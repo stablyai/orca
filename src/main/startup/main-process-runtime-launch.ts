@@ -40,6 +40,10 @@ import { startAppImageCopyPreExtraction } from '../cli/appimage-copy-pre-extract
 import { scheduleAllPendingHistoryTreeRemovals } from '../terminal-history-deletion'
 import { triggerStartupNotificationRegistration } from '../ipc/startup-notification-registration'
 import { startDesktopPushService } from './main-process-push-startup'
+import {
+  connectDesktopConnectorCloud,
+  installDesktopConnectorCloud
+} from './main-process-connector-startup'
 import { mainProcessState as state } from './main-process-state'
 import { logStartupMilestone } from './startup-diagnostics'
 import { setupHeadlessServeAutoUpdater } from '../window/main-window-updater'
@@ -70,31 +74,30 @@ function installRuntimeRpc(
   runtime: RuntimeService,
   serveOptions: ReturnType<typeof getServeOptions> | null
 ): OrcaRuntimeRpcServer {
-  // Why: existing installs may have pairing creds under the late app.getPath('userData'); copy them forward before switching to the canonical path.
+  // Migrate pairing credentials from late-resolved userData before switching to the canonical path.
   migrateMobilePairingDataToCanonicalUserDataPath(app.getPath('userData'))
-  // Why: parallel E2E Electron instances would race the fixed port (EADDRINUSE); port 0 gives each a random OS-assigned port.
+  // Use OS-assigned ports for concurrent E2E Electron instances to avoid EADDRINUSE.
   const isE2E = Boolean(process.env.ORCA_E2E_USER_DATA_DIR)
   const requestedE2EWsPort = process.env.ORCA_E2E_RUNTIME_WS_PORT
   const e2eWsPort = requestedE2EWsPort === undefined ? 0 : Number(requestedE2EWsPort)
   if (isE2E && (!Number.isInteger(e2eWsPort) || e2eWsPort < 0 || e2eWsPort > 65_535)) {
     throw new Error(`Invalid ORCA_E2E_RUNTIME_WS_PORT value: ${requestedE2EWsPort}`)
   }
-  // Why: pin dev to 6769 so `pnpm dev` doesn't race packaged Orca on 6768 and fall back to a random port, breaking deterministic mobile pairing/repro (STA-1511).
+  // STA-1511: separate dev port from packaged Orca so pairing/repro URLs do not fall back unpredictably.
   const devWsPort = !app.isPackaged && !isE2E ? 6769 : undefined
   const runtimeRpc = new OrcaRuntimeRpcServer({
     runtime,
-    // Why: mobile pairing needs the stable pre-setName() path (getCanonicalUserDataPath), not a late app.getPath('userData') that drops paired devices across restarts.
+    // Pairing must use pre-setName canonical userData or restarts can lose devices.
     userDataPath: getCanonicalUserDataPath(),
     enableWebSocket: true,
-    // Why: STA-2370 — the desktop app binds the WS listener to loopback until the user pairs a device;
-    // `orca serve` is an explicit remote opt-in, and E2E keeps the wide bind its harness connects over.
+    // STA-2370: desktop stays loopback until pairing; serve explicitly opts into remote access and E2E needs harness-wide bind.
     exposeNetworkByDefault: Boolean(serveOptions) || isE2E,
     ...(isE2E ? { wsPort: e2eWsPort } : {}),
     ...(devWsPort !== undefined ? { wsPort: devWsPort } : {}),
     ...(serveOptions?.wsPort !== undefined
       ? {
           wsPort: serveOptions.wsPort,
-          // Why: only explicit `orca serve --port` overrides a stale STA-1511 fallback (issue #8535); default/dev stay fallback-first for pairing stability.
+          // Explicit serve --port replaces stale fallback (#8535); defaults retain fallback-first pairing stability.
           preferPinnedWsPort: true,
           requirePinnedWsPort: true
         }
@@ -118,9 +121,9 @@ function installRuntimeRpc(
       return true
     }
   })
-  // Why: repeated direct auth failures otherwise look like a client that never connects; point users to re-pairing.
+  // Repeated direct-auth failures need a re-pairing explanation rather than silent nonconnection.
   runtimeRpc.setOnUnpairedDeviceAuthFailure(() => {
-    // Why: runtime startup races renderer mount; retain the one-shot until the listener consumes it.
+    // Retain the one-shot across the runtime-start/renderer-mount race.
     state.pendingUnpairedDeviceAuthFailure = true
     if (state.mainWindow && !state.mainWindow.isDestroyed()) {
       state.mainWindow.webContents.send('mobile:unpairedDeviceAuthFailure')
@@ -134,16 +137,15 @@ async function launchServeMode(
   runtimeRpc: OrcaRuntimeRpcServer,
   serveOptions: NonNullable<ReturnType<typeof getServeOptions>>
 ): Promise<void> {
-  // Why here: headless serve has no window to unblock, so keep the persisted proxy strictly
-  // ahead of every fetcher this phase can reach (relay, CLI install, RPC clients).
+  // Headless serve has no first paint to prioritize; apply persisted proxy before relay/CLI/RPC fetchers.
   await state.initialProxyApplicationReady
-  // Why: give managed WSL launchers a brief chance to migrate before headless PTYs go live, without slow repairs withholding all RPC readiness.
+  // Give WSL registration brief migration time without letting slow repair hold all RPC readiness.
   logStartupMilestone('wsl-cli-barrier-start')
   await state.managedWslCliStartupBarrierReady
   logStartupMilestone('wsl-cli-barrier-resolved', {
     reconciliation: state.managedWslCliReconciliationStatus
   })
-  // Why: headless PTYs must not start on the fallback provider, then get swept when an activated renderer registers desktop lifecycle handlers.
+  // Headless PTYs must not use fallback before desktop activation swaps providers.
   await state.localPtyStartupReady
   await state.localPtyProviderStartupReady
   await registerHeadlessPtyRuntime(
@@ -157,11 +159,11 @@ async function launchServeMode(
   )
   await runtime.refreshRestoredOrchestrationAuthority()
   await runtime.reconcileLegacyWorkerTerminals()
-  // Switch point: main shows live terminals no pane shows, before any client attaches.
+  // Main places unshown live terminals before any client attaches.
   if (ORCA_LAYOUT_OWNER_IS_MAIN) {
     await placeUnshownLiveTerminalsBestEffort(runtime)
   }
-  // Why: headless servers can't mount <webview> panes; use offscreen WebContents, gated on a real display so browser.headless.v1 stays honest.
+  // Headless hosts need display-backed offscreen WebContents; advertise browser capability only when usable.
   if (state.headlessBrowserDisplayAvailable) {
     runtime.setOffscreenBrowserBackend(
       new OffscreenBrowserBackend(browserManager, {
@@ -171,23 +173,21 @@ async function launchServeMode(
     )
   }
   publishHeadlessRuntimeGraph(runtime)
-  // Why before RPC binds: the first paired client must already see this host's SSH targets.
+  // Register SSH before binding RPC so the first paired client sees targets.
   registerHeadlessServeSshHandlers(state.store!, runtime)
   await runtimeRpc.start().catch((error) => {
     console.error('[runtime] Failed to start headless RPC transport:', error)
     throw error
   })
   scheduleAgentLaunchRecordWarmup(null)
-  // Why: a phone paired to a headless host still registers and unregisters its token;
-  // it simply never receives a push, because nothing dispatches notifications here.
+  // Headless phones still register/unregister tokens, though this host dispatches no push notifications.
   startDesktopPushService(runtimeRpc)
   settleDesktopActivation()
   installServeQuitHandling()
   await registerCliForHeadlessServe()
-  // Why: headless serve never opens a renderer, so arm scheduled automation dispatch here.
+  // Headless automation cannot wait for a renderer that never opens.
   state.automations?.start()
-  // Why: serve deletes worktrees too, and the history GC that normally drains delete tombstones is
-  // armed from the main window — without this, a quit mid-removal leaks the tree until a desktop launch.
+  // Arm history-removal GC without a window so interrupted serve deletions do not leak until desktop launch.
   void scheduleAllPendingHistoryTreeRemovals()
   emitServeBrowserIdentityActionLine(getBrowserIdentityModeStatus())
   await printServeReady(serveOptions)
@@ -206,12 +206,11 @@ async function launchDesktopMode(
   desktopWindow: BrowserWindow | null,
   openMainWindow: MainProcessRuntimeLaunchOptions['openMainWindow']
 ): Promise<void> {
-  // Preserve the pre-split startup failure contract if composition ever hands
-  // this phase an incomplete runtime graph.
+  // Retain startup failure on incomplete runtime composition.
   if (!runtimeRpc) {
     throw new Error('runtime_rpc_unavailable')
   }
-  // Why: window and RPC startup run in parallel; registerPtyHandlers gates PTY spawns so RPC binds without racing the daemon provider swap.
+  // PTY spawn gates permit parallel window/RPC startup without racing daemon-provider adoption.
   const [win, runtimeRpcStartResult] = await Promise.all([
     Promise.resolve(desktopWindow ?? openMainWindow()),
     shellPathReady
@@ -226,30 +225,28 @@ async function launchDesktopMode(
   ])
   scheduleAgentLaunchRecordWarmup(win)
   if (!runtimeRpcStartResult.ok) {
-    // Why gated: this dialog is the only launch-phase text read through translateMain, and i18n
-    // now settles alongside this phase — without the wait a non-English user could get the
-    // English defaultValue fallback. Still off the renderer's path (it is failure-only).
+    // Await i18n only for the failure dialog; parallel launch must not show English fallback to non-English users.
     void state.mainProcessI18nReady.then(() =>
       showRuntimeRpcStartupFailureDialog(win, runtimeRpcStartResult.error)
     )
   }
-  // Why before the proxy await: a mint in that window must wait for the installer, not fail
-  // provider_missing; the installer itself holds its first request until the proxy lands.
+  // Register before proxy await so concurrent token mints wait rather than fail provider_missing; installer requests are already guarded.
   startDesktopRelayService(runtimeRpc)
-  // Why after the window and not before it: the default-session request guard already holds every
-  // fetcher until the persisted proxy lands, so this only has to keep the launch phase itself
-  // ordered ahead of the push gateway — it must not gate the renderer.
+  connectDesktopConnectorCloud()
+  // Create the window before awaiting proxy readiness; the request guard already fences fetches.
   await state.initialProxyApplicationReady
-  // Why after the proxy await: the push gateway client is an app-owned fetcher, so it must not
-  // issue its first request ahead of the persisted proxy.
+  // Apply persisted proxy before the push gateway's first request.
   startDesktopPushService(runtimeRpc)
-  // Why: macOS notification permission dialog must fire after the window is shown, else it's hidden behind the maximized window.
+  // Request macOS notification permission after reveal or the maximized window can hide it.
   win.once('show', () => {
-    // Why: store can be null if init failed earlier; bail rather than throw inside an Electron event listener.
-    const store = state.store
-    if (store && store.getOnboarding().closedAt !== null) {
-      triggerStartupNotificationRegistration(store)
-    }
+    // Await i18n so the one-time prompt is not stuck in the English fallback.
+    void state.mainProcessI18nReady.then(() => {
+      // Initialization failure can leave no Store; do not throw inside Electron listeners.
+      const store = state.store
+      if (store && store.getOnboarding().closedAt !== null) {
+        triggerStartupNotificationRegistration(store)
+      }
+    })
   })
 }
 
@@ -272,13 +269,13 @@ export async function initializeMainProcessRuntimeLaunch(
   state.serveOptions = serveOptions
   installCloudSessionShutdownFlush()
   const runtimeRpc = installRuntimeRpc(runtime, serveOptions)
+  if (!serveOptions) {
+    installDesktopConnectorCloud()
+  }
   const shellPathReady = shellPathHydration.whenReady()
-  // Why published: the renderer's git-environment barrier must fence on the same
-  // generation the terminal startup services wait for, not a later re-read.
+  // Publish the same shell-PATH generation to renderer Git and terminal startup barriers.
   state.shellPathReady = shellPathReady
-  // Why before any window: the poisoned install DACL kills the renderer at init, and
-  // the probe that detects it cannot finish before createMainWindow. Bounded, and a
-  // no-op (one absent-file read) unless a previous launch already recorded the verdict.
+  // Repair known poisoned DACL before renderer initialization; the ordinary probe finishes too late to prevent its first crash.
   const aclGate = await repairKnownPoisonedInstallDirBeforeWindow({
     isServeMode: state.isServeMode || serveOptions !== null,
     userDataPath: app.getPath('userData'),
@@ -297,8 +294,7 @@ export async function initializeMainProcessRuntimeLaunch(
     })
     desktopWindow = desktopStartup.window
   } else {
-    // Why before the daemon starts: its host choice waits briefly for a copy unpacking here.
-    // Serve unpacks for itself, with a deadline and progress on its own output.
+    // Start AppImage extraction before daemon host selection briefly awaits it; serve manages its own bounded extraction.
     if (!serveOptions) {
       void startAppImageCopyPreExtraction()
     }

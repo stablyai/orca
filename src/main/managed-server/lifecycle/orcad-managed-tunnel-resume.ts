@@ -1,4 +1,4 @@
-import { sendRemoteRuntimeRequest } from '../../../shared/remote-runtime-client'
+import { sendRemoteRuntimeRequest } from '../../../shared/remote-runtime/remote-runtime-client'
 import {
   getPreferredPairedRuntimeConnection,
   type KnownRuntimeEnvironment,
@@ -50,7 +50,7 @@ type ResumeRecoveryDependencies = {
   ownershipGenerations: Map<string, number>
   probeTunnel?: OrcadManagedTunnelProbe
   targeting: OrcadManagedTunnelTargeting
-  /** Never rebuilds: a server restarted on a new port drops this forward for the next ensure. */
+  /** Drop moved-port forwards for the next ensure; never rebuild recursively. */
   checkServing?: (environment: KnownRuntimeEnvironment) => Promise<unknown>
 }
 
@@ -215,7 +215,7 @@ export class OrcadManagedTunnelResumeRecovery {
       ...checks,
       stillCurrent
     })
-    // Why re-check: a teardown can land between the build's last check and this record.
+    // Teardown may occur between the build's last check and recording its forward.
     if (!forward || !stillCurrent()) {
       await (forward && this.dependencies.forwards.removeForwardAndWait(forward.id))
       return
@@ -227,7 +227,7 @@ export class OrcadManagedTunnelResumeRecovery {
       targetId: active.targetId,
       transportGeneration
     })
-    // A server that idled out while this client slept is started here, not reported as lost.
+    // Wake idle-stopped servers after resume instead of reporting them lost.
     await this.dependencies.checkServing?.(current.environment)
   }
 

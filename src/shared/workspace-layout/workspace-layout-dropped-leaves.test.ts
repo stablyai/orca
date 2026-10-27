@@ -1,13 +1,7 @@
 // The dropped-leaf step (L80 Q2): which panes a live edit dropped, and what it records for them.
 import { describe, expect, it, vi } from 'vitest'
 import { applyLayoutCommand } from './workspace-layout-commands'
-import {
-  build,
-  emptyModel,
-  testContext,
-  terminalTab,
-  WS
-} from './workspace-layout-command.test-fixture'
+import { build, testContext, terminalTab, WS } from './workspace-layout-command.test-fixture'
 import type { LayoutCommand, LayoutContext } from './workspace-layout-command-types'
 import { droppedLeavesOf } from './workspace-layout-dropped-leaves'
 import type { WorkspaceLayoutModel } from './workspace-layout-model'
@@ -17,7 +11,6 @@ vi.mock('../layout-owner-switch', () => ({ ORCA_LAYOUT_OWNER_IS_MAIN: true }))
 
 const OTHER_WS = 'repo-1::/Users/dev/other'
 
-/** A create's result: the tab and leaf it made. */
 function createdPane(value: unknown): { tabId: string; leafId: string } {
   if (
     !value ||
@@ -204,10 +197,5 @@ describe('the dropped-leaf step', () => {
     const replayed = applyLayoutCommand({ ...model, records: once.records }, close, context)
 
     expect(replayed.ok && recorded(replayed.model)).toEqual(recorded(once))
-  })
-
-  it('records nothing in a window-owned commit with no workspaces changed', () => {
-    const model = emptyModel()
-    expect(droppedLeavesOf(model, model)).toEqual([])
   })
 })

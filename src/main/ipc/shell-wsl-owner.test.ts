@@ -32,7 +32,7 @@ vi.mock('../wsl/wsl-host-service-instance', () => ({
   getWslHostService: () => ({ recordForEnvironment: recordForEnvironmentMock })
 }))
 
-// Why: a WSL host's paths only exist for a Windows desktop; pin both resolvers to win32.
+// WSL paths require Windows resolution even when this test runs on another platform.
 vi.mock('../windows-path-access-host', async (importOriginal) => {
   const actual = await importOriginal<typeof WindowsPathAccessHost>()
   return {

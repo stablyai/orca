@@ -1,5 +1,7 @@
 import { bindPtyConnectionTestMocks } from './pty-connection-mocks.spec'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { TEST_REPO } from '@/store/slices/worktrees-slice-test-fixtures'
+import type { AppState } from '@/store/types'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../shared/constants'
 import { flushAsyncTicks } from './pty-connection-test-async'
 import { sendTerminalInputThroughPane } from './pty-connection-test-dom'
@@ -85,10 +87,7 @@ export function registerPtyConnectionFreshSpawnGuardsTests(): void {
       )
     })
 
-    // Why: deleting a worktree kills its PTYs for the filesystem teardown; the
-    // renderer must not race a doomed respawn into a directory main is deleting
-    // (main fences it with TerminalRemovalInProgressError and the pane is about to
-    // unmount). See docs — bad UI was the raw fence error flashing on the tab.
+    // Do not race PTY respawn into worktree deletion; main’s removal fence must not flash a raw error before unmount.
     it('skips a fresh spawn while the pane worktree is being deleted', async () => {
       const { connectPanePty } = await import('./pty-connection')
       const transport = createMockTransport()
@@ -97,7 +96,7 @@ export function registerPtyConnectionFreshSpawnGuardsTests(): void {
         ...mockStoreState,
         deleteStateByWorktreeId: { 'wt-1': { isDeleting: true, phase: 'deleting' } }
       }
-      // Why: a unique tab id keeps this pane's key clear of other tests' pendingSpawnByPaneKey entries so the connect deterministically fresh-spawns.
+      // Use a unique tab ID to avoid pending-spawn entries from other tests and force fresh spawn.
       const deps = createDeps({ tabId: 'tab-removal-skip-spawn' })
 
       connectPanePty(createPane(1) as never, createManager(1) as never, deps as never)
@@ -124,8 +123,7 @@ export function registerPtyConnectionFreshSpawnGuardsTests(): void {
       expect(transport.connect).toHaveBeenCalled()
     })
 
-    // The disposed-spawn kill in ipc-pty-connect asks this callback before retiring a PTY; it must
-    // answer from the live store, or a remounted pane's shell dies under it.
+    // Read the live store before retiring a disposed spawn, or a remounted pane’s shell could be killed.
     it('lets a disposed spawn survive while the pane surface still exists in the store', async () => {
       const { connectPanePty } = await import('./pty-connection')
       const transport = createMockTransport()
@@ -178,7 +176,7 @@ export function registerPtyConnectionFreshSpawnGuardsTests(): void {
       const { connectPanePty } = await import('./pty-connection')
       const transport = createMockTransport()
       transportFactoryQueue.push(transport)
-      // Why: unique tab id → deterministic fresh spawn (mirrors the skip test's control).
+      // Use a unique tab ID to force fresh spawn, matching the skip control.
       const deps = createDeps({ tabId: 'tab-removal-control-spawn' })
 
       connectPanePty(createPane(1) as never, createManager(1) as never, deps as never)
@@ -187,10 +185,7 @@ export function registerPtyConnectionFreshSpawnGuardsTests(): void {
       expect(transport.connect).toHaveBeenCalled()
     })
 
-    // Why: a doomed pane (or a child pane whose parent worktree is being removed,
-    // which startFreshSpawn's own-worktree skip cannot see) can still race a spawn
-    // that main fences. reportError must swallow that fence so the tab never flashes
-    // the raw "Terminal cannot start while the worktree is being removed" banner.
+    // A racing spawn, including under a removing parent worktree, must swallow main’s removal fence instead of flashing its raw banner.
     it('swallows a worktree-removal fence error instead of surfacing it', async () => {
       const { connectPanePty } = await import('./pty-connection')
       const { TERMINAL_REMOVAL_IN_PROGRESS_MESSAGE } =
@@ -209,9 +204,7 @@ export function registerPtyConnectionFreshSpawnGuardsTests(): void {
       connectPanePty(createPane(1) as never, createManager(1) as never, deps as never)
       await flushAsyncTicks()
 
-      // Why: assert the callback was captured before invoking — optional invocation
-      // would let this test false-pass (not.toHaveBeenCalled trivially true) if the
-      // transport onError wiring ever broke, exercising no suppression at all.
+      // Require captured onError wiring before invoking it; optional invocation could falsely pass without exercising suppression.
       expect(capturedOnError.current).toBeTypeOf('function')
       // Electron wraps the rejected ipcMain error with its own prefix; still swallowed.
       capturedOnError.current!(
@@ -245,6 +238,7 @@ export function registerPtyConnectionFreshSpawnGuardsTests(): void {
       const { connectPanePty } = await import('./pty-connection')
       const transport = createMockTransport()
       transportFactoryQueue.push(transport)
+      const repos: AppState['repos'][number][] = [{ ...TEST_REPO, id: 'repo1', path: '/tmp/wt-1' }]
       mockStoreState = {
         ...mockStoreState,
         settings: {
@@ -253,7 +247,22 @@ export function registerPtyConnectionFreshSpawnGuardsTests(): void {
           terminalWindowsWslDistro: 'Debian',
           localWindowsRuntimeDefault: { kind: 'wsl', distro: 'Debian' }
         },
-        projects: [{ id: 'repo1', localWindowsRuntimePreference: { kind: 'windows-host' } }]
+        repos,
+        endpointProjectHostSetups: [
+          {
+            id: 'repo1',
+            projectId: 'repo1',
+            repoId: 'repo1',
+            hostId: 'local',
+            path: '/tmp/wt-1',
+            displayName: 'orca',
+            setupState: 'ready',
+            setupMethod: 'legacy-repo',
+            createdAt: 0,
+            updatedAt: 0
+          }
+        ],
+        endpointProjects: [{ id: 'repo1', localWindowsRuntimePreference: { kind: 'windows-host' } }]
       }
 
       connectPanePty(createPane(1) as never, createManager(1) as never, createDeps() as never)
@@ -307,7 +316,7 @@ export function registerPtyConnectionFreshSpawnGuardsTests(): void {
             { id: 'tab-floating-agent', ptyId: null, launchAgent: 'codex' }
           ]
         },
-        projects: [
+        endpointProjects: [
           { id: 'repo1', localWindowsRuntimePreference: { kind: 'wsl', distro: 'Ubuntu' } }
         ],
         settings: {
@@ -396,7 +405,7 @@ export function registerPtyConnectionFreshSpawnGuardsTests(): void {
     })
 
     it('drops keystrokes while the replay guard is engaged, then forwards once it releases', async () => {
-      // Regression (cold-restore reattach lockout): a stuck replay guard dropped every keystroke ("can't type after reconnecting"); engaged guard suppresses input, released forwards it.
+      // A stuck replay guard caused reconnect input lockout; verify suppression while armed and forwarding after release.
       const { connectPanePty } = await import('./pty-connection')
       const pane = createPane(1)
       const transport = createMockTransport('ssh:ssh-1@@pty-1')
@@ -407,12 +416,10 @@ export function registerPtyConnectionFreshSpawnGuardsTests(): void {
       await flushAsyncTicks()
 
       transport.sendInput.mockClear()
-      // Engaged (as a stuck reattach would leave it): input must be suppressed.
       deps.replayingPanesRef.current.set(pane.id, 3)
       sendTerminalInputThroughPane(pane, 'echo hi\r')
       expect(transport.sendInput).not.toHaveBeenCalled()
 
-      // Released (via the guard's fallback or parse completion): input flows again.
       deps.replayingPanesRef.current.delete(pane.id)
       sendTerminalInputThroughPane(pane, 'echo hi\r')
       expect(transport.sendInput).toHaveBeenCalledWith('echo hi\r', 'query-reply')
@@ -483,7 +490,6 @@ export function registerPtyConnectionFreshSpawnGuardsTests(): void {
       expect(transport.sendInput).toHaveBeenCalledTimes(2)
       expect(transport.sendInput).toHaveBeenLastCalledWith('\x1b[B', 'driving')
 
-      // Once the guard releases, the same mouse report is ordinary input again.
       deps.replayingPanesRef.current.delete(pane.id)
       for (const listener of userInputListeners) {
         listener()

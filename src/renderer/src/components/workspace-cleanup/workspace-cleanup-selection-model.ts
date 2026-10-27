@@ -13,7 +13,6 @@ export function formatVanishedSelectionNotice(count: number): string {
       )
 }
 
-/** Explains selection removed when a facet filter hides rows. */
 export function formatWithheldSelectionNotice(count: number): string {
   return count === 1
     ? translate(

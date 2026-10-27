@@ -10,12 +10,9 @@ import {
   getFolderWorkspaceWorktree
 } from './slices/worktrees/listing/detected-worktree-meta'
 
-// The one read path for workspace records. Backed by today's store fields; readers outside the
-// writers go through here (config/scripts/check-workspace-record-read-ratchet.mjs).
+// Route workspace readers here; check-workspace-record-read-ratchet.mjs enforces this boundary.
 
 export type WorkspaceRecordState = Pick<AppState, 'worktreesByRepo' | 'folderWorkspaces'>
-
-// ─── Compatibility views ─────────────────────────────────────────────
 
 /** Git worktrees per repo id, in listing order. */
 export function selectWorktreesByRepo(
@@ -36,8 +33,6 @@ export function selectDetectedWorktreesByRepo(
 ): AppState['detectedWorktreesByRepo'] {
   return state.detectedWorktreesByRepo
 }
-
-// ─── Keyed records ───────────────────────────────────────────────────
 
 function findFolderWorkspaceForTarget(
   folderWorkspaces: readonly FolderWorkspace[],

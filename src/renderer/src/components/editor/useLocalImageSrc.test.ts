@@ -475,8 +475,7 @@ describe('useLocalImageSrc runtime owner', () => {
     return null
   }
 
-  // Stands in for a surface that drops its copy whenever the owner object changes; only the
-  // probe's pin keeps the shown URL alive through that release.
+  // Release on owner-object changes so the probe’s pin alone must keep the displayed URL alive.
   function ReleaseOnOwnerObject({
     runtimeContext
   }: {

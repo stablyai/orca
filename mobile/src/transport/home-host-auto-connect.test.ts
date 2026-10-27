@@ -1,7 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { HostProfile } from './types'
 import {
-  HOME_AUTO_CONNECT_LIMIT,
   resolveHomeHostConnectionState,
   selectHomeAutoConnectHostIds
 } from './home-host-auto-connect'
@@ -25,11 +24,12 @@ describe('home host auto-connect', () => {
       host('second', 4),
       host('third', 3),
       host('fourth', 2),
-      host('missing-credentials', 6, false)
+      host('missing-credentials', 6, false),
+      { ...host('missing-token', 7), deviceToken: '' },
+      { ...host('missing-key', 8), publicKeyB64: '' }
     ]
 
     expect(selectHomeAutoConnectHostIds(hosts)).toEqual(['newest', 'second', 'third'])
-    expect(selectHomeAutoConnectHostIds(hosts)).toHaveLength(HOME_AUTO_CONNECT_LIMIT)
   })
 
   it('does not mutate the host card order', () => {

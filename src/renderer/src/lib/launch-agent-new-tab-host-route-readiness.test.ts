@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type * as RemoteRuntimePtyIdModule from '../../../shared/remote-runtime-pty-id'
+import type * as RemoteRuntimePtyIdModule from '../../../shared/remote-runtime/remote-runtime-pty-id'
 
 const TAB = '9b1deb4d-3b7d-4bad-9bdd-2b0d7b3dcb6d'
 
@@ -45,7 +45,7 @@ vi.mock('@/components/terminal-pane/pty-data-sidecar-subscriptions', () => ({
 vi.mock('@/runtime/runtime-terminal-inspection', () => ({
   inspectRuntimeTerminalProcess: vi.fn(async () => null)
 }))
-vi.mock('../../../shared/remote-runtime-pty-id', async (importOriginal) => ({
+vi.mock('../../../shared/remote-runtime/remote-runtime-pty-id', async (importOriginal) => ({
   ...(await importOriginal<typeof RemoteRuntimePtyIdModule>()),
   isRemoteRuntimePtyId: () => false
 }))
@@ -91,8 +91,7 @@ describe('an AI button whose agent is ready before the host answers', () => {
     vi.useRealTimers()
   })
 
-  // Regression: the paste watched the terminal only after the host's reply, so an agent that had
-  // already enabled bracketed paste was never seen ready and its prompt waited out the budget.
+  // Attach readiness before host reply so early bracketed-paste signals cannot be lost until timeout.
   it('is pasted at its own ready signal plus the quiet window, not after the timeout', async () => {
     let answer!: (startedPtyId: string | null) => void
     testState.launchAgentThroughHost.mockReturnValue({
@@ -191,8 +190,7 @@ describe('an AI button whose agent is ready before the host answers', () => {
     ])
   })
 
-  // Regression: with a split bound first, the launch pane's ready bytes were drained to its primary
-  // handler before its own watcher attached, so a ready agent never got its prompt.
+  // A sibling split may bind first; observe launch-pane bytes before its primary handler drains them.
   it("sees the launch pane's ready output even when a split bound first and it drained at once", async () => {
     let answer!: (startedPtyId: string | null) => void
     testState.launchAgentThroughHost.mockReturnValue({

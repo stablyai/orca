@@ -86,10 +86,7 @@ const CLIENT_HOSTING_CAPABILITIES = [
   BROWSER_NETWORK_EXECUTION_HOSTS_RUNTIME_CAPABILITY
 ]
 
-/**
- * The capability list a client that connected before the runtime upgraded still has cached: the
- * pre-upgrade build advertised browser streaming but nothing client hosting needs.
- */
+// Pre-upgrade cache advertises streaming but lacks client-hosting capabilities.
 const PRE_UPGRADE_CAPABILITIES = [
   BROWSER_SCREENCAST_RUNTIME_CAPABILITY,
   BROWSER_TAB_CREATE_KNOWN_ID_RUNTIME_CAPABILITY
@@ -153,12 +150,9 @@ describe('browser placement against a stale capability cache', () => {
 
     await createWebRuntimeSessionBrowserTab({ worktreeId: WORKTREE_ID })
 
-    // The staged frame is minted from the cache, so without the re-mark the pane mounts the
-    // streamed component and swaps only once adoption lands.
+    // Without live re-marking, stale staging mounts streamed content and swaps components on adoption.
     expect(lastStagedHandle()).toMatchObject({ staged: true, stagedClientHosted: true })
-    // The rewrite must keep addressing the page the create actually asked the host for; a handle
-    // pointing anywhere else describes a page nothing will ever adopt. Matched against every write
-    // rather than the last, because adoption rewrites the handle again with the host's own id.
+    // Check every handle write targets the requested page; adoption rewrites the final handle and could mask an earlier wrong mapping.
     expect(mocks.setRemoteBrowserPageHandle.mock.calls.map((call) => call[1])).toContainEqual({
       environmentId: ENVIRONMENT_ID,
       remotePageId: runtimeCall.mock.calls[0]?.[0].params.page,

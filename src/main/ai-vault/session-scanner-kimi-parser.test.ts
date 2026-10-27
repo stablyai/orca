@@ -144,13 +144,11 @@ describe('parseKimiSessionFile', () => {
 
     expect(session).not.toBeNull()
     expect(session?.agent).toBe('kimi')
-    // The session id keeps the `session_` prefix that `kimi --session <id>` expects.
     expect(session?.sessionId).toBe(SESSION_ID)
     expect(session?.title).toBe('Please explain this project briefly')
     expect(session?.cwd).toBe('/private/tmp/kimi-test-proj')
     expect(session?.model).toBe('mock-model')
     expect(session?.totalTokens).toBe(30)
-    // 1 real user turn + 1 assistant turn; the injected system-reminder is excluded.
     expect(session?.messageCount).toBe(2)
     expect(session?.previewMessages).toEqual([
       { role: 'user', text: 'Please explain this project briefly', timestamp: null },
@@ -214,7 +212,7 @@ describe('parseKimiSessionFile', () => {
         push: (message) => messages.push(message)
       })
       const [userPreview, assistantPreview] = session!.previewMessages
-      // 220-char cap = 217 chars + '...'; the 96-char title cap would be 93 + '...'.
+      // Preview length must use its own cap rather than the shorter title cap.
       expect(userPreview.text.length).toBe(220)
       expect(assistantPreview.text.length).toBe(220)
       expect(assistantPreview.text.endsWith('...')).toBe(true)

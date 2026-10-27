@@ -1,10 +1,7 @@
 export const GRAB_GUEST_FOUNDATION_SCRIPT = `(function() {
   'use strict';
 
-  // Why: always tear down any pre-existing state before arming. A malicious
-  // guest page could predefine window.__orcaGrab with a fake extractPayload
-  // function. By tearing down unconditionally we ensure our freshly installed
-  // extraction logic is the only code that runs.
+  // Replace page-supplied grab state so extraction uses the newly installed implementation.
   if (window.__orcaGrab) {
     try {
       if (typeof window.__orcaGrab.cleanup === 'function') {
@@ -14,7 +11,6 @@ export const GRAB_GUEST_FOUNDATION_SCRIPT = `(function() {
     delete window.__orcaGrab;
   }
 
-  // --- Budget constants (mirrored from shared types) ---
   var BUDGET = {
     textSnippetMaxLength: 200,
     nearbyTextEntryMaxLength: 200,
@@ -33,7 +29,6 @@ export const GRAB_GUEST_FOUNDATION_SCRIPT = `(function() {
   var TEXT_NODE_SCAN_LIMIT = 80;
   var NEARBY_ELEMENT_SCAN_LIMIT = 80;
 
-  // --- Safe attribute names ---
   var SAFE_ATTRS = new Set([
     'id', 'class', 'name', 'type', 'role', 'href', 'src', 'alt',
     'title', 'placeholder', 'for', 'action', 'method'
@@ -53,7 +48,6 @@ export const GRAB_GUEST_FOUNDATION_SCRIPT = `(function() {
     'fontSize', 'fontWeight', 'lineHeight', 'textAlign', 'zIndex'
   ];
 
-  // --- Helpers ---
   function clampStr(s, max) {
     if (!s || typeof s !== 'string') return '';
     if (s.length <= max) return s;
@@ -82,8 +76,7 @@ export const GRAB_GUEST_FOUNDATION_SCRIPT = `(function() {
       u.hash = '';
       return u.toString();
     } catch (e) {
-      // Why: returning the raw URL on parse failure could preserve javascript:
-      // URIs or other non-http schemes. Return empty string instead.
+      // Never return unvalidated raw URLs on parse failure.
       return '';
     }
   }

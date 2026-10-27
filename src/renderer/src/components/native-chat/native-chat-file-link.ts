@@ -4,7 +4,7 @@ import {
   parseExplicitFileLinkTarget,
   resolveExplicitFileLinkTarget,
   resolveExplicitFileLinkTargetPath
-} from '@/lib/explicit-file-link-target'
+} from '../../../../shared/explicit-file-link-target'
 import { runtimeEnvironmentIdOrLocalUnlessTwin } from '@/lib/worktree-runtime-owner'
 import type { AppState } from '@/store/types'
 import { resolveNativeChatTabDirectory } from './native-chat-tab-directory'
@@ -88,8 +88,8 @@ export function createNativeChatFileLinkContextSelector(tabId: string) {
     resolveNativeChatFileLinkContextForOwner(state, tabId, selectOwner(state))
 }
 
-function resolveNativeChatFileLinkContextForOwner(
-  state: NativeChatFileLinkState,
+export function resolveNativeChatFileLinkContextForOwner(
+  state: Omit<NativeChatFileLinkState, 'tabsByWorktree'>,
   terminalTabId: string,
   worktreeId: string | null
 ): NativeChatFileLinkContext | null {
@@ -118,8 +118,7 @@ function resolvePathText(
   if (!parsed) {
     return null
   }
-  // Native chat hrefs are explicit agent-authored links, so avoid the terminal
-  // detector's conservative extension/filename filters.
+  // Explicit agent-authored hrefs bypass automatic terminal-detection filename filters.
   const resolved = resolveExplicitFileLinkTarget(parsed, context.worktreePath)
   if (!resolved) {
     return null

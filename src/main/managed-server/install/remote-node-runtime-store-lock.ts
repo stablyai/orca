@@ -1,8 +1,4 @@
-/**
- * The `runtimes/` store's mkdir lock (design D5). Promotion waits for it; store GC only tries it,
- * so a collector never queues behind an install. Both use the install lock's primitives and its
- * 20-minute stale rule.
- */
+// Promotion waits for the store lock; GC skips busy stores rather than queuing behind installs.
 import { randomUUID } from 'node:crypto'
 import { ORCAD_RUNTIMES_DIRNAME } from '../../../shared/orcad-artifacts'
 import type { RemoteInstallTransport } from './remote-install-transport'
@@ -24,16 +20,11 @@ import {
 } from '../../ssh/ssh-remote-platform'
 
 export const RUNTIME_STORE_LOCK_NAME = '.store-lock'
-/** Names the holder, so a release never removes a lock someone else took after it. */
+// Owner tokens prevent late releases from deleting successor locks.
 export const RUNTIME_STORE_LOCK_OWNER_FILENAME = '.holder'
 
-/** The store lock as held by one task. */
 export type HeldRuntimeStoreLock = {
-  /**
-   * POSIX: wraps `command` so the host itself releases this lock when the command exits. A client
-   * that stopped waiting (timeout, lost channel) then leaves the lock with the work that is still
-   * running, not for the 20-minute stale rule (HH-3).
-   */
+  /** Host-side release keeps the lock with work that outlives its client's timeout or channel. */
   releasedByHostOnExit(command: string): string
 }
 
@@ -64,8 +55,7 @@ function heldLock(
       if (isWindowsRemoteHost(host)) {
         throw new Error('The runtime store lock is released by the host only on POSIX hosts.')
       }
-      // Why ignore HUP/PIPE: a client that hung up must not stop the release, and capturing the
-      // output keeps the release ahead of the first write to a closed channel.
+      // Ignore hangups and capture output so release precedes writes to a potentially closed channel.
       return (
         `trap '' HUP PIPE; orca_store_out=$(${command}); orca_store_status=$?; ` +
         `${posixReleaseOwnedLockCommand(host, lockDir(host, storeDir), owner)}; ` +
@@ -83,7 +73,7 @@ async function releaseRuntimeStoreLock(
 ): Promise<void> {
   const windows = isWindowsRemoteHost(host)
   const lock = lockDir(host, storeDir)
-  // Why owner-checked on POSIX: the host may already have released it and another holder taken it.
+  // Host-side release may already have allowed a successor to acquire the lock.
   const command = windows
     ? removeRemoteTreeCommand(host, lock)
     : `${posixReleaseOwnedLockCommand(host, lock, owner)} || true`
@@ -94,7 +84,7 @@ async function releaseRuntimeStoreLock(
   })
 }
 
-/** One attempt, stealing only a stale or previous-boot lock. A missing store is simply not acquired. */
+/** Attempt once; only stale or previous-boot locks permit takeover. */
 async function tryAcquireRuntimeStoreLock(
   conn: RemoteInstallTransport,
   host: RemoteHostPlatform,
@@ -146,7 +136,7 @@ async function runHoldingLock<T>(
   try {
     value = await task(heldLock(host, storeDir, owner))
   } catch (error) {
-    // Why keep it on an unconfirmed termination: the remote step may still be running.
+    // Unconfirmed remote work may still need the lock.
     if (!isUnconfirmedSshCommandTermination(error)) {
       await releaseRuntimeStoreLock(conn, host, storeDir, owner)
     }
@@ -156,7 +146,6 @@ async function runHoldingLock<T>(
   return value
 }
 
-/** Runs `task` holding the store lock, waiting for it within the deploy bound. */
 export async function withRuntimeStoreLock<T>(
   conn: RemoteInstallTransport,
   host: RemoteHostPlatform,
@@ -174,7 +163,7 @@ export async function withRuntimeStoreLock<T>(
   return runHoldingLock(conn, host, storeDir, owner, task)
 }
 
-/** Runs `task` only when the lock is free now; null when another holder has it. */
+/** Skip busy stores instead of waiting; return null. */
 export async function tryWithRuntimeStoreLock<T>(
   conn: RemoteInstallTransport,
   host: RemoteHostPlatform,

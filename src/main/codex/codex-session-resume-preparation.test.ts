@@ -5,8 +5,6 @@ const SESSION_ID = '019f81b9-19a9-7651-a8d1-352d9420bd11'
 const ORIGIN_HOME = '/managed/origin/home'
 const ORIGIN_ROLLOUT = `${ORIGIN_HOME}/sessions/2026/07/20/rollout-2026-07-20T12-00-00-${SESSION_ID}.jsonl`
 
-// Why: these cases assert the resume/fresh outcome, never the legacy rescan's home ranking
-// (#10801) — no ranking input can change a verdict here, so they stay null.
 const withoutHomeRanking = {
   getSelectedAccountCodexHome: (): string | null => null,
   systemCodexHomePath: null,
@@ -46,8 +44,6 @@ describe('prepareCodexSessionResume', () => {
   })
 
   it('falls back to a fresh session when the rollout home is not trusted', async () => {
-    // Why: returning `resume` here is exactly the #10793 bug — the pane would resume
-    // under whichever account is selected now.
     const resolveVerifiedResumeHome = vi.fn(async (source: { homePath: string }) => source.homePath)
 
     await expect(
@@ -57,7 +53,6 @@ describe('prepareCodexSessionResume', () => {
         resolveVerifiedResumeHome
       })
     ).resolves.toEqual({ outcome: 'fresh', claimedCodexProvenance: true })
-    // Migration, project trust and hook repair must not run without a verified home.
     expect(resolveVerifiedResumeHome).not.toHaveBeenCalled()
   })
 
@@ -77,11 +72,6 @@ describe('prepareCodexSessionResume', () => {
   })
 })
 
-// Why: this wrapper is the only path index.ts takes to the legacy rescan, and nulling any
-// ranking input here still satisfies the type-checker and every ranking test in
-// codex-session-resume-home.test.ts (they call the rescan directly). Without these two the
-// forwarding is unguarded, and losing it silently restores #10801's bug: a resume landing
-// under an arbitrary account and staying pinned there.
 describe('prepareCodexSessionResume legacy-rescan ranking forwarding', () => {
   const systemHome = '/Users/example/.codex'
   const sharedMirror = '/userData/codex-runtime-home/home'
@@ -113,7 +103,6 @@ describe('prepareCodexSessionResume legacy-rescan ranking forwarding', () => {
   })
 
   it('keeps the selection thunk lazy on a provenance-present resume', async () => {
-    // Why: the thunk stats an ownership marker, and the common resume must not pay for it.
     const getSelectedAccountCodexHome = vi.fn(() => accountBHome)
 
     await expect(

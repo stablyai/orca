@@ -218,7 +218,7 @@ describe('ExternalConversationSeam delivery ids', () => {
     ).toEqual({
       outcome: 'accepted'
     })
-    // A start the host died during: its receipt is still pending.
+    // A pending receipt models process loss during the first start.
     db.beginMutationReceipt({
       callerFingerprint: 'connector:dev',
       requestId: JSON.stringify(['thread-9', 'd1']),
@@ -258,7 +258,6 @@ describe('ExternalConversationSeam links', () => {
       externalConversations: row(WORKTREE)?.externalConversations
     })
     remove(WORKTREE)
-    // Started in this period, so a second start goes to the renamed workspace's pane.
     expect(
       (await seam.start({ launcher, terminal: fakeTerminal().terminal }, KEY, 'd2', START)).initial
     ).toEqual({ outcome: 'accepted' })
@@ -269,7 +268,7 @@ describe('ExternalConversationSeam links', () => {
 
   it('finds an SSH twin’s link that only its host’s row holds, after a restart too', async () => {
     const records = fakeLinkStore([LOCAL_REPO, { ...LOCAL_REPO, connectionId: 'box' }])
-    // The local twin wrote this locator first, so the locator-keyed map keeps its row.
+    // The locator projection keeps the local twin; the SSH link exists only in canonical host rows.
     records.put(WORKTREE, 'local', {})
     const { seam, restart, writes } = harness({}, records)
     const { launcher, launch } = fakeLauncher(async () => launchResult('handed-to-terminal'), {
@@ -345,7 +344,7 @@ describe('ExternalConversationSeam send', () => {
       'term-1',
       'hello',
       expect.objectContaining({
-        inputKind: 'driving',
+        inputKind: 'orchestration',
         onPermission: 'wait',
         expectedBinding: { ptyId: 'pty-1', processIncarnation: 'inc-pty-1' },
         signal: expect.any(AbortSignal)
@@ -474,7 +473,6 @@ describe('ExternalConversationSeam send', () => {
     expect(await head).toEqual(gone)
     expect(await follower).toEqual(gone)
     expect(terminal.writes).toEqual([])
-    // A later delivery opens a new lane on the process there now.
     expect(await seam.send(host, KEY, 'd3', 'three')).toEqual({ outcome: 'accepted' })
     expect(terminal.writes).toEqual(['three'])
   })
@@ -590,7 +588,6 @@ describe('ExternalConversationSeam start-headed lanes', () => {
     expect((await start).initial).toEqual({ outcome: 'accepted' })
     expect(await follower).toEqual(GONE)
     expect(terminal.writes).toEqual([])
-    // A later delivery opens a new lane on the process there now.
     expect(await seam.send(host, KEY, 'd2', 'later')).toEqual({ outcome: 'accepted' })
     expect(terminal.writes).toEqual(['later'])
   })

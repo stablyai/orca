@@ -36,7 +36,10 @@ export function selectUnitFiles(files, changed, graphInput) {
       return full('No proven test coverage for changed inputs')
     }
   }
-  const affected = unitConsumers([...changed, ...graph.opaque], graph.reverse)
+  const affected = unitConsumers(changed, graph.reverse)
+  for (const file of graph.opaqueConsumers ?? unitConsumers(graph.opaque, graph.reverse)) {
+    affected.add(file)
+  }
   const selected = files.filter((file) => affected.has(file))
   if (!selected.length) {
     return full('No proven test coverage for changed inputs')
@@ -44,15 +47,13 @@ export function selectUnitFiles(files, changed, graphInput) {
   return {
     files: selected,
     reason: 'Transitive imports plus indirect-input consumers',
-    full: false
+    full: false,
+    checkedInputOwners: graph.checkedInputOwners ?? []
   }
 }
 
-// A concurrency slot is charged per job, not per core, so eight 6.5-minute shards cost eight of
-// the account's slots and made the unit matrix 68% of daily slot demand. Against the checked-in
-// baseline, five shards each carry 24.7 test-minutes over four workers plus ~2.6 minutes of fixed
-// setup, so ~8.8 minutes -- less than the 10.5-minute p95 queue the oversharding was causing.
-// Full PR workflows and daily callers use five; selected drafts may use fewer.
+// Job slots, not cores, drive queueing: eight shards consumed 68% of daily slots. Five budget ~8.8min/shard versus 10.5min p95 queue.
+// Full PR/daily callers use five; selected drafts may use fewer.
 export const FULL_SHARD_COUNT = 5
 
 export function planUnitSelection({
@@ -76,6 +77,7 @@ export function planUnitSelection({
     mode: selected ? 'selected' : 'shadow',
     selectionAvailable: !candidate.full,
     reason: candidate.reason,
+    checkedInputOwners: candidate.checkedInputOwners ?? [],
     files,
     candidateFiles: candidate.files,
     executionFiles,

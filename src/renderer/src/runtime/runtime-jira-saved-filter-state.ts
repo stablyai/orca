@@ -2,11 +2,11 @@ import {
   normalizeJiraSavedFilterState,
   type JiraSavedFilterState,
   type JiraSavedFilterMutation
-} from '../../../shared/jira-saved-filters'
+} from '../../../shared/jira/jira-saved-filters'
 import {
   JIRA_SAVED_FILTER_RUNTIME_CAPABILITY,
   JIRA_SAVED_FILTER_UPDATE_REQUIRED
-} from '../../../shared/jira-saved-filter-capability'
+} from '../../../shared/jira/jira-saved-filter-capability'
 import { assertRuntimeEnvironmentCapability, callRuntimeRpc } from './runtime-rpc-client'
 import type { RuntimeClientTarget } from '../../../shared/runtime-client-target'
 

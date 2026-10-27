@@ -1,9 +1,4 @@
 import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../shared/agent-session-journal-types'
-// A turn that was running when its host went away ends when recovery settles it. That settlement is
-// the edge the user needs to see — their work stopped — so the session reads as newly done then,
-// with what the host observed of the end as its verdict, and nothing along the way may call it a
-// success. Every hop is the real one: durable journal, recovery settlement, status feed, the host's
-// status row, and the turn-completion feed.
 
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
@@ -50,7 +45,6 @@ afterEach(async () => {
   await rm(root, { recursive: true, force: true })
 })
 
-/** A session whose turn was running when its host went away, reopened by the next host. */
 async function sessionWithRunningTurn() {
   let clock = TURN_STARTED
   const journal = await journals.open({
@@ -79,7 +73,7 @@ async function sessionWithRunningTurn() {
   const feed = new StructuredAgentSessionStatusFeed({
     logger: createStructuredAgentSessionLogger(),
     sessions,
-    getRecord: () => null,
+    getConversation: () => null,
     now: () => clock,
     statusSink: () => ({
       publish: (summary, subject) => server.ingestStructuredStatus(summary, subject),
@@ -104,7 +98,7 @@ async function sessionWithRunningTurn() {
   })
   const completionEvents: AgentSessionTurnCompletionEvent[] = []
   completions.subscribe({ id: 'dot-1', emit: (event) => completionEvents.push(event) })
-  // Both feeds have seen the turn running, so its settlement is a transition they must judge.
+  // Observe running state first so recovery becomes a feed transition.
   completions.observe(SESSION, journal)
   expect(summaries.at(-1)).toMatchObject({ status: 'working', statusStartedAt: TURN_STARTED })
   const publish = (): void => {
@@ -144,7 +138,6 @@ describe('a turn recovery settled after its host went away', () => {
       'an exit observed before the restart',
       { state: 'interrupted', completedAt: EXIT_OBSERVED },
       'interruption',
-      // A turn the user did not stop is a fault, marked as a failure is.
       'failed'
     ]
   ] satisfies [
@@ -166,24 +159,22 @@ describe('a turn recovery settled after its host went away', () => {
         turnOutcome: outcome
       })
       const [row] = session.server.getStatusSnapshot()
-      // A done row dated at the recovery is a completion the user has not read yet.
+      // Recovery time makes this an unread completion.
       expect(row).toMatchObject({
         state: 'done',
         stateStartedAt: RECOVERED,
         mainAgent: { state: 'done', outcome, stateStartedAt: RECOVERED }
       })
-      // Nobody stopped it: the flag older readers take as a user's stop stays down.
+      // Legacy personal-stop flags must remain false for host recovery.
       expect(row?.interrupted ?? false).toBe(false)
-      // The sidebar and tab read the published row, with no user action in between.
       expect(row && agentVerdictDisplayMark(row)).toBe(mark)
       expect(row && agentTurnEndedOnPurpose(row)).toBe(false)
-      // The dot and the OS notification come only from a completion event, and none is sent.
+      // Recovery must not emit completion dots or OS notifications.
       expect(session.completionEvents).toEqual([])
     }
   )
 
-  // The tab's mark reads a turn nobody stopped as failed; the chat's turn bar reads it like a
-  // finished turn, since the chat's notice row says why it stopped.
+  // Tabs mark unrequested ends failed; chat bars defer the explanation to the notice row.
   it.each([
     [
       'a restart',
@@ -192,7 +183,6 @@ describe('a turn recovery settled after its host went away', () => {
     ],
     [
       'quitting Orca',
-      // A quit evicts the child, writing no Stop event, and its adapter settles the open turn.
       (journal: AgentSessionJournal) =>
         journal.appendItem(
           { provider: 'codex', threadId: THREAD, turnId: 'turn-1', ordinal: 9 },
@@ -240,7 +230,6 @@ describe('a turn recovery settled after its host went away', () => {
     expect(session.summaries.at(-1)).toMatchObject({
       status: 'idle',
       statusStartedAt: RECOVERED,
-      // No evidence of the old owner's death: the end cannot be proven.
       turnOutcome: 'unconfirmed'
     })
     const [row] = session.server.getStatusSnapshot()
@@ -253,8 +242,7 @@ describe('a turn recovery settled after its host went away', () => {
     expect(session.completionEvents).toEqual([])
   })
 
-  // The control that keeps the silence above from being vacuous: a turn its provider finished does
-  // reach the completion feed through this same harness, dated by its own end.
+  // Positive control: provider-finished turns must emit through this same harness.
   it('leaves a turn its provider finished to the provider, dated by its own end', async () => {
     const session = await sessionWithRunningTurn()
     session.recoverAt(RECOVERED)

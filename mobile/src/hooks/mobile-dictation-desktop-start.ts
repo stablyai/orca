@@ -38,7 +38,6 @@ function setIdleIfGenerationCurrent(options: StartMobileDictationDesktopSessionO
   }
 }
 
-/** Cancel a start that went stale mid-startup: the desktop session is the only thing it holds. */
 async function cancelStaleStart(options: StartMobileDictationDesktopSessionOptions): Promise<void> {
   const { client, dictationId } = options
   options.clearActiveId(dictationId)
@@ -56,20 +55,12 @@ export async function startMobileDictationDesktopSession(
     dictationSessionStart.interpret(reply)
   } catch (err) {
     const wasCurrent = isCurrentStart(options)
-    // The hook opened the capture before this ran, and an open microphone holds the screen, so a
-    // failure that is still this start's gives both back — through the same rollback the commit
-    // failure below uses, because "undo the capture this start opened" is one thing the hook owns.
-    //
-    // Only while it is still current, though: there is one capture seam and it carries no start
-    // identity. A stale rejection — A opened the capture, the user cancelled, B is recording —
-    // would end B's microphone and hand back B's screen. Past the generation, the capture was
-    // already ended by whatever superseded this start, or belongs to the one that did.
+    // Capture already holds the screen; roll both back only while this start is current. A stale start could otherwise stop its replacement’s microphone. Capture itself has no start identity.
     if (wasCurrent) {
       try {
         options.rollbackRecordingStart()
       } catch {
-        // Guarded for the reason the commit arm below is: a seam that throws on the way down must
-        // not take the desktop cancel with it, nor replace the failure the caller is about to see.
+        // A throwing rollback must neither skip desktop cancellation nor replace the original failure.
       }
     }
     options.clearActiveId(dictationId)
@@ -84,16 +75,14 @@ export async function startMobileDictationDesktopSession(
     throw err
   }
 
-  // One check, in the same continuation as the commit below: nothing awaits between them now that
-  // the screen is the microphone's, so a second one would re-read state nothing could have moved.
+  // No await separates this check and commit; nothing can supersede the start between them.
   if (!isCurrentStart(options)) {
     await cancelStaleStart(options)
     return false
   }
 
   try {
-    // Committed here rather than after a return, which would let a queued cancel resurrect
-    // microphone recording after cleanup.
+    // Commit before returning so queued cancellation cannot resurrect recording after cleanup.
     if (!options.commitRecordingStart()) {
       throw new Error('Failed to start microphone recording')
     }

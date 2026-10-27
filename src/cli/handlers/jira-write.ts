@@ -5,7 +5,7 @@ import type {
   JiraMutationResult,
   JiraProject,
   JiraTransition
-} from '../../shared/jira-types'
+} from '../../shared/jira/jira-types'
 import type { CommandHandler, HandlerContext } from '../dispatch'
 import { readCommandBody } from '../command-body-input'
 import {

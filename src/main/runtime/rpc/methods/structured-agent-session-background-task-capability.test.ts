@@ -7,7 +7,7 @@ import {
   AGENT_SESSION_BACKGROUND_TASK_STOP_CAPABILITY
 } from '../../../../shared/protocol-version'
 import { AGENT_SESSION_BACKGROUND_TASK_CHILD_VIEWS_CAPABILITY } from '../../../../shared/agent-session-background-task-child-views-capability'
-import { remoteRuntimeClientCapabilities } from '../../../../shared/remote-runtime-client-capabilities'
+import { remoteRuntimeClientCapabilities } from '../../../../shared/remote-runtime/remote-runtime-client-capabilities'
 import type { AgentSessionSubscribeInput } from '../../../native-chat/agent-session-wire/structured-agent-session-subscribers'
 import {
   call,
@@ -237,8 +237,7 @@ describe('child views at the RPC boundary', () => {
     expect(JSON.stringify(result)).not.toContain('children')
   })
 
-  // A reader draws a per-row stop only when the host offers a targeted one, so a roster with no
-  // targeted stop (a Codex child, a persistent command) has no dead button to withhold.
+  // Without targeted stop, clients draw no row buttons; stoppability filtering must not hide those rosters.
   it('keeps unstoppable rows for a stop-only reader when no targeted stop is offered', async () => {
     const codexRoster: AgentSessionBackgroundTaskState = {
       state: 'monitoring',

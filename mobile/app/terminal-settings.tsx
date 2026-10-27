@@ -34,8 +34,7 @@ type RestoreValue = 'indefinite' | '60s' | '5m' | '30m'
 
 type TextSizeValue = 'smallest' | 'smaller' | 'default' | 'large' | 'larger' | 'largest'
 
-// scale = baseline zoom the terminal WebView applies on top of fit-to-width.
-// Keep in sync with TERMINAL_TEXT_SCALES; pinch-to-zoom snaps to these values.
+// Baseline zoom sits above fit-to-width; keep presets in sync with TERMINAL_TEXT_SCALES and pinch snapping.
 const TEXT_SIZE_OPTIONS: (PickerOption<TextSizeValue> & { scale: number })[] = [
   { value: 'smallest', label: 'Smallest (50%)', scale: 0.5 },
   { value: 'smaller', label: 'Smaller (75%)', scale: 0.75 },
@@ -68,10 +67,7 @@ function valueFromMs(ms: number | null | undefined): RestoreValue {
   if (exact) {
     return exact.value
   }
-  // Why: server may return a non-preset ms (custom value, future preset,
-  // or server-side clamp). Snap to the closest finite preset so the
-  // picker's selected radio agrees with the row sublabel rendered by
-  // autoRestoreSummary ("After Xs").
+  // Snap custom/future/clamped server durations to nearest finite preset so picker agrees with autoRestoreSummary.
   let closest: (typeof AUTO_RESTORE_FIT_OPTIONS)[number] | null = null
   let bestDelta = Infinity
   for (const opt of AUTO_RESTORE_FIT_OPTIONS) {
@@ -139,11 +135,7 @@ export default function TerminalSettingsScreen() {
     [hostClients]
   )
 
-  // Why: per-host current value, lazily fetched. We keep state at the
-  // screen level rather than per-row so the picker can render at root
-  // level — embedding PickerModal inside a row clipped its BottomDrawer
-  // absoluteFill backdrop to the ScrollView content frame and made the
-  // drawer appear cut-off.
+  // Keep host values/picker at screen root: row-nested PickerModal clips drawer backdrop to ScrollView content.
   const [hostMs, setHostMs] = useState<Record<string, number | null | undefined>>({})
   const [pickerHostId, setPickerHostId] = useState<string | null>(null)
 
@@ -162,8 +154,7 @@ export default function TerminalSettingsScreen() {
   }, [])
 
   const [autocompleteEnabled, setAutocompleteEnabled] = useState(false)
-  // Why: a fast toggle before the initial load resolves must win — otherwise the
-  // delayed read would clobber the user's choice with the stored (stale) value.
+  // Fast toggle must win over delayed initial load.
   const userToggledAutocompleteRef = useRef(false)
   useEffect(() => {
     let stale = false
@@ -193,8 +184,7 @@ export default function TerminalSettingsScreen() {
         .catch(() => null)
         .then((value) => {
           if (!cancelled) {
-            // Why: reconnect/status ticks can replay the same value; preserving
-            // object identity avoids rerendering every settings row again.
+            // Preserve object identity on repeated reconnect/status values to avoid rerendering every row.
             setHostMs((prev) => setTerminalAutoRestoreFitMsForHost(prev, host.id, value))
           }
         })
@@ -235,8 +225,7 @@ export default function TerminalSettingsScreen() {
   const scrollHandler = useAnimatedScrollHandler((event) => {
     scrollOffsetY.value = event.contentOffset.y
   })
-  // Why: imperative toggle instead of state — a re-render while a drag gesture
-  // is active would rebuild the row gestures and could cancel the drag.
+  // Toggle imperatively: rerendering during drag rebuilds row gestures and can cancel it.
   const setScrollEnabled = useCallback(
     (enabled: boolean) => {
       setTerminalSettingsScrollEnabled(scrollRef, enabled)

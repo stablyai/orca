@@ -17,7 +17,7 @@ import {
   readNativeChatAttachmentCache,
   useNativeChatComposerAttachments
 } from './use-native-chat-composer-attachments'
-import type * as RemoteRuntimePtyIdModule from '../../../../shared/remote-runtime-pty-id'
+import type * as RemoteRuntimePtyIdModule from '../../../../shared/remote-runtime/remote-runtime-pty-id'
 
 const electron = vi.hoisted(() => ({
   on: vi.fn(),
@@ -56,7 +56,7 @@ vi.mock('@/i18n/i18n', () => ({
   translate: (_key: string, fallback: string, values?: Record<string, unknown>) =>
     fallback.replace(/\{\{(\w+)\}\}/g, (_match, name: string) => String(values?.[name]))
 }))
-vi.mock('../../../../shared/remote-runtime-pty-id', async (importOriginal) => ({
+vi.mock('../../../../shared/remote-runtime/remote-runtime-pty-id', async (importOriginal) => ({
   ...(await importOriginal<typeof RemoteRuntimePtyIdModule>()),
   isRemoteRuntimePtyId: () => false
 }))
@@ -263,8 +263,7 @@ describe('native chat composer drop scoping', () => {
     expect(intake.stat).not.toHaveBeenCalled()
   })
 
-  // #15782: an OS drop that produces nothing must say so. Every assertion here
-  // is about the absence of silence, not about which path was attached.
+  // An OS drop with no readable path must report failure instead of silently attaching nothing.
   it('reports an OS drop whose files carry no readable path', async () => {
     electron.getPathForFile.mockReturnValue('')
     const view = render(<ComposerProbe pane="chat-a" />)
@@ -327,7 +326,6 @@ describe('native chat composer drop scoping', () => {
       '/repro/second.png'
     ])
     expect(readNativeChatAttachmentCache('chat-b')).toEqual([])
-    // Each image gets a chip at the caret, numbered by its thumbnail.
     expect(target.textContent).toBe('Image #1 Image #2 untouched draft')
 
     view.unmount()
@@ -352,7 +350,6 @@ describe('native chat composer drop scoping', () => {
       '/repro/first.png',
       '/repro/second.png'
     ])
-    // Both panes show the one shared draft.
     const shown = [...view.container.querySelectorAll('output:not([data-notice])')].map(
       (output) => output.textContent
     )

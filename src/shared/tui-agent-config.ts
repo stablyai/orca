@@ -1,6 +1,6 @@
 import type { TuiAgent } from './tui-agent'
-import { getOrcaCliCommandNameForPlatform } from './orca-cli-command-name'
-import type { TuiAgentConfig } from './tui-agent-config-types'
+import { getOrcaCliCommandNameForPlatform, skipsLinuxOrcaCliRename } from './orca-cli-command-name'
+import type { TuiAgentConfig, TuiAgentConfigSource } from './tui-agent-config-types'
 
 export type {
   AgentPromptInjectionMode,
@@ -9,12 +9,6 @@ export type {
   TuiAgentConfig,
   TuiAgentDetectionRuntime
 } from './tui-agent-config-types'
-
-/** Authoring form: `launchCmd` and `expectedProcess` default to `detectCmd` (true for most agents). */
-type TuiAgentConfigSource = Omit<TuiAgentConfig, 'launchCmd' | 'expectedProcess'> & {
-  launchCmd?: string
-  expectedProcess?: string
-}
 
 function resolveTuiAgentConfig(source: TuiAgentConfigSource): TuiAgentConfig {
   return {
@@ -29,17 +23,22 @@ const TUI_AGENT_CONFIG_SOURCE: Record<TuiAgent, TuiAgentConfigSource> = {
     detectCmd: 'claude',
     promptInjectionMode: 'argv',
     pasteNeedsTypedRequest: true,
-    // Why: `claude --prefill <text>` seeds the input without submitting, avoiding the paste-after-ready race (PR https://github.com/stablyai/orca/pull/926).
+    // Native --prefill avoids paste-after-ready races (https://github.com/stablyai/orca/pull/926).
     draftPromptFlag: '--prefill',
-    preflightTrust: 'claude'
+    preflightTrust: 'claude',
+    // Why: CLAUDE_CODE_DISABLE_TERMINAL_TITLE drops the `✳` title tui-idle waits on (#22655).
+    draftPasteReadySignal: 'claude-composer-prompt',
+    workerStartReadsComposerMarker: true,
+    // Why: Claude decodes CSI-u Ctrl+Enter on local ConPTY; CR made a remapped ctrl+enter act as Enter (#29711).
+    ctrlEnterEncoding: 'csi-u'
   },
   'claude-agent-teams': {
-    // Why: an Orca-provided launch mode, not a separate binary; detection follows the Orca CLI.
+    // This launch mode uses Orca’s CLI wrapper rather than a separate agent binary.
     detectCmd: 'orca',
     detectCmdAliases: ['orca-dev', 'orca-ide'],
-    // Why: require Claude too so fresh installs (Orca shim always present) don't report Agent Teams without an agent CLI.
+    // Orca’s always-present shim alone must not report installed Agent Teams without Claude.
     detectRequiredCommands: ['claude'],
-    // Why: Windows/WSL use Claude's in-process Agent Teams fallback, not this Orca native-pane/tmux-shim wrapper.
+    // Windows/WSL use Claude’s in-process fallback, not this native-pane/tmux wrapper.
     detectUnsupportedRuntimes: ['win32', 'wsl'],
     launchCmd: 'orca claude-teams',
     launchCmdByPlatform: {
@@ -49,7 +48,11 @@ const TUI_AGENT_CONFIG_SOURCE: Record<TuiAgent, TuiAgentConfigSource> = {
     expectedProcess: 'claude',
     promptInjectionMode: 'stdin-after-start',
     pasteNeedsTypedRequest: true,
-    preflightTrust: 'claude'
+    preflightTrust: 'claude',
+    draftPasteReadySignal: 'claude-composer-prompt',
+    workerStartReadsComposerMarker: true,
+    // Why: runs the same Claude binary, so Ctrl+Enter must match `claude`.
+    ctrlEnterEncoding: 'csi-u'
   },
   codebuddy: {
     detectCmd: 'codebuddy',
@@ -70,23 +73,17 @@ const TUI_AGENT_CONFIG_SOURCE: Record<TuiAgent, TuiAgentConfigSource> = {
     draftPasteReadyTimeoutMs: 20_000,
     submitRetryDelayMs: 1200
   },
-  autohand: {
-    detectCmd: 'autohand',
-    promptInjectionMode: 'stdin-after-start'
-  },
+  autohand: { detectCmd: 'autohand', promptInjectionMode: 'stdin-after-start' },
   ante: {
     detectCmd: 'ante',
     // Why: `ante --prompt` is headless (runs once and exits), so launch the bare TUI and inject after startup.
     promptInjectionMode: 'stdin-after-start'
   },
   trae: {
-    // Why: the unrelated open-source bytedance/trae-agent also installs a `trae-cli`
-    // binary, so detect TRAE CN's CLI on `traecli`, an alias only TRAE CN ships.
+    // Use TRAE CN’s unique traecli alias; unrelated bytedance/trae-agent also installs trae-cli.
     detectCmd: 'traecli',
-    // Why: `traecli [prompt]` takes the task as a positional argv, same as Claude/Codex.
     promptInjectionMode: 'argv',
-    // Why: separator so prompts starting with `help`/`config`/`-…` aren't parsed as a
-    // Trae subcommand or flag — `--` stops both in its Cobra parser.
+    // Cobra’s -- stops subcommands and flags from consuming prompt text such as help/config/-….
     argvPromptSeparator: '--'
   },
   opencode: {
@@ -94,15 +91,12 @@ const TUI_AGENT_CONFIG_SOURCE: Record<TuiAgent, TuiAgentConfigSource> = {
     promptInjectionMode: 'flag-prompt',
     // Why: opencode enables bracketed paste before its composer mounts; wait for the post-\x1b[?2004h show-cursor so paste lands.
     draftPasteReadySignal: 'render-cursor-after-bracketed-paste',
-    // Why: OpenCode 2 draws its input box before its agent list loads and drops an Enter sent
-    // in between; the agent/model row under the box is the first moment it can submit.
+    // OpenCode 2 renders input before loading its agent list; only the later agent/model row proves submit readiness.
     submitPasteReadySignal: 'opencode-agent-row',
-    // Why 20s: measured on two Windows hosts (ConPTY dll backend, as pinned by
-    // local-pty-utils), opencode does not enable bracketed paste until ~4.8s and its
-    // composer is not ready until ~10s — so the 8s default expired first and the draft
-    // was pasted blind, mid-startup (#22479). The signal itself fired every time in
-    // those runs, so the budget was the problem, not a dropped escape.
+    // Two Windows ConPTY hosts enabled paste at ~4.8s and composer readiness at ~10s; the 8s default pasted blind. Signals arrived reliably (#22479).
     draftPasteReadyTimeoutMs: 20_000,
+    // Why: OpenCode decodes CSI-u Ctrl+Enter without local ConPTY kitty negotiation (#25372).
+    ctrlEnterEncoding: 'csi-u',
     composerReadyCaptures: [
       'opencode-1-18-32-timed-boot-slow',
       'opencode-1-18-32-timed-boot-hidden-pane',
@@ -110,7 +104,6 @@ const TUI_AGENT_CONFIG_SOURCE: Record<TuiAgent, TuiAgentConfigSource> = {
       'opencode-cmd-2-0-21-timed-warm-server'
     ]
   },
-  // Why: opencode2 installs as a separate binary and uses the same prompt flags and paste signals.
   opencode2: {
     detectCmd: 'opencode2',
     // The private server inherits this pane's hook endpoint and identity.
@@ -130,13 +123,13 @@ const TUI_AGENT_CONFIG_SOURCE: Record<TuiAgent, TuiAgentConfigSource> = {
   'mimo-code': {
     detectCmd: 'mimo',
     promptInjectionMode: 'flag-prompt',
-    // Why: mirrors opencode's cursor-gated signal by parity; mimo's startup stream isn't separately validated.
+    // Mirror OpenCode’s cursor gate by parity; MiMo startup has not been separately validated.
     draftPasteReadySignal: 'render-cursor-after-bracketed-paste'
   },
   pi: {
     detectCmd: 'pi',
     promptInjectionMode: 'argv',
-    // Why: pi has no `--prefill` and paste-after-ready races its long startup; the orca-prefill extension seeds this env var instead.
+    // Pi has no prefill flag; the managed extension seeds env to avoid its long startup paste race.
     draftPromptEnvVar: 'ORCA_PI_PREFILL',
     // Why: Pi decodes CSI-u; Esc+CR submits after tool subprocesses reset live KKP state (#9703).
     windowsShiftEnterEncoding: 'csi-u'
@@ -145,17 +138,15 @@ const TUI_AGENT_CONFIG_SOURCE: Record<TuiAgent, TuiAgentConfigSource> = {
     detectCmd: 'omp',
     promptInjectionMode: 'argv',
     draftPromptEnvVar: 'ORCA_OMP_PREFILL',
-    // Why: OMP wraps Pi's TUI, so the bytes land in a Pi reader that decodes CSI-u (see pi above).
+    // OMP embeds Pi’s CSI-u reader; preserve newline encoding after live Kitty state resets.
     windowsShiftEnterEncoding: 'csi-u'
   },
   'prime-agent': {
     detectCmd: 'prime-agent',
-    // Why: `prime-agent [options] [@files...] [message...]` takes the task as positional argv.
     promptInjectionMode: 'argv',
-    // Why: separator so prompts starting with `help`/`agents`/`-…` aren't parsed as a
-    // subcommand or flag — its help documents `--` as "treat all following arguments as messages".
+    // -- forces all later arguments to be messages instead of Prime Agent subcommands/flags.
     argvPromptSeparator: '--',
-    // Why: Prime Agent embeds Pi's TUI and decodes CSI-u the same way (see pi above).
+    // Prime Agent embeds Pi’s CSI-u reader.
     windowsShiftEnterEncoding: 'csi-u'
   },
   qoder: {
@@ -178,13 +169,9 @@ const TUI_AGENT_CONFIG_SOURCE: Record<TuiAgent, TuiAgentConfigSource> = {
   antigravity: {
     detectCmd: 'agy',
     promptInjectionMode: 'flag-prompt-interactive',
-    // Why: agy's first-launch trust menu consumes the bracketed paste, and its trust is
-    // exact-path rather than inherited, so every freshly created child worktree raises it
-    // again — a supervised worker would otherwise always fail at agent_readiness
-    // (agent-trust-presets.ts).
+    // Antigravity trust is exact-path, so every child workspace can show a menu that consumes paste; pre-write trust (agent-trust-presets.ts).
     preflightTrust: 'antigravity',
-    // Why: agy 1.2.x collapses long paste as "↑ N more lines" and expands it over seconds; byte
-    // ingest alone (~500 ms on macOS) finishes before the composer is submit-ready.
+    // agy 1.2.x expands collapsed multiline pastes over seconds; byte ingest finishing does not prove submit readiness.
     submitLineSettleMsPerLine: 45
   },
   aider: {
@@ -204,9 +191,9 @@ const TUI_AGENT_CONFIG_SOURCE: Record<TuiAgent, TuiAgentConfigSource> = {
     promptInjectionMode: 'stdin-after-start'
   },
   kiro: {
-    // Why: the Kiro installer (https://cli.kiro.dev/install) ships `kiro-cli`, not `kiro`; keep id 'kiro' for stored prefs.
+    // The installer ships kiro-cli; preserve kiro as the stored preference ID.
     detectCmd: 'kiro-cli',
-    // Why: trust flags like --trust-all-tools attach to Kiro's `chat` subcommand, not top-level kiro-cli.
+    // Kiro trust flags belong to chat, not the top-level command.
     launchCmd: 'kiro-cli chat --tui',
     promptInjectionMode: 'stdin-after-start'
   },
@@ -215,7 +202,7 @@ const TUI_AGENT_CONFIG_SOURCE: Record<TuiAgent, TuiAgentConfigSource> = {
     promptInjectionMode: 'stdin-after-start'
   },
   aug: {
-    // Why: @augmentcode/auggie installs a binary named `auggie`, not `aug`; keep id 'aug' for stored prefs.
+    // The package installs auggie; preserve aug as the stored preference ID.
     detectCmd: 'auggie',
     promptInjectionMode: 'stdin-after-start'
   },
@@ -232,14 +219,14 @@ const TUI_AGENT_CONFIG_SOURCE: Record<TuiAgent, TuiAgentConfigSource> = {
     promptInjectionMode: 'stdin-after-start'
   },
   'command-code': {
-    // Why: use the full name (not its `cmd` alias) so detection doesn't collide with Windows' built-in cmd.exe.
+    // Avoid cmd alias detection colliding with Windows cmd.exe.
     detectCmd: 'command-code',
     // Why: `--trust` skips the first-run trust prompt so it doesn't consume the task text.
     launchCmd: 'command-code --trust',
     promptInjectionMode: 'argv'
   },
   continue: {
-    // Why: Continue's CLI binary is `cn`; `continue` is a bash/zsh builtin and would resolve to the shell keyword.
+    // Use the actual cn binary; continue resolves to a shell keyword.
     detectCmd: 'cn',
     promptInjectionMode: 'stdin-after-start'
   },
@@ -257,35 +244,33 @@ const TUI_AGENT_CONFIG_SOURCE: Record<TuiAgent, TuiAgentConfigSource> = {
     ctrlEnterEncoding: 'csi-u'
   },
   kimi: {
-    // Why: the `kimi` launcher runs as `kimi-code`, so foreground-process recognition never
-    // matches the agent without the alias — terminal reuse and `dispatch --inject` fail.
+    preflightTrust: 'kimi',
+    // The kimi launcher runs as kimi-code; recognize the alias for reuse and dispatch --inject.
     detectCmd: 'kimi',
     detectCmdAliases: ['kimi-code'],
     promptInjectionMode: 'stdin-after-start'
   },
   'mistral-vibe': {
-    // Why: installer exposes binary `vibe` though the package is mistral-vibe; keep old name as alias for wrapped installs.
+    // Installers expose vibe; keep mistral-vibe for wrapped installs.
     detectCmd: 'vibe',
     detectCmdAliases: ['mistral-vibe'],
     promptInjectionMode: 'stdin-after-start'
   },
   'qwen-code': {
-    // Why: package is qwen-code but its installed CLI binary on PATH is `qwen`.
     detectCmd: 'qwen',
     promptInjectionMode: 'stdin-after-start',
-    // Why: on Windows (and Node < 20) Qwen ignores Enter until 500 ms after a paste (0.24.7
-    // `pasteWorkaround`), so the Enter 50 ms after it is dropped; on an empty composer it is a no-op.
+    // Qwen 0.24.7 drops Enter for 500ms after paste on Windows/Node <20; delayed retry is harmless if the first submit landed.
     submitRetryDelayMs: 1200
   },
   rovo: {
-    // Why: Rovo Dev is an `acli` subcommand with no binary of its own on PATH; `acli rovodev run [instruction]` is one-shot.
+    // Rovo is an acli subcommand; passing an instruction there would run one-shot.
     detectCmd: 'acli',
     launchCmd: 'acli rovodev run',
     promptInjectionMode: 'stdin-after-start'
   },
   hermes: {
     detectCmd: 'hermes',
-    // Why: bare `hermes` opens the classic REPL; `--tui` starts the full-screen agent UI Orca hosts.
+    // Bare hermes opens the classic REPL; --tui selects the hosted full-screen interface.
     launchCmd: 'hermes --tui',
     // Why: Hermes delivers the prompt via its startup-query contract, submitting only after the composer is ready.
     promptInjectionMode: 'hermes-query'
@@ -307,9 +292,7 @@ const TUI_AGENT_CONFIG_SOURCE: Record<TuiAgent, TuiAgentConfigSource> = {
     promptInjectionMode: 'argv',
     // Why: separator so prompts like `help`/`--version` aren't parsed as Grok CLI syntax.
     argvPromptSeparator: '--',
-    // Why: grok shimmers its startup logo until the session opens, so the quiet
-    // window never settles and launch drafts waited out the full 8s hard
-    // timeout; its composer glyph lands ~0.6s in.
+    // Grok’s shimmering logo never satisfies render quiet; its composer glyph arrives around 0.6s instead of the 8s timeout.
     draftPasteReadySignal: 'grok-composer-prompt',
     ctrlEnterEncoding: 'csi-u'
   },
@@ -328,27 +311,24 @@ const TUI_AGENT_CONFIG_SOURCE: Record<TuiAgent, TuiAgentConfigSource> = {
     expectedProcess: 'dsh',
     promptInjectionMode: 'stdin-after-start',
     // The whale intro keeps repainting behind the ready composer.
-    draftPasteReadySignal: 'dsh-composer-prompt'
+    draftPasteReadySignal: 'dsh-composer-prompt',
+    // Why: dsh-tui 0.17's launchpad refuses Enter, keeping the draft, until its session opens (1-24 s).
+    submitRetryDelayMs: 1000,
+    submitRetryBudgetMs: 30_000
   },
   zcode: {
     detectCmd: 'zcode',
-    // Why: ZCode's entrypoint sets `process.title = 'zcode-cli'` (its `process-name.ts`
-    // exports CLI_COMMAND_NAME 'zcode' / CLI_PROCESS_NAME 'zcode-cli'), so the foreground
-    // name never equals the launch command and dispatch would refuse with no_agent_detected.
+    // ZCode sets process.title to zcode-cli; matching only its zcode launch name would reject dispatch as no_agent_detected.
     expectedProcess: 'zcode-cli',
-    // Why: ZCode reads `positionals[0]` as a subcommand name (apps/zcode-cli/packages/cli/src/run.ts),
-    // so an argv prompt exits with "Unknown command"; `-p` is headless-only and quits after the turn.
+    // ZCode treats positional text as subcommands and -p is headless; inject into the running TUI.
     promptInjectionMode: 'stdin-after-start',
-    // Why: ZCode repaints an animated ASCII banner indefinitely, so the default quiet-render
-    // window never settles; its composer box corner is the real "input is live" signal.
+    // Its banner animates indefinitely; wait for the input box corner instead of render quiet.
     draftPasteReadySignal: 'zcode-composer-prompt',
     composerReadyCaptures: ['zcode-composer-ready']
   },
-  devin: {
-    detectCmd: 'devin',
-    // Why: `devin -- <prompt>` auto-submits immediately (docs.devin.ai/cli), so start the REPL with no argv prompt.
-    promptInjectionMode: 'stdin-after-start'
-  },
+  // Why: stdin-after-start's follow-up wrote before Devin's input loop existed (#26302); `devin -- <prompt>` submits reliably.
+  // prettier-ignore
+  devin: { detectCmd: 'devin', promptInjectionMode: 'argv', argvPromptSeparator: '--' },
   // prettier-ignore
   jcode: { detectCmd: 'jcode', launchCmd: 'jcode', expectedProcess: 'jcode', promptInjectionMode: 'stdin-after-start' }
 }
@@ -373,8 +353,7 @@ export function getTuiAgentLaunchCommand(
   platform: NodeJS.Platform,
   opts?: { isRemote?: boolean }
 ): string {
-  // Why: local-only orca-ide rename (avoids GNOME Orca clash) must not leak to Linux remotes, whose relay shim is always `orca`.
-  if (opts?.isRemote && platform === 'linux') {
+  if (platform === 'linux' && skipsLinuxOrcaCliRename(opts?.isRemote)) {
     return config.launchCmd
   }
   return config.launchCmdByPlatform?.[platform] ?? config.launchCmd

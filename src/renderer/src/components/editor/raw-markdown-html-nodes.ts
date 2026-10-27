@@ -1,4 +1,8 @@
-import { Node, mergeAttributes } from '@tiptap/core'
+import { Node } from '@tiptap/core'
+import {
+  rawMarkdownSourceParseRules,
+  renderRawMarkdownSourceHtml
+} from './raw-markdown-html-source-dom'
 import { createMarkdownTokenizerStart } from './markdown-tokenizer-start'
 import {
   skipInlineTransportStartScan,
@@ -58,9 +62,7 @@ function createRawSourceNode({
       }
     },
 
-    // Why: converting embedded HTML tags into placeholder tokens before the
-    // markdown parser runs keeps marked's built-in paragraph tokenization intact
-    // while still letting Orca round-trip the raw markup verbatim.
+    // Placeholder tokens preserve marked’s paragraph boundaries while round-tripping raw HTML verbatim.
     markdownTokenName: name,
     markdownTokenizer: {
       name,
@@ -95,25 +97,11 @@ function createRawSourceNode({
     renderText: ({ node }) => (typeof node.attrs.value === 'string' ? node.attrs.value : ''),
 
     parseHTML() {
-      return [
-        {
-          tag: `${inline ? 'span' : 'div'}[${marker}]`,
-          getAttrs: (element: HTMLElement) => ({ value: element.textContent ?? '' })
-        }
-      ]
+      return rawMarkdownSourceParseRules({ inline, kind, marker, className })
     },
 
     renderHTML({ HTMLAttributes, node }) {
-      const value = typeof node.attrs.value === 'string' ? node.attrs.value : ''
-      return [
-        inline ? 'span' : 'div',
-        mergeAttributes(HTMLAttributes, {
-          [marker]: '',
-          contenteditable: 'false',
-          class: className
-        }),
-        inline ? value : ['pre', value]
-      ]
+      return renderRawMarkdownSourceHtml({ inline, kind, marker, className }, HTMLAttributes, node)
     }
   })
 }

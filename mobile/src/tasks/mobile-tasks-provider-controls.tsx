@@ -68,10 +68,7 @@ export function renderMobileTasksProviderControls(model: ConnectionPresentationM
               style={[
                 styles.segmentRepoDot,
                 {
-                  backgroundColor: getRepoBadgeColor(
-                    repoPickerSelectedRepo,
-                    repoPickerSelectedRepo.displayName
-                  )
+                  backgroundColor: getRepoBadgeColor(repoPickerSelectedRepo)
                 }
               ]}
             />

@@ -1,7 +1,3 @@
-// The adapter against OpenCode's recorded `opencode acp` traffic (1.18.31, and 2.0.29 for the
-// `opencode-v2-*` ones): each recording plays back as the agent, and the assertions read the
-// journal a client would see.
-
 import { afterEach, describe, expect, it } from 'vitest'
 import type { AgentJournalMessageItem } from '../../shared/agent-session-journal-types'
 import { readAgentJournalTurn } from '../../shared/agent-session-turn-record'
@@ -114,7 +110,7 @@ describe('OpenCode recordings through the adapter', () => {
     await answer(rig, replay, 'reject', 1)
     await waitFor(() => expect(replay.awaiting).toBeNull())
     await waitFor(async () => expect(await turns(rig)).toMatchObject([{ state: 'completed' }]))
-    // The write OpenCode repeats to a client that took no file system leaves no row.
+    // No filesystem capability was advertised, so the repeated write request creates no row.
     expect(JSON.stringify((await rig.rig.rows()).map((row) => row.body))).not.toContain(
       'fs/write_text_file'
     )
@@ -147,11 +143,12 @@ describe('OpenCode 2 recordings through the adapter', () => {
     )
     expect((await rowsOf(rig, 'tool-call')).at(-1)?.body).toMatchObject({
       state: 'completed',
-      exitCode: 0
+      exitCode: 0,
+      output: { head: 'TOOL-OK\n', truncated: false }
     })
   })
 
-  // Unlike 1.x, 2.x ends the turn when a permission is rejected: it answers `cancelled`.
+  // OpenCode 2.x ends denied-permission turns as cancelled, unlike 1.x.
   it('a rejected permission fails its tool and OpenCode ends the turn as cancelled', async () => {
     const { rig, replay } = await replaying('opencode-v2-deny', 'opencode2')
     await answer(rig, replay, 'reject')

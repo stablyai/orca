@@ -1,5 +1,8 @@
 import { WORKSPACE_ATTACHMENT_RUNTIME_CAPABILITIES } from './workspace-attachment-capabilities'
 
+export const WORKTREE_OPEN_EXISTING_BRANCH_RUNTIME_CAPABILITY =
+  'worktree.open-existing-branch.v1' as const
+
 export const PROJECT_HOST_SETUP_RUNTIME_CAPABILITY = 'project-host-setup.v1' as const
 // Why: older hosts strip `hostId` from setup update/delete and act on the first same-id twin.
 export const PROJECT_HOST_SETUP_HOST_TARGET_RUNTIME_CAPABILITY =
@@ -15,33 +18,23 @@ export const REPO_SEARCH_QUALIFIED_REFS_RUNTIME_CAPABILITY =
   'repo.search-qualified-refs.v1' as const
 export const FOLDER_WORKSPACE_PATH_STATUS_RUNTIME_CAPABILITY =
   'folder-workspace.path-status.v1' as const
-// Why: older hosts strip worktree.create's clientMutationId, so mobile must only
-// replay ambiguous cutovers when the host advertises idempotent create support;
-// status.worktreeCreateIdempotency carries the optional host retention policy.
+// Replay ambiguous creates only with advertised idempotency support; older hosts strip clientMutationId. status.worktreeCreateIdempotency supplies optional retention policy.
 export const WORKTREE_CREATE_IDEMPOTENCY_RUNTIME_CAPABILITY =
   'worktree.create-idempotency.v1' as const
-// Scope of the claim: a hook that RUNS and fails cannot delete the checkout. It does not promise
-// the hook was found — an SSH host whose orca.yaml cannot be read answers "no hook" and the removal
-// proceeds, because a failed read is indistinguishable from an absent file across the relay
-// (#20196 tracks the provider contract that would separate them).
-// Why (#19334): "accepts --run-hooks" and "refuses to delete when the archive hook fails" were
-// indistinguishable from the outside — both take the flag and behave identically on success, so
-// the only way to tell an unfixed host apart was to fail a hook and see whether the checkout
-// survived. Lifecycle integrations keep teardown evidence inside the checkout and cannot risk
-// that. Advertised unconditionally: every build carrying this constant has the gate.
+// A failed running archive hook blocks deletion. This does not prove a hook was found: unreadable SSH orca.yaml is indistinguishable from absence (#20196).
+// Advertise the gate so callers need not risk their checkout by probing a failure (#19334).
 export const WORKTREE_ARCHIVE_FAILURE_BLOCKING_RUNTIME_CAPABILITY =
   'worktree.archive-failure-blocking.v1' as const
 export const WORKTREE_VISIBILITY_DEFAULTS_RUNTIME_CAPABILITY =
   'worktree.visibility-defaults.v1' as const
 export const WORKTREE_VISIBILITY_SOURCE_DEFAULTS_RUNTIME_CAPABILITY =
   'worktree.visibility-source-defaults.v1' as const
-// Why: Git's checkout delete outlives worktree.rm's older client timeouts. A client with this waits
-// for the reply and shows `removing` rows as Deleting; one without it is answered on acceptance and
-// would re-show that row as a normal workspace, so the host leaves such rows out of its listings.
+// Capable clients wait for deletion and display removing rows. Legacy clients receive acceptance early, so hosts hide those rows to avoid showing them as normal workspaces.
 export const WORKTREE_BACKGROUND_REMOVAL_RUNTIME_CAPABILITY =
   'worktree.background-removal.v1' as const
 
 export const WORKTREE_RUNTIME_CAPABILITIES = [
+  WORKTREE_OPEN_EXISTING_BRANCH_RUNTIME_CAPABILITY,
   PROJECT_HOST_SETUP_RUNTIME_CAPABILITY,
   PROJECT_HOST_SETUP_HOST_TARGET_RUNTIME_CAPABILITY,
   WORKSPACE_RUN_CONTEXT_RUNTIME_CAPABILITY,

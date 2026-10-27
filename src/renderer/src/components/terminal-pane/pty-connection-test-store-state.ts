@@ -55,7 +55,8 @@ export type StoreState = {
     displayName?: string
     executionHostId?: string | null
   }[]
-  projects: {
+  endpointProjectHostSetups: AppState['endpointProjectHostSetups']
+  endpointProjects: {
     id: string
     localWindowsRuntimePreference?:
       | { kind: 'inherit-global' }
@@ -102,6 +103,7 @@ export type StoreState = {
   removeDeferredSshSessionId: ReturnType<typeof vi.fn>
   consumePendingColdRestore: ReturnType<typeof vi.fn>
   consumePendingSnapshot: ReturnType<typeof vi.fn>
+  consumeTabStartupCommand?: ReturnType<typeof vi.fn>
   runtimePaneTitlesByTabId: Record<string, Record<number, string>>
   agentStatusByPaneKey: Record<string, unknown>
   retainedAgentsByPaneKey: Record<string, { agentType: AgentType }>

@@ -94,19 +94,37 @@ describe('agentSessionFingerprintConflict', () => {
 describe('admitAgentSessionMutation', () => {
   const base = { envelope: envelope(), hostFingerprint: 'f'.repeat(64), lease: LEASE }
 
-  it('admits a first-time operation under a live lease at the expected fence', () => {
+  it('admits a matching first-time operation and refuses a mismatched payload', () => {
     expect(admitAgentSessionMutation({ ...base, ledger: ADMIT('f'.repeat(64)) }).decision).toBe(
       'admit'
     )
+    expect(
+      admitAgentSessionMutation({
+        ...base,
+        hostFingerprint: 'a'.repeat(64),
+        ledger: ADMIT('a'.repeat(64))
+      })
+    ).toMatchObject({
+      decision: 'refused',
+      refusal: {
+        code: 'agent_session_operation_conflict',
+        details: { reason: 'fingerprintMismatch' }
+      }
+    })
   })
 
-  it('replays a recorded operation without re-checking the fence', () => {
+  it('replays a recorded outcome even while the lease is unreconciled', () => {
+    const recorded = {
+      ...row('f'.repeat(64)),
+      outcome: { status: 'succeeded' as const, sessionId: 'created-session' }
+    }
     const admission = admitAgentSessionMutation({
       ...base,
       envelope: envelope({ expectedRuntimeFence: 1 }),
-      ledger: { decision: 'replay', row: row('f'.repeat(64)) }
+      lease: { ...LEASE, unreconciled: true },
+      ledger: { decision: 'replay', row: recorded }
     })
-    expect(admission.decision).toBe('replay')
+    expect(admission).toEqual({ decision: 'replay', row: recorded })
   })
 
   it('admits a writer whatever fence the client last saw', () => {

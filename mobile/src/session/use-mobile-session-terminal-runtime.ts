@@ -40,7 +40,7 @@ export function useMobileSessionTerminalRuntime(scope: MobileSessionScreenStateM
     activeSessionTabId,
     keyboardHeight
   } = scope
-  // Why: WebView pushes terminal modes on every change so paste reads a synchronous snapshot — no round-trip.
+  // Keep pushed terminal modes synchronous for paste without another round trip.
   const ptyModesRef = useRef<Map<string, TerminalModes>>(new Map())
   const terminalGestureInputBucketsRef = useRef<Map<string, TerminalGestureInputBucket>>(new Map())
   const terminalGestureInputQueuesRef = useRef<Map<string, TerminalGestureInputQueue>>(new Map())
@@ -48,13 +48,12 @@ export function useMobileSessionTerminalRuntime(scope: MobileSessionScreenStateM
   const terminalCwdRef = useRef<Map<string, string>>(new Map())
   const initialModesSeenRef = useRef<Set<string>>(new Set())
   const deviceTokenRef = useRef<string | null>(clientId)
-  // Keep the authenticated identity synchronous with the client exposed to downstream hooks.
   deviceTokenRef.current = clientId
-  // Why: state (not a ref) so the connection verdict re-renders when the endpoint loads and the Tailscale hint can appear.
+  // Use state so loaded endpoint hints trigger a render.
   const [hostEndpoint, setHostEndpoint] = useState<string | null>(null)
   const clientRef = useRef<RpcClient | null>(null)
   const connStateRef = useRef<ConnectionState>(connState)
-  // Why: measured once on mount, then passed with every subscribe so the server can auto-fit the PTY to phone dims.
+  // Carry measured phone dimensions on subscribes so the host fits before snapshot serialization.
   const viewportRef = useRef<{ cols: number; rows: number } | null>(null)
   const viewportMeasuredRef = useRef(false)
   const terminalRefs = useRef<Map<string, TerminalWebViewHandle>>(new Map())
@@ -72,13 +71,11 @@ export function useMobileSessionTerminalRuntime(scope: MobileSessionScreenStateM
   } | null>(null)
   const terminalUnsubsRef = useRef<Map<string, () => void>>(new Map())
   const subscribingHandlesRef = useRef<Set<string>>(new Set())
-  // Lease-only streams do not render, so reconciliation tracks them separately.
   const leaseOnlyHandlesRef = useRef<Set<string>>(new Set())
   const initializedHandlesRef = useRef<Set<string>>(new Set())
   const terminalDiagnosticsRef = useRef(new MobileTerminalDiagnostics())
-  // Why: bounds the scrollback→resubscribe fit loop per handle (STA-3337).
   const viewportResubscribeBudgetRef = useRef(new TerminalViewportResubscribeBudget())
-  // Why: don't subscribe until the WebView fires web-ready — iOS may defer JS in hidden WebViews and init() messages would queue unrendered.
+  // Wait for web-ready: hidden iOS WebViews can defer JS and otherwise queue init before rendering.
   const webReadyHandlesRef = useRef<Set<string>>(new Set())
   const activeHandleRef = useRef<string | null>(null)
   const executionHost = useWorkspaceExecutionHost()
@@ -99,11 +96,9 @@ export function useMobileSessionTerminalRuntime(scope: MobileSessionScreenStateM
   const reconcileBufferedDraftsRef = useRef(bufferedTerminalDraftState.reconcileTerminalTabs)
   const activeSessionTabTypeRef = useRef<MobileSessionTabType | null>(null)
   const pendingSelectionRef = useRef<PendingSessionSelection | null>(null)
-  // Why: remember the page id to activate its session tab once it syncs (bridge auto-activate flags only webContents, not the app-level active tab).
   const pendingBrowserFocusPageIdRef = useRef<string | null>(null)
   const switchSessionTabRef = useRef<((tab: MobileSessionTab) => void) | null>(null)
   const pendingTerminalActivationAttemptRef = useRef<string | null>(null)
-  // Why: route the terminal URL tap through a ref so it runs the current handleCreateBrowser closure (the memoized one may hold a null-client render).
   const handleCreateBrowserRef = useRef<((rawUrl?: string) => Promise<boolean>) | null>(null)
   const terminalInventoryRecoveryScope = JSON.stringify([hostId, worktreeId])
   const { registerTerminalInventoryRecoveryAction, signalTerminalInventoryRecovery } =
@@ -113,13 +108,11 @@ export function useMobileSessionTerminalRuntime(scope: MobileSessionScreenStateM
   const markdownSaveSeqRef = useRef<Map<string, number>>(new Map())
   const markdownSaveInFlightRef = useRef<Set<string>>(new Set())
   const subscribeSeqRef = useRef<Map<string, number>>(new Map())
-  // Why: post-RPC refresh timers capture this screen and must not survive route reuse or unmount.
   const delayedActionTimersRef = useRef<Set<ReturnType<typeof setTimeout>>>(new Set())
-  // Why: highest applyLayout seq seen per handle; drop older scrollback/resized as stale, but a >20 gap resets (fresh subscription/server restart).
+  // Reject stale layout sequences; large gaps reset the mark for fresh subscriptions/server restarts.
   const layoutSeqRef = useRef<Map<string, number>>(new Map())
   const sendingRef = useRef(false)
-  // Why: the terminal frame React Native laid out, unrounded, for every fit; window.innerHeight can
-  // overstate the visible area. Null until the frame's first layout.
+  // Fit the unrounded measured frame; window height can exceed visible area.
   const terminalFrameRef = useRef<TerminalFrame | null>(null)
   const activeSessionTab = sessionTabs.find((tab) => tab.id === activeSessionTabId) ?? null
   const {

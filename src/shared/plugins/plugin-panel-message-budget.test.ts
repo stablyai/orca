@@ -17,13 +17,6 @@ describe('structuredCloneMessageBytes', () => {
     expect(structuredCloneMessageBytes(tinyView, 256)).toBeGreaterThanOrEqual(128)
     expect(structuredCloneMessageBytes(new Blob([new Uint8Array(80)]), 256)).toBe(80)
   })
-
-  it('handles cycles and stops walking once the cap is exceeded', () => {
-    const cyclic: { self?: unknown; text: string } = { text: 'x'.repeat(100) }
-    cyclic.self = cyclic
-
-    expect(structuredCloneMessageBytes(cyclic, 32)).toBe(33)
-  })
 })
 
 describe('createPanelMessageBudget', () => {

@@ -42,7 +42,6 @@ describe('SSH hosts that need a typed credential', () => {
   const harness = createSshIpcHarness(mocks)
   const { handlers, mockStore, mockWindow } = harness
 
-  /** A fresh app launch: the main process registers SSH with the persisted targets. */
   async function launch(targets: SshTarget[]): Promise<void> {
     await resetSshHandlerStateForTests()
     mockSshStore.listTargets.mockReturnValue(targets)
@@ -50,7 +49,6 @@ describe('SSH hosts that need a typed credential', () => {
     registerAgain()
   }
 
-  /** What the main process does at launch, and again when macOS recreates the window. */
   function registerAgain(): void {
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the same partial store and window the shared harness registers with.
     registerSshHandlers(mockStore as never, () => mockWindow as never)

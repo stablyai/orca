@@ -1,5 +1,6 @@
 import type { CtrlTabOrderMode, Tab, TabContentType, TabGroup } from '../../../../shared/tab-types'
 import { resolveUnifiedTabLabel } from '../../../../shared/tab-title-resolution'
+import { readStructuredChatTabName } from '@/runtime/structured-chat-tab-name'
 import type { AppState } from '../../store/types'
 import { sanitizeRecentTabIds } from '../../store/slices/tab-group-state'
 import { getActiveTabNavOrder, type VisibleTabRef } from './group-tab-order'
@@ -16,21 +17,6 @@ export type RecentTabSwitcherModel = {
   items: RecentTabSwitcherItem[]
   activeIndex: number
 }
-
-type RecentTabSwitchingState = Pick<
-  AppState,
-  | 'activeBrowserTabId'
-  | 'activeFileId'
-  | 'activeGroupIdByWorktree'
-  | 'activeTabId'
-  | 'activeTabType'
-  | 'browserTabsByWorktree'
-  | 'groupsByWorktree'
-  | 'openFiles'
-  | 'tabBarOrderByWorktree'
-  | 'tabsByWorktree'
-  | 'unifiedTabsByWorktree'
-> & { settings?: AppState['settings'] }
 
 export function normalizeCtrlTabOrderMode(
   value: CtrlTabOrderMode | null | undefined
@@ -88,22 +74,26 @@ function getActiveVisibleTabKey(
 function getTabLabel(
   tab: Tab | undefined,
   generatedTitlesEnabled: boolean,
-  fallback: string
+  fallback: string,
+  state: AppState
 ): string {
-  return resolveUnifiedTabLabel(tab, generatedTitlesEnabled, fallback)
+  return tab?.contentType === 'agent-session'
+    ? readStructuredChatTabName(tab, state)
+    : resolveUnifiedTabLabel(tab, generatedTitlesEnabled, fallback)
 }
 
 function toSwitcherItem(
   entry: VisibleTabRef,
   tabById: ReadonlyMap<string, Tab>,
   dirtyFileIds: ReadonlySet<string>,
-  generatedTitlesEnabled: boolean
+  generatedTitlesEnabled: boolean,
+  state: AppState
 ): RecentTabSwitcherItem {
   const backingTab = entry.tabId ? tabById.get(entry.tabId) : undefined
   return {
     ...entry,
     key: getVisibleTabKey(entry),
-    label: getTabLabel(backingTab, generatedTitlesEnabled, entry.id),
+    label: getTabLabel(backingTab, generatedTitlesEnabled, entry.id, state),
     contentType: backingTab?.contentType ?? (entry.type === 'editor' ? 'editor' : entry.type),
     isDirty: entry.type === 'editor' && dirtyFileIds.has(entry.id)
   }
@@ -150,7 +140,7 @@ function orderByMru(
 }
 
 export function buildRecentTabSwitcherModel(
-  state: RecentTabSwitchingState,
+  state: AppState,
   worktreeId: string,
   mode: CtrlTabOrderMode
 ): RecentTabSwitcherModel | null {
@@ -170,7 +160,7 @@ export function buildRecentTabSwitcherModel(
   const generatedTitlesEnabled = state.settings?.tabAutoGenerateTitle === true
   const itemByKey = new Map(
     visibleEntries.map((entry) => {
-      const item = toSwitcherItem(entry, tabById, dirtyFileIds, generatedTitlesEnabled)
+      const item = toSwitcherItem(entry, tabById, dirtyFileIds, generatedTitlesEnabled, state)
       return [item.key, item] as const
     })
   )

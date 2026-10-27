@@ -4,7 +4,7 @@ import {
   MAX_JIRA_SAVED_FILTER_ID_LENGTH,
   MAX_JIRA_SAVED_FILTER_NAME_LENGTH,
   MAX_JIRA_SAVED_FILTER_JQL_LENGTH
-} from '../jira-saved-filters'
+} from '../jira/jira-saved-filters'
 
 const FilterId = z.string().trim().min(1).max(MAX_JIRA_SAVED_FILTER_ID_LENGTH)
 export const JiraSavedFilterMutationParam = z.discriminatedUnion('kind', [

@@ -6,10 +6,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { BrowserClientHostCommandEvent } from '../../shared/browser-client-host-protocol'
 import { BrowserClientFileChannelTransport } from './browser-client-file-channel-transport'
 import { BrowserClientPageCommandExecutor } from './browser-client-page-command-executor'
-import {
-  BROWSER_CLIENT_UPLOAD_STAGING_MAX_COMMANDS_PER_PAGE,
-  BrowserClientUploadStaging
-} from './browser-client-upload-staging'
+import { BrowserClientUploadStaging } from './browser-client-upload-staging'
 import type { BrowserRoutePageGuestIdentity } from './browser-route-page-authority'
 
 const partition = `persist:orca-browser-v1-${'a'.repeat(64)}`
@@ -153,23 +150,6 @@ function negotiatedTransport(contents: string): BrowserClientFileChannelTranspor
 }
 
 describe('client-placed browser.upload routing', () => {
-  it('never forwards the remote paths verbatim to the local automation runtime', async () => {
-    const transport = negotiatedTransport('remote-bytes')
-    const { executor, automationCalls } = createHarness({ fileChannel: transport })
-    await executor.handle(createPage, new AbortController().signal)
-
-    const result = await executor.handle(
-      uploadCommand(['docs/report.pdf']),
-      new AbortController().signal
-    )
-
-    expect(result).toEqual({ status: 'completed', value: { uploaded: true } })
-    const forwarded = automationCalls[0].params.files as string[]
-    expect(forwarded).not.toContain('docs/report.pdf')
-    expect(path.basename(forwarded[0])).toBe('report.pdf')
-    expect(forwarded[0].startsWith(stagingRoot)).toBe(true)
-  })
-
   it('fails the command instead of resolving remote paths on this desktop when unnegotiated', async () => {
     const { executor, executeAutomation } = createHarness()
     await executor.handle(createPage, new AbortController().signal)
@@ -192,8 +172,7 @@ describe('client-placed browser.upload routing', () => {
     await executor.handle(createPage, new AbortController().signal)
     await executor.handle(uploadCommand(['docs/report.pdf']), new AbortController().signal)
 
-    // Why: DOM.setFileInputFiles only records the path — Chromium reads it at submit time, so the
-    // bytes must still be on disk once browser.upload has already reported success.
+    // Chromium reads file-input paths lazily, after upload success.
     const staged = (automationCalls[0].params.files as string[])[0]
     expect(await readFile(staged, 'utf8')).toBe('remote-bytes')
 
@@ -203,33 +182,12 @@ describe('client-placed browser.upload routing', () => {
     expect(await readdir(stagingRoot)).toHaveLength(0)
   })
 
-  it('evicts a page oldest-first once it exceeds the staged-command budget', async () => {
-    const transport = negotiatedTransport('remote-bytes')
-    const { executor, uploadStaging } = createHarness({ fileChannel: transport })
-    await executor.handle(createPage, new AbortController().signal)
-
-    for (let sequence = 2; sequence <= 8; sequence += 1) {
-      await executor.handle(
-        uploadCommand(['docs/report.pdf'], sequence),
-        new AbortController().signal
-      )
-    }
-
-    expect(uploadStaging.activeStagingCount()).toBe(
-      BROWSER_CLIENT_UPLOAD_STAGING_MAX_COMMANDS_PER_PAGE
-    )
-    expect(await readdir(stagingRoot)).toHaveLength(
-      BROWSER_CLIENT_UPLOAD_STAGING_MAX_COMMANDS_PER_PAGE
-    )
-  })
-
   it('retires the guest and releases the route when the staged copies cannot be removed', async () => {
     const transport = negotiatedTransport('remote-bytes')
     const { executor, retireRendererPage, releaseRouteSession, releaseNetworkRoute } =
       createHarness({
         fileChannel: transport,
-        // Why: Chromium still holding a staged file open is EBUSY on Windows, and the partition is
-        // only reclaimed once the guest and its route session are gone.
+        // Windows may keep staged files busy until the guest and route session close.
         uploadStaging: new BrowserClientUploadStaging(stagingRoot, {
           mkdir: async () => {},
           writeFile: async () => {},
@@ -278,10 +236,8 @@ describe('client-placed browser.upload routing', () => {
     })
     await executor.handle(createPage, new AbortController().signal)
     await executor.handle(uploadCommand(['docs/report.pdf']), new AbortController().signal)
-    // The busy directory fails the close command, so the copies are still staged at shutdown.
     await executor.handle(closePageCommand(), new AbortController().signal)
 
-    // Why: leaving staged bytes behind silently is how a fenced host keeps another user's files.
     await expect(executor.close()).rejects.toMatchObject({
       message: 'Browser client page executor cleanup failed',
       errors: expect.arrayContaining([

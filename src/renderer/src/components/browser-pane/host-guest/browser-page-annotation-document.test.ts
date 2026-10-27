@@ -7,7 +7,6 @@ import { createBrowserMockApi } from '@/store/slices/browser-slice-test-harness'
 import { createTestStoreDrawnFromMain } from '@/store/slices/browser-slice-drawn-from-main.test-fixture'
 import { makeAnnotation } from '@/store/slices/browser-annotation-test-fixture'
 import { syncGuestAnnotationViewportBridge } from '../annotate/guest-annotation-viewport-bridge'
-import { createBrowserPageWebviewLoadingHandlers } from './browser-page-webview-loading-handlers'
 import { createBrowserPageWebviewNavigationHandlers } from './browser-page-webview-navigation-handlers'
 
 vi.mock('@/runtime/runtime-rpc-client', async (importOriginal) =>
@@ -73,9 +72,10 @@ async function createHarness() {
       token: 'token'
     })
   })
-  const common = {
+  const navigation = createBrowserPageWebviewNavigationHandlers({
     webview,
     browserTabId: pageId,
+    browserTabUrl: 'https://example.com/',
     faviconUrlRef: ref<string | null>(null),
     addressBarInputRef: ref<HTMLInputElement | null>(null),
     activeLoadFailureRef: ref(null),
@@ -87,25 +87,13 @@ async function createHarness() {
       store.getState().setBrowserPageUrl(id, nextUrl)
     ),
     setBrowserOverlayViewport,
-    setAddressBarValue: vi.fn()
-  }
-  const loading = createBrowserPageWebviewLoadingHandlers({
-    ...common,
-    browserTabUrlRef: ref('https://example.com/'),
-    addressBarValueRef: ref('https://example.com/'),
-    keepAddressBarFocusRef: ref(false),
-    focusAddressBarNow: () => false
-  })
-  const navigation = createBrowserPageWebviewNavigationHandlers({
-    ...common,
-    browserTabUrl: 'https://example.com/',
+    setAddressBarValue: vi.fn(),
     addBrowserHistoryEntryRef: ref(vi.fn()),
     annotationViewportBridgeTokenRef: ref('token')
   })
   return {
     store,
     pageId,
-    loading,
     navigation,
     cancelCapture,
     setAnnotationViewportBridge,
@@ -156,10 +144,10 @@ describe('browser annotation document boundaries', () => {
     })
   })
 
-  it('retains the exact saved notes on actual same-URL loading-start, including untracked loads', async () => {
+  it('retains the exact saved notes on a same-URL reload', async () => {
     const h = await createHarness()
     const saved = h.store.getState().browserAnnotationsByPageId[h.pageId]
-    h.loading.handleDidStartLoading()
+    h.navigation.handleDidStartNavigation(navigationEvent('https://example.com/'))
     expect(h.store.getState().browserAnnotationsByPageId[h.pageId]).toBe(saved)
     expect(h.store.getState().browserAnnotationMarkerIdsByPageId[h.pageId]).toBeUndefined()
     expect(h.cancelCapture).toHaveBeenCalledOnce()
@@ -187,7 +175,6 @@ describe('browser annotation document boundaries', () => {
   it('keeps geometry retired after redirects and away/back commits, including missed start events', async () => {
     const h = await createHarness()
     const saved = h.store.getState().browserAnnotationsByPageId[h.pageId]
-    h.loading.handleDidStartLoading()
     h.navigation.handleDidRedirectNavigation(navigationEvent('https://example.org/redirect'))
     h.navigation.handleFullDidNavigate({ url: 'https://example.org/redirect', isMainFrame: true })
     h.navigation.handleFullDidNavigate({ url: 'https://example.com/', isMainFrame: true })

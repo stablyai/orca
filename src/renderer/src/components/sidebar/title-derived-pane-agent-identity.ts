@@ -35,14 +35,11 @@ export function resolveTitleDerivedAgentType(
   if (agentType !== 'claude') {
     return agentType
   }
-  // Why: Claude's task-title spinner heuristic has no provider identity. In
-  // split panes it can match arbitrary terminal spinners, so sidebar rows only
-  // accept Claude when the title itself names Claude.
+  // A generic spinner cannot identify Claude; the title must name it explicitly.
   if (!CLAUDE_AGENT_TOKEN_RE.test(title)) {
     return null
   }
-  // Why: a "claude" word inside another agent's task text is a mention, not identity.
-  // Only a title that PRESENTS Claude may take a pane away from its known owner (#8940).
+  // A mention in another agent’s task text must not override its known owner.
   const owner = ownerAgentType && ownerAgentType !== 'unknown' ? ownerAgentType : null
   if (owner && owner !== 'claude' && !isClaudeIdentityFrameTitle(title)) {
     return null
@@ -61,17 +58,7 @@ function titleRetiresProcessRead(args: { title: string; defaultTitle?: string })
   return args.title.trim().length === 0 || titleShowsNoAgent(args.title, args.defaultTitle)
 }
 
-/**
- * Which agent a hook-less pane runs: a live process read (unless the title is a shell's), then the
- * title, then the agent Orca launched while the title shows activity. Sidebar-only; the tab icon
- * orders its signals differently. Null means the pane shows no agent row.
- *
- * Only the process read may keep a row whose title shows no agent activity (Codex retitles itself
- * to the project name, #23767): the mounted pane's tracker re-derives it at command boundaries,
- * which a pane without shell command marks never emits, so exit titles must still retire it. The
- * launch record is a tab-scoped latch with no run id, so it stays a fallback for titles that show
- * activity, and ranks below a title that names a different agent (pane reuse).
- */
+/** Prefer live process evidence, then title identity, then an active launch fallback; shell/default exit titles retire process evidence. */
 export function resolveTitleDerivedPaneAgent(args: {
   title: string
   defaultTitle?: string
@@ -80,8 +67,7 @@ export function resolveTitleDerivedPaneAgent(args: {
   launchAgentType: AgentType | null
   foreground: TitleDerivedPaneForeground | undefined
 }): AgentType | null {
-  // Why: a shell/default title is exit evidence the process read may not have caught up with; a
-  // reattach's launch record is not a read at all and can name an agent that already exited.
+  // Launch records lack run IDs; exit titles must override stale process reads after reattach.
   const processAgent =
     args.foreground?.agentEvidence !== 'process-read' || titleRetiresProcessRead(args)
       ? null

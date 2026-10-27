@@ -4,11 +4,7 @@ import {
   type RequestScope
 } from './generation-scoped-request-owner'
 
-// Why this file exists: the owner's claim is that a caller cannot publish into it except through a
-// lease it issued, in the generation it issued it. Every expect-error directive below is that claim
-// as an assertion — tsc fails on a directive that stops catching an error, so
-// `pnpm --dir mobile typecheck` is the gate. `mobile/tsconfig.json` excludes tests, so a type-level
-// assertion written in one is checked by nothing; that is why these live here. Nothing here runs.
+// Keep lease compile fences outside tests because mobile typechecking excludes them; unused expect-error directives fail the gate.
 
 type FileParameters = { readonly query: string }
 

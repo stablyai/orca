@@ -10,9 +10,7 @@ import {
 } from './system-transport/system-ssh-windows-file-write'
 
 const windows = getRemoteHostPlatform('win32-x64')
-// Why: sshd runs an exec request through its DefaultShell, which is cmd.exe on a
-// stock Windows OpenSSH install, and cmd.exe refuses a longer line with exit 1
-// and a localized "The command line is too long" — the whole connect dies there.
+// Stock sshd's cmd.exe DefaultShell rejects oversized exec lines with localized diagnostics.
 describe('Windows remote command line limit', () => {
   it.each([
     [
@@ -34,8 +32,7 @@ describe('Windows remote command line limit', () => {
         }
       )
     ],
-    // F11 flagged these two as uncovered. They carry one path literal each, so they are the file
-    // commands whose length a caller can actually move.
+    // These file commands carry caller-controlled path literals and must stay within the same budget.
     ['write file', makeWindowsWriteFileCommand('C:\\Users\\orca\\.orca-remote\\relay.js')],
     [
       'publish staged file',
@@ -83,12 +80,7 @@ describe('Windows remote command line limit', () => {
   })
 })
 
-/**
- * F11 asked whether a pathological path could reach the budget, and what happens if it does.
- * Measured: the inline encoding crosses 8000 at roughly 2500 high-entropy path characters — an
- * order of magnitude past what Windows itself accepts — and the failure is a throw before any ssh
- * is spawned, never a hang.
- */
+/** Check headroom with compressible paths and pre-spawn refusal with high-entropy paths that exceed the budget. */
 describe('Windows file command budget headroom', () => {
   it('absorbs a path far longer than Windows will accept', () => {
     const deep = `C:\\Users\\orca\\${'segment\\'.repeat(30)}relay.js`

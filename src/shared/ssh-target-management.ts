@@ -1,14 +1,9 @@
 import type { SshRepoReadoption, SshTarget, SshTargetSummary } from './ssh-types'
 
-// Why: hosts without this have no ssh.listEditableTargets/addTarget/updateTarget/removeTarget/
-// browseDir or repo.addRemote. A client must disable server SSH management, never manage its own
-// SSH hosts in their place.
+// Old hosts lack SSH management RPCs; disable server management rather than editing the client’s own hosts.
 export const SSH_TARGET_MANAGEMENT_RUNTIME_CAPABILITY = 'ssh.target-management.v1' as const
 
-/**
- * The SSH target fields a paired client reads and writes on a server. There is deliberately no
- * password or key passphrase: the server stores none and asks for them when it connects.
- */
+/** Paired-client editable fields; exclude passwords/passphrases because the server prompts instead of storing them. */
 export const SSH_EDITABLE_TARGET_FIELDS = [
   'label',
   'configHost',
@@ -23,6 +18,7 @@ export const SSH_EDITABLE_TARGET_FIELDS = [
   'jumpHost',
   'relayGracePeriodSeconds',
   'systemSshConnectionReuse',
+  'systemSshProxyConnectionReuse',
   'remoteRuntime',
   'allowRemoteCliControl'
 ] as const satisfies readonly (keyof SshTarget)[]

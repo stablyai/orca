@@ -33,8 +33,7 @@ const StructuredAgentSessionOverlaySlot = memo(function StructuredAgentSessionOv
   hasSplitGroups: boolean
   onFocusOwningGroup: ((groupId: string) => void) | undefined
 }): React.JSX.Element | null {
-  // Each chat is read from the host recorded on its tab, never from its workspace id, which two
-  // hosts can share.
+  // Resolve from the tab’s recorded host because workspace ids can collide across hosts.
   const owner = useAppStore((state) => structuredAgentSessionOwnerForTab(state, tab))
   const target = useMemo(() => structuredAgentSessionTargetForHost(owner), [owner])
   if (!target) {

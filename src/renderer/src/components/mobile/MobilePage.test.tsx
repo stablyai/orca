@@ -2,7 +2,7 @@
 
 import '@testing-library/jest-dom/vitest'
 
-import { cleanup, render, screen, waitFor } from '@testing-library/react'
+import { act, cleanup, render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { MobilePairingConnectionMode } from '../../../../shared/mobile-pairing-connection-mode'
@@ -154,8 +154,7 @@ describe('MobilePage pairing connection mode', () => {
       pairingUrl: 'orca://pair#automatic'
     })
     listNetworkInterfaces.mockReset().mockResolvedValue({ interfaces: [] })
-    // The paired-device cache is module state shared by every surface; reset it so
-    // one test's phones cannot decide the next test's opening stage.
+    // Reset the shared device cache so prior tests cannot determine this test’s opening stage.
     _resetPairedMobileDevicesCacheForTests()
     mocks.storeState = {
       closeMobilePage: vi.fn(),
@@ -214,16 +213,13 @@ describe('MobilePage pairing connection mode', () => {
         })
     )
     await user.click(screen.getByRole('button', { name: 'LAN' }))
-    // No rotate flag: the main process rotates exactly once on the policy
-    // mismatch, so concurrent windows converge on the same fresh token.
+    // Main rotates on policy mismatch; omitting rotate lets concurrent windows share the same fresh token.
     await waitFor(() =>
       expect(getPairingQR).toHaveBeenLastCalledWith({
         connectionMode: 'local-only'
       })
     )
     expect(screen.getByTestId('mode')).toHaveTextContent('local-only')
-    // The prior Relay QR clears immediately so the old policy's code is never
-    // shown while the reminted local-only offer is still pending.
     expect(screen.getByTestId('pairing-qr')).toHaveTextContent('none')
     expect(screen.getByTestId('pairing-url')).toHaveTextContent('none')
     expect(mocks.storeState.updateSettings).toHaveBeenCalledWith({
@@ -271,7 +267,6 @@ describe('MobilePage pairing connection mode', () => {
     mocks.storeState.orcaProfileAuthStatus = { state: 'local' }
     await openPairingStep()
 
-    // Why: Relay's one-click sign-in links this desktop to an Orca account, so it is opt-in.
     await waitFor(() => expect(getPairingQR).toHaveBeenCalledWith({ connectionMode: 'local-only' }))
     await waitFor(() => expect(screen.getByTestId('pairing-qr')).toHaveTextContent('base64,qr'))
     expect(screen.getByTestId('mode')).toHaveTextContent('local-only')
@@ -285,12 +280,10 @@ describe('MobilePage pairing connection mode', () => {
     await waitFor(() => expect(screen.getByTestId('pairing-qr')).toHaveTextContent('base64,qr'))
     getPairingQR.mockClear()
 
-    // Switching to Orca Relay must clear the local QR, not remint a
-    // local-only code under the Relay label.
     await user.click(screen.getByRole('button', { name: 'Orca Relay' }))
     await waitFor(() => expect(screen.getByTestId('mode')).toHaveTextContent('automatic'))
     await waitFor(() => expect(screen.getByTestId('pairing-qr')).toHaveTextContent('none'))
-    await new Promise((resolve) => setTimeout(resolve, 20))
+    await act(async () => {})
     expect(getPairingQR).not.toHaveBeenCalled()
     expect(screen.getByTestId('can-generate')).toHaveTextContent('false')
   })
@@ -304,7 +297,7 @@ describe('MobilePage pairing connection mode', () => {
     getPairingQR.mockClear()
 
     await user.click(screen.getByRole('button', { name: 'Change address' }))
-    await new Promise((resolve) => setTimeout(resolve, 20))
+    await act(async () => {})
     expect(getPairingQR).not.toHaveBeenCalled()
     expect(screen.getByTestId('pairing-qr')).toHaveTextContent('none')
   })
@@ -317,7 +310,6 @@ describe('MobilePage pairing connection mode', () => {
     await user.click(screen.getByRole('button', { name: 'Enter flow' }))
     await user.click(screen.getByRole('button', { name: 'Continue' }))
 
-    // Signed-out Anywhere (an explicit choice) shows no QR at all.
     await user.click(screen.getByRole('button', { name: 'Orca Relay' }))
     await waitFor(() => expect(screen.getByTestId('pairing-qr')).toHaveTextContent('none'))
     getPairingQR.mockClear()
@@ -331,12 +323,9 @@ describe('MobilePage pairing connection mode', () => {
         })
     )
 
-    // Signing in unlocks Relay, so Step 2 mints an honest Relay QR.
     mocks.storeState.orcaProfileAuthStatus = { state: 'connected' }
     rerender(<MobilePage />)
     await waitFor(() => expect(getPairingQR).toHaveBeenCalledWith({ connectionMode: 'automatic' }))
-    // Between the auth flip and the mint resolving, no code may be shown — the
-    // QR must not flash a stale/optimistic value while the Relay offer is pending.
     expect(screen.getByTestId('pairing-qr')).toHaveTextContent('none')
     expect(screen.getByTestId('pairing-url')).toHaveTextContent('none')
 
@@ -361,7 +350,7 @@ describe('MobilePage pairing connection mode', () => {
     expect(screen.getByTestId('pairing-url')).toHaveTextContent('none')
   })
 
-  it('keeps the copy fallback when the real encoder cannot render the offer', async () => {
+  it('keeps the copy fallback when the host reports QR encoding failure', async () => {
     getPairingQR.mockResolvedValue({
       available: true,
       qrDataUrl: null,
@@ -378,7 +367,7 @@ describe('MobilePage pairing connection mode', () => {
     expect(screen.getByTestId('pairing-url')).toHaveTextContent('copy-fallback')
   })
 
-  it('surfaces Relay failure and retries with a rotated credential', async () => {
+  it('surfaces Relay failure and requests credential rotation on retry', async () => {
     getPairingQR.mockResolvedValueOnce({
       available: false,
       reason: 'relay_mint_failed',
@@ -450,12 +439,14 @@ describe('MobilePage pairing connection mode', () => {
       expect(getPairingQR).toHaveBeenLastCalledWith({ connectionMode: 'local-only' })
     )
     await waitFor(() => expect(screen.getByTestId('pairing-qr')).toHaveTextContent('base64,local'))
-    resolveRetry?.({
-      available: true,
-      qrDataUrl: 'data:image/png;base64,stale-relay',
-      pairingUrl: 'orca://pair#stale-relay',
-      endpoint: 'ws://relay',
-      connectionMode: 'automatic'
+    await act(async () => {
+      resolveRetry?.({
+        available: true,
+        qrDataUrl: 'data:image/png;base64,stale-relay',
+        pairingUrl: 'orca://pair#stale-relay',
+        endpoint: 'ws://relay',
+        connectionMode: 'automatic'
+      })
     })
     await waitFor(() => expect(screen.getByTestId('pairing-qr')).toHaveTextContent('base64,local'))
     expect(screen.getByTestId('mode')).toHaveTextContent('local-only')
@@ -553,8 +544,7 @@ describe('MobilePage pairing connection mode', () => {
       })
     )
 
-    // Leave the flow so re-entering refetches the interface list, and hold that
-    // refetch open so Continue is clicked while the address is still unsettled.
+    // Re-enter with the address lookup held open so Continue runs before it settles.
     await user.click(screen.getByRole('button', { name: 'Back' }))
     await user.click(screen.getByRole('button', { name: 'Back' }))
     await waitFor(() => expect(screen.getByTestId('stage')).toHaveTextContent('intro'))
@@ -569,19 +559,14 @@ describe('MobilePage pairing connection mode', () => {
     await user.click(screen.getByRole('button', { name: 'Enter flow' }))
     await user.click(screen.getByRole('button', { name: 'Continue' }))
 
-    // Nothing may be minted yet, and Step 2 must read as busy rather than
-    // offering "Generate a pairing code" it is about to run itself.
     expect(getPairingQR).not.toHaveBeenCalled()
     expect(screen.getByTestId('pair-loading')).toHaveTextContent('true')
 
-    // The lease moved while the page was away.
     resolveRefresh?.({ interfaces: [{ name: 'Wi-Fi', address: '10.0.0.9' }] })
     await waitFor(() =>
       expect(screen.getByTestId('selected-address')).toHaveTextContent('10.0.0.9')
     )
-    // One Continue is one offer. Minting against the stale address and then
-    // rotating to the settled one runs two overlapping mints through main, whose
-    // rotate deletes the pending credential the first mint already returned.
+    // One Continue must mint once; stale-address reminting can rotate away the credential already returned.
     await waitFor(() => expect(getPairingQR).toHaveBeenCalledTimes(1))
     expect(getPairingQR).toHaveBeenCalledWith({
       address: '10.0.0.9',
@@ -604,7 +589,11 @@ describe('MobilePage pairing connection mode', () => {
     await user.click(screen.getByRole('button', { name: 'Continue' }))
     await waitFor(() => expect(getPairingQR).toHaveBeenCalledTimes(2))
 
-    resolveAbandonedMint?.({ available: true, qrDataUrl: 'abandoned' })
+    await act(async () => {
+      resolveAbandonedMint?.({ available: true, qrDataUrl: 'abandoned' })
+    })
+    expect(screen.getByTestId('pairing-qr')).toHaveTextContent('none')
+    expect(screen.getByTestId('pair-loading')).toHaveTextContent('true')
 
     resolveCurrentMint?.({ available: true, qrDataUrl: 'current' })
     await waitFor(() => expect(screen.getByTestId('pairing-qr')).toHaveTextContent('current'))
@@ -621,8 +610,6 @@ describe('MobilePage pairing connection mode', () => {
     render(<MobilePage />)
     await waitFor(() => expect(screen.getByTestId('stage')).toHaveTextContent('paired'))
 
-    // This jumps straight to Step 2 in the same commit that starts the interface
-    // lookup, so the auto-mint always runs before any address is known.
     await user.click(screen.getByRole('button', { name: 'Pair another device' }))
 
     await waitFor(() =>
@@ -634,8 +621,6 @@ describe('MobilePage pairing connection mode', () => {
       connectionMode: 'automatic'
     })
 
-    // Returning to the paired list and pairing again is a fresh visit: it must
-    // wait for its own lookup, not inherit the previous visit's answer.
     await user.click(screen.getByRole('button', { name: 'Back' }))
     await user.click(screen.getByRole('button', { name: 'Back' }))
     await waitFor(() => expect(screen.getByTestId('stage')).toHaveTextContent('paired'))
@@ -681,8 +666,7 @@ describe('MobilePage pairing connection mode', () => {
     render(<MobilePage />)
     await waitFor(() => expect(screen.getByTestId('stage')).toHaveTextContent('intro'))
 
-    // Enter, leave, and re-enter while the first lookup is still unanswered, so
-    // two lookups overlap and the older one is the first to settle.
+    // Overlap two visits’ lookups and settle the superseded one first.
     await user.click(screen.getByRole('button', { name: 'Enter flow' }))
     await user.click(screen.getByRole('button', { name: 'Back' }))
     await waitFor(() => expect(screen.getByTestId('stage')).toHaveTextContent('intro'))
@@ -690,9 +674,9 @@ describe('MobilePage pairing connection mode', () => {
     await user.click(screen.getByRole('button', { name: 'Continue' }))
     await waitFor(() => expect(listNetworkInterfaces).toHaveBeenCalledTimes(2))
 
-    // The superseded lookup answers first. It must neither move the picker nor
-    // release the mint — this visit's lookup has not answered yet.
-    resolveFirstLookup?.({ interfaces: [{ name: 'Wi-Fi', address: '10.0.0.5' }] })
+    await act(async () => {
+      resolveFirstLookup?.({ interfaces: [{ name: 'Wi-Fi', address: '10.0.0.5' }] })
+    })
     await waitFor(() => expect(screen.getByTestId('pair-loading')).toHaveTextContent('true'))
     expect(getPairingQR).not.toHaveBeenCalled()
     expect(screen.getByTestId('selected-address')).toHaveTextContent('none')
@@ -730,14 +714,14 @@ describe('MobilePage pairing connection mode', () => {
     await user.click(screen.getByRole('button', { name: 'Enter flow' }))
     await user.click(screen.getByRole('button', { name: 'Continue' }))
 
-    // A manual refresh overlaps the entry lookup, so both belong to this visit —
-    // the visit counter cannot tell them apart, only the request epoch can.
+    // Overlap refresh within one visit so only request epoch, not visit identity, can distinguish it.
     await user.click(screen.getByRole('button', { name: 'Refresh addresses' }))
     await waitFor(() => expect(listNetworkInterfaces).toHaveBeenCalledTimes(2))
 
-    // The superseded lookup answers first. Marking the visit addressed here would
-    // release the mint against an address its own replacement is about to change.
-    resolveEntryLookup?.({ interfaces: [{ name: 'Wi-Fi', address: '10.0.0.5' }] })
+    // The old lookup cannot release minting before its replacement chooses the address.
+    await act(async () => {
+      resolveEntryLookup?.({ interfaces: [{ name: 'Wi-Fi', address: '10.0.0.5' }] })
+    })
     await waitFor(() => expect(screen.getByTestId('pair-loading')).toHaveTextContent('true'))
     expect(getPairingQR).not.toHaveBeenCalled()
     expect(screen.getByTestId('selected-address')).toHaveTextContent('none')
@@ -783,13 +767,11 @@ describe('MobilePage pairing connection mode', () => {
     await waitFor(() => expect(getPairingQR).toHaveBeenCalledTimes(1))
     await waitFor(() => expect(screen.getByTestId('pair-loading')).toHaveTextContent('false'))
 
-    // The abandoned visit answers last. Recording it as the settled visit would
-    // walk the marker backwards and leave Step 2 waiting on a lookup that is
-    // never coming, with its Generate action disabled.
-    resolveAbandonedLookup?.({ interfaces: [{ name: 'Wi-Fi', address: '10.0.0.5' }] })
-    await waitFor(() =>
-      expect(screen.getByTestId('refreshing-addresses')).toHaveTextContent('false')
-    )
+    // A late abandoned visit must not roll back the settled marker and strand Step 2.
+    await act(async () => {
+      resolveAbandonedLookup?.({ interfaces: [{ name: 'Wi-Fi', address: '10.0.0.5' }] })
+    })
+    expect(screen.getByTestId('refreshing-addresses')).toHaveTextContent('false')
     expect(screen.getByTestId('pair-loading')).toHaveTextContent('false')
     expect(screen.getByTestId('selected-address')).toHaveTextContent('10.0.0.9')
     expect(getPairingQR).toHaveBeenCalledTimes(1)
@@ -803,7 +785,6 @@ describe('MobilePage pairing connection mode', () => {
     await openPairingStep()
     await waitFor(() => expect(getPairingQR).toHaveBeenCalledTimes(1))
 
-    // Two manual refreshes overlap; the older one answers last with a stale list.
     let resolveStaleRefresh: ((value: Record<string, unknown>) => void) | undefined
     listNetworkInterfaces.mockImplementationOnce(
       () =>
@@ -826,12 +807,11 @@ describe('MobilePage pairing connection mode', () => {
       rotate: true
     })
 
-    resolveStaleRefresh?.({ interfaces: [{ name: 'Wi-Fi', address: '10.0.0.1' }] })
-    await waitFor(() =>
-      expect(screen.getByTestId('refreshing-addresses')).toHaveTextContent('false')
-    )
+    await act(async () => {
+      resolveStaleRefresh?.({ interfaces: [{ name: 'Wi-Fi', address: '10.0.0.1' }] })
+    })
+    expect(screen.getByTestId('refreshing-addresses')).toHaveTextContent('false')
 
-    // The stale list must not reselect an address and rotate the live offer away.
     expect(screen.getByTestId('selected-address')).toHaveTextContent('10.0.0.7')
     expect(getPairingQR).toHaveBeenCalledTimes(2)
   })
@@ -840,8 +820,7 @@ describe('MobilePage pairing connection mode', () => {
     listNetworkInterfaces.mockResolvedValue({
       interfaces: [{ name: 'Wi-Fi', address: '10.0.0.5' }]
     })
-    // Leave Step 2 with no QR on screen: that is the state where a refresh could
-    // be mistaken for a mint in progress.
+    // Leave Step 2 without a QR so refresh could be mistaken for an active mint.
     getPairingQR.mockResolvedValueOnce({
       available: false,
       reason: 'websocket_unavailable',
@@ -866,8 +845,6 @@ describe('MobilePage pairing connection mode', () => {
       expect(screen.getByTestId('refreshing-addresses')).toHaveTextContent('true')
     )
 
-    // Nothing is minting, so Step 2 must not claim it is — that would disable the
-    // Generate action while the user is only re-reading the interface list.
     expect(screen.getByTestId('pair-loading')).toHaveTextContent('false')
     resolveRefresh?.({ interfaces: [{ name: 'Wi-Fi', address: '10.0.0.5' }] })
     await waitFor(() =>
@@ -912,11 +889,11 @@ describe('MobilePage pairing connection mode', () => {
     )
     expect(listNetworkInterfaces).toHaveBeenCalledOnce()
 
-    resolveRefresh?.({ interfaces: [{ name: 'Ethernet', address: '10.0.0.2' }] })
+    await act(async () => {
+      resolveRefresh?.({ interfaces: [{ name: 'Ethernet', address: '10.0.0.2' }] })
+    })
 
-    await waitFor(() =>
-      expect(screen.getByTestId('refreshing-addresses')).toHaveTextContent('false')
-    )
+    expect(screen.getByTestId('refreshing-addresses')).toHaveTextContent('false')
     expect(screen.getByTestId('selected-address')).toHaveTextContent('wss://custom.example/large')
     expect(getPairingQR).not.toHaveBeenCalledWith({
       address: '10.0.0.2',

@@ -1,13 +1,4 @@
-/**
- * Phase 5 slice 2 (View-attribute bridge): OSC 4/10/11/12, DSR ?996n and OSC 7501
- * feature-detection responder handlers for the runtime
- * headless emulator. The headless xterm core has no theme service, so these
- * handlers compute replies from the renderer's pushed attribute snapshot,
- * with per-PTY OSC SET mutations layered on top — mirroring exactly what the
- * renderer's ThemeService reports for a visible pane. Replies route through
- * the caller's emit sink, which the slice-1 forwarding window already gates,
- * so seeded/replayed bytes and delivered chunks never produce a reply.
- */
+/** Headless xterm lacks a theme service; answer from renderer attributes with per-PTY OSC color overrides. */
 import type { Terminal } from '@xterm/headless'
 import {
   formatXColorRgbSpec,
@@ -22,26 +13,20 @@ type ViewAttributeParser = Pick<Terminal['parser'], 'registerOscHandler' | 'regi
 
 export type TerminalViewAttributeResponderDeps = {
   parser: ViewAttributeParser
-  /** Last renderer push, or null before the first push. Null means SILENCE
-   *  for every view-attribute query — a fabricated default would resurrect
-   *  the default-black OSC-11 bug (design invariant 3). */
+  /** No renderer attributes means silence for color/scheme queries; fabricated defaults can report the wrong theme. */
   getBaseAttributes: () => TerminalViewAttributes | null
   /** Must already be replay/forwarding-window gated by the caller. */
   emitReply: (reply: string) => void
 }
 
 export type TerminalViewAttributeResponder = {
-  /** A changed renderer attribute push replaces the whole palette, exactly
-   *  like xterm's ThemeService `_setTheme` overwrites OSC-SET-mutated colors
-   *  on a visible pane's theme apply. Identical re-pushes (fresh renderer
-   *  process) are filtered in main's store and never reach this. */
+  /** Clear OSC overrides on changed renderer attributes, matching visible xterm theme replacement. */
   clearColorOverrides: () => void
 }
 
 type SpecialColorSlot = 'foreground' | 'background' | 'cursor'
 
-// OSC 10/11/12 stack extra params onto consecutive slots (xterm's
-// _setOrReportSpecialColor): `OSC 10;?;?` reports foreground then background.
+// Extra OSC 10/11/12 parameters address consecutive slots: OSC 10;?;? queries foreground then background.
 const SPECIAL_COLOR_SLOTS: SpecialColorSlot[] = ['foreground', 'background', 'cursor']
 const SPECIAL_COLOR_IDENTS: Record<SpecialColorSlot, string> = {
   foreground: '10',
@@ -53,8 +38,7 @@ function isValidColorIndex(value: number): boolean {
   return value >= 0 && value < TERMINAL_VIEW_ANSI_COLOR_COUNT
 }
 
-// Mirror of xterm's rgb.relativeLuminance2 (common/Color.ts, WCAG formula) —
-// the math CoreBrowserTerminal._reportColorScheme answers ?996n with.
+// Match xterm’s relativeLuminance2 calculation for private DSR ?996n replies.
 function relativeLuminance([r, g, b]: TerminalViewRgb): number {
   const linear = (channel: number): number => {
     const c = channel / 255
@@ -66,19 +50,12 @@ function relativeLuminance([r, g, b]: TerminalViewRgb): number {
 export function installTerminalViewAttributeResponder(
   deps: TerminalViewAttributeResponderDeps
 ): TerminalViewAttributeResponder {
-  // Why per-instance maps: SET mutations are per PTY (one emulator per PTY);
-  // they die with the emulator at teardown, like every other model state.
-  // They deliberately survive a reveal→re-hide cycle even though the revealed
-  // xterm restores without palette mutations (SerializeAddon emits no OSC
-  // color SETs): the TUI never reset its SET, so holding it is
-  // protocol-correct — the visible-side loss is the pre-existing restore
-  // limitation, not this model's.
+  // Preserve per-PTY OSC colors across visibility changes even though snapshot replay loses visible palette mutations.
   const ansiOverrides = new Map<number, TerminalViewRgb>()
   const specialOverrides = new Map<SpecialColorSlot, TerminalViewRgb>()
 
   const reportColor = (ident: string, rgb: TerminalViewRgb): void => {
-    // Why ST (not BEL) and 16-bit channels: byte-for-byte parity with the
-    // renderer xterm's reply (CoreBrowserTerminal._handleColorEvent).
+    // Match renderer xterm replies byte-for-byte: ST termination and 16-bit channels.
     deps.emitReply(`\x1b]${ident};${formatXColorRgbSpec(rgb)}\x1b\\`)
   }
 
@@ -101,8 +78,7 @@ export function installTerminalViewAttributeResponder(
         }
       }
     }
-    // True consumes the sequence; the headless core's own OSC 10/11/12
-    // handler only fires an onColor event nothing consumes.
+    // Consume the query because the headless core emits color events without a reply handler.
     return true
   }
 
@@ -137,8 +113,7 @@ export function installTerminalViewAttributeResponder(
   deps.parser.registerOscHandler(11, (data) => handleSpecialColor(data, 1))
   deps.parser.registerOscHandler(12, (data) => handleSpecialColor(data, 2))
 
-  // OSC 104/110/111/112 restore the themed color — dropping the override
-  // falls back to the pushed base, the model twin of ThemeService.restoreColor.
+  // Removing OSC overrides restores the renderer’s pushed theme colors.
   deps.parser.registerOscHandler(104, (data) => {
     if (!data) {
       ansiOverrides.clear()
@@ -166,16 +141,11 @@ export function installTerminalViewAttributeResponder(
 
   deps.parser.registerCsiHandler({ prefix: '?', final: 'n' }, (params) => {
     if (params[0] !== 996) {
-      // Fall through to the core for every other private DSR (?6n CPR etc.).
       return false
     }
     const base = deps.getBaseAttributes()
     if (base) {
-      // Why luminance and not base.colorSchemeMode: a visible xterm answers
-      // ?996n from the relative luminance of the CURRENT (OSC-SET-mutated)
-      // background vs foreground (CoreBrowserTerminal._reportColorScheme),
-      // so a dark terminal theme in a light app mode still answers dark.
-      // colorSchemeMode is the app mode and feeds the 2031/997 path only.
+      // xterm derives ?996n from current OSC-mutated color luminance, not the app’s colorSchemeMode.
       const background = specialOverrides.get('background') ?? base.background
       const foreground = specialOverrides.get('foreground') ?? base.foreground
       const dark = relativeLuminance(background) < relativeLuminance(foreground)

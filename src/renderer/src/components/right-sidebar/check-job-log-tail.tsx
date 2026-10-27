@@ -6,7 +6,7 @@ import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import type { PRCheckJob } from '../../../../shared/github/check-types'
 import type { CheckDetailsReadingOwner } from '@/components/editor/check-details-reading-owner'
-import { resolveStepOutcome } from '@/components/editor/check-job-step-status'
+import { resolveStepOutcome } from '../../../../shared/pr-check-step-status'
 import { useCheckLogReadingPosition } from './use-check-log-reading-position'
 
 const LOG_EXCERPT_ERROR_LINE_PATTERN =
@@ -40,8 +40,7 @@ function CopyButton({
 }): React.JSX.Element {
   const [copied, setCopied] = useState(false)
   const copiedResetTimerRef = useRef<number | null>(null)
-  // Why: clipboard IPC can resolve after this row action unmounts; avoid
-  // starting a reset timer that will outlive the component.
+  // Clipboard IPC may settle after unmount; do not start a reset timer then.
   const isMountedRef = useRef(false)
 
   const clearCopiedResetTimer = useCallback((): void => {

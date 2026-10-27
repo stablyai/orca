@@ -18,12 +18,7 @@ import {
 } from '../flags'
 import { RuntimeClientError } from '../runtime-client'
 import { getBrowserCommandTarget } from '../selectors'
-
-// Why: selector/text/url waits can legitimately take longer than a normal RPC
-// round-trip, even when Orca is healthy. Give browser.wait an explicit timeout
-// budget so slow waits do not get mislabeled as "Orca is not running" by the
-// generic client timeout path.
-const DEFAULT_BROWSER_WAIT_RPC_TIMEOUT_MS = 60_000
+import { browserWaitRequestTimeoutMs } from '../../shared/browser-wait-timeout'
 
 export const BROWSER_NAV_HANDLERS: Record<string, CommandHandler> = {
   snapshot: async ({ flags, client, cwd, json }) => {
@@ -112,9 +107,7 @@ export const BROWSER_NAV_HANDLERS: Record<string, CommandHandler> = {
         state,
         ...target
       },
-      {
-        timeoutMs: timeout ? timeout + 5000 : DEFAULT_BROWSER_WAIT_RPC_TIMEOUT_MS
-      }
+      { timeoutMs: browserWaitRequestTimeoutMs(timeout) }
     )
     printResult(result, json, (v) => JSON.stringify(v, null, 2))
   },

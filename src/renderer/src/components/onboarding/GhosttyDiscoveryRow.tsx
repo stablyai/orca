@@ -15,9 +15,7 @@ export function GhosttyDiscoveryRow({
   disabled: boolean
   onImport: (preview: GhosttyImportPreview) => void
 }) {
-  // Why: 'idle' is the pre-effect state that persists on non-Mac (the
-  // discovery effect short-circuits there), so render nothing instead of
-  // showing the dashed-border "Looking for a Ghostty config..." placeholder.
+  // Non-Mac discovery remains idle; hide it instead of leaving a permanent looking placeholder.
   if (discovery.status === 'absent' || discovery.status === 'idle') {
     return null
   }

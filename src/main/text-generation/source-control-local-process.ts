@@ -1,5 +1,6 @@
 import { WindowsCmdLineBreakError } from '@orca/process-host'
 import type { CommitMessagePlan } from '../../shared/commit-message-plan'
+import { commandLineLength, MAX_COMMAND_LINE_CHARS } from '../../shared/windows-command-line-budget'
 import { supervisedProviderSpawnFailure } from '../provider-process/provider-spawn-failure-report'
 import { stopSupervisedChildProcess } from '../provider-process/supervised-child-process-stop'
 import { terminateWindowsProcessTree } from '../windows-process-tree-kill'
@@ -38,10 +39,7 @@ export async function killSourceControlAgentProcess(
     return
   }
   if (process.platform === 'win32') {
-    // taskkill owns the tree, but the own-Chromium gate can refuse the
-    // pid-addressed walk; the handle-addressed root kill below cannot reach the
-    // recycled pid it refused, and callers release the managed-home lock on this
-    // promise, so it must not resolve having killed nothing.
+    // Tree-walk refusal must not release the home lock having killed nothing; root handle kill cannot hit a recycled PID.
     await terminateWindowsProcessTree(pid, { site: SOURCE_CONTROL_KILL_SITE })
   }
   try {
@@ -51,39 +49,29 @@ export async function killSourceControlAgentProcess(
   }
 }
 
-// Why: Windows caps the CreateProcess command line at 32,767 UTF-16 code units,
-// including the executable path, per-arg quoting, and separators. The budget
-// leaves headroom for cmd.exe `/d /c` shim wrappers.
-const WINDOWS_COMMAND_LINE_UNIT_BUDGET = 30_000
-
-function exceedsWindowsCommandLineBudget(command: string, args: string[]): boolean {
-  let units = command.length + args.length
-  for (const arg of args) {
-    units += arg.length + 2
-  }
-  return units > WINDOWS_COMMAND_LINE_UNIT_BUDGET
-}
-
-// Why separate from the Windows budget: Linux caps a SINGLE argv entry at
-// MAX_ARG_STRLEN (32 pages, so 128 KiB on a 4-KiB-page host) and execve fails with
-// E2BIG past it, well before the much larger total-argv limit. Agents that deliver the
-// whole prompt as one argument trip this on a big staged diff, so the cap is per-arg
-// and in bytes, not units. Headroom left for hosts whose page size differs.
+// Linux caps each argv entry in bytes (128KiB on 4KiB pages), before total argv capacity; reserve headroom for single-prompt arguments.
 const LINUX_SINGLE_ARGUMENT_BYTE_BUDGET = 120 * 1024
 
-function exceedsLinuxArgumentBudget(args: string[]): boolean {
-  return args.some((arg) => Buffer.byteLength(arg, 'utf8') > LINUX_SINGLE_ARGUMENT_BYTE_BUDGET)
+/** Whether the plan's argv plus reserve fits this host's limit: UTF-16 units on Windows, bytes per argument on Linux. */
+export function fitsLocalCommandLine(plan: CommitMessagePlan, reserve = 0): boolean {
+  if (process.platform === 'win32') {
+    return commandLineLength([plan.binary, ...plan.args]) + reserve <= MAX_COMMAND_LINE_CHARS
+  }
+  if (process.platform === 'linux') {
+    return plan.args.every(
+      (arg) => Buffer.byteLength(arg, 'utf8') + reserve <= LINUX_SINGLE_ARGUMENT_BYTE_BUDGET
+    )
+  }
+  return true
 }
 
-/** The user-facing reason this plan cannot be spawned here, or null when it can. */
 function argumentBudgetFailure(plan: CommitMessagePlan): string | null {
-  if (process.platform === 'win32' && exceedsWindowsCommandLineBudget(plan.binary, plan.args)) {
-    return `${plan.label} prompt is too large for the Windows command line. Stage fewer changes and try again.`
+  if (fitsLocalCommandLine(plan)) {
+    return null
   }
-  if (process.platform === 'linux' && exceedsLinuxArgumentBudget(plan.args)) {
-    return `${plan.label} prompt is too large to pass as a single command-line argument. Stage fewer changes and try again.`
-  }
-  return null
+  return process.platform === 'win32'
+    ? `${plan.label} prompt is too large for the Windows command line. Stage fewer changes and try again.`
+    : `${plan.label} prompt is too large to pass as a single command-line argument. Stage fewer changes and try again.`
 }
 
 export function runLocalSourceControlPlan(input: {
@@ -93,10 +81,9 @@ export function runLocalSourceControlPlan(input: {
   emptyResultName: string
   operation: TextGenerationOperation
   wslDistro?: string
-  holdHomeLockUntilExit: boolean
   spawnAgent: SpawnSourceControlAgent
 }): LocalProcessExecution<InternalTextGenerationResult> {
-  const { plan, cwd, operation, holdHomeLockUntilExit } = input
+  const { plan, cwd, operation } = input
   let markProcessClosed!: () => void
   const processClosed = new Promise<void>((resolve) => {
     markProcessClosed = resolve
@@ -105,8 +92,7 @@ export function runLocalSourceControlPlan(input: {
   const result = new Promise<InternalTextGenerationResult>((resolve) => {
     let child: SpawnedSourceControlAgentProcess
     try {
-      // Why before spawn: agents like jcode ride the whole prompt on argv, so a large
-      // staged diff fails at execve with an error the user cannot act on.
+      // Reject oversized argv before opaque E2BIG spawn failure so users can act on the prompt-size limit.
       const budgetFailure = argumentBudgetFailure(plan)
       if (budgetFailure) {
         markProcessClosed()
@@ -146,13 +132,18 @@ export function runLocalSourceControlPlan(input: {
     let canceledByUser = false
     const laneKey = localGenerationLaneKey(operation, cwd)
     let timer: ReturnType<typeof setTimeout> | null = null
+    let terminal = false
     let terminationComplete: Promise<void> | null = null
     let detachChildListeners = (): void => {}
     const startTermination = (): void => {
-      terminationComplete ??= killSourceControlAgentProcess(child)
+      terminationComplete ??= killSourceControlAgentProcess(child).catch((error: unknown) => {
+        console.error('[commit-message] Local generator termination failed:', error)
+      })
     }
     const markClosedAfterTermination = (): void => {
-      void (terminationComplete ?? Promise.resolve()).then(markProcessClosed)
+      if (terminal && settled) {
+        void (terminationComplete ?? Promise.resolve()).then(markProcessClosed)
+      }
     }
     const finalize = (value: InternalTextGenerationResult): void => {
       if (settled) {
@@ -165,10 +156,8 @@ export function runLocalSourceControlPlan(input: {
       }
       detachChildListeners()
       clearLocalGenerationCancelToken(laneKey, cancel)
-      if (!holdHomeLockUntilExit) {
-        markProcessClosed()
-      }
       resolve(value)
+      markClosedAfterTermination()
     }
     const cancel = (): void => {
       canceledByUser = true
@@ -209,6 +198,8 @@ export function runLocalSourceControlPlan(input: {
     const onError = (error: Error): void => {
       if (!child.pid) {
         markProcessClosed()
+      } else if (!terminal && child.exitCode == null && child.signalCode == null) {
+        startTermination()
       }
       if ((error as NodeJS.ErrnoException).code === 'ENOENT') {
         finalize({
@@ -224,6 +215,8 @@ export function runLocalSourceControlPlan(input: {
       })
     }
     const onClose = (code: number | null): void => {
+      terminal = true
+      child.off?.('close', onClose)
       markClosedAfterTermination()
       if (canceledByUser) {
         finalize({
@@ -240,7 +233,6 @@ export function runLocalSourceControlPlan(input: {
         })
         return
       }
-      // A supervised spawn failure reads as the same failure a direct spawn reports.
       const spawnFailure = supervisedProviderSpawnFailure(code, stderr)
       if (spawnFailure?.thrown) {
         console.error('[commit-message] Failed to spawn local generator:', spawnFailure.error)
@@ -265,17 +257,15 @@ export function runLocalSourceControlPlan(input: {
     }
     child.stdout?.on('data', onStdoutData)
     child.stderr?.on('data', onStderrData)
-    if (holdHomeLockUntilExit) {
-      child.once('exit', markClosedAfterTermination)
-      child.once('close', markClosedAfterTermination)
-    }
     child.on('error', onError)
     child.on('close', onClose)
+    child.on('exit', () => {
+      terminal = true
+      markClosedAfterTermination()
+    })
     detachChildListeners = () => {
       child.stdout?.off?.('data', onStdoutData)
       child.stderr?.off?.('data', onStderrData)
-      child.off?.('error', onError)
-      child.off?.('close', onClose)
     }
     try {
       child.stdin?.end(plan.stdinPayload ?? undefined)

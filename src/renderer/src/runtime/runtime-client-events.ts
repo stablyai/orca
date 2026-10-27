@@ -16,10 +16,7 @@ export async function subscribeRuntimeClientEvents(
   environmentId: string,
   onEvent: (event: RuntimeClientEvent) => void,
   onError: (error: unknown) => void = console.warn,
-  // Why: client events emitted while the shared-control transport was down are
-  // lost, not queued. The replay tag on the first post-reconnect response is
-  // the renderer's only signal that mirrored event-derived state (e.g. the
-  // per-environment SSH bucket) may have missed transitions and must resync.
+  // Control-outage events are lost, not queued. First replay-tagged response is the only signal to resync event-derived mirrors such as per-environment SSH state.
   onReplayedAfterReconnect?: () => void
 ): Promise<RuntimeClientEventSubscription> {
   const handle = await subscribeRuntimeEnvironment(
@@ -91,6 +88,7 @@ function isRuntimeClientEvent(
     message.type === 'terminalSideEffects' ||
     message.type === 'sshStateChanged' ||
     message.type === 'automationsChanged' ||
+    message.type === 'browserProfilesChanged' ||
     message.type === 'linearLinkedIssueUpdated' ||
     message.type === 'activateWorktree' ||
     message.type === 'worktreeTerminalSleepState'

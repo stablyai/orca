@@ -48,7 +48,6 @@ const command: NativeChatMessage = {
   source: 'transcript'
 }
 
-/** The slot drawing `edit-1`, as the live transcript builds it. */
 function editSlot(messages: NativeChatMessage[]): NativeChatTranscriptSlot {
   const slots = buildNativeChatTranscriptSlots({
     messages,

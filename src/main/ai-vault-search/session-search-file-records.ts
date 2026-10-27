@@ -6,30 +6,13 @@ import type SyncDatabase from '../sqlite/sync-database'
 import { EMPTY_CONTENT_HASH, type SessionContentHash } from './session-search-content-hash'
 import { normalizeRuntimePathForComparison } from '../../shared/cross-platform-path'
 
-/**
- * The stored comparison key for a session's working directory.
- *
- * Why the shared normalizer verbatim: the sidebar already groups sessions by
- * `folderGroupKey`, which is this function under a prefix. A second spelling
- * here means any later join between an indexed hit and a sidebar group returns
- * nothing. An earlier version qualified a WSL cwd with its distro so two
- * distros could not collide at `/home/me/repo`; that is a real collision, but it
- * is one every SSH host has too, neither key qualifies for SSH, and the fix for
- * it is a column that names the execution host, not a path key that only some
- * hosts spell differently.
- */
+/** Use the sidebar’s path normalization so indexed cwd keys join its folder groups. */
 export function cwdKey(cwd: string | null): string | null {
   return cwd ? normalizeRuntimePathForComparison(cwd) : null
 }
 
 export class SessionSearchFileRecords {
   constructor(private readonly db: SyncDatabase) {}
-  /**
-   * The row a read hangs its messages off, before the parser has said what the
-   * session is. The same transaction fills it in: from the decoded session when
-   * the read finished, and from `updateProvisionalSession` when this is a chunk
-   * of one that has not.
-   */
   createSessionRow(candidate: SessionFileCandidate): number {
     return Number(
       this.db
@@ -41,16 +24,7 @@ export class SessionSearchFileRecords {
     )
   }
 
-  /**
-   * Writes what the parser knows so far onto a session a chunk is committing.
-   *
-   * Rows a chunk commits answer searches the moment they land, so the session
-   * they hang off has to be nameable before the read producing it ends — and it
-   * may never end, because a crash between chunks leaves exactly this row. That
-   * is why the identity is required rather than optional: a read that has none
-   * does not chunk at all. The final commit overwrites all of it from the
-   * decoded session; until then the title in particular is provisional.
-   */
+  /** Name each committed chunk immediately; the final decoded session replaces provisional metadata. */
   updateProvisionalSession(
     rowId: number,
     identity: TranscriptSessionIdentity,

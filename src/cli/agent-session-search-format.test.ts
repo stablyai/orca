@@ -180,15 +180,28 @@ describe('terminal safety', () => {
   })
 
   it.each([
-    ['updatedAt', { updatedAt: '2026-09-12\u001b[31mT18:04:11.000Z' }, '\u001b'],
-    ['executionHostId', { executionHostId: 'ssh:\u001b]0;pwned\u0007build-01' }, '\u001b'],
-    ['title', { title: 'resize\u001b[2Jrace' }, '\u001b'],
-    ['evidence snippet', { evidence: { ...localHit.evidence!, snippet: 'a\u001b[1mb' } }, '\u001b'],
-    ['resumeCommand', { resumeCommand: 'claude \u001b[3Jresume' }, '\u001b']
-  ])('strips an escape sequence a host put in %s', (_field, override, escape) => {
+    [
+      'updatedAt',
+      { updatedAt: '2026-09-12\u001b[31mT18:04:11.000Z' },
+      'Claude  2026-09-12T18:04:11.000Z'
+    ],
+    [
+      'executionHostId',
+      { executionHostId: 'ssh:\u001b]0;pwned\u0007build-01' },
+      'host=ssh:build-01'
+    ],
+    ['title', { title: 'resize\u001b[2Jrace' }, '  resizerace  host='],
+    [
+      'evidence snippet',
+      { evidence: { ...localHit.evidence!, snippet: 'a\u001b[1mb' } },
+      '    assistant: ab'
+    ],
+    ['resumeCommand', { resumeCommand: 'claude \u001b[3Jresume' }, '    resume: claude resume']
+  ])('strips an escape sequence a host put in %s', (_field, override, expected) => {
     const text = formatSessionSearchResponse(results({ hits: [{ ...localHit, ...override }] }))
 
-    expect(text).not.toContain(escape)
+    expect(text).toContain(expected)
+    expect(text).not.toContain('\u001b')
   })
 
   it('strips an escape sequence a host put in the next-page cursor', () => {
@@ -216,9 +229,13 @@ describe('terminal safety', () => {
   })
 
   it.each([
-    ['root', { root: '/Users/me/\u001b[31m.codex', reason: 'EACCES' }],
-    ['reason', { root: '/r', reason: 'EACCES\u001b]0;x\u0007' }]
-  ])('strips an escape sequence a host put in a degraded %s', (_field, degradedRoot) => {
+    [
+      'root',
+      { root: '/Users/me/\u001b[31m.codex', reason: 'EACCES' },
+      '  /Users/me/.codex: EACCES'
+    ],
+    ['reason', { root: '/r', reason: 'EACCES\u001b]0;x\u0007' }, '  /r: EACCES']
+  ])('strips an escape sequence a host put in a degraded %s', (_field, degradedRoot, expected) => {
     const text = formatSessionSearchStatus({
       enabled: true,
       phase: 'degraded',
@@ -231,6 +248,7 @@ describe('terminal safety', () => {
       generation: 1
     })
 
+    expect(text).toContain(expected)
     expect(text).not.toContain('\u001b')
   })
 

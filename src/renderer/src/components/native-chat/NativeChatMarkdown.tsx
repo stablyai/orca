@@ -14,7 +14,7 @@ import CommentMarkdown, {
 } from '@/components/sidebar/CommentMarkdown'
 import { createDocumentCommentMarkdownComponents } from '@/components/sidebar/comment-markdown-element-renderers'
 import { cn } from '@/lib/utils'
-import { withoutPendingNativeChatVisualDirectiveTail } from '../../../../shared/native-chat-visual-directive'
+import { withoutPendingNativeChatVisualDirectiveTail } from '../../../../shared/native-chat/native-chat-visual-directive'
 import { NativeChatMarkdownRowKeyContext } from './native-chat-disclosure-store'
 import { useNativeChatVisualMarkdownExtension } from './native-chat-visual-markdown-extension'
 import { useNativeChatFileLinkExists } from './use-native-chat-file-link-existence'
@@ -131,11 +131,13 @@ export function NativeChatMarkdown({
             ? withoutPendingNativeChatVisualDirectiveTail(content)
             : content
         }
+        math
         extension={extension}
         fileLinkExists={fileLinkExists}
         fadeWords={fadeWords}
         renderMermaid={!streaming}
         keepMermaidSourceWhilePending
+        unknownHtmlAsText
         data-word-fade={wordFadeArmed ? '' : undefined}
         data-block-fade={wordFadeArmed && streaming ? '' : undefined}
         className={cn('native-chat-markdown', className)}

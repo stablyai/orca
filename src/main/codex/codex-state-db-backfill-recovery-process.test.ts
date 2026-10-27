@@ -52,7 +52,6 @@ describe('stopCodexBackfillRecoveryProcess for a supervised app-server', () => {
     await stopCodexBackfillRecoveryProcess(asHandle(child), true)
 
     expect(child.stdin.end).toHaveBeenCalledOnce()
-    // A direct SIGTERM would skip the stdin-end grace a Codex close gets.
     expect(child.kill).not.toHaveBeenCalled()
     expect(terminateProviderProcessTree).not.toHaveBeenCalled()
   })
@@ -68,11 +67,9 @@ describe('stopCodexBackfillRecoveryProcess for a supervised app-server', () => {
     expect(terminateProviderProcessTree).toHaveBeenCalledWith(child, {
       site: 'codex-state-db-backfill-recovery'
     })
-    // The shared close then waits, bounded, for the forced root's exit.
     await vi.advanceTimersByTimeAsync(1_000)
     await stopped
 
-    // The stop signals nothing itself: the stdin end asks, and only the teardown forces.
     expect(child.stdin.end).toHaveBeenCalledOnce()
     expect(child.kill).not.toHaveBeenCalled()
   })

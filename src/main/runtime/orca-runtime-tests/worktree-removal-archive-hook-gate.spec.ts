@@ -1,5 +1,4 @@
-// Regression cover for #19334: a failed archive hook used to be logged and stepped over, so the
-// checkout was deleted with nothing archived. The hook is a blocking precondition now.
+// Archive hook failure must preserve the checkout, Git registration, agents and ownership evidence (#19334).
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   assertWorktreeCleanForRemoval,
@@ -34,21 +33,18 @@ function withArchiveHook(): void {
 }
 
 function expectNothingMutated(removeWorktreeMeta: ReturnType<typeof vi.fn>): void {
-  // The checkout, its Git registration, its agents and Orca's ownership evidence all survive.
   expect(removeWorktree).not.toHaveBeenCalled()
   expect(removeWorktreeMeta).not.toHaveBeenCalled()
   expect(removeWorktreeLinkedPathsMock).not.toHaveBeenCalled()
   expect(deleteWorktreeHistoryDirMock).not.toHaveBeenCalled()
   expect(invalidateAuthorizedRootsCacheMock).not.toHaveBeenCalled()
-  // The gate runs before the registration re-read, so even the preflights never start. The one
-  // listing is the orchestrator's own lookup ahead of the hook; the post-hook refresh never runs.
+  // Only the pre-hook lookup runs; hook failure prevents post-hook refresh and preflights.
   expect(listWorktreesStrict).toHaveBeenCalledTimes(1)
   expect(assertWorktreeCleanForRemoval).not.toHaveBeenCalled()
 }
 
 describe('archive hook removal gate', () => {
-  // These specs are imported into one aggregate test file, so the module-level mocks arrive with
-  // calls from earlier specs. Clear counts here and restore the shared defaults afterwards.
+  // Aggregate imports share mocks; clear call counts here and restore defaults afterwards.
   beforeEach(() => {
     vi.clearAllMocks()
   })
@@ -87,7 +83,7 @@ describe('archive hook removal gate', () => {
     const { runtimeStore, removeWorktreeMeta } = createStaleRuntimeWorktreeStore(TEST_WORKTREE_ID)
     const runtime = createWorktreeRemovalRuntime(runtimeStore)
     withArchiveHook()
-    // A timeout or a lost execution host yields no exit code: `unverifiable`, never a pass.
+    // Timeout or host loss is unverifiable, never a successful hook.
     vi.mocked(runHook).mockResolvedValue({
       success: false,
       output: 'Hook timed out after 120000ms.'
@@ -117,7 +113,6 @@ describe('archive hook removal gate', () => {
     })
 
     await expect(
-      // force + the PTY-stop waiver, i.e. everything the desktop Force Delete sets.
       runtime.removeManagedWorktree(TEST_WORKTREE_ID, {
         force: true,
         runHooks: true,
@@ -287,8 +282,7 @@ describe('archive hook removal gate', () => {
     })
     await vi.waitFor(() => expect(runHook).toHaveBeenCalled())
 
-    // The waiver is part of the in-flight options key, so a concurrent waived retry is refused
-    // outright rather than handed the in-flight attempt that is about to reject on the hook.
+    // A concurrent waiver changes the options key and must not join an attempt about to reject the hook.
     await expect(
       runtime.removeManagedWorktree(TEST_WORKTREE_ID, {
         force: false,

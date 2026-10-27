@@ -25,8 +25,11 @@ describe('getAgentRowConversationName', () => {
   })
 
   it('keeps OpenCode semantic session titles whole', () => {
-    const tab = makeTab({ title: 'OC | build the release pipeline' })
+    const tab = makeTab({ title: 'OC | build the release pipeline', generatedTitle: 'Older title' })
     expect(getAgentRowConversationName(tab, 'opencode', false)).toBe(
+      'OC | build the release pipeline'
+    )
+    expect(getAgentRowConversationName(tab, 'opencode', true)).toBe(
       'OC | build the release pipeline'
     )
   })
@@ -40,6 +43,11 @@ describe('getAgentRowConversationName', () => {
     expect(getAgentRowConversationName(tab, 'claude', true, undefined, 's1')).toBe(
       'Fix the lease probe'
     )
+    expect(getAgentRowConversationName(tab, 'claude', true, undefined, 's2')).toBe(
+      'Fix intake flow'
+    )
+    expect(getAgentRowConversationName(tab, 'codex', true, undefined, 's1')).toBe('Fix intake flow')
+    expect(getAgentRowConversationName(tab, 'claude', true)).toBe('Fix intake flow')
   })
 
   it('lets a manual rename and a quick command still outrank the provider title', () => {
@@ -81,23 +89,20 @@ describe('getAgentRowConversationName', () => {
   })
 
   it('names a split pane from its own live title, not the tab title', () => {
-    // Why: the tab title is the FOCUSED pane's, so the sibling must not read it.
+    // Tab live title belongs to the focused pane; siblings need their own.
     const tab = makeTab({ title: '\u2733 Linear work log' })
     expect(getAgentRowConversationName(tab, 'claude', false, '\u2733 Redis cache strategy')).toBe(
       'Redis cache strategy'
     )
-    // OpenCode's semantic title is a live title too, so it follows the pane.
     expect(
       getAgentRowConversationName(tab, 'opencode', false, 'OC | build the release pipeline')
     ).toBe('OC | build the release pipeline')
-    // No resolvable pane title: no live title at all, never the sibling's.
     expect(getAgentRowConversationName(tab, 'claude', false, null)).toBeNull()
-    // A single-pane tab passes undefined and is untouched.
     expect(getAgentRowConversationName(tab, 'claude', false)).toBe('Linear work log')
   })
 
   it('keeps tab-owned names above the pane title', () => {
-    // Why: the user gave these to the whole tab, and none of them flip on focus.
+    // User-given names belong to the tab and remain stable across pane focus.
     const custom = makeTab({ customTitle: 'Patient sync spike' })
     expect(getAgentRowConversationName(custom, 'claude', false, 'Redis cache strategy')).toBe(
       'Patient sync spike'
@@ -185,9 +190,7 @@ describe('getAgentRowConversationName', () => {
   })
 
   it("rejects jcode's live identity title so the row shows the prompt instead", () => {
-    // Why: jcode repaints its title every second with its session codename and the
-    // turn's diff/duration. Accepting it pinned the row to "jcode Puppy…" while
-    // Claude's row in the same sidebar showed the prompt and the reply.
+    // jcode's per-second codename/diff/duration title would hide the actual prompt/reply preview.
     expect(
       getAgentRowConversationName(
         makeTab({ title: '🌐 jcode Puppy · +3 -0 · last ~23s' }),
@@ -201,13 +204,19 @@ describe('getAgentRowConversationName', () => {
     expect(
       getAgentRowConversationName(makeTab({ title: '🐍 jcode/creek Snake' }), 'jcode', false)
     ).toBeNull()
-    // A name the user gave the tab still wins.
     expect(
       getAgentRowConversationName(makeTab({ title: 'Fix the greet helper' }), 'jcode', false)
     ).toBe('Fix the greet helper')
   })
 
   it('rejects empty, glyph-only, and default terminal titles', () => {
+    expect(
+      getAgentRowConversationName(
+        makeTab({ title: 'Workbench', defaultTitle: 'Workbench' }),
+        'claude',
+        false
+      )
+    ).toBeNull()
     expect(getAgentRowConversationName(makeTab(), 'claude', false)).toBeNull()
     expect(getAgentRowConversationName(makeTab({ title: '✳' }), 'claude', false)).toBeNull()
     expect(

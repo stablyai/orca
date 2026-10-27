@@ -18,23 +18,11 @@ import type { PtyProcessInfo } from '../providers/pty-provider-contract'
 
 export abstract class DaemonPtySessionInventory extends DaemonPtyProcessInspection {
   async listProcesses(opts?: { deadlineMs?: number }): Promise<PtyProcessInfo[]> {
-    // Why: snapshotted before the request so ids spawned mid-flight can never
-    // be reconciled away below.
+    // Snapshot before awaiting inventory so newly spawned IDs cannot be reconciled away.
     const preRequestActiveIds = new Set(this.activeSessionIds)
     try {
-      // Why retry: this inventory is what destructive teardown consults, and a
-      // dead host pipe surfaced as `connect ENOENT \\?\\pipe\\orca-terminal-host-...`
-      // that failed worktree removal until the app was restarted (#10087). Spawn
-      // already recovered from exactly this; inventory did not, so the one path
-      // that must not get stuck was the only one that could not heal.
-      //
-      // Why the request is inside too: a host that dies between connect and
-      // listSessions throws the same daemon-gone error, so retrying only the
-      // connect would still fail. The reconciliation below stays outside --
-      // retrying that would double-apply it.
-      //
-      // Why: connect + listSessions share the caller's one absolute deadline so a
-      // wedged handshake cannot burn the whole teardown budget before the list issues.
+      // Retry connect and inventory together; reconcile only once after both succeed.
+      // Share the teardown deadline so handshake cannot consume a fresh budget before inventory.
       const result = await this.withDaemonRetry(async () => {
         await this.ensureConnected(opts?.deadlineMs)
         return this.client.request<ListSessionsResult>(
@@ -57,21 +45,20 @@ export abstract class DaemonPtySessionInventory extends DaemonPtyProcessInspecti
             id: session.sessionId,
             ...(session.incarnationId ? { incarnationId: session.incarnationId } : {}),
             ...(session.pid ? { rootProcessId: session.pid } : {}),
-            // Why: OSC 7 may not arrive before cleanup; spawn cwd is authoritative until the daemon reports a live cwd.
+            // Spawn cwd remains authoritative until the daemon reports live cwd.
             cwd: session.cwd ?? this.initialCwds.get(session.sessionId) ?? '',
             title: 'shell',
             ...(session.foregroundProcess ? { foregroundProcess: session.foregroundProcess } : {}),
             ...(worktreeId ? { worktreeId } : {}),
             ...(session.terminalHandle ? { terminalHandle: session.terminalHandle } : {}),
+            ...(session.paneKey ? { paneKey: session.paneKey } : {}),
             ...(session.wslDistro !== undefined ? { wslDistro: session.wslDistro } : {}),
             ...(session.state === 'exiting' ? { exiting: true as const } : {}),
             ...this.validatedAgentSessionOwners(session.agentSessionOwners)
           })
         )
       }
-      // Why: hasPty reads activeSessionIds, and an exit missed while the socket
-      // was disconnected otherwise survives an authoritative inventory forever —
-      // defeating every absence proof built on the cache.
+      // Reconcile missed disconnect-time exits so hasPty cannot retain disproven owners forever.
       for (const id of preRequestActiveIds) {
         if (!aliveSessionIds.has(id)) {
           this.activeSessionIds.delete(id)
@@ -117,10 +104,7 @@ export abstract class DaemonPtySessionInventory extends DaemonPtyProcessInspecti
       : {}
   }
 
-  // Why: the Manage Sessions panel needs the full SessionInfo (pid, state,
-  // createdAt) per session for display; listProcesses drops that detail for
-  // the IPtyProvider contract. Keep both in parallel rather than widening
-  // the provider surface.
+  // Manage Sessions needs details omitted from the generic listProcesses contract.
   async listSessions(): Promise<SessionInfo[]> {
     await this.ensureConnected()
     const result = await this.client.request<ListSessionsResult>('listSessions', undefined)
@@ -136,8 +120,7 @@ export abstract class DaemonPtySessionInventory extends DaemonPtyProcessInspecti
     return [...this.activeSessionIds]
   }
 
-  // Why: the daemon's kill-all-and-shutdown path suppresses onExit fanout (session.ts:246-252), so synthesize pty:exit
-  // for every live session before teardown or renderer panes black-hole writes to a disposed adapter forever.
+  // Daemon shutdown suppresses exit fanout; notify panes before teardown so they stop writing to dead PTYs.
   fanoutSyntheticExits(code: number, exit: { replacedByRestart?: true } = {}): void {
     const ids = [...this.activeSessionIds]
     this.activeSessionIds.clear()
@@ -156,7 +139,7 @@ export abstract class DaemonPtySessionInventory extends DaemonPtyProcessInspecti
     this.stopCheckpointTimer()
     for (const id of ids) {
       this.coldRestoreCache.delete(id)
-      // Why: don't catch listener throws — matches the natural onExit fanout so synthetic exits keep the same error semantics.
+      // Match natural exit listeners: synthetic fanout preserves thrown errors.
       emitPtyListeners(this.exitListeners, (listener) =>
         listener(
           createPtyExitPayload(id, {

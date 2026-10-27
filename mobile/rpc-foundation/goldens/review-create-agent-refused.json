@@ -14,10 +14,55 @@
       "ordinal": 6,
       "json": "{\"id\":\"frame-3\",\"deviceToken\":\"recording-device\",\"method\":\"preflight.detectAgents\",\"params\":{\"worktreeId\":\"workspace-1\"}}"
     },
-    "5ee9e7b49320": {
+    "3dc53a43cb5e": {
       "name": "agent.launchReplay#1",
       "ordinal": 8,
-      "json": "{\"id\":\"frame-4\",\"deviceToken\":\"recording-device\",\"method\":\"agent.launchReplay\",\"params\":{\"agent\":\"claude\",\"operationId\":\"1767225600000-00000000000040008000000000000001\",\"target\":{\"kind\":\"existing\",\"worktree\":\"id:workspace-1\"},\"prompt\":{\"text\":\"You are reviewing the current worktree. Address the following mobile review notes.\\n\\nFile: src/app.ts\\nLine: 4\\nUser comment: \\\"needs a test\\\"\\n\\nAfter applying fixes:\\n1. Summarize changed files.\\n2. Run relevant tests.\\n3. Tell me if anything remains risky.\",\"delivery\":\"submit\"},\"launchSource\":\"notes_send\"}}"
+      "json": "{\"id\":\"frame-4\",\"deviceToken\":\"recording-device\",\"method\":\"agent.launchReplay\",\"params\":{\"agent\":\"claude\",\"operationId\":\"1767225600000-00000000000040008000000000000001\",\"target\":{\"kind\":\"existing\",\"worktree\":\"id:workspace-1\"},\"prompt\":{\"text\":\"File: src/app.ts\\nLine: 4\\nUser comment: \\\"needs a test\\\"\",\"delivery\":\"submit\"},\"launchSource\":\"notes_send\"}}"
+    },
+    "85b2d08ce134": {
+      "name": "agent.launchReplay#1",
+      "ordinal": 7,
+      "args": [
+        {
+          "name": "method",
+          "value": "agent.launchReplay"
+        },
+        {
+          "name": "params",
+          "value": {
+            "agent": "claude",
+            "launchSource": "notes_send",
+            "operationId": "1767225600000-00000000000040008000000000000001",
+            "prompt": {
+              "delivery": "submit",
+              "text": "File: src/app.ts\nLine: 4\nUser comment: \"needs a test\""
+            },
+            "target": {
+              "kind": "existing",
+              "worktree": "id:workspace-1"
+            }
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "timeoutMs": 90000
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "error": {
+            "code": "selector_not_found",
+            "message": "Workspace not found"
+          },
+          "id": "frame-4",
+          "ok": false
+        }
+      }
     },
     "9239a4f232b8": {
       "name": "repo.list#1",
@@ -128,51 +173,6 @@
         }
       }
     },
-    "bcb5111e6012": {
-      "name": "agent.launchReplay#1",
-      "ordinal": 7,
-      "args": [
-        {
-          "name": "method",
-          "value": "agent.launchReplay"
-        },
-        {
-          "name": "params",
-          "value": {
-            "agent": "claude",
-            "launchSource": "notes_send",
-            "operationId": "1767225600000-00000000000040008000000000000001",
-            "prompt": {
-              "delivery": "submit",
-              "text": "You are reviewing the current worktree. Address the following mobile review notes.\n\nFile: src/app.ts\nLine: 4\nUser comment: \"needs a test\"\n\nAfter applying fixes:\n1. Summarize changed files.\n2. Run relevant tests.\n3. Tell me if anything remains risky."
-            },
-            "target": {
-              "kind": "existing",
-              "worktree": "id:workspace-1"
-            }
-          }
-        },
-        {
-          "name": "options",
-          "value": {
-            "timeoutMs": 90000
-          }
-        }
-      ],
-      "settlement": {
-        "status": "fulfilled",
-        "startedAt": 0,
-        "settledAt": 0,
-        "value": {
-          "error": {
-            "code": "selector_not_found",
-            "message": "Workspace not found"
-          },
-          "id": "frame-4",
-          "ok": false
-        }
-      }
-    },
     "e0eef7c9fafe": {
       "name": "repo.list#1",
       "ordinal": 3,
@@ -226,8 +226,8 @@
       {
         "id": "refused",
         "observation": {
-          "sender": ["9239a4f232b8", "96a9a954e28f", "bca41ddb4705", "bcb5111e6012"],
-          "payloads": ["e0eef7c9fafe", "1c2564f1daca", "2398eeb5ec74", "5ee9e7b49320"],
+          "sender": ["9239a4f232b8", "96a9a954e28f", "bca41ddb4705", "85b2d08ce134"],
+          "payloads": ["e0eef7c9fafe", "1c2564f1daca", "2398eeb5ec74", "3dc53a43cb5e"],
           "settlements": {
             "create-and-send": "eb79a9b3682a"
           },

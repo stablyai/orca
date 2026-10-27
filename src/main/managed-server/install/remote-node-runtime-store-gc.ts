@@ -1,17 +1,5 @@
-/**
- * Collects the shared `~/.orca-remote/runtimes/node-<sha256>/` store (design D5 GC).
- *
- * A runtime is deleted only when all of these hold: no retained directory references it
- * (`.runtime-node` or `.runtime-ref-node-<sha>`), it is neither a pin this client runs nor the
- * newest other verified runtime (keep two), and a process check ran and found nothing executing
- * from it. Process evidence can only add holds; a scan that could not run keeps everything.
- *
- * Legacy `relay-*` / `orcad-*` directories are read for references and reported as
- * diagnostics, never deleted here (design D10 two-step hand-over).
- *
- * The pass runs only while it holds the store lock that promotion takes, so a runtime cannot be
- * published and collected at once; a busy lock skips the pass rather than waiting.
- */
+// Promotion and GC share a lock; uncertain process evidence retains every runtime.
+// Legacy version directories supply references and diagnostics but are never deleted here.
 import { randomInt } from 'node:crypto'
 import type { RemoteInstallTransport } from './remote-install-transport'
 import { RUNTIME_STORE_STAGE_PREFIX } from './orcad-remote-node-runtime'
@@ -52,14 +40,11 @@ const MAX_REMOVALS_PER_PASS = 8
 const ABANDONED_TOMBSTONE_MS = 30 * 60_000
 
 type RuntimeStoreGcPlan = {
-  /** `node-<sha>` entries to rename away and delete. */
   remove: string[]
-  /** Abandoned tombstones whose runtime is still unwanted. */
   purgeTombstones: string[]
   kept: string[]
 }
 
-/** Why a sha must stay, or null when nothing holds it. */
 function holdReason(
   sha: string,
   inventory: RuntimeStoreInventory,
@@ -86,7 +71,7 @@ export function planRuntimeStoreGc(
   now: number = Date.now()
 ): RuntimeStoreGcPlan {
   const pins = new Set(currentPins)
-  // Keep two: the pin this client runs and the newest other verified runtime (the previous pin).
+  // Retain the newest verified non-current runtime as a previous-pin fallback.
   const previous = inventory.verifiedNewestFirst
     .map((name) => RUNTIME_STORE_ENTRY_NAME.exec(name)?.[1])
     .find((sha): sha is string => !!sha && !pins.has(sha))
@@ -98,7 +83,7 @@ export function planRuntimeStoreGc(
   for (const name of inventory.entries) {
     const entry = RUNTIME_STORE_ENTRY_NAME.exec(name)
     if (entry) {
-      // Unverified means mid-promotion or torn; the installer, not GC, owns that state.
+      // Installers own unverified runtimes, whether mid-promotion or torn.
       const idle = verified.has(name) && holdReason(entry[1], inventory, pins) === null
       if (idle && plan.remove.length < MAX_REMOVALS_PER_PASS) {
         plan.remove.push(name)
@@ -131,11 +116,7 @@ type RuntimeStoreGcResult =
 
 const SWEPT_STAGE = 'SWEPT'
 
-/**
- * Removes upload stages nothing has written to within the install lock's stale rule. Why file
- * mtimes and not the directory's: an upload in flight keeps rewriting its archive, not the dir.
- * A `find` that cannot answer keeps the stage.
- */
+/** File mtimes reveal active uploads; directory mtimes alone do not. Failed listings keep stages. */
 export function sweepStaleRuntimeStagesCommand(
   storeDir: string,
   host?: RemoteHostPlatform
@@ -169,7 +150,6 @@ function exec(
   command: string,
   signal?: AbortSignal
 ): Promise<string> {
-  // Why unwrapped on Windows: these are already self-contained powershell.exe command lines.
   return execCommand(conn, command, { wrapCommand: !isWindowsRemoteHost(host), signal })
 }
 
@@ -191,10 +171,7 @@ async function readInventory(
   }
 }
 
-/**
- * One pass over the runtime store. Confirmed failures keep the runtime and end quietly; an
- * unconfirmed SSH termination is rethrown so the caller stops its cleanup chain.
- */
+/** Confirmed failures retain runtimes; unconfirmed termination stops the caller's cleanup chain. */
 export async function gcRemoteNodeRuntimeStore(
   conn: RemoteInstallTransport,
   host: RemoteHostPlatform,
@@ -258,8 +235,7 @@ async function collectHoldingStoreLock(
       kept.push(name)
       continue
     }
-    // Why recheck after the rename: an installer that saw this runtime present may be writing
-    // its reference now; restoring is the only outcome that leaves its slot launchable.
+    // Installers may write references after our first scan; restore renamed runtimes they now need.
     const recheck = await readInventory(conn, host, remoteHome, options.signal).catch(
       async (err: unknown) => {
         await restoreTree(conn, host, tombstone, entryDir, options.signal).catch(() => {})

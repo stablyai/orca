@@ -43,7 +43,6 @@ const ACCEPTED: StructuredAgentSessionSinkAdmission = { accepted: true }
 
 type Written = { key: string; body: AgentJournalItemBody; turnScope?: AgentJournalTurnScope }
 
-/** Records every write with the scope it states; the journal holds the running command turn. */
 function recorder(refuseRevisions = 0) {
   const writes: Written[] = []
   const record = (
@@ -88,7 +87,6 @@ function recorder(refuseRevisions = 0) {
   return { sink, writes }
 }
 
-/** Codex names the thread inside every notification's params too. */
 function notification(
   method: string,
   params: Record<string, unknown>
@@ -119,7 +117,6 @@ function harness(refuseRevisions = 0) {
 const codexTurnRecords = (writes: readonly Written[]) =>
   writes.filter((write) => write.key !== COMMAND_TURN_KEY && readAgentJournalTurn(write.body))
 
-/** The command turn's newest body, as the journal would hold it. */
 const commandTurn = (writes: readonly Written[]) =>
   readAgentJournalTurn(writes.findLast((write) => write.key === COMMAND_TURN_KEY)?.body)
 
@@ -132,7 +129,6 @@ describe('a Codex turn a conversation command claims', () => {
     translator.beginCommand(COMMAND)
 
     emit(notification('turn/started', { turn: { id: PROVIDER_TURN } }))
-    // The claim is persisted on the command turn: nothing else re-derives it later.
     expect(commandTurn(writes)).toMatchObject({ state: 'running', providerTurnId: PROVIDER_TURN })
     emit(
       notification('item/completed', {
@@ -154,7 +150,6 @@ describe('a Codex turn a conversation command claims', () => {
       (write) => write.body.kind === 'message' && write.body.role === 'assistant'
     )
     expect(summary?.turnScope).toEqual(scope)
-    // Codex's own marker is the command's result row.
     expect(resultRows(writes)).toEqual([
       expect.objectContaining({
         body: { kind: 'status', text: 'Context compacted', presentation: 'compaction' },
@@ -251,7 +246,6 @@ describe('a Codex turn a conversation command claims', () => {
     )
     // The error is a row; only the completion ends the turn.
     expect(commandTurn(writes)).toMatchObject({ state: 'running' })
-    // Codex still completes the turn it failed, as status failed.
     emit(
       notification('turn/completed', {
         turn: { id: PROVIDER_TURN, status: 'failed', error: { message: 'Unavailable' } }
@@ -265,7 +259,6 @@ describe('a Codex turn a conversation command claims', () => {
         (write) => write.key === COMMAND_TURN_KEY && readAgentJournalTurn(write.body)?.completedAt
       )
     ).toHaveLength(1)
-    // Codex's own error row, in the command's turn; the completion adds none.
     expect(resultRows(writes)).toEqual([
       expect.objectContaining({
         body: expect.objectContaining({ kind: 'status', text: 'Unavailable', tone: 'error' }),
@@ -275,8 +268,7 @@ describe('a Codex turn a conversation command claims', () => {
   })
 
   it("ends a captured failed compaction on its completion, below one row of Codex's own", () => {
-    // A real app-server's compaction turn: two retried stream errors, the turn-ending error, then
-    // the failed completion.
+    // Captured app-server sequence: two retries, a fatal error, then failed completion.
     const captured: { case: string; t: number; method: string; params: object }[] = readFileSync(
       join(__dirname, '__fixtures__', 'codex-app-server-turn-endings.jsonl'),
       'utf8'
@@ -307,7 +299,6 @@ describe('a Codex turn a conversation command claims', () => {
       outcome: 'failure',
       completedAt: completion.t
     })
-    // Every row is one of Codex's frames, inside the command's turn; the completion adds none.
     const scope = { kind: 'turn', turnItemId: COMMAND_TURN_KEY }
     const rows = resultRows(writes)
     expect(rows.map((write) => write.key)).not.toContain(

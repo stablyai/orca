@@ -18,8 +18,6 @@ import { AgentBrowserBridgeInteractionCommands } from './agent-browser-bridge-in
 import { sendGuestCdpCommand } from './guest-cdp-command'
 
 export abstract class AgentBrowserBridgeStateCommands extends AgentBrowserBridgeInteractionCommands {
-  // ── Cookie commands ──
-
   async cookieGet(
     _url?: string,
     worktreeId?: string,
@@ -81,8 +79,6 @@ export abstract class AgentBrowserBridgeStateCommands extends AgentBrowserBridge
     })
   }
 
-  // ── Viewport / emulation commands ──
-
   async setViewport(
     width: number,
     height: number,
@@ -101,14 +97,14 @@ export abstract class AgentBrowserBridgeStateCommands extends AgentBrowserBridge
         throw new BrowserError('browser_error', 'Debugger not attached')
       }
 
-      // Why: agent-browser's `set viewport` has no `mobile` flag, so apply the emulation directly via CDP to honor Orca's --mobile.
+      // agent-browser lacks a mobile viewport flag; apply Orca's emulation through CDP.
       await sendGuestCdpCommand(wc, 'Emulation.setDeviceMetricsOverride', {
         width,
         height,
         deviceScaleFactor: scale,
         mobile
       })
-      // Why: BrowserView's compositor can keep the old host size after a metrics-only resize, cropping remote screencast clients.
+      // Metrics-only resize can leave the compositor at its old size and crop remote screencasts.
       await sendGuestCdpCommand(wc, 'Emulation.setVisibleSize', { width, height }).catch(() => {})
 
       return {
@@ -137,15 +133,12 @@ export abstract class AgentBrowserBridgeStateCommands extends AgentBrowserBridge
     })
   }
 
-  // ── Network interception commands ──
-
   async interceptEnable(
     patterns?: string[],
     worktreeId?: string,
     browserPageId?: string
   ): Promise<BrowserInterceptEnableResult> {
     return this.enqueueTargetedCommand(worktreeId, browserPageId, async (sessionName) => {
-      // Why: agent-browser uses "network route <url>" to intercept. Route each pattern individually.
       const urlPattern = patterns?.[0] ?? '**/*'
       const args = ['network', 'route', urlPattern]
       const result = (await this.execAgentBrowser(
@@ -190,9 +183,7 @@ export abstract class AgentBrowserBridgeStateCommands extends AgentBrowserBridge
     })
   }
 
-  // TODO: Add interceptContinue/interceptBlock once agent-browser supports per-request decisions, not just URL-pattern routing.
-
-  // ── Capture commands ──
+  // TODO: Per-request continue/block requires agent-browser support.
 
   async captureStart(
     worktreeId?: string,
@@ -253,13 +244,11 @@ export abstract class AgentBrowserBridgeStateCommands extends AgentBrowserBridge
     })
   }
 
-  // ── Generic passthrough ──
-
   async exec(command: string, worktreeId?: string, browserPageId?: string): Promise<unknown> {
     return this.enqueueTargetedCommand(worktreeId, browserPageId, async (sessionName) => {
-      // Why: strip target/session flags from passthrough so a caller can't override Orca's selected page or CDP proxy.
+      // Passthrough arguments must not override Orca's selected page or CDP proxy.
       const args = stripAgentBrowserTargetArgs(parseShellArgs(command.trim()))
-      return await this.execAgentBrowser(sessionName, args)
+      return await this.execAgentBrowser(sessionName, args, { cliArgv: true })
     })
   }
 }

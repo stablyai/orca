@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { i18n } from '@/i18n/i18n'
-import type { AgentSessionConversationCommandResult } from '../../../../shared/agent-session-conversation-command'
+import type { AgentSessionConversationCommandResult } from '../../../../shared/agent-session/agent-session-conversation-command'
 import type { AgentSessionFailureFact } from '../../../../shared/agent-session-failure'
 import { agentSessionFailureWords } from '../../../../shared/agent-session-failure-words'
 import { TUI_AGENT_DISPLAY_NAMES } from '../../../../shared/tui-agent-display-names'
@@ -25,8 +25,6 @@ const COMPACTION_FAILED: AgentSessionFailureFact = {
   detail: { text: 'Context is too short', audience: 'person' }
 }
 
-// The facts a command whose conversation did not start can carry: a /clear's new one, or the
-// start a /compact waited on.
 const START_FACTS: AgentSessionFailureFact[] = [
   START_FAILED,
   { kind: 'restartFailed' },
@@ -49,7 +47,6 @@ const COMPACT_FACTS: AgentSessionFailureFact[] = [
   { kind: 'compactionUnconfirmed' }
 ]
 
-// What the host returns: its English, worded with the context it uses, beside the fact.
 function hostResult(
   command: 'clear' | 'compact',
   failure: AgentSessionFailureFact,
@@ -93,7 +90,6 @@ describe('the line under the composer after a conversation command failed', () =
         expect(await sent(result, provider)).toEqual({ accepted: false, error: result.error })
       }
     }
-    // The host's own tests pin these sentences.
     expect((await sent(hostResult('clear', START_FAILED, 'codex'), 'codex')).error).toBe(
       "Codex couldn't start. Run /clear again."
     )
@@ -228,7 +224,6 @@ describe('a /compact the host holds in line', () => {
   it('against a host that cannot hold it, and for /clear, keeps every check in true words', () => {
     expect(structuredConversationCommandHold(idle)).toBeNull()
     expect(structuredConversationCommandHold({ ...idle, agentWorking: true })).toBe('working')
-    // The agent idle, only this window's own message still on its way: it is still being sent.
     expect(structuredConversationCommandHold({ ...idle, sendPending: true })).toBe('sending')
     expect(
       structuredConversationCommandHold({ ...idle, agentWorking: true, sendPending: true })

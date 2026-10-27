@@ -1,8 +1,3 @@
-// A rewind after a failed cleanup: the dead generation's turn and prompt are still saved as
-// running and pending, and the rewind rebuilds the epoch at the live fence. Through the rewind's
-// own row builders and a real SQLite journal, each carries the old fold's provenance, so the host
-// projection never promotes that work to the live generation's.
-
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -67,7 +62,6 @@ afterEach(async () => {
   await rm(root, { recursive: true, force: true })
 })
 
-/** The dead generation's work as its cleanup left it: nothing settled. */
 async function leftByDeadGeneration(): Promise<AgentSessionJournal> {
   const journal = await journals.open({ identity: IDENTITY, stateDirectory: root })
   const scope = { fence: DEAD, ownerFence: DEAD, turnScope: AGENT_JOURNAL_THREAD_SCOPE }
@@ -92,7 +86,6 @@ async function leftByDeadGeneration(): Promise<AgentSessionJournal> {
   return journal
 }
 
-/** The rewind's rebuild, as its recovery writes it: the journal's own rows before the cut. */
 async function rewindAtLiveFence(journal: AgentSessionJournal): Promise<void> {
   const cut = structuredRewindCut(journal, {
     itemId: agentJournalItemKey(UNDONE),
@@ -111,7 +104,7 @@ describe('a rewind after a failed cleanup', () => {
 
     expect(journal.epoch).not.toBe(before)
     const work = new StructuredAgentSessionCurrentWork(journal, LIVE)
-    // Rebuilt at the live fence, still the dead generation's work.
+    // New row fence must not promote old execution provenance.
     expect(journal.itemFence(agentJournalItemKey(TURN))).toBe(DEAD)
     expect(journal.itemFence(agentJournalItemKey(PROMPT))).toBe(DEAD)
     expect(journal.itemFence(agentJournalItemKey(REPLY))).toBe(DEAD)

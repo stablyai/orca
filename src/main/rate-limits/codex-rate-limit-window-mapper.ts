@@ -12,7 +12,7 @@ export function mapCodexRateLimitWindow(
   let resetsAt: number | null = null
 
   if (typeof raw.resetsAt === 'number' && Number.isFinite(raw.resetsAt) && raw.resetsAt > 0) {
-    // Why: Codex returns resetsAt as Unix seconds, not milliseconds.
+    // Codex reset epochs use seconds.
     const date = new Date(raw.resetsAt * 1000)
     if (!Number.isNaN(date.getTime())) {
       resetsAt = date.getTime()
@@ -30,7 +30,7 @@ export function mapCodexRateLimitWindow(
 
   return {
     usedPercent: Math.min(100, Math.max(0, raw.usedPercent)),
-    // Why: older app-server builds can report canonical bucket lengths off by one minute.
+    // Normalize the one-minute duration drift in older app-server builds.
     windowMinutes: expectedWindowMinutes,
     resetsAt,
     resetDescription

@@ -30,14 +30,15 @@ type AddRepoHostSelectorProps = {
 }
 
 function getHostStatusDetail(host: SidebarHostOption): string {
-  // Why only the detail: "Disconnected" would read as a failure, not a switched-off feature.
+  // A disabled WSL feature is not a disconnected-host failure.
   if (host.wslUnavailable) {
     return host.detail
   }
   if (host.compatibility?.kind === 'blocked') {
     return describeRuntimeCompatBlock(host.compatibility)
   }
-  return `${getSidebarHostHealthLabel(host.health, host.blockedReason)}${host.detail ? ` - ${host.detail}` : ''}`
+  const detail = host.failureReason ?? host.detail
+  return `${getSidebarHostHealthLabel(host.health, host.blockedReason)}${detail ? ` - ${detail}` : ''}`
 }
 
 export function AddRepoHostSelector({
@@ -219,7 +220,6 @@ export function AddRepoHostSelector({
                 const canConnectHost = canConnectAddRepoHost(host)
                 const canTurnOn =
                   host.wslUnavailable === 'turned-off' && onOpenWslHostsSetting !== undefined
-                // Why one flag: either action keeps the otherwise unselectable row interactive.
                 const canConnect = canConnectHost || canTurnOn
                 const isConnecting = host.health === 'connecting'
                 return (
@@ -251,7 +251,9 @@ export function AddRepoHostSelector({
                         <span className="truncate font-medium">{host.label}</span>
                       </span>
                       <span className="mt-0.5 block truncate text-[11px] text-muted-foreground">
-                        <span className="min-w-0 flex-1 truncate">{getHostStatusDetail(host)}</span>
+                        <span className="min-w-0 flex-1 truncate" title={host.failureReason}>
+                          {getHostStatusDetail(host)}
+                        </span>
                       </span>
                     </span>
                     {canConnectHost ? (

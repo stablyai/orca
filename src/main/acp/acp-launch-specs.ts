@@ -1,6 +1,4 @@
-// How Orca starts each ACP agent, as data: adding an agent is one more row (plus a dialect when it
-// speaks protocol extensions). Nothing outside `acp-dialects/` branches on an agent's name.
-
+import type { AcpHistoryTurnIdentity } from './acp-history-replay'
 import { join } from 'node:path'
 import type { AcpDialect } from './acp-dialects/acp-dialect'
 import { GROK_ACP_DIALECT } from './acp-dialects/grok-dialect'
@@ -10,8 +8,6 @@ import { ANTIGRAVITY_ACP_DIALECT } from './acp-dialects/antigravity-dialect'
 import { directoryAccountBinding, type AcpAccountBinding } from './acp-account-binding'
 import { openCodeAcpAccountBinding } from '../opencode/opencode-structured-account-home'
 import { scrubOpenCodeAcpEnvironment } from '../opencode/opencode-acp-environment'
-import { openCodeStoredUserMessagesReader } from '../opencode/opencode-acp-stored-messages'
-import type { AcpStoredUserMessagesReader } from './acp-recovery-history'
 import type { TuiAgent } from '../../shared/tui-agent'
 import type { AgentSessionModelOption } from '../../shared/agent-session-wire'
 import type { AgentChatPermissionMode } from '../../shared/agent-chat-permission-mode'
@@ -58,9 +54,7 @@ import { readAntigravitySignInLine } from '../antigravity/antigravity-sign-in-ur
 import type { AcpSignInWatch } from './acp-agent-connection'
 import type { AcpLaunchGate } from './acp-launch-gate'
 
-/** How an agent lists its models before a chat: from its `initialize` answer (plus extension
- *  requests), from a listing command, from a session it opens and deletes, or not at all. Never
- *  `authenticate`. */
+/** Model discovery never authenticates interactively. */
 export type AcpModelDiscovery =
   | {
       kind: 'initialize'
@@ -70,7 +64,6 @@ export type AcpModelDiscovery =
           requestSessionFreeExtension(method: string, params: unknown): Promise<unknown>
         }
       ): Promise<AgentSessionModelOption[]>
-      /** The listing marks the model the account is configured to run as its default. */
       listingNamesConfiguredModel: boolean
     }
   | {
@@ -78,28 +71,20 @@ export type AcpModelDiscovery =
       args: readonly string[]
       parse(stdout: string): AgentSessionModelOption[]
       listingNamesConfiguredModel: boolean
-      /** The releases whose listing matches what their chats offer; any other lists in a session
-       *  when `otherReleasesListInSession`, else not at all and its chats' own lists fill the
-       *  catalog. Absent lists on every release. */
+      /** Unsupported releases use session discovery when enabled, otherwise live-chat catalogs. */
       supportsVersion?(version: string): boolean
       otherReleasesListInSession?: true
     }
   | AcpSessionModelDiscovery
   | { kind: 'unavailable'; reason: string }
 
-/** What a new chat offers, read from a session opened in the asking chat's folder and then
- *  deleted. An agent that cannot delete one is not asked unless it can keep that session in a
- *  folder Orca removes, and with no chat folder (a prewarm) none is opened, so no conversation or
- *  new project is left in its history. */
+/** Requires a chat folder and session deletion or disposable storage to avoid persistent history. */
 export type AcpSessionModelDiscovery = {
   kind: 'session'
   listingNamesConfiguredModel: boolean
-  /** Arguments that keep the listing's session in `folder` instead of the agent's own store. */
   sessionFolderArgs?(folder: string): string[]
 }
 
-/** Whether some release lists in a session in the asking chat's folder, so the listing needs one
- *  and reads that folder's project config. */
 export function acpListingNeedsChatFolder(discovery: AcpModelDiscovery): boolean {
   return (
     discovery.kind === 'session' ||
@@ -108,72 +93,56 @@ export function acpListingNeedsChatFolder(discovery: AcpModelDiscovery): boolean
 }
 
 export type AcpLaunchSpec = {
-  /** The Orca agent id, which names the agent's records, its catalog label and its settings. */
   agent: TuiAgent
   command: string
   /** The terminal agent's Command setting may name a different program than this chat server. */
   ignoreAgentCommandSetting?: true
-  /** Built per launch: `fullAccess` is the chat's own Full access permission mode;
-   *  `pluginDir` is a plugin folder `visualsSkill` asked the agent to load. */
   args(input: { fullAccess: boolean; pluginDir: string | null }): string[]
-  /** Laid over the child's environment last, after the account and the user's own variables. */
+  /** Applied after the account and user environment. */
   env: Readonly<Record<string, string>>
-  /** Rewrites what the child would inherit from Orca's own plumbing; returns the keys it must not
-   *  inherit at all. `inherited` is the environment the child process starts from. */
+  /** Scrubs inherited Orca plumbing and returns keys to omit entirely. */
   scrubEnvironment?(env: Record<string, string>, inherited: NodeJS.ProcessEnv): string[]
   dialect: AcpDialect
-  /** The agent's own sign-in command, for a person to run when it reports auth required. */
   loginCommand: readonly string[]
-  /** Which advertised sign-in method to use when the agent reports auth required, read from the
-   *  environment it was launched with (on its own machine); none leaves it not signed in. */
+  /** Selects an advertised method using the execution host's environment; undefined leaves it signed out. */
   authMethod?(input: {
     advertised: readonly string[]
     env: Readonly<Record<string, string>>
   }): string | undefined
-  /** The agent's browser sign-in on its output: a valid sign-in line ends the chat signed out. */
+  /** A valid sign-in output line closes the chat signed out. */
   signIn?: Omit<AcpSignInWatch, 'link'>
-  /** The account each chat pins, and how a launch points the agent at it. */
   account: AcpAccountBinding
-  /** The ascending `--version` minimums a structured chat needs (`agentCliMinimumVersion`), asked
-   *  before a create and again at every launch; absent runs whatever is installed. */
+  /** Ascending release-line minimums, checked before creation and at every launch. */
   minimumVersions?: readonly string[]
-  /** Where the agent installs its own binary, searched after PATH. */
+  /** Searched after PATH. */
   installDirectories(input: { env: Readonly<Record<string, string>>; homePath: string }): string[]
-  /** A pinned copy Orca installs under its data folder when the person asks; a start runs an
-   *  installed release before PATH and never installs one. A spec with one names no
-   *  `minimumVersions`. */
+  /** Installed only on request; takes precedence over PATH and excludes `minimumVersions`. */
   managedRuntime?: ManagedRuntime
-  /** The agent's `mode` config option value per chat permission mode, through which it enforces
-   *  the mode itself; Orca then answers none of its permission requests for the person. */
+  /** Agent-enforced modes; Orca does not answer its permission requests. */
   permissionModeConfig?: {
     values: { ask: string } & Partial<Record<AgentChatPermissionMode, string>>
   }
-  /** The agent compacts its conversation when sent `/compact` as a prompt; off hides `/compact`. */
+  /** Enables /compact as a prompt command. */
   compaction?: true
-  /** Throws when the chat's own arguments would send a copied conversation's CLI elsewhere than
-   *  the store the copy is written to. */
+  /** Rejects copy arguments that route the CLI away from the copy's store. */
   assertCopyLaunchArgs?: (args: readonly string[]) => void
-  /** The agent's own store of a session's user messages, read for restart recovery only. */
-  readStoredUserMessages?: AcpStoredUserMessagesReader
+  /** How the agent names each turn its reopen replays, when a reopened chat catches up on the
+   *  turns made outside it; absent, the replay is only dropped. */
+  historyCatchUp?: AcpHistoryTurnIdentity
   modelDiscovery: AcpModelDiscovery
-  /** How a launch loads the inline-visuals skill; absent, the agent's chats have no visuals. */
   visualsSkill?: AcpVisualsSkillLoader
-  /** How a chat adopts a conversation the agent's CLI recorded; null when it cannot. */
   transcriptImport: StructuredAgentTranscriptImport | null
-  /** How the agent's chats own the Session History rows their conversations list as. */
   sessionHistory: StructuredAgentSessionHistory
-  /** Each process gets its own temp folder: the agent's temp files collide across processes. */
+  /** Isolate processes whose agent temp files collide. */
   privateTempDirectory?: true
-  /** Reopens a chat's session with `session/resume` even when the agent can also load it. */
+  /** Prefer session/resume even when loading is supported. */
   resumePreference?: 'resume'
-  /** Holds this host's chat starts off while its sign-in or runtime is replaced or removed. */
   launchGate?: AcpLaunchGate
 }
 
 const GROK_LAUNCH_SPEC: AcpLaunchSpec = {
   agent: 'grok',
   command: 'grok',
-  // `--always-approve` only for full access, as the chat's permission mode chooses.
   args: ({ fullAccess, pluginDir }) => [
     'agent',
     ...(fullAccess ? ['--always-approve'] : []),
@@ -182,8 +151,9 @@ const GROK_LAUNCH_SPEC: AcpLaunchSpec = {
   ],
   env: {},
   dialect: GROK_ACP_DIALECT,
+  historyCatchUp: 'prompt-id',
   loginCommand: agentSessionSignInFor('grok')?.loginCommand ?? [],
-  // An API key in Grok's own environment, else the sign-in Grok already cached; never interactive.
+  // Prefer the launch environment's API key, then cached sign-in; never prompt interactively.
   authMethod: ({ advertised, env }) =>
     env.XAI_API_KEY?.trim() && advertised.includes('xai.api_key')
       ? 'xai.api_key'
@@ -192,8 +162,7 @@ const GROK_LAUNCH_SPEC: AcpLaunchSpec = {
         : undefined,
   account: directoryAccountBinding('GROK_HOME', (homePath) => join(homePath, '.grok')),
   installDirectories: ({ env }) => (env.GROK_HOME ? [join(env.GROK_HOME, 'bin')] : []),
-  // Grok lists its models in `initialize`, before and without any session. Its `currentModelId`
-  // there can differ from what a session runs, so a chat started with no pick names the default.
+  // initialize's currentModelId can differ from a session's; leave the default to the chat.
   modelDiscovery: {
     kind: 'initialize',
     read: readGrokModelCatalog,
@@ -205,32 +174,28 @@ const GROK_LAUNCH_SPEC: AcpLaunchSpec = {
   sessionHistory: GROK_SESSION_HISTORY
 }
 
-// 1.18.31 is the release the recorded sessions capture; 2.0.14 the 2.x release verified to start the
-// private child below.
+// Verified release lines: 1.18.31 recordings and 2.0.14 private-child startup.
 const OPENCODE_MINIMUM_VERSIONS = ['1.18.31', '2.0.14'] as const
 
-// `opencode acp` on 1.x serves in-process; on 2.x it starts a private `opencode serve --stdio` child
-// with this environment and ends it with stdin, so both lines run the chat's own account.
+// 1.x serves in-process; 2.x passes this environment to a private serve --stdio child.
 function openCodeLaunchSpec(
   row: Pick<AcpLaunchSpec, 'agent' | 'command' | 'minimumVersions' | 'modelDiscovery'>
 ): AcpLaunchSpec {
   return {
     ...row,
-    // OpenCode has no bypass flag: full access answers each permission request yes.
+    // No bypass flag; full access approves permission requests individually.
     args: () => ['acp'],
-    // Applied last: the client name ACP sessions report, and no question tool, since Orca shows no
-    // question form yet (1.x would wait on one forever; 2.x drops it).
+    // Disable unsupported question forms: 1.x waits forever; 2.x drops them.
     env: { OPENCODE_CLIENT: 'acp', OPENCODE_ENABLE_QUESTION_TOOL: 'false' },
     scrubEnvironment: scrubOpenCodeAcpEnvironment,
     dialect: OPENCODE_ACP_DIALECT,
+    historyCatchUp: 'user-message-id',
     loginCommand: agentSessionSignInFor(row.agent)?.loginCommand ?? [],
     account: openCodeAcpAccountBinding(),
     installDirectories: ({ homePath }) => [join(homePath, '.opencode', 'bin')],
-    readStoredUserMessages: openCodeStoredUserMessagesReader(),
     visualsSkill: loadOpenCodeVisualsSkill,
     compaction: true,
     assertCopyLaunchArgs: assertOpenCodeCopyUsesLocalStore,
-    // Finds a conversation of either line in the one database both lines write.
     transcriptImport: OPENCODE_TRANSCRIPT_IMPORT,
     sessionHistory: OPENCODE_SESSION_HISTORY
   }
@@ -240,12 +205,11 @@ const OPENCODE_LAUNCH_SPEC = openCodeLaunchSpec({
   agent: 'opencode',
   command: 'opencode',
   minimumVersions: OPENCODE_MINIMUM_VERSIONS,
-  // Its `initialize` names no models; 1.x lists them with a command, 2.x in a session it deletes.
+  // 1.x lists via CLI; 2.x requires a disposable session.
   modelDiscovery: {
     kind: 'command',
     args: OPENCODE_MODEL_LISTING_ARGS,
     parse: parseOpenCodeModelListing,
-    // The listing marks no default; a chat started with no pick names it.
     listingNamesConfiguredModel: false,
     // 2.x and later reject `--verbose`, and their listings omit providers that report after startup.
     supportsVersion: (version) => compareAppVersions(version, '2.0.0') < 0,
@@ -253,8 +217,7 @@ const OPENCODE_LAUNCH_SPEC = openCodeLaunchSpec({
   }
 })
 
-// Since 2.0.0 `opencode2` is an alias OpenCode's installer writes beside `opencode`, and the only
-// name for 2.x where `opencode` is still 1.x. Its chats share OpenCode's account and history rows.
+// opencode2 is the installer's 2.x alias; both names share accounts and history.
 const OPENCODE2_LAUNCH_SPEC = openCodeLaunchSpec({
   agent: 'opencode2',
   command: 'opencode2',
@@ -262,26 +225,21 @@ const OPENCODE2_LAUNCH_SPEC = openCodeLaunchSpec({
   modelDiscovery: { kind: 'session', listingNamesConfiguredModel: false }
 })
 
-// OMP serves ACP through `omp acp`; its environment reaches it as the user set it.
 const OMP_LAUNCH_SPEC: AcpLaunchSpec = {
   agent: 'omp',
   command: 'omp',
-  // Full access answers each permission request yes.
+  // Full access approves permission requests individually.
   args: ({ pluginDir }) => ['acp', ...(pluginDir ? ['--plugin-dir', pluginDir] : [])],
   env: {},
   dialect: OMP_ACP_DIALECT,
   loginCommand: agentSessionSignInFor('omp')?.loginCommand ?? [],
-  // The directory OMP's terminal chats read too; its default is OMP's own.
   account: directoryAccountBinding('PI_CODING_AGENT_DIR', (homePath) =>
     join(homePath, '.omp', 'agent')
   ),
-  // OMP's installers use directories the shared resolver already searches after PATH.
   installDirectories: () => [],
-  // 17.0.5 is the release verified to serve `omp acp`.
+  // First release verified to serve ACP.
   minimumVersions: ['17.0.5'],
-  // `omp models --json` lists every model without the `enabledModels` filter a chat applies, so it
-  // could offer models a chat refuses. A session lists exactly what a chat in that folder offers;
-  // `omp acp` cannot delete one, so it is kept out of OMP's store (17.0.5 and 18.12.2 verified).
+  // CLI listings include disabled models; use a disposable session (OMP cannot delete sessions).
   modelDiscovery: {
     kind: 'session',
     listingNamesConfiguredModel: false,
@@ -293,37 +251,34 @@ const OMP_LAUNCH_SPEC: AcpLaunchSpec = {
   sessionHistory: OMP_SESSION_HISTORY
 }
 
-// `agy` keeps its own conversations apart from the ACP server's, so its arguments resume none.
+// agy conversations are separate from the ACP server's and cannot resume these sessions.
 const ANTIGRAVITY_SESSION_HISTORY: StructuredAgentSessionHistory = {
   rowAgents: ['antigravity'],
   rowSessionId: (link) => link.handle.nativeId,
   parseResumeArgs: () => null
 }
 
-// Google's Antigravity ACP server, which Orca installs (the `agy` CLI has no ACP mode). Its chats
-// sign in to a folder of their own on each host; an `agy` login is not theirs.
+// The managed ACP server has its own sign-in; agy provides neither ACP nor its account.
 export const ANTIGRAVITY_LAUNCH_SPEC = {
   agent: 'antigravity',
   command: ANTIGRAVITY_ACP_COMMAND,
   ignoreAgentCommandSetting: true,
-  // The registry's Linux launch: without `--uid=` the server, started as root, drops to nobody.
+  // Without --uid=, the Linux server drops root launches to nobody.
   args: () => (process.platform === 'linux' ? ['--uid='] : []),
   env: ANTIGRAVITY_ACP_ENV,
   scrubEnvironment: scrubAntigravityAcpEnvironment,
   dialect: ANTIGRAVITY_ACP_DIALECT,
   loginCommand: agentSessionSignInFor('antigravity')?.loginCommand ?? [],
-  // Signs in with the Google account the folder saved; without one, the server prints a sign-in link.
   authMethod: ({ advertised }) =>
     advertised.includes('oauth-personal') ? 'oauth-personal' : undefined,
   signIn: {
     read: readAntigravitySignInLine,
-    // The host's sign-in status is the server's latest answer, as chats meet it.
     answered: answerAntigravityChatAuth
   },
   account: antigravityChatAccount,
   installDirectories: () => [],
   managedRuntime: ANTIGRAVITY_ACP_RUNTIME,
-  // Its yolo mode still asks the person questions and administrative reviews.
+  // Yolo still requests questions and administrative reviews.
   permissionModeConfig: {
     values: { ask: 'default', 'accept-edits': 'auto_edit', 'full-access': 'yolo' }
   },

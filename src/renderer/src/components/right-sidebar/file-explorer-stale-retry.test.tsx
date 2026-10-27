@@ -127,3 +127,8 @@ it('does not let an old workspace completion release a new workspace retry', asy
   })
   expect(second.props.refreshTree).toHaveBeenCalledTimes(1)
 })
+it('opening a workspace is a user act, so its read may start a stopped WSL distro', () => {
+  const { props } = params()
+  renderHook(useFileExplorerTreeLoadEffects, { initialProps: props })
+  expect(props.resetAndLoad).toHaveBeenCalledExactlyOnceWith({ wakeWslDistro: true })
+})

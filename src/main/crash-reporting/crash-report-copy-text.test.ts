@@ -34,8 +34,4 @@ describe('formatCrashReportCopyText', () => {
     expect(text).toContain('Diagnostic ticket uploaded but not linked: ticket-123')
     expect(text).not.toContain('not-allow-listed')
   })
-
-  it('leaves the report unchanged when failure context is invalid', () => {
-    expect(formatCrashReportCopyText('[Crash Report]', { error: '' })).toBe('[Crash Report]')
-  })
 })

@@ -12,11 +12,8 @@ import { getDaemonSocketPath } from './daemon-spawner'
 import type { ListSessionsResult } from './types'
 import type { SubprocessHandle } from './session-subprocess-handle'
 
-// Why: terminals were lost after app updates because a busy machine could
-// time out the 3s startup health check against a daemon that was alive and
-// owning sessions, and the unhealthy path killed it. The fix re-verifies
-// with listSessions, which has far larger budgets (5s hello, 30s request).
-// Real sockets preserve the handshake; virtual time crosses both production budgets.
+// A slower session-list probe can confirm a live daemon after its short startup health check times out.
+// Real sockets preserve handshake behavior while fake time crosses the response budgets.
 const RESPONSE_DELAY_MS = 3_500
 
 function createMockSubprocess(): SubprocessHandle {
@@ -38,8 +35,7 @@ function createMockSubprocess(): SubprocessHandle {
   }
 }
 
-/** Forwards client bytes to the daemon immediately, but delays every daemon
- *  response so each round-trip looks like a daemon under heavy load. */
+/** Delay daemon responses to simulate load while forwarding client requests immediately. */
 function startDelayProxy(listenPath: string, upstreamPath: string): Server {
   const proxy = createServer((clientSocket: Socket) => {
     const upstream = connect(upstreamPath)
@@ -77,7 +73,7 @@ describe('slow daemon session verification', () => {
   const clients: DaemonClient[] = []
 
   beforeEach(() => {
-    // Why: real Unix socket paths have tight platform limits, especially on macOS.
+    // Keep socket paths short enough for macOS Unix-domain limits.
     dir = mkdtempSync(join(tmpdir(), 'ds-'))
     mkdirSync(join(dir, 'daemon'), { recursive: true })
     mkdirSync(join(dir, 'proxy'), { recursive: true })
@@ -123,16 +119,13 @@ describe('slow daemon session verification', () => {
       proxy = startDelayProxy(proxySocketPath, daemonSocketPath)
       vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
 
-      // The exact pre-fix kill trigger: the daemon is alive but too slow for
-      // the health-check budget.
       const healthResponse = once(proxy, 'response-queued')
       const health = healthCheckDaemon(proxySocketPath, tokenPath)
       await healthResponse
       await vi.advanceTimersByTimeAsync(3_000)
       await expect(health).resolves.toBe(false)
 
-      // The fix's re-verification against the SAME slow daemon: the larger
-      // client budgets absorb the latency and prove the session is alive.
+      // The same slow daemon can answer within the larger session-verification budgets.
       const verificationClient = new DaemonClient({ socketPath: proxySocketPath, tokenPath })
       clients.push(verificationClient)
       const helloResponse = once(proxy, 'response-queued')

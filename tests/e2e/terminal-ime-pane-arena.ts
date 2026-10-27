@@ -26,12 +26,10 @@ export async function openTerminalImePaneArena(page: Page): Promise<TerminalImeP
   await ensureTerminalVisible(page)
   await waitForActiveTerminalManager(page, 30_000)
   const ptyId = await waitForActivePanePtyId(page)
-  // The PTY binding precedes its initial snapshot replay; wait for the prompt before replacing the
-  // grid directly, otherwise that replay can overwrite the test row after composition starts.
+  // Wait for the prompt after PTY binding so initial snapshot replay cannot overwrite the test row during composition.
   await expect
     .poll(() => getTerminalContent(page), {
-      // Matches the terminal-manager wait above: at default worker counts on a loaded runner
-      // this poll, not the assertion, is what times out first.
+      // Match the manager wait above so loaded default-worker runs do not time out first on setup.
       timeout: 30_000,
       message: 'Active terminal did not render its initial PTY frame'
     })
@@ -42,10 +40,7 @@ export async function openTerminalImePaneArena(page: Page): Promise<TerminalImeP
   return { page, session, ptyId }
 }
 
-/**
- * `interrupt` sends Ctrl+C only when the test did not reach its end, so a spec that failed
- * mid-composition cannot leave a byte reader holding the pane for the next test in the worker.
- */
+// On failure, interrupt a mid-composition byte reader so the next shared-worker test gets the pane back.
 export async function closeTerminalImePaneArena(
   arena: TerminalImePaneArena,
   testInfo: TestInfo,

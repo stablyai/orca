@@ -37,7 +37,7 @@ export async function getRestPRByNumber(
     restData.stack !== undefined &&
     restData.stack !== null
   ) {
-    // Why: GitHub omits stack for ordinary PRs; only unusable non-null metadata is unsafe.
+    // Absent stack metadata is valid; malformed non-null metadata is unsafe.
     if (!isUsableRestStackMetadata(restData.stack) || !mapped.stack) {
       throw new Error('malformed stack')
     }
@@ -80,7 +80,7 @@ export async function getPRByNumber(
       executionScope
     )
   } catch (err) {
-    // Why: deleted/edited linked PR metadata falls back to branch discovery; quota/auth/network failures get one cheaper REST exact lookup.
+    // Missing links return to branch discovery; other failures get one cheaper REST recovery lookup.
     if (isNotFoundGhError(err)) {
       return null
     }
@@ -152,7 +152,7 @@ export async function lookupPRByNumber(args: {
       : { data: null, dataRepo: null }
   } catch (err) {
     if (isNoPullRequestError(err)) {
-      // Why: stale cached fallback numbers shouldn't error every poll when the PR was deleted or belongs to another repo.
+      // Stale fallback numbers can refer to deleted PRs or another repository.
       return { data: null, dataRepo: null }
     }
     throw err

@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { SshConnection } from '../connection/ssh-connection'
 import type { SshTarget } from '../../../shared/ssh-types'
+import { unusedSshConnection } from '../unused-host-transport.test-fixture'
 
 const mocks = vi.hoisted(() => ({
   connect: vi.fn(),
@@ -26,8 +27,7 @@ const { censusHostRelayTerminalsFor } = await import('./ssh-host-relay-census-fo
 const attribution = await import('../connection/ssh-connection-attribution')
 
 const target: SshTarget = { id: 'ssh-1', label: 'Box', host: 'box', port: 22, username: 'me' }
-// oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: attribution keys on identity only.
-const transport = (): SshConnection => ({}) as SshConnection
+const transport = (): SshConnection => unusedSshConnection()
 
 beforeEach(() => {
   vi.clearAllMocks()

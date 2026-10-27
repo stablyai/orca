@@ -72,12 +72,7 @@ export function renderFloatingTerminalPanelSurface({
   refreshOrchestrationSetupVisibility
 }: ReturnType<typeof useFloatingTerminalPanelController>): React.JSX.Element {
   return (
-    // Why: sit above the z-40 notification cards so the floating workspace is
-    // never buried behind them, but stay under the z-50 modal layer so its own
-    // orchestration/save dialogs (and every app modal) still open above it.
-    // Drop shadow on the outer shell, border on an inner shell — mixing both on
-    // one rounded node made corners look stubby. Floating tabs skip their top
-    // border so the titlebar curve stays clean.
+    // Stay above notifications but below modals; separate shadow and border shells to keep rounded corners clean.
     <div
       ref={setPanelNode}
       data-floating-terminal-panel
@@ -104,18 +99,14 @@ export function renderFloatingTerminalPanelSurface({
       }}
       onFocusCapture={(event) => reportFloatingFocusFromTarget(event.target)}
       onBlurCapture={(event) => {
-        // Why: keep terminal-first shortcut ownership latched during the
-        // synchronous macOS IME refresh blur; refocus or its skip callback settles it.
+        // Preserve shortcut ownership across macOS IME’s synchronous blur until refocus/skip settles it.
         if (!isTerminalImeInputContextRefreshing(event.target)) {
           reportFloatingFocusFromTarget(event.relatedTarget)
         }
       }}
       onKeyDownCapture={handleShortcutSurfaceKeyDown}
     >
-      {/* Why one drag layer around titlebar AND body: the titlebar strip's sortables and the
-          body tree's split/pane-body drop targets must live in the same dnd-kit scope, so a
-          floating tab drag can reorder in the strip or split against the tree — exactly one
-          DndContext owns floating tab drag. */}
+      {/* Share one drag context between the strip and body so tabs can reorder or split. */}
       <WorkspaceTabDragLayer worktreeId={FLOATING_TERMINAL_WORKTREE_ID} enabled={open}>
         {({ isTabDragActive, hoveredTabInsertion, setDragRootNode }) => (
           <div
@@ -190,6 +181,12 @@ export function renderFloatingTerminalPanelSurface({
                   tabStripChrome="floating-panel"
                 />
               </div>
+              {/* Keep a grab area even when the tab strip overflows. */}
+              <div
+                className="h-full w-16 shrink-0 select-none"
+                data-floating-terminal-drag-handle
+                aria-hidden
+              />
               <FloatingTerminalWindowControls
                 maximized={maximized}
                 onToggleMaximized={toggleMaximized}
@@ -203,12 +200,9 @@ export function renderFloatingTerminalPanelSurface({
                 hasVisibleFloatingTabs ? 'floating-workspace-surface' : undefined
               }
             >
-              {/* Why also gated on resolvable items: stale unified tabs whose entities are gone
-                  must show the empty state (with its CTAs), not a blank group body. */}
+              {/* Unresolvable stale tabs need the empty-state actions instead of a blank body. */}
               {surface.kind === 'workspace' && hasVisibleFloatingTabs ? (
-                // Why the flex frame: the tree's nodes size themselves as flex items (flex-1), so
-                // the host must own their rect with a flex container — same contract as
-                // WorktreeSplitSurface. In a block parent every pane collapses to 0px.
+                // The tree needs a flex host owning its rect; block layout collapses panes to zero height.
                 <div className="absolute inset-0 flex" data-floating-workspace-surface-frame>
                   <TabGroupSplitNodeTree
                     layout={surface.layout}
@@ -219,16 +213,11 @@ export function renderFloatingTerminalPanelSurface({
                     hoveredTabInsertion={hoveredTabInsertion}
                     // Why external: the titlebar strip above is the panel's one tab row.
                     tabStrip="external"
-                    // Why: floating workspace markdown is scratch/local context,
-                    // not a repo review surface that should expose agent notes.
+                    // Floating scratch Markdown is local context rather than a repository review surface.
                     markdownAnnotationsEnabled={false}
                     rootTouchesBottomEdge={true}
                   />
-                  {/* Why also gated on a settled viewport: a restored-maximized panel derives its
-                      rect from the live viewport, so mounting terminals before the window finishes
-                      maximizing fits them to a grid it is about to leave, and the correcting fit
-                      reflows the buffer under a live TUI. An empty worktreePath mounts no
-                      terminal panes; browser/editor/chat panes are not viewport-fitted. */}
+                  {/* Wait for viewport settling before fitting terminals; a post-maximize fit can damage live TUI scrollback. */}
                   <WorkspacePaneOverlayLayers
                     worktreeId={FLOATING_TERMINAL_WORKTREE_ID}
                     worktreePath={cwd && panelViewportSettled ? cwd : ''}

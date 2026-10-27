@@ -1,15 +1,11 @@
-// The address Google's sign-in sends the browser back to, pasted by hand when that browser is on
-// another computer than the host, then sent once to the server's own loopback listener here.
-
 import { request } from 'node:http'
 
-/** The loopback address and `state` from the sign-in link the server printed. */
+/** Expected callback coordinates from the server’s sign-in link. */
 export type AntigravitySignInPending = { redirectUri: string; state: string }
 
 const NOT_THIS_SIGN_IN = 'This redirect URL does not belong to the current sign-in.'
 
-/** The pasted address only when it is Google's answer to this flow's link; otherwise a sentence
- *  the person reads, since nothing else may be sent to a port on this host. */
+/** Validate the pasted callback before forwarding anything to a host port. */
 export function antigravitySignInCallback(
   pending: AntigravitySignInPending,
   callbackUrl: string
@@ -50,8 +46,7 @@ export function antigravitySignInCallback(
   return callback
 }
 
-/** One GET to the server's listener; `agent: false` so no proxy setting can route it elsewhere.
- *  The flow's end aborts it, request and answer both. */
+/** Send an abortable GET to the validated loopback callback. */
 export function sendAntigravitySignInCallback(
   callback: URL,
   flow: AbortSignal,

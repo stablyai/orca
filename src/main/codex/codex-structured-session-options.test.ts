@@ -107,7 +107,6 @@ describe('structured Codex session options', () => {
     expect(Object.fromEntries(restoredCodexSessionOptions({ serviceTier: 'priority' }))).toEqual({
       serviceTier: 'priority'
     })
-    // Fast on/off saved before tiers is not carried over.
     expect(Object.fromEntries(restoredCodexSessionOptions({ fastMode: 'true' }))).toEqual({})
   })
 
@@ -319,7 +318,7 @@ describe('structured Codex session options', () => {
       serviceTier: 'unrecognized-tier',
       confirmed: ['serviceTier']
     })
-    // A thread that reported no model runs the listing's default, which the chat never chose.
+    // Listing defaults are not saved user intent.
     await expect(
       readCodexStructuredSessionOptions({ connection, current: {} })
     ).resolves.toMatchObject({ current: { model: 'gpt-live', defaulted: ['model'] } })

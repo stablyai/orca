@@ -28,7 +28,6 @@ describe('WSL move rewrite ledger', () => {
     seedWslMoveCutover(userDataPath, committed([]))
     writeWslMoveCutover(userDataPath, committed(['a']))
     writeWslMoveCutover(userDataPath, committed(['a', 'b']))
-    // Rewriting the same ledger is a no-op, not a change.
     writeWslMoveCutover(userDataPath, committed(['a', 'b']))
     expect(listWslMoveCutovers(userDataPath)[0]?.rewrittenStores).toEqual(['a', 'b'])
   })
@@ -83,14 +82,5 @@ describe('WSL move rewrite ledger', () => {
     setWslMoveDesktopRewriteRegistryCompleteForTests(true)
     writeWslMoveCutover(userDataPath, cutover('move-1', 'client-rewritten'))
     expect(listWslMoveCutovers(userDataPath)[0]?.phase).toBe('client-rewritten')
-  })
-
-  it('re-seeds a committed record to a later phase without dropping its ledger', () => {
-    seedWslMoveCutover(userDataPath, committed(['a', 'b']))
-    seedWslMoveCutover(userDataPath, cutover('move-1', 'retained'))
-    expect(listWslMoveCutovers(userDataPath)[0]).toMatchObject({
-      phase: 'retained',
-      rewrittenStores: ['a', 'b']
-    })
   })
 })

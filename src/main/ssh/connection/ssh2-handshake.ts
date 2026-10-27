@@ -4,8 +4,7 @@ import { CONNECT_TIMEOUT_MS, SSH_CREDENTIAL_TIMEOUT_MS } from './ssh-connection-
 import { createCancelledConnectAttemptError } from '../ssh-connect-attempt-cancellation'
 import type { HostKeyVerificationError } from '../ssh-host-key-decision'
 
-// Counts every INFO_REQUEST of the handshake, so it must cover each partial-success stage the auth
-// queue will answer (MAX_PARTIAL_SUCCESS_STAGES) times the rounds a PAM stack spends per stage.
+// Count INFO_REQUEST across every partial-success stage and PAM challenge round.
 const SSH_KEYBOARD_INTERACTIVE_MAX_ROUNDS = 8
 const SSH_KEYBOARD_INTERACTIVE_READY_TIMEOUT_MS = SSH_CREDENTIAL_TIMEOUT_MS + 5_000
 
@@ -124,7 +123,7 @@ export function runSsh2Handshake(config: ConnectConfig, host: Ssh2HandshakeHost)
       if (settled) {
         return
       }
-      // Why: connect() completion races with disconnect(); a late ready must not resurrect a torn-down client after generation/disposed changes.
+      // Late ready cannot revive a disposed or superseded attempt.
       if (!host.isCurrentAttempt()) {
         settled = true
         guardStartupDestroy()
@@ -137,15 +136,13 @@ export function runSsh2Handshake(config: ConnectConfig, host: Ssh2HandshakeHost)
       settled = true
       host.adoptClient(client)
       cleanupStartupListeners()
-      // Why: ssh2 leaves Nagle on; enable TCP_NODELAY so keystrokes don't stack with delayed-ACK (~40ms each). No-op for proxy sockets.
+      // Disable Nagle so keystrokes avoid stacked delayed ACKs (~40ms); proxy sockets ignore it.
       client.setNoDelay(true)
       host.onConnected()
       resolve()
     }
 
-    // Why: a host that drops an unanswered login (sshd LoginGraceTime) must not close the open
-    // prompt for a retry that opens another; the user's answer decides, and a typed password is
-    // cached for that retry.
+    // LoginGraceTime drops must not close/reopen an active prompt; the user's answer is cached for retry.
     const onStartupError = (err: Error): void => {
       if (keyboardInteractiveAnswer && !settled) {
         const fail = (): void => failStartup(err)
@@ -163,9 +160,7 @@ export function runSsh2Handshake(config: ConnectConfig, host: Ssh2HandshakeHost)
       cleanupStartupListeners()
       settled = true
       client.destroy()
-      // Why replace the error: ssh2 reports a denied host key as a generic handshake failure,
-      // which the reconnect ladder cannot distinguish from a transient fault and would retry
-      // forever against a decision that will never change.
+      // Use the recorded denial; generic ssh2 handshake errors would retry a final trust refusal.
       reject(host.hostKeyRejection() ?? err)
     }
 

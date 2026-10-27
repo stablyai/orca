@@ -10,18 +10,14 @@ import {
 } from './native-chat-context-usage-answer'
 import type { NativeChatPtySessionOptionsSurface } from './native-chat-pty-session-options'
 
-/** The context window the host's model listing states for a model id, or null. */
 export type NativeChatModelContextWindow = (modelId: string) => number | null
 
-/** Answers a command the chat host owns over a terminal session, or null to send it. */
 export type NativeChatLocalCommandAnswer = (
   command: string,
   contextWindowTokens: NativeChatModelContextWindow
 ) => string | null
 
-/** OMP's `/context` paints a panel the chat never sees, so the host replies from the
- *  prompt size the last response reported, against the window of the model that
- *  served it. Null for any command whose catalog row is not composer-answered. */
+/** OMP /context draws outside chat; answer composer-owned commands using the last response’s prompt size and serving model. */
 export function answerNativeChatLocalCommand(args: {
   agent: AgentType
   command: string
@@ -36,15 +32,14 @@ export function answerNativeChatLocalCommand(args: {
     return formatNativeChatContextUsageUnreported()
   }
   const usage = deriveNativeChatContextUsage(args.messages, (message) => {
-    // Why: several providers share a bare model id; the listing keys by selector.
+    // Providers may share bare model IDs; use the provider-qualified selector.
     const selector = ompModelSelector(message.provider, message.model)
     return selector ? args.contextWindowTokens(selector) : null
   })
   return formatNativeChatContextUsageAnswer(usage)
 }
 
-/** False when the agent has answered yet no answer names its model: a host that
- *  predates usage decoding, or a scraped view, will never report usage. */
+/** An answered session with no model evidence cannot report usage (older hosts or scraped views). */
 function sessionReportsUsage(messages: readonly NativeChatMessage[]): boolean {
   let answered = false
   for (const message of messages) {
@@ -70,9 +65,7 @@ export function useNativeChatLocalCommandAnswer(
   )
 }
 
-/** The send paths' shared intercept: a composer-answered command is answered in
- *  place of reaching the PTY. Attachments stay armed for the next prompt. Returns
- *  false when the command must be sent. */
+/** Intercept composer-owned commands before PTY delivery; keep attachments armed and return false for commands to send. */
 export function answerNativeChatCommandInComposer(args: {
   draft: string
   answerCommandLocally?: NativeChatLocalCommandAnswer

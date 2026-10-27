@@ -1,4 +1,3 @@
-/** Reading a distro's liveness evidence: what exited, what is running, and what to ask next. */
 import type { WslRunningDistrosRead } from '../wsl-background-distro-gate'
 import { wslDistroHolderKey } from './wsl-distro-holder-record'
 import type { WslGuestIdentity } from './wsl-guest-process-identity'

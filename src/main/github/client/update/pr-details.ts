@@ -7,9 +7,6 @@ import {
   type LocalGitExecOptions
 } from '../../gh-utils'
 import { resolveGitHubRepoExecution, type GitHubApiRepository } from '../../github-api-repository'
-/**
- * Update a PR's title.
- */
 export async function updatePRTitle(
   repoPath: string,
   prNumber: number,

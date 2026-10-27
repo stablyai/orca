@@ -68,9 +68,6 @@ export const mobileApi = {
   revokeRuntimeAccess: (args: { deviceId: string }): Promise<{ revoked: boolean }> =>
     ipcRenderer.invoke('mobile:revokeRuntimeAccess', args),
 
-  isWebSocketReady: (): Promise<{ ready: boolean; endpoint: string | null }> =>
-    ipcRenderer.invoke('mobile:isWebSocketReady'),
-
   getRelayStatus: (): Promise<MobileRelayStatusDetail> =>
     ipcRenderer.invoke('mobile:getRelayStatus'),
 

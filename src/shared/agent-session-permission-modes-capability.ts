@@ -1,7 +1,7 @@
-// Split out of protocol-version.ts; listed in AGENT_SESSION_RUNTIME_CAPABILITIES. Import it from here.
-
-// Why: a host predating per-chat modes ignores them and runs its Agent Permissions, so a client
-// must know before it lets a chat there start or take a turn. 1.4.225–1.4.226 apply modes without
-// advertising this; they are recognised by the `nativeChatPermissionMode` their settings carry.
+// Probe per-chat modes before start/send: older hosts ignore them and use Agent Permissions. Versions 1.4.225–1.4.226 apply unadvertised modes; recognize nativeChatPermissionMode in their settings.
 export const AGENT_SESSION_PERMISSION_MODES_RUNTIME_CAPABILITY =
   'agent-session.permission-modes.v1' as const
+
+// Host accepts own chat intent and reports the permission the agent selected.
+export const AGENT_SESSION_PERMISSION_OWN_RUNTIME_CAPABILITY =
+  'agent-session.permission-own.v1' as const

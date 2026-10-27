@@ -76,21 +76,22 @@
       "ordinal": 6,
       "json": "{\"id\":\"frame-3\",\"deviceToken\":\"recording-device\",\"method\":\"ssh.connect\",\"params\":{\"targetId\":\"ssh-1\"}}"
     },
-    "4aa26501c485": {
-      "name": "preflight.detectRemoteAgents#2",
-      "ordinal": 8,
-      "json": "{\"id\":\"frame-4\",\"deviceToken\":\"recording-device\",\"method\":\"preflight.detectRemoteAgents\",\"params\":{\"connectionId\":\"ssh-1\"}}"
-    },
-    "4e2e9a890ced": {
+    "1212a28487d8": {
       "detected": ["codex"],
       "gate": {
         "connectInProgress": false,
         "error": {
           "$rpc": "null"
         },
+        "needsDesktopServerRecovery": false,
         "requiresConnection": false,
         "status": "connected"
       }
+    },
+    "4aa26501c485": {
+      "name": "preflight.detectRemoteAgents#2",
+      "ordinal": 8,
+      "json": "{\"id\":\"frame-4\",\"deviceToken\":\"recording-device\",\"method\":\"preflight.detectRemoteAgents\",\"params\":{\"connectionId\":\"ssh-1\"}}"
     },
     "70b1e8fb528a": {
       "name": "preflight.detectRemoteAgents#1",
@@ -201,7 +202,15 @@
         "startedAt": 0
       }
     },
-    "d23b91bd7660": {
+    "eb79a9b3682a": {
+      "status": "fulfilled",
+      "startedAt": 0,
+      "settledAt": 0,
+      "value": {
+        "$rpc": "undefined"
+      }
+    },
+    "fe6c500525e6": {
       "detected": {
         "$rpc": "null"
       },
@@ -210,18 +219,11 @@
         "error": {
           "$rpc": "null"
         },
+        "needsDesktopServerRecovery": false,
         "requiresConnection": true,
         "status": {
           "$rpc": "null"
         }
-      }
-    },
-    "eb79a9b3682a": {
-      "status": "fulfilled",
-      "startedAt": 0,
-      "settledAt": 0,
-      "value": {
-        "$rpc": "undefined"
       }
     }
   },
@@ -236,7 +238,7 @@
           "settlements": {
             "mount": "eb79a9b3682a"
           },
-          "state": "d23b91bd7660",
+          "state": "fe6c500525e6",
           "effects": []
         }
       },
@@ -249,7 +251,7 @@
             "mount": "eb79a9b3682a",
             "connect": "eb79a9b3682a"
           },
-          "state": "4e2e9a890ced",
+          "state": "1212a28487d8",
           "effects": []
         }
       }

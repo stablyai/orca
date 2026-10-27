@@ -2,7 +2,10 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { agentJournalItemKey } from '../../shared/agent-session-journal-item-key'
 import { AGENT_JOURNAL_THREAD_SCOPE } from '../../shared/agent-session-journal-types'
 import { agentJournalTurnBody } from '../../shared/agent-session-turn-record'
-import { AgentSessionAcquisitionRootExitObservedError } from '../native-chat/agent-session-wire/structured-agent-session-adapter'
+import {
+  type StructuredAgentSessionAdapter,
+  AgentSessionAcquisitionRootExitObservedError
+} from '../native-chat/agent-session-wire/structured-agent-session-adapter'
 import { JsonlRpcResponseError } from '../jsonl-rpc/peer'
 import {
   closePiRpcAdapterFixtures,
@@ -95,7 +98,10 @@ describe('Pi RPC session ownership and delivery', () => {
   it('lets a new acquisition proceed while the released child drains final stdout', async () => {
     const h = await setup()
     h.connection.deferExit = true
-    await h.adapter.closeSession(sessionId)
+    const adapter: StructuredAgentSessionAdapter = h.adapter
+    const observeClose = vi.fn()
+    await adapter.closeSession?.(sessionId, observeClose)
+    expect(observeClose).not.toHaveBeenCalled()
     h.adapter.acknowledgeSessionRelease(sessionId)
     await expect(h.adapter.acquire({ ...h.input, fence: 8 })).resolves.toMatchObject({
       process: { pid: 4123 }
@@ -148,7 +154,7 @@ describe('Pi RPC session ownership and delivery', () => {
       clientMessageId: 'send-1',
       body: { kind: 'message', role: 'user', blocks: [{ type: 'text', text: 'hello' }] }
     })
-    expect(result).toEqual({ state: 'admitted' })
+    expect(result).toEqual({ state: 'admitted', ranOptions: { model: 'anthropic/model-1' } })
     expect(h.settled).not.toHaveBeenCalled()
     h.connection.receive({ type: 'agent_start' })
     expect(h.settled).toHaveBeenCalledWith({
@@ -180,7 +186,6 @@ describe('Pi RPC session ownership and delivery', () => {
     expect(h.adapter.heldSends(sessionId)).toEqual(new Set(['first']))
     h.connection.receive({ type: 'agent_start' })
     await send('steer')
-    // The first is accepted; the steer waits behind its running turn.
     expect(h.adapter.heldSends(sessionId)).toEqual(new Set(['steer']))
   })
 
@@ -195,7 +200,10 @@ describe('Pi RPC session ownership and delivery', () => {
       body: { kind: 'message', role: 'user', blocks: [{ type: 'text', text: 'chosen' }] },
       executionOptions: { model: 'anthropic/model-2', effort: 'low' }
     })
-    expect(result).toEqual({ state: 'admitted' })
+    expect(result).toEqual({
+      state: 'admitted',
+      ranOptions: { model: 'anthropic/model-2', effort: 'low' }
+    })
     expect(h.connection.requests.slice(-2)).toEqual(['set_model', 'set_thinking_level'])
     expect(h.connection.sent).toMatchObject([{ type: 'prompt', message: 'chosen' }])
   })
@@ -221,7 +229,7 @@ describe('Pi RPC session ownership and delivery', () => {
           },
           executionOptions: { model }
         })
-      ).resolves.toEqual({ state: 'admitted' })
+      ).resolves.toMatchObject({ state: 'admitted', ranOptions: { model } })
     }
     // Back on the opening model, its opening effort is restored; elsewhere Pi keeps its own.
     expect(h.connection.requests.filter((command) => command.startsWith('set_'))).toEqual([
@@ -288,7 +296,10 @@ describe('Pi RPC session ownership and delivery', () => {
         executionOptions: { model: 'anthropic/model-1', effort: 'low' },
         body: { kind: 'message', role: 'user', blocks: [{ type: 'text', text: 'A again' }] }
       })
-    ).resolves.toEqual({ state: 'admitted' })
+    ).resolves.toEqual({
+      state: 'admitted',
+      ranOptions: { model: 'anthropic/model-1', effort: 'low' }
+    })
     expect(h.connection.requests.filter((command) => command === 'set_model')).toHaveLength(2)
     unanswered.resolve({})
     await Promise.resolve()

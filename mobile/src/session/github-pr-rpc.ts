@@ -19,9 +19,6 @@ import type { GitHubPrSettleableOperation } from './github-pr-mutation-outcome'
 import { githubPrRequestParams, type GitHubPrRepoSlug } from './github-pr-repo-slug'
 import type { RpcOperationSender } from '../transport/rpc-operation-sender'
 
-// Re-export the PR-scoped param builder so consumers (and tests) have a single entry point for the
-// github.* PR RPC surface. The reply parsers it used to re-export are schemas now, and the schema
-// module is the entry point for those.
 export {
   buildGithubPrParams,
   githubPrRepoSlugParam,
@@ -30,14 +27,7 @@ export {
 
 export type GitHubPrReadOutcome<T> = { ok: true; result: T } | { ok: false; error: string }
 
-/**
- * Two failure texts main kept apart, and one it shared.
- *
- * A refusal with no message falls back to the method's own copy, because that is what
- * `response.error?.message || ...` did. A reader that threw — the host reporting an upstream error
- * in-band, or a PR body that would not parse — surfaces its own text verbatim, because that threw
- * into the same catch a transport drop did.
- */
+// Refusals without text use method fallback; decode/in-band upstream errors preserve their own text.
 function githubPrFailureText(reply: RpcResponse, error: unknown, fallback: string): string {
   if (!reply.ok) {
     return refusedRpcMessageOrFallback(error, fallback)
@@ -64,9 +54,7 @@ async function settleGithubPrRead<Value>(
   }
 }
 
-// Probes whether the worktree's repo has a GitHub remote (a non-null slug). Used
-// to decide whether the dedicated PR-view icon is available — independent of
-// whether the branch has an open PR.
+// Gate the PR icon on a GitHub remote independently of whether this branch has an open PR.
 export function fetchGithubRepoSlug(
   client: RpcOperationSender,
   worktreeId: string
@@ -96,18 +84,16 @@ export function fetchHostedReviewForBranch(
   )
 }
 
-/**
- * The branch lookup, whose reader answers an outcome rather than a PR.
- *
- * `upstream-error` is the host reporting that it could not reach GitHub, which is not a reply this
- * app could not read: it throws here, outside the reader, so the host's own text reaches the
- * sidebar through the same catch a decode failure does. That is the one place this read differs
- * from the other six.
- */
+// Raise decoded upstream-error here so the sidebar retains host text; it is not a protocol decode failure.
 export function fetchPRForBranch(
   client: RpcOperationSender,
   worktreeId: string,
-  args: { branch: string; linkedPRNumber?: number | null }
+  args: {
+    branch: string
+    linkedPRNumber?: number | null
+    fallbackPRNumber?: number | null
+    currentHeadOid?: string | null
+  }
 ): Promise<GitHubPrReadOutcome<PRInfo | null>> {
   return settleGithubPrRead(
     {
@@ -119,7 +105,9 @@ export function fetchPRForBranch(
         client,
         githubPrRequestParams(githubPrForBranchRead.operation.method, worktreeId, {
           branch: args.branch,
-          linkedPRNumber: args.linkedPRNumber ?? null
+          linkedPRNumber: args.linkedPRNumber ?? null,
+          fallbackPRNumber: args.fallbackPRNumber ?? null,
+          currentHeadOid: args.currentHeadOid ?? null
         })
       )
   )

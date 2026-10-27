@@ -57,7 +57,7 @@ export function coldRestoreInfoFromSnapshot(
   cwd: string | null,
   meta: SessionMeta
 ): ColdRestoreInfo {
-  // Why: legacy normal snapshots stored their buffer only in snapshotAnsi.
+  // Older normal-buffer snapshots stored scrollback only in snapshotAnsi.
   const scrollbackAnsi =
     snapshot.scrollbackAnsi || (snapshot.modes?.alternateScreen ? '' : snapshot.snapshotAnsi)
   return {

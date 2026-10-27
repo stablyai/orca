@@ -87,9 +87,7 @@ describe('terminalShellOverrideRefusal', () => {
     ).toContain('darwin')
   })
 
-  // `resolveLocalWindowsTerminalRuntimeOptions` rewrites a shell that contradicts the project's
-  // execution runtime, which would hand back a terminal running something else entirely — and
-  // would quote an agent's startup command for the shell that was asked for, not the one running.
+  // Project runtime can rewrite the requested shell, splitting startup-command quoting from the shell that receives it.
   it('refuses a WSL shell when the project runs its terminals on the Windows host', () => {
     expect(
       terminalShellOverrideRefusal({
@@ -114,8 +112,7 @@ describe('terminalShellOverrideRefusal', () => {
     ).toContain('in WSL')
   })
 
-  // No setting can move a `\\wsl$` path out of WSL, so only the path names a fix; a workspace with no
-  // runtime of its own follows the default, so the message names that.
+  // WSL-share paths override runtime settings; distinguish project choices from the global default in the refusal.
   it('names a WSL-share path before the runtime, and a global default as the default', () => {
     const inWsl = { shellOverride: 'cmd.exe', connectionId: null, platform: 'win32' } as const
     const share = { cwd: WSL_WORKSPACE, workspacePath: WSL_WORKSPACE }
@@ -151,8 +148,7 @@ describe('terminalShellOverrideRefusal', () => {
     ).toBeNull()
   })
 
-  // `resolveWslSessionContext` forces wsl.exe for any `\\wsl$` cwd or workspace path, which is
-  // the one rewrite the project-runtime check cannot see: a folder workspace has no project.
+  // Folder workspaces have no project runtime, but WSL UNC cwd/workspace paths still force wsl.exe.
   describe('WSL UNC paths', () => {
     it('refuses a Windows shell for a folder workspace inside a WSL distro with no project runtime', () => {
       const message = terminalShellOverrideRefusal({

@@ -89,7 +89,7 @@ export function attachClosedEditorTabCleanup(
     if (!registry) {
       return
     }
-    // Not `toEditorModelUri`: this re-resolves a live model's own URI (diff models are not `file:`).
+    // Re-resolve the model’s actual URI; diff models are not file: URIs.
     const model = registry.editor.getModel(registry.Uri.parse(candidate.uri.toString()))
     if (!model || model !== candidate) {
       return
@@ -182,7 +182,7 @@ export function attachClosedEditorTabCleanup(
     const models = new Set(candidateModels)
     pendingFiles.clear()
     candidateModels.clear()
-    // Why: a kept dirty record owns its model; it stays pending until the record is released.
+    // Kept dirty records retain their models until record release.
     for (const [file, model] of kept) {
       pendingFiles.set(ownerKey(file), file)
       if (model) {
@@ -230,7 +230,7 @@ export function attachClosedEditorTabCleanup(
     previousState = currentState
     if (
       openFiles === previous &&
-      // Why: a detach or rejoin changes a view's model owner without touching `openFiles`.
+      // Detach/rejoin can change model ownership without replacing openFiles.
       currentState.editorBufferIdOf === closedState.editorBufferIdOf &&
       currentState.editorBufferKept === closedState.editorBufferKept &&
       currentState.repos === closedState.repos &&

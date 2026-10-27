@@ -1,7 +1,8 @@
-import { createElement } from 'react'
+import { createElement, type ReactNode } from 'react'
 import { act, create, type ReactTestInstance, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { AgentJournalStatusItem } from '../../../src/shared/agent-session-journal-types'
+import { isAdmissibleAgentJournalItemBody } from '../../../src/shared/agent-session-journal-schemas'
 import { projectStructuredItemToNativeChat } from '../../../src/shared/structured-agent-session-projection'
 import {
   NATIVE_CHAT_INTERRUPTED_STATUS_TEXT,
@@ -16,13 +17,14 @@ import { agentSessionFailureWords } from '../../../src/shared/agent-session-fail
 import { structuredQuestionTranscript } from '../../../src/shared/structured-agent-question-projection'
 import type { NativeChatResolvedPrompt } from '../../../src/shared/native-chat-resolution-receipt'
 import { colors, typography } from '../theme/mobile-theme'
-import { ANSWERED_PROMPT_ITEMS } from './mobile-native-chat-answered-prompts.test-fixture'
+import { ANSWERED_PROMPT_ITEMS } from './native-chat/input/mobile-native-chat-answered-prompts.test-fixture'
 import { MobileNativeChatRowOverlaysContext } from './mobile-native-chat-row-overlays'
 import { styles } from './mobile-native-chat-message-styles'
+import { stubRpcClient } from '../transport/rpc-client-test-stub'
 
 vi.mock('react-native', async () => {
   const React = await import('react')
-  const Text = ({ children, ...props }: { children?: unknown }): unknown =>
+  const Text = ({ children, ...props }: { children?: ReactNode }): unknown =>
     React.createElement('Text', props, children)
   return {
     ActivityIndicator: 'ActivityIndicator',
@@ -38,10 +40,10 @@ vi.mock('react-native', async () => {
     Image: 'Image',
     Platform: { OS: 'ios' },
     Pressable: 'Pressable',
-    ScrollView: ({ children, ...props }: { children?: unknown }) =>
+    ScrollView: ({ children, ...props }: { children?: ReactNode }) =>
       React.createElement('ScrollView', props, children),
     Text,
-    View: ({ children, ...props }: { children?: unknown }) =>
+    View: ({ children, ...props }: { children?: ReactNode }) =>
       React.createElement('View', props, children),
     StyleSheet: { create: (styles: unknown) => styles, hairlineWidth: 1 },
     useWindowDimensions: () => ({ width: 400, height: 800 })
@@ -79,6 +81,10 @@ vi.mock('./MobileNativeChatMessageActionsSheet', () => ({
 }))
 
 import { MobileNativeChatMessage } from './MobileNativeChatMessage'
+import { findAllByHostType, findByHostType } from '../test-support/react-test-renderer-host-nodes'
+
+const PNG =
+  'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg=='
 
 function userMessage(blocks: NativeChatMessage['blocks']): NativeChatMessage {
   return { id: 'u1', role: 'user', blocks, timestamp: null, source: 'transcript' }
@@ -130,7 +136,7 @@ describe('MobileNativeChatMessage', () => {
       .findAll((child) => String(child.type) === 'MobileMarkdown')
       .map((markdown) => markdown.props.content)
   const textIn = (node: ReactTestInstance): string[] =>
-    node.findAllByType('Text' as never).map((text) => String(text.children.join('')))
+    findAllByHostType(node, 'Text').map((text) => String(text.children.join('')))
 
   it('renders the shared clear boundary as one muted divider with prior history retained', () => {
     const message = projectStructuredItemToNativeChat({
@@ -165,7 +171,6 @@ describe('MobileNativeChatMessage', () => {
       const receipt = receipts.get(message.id)
       return receipt ? [words(render(message, { receipt }).root).join('')] : []
     })
-    // Each ends with when it was answered, in the device's own clock.
     expect(drawn).toEqual([
       expect.stringMatching(
         /^Bash\{[\s\S]*echo receipt-check[\s\S]*\}AllowResolved · Answered on desktop-renderer\d{1,2}:\d{2}(\s[AP]M)?$/
@@ -230,14 +235,12 @@ describe('MobileNativeChatMessage', () => {
     expect(words(render(row, { receipt: group('pending'), awaiting: false }).root).join('')).toBe(
       'Asked: 2 questions1. Which targets?2. Proceed?'
     )
-    // While the host waits, the answer card shows them.
     expect(words(render(row, { receipt: group('pending') }).root).join('')).toBe(
       'Awaiting user input: 2 questions'
     )
   })
 
   it('draws a pending question the host no longer waits on as asked, as desktop does', () => {
-    // The same journal, with the agent ended before the question was answered.
     const { messages, receipts } = structuredQuestionTranscript(
       ANSWERED_PROMPT_ITEMS.map((item) =>
         item.body.kind === 'question'
@@ -286,7 +289,6 @@ describe('MobileNativeChatMessage', () => {
   })
 
   it('draws a question call as the question awaited, then as asked, never as a raw tool line', () => {
-    // A Claude terminal chat's AskUserQuestion call and its answer, as the host decoded them.
     const ask = {
       type: 'tool-call' as const,
       name: 'AskUserQuestion',
@@ -318,7 +320,6 @@ describe('MobileNativeChatMessage', () => {
     expect(words(render({ ...call, blocks: [...call.blocks, answer] }).root).join('')).toBe(
       'Asked: Do you prefer red or blue?'
     )
-    // A native chat asks desktop's selector.
     const live = { structuredActivityUi: true, activeTurnIsWorking: true }
     expect(words(render(toolMessage([{ ...ask, state: 'running' }]), live).root).join('')).toBe(
       'Awaiting user input: Do you prefer red or blue?'
@@ -328,7 +329,6 @@ describe('MobileNativeChatMessage', () => {
     )
   })
 
-  // Each row as its host writes it: Claude's API retry and sign-in rows use these shared words.
   const statusRow = (body: AgentJournalStatusItem): NativeChatMessage =>
     projectStructuredItemToNativeChat({
       itemId: 'status',
@@ -337,7 +337,54 @@ describe('MobileNativeChatMessage', () => {
       observedAt: 2,
       body
     })!
-  it.each([
+
+  it.each(['without reset', 'with reset', 'from an old host'] as const)(
+    'draws an OpenCode usage warning %s',
+    (source) => {
+      const hasReset = source === 'with reset'
+      const resetsAt = new Date(2026, 9, 15, 15, 42).getTime()
+      const now = vi.spyOn(Date, 'now').mockReturnValue(new Date(2026, 9, 15, 12).getTime())
+      try {
+        const host = agentSessionFailureWords(
+          agentSessionFailureFact('usageLimitReached', {
+            detail: {
+              text: 'Internal error: Rate limit exceeded. Please try again later.',
+              audience: 'person'
+            },
+            ...(hasReset ? { usageLimit: { resetsAt } } : {})
+          }),
+          { surface: 'row', agentName: 'OpenCode' }
+        )
+        expect(host.text).toBe('OpenCode hit its usage limit.')
+        const hostText =
+          source === 'from an old host'
+            ? 'OpenCode hit its usage limit. Send a message once it resets to continue.'
+            : host.text
+        const body: unknown = { kind: 'status', tone: 'warning', ...host, text: hostText }
+        if (!isAdmissibleAgentJournalItemBody(body) || body.kind !== 'status') {
+          throw new Error('Status fixture was not admitted')
+        }
+        const tree = render(statusRow(body))
+        const text = tree.root.find(
+          (node) => String(node.type) === 'Text' && node.props.selectable === true
+        )
+        expect(text.props.children).toEqual(
+          hasReset
+            ? expect.stringMatching(/^OpenCode hit its usage limit\. It resets at \S.*\.$/u)
+            : hostText
+        )
+        expect(Object.assign({}, ...text.props.style)).toMatchObject({ color: colors.statusAmber })
+        expect(tree.root.find((node) => String(node.type) === 'AlertTriangle').props.color).toBe(
+          colors.statusAmber
+        )
+        expect(markdownIn(tree.root)).toEqual([])
+      } finally {
+        now.mockRestore()
+      }
+    }
+  )
+
+  it.each<readonly [string, NativeChatMessage, string]>([
     [
       'an API retry as a warning',
       statusRow({
@@ -370,6 +417,17 @@ describe('MobileNativeChatMessage', () => {
       }),
       colors.statusRed
     ],
+    ...[
+      'Please add or update your payment method to continue',
+      'Your current subscription plan does not yet include access to glm-5'
+    ].map(
+      (instruction) =>
+        [
+          `an OpenCode corrective instruction: ${instruction}`,
+          statusRow({ kind: 'status', tone: 'error', text: `Internal error: ${instruction}` }),
+          colors.statusRed
+        ] as const
+    ),
     [
       'an interruption as a faint aside',
       {
@@ -412,6 +470,7 @@ describe('MobileNativeChatMessage', () => {
           id: 'notice',
           role,
           timestamp: 1,
+          source: 'transcript',
           blocks: [
             { type: 'text', text: 'provider fallback', presentation: 'history-item-too-large' }
           ]
@@ -424,7 +483,6 @@ describe('MobileNativeChatMessage', () => {
       )
       expect(text.props.children).toBe(AGENT_SESSION_HOST_STATUS_COPY['history-item-too-large'])
       expect(text.props.selectable).toBe(true)
-      // Zoomed 1.5× with its leading zoomed too, so wrapped lines never overlap.
       expect(Object.assign({}, ...text.props.style)).toMatchObject({
         color: colors.textMuted,
         fontSize: 25.5,
@@ -449,7 +507,6 @@ describe('MobileNativeChatMessage', () => {
     }
     const tree = render(agentMessage)
     expect(textIn(tree.root)[0]).toBe('Message from Coder')
-    // Left-aligned agent prose, not the person's inverted bubble.
     expect(tree.root.findAll((node) => String(node.type) === 'MobileMarkdown')).toHaveLength(1)
     const rows = tree.root.findAll(
       (node) => String(node.type) === 'View' && Array.isArray(node.props.style)
@@ -500,7 +557,7 @@ describe('MobileNativeChatMessage', () => {
 
   it('renders a loadable preview URI as an image thumbnail', () => {
     const tree = render(userMessage([{ type: 'image-ref', url: 'file:///a.jpg', alt: 'a photo' }]))
-    const image = tree.root.findByType('Image' as never)
+    const image = findByHostType(tree.root, 'Image')
     expect(image.props.source).toEqual({ uri: 'file:///a.jpg' })
     expect(image.parent?.props).toMatchObject({
       accessibilityRole: 'imagebutton',
@@ -546,8 +603,7 @@ describe('MobileNativeChatMessage', () => {
       )
     const folded = render(message, { onToggleUserMessage })
     expect(clips(folded)).toHaveLength(1)
-    // Native layout fits the cut text to the clip, so it measures at the fold: it stays folded and
-    // offers the rest, rather than unfolding to measure taller and folding again.
+    // Native clips measure at their folded height; expanding to test greater-than would cause a fold/unfold loop.
     act(() =>
       clips(folded)[0]!
         .find((node) => node.props.onLayout !== undefined)
@@ -562,7 +618,6 @@ describe('MobileNativeChatMessage', () => {
         .props.onPress()
     )
     expect(onToggleUserMessage).toHaveBeenCalledWith('u1')
-    // The list recycles rows; the transcript's state draws it open again.
     expect(clips(render(message, { userMessageOpen: true, onToggleUserMessage }))).toHaveLength(0)
   })
 
@@ -570,24 +625,59 @@ describe('MobileNativeChatMessage', () => {
     const tree = render(
       userMessage([{ type: 'image-ref', url: 'file:///local.jpg', path: '/tmp/host.png' }])
     )
-    expect(tree.root.findByType('Image' as never).props.source).toEqual({
+    expect(findByHostType(tree.root, 'Image').props.source).toEqual({
       uri: 'file:///local.jpg'
     })
   })
 
   it('falls back to a text placeholder for a bare host path', () => {
-    // A host temp path (e.g. on an SSH host) is not loadable on the device.
+    // Host paths, including SSH paths, cannot be loaded directly on this device.
     const tree = render(userMessage([{ type: 'image-ref', path: '/tmp/host.png' }]))
-    expect(tree.root.findAllByType('Image' as never)).toHaveLength(0)
-    const texts = tree.root
-      .findAllByType('Text' as never)
-      .map((node) => String(node.children.join('')))
+    expect(findAllByHostType(tree.root, 'Image')).toHaveLength(0)
+    const texts = findAllByHostType(tree.root, 'Text').map((node) => String(node.children.join('')))
     expect(texts.some((text) => text.includes('/tmp/host.png'))).toBe(true)
+  })
+
+  // An older host refuses the read; the row keeps today's placeholder.
+  it.each([
+    [
+      { ok: true, result: { content: PNG, isBinary: true, isImage: true, mimeType: 'image/png' } },
+      [`data:image/png;base64,${PNG}`]
+    ],
+    [{ ok: false, error: { code: 'forbidden', message: 'not available to mobile clients' } }, []]
+  ] as const)('reads a stored image from the chat host: %j', async (reply, thumbnails) => {
+    const path = '/home/me/.orca/agent-session-attachments/6f1c2a4e/shot.png'
+    const sendRequest = vi.fn(async () => ({ id: '1', ...reply }))
+    await act(async () => {
+      renderer = create(
+        createElement(
+          MobileNativeChatRowOverlaysContext.Provider,
+          {
+            value: {
+              openImage: vi.fn(),
+              openActions: vi.fn(),
+              imageClient: stubRpcClient({ sendRequest })
+            }
+          },
+          createElement(MobileNativeChatMessage, {
+            message: userMessage([{ type: 'image-ref', path, alt: 'shot' }])
+          })
+        )
+      )
+    })
+    expect(sendRequest).toHaveBeenCalledWith(
+      'agentSessionAttachment.read',
+      { path },
+      expect.anything()
+    )
+    expect(
+      findAllByHostType(renderer!.root, 'Image').map((image) => image.props.source.uri)
+    ).toEqual(thumbnails)
   })
 
   it('draws your message as selectable Markdown in the bubble’s dark-on-light colours', () => {
     const tree = render(userMessage([{ type: 'text', text: '**Fix** `src/a.ts`' }]))
-    const markdown = tree.root.findByType('MobileMarkdown' as never)
+    const markdown = findByHostType(tree.root, 'MobileMarkdown')
     expect(markdown.props).toMatchObject({
       content: '**Fix** `src/a.ts`',
       tone: 'onBright',
@@ -598,7 +688,7 @@ describe('MobileNativeChatMessage', () => {
 
   it('routes assistant prose through selectable Markdown', () => {
     const tree = render(toolMessage([{ type: 'text', text: 'Agent reply prose' }]))
-    const markdown = tree.root.findByType('MobileMarkdown' as never)
+    const markdown = findByHostType(tree.root, 'MobileMarkdown')
     expect(markdown.props.content).toBe('Agent reply prose')
     expect(markdown.props.rangeSelectable).toBe(true)
   })
@@ -623,8 +713,7 @@ describe('MobileNativeChatMessage', () => {
         activeTurnIsWorking: true
       })
       expect(textIn(tree.root)).toEqual(expect.arrayContaining(['Running 1 command', 'npm test']))
-      expect(tree.root.findAllByType('SquareTerminal' as never)).toHaveLength(1)
-      // A finished call, and a Codex diff that carries no state, keep the same header.
+      expect(findAllByHostType(tree.root, 'SquareTerminal')).toHaveLength(1)
       act(() =>
         tree.update(
           createElement(MobileNativeChatMessage, {
@@ -708,7 +797,6 @@ describe('MobileNativeChatMessage', () => {
       const tree = render(reasoning())
       expect(textIn(tree.root)).toContain('Thought for 3s')
       expect(toggleOf(tree).props.accessibilityState).toEqual({ expanded: false })
-      // Said with what it is, as desktop's screen-reader prefix does, on a 32 + 2 × 6 pt target.
       expect(toggleOf(tree).props.accessibilityLabel).toBe('Reasoning: Thought for 3s')
       expect(toggleOf(tree).props.hitSlop).toBe(6)
       expect(markdownIn(tree)).toHaveLength(0)
@@ -738,7 +826,6 @@ describe('MobileNativeChatMessage', () => {
       expect(render(reasoning({ blocks: [{ type: 'text', text: ' \n ' }] })).toJSON()).toBeNull()
     })
 
-    // The turn's bar is not the block's: hiding the block must not hide the bar it sits on.
     it("still draws its turn's bar while the live line discloses it", () => {
       const tree = render(reasoning({ state: 'running' }), {
         activeTurnIsWorking: true,
@@ -749,7 +836,6 @@ describe('MobileNativeChatMessage', () => {
       expect(textIn(tree.root).some((text) => text.startsWith('Working for'))).toBe(true)
     })
 
-    // Only the block the line discloses hides: a subagent's or a stale open block draws, unended.
     it('draws any other open block in its working turn as Reasoning', () => {
       const child = render(reasoning({ state: 'running', agentId: 'sub-1' }), {
         activeTurnIsWorking: true
@@ -762,7 +848,6 @@ describe('MobileNativeChatMessage', () => {
       expect(textIn(render(reasoning({ state: 'running' })).root)).toContain('Thought')
       const unknown = render(reasoning({ state: undefined, completedAt: undefined }))
       expect(textIn(unknown.root)).toContain('Reasoning')
-      // No "Reasoning: Reasoning".
       expect(toggleOf(unknown).props.accessibilityLabel).toBe('Reasoning')
       expect(textIn(render(reasoning({ completedAt: 1_300 })).root)).toContain('Thought for 1s')
     })

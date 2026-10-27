@@ -27,10 +27,12 @@ import {
 import { shouldIgnoreTerminalMenuPointerDownOutside } from './terminal-context-menu-dismiss'
 import type { TerminalQuickCommand } from '../../../../shared/terminal-quick-command-types'
 import type { ExecutionHostId } from '../../../../shared/execution-host'
-import { formatPrimaryShortcutLabel } from '@/hooks/useShortcutLabel'
+import {
+  formatOptionalPrimaryShortcutLabel,
+  formatPrimaryShortcutLabel
+} from '@/hooks/useShortcutLabel'
 import type { KeybindingOverrides } from '../../../../shared/keybindings'
 import { translate } from '@/i18n/i18n'
-import { isMacPlatform, nativeChatToggleShortcutLabel } from '../native-chat/native-chat-shortcut'
 import { AgentSessionContinuationMenuItem } from './AgentSessionContinuationMenuItem'
 import { AgentSessionContextCopyMenuItem } from './AgentSessionContextCopyMenuItem'
 import { ClearPaneTitleMenuItem } from './ClearPaneTitleMenuItem'
@@ -183,7 +185,7 @@ function TerminalContextMenuItems({
       setTitle: formatPrimaryShortcutLabel('terminal.setTitle', keybindings),
       clearPaneTitle: formatPrimaryShortcutLabel('terminal.clearPaneTitle', keybindings),
       close: formatPrimaryShortcutLabel('terminal.closePane', keybindings),
-      nativeChat: nativeChatToggleShortcutLabel(isMacPlatform())
+      nativeChat: formatOptionalPrimaryShortcutLabel('terminal.toggleNativeChat', keybindings)
     }),
     [keybindings]
   )
@@ -239,7 +241,9 @@ function TerminalContextMenuItems({
                 'components.tab.bar.SortableTabContextMenu.switchToChatView',
                 'Continue in Chat UI'
               )}
-          <DropdownMenuShortcut>{shortcuts.nativeChat}</DropdownMenuShortcut>
+          {shortcuts.nativeChat ? (
+            <DropdownMenuShortcut>{shortcuts.nativeChat}</DropdownMenuShortcut>
+          ) : null}
         </DropdownMenuItem>
       ) : null}
       <DropdownMenuSeparator />
@@ -289,8 +293,7 @@ function TerminalContextMenuItems({
       <DropdownMenuSeparator />
       <DropdownMenuItem
         onSelect={() => {
-          // Why: Set Title moves focus into an overlay input. Force-close
-          // before opening it so the menu's focus guards are not still active.
+          // Close focus guards before opening the title editor overlay.
           onOpenChange(false)
           onSetTitle()
         }}

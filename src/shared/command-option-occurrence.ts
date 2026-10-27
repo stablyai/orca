@@ -14,9 +14,12 @@ export function findOptionOccurrence(
   tokens: readonly string[],
   aliases: readonly string[],
   stopAtTerminator: boolean,
-  valueOptions: readonly string[] = []
+  valueOptions: readonly string[] = [],
+  startIndex = 0,
+  /** False for a flag that takes no value, so the token after it stays where it is. */
+  takesValue = true
 ): { index: number; consumed: number; value?: string } | null {
-  for (let index = 0; index < tokens.length; index += 1) {
+  for (let index = startIndex; index < tokens.length; index += 1) {
     const token = tokens[index]
     if (stopAtTerminator && token === '--') {
       break
@@ -30,7 +33,7 @@ export function findOptionOccurrence(
     }
     const nextToken = tokens[index + 1]
     const consumesNext =
-      aliases.includes(token) && nextToken !== undefined && !nextToken.startsWith('-')
+      takesValue && aliases.includes(token) && nextToken !== undefined && !nextToken.startsWith('-')
     const alias = aliases.find((name) => matchesOption(token, [name]))
     const value = consumesNext
       ? nextToken

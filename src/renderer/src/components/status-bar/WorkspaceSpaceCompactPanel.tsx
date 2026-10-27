@@ -34,7 +34,7 @@ export function WorkspaceSpaceCompactPanel({
   }, [cancelWorkspaceSpaceScan])
 
   return (
-    <div className="border-t border-border/50 bg-muted/15 px-3 py-2">
+    <div className="shrink-0 border-t border-border/50 bg-muted/15 px-3 py-2">
       <div className="flex items-center justify-between gap-2">
         <div className="flex min-w-0 items-center gap-2">
           <HardDrive className="size-3.5 shrink-0 text-muted-foreground" />

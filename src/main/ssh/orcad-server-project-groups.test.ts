@@ -55,7 +55,7 @@ describe('which project groups the server already holds', () => {
     expect(held.sort()).toEqual(['child', 'parent'])
   })
 
-  // Codex repro: a foreign server row's group was taken as this machine's, hiding the conflict.
+  // Foreign rows/groups cannot prove local ownership or hide migration conflicts.
   it('takes no evidence from a server row or group on another host', () => {
     const held = serverHeldProjectGroups(
       payload([group('mine'), group('foreign'), group('via-row')]),
@@ -77,7 +77,7 @@ describe('which project groups the server already holds', () => {
     ).toEqual([])
   })
 
-  // Codex repro: the ancestor walk took a foreign same-id parent as this machine's.
+  // Same-id foreign parents must not enter the local ancestor link set.
   it('does not link a parent the server keeps for another host', () => {
     const held = serverHeldProjectGroups(
       payload([group('parent'), group('child', 'parent')]),
@@ -88,7 +88,7 @@ describe('which project groups the server already holds', () => {
     expect(held).toEqual(['child'])
   })
 
-  // Opus repro: a new parent the server lacks was linked, so a later row in it was refused.
+  // A missing parent must migrate or later rows referencing it will fail.
   it('does not link a parent the server lacks', () => {
     const held = serverHeldProjectGroups(
       payload([group('new-parent'), group('child', 'new-parent')]),

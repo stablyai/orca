@@ -1,10 +1,5 @@
-/**
- * How each streaming method a phone can relay names its stream. `terminal-stream-id`: the host
- * allocates ids in `result.streamId` and terminal binary headers, renumbered by RelayedPhoneReplies.
- * `none`: replies carry no host-allocated id (the phone holds one screencast at a time).
- * `phone-binary-frames`: the client drives the stream with binary frames, which the relay never
- * forwards, so the call is refused rather than opened dead. The census test fails on a new stream.
- */
+/** terminal-stream-id renumbers result/header ids; none carries no id (one phone screencast at a time).
+ * Refuse phone-binary-frames because the relay cannot forward their input. */
 export type RelayedStreamCarrier = 'terminal-stream-id' | 'none' | 'phone-binary-frames'
 
 export const RELAYED_STREAM_CARRIERS: ReadonlyMap<string, RelayedStreamCarrier> = new Map([

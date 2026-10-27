@@ -2,7 +2,7 @@ import type { DaemonFileLog } from './daemon-file-log'
 
 export const DAEMON_SHUTDOWN_TIMEOUT_MS = 5_000
 
-/** Bounds every process shutdown, including RPC teardown that never settles. */
+/** Force exit if shutdown stalls, including RPC teardown. */
 export function createDaemonShutdownDeadline(
   log: DaemonFileLog,
   exit: () => void

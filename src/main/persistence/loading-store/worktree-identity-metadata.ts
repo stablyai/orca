@@ -24,14 +24,12 @@ type WorktreeMetaState = Pick<
   'worktreeMeta' | 'worktreeMetaByIdentity' | 'worktreeIdentityAliases'
 >
 
-/** Storage rows changed together by host-qualified metadata writes. */
 export const WORKTREE_METADATA_DOMAINS = [
   'worktreeMeta',
   'worktreeMetaByIdentity',
   'worktreeIdentityAliases'
 ] as const
 
-/** Select one readable row without discarding competing alias candidates. */
 export function resolveAliasIdentityKey(
   state: WorktreeMetaState,
   alias: string
@@ -42,7 +40,7 @@ export function resolveAliasIdentityKey(
   }
   const resolvable = identityKeys.filter((key) => state.worktreeMetaByIdentity?.[key])
   const candidates = resolvable.length > 0 ? resolvable : identityKeys
-  // Newest activity wins, then the greater key, so every host agrees on the survivor.
+  // Deterministic tie-breaking keeps hosts consistent: newest activity, then greatest key.
   const winner = candidates.reduce((best, key) => {
     const bestTouch = state.worktreeMetaByIdentity?.[best]?.lastActivityAt ?? 0
     const keyTouch = state.worktreeMetaByIdentity?.[key]?.lastActivityAt ?? 0
@@ -54,7 +52,6 @@ export function resolveAliasIdentityKey(
   return winner
 }
 
-/** Drop identity metadata no alias points at any more. */
 export function pruneUnreferencedWorktreeIdentityMeta(
   state: PersistedState,
   candidates?: ReadonlySet<string>
@@ -117,7 +114,6 @@ function migrateLegacyWorktreeMetadata(
   return changed
 }
 
-/** Drop the identity rows a locator owns, for one host or for every host. */
 export function removeWorktreeMetadataForHost(
   state: PersistedState,
   worktreeId: string,
@@ -140,10 +136,7 @@ export function removeWorktreeMetadataForHost(
   return pruneUnreferencedWorktreeIdentityMeta(state) || changed
 }
 
-/**
- * Re-point one host's alias at a renamed locator. Host-scoped on purpose: a local
- * folder move must not drag a remote host's alias to a path that host does not have.
- */
+/** Migrate only this host's locator alias; local moves cannot rewrite another host's paths. */
 export function migrateWorktreeMetadataLocator(
   state: PersistedState,
   oldWorktreeId: string,
@@ -160,8 +153,7 @@ export function migrateWorktreeMetadataLocator(
   }
   const newAlias = composeWorktreeHostIdentity(executionHostId, newWorktreeId)
   state.worktreeIdentityAliases ??= {}
-  // A taken destination keeps its own occupant; stranding the mover at the old locator loses less
-  // than merging (which makes both unreadable) or dropping its row outright.
+  // Keep the source on destination collision rather than losing metadata or making both unreadable.
   if ((state.worktreeIdentityAliases[newAlias] ?? []).length > 0) {
     return false
   }
@@ -190,12 +182,11 @@ export function getWorktreeMetaForHost(
   return !legacy?.hostId || legacy.hostId === executionHostId ? legacy : undefined
 }
 
-// Why: an unstamped repo row may be any host's, but a local-only id is never a remote host's (#31498).
+// Local-only IDs cannot belong to remote hosts even when legacy rows lack stamps.
 function isOtherHostsLocalOnlyRow(worktreeId: string, executionHostId: ExecutionHostId): boolean {
   return executionHostId !== LOCAL_EXECUTION_HOST_ID && isLocalOnlyWorktreeMetaId(worktreeId)
 }
 
-/** Read-only host projection used by listings that must include canonical-only rows. */
 export function getAllWorktreeMetaForHost(
   runtime: { state: WorktreeMetaState },
   executionHostId: ExecutionHostId
@@ -254,7 +245,7 @@ export function setWorktreeMetaForHost(
   const existing =
     existingIdentityMeta ??
     (!legacy?.hostId || legacy.hostId === executionHostId ? legacy : undefined)
-  // An explicit instanceId is a deliberate rotation (see worktree-lineage-pruning), so it wins.
+  // Explicit instance IDs rotate identity; otherwise preserve the existing incarnation.
   const instanceId = meta.instanceId ?? existing?.instanceId ?? randomUUID()
   const identityKey = canonicalWorktreeIdentity({ worktreeId, executionHostId, instanceId })
   const updated = mergeWorktreeMetaForWrite(existing, meta, {
@@ -268,7 +259,7 @@ export function setWorktreeMetaForHost(
   }
   state.worktreeMetaByIdentity[identityKey] = updated
   state.worktreeIdentityAliases[alias] = [identityKey]
-  // Keep the legacy projection only for the first known owner.
+  // Only the first known host owns the legacy locator projection.
   if (!legacy || legacy.hostId === executionHostId) {
     state.worktreeMeta[worktreeId] = updated
   }

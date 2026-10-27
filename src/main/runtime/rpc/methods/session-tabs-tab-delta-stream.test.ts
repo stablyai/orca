@@ -115,7 +115,6 @@ async function runStream(
     { clientKind: 'runtime', connectionId: 'conn-1', clientCapabilities }
   )
   await vi.waitFor(() => expect(listener).not.toBeNull())
-  // Thirty hook status changes, each on one of three working agents.
   for (let version = 2; version <= 31; version += 1) {
     listener!(snapshot(version, version % 3), version)
   }

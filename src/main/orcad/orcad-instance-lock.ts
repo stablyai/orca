@@ -1,20 +1,8 @@
-/**
- * Single-instance ownership of orcad's data root, taken BEFORE the profile is loaded.
- *
- * Two orcads on one data root corrupt it quietly: both load the same profile, both write
- * the same store file, and the loser's writes disappear on the next flush. The refusal is
- * therefore a startup gate, not a warning.
- *
- * What this lock does NOT cover, and must not: the terminal daemon. The daemon is a second
- * long-lived process living under `<root>/daemon`, it deliberately outlives the orcad that
- * spawned it, and it fences its own endpoint with a PID record of its own. A lock that
- * asked "is any process using this root" would refuse every restart that a live daemon
- * makes worthwhile. This lock scopes exactly one role — who is the runtime — so releasing
- * it says nothing about the daemon, which is what makes a non-destructive restart possible.
- */
+// Lock before profile load to prevent concurrent writers; terminal daemons own separate endpoints
+// and deliberately survive runtime lock release and restart.
 import { randomUUID } from 'node:crypto'
 import { linkSync, mkdirSync, statSync, unlinkSync, writeFileSync } from 'node:fs'
-import { userInfo } from 'node:os'
+import { hostname, userInfo } from 'node:os'
 import { join } from 'node:path'
 import process from 'node:process'
 import { z } from 'zod'
@@ -34,6 +22,17 @@ import {
 import { hasErrorCode, isProcessAlive } from '../daemon/daemon-process-inspection'
 import { profileStateAccessMachineIdentity } from '../persistence/profile-state/profile-state-access-identity'
 import { orcadDataRootIsOnLocalDisk } from './orcad-data-root-locality'
+import type { OrcadReclaimHintRuntime } from '../../shared/orcad-stale-lock-reclaim'
+import {
+  orcadLockHolderLocality,
+  orcadLockHolderUnverifiableError
+} from './orcad-lock-holder-locality'
+import {
+  orcadLockPeer,
+  orcadLockSelf,
+  orcadPeerIsLiveCloneMachine,
+  startOrcadLockHeartbeat
+} from './orcad-lock-clone-machine'
 import {
   MAX_ORCAD_LOCK_BYTES,
   readBoundedLockFile,
@@ -43,37 +42,31 @@ import {
 } from './orcad-instance-lock-reclaim'
 
 export const ORCAD_LOCK_FILE_NAME = 'orcad.lock'
-// A writer finishes in milliseconds; a garbled record older than this has no live writer.
+// Allow old torn writes time to complete before treating garbled records as abandoned.
 const GARBLED_LOCK_GRACE_MS = 10_000
 
 const OrcadLockRecordSchema = z.object({
   pid: z.number().int().positive().max(Number.MAX_SAFE_INTEGER),
-  /** Null where the platform cannot read it; PID alone is then the (weaker) fence. */
+  /** Null means PID alone supplies the weaker fence. */
   startedAtMs: z.number().finite().nonnegative().nullable(),
-  /**
-   * Linux only, absent from older writers: drift-free identity preferred over `startedAtMs`.
-   * Salvaged rather than refused, so a future encoding never makes the whole lock unreadable.
-   */
+  /** Drift-free Linux identity; tolerate unknown future encodings without losing the whole record. */
   linuxStartTicks: z.string().regex(/^\d+$/).max(32).optional().catch(undefined),
   bootId: z.string().min(1).max(255).optional().catch(undefined),
-  /** POSIX uid, or the Windows username. Compared as an opaque string. */
   identity: z.string().min(1).max(1_024),
   version: z.string().min(1).max(255),
   acquiredAt: z.iso.datetime({ offset: true }),
-  /** Distinguishes our record from a replacement written after we lost the race. */
   nonce: z.string().min(1).max(255),
-  /** Absent in records orcad wrote before the desktop app shared this lock. */
+  /** Older pre-desktop-sharing records omit role. */
   role: z.enum(['orcad', 'desktop']).optional(),
-  /**
-   * The holder's machine (as profile-state owners record it). Absent from older writers. A PID is
-   * evidence only on the machine that issued it, and a shared home can put two on one data root.
-   */
-  machineIdentity: z.string().min(1).max(255).optional().catch(undefined)
+  /** Shared homes require machine identity: foreign PIDs establish no local liveness. */
+  machineIdentity: z.string().min(1).max(255).optional().catch(undefined),
+  /** Optional legacy-compatible hostname for stale-lock reclaim hints. */
+  host: z.string().min(1).max(255).optional().catch(undefined)
 })
 
 export type OrcadLockRecord = z.infer<typeof OrcadLockRecordSchema>
 
-/** `null` when absent, unreadable, oversized or malformed; callers must not read that as free. */
+/** Unreadable/malformed/oversized/absent returns null; this does not prove the lock is free. */
 export function readOrcadInstanceLockRecord(path: string): OrcadLockRecord | null {
   return parseOrcadInstanceLockRecord(readBoundedLockFile(path) ?? '')
 }
@@ -88,33 +81,32 @@ export type OrcadInstanceLockHooks = OrcadDataRootPrivacyHooks & {
   identity?: () => string
   version?: () => string
   now?: () => Date
-  /** Whether a PID is running. EPERM counts as alive: it proves the process exists. */
+  /** EPERM still proves the process exists. */
   processIsAlive?: (pid: number) => boolean
   startedAtMs?: (pid: number) => number | null
   incarnation?: (pid: number) => OrcadProcessIncarnation | null
   ownerUid?: (pid: number) => number | null
   processName?: (pid: number) => string | null
-  /** Only `differs` frees a live holder's PID; anything less proves nothing. */
+  /** Only differs can reject a live PID’s identity. */
   holderIdentity?: (record: OrcadLockRecord) => OrcadProcessIdentityVerdict
-  /**
-   * Who takes the profile. The desktop app takes it too, so the two refuse each other; it must
-   * hold Electron's single-instance lock first, which is what lets it reclaim a desktop record.
-   */
+  /** Desktop callers must first hold Electron’s single-instance lock to reclaim desktop records. */
   role?: 'orcad' | 'desktop'
   machineIdentity?: () => string | null
-  /** Whether no other machine can reach the data root, for records that name no machine. */
+  /** Establishes locality for legacy machine-less records. */
   dataRootIsOnLocalDisk?: (dataRoot: string) => boolean
+  /** Explicit stale-reclaim confirmation permits judging otherwise unverifiable PIDs locally. */
+  reclaimConfirmed?: (record: OrcadLockRecord, role: 'holder' | 'recovery-owner') => boolean
+  reclaimHintRuntime?: OrcadReclaimHintRuntime | null
+  bootStartedAtMs?: () => number | null
 }
 
 function defaultIdentity(): string {
-  // Why uid and not the name on POSIX: two accounts can share a login name across a
-  // container boundary while the uid is what the filesystem actually enforces.
+  // POSIX names can repeat across containers; filesystem permissions enforce numeric UIDs.
   return process.platform === 'win32'
     ? (userInfo().username ?? 'unknown')
     : String(process.getuid?.() ?? 'unknown')
 }
 
-/** `null` for anything that is not a complete record; never a reason to treat a lock as free. */
 export function parseOrcadInstanceLockRecord(content: string): OrcadLockRecord | null {
   try {
     const result = OrcadLockRecordSchema.safeParse(JSON.parse(content))
@@ -124,12 +116,7 @@ export function parseOrcadInstanceLockRecord(content: string): OrcadLockRecord |
   }
 }
 
-/**
- * Take the lock, or throw an `OrcadInstanceLockError` naming why.
- *
- * A dead holder's record is reclaimed; a live one, or one belonging to a different identity,
- * is never touched.
- */
+/** Reclaim dead holders only; preserve live or foreign-identity ownership. */
 export function acquireOrcadInstanceLock(
   dataRoot: string,
   hooks: OrcadInstanceLockHooks = {}
@@ -156,7 +143,7 @@ export function acquireOrcadInstanceLock(
       `Cannot create the orcad data root ${dataRoot}: ${error instanceof Error ? error.message : String(error)}`
     )
   }
-  // The desktop's profile keeps the permissions it was created with; orcad tightens its own.
+  // Desktop profiles retain existing permissions; orcad tightens its own roots.
   if ((hooks.role ?? 'orcad') === 'orcad') {
     assertOrcadDataRootIsPrivate(dataRoot, hooks)
   }
@@ -172,11 +159,14 @@ export function acquireOrcadInstanceLock(
     acquiredAt: (hooks.now ?? (() => new Date()))().toISOString(),
     nonce: randomUUID(),
     role: hooks.role ?? 'orcad',
-    ...(machineIdentity ? { machineIdentity } : {})
+    ...(machineIdentity ? { machineIdentity } : {}),
+    host: hostname()
   }
   const serialized = JSON.stringify(record)
+  const platform = hooks.platform ?? process.platform
+  const self = orcadLockSelf(record, Date.parse(record.acquiredAt), hooks.bootStartedAtMs?.())
 
-  // Staged then hard-linked: the canonical path only ever holds a complete record, never a torn one.
+  // Stage then hard-link so canonical records are always complete.
   const publish = (): boolean => {
     const staged = `${lockPath}.staged-${process.pid}-${randomUUID()}`
     try {
@@ -202,7 +192,13 @@ export function acquireOrcadInstanceLock(
 
   const dataRootIsLocal = (): boolean =>
     (hooks.dataRootIsOnLocalDisk ?? orcadDataRootIsOnLocalDisk)(dataRoot)
-  // A recovery lock is ours by the same record, and broken only on the same proof of exit.
+  const judgedHere = (holder: OrcadLockRecord, role: 'holder' | 'recovery-owner'): boolean => {
+    const peer = orcadLockPeer(holder, role === 'holder' ? lockPath : null)
+    const locality = orcadLockHolderLocality(peer, self, dataRootIsLocal, platform)
+    return (
+      locality === 'local' || (locality === 'unknown' && !!hooks.reclaimConfirmed?.(holder, role))
+    )
+  }
   const recoveryOwner: OrcadLockRecoveryOwner = {
     record: serialized,
     exited: (ownerRecord) => {
@@ -210,7 +206,7 @@ export function acquireOrcadInstanceLock(
       return Boolean(
         owner &&
         owner.identity === identity &&
-        orcadLockHolderLocality(owner, record, dataRootIsLocal) === 'local' &&
+        judgedHere(owner, 'recovery-owner') &&
         (!isAlive(owner.pid) || holderIdentity(owner) === 'differs')
       )
     }
@@ -218,7 +214,7 @@ export function acquireOrcadInstanceLock(
 
   const existingContents = readBoundedLockFile(lockPath)
   if (existingContents === null) {
-    // Why fail closed: a record we cannot read proves nothing about its holder having exited.
+    // Unreadable records cannot prove their holder exited.
     throw new OrcadInstanceLockError(
       'orcad_instance_lock_unreadable',
       `The orcad instance lock at ${lockPath} is unreadable or larger than ` +
@@ -228,8 +224,7 @@ export function acquireOrcadInstanceLock(
   }
   const existing = parseOrcadInstanceLockRecord(existingContents)
   if (!existing) {
-    // Only a torn write (an older build, or a crash mid-write) leaves this; once it has aged
-    // past any live writer, no owner can be behind it.
+    // Old torn writes become reclaimable only after the writer grace period.
     if (garbledLockIsAbandoned(lockPath)) {
       reclaimAndPublish(lockPath, dataRoot, existingContents, publish, recoveryOwner)
       return makeLock(lockPath, record)
@@ -247,20 +242,26 @@ export function acquireOrcadInstanceLock(
         'root corrupts it. Give each its own ORCA_USER_DATA.'
     )
   }
-  const locality = orcadLockHolderLocality(existing, record, dataRootIsLocal)
-  if (locality !== 'local') {
-    // Its PID means nothing here, so neither a missing nor a reused one proves it exited.
-    throw new OrcadInstanceLockError(
-      'orcad_instance_lock_held',
-      `${describeLockHolder(existing)} (pid ${existing.pid}, started ${existing.acquiredAt}) ` +
-        `holds the data root ${dataRoot}${locality === 'foreign' ? ' from another machine' : ''}. ` +
-        'Orca cannot check from here whether it is still running, because this data root may be ' +
-        `shared with other machines. Stop it there, or if it is not running anywhere, delete ` +
-        `${lockPath} and try again.`
-    )
+  const holder = orcadLockPeer(existing, lockPath)
+  if (!judgedHere(existing, 'holder')) {
+    // Foreign/unverifiable PIDs prove neither absence nor reuse here.
+    throw orcadLockHolderUnverifiableError({
+      holder: `${describeLockHolder(existing)} (pid ${existing.pid}, started ${existing.acquiredAt})`,
+      foreign: orcadLockHolderLocality(holder, self, dataRootIsLocal, platform) === 'foreign',
+      ...(orcadPeerIsLiveCloneMachine(holder, self, dataRootIsLocal, platform)
+        ? { cloneMachine: { role: hooks.role ?? 'orcad' } }
+        : {}),
+      dataRoot,
+      lockPath,
+      hintRuntime:
+        hooks.reclaimHintRuntime !== undefined
+          ? hooks.reclaimHintRuntime
+          : hooks.role === 'desktop'
+            ? null
+            : { execPath: process.execPath, entry: process.argv[1] }
+    })
   }
-  // The desktop takes this lock only after Electron's single-instance lock, which already proves
-  // no other desktop runs; a desktop record is then stale even when its PID was reused.
+  // Electron’s already-held lock proves other desktop instances absent despite PID reuse.
   const staleDesktopRecord = hooks.role === 'desktop' && existing.role === 'desktop'
   const verdict = staleDesktopRecord || !isAlive(existing.pid) ? null : holderIdentity(existing)
   if (verdict === 'unproven' && !existing.bootId) {
@@ -278,48 +279,6 @@ export function acquireOrcadInstanceLock(
   return makeLock(lockPath, record)
 }
 
-/**
- * Same machine: the same machine identity, or (records without one) the same kernel boot. A record
- * that names neither is local only when no other machine can reach the data root.
- */
-function orcadLockHolderLocality(
-  holder: OrcadPeerMachine,
-  self: OrcadPeerMachine,
-  dataRootIsOnLocalDisk: () => boolean
-): 'local' | 'foreign' | 'unknown' {
-  if (holder.machineIdentity && self.machineIdentity) {
-    return holder.machineIdentity === self.machineIdentity ? 'local' : 'foreign'
-  }
-  if (holder.bootId && holder.bootId === self.bootId) {
-    return 'local'
-  }
-  return dataRootIsOnLocalDisk() ? 'local' : 'unknown'
-}
-
-export type OrcadPeerMachine = Pick<OrcadLockRecord, 'machineIdentity' | 'bootId'>
-
-export function currentOrcadPeerMachine(): OrcadPeerMachine {
-  const machineIdentity = profileStateAccessMachineIdentity()
-  const bootId = readOrcadProcessIncarnation(process.pid)?.bootId
-  return { ...(machineIdentity ? { machineIdentity } : {}), ...(bootId ? { bootId } : {}) }
-}
-
-/**
- * Whether a peer's recorded PID means anything here: same machine and kernel boot. A different or
- * unprovable one leaves the peer unverifiable, never exited.
- */
-export function orcadPeerPidIsJudgeableHere(
-  peer: OrcadPeerMachine,
-  self: OrcadPeerMachine,
-  dataRootIsOnLocalDisk: () => boolean
-): boolean {
-  if (peer.bootId && self.bootId && peer.bootId !== self.bootId) {
-    return false
-  }
-  return orcadLockHolderLocality(peer, self, dataRootIsOnLocalDisk) === 'local'
-}
-
-/** A record without a boot id cannot tell its holder from a reused PID; say so. */
 function possiblyReusedPidError(
   lockPath: string,
   existing: OrcadLockRecord,
@@ -352,6 +311,7 @@ function describeLockHolder(record: OrcadLockRecord): string {
 
 function makeLock(lockPath: string, record: OrcadLockRecord): OrcadInstanceLock {
   let released = false
+  const stopHeartbeat = startOrcadLockHeartbeat(lockPath)
   return {
     path: lockPath,
     record,
@@ -360,9 +320,8 @@ function makeLock(lockPath: string, record: OrcadLockRecord): OrcadInstanceLock 
         return
       }
       released = true
-      // Why re-read before unlinking: a reclaim by a later orcad (after, say, a SIGKILL that
-      // this process somehow survived enough to run handlers) leaves a record that is not
-      // ours. Deleting it would unlock a live runtime.
+      stopHeartbeat()
+      // Re-read ownership before unlinking so a successor’s live runtime cannot be unlocked.
       const current = parseOrcadInstanceLockRecord(readBoundedLockFile(lockPath) ?? '')
       if (!current || current.nonce !== record.nonce) {
         return
@@ -370,7 +329,7 @@ function makeLock(lockPath: string, record: OrcadLockRecord): OrcadInstanceLock 
       try {
         unlinkSync(lockPath)
       } catch {
-        // Best-effort: a leftover record with a dead pid is reclaimed on the next start.
+        // Dead-PID leftovers can be reclaimed on the next start.
       }
     }
   }

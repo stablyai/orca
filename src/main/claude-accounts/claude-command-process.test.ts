@@ -52,7 +52,6 @@ describe('runClaudeCommandProcess', () => {
         keepStdinOpen: true,
         onStdin: (next) => {
           write = next
-          // Unhandled, this 'error' would throw and take the host process down.
           spawned.stdins[0].emit(
             'error',
             Object.assign(new Error('write EPIPE'), { code: 'EPIPE' })

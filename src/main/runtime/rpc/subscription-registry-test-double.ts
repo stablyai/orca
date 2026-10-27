@@ -30,22 +30,8 @@ export type SubscriptionRegistryDouble = {
   requestAddressCount: () => number
 }
 
-/**
- * Faithful double of the runtime subscription registry (`OrcaRuntimeService`,
- * `registerSubscriptionCleanup` through `cleanupSubscriptionsForConnection`, plus
- * `releaseSubscriptionByRequest`).
- *
- * This mirrors production line-for-line, so it can drift. If you change
- * `registerSubscriptionCleanup`, `cleanupSubscriptionAndWait`,
- * `cleanupOwnedSubscription`, `cleanupSubscriptionIfOwnedByConnection`, or
- * `cleanupSubscriptionsForConnection`, change this too — the runtime-level tests in
- * `orca-runtime.test.ts` are what pin the real behavior; these doubles only pin routing.
- *
- * Why this exists: the ad-hoc `Map` stubs these tests used to carry never evicted the
- * prior generation and had no connection index, so no test could observe a
- * cross-generation teardown — which is how STA-4510 shipped. Anything exercising
- * subscribe/teardown must use this instead of a bare Map.
- */
+/** Keep generation eviction, connection/request indexes and cleanup behavior aligned with OrcaRuntimeService; orca-runtime.test.ts pins production, these doubles pin routing.
+ * Use this for subscribe/teardown tests: bare Maps missed cross-generation teardown (STA-4510). */
 export function createSubscriptionRegistryDouble(): SubscriptionRegistryDouble {
   const cleanups = new Map<string, Entry>()
   const inFlight = new Map<string, { entry: Entry; promise: Promise<void> }>()

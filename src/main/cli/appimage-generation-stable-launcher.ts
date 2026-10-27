@@ -5,11 +5,7 @@ import {
   resolveAppImageStableLauncherPath
 } from './appimage-stable-launcher'
 
-/**
- * The stable launcher when this process runs from an extracted AppImage generation (a service
- * started through that launcher has no $APPIMAGE). Registering the generation's own launcher
- * instead would break once a later update prunes that generation.
- */
+// Generation services lack $APPIMAGE; register the stable launcher so later pruning cannot break it.
 export function resolveGenerationStableLauncherPath(resourcesPath: string): string | null {
   const generation = resolveAppImageGenerationOfExecutable(join(dirname(resourcesPath), 'orca-ide'))
   if (!generation || !isAppImageStableLauncherReady(generation.cacheRootPath)) {

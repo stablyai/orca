@@ -100,7 +100,6 @@ describe('inline visuals launch preference', () => {
       prepareVisuals
     })
     const adapter = adapterFor(codex, {}, [], { resolveLaunch })
-    // The thread opens after the acquire returns; each check below reads its `thread/start`.
     const start = (sessionId: string) =>
       acquireReadyCodexForTest(adapter, {
         identity: {

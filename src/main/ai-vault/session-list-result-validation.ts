@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { isAiVaultProjectKey } from '../../shared/ai-vault-project-key'
 import {
   AI_VAULT_AGENTS,
   AI_VAULT_SCOPE_PATHS_MAX_COUNT,
@@ -52,12 +53,13 @@ const aiVaultSessionSchema = z.object({
   sessionId: z.string(),
   title: z.string(),
   cwd: z.string().nullable(),
-  // Why catch: a malformed alias list must cost only the aliases, never the whole row.
+  // Malformed aliases must not discard the entire session.
   cwdAliases: z
     .array(z.string().min(1).max(4096))
     .max(AI_VAULT_SCOPE_PATHS_MAX_COUNT)
     .optional()
     .catch(undefined),
+  projectOwnerKey: z.string().refine(isAiVaultProjectKey).nullable().optional().catch(undefined),
   branch: z.string().nullable(),
   model: z.string().nullable(),
   filePath: z.string(),
@@ -93,10 +95,7 @@ const aiVaultSessionSchema = z.object({
 const aiVaultScanIssueSchema = z.object({
   executionHostId: executionHostIdSchema.optional(),
   agent: z.string().min(1),
-  // Why (#15036): a `kind` this build has never heard of used to fail the whole
-  // issue, which the fallback re-reported as an *unkinded* "invalid entry" — i.e.
-  // a newer host's source-level failure came back as a skipped transcript. An
-  // unknown kind degrades to 'scope' (its own muted row); absent stays absent.
+  // Future issue kinds degrade to scope banners; preserve absent kinds for skipped-transcript rows (#15036).
   kind: z
     .union([z.enum(['host', 'scope', 'notice']), z.string().transform(() => 'scope' as const)])
     .optional(),

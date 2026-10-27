@@ -4,14 +4,14 @@ import type { PairingOffer } from '../../shared/pairing'
 import type {
   RemoteRuntimeSubscription,
   RemoteRuntimeSubscriptionCallbacks
-} from '../../shared/remote-runtime-client'
-import { RemoteRuntimeClientError } from '../../shared/remote-runtime-client-error'
+} from '../../shared/remote-runtime/remote-runtime-client'
+import { RemoteRuntimeClientError } from '../../shared/remote-runtime/remote-runtime-client-error'
 
 const { subscribeRemoteRuntimeRequestMock } = vi.hoisted(() => ({
   subscribeRemoteRuntimeRequestMock: vi.fn()
 }))
 
-vi.mock('../../shared/remote-runtime-client', () => ({
+vi.mock('../../shared/remote-runtime/remote-runtime-client', () => ({
   subscribeRemoteRuntimeRequest: subscribeRemoteRuntimeRequestMock
 }))
 
@@ -93,7 +93,6 @@ describe('browser file channel reconnect degradation', () => {
     attempts[1]!.callbacks.onResponse(readyResponse({ fileChannel: true }))
     await vi.waitFor(() => expect(lease.fileChannelNegotiated).toBe(true))
 
-    // Why: the superseded connection's late failure must never fence the lease that replaced it.
     attempts[0]!.callbacks.onError(new RemoteRuntimeClientError('bad_request', 'superseded'))
     await flushMicrotasks()
 

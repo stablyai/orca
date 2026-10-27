@@ -63,8 +63,7 @@ function readRetention(retention: SidebarRetention | null): SidebarFeedRetention
 
 type EntityParser<Entity> = (value: unknown) => { entity: Entity } | null
 
-/** Remembers each raw entity's parse by object identity. The installer keeps an unchanged entity's
- *  object, so only a changed entity is parsed again, and only its parsed object changes. */
+/** Cache parses by raw object identity; unchanged installed entities retain both raw and parsed objects. */
 function entityParser<Schema extends z.ZodType>(schema: Schema): EntityParser<z.infer<Schema>> {
   const parsedByRaw = new WeakMap<object, { entity: z.infer<Schema> } | null>()
   return (value) => {
@@ -138,7 +137,7 @@ export function readSidebarFeedDomains(
   installed: InstalledSidebarInputs,
   previous?: SidebarFeedRead
 ): SidebarFeedDomains {
-  // A batch leaves a domain it did not touch as the same map, so its entities keep their identity.
+  // Untouched domains retain map/entity identity across batch installs.
   const unchanged = (name: string): SidebarFeedDomains | undefined =>
     previous && installed.domains.get(name) === previous.installed.domains.get(name)
       ? previous.domains

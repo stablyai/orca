@@ -57,8 +57,7 @@ export function useCliRegistrationActions({
       }
       onStatusChange(next)
       onSettled()
-      // Why: `install()` resolves with the post-registration status, so a refusal
-      // (conflict, unsupported build, unreadable PATH) arrives as data, not a throw.
+      // Registration refusals resolve as status data rather than throwing.
       const failure = readCliInstallFailure(next, unknownReason())
       setInstallFailure(failure)
       if (failure) {
@@ -78,7 +77,7 @@ export function useCliRegistrationActions({
       }
       const failure = readCliInstallRejection(error, unknownReason())
       setInstallFailure(failure)
-      // Why: closing reveals the persistent notice the toast is only a preview of.
+      // Closing reveals the persistent notice summarized by the toast.
       onSettled()
       toast.error(failedTitle(commandName), { description: failure.reason })
     } finally {

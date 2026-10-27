@@ -89,7 +89,7 @@ function runMacCustomIconCommand(
   execFile: ExecFile,
   appBundlePath: string,
   iconPath: string
-): Promise<void> {
+): Promise<boolean> {
   return runBoundedMacDockIconCommand({
     args: MAC_DOCK_ICON_SCRIPT.flatMap((line) => ['-e', line]),
     execFile,
@@ -139,7 +139,7 @@ function runBoundedMacDockIconCommand({
   onError,
   options,
   timeoutWarning
-}: BoundedMacDockIconCommandOptions): Promise<void> {
+}: BoundedMacDockIconCommandOptions): Promise<boolean> {
   return new Promise((resolve) => {
     let childProcess: MacDockIconChildProcess | undefined
     let settled = false
@@ -157,7 +157,7 @@ function runBoundedMacDockIconCommand({
       if (error) {
         onError(error)
       }
-      resolve()
+      resolve(!error)
     }
 
     const finishAfterFallback = (): void => {
@@ -169,7 +169,7 @@ function runBoundedMacDockIconCommand({
         clearTimeout(forceFallback)
       }
       console.warn(timeoutWarning)
-      resolve()
+      resolve(false)
     }
 
     const fallback = setTimeout(() => {
@@ -180,7 +180,7 @@ function runBoundedMacDockIconCommand({
         finishAfterFallback()
         return
       }
-      // Why: the queue must not release while an older icon process can still win.
+      // Hold the queue until an older icon process can no longer overwrite the result.
       childProcess.once('exit', finishAfterFallback)
       childProcess.once('close', finishAfterFallback)
       forceFallback = setTimeout(finishAfterFallback, MAC_DOCK_ICON_COMMAND_FALLBACK_MS)
@@ -217,8 +217,8 @@ function enqueueMacDockIconPersistence(work: () => Promise<void>): void {
     .catch(handleMacDockIconQueueError)
 }
 
-function clearMacCustomIconMetadata(execFile: ExecFile, appBundlePath: string): Promise<void> {
-  const clearAppKitIcon = (): Promise<void> => {
+function clearMacCustomIconMetadata(execFile: ExecFile, appBundlePath: string): Promise<boolean> {
+  const clearAppKitIcon = (): Promise<boolean> => {
     return runBoundedMacDockIconCommand({
       args: MAC_DOCK_ICON_CLEAR_SCRIPT.flatMap((line) => ['-e', line]),
       execFile,
@@ -236,7 +236,7 @@ function clearMacCustomIconMetadata(execFile: ExecFile, appBundlePath: string): 
     })
   }
 
-  const clearAttribute = (attribute: string): Promise<void> => {
+  const clearAttribute = (attribute: string): Promise<boolean> => {
     return runBoundedMacDockIconCommand({
       args: ['-d', attribute, appBundlePath],
       execFile,
@@ -250,11 +250,11 @@ function clearMacCustomIconMetadata(execFile: ExecFile, appBundlePath: string): 
     })
   }
 
-  return clearAppKitIcon().then(() =>
+  return clearAppKitIcon().then((cleared) =>
     Promise.all([
       clearAttribute('com.apple.FinderInfo'),
       clearAttribute('com.apple.ResourceFork')
-    ]).then(() => {})
+    ]).then(() => cleared)
   )
 }
 
@@ -272,16 +272,18 @@ export function persistMacDockIcon(value: unknown, options: PersistMacDockIconOp
   const iconId = normalizeAppIconId(value)
   const generation = ++macDockIconPersistenceGeneration
   enqueueMacDockIconPersistence(async () => {
-    // Why: stale queued writes must not reapply an older Dock pin icon.
     if (generation !== macDockIconPersistenceGeneration) {
       return
     }
     if (iconId === 'classic') {
-      await clearMacCustomIconMetadata(execFile, appBundlePath)
+      const cleared = await clearMacCustomIconMetadata(execFile, appBundlePath)
+      // Empty image reaches AppKit as nil, so the Dock draws the sharp bundle icns once no custom icon remains.
+      if (cleared && generation === macDockIconPersistenceGeneration) {
+        app.dock?.setIcon(nativeImage.createEmpty())
+      }
       return
     }
-    // Why: a stopped app's Dock tile is resolved from Finder metadata, not
-    // Electron's live app.dock.setIcon state.
+    // Finder metadata supplies the stopped app’s Dock icon; Electron only changes the live tile.
     await runMacCustomIconCommand(execFile, appBundlePath, MAC_DOCK_ICON_PATHS[iconId])
   })
 }

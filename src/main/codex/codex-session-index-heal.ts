@@ -2,6 +2,8 @@ import { dirname, join } from 'node:path'
 import { resolveCodexCommand } from '../codex-cli/command'
 import { isTransientSqliteContention } from '../sqlite/sqlite-read-failure'
 import { CODEX_SHORT_LIVED_PROBE_APP_SERVER_ARGS } from '../codex-cli/codex-read-only-app-server-args'
+import { buildWslCodexAppServerArgs } from '../codex-accounts/wsl-codex-command'
+import { resolveWslExecutablePath } from '../wsl/wsl-executable-path'
 import { getCodexSessionBackfillStateDirPath } from './codex-home-paths'
 import { resolveCodexSessionBackfillPaths } from './codex-session-backfill'
 import {
@@ -23,16 +25,9 @@ import {
 
 export type { CodexSessionIndexHealPaths } from './codex-session-index-heal-state'
 
-// Why: Codex's own sqlite metadata backfill is one-shot (backfill_state is
-// stamped `complete` on first app-server startup), so rollouts that Orca's
-// session backfill hardlinks in later never reach the state DB on their own.
-// `thread/read` is Codex's sanctioned lazy-indexing path: it parses the
-// rollout and upserts the thread row, making backfilled sessions visible to
-// Codex's DB-driven surfaces. Orca never writes Codex's sqlite schema itself.
+// Codex's SQLite backfill is one-shot; thread/read indexes rollouts hardlinked in later.
 
-// Why: one server session per batch bounds child memory and keeps a wedged
-// server from stalling the whole pass; small in-session concurrency keeps the
-// disk/CPU cost background-grade instead of a thundering read storm.
+// Bounded sessions and concurrency limit memory, stalled work and background I/O.
 const HEAL_READS_PER_SERVER_SESSION = 50
 const HEAL_READ_CONCURRENCY = 2
 const HEAL_INTER_BATCH_DELAY_MS = 500
@@ -58,7 +53,11 @@ export type CodexSessionIndexHealOptions = {
   readsPerServerSession?: number
   readConcurrency?: number
   interBatchDelayMs?: number
+  /** Runs after each batch with the reads it settled; a failure is logged, not fatal. */
+  afterBatch?: (settled: readonly CodexSettledThreadRead[]) => Promise<void>
 }
+
+export type CodexSettledThreadRead = { threadId: string; outcome: HealLedgerOutcome }
 
 export type CodexThreadReadOutcome = HealLedgerOutcome
 
@@ -79,12 +78,6 @@ export function resolveCodexSessionIndexHealPaths(
   }
 }
 
-/**
- * Starts a single background index-heal pass for backfilled Codex sessions.
- *
- * Concurrent callers share the in-flight task; an up-to-date marker resolves
- * without reading the audit ledger or spawning any app-server.
- */
 export function startCodexSessionIndexHealInBackground(
   options: CodexSessionIndexHealOptions = {},
   systemCodexHomePathOverride?: string
@@ -108,11 +101,6 @@ export function startCodexSessionIndexHealInBackground(
   return task
 }
 
-/**
- * Drives Codex's lazy thread indexing (`thread/read`) for every backfilled
- * session recorded in the backfill audit ledger that this pass has not
- * processed yet, most recent sessions first.
- */
 export async function runCodexSessionIndexHeal(
   paths: CodexSessionIndexHealPaths,
   options: CodexSessionIndexHealOptions = {}
@@ -149,7 +137,6 @@ export async function runCodexSessionIndexHeal(
       if (readOutcome === 'healed') {
         summary.healedThreads += 1
       } else if (readOutcome === 'missing') {
-        // The backfilled rollout was deleted after the audit was written.
         summary.missingThreads += 1
       } else {
         summary.failedThreads += 1
@@ -159,8 +146,6 @@ export async function runCodexSessionIndexHeal(
     options
   )
   if (outcome === 'unsupported') {
-    // Why: no retry churn on old CLIs — remember unsupported and re-probe
-    // after the retry interval or a version bump; nothing is marked healed.
     writeHealMarker(paths, auditBytes, summary, { unsupportedAt: Date.now() })
   }
   if (outcome !== 'completed' || shouldStop()) {
@@ -176,11 +161,7 @@ export async function runCodexSessionIndexHeal(
   return summary
 }
 
-/**
- * Drives `thread/read` over `threads` in bounded app-server batches, reporting
- * each settled read. Transport failures and sqlite contention abort the pass
- * without reporting, so the caller's next pass retries those threads.
- */
+/** Transport failures and SQLite contention leave affected reads unreported for retry. */
 export async function readCodexThreadsForIndexHeal<T extends { threadId: string }>(
   codexHomePath: string,
   threads: readonly T[],
@@ -204,13 +185,12 @@ export async function readCodexThreadsForIndexHeal<T extends { threadId: string 
     if (offset > 0 && interBatchDelayMs > 0) {
       await new Promise((resolve) => setTimeout(resolve, interBatchDelayMs))
       if (shouldStop()) {
-        // Why: opt-out can happen during the throttle delay; do not spawn an
-        // app-server after the lane has been disabled.
         return 'stopped'
       }
     }
     const batch = threads.slice(offset, offset + readsPerServerSession)
     const timeoutMs = HEAL_BATCH_TIMEOUT_BASE_MS + HEAL_BATCH_TIMEOUT_PER_READ_MS * batch.length
+    const settled: CodexSettledThreadRead[] = []
     try {
       await runSession(buildInvocation(codexHomePath, timeoutMs), async (rpc) => {
         let nextIndex = 0
@@ -218,25 +198,41 @@ export async function readCodexThreadsForIndexHeal<T extends { threadId: string 
           while (nextIndex < batch.length && !shouldStop()) {
             const thread = batch[nextIndex]
             nextIndex += 1
-            onOutcome(thread, await readOneThread(rpc, thread.threadId))
+            const outcome = await readOneThread(rpc, thread.threadId)
+            settled.push({ threadId: thread.threadId, outcome })
+            onOutcome(thread, outcome)
           }
         }
         await Promise.all(Array.from({ length: readConcurrency }, () => worker()))
       })
     } catch (error) {
+      await runAfterBatch(options.afterBatch, settled)
       if (shouldStop()) {
         return 'stopped'
       }
       if (isCodexAppServerUnsupportedError(error)) {
         return 'unsupported'
       }
-      // Transport failure (timeout, early exit, spawn error): unprocessed ids
-      // were never reported, so the next pass resumes them.
       console.warn('[codex-session-index-heal] Heal batch aborted:', error)
       return 'aborted'
     }
+    await runAfterBatch(options.afterBatch, settled)
   }
   return 'completed'
+}
+
+async function runAfterBatch(
+  afterBatch: CodexSessionIndexHealOptions['afterBatch'],
+  settled: readonly CodexSettledThreadRead[]
+): Promise<void> {
+  if (!afterBatch || settled.length === 0) {
+    return
+  }
+  try {
+    await afterBatch(settled)
+  } catch (error) {
+    console.warn('[codex-session-index-heal] Post-batch bookkeeping failed:', error)
+  }
 }
 
 async function readOneThread(
@@ -252,16 +248,14 @@ async function readOneThread(
     }
     const message = error instanceof Error ? error.message : String(error)
     if (!message.startsWith('codex app-server thread/read failed')) {
-      // Not an RPC-level response: the server died or timed out. Abort the
-      // batch without reporting, so the id is retried on the next pass.
+      // Transport errors leave this read unreported for retry.
       throw error
     }
     if (/no rollout found/i.test(message)) {
       return 'missing'
     }
     if (isTransientSqliteContention(message)) {
-      // Why: an active Codex process can briefly own sqlite; leave the id
-      // unreported and abort this pass so a later startup resumes it.
+      // SQLite contention is temporary; leave this read unreported for retry.
       throw error
     }
     return 'failed'
@@ -292,13 +286,28 @@ export function buildNativeHealInvocation(
   const command = resolveCodexCommand()
   return {
     command,
-    // Why: each session is torn down after one batch, so plugin startup could
-    // leave marketplace clones running; indexing needs neither plugins nor tools.
+    // Disable plugins so batch teardown cannot leave marketplace clones running.
     args: [...CODEX_SHORT_LIVED_PROBE_APP_SERVER_ARGS],
     cliPath: command,
-    // Why: pin the home explicitly — nested Orca launches can inherit a managed
-    // CODEX_HOME from the daemon environment, which would index the wrong sqlite DB.
+    // Override inherited managed homes to avoid indexing the wrong database.
     env: { CODEX_HOME: codexHomePath },
+    timeoutMs
+  }
+}
+
+/** Runs the distro's own codex against a guest home; Windows cannot open its sqlite over 9p. */
+export function buildWslHealInvocation(
+  distro: string,
+  linuxCodexHomePath: string,
+  timeoutMs: number
+): CodexAppServerInvocation {
+  return {
+    command: resolveWslExecutablePath(),
+    args: buildWslCodexAppServerArgs(distro, linuxCodexHomePath, [
+      ...CODEX_SHORT_LIVED_PROBE_APP_SERVER_ARGS
+    ]),
+    // Why null: the guest resolves `codex` inside the distro, so a host path pairs nothing.
+    cliPath: null,
     timeoutMs
   }
 }

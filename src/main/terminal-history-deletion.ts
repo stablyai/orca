@@ -15,19 +15,16 @@ import { deferUntilWslDistroRunning } from './wsl-background-distro-gate'
 
 const pendingHistoryTreeRemovals = new Map<string, Promise<void>>()
 export const MAX_PENDING_HISTORY_TREE_REMOVALS = 64
-// Why: a tombstone that fails once (Windows EBUSY under AV) would otherwise sit on disk for the whole
-// desktop session — only the next launch re-queues it. Bounded so a genuinely stuck tree stops retrying.
+// Retry transient failures such as Windows EBUSY without polling a stuck tree indefinitely.
 export const HISTORY_TREE_REMOVAL_RETRY_DELAYS_MS = [30_000, 120_000]
 const historyTreeRemovalAttempts = new Map<string, number>()
 const historyTreeRemovalRetryTimers = new Map<string, ReturnType<typeof setTimeout>>()
 const wslDistroByTombstone = new Map<string, string>()
-// Tombstones whose fish cleanup waits for their stopped distro; they hold no admission slot.
+// Stopped distros retain tombstones without holding admission slots.
 const tombstonesAwaitingWslDistro = new Set<string>()
 
-/** One root's undrained tombstone names from the last enumeration, plus its in-flight re-read. */
 type HistoryRemovalQueue = { names: string[]; refill: Promise<void> | null }
-// Why hold the names instead of re-reading per completion: one `readdir` already materialises every
-// name, so keeping it until it runs out makes a backlog of N tombstones cost a handful of reads, not N.
+// Keep enumerated names so a backlog needs a handful of directory reads, not one per removal.
 const historyRemovalQueues = new Map<string, HistoryRemovalQueue>()
 
 function historyRemovalQueueFor(historyRoot: string): HistoryRemovalQueue {
@@ -55,7 +52,6 @@ function isHistoryTreeRemovalTracked(dir: string): boolean {
   )
 }
 
-/** Admit already-enumerated tombstones up to the admission cap; the rest stay queued for a later slot. */
 function admitQueuedHistoryTreeRemovals(historyRoot: string, queue: HistoryRemovalQueue): void {
   const pendingRoot = getPendingDeleteRoot(historyRoot)
   const wslDistro = wslDistroForHistoryRoot(historyRoot)
@@ -64,36 +60,31 @@ function admitQueuedHistoryTreeRemovals(historyRoot: string, queue: HistoryRemov
     if (name === undefined) {
       return
     }
-    // Safe to re-admit a name removed since enumeration: `removeHostTree` forces the rm.
+    // removeHostTree tolerates names removed since enumeration.
     scheduleHistoryTreeRemoval(join(pendingRoot, name), wslDistro)
   }
 }
 
-/** Re-read one root's tombstone directory, coalescing concurrent requests onto a single readdir. */
 function refillHistoryRemovalQueue(historyRoot: string, queue: HistoryRemovalQueue): Promise<void> {
   if (queue.refill) {
     return queue.refill
   }
   const pendingRoot = getPendingDeleteRoot(historyRoot)
-  // Why snapshot rather than only test tracking when the read lands: a removal under way now can
-  // still show up in the read and also finish before it resolves, which would look admissible again.
+  // A removal can finish during readdir; exclude it even after its tracking entry disappears.
   const removalsUnderWay = new Set(pendingHistoryTreeRemovals.keys())
   queue.refill = readTombstoneNames(historyRoot).then((names) => {
-    // A teardown that dropped this queue must not resurrect its removals.
     if (historyRemovalQueues.get(historyRoot) !== queue) {
       return
     }
     queue.refill = null
     try {
-      // Dropping names already handled keeps the read that confirms a drained directory from
-      // re-queueing work, so the tail of a backlog does not cost one read per completion.
       queue.names = names.filter((name) => {
         const dir = join(pendingRoot, name)
         return !removalsUnderWay.has(dir) && !isHistoryTreeRemovalTracked(dir)
       })
       admitQueuedHistoryTreeRemovals(historyRoot, queue)
     } catch (err) {
-      // Non-fatal, and never a rejection: callers fire this off without awaiting it.
+      // Background callers do not await this promise; report failures without rejecting.
       console.warn(
         `[pty:history] Failed to queue pending history removals: ${err instanceof Error ? err.message : String(err)}`
       )
@@ -106,8 +97,7 @@ async function readTombstoneNames(historyRoot: string): Promise<string[]> {
   try {
     return await readdir(getPendingDeleteRoot(historyRoot))
   } catch (err) {
-    // An absent root is the normal steady state; anything else means tombstones may linger until a
-    // later completion re-reads, so it is worth a line.
+    // Missing roots are normal; other errors can strand tombstones until a later refill.
     const code = err && typeof err === 'object' && 'code' in err ? String(err.code) : ''
     if (code !== 'ENOENT') {
       console.warn(
@@ -118,12 +108,10 @@ async function readTombstoneNames(historyRoot: string): Promise<string[]> {
   }
 }
 
-/** Reopen the admission window after a completion — from the queues, or one read once they empty. */
 function replenishHistoryTreeRemovals(historyRoot: string): void {
   const queue = historyRemovalQueueFor(historyRoot)
   admitQueuedHistoryTreeRemovals(historyRoot, queue)
-  // Why other roots too: a slot this root cannot fill is the only thing a sibling root displaced at
-  // the cap is waiting for, and nothing else would offer it one before the next startup.
+  // Offer freed slots to sibling roots that hit the shared admission cap.
   for (const [otherRoot, otherQueue] of historyRemovalQueues) {
     if (otherQueue !== queue) {
       admitQueuedHistoryTreeRemovals(otherRoot, otherQueue)
@@ -148,7 +136,7 @@ function historyRootForTombstone(dir: string): string {
   return dirname(dirname(dir))
 }
 
-/** Move a history tree to a pending-delete tombstone (metadata-only) so the critical path never walks it. */
+// Rename first so the caller never recursively walks the live tree.
 function tombstoneHistoryTree(dir: string, historyRoot: string): string | null {
   if (!existsSync(dir)) {
     return null
@@ -168,8 +156,7 @@ function tombstoneHistoryTree(dir: string, historyRoot: string): string | null {
     console.warn(
       `[pty:history] Failed to tombstone history dir: ${err instanceof Error ? err.message : String(err)}`
     )
-    // Why: never schedule an async rm of the live path — worktree IDs are path-derived, so a recreated
-    // worktree can own this directory again before the rm lands. GC reclaims it by meta.worktreeId instead.
+    // Never remove the live path asynchronously: a recreated worktree may already own it.
     return null
   }
 }
@@ -178,7 +165,7 @@ function scheduleHistoryTreeRemovalRetry(dir: string): void {
   const attempt = historyTreeRemovalAttempts.get(dir) ?? 0
   const retryDelayMs = HISTORY_TREE_REMOVAL_RETRY_DELAYS_MS[attempt]
   if (retryDelayMs === undefined) {
-    // Out of in-process attempts: the tombstone stays on disk and the next startup drain re-queues it.
+    // Keep the tombstone on disk for a later startup drain.
     historyTreeRemovalAttempts.delete(dir)
     wslDistroByTombstone.delete(dir)
     return
@@ -196,11 +183,9 @@ function scheduleHistoryTreeRemoval(dir: string, wslDistro?: string): void {
   if (pendingHistoryTreeRemovals.has(dir) || tombstonesAwaitingWslDistro.has(dir)) {
     return
   }
-  // Leave excess tombstones on disk; admission is intentionally bounded.
   if (historyTreeRemovalsAtCapacity()) {
     return
   }
-  // A rescan must not cancel a delayed retry for a real failure.
   const pendingRetry = historyTreeRemovalRetryTimers.get(dir)
   if (pendingRetry) {
     return
@@ -214,11 +199,7 @@ function scheduleHistoryTreeRemoval(dir: string, wslDistro?: string): void {
   const meta = cleanupDistro ? readHistoryMeta(dir) : null
   const cleanup =
     cleanupDistro && meta?.fishSession
-      ? // Why swallow rather than rethrow: fish history cleanup is best effort
-        // and runs `wsl.exe --exec fish`, which fails outright on a distro that
-        // has no fish — which is most of them. Rethrowing chained that failure
-        // into removeHostTree below, so those users' history trees were never
-        // reclaimed at all.
+      ? // Missing fish must not block removal of the other history files.
         deleteWslFishHistoryFile(cleanupDistro, meta.fishSession).catch((err: unknown) => {
           console.warn(
             `[pty:history] Failed to delete WSL fish history: ${err instanceof Error ? err.message : String(err)}`
@@ -229,7 +210,7 @@ function scheduleHistoryTreeRemoval(dir: string, wslDistro?: string): void {
   const removal = (
     cleanup
       ? cleanup.then((outcome) => {
-          // Why keep the tombstone: its meta.json is the only record of the guest-side file.
+          // meta.json is the only record of the guest-side file; retain it while its distro is stopped.
           awaitingDistro = outcome === 'distro-stopped'
           return awaitingDistro ? undefined : removeHostTree(dir)
         })
@@ -267,16 +248,13 @@ function scheduleHistoryTreeRemoval(dir: string, wslDistro?: string): void {
   pendingHistoryTreeRemovals.set(dir, removal)
 }
 
-/** Tombstone one history tree and queue its recursive removal off the caller's critical path.
- *  Returns false when the rename failed, leaving the tree for a later GC pass to reclaim. */
+/** Returns false if tombstoning fails; leave the live tree for a later GC pass. */
 export function scheduleWorktreeHistoryTreeDeletion(dir: string, historyRoot: string): boolean {
-  // Why first: fish keeps its history in the user's fish data dir, outside this tree,
-  // so the meta.json naming the session must still be readable when we look it up.
+  // Read metadata before renaming; fish stores its history outside this tree.
   const meta = readHistoryMeta(dir)
   const wslDistro = wslDistroForHistoryRoot(historyRoot)
   if (meta?.fishSession && !wslDistro) {
-    // Why both directories: the recorded one is what the PTY's fish saw, this
-    // process's own is the fallback when meta.json predates that field.
+    // Old metadata lacks the spawn-time directory; fall back to this process's fish data dir.
     deleteFishHistoryFile(meta.fishSession, [
       ...(meta.fishHistoryDir ? [meta.fishHistoryDir] : []),
       resolveFishHistoryDir()
@@ -290,13 +268,11 @@ export function scheduleWorktreeHistoryTreeDeletion(dir: string, historyRoot: st
   return true
 }
 
-/** Schedule tombstoned trees under one history root for async removal — the retry after a quit mid-rm.
- *  Resolves once the enumeration landed; the removals it admitted keep draining in the background. */
+/** Resolves after enumeration; admitted removals keep draining in the background. */
 export function schedulePendingHistoryTreeRemovals(historyRoot: string): Promise<void> {
   return refillHistoryRemovalQueue(historyRoot, historyRemovalQueueFor(historyRoot))
 }
 
-/** Schedule tombstoned trees under every history root, native and WSL. */
 export async function scheduleAllPendingHistoryTreeRemovals(): Promise<void> {
   await Promise.all([
     schedulePendingHistoryTreeRemovals(getHistoryRoot()),
@@ -304,11 +280,10 @@ export async function scheduleAllPendingHistoryTreeRemovals(): Promise<void> {
   ])
 }
 
-/** Drop queued tombstone names and retries so fixture teardown cannot resurrect a removal. Tests only. */
+/** Tests only: prevent queued removals and retries from surviving fixture teardown. */
 export function cancelPendingHistoryTreeRemovalRetries(): void {
   historyRemovalQueues.clear()
-  // Why also the in-flight map: a fixture that never settles a held removal would otherwise leave it
-  // for the next test's flush to wait on forever.
+  // Held test removals must not leave the next test's flush waiting forever.
   pendingHistoryTreeRemovals.clear()
   for (const timer of historyTreeRemovalRetryTimers.values()) {
     clearTimeout(timer)
@@ -319,12 +294,10 @@ export function cancelPendingHistoryTreeRemovalRetries(): void {
   tombstonesAwaitingWslDistro.clear()
 }
 
-/** Drain every history root's tombstones and await the in-flight removals. Tests only: production
- *  schedules the same drain from startup GC and headless serve without ever blocking on it. */
+/** Tests only: await admitted removals; production drains in the background. */
 export async function flushPendingWorktreeHistoryDeletions(): Promise<void> {
   await scheduleAllPendingHistoryTreeRemovals()
-  // Why loop: awaiting one snapshot of the map would return with a removal scheduled mid-batch still
-  // in flight. Each pass admits every queued name the cap allows, then settles what is outstanding.
+  // Removals scheduled mid-batch must be included before returning.
   while (true) {
     for (const [root, queue] of historyRemovalQueues) {
       admitQueuedHistoryTreeRemovals(root, queue)
@@ -334,14 +307,14 @@ export async function flushPendingWorktreeHistoryDeletions(): Promise<void> {
       ...[...historyRemovalQueues.values()].flatMap((queue) => (queue.refill ? [queue.refill] : []))
     ]
     if (outstanding.length === 0) {
-      // Nothing in flight and nothing admissible: only delayed retries can still make progress.
+      // Delayed retries are intentionally left to their timers.
       return
     }
     await Promise.all(outstanding)
   }
 }
 
-/** Delete the history directory for a removed worktree. Non-fatal; never blocks on recursive rm. */
+// Never recursively remove history on the caller's critical path.
 export function deleteWorktreeHistoryDir(worktreeId: string): void {
   const worktreeHash = hashWorktreeId(worktreeId)
   const historyRoot = getHistoryRoot()
@@ -355,7 +328,6 @@ export function deleteWorktreeHistoryDir(worktreeId: string): void {
     )
   }
 
-  // Also clean up WSL history for this worktree; listWslHistoryRoots is empty where WSL never ran.
   try {
     for (const distroRoot of listWslHistoryRoots()) {
       scheduleWorktreeHistoryTreeDeletion(join(distroRoot, worktreeHash), distroRoot)

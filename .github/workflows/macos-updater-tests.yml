@@ -15,6 +15,10 @@ on:
       - 'src/main/window/main-window-state-lifecycle*'
       - 'src/main/window/dashboard-popout-window*'
       - 'src/packages/process-host/**'
+      - 'src/main/runtime/structured-agent-cli-writers*'
+      - 'src/main/providers/macos-tcc-login-shell*'
+      - 'src/shared/process-table-snapshot*'
+      - 'src/shared/darwin-process-table-capture*'
       - 'src/shared/update-status-types.ts'
       - 'pnpm-lock.yaml'
   workflow_dispatch:
@@ -55,3 +59,8 @@ jobs:
           src/main/startup/main-process-quit-update-veto.test.ts
           src/main/window/main-window-state-lifecycle.test.ts
           src/main/window/dashboard-popout-window.test.ts
+      - name: Prove login-backed terminal writer census on the disposable runner
+        env:
+          ORCA_MACOS_LOGIN_CENSUS_CI: '1'
+          ORCA_BACKGROUND_LAUNCH: '1'
+        run: pnpm exec vitest run --config config/vitest.config.ts src/main/runtime/structured-agent-cli-writers.test.ts

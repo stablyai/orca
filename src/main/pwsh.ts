@@ -28,8 +28,7 @@ function cachePwshProbeFailure(timedOut: boolean, startedAtGeneration: number): 
   if (startedAtGeneration !== pwshAvailabilityCacheGeneration) {
     return pwshAvailableCache?.available ?? false
   }
-  // Why: pwsh.exe cold starts can exceed the sync timeout; do not let one slow
-  // .NET startup disable the user's PowerShell 7 preference for the daemon.
+  // Slow .NET cold starts must not permanently disable the user’s PowerShell 7 preference.
   if (timedOut) {
     writePwshAvailabilityCache(null)
     return false
@@ -38,18 +37,13 @@ function cachePwshProbeFailure(timedOut: boolean, startedAtGeneration: number): 
   return false
 }
 
-/**
- * Check whether pwsh.exe is available on this Windows machine.
- * Positive results are cached for the process lifetime; negative results are
- * retried so transient cold-start failures cannot outlive the daemon.
- */
+/** Cache success for the process lifetime; retry transient failures. */
 export function isPwshAvailable(): boolean {
   if (pwshAvailableCache && isCacheFresh(pwshAvailableCache)) {
     return pwshAvailableCache.available
   }
 
-  // Why: daemon shell resolution is synchronous but has a spawn fallback chain; an optimistic
-  // cold answer avoids launching a duplicate probe while its startup warmup is still running.
+  // Optimistic availability avoids duplicate warmup probes; shell spawning still has fallbacks.
   if (pwshProbeInFlight || pwshWarmupInFlight) {
     return pwshAvailableCache?.available ?? true
   }
@@ -68,7 +62,6 @@ export function isPwshAvailable(): boolean {
       timeoutMs: PWSH_SYNC_PROBE_TIMEOUT_MS
     })
   } catch {
-    // pwsh.exe is not on PATH at all.
     return cachePwshProbeFailure(false, startedAtGeneration)
   }
   if (probe.timedOut || probe.code !== 0) {
@@ -79,12 +72,7 @@ export function isPwshAvailable(): boolean {
   return pwshAvailableCache?.available ?? false
 }
 
-/**
- * Async twin of `isPwshAvailable`, sharing its cache.
- *
- * Why: the renderer's capability read reaches this over IPC, and the sync probe blocks the
- * Electron main thread for up to 5s when pwsh.exe cold-starts. Concurrent callers share one spawn.
- */
+/** Share async probes so renderer capability reads cannot block main during PowerShell cold starts. */
 export function isPwshAvailableAsync(): Promise<boolean> {
   if (pwshAvailableCache && isCacheFresh(pwshAvailableCache)) {
     return Promise.resolve(pwshAvailableCache.available)

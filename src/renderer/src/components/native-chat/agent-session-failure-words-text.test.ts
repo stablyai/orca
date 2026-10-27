@@ -89,6 +89,34 @@ afterEach(async () => {
 })
 
 describe('desktop words for a failure fact', () => {
+  it.each(['Claude', 'Codex'])(
+    'names %s in terminal refusals on every failure surface',
+    (agentName) => {
+      for (const surface of ['row', 'rejection', 'answer'] as const) {
+        expect(
+          agentSessionFailureSentence(
+            { kind: 'conversationOpenInTerminal' },
+            surface,
+            { agentName },
+            sayAgentSessionFailureTranslated
+          )
+        ).toBe(
+          `${agentName} is already running this conversation in another terminal. Quit ${agentName} there or close that terminal to continue here.`
+        )
+      }
+      expect(
+        agentSessionFailureSentence(
+          { kind: 'conversationOpenElsewhere' },
+          'row',
+          { agentName: 'Codex' },
+          sayAgentSessionFailureTranslated
+        )
+      ).toBe(
+        'Codex is still holding this conversation open. Try again in a moment, or close other Codex terminals.'
+      )
+    }
+  )
+
   it.each([
     ['en', 'Then send your message again.'],
     ['es', 'Después, envía tu mensaje de nuevo.'],

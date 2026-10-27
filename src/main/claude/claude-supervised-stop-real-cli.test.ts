@@ -17,15 +17,13 @@ import {
   claudeStructuredPermissionOptions
 } from './claude-structured-launch-resolution'
 
-// Opt-in only: spends a real (haiku) turn per case. Needs ORCA_REAL_CLAUDE_BIN; set
-// ORCA_REAL_CLAUDE_SETTINGS only when auth lives in a settings file outside the Claude home.
+// Opt-in spends real turns; ORCA_REAL_CLAUDE_SETTINGS supports auth outside the Claude home.
 const CLAUDE_BIN = process.env.ORCA_REAL_CLAUDE_BIN ?? ''
 const enabled =
   process.env.ORCA_REAL_CLAUDE_SUPERVISED_STOP === '1' &&
   process.platform !== 'win32' &&
   CLAUDE_BIN.length > 0
 const FRAMES_OUT = process.env.ORCA_REAL_CLAUDE_FRAMES_OUT
-// Launch and transcript lookup share one home, as production acquisition does.
 const home = realClaudeLaunchHome()
 const TOOL_MARKER = 'orca_supervised_stop_probe'
 const TOOL_PROMPT = `Use the Bash tool to run exactly this command, with no timeout argument, and nothing else: python3 -c "import time; time.sleep(120)  # ${TOOL_MARKER}"`

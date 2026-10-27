@@ -80,12 +80,12 @@ describe('terminal set-pane-title', () => {
   })
 
   it('documents a required pane-scoped title and explicit clearing', () => {
-    const spec = COMMAND_SPECS.find((entry) => entry.path.join(' ') === 'terminal set-pane-title')
-    expect(spec?.usage).toContain('--title <text>')
-    expect(spec?.usage).not.toContain('[--title')
     const log = vi.spyOn(console, 'log').mockImplementation(() => {})
     printHelp(COMMAND_SPECS, ['terminal', 'set-pane-title'])
     const help = log.mock.calls.flat().join('\n')
+    expect(help).toContain(
+      'Usage: orca terminal set-pane-title [--terminal <handle>] --title <text>'
+    )
     expect(help).toContain('Custom title for one pane (pass "" to reset)')
     expect(help).not.toContain('omit or pass')
   })

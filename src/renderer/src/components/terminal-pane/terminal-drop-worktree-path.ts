@@ -5,6 +5,7 @@ import {
   toRuntimeExecutionHostId,
   type ExecutionHostId
 } from '../../../../shared/execution-host'
+import { DROP_STAGING_RELATIVE_DIR } from '../../../../shared/drop-staging-ignore'
 import { resolveExactWorktreeRoute } from '@/lib/worktree-owner-route'
 import { isTerminalDropWindowsPathLike } from './terminal-drop-shell'
 
@@ -40,8 +41,6 @@ export function resolveTerminalDropWorktreePath(
 }
 
 export function joinRuntimeTerminalDropDir(worktreePath: string): string {
-  if (isTerminalDropWindowsPathLike(worktreePath)) {
-    return `${worktreePath.replace(/[\\/]+$/, '').replace(/\//g, '\\')}\\.orca\\drops`
-  }
-  return `${worktreePath.replace(/[\\/]+$/, '')}/.orca/drops`
+  const dropDir = `${worktreePath.replace(/[\\/]+$/, '')}/${DROP_STAGING_RELATIVE_DIR}`
+  return isTerminalDropWindowsPathLike(worktreePath) ? dropDir.replace(/\//g, '\\') : dropDir
 }

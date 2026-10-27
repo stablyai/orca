@@ -7,16 +7,17 @@ import { MobileCommitFailurePanel } from './MobileCommitFailurePanel'
 import { KEYBOARD_COMMIT_BAR_CLEARANCE } from './mobile-source-control-screen-state'
 import { MobileSourceControlFileList } from './MobileSourceControlFileList'
 import type { MobileSourceControlState } from './use-mobile-source-control-state'
+import type { MobileSourceControlPrimaryAction } from './mobile-source-control-primary-action'
 import { styles } from './mobile-source-control-styles'
 import { hubStyles } from './mobile-source-control-hub-styles'
 
 type Props = {
-  state: MobileSourceControlState
+  state: Omit<MobileSourceControlState, 'primaryActionArgs'>
+  // The panel builds it once it knows the branch's review.
+  primaryAction: MobileSourceControlPrimaryAction
 }
 
-// Changes tab: local file changes only — uncommitted (staged/unstaged) plus
-// committed-on-branch vs base. PR conflicts and push status live elsewhere.
-export function MobileSourceControlContent({ state }: Props) {
+export function MobileSourceControlContent({ state, primaryAction }: Props) {
   const {
     insets,
     connState,
@@ -38,7 +39,6 @@ export function MobileSourceControlContent({ state }: Props) {
     stageablePaths,
     unstageablePaths,
     stagedCount,
-    primaryAction,
     createPrAction,
     stageAll,
     unstageAll,
@@ -49,10 +49,10 @@ export function MobileSourceControlContent({ state }: Props) {
     runGitAction
   } = state
   const ioBusy = busyAction !== null || openingPath !== null || openingBranchPath !== null
-  // Why: a capped listing can hide unstaged rows behind an all-staged prefix.
+  // A capped all-staged prefix can hide unstaged rows.
   const canStageAll = stageablePaths.length > 0 || status?.didHitLimit === true
   const shouldShowGenerateButton = stagedCount > 0 || generatingMessage
-  // Why: as on desktop, a typed message blocks regenerating; while generating the button cancels.
+  // Typed text blocks regeneration; the same button cancels active generation.
   const generateBlockedByMessage = !generatingMessage && commitMessage.trim().length > 0
   const generateDisabled = busyAction !== null || generateBlockedByMessage
   const createPrHeroActive =
@@ -97,9 +97,7 @@ export function MobileSourceControlContent({ state }: Props) {
   return (
     <>
       {connState !== 'connected' ? (
-        // Why: once data has loaded the screen looks alive even when the
-        // desktop link is down, so taps appear to do nothing (STA-1511).
-        // Surface the reconnect state where the user is looking.
+        // Retained rows look actionable offline; show reconnect state beside them.
         <View style={styles.reconnectBanner}>
           <ActivityIndicator size="small" color={colors.statusAmber} />
           <Text style={styles.reconnectBannerText}>Reconnecting to desktop...</Text>
@@ -215,8 +213,7 @@ export function MobileSourceControlContent({ state }: Props) {
                 generateDisabled && styles.commitButtonDisabled,
                 pressed && styles.commitButtonPressed
               ]}
-              // Why: commit-message AI belongs to the commit path; hiding it
-              // during Stage All keeps the quick action visually unambiguous.
+              // Keep commit-message AI with commit actions so Stage All remains unambiguous.
               disabled={generateDisabled}
               accessibilityState={{ disabled: generateDisabled }}
               accessibilityHint={

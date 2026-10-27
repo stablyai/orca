@@ -25,13 +25,7 @@ export function clientReadsOptionsWithoutModel(
   )
 }
 
-/**
- * One rule for every caller: can this client read structured sessions? The host's own
- * The host's Chat UI setting is not consulted. It is the host user's launch preference,
- * and whether a new agent is a chat is decided by whoever launches it, so a paired client's
- * sessions stay reachable whatever the host's setting says. The negotiated capability is a wire
- * term, asked of remote clients only: in-process callers are the host's own build.
- */
+/** Admit by client wire capability, independent of the host user's launch preference. In-process callers share this build and need no negotiation. */
 export function supportsStructuredAgentSessions(
   context: Pick<RpcContext, 'clientCapabilities' | 'clientKind'>
 ): boolean {
@@ -62,9 +56,7 @@ export function clientRendersStructuredAgent(
   )
 }
 
-/** Whether this client opens an agent's chat from its Session History row. Claude and Codex keep
- *  their shipped rule, any client that reads structured sessions; every other agent needs a client
- *  that renders its chats. */
+/** History opens Claude/Codex for any structured-capable client; other agents require explicit rendering support. */
 export function clientOpensStructuredChatFromHistory(
   context: Pick<RpcContext, 'clientCapabilities' | 'clientKind'>,
   agent: string
@@ -89,8 +81,7 @@ export function clientReadsStructuredSessionAgent(
   )
 }
 
-/** The agents this client reads rows of, among those registered or saved here; undefined when it
- *  reads every one, so an action for it is exactly the unscoped one (one fence for every offer). */
+/** Scope offers to readable registered/saved agents; undefined means all are readable and one unscoped fence applies. */
 export function structuredAgentsReadBy(
   context: Pick<RpcContext, 'clientCapabilities' | 'clientKind'>,
   agents: readonly string[]

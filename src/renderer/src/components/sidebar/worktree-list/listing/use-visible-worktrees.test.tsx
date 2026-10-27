@@ -137,9 +137,7 @@ describe('useVisibleSidebarWorktrees', () => {
       defaultHostId: LOCAL_EXECUTION_HOST_ID,
       agentSendTargetWorktreeId: null
     } as Parameters<typeof useVisibleSidebarWorktrees>[0]
-    // Why the extra `settings`: it is the pre-fix memo key. Passing it keeps
-    // this test red against the old hook, which re-keyed the whole scan on the
-    // settings object identity.
+    // Pass the old settings memo key so unrelated-setting churn would still catch the former invalidation bug.
     const withSettings = (
       settings: ReturnType<typeof useAppStore.getState>['settings']
     ): Parameters<typeof useVisibleSidebarWorktrees>[0] => Object.assign({}, baseArgs, { settings })
@@ -153,7 +151,6 @@ describe('useVisibleSidebarWorktrees', () => {
     const callsAfterFirstRender = computeVisibleWorktreesCalls.count
     expect(callsAfterFirstRender).toBe(1)
 
-    // A settings write that does not move the focused execution host.
     const nextSettings = {
       ...useAppStore.getState().settings,
       sidebarWidth: 321
@@ -164,7 +161,6 @@ describe('useVisibleSidebarWorktrees', () => {
     expect(computeVisibleWorktreesCalls.count).toBe(callsAfterFirstRender)
     expect(result.current.visibleWorktrees).toBe(initialVisible)
 
-    // A write that does move it still recomputes.
     rerender(Object.assign({}, withSettings(nextSettings), { defaultHostId: 'runtime:other' }))
     expect(computeVisibleWorktreesCalls.count).toBe(callsAfterFirstRender + 1)
   })

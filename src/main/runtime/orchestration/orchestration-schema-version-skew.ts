@@ -34,7 +34,7 @@ const VERSIONED_POST_V6_COLUMNS = [
   { version: 31, table: 'dispatch_contexts', column: 'host_scope' },
   { version: 31, table: 'worker_terminal_resources', column: 'endpoint_id' },
   { version: 31, table: 'worker_terminal_resources', column: 'endpoint_incarnation' },
-  // Why: unversioned, these made every shipped v30 database read as v6 and replay the whole chain.
+  // Version these probes or genuine v30 databases falsely replay from v6.
   { version: 32, table: 'worker_terminal_resources', column: 'recovery_attempt_count' },
   { version: 32, table: 'worker_terminal_resources', column: 'last_recovery_at' },
   { version: 33, table: 'messages', column: 'pointer_enter_pending' },
@@ -50,8 +50,7 @@ const VERSIONED_POST_V6_COLUMNS = [
   { version: 42, table: 'dispatch_contexts', column: 'creator_orca_session_id' }
 ] as const
 
-// Why: v34 shipped without these two, so a v34 stamp proves nothing about them; v35 repairs both
-// and this list keeps a partially-written v35 from claiming the repair.
+// v34 stamps can lack these repairs; v35 probes must verify their stored defaults.
 const VERSIONED_POST_V6_COLUMN_DEFAULTS = [
   { version: 35, table: 'deliveries', column: 'mailbox_handle', defaultValue: "''" }
 ] as const
@@ -192,6 +191,6 @@ export function resolveOrchestrationMigrationStartVersion(
   if (hasCompletePostV6Schema(db, storedVersion)) {
     return storedVersion
   }
-  // Why: version-skewed pre-Run databases can claim the post-v6 range while retaining v6 tables.
+  // Pre-Run databases may claim post-v6 versions while retaining the old tables.
   return Math.min(storedVersion, schemaVersion, 6)
 }

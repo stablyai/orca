@@ -20,12 +20,14 @@ import { getRefreshAliasExecutionHostId } from './repository-routing'
 import {
   buildWorktreeLookupIndex,
   findUniqueWorktreeById,
-  isStaleExactLinkedPRLookup,
+  isStaleExactLinkedPRLookup
+} from './worktree-refresh'
+import {
   shouldApplyBranchMismatchedLinkedPRClear,
   shouldApplyDivergedLinkedPRClear,
   shouldClearBranchMismatchedLinkedOpenPR,
   shouldClearDivergedLinkedMergedPR
-} from './worktree-refresh'
+} from '../../../../shared/github/linked-pr-staleness'
 import type { WorktreeLookupIndex } from './worktree-refresh'
 
 export const createRefreshEventActions = (

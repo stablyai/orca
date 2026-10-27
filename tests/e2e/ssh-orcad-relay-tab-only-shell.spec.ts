@@ -1,14 +1,6 @@
-/**
- * An SSH host whose relay-era terminal named its shell only on the tab still converts while that
- * shell runs, on a real Docker SSH host, and the old tab keeps the same shell.
- *
- * A 1.4.224 relay runs detached with a live shell for this desktop's target. The profile names that
- * shell on the tab (row ptyId and relay session map) with no per-pane binding, as an older build
- * left it at quit. Loading such a tab records legacy pane-key aliases for its leaf; those name no
- * extra terminal, so the move must not refuse with "terminals waiting to reconnect".
- *
- * COMPAT(legacy-relay-bridge): revisit 2027-01-15, with src/main/ssh/legacy-relay/.
- */
+// Convert a live detached 1.4.224 relay whose shell is named only on the tab/session map, preserving the same shell.
+// Synthesized legacy pane-key aliases name no extra terminal and must not block conversion as waiting-to-reconnect.
+// COMPAT(legacy-relay-bridge): revisit 2027-01-15, with src/main/ssh/legacy-relay/.
 import { writeFileSync } from 'node:fs'
 import type { ElectronApplication, Page, TestInfo } from '@stablyai/playwright-test'
 import { expect, test } from './helpers/orca-app'

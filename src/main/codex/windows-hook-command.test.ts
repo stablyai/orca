@@ -129,7 +129,6 @@ describe.skipIf(process.platform !== 'win32')('Codex hook delivery through Power
           timedOut: false
         })
         rmSync(scriptPath)
-        // Why: like the bare path, the cmd spelling exits non-zero for a missing script.
         const missing = await invoke(getManagedCommand(scriptPath), payloads[0])
         expect(missing.timedOut).toBe(false)
         expect(missing.code).not.toBe(0)

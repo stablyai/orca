@@ -60,7 +60,7 @@ describe('OpenCode Go write-only credentials', () => {
     expect(invoke(action, 'fake-key')).toEqual({ apiKeyConfigured: action === 'saveApiKey' })
     expect(action === 'saveApiKey' ? mocks.save : mocks.clear).toHaveBeenCalledOnce()
     expect(refresh).toHaveBeenCalledOnce()
-    // Why: only clearing the saved key may hide the chip; another key source can still exist after a save.
+    // Saves may leave another key source; only explicit clearing can hide the chip.
     expect(invalidate).toHaveBeenCalledWith({ apiKeyCleared: action === 'clearApiKey' })
   })
 

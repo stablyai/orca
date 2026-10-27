@@ -31,7 +31,6 @@ function emptyJournal(): SendSettlementJournal {
   }
 }
 
-/** A message accepted and not yet handed over, while `activeTurnId` names the running turn. */
 function queuedJournal(activeTurnId: string | null, handedOver = false): SendSettlementJournal {
   return {
     cursor: () => ({ epoch: 'epoch-1', sequence: handedOver ? 3 : 2 }),

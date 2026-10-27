@@ -1,10 +1,4 @@
-/**
- * Reading the activation record off a host.
- *
- * Split out from the deploy driver because the rollback path needs it too, and because an
- * unreadable record must fail loudly in both: treating "I cannot parse this" as "nothing is
- * activated" would deploy over a live install and lose its rollback target.
- */
+// Unreadable activation records must fail closed; treating them as absent could overwrite a live install and its rollback target.
 import type { OrcadHostTransport } from '../../ssh/orcad-host-transport'
 import { RELAY_REMOTE_DIR } from '../../ssh/remote-exec/remote-frame-protocol'
 import {
@@ -34,7 +28,6 @@ function orcadActivationPath(host: RemoteHostPlatform, remoteHome: string): stri
   return joinRemotePath(host, remoteHome, RELAY_REMOTE_DIR, ORCAD_ACTIVATION_FILENAME)
 }
 
-/** A failed read rejects; it never reads as absent, because absence would admit a fresh deploy. */
 async function readActivationRecordState(
   options: ActivationRecordTarget
 ): Promise<OrcadActivationReadResult> {
@@ -54,14 +47,12 @@ export async function readOrcadActivationRecord(
     return parsed.record
   }
   if (parsed.state === 'unreadable') {
-    // Why throw: an unreadable record is not an empty one. Treating it as empty would
-    // activate over a live install and orphan its rollback target.
     throw new Error(`Cannot read this host's orcad activation record: ${parsed.reason}`)
   }
   return emptyOrcadActivationRecord()
 }
 
-/** Refuses to replace a record this client cannot read, e.g. one a newer client wrote. */
+/** Refuse replacement of unreadable records, including schemas written by newer clients. */
 export async function writeOrcadActivationRecord(
   options: ActivationRecordTarget,
   record: OrcadActivationRecord

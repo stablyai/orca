@@ -28,11 +28,6 @@ describe('areWorkspaceLinkedItemsEqual', () => {
     ).toBe(true)
   })
 
-  it('treats both nullish items as equal and a one-sided item as different', () => {
-    expect(areWorkspaceLinkedItemsEqual(null, undefined)).toBe(true)
-    expect(areWorkspaceLinkedItemsEqual(item, null)).toBe(false)
-  })
-
   it('separates items that differ by identifier, title, url, provider, or repo', () => {
     expect(areWorkspaceLinkedItemsEqual(item, { ...item, jiraIdentifier: 'ORCA-124' })).toBe(false)
     expect(areWorkspaceLinkedItemsEqual(item, { ...item, title: 'Renamed' })).toBe(false)

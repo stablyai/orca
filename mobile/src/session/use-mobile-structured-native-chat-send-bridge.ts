@@ -1,12 +1,14 @@
 import { useCallback } from 'react'
 import type { StructuredAgentId } from '../../../src/shared/agent-session-provider-handle'
+import type { AgentSessionSlashCommand } from '../../../src/shared/agent-session-wire'
 import { isStructuredAgentSessionComposerCommand } from '../../../src/shared/structured-agent-session-composer'
-import type { MobileNativeChatSendOutcome } from './mobile-native-chat-send'
-import type { MobileNativeChatSendOrigin } from './use-mobile-native-chat-drafts'
+import type { MobileNativeChatSendOutcome } from './native-chat/mobile-native-chat-send'
+import type { MobileNativeChatSendOrigin } from './native-chat/mobile-native-chat-pending-echo'
 import type { StructuredMobileSendAttachment } from './use-mobile-structured-send-with-outcome'
 
 export function useMobileStructuredNativeChatSendBridge(args: {
   agent: StructuredAgentId | undefined
+  sessionCommands?: readonly AgentSessionSlashCommand[]
   sendStructured: (
     text: string,
     images?: string[],
@@ -32,7 +34,8 @@ export function useMobileStructuredNativeChatSendBridge(args: {
     clearDraftForSend,
     onSendError,
     restoreRejectedDraft,
-    sendStructured
+    sendStructured,
+    sessionCommands
   } = args
   const sendWithOutcome = useCallback(
     async (
@@ -46,7 +49,7 @@ export function useMobileStructuredNativeChatSendBridge(args: {
         onSendError('Message not sent (disconnected)')
         return 'rejected'
       }
-      const isHostCommand = isStructuredAgentSessionComposerCommand(text, agent)
+      const isHostCommand = isStructuredAgentSessionComposerCommand(text, agent, sessionCommands)
       clearDraftForSend(origin, text)
       const outcome =
         attachments !== undefined
@@ -56,14 +59,21 @@ export function useMobileStructuredNativeChatSendBridge(args: {
             : images !== undefined
               ? await sendStructured(text, images)
               : await sendStructured(text)
-      // The structured session draws or holds a message the host took; a command's lost answer
-      // comes back instead.
+      // Accepted messages remain host-owned; restore commands whose reply was lost.
       if (outcome === 'rejected' || (outcome === 'unknown' && isHostCommand)) {
         restoreRejectedDraft(origin, text)
       }
       return outcome
     },
-    [agent, captureSendOrigin, clearDraftForSend, onSendError, restoreRejectedDraft, sendStructured]
+    [
+      agent,
+      captureSendOrigin,
+      clearDraftForSend,
+      onSendError,
+      restoreRejectedDraft,
+      sendStructured,
+      sessionCommands
+    ]
   )
   const send = useCallback(
     async (

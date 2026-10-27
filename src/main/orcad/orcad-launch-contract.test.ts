@@ -1,7 +1,3 @@
-/**
- * The two things a supervisor reads off a launch: what the arguments mean, and what an exit
- * code means. Both are part of the supervisor ops contract.
- */
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -100,8 +96,6 @@ describe('parseArgs', () => {
 
 describe('resolveOrcadExitCode', () => {
   it('separates a configuration fault from a generic failure', () => {
-    // A supervisor must be able to stop restarting on faults that restarting cannot fix:
-    // a data root owned by someone else, held by another instance, or a bad bind address.
     expect(
       resolveOrcadExitCode(new OrcadInstanceLockError('orcad_instance_lock_held', 'held'))
     ).toBe(ORCAD_EXIT_CONFIGURATION)
@@ -188,7 +182,6 @@ describe('orcad lifecycle cleanup', () => {
 
       await handle.stop()
 
-      // A chat whose agent dies with this stop reads as a restart, not a crash.
       expect(endSeenByCleanup).toBe('quit')
     } finally {
       await rm(directory, { recursive: true, force: true })

@@ -71,7 +71,6 @@ function twoHostState(): PersistedState {
     'ssh:host-a': { ...state.workspaceSession, unifiedTabs: { [WORKTREE]: [tab('a')] } },
     [HOST_B]: { ...state.workspaceSession, unifiedTabs: { [WORKTREE]: [tab('b')] } }
   }
-  // Host B's row, qualified, in the local partition.
   state.workspaceSession.unifiedTabs = { [`${HOST_B}|${WORKTREE}`]: [tab('b-local')] }
   state.worktreeMeta[`${HOST_B}|${WORKTREE}`] = {
     displayName: 'B worktree',

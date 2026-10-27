@@ -16,6 +16,7 @@ type CountTypography = {
 const CASES = [
   { state: 'idle', count: 0 },
   { state: 'working', count: 1 },
+  { state: 'working', count: 4 },
   { state: 'working', count: 12 },
   { state: 'working', count: 88 },
   { state: 'working', count: 99 },
@@ -122,7 +123,7 @@ async function expectActivityGeometry(
     }
   })
 
-  expect(geometry.button.width, 'The control must keep its existing width').toBe(24)
+  expect(geometry.button.width, 'The control must leave room for horizontal padding').toBe(32)
   expect(geometry.button.height, 'The control must keep its existing height').toBe(24)
   expect(
     Math.abs(geometry.status.centerX - geometry.count.centerX),
@@ -131,14 +132,14 @@ async function expectActivityGeometry(
   expect(geometry.status.bottom, 'The status must clear the count').toBeLessThanOrEqual(
     geometry.countLineBox.top + 0.25
   )
-  expect(geometry.bell.left, 'The bell must retain its left anchor').toBe(geometry.button.left)
+  expect(geometry.bell.left, 'The bell must have horizontal padding').toBe(geometry.button.left + 4)
   expect(geometry.bell.top, 'The bell must retain its vertical position').toBe(
     geometry.button.top + 6
   )
   expect(geometry.bell.width, 'The bell must retain its existing size').toBe(12)
   expect(geometry.bell.height, 'The bell must retain its existing size').toBe(12)
   expect(geometry.countSlot.centerX, 'The count slot must retain its side column').toBe(
-    geometry.button.right - 6
+    geometry.button.right - 10
   )
   expect(geometry.count.width, 'The count text must be rendered').toBeGreaterThan(0)
   expect(geometry.count.width, 'Keep wider digits within a slight overhang').toBeLessThanOrEqual(
@@ -182,7 +183,7 @@ async function expectActivityGeometry(
 for (const theme of ['dark', 'light'] as const) {
   test(`activity side-column counts align with their status and preserve the control size (${theme})`, async ({
     orcaPage
-  }) => {
+  }, testInfo) => {
     await waitForSessionReady(orcaPage)
     const worktreeId = await waitForActiveWorktree(orcaPage)
     await orcaPage.evaluate(
@@ -245,6 +246,20 @@ for (const theme of ['dark', 'light'] as const) {
         name: sidebarBody === 'agents' ? 'Turn off activity view' : 'View activity',
         exact: true
       })
+      await expect(button).toHaveAttribute('aria-pressed', String(sidebarBody === 'agents'))
+      await orcaPage.mouse.move(0, 0)
+      const background = await button.evaluate(
+        (element) => getComputedStyle(element).backgroundColor
+      )
+      if (sidebarBody === 'agents') {
+        expect(background, 'The selected activity control must retain a visible fill').not.toBe(
+          'rgba(0, 0, 0, 0)'
+        )
+      } else {
+        expect(background, 'The inactive activity control must stay unfilled').toBe(
+          'rgba(0, 0, 0, 0)'
+        )
+      }
       for (const { state, count } of CASES) {
         await test.step(`${sidebarBody}: ${state} ${count}`, async () => {
           await seedActivity(orcaPage, worktreeId, state, count)
@@ -257,6 +272,7 @@ for (const theme of ['dark', 'light'] as const) {
           )
         })
       }
+      await button.screenshot({ path: testInfo.outputPath(`${theme}-${sidebarBody}.png`) })
     }
   })
 }

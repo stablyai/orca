@@ -1,18 +1,6 @@
 import type { WatcherRemovalDeadline } from './watcher-removal-drain'
 
-/**
- * Removal-time coordination for the renderer-facing filesystem watchers.
- *
- * Worktree removal has to close any watcher holding the directory open, then either
- * restore it (removal failed) or drop the snapshot (removal succeeded). The desktop
- * implementation lives in `./filesystem-watcher`, where that bookkeeping is inseparable
- * from the `WebContents` map it suspends and replays.
- *
- * Why the default is inert rather than a throw: every entry in those maps arrives through
- * an `ipcMain` handler carrying a renderer `sender`. A host with no renderer never
- * installs one, so there is nothing to close, restore, or forget — the no-op is what the
- * desktop code itself would do against empty maps, not a silent stub hiding lost work.
- */
+/** Coordinate renderer watcher removal; renderer-free hosts have no watches, so the default is inert. */
 export type WorktreeWatcherRemoval = {
   closeLocal(worktreePath: string, deadline?: WatcherRemovalDeadline): Promise<void>
   restoreLocal(worktreePath: string): Promise<void>

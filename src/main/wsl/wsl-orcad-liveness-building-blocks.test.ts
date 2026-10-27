@@ -100,7 +100,8 @@ describe('WSL orcad liveness building blocks', () => {
       busy: false,
       pending: null,
       state: null,
-      lastBeatMs: 42
+      lastBeatMs: 42,
+      lastExitMs: null
     })
   })
 

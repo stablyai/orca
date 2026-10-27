@@ -8,8 +8,7 @@ export async function hydrateShellPathForAgentDetection(
   if (getPreflightWslTarget(context)) {
     return
   }
-  // Why: remote runtime servers may inherit a sparse daemon/SSH PATH even
-  // though the user's shell can run the agents.
+  // Daemon/SSH PATH may omit agents available in the user's shell.
   const hydration = await (force ? hydrateShellPath({ force: true }) : hydrateShellPath())
   if (hydration.ok) {
     mergePathSegments(hydration.segments)

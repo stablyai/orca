@@ -32,8 +32,7 @@ export async function readIssueRelations(
     .slice(0, LINEAR_RELATIONS_CAP)
     .map((node) => mapRelation(node, 'outbound', node.relatedIssue))
   const remaining = LINEAR_RELATIONS_CAP - outbound.length
-  // Why: when outbound relations exactly fill the cap, probe inverse relations so
-  // the response cannot claim completeness while silently omitting inbound ones.
+  // Probe inverse relations even at capacity so omitted inbound rows cannot look complete.
   const inverseReadLimit = Math.max(1, remaining)
   const inverse = await readConnectionPages(inverseReadLimit, async (page) => {
     return await withLinearRead(entry, async () => {

@@ -3,13 +3,10 @@ import { closesAppOsc133Zone } from '../../shared/terminal-osc133-command-finish
 import type { TerminalOwner } from '../../shared/terminal-owner'
 import { TerminalArmedInputModes } from './terminal-armed-input-modes'
 
-// Why: PTY/SSH chunks can split a long combined DECSET or an OSC 133 payload
-// before its terminator. Keep parser state far beyond normal sequence lengths
-// while still bounding memory.
+// Retain split DECSET/OSC payloads across PTY or SSH chunks without unbounded memory.
 const SCAN_TAIL_LIMIT = 4096
 
-// Any mode a full-screen or mouse-driven app arms: once one appears the shell
-// is no longer the thing writing to this pane.
+// These enables invalidate cached shell ownership until fresh proof arrives.
 const TUI_MODE_ENABLES = new Set([47, 1000, 1002, 1003, 1004, 1005, 1006, 1015, 1016, 1047, 1049])
 const ALTERNATE_SCREEN_MODES = new Set([47, 1047, 1049])
 
@@ -24,8 +21,7 @@ const FULL_RESET = /\x1bc/
 // oxlint-disable-next-line no-control-regex -- terminal escape sequences require control chars
 const MODIFY_OTHER_KEYS = /\x1b\[>4(?:;([0-9]*))?m|\x9b>4(?:;([0-9]*))?m/
 
-// Groups: 1 OSC 133 payload, 2/3 and 4/5 private-mode params + final, 6/7 and 8/9 kitty prefix + params,
-// 10 and 11 modifyOtherKeys level.
+// Groups: 1 OSC payload; 2–5 private mode; 6–9 kitty prefix/params; 10–11 XTMODKEYS level.
 const SEQUENCE_RE = new RegExp(
   [LIFECYCLE_OSC, PRIVATE_MODE, KITTY_KEYBOARD, FULL_RESET, MODIFY_OTHER_KEYS]
     .map((re) => re.source)
@@ -34,11 +30,7 @@ const SEQUENCE_RE = new RegExp(
 )
 
 export type ShellLifecycleScanEvents = {
-  /**
-   * Index into the chunk just handed to `scan()`, one past the terminator of an
-   * OSC 133;D that arrived while the alternate screen was still active. Bytes at
-   * and after this index were NOT consumed; the caller re-feeds them.
-   */
+  /** Chunk index after a suspected-death OSC 133;D; the caller must refeed the unconsumed remainder. */
   uncleanDeathTriggerEnd?: number
   /** Where that OSC 133;D begins in the chunk; 0 when it began in an earlier one. */
   uncleanDeathTriggerStart?: number
@@ -46,22 +38,13 @@ export type ShellLifecycleScanEvents = {
   cleanExitCandidate?: { generation: number }
 }
 
-/**
- * Streaming, chunk-split-safe scanner of raw PTY output that tracks which side
- * owns the stream. Callers must feed `scan()` the same bytes the terminal
- * parsed, in order.
- *
- * Ownership is generation-guarded rather than a plain flag: an async consumer
- * that decides "the shell owns this pane" from an event must prove no revoking
- * sequence slipped in between, which `trySetOwner()` checks.
- */
+/** Feed terminal bytes in order; generation checks reject ownership proofs invalidated by later output. */
 export class TerminalShellLifecycleScanner {
   private scanTail = ''
   private ownerState: TerminalOwner | undefined
   private generationState = 0
   private altActive = false
   private commandEnteredAlternateScreen = false
-  // OSC 133 markers seen back to back since the last other output.
   private adjacentMarkers = ''
   private readonly inputModes = new TerminalArmedInputModes()
 
@@ -85,7 +68,6 @@ export class TerminalShellLifecycleScanner {
     return true
   }
 
-  /** Scans and returns the process-boundary ground for the current host ownership. */
   groundProcessBoundary(): string {
     const ground = buildProcessBoundaryGround({
       keepFocusReporting: this.inputModes.hostOwnsFocusReporting
@@ -98,9 +80,7 @@ export class TerminalShellLifecycleScanner {
     this.generationState += 1
     this.ownerState = owner
     if (opts.alternateScreen !== undefined) {
-      // Why seeded mode state matters: restored bytes bypass scan(), so without
-      // this a mirror seeded mid-TUI never arms its unclean-death trigger and
-      // the whole occupancy loses recovery.
+      // Restored bytes bypass scan(), so seed alternate-screen state to retain death detection.
       this.altActive = opts.alternateScreen
       this.commandEnteredAlternateScreen = opts.alternateScreen
     }
@@ -108,9 +88,7 @@ export class TerminalShellLifecycleScanner {
 
   scan(chunk: string): ShellLifecycleScanEvents {
     const events: ShellLifecycleScanEvents = {}
-    // Why the pre-filter: this runs per chunk for every session; a flood chunk
-    // with no escape introducer must not pay the regex pass. Split sequences
-    // stay correct because a partial one always left a non-empty scanTail.
+    // Skip regex work on plain output; an incomplete escape already leaves scanTail nonempty.
     if (this.scanTail.length === 0 && !chunk.includes('\x1b') && !chunk.includes('\x9b')) {
       if (chunk.length > 0) {
         this.adjacentMarkers = ''
@@ -148,23 +126,18 @@ export class TerminalShellLifecycleScanner {
         if (marker === 'A') {
           this.inputModes.markPrompt()
         }
-        // Why: an app closing its own zone is still running, so its `D` proves no exit (#10923).
+        // An app closing its own OSC zone is still running; its D does not prove exit (#10923).
         if (marker !== 'D' || closesAppOsc133Zone(markersBefore, oscPayload)) {
           continue
         }
-        // An alternate screen or a command's input mode still up at command-finished
-        // means the app died without its own teardown; the caller must repair first.
-        // Every D re-asks: a refuted one may be a nested shell's while the app lives.
+        // Armed modes suggest unclean death, but each D needs proof because nested shells also emit it.
         const uncleanDeath = this.inputModes.markCommandEnd() || this.altActive
         const cleanExit = !uncleanDeath && this.commandEnteredAlternateScreen && !this.altActive
         this.revoke()
         this.commandEnteredAlternateScreen = false
         if (uncleanDeath) {
           this.scanTail = ''
-          // Why the clamp: a complete OSC can never sit wholly inside the
-          // carried tail (extractScanTail keeps incomplete ones only), so this
-          // is > 0 by construction — the clamp only guards that invariant
-          // against a future loosening of the tail extractor.
+          // Clamp the chunk-relative boundary defensively; carried tails contain only incomplete sequences.
           events.uncleanDeathTriggerEnd = Math.max(
             0,
             match.index + match[0].length - previousTailLength
@@ -178,7 +151,7 @@ export class TerminalShellLifecycleScanner {
         continue
       }
       if (match[0].endsWith('m')) {
-        // A disarm (level 0) is part of our own ground, so like kitty only an arm revokes.
+        // Our injected ground disarms XTMODKEYS; only enables revoke ownership.
         const level = Number(match[10] ?? match[11] ?? '') || 0
         if (level > 0) {
           this.revoke()
@@ -188,8 +161,7 @@ export class TerminalShellLifecycleScanner {
       }
       const kittyPrefix = match[6] ?? match[8]
       if (kittyPrefix !== undefined) {
-        // `CSI < n u` (pop) and `CSI = 0 u` (clear) appear in our own injected
-        // reset, so only a push of real flags counts as a new owner.
+        // Our reset pops and clears kitty flags; only nonzero push/set parameters revoke ownership.
         const kittyParams = match[7] ?? match[9] ?? ''
         const first = Number(kittyParams.split(';')[0])
         if (kittyPrefix !== '<' && Number.isInteger(first) && first > 0) {

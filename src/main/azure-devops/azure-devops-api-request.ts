@@ -5,8 +5,7 @@ import { cancelUnreadResponseBody } from '../lib/unread-response-body'
 const REQUEST_TIMEOUT_MS = 5000
 const DEFAULT_API_VERSION = '7.1'
 
-// Why (STA-3494): on-prem Azure DevOps Server rejects versioned requests without
-// the -preview suffix; remember which origins need it after the first rejection.
+// Remember origins that require the -preview API version suffix.
 const previewApiVersionOrigins = new Set<string>()
 
 /** @internal - exposed for tests only */
@@ -109,8 +108,7 @@ export function resolveAzureDevOpsGitApiBaseUrl(repo: AzureDevOpsRepoRef): strin
     return repo.apiBaseUrl
   }
   const normalized = normalizeAzureDevOpsApiBaseUrl(configured)
-  // Why (STA-3494): a configured collection ancestor is the auth-probe URL;
-  // Git endpoints need the project-level base derived from the remote.
+  // Git endpoints need the remote's project path, even when auth probes use a collection URL.
   return isUrlPathAncestor(normalized, repo.apiBaseUrl) ? repo.apiBaseUrl : normalized
 }
 
@@ -130,7 +128,6 @@ function apiUrl(
   return url
 }
 
-// Reads the body only for a 400 on a non-preview request; consumed either way.
 async function shouldRetryWithPreviewApiVersion(url: URL, response: Response): Promise<boolean> {
   if (response.ok || response.status !== 400) {
     return false
@@ -150,9 +147,7 @@ export async function requestAzureDevOpsJsonAtBase<T>(
   baseUrl: string,
   path: string,
   options: AzureDevOpsRequestOptions = {},
-  // Why: the existing-review lookup behind Create must distinguish a real
-  // transport/auth failure from an accepted "no PR". When true, a failed request
-  // throws instead of collapsing to null so callers never report false not_found.
+  // Creation preflight must distinguish lookup failure from an absent PR.
   throwOnFailure = false
 ): Promise<T | null> {
   const config = getAzureDevOpsAuthConfig()

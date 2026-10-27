@@ -3,10 +3,7 @@ import type { GitDiffResult } from '../../../shared/git-diff-compare-types'
 import { getBranchDiff, getCommitDiff } from '../../git/status'
 import { resolveRegisteredWorktreePath } from '../registered-worktree-roots-cache'
 import { getLocalGitOptionsForRegisteredWorktree } from '../local-worktree-runtime-options'
-import {
-  validateFullGitObjectId,
-  validateGitRelativeFilePath
-} from '../filesystem-path-containment'
+import { validateFullGitObjectId, validateGitRelativeFilePath } from './filesystem-path-containment'
 import type { FilesystemHandlerContext } from './filesystem-handler-context'
 import { requireReachableGitRoute } from '../../providers/execution-host-provider-dispatch'
 import { getConnectionExecutionHostId } from '../../../shared/execution-host'

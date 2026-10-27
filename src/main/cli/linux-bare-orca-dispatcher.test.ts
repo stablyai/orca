@@ -65,7 +65,6 @@ async function makeFixture(): Promise<{ homePath: string; resourcesPath: string 
   const root = await mkdtemp(join(tmpdir(), 'orca-bare-dispatcher-'))
   created.push(root)
   const resourcesPath = join(root, 'resources')
-  // The bundled orca-ide launcher must exist for the dispatcher to be written.
   await mkdir(join(resourcesPath, 'bin'), { recursive: true })
   await writeFile(join(resourcesPath, 'bin', 'orca-ide'), '#!/usr/bin/env bash\n', 'utf8')
   return { homePath: join(root, 'home'), resourcesPath }
@@ -184,9 +183,6 @@ describe('installLinuxBareOrcaDispatcher', () => {
     expect(content).toContain(`exec '${join(resourcesPath, 'bin', 'orca-ide')}' "$@"`)
   })
 
-  // Why: this dispatcher must survive a restart, and an AppImage's resourcesPath
-  // is a mount that dies with the app. Point it at the extracted payload, which
-  // also keeps it clear of AppRun's `--no-sandbox` injection (#11609).
   it.skipIf(process.platform === 'win32')(
     'execs the extracted payload (not the ephemeral mount) when running from an AppImage',
     async () => {

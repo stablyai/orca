@@ -27,7 +27,7 @@ export function getOptionalStructuredMessagePayload(
       'Use either --payload or structured payload flags, not both.'
     )
   }
-  // Why: raw JSON args are fragile in Windows PowerShell; these flags avoid shell-specific quoting.
+  // Structured flags avoid fragile PowerShell JSON quoting.
   const payload: Record<string, string | string[]> = {}
   if (taskId) {
     payload.taskId = taskId

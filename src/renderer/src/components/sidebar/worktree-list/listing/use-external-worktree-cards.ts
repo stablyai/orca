@@ -19,8 +19,6 @@ import {
 import { buildNewExternalWorktreesInboxCandidates } from '../../new-external-worktrees-inbox-candidates'
 import { selectDetectedWorktreesByRepo } from '@/store/workspace-record-selectors'
 
-// The two sidebar notice rows for worktrees Orca detected but does not yet show, plus the
-// pending/error state their inline actions surface.
 export function useSidebarExternalWorktreeCards(args: {
   repos: readonly Repo[]
   visibleReposForRows: readonly Repo[]

@@ -6,11 +6,32 @@ import { isNativeWindowsConptyPty } from '../../terminal-model-query-authority'
 import { getTerminalViewAttributes } from '../../terminal-view-attribute-store'
 import { PtyShellOwnershipMirror } from '../../pty-shell-ownership-mirror'
 import { PROCESS_BOUNDARY_GROUND } from '../../../../shared/terminal-mode-reset-profiles'
+import { release } from 'node:os'
+import { resolvePtyOwnerBackend, type PtyOwnerBackend } from '../../../../shared/pty-owner-backend'
+import { isRemoteRuntimePtyId } from '../../../../shared/remote-runtime/remote-runtime-pty-id'
+import { parseAppSshPtyId } from '../../../../shared/ssh-pty-id'
+import { windowsPtyForOwnerBackend } from '../../../../shared/xterm-conpty-options'
 
 export abstract class OrcaRuntimeWithCreatePtyHeadlessTerminalState extends OrcaRuntimeWithMaybeHydrateHeadlessFromRenderer {
-  /** Shared factory for the per-PTY runtime emulators (seed, hydration, and
-   *  lazy live-byte creation): wires the Phase-5 query-reply sink and the
-   *  ConPTY DA1 override. The daemon emulator never goes through here. */
+  /** SSH and paired-runtime panes run on their host's PTY; every PTY this Windows process owns is ConPTY. */
+  private ownerBackendForHeadlessPty(ptyId: string): PtyOwnerBackend {
+    // Why the id too: main's copy starts on the first byte, before a restored relay PTY has a record.
+    if (
+      this.ptysById.get(ptyId)?.connectionId ||
+      parseAppSshPtyId(ptyId) !== null ||
+      isRemoteRuntimePtyId(ptyId)
+    ) {
+      return 'posix-pty'
+    }
+    return resolvePtyOwnerBackend({ platform: process.platform, shellPath: undefined })
+  }
+
+  /** Headless and phone replies share the per-agent reply policy desktop applies in its renderer. */
+  shouldForwardTerminalQueryReply(ptyId: string, reply: string): boolean {
+    return shouldForwardHeadlessTerminalQueryReply(this.ptysById.get(ptyId)?.launchAgent, reply)
+  }
+
+  /** Create runtime emulators with query forwarding and ConPTY DA1 override for seed, hydration and live bytes; daemon emulators use another factory. */
   protected createPtyHeadlessTerminalState(
     ptyId: string,
     dims: { cols: number; rows: number }
@@ -26,25 +47,15 @@ export abstract class OrcaRuntimeWithCreatePtyHeadlessTerminalState extends Orca
       wslDistro: this.ptysById.get(ptyId)?.connectionId
         ? undefined
         : (this.wslDistroByPtyId.get(ptyId) ?? this.ptysById.get(ptyId)?.wslDistro ?? undefined),
-      // Why: replies take the provider input path (same entry as pty:write —
-      // daemon shell-ready gating and the SSH relay write apply unchanged),
-      // NOT writePtyInput, so renderer interactive-output metering never
-      // counts responder traffic as user-input echo.
+      windowsPty: windowsPtyForOwnerBackend(this.ownerBackendForHeadlessPty(ptyId), release()),
+      // Use provider input for query replies to retain shell-ready/SSH routing without interactive echo metering.
       onQueryReply: (reply) => {
-        // Why the identity check: queued writeChain links can parse after
-        // disposeHeadlessTerminal, and daemon respawns reuse session ids — a
-        // stale link's reply must never reach a successor PTY under this id.
+        // Queued links can outlive disposal; only the current state may reply to a reused PTY id.
         if (state !== null && this.headlessTerminals.get(ptyId) === state) {
-          if (
-            !shouldForwardHeadlessTerminalQueryReply(this.ptysById.get(ptyId)?.launchAgent, reply)
-          ) {
+          if (!this.shouldForwardTerminalQueryReply(ptyId, reply)) {
             return
           }
-          // Why this write is safe pre-shell-ready: daemon Session.write
-          // QUEUES (never drops) input while the POSIX shell-ready gate is
-          // pending and flushes at the ready marker or the 15s
-          // SHELL_READY_TIMEOUT_MS bound (session.ts) — a spawn-time query
-          // reply is delayed at most that bound, not lost.
+          // Daemon writes queue until the shell-ready marker or 15s timeout, preserving spawn-time replies.
           this.ptyController?.write(ptyId, reply, 'query-reply')
         }
       }
@@ -52,8 +63,7 @@ export abstract class OrcaRuntimeWithCreatePtyHeadlessTerminalState extends Orca
     if (isNativeWindowsConptyPty(ptyId)) {
       emulator.installConptyPrimaryDeviceAttributesOverride()
     }
-    // Why the lazy getter: replies must use the freshest renderer push at
-    // parse time, and stay silent (never default) before the first push.
+    // Read latest viewer attributes at parse time; remain silent before the first push.
     emulator.installViewAttributeResponder(() => getTerminalViewAttributes())
     const viewAttributes = getTerminalViewAttributes()
     if (viewAttributes) {
@@ -84,9 +94,7 @@ export abstract class OrcaRuntimeWithCreatePtyHeadlessTerminalState extends Orca
     return state
   }
 
-  /** Phase-5 ConPTY DA1 retrofit (terminal-query-authority.md): invoked via
-   *  markNativeWindowsConptyPty when the spawn mark lands after daemon stream
-   *  data already created this PTY's emulator. Idempotent emulator-side. */
+  /** Idempotently retrofit ConPTY DA1 when spawn metadata arrives after live bytes created the emulator (terminal-query-authority.md). */
   protected ensureNativeWindowsConptyDa1Override(ptyId: string): void {
     if (isNativeWindowsConptyPty(ptyId)) {
       this.headlessTerminals.get(ptyId)?.emulator.installConptyPrimaryDeviceAttributesOverride()
@@ -163,9 +171,7 @@ export abstract class OrcaRuntimeWithCreatePtyHeadlessTerminalState extends Orca
     if (unpainted && (unpainted.cols !== cols || unpainted.rows !== rows)) {
       state.unrepaintedReflowGrid = undefined
     }
-    // Why: terminal reflow is a parser operation. It must sit in the same
-    // per-PTY stream as output bytes or restore snapshots can bake in wraps
-    // from the wrong terminal width.
+    // Reflow joins the byte stream so snapshots cannot capture wraps from an out-of-order width change.
     state.writeChain = state.writeChain
       .then(() => {
         state.emulator.resize(cols, rows)
@@ -176,10 +182,7 @@ export abstract class OrcaRuntimeWithCreatePtyHeadlessTerminalState extends Orca
       })
   }
 
-  /** Public: reflow an already-created model onto a grid the PROVIDER proved — a reattach learns
-   *  the live session's real size only from its spawn reply, after live bytes may have lazily
-   *  created the model at the 80x24 default. Not onExternalPtyResize: nothing measured a pane
-   *  here, so the renderer-geometry baselines behind mobile take-back must stay untouched. */
+  /** Reflow to provider-proven size after early live bytes used default geometry; preserve renderer restore baselines because no pane was measured. */
   reflowHeadlessTerminalToPtyGrid(ptyId: string, cols: number, rows: number): void {
     if (cols <= 0 || rows <= 0) {
       return
@@ -203,9 +206,7 @@ export abstract class OrcaRuntimeWithCreatePtyHeadlessTerminalState extends Orca
     if (!state) {
       return
     }
-    // Why: headless writes are queued to preserve xterm parser order. Clear
-    // must join that same chain or an earlier PTY chunk can finish after the
-    // clear request and repopulate mobile scrollback.
+    // Queue clears after earlier output so it cannot repopulate cleared mobile scrollback.
     state.writeChain = state.writeChain.then(() => state.emulator.clearScrollback())
     await state.writeChain
   }

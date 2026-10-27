@@ -19,7 +19,7 @@ export function appendJournalContextClear(input: {
     .enqueueRows(
       () => {
         const cards = input.cards.list()
-        // A command is about the context the clear just ended: its card goes with the divider.
+        // Commands belong to the ended context and must move with its divider.
         commands = input.cards.plan(
           cards
             .filter(

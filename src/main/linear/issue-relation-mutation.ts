@@ -72,7 +72,7 @@ async function runRelationMutation<T>(mutation: () => Promise<T>): Promise<T> {
     }
     const failure = classifyLinearWriteFailure(error)
     if (failure.kind === 'duplicate_id') {
-      // Why: relation creates have no caller-supplied id, so a duplicate can be a concurrent add.
+      // Server-assigned relation IDs make duplicate errors ambiguous with concurrent creation.
       throw new LinearWriteFailure(
         'unconfirmed',
         'Linear relation mutation could not be confirmed.',

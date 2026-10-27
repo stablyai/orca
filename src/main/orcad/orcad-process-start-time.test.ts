@@ -152,7 +152,6 @@ describe.runIf(platform === 'linux')('orcad process incarnation on a real /proc'
         bootId
       })
       expect(compareOrcadProcessIdentity(pid, { startedAtMs: null, ...other })).toBe('matches')
-      // This test process started well before the child, so its ticks name another process.
       expect(compareOrcadProcessIdentity(pid, { startedAtMs: null, ...own })).toBe('differs')
     } finally {
       child.kill('SIGKILL')

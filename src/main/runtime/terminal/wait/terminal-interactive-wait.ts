@@ -31,9 +31,8 @@ import { isTuiAgent } from '../../../../shared/tui-agent-config'
 import { resolveConfiguredWorkerAgent } from '../../orchestration/configured-worker-agent-selector'
 import { resolveAgentLaunchRuntime } from '../../agent-launch-scope-runtime'
 import { parseWslUncPath } from '../../../../shared/wsl-paths'
-
-import { prepareOpenCodeModelStartupInputs } from '../../../opencode/opencode-model-startup-plan'
 import { resolveAgentStartupPlanInputs } from '../../../../shared/agent-startup-plan-inputs'
+import { resolveOpenCodeModelLaunchRoute } from '../../../opencode/opencode-model-startup-plan'
 
 import type { RuntimePtyWorktreeRecord } from '../../runtime-terminal-state-records'
 
@@ -293,25 +292,26 @@ export abstract class OrcaRuntimeWithGetTerminalInteractiveWait extends OrcaRunt
     } catch {
       return false
     }
-    try {
-      await prepareOpenCodeModelStartupInputs({
-        inputs: resolveAgentStartupPlanInputs({
-          agent: 'opencode',
-          settings: store.getSettings(),
-          platform: launchRuntime.platform,
-          isRemote: false,
-          // A yes/no model probe; nothing is typed into a shell.
-          shell: undefined,
-          sessionOptions: { model: target.model }
-        }),
-        cwd: path,
-        isWsl: Boolean(parseWslUncPath(path)),
-        hostIdentity: this.getRuntimeId()
-      })
-      return true
-    } catch {
+    if (
+      !target.model.trim() ||
+      launchRuntime.platform !== process.platform ||
+      parseWslUncPath(path)
+    ) {
       return false
     }
+    await resolveOpenCodeModelLaunchRoute({
+      inputs: resolveAgentStartupPlanInputs({
+        agent: 'opencode',
+        settings: store.getSettings(),
+        platform: launchRuntime.platform,
+        isRemote: false,
+        shell: undefined,
+        sessionOptions: { model: target.model }
+      }),
+      cwd: path,
+      hostIdentity: this.getRuntimeId()
+    })
+    return true
   }
 
   validateOrchestrationAgentLauncher(agent: TuiAgent): void {

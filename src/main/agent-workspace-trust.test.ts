@@ -20,6 +20,7 @@ const mocks = vi.hoisted(() => ({
   copilot: vi.fn<(path: string, home: string) => void>(),
   antigravity: vi.fn<(path: string, home: string) => void>(),
   qoder: vi.fn<(path: string, home: string) => void>(),
+  kimi: vi.fn<(path: string, kimiHome: string) => void>(),
   codexConfigFiles: vi.fn<(agentHome: string) => string[]>(() => CODEX_CONFIG_FILES),
   claudeGrant: vi.fn<typeof ClaudeFolderTrustFile.grantClaudeWorkspaceTrust>()
 }))
@@ -28,7 +29,8 @@ vi.mock('./agent-trust-presets', () => ({
   markCodexProjectTrusted: mocks.codex,
   markCursorWorkspaceTrusted: mocks.cursor,
   markCopilotFolderTrusted: mocks.copilot,
-  markAntigravityWorkspaceTrusted: mocks.antigravity
+  markAntigravityWorkspaceTrusted: mocks.antigravity,
+  markKimiWorkspaceTrusted: mocks.kimi
 }))
 vi.mock('./codex/codex-home-paths', () => ({
   getLocalCodexTrustConfigFiles: mocks.codexConfigFiles
@@ -77,7 +79,6 @@ describe('applyAgentWorkspaceTrust on this machine', () => {
     ['cursor', mocks.cursor],
     ['copilot', mocks.copilot],
     ['qoder', mocks.qoder],
-    // Why: one of the old copied switches omitted Antigravity, so workers launched there asked.
     ['antigravity', mocks.antigravity]
   ] as const)('writes the %s preset for the workspace', async (preset, writer) => {
     await expect(applyAgentWorkspaceTrust(preset, WORKSPACE, local)).resolves.toEqual({})
@@ -88,14 +89,36 @@ describe('applyAgentWorkspaceTrust on this machine', () => {
   })
 
   it('writes per-user trust under the home the launch env names, where the agent reads it', async () => {
-    const context = { ...local, env: { HOME: '/home/agent', USERPROFILE: '/home/agent' } }
+    const context = {
+      ...local,
+      env: { HOME: '/home/agent', USERPROFILE: '/home/agent' },
+      codexHome: '/orca/codex-accounts/acct-1/home'
+    }
     for (const preset of ['codex', 'cursor', 'copilot', 'qoder', 'antigravity'] as const) {
       await applyAgentWorkspaceTrust(preset, WORKSPACE, context)
     }
-    expect(mocks.codexConfigFiles).toHaveBeenCalledWith('/home/agent')
+    expect(mocks.codexConfigFiles).toHaveBeenCalledWith(
+      '/home/agent',
+      '/orca/codex-accounts/acct-1/home'
+    )
     for (const writer of [mocks.cursor, mocks.copilot, mocks.qoder, mocks.antigravity]) {
       expect(writer).toHaveBeenCalledWith(WORKSPACE, '/home/agent')
     }
+  })
+
+  it("writes Kimi trust under the launch env's KIMI_CODE_HOME, else its ~/.kimi-code", async () => {
+    vi.stubEnv('KIMI_CODE_HOME', '')
+    await applyAgentWorkspaceTrust('kimi', WORKSPACE, {
+      ...local,
+      env: { HOME: '/home/agent', USERPROFILE: '/home/agent', KIMI_CODE_HOME: '/kimi/custom' }
+    })
+    expect(mocks.kimi).toHaveBeenLastCalledWith(WORKSPACE, '/kimi/custom')
+    await applyAgentWorkspaceTrust('kimi', WORKSPACE, {
+      ...local,
+      env: { HOME: '/home/agent', USERPROFILE: '/home/agent' }
+    })
+    expect(mocks.kimi).toHaveBeenLastCalledWith(WORKSPACE, join('/home/agent', '.kimi-code'))
+    vi.unstubAllEnvs()
   })
 
   it('contains a rejected or throwing write so the launch proceeds', async () => {
@@ -128,7 +151,7 @@ describe('applyAgentWorkspaceTrust on this machine', () => {
     warn.mockRestore()
   })
 
-  // Why: a config dir that does not exist keeps a regression here from writing a real config.
+  // A nonexistent config directory prevents this test from modifying real Claude config.
   const noConfig = { ...local, env: { CLAUDE_CONFIG_DIR: join(tmpdir(), 'orca-no-claude-config') } }
   it.each([
     ['the home folder', homedir(), noConfig],

@@ -37,12 +37,11 @@ export function upsertAddedRepoWithProjectHostSetup(
     : [...state.repos, ownedRepo]
   const projection = projectHostSetupProjectionFromRepos(repos)
 
-  // Why: these Add Project flows call IPC directly, bypassing the repo slice
-  // action that normally keeps the project-first compatibility model synced.
+  // Direct IPC bypasses repo-slice compatibility projection; synchronize project-first state here.
   useAppStore.setState({
     repos,
-    projects: projection.projects,
-    projectHostSetups: projection.setups
+    endpointProjects: projection.projects,
+    endpointProjectHostSetups: projection.setups
   })
   return { alreadyPresent, repo: ownedRepo }
 }

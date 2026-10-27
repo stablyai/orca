@@ -13,11 +13,7 @@ function isRendererUnavailable(error: unknown): boolean {
   )
 }
 
-/**
- * Why: a headless server (`orca serve`, orcad) has no window to put the tab in and answers with
- * the bare `renderer_unavailable` token (#29822). The wire answer stays as is — the mobile app
- * keys its preview fallback on it — so only the CLI turns it into something an agent can act on.
- */
+/** Keep renderer_unavailable on the wire for mobile fallback; add CLI-specific recovery here. */
 export async function callFileOpen(
   ctx: HandlerContext,
   method: 'files.open' | 'files.openDiff',

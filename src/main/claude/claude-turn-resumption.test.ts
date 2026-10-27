@@ -1,9 +1,4 @@
-// Regression for a structured Claude session that reported idle while it was
-// working. Reproduced from the journal of the reported session
-// (962e6f25…/epoch 3d214e6f…, 2026-09-13): a `result` settled the turn at
-// 13:56:06, a background task reported in at 13:58:59, and the agent then ran
-// tool calls until 14:05:18 — nine minutes in which the shared projector, and
-// so the sidebar row and the chat indicator, read `idle`.
+// Captured 2026-09-13 (962e6f25…/3d214e6f…): provider-resumed work incorrectly stayed idle.
 
 import { describe, expect, it, vi } from 'vitest'
 import type {
@@ -36,8 +31,6 @@ function harness() {
     publish: vi.fn()
   }
   const translator = createClaudeJournalTranslator({ sink, fallbackIdPrefix: 'test' })
-  // The reducer keys items by identity and orders them by first append, so the
-  // render list the projector reads is the deduplicated append order.
   const items = (): AgentJournalRenderItem[] => {
     const byKey = new Map<string, AgentJournalRenderItem>()
     appended.forEach(({ identity, body }, index) => {
@@ -76,8 +69,7 @@ function frame(
   }
 }
 
-/** The captured `task-notification` wake-up: a main-thread user frame Orca never
- *  dispatched, so it carries no replay waiter and cannot start a turn. */
+/** Captured provider wake-up has no dispatch waiter, so it cannot open a turn. */
 function taskNotification(uuid: string) {
   return {
     type: 'message' as const,
@@ -95,8 +87,6 @@ function taskNotification(uuid: string) {
   }
 }
 
-/** A partial-message text delta. `--include-partial-messages` is a pinned launch
- *  contract, so this is the shape a resumed turn's first output usually takes. */
 function textDelta(uuid: string, messageId: string, text: string) {
   return {
     type: 'message' as const,
@@ -142,8 +132,7 @@ function result(uuid: string, parentToolUseId: string | null = null, durationMs 
 }
 
 function projected(items: readonly AgentJournalRenderItem[]): string {
-  // No submission is outstanding: the send was acknowledged long ago, which is
-  // exactly the state in which the reported session fell back to idle.
+  // No pending dispatch can mask the false-idle regression.
   expect(hasUnansweredStructuredAgentSessionDispatch([], null)).toBe(false)
   return projectStructuredAgentSessionStatus(items, [], null)
 }
@@ -156,10 +145,8 @@ describe('a Claude turn the provider resumed on its own', () => {
     expect(projected(items())).toBe('working')
 
     translator.handle(result('r1'))
-    // The agent really did stop here, so idle is correct.
     expect(projected(items())).toBe('idle')
 
-    // A background task reports in and wakes the agent; it starts working again.
     translator.handle(taskNotification('n1'))
     translator.handle(frame('assistant', 'a1', [{ type: 'text', text: 'Back on it.' }]))
     expect(projected(items())).toBe('working')
@@ -171,7 +158,6 @@ describe('a Claude turn the provider resumed on its own', () => {
     )
     expect(projected(items())).toBe('working')
 
-    // The next result settles the turn the provider opened, so nothing over-claims.
     translator.handle(result('r2'))
     expect(projected(items())).toBe('idle')
   })
@@ -234,7 +220,6 @@ describe('a Claude turn the provider resumed on its own', () => {
     translator.handle(frame('user', 'u1', [{ type: 'text', text: 'go' }]))
     translator.handle(result('r1'))
 
-    // Children outlive the turn that spawned them; their streams are not a turn.
     translator.handle(streamMessageStart('child-start', 'toolu_parent'))
     expect(projected(items())).toBe('idle')
   })
@@ -254,13 +239,11 @@ describe('a Claude turn the provider resumed on its own', () => {
   it('reports the first tool call of a resumed turn as the live tool', () => {
     const { translator, items } = harness()
     translator.handle(frame('user', 'u1', [{ type: 'text', text: 'go' }]))
-    // A real first turn leaves prose behind, which is what makes the session listable.
+    // Prose makes the original session listable.
     translator.handle(frame('assistant', 'a0', [{ type: 'text', text: 'Launched it.' }]))
     translator.handle(result('r1'))
 
-    // The provider resumes straight into a tool call, with no prose first. The
-    // turn has to bracket its own first output or every reader that stops at the
-    // turn record looks straight past it.
+    // The turn record must precede its first tool row for turn-scoped readers.
     translator.handle(
       frame('assistant', 'a1', [
         { type: 'tool_use', id: 'toolu_1', name: 'Bash', input: { command: 'rg foo' } }
@@ -277,9 +260,7 @@ describe('a Claude turn the provider resumed on its own', () => {
     translator.handle(frame('user', 'u1', [{ type: 'text', text: 'go' }]))
     translator.handle(frame('assistant', 'a0', [{ type: 'text', text: 'working on it' }]))
 
-    // A child's result ends the child, not the turn that spawned it. No real
-    // stream has been observed carrying one; this holds the symmetry with the
-    // open path, which already refuses to open a turn from nested output.
+    // Synthetic nested result: no live capture; nested output must not settle the root turn.
     translator.handle(result('r-child', 'toolu_parent'))
     expect(projected(items())).toBe('working')
 
@@ -294,7 +275,6 @@ describe('a Claude turn the provider resumed on its own', () => {
     translator.handle({ type: 'ended', sessionId: 'orca-session', reason: 'exit', observedAt: 1 })
     expect(projected(items())).toBe('idle')
 
-    // Nothing can close a turn opened now, so nothing may open one.
     translator.handle(streamMessageStart('late-start'))
     expect(projected(items())).toBe('idle')
   })
@@ -320,7 +300,6 @@ describe('a Claude turn the provider resumed on its own', () => {
     translator.handle(frame('assistant', 'a1', [{ type: 'text', text: 'still talking' }]))
     expect(projected(items())).toBe('idle')
 
-    // The next accepted send is what resumes it.
     translator.handle(frame('user', 'u2', [{ type: 'text', text: 'again' }]))
     expect(projected(items())).toBe('working')
   })
@@ -332,7 +311,6 @@ describe('a Claude turn the provider resumed on its own', () => {
     translator.handle(result('r1'))
     expect(projected(items())).toBe('idle')
 
-    // The resumed reply streams in before any whole assistant frame lands.
     translator.handle(textDelta('d1', 'msg-1', 'Back '))
     translator.handle(textDelta('d2', 'msg-1', 'on it.'))
     expect(projected(items())).toBe('working')
@@ -420,7 +398,6 @@ describe('a Claude turn the provider resumed on its own', () => {
         is_error: true
       }
     })
-    // A clean result arriving afterwards must not lift the latch.
     translator.handle(result('r-late-ok'))
     translator.handle(frame('assistant', 'a1', [{ type: 'text', text: 'still talking' }]))
     expect(projected(items())).toBe('idle')

@@ -1,5 +1,4 @@
-/** A native chat's shown name: the user's tab alias, then the host's saved name, then the host's
- *  own label for the row. Every surface that names a native chat uses this one order. */
+/** Share name precedence across surfaces: user alias, host-saved name, host row label. */
 export function structuredChatDisplayName(
   customLabel: string | null | undefined,
   conversationName: string | null | undefined,
@@ -8,8 +7,7 @@ export function structuredChatDisplayName(
   return customLabel?.trim() || conversationName || fallback.trim()
 }
 
-/** Whether a Session History row a native chat owns shows the chat's name. Only Claude and Codex
- *  rows do; other agents' rows keep their CLI's own title, as their terminal conversations do. */
-export function historyRowShowsChatName(rowAgent: string): boolean {
+/** Unnamed Claude/Codex rows use chat labels; other unnamed agents retain provider titles. */
+export function historyRowFallsBackToChatLabel(rowAgent: string): boolean {
   return rowAgent === 'claude' || rowAgent === 'codex'
 }

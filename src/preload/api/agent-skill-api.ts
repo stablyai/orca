@@ -78,10 +78,6 @@ export type SkillsApi = {
   getPackage: (packageId: string) => Promise<SkillCloudOperation<SkillCloudPackageDetails>>
   listOwnedShares: () => Promise<SkillCloudOperation<SkillCloudOwnedShare[]>>
   revokeShare: (shareId: string) => Promise<SkillCloudOperation<void>>
-  deletePackageVersion: (input: {
-    packageId: string
-    versionId: string
-  }) => Promise<SkillCloudOperation<void>>
   deletePackage: (packageId: string) => Promise<SkillCloudOperation<void>>
   listWslDistros: (environmentId?: string) => Promise<string[]>
   onInstallProgress: (callback: (progress: SkillInstallProgress) => void) => () => void

@@ -36,7 +36,7 @@ function binDir(name: string): string {
   return directory
 }
 
-// Why posix-only: the guest is Linux; Windows resolution never consults drive mounts.
+// Drive-mount filtering applies to Linux guests; Windows resolves its own shims.
 describe.skipIf(process.platform === 'win32')('launch-time CLI resolution in a WSL guest', () => {
   it('skips a Windows shim on a drive mount for the Linux CLI behind it', () => {
     const windowsDrive = binDir('drive')

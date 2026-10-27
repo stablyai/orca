@@ -3,6 +3,12 @@ import { posix, join } from 'node:path'
 import ts from 'typescript-api'
 import { createWorkspaceSourceResolver } from './workspace-source-exports.mjs'
 import { hasIndirectUnitInputs } from './ci-unit-indirect-inputs.mjs'
+import {
+  checkUnitInputOwnership,
+  readUnitInputOwnership,
+  unitInputSourceDigest
+} from './ci-unit-input-ownership.mjs'
+import { UNIT_SETUP_FILES } from './ci-unit-files.mjs'
 
 const SOURCE_EXTENSIONS = ['ts', 'tsx', 'mts', 'cts', 'mjs', 'js', 'jsx', 'cjs', 'json']
 const RESOLUTION_SUFFIXES = [
@@ -24,9 +30,15 @@ function localPath(file, specifier) {
   return null
 }
 
-export function buildUnitDependencyGraph(sources, workspace = { resolve: () => null }) {
+export function buildUnitDependencyGraph(
+  sources,
+  workspace = { resolve: () => null },
+  ownershipRecords = [],
+  dependencyInputs = new Map()
+) {
   const reverse = new Map()
   const opaque = new Set()
+  const unresolved = new Set()
   function addConsumer(input, file) {
     if (!reverse.has(input)) {
       reverse.set(input, new Set())
@@ -60,6 +72,7 @@ export function buildUnitDependencyGraph(sources, workspace = { resolve: () => n
       }
       if (sources.has(`${path}/package.json`)) {
         opaque.add(file)
+        unresolved.add(file)
       }
       let resolved = false
       // Resolution differs across runtimes; retain every plausible source consumer.
@@ -71,6 +84,7 @@ export function buildUnitDependencyGraph(sources, workspace = { resolve: () => n
       }
       if (!resolved) {
         opaque.add(file)
+        unresolved.add(file)
         continue
       }
       if (workspaceSource) {
@@ -78,7 +92,63 @@ export function buildUnitDependencyGraph(sources, workspace = { resolve: () => n
       }
     }
   }
-  return { reverse, opaque }
+  const dependencies = new Map()
+  for (const [input, consumers] of reverse) {
+    for (const consumer of consumers) {
+      if (!dependencies.has(consumer)) {
+        dependencies.set(consumer, new Set())
+      }
+      dependencies.get(consumer).add(input)
+    }
+  }
+  const context = new Map(dependencyInputs)
+  const runtime = unitConsumers(
+    [
+      'config/vitest.config.ts',
+      'config/scripts/run-vitest.mjs',
+      'config/scripts/ci-unit-dependency-graph.mjs',
+      'config/scripts/ci-unit-input-ownership.mjs',
+      'config/scripts/ci-unit-selection.mjs',
+      ...UNIT_SETUP_FILES,
+      ...[...sources.keys()].filter((file) => /^config\/tsconfig[^/]*\.json$/.test(file))
+    ],
+    dependencies
+  )
+  for (const file of runtime) {
+    context.set(file, sources.get(file) ?? null)
+  }
+  const ownershipContextSha256 = unitInputSourceDigest(context)
+  if (!Array.isArray(ownershipRecords) || !ownershipRecords.length) {
+    return { reverse, opaque, ownershipContextSha256 }
+  }
+  const ownership = checkUnitInputOwnership(
+    ownershipRecords,
+    (file) => {
+      const closure = unitConsumers([file], dependencies)
+      return sources.has(file) && ![...closure].some((input) => unresolved.has(input))
+        ? new Map([...closure].map((input) => [input, sources.get(input)]))
+        : null
+    },
+    process.env,
+    ownershipContextSha256
+  )
+  for (const [file, { inputs }] of ownership) {
+    for (const input of inputs) {
+      for (const source of input.endsWith('/') ? sources.keys() : [input]) {
+        if (source.startsWith(input)) {
+          addConsumer(source, file)
+        }
+      }
+    }
+    opaque.delete(file)
+  }
+  return {
+    reverse,
+    opaque,
+    opaqueConsumers: unitConsumers(opaque, reverse, new Set(ownership.keys())),
+    checkedInputOwners: [...ownership.keys()],
+    ownershipContextSha256
+  }
 }
 
 export function collectUnitDependencyGraph(root = process.cwd()) {
@@ -92,14 +162,28 @@ export function collectUnitDependencyGraph(root = process.cwd()) {
     files.map((file) => [file.replaceAll('\\', '/'), readFileSync(join(root, file), 'utf8')])
   )
   const workspace = createWorkspaceSourceResolver(root)
-  return { ...buildUnitDependencyGraph(sources, workspace), files: new Set(sources.keys()) }
+  let ownership = readUnitInputOwnership(root)
+  const dependencyInputs = new Map()
+  try {
+    for (const file of ['package.json', 'pnpm-lock.yaml', 'pnpm-workspace.yaml']) {
+      dependencyInputs.set(file, readFileSync(join(root, file), 'utf8'))
+    }
+  } catch {
+    ownership = []
+  }
+  return {
+    ...buildUnitDependencyGraph(sources, workspace, ownership, dependencyInputs),
+    files: new Set(sources.keys())
+  }
 }
 
-export function unitConsumers(seeds, reverse) {
-  const result = new Set(seeds)
+export function unitConsumers(seeds, reverse, boundaries = new Set()) {
+  const result = new Set([...seeds].filter((seed) => !boundaries.has(seed)))
   for (const file of result) {
     for (const consumer of reverse.get(file) ?? []) {
-      result.add(consumer)
+      if (!boundaries.has(consumer)) {
+        result.add(consumer)
+      }
     }
   }
   return result

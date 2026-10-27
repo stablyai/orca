@@ -17,7 +17,6 @@ export type DescribedRelayHost = MobileRelayHost & {
   identity: Pick<MobileDesktopRelayHostListing, 'pairingRevision' | 'runtimeId'>
 }
 
-/** The configured servers the desktop shows, with health from its own status (the sidebar's mapping). */
 export function describeRelayHosts(
   hosts: Pick<MobileDesktopRelayHosts, 'list'>,
   hostLabelOverrides: ReadonlyMap<ExecutionHostId, string> = new Map()
@@ -56,7 +55,7 @@ function relayVerdict(
   if (!answer) {
     return 'unavailable'
   }
-  // Why: a build's capabilities do not expire, so an old server stays update-needed while offline.
+  // Build capabilities remain valid offline; old servers still need an update.
   if (!(answer.capabilities ?? []).includes(DELEGATED_MOBILE_DEVICES_RUNTIME_CAPABILITY)) {
     return 'update-needed'
   }

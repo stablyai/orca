@@ -38,10 +38,7 @@ import {
   type WslCanonicalPathSettlement
 } from './codex-wsl-hook-install-plan'
 
-/**
- * Lane-scoped so the hooks-on install never joins the hooks-off refresh, and a
- * Codex launch never joins a plain terminal's run that went ahead without Codex's answer.
- */
+// Separate hooks-on/off and Codex/terminal runs: their trust outcomes and wait budgets differ.
 function launchPrepKey(
   lane: 'install' | 'codex-launch' | 'refresh',
   runtimeHomePath: string
@@ -75,10 +72,7 @@ export class CodexHookService {
     const generation = this.supersedeWslReconciliation(runtimeHomePath)
     let installedTrustConfigPath: string | null = null
     let installSucceeded = false
-    // Why: the install below now awaits a codex app-server session, so a
-    // settlement callback can land mid-install. This gate keeps reconciliation
-    // reading the finished install's flags, as it did when the install was
-    // synchronous and no callback could interleave with it.
+    // Canonical-path callbacks must wait for the async install to finish updating its flags.
     let markPrimaryInstallSettled!: () => void
     let reconciliationChain = new Promise<void>((resolve) => {
       markPrimaryInstallSettled = resolve
@@ -175,8 +169,7 @@ export class CodexHookService {
     launchesCodex: boolean
   ): Promise<AgentHookInstallStatus> {
     if (isHooksEnabled()) {
-      // Why: a managed account's launch home is its self-contained CODEX_HOME,
-      // so hooks/trust must install there rather than the shared mirror.
+      // Install hooks into the managed account's launch home, where its Codex reads trust.
       return (
         (await this.installForRuntimeHomeSerialized(runtimeHomePath, target)) ??
         (await this.installForLaunchPrep(
@@ -201,21 +194,13 @@ export class CodexHookService {
     return wslPlan ? refreshWslRuntimeUserHooks(wslPlan) : null
   }
 
-  /**
-   * Status read from a home's files: the home the next native pane gets when
-   * none is named (~/.codex outside the app), else that home.
-   */
   getStatus(runtimeHomePath?: string): AgentHookInstallStatus {
     return readCurrentCodexHookStatus(runtimeHomePath)
   }
 
-  /**
-   * App start and the setting turning on: reconciles Orca's entry in ~/.codex,
-   * converting an older build's, then sweeps retired forms.
-   */
+  /** App start and explicit enablement may convert older builds' real-home entries. */
   async reconcileHooks(): Promise<AgentHookInstallStatus> {
     try {
-      // Why here too: like every managed agent's installer, it deploys its shared script.
       writeManagedScript(getManagedScriptPath(), getManagedScript())
     } catch (error) {
       console.warn('[codex-hook-service] could not write the Codex hook script:', error)
@@ -225,10 +210,7 @@ export class CodexHookService {
     return this.getStatus()
   }
 
-  // Why: runtimeHomePath defaults to the shared managed mirror, but a managed
-  // account launching against its own self-contained CODEX_HOME passes that
-  // per-account home so hooks.json/config.toml/trust land where codex reads.
-  // Only launch prep for a pane that does not run Codex skips waiting for Codex's answer.
+  // Managed accounts pass their own CODEX_HOME; plain terminal launches skip waiting for Codex's answer.
   async install(
     runtimeHomePath: string = getOrcaManagedCodexHomePath(),
     launchesCodex = true,
@@ -238,14 +220,13 @@ export class CodexHookService {
       (await resolveCodexHookAnswerForLaunch(launchesCodex ? CODEX_HOOK_LAUNCH_WAIT_MS : 0)) ??
       CODEX_ANSWER_AWAITED
     return runExclusivelyForRuntimeAndSystemTrustConfig(runtimeHomePath, () => {
-      // Why decided in the queue: an Off that landed during the wait has already run, and must win.
+      // Recheck in the queue so an Off that landed during hash lookup wins.
       if (!isHooksEnabled() || answer.kind === 'refused') {
-        // Why: without Codex's hash an entry would wait for review; the home keeps only the user's hooks.
         return refreshCodexRuntimeUserHooksExclusively(runtimeHomePath, (homePath) =>
           readCodexHookHomeStatus(homePath, answer)
         )
       }
-      // Why a stopgap: an answer still on its way must never leave a managed home worse than main.
+      // Keep known/local approvals usable while Codex's answer is pending.
       const hashes =
         answer.kind === 'hashes'
           ? answer.hashes
@@ -259,19 +240,7 @@ export class CodexHookService {
     })
   }
 
-  /**
-   * Launch prep runs on every local PTY spawn, and both lanes below serialize
-   * globally per Codex home, so activating a multi-pane worktree used to pay one
-   * full hook install per pane back to back (measured ~790ms for 7 panes, and a
-   * resumed Codex pane prepares twice). Spawns racing for the same home all want
-   * the same on-disk outcome, so they share one run — the same reason the WSL
-   * lane above shares `installForRuntimeHome`.
-   *
-   * Invalidation: `dedupeInFlightRun` drops the run the moment it settles, so the
-   * next launch re-reads hooks.json and the user's trust state. Never widen this
-   * into a time-based cache — the hooks setting, ~/.codex approvals and the
-   * managed script can all change between spawns, and only a fresh run sees them.
-   */
+  // Share concurrent preparation per home; a time cache would miss settings, approvals or script changes.
   installForLaunchPrep(
     runtimeHomePath: string | undefined,
     launchesCodex: boolean,
@@ -323,7 +292,7 @@ export class CodexHookService {
   }
 
   private removeExclusively(): Promise<AgentHookInstallStatus> {
-    // Why every saved version: the mirror may still hold an approval from a Codex since updated.
+    // Include older Codex versions' hashes still held by the mirror.
     return removeCodexHooksExclusively(readEveryKnownCodexHookHashes(), () => this.getStatus())
   }
 }

@@ -4,8 +4,7 @@ import { getCodexHookTrustSignature } from './codex-hook-identity'
 import { parseCodexTrustKey } from './codex-trust-identity'
 import { computeTrustedHash, type CodexTrustEntry } from './config-toml-trust'
 
-// Why: Orca's frozen form-1 POSIX command and the hash codex-cli 0.159.3 `hooks/list` reported
-// for it as an Interrupt hook with `timeout: 3`; fails loudly if Codex's normalization drifts.
+// Frozen form-1 fixture: codex-cli 0.159.3 hooks/list reported this Interrupt hash with timeout 3.
 const ORCA_FORM_1_COMMAND =
   ': orca-agent-hook-form=1; if [ -n "${ORCA_PANE_KEY-}" ] && [ -n "${ORCA_AGENT_HOOK_ROOT-}" ] && [ -f "${ORCA_AGENT_HOOK_ROOT-}/agent-hooks/codex-hook.sh" ]; then /bin/sh "${ORCA_AGENT_HOOK_ROOT-}/agent-hooks/codex-hook.sh" || :; elif [ -z "${ORCA_AGENT_HOOK_ROOT-}" ] && [ -n "${ORCA_PANE_KEY-}" ] && [ -n "${ORCA_AGENT_HOOK_PORT-}" ] && [ -f "${HOME-}/.orca/agent-hooks/codex-hook.sh" ]; then /bin/sh "${HOME-}/.orca/agent-hooks/codex-hook.sh" || :; else { command -p cat 2>/dev/null || cat; } >/dev/null 2>&1 || :; fi'
 const REAL_INTERRUPT_HASH =
@@ -33,7 +32,7 @@ describe('the managed Codex Interrupt hook', () => {
   })
 
   it('hashes the timeout Codex clamps to, so an over-cap entry stays trusted', () => {
-    // Why: Codex clamps Interrupt to [1, 3] and defaults it to 1 before hashing.
+    // Codex clamps Interrupt to [1, 3], defaulting to 1, before hashing.
     expect(computeTrustedHash({ ...INTERRUPT_ENTRY, timeoutSec: 10 })).toBe(REAL_INTERRUPT_HASH)
     expect(computeTrustedHash({ ...INTERRUPT_ENTRY, timeoutSec: undefined })).toBe(
       computeTrustedHash({ ...INTERRUPT_ENTRY, timeoutSec: 1 })

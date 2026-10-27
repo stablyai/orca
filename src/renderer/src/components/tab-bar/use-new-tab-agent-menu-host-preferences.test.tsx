@@ -5,6 +5,11 @@ import { useAppStore } from '@/store'
 import { setLocalRuntimeCapabilitiesForTests } from '@/runtime/local-runtime-capabilities'
 import { replaceRuntimeEnvironmentRevisions } from '@/runtime/runtime-environment-revision'
 import { getDefaultSettings } from '../../../../shared/constants'
+import {
+  measureSettingsWork,
+  expectSettingsWorkScale
+} from '../../../../shared/global-settings-test-fixture'
+import * as profile from '../../../../shared/tui-agent-launch-defaults'
 import { projectAgentLaunchSettings } from '../../../../shared/agent-launch-settings'
 import type { RuntimeEnvironmentStatus } from '../../../../shared/runtime-host-status'
 import {
@@ -18,6 +23,7 @@ import {
 } from '@/store/slices/worktrees-slice-test-fixtures'
 import { mutateHostAgentLaunchSettings } from '../settings/agent-launch-settings-transport'
 import {
+  ensureAgentLaunchPreferences,
   clearHostAgentMenuSettingsForTests,
   readAgentLaunchPreferencesForWorktree
 } from '../settings/use-host-agent-launch-preferences'
@@ -36,6 +42,28 @@ const server = projectAgentLaunchSettings({
   defaultTuiAgent: 'codex',
   disabledTuiAgents: ['opencode']
 })
+const raw = {
+  ...server,
+  agentPermissionDefault: 'ask' as const,
+  agentDefaultEnv: {
+    claude: Object.fromEntries(Array.from({ length: 20 }, (_, i) => [`K${i}`, 'private']))
+  }
+}
+const payloadWork = { entries: 0, bytes: 0, count: 0 }
+const compositions = vi.spyOn(profile, 'composeAgentLaunchProfile')
+function payload(source: Parameters<typeof projectAgentLaunchSettings>[0] = raw) {
+  const before = compositions.mock.calls.length,
+    { value: settings, work } = measureSettingsWork(() => projectAgentLaunchSettings(source))
+  expect(compositions.mock.calls.length - before).toBe(1)
+  const result = { settings },
+    text = JSON.stringify(result)
+  expect(text).not.toContain('private')
+  payloadWork.count++
+  payloadWork.entries += work.entries + work.visits + 14 * 20
+  payloadWork.bytes += text.length + work.bytes
+  return result
+}
+
 function status(runtimeId = 'runtime-1'): RuntimeEnvironmentStatus {
   return {
     status: {
@@ -51,7 +79,8 @@ function status(runtimeId = 'runtime-1'): RuntimeEnvironmentStatus {
   }
 }
 beforeEach(() => {
-  rpc.call.mockReset().mockResolvedValue({ settings: server })
+  Object.assign(payloadWork, { entries: 0, bytes: 0, count: 0 })
+  rpc.call.mockReset().mockImplementation(() => payload())
   rpc.supports.mockReset().mockResolvedValue(true)
   replaceRuntimeEnvironmentRevisions([{ id: 'alpha', createdAt: 7 }])
   setLocalRuntimeCapabilitiesForTests([CHAT, CLIENT])
@@ -171,38 +200,54 @@ it('ignores old reads across host switches, restarts, and re-pairing', async () 
   )
 })
 
-it('refreshes after a save, fences the earlier read, and refreshes on reopening', async () => {
-  const old = Promise.withResolvers<{ settings: typeof server }>()
-  rpc.call.mockReturnValueOnce(old.promise)
-  const hook = renderHook(
-    ({ open }) => useNewTabAgentMenuRows('wt', open, { kind: 'runtime', environmentId: 'alpha' }),
-    { initialProps: { open: true } }
-  )
-  await act(async () => {})
-  await act(async () => {
-    await mutateHostAgentLaunchSettings(
+it.each([20, 200])('bounds %s menu owners across save/open', async (n) => {
+  const reads = () => rpc.call.mock.calls.filter((call) => call[1] === 'settings.getAgentLaunch')
+  const mutations = () =>
+    rpc.call.mock.calls.filter((call) => call[1] === 'settings.mutateAgentLaunch')
+  const notify = () =>
+    mutateHostAgentLaunchSettings(
       { environmentId: 'alpha', pairingRevision: 7 },
       { type: 'availability', agent: 'opencode', enabled: false }
     )
+  const old = Promise.withResolvers<void>()
+  rpc.call.mockImplementationOnce(() => {
+    const earlier = payload({ ...raw, disabledTuiAgents: ['codex'] })
+    return old.promise.then(() => earlier)
   })
-  await act(async () =>
-    old.resolve({ settings: projectAgentLaunchSettings({ disabledTuiAgents: ['codex'] }) })
+  const hooks = Array.from({ length: n }, () =>
+    renderHook(
+      ({ open }) => useNewTabAgentMenuRows('wt', open, { kind: 'runtime', environmentId: 'alpha' }),
+      { initialProps: { open: true } }
+    )
   )
+  const hook = hooks[0]
+  await act(async () => {})
+  expect(reads()).toHaveLength(1)
+  await act(notify)
+  await act(async () => old.resolve())
   expect(hook.result.current.state === 'settled' && hook.result.current.rows[0]?.agent).toBe(
     'codex'
   )
-  hook.rerender({ open: false })
-  rpc.call.mockResolvedValue({
-    settings: projectAgentLaunchSettings({
-      defaultTuiAgent: 'claude',
-      disabledTuiAgents: ['codex']
-    })
-  })
-  hook.rerender({ open: true })
+  expect(reads()).toHaveLength(2)
+  hooks.forEach((h) => h.rerender({ open: false }))
+  await act(notify)
+  expect(reads()).toHaveLength(2)
+  rpc.call.mockImplementation(() =>
+    payload({ ...raw, defaultTuiAgent: 'claude', disabledTuiAgents: ['codex'] })
+  )
+  hooks.forEach((h) => h.rerender({ open: true }))
   await act(async () => {})
   expect(hook.result.current.state === 'settled' && hook.result.current.rows[0]?.agent).toBe(
     'claude'
   )
+  expect(reads()).toHaveLength(3)
+  hooks.forEach((h) => h.unmount())
+  await act(notify)
+  expect(reads()).toHaveLength(3)
+  expect(mutations()).toHaveLength(3)
+  expect(rpc.call).toHaveBeenCalledTimes(6)
+  expect(payloadWork.count).toBe(6)
+  expectSettingsWorkScale('menu', n, [payloadWork.entries, payloadWork.bytes])
 })
 
 it('keeps this runtime’s last preferences through a failed reconnect refresh', async () => {
@@ -307,3 +352,92 @@ it('gives the new-agent shortcut and badge the default the host menu applied', a
     disabledTuiAgents: ['opencode']
   })
 })
+
+it('shares cold reads with independent cancelled waiters and retains mutation answers on failure', async () => {
+  vi.useFakeTimers()
+  try {
+    const pending = Promise.withResolvers<{ settings: typeof server }>()
+    rpc.call.mockReturnValueOnce(pending.promise)
+    const menu = renderHook(() =>
+      useNewTabAgentMenuRows('wt', true, { kind: 'runtime', environmentId: 'alpha' })
+    )
+    const controller = new AbortController()
+    const attempt = ensureAgentLaunchPreferences(
+      useAppStore.getState(),
+      { kind: 'git-worktree', worktreeId: 'wt' },
+      controller.signal
+    )
+    const cancelled = expect(attempt).rejects.toMatchObject({ name: 'AbortError' })
+    await act(async () => controller.abort())
+    await cancelled
+    expect(rpc.call).toHaveBeenCalledTimes(1)
+    expect(rpc.call.mock.calls[0]?.[3].signal.aborted).toBe(false)
+    await act(async () => pending.resolve({ settings: server }))
+    rpc.call
+      .mockResolvedValueOnce({ settings: server })
+      .mockRejectedValueOnce(new Error('refresh failed'))
+    await act(async () => {
+      await mutateHostAgentLaunchSettings(
+        { environmentId: 'alpha', pairingRevision: 7 },
+        { type: 'availability', agent: 'claude', enabled: false }
+      )
+    })
+    expect(menu.result.current).toMatchObject({ state: 'settled', defaultTuiAgent: 'codex' })
+    await expect(
+      ensureAgentLaunchPreferences(useAppStore.getState(), {
+        kind: 'git-worktree',
+        worktreeId: 'wt'
+      })
+    ).resolves.toMatchObject({ defaultTuiAgent: 'codex' })
+    expect(rpc.call).toHaveBeenCalledTimes(3)
+    const late = Promise.withResolvers<{ settings: typeof server }>()
+    rpc.call.mockReturnValueOnce(late.promise)
+    act(() =>
+      useAppStore.setState({
+        runtimeStatusByEnvironmentId: new Map([['alpha', { ...status(), hostContactEpoch: 3 }]])
+      })
+    )
+    await act(async () => {})
+    const signal = rpc.call.mock.calls.at(-1)?.[3].signal
+    menu.unmount()
+    await act(async () => {})
+    expect(signal.aborted).toBe(true)
+    await act(async () =>
+      late.resolve({ settings: projectAgentLaunchSettings({ defaultTuiAgent: 'claude' }) })
+    )
+    expect(
+      readAgentLaunchPreferencesForWorktree(useAppStore.getState(), 'wt').defaultTuiAgent
+    ).toBe('codex')
+  } finally {
+    vi.useRealTimers()
+  }
+})
+it.each(['pairing', 'runtime'] as const)(
+  'cancels a cold event-only wait on actual %s retirement without another acquisition',
+  async (change) => {
+    vi.useFakeTimers()
+    try {
+      const pending = Promise.withResolvers<{ settings: typeof server }>()
+      rpc.call.mockReturnValueOnce(pending.promise)
+      const attempt = ensureAgentLaunchPreferences(useAppStore.getState(), {
+        kind: 'git-worktree',
+        worktreeId: 'wt'
+      })
+      const cancelled = expect(attempt).rejects.toMatchObject({ name: 'AbortError' })
+      await act(async () => {})
+      if (change === 'pairing') {
+        replaceRuntimeEnvironmentRevisions([{ id: 'alpha', createdAt: 8 }])
+      } else {
+        useAppStore.setState({
+          runtimeStatusByEnvironmentId: new Map([['alpha', status('replacement')]])
+        })
+      }
+      await act(async () => vi.advanceTimersByTime(3_000))
+      await cancelled
+      await act(async () => pending.resolve({ settings: server }))
+      expect(rpc.call).toHaveBeenCalledTimes(1)
+    } finally {
+      vi.useRealTimers()
+    }
+  }
+)

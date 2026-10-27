@@ -18,7 +18,7 @@ type WorkspaceSessionWorktreeReferenceKind =
   | 'row-arrays'
   | 'browser-row-arrays'
 
-/** Every persisted session field must state how, if at all, it can name a worktree owner. */
+/** Classify every persisted session field for worktree ownership tracking. */
 export const WORKSPACE_SESSION_WORKTREE_REFERENCE_KIND = {
   activeRepoId: 'none',
   activeWorkspaceKey: 'direct',

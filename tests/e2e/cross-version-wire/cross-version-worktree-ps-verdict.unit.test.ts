@@ -5,17 +5,7 @@ import {
   materializeReleaseCheckout
 } from './release-checkout'
 
-/**
- * The verdict on a `worktree ps` agent row, paired across two builds.
- *
- * The host now sends `mainAgent` (the main agent's own state, verdict and clock) on each row,
- * beside the `interrupted` flag every build reads. That is Rule 1 only if an old phone still reads
- * a new host's row by the flag, and a new phone reads an old host's row, which has no `mainAgent`,
- * by the same flag. Both halves run a real old build here rather than being reasoned about.
- *
- * The pre-change ref is pinned rather than derived: a newer baseline would carry the new reader,
- * and every "old reader" cell would then pair the change against itself.
- */
+// Pin pre-mainAgent readers: old phones must read new rows by interrupted; new phones must keep that fallback for old hosts.
 const PRE_CHANGE_REF = 'v1.4.212'
 const SUITE_TIMEOUT_MS = 180_000
 // Both builds load a copy in the checkout cache, out of reach of `mobile/tsconfig.json`.
@@ -56,8 +46,7 @@ function snapshot(
   }
 }
 
-// The three verdicts the change separates: a failure the old flag cannot express, the same
-// failure while subagents keep the row working, and a stop the old flag already carries.
+// Separate main-agent failure, failure with working children, and an explicit user stop.
 const SNAPSHOTS: HookSnapshot[] = [
   snapshot('failed-done', {
     state: 'done',
@@ -72,8 +61,7 @@ const SNAPSHOTS: HookSnapshot[] = [
     interrupted: true,
     mainAgent: { state: 'done', outcome: 'cancellation', stateStartedAt: NOW - 600_000 }
   }),
-  // The host-observed ends: a crash that cut the turn off, and an end the host cannot prove. Neither
-  // sets the flag, so a reader without the arm reads the done it always did.
+  // Host-observed crash/unknown endings set no interrupted flag, so old readers still see done.
   snapshot('crash-cut', {
     state: 'done',
     mainAgent: { state: 'done', outcome: 'interruption', stateStartedAt: NOW - 600_000 }
@@ -102,7 +90,9 @@ function publishRows(host: HostRowModules): Record<string, AgentRow> {
     summaries,
     pathIndex: { byPath: new Map(), byRealPath: new Map() },
     missingWorktreeIds: new Set(),
+    // Older builds read workingTerminalEvidenceByWorktreeId; newer ones read terminalTitleEvidenceByWorktreeId.
     workingTerminalEvidenceByWorktreeId: new Map(),
+    terminalTitleEvidenceByWorktreeId: new Map(),
     rowSources: host.collectRuntimeWorktreeAgentSources({
       hookSnapshots: SNAPSHOTS,
       mirroredWorktreeIdByTabId: new Map(),
@@ -170,7 +160,7 @@ beforeAll(async () => {
 
 describe('cross-version worktree ps verdict', () => {
   it('pairs two real builds that disagree on the row shape', () => {
-    // Anti-vacuous-pass oracle: one module resolved twice would make every cell same-version.
+    // Require distinct implementations so every skew cannot silently run the same build.
     expect(oldBuild.agentDotState).not.toBe(newBuild.agentDotState)
     expect(Object.values(publishRows(oldBuild.host)).some((row) => 'mainAgent' in row)).toBe(false)
     expect(Object.values(publishRows(newBuild.host)).every((row) => 'mainAgent' in row)).toBe(true)

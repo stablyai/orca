@@ -13,7 +13,6 @@ import {
 const tabIds = (count: number): string[] =>
   Array.from({ length: count }, (_, index) => `tab-${index + 1}`)
 
-/** Runs the scheduler against timers instead of idle callbacks. */
 function withoutIdleCallbacks(run: () => void): void {
   const originalRequest = globalThis.requestIdleCallback
   const originalCancel = globalThis.cancelIdleCallback
@@ -48,8 +47,7 @@ describe('activation-deferred tab admission', () => {
     expect(isActivationAdmissionEligible(ACTIVATION_DEFERRED_ADMISSION_LIMIT + 1)).toBe(false)
   })
 
-  // The contract that makes deferral free: repeated admission ends with the
-  // worktree exactly as fully mounted as it would have been without deferral.
+  // Idle admission must restore the same fully mounted warm set as eager activation.
   it('drains to a fully mounted worktree with no restriction left behind', () => {
     const restrictions = new Map<string, ReadonlySet<string>>()
     const deferredMountTabIdsByWorktree = new Map<string, ReadonlySet<string>>()

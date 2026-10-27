@@ -49,7 +49,7 @@ vi.mock('electron', () => ({
   }
 }))
 
-vi.mock('../../../shared/remote-runtime-client', () => ({
+vi.mock('../../../shared/remote-runtime/remote-runtime-client', () => ({
   sendRemoteRuntimeRequest: sendRemoteRuntimeRequestMock,
   subscribeRemoteRuntimeRequest: subscribeRemoteRuntimeRequestMock
 }))
@@ -65,7 +65,6 @@ vi.mock('./runtime-environment-request-connections', async () => {
       reconnectRemoteRuntimeSharedControlConnectionMock,
     retryRemoteRuntimeSharedControlConnectionsNow:
       retryRemoteRuntimeSharedControlConnectionsNowMock,
-    retryRemoteRuntimeSharedControlConnectionNow: vi.fn(),
     ensureRemoteRuntimeSharedControlConnection: vi.fn(),
     pauseRemoteRuntimeSharedControlRetry: vi.fn(),
     closeRemoteRuntimeRequestConnection: closeRemoteRuntimeRequestConnectionMock
@@ -153,7 +152,7 @@ describe('registerRuntimeEnvironmentHandlers', () => {
       id: 1,
       isDestroyed: () => false,
       send: vi.fn(),
-      once: vi.fn(),
+      on: vi.fn(),
       removeListener: vi.fn()
     }
     const pending = subscribe(
@@ -226,7 +225,7 @@ describe('registerRuntimeEnvironmentHandlers', () => {
           id: 1,
           isDestroyed: () => false,
           send: (_channel: string, payload: unknown) => sent.push(payload),
-          once: vi.fn(),
+          on: vi.fn(),
           removeListener: destroyedListenerRemoved
         }
       },
@@ -310,7 +309,7 @@ describe('registerRuntimeEnvironmentHandlers', () => {
           id: 1,
           isDestroyed: () => false,
           send: vi.fn(),
-          once: vi.fn(),
+          on: vi.fn(),
           removeListener: vi.fn()
         }
       },
@@ -388,7 +387,7 @@ describe('registerRuntimeEnvironmentHandlers', () => {
           id: 1,
           isDestroyed: () => destroyed,
           send: vi.fn(),
-          once: vi.fn((_event: string, handler: () => void) => {
+          on: vi.fn((_event: string, handler: () => void) => {
             destroyedHandler = () => {
               destroyed = true
               handler()
@@ -480,7 +479,7 @@ describe('registerRuntimeEnvironmentHandlers', () => {
             id: 1,
             isDestroyed: () => false,
             send: senderSend,
-            once: vi.fn(),
+            on: vi.fn(),
             removeListener: vi.fn()
           }
         },
@@ -552,7 +551,7 @@ describe('registerRuntimeEnvironmentHandlers', () => {
             id: 1,
             isDestroyed: () => false,
             send: vi.fn(),
-            once: vi.fn(),
+            on: vi.fn(),
             removeListener: destroyedListenerRemoved
           }
         },

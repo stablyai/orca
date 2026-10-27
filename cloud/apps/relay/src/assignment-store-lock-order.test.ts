@@ -273,7 +273,7 @@ class NewAssignmentLockDatabase implements RelayDatabase {
       return [
         {
           cell_id: 'cell-general',
-          hard_cap: 600,
+          effective_hard_cap: 600,
           unobserved_bound: 99,
           enforced_connection_units: 0,
           outstanding_reservations: 0,

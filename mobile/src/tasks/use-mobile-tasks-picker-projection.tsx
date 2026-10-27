@@ -51,12 +51,7 @@ export function useMobileTasksPickerProjection(model: DetailCommentRenderersMode
             label: repo.displayName,
             subtitle: getTaskRepoDetail(repo, repoHostLabels),
             renderIcon: () => (
-              <View
-                style={[
-                  styles.pickerRepoDot,
-                  { backgroundColor: getRepoBadgeColor(repo, repo.displayName) }
-                ]}
-              />
+              <View style={[styles.pickerRepoDot, { backgroundColor: getRepoBadgeColor(repo) }]} />
             )
           }))
         : linearTeams.map((team) => ({
@@ -137,12 +132,7 @@ export function useMobileTasksPickerProjection(model: DetailCommentRenderersMode
         label: repo.displayName,
         subtitle: getTaskRepoDetail(repo, repoHostLabels),
         renderIcon: () => (
-          <View
-            style={[
-              styles.pickerRepoDot,
-              { backgroundColor: getRepoBadgeColor(repo, repo.displayName) }
-            ]}
-          />
+          <View style={[styles.pickerRepoDot, { backgroundColor: getRepoBadgeColor(repo) }]} />
         )
       })),
     [repoHostLabels, workspaceRepos]

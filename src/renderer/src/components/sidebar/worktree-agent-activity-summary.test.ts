@@ -431,8 +431,7 @@ describe('selectWorktreeAgentActivitySummary', () => {
       (summary, index) => !shallow(summary, before[index])
     ).length
 
-    // Why: shallow store subscriptions wake on the nested pane-id map reference.
-    // One transition must not schedule downstream work for every other card.
+    // One transition must change only its worktree’s nested pane map to avoid waking every card.
     expect(changedReferenceCount).toBe(1)
     expect(shallowNotificationCount).toBe(1)
     expect(after[11]).toMatchObject({ hasLiveWorking: false, hasLiveDone: true })
@@ -582,10 +581,7 @@ describe('selectWorktreeAgentActivitySummary', () => {
     expect(summary.agentStatusPaneIdsByTabId['tab-parent']).toEqual(new Set([LEAF_ID]))
   })
 
-  // Why: Orca injects its own "<Agent> - action required" OSC title on a blocked/waiting hook,
-  // then classifies that title back as evidence. If a pane stopped registering its identity once
-  // its row aged out, that self-authored title outranked the pane's own `done` row and pinned the
-  // workspace card to the question icon with no agent asking anything.
+  // Retain stale pane identity so Orca’s generated permission title cannot outlive its authoritative row.
   it('records a stale entry pane id separately so permission titles stay suppressed', () => {
     const paneKey = makePaneKey('tab-1', LEAF_ID)
     const entry = makeAgentStatusEntry({ paneKey, state: 'done', worktreeId: 'repo::/wt-1' })
@@ -607,10 +603,7 @@ describe('selectWorktreeAgentActivitySummary', () => {
     expect(summary.hasLiveDone).toBe(false)
   })
 
-  // Reproduces the reported card: a Codex pane parked at its composer, its only agent row `done`
-  // and ~2h old, and the workspace still painting the amber question icon. `permission` outranks
-  // `hasLiveDone` in resolveWorktreeStatus, so the pane's stale self-authored title decided the
-  // card. With no fresh evidence the honest answer is `active`, never a question nobody asked.
+  // A two-hour-old done row must suppress its generated question title without claiming fresh completion.
   it('does not paint a stale self-authored action-required title as a live question', () => {
     const paneKey = makePaneKey('tab-1', LEAF_ID)
     const entry = makeAgentStatusEntry({ paneKey, state: 'done', worktreeId: 'repo::/wt-1' })

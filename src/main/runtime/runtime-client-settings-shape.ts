@@ -13,6 +13,7 @@ export type RuntimeClientSettings = Pick<
   | 'agentDefaultArgs'
   | 'agentDefaultEnv'
   | 'agentStatusHooksEnabled'
+  | 'claudeSubagentNavigationEnabled'
   | 'terminalCopyTrimsGutter'
   | 'defaultTaskSource'
   | 'defaultTaskViewPreset'
@@ -33,7 +34,9 @@ export type RuntimeClientSettings = Pick<
   | 'agentSkillSharingEnabled'
   | 'machineName'
   | 'nativeChatPermissionMode'
-  | 'agentNativeChatPermissionModes'
+  | 'sourceControlGroupOrder'
+  | 'sourceControlCompareAgainstUpstream'
+  | 'diffShowWhitespace'
 > & {
   /** Older clients still read these; neither is persisted or accepted as an update. */
   openAgentTabsInChatByDefault?: boolean
@@ -53,6 +56,7 @@ export type RuntimeHostDisplayLabelOverrides = Partial<
 export type RuntimeClientSettingsUpdate = Pick<
   Partial<GlobalSettings>,
   | 'agentStatusHooksEnabled'
+  | 'claudeSubagentNavigationEnabled'
   | 'experimentalConnectors'
   | 'defaultTuiAgent'
   | 'disabledTuiAgents'

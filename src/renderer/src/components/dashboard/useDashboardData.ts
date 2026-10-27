@@ -4,20 +4,16 @@ import type { TerminalTab } from '../../../../shared/terminal-tab-types'
 import type { AgentChildRowModel } from '../../../../shared/agent-child-row-model'
 
 export type DashboardAgentRow = {
-  /** Row identity. For 'subagent' rows this is a synthetic key (the child has
-   *  no PTY) — unique for React/lineage maps but never parsed as a pane key. */
+  /** Synthetic subagent keys identify rows only; they have no PTY and must never be parsed as pane keys. */
   paneKey: string
   entry: AgentStatusEntry
   tab: TerminalTab
   agentType: AgentType
   rowSource?: 'live' | 'retained' | 'subagent'
   state: AgentRowState
-  /** Pane to focus when the row is activated, when it differs from paneKey.
-   *  Subagent rows have no pane of their own and activate their parent's. */
+  /** Focus the parent pane for subagent rows, which have no pane of their own. */
   activationPaneKey?: string
-  /** When this agent first began reporting status. Derived from the oldest
-   *  stateHistory entry, falling back to updatedAt when no history exists yet.
-   *  Used to sort agents by when they started. */
+  /** Sort by oldest stateHistory start, falling back to updatedAt when no history exists. */
   startedAt: number
   /** Subagent rows only: what the row shows, decided once for every surface. */
   childRow?: AgentChildRowModel

@@ -78,8 +78,6 @@ describe('review screen sheet requests', () => {
     })
   })
 
-  // Review Complete → Send Notes, then a second Mark Reviewed save lands while Review Complete is
-  // still closing: Send Notes must stay the request.
   it('a late Review Complete never displaces a sheet the user asked for', () => {
     const state = run(open(COMPLETION), open(SEND_LOADING), openWhenIdle(COMPLETION))
     expect(state.requested).toEqual(SEND_LOADING)

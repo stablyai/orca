@@ -1,6 +1,4 @@
-// Windows-only, at-most-daily `wsl_usage_snapshot`. Cost per send: one native registry read,
-// one `reg.exe` Lxss query, and a `wsl --list --running` only when no confirmed running list is
-// cached yet and a user distro exists. Nothing is gathered while telemetry is off.
+// Windows-only daily usage; gather registry/WSL state only while transmission is enabled. Reuse confirmed running distros, otherwise share one probe when user distros exist.
 import { readFile, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import type { Store } from '../persistence'
@@ -18,6 +16,7 @@ import { loadWindowsNativeRegistry, WINDOWS_REG_SZ } from '../windows-native-reg
 import { readWslDistroRegistrations } from '../wsl/wsl-distro-registry-id'
 import { listWslHostDistros } from '../wsl/wsl-host-distro-list'
 import { wslHostsGateOpen } from '../wsl/wsl-host-gate'
+import { isForeignLink, readWorktreeLinks } from '../git/worktree-prune-guard'
 import { isTelemetryEnabled, track } from './client'
 import {
   buildWslUsageSnapshot,
@@ -28,7 +27,7 @@ import {
 } from './wsl-usage-snapshot'
 
 export const WSL_USAGE_SNAPSHOT_INTERVAL_MS = 24 * 60 * 60 * 1000
-// Only a timestamp compare per tick; the gather runs at most once per interval.
+// Hourly ticks compare time only; gathering stays at most daily.
 const RECHECK_MS = 60 * 60 * 1000
 const STAMP_FILE = 'wsl-usage-telemetry.json'
 const WSL_MSI_KEY = 'SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Lxss\\MSI'
@@ -66,7 +65,7 @@ export function collectWslProjects(
         resolveLocalWorkspaceRuntime(store, repo, repo.path)
       )
       if (project) {
-        // `wsl.exe` lists the default distro first; naming it keeps distinct-distro counts honest.
+        // Resolve null distro to the default so distinct counts do not invent another distro.
         projects.push({ ...project, distro: project.distro ?? defaultDistro })
       }
       continue
@@ -82,6 +81,36 @@ export function collectWslProjects(
     }
   }
   return projects
+}
+
+/**
+ * Windows-drive WSL git repos with a linked worktree whose link is a Linux path (WSL Git made it).
+ * File reads only, one folder per such repo; no Git is spawned, so a repo whose `.git` is a file
+ * (bare, or itself a linked worktree) reads as having none.
+ */
+export async function countWindowsDriveReposWithWslWorktrees(
+  store: WslUsageStore
+): Promise<number> {
+  let total = 0
+  for (const repo of store.getRepos()) {
+    const host = parseExecutionHostId(getRepoExecutionHostId(repo))
+    if (host && host.kind !== 'local') {
+      continue
+    }
+    const project = classifyLocalWslProject(
+      repo,
+      resolveLocalWorkspaceRuntime(store, repo, repo.path)
+    )
+    if (project?.location !== 'windows_drive' || project.kind !== 'git') {
+      continue
+    }
+    const links = await readWorktreeLinks(join(repo.path, '.git', 'worktrees'))
+    // As Windows Git would read it: a POSIX link, not a `//server/share` one.
+    if (links.some(({ link }) => isForeignLink(link, false))) {
+      total += 1
+    }
+  }
+  return total
 }
 
 function readWslHostDistros(userDataPath: string): Map<string, string> {
@@ -131,6 +160,7 @@ export async function gatherWslUsageSnapshotInput(
       () => readWslHostDistros(userDataPath),
       getCachedWslDistros()?.[0] ?? null
     ),
+    windowsDriveReposWithWslWorktrees: await countWindowsDriveReposWithWslWorktrees(store),
     wslHostsGateOpen: gateOpen
   }
 }
@@ -188,7 +218,7 @@ export class WslUsageReporter {
     if ((this.deps.platform ?? process.platform) !== 'win32' || this.running) {
       return false
     }
-    // Why before gathering: an opted-out install pays no registry or wsl.exe read at all.
+    // Gate before gathering so opted-out installs pay no registry/wsl.exe read.
     if (!(this.deps.telemetryEnabled ?? isTelemetryEnabled)()) {
       return false
     }
@@ -203,7 +233,7 @@ export class WslUsageReporter {
       if (elapsed >= 0 && elapsed < WSL_USAGE_SNAPSHOT_INTERVAL_MS) {
         return false
       }
-      // Stamp the attempt before gathering: a failing gather or dropped send must not re-pay hourly.
+      // Stamp attempts before gathering so failed/dropped sends do not repeat the cost hourly.
       this.lastSentAt = now
       await writeFile(this.stampFile, JSON.stringify({ lastSentAt: now })).catch(() => {})
       const input = await (

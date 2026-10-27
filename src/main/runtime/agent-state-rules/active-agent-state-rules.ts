@@ -2,7 +2,7 @@ import { BUNDLED_AGENT_STATE_RULE_FILES } from './agent-state-rules-catalog'
 import { BUNDLED_AGENT_STATE_RULES_VERSION } from './agent-state-rules-bundle'
 import type { AgentStateRulesFile } from './agent-state-rules-schema'
 
-/** Where the rules in use came from: precedence is override, then downloaded, then bundled. */
+/** Precedence: override, downloaded, bundled. */
 export type AgentStateRulesSource = 'bundled' | 'downloaded' | 'override'
 
 export type ActiveAgentStateRules = {
@@ -33,15 +33,11 @@ export function getActiveAgentStateRules(): ActiveAgentStateRules {
   return active
 }
 
-/** Hot reload: every compiled view below recompiles from `next` on its next read. */
 export function activateAgentStateRules(next: ActiveAgentStateRules): void {
   active = next
 }
 
-/**
- * A view compiled from the active files, rebuilt only when they change. Why keyed on the array:
- * readers run on every poll, and one identity check is all a stable rule set costs them.
- */
+/** Cache by file-array identity to keep unchanged-rule polling cheap. */
 export function compiledFromActiveAgentStateRules<T>(
   compile: (files: readonly AgentStateRulesFile[]) => T
 ): () => T {

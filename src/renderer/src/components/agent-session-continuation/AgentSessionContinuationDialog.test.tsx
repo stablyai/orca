@@ -93,7 +93,7 @@ it('clears failed detection, gates unresolved Start, and submits the displayed r
   )
   expect(screen.getAllByRole('combobox')[0].textContent).toContain('Codex (CLI)')
   fireEvent.click(screen.getAllByRole('combobox')[0])
-  expect(screen.getByText('No chat in a subfolder')).toBeTruthy()
+  expect(screen.getAllByText('No chat in a subfolder').length).toBeGreaterThan(0)
   fireEvent.click(screen.getByRole('option', { name: 'Codex (CLI)' }))
   await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Start New Session' })))
   expect(mocks.launch.mock.calls.at(-1)?.[0]).toMatchObject({

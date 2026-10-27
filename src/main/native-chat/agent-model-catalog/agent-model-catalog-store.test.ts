@@ -37,7 +37,6 @@ function success(...ids: string[]): AgentModelCatalogSuccess {
   }
 }
 
-/** A live session's per-spawn handle; each call is a distinct lister. */
 function liveLister(store: AgentModelCatalogStore): AgentModelCatalogSessionAccess {
   return { store, fingerprint: 'fp-1', accountHomePath: '/homes/a' }
 }
@@ -116,7 +115,6 @@ describe('agent model catalog store', () => {
     )
     expect(live!.models[0]!.id).toBe('gpt-live')
 
-    // The probe still reports its own failure; the live listing it lost to stays served.
     failProbe(new Error('codex app-server session exceeded 15000ms'))
     expect(await probe).toBeNull()
     expect(store.failureDetail('fp-1')).toBe('codex app-server session exceeded 15000ms')
@@ -189,7 +187,7 @@ describe('agent model catalog store', () => {
     settleSlow(success('gpt-slow'))
     await slow
     at += AGENT_MODEL_CATALOG_FRESH_MS
-    // A leftover in-flight record here would suppress every later refresh for the account.
+    // Stale in-flight bookkeeping must not suppress later refreshes.
     expect(store.shouldRefresh('fp-1')).toBe(true)
   })
 
@@ -244,7 +242,7 @@ describe('agent model catalog store', () => {
     const entry = store.get('fp-1')!
     expect(entry.discovered!.models[0]!.id).toBe('gpt-probe')
     expect(entry.live!.models[0]!.id).toBe('gpt-live')
-    // A live save neither postpones the next discovery nor clears its failure back-off.
+    // Live reports cannot reset discovery freshness or its failure backoff.
     store.recordFailure('fp-1', 'timed out')
     store.recordSuccess('fp-1', 'grok', success('gpt-live'), 'live')
     expect(store.hasActiveFailure('fp-1')).toBe(true)
@@ -361,7 +359,6 @@ describe('agent model catalog store', () => {
       origin: 'live-session'
     })
     store.recordSuccess('fp', 'grok', listing('medium'), 'live')
-    // A session-less probe never names the provider's default.
     store.recordSuccess('fp', 'grok', { ...listing(), origin: 'probe' }, 'discovery')
     expect(store.get('fp')!.models[0]!.defaultEffort).toBe('medium')
     await store.flushPersistence()
@@ -369,7 +366,6 @@ describe('agent model catalog store', () => {
     await restarted.attachPersistence(createAgentModelCatalogFilePersistence(directory))
     expect(restarted.get('fp')!.models[0]!.defaultEffort).toBe('medium')
 
-    // A newer report replaces it; a model that stops offering it drops it.
     store.recordSuccess('fp', 'grok', listing('high'), 'live')
     expect(store.get('fp')!.models[0]!.defaultEffort).toBe('high')
     store.recordSuccess(
@@ -388,7 +384,6 @@ describe('agent model catalog store', () => {
     const directory = mkdtempSync(join(tmpdir(), 'agent-model-catalog-'))
     const store = new AgentModelCatalogStore()
     await store.attachPersistence(createAgentModelCatalogFilePersistence(directory))
-    // Never on its own: there is no catalog to name a default in yet.
     store.recordConfiguredDefault('fp', { modelId: 'sonnet' })
     expect(store.get('fp')).toBeNull()
 
@@ -439,7 +434,6 @@ describe('agent model catalog store', () => {
     await restarted.attachPersistence(createAgentModelCatalogFilePersistence(directory))
     const entry = restarted.get('fp-1')!
     expect(entry.models.map((model) => model.id)).toEqual(['gpt-a'])
-    // The failure died with the process: doubt is never a durable fact.
     expect(restarted.hasActiveFailure('fp-2')).toBe(false)
     expect(restarted.get('fp-2')).toBeNull()
   })

@@ -23,8 +23,6 @@ describe('bucketDaemonLiveSessionCount', () => {
   })
 })
 
-// Revert-sensitive: asserts each emitter fires `daemon_lifecycle` with a payload the real
-// runtime validator accepts. If the event, emitter, or schema is reverted, these fail.
 describe('daemon lifecycle emitters', () => {
   it('emits a validator-accepted replace payload', () => {
     trackDaemonReplaced('stale_bundle', 0)
@@ -50,7 +48,6 @@ describe('daemon lifecycle emitters', () => {
     expect(validate('daemon_lifecycle', props).ok).toBe(true)
   })
 
-  // Why: both emitters run on the daemon launch/respawn path, where a throw would cost every terminal.
   it('swallows a throwing telemetry client instead of failing the caller', () => {
     trackMock.mockImplementationOnce(() => {
       throw new Error('posthog exploded')

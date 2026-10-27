@@ -16,7 +16,6 @@ type MockGuest = Electron.WebContents & EventEmitter
 const guests: MockGuest[] = []
 const targets = new Map<number, BrowserPagePromptTarget>()
 
-/** The Orca window; prompts only read its id, liveness, send and its destroyed or crash events. */
 function mockRenderer(id: number): MockGuest {
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: prompts only read id, isDestroyed, send and the destroyed and crash events.
   const renderer = new EventEmitter() as MockGuest
@@ -24,7 +23,6 @@ function mockRenderer(id: number): MockGuest {
   return renderer
 }
 
-/** A page in a tab shown by `renderer`; only its id, liveness and events matter to prompts. */
 function mockGuest(
   renderer: Electron.WebContents,
   browserPageId: string,
@@ -171,11 +169,10 @@ describe('browser page prompts', () => {
     await respondToBrowserPagePrompt(renderer, { requestId: latestId(renderer), answer: null })
     expect(declined.settle).toHaveBeenCalledWith(null)
 
-    // The page reloading itself, or a pointer move, is not the user acting.
     guest.emit('did-start-navigation', { isMainFrame: true, initiator: {} })
     guest.emit('input-event', {}, { type: 'mouseMove' })
     expect(ask(guest).opening).toBe('refused')
-    // Reload from Orca's toolbar: no frame started it.
+    // A null initiator models toolbar navigation.
     guest.emit('did-start-navigation', { isMainFrame: true, initiator: null })
     expect(ask(guest).opening).toBe('prompting')
 
@@ -184,7 +181,6 @@ describe('browser page prompts', () => {
     guest.emit('input-event', {}, { type: 'mouseDown' })
     expect(ask(guest).opening).toBe('prompting')
 
-    // Saying yes never quiets the page.
     await respondToBrowserPagePrompt(renderer, { requestId: latestId(renderer), answer: true })
     expect(ask(guest).opening).toBe('prompting')
   })
@@ -207,7 +203,6 @@ describe('browser page prompts', () => {
     await expect(
       respondToBrowserPagePrompt(renderer, { requestId: closingId, answer: true })
     ).resolves.toBe('rejected')
-    // A closed page is not quieted: it never declined anything.
     expect(ask(closingGuest).opening).toBe('prompting')
   })
 
@@ -228,7 +223,6 @@ describe('browser page prompts', () => {
     await expect(respondToBrowserPagePrompt(renderer, { requestId, answer: true })).resolves.toBe(
       'rejected'
     )
-    // The page's next question gets its own prompt instead of waiting on the dead one.
     expect(ask(guest).opening).toBe('prompting')
   })
 

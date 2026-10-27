@@ -1,9 +1,14 @@
 import { describe, expect, it, vi } from 'vitest'
+import type { RpcResponse } from '../transport/types'
+import type { UnvalidatedRpcRequestPort } from '../transport/unvalidated-rpc-request-port'
 import { openMobileNativeChatFileTap } from './mobile-native-chat-open-file'
 
-function ok(result: unknown) {
-  return { ok: true, result, _meta: { runtimeId: 'runtime-1' } }
+function ok(result: unknown): RpcResponse {
+  return { id: 'rpc', ok: true, result, _meta: { runtimeId: 'runtime-1' } }
 }
+
+// Drains the resolve round trip without counting its internal awaits.
+const settle = (): Promise<void> => new Promise((resolve) => setTimeout(resolve, 0))
 
 function activationState(activated: boolean) {
   return {
@@ -16,7 +21,7 @@ function activationState(activated: boolean) {
   }
 }
 
-function baseOptions(client: { sendRequest: ReturnType<typeof vi.fn> }) {
+function baseOptions(client: UnvalidatedRpcRequestPort) {
   return {
     client,
     hostId: 'host-1',
@@ -56,7 +61,7 @@ describe('openMobileNativeChatFileTap', () => {
     const options = baseOptions({ sendRequest })
 
     openMobileNativeChatFileTap({ ...options, pathText: 'src/app.ts' })
-    await Promise.resolve()
+    await settle()
 
     expect(sendRequest).toHaveBeenCalledWith(
       'files.resolveTerminalPath',
@@ -89,7 +94,7 @@ describe('openMobileNativeChatFileTap', () => {
       pathText: '~/orca-plans/result.html',
       nativeChatContext: { tabId: 'tab-1', sessionId: 'session-1' }
     })
-    await Promise.resolve()
+    await settle()
 
     expect(sendRequest).toHaveBeenCalledWith(
       'files.resolveTerminalPath',
@@ -118,7 +123,7 @@ describe('openMobileNativeChatFileTap', () => {
     const options = baseOptions({ sendRequest })
 
     openMobileNativeChatFileTap({ ...options, pathText: 'src/app.ts:120:7' })
-    await Promise.resolve()
+    await settle()
 
     expect(sendRequest).toHaveBeenCalledWith(
       'files.resolveTerminalPath',
@@ -151,8 +156,7 @@ describe('openMobileNativeChatFileTap', () => {
     const options = baseOptions({ sendRequest })
 
     openMobileNativeChatFileTap({ ...options, pathText: 'gone/missing.ts' })
-    await Promise.resolve()
-    await Promise.resolve()
+    await settle()
 
     expect(options.onOpenFailed).toHaveBeenCalledTimes(1)
     expect(options.pushPreviewRoute).not.toHaveBeenCalled()
@@ -166,15 +170,20 @@ describe('openMobileNativeChatFileTap', () => {
     const options = baseOptions({ sendRequest })
 
     openMobileNativeChatFileTap({ ...options, pathText: 'src/app.ts' })
-    await Promise.resolve()
-    await Promise.resolve()
+    await settle()
 
     expect(options.onOpenFailed).toHaveBeenCalledTimes(1)
   })
 
   it('opens a plain path through files.open with tab activation', async () => {
-    const responses: unknown[] = [worktreeFileResolution('src/app.ts'), ok({ opened: true })]
-    const sendRequest = vi.fn(async () => responses.shift())
+    const responses = [worktreeFileResolution('src/app.ts'), ok({ opened: true })]
+    const sendRequest = vi.fn(async (method: string) => {
+      const response = responses.shift()
+      if (!response) {
+        throw new Error(`no scripted response for ${method}`)
+      }
+      return response
+    })
     const openedTab = { id: 'tab-2', relativePath: 'src/app.ts' }
     const switchSessionTab = vi.fn()
     const options = {
@@ -185,17 +194,20 @@ describe('openMobileNativeChatFileTap', () => {
       scheduleDelayedAction: vi.fn((callback: () => void) => callback())
     }
 
-    openMobileNativeChatFileTap({ ...options, pathText: 'src/app.ts' })
-    await Promise.resolve()
-    await Promise.resolve()
-    await new Promise((resolve) => setTimeout(resolve, 0))
+    vi.useFakeTimers()
+    try {
+      openMobileNativeChatFileTap({ ...options, pathText: 'src/app.ts' })
+      await vi.runAllTimersAsync()
 
-    expect(sendRequest).toHaveBeenCalledWith(
-      'files.open',
-      { worktree: 'id:wt-1', relativePath: 'src/app.ts' },
-      { timeoutMs: 15_000 }
-    )
-    expect(switchSessionTab).toHaveBeenCalledWith(openedTab)
-    expect(options.onOpenFailed).not.toHaveBeenCalled()
+      expect(sendRequest).toHaveBeenCalledWith(
+        'files.open',
+        { worktree: 'id:wt-1', relativePath: 'src/app.ts' },
+        { timeoutMs: 15_000 }
+      )
+      expect(switchSessionTab).toHaveBeenCalledWith(openedTab)
+      expect(options.onOpenFailed).not.toHaveBeenCalled()
+    } finally {
+      vi.useRealTimers()
+    }
   })
 })

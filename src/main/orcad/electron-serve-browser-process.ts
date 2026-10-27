@@ -17,6 +17,7 @@ import { BROWSER_SIDECAR_OWNER_ENV } from '../../shared/browser-sidecar-lifetime
 import { electronIsolatedProfileSwitches } from '../../shared/electron-isolated-profile-switches'
 import { headlessServeOzonePlatformSwitches } from '../../shared/headless-serve-ozone-platform'
 import { sendOrcadSidecarRequest } from './orcad-sidecar-runtime-client'
+import { browserWaitRequestTimeoutMs } from '../../shared/browser-wait-timeout'
 import { electronServeEnvironment } from './electron-serve-browser-environment'
 import {
   ElectronSidecarTabRegistry,
@@ -97,7 +98,7 @@ export class ElectronServeBrowserProcess {
     })
     this.child = child
     let spawnError: unknown = null
-    // Why: a restart can race the bundle swap after an install; ENOENT must fail start, not orcad.
+    // Bundle swaps can race restart; report ENOENT as start failure without crashing orcad.
     child.on('error', (error) => {
       spawnError = error
     })
@@ -143,7 +144,7 @@ export class ElectronServeBrowserProcess {
 
   createCommands(host: RuntimeBrowserCommandHost): RuntimeBrowserCommands {
     return new Proxy({} as RuntimeBrowserCommands, {
-      // Why: startup checks membership before invoking dynamically resolved commands.
+      // Startup checks membership before resolving commands dynamically.
       has: (_target, property) => typeof property === 'string' && property !== 'then',
       get: (_target, property) => {
         if (property === 'then') {
@@ -160,7 +161,7 @@ export class ElectronServeBrowserProcess {
     return this.metadata !== null && isProcessAlive(this.metadata.pid)
   }
 
-  /** From the child's own exit state, so a recycled pid is never reported as the helper. */
+  /** Read child exit state so recycled PIDs cannot identify an unrelated process. */
   pid(): number | null {
     const child = this.child
     return child?.pid && child.exitCode === null && child.signalCode === null ? child.pid : null
@@ -185,8 +186,7 @@ export class ElectronServeBrowserProcess {
       }
     }
     if (sidecarDataPath) {
-      // Why best-effort: on Windows the killed sidecar's helpers hold this throwaway profile for a
-      // moment, and a leftover temp dir must not fail orcad's stop and strand its instance lock.
+      // Windows helpers may briefly hold this temp profile; cleanup failure must not strand the instance lock.
       await removeTree(sidecarDataPath).catch((error: unknown) =>
         console.warn('[orcad] Electron browser sidecar data was not removed:', error)
       )
@@ -227,7 +227,7 @@ export class ElectronServeBrowserProcess {
         this.tabs.require(requestedPageId, worktreeId)
         return { browserPageId: requestedPageId }
       }
-      // The sidecar mints its own tab id; adopt the caller's provisional id after creating it.
+      // Sidecars mint their own IDs; adopt the caller’s provisional ID after creation.
       delete params.page
     }
 
@@ -257,7 +257,12 @@ export class ElectronServeBrowserProcess {
 
     let result: unknown
     try {
-      result = await sendOrcadSidecarRequest(metadata, rpcMethod, params)
+      result = await sendOrcadSidecarRequest(
+        metadata,
+        rpcMethod,
+        params,
+        method === 'browserWait' ? browserWaitRequestTimeoutMs(params.timeout) : undefined
+      )
     } catch (error) {
       if (
         targetPage &&

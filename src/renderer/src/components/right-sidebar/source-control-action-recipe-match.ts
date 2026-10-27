@@ -9,20 +9,27 @@ import {
   type SourceControlActionId,
   type SourceControlActionRecipe
 } from '../../../../shared/source-control-ai-actions'
-import type { SourceControlAiWriteTarget } from '../../../../shared/source-control-ai-recipe-save'
+import {
+  saveSourceControlActionRecipe,
+  type SourceControlAiWriteTarget
+} from '../../../../shared/source-control-ai-recipe-save'
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
 import type { Repo } from '../../../../shared/repo-types'
 
 type NormalizedSourceControlActionRecipe = {
   agentId: SourceControlActionRecipe['agentId'] | null
   commandInputTemplate: string
-  agentArgs: string
+  agentArgs: string | undefined
+  launchPreferences: string
+  surface: string
 }
 
 type PersistedSourceControlActionRecipe = {
   agentId?: SourceControlActionRecipe['agentId']
   commandInputTemplate?: string | null
   agentArgs?: string | null
+  launchPreferences?: SourceControlActionRecipe['launchPreferences']
+  surface?: SourceControlActionRecipe['surface']
 }
 
 function normalizeSourceControlActionRecipeForComparison(
@@ -35,7 +42,18 @@ function normalizeSourceControlActionRecipeForComparison(
       typeof recipe?.commandInputTemplate === 'string'
         ? recipe.commandInputTemplate.trim()
         : DEFAULT_SOURCE_CONTROL_ACTION_COMMAND_TEMPLATES[actionId],
-    agentArgs: typeof recipe?.agentArgs === 'string' ? recipe.agentArgs.trim() : ''
+    agentArgs: typeof recipe?.agentArgs === 'string' ? recipe.agentArgs.trim() : undefined,
+    launchPreferences: recipe?.launchPreferences
+      ? JSON.stringify([
+          recipe.launchPreferences.agentId,
+          recipe.launchPreferences.model ?? null,
+          Object.entries(recipe.launchPreferences.options ?? {}).sort(([a], [b]) =>
+            a.localeCompare(b)
+          ),
+          recipe.launchPreferences.permissionMode ?? null
+        ])
+      : '',
+    surface: recipe?.surface ?? ''
   }
 }
 
@@ -46,7 +64,9 @@ function sourceControlActionRecipesMatch(
   return (
     left.agentId === right.agentId &&
     left.commandInputTemplate === right.commandInputTemplate &&
-    left.agentArgs === right.agentArgs
+    left.agentArgs === right.agentArgs &&
+    left.launchPreferences === right.launchPreferences &&
+    left.surface === right.surface
   )
 }
 
@@ -62,11 +82,7 @@ function readSavedSourceControlActionRecipeAtTarget(input: {
     if (!repoRecipe) {
       return null
     }
-    return resolveSourceControlActionRecipe({
-      actionId: input.actionId,
-      settings: input.settings,
-      repo: input.repo
-    })
+    return repoRecipe
   }
   const source = normalizeSourceControlAiSettings(
     input.settings?.sourceControlAi,
@@ -106,7 +122,10 @@ export function sourceControlActionRecipeMatchesTarget(input: {
     return false
   }
   const current = normalizeSourceControlActionRecipeForComparison(input.actionId, input.recipe)
-  const saved = normalizeSourceControlActionRecipeForComparison(input.actionId, savedRecipe)
+  const saved = normalizeSourceControlActionRecipeForComparison(
+    input.actionId,
+    input.target.type === 'repo' ? resolveSourceControlActionRecipe(input) : savedRecipe
+  )
   if (!sourceControlActionRecipesMatch(current, saved)) {
     return false
   }
@@ -114,4 +133,31 @@ export function sourceControlActionRecipeMatchesTarget(input: {
     return true
   }
   return (input.customAgentCommand ?? '').trim() === readSavedCustomAgentCommandAtTarget(input)
+}
+
+export function sourceControlActionRecipeSaveMatchesTarget(
+  input: Parameters<typeof sourceControlActionRecipeMatchesTarget>[0]
+): boolean {
+  const stored = readSavedSourceControlActionRecipeAtTarget(input)
+  if (!stored || !input.settings) {
+    return false
+  }
+  const saved = saveSourceControlActionRecipe({ ...input, settings: input.settings })
+  const planned =
+    'sourceControlAi' in saved
+      ? saved.sourceControlAi.actions?.[input.actionId]
+      : saved.update.sourceControlAi?.actionOverrides?.[input.actionId]
+  // A complete save owns these fields; inherited equal values do not establish that ownership.
+  return Boolean(
+    planned &&
+    stored.agentId === planned.agentId &&
+    stored.commandInputTemplate === planned.commandInputTemplate &&
+    stored.agentArgs === planned.agentArgs &&
+    sourceControlActionRecipesMatch(
+      normalizeSourceControlActionRecipeForComparison(input.actionId, stored),
+      normalizeSourceControlActionRecipeForComparison(input.actionId, planned)
+    ) &&
+    (!isCustomAgentId(planned.agentId) ||
+      (input.customAgentCommand ?? '').trim() === readSavedCustomAgentCommandAtTarget(input))
+  )
 }

@@ -13,7 +13,7 @@ export const TERMINAL_DAEMON_METHODS = [
     // Why `daemon` is additive: older CLIs read only `severed`.
     handler: async () => ({
       severed: await readSeveredDaemonStatus(),
-      // Why lazy: the probe pulls in the daemon provider graph, which the RPC table must not load.
+      // Import the probe lazily to avoid loading daemon providers with the RPC table.
       daemon: await (
         await import('../../../daemon/daemon-liveness-report')
       ).readTerminalDaemonLiveness()

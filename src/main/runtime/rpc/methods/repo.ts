@@ -133,8 +133,7 @@ export const REPO_METHODS = [
       )
     })
   }),
-  // Why a new method, not a field on repo.add: an old host would strip the field and register the
-  // path on itself instead of on its SSH target. Gated by ssh.target-management.v1.
+  // Use a new ssh.target-management.v1 method: old repo.add would strip the target and register the path locally.
   defineMethod({
     name: 'repo.addRemote',
     permission: 'workspace',

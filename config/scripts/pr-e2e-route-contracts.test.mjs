@@ -26,6 +26,21 @@ const projectDir = resolve(import.meta.dirname, '../..')
 const prWorkflow = parse(readFileSync(join(projectDir, '.github/workflows/pr.yml'), 'utf8'))
 const e2eWorkflow = parse(readFileSync(join(projectDir, '.github/workflows/e2e.yml'), 'utf8'))
 
+describe('browser native focus routing', () => {
+  it('selects the general E2E lane for focus adapter and image fixture changes', () => {
+    const spec = 'tests/e2e/browser-image-link-focus.spec.ts'
+    for (const file of [
+      'src/renderer/src/components/browser-pane/assemble-chrome/browser-page-guest-focus.ts',
+      'tests/e2e/helpers/browser-link-server.ts'
+    ]) {
+      const specs = selectPrE2eSpecs([file])
+      expect(specs, file).toContain(spec)
+      expect(selectGeneralE2eSpecs(specs), file).toContain(spec)
+      expect(classifyE2eJobs(JSON.stringify(specs)).e2e_run_changed, file).toBe(true)
+    }
+  })
+})
+
 describe('pr-e2e-native-only-routing', () => {
   const workflow = prWorkflow
   const filterStep = workflow.jobs.code_paths.steps.find((step) => step.id === 'e2e_filter')
@@ -57,12 +72,7 @@ describe('pr-e2e-native-only-routing', () => {
 })
 
 describe('pr-e2e-pane-close-routing', () => {
-  /**
-   * The product paths of #21005, "retire captured remote handles when pending panes close". It
-   * changed the pane close and retirement lifecycle across three transports and matched no route
-   * at all, so it merged with E2E skipped outright. The routes named every module that BINDS a
-   * pane and none that unbinds one.
-   */
+  // #21005 changed pane close/retirement across three transports with E2E skipped: routes covered binders but missed unbinders.
   const PENDING_PANE_CLOSE_CHANGE = [
     'src/renderer/src/components/terminal-pane/retire-unbound-ipc-terminal-pane.ts',
     'src/renderer/src/components/terminal-pane/retire-unbound-runtime-terminal-pane.ts',
@@ -88,8 +98,7 @@ describe('pr-e2e-pane-close-routing', () => {
 
     it('routes each unbind authority on its own, not just as a group', () => {
       expect(CLOSE_ROUTE, 'the close route was renamed or removed').toBeDefined()
-      // A single-file change is the shape that slipped through; assert per path rather than only
-      // on the union, where one matching path would hide five that do not.
+      // Assert each single path; union could hide missed routes behind one match.
       for (const file of PENDING_PANE_CLOSE_CHANGE) {
         expect(selectPrE2eSpecs([file]), file).toEqual(CLOSE_ROUTE.specs.toSorted())
       }
@@ -275,7 +284,7 @@ describe('ssh-browser-e2e-routing', () => {
     const run = job.steps.find(
       (step) => step.name === 'Run Docker SSH browser network route journeys'
     )
-    expect(job['runs-on']).toBe('ubuntu-latest')
+    expect(job['runs-on']).toBe('blacksmith-4vcpu-ubuntu-2404')
     expect(job.if).toContain("inputs.test_files == ''")
     expect(job.if).toContain(spec)
     expect(install.with['native-runtime']).toBe('node')
@@ -377,8 +386,7 @@ describe('orcad-e2e-routing', () => {
         'tests/e2e/helpers/orcad-convert-flow.ts',
         'tests/e2e/helpers/orcad-convert-host.ts'
       ],
-      ORCAD_IDLE_EXIT_E2E_SPEC,
-      ORCAD_OPEN_IN_OWNER_E2E_SPEC
+      ORCAD_IDLE_EXIT_E2E_SPEC
     )
   })
 
@@ -512,7 +520,7 @@ describe('managed-SSH remote sources routing', () => {
       'src/main/ipc/runtime-environments/runtime-environment-status-probe.ts',
       'src/main/ipc/runtime-environments/orcad-runtime-lifecycle-handlers.ts',
       'src/shared/protocol-version.ts',
-      'src/shared/remote-runtime-client-error-classification.ts',
+      'src/shared/remote-runtime/remote-runtime-client-error-classification.ts',
       // #30047 and #30060: sidebar sleep and project removal.
       'src/renderer/src/components/sidebar/sleep-worktree-flow.ts',
       'src/renderer/src/components/sidebar/ssh-host-remove-resolution.ts',

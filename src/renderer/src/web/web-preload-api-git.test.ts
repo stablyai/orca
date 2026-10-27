@@ -175,8 +175,7 @@ describe('web git preload API', () => {
     })
 
     const statusCalls = runtimeCalls.filter((call) => call.method === 'git.status')
-    // Why: strict — `toEqual` would pass on a forwarded `branchLineTotalMergeBase: undefined`,
-    // which is exactly what the conditional spread must avoid sending.
+    // Strict equality catches forwarded undefined keys that older hosts must not receive.
     expect(statusCalls).toStrictEqual([
       {
         method: 'git.status',

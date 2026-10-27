@@ -19,6 +19,5 @@ export class QuitTeardownStartGate {
   }
 }
 
-// Why shared, not per-caller: subsystems fence new work on "the committed quit has begun", and a
-// second instance would answer no while the real teardown is already draining what it snapshotted.
+// All subsystems must observe the same committed quit.
 export const quitTeardownStartGate = new QuitTeardownStartGate()

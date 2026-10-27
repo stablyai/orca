@@ -43,16 +43,7 @@ export {
   selectRetainedAgentEntriesForWorktree
 } from './worktree-agent-row-selectors'
 
-/**
- * Narrow per-worktree agent row hook used by the WorktreeCard inline agents
- * list. Produces live hook-reported agents plus retained "done" snapshots,
- * stale-decayed to 'idle' when the hook stream has gone quiet.
- *
- * Uses indexed per-worktree selectors rather than reusing useDashboardData's
- * cross-worktree aggregate. The index is rebuilt once per relevant immutable
- * store slice and then shared by every visible card, avoiding O(cards × agents)
- * selector work on high-frequency agent status pings.
- */
+/** Share indexed worktree inputs across cards; derive live/retained row freshness from the available evidence. */
 export function useWorktreeAgentRows(worktreeId: string, active = true): DashboardAgentRow[] {
   const selectInputs = useMemo(() => {
     const selectAgentFreshness = createWorktreeAgentFreshnessSelector(worktreeId)
@@ -111,8 +102,7 @@ export function useWorktreeAgentRows(worktreeId: string, active = true): Dashboa
     if (!active) {
       return EMPTY_AGENT_ROWS
     }
-    // Why: Date.now() is read inside the memo so stale-decay recalculates when
-    // this worktree's freshness signature changes, even without new PTY data.
+    // Read time inside the freshness-keyed memo so rows expire without new PTY data.
     const now = Date.now()
     const entries =
       migrationUnsupported.length > 0

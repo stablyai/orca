@@ -1,11 +1,4 @@
-/**
- * The model, effort and mode a terminal launch starts with.
- *
- * A launch's `sessionOptions` carry the picks the user made (the remembered model among them). A
- * structured create has always read them; a terminal launch dropped them, so the same launch got a
- * different model depending on which surface the host chose. Both routes that build a terminal now
- * hand them to the runtime as launch preferences, which the startup plan ranks above configured args.
- */
+/** Forward sessionOptions to both terminal paths so the user's model/effort/mode override configured args as on structured chat. */
 
 import { describe, expect, it, vi } from 'vitest'
 import type { RpcContext } from '../core'

@@ -9,9 +9,7 @@ export type QueuedMessageUpdate = QueuedMessageEdit & {
   expectedBodyFingerprint: string
 }
 
-/** Compare-and-set on the body fingerprint. The resulting body is checked first, so a retried
- *  Save whose first answer was lost reads `unchanged`, and one a newer edit superseded reads
- *  `changed`: a retry never overwrites newer text. */
+/** Check the resulting body before CAS so lost Save replies retry safely without overwriting newer edits. */
 export function queuedMessageUpdateDecision(
   row: QueuedMessageRow | null,
   sessionId: string,
@@ -31,7 +29,7 @@ export function queuedMessageUpdateDecision(
     return { status: 'gone', messageId, disposition }
   }
   const edited = queuedMessageWithEdit(row.body, input)
-  // A caller shown no image card must not make one it then cannot see.
+  // Clients unable to display image cards must not create them.
   if (!edited.ok || (!readsImageCards && (input.images?.length ?? 0) > 0)) {
     return { status: 'not-editable', messageId }
   }

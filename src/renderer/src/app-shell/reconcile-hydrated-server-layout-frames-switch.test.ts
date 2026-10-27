@@ -39,7 +39,6 @@ describe('paired servers’ layout streams at restore', () => {
     hoisted.layoutOwnerIsMain = false
     const reconcile = vi.fn()
     reconcileHydratedWorkspaceTabModels({ tabsByWorktree: { 'wt-a': [] } }, reconcile)
-    // Presence: the restore path ran.
     expect(reconcile).toHaveBeenCalledWith(['wt-a'])
     expect(hoisted.showServerLayoutFrames).not.toHaveBeenCalled()
     expect(hoisted.showStartupLayoutFrames).not.toHaveBeenCalled()

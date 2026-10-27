@@ -1,5 +1,5 @@
 import { useCallback, useDeferredValue, useMemo, useState } from 'react'
-import { isWorktreePaletteQueryTooLarge } from '@/lib/worktree-palette-query-bounds'
+import { isWorktreePaletteQueryTooLarge } from '../../../../shared/palette-match/worktree-palette-query-bounds'
 import type { Repo } from '../../../../shared/repo-types'
 import type { Worktree } from '../../../../shared/worktree/types'
 import {
@@ -33,27 +33,18 @@ export function useWorkspaceKanbanSearch(args: {
   isQueryTooLarge: boolean
 } {
   const [query, setQuery] = useState('')
-  // Why: board identities churn on agent-status ticks, so an unchanged match set
-  // must keep its identity or every memoized card re-renders on every tick.
-  // Store via setState-during-render (not a ref write) so discarded renders do
-  // not leak a match set that never committed.
+  // Commit equal match sets through state so cards keep stable identities without leaking discarded renders.
   const [stableMatched, setStableMatched] = useState<ReadonlySet<string> | null>(null)
 
-  // Why: a stale query silently hiding cards on reopen is a trap. Reset during
-  // render like useWorkspaceKanbanSelection, so no frame paints the old filter.
+  // Clear queries before painting a reopened board so stale filters cannot hide cards.
   if (!args.open && query !== '') {
     setQuery('')
   }
 
-  // Why: the input stays fully controlled and undebounced, but a query change
-  // mounts or unmounts every hidden card — clearing one costs about what opening
-  // the board costs. Deferring only the filter keeps the caret responsive and
-  // lets React interrupt the board re-render.
+  // Defer expensive card filtering while keeping the input controlled and responsive.
   const deferredQuery = useDeferredValue(query)
 
-  // Why split from the match memo: the index only depends on the worktrees and repos, so a
-  // keystroke reruns the search over an already-built index instead of rebuilding every
-  // worktree's normalized fields.
+  // Index changes depend on catalog inputs, not keystrokes; reuse normalized fields across queries.
   const documents = useMemo(
     () =>
       buildWorkspaceBoardPaletteDocuments({
@@ -89,14 +80,9 @@ export function useWorkspaceKanbanSearch(args: {
     setQuery,
     clearQuery,
     matchingWorktreeIds,
-    // Why: an over-bound query is non-empty but non-filtering, and the lane
-    // counts must not switch to "n / m" for it.
+    // An oversized query is ignored and must not display filtered lane counts.
     hasQuery: matchingWorktreeIds !== null,
-    // Why: whitespace-only text is also non-filtering, but it is self-evidently
-    // so. A discarded 2KB paste looks identical to a query that matched
-    // everything, so only that case earns an explanation. Read the deferred
-    // query, not the live one — this describes the board, so it has to change
-    // on the same frame the board does.
+    // Explain discarded oversized input on the same deferred frame as the board; whitespace needs no warning.
     isQueryTooLarge: isWorktreePaletteQueryTooLarge(deferredQuery)
   }
 }

@@ -197,8 +197,7 @@ async function resolveRemoteDefaultBranch(
       return branchName
     }
   } catch {
-    // Fall through to common branch names so offline/stale remote metadata can
-    // still support the conservative fast-forward check when refs exist.
+    // Offline/stale metadata may still leave common default refs usable for conservative fast-forward checks.
   }
 
   for (const branchName of DEFAULT_BRANCH_FALLBACKS) {

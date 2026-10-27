@@ -134,8 +134,7 @@ export function moveFromEmptyDetailsBodyToSummary(editor: Editor): boolean {
   const summaryStart = detailsStart + 1
   const summaryTextEnd = summaryStart + summaryNode.nodeSize - 1
 
-  // Why: Backspace from an empty toggle body should first make the summary
-  // cursor visible; deletion is reserved for the next Backspace.
+  // First Backspace reveals the empty toggle’s summary cursor; only the next press deletes it.
   const tr = state.tr.setSelection(TextSelection.near(state.doc.resolve(summaryTextEnd), -1))
   tr.scrollIntoView()
   view.dispatch(tr)
@@ -190,8 +189,7 @@ export function exitEmptyDetailsBody(editor: Editor): boolean {
     insertPos -= currentBlockTo - currentBlockFrom
   }
 
-  // Why: an empty toggle body must have an Enter escape hatch, while the
-  // detailsContent node still needs one child to stay schema-valid.
+  // Allow Enter to escape an empty toggle while retaining detailsContent’s required child.
   tr.insert(insertPos, paragraph)
   tr.setSelection(TextSelection.create(tr.doc, insertPos + 1))
   tr.scrollIntoView()
@@ -201,8 +199,7 @@ export function exitEmptyDetailsBody(editor: Editor): boolean {
 }
 
 const OrcaDetails = Details.extend({
-  // Why: details summary Enter must run before StarterKit's generic paragraph
-  // splitting so typing a toggle title then pressing Enter moves into the body.
+  // Handle summary Enter before StarterKit splits paragraphs so titles lead into the toggle body.
   priority: 1000,
 
   addAttributes() {
@@ -293,9 +290,7 @@ const OrcaDetailsSummary = DetailsSummary.extend({
     DetailsSummary.config.markdownTokenizer,
     'detailsSummary'
   ),
-  // Why: the summary parser runs parseInline, which emits image/math nodes that
-  // upstream's text*-only summary rejects, so the doc is schema-invalid until the
-  // first edit reassembles the summary and ProseMirror throws.
+  // parseInline emits images/math; upstream’s text-only summary becomes invalid and crashes when the first edit rebuilds it.
   content: 'inline*'
 })
 
@@ -304,8 +299,7 @@ const OrcaDetailsContent = DetailsContent.extend({
     DetailsContent.config.markdownTokenizer,
     'detailsContent'
   ),
-  // Why: detailsContent's double-Enter escape must run before StarterKit's
-  // generic paragraph split, otherwise users can get stuck inside a toggle.
+  // Handle double Enter before StarterKit’s paragraph split so users can escape toggles.
   priority: 1000,
 
   addKeyboardShortcuts() {

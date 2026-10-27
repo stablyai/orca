@@ -1,3 +1,7 @@
+import {
+  selectCanonicalProjects,
+  selectCanonicalProjectHostSetups
+} from '@/store/project-host-setup-selector'
 import { Workflow } from 'lucide-react'
 import { useMemo, type JSX } from 'react'
 import type { Repo } from '../../../../shared/repo-types'
@@ -32,8 +36,8 @@ export function DeleteWorktreeLineageNotice({
   dirtyChangePreviewsByWorktreeId,
   changeCheckStatesByWorktreeId
 }: DeleteWorktreeLineageNoticeProps): JSX.Element | null {
-  const projects = useAppStore((s) => s.projects)
-  const projectHostSetups = useAppStore((s) => s.projectHostSetups)
+  const projects = useAppStore((s) => selectCanonicalProjects(s))
+  const projectHostSetups = useAppStore((s) => selectCanonicalProjectHostSetups(s))
   const projectIndex = useMemo(
     () =>
       buildProjectGroupingIndex({
@@ -82,8 +86,7 @@ export function DeleteWorktreeLineageNotice({
                 )}
             {foreignProjects.length > 0 ? ` (${foreignProjects.join(', ')})` : null}
           </div>
-          {/* Why: long nowrap paths can otherwise give this grid child an
-             intrinsic width wider than the modal. */}
+          {/* Constrain grid min-content width so nowrap paths cannot widen the modal. */}
           <div className="mt-2 min-w-0 max-w-full space-y-1 overflow-hidden rounded-sm border border-border/60 bg-background/60 px-2 py-1.5">
             {descendants.slice(0, 4).map((child) => (
               <div key={child.id} className="min-w-0 overflow-hidden">

@@ -1,8 +1,5 @@
 import { pollCodexTranscriptStatus } from '../shared/agent-hook-listener/providers/codex-transcript-poll'
-// Deferred re-normalization timers for late-arriving agent results: the transcript hadn't caught up
-// when the hook fired, so re-read the same body on a timer and re-apply only if it changed. Both
-// timer families live in one owner so pane teardown and server stop tear both down in one ordered
-// place before the listener caches are cleared.
+// Retry late transcript results against the same cached event; one owner cancels both timer families before cache teardown.
 import {
   hasPendingAgentResultText,
   preparePendingGrokResultDiscovery

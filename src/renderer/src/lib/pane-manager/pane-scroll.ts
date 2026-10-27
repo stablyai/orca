@@ -74,9 +74,7 @@ export function captureScrollState(terminal: Terminal): ScrollState {
     wasAtBottom,
     viewportY,
     baseY: buf.baseY,
-    // Why: continuation-row markers can be deleted or drift during reflow.
-    // Keep the physical marker for no-reflow ConPTY/cursor-line cases, and
-    // anchor reflowing content at the logical line's stable first row.
+    // Continuation markers drift/disappear on reflow; anchor logical first rows, retaining physical markers for no-reflow ConPTY/cursor cases.
     firstVisibleLineMarker,
     firstVisibleLogicalLineMarker:
       logicalAnchor?.lineY === viewportY
@@ -164,8 +162,7 @@ export function restoreScrollStateAfterFit(
       return false
     }
     if (remainingFrames <= 0) {
-      // Why: background/WebGL teardown can outlast a bounded frame retry.
-      // Keep the content marker parked for the next real fit/reveal.
+      // Hidden/WebGL teardown can outlast frame retries; retain the marker until a real fit/reveal.
       return true
     }
     pending.rafId = requestAnimationFrame(retry)
@@ -235,9 +232,7 @@ export function restoreScrollStateAfterLayout(terminal: Terminal, state: ScrollS
     if (!pending.cancelled) {
       restoreScrollStateNow(terminal, state)
     }
-    // Why: background tabs can throttle rAF past the timeout. Once the
-    // authoritative timeout restore has run, stale frame callbacks must not
-    // later rewind a user-initiated scroll or follow-output jump.
+    // After timeout restore, invalidate throttled rAF callbacks so they cannot rewind newer user scroll/follow intent.
     cancelPendingRafs()
     releaseScrollStateMarker(state)
     deferredScrollRestores.delete(terminal)
@@ -256,10 +251,7 @@ function restoreScrollStateNow(terminal: Terminal, state: ScrollState): ScrollRe
     return 'skipped'
   }
 
-  // Why: WebGL suspend disposes xterm's render service while leaving
-  // terminal.element attached, so scrollToBottom/scrollToLine/scrollLines all
-  // throw "cannot read dimensions" until the pane re-attaches. Swallow that
-  // window quietly — the next visibility flip re-fits and re-restores.
+  // WebGL teardown leaves terminal.element but removes render dimensions; tolerate scroll failures until visibility reattaches and restores.
   if (state.wasAtBottom) {
     if (safeScrollCall(() => terminal.scrollToBottom())) {
       forceTerminalViewportScrollbarSync(terminal)
@@ -289,10 +281,7 @@ function restoreScrollStateNow(terminal: Terminal, state: ScrollState): ScrollRe
     buf.baseY
   )
   state.viewportY = targetLine
-  // Why: deferred rAF/timeout restores re-invoke this function after xterm
-  // reflow settles; keep the marker alive so each call consults the live
-  // line. Callers (restoreScrollState, the timeout in
-  // restoreScrollStateAfterLayout, cancelDeferredScrollRestore) own disposal.
+  // Deferred restores need the live marker after reflow; restore/cancel owners dispose it, not these retries.
   if (safeScrollCall(() => terminal.scrollToLine(targetLine))) {
     forceTerminalViewportScrollbarSync(terminal)
     return 'restored'
@@ -305,9 +294,7 @@ function safeScrollCall(fn: () => void): boolean {
     fn()
     return true
   } catch (err) {
-    // Why: xterm's renderer can null out internal dimensions during WebGL
-    // teardown, throwing "Cannot read properties of undefined (reading
-    // 'dimensions')". Tolerate that; surface anything else.
+    // Tolerate missing render dimensions during WebGL teardown; surface other failures.
     if (err instanceof TypeError && /dimensions/.test(err.message)) {
       return false
     }

@@ -1,5 +1,3 @@
-// The window's own creates are listed in the host's creation registry while they run, and name
-// their workspace before the host announces it, so completion never shows both or neither.
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { addWorktreeMock, listWorktreesMock } from './worktrees-test-module-mocks'
 import { handlers, mainWindow, setupWorktreeHandlers } from './worktrees-test-harness'

@@ -39,7 +39,6 @@ export type MobileFilePreviewResult =
       reconnect: boolean
     }
 
-/** The accepted arm, for a call site whose acceptance policy already admitted the payload. */
 export function normalizeMobileFilePreviewResult(
   relativePath: string,
   result: unknown
@@ -50,7 +49,7 @@ export function normalizeMobileFilePreviewResult(
   return normalizeTextPreviewResult(relativePath, result)
 }
 
-/** The refused arm. The code is the fallback copy, which is why the refusal itself is needed. */
+// Keep the refusal code because it supplies fallback display copy.
 export function previewErrorFromRefusal(error: RpcFailure['error']): MobileFilePreviewResult {
   return previewError(error.message || error.code)
 }

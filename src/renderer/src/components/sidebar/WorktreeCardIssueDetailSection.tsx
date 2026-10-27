@@ -25,6 +25,7 @@ type WorktreeCardIssueDetailSectionProps = {
   onOpenIssueInBrowser?: (url: string) => void
   onEditIssue?: (event: React.MouseEvent) => void
   onOpenGitHubIssueInOrca?: (event: React.MouseEvent) => void
+  onManageLinks?: (event: React.MouseEvent) => void
 }
 
 export function WorktreeCardIssueDetailSection({
@@ -34,7 +35,8 @@ export function WorktreeCardIssueDetailSection({
   onCopyIssueLink,
   onOpenIssueInBrowser,
   onEditIssue,
-  onOpenGitHubIssueInOrca
+  onOpenGitHubIssueInOrca,
+  onManageLinks
 }: WorktreeCardIssueDetailSectionProps): React.JSX.Element | null {
   if (!issue) {
     return null
@@ -63,6 +65,7 @@ export function WorktreeCardIssueDetailSection({
   return (
     <WorktreeCardDetailSection>
       <DetailHeader
+        onAddReference={onManageLinks}
         icon={<CircleDot className="size-3 text-muted-foreground" />}
         label={translate(
           'auto.components.sidebar.WorktreeCardMeta.e97d8f2876',

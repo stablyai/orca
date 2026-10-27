@@ -1,5 +1,3 @@
-// Saved choices seed the CLI launch; changed message choices apply before input.
-
 import type { EffortLevel } from '@anthropic-ai/claude-agent-sdk'
 import { decodeStructuredAgentSessionOptionValue } from '../../shared/structured-agent-session-option-codec'
 import type {
@@ -16,8 +14,7 @@ const EFFORT_LEVELS: ReadonlySet<string> = new Set<EffortLevel>([
   'xhigh',
   'max'
 ])
-/** The saved value stands in for the agent Arguments' own flag for it: the chat's pick wins, and
- *  the CLI is never handed the flag twice. */
+/** Saved choices replace configured flags so the CLI receives each flag once. */
 function withoutConfiguredFlag(
   options: ClaudeStructuredSdkOptions,
   flag: string
@@ -35,17 +32,12 @@ function isEffortLevel(value: string): value is EffortLevel {
 
 export type ClaudeStructuredSpawnOptions = {
   sdkOptions: ClaudeStructuredSdkOptions
-  /** The chat's options as the session holds them: what was launched, and a Fast the start applies. */
   options: Map<string, string>
-  /** A saved Fast the launch does not carry, which the start applies. */
+  /** Saved Fast must be applied before input when launch settings cannot carry it. */
   fastModeAtStart: boolean
 }
 
-/**
- * Every saved value is passed as the user chose it; the CLI's own answer (a turn's error, the
- * settings readback) says what it ran. Only a value no Claude version can parse is left out, by
- * the SDK's types, not the installed binary's: one that binary rejects fails its start.
- */
+/** Pass SDK-valid saved choices through; let the installed CLI reject unsupported values. */
 export function claudeStructuredSpawnOptions(input: {
   launch: Pick<ClaudeStructuredLaunch, 'options' | 'resumesTranscript'>
   saved: Readonly<Record<string, string>> | undefined
@@ -71,8 +63,7 @@ export function claudeStructuredSpawnOptions(input: {
     const decoded = decodeStructuredAgentSessionOptionValue('fastMode', fastMode)
     if (typeof decoded === 'boolean') {
       options.set('fastMode', fastMode)
-      // A new CLI session may opt in to Fast per session; the first message applies a saved Fast
-      // when launch settings cannot carry it.
+      // New sessions may require Fast opt-in before input; explicit --settings must remain intact.
       if (
         (!decoded || input.launch.resumesTranscript) &&
         !Object.hasOwn(sdkOptions.extraArgs ?? {}, 'settings')
@@ -86,15 +77,23 @@ export function claudeStructuredSpawnOptions(input: {
   return { sdkOptions, options, fastModeAtStart }
 }
 
-/** The published session takes on what its child was launched with. */
 export function adoptClaudeStructuredSpawnOptions(
   session: Pick<
     ClaudeSession,
-    'translator' | 'launchedModel' | 'fastModeAtStart' | 'appliedInputOptions'
+    'translator' | 'launchedModel' | 'launchIntent' | 'fastModeAtStart' | 'appliedInputOptions'
   >,
-  spawn: Pick<ClaudeStructuredSpawnOptions, 'options' | 'fastModeAtStart'>
+  spawn: ClaudeStructuredSpawnOptions
 ): void {
   session.launchedModel = spawn.options.get('model') ?? null
+  const { extraArgs, permissionMode } = spawn.sdkOptions
+  // A configured `--model` in the agent's arguments survives when the chat saved none.
+  const configuredModel = typeof extraArgs?.model === 'string' ? extraArgs.model : undefined
+  session.launchIntent = {
+    model: spawn.sdkOptions.model ?? configuredModel,
+    permissionMode: Object.hasOwn(extraArgs ?? {}, 'dangerously-skip-permissions')
+      ? 'bypassPermissions'
+      : permissionMode
+  }
   session.fastModeAtStart = spawn.fastModeAtStart
   const fastMode = spawn.options.get('fastMode')
   if (fastMode !== undefined && !spawn.fastModeAtStart) {

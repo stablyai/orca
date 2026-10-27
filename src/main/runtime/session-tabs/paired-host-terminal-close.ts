@@ -1,4 +1,4 @@
-import { parseRemoteRuntimePtyId } from '../../../shared/remote-runtime-pty-id'
+import { parseRemoteRuntimePtyId } from '../../../shared/remote-runtime/remote-runtime-pty-id'
 import type { RuntimeTerminalClose } from '../../../shared/runtime-types'
 import type { WorkspaceSessionState } from '../../../shared/workspace-session-state-types'
 import { findUnifiedTerminalTabs } from '../../../shared/workspace-session-terminal-tab-close'
@@ -50,11 +50,7 @@ function errorCode(error: unknown): string | null {
     : null
 }
 
-/**
- * Asks the paired runtime that owns the PTY to close it. This machine cannot stop that process,
- * so the owner's receipt is the only evidence of the stop. A failure to reach the owner rejects,
- * so the caller keeps its local mirror rather than hiding a terminal that may still run.
- */
+/** Only the owning runtime can attest a stop. Unreachable owners reject so callers retain visible mirrors for retry. */
 export async function closeTerminalOnPairedHost(
   call: PairedHostTerminalCall,
   terminal: PairedHostTerminal,
@@ -110,12 +106,7 @@ export function isTerminalTabPinnedInSession(
 
 type PairedHostLeaf = { tabId: string; leafId: string; ptyId: string | null }
 
-/**
- * Closes a leaf's PTY on the paired runtime that owns it, before any local commit: only that host
- * can stop the process, and a failure must reject while the terminal is still visible to retry.
- * null when this machine owns the PTY. `stillBound` is false when the pane was rebound or removed
- * during the host call, so its new occupant must not be retired by this close.
- */
+/** Stop on the paired owner before local retirement; failure retains visibility. Null means local ownership; stillBound=false protects panes rebound/removed during the call. */
 export async function closePairedHostLeafFirst(
   leaf: PairedHostLeaf,
   method: 'terminal.close' | 'terminal.closeTab',

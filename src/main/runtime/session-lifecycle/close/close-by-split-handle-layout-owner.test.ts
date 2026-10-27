@@ -14,6 +14,7 @@ import { OrcaRuntimeService } from '../../orca-runtime'
 import type { ExecutionHostId } from '../../../../shared/execution-host'
 import type { LayoutCommand } from '../../../../shared/workspace-layout/workspace-layout-command-types'
 import { applyCommandToSession } from '../../../persistence/terminal-topology/terminal-pane-admission'
+import { partialRuntimeStore } from '../../runtime-store-partial-fixture'
 
 vi.mock('../../../../shared/layout-owner-switch', () => ({ ORCA_LAYOUT_OWNER_IS_MAIN: true }))
 
@@ -127,7 +128,7 @@ function setup(listing: WindowListing, pinned = false) {
     }
   }
   // The Store tells its write listeners after each write, as main's terminal list relies on.
-  const written = new Set<(hostId: string | null) => void>()
+  const written = new Set<(hostId: ExecutionHostId | null) => void>()
   const write = (next: WorkspaceSessionState): void => {
     session = next
     for (const listener of written) {
@@ -146,8 +147,8 @@ function setup(listing: WindowListing, pinned = false) {
       getRepos: () => [repo],
       getRepo: (id: string) => (id === REPO_ID ? repo : undefined),
       getWorkspaceSession: () => session,
-      getWorkspaceSessionHostIds: () => ['local'],
-      onWorkspaceSessionWritten: (listener: (hostId: string | null) => void) => {
+      getWorkspaceSessionHostIds: (): ExecutionHostId[] => ['local'],
+      onWorkspaceSessionWritten: (listener: (hostId: ExecutionHostId | null) => void) => {
         written.add(listener)
         return () => written.delete(listener)
       },
@@ -162,12 +163,11 @@ function setup(listing: WindowListing, pinned = false) {
         }
         return change.value
       },
-      persistPtyBinding: () => true,
+      persistPtyBinding: async () => true,
       flushOrThrow: () => undefined
     })
   )
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the fake carries every store method a split and a tab close reach.
-  const runtime = new OrcaRuntimeService(store as never)
+  const runtime = new OrcaRuntimeService(partialRuntimeStore(store))
   Object.assign(runtime, {
     resolveTerminalWorkspaceLaunchScope: vi.fn(async () => ({
       id: WORKTREE_ID,

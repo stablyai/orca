@@ -14,11 +14,7 @@ import type { RelayRuntimeObserver } from './relay-observability.js'
 import type { RelayTokenClaims } from './relay-token-verifier.js'
 import { ProcessQueuedByteBudget } from './splice-forwarder.js'
 
-// Incident 2026-09-04 ~01:05Z: the phone's dial bound ran out while the cell was
-// still inside acceptClient's serialized Postgres phase (cell-inventory lock
-// contention). The cell then finished the work for a socket nobody held, holding
-// an activity lease for the 10s attach deadline before its timer unwound it, and
-// logged `host_data_reservation_already_bound`.
+// 2026-09-04: phone dial timed out during serialized SQL; late accept leaked a 10s lease and failed bind with host_data_reservation_already_bound.
 
 class FakeSocket extends EventEmitter {
   readonly OPEN = 1

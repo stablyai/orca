@@ -104,7 +104,6 @@ export function createIdentityFilteredAgent(
   if (identityKeys.length === 0) {
     return undefined
   }
-  // Why: IdentitiesOnly must not offer every key loaded in the agent. ssh2 has
-  // no built-in equivalent, so wrap the agent and expose only IdentityFile keys.
+  // ssh2 lacks IdentitiesOnly; expose only configured IdentityFile keys instead of every agent key.
   return new IdentityFilteredAgent(agentSocket, createAgent(agentSocket), identityKeys)
 }

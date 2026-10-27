@@ -1,6 +1,6 @@
 import { EventEmitter } from 'node:events'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
-import type { RemoteRuntimeSubscription } from '../../../shared/remote-runtime-client'
+import type { RemoteRuntimeSubscription } from '../../../shared/remote-runtime/remote-runtime-client'
 import type { subscribeRuntimeEnvironment } from './runtime-environment-transport-routing'
 
 const mocks = vi.hoisted(() => ({ handle: vi.fn(), on: vi.fn(), subscribe: vi.fn() }))
@@ -118,7 +118,6 @@ it('does not retain a subscription that closes before setup resolves', async () 
       return value
     }
   )
-  // The renderer hears the close, and the id is not kept for a dead connection.
   await expect(open()).resolves.toMatchObject({ subscriptionId: 'reused-id' })
   expect(sender.send).toHaveBeenCalledWith('runtimeEnvironments:subscriptionEvent', {
     subscriptionId: 'reused-id',

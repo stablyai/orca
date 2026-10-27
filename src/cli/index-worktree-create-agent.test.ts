@@ -80,7 +80,6 @@ describe('orca cli worktree awareness', () => {
       comment: undefined,
       runHooks: true,
       activate: true,
-      // CLI activation targets the host desktop.
       navigation: 'host',
       parentWorktree: undefined,
       cwdParentWorktree: 'id:repo-1::/tmp/repo',

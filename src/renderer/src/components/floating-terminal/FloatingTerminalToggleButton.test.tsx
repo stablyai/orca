@@ -1,3 +1,4 @@
+import type * as ReactModule from 'react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { FLOATING_TERMINAL_TRIGGER_POSITION_STORAGE_KEY } from './floating-terminal-trigger-position'
 
@@ -16,7 +17,7 @@ const hookRuntime = vi.hoisted(() => ({
 }))
 
 vi.mock('react', async () => {
-  const actual = await vi.importActual<typeof import('react')>('react') // eslint-disable-line @typescript-eslint/consistent-type-imports -- vi.importActual requires inline import()
+  const actual = await vi.importActual<typeof ReactModule>('react')
   return {
     ...actual,
     useCallback: <T,>(callback: T) => callback,
@@ -94,8 +95,7 @@ vi.mock('@/store', () => ({
   useAppStore: <T,>(selector: (state: typeof storeState) => T): T => selector(storeState)
 }))
 
-// The real selector is covered in store/selectors.test.ts; here it just reads
-// the mocked flag so the dot's show/hide logic can be exercised in isolation.
+// Isolate dot visibility here; store/selectors.test.ts covers the real unread selector.
 vi.mock('@/store/selectors', () => ({
   selectFloatingWorkspaceHasUnread: (state: typeof storeState): boolean => state.hasFloatingUnread
 }))

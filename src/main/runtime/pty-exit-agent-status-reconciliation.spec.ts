@@ -1,9 +1,4 @@
-/**
- * A PTY that exits without a resolvable spawn-time pane key never reaches
- * `agentHookServer.clearPaneState`, so its row and every Claude latch outlive the process with
- * nothing left to retire them (STA-4612). `onPtyExit` knows the pane keys that teardown could not
- * resolve, so it reconciles them — but only on a real death certificate.
- */
+/** Reconcile orphaned hook rows on observed PTY death when spawn-time pane lookup cannot clear them (STA-4612). */
 import { describe, expect, it, vi } from 'vitest'
 import { OrcaRuntimeService } from './orca-runtime'
 import { makePaneKey } from '../../shared/stable-pane-id'
@@ -23,7 +18,7 @@ export function registerPtyExitAgentStatusReconciliationTests(): void {
     reconcile: (paneKeys: Iterable<string>) => void,
     options: { connectionId?: string } = {}
   ): OrcaRuntimeService {
-    // Switch-on main's layout answers which pane holds the terminal, so it needs a store to hold it.
+    // Main-owned bindings require a session-backed fixture store.
     const runtime = new OrcaRuntimeService(
       // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: bindPaneFirst fills in the session accessors main's layout reads.
       ORCA_LAYOUT_OWNER_IS_MAIN ? ({} as never) : null,
@@ -57,8 +52,7 @@ export function registerPtyExitAgentStatusReconciliationTests(): void {
     })
 
     it('reconciles a physical -1 exit reported by the provider callback', () => {
-      // node-pty forwards real exits as -1 (local-pty-provider-shutdown.test.ts pins this), so the
-      // numeric code alone cannot separate a dead process from a failed stop.
+      // node-pty reports real exits as -1 too; numeric code alone cannot attest process death.
       const reconcile = vi.fn()
       runtimeWithBoundPane(reconcile).onPtyExit(PTY, -1, undefined, { providerExitObserved: true })
 
@@ -73,10 +67,7 @@ export function registerPtyExitAgentStatusReconciliationTests(): void {
     })
 
     it('reconciles a provider-observed -1 on a pane bound to a transport, where the SSH surface is preserved', () => {
-      // A WSL pane carries a `wsl:*` connectionId, so a negative exit keeps the abnormal-SSH surface
-      // (liveness unverifiable, launch authority not retired) — but the daemon provider's own exit
-      // callback still witnessed the process die. The two decisions are deliberately independent;
-      // without this the connectionId arm of the certificate is never exercised.
+      // WSL's connection id can retain an abnormal surface while a provider exit independently certifies process death.
       const reconcile = vi.fn()
       runtimeWithBoundPane(reconcile, { connectionId: 'wsl:Ubuntu' }).onPtyExit(
         PTY,

@@ -294,7 +294,6 @@ describe('getPRForBranch', () => {
   it('returns null for empty branch (e.g. during rebase with detached HEAD)', async () => {
     const pr = await getPRForBranch('/repo-root', '')
     expect(pr).toBeNull()
-    // Should not call gh at all
     expect(execFileAsyncMock).not.toHaveBeenCalled()
   })
 

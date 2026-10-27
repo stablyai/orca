@@ -11,9 +11,7 @@ import {
 import { groupAutomationHostEntriesByAuthority } from './automation-host-picker-groups'
 import type { AutomationCreateDestinationControl } from './use-automation-create-destination'
 
-// The host that stores and schedules the automation, not the workspace's
-// execution host — the two routinely differ. Serves create and edit alike; on an
-// existing record a save that lands elsewhere is a move.
+// This host stores/schedules the automation and may differ from workspace execution; saving an existing record elsewhere moves it.
 
 export function AutomationDestinationField({
   control,
@@ -23,8 +21,7 @@ export function AutomationDestinationField({
   labelClassName?: string
 }): React.JSX.Element {
   const selected = control.resolution.status === 'ready' ? control.resolution.entry : null
-  // Ineligible hosts stay listed but disabled: hiding them read as the host
-  // being gone, and it hid every connected host on a pre-host-scoping server.
+  // Keep ineligible hosts visible with reasons, including connected hosts on older servers without host-scoping support.
   const groups = groupAutomationHostEntriesByAuthority(
     control.entries.filter(automationCreateHostOffered)
   )
@@ -69,8 +66,7 @@ export function AutomationDestinationField({
           ).replace('{host}', selected.label)}
         </p>
       ) : control.moveWarning ? (
-        // Replaces the storedOn line: both name the same host, and the move is
-        // the consequential half.
+        // Prefer the consequential move warning over a duplicate stored-on host label.
         <p className="text-xs text-destructive" data-testid="automation-host-move">
           {control.moveWarning}
         </p>

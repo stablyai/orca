@@ -33,9 +33,9 @@ export const CLAUDE_CLI_CONVERSATIONS: StructuredAgentCliConversations = {
 }
 
 function parseClaudeResumeArgs(args: readonly string[]): StructuredAgentResumeInvocation | null {
-  // Flags match in any case (`claude -C`); a lowered id still matches, as ids compare in any case.
+  // Flags and session IDs compare without case, including -C.
   const folded = args.map((token) => token.toLowerCase())
-  // `--continue`/`-c` never take an id, so a following token is a prompt, not a target.
+  // --continue/-c take no ID; a following token is a prompt.
   return isClaudeForkInvocation(folded)
     ? null
     : resumeInvocationFromOptions(folded, {
@@ -44,8 +44,7 @@ function parseClaudeResumeArgs(args: readonly string[]): StructuredAgentResumeIn
       })
 }
 
-/** A fork reads the conversation and writes a new one, so it is no second writer. Not when
- *  `--session-id` names the id it writes under, and nothing after `--` is an option. */
+/** Forks avoid a second writer unless --session-id explicitly chooses the output conversation. */
 function isClaudeForkInvocation(args: readonly string[]): boolean {
   const terminatorIndex = args.indexOf('--')
   const options = terminatorIndex === -1 ? args : args.slice(0, terminatorIndex)

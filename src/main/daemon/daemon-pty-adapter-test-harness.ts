@@ -1,9 +1,9 @@
-/* Shared daemon server + adapter fixtures for the DaemonPtyAdapter test files. */
 import { vi } from 'vitest'
 import { mkdtempSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { DaemonPtyAdapter } from './daemon-pty-adapter'
+import type { DaemonPtyAdapterOptions } from './daemon-pty-runtime-state'
 import { DaemonServer } from './daemon-server'
 import { getDaemonSocketPath } from './daemon-spawner'
 import type { SubprocessHandle } from './session-subprocess-handle'
@@ -36,7 +36,7 @@ export function createMockSubprocess(dataOnSubscribe?: string): SubprocessHandle
   let onDataCb: ((data: string) => void) | null = null
   let onExitCb: ((code: number) => void) | null = null
   return {
-    // Why: getCwd falls back to OS pid lookup; an implausibly-high fake pid can't collide with a real process' cwd.
+    // getCwd falls back to OS lookup; keep the fake PID outside the real process range.
     pid: 999_999_999,
     getForegroundProcess: vi.fn(() => null),
     confirmShellForeground: vi.fn(async () => false),
@@ -79,7 +79,8 @@ export async function waitFor(predicate: () => boolean, timeoutMs = 2000): Promi
 
 /** Boots a real daemon server over a temp socket plus a lazily-connecting adapter. */
 export async function startDaemonAdapterHarness(
-  spawnSubprocess: SpawnSubprocess
+  spawnSubprocess: SpawnSubprocess,
+  adapterOptions: Pick<DaemonPtyAdapterOptions, 'readRunningWslDistros' | 'historyPath'> = {}
 ): Promise<DaemonAdapterHarness> {
   const dir = createTestDir()
   const socketPath = getDaemonSocketPath(dir)
@@ -91,6 +92,6 @@ export async function startDaemonAdapterHarness(
   }
   const server = new DaemonServer({ socketPath, tokenPath, log: daemonLog, spawnSubprocess })
   await server.start()
-  const adapter = new DaemonPtyAdapter({ socketPath, tokenPath })
+  const adapter = new DaemonPtyAdapter({ socketPath, tokenPath, ...adapterOptions })
   return { dir, socketPath, tokenPath, server, adapter, daemonLog, daemonLogEvents }
 }

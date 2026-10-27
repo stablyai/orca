@@ -100,6 +100,8 @@ ORCA worktree set --worktree active --pr null --gitlab-mr null --json
 ORCA worktree rm --worktree id:<repoId>::<worktreePath> --force --json
 ```
 
+Ports: `ORCA ports --json` lists the listening ports Orca tied to the current workspace (`--worktree <selector>` for another one, `--all` for every listener on that workspace's host). Each row has `port`, `pid`, `processName`, `connectHost`, `protocol`, and `kind` (`workspace`, `container`, or `external`). Only `workspace` rows have `owner` (with `owner.confidence`: `cwd` or `command`) and, when the dev server printed one in an Orca terminal, `advertisedUrl`. Use this to find a dev server's port instead of running `lsof` yourself. If `unavailableReason` is set, the scan could not run on that host. Native folder workspaces need `--all`, because Orca does not tie ports to them. SSH workspaces opened directly from this app report `unavailableReason` for now; a workspace on a managed Orca server is scanned on that server.
+
 Use `repo set --external-worktree-visibility show` to show a repo's non-Orca worktrees.
 `hide` hides them; `inherit` clears the repo override and follows the global default.
 Per-worktree visibility rules still apply.
@@ -194,6 +196,7 @@ ORCA terminal list --worktree id:<repoId>::<worktreePath> --json
 ORCA terminal show --terminal <handle> --json
 ORCA terminal read --terminal <handle> --json
 ORCA terminal read --terminal <handle> --cursor <cursor> --limit 1000 --json
+ORCA terminal read --terminal <handle> --screen --json
 ORCA terminal read --json
 ORCA terminal send --terminal <handle> --text "continue" --enter --json
 ORCA terminal send --terminal <handle> --text "continue" --enter --wait-submit 10 --json
@@ -221,8 +224,11 @@ Terminal rules:
 - `terminal list --json` omits `visualLayouts` to keep the common agent payload bounded. Add `--include-visual-layouts` only when tab and pane topology is required.
 - A paired server has no window. `terminal switch --environment <name>` moves the desktop app on this machine to that server's terminal, and reports `navigated: false` when no desktop here shows that server.
 - Use `terminal read` before `terminal send` unless the next input is obvious.
+- `terminal read` returns accumulated output with escape sequences stripped, not the rendered screen, so anything that repaints (shells, progress bars, TUIs) reads as stacked fragments. Use `--screen` whenever the answer depends on what the terminal actually shows.
+- `--screen` and `--cursor` are mutually exclusive: a screen read is the current frame and has no history to page.
 - Use `terminal send` only for direct terminal input or one-off prompts where no task state, inbox, or reply tracking is needed.
 - `accepted: true` proves input acceptance, not a started turn. Use the receipt's `turn_started` stage when submission proof is needed; never resend on silence.
+- A text-plus-Enter agent prompt is refused with `agent_prompt_blocked` while the agent shows a permission or trust menu. To answer the menu, send `--text` and `--enter` as separate commands.
 - A text-plus-Enter agent prompt returns a durable request ID and additive stages: `input_accepted`, then `turn_started` once the agent's turn is proven. Raw text-only, bare Enter, interrupt, and terminal query replies keep their existing direct-input behavior.
 - A default send observes for 0 seconds, so a receipt that stops at `input_accepted` is expected and its warning means "unproven", not "failed". Pass `--wait-submit` when you need proof of submission.
 - `--wait-submit <seconds>` only observes the same accepted prompt. A timeout returns queued/input-accepted truth without resending; after an ambiguous transport failure, repeat the exact command with the reported `--retry-request <id>`. Both text and `--json` receipts carry the same `warnings`.
@@ -231,7 +237,7 @@ Terminal rules:
 - Start a fresh agent with `agent launch` in the current worktree, or `worktree create --agent` for a separate checkout (see Starting agents).
 - Use `terminal wait --for tui-idle` for agent CLIs such as Claude Code, Gemini, Codex, OMP, Pi, and Grok; always pass `--timeout-ms`.
 - For long output, use cursor reads. After a limited tail preview, page from `oldestCursor`; after a cursor read, continue with `nextCursor` while `limited` is true and `nextCursor !== latestCursor`.
-- `--direction horizontal` splits left/right. `--direction vertical` splits top/bottom.
+- `--direction vertical` splits left/right. `--direction horizontal` splits top/bottom.
 
 ## Artifacts
 
@@ -247,6 +253,10 @@ links stay auditable and revocable.
 A denied share fails with `artifact_sharing_disabled` before any upload. Do not retry; the
 answer will not change until a human acts. Tell the user to turn the setting on and re-run, or
 deliver the file locally if they decline.
+
+On a headless Orca server, artifact and skill-sharing commands fail with
+`sharing_unavailable_on_host`: no Orca cloud sign-in exists there. Do not retry or ask the
+user to change settings; tell them to share from the Orca desktop app instead.
 
 The `artifacts` commands, and the separate default-off permission for publishing installed skills, are in `references/publishing.md`. Load it before publishing either kind of link; a skill folder can hold scripts, configuration, or credentials.
 

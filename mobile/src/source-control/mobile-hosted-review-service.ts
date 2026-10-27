@@ -1,4 +1,5 @@
 import type { MobileHostedReviewEligibilityReply } from './hosted-review-reply-schema'
+import { getRepoIdFromWorktreeId } from '../../../src/shared/worktree/id'
 import type { RpcSendParams } from '../transport/rpc-params-contract'
 import { refusedRpcMessageOrFallback } from '../transport/rpc-refusal-message'
 import { hostedReviewCopy } from './hosted-review-copy'
@@ -11,12 +12,9 @@ import { pushMobileHostedReviewBranch } from './mobile-hosted-review-git-prepara
 import { linkMobileHostedReview } from './mobile-pr-link'
 import type { RpcOperationSender } from '../transport/rpc-operation-sender'
 
-// The mobile worktree id is `${repoId}::${path}`; hosted-review RPCs expect the
-// repo selector separately, matching the desktop/runtime hosted-review service.
+// Mobile ids combine repo::path; hosted-review RPCs need separate selectors.
 export function mobileRepoSelectorFromWorktreeId(worktreeId: string): string {
-  const separatorIdx = worktreeId.indexOf('::')
-  const repoId = separatorIdx === -1 ? worktreeId : worktreeId.slice(0, separatorIdx)
-  return `id:${repoId}`
+  return `id:${getRepoIdFromWorktreeId(worktreeId)}`
 }
 
 export type MobileHostedReviewEligibilityInput = {
@@ -54,26 +52,19 @@ export async function fetchMobileHostedReviewEligibility(
 }
 
 export type MobileHostedReviewPrefill = {
-  // The host's own token, echoed back on create. Never narrowed here — see
-  // hosted-review-reply-schema.ts.
+  // Round-trip the host’s provider token without narrowing.
   provider: string
   base: string
   title: string
   body: string
   canCreate?: boolean
-  // Strings, not the shared closed unions: the host publishes tokens those unions do not list, and
-  // mobile only compares them to the handful it acts on. See hosted-review-reply-schema.ts.
+  // Newer hosts may publish routing tokens beyond shared closed unions.
   blockedReason?: string | null
   nextAction?: string | null
-  // Why: mobile lacks the desktop refresh/review-lookup signals, so it fails
-  // closed on ambiguity. When the host could not prove the branch has no review
-  // (`unavailable`), create — including the Push & Create path — stays blocked.
+  // Mobile lacks independent review-lookup signals; unavailable lookup must also block Push & Create.
   reviewLookupOutcome?: string
 }
 
-// Resolve the mobile compose prefill from the same hosted-review eligibility
-// service desktop uses. If eligibility is unavailable, return a blocked prefill
-// instead of inventing a provider/base locally.
 export async function resolveMobileHostedReviewPrefill(
   client: RpcOperationSender,
   worktreeId: string,
@@ -104,9 +95,7 @@ export async function resolveMobileHostedReviewPrefill(
       behind: args.behind
     })
     if (!eligibility) {
-      // Eligibility itself could not be resolved: the review lookup is unproven. No `canCreate`,
-      // because a false one is a determination — it would route the copy through blockedReason and
-      // tell the user the branch is not ready, when what happened is that nobody could say.
+      // Unresolved eligibility is not canCreate: false; use unavailable copy instead of claiming the branch is unready.
       return {
         ...fallback,
         blockedReason: null,
@@ -151,8 +140,6 @@ export type MobileHostedReviewCreateInput = {
   pushBeforeCreate?: boolean
 }
 
-// Builds the hostedReview.create params, trimming title/body and dropping empty
-// optional fields so the host's required-string validation passes cleanly.
 export function buildMobileHostedReviewCreateParams(
   worktreeId: string,
   input: MobileHostedReviewCreateInput
@@ -176,8 +163,7 @@ export type MobileHostedReviewCreateOutcome =
 
 const PUSH_BEFORE_CREATE_ERROR = 'Push failed. Resolve the push error, then try again.'
 
-// Why the host's own message is discarded here: the compose form shows one actionable line for
-// every push failure, refusal and transport drop alike.
+// The form intentionally uses one actionable fallback for all push failures.
 async function pushMobileBranchBeforeCreate(
   client: RpcOperationSender,
   worktreeId: string
@@ -214,8 +200,7 @@ async function finishMobileHostedReviewCreateSuccess(
 ): Promise<MobileHostedReviewCreateOutcome> {
   const baseRef = input.base.trim()
   const linked = await linkMobileHostedReview(client, worktreeId, input.provider, result.number, {
-    // Why: mobile branch compare cannot infer the new hosted review's target
-    // base from renderer cache; persist the submitted base for the refresh.
+    // Persist the submitted base; mobile cannot infer the new review’s target from renderer cache.
     baseRef
   })
   return {
@@ -284,8 +269,7 @@ export async function createMobileHostedReview(
         ) || 'Failed to create pull request'
     }
   } catch (err) {
-    // Why: create review runs from an inline form; transport drops should surface
-    // as form errors instead of escaping as unhandled promise rejections.
+    // Inline creation must display transport errors instead of leaking rejected promises.
     return {
       ok: false,
       error: err instanceof Error ? err.message : 'Failed to create pull request'

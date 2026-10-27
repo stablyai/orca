@@ -98,7 +98,6 @@ describe('withAgentInputInjection', () => {
     })
     expect(send).not.toHaveBeenCalled()
 
-    // Why: the same key from the user still reaches Orca.
     expect(press({ code: 'KeyT', key: 't' })).toHaveBeenCalled()
   })
 })

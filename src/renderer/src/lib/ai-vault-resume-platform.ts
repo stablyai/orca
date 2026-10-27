@@ -1,3 +1,4 @@
+import type { ProjectCatalogReadState } from '@/store/project-host-setup-selector'
 import type { AppState } from '@/store/types'
 import { getLocalProjectExecutionRuntimeContext } from '@/lib/local-preflight-context'
 import { CLIENT_PLATFORM } from '@/lib/new-workspace'
@@ -6,8 +7,7 @@ import { getAiVaultResumeWorkspacePath } from '@/lib/ai-vault-resume-shell'
 import { parseExecutionHostId } from '../../../shared/execution-host'
 import { parseWslUncPath } from '../../../shared/wsl-paths'
 
-// Which platform's grammar an Agent Session History resume is written in: the target
-// workspace's host, or Linux when the agent runs over SSH, a paired runtime, or WSL.
+// Target the workspace host’s grammar, or Linux for agents running through SSH, paired runtime or WSL.
 
 export function getAiVaultResumePlatform(
   state: Pick<
@@ -16,11 +16,11 @@ export function getAiVaultResumePlatform(
     | 'activeWorktreeId'
     | 'folderWorkspaces'
     | 'projectGroups'
-    | 'projects'
     | 'repos'
     | 'settings'
     | 'worktreesByRepo'
-  >,
+  > &
+    ProjectCatalogReadState,
   worktreeId?: string | null
 ): NodeJS.Platform {
   const targetWorktreeId = worktreeId ?? state.activeWorktreeId

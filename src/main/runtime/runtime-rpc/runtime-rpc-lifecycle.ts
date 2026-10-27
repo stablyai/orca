@@ -35,7 +35,7 @@ export class RuntimeRpcLifecycle extends RuntimeRpcWebSocketDispatch {
       return
     }
 
-    // Why: SIGKILL/OOM skip stop(), orphaning `o-<pid>-*.sock` files; sweep them. Skipped on Windows: named pipes leave no filesystem entries.
+    // Sweep sockets orphaned by SIGKILL/OOM; Windows pipes leave no files.
     if (this.platform !== 'win32') {
       sweepOrphanedRuntimeSockets(this.userDataPath, this.pid)
     }
@@ -53,7 +53,7 @@ export class RuntimeRpcLifecycle extends RuntimeRpcWebSocketDispatch {
       keepaliveIntervalMs: this.keepaliveIntervalMs
     })
 
-    // Why: the `.catch` guarantees reply() always fires so a throw can't strand the client or leak the AbortController.
+    // Always reply on unexpected throws so clients and dispatch controllers cannot be stranded.
     socketTransport.onMessage((msg, reply, context) => {
       void this.trackClientRequest(() => this.handleMessage(msg, context))
         .then((response) => {
@@ -61,16 +61,14 @@ export class RuntimeRpcLifecycle extends RuntimeRpcWebSocketDispatch {
         })
         .catch((error) => {
           const message = errorMessage(error)
-          // Why: best-effort id recovery so the client can correlate the error frame to its pending request.
+          // Recover request id best-effort so clients can correlate failure.
           let id = 'unknown'
           try {
             const parsed = JSON.parse(msg) as { id?: unknown }
             if (typeof parsed.id === 'string' && parsed.id.length > 0) {
               id = parsed.id
             }
-          } catch {
-            // ignore — fall through with id='unknown'
-          }
+          } catch {}
           reply(JSON.stringify(this.buildError(id, 'internal_error', message)))
         })
     })
@@ -80,9 +78,9 @@ export class RuntimeRpcLifecycle extends RuntimeRpcWebSocketDispatch {
     const activeTransports: RpcTransport[] = [socketTransport]
     const transportsMeta: RuntimeTransportMetadata[] = [transportMeta]
 
-    // Why: WebSocket uses per-device tokens + E2EE (tweetnacl) instead of TLS since React Native can't pin self-signed certs.
+    // Per-device tokens/E2EE avoid React Native's inability to pin self-signed TLS certificates.
     if (this.enableWebSocket) {
-      // Why: land any deferred lastSeen write before a replacement registry reads the same file.
+      // Flush deferred lastSeen before replacement registry reads disk.
       this.deviceRegistry?.flushPendingLastSeen()
       const pairingIdentity = this.initializePairingIdentity()
       if (!pairingIdentity.ok) {
@@ -102,7 +100,7 @@ export class RuntimeRpcLifecycle extends RuntimeRpcWebSocketDispatch {
             port: this.wsPort,
             preferPinnedPort: this.preferPinnedWsPort,
             requirePinnedPort: this.requirePinnedWsPort,
-            // Why: stable fallback port across restarts keeps paired devices' endpoints valid (STA-1511); wsPort 0 = random (E2E).
+            // Persist fallback ports for paired endpoints (STA-1511); explicit zero remains random for E2E.
             ...(this.wsPort !== 0 ? { fallbackPort: readWsFallbackPort(this.userDataPath) } : {})
           })
           if (this.wsPort !== 0 && transport.resolvedPort !== this.wsPort) {
@@ -113,7 +111,7 @@ export class RuntimeRpcLifecycle extends RuntimeRpcWebSocketDispatch {
           activeTransports.push(transport)
           transportsMeta.push({ kind: 'websocket', endpoint })
         } catch (error) {
-          // Why: WebSocket transport is supplementary; on failure (e.g. port in use) continue with Unix socket only.
+          // WS is supplementary; keep Unix transport serving if it fails.
           console.error('[runtime] Failed to start WebSocket transport:', error)
           this.mobileSocketWiring?.dispose()
           this.mobileSocketWiring = null
@@ -125,14 +123,14 @@ export class RuntimeRpcLifecycle extends RuntimeRpcWebSocketDispatch {
       }
     }
 
-    // Why: set in-memory transport state before writing metadata so the bootstrap file has the real endpoint/token pair.
+    // Set live endpoint/token before metadata publication.
     this.activeTransports = activeTransports
     this.transports = transportsMeta
 
     try {
       this.writeMetadata()
     } catch (error) {
-      // Why: a runtime that can't publish metadata is invisible to the CLI — close transports rather than run undiscoverable.
+      // Without metadata CLI cannot discover runtime; close transports rather than serve invisibly.
       this.activeTransports = []
       this.transports = []
       await Promise.all(activeTransports.map((t) => t.stop().catch(() => {}))).catch(() => {})
@@ -145,7 +143,7 @@ export class RuntimeRpcLifecycle extends RuntimeRpcWebSocketDispatch {
       ownedRuntimeId: this.runtime.getRuntimeId(),
       pollIntervalMs: this.metadataOwnershipPollMs,
       republish: () => {
-        // Why: never advertise endpoints we already tore down.
+        // Never publish torn-down endpoints.
         if (this.activeTransports.length === 0) {
           return
         }
@@ -159,10 +157,7 @@ export class RuntimeRpcLifecycle extends RuntimeRpcWebSocketDispatch {
     })
   }
 
-  // Why: STA-2370 — a desktop with no previously-connected device stays on loopback until the user
-  // explicitly pairs; `orca serve`/E2E (exposeNetworkByDefault) and a reconnecting paired device bind wide.
-  // A grant minted for "This computer only" is excluded: its client is a browser on this machine, so
-  // counting it would republish the runtime on every interface one restart after the user declined that.
+  // Default to loopback until explicit network pairing or a connected network-reach grant; local-only browser grants must never trigger reconnect exposure (STA-2370).
   protected resolveInitialWebSocketBindHost(): string {
     if (this.pinnedBindHost) {
       return this.pinnedBindHost
@@ -177,8 +172,7 @@ export class RuntimeRpcLifecycle extends RuntimeRpcWebSocketDispatch {
     return hasConnectedNetworkDevice ? WS_BIND_HOST_ALL_INTERFACES : WS_BIND_HOST_LOOPBACK
   }
 
-  // Why: builds and starts a WS transport bound to `host`, wiring the session-scoped mobile socket
-  // handlers. Shared by initial start() and the pairing-time widen so both paths stay identical.
+  // Share WS construction/wiring between startup and pairing-time rebind.
   protected async startWebSocketTransport(options: {
     host: string
     port: number
@@ -206,8 +200,7 @@ export class RuntimeRpcLifecycle extends RuntimeRpcWebSocketDispatch {
     try {
       await wsTransport.start()
     } catch (error) {
-      // Why: a listener that never bound must not stay attached to the session wiring (it would leak into
-      // terminateDeviceConnections); detach before propagating so the wiring only tracks live transports.
+      // Detach listeners that failed to bind so session wiring never retains dead revocation targets.
       this.detachWebSocketWiring?.()
       this.detachWebSocketWiring = null
       throw error
@@ -219,10 +212,7 @@ export class RuntimeRpcLifecycle extends RuntimeRpcWebSocketDispatch {
     }
   }
 
-  // Why: one MobileSocketWiring per server session. Direct WS and cloud relay both attach to it, and
-  // DesktopRelayService captures it once at construction, so a loopback→wide pairing rebind must swap the
-  // transport under the SAME wiring — replacing the wiring would strand relay sockets (lost connection IDs,
-  // binary handling, and revocation targeting) on a dead object.
+  // Direct/relay sockets share session wiring captured by brokers; swap transports within it during rebind or relay identity/binary/revocation state is lost.
   protected ensureMobileSocketWiring(
     deviceRegistry: DeviceRegistry,
     e2eeKeypair: E2EEKeypair
@@ -230,7 +220,7 @@ export class RuntimeRpcLifecycle extends RuntimeRpcWebSocketDispatch {
     if (this.mobileSocketWiring) {
       return this.mobileSocketWiring
     }
-    // Why: session-scoped so each desktop launch may notify once (a mid-session rebind must not reset it).
+    // Allow one re-pair notification per session, including across rebinds.
     this.unpairedDeviceAuthThrottle = new UnpairedDeviceAuthThrottle({
       onTrigger: () => this.onUnpairedDeviceAuthFailure?.()
     })
@@ -255,21 +245,15 @@ export class RuntimeRpcLifecycle extends RuntimeRpcWebSocketDispatch {
         this.handleWebSocketBinaryMessage(bytes, socket.ws)
       },
       onReady: (socket) => {
-        // Why: first authenticated mobile/remote client (direct WS and
-        // cloud relay both attach here) starts path-candidate tracking.
-        // Activation is a local-host concern: candidate buffers live on the
-        // buffer-owning host's runtime, so a remote runtime proxy may
-        // legitimately lack this method (its own server activates it).
-        this.runtime.activateRecentPtyPathCandidateTracking?.()
         this.mobileRelayPairingProvider?.onDemandStateChanged?.()
         if (socket.clientCapabilities.includes(AGENT_LAUNCH_RUNTIME_CAPABILITY)) {
           this.runtime.noteAgentLaunchClientReady?.()
         }
-        // Switch point: a client attaching sees every live terminal of this host in a tab.
+        // Publish every live host terminal as a tab on attach.
         if (ORCA_LAYOUT_OWNER_IS_MAIN) {
           void placeUnshownLiveTerminalsBestEffort(this.runtime)
         }
-        // Why once per socket: only phones send runtime.clientCapabilities.update.
+        // Update capabilities once per socket; only phones send their own later update.
         if (socket.device.scope === 'runtime') {
           this.runtime.sidebarFacts?.noteRuntimeClient(
             socket.connectionId,
@@ -283,7 +267,7 @@ export class RuntimeRpcLifecycle extends RuntimeRpcWebSocketDispatch {
         }
         this.abortWebSocketDispatches(socket.ws)
         this.mobileDesktopRelay?.closePhoneConnection(socket.connectionId)
-        // Why: subscriptions and binary streams are socket-scoped, but disconnect state is device-scoped across transports.
+        // Stream cleanup is socket-scoped; disconnect state spans all transports for that device.
         this.runtime.cleanupSubscriptionsForConnection(socket.connectionId)
         this.runtime.cancelMobileDictationForConnection(socket.connectionId)
         this.binaryMessageRouter.deleteConnection(socket.connectionId)
@@ -291,7 +275,7 @@ export class RuntimeRpcLifecycle extends RuntimeRpcWebSocketDispatch {
           this.runtime.onClientDisconnected(socket.device.clientId)
         }
       },
-      // Why: relay attempts are authorized upstream; only direct failures should prompt local re-pairing.
+      // Relay handles authorization upstream; only direct failures prompt local re-pairing.
       onUnpairedDeviceAuthFailure: (metadata) => {
         if (metadata.transport === 'direct') {
           this.unpairedDeviceAuthThrottle?.recordFailure()

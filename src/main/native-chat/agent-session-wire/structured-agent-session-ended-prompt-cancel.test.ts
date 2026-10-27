@@ -1,6 +1,4 @@
-// A Cancel that names a question an ended generation raised, from a client that still shows it:
-// the card is dismissed in the journal alone. Main ran the chat's Stop here, which stopped the live
-// turn and withdrew the queue.
+// Dismiss stale-generation prompts in the journal without stopping current turns or withdrawing queued work.
 
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
@@ -43,8 +41,6 @@ afterEach(async () => {
   }
 })
 
-/** Generation 1 raised a card and ended without its cleanup; generation 2 runs `turn-2`, with a
- *  message queued behind it. */
 async function endedCardAndLiveTurn(): Promise<{ journal: AgentSessionJournal; itemId: string }> {
   root = await mkdtemp(join(tmpdir(), 'orca-ended-prompt-cancel-'))
   const journal = await journals.open({ identity: IDENTITY, stateDirectory: root })
@@ -79,7 +75,6 @@ async function endedCardAndLiveTurn(): Promise<{ journal: AgentSessionJournal; i
   return { journal, itemId: card.itemId }
 }
 
-/** The queue as the live turn left it: its message waiting, and nothing pausing it. */
 function queueUntouched(journal: AgentSessionJournal): void {
   expect(journal.queuedMessages.list().map((card) => [card.messageId, card.state])).toEqual([
     ['queued-1', 'waiting']

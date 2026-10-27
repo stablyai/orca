@@ -3,7 +3,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import * as environmentStore from '../../../shared/runtime-environment-store'
-import { RemoteRuntimeClientError } from '../../../shared/remote-runtime-client-error'
+import { RemoteRuntimeClientError } from '../../../shared/remote-runtime/remote-runtime-client-error'
 
 const { handleMock, getPathMock, sendRemoteRuntimeRequestMock } = vi.hoisted(() => ({
   handleMock: vi.fn(),
@@ -22,7 +22,7 @@ vi.mock('electron', () => ({
   }
 }))
 
-vi.mock('../../../shared/remote-runtime-client', () => ({
+vi.mock('../../../shared/remote-runtime/remote-runtime-client', () => ({
   sendRemoteRuntimeRequest: sendRemoteRuntimeRequestMock,
   subscribeRemoteRuntimeRequest: vi.fn()
 }))
@@ -36,7 +36,6 @@ vi.mock('./runtime-environment-request-connections', async () => {
     getRemoteRuntimeSharedControlDiagnostics: vi.fn(() => null),
     reconnectRemoteRuntimeSharedControlConnection: vi.fn(),
     retryRemoteRuntimeSharedControlConnectionsNow: vi.fn(),
-    retryRemoteRuntimeSharedControlConnectionNow: vi.fn(),
     ensureRemoteRuntimeSharedControlConnection: vi.fn(),
     pauseRemoteRuntimeSharedControlRetry: vi.fn(),
     closeRemoteRuntimeRequestConnection: vi.fn()

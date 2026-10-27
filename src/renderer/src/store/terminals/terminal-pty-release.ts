@@ -1,4 +1,4 @@
-import { isRemoteRuntimePtyId } from '../../../../shared/remote-runtime-pty-id'
+import { isRemoteRuntimePtyId } from '../../../../shared/remote-runtime/remote-runtime-pty-id'
 import { hasWorktreeSleepIntent } from '@/lib/worktree-sleep-intent'
 import type { TerminalSlice, TerminalStoreGet, TerminalStoreSet } from './terminal-state'
 import {
@@ -80,11 +80,7 @@ export function createTerminalPtyReleaseActions(
         // Why: an explicit exit drops the dead relay ID; bulk clears retain it for relay grace.
         const nextLastKnownRelay = { ...s.lastKnownRelayPtyIdByTabId }
         if (ptyId && nextLastKnownRelay[tabId] === ptyId) {
-          // Why: the relay slot holds ONE id per tab (the last pane to bind). If
-          // that pane exits, promote a surviving pane instead of clearing — else the
-          // survivor is left visible only in the layout leaf map, and a later
-          // relay-drop bulk-clear lets the orphan sweep delete the still-live tab
-          // (the orphan predicate reads this map but not layout leaves) (#9911).
+          // If last-bound relay slot exits, promote a survivor or later bulk relay clearing makes orphan sweep delete the still-live split tab (#9911).
           const survivingPtyId = remainingPtyIds.at(-1)
           if (survivingPtyId) {
             nextLastKnownRelay[tabId] = survivingPtyId

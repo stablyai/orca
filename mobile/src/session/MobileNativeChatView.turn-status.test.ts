@@ -1,4 +1,5 @@
-import { createElement } from 'react'
+import './MobileNativeChatView.harness.test-fixture'
+import { createElement, type ReactNode } from 'react'
 import { act, create, type ReactTestInstance, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { NativeChatMessage } from '../../../src/shared/native-chat-types'
@@ -12,9 +13,23 @@ vi.mock('react-native', async () => {
   const React = await import('react')
   return {
     ActivityIndicator: 'ActivityIndicator',
-    FlatList: React.forwardRef((props, ref) => {
+    FlatList: React.forwardRef<
+      unknown,
+      {
+        data: NativeChatMessage[]
+        renderItem: (row: { item: NativeChatMessage; index: number }) => ReactNode
+        ListFooterComponent: ReactNode
+      }
+    >((props, ref) => {
       React.useImperativeHandle(ref, () => ({ scrollToEnd, scrollToOffset }), [])
-      return React.createElement('FlatList', props)
+      return React.createElement(
+        'FlatList',
+        props,
+        props.data.map((item, index) =>
+          React.createElement(React.Fragment, { key: item.id }, props.renderItem({ item, index }))
+        ),
+        props.ListFooterComponent
+      )
     }),
     Platform: { OS: 'ios' },
     Pressable: 'Pressable',
@@ -50,30 +65,18 @@ vi.mock('lucide-react-native', () => ({
 
 vi.mock('./MobileNativeChatMessage', () => ({ MobileNativeChatMessage: 'ChatMessage' }))
 vi.mock('./MobileNativeChatLiveLine', () => ({ MobileNativeChatLiveLine: 'LiveStatus' }))
-vi.mock('./MobileNativeChatAsk', () => ({ MobileNativeChatAsk: 'ChatAsk' }))
-vi.mock('./MobileNativeChatPermission', () => ({ MobileNativeChatPermission: 'ChatPermission' }))
-vi.mock('./MobileNativeChatQuestion', () => ({ MobileNativeChatQuestion: 'ChatQuestion' }))
+vi.mock('./native-chat/input/MobileNativeChatAsk', () => ({ MobileNativeChatAsk: 'ChatAsk' }))
+vi.mock('./native-chat/input/MobileNativeChatPermission', () => ({
+  MobileNativeChatPermission: 'ChatPermission'
+}))
+vi.mock('./native-chat/input/MobileNativeChatQuestion', () => ({
+  MobileNativeChatQuestion: 'ChatQuestion'
+}))
 vi.mock('../components/ActionSheetModal', () => ({ ActionSheetModal: 'ActionSheetModal' }))
 
-// Stand-in composer: exposes the view's `handleSend` through a pressable, which is
-// the only composer behaviour these banner tests exercise.
-vi.mock('./MobileNativeChatComposer', async () => {
-  const React = await import('react')
-  const { MobileNativeChatStopButton } = await import('./MobileNativeChatStopButton')
-  return {
-    MobileNativeChatComposer: (props: {
-      onSend: (text: string) => Promise<boolean>
-      disabled?: boolean
-      placeholder?: string
-      stop?: { onStop?: () => void; held: boolean } | null
-    }) =>
-      React.createElement(
-        'Composer',
-        { ...props, accessibilityLabel: 'Send message', onPress: () => props.onSend('hi') },
-        // The real composer draws Stop in Send's slot while its draft is empty, as here.
-        props.stop ? React.createElement(MobileNativeChatStopButton, props.stop) : null
-      )
-  }
+vi.mock('./native-chat/composer/MobileNativeChatComposer', async () => {
+  const { composerStub } = await import('./MobileNativeChatView.render-stubs.test-fixture')
+  return composerStub()
 })
 
 type Overrides = {
@@ -113,7 +116,7 @@ function chatViewElement(overrides: Overrides): ReturnType<typeof createElement>
     getSendCompletionGeneration: () => 0,
     getComposerEditGeneration: () => 0,
     pending: [],
-    composerText: '',
+    draftKey: null,
     onComposerTextChange: vi.fn(),
     ...overrides
   })
@@ -151,7 +154,6 @@ describe('MobileNativeChatView', () => {
     })
   }
 
-  /** Ids of the rows the list is currently rendering. */
   function listIds(): string[] {
     return (list().props.data as { id: string }[]).map((row) => row.id)
   }
@@ -161,10 +163,12 @@ describe('MobileNativeChatView', () => {
   }
 
   function renderedRow(id: string): ReturnType<typeof createElement> {
-    const listNode = list()
-    const data = listNode.props.data as NativeChatMessage[]
-    const index = data.findIndex((row) => row.id === id)
-    return listNode.props.renderItem({ item: data[index], index })
+    return createElement(
+      'Row',
+      renderer!.root.find(
+        (node) => String(node.type) === 'ChatMessage' && node.props.message.id === id
+      ).props
+    )
   }
 
   describe('structured turn status wiring', () => {
@@ -180,7 +184,6 @@ describe('MobileNativeChatView', () => {
       return (renderedRow(id) as { props: Record<string, unknown> }).props
     }
 
-    /** What the live footer line says: its label inputs, read off the line the view hands it. */
     function footerProps(): Record<string, unknown> | null {
       const list = renderer!.root.find((node) => String(node.type) === 'FlatList')
       const line = list.props.ListFooterComponent?.props.line
@@ -195,7 +198,6 @@ describe('MobileNativeChatView', () => {
       const props = rowProps('u1')
       expect(props.structuredActivityUi).toBe(true)
       expect(props.turnStatus).toMatchObject({ workedSeconds: null })
-      // Nothing reports reasoning, so the tail line reads plain working instead of guessing.
       expect(footerProps()).toEqual({ thinking: false, activityText: null, stopping: false })
       expect(listIds().at(-1)).toBe('a1')
       expect(props.activeTurnIsWorking).toBe(true)
@@ -341,7 +343,6 @@ describe('MobileNativeChatView', () => {
       const folded = [userTurn('u1', 'go'), assistantTurn('a1', 'done')]
       await render({ messages: folded, folded, structuredActivityUi: true, agentWorking: true })
       expect(rowProps('a1').turnStatus).toBeNull()
-      // The assistant row still belongs to the live turn, so its tool row stays visible.
       expect(rowProps('a1').activeTurnIsWorking).toBe(true)
       expect(footerProps()).toMatchObject({ thinking: false })
     })

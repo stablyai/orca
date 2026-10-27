@@ -1,5 +1,3 @@
-// Grok chat_history.jsonl line → NativeChatMessage decoder.
-
 import type { NativeChatBlock, NativeChatMessage } from '../../shared/native-chat-types'
 import {
   asRecord,
@@ -9,11 +7,6 @@ import {
 } from '../ai-vault/session-scanner-values'
 import { claudeContentBlocks, toolResultOutput } from './transcript-record-blocks'
 
-/**
- * Grok `chat_history.jsonl` rows: user/assistant/reasoning/tool records with
- * Claude-like content blocks plus Grok-specific `backend_tool_call` /
- * `tool_result` shapes. System prompts are skipped.
- */
 export function decodeGrokTranscriptLine(
   line: string,
   fallbackId: string
@@ -28,13 +21,11 @@ export function decodeGrokTranscriptLine(
   }
   const timestamp = parseTimestamp(record.timestamp)
   const recordId = extractString(record.id)
-  // Why: Grok rows frequently omit timestamps and only some carry ids; prefix
-  // every row with its JSONL position so Native Chat preserves transcript order.
+  // Position-prefix every ID: missing timestamps and IDs otherwise lose transcript order.
   const id = recordId ? `${fallbackId}:${recordId}` : fallbackId
 
   if (type === 'user' || type === 'assistant') {
-    // Why: Grok records bootstrap context as user rows; only submitted prompts
-    // belong in the conversation shown to the user.
+    // Bootstrap context also uses user rows; only actual prompts belong in the timeline.
     if (
       type === 'user' &&
       (hasNonEmptySyntheticReason(record) || isGrokBootstrapContext(record.content))
@@ -44,7 +35,6 @@ export function decodeGrokTranscriptLine(
     const rawBlocks = claudeContentBlocks(record.content)
     const blocks = type === 'user' ? rawBlocks.flatMap(normalizeGrokUserQueryBlock) : rawBlocks
     if (blocks.length === 0) {
-      // Empty assistant rows often only hold tool_calls — surface those.
       const toolBlocks = grokToolCallBlocks(record.tool_calls)
       if (toolBlocks.length === 0) {
         return null
@@ -132,7 +122,7 @@ function grokToolCallBlocks(value: unknown): NativeChatBlock[] {
       try {
         input = JSON.parse(input)
       } catch {
-        // keep string
+        // Preserve unparseable arguments as text.
       }
     }
     blocks.push({ type: 'tool-call', name, input })
@@ -175,8 +165,7 @@ function isGrokBootstrapContext(content: unknown): boolean {
   if (userInfoEnd === -1) {
     return false
   }
-  // Why: Grok 0.2.93 appends its git snapshot and 1.0 its rules to the user-info bootstrap row;
-  // reject only those known envelopes so real prompts mentioning the tags survive.
+  // Strip only known bootstrap envelopes; genuine prompts may mention the same tags.
   let remainder = normalized.slice(userInfoEnd + '</user_info>'.length).trim()
   while (remainder.length > 0) {
     const section = GROK_BOOTSTRAP_SECTIONS.find((name) => remainder.startsWith(`<${name}>`))
@@ -221,8 +210,7 @@ function normalizeGrokUserQueryBlock(block: NativeChatBlock): NativeChatBlock[] 
 }
 
 function splitGrokPastedImageQuery(text: string): { path: string; query: string } | null {
-  // Why: Grok 0.2.93 persists clipboard images as an absolute temp path directly
-  // concatenated with the prompt; recover Orca's attachment without exposing it.
+  // Grok 0.2.93 concatenates clipboard temp paths with prompts; recover the attachment separately.
   const match = text.match(
     /^((?:[a-z]:[\\/]|\/|[\\/]{2}[^\\/\r\n]+[\\/][^\\/\r\n]+[\\/])(?:.*?[\\/])?orca-paste-[^\\/\r\n]+?\.png)([\s\S]*)$/i
   )

@@ -14,10 +14,7 @@ function isPane(value: unknown): value is PaintedRestorePane {
   )
 }
 
-/**
- * A view painted a cold restore: drop the terminal service's in-memory copy (checkpoint.json
- * keeps the history across restarts). No view, no ack.
- */
+/** Release in-memory cold restore only after painting; checkpoint.json retains restart history. */
 export function acknowledgePaintedColdRestore(
   args: Partial<PaintedRestoreAck> | null | undefined,
   isPaneBoundTo: ((pane: PaintedRestorePane, ptyId: string) => boolean) | undefined
@@ -26,7 +23,7 @@ export function acknowledgePaintedColdRestore(
   if (typeof id !== 'string' || !id) {
     return
   }
-  // Switch point: main releases it only for the pane's current terminal; a stale view's ack keeps it.
+  // A stale view cannot release the current pane terminal's restore cache.
   if (ORCA_LAYOUT_OWNER_IS_MAIN && !(isPane(args?.pane) && isPaneBoundTo?.(args.pane, id))) {
     return
   }

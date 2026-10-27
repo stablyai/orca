@@ -3,8 +3,7 @@ import { expect, it } from 'vitest'
 import { parse } from 'yaml'
 import { classifyPrJobs } from './pr-code-change-scope.mjs'
 
-// The formatting check reads the whole tree, so a diff that skipped it would land drift that then
-// fails every later PR's merge ref.
+// Whole-tree formatting must run on every formatted-file change or drift breaks later PR merge refs.
 it.each(['README.md', '.github/ISSUE_TEMPLATE/bug.yml', '.github/workflows/mobile.yml'])(
   'runs static analysis, and only it, for a %s diff the formatter reads',
   (file) => {

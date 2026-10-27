@@ -1,30 +1,10 @@
 import type { PackIndexMaintenanceOutcome } from './repo-pack-index-maintenance-policy'
 
-/**
- * Idle-time loose-ref packing for repositories Orca itself degrades.
- *
- * Orca strips git's auto-maintenance off its own frequent fetches
- * (`GIT_FETCH_SKIP_AUTO_MAINTENANCE_CONFIG_ARGS`) and never compensated, so an
- * Orca-driven checkout accumulates loose refs forever and every ref
- * enumeration -- `show-ref`, `for-each-ref`, worktree create -- pays for them.
- * This is the compensation: after a repo goes quiet, probe it, and pack only
- * when the backlog is real.
- *
- * The engine is host-agnostic on purpose. The execution host owns everything
- * that touches execution, so each host supplies its own target (which git to
- * run, which filesystem to walk) and all state here is keyed per host.
- */
+/** Compensate for Orca fetches disabling Git auto-maintenance: pack loose refs after a quiet period.
+ * Execution hosts own Git/filesystem access and supply host-scoped target identities. */
 
-/**
- * Below this, ref enumeration is already fast and `pack-refs` would cost more
- * than it saves.
- *
- * Git's own files-backend auto heuristic (2.47+) packs at
- * `max(16, log2(packed_refs_bytes / 100) * 5)` loose refs -- about 76 for the
- * 4.1 MB `packed-refs` that motivated this work. A flat 1000 is roughly an
- * order of magnitude more conservative on purpose: this runs unasked against a
- * real checkout, and being late is cheap where being wrong is not.
- */
+/** Conservative threshold for unsolicited maintenance; well above Git 2.47’s files-backend heuristic
+ * (~76 refs for the motivating 4.1 MB packed-refs). Packing smaller backlogs costs more than it saves. */
 export const LOOSE_REF_PACK_THRESHOLD = 1000
 
 /** No fetch, create, or other tracked write on the repo for this long. */
@@ -39,58 +19,24 @@ export const REF_MAINTENANCE_CLEAN_COOLDOWN_MS = 6 * 60 * 60_000
 /** A failing repo (permissions, stale lock) must not be retried in a loop. */
 export const REF_MAINTENANCE_FAILURE_COOLDOWN_MS = 6 * 60 * 60_000
 
-/**
- * A repository whose `packed-refs.lock` is a strand from our own dead process
- * becomes reclaimable at `PACK_REFS_TIMEOUT_MS`, so retry near that rather than
- * serving the full failure cooldown -- otherwise a Windows force-kill leaves
- * every ref deletion in that repo failing for six hours instead of thirty
- * minutes.
- */
+/** Retry near PACK_REFS_TIMEOUT_MS, when our dead process’s lock becomes reclaimable, rather than blocking ref edits for six hours. */
 export const REF_MAINTENANCE_LOCKED_COOLDOWN_MS = 30 * 60_000
 
-/**
- * `pack-refs` holds `packed-refs.lock` only while it rewrites the file --
- * measured at 0.03-1.37s of a 23-32s run, the other ~95% being the prune phase
- * unlinking loose refs. A caller about to touch refs waits out that window
- * instead of killing the pack.
- */
+/** Wait out the short packed-refs rewrite (measured 0.03–1.37s), rather than killing a mostly-pruning pack. */
 export const PACKED_REFS_LOCK_POLL_MS = 50
 
-/**
- * Ceiling on that wait. Past this we stop blocking the user and let Git's own
- * retry (`core.filesRefLockTimeout`, `core.packedRefsTimeout`) handle it, which
- * is what happens today without any of this.
- */
+/** After this wait, rely on Git’s core.filesRefLockTimeout/core.packedRefsTimeout retries. */
 export const PACKED_REFS_LOCK_WAIT_MS = 5_000
 
-/**
- * `pack-refs --prune` unlinks one file per loose ref. Paying off a 36k-ref
- * backlog measured at ~83s on APFS, so the deadline has to clear a cold repo on
- * a slow disk by a wide margin. A kill mid-run is safe -- git renames
- * `packed-refs` into place atomically and the surviving loose refs stay
- * authoritative -- but it wastes the work.
- */
+/** Leave margin for cold-disk pruning (36k refs took ~83s on APFS). Mid-pack kills preserve ref data
+ * via atomic packed-refs replacement and authoritative loose refs, but waste work. */
 export const PACK_REFS_TIMEOUT_MS = 15 * 60_000
 
-/**
- * Ancient, safe on the Git 2.25 baseline, and does exactly one thing.
- *
- * Not `pack-refs --auto`: that arrived in 2.45 and unconditionally rewrote
- * `packed-refs` on the files backend until 2.47, so it is both unavailable at
- * our baseline and wrong on two shipped releases. Not `git maintenance run`
- * either -- newer, and it pulls in commit-graph and repack work we did not ask
- * for. `--all` is required because the backlog is `refs/heads` and
- * `refs/remotes`, which a bare `pack-refs` leaves alone.
- */
+/** Git 2.25-compatible; --all includes heads/remotes. --auto requires 2.45 and rewrites unconditionally
+ * before 2.47; git maintenance adds unrelated work. */
 export const PACK_REFS_ARGS = ['pack-refs', '--all', '--prune'] as const
 
-/**
- * Backstop on a whole attempt: aborts it, rather than abandoning it. Every Git
- * child is already deadlined, but an admission wait is not, and the whole app
- * shares one maintenance slot. Abandoning would release that slot while a pack
- * that may still hold `packed-refs.lock` runs on, so the deadline cancels the
- * work instead and the slot is held until it really stops.
- */
+/** Bound admission too; cancel and await work before releasing the app-wide slot, or a pack may keep its lock while another starts. */
 export const REF_MAINTENANCE_ATTEMPT_DEADLINE_MS = PACK_REFS_TIMEOUT_MS + 5 * 60_000
 
 export type RefMaintenanceOutcome =
@@ -125,12 +71,7 @@ export type RepoRefMaintenanceTarget = {
     span: RefMaintenanceSpan,
     canWrite: () => boolean
   ): Promise<PackIndexMaintenanceOutcome | void>
-  /**
-   * Runs `pack-refs` to completion. Its signal cancels admission only: killing
-   * a pack is measurably worse than waiting for it (see `PACKED_REFS_LOCK_*`).
-   * It must report `packed-refs.lock` transitions through `lock` so callers can
-   * wait for the short window that actually blocks them.
-   */
+  /** Run to completion: signal cancels admission only. Report packed-refs.lock transitions so callers can wait out the rewrite. */
   packRefs(
     lock: PackedRefsLockReporter,
     admissionSignal?: AbortSignal,
@@ -166,11 +107,7 @@ export class RefMaintenanceInterrupted extends Error {
   }
 }
 
-/**
- * The repository's `packed-refs.lock` is held by something we must not touch.
- * Distinct from a failure so a strand our own dead process left can be retried
- * once it ages into reclaimability, rather than parked for six hours.
- */
+/** Retry foreign or stranded locks when reclaimable, separately from the six-hour failure cooldown. */
 export class RefMaintenanceRepoLocked extends Error {
   constructor(detail: string) {
     super(`packed-refs.lock is held: ${detail}`)

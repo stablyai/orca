@@ -1,4 +1,4 @@
-import { createContext } from 'react'
+import { createContext, type ContextType } from 'react'
 import { z } from 'zod'
 import { isAdmissibleAgentJournalRenderItem } from '../../../src/shared/agent-session-journal-schemas'
 import type { AgentJournalRenderItem } from '../../../src/shared/agent-session-journal-types'
@@ -6,9 +6,6 @@ import { bindDeferredRpcOperation, defineRpcOperation } from '../transport/rpc-o
 import { rpcResultVariant } from '../transport/rpc-operation-result-reader'
 import type { MobileNativeChatVisualSource } from './mobile-native-chat-visual-read'
 import type { MobileNativeChatMessageDetail } from './use-mobile-native-chat-message-detail'
-
-// One chat item whole, for "Show full output" and "Show full message": every other read sends the
-// phone a head of long text, and the host keeps the rest.
 
 const itemReplySchema = z.object({
   item: z.custom<AgentJournalRenderItem>(isAdmissibleAgentJournalRenderItem).nullable()
@@ -26,13 +23,16 @@ const nativeChatItemRead = bindDeferredRpcOperation(
 
 const READ_TIMEOUT_MS = 30_000
 
-/** Where whole items are read from; null where the host predates `agentSession.item`. */
+// Null for hosts predating agentSession.item.
 export const MobileNativeChatItemSourceContext = createContext<
   (MobileNativeChatVisualSource & { messageDetail?: MobileNativeChatMessageDetail | null }) | null
 >(null)
 
-/** The item's body as the host keeps it, fitted to a phone frame; null when the host no longer has
- *  it. Rejects when the host could not be asked or answered with an error. */
+// Live publication and selected row values use separate contexts to avoid root fanout below memo.
+export const MobileNativeChatRootItemSourceContext =
+  createContext<ContextType<typeof MobileNativeChatItemSourceContext>>(null)
+
+// Null means the item is gone; transport/refusal still rejects.
 export async function readMobileNativeChatItem(
   source: MobileNativeChatVisualSource,
   itemId: string

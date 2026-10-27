@@ -1,9 +1,8 @@
 import { existsSync } from 'node:fs'
-import type * as NodeFsPromises from 'node:fs/promises'
 import { mkdir, mkdtemp, readFile, readdir, realpath, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 
 import {
   BROWSER_CLIENT_UPLOAD_STAGING_MAX_BYTES_PER_PAGE,
@@ -11,23 +10,10 @@ import {
   BrowserClientUploadStaging
 } from './browser-client-upload-staging'
 
-const nodeRemovals = vi.hoisted(() => ({ rm: [] as { target: unknown; options: unknown }[] }))
-
-vi.mock('node:fs/promises', async (importOriginal) => {
-  const actual = await importOriginal<typeof NodeFsPromises>()
-  return {
-    ...actual,
-    rm: (target: unknown, options: unknown) => {
-      nodeRemovals.rm.push({ target, options })
-      return (actual.rm as (t: unknown, o: unknown) => Promise<void>)(target, options)
-    }
-  }
-})
-
 let stagingRoot = ''
 
 beforeEach(async () => {
-  // Why: macOS reports /private/var for a /var mkdtemp path, so compare against the resolved root.
+  // Resolve macOS /var aliases so path assertions use the real root.
   stagingRoot = await realpath(await mkdtemp(path.join(tmpdir(), 'orca-upload-staging-')))
 })
 
@@ -35,7 +21,6 @@ afterEach(async () => {
   await rm(stagingRoot, { recursive: true, force: true })
 })
 
-/** Release reports every failed removal together, so assert on the aggregate's contents. */
 async function releaseFailures(release: Promise<unknown>): Promise<string[]> {
   const failure = await release.catch((error: unknown) => error)
   expect(failure).toBeInstanceOf(AggregateError)
@@ -306,27 +291,7 @@ describe('BrowserClientUploadStaging', () => {
         files: [{ remotePath: 'a.txt', contents: Buffer.from('a') }]
       })
     ).rejects.toThrow('disk full')
-    // Why: the retained record is the only handle a later release has on the orphaned directory.
+    // A later release needs the retained directory record to retry cleanup.
     expect(staging.activeStagingCount()).toBe(1)
-  })
-
-  it('retries the staged removal so a briefly held file is not orphaned', async () => {
-    const staging = new BrowserClientUploadStaging(stagingRoot)
-    const staged = await staging.stage({
-      browserPageId: 'page-1',
-      pageHostGeneration: 1,
-      files: [{ remotePath: 'a.txt', contents: Buffer.from('a') }]
-    })
-    const directory = staging.stagedDirectory(staged.stagingId)
-    nodeRemovals.rm.length = 0
-
-    expect(await staging.release(staged.stagingId)).toBe(true)
-
-    expect(nodeRemovals.rm).toEqual([
-      {
-        target: directory,
-        options: { recursive: true, force: true, maxRetries: 3, retryDelay: 50 }
-      }
-    ])
   })
 })

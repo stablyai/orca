@@ -10,30 +10,26 @@ import { AcpConnectionClosedError, AcpSignInPromptError } from './acp-errors'
 import { resolveAcpPeerOptions, type AcpPeerOptions } from './acp-peer-limits'
 import { AcpSessionRuntime, type AcpSessionRuntimeOptions } from './acp-session-runtime'
 
-/** How an agent that signs in through a browser says so on its output. */
 export type AcpSignInWatch = {
-  /** A sign-in line's valid link (the connection ends signed out), null for a malformed one,
-   *  undefined for any other line. */
+  /** Returns a valid link, null for a malformed sign-in line, or undefined for other output. */
   read(line: string, source: 'stdout' | 'stderr'): string | null | undefined
-  /** The agent's answer on its sign-in: a session started, or it asked to sign in. */
   answered?(signedIn: boolean): void
-  /** Receives each valid link instead, and the connection stays open for the sign-in to finish. */
+  /** Keeps the connection open for sign-in instead of closing it signed out. */
   link?(link: string): void
 }
 
-// A full sign-in link with its framing; the stderr tail kept for diagnostics stays smaller.
+// Allow full sign-in links while keeping the diagnostic tail smaller.
 const SIGN_IN_LINE_MAX_CHARS = 32_768
 
 export type AcpAgentConnectionOptions = Omit<AcpSessionRuntimeOptions, 'peer'> & {
   peer?: Omit<AcpPeerOptions, 'closeOnInputEnd'>
   /** Process exit evidence, including expected closes and processless spawn failures. */
   onExit?: (error: Error, context: { expected: boolean; exit: ProviderProcessExit }) => void
-  /** Any stdout or stderr chunk from the child. */
   onOutput?: () => void
   signIn?: AcpSignInWatch
 }
 
-/** The execution host owns the child and protocol lifetime; the adapter owns turns and Stop. */
+/** The host owns process lifetime; the adapter owns turns and Stop. */
 export function createAcpAgentConnection(
   launch: ProviderProcessLaunch,
   options: AcpAgentConnectionOptions = {},
@@ -53,12 +49,12 @@ export class AcpAgentConnection extends AcpSessionRuntime {
     options: AcpAgentConnectionOptions = {},
     spawnImpl: PipedProcessSpawner = spawnProcess
   ) {
-    // Validate before spawning so invalid limits cannot leave an unowned child.
+    // Invalid limits must fail before spawning an unowned child.
     const peer = resolveAcpPeerOptions({ ...options.peer, closeOnInputEnd: false })
     const { signIn } = options
     let signedOut = (): void => {}
     let unreadable = (): void => {}
-    // A sign-in line is never kept or logged; only a whole, valid one is an answer.
+    // Never retain sign-in links in diagnostics.
     const signInLine = (line: string, source: 'stdout' | 'stderr', cut = false): boolean => {
       const link = signIn?.read(line, source)
       if (link === undefined) {
@@ -137,7 +133,7 @@ export class AcpAgentConnection extends AcpSessionRuntime {
       signIn?.answered?.(false)
       super.close(new AcpSignInPromptError('The agent asked to sign in in a browser'))
     }
-    // A broken sign-in line on the protocol stream is a broken agent, not a sign-in answer.
+    // A malformed protocol-stream link closes the connection without reporting signed-out status.
     unreadable = () =>
       super.close(new AcpConnectionClosedError('The agent printed a sign-in link Orca cannot read'))
     child.stderr.on('error', (error) => super.close(error))
@@ -166,7 +162,7 @@ export class AcpAgentConnection extends AcpSessionRuntime {
     return this.managed.rootVerdict
   }
 
-  /** Retained evidence from the last close attempt; a null tree means no observation. */
+  /** Null tree means no observation. */
   get lastCloseResult(): Readonly<ManagedProviderProcess['lastCloseResult']> {
     return this.managed.lastCloseResult
   }

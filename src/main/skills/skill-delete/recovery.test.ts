@@ -164,21 +164,17 @@ describe('recoverSkillDeleteTransaction', () => {
     }
     await recoverSkillDeleteTransaction(stateDirectory, canonicalPath, filesystem)
 
-    // Journal retained: the staged path is still parked, and dropping the record
-    // would strand it with nothing left to retry from.
+    // Retain the journal while staging remains parked so startup can retry.
     expect(await exists(entry.moves[0].stagedPath)).toBe(true)
     expect(await exists(skillDeleteJournalPath(stateDirectory, canonicalPath))).toBe(true)
 
-    // Retry on a working filesystem completes and only then clears the journal.
     await recoverSkillDeleteTransaction(stateDirectory, canonicalPath)
     expect(await exists(canonicalPath)).toBe(true)
     expect(await exists(skillDeleteJournalPath(stateDirectory, canonicalPath))).toBe(false)
   })
 
   it('clears the journal when the recorded move was never performed', async () => {
-    // The journal records intent before each rename, so a crash in that window
-    // leaves a move whose staged path never existed. Rollback must read that as
-    // already restored, not fail it and retry the same journal at every startup.
+    // Intent precedes rename: absent staged paths may never have moved and must not pin recovery forever.
     const { stateDirectory, root } = await fixture()
     const canonicalPath = join(root, 'demo')
     await mkdir(canonicalPath, { recursive: true })
@@ -214,8 +210,7 @@ describe('recoverSkillDeleteTransaction', () => {
         }
       ]
     })
-    // The canonical move came back in an interrupted earlier pass; only the
-    // alias-file is still parked at its staged path.
+    // A previous pass restored canonical content; only the alias-file remains staged.
     await mkdir(canonicalPath, { recursive: true })
     await writeFile(entry.moves[0].stagedPath, 'link-stand-in')
     await writeSkillDeleteJournal(stateDirectory, entry)
@@ -235,8 +230,7 @@ describe('recoverSkillDeleteTransaction', () => {
       phase: 'staging',
       movedCount: 2,
       allowedRoots: [root, join(home, '.claude', 'skills')],
-      // Staging order is alias-file first, then canonical, so plain reversal
-      // gives canonical-first restore.
+      // Reverse alias-first staging to restore canonical content before aliases.
       moves: [
         {
           sourcePath: join(aliasRoot, 'SKILL.md'),

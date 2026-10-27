@@ -7,7 +7,11 @@ import {
   resolveWorktreeOperationRouteResult,
   type WorktreeOperationRouteResolution
 } from '@/lib/worktree-operation-route'
-import { resolveNativeChatFileLinkContext } from './native-chat-file-link'
+import {
+  createNativeChatTabOwnerSelector,
+  findNativeChatTabOwnerWorktreeId,
+  resolveNativeChatFileLinkContextForOwner
+} from './native-chat-file-link'
 import { captureDirectSshMutationExpectation } from '@/lib/ssh-mutation-expectation'
 import { parseExecutionHostId, toRuntimeExecutionHostId } from '../../../../shared/execution-host'
 import { isFloatingWorkspaceId } from '../../../../shared/floating-workspace-worktree'
@@ -45,9 +49,10 @@ type OwnerState = Pick<
   | 'unifiedTabsByWorktree'
 >
 
-// Keep the subscription limited to fields that can change image ownership. The
-// derived context is computed during render, after Zustand has filtered updates.
-export function selectNativeChatImageOwnerState(state: AppState): OwnerState {
+type RouteState = Omit<OwnerState, 'tabsByWorktree' | 'unifiedTabsByWorktree'>
+
+// Subscribe only to ownership inputs; derive context after Zustand filters unrelated updates.
+function selectNativeChatImageRouteState(state: AppState): RouteState {
   return {
     settings: state.settings,
     repos: state.repos,
@@ -64,7 +69,13 @@ export function selectNativeChatImageOwnerState(state: AppState): OwnerState {
     sshStateByEnvironment: state.sshStateByEnvironment,
     activeWorktreeId: state.activeWorktreeId,
     activeWorkspaceExecutionHostId: state.activeWorkspaceExecutionHostId,
-    restoredRuntimeHostIdByWorkspaceSessionKey: state.restoredRuntimeHostIdByWorkspaceSessionKey,
+    restoredRuntimeHostIdByWorkspaceSessionKey: state.restoredRuntimeHostIdByWorkspaceSessionKey
+  }
+}
+
+export function selectNativeChatImageOwnerState(state: AppState): OwnerState {
+  return {
+    ...selectNativeChatImageRouteState(state),
     tabsByWorktree: state.tabsByWorktree,
     unifiedTabsByWorktree: state.unifiedTabsByWorktree
   }
@@ -76,8 +87,7 @@ const FLOATING_WORKSPACE_ROUTE: WorktreeOperationRouteResolution = {
   route: { executionHostId: 'local', runtimeEnvironmentId: null }
 }
 
-// Why stable: consumers compare by identity, so an unrelated store update must not read as a
-// new image owner.
+// Keep target identity stable so unrelated store changes cannot look like an image-owner change.
 const LOCAL_TARGET: RuntimeClientTarget = { kind: 'local' }
 const environmentTargets = new Map<string, RuntimeClientTarget>()
 
@@ -97,7 +107,19 @@ export function resolveNativeChatImageRuntimeContext(
   state: OwnerState,
   tabId: string
 ): NativeChatImageRuntimeContext {
-  const linkContext = resolveNativeChatFileLinkContext(state, tabId)
+  return resolveNativeChatImageRuntimeContextForOwner(
+    state,
+    tabId,
+    findNativeChatTabOwnerWorktreeId(state, tabId)
+  )
+}
+
+export function resolveNativeChatImageRuntimeContextForOwner(
+  state: RouteState & Pick<OwnerState, 'unifiedTabsByWorktree'>,
+  tabId: string,
+  owner: string | null
+): NativeChatImageRuntimeContext {
+  const linkContext = resolveNativeChatFileLinkContextForOwner(state, tabId, owner)
   if (!linkContext) {
     return null
   }
@@ -150,7 +172,38 @@ export function resolveNativeChatImageRuntimeContext(
   return context
 }
 
+/** Ordinary workspace directories need only the selected owner; floating also needs its tab list. */
+export function createNativeChatImageOwnerSelector(tabId: string) {
+  const selectOwner = createNativeChatTabOwnerSelector(tabId)
+  return (state: AppState) => {
+    const owner = selectOwner(state)
+    return {
+      ...selectNativeChatImageRouteState(state),
+      owner,
+      floatingTabs:
+        owner && isFloatingWorkspaceId(owner) && Object.hasOwn(state.unifiedTabsByWorktree, owner)
+          ? state.unifiedTabsByWorktree[owner]
+          : undefined
+    }
+  }
+}
+
 export function useNativeChatImageRuntimeContext(tabId: string): NativeChatImageRuntimeContext {
-  const ownerState = useAppStore(useShallow(selectNativeChatImageOwnerState))
-  return useMemo(() => resolveNativeChatImageRuntimeContext(ownerState, tabId), [ownerState, tabId])
+  const selectOwnerState = useMemo(() => createNativeChatImageOwnerSelector(tabId), [tabId])
+  const ownerState = useAppStore(useShallow(selectOwnerState))
+  return useMemo(() => {
+    // This view serves only the existing floating-directory predicate, never an owner index.
+    const unifiedTabsByWorktree =
+      ownerState.owner && ownerState.floatingTabs
+        ? { [ownerState.owner]: ownerState.floatingTabs }
+        : {}
+    return resolveNativeChatImageRuntimeContextForOwner(
+      {
+        ...ownerState,
+        unifiedTabsByWorktree
+      },
+      tabId,
+      ownerState.owner
+    )
+  }, [ownerState, tabId])
 }

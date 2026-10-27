@@ -1263,6 +1263,23 @@ index d45938515e7a9903de0da0d61716fd42e4deea0c..17d6577e388eb2e4397338093e353738
    private _canvas: OffscreenCanvas | HTMLCanvasElement;
    private _ctx: OffscreenCanvasRenderingContext2D | CanvasRenderingContext2D;
  
+diff --git a/src/browser/services/MouseService.ts b/src/browser/services/MouseService.ts
+index 353e0581da7a95c9473d6169cd9ec548bc3bfe30..a51645fb22b922f8fde5c10730d029e14b8912cd 100644
+--- a/src/browser/services/MouseService.ts
++++ b/src/browser/services/MouseService.ts
+@@ -495,9 +495,9 @@ export class MouseService implements IMouseService {
+    * to fulfill protocol and encoding restrictions.
+    */
+   private _triggerMouseEvent(e: ICoreMouseEvent): boolean {
+-    // range check for col/row
+-    if (e.col < 0 || e.col >= this._bufferService.cols
+-      || e.row < 0 || e.row >= this._bufferService.rows) {
++    // range check for col/row; negated so NaN (touch inertia has no clientX/Y) fails too
++    if (!(e.col >= 0 && e.col < this._bufferService.cols
++      && e.row >= 0 && e.row < this._bufferService.rows)) {
+       return false;
+     }
+ 
 diff --git a/src/common/InputHandler.ts b/src/common/InputHandler.ts
 index 995fe7670a10f11fb9b0b42332484b038ea6c989..3df13f60209ccd097b861d94efd481988d38400f 100644
 --- a/src/common/InputHandler.ts

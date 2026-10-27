@@ -18,8 +18,7 @@ import {
   revokeAllDocPreviewGrants
 } from './doc-preview-grant-registry'
 
-// Why the fixtures approve the document directory up front: these tests exercise the transport
-// half of a read — an entry-only grant's approval flow is pinned in its own test below.
+// Preapprove directories to isolate transport behavior; entry-only authorization is tested separately.
 function sshGrant(): ReturnType<typeof mintDocPreviewGrant> {
   const grant = mintDocPreviewGrant({
     owner: { kind: 'ssh', connectionId: 'ssh-1' },
@@ -136,7 +135,6 @@ describe('readDocPreviewFile — paired runtime owner', () => {
       ok: false,
       status: 404,
       reason: 'unreadable',
-      // Why: fail-closed is deliberate, so the reader is told the host is old, not that it broke.
       message:
         'Secure document previews require a newer Orca on the paired machine. Update it and try again.'
     })

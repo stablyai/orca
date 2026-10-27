@@ -210,7 +210,6 @@ it('preserves menu uploads closed before a delayed or absent thumbnail', async (
     expect(nativeChatPendingAttachmentSnapshot(scope('menu'))).toEqual([])
     expect(readNativeChatComposerDraft(scope('menu')).images).toHaveLength(++completed)
     expect(readNativeChatComposerDraft(scope('menu')).images.at(-1)).toMatchObject({ path })
-    // The save also settles when a thumbnail has not answered at all.
     if (preview === 'delayed') {
       await act(async () => thumbnail.resolve(null))
     }

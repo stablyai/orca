@@ -63,7 +63,7 @@ export function linearMessage(error: unknown): string {
 }
 
 export function sanitizeLinearErrorMessage(message: string): string {
-  // Why: provider text is useful in CLI errors, but raw SDK failures can embed secrets or user payloads.
+  // Preserve useful provider diagnostics while removing secrets and user payloads from SDK errors.
   return stripLinearStackTrace(message)
     .replace(
       /(headers?\s*[:=]\s*)\{[^{}]*(?:authorization|token|api[-_]?key)[^{}]*\}/gi,

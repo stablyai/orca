@@ -1,12 +1,5 @@
 import '../unused-default-rpc-methods.test-fixture'
-/**
- * Replay safety for `agent.launch`, against the real durable ledger.
- *
- * The property under test is narrow and total: one execution per operation, a recorded answer for
- * every replay, a truthful refusal when the outcome is unknown. Each guard here has an ablation
- * beside it, because a replay test that never watched the unguarded code duplicate is a test of the
- * harness rather than of the guard.
- */
+/** Exercise at-most-once launch and truthful replay against the durable ledger; adjacent ablations prove each guard prevents duplication. */
 
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
@@ -46,8 +39,7 @@ type StructuredCreateReply =
   | { ok: true; value: { sessionId: string } }
   | { ok: false; refusal: { code: string; message: string } }
 
-/** Records the operation id the launch handed its inner attach, so the child-id rule is observable
- *  rather than inferred. */
+/** Record attach operation ids to verify the child-id rule directly. */
 const attachOperationIds: string[] = []
 const attachCallerKeys: string[] = []
 
@@ -73,8 +65,7 @@ const { AGENT_LAUNCH_METHODS } = await import('./agent-launch')
 
 const AGENT_LAUNCH = methodNamed(AGENT_LAUNCH_METHODS, 'agent.launch')
 
-// Real wall-clock, because the handler admits against `Date.now()`: the ledger refuses an id dated
-// far from now in either direction, so a frozen fixture timestamp would only ever test that.
+// Use current time because admission rejects operation ids outside its clock window.
 const NOW = Date.now()
 const OPERATION_ID = `${NOW}-000000000000000000000000000000aa`
 
@@ -263,8 +254,7 @@ describe('a replay answers from the record', () => {
     })
     const first = await launch(params, runtime)
 
-    // The settings that produced the receipt move underneath the replay. A recomputed answer would
-    // now say the user prefers a terminal; the recorded one still says what actually ran.
+    // Changed settings must not recompute the recorded launch receipt.
     const movedSettings = runtimeStub({
       settings: {
         experimentalNativeChat: false
@@ -317,8 +307,7 @@ describe('an uncertain launch stays uncertain', () => {
     await store.admitOperation({
       callerKey: 'device-1',
       operationId: OPERATION_ID,
-      // The host's own digest, so the retry passes the fingerprint check and is refused for the
-      // reason under test rather than for disagreeing about what it asked for.
+      // Use the host's digest so admission tests the intended refusal, not a fingerprint mismatch.
       fingerprint: computeAgentLaunchFingerprint(params),
       now: NOW
     })
@@ -440,8 +429,7 @@ describe('settlement is monotone', () => {
 
 describe('the recorded row stays readable by a build that predates it', () => {
   it('writes a launch success as a succeeded row with a string sessionId', async () => {
-    // A terminal launch: the surface has a handle and no session id, which is the case that would
-    // tempt a new outcome status or an optional field.
+    // Terminal outcomes have a handle but no session id; preserve the ledger shape older builds accept.
     await launch(
       createLaunch({
         agent: 'codex',
@@ -455,9 +443,7 @@ describe('the recorded row stays readable by a build that predates it', () => {
       await readPersistedTestAgentSessionStore(directory)
     const outcome = Object.values(file.operations)[0].outcome
 
-    // The ratchet, and the reason this is not a new status arm or an optional `sessionId`: a build
-    // without `launch` validates a row by these two fields and drops a row it rejects, losing its
-    // replay. A downgrade must skip only what it cannot understand.
+    // Older builds require succeeded plus a string sessionId; changing those fields would discard the row on downgrade.
     expect(outcome.status).toBe('succeeded')
     expect(typeof outcome.sessionId).toBe('string')
     expect(outcome.launch).toMatchObject({ outcome: { kind: 'terminal' } })
@@ -474,8 +460,7 @@ describe('an unreadable launch payload costs one replay, never the store', () =>
   }
 
   it('still admits the row, because a load drops a row it rejects', () => {
-    // The ratchet. `isAgentLaunchResult` mirrors a result type by hand, so a field tightened there
-    // would reject rows this same build wrote and lose their replay.
+    // Keep isAgentLaunchResult aligned with results this build writes, or replay rejects its own records.
     expect(
       isAgentSessionOperationRow({
         callerKey: 'device-1',
@@ -515,10 +500,7 @@ describe('a recorded failure replays as the failure it was', () => {
     })
     await expect(launch(params, runtime)).rejects.toThrow('worktree_not_found')
 
-    // `worktree_not_found` is not in AGENT_SESSION_WIRE_REFUSAL_CODES. Narrowing the recorded code
-    // through that closed list answers `agent_session_operation_invalid` — the ledger's "your id is
-    // malformed" signal, which tells a client to mint a fresh id when the truthful answer is that
-    // this launch definitively did not run.
+    // Keep worktree_not_found verbatim: narrowing to agentSession codes would falsely report an invalid id and invite a duplicate attempt.
     const replayed = runtimeStub()
     replayed.showTerminalWorkspaceLaunchScope.mockRejectedValue(new Error('worktree_not_found'))
     await expect(launch(params, replayed)).rejects.toThrow('worktree_not_found')

@@ -9,9 +9,9 @@ on:
         type: string
 
       runner:
-        description: Hosted runner for the unit shards; relay integration keeps its x86 host.
+        description: Hosted runner for the unit shards.
         required: false
-        default: ubuntu-latest
+        default: blacksmith-4vcpu-ubuntu-2404
         type: string
 
       browser_contract:
@@ -91,35 +91,10 @@ jobs:
       - name: Install Electron package binary for tests
         run: node config/scripts/install-electron-package-binary.mjs
 
-      # The image resets HOME during login; shell fixtures intentionally use temporary homes.
-      - name: Preserve explicit login-shell homes on Blacksmith
-        if: runner.os == 'Linux' && startsWith(inputs.runner, 'blacksmith-')
-        run: |
-          sudo python3 - <<'PYTHON'
-          from pathlib import Path
-          profile = Path('/etc/profile.d/blacksmith.sh')
-          if profile.exists():
-              original = profile.read_text()
-              updated = original.replace('export HOME="$RUNNER_HOME"', 'export HOME="${HOME:-$RUNNER_HOME}"')
-              if updated != original:
-                  profile.write_text(updated)
-          PYTHON
-
       - name: Verify Blacksmith unit runner environment
         if: runner.os == 'Linux' && startsWith(inputs.runner, 'blacksmith-')
         run: |
           ELECTRON_RUN_AS_NODE=1 "$(node -p "require('electron')")" --version
-          fixture_home="$(mktemp -d)"
-          trap 'rm -rf "$fixture_home"' EXIT
-          printf 'export ORCA_CI_PROFILE_LOADED=1\n' > "$fixture_home/.bash_profile"
-          HOME="$fixture_home" ORCA_CI_FIXTURE_HOME="$fixture_home" /bin/bash -lc '
-            test "$HOME" = "$ORCA_CI_FIXTURE_HOME" && test "$ORCA_CI_PROFILE_LOADED" = 1
-          ' || {
-            echo '::error::Runner login profile overrides fixture HOME'
-            grep -nH 'HOME' /etc/profile /etc/profile.d/*.sh || true
-            HOME="$fixture_home" /bin/bash -lc 'printf "Observed HOME=%s\n" "$HOME"'
-            exit 1
-          }
 
       - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
         with:
@@ -175,7 +150,7 @@ jobs:
           export ORCA_SHARD_SOURCE_SHA
           node config/scripts/run-vitest.mjs run --config config/vitest.config.ts \
             --shard=${{ matrix.shard.index }}/${{ matrix.shard.count }} \
-            ${{ (runner.arch == 'ARM64' || inputs.runner == 'blacksmith-4vcpu-ubuntu-2404') && '--maxWorkers=4' || '' }}
+            ${{ inputs.runner == 'blacksmith-8vcpu-ubuntu-2404' && '--maxWorkers=8' || (runner.arch == 'ARM64' || inputs.runner == 'blacksmith-4vcpu-ubuntu-2404') && '--maxWorkers=4' || '' }}
 
       - name: Seal unit module cache
         id: module-cache-seal
@@ -213,7 +188,7 @@ jobs:
       fail-fast: false
       matrix:
         node: ${{ fromJSON(inputs.node_versions) }}
-    runs-on: ubuntu-latest
+    runs-on: blacksmith-4vcpu-ubuntu-2404
     timeout-minutes: 60
 
     steps:

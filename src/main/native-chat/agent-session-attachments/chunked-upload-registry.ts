@@ -8,18 +8,15 @@ type RegistryEntry<T> = {
 
 export type ChunkedUploadRegistryOptions<T> = {
   maxConcurrent: number
-  /** Idle lifetime: every touch restarts it. */
+  /** Reset idle expiry on every touch. */
   ttlMs: number
   tooManyMessage: string
   notFoundMessage: string
-  /** Runs when an upload expires unfinished; never for an explicit delete. */
+  /** Expiry only, not explicit deletion. */
   onExpire?: (value: T) => void
 }
 
-/**
- * In-flight chunked uploads held between start and commit: bounded in number, each forgotten after
- * an idle TTL so a client that disappears mid-upload cannot pin the slot.
- */
+/** Bound uploads and expire idle slots so disappeared clients cannot reserve them forever. */
 export class ChunkedUploadRegistry<T> {
   private readonly entries = new Map<string, RegistryEntry<T>>()
 
@@ -29,7 +26,6 @@ export class ChunkedUploadRegistry<T> {
     return this.entries.size
   }
 
-  /** `build` receives the new id, for state that is named after it. */
   create(build: (uploadId: string) => T): string {
     this.pruneExpired()
     if (this.entries.size >= this.options.maxConcurrent) {
@@ -112,7 +108,6 @@ export class ChunkedUploadRegistry<T> {
   }
 }
 
-/** The next chunk must start where the last one ended and stay within the declared size. */
 export function nextChunkedUploadLength(
   upload: { expectedLength: number; receivedLength: number },
   offset: number,

@@ -26,13 +26,12 @@ export function registerRepoCatalogHandlers(
   store: Store,
   runtime: Pick<OrcaRuntimeService, 'removeProject'>
 ): void {
-  // Why one shared reference: enrichment dedupes coalesced callers by callback identity, so a fresh
-  // closure per list call would stack up (and re-broadcast) for the length of a slow sweep.
+  // Enrichment deduplicates by callback identity; per-call closures accumulate broadcasts during slow sweeps.
   const broadcastReposChanged = (): void => notifyReposChanged(mainWindow)
 
   ipcMain.handle('repos:list', () => {
     enrichMissingRepoGitRemoteIdentities(store, { onChanged: broadcastReposChanged })
-    // Why: username resolution spawns git/gh, so keep it off this sync handler (issue #7225); it re-lists when values land.
+    // Git/gh username discovery must not block synchronous listing; completion triggers a refresh (#7225).
     enrichRepoGitUsernames(store, { onChanged: broadcastReposChanged })
     return visibleRepos(store)
   })
@@ -61,7 +60,7 @@ export function registerRepoCatalogHandlers(
   ipcMain.handle(
     'repos:reorder',
     (_event, args: { orderedIds: string[] }): { status: 'applied' | 'rejected' } => {
-      // Why: a permutation mismatch means the renderer's drag was stale vs a concurrent add/remove; reject so it can resync.
+      // Reject stale drag permutations so the renderer can resync after concurrent changes.
       const ids = Array.isArray(args?.orderedIds) ? args.orderedIds : []
       const applied = store.reorderRepos(ids)
       if (applied) {
@@ -92,7 +91,7 @@ export function registerRepoCatalogHandlers(
     }
   )
 
-  // Why: forget a project on one execution host without disturbing the same repo id on other hosts (SSH-workspace forget flow).
+  // Removal is host-scoped because repo IDs can collide.
   ipcMain.handle(
     'repos:removeForHost',
     async (_event, args: { repoId: string; hostId: string }) => {
@@ -106,10 +105,8 @@ export function registerRepoCatalogHandlers(
       const row = store
         .getRepos()
         .find((repo) => repo.id === args.repoId && getRepoExecutionHostId(repo) === hostId)
-      // Why the runtime's removal: this process runs the project's local and SSH sessions, and only
-      // the host's own sweep stops the ones no renderer lists. A paired server's row is residue.
+      // Runtime sweeps stop local/SSH sessions absent from renderer listings; paired-server rows are residue.
       if (row && parseExecutionHostId(hostId)?.kind !== 'runtime') {
-        // It notifies the renderer and paired clients itself.
         await runtime.removeProject(row)
         scheduleCurrentWorktreeBaseDirectoryWatcherSync()
         return

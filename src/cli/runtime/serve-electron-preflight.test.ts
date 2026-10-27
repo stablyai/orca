@@ -154,7 +154,6 @@ describe('preflightElectronServe', () => {
       expect(run({}, 2_000, () => 'Aqua|ssh=0|sandbox=0')).toBeNull()
       expect(run({}, 1_000 + 31 * 60_000)).toBeNull()
       expect(run({ force: true }, 2_000)).toBeNull()
-      // --force also clears it for the next run.
       expect(readServeAbortPark(userData)).toBeNull()
     })
 

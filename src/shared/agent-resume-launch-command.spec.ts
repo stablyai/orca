@@ -14,9 +14,7 @@ const SHELLS: { platform: NodeJS.Platform; shell: AgentStartupShell }[] = [
   { platform: 'win32', shell: 'cmd' }
 ]
 
-/** Independent selector oracle — deliberately NOT the implementation's own
- * predicate, so a regression that shrinks the stripped set cannot also blind
- * this assertion. */
+/** Use an independent selector oracle so shrinking the stripped set cannot also blind the assertion. */
 function isResumeSelectorToken(token: string): boolean {
   return (
     ['--resume', '--continue', '-r', '-c'].includes(token) ||
@@ -112,8 +110,7 @@ describe('buildClaudeResumeLaunchCommand', () => {
   })
 
   it('fails open for claude outside command position (wrapper without --)', () => {
-    // Why: npx/bunx-style passthrough cannot be told apart from an argument
-    // that merely names claude, so the guard defers to append-only behavior.
+    // Without a wrapper -- boundary, claude may be an argument; retain append-only behavior.
     expect(buildClaudeResumeLaunchCommand("npx claude '--resume'", RESUME, 'posix')).toBe(
       `npx claude '--resume' '--resume' '${SESSION_ID}'`
     )
@@ -182,8 +179,7 @@ describe('buildClaudeResumeLaunchCommand', () => {
   it.each(['claude a^" --resume ^"b', 'claude ^"x --resume^" --resume old'])(
     'fails open when a cmd caret escapes a quote: %s',
     (base) => {
-      // cmd strips the caret and the child's parser reads a bare quote
-      // delimiter, so the tokenizer's word boundaries stop matching argv.
+      // cmd strips the caret before child quote parsing; tokenizer words no longer match argv.
       expect(buildClaudeResumeLaunchCommand(base, RESUME, 'cmd')).toBe(
         `${base} "--resume" "${SESSION_ID}"`
       )
@@ -205,16 +201,14 @@ describe('buildClaudeResumeLaunchCommand', () => {
     'claude -`r foo --model x',
     'claude --resum`e stale --model x'
   ])('fails open on powershell escape sequences, quoted or bare: %s', (base) => {
-    // PowerShell expands these in bare arguments too, so the tokenizer's
-    // token value is not what argv receives.
+    // PowerShell expands bare escape sequences too; token values no longer match argv.
     expect(buildClaudeResumeLaunchCommand(base, RESUME, 'powershell')).toBe(
       `${base} '--resume' '${SESSION_ID}'`
     )
   })
 
   it('fails open on a token-leading powershell backtick before whitespace', () => {
-    // PowerShell drops the backtick AND the whitespace, emitting no token,
-    // so the tokenizer's extra token would shift the locator.
+    // PowerShell drops backtick+whitespace without a token; the extra tokenizer token would shift the locator.
     const base = 'claude --resume ` \t"q"'
     expect(buildClaudeResumeLaunchCommand(base, RESUME, 'powershell')).toBe(
       `${base} '--resume' '${SESSION_ID}'`
@@ -222,8 +216,7 @@ describe('buildClaudeResumeLaunchCommand', () => {
   })
 
   it('fails open on the powershell stop-parsing token', () => {
-    // After a bare --%, PowerShell hands the rest of the line to the child
-    // literally, so an appended quoted selector would arrive as literal bytes.
+    // After --%, appended quotes reach the child literally.
     const base = 'claude --% --resume stale --model sonnet'
     expect(buildClaudeResumeLaunchCommand(base, RESUME, 'powershell')).toBe(
       `${base} '--resume' '${SESSION_ID}'`
@@ -253,8 +246,7 @@ describe('buildClaudeResumeLaunchCommand', () => {
     'claude "--add-dir" "C:\\a\\" "--" "--out" "D:\\x\\"',
     'claude --add-dir "C:\\repo\\" --resume old'
   ])('fails open when a cmd backslash run makes a quote literal: %s', (base) => {
-    // An odd run of backslashes makes the quote a literal byte to the child's
-    // CommandLineToArgvW parser, so tokenizer boundaries stop matching argv.
+    // Odd backslash runs make quotes literal to CommandLineToArgvW, invalidating tokenizer boundaries.
     expect(buildClaudeResumeLaunchCommand(base, RESUME, 'cmd')).toBe(
       `${base} "--resume" "${SESSION_ID}"`
     )
@@ -270,8 +262,7 @@ describe('buildClaudeResumeLaunchCommand', () => {
   })
 
   it('fails open when a cmd caret escapes a real argument separator', () => {
-    // cmd strips ^ before the child re-splits on the bare space, so the
-    // tokenizer's merged token would drop the user's second argument.
+    // cmd strips ^ before the child splits the bare space; splicing a merged token would lose the second argument.
     const base = 'claude --resume a^ b --model x'
     expect(buildClaudeResumeLaunchCommand(base, RESUME, 'cmd')).toBe(
       `${base} "--resume" "${SESSION_ID}"`
@@ -283,8 +274,7 @@ describe('buildClaudeResumeLaunchCommand', () => {
     ['claude --resume old `', 'powershell' as const],
     ['claude --resume old ^', 'cmd' as const]
   ])('fails open on a trailing unpaired escape: %s', (base, shell) => {
-    // A dangling escape would swallow the separator before the appended
-    // selector, so claude would receive no exact --resume at all.
+    // A dangling escape can swallow the appended selector's separator.
     const quoted = shell === 'cmd' ? `"--resume" "${SESSION_ID}"` : `'--resume' '${SESSION_ID}'`
     expect(buildClaudeResumeLaunchCommand(base, RESUME, shell)).toBe(`${base} ${quoted}`)
   })
@@ -308,8 +298,7 @@ describe('buildClaudeResumeLaunchCommand', () => {
   })
 
   it('fails open on escape characters the windows shells keep literal', () => {
-    // cmd keeps ^ literal inside double quotes; PowerShell keeps ` literal
-    // inside single quotes, so these tokens are not really selectors.
+    // cmd retains ^ in double quotes and PowerShell retains backticks in single quotes; neither forms a selector.
     expect(buildClaudeResumeLaunchCommand('claude "-^-resume" old', RESUME, 'cmd')).toBe(
       `claude "-^-resume" old "--resume" "${SESSION_ID}"`
     )
@@ -335,8 +324,7 @@ describe('buildClaudeResumeLaunchCommand', () => {
   it.each(['cmd', 'powershell'] as const)(
     'fails open on a posix-style assignment prefix under %s',
     (shell) => {
-      // NAME=value prefixes are posix-only syntax; on Windows shells that
-      // token is a bogus executable, so nothing may be spliced.
+      // Assignment prefixes are POSIX-only; Windows shells treat them as bogus executable names.
       const base = "FOO='bar' claude --resume old"
       const quoted = shell === 'cmd' ? `"--resume" "${SESSION_ID}"` : `'--resume' '${SESSION_ID}'`
       expect(buildClaudeResumeLaunchCommand(base, RESUME, shell)).toBe(`${base} ${quoted}`)
@@ -464,8 +452,7 @@ describe('buildClaudeResumeLaunchCommand', () => {
   })
 
   it('fails open on cmd single-quoted literals that merely look like selectors', () => {
-    // cmd passes the quotes through, so these are junk positionals for
-    // claude, not real selectors or terminators.
+    // cmd passes single quotes through as junk positional bytes, not selectors/terminators.
     expect(buildClaudeResumeLaunchCommand("claude '--resume' old", RESUME, 'cmd')).toBe(
       `claude '--resume' old "--resume" "${SESSION_ID}"`
     )
@@ -544,7 +531,7 @@ describe('buildAgentResumeStartupPlan claude selector guard', () => {
     expect(restored?.launchCommand).toBe(`claude '--model' 'sonnet' '--resume' '${SESSION_ID}'`)
   })
 
-  it('still launches exotic custom commands that the tokenizer rejects', () => {
+  it('builds a resume command for a custom command the tokenizer rejects', () => {
     const restored = buildAgentResumeStartupPlan({
       agent: 'claude',
       providerSession,
@@ -556,7 +543,7 @@ describe('buildAgentResumeStartupPlan claude selector guard', () => {
     expect(restored?.launchCommand.endsWith(`'--resume' '${SESSION_ID}'`)).toBe(true)
   })
 
-  it('does not change other agents', () => {
+  it('retains Gemini args while appending its resume identity', () => {
     const restored = buildAgentResumeStartupPlan({
       agent: 'gemini',
       providerSession,
@@ -577,4 +564,33 @@ describe('buildAgentResumeStartupPlan claude selector guard', () => {
     })
     expect(restored?.launchConfig.agentCommand).toBe("claude '--resume'")
   })
+})
+
+describe('buildAgentResumeStartupPlan claude effort', () => {
+  it.each(SHELLS)(
+    "resumes at the session's effort after a stale launch flag ($platform/$shell)",
+    ({ platform, shell }) => {
+      const session = { ...providerSession, effort: 'max' }
+      const restored = buildAgentResumeStartupPlan({
+        agent: 'claude',
+        providerSession: session,
+        cmdOverrides: {},
+        agentArgs: '--effort low',
+        platform,
+        shell
+      })
+      const command = restored?.launchCommand ?? ''
+      const tokens = tokenizeStartupCommand(command, shell)
+      // Claude keeps the last --effort it parses.
+      expect(tokens.ok && tokens.tokens.slice(-6)).toEqual([
+        '--effort',
+        'low',
+        '--effort',
+        'max',
+        ...RESUME
+      ])
+      // The saved launch recipe stays the user's own.
+      expect(restored?.launchConfig.agentArgs).toBe('--effort low')
+    }
+  )
 })

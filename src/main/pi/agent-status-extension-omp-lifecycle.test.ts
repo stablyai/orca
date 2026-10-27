@@ -11,6 +11,11 @@ function postedHookNames(fetchMock: ReturnType<typeof vi.fn>): string[] {
   )
 }
 
+function lastSubagentIds(fetchMock: ReturnType<typeof vi.fn>): string[] {
+  const body = JSON.parse(String(fetchMock.mock.calls.at(-1)?.[1]?.body))
+  return (body.payload.subagents ?? []).map((subagent: { id: string }) => subagent.id)
+}
+
 const OMP_RUNTIME_CASES = [
   ['configured OMP', { kind: 'omp' as const }],
   ['title-routed OMP', { kind: 'pi' as const, title: 'omp' }],
@@ -96,7 +101,7 @@ describe('OMP agent_end contract', () => {
   it.each(OMP_RUNTIME_CASES)(
     'settles a completed %s turn without waiting for ctx.isIdle',
     async (_name, args) => {
-      // Why: absent payload and absent flag are both terminal for a version that cannot send one.
+      // Older versions cannot send willContinue; missing payload/flag must still settle.
       for (const event of [{ willContinue: false }, {}, undefined]) {
         const harness = createAgentStatusExtensionHarness(args)
         const context = { isIdle: vi.fn(() => false) }
@@ -243,6 +248,65 @@ describe('OMP subagent settlement', () => {
       expect(postedHookNames(harness.fetchMock).at(-1)).toBe('agent_end')
     }
   )
+
+  // OMP hands extensions its package exports, including the process-wide agent registry.
+  function ompModule(session?: { isStreaming: boolean; hasPendingAsyncWork: () => boolean }) {
+    return { AgentRegistry: { global: () => ({ get: () => (session ? { session } : undefined) }) } }
+  }
+
+  it('settles OMP when a child it no longer runs never reported finishing', async () => {
+    const harness = createAgentStatusExtensionHarness({ kind: 'omp', ompModule: ompModule() })
+
+    await hook(harness, 'agent_start')
+    await lifecycle(harness, 'Orphan', 'started')
+    await harness.callHook('agent_end', {}, { getAsyncJobSnapshot: () => ({ running: [] }) })
+    await vi.advanceTimersByTimeAsync(0)
+
+    expect(postedHookNames(harness.fetchMock).at(-1)).toBe('agent_end')
+  })
+
+  it('drops only the children OMP no longer runs', async () => {
+    const harness = createAgentStatusExtensionHarness({ kind: 'omp', ompModule: ompModule() })
+    const job = { type: 'task', agentId: 'Helper', label: 'Helper' }
+
+    await hook(harness, 'agent_start')
+    await lifecycle(harness, 'Orphan', 'started')
+    await lifecycle(harness, 'Helper', 'started')
+    await harness.callHook('agent_end', {}, { getAsyncJobSnapshot: () => ({ running: [job] }) })
+    await vi.advanceTimersByTimeAsync(0)
+
+    expect(postedHookNames(harness.fetchMock)).not.toContain('agent_end')
+    expect(lastSubagentIds(harness.fetchMock)).toEqual(['Helper'])
+  })
+
+  it.each([
+    ['the job snapshot cannot name task jobs', [{ type: 'task', label: 'Helper-b1' }], ompModule()],
+    ['no agent registry is exposed', [], undefined]
+  ])('keeps every child when %s', async (_name, running, module) => {
+    const harness = createAgentStatusExtensionHarness({ kind: 'omp', ompModule: module })
+
+    await hook(harness, 'agent_start')
+    await lifecycle(harness, 'Helper', 'started')
+    await harness.callHook('agent_end', {}, { getAsyncJobSnapshot: () => ({ running }) })
+    await vi.advanceTimersByTimeAsync(0)
+
+    expect(postedHookNames(harness.fetchMock)).not.toContain('agent_end')
+  })
+
+  it('keeps OMP working while a woken child waits on its own background work', async () => {
+    const session = { isStreaming: false, hasPendingAsyncWork: () => true }
+    const harness = createAgentStatusExtensionHarness({
+      kind: 'omp',
+      ompModule: ompModule(session)
+    })
+
+    await hook(harness, 'agent_start')
+    await lifecycle(harness, 'Helper', 'started')
+    await harness.callHook('agent_end', {}, { getAsyncJobSnapshot: () => ({ running: [] }) })
+    await vi.advanceTimersByTimeAsync(0)
+
+    expect(postedHookNames(harness.fetchMock)).not.toContain('agent_end')
+  })
 
   it('does not settle OMP when a child finishes mid-run', async () => {
     const harness = createAgentStatusExtensionHarness({ kind: 'omp' })

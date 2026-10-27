@@ -9,7 +9,6 @@ import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switc
 import { makeLayout, makeTab } from './store-test-helpers'
 import { drawTabsFromMain } from './tabs-drawn-from-main.test-fixture'
 
-// Main's answer to the window's layout commands, as a switch-on build sends them.
 vi.mock('@/runtime/runtime-rpc-client', async (importOriginal) =>
   (
     await import('@/runtime/layout-apply-test-transport.test-fixture')
@@ -175,7 +174,6 @@ describe('file links open beside their source', () => {
     addEditor(store, '/repo/seed.ts', b)
     focus(store, a)
 
-    // Main takes the seeded layout; new editor tabs come from its frames.
     const main = await drawTabsFromMain(store)
     store.getState().openFile(fileInput('/repo/plain.ts'))
     const opened = store
@@ -194,7 +192,6 @@ describe('file links open beside their source', () => {
     const store = createEditorTabsStore()
     const { a, b, c } = seedColumns(store, 'terminal', 'terminal', 'editor')
 
-    // Main takes the seeded layout; new editor tabs come from its frames.
     const main = await drawTabsFromMain(store)
     store.getState().openFile(fileInput('/repo/plain.ts'))
     focus(store, a)
@@ -212,7 +209,6 @@ describe('file links open beside their source', () => {
     addEditor(store, '/repo/link.ts', c)
     store.getState().activateTab(`${c}-terminal`)
     focus(store, a)
-    // Main takes the seeded layout; new editor tabs come from its frames.
     const main = await drawTabsFromMain(store)
     const existing = store
       .getState()
@@ -238,7 +234,6 @@ describe('file links open beside their source', () => {
     addEditor(store, '/repo/link.ts', a)
     store.getState().activateTab('source')
 
-    // Main takes the seeded layout; new editor tabs come from its frames.
     const main = await drawTabsFromMain(store)
     const opened = store
       .getState()
@@ -254,7 +249,6 @@ describe('file links open beside their source', () => {
   it('keeps placement on the captured source when focus moves during resolution', async () => {
     const store = createEditorTabsStore()
     const { b, c } = seedColumns(store, 'terminal', 'terminal', 'terminal')
-    // Main takes the seeded layout; new editor tabs come from its frames.
     const main = await drawTabsFromMain(store)
     const intent = linkIntent(store)
     focus(store, c)
@@ -270,7 +264,6 @@ describe('file links open beside their source', () => {
     const store = createEditorTabsStore()
     const { a, b, c } = seedColumns(store, 'terminal', 'terminal', 'terminal')
     addTab(store, 'terminal', 'keeps-a-alive', a)
-    // Main takes the seeded layout; new editor tabs come from its frames.
     const main = await drawTabsFromMain(store)
     const intent = linkIntent(store)
     store.getState().moveUnifiedTabToGroup(intent!.sourceTabId, b)
@@ -287,7 +280,6 @@ describe('file links open beside their source', () => {
     const store = createEditorTabsStore()
     const { a, c } = seedColumns(store, 'terminal', 'terminal', 'editor')
     addTab(store, 'terminal', 'keeps-a-alive', a)
-    // Main takes the seeded layout; new editor tabs come from its frames.
     const main = await drawTabsFromMain(store)
     const intent = linkIntent(store)
     removeTab(store, intent!.sourceTabId)
@@ -305,7 +297,6 @@ describe('file links open beside their source', () => {
     const store = createEditorTabsStore()
     seedColumns(store, 'terminal', 'terminal', 'terminal')
 
-    // Main takes the seeded layout; new editor tabs come from its frames.
     const main = await drawTabsFromMain(store)
     const opened = store
       .getState()
@@ -322,7 +313,6 @@ describe('file links open beside their source', () => {
     addEditor(store, '/repo/link.ts', c)
     store.getState().activateTab('source')
 
-    // Main takes the seeded layout; new editor tabs come from its frames.
     const main = await drawTabsFromMain(store)
     const opened = store
       .getState()
@@ -373,7 +363,6 @@ describe('file links open beside their source', () => {
     const store = createEditorTabsStore()
     const { b } = seedColumns(store, 'terminal', 'terminal', 'terminal')
 
-    // Main takes the seeded layout; new editor tabs come from its frames.
     const main = await drawTabsFromMain(store)
     const opened = store
       .getState()

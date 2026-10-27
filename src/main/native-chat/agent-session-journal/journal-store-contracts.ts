@@ -12,7 +12,7 @@ import type {
   AgentJournalTurnScope,
   AgentSessionJournalIdentity
 } from '../../../shared/agent-session-journal-types'
-import type { AgentSessionMessageSource } from '../../../shared/agent-session-message-source'
+import type { AgentSessionMessageSource } from '../../../shared/agent-session/agent-session-message-source'
 import type { AgentSessionExecutionOptions } from '../../../shared/agent-session-execution-options'
 import type { JournalHostDatabase } from './journal-host-database'
 import type { JournalLifecycleMutationInput } from './journal-row-builders'
@@ -38,19 +38,16 @@ export type ResolveDispatchInput = {
   fence: number
   recovered?: true
 } &
-  /** A null identity: the provider took the message without echoing an item of its own, as a
-   *  conversation command it carries out in place. */
+  /** Null identity means the provider accepted without echoing an item, e.g. an in-place command. */
   (
     | { state: 'accepted'; providerIdentity: AgentJournalItemIdentity | null }
-    /** The turn the message is handed into — the live root turn, or `thread` when none runs. */
+    /** Handover scope: live root turn, otherwise thread. */
     | {
         state: 'pending'
         turnScope: AgentJournalTurnScope
-        /** The stopped messages this send carries as history (`JournalDispatchRow.carries`). */
         carries?: readonly string[]
       }
-    /** `reason` is what released clients print, `rejection` what newer ones read: both from
-     *  `agentSessionFailureWords`, never written by hand. */
+    /** Generate both legacy reason text and typed rejection with agentSessionFailureWords. */
     | ({
         state: 'rejected'
         keptAsQueuedMessageId?: string
@@ -68,18 +65,15 @@ export type JournalAppendResult = {
 export type JournalItemAppendOptions = AgentJournalRowAttribution & {
   echoOf?: JournalItemEcho['echoOf']
   fence: number
-  /** The generation whose execution produced the item: set by a provider's observation, and by
-   *  nothing else. Host bookkeeping leaves it out and keeps the item's (`journalItemOwnerFence`). */
+  /** Provider execution provenance; host bookkeeping omits it to retain the item's owner. */
   ownerFence?: number
-  /** A reusable child's write: the fence of the child process that produced it
-   *  (`JournalItemRow.executionOwner`). */
+  /** Fence of the reusable child process producing this write. */
   executionOwner?: number
   observedAt?: number
   recovered?: true
 }
 export type JournalTombstoneInput = { fence: number }
 
-/** One reduced item, the producer that wrote it and the turn it was created beside. */
 export type JournalItemLinkageVisitor = (
   itemId: string,
   sequence: number,
@@ -91,20 +85,16 @@ export type JournalLifecycleBatchInput = {
   settlementId: string
   mutations: readonly JournalLifecycleMutationInput[]
   fence: number
-  /** A provider's own batch: the generation that produced every item it writes
-   *  (`JournalItemAppendOptions.ownerFence`). */
+  /** Provider generation producing every item; host bookkeeping omits it. */
   ownerFence?: number
   recovered?: true
-  /** Submission verdicts belonging to this settlement, committed before its item rows. */
+  /** Commit settlement verdicts before item rows. */
   dispatches?: readonly ResolveDispatchInput[]
-  /** Rejects the sends still queued with this first, in the same append: a failed start's row
-   *  follows the messages it failed, and no reader meets one without the other. With none still
-   *  queued, the batch is not written either. */
+  /** Atomically reject queued sends before the batch; skip the batch when none remain. */
   rejectsQueued?: AgentJournalDispatchRejection
 }
 
-/** A lifecycle batch whose rows are chosen at its own turn in the write queue, so a write queued
- *  ahead of it (an answer, a Stop) is what it plans from. */
+/** Plan after preceding writes, including answers and Stops. */
 export type JournalPlannedLifecycleBatchInput = Pick<
   JournalLifecycleBatchInput,
   'settlementId' | 'fence' | 'recovered'
@@ -119,7 +109,7 @@ export type JournalResolvedLifecycleBatchInput = Omit<
   JournalLifecycleBatchInput,
   'mutations' | 'rejectsQueued' | 'dispatches'
 > & {
-  /** Read from the fold with every earlier write landed; may return none. */
+  /** Read after earlier writes; empty means no mutations. */
   resolve: () => readonly JournalLifecycleMutationInput[]
 }
 
@@ -128,25 +118,21 @@ export type JournalSubmissionInput = {
   payloadFingerprint: string
   body: AgentJournalMessageItem
   fence: number
-  /** The send is accepted now and handed over later, by a `dispatch{pending}` row. */
+  /** Acceptance precedes handover; dispatch/pending records delivery later. */
   handoverRecorded?: true
-  /** Stamped by `appendSubmission` from its consume; a caller-passed value must match it. */
+  /** Derived from consume; caller-provided values must match. */
   queuedMessageId?: string
-  /** Who asked for this turn (`JournalSubmissionRow.origin`). */
   origin?: 'client' | 'host'
-  /** Who it is from (`JournalSubmissionRow.source`); the row keeps the kind only. */
+  /** Persist only the sender kind. */
   source?: Pick<AgentSessionMessageSource, 'kind'>
-  /** The choices it runs on (`JournalSubmissionRow.options`). */
   options?: AgentSessionExecutionOptions
 }
 
-/** A submission append that hands off a queued card: the submission names it, and that row is
- *  the whole hand-off. */
+/** The submission's queue link constitutes the entire handoff. */
 export type JournalSubmissionConsume = {
   messageId: string
   expect: 'waiting' | 'returned'
-  /** The queue's own send: refused in the consume's transaction while the queue's pause holds
-   *  the card. Send-now omits it. */
+  /** Automatic drain honors pauses in the consume transaction; Send now omits this. */
   yieldsToPause?: true
 }
 
@@ -156,20 +142,16 @@ export type JournalItemAppendInput = {
   options: JournalItemAppendOptions
 }
 
-/** What `JournalQueuedMessages` reads from the journal that owns it. */
 export type JournalQueuedMessagesDeps = {
   sessionId: string
   serialize: <T>(run: JournalWriteBody<T>) => Promise<T>
   database: () => JournalHostDatabase
   readOnly: () => boolean
   state: () => JournalReducerState
-  /** Where the reopen's pause begins when this handle could not mark it (`reopenFloor`). */
+  /** Fallback pause boundary when this handle could not write its reopen mark. */
   reopenFloor: () => AgentJournalCursor | null
-  /** The journal's own writer: every card change is a journal row, published and waking the drain
-   *  through the row's own commit. */
   writer: JournalRowWriter
-  /** The journal's commit notification, for the one write that appends no row: an import that
-   *  only deletes legacy rows. */
+  /** Notify after legacy deletion that appends no row. */
   committed: () => void
   claimAttachments: JournalAttachmentClaim
 }

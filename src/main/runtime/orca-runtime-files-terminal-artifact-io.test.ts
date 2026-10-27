@@ -11,7 +11,6 @@ import {
   resolveTerminalArtifactPath,
   useTerminalArtifactTempFiles
 } from './orca-runtime-files-terminal-artifact-fixtures'
-import { SshHostNotServedError } from '../providers/ssh-host-not-served-error'
 import { RUNTIME_PREVIEWABLE_BINARY_MAX_BYTES } from './files/file-preview-budget'
 import type { RuntimeFileCommands } from './orca-runtime-files'
 
@@ -23,7 +22,7 @@ vi.mock(
   './file-watcher-host',
   async () => (await import('./orca-runtime-files-mock-registry')).fileWatcherHostMock
 )
-vi.mock('../ipc/filesystem-auth', async () =>
+vi.mock('../ipc/filesystem/filesystem-auth', async () =>
   (await import('./orca-runtime-files-mock-registry')).filesystemAuthModuleMock()
 )
 vi.mock('../git/runner', async () =>
@@ -364,16 +363,13 @@ describe('RuntimeFileCommands', () => {
       await expect(readFile(artifactPath, 'utf8')).resolves.toBe('%PDF text-looking bytes')
     })
 
-    it('refuses a native-chat artifact on an SSH target as not served', async () => {
-      const { commands, store } = createRuntimeFileCommands({
-        path: '/repo',
-        hasRecentNativeChatOutputPath: vi.fn(() => true)
-      })
+    it('never reads this machine for a native-chat path outside an SSH workspace', async () => {
+      const { commands, store } = createRuntimeFileCommands({ path: '/repo' })
       store.getRepo.mockReturnValue({ connectionId: 'ssh-1' })
 
       await expect(
         resolveRemoteNativeChatArtifact(commands, '/home/me/report.json')
-      ).rejects.toThrow(SshHostNotServedError)
+      ).rejects.toThrow('outside an SSH workspace')
     })
   })
 })

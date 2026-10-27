@@ -16,7 +16,6 @@ export function readDevinHooksConfig(configPath: string): HooksConfig | null {
   }
 }
 
-/** Original file text alongside its parsed form, so a write can edit the text in place. */
 export function readDevinHooksSource(
   configPath: string
 ): { text: string | null; config: HooksConfig } | null {
@@ -34,11 +33,7 @@ export function readDevinHooksSource(
   return config === null ? null : { text, config }
 }
 
-/**
- * Serialize by editing the original JSONC text one hook event at a time, so the user's
- * comments, key order, and formatting survive. A parse -> JSON.stringify round trip would
- * silently drop all of them.
- */
+/** Edit JSONC in place to preserve user comments, key order, and formatting. */
 export function serializeDevinHooksConfig(
   originalText: string | null,
   nextConfig: HooksConfig
@@ -52,8 +47,7 @@ export function serializeDevinHooksConfig(
   const nextHooks = nextConfig.hooks ?? {}
 
   let text = originalText
-  // Why: touch only the events that actually changed, so comments attached to a user's
-  // own untouched hook entries stay put.
+  // Leave unchanged events intact so their attached comments survive.
   for (const eventName of new Set([...Object.keys(previousHooks), ...Object.keys(nextHooks)])) {
     const nextValue = nextHooks[eventName]
     if (JSON.stringify(previousHooks[eventName]) === JSON.stringify(nextValue)) {
@@ -61,7 +55,7 @@ export function serializeDevinHooksConfig(
     }
     text = applyEdits(
       text,
-      // Why: `undefined` removes the key, which is how remove() drops an emptied event.
+      // jsonc-parser removes a key when its replacement is undefined.
       modify(text, ['hooks', eventName], nextValue, {
         formattingOptions: { insertSpaces: true, tabSize: 2 }
       })

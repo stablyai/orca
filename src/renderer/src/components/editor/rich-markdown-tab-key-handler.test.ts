@@ -8,8 +8,7 @@ import { createRichMarkdownEditorCodec } from './rich-markdown-source-transport'
 import { createRichMarkdownKeyHandler, type KeyHandlerContext } from './rich-markdown-key-handler'
 
 function createEditor(content: JSONContent): Editor {
-  // Why: each Editor needs its own marked registry; sharing one module-scoped
-  // extension accumulates tokenizer state across tests.
+  // Isolate marked registries so tokenizer state cannot accumulate across editors.
   return new Editor({
     element: null,
     extensions: [
@@ -22,10 +21,7 @@ function createEditor(content: JSONContent): Editor {
   })
 }
 
-/**
- * Why: mixed bullet/task nesting and code-block indentation only reproduce
- * against the live extension set, not the trimmed StarterKit one above.
- */
+/** Mixed task/bullet nesting and code indentation require the production extensions. */
 function createMarkdownEditor(markdown: string): Editor {
   return new Editor({
     element: null,
@@ -37,11 +33,7 @@ function createMarkdownEditor(markdown: string): Editor {
   })
 }
 
-/**
- * Why: pasted list HTML is the path the reported bug came in through — the
- * editor has no plain-text markdown paste transform. The DOM-less test env
- * cannot parse HTML, so assert against the node shapes that paste produces.
- */
+/** Use the node shapes HTML paste produces because this DOM-less fixture cannot parse the reported pasted HTML. */
 function createNodeEditor(content: JSONContent): Editor {
   return new Editor({
     element: null,

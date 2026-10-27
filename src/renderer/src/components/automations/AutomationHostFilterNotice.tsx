@@ -11,11 +11,7 @@ import {
   type AutomationHostRecoveryAction
 } from './automation-host-status-descriptors'
 
-/**
- * Inline status for the current host selection, plus the two polite
- * announcements. Status appears inline rather than as a toast because the user
- * has to read and act on it, and it must never steal focus.
- */
+/** Keep actionable host status inline and announce updates politely without taking focus. */
 
 export function automationHostLoadSummaryMessage(
   failedHostCount: number,

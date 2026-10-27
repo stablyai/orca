@@ -11,8 +11,7 @@ import { SkillSharePackageSummary } from './SkillSharePackageSummary'
 import { SkillShareReleaseNotesField } from './SkillShareReleaseNotesField'
 import { shortDigest } from './skill-package-digest'
 
-/** Radix warns about a missing description unless the caller opts out, so the
- *  dialog and its header have to agree on when one exists. */
+/** Keep dialog description presence aligned with the header to satisfy Radix accessibility checks. */
 export function skillShareDialogHasDescription(
   published: boolean,
   publishingNewVersion: boolean
@@ -57,9 +56,7 @@ export function SkillShareDialogHeader({
                 )
               : translate('auto.components.skills.SkillShareDialog.title', 'Share skill')}
       </DialogTitle>
-      {/* Why: the title and the access line already say what this does, so the
-          only description left is the one case with a non-obvious outcome —
-          publishing again adds a version instead of replacing the old one. */}
+      {/* Only repeat publishing needs extra explanation: it adds a version rather than replacing the previous one. */}
       {skillShareDialogHasDescription(published, publishingNewVersion) ? (
         <DialogDescription>
           {translate(
@@ -137,8 +134,7 @@ function publishingPhaseLabel(progress: SkillShareProgress | null): string {
   return translate('auto.components.skills.SkillShareReviewContent.0142581727', 'Uploading…')
 }
 
-/** Rendered outside the scrolling review so upload feedback stays on screen next
- *  to the button that started it. */
+/** Keep upload progress beside the initiating button, outside the scrolling review. */
 export function SkillSharePublishProgress({
   progress,
   progressPercent

@@ -1,7 +1,7 @@
 import { createElement } from 'react'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { pairToolBlocks } from '../../../src/shared/native-chat-tool-fold'
+import { pairToolBlocks } from '../../../src/shared/native-chat/tools/native-chat-tool-pairs'
 import { nativeChatTurnMembership } from '../../../src/shared/native-chat-turn-membership'
 import type { NativeChatMessage } from '../../../src/shared/native-chat-types'
 import type { RpcClient } from '../transport/rpc-client'
@@ -153,6 +153,7 @@ describe('mobile transcript tool result paging', () => {
           agent: 'claude',
           sessionId: 'remote-session',
           limit: hasCursor ? 60 : 100,
+          capabilities: { transcriptSourceOrder: 1 },
           ...(hasCursor ? { beforeOffset: 700 } : {})
         },
         expect.objectContaining({ budgetSpansConnect: true })

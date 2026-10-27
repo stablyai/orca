@@ -14,7 +14,7 @@ function webBody(response: Readable, request: ClientRequest): ReadableStream<Uin
         controller.enqueue(value)
       }
     },
-    // Why destroy, not return(): return() would queue behind a pending read on a stalled body.
+    // iterator.return() would queue behind a pending read on a stalled body.
     cancel: () => {
       response.destroy()
       request.abort()
@@ -22,11 +22,7 @@ function webBody(response: Readable, request: ClientRequest): ReadableStream<Uin
   })
 }
 
-/**
- * A GET that answers a redirect with the 3xx itself, as undici does with `redirect: 'manual'`.
- * Why its own request: Electron's net.fetch rejects every manual redirect, and the icon fetcher
- * must count and vet each hop. Proxy login challenges are cancelled, so icons fall back there.
- */
+/** Use net.request: net.fetch rejects manual redirects, but icon fetching must vet every hop. Proxy challenges are cancelled. */
 export function fetchRepoIconWithManualRedirects(
   url: string,
   init: RequestInit
@@ -65,7 +61,7 @@ export function fetchRepoIconWithManualRedirects(
           headers.set(key, Array.isArray(value) ? value.join(', ') : value)
         }
         const body = NULL_BODY_STATUSES.has(response.statusCode) ? null : webBody(response, request)
-        // Why: a stalled body must end at the caller's deadline or on a late network error.
+        // Caller deadlines and late errors must also end stalled bodies.
         signal?.addEventListener('abort', () => response.destroy(signal.reason), { once: true })
         request.on('error', (error) => response.destroy(error))
         resolve(new Response(body, { headers, status: response.statusCode }))

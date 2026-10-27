@@ -27,16 +27,15 @@ export const WorktreeCreate = z
       .unknown()
       .transform((v) => (typeof v === 'string' ? v : ''))
       .pipe(z.string().min(1, 'Missing repo selector')),
-    /** The host of the repo row `repo` names: one repo id can be set up on several hosts. Absent
-     *  (older clients) keeps the selector-only lookup, which refuses an id on several hosts. */
+    /** Scope same-ID repo copies by host; absent retains legacy selector lookup, which refuses ambiguous IDs. */
     repoHostId: OptionalExecutionHostId,
     name: OptionalString,
-    /** Set by clients that fell back to a generated creature name. Absent means user-typed, so the
-     *  host neither skips a retired candidate nor retires the name it lands on. */
+    /** Generated names may skip/retire candidates; absent means user-typed and bypasses that policy. */
     nameWasGenerated: z.boolean().optional(),
     baseBranch: OptionalString,
     compareBaseRef: OptionalString,
     branchNameOverride: OptionalString,
+    branchIntent: z.literal('open-existing').optional(),
     linkedIssue: TriStateLinkedIssue,
     linkedPR: TriStateLinkedIssue,
     linkedLinearIssue: z.string().optional(),
@@ -82,14 +81,11 @@ export const WorktreeCreate = z
       .optional(),
     runHooks: OptionalBoolean,
     activate: OptionalBoolean,
-    // Why: activation on create is view intent, so it is addressed like worktree.activate.
-    // Contract: a paired desktop/web caller resolves to 'caller' and therefore receives NO
-    // activateWorktree event — it must reveal from this call's result, which carries setup,
-    // startup and defaultTabs. Pass an explicit target to opt into an all-surface reveal.
+    // Paired desktop/web defaults to caller navigation with no activation event; reveal from the result’s setup/startup/defaultTabs.
+    // Explicit targets opt into all-surface reveal.
     navigation: z.enum(RUNTIME_NAVIGATION_TARGETS).optional(),
     parentWorkspace: OptionalString,
-    // Why: an app-selected parent is a manual action, not the CLI's `--parent-workspace` flag.
-    // Absent keeps the CLI provenance older clients rely on.
+    // App-selected parents are manual; absent retains older clients’ CLI provenance.
     parentWorkspaceOrigin: z.literal('manual').optional(),
     envParentWorkspace: OptionalString,
     parentWorktree: OptionalString,
@@ -112,28 +108,23 @@ export const WorktreeCreate = z
       )
       .pipe(z.union([z.enum(['run', 'skip', 'inherit']), z.undefined()]))
       .optional(),
-    // Why: some clients (e.g. desktop) pass a pre-built launch command so the
-    // first terminal pane launches the selected agent instead of an idle shell.
-    // Clients that can't quote for the host shell send `startupAgent` instead.
+    // Desktop can prequote startup commands; clients unable to quote for the host send startupAgent.
     startupCommand: OptionalString,
     startupEnv: z.record(z.string(), z.string()).optional(),
     startupLaunchConfig: sleepingAgentLaunchConfigSchema,
     startupCommandDelivery: z.enum(['fast', 'shell-ready']).optional(),
-    // Why: CLI clients should not hardcode agent launch quoting because SSH
-    // workspaces execute in a different shell than the client process.
+    // Quote agent launches on the execution host because SSH shells can differ from the client’s.
     startupAgent: OptionalTuiAgent,
     startupPrompt: OptionalString,
     // Which surface asked for the agent the host launches from `startupAgent` or `startupDraft`.
     launchSource: LaunchSourceParam.optional(),
-    // Why: task-driven mobile creates need desktop parity: the host chooses
-    // the same default/detected agent and drafts the linked issue/PR URL into it.
+    // Task-driven mobile creation uses desktop-equivalent host defaults and linked issue/PR draft URLs.
     startupDraft: OptionalString,
     createdWithAgent: z
       .unknown()
       .transform((value) => (isTuiAgent(value) ? value : undefined))
       .optional(),
-    // Why: mobile retries a create interrupted by a connection migration with the
-    // same key so the host dedupes instead of spawning a duplicate worktree.
+    // Reuse the mutation key after connection migration so retries cannot create duplicate worktrees.
     clientMutationId: z.string().min(1).max(128).optional(),
     /** The requesting window's pending creation, so the host's in-progress entry shares its id. */
     creationId: z.string().min(1).max(128).optional(),

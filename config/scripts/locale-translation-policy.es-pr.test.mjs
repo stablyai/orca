@@ -42,8 +42,7 @@ describe('locale-translation-policy es PR glossary', () => {
   })
 
   it('does not fire when the English has a "pr" substring but no PR token', () => {
-    // "approve"/"public" contain the substring "pr" but not the PR token, so a genuine
-    // "public relations" string must be left alone.
+    // approve/public contain pr substring but no PR token; leave genuine public-relations prose alone.
     expect(repairEs('Approve public relations', 'Aprobar relaciones públicas')).toBe(
       'Aprobar relaciones públicas'
     )

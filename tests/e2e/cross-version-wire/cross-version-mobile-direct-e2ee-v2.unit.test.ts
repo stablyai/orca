@@ -16,11 +16,7 @@ import {
   resolveBaselineReleaseRef
 } from './release-checkout'
 
-/**
- * Updated phones open direct (LAN) sockets with E2EE v2 instead of the legacy hello. The
- * previously released host must accept that handshake on its direct transport, where it does
- * not require v2, and route sealed requests to its RPC handler.
- */
+// Updated phones must authenticate direct E2EE v2 and route sealed RPCs against the released host without requiring v2.
 const SUITE_TIMEOUT_MS = 180_000
 
 type ChannelLike = {

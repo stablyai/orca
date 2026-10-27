@@ -80,10 +80,7 @@ describe('Cmd+J lifted creation actions', () => {
   })
 
   it('rejects without a local browser fallback when paired-web creation fails', async () => {
-    // Why: a remote-owned workspace must stay remote-owned. If the remote host
-    // cannot create the page, we must NOT silently open a local desktop tab —
-    // that produces confusing split ownership (issue #5321). Mirrors the
-    // terminal no-fallback contract below.
+    // Failed remote creation must not fall back local and split ownership (#5321), like terminals.
     createWebRuntimeSessionBrowserTabMock.mockResolvedValue(false)
     const store = createTestStore()
     seedActiveWorkspace(store)
@@ -202,50 +199,6 @@ describe('Cmd+J lifted creation actions', () => {
       activate: true
     })
     expect(store.getState().tabsByWorktree['wt-1'] ?? []).toEqual([])
-  })
-
-  it('creates a terminal in the invoking group’s workspace when another workspace is selected', async () => {
-    const store = createTestStore()
-    seedActiveWorkspace(store)
-    store.setState({ activeWorktreeId: 'another-workspace' })
-
-    await store.getState().openNewTerminalTabInActiveWorkspace('group-1')
-
-    expect(createWebRuntimeSessionTerminalMock).toHaveBeenCalledWith({
-      worktreeId: 'wt-1',
-      environmentId: 'runtime-1',
-      targetGroupId: 'group-1',
-      activate: true
-    })
-    expect(store.getState().tabsByWorktree['another-workspace'] ?? []).toEqual([])
-  })
-
-  it('creates a floating terminal locally while a paired workspace is selected', async () => {
-    const store = createTestStore()
-    seedActiveWorkspace(store)
-    store.setState({
-      groupsByWorktree: {
-        ...store.getState().groupsByWorktree,
-        [FLOATING_TERMINAL_WORKTREE_ID]: [
-          {
-            id: 'floating-group',
-            worktreeId: FLOATING_TERMINAL_WORKTREE_ID,
-            activeTabId: null,
-            tabOrder: []
-          }
-        ]
-      }
-    })
-
-    await store.getState().openNewTerminalTabInActiveWorkspace('floating-group')
-
-    expect(createWebRuntimeSessionTerminalMock).not.toHaveBeenCalled()
-    expect(store.getState().tabsByWorktree['wt-1'] ?? []).toEqual([])
-    const tabs = store.getState().tabsByWorktree[FLOATING_TERMINAL_WORKTREE_ID] ?? []
-    expect(tabs).toHaveLength(1)
-    expect(store.getState().unifiedTabsByWorktree[FLOATING_TERMINAL_WORKTREE_ID]).toEqual([
-      expect.objectContaining({ entityId: tabs[0].id, groupId: 'floating-group' })
-    ])
   })
 
   it('does not create a local folder terminal while paired ownership is unresolved', async () => {

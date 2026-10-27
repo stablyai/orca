@@ -44,8 +44,7 @@ describe('the shell encodes a screencast frame the page can decode', () => {
       frameOf(Uint8Array.of(1, 2, 3), { format: 'png', seq: 77, metadata })
     )
     expect(event).toEqual({ b64: expect.any(String), format: 'png', frameSeq: 77, metadata })
-    // `b64` rides on the decoded frame so the page's data URI can reuse it (C6.2); exact, so a
-    // re-encode on either side cannot hide behind a wildcard.
+    // Assert exact wire base64 reuse so unnecessary re-encoding cannot hide behind a wildcard.
     expect(decodeBridgeScreencastFrame(event)).toEqual({
       opcode: BrowserScreencastOpcode.Frame,
       seq: 77,
@@ -63,8 +62,7 @@ describe('the shell encodes a screencast frame the page can decode', () => {
     )
   })
 
-  /** A grouped encoder is wrong exactly at the tail: one image whose length divides by three
-   *  exercises neither padding arm. */
+  // Exercise lengths not divisible by three to cover both base64 padding tails.
   it('round-trips at every remainder and across the group boundary', () => {
     const lengths = [0, 1, 2, 3, 4, 5, 6, 7, 8191, 8192, 8193, 8194, 16_384, 16_385, 24_575]
     for (const length of lengths) {
@@ -75,8 +73,7 @@ describe('the shell encodes a screencast frame the page can decode', () => {
   })
 
   it('agrees with the platform encoder on a frame-sized image and at every remainder', () => {
-    // The oracle is Node's own base64, which the page's `atob` is the inverse of. Round-tripping
-    // through this module's own decoder cannot see an alphabet or a padding both halves share.
+    // Use Node base64 as the oracle; a private encoder/decoder round-trip could share the same alphabet or padding bug.
     const image = Uint8Array.from({ length: 77_293 }, (_, index) => (index * 13 + 5) & 0xff)
     expect(encodeBase64(image)).toBe(Buffer.from(image).toString('base64'))
     for (const length of [0, 1, 2, 3, 4, 5, 255, 256, 257]) {
