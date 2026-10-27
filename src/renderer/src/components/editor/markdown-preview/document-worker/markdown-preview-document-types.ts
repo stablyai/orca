@@ -18,6 +18,8 @@ export type MarkdownPreviewBlock = {
   sourceLine: number | null
   sourceColumn?: number
   sourceEndLine: number | null
+  /** Rendered-text signature; lets a scroll anchor follow the block when lines move above it. */
+  contentSignature: string
 }
 export type MarkdownPreviewDocument = {
   blocks: MarkdownPreviewBlock[]
