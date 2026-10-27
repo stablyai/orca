@@ -57,8 +57,4 @@ describe('useAgentSkillHostScope', () => {
       await scopeOf({ bundledSkillTarget: { kind: 'environment', environmentId: 'env-1' } })
     ).toEqual({ hostId: 'runtime:env-1', label: 'build-box' })
   })
-
-  it('stays unscoped for an SSH host no server reads yet', async () => {
-    expect(await scopeOf({ bundledSkillTarget: { kind: 'ssh', targetId: 'box' } })).toBeNull()
-  })
 })

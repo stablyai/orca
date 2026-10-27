@@ -1,4 +1,5 @@
 import type { BundledSkillOp, BundledSkillPlan } from '../../../../shared/bundled-skill-plan'
+import type { DiscoveredSkill, SkillDiscoverySource } from '../../../../shared/skills'
 import { defineFixture } from '../../component-fixtures/component-fixture'
 import { OrchestrationSkillAgentCoverage } from './OrchestrationSkillAgentCoverage'
 import type { AgentSkillHostScope } from './use-agent-skill-host-scope'
@@ -38,7 +39,7 @@ const plan: BundledSkillPlan = {
   ]
 }
 
-function coverage(host?: AgentSkillHostScope): React.JSX.Element {
+function coverage(host: AgentSkillHostScope): React.JSX.Element {
   return (
     <div className="p-5">
       <OrchestrationSkillAgentCoverage
@@ -53,6 +54,35 @@ function coverage(host?: AgentSkillHostScope): React.JSX.Element {
   )
 }
 
+// The WSL bridge has no plan: chips come from the distro scan and this machine's detected agents.
+const WSL_HOME = '\\\\wsl.localhost\\Ubuntu\\home\\u'
+const wslSources: SkillDiscoverySource[] = (['claude', 'codex', 'gemini'] as const).map(
+  (owner) => ({
+    id: `${owner}-home`,
+    label: `${owner} home`,
+    path: `${WSL_HOME}\\.${owner}\\skills`,
+    sourceKind: 'home',
+    providers: [],
+    owner,
+    exists: true
+  })
+)
+const wslSkills: DiscoveredSkill[] = [
+  {
+    id: 'claude-orchestration',
+    name: 'orchestration',
+    description: null,
+    providers: ['claude'],
+    sourceKind: 'home',
+    sourceLabel: 'claude home',
+    rootPath: `${WSL_HOME}\\.claude\\skills`,
+    directoryPath: `${WSL_HOME}\\.claude\\skills\\orchestration`,
+    skillFilePath: `${WSL_HOME}\\.claude\\skills\\orchestration\\SKILL.md`,
+    installed: true,
+    updatedAt: null
+  }
+]
+
 export const thisMachine = defineFixture({
   width: 560,
   render: () => coverage({ hostId: 'local', label: 'This machine' })
@@ -60,15 +90,21 @@ export const thisMachine = defineFixture({
 
 export const wslDistro = defineFixture({
   width: 560,
-  render: () => coverage({ hostId: 'local', label: 'WSL Ubuntu' })
+  store: { detectedAgentIds: ['claude', 'codex', 'gemini'], isDetectingAgents: false },
+  render: () => (
+    <div className="p-5">
+      <OrchestrationSkillAgentCoverage
+        embedded
+        host={{ hostId: 'local', label: 'WSL Ubuntu' }}
+        skills={wslSkills}
+        sources={wslSources}
+        loading={false}
+      />
+    </div>
+  )
 })
 
 export const remoteServer = defineFixture({
   width: 560,
   render: () => coverage({ hostId: 'runtime:build-box', label: 'build-box' })
-})
-
-export const unresolvedHost = defineFixture({
-  width: 560,
-  render: () => coverage()
 })
