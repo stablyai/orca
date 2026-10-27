@@ -549,6 +549,7 @@ jobs:
     if: needs.cut.outputs.should_release == 'true'
     uses: ./.github/workflows/e2e.yml
     with:
+      full_reason: Manual release ${{ needs.cut.outputs.tag }}
       ref: refs/tags/${{ needs.cut.outputs.tag }}
 
   terminal-rendering-golden:

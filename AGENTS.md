@@ -63,3 +63,7 @@ Source-control and review changes must consider GitLab and other supported git p
 Be mindful of the user's `gh` CLI API rate limit — batch requests where possible and avoid unnecessary calls. All code, commands, and scripts must be compatible with macOS, Linux, and Windows.
 
 ## Type Declarations: Prefer `.ts` Over `.d.ts`
+
+## Test Execution Cost
+
+On macOS/Linux, use the package test commands or `node config/scripts/test-cost-entry.mjs <runner> ...`; they select affected files and enter the machine-wide gate. Exact failed-file retries stay exact. Full runs need `TEST_GATE_FULL=<reason>`, repeated identical revision/commands need `TEST_GATE_RERUN=<reason>`. Read [the execution contract](docs/reference/test-execution-cost.md). Native Windows preserves the existing runner and currently has no machine gate.

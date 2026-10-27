@@ -8,7 +8,7 @@
     "android": "expo run:android",
     "ios": "expo run:ios",
     "postinstall": "node scripts/build-terminal-webview-engine.mjs",
-    "test": "vitest run",
+    "test": "node ../config/scripts/test-cost-entry.mjs vitest run",
     "typecheck": "tsc --noEmit",
     "lint": "oxlint",
     "format": "oxfmt --write .",

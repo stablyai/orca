@@ -3,20 +3,27 @@ name: E2E
 on:
   workflow_call:
     inputs:
+      full_reason:
+        description: Explicit reason for the full E2E batch
+        required: true
+        type: string
       ref:
         description: Ref to check out (defaults to the calling workflow's ref)
         required: false
         type: string
   workflow_dispatch:
     inputs:
+      full_reason:
+        description: Explicit reason for the full E2E batch
+        required: true
+        type: string
       ref:
         description: Ref to check out (defaults to the workflow ref)
         required: false
         type: string
-  schedule:
-    # Why: GitHub cron uses UTC; these slots map to 10am and 3pm
-    # America/Phoenix for the default-branch E2E run.
-    - cron: '0 17,22 * * *'
+
+env:
+  TEST_GATE_FULL: ${{ inputs.full_reason }}
 
 jobs:
   build:
@@ -25,6 +32,9 @@ jobs:
     timeout-minutes: 10
 
     steps:
+      - name: Validate full-run reason
+        run: test -n "$TEST_GATE_FULL"
+
       - name: Checkout
         uses: actions/checkout@v6
         with:
