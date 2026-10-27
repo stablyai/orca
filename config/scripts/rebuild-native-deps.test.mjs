@@ -1,4 +1,12 @@
-import { chmodSync, existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
+import {
+  chmodSync,
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  writeFileSync
+} from 'node:fs'
+import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import { removeTreeSync } from '../../src/shared/windows-transient-lock-removal.ts'
@@ -10,6 +18,7 @@ import {
   writeFakeElectronGet,
   writeFakeElectronPackage,
   writeFakeElectronRebuild,
+  writeFakeSharedNodePtyBuild,
   writeFakeUsableElectronPackage
 } from './rebuild-native-deps-test-fixtures.mjs'
 
@@ -229,6 +238,26 @@ exit 127
         expect(forced.stderr).not.toContain('is missing')
       } finally {
         removeTreeSync(projectDir)
+      }
+    })
+
+    // Why: with pnpm's global virtual store node-pty is shared, so a forced build still load-checks it.
+    it('checks a forced shared node-pty build in Node instead of exiting', () => {
+      const projectDir = mkTempProject()
+      const storeDir = mkdtempSync(join(tmpdir(), 'orca-rebuild-shared-store-'))
+      try {
+        writeElectronMissingLibrary(projectDir)
+        writeFakeElectronRebuild(projectDir)
+        const { nodeOptions } = writeFakeSharedNodePtyBuild(projectDir, storeDir)
+
+        const result = runRebuildScript(projectDir, { NODE_OPTIONS: nodeOptions }, ['--force'])
+
+        expect(result.status, result.stderr).toBe(0)
+        expect(result.stderr).not.toContain('is missing')
+        expect(result.stdout).toContain('Reusing the shared node-pty build')
+      } finally {
+        removeTreeSync(projectDir)
+        removeTreeSync(storeDir)
       }
     })
   }
