@@ -21,7 +21,7 @@ import {
   readWorkerListSnapshot
 } from './worker-list-snapshot-store'
 import { projectWorkerFleet, type WorkerListPageParams } from './worker-list-projection'
-import { chatAssigneeObserver } from './session-worker-observation'
+import { sessionWorkerFleetObserver } from './session-worker-observation'
 import { exposeWorkerTerminalResource } from './worker-terminal-resource-presentation'
 import {
   WORKER_TERMINAL_LIST_STATES,
@@ -207,7 +207,7 @@ async function projectWorkerListPageWithFilteredSnapshot(
     limit,
     now: authorityNow,
     completeProjection: args.completeProjection,
-    observeChat: await chatAssigneeObserver(runtime, db, pageRows)
+    observeSession: await sessionWorkerFleetObserver(runtime, db, pageRows)
   })
   const federated = params.includeRemote
     ? await readFederatedFleetSnapshots({

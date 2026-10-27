@@ -28,7 +28,7 @@ const STRUCTURED_ORCA_SESSION_ID = 'orca_session_id:sess_worker'
 
 const structuredPreambles: string[] = []
 // The session host the code under test reads; a structural fake, so no host type is claimed.
-const hostRef = vi.hoisted((): { current: unknown } => ({ current: null }))
+const hostRef = vi.hoisted((): { current: Record<string, unknown> | null } => ({ current: null }))
 
 vi.mock('../../../native-chat/agent-session-wire/structured-agent-session-registry', () => ({
   getStructuredAgentSessionHost: () => hostRef.current
@@ -299,5 +299,48 @@ describe('a worker cannot tell which mode it is running in', () => {
 
     // Omit agentWait: null means checked-and-absent, but terminal prompt scans cannot see journal questions.
     expect('agentWait' in observation).toBe(false)
+  })
+
+  it('lists a structured worker with the verdict worker-show reads, keeping uncertainty', async () => {
+    installStructuredCoordinator(STRUCTURED_HANDLE, 'sess_worker')
+    hostRef.current = {
+      ...hostRef.current,
+      readStatusSummary: () => ({ agent: 'claude', model: 'haiku', status: 'working' })
+    }
+    vi.spyOn(runtime, 'showTerminal').mockResolvedValue({
+      handle: 'term_coord',
+      worktreeId: WORKTREE,
+      status: 'running'
+    } as never)
+    const started = await startWorker({
+      settings: STRUCTURED_DEFAULT,
+      from: 'term_coord',
+      coordinatorPaneKey
+    })
+    const method = ORCHESTRATION_METHODS.find(
+      (candidate) => candidate.name === 'orchestration.workerList'
+    )!
+    const listed = (projection: Record<string, unknown>) =>
+      expect(method.handler(method.params!.parse({}), { runtime })).resolves.toMatchObject({
+        workers: [{ dispatchId: started.dispatchId, projection }]
+      })
+
+    // No agent-status row binds a session without a terminal; the list read missing_status before.
+    await listed({
+      liveness: { verdict: 'live', source: 'execution_host' },
+      provider: { id: 'claude', model: 'haiku' },
+      stage: { activity: 'working' },
+      attention: { requiresAction: false }
+    })
+
+    // A session this host cannot see attached proves neither life nor exit.
+    hostRef.current = { ...hostRef.current, hasSession: () => false }
+    expect((await inspectWorkerTerminal(runtime, db, started.dispatchId)).status).toBe(
+      'unverifiable'
+    )
+    await listed({
+      liveness: { verdict: 'unverifiable', reason: 'host_indeterminate' },
+      stage: { activity: 'unknown' }
+    })
   })
 })

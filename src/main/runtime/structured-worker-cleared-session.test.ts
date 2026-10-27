@@ -250,7 +250,7 @@ function installHost(): void {
       if (unreadable.has(sessionId)) {
         throw new Error(AGENT_SESSION_NOT_ATTACHED.code)
       }
-      // As the real history: reading opens a closed conversation, and it stays open.
+      // As the real history: reading opens a closed conversation, and it stays open. No `ok`: catch-up reads reset.
       open.add(sessionId)
       const items = journals.get(sessionId) ?? [
         message(
@@ -258,7 +258,8 @@ function installHost(): void {
           sessionId === MINTED ? 'PRE-CLEAR (dispatch work)' : 'POST-CLEAR (live work)'
         )
       ]
-      return { page: { items: items.slice(-limit), hasOlder: items.length > limit } }
+      const page = { items: items.slice(-limit), hasOlder: items.length > limit, epoch: sessionId }
+      return { page }
     }
   }
 }
@@ -744,7 +745,6 @@ describe('the lineage journal page', () => {
     expect(page?.items).toHaveLength(STRUCTURED_JOURNAL_PAGE_LIMIT)
     expect(page?.items[0]?.itemId).toBe(`${MINTED}-100`)
     expect(page?.items.at(-1)?.itemId).toBe(`${SUCCESSOR}-149`)
-    expect(page?.sessionIds.filter((id) => id === MINTED)).toHaveLength(50)
     expect(page?.hasOlder).toBe(true)
   })
 
@@ -752,7 +752,9 @@ describe('the lineage journal page', () => {
     unreadable.add(MINTED)
     const read = await readJournal(registerWorker())
     expect(texts(read.transcript?.messages)).toContain('POST-CLEAR')
-    expect(read.warnings).toContain('Older journal items were omitted from this page.')
+    expect(read.warnings).toContain(
+      'Older journal items were omitted from this page; the cursor follows only newer ones.'
+    )
   })
 })
 

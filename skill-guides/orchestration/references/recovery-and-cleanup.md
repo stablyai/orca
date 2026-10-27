@@ -68,7 +68,11 @@ Continue with its top-level cursor, which is pinned to that source. If Orca
 reports `source_changed`, restart without the old cursor. A bounded initial
 transcript tail can return an EOF cursor that follows only newly appended records;
 read `contentComplete`, `clipping`, and `warnings` before assuming omitted older
-records are pageable. Never guess a provider session ID, transcript path, or
+records are pageable. A chat worker's read also starts at its newest messages;
+its cursor then returns every message written since, including ones you already
+read that changed (a streaming reply, a tool call that gained its result), so
+replace messages by `id`. If the chat was rebuilt or cleared, the next page starts
+at its newest messages and says so in `warnings`. Never guess a provider session ID, transcript path, or
 remote terminal handle.
 
 ## Was the mutation applied?

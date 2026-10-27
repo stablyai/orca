@@ -387,37 +387,6 @@ describe('structured worker output', () => {
       liveness: 'exited'
     })
   })
-
-  it('refuses a cursor once the tail window has slid past it', async () => {
-    // A stable identity over a sliding bounded tail skipped middle pages; cursor identity must cover index shifts.
-    installHost({ items: ITEMS })
-    const first = await readStructuredWorkerJournal({
-      identity: IDENTITY,
-      dispatchId: 'd1',
-      workerState: 'ready',
-      liveness: 'live',
-      agent: 'claude'
-    })
-    installHost({
-      items: [
-        {
-          itemId: 'i2',
-          observedAt: 2,
-          body: { kind: 'message', role: 'assistant', blocks: [{ type: 'text', text: 'later' }] }
-        } as unknown as AgentJournalRenderItem
-      ]
-    })
-    await expect(
-      readStructuredWorkerJournal({
-        identity: IDENTITY,
-        dispatchId: 'd1',
-        workerState: 'ready',
-        liveness: 'live',
-        agent: 'claude',
-        cursor: first.cursor
-      })
-    ).rejects.toThrow(/source changed/i)
-  })
 })
 
 describe('archiving a structured worker whose journal cannot be read', () => {

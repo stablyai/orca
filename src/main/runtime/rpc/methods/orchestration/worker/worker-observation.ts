@@ -5,8 +5,7 @@ import { OrchestrationError } from '../../../../orchestration/orchestration-erro
 import { parseWorkerTerminalHostScope } from '../../../../../../shared/worker-terminal-host-scope'
 import type { OrchestrationFleetWorker } from '../../../../../../shared/orchestration-fleet-projection'
 import { projectWorkerFleet } from './worker-list-projection'
-import { observeChatAssignee } from '../../../../orchestration/chat-assignee'
-import { inspectSessionWorker } from './session-worker-observation'
+import { fleetSessionObserver, inspectSessionWorker } from './session-worker-observation'
 import type {
   DispatchContextRow,
   FederatedDispatchRow,
@@ -247,7 +246,7 @@ export function projectFleetWorkerPage(
     statuses: runtime.getOrchestrationFleetAgentStatusSnapshot(),
     limit: 1,
     now,
-    observeChat: (sessionId) => observeChatAssignee(sessionId, db)
+    observeSession: fleetSessionObserver(db)
   })
 }
 

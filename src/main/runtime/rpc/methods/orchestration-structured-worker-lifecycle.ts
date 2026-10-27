@@ -10,23 +10,18 @@ import {
   captureRetiredLineageArchive,
   type WorkerStructuredJournalArchive
 } from '../../orchestration/structured-worker-journal-archive'
+import { readStructuredLineageJournalPage } from '../../orchestration/structured-worker-journal-page'
 import {
-  readStructuredLineageJournalPage,
-  type StructuredLineageJournalPage
-} from '../../orchestration/structured-worker-journal-page'
+  readStructuredJournalSince,
+  readStructuredJournalTail,
+  type StructuredJournalRead
+} from '../../orchestration/structured-worker-journal-cursor'
 import {
   createWorkerOutputSourceIdentity,
   decodeWorkerOutputCursor,
   encodeWorkerOutputCursor
 } from '../../orchestration/worker-output-cursor'
-import {
-  boundWorkerTranscriptMessages,
-  clampWorkerTranscriptLimit
-} from '../../orchestration/worker-transcript-payload'
-import {
-  projectStructuredItemToNativeChat,
-  projectStructuredItemsToNativeChat
-} from '../../../../shared/structured-agent-session-projection'
+import { clampWorkerTranscriptLimit } from '../../orchestration/worker-transcript-payload'
 import {
   observeStructuredWorker,
   requireRunningStructuredWorker,
@@ -139,7 +134,7 @@ export async function readStructuredWorkerOutput(args: {
   })
 }
 
-/** Journal page in the shape `worker-read --source transcript` already serves. */
+/** Journal page in the shape `worker-read --source transcript` already serves; see `structured-worker-journal-cursor`. */
 export async function readStructuredWorkerJournal(args: {
   identity: StructuredJournalSource
   dispatchId: string
@@ -150,74 +145,59 @@ export async function readStructuredWorkerJournal(args: {
   limit?: number
 }): Promise<OrchestrationWorkerReadTranscriptResult> {
   const running = requireRunningStructuredWorker(args.identity)
-  const page = await readStructuredLineageJournalPage(running.lineage)
-  if (!page) {
-    throw new OrchestrationError(
-      'transcript_required',
-      `The transcript for Dispatch ${args.dispatchId} could not be read; its session is not attached.`
-    )
-  }
-  const bounded = boundWorkerTranscriptMessages(projectStructuredItemsToNativeChat(page.items))
-  // Identity of the PREFIX the caller already holds — see `structuredJournalPrefixIdentity`.
-  const identityAt = (position: number): string =>
-    structuredJournalPrefixIdentity({ identity: args.identity, page, position })
+  const sourceIdentity = createWorkerOutputSourceIdentity([
+    'structured-journal',
+    args.identity.processIncarnation,
+    args.identity.paneKey
+  ])
   const cursor = decodeWorkerOutputCursor(args.cursor, args.dispatchId)
   if (
     cursor &&
-    (cursor.source !== 'transcript' || cursor.sourceIdentity !== identityAt(cursor.position))
+    (cursor.source !== 'transcript' ||
+      cursor.sourceIdentity !== sourceIdentity ||
+      !cursor.boundaryCheckpoint)
   ) {
-    throw new OrchestrationError(
-      'source_changed',
-      'The worker output source changed. Start a fresh worker-read without the old cursor.'
-    )
+    throw sourceChanged()
   }
-  return pageMessages({
-    messages: bounded.messages,
-    warnings: [
-      ...bounded.warnings,
-      ...(page.hasOlder ? ['Older journal items were omitted from this page.'] : [])
-    ],
-    limited: bounded.limited || page.hasOlder,
+  const limit = clampWorkerTranscriptLimit(args.limit)
+  let read: StructuredJournalRead
+  if (cursor?.boundaryCheckpoint) {
+    read = await readStructuredJournalSince(
+      running.sessionId,
+      { epoch: cursor.boundaryCheckpoint, sequence: cursor.position },
+      limit
+    )
+  } else {
+    const page = await readStructuredLineageJournalPage(running.lineage)
+    if (!page) {
+      throw new OrchestrationError(
+        'transcript_required',
+        `The transcript for Dispatch ${args.dispatchId} could not be read; its session is not attached.`
+      )
+    }
+    read = readStructuredJournalTail(page, limit)
+  }
+  // The transcript cursor's checkpoint carries the journal epoch and its position the write sequence.
+  const nextCursor = encodeWorkerOutputCursor(
+    args.dispatchId,
+    'transcript',
+    sourceIdentity,
+    read.next.sequence,
+    read.next.epoch
+  )
+  return structuredTranscriptResult({
     dispatchId: args.dispatchId,
     workerState: args.workerState,
     agent: args.agent,
-    identityAt,
-    start: cursor?.position ?? 0,
-    limit: args.limit,
-    archived: false,
-    liveness: args.liveness
+    liveness: args.liveness,
+    sourceIdentity,
+    messages: read.messages,
+    nextCursor,
+    limited: read.clipping.length > 0,
+    clipping: read.clipping,
+    warnings: read.warnings,
+    archived: false
   })
-}
-
-/** Anchor cursors to the oldest item and the ids/revisions of messages below position.
- * Journal messages mutate or appear in place, so oldest-item-only misses omissions/duplicates.
- * Hash only the consumed prefix: unseen tail growth must not invalidate active readers; oldest-item changes still detect window slides. */
-function structuredJournalPrefixIdentity(args: {
-  identity: StructuredJournalSource
-  page: StructuredLineageJournalPage
-  position: number
-}): string {
-  // Namespace successor items by session because /clear copies drafts; keep root ids bare for earlier cursors.
-  const itemKey = (index: number): string => {
-    const itemId = args.page.items[index]?.itemId ?? ''
-    const sessionId = args.page.sessionIds[index]
-    return sessionId === undefined || sessionId === args.identity.sessionId
-      ? itemId
-      : `${sessionId}/${itemId}`
-  }
-  // Fingerprint message-producing items in projection order; bounded output is their prefix.
-  const projected = args.page.items.flatMap((item, index) =>
-    projectStructuredItemToNativeChat(item) === null ? [] : [{ index, revision: item.revision }]
-  )
-  return createWorkerOutputSourceIdentity([
-    'structured-journal',
-    args.identity.processIncarnation,
-    args.identity.paneKey,
-    args.page.items.length > 0 ? itemKey(0) : '',
-    ...projected
-      .slice(0, args.position)
-      .flatMap(({ index, revision }) => [itemKey(index), String(revision)])
-  ])
 }
 
 /** Freezes the journal before the session is closed, so a released worker is still readable. */
@@ -271,65 +251,67 @@ export function readArchivedStructuredJournal(args: {
   ])
   const cursor = decodeWorkerOutputCursor(args.cursor, args.dispatchId)
   if (cursor && (cursor.source !== 'transcript' || cursor.sourceIdentity !== sourceIdentity)) {
-    throw new OrchestrationError(
-      'source_changed',
-      'The worker output source changed. Start a fresh worker-read without the old cursor.'
-    )
+    throw sourceChanged()
   }
-  return pageMessages({
-    messages: args.archive.messages,
-    warnings: args.archive.warnings,
-    limited: args.archive.limited,
+  // Frozen archives cannot revise under a cursor, so a position pages them exactly.
+  const messages = args.archive.messages
+  const start = Math.min(cursor?.position ?? 0, messages.length)
+  const end = Math.min(start + clampWorkerTranscriptLimit(args.limit), messages.length)
+  return structuredTranscriptResult({
     dispatchId: args.dispatchId,
     workerState: args.workerState,
     agent: args.archive.agent,
-    // Frozen archives cannot revise under a cursor, so their identity is constant.
-    identityAt: () => sourceIdentity,
-    start: cursor?.position ?? 0,
-    limit: args.limit,
-    archived: true,
     // Archives precede close and prove no exit; only settled release can certify death (docs/reference/ssh-execution-boundary.md).
-    liveness: args.releaseState === 'released' ? 'exited' : 'unverifiable'
+    liveness: args.releaseState === 'released' ? 'exited' : 'unverifiable',
+    sourceIdentity,
+    messages: messages.slice(start, end),
+    nextCursor: encodeWorkerOutputCursor(args.dispatchId, 'transcript', sourceIdentity, end),
+    limited: args.archive.limited || end < messages.length,
+    warnings: args.archive.warnings,
+    archived: true
   })
 }
 
-function pageMessages(input: {
-  messages: readonly NativeChatMessage[]
-  warnings: string[]
-  limited: boolean
+function sourceChanged(): OrchestrationError {
+  return new OrchestrationError(
+    'source_changed',
+    'The worker output source changed. Start a fresh worker-read without the old cursor.'
+  )
+}
+
+function structuredTranscriptResult(input: {
   dispatchId: string
   workerState: string
   agent: AgentType
-  /** Identity of the prefix below a position; the returned cursor is stamped with its own end. */
-  identityAt: (position: number) => string
-  start: number
-  limit: number | undefined
-  archived: boolean
   liveness: StructuredWorkerObservation['status']
+  sourceIdentity: string
+  messages: NativeChatMessage[]
+  nextCursor: string
+  limited: boolean
+  clipping?: string[]
+  warnings: string[]
+  archived: boolean
 }): OrchestrationWorkerReadTranscriptResult {
-  const start = Math.min(input.start, input.messages.length)
-  const end = Math.min(start + clampWorkerTranscriptLimit(input.limit), input.messages.length)
-  // Stamp the prefix through end so later revisions below it invalidate the next cursor.
-  const sourceIdentity = input.identityAt(end)
-  const nextCursor = encodeWorkerOutputCursor(input.dispatchId, 'transcript', sourceIdentity, end)
   return {
     dispatchId: input.dispatchId,
     source: 'transcript',
-    sourceIdentity,
+    sourceIdentity: input.sourceIdentity,
     provider: input.agent,
     transcript: {
-      messages: input.messages.slice(start, end),
-      nextCursor,
-      limited: input.limited || end < input.messages.length,
-      returnedMessageCount: end - start
+      messages: input.messages,
+      nextCursor: input.nextCursor,
+      limited: input.limited,
+      returnedMessageCount: input.messages.length
     },
-    cursor: nextCursor,
+    cursor: input.nextCursor,
     status: {
       worker: input.workerState,
       terminal: structuredWorkerTerminalState(input.liveness),
       liveness: input.liveness
     },
     fallbackReason: null,
+    contentComplete: !input.limited,
+    ...(input.clipping?.length ? { clipping: input.clipping } : {}),
     warnings: input.warnings,
     ...(input.archived ? { archived: true } : {})
   }

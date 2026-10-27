@@ -7,12 +7,8 @@ import {
 import { resolveFleetWorkerOutcome } from '../../../../../../shared/orchestration-fleet-outcome-resolution'
 import type { WorkerTerminalListState } from '../../../../orchestration/worker-terminal-ownership'
 import type { OrchestrationDb } from '../../../../orchestration/db'
-import type { OrcaSessionId } from '../../../../../../shared/orca-session-address'
-import {
-  chatAssigneeSessionId,
-  type ChatAssigneeObservation
-} from '../../../../orchestration/chat-assignee'
 import { refreshFleetWorkerVerdict } from '../federation/federated-fleet-snapshot'
+import type { FleetSessionObserver } from './session-worker-observation'
 
 export type WorkerListPageParams = {
   run?: string
@@ -28,8 +24,8 @@ export function projectWorkerFleet(args: {
   limit: number
   now: number
   completeProjection?: boolean
-  /** A chat assignee's verdict; no agent-status row names a chat, so its reach stands in. */
-  observeChat?: (sessionId: OrcaSessionId) => ChatAssigneeObservation
+  /** Session workers' verdicts; agent-status rows bind to terminals, which chat and structured workers lack. */
+  observeSession?: FleetSessionObserver
 }) {
   const workers: FleetDurableWorker[] = args.rows.map((row) => {
     return {
@@ -67,7 +63,7 @@ export function projectWorkerFleet(args: {
       }),
       durable
     }
-    applyChatAssigneeLiveness(fleet, args.observeChat, args.now)
+    applySessionWorkerLiveness(fleet, args.observeSession, args.now)
     return fleet
   }
 
@@ -87,31 +83,36 @@ export function projectWorkerFleet(args: {
     page: { limit: workers.length, total: workers.length, hasMore: false, nextCursor: null },
     durable
   }
-  applyChatAssigneeLiveness(fleet, args.observeChat, args.now)
+  applySessionWorkerLiveness(fleet, args.observeSession, args.now)
   return fleet
 }
 
-/** Read off the session records, as worker-show and mail read it: at rest is live, closed exited. */
-function applyChatAssigneeLiveness(
+/** Read off the session records, as worker-show and mail read them: at rest is live, closed exited. */
+function applySessionWorkerLiveness(
   fleet: { workers: OrchestrationFleetWorker[]; durable: ReadonlyMap<string, FleetDurableWorker> },
-  observeChat: ((sessionId: OrcaSessionId) => ChatAssigneeObservation) | undefined,
+  observeSession: FleetSessionObserver | undefined,
   now: number
 ): void {
-  for (const worker of observeChat ? fleet.workers : []) {
-    const chat = chatAssigneeSessionId(fleet.durable.get(worker.dispatchId)?.agentTerminalHandle)
+  for (const worker of observeSession ? fleet.workers : []) {
+    const handle = fleet.durable.get(worker.dispatchId)?.agentTerminalHandle
     // A durable death certificate (a stop, a release) outranks a read of the records.
-    if (!chat || !observeChat || worker.liveness.verdict === 'exited') {
+    const observed =
+      handle && observeSession && worker.liveness.verdict !== 'exited'
+        ? observeSession(worker.dispatchId, handle)
+        : null
+    if (!observed) {
       continue
     }
-    const observed = observeChat(chat)
-    worker.liveness =
-      observed.status === 'live'
-        ? { verdict: 'live', observedAt: now, source: 'execution_host' }
-        : observed.status === 'exited'
-          ? { verdict: 'exited', source: 'execution_host' }
-          : { verdict: 'unverifiable', reason: 'host_unavailable' }
-    worker.evidence.liveStatus = observed.status === 'live' ? 'fresh' : 'unavailable'
-    worker.evidence.lastObservedAt = observed.status === 'live' ? now : null
+    const live = observed.status === 'live'
+    worker.liveness = live
+      ? { verdict: 'live', observedAt: now, source: 'execution_host' }
+      : observed.status === 'exited'
+        ? { verdict: 'exited', source: 'execution_host' }
+        : { verdict: 'unverifiable', reason: 'host_indeterminate' }
+    worker.evidence.liveStatus = live ? 'fresh' : 'unavailable'
+    worker.evidence.lastObservedAt = live ? now : null
+    worker.provider = observed.published?.provider ?? worker.provider
+    worker.stage.activity = live ? (observed.published?.activity ?? 'unknown') : 'unknown'
     refreshFleetWorkerVerdict(worker, fleet.durable)
   }
 }
