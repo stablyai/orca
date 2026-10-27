@@ -4,7 +4,7 @@ import type { MemorySnapshot } from '../../../../shared/process-stats-types'
 import type { Worktree } from '../../../../shared/worktree/types'
 import { getRepoExecutionHostId, parseExecutionHostId } from '../../../../shared/execution-host'
 import { mergeSnapshotAndSessions } from './mergeSnapshotAndSessions'
-import type { DaemonSession } from './resource-usage-merge-types'
+import type { DaemonSession, RuntimeHostResourceSample } from './resource-usage-merge-types'
 import type { ResourceSessionBindingInputs } from './resource-session-bindings'
 import { countUnboundDaemonSessions } from './resource-session-bindings'
 import {
@@ -17,15 +17,18 @@ import {
   getResourceMemoryMetricCopy
 } from './resource-memory-metric-copy'
 import { formatMemory } from './resource-usage-metrics'
+import { findAmbiguousWorktreeIds, findDuplicateIds } from '../../lib/unified-tab-host-ownership'
 
 export function useResourceUsageDerivedModel({
   open,
   resourceSnapshot,
+  runtimeHostResources,
   sessions,
   resourceSessionBindings,
   runtimePaneTitlesByTabId,
   repos,
   allWorktrees,
+  projectGroups,
   browserTabsByWorktree,
   workspaceSessionReady,
   sessionCount,
@@ -36,14 +39,16 @@ export function useResourceUsageDerivedModel({
 }: {
   open: boolean
   resourceSnapshot: MemorySnapshot | null
+  runtimeHostResources: readonly RuntimeHostResourceSample[]
   sessions: readonly DaemonSession[]
   resourceSessionBindings: ResourceSessionBindingInputs
   runtimePaneTitlesByTabId: AppState['runtimePaneTitlesByTabId']
   repos: AppState['repos']
   allWorktrees: Worktree[]
+  projectGroups: AppState['projectGroups']
   browserTabsByWorktree: AppState['browserTabsByWorktree']
   workspaceSessionReady: boolean
-  sessionCount: number
+  sessionCount: number | null
   sessionsError: boolean
   memorySnapshotError: string | null
   snapshot: MemorySnapshot | null
@@ -57,10 +62,16 @@ export function useResourceUsageDerivedModel({
         map.set(repo.id, display)
       }
     }
+    const ambiguousGroupIds = findDuplicateIds(projectGroups)
+    for (const group of projectGroups) {
+      if (!ambiguousGroupIds.has(group.id)) {
+        map.set(`folder-workspace:${group.id}`, group.name)
+      }
+    }
     return map
-  }, [repos])
+  }, [repos, projectGroups])
 
-  // Why: non-null connectionId is the only honest "remote" signal (SSH PTYs run remote); build from the store, not a missing memory sample.
+  // Use execution-host metadata for SSH status; an absent sample cannot establish remoteness.
   const repoConnectionIdById = useMemo(() => {
     const map = new Map<string, string | null>()
     for (const repo of repos) {
@@ -69,12 +80,14 @@ export function useResourceUsageDerivedModel({
     return map
   }, [repos])
 
-  // Why: runtime-hosted repos have no local daemon samples or killable sessions; this map drives their per-row exclusion in the merge.
-  const repoRuntimeScopedById = useMemo(() => {
-    const map = new Map<string, boolean>()
+  // Why: runtime-hosted repos have no local samples or killable sessions; their rows come only from that server's own samples.
+  const repoRuntimeHostIdById = useMemo(() => {
+    const map = new Map<string, string>()
     for (const repo of repos) {
       const parsed = parseExecutionHostId(getRepoExecutionHostId(repo))
-      map.set(repo.id, parsed?.kind === 'runtime')
+      if (parsed?.kind === 'runtime') {
+        map.set(repo.id, parsed.id)
+      }
     }
     return map
   }, [repos])
@@ -83,22 +96,24 @@ export function useResourceUsageDerivedModel({
     () => new Map(allWorktrees.map((worktree) => [worktree.id, worktree])),
     [allWorktrees]
   )
+  // Keep duplicate workspace IDs in the catalog; gate host attribution where the resource identity is ambiguous.
+  const ambiguousWorktreeIds = useMemo(() => findAmbiguousWorktreeIds(allWorktrees), [allWorktrees])
 
   // Why: skip the merge when closed; the always-mounted segment recomputing on every keystroke-driven store mutation made the app laggy.
   const unifiedRepos = useMemo(
     () =>
       open
         ? mergeSnapshotAndSessions(resourceSnapshot, sessions, {
-            // Why spread: the rows and the bulk selector must classify from the identical binding
-            // inputs. Re-listing them here let the row path miss deferred SSH sessions, so their
-            // single-row kill skipped confirmation while bulk cleanup correctly spared them (#8459).
+            // Share all binding inputs with bulk selection so deferred SSH sessions also require single-row kill confirmation.
             ...resourceSessionBindings,
             runtimePaneTitlesByTabId,
             repoDisplayNameById,
             repoConnectionIdById,
-            repoRuntimeScopedById,
+            repoRuntimeHostIdById,
+            runtimeHostResources,
             browserTabsByWorktree,
-            worktreeById
+            worktreeById,
+            ambiguousWorktreeIds
           })
         : [],
     [
@@ -109,9 +124,11 @@ export function useResourceUsageDerivedModel({
       runtimePaneTitlesByTabId,
       repoDisplayNameById,
       repoConnectionIdById,
-      repoRuntimeScopedById,
+      repoRuntimeHostIdById,
+      runtimeHostResources,
       browserTabsByWorktree,
-      worktreeById
+      worktreeById,
+      ambiguousWorktreeIds
     ]
   )
 
@@ -123,15 +140,13 @@ export function useResourceUsageDerivedModel({
     return countUnboundDaemonSessions(sessions, resourceSessionBindings)
   }, [open, sessions, resourceSessionBindings, workspaceSessionReady])
 
-  // Why: open and closed badges share the same daemon inventory cache. The old
-  // closed path used boundPtyIds (wake hints) and inflated the chip to 60+.
+  // Share daemon inventory for open and closed counts; wake hints are bindings, not a live session count.
   const triggerSessionCount = sessionCount
 
   const memoryMetricCopy = getResourceMemoryMetricCopy(
     resourceSnapshot?.processMemoryMetric ?? 'rss'
   )
-  // Why null-not-zero: a host that cannot read commit (every Unix host, and any
-  // host older than the field) must render nothing here, never "0 B committed".
+  // Missing commit support on Unix/older hosts means unknown, not zero committed bytes.
   const commitMetricCopy = resourceSnapshot?.processCommitMetric
     ? getResourceCommitMetricCopy()
     : null

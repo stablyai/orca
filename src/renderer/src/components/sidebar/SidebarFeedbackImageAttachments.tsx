@@ -6,12 +6,18 @@ import { translate } from '@/i18n/i18n'
 import {
   FEEDBACK_IMAGE_FILE_ACCEPT,
   MAX_FEEDBACK_IMAGE_COUNT,
+  MAX_FEEDBACK_IMAGE_TOTAL_BYTES,
   formatFeedbackImageSize,
   type FeedbackImageDraft
 } from '@/lib/feedback-image-attachments'
 
+// Delay progress hints to avoid flashing during fast unshrunk reads.
+const PREPARING_HINT_DELAY_MS = 250
+
 type SidebarFeedbackImageAttachmentsProps = {
   images: FeedbackImageDraft[]
+  /** Files picked but not yet read; a shrink keeps them pending long enough to show. */
+  pendingCount: number
   disabled: boolean
   isDragActive: boolean
   onAddFiles: (files: readonly File[]) => void
@@ -20,13 +26,28 @@ type SidebarFeedbackImageAttachmentsProps = {
 
 export function SidebarFeedbackImageAttachments({
   images,
+  pendingCount,
   disabled,
   isDragActive,
   onAddFiles,
   onRemove
 }: SidebarFeedbackImageAttachmentsProps): React.JSX.Element {
   const fileInputRef = React.useRef<HTMLInputElement>(null)
-  const atCapacity = images.length >= MAX_FEEDBACK_IMAGE_COUNT
+  // Full-screen screenshots exhaust bytes before count; disable picks that cannot fit.
+  const attachedBytes = images.reduce((total, image) => total + image.bytes, 0)
+  const atCapacity =
+    images.length >= MAX_FEEDBACK_IMAGE_COUNT || attachedBytes >= MAX_FEEDBACK_IMAGE_TOTAL_BYTES
+  const hasPendingReads = pendingCount > 0
+  const [showPreparing, setShowPreparing] = React.useState(false)
+  React.useEffect(() => {
+    if (!hasPendingReads) {
+      setShowPreparing(false)
+      return
+    }
+    const timer = window.setTimeout(() => setShowPreparing(true), PREPARING_HINT_DELAY_MS)
+    return () => window.clearTimeout(timer)
+  }, [hasPendingReads])
+  const isPreparing = hasPendingReads && showPreparing
 
   return (
     <div
@@ -37,10 +58,20 @@ export function SidebarFeedbackImageAttachments({
     >
       <div className="flex items-center justify-between gap-2">
         <span className="text-xs text-muted-foreground">
-          {translate(
-            'auto.components.sidebar.SidebarFeedbackImageAttachments.screenshotsHint',
-            'Attach up to {count} screenshots'
-          ).replace('{count}', String(MAX_FEEDBACK_IMAGE_COUNT))}
+          {/* Show progress while shrinking so the thumbnail delay cannot read as a dropped attachment. */}
+          {isPreparing
+            ? translate(
+                'auto.components.sidebar.SidebarFeedbackImageAttachments.preparing',
+                'Preparing attachments…'
+              )
+            : translate(
+                'auto.components.sidebar.SidebarFeedbackImageAttachments.screenshotsHint',
+                'Attach up to {{count}} screenshots, {{maxSize}} total',
+                {
+                  count: MAX_FEEDBACK_IMAGE_COUNT,
+                  maxSize: formatFeedbackImageSize(MAX_FEEDBACK_IMAGE_TOTAL_BYTES)
+                }
+              )}
         </span>
         <Button
           type="button"
@@ -66,7 +97,7 @@ export function SidebarFeedbackImageAttachments({
         className="hidden"
         onChange={(event) => {
           onAddFiles(Array.from(event.target.files ?? []))
-          // Why: reset so re-picking the same file still fires onChange.
+          // Reset so selecting the same file still emits change.
           event.target.value = ''
         }}
       />

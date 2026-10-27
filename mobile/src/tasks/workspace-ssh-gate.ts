@@ -1,10 +1,22 @@
 import type { SshConnectionState, SshConnectionStatus } from '../../../src/shared/ssh-types'
+import { ORCAD_RECLAIM_STALE_LOCK_FLAG } from '../../../src/shared/orcad-stale-lock-reclaim'
+
+// Keep unread SSH fields optional so an omitted member cannot drop auth-failed state into connected fallback.
+export type WorkspaceSshRecord = Omit<
+  SshConnectionState,
+  'error' | 'reconnectAttempt' | 'managedServer'
+> & {
+  error?: string | null
+  reconnectAttempt?: number
+  managedServer?: { kind?: string; serving?: { state?: string; detail?: string } }
+}
 
 export type WorkspaceSshGate = {
   status: SshConnectionStatus | null
   requiresConnection: boolean
   connectInProgress: boolean
   error: string | null
+  needsDesktopServerRecovery: boolean
 }
 
 function isWorkspaceSshConnectInProgress(status: SshConnectionStatus | null): boolean {
@@ -38,7 +50,7 @@ export function workspaceSshStatusLabel(status: SshConnectionStatus | null): str
 
 export function deriveWorkspaceSshGate(args: {
   connectionId: string | null
-  state: SshConnectionState | null
+  state: WorkspaceSshRecord | null
   connecting: boolean
 }): WorkspaceSshGate {
   const matchingState =
@@ -48,6 +60,15 @@ export function deriveWorkspaceSshGate(args: {
     status,
     requiresConnection: args.connectionId !== null && status !== 'connected',
     connectInProgress: args.connecting || isWorkspaceSshConnectInProgress(status),
-    error: matchingState?.error ?? null
+    error: matchingState?.error ?? null,
+    needsDesktopServerRecovery: needsDesktopServerRecovery(matchingState?.managedServer)
   }
+}
+
+function needsDesktopServerRecovery(server: WorkspaceSshRecord['managedServer']): boolean {
+  return (
+    server?.kind === 'managed' &&
+    server.serving?.state === 'unverifiable' &&
+    Boolean(server.serving.detail?.includes(ORCAD_RECLAIM_STALE_LOCK_FLAG))
+  )
 }

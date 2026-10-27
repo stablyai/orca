@@ -45,7 +45,6 @@ describe('automation setup decision defaults', () => {
   ] as const)('maps %s setup policy to %s', (setupRunPolicy, expectedDecision) => {
     expect(
       getVisibleAutomationSetupDecision({
-        createTarget: 'orca',
         workspaceMode: 'new_per_run',
         repoId: 'repo-1',
         repos: [
@@ -75,21 +74,12 @@ describe('automation setup decision defaults', () => {
     expect(
       getVisibleAutomationSetupDecision({
         ...baseArgs,
-        createTarget: 'orca',
         workspaceMode: 'existing'
       })
     ).toBeUndefined()
     expect(
       getVisibleAutomationSetupDecision({
         ...baseArgs,
-        createTarget: 'hermes',
-        workspaceMode: 'new_per_run'
-      })
-    ).toBeUndefined()
-    expect(
-      getVisibleAutomationSetupDecision({
-        ...baseArgs,
-        createTarget: 'orca',
         workspaceMode: 'new_per_run',
         repos: [
           {
@@ -104,7 +94,6 @@ describe('automation setup decision defaults', () => {
   it('uses ready project-host setup hook settings before repo fallback', () => {
     expect(
       getVisibleAutomationSetupDecision({
-        createTarget: 'orca',
         workspaceMode: 'new_per_run',
         repoId: 'repo-1',
         repos: [repo],
@@ -125,7 +114,6 @@ describe('automation setup decision defaults', () => {
   it('shows setup choice for shared orca.yaml setup and default tabs', () => {
     expect(
       getVisibleAutomationSetupDecision({
-        createTarget: 'orca',
         workspaceMode: 'new_per_run',
         repoId: 'repo-1',
         repos: [
@@ -148,7 +136,6 @@ describe('automation setup decision defaults', () => {
 
     expect(
       getVisibleAutomationSetupDecision({
-        createTarget: 'orca',
         workspaceMode: 'new_per_run',
         repoId: 'repo-1',
         repos: [
@@ -173,7 +160,6 @@ describe('automation setup decision defaults', () => {
   it('omits setup decision when no setup source is visible', () => {
     expect(
       resolveAutomationSetupDecisionForSave({
-        createTarget: 'orca',
         workspaceMode: 'new_per_run',
         repoId: 'repo-1',
         repos: [
@@ -193,7 +179,6 @@ describe('automation setup decision defaults', () => {
     ).toBeUndefined()
     expect(
       resolveAutomationSetupDecisionForSave({
-        createTarget: 'orca',
         workspaceMode: 'new_per_run',
         repoId: 'repo-1',
         repos: [
@@ -214,7 +199,6 @@ describe('automation setup decision defaults', () => {
 
     expect(
       resolveAutomationSetupDecisionForSave({
-        createTarget: 'orca',
         workspaceMode: 'new_per_run',
         repoId: 'repo-1',
         repos: [
@@ -237,7 +221,6 @@ describe('automation setup decision defaults', () => {
   it('fails closed when saving before shared hook inspection is available', () => {
     expect(
       resolveAutomationSetupDecisionForSave({
-        createTarget: 'orca',
         workspaceMode: 'new_per_run',
         repoId: 'repo-1',
         repos: [

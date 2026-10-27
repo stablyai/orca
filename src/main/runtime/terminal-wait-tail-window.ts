@@ -1,5 +1,3 @@
-// Line-window primitives over a newline-joined terminal tail, shared by the wait-blocked prompt rules.
-
 export function isTerminalWaitWhitespace(value: string, index: number): boolean {
   const code = value.charCodeAt(index)
   return code === 32 || (code >= 9 && code <= 13)
@@ -18,12 +16,11 @@ export function startOfLastLines(value: string, count: number): number {
   return cursor + 1
 }
 
-/** Like `startOfLastLines`, but blank rows don't count toward the window. */
-// Why: the visible-screen probe joins raw rows, so blank spacer rows must not eat a dialog's window.
+/** Blank spacer rows in visible-screen output must not consume a dialog window. */
 export function startOfLastNonBlankLines(value: string, count: number): number {
   let seen = 0
   let lineEnd = value.length
-  for (;;) {
+  while (lineEnd > 0) {
     const lineStart = value.lastIndexOf('\n', lineEnd - 1) + 1
     if (hasNonWhitespaceBetween(value, lineStart, lineEnd)) {
       seen += 1
@@ -36,6 +33,7 @@ export function startOfLastNonBlankLines(value: string, count: number): number {
     }
     lineEnd = lineStart - 1
   }
+  return 0
 }
 
 function hasNonWhitespaceBetween(value: string, start: number, end: number): boolean {

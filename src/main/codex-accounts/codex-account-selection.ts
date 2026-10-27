@@ -3,10 +3,13 @@ import type {
   CodexRateLimitAccountsState,
   CodexSystemDefaultIdentity
 } from '../../shared/managed-account-types'
+import { parseWslUncPath } from '../../shared/wsl-paths'
 import type { Store } from '../persistence'
 import type { RateLimitService } from '../rate-limits/service'
 import type { CodexRuntimeHomeService } from './runtime-home-service'
 import type { CodexConfigMirror } from './codex-config-mirror'
+import type { ResolvedCodexIdentity } from './codex-account-identity'
+import { codexAuthIdentityContradictsAccount } from './codex-auth-identity'
 import type { CodexAccountServiceLifecycle } from './codex-account-service-types'
 import { toCodexManagedAccountSummary } from './codex-account-service-types'
 import {
@@ -27,8 +30,12 @@ type CodexAccountSelectionDependencies = {
   configMirror: CodexConfigMirror
   lifecycle: CodexAccountServiceLifecycle
   resolveSystemDefault: () => CodexSystemDefaultIdentity
+  readIdentityFromHome: (
+    managedHomePath: string,
+    expectedAccountId: string
+  ) => ResolvedCodexIdentity
   removeManagedHome: (candidatePath: string, expectedAccountId: string) => void
-  discardResetAttempts: (accountId: string) => void
+  discardResetAttempts: (accountId: string) => Promise<void>
 }
 
 export class CodexAccountSelection {
@@ -36,6 +43,7 @@ export class CodexAccountSelection {
 
   list(): CodexRateLimitAccountsState {
     this.normalizeActiveSelection()
+    this.adoptManagedHomeIdentities()
     return this.snapshot()
   }
 
@@ -83,10 +91,13 @@ export class CodexAccountSelection {
     }
 
     this.dependencies.removeManagedHome(account.managedHomePath, account.id)
-    // Why: a removed account can no longer appear in the switcher dropdown,
-    // so purge its cached usage to avoid stale entries.
     this.dependencies.rateLimits.evictInactiveCodexCache(accountId)
-    this.dependencies.discardResetAttempts(accountId)
+    try {
+      await this.dependencies.discardResetAttempts(accountId)
+    } catch (error) {
+      // Removal already succeeded; retain the ledger's safety guards if cleanup fails.
+      console.warn('[codex-accounts] Removed account, but credit ledger cleanup failed:', error)
+    }
     const accountTarget = getCodexSelectionTargetForAccount(account)
     this.startQuotaRefresh(
       getSelectedCodexAccountIdForTarget(settings, accountTarget) === accountId
@@ -139,6 +150,42 @@ export class CodexAccountSelection {
 
     this.startQuotaRefresh(outgoingAccountId, effectiveTarget)
     return this.snapshot()
+  }
+
+  // A `codex login` run inside a managed home swaps its account; label the row with what actually runs (#22284).
+  private adoptManagedHomeIdentities(): void {
+    const settings = this.dependencies.store.getSettings()
+    let changed = false
+    const accounts = settings.codexManagedAccounts.map((account) => {
+      // WSL homes are read over UNC, which can block when the distro is stopped.
+      if (account.managedHomeRuntime === 'wsl' || parseWslUncPath(account.managedHomePath)) {
+        return account
+      }
+      let identity: ResolvedCodexIdentity
+      try {
+        identity = this.dependencies.readIdentityFromHome(account.managedHomePath, account.id)
+      } catch {
+        return account
+      }
+      if (!identity.email || !codexAuthIdentityContradictsAccount(identity, account)) {
+        return account
+      }
+      console.warn(
+        '[codex-accounts] Managed home holds a different Codex login; updating its label'
+      )
+      changed = true
+      return {
+        ...account,
+        email: identity.email,
+        providerAccountId: identity.providerAccountId,
+        workspaceLabel: identity.workspaceLabel,
+        workspaceAccountId: identity.workspaceAccountId,
+        updatedAt: Date.now()
+      }
+    })
+    if (changed) {
+      this.dependencies.store.updateSettings({ codexManagedAccounts: accounts })
+    }
   }
 
   private normalizeActiveSelection(): void {

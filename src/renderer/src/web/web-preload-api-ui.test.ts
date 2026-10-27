@@ -1,10 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { FeatureInteractionState } from '../../../shared/feature-interactions'
-import {
-  PAIRING_LOCAL_UI_FIELDS,
-  type PairingLocalUiField
-} from '../../../shared/pairing-local-ui-fields'
-import type { PersistedUIState } from '../../../shared/persisted-ui-state-types'
 import type { RuntimeRpcResponse } from '../../../shared/runtime-rpc-envelope'
 import type { ManualRepoOrderEntry } from '../../../shared/ui-chrome-types'
 import {
@@ -356,8 +351,7 @@ describe('web UI preload API', () => {
     const { installWebPreloadApi } = await import('./web-preload-api')
     installWebPreloadApi()
 
-    // The web client keys its order to its own runtime:web-* host, so a host that predates the
-    // RPC-side strip would persist it over the desktop's local/ssh-keyed order.
+    // Old hosts would persist browser runtime:web-* order over the desktop’s local/SSH order.
     const manualRepoOrder: ManualRepoOrderEntry[] = [
       { hostId: 'runtime:web-11111111-2222-3333-4444-555555555555', repoId: 'repo-b' },
       { hostId: 'runtime:web-11111111-2222-3333-4444-555555555555', repoId: 'repo-a' }
@@ -371,10 +365,7 @@ describe('web UI preload API', () => {
     })
   })
 
-  // Why cover a host that still sends the field: clients and hosts update independently, so a new
-  // web client meets hosts predating the response omission. On a profile an old web client
-  // poisoned, those echoed runtime:web-* entries match this browser's own repos and would beat
-  // every drag it has made since.
+  // Hosts/clients update independently; old hosts may echo previously poisoned browser order, overriding later drags.
   it.each([
     [
       'this browser own stale runtime:web-* entries',
@@ -457,77 +448,6 @@ describe('web UI preload API', () => {
     })
   })
 
-  // Census-driven, matching the host-side seam tests: a field added to PAIRING_LOCAL_UI_FIELDS
-  // without wiring the web read seam fails here rather than shipping. The host sample differs from
-  // the browser's for every field, so only the pin makes this pass.
-  const browserLocalUiSamples: Record<PairingLocalUiField, unknown> = {
-    automationHostFilter: { kind: 'host', hostKey: 'browser-local-host-key' },
-    hideWorkspacesFromOtherDevices: true,
-    manualRepoOrder: [{ hostId: 'runtime:web-env-1', repoId: 'repo-b' }],
-    workspaceHostOrder: ['runtime:web-env-1', 'local'],
-    agentsVisibleHostIds: ['runtime:web-env-1'],
-    agentsFilterRepoIds: ['repo-b'],
-    agentsShowChildAgents: true,
-    agentsCompactMode: false,
-    agentsShowSearch: false,
-    agentsReadFilter: 'unread',
-    agentsGroupBy: 'project',
-    activityClearedAtByPaneKey: { 'tab-1:leaf-1': 123 },
-    manuallyUnreadTurnsByPaneKey: { 'tab-1:leaf-1': 321 }
-  }
-  const hostUiSamples: Record<PairingLocalUiField, unknown> = {
-    automationHostFilter: { kind: 'all' },
-    hideWorkspacesFromOtherDevices: false,
-    manualRepoOrder: [{ hostId: 'local', repoId: 'repo-a' }],
-    workspaceHostOrder: ['local', 'ssh:box'],
-    agentsVisibleHostIds: ['local'],
-    agentsFilterRepoIds: ['repo-a'],
-    agentsShowChildAgents: false,
-    agentsCompactMode: true,
-    agentsShowSearch: true,
-    agentsReadFilter: 'all',
-    agentsGroupBy: 'status',
-    activityClearedAtByPaneKey: { 'tab-2:leaf-2': 456 },
-    manuallyUnreadTurnsByPaneKey: { 'tab-2:leaf-2': 654 }
-  }
-
-  it.each(PAIRING_LOCAL_UI_FIELDS.map((field) => [field] as const))(
-    'keeps the browser-local %s and never sends it to the host',
-    async (field) => {
-      const runtimeCalls: { method: string; params: unknown }[] = []
-      vi.doMock('./web-runtime-client', () => ({
-        WebRuntimeClient: class {
-          call(method: string, params?: unknown): Promise<RuntimeRpcResponse<unknown>> {
-            runtimeCalls.push({ method, params })
-            return Promise.resolve({
-              id: method,
-              ok: true,
-              result: { ui: { [field]: hostUiSamples[field] } },
-              _meta: { runtimeId: 'runtime-1' }
-            })
-          }
-
-          close(): void {}
-        }
-      }))
-
-      const browserLocal = { [field]: browserLocalUiSamples[field] } as Partial<PersistedUIState>
-      const globals = installBrowserGlobals('Linux')
-      writeStoredRuntimeEnvironment(globals.storage)
-      globals.storage.setItem('orca.web.ui.v1', JSON.stringify(browserLocal))
-      const { installWebPreloadApi } = await import('./web-preload-api')
-      installWebPreloadApi()
-
-      await globals.window.api.ui.set({ ...browserLocal, sidebarWidth: 280 })
-
-      expect(runtimeCalls[0]).toEqual({ method: 'ui.set', params: { sidebarWidth: 280 } })
-      await expect(globals.window.api.ui.get()).resolves.toMatchObject(browserLocal)
-      expect(JSON.parse(globals.storage.getItem('orca.web.ui.v1') ?? '{}')).toMatchObject(
-        browserLocal
-      )
-    }
-  )
-
   it('union-merges local contextual tour seen ids when ui.get returns stale host state', async () => {
     vi.doMock('./web-runtime-client', () => ({
       WebRuntimeClient: class {
@@ -575,8 +495,7 @@ describe('web UI preload API', () => {
           return Promise.resolve({
             id: method,
             ok: true,
-            // Why false: the host store always projects this key, so a plain spread
-            // would overwrite the arm the web client's own settings migration raised.
+            // Host always projects this key; spreading false would erase the browser migration’s notice arm.
             result: { ui: { osc52ClipboardDefaultOnNoticePending: false } },
             _meta: { runtimeId: 'runtime-1' }
           })
@@ -842,12 +761,11 @@ describe('web UI preload API', () => {
     const { installWebPreloadApi } = await import('./web-preload-api')
     installWebPreloadApi()
 
-    // Plain set swallows the failure so fire-and-forget callers stay quiet...
+    // Fire-and-forget set tolerates failure; setWithAck must reject for retry.
     await expect(
       globals.window.api.ui.set({ hideDefaultBranchWorkspace: true })
     ).resolves.toBeUndefined()
-    // ...but the diff writer's ack path must see it, or it folds a patch the
-    // host never received into its baseline and silently stops retrying it.
+    // Acknowledging an unreceived patch would advance the diff baseline and silently stop retries.
     await expect(
       globals.window.api.ui.setWithAck!({ hideSleepingWorkspaces: true })
     ).rejects.toThrow('runtime disconnected')

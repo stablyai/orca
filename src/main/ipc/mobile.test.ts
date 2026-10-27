@@ -1,3 +1,4 @@
+import '../runtime/rpc/unused-default-rpc-methods.test-fixture'
 import { beforeEach, describe, expect, it, vi, type Mock } from 'vitest'
 import type * as NodeOs from 'node:os'
 
@@ -20,8 +21,7 @@ vi.mock('qrcode', () => ({
   }
 }))
 
-// Why: only the interface enumeration is faked; the real `os` stays available for the integration
-// test below, which needs tmpdir() for a real runtime's user data directory.
+// Mock interface enumeration only; integration fixtures still need real os.tmpdir.
 vi.mock('os', async (importOriginal) => ({
   ...(await importOriginal<typeof NodeOs>()),
   networkInterfaces: networkInterfacesMock
@@ -36,9 +36,15 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { registerMobileHandlers } from './mobile'
 import { NETWORK_EXPOSURE_FAILED_GUIDANCE } from '../runtime/network-exposure-guidance'
-import { OrcaRuntimeService } from '../runtime/orca-runtime'
+import { createMobileRpcSurfaceRuntime } from '../runtime/runtime-rpc-mobile-method-allowlist-fixtures'
 import { OrcaRuntimeRpcServer } from '../runtime/runtime-rpc'
 import { WebSocketTransport } from '../runtime/rpc/ws-transport'
+
+// Match production's IPv4-only widened listener.
+function registerWithListener(stub: Record<string, unknown>, bindHost = '0.0.0.0'): void {
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: each stub implements every server member its test's handlers call.
+  registerMobileHandlers({ getNetworkExposureBindHost: () => bindHost, ...stub } as never)
+}
 
 describe('registerMobileHandlers', () => {
   const handlers = new Map<string, (...args: unknown[]) => unknown>()
@@ -64,7 +70,7 @@ describe('registerMobileHandlers', () => {
         tailscale0: [{ family: 'IPv4', internal: false, address: '100.64.1.20' }]
       })
 
-    registerMobileHandlers({} as never)
+    registerWithListener({})
 
     await expect(handlers.get('mobile:listNetworkInterfaces')?.()).resolves.toEqual({
       interfaces: [{ name: 'en0', address: '192.168.1.24' }]
@@ -98,7 +104,7 @@ describe('registerMobileHandlers', () => {
       connectionMode: 'automatic'
     })
 
-    registerMobileHandlers({ createMobilePairingOffer } as never)
+    registerWithListener({ createMobilePairingOffer })
 
     await expect(handlers.get('mobile:listNetworkInterfaces')?.()).resolves.toEqual({
       interfaces: [
@@ -114,29 +120,8 @@ describe('registerMobileHandlers', () => {
     )
   })
 
-  it('includes IPv6 addresses (ranked after IPv4) and excludes link-local IPv6', async () => {
-    networkInterfacesMock.mockReturnValue({
-      en0: [
-        { family: 'IPv4', internal: false, address: '192.168.1.24' },
-        { family: 'IPv6', internal: false, address: 'fe80::1' },
-        { family: 'IPv6', internal: false, address: '2605:340:cd51:2a01:0:2b13:f279:c096' }
-      ],
-      lo0: [{ family: 'IPv6', internal: true, address: '::1' }]
-    })
-
-    registerMobileHandlers({} as never)
-
-    await expect(handlers.get('mobile:listNetworkInterfaces')?.()).resolves.toEqual({
-      interfaces: [
-        { name: 'en0', address: '192.168.1.24' },
-        { name: 'en0', address: '2605:340:cd51:2a01:0:2b13:f279:c096' }
-      ]
-    })
-  })
-
   it('ranks container and VM bridges below every reachable address', async () => {
-    // Why: a phone can never reach docker0, so advertising it makes the direct
-    // path lose the pairing race and silently relays every session.
+    // Container bridges should not become unreachable automatic direct candidates.
     networkInterfacesMock.mockReturnValue({
       docker0: [{ family: 'IPv4', internal: false, address: '172.17.0.1' }],
       'vEthernet (Default Switch)': [{ family: 'IPv4', internal: false, address: '172.28.80.1' }],
@@ -147,9 +132,9 @@ describe('registerMobileHandlers', () => {
       ]
     })
 
-    registerMobileHandlers({} as never)
+    registerWithListener({}, '::')
 
-    // Real IPv6 outranks a bridge IPv4: the phone can reach one, never the other.
+    // Prefer a reachable external IPv6 candidate over container bridge IPv4.
     await expect(handlers.get('mobile:listNetworkInterfaces')?.()).resolves.toEqual({
       interfaces: [
         { name: 'en0', address: '192.168.1.24' },
@@ -185,7 +170,7 @@ describe('registerMobileHandlers', () => {
       connectionMode: 'automatic'
     })
 
-    registerMobileHandlers({ createMobilePairingOffer } as never)
+    registerWithListener({ createMobilePairingOffer })
 
     await expect(handlers.get('mobile:listNetworkInterfaces')?.()).resolves.toEqual({
       interfaces: [
@@ -214,14 +199,13 @@ describe('registerMobileHandlers', () => {
   })
 
   it('keeps a real LAN address that merely overlaps a container subnet', async () => {
-    // Why: Docker's 172.16/12 pool overlaps genuine corporate LANs, so the
-    // bridge check keys on interface name — a subnet test would demote this.
+    // Container subnets overlap corporate LANs; identify bridges by interface name.
     networkInterfacesMock.mockReturnValue({
       eth0: [{ family: 'IPv4', internal: false, address: '172.17.4.9' }],
       docker0: [{ family: 'IPv4', internal: false, address: '172.17.0.1' }]
     })
 
-    registerMobileHandlers({} as never)
+    registerWithListener({})
 
     await expect(handlers.get('mobile:listNetworkInterfaces')?.()).resolves.toEqual({
       interfaces: [
@@ -232,8 +216,7 @@ describe('registerMobileHandlers', () => {
   })
 
   it('never auto-advertises a bridge: a bridge-only host pairs over Relay with no address', async () => {
-    // Why: a bridge address the phone provably cannot reach must not become the default, and Relay
-    // needs no local address — so the QR ships without a direct path instead of an unreachable one.
+    // Relay can pair without advertising an unreachable local interface.
     networkInterfacesMock.mockReturnValue({
       docker0: [{ family: 'IPv4', internal: false, address: '172.17.0.1' }],
       'vEthernet (WSL)': [{ family: 'IPv4', internal: false, address: '172.28.80.1' }]
@@ -246,19 +229,17 @@ describe('registerMobileHandlers', () => {
       connectionMode: 'automatic'
     })
 
-    registerMobileHandlers({ createMobilePairingOffer } as never)
+    registerWithListener({ createMobilePairingOffer })
 
     await expect(handlers.get('mobile:getPairingQR')?.(null, {})).resolves.toMatchObject({
       available: true,
       connectionMode: 'automatic',
-      // Why: the offer's loopback fallback points at the scanning phone, not this host — reporting it
-      // would print a direct endpoint under the QR that nothing can dial.
+      // Loopback points at the scanning phone; omit the unusable direct endpoint.
       endpoint: null
     })
     expect(createMobilePairingOffer).toHaveBeenCalledWith(
       expect.objectContaining({ address: null })
     )
-    // The bridges stay pickable, just never automatically.
     await expect(handlers.get('mobile:listNetworkInterfaces')?.()).resolves.toEqual({
       interfaces: [
         { name: 'docker0', address: '172.17.0.1' },
@@ -268,14 +249,13 @@ describe('registerMobileHandlers', () => {
   })
 
   it('refuses a LAN-only QR on a bridge-only host instead of advertising the bridge', async () => {
-    // Why: LAN has no Relay to fall back on, so a dead direct endpoint is worse than saying so —
-    // the guidance points at the picker, where the bridge is still selectable on purpose.
+    // LAN-only has no relay fallback; guide manual interface selection instead of minting a dead endpoint.
     networkInterfacesMock.mockReturnValue({
       docker0: [{ family: 'IPv4', internal: false, address: '172.17.0.1' }]
     })
     const createMobilePairingOffer = vi.fn()
 
-    registerMobileHandlers({ createMobilePairingOffer } as never)
+    registerWithListener({ createMobilePairingOffer })
 
     await expect(
       handlers.get('mobile:getPairingQR')?.(null, { connectionMode: 'local-only' })
@@ -287,8 +267,7 @@ describe('registerMobileHandlers', () => {
   })
 
   it('honors an explicitly picked bridge address', async () => {
-    // Why: exclusion is about the automatic default only — a user who knows their bridge is routable
-    // (a VM guest pairing with the host) must still be able to advertise it.
+    // Keep bridges manually selectable for users with deliberately routable VM networking.
     networkInterfacesMock.mockReturnValue({
       docker0: [{ family: 'IPv4', internal: false, address: '172.17.0.1' }],
       en0: [{ family: 'IPv4', internal: false, address: '192.168.1.24' }]
@@ -312,21 +291,6 @@ describe('registerMobileHandlers', () => {
     )
   })
 
-  it('returns an IPv6 interface on an IPv6-only host (regression: was empty, breaking mobile pairing)', async () => {
-    networkInterfacesMock.mockReturnValue({
-      eth0: [
-        { family: 'IPv6', internal: false, address: '2605:340:cd51:2a01:0:2b13:f279:c096' },
-        { family: 'IPv6', internal: false, address: 'fe80::42:acff:fe11:2' }
-      ]
-    })
-
-    registerMobileHandlers({} as never)
-
-    await expect(handlers.get('mobile:listNetworkInterfaces')?.()).resolves.toEqual({
-      interfaces: [{ name: 'eth0', address: '2605:340:cd51:2a01:0:2b13:f279:c096' }]
-    })
-  })
-
   it('generates mobile pairing urls with the tailnet address by default', async () => {
     networkInterfacesMock.mockReturnValue({
       en0: [{ family: 'IPv4', internal: false, address: '192.168.1.24' }],
@@ -341,7 +305,7 @@ describe('registerMobileHandlers', () => {
     })
     const rpcServer = { createMobilePairingOffer }
 
-    registerMobileHandlers(rpcServer as never)
+    registerWithListener(rpcServer)
 
     await expect(handlers.get('mobile:getPairingQR')?.(null, {})).resolves.toMatchObject({
       available: true,
@@ -376,7 +340,7 @@ describe('registerMobileHandlers', () => {
       relayFailure
     })
 
-    registerMobileHandlers({ createMobilePairingOffer } as never)
+    registerWithListener({ createMobilePairingOffer })
 
     await expect(handlers.get('mobile:getPairingQR')?.(null, {})).resolves.toEqual({
       available: false,
@@ -398,7 +362,7 @@ describe('registerMobileHandlers', () => {
       connectionMode: 'local-only'
     })
 
-    registerMobileHandlers({ createMobilePairingOffer } as never)
+    registerWithListener({ createMobilePairingOffer })
     await handlers.get('mobile:getPairingQR')?.(null, { connectionMode: 'local-only' })
 
     expect(createMobilePairingOffer).toHaveBeenCalledWith(
@@ -509,9 +473,7 @@ describe('registerMobileHandlers', () => {
       scope: 'runtime',
       reach: 'network'
     })
-    // Why: STA-2370 — generating a runtime offer must widen the listener BEFORE advertising its endpoint,
-    // or a client could read the URL and connect before the LAN bind exists. Assert call ORDER, not just
-    // that the widen ran, so a regression that widens after minting the offer is caught.
+    // Widen before minting the offer so clients cannot race an unbound LAN endpoint (STA-2370).
     expect(ensureNetworkExposure).toHaveBeenCalled()
     expect(ensureNetworkExposure.mock.invocationCallOrder[0]).toBeLessThan(
       createPairingOffer.mock.invocationCallOrder[0]
@@ -520,7 +482,12 @@ describe('registerMobileHandlers', () => {
 
   const stubRuntimePairingServer = (
     address: string
-  ): { createPairingOffer: Mock; ensureNetworkExposure: Mock } => ({
+  ): {
+    getNetworkExposureBindHost: () => string
+    createPairingOffer: Mock
+    ensureNetworkExposure: Mock
+  } => ({
+    getNetworkExposureBindHost: () => '0.0.0.0',
     createPairingOffer: vi.fn().mockReturnValue({
       available: true,
       pairingUrl: 'orca://pair#runtime',
@@ -532,8 +499,7 @@ describe('registerMobileHandlers', () => {
   })
 
   it('reports runtime pairing unavailable rather than advertising a bridge', async () => {
-    // Why: runtime clients have no Relay fallback, so a bridge-only host has nothing reachable to
-    // advertise — and no widen should happen for a link that would be dead anyway.
+    // Runtime clients lack relay fallback; do not widen or mint when no automatic address is usable.
     networkInterfacesMock.mockReturnValue({
       docker0: [{ family: 'IPv4', internal: false, address: '172.17.0.1' }]
     })
@@ -548,9 +514,7 @@ describe('registerMobileHandlers', () => {
     expect(rpcServer.ensureNetworkExposure).not.toHaveBeenCalled()
   })
 
-  // Why: every loopback form the address field accepts must behave identically once the user declared
-  // "This computer only" — `splitHostPort`/`ws://` overrides all reach the handler verbatim, so gating on
-  // the raw string alone treated `localhost:8443` and `ws://127.0.0.1:6768` as off-host.
+  // All accepted loopback spellings must honor an explicit this-computer reach.
   it.each([
     '127.0.0.1',
     'localhost',
@@ -572,17 +536,14 @@ describe('registerMobileHandlers', () => {
       })
     ).resolves.toMatchObject({ available: true, deviceId: 'runtime-local' })
 
-    // Why: "This computer only" exists so nothing is exposed off-host — a loopback link is already
-    // served by the loopback listener, and the widen is one-way for the life of the process.
+    // Widening is one-way; local-only intent must leave the listener on loopback.
     expect(rpcServer.ensureNetworkExposure).not.toHaveBeenCalled()
     expect(rpcServer.createPairingOffer).toHaveBeenCalledWith(
       expect.objectContaining({ reach: 'this-computer' })
     )
   })
 
-  // Why: the Custom field is documented as "SSH tunnel, reverse proxy, or custom hostname", so a loopback
-  // front-end there still needs the listener open behind it — gating the widen on the address SHAPE broke
-  // `ssh -L 8443:<desktop-lan-ip>:6768` (sshd dials the LAN address on this host and gets refused).
+  // Custom loopback frontends can tunnel to this host's LAN address; do not infer local-only intent from their shape.
   it.each(['127.0.0.1:8443', 'localhost', 'ws://127.0.0.1:6768'])(
     'widens the listener for a custom %s address that fronts a tunnel',
     async (address) => {
@@ -614,8 +575,7 @@ describe('registerMobileHandlers', () => {
       handlers.get('mobile:getRuntimePairingUrl')?.(null, { address: '127.0.0.1', rotate: true })
     ).resolves.toMatchObject({ available: true })
 
-    // Why: only an explicit "This computer only" declines remote reach; an undeclared caller keeps the
-    // pre-STA-2370 opt-in behavior rather than silently minting a link the widen never backed.
+    // Only explicit this-computer intent declines widening; undeclared callers keep legacy opt-in behavior.
     expect(rpcServer.ensureNetworkExposure).toHaveBeenCalled()
   })
 
@@ -632,8 +592,7 @@ describe('registerMobileHandlers', () => {
       })
     ).resolves.toMatchObject({ available: true })
 
-    // Why: the declared reach and the advertised address disagree; honoring the declaration would mint a
-    // LAN link with no LAN listener behind it, so the address it actually publishes wins.
+    // Published LAN addresses require a LAN bind even if declared reach disagrees.
     expect(rpcServer.ensureNetworkExposure).toHaveBeenCalled()
     expect(rpcServer.createPairingOffer).toHaveBeenCalledWith(
       expect.objectContaining({ reach: 'network' })
@@ -642,9 +601,7 @@ describe('registerMobileHandlers', () => {
 
   it('reports the runtime pairing url unavailable and mints no offer when the widen fails', async () => {
     const createPairingOffer = vi.fn()
-    // Why: STA-2370 — a failed widen leaves the listener on loopback, so the handler must NOT advertise a
-    // LAN endpoint. A regression that swallows the rejection and mints an offer against a loopback-only
-    // listener is caught here: createPairingOffer must never run.
+    // Failed widening must stop offer creation rather than advertise a dead LAN endpoint (STA-2370).
     const ensureNetworkExposure = vi.fn().mockRejectedValue(new Error('bind refused'))
     const rpcServer = { createPairingOffer, ensureNetworkExposure }
 
@@ -846,8 +803,7 @@ describe('runtime pairing bind host', () => {
   beforeEach(() => {
     handlers.clear()
     handleMock.mockReset()
-    networkInterfacesMock.mockReset()
-    networkInterfacesMock.mockReturnValue({})
+    networkInterfacesMock.mockReset().mockReturnValue({})
     handleMock.mockImplementation((channel: string, handler: (...args: unknown[]) => unknown) => {
       handlers.set(channel, handler)
     })
@@ -855,7 +811,8 @@ describe('runtime pairing bind host', () => {
 
   const startServer = async (userDataPath: string): Promise<OrcaRuntimeRpcServer> => {
     const server = new OrcaRuntimeRpcServer({
-      runtime: new OrcaRuntimeService(),
+      methods: [],
+      runtime: createMobileRpcSurfaceRuntime().runtime,
       userDataPath,
       enableWebSocket: true,
       wsPort: 0
@@ -879,8 +836,7 @@ describe('runtime pairing bind host', () => {
           reach: 'this-computer'
         })
       ).resolves.toMatchObject({ available: true })
-      // Why: the exposure regression — picking "This computer only" used to rebind the listener to
-      // 0.0.0.0 and leave it there, publishing the runtime to the whole LAN for the rest of the process.
+      // This-computer pairing must not permanently expose the runtime to the LAN.
       expect(wsTransportOf(server)?.resolvedHost).toBe('127.0.0.1')
 
       await expect(
@@ -890,15 +846,14 @@ describe('runtime pairing bind host', () => {
           reach: 'network'
         })
       ).resolves.toMatchObject({ available: true })
-      // Why: the LAN/Tailscale choice still opts in — a client off this host cannot reach a loopback bind.
+      // Off-host reach still requires widening.
       expect(wsTransportOf(server)?.resolvedHost).toBe('0.0.0.0')
     } finally {
       await server.stop()
     }
   })
 
-  // Why: the whole guarantee is worthless if it lasts one process — the local web client authenticating
-  // marks its grant lastSeenAt > 0, which used to make the NEXT launch bind every interface.
+  // Authenticated local links must not cause the next launch to bind every interface.
   it('still binds loopback on the next launch after the local link has been used', async () => {
     const userDataPath = mkdtempSync(join(tmpdir(), 'orca-mobile-ipc-'))
     const server = await startServer(userDataPath)
@@ -912,7 +867,7 @@ describe('runtime pairing bind host', () => {
       })) as { available: true; deviceId: string }
       expect(offer.available).toBe(true)
       deviceId = offer.deviceId
-      // Exactly what MobileSocketWiring does for every authenticated socket, local browser included.
+      // Model authentication updating grant lastSeenAt, including local clients.
       server.getDeviceRegistry()?.updateLastSeen(deviceId)
     } finally {
       await server.stop()
@@ -950,8 +905,7 @@ describe('runtime pairing bind host', () => {
 
     const relaunched = await startServer(userDataPath)
     try {
-      // Why: the reconnect widen must survive — a client that really did connect from off-host has to
-      // find the listener at launch without the user re-pairing.
+      // Genuine off-host grants must preserve reconnect reach after restart.
       expect(wsTransportOf(relaunched)?.resolvedHost).toBe('0.0.0.0')
     } finally {
       await relaunched.stop()

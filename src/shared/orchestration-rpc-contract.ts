@@ -14,6 +14,9 @@ export const ORCHESTRATION_SKILL_COMMAND_ARGS = [
 ] as const
 
 export const ORCHESTRATION_LEGACY_RUN_ID = 'run_legacy_local'
+/** Files mail sent from a terminal in no Run. Distinct from the legacy Run on purpose: rows under
+ *  the legacy id read as a pre-Runs database and trigger adoption on the next open. */
+export const ORCHESTRATION_UNBOUND_RUN_ID = 'run_unbound'
 
 const ORCHESTRATION_MUTATION_METHODS = new Set([
   'orchestration.runCreate',

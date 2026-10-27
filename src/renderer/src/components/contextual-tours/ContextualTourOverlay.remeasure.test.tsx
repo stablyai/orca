@@ -54,8 +54,7 @@ async function mountOverlay(): Promise<void> {
   })
 }
 
-// Why: one act() per event so React flushes between events the way the browser
-// does, instead of coalescing a whole burst into a single render.
+// Flush between events as the browser does; batching a burst in one act would hide redundant commits.
 async function dispatchScroll(source: EventTarget): Promise<void> {
   await act(async () => {
     source.dispatchEvent(new Event('scroll'))

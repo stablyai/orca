@@ -17,23 +17,25 @@ const mocks = vi.hoisted(() => ({
   getState: vi.fn()
 }))
 
-vi.mock('@/runtime/runtime-file-client', () => ({
+vi.mock('@/runtime/runtime-file-routing', () => ({
   getRuntimeFileReadScope: vi.fn(
     (
-      settings: { activeRuntimeEnvironmentId?: string | null } | null | undefined,
+      target: { kind: 'local' } | { kind: 'environment'; environmentId: string },
       connectionId?: string
-    ) => connectionId ?? settings?.activeRuntimeEnvironmentId ?? null
-  ),
-  readRuntimeFileContent: mocks.readRuntimeFileContent,
-  subscribeRuntimeFileChanges: vi.fn()
+    ) => connectionId ?? (target.kind === 'environment' ? target.environmentId : null)
+  )
 }))
+vi.mock('@/runtime/runtime-file-read-client', () => ({
+  readRuntimeFileContent: mocks.readRuntimeFileContent
+}))
+vi.mock('@/runtime/runtime-file-watch-client', () => ({ subscribeRuntimeFileChanges: vi.fn() }))
 
-vi.mock('@/runtime/runtime-git-client', () => ({
+vi.mock('@/runtime/runtime-git-diff-client', () => ({
   getRuntimeGitBranchDiff: mocks.getRuntimeGitBranchDiff,
   getRuntimeGitCommitDiff: vi.fn(),
-  getRuntimeGitDiff: mocks.getRuntimeGitDiff,
-  getRuntimeGitScope: vi.fn(() => null)
+  getRuntimeGitDiff: mocks.getRuntimeGitDiff
 }))
+vi.mock('@/runtime/runtime-git-client-context', () => ({ getRuntimeGitScope: vi.fn(() => null) }))
 
 vi.mock('@/lib/connection-context', () => ({
   getConnectionId: mocks.getConnectionId,
@@ -41,18 +43,34 @@ vi.mock('@/lib/connection-context', () => ({
   isWorktreeConnectionResolved: mocks.isWorktreeConnectionResolved
 }))
 
+vi.mock('@/lib/worktree-host-connection-phase', () => import('./local-host-test-fixture'))
+
 vi.mock('@/lib/runtime-workspace-file-route', () => ({
   findWorkspaceFileRoute: vi.fn(() => null)
 }))
 
-vi.mock('@/store', () => ({
-  useAppStore: {
-    getState: mocks.getState
+// Fixture owners: `repo-runtime::` workspaces live on runtime-1, everything else here is local.
+vi.mock('@/lib/file-owner-runtime-target', () => {
+  const ownerTarget = (_s: unknown, worktreeId?: string, owner?: string | null) => {
+    const id = owner === undefined && worktreeId?.startsWith('repo-runtime::') ? 'runtime-1' : owner
+    return id ? { kind: 'environment', environmentId: id } : { kind: 'local' }
   }
+  return {
+    getRuntimeTargetForFileOwner: ownerTarget,
+    requireRuntimeTargetForFileOwner: ownerTarget
+  }
+})
+
+vi.mock('@/store', () => ({
+  useAppStore: Object.assign(
+    (select: (state: ReturnType<typeof mocks.getState>) => unknown) => select(mocks.getState()),
+    { getState: mocks.getState }
+  )
 }))
 
 import { useEditorPanelContentState } from './useEditorPanelContentState'
-import { getDiskBaselineSignature } from './diff-content-signature'
+import { createTestStore } from '@/store/slices/store-test-helpers'
+import { getDiskBaselineSignature } from '../../../../shared/disk-baseline-signature'
 import { ORCA_EDITOR_EXTERNAL_FILE_CHANGE_EVENT } from './editor-autosave'
 
 type Deferred<T> = {
@@ -91,13 +109,12 @@ type ProbeProps = {
   gitStatusByWorktree?: Record<string, GitStatusEntry[]>
 }
 
-const authorizeExternalPath = vi.fn()
 // Why: opening any liveTail tab arms useLocalLogTail's change subscription.
 const onLocalLogTailChanged = vi.fn(() => () => {})
-const fsApi = { authorizeExternalPath, onLocalLogTailChanged }
+const fsApi = { onLocalLogTailChanged }
 let latestFileContents: Record<string, FileContent> = {}
 let latestDiffContents: Record<string, DiffContent> = {}
-let latestReloadContent: (file: OpenFile) => void = () => {}
+let latestReloadContent: (file: OpenFile, options?: { wakeWslDistro?: boolean }) => void = () => {}
 const EMPTY_GIT_STATUS_BY_WORKTREE: Record<string, GitStatusEntry[]> = {}
 
 function HookProbe({
@@ -138,8 +155,6 @@ describe('useEditorPanelContentState', () => {
   beforeEach(() => {
     latestFileContents = {}
     latestDiffContents = {}
-    authorizeExternalPath.mockReset()
-    authorizeExternalPath.mockResolvedValue(undefined)
     onLocalLogTailChanged.mockClear()
     ;(window as unknown as { api: unknown }).api = { fs: fsApi }
     mocks.readRuntimeFileContent.mockReset()
@@ -153,6 +168,7 @@ describe('useEditorPanelContentState', () => {
     mocks.isWorktreeConnectionResolved.mockReturnValue(true)
     mocks.getState.mockReset()
     mocks.getState.mockReturnValue({
+      ...createTestStore().getState(),
       settings: null,
       openFiles: [],
       setLastKnownDiskSignature: vi.fn()
@@ -166,6 +182,30 @@ describe('useEditorPanelContentState', () => {
     container?.remove()
     container = null
     root = null
+  })
+
+  it('lets the active tab load and its Retry start a stopped WSL distro, but not other reloads', async () => {
+    const activeFile = createOpenFile()
+    mocks.readRuntimeFileContent.mockResolvedValue({ content: 'text', isBinary: false })
+    container = document.createElement('div')
+    document.body.appendChild(container)
+    root = createRoot(container)
+    await act(async () => {
+      root?.render(<HookProbe activeFile={activeFile} openFiles={[activeFile]} />)
+    })
+    await vi.waitFor(() => expect(latestFileContents[activeFile.id]?.content).toBe('text'))
+    expect(mocks.readRuntimeFileContent).toHaveBeenLastCalledWith(
+      expect.objectContaining({ wakeWslDistro: true })
+    )
+
+    await act(async () => latestReloadContent(activeFile))
+    expect(mocks.readRuntimeFileContent).toHaveBeenLastCalledWith(
+      expect.not.objectContaining({ wakeWslDistro: true })
+    )
+    await act(async () => latestReloadContent(activeFile, { wakeWslDistro: true }))
+    expect(mocks.readRuntimeFileContent).toHaveBeenLastCalledWith(
+      expect.objectContaining({ wakeWslDistro: true })
+    )
   })
 
   it('loads folder workspace files through the path-specific SSH connection', async () => {
@@ -257,8 +297,6 @@ describe('useEditorPanelContentState', () => {
     })
 
     await vi.waitFor(() => expect(latestFileContents[activeFile.id]?.content).toBe('# remote'))
-    // Why: the client-local grant must not be requested for a remote-owned path.
-    expect(authorizeExternalPath).not.toHaveBeenCalled()
     expect(mocks.readRuntimeFileContent).toHaveBeenCalledWith(
       expect.objectContaining({
         filePath: '/work/reports/audit.md',
@@ -284,64 +322,14 @@ describe('useEditorPanelContentState', () => {
     })
 
     await vi.waitFor(() => expect(latestFileContents[activeFile.id]?.content).toBe('log line'))
-    // Why: AI Vault only surfaces client-local logs, so the worktree's SSH target must
-    // not capture this read — it stays a granted client-local path.
-    expect(authorizeExternalPath).toHaveBeenCalledWith({ targetPath: logPath })
+    // AI Vault logs are client-local user-named paths and must not inherit workspace SSH ownership.
     expect(mocks.readRuntimeFileContent).toHaveBeenCalledWith(
-      expect.objectContaining({ connectionId: undefined, includeLocalLogMetadata: true })
+      expect.objectContaining({
+        connectionId: undefined,
+        includeLocalLogMetadata: true,
+        access: { kind: 'user-file' }
+      })
     )
-  })
-
-  it('re-authorizes a client-local external tab before reading it', async () => {
-    const activeFile = createOpenFile({
-      id: '/Users/me/notes/audit.md',
-      filePath: '/Users/me/notes/audit.md',
-      relativePath: '/Users/me/notes/audit.md',
-      worktreeId: 'repo-local::/Users/me/project'
-    })
-    mocks.getConnectionIdForFile.mockReturnValue(undefined)
-    mocks.readRuntimeFileContent.mockResolvedValue({ content: '# local', isBinary: false })
-
-    container = document.createElement('div')
-    document.body.appendChild(container)
-    root = createRoot(container)
-
-    await act(async () => {
-      root?.render(<HookProbe activeFile={activeFile} openFiles={[activeFile]} />)
-    })
-
-    await vi.waitFor(() => expect(latestFileContents[activeFile.id]?.content).toBe('# local'))
-    expect(authorizeExternalPath).toHaveBeenCalledWith({ targetPath: '/Users/me/notes/audit.md' })
-  })
-
-  it('rejects an unstamped external tab in a remote runtime workspace', async () => {
-    const activeFile = createOpenFile({
-      id: '/work/reports/audit.md',
-      filePath: '/work/reports/audit.md',
-      relativePath: '/work/reports/audit.md',
-      worktreeId: 'repo-runtime::/work/demo-project'
-    })
-    mocks.getConnectionIdForFile.mockReturnValue(undefined)
-    mocks.getState.mockReturnValue({
-      settings: { activeRuntimeEnvironmentId: 'runtime-1' },
-      openFiles: [],
-      setLastKnownDiskSignature: vi.fn()
-    })
-
-    container = document.createElement('div')
-    document.body.appendChild(container)
-    root = createRoot(container)
-
-    await act(async () => {
-      root?.render(<HookProbe activeFile={activeFile} openFiles={[activeFile]} />)
-    })
-
-    await vi.waitFor(() =>
-      expect(latestFileContents[activeFile.id]?.loadError).toBe(
-        'External local files are not available for remote workspaces.'
-      )
-    )
-    expect(mocks.readRuntimeFileContent).not.toHaveBeenCalled()
   })
 
   it('rejects an external SSH-host tab after its target owner changes', async () => {
@@ -450,20 +438,16 @@ describe('useEditorPanelContentState', () => {
       root?.render(<HookProbe activeFile={activeFile} openFiles={[activeFile]} />)
     })
 
-    // Surfaces a retryable owner-not-ready error instead of a terminal local
-    // "access denied", and never attempts the bad local read.
+    // Unresolved ownership must remain retryable without attempting a client-local read of the remote path.
     await vi.waitFor(() => expect(latestFileContents[activeFile.id]?.loadError).toBeTruthy())
     expect(latestFileContents[activeFile.id]?.loadError).not.toMatch(/access denied/i)
     expect(mocks.readRuntimeFileContent).not.toHaveBeenCalled()
 
-    // The SSH repo finishes hydrating: the worktree owner resolves to its
-    // target. We do NOT bump the reload nonce here — the retry hook must
-    // re-attempt the read on its own once the owner-not-ready error clears.
+    // Hydrate ownership without bumping reload nonce so automatic retry alone must recover the read.
     mocks.isWorktreeConnectionResolved.mockReturnValue(true)
     mocks.getConnectionIdForFile.mockReturnValue('ssh-target-1')
     mocks.readRuntimeFileContent.mockResolvedValue({ content: 'remote', isBinary: false })
 
-    // Driven purely by the automatic retry (no re-render, no forced reload).
     await vi.waitFor(() => expect(latestFileContents[activeFile.id]?.content).toBe('remote'), {
       timeout: 3000
     })
@@ -610,9 +594,7 @@ describe('useEditorPanelContentState', () => {
   })
 
   it('starts a fresh file read for a forced reload instead of reusing the in-flight read', async () => {
-    // A reload nonce on mount makes the lazy-load read and the forced reload
-    // fire in the same effect flush, while the first read is still registered
-    // in flight. The forced reload must delete that entry and start a new read.
+    // Mount starts lazy and forced reads in one effect flush; forcing must supersede the in-flight entry.
     const activeFile = createOpenFile({ fileContentReloadNonce: 1 })
     const firstRead = createDeferred<FileContent>()
     const secondRead = createDeferred<FileContent>()
@@ -663,7 +645,6 @@ describe('useEditorPanelContentState', () => {
     })
     await vi.waitFor(() => expect(latestFileContents[activeFile.id]?.content).toBe('fresh content'))
 
-    // The older read resolving last must not clobber the fresh content.
     await act(async () => {
       staleRead.resolve({ content: 'stale content', isBinary: false })
       await staleRead.promise
@@ -817,9 +798,7 @@ describe('useEditorPanelContentState', () => {
   })
 
   it('routes reloadContent for a diff tab to a forced diff refetch, not a file read', async () => {
-    // Why: the changed-on-disk banner's "Reload from Disk" on an unstaged
-    // diff tab must refetch the diff body — routing it to the file store
-    // would leave the visible diff stale (and vice versa for edit tabs).
+    // Banner reload must update the visible diff body rather than only the plain-file cache.
     const activeFile = createOpenFile({
       id: 'wt-1::diff::unstaged::file.ts',
       mode: 'diff',
@@ -891,6 +870,7 @@ describe('useEditorPanelContentState', () => {
     const activeFile = createOpenFile()
     const setLastKnownDiskSignature = vi.fn()
     mocks.getState.mockReturnValue({
+      ...createTestStore().getState(),
       settings: null,
       openFiles: [activeFile],
       setLastKnownDiskSignature
@@ -913,12 +893,11 @@ describe('useEditorPanelContentState', () => {
   })
 
   it('keeps a dirty tab baseline untouched by content loads', async () => {
-    // Why: a dirty tab's draft still derives from the OLD content — moving
-    // the baseline on load would hide the conflict its restore check exists
-    // to catch.
+    // Dirty drafts retain their original disk baseline so content loading cannot hide external conflicts.
     const activeFile = createOpenFile({ isDirty: true })
     const setLastKnownDiskSignature = vi.fn()
     mocks.getState.mockReturnValue({
+      ...createTestStore().getState(),
       settings: null,
       openFiles: [activeFile],
       setLastKnownDiskSignature

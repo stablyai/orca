@@ -15,12 +15,12 @@ import {
   createDeferredStructuredAgentSessionEventSink,
   type StructuredAgentSessionEventSink
 } from '../native-chat/agent-session-wire/structured-agent-session-event-sink'
-import {
-  boundInlineText,
-  DEFAULT_JOURNAL_PAYLOAD_LIMITS
-} from '../native-chat/agent-session-journal/journal-payload-bounds'
 import type { ClaudePendingPrompt } from './claude-structured-prompt-replies'
+import { readAgentJournalTurn } from '../../shared/agent-session-turn-record'
 import { createClaudeJournalTranslator } from './claude-structured-journal-translation'
+import { openTestJournalHostDatabase } from '../native-chat/agent-session-journal/journal-host-database-test-support'
+import { testEventSinkLogging } from '../native-chat/agent-session-wire/structured-agent-session-logger-test-support'
+import { claudeProviderHandle } from '../../shared/agent-session-provider-handle-encoding'
 
 function sinkState() {
   const items: { identity: AgentJournalItemIdentity; body: AgentJournalItemBody }[] = []
@@ -31,6 +31,16 @@ function sinkState() {
     publish: vi.fn()
   }
   return { sink, items, tombstones }
+}
+
+function lifecycleAppends(
+  items: { identity: AgentJournalItemIdentity; body: AgentJournalItemBody }[]
+) {
+  return items.flatMap((item) => {
+    const identity = item.identity
+    const turn = identity.provider === 'legacy' ? readAgentJournalTurn(item.body) : null
+    return turn && identity.provider === 'legacy' ? [[identity.recordId, turn.state]] : []
+  })
 }
 
 function message(
@@ -53,10 +63,7 @@ function message(
   }
 }
 
-// Frames below follow the Claude Code 2.1.258 / SDK 0.3.251 partial-message
-// cadence captured from the real CLI: every stream_event carries its own uuid,
-// the final assistant frame for a block carries yet another, and only
-// message.id ties them together.
+// Claude Code 2.1.258 / SDK 0.3.251 capture: only message.id links partial and final frames.
 function streamEvent(uuid: string, event: Record<string, unknown>) {
   return {
     type: 'message' as const,
@@ -88,9 +95,6 @@ function resultFrame(subtype: string, fields: Record<string, unknown>) {
   }
 }
 
-/** One streamed text turn in wire order: message_start, the block's start frame,
- *  one delta per chunk, the block's final assistant frame, the stop frames and
- *  the success result. */
 function streamedTextTurn(input: {
   messageId: string
   startUuid: string
@@ -166,7 +170,7 @@ const JOURNAL_IDENTITY: AgentSessionJournalIdentity = {
   workspaceId: 'workspace-1',
   hostId: 'host-1',
   agent: 'claude',
-  providerHandle: { kind: 'claude', sessionId: 'claude-session', leafUuid: 'leaf-1' }
+  providerHandle: claudeProviderHandle('claude-session', 'leaf-1')
 }
 
 let journalRoot = ''
@@ -199,19 +203,25 @@ describe('Claude structured journal translation', () => {
       finalUuid: 'assistant-final-1',
       chunks: ['ST', 'REAMOK_ELEC_64E632']
     })
+    // The block's source, which its saved transcript row also carries; never a stream frame's uuid.
     const streamedIdentity = {
       provider: 'claude',
       sessionId: 'claude-session',
-      uuid: 'block-start-1'
+      uuid: 'block:msg_01:0'
     }
 
     for (const event of turn.start) {
       translator.handle(event)
     }
+    expect(lifecycleAppends(state.items)).toEqual([
+      ['turn-lifecycle:msg_01-message-start', 'running']
+    ])
+    expect(assistantMessages(state.items)).toEqual([])
+
     for (const delta of turn.deltas) {
       translator.handle(delta)
     }
-    expect(state.items).toEqual([])
+    expect(assistantMessages(state.items)).toEqual([])
 
     const run = scheduled as (() => void) | null
     run?.()
@@ -236,11 +246,11 @@ describe('Claude structured journal translation', () => {
   it('journals a count-to-200 stream as one assistant item carrying the complete reply', async () => {
     const journal = await openAgentSessionJournal({
       identity: JOURNAL_IDENTITY,
-      journalDir: journalRoot,
+      database: openTestJournalHostDatabase(journalRoot),
       now: () => 1_700_000_000_000,
       mintEpoch: () => 'epoch-1'
     })
-    const deferred = createDeferredStructuredAgentSessionEventSink()
+    const deferred = createDeferredStructuredAgentSessionEventSink(testEventSinkLogging())
     deferred.bind({ journal, fence: 1, publish: vi.fn() })
     let scheduled: (() => void) | null = null
     const translator = createClaudeJournalTranslator({
@@ -283,13 +293,62 @@ describe('Claude structured journal translation', () => {
 
     const items: AgentJournalRenderItem[] = journal.snapshot().items
     const assistant = assistantMessages(items)
-    expect(assistant.map((item) => item.itemId)).toEqual(['claude:claude-session:count-start'])
+    expect(assistant.map((item) => item.itemId)).toEqual([
+      'claude:claude-session:block%3Amsg_count%3A0'
+    ])
     expect(assistant[0]?.body).toEqual({
       kind: 'message',
       role: 'assistant',
       blocks: [{ type: 'text', text: numbers.join('\n') }]
     })
     expect(providerFrameKinds(items)).toEqual([])
+  })
+
+  it('restores a cancelled prompt as terminal history after reopening the journal', async () => {
+    const journal = await openAgentSessionJournal({
+      identity: JOURNAL_IDENTITY,
+      database: openTestJournalHostDatabase(journalRoot),
+      now: () => 1_700_000_000_000,
+      mintEpoch: () => 'epoch-1'
+    })
+    const deferred = createDeferredStructuredAgentSessionEventSink(testEventSinkLogging())
+    deferred.bind({ journal, fence: 1, publish: vi.fn() })
+    const translator = createClaudeJournalTranslator({ sink: deferred.sink })
+    const approval = prompt({
+      requestId: 'permission-1',
+      promptKey: 'permission-1',
+      toolUseId: 'tool-1',
+      toolName: 'Bash',
+      kind: 'approval',
+      input: { command: 'git status' },
+      questionIds: []
+    })
+
+    translator.handle({ type: 'prompt', sessionId: 'orca-session', prompt: approval })
+    translator.handle({
+      type: 'prompt-cancelled',
+      sessionId: 'orca-session',
+      promptKey: approval.promptKey
+    })
+    await expect(deferred.drained()).resolves.toEqual({ ok: true })
+    deferred.close()
+    await journal.close()
+
+    const reopened = await openAgentSessionJournal({
+      identity: JOURNAL_IDENTITY,
+      database: openTestJournalHostDatabase(journalRoot),
+      now: () => 1_700_000_000_000,
+      mintEpoch: () => 'epoch-2'
+    })
+    expect(reopened.snapshot().items).toEqual([
+      expect.objectContaining({
+        body: expect.objectContaining({
+          kind: 'approval',
+          resolution: expect.objectContaining({ state: 'cancelled' })
+        })
+      })
+    ])
+    await reopened.close()
   })
 
   it('settles result frames, empty thinking and string user replays without painting a row', () => {
@@ -343,14 +402,14 @@ describe('Claude structured journal translation', () => {
         item.body.kind === 'message' && item.body.role === 'user' ? [item.body.blocks] : []
       )
     ).toEqual([])
-    expect(
-      state.items.some((item) => item.body.kind === 'status' && !item.body.turnLifecycle)
-    ).toBe(false)
-    expect(
-      state.tombstones.flatMap((identity) =>
-        identity.provider === 'legacy' ? [identity.recordId] : []
-      )
-    ).toEqual(['turn-lifecycle:user-replay-1', 'turn-lifecycle:user-interrupt'])
+    expect(state.items.some((item) => item.body.kind === 'status')).toBe(false)
+    expect(state.tombstones).toEqual([])
+    expect(lifecycleAppends(state.items)).toEqual([
+      ['turn-lifecycle:user-replay-1', 'running'],
+      ['turn-lifecycle:user-replay-1', 'completed'],
+      ['turn-lifecycle:user-interrupt', 'running'],
+      ['turn-lifecycle:user-interrupt', 'interrupted']
+    ])
   })
 
   it('does not reopen a completed turn when the SDK replays its user row after restart', () => {
@@ -371,11 +430,9 @@ describe('Claude structured journal translation', () => {
 
     liveTranslator.handle({ ...replay, startsTurn: true })
     liveTranslator.handle(resultFrame('success', { is_error: false, result: '' }))
-    expect(live.tombstones).toContainEqual({
-      provider: 'legacy',
-      agent: 'claude',
-      sessionId: 'claude-session',
-      recordId: 'turn-lifecycle:picker-command-1'
+    expect(live.items.at(-1)).toMatchObject({
+      identity: { provider: 'legacy', recordId: 'turn-lifecycle:picker-command-1' },
+      body: { kind: 'turn', turnId: 'picker-command-1', state: 'completed' }
     })
     liveTranslator.dispose()
 
@@ -401,9 +458,6 @@ describe('Claude structured journal translation', () => {
     const translator = createClaudeJournalTranslator({ sink: state.sink })
 
     translator.handle(message('user', 'user-1', [{ type: 'text', text: 'summarize this' }]))
-    // The SDK models this as a SUCCESS-subtype result whose `result` string is the
-    // user-facing API error. Suppressing it as ordinary turn bookkeeping ends the
-    // turn with nothing shown at all.
     translator.handle(
       resultFrame('success', {
         is_error: true,
@@ -418,12 +472,10 @@ describe('Claude structured journal translation', () => {
       kind: 'status',
       text: 'API Error: 529 upstream overloaded'
     })
-    // The turn still settles: the error is an extra row, not a stuck lifecycle.
-    expect(
-      state.tombstones.flatMap((identity) =>
-        identity.provider === 'legacy' ? [identity.recordId] : []
-      )
-    ).toEqual(['turn-lifecycle:user-1'])
+    expect(lifecycleAppends(state.items).at(-1)).toEqual(['turn-lifecycle:user-1', 'completed'])
+    expect(state.items.findLast((item) => item.identity.provider === 'legacy')?.body).toMatchObject(
+      { kind: 'turn', state: 'completed', outcome: 'failure' }
+    )
   })
 
   it('drops the stream state of turns that ended without their final frame', () => {
@@ -450,19 +502,19 @@ describe('Claude structured journal translation', () => {
       }
       const run = scheduled as (() => void) | null
       run?.()
-      // The user interrupts: the result arrives with no final assistant frame,
-      // so nothing ever reconciles these blocks.
+      // Interrupts may deliver a result without a final assistant frame to reconcile streamed blocks.
       translator.handle(
         resultFrame('error_during_execution', {
           is_error: true,
           terminal_reason: 'aborted_streaming'
         })
       )
-      // The partial text is already journaled; only the live state is dropped.
       expect(translator.pendingStreamedBlocks).toBe(0)
     }
 
-    expect(assistantMessages(state.items)).toHaveLength(3)
+    expect(
+      new Set(assistantMessages(state.items).map((item) => agentJournalItemKey(item.identity))).size
+    ).toBe(3)
   })
 
   it('keeps an ordinary successful result off the timeline', () => {
@@ -522,14 +574,13 @@ describe('Claude structured journal translation', () => {
     expect(keyed.get('orca:claude-tool%3Aclaude-session%3Atool-1')).toMatchObject({
       kind: 'tool-call',
       name: 'Bash',
+      callId: 'tool-1',
       state: 'completed',
       output: { head: 'a.ts\nb.ts', truncated: false }
     })
-    expect(
-      state.items.some(
-        (item) => item.body.kind === 'status' && item.body.turnLifecycle?.turnId === 'user-1'
-      )
-    ).toBe(true)
+    expect(state.items.some((item) => readAgentJournalTurn(item.body)?.turnId === 'user-1')).toBe(
+      true
+    )
 
     translator.handle(
       message(
@@ -542,6 +593,7 @@ describe('Claude structured journal translation', () => {
     expect(state.items.at(-1)?.body).toMatchObject({
       kind: 'tool-call',
       name: 'tool',
+      callId: 'tool-1',
       input: null,
       output: { head: 'done again' }
     })
@@ -551,23 +603,25 @@ describe('Claude structured journal translation', () => {
       sessionId: 'orca-session',
       message: { type: 'result', session_id: 'claude-session', uuid: 'result-1' }
     })
-    expect(state.tombstones.at(-1)).toMatchObject({
-      provider: 'legacy',
-      agent: 'claude',
-      recordId: 'turn-lifecycle:user-1'
-    })
+    expect(state.tombstones).toEqual([])
+    expect(lifecycleAppends(state.items).at(-1)).toEqual(['turn-lifecycle:user-1', 'completed'])
   })
 
-  it('bounds persisted thinking text to the shared journal payload limit', () => {
+  it('saves long thinking text whole', () => {
     const state = sinkState()
     const translator = createClaudeJournalTranslator({ sink: state.sink })
     const thinking = 'considering '.repeat(20_000)
 
     translator.handle(message('assistant', 'assistant-thinking', [{ type: 'thinking', thinking }]))
 
-    expect(state.items.at(-1)?.body).toEqual({
-      kind: 'status',
-      text: boundInlineText(thinking, DEFAULT_JOURNAL_PAYLOAD_LIMITS).text
+    const reasoning = state.items.find(
+      (item) => item.body.kind === 'message' && item.body.role === 'reasoning'
+    )
+    expect(reasoning?.body).toEqual({
+      kind: 'message',
+      role: 'reasoning',
+      blocks: [{ type: 'text', text: thinking }],
+      state: 'completed'
     })
   })
 
@@ -582,9 +636,11 @@ describe('Claude structured journal translation', () => {
     )
 
     expect(state.items.at(-1)?.body).toEqual({
-      kind: 'status',
-      text: 'Claude is working…',
-      turnLifecycle: { turnId: 'user-image', state: 'running' }
+      kind: 'turn',
+      turnId: 'user-image',
+      state: 'running',
+      startedAt: expect.any(Number),
+      userItemId: 'claude:claude-session:user-image'
     })
   })
 
@@ -603,14 +659,11 @@ describe('Claude structured journal translation', () => {
     ])
     expect(state.items[0]?.body).toMatchObject({
       kind: 'tool-call',
+      callId: 'tool-1',
       state: 'completed',
       output: { head: 'done' }
     })
-    expect(
-      state.items.some(
-        (item) => item.body.kind === 'status' && item.body.turnLifecycle !== undefined
-      )
-    ).toBe(false)
+    expect(state.items.some((item) => readAgentJournalTurn(item.body) !== null)).toBe(false)
   })
 
   it('paints nothing for a user frame that carries no content', () => {
@@ -785,7 +838,11 @@ describe('Claude structured journal translation', () => {
       sessionId: 'orca-session',
       promptKey: 'questions-1'
     })
-    expect(state.tombstones).toHaveLength(1)
+    expect(state.items.at(-1)?.body).toMatchObject({
+      kind: 'question',
+      resolution: { state: 'cancelled' }
+    })
+    expect(state.tombstones).toHaveLength(0)
   })
 })
 
@@ -798,7 +855,6 @@ function prompt(
   return {
     ...input,
     suggestions: [],
-    answers: new Map(),
     settle: () => {}
   }
 }

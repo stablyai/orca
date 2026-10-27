@@ -2,17 +2,19 @@ import { session, type Session } from 'electron'
 import type { BrowserSessionProfile } from '../../shared/browser-workspace-types'
 import { applyProxySettingsToSession } from '../network/proxy-settings'
 import type { NetworkProxySettings } from '../../shared/network-proxy'
+import {
+  readNetworkProxySettings,
+  setNetworkProxySettingsSource
+} from './browser-network-proxy-settings-source'
 
-// Why: browser modules hold no store handle, so main injects a reader the way rate-limits does.
-let resolveNetworkProxySettings: (() => NetworkProxySettings) | null = null
 let proxyPolicyGeneration = 0
-// Why: removed partitions must stop stale readiness loops before their queued system release.
+// Stop stale readiness loops before a removed partition's queued proxy release.
 const browserSessionProxyApplicationGenerations = new WeakMap<Session, number>()
 
 export function setBrowserNetworkProxySettingsResolver(
   resolver: (() => NetworkProxySettings) | null
 ): void {
-  resolveNetworkProxySettings = resolver
+  setNetworkProxySettingsSource(resolver)
   if (!resolver) {
     proxyPolicyGeneration = 0
   }
@@ -23,7 +25,7 @@ export async function applyProxyToBrowserSession(sess: Session): Promise<void> {
   let observedGeneration: number
   do {
     observedGeneration = proxyPolicyGeneration
-    const resolved = resolveNetworkProxySettings?.()
+    const resolved = readNetworkProxySettings()
     if (!resolved) {
       return
     }
@@ -39,12 +41,11 @@ export function invalidateBrowserSessionProxyApplication(sess: Session): void {
   browserSessionProxyApplicationGenerations.set(sess, generation + 1)
 }
 
-/** Re-apply the app-wide proxy across every browser partition. */
 export async function applyBrowserSessionProxies(
   profiles: BrowserSessionProfile[],
   settings?: NetworkProxySettings
 ): Promise<void> {
-  const resolved = settings ?? resolveNetworkProxySettings?.()
+  const resolved = settings ?? readNetworkProxySettings()
   if (!resolved) {
     return
   }

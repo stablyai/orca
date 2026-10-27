@@ -151,7 +151,7 @@ describe('ActivityThreadHoverCard and ActivityThreadRow', () => {
     expect(onSelect).not.toHaveBeenCalled()
   })
 
-  it('clears from a keyboard-reachable row action without selecting the row', async () => {
+  it('clears from the row action without selecting the row', async () => {
     const thread = createTestThread()
     const onClear = vi.fn()
     const onSelect = vi.fn()
@@ -199,23 +199,37 @@ describe('ActivityThreadHoverCard and ActivityThreadRow', () => {
 
     const content = container.querySelector('[data-testid="hover-card-content"]')?.textContent ?? ''
 
-    // Workspace & Host info
     expect(content).toContain('Workspace')
     expect(content).toContain('m4air-audit')
     expect(content).toContain('feat/m4air-performance')
     expect(content).toContain('/Users/test/projects/orca/worktrees/m4air-audit')
 
-    // Agent & Task details
     expect(content).toContain('Claude')
     expect(content).toContain('Audit current HEAD on m4air environment')
     expect(content).toContain('Auditing terminal PTY and IME bug categories...')
 
-    // Notes
     expect(content).toContain('Notes')
     expect(content).toContain('Performance investigation notes')
   })
 
-  it('allows clicking row while preventing inner hover interactions from bubbling', async () => {
+  it('keeps the preview closed while suppressed by the row menu', async () => {
+    const renderCard = (suppressed: boolean) =>
+      root.render(
+        <TooltipProvider>
+          <ActivityThreadHoverCard thread={createTestThread()} suppressed={suppressed}>
+            <div data-testid="hover-trigger">Hover Target</div>
+          </ActivityThreadHoverCard>
+        </TooltipProvider>
+      )
+
+    await act(async () => renderCard(true))
+    expect(container.querySelector('[data-testid="hover-card-content"]')).toBeNull()
+
+    await act(async () => renderCard(false))
+    expect(container.querySelector('[data-testid="hover-card-content"]')).not.toBeNull()
+  })
+
+  it('selects the thread when the row body is clicked', async () => {
     const onSelect = vi.fn()
     const thread = createTestThread()
 
@@ -261,5 +275,36 @@ describe('ActivityThreadHoverCard and ActivityThreadRow', () => {
     })
 
     expect(onJump).toHaveBeenCalledWith(thread)
+  })
+
+  it('flattens code blocks and tables in the reply preview so the line clamp cuts them', async () => {
+    const thread = createTestThread({
+      currentAgentState: null,
+      responsePreview:
+        'KK1-START\n\n```\n| metric | base median |\n| --- | --- |\n| p2 | 12 |\n```\n\n| a | b |\n| - | - |\n| 1 | 2 |'
+    })
+
+    await act(async () => {
+      root.render(<Harness thread={thread} />)
+    })
+
+    const pre = container.querySelector('pre')
+    const table = container.querySelector('table')
+    expect(pre).not.toBeNull()
+    expect(table).not.toBeNull()
+    const preview = pre?.closest<HTMLElement>('.line-clamp-3')
+    expect(preview).not.toBeNull()
+    expect(preview?.contains(table ?? null)).toBe(true)
+    // Why: the compact renderers draw both as scroll boxes; the row must undo that.
+    const previewClasses = preview?.className.split(/\s+/) ?? []
+    expect(previewClasses).toEqual(
+      expect.arrayContaining([
+        '[&_pre]:!max-h-none',
+        '[&_pre]:!overflow-visible',
+        '[&_pre]:!whitespace-normal',
+        '[&_div]:!overflow-visible',
+        '[&_:is(table,thead,tbody,tr,th,td)]:!inline'
+      ])
+    )
   })
 })

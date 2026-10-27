@@ -34,6 +34,7 @@ describe('pr-comment-action-state', () => {
     expect(getPRCommentGroupActionState(groups[0]!)).toBe('open')
     expect(getPRCommentGroupActionState(groups[1]!)).toBe('resolved')
     expect(getPRCommentGroupActionState(groups[2]!)).toBe('conversation')
+    expect(groups.map(isPRCommentGroupQueueableForAI)).toEqual([true, false, true])
   })
 
   it('partitions groups for triage sections', () => {

@@ -4,6 +4,7 @@ import type { WorkspaceCreateSetupDecision } from '../tasks/workspace-create-par
 import type { WorkspaceSshGate } from '../tasks/workspace-ssh-gate'
 import type { useMobileComposerSource } from '../tasks/use-mobile-composer-source'
 import { colors } from '../theme/mobile-theme'
+import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import { BottomDrawer } from './BottomDrawer'
 import { MobileAgentIcon } from './MobileAgentIcon'
 import type { NewWorktreeAgentOption } from './new-worktree-agent-selection'
@@ -24,7 +25,7 @@ export function NewWorktreeFormSheet(props: {
   loading: boolean
   hasRepos: boolean
   project: Selection | null
-  runTarget: Selection | null
+  runTarget: (Selection & { hostId: string }) | null
   projectBadgeColor: string | null
   selectedRepoIsGit: boolean
   selectedRepoConnectionId: string | null
@@ -43,6 +44,7 @@ export function NewWorktreeFormSheet(props: {
   creating: boolean
   canCreate: boolean
   onClose: () => void
+  onOpenExternalUrl: (url: string) => void
   onOpenProject: () => void
   onOpenRunTarget: () => void
   onOpenSource: () => void
@@ -55,6 +57,7 @@ export function NewWorktreeFormSheet(props: {
   onRunSetupChange: (run: boolean) => void
   onCreate: () => void
 }) {
+  useMobileColorScheme()
   return (
     <BottomDrawer visible={props.visible} interactive={props.interactive} onClose={props.onClose}>
       <View style={styles.header}>
@@ -84,6 +87,7 @@ export function NewWorktreeFormSheet(props: {
             label={props.selectedRepoIsGit ? "Name or 'Create From'" : 'Workspace name'}
             disabled={props.sshGate.requiresConnection}
             interactive={props.interactive}
+            onOpenExternalUrl={props.onOpenExternalUrl}
             onBeforeOpen={props.onClearError}
             onOpenDrawer={props.onOpenSource}
           />

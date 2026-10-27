@@ -1,12 +1,17 @@
-import type { CodexAppServerConnection } from './codex-app-server-connection'
+import type { CodexAppServerConnection } from './app-server/codex-app-server-connection-types'
 import type { CodexJournalTranslationAdmission } from './codex-structured-journal-translation'
 import type { CodexSession } from './codex-structured-session-state'
 
 const MAX_RETRY_EVENTS = 256
-const MAX_RETRY_BYTES = 8 * 1024 * 1024
 const RETRY_DELAY_MS = 25
 
-type PendingNotification = { method: string; params: unknown; bytes: number }
+type PendingNotification = {
+  method: string
+  params: unknown
+  bytes: number
+  observedAt?: number
+  dispatchSequenceAtReceipt?: number
+}
 type RetryState = {
   connection: CodexAppServerConnection
   events: PendingNotification[]
@@ -22,7 +27,9 @@ export function createCodexStructuredNotificationRetry(deps: {
     sessionId: string,
     session: CodexSession,
     method: string,
-    params: unknown
+    params: unknown,
+    observedAt?: number,
+    dispatchSequenceAtReceipt?: number
   ) => CodexJournalTranslationAdmission
 }) {
   const states = new Map<string, RetryState>()
@@ -48,7 +55,14 @@ export function createCodexStructuredNotificationRetry(deps: {
           fail(sessionId, state, 'notification retry owner is no longer live')
           break
         }
-        const admission = deps.translate(sessionId, session, pending.method, pending.params)
+        const admission = deps.translate(
+          sessionId,
+          session,
+          pending.method,
+          pending.params,
+          pending.observedAt,
+          pending.dispatchSequenceAtReceipt
+        )
         if (!admission.accepted) {
           if (admission.reason === 'backpressure') {
             state.timer = setTimeout(() => {
@@ -81,8 +95,7 @@ export function createCodexStructuredNotificationRetry(deps: {
       clearTimeout(state.timer)
       state.timer = null
     }
-    // The queue is no longer replayable. Drop it explicitly, release the read
-    // pause, and enter the adapter's generation-checked unexpected-exit seam.
+    // Unreplayable queues must release paused reads before host recovery.
     state.events.length = 0
     state.bytes = 0
     state.connection.resumeReading?.()
@@ -97,7 +110,9 @@ export function createCodexStructuredNotificationRetry(deps: {
     sessionId: string,
     connection: CodexAppServerConnection,
     method: string,
-    params: unknown
+    params: unknown,
+    observedAt: number | undefined,
+    dispatchSequenceAtReceipt: number | undefined
   ): void => {
     const bytes = Buffer.byteLength(JSON.stringify({ method, params }), 'utf8')
     let state = states.get(sessionId)
@@ -105,13 +120,17 @@ export function createCodexStructuredNotificationRetry(deps: {
       state = { connection, events: [], bytes: 0, timer: null, running: false, failed: false }
       states.set(sessionId, state)
     }
-    if (state.events.length >= MAX_RETRY_EVENTS || state.bytes + bytes > MAX_RETRY_BYTES) {
-      // A bounded queue cannot retain more traffic. Fail it truthfully so the
-      // provider's generation enters host recovery instead of stranding a pause.
+    if (state.events.length >= MAX_RETRY_EVENTS) {
       fail(sessionId, state, 'notification retry queue overflow')
       return
     }
-    state.events.push({ method, params, bytes })
+    state.events.push({
+      method,
+      params,
+      bytes,
+      ...(observedAt !== undefined ? { observedAt } : {}),
+      ...(dispatchSequenceAtReceipt !== undefined ? { dispatchSequenceAtReceipt } : {})
+    })
     state.bytes += bytes
     connection.pauseReading?.()
   }
@@ -120,7 +139,9 @@ export function createCodexStructuredNotificationRetry(deps: {
     handle: (
       sessionId: string,
       method: string,
-      params: unknown
+      params: unknown,
+      observedAt?: number,
+      dispatchSequenceAtReceipt?: number
     ): CodexJournalTranslationAdmission => {
       const session = deps.sessionFor(sessionId)
       if (!session) {
@@ -128,13 +149,27 @@ export function createCodexStructuredNotificationRetry(deps: {
       }
       const state = states.get(sessionId)
       if (state && state.events.length > 0) {
-        enqueue(sessionId, state.connection, method, params)
+        enqueue(sessionId, state.connection, method, params, observedAt, dispatchSequenceAtReceipt)
         retry(sessionId, state.connection)
         return { accepted: false, reason: 'backpressure' }
       }
-      const admission = deps.translate(sessionId, session, method, params)
+      const admission = deps.translate(
+        sessionId,
+        session,
+        method,
+        params,
+        observedAt,
+        dispatchSequenceAtReceipt
+      )
       if (!admission.accepted) {
-        enqueue(sessionId, session.connection, method, params)
+        enqueue(
+          sessionId,
+          session.connection,
+          method,
+          params,
+          observedAt,
+          dispatchSequenceAtReceipt
+        )
         retry(sessionId, session.connection)
       }
       return admission

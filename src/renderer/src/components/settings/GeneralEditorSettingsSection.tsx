@@ -10,6 +10,7 @@ import { clampNumber } from '@/lib/terminal-theme'
 import { Input } from '../ui/input'
 import { Label } from '../ui/label'
 import { SearchableSetting } from './SearchableSetting'
+import { CollapseUnchangedRegionsSetting } from './CollapseUnchangedRegionsSetting'
 import {
   SettingsSegmentedControl,
   SettingsSubsectionHeader,
@@ -48,8 +49,7 @@ export function GeneralEditorSettingsSection({
     settings.editorAutoSaveDelayMs
   )
   if (resolvedAutoSaveDelayDraftState !== autoSaveDelayDraftState) {
-    // Why: Settings can be updated outside this pane; reconcile drafts before
-    // paint so the visible input never lags behind the persisted value.
+    // Reconcile external settings before paint so drafts cannot lag persisted values.
     setAutoSaveDelayDraftState(resolvedAutoSaveDelayDraftState)
   }
   const autoSaveDelayDraft = resolvedAutoSaveDelayDraftState.draft
@@ -235,6 +235,8 @@ export function GeneralEditorSettingsSection({
 
       <DiffShowWhitespaceSetting settings={settings} updateSettings={updateSettings} />
 
+      <CollapseUnchangedRegionsSetting settings={settings} updateSettings={updateSettings} />
+
       <SearchableSetting
         title={translate(
           'auto.components.settings.GeneralEditorSettingsSection.8f1afdfbd8',
@@ -375,7 +377,7 @@ export function GeneralEditorSettingsSection({
         )}
         description={translate(
           'auto.components.settings.GeneralEditorSettingsSection.5f02e6fb21',
-          'Show local markdown review note controls in rich editor mode.'
+          'Show local markdown review note controls in markdown files.'
         )}
         keywords={['markdown', 'review', 'notes', 'annotations', 'agents']}
       >
@@ -386,7 +388,7 @@ export function GeneralEditorSettingsSection({
           )}
           description={translate(
             'auto.components.settings.GeneralEditorSettingsSection.f80603d293',
-            'Show local markdown note controls in rich editor mode and agent handoff actions.'
+            'Show markdown note controls in every markdown view and include markdown notes in agent handoff actions.'
           )}
           checked={settings.markdownReviewToolsEnabled}
           onChange={() =>

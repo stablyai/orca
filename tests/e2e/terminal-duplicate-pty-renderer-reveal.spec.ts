@@ -1,9 +1,11 @@
+import {
+  mutateStoppedProfileState,
+  readPersistedProfileState
+} from './helpers/persisted-profile-state'
 import { randomUUID } from 'node:crypto'
-import { existsSync, readFileSync, writeFileSync } from 'node:fs'
-import path from 'node:path'
+import { existsSync, readFileSync } from 'node:fs'
 import type { ElectronApplication, Page } from '@stablyai/playwright-test'
 import type { TerminalLayoutSnapshot } from '../../src/shared/terminal-tab-types'
-import { DEFAULT_LOCAL_ORCA_PROFILE_ID } from '../../src/shared/orca-profiles'
 import { test, expect } from './helpers/orca-app'
 import {
   findMarkerFrame,
@@ -59,39 +61,36 @@ setInterval(() => {
 `.trim()
 }
 
-function persistedDataPath(userDataDir: string): string {
-  return path.join(userDataDir, 'profiles', DEFAULT_LOCAL_ORCA_PROFILE_ID, 'orca-data.json')
-}
-
 function seedDuplicatePtyOwnership(userDataDir: string): void {
-  const dataPath = persistedDataPath(userDataDir)
-  const data = JSON.parse(readFileSync(dataPath, 'utf8')) as PersistedData
-  const session = data.workspaceSession
-  const tabId = session?.activeTabId
-  const layout = tabId ? session?.terminalLayoutsByTabId?.[tabId] : undefined
-  const retainedLeafId = layout?.activeLeafId
-  const ptyId = retainedLeafId ? layout?.ptyIdsByLeafId?.[retainedLeafId] : undefined
-  if (!session?.terminalLayoutsByTabId || !tabId || !layout || !retainedLeafId || !ptyId) {
-    throw new Error('Persisted terminal ownership was unavailable for duplicate-layout seeding')
-  }
-
-  const duplicateLeafId = randomUUID()
-  session.terminalLayoutsByTabId[tabId] = {
-    ...layout,
-    root: {
-      type: 'split',
-      direction: 'vertical',
-      first: { type: 'leaf', leafId: retainedLeafId },
-      second: { type: 'leaf', leafId: duplicateLeafId }
-    },
-    activeLeafId: retainedLeafId,
-    expandedLeafId: null,
-    ptyIdsByLeafId: {
-      [retainedLeafId]: ptyId,
-      [duplicateLeafId]: ptyId
+  return mutateStoppedProfileState(userDataDir, (state) => {
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: This test owns the persisted fixture; optional fields are checked at use sites.
+    const data = state as PersistedData
+    const session = data.workspaceSession
+    const tabId = session?.activeTabId
+    const layout = tabId ? session?.terminalLayoutsByTabId?.[tabId] : undefined
+    const retainedLeafId = layout?.activeLeafId
+    const ptyId = retainedLeafId ? layout?.ptyIdsByLeafId?.[retainedLeafId] : undefined
+    if (!session?.terminalLayoutsByTabId || !tabId || !layout || !retainedLeafId || !ptyId) {
+      throw new Error('Persisted terminal ownership was unavailable for duplicate-layout seeding')
     }
-  }
-  writeFileSync(dataPath, `${JSON.stringify(data, null, 2)}\n`)
+
+    const duplicateLeafId = randomUUID()
+    session.terminalLayoutsByTabId[tabId] = {
+      ...layout,
+      root: {
+        type: 'split',
+        direction: 'vertical',
+        first: { type: 'leaf', leafId: retainedLeafId },
+        second: { type: 'leaf', leafId: duplicateLeafId }
+      },
+      activeLeafId: retainedLeafId,
+      expandedLeafId: null,
+      ptyIdsByLeafId: {
+        [retainedLeafId]: ptyId,
+        [duplicateLeafId]: ptyId
+      }
+    }
+  })
 }
 
 async function waitForRestoredTerminal(page: Page, worktreeId: string): Promise<string> {
@@ -152,9 +151,7 @@ type RevealFrameDiagnostics = {
   screenRows: string[]
 }
 
-// Why: if the revealed pane ever fails to converge, whether the freshest marker is on
-// screen, only in normal-buffer scrollback, or absent is what separates a stalled
-// renderer from stale residue left by the restore replay (STA-5208).
+// STA-5208: distinguish live viewport markers from normal-buffer residue to diagnose stalled render versus stale restore.
 async function readRevealFrameDiagnostics(
   page: Page,
   tabId: string,
@@ -256,8 +253,7 @@ test('repairs duplicate persisted PTY renderers before streaming tab reveal', as
     await expect
       .poll(() => getActiveTabId(secondLaunch.page), { timeout: 10_000 })
       .toBe(restoredTabId)
-    // Ownership first: the frame is read off the single repaired pane, so the repair has
-    // to have settled before that read means anything.
+    // Wait for duplicate ownership repair before reading the surviving pane’s frame.
     await expect
       .poll(() => readRendererOwnership(secondLaunch.page, restoredTabId), { timeout: 10_000 })
       .toEqual({
@@ -275,16 +271,14 @@ test('repairs duplicate persisted PTY renderers before streaming tab reveal', as
           message: 'Revealed renderer did not catch up to hidden authoritative output'
         })
         .toBeGreaterThanOrEqual(hiddenFrame)
-      // The fixture enters the alternate buffer once at startup and repaints in place, so a
-      // revealed pane parked on the normal buffer is painting the TUI into scrollback.
+      // The TUI enters alt once; a normal-buffer reveal would paint its output into scrollback.
       const revealedScreen = await readActiveScreen(secondLaunch.page, restoredTabId)
       expect(
         revealedScreen?.bufferType,
         'revealed pane was missing or painting outside the alternate buffer'
       ).toBe('alternate')
     } catch (error) {
-      // Diagnostics are more page reads, so a dead page has to degrade to a note in the
-      // attachment rather than replacing the failure the attachment exists to explain.
+      // Degrade dead-page diagnostics to attachment notes so they cannot replace the assertion failure.
       revealFailure = error
       const diagnostics = await readRevealFrameDiagnostics(
         secondLaunch.page,
@@ -307,6 +301,23 @@ test('repairs duplicate persisted PTY renderers before streaming tab reveal', as
     if (revealFailure) {
       throw revealFailure
     }
+
+    // Require persisted terminal bindings on every repaired pane or later restores become empty without another duplicate to repair.
+    await session.close(secondApp)
+    secondApp = null
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: This test owns the persisted fixture; optional fields are checked at use sites.
+    const persisted = readPersistedProfileState(session.userDataDir) as PersistedData
+    const storedLayout = persisted.workspaceSession?.terminalLayoutsByTabId?.[restoredTabId]
+    const storedLeafIds = (node: TerminalLayoutSnapshot['root']): string[] =>
+      !node
+        ? []
+        : node.type === 'leaf'
+          ? [node.leafId]
+          : [...storedLeafIds(node.first), ...storedLeafIds(node.second)]
+    const unboundLeafIds = storedLeafIds(storedLayout?.root ?? null).filter(
+      (leafId) => !storedLayout?.ptyIdsByLeafId?.[leafId]
+    )
+    expect(unboundLeafIds).toEqual([])
   } finally {
     tui.cleanup()
     if (secondApp) {

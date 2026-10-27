@@ -1,5 +1,5 @@
 import { execFileSync } from 'node:child_process'
-import { mkdtemp, rm } from 'node:fs/promises'
+import { mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import * as path from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
@@ -20,6 +20,74 @@ afterEach(async () => {
 })
 
 describe('getBranchCompare real refs', () => {
+  it.each([false, true])(
+    'excludes base-only changes after branches diverge: %s',
+    async (diverged) => {
+      const repo = await mkdtemp(path.join(tmpdir(), 'orca-common-ancestor-compare-'))
+      tempRoots.push(repo)
+      git(repo, ['init', '-q'])
+      git(repo, ['config', 'user.email', 'test@example.com'])
+      git(repo, ['config', 'user.name', 'Test User'])
+      git(repo, ['config', 'commit.gpgSign', 'false'])
+      git(repo, ['commit', '--allow-empty', '-qm', 'initial'])
+      const forkOid = git(repo, ['rev-parse', 'HEAD'])
+      git(repo, ['branch', 'base'])
+      git(repo, ['checkout', '-qb', 'feature'])
+      if (diverged) {
+        await writeFile(path.join(repo, 'feature.txt'), 'feature\n')
+        git(repo, ['add', 'feature.txt'])
+        git(repo, ['commit', '-qm', 'feature addition'])
+      }
+      git(repo, ['checkout', '-q', 'base'])
+      await writeFile(path.join(repo, 'upstream.txt'), 'upstream\n')
+      git(repo, ['add', 'upstream.txt'])
+      git(repo, ['commit', '-qm', 'upstream addition'])
+      git(repo, ['checkout', '-q', 'feature'])
+
+      const result = await getBranchCompare(repo, 'base')
+      expect(result.summary).toMatchObject({
+        status: 'ready',
+        mergeBase: forkOid,
+        commitsAhead: diverged ? 1 : 0,
+        commitsBehind: 1,
+        changedFiles: diverged ? 1 : 0
+      })
+      expect(result.entries).toEqual(
+        diverged ? [{ path: 'feature.txt', status: 'added', added: 1, removed: 0 }] : []
+      )
+    }
+  )
+
+  it('reports equal commits as empty despite staged and unstaged changes', async () => {
+    const repo = await mkdtemp(path.join(tmpdir(), 'orca-equal-branch-compare-'))
+    tempRoots.push(repo)
+    git(repo, ['init', '-q'])
+    git(repo, ['config', 'user.email', 'test@example.com'])
+    git(repo, ['config', 'user.name', 'Test User'])
+    git(repo, ['-c', 'commit.gpgSign=false', 'commit', '--allow-empty', '-m', 'initial'])
+    git(repo, ['branch', 'base'])
+    git(repo, ['checkout', '-q', '-b', 'feature'])
+    const oid = git(repo, ['rev-parse', 'HEAD'])
+    await writeFile(path.join(repo, 'changes.txt'), 'staged\n')
+    git(repo, ['add', 'changes.txt'])
+    await writeFile(path.join(repo, 'changes.txt'), 'unstaged\n')
+
+    expect(await getBranchCompare(repo, 'base')).toEqual({
+      summary: {
+        baseRef: 'base',
+        baseOid: oid,
+        compareRef: 'feature',
+        headOid: oid,
+        mergeBase: oid,
+        changedFiles: 0,
+        commitsAhead: 0,
+        commitsBehind: 0,
+        status: 'ready'
+      },
+      entries: []
+    })
+  })
+
   it('preserves the raw oid of a remote-tracking ref that stores an annotated tag', async () => {
     const root = await mkdtemp(path.join(tmpdir(), 'orca-branch-compare-ref-'))
     tempRoots.push(root)
@@ -48,8 +116,14 @@ describe('getBranchCompare real refs', () => {
     ])
     expect(rawOid).not.toBe(peeledOid)
 
-    const result = await getBranchCompare(client, 'origin/tagbase')
-
-    expect(result.summary).toMatchObject({ baseOid: rawOid, status: 'ready' })
+    expect((await getBranchCompare(client, 'origin/tagbase')).summary).toMatchObject({
+      baseOid: rawOid,
+      headOid: peeledOid,
+      mergeBase: peeledOid,
+      changedFiles: 0,
+      commitsAhead: 0,
+      commitsBehind: 0,
+      status: 'ready'
+    })
   })
 })

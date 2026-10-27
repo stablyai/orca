@@ -1,0 +1,12 @@
+{
+  "revision": "29628c9acdb81b703bbd4080c207a0e7ce5e276e",
+  "cliVersion": "0.16.9",
+  "writer": "SharedZCodeCredentialStore + NodePersonalProviderConfigRepository + NodeModelSelectionConfigRepository",
+  "secret": "synthetic-secret",
+  "fallbackHost": {
+    "platform": "linux",
+    "home": "/synthetic/home",
+    "username": "synthetic-user"
+  },
+  "identity": "synthetic account/@with spaces"
+}

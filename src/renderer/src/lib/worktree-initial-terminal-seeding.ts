@@ -2,31 +2,32 @@ import type {
   WorktreeDefaultTabsLaunch,
   WorktreeSetupLaunch
 } from '../../../shared/worktree/launch-types'
+import type { ExecutionHostId } from '../../../shared/execution-host'
+import type { FolderWorkspace } from '../../../shared/folder-workspace-types'
+import { folderWorkspaceKey } from '../../../shared/workspace-scope'
 import { shouldAutoCreateInitialTerminal } from '@/components/terminal/initial-terminal'
+import { isTerminalWorkspaceEmptiedOnPurpose } from '../../../shared/closed-terminal-tab-tombstones'
+import { shouldSeedWorktreePrimaryTerminal } from '../../../shared/worktree-first-surface'
 import { createSequencedSetupAgentCommands } from '../../../shared/setup-agent-sequencing'
 import { getSetupRunnerCommandPlatformForPath } from '../../../shared/setup-runner-command'
 import { agentKindToTuiAgent } from '../../../shared/agent-kind'
 import { useAppStore } from '@/store'
 import { queueHookCommandsForFirstWorktreeTab } from '@/lib/hook-command-delayed-delivery'
 import { resolveWorkspaceTerminalHostAuthority } from '@/lib/workspace-terminal-host-authority'
-import { initialAgentTabViewModeProps } from './native-chat-initial-view-mode'
-import { getConnectionId } from '@/lib/connection-context'
-import { isNativeChatTranscriptLocalReadable } from '@/lib/native-chat-transcript-readability'
 import { seedNativeChatAppliedSessionOptions } from '@/components/native-chat/native-chat-session-option-cache'
 import type {
   InitialTerminalOptions,
   WorktreeActivationStore
 } from '@/lib/worktree-activation-store-contract'
-import {
-  draftViewModeProps,
-  resolveStartupLaunchDraftText,
-  type WorktreeStartupPayload
-} from '@/lib/worktree-startup-payload'
+import type { WorktreeStartupPayload } from '@/lib/worktree-startup-payload'
 import {
   queueSetupAndIssueCommands,
   type IssueCommandLaunch
 } from '@/lib/worktree-setup-issue-command-queue'
 import { applyDefaultTerminalTabs } from '@/lib/worktree-default-terminal-tabs'
+import { openDefaultAgentChatInEmptyWorkspace } from '@/lib/empty-workspace-default-agent-chat'
+import { isEmptyWorkspaceDefaultSurfacePending } from '@/lib/empty-workspace-default-surface-claims'
+import { findPendingWorktreeCreationId } from './pending-worktree-creation'
 
 function getSetupRunnerCommandPlatformForLaunch(setup: WorktreeSetupLaunch): 'windows' | 'posix' {
   return getSetupRunnerCommandPlatformForPath(
@@ -35,14 +36,25 @@ function getSetupRunnerCommandPlatformForLaunch(setup: WorktreeSetupLaunch): 'wi
   )
 }
 
-/** After the async activation gate reports an empty workspace: re-seed a shell unless the caller
- *  promised its own surface or the user has already moved on. */
+export type GatedEmptyWorkspaceReseedIntent = {
+  callerProvidesSurface: boolean
+  seedUserDefaultSurface: boolean
+  executionHostId?: ExecutionHostId
+}
+
+/** Re-seed after an empty gate unless its activation owns the surface or no longer owns the host. */
 export function reseedGatedEmptyWorkspace(
   workspaceKey: string,
-  callerProvidesSurface: boolean | undefined
+  intent: GatedEmptyWorkspaceReseedIntent
 ): void {
+  const { callerProvidesSurface, seedUserDefaultSurface, executionHostId } = intent
   const state = useAppStore.getState()
-  if (callerProvidesSurface === true || state.activeWorktreeId !== workspaceKey) {
+  if (
+    callerProvidesSurface === true ||
+    isEmptyWorkspaceDefaultSurfacePending(workspaceKey) ||
+    state.activeWorktreeId !== workspaceKey ||
+    (executionHostId !== undefined && state.activeWorkspaceExecutionHostId !== executionHostId)
+  ) {
     return
   }
   ensureWorktreeHasInitialTerminal(
@@ -53,9 +65,36 @@ export function reseedGatedEmptyWorkspace(
     undefined,
     undefined,
     {
-      reseedEmptiedWorkspace: true
+      reseedEmptiedWorkspace: true,
+      ...(seedUserDefaultSurface ? { seedUserDefaultSurface: true } : {})
     }
   )
+}
+
+export function ensureFolderWorkspaceInitialTerminal(
+  folderWorkspace: FolderWorkspace,
+  startup?: WorktreeStartupPayload,
+  providesInitialSurface?: boolean,
+  seedUserDefaultSurface?: boolean
+): string | null {
+  if (providesInitialSurface === true && startup === undefined) {
+    return null
+  }
+  const state = useAppStore.getState()
+  const workspaceKey = folderWorkspaceKey(folderWorkspace.id)
+  const primaryTabId = ensureWorktreeHasInitialTerminal(
+    state,
+    workspaceKey,
+    startup,
+    undefined,
+    undefined,
+    undefined,
+    {
+      reseedEmptiedWorkspace: providesInitialSurface !== true,
+      ...(seedUserDefaultSurface ? { seedUserDefaultSurface: true } : {})
+    }
+  )
+  return primaryTabId
 }
 
 export function ensureWorktreeHasInitialTerminal(
@@ -68,7 +107,7 @@ export function ensureWorktreeHasInitialTerminal(
   opts?: InitialTerminalOptions
 ): string | null {
   const { renderableTabCount } = store.reconcileWorktreeTabModel(worktreeId)
-  // Why: creating a terminal just because the legacy terminal slice is empty gives editor/browser-only worktrees an unexpected extra tab.
+  // Editor/browser-only workspaces need no extra terminal merely because the legacy terminal slice is empty.
   const ownerState =
     store.settings !== undefined || store.repos !== undefined || store.worktreesByRepo !== undefined
       ? store
@@ -93,8 +132,12 @@ export function ensureWorktreeHasInitialTerminal(
   }
 
   const backendStartupTerminalSpawned = opts?.backendStartupTerminalSpawned === true
-  const hostAuthority = resolveWorkspaceTerminalHostAuthority(ownerState, worktreeId)
-  // Why: explicit spawn evidence survives the new-worktree ownership race; a host that owns terminal creation provides the same authority for later activations.
+  const hostAuthority = resolveWorkspaceTerminalHostAuthority(
+    ownerState,
+    worktreeId,
+    opts?.executionHostId
+  )
+  // Explicit spawn evidence survives new-worktree ownership races; later activations also defer to host-owned terminal creation.
   if (backendStartupTerminalSpawned || hostAuthority === 'live') {
     const existingTerminalTabId = store.tabsByWorktree[worktreeId]?.[0]?.id
     if (existingTerminalTabId && (setup || issueCommand)) {
@@ -113,7 +156,7 @@ export function ensureWorktreeHasInitialTerminal(
       return existingTerminalTabId
     }
     if (setup || issueCommand) {
-      // Why: runtime-owned worktrees mirror session tabs async, so hold commands for the first mirrored tab instead of dropping them.
+      // Runtime tabs mirror asynchronously; retain commands until the first tab arrives.
       queueHookCommandsForFirstWorktreeTab({
         worktreeId,
         deliver: (state, firstTerminalTabId) =>
@@ -132,18 +175,26 @@ export function ensureWorktreeHasInitialTerminal(
   }
 
   const hasExplicitLaunchWork = Boolean(sequencedStartup || setup || issueCommand)
-  // Why: a caller opening its own primary surface (a structured native chat) asked for that surface
-  // alone. Setup launched in its own tab needs no shell to attach to, so seeding one leaves a stray
-  // "Terminal 1" beside the chat. Splits and issue automation still need a pane to split from.
-  const setupNeedsHostTerminal =
-    setup !== undefined &&
-    (useAppStore.getState().settings?.setupScriptLaunchMode ?? 'new-tab') !== 'new-tab'
+  const pendingCreationId = findPendingWorktreeCreationId(
+    ownerState.pendingWorktreeCreations,
+    worktreeId
+  )
+  // Why: a checkout can become selectable before creation has handed off its chosen surface.
   if (
-    opts?.callerProvidesSurface === true &&
+    pendingCreationId &&
+    opts?.worktreeCreationId !== pendingCreationId &&
+    !hasExplicitLaunchWork
+  ) {
+    return null
+  }
+  if (
     renderableTabCount === 0 &&
-    !sequencedStartup &&
-    !issueCommand &&
-    !setupNeedsHostTerminal &&
+    !shouldSeedWorktreePrimaryTerminal({
+      hasPrimarySurface: false,
+      callerProvidesSurface: opts?.callerProvidesSurface === true,
+      startupNeedsTerminal: sequencedStartup !== undefined,
+      issueCommandNeedsTerminal: issueCommand !== undefined
+    }) &&
     !defaultTabs?.tabs.length &&
     opts?.createNewTerminalForStartup !== true
   ) {
@@ -158,21 +209,10 @@ export function ensureWorktreeHasInitialTerminal(
     )
     return null
   }
-  // Why: only startup hydration honours the closed-last-tab tombstone. Every explicit
-  // activation (sidebar, palette, automation resume, wake) re-seeds a surface instead,
-  // because closing the last terminal normally deactivates the workspace too
-  // (terminal-tab-actions.ts closeTerminalTab, plus leaveWorktreeIfEmpty for split-group
-  // closes) — so reaching here through an activation means the user asked for it back.
-  // The paths that do leave it active stay safe: a runtime-owned close returns before that
-  // deactivation, but while that session is live the host owns terminal creation and this
-  // bails out above; an editor/browser survivor keeps renderableTabCount non-zero, so no
-  // terminal is added; and closeTabPreservingPty (use-terminal-pane-lifecycle.ts) skips both
-  // deactivation hooks for pane moves and retirement, where re-seeding is the wanted outcome.
+  // Only passive startup honors last-close tombstones; explicit activation requests a surface because closing the last terminal normally deactivates. Runtime-owned live sessions bail above, editor/browser survivors remain renderable, and pane moves/retirement intentionally allow reseeding.
   const shouldHonourClosedTerminalTombstone =
-    Object.hasOwn(store.tabsByWorktree, worktreeId) && opts?.reseedEmptiedWorkspace !== true
-  // Why: an execution host that has not answered is not a host with no terminals; seeding into that
-  // gap is what adds a tab per launch (STA-4658). Explicit launch work below is a request to create
-  // a terminal now, so it stays ungated.
+    isTerminalWorkspaceEmptiedOnPurpose(store, worktreeId) && opts?.reseedEmptiedWorkspace !== true
+  // An unanswered host is not empty; seeding there adds a tab per launch (STA-4658). Explicit launch requests below remain ungated.
   const shouldAutoCreate =
     hostAuthority === 'none' &&
     shouldAutoCreateInitialTerminal(renderableTabCount, shouldHonourClosedTerminalTombstone)
@@ -182,7 +222,7 @@ export function ensureWorktreeHasInitialTerminal(
   if (!shouldAutoCreate && !shouldCreateForExplicitWork && !shouldCreateNewStartupTerminal) {
     const existingTerminalTabId = store.tabsByWorktree[worktreeId]?.[0]?.id
     if (existingTerminalTabId && (setup || issueCommand)) {
-      // Why: main may have adopted the startup tab but failed to spawn setup; renderer must still launch the returned fallback setup.
+      // Main can adopt the startup tab yet fail setup spawn; renderer still runs returned fallback setup.
       queueSetupAndIssueCommands(
         store,
         worktreeId,
@@ -210,9 +250,31 @@ export function ensureWorktreeHasInitialTerminal(
   if (templatedTabId) {
     return templatedTabId
   }
+  if (
+    opts?.seedUserDefaultSurface === true &&
+    !hasExplicitLaunchWork &&
+    opts.activateCreatedTabs !== false
+  ) {
+    const defaultChat = openDefaultAgentChatInEmptyWorkspace(
+      worktreeId,
+      () =>
+        ensureWorktreeHasInitialTerminal(
+          store,
+          worktreeId,
+          startup,
+          setup,
+          issueCommand,
+          defaultTabs,
+          { ...opts, seedUserDefaultSurface: false }
+        ) !== null
+    )
+    if (defaultChat) {
+      return defaultChat.primaryTabId
+    }
+  }
 
-  // Why: tag this activation-created tab so its PTY spawn doesn't count as activity and reshuffle the Recent sort.
-  // Why: stamp the seeded agent before hooks arrive so native chat and provider chrome can resolve it immediately.
+  // Activation-created PTY spawns must not count as activity and reshuffle Recent.
+  // Stamp before hooks so chat/provider chrome can resolve agent identity immediately.
   const launchAgent =
     sequencedStartup?.launchAgent ??
     (sequencedStartup?.telemetry
@@ -220,36 +282,19 @@ export function ensureWorktreeHasInitialTerminal(
       : undefined)
   const terminalTab = store.createTab(worktreeId, undefined, undefined, {
     pendingActivationSpawn: true,
-    ...(launchAgent
-      ? {
-          launchAgent,
-          ...initialAgentTabViewModeProps(store.settings ?? null, {
-            agent: launchAgent,
-            // Why: argv-prefill launches carry the draft in `command` and set no
-            // draftPrompt, so gating on draftPrompt alone misses them entirely.
-            ...draftViewModeProps(resolveStartupLaunchDraftText(sequencedStartup)),
-            nativeChatTranscriptIsLocalReadable: isNativeChatTranscriptLocalReadable(
-              getConnectionId(worktreeId)
-            )
-          })
-        }
-      : {}),
-    ...(opts?.activateCreatedTabs === false ? { activate: false } : {})
+    ...(launchAgent ? { launchAgent } : {}),
+    ...(opts?.activateCreatedTabs === false ? { activate: false } : {}),
+    ...(sequencedStartup ? { pendingStartup: sequencedStartup } : {})
   })
   if (opts?.activateCreatedTabs !== false) {
     store.setActiveTab(terminalTab.id)
   }
-
-  // Why: queue the seeded startup on the initial pane so the terminal begins in the requested agent session instead of an idle shell.
-  if (sequencedStartup) {
-    if (launchAgent) {
-      seedNativeChatAppliedSessionOptions(
-        terminalTab.id,
-        launchAgent,
-        sequencedStartup.sessionOptions
-      )
-    }
-    store.queueTabStartupCommand(terminalTab.id, sequencedStartup)
+  if (sequencedStartup && launchAgent) {
+    seedNativeChatAppliedSessionOptions(
+      terminalTab.id,
+      launchAgent,
+      sequencedStartup.sessionOptions
+    )
   }
   queueSetupAndIssueCommands(
     store,

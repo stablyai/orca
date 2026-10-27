@@ -1,10 +1,12 @@
-import type { Terminal } from '@xterm/headless'
+import type { IBuffer, IBufferCell, IBufferLine, Terminal } from '@xterm/headless'
 import type { TerminalOscLinkRange } from '../../shared/terminal-osc-link-ranges'
 
 type TerminalWithOscLinks = Terminal & {
   _core?: {
     _oscLinkService?: {
       getLinkData: (linkId: number) => { uri?: string } | undefined
+      // An empty private registry rules out live links; fall back to scanning if xterm changes it.
+      _dataByLinkId?: { size?: number }
     }
   }
 }
@@ -14,22 +16,50 @@ type CellWithOscLink = {
   hasExtendedAttrs?: () => boolean
 }
 
+function hasNoRegisteredOscLinks(service: { _dataByLinkId?: { size?: number } }): boolean {
+  return service._dataByLinkId?.size === 0
+}
+
 export function collectHeadlessOscLinkRanges(
   terminal: Terminal,
   scrollbackRows: number | undefined,
   restoredLinks: TerminalOscLinkRange[] = []
 ): TerminalOscLinkRange[] {
-  // Why: headless xterm exposes OSC 8 metadata only via this private service.
-  // Keep this boundary explicit so xterm upgrades are audited here.
+  const buffer = terminal.buffer.active
+  const startRow =
+    scrollbackRows === undefined ? 0 : Math.max(0, buffer.length - terminal.rows - scrollbackRows)
+  return collectOscLinkRangesInRows(terminal, buffer, startRow, buffer.length, restoredLinks)
+}
+
+/** Read normal-buffer rows [0, endRow), even while the alternate buffer is active. */
+export function collectNormalBufferOscLinkRanges(
+  terminal: Terminal,
+  endRow: number
+): TerminalOscLinkRange[] {
+  const buffer = terminal.buffer.normal
+  return collectOscLinkRangesInRows(terminal, buffer, 0, Math.min(endRow, buffer.length), [])
+}
+
+function collectOscLinkRangesInRows(
+  terminal: Terminal,
+  buffer: IBuffer,
+  startRow: number,
+  endRow: number,
+  restoredLinks: TerminalOscLinkRange[]
+): TerminalOscLinkRange[] {
+  // Headless xterm exposes OSC 8 metadata only through this private service.
   const service = (terminal as TerminalWithOscLinks)._core?._oscLinkService
   if (!service) {
     return []
   }
-  const buffer = terminal.buffer.active
-  const startRow =
-    scrollbackRows === undefined ? 0 : Math.max(0, buffer.length - terminal.rows - scrollbackRows)
+  // Skip the per-cell walk only if neither xterm nor restored metadata holds links.
+  if (hasNoRegisteredOscLinks(service) && restoredLinks.length === 0) {
+    return []
+  }
   const ranges: TerminalOscLinkRange[] = []
-  for (let row = startRow; row < buffer.length; row += 1) {
+  // Reuse a cell to avoid allocating for every scrollback position.
+  const scratchCell = buffer.getNullCell()
+  for (let row = startRow; row < endRow; row += 1) {
     const line = buffer.getLine(row)
     if (!line) {
       continue
@@ -38,7 +68,7 @@ export function collectHeadlessOscLinkRanges(
     let currentUrlId = 0
     let currentStart = -1
     for (let col = 0; col <= lineLength; col += 1) {
-      const urlId = col < lineLength ? getOscLinkIdAtCell(line, col) : 0
+      const urlId = col < lineLength ? getOscLinkIdAtCell(line, col, scratchCell) : 0
       if (urlId === currentUrlId) {
         continue
       }
@@ -53,7 +83,7 @@ export function collectHeadlessOscLinkRanges(
     }
   }
   for (const link of restoredLinks) {
-    if (link.row < startRow || link.row >= buffer.length) {
+    if (link.row < startRow || link.row >= endRow) {
       continue
     }
     const startCol = Math.max(0, Math.min(terminal.cols, link.startCol))
@@ -83,8 +113,7 @@ function dedupeOscLinkRanges(ranges: TerminalOscLinkRange[]): TerminalOscLinkRan
   })
 }
 
-function getOscLinkIdAtCell(line: { getCell: (col: number) => unknown }, col: number): number {
-  const cell = line.getCell(col) as CellWithOscLink | undefined
-  // Why: OSC link IDs live in extended cell attrs; missing attrs means no link.
+function getOscLinkIdAtCell(line: IBufferLine, col: number, scratchCell: IBufferCell): number {
+  const cell = line.getCell(col, scratchCell) as (IBufferCell & CellWithOscLink) | undefined
   return cell?.hasExtendedAttrs?.() && cell.extended?.urlId ? cell.extended.urlId : 0
 }

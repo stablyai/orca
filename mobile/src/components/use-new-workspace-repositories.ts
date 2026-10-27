@@ -1,41 +1,62 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
+import type { ExecutionHostId } from '../../../src/shared/execution-host'
 import type { RpcClient } from '../transport/rpc-client'
-import type { RpcSuccess } from '../transport/types'
 import { getCachedRepos, setCachedRepos } from '../cache/repo-cache'
+import { listHostRepos } from '../worktree/server-repos'
+import { useServerRepos } from '../worktree/use-server-repos'
 import { useLastVisitedWorktreeRepoId } from '../worktree/use-last-visited-worktree-repo'
+import { refreshMobileNewWorkspaceDialogSelectedRepo } from '../worktree/new-workspace-dialog-repo-selection'
 import {
-  getMobileNewWorkspaceDialogEligibleRepos,
-  refreshMobileNewWorkspaceDialogSelectedRepo,
-  resolveMobileNewWorkspaceDialogRepoId
-} from '../worktree/new-workspace-dialog-repo-selection'
+  getNewWorkspaceDialogEligibleRepos,
+  resolveNewWorkspaceDialogRepoId
+} from '../../../src/shared/new-workspace-dialog-repo'
 import type { MobileWorkspaceRepo } from './new-worktree-modal-types'
 
+const NO_SERVER_CLIENTS: ReadonlyMap<ExecutionHostId, RpcClient> = new Map()
+
+// List desktop repos immediately; add each reachable server’s repos as it responds.
 export function useNewWorkspaceRepositories(args: {
   client: RpcClient | null
+  serverClients?: ReadonlyMap<ExecutionHostId, RpcClient>
   hostId?: string
   visible: boolean
 }): {
   repos: MobileWorkspaceRepo[]
+  allRepos: MobileWorkspaceRepo[]
   selectedRepo: MobileWorkspaceRepo | null
   setSelectedRepo: (repo: MobileWorkspaceRepo | null) => void
   loading: boolean
 } {
-  const { client, hostId, visible } = args
+  const { client, serverClients = NO_SERVER_CLIENTS, hostId, visible } = args
   const [initialRepos] = useState(() =>
     hostId ? (getCachedRepos(hostId) as MobileWorkspaceRepo[] | null) : null
   )
-  const [repos, setRepos] = useState<MobileWorkspaceRepo[]>(initialRepos ?? [])
-  const [selectedRepo, setSelectedRepo] = useState<MobileWorkspaceRepo | null>(null)
+  const [desktopRepos, setDesktopRepos] = useState<MobileWorkspaceRepo[]>(initialRepos ?? [])
+  const serverRepos = useServerRepos<MobileWorkspaceRepo>(serverClients, visible)
+  const [pickedRepo, setSelectedRepo] = useState<MobileWorkspaceRepo | null>(null)
   const [loading, setLoading] = useState(initialRepos == null)
   const lastVisitedRepo = useLastVisitedWorktreeRepoId(hostId, visible)
+  // Why: trust checks count same-id rows on every host, as desktop does; only the picker filters.
+  const allRepos = useMemo(
+    () =>
+      serverRepos.size === 0
+        ? desktopRepos
+        : [...desktopRepos, ...[...serverRepos.values()].flat()],
+    [desktopRepos, serverRepos]
+  )
+  const repos = useMemo(() => getNewWorkspaceDialogEligibleRepos(allRepos), [allRepos])
+  // Derive the pick so it follows updated listings and disappears when its host stops listing it.
+  const selectedRepo = useMemo(
+    () => refreshMobileNewWorkspaceDialogSelectedRepo(repos, pickedRepo),
+    [pickedRepo, repos]
+  )
 
   useEffect(() => {
     if (!visible || !lastVisitedRepo.loaded || selectedRepo || repos.length === 0) {
       return
     }
-    const eligibleRepos = getMobileNewWorkspaceDialogEligibleRepos(repos)
-    const preferredRepoId = resolveMobileNewWorkspaceDialogRepoId({
-      eligibleRepos,
+    const preferredRepoId = resolveNewWorkspaceDialogRepoId({
+      eligibleRepos: repos,
       activeRepoId: lastVisitedRepo.repoId
     })
     const preferredRepo = repos.find((repo) => repo.id === preferredRepoId) ?? null
@@ -50,20 +71,15 @@ export function useNewWorkspaceRepositories(args: {
     }
     let stale = false
     setLoading(true)
-    void client
-      .sendRequest('repo.list')
-      .then((response) => {
-        if (stale || !response.ok) {
+    void listHostRepos<MobileWorkspaceRepo>(client)
+      .then((listed) => {
+        if (stale || !listed) {
           return
         }
-        const result = (response as RpcSuccess).result as { repos: MobileWorkspaceRepo[] }
-        setRepos(result.repos)
+        setDesktopRepos(listed)
         if (hostId) {
-          setCachedRepos(hostId, result.repos)
+          setCachedRepos(hostId, listed)
         }
-        setSelectedRepo((current) =>
-          refreshMobileNewWorkspaceDialogSelectedRepo(result.repos, current)
-        )
       })
       .catch(() => undefined)
       .finally(() => {
@@ -76,5 +92,5 @@ export function useNewWorkspaceRepositories(args: {
     }
   }, [visible, client, hostId])
 
-  return { repos, selectedRepo, setSelectedRepo, loading: loading && repos.length === 0 }
+  return { repos, allRepos, selectedRepo, setSelectedRepo, loading: loading && repos.length === 0 }
 }

@@ -3,17 +3,20 @@ import type { TerminalPaneSplitSource } from '../../../shared/feature-education-
 import type { RuntimeRpcResponse } from '../../../shared/runtime-rpc-envelope'
 import type { RuntimeTerminalClose, RuntimeTerminalSplit } from '../../../shared/runtime-types'
 import type { TerminalPaneLayoutNode } from '../../../shared/terminal-tab-types'
-import { getRuntimeEnvironmentIdForWorktree } from '../lib/worktree-runtime-owner'
+import { runtimeEnvironmentIdUnlessTwin } from '../lib/resolve-owner'
 import { useAppStore } from '../store'
-import { unwrapRuntimeRpcResult } from './runtime-rpc-client'
-import { parseRemoteRuntimePtyId } from './runtime-terminal-stream'
+import { unwrapRuntimeRpcResult } from './runtime-rpc-result'
+import { parseRemoteRuntimePtyId } from '../../../shared/remote-runtime/remote-runtime-pty-id'
 import { toRuntimeWorktreeSelector } from './runtime-worktree-selector'
-import { isWebTerminalSurfaceTabId, toHostSessionTabId } from './web-terminal-surface-id'
+import { isWebTerminalSurfaceTabId, toHostSessionTabId } from '../../../shared/terminal-surface-id'
 import {
   captureRuntimeEnvironmentCall,
   captureWebSessionIntentOwner,
   isWebRuntimeSessionActive
 } from './web-runtime-session-environment'
+import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../shared/layout-owner-switch'
+import { isServerFrameDrawnWorkspace } from './web-session-tabs-sync/frame-drawn-server-workspaces'
+import { redrawServerLayoutWorkspace } from './server-layout-apply-routes'
 import {
   beginWebRuntimeSplitFocusRequest,
   captureWebRuntimeSplitFocusTarget,
@@ -41,7 +44,7 @@ export function splitWebRuntimeTerminal(
     return false
   }
 
-  // Why: split must run on the host pane; a local split mints a web-only pane the host mirrors back as a tab, not a split.
+  // Split on the host pane; local splits mint web-only panes the host mirrors as separate tabs.
   const pendingMirrorSuppressionId = reservePendingWebRuntimeSplitMirrorTelemetry(ptyId, direction)
   const releasePendingMirrorSuppression = schedulePendingWebRuntimeSplitMirrorTelemetryRelease(
     ptyId,
@@ -75,8 +78,7 @@ export function splitWebRuntimeTerminal(
     .catch((error) => {
       releasePendingMirrorSuppression()
       const message = error instanceof Error ? error.message : String(error)
-      // Why: a split that fails only in the console leaves the user with a pane that silently
-      // never appears.
+      // Report failed splits visibly or the requested pane silently never appears.
       toast.error(message)
       console.warn('[web-runtime-session] failed to split terminal:', message)
     })
@@ -159,7 +161,11 @@ function getPendingWebRuntimeSplitMirrorTelemetryKey(
   return `${direction}:${sourcePtyId}`
 }
 
-export function closeWebRuntimeTerminal(ptyId: string | null | undefined): boolean {
+/** `worktreeId`: the pane's workspace, whose server frames redraw a pane the server kept. */
+export function closeWebRuntimeTerminal(
+  ptyId: string | null | undefined,
+  worktreeId?: string
+): boolean {
   if (!ptyId) {
     return false
   }
@@ -169,7 +175,7 @@ export function closeWebRuntimeTerminal(ptyId: string | null | undefined): boole
     return false
   }
 
-  // Why: host owns the real pane graph; close the host terminal first so later snapshots can't resurrect the removed pane.
+  // Close host terminal first or later authoritative snapshots resurrect the pane.
   void window.api.runtimeEnvironments
     .call({
       selector: environmentId,
@@ -183,6 +189,10 @@ export function closeWebRuntimeTerminal(ptyId: string | null | undefined): boole
       unwrapRuntimeRpcResult(response as RuntimeRpcResponse<{ close: RuntimeTerminalClose }>)
     })
     .catch((error) => {
+      // Switch point: the window already dropped the pane; the server's frames draw what it kept.
+      if (ORCA_LAYOUT_OWNER_IS_MAIN && worktreeId) {
+        redrawServerLayoutWorkspace(environmentId, worktreeId)
+      }
       console.warn(
         '[web-runtime-session] failed to close terminal pane:',
         error instanceof Error ? error.message : String(error)
@@ -191,18 +201,28 @@ export function closeWebRuntimeTerminal(ptyId: string | null | undefined): boole
   return true
 }
 
-// Why: pane geometry is host-authoritative for remote tabs; local-only changes revert on next snapshot, so push to host.
+// Push remote geometry to its host or the next authoritative snapshot reverts it.
 export async function updateWebRuntimePaneLayout(args: {
   worktreeId: string
   tabId: string
   root: TerminalPaneLayoutNode | null
   expandedLeafId: string | null
+  chatLeafId?: string | null
   titlesByLeafId?: Record<string, string>
+  renamedLeafIds?: string[]
 }): Promise<boolean> {
-  const environmentId =
-    getRuntimeEnvironmentIdForWorktree(useAppStore.getState(), args.worktreeId) ?? null
+  // Why: a twin's edit must not reach either host on a guess; it stays local until one is chosen.
+  const environmentId = runtimeEnvironmentIdUnlessTwin(
+    useAppStore.getState(),
+    args.worktreeId,
+    'push a pane layout to its host'
+  )
   if (!environmentId || !isWebRuntimeSessionActive(environmentId)) {
     return false
+  }
+  // Frame-drawn geometry uses layout.apply (sizes, moves, chat pane); only rename still needs this push.
+  if (!args.renamedLeafIds?.length && isServerFrameDrawnWorkspace(environmentId, args.worktreeId)) {
+    return true
   }
   const callEnvironment = captureRuntimeEnvironmentCall(environmentId)
   const hostTabId = isWebTerminalSurfaceTabId(args.tabId)
@@ -216,7 +236,9 @@ export async function updateWebRuntimePaneLayout(args: {
         tabId: hostTabId,
         root: args.root,
         expandedLeafId: args.expandedLeafId,
-        ...(args.titlesByLeafId ? { titlesByLeafId: args.titlesByLeafId } : {})
+        ...(args.chatLeafId !== undefined ? { chatLeafId: args.chatLeafId } : {}),
+        ...(args.titlesByLeafId ? { titlesByLeafId: args.titlesByLeafId } : {}),
+        ...(args.renamedLeafIds ? { renamedLeafIds: args.renamedLeafIds } : {})
       },
       timeoutMs: 15_000
     })
@@ -231,22 +253,26 @@ export async function updateWebRuntimePaneLayout(args: {
   }
 }
 
-// Why: tab color/pin are host-authoritative; mirror the change so it persists (undefined field = leave as-is on host).
+// Push color/pin to the authoritative host for persistence; undefined means unchanged.
 export function setWebRuntimeTabProps(args: {
   worktreeId: string
   tabId: string
   color?: string | null
   isPinned?: boolean
   viewMode?: 'terminal' | 'chat'
+  customTitle?: string | null
 }): boolean {
-  const environmentId =
-    getRuntimeEnvironmentIdForWorktree(useAppStore.getState(), args.worktreeId) ?? null
+  const environmentId = runtimeEnvironmentIdUnlessTwin(
+    useAppStore.getState(),
+    args.worktreeId,
+    'push tab props to its host'
+  )
   if (!environmentId || !isWebRuntimeSessionActive(environmentId)) {
     return false
   }
   const callEnvironment = captureRuntimeEnvironmentCall(environmentId)
   const state = useAppStore.getState()
-  void import('./web-session-tabs-sync')
+  void import('./web-session-tabs-sync/tracking-mappings')
     .then(({ resolveHostSessionTabIdForWebSessionTab }) => {
       const hostTabId =
         resolveHostSessionTabIdForWebSessionTab(state, {
@@ -261,7 +287,8 @@ export function setWebRuntimeTabProps(args: {
           tabId: hostTabId,
           ...(args.color !== undefined ? { color: args.color } : {}),
           ...(args.isPinned !== undefined ? { isPinned: args.isPinned } : {}),
-          ...(args.viewMode !== undefined ? { viewMode: args.viewMode } : {})
+          ...(args.viewMode !== undefined ? { viewMode: args.viewMode } : {}),
+          ...(args.customTitle !== undefined ? { customTitle: args.customTitle } : {})
         },
         timeoutMs: 15_000
       })
@@ -272,35 +299,6 @@ export function setWebRuntimeTabProps(args: {
     .catch((error) => {
       console.warn(
         '[web-runtime-session] failed to set tab props:',
-        error instanceof Error ? error.message : String(error)
-      )
-    })
-  return true
-}
-
-// Why: local pane.terminal.clear() is undone by the next host snapshot replay; clear the host buffer so it sticks.
-export function clearWebRuntimeTerminalBuffer(ptyId: string | null | undefined): boolean {
-  if (!ptyId) {
-    return false
-  }
-  const remote = parseRemoteRuntimePtyId(ptyId)
-  const environmentId = remote?.environmentId?.trim()
-  if (!remote || !environmentId || !isWebRuntimeSessionActive(environmentId)) {
-    return false
-  }
-  void window.api.runtimeEnvironments
-    .call({
-      selector: environmentId,
-      method: 'terminal.clearBuffer',
-      params: { terminal: remote.handle },
-      timeoutMs: 15_000
-    })
-    .then((response) => {
-      unwrapRuntimeRpcResult(response as RuntimeRpcResponse<{ clear: unknown }>)
-    })
-    .catch((error) => {
-      console.warn(
-        '[web-runtime-session] failed to clear terminal buffer:',
         error instanceof Error ? error.message : String(error)
       )
     })

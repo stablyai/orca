@@ -94,31 +94,48 @@ describe('agentSessionFingerprintConflict', () => {
 describe('admitAgentSessionMutation', () => {
   const base = { envelope: envelope(), hostFingerprint: 'f'.repeat(64), lease: LEASE }
 
-  it('admits a first-time operation under a live lease at the expected fence', () => {
+  it('admits a matching first-time operation and refuses a mismatched payload', () => {
     expect(admitAgentSessionMutation({ ...base, ledger: ADMIT('f'.repeat(64)) }).decision).toBe(
       'admit'
     )
+    expect(
+      admitAgentSessionMutation({
+        ...base,
+        hostFingerprint: 'a'.repeat(64),
+        ledger: ADMIT('a'.repeat(64))
+      })
+    ).toMatchObject({
+      decision: 'refused',
+      refusal: {
+        code: 'agent_session_operation_conflict',
+        details: { reason: 'fingerprintMismatch' }
+      }
+    })
   })
 
-  it('replays a recorded operation without re-checking the fence', () => {
+  it('replays a recorded outcome even while the lease is unreconciled', () => {
+    const recorded = {
+      ...row('f'.repeat(64)),
+      outcome: { status: 'succeeded' as const, sessionId: 'created-session' }
+    }
     const admission = admitAgentSessionMutation({
       ...base,
       envelope: envelope({ expectedRuntimeFence: 1 }),
-      ledger: { decision: 'replay', row: row('f'.repeat(64)) }
+      lease: { ...LEASE, unreconciled: true },
+      ledger: { decision: 'replay', row: recorded }
     })
-    expect(admission.decision).toBe('replay')
+    expect(admission).toEqual({ decision: 'replay', row: recorded })
   })
 
-  it('refuses a stale fence and hands back the current one', () => {
-    const admission = admitAgentSessionMutation({
-      ...base,
-      envelope: envelope({ expectedRuntimeFence: 3 }),
-      ledger: ADMIT('f'.repeat(64))
-    })
-    expect(admission).toMatchObject({
-      decision: 'refused',
-      refusal: { code: 'agent_session_checkpoint_stale', currentFence: 4 }
-    })
+  it('admits a writer whatever fence the client last saw', () => {
+    for (const expectedRuntimeFence of [3, 5, null]) {
+      const admission = admitAgentSessionMutation({
+        ...base,
+        envelope: envelope({ expectedRuntimeFence }),
+        ledger: ADMIT('f'.repeat(64))
+      })
+      expect(admission, String(expectedRuntimeFence)).toMatchObject({ decision: 'admit' })
+    }
   })
 
   it('refuses a writer while the lease is unreconciled', () => {
@@ -133,7 +150,7 @@ describe('admitAgentSessionMutation', () => {
     })
   })
 
-  it('refuses a writer mid-handoff', () => {
+  it('refuses a writer while the chat is still starting', () => {
     const admission = admitAgentSessionMutation({
       ...base,
       lease: { ...LEASE, handoffStage: 'new-owner-proving' },
@@ -141,18 +158,41 @@ describe('admitAgentSessionMutation', () => {
     })
     expect(admission).toMatchObject({
       decision: 'refused',
-      refusal: { code: 'agent_session_conflict' }
+      refusal: { code: 'agent_session_conflict', message: 'The chat is still starting.' }
+    })
+  })
+
+  it('names recovery rather than a handoff when a restart left the owner unproven', () => {
+    const admission = admitAgentSessionMutation({
+      ...base,
+      lease: { ...LEASE, handoffStage: 'recovering' },
+      ledger: ADMIT('f'.repeat(64))
+    })
+    expect(admission).toMatchObject({
+      decision: 'refused',
+      refusal: {
+        code: 'agent_session_conflict',
+        message:
+          "Orca has not yet confirmed that this chat's previous agent process stopped. Reopen the chat to check again."
+      }
     })
   })
 
   it('surfaces a ledger refusal verbatim', () => {
     const admission = admitAgentSessionMutation({
       ...base,
-      ledger: { decision: 'refused', code: 'agent_session_operation_expired' }
+      ledger: {
+        decision: 'refused',
+        code: 'agent_session_operation_expired',
+        details: { reason: 'operationExpired' }
+      }
     })
     expect(admission).toMatchObject({
       decision: 'refused',
-      refusal: { code: 'agent_session_operation_expired' }
+      refusal: {
+        code: 'agent_session_operation_expired',
+        details: { reason: 'operationExpired' }
+      }
     })
   })
 })

@@ -25,7 +25,7 @@ function median(fn, input, repeats) {
   return samples.sort((a, b) => a - b)[Math.floor(samples.length / 2)]
 }
 const rows = []
-for (const [shape, input] of [
+for (const [label, input] of [
   ['8KiB blank lines', '\n'.repeat(8192)],
   ['16KiB blank lines', '\n'.repeat(16384)],
   ['32KiB blank lines', '\n'.repeat(32768)],
@@ -37,7 +37,7 @@ for (const [shape, input] of [
   const beforeMs = median(before, input, 3)
   const afterMs = median(redactString, input, 15)
   rows.push({
-    shape,
+    label,
     bytes: Buffer.byteLength(input),
     beforeMs,
     afterMs,

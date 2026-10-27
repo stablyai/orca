@@ -3,6 +3,7 @@ import { EventEmitter } from 'node:events'
 import { tmpdir } from 'node:os'
 import { delimiter, join } from 'node:path'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import type * as RunProcess from '@orca/process-host'
 
 const { childSpawnMock, readFileMock, resolveCodexCommandMock, ptySpawnMock } = vi.hoisted(() => ({
   childSpawnMock: vi.fn(),
@@ -11,7 +12,19 @@ const { childSpawnMock, readFileMock, resolveCodexCommandMock, ptySpawnMock } = 
   ptySpawnMock: vi.fn()
 }))
 
+// Keep child-process assertions in this suite; worker transport is covered separately.
+vi.mock(
+  '../worker-thread-child-process/worker-thread-child-process',
+  () =>
+    import('../worker-thread-child-process/worker-thread-child-process-in-process.test-fixtures')
+)
 vi.mock('node:child_process', () => ({ spawn: childSpawnMock }))
+// Observe spawn requests before npm-shim resolution.
+vi.mock('@orca/process-host', async (importOriginal) => ({
+  ...(await importOriginal<typeof RunProcess>()),
+  spawnProcess: (spec: { program: string; args?: readonly string[] }) =>
+    childSpawnMock(spec.program, spec.args ?? [], spec)
+}))
 vi.mock('node:fs/promises', () => ({ readFile: readFileMock }))
 vi.mock('../codex-cli/command', () => ({ resolveCodexCommand: resolveCodexCommandMock }))
 vi.mock('node-pty', () => ({ spawn: ptySpawnMock }))
@@ -47,7 +60,6 @@ function makeRpcChild() {
   return child
 }
 
-/** A CLI installed under one version manager entry, with its sibling node. */
 function makeVersionManagerCli(cliName = 'codex'): { bin: string; cli: string } {
   const root = mkdtempSync(join(tmpdir(), 'orca-fetch-pair-'))
   const bin = join(root, '.nvm', 'versions', 'node', 'v20.11.0', 'bin')
@@ -68,29 +80,25 @@ describe('codex rate-limit spawn runtime pairing', () => {
   })
 
   it("spawns the RPC reader with the resolved CLI's own node ahead of PATH", async () => {
-    // Why a real fixture: the helper short-circuits on a non-absolute command,
-    // so a bare 'codex' mock would make this pass vacuously.
+    // Bare command mocks short-circuit pairing; use an absolute version-manager fixture.
     const { bin, cli } = makeVersionManagerCli()
     resolveCodexCommandMock.mockReturnValue(cli)
     const rpcChild = makeRpcChild()
     childSpawnMock.mockReturnValue(rpcChild)
 
-    const resultPromise = fetchCodexRateLimits({ allowPtyFallback: false })
+    const resultPromise = fetchCodexRateLimits()
     await vi.advanceTimersByTimeAsync(0)
 
     const spawnEnv = childSpawnMock.mock.calls[0]?.[2]?.env as NodeJS.ProcessEnv
-    // Guards the argument choice: pairing spawnCmd (cmd.exe on win32) rather than
-    // the resolved CLI silently reverts the ABI fix (stablyai/orca#10932).
+    // Pair the resolved CLI's sibling runtime to prevent ABI drift (#10932).
     expect(spawnEnv.PATH?.split(delimiter)[0]).toBe(bin)
 
     rpcChild.emit('close')
     await resultPromise
   })
 
-  it('pairs the resolved CLI on win32, where the spawn command is cmd.exe', async () => {
-    // Why win32 specifically: on posix getSpawnArgsForWindows returns the CLI
-    // itself, so pairing the spawn command instead of the resolved CLI is
-    // indistinguishable. Only here does the wrong argument become cmd.exe.
+  it('hands an npm .cmd shim to the spawn chokepoint unwrapped, paired with its node', async () => {
+    // Windows pre-wrapping would hide the npm shim from spawnProcess resolution.
     const originalPlatform = Object.getOwnPropertyDescriptor(process, 'platform')
     Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
     try {
@@ -99,11 +107,11 @@ describe('codex rate-limit spawn runtime pairing', () => {
       const rpcChild = makeRpcChild()
       childSpawnMock.mockReturnValue(rpcChild)
 
-      const resultPromise = fetchCodexRateLimits({ allowPtyFallback: false })
+      const resultPromise = fetchCodexRateLimits()
       await vi.advanceTimersByTimeAsync(0)
 
       const spawnCommand = childSpawnMock.mock.calls[0]?.[0] as string
-      expect(spawnCommand.toLowerCase()).toContain('cmd.exe')
+      expect(spawnCommand).toBe(cli)
       const spawnEnv = childSpawnMock.mock.calls[0]?.[2]?.env as NodeJS.ProcessEnv
       expect((spawnEnv.Path ?? spawnEnv.PATH)?.split(';')[0]).toBe(bin)
 
@@ -121,7 +129,7 @@ describe('codex rate-limit spawn runtime pairing', () => {
     const rpcChild = makeRpcChild()
     childSpawnMock.mockReturnValue(rpcChild)
 
-    const resultPromise = fetchCodexRateLimits({ allowPtyFallback: false })
+    const resultPromise = fetchCodexRateLimits()
     await vi.advanceTimersByTimeAsync(0)
 
     const spawnEnv = childSpawnMock.mock.calls[0]?.[2]?.env as NodeJS.ProcessEnv

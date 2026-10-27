@@ -8,22 +8,21 @@ import {
   tailMayContainBlockedSignal
 } from './terminal-tail-sentinel-index'
 import { computeTerminalTailWaitState } from './terminal-wait-tail-state'
-import { TERMINAL_WAIT_BLOCKED_SENTINEL_RE } from './terminal-wait-detection'
+import { terminalWaitBlockedSentinelRe } from './agent-state-rules/blocked-text-layer'
 import type { RetainedTailRedrawCursor } from './terminal-tail-redraw-buffer'
 
-// The definition the incremental index must reproduce: does ANY retained line (or the
-// partial line) match the sentinel? Written out independently of the implementation.
+// Independent full scan defines whether any retained/partial line matches the blocked sentinel.
 function referenceMayContainBlockedSignal(lines: string[], partialLine: string): boolean {
   for (const line of lines) {
-    if (TERMINAL_WAIT_BLOCKED_SENTINEL_RE.test(line)) {
+    if (terminalWaitBlockedSentinelRe().test(line)) {
       return true
     }
   }
-  return TERMINAL_WAIT_BLOCKED_SENTINEL_RE.test(partialLine)
+  return terminalWaitBlockedSentinelRe().test(partialLine)
 }
 
 function indexedMayContainBlockedSignal(lines: string[], partialLine: string): boolean {
-  return tailMayContainBlockedSignal(lines) || TERMINAL_WAIT_BLOCKED_SENTINEL_RE.test(partialLine)
+  return tailMayContainBlockedSignal(lines) || terminalWaitBlockedSentinelRe().test(partialLine)
 }
 
 type TailSim = {
@@ -66,18 +65,14 @@ const ESC = String.fromCharCode(27)
 function referenceSentinelMatches(lines: readonly string[]): number[] {
   const matches: number[] = []
   for (let index = 0; index < lines.length; index += 1) {
-    if (TERMINAL_WAIT_BLOCKED_SENTINEL_RE.test(lines[index]!)) {
+    if (terminalWaitBlockedSentinelRe().test(lines[index]!)) {
       matches.push(index)
     }
   }
   return matches
 }
 
-/**
- * The whole contract of the carried window, at position resolution: the index the constructor
- * registered for this exact array must equal a from-scratch scan of it. A boolean-only assertion
- * would pass on an index whose positions are shifted, doubled, or out of bounds.
- */
+/** Compare exact match positions against a fresh scan; booleans cannot catch shifted, duplicate or out-of-bounds indices. */
 function assertIndexedPositionsAreExact(lines: readonly string[]): void {
   const indexed = [...getTerminalTailSentinelMatches(lines)]
   expect(indexed).toEqual(referenceSentinelMatches(lines))
@@ -88,7 +83,7 @@ function assertIndexedPositionsAreExact(lines: readonly string[]): void {
 }
 
 function countSentinelTests(run: () => void): number {
-  const spy = vi.spyOn(TERMINAL_WAIT_BLOCKED_SENTINEL_RE, 'test')
+  const spy = vi.spyOn(terminalWaitBlockedSentinelRe(), 'test')
   try {
     run()
     return spy.mock.calls.length
@@ -141,13 +136,11 @@ describe('terminal tail sentinel index', () => {
     }
     expect(sim.lines[0]).toBe(BLOCKED_LINE)
 
-    // One more line evicts it.
     feed(sim, 'evicting line\n')
     expect(sim.lines.includes(BLOCKED_LINE)).toBe(false)
     expect(indexedMayContainBlockedSignal(sim.lines, sim.partialLine)).toBe(false)
     assertMatchesFullScan(sim)
 
-    // And it stays gone many chunks later.
     for (let index = 0; index < 200; index += 1) {
       feed(sim, `long after eviction ${index}\n`)
     }
@@ -171,17 +164,14 @@ describe('terminal tail sentinel index', () => {
   it('finds a sentinel split across two chunks once the line completes', () => {
     const sim = saturatedSim()
     feed(sim, 'Codex asks: press ent')
-    // Still only a partial line, and no alternative matches the fragment yet.
     expect(indexedMayContainBlockedSignal(sim.lines, sim.partialLine)).toBe(false)
     assertMatchesFullScan(sim)
 
     feed(sim, 'er to confirm')
-    // Now complete, but still the partial line — the partial is always tested directly.
     expect(indexedMayContainBlockedSignal(sim.lines, sim.partialLine)).toBe(true)
     assertMatchesFullScan(sim)
 
     feed(sim, '\n')
-    // And once it becomes a retained line the index carries it.
     expect(sim.partialLine).toBe('')
     expect(indexedMayContainBlockedSignal(sim.lines, sim.partialLine)).toBe(true)
     assertMatchesFullScan(sim)
@@ -193,7 +183,7 @@ describe('terminal tail sentinel index', () => {
     expect(tailMayContainBlockedSignal(seeded)).toBe(true)
     const state = computeTerminalTailWaitState(seeded, '', '')
     expect(state.fromTail).toBe(true)
-    expect(state.signal?.reason).toBe('codex-update-prompt')
+    expect(state.signal?.reason).toBe('agent-update-prompt')
 
     const clean = ['boot log', 'no prompt here', 'trailing']
     expect(tailMayContainBlockedSignal(clean)).toBe(false)
@@ -209,18 +199,12 @@ describe('terminal tail sentinel index', () => {
   })
 })
 
-/**
- * `buildCarriedTailLines` is the only producer of a tail array, and it derives the carried-match
- * window from the same keep bounds it slices the array out of. These guards pin the four ways
- * that derivation could still be written wrong, plus the one way a path could escape it. Each was
- * confirmed to fail against a deliberately broken constructor (see the PR body).
- */
+// Compare constructor carry windows with independent scans; boolean-only checks miss shifted, duplicated or out-of-bounds positions.
 describe('terminal tail sentinel index carried window', () => {
   it('drops a carried match the moment the constructor evicts its row (no stale match)', () => {
     const sim = saturatedSim()
     feed(sim, `${BLOCKED_LINE}\n`)
-    // Walk it to the very first retained slot, checking the position every step: each append
-    // evicts one row at a saturated tail, so the carried match must shift down by exactly one.
+    // At saturation each append evicts one row; verify the carried match shifts exactly once.
     for (let index = 0; index < MAX_TAIL_LINES - 1; index += 1) {
       feed(sim, `after prompt ${index}\n`)
       expect(getTerminalTailSentinelMatches(sim.lines)).toEqual([MAX_TAIL_LINES - 2 - index])
@@ -276,8 +260,7 @@ describe('terminal tail sentinel index carried window', () => {
     feed(sim, `${BLOCKED_LINE}\n`)
     expect(indexedMayContainBlockedSignal(sim.lines, sim.partialLine)).toBe(true)
 
-    // One chunk with more complete lines than the tail retains: every carried row goes, and so
-    // does the front of the chunk itself, so nothing may survive from before the cut.
+    // An oversized chunk evicts every carried row and its own head; no match may survive before the cut.
     const early: string[] = [BLOCKED_LINE]
     for (let index = 0; index < MAX_TAIL_LINES + 500; index += 1) {
       early.push(`flood ${index}`)

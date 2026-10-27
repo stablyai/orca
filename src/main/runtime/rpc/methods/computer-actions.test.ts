@@ -27,6 +27,7 @@ vi.mock('../../../computer/macos-computer-use-permissions', () => ({
 }))
 
 import { COMPUTER_METHODS, resetComputerSessionsForTest } from './computer'
+import { eraseRpcMethods } from '../core'
 
 describe('computer action RPC methods', () => {
   beforeEach(() => {
@@ -269,7 +270,7 @@ describe('computer action RPC methods', () => {
 })
 
 function findMethod(name: string) {
-  const method = COMPUTER_METHODS.find((candidate) => candidate.name === name)
+  const method = eraseRpcMethods(COMPUTER_METHODS).find((candidate) => candidate.name === name)
   if (!method) {
     throw new Error(`missing method ${name}`)
   }

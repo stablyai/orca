@@ -61,6 +61,26 @@ describe('UsageRow', () => {
     expect(markup).not.toContain('<button')
   })
 
+  it('renders a row detail line under a placeholder', () => {
+    const markup = renderToStaticMarkup(
+      <UsageRow
+        p={{ ...signedOutCodex, provider: 'minimax', error: 'Not configured on devbox' }}
+        display="used"
+        state={{
+          kind: 'unavailable',
+          statusLabel: 'Not configured on devbox',
+          detail: 'Its sign-in is saved on this computer only.'
+        }}
+        showSignInAction={false}
+        now={mocks.now}
+      />
+    )
+
+    expect(markup).toContain('Not configured on devbox')
+    expect(markup).toContain('Its sign-in is saved on this computer only.')
+    expect(markup).not.toContain('Sign in')
+  })
+
   it('keeps the bar fill consistent with the remaining percentage label', () => {
     const markup = renderToStaticMarkup(
       <UsageRow
@@ -133,6 +153,38 @@ describe('UsageRow', () => {
     expect(markup).toContain('25%')
     expect(markup).toContain('wk')
     expect(markup).toContain('10%')
+  })
+
+  it('keeps full Antigravity pool names in the click panel', () => {
+    const markup = renderToStaticMarkup(
+      <UsageRow
+        p={{
+          provider: 'antigravity',
+          session: null,
+          weekly: null,
+          buckets: [
+            {
+              name: 'Gemini Models · Weekly Limit Remaining',
+              group: 'Gemini Models',
+              windowName: 'Weekly Limit Remaining',
+              usedPercent: 4,
+              windowMinutes: 10_080,
+              resetsAt: null,
+              resetDescription: null
+            }
+          ],
+          updatedAt: 0,
+          status: 'ok',
+          error: null
+        }}
+        display="used"
+        state={{ kind: 'usage', statusLabel: null }}
+        showSignInAction={false}
+        now={mocks.now}
+      />
+    )
+
+    expect(markup).toContain('Gemini Models · Weekly Limit Remaining')
   })
 
   it('renders the tightest window inline in compact mode', () => {
@@ -246,6 +298,35 @@ describe('UsageRow', () => {
     expect(markup.match(/data-usage-bar/g)).toHaveLength(2)
     expect(markup).toContain('25%')
     expect(markup).toContain('60%')
+  })
+
+  it('labels ZCode MCP separately from Coding Plan windows in both roster modes', () => {
+    const zcode: ProviderRateLimits = {
+      provider: 'zcode',
+      session: { usedPercent: 1, windowMinutes: 300, resetsAt: null, resetDescription: null },
+      weekly: { usedPercent: 94, windowMinutes: 10_080, resetsAt: null, resetDescription: null },
+      monthly: { usedPercent: 97, windowMinutes: 43_200, resetsAt: null, resetDescription: null },
+      updatedAt: mocks.now,
+      status: 'ok',
+      error: null
+    }
+    const renderRow = (mode: 'verbose' | 'compact') =>
+      renderToStaticMarkup(
+        <UsageRow
+          p={zcode}
+          display="used"
+          mode={mode}
+          state={{ kind: 'usage', statusLabel: null }}
+          showSignInAction={false}
+          now={mocks.now}
+        />
+      )
+
+    expect(renderRow('verbose')).toContain('data-usage-window="MCP"')
+    expect(renderRow('verbose')).toContain('MCP')
+    expect(renderRow('verbose')).not.toContain('30d')
+    expect(renderRow('compact')).toContain('MCP')
+    expect(renderRow('compact')).not.toContain('30d')
   })
 })
 

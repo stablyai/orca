@@ -169,6 +169,45 @@ describe('createIpcPtyTransport', () => {
     expect(transport.getPtyId()).toBeNull()
   })
 
+  // Main can reserve the same PTY for a successor mount; only current surface ownership may authorize killing a disposed spawn.
+  it('keeps a fresh spawn that resolves after destroy when the pane surface still owns it', async () => {
+    const { createIpcPtyTransport } = await import('./pty-transport')
+    const kill = vi.mocked(window.api.pty.kill)
+    let resolveSpawn: (result: { id: string }) => void = () => {}
+    vi.mocked(window.api.pty.spawn).mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          resolveSpawn = resolve
+        })
+    )
+    const transport = createIpcPtyTransport({ retainDisposedSpawn: () => true })
+    const pending = transport.connect({ url: '', callbacks: {} })
+    await transport.destroy?.()
+    resolveSpawn({ id: 'pty-shared-with-successor' })
+
+    await expect(pending).resolves.toBeUndefined()
+    expect(kill).not.toHaveBeenCalled()
+  })
+
+  it('still kills a fresh spawn that resolves after destroy when nothing owns the surface', async () => {
+    const { createIpcPtyTransport } = await import('./pty-transport')
+    const kill = vi.mocked(window.api.pty.kill)
+    let resolveSpawn: (result: { id: string }) => void = () => {}
+    vi.mocked(window.api.pty.spawn).mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          resolveSpawn = resolve
+        })
+    )
+    const transport = createIpcPtyTransport({ retainDisposedSpawn: () => false })
+    const pending = transport.connect({ url: '', callbacks: {} })
+    await transport.destroy?.()
+    resolveSpawn({ id: 'pty-orphaned' })
+
+    await expect(pending).resolves.toBeUndefined()
+    expect(kill).toHaveBeenCalledWith('pty-orphaned')
+  })
+
   it('drops the exit observer when abandoning an obsolete reattach without killing it', async () => {
     const { createIpcPtyTransport } = await import('./pty-transport')
     const onPtyExit = vi.fn()

@@ -124,6 +124,9 @@ export function createPageState(browserPageId: string, generation: number): Page
 function snapshotPageCommand(
   command: BrowserClientHostCommandEvent['command']
 ): BrowserClientHostCommandEvent['command'] {
+  if (command.type === 'switchProfile') {
+    return Object.freeze({ ...command, profile: Object.freeze({ ...command.profile }) })
+  }
   if (command.type === 'reclaimPage') {
     return Object.freeze({
       ...command,

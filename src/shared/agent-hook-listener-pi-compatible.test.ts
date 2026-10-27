@@ -166,8 +166,7 @@ describe('shared agent-hook-listener', () => {
     expect(blocked?.payload.state).toBe('blocked')
     expect(blocked?.payload.interactivePrompt).toBe(JSON.stringify(questions))
 
-    // Why: the answered question must leave the blocked/needs-attention state so
-    // the notification and attention sort clear; tool_execution_end is working.
+    // Answered questions must release attention/notification state at tool_execution_end.
     const cleared = normalizeHookPayload(
       state,
       'pi',
@@ -236,8 +235,7 @@ describe('shared agent-hook-listener', () => {
       },
       'production'
     )
-    // Why: a follow-up regular tool must not inherit the prior question's blocked
-    // state or its live interactivePrompt card.
+    // Later tools must not inherit the previous question's blocked state or card.
     const working = normalizeHookPayload(
       state,
       'pi',
@@ -356,8 +354,8 @@ describe('shared agent-hook-listener', () => {
         payload: {
           hook_event_name: 'tool_approval_requested',
           tool_name: 'bash',
-          reason: 'tools.approval.bash: prompt',
-          approval_mode: 'prompt'
+          reason: 'Critical pattern detected',
+          approval_mode: 'always-ask'
         }
       },
       'production'
@@ -367,7 +365,7 @@ describe('shared agent-hook-listener', () => {
       state: 'blocked',
       agentType: 'omp',
       toolName: 'bash',
-      toolInput: 'tools.approval.bash: prompt'
+      toolInput: 'Critical pattern detected'
     })
 
     const resolved = normalizeHookPayload(

@@ -1,9 +1,10 @@
+import { toRuntimeExecutionHostId } from '../../../../shared/execution-host'
 import type { RuntimeMobileSessionTabsResult } from '../../../../shared/runtime-types'
+import { recheckUnconfirmedStructuredAgentLaunches } from '../../lib/agent-session/launch/structured-agent-session-launch-unconfirmed-recheck'
 import { useAppStore } from '../../store'
-import { recoverWebSessionTerminalOrphansBeforeApply } from '../web-session-terminal-orphan-recovery'
+import { recoverMirroredTerminalOrphansBeforeApply } from './mirror-terminal-orphan-recovery'
 import { queueAcceptedWebSessionTerminalSnapshot } from '../web-session-terminal-handle-events'
 import {
-  beginWebSessionTabsSnapshotRecovery,
   recordReceivedWebSessionTabsInventory,
   recordReceivedWebSessionTabsSnapshot,
   shouldApplyRecoveredWebSessionTabsSnapshot
@@ -36,7 +37,6 @@ export type GlobalSessionInventoryEventArgs = {
   coordinator: VisibilityResumeCoordinator
 }
 
-/** Apply a full-inventory frame from the all-worktrees stream, fencing visibility omissions. */
 export function handleGlobalSessionInventoryEvent({
   environmentId,
   expectedEnvironmentConnectionGeneration,
@@ -52,16 +52,6 @@ export function handleGlobalSessionInventoryEvent({
 }: GlobalSessionInventoryEventArgs): void {
   const skipUnchangedResumeWork = awaitingVisibilityResumeInventory.value && !replayed
   awaitingVisibilityResumeInventory.value = false
-  const unchanged = event.snapshots.map((snapshot) => {
-    const key = `${environmentId}:${snapshot.worktree}`
-    const freshness = latestSessionTabsSnapshotByWorktree.get(key)
-    return Boolean(
-      skipUnchangedResumeWork &&
-      !replayableSessionTabsSnapshotByWorktree.has(key) &&
-      freshness?.publicationEpoch === snapshot.publicationEpoch &&
-      freshness.snapshotVersion === snapshot.snapshotVersion
-    )
-  })
   const receivedFrames = event.snapshots.map((snapshot) => {
     const frame = recordReceivedWebSessionTabsSnapshot(
       environmentId,
@@ -72,6 +62,17 @@ export function handleGlobalSessionInventoryEvent({
     coordinator.recordSnapshotReceipt(environmentId, snapshot, frame, runtimeId)
     return frame
   })
+  // After receipt: a held close dropped at receipt marks its unchanged frame for redraw.
+  const unchanged = event.snapshots.map((snapshot) => {
+    const key = `${environmentId}:${snapshot.worktree}`
+    const freshness = latestSessionTabsSnapshotByWorktree.get(key)
+    return Boolean(
+      skipUnchangedResumeWork &&
+      !replayableSessionTabsSnapshotByWorktree.has(key) &&
+      freshness?.publicationEpoch === snapshot.publicationEpoch &&
+      freshness.snapshotVersion === snapshot.snapshotVersion
+    )
+  })
   const inventoryFrame = recordReceivedWebSessionTabsInventory(environmentId)
   const missing = coordinator.recordInventoryReceipt(
     environmentId,
@@ -81,21 +82,12 @@ export function handleGlobalSessionInventoryEvent({
     event.authoritative === true,
     runtimeId
   )
-  const finishRecoveries = event.snapshots.map((snapshot, index) =>
-    unchanged[index]
-      ? null
-      : beginWebSessionTabsSnapshotRecovery(
-          environmentId,
-          snapshot.worktree,
-          receivedFrames[index]!
-        )
-  )
   let settleHydration: (() => void) | null = null
   void Promise.all(
     event.snapshots.map((snapshot, index) =>
       unchanged[index]
         ? Promise.resolve(snapshot)
-        : recoverWebSessionTerminalOrphansBeforeApply(
+        : recoverMirroredTerminalOrphansBeforeApply(
             useAppStore.getState(),
             snapshot,
             environmentId,
@@ -144,6 +136,7 @@ export function handleGlobalSessionInventoryEvent({
           frames: applicable.map(({ snapshot }, index) => ({
             environmentId,
             worktreeId: snapshot.worktree,
+            source: snapshot,
             decision: decisions[index]!,
             expectedEnvironmentConnectionGeneration,
             expectedEnvironmentPairingRevision,
@@ -179,11 +172,10 @@ export function handleGlobalSessionInventoryEvent({
       }
     })
     .finally(() => {
-      for (const finishRecovery of finishRecoveries) {
-        finishRecovery?.()
-      }
       if (isCurrent()) {
         settleHydration?.()
       }
     })
+  // Each subscription opens with one census: recheck launches now that the host is reachable.
+  recheckUnconfirmedStructuredAgentLaunches(toRuntimeExecutionHostId(environmentId))
 }

@@ -28,6 +28,17 @@ describe('buildAiVaultResumeCommand', () => {
     ).toBe('cmd /d /s /c "cd /d ""C:\\Users\\Ada Lovelace\\repo"" && codex resume ""session-1"""')
   })
 
+  it('resumes CodeBuddy sessions with the Claude-compatible --resume flag', () => {
+    expect(
+      buildAiVaultResumeCommand({
+        agent: 'codebuddy',
+        sessionId: 'aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee',
+        cwd: '/repo/app',
+        platform: 'darwin'
+      })
+    ).toBe("cd '/repo/app' && codebuddy --resume 'aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee'")
+  })
+
   it('builds a direct queued command for a live cmd shell', () => {
     expect(
       buildAiVaultResumeCommand({
@@ -44,9 +55,7 @@ describe('buildAiVaultResumeCommand', () => {
   })
 
   it('emits no CODEX_HOME stamp for real-home canonical sessions', () => {
-    // Backfilled sessions dedupe to the real-home row (codexHome null); their
-    // resume must run against the user's own ~/.codex, never the frozen
-    // managed home whose auth.json stops refreshing after the flip.
+    // Backfills dedupe to real-home rows: resume from ~/.codex, never a frozen managed home whose auth stops refreshing.
     const command = buildAiVaultResumeCommand({
       agent: 'codex',
       sessionId: 'session-1',
@@ -152,6 +161,40 @@ describe('buildAiVaultResumeCommand', () => {
       })
     ).toBe("cd '/Users/ada/repo' && prime-agent --resume 'dddddddd-eeee-4fff-8aaa-111111111111'")
   })
+
+  it('resumes Rovo Dev through its acli launch command', () => {
+    expect(
+      buildAiVaultResumeCommand({
+        agent: 'rovo',
+        sessionId: 'rovo-session',
+        cwd: '/Users/ada/repo',
+        platform: 'darwin'
+      })
+    ).toBe("cd '/Users/ada/repo' && acli rovodev run --restore 'rovo-session'")
+  })
+
+  it('appends the Rovo Dev restore flag to a full-command settings override', () => {
+    expect(
+      buildAiVaultResumeCommand({
+        agent: 'rovo',
+        sessionId: 'rovo-session',
+        cwd: null,
+        platform: 'darwin',
+        commandOverride: '/opt/acli/acli rovodev run'
+      })
+    ).toBe("/opt/acli/acli rovodev run --restore 'rovo-session'")
+  })
+
+  it('resumes Muse by session id in the session cwd', () => {
+    expect(
+      buildAiVaultResumeCommand({
+        agent: 'muse',
+        sessionId: 'eeeeeeee-ffff-4000-baaa-222222222222',
+        cwd: '/Users/ada/repo',
+        platform: 'darwin'
+      })
+    ).toBe("cd '/Users/ada/repo' && muse resume 'eeeeeeee-ffff-4000-baaa-222222222222'")
+  })
 })
 
 describe('buildAiVaultResumeShellCommand env removal', () => {
@@ -167,8 +210,7 @@ describe('buildAiVaultResumeShellCommand env removal', () => {
     )
   })
 
-  // Why: `env -u` strips what the assignment just set, so an unfiltered list
-  // would silently resume against the real home instead of the pinned one.
+  // Filter assigned variables from env -u or the pinned home silently becomes real-home resume.
   it('keeps a pinned CODEX_HOME authoritative instead of stripping it', () => {
     const command = buildAiVaultResumeShellCommand({
       ...base,
@@ -195,8 +237,7 @@ describe('buildAiVaultResumeShellCommand env removal', () => {
     )
   })
 
-  // Why: the shell decides the grammar, not the host. Keying placement on the
-  // platform emitted POSIX `env -u` into a PowerShell line.
+  // Shell grammar wins over host platform; platform routing emitted POSIX env -u into PowerShell.
   it('uses PowerShell grammar for a PowerShell shell on a non-Windows host', () => {
     const command = buildAiVaultResumeShellCommand({
       ...base,

@@ -7,8 +7,14 @@ const mocks = vi.hoisted(() => ({
   readFileSync: vi.fn()
 }))
 
-vi.mock('fs', () => ({
-  readFileSync: (...args: unknown[]) => mocks.readFileSync(...args)
+vi.mock('./ssh-identity-file-read', () => ({
+  readSshIdentityFileSync: (path: string) => {
+    try {
+      return { contents: mocks.readFileSync(path) ?? null, problem: null }
+    } catch (error) {
+      return { contents: null, problem: String(error) }
+    }
+  }
 }))
 
 vi.mock('os', () => ({

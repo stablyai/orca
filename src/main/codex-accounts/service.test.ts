@@ -1,4 +1,5 @@
-import { describe, expect, it, vi } from 'vitest'
+import { describe, expect, it, vi, beforeEach } from 'vitest'
+import { installFakeAppEnvironment } from '../../../config/scripts/vitest-host-ports-setup'
 import { mkdirSync, readFileSync, statSync, utimesSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import {
@@ -12,14 +13,21 @@ import {
 } from './service-test-harness'
 import { createCanonicalHookTrustFixture } from './service-hook-trust-test-fixtures'
 
+// Keep asserted config bytes independent of platform socket-path limits.
+vi.mock('../codex/codex-daemon-socket-path-guard', async (importOriginal) => ({
+  ...(await importOriginal<object>()),
+  applyCodexDaemonSocketGuard: (config: string) => config
+}))
+
 vi.mock('electron', () => ({
   app: {
     getPath: () => testState.userDataDir
   }
 }))
+beforeEach(() => installFakeAppEnvironment({ getPath: () => testState.userDataDir }))
 
-vi.mock('node:os', async () => {
-  const actual = await vi.importActual<typeof import('node:os')>('node:os') // eslint-disable-line @typescript-eslint/consistent-type-imports -- vi.importActual requires inline import()
+vi.mock(import('node:os'), async (importOriginal) => {
+  const actual = await importOriginal()
   return {
     ...actual,
     homedir: () => testState.fakeHomeDir
@@ -109,7 +117,7 @@ describe('CodexAccountService config sync', () => {
       for (const key of fixture.orcaKeys) {
         expect(entries.has(key)).toBe(false)
       }
-      // The launch-time hook mirror remaps user trust to this home's hooks.json.
+
       expect(entries.has(fixture.userKey)).toBe(false)
     }
 
@@ -208,8 +216,6 @@ describe('CodexAccountService config sync', () => {
     const { CodexAccountService } = await import('./service')
     new CodexAccountService(store as never, rateLimits as never, runtimeHome as never)
 
-    // The first pass remaps the user hook-trust entry into this home; once that
-    // has settled, a later pass must leave the file completely untouched.
     const settledConfig = readFileSync(managedConfigPath, 'utf-8')
     const oldDate = new Date('2024-01-01T00:00:00.000Z')
     utimesSync(managedConfigPath, oldDate, oldDate)
@@ -312,8 +318,6 @@ describe('CodexAccountService config sync', () => {
 
     await service.selectAccount('account-1')
 
-    // Selecting merges canonical settings into the account's own home rather
-    // than overwriting it, so its local approval_policy survives the re-sync.
     expect(readFileSync(join(managedHomePath, 'config.toml'), 'utf-8')).toBe(
       'sandbox_mode = "danger-full-access"\napproval_policy = "untrusted"\n'
     )

@@ -1,34 +1,27 @@
 import { StringDecoder } from 'node:string_decoder'
-import type { ProcessSpec } from '../../shared/child-process/process-spec'
-import type { spawnProcess } from '../../shared/child-process/run-process'
+import type {
+  PipedChildProcess,
+  PipedProcessSpawner,
+  PipedProcessSpec
+} from '@orca/process-host/process-spec'
+import { ownRetainedString } from '../../shared/own-retained-string'
 
-/** The all-pipes child `spawnProcess` returns; avoids a node:child_process import. */
-export type RuntimeChildProcess = ReturnType<typeof spawnProcess>
+export type RuntimeChildProcess = PipedChildProcess
 
-export type RuntimeProcessSpawn = (spec: ProcessSpec) => RuntimeChildProcess
+export type RuntimeProcessSpawn = PipedProcessSpawner
 
 /** UTF-16 units, not bytes — this bounds the buffer, it is not a payload contract. */
 const MAX_RESPONSE_CHARS = 20 * 1024 * 1024
 const MAX_STDERR_CHARS = 4096
 
 export type ServeChannelHandlers = {
-  /** One complete line from the helper, without its terminator. */
   onLine: (line: string) => void
   /** The helper is gone; detail carries the exit reason and its stderr tail. */
   onGone: (detail: string) => void
-  /** The helper produced more than one buffer's worth without a line break. */
   onOverflow: () => void
 }
 
-/**
- * One `runtime.ps1 -Serve` child, framed as NDJSON lines.
- *
- * Split from the host so the host reads as what it is — a queue, a retry policy
- * and a correlation check — rather than that plus stream plumbing. Responses
- * carry base64 screenshots and routinely exceed a megabyte, so lines are
- * reassembled across chunks with a decoder that survives a code point split
- * across a chunk boundary.
- */
+/** Reassemble large NDJSON replies across chunks, preserving split UTF-8 code points. */
 export class DesktopScriptServeChannel {
   private readonly decoder = new StringDecoder('utf8')
   private buffer = ''
@@ -44,8 +37,7 @@ export class DesktopScriptServeChannel {
     const onStderr = (chunk: Buffer | string): void => {
       this.stderrTail = `${this.stderrTail}${chunk.toString()}`.slice(-MAX_STDERR_CHARS)
     }
-    // Why close and not exit: the caller classifies the failure from stderr, and
-    // only close guarantees the stdio streams were drained first.
+    // close, unlike exit, guarantees stderr is drained before failure classification.
     const onClose = (code: number | null, signal: NodeJS.Signals | null): void =>
       this.reportGone(signal ? `signal ${signal}` : `code ${code ?? 'unknown'}`)
     const onError = (error: Error): void => this.reportGone(error.message)
@@ -53,7 +45,7 @@ export class DesktopScriptServeChannel {
     child.stderr.on('data', onStderr)
     child.once('close', onClose)
     child.once('error', onError)
-    // An unhandled stream error is an uncaught exception in the main process.
+    // Unhandled stdin errors would terminate the sidecar.
     child.stdin.on('error', () => {})
     this.detach = (): void => {
       child.stdout.off('data', onStdout)
@@ -69,17 +61,13 @@ export class DesktopScriptServeChannel {
       return
     }
     this.child.stdin.write(payload, (error) => {
-      // A destroyed stdin calls back after stop(); reporting then charges the
-      // caller a second failure for one operation. Deliberately redundant with
-      // the host's own staleness check — keep both, and note that each is
-      // pinned separately, this one by the "once stopped" tests here.
+      // Ignore errors after stop() so a destroyed stdin cannot charge the same failure twice.
       if (error && !this.closed) {
         onError(error)
       }
     })
   }
 
-  /** Stop the helper and go silent; handlers are not called afterwards. */
   stop(): void {
     if (this.closed) {
       return
@@ -88,7 +76,7 @@ export class DesktopScriptServeChannel {
     this.detach?.()
     this.detach = null
     this.buffer = ''
-    // Closing stdin ends the serve loop; the kill covers a wedged helper.
+    // End the serve loop; kill also covers helpers wedged in native calls.
     try {
       this.child.stdin.end()
     } catch {
@@ -112,13 +100,20 @@ export class DesktopScriptServeChannel {
     if (this.closed) {
       return
     }
-    this.buffer += typeof chunk === 'string' ? chunk : this.decoder.write(chunk)
+    const decoded = typeof chunk === 'string' ? chunk : this.decoder.write(chunk)
+    const retainedLength = this.buffer.length
+    this.buffer += decoded
     if (this.buffer.length > MAX_RESPONSE_CHARS) {
       this.buffer = ''
       this.handlers.onOverflow()
       return
     }
-    for (let newline = this.buffer.indexOf('\n'); newline >= 0;) {
+    // The retained tail has no newline, so only the new chunk needs scanning for the first one.
+    const firstNewline = decoded.indexOf('\n')
+    if (firstNewline === -1) {
+      return
+    }
+    for (let newline = retainedLength + firstNewline; newline >= 0;) {
       // Slice a trailing CR off by index; trimming copies the whole payload.
       const end = newline > 0 && this.buffer.charCodeAt(newline - 1) === 13 ? newline - 1 : newline
       const line = this.buffer.slice(0, end)
@@ -133,11 +128,13 @@ export class DesktopScriptServeChannel {
       }
       newline = this.buffer.indexOf('\n')
     }
+    // Copy the retained slice so it cannot pin a drained megabyte-scale response.
+    this.buffer = ownRetainedString(this.buffer)
   }
 }
 
 export function startServeChannel(
-  spec: ProcessSpec,
+  spec: PipedProcessSpec,
   spawn: RuntimeProcessSpawn,
   handlers: ServeChannelHandlers
 ): DesktopScriptServeChannel {

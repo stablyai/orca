@@ -1,15 +1,9 @@
 import type { SkillDiscoveryResult } from '../../../shared/skills'
 
-// Why: project and runtime identity change across a long renderer session, so the
-// keyed results accumulate; keep the most recent targets instead of every target
-// the window has ever resolved.
+// Bound runtime/project keys accumulated across long renderer sessions to recent targets.
 export const INSTALLED_AGENT_SKILL_DISCOVERY_CACHE_MAX = 256
 
-// Why: focus-triggered refreshes read through this cache instead of forcing a
-// disk walk, so it needs a lifetime — without one a non-forced read would never
-// see a skill installed outside Orca. Matches the focus-rescan cooldown the
-// freshness inventory already applies to its own scan (`useSkillFreshness`), so
-// the two disk-reading surfaces answer a burst of alt-tabs the same way.
+// Expire focus-read caches so externally installed skills appear; match freshness inventory’s focus cooldown.
 export const INSTALLED_AGENT_SKILL_DISCOVERY_FRESH_MS = 15_000
 
 type CachedDiscovery = { result: SkillDiscoveryResult; expiresAt: number }
@@ -30,8 +24,7 @@ function readUnexpired(key: string): CachedDiscovery | null {
 
 // Why: render reads must not reorder recency — React can discard a render pass.
 export function peekInstalledAgentSkillDiscoveryCache(key: string): SkillDiscoveryResult | null {
-  // Why: an expired entry is still the last thing this window knew, and showing it
-  // beats flashing empty while the refresh it triggers is in flight.
+  // Serve expired last-known results during refresh instead of flashing empty.
   return cachedDiscoveryByTarget.get(key)?.result ?? null
 }
 
@@ -65,6 +58,14 @@ export function writeInstalledAgentSkillDiscoveryCache(
 
 export function clearInstalledAgentSkillDiscoveryCache(): void {
   cachedDiscoveryByTarget.clear()
+}
+
+export function deleteInstalledAgentSkillDiscoveryCache(matches: (key: string) => boolean): void {
+  for (const key of cachedDiscoveryByTarget.keys()) {
+    if (matches(key)) {
+      cachedDiscoveryByTarget.delete(key)
+    }
+  }
 }
 
 export function getInstalledAgentSkillDiscoveryCacheSizeForTests(): number {

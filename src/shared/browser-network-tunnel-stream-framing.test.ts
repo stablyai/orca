@@ -27,19 +27,20 @@ describe('browser network tunnel stream framing', () => {
     expect(errors).toEqual([])
   })
 
-  it('fails closed on oversized or empty frames', () => {
-    const oversizedError = vi.fn()
-    const oversized = new Uint8Array(4)
-    new DataView(oversized.buffer).setUint32(0, 2 * 1024 * 1024, false)
-    const oversizedDecoder = new BrowserNetworkTunnelStreamFrameDecoder(() => {}, oversizedError)
-    const emptyError = vi.fn()
-    const emptyDecoder = new BrowserNetworkTunnelStreamFrameDecoder(() => {}, emptyError)
+  it.each([0, 2 * 1024 * 1024])('stays closed after rejecting a %i-byte frame', (length) => {
+    const onFrame = vi.fn()
+    const onError = vi.fn()
+    const header = new Uint8Array(4)
+    new DataView(header.buffer).setUint32(0, length, false)
+    const decoder = new BrowserNetworkTunnelStreamFrameDecoder(onFrame, onError)
 
-    oversizedDecoder.feed(oversized)
-    emptyDecoder.feed(new Uint8Array([0, 0, 0, 0]))
+    decoder.feed(header)
+    decoder.feed(encodeBrowserNetworkTunnelStreamFrame(new Uint8Array([1])))
 
-    expect(oversizedError).toHaveBeenCalledOnce()
-    expect(emptyError).toHaveBeenCalledOnce()
+    expect(onFrame).not.toHaveBeenCalled()
+    expect(onError).toHaveBeenCalledExactlyOnceWith(
+      expect.objectContaining({ message: 'browser_tunnel_stream_frame_invalid' })
+    )
   })
 
   it('fails the stream when a frame consumer rejects input', () => {
@@ -82,12 +83,14 @@ describe('browser network tunnel stream framing', () => {
     )
     const originalSet = Uint8Array.prototype.set
     let copiedBytes = 0
-    const set = vi
-      .spyOn(Uint8Array.prototype, 'set')
-      .mockImplementation(function (this: Uint8Array, source, offset) {
-        copiedBytes += source.length
-        originalSet.call(this, source, offset)
-      })
+    const set = vi.spyOn(Uint8Array.prototype, 'set').mockImplementation(function (
+      this: Uint8Array,
+      source,
+      offset
+    ) {
+      copiedBytes += source.length
+      originalSet.call(this, source, offset)
+    })
     try {
       for (const byte of encoded) {
         decoder.feed(new Uint8Array([byte]))
@@ -170,5 +173,46 @@ describe('browser network tunnel stream framing', () => {
     callbacks.shift()?.()
     expect(writer.queuedBytes).toBe(0)
     expect(onError).not.toHaveBeenCalled()
+  })
+
+  it('rejects saturated writer frames before encoding and copying their payloads', () => {
+    const writer = new BrowserNetworkTunnelStreamFrameWriter(
+      () => {},
+      () => {},
+      { maxQueuedFrames: 1 }
+    )
+    const frame = new Uint8Array(65536)
+    expect(writer.send(frame)).toBe(true)
+    const set = vi.spyOn(Uint8Array.prototype, 'set')
+    try {
+      for (let index = 0; index < 1000; index += 1) {
+        expect(writer.send(frame)).toBe(false)
+      }
+      expect(set.mock.calls.length).toBe(0)
+      expect(writer.queuedBytes).toBe(65540)
+    } finally {
+      set.mockRestore()
+      writer.close()
+    }
+  })
+
+  it('admits a frame that exactly fills the byte cap and rejects one byte past it', () => {
+    const writer = new BrowserNetworkTunnelStreamFrameWriter(
+      () => {},
+      () => {},
+      { maxQueuedBytes: 158 }
+    )
+    expect(writer.send(new Uint8Array(100))).toBe(true)
+    expect(writer.queuedBytes).toBe(104)
+    expect(writer.send(new Uint8Array(51))).toBe(false)
+    expect(writer.send(new Uint8Array(50))).toBe(true)
+    expect(writer.queuedBytes).toBe(158)
+    writer.close()
+  })
+
+  it('encodes exactly the byte count writer admission reserves', () => {
+    for (const size of [1, 2, 255, 4096, 65536, 64 * 1024 + 16]) {
+      expect(encodeBrowserNetworkTunnelStreamFrame(new Uint8Array(size)).byteLength).toBe(4 + size)
+    }
   })
 })

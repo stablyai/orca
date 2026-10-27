@@ -2,10 +2,8 @@ import { mkdtempSync, realpathSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { describe, expect, it, vi } from 'vitest'
-import type {
-  BrowserHostLeaseAuthority,
-  BrowserNetworkExecutionHost
-} from '../../shared/browser-client-host-protocol'
+import type { BrowserHostLeaseAuthority } from '../../shared/browser-client-host-protocol'
+import type { BrowserNetworkExecutionHost } from '../../shared/browser-network-execution-host'
 import { BrowserClientNetworkRouteRegistry } from './browser-client-network-route-registry'
 import { browserNetworkExecutionHostKey } from './browser-network-execution-route'
 import { deriveBrowserRoutePartition } from './browser-route-identity'
@@ -39,7 +37,6 @@ function createRegistry(
   authorityStorageKey: string
 ): BrowserClientNetworkRouteRegistry {
   return new BrowserClientNetworkRouteRegistry({
-    // Why: native/WSL routes are admitted only under their own runtime's authority.
     authority:
       host.kind === 'ssh' ? authority : { ...authority, authorityRuntimeId: host.runtimeId },
     authorityStorageKey,
@@ -52,7 +49,6 @@ function createRegistry(
   })
 }
 
-/** Full client-hosted derivation: route key -> retained route -> partition name. */
 async function partitionFor(
   host: BrowserNetworkExecutionHost,
   authorityStorageKey = storageKeyA
@@ -97,8 +93,7 @@ async function bindPartition(
 describe('client-hosted route partition stability', () => {
   it('keeps one partition and one binding across remote runtime restarts', async () => {
     const filePath = createBindingStorePath()
-    // Why: the remote mints runtimeId with randomUUID() per process, so a restart moves BOTH
-    // runtimeId and revision -- holding runtimeId fixed here would pass without testing anything.
+    // A remote restart changes both runtimeId and revision; vary both to exercise real identities.
     const before = await bindPartition(
       { kind: 'native', runtimeId: 'runtime-a', revision: 1_700_000_000 },
       filePath
@@ -123,7 +118,7 @@ describe('client-hosted route partition stability', () => {
       },
       filePath
     )
-    // Why: the provider mints a fresh epoch on every generation bump, so both move together.
+    // SSH generation changes also mint a new provider epoch.
     const after = await bindPartition(
       {
         kind: 'ssh',
@@ -145,7 +140,7 @@ describe('client-hosted route partition stability', () => {
       providerEpoch: 'epoch-1',
       connectionGeneration: 3
     })
-    // Why: SshConnectionStore mints `ssh-<now>-<rand>` per record, so a readd never reuses an id.
+    // Re-adding an SSH target creates a new record id.
     const after = await partitionFor({
       kind: 'ssh',
       targetId: 'ssh-1800000000-bbb222',

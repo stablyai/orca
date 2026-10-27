@@ -3,7 +3,7 @@ import { negotiateMobileRuntimeCapabilities } from './mobile-runtime-capability-
 import { markRpcDeliveryUnknown } from './rpc-delivery-ambiguity'
 import type { RpcResponse } from './types'
 
-function negotiate(args: { reject: unknown; current?: boolean }): {
+function negotiate(args: { reject: unknown }): {
   onReady: ReturnType<typeof vi.fn>
   onFailure: ReturnType<typeof vi.fn>
 } {
@@ -11,7 +11,7 @@ function negotiate(args: { reject: unknown; current?: boolean }): {
   const onFailure = vi.fn()
   negotiateMobileRuntimeCapabilities({
     sendRequest: () => Promise.reject(args.reject),
-    current: () => args.current ?? true,
+    current: () => true,
     onReady,
     onFailure
   })
@@ -44,26 +44,42 @@ describe('mobile runtime capability negotiation', () => {
     expect(onReady).not.toHaveBeenCalled()
   })
 
-  it('leaves a replaced session alone on an unanswered request', async () => {
-    const timedOut = markRpcDeliveryUnknown(new Error('Request timed out'))
-    const { onReady, onFailure } = negotiate({ reject: timedOut, current: false })
+  it.each(['successful', 'unanswered', 'unsent'] as const)(
+    'leaves a replaced session alone after a %s request settles',
+    async (outcome) => {
+      const onReady = vi.fn()
+      const onFailure = vi.fn()
+      let resolveRequest!: (response: RpcResponse) => void
+      let rejectRequest!: (error: Error) => void
+      const request = new Promise<RpcResponse>((resolve, reject) => {
+        resolveRequest = resolve
+        rejectRequest = reject
+      })
+      let current = true
+      let checkedCurrent!: () => void
+      const settled = new Promise<void>((resolve) => {
+        checkedCurrent = resolve
+      })
+      negotiateMobileRuntimeCapabilities({
+        sendRequest: () => request,
+        current: () => {
+          checkedCurrent()
+          return current
+        },
+        onReady,
+        onFailure
+      })
 
-    await vi.waitFor(() => expect(onReady).not.toHaveBeenCalled())
-    expect(onFailure).not.toHaveBeenCalled()
-  })
-
-  it('leaves a replaced session alone on a successful response', async () => {
-    const onReady = vi.fn()
-    const onFailure = vi.fn()
-    negotiateMobileRuntimeCapabilities({
-      sendRequest: () =>
-        Promise.resolve({ id: 'capability-1', ok: true, result: {} } as RpcResponse),
-      current: () => false,
-      onReady,
-      onFailure
-    })
-
-    await vi.waitFor(() => expect(onReady).not.toHaveBeenCalled())
-    expect(onFailure).not.toHaveBeenCalled()
-  })
+      current = false
+      if (outcome === 'successful') {
+        resolveRequest({ id: 'capability-1', ok: true, result: {} })
+      } else {
+        const error = new Error('Connection interrupted')
+        rejectRequest(outcome === 'unanswered' ? markRpcDeliveryUnknown(error) : error)
+      }
+      await settled
+      expect(onReady).not.toHaveBeenCalled()
+      expect(onFailure).not.toHaveBeenCalled()
+    }
+  )
 })

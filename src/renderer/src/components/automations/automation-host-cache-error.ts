@@ -1,13 +1,6 @@
-/**
- * Classifies a failed host query by code rather than by copy, and decides
- * whether it may retry.
- *
- * The distinction that matters: a host that *proved* it cannot serve the
- * contract (old server, malformed payload, changed owner) must not burn the
- * retry budget, while an unreachable or slow host must.
- */
+/** Classify by error code: contract/owner failures do not spend retry budget; unreachable or slow hosts do. */
 
-import { hasRuntimeRpcErrorCode } from '@/runtime/runtime-rpc-client'
+import { hasRuntimeRpcErrorCode } from '../../../../shared/runtime-rpc-error-code'
 import {
   AUTOMATION_OWNER_CONFLICT_CODES,
   stripAutomationOwnerConflictCode

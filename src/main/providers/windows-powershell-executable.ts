@@ -1,8 +1,6 @@
 import { existsSync, readlinkSync, statSync } from 'node:fs'
 import { win32 as pathWin32 } from 'node:path'
 
-/** Dependency seams so the resolver can be unit-tested without a real Windows
- *  filesystem. Production callers omit these and get process.env / fs. */
 export type WindowsPowerShellResolveOptions = {
   env?: NodeJS.ProcessEnv
   /** Returns true when the candidate path is a real, non-empty executable. */
@@ -12,18 +10,12 @@ export type WindowsPowerShellResolveOptions = {
   platform?: NodeJS.Platform
 }
 
-/** Why: the Microsoft Store ships `pwsh.exe`/`powershell.exe` App Execution
- *  Alias stubs under WindowsApps. They are zero-byte reparse points that
- *  execFileSync can launch (PATH lookup follows the alias) but ConPTY's
- *  CreateProcessW(lpApplicationName=<abs stub>) rejects with ERROR_ACCESS_DENIED
- *  (error code 5). Never resolve a shell to a path inside this directory. */
+/** Store alias reparse stubs may launch through execFile PATH lookup but fail ConPTY absolute CreateProcessW (5). */
 function isWindowsAppExecutionAliasPath(candidate: string): boolean {
   return /[\\/]Microsoft[\\/]WindowsApps[\\/]/i.test(pathWin32.normalize(candidate))
 }
 
-/** A real executable is a regular file with non-zero size. The App Execution
- *  Alias stubs report size 0, so the size check rejects them even if a future
- *  Windows build relocates them outside WindowsApps. */
+/** Reject zero-byte alias stubs even if future Windows versions move them outside WindowsApps. */
 function defaultIsRealExecutable(candidate: string): boolean {
   if (isWindowsAppExecutionAliasPath(candidate)) {
     return false
@@ -68,8 +60,7 @@ function getPathExecutableCandidates(env: NodeJS.ProcessEnv, executable: string)
   const seen = new Set<string>()
   for (const rawPart of pathValue.split(pathWin32.delimiter)) {
     const dir = rawPart.trim().replace(/^"|"$/g, '')
-    // Why: Windows' implicit current-directory search can pick up repo-local
-    // shims. Only absolute PATH entries become ConPTY launch candidates.
+    // Relative PATH entries enable repo-local shell hijacking; accept only absolute directories.
     if (!pathWin32.isAbsolute(dir)) {
       continue
     }
@@ -94,8 +85,6 @@ function pushUniqueCandidate(
   }
 }
 
-/** Known absolute install locations for PowerShell 7 (`pwsh.exe`), ordered by
- *  preference: per-machine MSI installs first, then per-user. */
 function getPwshCandidatePaths(env: NodeJS.ProcessEnv): string[] {
   const candidates: string[] = []
   const seen = new Set<string>()
@@ -108,13 +97,11 @@ function getPwshCandidatePaths(env: NodeJS.ProcessEnv): string[] {
     if (!root) {
       continue
     }
-    // PowerShell 7 MSI installs land in `PowerShell\7\pwsh.exe`. Glob the major
-    // version conservatively (6/7/8) so future majors keep resolving.
+    // Prefer major 7 while probing adjacent 8/6 install directories for compatibility.
     for (const major of ['7', '8', '6']) {
       pushUniqueCandidate(candidates, seen, pathWin32.join(root, 'PowerShell', major, 'pwsh.exe'))
     }
   }
-  // Per-user dotnet-tool / winget install location.
   const localAppData = readEnv(env, ['LOCALAPPDATA', 'LocalAppData'])
   if (localAppData) {
     for (const major of ['7', '8', '6']) {
@@ -131,14 +118,11 @@ function getPwshCandidatePaths(env: NodeJS.ProcessEnv): string[] {
   return candidates
 }
 
-/** Absolute path to inbox Windows PowerShell (`powershell.exe`), which always
- *  ships at System32\WindowsPowerShell\v1.0 on a stock Windows install. */
 function getWindowsPowerShellPath(env: NodeJS.ProcessEnv): string {
   const systemRoot = readEnv(env, ['SystemRoot', 'WINDIR', 'windir']) || 'C:\\Windows'
   return pathWin32.join(systemRoot, 'System32', 'WindowsPowerShell', 'v1.0', 'powershell.exe')
 }
 
-/** Absolute path to cmd.exe, the last-resort fallback shell. */
 export function getWindowsCmdPath(env: NodeJS.ProcessEnv = process.env): string {
   const comspec = readEnv(env, ['ComSpec', 'COMSPEC'])
   if (comspec) {
@@ -148,12 +132,7 @@ export function getWindowsCmdPath(env: NodeJS.ProcessEnv = process.env): string 
   return pathWin32.join(systemRoot, 'System32', 'cmd.exe')
 }
 
-/**
- * Resolve a PowerShell family name to a real absolute executable path.
- *
- * Returns null when no real executable or safely resolvable Store alias target
- * can be found for the family. Callers then try the next Windows shell fallback.
- */
+/** Null when neither a real executable nor safe Store package target resolves; callers try the next shell. */
 export function resolveWindowsPowerShellExecutablePath(
   family: 'pwsh.exe' | 'powershell.exe',
   options: WindowsPowerShellResolveOptions = {}
@@ -175,8 +154,7 @@ export function resolveWindowsPowerShellExecutablePath(
   for (const candidate of getPwshCandidatePaths(env)) {
     if (isWindowsAppExecutionAliasPath(candidate)) {
       const target = resolveAppExecutionAlias(candidate)
-      // Why: ConPTY cannot launch the alias reparse point, but its real Store
-      // package target is a normal executable that preserves the user's pwsh choice.
+      // ConPTY cannot launch the alias itself; its real package target preserves the requested pwsh.
       if (
         target &&
         pathWin32.isAbsolute(target) &&
@@ -195,14 +173,7 @@ export function resolveWindowsPowerShellExecutablePath(
   return null
 }
 
-/**
- * Build the ordered Windows shell-spawn fallback chain for a requested
- * PowerShell family. Each entry is a real absolute path that ConPTY can launch.
- *
- * Order: requested PowerShell (resolved abs) -> inbox Windows PowerShell (abs)
- * -> cmd.exe. Duplicates and unresolved links are dropped. The chain is never
- * empty because cmd.exe always closes it.
- */
+/** Deduplicated requested PowerShell → inbox PowerShell → cmd.exe fallback paths. */
 export function resolveWindowsPowerShellSpawnChain(
   requestedFamily: 'pwsh.exe' | 'powershell.exe',
   options: WindowsPowerShellResolveOptions = {}
@@ -217,11 +188,9 @@ export function resolveWindowsPowerShellSpawnChain(
   }
 
   add(resolveWindowsPowerShellExecutablePath(requestedFamily, options))
-  // Always offer inbox Windows PowerShell as the next link: it is present on
-  // every supported Windows and is not subject to the Store alias hazard.
+  // Inbox PowerShell avoids Store alias launch hazards.
   add(resolveWindowsPowerShellExecutablePath('powershell.exe', options))
-  // cmd.exe is the guaranteed last resort so a terminal still opens even when
-  // both PowerShell flavors are blocked by AV/AppLocker/SAC.
+  // cmd.exe remains the last attempt when policy blocks both PowerShell variants.
   pushUniqueCandidate(chain, seen, getWindowsCmdPath(env))
   return chain
 }

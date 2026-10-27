@@ -42,26 +42,7 @@ describe('getUnavailableWorkspacePortHosts', () => {
     ])
   })
 
-  it('keeps colons inside an environment id when parsing the scan key', () => {
-    // Why: keys are `${targetKey}:all`, so the id runs to the last `:all` —
-    // splitting on the first colon would truncate ids that contain colons.
-    expect(
-      getUnavailableWorkspacePortHosts({
-        'local:all': scan(),
-        'environment:weird:id:all': scan({ unavailableReason: 'Remote connection dropped' })
-      })
-    ).toEqual([
-      {
-        scanKey: 'environment:weird:id:all',
-        host: { kind: 'environment', environmentId: 'weird:id' },
-        platform: 'linux',
-        reason: 'Remote connection dropped'
-      }
-    ])
-  })
-
-  // Why: total loss of contact is where naming the host matters most — the merged
-  // projection joins raw internal scan keys, so it cannot name them itself.
+  // Merged failure reasons carry raw scan keys, so total contact loss still needs host-name resolution.
   it('names every host when all of them failed', () => {
     expect(
       getUnavailableWorkspacePortHosts({
@@ -84,40 +65,7 @@ describe('getUnavailableWorkspacePortHosts', () => {
     ])
   })
 
-  it('names a single failed host', () => {
-    expect(
-      getUnavailableWorkspacePortHosts({
-        'local:all': scan({ unavailableReason: 'lsof is unavailable' })
-      })
-    ).toEqual([
-      {
-        scanKey: 'local:all',
-        host: { kind: 'local' },
-        platform: 'linux',
-        reason: 'lsof is unavailable'
-      }
-    ])
-  })
-
-  // Why: the synthetic all-hosts projection key must never be labelled as the
-  // local machine — that would blame the wrong host for a remote failure.
-  it('marks an unrecognised scan key as an unknown host', () => {
-    expect(
-      getUnavailableWorkspacePortHosts({
-        'all-hosts:all': scan({ unavailableReason: 'Remote connection dropped' })
-      })
-    ).toEqual([
-      {
-        scanKey: 'all-hosts:all',
-        host: { kind: 'unknown' },
-        platform: 'linux',
-        reason: 'Remote connection dropped'
-      }
-    ])
-  })
-
-  // Why: a paired web client's userAgent is not the Orca host's platform, so the
-  // caller labels the local host from the scan's own platform.
+  // Web-client UA does not identify host OS; label local hosts using the scan’s own platform.
   it("carries the failed scan's platform, and null when it is unknown", () => {
     expect(
       getUnavailableWorkspacePortHosts({

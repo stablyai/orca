@@ -4,7 +4,8 @@ const mocks = vi.hoisted(() => ({
   createTab: vi.fn(),
   closeTab: vi.fn(),
   createWebRuntimeSessionTerminal: vi.fn(),
-  setActiveTabType: vi.fn()
+  setActiveTabType: vi.fn(),
+  toastError: vi.fn()
 }))
 
 const store = {
@@ -17,7 +18,10 @@ const store = {
     activeRuntimeEnvironmentId: 'web-runtime' as string | null
   },
   projects: [{ id: 'repo-1', localWindowsRuntimePreference: { kind: 'inherit-global' as const } }],
-  repos: [{ id: 'repo-1', connectionId: null, path: '/repo' }],
+  // The client stamps a server's rows on arrival; focus alone never names the owner.
+  repos: [
+    { id: 'repo-1', connectionId: null, path: '/repo', executionHostId: 'runtime:web-runtime' }
+  ],
   worktreesByRepo: {
     'repo-1': [
       {
@@ -36,6 +40,8 @@ const store = {
   terminalLayoutsByTabId: {},
   ptyIdsByTabId: {},
   sshConnectionStates: new Map(),
+  sshStateByEnvironment: new Map(),
+  runtimeStatusByEnvironmentId: new Map([['web-runtime', { status: { hostPlatform: 'linux' } }]]),
   transientClearedAgentStatusConnectionIds: {},
   allWorktrees: vi.fn(() => store.worktreesByRepo['repo-1']),
   createTab: mocks.createTab,
@@ -49,17 +55,18 @@ const store = {
 }
 
 vi.mock('@/store', () => ({ useAppStore: { getState: () => store } }))
-vi.mock('sonner', () => ({ toast: { message: vi.fn(), error: vi.fn() } }))
+vi.mock('sonner', () => ({ toast: { message: vi.fn(), error: mocks.toastError } }))
 vi.mock('@/components/tab-bar/reconcile-order', () => ({ reconcileTabOrder: vi.fn(() => []) }))
 vi.mock('@/lib/agent-paste-draft', () => ({ pasteDraftWhenAgentReady: vi.fn() }))
 vi.mock('@/lib/telemetry', () => ({
   track: vi.fn(),
   tuiAgentToAgentKind: (agent: string) => agent
 }))
-vi.mock('@/runtime/web-runtime-session', () => ({
-  createWebRuntimeSessionTerminal: mocks.createWebRuntimeSessionTerminal,
-  isWebRuntimeSessionActive: vi.fn(() => true),
-  isWebTerminalSurfaceTabId: vi.fn(() => false)
+vi.mock('@/runtime/web-runtime-terminal-create-operation', () => ({
+  createWebRuntimeSessionTerminalResult: mocks.createWebRuntimeSessionTerminal
+}))
+vi.mock('@/runtime/web-runtime-session-environment', () => ({
+  isWebRuntimeSessionActive: vi.fn(() => true)
 }))
 
 describe('launchAgentInNewTab paired web runtime', () => {
@@ -72,33 +79,72 @@ describe('launchAgentInNewTab paired web runtime', () => {
       activeRuntimeEnvironmentId: 'web-runtime'
     }
     store.tabsByWorktree = { 'wt-1': [{ id: 'tab-1' }] }
-    mocks.createWebRuntimeSessionTerminal.mockResolvedValue({ status: 'created' })
+    mocks.createWebRuntimeSessionTerminal.mockResolvedValue({
+      outcome: { status: 'created' },
+      hostTabId: 'host-tab::leaf-1'
+    })
   })
 
-  it('delegates agent quick launch to the host runtime', async () => {
-    store.tabsByWorktree['wt-1'].push({ id: 'stale-agent-tab', launchAgent: 'claude' })
+  it.each([true, false, 'failed'] as const)('delegates agent quick launch (%s)', async (mode) => {
+    store.settings.agentDefaultArgs = { claude: '--model "model with spaces"' }
+    const activate = mode === true
+    const status = mode === 'failed' ? 'failed' : 'created'
+    mocks.createWebRuntimeSessionTerminal.mockResolvedValue({
+      outcome: {
+        status,
+        ...(status === 'failed' ? { message: 'The host refused the launch.' } : {})
+      },
+      hostTabId: 'host-tab::leaf-1'
+    })
+    store.tabsByWorktree['wt-1'].push({ id: 'local-agent-tab', launchAgent: 'claude' })
     const { launchAgentInNewTab } = await import('./launch-agent-in-new-tab')
 
     const result = launchAgentInNewTab({
+      requestId: 'request-1',
+      activate,
       agent: 'claude',
       worktreeId: 'wt-1',
       groupId: 'group-1'
     })
 
-    expect(result).toEqual(expect.objectContaining({ tabId: null, pasteDraftAfterLaunch: false }))
+    expect(result).toEqual(
+      expect.objectContaining({
+        surface: { kind: 'host-published' },
+        pasteDraftAfterLaunch: false
+      })
+    )
+    const startupPlan = result?.startupPlan
+    expect(startupPlan).toBeDefined()
+    if (!startupPlan) {
+      throw new Error('Expected the terminal startup plan')
+    }
     expect(mocks.createWebRuntimeSessionTerminal).toHaveBeenCalledWith({
       worktreeId: 'wt-1',
       environmentId: 'web-runtime',
       targetGroupId: 'group-1',
-      activate: true,
+      activate,
+      ...(activate ? {} : { selectWorktree: false }),
       agentSessionKind: 'fresh',
-      agent: 'claude',
+      launchAgent: 'claude',
+      preparedAgentCommand: false,
+      command: startupPlan.launchCommand,
+      env: startupPlan.env,
+      launchConfig: startupPlan.launchConfig,
       viewMode: 'terminal'
     })
+    expect(startupPlan.launchConfig.agentArgs).toBe(store.settings.agentDefaultArgs.claude)
     expect(mocks.createTab).not.toHaveBeenCalled()
-    await Promise.resolve()
-    expect(mocks.setActiveTabType).toHaveBeenCalledWith('terminal')
-    expect(mocks.closeTab).toHaveBeenCalledWith('stale-agent-tab', { reason: 'cleanup' })
+    await expect(result?.terminalCompletion).resolves.toMatchObject({
+      outcome: { status },
+      ...(status === 'created' ? { tabId: 'web-terminal-host-tab' } : {})
+    })
+    expect(mocks.setActiveTabType).toHaveBeenCalledTimes(activate && status === 'created' ? 1 : 0)
+    expect(mocks.toastError).toHaveBeenCalledTimes(status === 'failed' ? 1 : 0)
+    if (status === 'failed') {
+      expect(mocks.toastError).toHaveBeenCalledExactlyOnceWith('The host refused the launch.')
+    }
+    // A local tab closes locally (the host close no-ops), so a launch leaves it alone.
+    expect(mocks.closeTab).not.toHaveBeenCalled()
   })
 
   it('forwards prompt launch env and captured config to the host runtime', async () => {
@@ -107,13 +153,19 @@ describe('launchAgentInNewTab paired web runtime', () => {
     const { launchAgentInNewTab } = await import('./launch-agent-in-new-tab')
 
     const result = launchAgentInNewTab({
+      requestId: 'request-2',
       agent: 'codex',
       worktreeId: 'wt-1',
       prompt: 'fix the spinner',
       groupId: 'group-1'
     })
 
-    expect(result).toEqual(expect.objectContaining({ tabId: null, pasteDraftAfterLaunch: false }))
+    expect(result).toEqual(
+      expect.objectContaining({
+        surface: { kind: 'host-published' },
+        pasteDraftAfterLaunch: false
+      })
+    )
     expect(mocks.createWebRuntimeSessionTerminal).toHaveBeenCalledWith({
       worktreeId: 'wt-1',
       environmentId: 'web-runtime',
@@ -121,6 +173,7 @@ describe('launchAgentInNewTab paired web runtime', () => {
       activate: true,
       agentSessionKind: 'fresh',
       launchAgent: 'codex',
+      preparedAgentCommand: false,
       command: "codex '--model' 'gpt-5' '--reasoning-effort' 'high' 'fix the spinner'",
       env: { CODEX_PROFILE: 'captured' },
       launchConfig: {

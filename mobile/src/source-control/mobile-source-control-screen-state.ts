@@ -16,21 +16,22 @@ import type { MobileDiffLine } from '../session/mobile-diff-lines'
 import type { MobileHighlightedDiffLine } from '../session/mobile-file-syntax'
 import type {
   MobileGitBranchChangeEntry,
-  MobileGitBranchCompareResult,
-  MobileGitBranchCompareSummary
-} from './mobile-branch-compare'
+  MobileGitBranchCompareReply
+} from './git-compare-reply-schema'
+import type { MobileGitBranchCompareSummary } from './mobile-branch-compare'
+import type { MobileGitStatusHostPayload } from './git-status-reply-schema'
 import {
   canOpenMobileGitStatusEntry,
   isMobileGitDiscardableEntry,
   isMobileGitStageableEntry,
+  isMobileGitUnstageableEntry,
   type MobileGitFileStatus,
-  type MobileGitStatusEntry,
-  type MobileGitStatusResult
+  type MobileGitStatusEntry
 } from './mobile-git-status'
 
 export type ScreenState =
   | { kind: 'loading' }
-  | { kind: 'ready'; status: MobileGitStatusResult }
+  | { kind: 'ready'; status: MobileGitStatusHostPayload }
   | { kind: 'unavailable'; message: string }
   | { kind: 'error'; message: string }
 
@@ -38,6 +39,7 @@ export type LoadStatusOptions = {
   preserveReadyOnFailure?: boolean
   clearActionErrorOnSuccess?: boolean
   force?: boolean
+  rereadSettings?: boolean
 }
 
 export type StatusLoadInFlight = {
@@ -53,13 +55,13 @@ export type MobileGitStatusEntryView = MobileGitStatusEntry & {
   canDiscard: boolean
   canOpen: boolean
   canStage: boolean
+  canUnstage: boolean
   discardActionId: string
   stageActionId: string
   unstageActionId: string
 }
 
-// Decorate raw status entries with the row-level capability/action-id fields the
-// file list needs. Opener guards must use the same canOpen rule.
+// File openers must use the same row canOpen rule as the list.
 export function buildMobileGitStatusEntryViews(
   entries: readonly MobileGitStatusEntry[]
 ): MobileGitStatusEntryView[] {
@@ -68,6 +70,7 @@ export function buildMobileGitStatusEntryViews(
     canDiscard: isMobileGitDiscardableEntry(entry),
     canOpen: canOpenMobileGitStatusEntry(entry),
     canStage: isMobileGitStageableEntry(entry),
+    canUnstage: isMobileGitUnstageableEntry(entry),
     discardActionId: `discard:${entry.path}`,
     stageActionId: `stage:${entry.path}`,
     unstageActionId: `unstage:${entry.path}`
@@ -77,7 +80,7 @@ export function buildMobileGitStatusEntryViews(
 export type MobileBranchCompareState =
   | { kind: 'idle' }
   | { kind: 'loading' }
-  | { kind: 'ready'; result: MobileGitBranchCompareResult }
+  | { kind: 'ready'; result: MobileGitBranchCompareReply }
   | { kind: 'error'; message: string }
 
 export type MobileBranchEntryView = MobileGitBranchChangeEntry & {
@@ -118,10 +121,6 @@ export const SOURCE_CONTROL_ACTION_ICONS: Record<MobileSourceControlActionIcon, 
 
 export const SELECTOR_RETRY_COUNT = 3
 export const SELECTOR_RETRY_DELAY_MS = 250
-
-export function firstParam(value: string | string[] | undefined): string {
-  return Array.isArray(value) ? (value[0] ?? '') : (value ?? '')
-}
 
 export function wait(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms))

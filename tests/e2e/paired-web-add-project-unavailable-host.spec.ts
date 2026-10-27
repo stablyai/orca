@@ -35,20 +35,37 @@ async function setOnlyRuntimeHostHealth(page: Page, health: HostHealth): Promise
     if (nextHealth === 'blocked' && !current?.status) {
       throw new Error('Paired web runtime status unavailable for compatibility fault')
     }
+    // #20003: rewrite the authoritative health snapshot, not status alone; pin its sequence above live ready publications.
+    const verified = current?.status ?? current?.snapshot?.status ?? null
+    const snapshot = {
+      environmentId: environment.id,
+      pairingRevision: environment.pairingRevision ?? environment.createdAt,
+      sequence: Number.MAX_SAFE_INTEGER,
+      checkedAt: Date.now(),
+      ...(nextHealth === 'blocked'
+        ? {
+            status: { ...verified!, protocolVersion: 0, runtimeProtocolVersion: 0 },
+            verification: 'verified' as const,
+            transport: 'ready' as const
+          }
+        : {
+            status: null,
+            verification: 'unavailable' as const,
+            // Unknown/unavailable renders disconnected; explicit disconnected transport renders reconnecting instead.
+            transport: 'unknown' as const
+          })
+    }
     store.setState({
       runtimeStatusByEnvironmentId: new Map(state.runtimeStatusByEnvironmentId).set(
         environment.id,
-        nextHealth === 'blocked'
-          ? {
-              ...current,
-              checkedAt: Date.now(),
-              status: {
-                ...current!.status!,
-                protocolVersion: 0,
-                runtimeProtocolVersion: 0
-              }
-            }
-          : { ...current, checkedAt: Date.now(), status: null }
+        {
+          ...current,
+          snapshot,
+          checkedAt: snapshot.checkedAt,
+          status: snapshot.verification === 'verified' ? snapshot.status : null,
+          // Why: runtimeHealth answers 'available' on a ready remoteControl even with a null status.
+          remoteControl: null
+        }
       )
     })
     return environment.name

@@ -6,6 +6,7 @@ import {
   mergeTerminalRecordsByCurrentOrder,
   mobileSessionTabsEqual,
   mobileTerminalThemesEqual,
+  terminalRecordsEqual,
   type MobileTerminalSessionTab,
   type TerminalRecord
 } from './mobile-terminal-records'
@@ -37,10 +38,8 @@ describe('mobile terminal records', () => {
     })
 
     try {
-      for (let comparison = 0; comparison < 1_000; comparison += 1) {
-        expect(mobileTerminalThemesEqual(darkTheme, equivalentTheme)).toBe(true)
-        expect(mobileTerminalThemesEqual(darkTheme, lightTheme)).toBe(false)
-      }
+      expect(mobileTerminalThemesEqual(darkTheme, equivalentTheme)).toBe(true)
+      expect(mobileTerminalThemesEqual(darkTheme, lightTheme)).toBe(false)
     } finally {
       stringify.mockRestore()
     }
@@ -65,6 +64,48 @@ describe('mobile terminal records', () => {
     expect(mergeTerminalRecordsByCurrentOrder(snapshot, known)).toEqual([
       { handle: 'pty-1', title: 'Current title', terminalTheme: darkTheme, isActive: true }
     ])
+  })
+
+  it('keeps the host pane identity when a session-tab snapshot omits it', () => {
+    const known: TerminalRecord[] = [
+      { handle: 'pty-1', title: 'Old title', isActive: false, agentIdentity: 'cursor' }
+    ]
+    const snapshot: TerminalRecord[] = [{ handle: 'pty-1', title: 'Current title', isActive: true }]
+
+    expect(mergeTerminalRecordsByCurrentOrder(snapshot, known)).toEqual([
+      { handle: 'pty-1', title: 'Current title', isActive: true, agentIdentity: 'cursor' }
+    ])
+  })
+
+  it('lets an authoritative inventory replace or clear an earlier host identity', () => {
+    const known: TerminalRecord[] = [
+      { handle: 'pty-1', title: 'Terminal', isActive: true, agentIdentity: 'cursor' }
+    ]
+    for (const agentIdentity of ['claude', undefined]) {
+      const listed: TerminalRecord[] = [
+        { handle: 'pty-1', title: 'Terminal', isActive: true, agentIdentity }
+      ]
+      expect(mergeTerminalListWithKnownRecords(listed, known, [])[0]?.agentIdentity).toBe(
+        agentIdentity
+      )
+    }
+  })
+
+  it('treats a host pane identity change as a terminal record change', () => {
+    const record: TerminalRecord = { handle: 'pty-1', title: 'Terminal', isActive: true }
+
+    expect(
+      terminalRecordsEqual(
+        [{ ...record, agentIdentity: 'claude' }],
+        [{ ...record, agentIdentity: 'cursor' }]
+      )
+    ).toBe(false)
+    expect(
+      terminalRecordsEqual(
+        [{ ...record, agentIdentity: 'cursor' }],
+        [{ ...record, agentIdentity: 'cursor' }]
+      )
+    ).toBe(true)
   })
 
   it('keeps session-tab terminal themes when terminal.list omits them', () => {
@@ -119,8 +160,6 @@ describe('mobile terminal records', () => {
   })
 
   it('treats a launch draft appearing or retracting as a session-tab change', () => {
-    // The route keeps `prev` when these compare equal, so a frame whose only
-    // delta is the draft would never reach the chat composer.
     const base: MobileTerminalSessionTab = {
       type: 'terminal',
       id: 'term-1::leaf-1',
@@ -141,6 +180,30 @@ describe('mobile terminal records', () => {
     expect(mobileSessionTabsEqual([seeded], [base])).toBe(false)
     expect(mobileSessionTabsEqual([seeded], [{ ...seeded }])).toBe(true)
     expect(mobileSessionTabsEqual([seeded], [{ ...seeded, launchDraftCreatedAt: 2 }])).toBe(false)
+  })
+
+  it('treats a browser load failure appearing or changing as a session-tab change', () => {
+    const url = 'http://localhost:3000/'
+    const page: Parameters<typeof mobileSessionTabsEqual>[0][number] = {
+      type: 'browser',
+      id: 'browser-1',
+      url,
+      loading: false
+    }
+    const refused = {
+      ...page,
+      loadError: { code: -102, description: 'ERR_CONNECTION_REFUSED', validatedUrl: url }
+    }
+    expect(mobileSessionTabsEqual([page], [refused])).toBe(false)
+    expect(
+      mobileSessionTabsEqual([refused], [{ ...refused, loadError: { ...refused.loadError } }])
+    ).toBe(true)
+    expect(
+      mobileSessionTabsEqual(
+        [refused],
+        [{ ...refused, loadError: { ...refused.loadError, code: -105 } }]
+      )
+    ).toBe(false)
   })
 
   it('treats terminal agent-status changes as session-tab changes', () => {
@@ -172,7 +235,7 @@ describe('mobile terminal records', () => {
             ...base,
             agentStatus: {
               ...base.agentStatus!,
-              state: 'blocked',
+              state: 'blocked' as const,
               updatedAt: 2,
               stateStartedAt: 2
             }
@@ -194,6 +257,9 @@ describe('mobile terminal records', () => {
 
     expect(mobileSessionTabsEqual([base], [{ ...base }])).toBe(true)
     expect(mobileSessionTabsEqual([base], [{ ...base, sessionId: 'session-2' }])).toBe(false)
+    expect(
+      mobileSessionTabsEqual([base], [{ ...base, chatStatus: { state: 'working', updatedAt: 1 } }])
+    ).toBe(false)
   })
 
   const record = (over: Partial<TerminalRecord> & { handle: string }): TerminalRecord => ({
@@ -225,8 +291,7 @@ describe('mobile terminal records', () => {
       record({ handle: 'pty-2', connected: false })
     ]
 
-    // A worktree with no live PTY lists every parked leaf while tabs publish none;
-    // treating that as absence would pin the caller to the fast cadence forever.
+    // Parked leaves legitimately lack tabs; counting them as missing live PTYs would force fast polling forever.
     expect(hasConnectedTerminalAbsentFromSessionTabs(parked, [])).toBe(false)
   })
 

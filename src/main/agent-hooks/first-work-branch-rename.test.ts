@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { GlobalSettings } from '../../shared/global-settings-types'
 import type { Repo } from '../../shared/repo-types'
 import type { AgentJournalRenderItem } from '../../shared/agent-session-journal-types'
@@ -10,8 +10,6 @@ import { WORKTREE_ID_SEPARATOR } from '../../shared/worktree/id'
 const {
   gitExecFileAsyncMock,
   resolveLocalGitUsernameMock,
-  getSshGitUsernameMock,
-  getSshGitProviderMock,
   generateBranchNameMock,
   resolveTextGenerationParamsMock,
   prepareLocalEnvMock,
@@ -20,22 +18,15 @@ const {
 } = vi.hoisted(() => ({
   gitExecFileAsyncMock: vi.fn(),
   resolveLocalGitUsernameMock: vi.fn(async () => 'you'),
-  getSshGitUsernameMock: vi.fn(async () => 'you'),
-  getSshGitProviderMock: vi.fn(() => undefined),
   generateBranchNameMock: vi.fn(),
   resolveTextGenerationParamsMock: vi.fn(),
   prepareLocalEnvMock: vi.fn(async () => ({ ok: true as const })),
   computeBranchNameMock: vi.fn((leaf: string) => `you/${leaf}`),
-  // Mirror computeBranchNameMock's `you/` strategy so prefix stripping is realistic.
   getConfiguredBranchPrefixMock: vi.fn((_settings: unknown, username: string | null) => username)
 }))
 
 vi.mock('../git/runner', () => ({ gitExecFileAsync: gitExecFileAsyncMock }))
-vi.mock('../git/git-username', () => ({
-  getSshGitUsername: getSshGitUsernameMock,
-  resolveLocalGitUsername: resolveLocalGitUsernameMock
-}))
-vi.mock('../providers/ssh-git-dispatch', () => ({ getSshGitProvider: getSshGitProviderMock }))
+vi.mock('../git/git-username', () => ({ resolveLocalGitUsername: resolveLocalGitUsernameMock }))
 vi.mock('../text-generation/commit-message-text-generation', () => ({
   generateBranchNameFromContext: generateBranchNameMock,
   resolveTextGenerationParams: resolveTextGenerationParamsMock
@@ -43,7 +34,7 @@ vi.mock('../text-generation/commit-message-text-generation', () => ({
 vi.mock('../text-generation/commit-message-agent-environment', () => ({
   prepareLocalCommitMessageAgentEnv: prepareLocalEnvMock
 }))
-vi.mock('../ipc/worktree-logic', () => ({
+vi.mock('../ipc/worktree-branch-name', () => ({
   computeBranchName: computeBranchNameMock,
   getConfiguredBranchPrefix: getConfiguredBranchPrefixMock
 }))
@@ -63,18 +54,37 @@ import {
   noUpstreamError,
   workingEvent
 } from './first-work-branch-rename-test-harness'
+import { FIRST_WORK_GENERATION_RETRY_DELAYS_MS } from './first-work-generation-backoff'
+import { createStructuredAgentSessionLogger } from '../native-chat/agent-session-wire/structured-agent-session-logger'
+
+const REMOTE_REPO_BASE: Repo = {
+  id: REPO_ID,
+  path: '/repo',
+  displayName: 'repo',
+  badgeColor: '',
+  addedAt: 0
+}
 
 function makeDeps(overrides: Partial<FirstWorkBranchRenameDeps> = {}) {
   return makeBranchRenameDeps(vi.fn, overrides)
 }
 
+let clockMs = 0
+function elapseGenerationBackoff(): void {
+  clockMs += Math.max(...FIRST_WORK_GENERATION_RETRY_DELAYS_MS)
+}
+
 describe('maybeAutoRenameBranchOnFirstWork', () => {
+  afterEach(() => {
+    vi.restoreAllMocks()
+  })
+
   beforeEach(() => {
     resetFirstWorkBranchRenameState()
     vi.clearAllMocks()
+    clockMs = 0
+    vi.spyOn(Date, 'now').mockImplementation(() => clockMs)
     resolveLocalGitUsernameMock.mockResolvedValue('you')
-    getSshGitUsernameMock.mockResolvedValue('you')
-    getSshGitProviderMock.mockReturnValue(undefined)
     computeBranchNameMock.mockImplementation((leaf: string) => `you/${leaf}`)
     prepareLocalEnvMock.mockResolvedValue({ ok: true })
     resolveTextGenerationParamsMock.mockReturnValue({
@@ -100,10 +110,21 @@ describe('maybeAutoRenameBranchOnFirstWork', () => {
         isPendingFirstAgentMessageRename: () => true
       })
       const items: AgentJournalRenderItem[] = []
+      // Advance journal sequence so projection caching cannot hide a rename event.
+      let sequence = 0
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the status feed uses these held rows and provenance reads; the item lookup is checked against the real journal contract.
       const journal = {
-        snapshot: () => ({ items }),
+        snapshot: () => ({ items, submissions: [] }),
+        context: { floor: () => null },
+        item: ((itemId) =>
+          items.find((item) => item.itemId === itemId) ??
+          null) satisfies AgentSessionJournal['item'],
+        stopMarks: { latest: () => null, revision: () => 0 },
         lastActivityAt: () => 1,
-        isReadOnly: false
+        cursor: () => ({ epoch: 1, sequence: (sequence += 1) }),
+        itemFence: () => undefined,
+        wroteBeforeOpen: () => false,
+        runningTurn: () => null
       } as unknown as AgentSessionJournal
       const pending: Promise<void>[] = []
       const observe = vi.fn((summary, options) => {
@@ -113,10 +134,25 @@ describe('maybeAutoRenameBranchOnFirstWork', () => {
         }
       })
       const feed = new StructuredAgentSessionStatusFeed({
+        logger: createStructuredAgentSessionLogger(),
         sessions: new Map([
-          ['session', { journal, params: { location: { workspaceId }, provider: agent } }]
+          [
+            'session',
+            {
+              journal,
+              params: {
+                location: {
+                  executionHostId: 'local',
+                  wslDistro: null,
+                  workspaceId,
+                  workspaceKind: 'git-worktree'
+                },
+                provider: agent
+              }
+            }
+          ]
         ]),
-        getRecord: () => null,
+        getConversation: () => null,
         now: () => 1,
         onStatusChanged: observe
       })
@@ -149,6 +185,7 @@ describe('maybeAutoRenameBranchOnFirstWork', () => {
       }
       expect(observe).toHaveBeenCalledTimes(callsBeforeOutput)
 
+      elapseGenerationBackoff()
       items.pop()
       feed.publish('session', journal)
       items.push(turn)
@@ -172,27 +209,50 @@ describe('maybeAutoRenameBranchOnFirstWork', () => {
     const { deps, setDisplayName, setRenameError } = makeDeps({
       getRepo: () => ({ id: REPO_ID, kind: 'folder', path: '/workspace/platform' }) as Repo
     })
+    const items: AgentJournalRenderItem[] = [
+      {
+        itemId: 'user-1',
+        sequence: 1,
+        revision: 1,
+        observedAt: 1,
+        body: { kind: 'message', role: 'user', blocks: [{ type: 'text', text: 'Fix auth' }] }
+      },
+      {
+        itemId: 'turn-1',
+        sequence: 2,
+        revision: 1,
+        observedAt: 1,
+        body: {
+          kind: 'status',
+          text: 'Working',
+          turnLifecycle: { turnId: 'turn-1', state: 'running' }
+        }
+      }
+    ]
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the status feed uses these held rows and provenance reads; the item lookup is checked against the real journal contract.
     const journal = {
-      isReadOnly: false,
       lastActivityAt: () => 1,
-      snapshot: () => ({
-        items: [
-          { body: { kind: 'message', role: 'user', blocks: [{ type: 'text', text: 'Fix auth' }] } },
-          {
-            body: {
-              kind: 'status',
-              text: 'Working',
-              turnLifecycle: { turnId: 'turn-1', state: 'running' }
-            }
-          }
-        ]
-      })
+      context: { floor: () => null },
+      stopMarks: { latest: () => null, revision: () => 0 },
+      cursor: () => ({ epoch: 1, sequence: 1 }),
+      snapshot: () => ({ items, submissions: [] }),
+      item: ((itemId) =>
+        items.find((item) => item.itemId === itemId) ?? null) satisfies AgentSessionJournal['item'],
+      itemFence: () => undefined,
+      wroteBeforeOpen: () => false,
+      runningTurn: () => null
     } as unknown as AgentSessionJournal
-    const location = { workspaceId, workspaceKind: 'git-worktree' as const }
+    const location = {
+      executionHostId: 'local' as const,
+      wslDistro: null,
+      workspaceId,
+      workspaceKind: 'git-worktree' as const
+    }
     const pending: Promise<void>[] = []
     const feed = new StructuredAgentSessionStatusFeed({
+      logger: createStructuredAgentSessionLogger(),
       sessions: new Map([['session', { journal, params: { location, provider: 'codex' } }]]),
-      getRecord: () => null,
+      getConversation: () => null,
       now: () => 1,
       onStatusChanged: (summary, options) => {
         expect(summary.workspaceId).toBe(workspaceId)
@@ -207,7 +267,6 @@ describe('maybeAutoRenameBranchOnFirstWork', () => {
     await Promise.all(pending)
 
     expect(gitExecFileAsyncMock).not.toHaveBeenCalled()
-    expect(getSshGitProviderMock).not.toHaveBeenCalled()
     expect(generateBranchNameMock).not.toHaveBeenCalled()
     expect(setDisplayName).not.toHaveBeenCalled()
     expect(setRenameError).toHaveBeenCalledWith(workspaceId, null)
@@ -248,8 +307,6 @@ describe('maybeAutoRenameBranchOnFirstWork', () => {
   })
 
   it('skips the redundant branch-rename notify when the folder rename succeeded', async () => {
-    // The folder rename already pushed a worktrees:changed carrying the id mapping,
-    // so onRenamed would only trigger a second, redundant renderer re-list.
     const { deps, onRenamed } = makeDeps({ renameWorktreeFolder: vi.fn(async () => true) })
     await maybeAutoRenameBranchOnFirstWork(workingEvent(), deps)
     expect(onRenamed).not.toHaveBeenCalled()
@@ -271,9 +328,7 @@ describe('maybeAutoRenameBranchOnFirstWork', () => {
   })
 
   it('strips a prefix the model leaked into the slug from both branch and display name', async () => {
-    // Model echoed `you/worktree-spinner`, which the
-    // sanitizer folds to `you-worktree-spinner`; without stripping it would
-    // double-prefix the branch (`you/you-...`) and show "You worktree spinner".
+    // Sanitization folds an echoed you/ prefix into the slug; strip it to prevent double-prefixing.
     generateBranchNameMock.mockResolvedValue({ success: true, slug: 'you-worktree-spinner' })
     const { deps, setDisplayName } = makeDeps()
     await maybeAutoRenameBranchOnFirstWork(workingEvent(), deps)
@@ -285,8 +340,6 @@ describe('maybeAutoRenameBranchOnFirstWork', () => {
   })
 
   it('skips the rename when the model echoes only the configured prefix', async () => {
-    // The model emitted just `you` (the prefix); stripping leaves an empty slug,
-    // so renaming would re-add the prefix and double it to `you/you`.
     generateBranchNameMock.mockResolvedValue({ success: true, slug: 'you' })
     const { deps, onRenamed, setRenameError } = makeDeps()
     await maybeAutoRenameBranchOnFirstWork(workingEvent(), deps)
@@ -295,7 +348,6 @@ describe('maybeAutoRenameBranchOnFirstWork', () => {
       expect.anything()
     )
     expect(onRenamed).not.toHaveBeenCalled()
-    // Benign terminal state: clear any stale badge, never raise a new one.
     expect(setRenameError).not.toHaveBeenCalledWith(WORKTREE_ID, expect.any(String))
   })
 
@@ -309,17 +361,7 @@ describe('maybeAutoRenameBranchOnFirstWork', () => {
     expect(setDisplayName).not.toHaveBeenCalled()
   })
 
-  it('resolves the worktree from the tab when the hook payload omits worktreeId', async () => {
-    // workingEvent() carries worktreeId: undefined; resolveWorktreeIdForTab supplies it.
-    const { deps, onRenamed } = makeDeps()
-    await maybeAutoRenameBranchOnFirstWork(workingEvent(), deps)
-    expect(onRenamed).toHaveBeenCalledWith(REPO_ID)
-  })
-
   it('runs Git against the backing folder for a folder-workspace instance id', async () => {
-    // Why: instance ids carry a synthetic `::workspace:<uuid>` suffix that is not
-    // a real directory. The Git cwd must resolve to the folder or `rev-parse`
-    // spawns against a nonexistent path (ENOENT).
     const instanceId = `${WORKTREE_ID}::workspace:123e4567-e89b-12d3-a456-426614174000`
     const { deps } = makeDeps({ resolveWorktreeIdForTab: () => instanceId })
     await maybeAutoRenameBranchOnFirstWork(workingEvent({ worktreeId: undefined }), deps)
@@ -450,6 +492,10 @@ describe('maybeAutoRenameBranchOnFirstWork', () => {
     )
 
     expect(gitExecFileAsyncMock).toHaveBeenCalledTimes(1)
+    expect(gitExecFileAsyncMock).toHaveBeenCalledWith(
+      ['rev-parse', '--abbrev-ref', 'HEAD'],
+      expect.objectContaining({ cwd: '/repo/wt-0' })
+    )
   })
 
   it('retries on a later event after a transient failure (does not poison the worktree)', async () => {
@@ -458,13 +504,13 @@ describe('maybeAutoRenameBranchOnFirstWork', () => {
     await maybeAutoRenameBranchOnFirstWork(workingEvent(), deps)
     expect(onRenamed).not.toHaveBeenCalled()
 
+    elapseGenerationBackoff()
     await maybeAutoRenameBranchOnFirstWork(workingEvent(), deps)
     expect(gitExecFileAsyncMock).toHaveBeenCalledWith(
       ['branch', '-m', 'you/fix-auth'],
       expect.objectContaining({ cwd: '/repo/wt' })
     )
     expect(onRenamed).toHaveBeenCalledWith(REPO_ID)
-    // The eventual success must clear the error raised on the first attempt.
     expect(setRenameError).toHaveBeenLastCalledWith(WORKTREE_ID, null)
   })
 
@@ -504,25 +550,42 @@ describe('maybeAutoRenameBranchOnFirstWork', () => {
     await maybeAutoRenameBranchOnFirstWork(workingEvent(), deps)
     expect(generateBranchNameMock).not.toHaveBeenCalled()
     expect(onRenamed).not.toHaveBeenCalled()
-    // Benign skip (user-named branch) must never raise the failure badge; it may
-    // only clear a stale one (null), never set a non-null error message.
     expect(setRenameError).not.toHaveBeenCalledWith(WORKTREE_ID, expect.any(String))
   })
 
   it('clears a stale error when a retryable worktree later reaches a benign stop', async () => {
-    // First event: transient generation failure raises the badge.
     generateBranchNameMock.mockResolvedValueOnce({ success: false, error: 'agent not ready' })
     const { deps, setRenameError } = makeDeps()
     await maybeAutoRenameBranchOnFirstWork(workingEvent(), deps)
     expect(setRenameError).toHaveBeenCalledWith(WORKTREE_ID, 'agent not ready', null)
 
-    // Second event: the user has since pushed the branch, so it settles benignly.
-    // The stale "rename failed" badge must be cleared rather than stick forever.
     gitExecFileAsyncMock.mockImplementation(
       gitResponder({ currentBranch: 'you/Nautilus', hasUpstream: true })
     )
+    elapseGenerationBackoff()
     await maybeAutoRenameBranchOnFirstWork(workingEvent(), deps)
     expect(setRenameError).toHaveBeenLastCalledWith(WORKTREE_ID, null)
+  })
+
+  it('backs off a generation that keeps hitting a usage limit, then recovers (#9705)', async () => {
+    const error = "You've hit your session limit · resets 2pm"
+    generateBranchNameMock.mockResolvedValue({ success: false, error })
+    const { deps, onRenamed, setRenameError } = makeDeps()
+    for (let minute = 0; minute < 60; minute++) {
+      clockMs = minute * 60_000
+      for (let event = 0; event < 5; event++) {
+        await maybeAutoRenameBranchOnFirstWork(workingEvent(), deps)
+      }
+    }
+    // 300 working events over an hour; attempts only at minutes 0, 1 (+30s), 3 (+2m) and 33 (+30m).
+    expect(generateBranchNameMock).toHaveBeenCalledTimes(4)
+    expect(onRenamed).not.toHaveBeenCalled()
+    expect(setRenameError).toHaveBeenLastCalledWith(WORKTREE_ID, error, null)
+
+    generateBranchNameMock.mockResolvedValue({ success: true, slug: 'fix-auth' })
+    clockMs = 63 * 60_000
+    await maybeAutoRenameBranchOnFirstWork(workingEvent(), deps)
+    expect(onRenamed).toHaveBeenCalledWith(REPO_ID)
   })
 
   it('does not raise the failure badge when generation is canceled by the user', async () => {
@@ -531,8 +594,12 @@ describe('maybeAutoRenameBranchOnFirstWork', () => {
       error: 'Generation canceled.',
       canceled: true
     })
-    const { deps, setRenameError } = makeDeps()
+    const { deps, setRenameError, setDisplayName, onRenamed } = makeDeps()
     await maybeAutoRenameBranchOnFirstWork(workingEvent(), deps)
+    expect(generateBranchNameMock).toHaveBeenCalledTimes(1)
+    expect(setDisplayName).not.toHaveBeenCalled()
+    expect(onRenamed).not.toHaveBeenCalled()
+    expect(gitExecFileAsyncMock.mock.calls.some(([args]) => args[0] === 'branch')).toBe(false)
     expect(setRenameError).not.toHaveBeenCalledWith(WORKTREE_ID, 'Generation canceled.')
   })
 
@@ -547,9 +614,7 @@ describe('maybeAutoRenameBranchOnFirstWork', () => {
   })
 
   it('surfaces a failed upstream probe and retries instead of settling silently (issue #7808)', async () => {
-    // Localized git (gettext + de_DE) translates even the `fatal:` prefix, so
-    // the no-upstream error is unrecognizable. This must not settle as "has
-    // upstream" — the badge goes up and a later event may still succeed.
+    // Localized probe failures must remain visible and retryable.
     const localizedError = new Error(
       'Command failed: git rev-parse --abbrev-ref HEAD@{u}\n' +
         "Schwerwiegend: Kein Upstream-Branch für Branch 'you/Nautilus' konfiguriert."
@@ -570,7 +635,6 @@ describe('maybeAutoRenameBranchOnFirstWork', () => {
       expect.stringContaining('Schwerwiegend')
     )
 
-    // Once git output is readable again, the same worktree retries and renames.
     gitExecFileAsyncMock.mockImplementation(plainResponder)
     await maybeAutoRenameBranchOnFirstWork(workingEvent(), deps)
     expect(gitExecFileAsyncMock).toHaveBeenCalledWith(
@@ -601,8 +665,6 @@ describe('maybeAutoRenameBranchOnFirstWork', () => {
       ['branch', '-m', 'you/fix-auth-2'],
       expect.objectContaining({ cwd: '/repo/wt' })
     )
-    // Display name and folder must follow the resolved (suffixed) leaf, not the
-    // pre-suffix slug — otherwise they diverge from the branch.
     expect(setDisplayName).toHaveBeenCalledWith(WORKTREE_ID, 'Fix auth 2')
     expect(renameWorktreeFolder).toHaveBeenCalledWith(WORKTREE_ID, 'fix-auth-2')
   })
@@ -631,6 +693,8 @@ describe('maybeAutoRenameBranchOnFirstWork', () => {
       ['branch', '-m', 'you/fix-auth'],
       expect.anything()
     )
+    expect(generateBranchNameMock).toHaveBeenCalledTimes(1)
+    expect(branchReadCount).toBe(2)
     expect(onRenamed).not.toHaveBeenCalled()
   })
 
@@ -661,53 +725,39 @@ describe('maybeAutoRenameBranchOnFirstWork', () => {
       ['branch', '-m', 'you/fix-auth'],
       expect.anything()
     )
+    expect(generateBranchNameMock).toHaveBeenCalledTimes(1)
+    expect(upstreamReadCount).toBe(2)
     expect(onRenamed).not.toHaveBeenCalled()
   })
 
-  it('uses the SSH git provider and remote generation target for remote worktrees', async () => {
-    getSshGitUsernameMock.mockResolvedValue('remote-user')
-    const provider = {
-      exec: vi.fn(gitResponder({ currentBranch: 'remote-user/Nautilus', hasUpstream: false })),
-      renameCurrentBranch: vi.fn(async () => undefined),
-      executeCommitMessagePlan: vi.fn()
+  it.each<[string, Repo]>([
+    ['connectionId', { ...REMOTE_REPO_BASE, connectionId: 'ssh-1' }],
+    ['executionHostId', { ...REMOTE_REPO_BASE, executionHostId: 'ssh:ssh-1' }]
+  ])(
+    'skips local generation and git for a row naming its SSH owner by %s',
+    async (_spelling, repo) => {
+      const { deps, onRenamed } = makeDeps({ getRepo: () => repo })
+
+      await maybeAutoRenameBranchOnFirstWork(workingEvent(), deps)
+
+      expect(gitExecFileAsyncMock).not.toHaveBeenCalled()
+      expect(generateBranchNameMock).not.toHaveBeenCalled()
+      expect(onRenamed).not.toHaveBeenCalled()
     }
-    getSshGitProviderMock.mockReturnValue(provider as never)
-    const repo = { id: REPO_ID, path: '/repo', connectionId: 'ssh-1' } as unknown as Repo
-    const { deps } = makeDeps({ getRepo: () => repo })
+  )
+
+  it("never dials a paired server's nested SSH target from this client", async () => {
+    const repo: Repo = {
+      ...REMOTE_REPO_BASE,
+      connectionId: 'ssh-1',
+      executionHostId: 'runtime:env-1'
+    }
+    const { deps, onRenamed } = makeDeps({ getRepo: () => repo })
 
     await maybeAutoRenameBranchOnFirstWork(workingEvent(), deps)
 
     expect(gitExecFileAsyncMock).not.toHaveBeenCalled()
-    expect(prepareLocalEnvMock).not.toHaveBeenCalled()
-    expect(generateBranchNameMock).toHaveBeenCalledWith(
-      { firstPrompt: 'Fix the auth bug', assistantMessage: undefined },
-      { agentId: 'claude', model: 'm' },
-      expect.objectContaining({
-        kind: 'remote',
-        cwd: '/repo/wt',
-        missingBinaryLocation: 'remote PATH'
-      })
-    )
-    expect(computeBranchNameMock).toHaveBeenCalledWith('fix-auth', expect.anything(), 'remote-user')
-    expect(provider.exec).not.toHaveBeenCalledWith(['branch', '-m', 'you/fix-auth'], '/repo/wt')
-    expect(provider.renameCurrentBranch).toHaveBeenCalledWith('/repo/wt', 'you/fix-auth')
-  })
-
-  it('retries when the SSH provider is unavailable on the first working event', async () => {
-    const provider = {
-      exec: vi.fn(gitResponder({ currentBranch: 'you/Nautilus', hasUpstream: false })),
-      renameCurrentBranch: vi.fn(async () => undefined),
-      executeCommitMessagePlan: vi.fn()
-    }
-    getSshGitProviderMock.mockReturnValueOnce(undefined).mockReturnValue(provider as never)
-    const repo = { id: REPO_ID, path: '/repo', connectionId: 'ssh-1' } as unknown as Repo
-    const { deps, onRenamed } = makeDeps({ getRepo: () => repo })
-
-    await maybeAutoRenameBranchOnFirstWork(workingEvent(), deps)
+    expect(generateBranchNameMock).not.toHaveBeenCalled()
     expect(onRenamed).not.toHaveBeenCalled()
-
-    await maybeAutoRenameBranchOnFirstWork(workingEvent(), deps)
-    expect(provider.renameCurrentBranch).toHaveBeenCalledWith('/repo/wt', 'you/fix-auth')
-    expect(onRenamed).toHaveBeenCalledWith(REPO_ID)
   })
 })

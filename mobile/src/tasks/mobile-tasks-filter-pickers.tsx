@@ -9,7 +9,9 @@ import {
   PickerModal,
   ActivityIndicator
 } from './mobile-tasks-dependencies'
+import { linearWorkspaceSelect } from './mobile-task-runtime-operations'
 import { styles } from './mobile-tasks-legacy-styles'
+import { JIRA_FILTER_OPTIONS } from './mobile-task-view-options'
 import {
   GITLAB_VIEW_OPTIONS,
   GITLAB_FILTER_OPTIONS,
@@ -86,9 +88,7 @@ export function renderMobileTasksGitLabViewPicker(model: ConnectionPresentationM
       onSelect={(view) => {
         setGitlabView(view)
         if (view === 'todos') {
-          // Why: GitLab Todos is a server-side pending-todos stream; the
-          // runtime method has no search query, so clear item-search state
-          // when entering that view instead of carrying an invisible filter.
+          // GitLab Todos has no server search query; clear item filters instead of carrying an invisible one.
           setQuery('')
           setAppliedQuery('')
         }
@@ -169,8 +169,8 @@ export function renderMobileTasksLinearWorkspacePicker(model: ConnectionPresenta
         setSelectedLinearWorkspaceId(workspaceId)
         setSelectedLinearTeamIds(new Set())
         if (client) {
-          void client
-            .sendRequest('linear.selectWorkspace', { workspaceId })
+          void linearWorkspaceSelect
+            .request(client, { workspaceId })
             .then(() => loadLinearContext())
             .catch((err) => {
               setError(err instanceof Error ? err.message : 'Failed to switch workspace')
@@ -330,5 +330,58 @@ export function renderMobileTasksLinearStatusPicker(model: ConnectionPresentatio
         )}
       </View>
     </BottomDrawer>
+  )
+}
+
+export function renderMobileTasksJiraFilterPicker(model: ConnectionPresentationModel) {
+  const {
+    jiraFilter,
+    persistTaskResumeState,
+    setAppliedQuery,
+    setJiraFilter,
+    setQuery,
+    setShowJiraFilterPicker,
+    showJiraFilterPicker,
+    taskUiReady
+  } = model
+  return (
+    <PickerModal
+      visible={taskUiReady && showJiraFilterPicker}
+      title="Jira Filter"
+      options={JIRA_FILTER_OPTIONS}
+      selected={jiraFilter}
+      onSelect={(filter) => {
+        setJiraFilter(filter)
+        setQuery('')
+        setAppliedQuery('')
+        persistTaskResumeState({ jiraPreset: filter, jiraQuery: '' })
+      }}
+      onClose={() => setShowJiraFilterPicker(false)}
+    />
+  )
+}
+
+export function renderMobileTasksJiraSitePicker(model: ConnectionPresentationModel) {
+  const {
+    jiraConnection,
+    jiraSiteOptions,
+    setItems,
+    setJiraConnection,
+    setShowJiraSitePicker,
+    showJiraSitePicker,
+    taskUiReady
+  } = model
+  return (
+    <PickerModal
+      visible={taskUiReady && showJiraSitePicker}
+      title="Jira Site"
+      options={jiraSiteOptions}
+      selected={jiraConnection.selection ?? ''}
+      onSelect={(siteId) => {
+        setJiraConnection((current) => ({ ...current, selection: siteId }))
+        setItems([])
+      }}
+      onClose={() => setShowJiraSitePicker(false)}
+    />
   )
 }

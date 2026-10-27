@@ -1,6 +1,4 @@
-// The fingerprint's own behaviour is covered against real Git in repo-worktree-admin-fingerprint.test.ts.
-// This suite pins the cache wiring: when the probe may skip a `git worktree list`, and when it may not.
-// Also listed in pr.yml's Windows boundary step, so the gate's repo-path handling stays honest there.
+// Check scan-cache gating here; real-Git fingerprint behavior lives in repo-worktree-admin-fingerprint.test.ts. Windows CI also exercises repo-path handling.
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const electronMocks = vi.hoisted(() => {
@@ -17,14 +15,6 @@ const electronMocks = vi.hoisted(() => {
   }
 })
 vi.mock('electron', () => electronMocks)
-
-const getSshGitProviderMock = vi.hoisted(() => vi.fn())
-vi.mock('../providers/ssh-git-dispatch', () => ({
-  getSshGitProvider: getSshGitProviderMock,
-  getSshGitProviderGeneration: vi.fn(() => 0),
-  SSH_GIT_PROVIDER_UNAVAILABLE_MESSAGE: 'unavailable',
-  requireSshGitProvider: (connectionId: string) => getSshGitProviderMock(connectionId)
-}))
 
 const listWorktreesStrictMock = vi.hoisted(() => vi.fn())
 vi.mock('../git/worktree', async (importOriginal) => ({
@@ -44,6 +34,7 @@ import {
 } from './orca-runtime'
 import { RESOLVED_WORKTREE_REPO_TIMEOUT_MS } from './repo-worktree-row-resolution'
 import { canonicalWorktreeIdentity } from '../../shared/worktree/identity'
+import type { HostWorktreeTarget } from '../../shared/worktree/host-qualified-identity'
 
 const REPO_ID = 'repo-local'
 const REPO_PATH = '/Users/me/dev/app'
@@ -51,9 +42,7 @@ const WORKTREE_PATH = '/Users/me/dev/app-feature'
 const WORKTREE_ID = `${REPO_ID}::${WORKTREE_PATH}`
 const MAIN_WORKTREE_ID = `${REPO_ID}::${REPO_PATH}`
 const SCAN_TTL_MS = 30_000
-// A busy host (100+ linked worktrees, Defender, cold dentry cache, cloud placeholders) can spend
-// seconds in pure stat time. Reuse has to survive that, or trimming the probe's deadline to fit the
-// caller budget just trades a repeating stall for a repeating `git worktree list`.
+// Slow healthy stat work must permit reuse rather than trigger repeating Git scans.
 const SLOW_BUT_HEALTHY_PROBE_MS = 3_000
 
 function makeMeta(overrides: Record<string, unknown> = {}) {
@@ -100,7 +89,7 @@ function makeStore(options: { connectionId?: string; repoCount?: number; repoPat
     getRepos: () => repos,
     getAllWorktreeMeta: () => metaById,
     getWorktreeMeta: (id: string) => metaById[id],
-    setWorktreeMeta: (id: string, meta: Record<string, unknown>) => {
+    setWorktreeMeta: ({ id }: HostWorktreeTarget, meta: Record<string, unknown>) => {
       metaById[id] = { ...(metaById[id] ?? makeMeta()), ...meta } as never
       return metaById[id]
     },
@@ -181,7 +170,6 @@ function stallProbeOnce(): (fingerprint: string | null) => void {
 
 describe('worktree scan admin-fingerprint gate', () => {
   beforeEach(() => {
-    getSshGitProviderMock.mockReset()
     listWorktreesStrictMock.mockReset()
     listWorktreesStrictMock.mockResolvedValue([
       { path: REPO_PATH, head: 'abc', branch: 'main', isBare: false, isMainWorktree: true },
@@ -203,7 +191,6 @@ describe('worktree scan admin-fingerprint gate', () => {
       await list()
       expect(scanCount()).toBe(1)
 
-      // The suppressed read must still re-arm the TTL rather than probing on every poll.
       vi.advanceTimersByTime(1_000)
       await list()
       expect(scanCount()).toBe(1)
@@ -306,8 +293,6 @@ describe('worktree scan admin-fingerprint gate', () => {
   })
 
   it('never probes a repo whose scan TTL already reaches the reconcile interval', async () => {
-    // Agent-scratch roots carry a 5-minute TTL, so a fingerprint could never be reused. Reading one
-    // would be pure work on a polling path.
     vi.useFakeTimers()
     try {
       const { list } = makeRuntime({ repoPath: '/tmp/.codex-tmp/capsule-a' })
@@ -326,17 +311,13 @@ describe('worktree scan admin-fingerprint gate', () => {
   it('never consults the probe for SSH repos', async () => {
     vi.useFakeTimers()
     try {
-      const listWorktrees = vi.fn(async () => [
-        { path: REPO_PATH, head: 'abc', branch: 'main', isBare: false, isMainWorktree: true }
-      ])
-      getSshGitProviderMock.mockReturnValue({ listWorktrees })
       const { list } = makeRuntime({ connectionId: 'ssh-remote-1' })
 
       await list()
       vi.advanceTimersByTime(SCAN_TTL_MS + 1_000)
       await list()
 
-      expect(listWorktrees).toHaveBeenCalledTimes(2)
+      expect(listWorktreesStrictMock).not.toHaveBeenCalled()
       expect(readRepoWorktreeAdminFingerprintMock).not.toHaveBeenCalled()
     } finally {
       vi.useRealTimers()
@@ -361,8 +342,7 @@ describe('worktree scan admin-fingerprint gate', () => {
   })
 
   it('bounds Git fan-out under a sustained 1 Hz polling workload', async () => {
-    // Reproduces the reported steady state: 10 idle repos, a caller polling faster than the
-    // resolved-snapshot TTL. Before the gate this cost one `git worktree list` per repo per 30 s.
+    // Ten idle repos polled faster than snapshot TTL formerly spawned git worktree list every 30s.
     vi.useFakeTimers()
     try {
       const REPOS = 10
@@ -374,8 +354,7 @@ describe('worktree scan admin-fingerprint gate', () => {
         vi.advanceTimersByTime(1_000)
       }
 
-      // One scan per repo per cache refresh: the TTL alone would refresh 60x per repo, the
-      // reconcile deadline refreshes 6x. 600 -> 60 `git worktree list` spawns per half hour.
+      // Reconciliation cuts this half-hour workload from 600 scans to 60.
       const ttlOnlyScans = (REPOS * POLL_SECONDS * 1_000) / SCAN_TTL_MS
       const reconcileScans =
         (REPOS * POLL_SECONDS * 1_000) / WORKTREE_SCAN_ADMIN_RECONCILE_INTERVAL_MS
@@ -396,15 +375,15 @@ describe('worktree scan admin-fingerprint gate', () => {
       await list()
       expect(scanCount()).toBe(1)
 
-      // No timer advance: the caller's 5s fallback cannot rescue this, so the refresh itself must
-      // not be waiting on the dead probe.
+      // Do not advance time: the refresh itself must avoid waiting on a dead probe.
       vi.advanceTimersByTime(SCAN_TTL_MS + 1_000)
       const second = list()
       const secondSettled = trackSettled(second)
       await drainMicrotasks()
       expect(secondSettled()).toBe(true)
-      await second
-      expect(scanCount()).toBe(2)
+      // #19312: a pending probe says nothing, so it reuses the scanned rows instead of rescanning.
+      expect(heads(await second)).toEqual(['abc', 'def'])
+      expect(scanCount()).toBe(1)
 
       vi.advanceTimersByTime(SCAN_TTL_MS + 1_000)
       const third = list()
@@ -412,7 +391,7 @@ describe('worktree scan admin-fingerprint gate', () => {
       await drainMicrotasks()
       expect(thirdSettled()).toBe(true)
       await third
-      expect(scanCount()).toBe(3)
+      expect(scanCount()).toBe(1)
     } finally {
       vi.useRealTimers()
     }
@@ -427,14 +406,20 @@ describe('worktree scan admin-fingerprint gate', () => {
       await list()
       expect(readRepoWorktreeAdminFingerprintMock).toHaveBeenCalledTimes(1)
 
+      const startedAt = Date.now()
       for (let refresh = 0; refresh < 20; refresh += 1) {
         vi.advanceTimersByTime(SCAN_TTL_MS + 1_000)
         await list()
       }
 
-      // Each abandoned probe pins an fs work item on the 4-slot libuv pool forever.
+      // Each abandoned probe can pin a libuv filesystem worker indefinitely.
       expect(readRepoWorktreeAdminFingerprintMock).toHaveBeenCalledTimes(1)
-      expect(scanCount()).toBe(21)
+      // Only the reconcile ceiling rescans while the probe stays pending, never every refresh.
+      const elapsed = Date.now() - startedAt
+      expect(scanCount()).toBeGreaterThan(1)
+      expect(scanCount()).toBeLessThanOrEqual(
+        1 + Math.ceil(elapsed / WORKTREE_SCAN_ADMIN_RECONCILE_INTERVAL_MS)
+      )
     } finally {
       vi.useRealTimers()
     }
@@ -449,24 +434,24 @@ describe('worktree scan admin-fingerprint gate', () => {
       await list()
       vi.advanceTimersByTime(SCAN_TTL_MS + 1_000)
       await list()
-      expect(scanCount()).toBe(2)
+      expect(scanCount()).toBe(1)
 
       // The mount unwedges; its stale answer must not gate anything, but the repo must probe again.
       releaseStalledProbe('fp-stale')
       await drainMicrotasks()
       vi.advanceTimersByTime(SCAN_TTL_MS + 1_000)
       await list()
-      expect(scanCount()).toBe(3)
+      expect(scanCount()).toBe(2)
 
       vi.advanceTimersByTime(SCAN_TTL_MS + 1_000)
       await list()
-      expect(scanCount()).toBe(3)
+      expect(scanCount()).toBe(2)
     } finally {
       vi.useRealTimers()
     }
   })
 
-  it('scans when the awaited probe outlives its deadline', async () => {
+  it('reuses the scanned rows when the awaited probe outlives its deadline', async () => {
     vi.useFakeTimers()
     try {
       const { list } = makeRuntime()
@@ -479,14 +464,37 @@ describe('worktree scan admin-fingerprint gate', () => {
       const second = list()
       const secondSettled = trackSettled(second)
       await drainMicrotasks()
-      // A reusable cache entry is the one case that genuinely waits on the probe.
       expect(secondSettled()).toBe(false)
       expect(scanCount()).toBe(1)
 
       await vi.advanceTimersByTimeAsync(WORKTREE_SCAN_ADMIN_FINGERPRINT_TIMEOUT_MS)
       await drainMicrotasks()
+      // #19312: a timeout is "unknown", never a mismatch, so it must not start a full scan.
+      expect(scanCount()).toBe(1)
+      expect(heads(await second)).toEqual(['abc', 'def'])
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('still reconciles on schedule while every probe times out', async () => {
+    vi.useFakeTimers()
+    try {
+      readRepoWorktreeAdminFingerprintMock.mockImplementation(() => new Promise(() => {}))
+      const { list } = makeRuntime()
+      const scannedAt = Date.now()
+      await list()
+      expect(scanCount()).toBe(1)
+
+      while (Date.now() - scannedAt < WORKTREE_SCAN_ADMIN_RECONCILE_INTERVAL_MS - SCAN_TTL_MS) {
+        vi.advanceTimersByTime(SCAN_TTL_MS + 1_000)
+        await list()
+      }
+      expect(scanCount()).toBe(1)
+
+      vi.advanceTimersByTime(2 * SCAN_TTL_MS)
+      await list()
       expect(scanCount()).toBe(2)
-      await second
     } finally {
       vi.useRealTimers()
     }
@@ -510,8 +518,7 @@ describe('worktree scan admin-fingerprint gate', () => {
       vi.advanceTimersByTime(SCAN_TTL_MS + 1_000)
       const second = list()
 
-      // Deliberately an absolute figure, not one derived from the deadline: this is the lower end of
-      // the band, and a self-referential advance would still pass however far the deadline is cut.
+      // Use an absolute healthy latency so shortening the deadline cannot make a self-referential test pass.
       await vi.advanceTimersByTimeAsync(SLOW_BUT_HEALTHY_PROBE_MS)
       releaseSlowProbe('fp-1')
       await second
@@ -532,12 +539,11 @@ describe('worktree scan admin-fingerprint gate', () => {
       const second = list()
       const secondSettled = trackSettled(second)
 
-      // The probe's own deadline has to end the wait; if the caller's fallback gets there first the
-      // repo answers with persisted rows on every TTL expiry.
+      // The probe must settle before caller fallback or each TTL expiry publishes persisted rows.
       await vi.advanceTimersByTimeAsync(WORKTREE_SCAN_ADMIN_FINGERPRINT_TIMEOUT_MS)
       await drainMicrotasks()
       expect(secondSettled()).toBe(true)
-      expect(scanCount()).toBe(2)
+      expect(scanCount()).toBe(1)
       expect(heads(await second)).toEqual(['abc', 'def'])
     } finally {
       vi.useRealTimers()
@@ -556,8 +562,7 @@ describe('worktree scan admin-fingerprint gate', () => {
       await vi.advanceTimersByTimeAsync(WORKTREE_SCAN_ADMIN_FINGERPRINT_TIMEOUT_MS)
       await second
 
-      // The probe deadline outlasts the snapshot TTL, so a start-stamped entry is born expired and
-      // the next poll repeats the whole wait instead of reading the answer that just landed.
+      // Stamp completion time: a probe slower than snapshot TTL otherwise creates an already-expired entry.
       const getRepos = vi.spyOn(store, 'getRepos')
       await list()
       expect(getRepos).not.toHaveBeenCalled()
@@ -578,7 +583,6 @@ describe('worktree scan admin-fingerprint gate', () => {
 
 describe('scoped explicit worktree-id resolution', () => {
   beforeEach(() => {
-    getSshGitProviderMock.mockReset()
     listWorktreesStrictMock.mockReset()
     listWorktreesStrictMock.mockImplementation(async (repoPath: string) => [
       { path: repoPath, head: 'abc', branch: 'main', isBare: false, isMainWorktree: true },
@@ -648,7 +652,6 @@ describe('scoped explicit worktree-id resolution', () => {
         runtime as unknown as { resolveWorktreeSelector: (s: string) => Promise<unknown> }
       ).resolveWorktreeSelector(selector)
 
-    // `main` is checked out in every repo, so a branch selector must refuse rather than pick one.
     await expect(resolve('branch:main')).rejects.toThrow('selector_ambiguous')
     expect(new Set(scannedRepoPaths()).size).toBe(10)
   })

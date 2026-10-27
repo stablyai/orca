@@ -1,3 +1,4 @@
+import { toast } from 'sonner'
 import { useAppStore } from '@/store'
 import {
   findPendingLinkedWorkItemCreationId,
@@ -10,10 +11,30 @@ import {
   getInitialWorktreeCreationPhase,
   getWorktreeCreationIndeterminate
 } from '@/lib/worktree-creation-flow-startup'
-import { retryStructuredWorktreeLaunch } from '@/lib/worktree-creation-structured-recovery'
+import {
+  formatWorkspaceCreateError,
+  getWorkspaceCreateErrorToastMessage
+} from '@/lib/workspace-create-error-format'
 
 type ContinueBackgroundWorktreeCreationOptions = {
   revealCreationSurface?: boolean
+}
+
+// Contain fire-and-forget rejections or pending creation UI remains stuck without errors.
+function startWorktreeCreation(creationId: string, request: WorktreeCreationRequest): void {
+  executeWorktreeCreation(creationId, request).catch((error: unknown) => {
+    console.error('worktree create: unhandled failure', creationId, error)
+    const store = useAppStore.getState()
+    if (!store.pendingWorktreeCreations[creationId]) {
+      return
+    }
+    const message = getWorkspaceCreateErrorToastMessage(formatWorkspaceCreateError(error))
+    store.updatePendingWorktreeCreation(creationId, { status: 'error', error: message })
+    // Inline creation errors need a separate toast only after navigation away.
+    if (!(store.activeView === 'terminal' && store.activePendingCreationId === creationId)) {
+      toast.error(message)
+    }
+  })
 }
 
 function revealPendingCreation(
@@ -29,23 +50,16 @@ function revealPendingCreation(
     status: 'creating',
     startedAt: Date.now(),
     indeterminate,
-    // Why: the creation surface owns the tab strip immediately. Delaying this
-    // caused the real workspace tab bar to flash out when the debounce elapsed.
+    // Give creation its tab strip synchronously; delayed reveal flashes the prior workspace’s tabs.
     loaderVisible: true,
     request
   })
-  // Why: the creation panel only renders under the terminal view (App content
-  // router), so force it active so the panel is what fills the content area.
+  // Creation UI renders only in terminal view; activate it before publishing the panel.
   store.setActiveView('terminal')
   store.setSidebarOpen(true)
 }
 
-/**
- * Kick off a worktree create in the background. The caller (the composer) has
- * already resolved every interactive decision into `request`, so this returns
- * immediately and the work outlives the now-closed modal. Progress and errors
- * surface on the pending creation's sidebar row and content panel.
- */
+/** Start creation without blocking the composer; the pending panel owns preparation and errors. */
 export function runBackgroundWorktreeCreation(request: WorktreeCreationRequest): string {
   const store = useAppStore.getState()
   const existingCreationId = findPendingLinkedWorkItemCreationId(
@@ -58,11 +72,10 @@ export function runBackgroundWorktreeCreation(request: WorktreeCreationRequest):
     store.setSidebarOpen(true)
     return existingCreationId
   }
-  // Why: crypto.randomUUID is undefined in non-secure browser contexts (LAN web
-  // client over plain HTTP). createBrowserUuid falls back to getRandomValues.
+  // Plain-HTTP LAN clients lack randomUUID; createBrowserUuid uses getRandomValues fallback.
   const creationId = createBrowserUuid()
   revealPendingCreation(creationId, request, getInitialWorktreeCreationPhase(request))
-  void executeWorktreeCreation(creationId, request)
+  startWorktreeCreation(creationId, request)
   return creationId
 }
 
@@ -83,25 +96,23 @@ export function continueBackgroundWorktreeCreation(
   if (!store.pendingWorktreeCreations[creationId]) {
     return false
   }
-  // Why: the remote/runtime create path emits no progress events, so the stepped
-  // checklist would freeze on step 1. Use the request's captured repo owner so
-  // Retry does not change shape when focus moves to another runtime.
+  // Remote creates emit no phases; use captured submit-owner progress mode so Retry cannot change with focused runtime.
   store.updatePendingWorktreeCreation(creationId, {
     phase: getInitialWorktreeCreationPhase(request),
     status: 'creating',
     startedAt: Date.now(),
     error: undefined,
     provisioningLog: undefined,
+    checkoutProgress: undefined,
     request
   })
-  // Why: background work-item preflight can finish after the user moved on; keep
-  // the pending row alive without reselecting the creation panel in that case.
+  // Late background preflight preserves pending rows without reselecting creation after navigation.
   if (options.revealCreationSurface !== false) {
     store.setActivePendingWorktreeCreation(creationId)
     store.setActiveView('terminal')
     store.setSidebarOpen(true)
   }
-  void executeWorktreeCreation(creationId, request)
+  startWorktreeCreation(creationId, request)
   return true
 }
 
@@ -115,23 +126,14 @@ export function retryBackgroundWorktreeCreation(creationId: string): void {
   store.updatePendingWorktreeCreation(creationId, {
     status: 'creating',
     startedAt: Date.now(),
-    phase:
-      entry.request.ephemeralVmRecipe && !entry.request.ephemeralVmRuntimeId
-        ? 'provisioning-vm'
-        : 'fetching',
+    phase: getInitialWorktreeCreationPhase(entry.request),
     error: undefined,
-    provisioningLog: undefined
+    provisioningLog: undefined,
+    checkoutProgress: undefined,
+    worktreeId: undefined
   })
   store.setActivePendingWorktreeCreation(creationId)
   store.setActiveView('terminal')
   store.setSidebarOpen(true)
-  if (entry.structuredLaunchRecoveryWorktreeId) {
-    void retryStructuredWorktreeLaunch(
-      creationId,
-      entry.request,
-      entry.structuredLaunchRecoveryWorktreeId
-    )
-    return
-  }
-  void executeWorktreeCreation(creationId, entry.request)
+  startWorktreeCreation(creationId, entry.request)
 }

@@ -1,42 +1,5 @@
-import type { AppState } from '../types'
 import type { TerminalLayoutSnapshot, TerminalTab } from '../../../../shared/terminal-tab-types'
-import type { DirectSshAuthority } from '../../../../shared/ssh-types'
 import { parseLegacyNumericPaneKey, parsePaneKey } from '../../../../shared/stable-pane-id'
-import { parseRemoteRuntimePtyId } from '@/runtime/runtime-terminal-stream'
-import { resolveDirectSshTerminalWorkspaceKeys } from '../slices/direct-ssh-terminal-workspace-scope'
-
-export function isRemoteRuntimePtyId(ptyId: string | null | undefined): boolean {
-  return typeof ptyId === 'string' && parseRemoteRuntimePtyId(ptyId) !== null
-}
-
-export function isCurrentDirectSshAuthority(
-  state: AppState,
-  authority: DirectSshAuthority
-): boolean {
-  const current = state.sshConnectionStates.get(authority.targetId)
-  return Boolean(
-    current?.status === 'connected' &&
-    current.providerEpoch === authority.providerEpoch &&
-    current.connectionGeneration === authority.connectionGeneration
-  )
-}
-
-export function resolveDirectSshTerminalKeys(state: AppState, targetId: string): Set<string> {
-  return resolveDirectSshTerminalWorkspaceKeys(
-    {
-      targetId,
-      catalogRevision: 0,
-      repos: state.repos,
-      worktreesByRepo: state.worktreesByRepo,
-      detectedWorktreesByRepo: state.detectedWorktreesByRepo,
-      folderWorkspaces: state.folderWorkspaces,
-      projectGroups: state.projectGroups,
-      restoredRuntimeHostIdByWorkspaceSessionKey: state.restoredRuntimeHostIdByWorkspaceSessionKey
-    },
-    state.tabsByWorktree,
-    state.lastKnownRelayPtyIdByTabId
-  )
-}
 
 export function getPendingActivationSpawnCount(value: boolean | number | undefined): number {
   if (value === true) {

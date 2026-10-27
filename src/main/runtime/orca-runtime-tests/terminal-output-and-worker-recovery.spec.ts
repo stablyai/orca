@@ -1,5 +1,7 @@
 import { settledWriteStub } from '../../providers/settled-pty-write-stub'
+import { makeAgentStatusStoreWiring } from '../agent-status-store-wiring.test-fixture'
 import { describe, expect, it, vi } from 'vitest'
+import { committingSpawn } from '../bind-first-pane.test-fixture'
 import {
   OrcaRuntimeService,
   detectAgentStatusFromTitle,
@@ -94,7 +96,7 @@ describe('OrcaRuntimeService', () => {
     expect(pty?.lastOscTitle).toBe('⠋ Grok')
     expect(pty?.lastAgentStatus).toBe('working')
 
-    // A different rotating frame must store an identical title — title equality is what stops per-frame session-tab and mobile-snapshot touch.
+    // Normalize rotating frames identically to suppress per-frame session and snapshot updates.
     runtime.onPtyData('pty-1', '\x1b]0;⠴ - Thinking - grok\x07', 101)
     expect(pty?.lastOscTitle).toBe('⠋ Grok')
     expect(pty?.lastAgentStatus).toBe('working')
@@ -104,7 +106,7 @@ describe('OrcaRuntimeService', () => {
     const spawn = vi.fn().mockResolvedValue({ id: 'laptop-created-pty' })
     const runtime = new OrcaRuntimeService(store)
     runtime.setPtyController({
-      spawn,
+      spawn: committingSpawn(runtime, spawn),
       write: () => true,
       writeWithSettlement: settledWriteStub(() => true),
       kill: () => true,
@@ -136,12 +138,14 @@ describe('OrcaRuntimeService', () => {
     unsubscribe()
   })
 
-  // #7970: headless serve has no renderer syncing tab.agentStatus, so hook-only transitions must republish the snapshot carrying the retained hook payload.
+  // Hook-only OSC 9999 transitions must republish mobile status without a renderer (#7970).
   it('republishes mobile session tabs with hook payloads for title-less OSC 9999 transitions', async () => {
     const spawn = vi.fn().mockResolvedValue({ id: 'hook-only-pty' })
-    const runtime = new OrcaRuntimeService(store)
+    const statusWiring = makeAgentStatusStoreWiring()
+    const runtime = new OrcaRuntimeService(store, undefined, statusWiring.deps)
+    const uninstallRepublish = statusWiring.attach(runtime)
     runtime.setPtyController({
-      spawn,
+      spawn: committingSpawn(runtime, spawn),
       write: () => true,
       writeWithSettlement: settledWriteStub(() => true),
       kill: () => true,
@@ -188,14 +192,17 @@ describe('OrcaRuntimeService', () => {
     )
 
     unsubscribe()
+    uninstallRepublish()
   })
 
-  // Why: restored OMP panes can retain the hook while the wrapped Pi owns foreground (#6364).
+  // An OMP hook retains ownership when its wrapped Pi child is foreground (#6364).
   it('keeps an OMP hook labeled OMP when the wrapped pi child owns the foreground', async () => {
     const spawn = vi.fn().mockResolvedValue({ id: 'omp-flicker-pty' })
-    const runtime = new OrcaRuntimeService(store)
+    const statusWiring = makeAgentStatusStoreWiring()
+    const runtime = new OrcaRuntimeService(store, undefined, statusWiring.deps)
+    const uninstallRepublish = statusWiring.attach(runtime)
     runtime.setPtyController({
-      spawn,
+      spawn: committingSpawn(runtime, spawn),
       write: () => true,
       writeWithSettlement: settledWriteStub(() => true),
       kill: () => true,
@@ -240,13 +247,16 @@ describe('OrcaRuntimeService', () => {
     )
 
     unsubscribe()
+    uninstallRepublish()
   })
 
   it('does not republish mobile session tabs for repeated identical OSC 9999 payloads', async () => {
     const spawn = vi.fn().mockResolvedValue({ id: 'hook-ping-pty' })
-    const runtime = new OrcaRuntimeService(store)
+    const statusWiring = makeAgentStatusStoreWiring()
+    const runtime = new OrcaRuntimeService(store, undefined, statusWiring.deps)
+    const uninstallRepublish = statusWiring.attach(runtime)
     runtime.setPtyController({
-      spawn,
+      spawn: committingSpawn(runtime, spawn),
       write: () => true,
       writeWithSettlement: settledWriteStub(() => true),
       kill: () => true,
@@ -270,6 +280,7 @@ describe('OrcaRuntimeService', () => {
     expect(events).toHaveLength(1)
 
     unsubscribe()
+    uninstallRepublish()
   })
 
   it('suppresses a retained hook working status once the shell owns the pane title again', async () => {
@@ -296,7 +307,7 @@ describe('OrcaRuntimeService', () => {
       '\x1b]9999;{"state":"working","prompt":"long task","agentType":"codex"}\x07',
       100
     )
-    // Agent exits without a hook done event and the shell takes the title back; the stuck-spinner guard (#1437) must win over the retained hook row.
+    // A shell title must clear a stuck spinner even if no hook done event arrived (#1437).
     runtime.onPtyData('hook-exit-pty', '\x1b]0;zsh\x07', 101)
 
     await waitForMobileSessionTabsEvents(events, 1)
@@ -319,7 +330,7 @@ describe('OrcaRuntimeService', () => {
     ).ptysById.get('pty-1')
     expect(pty?.lastOscTitle).toBe('π - my-project')
     expect(pty?.lastAgentStatus).toBe('idle')
-    // Why: worktree.ps / mobile re-detect from stored lastOscTitle, not the raw OSC frame; the preserved π title must still classify as idle after normalize.
+    // Mobile re-detects the normalized stored title; retained π must still classify idle.
     expect(detectAgentStatusFromTitle(pty?.lastOscTitle ?? '')).toBe('idle')
   })
 
@@ -338,7 +349,7 @@ describe('OrcaRuntimeService', () => {
       }
     ).ptysById.get('pty-1')
     expect(pty?.lastOscTitle).toBe('⠋ Grok')
-    // Seed writes leaf status only; re-detect from the stored title must still report working so later live frames compare equal and don't thrash.
+    // The stored working title must match later frames to avoid snapshot churn.
     expect(detectAgentStatusFromTitle(pty?.lastOscTitle ?? '')).toBe('working')
 
     ;(
@@ -362,7 +373,6 @@ describe('OrcaRuntimeService', () => {
     ).ptysById.get('pty-1')
     expect(pty?.lastOscTitle).toBe('⠋ wire up grok')
 
-    // Claude/Codex braille + task ending " - grok" is not a Grok frame shape.
     runtime.onPtyData('pty-1', '\x1b]0;⠋ fix the flaky suite - grok\x07', 101)
     expect(pty?.lastOscTitle).toBe('⠋ fix the flaky suite - grok')
   })
@@ -568,7 +578,7 @@ describe('OrcaRuntimeService', () => {
     }
   })
 
-  it('injects pending orchestration messages into Cursor Agent without auto-submitting', async () => {
+  it('submits the mail pointer to Cursor Agent only after the paste-burst delay', async () => {
     vi.useFakeTimers()
     try {
       const runtime = new OrcaRuntimeService(store)
@@ -595,51 +605,17 @@ describe('OrcaRuntimeService', () => {
         'pty-1',
         expect.stringContaining('You have 1 orchestration message')
       )
-      await vi.advanceTimersByTimeAsync(500)
-      const submitWrites = write.mock.calls.filter(
-        ([ptyId, text]) => ptyId === 'pty-1' && text === '\r'
-      )
-      expect(submitWrites).toHaveLength(0)
+      const isSubmit = ([ptyId, text]: unknown[]): boolean => ptyId === 'pty-1' && text === '\r'
+      // Why: Cursor reads Enter within a 35ms keystroke burst as a newline, so it must trail the pointer.
+      await vi.advanceTimersByTimeAsync(100)
+      expect(write.mock.calls.filter(isSubmit)).toHaveLength(0)
+      await vi.advanceTimersByTimeAsync(400)
+      expect(write.mock.calls.filter(isSubmit)).toHaveLength(1)
 
       const unread = db.getUnreadMessages(mailbox)
       expect(unread).toHaveLength(1)
       expect(unread[0].read).toBe(0)
       expect(unread[0].delivered_at).toEqual(expect.any(String))
-      db.close()
-    } finally {
-      vi.useRealTimers()
-    }
-  })
-
-  it('still auto-submits to a non-Cursor agent when its idle title mentions Cursor Agent', async () => {
-    vi.useFakeTimers()
-    try {
-      const runtime = new OrcaRuntimeService(store)
-      const db = new InMemoryOrchestrationMessages()
-      const write = vi.fn().mockReturnValue(true)
-      setInMemoryOrchestrationMessages(runtime, db)
-      runtime.setPtyController({
-        write,
-        writeWithSettlement: settledWriteStub(write),
-        kill: vi.fn(),
-        getForegroundProcess: async () => null
-      })
-      syncSinglePty(runtime, 'pty-1', { tabTitle: 'cursor-repro-branch' })
-
-      const [terminal] = (await runtime.listTerminals()).terminals
-      bindSinglePtyRun(db, terminal.handle)
-      runtime.onPtyData('pty-1', '\x1b]0;. Investigate Cursor Agent\x07', 100)
-      runtime.onPtyData('pty-1', '\x1b]0;* Investigate Cursor Agent\x07', 101)
-      db.insertMessage({ from: 'term_sender', to: terminal.handle, subject: 'hello claude' })
-
-      runtime.deliverPendingMessagesForHandle(terminal.handle)
-      await vi.advanceTimersByTimeAsync(500)
-
-      expect(write).toHaveBeenCalledWith(
-        'pty-1',
-        expect.stringContaining('You have 1 orchestration message')
-      )
-      expect(write).toHaveBeenCalledWith('pty-1', '\r')
       db.close()
     } finally {
       vi.useRealTimers()
@@ -675,7 +651,6 @@ describe('OrcaRuntimeService', () => {
       ).length
       expect(firstInjections).toBe(1)
 
-      // The row remains pending, so the in-memory sequence watermark prevents replay.
       runtime.deliverPendingMessagesForHandle(terminal.handle)
       await vi.advanceTimersByTimeAsync(500)
 

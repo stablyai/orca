@@ -2,14 +2,18 @@ import { describe, expect, it, vi } from 'vitest'
 import type { ExecutionHostId } from '../../shared/execution-host'
 import type { Repo } from '../../shared/repo-types'
 import type { WorktreeMeta } from '../../shared/worktree/meta-types'
+import type { WorktreeLineage } from '../../shared/worktree/lineage-types'
 import type { GitWorktreeInfo, Worktree } from '../../shared/worktree/types'
 import type { Store } from '../persistence'
+import { mergeWorktreeMetaForWrite } from '../persistence/loading-store/worktree-meta-write-normalization'
+import { buildDetectedGitWorktrees } from '../ipc/worktrees/listing/ssh-worktree-fallback'
 import {
   listStoredWorktreeRowsForRepo,
   resolveRepoWorktreeRows,
   resolveScopedWorktreeIdRow,
   type RepoWorktreeRowDeps
 } from './repo-worktree-row-resolution'
+import type { HostWorktreeTarget } from '../../shared/worktree/host-qualified-identity'
 
 function repo(
   id: string,
@@ -37,18 +41,20 @@ function gitWorktree(path: string): GitWorktreeInfo {
 }
 
 function createDeps(repos: Repo[]): RepoWorktreeRowDeps & {
+  store: Store
   metaById: Record<string, WorktreeMeta>
   scanRepo: ReturnType<typeof vi.fn<RepoWorktreeRowDeps['scanRepo']>>
   listFolderWorkspaces: ReturnType<typeof vi.fn<RepoWorktreeRowDeps['listFolderWorkspaces']>>
 } {
   const metaById: Record<string, WorktreeMeta> = {}
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: a partial store mock; the code under test reads only the members it defines.
   const store = {
     getRepos: () => repos,
     getAllWorktreeMeta: () => metaById,
     getAllWorktreeLineage: () => ({}),
     getProjects: () => [],
     getSettings: () => ({}),
-    setWorktreeMeta: (worktreeId: string, updates: Partial<WorktreeMeta>) => {
+    setWorktreeMeta: ({ id: worktreeId }: HostWorktreeTarget, updates: Partial<WorktreeMeta>) => {
       const next = { ...metaById[worktreeId], ...updates } as WorktreeMeta
       metaById[worktreeId] = next
       return next
@@ -63,6 +69,55 @@ function createDeps(repos: Repo[]): RepoWorktreeRowDeps & {
 }
 
 describe('host-qualified scoped worktree resolution', () => {
+  it('projects cross-repository lineage by scanning only related repos on the selected host', async () => {
+    const childRepo = repo('child-repo', '/child-repo', { executionHostId: 'local' })
+    const parentRepo = repo('parent-repo', '/parent-repo', { executionHostId: 'local' })
+    const remoteParent = repo('parent-repo', '/remote-parent-repo', {
+      connectionId: 'builder',
+      executionHostId: 'ssh:builder'
+    })
+    const unrelated = repo('unrelated', '/unrelated', { executionHostId: 'local' })
+    const deps = createDeps([childRepo, parentRepo, remoteParent, unrelated])
+    const childId = 'child-repo::/child'
+    const parentId = 'parent-repo::/parent'
+    deps.metaById[childId] = mergeWorktreeMetaForWrite(undefined, {
+      instanceId: 'child-instance',
+      hostId: 'local',
+      projectId: 'child-project'
+    })
+    deps.metaById[parentId] = mergeWorktreeMetaForWrite(undefined, {
+      instanceId: 'parent-instance',
+      hostId: 'local',
+      projectId: 'parent-project'
+    })
+    const lineage: WorktreeLineage = {
+      worktreeId: childId,
+      worktreeInstanceId: 'child-instance',
+      parentWorktreeId: parentId,
+      parentWorktreeInstanceId: 'parent-instance',
+      origin: 'cli',
+      capture: { source: 'explicit-cli-flag', confidence: 'explicit' },
+      createdAt: 1
+    }
+    Object.assign(deps.store, { getAllWorktreeLineage: () => ({ [childId]: lineage }) })
+    deps.scanRepo.mockImplementation(async (owner) => ({
+      ok: true,
+      worktrees: [gitWorktree(owner.id === 'child-repo' ? '/child' : '/parent')]
+    }))
+
+    await expect(resolveScopedWorktreeIdRow(deps, childId, 'local')).resolves.toMatchObject({
+      parentWorktreeId: parentId,
+      lineage
+    })
+    expect(deps.scanRepo.mock.calls.map(([owner]) => owner)).toEqual([childRepo, parentRepo])
+
+    deps.scanRepo.mockClear()
+    await expect(resolveScopedWorktreeIdRow(deps, parentId, 'local')).resolves.toMatchObject({
+      childWorktreeIds: [childId]
+    })
+    expect(deps.scanRepo.mock.calls.map(([owner]) => owner)).toEqual([parentRepo, childRepo])
+  })
+
   it('scans only the selected local or SSH owner when repo ids and paths collide', async () => {
     const owners = [
       repo('shared', '/local/repo', { executionHostId: 'local' }),
@@ -266,12 +321,7 @@ describe('host-qualified scoped worktree resolution', () => {
   })
 })
 
-/**
- * #16243: the renderer can only address a workspace by `id:<repoId>::<path>`, and this scoped
- * lookup is what a host-qualified removal resolves through. It matched the id byte for byte while a
- * `path:` selector has always compared through `normalizeRuntimePathForComparison`, so a stored id
- * spelling its path differently from `git worktree list` resolved for the CLI and not for the UI.
- */
+/** Normalize id-selector paths like path selectors so UI removal resolves the same host-qualified row as CLI (#16243). */
 describe('scoped worktree id resolution across path spellings (#16243)', () => {
   it.each([
     ['a trailing slash', '/same/worktree', 'shared::/same/worktree/'],
@@ -349,4 +399,43 @@ describe('scoped worktree id resolution across path spellings (#16243)', () => {
     await expect(resolveScopedWorktreeIdRow(deps, worktreeId, 'local')).resolves.toBeNull()
     expect(deps.scanRepo).not.toHaveBeenCalled()
   })
+})
+
+describe('folder-to-Git checkout identity', () => {
+  it.each([
+    ['C:\\projects\\draft', 'C:/projects/draft'],
+    ['C:\\projects\\draft', 'c:/projects/draft']
+  ])(
+    'preserves the live folder locator %s in desktop and runtime listings',
+    async (folderPath, gitPath) => {
+      const owner = {
+        ...repo('folder', folderPath),
+        kind: 'git' as const,
+        folderUpgradeGitRootPath: gitPath
+      }
+      const deps = createDeps([owner])
+      const oldId = `folder::${folderPath}`
+      const metadata = mergeWorktreeMetaForWrite(undefined, {
+        hostId: 'local',
+        instanceId: 'existing-omp',
+        comment: 'keep me'
+      })
+      deps.metaById[oldId] = metadata
+      Object.assign(deps.store, { getProjectHostSetups: () => [] })
+      deps.scanRepo.mockResolvedValue({ ok: true, worktrees: [gitWorktree(gitPath)] })
+
+      const detected = buildDetectedGitWorktrees(deps.store, owner, [gitWorktree(gitPath)])
+      const rows = await resolveRepoWorktreeRows(deps, owner, deps.metaById, new Map())
+      for (const result of [detected, rows]) {
+        expect(result).toHaveLength(1)
+        expect(result[0]).toMatchObject({
+          id: oldId,
+          path: folderPath,
+          instanceId: 'existing-omp',
+          comment: 'keep me'
+        })
+      }
+      expect(Object.keys(deps.metaById)).toEqual([oldId])
+    }
+  )
 })

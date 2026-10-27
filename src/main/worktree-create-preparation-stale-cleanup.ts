@@ -1,8 +1,11 @@
 import {
   isWorktreeCreatePreparation,
+  parseWorktreePreparationOwnerMachine,
   parseWorktreePreparationOwnerPid,
   parseWorktreePreparationPathOwnerPid
 } from '../shared/worktree/create-preparation'
+import { orcadDataRootIsOnLocalDisk } from './orcad/orcad-data-root-locality'
+import { profileStateAccessMachineIdentity } from './persistence/profile-state/profile-state-access-identity'
 import type { AddWorktreeOptions } from './git/worktree'
 import { listWorktreeGraph } from './git/worktree'
 import { discardPreparedWorktree, unlockPreparedWorktree } from './git/worktree-create-preparation'
@@ -21,6 +24,37 @@ function isProcessAlive(pid: number): boolean {
   }
 }
 
+export type PreparationOwnerProbe = {
+  machineIdentity: () => string | null
+  repoIsOnLocalDisk: (repoPath: string) => boolean
+  isProcessAlive: (pid: number) => boolean
+}
+
+const defaultOwnerProbe: PreparationOwnerProbe = {
+  machineIdentity: profileStateAccessMachineIdentity,
+  repoIsOnLocalDisk: orcadDataRootIsOnLocalDisk,
+  isProcessAlive
+}
+
+/** A PID proves owner exit only on its issuing machine; shared disks do not establish ownership. */
+export function preparationOwnerExitedHere(
+  lockReason: string,
+  repoPath: string,
+  options: Pick<AddWorktreeOptions, 'wslDistro'>,
+  probe: PreparationOwnerProbe = defaultOwnerProbe
+): boolean {
+  const ownerPid = parseWorktreePreparationOwnerPid(lockReason)
+  if (!ownerPid) {
+    return false
+  }
+  const ownerMachine = parseWorktreePreparationOwnerMachine(lockReason)
+  // Older reasons name no machine: their pid is evidence only where no other host sees the repo.
+  const judgeable = ownerMachine
+    ? ownerMachine === probe.machineIdentity()
+    : Boolean(options.wslDistro) || probe.repoIsOnLocalDisk(repoPath)
+  return judgeable && !probe.isProcessAlive(ownerPid)
+}
+
 /** Returns after the shared host scan; file reclamation stays tracked in the background. */
 export async function startStalePreparationCleanup(
   cleanupKey: string,
@@ -33,6 +67,8 @@ export async function startStalePreparationCleanup(
     return
   }
   void retryPendingPreparationDiscards(cleanupKey)
+  // Reclaim in background to avoid blocking creates; retain caller priority for the scan they await.
+  const reclaimOptions: AddWorktreeOptions = { ...options, admissionTier: 'background' }
   const scan = listWorktreeGraph(repoPath, {
     ...options,
     includeCreatePreparations: true
@@ -47,15 +83,28 @@ export async function startStalePreparationCleanup(
         nextIndex += 1
         const lockOwnerPid = parseWorktreePreparationOwnerPid(worktree.lockReason)
         const pathOwnerPid = parseWorktreePreparationPathOwnerPid(worktree.path)
-        if (!lockOwnerPid || isProcessAlive(lockOwnerPid)) {
+        if (
+          !worktree.lockReason ||
+          !lockOwnerPid ||
+          !preparationOwnerExitedHere(worktree.lockReason, repoPath, options)
+        ) {
           continue
         }
-        // Preserve a branch-attached final path after a crash; only detached or
-        // still-hidden preparations are safe to discard automatically.
+        // Preserve branch-attached final paths after crashes; only hidden or detached preparations are disposable.
         if (worktree.branch && pathOwnerPid === null) {
-          await unlockPreparedWorktree(repoPath, worktree.path, options).catch(() => {})
+          await unlockPreparedWorktree(
+            repoPath,
+            worktree.path,
+            reclaimOptions,
+            worktree.lockReason
+          ).catch(() => {})
         } else if (pathOwnerPid === lockOwnerPid) {
-          await discardPreparedWorktree(repoPath, worktree.path, options).catch(() => {})
+          await discardPreparedWorktree(
+            repoPath,
+            worktree.path,
+            reclaimOptions,
+            worktree.lockReason
+          ).catch(() => {})
         }
       }
     }

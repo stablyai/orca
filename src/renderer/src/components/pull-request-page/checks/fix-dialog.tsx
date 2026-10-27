@@ -2,7 +2,7 @@ import React from 'react'
 import { toast } from 'sonner'
 import type { useAppStore } from '@/store'
 import { SourceControlAgentActionDialog } from '@/components/right-sidebar/SourceControlAgentActionDialog'
-import { readSourceControlLaunchRecipeAgentId } from '@/lib/source-control-launch-agent-selection'
+import { readSourceControlLaunchRecipeAgentId } from '../../../../../shared/source-control-launch-agent-selection'
 import type { SourceControlActionRecipe } from '../../../../../shared/source-control-ai-actions'
 import { translate } from '@/i18n/i18n'
 import type { GitHubWorkItem } from '../../../../../shared/github/work-item-types'
@@ -22,7 +22,8 @@ export function ChecksFixDialog({
   fixChecksComposerPrompt: string | null
   setFixChecksComposerPrompt: (value: string | null) => void
   fixChecksRecipe: SourceControlActionRecipe
-  fixChecksLaunchPlatform: NodeJS.Platform
+  /** Unset when the repo's host has not reported its OS; the launch then reports why. */
+  fixChecksLaunchPlatform: NodeJS.Platform | undefined
   repoConnectionId: string | null
   targetRepoId: string | null
   item: GitHubWorkItem
@@ -63,15 +64,7 @@ export function ChecksFixDialog({
           )
         )
       }}
-      onStart={({ agent, commandInput, agentArgs }) =>
-        startFixChecksFromDialog({
-          targetRepoId,
-          item,
-          agent,
-          commandInput,
-          agentArgs
-        })
-      }
+      onStart={(launch) => startFixChecksFromDialog({ targetRepoId, item, ...launch })}
     />
   )
 }

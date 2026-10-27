@@ -45,10 +45,7 @@ export type MonacoLargeTextPasteOptions = {
   ) => void
 }
 
-// Why: getFocusedCodeEditor() (context-menu/command paste) yields the base
-// ICodeEditor, while @monaco-editor/react mounts an IStandaloneCodeEditor (DOM
-// paste path). Both share every method used here, so accept the base type and
-// let the stricter standalone callers pass through unchanged.
+// Accept base ICodeEditor methods for both focused context-menu editors and mounted standalone editors.
 export type MonacoPasteEditor = Pick<
   editor.ICodeEditor,
   | 'getModel'
@@ -181,10 +178,7 @@ async function insertMonacoTextInChunks(
   return { status: 'pasted', mode: 'chunked', byteLength, chunksWritten }
 }
 
-// Why: shared by the DOM-event paste path (handleMonacoLargeTextPaste) and the
-// context-menu paste path (monaco-context-menu-paste) so both enforce the same
-// too-large rejection and chunked-insert behavior regardless of how the paste
-// was triggered.
+// Share size rejection and chunking across DOM and context-menu paste paths.
 export async function executeMonacoLargeTextPaste(
   monacoEditor: MonacoPasteEditor,
   text: string,
@@ -253,6 +247,17 @@ export function handleMonacoLargeTextPaste(
   event.stopPropagation()
 
   options.onPasteStart?.()
-  void executeMonacoLargeTextPaste(monacoEditor, text, options).then(options.onPasteResult)
+  // Why the catch: a throwing paste must still settle, or its start-side state never releases.
+  void executeMonacoLargeTextPaste(monacoEditor, text, options)
+    .catch((error: unknown) => {
+      console.error('[editor] large paste failed', error)
+      return {
+        status: 'cancelled',
+        reason: 'target-unavailable',
+        byteLength: ownershipMeasurement.byteLength,
+        chunksWritten: 0
+      } as const
+    })
+    .then(options.onPasteResult)
   return { status: 'handled' }
 }

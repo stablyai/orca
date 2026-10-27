@@ -1,3 +1,4 @@
+import type { LinkedReviewHints } from './hosted-review-cache-identity'
 import type {
   CreateHostedReviewInput,
   CreateStackedHostedReviewInput,
@@ -5,18 +6,23 @@ import type {
   HostedReviewInfo
 } from '../../../../shared/hosted-review'
 import type { Repo } from '../../../../shared/repo-types'
-import { getRepoExecutionHostId, parseExecutionHostId } from '../../../../shared/execution-host'
-import type { AppState } from '../types'
+import type { PRInfo } from '../../../../shared/github/pull-request-types'
+import { getRepoExecutionHostId } from '../../../../shared/execution-host'
+import { ipcOrRuntimeTargetForHostId } from '@/runtime/runtime-client-target'
+import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
 
 export type HostedReviewCacheEntry<T> = {
   data: T | null
   fetchedAt: number
+  stale?: boolean
   linkedReviewHintKey?: string
   branchLookupGitHubPRNumber?: number
 }
 export type HostedReviewCache = Record<string, HostedReviewCacheEntry<HostedReviewInfo>>
 
 export type HostedReviewFetchOptions = {
+  /** Source-qualified exact lookup; does not replace the branch’s selected review. */
+  exactReviewKey?: string
   force?: boolean
   repoId?: string
   admissionTier?: 'interactive' | 'status' | 'background'
@@ -36,11 +42,7 @@ export type CreateStackedHostedReviewStoreInput = CreateStackedHostedReviewInput
 
 const CACHE_TTL_MS = 60_000
 const HOSTED_REVIEW_CACHE_MAX = 500
-// Why: the runtime path is bounded by callRuntimeRpc's own timeout; the local
-// Electron path had none, so a hung git/gh subprocess (e.g. a stalled Windows
-// credential probe) could leave the Create PR header stuck in its "Checking…"
-// loading state forever. Mirror the runtime bound so a never-settling probe
-// rejects and the UI can fall back to an actionable/retryable state.
+// Bound native Electron lookups like runtime RPC; hung git/gh credentials must not leave Create PR Checking forever.
 const CREATION_ELIGIBILITY_TIMEOUT_MS = 30_000
 
 export class HostedReviewCreationEligibilityTimeoutError extends Error {
@@ -133,8 +135,7 @@ export function shouldRefetchGitHubScopedResultForNoHint(
   cached: HostedReviewCacheEntry<HostedReviewInfo> | undefined,
   hintKey: string
 ): boolean {
-  // Why: a GitHub-scoped result does not prove the branch's publishing remote
-  // has no GitLab/other review for neutral lookup.
+  // GitHub-only misses cannot rule out GitLab/other reviews on the publishing remote.
   return (
     cached !== undefined &&
     hintKey === '' &&
@@ -142,25 +143,20 @@ export function shouldRefetchGitHubScopedResultForNoHint(
   )
 }
 
-export function canReuseInflightHint(inflightHintKey: string, nextHintKey: string): boolean {
-  return inflightHintKey === nextHintKey
-}
-
 export function isStaleMergedGitHubReviewForHead(
-  cached: HostedReviewCacheEntry<HostedReviewInfo> | undefined,
+  cached: { data: HostedReviewInfo | PRInfo | null } | undefined,
   currentHeadOid: string | null | undefined
 ): boolean {
-  // Why: a merged GitHub PR is only shown when the worktree sits on its head
-  // or on a commit confirmed to be part of the PR. The cache key is
-  // branch-scoped, so a worktree that advanced off the merged line of work
-  // must not reuse (or, on failure, preserve) the now-stale merged review.
+  // Branch cache may outlive merged work: reuse/preserve merged GitHub reviews only at their head or confirmed-contained commits.
   const head = typeof currentHeadOid === 'string' ? currentHeadOid.trim() : ''
   if (head.length === 0) {
     return false
   }
   const data = cached?.data
   return (
-    data?.provider === 'github' &&
+    data !== null &&
+    data !== undefined &&
+    (!('provider' in data) || data.provider === 'github') &&
     data.state === 'merged' &&
     typeof data.headSha === 'string' &&
     data.headSha.length > 0 &&
@@ -175,8 +171,7 @@ export function hasNewerHostedReviewCacheEntry(
   requestStartedAt: number,
   requestStartedEntry: HostedReviewCacheEntry<HostedReviewInfo> | undefined
 ): boolean {
-  // Why: GitHub refresh events can update this shared cache while a branch
-  // lookup is in flight; older lookups must not resurrect stale results.
+  // Refresh broadcasts can update shared cache mid-lookup; stale results must not resurrect older reviews.
   const entry = cache[cacheKey]
   return (
     entry !== undefined &&
@@ -209,32 +204,33 @@ export function withHostedReviewCacheEntry(
   return pruned
 }
 
-export function settingsForHostedReviewRepoOwner(
-  settings: AppState['settings'],
+/** Known runtime repos use owner server; local/SSH/unknown repos use app IPC. Focus cannot infer ownership. */
+export function hostedReviewRepoOwnerTarget(
   repo: Pick<Repo, 'connectionId' | 'executionHostId'> | undefined
-): AppState['settings'] {
-  if (!repo) {
-    return settings
-  }
-  const parsed = parseExecutionHostId(getRepoExecutionHostId(repo))
-  if (parsed?.kind === 'runtime') {
-    return settings
-      ? { ...settings, activeRuntimeEnvironmentId: parsed.environmentId }
-      : ({ activeRuntimeEnvironmentId: parsed.environmentId } as AppState['settings'])
-  }
-  // Why: local and SSH-owned reviews are served by the desktop client's local
-  // IPC path, even when the sidebar is focused on a runtime host.
-  return settings
-    ? { ...settings, activeRuntimeEnvironmentId: null }
-    : ({ activeRuntimeEnvironmentId: null } as AppState['settings'])
+): RuntimeClientTarget {
+  return (
+    (repo ? ipcOrRuntimeTargetForHostId(getRepoExecutionHostId(repo)) : null) ?? { kind: 'local' }
+  )
 }
 
-export function settingsForHostedReviewActionOwner(
-  settings: AppState['settings'],
-  repo: Pick<Repo, 'connectionId' | 'executionHostId'> | undefined
-): AppState['settings'] {
-  if (!repo?.executionHostId && !repo?.connectionId) {
-    return settings
+export function hostedReviewBranchLookupArgs(
+  branch: string,
+  options?: HostedReviewFetchOptions & LinkedReviewHints
+) {
+  const fallbackGitHubPR =
+    options?.linkedGitHubPR == null ? (options?.fallbackGitHubPR ?? null) : null
+  return {
+    branch,
+    ...(options?.force === true ? { force: true } : {}),
+    ...(options?.admissionTier ? { admissionTier: options.admissionTier } : {}),
+    ...(options?.repoId !== undefined ? { repoId: options.repoId } : {}),
+    currentHeadOid: options?.currentHeadOid ?? null,
+    ...(options?.active === true ? { active: true } : {}),
+    linkedGitHubPR: options?.linkedGitHubPR ?? null,
+    ...(fallbackGitHubPR !== null ? { fallbackGitHubPR } : {}),
+    linkedGitLabMR: options?.linkedGitLabMR ?? null,
+    linkedBitbucketPR: options?.linkedBitbucketPR ?? null,
+    linkedAzureDevOpsPR: options?.linkedAzureDevOpsPR ?? null,
+    linkedGiteaPR: options?.linkedGiteaPR ?? null
   }
-  return settingsForHostedReviewRepoOwner(settings, repo)
 }

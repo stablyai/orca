@@ -38,6 +38,8 @@ type ApplySelectorInput = {
   expectedGeneration: number
   expectedMembershipSha256?: string
   membership: CellAdmissionMembership
+  // migration-only also parks evacuation/Asia rollback/failed-wave/new cells (orca-relay-operations.md); only same-cap isolate writes stamps, cleared on every exit from that state.
+  rollIsolatedCells?: string[]
 }
 
 const SELECTOR_ID = 'general'
@@ -48,6 +50,12 @@ export function stateFromEnabled(enabled: boolean): CellAdmissionState {
 
 export function enabledForState(state: CellAdmissionState): number {
   return state === 'existing-only' ? 0 : 1
+}
+
+// The narrowing counterpart of parseCellAdmissionState, for readers that must
+// answer "unknown" rather than throw.
+export function isCellAdmissionState(value: unknown): value is CellAdmissionState {
+  return CELL_ADMISSION_STATES.some((state) => state === value)
 }
 
 export function parseCellAdmissionState(value: string): CellAdmissionState {
@@ -122,9 +130,10 @@ export async function setCellAdmissionBeforeBoundary(
   await transaction.query(
     `UPDATE relay_cell_admission
      SET updated_at = CASE WHEN admission_state <> ? THEN ? ELSE updated_at END,
-         admission_state = ?
+         admission_state = ?,
+         roll_isolated_at = CASE WHEN ? = 'migration-only' THEN roll_isolated_at ELSE NULL END
      WHERE cell_id = ?`,
-    [state, now, state, cellId]
+    [state, now, state, state, cellId]
   )
   await synchronizeCellAdmissionBoundary(transaction, now)
 }
@@ -184,14 +193,27 @@ export class RelayCellAdmissionSelector {
         }
       }
       const now = this.now()
+      const rollIsolated = new Set(input.rollIsolatedCells ?? [])
       for (const [state, cellIds] of membershipEntries(membership)) {
         for (const cellId of cellIds) {
+          // Update stamp atomically with state: named isolates preserve prior stamp, leaving migration-only clears it, unnamed migration-only preserves it.
+          const marker =
+            state === 'migration-only'
+              ? rollIsolated.has(cellId)
+                ? 'stamp'
+                : 'keep'
+              : 'clear'
           await transaction.query(
             `UPDATE relay_cell_admission
              SET updated_at = CASE WHEN admission_state <> ? THEN ? ELSE updated_at END,
-                 admission_state = ?
+                 admission_state = ?,
+                 roll_isolated_at = CASE
+                   WHEN ? = 'clear' THEN NULL
+                   WHEN ? = 'stamp' THEN COALESCE(roll_isolated_at, ?)
+                   ELSE roll_isolated_at
+                 END
              WHERE cell_id = ?`,
-            [state, now, state, cellId]
+            [state, now, state, marker, marker, now, cellId]
           )
           await transaction.query(
             `UPDATE relay_cells

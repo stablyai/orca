@@ -1,0 +1,197 @@
+import type {
+  AgentChildWorkId,
+  AgentChildWorkInvocationFence,
+  AgentChildWorkKind
+} from './agent-status-child-work'
+import { parseAgentChildWorkInvocationFence } from './agent-status-child-work-codec'
+import { isBoundedString } from './agent-status-child-work-value-guards'
+import {
+  deserializeAgentStatusSubject,
+  parseAgentStatusSubject,
+  serializeAgentStatusSubject,
+  type AgentStatusSubject
+} from './agent-status-subject'
+
+const CHILD_ALIAS_KEY_PREFIX = 'agent-child-work-alias-v1:'
+const MAX_ALIAS_PART_LENGTH = 512
+
+/** thread_id identifies a child; turn_id/tool_use_id identify runs. Register hook Claude agent_id as task_id and Codex agent_id as thread_id; intentionally define no separate agent_id kind. */
+export const AGENT_CHILD_WORK_ALIAS_KINDS = [
+  'task_id',
+  'tool_use_id',
+  'thread_id',
+  'turn_id'
+] as const
+export type AgentChildWorkAliasKind = (typeof AGENT_CHILD_WORK_ALIAS_KINDS)[number]
+const ALIAS_KIND_SET: ReadonlySet<string> = new Set(AGENT_CHILD_WORK_ALIAS_KINDS)
+
+export type AgentChildWorkAliasIdentity = Pick<
+  AgentChildWorkAliasInput,
+  'parent' | 'provider' | 'segmentId' | 'kind' | 'aliasKind' | 'alias'
+>
+
+export type AgentChildWorkAliasInput = {
+  parent: AgentStatusSubject
+  provider: string
+  segmentId: string
+  kind: AgentChildWorkKind
+  aliasKind: AgentChildWorkAliasKind
+  alias: string
+  childWorkId: AgentChildWorkId
+  fence: AgentChildWorkInvocationFence
+}
+
+export type AgentChildWorkAliasRecord = AgentChildWorkAliasInput & {
+  revision: number
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value)
+}
+
+function hasOnlyKeys(
+  record: Record<string, unknown>,
+  required: readonly string[],
+  optional: readonly string[] = []
+): boolean {
+  const keys = Object.keys(record)
+  return (
+    required.every((key) => Object.hasOwn(record, key)) &&
+    keys.every((key) => required.includes(key) || optional.includes(key))
+  )
+}
+
+function isRevision(value: unknown): value is number {
+  return typeof value === 'number' && Number.isSafeInteger(value) && value >= 0
+}
+
+function isKind(value: unknown): value is AgentChildWorkKind {
+  return (
+    value === 'agent' ||
+    value === 'workflow' ||
+    value === 'command' ||
+    value === 'monitor' ||
+    value === 'unknown'
+  )
+}
+
+function isAliasKind(value: unknown): value is AgentChildWorkAliasKind {
+  return typeof value === 'string' && ALIAS_KIND_SET.has(value)
+}
+
+export function parseAgentChildWorkAliasInput(value: unknown): AgentChildWorkAliasInput | null {
+  if (
+    !isRecord(value) ||
+    !hasOnlyKeys(value, [
+      'parent',
+      'provider',
+      'segmentId',
+      'kind',
+      'aliasKind',
+      'alias',
+      'childWorkId',
+      'fence'
+    ]) ||
+    !isBoundedString(value.provider, MAX_ALIAS_PART_LENGTH) ||
+    !isBoundedString(value.segmentId, MAX_ALIAS_PART_LENGTH) ||
+    !isKind(value.kind) ||
+    !isAliasKind(value.aliasKind) ||
+    !isBoundedString(value.alias, MAX_ALIAS_PART_LENGTH) ||
+    !isBoundedString(value.childWorkId, MAX_ALIAS_PART_LENGTH)
+  ) {
+    return null
+  }
+  const parent = parseAgentStatusSubject(value.parent)
+  const fence = parseAgentChildWorkInvocationFence(value.fence)
+  if (!parent || !fence) {
+    return null
+  }
+  return {
+    parent,
+    provider: value.provider,
+    segmentId: value.segmentId,
+    kind: value.kind,
+    aliasKind: value.aliasKind,
+    alias: value.alias,
+    childWorkId: value.childWorkId,
+    fence
+  }
+}
+
+export function parseAgentChildWorkAliasRecord(value: unknown): AgentChildWorkAliasRecord | null {
+  if (!isRecord(value) || !isRevision(value.revision)) {
+    return null
+  }
+  const input = { ...value }
+  delete input.revision
+  const parsed = parseAgentChildWorkAliasInput(input)
+  return parsed ? { ...parsed, revision: value.revision } : null
+}
+
+export function serializeAgentChildWorkAliasKey(alias: AgentChildWorkAliasIdentity): string {
+  const parsed = parseAgentChildWorkAliasInput({
+    parent: alias.parent,
+    provider: alias.provider,
+    segmentId: alias.segmentId,
+    kind: alias.kind,
+    aliasKind: alias.aliasKind,
+    alias: alias.alias,
+    childWorkId: 'key-only',
+    fence: { invocationId: 'key-only', generation: 0 }
+  })
+  if (!parsed) {
+    throw new Error('Invalid agent child-work alias')
+  }
+  return `${CHILD_ALIAS_KEY_PREFIX}${JSON.stringify([
+    serializeAgentStatusSubject(parsed.parent),
+    parsed.provider,
+    parsed.segmentId,
+    parsed.kind,
+    parsed.aliasKind,
+    parsed.alias
+  ])}`
+}
+
+export function deserializeAgentChildWorkAliasKey(
+  value: string
+): AgentChildWorkAliasIdentity | null {
+  if (!value.startsWith(CHILD_ALIAS_KEY_PREFIX)) {
+    return null
+  }
+  let tuple: unknown
+  try {
+    tuple = JSON.parse(value.slice(CHILD_ALIAS_KEY_PREFIX.length))
+  } catch {
+    return null
+  }
+  if (!Array.isArray(tuple) || tuple.length !== 6) {
+    return null
+  }
+  const [parentKey, provider, segmentId, kind, aliasKind, alias] = tuple
+  if (typeof parentKey !== 'string') {
+    return null
+  }
+  const parent = deserializeAgentStatusSubject(parentKey)
+  const parsed = parseAgentChildWorkAliasInput({
+    parent,
+    provider,
+    segmentId,
+    kind,
+    aliasKind,
+    alias,
+    childWorkId: 'key-only',
+    fence: { invocationId: 'key-only', generation: 0 }
+  })
+  if (!parsed) {
+    return null
+  }
+  const identity = {
+    parent: parsed.parent,
+    provider: parsed.provider,
+    segmentId: parsed.segmentId,
+    kind: parsed.kind,
+    aliasKind: parsed.aliasKind,
+    alias: parsed.alias
+  }
+  return serializeAgentChildWorkAliasKey(identity) === value ? identity : null
+}

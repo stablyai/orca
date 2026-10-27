@@ -2,6 +2,12 @@ import { ipcRenderer } from 'electron'
 import { admitCloseActiveTabPayload } from '../close-active-tab-payload-admission'
 import type { CloseActiveTabPayload } from '../api/ui-command-event-api'
 import type {
+  BrowserHistoryNavigateCommand,
+  BrowserPageCommandTarget,
+  BrowserPageTabShortcut
+} from '../../shared/browser-page-command-target'
+import type { BrowserPageZoomCommand } from '../../shared/browser-page-zoom'
+import type {
   WorktreeDefaultTabsLaunch,
   WorktreeSetupLaunch
 } from '../../shared/worktree/launch-types'
@@ -49,31 +55,52 @@ export const uiTabAndBrowserCommandsApi = {
   }): void => {
     ipcRenderer.send('browser:tabCloseReply', reply)
   },
-  onNewTerminalTab: (callback: () => void): (() => void) => {
-    const listener = (_event: Electron.IpcRendererEvent) => callback()
-    ipcRenderer.on('ui:newTerminalTab', listener)
-    return () => ipcRenderer.removeListener('ui:newTerminalTab', listener)
+  onBrowserPageTabShortcut: (callback: (input: BrowserPageTabShortcut) => void): (() => void) => {
+    const listener = (_event: Electron.IpcRendererEvent, input: BrowserPageTabShortcut) =>
+      callback(input)
+    ipcRenderer.on('ui:browserPageTabShortcut', listener)
+    return () => ipcRenderer.removeListener('ui:browserPageTabShortcut', listener)
   },
-  onFocusBrowserAddressBar: (callback: () => void): (() => void) => {
-    const listener = (_event: Electron.IpcRendererEvent) => callback()
+  onFocusBrowserAddressBar: (
+    callback: (target: BrowserPageCommandTarget) => void
+  ): (() => void) => {
+    const listener = (_event: Electron.IpcRendererEvent, target: BrowserPageCommandTarget) =>
+      callback(target)
     ipcRenderer.on('ui:focusBrowserAddressBar', listener)
     return () => ipcRenderer.removeListener('ui:focusBrowserAddressBar', listener)
   },
+  onShowBrowserHistory: (callback: (target: BrowserPageCommandTarget) => void): (() => void) => {
+    const listener = (_event: Electron.IpcRendererEvent, target: BrowserPageCommandTarget) =>
+      callback(target)
+    ipcRenderer.on('ui:showBrowserHistory', listener)
+    return () => ipcRenderer.removeListener('ui:showBrowserHistory', listener)
+  },
   onFindInBrowserPage: browserFindSubscriptions.subscribe,
-  onReloadBrowserPage: (callback: () => void): (() => void) => {
-    const listener = (_event: Electron.IpcRendererEvent) => callback()
+  onReloadBrowserPage: (callback: (target: BrowserPageCommandTarget) => void): (() => void) => {
+    const listener = (_event: Electron.IpcRendererEvent, target: BrowserPageCommandTarget) =>
+      callback(target)
     ipcRenderer.on('ui:reloadBrowserPage', listener)
     return () => ipcRenderer.removeListener('ui:reloadBrowserPage', listener)
   },
-  onBrowserHistoryNavigate: (callback: (direction: 'back' | 'forward') => void): (() => void) => {
-    const listener = (_event: Electron.IpcRendererEvent, direction: 'back' | 'forward'): void =>
-      callback(direction)
+  onBrowserHistoryNavigate: (
+    callback: (command: BrowserHistoryNavigateCommand) => void
+  ): (() => void) => {
+    const listener = (_event: Electron.IpcRendererEvent, command: BrowserHistoryNavigateCommand) =>
+      callback(command)
     ipcRenderer.on('ui:browserHistoryNavigate', listener)
     return () => ipcRenderer.removeListener('ui:browserHistoryNavigate', listener)
   },
-  onZoomBrowserPage: (callback: (direction: 'in' | 'out' | 'reset') => void): (() => void) => {
-    const listener = (_event: Electron.IpcRendererEvent, direction: 'in' | 'out' | 'reset') =>
-      callback(direction)
+  onBrowserPagePointerDown: (
+    callback: (target: BrowserPageCommandTarget) => void
+  ): (() => void) => {
+    const listener = (_event: Electron.IpcRendererEvent, target: BrowserPageCommandTarget) =>
+      callback(target)
+    ipcRenderer.on('ui:browserPagePointerDown', listener)
+    return () => ipcRenderer.removeListener('ui:browserPagePointerDown', listener)
+  },
+  onZoomBrowserPage: (callback: (command: BrowserPageZoomCommand) => void): (() => void) => {
+    const listener = (_event: Electron.IpcRendererEvent, command: BrowserPageZoomCommand) =>
+      callback(command)
     ipcRenderer.on('ui:zoomBrowserPage', listener)
     return () => ipcRenderer.removeListener('ui:zoomBrowserPage', listener)
   },
@@ -87,8 +114,9 @@ export const uiTabAndBrowserCommandsApi = {
     ipcRenderer.on('ui:scrollBrowserPage', listener)
     return () => ipcRenderer.removeListener('ui:scrollBrowserPage', listener)
   },
-  onHardReloadBrowserPage: (callback: () => void): (() => void) => {
-    const listener = (_event: Electron.IpcRendererEvent) => callback()
+  onHardReloadBrowserPage: (callback: (target: BrowserPageCommandTarget) => void): (() => void) => {
+    const listener = (_event: Electron.IpcRendererEvent, target: BrowserPageCommandTarget) =>
+      callback(target)
     ipcRenderer.on('ui:hardReloadBrowserPage', listener)
     return () => ipcRenderer.removeListener('ui:hardReloadBrowserPage', listener)
   },
@@ -116,25 +144,10 @@ export const uiTabAndBrowserCommandsApi = {
     ipcRenderer.on('ui:selectFloatingIndex', listener)
     return () => ipcRenderer.removeListener('ui:selectFloatingIndex', listener)
   },
-  onSwitchTab: (callback: (direction: 1 | -1) => void): (() => void) => {
-    const listener = (_event: Electron.IpcRendererEvent, direction: 1 | -1) => callback(direction)
-    ipcRenderer.on('ui:switchTab', listener)
-    return () => ipcRenderer.removeListener('ui:switchTab', listener)
-  },
-  onSwitchTabAcrossAllTypes: (callback: (direction: 1 | -1) => void): (() => void) => {
-    const listener = (_event: Electron.IpcRendererEvent, direction: 1 | -1) => callback(direction)
-    ipcRenderer.on('ui:switchTabAcrossAllTypes', listener)
-    return () => ipcRenderer.removeListener('ui:switchTabAcrossAllTypes', listener)
-  },
   onSwitchRecentTab: (callback: () => void): (() => void) => {
     const listener = (_event: Electron.IpcRendererEvent) => callback()
     ipcRenderer.on('ui:switchRecentTab', listener)
     return () => ipcRenderer.removeListener('ui:switchRecentTab', listener)
-  },
-  onSwitchTerminalTab: (callback: (direction: 1 | -1) => void): (() => void) => {
-    const listener = (_event: Electron.IpcRendererEvent, direction: 1 | -1) => callback(direction)
-    ipcRenderer.on('ui:switchTerminalTab', listener)
-    return () => ipcRenderer.removeListener('ui:switchTerminalTab', listener)
   },
   onCtrlTabKeyDown: (callback: (data: { shiftKey: boolean }) => void): (() => void) => {
     const listener = (_event: Electron.IpcRendererEvent, data: { shiftKey: boolean }) =>
@@ -186,6 +199,7 @@ export const uiTabAndBrowserCommandsApi = {
       setup?: WorktreeSetupLaunch
       startup?: { command: string; env?: Record<string, string> }
       defaultTabs?: WorktreeDefaultTabsLaunch
+      providesInitialSurface?: boolean
     }) => void
   ): (() => void) => {
     const listener = (
@@ -196,6 +210,7 @@ export const uiTabAndBrowserCommandsApi = {
         setup?: WorktreeSetupLaunch
         startup?: { command: string; env?: Record<string, string> }
         defaultTabs?: WorktreeDefaultTabsLaunch
+        providesInitialSurface?: boolean
       }
     ) => callback(data)
     ipcRenderer.on('ui:activateWorktree', listener)

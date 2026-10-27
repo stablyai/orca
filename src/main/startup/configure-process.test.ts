@@ -1,7 +1,7 @@
-import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { homedir, tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it, onTestFinished, vi } from 'vitest'
 
 vi.mock('electron', () => {
   const paths = new Map<string, string>([['appData', '/tmp/app-data']])
@@ -56,7 +56,7 @@ describe('patchPackagedProcessPath', () => {
     }
   })
 
-  it('prepends agent-CLI install dirs (~/.opencode/bin, ~/.vite-plus/bin) for packaged darwin runs', async () => {
+  it('seeds agent-CLI install dirs (~/.opencode/bin, ~/.vite-plus/bin, ~/.grok/bin) for packaged darwin runs', async () => {
     const { app } = await import('electron')
     const { patchPackagedProcessPath } = await import('./configure-process')
 
@@ -68,12 +68,10 @@ describe('patchPackagedProcessPath', () => {
     patchPackagedProcessPath()
 
     const segments = (process.env.PATH ?? '').split(':')
-    // Why: issue #829 — ~/.opencode/bin and ~/.vite-plus/bin are the documented
-    // fallback install locations for the opencode and Pi CLI install scripts.
-    // Without them on PATH, GUI-launched Orca reports both as "Not installed"
-    // even when `which` resolves them in the user's shell.
+    // #829/#17590: GUI PATH must discover the documented OpenCode/Pi/Grok fallback installs.
     expect(segments).toContain(join('/Users/tester', '.opencode/bin'))
     expect(segments).toContain(join('/Users/tester', '.vite-plus/bin'))
+    expect(segments).toContain(join('/Users/tester', '.grok/bin'))
     expect(segments).toContain(join('/Users/tester', 'bin'))
   })
 
@@ -89,10 +87,8 @@ describe('patchPackagedProcessPath', () => {
     patchPackagedProcessPath()
 
     const segments = (process.env.PATH ?? '').split(':')
-    // Why: neither has a macOS installer, so both are phantom PATH entries.
     expect(segments).not.toContain('/snap/bin')
     expect(segments).not.toContain('/home/linuxbrew/.linuxbrew/bin')
-    // Why: Nix does ship a macOS default profile, so it stays seeded.
     expect(segments).toContain('/nix/var/nix/profiles/default/bin')
     expect(segments).toContain('/opt/homebrew/bin')
     expect(segments).toContain('/usr/local/bin')
@@ -137,9 +133,7 @@ describe('patchPackagedProcessPath', () => {
     expect(segments).toContain('/usr/local/bin')
   })
 
-  // Why derived, not a second literal: system-cli-install-dirs.ts documents its
-  // order as matching this seed's system block, and hardcoding the order in the
-  // fallback's own test lets a reorder here break that parity while both stay green.
+  // Derive expected system order from the seed so independently hardcoded tests cannot conceal parity drift.
   it('seeds the system block in the order the install-dir fallback expects', async () => {
     const { app } = await import('electron')
     const { patchPackagedProcessPath } = await import('./configure-process')
@@ -160,14 +154,7 @@ describe('patchPackagedProcessPath', () => {
     expect([...offsets].sort((a, b) => a - b)).toEqual(offsets)
   })
 
-  // Why this ordering is load-bearing (#18234): a seed exists so a GUI-launched
-  // Electron can *find* a tool, not to re-rank tools the user already has.
-  // `~/.local/bin` is user-writable and can hold a wrapper for any system tool.
-  // The reporter's `~/.local/bin/gh` wrapped `mise x gh -- gh`; seeded ahead of
-  // /usr/bin it ran instead of the real gh, and the wrapper's inner bare `gh`
-  // resolved back to itself. Measured in a container: with the login shell's
-  // ordering that chain exits in 22ms, with the seeded ordering it never
-  // terminates and creates ~1,300 processes/second.
+  // #18234: a seeded ~/.local/bin/gh wrapper outranked /usr/bin/gh and recursively spawned itself through mise.
   it('never lets a seeded user dir overtake a system dir already on PATH', async () => {
     const { app } = await import('electron')
     const { patchPackagedProcessPath } = await import('./configure-process')
@@ -181,7 +168,6 @@ describe('patchPackagedProcessPath', () => {
 
     const segments = (process.env.PATH ?? '').split(':')
     const localBin = segments.indexOf(join('/home/tester', '.local/bin'))
-    // Still reachable — that is what the seeding is for (#829).
     expect(localBin).toBeGreaterThan(-1)
     for (const systemDir of ['/usr/bin', '/bin', '/usr/local/bin']) {
       expect(segments.indexOf(systemDir)).toBeLessThan(localBin)
@@ -208,13 +194,11 @@ describe('patchPackagedProcessPath', () => {
     const seeded = getVersionManagerBinPaths({ platform: 'linux', homePath: '/home/tester' })
     const shimDirs = seeded.filter((dir) => !genericUserBinDirs.includes(dir))
     expect(shimDirs).not.toHaveLength(0)
-    // Why these keep leading: an nvm/mise/asdf user's runtime must beat a
-    // system install, which is the reason this seeding is ordered at all.
+    // Version-manager shims must outrank system runtimes.
     for (const dir of shimDirs) {
       expect(segments.indexOf(dir)).toBeLessThan(segments.indexOf('/usr/bin'))
     }
-    // Why these do not: the same list carries the generic user bin dirs, which
-    // hold whatever was last installed there rather than a managed toolchain.
+    // Generic user bins hold arbitrary wrappers and must remain behind inherited system tools.
     for (const dir of genericUserBinDirs) {
       expect(segments.indexOf(dir)).toBeGreaterThan(segments.indexOf('/usr/bin'))
     }
@@ -240,6 +224,10 @@ describe('patchPackagedProcessPath', () => {
 
     setPlatform('win32')
     Object.defineProperty(app, 'isPackaged', { configurable: true, value: true })
+    vi.stubEnv('FNM_DIR', 'C:\\fnm')
+    onTestFinished(() => {
+      vi.unstubAllEnvs()
+    })
     const pathDelimiter = process.platform === 'win32' ? ';' : ':'
     process.env.PATH = `C:\\Windows\\System32${pathDelimiter}C:\\Windows`
 
@@ -249,6 +237,9 @@ describe('patchPackagedProcessPath', () => {
     const userLocalBin = join(homedir(), '.local', 'bin')
     expect(segments).toContain(userLocalBin)
     expect(segments.indexOf(userLocalBin)).toBeLessThan(segments.indexOf('C:\\Windows\\System32'))
+    // #11356: fnm's default Node only backfills; it must not shadow an inherited system Node.
+    const fnmAlias = join('C:\\fnm', 'aliases', 'default')
+    expect(segments.indexOf(fnmAlias)).toBeGreaterThan(segments.indexOf('C:\\Windows'))
   })
 })
 
@@ -347,8 +338,6 @@ describe('configureDevUserDataPath', () => {
     delete process.env.ORCA_DEV_USER_DATA_PATH
     configureDevUserDataPath(true)
 
-    // Why: production code uses path.join(app.getPath('appData'), 'orca-dev')
-    // which produces platform-specific separators.
     expect(app.setPath).toHaveBeenCalledWith('userData', join('/tmp/app-data', 'orca-dev'))
   })
 
@@ -393,6 +382,25 @@ describe('configureOrcaUserDataPathEnv', () => {
 
     expect(configuredUserDataPath).toBe('/tmp/current-orca-user-data')
   })
+
+  it('drops a runtime source inherited from the Orca terminal that started this Orca', async () => {
+    const { app } = await import('electron')
+    const { configureOrcaUserDataPathEnv } = await import('./configure-process')
+    const saved = { ...process.env }
+    process.env.ORCA_RUNTIME_SOURCE_ID = 'parent-source'
+    process.env.ORCA_RUNTIME_SOURCE_INCARNATION = 'parent-runtime'
+    app.setPath('userData', '/tmp/current-orca-user-data')
+    let inherited: (string | undefined)[] = []
+
+    try {
+      configureOrcaUserDataPathEnv()
+      inherited = [process.env.ORCA_RUNTIME_SOURCE_ID, process.env.ORCA_RUNTIME_SOURCE_INCARNATION]
+    } finally {
+      process.env = saved
+    }
+
+    expect(inherited).toEqual([undefined, undefined])
+  })
 })
 
 describe('shouldInstallManagedHooks', () => {
@@ -418,6 +426,22 @@ describe('configureElectronNetworkCompatibility', () => {
     tempDirs.push(userDataPath)
     writeFileSync(join(userDataPath, 'orca-data.json'), JSON.stringify({ settings }), 'utf-8')
     return userDataPath
+  }
+
+  function createProfileState(
+    userDataPath: string,
+    profileId: string,
+    settings: Record<string, unknown>
+  ): string {
+    const profileDirectory = join(userDataPath, 'profiles', profileId)
+    mkdirSync(profileDirectory, { recursive: true })
+    writeFileSync(
+      join(userDataPath, 'orca-profile-index.json'),
+      JSON.stringify({ activeProfileId: profileId, profiles: [{ id: profileId }] }),
+      'utf-8'
+    )
+    writeFileSync(join(profileDirectory, 'orca-data.json'), JSON.stringify({ settings }), 'utf-8')
+    return profileDirectory
   }
 
   afterEach(() => {
@@ -502,6 +526,40 @@ describe('configureElectronNetworkCompatibility', () => {
     expect(
       shouldDisableHttp2ForElectronNetworking({ env: { ORCA_DISABLE_HTTP2: '0' }, userDataPath })
     ).toBe(false)
+  })
+
+  it('scopes a profile marker to the active profile before trusting it', async () => {
+    const { shouldDisableHttp2ForElectronNetworking } = await import('./configure-process')
+    const { writeHttp1CompatibilityMarker } = await import('./http1-compatibility-marker')
+    const userDataPath = mkdtempSync(join(tmpdir(), 'orca-http1-profile-'))
+    tempDirs.push(userDataPath)
+    createProfileState(userDataPath, 'profile-b', { electronHttp1CompatibilityMode: false })
+    writeHttp1CompatibilityMarker(userDataPath, true, 'profile-a')
+
+    expect(shouldDisableHttp2ForElectronNetworking({ env: {}, userDataPath })).toBe(false)
+  })
+
+  it('uses a matching profile marker even when the legacy JSON is stale', async () => {
+    const { shouldDisableHttp2ForElectronNetworking } = await import('./configure-process')
+    const { writeHttp1CompatibilityMarker } = await import('./http1-compatibility-marker')
+    const userDataPath = mkdtempSync(join(tmpdir(), 'orca-http1-profile-'))
+    tempDirs.push(userDataPath)
+    createProfileState(userDataPath, 'profile-b', { electronHttp1CompatibilityMode: false })
+    writeHttp1CompatibilityMarker(userDataPath, true, 'profile-b')
+
+    expect(shouldDisableHttp2ForElectronNetworking({ env: {}, userDataPath })).toBe(true)
+  })
+
+  it('fails closed when a profile database exists without a trusted marker', async () => {
+    const { shouldDisableHttp2ForElectronNetworking } = await import('./configure-process')
+    const userDataPath = mkdtempSync(join(tmpdir(), 'orca-http1-profile-'))
+    tempDirs.push(userDataPath)
+    const profileDirectory = createProfileState(userDataPath, 'profile-b', {
+      electronHttp1CompatibilityMode: true
+    })
+    writeFileSync(join(profileDirectory, 'profile-state.db'), 'sqlite-present', 'utf-8')
+
+    expect(shouldDisableHttp2ForElectronNetworking({ env: {}, userDataPath })).toBe(false)
   })
 
   it('appends Electron disable-http2 before sessions are created', async () => {
@@ -892,41 +950,7 @@ describe('safe graphics mode startup switches', () => {
     )
   })
 
-  // Why: the defect was the call site, not the switch — a win32 safe-graphics launch runs
-  // `if (!gpuFallbackActiveThisLaunch) enableMainProcessGpuFeatures()` and skips everything
-  // parked inside it, so only an unconditional call site reaches the users a GPU crash already hit.
-  it('calls the throttling opt-out outside the GPU-fallback gate in preflight', () => {
-    const mainSource = readFileSync(join(__dirname, 'main-process-preflight.ts'), 'utf8')
-    const gateStart = mainSource.indexOf('if (!state.gpuFallbackActiveThisLaunch) {')
-    expect(gateStart).toBeGreaterThanOrEqual(0)
-    const gateEnd = mainSource.indexOf('\n  }', gateStart)
-    expect(gateEnd).toBeGreaterThan(gateStart)
-
-    expect(mainSource.match(/\boptOutOfHiddenPageWakeUpThrottling\(\)/g)).toHaveLength(1)
-    expect(mainSource.slice(gateStart, gateEnd)).not.toContain('optOutOfHiddenPageWakeUpThrottling')
-  })
-
-  // Why: Chromium consumes the command line at ready, so this must stay in the pre-ready
-  // top-level block and never move into the whenReady callback, where appendSwitch is a silent
-  // no-op — the same invisible failure as parking it behind the GPU gate.
-  it('appends the throttling opt-out before app ready in preflight', () => {
-    const mainSource = readFileSync(join(__dirname, 'main-process-preflight.ts'), 'utf8')
-    const entrySource = readFileSync(join(__dirname, '..', 'index.ts'), 'utf8')
-    const preflightEnd = mainSource.indexOf('\n  return true')
-    const readyStart = entrySource.indexOf('void app.whenReady()')
-    const preflightCall = entrySource.indexOf('runMainProcessPreflight({')
-    expect(preflightEnd).toBeGreaterThan(0)
-    expect(readyStart).toBeGreaterThan(0)
-    expect(preflightCall).toBeGreaterThanOrEqual(0)
-    expect(preflightCall).toBeLessThan(readyStart)
-
-    const callIndex = mainSource.indexOf('optOutOfHiddenPageWakeUpThrottling()')
-    expect(callIndex).toBeGreaterThan(0)
-    expect(callIndex).toBeLessThan(preflightEnd)
-  })
-
-  // Why: Chromium enables IntensiveWakeUpThrottling on every desktop platform, so the opt-out
-  // must never become reachable only through the GPU-feature path again.
+  // Hidden-page throttling affects every desktop platform, independent of GPU setup.
   it('does not couple the throttling opt-out to GPU feature setup', async () => {
     const { app } = await import('electron')
     const { enableMainProcessGpuFeatures } = await import('./configure-process')

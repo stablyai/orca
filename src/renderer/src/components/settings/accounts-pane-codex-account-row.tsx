@@ -29,7 +29,7 @@ export function renderCodexAccountRow(
     isRemoteAccountScope,
     runCodexAccountAction,
     setRemoveCodexTarget,
-    settings
+    accountOwner
   } = model
   const isActive = providerAccountIsActiveInView(
     account,
@@ -37,8 +37,7 @@ export function renderCodexAccountRow(
     accountRuntime,
     accountVisibilityOptions
   )
-  // Why: same remote gate as the section-level warning — the
-  // desktop's rate-limit poll says nothing about server accounts.
+  // Desktop rate-limit polls cannot describe remote-owned account auth.
   const accountAuthWarning = isRemoteAccountScope
     ? null
     : getCodexAccountAuthWarning({
@@ -73,7 +72,7 @@ export function renderCodexAccountRow(
             void runCodexAccountAction(
               `select:${account.id}`,
               () =>
-                selectCodexProviderAccount(settings, {
+                selectCodexProviderAccount(accountOwner, {
                   accountId: account.id,
                   ...accountRuntimeView
                 }),
@@ -133,9 +132,7 @@ export function renderCodexAccountRow(
         </button>
 
         <div className="flex shrink-0 items-center justify-end gap-1 max-md:w-full max-md:flex-wrap">
-          {/* Why: selecting an account is the primary action in this row.
-          Keeping maintenance actions visually lighter prevents re-auth/remove
-          controls from overpowering the selection affordance in a dense list. */}
+          {/* Keep maintenance actions lighter so account selection remains primary in dense lists. */}
           <Button
             variant="ghost"
             size="xs"

@@ -33,6 +33,7 @@ function build(
 ): Tab {
   const [mirrored] = buildMirroredAgentTabs(
     snapshot,
+    'runtime:env-1',
     new Map(),
     GROUP,
     0,
@@ -60,11 +61,36 @@ describe('buildMirroredAgentTabs', () => {
   })
 
   it('leaves customLabel null when the tab was never renamed', () => {
-    // Guard: assert the row is actually built, so this cannot pass on an empty
-    // result the way a bare null-check would.
+    // Require a row so an empty result cannot satisfy the null check.
     const tab = build(snapshotWith('codex', 'Codex Chat'))
     expect(tab.label).toBe('Codex Chat')
     expect(tab.customLabel).toBeNull()
+  })
+
+  it('records the publishing host on a tab restored from before tabs carried one', () => {
+    const snapshot = snapshotWith('codex', 'Codex Chat')
+    const { executionHostId: _recorded, ...unrecorded } = build(snapshot)
+    const mirrored = build(snapshot, [unrecorded])
+    expect(mirrored.id).toBe(unrecorded.id)
+    expect(mirrored.executionHostId).toBe('runtime:env-1')
+  })
+
+  it('keeps the provisional tab group when the host publishes a different group', () => {
+    const snapshot = snapshotWith('codex', 'Codex Chat')
+    const provisional = build(snapshot)
+    const existing: Tab = { ...provisional, groupId: 'local-group' }
+    const [mirrored] = buildMirroredAgentTabs(
+      snapshot,
+      'runtime:env-1',
+      new Map([['host-tab-1', 'host-group']]),
+      GROUP,
+      0,
+      [existing],
+      1_000
+    )
+
+    expect(mirrored?.unifiedTab.id).toBe(existing.id)
+    expect(mirrored?.unifiedTab.groupId).toBe('local-group')
   })
 
   it('degrades to the placeholder when the host violates the string contract', () => {
@@ -77,8 +103,7 @@ describe('buildMirroredAgentTabs', () => {
 
   it('names an agent this build does not know after itself, not Codex', () => {
     const snapshot = snapshotWith('codex', '')
-    // Cast: the wire union is claude|codex today, but Tab.agentSessionAgent is
-    // the open AgentType, so a future agent can reach this label.
+    // Wire agent union is closed; Tab.agentSessionAgent is open and can carry future agents.
     ;(snapshot.tabs[0] as { agent: string }).agent = 'gemini'
     expect(build(snapshot).label).toBe('Gemini Chat')
   })

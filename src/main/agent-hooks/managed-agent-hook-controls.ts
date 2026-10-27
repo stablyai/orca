@@ -5,6 +5,11 @@ import {
 } from '../../shared/managed-agent-hook-targets'
 import { normalizeDisabledTuiAgents } from '../../shared/tui-agent-selection'
 import type { GlobalSettings } from '../../shared/global-settings-types'
+import {
+  isAgentStatusHooksEnabled,
+  isAgentStatusHooksEnabledForAgent
+} from '../../shared/agent-status-hooks-setting'
+import { probeClaudeCliVersion } from '../claude/claude-hook-event-versions'
 import { detectLocalManagedAgentCliPresence } from './local-agent-cli-presence'
 import {
   MANAGED_AGENT_HOOK_ASYNC_REMOVERS,
@@ -12,11 +17,15 @@ import {
   MANAGED_AGENT_HOOK_REMOVERS,
   MANAGED_AGENT_HOOK_SCRIPT_REFRESHERS,
   MANAGED_AGENT_HOOK_STATUS_READERS,
-  type ManagedAgentHookInstaller
+  type ManagedAgentHookInstaller,
+  type ManagedAgentHookInstallOptions
 } from './managed-agent-hook-registry'
 
 export { MANAGED_AGENT_HOOK_INSTALLERS } from './managed-agent-hook-registry'
-export { prepareManagedCodexHomeBeforeShellLaunch } from '../codex/managed-home-shell-preflight'
+export {
+  isAgentStatusHooksEnabled,
+  isAgentStatusHooksEnabledForAgent
+} from '../../shared/agent-status-hooks-setting'
 
 type ManagedHookSettings = Partial<
   Pick<GlobalSettings, 'agentCmdOverrides' | 'agentStatusHooksEnabled' | 'disabledTuiAgents'>
@@ -35,33 +44,13 @@ type RemoveOptions = {
   agents?: readonly AgentHookTarget[]
 }
 
-export function isAgentStatusHooksEnabled(
-  settings: Partial<Pick<GlobalSettings, 'agentStatusHooksEnabled'>> | null | undefined
-): boolean {
-  return settings?.agentStatusHooksEnabled !== false
-}
-
 export type StartupManagedHookAction = 'install' | 'skip'
 
-// Why never 'remove': this reads THIS instance's settings, but the managed hook files are
-// user-global (~/.claude/settings.json, ~/.cursor/hooks.json). A second Orca profile with the off
-// switch set would delete the hooks every other instance depends on, and Cursor — the one agent
-// with no title-derived status fallback — then goes silently idle (STA-5679). Honoring the off
-// switch only requires skipping the install; explicit removal stays on the Settings toggle.
+// Settings are per profile but hooks are user-global; startup removal would break other instances.
 export function resolveStartupManagedHookAction(
   settings: ManagedHookSettings
 ): StartupManagedHookAction {
   return isAgentStatusHooksEnabled(settings) ? 'install' : 'skip'
-}
-
-export function shouldInstallStartupManagedAgentHook(
-  settings: ManagedHookSettings,
-  agent: AgentHookTarget
-): boolean {
-  return (
-    resolveStartupManagedHookAction(settings) === 'install' &&
-    !normalizeDisabledTuiAgents(settings?.disabledTuiAgents).includes(agent)
-  )
 }
 
 export function shouldContinueManagedHookStartup(
@@ -69,11 +58,7 @@ export function shouldContinueManagedHookStartup(
   settings: ManagedHookSettings,
   agent: AgentHookTarget
 ): boolean {
-  return (
-    !isQuitting &&
-    isAgentStatusHooksEnabled(settings) &&
-    !normalizeDisabledTuiAgents(settings?.disabledTuiAgents).includes(agent)
-  )
+  return !isQuitting && isAgentStatusHooksEnabledForAgent(settings, agent)
 }
 
 function errorStatus(agent: AgentHookTarget, error: unknown): AgentHookInstallStatus {
@@ -112,11 +97,11 @@ function selectedInstallers(options: InstallOptions): readonly ManagedAgentHookI
 async function runInstaller(
   entry: ManagedAgentHookInstaller,
   onInstallError: InstallOptions['onInstallError'],
-  userInitiated?: boolean
+  options: ManagedAgentHookInstallOptions
 ): Promise<AgentHookInstallStatus> {
   const [agent, install] = entry
   try {
-    return await install({ userInitiated })
+    return await install(options)
   } catch (error) {
     console.error(`[agent-hooks] Failed to install ${agent} managed hooks:`, error)
     try {
@@ -128,10 +113,7 @@ async function runInstaller(
   }
 }
 
-// Why (#11549 aftermath): a CLI that falls off PATH keeps its user-wide config invoking
-// Orca's script, but the presence gate below then skips install() forever, freezing the
-// script at whatever Orca generated last. Existing scripts are Orca-owned, so bring them
-// current before any gating; creating new ones remains install()'s presence-gated job.
+// Refresh owned scripts before CLI presence gating; user-wide configs may still invoke them.
 async function refreshExistingManagedScripts(options: InstallOptions): Promise<void> {
   const allowed = options.agents ? new Set(options.agents) : null
   for (const [agent, refresh] of MANAGED_AGENT_HOOK_SCRIPT_REFRESHERS) {
@@ -200,7 +182,16 @@ export async function installManagedAgentHooks(
       )
       continue
     }
-    results.push(await runInstaller(entry, options.onInstallError, options.userInitiated))
+    const cliVersion =
+      agent === 'claude' && presence.executablePath
+        ? await probeClaudeCliVersion(presence.executablePath)
+        : null
+    results.push(
+      await runInstaller(entry, options.onInstallError, {
+        ...(options.userInitiated !== undefined ? { userInitiated: options.userInitiated } : {}),
+        ...(cliVersion ? { cliVersion } : {})
+      })
+    )
   }
   return results
 }

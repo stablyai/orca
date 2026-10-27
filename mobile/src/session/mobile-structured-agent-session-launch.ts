@@ -12,7 +12,12 @@ import {
 import { TUI_AGENT_DISPLAY_NAMES } from '../../../src/shared/tui-agent-display-names'
 import { hasRuntimeRpcErrorCode } from '../../../src/shared/runtime-rpc-error-code'
 import type { RpcClient } from '../transport/rpc-client'
-import { structuredSessionRandomUuid } from './mobile-structured-agent-session-rpc'
+import {
+  structuredAgentSessionCreate,
+  structuredAgentSupportProbe
+} from './mobile-session-launch-operations'
+import { randomV4Uuid } from '../platform/random-v4-uuid'
+import { rememberMobileCreatedStructuredSession } from './mobile-created-structured-sessions'
 
 type StructuredCreateSupport = {
   supported?: boolean
@@ -37,10 +42,10 @@ function createParamsFor(
   worktree: string
 ): StructuredAgentSessionCreateParams {
   return structuredAgentSessionCreateParams({
-    sessionId: createStructuredAgentSessionId(agent, structuredSessionRandomUuid),
+    sessionId: createStructuredAgentSessionId(agent, randomV4Uuid),
     worktree,
     agent,
-    randomUuid: structuredSessionRandomUuid
+    randomUuid: randomV4Uuid
   })
 }
 
@@ -60,8 +65,7 @@ function failedMessage(agent: AgentSessionHandleProvider): string {
   return `Could not open ${TUI_AGENT_DISPLAY_NAMES[agent]} chat.`
 }
 
-/** Only a refusal the host names as definitive may become `failed`; anything else keeps the
- *  outcome unknown so no legacy sibling terminal is created for a session that may exist. */
+// Only definitive refusal permits failure/fallback; uncertain creates may already own a session and must not create a sibling.
 function classifyCreateRefusal(
   agent: AgentSessionHandleProvider,
   code: string,
@@ -82,7 +86,7 @@ export async function createMobileStructuredAgentSession(
   let supportResponse
   for (let attempt = 0; ; attempt += 1) {
     try {
-      supportResponse = await client.sendRequest('agentSession.createSupport', { worktree, agent })
+      supportResponse = await structuredAgentSupportProbe.request(client, { worktree, agent })
     } catch (error) {
       const retryDelayMs = CREATE_SUPPORT_RETRY_DELAYS_MS[attempt]
       if (
@@ -118,16 +122,17 @@ export async function createMobileStructuredAgentSession(
   }
 
   const params = createParamsFor(agent, worktree)
+  rememberMobileCreatedStructuredSession(params.envelope.sessionId, worktree)
   let response
   try {
-    response = await client.sendRequest('agentSession.create', params, {
+    response = await structuredAgentSessionCreate.request(client, params, {
       timeoutMs: 15_000,
       budgetSpansConnect: true
     })
   } catch {
     // Replay the durable envelope once so a lost acknowledgement cannot create a sibling.
     try {
-      response = await client.sendRequest('agentSession.create', params, {
+      response = await structuredAgentSessionCreate.request(client, params, {
         timeoutMs: 15_000,
         budgetSpansConnect: true
       })
@@ -137,18 +142,21 @@ export async function createMobileStructuredAgentSession(
     }
   }
 
+  // Inspect malformed replies as unconfirmed rather than classifying them as refusals.
   if (!response || typeof response !== 'object' || typeof response.ok !== 'boolean') {
     return unknownCreateResult(agent, new Error(unconfirmedMessage(agent)))
   }
   if (!response.ok) {
+    const error = response.error as { code?: unknown; message?: unknown } | null | undefined
     if (
-      !response.error ||
-      typeof response.error !== 'object' ||
-      typeof response.error.code !== 'string'
+      !error ||
+      typeof error !== 'object' ||
+      typeof error.code !== 'string' ||
+      typeof error.message !== 'string'
     ) {
       return unknownCreateResult(agent, new Error(unconfirmedMessage(agent)))
     }
-    return classifyCreateRefusal(agent, response.error.code, response.error.message)
+    return classifyCreateRefusal(agent, error.code, error.message)
   }
   const result = response.result as AgentSessionMutationResult<AgentSessionAttachResult>
   if (!result || typeof result !== 'object' || typeof result.ok !== 'boolean') {
@@ -158,7 +166,8 @@ export async function createMobileStructuredAgentSession(
     if (
       !result.refusal ||
       typeof result.refusal !== 'object' ||
-      typeof result.refusal.code !== 'string'
+      typeof result.refusal.code !== 'string' ||
+      typeof result.refusal.message !== 'string'
     ) {
       return unknownCreateResult(agent, new Error(unconfirmedMessage(agent)))
     }

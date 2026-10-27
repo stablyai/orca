@@ -22,7 +22,6 @@ import { getWorktreeHostIdentity } from '../../../../shared/worktree/host-qualif
 const mockUnregisterPtyDataHandlers = vi.hoisted(() => vi.fn<() => unknown[]>(() => []))
 const mockRestorePtyDataHandlersAfterFailedShutdown = vi.hoisted(() => vi.fn())
 
-// Mock sonner (imported by repos.ts)
 vi.mock('sonner', () => ({
   toast: { info: vi.fn(), success: vi.fn(), error: vi.fn(), warning: vi.fn() }
 }))
@@ -32,7 +31,6 @@ vi.mock('@/components/terminal-pane/pty-dispatcher', () => ({
   unregisterPtyDataHandlers: mockUnregisterPtyDataHandlers
 }))
 
-// Mock agent-status (imported by terminal-helpers)
 vi.mock('@/lib/agent-status', async (importOriginal) => {
   const actual = await importOriginal<typeof AgentStatusModule>()
   return {
@@ -239,7 +237,6 @@ describe('removeWorktree cascade', () => {
       canForceDelete: true,
       forceDeleteReason: 'dirty'
     })
-    // State NOT cleaned up
     expect(s.worktreesByRepo['repo1']).toHaveLength(1)
     expect(s.tabsByWorktree[worktreeId]).toHaveLength(1)
     expect(s.ptyIdsByTabId['tab1']).toEqual(['pty1'])
@@ -321,9 +318,7 @@ describe('removeWorktree cascade', () => {
     store.getState().markWorktreesDeleting([queued, inProgress])
 
     expect(store.getState().deleteStateByWorktreeId).toMatchObject({
-      // A queued row is promoted so the sidebar shows real deletion progress.
       [queued]: { isDeleting: true, phase: 'deleting', error: null, canForceDelete: false },
-      // A row already in the deleting phase is left untouched.
       [inProgress]: { isDeleting: true, phase: 'deleting', error: null, canForceDelete: false }
     })
   })
@@ -377,18 +372,32 @@ describe('removeWorktree cascade', () => {
     })
   })
 
-  it('offers force delete for Electron-wrapped local dirty preflight errors', async () => {
+  // Vary wrapper/classification together (#19334); display strips wrappers while classification still reads original input.
+  it.each([
+    [
+      'offers force delete for Electron-wrapped local dirty preflight errors',
+      "Error invoking remote method 'worktrees:remove': Error: Failed to delete worktree at /workspace/feature-wt. ?? scratch.txt",
+      'Failed to delete worktree at /workspace/feature-wt. ?? scratch.txt',
+      { canForceDelete: true, forceDeleteReason: 'dirty' }
+    ],
+    [
+      'offers force delete when Git already removed an unregistered worktree',
+      "Error invoking remote method 'worktrees:remove': Error: Worktree is no longer registered with Git and its directory is already gone.",
+      'Worktree is no longer registered with Git and its directory is already gone.',
+      { canForceDelete: true, forceDeleteReason: 'missing-registration' }
+    ],
+    [
+      'does not offer force delete when Electron wraps SSH filesystem provider failures',
+      "Error invoking remote method 'worktrees:remove': Error: SSH filesystem provider unavailable",
+      'SSH filesystem provider unavailable',
+      { canForceDelete: false, forceDeleteReason: null }
+    ]
+  ])('%s', async (_title, wrapped, displayed, classification) => {
     const store = createTestStore()
     const worktreeId = 'repo1::/workspace/feature-wt'
-    const error =
-      "Error invoking remote method 'worktrees:remove': Error: Failed to delete worktree at /workspace/feature-wt. ?? scratch.txt"
-
-    mockApi.worktrees.remove.mockRejectedValueOnce(new Error(error))
-
+    mockApi.worktrees.remove.mockRejectedValueOnce(new Error(wrapped))
     seedStore(store, {
-      worktreesByRepo: {
-        repo1: [makeWorktree({ id: worktreeId, repoId: 'repo1' })]
-      },
+      worktreesByRepo: { repo1: [makeWorktree({ id: worktreeId, repoId: 'repo1' })] },
       tabsByWorktree: {},
       ptyIdsByTabId: {},
       terminalLayoutsByTabId: {}
@@ -396,12 +405,11 @@ describe('removeWorktree cascade', () => {
 
     const result = await store.getState().removeWorktree({ id: worktreeId, executionHostId: null })
 
-    expect(result).toEqual({ ok: false, error })
+    expect(result).toEqual({ ok: false, error: displayed })
     expect(store.getState().deleteStateByWorktreeId[worktreeId]).toEqual({
       isDeleting: false,
-      error,
-      canForceDelete: true,
-      forceDeleteReason: 'dirty'
+      error: displayed,
+      ...classification
     })
   })
 
@@ -459,34 +467,6 @@ describe('removeWorktree cascade', () => {
       canForceDelete: false,
       forceDeleteReason: null,
       lockReason: null
-    })
-  })
-
-  it('offers force delete when Git already removed an unregistered worktree', async () => {
-    const store = createTestStore()
-    const worktreeId = 'repo1::/workspace/deleted-wt'
-    const error =
-      "Error invoking remote method 'worktrees:remove': Error: Worktree is no longer registered with Git and its directory is already gone."
-
-    mockApi.worktrees.remove.mockRejectedValueOnce(new Error(error))
-
-    seedStore(store, {
-      worktreesByRepo: {
-        repo1: [makeWorktree({ id: worktreeId, repoId: 'repo1' })]
-      },
-      tabsByWorktree: {},
-      ptyIdsByTabId: {},
-      terminalLayoutsByTabId: {}
-    })
-
-    const result = await store.getState().removeWorktree({ id: worktreeId, executionHostId: null })
-
-    expect(result).toEqual({ ok: false, error })
-    expect(store.getState().deleteStateByWorktreeId[worktreeId]).toEqual({
-      isDeleting: false,
-      error,
-      canForceDelete: true,
-      forceDeleteReason: 'missing-registration'
     })
   })
 
@@ -579,34 +559,6 @@ describe('removeWorktree cascade', () => {
     expect(store.getState().deleteStateByWorktreeId[worktreeId]?.canForceDelete).toBe(false)
   })
 
-  it('does not offer force delete when Electron wraps SSH filesystem provider failures', async () => {
-    const store = createTestStore()
-    const worktreeId = 'repo1::/path/wt1'
-    const error =
-      "Error invoking remote method 'worktrees:remove': Error: SSH filesystem provider unavailable"
-
-    mockApi.worktrees.remove.mockRejectedValueOnce(new Error(error))
-
-    seedStore(store, {
-      worktreesByRepo: {
-        repo1: [makeWorktree({ id: worktreeId, repoId: 'repo1' })]
-      },
-      tabsByWorktree: {},
-      ptyIdsByTabId: {},
-      terminalLayoutsByTabId: {}
-    })
-
-    const result = await store.getState().removeWorktree({ id: worktreeId, executionHostId: null })
-
-    expect(result).toEqual({ ok: false, error })
-    expect(store.getState().deleteStateByWorktreeId[worktreeId]).toEqual({
-      isDeleting: false,
-      error,
-      canForceDelete: false,
-      forceDeleteReason: null
-    })
-  })
-
   it.each([
     'Could not connect to the remote Orca runtime.',
     'Remote Orca runtime closed the connection.',
@@ -617,6 +569,7 @@ describe('removeWorktree cascade', () => {
       const store = createTestStore()
       const worktreeId = 'repo1::/path/wt1'
       const error = `Error invoking remote method 'runtime-environments:call': Error: ${runtimeFailure}`
+      const displayed = runtimeFailure
 
       mockApi.runtimeEnvironments.call.mockImplementation((args: { method: string }) => {
         const compatibility = createCompatibleRuntimeStatusResponseIfNeeded(args)
@@ -648,10 +601,10 @@ describe('removeWorktree cascade', () => {
         .getState()
         .removeWorktree({ id: worktreeId, executionHostId: null })
 
-      expect(result).toEqual({ ok: false, error })
+      expect(result).toEqual({ ok: false, error: displayed })
       expect(store.getState().deleteStateByWorktreeId[worktreeId]).toEqual({
         isDeleting: false,
-        error,
+        error: displayed,
         canForceDelete: false,
         forceDeleteReason: null
       })
@@ -741,7 +694,6 @@ describe('removeWorktree cascade', () => {
     await store.getState().removeWorktree({ id: wt1, executionHostId: null })
     const s = store.getState()
 
-    // wt2 is untouched
     expect(s.tabsByWorktree[wt2]).toHaveLength(1)
     expect(s.tabsByWorktree[wt2][0].id).toBe('tab2')
     expect(s.ptyIdsByTabId['tab2']).toEqual(['pty2'])
@@ -750,7 +702,6 @@ describe('removeWorktree cascade', () => {
     expect(s.activeWorktreeId).toBe(wt2)
     expect(s.activeTabId).toBe('tab2')
 
-    // wt1 is gone
     expect(s.worktreesByRepo['repo1'].find((w) => w.id === wt1)).toBeUndefined()
     expect(s.tabsByWorktree[wt1]).toBeUndefined()
     expect(s.ptyIdsByTabId['tab1']).toBeUndefined()

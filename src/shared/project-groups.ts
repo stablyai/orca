@@ -1,16 +1,9 @@
 import { normalizeExecutionHostId } from './execution-host'
 import type { ProjectGroup, ProjectGroupCreatedFrom } from './project-group-types'
 import type { Repo } from './repo-types'
+import { createNonSecureContextUuid } from './non-secure-context-uuid'
 
 export const UNGROUPED_PROJECT_GROUP_KEY = 'project-group:ungrouped'
-
-function createProjectGroupId(): string {
-  const randomUUID = globalThis.crypto?.randomUUID
-  if (randomUUID) {
-    return randomUUID.call(globalThis.crypto)
-  }
-  return `project-group-${Date.now()}-${Math.random().toString(36).slice(2)}`
-}
 
 export function normalizeProjectGroupName(name: string, fallback = 'Untitled group'): string {
   const trimmed = name.trim()
@@ -28,7 +21,7 @@ export function createProjectGroup(input: {
 }): ProjectGroup {
   const now = input.now ?? Date.now()
   return {
-    id: createProjectGroupId(),
+    id: createNonSecureContextUuid(),
     name: normalizeProjectGroupName(input.name),
     parentPath: input.parentPath ?? null,
     connectionId: input.connectionId ?? null,
@@ -91,9 +84,8 @@ export function normalizeProjectGroups(value: unknown): ProjectGroup[] {
   groups.sort(
     (left, right) => left.tabOrder - right.tabOrder || left.name.localeCompare(right.name)
   )
-  const groupIds = new Set(groups.map((group) => group.id))
   for (const group of groups) {
-    if (group.parentGroupId === group.id || !groupIds.has(group.parentGroupId ?? '')) {
+    if (group.parentGroupId === group.id || !seen.has(group.parentGroupId ?? '')) {
       group.parentGroupId = null
     }
   }
@@ -146,8 +138,7 @@ export function collectProjectGroupSubtreeIds(
       continue
     }
     subtreeIds.add(groupId)
-    // Why: imported project-group trees can be very wide; `push(...children)`
-    // can exceed V8's argument limit while collecting descendants.
+    // Wide imported trees can exceed V8’s spread argument limit; append children individually.
     for (const childGroupId of childGroupsByParentId.get(groupId) ?? []) {
       pending.push(childGroupId)
     }
@@ -155,9 +146,7 @@ export function collectProjectGroupSubtreeIds(
   return subtreeIds
 }
 
-/** Manual rank for a project inside a group bucket. Explicit
- *  `projectGroupOrder` wins; otherwise fall back to global repo order so drag
- *  midpoint math and sidebar sorting stay aligned. */
+/** Use explicit group rank, else global repo rank, so drag midpoint math and sidebar order agree. */
 export function getEffectiveProjectGroupManualRank(
   repo: Pick<Repo, 'id' | 'projectGroupOrder'> | undefined,
   repoOrderRankById?: ReadonlyMap<string, number>,
@@ -192,4 +181,11 @@ export function getNextProjectGroupOrder(repos: readonly Repo[], groupId: string
     }
   }
   return max + 1
+}
+
+/** Deduplicate group IDs in first-seen order with last-copy values, matching id-keyed lookup behavior across host copies (#30045). */
+export function getDistinctProjectGroups<T extends Pick<ProjectGroup, 'id'>>(
+  projectGroups: readonly T[]
+): T[] {
+  return [...new Map(projectGroups.map((group) => [group.id, group])).values()]
 }

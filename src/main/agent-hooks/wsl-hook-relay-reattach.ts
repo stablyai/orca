@@ -9,7 +9,7 @@ export function ensureWslHookRelayForReattach(
   ensureForDistro: (distro: string) => void = (distro) =>
     wslHookRelayManager.ensureForDistro(distro)
 ): void {
-  // Why: the current renderer preference can differ from the surviving PTY's proven distro ownership.
+  // Surviving PTY distro ownership overrides the current renderer preference.
   if (connectionId || result.isReattach !== true || typeof result.wslDistro !== 'string') {
     return
   }

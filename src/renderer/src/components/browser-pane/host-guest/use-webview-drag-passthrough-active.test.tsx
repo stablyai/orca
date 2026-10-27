@@ -4,8 +4,7 @@ import { act, cleanup, render } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type * as DragPassthroughModule from './webview-drag-passthrough'
 
-/** Real behaviour, with enrolment counted: a subscriber that never drops out of the shared
- *  module-level set is otherwise invisible — the set is not enumerable from outside. */
+/** Count enrollment to expose leaks in the private subscriber set while retaining real behavior. */
 const enrolment = vi.hoisted(() => ({ live: 0 }))
 
 vi.mock('./webview-drag-passthrough', async (importActual) => {

@@ -2,7 +2,7 @@ import { readFile } from 'node:fs/promises'
 import { collectDescendantsFromIndex, getProcessTableIndex } from '../../shared/process-table-index'
 import { parseLinuxProcStatStartTime } from '../../shared/process-table-snapshot-reader'
 
-/** The job-control columns both `ps` tiers carry; `command`/`tty` are deliberately absent. */
+/** Cheap-tier job-control columns omit command/tty by design. */
 export type PaneFingerprintRow = {
   pid: number
   ppid: number
@@ -18,11 +18,7 @@ export type PaneFingerprintDeps = {
   readLinuxStartTime?: (pid: number) => Promise<string | null>
 }
 
-/**
- * Only the job-control bits of `stat`. The scheduler letter (R/S/D/I/U) flips every tick
- * on a working agent and says nothing about whether the pane changed hands; stopped,
- * zombie, and foreground-group membership do.
- */
+/** Ignore scheduler churn; stopped, zombie and foreground states can change pane ownership. */
 function jobControlState(stat: string): string {
   const head = stat[0] ?? ''
   const lifecycle = head === 'T' || head === 't' ? 'T' : head === 'Z' ? 'Z' : ''
@@ -37,15 +33,8 @@ async function readLinuxProcStartTime(pid: number): Promise<string | null> {
   }
 }
 
-/**
- * A per-pane summary of everything the cheap `ps` tier can see: the root shell's identity
- * (pid + start marker) and terminal foreground group, and every descendant's identity, group,
- * and job-control state. Two captures with equal fingerprints describe the same pane
- * subtree, so the name resolved from the last full capture still holds.
- *
- * Null when the root is missing or unfenced (no start marker, no group columns): callers
- * must then take the full capture rather than trust a comparison that could not be made.
- */
+/** Reuse recognition only across equal fenced shell/descendant identities, groups and job-control state.
+ * Missing root, start markers or group columns requires a full capture instead. */
 export async function buildPaneProcessFingerprint(
   rows: readonly PaneFingerprintRow[],
   rootPid: number,
@@ -76,10 +65,7 @@ export async function buildPaneProcessFingerprint(
   if (!rootStart) {
     return null
   }
-  // Why every member, not just the root: a start marker is what makes a pid comparison
-  // recycle-safe. Stamping a missing one as a placeholder would let two captures that both
-  // failed to read it compare equal across a recycled pid, so a vanished agent could look
-  // unchanged. Refusing the fingerprint sends the caller to the full capture instead.
+  // Every descendant needs a start marker; placeholders could compare equal across PID reuse and mask agent exit.
   const members: string[] = []
   for (const row of descendants) {
     const startTime = startTimes.get(row.pid)

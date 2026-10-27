@@ -3,55 +3,25 @@ import type {
   CatalogModel,
   CatalogOption
 } from './agent-session-option-catalog-types'
-import { agentArgOptionTokens, removeAgentArgOption } from './agent-session-option-agent-args'
+import { removeAgentArgOption } from './agent-session-option-agent-args'
 import {
   CLAUDE_MODEL_LIST_ARGS,
   CLAUDE_MODEL_LIST_STDIN,
   parseClaudeModelList
 } from './claude-model-list-probe'
-import { hasFlag } from './agent-cli-flag-detection'
 
-function hasCodexEffortOverride(tokens: readonly string[]): boolean {
-  if (hasFlag(tokens, ['--reasoning-effort'])) {
-    return true
-  }
-  const optionTokens = agentArgOptionTokens(tokens)
-  return optionTokens.some((token, index) => {
-    const previous = optionTokens[index - 1]
-    return (
-      (token.startsWith('model_reasoning_effort=') &&
-        (previous === '-c' || previous === '--config')) ||
-      token.startsWith('-cmodel_reasoning_effort=') ||
-      token.startsWith('-c=model_reasoning_effort=') ||
-      token.startsWith('--config=model_reasoning_effort=')
-    )
-  })
-}
-
-function removeCodexEffortOverride(tokens: readonly string[]): string[] {
-  const withoutFlag = removeAgentArgOption(tokens, ['--reasoning-effort'])
-  const result: string[] = []
-  for (let index = 0; index < withoutFlag.length; index += 1) {
-    const token = withoutFlag[index]
-    if (token === '--') {
-      result.push(...withoutFlag.slice(index))
-      break
-    }
-    const next = withoutFlag[index + 1]
-    if ((token === '-c' || token === '--config') && next?.startsWith('model_reasoning_effort=')) {
-      index += 1
-      continue
-    }
-    if (
-      token.startsWith('-cmodel_reasoning_effort=') ||
-      token.startsWith('-c=model_reasoning_effort=') ||
-      token.startsWith('--config=model_reasoning_effort=')
-    ) {
-      continue
-    }
-    result.push(token)
-  }
-  return result
+// Why: Codex also reads any setting from a `-c key=value` config override.
+function removeCodexAgentArgs(
+  tokens: readonly string[],
+  flags: readonly string[],
+  configKey: string
+): string[] {
+  return removeAgentArgOption(
+    'codex',
+    removeAgentArgOption('codex', tokens, flags),
+    ['-c', '--config'],
+    (value) => new RegExp(`^\\s*${configKey}\\s*=`).test(value ?? '')
+  )
 }
 
 const STANDARD_EFFORT_CHOICES = [
@@ -84,8 +54,7 @@ function claudeEffortWithChoices(choices: typeof EXTENDED_EFFORT_CHOICES): Catal
     },
     apply: {
       launchArgs: (value) => ['--effort', String(value)],
-      agentArgsOverride: (tokens) => hasFlag(tokens, ['--effort']),
-      removeAgentArgs: (tokens) => removeAgentArgOption(tokens, ['--effort']),
+      removeAgentArgs: (tokens) => removeAgentArgOption('claude', tokens, ['--effort']),
       midSession: { kind: 'command', build: (value) => `/effort ${String(value)}` }
     }
   }
@@ -128,11 +97,7 @@ const CLAUDE_FAST_MODE: CatalogOption = {
 
 export const CLAUDE_SESSION_OPTION_CATALOG: AgentSessionOptionCatalog = {
   supportsWorkerLaunchPreferences: true,
-  // Why: these ids are Claude CLI aliases that resolve to the newest model of
-  // each family on the host's CLI (`opus` is Opus 5 on current CLIs, older
-  // Opus on older CLIs), so pinned version labels lie on part of the fleet.
-  // Family labels also keep header scraping and /model echo detection working
-  // across CLI versions; listModels overlays exact per-host names below.
+  // Use CLI family aliases/labels across versions; pinned names mislabel older hosts and break header/model-echo matching. listModels supplies exact host names.
   models: [
     {
       id: 'fable',
@@ -162,14 +127,12 @@ export const CLAUDE_SESSION_OPTION_CATALOG: AgentSessionOptionCatalog = {
   ],
   modelApply: {
     launchArgs: (value) => ['--model', String(value)],
-    agentArgsOverride: (tokens) => hasFlag(tokens, ['--model']),
-    removeAgentArgs: (tokens) => removeAgentArgOption(tokens, ['--model']),
+    removeAgentArgs: (tokens) => removeAgentArgOption('claude', tokens, ['--model']),
     midSession: {
       kind: 'command',
       build: (value) => `/model ${String(value)}`,
       pickerCommand: '/model',
-      // Why: Claude sometimes confirms a cached-history switch. Detect the
-      // actual prompt so ordinary model changes stay in native chat.
+      // Detect the actual cached-history confirmation prompt so ordinary model changes stay in native chat.
       detectAgentInteraction: 'claude-model-switch-confirmation'
     }
   },
@@ -204,8 +167,8 @@ function codexEffort(ceiling: 'xhigh' | 'max' | 'ultra'): CatalogOption {
     },
     apply: {
       launchArgs: (value) => ['-c', `model_reasoning_effort=${String(value)}`],
-      agentArgsOverride: hasCodexEffortOverride,
-      removeAgentArgs: removeCodexEffortOverride,
+      removeAgentArgs: (tokens) =>
+        removeCodexAgentArgs(tokens, ['--reasoning-effort'], 'model_reasoning_effort'),
       midSession: { kind: 'agent-picker', command: '/model', delivery: 'type' }
     }
   }
@@ -213,8 +176,8 @@ function codexEffort(ceiling: 'xhigh' | 'max' | 'ultra'): CatalogOption {
 
 export const CODEX_SESSION_OPTION_CATALOG: AgentSessionOptionCatalog = {
   supportsWorkerLaunchPreferences: true,
-  // Why: Codex model access depends on auth. Keep this seed short and allow
-  // unknown persisted ids to pass through instead of claiming a complete list.
+  hostListingNamesConfiguredModel: true,
+  // Auth scopes Codex access; keep a short seed and admit unknown persisted IDs.
   models: [
     { id: 'gpt-5.6-sol', label: 'GPT-5.6 Sol', options: [codexEffort('ultra')] },
     { id: 'gpt-5.6-terra', label: 'GPT-5.6 Terra', options: [codexEffort('ultra')] },
@@ -228,11 +191,10 @@ export const CODEX_SESSION_OPTION_CATALOG: AgentSessionOptionCatalog = {
   ],
   modelApply: {
     launchArgs: (value) => ['-m', String(value)],
-    agentArgsOverride: (tokens) => hasFlag(tokens, ['-m', '--model']),
-    removeAgentArgs: (tokens) => removeAgentArgOption(tokens, ['-m', '--model']),
-    // Codex classifies multi-character writes as pasted prose; type the bare
-    // command and let its own picker apply the account-supported model.
+    removeAgentArgs: (tokens) => removeCodexAgentArgs(tokens, ['-m', '--model'], 'model'),
+    // Codex treats multi-character writes as paste; type the command and let its picker select an account-supported model.
     midSession: { kind: 'agent-picker', command: '/model', delivery: 'type' }
   },
-  unknownModelOptions: [codexEffort('xhigh')]
+  // New models may support max/ultra; unsupported efforts fall back to the model default instead of failing.
+  unknownModelOptions: [codexEffort('ultra')]
 }

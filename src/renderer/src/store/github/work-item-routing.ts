@@ -1,25 +1,27 @@
 import type { AppState } from '../types'
+import type { RuntimeFocusSettings } from '../../../../shared/github/github-cache-key'
 import type { Repo } from '../../../../shared/repo-types'
 import type { GitHubWorkItem, ListWorkItemsResult } from '../../../../shared/github/work-item-types'
 import {
   getTaskSourceCacheScope,
-  getTaskSourceRuntimeSettings,
   type TaskSourceContext
 } from '../../../../shared/task-source-context'
 import {
   getRepoExecutionHostId,
-  normalizeExecutionHostId,
   parseExecutionHostId,
   type ExecutionHostId
 } from '../../../../shared/execution-host'
 import { classifyGitHubUnavailable } from '../../../../shared/github/api-availability'
-import { callRuntimeRpc, RuntimeRpcCallError } from '../../runtime/runtime-rpc-client'
-import { workItemsCacheKey } from './cache-identity'
+import { callRuntimeRpc } from '../../runtime/runtime-rpc-client'
+import { RuntimeRpcCallError } from '../../runtime/runtime-rpc-result'
+import { getHostlessSourceRepoOwnerEnvironmentId } from '@/lib/repo-runtime-owner'
 import {
-  findRepoForGitHubOwner,
-  getGitHubFocusedRepoOwnerHostId,
-  getRuntimeRepoTarget
-} from './repository-routing'
+  runtimeTargetForOwnerEnvironment,
+  ipcOrRuntimeTargetForHostId
+} from '@/runtime/runtime-client-target'
+import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
+import { workItemsCacheKey } from './cache-identity'
+import { findRepoForGitHubOwner, getRuntimeRepoTarget } from './repository-routing'
 
 export type GitHubWorkItemRequestContext = {
   repoId: string
@@ -31,6 +33,8 @@ export type GitHubWorkItemRequestTarget =
   | { kind: 'environment'; environmentId: string; runtimeRepoId: string }
   | { kind: 'local' }
 
+type GitHubSourceRoutingState = Pick<AppState, 'settings' | 'repos'>
+
 export type GitHubWorkItemsListArgs = {
   limit: number
   query?: string
@@ -41,31 +45,39 @@ export type GitHubWorkItemsListArgs = {
 export function settingsForGitHubRepoOwner(
   settings: AppState['settings'],
   repo: Pick<Repo, 'connectionId' | 'executionHostId'> | undefined
-): AppState['settings'] {
+): RuntimeFocusSettings {
   if (!repo) {
     return settings
   }
   const parsed = parseExecutionHostId(getRepoExecutionHostId(repo))
-  if (parsed?.kind === 'runtime') {
-    return settings
-      ? { ...settings, activeRuntimeEnvironmentId: parsed.environmentId }
-      : ({ activeRuntimeEnvironmentId: parsed.environmentId } as AppState['settings'])
-  }
   // Why: local and SSH-owned GitHub lookups run on the desktop client; host focus must not redirect them to the selected runtime.
-  return settings
-    ? { ...settings, activeRuntimeEnvironmentId: null }
-    : ({ activeRuntimeEnvironmentId: null } as AppState['settings'])
+  return withActiveRuntimeEnvironmentId(
+    settings,
+    parsed?.kind === 'runtime' ? parsed.environmentId : null
+  )
 }
 
-export function settingsForGitHubFocusedRepoOwner(
+function withActiveRuntimeEnvironmentId(
   settings: AppState['settings'],
-  repo: Pick<Repo, 'connectionId' | 'executionHostId'> | undefined
-): AppState['settings'] {
-  if (!repo?.executionHostId && !repo?.connectionId) {
-    return settings
-  }
-  return settingsForGitHubRepoOwner(settings, repo)
+  activeRuntimeEnvironmentId: string | null
+): RuntimeFocusSettings {
+  return settings ? { ...settings, activeRuntimeEnvironmentId } : { activeRuntimeEnvironmentId }
 }
+
+function settingsForGitHubTaskSource(
+  state: GitHubSourceRoutingState,
+  repo: Pick<Repo, 'id'> | undefined,
+  sourceContext: TaskSourceContext
+): RuntimeFocusSettings {
+  const sourceHost = parseExecutionHostId(sourceContext.hostId)
+  return withActiveRuntimeEnvironmentId(
+    state.settings,
+    sourceHost?.kind === 'runtime'
+      ? sourceHost.environmentId
+      : getHostlessSourceRepoOwnerEnvironmentId(state.repos, repo?.id)
+  )
+}
+
 export function getWorkItemsCacheKeyForOwner(
   state: Partial<Pick<AppState, 'repos' | 'settings'>>,
   repoId: string,
@@ -74,69 +86,80 @@ export function getWorkItemsCacheKeyForOwner(
   repoPath?: string
 ): string {
   const repo = findRepoForGitHubOwner(state, repoId, repoPath ?? '')
-  return workItemsCacheKey(
-    repoId,
-    limit,
-    query,
-    repo ? getGitHubFocusedRepoOwnerHostId(state.settings ?? null, repo) : undefined
-  )
+  // Why canonical: an SSH row may carry only connectionId, and an unstamped row is local, not focus.
+  return workItemsCacheKey(repoId, limit, query, repo ? getRepoExecutionHostId(repo) : undefined)
 }
 
 export function getGitHubWorkItemSourceHostId(
-  state: AppState,
   repo: Pick<Repo, 'connectionId' | 'executionHostId'> | undefined,
   sourceContext?: TaskSourceContext | null
 ): ExecutionHostId | undefined {
   if (sourceContext?.provider === 'github') {
     return sourceContext.hostId
   }
-  return repo
-    ? (normalizeExecutionHostId(getGitHubFocusedRepoOwnerHostId(state.settings, repo)) ?? undefined)
-    : undefined
+  return repo ? getRepoExecutionHostId(repo) : undefined
+}
+
+/** The host whose row a fetch read, never the focused server: items carry it to their actions. */
+export function getGitHubWorkItemRowHostId(
+  state: Partial<Pick<AppState, 'repos'>>,
+  repoId: string,
+  repoPath: string,
+  sourceContext?: TaskSourceContext | null
+): ExecutionHostId | undefined {
+  const sourceHostId = sourceContext?.provider === 'github' ? sourceContext.hostId : undefined
+  const rows = state.repos?.filter((entry) => entry.id === repoId) ?? []
+  // Why not by id alone: a twin would resolve to whichever row is listed first.
+  const row =
+    rows.find((entry) => getRepoExecutionHostId(entry) === sourceHostId) ??
+    rows.find((entry) => entry.path === repoPath) ??
+    (rows.length === 1 ? rows[0] : undefined)
+  return row ? getRepoExecutionHostId(row) : sourceHostId
 }
 
 export function getGitHubWorkItemSourceCacheScope(
-  state: AppState,
   repo: Pick<Repo, 'connectionId' | 'executionHostId'> | undefined,
   sourceContext?: TaskSourceContext | null
 ): string | undefined {
   if (sourceContext?.provider === 'github') {
     return getTaskSourceCacheScope(sourceContext)
   }
-  return getGitHubWorkItemSourceHostId(state, repo, sourceContext)
-}
-
-export function getGitHubWorkItemSourceSettings(
-  settings: AppState['settings'],
-  repo: Pick<Repo, 'connectionId' | 'executionHostId'> | undefined,
-  sourceContext?: TaskSourceContext | null
-): AppState['settings'] {
-  if (sourceContext?.provider === 'github') {
-    return {
-      ...settings,
-      ...getTaskSourceRuntimeSettings(sourceContext)
-    } as AppState['settings']
-  }
-  return settingsForGitHubFocusedRepoOwner(settings, repo)
+  return getGitHubWorkItemSourceHostId(repo, sourceContext)
 }
 
 export function getGitHubRepoSourceSettings(
-  settings: AppState['settings'],
-  repo: Pick<Repo, 'connectionId' | 'executionHostId'> | undefined,
+  state: GitHubSourceRoutingState,
+  repo: Pick<Repo, 'id' | 'connectionId' | 'executionHostId'> | undefined,
   sourceContext?: TaskSourceContext | null
-): AppState['settings'] {
+): RuntimeFocusSettings {
   if (sourceContext?.provider === 'github') {
-    return {
-      ...settings,
-      ...getTaskSourceRuntimeSettings(sourceContext)
-    } as AppState['settings']
+    return settingsForGitHubTaskSource(state, repo, sourceContext)
   }
-  return settingsForGitHubRepoOwner(settings, repo)
+  return settingsForGitHubRepoOwner(state.settings, repo)
+}
+
+/** Use row-less task source host, else repo owner. Local/SSH/unknown repos use desktop credentials; never follow focused runtime (main refuses unowned repos). */
+export function getGitHubSourceTarget(
+  state: Pick<AppState, 'repos'>,
+  repo: Pick<Repo, 'id' | 'connectionId' | 'executionHostId'> | undefined,
+  sourceContext?: TaskSourceContext | null
+): RuntimeClientTarget {
+  if (sourceContext?.provider === 'github') {
+    const sourceHost = parseExecutionHostId(sourceContext.hostId)
+    return runtimeTargetForOwnerEnvironment(
+      sourceHost?.kind === 'runtime'
+        ? sourceHost.environmentId
+        : getHostlessSourceRepoOwnerEnvironmentId(state.repos, repo?.id)
+    )
+  }
+  return (
+    (repo ? ipcOrRuntimeTargetForHostId(getRepoExecutionHostId(repo)) : null) ?? { kind: 'local' }
+  )
 }
 
 export function getGitHubWorkItemRequestContext(
   state: AppState,
-  settings: AppState['settings'],
+  requestTarget: RuntimeClientTarget,
   repoId: string,
   repoPath: string,
   sourceContext?: TaskSourceContext | null
@@ -155,7 +178,7 @@ export function getGitHubWorkItemRequestContext(
       }
     }
   }
-  const runtimeRepo = getRuntimeRepoTarget(state, repoPath, settings)
+  const runtimeRepo = getRuntimeRepoTarget(state, { repoId, repoPath }, requestTarget)
   return {
     repoId,
     repoPath,
@@ -214,7 +237,7 @@ export function countGitHubWorkItemsForRepo(
 }
 
 export function isGitHubUnavailableWorkItemsError(error: unknown): boolean {
-  // Why: only `runtime_error` came from the GitHub method; other RPC transport failures ("timed out"/"unavailable") must not be blamed on GitHub.
+  // Only runtime_error came from the GitHub method; transport timeouts/unavailability are not GitHub faults.
   if (error instanceof RuntimeRpcCallError && error.code !== 'runtime_error') {
     return false
   }

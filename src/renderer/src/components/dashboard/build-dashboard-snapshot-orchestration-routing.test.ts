@@ -15,7 +15,10 @@ vi.mock('../sidebar/worktree-agent-orchestration-batch', () => ({
   selectRuntimeAgentOrchestrationBatch: batchMocks.select
 }))
 
-import { buildDashboardSnapshot, type DashboardSnapshotState } from './build-dashboard-snapshot'
+import {
+  buildDashboardSnapshot,
+  type DashboardSnapshotInput as DashboardSnapshotState
+} from './build-dashboard-snapshot'
 
 function worktree(index: number): Worktree {
   return {
@@ -58,7 +61,8 @@ function state(
 ): DashboardSnapshotState {
   const worktrees = Array.from({ length: worktreeCount }, (_, index) => worktree(index))
   return {
-    repos: [{ id: 'r1', path: '/r1', displayName: 'Repo One', badgeColor: '#000' }],
+    chatNames: new Map(),
+    repos: [{ id: 'r1', path: '/r1', displayName: 'Repo One', badgeColor: '#000', addedAt: 1 }],
     worktreesByRepo: { r1: worktrees },
     tabsByWorktree: Object.fromEntries(
       worktrees.map((currentWorktree, index) => [currentWorktree.id, [tab(index)]])
@@ -70,8 +74,9 @@ function state(
     terminalLayoutsByTabId: {},
     ptyIdsByTabId: {},
     runtimePaneTitlesByTabId: {},
-    acknowledgedAgentsByPaneKey: {}
-  } as unknown as DashboardSnapshotState
+    acknowledgedAgentsByPaneKey: {},
+    settings: null
+  }
 }
 
 describe('buildDashboardSnapshot orchestration routing', () => {
@@ -109,6 +114,7 @@ describe('buildDashboardSnapshot orchestration routing', () => {
         if (typeof key === 'string' && Object.hasOwn(target, key)) {
           runtimeValueReads += 1
         }
+        // oxlint-disable-next-line anti-slop/no-reflect-get -- Proxy `get` trap: only Reflect.get forwards a raw string|symbol key with the proxy receiver.
         return Reflect.get(target, key, receiver)
       }
     })

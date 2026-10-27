@@ -1,0 +1,127 @@
+import { describe, expect, it } from 'vitest'
+import { MOBILE_CLIPBOARD_IMAGE_UPLOAD_CHUNK_BASE64_CHARS } from '../../session/mobile-clipboard-image-upload-chunk'
+import { CLIPBOARD_IMAGE_MAX_SOURCE_BYTES } from '../../../../src/shared/clipboard-image'
+import {
+  BRIDGE_MEDIA_HANDLE_MAX_CHARS,
+  BRIDGE_MEDIA_MAX_LIVE_HANDLES,
+  BRIDGE_MEDIA_MIME_MAX_CHARS,
+  BRIDGE_MEDIA_READ_MAX_BYTES,
+  mediaPickParamsSchema,
+  mediaPickResultSchema,
+  mediaReadParamsSchema,
+  mediaReadResultSchema,
+  mediaReleaseParamsSchema,
+  mediaReleaseResultSchema
+} from './bridge-media-verbs'
+
+const HANDLE = 'media-1'
+
+describe('what a pick may ask for', () => {
+  it('takes each source the shell serves, single or multiple', () => {
+    for (const source of ['library', 'files', 'clipboard']) {
+      for (const multiple of [true, false]) {
+        expect(mediaPickParamsSchema.safeParse({ source, multiple }).success, source).toBe(true)
+      }
+    }
+  })
+
+  it('refuses a source this build has no picker for, and a missing or extra key', () => {
+    for (const params of [
+      { source: 'camera', multiple: false },
+      { source: 'library' },
+      { multiple: true },
+      { source: 'library', multiple: 'yes' },
+      { source: 'library', multiple: false, limit: 3 }
+    ]) {
+      expect(mediaPickParamsSchema.safeParse(params).success, JSON.stringify(params)).toBe(false)
+    }
+  })
+})
+
+describe('what a pick may answer', () => {
+  const item = { handle: HANDLE, mime: 'image/png', byteLength: 1024 }
+
+  it('takes items with and without their pixel dimensions', () => {
+    expect(mediaPickResultSchema.safeParse({ items: [item] }).success).toBe(true)
+    expect(
+      mediaPickResultSchema.safeParse({ items: [{ ...item, width: 4, height: 3 }] }).success
+    ).toBe(true)
+    expect(mediaPickResultSchema.safeParse({ items: [] }).success).toBe(true)
+  })
+
+  it('holds a handler to the live-handle cap, so one pick cannot outrun the registry', () => {
+    const many = (count: number): unknown => ({
+      items: Array.from({ length: count }, () => item)
+    })
+    expect(mediaPickResultSchema.safeParse(many(BRIDGE_MEDIA_MAX_LIVE_HANDLES)).success).toBe(true)
+    expect(mediaPickResultSchema.safeParse(many(BRIDGE_MEDIA_MAX_LIVE_HANDLES + 1)).success).toBe(
+      false
+    )
+  })
+
+  it('accepts exact handle and MIME limits and refuses unusable items', () => {
+    const at = {
+      ...item,
+      handle: 'h'.repeat(BRIDGE_MEDIA_HANDLE_MAX_CHARS),
+      mime: `image/${'x'.repeat(BRIDGE_MEDIA_MIME_MAX_CHARS - 6)}`
+    }
+    expect(mediaPickResultSchema.safeParse({ items: [at] }).success).toBe(true)
+    expect(
+      mediaPickResultSchema.safeParse({ items: [{ ...at, mime: `${at.mime}x` }] }).success
+    ).toBe(false)
+    for (const bad of [
+      { ...item, handle: '' },
+      { ...item, handle: 'h'.repeat(BRIDGE_MEDIA_HANDLE_MAX_CHARS + 1) },
+      { ...item, mime: 'image' },
+      { ...item, mime: 'data:image/png;base64,AAAA' },
+      { ...item, byteLength: -1 },
+      { ...item, byteLength: 1.5 },
+      { ...item, byteLength: CLIPBOARD_IMAGE_MAX_SOURCE_BYTES + 1 },
+      { ...item, width: 0 },
+      { ...item, height: -2 }
+    ]) {
+      expect(mediaPickResultSchema.safeParse({ items: [bad] }).success, JSON.stringify(bad)).toBe(
+        false
+      )
+    }
+  })
+})
+
+describe('what a chunk read may ask for', () => {
+  it('takes a read at the cap and refuses one past it', () => {
+    const at = { handle: HANDLE, offset: 0, length: BRIDGE_MEDIA_READ_MAX_BYTES }
+    expect(mediaReadParamsSchema.safeParse(at).success).toBe(true)
+    expect(mediaReadParamsSchema.safeParse({ ...at, length: at.length + 1 }).success).toBe(false)
+  })
+
+  it('refuses a read that names nothing a file has', () => {
+    for (const params of [
+      { handle: HANDLE, offset: 0, length: 0 },
+      { handle: HANDLE, offset: -1, length: 16 },
+      { handle: HANDLE, offset: 1.5, length: 16 },
+      { handle: HANDLE, offset: CLIPBOARD_IMAGE_MAX_SOURCE_BYTES + 1, length: 16 },
+      { handle: '', offset: 0, length: 16 },
+      { handle: HANDLE, offset: 0 },
+      { handle: HANDLE, offset: 0, length: 16, encoding: 'hex' }
+    ]) {
+      expect(mediaReadParamsSchema.safeParse(params).success, JSON.stringify(params)).toBe(false)
+    }
+  })
+
+  it('holds the answer to the base64 the chunk cap allows', () => {
+    const base64 = 'a'.repeat(MOBILE_CLIPBOARD_IMAGE_UPLOAD_CHUNK_BASE64_CHARS)
+    expect(mediaReadResultSchema.safeParse({ base64, eof: false }).success).toBe(true)
+    expect(mediaReadResultSchema.safeParse({ base64: `${base64}a`, eof: true }).success).toBe(false)
+    expect(mediaReadResultSchema.safeParse({ base64: '', eof: true }).success).toBe(true)
+    expect(mediaReadResultSchema.safeParse({ base64: '!!', eof: true }).success).toBe(false)
+  })
+})
+
+describe('what a release may ask for and answer', () => {
+  it('names one handle and says whether it held one', () => {
+    expect(mediaReleaseParamsSchema.safeParse({ handle: HANDLE }).success).toBe(true)
+    expect(mediaReleaseParamsSchema.safeParse({ handle: HANDLE, all: true }).success).toBe(false)
+    expect(mediaReleaseResultSchema.safeParse({ released: false }).success).toBe(true)
+    expect(mediaReleaseResultSchema.safeParse({ released: 'no' }).success).toBe(false)
+  })
+})

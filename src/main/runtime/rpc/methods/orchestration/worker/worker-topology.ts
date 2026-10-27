@@ -1,9 +1,10 @@
 import type { AgentLaunchPreferences } from '../../../../../../shared/agent-session-host-authority'
+import { narrowStructuredLaunchSeedOptions } from '../../../../../../shared/native-chat/input/native-chat-session-option-defaults'
 import type { TuiAgent } from '../../../../../../shared/tui-agent'
 import type { OrcaRuntimeService } from '../../../../orca-runtime'
 import type { OrchestrationDb } from '../../../../orchestration/db'
-import { OrchestrationError } from '../../../../orchestration/orchestration-error'
 import { createStructuredWorkerSession } from '../../orchestration-structured-worker-session'
+import { dispatchReportMailbox } from '../../../../orchestration/dispatch-report-mailbox'
 
 export type WorkerEffect = {
   kind: 'worktree' | 'terminal' | 'setup' | 'dispatch_input'
@@ -64,14 +65,13 @@ export async function createExistingWorktreeWorkerTerminal(args: {
   effects: WorkerEffect[]
 }): Promise<{ handle: string; warning?: string }> {
   const terminal = await args.runtime.createTerminal(`id:${args.worktreeId}`, {
-    // Why: the agent id is not a shell command — `cursor` resolves to the Cursor
-    // desktop app while its CLI is `cursor-agent`. Let the runtime build the
-    // configured launcher instead of executing the raw id.
+    // Resolve ids through agent config; cursor alone opens the desktop app, its CLI is cursor-agent.
     startupAgent: args.agent,
+    launchSource: 'orchestration',
+    suppressStartupUpdatePrompt: true,
     ...(args.launchPreferences ? { launchPreferences: args.launchPreferences } : {}),
     title: `worker-${args.taskId}`,
-    // Why: dispatching a worker is background work; it must not pull the sidebar
-    // to the worker's workspace while the user is reading somewhere else.
+    // Worker creation is background work and must not pull the sidebar away.
     surfaceOwner: false
   })
   args.effects.push({
@@ -85,30 +85,23 @@ export async function createExistingWorktreeWorkerTerminal(args: {
   return { handle: terminal.handle, warning: terminal.warning }
 }
 
-/**
- * A worker that IS a structured chat session, in the same shape the terminal path returns.
- *
- * `requireWorkerAuthority` needs no branch: the runtime's pane-key and process-incarnation getters
- * consult the structured registry, so the handle minted here answers exactly like a PTY handle.
- */
+/** Return structured workers in the terminal authority shape; registry-backed pane/incarnation getters keep requireWorkerAuthority mode-independent. */
 export async function createStructuredWorkerSessionForWorktree(args: {
   runtime: OrcaRuntimeService
   worktreeId: string
   agent: TuiAgent
   dispatchId: string
+  /** `--model`/`--effort`; the session seeds them exactly as a saved selection is seeded. */
+  launchPreferences?: AgentLaunchPreferences
   effects: WorkerEffect[]
 }): Promise<Awaited<ReturnType<typeof createStructuredWorkerSession>>> {
-  if (args.agent !== 'claude' && args.agent !== 'codex') {
-    throw new OrchestrationError(
-      'agent_unconfigured',
-      `Structured workers support claude and codex; ${args.agent} has no structured session.`
-    )
-  }
+  const options = narrowStructuredLaunchSeedOptions(args.launchPreferences)
   const created = await createStructuredWorkerSession({
     runtime: args.runtime,
     worktreeId: args.worktreeId,
     agent: args.agent,
     dispatchId: args.dispatchId,
+    ...(options ? { options } : {}),
     onJournalActivity: (sessionId) =>
       args.runtime.notifyStructuredSessionJournalActivity?.(sessionId)
   })
@@ -140,118 +133,6 @@ export function applyWaitForSetupOutcome(
   const setupEffect = effects.find((effect) => effect.kind === 'setup')
   if (setupEffect) {
     setupEffect.state = receipt.state
-  }
-}
-
-export async function createWorkerWorktree(args: {
-  runtime: OrcaRuntimeService
-  db: OrchestrationDb
-  dispatchId: string
-  requestedWorktree: string
-  coordinatorWorktree: Awaited<ReturnType<OrcaRuntimeService['showManagedWorktree']>>
-  params: {
-    repo?: string
-    name?: string
-    baseBranch?: string
-    displayName?: string
-    comment?: string
-    setup?: 'run' | 'skip' | 'inherit'
-    from: string
-  }
-  agent: TuiAgent
-  launchPreferences?: AgentLaunchPreferences
-  effects: WorkerEffect[]
-}): Promise<{
-  worktree: Awaited<ReturnType<OrcaRuntimeService['showManagedWorktree']>>
-  terminalHandle: string
-  setupReceipt: WorkerSetupReceipt
-}> {
-  const { runtime, db, dispatchId, requestedWorktree, coordinatorWorktree, params, effects } = args
-  const setupDecision = params.setup ?? 'run'
-  db.recordWorkerStage({ dispatchId, stage: 'worktree_creating', effects })
-  const created = await runtime.createManagedWorktree({
-    repoSelector: params.repo ?? coordinatorWorktree.repoId,
-    name: params.name as string,
-    baseBranch: params.baseBranch,
-    displayName: params.displayName,
-    ...(params.displayName !== undefined ? { displayNameKind: 'user' as const } : {}),
-    comment: params.comment,
-    // setupDecision runs setup without the legacy runHooks activation side effect.
-    runHooks: false,
-    setupDecision,
-    awaitTerminalProvisioning: true,
-    observeSetupCompletion: true,
-    createdWithAgent: args.agent,
-    startupAgent: args.agent,
-    ...(args.launchPreferences ? { startupLaunchPreferences: args.launchPreferences } : {}),
-    activate: false,
-    lineage: {
-      parentWorktree: requestedWorktree === 'new-child' ? coordinatorWorktree.id : undefined,
-      noParent: requestedWorktree === 'new-top-level',
-      callerTerminalHandle: params.from
-    }
-  })
-  const terminalHandle = created.startupTerminal?.handle
-  effects.push({
-    kind: 'worktree',
-    action: requestedWorktree === 'new-child' ? 'created_child' : 'created_top_level',
-    id: created.worktree.id
-  })
-  db.recordWorkerStage({
-    dispatchId,
-    stage: 'worktree_created',
-    worktreeId: created.worktree.id,
-    effects,
-    residualResources: effects
-  })
-  const setupReceipt = {
-    requested: setupDecision,
-    effective: setupDecision,
-    source: params.setup ? 'explicit_request' : 'orchestration_default',
-    hookFound: created.setupReceipt?.hookFound ?? false,
-    startupPolicy: created.setupReceipt?.startupPolicy ?? 'start-immediately',
-    state: created.setupReceipt?.state ?? 'not_configured'
-  }
-  if (!terminalHandle) {
-    throw new Error(created.warning ?? 'Agent-first worktree creation returned no terminal.')
-  }
-  const listed = await runtime.listTerminals(`id:${created.worktree.id}`, undefined, {
-    includeVisualLayouts: false
-  })
-  const setupTerminalHandle = created.setupReceipt?.terminalHandle
-  for (const terminal of listed.terminals) {
-    effects.push({
-      kind: 'terminal',
-      role:
-        terminal.handle === terminalHandle
-          ? 'agent'
-          : terminal.handle === setupTerminalHandle
-            ? 'setup'
-            : 'configured_tab',
-      action: terminal.handle === terminalHandle ? 'reused_agent_terminal' : 'created',
-      id: terminal.handle,
-      tabId: terminal.tabId,
-      leafId: terminal.leafId
-    })
-  }
-  const setupTerminal = effects.find(
-    (effect) => effect.kind === 'terminal' && effect.role === 'setup'
-  )
-  effects.push({
-    kind: 'setup',
-    action: setupDecision,
-    requested: setupReceipt.requested,
-    effective: setupReceipt.effective,
-    source: setupReceipt.source,
-    hookFound: setupReceipt.hookFound,
-    startupPolicy: setupReceipt.startupPolicy,
-    state: setupReceipt.state,
-    terminalId: setupTerminalHandle ?? setupTerminal?.id
-  })
-  return {
-    worktree: created.worktree as Awaited<ReturnType<OrcaRuntimeService['showManagedWorktree']>>,
-    terminalHandle,
-    setupReceipt
   }
 }
 
@@ -288,10 +169,11 @@ export function monitorWorkerSetup(args: {
       if (!evidence.changed) {
         return
       }
+      const dispatch = args.db.getDispatchContextById(args.dispatchId)
       const message = args.db.insertMessage({
         runId: args.runId,
         from: `dispatch:${args.dispatchId}`,
-        to: `run:${args.runId}`,
+        to: dispatch ? dispatchReportMailbox(args.db, dispatch) : `run:${args.runId}`,
         subject: `Setup ${setupState} for worker ${args.dispatchId}`,
         type: 'status',
         priority: setupState === 'failed' ? 'high' : 'normal',

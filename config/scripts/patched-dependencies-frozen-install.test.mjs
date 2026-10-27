@@ -10,41 +10,24 @@ import {
 import { tmpdir } from 'node:os'
 import { isAbsolute, join, parse, resolve } from 'node:path'
 import { describe, expect, it } from 'vitest'
-import { runProcessSync } from '../../src/shared/child-process/run-process.ts'
+import { runProcessSync } from '@orca/process-host'
 import { resolveCliCommand } from '../../src/shared/node-cli-command-resolution.ts'
 import { removeTreeSync } from '../../src/shared/windows-transient-lock-removal.ts'
 import { resolvePnpmCliInvocation } from './pnpm-cli-invocation.mjs'
+import { workspacePackageManifests } from './workspace-source-exports.mjs'
 
-/**
- * Run the command that actually consumes the patch hashes.
- *
- * A hash comparison is not this check. `@vscode/windows-process-tree@0.8.0` shipped
- * twice with a hand-computed `sha256(patchBytes)` in the lockfile, and two separate
- * reviews "verified" it by recomputing the same number the same wrong way. pnpm
- * hashes the **LF-normalized** content, so a CRLF patch makes the raw digest a value
- * pnpm will never produce, and `--frozen-lockfile` dies with
- * ERR_PNPM_LOCKFILE_CONFIG_MISMATCH on every runner. An independent check that
- * repeats the original assumption is not independent; only the installer is.
- *
- * `--lockfile-only --ignore-scripts` keeps it to the resolution pnpm rejects on,
- * with no node_modules and no native builds.
- */
+// Run actual pnpm: it hashes LF-normalized patch content; repeated raw SHA checks agreed with a bad CRLF lockfile and missed frozen-install failures.
+// lockfile-only/ignore-scripts checks resolution without node_modules or native builds; patch application is tested separately below.
 const PROJECT_DIR = resolve(import.meta.dirname, '../..')
 const WINDOWS_PROCESS_TREE_PATCH = '@vscode__windows-process-tree@0.8.0.patch'
 
-/**
- * Which pnpm to run belongs to pnpm-cli-invocation.mjs, not to this file: naming
- * the Windows shim here is what windows-cmd-shim-spawn-boundary.test.mjs rejects.
- * Its `shell` is dropped on purpose -- runProcessSync refuses that flag and
- * already drives a shim through the interpreter itself.
- */
+// Use pnpm-cli-invocation’s Windows shim resolver; omit shell because runProcessSync rejects it and handles interpreter routing itself.
 function resolvePnpmInvocation() {
   const { command, prefixArgs } = resolvePnpmCliInvocation()
   if (isAbsolute(command)) {
     return existsSync(command) ? { program: command, prefixArgs } : null
   }
-  // Bare name only when npm_execpath is unset (bare `vitest`, not `pnpm test`).
-  // Drop the extension so the shared resolver tries every executable form of it.
+  // Without npm_execpath, use bare extensionless name so shared resolver can try every executable form.
   const resolved = resolveCliCommand(parse(command).name)
   return isAbsolute(resolved) ? { program: resolved, prefixArgs } : null
 }
@@ -54,11 +37,18 @@ describe('patched dependencies', () => {
     const pnpm = resolvePnpmInvocation()
     expect(pnpm, 'pnpm must be installed; it is the only thing that can check this').not.toBeNull()
 
-    // A copy, because a --frozen-lockfile run still rewrites parts of the
-    // lockfile this repo does not track, and the real one must not move.
+    // Use a copy: even frozen-lockfile rewrites untracked lockfile sections; preserve repository bytes.
     const scratch = mkdtempSync(join(tmpdir(), 'orca-frozen-install-'))
     try {
-      for (const file of ['package.json', 'pnpm-lock.yaml', 'pnpm-workspace.yaml']) {
+      for (const file of [
+        'package.json',
+        'pnpm-lock.yaml',
+        'pnpm-workspace.yaml',
+        // The lockfile pins its checksum, so a frozen install fails without it.
+        'config/pnpmfile.cjs',
+        ...workspacePackageManifests(PROJECT_DIR)
+      ]) {
+        mkdirSync(resolve(scratch, file, '..'), { recursive: true })
         copyFileSync(join(PROJECT_DIR, file), join(scratch, file))
       }
       mkdirSync(join(scratch, 'config'), { recursive: true })
@@ -83,18 +73,10 @@ describe('patched dependencies', () => {
     } finally {
       removeTreeSync(scratch)
     }
-    // The 300s spawn budget is only reachable if the case is allowed to take it;
-    // config/vitest.config.ts caps every case at 30s by default.
+    // Allow the full 300s spawn budget beyond Vitest’s 30s case default.
   }, 300_000)
 
-  /**
-   * `--lockfile-only` resolves; it never applies a patch. So the case above is
-   * bounded to hash consistency, and the actual question -- can pnpm still put
-   * the patched reader on disk? -- had nothing covering it.
-   *
-   * One package, patch applied for real, assert the marker landed. Scoped to the
-   * single dependency so it stays a ~2s check rather than a full install.
-   */
+  // lockfile-only never applies patches; install one real dependency and check its marker to cover application without a full install.
   it('materializes the patched command-line reader on a real install', () => {
     const pnpm = resolvePnpmInvocation()
     expect(pnpm, 'pnpm must be installed; it is the only thing that can check this').not.toBeNull()
@@ -145,8 +127,7 @@ describe('patched dependencies', () => {
         'utf8'
       )
       expect(materialized).toContain('kProcessCommandLineInformation')
-      // The whole point of the patch: the upstream reader is gone, not merely
-      // supplemented.
+      // Require upstream reader removal, not merely a supplementary patched reader.
       expect(materialized).not.toContain('ReadProcessMemory')
     } finally {
       removeTreeSync(scratch)

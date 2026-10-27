@@ -3,10 +3,16 @@ import { invalidateLocalWorktreeMetadataPruneInputs } from '../../local-worktree
 import type {
   Automation,
   AutomationCreateInput,
+  AutomationRun,
   AutomationUpdateInput
 } from '../../../shared/automations-types'
 import type { PersistedState } from '../../../shared/persisted-state-types'
+import type { WorkspaceRunContext } from '../../../shared/task-source-context'
 import { normalizeAutomationPrecheck } from '../../../shared/automation-precheck'
+import {
+  assertAutomationExtraAgentArgs,
+  storedExtraAgentArgs
+} from '../../../shared/automation-extra-agent-args-record'
 import { nextAutomationOccurrenceAfter } from '../../../shared/automation-schedule-occurrences'
 import {
   applyAutomationExecutionTarget,
@@ -38,6 +44,7 @@ export type AutomationDefinitionOperations = {
   storageAuthority: AutomationStorageAuthority
   flush: () => void
   recordCreated: () => void
+  recordAutomationRunsMutation?: (runs: readonly AutomationRun[]) => void
 }
 
 export function listAutomations(state: PersistedState): Automation[] {
@@ -79,6 +86,7 @@ export function createAutomation(
   }
   const schedulerOwner = getAutomationSchedulerOwner(repo)
   const contexts = getAutomationContextsForRepo(repo, operations.state.projectHostSetups ?? [])
+  const extraAgentArgs = storedExtraAgentArgs(input.extraAgentArgs)
   const automation: Automation = {
     id: randomUUID(),
     ...(input.creationKey ? { creationKey: input.creationKey } : {}),
@@ -86,9 +94,8 @@ export function createAutomation(
     prompt: input.prompt,
     precheck: normalizeAutomationPrecheck(input.precheck),
     agentId: input.agentId,
-    // Why own contexts win: a wire context speaks the client's perspective —
-    // 'runtime:<id>' is a client-assigned name this store cannot interpret, and
-    // persisting it makes the projection orphan a record this authority owns.
+    ...(extraAgentArgs !== undefined ? { extraAgentArgs } : {}),
+    // Prefer authority-local contexts; client-assigned runtime IDs cannot identify this store's host.
     runContext: contexts.runContext ?? input.runContext ?? null,
     sourceContext: contexts.sourceContext ?? input.sourceContext ?? null,
     projectId: input.projectId,
@@ -112,6 +119,7 @@ export function createAutomation(
     createdAt: now,
     updatedAt: now
   }
+  assertAutomationExtraAgentArgs(automation)
   operations.state.automations = [...(operations.state.automations ?? []), automation]
   operations.recordCreated()
   operations.flush()
@@ -143,8 +151,7 @@ export function updateAutomation(
   if (options?.destination) {
     assertAutomationDestination(options.destination, projectionContext)
   }
-  // Why: the renderer forwards a Partial verbatim, so `{ enabled: undefined }` survives structuredClone
-  // and would blank the stored value in the spread below. Explicit clears go through the `null` branches.
+  // Ignore undefined values preserved by structuredClone; explicit clears use null.
   const definedUpdates = Object.fromEntries(
     Object.entries(updates).filter(([, value]) => value !== undefined)
   ) as AutomationUpdateInput
@@ -159,6 +166,10 @@ export function updateAutomation(
   const dtstart = updates.dtstart ?? current.dtstart
   const scheduleChanged = updates.rrule !== undefined || updates.dtstart !== undefined
   const workspaceMode = updates.workspaceMode ?? current.workspaceMode
+  // Omitted preserves; empty or whitespace clears.
+  const extraAgentArgs = Object.hasOwn(definedUpdates, 'extraAgentArgs')
+    ? storedExtraAgentArgs(definedUpdates.extraAgentArgs)
+    : storedExtraAgentArgs(current.extraAgentArgs)
   const merged: Automation = {
     ...current,
     ...definedUpdates,
@@ -167,9 +178,7 @@ export function updateAutomation(
       ? normalizeAutomationPrecheck(definedUpdates.precheck)
       : normalizeAutomationPrecheck(current.precheck),
     projectId: repoId,
-    // Why the wire object is ignored: contexts are the storing authority's own
-    // registry speaking. A move restates them from that registry, anything else
-    // keeps the stored value; an explicit null still clears.
+    // Rebuild moved contexts from this authority's registry; otherwise preserve stored values or explicit null.
     runContext:
       definedUpdates.runContext === null
         ? null
@@ -216,6 +225,12 @@ export function updateAutomation(
       : current.nextRunAt,
     updatedAt: Date.now()
   }
+  if (extraAgentArgs === undefined) {
+    delete merged.extraAgentArgs
+  } else {
+    merged.extraAgentArgs = extraAgentArgs
+  }
+  assertAutomationExtraAgentArgs(merged)
   const previousPin = automationWorkspaceSshPin(operations.state, current.workspaceId)
   const workspaceSshPin = automationWorkspaceSshPin(operations.state, merged.workspaceId)
   const workspaceSshPinMoved = previousPin?.targetId !== workspaceSshPin?.targetId
@@ -235,12 +250,30 @@ export function updateAutomation(
     executionTarget,
     workspaceSshPinMoved ? undefined : workspaceSshPin
   )
-  // Replaced, not patched in place: the list projection caches on array identity.
+  // Replace the array to invalidate identity-keyed list projections.
   operations.state.automations = operations.state.automations.map((entry) =>
     entry.id === id ? updated : entry
   )
   operations.flush()
   return updated
+}
+
+/** Stamp legacy targets once without retargeting user- or migration-owned contexts. */
+export function stampLegacyAutomationRunContext(
+  operations: AutomationDefinitionOperations,
+  id: string,
+  runContext: WorkspaceRunContext
+): boolean {
+  const current = (operations.state.automations ?? []).find((entry) => entry.id === id)
+  if (!current || current.runContext) {
+    return false
+  }
+  // Replace the array to invalidate identity-keyed list projections.
+  operations.state.automations = operations.state.automations.map((entry) =>
+    entry.id === id ? { ...entry, runContext } : entry
+  )
+  operations.flush()
+  return true
 }
 
 export function deleteAutomation(
@@ -263,7 +296,8 @@ export function deleteAutomation(
   operations.state.automationRuns = (operations.state.automationRuns ?? []).filter(
     (entry) => entry.automationId !== id
   )
-  // Why: the automation and its unfinished runs were pinning their workspace; both are gone (#17775).
+  operations.recordAutomationRunsMutation?.(operations.state.automationRuns)
+  // Removing definitions and unfinished runs releases their workspace claims (#17775).
   invalidateLocalWorktreeMetadataPruneInputs()
   operations.flush()
 }

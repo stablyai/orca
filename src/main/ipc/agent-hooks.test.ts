@@ -3,9 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type * as AgentHookServerModule from '../agent-hooks/server'
 import { makePaneKey } from '../../shared/stable-pane-id'
 
-// Why: cover the agentStatus:drop IPC handler — it must propagate the
-// renderer dismissal to dropStatusEntry so the on-disk last-status file
-// evicts the entry.
+// Renderer dismissals must evict persisted status as well as the live row.
 
 const dropStatusEntry = vi.fn()
 const dropPersistedStatusEntry = vi.fn()
@@ -39,8 +37,7 @@ vi.mock('electron', () => ({
 }))
 
 vi.mock('../agent-hooks/server', async () => {
-  // Why: import the real isValidPaneKey so this test stays in sync with any
-  // tightening of the validator (length cap, character allow-list, etc).
+  // Use the real pane-key validator so invalid-input coverage tracks its constraints.
   const actual = await vi.importActual<typeof AgentHookServerModule>('../agent-hooks/server')
   return {
     ...actual,
@@ -150,6 +147,36 @@ describe('agentStatus:getSnapshot IPC', () => {
     const handler = handleHandlers.get('agentStatus:getSnapshot')
     expect(handler).toBeDefined()
     expect(handler!({})).toEqual(snapshot)
+  })
+
+  // Keep one writer per pane while the renderer feed bridge owns structured rows.
+  it('omits structured rows the renderer feed bridge still owns', async () => {
+    getStatusSnapshot.mockReturnValue([
+      {
+        paneKey: PANE_KEY,
+        state: 'done',
+        prompt: 'hook row',
+        agentType: 'claude',
+        connectionId: null,
+        receivedAt: 1_700_000_000_000,
+        stateStartedAt: 1_699_999_999_000
+      },
+      {
+        paneKey: CHILD_PANE_KEY,
+        state: 'working',
+        prompt: 'native chat row',
+        agentType: 'codex',
+        connectionId: null,
+        structuredHost: 'owned',
+        receivedAt: 1_700_000_001_000,
+        stateStartedAt: 1_700_000_000_500
+      }
+    ])
+    const { registerAgentHookHandlers } = await import('./agent-hooks')
+    registerAgentHookHandlers()
+
+    const rows = handleHandlers.get('agentStatus:getSnapshot')!({}) as { paneKey: string }[]
+    expect(rows.map((row) => row.paneKey)).toEqual([PANE_KEY])
   })
 
   it('enriches the hook cache snapshot with runtime lineage metadata', async () => {
@@ -262,6 +289,17 @@ describe('agentStatus:drop IPC', () => {
     expect(clearMigrationUnsupportedPtysForPaneKey).toHaveBeenCalledWith(PANE_KEY)
   })
 
+  it('forwards a runtime-owned legacy numeric row dismissal', async () => {
+    const { registerAgentHookHandlers } = await import('./agent-hooks')
+    registerAgentHookHandlers()
+
+    const handler = onHandlers.get('agentStatus:drop')!
+    handler!({}, 'tab-1:0')
+
+    expect(dropStatusEntry).toHaveBeenCalledWith('tab-1:0')
+    expect(clearMigrationUnsupportedPtysForPaneKey).toHaveBeenCalledWith('tab-1:0')
+  })
+
   it('rejects non-string paneKey (defensive against a malformed renderer message)', async () => {
     const { registerAgentHookHandlers } = await import('./agent-hooks')
     registerAgentHookHandlers()
@@ -274,7 +312,6 @@ describe('agentStatus:drop IPC', () => {
       null,
       {},
       [],
-      'tab-1:0', // legacy numeric pane-key suffix
       'no-colon', // missing colon — rejected by isValidPaneKey
       ':leading', // empty tabId half
       'trailing:', // empty leafId half
@@ -403,7 +440,7 @@ describe('agent pane authority IPC', () => {
 
     onHandlers.get('agentStatus:retirePaneAuthority')!({}, PANE_KEY)
 
-    expect(retirePaneAuthority).toHaveBeenCalledWith(PANE_KEY)
+    expect(retirePaneAuthority).toHaveBeenCalledWith(PANE_KEY, undefined)
     expect(clearMigrationUnsupportedPtysForPaneKey).toHaveBeenCalledWith(PANE_KEY)
   })
 

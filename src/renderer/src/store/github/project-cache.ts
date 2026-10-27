@@ -5,13 +5,18 @@ import type {
   GitHubProjectTable
 } from '../../../../shared/github/project-types'
 
-// Why: optimistic field value so the patched row re-renders immediately; best-effort, overwritten by the authoritative payload on next refresh.
+// Patch field optimistically for immediate render; next authoritative refresh replaces it.
 export function optimisticFieldValueFromMutation(
   table: GitHubProjectTable,
   fieldId: string,
   value: GitHubProjectFieldMutationValue
 ): GitHubProjectTable['rows'][number]['fieldValuesByFieldId'][string] | null {
-  const field = table.selectedView.fields.find((f) => f.id === fieldId)
+  // Board column fields can be hidden from the view's visible fields.
+  const field = [
+    ...table.selectedView.fields,
+    ...(table.selectedView.verticalGroupByFields ?? []),
+    ...table.selectedView.groupByFields
+  ].find((f) => f.id === fieldId)
   switch (value.kind) {
     case 'single-select': {
       if (field?.kind === 'single-select') {
@@ -76,11 +81,11 @@ export function applyRowPatch(
   set((s) => {
     const entry = s.projectViewCache[cacheKey]
     if (!entry?.data) {
-      return {}
+      return s
     }
     const rowIndex = entry.data.rows.findIndex((r) => r.id === rowId)
     if (rowIndex === -1) {
-      return {}
+      return s
     }
     const rows = [...entry.data.rows]
     rows[rowIndex] = nextRow
@@ -103,7 +108,7 @@ export function rollbackRowIfPresent(
   rowId: string,
   previousRow: GitHubProjectRow
 ): void {
-  // Why: skip rollback when the entry moved (rapid project switch) or the row is gone, else stale data would surface in the newly selected project.
+  // Rollback only the same entry/row; project switches must not receive stale data.
   const entry = get().projectViewCache[cacheKey]
   if (!entry?.data) {
     return

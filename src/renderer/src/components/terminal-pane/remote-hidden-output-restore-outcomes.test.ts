@@ -1,25 +1,14 @@
 import type * as React from 'react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { resetAgentStartupDelayedDeliveryForTests } from '@/lib/agent-startup-delayed-delivery'
+import {
+  installTerminalTestGlobals,
+  restoreTerminalTestGlobals
+} from './pty-connection-test-environment'
 
 async function flushAsyncTicks(count = 6): Promise<void> {
   for (let i = 0; i < count; i++) {
     await Promise.resolve()
   }
-}
-
-async function drainFakeTimerWork(limit = 20): Promise<void> {
-  await flushAsyncTicks(20)
-  if (!vi.isFakeTimers()) {
-    return
-  }
-  for (let iteration = 0; iteration < limit && vi.getTimerCount() > 0; iteration += 1) {
-    await vi.runOnlyPendingTimersAsync()
-    await flushAsyncTicks(20)
-  }
-  vi.clearAllTimers()
-  await flushAsyncTicks(20)
-  vi.clearAllTimers()
 }
 
 const LEAF_1 = '11111111-1111-4111-8111-111111111111' as const
@@ -56,6 +45,7 @@ type MockTransport = {
   sendInputAccepted?: ReturnType<typeof vi.fn>
   claimViewport: ReturnType<typeof vi.fn>
   resize: ReturnType<typeof vi.fn>
+  isConnected?: ReturnType<typeof vi.fn>
   getPtyId: ReturnType<typeof vi.fn>
   getConnectionId: ReturnType<typeof vi.fn>
   serializeBuffer?: ReturnType<typeof vi.fn>
@@ -176,6 +166,7 @@ function createMockTransport(initialPtyId: string | null = null): MockTransport 
     getConnectionId: vi.fn(() => null),
     serializeBuffer: undefined
   } as MockTransport
+  transport.isConnected = vi.fn(() => ptyId !== null)
   const sendInput = transport.sendInput as unknown as (data: string) => boolean
   transport.sendInputImmediate = vi.fn((data: string) => sendInput(data))
   transport.sendInputAccepted = vi.fn(async (data: string) => sendInput(data))
@@ -221,7 +212,7 @@ function createPane(paneId: number) {
     },
     write: vi.fn<(data: string, callback?: () => void) => void>(function write(...args): void {
       const [data, callback] = args
-      if (data === '' || callback?.name === 'runParsedSteps') {
+      if (data.length === 0 || callback?.name === 'runParsedSteps') {
         callback?.()
       }
     }),
@@ -325,12 +316,7 @@ function createDeps(overrides: Record<string, unknown> = {}) {
             : [...current, ptyId]
       mockStoreState.ptyIdsByTabId = { ...byTab, [tabId]: next }
     }),
-    markWorktreeUnread: vi.fn(),
-    markTerminalTabUnread: vi.fn(),
-    markTerminalPaneUnread: vi.fn(),
-    clearWorktreeUnread: vi.fn(),
-    clearTerminalTabUnread: vi.fn(),
-    clearTerminalPaneUnread: vi.fn(),
+    markTerminalBell: vi.fn(),
     dispatchNotification: vi.fn(),
     onShowSessionRestoredBanner: vi.fn(),
     setCacheTimerStartedAt: vi.fn(),
@@ -354,11 +340,8 @@ function createDeferred<T>(): {
   return { promise, resolve: resolveDeferred, reject: rejectDeferred }
 }
 
-// ── Scenario identities ─────────────────────────────────────────────────────
 const REMOTE_PTY_ID = 'remote:env-1@@terminal-agent-1'
-// Overflows the renderer's hidden background queue (2MB lossy cap), dropping the
-// backlog and latching model restore — mirrors the real remote pause semantics
-// where hidden-time bytes exist ONLY in the host's authoritative buffer.
+// Overflow the 2MB client queue so hidden-time recovery depends on the host’s retained buffer.
 const HIDDEN_BYTES = 'x'.repeat(2 * 1024 * 1024 + 1)
 const LIVE_AGENT_CHUNK = 'LIVE_AGENT_CHUNK\r\n'
 const HOST_SNAPSHOT_MARKER = 'HOST_SNAPSHOT_HIDDEN_AGENT_CONTENT'
@@ -424,8 +407,7 @@ async function connectHiddenRemoteAgentPane(
   }
 }
 
-// Delivers the hidden backlog, reveals the pane, and delivers one live agent
-// chunk — the exact user flow in the screenshot (agent streaming on reveal).
+// Reveal a dropped backlog while live agent output continues.
 function driveHiddenBacklogThenReveal(drive: RemotePaneDrive): void {
   drive.deliver(HIDDEN_BYTES, HIDDEN_BYTES.length)
   ;(drive.deps.isVisibleRef as { current: boolean }).current = true
@@ -445,21 +427,17 @@ async function advanceThroughNullRetryBudget(drive: RemotePaneDrive): Promise<vo
   }
 }
 
-// Generous self-heal window: lets any corrected pipeline (extended retries,
-// restore re-arm, post-abandon repaint) run to completion under fake timers.
+// Advance enough fake time for bounded re-arms, deferred repaint and retry chains to finish.
 async function advanceModernRetryProbe(): Promise<void> {
   await vi.advanceTimersByTimeAsync(2_000)
   await flushAsyncTicks(20)
 }
 
 describe('remote hidden-output restore outcomes', () => {
-  const originalRequestAnimationFrame = globalThis.requestAnimationFrame
-  const originalCancelAnimationFrame = globalThis.cancelAnimationFrame
-  const originalDocument = globalThis.document
-
-  beforeEach(() => {
+  beforeEach(async () => {
     vi.resetModules()
     vi.clearAllMocks()
+    await installTerminalTestGlobals()
     transportFactoryQueue = []
     createdTransportOptions = []
     storeSubscribers = []
@@ -471,6 +449,8 @@ describe('remote hidden-output restore outcomes', () => {
       ptyIdsByTabId: {
         'tab-1': ['tab-pty']
       },
+      terminalPaneStartsByPaneKey: {},
+      terminalPaneResumeOutcomesByPaneKey: {},
       terminalLayoutsByTabId: {
         'tab-1': {
           root: { type: 'leaf', leafId: LEAF_1 },
@@ -516,13 +496,11 @@ describe('remote hidden-output restore outcomes', () => {
         >
         return byPaneKey[entry.paneKey]?.launchConfig
       }),
-      getAgentLaunchConfigForStatusMetadata: vi.fn(() => undefined),
       clearSleepingAgentSession: vi.fn((paneKey: string) => {
         delete (mockStoreState.sleepingAgentSessionsByPaneKey as Record<string, unknown>)[paneKey]
       }),
       registerAgentLaunchConfig: vi.fn(),
       clearAgentLaunchConfig: vi.fn(),
-      markWorktreeUnread: vi.fn(),
       observeTerminalGitHubPullRequestLink: vi.fn(),
       recordTerminalInput: vi.fn(),
       setAgentStatus: vi.fn(),
@@ -535,9 +513,8 @@ describe('remote hidden-output restore outcomes', () => {
       clearPaneForegroundAgent: vi.fn((paneKey: string) => {
         delete (mockStoreState.paneForegroundAgentByPaneKey as Record<string, unknown>)[paneKey]
       }),
-      markTerminalTabUnread: vi.fn(),
-      markTerminalPaneUnread: vi.fn(),
-      markAgentCompletionPaneUnread: vi.fn()
+      markTerminalBell: vi.fn(),
+      markAgentAttentionUnread: vi.fn()
     }
     ;(globalThis as unknown as { window: unknown }).window = {
       api: {
@@ -598,30 +575,7 @@ describe('remote hidden-output restore outcomes', () => {
     globalThis.cancelAnimationFrame = vi.fn()
   })
 
-  afterEach(async () => {
-    await drainFakeTimerWork()
-    vi.useRealTimers()
-    vi.restoreAllMocks()
-    if (originalRequestAnimationFrame) {
-      globalThis.requestAnimationFrame = originalRequestAnimationFrame
-    } else {
-      delete (globalThis as { requestAnimationFrame?: typeof requestAnimationFrame })
-        .requestAnimationFrame
-    }
-    if (originalCancelAnimationFrame) {
-      globalThis.cancelAnimationFrame = originalCancelAnimationFrame
-    } else {
-      delete (globalThis as { cancelAnimationFrame?: typeof cancelAnimationFrame })
-        .cancelAnimationFrame
-    }
-    if (originalDocument) {
-      globalThis.document = originalDocument
-    } else {
-      delete (globalThis as { document?: Document }).document
-    }
-    delete (globalThis as unknown as { window?: unknown }).window
-    resetAgentStartupDelayedDeliveryForTests()
-  })
+  afterEach(restoreTerminalTestGlobals)
 
   it('[modern] repaints a recovered visible pane from the retained host buffer', async () => {
     const serializeBuffer = vi.fn()
@@ -636,6 +590,10 @@ describe('remote hidden-output restore outcomes', () => {
     await flushAsyncTicks(20)
 
     expect(serializeBufferOutcome).toHaveBeenCalledTimes(1)
+    // Why: the multiplexer only moves its gap baseline for images a pane repaints from.
+    expect(serializeBufferOutcome).toHaveBeenCalledWith(
+      expect.objectContaining({ repaintsPane: true })
+    )
     expect(drive.writtenChunks().join('')).toContain(HOST_SNAPSHOT_MARKER)
     expect(serializeBuffer).not.toHaveBeenCalled()
     drive.disposable.dispose()
@@ -710,9 +668,7 @@ describe('remote hidden-output restore outcomes', () => {
     drive.disposable.dispose()
   })
 
-  // Regression: these causes are returned before any frame leaves the client, so the host
-  // declined nothing. Charging them to its budget banners a healthy pane at ~12s — the very
-  // elapsed-time guess this change removes.
+  // Local request gates send nothing to the host; charging them as host refusal would falsely disclose loss on healthy panes.
   it('[modern] does not spend the host answer budget on locally-gated retries', async () => {
     const serializeBuffer = vi.fn()
     const serializeBufferOutcome = vi.fn().mockResolvedValue({
@@ -809,8 +765,7 @@ describe('remote hidden-output restore outcomes', () => {
     await flushAsyncTicks(20)
     expect(serializeBufferOutcome).toHaveBeenCalledTimes(1)
 
-    // The retry answer arms a post-flood repaint 2s out; interrupt it partway with an
-    // ungated re-arm (remote output unpause) whose answer is permanently unavailable.
+    // Interrupt a scheduled quiet repaint with an unpause retry that proves permanent unavailability.
     await vi.advanceTimersByTimeAsync(1_000)
     drive.setOutputPaused(true)
     drive.setOutputPaused(false)

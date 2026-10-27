@@ -1,4 +1,4 @@
-import { useEffect } from 'react'
+import { useEffect, useRef } from 'react'
 import { useAppStore } from '../store'
 import {
   TERMINAL_HIDDEN_WORKTREE_RETENTION_TTL_MS,
@@ -11,7 +11,7 @@ import {
 } from './terminal-pane/terminal-hidden-worktree-retention'
 import { recordRendererCrashBreadcrumb } from '@/lib/crash-breadcrumb-recorder'
 import { selectEvictionExemptTerminalTabIds } from './terminal-pane/terminal-eviction-exempt-tabs'
-import { captureForceParkedWorktreeBuffers } from './terminal-pane/force-park-buffer-capture'
+import { captureParkedTerminalBuffers } from './terminal-pane/parked-terminal-buffer-capture'
 import { warnTerminalLifecycleAnomaly } from './terminal-pane/terminal-lifecycle-diagnostics'
 import { recordTerminalWorktreeParkingDebugVerdicts } from './terminal-pane/terminal-parking-e2e-overrides'
 import { getTerminalWorktreeColdParkRecheckDelayMs } from './terminal-pane/terminal-cold-park-recheck-deadlines'
@@ -27,7 +27,7 @@ export function useTerminalParkingPass(controller: TerminalParkingFoundation): v
     activeView,
     activityTerminalPortals,
     backgroundMountRevision,
-    forceParkedCaptureDoneRef,
+    parkedCaptureDoneRef,
     pairedRuntimeParkingEnvironmentIds,
     pendingStartupByTabId,
     renderedActiveWorktreeId,
@@ -43,6 +43,12 @@ export function useTerminalParkingPass(controller: TerminalParkingFoundation): v
     terminalSshParkingEnabled,
     workspaceSurfaceIds
   } = controller
+  // Why: this effect is the sole writer, so these mirror the queued state without a render.
+  const dispatchedIdSetsRef = useRef<{
+    parked: ReadonlySet<string>
+    forceParked: ReadonlySet<string>
+    evictionExempt: ReadonlySet<string>
+  } | null>(null)
 
   useEffect(() => {
     const pass = collectTerminalParkingPassCandidates(controller)
@@ -76,13 +82,31 @@ export function useTerminalParkingPass(controller: TerminalParkingFoundation): v
         forceParked: forceParkedWorktreeIds.has(candidate.worktreeId)
       }))
     )
-    const capturedForceParked = forceParkedCaptureDoneRef.current
-    for (const id of Array.from(capturedForceParked)) {
-      if (!forceParkedWorktreeIds.has(id)) {
-        capturedForceParked.delete(id)
+    const capturedParked = parkedCaptureDoneRef.current
+    for (const id of Array.from(capturedParked)) {
+      if (!forceParkedWorktreeIds.has(id) && !pass.nextParkedTerminalWorktreeIds.has(id)) {
+        capturedParked.delete(id)
       }
     }
     const repos = useAppStore.getState().repos
+    // Capture before unmount while xterm still owns client scrollback; paired-parking capability
+    // does not guarantee host buffer retention. Force-parks capture below under their eviction exemption.
+    // Why localOnly: the ordinary park is the every-hide cadence; its bytes stay off the upload.
+    for (const worktreeId of pass.nextParkedTerminalWorktreeIds) {
+      if (capturedParked.has(worktreeId)) {
+        continue
+      }
+      if (
+        captureParkedTerminalBuffers({
+          worktreeId,
+          tabIds: (tabsByWorktree[worktreeId] ?? []).map((tab) => tab.id),
+          repos,
+          localOnly: true
+        })
+      ) {
+        capturedParked.add(worktreeId)
+      }
+    }
     const nextEvictionExemptTabIds = new Set<string>()
     for (const worktreeId of forceParkedWorktreeIds) {
       const forceParkedTabs = tabsByWorktree[worktreeId] ?? []
@@ -90,13 +114,11 @@ export function useTerminalParkingPass(controller: TerminalParkingFoundation): v
       for (const tabId of exemptTabIds) {
         nextEvictionExemptTabIds.add(tabId)
       }
-      if (!capturedForceParked.has(worktreeId)) {
+      if (!capturedParked.has(worktreeId)) {
         const evictableTabIds = selectForceParkEvictableTabIds(forceParkedTabs, (tab) =>
           exemptTabIds.has(tab.id)
         )
-        // Why routed + breadcrumbed: only per-route counts in a field bundle
-        // can say whether fail-open ids or unresolved snapshot capability
-        // dominates the degenerate all-exempt force-park (which frees no heap).
+        // Per-route exemption counts distinguish unresolved capabilities from fail-open IDs when force-park frees no heap.
         if (evictableTabIds.length === 0 && forceParkedTabs.length > 0) {
           const exemptRouteCounts = countEvictionExemptTabRoutes(forceParkedTabs, worktreeId)
           warnTerminalLifecycleAnomaly('retention force-park freed no panes', {
@@ -108,29 +130,38 @@ export function useTerminalParkingPass(controller: TerminalParkingFoundation): v
             ...exemptRouteCounts
           })
         }
+        // Rare force-parks share captures so another desktop can cold-restore them.
         if (
-          captureForceParkedWorktreeBuffers({
+          captureParkedTerminalBuffers({
             worktreeId,
             tabIds: evictableTabIds,
-            repos
+            repos,
+            localOnly: false
           })
         ) {
-          capturedForceParked.add(worktreeId)
+          capturedParked.add(worktreeId)
         }
       }
       pass.nextParkedTerminalWorktreeIds.add(worktreeId)
     }
-    setParkedTerminalWorktreeIds((current) =>
-      haveSameIdSet(current, pass.nextParkedTerminalWorktreeIds)
-        ? current
-        : pass.nextParkedTerminalWorktreeIds
-    )
-    setForceParkedTerminalWorktreeIds((current) =>
-      haveSameIdSet(current, forceParkedWorktreeIds) ? current : forceParkedWorktreeIds
-    )
-    setEvictionExemptTerminalTabIds((current) =>
-      haveSameIdSet(current, nextEvictionExemptTabIds) ? current : nextEvictionExemptTabIds
-    )
+    // No-op functional updaters still queue renders in PTY-exit commit cascades and can exceed React’s nested-update limit (#185).
+    const dispatched = (dispatchedIdSetsRef.current ??= {
+      parked: new Set(),
+      forceParked: new Set(),
+      evictionExempt: new Set()
+    })
+    if (!haveSameIdSet(dispatched.parked, pass.nextParkedTerminalWorktreeIds)) {
+      dispatched.parked = pass.nextParkedTerminalWorktreeIds
+      setParkedTerminalWorktreeIds(pass.nextParkedTerminalWorktreeIds)
+    }
+    if (!haveSameIdSet(dispatched.forceParked, forceParkedWorktreeIds)) {
+      dispatched.forceParked = forceParkedWorktreeIds
+      setForceParkedTerminalWorktreeIds(forceParkedWorktreeIds)
+    }
+    if (!haveSameIdSet(dispatched.evictionExempt, nextEvictionExemptTabIds)) {
+      dispatched.evictionExempt = nextEvictionExemptTabIds
+      setEvictionExemptTerminalTabIds(nextEvictionExemptTabIds)
+    }
     const retentionTtlEligibleIds = new Set(
       retentionBudgetCandidates
         .filter((candidate) => !candidate.ordinaryParkingCovers && !candidate.hasPendingSpawnWork)
@@ -168,14 +199,19 @@ export function useTerminalParkingPass(controller: TerminalParkingFoundation): v
         pass.parkingTimers.set(worktreeId, timer)
       }
     }
-    // oxlint-disable-next-line react-hooks/exhaustive-deps -- controller refs and setters preserve their original stable identities.
+    // oxlint-disable-next-line react-hooks/exhaustive-deps -- `controller` is rebuilt every render; the pass reads only the listed values and stable refs.
   }, [
     activeView,
     activityTerminalPortals,
     backgroundMountRevision,
+    parkedCaptureDoneRef,
     pendingStartupByTabId,
     pairedRuntimeParkingEnvironmentIds,
     renderedActiveWorktreeId,
+    setEvictionExemptTerminalTabIds,
+    setForceParkedTerminalWorktreeIds,
+    setParkedTerminalWorktreeIds,
+    setTerminalParkingRevision,
     tabsByWorktree,
     terminalParkingEnabled,
     terminalParkingRevision,

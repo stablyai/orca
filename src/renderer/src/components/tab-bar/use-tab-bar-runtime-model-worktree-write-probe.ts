@@ -1,11 +1,7 @@
 import { vi } from 'vitest'
 import type { WindowsTerminalCapabilities } from '@/lib/windows-terminal-capabilities'
 
-/**
- * Shared rig for the tab-strip worktree-write gate tests. The platform check in
- * `use-tab-bar-runtime-model` is read once at module load, so each platform needs
- * its own test file; everything but the `vi.mock` calls lives here.
- */
+/** Share the write-gate harness across separate platform files because platform detection runs at module load. */
 export type TabBarProbeState = {
   settings: Record<string, unknown> | null
   persistedUIReady: boolean
@@ -15,7 +11,8 @@ export type TabBarProbeState = {
   activeGroupIdByWorktree: Record<string, string>
   activeRepoId: string | null
   activeWorktreeId: string | null
-  projects: unknown[]
+  endpointProjects: unknown[]
+  endpointProjectHostSetups: unknown[]
   repos: unknown[]
   worktreesByRepo: Record<string, unknown[]>
   sshConnectionStates: Map<string, unknown>
@@ -47,7 +44,8 @@ export async function createTabBarProbeStore(): Promise<TabBarProbeStore> {
       activeGroupIdByWorktree: {},
       activeRepoId: null,
       activeWorktreeId: null,
-      projects: [],
+      endpointProjects: [],
+      endpointProjectHostSetups: [],
       repos: [],
       worktreesByRepo: {},
       sshConnectionStates: new Map(),
@@ -81,7 +79,6 @@ const CREATION_POLICY = Object.freeze({
   'mobile-emulator': { state: 'enabled' }
 })
 const DETECTED_AGENTS = Object.freeze({ detectedIds: Object.freeze([]) })
-const RUNTIME_TARGET = Object.freeze({ kind: 'local' })
 const CREATE_MENU = Object.freeze({})
 const ITEM_PROJECTION = Object.freeze({
   orderedItems: Object.freeze([]),
@@ -108,8 +105,7 @@ export function tabBarRuntimeModelStubs(): Record<string, () => Record<string, u
     detectedAgents: () => ({ useDetectedAgents: () => DETECTED_AGENTS }),
     detectionTarget: () => ({ useAgentDetectionTargetForWorktree: () => null }),
     connectionContext: () => ({ getConnectionIdFromState: () => null }),
-    runtimeOwner: () => ({ getRuntimeEnvironmentIdForWorktree: () => null }),
-    runtimeRpcClient: () => ({ getActiveRuntimeTarget: () => RUNTIME_TARGET }),
+    runtimeOwner: () => ({ runtimeEnvironmentIdOrLocalUnlessTwin: () => null }),
     nativeChatReadability: () => ({ isNativeChatTranscriptLocalReadable: () => false }),
     creationPolicy: () => ({ getClientCreationActionPolicy: () => CREATION_POLICY }),
     agentProjections: () => ({ selectTabBarAgentProjections: () => AGENT_PROJECTIONS }),

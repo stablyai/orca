@@ -1,36 +1,27 @@
 import type { UISlice, UISliceGet, UISliceSet } from './ui-slice-contract'
 import { getSetupScriptPromptDismissalKey } from '../../../lib/setup-script-prompt'
+import {
+  withOrcaHookRepoAlwaysTrusted,
+  withOrcaHookScriptConfirmed
+} from '../../../../../shared/orca-hook-trust-entries'
 
 export function createUiTrustActions(set: UISliceSet, _get: UISliceGet): Partial<UISlice> {
   return {
     trustedOrcaHooks: {},
     markOrcaHookScriptConfirmed: (repoId, kind, contentHash) =>
       set((s) => {
-        const existing = s.trustedOrcaHooks[repoId]
-        const currentEntry = existing?.[kind]
-        if (currentEntry?.contentHash === contentHash) {
+        const next = withOrcaHookScriptConfirmed(s.trustedOrcaHooks, repoId, kind, contentHash)
+        if (next === s.trustedOrcaHooks) {
           return s
         }
-        const nextRepo = {
-          ...existing,
-          [kind]: { contentHash, approvedAt: Date.now() }
-        }
-        const next = { ...s.trustedOrcaHooks, [repoId]: nextRepo }
         window.api.ui.set({ trustedOrcaHooks: next }).catch(console.error)
         return { trustedOrcaHooks: next }
       }),
     markOrcaHookRepoAlwaysTrusted: (repoId) =>
       set((s) => {
-        const existing = s.trustedOrcaHooks[repoId]
-        if (existing?.all) {
+        const next = withOrcaHookRepoAlwaysTrusted(s.trustedOrcaHooks, repoId)
+        if (next === s.trustedOrcaHooks) {
           return s
-        }
-        const next = {
-          ...s.trustedOrcaHooks,
-          [repoId]: {
-            ...existing,
-            all: { approvedAt: Date.now() }
-          }
         }
         window.api.ui.set({ trustedOrcaHooks: next }).catch(console.error)
         return { trustedOrcaHooks: next }
@@ -130,6 +121,15 @@ export function createUiTrustActions(set: UISliceSet, _get: UISliceGet): Partial
           .catch(console.error)
         return { usagePercentageDisplayChangeNoticeDismissed: true }
       }),
+    statusBarCompactChangeNoticeDismissed: true,
+    dismissStatusBarCompactChangeNotice: () =>
+      set((s) => {
+        if (s.statusBarCompactChangeNoticeDismissed) {
+          return s
+        }
+        window.api.ui.set({ statusBarCompactChangeNoticeDismissed: true }).catch(console.error)
+        return { statusBarCompactChangeNoticeDismissed: true }
+      }),
     usageEmptyStateDismissed: false,
     dismissUsageEmptyState: () =>
       set((s) => {
@@ -138,6 +138,34 @@ export function createUiTrustActions(set: UISliceSet, _get: UISliceGet): Partial
         }
         window.api.ui.set({ usageEmptyStateDismissed: true }).catch(console.error)
         return { usageEmptyStateDismissed: true }
+      }),
+    // Why default true: nothing may toast before hydration reads the persisted flag.
+    codexTerminalServerIsolationNoticeSeen: true,
+    markCodexTerminalServerIsolationNoticeSeen: () =>
+      set((s) => {
+        if (s.codexTerminalServerIsolationNoticeSeen) {
+          return s
+        }
+        window.api.ui.set({ codexTerminalServerIsolationNoticeSeen: true }).catch(console.error)
+        return { codexTerminalServerIsolationNoticeSeen: true }
+      }),
+    codexSharedSettingsNoticeSeen: true,
+    markCodexSharedSettingsNoticeSeen: () =>
+      set((s) => {
+        if (s.codexSharedSettingsNoticeSeen) {
+          return s
+        }
+        window.api.ui.set({ codexSharedSettingsNoticeSeen: true }).catch(console.error)
+        return { codexSharedSettingsNoticeSeen: true }
+      }),
+    claudeDiffPanelNoticeSeen: true,
+    markClaudeDiffPanelNoticeSeen: () =>
+      set((s) => {
+        if (s.claudeDiffPanelNoticeSeen) {
+          return s
+        }
+        window.api.ui.set({ claudeDiffPanelNoticeSeen: true }).catch(console.error)
+        return { claudeDiffPanelNoticeSeen: true }
       })
   }
 }

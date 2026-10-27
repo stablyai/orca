@@ -15,6 +15,25 @@ import {
   resetWorktreeSliceModuleMemory
 } from './worktrees-slice-test-harness'
 
+function makeOrphanedSetup(): AppState['endpointProjectHostSetups'][number] {
+  const row = {
+    id: '',
+    projectId: '',
+    repoId: '',
+    hostId: 'local' as const,
+    path: '',
+    displayName: '',
+    setupState: 'ready' as const,
+    setupMethod: 'legacy-repo' as const,
+    createdAt: 0,
+    updatedAt: 0
+  }
+  for (const property of Object.keys(row)) {
+    Reflect.deleteProperty(row, property)
+  }
+  return row
+}
+
 const requestWorktreeBaseFallbackNotice = vi.hoisted(() => vi.fn())
 
 vi.mock('sonner', () => ({
@@ -174,20 +193,20 @@ describe('removeWorktree state cleanup', () => {
   it('purges the orphaned project that pointed at a destroyed runtime-owned SSH target', async () => {
     const store = createTestStore()
     const wt = makeWorktree({ id: 'repo1::/path/wt1', repoId: 'repo1', path: '/path/wt1' })
-    const orphanedSetup = {
+    const orphanedSetup = Object.assign(makeOrphanedSetup(), {
       id: 'setup-runtime-ssh',
       hostId: 'ssh:runtime-ssh-orca-1'
-    } as unknown as AppState['projectHostSetups'][number]
-    const userSshSetup = {
+    })
+    const userSshSetup = Object.assign(makeOrphanedSetup(), {
       id: 'setup-user-ssh',
       hostId: 'ssh:my-server'
-    } as unknown as AppState['projectHostSetups'][number]
+    })
     const deleteProjectHostSetup = vi.fn().mockResolvedValue(null)
     store.setState({
       worktreesByRepo: { repo1: [wt] },
-      projectHostSetups: [orphanedSetup, userSshSetup],
+      endpointProjectHostSetups: [orphanedSetup, userSshSetup],
       deleteProjectHostSetup
-    } as unknown as Partial<AppState>)
+    })
     mockApi.ephemeralVm.listRuntimes.mockResolvedValueOnce([
       {
         id: 'runtime-1',
@@ -201,7 +220,10 @@ describe('removeWorktree state cleanup', () => {
 
     // Only the orphaned runtime-owned project setup is purged; the user's SSH project is untouched.
     expect(deleteProjectHostSetup).toHaveBeenCalledTimes(1)
-    expect(deleteProjectHostSetup).toHaveBeenCalledWith({ setupId: 'setup-runtime-ssh' })
+    expect(deleteProjectHostSetup).toHaveBeenCalledWith({
+      setupId: 'setup-runtime-ssh',
+      hostId: 'ssh:runtime-ssh-orca-1'
+    })
   })
 
   it('cleans up editorDrafts for files in the removed worktree', async () => {
@@ -233,7 +255,6 @@ describe('removeWorktree state cleanup', () => {
       .removeWorktree({ id: 'repo1::/path/wt1', executionHostId: null })
 
     expect(result).toEqual({ ok: true })
-    // Draft for file-1 should be removed, draft for file-2 should remain
     expect(store.getState().editorDrafts).toEqual({
       'file-2': 'draft content for another worktree'
     })
@@ -649,7 +670,6 @@ describe('removeWorktree state cleanup', () => {
 
     await store.getState().removeWorktree({ id: 'repo1::/path/wt1', executionHostId: null })
 
-    // The same reference should be returned (no unnecessary shallow copy)
     expect(store.getState().editorDrafts).toBe(drafts)
   })
 })

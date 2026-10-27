@@ -57,6 +57,7 @@ export function createTerminalPaneClosedHandler(
     disposeMapEntry(refs.fileLinkClickFallbackDisposablesRef.current, paneId)
     disposeMapEntry(refs.httpLinkClickFallbackDisposablesRef.current, paneId)
     disposeMapEntry(refs.selectionDisposablesRef.current, paneId)
+    disposeMapEntry(refs.nativeCopyDisposablesRef.current, paneId)
     disposeMapEntry(refs.imeCompositionDisposablesRef.current, paneId)
     disposeMapEntry(refs.imeNativeTextForwarderDisposablesRef.current, paneId)
     const timer = refs.selectionCaptureTimersRef.current.get(paneId)
@@ -86,13 +87,11 @@ export function createTerminalPaneClosedHandler(
     const leafId = closedPane?.leafId
     const deferredSplitHandoff = context.deferredSplitHandoffs.get(paneId)
     if (deferredSplitHandoff) {
-      // Explicit pane removal is terminal for the split intent; only a
-      // whole-tab remount is allowed to retain this record.
+      // Explicit close ends split intent; only whole-tab remount may retain it.
       clearDeferredSplitPaneHandoff(deferredSplitHandoff)
       context.deferredSplitHandoffs.delete(paneId)
     } else if (leafId) {
-      // A close callback can outlive its mount-local numeric handle; the
-      // durable leaf key still identifies the deferred split to discard.
+      // Close may outlive the numeric handle; discard deferred splits by durable leaf key.
       discardDeferredSplitPaneHandoffForKey(makePaneKey(tabId, leafId))
     }
     if (leafId && isRetiredSurface) {

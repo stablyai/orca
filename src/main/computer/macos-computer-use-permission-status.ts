@@ -13,6 +13,7 @@ import {
   resolveMacOSComputerUseExecutablePath
 } from './macos-native-provider-paths'
 import { RuntimeClientError } from './runtime-client-error'
+import { stopMacOSPermissionStatusHelper } from './macos-computer-use-permission-status-cleanup'
 
 const PERMISSION_STATUS_HELPER_LAUNCH_TIMEOUT_MS = 5_000
 
@@ -80,8 +81,7 @@ async function readPermissionStatusFromHelperApp(
   const tempDir = await mkdtemp(join(tmpdir(), 'orca-computer-use-permissions-'))
   const statusPath = join(tempDir, 'status.json')
   try {
-    // Why: TCC status must be checked through the helper app identity. Directly
-    // execing the binary can inherit the parent app's already-granted context.
+    // Launch the helper app so TCC checks its identity instead of inheriting the parent's grants.
     await launchPermissionStatusHelper(helperAppPath, statusPath)
 
     for (let attempt = 0; attempt < 50; attempt++) {
@@ -95,6 +95,7 @@ async function readPermissionStatusFromHelperApp(
     }
     throw new RuntimeClientError('accessibility_error', 'Timed out checking permissions')
   } finally {
+    void stopMacOSPermissionStatusHelper(statusPath)
     await rm(tempDir, { recursive: true, force: true })
   }
 }
@@ -171,8 +172,7 @@ function launchPermissionStatusHelper(helperAppPath: string, statusPath: string)
         new RuntimeClientError('accessibility_error', 'Timed out launching permission helper')
       )
     }
-    // Why: the status-file polling timeout only starts after `open` exits; if
-    // `open` wedges first, permission checks would otherwise stay pending.
+    // Polling starts after open exits, so a stalled launch needs its own deadline.
     launchTimeout = setTimeout(onTimeout, PERMISSION_STATUS_HELPER_LAUNCH_TIMEOUT_MS)
     if (typeof launchTimeout.unref === 'function') {
       launchTimeout.unref()

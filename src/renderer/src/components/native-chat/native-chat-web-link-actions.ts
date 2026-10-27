@@ -4,8 +4,10 @@ import {
   isTerminalLinkActionActivation,
   isTerminalLinkDirectActivation
 } from '@/components/terminal-pane/terminal-link-activation'
+import type { TerminalLinkClickBehavior } from '@/components/terminal-pane/terminal-link-click-behavior'
 import {
   buildHttpLinkActions,
+  httpLinkDirectClickDestination,
   openRoutedHttpLink,
   type HttpLinkActionDestinations,
   type HttpLinkDestination
@@ -14,10 +16,12 @@ import type { HttpLinkSourceOwner } from '@/lib/http-link-routing'
 
 export type NativeChatWebLinkDeps = {
   worktreeId: string
+  sourceTabId?: string | null
   sourceOwner: HttpLinkSourceOwner
   destinations: HttpLinkActionDestinations
   /** Off: a plain click opens the routed destination outright, as it did before actions existed. */
   actionsEnabled: boolean
+  plainClickBehavior?: TerminalLinkClickBehavior
   restoreFocus: () => void
   request: (request: LinkActionRequest) => void
 }
@@ -32,6 +36,22 @@ type ChatLinkMouseEvent = Pick<
   preventDefault: () => void
 }
 
+export function openNativeChatWebLink(
+  url: string,
+  deps: Pick<NativeChatWebLinkDeps, 'worktreeId' | 'sourceOwner' | 'sourceTabId'>,
+  destination: HttpLinkDestination | undefined,
+  openInSourceGroup = false
+): void {
+  openRoutedHttpLink(url, {
+    worktreeId: deps.worktreeId,
+    ...(deps.sourceTabId ? { sourceTabId: deps.sourceTabId } : {}),
+    ...(openInSourceGroup ? { openInSourceGroup: true } : {}),
+    sourceOwner: deps.sourceOwner,
+    modifierHeld: false,
+    ...(destination ? { forceDestination: destination } : {})
+  })
+}
+
 /** Returns true when the click was consumed; false leaves the anchor's default. */
 export function handleNativeChatWebLink(
   event: ChatLinkMouseEvent,
@@ -39,31 +59,26 @@ export function handleNativeChatWebLink(
   deps: NativeChatWebLinkDeps
 ): boolean {
   const open = (destination: HttpLinkDestination | undefined): void =>
-    openRoutedHttpLink(url, {
-      worktreeId: deps.worktreeId,
-      sourceOwner: deps.sourceOwner,
-      modifierHeld: false,
-      ...(destination ? { forceDestination: destination } : {})
-    })
+    openNativeChatWebLink(url, deps, destination)
 
   if (isTerminalLinkDirectActivation(event)) {
     event.preventDefault()
-    open(
-      event.shiftKey
-        ? (deps.destinations.alternate ?? deps.destinations.primary)
-        : deps.destinations.primary
-    )
+    open(httpLinkDirectClickDestination(deps.destinations, event.shiftKey))
     return true
   }
   if (!isTerminalLinkActionActivation(event)) {
     return false
   }
 
-  event.preventDefault()
   if (!deps.actionsEnabled) {
+    if (deps.plainClickBehavior === 'none') {
+      return false
+    }
+    event.preventDefault()
     open(deps.destinations.primary)
     return true
   }
+  event.preventDefault()
   const keyboardAnchor = event.detail === 0 ? event.currentTarget?.getBoundingClientRect() : null
   deps.request({
     anchorX: keyboardAnchor?.left ?? event.clientX,
@@ -71,7 +86,11 @@ export function handleNativeChatWebLink(
     destination: url,
     kind: 'url',
     restoreFocus: deps.restoreFocus,
-    ...buildHttpLinkActions(deps.destinations, open)
+    ...buildHttpLinkActions(deps.destinations, open, {
+      ...deps,
+      url,
+      openInSourceGroup: () => openNativeChatWebLink(url, deps, 'orca', true)
+    })
   })
   return true
 }

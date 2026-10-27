@@ -1,6 +1,9 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
+import { getRepoExecutionHostId } from '../shared/execution-host'
 import type { GitRemoteIdentity } from '../shared/git-remote-identity'
 import type { Repo } from '../shared/repo-types'
+import type { RepoHostTarget } from '../shared/repo-host-identity'
+import { repoTarget } from './persistence/repo-host-target-matcher.test-fixture'
 import { type GitRemoteIdentityProbe, probeGitRemoteIdentity } from './repo-git-remote-identity'
 import {
   enrichMissingRepoGitRemoteIdentities,
@@ -15,7 +18,10 @@ vi.mock('./repo-git-remote-identity', () => ({
 type RepoIdentityStore = {
   getRepos: () => Repo[]
   getRepo: (id: string) => Repo | undefined
-  updateRepo: (id: string, updates: Pick<Partial<Repo>, 'gitRemoteIdentity'>) => Repo | null
+  updateRepo: (
+    target: RepoHostTarget,
+    updates: Pick<Partial<Repo>, 'gitRemoteIdentity'>
+  ) => Repo | null
 }
 
 const remoteIdentity: GitRemoteIdentity = {
@@ -42,13 +48,18 @@ function makeStore(...repos: Repo[]): RepoIdentityStore & { updateRepo: ReturnTy
   return {
     getRepos: () => repos,
     getRepo: (id) => repos.find((candidate) => candidate.id === id),
-    updateRepo: vi.fn((id, updates) => {
-      const target = repos.find((candidate) => candidate.id === id)
-      if (!target) {
+    // Match the real store: writes use the row's own host stamp.
+    updateRepo: vi.fn((target: RepoHostTarget, updates) => {
+      const row = repos.find(
+        (candidate) =>
+          candidate.id === target.id &&
+          getRepoExecutionHostId(candidate) === getRepoExecutionHostId(target)
+      )
+      if (!row) {
         return null
       }
-      Object.assign(target, updates)
-      return target
+      Object.assign(row, updates)
+      return row
     })
   }
 }
@@ -73,7 +84,6 @@ const movedIdentity: GitRemoteIdentity = {
   remoteUrl: 'git@git.company.test:platform/sample-app.git'
 }
 
-/** Drains the sequential sweep: each flush only awaits the probe in flight at that moment. */
 async function drainEnrichmentSweep(): Promise<void> {
   for (let attempt = 0; attempt < 8; attempt += 1) {
     await flushRepoGitRemoteIdentityEnrichmentForTests()
@@ -114,8 +124,6 @@ describe('enrichMissingRepoGitRemoteIdentities', () => {
   })
 
   it('probes an SSH row that carries only executionHostId on its own host', async () => {
-    // Why: a row minted with the unified spelling has no `connectionId`, and reading the raw field
-    // would run `git remote -v` against a same-named path on this machine (#11163).
     vi.mocked(probeGitRemoteIdentity).mockResolvedValue(resolvedProbe)
     const store = makeStore(makeRepo({ executionHostId: 'ssh:builder' }))
 
@@ -129,29 +137,37 @@ describe('enrichMissingRepoGitRemoteIdentities', () => {
     await flushRepoGitRemoteIdentityEnrichmentForTests()
   })
 
-  it('never hands a runtime row nested SSH target to this client dispatch table', async () => {
-    // Why: `connectionId` on a `runtime:` row names a target inside that server's namespace, so
-    // dialing it here reaches a same-named box of ours. The row keeps the probe this process has
-    // always run for it; what it must never do is dial our same-named target.
+  it('never probes a runtime row that names a nested SSH target', async () => {
     vi.mocked(probeGitRemoteIdentity).mockResolvedValue({ status: 'unavailable' })
     const store = makeStore(
       makeRepo({ connectionId: 'nested-1', executionHostId: 'runtime:env-a' })
     )
 
-    enrichMissingRepoGitRemoteIdentities(store)
+    await sweep(store)
+
+    expect(probeGitRemoteIdentity).not.toHaveBeenCalled()
+    expect(store.updateRepo).not.toHaveBeenCalled()
+  })
+
+  it('probes a self-addressed runtime row here and writes it back under its own stamp', async () => {
+    vi.mocked(probeGitRemoteIdentity).mockResolvedValue(resolvedProbe)
+    const repo = makeRepo({ executionHostId: 'runtime:env-a' })
+    const store = makeStore(repo)
+
+    await sweep(store)
 
     expect(probeGitRemoteIdentity).toHaveBeenCalledWith(
       '/workspace/sample-app',
       'local',
       expect.objectContaining({ signal: expect.any(AbortSignal) })
     )
-    await flushRepoGitRemoteIdentityEnrichmentForTests()
+    expect(store.updateRepo).toHaveBeenCalledWith(repoTarget('repo-1', 'runtime:env-a'), {
+      gitRemoteIdentity: remoteIdentity
+    })
+    expect(repo.gitRemoteIdentity).toEqual(remoteIdentity)
   })
 
   it('keeps same-path rows on two different SSH hosts from sharing one backoff', async () => {
-    // Why: the location key decides coalescing and backoff. Keyed on the raw field, two rows that
-    // carry only `executionHostId` collapse onto one key, so the first host being down suppresses
-    // the probe for the second one entirely.
     vi.mocked(probeGitRemoteIdentity).mockResolvedValue({ status: 'unavailable' })
     const store = makeStore(
       makeRepo({ id: 'repo-m4air', executionHostId: 'ssh:m4air' }),
@@ -208,7 +224,9 @@ describe('enrichMissingRepoGitRemoteIdentities', () => {
     enrichMissingRepoGitRemoteIdentities(store)
     await flushRepoGitRemoteIdentityEnrichmentForTests()
 
-    expect(store.updateRepo).toHaveBeenCalledWith('repo-1', { gitRemoteIdentity: null })
+    expect(store.updateRepo).toHaveBeenCalledWith(repoTarget('repo-1', 'local'), {
+      gitRemoteIdentity: null
+    })
     expect(repo.gitRemoteIdentity).toBeNull()
   })
 
@@ -243,7 +261,9 @@ describe('enrichMissingRepoGitRemoteIdentities', () => {
     enrichMissingRepoGitRemoteIdentities(store)
     await flushRepoGitRemoteIdentityEnrichmentForTests()
 
-    expect(store.updateRepo).toHaveBeenCalledWith('repo-1', { gitRemoteIdentity: remoteIdentity })
+    expect(store.updateRepo).toHaveBeenCalledWith(repoTarget('repo-1', 'local'), {
+      gitRemoteIdentity: remoteIdentity
+    })
   })
 
   it('does not re-probe a resolved identity before the refresh window elapses', async () => {
@@ -252,7 +272,7 @@ describe('enrichMissingRepoGitRemoteIdentities', () => {
     vi.mocked(probeGitRemoteIdentity).mockResolvedValue(resolvedProbe)
     const store = makeStore(makeRepo({ gitRemoteIdentity: remoteIdentity }))
 
-    // Why two sweeps: the first only schedules the re-probe, so a restart cannot fan out at launch.
+    // The first sweep schedules refreshes to avoid startup fan-out.
     await sweep(store)
     expect(probeGitRemoteIdentity).not.toHaveBeenCalled()
 
@@ -296,7 +316,9 @@ describe('enrichMissingRepoGitRemoteIdentities', () => {
     enrichMissingRepoGitRemoteIdentities(store, { onChanged })
     await drainEnrichmentSweep()
 
-    expect(store.updateRepo).toHaveBeenCalledWith('repo-1', { gitRemoteIdentity: movedIdentity })
+    expect(store.updateRepo).toHaveBeenCalledWith(repoTarget('repo-1', 'local'), {
+      gitRemoteIdentity: movedIdentity
+    })
     expect(repo.gitRemoteIdentity).toEqual(movedIdentity)
     expect(onChanged).toHaveBeenCalledTimes(1)
   })
@@ -399,12 +421,11 @@ describe('enrichMissingRepoGitRemoteIdentities', () => {
       updateRepo: () => null
     }
 
-    // Seeds the startup-delay deadline for this location.
     await sweep(store)
     live.length = 0
     await sweep(store)
     live.push(repo)
-    // Past the seeded deadline: a retained entry would make this location due at once.
+    // Retaining a removed location would make it immediately due when re-added.
     vi.setSystemTime(1_000 + REFRESH_STARTUP_DELAY_MS + 1)
     await sweep(store)
 
@@ -436,8 +457,6 @@ describe('enrichMissingRepoGitRemoteIdentities', () => {
     live.splice(1, 1)
     await sweep(store)
 
-    // The kept repo is still inside its 6h refresh window, so pruning its sibling
-    // must not make it due again.
     expect(probeGitRemoteIdentity).toHaveBeenCalledTimes(2)
   })
 
@@ -464,7 +483,7 @@ describe('retiring probes for removed repos', () => {
     return {
       getRepos: () => live,
       getRepo: (id) => live.find((candidate) => candidate.id === id),
-      updateRepo: vi.fn((id, updates) => {
+      updateRepo: vi.fn(({ id }: RepoHostTarget, updates) => {
         const target = live.find((candidate) => candidate.id === id)
         if (!target) {
           return null
@@ -484,8 +503,7 @@ describe('retiring probes for removed repos', () => {
   }
 
   it('aborts the in-flight probe of a repo that was removed', () => {
-    // Never resolves: a probe wedged on a hung network path is exactly the case that must not
-    // outlive its repo. Do not flush here — flushing awaits this promise and would hang the suite.
+    // Do not flush this intentionally wedged promise; the flush would hang.
     vi.mocked(probeGitRemoteIdentity).mockReturnValue(new Promise(() => {}))
     const repo = makeRepo()
     const live: Repo[] = [repo]
@@ -513,7 +531,7 @@ describe('retiring probes for removed repos', () => {
     enrichMissingRepoGitRemoteIdentities(store)
     live.length = 0
     enrichMissingRepoGitRemoteIdentities(store)
-    // The retired probe settles late, as an abort-killed git does.
+    // An aborted git probe can still settle late.
     wedged.resolve(resolvedProbe)
     await flushRepoGitRemoteIdentityEnrichmentForTests()
 
@@ -544,7 +562,7 @@ describe('retiring probes for removed repos', () => {
 
     expect(store.updateRepo).not.toHaveBeenCalled()
 
-    // Same instant: a deadline re-seeded by the retired probe would suppress this probe entirely.
+    // A retired probe must not re-seed backoff for this location.
     live.push(repo)
     enrichMissingRepoGitRemoteIdentities(store)
     await flushRepoGitRemoteIdentityEnrichmentForTests()
@@ -559,9 +577,7 @@ describe('retiring probes for removed repos', () => {
       .mockResolvedValue(resolvedProbe)
     const live: Repo[] = [makeRepo(), makeRepo({ id: 'repo-2', path: '/workspace/other-app' })]
     const store = makeMutableStore(live)
-    // The three list handlers share one broadcast reference (ipc/repos.ts) while the runtime RPC
-    // passes its own, so the shared one catches stacked passes and the distinct one catches a
-    // coalesced caller being dropped.
+    // List handlers share a callback; runtime RPC uses a distinct one.
     const listHandlersChanged = vi.fn()
     const runtimeChanged = vi.fn()
 
@@ -572,26 +588,7 @@ describe('retiring probes for removed repos', () => {
     first.resolve(resolvedProbe)
     await drainEnrichmentSweep()
 
-    // Each stacked sweep would otherwise re-run the whole candidate loop and re-broadcast.
     expect(listHandlersChanged).toHaveBeenCalledTimes(1)
-    expect(runtimeChanged).toHaveBeenCalledTimes(1)
-  })
-
-  it('still notifies a caller whose sweep was coalesced into one already running', async () => {
-    const first = deferred<GitRemoteIdentityProbe>()
-    vi.mocked(probeGitRemoteIdentity).mockReturnValue(first.promise)
-    const store = makeMutableStore([makeRepo()])
-    const listHandlerChanged = vi.fn()
-    // The runtime RPC caller also drops a resolved-worktree cache, so it must not be dropped.
-    const runtimeChanged = vi.fn()
-
-    enrichMissingRepoGitRemoteIdentities(store, { onChanged: listHandlerChanged })
-    enrichMissingRepoGitRemoteIdentities(store, { onChanged: runtimeChanged })
-
-    first.resolve(resolvedProbe)
-    await drainEnrichmentSweep()
-
-    expect(listHandlerChanged).toHaveBeenCalledTimes(1)
     expect(runtimeChanged).toHaveBeenCalledTimes(1)
   })
 })

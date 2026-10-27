@@ -2,9 +2,13 @@ import React, { useCallback, useMemo } from 'react'
 import { toast } from 'sonner'
 import { useShallow } from 'zustand/react/shallow'
 import { useAppStore } from '@/store'
+import {
+  useStructuredChatTabNames,
+  getStructuredChatTabNames
+} from '@/runtime/structured-chat-name-observation'
 import { QuickLaunchAgentMenuItems } from '@/components/tab-bar/QuickLaunchButton'
 import { AgentStateDot, agentStateLabel } from '@/components/AgentStateDot'
-import { AgentIcon } from '@/lib/agent-catalog'
+import { AgentTypeIcon } from '@/lib/agent-type-icon'
 import {
   DropdownMenuItem,
   DropdownMenuLabel,
@@ -13,18 +17,14 @@ import {
 import { focusTerminalTabSurface } from '@/lib/focus-terminal-tab-surface'
 import {
   activeAgentNotesSendFailureMessage,
-  sendNotesToActiveAgentSession,
   type ActiveAgentNotesSendResult
 } from '@/lib/active-agent-note-send'
+import { sendMessageToAgent } from '@/lib/agent-message-send'
 import {
   deriveNotesSendAgentTargets,
   type NotesSendAgentTarget
 } from '@/lib/notes-send-agent-targets'
-import {
-  agentKindForAgentType,
-  formatAgentTypeLabel,
-  agentTypeToIconAgent
-} from '@/lib/agent-status'
+import { agentKindForAgentType, formatAgentTypeLabel } from '@/lib/agent-status'
 import { track } from '@/lib/telemetry'
 import { useNow } from '@/hooks/use-now'
 import type { DashboardAgentRow as DashboardAgentRowData } from '@/components/dashboard/useDashboardData'
@@ -32,7 +32,7 @@ import { lastEnteredDoneAt } from '@/components/dashboard/agent-finished-timesta
 import { selectLivePtyIdsForWorktree } from '@/components/sidebar/worktree-card-status-inputs'
 import { useWorktreeAgentRows } from '@/components/sidebar/useWorktreeAgentRows'
 import type { LaunchSource } from '../../../../shared/telemetry-events'
-import { agentRowDotState } from '@/lib/agent-row-dot-state'
+import { agentRowDisplayDotState } from '@/lib/agent-row-dot-state'
 import { translate } from '@/i18n/i18n'
 
 type OrderedSendTarget = {
@@ -46,7 +46,8 @@ export function ReviewNotesSendMenuContent({
   prompt,
   promptDelivery = 'submit-after-ready',
   launchSource = 'notes_send',
-  onPromptDelivered
+  onPromptDelivered,
+  onPromptHandedOff
 }: {
   worktreeId: string
   groupId: string
@@ -54,38 +55,43 @@ export function ReviewNotesSendMenuContent({
   promptDelivery?: 'auto-submit' | 'draft' | 'submit-after-ready'
   launchSource?: LaunchSource
   onPromptDelivered?: () => void
+  /** Given each send's own result the moment its prompt is handed to an agent. */
+  onPromptHandedOff?: (delivered: Promise<unknown>) => void
 }): React.JSX.Element {
   const hasPrompt = prompt.trim().length > 0
 
-  // Why: enumerate every running agent of the worktree so the user can target
-  // any of them — not only the focused pane. Derive from store slices in a memo
-  // to avoid the new-array identity churn of selecting the function result.
+  // Include every workspace agent, not just the focused pane; memoize slice-derived targets to avoid fresh selector arrays.
   const agentStatusByPaneKey = useAppStore((s) => s.agentStatusByPaneKey)
   const tabsByWorktree = useAppStore((s) => s.tabsByWorktree)
+  const unifiedTabsByWorktree = useAppStore((s) => s.unifiedTabsByWorktree)
   const terminalLayoutsByTabId = useAppStore((s) => s.terminalLayoutsByTabId)
   const ptyIdsByTabId = useAppStore(useShallow((s) => selectLivePtyIdsForWorktree(s, worktreeId)))
   const runtimePaneTitlesByTabId = useAppStore((s) => s.runtimePaneTitlesByTabId)
   const agentStatusEpoch = useAppStore((s) => s.agentStatusEpoch)
   const agentRows = useWorktreeAgentRows(worktreeId)
   const now = useNow(30_000)
+  const chatNames = useStructuredChatTabNames()
   const sendTargets = useMemo(() => {
     void agentStatusEpoch
     return deriveNotesSendAgentTargets(
       {
         agentStatusByPaneKey,
         tabsByWorktree,
+        unifiedTabsByWorktree,
         terminalLayoutsByTabId,
         ptyIdsByTabId,
         runtimePaneTitlesByTabId
       },
-      worktreeId
+      worktreeId,
+      chatNames
     )
   }, [
-    // Why: stale-boundary timers bump this epoch without replacing the
-    // status map, so eligibility must derive again when freshness flips.
+    // Freshness timers can change eligibility through this epoch without replacing the status map.
     agentStatusEpoch,
+    chatNames,
     agentStatusByPaneKey,
     tabsByWorktree,
+    unifiedTabsByWorktree,
     terminalLayoutsByTabId,
     runtimePaneTitlesByTabId,
     ptyIdsByTabId,
@@ -102,6 +108,7 @@ export function ReviewNotesSendMenuContent({
       onSent: () => void,
       options: { explicitTarget?: boolean } = {}
     ) => {
+      // Settle the loading toast in place: immediate sends can resolve before Sonner mounts, racing a separate dismissal.
       const pending = toast.loading(
         translate(
           'auto.components.editor.ReviewNotesSendMenuContent.50f7e753ea',
@@ -109,7 +116,7 @@ export function ReviewNotesSendMenuContent({
         )
       )
 
-      void send()
+      const sending = send()
         .then((result) => {
           if (result.status === 'sent') {
             onSent()
@@ -117,16 +124,19 @@ export function ReviewNotesSendMenuContent({
               translate(
                 'auto.components.editor.ReviewNotesSendMenuContent.bb9c69a0c9',
                 'Notes sent.'
-              )
+              ),
+              { id: pending }
             )
             return
           }
 
-          toast.message(
+          // Use a typed toast update; toast.message preserves the loading spinner.
+          toast.info(
             activeAgentNotesSendFailureMessage(result.status, {
               explicitTarget: options.explicitTarget,
               code: result.code
-            })
+            }),
+            { id: pending }
           )
         })
         .catch(() => {
@@ -135,14 +145,13 @@ export function ReviewNotesSendMenuContent({
             activeAgentNotesSendFailureMessage('status-unavailable', {
               explicitTarget: options.explicitTarget,
               code: 'runtime-unverifiable'
-            })
+            }),
+            { id: pending }
           )
         })
-        .finally(() => {
-          toast.dismiss(pending)
-        })
+      onPromptHandedOff?.(sending)
     },
-    []
+    [onPromptHandedOff]
   )
 
   const sendToAgentTarget = useCallback(
@@ -158,16 +167,10 @@ export function ReviewNotesSendMenuContent({
       }
 
       runNotesSend(
-        () =>
-          sendNotesToActiveAgentSession({
-            worktreeId,
-            prompt,
-            noteTarget: { tabId: target.tabId, leafId: target.leafId }
-          }),
+        () => sendMessageToAgent({ worktreeId, prompt, target: target.messageTarget }),
         () => {
           onPromptDelivered?.()
-          // Why: mirror the sidebar send-target telemetry so dropdown-routed
-          // follow-up notes show up identically on `agent_prompt_sent`.
+          // Match sidebar telemetry for follow-up notes sent through the dropdown.
           track('agent_prompt_sent', {
             agent_kind: agentKindForAgentType(target.agentType),
             launch_source: launchSource,
@@ -207,6 +210,8 @@ export function ReviewNotesSendMenuContent({
         promptDelivery={promptDelivery}
         launchSource={launchSource}
         onPromptDelivered={onPromptDelivered}
+        onPromptHandedOff={onPromptHandedOff}
+        disabled={!hasPrompt}
       />
     </>
   )
@@ -216,20 +221,26 @@ function resolveCurrentSendTargetEligibility(
   target: NotesSendAgentTarget,
   worktreeId: string
 ): { status: 'eligible' } | { status: 'disabled'; disabledReason: string } {
+  const goneReason =
+    target.messageTarget.kind === 'terminal'
+      ? 'Terminal is no longer available'
+      : 'Chat is no longer open'
   const state = useAppStore.getState()
-  const currentTarget = deriveNotesSendAgentTargets(state, worktreeId).find(
-    (candidate) => candidate.paneKey === target.paneKey
-  )
+  const currentTarget = deriveNotesSendAgentTargets(
+    state,
+    worktreeId,
+    getStructuredChatTabNames()
+  ).find((candidate) => candidate.paneKey === target.paneKey)
   if (currentTarget) {
     return currentTarget.status === 'eligible'
       ? { status: 'eligible' }
       : {
           status: 'disabled',
-          disabledReason: currentTarget.disabledReason ?? 'Terminal is no longer available'
+          disabledReason: currentTarget.disabledReason ?? goneReason
         }
   }
 
-  return { status: 'disabled', disabledReason: 'Terminal is no longer available' }
+  return { status: 'disabled', disabledReason: goneReason }
 }
 
 function AgentTargetMenuItem({
@@ -246,7 +257,8 @@ function AgentTargetMenuItem({
   onSend: (target: NotesSendAgentTarget) => void
 }): React.JSX.Element {
   const tabTitle = target.tabTitle.trim()
-  const state = agentRowDotState(agent?.state ?? 'idle', agent?.entry.workingMode)
+  // Use the sidebar’s display state so failed/stopped agents agree across surfaces.
+  const state = agent ? agentRowDisplayDotState(agent) : 'idle'
   const timeAgo = agent ? formatAgentRelativeTime(agent, now) : null
   const disabledReason = target.status === 'disabled' ? target.disabledReason : undefined
   const secondaryParts = [
@@ -258,9 +270,7 @@ function AgentTargetMenuItem({
     <DropdownMenuItem
       disabled={disabled}
       onSelect={() => onSend(target)}
-      // Why: surface the ineligibility reason (permission/stale/no-terminal) as a
-      // hover tooltip rather than inline text, matching DashboardAgentRow's
-      // title-attribute treatment of the same disabledReason.
+      // Match dashboard tooltips for permission, stale-state and missing-terminal reasons.
       title={disabledReason}
       className="min-w-[240px] gap-2 rounded-[7px] px-2 py-1.5 text-[12px] leading-5 font-medium"
     >
@@ -271,7 +281,7 @@ function AgentTargetMenuItem({
         className="shrink-0"
         title={disabledReason ? null : undefined}
       />
-      <AgentIcon agent={agentTypeToIconAgent(target.agentType ?? agent?.agentType)} size={14} />
+      <AgentTypeIcon agentType={target.agentType ?? agent?.agentType} size={14} />
       <span className="grid min-w-0 flex-1 text-left">
         <span className="truncate">
           {formatAgentTypeLabel(target.agentType ?? agent?.agentType)}

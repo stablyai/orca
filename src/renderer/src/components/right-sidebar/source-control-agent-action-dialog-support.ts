@@ -1,9 +1,12 @@
+import { useAppStore } from '@/store'
+import { ensureDetectedAgentsForWorktree } from '@/lib/agent-detection-target-inventory'
 import { getAgentCatalog } from '@/lib/agent-catalog'
 import { isTuiAgentEnabled } from '../../../../shared/tui-agent-selection'
 import type { TuiAgent } from '../../../../shared/tui-agent'
 import type { SourceControlAiWriteTarget } from '../../../../shared/source-control-ai-recipe-save'
 import { translate } from '@/i18n/i18n'
 import type { SourceControlAgentActionDeliveryPlanState } from './SourceControlAgentActionDialogForm'
+import type { SourceControlAgentScopeNote } from './source-control-agent-action-dialog-result'
 
 export function isSourceControlAgentDetectedAndEnabled(
   agent: TuiAgent | null,
@@ -13,6 +16,34 @@ export function isSourceControlAgentDetectedAndEnabled(
   return Boolean(
     agent && detectedAgents.includes(agent) && isTuiAgentEnabled(agent, disabledAgents)
   )
+}
+
+export function buildSourceControlAgentAvailability({
+  detectedAgents,
+  disabledAgents,
+  selectedAgent
+}: {
+  detectedAgents: TuiAgent[]
+  disabledAgents: TuiAgent[] | undefined
+  selectedAgent: TuiAgent | null
+}): {
+  agentOptions: ReturnType<typeof getAgentCatalog>
+  selectedAgentUnavailable: boolean
+  hasEnabledAgents: boolean
+} {
+  const enabledDetectedAgents = detectedAgents.filter((agent) =>
+    isTuiAgentEnabled(agent, disabledAgents)
+  )
+  return {
+    agentOptions: getAgentCatalog().filter(
+      (entry) => enabledDetectedAgents.includes(entry.id) || entry.id === selectedAgent
+    ),
+    selectedAgentUnavailable: Boolean(
+      selectedAgent &&
+      !isSourceControlAgentDetectedAndEnabled(selectedAgent, detectedAgents, disabledAgents)
+    ),
+    hasEnabledAgents: enabledDetectedAgents.length > 0
+  }
 }
 
 export function buildSourceControlAgentSaveTargets(repoId?: string | null): {
@@ -98,4 +129,35 @@ export function buildSourceControlAgentStatusCopy(args: {
     return 'No enabled agents were detected on this workspace host.'
   }
   return null
+}
+
+/** Names the agent this action will really use when the repo overrides the global default. */
+export function buildSourceControlAgentScopeNote(launchAgentScope: {
+  overridesGlobalAgent: boolean
+  effectiveAgentId: TuiAgent | null
+  globalAgentId: TuiAgent | null
+}): SourceControlAgentScopeNote | null {
+  if (!launchAgentScope.overridesGlobalAgent) {
+    return null
+  }
+  const catalog = getAgentCatalog()
+  const labelFor = (agentId: TuiAgent | null): string =>
+    catalog.find((entry) => entry.id === agentId)?.label ?? agentId ?? ''
+  return {
+    effectiveAgentLabel: labelFor(launchAgentScope.effectiveAgentId),
+    globalAgentLabel: labelFor(launchAgentScope.globalAgentId)
+  }
+}
+
+/** The workspace owner answers detection, including a paired host's SSH workspace. */
+export function detectSourceControlActionAgents(
+  worktreeId: string | null | undefined,
+  connectionId: string | null | undefined
+): Promise<TuiAgent[]> {
+  const state = useAppStore.getState()
+  return worktreeId
+    ? ensureDetectedAgentsForWorktree(state, worktreeId)
+    : typeof connectionId === 'string'
+      ? state.ensureRemoteDetectedAgents(connectionId)
+      : state.ensureDetectedAgents()
 }

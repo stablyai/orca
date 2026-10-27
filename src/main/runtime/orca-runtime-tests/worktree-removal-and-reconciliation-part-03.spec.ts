@@ -1,6 +1,8 @@
-import { describe, expect, it, vi } from 'vitest'
+import { describe, expect, it, vi, type MockInstance } from 'vitest'
+import { readFile } from 'node:fs/promises'
+import { _settlePendingWorktreeRemovalsForTests } from '../../worktree-background-removal'
+
 import {
-  OrcaRuntimeService,
   assertWorktreeCleanForRemoval,
   closeLocalWatcherForWorktreePathMock,
   deleteWorktreeHistoryDirMock,
@@ -12,110 +14,27 @@ import {
   lstat,
   mkdir,
   mkdtemp,
-  registerSshFilesystemProvider,
-  registerSshGitProvider,
   removeWorktree,
   rm,
   runHook,
   setPlatform,
   tmpdir,
-  unregisterSshFilesystemProvider,
-  unregisterSshGitProvider,
   writeFile
 } from '../orca-runtime-test-mocks.spec'
-import type { WorktreeMeta } from '../orca-runtime-test-mocks.spec'
 import {
   TEST_REPO_ID,
   TEST_REPO_PATH,
   TEST_WORKTREE_ID,
-  TEST_WORKTREE_PATH,
   createStaleRuntimeWorktreeStore,
   deferred,
-  makeWorktreeMeta,
   store
 } from '../orca-runtime-test-fixtures.spec'
 import { createWorktreeRemovalRuntime } from '../orca-runtime-test-scenario-builders.spec'
+import { hostWorktreeTarget } from '../../../shared/worktree/host-qualified-identity'
+
+// Connected SSH fixtures need the host HOME for removal guards.
 
 describe('OrcaRuntimeService', () => {
-  it('force-deletes a preserved branch on the qualified host when repo ids collide', async () => {
-    const localRepo = store.getRepo(TEST_REPO_ID)!
-    const remoteRepo = {
-      ...localRepo,
-      path: '/remote/repo',
-      connectionId: 'ssh-1'
-    }
-    const remoteWorktree = {
-      path: TEST_WORKTREE_PATH,
-      head: 'def456',
-      branch: 'feature/test',
-      isBare: false,
-      isMainWorktree: false
-    }
-    const metaById: Record<string, WorktreeMeta> = {
-      [TEST_WORKTREE_ID]: makeWorktreeMeta({
-        hostId: 'local',
-        preserveBranchOnDelete: true
-      })
-    }
-    const runtimeStore = {
-      ...store,
-      getRepos: () => [localRepo, remoteRepo],
-      getRepo: (id: string) => (id === localRepo.id ? localRepo : undefined),
-      getAllWorktreeMeta: () => metaById,
-      getWorktreeMeta: (worktreeId: string) => metaById[worktreeId],
-      setWorktreeMeta: (worktreeId: string, meta: Partial<WorktreeMeta>) => {
-        metaById[worktreeId] = { ...(metaById[worktreeId] ?? makeWorktreeMeta()), ...meta }
-        return metaById[worktreeId]
-      },
-      removeWorktreeMeta: (worktreeId: string, hostId?: string) => {
-        if (!hostId || metaById[worktreeId]?.hostId === hostId) {
-          delete metaById[worktreeId]
-        }
-      }
-    }
-    const provider = {
-      exec: vi.fn().mockResolvedValue({ stdout: '', stderr: '' }),
-      forceDeletePreservedBranch: vi.fn().mockResolvedValue(undefined),
-      listWorktrees: vi.fn().mockResolvedValue([
-        {
-          path: remoteRepo.path,
-          head: 'main',
-          branch: 'main',
-          isBare: false,
-          isMainWorktree: true
-        },
-        remoteWorktree
-      ]),
-      removeWorktree: vi.fn().mockResolvedValue({
-        preservedBranch: { branchName: 'feature/test', head: 'def456' }
-      })
-    }
-    registerSshGitProvider('ssh-1', provider as never)
-    const runtime = createWorktreeRemovalRuntime(runtimeStore)
-
-    try {
-      await runtime.removeManagedWorktree(TEST_WORKTREE_ID, false, false, false, 'ssh:ssh-1')
-      expect(provider.removeWorktree).toHaveBeenCalledWith(TEST_WORKTREE_PATH, false)
-      expect(metaById[TEST_WORKTREE_ID]?.hostId).toBe('local')
-      const result = await runtime.forceDeletePreservedBranch(
-        TEST_WORKTREE_ID,
-        'feature/test',
-        'def456',
-        'ssh:ssh-1'
-      )
-
-      expect(result).toEqual({ deleted: true })
-      expect(provider.forceDeletePreservedBranch).toHaveBeenCalledWith(
-        remoteRepo.path,
-        'feature/test',
-        'def456'
-      )
-      expect(forceDeleteLocalBranchMock).not.toHaveBeenCalled()
-    } finally {
-      unregisterSshGitProvider('ssh-1')
-    }
-  })
-
   it('routes runtime preserved-branch force-delete through the selected WSL project runtime', async () => {
     setPlatform('win32')
     const runtimeStore = {
@@ -181,8 +100,8 @@ describe('OrcaRuntimeService', () => {
       return {}
     })
 
-    const first = runtime.removeManagedWorktree(TEST_WORKTREE_ID, true)
-    const second = runtime.removeManagedWorktree(TEST_WORKTREE_ID, true)
+    const first = runtime.removeManagedWorktree(TEST_WORKTREE_ID, { force: true })
+    const second = runtime.removeManagedWorktree(TEST_WORKTREE_ID, { force: true })
 
     await removeStarted.promise
     await Promise.resolve()
@@ -194,8 +113,7 @@ describe('OrcaRuntimeService', () => {
 
   it('does not coalesce concurrent same-id removals on different hosts', async () => {
     const baseRepo = store.getRepos()[0]!
-    // The second owner names its host only in the migrated spelling, so its removal must reach the
-    // SSH host rather than joining the local one and running `git worktree remove` here.
+    // Migrated executionHostId must keep remote removal separate from the same-path local owner.
     const remoteRepo = { ...baseRepo, path: '/remote/repo', executionHostId: 'ssh:host-b' }
     const runtimeStore = {
       ...store,
@@ -203,62 +121,36 @@ describe('OrcaRuntimeService', () => {
     }
     const runtime = createWorktreeRemovalRuntime(runtimeStore)
     vi.spyOn(runtime, 'acquireFileWatcherRemoval').mockResolvedValue({ finish: vi.fn() })
-    const bothStarted = deferred<void>()
+    const localStarted = deferred<void>()
     const finishRemovals = deferred<void>()
-    let startedCount = 0
     const startRemoval = async (): Promise<Record<string, never>> => {
-      startedCount += 1
-      if (startedCount === 2) {
-        bothStarted.resolve()
-      }
+      localStarted.resolve()
       await finishRemovals.promise
       return {}
     }
     vi.mocked(removeWorktree).mockImplementation(startRemoval)
-    const provider = {
-      exec: vi.fn().mockResolvedValue({ stdout: '', stderr: '' }),
-      listWorktrees: vi.fn().mockResolvedValue([
-        {
-          path: remoteRepo.path,
-          head: 'main',
-          branch: 'main',
-          isBare: false,
-          isMainWorktree: true
-        },
-        {
-          path: TEST_WORKTREE_PATH,
-          head: 'def456',
-          branch: 'feature/test',
-          isBare: false,
-          isMainWorktree: false
-        }
-      ]),
-      removeWorktree: vi.fn().mockImplementation(startRemoval)
-    }
-    registerSshGitProvider('host-b', provider as never)
+    const local = runtime.removeManagedWorktree(TEST_WORKTREE_ID, {
+      force: true,
+      runHooks: false,
+      allowUnverifiedPtyStop: false,
+      hostId: 'local'
+    })
+    const remote = runtime.removeManagedWorktree(TEST_WORKTREE_ID, {
+      force: true,
+      runHooks: false,
+      allowUnverifiedPtyStop: false,
+      hostId: 'ssh:host-b'
+    })
 
-    try {
-      const local = runtime.removeManagedWorktree(TEST_WORKTREE_ID, true, false, false, 'local')
-      const remote = runtime.removeManagedWorktree(
-        TEST_WORKTREE_ID,
-        true,
-        false,
-        false,
-        'ssh:host-b'
-      )
+    await localStarted.promise
+    await expect(remote).rejects.toThrow('selector_not_found')
 
-      await bothStarted.promise
-      expect(removeWorktree).toHaveBeenCalledTimes(1)
-      expect(provider.removeWorktree).toHaveBeenCalledTimes(1)
-
-      finishRemovals.resolve()
-      await expect(Promise.all([local, remote])).resolves.toEqual([{}, {}])
-    } finally {
-      unregisterSshGitProvider('host-b')
-    }
+    finishRemovals.resolve()
+    await expect(local).resolves.toEqual({})
+    expect(removeWorktree).toHaveBeenCalledTimes(1)
   })
 
-  it('rejects concurrent runtime worktree removals for the same id with different options', async () => {
+  it('joins a runtime removal Git is already deleting, even with different options', async () => {
     const runtime = createWorktreeRemovalRuntime()
     const removeStarted = deferred<void>()
     const finishRemoval = deferred<void>()
@@ -268,16 +160,50 @@ describe('OrcaRuntimeService', () => {
       return {}
     })
 
+    const resolveTarget: MockInstance<(...args: unknown[]) => Promise<unknown>> = vi.spyOn(
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: resolveWorktreeRemovalTarget is a protected runtime method the spy only observes.
+      runtime as never,
+      'resolveWorktreeRemovalTarget'
+    )
     const first = runtime.removeManagedWorktree(TEST_WORKTREE_ID)
 
     await removeStarted.promise
-    await expect(runtime.removeManagedWorktree(TEST_WORKTREE_ID, true)).rejects.toThrow(
-      'Worktree deletion already in progress'
-    )
-
-    expect(removeWorktree).toHaveBeenCalledTimes(1)
+    // Acceptance follows every refusal; a force retry has nothing left to waive.
+    const second = runtime.removeManagedWorktree(TEST_WORKTREE_ID, { force: true })
+    await vi.waitFor(() => expect(resolveTarget).toHaveBeenCalledTimes(2))
+    await resolveTarget.mock.results[1]?.value
     finishRemoval.resolve()
-    await expect(first).resolves.toEqual({})
+    await expect(Promise.all([first, second])).resolves.toEqual([{}, {}])
+    expect(removeWorktree).toHaveBeenCalledTimes(1)
+  })
+
+  it('answers a client that cannot wait as soon as Git starts deleting', async () => {
+    const runtime = createWorktreeRemovalRuntime()
+    const removeStarted = deferred<void>()
+    const finishRemoval = deferred<void>()
+    vi.mocked(removeWorktree).mockImplementation(async () => {
+      removeStarted.resolve()
+      await finishRemoval.promise
+      return {}
+    })
+
+    const accepted = runtime.removeManagedWorktree(TEST_WORKTREE_ID, {
+      waitForBackgroundRemoval: false
+    })
+    await removeStarted.promise
+    await expect(accepted).resolves.toEqual({ removing: true })
+    finishRemoval.resolve()
+    await _settlePendingWorktreeRemovalsForTests()
+  })
+
+  it('replies to a waiting client with the error of a delete that fails after acceptance', async () => {
+    vi.spyOn(console, 'warn').mockImplementation(() => {})
+    const runtime = createWorktreeRemovalRuntime()
+    vi.mocked(removeWorktree).mockRejectedValue(new Error('permission denied'))
+
+    await expect(runtime.removeManagedWorktree(TEST_WORKTREE_ID)).rejects.toThrow(
+      'permission denied'
+    )
   })
 
   it('treats forced runtime deletion of an already-missing unregistered worktree as cleanup', async () => {
@@ -292,14 +218,15 @@ describe('OrcaRuntimeService', () => {
     try {
       vi.mocked(listWorktrees).mockResolvedValue([])
 
-      await expect(runtime.removeManagedWorktree(worktreeId, true)).resolves.toEqual({})
+      await expect(runtime.removeManagedWorktree(worktreeId, { force: true })).resolves.toEqual({})
 
       expect(removeWorktree).not.toHaveBeenCalled()
-      // The repo resolved to the local host, so the metadata purge names it —
-      // an unqualified purge would evict a same-id row owned by another host.
-      expect(removeWorktreeMeta).toHaveBeenCalledWith(worktreeId, 'local')
+      // Host-qualified metadata purge preserves same-id rows on other hosts.
+      expect(removeWorktreeMeta).toHaveBeenCalledWith(
+        hostWorktreeTarget({ id: worktreeId, hostId: 'local' })
+      )
       expect(deleteWorktreeHistoryDirMock).toHaveBeenCalledWith(worktreeId)
-      expect(invalidateAuthorizedRootsCacheMock).toHaveBeenCalled()
+      expect(invalidateAuthorizedRootsCacheMock).toHaveBeenCalledWith(runtimeStore, TEST_REPO_ID)
       expect(notifier.worktreesChanged).toHaveBeenCalledWith(TEST_REPO_ID)
     } finally {
       await rm(parentDir, { recursive: true, force: true })
@@ -321,154 +248,15 @@ describe('OrcaRuntimeService', () => {
       await expect(runtime.removeManagedWorktree(worktreeId)).resolves.toEqual({})
 
       expect(removeWorktree).not.toHaveBeenCalled()
-      // The repo resolved to the local host, so the metadata purge names it —
-      // an unqualified purge would evict a same-id row owned by another host.
-      expect(removeWorktreeMeta).toHaveBeenCalledWith(worktreeId, 'local')
+      expect(removeWorktreeMeta).toHaveBeenCalledWith(
+        hostWorktreeTarget({ id: worktreeId, hostId: 'local' })
+      )
       expect(deleteWorktreeHistoryDirMock).toHaveBeenCalledWith(worktreeId)
-      expect(invalidateAuthorizedRootsCacheMock).toHaveBeenCalled()
+      expect(invalidateAuthorizedRootsCacheMock).toHaveBeenCalledWith(runtimeStore, TEST_REPO_ID)
       expect(notifier.worktreesChanged).toHaveBeenCalledWith(TEST_REPO_ID)
     } finally {
       await rm(parentDir, { recursive: true, force: true })
     }
-  })
-
-  it('routes already-missing SSH runtime history cleanup through the PTY owner', async () => {
-    const repo = {
-      id: 'repo-runtime-ssh',
-      path: '/remote/repo',
-      displayName: 'ssh',
-      badgeColor: 'blue',
-      addedAt: 1,
-      connectionId: 'ssh-1'
-    }
-    const worktreeId = `${repo.id}::/remote/already-deleted`
-    const metaById: Record<string, WorktreeMeta> = {
-      [worktreeId]: makeWorktreeMeta({ hostId: 'ssh:ssh-1', orcaCreationSource: 'ssh' })
-    }
-    const removeWorktreeMeta = vi.fn((id: string) => {
-      delete metaById[id]
-    })
-    const runtimeStore = {
-      ...store,
-      getRepos: () => [repo],
-      getRepo: (id: string) => (id === repo.id ? repo : undefined),
-      getAllWorktreeMeta: () => metaById,
-      getWorktreeMeta: (id: string) => metaById[id],
-      removeWorktreeMeta
-    }
-    const gitProvider = {
-      listWorktrees: vi.fn().mockResolvedValue([
-        {
-          path: repo.path,
-          head: 'main',
-          branch: 'refs/heads/main',
-          isBare: false,
-          isMainWorktree: true
-        }
-      ])
-    }
-    const fsProvider = {
-      stat: vi.fn().mockRejectedValue(Object.assign(new Error('missing'), { code: 'ENOENT' }))
-    }
-    const deleteWorktreeHistory = vi.fn().mockResolvedValue(undefined)
-    const ptyProvider = { deleteWorktreeHistory } as never
-    registerSshGitProvider(repo.connectionId, gitProvider as never)
-    registerSshFilesystemProvider(repo.connectionId, fsProvider as never)
-    const runtime = new OrcaRuntimeService(runtimeStore as never, undefined, {
-      getSshProvider: () => ptyProvider
-    })
-
-    try {
-      await expect(runtime.removeManagedWorktree(`id:${worktreeId}`)).resolves.toEqual({})
-    } finally {
-      unregisterSshGitProvider(repo.connectionId)
-      unregisterSshFilesystemProvider(repo.connectionId)
-    }
-
-    expect(deleteWorktreeHistory).toHaveBeenCalledWith(worktreeId)
-    expect(deleteWorktreeHistory.mock.invocationCallOrder[0]).toBeLessThan(
-      removeWorktreeMeta.mock.invocationCallOrder[0]
-    )
-    expect(removeWorktreeMeta).toHaveBeenCalledWith(worktreeId, 'ssh:ssh-1')
-  })
-
-  it('routes SSH runtime orphan-directory history cleanup through the PTY owner', async () => {
-    const repo = {
-      id: 'repo-runtime-ssh',
-      path: '/remote/repo',
-      displayName: 'ssh',
-      badgeColor: 'blue',
-      addedAt: 1,
-      connectionId: 'ssh-1'
-    }
-    const worktreePath = '/remote/orphan'
-    const worktreeId = `${repo.id}::${worktreePath}`
-    const metaById: Record<string, WorktreeMeta> = {
-      [worktreeId]: makeWorktreeMeta({
-        hostId: 'ssh:ssh-1',
-        orcaCreatedAt: Date.now(),
-        orcaCreationSource: 'ssh'
-      })
-    }
-    const removeWorktreeMeta = vi.fn((id: string) => {
-      delete metaById[id]
-    })
-    const runtimeStore = {
-      ...store,
-      getRepos: () => [repo],
-      getRepo: (id: string) => (id === repo.id ? repo : undefined),
-      getAllWorktreeMeta: () => metaById,
-      getWorktreeMeta: (id: string) => metaById[id],
-      removeWorktreeMeta
-    }
-    const gitProvider = {
-      listWorktrees: vi.fn().mockResolvedValue([
-        {
-          path: repo.path,
-          head: 'main',
-          branch: 'refs/heads/main',
-          isBare: false,
-          isMainWorktree: true
-        }
-      ])
-    }
-    const fsProvider = {
-      lstat: vi.fn(async (path: string) => ({
-        type: path === `${worktreePath}/.git` ? 'file' : 'directory'
-      })),
-      readFile: vi.fn(async (path: string) => ({
-        isBinary: false,
-        content:
-          path === `${worktreePath}/.git`
-            ? `gitdir: ${repo.path}/.git/worktrees/orphan\n`
-            : `${worktreePath}/.git\n`
-      })),
-      deletePath: vi.fn().mockResolvedValue(undefined)
-    }
-    const deleteWorktreeHistory = vi.fn().mockResolvedValue(undefined)
-    const ptyProvider = {
-      listProcesses: vi.fn().mockResolvedValue([]),
-      shutdown: vi.fn().mockResolvedValue(undefined),
-      deleteWorktreeHistory
-    }
-    registerSshGitProvider(repo.connectionId, gitProvider as never)
-    registerSshFilesystemProvider(repo.connectionId, fsProvider as never)
-    const runtime = new OrcaRuntimeService(runtimeStore as never, undefined, {
-      getSshProvider: () => ptyProvider as never
-    })
-
-    try {
-      await expect(runtime.removeManagedWorktree(`id:${worktreeId}`, true)).resolves.toEqual({})
-    } finally {
-      unregisterSshGitProvider(repo.connectionId)
-      unregisterSshFilesystemProvider(repo.connectionId)
-    }
-
-    expect(fsProvider.deletePath).toHaveBeenCalledWith(worktreePath, true)
-    expect(deleteWorktreeHistory).toHaveBeenCalledWith(worktreeId)
-    expect(deleteWorktreeHistory.mock.invocationCallOrder[0]).toBeLessThan(
-      removeWorktreeMeta.mock.invocationCallOrder[0]
-    )
   })
 
   it('force-removes a legacy Orca-created runtime orphaned worktree directory after Git tracking is gone', async () => {
@@ -513,7 +301,7 @@ describe('OrcaRuntimeService', () => {
     try {
       vi.mocked(listWorktrees).mockResolvedValue([])
 
-      await expect(runtime.removeManagedWorktree(worktreeId, true)).resolves.toEqual({})
+      await expect(runtime.removeManagedWorktree(worktreeId, { force: true })).resolves.toEqual({})
 
       await expect(lstat(orphanPath)).rejects.toMatchObject({ code: 'ENOENT' })
       expect(closeLocalWatcherForWorktreePathMock).toHaveBeenCalledWith(
@@ -521,9 +309,9 @@ describe('OrcaRuntimeService', () => {
         expect.objectContaining({ remainingMs: expect.any(Function) })
       )
       expect(removeWorktree).not.toHaveBeenCalled()
-      // The repo resolved to the local host, so the metadata purge names it —
-      // an unqualified purge would evict a same-id row owned by another host.
-      expect(removeWorktreeMeta).toHaveBeenCalledWith(worktreeId, 'local')
+      expect(removeWorktreeMeta).toHaveBeenCalledWith(
+        hostWorktreeTarget({ id: worktreeId, hostId: 'local' })
+      )
       expect(deleteWorktreeHistoryDirMock).toHaveBeenCalledWith(worktreeId)
       expect(invalidateAuthorizedRootsCacheMock).toHaveBeenCalled()
       expect(notifier.worktreesChanged).toHaveBeenCalledWith(TEST_REPO_ID)
@@ -533,13 +321,13 @@ describe('OrcaRuntimeService', () => {
     }
   })
 
-  it('prompts then force-removes an Orca-created runtime unregistered leftover directory with no git marker', async () => {
+  it('refuses an Orca-created runtime unregistered directory with no git marker, even forced, until the user removes it', async () => {
     const parentDir = await mkdtemp(join(tmpdir(), 'orca-runtime-leftover-'))
     const repoPath = join(parentDir, 'repo')
     const leftoverPath = join(parentDir, 'leftover')
     const worktreeId = `${TEST_REPO_ID}::${leftoverPath}`
     await mkdir(leftoverPath, { recursive: true })
-    await writeFile(join(leftoverPath, 'leftover.txt'), 'kept until force\n')
+    await writeFile(join(leftoverPath, 'notes.txt'), 'mine\n')
     const { runtimeStore, removeWorktreeMeta } = createStaleRuntimeWorktreeStore(worktreeId, {
       orcaCreatedAt: Date.now(),
       orcaCreationSource: 'runtime'
@@ -579,26 +367,27 @@ describe('OrcaRuntimeService', () => {
     try {
       vi.mocked(listWorktrees).mockResolvedValue([])
 
-      await expect(runtime.removeManagedWorktree(worktreeId)).rejects.toThrow(
-        'Worktree is no longer registered with Git but its directory remains.'
-      )
-      await expect(lstat(leftoverPath)).resolves.toBeTruthy()
+      for (const force of [false, true]) {
+        await expect(runtime.removeManagedWorktree(worktreeId, { force })).rejects.toThrow(
+          `Refusing to delete unregistered worktree path: ${leftoverPath}`
+        )
+      }
+      await expect(readFile(join(leftoverPath, 'notes.txt'), 'utf8')).resolves.toBe('mine\n')
       expect(removeWorktree).not.toHaveBeenCalled()
       expect(removeWorktreeMeta).not.toHaveBeenCalled()
 
-      await expect(runtime.removeManagedWorktree(worktreeId, true)).resolves.toEqual({})
+      await rm(leftoverPath, { recursive: true, force: true })
+      await expect(runtime.removeManagedWorktree(worktreeId)).resolves.toEqual({})
 
-      await expect(lstat(leftoverPath)).rejects.toMatchObject({ code: 'ENOENT' })
       expect(assertWorktreeCleanForRemoval).not.toHaveBeenCalled()
       expect(runHook).not.toHaveBeenCalled()
       expect(removeWorktree).not.toHaveBeenCalled()
-      // The repo resolved to the local host, so the metadata purge names it —
-      // an unqualified purge would evict a same-id row owned by another host.
-      expect(removeWorktreeMeta).toHaveBeenCalledWith(worktreeId, 'local')
+      expect(removeWorktreeMeta).toHaveBeenCalledWith(
+        hostWorktreeTarget({ id: worktreeId, hostId: 'local' })
+      )
       expect(deleteWorktreeHistoryDirMock).toHaveBeenCalledWith(worktreeId)
       expect(invalidateAuthorizedRootsCacheMock).toHaveBeenCalled()
       expect(notifier.worktreesChanged).toHaveBeenCalledWith(TEST_REPO_ID)
-      expect(gitSpy).toHaveBeenCalledWith(['status', '--short'], { cwd: leftoverPath })
     } finally {
       gitSpy.mockRestore()
       await rm(parentDir, { recursive: true, force: true, maxRetries: 5, retryDelay: 50 })
@@ -642,7 +431,7 @@ describe('OrcaRuntimeService', () => {
     try {
       vi.mocked(listWorktrees).mockResolvedValue([])
 
-      await expect(runtime.removeManagedWorktree(worktreeId, true)).rejects.toThrow(
+      await expect(runtime.removeManagedWorktree(worktreeId, { force: true })).rejects.toThrow(
         `Refusing to delete unregistered worktree path: ${standalonePath}`
       )
 

@@ -9,16 +9,17 @@ import {
   BrowserClientHostCommandResultParams
 } from '../../../../shared/browser-client-host-protocol'
 import { BrowserError } from '../../../browser/browser-error'
-import { getBrowserHostLeaseRegistry } from '../../browser-host-lease-registry-instance'
+import { getBrowserHostLeaseRegistry } from '../../browser-host/browser-host-lease-registry-instance'
 import { getRuntimeBrowserPageRegistry } from '../../runtime-browser-page-registry'
 import { adoptRuntimeBrowserClientPagesFromInventory } from '../../runtime-browser-client-page-adoption'
 import { recoverUnavailableRuntimeBrowserClientPages } from '../../runtime-browser-client-page-recovery'
 import { releaseRuntimeBrowserClientPageRecord } from '../../runtime-browser-client-page-release'
-import { defineMethod, defineStreamingMethod, type RpcAnyMethod } from '../core'
+import { defineMethod, defineStreamingMethod } from '../core'
 
-export const BROWSER_CLIENT_HOST_METHODS: RpcAnyMethod[] = [
+export const BROWSER_CLIENT_HOST_METHODS = [
   defineStreamingMethod({
     name: 'browser.clientHost.attach',
+    permission: 'workspace',
     params: BrowserClientHostAttachParams,
     handler: async (
       params,
@@ -111,8 +112,7 @@ export const BROWSER_CLIENT_HOST_METHODS: RpcAnyMethod[] = [
             emit
           )
         }
-        // Before recovery, which only reconciles pages this runtime already knows: a restart left
-        // the guests alive on the client but took the records with it.
+        // Adopt surviving client guests before recovery, which only reconciles records the runtime already knows.
         const adoption = await adoptRuntimeBrowserClientPagesFromInventory({
           lease: handle.lease,
           authority: registry,
@@ -123,10 +123,7 @@ export const BROWSER_CLIENT_HOST_METHODS: RpcAnyMethod[] = [
           ...(signal ? { signal } : {})
         })
         if (adoption.unadoptedPageIds.length === 0) {
-          // This client's host has reported what it holds and the runtime has taken all of it back,
-          // so snapshots stop warning that its client-hosted pages are unaccounted for. A page left
-          // behind means the opposite -- its guest is live and record-less -- so the hold stands
-          // until a later attach settles it or the window's deadline expires.
+          // Clear reconciliation hold only after every live guest has a record; otherwise retain it until later attach or window deadline.
           runtime.markClientHostedPagesReconciled(pairedDeviceId)
         }
         await recoverUnavailableRuntimeBrowserClientPages({
@@ -164,6 +161,7 @@ export const BROWSER_CLIENT_HOST_METHODS: RpcAnyMethod[] = [
   }),
   defineMethod({
     name: 'browser.clientHost.commandResult',
+    permission: 'workspace',
     params: BrowserClientHostCommandResultParams,
     handler: (
       params,
@@ -196,6 +194,7 @@ export const BROWSER_CLIENT_HOST_METHODS: RpcAnyMethod[] = [
   }),
   defineMethod({
     name: 'browser.clientHost.pageMetadata',
+    permission: 'workspace',
     params: BrowserClientPageMetadataParams,
     handler: (
       params,

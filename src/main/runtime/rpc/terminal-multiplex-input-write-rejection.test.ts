@@ -1,3 +1,4 @@
+import './unused-default-rpc-methods.test-fixture'
 import { describe, expect, it, vi } from 'vitest'
 import { RpcDispatcher } from './dispatcher'
 import type { OrcaRuntimeService } from '../orca-runtime'
@@ -327,11 +328,15 @@ describe('terminal multiplex RPC', () => {
     )
 
     await vi.waitFor(() =>
-      expect(runtime.sendTerminal).toHaveBeenCalledWith('terminal-1', {
-        text: 'echo one\necho two\r\n',
-        enter: false,
-        interrupt: false
-      })
+      expect(runtime.sendTerminal).toHaveBeenCalledWith(
+        'terminal-1',
+        {
+          text: 'echo one\necho two\r\n',
+          enter: false,
+          interrupt: false
+        },
+        { inputKind: 'driving' }
+      )
     )
 
     runtime.cleanupSubscription('terminal-multiplex:conn-byte-preserving')
@@ -403,11 +408,15 @@ describe('terminal multiplex RPC', () => {
     )
 
     await vi.waitFor(() =>
-      expect(runtime.sendTerminal).toHaveBeenCalledWith('terminal-1', {
-        text: 'printf a\nprintf b\r\n',
-        enter: false,
-        interrupt: false
-      })
+      expect(runtime.sendTerminal).toHaveBeenCalledWith(
+        'terminal-1',
+        {
+          text: 'printf a\nprintf b\r\n',
+          enter: false,
+          interrupt: false
+        },
+        { inputKind: 'driving' }
+      )
     )
 
     runtime.cleanupSubscription('terminal-1:desktop-1')
@@ -490,11 +499,7 @@ describe('terminal multiplex RPC', () => {
   })
 
   it('never sends the rejection opcode to an un-negotiated legacy binary stream', async () => {
-    // The mobile client is exactly this subscriber: it declares
-    // terminalBinaryStream and nothing else, and its vendored opcode enum knows
-    // nothing past 12, so an unsolicited 17 is an unknown opcode on that wire.
-    // A capable desktop subscriber shares the runtime and is driven second, so
-    // its frame proves the rejection had already been processed for both.
+    // Legacy mobile knows opcodes only through 12 and must not receive 17. Drive capable desktop second to prove rejection was already processed for both.
     const registry = createSubscriptionRegistryDouble()
     const sendTerminal = vi.fn().mockRejectedValue(new Error('terminal_not_writable'))
     const runtime = stubRuntime({

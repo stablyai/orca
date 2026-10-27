@@ -1,6 +1,6 @@
 import type { AgentType } from '../../../../shared/agent-status-types'
 import type { TuiAgent } from '../../../../shared/tui-agent'
-import type { RuntimeClientTarget } from '@/runtime/runtime-rpc-client'
+import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
 import type { NativeChatSession } from '../../../../shared/native-chat-types'
 import type { NativeChatContextMenuActions } from './use-native-chat-context-menu'
 
@@ -8,21 +8,17 @@ export type NativeChatBridgeViewProps = {
   mode?: 'bridge'
   /** The terminal tab hosting the agent. paneKey is `${tabId}:${leafId}`. */
   terminalTabId: string
-  /** Whether the hosted terminal surface is currently visible. */
   isVisible: boolean
-  /** Specific split leaf this chat surface replaces. */
+  /** This pane's split group holds focus; a revealed sibling column must not take the caret. */
+  isFocusedGroup: boolean
   paneKey?: string
-  /** PTY bound to `paneKey`, used for composer and interactive-card sends. */
   targetPtyId?: string | null
-  /** Launch-time agent hint from the TerminalTab, when Orca started one. */
   launchAgent?: TuiAgent | null
   /** Trusted title/foreground fallback for manually-started agents. */
   resolvedAgent?: TuiAgent | null
   /** Whether this pane owns the tab's launch draft; false for split siblings. */
   ownsTabWideLaunchDraft: boolean
-  /** Return this pane to the hosted terminal surface. */
   onSwitchToTerminal?: () => void
-  /** Current xterm screen reader used to recover agent-reported session state. */
   readTerminalScreen?: () => string | null
   contextMenuActions?: Omit<NativeChatContextMenuActions, 'onPaste'>
 }
@@ -35,6 +31,8 @@ export type NativeChatStructuredViewProps = {
   target: RuntimeClientTarget
   agent: AgentType
   isVisible: boolean
+  /** This pane's split group holds focus; a revealed sibling column must not take the caret. */
+  isFocusedGroup: boolean
   contextMenuActions?: Omit<NativeChatContextMenuActions, 'onPaste'>
 }
 
@@ -44,6 +42,8 @@ export type NativeChatResolvedViewProps = {
   sessionId: string | null
   transcriptPath: string | null
   isVisible: boolean
+  /** This pane's split group holds focus; a revealed sibling column must not take the caret. */
+  isFocusedGroup: boolean
   targetPtyId: string | null
   terminalTabId: string
   ownsTabWideLaunchDraft: boolean

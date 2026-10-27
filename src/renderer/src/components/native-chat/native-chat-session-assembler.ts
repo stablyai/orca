@@ -6,16 +6,20 @@ import {
   type NativeChatSession,
   type NativeChatSessionStatus
 } from '../../../../shared/native-chat-types'
-import { NATIVE_CHAT_STREAMING_ID } from '../../../../shared/native-chat-streaming'
+import { NATIVE_CHAT_STREAMING_ID } from '../../../../shared/native-chat/native-chat-streaming'
+import {
+  compareNativeChatTranscriptMessages,
+  orderNativeChatTranscriptEntries
+} from '../../../../shared/native-chat-transcript-projection'
 import {
   hasImagePromptMarker,
   isImageSourceUserTurn,
   normalizeImageTranscriptMessages
 } from '../../../../shared/native-chat-image-transcript-markers'
-import { isLaunchPromptMessageId, isPendingMessageId } from './native-chat-pending'
+import { isLaunchPromptMessageId } from './native-chat-pending'
+import { isPendingMessageId } from '../../../../shared/native-chat-pending-sends'
 
-/** Messages grouped by source. Higher-priority sources (transcript > hook >
- *  scrape) supersede lower ones when they describe the same turn. */
+/** For the same turn, prefer transcript over hook over scrape. */
 export type NativeChatSources = {
   transcript?: NativeChatMessage[]
   hook?: NativeChatMessage[]
@@ -26,24 +30,12 @@ export type AssembleNativeChatSessionInput = {
   sources: NativeChatSources
   sessionId: string | null
   agent: AgentType
-  /** Overrides the derived status. The derived value is 'empty' when no
-   *  messages survive merge, otherwise 'ready'. Callers pass 'loading',
-   *  'working', or 'error' when out-of-band signals apply. */
+  /** Without an override, surviving messages mean ready and no messages mean empty. */
   status?: NativeChatSessionStatus
   error?: string
 }
 
-// Why: a turn can surface from several sources with different ids (a hook event
-// and the transcript record for the same assistant reply rarely share an id).
-// We dedup on an explicit `turnId` when present; otherwise fall back to
-// role + normalized text so the same logical turn collapses to one message.
-// Normalization lowercases and collapses whitespace so cosmetic ANSI/scrape
-// differences don't defeat the match. The fallback only ever merges records of
-// DIFFERENT sources (gated in mergeOne), so two identical SAME-source prompts
-// stay distinct (#10). Timestamp is deliberately NOT folded into the key: a
-// scrape copy of a turn often has a null timestamp while the transcript copy
-// has a real one, and folding it would wrongly stop that legitimate
-// cross-source pair from collapsing.
+// Deduplicate explicit turn ids or normalized content only across sources; omit timestamps because scrape copies lack them.
 function turnKey(message: NativeChatMessage): string {
   if (message.turnId) {
     return `turn:${message.turnId}`
@@ -55,10 +47,7 @@ function turnKey(message: NativeChatMessage): string {
     .toLowerCase()
     .replace(/\s+/g, ' ')
     .trim()
-  // Why: two same-role messages with no turnId and no text (e.g. distinct
-  // tool-call-only turns) would otherwise share `${role}:` and the second would
-  // be dropped. Fold a digest of the non-text blocks (tool name+input, result
-  // output) into the key so different tool turns stay distinct.
+  // Digest non-text blocks so distinct tool-only turns cannot share an empty-content key.
   return `${message.role}:${text}:${nonTextBlockDigest(message)}`
 }
 
@@ -90,62 +79,48 @@ function supersedes(candidate: NativeChatMessage, existing: NativeChatMessage): 
   return candidateRank > existingRank
 }
 
-// Why: the tail bubbles form fixed tiers that timestamps alone can't express.
-// The streaming preview (null timestamp) must follow real content but sit ahead
-// of the optimistic composer echoes, which carry finite `sentAt` timestamps that
-// would otherwise sort past it. Rank first, then timestamp within a tier.
+// Sort real content before streaming preview before optimistic/queued sends, regardless of timestamps.
 function messageSortRank(message: NativeChatMessage): number {
   if (message.id === NATIVE_CHAT_STREAMING_ID) {
     return 1
   }
-  if (isPendingMessageId(message.id) || isLaunchPromptMessageId(message.id)) {
+  if (message.queued || isPendingMessageId(message.id) || isLaunchPromptMessageId(message.id)) {
     return 2
   }
   return 0
 }
 
-// Why: null timestamps (sources that can't supply one, e.g. scrape segments)
-// sort before any real timestamp within their tier so they don't jump to the
-// end. Ties break on id for a stable, deterministic order.
 export function compareMessages(a: NativeChatMessage, b: NativeChatMessage): number {
   const ar = messageSortRank(a)
   const br = messageSortRank(b)
   if (ar !== br) {
     return ar - br
   }
-  const at = a.timestamp ?? Number.NEGATIVE_INFINITY
-  const bt = b.timestamp ?? Number.NEGATIVE_INFINITY
-  if (at !== bt) {
-    return at - bt
-  }
-  if (a.id < b.id) {
-    return -1
-  }
-  if (a.id > b.id) {
-    return 1
-  }
-  return 0
+  return compareNativeChatTranscriptMessages(a, b)
 }
 
-/**
- * Pure merge of layered conversation sources into a single ordered, deduped
- * `NativeChatSession`. Precedence: transcript > hook > scrape. Dedup happens on
- * message id and on turn key (explicit turnId, else role + normalized text), so
- * the same turn from multiple sources collapses to the highest-priority copy.
- */
+function orderEntries<T>(entries: readonly T[], messageOf: (entry: T) => NativeChatMessage): T[] {
+  return [0, 1, 2].flatMap((rank) => {
+    const tier = entries.filter((entry) => messageSortRank(messageOf(entry)) === rank)
+    return rank === 0
+      ? orderNativeChatTranscriptEntries(tier, messageOf)
+      : tier.sort((a, b) => compareMessages(messageOf(a), messageOf(b)))
+  })
+}
+
+export function orderMessages(messages: readonly NativeChatMessage[]): NativeChatMessage[] {
+  return orderEntries(messages, (message) => message)
+}
+
 export function assembleNativeChatSession(
   input: AssembleNativeChatSessionInput
 ): NativeChatSession {
   const { sources, sessionId, agent, status, error } = input
 
-  // Process highest priority first so a later, lower-priority duplicate is
-  // dropped rather than overwriting. Sort each source before image folding so
-  // equal-timestamp companion/prompt rows retain semantic order.
+  // Prefer higher-priority sources; sort before image folding to preserve equal-time companion/prompt order.
   const ordered: NativeChatMessage[] = [
     ...normalizeImageTranscriptMessages(sortForImageNormalization(sources.transcript ?? [])),
     ...(sources.hook ?? []),
-    // Scrape segments carry the same raw `[Image: source: …]` markers (e.g. from
-    // scrollback before the transcript loads), so normalize them too.
     ...normalizeImageTranscriptMessages(sortForImageNormalization(sources.scrape ?? []))
   ]
 
@@ -156,7 +131,7 @@ export function assembleNativeChatSession(
     mergeOne(byId, byTurn, message)
   }
 
-  const messages = Array.from(byId.values()).sort(compareMessages)
+  const messages = orderMessages(Array.from(byId.values()))
 
   const derivedStatus: NativeChatSessionStatus = messages.length === 0 ? 'empty' : 'ready'
 
@@ -174,28 +149,31 @@ type ImageNormalizationUnit = {
   sortKey: NativeChatMessage
 }
 
-// Keep only adjacent companion/prompt rows atomic; ranking every companion first
-// can cross-fold distinct turns that share a timestamp.
+// Keep adjacent image companion/prompt pairs atomic; global companion ranking could cross-fold equal-time turns.
 export function sortForImageNormalization(
   messages: readonly NativeChatMessage[]
 ): readonly NativeChatMessage[] {
+  // Restore file adjacency before supplemental rows can be inserted between image companions.
+  const sourceOrdered = messages.some((message) => message.transcriptOrder !== undefined)
+    ? Array.from(messages).sort(compareMessages)
+    : messages
   const units: ImageNormalizationUnit[] = []
-  for (let index = 0; index < messages.length; index += 1) {
-    const message = messages[index]!
+  for (let index = 0; index < sourceOrdered.length; index += 1) {
+    const message = sourceOrdered[index]!
     const companions: NativeChatMessage[] = []
     let prompt: NativeChatMessage | undefined
 
     if (isImageSourceUserTurn(message)) {
       let nextIndex = index
       while (
-        nextIndex < messages.length &&
-        messages[nextIndex]?.source === message.source &&
-        isImageSourceUserTurn(messages[nextIndex]!)
+        nextIndex < sourceOrdered.length &&
+        sourceOrdered[nextIndex]?.source === message.source &&
+        isImageSourceUserTurn(sourceOrdered[nextIndex]!)
       ) {
-        companions.push(messages[nextIndex]!)
+        companions.push(sourceOrdered[nextIndex]!)
         nextIndex += 1
       }
-      const candidate = messages[nextIndex]
+      const candidate = sourceOrdered[nextIndex]
       if (
         candidate?.role === 'user' &&
         candidate.source === message.source &&
@@ -207,7 +185,7 @@ export function sortForImageNormalization(
         companions.length = 0
       }
     } else {
-      const candidate = messages[index + 1]
+      const candidate = sourceOrdered[index + 1]
       if (
         message.role === 'user' &&
         hasImagePromptMarker(message) &&
@@ -217,12 +195,12 @@ export function sortForImageNormalization(
       ) {
         let nextIndex = index + 1
         while (
-          nextIndex < messages.length &&
-          messages[nextIndex]?.source === message.source &&
-          messages[nextIndex]?.timestamp === message.timestamp &&
-          isImageSourceUserTurn(messages[nextIndex]!)
+          nextIndex < sourceOrdered.length &&
+          sourceOrdered[nextIndex]?.source === message.source &&
+          sourceOrdered[nextIndex]?.timestamp === message.timestamp &&
+          isImageSourceUserTurn(sourceOrdered[nextIndex]!)
         ) {
-          companions.push(messages[nextIndex]!)
+          companions.push(sourceOrdered[nextIndex]!)
           nextIndex += 1
         }
         prompt = message
@@ -234,20 +212,11 @@ export function sortForImageNormalization(
     units.push({ messages: unitMessages, sortKey: prompt ?? message })
   }
 
-  units.sort((a, b) => compareMessages(a.sortKey, b.sortKey))
-  const sorted = units.flatMap((unit) => unit.messages)
+  const sorted = orderEntries(units, (unit) => unit.sortKey).flatMap((unit) => unit.messages)
   return sorted.every((message, index) => message === messages[index]) ? messages : sorted
 }
 
-/**
- * The single per-message merge rule, shared by the full rebuild and the
- * incremental assembler so there is exactly one copy of the dedup logic.
- * Dedups by `id`, then by `turnKey` — but the turnKey fallback only merges a
- * candidate against an existing message of a DIFFERENT source (#10): the text
- * fallback exists for cross-source dedup, so two distinct same-source records
- * with identical text must never collapse. The explicit-`turnId` path is
- * cross-source identity and is unaffected (it never collides within a source).
- */
+/** Share id-first, cross-source turn-key deduplication between full and incremental assembly. */
 export function mergeOne(
   byId: Map<string, NativeChatMessage>,
   byTurn: Map<string, NativeChatMessage>,
@@ -268,10 +237,7 @@ export function mergeOne(
     }
     return
   }
-  // No id match and no cross-source turn match: a distinct record. Indexing it
-  // under its turnKey may overwrite a same-source entry that shares the key —
-  // that's fine, the turn index only needs one representative per key for the
-  // cross-source pass; both distinct records still live in `byId`.
+  // One same-key representative suffices for cross-source lookup; byId retains distinct same-source rows.
   byId.set(message.id, message)
   byTurn.set(key, message)
 }

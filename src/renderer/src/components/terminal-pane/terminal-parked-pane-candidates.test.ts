@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { fallbackParkedPaneCandidates } from './terminal-parked-tab-watchers'
+import { fallbackParkedPaneCandidates } from './terminal-parked-watcher-reconciliation'
 
 const TAB_ID = 'tab-1'
 const PTY_ID = 'repo::/worktree@@session-1'
@@ -28,9 +28,7 @@ describe('fallbackParkedPaneCandidates', () => {
     ).toEqual([{ ptyId: PTY_ID, paneId: 7, leafId: LEAF_ID, drivesTabTitle: true }])
   })
 
-  // Why: a tab that never mounted a pane persists a rootless layout. Walking
-  // only `root` yielded zero candidates, so watcher coverage refused it and a
-  // manual park could never succeed for a workspace the user had not visited.
+  // Never-mounted tabs have rootless layouts; root-only candidates would refuse coverage and prevent manual parking.
   it('resolves the single leaf of a rootless layout', () => {
     expect(
       fallbackParkedPaneCandidates({ id: TAB_ID, ptyId: PTY_ID }, {

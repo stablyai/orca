@@ -47,20 +47,20 @@ function createRelease(flags: number): TerminalOptionKittyRelease | undefined {
   return (flags & KITTY_REPORT_EVENT_TYPES) === 0 ? undefined : { flags }
 }
 
-// Why ASCII-only: the protocol says a text-producing key sends its text, but #8031 needs Option
-// hotkeys to still reach kitty TUIs. ASCII splits the two — layouts hide `@ $ # [ ] { } \ |` behind
-// Option with no other way to type them, while the glyphs on TUI-bound keys (π, ƒ, ∫) never are.
-function isLayoutComposedAsciiCharacter(
+// Compose-side text must survive kitty negotiation; Alt-configured sides still send chords.
+function isLayoutComposedCharacter(
   key: string,
   characterWithoutOption: string | undefined
 ): boolean {
-  if (key.length !== 1) {
+  const chars = Array.from(key)
+  if (chars.length !== 1) {
     return false
   }
-  const codePoint = key.codePointAt(0) as number
+  const codePoint = chars[0].codePointAt(0)
   return (
+    codePoint !== undefined &&
     codePoint > 0x20 &&
-    codePoint <= 0x7e &&
+    !(codePoint >= 0x7f && codePoint <= 0x9f) &&
     (characterWithoutOption === undefined ||
       key.toLowerCase() !== characterWithoutOption.toLowerCase())
   )
@@ -131,7 +131,7 @@ export function resolveTerminalOptionShortcutAction(
       !kittyReportsAllKeysAsEscapeCodes(flags) &&
       canSendComposedText &&
       !isNumpad &&
-      isLayoutComposedAsciiCharacter(event.key, characterWithoutOption)
+      isLayoutComposedCharacter(event.key, characterWithoutOption)
     ) {
       return { type: 'sendInput', data: event.key, optionKittyRelease: createRelease(flags) }
     }

@@ -1,4 +1,4 @@
-import { useId, useLayoutEffect, useState } from 'react'
+import { useEffectEvent, useId, useLayoutEffect, useRef, useState } from 'react'
 import { ExternalLink, LoaderCircle, Lock } from 'lucide-react'
 import type { BitbucketAuthMode } from '../../../../shared/bitbucket-credentials'
 import { useAppStore } from '@/store'
@@ -17,6 +17,7 @@ import { Label } from '@/components/ui/label'
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
 import { cn } from '@/lib/utils'
 import { hasRemoteProviderRuntime } from '@/lib/provider-runtime-context'
+import { preventOutsideDismissWhenDirty } from '@/lib/outside-dismiss-guard'
 import { translate } from '@/i18n/i18n'
 
 const API_TOKEN_DOCS_URL = 'https://support.atlassian.com/bitbucket-cloud/docs/using-api-tokens/'
@@ -63,28 +64,31 @@ export function BitbucketCredentialsDialog({
   const [baseUrl, setBaseUrl] = useState('')
   const [connectState, setConnectState] = useState<ConnectState>('idle')
   const [connectError, setConnectError] = useState<string | null>(null)
+  // Capture opening values for dirty checks; status refreshes may replace seed props mid-edit.
+  const baselineRef = useRef({ email: '', baseUrl: '' })
 
-  // Re-sync from the latest stored metadata on every open, not just on mount, so
-  // the Edit flow never shows values from a previous connection. Secrets always
-  // start empty: the main process never hands them back.
-  useLayoutEffect(() => {
-    if (!open) {
-      return
-    }
+  // Reseed stored metadata on each opening; secrets always start empty because main never returns them.
+  // Why an event: keyed on `open` alone, so a status refresh mid-edit must not overwrite typing.
+  const seedFromStoredMetadata = useEffectEvent(() => {
+    const seedEmail = initialEmail ?? ''
+    const seedBaseUrl = initialBaseUrl ?? ''
+    baselineRef.current = { email: seedEmail, baseUrl: seedBaseUrl }
     setAuthMode(initialAuthMode ?? 'basic')
-    setEmail(initialEmail ?? '')
-    setBaseUrl(initialBaseUrl ?? '')
+    setEmail(seedEmail)
+    setBaseUrl(seedBaseUrl)
     setApiToken('')
     setAccessToken('')
     setConnectState('idle')
     setConnectError(null)
-    // oxlint-disable-next-line react-hooks/exhaustive-deps -- keyed on `open` alone: a status refresh mid-edit must not overwrite what the user is typing.
+  })
+  useLayoutEffect(() => {
+    if (open) {
+      seedFromStoredMetadata()
+    }
   }, [open])
 
   const remoteRuntime = hasRemoteProviderRuntime(settings)
-  // Why: only an env-managed connection makes saving pointless. A remote runtime
-  // just means the credential is stored on this machine, so the form stays
-  // usable and only the storage note changes (matching the Jira dialog).
+  // Only environment-managed auth makes saving ineffective; remote runtimes change storage guidance, not form usability.
   const locked = environmentManaged
   const connecting = connectState === 'connecting'
   const isTokenMode = authMode === 'token'
@@ -105,6 +109,12 @@ export function BitbucketCredentialsDialog({
       onOpenChange(nextOpen)
     }
   }
+
+  // Guard accidental backdrop discard using only submitted-mode fields; Escape/Cancel/close remain explicit exits.
+  const isDraftDirty = (): boolean =>
+    baseUrl !== baselineRef.current.baseUrl ||
+    (isTokenMode ? accessToken !== '' : email !== baselineRef.current.email || apiToken !== '')
+  const guardOutsideDismiss = preventOutsideDismissWhenDirty(isDraftDirty)
 
   const handleConnect = async (): Promise<void> => {
     if (!canSubmit) {
@@ -153,9 +163,10 @@ export function BitbucketCredentialsDialog({
       <DialogContent
         overlayClassName={overlayClassName}
         className={cn('sm:max-w-lg', contentClassName)}
+        onPointerDownOutside={guardOutsideDismiss}
+        onInteractOutside={guardOutsideDismiss}
         onKeyDown={(event) => {
-          // Only from a text field: Enter on Cancel or the docs link must do
-          // what that control does, not submit the form.
+          // Intercept Enter only in inputs; Cancel and documentation links retain their own actions.
           if (!(event.target instanceof HTMLInputElement)) {
             return
           }
@@ -198,8 +209,7 @@ export function BitbucketCredentialsDialog({
                   return
                 }
                 setAuthMode(value as BitbucketAuthMode)
-                // An API token and an access token are different secrets; drop
-                // the typed one so it can't be submitted as the other.
+                // Drop secrets on mode changes so API tokens cannot be submitted as access tokens or vice versa.
                 setApiToken('')
                 setAccessToken('')
                 clearErrorOnEdit()

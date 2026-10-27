@@ -1,0 +1,340 @@
+// @vitest-environment happy-dom
+
+// An answered subagent ask restores its parent’s older turn-end timestamp. Order switches by observation time, but read unread/state from the pane’s current turn.
+
+import { act, cleanup, render, renderHook, waitFor } from '@testing-library/react'
+import { afterEach, beforeEach, describe, expect, it, vi, type Mock } from 'vitest'
+import type {
+  AgentSessionStatusEvent,
+  AgentSessionStatusSummary
+} from '../../../../shared/agent-session-wire'
+import type { Tab } from '../../../../shared/tab-types'
+import type { AppState } from '@/store/types'
+import { makeRepo, makeWorktree } from './ActivityPrototypePage-test-fixtures'
+import { activityThreadRowCopy, activityThreadStatusId } from './activity-thread-presentation'
+import { clearActivityThread } from './activity-clear-completed'
+import { countActivityUnread } from './useActivityUnreadCount'
+import { useAgentPaneThreads } from './use-agent-pane-threads'
+import { useAppStore } from '@/store'
+import { makeTabGroup } from '@/store/slices/store-test-helpers'
+import { tabActivationPatch } from '@/store/slices/tabs/tabs-focus-actions'
+import { getStructuredChatTabNames } from '@/runtime/structured-chat-name-observation'
+
+type TestStore = {
+  getState: () => AppState
+  setState: (state: Partial<AppState> & { testRuntimeOwner?: string | null }) => void
+}
+
+const mocks = vi.hoisted(() => {
+  const hoisted: { store: TestStore | null; subscribeStatus: Mock; unsubscribe: Mock } = {
+    store: null,
+    subscribeStatus: vi.fn(),
+    unsubscribe: vi.fn()
+  }
+  return hoisted
+})
+
+vi.mock('@/store', async () => {
+  const { createTestStore } = await import('@/store/slices/store-test-helpers')
+  const useAppStore = createTestStore()
+  mocks.store = useAppStore
+  return { useAppStore }
+})
+
+vi.mock('@/lib/worktree-runtime-owner', () => ({
+  getExecutionHostIdForWorktree: (state: { testRuntimeOwner?: string | null }) =>
+    state.testRuntimeOwner ? `runtime:${state.testRuntimeOwner}` : 'local'
+}))
+
+vi.mock('@/runtime/structured-agent-session-client', () => ({
+  callStructuredAgentSession: vi.fn(),
+  subscribeStructuredAgentSession: vi.fn(),
+  subscribeStructuredAgentSessionStatus: mocks.subscribeStatus
+}))
+
+import { StructuredAgentSessionStatusBridge } from '../native-chat/StructuredAgentSessionStatusBridge'
+import { resetStructuredAgentSessionStatusFeedsForTests } from '@/runtime/structured-agent-session-status-feed'
+
+const structuredTab = {
+  id: 'structured-tab-1',
+  worktreeId: 'wt-1',
+  groupId: 'group-1',
+  contentType: 'agent-session',
+  entityId: 'session-1',
+  label: 'Claude Chat',
+  customLabel: null,
+  color: null,
+  sortOrder: 0,
+  createdAt: 0,
+  isPinned: false,
+  agentSessionAgent: 'claude'
+} satisfies Tab
+
+const SETTLED = 22_000
+const ASKED = 27_000
+const ANSWERED = 28_500
+
+function summary(overrides: Partial<AgentSessionStatusSummary> = {}): AgentSessionStatusSummary {
+  return {
+    sessionId: 'session-1',
+    workspaceId: 'wt-1',
+    agent: 'claude',
+    status: 'idle',
+    hostExecutionOwned: true,
+    latestPrompt: 'fan out',
+    statusStartedAt: SETTLED,
+    updatedAt: SETTLED,
+    ...overrides
+  }
+}
+
+function store(): TestStore {
+  if (!mocks.store) {
+    throw new Error('store missing')
+  }
+  return mocks.store
+}
+
+function paneKey(): string {
+  const [key] = Object.keys(store().getState().agentStatusByPaneKey)
+  if (!key) {
+    throw new Error('status row missing')
+  }
+  return key
+}
+
+function acknowledge(at: number): void {
+  store().setState({ acknowledgedAgentsByPaneKey: { [paneKey()]: at } })
+}
+
+/** The Activity page's own pipeline over the store the bridge wrote. */
+function renderActivity() {
+  return renderHook(() =>
+    useAgentPaneThreads({
+      query: '',
+      readFilter: 'all',
+      groupBy: 'none',
+      selectedPaneKey: null,
+      showChildAgents: true
+    })
+  )
+}
+
+function thread(activity: ReturnType<typeof renderActivity>) {
+  const [only, ...rest] = activity.result.current.allThreads
+  expect(rest).toHaveLength(0)
+  if (!only) {
+    throw new Error('activity thread missing')
+  }
+  return only
+}
+
+async function connect(): Promise<(event: AgentSessionStatusEvent) => void> {
+  render(<StructuredAgentSessionStatusBridge />)
+  await waitFor(() => expect(mocks.subscribeStatus).toHaveBeenCalledOnce())
+  const emit: (event: AgentSessionStatusEvent) => void = mocks.subscribeStatus.mock.calls[0]?.[1]
+  return (event) => act(() => emit(event))
+}
+
+describe("an answered subagent ask on a settled parent's Activity row", () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    resetStructuredAgentSessionStatusFeedsForTests()
+    mocks.subscribeStatus.mockResolvedValue({ unsubscribe: mocks.unsubscribe })
+    vi.spyOn(Date, 'now').mockReturnValue(ANSWERED + 1_000)
+    const worktree = makeWorktree()
+    store().setState({
+      agentStatusByPaneKey: {},
+      acknowledgedAgentsByPaneKey: {},
+      activityClearedAtByPaneKey: {},
+      retainedAgentsByPaneKey: {},
+      testRuntimeOwner: null,
+      repos: [makeRepo()],
+      worktreesByRepo: { [worktree.repoId]: [worktree] },
+      unifiedTabsByWorktree: { 'wt-1': [structuredTab] }
+    })
+  })
+
+  afterEach(() => {
+    cleanup()
+    vi.restoreAllMocks()
+    resetStructuredAgentSessionStatusFeedsForTests()
+  })
+
+  it('keeps the saved native name across focus and follows naming-only updates', async () => {
+    const unrelated = { ...structuredTab, id: 'other-tab', entityId: 'other-session' }
+    const terminal: Tab = { ...structuredTab, id: 'terminal', contentType: 'terminal' }
+    useAppStore.setState({
+      unifiedTabsByWorktree: { 'wt-1': [structuredTab, unrelated, terminal] },
+      groupsByWorktree: {
+        'wt-1': [
+          makeTabGroup({
+            id: 'group-1',
+            worktreeId: 'wt-1',
+            tabOrder: [structuredTab.id, unrelated.id, terminal.id],
+            activeTabId: structuredTab.id
+          })
+        ]
+      }
+    })
+    const emit = await connect()
+    emit({
+      type: 'snapshot',
+      sessions: [
+        summary({ latestPrompt: 'Implement the requested change' }),
+        summary({ sessionId: unrelated.entityId })
+      ],
+      conversationNames: [{ sessionId: structuredTab.entityId, conversationName: 'Saved name' }]
+    })
+    const stop = useAppStore.subscribe(() => getStructuredChatTabNames())
+    try {
+      const activity = renderActivity()
+      const row = (id = structuredTab.id) => {
+        const found = activity.result.current.allThreads.find((item) => item.tab.id === id)
+        if (!found) {
+          throw new Error('Missing Activity row')
+        }
+        return found
+      }
+      const otherRow = row(unrelated.id)
+      expect(activityThreadRowCopy(row()).taskTitle).toBe('Saved name')
+      const focus = (current: Tab) =>
+        act(() => {
+          const state = useAppStore.getState()
+          useAppStore.setState(tabActivationPatch(state, current, 'wt-1', undefined, false))
+        })
+      for (let i = 0; i < 2; i += 1) {
+        const before = useAppStore.getState().unifiedTabsByWorktree['wt-1'][0]
+        focus(before)
+        const current = useAppStore.getState().unifiedTabsByWorktree['wt-1'][0]
+        expect(current).not.toBe(before)
+        expect(getStructuredChatTabNames().has(current)).toBe(true)
+        expect(activityThreadRowCopy(row()).taskTitle).toBe('Saved name')
+        expect(activity.result.current.storeData.activityTabs['wt-1'][0]).toBe(current)
+        expect(row(unrelated.id)).toBe(otherRow)
+      }
+      const projectedTerminal = activity.result.current.storeData.activityTabs['wt-1'][2]
+      focus(terminal)
+      expect(activity.result.current.storeData.activityTabs['wt-1'][2]).toBe(projectedTerminal)
+      const threads = activity.result.current.allThreads
+      activity.rerender()
+      expect(activity.result.current.allThreads).toBe(threads)
+      const state = useAppStore.getState()
+      for (const name of ['Renamed on host', null]) {
+        emit({
+          type: 'snapshot',
+          sessions: [],
+          conversationNames: [{ sessionId: structuredTab.entityId, conversationName: name }]
+        })
+        expect(activityThreadRowCopy(row()).taskTitle).toBe(
+          name ?? 'Implement the requested change'
+        )
+        expect(useAppStore.getState().unifiedTabsByWorktree).toBe(state.unifiedTabsByWorktree)
+        expect(useAppStore.getState().agentStatusByPaneKey).toBe(state.agentStatusByPaneKey)
+      }
+    } finally {
+      stop()
+    }
+  })
+
+  it('reads done, lists Blocked then done, and leaves the answer read', async () => {
+    const emit = await connect()
+    emit({ type: 'snapshot', sessions: [summary()] })
+    acknowledge(SETTLED + 1_000)
+    emit({
+      type: 'status',
+      session: summary({ status: 'attention', statusStartedAt: ASKED, updatedAt: ASKED })
+    })
+    // The user reads the ask and answers it; the parent returns to its own turn's end.
+    acknowledge(ASKED + 500)
+    emit({ type: 'status', session: summary({ updatedAt: ANSWERED }) })
+
+    const row = thread(renderActivity())
+    expect(activityThreadStatusId(row)).toBe('done')
+    expect(activityThreadRowCopy(row).needsAttention).toBe(false)
+    expect(row.events.map((event) => event.state)).toEqual(['done', 'blocked', 'done'])
+    expect(row.events.map((event) => [event.state, event.timestamp, event.observedAt])).toEqual([
+      ['done', SETTLED, ANSWERED],
+      ['blocked', ASKED, ASKED],
+      ['done', SETTLED, SETTLED]
+    ])
+    expect(row.latestEvent?.observedAt).toBe(ANSWERED)
+    // Unread keys on the turn's own end, which the user had already read.
+    expect(row.events.map((event) => event.unread)).toEqual([false, false, false])
+    expect(row.unread).toBe(false)
+    expect(countActivityUnread(store().getState())).toBe(0)
+
+    // Clearing the answered row must also pass the ask, which is dated after the done.
+    act(() => {
+      expect(clearActivityThread(row)).toBe(true)
+    })
+    expect(renderActivity().result.current.allThreads).toHaveLength(0)
+  })
+
+  it('keeps each answered done between the asks around it', async () => {
+    const asks = [ASKED, ASKED + 400, ASKED + 800]
+    const emit = await connect()
+    emit({ type: 'snapshot', sessions: [summary()] })
+    for (const askedAt of asks) {
+      emit({
+        type: 'status',
+        session: summary({ status: 'attention', statusStartedAt: askedAt, updatedAt: askedAt })
+      })
+      emit({ type: 'status', session: summary({ updatedAt: askedAt + 200 }) })
+    }
+
+    // Repeated done events share a turn end; observation times distinguish/order them before the per-pane cap.
+    expect(thread(renderActivity()).events.map((event) => [event.state, event.observedAt])).toEqual(
+      [
+        ['done', ASKED + 1_000],
+        ['blocked', ASKED + 800],
+        ['done', ASKED + 600],
+        ['blocked', ASKED + 400],
+        ['done', ASKED + 200]
+      ]
+    )
+  })
+
+  it('reads done after a clear hid that done, while the later ask stays listed', async () => {
+    const emit = await connect()
+    emit({ type: 'snapshot', sessions: [summary()] })
+    acknowledge(SETTLED + 1_000)
+    const beforeAsk = renderActivity()
+    let cleared = false
+    act(() => {
+      cleared = clearActivityThread(thread(beforeAsk))
+    })
+    expect(cleared).toBe(true)
+    beforeAsk.unmount()
+    expect(store().getState().activityClearedAtByPaneKey).toEqual({ [paneKey()]: SETTLED })
+
+    emit({
+      type: 'status',
+      session: summary({ status: 'attention', statusStartedAt: ASKED, updatedAt: ASKED })
+    })
+    acknowledge(ASKED + 500)
+    emit({ type: 'status', session: summary({ updatedAt: ANSWERED }) })
+
+    const row = thread(renderActivity())
+    // The cleared done stays cleared; only the ask, seen after the clear, is listed.
+    expect(row.events.map((event) => event.state)).toEqual(['blocked'])
+    expect(activityThreadStatusId(row)).toBe('done')
+    expect(activityThreadRowCopy(row).needsAttention).toBe(false)
+    expect(row.unread).toBe(false)
+    expect(countActivityUnread(store().getState())).toBe(0)
+
+    // Once a second ask moves the answered done into history, it stays cleared there too.
+    emit({
+      type: 'status',
+      session: summary({
+        status: 'attention',
+        statusStartedAt: ANSWERED + 200,
+        updatedAt: ANSWERED + 200
+      })
+    })
+    expect(thread(renderActivity()).events.map((event) => event.state)).toEqual([
+      'blocked',
+      'blocked'
+    ])
+  })
+})

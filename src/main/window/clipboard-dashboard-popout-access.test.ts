@@ -19,7 +19,7 @@ const {
 }))
 
 vi.mock('electron', () => ({
-  app: { getPath: vi.fn(() => '/tmp') },
+  app: { getPath: vi.fn(() => '/tmp'), commandLine: { getSwitchValue: vi.fn(() => 'x11') } },
   clipboard: {
     readText: clipboardReadText,
     readBuffer: vi.fn(),
@@ -39,8 +39,7 @@ vi.mock('electron', () => ({
 vi.mock('./dashboard-popout-window', () => ({ isDashboardPopoutRenderer }))
 vi.mock('./clipboard-remote-file-copy', () => ({
   cleanupExpiredRemoteClipboardFiles: vi.fn(async () => undefined),
-  scheduleLegacyRemoteClipboardFileCleanup: vi.fn(),
-  writeRemoteFileToClipboard: vi.fn()
+  scheduleLegacyRemoteClipboardFileCleanup: vi.fn()
 }))
 
 import {
@@ -106,6 +105,12 @@ describe('dashboard popout clipboard access', () => {
     await expect(handlers.get('clipboard:saveImageAsTempFile')?.(popoutEvent)).rejects.toThrow(
       'Unauthorized clipboard IPC sender'
     )
+    expect(() => handlers.get('clipboard:readFilePaths')?.(popoutEvent)).toThrow(
+      'Unauthorized clipboard IPC sender'
+    )
+    expect(() =>
+      handlers.get('clipboard:restoreNativeChatPastes')?.(popoutEvent, ['/etc/passwd'])
+    ).toThrow('Unauthorized clipboard IPC sender')
     expect(() =>
       handlers.get('clipboard:writeFile')?.(popoutEvent, {
         filePath: '/tmp/copied-file.txt',

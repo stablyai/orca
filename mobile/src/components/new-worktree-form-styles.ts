@@ -1,7 +1,9 @@
-import { Platform, StyleSheet } from 'react-native'
+import { Platform } from 'react-native'
 import { colors, radii, spacing, typography } from '../theme/mobile-theme'
+import { themedStyleSheet } from '../theme/themed-styles'
+import { TEXT_INPUT_FONT_SIZE } from '../platform/text-input-font-size'
 
-export const newWorktreeFormStyles = StyleSheet.create({
+export const newWorktreeFormStyles = themedStyleSheet(() => ({
   header: {
     paddingHorizontal: spacing.xs,
     marginBottom: spacing.md
@@ -122,7 +124,7 @@ export const newWorktreeFormStyles = StyleSheet.create({
     borderRadius: radii.input,
     paddingHorizontal: spacing.md,
     paddingVertical: Platform.OS === 'ios' ? spacing.sm + 2 : spacing.sm,
-    fontSize: typography.bodySize,
+    fontSize: TEXT_INPUT_FONT_SIZE,
     borderWidth: 1,
     borderColor: colors.borderSubtle
   },
@@ -241,4 +243,4 @@ export const newWorktreeFormStyles = StyleSheet.create({
     fontSize: typography.bodySize,
     fontWeight: '600'
   }
-})
+}))

@@ -3,6 +3,7 @@ import { useAppStore } from '@/store'
 import type { AgentType } from '../../../../../shared/agent-status-types'
 import { AGENT_INTERRUPT_SETTLE_MS } from '../../../../../shared/agent-interrupt-intent'
 import { resolvePaneAgentOwner } from '../../../../../shared/pane-agent-owner'
+import { titleAfterInferredInterrupt } from '../../../../../shared/terminal-pane-title-reset'
 
 import { MANUAL_AGENT_COMMAND_MAX_CHARS } from './pty-connect-limits'
 import {
@@ -93,14 +94,7 @@ export function installShellCommandInference(session: ConnectPanePtySession): vo
       }
     }
   }
-  /**
-   * Resolves the authoritative owner agent type for this pane, checking tab launch,
-   * pane startup, typed command ownership, and store state configuration.
-   *
-   * Why: launch ownership wins so Pi-compatible live titles/hooks can't repaint an
-   * OMP-owned pane back to Pi; command ownership covers manually typed `omp`
-   * in generic terminals where launch metadata does not exist.
-   */
+  /** Launch ownership preserves OMP over Pi-compatible titles/hooks; typed command ownership covers manual launches without metadata. */
   session.getAuthoritativePaneAgent = (): AgentType | undefined => {
     const state = useAppStore.getState()
     const tab = (state.tabsByWorktree[session.deps.worktreeId] ?? []).find(
@@ -116,17 +110,7 @@ export function installShellCommandInference(session: ConnectPanePtySession): vo
       }) ?? undefined
     )
   }
-  // Why: the renderer veto (owner evidence beating a Gemini-looking title) must
-  // use only pane-scoped, CURRENT ownership. getAuthoritativePaneAgent leads
-  // with the tab-shared `tab.launchAgent` and a never-cleared
-  // `paneStartup.launchAgent`, which would let a sibling split pane or a reused
-  // pane keep WebGL for a genuine Gemini terminal (#7428 regression class).
-  // Launch identity is excluded, and the never-clearing startup seed
-  // (`paneStartup.initialAgentStatus`) too; a stale or `done` explicit row is
-  // ignored via the freshness predicate so a reused pane cannot inherit a prior
-  // agent's veto. Only live foreground command inference and a fresh, active
-  // hook row count. A genuine OMP/Pi pane stays protected owner-independently by
-  // the isPiAgentTitle guard inside isGeminiTerminalTitle.
+  // GPU veto needs current pane evidence: tab-shared/never-cleared launch seeds can describe siblings or dead agents. Use fresh active rows or command evidence; Pi/OMP titles retain their own guard (#7428).
   session.getPaneScopedRendererOwner = (): AgentType | undefined => {
     const entry = useAppStore.getState().agentStatusByPaneKey[session.cacheKey]
     return (
@@ -138,15 +122,14 @@ export function installShellCommandInference(session: ConnectPanePtySession): vo
     const state = useAppStore.getState()
     const currentTitle = state.runtimePaneTitlesByTabId?.[session.deps.tabId]?.[session.pane.id]
     const statusTitle = state.agentStatusByPaneKey[session.cacheKey]?.terminalTitle
-    const title = currentTitle ?? statusTitle
-    if (!title) {
+    const neutralTitle = titleAfterInferredInterrupt(
+      currentTitle ?? statusTitle,
+      session.neutralTerminalTitle()
+    )
+    if (neutralTitle === null) {
       return
     }
-    const neutralTitle = session.neutralTerminalTitle()
-    // Why: inferred interrupts update the explicit hook row, but many CLIs leave
-    // their OSC title stuck on a working spinner. Replace only this fallback
-    // title signal with a neutral terminal label so the existing process tracker
-    // can still decide whether an agent TUI is truly alive.
+    // After inferred interrupt, clear only stale working-title fallback; process tracking still decides whether the TUI lives.
     session.deps.setRuntimePaneTitle(session.deps.tabId, session.pane.id, neutralTitle)
     if (session.manager.getActivePane()?.id === session.pane.id) {
       session.deps.updateTabTitle(session.deps.tabId, neutralTitle)
@@ -210,20 +193,16 @@ export function installShellCommandInference(session: ConnectPanePtySession): vo
     return runtimeTitle ?? tabTitle ?? null
   }
   session.reattachReplayPayloadHasCursorAgentSignal = false
-  // Why: post-parse veto callbacks must only judge the latest replay frame; a
-  // newer frame bumps the generation so a stale callback stands down.
+  // Only the latest replay generation may judge post-parse agent-screen evidence.
   session.reattachReplayPayloadSignalGeneration = 0
   session.rememberReattachPayloadAgentSignal = (
     data: string,
     opts: { fullScreenReplay: boolean }
   ): void => {
     session.reattachReplayPayloadSignalGeneration += 1
-    // Why: ordinary scrollback can mention agent names. Treat replay bytes as
-    // a live Cursor Agent signal only when they look like its restored screen.
+    // Agent names in history are not liveness; require restored Cursor screen shape.
     const signal = hasCursorAgentReattachPayloadScreenSignal(data)
-    // Why: incremental (non-clearing) replay frames repaint only part of the
-    // screen, so their bytes can only add evidence — a full-screen replay is
-    // the authoritative repaint that may clear the flag.
+    // Incremental frames may add evidence; only authoritative full-screen repaint may clear it.
     session.reattachReplayPayloadHasCursorAgentSignal = opts.fullScreenReplay
       ? signal
       : session.reattachReplayPayloadHasCursorAgentSignal || signal
@@ -232,16 +211,12 @@ export function installShellCommandInference(session: ConnectPanePtySession): vo
     return title.trim().toLowerCase() === CURSOR_AGENT_REATTACH_HEADER.toLowerCase()
   }
   session.hasLiveAgentReattachStatusOrTitleSignal = (): boolean => {
-    // Why: launch ownership (tab.launchAgent) never decays after the agent
-    // exits, so it must not count as liveness here — only live status, live
-    // titles, and the replayed screen shape do.
+    // Permanent tab launch metadata cannot prove liveness; require current status/title or restored screen shape.
     if (useAppStore.getState().agentStatusByPaneKey[session.cacheKey]) {
       return true
     }
     const title = session.getCurrentTerminalTitle() ?? ''
-    // Why: broad token matching (getAgentLabel) fires on titles like
-    // "ssh devin@host"; that surface is too loose to gate mode preservation
-    // and PTY byte injection, so only exact/status titles count here.
+    // Loose label matching can classify ssh user names; mode preservation and input injection need exact/status titles.
     return detectAgentStatusFromTitle(title) !== null || session.isCursorAgentNativeTitle(title)
   }
   session.hasLiveAgentReattachSignal = (): boolean => {

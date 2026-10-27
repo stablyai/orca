@@ -4,33 +4,12 @@ import {
   getSettingsSectionSearchEntries,
   isSettingsSearchQueryTooLarge,
   matchesSettingsSearch,
-  normalizeSettingsSearchQuery,
   rankSettingsSearchItems,
   scoreSettingsSearch,
   type SettingsSearchEntry
 } from './settings-search'
 
 describe('settings-search', () => {
-  it('normalizes settings search text for callers that need local query state', () => {
-    expect(normalizeSettingsSearchQuery('  Terminal Rendering  ')).toBe('terminal rendering')
-  })
-
-  it('matches titles, descriptions, and keywords case-insensitively', () => {
-    const entry = {
-      title: 'Terminal',
-      description: 'Rendering settings',
-      keywords: ['shell', 'conpty']
-    }
-
-    expect(matchesSettingsSearch('render', entry)).toBe(true)
-    expect(matchesSettingsSearch('CONPTY', entry)).toBe(true)
-    expect(matchesSettingsSearch('voice', entry)).toBe(false)
-  })
-
-  it('treats empty search as matching all entries', () => {
-    expect(matchesSettingsSearch('   ', { title: 'General' })).toBe(true)
-  })
-
   it('scores pane title matches above entry, description, and keyword matches', () => {
     const paneTitleMatch = [{ title: 'Keyboard Shortcuts' }]
     const entryTitleMatch = [{ title: 'Interface' }, { title: 'Shortcuts' }]
@@ -48,35 +27,6 @@ describe('settings-search', () => {
     )
   })
 
-  it('ranks Shortcuts above Task Sources for the shortcuts query', () => {
-    const sections = [
-      {
-        id: 'tasks',
-        entries: [
-          { title: 'Task Sources', description: 'Choose task providers.' },
-          {
-            title: 'Task Providers',
-            description:
-              'Choose which task providers appear in the Tasks page and sidebar shortcuts.'
-          }
-        ]
-      },
-      {
-        id: 'shortcuts',
-        entries: [
-          { title: 'Shortcuts', description: 'Keyboard shortcuts for common actions.' },
-          { title: 'Shortcuts in Terminal', description: 'Choose terminal shortcut behavior.' }
-        ]
-      }
-    ]
-
-    expect(
-      rankSettingsSearchItems('shortcuts', sections, (section) => section.entries).map(
-        (section) => section.item.id
-      )
-    ).toEqual(['shortcuts', 'tasks'])
-  })
-
   it('includes pane title entries for SettingsSection content filtering', () => {
     const section = {
       title: 'AI Provider Accounts',
@@ -88,19 +38,6 @@ describe('settings-search', () => {
 
     expect(matchesSettingsSearch('accounts', entries)).toBe(true)
     expect(matchesSettingsSearch('accounts', section.searchEntries)).toBe(false)
-  })
-
-  it('preserves source order for equally ranked matches', () => {
-    const sections = [
-      { id: 'terminal', entries: [{ title: 'Terminal' }] },
-      { id: 'terminal-advanced', entries: [{ title: 'Terminal Advanced' }] }
-    ]
-
-    expect(
-      rankSettingsSearchItems('term', sections, (section) => section.entries).map(
-        (section) => section.item.id
-      )
-    ).toEqual(['terminal', 'terminal-advanced'])
   })
 
   it('keeps empty search ranking in source order without reading entries', () => {

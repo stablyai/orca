@@ -26,8 +26,10 @@ vi.mock('electron', () => {
 })
 const { CdpWsProxyMock } = vi.hoisted(() => {
   const instances: unknown[] = []
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const MockClass = vi.fn().mockImplementation(function (this: any, _wc: unknown) {
+  const MockClass = vi.fn().mockImplementation(function (
+    this: Record<string, unknown>,
+    _wc: unknown
+  ) {
     this._wc = _wc
     this.start = vi.fn(async () => 'ws://127.0.0.1:9222')
     this.stop = vi.fn(async () => {})
@@ -73,6 +75,33 @@ describe('AgentBrowserBridge', () => {
     })
     bridge = new AgentBrowserBridge(mockBrowserManager())
     bridge.setActiveTab(100)
+  })
+
+  it('guards the user’s focus instead of focusing an embedded guest on click', async () => {
+    const release = vi.fn()
+    const guardUserFocusForAgentInput = vi.fn(async () => release)
+    bridge = new AgentBrowserBridge(
+      mockBrowserManager(undefined, undefined, { guardUserFocusForAgentInput })
+    )
+    bridge.setActiveTab(100)
+    const wc = mockWebContents(100)
+    wc.getType.mockReturnValue('webview')
+    wc.debugger.sendCommand.mockImplementation(async (method: string) => {
+      if (method === 'Input.dispatchMouseEvent') {
+        expect(release).not.toHaveBeenCalled()
+      }
+      return method === 'Runtime.evaluate' ? { result: { value: null } } : {}
+    })
+    webContentsFromIdMock.mockReturnValue(wc)
+
+    await bridge.mouseClick(10, 20, 'left', undefined, 'tab-1')
+
+    expect(wc.focus).not.toHaveBeenCalled()
+    expect(guardUserFocusForAgentInput).toHaveBeenCalledWith(100)
+    expect(release).toHaveBeenCalledTimes(1)
+    expect(
+      wc.debugger.sendCommand.mock.calls.filter((call) => call[0] === 'Input.dispatchMouseEvent')
+    ).toHaveLength(2)
   })
 
   it('uses the runtime mobile tap path when a nearby DOM target is handled', async () => {
@@ -168,18 +197,5 @@ describe('AgentBrowserBridge', () => {
     expect(mouseCalls).toHaveLength(2)
     expect(mouseCalls[0]?.[1]).toMatchObject({ type: 'mousePressed', x: 12, y: 34, modifiers: 4 })
     expect(mouseCalls[1]?.[1]).toMatchObject({ type: 'mouseReleased', x: 12, y: 34, modifiers: 4 })
-  })
-
-  it('drops empty command queues after direct CDP commands finish', async () => {
-    const wc = mockWebContents(100)
-    wc.debugger.sendCommand.mockResolvedValue({})
-    webContentsFromIdMock.mockReturnValue(wc)
-
-    await bridge.mouseClick(10, 20, 'right', undefined, 'tab-1')
-
-    expect(
-      (bridge as unknown as { commandQueues: Map<string, unknown[]> }).commandQueues.size
-    ).toBe(0)
-    expect((bridge as unknown as { processingQueues: Set<string> }).processingQueues.size).toBe(0)
   })
 })

@@ -8,6 +8,7 @@ import type { RuntimeTerminalCreate, RuntimeTerminalPresentation } from './runti
 import { isTerminalLeafId } from './stable-pane-id'
 import { isValidTerminalTabId } from './terminal-tab-id'
 import type { TuiAgent } from './tui-agent'
+import type { SpawnIntent } from './host-spawn-admission'
 
 export { AGENT_SESSION_HOST_AUTHORITY_RUNTIME_CAPABILITY as AGENT_SESSION_HOST_AUTHORITY_CAPABILITY } from './protocol-version'
 
@@ -23,6 +24,7 @@ export const AGENT_SESSION_RPC_ERROR_CODES = [
   'agent_session_operation_conflict',
   'agent_session_operation_expired',
   'agent_session_operation_capacity',
+  'agent_session_operation_unknown',
   'agent_session_legacy_required',
   'execution_owner_reconciling',
   'execution_owner_unavailable'
@@ -30,11 +32,11 @@ export const AGENT_SESSION_RPC_ERROR_CODES = [
 
 export const AGENT_SESSION_CLAIM_DIGEST_VERSION = 1 as const
 
-export const AGENT_SESSION_EXECUTION_OWNER_PROTOCOL_VERSION = 2 as const
-export const AGENT_SESSION_CREATE_OPERATION_PROTOCOL_VERSION = 1 as const
-
 export const AGENT_SESSION_OPERATION_FUTURE_SKEW_MS = 5 * 60 * 1000
 export const AGENT_SESSION_MAX_NEW_OPERATION_AGE_MS = 24 * 60 * 60 * 1000
+/** Oldest an operation can be when admitted, plus the host tombstone lifetime after admission. */
+export const AGENT_SESSION_MAX_OPERATION_REPLAY_AGE_MS =
+  AGENT_SESSION_MAX_NEW_OPERATION_AGE_MS * 2 + AGENT_SESSION_OPERATION_FUTURE_SKEW_MS
 
 const AGENT_SESSION_OPERATION_ID_PATTERN = /^(\d{13})-[0-9a-f]{32}$/
 
@@ -103,15 +105,20 @@ export type RuntimeEnsureAgentSessionRequest =
     }
   | {
       kind: 'explicit'
+      resumeOrigin?: 'saved'
       worktree: string
       agent: ResumableTuiAgent
       providerSession: AgentProviderSessionMetadata
       ompResumeFilePath?: string
+      terminalKittyKeyboardProtocol?: boolean
       /** Explicit client override. Omission keeps launch defaults host-owned. */
       agentArgs?: string | null
       launchPreferences?: AgentLaunchPreferences
       presentation?: RuntimeTerminalPresentation
       placement?: { tabId?: string; leafId?: string }
+      spawnIntent?: SpawnIntent
+      /** Account routing env a desktop prepared for a host with no account services (WSL orcad). */
+      accountEnv?: Record<string, string>
     }
 
 export type RuntimeEnsureAgentSessionResult = {
@@ -121,6 +128,7 @@ export type RuntimeEnsureAgentSessionResult = {
 
 export type RuntimeCreateAgentSessionRequest = {
   clientOperationId: string
+  terminalKittyKeyboardProtocol?: boolean
   worktree: string
   agent: TuiAgent
   prompt?: string
@@ -132,6 +140,8 @@ export type RuntimeCreateAgentSessionRequest = {
   presentation?: RuntimeTerminalPresentation
   placement?: { tabId?: string; leafId?: string }
   viewMode?: 'terminal' | 'chat'
+  /** Account routing env a desktop prepared for a host with no account services (WSL orcad). */
+  accountEnv?: Record<string, string>
 }
 
 export type RuntimeCreateAgentSessionResult = {
@@ -140,6 +150,7 @@ export type RuntimeCreateAgentSessionResult = {
 }
 
 export type RuntimeAgentSessionRpcCaller = {
+  terminalImageViewerSupported?: boolean
   clientId?: string
   clientKind?: 'mobile' | 'runtime'
   signal?: AbortSignal

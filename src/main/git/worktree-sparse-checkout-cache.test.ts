@@ -16,14 +16,13 @@ import {
   clearSparseCheckoutStateCacheForRepo,
   detectSparseCheckoutCached,
   invalidateSparseCheckoutState,
+  MAX_SPARSE_CHECKOUT_CACHE_ENTRIES,
   onSparseCheckoutStateChanged
 } from './worktree-sparse-checkout-cache'
 
 const RECONCILE_WINDOW_MS = 5 * 60_000
 
-// A real setTimeout tick, not a faked one, to flush the microtask chain a background
-// stale-while-revalidate detect runs on without needing vi.useFakeTimers() (which would also
-// have to fake Date.now(), the thing these tests drive manually via the Date.now spy below).
+// Flush background microtasks with a real timer while Date.now remains controlled by the spy.
 async function flushBackgroundRevalidation(): Promise<void> {
   await new Promise((resolve) => setTimeout(resolve, 0))
 }
@@ -34,6 +33,16 @@ beforeEach(() => {
 })
 
 describe('detectSparseCheckoutCached', () => {
+  it('bounds cache growth when worktree paths churn', async () => {
+    detectSparseCheckoutMock.mockResolvedValue(true)
+
+    for (let index = 0; index < MAX_SPARSE_CHECKOUT_CACHE_ENTRIES + 4; index += 1) {
+      await detectSparseCheckoutCached('/repo', `/repo/worktree-${index}`)
+    }
+
+    expect(__getSparseCheckoutStateCacheSizeForTests()).toBe(MAX_SPARSE_CHECKOUT_CACHE_ENTRIES)
+  })
+
   it('caches a detection result across repeated calls for the same repo+path', async () => {
     detectSparseCheckoutMock.mockResolvedValue(true)
 
@@ -87,16 +96,11 @@ describe('detectSparseCheckoutCached', () => {
       detectSparseCheckoutMock.mockResolvedValueOnce(false)
       expect(await detectSparseCheckoutCached('/repo', '/repo/wt-a')).toBe(false)
 
-      // Just under the window: still trusts the cached value, no re-detect.
       nowSpy.mockReturnValue(1_000 + RECONCILE_WINDOW_MS - 1)
       expect(await detectSparseCheckoutCached('/repo', '/repo/wt-a')).toBe(false)
       expect(detectSparseCheckoutMock).toHaveBeenCalledTimes(1)
 
-      // Past the window: both calls return the (stale) cached value, and only one kicks a
-      // background re-detect. Read both without awaiting in between — the underlying function
-      // never suspends before returning the stale value, so two calls issued back-to-back in the
-      // same tick are the only reliable way to observe "both concurrent callers stay stale" without
-      // racing the background revalidation's own microtask.
+      // Issue both stale reads before yielding so background revalidation cannot win the second read.
       nowSpy.mockReturnValue(1_000 + RECONCILE_WINDOW_MS + 1)
       detectSparseCheckoutMock.mockResolvedValueOnce(true)
       const firstPastWindow = detectSparseCheckoutCached('/repo', '/repo/wt-a')
@@ -107,7 +111,6 @@ describe('detectSparseCheckoutCached', () => {
 
       await flushBackgroundRevalidation()
 
-      // The corrected value is now served without needing another window to elapse.
       expect(await detectSparseCheckoutCached('/repo', '/repo/wt-a')).toBe(true)
       expect(detectSparseCheckoutMock).toHaveBeenCalledTimes(2)
     } finally {
@@ -123,18 +126,15 @@ describe('detectSparseCheckoutCached', () => {
       detectSparseCheckoutMock.mockResolvedValueOnce(false)
       await detectSparseCheckoutCached('/repo', '/repo/wt-a')
 
-      // Past the window: kicks a background re-detect that we hold open.
       nowSpy.mockReturnValue(1_000 + RECONCILE_WINDOW_MS + 1)
       detectSparseCheckoutMock.mockImplementationOnce(
         () => new Promise<boolean>((resolve) => (resolveDetect = resolve))
       )
       await detectSparseCheckoutCached('/repo', '/repo/wt-a')
 
-      // The worktree is removed (or the repo cache is cleared) while the detect above is in flight.
       invalidateSparseCheckoutState('/repo', '/repo/wt-a')
       expect(__getSparseCheckoutStateCacheSizeForTests()).toBe(0)
 
-      // The in-flight detect now resolves; it must not write the entry back.
       resolveDetect(true)
       await flushBackgroundRevalidation()
       expect(__getSparseCheckoutStateCacheSizeForTests()).toBe(0)
@@ -151,23 +151,18 @@ describe('detectSparseCheckoutCached', () => {
       detectSparseCheckoutMock.mockResolvedValueOnce(false)
       await detectSparseCheckoutCached('/repo', '/repo/wt-a')
 
-      // Past the window: kicks a background re-detect that we hold open (simulates a slow probe
-      // racing a worktree removal + recreation at the same path).
+      // Hold a stale probe across removal and recreation at the same path.
       nowSpy.mockReturnValue(1_000 + RECONCILE_WINDOW_MS + 1)
       detectSparseCheckoutMock.mockImplementationOnce(
         () => new Promise<boolean>((resolve) => (resolveStaleDetect = resolve))
       )
       await detectSparseCheckoutCached('/repo', '/repo/wt-a')
 
-      // The worktree is removed (invalidate) and a new one is recreated at the exact same path,
-      // repopulating the key with a fresh, different value via a normal cold read.
       invalidateSparseCheckoutState('/repo', '/repo/wt-a')
       detectSparseCheckoutMock.mockResolvedValueOnce(true)
       expect(await detectSparseCheckoutCached('/repo', '/repo/wt-a')).toBe(true)
 
-      // The stale in-flight detect from before the remove+recreate now resolves with the old
-      // answer. A presence-only guard would let this overwrite the fresh entry above; the fix
-      // must compare entry identity and refuse to write back over a value it didn't produce.
+      // A presence-only guard would overwrite the recreated entry; require the original entry identity.
       resolveStaleDetect(false)
       await flushBackgroundRevalidation()
       expect(await detectSparseCheckoutCached('/repo', '/repo/wt-a')).toBe(true)
@@ -251,13 +246,9 @@ describe('clearSparseCheckoutStateCache', () => {
   })
 })
 
-// Regression coverage for the live Windows+WSL sequence: a distro-less listing (filesystem-auth
-// root rebuild, worktree ownership checks) racing the real distro-carrying listing for the same
-// repo. Before the distro joined the cache key they shared one entry, so whichever ran first
-// decided the sparse badge for the whole reconcile window.
+// Distro-less and distro-carrying reads of one checkout must retain separate sparse answers.
 describe('detectSparseCheckoutCached with a WSL distro', () => {
-  // Mirrors the real probe: without the distro the gitdir pointer resolves to a fabricated Win32
-  // path, the sparse-checkout stat misses, and the worktree reads as non-sparse.
+  // Model a non-drvfs pointer that requires the caller's distro to resolve.
   function detectOnlyWithDistro(distro: string): void {
     detectSparseCheckoutMock.mockImplementation(
       async (_worktreePath: string, options?: { wslDistro?: string }) =>
@@ -313,8 +304,7 @@ describe('detectSparseCheckoutCached with a WSL distro', () => {
       await detectSparseCheckoutCached('C:\\repo', 'C:\\repo\\wt', { wslDistro: 'Ubuntu' })
       await detectSparseCheckoutCached('C:\\repo', 'C:\\repo\\wt')
 
-      // Past the window the distro-less caller re-probes its own entry, not the sparse one, so the
-      // badge cannot blink off and fire the change listener that clears the whole repo's cache.
+      // Revalidate only the distro-less entry, without flipping the other entry's sparse badge.
       nowSpy.mockReturnValue(1_000 + RECONCILE_WINDOW_MS + 1)
       expect(await detectSparseCheckoutCached('C:\\repo', 'C:\\repo\\wt')).toBe(false)
       await flushBackgroundRevalidation()

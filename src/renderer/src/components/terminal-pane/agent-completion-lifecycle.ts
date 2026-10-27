@@ -17,7 +17,6 @@ type LifecycleOptions = {
   processState: { disposed: boolean; lastForegroundAgent: unknown; hasAgentRunEvidence: boolean }
   identityScope: AgentCompletionIdentityScope
   clearPendingHookDone: () => void
-  clearPendingCodexAttention: () => void
   dropPendingTitle: () => void
   clearWorkingBoundary: () => void
   incrementGeneration: () => void
@@ -32,7 +31,6 @@ export function createAgentCompletionLifecycle({
   processState,
   identityScope,
   clearPendingHookDone,
-  clearPendingCodexAttention,
   dropPendingTitle,
   clearWorkingBoundary,
   incrementGeneration,
@@ -43,7 +41,6 @@ export function createAgentCompletionLifecycle({
 }: LifecycleOptions) {
   function resetCompletionState(options: { requireFreshWorking?: boolean } = {}): void {
     clearPendingHookDone()
-    clearPendingCodexAttention()
     dropPendingTitle()
     clearEvidence()
     clearTitleStatus()
@@ -68,7 +65,6 @@ export function createAgentCompletionLifecycle({
     processState.disposed = true
     clearPollTimer()
     clearPendingHookDone()
-    clearPendingCodexAttention()
     dropPendingTitle()
     clearWorkingBoundary()
     identityScope.dispose(isLive())

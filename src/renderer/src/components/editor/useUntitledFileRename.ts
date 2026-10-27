@@ -2,7 +2,8 @@ import { useCallback, useState } from 'react'
 import { dirname, joinPath } from '@/lib/path'
 import { useAppStore } from '@/store'
 import type { OpenFile } from '@/store/slices/editor'
-import { createRuntimePath, runtimePathExists } from '@/runtime/runtime-file-client'
+import { createRuntimePath } from '@/runtime/runtime-file-mutation-client'
+import { runtimePathExists } from '@/runtime/runtime-file-metadata-client'
 import { executeOpenEditorPathMove } from '@/lib/execute-open-editor-path-move'
 import { getEditorFileOperationContext } from '@/lib/editor-file-operation-owner'
 import { requestEditorFileSave, requestEditorSaveQuiesce } from './editor-autosave'
@@ -79,8 +80,7 @@ export function useUntitledFileRename({
       }
 
       try {
-        // Retarget the untitled tab in place (the coordinator's rekey consumes
-        // its untitled status on this explicit rename), instead of close+reopen.
+        // Rekey in place so explicit rename consumes untitled status without closing/reopening the tab.
         await executeOpenEditorPathMove({
           context: fileContext,
           fromPath: oldPath,

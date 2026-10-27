@@ -113,6 +113,7 @@ export function useMonacoMarkdownAnnotations(params: {
     filePath: relativePath,
     worktreeId: worktreeId ?? '',
     comments: shouldShowMarkdownAnnotations ? markdownComments : [],
+    pendingCommentTarget: commentPopover,
     onAddCommentClick: ({ lineNumber, startLine, top }) => {
       setSelectionAnnotationTarget(null)
       setCommentPopover({
@@ -135,12 +136,14 @@ export function useMonacoMarkdownAnnotations(params: {
     onPendingScrollConsumed: () => setScrollToDiffCommentId(null)
   })
 
+  // Why the line number alone: match DiffViewer, so popover top updates don't resubscribe.
+  const popoverLineNumber = commentPopover?.lineNumber
   useEffect(() => {
-    if (!mountedEditor || !commentPopover) {
+    if (!mountedEditor || popoverLineNumber === undefined) {
       return
     }
     const update = (): void => {
-      const top = getDiffCommentPopoverTop(mountedEditor, commentPopover.lineNumber, undefined)
+      const top = getDiffCommentPopoverTop(mountedEditor, popoverLineNumber, undefined)
       const left = getDiffCommentPopoverLeft(mountedEditor, editorContainerRef.current)
       setCommentPopover((prev) =>
         prev ? { ...prev, top: top ?? prev.top, left: left == null ? prev.left : left } : prev
@@ -154,8 +157,7 @@ export function useMonacoMarkdownAnnotations(params: {
       contentSub.dispose()
       layoutSub.dispose()
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- match DiffViewer: don't resubscribe on top updates.
-  }, [mountedEditor, commentPopover?.lineNumber])
+  }, [mountedEditor, popoverLineNumber, editorContainerRef])
 
   useEffect(() => {
     if (!mountedEditor || !shouldShowMarkdownAnnotations || commentPopover) {

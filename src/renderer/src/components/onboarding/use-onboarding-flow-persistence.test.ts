@@ -3,7 +3,7 @@
 import { createElement, useEffect, act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { getDefaultOnboardingState } from '../../../../shared/constants'
+import { getDefaultOnboardingState } from '../../../../shared/onboarding-defaults'
 import type { OnboardingState } from '../../../../shared/onboarding-state-types'
 
 const trackMock = vi.hoisted(() => vi.fn())
@@ -14,10 +14,9 @@ vi.mock('@/lib/telemetry', () => ({
 
 import {
   buildCompletedOnboardingNotificationSettings,
-  buildOnboardingDismissedPayload,
+  onboardingChatPermissionSetting,
   useCloseWith,
-  type DismissedExtras,
-  trackOnboardingDismissed
+  type DismissedExtras
 } from './use-onboarding-flow-persistence'
 import type { StepNumber } from './use-onboarding-flow-types'
 
@@ -90,32 +89,6 @@ describe('onboarding flow persistence', () => {
     vi.useRealTimers()
   })
 
-  it('builds dismissed telemetry with the triggering advance path', () => {
-    expect(
-      buildOnboardingDismissedPayload(3, {
-        durationMs: 250,
-        advancedVia: 'keyboard'
-      })
-    ).toEqual({
-      last_step: 3,
-      duration_ms: 250,
-      advanced_via: 'keyboard'
-    })
-  })
-
-  it('tracks dismissed onboarding telemetry with the triggering advance path', () => {
-    trackOnboardingDismissed(3, {
-      durationMs: 250,
-      advancedVia: 'keyboard'
-    })
-
-    expect(trackMock).toHaveBeenCalledWith('onboarding_dismissed', {
-      last_step: 3,
-      duration_ms: 250,
-      advanced_via: 'keyboard'
-    })
-  })
-
   it('preserves explicit focus notification suppression when completing onboarding', () => {
     const notifications = buildCompletedOnboardingNotificationSettings({
       enabled: false,
@@ -124,7 +97,9 @@ describe('onboarding flow persistence', () => {
       suppressWhenFocused: false,
       customSoundId: 'two-tone',
       customSoundPath: null,
-      customSoundVolume: 60
+      customSoundVolume: 60,
+      mutedNotificationSourceIds: [],
+      notifyHiddenWorkspaces: false
     })
 
     expect(notifications).toEqual({
@@ -134,8 +109,18 @@ describe('onboarding flow persistence', () => {
       suppressWhenFocused: false,
       customSoundId: 'two-tone',
       customSoundPath: null,
-      customSoundVolume: 60
+      customSoundVolume: 60,
+      mutedNotificationSourceIds: [],
+      notifyHiddenWorkspaces: false
     })
+  })
+
+  it('sets new chats from a flipped Yolo mode, keeping a custom mode and an untouched replay', () => {
+    const set = (mode: string) => ({ nativeChatPermissionMode: mode })
+    expect(onboardingChatPermissionSetting('full-access', false, true)).toEqual(set('ask'))
+    expect(onboardingChatPermissionSetting('ask', true, true)).toEqual(set('full-access'))
+    expect(onboardingChatPermissionSetting('ask', true, false)).toEqual({})
+    expect(onboardingChatPermissionSetting('auto', false, true)).toEqual({})
   })
 
   it('schedules the star toast after every completed close path', async () => {

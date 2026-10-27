@@ -7,27 +7,16 @@ import type { PtyConnectionDeps } from './pty-connection-types'
 import type { UseTerminalPaneLifecycleDeps } from './terminal-pane-lifecycle-types'
 import type { TerminalPaneLifecycleRefs } from './use-terminal-pane-lifecycle-refs'
 
-/** Builds the mutable PTY dependency bag shared by every pane in one mount. */
 export function createTerminalPanePtyDeps(args: {
   deps: UseTerminalPaneLifecycleDeps
   refs: TerminalPaneLifecycleRefs
   startupCwd: string
-  startupWithSetupSplitWait: PtyConnectionDeps['startup']
   mountFollowsTerminalPark: boolean
   restoredPtyIdByLeafId: Record<string, string>
   deferredSplitHandoffs: Map<number, DeferredSplitPaneHandoffHandle>
 }): PtyConnectionDeps {
-  const {
-    deps,
-    refs,
-    startupCwd,
-    startupWithSetupSplitWait,
-    mountFollowsTerminalPark,
-    deferredSplitHandoffs
-  } = args
-  // A concrete PTY owns the input queue and settles the split admission fence,
-  // so the deferred lookup stops being reusable. Both layout-binding variants
-  // must run this: main routes live binds through the leaf-keyed one.
+  const { deps, refs, startupCwd, mountFollowsTerminalPark, deferredSplitHandoffs } = args
+  // Concrete binding consumes deferred lookup and input ownership; both layout bind variants must settle the split fence.
   const settleDeferredSplitOnBind = (paneId: number, ptyId: string | null): void => {
     if (!ptyId) {
       return
@@ -43,7 +32,7 @@ export function createTerminalPanePtyDeps(args: {
     tabId: deps.tabId,
     worktreeId: deps.worktreeId,
     cwd: startupCwd,
-    startup: startupWithSetupSplitWait,
+    startup: deps.startup,
     mountFollowsTerminalPark,
     paneTransportsRef: deps.paneTransportsRef,
     paneMode2031Ref: deps.paneMode2031Ref,
@@ -66,12 +55,7 @@ export function createTerminalPanePtyDeps(args: {
     setRuntimePaneTitle: deps.setRuntimePaneTitle,
     clearRuntimePaneTitle: deps.clearRuntimePaneTitle,
     updateTabPtyId: deps.updateTabPtyId,
-    markWorktreeUnread: deps.markWorktreeUnread,
-    markTerminalTabUnread: deps.markTerminalTabUnread,
-    markTerminalPaneUnread: deps.markTerminalPaneUnread,
-    clearWorktreeUnread: deps.clearWorktreeUnread,
-    clearTerminalTabUnread: deps.clearTerminalTabUnread,
-    clearTerminalPaneUnread: deps.clearTerminalPaneUnread,
+    markTerminalBell: deps.markTerminalBell,
     onShowSessionRestoredBanner: deps.onShowSessionRestoredBanner,
     dispatchNotification: deps.dispatchNotification,
     setCacheTimerStartedAt: deps.setCacheTimerStartedAt,

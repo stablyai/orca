@@ -9,9 +9,11 @@ import { createBrowserPageCreateActions } from './browser-page-create-actions'
 import { createBrowserPageConversionActions } from './browser-page-conversion-actions'
 import { createBrowserPageFocusActions } from './browser-page-focus-actions'
 import { createBrowserPageStateActions } from './browser-page-state-actions'
+import { createBrowserAudioActions } from './browser-audio-actions'
 import { createBrowserPageMetadataActions } from './browser-page-metadata-actions'
 import { createBrowserHydrationActions } from './browser-hydration-actions'
 import { createBrowserProfileListActions } from './browser-profile-list-actions'
+import { createBrowserManagedProfileActions } from './browser-managed-profile-actions'
 import { createBrowserProfileImportActions } from './browser-profile-import-actions'
 import { createBrowserCookieImportActions } from './browser-cookie-import-actions'
 import { createBrowserHistoryActions } from './browser-history-actions'
@@ -20,7 +22,10 @@ export const createBrowserSlice: StateCreator<AppState, [], [], BrowserSlice> = 
   browserTabsByWorktree: {},
   browserPagesByWorkspace: {},
   browserCertificateFailuresByPageId: {},
+  browserAudiblePageIds: {},
+  browserAudioMutedTabIds: {},
   browserAnnotationsByPageId: {},
+  browserAnnotationMarkerIdsByPageId: {},
   remoteBrowserPageHandlesByPageId: {},
   clientHostedBrowserCloseIntentsByEnvironment: {},
   activeBrowserTabId: null,
@@ -31,10 +36,12 @@ export const createBrowserSlice: StateCreator<AppState, [], [], BrowserSlice> = 
   pendingAddressBarFocusByPageId: {},
   browserSessionProfiles: [],
   browserSessionProfilesByHostId: {},
+  managedBrowserProfileStatusById: {},
   browserSessionHostIdOverride: null,
   browserSessionImportState: null,
   browserUrlHistory: [],
   workspaceDocHistory: [],
+  browserHistoryPageId: null,
   defaultBrowserSessionProfileId: null,
   defaultBrowserSessionProfileIdByHostId: {},
   detectedBrowsers: [],
@@ -48,9 +55,11 @@ export const createBrowserSlice: StateCreator<AppState, [], [], BrowserSlice> = 
   ...createBrowserPageConversionActions(set, get),
   ...createBrowserPageFocusActions(set, get),
   ...createBrowserPageStateActions(set, get),
+  ...createBrowserAudioActions(set, get),
   ...createBrowserPageMetadataActions(set, get),
   ...createBrowserHydrationActions(set, get),
   ...createBrowserProfileListActions(set, get),
+  ...createBrowserManagedProfileActions(set, get),
   ...createBrowserProfileImportActions(set, get),
   ...createBrowserCookieImportActions(set, get),
   ...createBrowserHistoryActions(set, get)

@@ -5,6 +5,100 @@ import {
 } from './terminal-windows-shift-enter'
 
 describe('resolveWindowsShiftEnterEncoding', () => {
+  it.each(['dsb', 'codex'] as const)(
+    'keeps pending %s input encoding when a stale title names another agent',
+    (agent) => {
+      const state = {
+        paneForegroundAgentByPaneKey: {
+          'tab:pane': { agent, routingConfirmationPending: true, shellForeground: false }
+        },
+        agentLaunchConfigByPaneKey: {}
+      }
+      for (const title of ['Pi ready', 'OMP ready', 'Droid']) {
+        expect(resolveWindowsShiftEnterEncodingForPane(state, 'tab:pane', title)).toBe('alt-enter')
+      }
+    }
+  )
+
+  it.each(['pi', 'omp', 'droid'] as const)(
+    'keeps pending %s CSI-u capability through a conflicting title',
+    (agent) => {
+      expect(
+        resolveWindowsShiftEnterEncodingForPane(
+          {
+            paneForegroundAgentByPaneKey: {
+              'tab:pane': { agent, routingConfirmationPending: true, shellForeground: false }
+            },
+            agentLaunchConfigByPaneKey: {}
+          },
+          'tab:pane',
+          'DeepSeek Build'
+        )
+      ).toBe('csi-u')
+    }
+  )
+
+  it('recovers a title capability when pending confirmation has no foreground identity', () => {
+    expect(
+      resolveWindowsShiftEnterEncodingForPane(
+        {
+          paneForegroundAgentByPaneKey: {
+            'tab:pane': { agent: null, routingConfirmationPending: true, shellForeground: false }
+          },
+          agentLaunchConfigByPaneKey: {}
+        },
+        'tab:pane',
+        'Pi ready'
+      )
+    ).toBe('csi-u')
+  })
+
+  it.each([
+    { agent: 'dsb' as const, routingTrusted: true, shellForeground: false },
+    { agent: 'dsb' as const, routingConfirmationPending: true, shellForeground: false }
+  ])('keeps the generic encoding for recognition-only foreground evidence %j', (foreground) => {
+    expect(resolveWindowsShiftEnterEncoding({ foreground })).toBe('alt-enter')
+    expect(
+      resolveWindowsShiftEnterEncodingForPane(
+        {
+          paneForegroundAgentByPaneKey: { 'tab:pane': foreground },
+          agentLaunchConfigByPaneKey: {}
+        },
+        'tab:pane',
+        'DeepSeek Build'
+      )
+    ).toBe('alt-enter')
+  })
+
+  it.each(['DeepSeek Build', '⠋ - Review Codex - DeepSeek Build'])(
+    'keeps title-derived recognition-only identity %j on the generic encoding',
+    (title) => {
+      expect(
+        resolveWindowsShiftEnterEncodingForPane(
+          { paneForegroundAgentByPaneKey: {}, agentLaunchConfigByPaneKey: {} },
+          'tab:pane',
+          title
+        )
+      ).toBe('alt-enter')
+      for (const foreground of [
+        { agent: 'dsb' as const, routingRevoked: true, shellForeground: false },
+        { agent: 'dsb' as const, shellForeground: true },
+        { agent: 'dsb' as const, routingTrusted: true, shellForeground: false }
+      ]) {
+        expect(
+          resolveWindowsShiftEnterEncodingForPane(
+            {
+              paneForegroundAgentByPaneKey: { 'tab:pane': foreground },
+              agentLaunchConfigByPaneKey: {}
+            },
+            'tab:pane',
+            'Pi ready'
+          )
+        ).toBe('alt-enter')
+      }
+    }
+  )
+
   it('uses CSI-u only for trusted Droid process evidence', () => {
     expect(
       resolveWindowsShiftEnterEncoding({
@@ -41,12 +135,19 @@ describe('resolveWindowsShiftEnterEncoding', () => {
     ).toBe('csi-u')
   })
 
-  // Why: OMP wraps Pi, so an OMP-labelled title still reaches a Pi reader. Owner-pinning made the
-  // stored pane title read "OMP" for every OMP pane (#16373), so an omp profile without the Pi
-  // encoding sends Esc+CR — which submits instead of inserting a newline (#9703).
+  // OMP wraps Pi despite owner-pinned titles; preserve Pi newline encoding or Esc+CR submits instead (#16373, #9703).
   it('recovers CSI-u from an OMP title, which wraps the same Pi reader', () => {
     const state = { paneForegroundAgentByPaneKey: {}, agentLaunchConfigByPaneKey: {} }
-    for (const title of ['⠸ OMP', 'OMP ready', 'OMP', 'OMP - action required']) {
+    // Owner normalization rebrands π session titles to OMP in the stored pane title.
+    for (const title of [
+      '⠸ OMP',
+      'OMP ready',
+      'OMP',
+      'OMP - action required',
+      'OMP - fixing the sidebar - orca',
+      '⠋ OMP - fixing the sidebar - orca',
+      'OMP > fixing the sidebar'
+    ]) {
       expect(resolveWindowsShiftEnterEncodingForPane(state, 'tab:pane', title)).toBe('csi-u')
     }
   })
@@ -174,8 +275,7 @@ describe('resolveWindowsShiftEnterEncoding', () => {
     }
 
     expect(resolveWindowsShiftEnterEncodingForPane(state, 'tab:launched-droid')).toBe('alt-enter')
-    // Why: after split→close leaves only the sibling, pane count is no longer
-    // ownership evidence; the surviving leaf must keep the legacy fallback.
+    // A surviving sibling cannot inherit launch ownership merely because split count returned to one.
     expect(resolveWindowsShiftEnterEncodingForPane(state, 'tab:surviving-sibling')).toBe(
       'alt-enter'
     )

@@ -9,7 +9,6 @@ import { SourceControlCommitSurface } from './commit-surface'
 import { SourceControlForkPushNotice } from './fork-push-notice'
 import type { SourceControlPanelReadyProps } from './panel-props'
 
-/** The scrolling surface: status, commit affordances, the file sections and the history dock. */
 export function SourceControlPanelContent(props: SourceControlPanelReadyProps) {
   const { activeWorktree, currentWorktreeId, model, worktreePath } = props
   const {
@@ -27,7 +26,6 @@ export function SourceControlPanelContent(props: SourceControlPanelReadyProps) {
     fileListScrollElement,
     filterQuery,
     filteredBranchEntries,
-    filteredGrouped,
     gitHistoryState,
     handleAbortOperationForConflict,
     handleCommitAction,
@@ -37,10 +35,14 @@ export function SourceControlPanelContent(props: SourceControlPanelReadyProps) {
     handleSelect,
     handleStage,
     handleStageAllPaths,
+    handleStageSectionPaths,
+    handleStageWorktreeChanges,
     handleUnstage,
     handleUnstagePaths,
     hasUncommittedEntries,
+    isResolvingConflictsWithAI,
     isAbortingOperation,
+    isCheckingRecoveryAdmission,
     isExecutingBulk,
     isGitHistoryVisible,
     loadCommitFiles,
@@ -74,10 +76,7 @@ export function SourceControlPanelContent(props: SourceControlPanelReadyProps) {
     visibleTreeRowsBySection
   } = model
 
-  const hasFilteredUncommittedEntries =
-    filteredGrouped.staged.length > 0 ||
-    filteredGrouped.unstaged.length > 0 ||
-    filteredGrouped.untracked.length > 0
+  const hasFilteredUncommittedEntries = displaySections.length > 0
   const hasFilteredBranchEntries = filteredBranchEntries.length > 0
   const showGenericEmptyState =
     !hasUncommittedEntries && branchSummary?.status === 'ready' && branchEntries.length === 0
@@ -88,6 +87,7 @@ export function SourceControlPanelContent(props: SourceControlPanelReadyProps) {
         unresolvedConflictCount={unresolvedConflictReviewEntries.length}
         conflictOperation={conflictOperation}
         sourceControlAiActionsVisible={sourceControlAiActionsVisible}
+        isRecoveryBusy={isCheckingRecoveryAdmission || isResolvingConflictsWithAI}
         isAbortingOperation={isAbortingOperation}
         onAbortOperation={handleAbortOperationForConflict}
         onResolveWithAi={() => void handleResolveConflictsWithAI()}
@@ -102,6 +102,8 @@ export function SourceControlPanelContent(props: SourceControlPanelReadyProps) {
         repositoryHuge={repositoryHuge}
         worktreeId={currentWorktreeId}
         onRetryStatus={refreshActiveGitStatus}
+        onStageAllChanges={handleStageWorktreeChanges}
+        isExecutingBulk={isExecutingBulk}
         showGenericEmptyState={showGenericEmptyState}
         normalizedFilter={normalizedFilter}
         branchBaseRef={branchSummary?.baseRef ?? null}
@@ -111,7 +113,7 @@ export function SourceControlPanelContent(props: SourceControlPanelReadyProps) {
         filterQuery={filterQuery}
       />
 
-      {/* Why: keep CommitArea mounted across normal states — gating on hasUncommittedEntries (#1448) would unmount the action surface on clean worktrees and mid-commit as the staged list clears. Active merge/rebase/cherry-pick is the exception. */}
+      {/* Keep CommitArea through clean/mid-commit states (#1448); only active conflict operations replace the action surface. */}
       <SourceControlForkPushNotice pushTarget={activeWorktree.pushTarget ?? null} />
 
       {shouldRenderCommitArea(unresolvedConflicts.length, conflictOperation) && (
@@ -146,6 +148,7 @@ export function SourceControlPanelContent(props: SourceControlPanelReadyProps) {
           isExecutingBulk={isExecutingBulk}
           requestDiscardAllInArea={requestDiscardAllInArea}
           handleStageAllPaths={handleStageAllPaths}
+          handleStageSectionPaths={handleStageSectionPaths}
           handleUnstagePaths={handleUnstagePaths}
           sourceControlViewMode={sourceControlViewMode}
           visibleTreeRowsBySection={visibleTreeRowsBySection}
@@ -208,7 +211,7 @@ export function SourceControlPanelContent(props: SourceControlPanelReadyProps) {
       )}
 
       {isGitHistoryVisible && (
-        // Why: the graph is reference context, so keep it docked at the bottom as the pane scrolls.
+        // Dock history as reference context while the rest of the pane scrolls.
         <div className="sticky bottom-0 z-10 mt-auto shrink-0 border-t border-border bg-sidebar/95 backdrop-blur-sm">
           <GitHistoryPanel
             state={gitHistoryState}

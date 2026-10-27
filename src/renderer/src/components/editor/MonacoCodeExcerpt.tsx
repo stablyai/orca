@@ -1,9 +1,9 @@
 import React, { useEffect, useMemo, useState } from 'react'
 import { monaco } from '@/lib/monaco-setup'
 import { computeEditorFontSize, resolveEditorFontFamily } from '@/lib/editor-font-zoom'
-import { resolveDocumentTheme } from '@/lib/document-theme'
 import { useAppStore } from '@/store'
 import { cn } from '@/lib/utils'
+import { useDocumentDarkTheme } from '@/hooks/use-document-dark-theme'
 
 let pythonLanguageRegistrationPromise: Promise<void> | null = null
 
@@ -14,8 +14,7 @@ async function ensureColorizationLanguage(language: string): Promise<void> {
   pythonLanguageRegistrationPromise ??=
     import('monaco-editor/esm/vs/basic-languages/python/python.js').then(
       ({ conf, language: pythonTokens }) => {
-        // Why: notebook excerpts colorize without mounting Monaco editors. Load
-        // Python tokens only on demand so non-notebook users do not pay at startup.
+        // Load Python tokens only for notebook excerpts so other users pay no startup cost.
         if (!monaco.languages.getLanguages().some((item) => item.id === 'python')) {
           monaco.languages.register({
             id: 'python',
@@ -28,6 +27,44 @@ async function ensureColorizationLanguage(language: string): Promise<void> {
       }
     )
   await pythonLanguageRegistrationPromise
+}
+
+/** Monaco token HTML per line; loads lazy tokenizers (e.g. Python) before colorizing. */
+export function useMonacoColorizedLines(lines: string[], language: string): string[] {
+  const isDark = useDocumentDarkTheme()
+  const code = useMemo(() => lines.join('\n'), [lines])
+  const [htmlLines, setHtmlLines] = useState<string[]>(() => lines.map(() => ''))
+
+  useEffect(() => {
+    monaco.editor.setTheme(isDark ? 'vs-dark' : 'vs')
+  }, [isDark])
+
+  // Why: colorize emits theme-specific token classes, so a theme switch must re-colorize.
+  useEffect(() => {
+    if (lines.length === 0) {
+      setHtmlLines([])
+      return
+    }
+
+    let cancelled = false
+    // Wait for lazy tokenizers before colorizing; colorizeModelLine would emit default tokens while contributions load.
+    void ensureColorizationLanguage(language)
+      .catch(() => undefined)
+      .then(() => monaco.editor.colorize(code, language, { tabSize: 2 }))
+      .then((html) => {
+        if (cancelled) {
+          return
+        }
+        const nextLines = html.split('<br/>').slice(0, lines.length)
+        setHtmlLines(nextLines)
+      })
+
+    return () => {
+      cancelled = true
+    }
+  }, [code, language, lines, isDark])
+
+  return htmlLines
 }
 
 type MonacoCodeExcerptProps = {
@@ -52,39 +89,7 @@ export default function MonacoCodeExcerpt({
     editorFontZoomLevel
   )
   const fontFamily = resolveEditorFontFamily(settings)
-  const isDark = resolveDocumentTheme(settings?.theme ?? 'system')
-  const code = useMemo(() => lines.join('\n'), [lines])
-  const [htmlLines, setHtmlLines] = useState<string[]>(() => lines.map(() => ''))
-
-  useEffect(() => {
-    monaco.editor.setTheme(isDark ? 'vs-dark' : 'vs')
-  }, [isDark])
-
-  useEffect(() => {
-    if (lines.length === 0) {
-      setHtmlLines([])
-      return
-    }
-
-    let cancelled = false
-    // Why: notebook languages like Python are loaded lazily by Monaco. The
-    // async colorizer waits for that tokenizer; colorizeModelLine can render
-    // only default-token spans if called before the contribution finishes.
-    void ensureColorizationLanguage(language)
-      .catch(() => undefined)
-      .then(() => monaco.editor.colorize(code, language, { tabSize: 2 }))
-      .then((html) => {
-        if (cancelled) {
-          return
-        }
-        const nextLines = html.split('<br/>').slice(0, lines.length)
-        setHtmlLines(nextLines)
-      })
-
-    return () => {
-      cancelled = true
-    }
-  }, [code, language, lines])
+  const htmlLines = useMonacoColorizedLines(lines, language)
 
   return (
     <div

@@ -3,7 +3,6 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { ClaudeUsagePersistedState } from './types'
-import type * as Scanner from './scanner'
 
 const { getPathMock } = vi.hoisted(() => ({
   getPathMock: vi.fn(() => '/tmp/orca-test-userdata')
@@ -15,13 +14,13 @@ vi.mock('electron', () => ({
   }
 }))
 
-vi.mock('./scanner', async (importOriginal) => ({
-  ...(await importOriginal<typeof Scanner>()),
-  scanClaudeUsageFiles: vi.fn()
+vi.mock('../usage/usage-scan-worker-spawn', () => ({
+  scanClaudeUsageFilesViaWorker: vi.fn(),
+  splitUsageCacheFileViaWorker: vi.fn()
 }))
 
 import { ClaudeUsageStore, initClaudeUsagePath } from './store'
-import { scanClaudeUsageFiles } from './scanner'
+import { scanClaudeUsageFilesViaWorker } from '../usage/usage-scan-worker-spawn'
 
 function createBackingStore(): ConstructorParameters<typeof ClaudeUsageStore>[0] {
   return {
@@ -51,6 +50,42 @@ function createStoreWithState(state: Partial<ClaudeUsagePersistedState>): Claude
   return store
 }
 
+function createWorktreeUsageSession(worktreeId: string) {
+  const tokens = {
+    turnCount: 1,
+    inputTokens: 1000,
+    outputTokens: 500,
+    cacheReadTokens: 200,
+    cacheWriteTokens: 100,
+    cacheWrite1hTokens: 0
+  }
+  return {
+    sessionId: 'session-1',
+    firstTimestamp: '2026-04-09T15:00:00.000Z',
+    lastTimestamp: '2026-04-09T15:05:00.000Z',
+    model: 'claude-sonnet-4-6',
+    lastCwd: '/workspace/repo-a',
+    lastGitBranch: 'feature/a',
+    primaryWorktreeId: worktreeId,
+    primaryRepoId: 'repo-1',
+    totalInputTokens: 1000,
+    totalOutputTokens: 500,
+    totalCacheReadTokens: 200,
+    totalCacheWriteTokens: 100,
+    totalCacheWrite1hTokens: 0,
+    ...tokens,
+    locationBreakdown: [
+      {
+        locationKey: `worktree:${worktreeId}`,
+        projectLabel: 'Repo A',
+        repoId: 'repo-1',
+        worktreeId,
+        ...tokens
+      }
+    ]
+  }
+}
+
 describe('ClaudeUsageStore', () => {
   let tempUserData: string
 
@@ -58,9 +93,8 @@ describe('ClaudeUsageStore', () => {
     tempUserData = mkdtempSync(join(tmpdir(), 'orca-claude-usage-store-'))
     getPathMock.mockReturnValue(tempUserData)
     initClaudeUsagePath()
-    vi.mocked(scanClaudeUsageFiles).mockReset()
-    vi.mocked(scanClaudeUsageFiles).mockResolvedValue({
-      processedFiles: [],
+    vi.mocked(scanClaudeUsageFilesViaWorker).mockReset()
+    vi.mocked(scanClaudeUsageFilesViaWorker).mockResolvedValue({
       sessions: [],
       dailyAggregates: []
     })
@@ -285,7 +319,6 @@ describe('ClaudeUsageStore', () => {
     const summary = await store.getSummary('orca', '30d')
     const breakdown = await store.getBreakdown('orca', '30d', 'model')
 
-    // 5 + 25 + 0.5 + (0.6 * 6.25 + 0.4 * 10); the flat 5m rate would give 36.75.
     expect(summary.estimatedCostUsd).toBeCloseTo(38.25)
     expect(
       breakdown.find((row) => row.key === 'claude-opus-4-7-20260416')?.estimatedCostUsd
@@ -427,7 +460,6 @@ describe('ClaudeUsageStore', () => {
 
     const summary = await store.getSummary('orca', '30d')
 
-    // Why: Sonnet 4.6 and earlier bill above 200k at a premium; Sonnet 5 does not.
     expect(summary.estimatedCostUsd).toBeCloseTo(4.41)
   })
 
@@ -446,25 +478,29 @@ describe('ClaudeUsageStore', () => {
         outputTokens: 300_000,
         cacheReadTokens: 300_000,
         cacheWriteTokens: 300_000,
-        cacheWrite1hTokens: 0
+        cacheWrite1hTokens: 0,
+        longContext: {
+          inputTokens: 300_000,
+          outputTokens: 300_000,
+          cacheReadTokens: 300_000,
+          cacheWriteTokens: 300_000,
+          cacheWrite1hTokens: 0
+        }
       }))
     })
 
     const breakdown = await store.getBreakdown('orca', '30d', 'model')
 
-    // Why: the 4.5 tier premium only survives if `-4-5-` never matches the `-5`
-    // family regex, so this doubles as the digit-boundary proof for both families.
     expect(
       breakdown.find((row) => row.key === 'claude-sonnet-4-5-20250929')?.estimatedCostUsd
-    ).toBeCloseTo(8.07)
-    // Why: Opus 4.5 and Opus 5 share rates today, so this pins the rate rather
-    // than the routing — it fails only if the two ever diverge.
+    ).toBeCloseTo(10.98)
+    // Opus 4.5 and 5 share rates, so this assertion cannot distinguish their routing.
     expect(
       breakdown.find((row) => row.key === 'claude-opus-4-5-20251101')?.estimatedCostUsd
     ).toBeCloseTo(11.025)
   })
 
-  it('prices unknown newer Opus 4 point releases with current Opus rates', async () => {
+  it('leaves unknown Opus point releases unpriced instead of borrowing another model', async () => {
     const store = createStoreWithState({
       dailyAggregates: [
         {
@@ -502,7 +538,8 @@ describe('ClaudeUsageStore', () => {
 
     const summary = await store.getSummary('orca', '30d')
 
-    expect(summary.estimatedCostUsd).toBeCloseTo(73.5)
+    expect(summary.estimatedCostUsd).toBeNull()
+    expect(summary.hasUnpricedModels).toBe(true)
   })
 
   it('does not collapse older Opus 4.1 or base Opus 4 usage into current Opus pricing', async () => {
@@ -582,38 +619,7 @@ describe('ClaudeUsageStore', () => {
         lastScanCompletedAt: 2,
         lastScanError: null
       },
-      sessions: [
-        {
-          sessionId: 'session-1',
-          firstTimestamp: '2026-04-09T15:00:00.000Z',
-          lastTimestamp: '2026-04-09T15:05:00.000Z',
-          model: 'claude-sonnet-4-6',
-          lastCwd: '/workspace/repo-a',
-          lastGitBranch: 'feature/a',
-          primaryWorktreeId: worktreeId,
-          primaryRepoId: 'repo-1',
-          turnCount: 1,
-          totalInputTokens: 1000,
-          totalOutputTokens: 500,
-          totalCacheReadTokens: 200,
-          totalCacheWriteTokens: 100,
-          totalCacheWrite1hTokens: 0,
-          locationBreakdown: [
-            {
-              locationKey: `worktree:${worktreeId}`,
-              projectLabel: 'Repo A',
-              repoId: 'repo-1',
-              worktreeId,
-              turnCount: 1,
-              inputTokens: 1000,
-              outputTokens: 500,
-              cacheReadTokens: 200,
-              cacheWriteTokens: 100,
-              cacheWrite1hTokens: 0
-            }
-          ]
-        }
-      ]
+      sessions: [createWorktreeUsageSession(worktreeId)]
     })
     const refreshMock = vi.fn().mockResolvedValue({
       enabled: true,
@@ -648,7 +654,47 @@ describe('ClaudeUsageStore', () => {
     expect(refreshMock).toHaveBeenCalledWith(false)
   })
 
-  it('adapts Claude scans to pretty-printed cache persistence', async () => {
+  it('forces one scan per run and stops re-forcing after a failed attempt', async () => {
+    const completedAt = Date.parse('2026-04-09T15:06:00.000Z')
+    const scanError = 'EMFILE: too many open files'
+    const failedScanState = (lastScanStartedAt: number) => ({
+      enabled: true,
+      lastScanStartedAt,
+      lastScanCompletedAt: completedAt - 60_000,
+      lastScanError: scanError
+    })
+    const scanStateResult = {
+      enabled: true,
+      isScanning: false,
+      lastScanStartedAt: completedAt - 60_000,
+      lastScanCompletedAt: completedAt - 60_000,
+      lastScanError: scanError,
+      hasAnyClaudeData: false
+    }
+    const request = {
+      worktreeId: 'repo-1::/workspace/repo-a',
+      terminalSessionId: 'tab-1',
+      startedAt: completedAt - 120_000,
+      completedAt
+    }
+
+    const beforeAttempt = createStoreWithState({
+      scanState: failedScanState(completedAt - 60_000)
+    })
+    const beforeRefresh = vi.spyOn(beforeAttempt, 'refresh').mockResolvedValue(scanStateResult)
+    await beforeAttempt.getAutomationRunUsage(request)
+
+    expect(beforeRefresh).toHaveBeenCalledWith(true)
+
+    const afterAttempt = createStoreWithState({ scanState: failedScanState(completedAt + 1000) })
+    const afterRefresh = vi.spyOn(afterAttempt, 'refresh').mockResolvedValue(scanStateResult)
+    const usage = await afterAttempt.getAutomationRunUsage(request)
+
+    expect(afterRefresh).toHaveBeenCalledWith(false)
+    expect(usage.unavailableReason).toBe('scan_failed')
+  })
+
+  it('hands Claude scans the worker-owned source cache and persists a compact report', async () => {
     const store = createStoreWithState({
       schemaVersion: 5,
       scanState: {
@@ -660,8 +706,69 @@ describe('ClaudeUsageStore', () => {
     })
 
     await store.refresh(true)
+    await store.flush()
 
-    expect(scanClaudeUsageFiles).toHaveBeenCalledWith([], [])
-    expect(readFileSync(join(tempUserData, 'orca-claude-usage.json'), 'utf-8')).toContain('\n')
+    expect(scanClaudeUsageFilesViaWorker).toHaveBeenCalledWith([], {
+      path: join(tempUserData, 'orca-claude-usage-sources.json'),
+      schemaVersion: 7,
+      worktreeFingerprint: '[]',
+      reuse: false
+    })
+    const persisted = readFileSync(join(tempUserData, 'orca-claude-usage.json'), 'utf-8')
+    expect(persisted).not.toContain('\n')
+    expect(JSON.parse(persisted)).not.toHaveProperty('processedFiles')
+  })
+
+  it('joins a scan that is already in flight when the run finished before it started', async () => {
+    const worktreeId = 'repo-1::/workspace/repo-a'
+    const store = createStoreWithState({
+      scanState: {
+        enabled: true,
+        lastScanStartedAt: null,
+        lastScanCompletedAt: null,
+        lastScanError: null
+      }
+    })
+    // Prime the worktree fingerprint so an unforced refresh can return early.
+    vi.mocked(scanClaudeUsageFilesViaWorker).mockResolvedValue({
+      sessions: [],
+      dailyAggregates: []
+    })
+    await store.refresh(true)
+
+    const completedAt = Date.now() + 10_000
+    vi.setSystemTime(new Date(completedAt + 1_000))
+
+    let startScan = () => {}
+    let finishScan = () => {}
+    const scanStarted = new Promise<void>((resolve) => {
+      startScan = resolve
+    })
+    const scanFinished = new Promise<void>((resolve) => {
+      finishScan = resolve
+    })
+    vi.mocked(scanClaudeUsageFilesViaWorker).mockImplementationOnce(async () => {
+      startScan()
+      await scanFinished
+      return {
+        sessions: [createWorktreeUsageSession(worktreeId)],
+        dailyAggregates: []
+      }
+    })
+
+    const inFlight = store.refresh(true)
+    await scanStarted
+
+    const usage = store.getAutomationRunUsage({
+      worktreeId,
+      terminalSessionId: 'session-1',
+      startedAt: completedAt - 60_000,
+      completedAt
+    })
+    finishScan()
+    await inFlight
+
+    expect((await usage).status).toBe('known')
+    expect((await usage).providerSessionId).toBe('session-1')
   })
 })

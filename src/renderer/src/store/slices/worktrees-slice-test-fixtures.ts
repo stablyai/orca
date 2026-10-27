@@ -4,6 +4,14 @@ import type { TerminalTab } from '../../../../shared/terminal-tab-types'
 import type { WorkspaceLineage, WorktreeLineage } from '../../../../shared/worktree/lineage-types'
 import type { Worktree } from '../../../../shared/worktree/types'
 
+export const TEST_REPO = {
+  id: 'repo1',
+  path: '/repo1',
+  displayName: 'Repo 1',
+  badgeColor: '#000',
+  addedAt: 0
+}
+
 export function makeWorktree(
   overrides: Partial<Worktree> & { id: string; repoId: string }
 ): Worktree {

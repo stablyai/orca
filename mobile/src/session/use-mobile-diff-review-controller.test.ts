@@ -1,7 +1,7 @@
 import { createElement } from 'react'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { RpcClient } from '../transport/rpc-client'
+import { createFakeRpcClient } from '../mobile-web-shell/bridge-host-test-fakes'
 import type { ConnectionState } from '../transport/types'
 import type { ReviewScreenState } from './mobile-diff-review-screen-model'
 import { useMobileDiffReviewController } from './use-mobile-diff-review-controller'
@@ -23,16 +23,22 @@ vi.mock('expo-haptics', () => ({
 }))
 vi.mock('expo-clipboard', () => ({ setStringAsync: vi.fn() }))
 
-const client = { sendRequest: vi.fn() } as unknown as RpcClient
+const client = createFakeRpcClient()
 
 function readySnapshot(branch: string): ReviewScreenState {
   return {
     kind: 'ready',
-    status: { entries: [], branch, head: 'abc123' },
+    status: {
+      entries: [],
+      branch,
+      head: 'abc123',
+      conflictOperation: undefined,
+      upstreamStatus: undefined
+    },
     comments: [],
-    reviewState: { reviewedKeys: [] },
+    reviewState: { version: 1, files: {} },
     branchCompare: null
-  } as unknown as ReviewScreenState
+  }
 }
 
 describe('useMobileDiffReviewController', () => {
@@ -43,6 +49,9 @@ describe('useMobileDiffReviewController', () => {
     const controller = useMobileDiffReviewController({
       client,
       connState,
+      hostCapabilities: [],
+      hostStatusPending: false,
+      hostStatusReadable: true,
       hostId: 'host-1',
       worktreeId: 'wt-1',
       name: 'review',
@@ -113,7 +122,6 @@ describe('useMobileDiffReviewController', () => {
     await update('reconnecting')
     await update('connected')
     expect(loadSnapshot).toHaveBeenCalledTimes(2)
-    // Why (F10): a failed refresh must not replace the review on screen with an error.
     expect(screenState).toMatchObject({ kind: 'ready', status: { branch: 'feature/one' } })
   })
 

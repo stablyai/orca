@@ -20,7 +20,9 @@ describe('comment body submit state', () => {
   })
 
   it('counts multibyte leading whitespace toward the scan budget', () => {
-    const oversizedLeadingWhitespace = '\u3000'.repeat(COMMENT_BODY_NONBLANK_SCAN_MAX_BYTES)
+    const oversizedLeadingWhitespace = '\u3000'.repeat(
+      Math.floor(COMMENT_BODY_NONBLANK_SCAN_MAX_BYTES / 3) + 1
+    )
     const body = oversizedLeadingWhitespace.concat('body')
 
     expect(hasBoundedCommentBodyText(body)).toBe(false)

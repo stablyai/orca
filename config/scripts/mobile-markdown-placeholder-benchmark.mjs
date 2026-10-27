@@ -40,7 +40,7 @@ function measure(fn, input, repeats) {
   return samples.sort((a, b) => a - b)[Math.floor(samples.length / 2)]
 }
 const results = []
-for (const [shape, input] of [
+for (const [inputCase, input] of [
   ['ordinary Markdown', '# Hello\n\n<p>Use `Array<string>` and <b>bold</b>.</p>'],
   ...[2048, 8192, 16384].map((length) => [
     `${length} underscore collision`,
@@ -49,7 +49,7 @@ for (const [shape, input] of [
 ]) {
   assert.equal(after(input), before(input))
   results.push({
-    shape,
+    inputCase,
     bytes: Buffer.byteLength(input),
     beforeMs: measure(before, input, 5),
     afterMs: measure(after, input, 15)

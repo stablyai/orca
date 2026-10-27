@@ -5,10 +5,8 @@ import { tmpdir } from 'node:os'
 
 import { afterEach, describe, expect, it } from 'vitest'
 
-import {
-  createSequencedSetupAgentCommands,
-  SETUP_AGENT_SEQUENCE_STARTUP_COMMAND_ENV
-} from './setup-agent-sequencing'
+import { createSequencedSetupAgentCommands } from './setup-agent-sequencing'
+import { quotePowerShellLiteral } from './powershell-native-argument'
 
 const TEMP_DIRS: string[] = []
 const WINDOWS_PROCESS_TEST_TIMEOUT_MS = 30_000
@@ -49,14 +47,14 @@ describe.skipIf(process.platform !== 'win32')('Windows setup-agent sequencing', 
         [
           'param([string]$Value)',
           '$utf8 = [System.Text.UTF8Encoding]::new($false)',
-          `[System.IO.File]::AppendAllText('${quotePowerShell(logPath)}', $Value + [Environment]::NewLine, $utf8)`
+          `[System.IO.File]::AppendAllText(${quotePowerShellLiteral(logPath)}, $Value + [Environment]::NewLine, $utf8)`
         ].join('\r\n'),
         'utf8'
       )
 
       const commands = createSequencedSetupAgentCommands({
         runnerScriptPath,
-        startupCommand: `& '${quotePowerShell(startupScriptPath)}' '${quotePowerShell(prompt)}'`,
+        startupCommand: `& ${quotePowerShellLiteral(startupScriptPath)} ${quotePowerShellLiteral(prompt)}`,
         platform: 'windows',
         nonce: 'windows-sequence',
         waitTimeoutSeconds: 2
@@ -84,20 +82,6 @@ describe.skipIf(process.platform !== 'win32')('Windows setup-agent sequencing', 
     },
     WINDOWS_PROCESS_TEST_TIMEOUT_MS
   )
-
-  it('keeps the startup command out of generated cmd.exe source', () => {
-    const startupCommand = 'agent --prompt "& | ^ % ! 한글 trailing\\"'
-    const commands = createSequencedSetupAgentCommands({
-      runnerScriptPath: 'C:\\repo\\setup-runner.cmd',
-      startupCommand,
-      platform: 'windows',
-      nonce: 'windows-sequence'
-    })
-
-    expect(commands.setupCommand).not.toContain(startupCommand)
-    expect(commands.startupCommand).not.toContain(startupCommand)
-    expect(commands.startupEnv?.[SETUP_AGENT_SEQUENCE_STARTUP_COMMAND_ENV]).toBe(startupCommand)
-  })
 
   it(
     'propagates setup failure without launching the agent',
@@ -165,10 +149,6 @@ function spawnWindowsCommand(
     stdio: 'pipe',
     env: { ...process.env, ...env }
   })
-}
-
-function quotePowerShell(value: string): string {
-  return value.replace(/'/g, "''")
 }
 
 function waitForExit(

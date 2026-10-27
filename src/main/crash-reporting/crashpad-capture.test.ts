@@ -1,3 +1,4 @@
+import type { MinidumpSource } from './minidump-stream-reader'
 import { mkdtemp, mkdir, readdir, rm, utimes, writeFile } from 'node:fs/promises'
 import os from 'node:os'
 import path from 'node:path'
@@ -85,7 +86,6 @@ describe('waitForCrashMinidump', () => {
   })
 
   it('accepts a dump written just before the crash was observed', async () => {
-    // Crashpad writes from the handler process, so the dump can land first.
     const expected = await writeDump(path.join('reports', 'race.dmp'), CRASHED_AT - 200)
 
     const dump = await waitForCrashMinidump(CRASHED_AT, { now: () => CRASHED_AT })
@@ -200,8 +200,8 @@ describe('captureMinidumpSignature', () => {
       Buffer.from('renderer')
     )
     await writeDump(path.join('reports', 'gpu.dmp'), CRASHED_AT + 200, Buffer.from('gpu-process'))
-    parseMinidumpCrashSignatureMock.mockImplementation((dump: Buffer) => ({
-      processType: dump.toString('utf8'),
+    parseMinidumpCrashSignatureMock.mockImplementation(async (dump: MinidumpSource) => ({
+      processType: (await dump.read(0, dump.byteLength)).toString('utf8'),
       annotations: {}
     }))
 
@@ -279,7 +279,7 @@ describe('Crashpad dump pruning', () => {
       now: () => CRASHED_AT
     })
     expect(captured?.filePath).toBe(path.join(dumpDir, 'reports', 'claimed.dmp'))
-    // Newer than the claimed dump, so the claim is what protects it, not index 0.
+    // Make another dump newest so only the persisted claim protects this one.
     await writeDump(path.join('reports', 'newest.dmp'), CRASHED_AT + 400, Buffer.alloc(8))
 
     await _pruneCrashpadDumpsForTest(8)

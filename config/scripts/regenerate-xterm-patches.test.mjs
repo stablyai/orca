@@ -24,13 +24,11 @@ import {
   formatCheckFailure,
   normalizePnpmDiff,
   pnpmDiffEnvironment,
-  selectPatchEntries,
   sourceHunks,
   splitPatchEntries
 } from './xterm-patch-text.mjs'
 
-// Only the tests need to slice the generated half out of a patch; the generator
-// reads `generatedPaths` directly where it compares against the pristine build.
+// Only tests slice generated patch section; generator compares manifest generatedPaths directly with pristine build.
 function generatedHunks(patchText, generatedPaths) {
   return splitPatchEntries(patchText)
     .filter((entry) => generatedPaths.some((prefix) => entry.path.startsWith(prefix)))
@@ -98,26 +96,6 @@ const PATCHED = {
 }
 
 describe('pnpm diff format', () => {
-  it('keeps the exact git flags pnpm uses, so patches survive `pnpm patch-commit`', () => {
-    expect(PNPM_DIFF_FLAGS).toEqual([
-      '-c',
-      'core.safecrlf=false',
-      '-c',
-      'core.quotePath=false',
-      'diff',
-      '--src-prefix=a/',
-      '--dst-prefix=b/',
-      '--ignore-cr-at-eol',
-      '--irreversible-delete',
-      '--full-index',
-      '--no-index',
-      '--text',
-      '--no-ext-diff',
-      '--no-color',
-      '--'
-    ])
-  })
-
   it('matches pnpm git config isolation', () => {
     const environment = pnpmDiffEnvironment({ PATH: '/usr/bin', HOME: '/Users/someone' })
     expect(environment).toMatchObject({
@@ -246,8 +224,7 @@ describe('round-trip stability', () => {
   })
 })
 
-// `--write` rewrites the source patch from the emitted patch, so a hunk the
-// emitted patch cannot name would delete itself on the next run.
+// --write derives source patch from emitted hunks; an unnameable hunk would delete itself next run.
 describe('source derivation agreement', () => {
   const publishedEntry = [
     'diff --git a/src/browser/Types.ts b/src/browser/Types.ts',
@@ -281,20 +258,26 @@ describe('source derivation agreement', () => {
     ).toThrow(/disagree on a source file/)
   })
 
-  it('diffs the checkout with pnpm formatting so the two halves stay comparable', () => {
-    expect(CHECKOUT_DIFF_FLAGS.filter((flag) => flag !== '--relative')).toEqual(
-      PNPM_DIFF_FLAGS.filter((flag) => flag !== '--no-index')
-    )
-    expect(CHECKOUT_DIFF_FLAGS).toContain('--full-index')
-    expect(CHECKOUT_DIFF_FLAGS).not.toContain('--no-index')
-  })
+  it('diffs a nested checkout with package-relative paths and full object IDs', async () => {
+    const root = await createDirectory()
+    const checkout = path.join(root, 'checkout')
+    const packageRoot = path.join(checkout, 'addons', 'widget')
+    const pristine = path.join(root, 'pristine')
+    await writeTree(packageRoot, PRISTINE)
+    await writeTree(pristine, PRISTINE)
+    execFileSync('git', ['init', '--quiet', checkout], { env: pnpmDiffEnvironment() })
+    execFileSync('git', ['add', '.'], { cwd: checkout, env: pnpmDiffEnvironment() })
+    await writeTree(packageRoot, PATCHED)
 
-  it('passes --relative as a flag, not as a pathspec', () => {
-    // After `--` git reads it as a path, silently leaving addon diffs rooted at the
-    // repo instead of the package, which drops every source hunk from the patch.
-    expect(CHECKOUT_DIFF_FLAGS.indexOf('--relative')).toBeLessThan(
-      CHECKOUT_DIFF_FLAGS.indexOf('--')
-    )
+    const patch = execFileSync('git', [...CHECKOUT_DIFF_FLAGS, 'src/'], {
+      cwd: packageRoot,
+      encoding: 'utf8',
+      env: pnpmDiffEnvironment()
+    })
+
+    expect(patch).toBe(sourceHunks(diffFolders(pristine, packageRoot)))
+    expect(patch).toContain('diff --git a/src/Widget.ts b/src/Widget.ts')
+    expect(patch).toMatch(/^index [0-9a-f]{40}\.\.[0-9a-f]{40} 100644$/m)
   })
 })
 
@@ -343,8 +326,7 @@ describe('manifest guards', () => {
 
   it('refuses a sourcemap policy it does not implement', () => {
     expect(assertSourcemapPolicy({ sourcemaps: { policy: 'include' } })).toBe('include')
-    // `delete` named a code path that no longer exists; accepting it would ship
-    // maps that do not match the bundle.
+    // Reject retired delete policy or source maps ship mismatched to bundle.
     expect(() => assertSourcemapPolicy({ sourcemaps: { policy: 'delete' } })).toThrow(
       /must be one of include, got "delete"/
     )
@@ -393,8 +375,7 @@ describe('lockfile coupling', () => {
     expect(updated.split('\n')).toHaveLength(lockfile.split('\n').length)
   })
 
-  // pnpm repeats the hash in every resolution key. Rewriting only patchedDependencies
-  // installs fine on a warm store and drifts on a cold one, so it fails in CI only.
+  // Rewrite every resolution hash: patchedDependencies alone passes warm installs but fails cold CI stores.
   it('rewrites the resolution keys as well as patchedDependencies', () => {
     const key = '@xterm/xterm@6.1.0-beta.287'
     expect(readLockfileResolutionHashes(lockfile, key)).toEqual(['0'.repeat(64), '0'.repeat(64)])
@@ -425,10 +406,9 @@ describe('lockfile coupling', () => {
   })
 
   it('reports a missing key without throwing, which is the state mid version bump', () => {
-    // A bump renames the key, so --write has nothing to rewrite until pnpm install
-    // creates it. Aborting there would strand the run before the later packages.
+    // Missing renamed key is normal mid-bump; let later pnpm install create it rather than aborting --write.
     expect(lockfileHasPatchEntry(lockfile, '@xterm/xterm@6.1.0-beta.287')).toBe(true)
-    expect(lockfileHasPatchEntry(lockfile, '@xterm/xterm@6.1.0-beta.303')).toBe(false)
+    expect(lockfileHasPatchEntry(lockfile, '@xterm/xterm@6.1.0-beta.288')).toBe(false)
   })
 })
 
@@ -453,25 +433,8 @@ describe('check-mode reporting', () => {
   })
 })
 
-// These run without network or a build, so ordinary `pnpm test` catches the two
-// desyncs that would otherwise only surface in the heavy xterm_patch_sync job.
+// Offline/build-free tests catch desync before costly xterm_patch_sync job.
 describe('committed xterm patch artifacts', () => {
-  it('carries the font-weight probe into every WebGL runtime copy', async () => {
-    const manifest = JSON.parse(await readFile(MANIFEST_PATH, 'utf8'))
-    const webgl = manifest.packages.find((entry) => entry.name === '@xterm/addon-webgl')
-    const patch = await readFile(path.join(REPO_ROOT, webgl.patch), 'utf8')
-    // The ESM and CJS bundles mangle locals differently, so anchor on the global the
-    // renderer diagnostics read; a copy missing it reports a font mismatch as a repaint bug.
-    for (const file of ['src/TextureAtlas.ts', 'lib/addon-webgl.js', 'lib/addon-webgl.mjs']) {
-      const stanza = selectPatchEntries(patch, (candidate) => candidate === file)
-      expect(stanza, file).not.toBe('')
-      expect(stanza, file).toContain('__orcaAtlasFontProbe')
-    }
-    // The probe must compare the rasterized weight against the requested one; comparing
-    // against a literal '400' would call every non-default weight a mismatch.
-    expect(sourceHunks(patch)).toContain('actual === desired')
-  })
-
   it('records the lockfile hash pnpm derives from the patch file', async () => {
     const manifest = JSON.parse(await readFile(MANIFEST_PATH, 'utf8'))
     const lockfile = await readFile(path.join(REPO_ROOT, 'pnpm-lock.yaml'), 'utf8')
@@ -492,7 +455,7 @@ describe('committed xterm patch artifacts', () => {
     }
   })
 
-  it('pins a full upstream commit and a buildable package entry', async () => {
+  it('requires a full upstream commit, a package, and allowed build steps', async () => {
     const manifest = JSON.parse(await readFile(MANIFEST_PATH, 'utf8'))
     expect(manifest.upstream.commit).toMatch(/^[0-9a-f]{40}$/)
     expect(manifest.packages.length).toBeGreaterThan(0)

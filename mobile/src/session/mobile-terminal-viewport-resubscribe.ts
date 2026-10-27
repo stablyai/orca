@@ -1,14 +1,11 @@
-/** Bounds the scrollback→measure→resubscribe fit loop (STA-3337): a host whose
- *  frame dims can never equal the phone viewport must not re-arm the stream
- *  forever — it broke gesture recognition and drained battery at ~25 cycles/s. */
+// Bound nonconverging viewport refits to avoid stream churn, broken gestures and battery drain.
 
+import type { TerminalFrame } from '../terminal/terminal-webview-messages'
 import type { MobileTerminalDiagnostics } from './mobile-terminal-diagnostics'
 
 export const MAX_TERMINAL_VIEWPORT_RESUBSCRIBE_ATTEMPTS = 3
 
-/** Attempt-indexed teardown delay. Attempt 0 is the ordinary first fit pass
- *  (server learns the viewport) and must stay immediate; later attempts mean
- *  the server answered with non-matching dims, so probe at a decaying rate. */
+// First fit is immediate to teach the host the viewport; decay retries when dimensions still disagree.
 const TERMINAL_VIEWPORT_RESUBSCRIBE_BACKOFF_MS = [0, 750, 3000] as const
 
 export type TerminalViewportDims = { readonly cols: number; readonly rows: number }
@@ -45,14 +42,18 @@ export function resolveTerminalViewportResubscribe(args: {
   viewportMeasured: boolean
   viewport: TerminalViewportDims | null
   attempts: number
+  displayMode?: string | null
 }): TerminalViewportResubscribeDecision {
+  // Desktop mode intentionally keeps desktop dimensions; phone mismatch is not fit failure.
+  if (args.displayMode === 'desktop') {
+    return { kind: 'converged' }
+  }
   const overBudget = args.attempts >= MAX_TERMINAL_VIEWPORT_RESUBSCRIBE_ATTEMPTS
   // First subscribe carries no viewport; resubscribing is how the server learns it.
   if (!args.viewportMeasured || args.viewport == null) {
     return overBudget ? { kind: 'exhausted' } : { kind: 'resubscribe', delayMs: 0 }
   }
-  // Why: a host that doesn't report PTY dims can never converge — resubscribing
-  // replays the identical frame, so keep the stream instead of probing it.
+  // Hosts omitting PTY dimensions cannot converge; retain their stream instead of replaying the same frame.
   if (args.hostCols == null || args.hostRows == null) {
     return { kind: 'hold' }
   }
@@ -64,9 +65,7 @@ export function resolveTerminalViewportResubscribe(args: {
     : { kind: 'resubscribe', delayMs: resubscribeDelayMs(args.attempts) }
 }
 
-/** Post-measure re-check: the pre-measure mismatch may have been a stale cached
- *  viewport. Resubscribing is only productive when the server still disagrees
- *  with the fresh measure, or was never told the viewport at all. */
+// Recheck after measuring because cached viewport mismatch may already be resolved.
 export function shouldResubscribeAfterViewportMeasure(args: {
   hostCols: number | null
   hostRows: number | null
@@ -79,15 +78,14 @@ export function shouldResubscribeAfterViewportMeasure(args: {
   return args.hostCols !== args.measured.cols || args.hostRows !== args.measured.rows
 }
 
-/** Per-handle resubscribe budget, mirroring the chat-side rearm bound: attempts
- *  refill only when the handle actually left terminal.list and came back. A
- *  still-listed non-converging handle re-funded on every list refresh would undo
- *  the bound this class exists to enforce. */
+type RetryGenerationToken = Readonly<Record<string, never>>
+
+// Refill only after a handle disappears and returns; ordinary list refreshes must not undo the retry bound.
 export class TerminalViewportResubscribeBudget {
   private readonly attemptsByHandle = new Map<string, number>()
   private readonly absentSinceExhaustion = new Set<string>()
   private readonly announcedExhaustion = new Set<string>()
-  private readonly retryGenerationByHandle = new Map<string, object>()
+  private readonly retryGenerationByHandle = new Map<string, RetryGenerationToken>()
 
   attempts(handle: string): number {
     return this.attemptsByHandle.get(handle) ?? 0
@@ -97,17 +95,17 @@ export class TerminalViewportResubscribeBudget {
     this.attemptsByHandle.set(handle, this.attempts(handle) + 1)
   }
 
-  retryGeneration(handle: string): object {
+  retryGeneration(handle: string): RetryGenerationToken {
     const existing = this.retryGenerationByHandle.get(handle)
     if (existing) {
       return existing
     }
-    const generation = {}
+    const generation: RetryGenerationToken = {}
     this.retryGenerationByHandle.set(handle, generation)
     return generation
   }
 
-  isRetryGenerationCurrent(handle: string, generation: object): boolean {
+  isRetryGenerationCurrent(handle: string, generation: RetryGenerationToken): boolean {
     return this.retryGenerationByHandle.get(handle) === generation
   }
 
@@ -129,7 +127,6 @@ export class TerminalViewportResubscribeBudget {
     this.forget(handle)
   }
 
-  /** True exactly once per exhaustion so the degraded state is announced, not spammed. */
   shouldAnnounceExhaustion(handle: string): boolean {
     if (this.announcedExhaustion.has(handle)) {
       return false
@@ -147,8 +144,7 @@ export class TerminalViewportResubscribeBudget {
         this.absentSinceExhaustion.add(handle)
         continue
       }
-      // Why: only an absence marker buys a refill — the handle's PTY may be live
-      // again, so a fresh budget (and a fresh degrade announcement) is warranted.
+      // Only reappearance after absence permits a fresh budget and exhaustion announcement.
       if (this.absentSinceExhaustion.delete(handle)) {
         this.forget(handle)
       }
@@ -170,11 +166,11 @@ export class TerminalViewportResubscribeBudget {
   }
 }
 
-type MutableRef<T> = { current: T }
+export type MutableRef<T> = { current: T }
 
 type TerminalFitWebView = {
   awaitReady: () => Promise<unknown>
-  measureFitDimensions: (frameHeight?: number) => Promise<TerminalViewportDims | null | undefined>
+  fitDimensions: (frame: { width: number; height: number }) => TerminalViewportDims | null
 }
 
 export type TerminalViewportFitPassArgs = {
@@ -182,6 +178,8 @@ export type TerminalViewportFitPassArgs = {
   seq: number
   hostCols: number | null
   hostRows: number | null
+  displayMode?: string | null
+  sentViewport: TerminalViewportDims | null
   budget: TerminalViewportResubscribeBudget
   diagnostics: Pick<
     MobileTerminalDiagnostics,
@@ -190,9 +188,8 @@ export type TerminalViewportFitPassArgs = {
   viewportRef: MutableRef<TerminalViewportDims | null>
   viewportMeasuredRef: MutableRef<boolean>
   subscribeSeqRef: MutableRef<Map<string, number>>
-  initializedHandlesRef: MutableRef<Set<string>>
   terminalUnsubsRef: MutableRef<Map<string, () => void>>
-  terminalFrameHeightRef: MutableRef<number>
+  terminalFrameRef: MutableRef<TerminalFrame | null>
   getTerminalRef: (handle: string | null) => TerminalFitWebView | undefined
   unsubscribeTerminal: (handle: string) => void
   subscribeToTerminal: (handle: string) => void
@@ -200,14 +197,13 @@ export type TerminalViewportFitPassArgs = {
   showToast: (message: string, durationMs?: number) => void
 }
 
-/** One bounded fit pass per scrollback frame: converge, hold, degrade visibly,
- *  or measure and resubscribe (backing off) so the server can phone-fit. */
 export function runTerminalViewportFitPass(args: TerminalViewportFitPassArgs): void {
   const { handle, seq, hostCols, hostRows, budget, diagnostics } = args
   const retryGeneration = budget.retryGeneration(handle)
   const decision = resolveTerminalViewportResubscribe({
     hostCols,
     hostRows,
+    displayMode: args.displayMode,
     viewportMeasured: args.viewportMeasuredRef.current,
     viewport: args.viewportRef.current,
     attempts: budget.attempts(handle)
@@ -227,9 +223,10 @@ export function runTerminalViewportFitPass(args: TerminalViewportFitPassArgs): v
     }
     return
   }
-  const viewportWasMeasured = args.viewportMeasuredRef.current
+  // A matching freshly measured viewport needs no new subscribe.
+  const viewportWasMeasured = args.viewportMeasuredRef.current || args.sentViewport != null
   void (async () => {
-    // Why: wait for init()'s rAF chain before measuring, else the measure races ahead and returns null (log dump 2026-05-06).
+    // Wait for init’s animation-frame chain to report the box used for fitting.
     await args.getTerminalRef(handle)?.awaitReady()
     if (
       args.subscribeSeqRef.current.get(handle) !== seq ||
@@ -237,17 +234,9 @@ export function runTerminalViewportFitPass(args: TerminalViewportFitPassArgs): v
     ) {
       return
     }
-    const dims = await args
-      .getTerminalRef(handle)
-      ?.measureFitDimensions(args.terminalFrameHeightRef.current || undefined)
-    // Why: re-check seq — the awaits may have let a newer subscribe cycle arm; tearing it down would resubscribe a stale generation.
-    if (
-      args.subscribeSeqRef.current.get(handle) !== seq ||
-      !budget.isRetryGenerationCurrent(handle, retryGeneration)
-    ) {
-      return
-    }
-    if (!args.getTerminalRef(handle) || !dims) {
+    const frame = args.terminalFrameRef.current
+    const dims = frame ? args.getTerminalRef(handle)?.fitDimensions(frame) : null
+    if (!dims) {
       return
     }
     args.viewportRef.current = dims
@@ -260,7 +249,6 @@ export function runTerminalViewportFitPass(args: TerminalViewportFitPassArgs): v
         viewportWasMeasured
       })
     ) {
-      // Why: the pre-measure mismatch was a stale cached viewport; the server already agrees.
       budget.markConverged(handle)
       return
     }
@@ -276,15 +264,14 @@ export function runTerminalViewportFitPass(args: TerminalViewportFitPassArgs): v
       }
       diagnostics.streamResubscribing(handle, seq, dims, budget.attempts(handle), decision.delayMs)
       args.unsubscribeTerminal(handle)
-      args.initializedHandlesRef.current.delete(handle)
       args.subscribeToTerminal(handle)
-      // Why: only a resubscribe that actually armed spends budget; one turned away by its own gates never reached the host.
+      // Only an armed subscribe spends budget; locally rejected attempts never reached the host.
       if (args.terminalUnsubsRef.current.has(handle)) {
         budget.chargeAttempt(handle)
       }
     }
     if (decision.delayMs > 0) {
-      // Why: keep the live stream up through the backoff so input keeps flowing; teardown happens only when the retry fires.
+      // Keep input live during backoff; tear down only when retry fires.
       args.scheduleDelayedAction(resubscribe, decision.delayMs)
     } else {
       resubscribe()

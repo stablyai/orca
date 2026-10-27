@@ -10,10 +10,7 @@ vi.mock('os', async () => {
 })
 
 import { GrokHookService } from './hook-service'
-// Why one file covers both local removal paths: nothing exercised this rule more than once. Removal
-// used to unlink only when the WHOLE config object was empty, but it strips just the `hooks` key --
-// so any other top-level key left a remnant, and the user-cleared install guard then read that
-// remnant as a deliberate opt-out and never reinstalled. Silently. Forever.
+// Hookless Orca-owned remnants must not masquerade as deliberate user opt-outs and block reinstall.
 const SCHEMA = 'https://grok.example/hooks.schema.json'
 
 describe('Grok hook removal leaves no remnant that blocks reinstall', () => {

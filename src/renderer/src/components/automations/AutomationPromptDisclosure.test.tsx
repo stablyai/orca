@@ -70,21 +70,21 @@ describe('AutomationPromptDisclosure', () => {
   beforeEach(async () => {
     await i18n.changeLanguage('en')
     vi.stubGlobal('ResizeObserver', PromptResizeObserver)
-    vi.spyOn(HTMLElement.prototype, 'clientHeight', 'get').mockImplementation(
-      function (this: HTMLElement) {
-        if (this.tagName !== 'P') {
-          return 0
-        }
-        return this.classList.contains('line-clamp-4')
-          ? Math.min(promptNaturalHeight, 80)
-          : promptNaturalHeight
+    vi.spyOn(HTMLElement.prototype, 'clientHeight', 'get').mockImplementation(function (
+      this: HTMLElement
+    ) {
+      if (this.tagName !== 'P') {
+        return 0
       }
-    )
-    vi.spyOn(HTMLElement.prototype, 'scrollHeight', 'get').mockImplementation(
-      function (this: HTMLElement) {
-        return this.tagName === 'P' ? promptNaturalHeight : 0
-      }
-    )
+      return this.classList.contains('line-clamp-4')
+        ? Math.min(promptNaturalHeight, 80)
+        : promptNaturalHeight
+    })
+    vi.spyOn(HTMLElement.prototype, 'scrollHeight', 'get').mockImplementation(function (
+      this: HTMLElement
+    ) {
+      return this.tagName === 'P' ? promptNaturalHeight : 0
+    })
   })
 
   afterEach(async () => {
@@ -112,7 +112,7 @@ describe('AutomationPromptDisclosure', () => {
     expect(screen.queryByText('Inmediato')).not.toBeInTheDocument()
   })
 
-  it('reveals the complete long prompt from the keyboard and keeps it selectable', async () => {
+  it('expands a long prompt from the keyboard and applies text-selection styling', async () => {
     promptNaturalHeight = 240
     const prompt = `Synthetic opening.\n${'Synthetic detail. '.repeat(80)}\nSYNTHETIC-END-MARKER`
     const user = userEvent.setup()
@@ -155,7 +155,7 @@ describe('AutomationPromptDisclosure', () => {
     expect(content).toHaveClass('line-clamp-4')
   })
 
-  it('offers disclosure after a narrow resize makes the prompt overflow', () => {
+  it('offers disclosure when a resize reports prompt overflow', () => {
     promptNaturalHeight = 60
     render(<AutomationPromptDisclosure prompt="Synthetic prompt that reflows at narrow widths." />)
     expect(screen.queryByRole('button', { name: 'Show more' })).not.toBeInTheDocument()
@@ -166,7 +166,7 @@ describe('AutomationPromptDisclosure', () => {
     expect(screen.getByRole('button', { name: 'Show more' })).toBeVisible()
   })
 
-  it('moves focus to the fully visible prompt when resizing removes the disclosure', () => {
+  it('moves focus to the prompt when a resize reports no overflow', () => {
     promptNaturalHeight = 180
     render(<AutomationPromptDisclosure prompt="Synthetic prompt that fits after widening." />)
     const content = screen.getByText('Synthetic prompt that fits after widening.')

@@ -1,0 +1,93 @@
+{
+  "goldenFormatVersion": 6,
+  "operation": "session.tab-documents",
+  "family": "session.tab-documents",
+  "namedDeltas": [],
+  "values": {
+    "44abbe2af7aa": {
+      "name": "markdown.readTab#1",
+      "ordinal": 2,
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"markdown.readTab\",\"params\":{\"worktree\":\"id:workspace-1\",\"tabId\":\"tab-md\"}}"
+    },
+    "79f4c7ca7e69": {
+      "name": "markdown.readTab#1",
+      "ordinal": 1,
+      "args": [
+        {
+          "name": "method",
+          "value": "markdown.readTab"
+        },
+        {
+          "name": "params",
+          "value": {
+            "tabId": "tab-md",
+            "worktree": "id:workspace-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-1",
+          "ok": true,
+          "result": {
+            "content": "# a",
+            "editable": true,
+            "isDirty": false,
+            "version": "v1"
+          }
+        }
+      }
+    },
+    "d4cf305b17f8": {
+      "file": {},
+      "markdown": {
+        "tab-md": {
+          "baseVersion": "v1",
+          "content": "# a",
+          "editable": true,
+          "isDirty": false,
+          "localContent": "# a",
+          "readOnlyReason": {
+            "$rpc": "undefined"
+          },
+          "stale": false,
+          "status": "ready"
+        }
+      }
+    },
+    "eb79a9b3682a": {
+      "status": "fulfilled",
+      "startedAt": 0,
+      "settledAt": 0,
+      "value": {
+        "$rpc": "undefined"
+      }
+    }
+  },
+  "recording": {
+    "scenario": "session-markdown-tab-read",
+    "checkpoints": [
+      {
+        "id": "read",
+        "observation": {
+          "sender": ["79f4c7ca7e69"],
+          "payloads": ["44abbe2af7aa"],
+          "settlements": {
+            "markdown": "eb79a9b3682a"
+          },
+          "state": "d4cf305b17f8",
+          "effects": []
+        }
+      }
+    ]
+  }
+}

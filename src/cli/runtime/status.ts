@@ -7,7 +7,8 @@ import {
   projectRemoteAppStatus,
   resolveDesktopWindowStatus
 } from '../../shared/cli-app-status-projection'
-import { RuntimeRpcFailureError, type RuntimeRpcSuccess } from './types'
+import { RuntimeClientError, RuntimeRpcFailureError, type RuntimeRpcSuccess } from './types'
+import { isProcessRunning } from './runtime-pid-liveness'
 
 export { projectRemoteAppStatus, resolveDesktopWindowStatus }
 
@@ -23,9 +24,7 @@ export async function getCliStatus(
         pid: null
       },
       runtime: {
-        // Why: distinguishing "never started" from "was running but died"
-        // gives the user a better signal about what happened. If the metadata
-        // file exists, Orca was running at some point.
+        // Existing metadata proves the runtime started at least once.
         state: metadata ? 'stale_bootstrap' : 'not_running',
         reachable: false,
         runtimeId: null
@@ -68,7 +67,11 @@ export async function getCliStatus(
         state: graphState
       }
     })
-  } catch {
+  } catch (error) {
+    // Access denial does not establish runtime liveness.
+    if (error instanceof RuntimeClientError && error.code === 'runtime_access_denied') {
+      throw error
+    }
     const running = isProcessRunning(metadata.pid)
     return buildCliStatusResponse({
       app: {
@@ -96,17 +99,5 @@ function buildCliStatusResponse(result: CliStatusResult): RuntimeRpcSuccess<CliS
     _meta: {
       runtimeId: result.runtime.runtimeId ?? 'none'
     }
-  }
-}
-
-function isProcessRunning(pid: number | null | undefined): boolean {
-  if (!pid || pid <= 0) {
-    return false
-  }
-  try {
-    process.kill(pid, 0)
-    return true
-  } catch {
-    return false
   }
 }

@@ -1,9 +1,9 @@
 import { expect, vi } from 'vitest'
 import type { Mock } from 'vitest'
 import type * as GitUsernameModule from '../../git/git-username'
+import type * as FilesystemPathContainmentModule from '../../ipc/filesystem/filesystem-path-containment'
 import { reviewHeadRemoteRefComponent } from '../../../shared/review-head-tracking-ref'
 
-// Why: durable review-head refs are scoped by remote identity (name + URL hash).
 export const ORIGIN_REMOTE_URL = 'git@example.com:group/repo.git'
 export const ORIGIN_HEAD_COMPONENT = reviewHeadRemoteRefComponent('origin', ORIGIN_REMOTE_URL)
 import type { OrcaRuntimeService as OrcaRuntimeServiceConstructor } from '../orca-runtime'
@@ -11,6 +11,17 @@ import type { RuntimeMobileSessionTabsResult } from '../../../shared/runtime-typ
 import { setWorktreeWatcherRemoval } from '../../ipc/worktree-watcher-removal'
 
 type TestMock = Mock
+
+const reconcileClaudeAgentViewMock = vi.hoisted(() => vi.fn(async () => {}))
+vi.mock('../../claude/agent-view-service', () => ({
+  getClaudeAgentViewService: () => ({
+    reconcile: reconcileClaudeAgentViewMock,
+    ready: async () => {},
+    readyForLaunch: async () => {},
+    prepareProfile: async () => {},
+    read: () => undefined
+  })
+}))
 
 export const ORIGINAL_PLATFORM = process.platform
 export const ORIGINAL_PLATFORM_DESCRIPTOR = Object.getOwnPropertyDescriptor(process, 'platform')
@@ -86,24 +97,16 @@ const electronMocks = vi.hoisted(() => {
 })
 
 const closeLocalWatcherForWorktreePathMock: TestMock = vi.hoisted(() => vi.fn())
-const closeRemoteWatcherForWorktreePathMock: TestMock = vi.hoisted(() => vi.fn())
 const restoreLocalWatcherAfterFailedRemovalMock: TestMock = vi.hoisted(() => vi.fn())
-const restoreRemoteWatcherAfterFailedRemovalMock: TestMock = vi.hoisted(() => vi.fn())
 const forgetLocalWatcherRemovalSnapshotMock: TestMock = vi.hoisted(() => vi.fn())
-const forgetRemoteWatcherRemovalSnapshotMock: TestMock = vi.hoisted(() => vi.fn())
 const scanLocalRepoWorktreesForResolutionMock: TestMock = vi.hoisted(() => vi.fn())
 
 vi.mock('electron', () => electronMocks)
-// Why install the port instead of mocking ../ipc/filesystem-watcher: the runtime calls
-// WorktreeWatcherRemoval now, so a module mock would be inert and every assertion below
-// would silently pass against the inert default. Same mocks, same expectations.
+// Runtime calls the WorktreeWatcherRemoval port; filesystem-watcher module mocks would be inert.
 setWorktreeWatcherRemoval({
   closeLocal: closeLocalWatcherForWorktreePathMock,
-  closeRemote: closeRemoteWatcherForWorktreePathMock,
   restoreLocal: restoreLocalWatcherAfterFailedRemovalMock,
-  restoreRemote: restoreRemoteWatcherAfterFailedRemovalMock,
-  forgetLocal: forgetLocalWatcherRemovalSnapshotMock,
-  forgetRemote: forgetRemoteWatcherRemovalSnapshotMock
+  forgetLocal: forgetLocalWatcherRemovalSnapshotMock
 })
 
 const {
@@ -114,14 +117,6 @@ const {
   forceDeleteLocalBranchMock,
   computeWorktreePathMock,
   ensurePathWithinWorkspaceMock,
-  sshGitProviders,
-  sshProviderGenerations,
-  getSshGitProviderMock,
-  getSshGitProviderGenerationMock,
-  registerSshGitProviderMock,
-  unregisterSshGitProviderMock,
-  getActiveMultiplexerMock,
-  muxRequestMock,
   invalidateAuthorizedRootsCacheMock,
   prepareLocalWorktreeRootForRepoMock,
   createHostedReviewMock,
@@ -162,7 +157,6 @@ const {
   listGitHubAssignableUsersMock,
   applyAgentStatusHooksEnabledMock,
   detectInstalledAgentsWithShellPathHydrationMock,
-  detectRemoteAgentsMock,
   markCodexProjectTrustedMock,
   markCopilotFolderTrustedMock,
   markCursorWorkspaceTrustedMock,
@@ -170,6 +164,7 @@ const {
   listGitLabWorkItemsMock,
   listGitLabIssuesMock,
   listGitLabLabelsMock,
+  listGitLabAssignableUsersMock,
   listGitLabTodosMock,
   getGitLabProjectRefForRemoteMock,
   getGitLabWorkItemByProjectRefMock,
@@ -191,10 +186,6 @@ const {
   getIssueMock,
   deleteWorktreeHistoryDirMock
 } = vi.hoisted(() => {
-  // Why: SSH runtime tests register providers via the public dispatcher API, so the mock needs the same registry semantics as the real module.
-  const sshGitProviders = new Map<string, unknown>()
-  const sshProviderGenerations = new Map<string, number>()
-
   return {
     MOCK_GIT_WORKTREES: [
       {
@@ -211,26 +202,6 @@ const {
     forceDeleteLocalBranchMock: vi.fn() as TestMock,
     computeWorktreePathMock: vi.fn() as TestMock,
     ensurePathWithinWorkspaceMock: vi.fn() as TestMock,
-    sshGitProviders,
-    sshProviderGenerations,
-    getSshGitProviderMock: vi.fn((connectionId: string) => sshGitProviders.get(connectionId)),
-    getSshGitProviderGenerationMock: vi.fn(
-      (connectionId: string) => sshProviderGenerations.get(connectionId) ?? 0
-    ),
-    registerSshGitProviderMock: vi.fn((connectionId: string, provider: unknown) => {
-      sshGitProviders.set(connectionId, provider)
-      sshProviderGenerations.set(connectionId, (sshProviderGenerations.get(connectionId) ?? 0) + 1)
-    }),
-    unregisterSshGitProviderMock: vi.fn((connectionId: string) => {
-      if (sshGitProviders.delete(connectionId)) {
-        sshProviderGenerations.set(
-          connectionId,
-          (sshProviderGenerations.get(connectionId) ?? 0) + 1
-        )
-      }
-    }),
-    getActiveMultiplexerMock: vi.fn() as TestMock,
-    muxRequestMock: vi.fn() as TestMock,
     invalidateAuthorizedRootsCacheMock: vi.fn() as TestMock,
     prepareLocalWorktreeRootForRepoMock: vi.fn() as TestMock,
     createHostedReviewMock: vi.fn() as TestMock,
@@ -273,7 +244,6 @@ const {
     listGitHubAssignableUsersMock: vi.fn() as TestMock,
     applyAgentStatusHooksEnabledMock: vi.fn() as TestMock,
     detectInstalledAgentsWithShellPathHydrationMock: vi.fn() as TestMock,
-    detectRemoteAgentsMock: vi.fn() as TestMock,
     markCodexProjectTrustedMock: vi.fn() as TestMock,
     markCopilotFolderTrustedMock: vi.fn() as TestMock,
     markCursorWorkspaceTrustedMock: vi.fn() as TestMock,
@@ -281,6 +251,7 @@ const {
     listGitLabWorkItemsMock: vi.fn() as TestMock,
     listGitLabIssuesMock: vi.fn() as TestMock,
     listGitLabLabelsMock: vi.fn() as TestMock,
+    listGitLabAssignableUsersMock: vi.fn<TestMock>(),
     listGitLabTodosMock: vi.fn() as TestMock,
     getGitLabProjectRefForRemoteMock: vi.fn() as TestMock,
     getGitLabWorkItemByProjectRefMock: vi.fn() as TestMock,
@@ -324,33 +295,13 @@ vi.mock('../../terminal-history-deletion', () => ({
   deleteWorktreeHistoryDir: deleteWorktreeHistoryDirMock
 }))
 
-vi.mock('../../providers/ssh-git-dispatch', () => ({
-  getSshGitProvider: getSshGitProviderMock,
-  getSshGitProviderGeneration: getSshGitProviderGenerationMock,
-  SSH_GIT_PROVIDER_UNAVAILABLE_MESSAGE:
-    'Remote connection dropped. Click Reconnect on the SSH target before retrying.',
-  requireSshGitProvider: (connectionId: string) => {
-    const provider = getSshGitProviderMock(connectionId)
-    if (!provider) {
-      throw new Error(
-        'Remote connection dropped. Click Reconnect on the SSH target before retrying.'
-      )
-    }
-    return provider
-  },
-  registerSshGitProvider: registerSshGitProviderMock,
-  unregisterSshGitProvider: unregisterSshGitProviderMock
-}))
-
-vi.mock('../../ssh/ssh-target-registry', () => ({
-  getActiveMultiplexer: getActiveMultiplexerMock,
-  getRegisteredSshState: () => ({ remotePlatform: 'linux' }),
-  setSshActiveMultiplexerResolver: vi.fn()
+vi.mock('../../ssh/targets/ssh-target-registry', () => ({
+  getRegisteredSshState: () => ({ remotePlatform: 'linux' })
 }))
 
 vi.mock('../../preflight/agent-detection', () => ({
-  detectInstalledAgentsWithShellPathHydration: detectInstalledAgentsWithShellPathHydrationMock,
-  detectRemoteAgents: detectRemoteAgentsMock
+  detectAgentCommandsOnHost: vi.fn(async () => new Set(['qodercli'])),
+  detectInstalledAgentsWithShellPathHydration: detectInstalledAgentsWithShellPathHydrationMock
 }))
 
 vi.mock('../../agent-hooks/managed-agent-hook-controls', () => ({
@@ -390,9 +341,6 @@ vi.mock('../../setup-hook-env-vars', () => ({
 
 vi.mock('../../effective-hook-config', () => ({
   getEffectiveHooksFromConfig: vi.fn().mockReturnValue(null),
-  getDefaultTabCommandTrustContent: vi.fn(
-    (hooks: { scripts?: { setup?: string } } | null) => hooks?.scripts?.setup?.trim() ?? ''
-  ),
   getDefaultTabsLaunch: vi.fn().mockReturnValue(undefined),
   shouldRunSetupForCreate: vi
     .fn()
@@ -409,21 +357,25 @@ vi.mock('../../ipc/worktree-logic', async (importOriginal) => {
   }
 })
 
-vi.mock('../../ipc/filesystem-auth', () => ({
-  resolveAuthorizedPath: vi.fn(async (pathValue: string) => pathValue),
-  invalidateAuthorizedRootsCache: invalidateAuthorizedRootsCacheMock,
-  isENOENT: (error: unknown) =>
-    Boolean(error && typeof error === 'object' && 'code' in error && error.code === 'ENOENT')
+vi.mock('../../ipc/filesystem/filesystem-auth', () => ({
+  resolveAuthorizedPath: vi.fn(async (pathValue: string) => pathValue)
 }))
 
 vi.mock('../../ipc/registered-worktree-roots-cache', () => ({
   invalidateAuthorizedRootsCache: invalidateAuthorizedRootsCacheMock
 }))
 
-vi.mock('../../ipc/filesystem-path-containment', () => ({
-  isENOENT: (error: unknown) =>
-    Boolean(error && typeof error === 'object' && 'code' in error && error.code === 'ENOENT')
+vi.mock('../../ipc/registered-worktree-roots-scoped-invalidation', () => ({
+  invalidateAuthorizedRootsCacheForRepo: invalidateAuthorizedRootsCacheMock
 }))
+
+// Relay-rebuilt ENOENT errors may retain only the message.
+vi.mock('../../ipc/filesystem/filesystem-path-containment', async () => {
+  const actual = await vi.importActual<typeof FilesystemPathContainmentModule>(
+    '../../ipc/filesystem/filesystem-path-containment'
+  )
+  return { isENOENT: actual.isENOENT }
+})
 
 vi.mock('../../worktree-root-preparation', () => ({
   prepareLocalWorktreeRootForRepo: prepareLocalWorktreeRootForRepoMock
@@ -488,6 +440,7 @@ vi.mock('../../gitlab/client', async (importOriginal) => {
     listWorkItems: listGitLabWorkItemsMock,
     listIssues: listGitLabIssuesMock,
     listLabels: listGitLabLabelsMock,
+    listAssignableUsers: listGitLabAssignableUsersMock,
     listTodos: listGitLabTodosMock,
     getProjectRefForRemote: getGitLabProjectRefForRemoteMock,
     getWorkItemByProjectRef: getGitLabWorkItemByProjectRefMock,
@@ -540,7 +493,7 @@ vi.mock('../../github/issues', async (importOriginal) => {
   }
 })
 
-// Why: CLI worktree creation resolves a default against fabricated repo paths, so keep the async resolver deterministic.
+// Fabricated repo paths need deterministic async default-ref resolution.
 vi.mock('../../git/repo', async (importOriginal) => {
   const actual = (await importOriginal()) as Record<string, unknown>
   const actualGetBaseRefDefault = actual.getBaseRefDefault as (
@@ -549,11 +502,18 @@ vi.mock('../../git/repo', async (importOriginal) => {
   ) => Promise<string | null>
   return {
     ...actual,
-    // Why: fabricated local test repos need a deterministic default, while WSL coverage must still exercise the real async Git-options path.
+    // Keep fake local defaults deterministic while WSL exercises real async Git options.
     getBaseRefDefault: vi
       .fn()
       .mockImplementation((path: string, options?: { wslDistro?: string }) =>
         options?.wslDistro ? actualGetBaseRefDefault(path, options) : Promise.resolve('origin/main')
+      ),
+    resolveDefaultBaseRefWithLocalGit: vi
+      .fn()
+      .mockImplementation((options: { cwd: string; wslDistro?: string }) =>
+        options.wslDistro
+          ? actualGetBaseRefDefault(options.cwd, options)
+          : Promise.resolve('origin/main')
       ),
     getBranchConflictKind: vi.fn().mockResolvedValue(null)
   }
@@ -570,11 +530,8 @@ export {
   findExistingWorktreeSymlinkPathsMock,
   resolveLocalGitUsernameMock,
   closeLocalWatcherForWorktreePathMock,
-  closeRemoteWatcherForWorktreePathMock,
   restoreLocalWatcherAfterFailedRemovalMock,
-  restoreRemoteWatcherAfterFailedRemovalMock,
   forgetLocalWatcherRemovalSnapshotMock,
-  forgetRemoteWatcherRemovalSnapshotMock,
   scanLocalRepoWorktreesForResolutionMock,
   MOCK_GIT_WORKTREES,
   addSparseWorktreeMock,
@@ -583,14 +540,6 @@ export {
   forceDeleteLocalBranchMock,
   computeWorktreePathMock,
   ensurePathWithinWorkspaceMock,
-  sshGitProviders,
-  sshProviderGenerations,
-  getSshGitProviderMock,
-  getSshGitProviderGenerationMock,
-  registerSshGitProviderMock,
-  unregisterSshGitProviderMock,
-  getActiveMultiplexerMock,
-  muxRequestMock,
   invalidateAuthorizedRootsCacheMock,
   prepareLocalWorktreeRootForRepoMock,
   createHostedReviewMock,
@@ -631,7 +580,6 @@ export {
   listGitHubAssignableUsersMock,
   applyAgentStatusHooksEnabledMock,
   detectInstalledAgentsWithShellPathHydrationMock,
-  detectRemoteAgentsMock,
   markCodexProjectTrustedMock,
   markCopilotFolderTrustedMock,
   markCursorWorkspaceTrustedMock,
@@ -639,6 +587,7 @@ export {
   listGitLabWorkItemsMock,
   listGitLabIssuesMock,
   listGitLabLabelsMock,
+  listGitLabAssignableUsersMock,
   listGitLabTodosMock,
   getGitLabProjectRefForRemoteMock,
   getGitLabWorkItemByProjectRefMock,
@@ -660,3 +609,5 @@ export {
   getIssueMock,
   deleteWorktreeHistoryDirMock
 }
+
+export { reconcileClaudeAgentViewMock }

@@ -7,10 +7,7 @@ import type {
 import { useMountedRef } from '@/hooks/useMountedRef'
 import { translate } from '@/i18n/i18n'
 import { isEditableKeyboardTarget } from '../host-guest/browser-keyboard'
-
-// ---------------------------------------------------------------------------
-// Grab mode state machine
-// ---------------------------------------------------------------------------
+import { addAppKeyListener, removeAppKeyListener } from '@/lib/app-keyboard-router'
 
 export type GrabModeState = 'idle' | 'armed' | 'awaiting' | 'confirming' | 'error'
 
@@ -18,8 +15,7 @@ export type GrabModeHook = {
   state: GrabModeState
   payload: BrowserGrabPayload | null
   error: string | null
-  /** True when the user right-clicked to select, signalling the renderer
-   *  should show the full action menu instead of auto-copying. */
+  /** Right-click selection opens the full action menu instead of auto-copying. */
   contextMenu: boolean
   toggle: () => void
   cancel: () => void
@@ -59,12 +55,6 @@ function getGrabEnableError(reason: BrowserGrabRejectReason): string {
   }
 }
 
-/**
- * Hook that drives the browser grab lifecycle for a single browser page.
- *
- * The state machine: idle → armed → awaiting → confirming → idle/armed
- *                                                        ↘ error → idle
- */
 export function useGrabMode(browserPageId: string): GrabModeHook {
   const [state, setState] = useState<GrabModeState>('idle')
   const [payload, setPayload] = useState<BrowserGrabPayload | null>(null)
@@ -80,8 +70,7 @@ export function useGrabMode(browserPageId: string): GrabModeHook {
     browserTabIdRef.current = browserPageId
   }, [browserPageId])
 
-  // Why: when the browser page changes while grab is active, cancel the
-  // current grab operation so stale overlays don't survive tab switches.
+  // Cancel on page departure so overlays cannot survive on another tab.
   useEffect(() => {
     return () => {
       const grabTabId = grabTabIdRef.current
@@ -101,7 +90,6 @@ export function useGrabMode(browserPageId: string): GrabModeHook {
     grabTabIdRef.current = tabId
     setState('armed')
 
-    // Enable grab mode — injects the overlay
     const setResult = await window.api.browser.setGrabMode({
       browserPageId: tabId,
       enabled: true
@@ -130,7 +118,6 @@ export function useGrabMode(browserPageId: string): GrabModeHook {
       return
     }
 
-    // Generate opId and await selection
     const opId = nextOpId()
     activeOpIdRef.current = opId
 
@@ -140,7 +127,6 @@ export function useGrabMode(browserPageId: string): GrabModeHook {
       opId
     })
 
-    // Ignore stale results
     if (!mountedRef.current || activeOpIdRef.current !== opId || grabTabIdRef.current !== tabId) {
       return
     }
@@ -148,7 +134,6 @@ export function useGrabMode(browserPageId: string): GrabModeHook {
     activeOpIdRef.current = null
 
     if (result.kind === 'selected' || result.kind === 'context-selected') {
-      // Capture screenshot for the selected element
       let screenshot: BrowserGrabScreenshot | null = null
       try {
         const ssResult = await window.api.browser.captureSelectionScreenshot({
@@ -214,13 +199,9 @@ export function useGrabMode(browserPageId: string): GrabModeHook {
     }
   }, [state, armAndAwait, cancel])
 
-  // Why: Copy re-arms so the user can quickly pick another element without
-  // re-clicking the toolbar button. Attach to AI exits because the user's
-  // intent is to continue in the chat, not keep selecting.
+  // Copy rearms for another pick; attaching exits so the user can continue in chat.
   const rearm = useCallback(() => {
-    // Why: set state to 'armed' immediately so the dropdown menu closes
-    // before armAndAwait starts its async IPC calls. Without this, the state
-    // stays 'confirming' during the gap, causing the dropdown to flash.
+    // Close the confirming menu before async rearm IPC; otherwise it flashes during the gap.
     setState('armed')
     setPayload(null)
     setError(null)
@@ -235,8 +216,7 @@ export function useGrabMode(browserPageId: string): GrabModeHook {
       browserPageId: targetTabId,
       enabled: false
     })
-    // Why: clear the active opId so that any in-flight result from the
-    // previous operation is ignored by the stale-opId check in armAndAwait.
+    // Invalidate prior in-flight selections before exiting.
     activeOpIdRef.current = null
     grabTabIdRef.current = null
     setState('idle')
@@ -245,7 +225,6 @@ export function useGrabMode(browserPageId: string): GrabModeHook {
     setContextMenu(false)
   }, [])
 
-  // Keyboard shortcut: Esc cancels grab mode
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent): void => {
       if (e.key === 'Escape' && state !== 'idle') {
@@ -266,8 +245,8 @@ export function useGrabMode(browserPageId: string): GrabModeHook {
         cancel()
       }
     }
-    window.addEventListener('keydown', handleKeyDown, true)
-    return () => window.removeEventListener('keydown', handleKeyDown, true)
+    addAppKeyListener('keydown', handleKeyDown)
+    return () => removeAppKeyListener('keydown', handleKeyDown)
   }, [state, cancel])
 
   return { state, payload, error, contextMenu, toggle, cancel, rearm, exit }

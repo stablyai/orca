@@ -1,4 +1,9 @@
-import { movePaneCacheState } from '../../../shared/agent-hook-listener/listener-state'
+import { deriveCliWriterTopology } from './cli-writer-observation'
+import {
+  admitLegacyAgentStatus,
+  movePaneCacheState
+} from '../../../shared/agent-hook-listener/listener-state'
+import { AGENT_STATUS_2A_CURRENT_PRODUCER_MODE } from '../../../shared/agent-status-legacy-adapter'
 import { canRegisterPaneKeyAlias, isOpaqueRemintedPaneKey } from '../../../shared/pane-key-alias'
 import { parsePaneKey } from '../../../shared/stable-pane-id'
 import { PANE_KEY_ALIASES_MAX } from './server-constants'
@@ -10,6 +15,10 @@ import { AgentHookServerAuthorityEvidence } from './server-authority-evidence'
 export abstract class AgentHookServerAuthorityAliases extends AgentHookServerAuthorityEvidence {
   setPaneKeyAliasPersistenceListener(listener: PaneKeyAliasPersistenceListener | null): void {
     this.paneKeyAliasPersistenceListener = listener
+  }
+
+  resolvePaneAuthorityOwner(paneKey: string): string {
+    return this.resolvePaneKeyAlias(paneKey)
   }
 
   protected getPersistedPaneKeyAliases(): LegacyPaneKeyAliasEntry[] {
@@ -33,7 +42,7 @@ export abstract class AgentHookServerAuthorityAliases extends AgentHookServerAut
 
   protected boundPaneKeyAliases(): void {
     while (this.legacyPaneKeyAliases.size > PANE_KEY_ALIASES_MAX) {
-      // Why: renderer-originated aliases are untrusted; insertion-order eviction bounds memory and per-message cleanup.
+      // Bound memory and cleanup work for untrusted renderer aliases.
       const oldestKey = this.legacyPaneKeyAliases.keys().next().value
       if (!oldestKey) {
         break
@@ -77,7 +86,7 @@ export abstract class AgentHookServerAuthorityAliases extends AgentHookServerAut
         (ownerPaneKey !== physicalPaneKey && ownsPty(ownerPaneKey, ptyId))
       )
     }
-    // Why: hook status is renderer evidence, not PTY ownership; ID-less moves are safe only after a verified transfer minted an alias.
+    // Status does not prove PTY ownership; ID-less moves require a verified alias.
     return alias?.authorityVerified === true
   }
 
@@ -97,8 +106,7 @@ export abstract class AgentHookServerAuthorityAliases extends AgentHookServerAut
     if (existing && options?.overwriteExisting === false) {
       return
     }
-    // Why: remint tokens have no embedded tab id; first pane wins so a later spawn
-    // cannot steal leftover $$…:L$$ posts onto a different tab:leaf.
+    // Remint tokens lack tab identity; first ownership wins to prevent cross-tab reuse.
     if (existing && existing.stablePaneKey !== toPaneKey && isOpaqueRemintedPaneKey(fromPaneKey)) {
       return
     }
@@ -128,33 +136,72 @@ export abstract class AgentHookServerAuthorityAliases extends AgentHookServerAut
     }
   }
 
+  /** Undoes the move `ptyId` made out of `physicalPaneKey`: its status and later posts land there again. */
+  returnPaneAuthority(physicalPaneKey: string, ptyId: string): void {
+    const alias = this.legacyPaneKeyAliases.get(physicalPaneKey)
+    if (alias?.ptyId !== ptyId) {
+      return
+    }
+    if (alias.stablePaneKey !== physicalPaneKey) {
+      this.transferPaneAuthority(alias.stablePaneKey, physicalPaneKey, ptyId)
+    }
+    this.legacyPaneKeyAliases.delete(physicalPaneKey)
+    this.notifyPaneKeyAliasPersistenceListener()
+  }
+
   transferPaneAuthority(
     fromPaneKey: string,
     toPaneKey: string,
     ptyId?: string,
     updatedAt = Date.now(),
-    options?: { authorityVerified?: boolean }
+    options?: { authorityVerified?: boolean; emitStatusRowMutation?: boolean }
   ): void {
     if (!isValidPaneKey(fromPaneKey) || !isValidPaneKey(toPaneKey)) {
       return
     }
     const previousOwnerPaneKey = this.resolvePaneKeyAlias(fromPaneKey)
     const physicalPaneKey = this.getPhysicalPaneKeyForAuthority(fromPaneKey, ptyId)
+    const requestedPtyId = ptyId?.trim()
+    // Main and renderer both announce moves; repeats must not clear the owner's polls.
+    if (
+      previousOwnerPaneKey === toPaneKey &&
+      (!requestedPtyId || this.legacyPaneKeyAliases.get(physicalPaneKey)?.ptyId === requestedPtyId)
+    ) {
+      return
+    }
+    for (const key of [fromPaneKey, previousOwnerPaneKey, physicalPaneKey, toPaneKey]) {
+      this.takeRetiredPaneRestartId(key)
+    }
     const existing = this.legacyPaneKeyAliases.get(physicalPaneKey)
     const normalizedPtyId = ptyId?.trim() || existing?.ptyId || null
-    const hadStatus = this.state.lastStatusByPaneKey.has(previousOwnerPaneKey)
+    const previousStatus = this.state.lastStatusByPaneKey.get(previousOwnerPaneKey) as
+      | EnrichedAgentHookEventPayload
+      | undefined
+    const hadStatus = previousStatus !== undefined
     movePaneCacheState(this.state, previousOwnerPaneKey, toPaneKey)
     const movedStatus = this.state.lastStatusByPaneKey.get(toPaneKey) as
       | EnrichedAgentHookEventPayload
       | undefined
     if (movedStatus) {
       const owner = parsePaneKey(toPaneKey)
-      this.state.lastStatusByPaneKey.set(toPaneKey, {
-        ...movedStatus,
-        paneKey: toPaneKey,
-        tabId: owner?.tabId
-      })
+      admitLegacyAgentStatus(
+        this.state,
+        'main-pane-alias-transfer',
+        deriveCliWriterTopology(
+          {
+            ...movedStatus,
+            paneKey: toPaneKey,
+            tabId: owner?.tabId
+          },
+          previousStatus,
+          this.cliWriterExecutionMatches
+        ),
+        AGENT_STATUS_2A_CURRENT_PRODUCER_MODE
+      )
     }
+    const transferredStatus = this.state.lastStatusByPaneKey.get(toPaneKey) as
+      | EnrichedAgentHookEventPayload
+      | undefined
     const hydratedLaunchTokenHash = this.hydratedLaunchTokenHashByPaneKey.get(previousOwnerPaneKey)
     if (hydratedLaunchTokenHash) {
       this.hydratedLaunchTokenHashByPaneKey.delete(previousOwnerPaneKey)
@@ -183,10 +230,23 @@ export abstract class AgentHookServerAuthorityAliases extends AgentHookServerAut
     if (restartedTokenHash) {
       this.restartedStatusLaunchTokenHashByPaneKey.set(toPaneKey, restartedTokenHash)
     }
+    const agentExit = this.agentExitedAtByPaneKey.get(previousOwnerPaneKey)
+    if (agentExit) {
+      agentExit.paneKeys.add(toPaneKey)
+      this.agentExitedAtByPaneKey.set(toPaneKey, agentExit)
+    }
     const activeTurnCompletedAt = this.activeHookTurnCompletedAtByPaneKey.get(previousOwnerPaneKey)
     if (activeTurnCompletedAt !== undefined) {
       this.activeHookTurnCompletedAtByPaneKey.delete(previousOwnerPaneKey)
       this.activeHookTurnCompletedAtByPaneKey.set(toPaneKey, activeTurnCompletedAt)
+    }
+    this.programStatusFacets.move(previousOwnerPaneKey, toPaneKey)
+    this.hookSilenceRechecks.move(previousOwnerPaneKey, toPaneKey)
+    this.programStatusFacetRepublishes.move(previousOwnerPaneKey, toPaneKey)
+    const evidenceObservedAt = this.evidenceObservedAtByPaneKey.get(previousOwnerPaneKey)
+    if (evidenceObservedAt !== undefined) {
+      this.evidenceObservedAtByPaneKey.delete(previousOwnerPaneKey)
+      this.evidenceObservedAtByPaneKey.set(toPaneKey, evidenceObservedAt)
     }
     const authorityObservation = this.currentAuthorityObservations.get(previousOwnerPaneKey)
     if (authorityObservation) {
@@ -203,8 +263,8 @@ export abstract class AgentHookServerAuthorityAliases extends AgentHookServerAut
       this.promptSentDedupeByPaneKey.set(toPaneKey, promptDedupe)
     }
     this.clearAssistantMessageRetry(previousOwnerPaneKey)
-    this.clearCodexSubagentPoll(previousOwnerPaneKey)
-    // Why: the live process keeps posting the physical source key after detach; persist a chain-safe mapping to the current owner.
+    this.clearTranscriptPoll(previousOwnerPaneKey)
+    // Detached processes keep posting the physical key; retain its mapping to the current owner.
     this.legacyPaneKeyAliases.set(physicalPaneKey, {
       stablePaneKey: toPaneKey,
       ptyId: normalizedPtyId,
@@ -214,6 +274,11 @@ export abstract class AgentHookServerAuthorityAliases extends AgentHookServerAut
     this.boundPaneKeyAliases()
     this.closedAgentStatusPaneKeys.delete(toPaneKey)
     this.notifyPaneKeyAliasPersistenceListener()
+    this.commitStatusRowMutation(
+      previousStatus,
+      transferredStatus,
+      options?.emitStatusRowMutation !== false
+    )
     if (hadStatus || persistedAuthority) {
       this.scheduleStatusPersist()
       this.notifyStatusChangeListeners()

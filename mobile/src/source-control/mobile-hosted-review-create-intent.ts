@@ -1,17 +1,20 @@
-import type { RpcClient } from '../transport/rpc-client'
 import { requestMobileCommitMessage } from './mobile-commit-message-ai'
 import { getStageablePaths, type MobileGitStatusResult } from './mobile-git-status'
 import { getMobilePrEligibilityReadiness } from './mobile-open-pr-prefill'
 import { resolveMobilePrPrefill, type MobilePrPrefill } from './mobile-pr-create'
+import { isBehindOnlyUpstream } from '../../../src/shared/git-upstream-status'
 import {
   commitMobileHostedReviewStagedChanges,
+  fastForwardMobileHostedReviewBranch,
   mobileHostedReviewBranchStillMatches,
   readMobileHostedReviewGitStatus,
-  sendMobileHostedReviewGitMutation
+  stageMobileHostedReviewPaths
 } from './mobile-hosted-review-git-preparation'
 import { applyMobileHostedReviewRemotePrerequisite } from './mobile-hosted-review-remote-prerequisite'
+import type { RpcOperationSender } from '../transport/rpc-operation-sender'
 
 export type MobileHostedReviewCreateIntentProgress =
+  | 'fast_forwarding'
   | 'staging'
   | 'generating_commit_message'
   | 'committing'
@@ -42,6 +45,8 @@ type PrepareInput = {
   title: string
   status: MobileGitStatusResult | null
   commitMessage?: string
+  // The live composer text, so a message typed during generation is not overwritten.
+  readCommitMessage?: () => string
   onProgress?: (progress: MobileHostedReviewCreateIntentProgress) => void
 }
 
@@ -49,6 +54,8 @@ export function mobileHostedReviewCreateIntentProgressMessage(
   progress: MobileHostedReviewCreateIntentProgress
 ): string {
   switch (progress) {
+    case 'fast_forwarding':
+      return 'Updating branch...'
     case 'staging':
       return 'Staging changes...'
     case 'generating_commit_message':
@@ -71,7 +78,7 @@ function hasUnresolvedConflicts(status: MobileGitStatusResult | null): boolean {
 }
 
 async function resolvePrefillFromStatus(
-  client: Pick<RpcClient, 'sendRequest'>,
+  client: RpcOperationSender,
   worktreeId: string,
   branch: string,
   title: string,
@@ -85,7 +92,7 @@ async function resolvePrefillFromStatus(
 }
 
 async function ensureLocalChangesCommitted(
-  client: Pick<RpcClient, 'sendRequest'>,
+  client: RpcOperationSender,
   worktreeId: string,
   input: PrepareInput,
   currentStatus: MobileGitStatusResult | null
@@ -108,12 +115,7 @@ async function ensureLocalChangesCommitted(
   const stagePaths = getStageablePaths(currentStatus?.entries ?? [])
   if (stagePaths.length > 0) {
     input.onProgress?.('staging')
-    const staged = await sendMobileHostedReviewGitMutation(
-      client,
-      'git.bulkStage',
-      { worktree: `id:${worktreeId}`, filePaths: stagePaths },
-      'Failed to stage changes'
-    )
+    const staged = await stageMobileHostedReviewPaths(client, worktreeId, stagePaths)
     if (!staged.ok) {
       return staged
     }
@@ -159,12 +161,32 @@ async function ensureLocalChangesCommitted(
         status: currentStatus
       }
     }
+    if (input.readCommitMessage?.().trim()) {
+      return {
+        ok: false,
+        error: 'Review the commit message, then retry Create PR.',
+        committed: false,
+        status: currentStatus
+      }
+    }
     message = generated.message
   }
 
   input.onProgress?.('committing')
   const committed = await commitMobileHostedReviewStagedChanges(client, worktreeId, message)
   if (!committed.ok) {
+    // Hooks may rewrite files during a failed commit; restage them so a retry commits what they wrote.
+    // Best effort: the commit failure, not this recovery, is what the caller reports.
+    const failedStatus = await readMobileHostedReviewGitStatus(client, worktreeId).catch(() => null)
+    if (
+      failedStatus?.ok &&
+      mobileHostedReviewBranchStillMatches(input.branch, failedStatus.status)
+    ) {
+      const restagePaths = getStageablePaths(failedStatus.status?.entries ?? [])
+      if (restagePaths.length > 0) {
+        await stageMobileHostedReviewPaths(client, worktreeId, restagePaths).catch(() => null)
+      }
+    }
     return { ...committed, committed: false, status: currentStatus, commitMessage: message }
   }
   const committedStatus = await readMobileHostedReviewGitStatus(client, worktreeId)
@@ -189,7 +211,7 @@ async function ensureLocalChangesCommitted(
 }
 
 export async function prepareMobileHostedReviewCreateIntent(
-  client: Pick<RpcClient, 'sendRequest'>,
+  client: RpcOperationSender,
   worktreeId: string,
   input: PrepareInput
 ): Promise<MobileHostedReviewCreateIntentOutcome> {
@@ -202,6 +224,27 @@ export async function prepareMobileHostedReviewCreateIntent(
         ? 'Branch changed while preparing the pull request.'
         : initialStatus.error,
       status: currentStatus
+    }
+  }
+
+  // Like desktop, catch up a behind-only branch first so the new commit does not diverge it.
+  if (isBehindOnlyUpstream(currentStatus?.upstreamStatus)) {
+    input.onProgress?.('fast_forwarding')
+    const updated = await fastForwardMobileHostedReviewBranch(client, worktreeId)
+    if (!updated.ok) {
+      return { ok: false, error: updated.error, status: currentStatus }
+    }
+    const updatedStatus = await readMobileHostedReviewGitStatus(client, worktreeId)
+    if (!updatedStatus.ok) {
+      return { ok: false, error: updatedStatus.error, status: currentStatus }
+    }
+    currentStatus = updatedStatus.status
+    if (!mobileHostedReviewBranchStillMatches(input.branch, currentStatus)) {
+      return {
+        ok: false,
+        error: 'Branch changed while preparing the pull request.',
+        status: currentStatus
+      }
     }
   }
 

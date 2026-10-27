@@ -1,8 +1,8 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { mergeDiscoveredAuthoritativeModels } from '../../../../shared/agent-session-option-catalog'
 import { GROK_SESSION_OPTION_CATALOG } from '../../../../shared/agent-session-option-catalog-grok'
-import { updateNativeChatSessionOptionDefaults } from '../../../../shared/native-chat-session-option-defaults'
-import type { PersistedNativeChatSessionOptions } from '../../../../shared/native-chat-session-options'
+import { updateNativeChatSessionOptionDefaults } from '../../../../shared/native-chat/input/native-chat-session-option-defaults'
+import type { PersistedNativeChatSessionOptions } from '../../../../shared/native-chat/input/native-chat-session-options'
 import {
   clearNativeChatSessionOptionCacheForTests,
   readNativeChatSessionOptionCache,
@@ -12,7 +12,7 @@ import {
   createNativeChatPtySessionOptions,
   type CreateNativeChatPtySessionOptionsArgs,
   type NativeChatPtySessionOptionsSurface
-} from './native-chat-pty-session-options'
+} from '../../../../shared/native-chat-pty-session-options'
 
 const discoveredGrok5 = (): ReturnType<typeof mergeDiscoveredAuthoritativeModels> =>
   mergeDiscoveredAuthoritativeModels(GROK_SESSION_OPTION_CATALOG.models, [
@@ -28,6 +28,7 @@ function createGrokSurface(args?: Partial<CreateNativeChatPtySessionOptionsArgs>
     agent: 'grok',
     scopeKey: 'pty-1',
     mode: 'live',
+    modelLabel: 'Model',
     dispatchCommand: vi.fn(),
     persistSelection: ({ modelId, optionId, value, adoptModelAsLaunchDefault }) => {
       persisted = updateNativeChatSessionOptionDefaults({
@@ -44,9 +45,7 @@ function createGrokSurface(args?: Partial<CreateNativeChatPtySessionOptionsArgs>
   return { surface, persisted: () => persisted }
 }
 
-/** Retirement clears settings, but the session-tracked model is what option writes
- *  re-persist — left tracked, a retired id re-enters the picker via re-injection and
- *  restores the fatal `-m <retired>` the retirement just removed. */
+/** Untrack retired models too: later option writes otherwise reinject and persist the fatal -m flag. */
 describe('retired grok model untracking', () => {
   beforeEach(() => clearNativeChatSessionOptionCacheForTests())
 
@@ -56,21 +55,18 @@ describe('retired grok model untracking', () => {
 
     surface.replaceModels(discoveredGrok5())
 
-    // The retired id is gone from the picker, not kept as a reconciled row.
     expect(surface.getSnapshot()[0].kind).toMatchObject({
       currentValue: 'grok-5',
       choices: [expect.objectContaining({ value: 'grok-5' })]
     })
     expect(readNativeChatSessionOptionCache('pty-1')?.model).toBeUndefined()
 
-    // A later option write persists under the surviving default, never the retired id.
     await surface.setOption('effort', 'low')
     expect(persisted().grok?.model).toBe('grok-5')
   })
 
   it('untracks a cached retired model at surface creation', () => {
-    // The probe can settle before this pane mounts; the cache handoff then restores a
-    // tracked id the authoritative list already dropped.
+    // Discovery can finish before mounting, leaving a cached model already proven retired.
     seedNativeChatAppliedSessionOptions('pty-1', 'grok', { model: 'grok-4.5' })
     const { surface } = createGrokSurface({ initialModels: discoveredGrok5() })
 
@@ -82,14 +78,12 @@ describe('retired grok model untracking', () => {
   })
 
   it('never persists a typed model the authoritative list lacks', () => {
-    // `/model <retired>` is tracked for display, but adopting it as the persisted
-    // launch default would recreate the fatal `-m` retirement just cleared.
+    // Typed retired ids may display but must not recreate a fatal launch default.
     const { surface, persisted } = createGrokSurface({ initialModels: discoveredGrok5() })
 
     surface.recordOutgoingCommand('/model grok-4.5')
 
     expect(persisted().grok?.model).toBeUndefined()
-    // A typed id the list does carry still persists as before.
     surface.recordOutgoingCommand('/model grok-5')
     expect(persisted().grok?.model).toBe('grok-5')
   })

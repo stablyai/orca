@@ -1,0 +1,157 @@
+vi.mock('./MobileFileMediaPreview', () => ({ MobileFileMediaPreview: () => null }))
+import { createElement } from 'react'
+import { act, create, type ReactTestInstance, type ReactTestRenderer } from 'react-test-renderer'
+import { afterEach, describe, expect, it, vi } from 'vitest'
+
+const push = vi.hoisted(() => vi.fn())
+const transport = vi.hoisted(
+  (): {
+    forceReconnect: ((hostId: string) => Promise<void>) | null
+    connection: { client: { sendRequest: (...args: unknown[]) => unknown } | null; state: string }
+  } => ({
+    forceReconnect: null,
+    connection: { client: null, state: 'reconnecting' }
+  })
+)
+
+vi.mock('react-native', () => ({
+  ActivityIndicator: 'ActivityIndicator',
+  BackHandler: { addEventListener: () => ({ remove: () => {} }) },
+  Image: 'Image',
+  Platform: { OS: 'ios' },
+  Pressable: 'Pressable',
+  ScrollView: 'ScrollView',
+  StyleSheet: { create: (styles: unknown) => styles, hairlineWidth: 1 },
+  Text: 'Text',
+  TextInput: 'TextInput',
+  View: 'View',
+  useWindowDimensions: () => ({ width: 390, height: 844 })
+}))
+vi.mock('react-native-safe-area-context', () => ({
+  SafeAreaView: 'SafeAreaView',
+  useSafeAreaFrame: () => ({ x: 0, y: 0, width: 390, height: 844 })
+}))
+vi.mock('lucide-react-native', () => ({ ChevronLeft: 'Icon', Save: 'Icon' }))
+vi.mock('../navigation/route-handoff', () => ({
+  useRouteHandoff: () => ({ back: () => {}, canGoBack: () => false, push })
+}))
+vi.mock('../components/ConfirmModal', () => ({ ConfirmModal: () => null }))
+vi.mock('./MobileFileMarkdownPreview', () => ({
+  MobileFileMarkdownPreview: 'MobileFileMarkdownPreview'
+}))
+vi.mock('./MobileFilePreviewSourceText', () => ({ MobileFilePreviewSourceText: () => null }))
+// No shell client initially: the screen must settle on waiting.
+vi.mock('../transport/host-client-hooks', () => ({
+  useForceReconnect: () => transport.forceReconnect,
+  useHostClient: () => ({ ...transport.connection, clientId: null })
+}))
+
+import { MobileFilePreviewScreen } from './MobileFilePreviewScreen'
+
+let tree: ReactTestRenderer | null = null
+
+afterEach(() => {
+  act(() => tree?.unmount())
+  tree = null
+  transport.connection = { client: null, state: 'reconnecting' }
+})
+
+// Keep identity stable so only the client changes across renders.
+const ROUTE = {
+  ok: true,
+  params: { hostId: 'host-a', worktreeId: 'wt-1', relativePath: 'README.md' }
+} as const
+
+async function render(): Promise<ReactTestRenderer> {
+  await act(async () => {
+    tree = create(createElement(MobileFilePreviewScreen, { route: ROUTE }))
+  })
+  if (tree === null) {
+    throw new Error('the preview did not render')
+  }
+  return tree
+}
+
+function retryButtons(rendered: ReactTestRenderer): ReactTestInstance[] {
+  return rendered.root
+    .findAll((node) => String(node.type) === 'Pressable')
+    .filter((node) =>
+      node
+        .findAll((text) => String(text.type) === 'Text')
+        .some((text) => text.props.children === 'Retry')
+    )
+}
+
+describe('the file preview Retry while the host is unreachable', () => {
+  it('is absent on the page, where the only retry is a re-dial it cannot make', async () => {
+    transport.forceReconnect = null
+    const rendered = await render()
+    expect(
+      rendered.root.findAll((node) => node.props.children === 'Waiting for desktop...')
+    ).not.toHaveLength(0)
+    expect(retryButtons(rendered)).toHaveLength(0)
+  })
+
+  it('still renders natively and re-dials this host', async () => {
+    const forceReconnect = vi.fn(() => Promise.resolve())
+    transport.forceReconnect = forceReconnect
+    const [retry] = retryButtons(await render())
+    await act(async () => {
+      retry?.props.onPress()
+    })
+    expect(forceReconnect.mock.calls).toEqual([['host-a']])
+  })
+
+  it('loads again when the shell reconnects, which is what the missing Retry relies on', async () => {
+    transport.forceReconnect = null
+    const rendered = await render()
+    expect(retryButtons(rendered)).toHaveLength(0)
+    const sendRequest = vi.fn(async () => ({
+      id: 'reconnected',
+      ok: true,
+      result: { content: '# Recovered preview', truncated: false, byteLength: 19 },
+      _meta: { runtimeId: 'host' }
+    }))
+    transport.connection = { client: { sendRequest }, state: 'connected' }
+    await act(async () => {
+      rendered.update(createElement(MobileFilePreviewScreen, { route: ROUTE }))
+    })
+    expect(sendRequest).toHaveBeenCalledWith('files.read', {
+      worktree: 'id:wt-1',
+      relativePath: 'README.md'
+    })
+    expect(
+      rendered.root.find((node) => String(node.type) === 'MobileFileMarkdownPreview').props.content
+    ).toBe('# Recovered preview')
+    expect(
+      rendered.root.findAll((node) => node.props.children === 'Waiting for desktop...')
+    ).toHaveLength(0)
+  })
+})
+
+it('wires rendered file links through the preview screen to navigation', async () => {
+  transport.connection = {
+    state: 'connected',
+    client: {
+      sendRequest: vi.fn(async () => ({
+        ok: true,
+        id: '1',
+        _meta: { runtimeId: 'runtime-1' },
+        result: { content: '[Details](docs/details.md)', isBinary: false, truncated: false }
+      }))
+    }
+  }
+  const rendered = await render()
+  const markdown = rendered.root.find((node) => String(node.type) === 'MobileFileMarkdownPreview')
+  await act(async () => markdown.props.onOpenFile('docs/details.md'))
+  expect(push).toHaveBeenCalledWith({
+    pathname: '/h/[hostId]/files/preview/[worktreeId]',
+    params: {
+      hostId: 'host-a',
+      worktreeId: 'wt-1',
+      worktreeName: undefined,
+      source: 'worktree',
+      relativePath: 'docs/details.md'
+    }
+  })
+})

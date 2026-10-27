@@ -15,6 +15,12 @@ import {
   nestedWorkerDepthExceededMessage
 } from '../../../shared/nested-worker-depth'
 import { OrchestrationError } from '../orchestration/orchestration-error'
+import {
+  AgentSessionRefusalError,
+  agentSessionRefusalError,
+  refuseUnclassified
+} from '../../../shared/agent-session-wire-refusals'
+import { readAgentSessionErrorRefusal } from '../../../shared/agent-session-write-failure'
 
 class LineageError extends Error {
   code = 'LINEAGE_PARENT_NOT_FOUND'
@@ -24,6 +30,26 @@ class LineageError extends Error {
 }
 
 describe('mapRuntimeError', () => {
+  it('names a deferred fork with its own code and reason', () => {
+    expect(
+      mapRuntimeError(
+        'req_1',
+        { runtimeId: 'runtime-1' },
+        new Error('terminal_spawn_deferred:paused')
+      )
+    ).toMatchObject({
+      ok: false,
+      error: {
+        code: 'terminal_spawn_deferred',
+        message: 'terminal_spawn_deferred:paused',
+        data: { reason: 'paused' }
+      }
+    })
+    expect(
+      mapRuntimeError('req_1', { runtimeId: 'runtime-1' }, new Error('terminal_spawn_deferred:x'))
+    ).toMatchObject({ error: { code: 'runtime_error' } })
+  })
+
   it('preserves the stable skill failure category and retryability across RPC', () => {
     expect(
       mapRuntimeError(
@@ -239,8 +265,7 @@ describe('artifact sharing denial', () => {
   })
 })
 
-// Why: the renderer decides between "reload the host", "re-adopt", and "stop offering
-// the action" from this code; flattened to runtime_error it can only guess.
+// Clients need distinct owner-conflict codes to choose reload, re-adopt or stop offering the action.
 describe('automation owner conflicts', () => {
   it.each(Object.values(AUTOMATION_OWNER_CONFLICT_CODES))(
     'passes %s through structured',
@@ -274,5 +299,112 @@ describe('nested worker depth cap', () => {
       effectsApplied: false,
       nextSteps: [...NESTED_WORKER_DEPTH_EXCEEDED_NEXT_STEPS]
     })
+  })
+})
+
+describe('structured worker dispatch preamble errors', () => {
+  it('preserves the undelivered verdict across runtime RPC', () => {
+    const failure = mapRuntimeError(
+      'rpc_dispatch_preamble',
+      { runtimeId: 'runtime-1' },
+      new OrchestrationError(
+        'dispatch_preamble_undelivered',
+        'The dispatch preamble was not delivered: provider_write_failed: broken pipe.'
+      )
+    )
+
+    expect(failure).toMatchObject({
+      ok: false,
+      error: {
+        code: 'dispatch_preamble_undelivered',
+        message: 'The dispatch preamble was not delivered: provider_write_failed: broken pipe.'
+      }
+    })
+  })
+})
+
+describe('thrown agent-session refusals', () => {
+  const meta = { runtimeId: 'runtime-1' }
+
+  // Released clients match both wire code and message; preserve the prior bare Error(code) contract.
+  it.each([
+    [
+      'agent_session_ownership_unknown',
+      'agent_session_ownership_unknown',
+      agentSessionRefusalError('agent_session_ownership_unknown', { reason: 'noLiveOwner' })
+    ],
+    [
+      'structured_agent_session_unsupported',
+      'runtime_error',
+      agentSessionRefusalError('structured_agent_session_unsupported', { reason: 'hostDisabled' })
+    ],
+    [
+      'agent_session_checkpoint_stale',
+      'agent_session_checkpoint_stale',
+      agentSessionRefusalError('agent_session_checkpoint_stale', {
+        reason: 'fenceStale',
+        currentFence: 4
+      })
+    ]
+  ] as const)(
+    'keeps %s on the wire as it was, and adds its details in data',
+    (code, wire, error) => {
+      const before = mapRuntimeError('req_1', meta, new Error(code))
+      const after = mapRuntimeError('req_1', meta, error)
+      expect(after.error.code).toBe(before.error.code)
+      expect(after.error.code).toBe(wire)
+      expect(after.error.message).toBe(before.error.message)
+      expect(after.error.message).toBe(code)
+      expect(after.error.data).toEqual({ refusal: { code, details: error.refusal.details } })
+      expect(error.refusal.details?.reason).toBeDefined()
+    }
+  )
+
+  it('carries no details in data when the refusal named none', () => {
+    const response = mapRuntimeError(
+      'req_1',
+      meta,
+      new AgentSessionRefusalError(
+        refuseUnclassified('agent_session_conflict', 'Another process claims this session.')
+      )
+    )
+    expect(response.error).toEqual({
+      code: 'agent_session_conflict',
+      message: 'agent_session_conflict',
+      data: { refusal: { code: 'agent_session_conflict' } }
+    })
+  })
+
+  it("sends a journal refusal's reason where a client reads it", () => {
+    const response = mapRuntimeError(
+      'req_1',
+      meta,
+      agentSessionRefusalError(
+        'agent_session_journal_unreadable',
+        { reason: 'journalCorrupt' },
+        'Unable to load this chat.'
+      )
+    )
+    const wire = JSON.parse(JSON.stringify(response.error))
+    expect(wire).toEqual({
+      code: 'runtime_error',
+      message: 'agent_session_journal_unreadable',
+      data: {
+        refusal: {
+          code: 'agent_session_journal_unreadable',
+          details: { reason: 'journalCorrupt' }
+        }
+      }
+    })
+    expect(readAgentSessionErrorRefusal(wire)).toEqual({
+      code: 'agent_session_journal_unreadable',
+      details: { reason: 'journalCorrupt' }
+    })
+  })
+
+  it('exposes no code property another passthrough could claim', () => {
+    expect(
+      'code' in agentSessionRefusalError('agent_session_conflict', { reason: 'claimConflicted' })
+    ).toBe(false)
   })
 })

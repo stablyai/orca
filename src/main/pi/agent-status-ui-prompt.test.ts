@@ -21,7 +21,6 @@ function createHarness() {
 }
 
 async function flushPosts(): Promise<void> {
-  // Each delivery has a bounded promise chain; no wall-clock sleeps in the harness.
   for (let i = 0; i < 20; i++) {
     await Promise.resolve()
   }
@@ -57,6 +56,7 @@ describe('Pi UI prompt status', () => {
     'agent_settled'
   ])('%s cannot clear an open modal', async (name) => {
     const harness = createHarness()
+    await post(harness, 'agent_start')
     await post(harness, 'ui_prompt_start')
     await post(harness, name, {
       toolName: 'ask_user_question',
@@ -73,6 +73,7 @@ describe('Pi UI prompt status', () => {
 
   it('clears stale question cards when a generic modal opens', async () => {
     const harness = createHarness()
+    await post(harness, 'agent_start')
     await post(harness, 'tool_call', {
       toolName: 'ask_user_question',
       input: { questions: [{ question: 'Pick one' }] }
@@ -84,29 +85,27 @@ describe('Pi UI prompt status', () => {
     expect(harness.statuses.at(-1)?.payload.interactivePrompt).toBeUndefined()
   })
 
-  it('returns an idle session to done after its modal closes', async () => {
+  it('ignores an idle utility dialog instead of creating a completion boundary', async () => {
     const harness = createHarness()
     await post(harness, 'ui_prompt_start')
     await harness.callHook('ui_prompt_end', {}, { isIdle: () => true })
     await flushPosts()
-    expect(harness.statuses.map((status) => status?.payload.state)).toEqual(['waiting', 'done'])
+    expect(harness.fetchMock).not.toHaveBeenCalled()
   })
 
-  it('returns a pane that never ran a turn to done when idleness is unreadable', async () => {
+  it('ignores an idle utility dialog when idleness is unreadable', async () => {
     const harness = createHarness()
     await post(harness, 'ui_prompt_start')
     await post(harness, 'ui_prompt_end')
-    // Why: no turn has started, so the pane is idle — reporting working would spin forever.
-    expect(harness.statuses.at(-1)?.payload.state).toBe('done')
+    expect(harness.fetchMock).not.toHaveBeenCalled()
   })
 
-  it('trusts local turn state over a ctx that claims work on an idle pane', async () => {
+  it('does not let an idle dialog trigger done when ctx claims work', async () => {
     const harness = createHarness()
     await post(harness, 'ui_prompt_start')
     await harness.callHook('ui_prompt_end', {}, { isIdle: () => false })
     await flushPosts()
-    // Why: no turn ever started, so nothing later would correct a working verdict.
-    expect(harness.statuses.at(-1)?.payload.state).toBe('done')
+    expect(harness.fetchMock).not.toHaveBeenCalled()
   })
 
   it('lets the normal settlement hook finish work after a modal closes', async () => {
@@ -126,20 +125,20 @@ describe('Pi UI prompt status', () => {
 
   it('retains modal state across an in-process registration reload', async () => {
     const harness = createHarness()
+    await post(harness, 'agent_start')
     await post(harness, 'ui_prompt_start')
     harness.reload()
     await post(harness, 'tool_execution_end', { toolName: 'bash' })
-    // Why: re-registering handlers is not a session boundary and must not lose the wait.
     expect(harness.statuses.at(-1)?.payload.state).toBe('waiting')
   })
 
   it('releases a modal that a session replacement tore down without a close', async () => {
     const harness = createHarness()
     await post(harness, 'before_agent_start', { prompt: 'Old session prompt' })
+    await post(harness, 'agent_start')
     await post(harness, 'ui_prompt_start')
     expect(harness.statuses.at(-1)?.payload.state).toBe('waiting')
-    // Why: pi hides the dialog through resetExtensionUI without resolving its promise,
-    // so no ui_prompt_end is ever emitted — these two boundaries are the only release.
+    // Session replacement hides dialogs without resolving them, so no ui_prompt_end arrives.
     await post(harness, 'session_shutdown')
     await post(harness, 'session_start', { reason: 'switch' })
     await post(harness, 'tool_execution_end', { toolName: 'bash' })
@@ -148,6 +147,7 @@ describe('Pi UI prompt status', () => {
 
   it('releases a modal dropped by a reload that emits no shutdown', async () => {
     const harness = createHarness()
+    await post(harness, 'agent_start')
     await post(harness, 'ui_prompt_start')
     await post(harness, 'session_start', { reason: 'reload' })
     await post(harness, 'tool_execution_end', { toolName: 'bash' })
@@ -174,7 +174,7 @@ describe('Pi UI prompt status', () => {
     expect(harness.statuses.at(-1)?.payload.interactivePrompt).toBeUndefined()
   })
 
-  it('still reports the close when the modal invalidated its own runner', async () => {
+  it('ignores an idle modal close when its runner is invalidated', async () => {
     const harness = createHarness()
     await post(harness, 'ui_prompt_start')
     await harness.callHook(
@@ -187,8 +187,7 @@ describe('Pi UI prompt status', () => {
       }
     )
     await flushPosts()
-    // Why: a lost close would strand the pane on waiting; no turn is running, so done.
-    expect(harness.statuses.at(-1)?.payload.state).toBe('done')
+    expect(harness.fetchMock).not.toHaveBeenCalled()
   })
 
   it('keeps a mid-turn modal working when its runner throws on close', async () => {
@@ -205,7 +204,6 @@ describe('Pi UI prompt status', () => {
       }
     )
     await flushPosts()
-    // Why: the turn is still in flight, so done would ring the completion bell early.
     expect(harness.statuses.at(-1)?.payload.state).toBe('working')
     await post(harness, 'agent_settled')
     expect(harness.statuses.at(-1)?.payload.state).toBe('done')
@@ -214,8 +212,8 @@ describe('Pi UI prompt status', () => {
   it('recovers on a new turn when a modal close was lost', async () => {
     const harness = createHarness()
     await post(harness, 'ui_prompt_start')
-    expect(harness.statuses.at(-1)?.payload.state).toBe('waiting')
-    // Why: a turn cannot begin under a dialog holding input focus, so this is recovery.
+    expect(harness.fetchMock).not.toHaveBeenCalled()
+    // A turn cannot start under an input-holding dialog; recover a missing close event.
     await post(harness, 'agent_start')
     await post(harness, 'tool_execution_end', { toolName: 'bash' })
     expect(harness.statuses.at(-1)?.payload.state).toBe('working')
@@ -223,6 +221,7 @@ describe('Pi UI prompt status', () => {
 
   it('keeps the wait until the outermost of nested modals closes', async () => {
     const harness = createHarness()
+    await post(harness, 'agent_start')
     await post(harness, 'ui_prompt_start')
     await post(harness, 'ui_prompt_start')
     await harness.callHook('ui_prompt_end', {}, { isIdle: () => true })
@@ -249,8 +248,7 @@ describe('Pi UI prompt status', () => {
       }
     )
     await flushPosts()
-    // Why: the turn already reported its end, so no later event is coming to correct a
-    // guess of working — fall back to what this process knows rather than strand it.
+    // No later end event can correct this state; use the locally recorded turn outcome.
     expect(harness.statuses.at(-1)?.payload.state).toBe('done')
   })
 
@@ -273,6 +271,7 @@ describe('Pi UI prompt status', () => {
   it('isolates prompt state between Pi processes', async () => {
     const first = createHarness()
     const second = createHarness()
+    await post(first, 'agent_start')
     await post(first, 'ui_prompt_start')
     await post(second, 'agent_start')
     expect(first.statuses.at(-1)?.payload.state).toBe('waiting')

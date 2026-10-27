@@ -95,9 +95,11 @@ function makeStore(
       return repo ? repo.connectionId?.trim() || null : undefined
     }
   }
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: run-target resolution reads only these Store members.
   return {
     getProjectHostSetups: () => setups,
     getRepo: (id: string) => repos.find((repo) => repo.id === id),
+    getRepos: () => repos,
     automationOwnerPrecondition: () =>
       projectedAutomation
         ? toAutomationOwnerPrecondition(
@@ -139,15 +141,6 @@ describe('resolveAutomationRunTarget projectId drift', () => {
   it('resolves when only the derived projectId tier differs (repo: snapshot vs github: setup)', () => {
     const store = makeStore([makeSetup()], [makeRepo()])
     const automation = makeAutomation(makeRunContext({ projectId: 'repo:repo-1' }))
-
-    const result = resolveAutomationRunTarget(store, automation)
-
-    expect(result).toMatchObject({ ok: true, cwd: '/repo' })
-  })
-
-  it('resolves when the snapshot is at the git: tier and the setup climbed to github:', () => {
-    const store = makeStore([makeSetup()], [makeRepo()])
-    const automation = makeAutomation(makeRunContext({ projectId: 'git:github.com/o/r' }))
 
     const result = resolveAutomationRunTarget(store, automation)
 

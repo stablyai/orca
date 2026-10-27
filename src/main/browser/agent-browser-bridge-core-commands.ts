@@ -6,14 +6,10 @@ import type {
 } from '../../shared/runtime-types'
 import { assertClipboardTextWriteWithinLimitWithYield } from '../../shared/clipboard-text'
 import { normalizeBrowserNavigationUrl } from '../../shared/browser-url'
-import { iterateBrowserTextInsertionChunks } from './browser-text-insertion'
 import { BrowserError } from './cdp-bridge'
 import { ORCA_TAB_SESSION_PREFIX } from './agent-browser-orphan-sweep'
 import { focusedValueSetExpression } from './agent-browser-bridge-input'
-import {
-  AGENT_BROWSER_TEXT_ARGUMENT_MAX_BYTES,
-  EMBEDDED_NAVIGATION_TIMEOUT_MS
-} from './agent-browser-bridge-types'
+import { EMBEDDED_NAVIGATION_TIMEOUT_MS } from './agent-browser-bridge-types'
 import {
   isAbortedNavigationError,
   waitForAbortedNavigationReplacement
@@ -22,7 +18,6 @@ import { AgentBrowserBridgeQueue } from './agent-browser-bridge-queue'
 
 export abstract class AgentBrowserBridgeCoreCommands extends AgentBrowserBridgeQueue {
   async snapshot(worktreeId?: string, browserPageId?: string): Promise<BrowserSnapshotResult> {
-    // Why: snapshot creates fresh refs so it must bypass the stale-ref guard
     return this.enqueueTargetedCommand(worktreeId, browserPageId, async (sessionName, target) => {
       const result = (await this.execAgentBrowser(sessionName, [
         'snapshot'
@@ -100,7 +95,7 @@ export abstract class AgentBrowserBridgeCoreCommands extends AgentBrowserBridgeQ
               `${ORCA_TAB_SESSION_PREFIX}${target.browserPageId}`
             )
           }
-          // Why: ERR_ABORTED also covers a page vetoing unload; that navigation did not succeed.
+          // ERR_ABORTED can also mean the page vetoed unloading.
           if (
             !isAbortedNavigationError(error) ||
             (navigationState.preventUnloadEvent !== null &&
@@ -112,7 +107,7 @@ export abstract class AgentBrowserBridgeCoreCommands extends AgentBrowserBridgeQ
             )
           }
           navigationAborted = true
-          // Why: a superseding navigation rejects the first load before its replacement has landed.
+          // A superseding navigation can still be loading when the first load rejects.
           await waitForAbortedNavigationReplacement(
             wc,
             target.browserPageId,
@@ -125,7 +120,7 @@ export abstract class AgentBrowserBridgeCoreCommands extends AgentBrowserBridgeQ
           }
         }
 
-        // Why: cross-process navigation can replace the guest while retaining the same authoritative page id.
+        // Process swaps can replace the guest while retaining the page ID.
         const navigatedTarget = this.resolveCommandTarget(worktreeId, target.browserPageId)
         const navigatedWebContents = this.requireTargetWebContents(navigatedTarget)
         const loadError = navigationAborted
@@ -150,30 +145,17 @@ export abstract class AgentBrowserBridgeCoreCommands extends AgentBrowserBridgeQ
     browserPageId?: string
   ): Promise<BrowserFillResult> {
     await assertClipboardTextWriteWithinLimitWithYield(value)
-    // Why: agent-browser's CDP text insertion loses focus in Electron guests; edit through the browser's input pipeline instead.
+    // agent-browser's CDP insertion loses focus in Electron guests; use the browser input pipeline.
     return this.enqueueTargetedCommand(
       worktreeId,
       browserPageId,
       async (sessionName) => {
         if (!(await this.isExplicitContentEditableTarget(sessionName, element))) {
           await this.execAgentBrowser(sessionName, ['focus', element])
-          await this.execAgentBrowser(sessionName, [
-            'eval',
-            focusedValueSetExpression(JSON.stringify(''))
-          ])
-          for (const chunk of iterateBrowserTextInsertionChunks(
-            value,
-            AGENT_BROWSER_TEXT_ARGUMENT_MAX_BYTES
-          )) {
-            await this.execAgentBrowser(sessionName, [
-              'eval',
-              focusedValueSetExpression(JSON.stringify(chunk), { append: true })
-            ])
-          }
-          await this.execAgentBrowser(sessionName, [
-            'eval',
-            focusedValueSetExpression(JSON.stringify(''), { append: true, dispatchEvents: true })
-          ])
+          // One stdin edit avoids argv limits and repeated copying of the growing field value.
+          await this.execAgentBrowser(sessionName, ['eval', '--stdin'], {
+            stdinText: focusedValueSetExpression(JSON.stringify(value), { dispatchEvents: true })
+          })
           return { filled: element } as BrowserFillResult
         }
 

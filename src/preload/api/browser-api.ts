@@ -1,4 +1,27 @@
+import type { BrowserDevToolsDockBounds } from '../../shared/browser-devtools-dock'
 import type { BrowserSetAnnotationViewportBridgeArgs } from '../../shared/browser-annotation-viewport-bridge'
+import type {
+  BrowserAgentActivityEvent,
+  BrowserAgentCursorEvent
+} from '../../shared/browser-agent-activity-contract'
+import type { ManagedBrowserProfileOwner } from '../../shared/browser-profile-scope'
+import type { BrowserExtensionToolbarApi } from './browser-extension-toolbar-api'
+import type { BrowserExtensionContextMenuApi } from './browser-extension-context-menu-api'
+import type { BrowserExtensionWebStoreApi } from './browser-extension-webstore-api'
+import type {
+  BrowserExtensionActionResult,
+  BrowserExtensionListResult
+} from '../../shared/browser-extension-types'
+import type {
+  BrowserPageSiteDisplay,
+  BrowserSiteColorScheme
+} from '../../shared/browser-site-display'
+import type { BrowserPageZoomDirection } from '../../shared/browser-page-zoom'
+import type {
+  BrowserIdentityModeSetResult,
+  BrowserIdentityModeStatus,
+  BrowserUserAgentMode
+} from '../../shared/browser-user-agent-mode'
 import type {
   BrowserClientPageMetadataParams,
   BrowserClientPageMetadataPublishOutcome
@@ -8,6 +31,16 @@ import type {
   BrowserWebAuthnAccountResponse
 } from '../../shared/browser-webauthn-account'
 import type {
+  BrowserPagePromptRequest,
+  BrowserPagePromptResponse,
+  BrowserPagePromptResult
+} from '../../shared/browser-page-prompt'
+import type {
+  BrowserSitePermission,
+  BrowserSitePermissionDecision,
+  BrowserSitePermissionEntry
+} from '../../shared/browser-site-permission'
+import type {
   BrowserSetGrabModeArgs,
   BrowserSetGrabModeResult,
   BrowserAwaitGrabSelectionArgs,
@@ -16,7 +49,8 @@ import type {
   BrowserCaptureSelectionScreenshotArgs,
   BrowserCaptureSelectionScreenshotResult,
   BrowserExtractHoverArgs,
-  BrowserExtractHoverResult
+  BrowserExtractHoverResult,
+  GrabIntent
 } from '../../shared/browser-grab-types'
 import type {
   BrowserContextMenuDismissedEvent,
@@ -25,7 +59,8 @@ import type {
   BrowserDownloadProgressEvent,
   BrowserDownloadRequestedEvent,
   BrowserPermissionDeniedEvent,
-  BrowserPopupEvent
+  BrowserPopupEvent,
+  BrowserTargetUrlChangedEvent
 } from '../../shared/browser-guest-events'
 import type {
   BrowserCertificateFailure,
@@ -33,7 +68,6 @@ import type {
   BrowserCookieImportResult,
   BrowserLoadError,
   BrowserSessionProfile,
-  BrowserSessionProfileCreateOptions,
   BrowserSessionProfileScope,
   BrowserSessionProfileSource,
   BrowserViewportOverride,
@@ -45,7 +79,7 @@ import type {
 } from '../../shared/browser-client-page-renderer-protocol'
 
 export type BrowserApi = {
-  /** Absent wherever this client hosts no guests of its own, which is how the web client reads. */
+  /** Absent on clients that host no browser guests, including web clients. */
   readClientHostId?: () => string | null
   onClientPageRendererRequest?: (
     callback: (
@@ -73,17 +107,53 @@ export type BrowserApi = {
   ) => () => void
   onWebAuthnAccountRequestClosed: (callback: (event: { requestId: string }) => void) => () => void
   respondWebAuthnAccount: (response: BrowserWebAuthnAccountResponse) => Promise<boolean>
-  openDevTools: (args: { browserPageId: string }) => Promise<boolean>
+  onPagePromptRequest: (callback: (request: BrowserPagePromptRequest) => void) => () => void
+  onPagePromptClosed: (callback: (event: { requestId: string }) => void) => () => void
+  respondPagePrompt: (response: BrowserPagePromptResponse) => Promise<BrowserPagePromptResult>
+  /** Docks DevTools in the pane unless `detach`; `inspectAt` (the context-menu point, in window coordinates) selects the element there. */
+  openDevTools: (args: {
+    browserPageId: string
+    inspectAt?: { x: number; y: number }
+    detach?: boolean
+  }) => Promise<boolean>
+  closeDevTools: (args: { browserPageId: string }) => Promise<void>
+  /** Places docked DevTools over the pane's slot (renderer CSS px); null hides them, and with
+   *  `snapshot` resolves to their last frame as a data URL. */
+  setDevToolsDockBounds: (args: {
+    browserPageId: string
+    bounds: BrowserDevToolsDockBounds | null
+    snapshot?: boolean
+  }) => Promise<string | null>
+  onDevToolsDockChanged: (
+    callback: (event: { browserPageId: string; docked: boolean }) => void
+  ) => () => void
+  addWordToDictionary: (args: { browserPageId: string; word: string }) => Promise<boolean>
+  copyImageAt: (args: {
+    browserPageId: string
+    point: { x: number; y: number }
+  }) => Promise<boolean>
   setViewportOverride: (args: {
     browserPageId: string
     override: BrowserViewportOverride | null
   }) => Promise<boolean>
+  getPageSiteDisplay: (args: { browserPageId: string }) => Promise<BrowserPageSiteDisplay | null>
+  /** Site zoom is scoped to the browser profile. */
+  zoomPage: (args: {
+    browserPageId: string
+    direction: BrowserPageZoomDirection
+  }) => Promise<BrowserPageSiteDisplay | null>
+  /** Null makes the site match Orca's theme again. */
+  setPageSiteColorScheme: (args: {
+    browserPageId: string
+    colorScheme: BrowserSiteColorScheme | null
+  }) => Promise<BrowserPageSiteDisplay | null>
+  setPageAudioMuted: (args: { browserPageId: string; muted: boolean }) => Promise<boolean>
   reportViewportScrollState?: (args: {
     browserPageId: string
     state: BrowserViewportScrollState
   }) => void
   setAnnotationViewportBridge: (args: BrowserSetAnnotationViewportBridgeArgs) => Promise<boolean>
-  /** Publishes a client-hosted page's url/title to its runtime over that runtime's host lease. */
+  /** Uses the owning runtime's host lease. */
   publishClientPageMetadata: (args: {
     environmentId: string
     params: BrowserClientPageMetadataParams
@@ -93,6 +163,9 @@ export type BrowserApi = {
   ) => () => void
   onCertificateFailureChanged: (
     callback: (event: { browserPageId: string; failure: BrowserCertificateFailure | null }) => void
+  ) => () => void
+  onAudioStateChanged: (
+    callback: (event: { browserPageId: string; audible: boolean }) => void
   ) => () => void
   proceedCertificate: (args: {
     browserPageId: string
@@ -109,12 +182,26 @@ export type BrowserApi = {
   onContextMenuDismissed: (
     callback: (event: BrowserContextMenuDismissedEvent) => void
   ) => () => void
+  onTargetUrlChanged: (callback: (event: BrowserTargetUrlChangedEvent) => void) => () => void
   onNavigationUpdate: (
     callback: (event: { browserPageId: string; url: string; title: string }) => void
   ) => () => void
   onActivateView: (
     callback: (data: { worktreeId?: string; browserPageId?: string }) => void
   ) => () => void
+  onCapturePaintHold: (
+    callback: (data: { browserPageId: string; held: boolean }) => void
+  ) => () => void
+  /** Main asks the pane to keep the user's focus through an agent press; `ready` answers it. */
+  onAgentInputFocusGuard: (
+    callback: (data: { browserPageId: string; token: string; active: boolean }) => void
+  ) => () => void
+  agentInputFocusGuardReady: (token: string, composing: boolean) => void
+  /** Main marks the pages an agent drives; the tab strip badges them. */
+  onAgentActivity: (callback: (data: BrowserAgentActivityEvent) => void) => () => void
+  /** Main shows the agent's pointer before its input; `agentCursorArrived` answers awaited moves. */
+  onAgentCursor: (callback: (data: BrowserAgentCursorEvent) => void) => () => void
+  agentCursorArrived: (sequence: number) => void
   onPaneFocus: (
     callback: (data: { worktreeId: string | null; browserPageId: string }) => void
   ) => () => void
@@ -129,23 +216,29 @@ export type BrowserApi = {
     args: BrowserCaptureSelectionScreenshotArgs
   ) => Promise<BrowserCaptureSelectionScreenshotResult>
   extractHoverPayload: (args: BrowserExtractHoverArgs) => Promise<BrowserExtractHoverResult>
-  onGrabModeToggle: (callback: (browserPageId: string) => void) => () => void
+  onGrabModeToggle: (callback: (browserPageId: string, intent: GrabIntent) => void) => () => void
   onGrabActionShortcut: (
     callback: (args: { browserPageId: string; key: 'c' | 's' }) => void
   ) => () => void
   sessionListProfiles: () => Promise<BrowserSessionProfile[]>
+  onSessionProfilesChanged: (callback: () => void) => () => void
   /** Resolves once the SSH workspace's partition is bound and proxy-verified; the webview must wait for it. */
   prepareSshWorkspacePartition: (args: {
     targetId: string
+    expectedSshTargetGeneration?: number
     browserProfileId?: string
     skipProbe?: boolean
   }) => Promise<{ partition: string }>
-  sessionCreateProfile: (
-    args: {
-      scope: BrowserSessionProfileScope
-      label: string
-    } & BrowserSessionProfileCreateOptions
-  ) => Promise<BrowserSessionProfile | null>
+  sessionCreateProfile: (args: {
+    scope: BrowserSessionProfileScope
+    label: string
+  }) => Promise<BrowserSessionProfile | null>
+  sessionEnsureManagedProfile: (args: {
+    owner: ManagedBrowserProfileOwner
+    label: string
+  }) => Promise<BrowserSessionProfile>
+  identityGet: () => Promise<BrowserIdentityModeStatus | null>
+  identitySet: (mode: BrowserUserAgentMode) => Promise<BrowserIdentityModeSetResult | null>
   sessionDeleteProfile: (args: { profileId: string }) => Promise<boolean>
   sessionImportCookies: (args: { profileId: string }) => Promise<BrowserCookieImportResult>
   sessionResolvePartition: (args: { profileId: string | null }) => Promise<string | null>
@@ -166,13 +259,54 @@ export type BrowserApi = {
     browserFamily: string
     browserProfile?: string
   }) => Promise<BrowserCookieImportResult | null>
-  /** Import-source badges for one environment's client-hosted jars, keyed by profile id. */
+  /** Import sources keyed by browser profile ID. */
   sessionClientRouteImportSources: (args: {
     environmentId: string
   }) => Promise<Record<string, BrowserSessionProfileSource>>
   sessionClearDefaultCookies: () => Promise<boolean>
+  /** Site permissions are local to this computer and browser profile. */
+  sitePermissionsList: (args: { profileId: string }) => Promise<BrowserSitePermissionEntry[]>
+  /** Null forgets the answer so the site is asked again. */
+  sitePermissionsSet: (args: {
+    profileId: string
+    origin: string
+    permission: BrowserSitePermission
+    decision: BrowserSitePermissionDecision | null
+  }) => Promise<BrowserSitePermissionEntry[]>
   notifyActiveTabChanged: (args: { browserPageId: string }) => Promise<boolean>
-}
+  extensionsList: (args: { profileId: string }) => Promise<BrowserExtensionListResult>
+  extensionsSetEnabled: (args: {
+    profileId: string
+    extensionId: string
+    enabled: boolean
+  }) => Promise<BrowserExtensionActionResult>
+  extensionsRemove: (args: {
+    profileId: string
+    extensionId: string
+  }) => Promise<BrowserExtensionActionResult>
+  extensionsLoadUnpacked: (args: {
+    profileId: string
+    directory: string
+  }) => Promise<BrowserExtensionActionResult>
+  /** Re-copies an unpacked extension's folder and restarts it in every profile. */
+  extensionsReload: (args: {
+    profileId: string
+    extensionId: string
+  }) => Promise<BrowserExtensionActionResult>
+  extensionsOpenOptions: (args: {
+    profileId: string
+    extensionId: string
+  }) => Promise<BrowserExtensionActionResult>
+  /** Asks about a held store update's new access, then installs it. */
+  extensionsReviewUpdate: (args: {
+    profileId: string
+    extensionId: string
+  }) => Promise<BrowserExtensionActionResult>
+  /** Installs, updates, removals, load errors or held updates changed; refetch the list. */
+  onExtensionsChanged: (callback: () => void) => () => void
+} & BrowserExtensionToolbarApi &
+  BrowserExtensionWebStoreApi &
+  BrowserExtensionContextMenuApi
 
 export type DetectedBrowserProfileInfo = {
   name: string

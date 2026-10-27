@@ -1,6 +1,8 @@
 import type { RuntimeMobileTerminalTheme } from '../../../src/shared/runtime-types'
 import type { TerminalOscLinkRange } from '../../../src/shared/terminal-osc-link-ranges'
 
+export type TerminalFrame = { width: number; height: number }
+
 export type TerminalWebViewCommand =
   | { type: 'ping'; id?: number }
   | { type: 'write'; id?: number; data: string }
@@ -11,17 +13,17 @@ export type TerminalWebViewCommand =
       rows: number
       initialData?: string
       oscLinks?: TerminalOscLinkRange[]
+      kittyKeyboardFlags?: number
       terminalTheme?: RuntimeMobileTerminalTheme
       fontScale?: number
-      // Why: width-reflow re-streams replay the same content rewrapped at new
-      // cols; preserve the reader's scroll position instead of jumping to bottom.
+      // Width-reflow replay contains the same rewrapped content; preserve reader position instead of jumping to bottom.
       preserveScroll?: boolean
+      frame: TerminalFrame | null
     }
   | { type: 'set-font-scale'; id?: number; fontScale: number }
-  | { type: 'resize'; id?: number; cols: number; rows: number }
-  | { type: 'reflow'; id?: number; cols: number; rows: number }
+  | { type: 'resize'; id?: number; cols: number; rows: number; frame: TerminalFrame | null }
+  | { type: 'reflow'; id?: number; cols: number; rows: number; frame: TerminalFrame | null }
   | { type: 'clear'; id?: number }
-  | { type: 'measure'; id?: number; containerHeight?: number }
   | { type: 'reset-zoom'; id?: number }
   | { type: 'cancel-select'; id?: number }
   | { type: 'do-select-all'; id?: number }

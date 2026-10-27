@@ -1,17 +1,12 @@
-// Records below this size are decoded and parsed exactly: JSON.parse on a
-// kilobyte costs less than the risk of a prefix heuristic, and the scan cost
-// this path exists to remove is entirely in megabyte-scale records.
+import { CODEX_TOOL_RESPONSE_TYPES } from './session-scanner-codex-tool-records'
+
+// Restrict prefix heuristics to large records, where full JSON parsing dominates scan cost.
 const CODEX_RECORD_PREFIX_LIMIT = 1024
-// serde emits `RolloutLine` as `timestamp` then the adjacently tagged
-// `RolloutItem` (`type`, `payload`), and every tagged payload enum writes its
-// own `type` first. Anything spelled differently takes the full parser.
+// Match serde ordering (timestamp/type/payload, payload type first); other spellings need full parsing.
 const CODEX_RECORD_ENVELOPE_PATTERN = /^\{"timestamp":"([^"]+)","type":"([^"]+)","payload":/
 const CODEX_PAYLOAD_TYPE_PATTERN = /^\{"type":"([^"]+)"/
 
-// Every record `consumeCodexRecordLine` reads beyond the timeline clock; the
-// fast path is the complement, so teaching the parser a new record means
-// adding it here or the scanner silently stops seeing it.
-// `session-scanner-codex-fast-path.test.ts` pins each entry.
+// Keep these sets in sync with consumeCodexRecordLine or the fast path will silently discard new fields.
 const PARSED_RECORD_TYPES = new Set(['session_meta', 'turn_context'])
 const PARSED_RESPONSE_ITEM_TYPES = new Set(['message'])
 const PARSED_EVENT_TYPES = new Set([
@@ -22,7 +17,10 @@ const PARSED_EVENT_TYPES = new Set([
 ])
 
 /** Returns the timestamp only when the record cannot affect other visible session fields. */
-export function readCodexTimelineOnlyRecord(line: Buffer): { timestamp: string } | null {
+export function readCodexTimelineOnlyRecord(
+  line: Buffer,
+  includeTools = false
+): { timestamp: string } | null {
   if (line.length <= CODEX_RECORD_PREFIX_LIMIT) {
     return null
   }
@@ -36,9 +34,15 @@ export function readCodexTimelineOnlyRecord(line: Buffer): { timestamp: string }
   if (recordType !== 'response_item' && recordType !== 'event_msg') {
     return { timestamp }
   }
-  // A payload whose type is unreadable from the bounded prefix stays ambiguous.
   const payloadType = CODEX_PAYLOAD_TYPE_PATTERN.exec(prefix.slice(envelope[0].length))?.[1]
   if (!payloadType) {
+    return null
+  }
+  if (
+    includeTools &&
+    recordType === 'response_item' &&
+    CODEX_TOOL_RESPONSE_TYPES.has(payloadType)
+  ) {
     return null
   }
   const parsedPayloadTypes =

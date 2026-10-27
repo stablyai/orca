@@ -1,4 +1,13 @@
 export const CROSS_LOCALE_KEY_OVERRIDES = {
+  // The live status describes ongoing reasoning; the composer option names the feature.
+  'components.native-chat.status.thinking': {
+    zh: '思考中',
+    ja: '思考中',
+    ko: '생각 중',
+    fr: 'Réflexion en cours',
+    es: 'Pensando'
+  },
+  'auto.components.feature.wall.WorkbenchAnimatedVisual.633a91e358': { zh: '思考中…' },
   'auto.components.GitLabItemDialog.4168eb2c51': {
     zh: '解决',
     ja: '解決'
@@ -31,9 +40,7 @@ export const CROSS_LOCALE_KEY_OVERRIDES = {
     zh: '/{{value0}}',
     ja: '/{{value0}}'
   },
-  // Settings-search empty state. ko/zh put the quoted term before the verb phrase, so MT
-  // localized the old leading fragment as a whole clause and the query landed after the
-  // period. The message interpolates now; keep the term inside the quotes.
+  // ko/zh put the quoted query before the verb phrase; MT tends to move it after.
   'auto.components.settings.Settings.noSettingsFoundForQuery': {
     ko: '"{{value0}}"에 대한 설정을 찾을 수 없습니다.',
     zh: '找不到“{{value0}}”的设置'

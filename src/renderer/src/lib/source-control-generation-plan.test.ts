@@ -65,8 +65,7 @@ describe('planSourceControlCommitMessageGeneration', () => {
   })
 
   it('accepts a bare {linkedIssue} recipe, which is only empty per workspace', () => {
-    // Why: the recipe is saved repo- or globally scoped, so validation must not depend on
-    // whichever workspace happens to be active — an unlinked one must not fail the plan.
+    // Saved repo/global recipes must validate independently of active-workspace linkage.
     const result = planSourceControlTextGeneration('commitMessage', {
       agentId: 'custom',
       model: '',
@@ -86,6 +85,20 @@ describe('planSourceControlCommitMessageGeneration', () => {
     })
 
     expect(result.ok && result.commandLabel).toBe('echo issue {linkedIssue}')
+  })
+
+  it('omits Pi configured-default sentinel from dry-run command labels', () => {
+    const result = planSourceControlTextGeneration('commitMessage', {
+      agentId: 'pi',
+      model: 'default',
+      commandInputTemplate: '{basePrompt}'
+    })
+
+    expect(result.ok).toBe(true)
+    if (result.ok) {
+      expect(result.commandLabel).not.toContain('--model')
+      expect(result.commandLabel).not.toContain('default')
+    }
   })
 
   it('shows per-action CLI arguments in dry-run command labels', () => {

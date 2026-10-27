@@ -1,10 +1,9 @@
-// Codex JSONL line → NativeChatMessage decoder.
-
 import {
   NATIVE_CHAT_INTERRUPTED_STATUS_TEXT,
   type NativeChatBlock,
   type NativeChatMessage
 } from '../../shared/native-chat-types'
+import { NATIVE_CHAT_NOTICE_COPY } from '../../shared/native-chat/native-chat-notice'
 import {
   asRecord,
   extractString,
@@ -92,10 +91,13 @@ function codexResponseItem(
     payload.type === 'custom_tool_call'
   ) {
     const name = extractString(payload.name) ?? 'tool'
+    const callId = extractString(payload.call_id)
     return {
       id,
       role: 'assistant',
-      blocks: [{ type: 'tool-call', name, input: codexCallInput(payload) }],
+      blocks: [
+        { type: 'tool-call', name, input: codexCallInput(payload), ...(callId ? { callId } : {}) }
+      ],
       timestamp,
       source: 'transcript'
     }
@@ -104,7 +106,7 @@ function codexResponseItem(
     return {
       id,
       role: 'tool',
-      blocks: [codexToolResult(payload.output)],
+      blocks: [codexToolResult(payload.output, extractString(payload.call_id))],
       timestamp,
       source: 'transcript'
     }
@@ -130,6 +132,10 @@ function codexEventMessage(
       timestamp,
       source: 'transcript'
     }
+  }
+  // Legacy rollouts persist this event; paginated rollouts persist a ContextCompaction item instead.
+  if (payload.type === 'context_compacted') {
+    return codexCompactionMarker(id, timestamp)
   }
   if (payload.type === 'item_completed') {
     return codexCompletedTurnItem(payload, id, timestamp)
@@ -159,6 +165,9 @@ function codexCompletedTurnItem(
     return null
   }
   const id = extractString(item.id) ?? fallbackId
+  if (item.type === 'ContextCompaction') {
+    return codexCompactionMarker(id, timestamp)
+  }
   const blocks = codexTurnItemBlocks(item.content)
   if (blocks.length === 0) {
     return null
@@ -170,6 +179,18 @@ function codexCompletedTurnItem(
     return { id, role: 'assistant', blocks, timestamp, source: 'transcript' }
   }
   return null
+}
+
+function codexCompactionMarker(id: string, timestamp: number | null): NativeChatMessage {
+  return {
+    id,
+    role: 'system',
+    blocks: [
+      { type: 'text', text: NATIVE_CHAT_NOTICE_COPY.compaction, presentation: 'compaction' }
+    ],
+    timestamp,
+    source: 'transcript'
+  }
 }
 
 function codexTurnItemBlocks(content: unknown): NativeChatBlock[] {
@@ -211,10 +232,7 @@ function codexTurnItemBlocks(content: unknown): NativeChatBlock[] {
   return blocks
 }
 
-/** The argument payload is passed through exactly as it arrived. Decoding it
- *  here would change the shape every `.input` consumer sees — including the ask
- *  surface, which reads a question shape out of any tool's input — so the one
- *  consumer that needs structure decodes it for itself. */
+/** Preserve raw argument shape for all consumers; callers needing structure decode it themselves. */
 function codexCallInput(payload: Record<string, unknown>): unknown {
   if (payload.arguments !== undefined) {
     return payload.arguments
@@ -222,12 +240,13 @@ function codexCallInput(payload: Record<string, unknown>): unknown {
   return payload.input ?? payload.action ?? null
 }
 
-function codexToolResult(output: unknown): NativeChatBlock {
+function codexToolResult(output: unknown, callId: string | null): NativeChatBlock {
   const record = asRecord(output)
   const isError = record?.success === false || record?.is_error === true
   return {
     type: 'tool-result',
     output: toolResultOutput(record?.content ?? record?.output ?? output),
+    ...(callId ? { callId } : {}),
     ...(isError ? { isError: true } : {})
   }
 }

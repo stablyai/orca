@@ -1,0 +1,49 @@
+name: Unit transform cache comparison
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: unit-module-cache-comparison-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  baseline:
+    uses: ./.github/workflows/unit-tests.yml
+    with:
+      node_versions: '["24.22.1"]'
+      runner: ubuntu-24.04-arm
+      shards: '[{"index":1,"count":5},{"index":2,"count":5},{"index":3,"count":5},{"index":4,"count":5},{"index":5,"count":5}]'
+      artifact_prefix: baseline-unit
+      phase_diagnostics: true
+      run_relay_integration: false
+
+  producer:
+    needs: baseline
+    uses: ./.github/workflows/unit-tests.yml
+    with:
+      node_versions: '["24.22.1"]'
+      runner: ubuntu-24.04-arm
+      shards: '[{"index":1,"count":5},{"index":2,"count":5},{"index":3,"count":5},{"index":4,"count":5},{"index":5,"count":5}]'
+      artifact_prefix: producer-unit
+      module_cache: cold
+      module_cache_namespace: ${{ github.run_id }}-${{ github.run_attempt }}
+      module_cache_seed: true
+      phase_diagnostics: true
+      run_relay_integration: false
+
+  warm:
+    needs: producer
+    uses: ./.github/workflows/unit-tests.yml
+    with:
+      node_versions: '["24.22.1"]'
+      runner: ubuntu-24.04-arm
+      shards: '[{"index":1,"count":5},{"index":2,"count":5},{"index":3,"count":5},{"index":4,"count":5},{"index":5,"count":5}]'
+      artifact_prefix: warm-unit
+      module_cache: warm
+      module_cache_namespace: ${{ github.run_id }}-${{ github.run_attempt }}
+      phase_diagnostics: true
+      run_relay_integration: false

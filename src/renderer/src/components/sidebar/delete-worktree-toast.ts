@@ -2,12 +2,20 @@ import { translate } from '@/i18n/i18n'
 import {
   isLockedWorktreeRemovalError,
   isProvenLivePtyRemovalError,
+  isProvenLiveStructuredSessionRemovalError,
   type WorktreeForceDeleteReason
 } from '../../../../shared/worktree/removal'
 export type DeleteWorktreeToastCopy = {
   title: string
   description?: string
   isDestructive: boolean
+}
+
+export function getSubmoduleRemovalRefusalCopy(): string {
+  return translate(
+    'auto.components.sidebar.delete.worktree.toast.submodules',
+    'This workspace contains submodules, so Git deletes it only with Force Delete. Force Delete also permanently removes anything in those submodules that was never pushed: commits, local branches and stashes.'
+  )
 }
 
 export function getDeleteWorktreeToastCopy(
@@ -59,9 +67,7 @@ export function getDeleteWorktreeToastCopy(
           'Failed to delete workspace {{value0}}',
           { value0: worktreeName }
         ),
-        // Why: Force Delete proceeds either way, so the copy must say which case this is.
-        // Telling a user "could not confirm" about terminals Orca watched stay alive asks
-        // them to waive a doubt that does not exist, and any running agent's work dies with it.
+        // Distinguish proven-live terminals from unverified exits because force delete can destroy their work.
         description: isProvenLivePtyRemovalError(error)
           ? translate(
               'auto.components.sidebar.delete.worktree.toast.unstoppedPtyLive',
@@ -81,13 +87,27 @@ export function getDeleteWorktreeToastCopy(
           'Failed to delete workspace {{value0}}',
           { value0: worktreeName }
         ),
-        // Why this is not the "could not confirm" wording: Orca watched these sessions stay
-        // attached, so there is no doubt to waive — Force Delete ends a conversation that is
-        // running right now, and any work it holds goes with it.
-        description: translate(
-          'auto.components.sidebar.delete.worktree.toast.runningAgentSession',
-          'This workspace still has running agent sessions, so Orca stopped before deleting any files. Force Delete will close them and discard any work they hold.'
+        // After attempted close, distinguish sessions observed attached from sessions we could not reach.
+        description: isProvenLiveStructuredSessionRemovalError(error)
+          ? translate(
+              'auto.components.sidebar.delete.worktree.toast.runningAgentSessionLive',
+              'This workspace still has running agent sessions that Orca could not close, so it stopped before deleting any files. Force Delete will discard any work they hold.'
+            )
+          : translate(
+              'auto.components.sidebar.delete.worktree.toast.runningAgentSession',
+              'Orca could not confirm every agent session in this workspace has closed, so it stopped before deleting any files. Use Force Delete to remove it anyway.'
+            ),
+        isDestructive: false
+      }
+    }
+    if (forceDeleteReason === 'submodules') {
+      return {
+        title: translate(
+          'auto.components.sidebar.delete.worktree.toast.1d0fa5c0a5',
+          'Failed to delete workspace {{value0}}',
+          { value0: worktreeName }
         ),
+        description: getSubmoduleRemovalRefusalCopy(),
         isDestructive: false
       }
     }
@@ -115,10 +135,7 @@ export function getDeleteWorktreeToastCopy(
         'auto.components.sidebar.delete.worktree.toast.ead7b8ee15',
         'It has changed files. Use Force Delete to delete it anyway.'
       ),
-      // Why: git commonly refuses the first delete when the worktree still has
-      // modified or untracked files. Showing raw stderr in a destructive toast
-      // made a normal cleanup step look like an Orca bug, so this common case
-      // gets a concise explanation plus the force-delete path instead.
+      // Dirty worktrees need cleanup guidance and force delete rather than alarming raw Git stderr.
       isDestructive: false
     }
   }

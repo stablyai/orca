@@ -1,13 +1,4 @@
-// Why: a remote tab create/activate is the ONE case where the session snapshot's
-// activeTabId reflects genuine user focus intent. Status-echo snapshots (e.g. an
-// agent "thinking" during a run) also set activeTabId but must NOT steal focus
-// (#5435). The snapshot can't distinguish these, so the client records its own
-// activation intent here: the reconcile only follows the snapshot's active tab
-// when it matches a pending intent the client itself initiated.
-//
-// Keyed by worktree id → the host session surface the client expects to focus.
-// The intent persists until a snapshot matches it (surviving racing/duplicate
-// snapshots, unlike a transient per-snapshot flag).
+// Status echoes also publish activeTabId and must not steal focus (#5435). Follow it only for matching client create/activate intent, retained per worktree until a matching snapshot arrives.
 
 import { webSessionIntentOwnerKey, type WebSessionIntentOwner } from './web-session-intent-owner'
 import { toVisibleTabType } from '../../../shared/tab-types'
@@ -18,6 +9,8 @@ export type WebSessionFocusIntent = {
   leafId?: string
   expectedCurrentLocalTabId?: string | null
 }
+
+export const MAX_WEB_SESSION_FOCUS_INTENTS = 512
 
 const pendingFocusByOwnerAndWorktree = new Map<string, WebSessionFocusIntent>()
 
@@ -39,8 +32,7 @@ export function resolveWebSessionVisibleTabId(
   worktreeId: string,
   tabs = state.unifiedTabsByWorktree?.[worktreeId] ?? []
 ): string | null {
-  // Why: the coarse (activeTabType, entityId) address inverts a many-to-one projection and cannot
-  // tell editor-family kinds apart; group state is what is actually on screen.
+  // Coarse active type/entity addresses cannot distinguish editor-family kinds; groups identify the visible tab.
   const groups = state.groupsByWorktree?.[worktreeId] ?? []
   if (groups.length > 0) {
     const activeGroupId = state.activeGroupIdByWorktree?.[worktreeId] ?? null
@@ -55,8 +47,7 @@ export function resolveWebSessionVisibleTabId(
     if (direct) {
       return direct.id
     }
-    // Why: reconcile can rematerialize the visible tab under a new id (local -> mirrored), so
-    // follow its entity rather than dropping focus. Stays inside the group to avoid a pane jump.
+    // Rekeys replace local tab IDs; follow entity within the group to avoid losing focus or jumping panes.
     const previous = (state.unifiedTabsByWorktree?.[worktreeId] ?? []).find(
       (tab) => tab.id === activeTabId
     )
@@ -82,8 +73,7 @@ export function resolveWebSessionVisibleTabId(
     const tabId = state.activeTabIdByWorktree?.[worktreeId]
     return tabId && tabs.some((tab) => tab.id === tabId) ? tabId : null
   }
-  // Why: a structured chat tab has no per-worktree active-entity map to address it by, so the
-  // entityId lookup below would always miss. There is at most one per worktree here.
+  // Structured chat lacks a per-worktree active-entity map; the lookup below would miss its sole tab.
   if (currentType === 'agent-session') {
     return tabs.find((tab) => tab.contentType === 'agent-session')?.id ?? null
   }
@@ -143,11 +133,20 @@ export function recordWebSessionFocusIntent(
     return
   }
   const trimmedLeafId = leafId?.trim()
-  pendingFocusByOwnerAndWorktree.set(focusIntentPartitionKey(owner, worktreeId), {
+  const key = focusIntentPartitionKey(owner, worktreeId)
+  pendingFocusByOwnerAndWorktree.delete(key)
+  pendingFocusByOwnerAndWorktree.set(key, {
     hostTabId: trimmed,
     ...(trimmedLeafId ? { leafId: trimmedLeafId } : {}),
     ...(expectedCurrentLocalTabId !== undefined ? { expectedCurrentLocalTabId } : {})
   })
+  while (pendingFocusByOwnerAndWorktree.size > MAX_WEB_SESSION_FOCUS_INTENTS) {
+    const oldest = pendingFocusByOwnerAndWorktree.keys().next()
+    if (oldest.done || oldest.value === key) {
+      break
+    }
+    pendingFocusByOwnerAndWorktree.delete(oldest.value)
+  }
 }
 
 export function peekWebSessionFocusIntent(

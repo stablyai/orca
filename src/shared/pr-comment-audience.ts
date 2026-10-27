@@ -55,7 +55,12 @@ export function getPRCommentAudienceCounts(
   comments: readonly PRComment[],
   botAuthorOverrides?: ReadonlySet<string>
 ): Record<PRCommentAudienceFilter, number> {
-  const bot = comments.filter((comment) => isBotPRComment(comment, botAuthorOverrides)).length
+  let bot = 0
+  comments.forEach((comment) => {
+    if (isBotPRComment(comment, botAuthorOverrides)) {
+      bot += 1
+    }
+  })
   return { all: comments.length, human: comments.length - bot, bot }
 }
 

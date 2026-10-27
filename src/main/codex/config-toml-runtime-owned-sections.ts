@@ -1,10 +1,16 @@
+import { stripCodexDaemonOverride } from './codex-daemon-socket-path-guard'
 import {
   createTomlLineScanState,
   getTomlTableHeader,
   isTomlStructuralLine,
   updateTomlLineScanState
 } from './config-toml-line-scan'
+import { parseTomlTableHeaderPath } from './config-toml-key-path'
+import { findProjectTrustLevelEntries } from './config-toml-project-trust-level'
+import { CODEX_HOOK_TRUST_KEY, parseHookStateTomlHeaderKey } from './config-toml-syntax'
 import {
+  codexHookSourcePathsEqual,
+  getCodexExplicitHomeHookSourcePath,
   normalizeCodexProjectPathForLookup,
   normalizeCodexProjectPathForRevocationLookup,
   parseCodexProjectHeaderPath
@@ -16,19 +22,32 @@ export type TomlSection = {
   start: number
 }
 
+export type SharedHookTrustCarry = {
+  systemHomeDir: string
+  /** Decoded hook-trust keys the runtime config already holds. */
+  runtimeHookTrustKeys: ReadonlySet<string>
+}
+
 export function stripRuntimeOwnedTomlSections(
   config: string,
-  runtimeProjectHeaders = new Set<string>()
+  runtimeProjectHeaders = new Set<string>(),
+  sharedHookTrust?: SharedHookTrustCarry
 ): string {
   const lines = config.split('\n')
   const sourceSections = getTomlSections(config)
   const sections = deduplicateProjectTomlSections(sourceSections)
   const firstSectionIndex = sourceSections[0]?.start ?? -1
   const preamble = firstSectionIndex === -1 ? config : lines.slice(0, firstSectionIndex).join('\n')
+  const carriedHookTrustKeys = new Set(sharedHookTrust?.runtimeHookTrustKeys)
   return joinTomlBlocks([
     preamble,
     ...sections
-      .filter((section) => !isRuntimeHookTrustTomlSection(section.header))
+      .filter(
+        (section) =>
+          !isRuntimeHookTrustTomlSection(section.header) ||
+          (sharedHookTrust !== undefined &&
+            claimSharedHookTrustSection(section.header, sharedHookTrust, carriedHookTrustKeys))
+      )
       .filter(
         (section) =>
           !isRuntimeProjectTomlSection(section.header) ||
@@ -80,14 +99,68 @@ export function isRuntimePreservedTomlSection(header: string): boolean {
 }
 
 export function isRuntimeHookTrustTomlSection(header: string): boolean {
-  const trimmed = header.trim()
-  // Why: Codex's config writer materializes the parent table on Windows. It is
-  // part of runtime-owned trust and must survive the next config mirror too.
-  return trimmed === '[hooks.state]' || trimmed.startsWith('[hooks.state.')
+  const table = parseTomlTableHeaderPath(header)
+  // Preserve the hooks.state parent Codex materializes on Windows, including quoted spellings.
+  return !!table && !table.isArray && table.segments[0] === 'hooks' && table.segments[1] === 'state'
+}
+
+// Home-owned hook sources must not be shared between runtime homes.
+export function classifyHookTrustKey(key: string, homeDir: string): 'home-scoped' | 'shared' {
+  const sourcePath = CODEX_HOOK_TRUST_KEY.exec(key)?.[1]
+  if (sourcePath === undefined) {
+    // Do not carry keys whose source cannot be attributed.
+    return 'home-scoped'
+  }
+  const homeFiles = ['hooks.json', 'config.toml'].flatMap((file) => {
+    // WSL homes require Linux separators even when Orca runs on Windows.
+    const logicalPath = `${homeDir.replace(/[\\/]+$/, '')}/${file}`
+    return [logicalPath, getCodexExplicitHomeHookSourcePath(logicalPath)]
+  })
+  return homeFiles.some((homeFile) => codexHookSourcePathsEqual(sourcePath, homeFile))
+    ? 'home-scoped'
+    : 'shared'
+}
+
+export function getHookTrustTomlSectionKeys(sections: readonly TomlSection[]): Set<string> {
+  const keys = new Set<string>()
+  for (const section of sections) {
+    const key = parseHookStateTomlHeaderKey(section.header)
+    if (key !== null) {
+      keys.add(key)
+    }
+  }
+  return keys
+}
+
+// Runtime trust wins; compare exact keys to retain required Windows separator variants.
+function claimSharedHookTrustSection(
+  header: string,
+  { systemHomeDir }: SharedHookTrustCarry,
+  claimedKeys: Set<string>
+): boolean {
+  const key = parseHookStateTomlHeaderKey(header)
+  if (key === null || classifyHookTrustKey(key, systemHomeDir) === 'home-scoped') {
+    return false
+  }
+  if (claimedKeys.has(key)) {
+    return false
+  }
+  claimedKeys.add(key)
+  return true
 }
 
 export function isRuntimeProjectTomlSection(header: string): boolean {
   return parseCodexProjectHeaderPath(header) !== null
+}
+
+const CODEX_MCP_SERVER_TABLE_ROOT = 'mcp_servers'
+
+export function getMcpServerTomlSectionName(header: string): string | null {
+  const table = parseTomlTableHeaderPath(header)
+  if (!table || table.isArray || table.segments[0] !== CODEX_MCP_SERVER_TABLE_ROOT) {
+    return null
+  }
+  return table.segments[1] ?? null
 }
 
 export function getTomlSectionHeaderKey(header: string): string {
@@ -97,8 +170,7 @@ export function getTomlSectionHeaderKey(header: string): string {
     : `project:${normalizeCodexProjectPathForLookup(projectPath)}`
 }
 
-// Why: configs written before WSL tails compared case-sensitively can hold a
-// revocation under drifted casing; match it loosely so trust is not resurrected.
+// Match legacy WSL revocations loosely so case drift cannot restore trust.
 export function getRevocationTomlSectionHeaderKey(header: string): string {
   const projectPath = parseCodexProjectHeaderPath(header)
   return projectPath === null
@@ -106,8 +178,7 @@ export function getRevocationTomlSectionHeaderKey(header: string): string {
     : `project:${normalizeCodexProjectPathForRevocationLookup(projectPath)}`
 }
 
-// Why: hook upsert already removes both quote representations, while its paired
-// Windows slash variants are required for Codex 0.140 and must remain distinct.
+// Deduplicate only projects; hook trust needs distinct Windows separator variants.
 export function deduplicateProjectTomlSections(sections: TomlSection[]): TomlSection[] {
   const deduplicated: TomlSection[] = []
   const projectIndexes = new Map<string, number>()
@@ -129,7 +200,7 @@ export function deduplicateProjectTomlSections(sections: TomlSection[]): TomlSec
       getProjectTrustLevel(existing.block) !== 'untrusted' &&
       getProjectTrustLevel(section.block) === 'untrusted'
     ) {
-      // Why: revocation must survive self-healing regardless of duplicate order.
+      // Revocation wins regardless of duplicate order.
       deduplicated[existingIndex] = section
     }
   }
@@ -137,12 +208,7 @@ export function deduplicateProjectTomlSections(sections: TomlSection[]): TomlSec
 }
 
 export function getProjectTrustLevel(block: string): 'trusted' | 'untrusted' | null {
-  const match =
-    /^[ \t]*trust_level[ \t]*=[ \t]*(?:"(trusted|untrusted)"|'(trusted|untrusted)')[ \t\r]*(?:#.*)?$/m.exec(
-      block
-    )
-  const trustLevel = match?.[1] ?? match?.[2] ?? null
-  return trustLevel === 'trusted' || trustLevel === 'untrusted' ? trustLevel : null
+  return findProjectTrustLevelEntries(block).find((entry) => entry.value !== null)?.value ?? null
 }
 
 export function joinTomlBlocks(blocks: string[]): string {
@@ -150,9 +216,7 @@ export function joinTomlBlocks(blocks: string[]): string {
   return normalizedBlocks.length === 0 ? '' : `${normalizedBlocks.join('\n\n')}\n`
 }
 
-// Why: with no ~/.codex/config.toml the runtime config is the user's only
-// config, so promotion seeds ~/.codex from it. Trust is runtime-owned and the
-// mirror re-appends it, so drop every project and hook-trust table here.
+// Seed missing canonical configs from runtime settings while excluding runtime-owned trust.
 export function extractOrdinaryCodexSettings(config: string): string {
   const sections = deduplicateProjectTomlSections(getTomlSections(config))
   const projectHeaders = new Set(
@@ -160,5 +224,6 @@ export function extractOrdinaryCodexSettings(config: string): string {
       .filter((section) => isRuntimeProjectTomlSection(section.header))
       .map((section) => getTomlSectionHeaderKey(section.header))
   )
-  return stripRuntimeOwnedTomlSections(config, projectHeaders).trimEnd()
+  // The daemon override belongs to the managed home and must not be promoted.
+  return stripCodexDaemonOverride(stripRuntimeOwnedTomlSections(config, projectHeaders)).trimEnd()
 }

@@ -1,3 +1,4 @@
+import '../unused-default-rpc-methods.test-fixture'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { RpcDispatcher } from '../dispatcher'
 import type { RpcRequest } from '../core'
@@ -6,7 +7,6 @@ import type { OrcaRuntimeService } from '../../orca-runtime'
 const {
   isPwshAvailable,
   isPwshAvailableAsync,
-  isWslAvailable,
   isWslAvailableAsync,
   listWslDistros,
   listWslDistrosAsync,
@@ -14,7 +14,6 @@ const {
 } = vi.hoisted(() => ({
   isPwshAvailable: vi.fn(),
   isPwshAvailableAsync: vi.fn(),
-  isWslAvailable: vi.fn(),
   isWslAvailableAsync: vi.fn(),
   listWslDistros: vi.fn(),
   listWslDistrosAsync: vi.fn(),
@@ -23,7 +22,6 @@ const {
 
 vi.mock('../../../pwsh', () => ({ isPwshAvailable, isPwshAvailableAsync }))
 vi.mock('../../../wsl', () => ({
-  isWslAvailable,
   isWslAvailableAsync,
   listWslDistros,
   listWslDistrosAsync
@@ -40,7 +38,6 @@ describe('host capability RPC methods', () => {
   beforeEach(() => {
     isPwshAvailable.mockReset()
     isPwshAvailableAsync.mockReset()
-    isWslAvailable.mockReset()
     isWslAvailableAsync.mockReset()
     listWslDistros.mockReset()
     listWslDistrosAsync.mockReset()
@@ -75,8 +72,7 @@ describe('host capability RPC methods', () => {
     })
   })
 
-  // Why: web/mobile clients reach these over the relay, so a sync probe would stall the
-  // desktop main event loop on execFileSync wsl.exe/pwsh.exe for up to 5s per call.
+  // Paired capability reads must not block the main loop with synchronous wsl.exe/pwsh.exe probes (up to 5s).
   it('answers the Windows shell capability methods without a blocking spawn', async () => {
     isPwshAvailableAsync.mockResolvedValue(false)
     isWslAvailableAsync.mockResolvedValue(false)
@@ -91,7 +87,6 @@ describe('host capability RPC methods', () => {
     expect(isWslAvailableAsync).toHaveBeenCalledTimes(1)
     expect(listWslDistrosAsync).toHaveBeenCalledTimes(1)
     expect(isPwshAvailableAsync).toHaveBeenCalledTimes(1)
-    expect(isWslAvailable).not.toHaveBeenCalled()
     expect(listWslDistros).not.toHaveBeenCalled()
     expect(isPwshAvailable).not.toHaveBeenCalled()
   })

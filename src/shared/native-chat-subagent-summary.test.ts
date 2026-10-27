@@ -4,7 +4,8 @@ import {
   isTerminalSubagentState,
   normalizeSubagentState,
   subagentGroupFallbackText,
-  summarizeSubagentGroup
+  summarizeSubagentGroup,
+  withoutSubagentGroupTwins
 } from './native-chat-subagent-summary'
 import type { NativeChatSubagentEntry } from './native-chat-types'
 
@@ -71,8 +72,75 @@ describe('summarizeSubagentGroup', () => {
       agent({ id: 'b', state: 'stopped', startedAt: 20, settledAt: 95 })
     ])
 
-    expect(working).toMatchObject({ startedAt: 20, settledAt: null })
-    expect(settled).toMatchObject({ startedAt: 20, settledAt: 95 })
+    expect(working).toMatchObject({ clockStartedAt: 20, settledAt: null })
+    expect(settled).toMatchObject({ clockStartedAt: 20, settledAt: 95 })
+  })
+
+  describe('elapsed clock', () => {
+    // What the row's clock reads: from `clockStartedAt` to now, or to `settledAt`.
+    function elapsed(agents: NativeChatSubagentEntry[], now: number): number | null {
+      const { clockStartedAt, settledAt } = summarizeSubagentGroup(agents)
+      return clockStartedAt === null ? null : (settledAt ?? now) - clockStartedAt
+    }
+
+    it('reads an overlapping fan-out as first start to last stop', () => {
+      const agents = [
+        agent({ id: 'a', state: 'completed', startedAt: 100, settledAt: 400 }),
+        agent({ id: 'b', state: 'completed', startedAt: 150, settledAt: 250 }),
+        agent({ id: 'c', state: 'failed', startedAt: 300, settledAt: 700 })
+      ]
+
+      expect(elapsed(agents, 10_000)).toBe(600)
+    })
+
+    it('counts only the two runs of a child resumed after a long gap', () => {
+      const agents = [
+        agent({ id: 'a', state: 'completed', startedAt: 1_000, settledAt: 6_000 }),
+        // The resumed child's current run, reopened long after its sibling stopped.
+        agent({ id: 'b', state: 'completed', startedAt: 300_000, settledAt: 305_000 })
+      ]
+
+      expect(elapsed(agents, 400_000)).toBe(10_000)
+    })
+
+    it('sums sequential children and skips the gap between them', () => {
+      const agents = [
+        agent({ id: 'a', state: 'completed', startedAt: 0, settledAt: 2_000 }),
+        agent({ id: 'b', state: 'completed', startedAt: 60_000, settledAt: 63_000 }),
+        agent({ id: 'c', state: 'stopped', startedAt: 120_000, settledAt: 121_000 })
+      ]
+
+      expect(elapsed(agents, 200_000)).toBe(6_000)
+    })
+
+    it('grows with now while a child works, without the gap before its run', () => {
+      const agents = [
+        agent({ id: 'a', state: 'completed', startedAt: 1_000, settledAt: 6_000 }),
+        agent({ id: 'b', state: 'working', startedAt: 300_000 })
+      ]
+
+      expect(elapsed(agents, 302_000)).toBe(7_000)
+      expect(elapsed(agents, 310_000)).toBe(15_000)
+    })
+
+    it('counts a settled run that overlaps a working one only once', () => {
+      const agents = [
+        agent({ id: 'a', state: 'completed', startedAt: 1_000, settledAt: 5_000 }),
+        agent({ id: 'b', state: 'working', startedAt: 3_000 })
+      ]
+
+      expect(elapsed(agents, 10_000)).toBe(9_000)
+    })
+
+    it('has no clock when no child carries a run time', () => {
+      expect(summarizeSubagentGroup([]).clockStartedAt).toBeNull()
+      expect(
+        summarizeSubagentGroup([
+          agent({ id: 'a', state: 'working' }),
+          agent({ id: 'b', state: 'completed', settledAt: 50 })
+        ]).clockStartedAt
+      ).toBeNull()
+    })
   })
 
   it('reads a state this build does not know as unverifiable, never as working', () => {
@@ -142,12 +210,7 @@ describe('subagentGroupFallbackText', () => {
     ).toBe('Ran 2 subagents (1 stopped)')
   })
 
-  // The sentence is frozen into a durable journal row and replayed on every
-  // reconnect, to clients that draw no roster block and reconcile nothing. It
-  // may therefore only state what a dead process still makes true: the group was
-  // spawned, and whatever outcome had already latched. `Kicked off` vs `Ran`
-  // reports whether an outcome was recorded yet, which is a write-time fact —
-  // saying `Ran` while children were in flight would assert they exited.
+  // Frozen journal text replays to non-reconciling clients. Claim only spawn/latched outcomes; Kicked off versus Ran records write-time outcome presence, never liveness.
   it('makes no liveness claim a replayed row could not still justify', () => {
     const inFlight = subagentGroupFallbackText([
       agent({ id: 'a', state: 'working' }),
@@ -175,10 +238,7 @@ describe('subagentGroupFallbackText', () => {
   })
 })
 
-// Both readers decide "the twin is already printing" with this, so a false
-// positive silently eats a message's real prose and a false negative prints the
-// roster twice. The shape must outlive a byte compare: a roster from a newer
-// build names a state this build never produces.
+// Twin false positives hide real prose; false negatives duplicate rosters. Match shape because newer states cannot reproduce byte-for-byte here.
 describe('isSubagentGroupFallbackText', () => {
   it('recognizes every sentence the producer writes, including an unknown state', () => {
     expect(isSubagentGroupFallbackText(subagentGroupFallbackText([agent({})]))).toBe(true)
@@ -199,10 +259,7 @@ describe('isSubagentGroupFallbackText', () => {
     )
   })
 
-  // Journals written before the twin dropped its live count still hold the old
-  // sentence, and those rows replay forever. A pattern that stopped matching
-  // them would print every one of those rosters twice — once as the block, once
-  // as prose the reader meant to drop.
+  // Legacy dev journals retain live-count twins forever; continue matching them to avoid duplicate replay rows.
   it('still recognizes the legacy twin already frozen into existing journals', () => {
     for (const legacy of [
       'Kicked off 1 subagent — 1 working',
@@ -224,5 +281,18 @@ describe('isSubagentGroupFallbackText', () => {
     ]) {
       expect(isSubagentGroupFallbackText(prose)).toBe(false)
     }
+  })
+})
+
+describe('withoutSubagentGroupTwins', () => {
+  const twin = { type: 'text' as const, text: 'Ran 1 subagent' }
+  const prose = { type: 'text' as const, text: 'Delegating the review.' }
+
+  it('drops the twin only beside a group that draws', () => {
+    const group = { type: 'subagent-group' as const, groupId: 'g', agents: [agent({})] }
+    expect(withoutSubagentGroupTwins([twin, prose, group])).toEqual([prose, group])
+    const childless = { type: 'subagent-group' as const, groupId: 'g', agents: [] }
+    expect(withoutSubagentGroupTwins([twin, childless])).toEqual([twin, childless])
+    expect(withoutSubagentGroupTwins([twin])).toEqual([twin])
   })
 })

@@ -2,7 +2,15 @@ import type { Store } from './persistence'
 import type { GlobalSettings } from '../shared/global-settings-types'
 import type { Project } from '../shared/project-types'
 import type { Repo } from '../shared/repo-types'
+import type { FolderWorkspace } from '../shared/folder-workspace-types'
+import type { ProjectGroup } from '../shared/project-group-types'
 import {
+  findFolderWorkspaceCandidateRepos,
+  resolveFolderWorkspaceHost,
+  type FolderWorkspaceHostState
+} from '../shared/folder-workspace-execution-host'
+import {
+  getWorkspaceRuntimePreference,
   resolveProjectExecutionRuntime,
   type ProjectExecutionRuntimeResolution
 } from '../shared/project-execution-runtime'
@@ -13,17 +21,15 @@ import {
   hasCachedWslDistros
 } from './wsl'
 import { getRepoIdFromWorktreeId } from '../shared/worktree/id'
+import { projectMatchesRepo } from '../shared/project-repo-match'
+import {
+  resolveLocalWindowsTerminalRuntimeOptions,
+  type LocalWindowsTerminalRuntimeOptions
+} from '../shared/local-windows-terminal-runtime'
+import { resolveManagedSshHostLoginShell } from './pty/managed-ssh-host-login-shell'
 import { getRepoExecutionHostId, LOCAL_EXECUTION_HOST_ID } from '../shared/execution-host'
 
-/**
- * The slice of the store runtime resolution actually reads. Structural rather
- * than the full `Store` so narrowed stores -- the Orca runtime's `RuntimeStore`,
- * worktree root preparation -- resolve the same runtime the create path does
- * instead of silently falling back to host placement.
- *
- * Members stay optional because those stores declare them optional; the
- * `typeof` guards below are what actually decide whether resolution can run.
- */
+// Structural typing lets narrowed runtime stores use the same resolution as workspace creation.
 export type ProjectRuntimeResolutionStore = {
   getProjects?: Store['getProjects']
   getRepo?: Store['getRepo']
@@ -49,13 +55,15 @@ function canResolveProjectRuntimeForWorktreeId(
 
 function resolveLocalProjectRuntime(
   store: ResolvableStore,
-  project: Project,
-  settings: ReturnType<ResolvableStore['getSettings']> = store.getSettings()
+  project: Pick<Project, 'id' | 'localWindowsRuntimePreference'>,
+  settings: ReturnType<ResolvableStore['getSettings']> = store.getSettings(),
+  checkWslCache = true
 ): ProjectExecutionRuntimeResolution {
-  const wslAvailable = hasCachedWslAvailability()
-    ? (getCachedWslAvailability() ?? undefined)
-    : undefined
-  const availableWslDistros = hasCachedWslDistros() ? getCachedWslDistros() : null
+  const wslAvailable =
+    checkWslCache && hasCachedWslAvailability()
+      ? (getCachedWslAvailability() ?? undefined)
+      : undefined
+  const availableWslDistros = checkWslCache && hasCachedWslDistros() ? getCachedWslDistros() : null
   return resolveProjectExecutionRuntime({
     appPlatform: process.platform,
     projectId: project.id,
@@ -83,6 +91,89 @@ export function resolveLocalProjectRuntimeForRepo(
   return resolveLocalProjectRuntime(store, project)
 }
 
+/** Match renderer precedence: project preference, WSL-share distro, then global default. */
+export function resolveLocalWorkspaceRuntime(
+  store: ProjectRuntimeResolutionStore,
+  repo: Repo,
+  workspacePath: string | null | undefined
+): ProjectExecutionRuntimeResolution | undefined {
+  if (
+    getRepoExecutionHostId(repo) !== LOCAL_EXECUTION_HOST_ID ||
+    !canResolveProjectRuntimeForRepo(store)
+  ) {
+    return undefined
+  }
+  const project = store.getProjects().find((entry) => projectMatchesRepo(entry, repo.id))
+  const preference = getWorkspaceRuntimePreference(
+    project?.localWindowsRuntimePreference,
+    workspacePath
+  )
+  // WSL-share paths supply their distro; ignore potentially stale discovery caches for inferred preferences.
+  return resolveLocalProjectRuntime(
+    store,
+    { id: project?.id ?? repo.id, localWindowsRuntimePreference: preference },
+    undefined,
+    Boolean(project?.localWindowsRuntimePreference) || preference.kind !== 'wsl'
+  )
+}
+
+/** A folder inherits a runtime only from a single repo on the local host. */
+export function findLocalFolderWorkspaceRuntimeRepo(
+  state: FolderWorkspaceHostState,
+  folderWorkspaceId: string
+): Repo | undefined {
+  const folder = state.folderWorkspaces.find((entry) => entry.id === folderWorkspaceId)
+  if (!folder || resolveFolderWorkspaceHost(state, folder.id).kind !== 'local') {
+    return undefined
+  }
+  const group = state.projectGroups.find((entry) => entry.id === folder.projectGroupId)
+  if (
+    (folder.executionHostId ?? group?.executionHostId ?? LOCAL_EXECUTION_HOST_ID) !==
+    LOCAL_EXECUTION_HOST_ID
+  ) {
+    return undefined
+  }
+  const candidates = findFolderWorkspaceCandidateRepos(state, folder.id)
+  const repo = candidates.length === 1 ? candidates[0] : undefined
+  return repo && getRepoExecutionHostId(repo) === LOCAL_EXECUTION_HOST_ID ? repo : undefined
+}
+
+export type LaunchScopeRuntimeStore = ProjectRuntimeResolutionStore & {
+  getRepos?: () => Repo[]
+  getFolderWorkspaces?: () => FolderWorkspace[]
+  getProjectGroups?: () => ProjectGroup[]
+}
+
+/** Remote scopes resolve their runtime on their own host. */
+export function resolveLocalLaunchScopeRuntime(
+  store: LaunchScopeRuntimeStore,
+  scope: {
+    id: string
+    path: string
+    connectionId: string | null
+    repo: Repo | null
+    folderWorkspace: Pick<FolderWorkspace, 'id'> | null
+  }
+): ProjectExecutionRuntimeResolution | undefined {
+  if (scope.connectionId) {
+    return undefined
+  }
+  const repo =
+    scope.repo ??
+    (scope.folderWorkspace
+      ? findLocalFolderWorkspaceRuntimeRepo(
+          {
+            folderWorkspaces: store.getFolderWorkspaces?.() ?? [],
+            projectGroups: store.getProjectGroups?.() ?? [],
+            repos: store.getRepos?.() ?? []
+          },
+          scope.folderWorkspace.id
+        )
+      : undefined)
+  // A repo-less folder has no runtime: its path alone places it, and its cwd picks its shell.
+  return repo ? resolveLocalWorkspaceRuntime(store, repo, scope.path) : undefined
+}
+
 export function resolveLocalProjectRuntimesForRepos(
   store: ProjectRuntimeResolutionStore,
   repos: readonly Repo[]
@@ -107,8 +198,7 @@ export function resolveLocalProjectRuntimesForRepos(
     if (matchingRepoIds.length === 0) {
       continue
     }
-    // Why: one project runtime applies to every source repo in that project;
-    // resolving it once prevents mobile polls from rescanning project settings.
+    // Resolve once per project to avoid repeated settings scans during mobile polls.
     const runtime = resolveLocalProjectRuntime(store, project, settings)
     for (const repoId of matchingRepoIds) {
       runtimeByRepoId.set(repoId, runtime)
@@ -129,4 +219,45 @@ export function resolveLocalProjectRuntimeForWorktreeId(
   }
   const repo = store.getRepo(getRepoIdFromWorktreeId(worktreeId))
   return repo ? resolveLocalProjectRuntimeForRepo(store, repo) : undefined
+}
+
+type LocalPtySettings = Partial<
+  Pick<GlobalSettings, 'terminalWindowsShell' | 'terminalWindowsWslDistro' | 'terminalDefaultShell'>
+>
+
+/** Throws for a Windows runtime that needs repair. */
+export function resolveLocalPtyOptions(
+  settings: LocalPtySettings | undefined,
+  projectRuntime: ProjectExecutionRuntimeResolution | undefined,
+  requestedShellOverride: string | undefined,
+  /** Replaces a `wsl.exe` setting on a Windows-host runtime; absent is `powershell.exe`. */
+  fallbackHostShell?: string
+): LocalWindowsTerminalRuntimeOptions {
+  return process.platform === 'win32'
+    ? resolveLocalWindowsTerminalRuntimeOptions({
+        requestedShellOverride,
+        settings,
+        projectRuntime,
+        fallbackHostShell,
+        sshLoginShell: resolveManagedSshHostLoginShell()
+      })
+    : {
+        shellOverride: requestedShellOverride ?? (settings?.terminalDefaultShell || undefined),
+        terminalWindowsWslDistro: null
+      }
+}
+
+/** Plain terminals use the project runtime and fall back to COMSPEC for the Windows host shell. */
+export function resolvePlainTerminalPtyOptions(
+  store: ProjectRuntimeResolutionStore | undefined,
+  settings: LocalPtySettings | undefined,
+  worktreeId: string | undefined,
+  requestedShellOverride: string | undefined
+): LocalWindowsTerminalRuntimeOptions {
+  return resolveLocalPtyOptions(
+    settings,
+    resolveLocalProjectRuntimeForWorktreeId(store, worktreeId),
+    requestedShellOverride,
+    process.env.COMSPEC || 'powershell.exe'
+  )
 }

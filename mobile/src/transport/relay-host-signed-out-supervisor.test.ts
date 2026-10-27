@@ -1,12 +1,16 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { MOBILE_RELAY_CLOSE_CODE } from '../../../src/shared/mobile-relay-close-codes'
-import { RELAY_HOST_CLOSE_REASON } from '../../../src/shared/relay-host-close-reason'
+import {
+  RELAY_HOST_CLOSE_REASON,
+  type RelayHostCloseReason
+} from '../../../src/shared/relay-host-close-reason'
 import { RelayOuterError } from './mobile-relay-e2ee-link'
 import {
   dependencies,
   FakeLogicalClient,
   FakeRelaySession,
-  host
+  host,
+  relay
 } from './mobile-endpoint-supervisor-test-fakes'
 import { MobileEndpointSupervisor } from './mobile-endpoint-supervisor'
 
@@ -14,8 +18,7 @@ vi.mock('react-native', () => ({ Platform: { OS: 'ios' } }))
 vi.mock('expo-secure-store', () => ({ WHEN_UNLOCKED_THIS_DEVICE_ONLY: 'when-unlocked' }))
 vi.mock('expo-crypto', () => ({ getRandomBytes: (length: number) => new Uint8Array(length) }))
 
-// The reason travels from the cell's close frame to the screens. This covers
-// the production wiring between them: the supervisor's own openRelay callback.
+// Exercise reason propagation through the supervisor’s real openRelay wiring.
 describe('a signed-out desktop reaches the phone verdict', () => {
   beforeEach(() => {
     vi.useFakeTimers()
@@ -23,13 +26,13 @@ describe('a signed-out desktop reaches the phone verdict', () => {
   })
   afterEach(() => vi.useRealTimers())
 
-  function supervisorOver(closeReason: string | null) {
+  function supervisorOver(closeReason: RelayHostCloseReason | null) {
     const logical = new FakeLogicalClient('disconnected', 'lan')
     const deps = dependencies({
       openDirect: vi.fn(() => new FakeRelaySession('disconnected')),
       openRelay: vi.fn((_relay, _credential, _confirmReqId, onHostCloseReason) => {
         if (closeReason) {
-          onHostCloseReason?.(closeReason as never)
+          onHostCloseReason?.(closeReason)
         }
         return new FakeRelaySession(
           'disconnected',
@@ -37,14 +40,14 @@ describe('a signed-out desktop reaches the phone verdict', () => {
         )
       })
     })
-    return { logical, supervisor: new MobileEndpointSupervisor(logical, host, deps) }
+    return { logical, supervisor: new MobileEndpointSupervisor(logical, host.id, relay, deps) }
   }
 
   it('latches the sign-out the cell reported', async () => {
     const { logical, supervisor } = supervisorOver(RELAY_HOST_CLOSE_REASON.SIGNED_OUT)
 
     await supervisor.start()
-    await vi.waitFor(() => expect(logical.isHostSignedOut()).toBe(true))
+    await vi.waitFor(() => expect(logical.getRelayHostReachability()).toBe('signed-out'))
 
     supervisor.stop()
   })
@@ -54,7 +57,7 @@ describe('a signed-out desktop reaches the phone verdict', () => {
 
     await supervisor.start()
 
-    expect(logical.isHostSignedOut()).toBe(false)
+    expect(logical.getRelayHostReachability()).not.toBe('signed-out')
     supervisor.stop()
   })
 })

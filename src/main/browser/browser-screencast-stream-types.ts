@@ -34,6 +34,8 @@ export type BrowserScreencastSession = {
   done: Promise<void>
   updateViewport: (viewport: BrowserScreencastViewport) => Promise<void>
   updateFrameBudget: (budget: BrowserScreencastFrameBudget) => Promise<void>
+  /** Answers on the reporting CDP session; returns false if no dialog is open. */
+  settleDialog: (accept: boolean, promptText?: string) => Promise<boolean>
 }
 
 export type BrowserScreencastEvent =

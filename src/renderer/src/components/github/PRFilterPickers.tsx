@@ -1,6 +1,3 @@
-// Why: lower-level pickers used by PRFilterDropdowns. Split out so the parent
-// stays under the per-file line cap and so each picker can be tested or reused
-// independently of the qualifier-mapping logic.
 import React, { useMemo, useState } from 'react'
 import { Check } from 'lucide-react'
 import {
@@ -18,7 +15,7 @@ export type PickerOption = { key: string; primary: string; secondary?: string }
 
 export const PULL_REQUEST_PICKER_QUERY_MAX_BYTES = 2 * 1024
 
-export function isPullRequestPickerQueryTooLarge(
+function isPullRequestPickerQueryTooLarge(
   query: string,
   maxBytes = PULL_REQUEST_PICKER_QUERY_MAX_BYTES
 ): boolean {
@@ -71,9 +68,7 @@ export function SingleSelectList({
   searchPlaceholder: string
   emptyText?: string
   renderOption?: (opt: PickerOption) => React.ReactNode
-  // Why: PR authors and reviewers can be external contributors who aren't in
-  // `listAssignableUsers` (repo collaborators only). Allowing a typed login as
-  // a fallback lets the user filter by anyone GitHub recognizes.
+  // Allow external authors/reviewers missing from the collaborator-only assignable-user list.
   allowCustomValue?: boolean
   onSelect: (value: string | null) => void
 }): React.JSX.Element {

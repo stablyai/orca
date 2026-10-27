@@ -1,0 +1,80 @@
+{
+  "goldenFormatVersion": 6,
+  "operation": "files.preview-save",
+  "family": "files.preview-save",
+  "namedDeltas": [],
+  "values": {
+    "300dad960cb6": {
+      "name": "files.writeTerminalArtifact#1",
+      "ordinal": 2,
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"files.writeTerminalArtifact\",\"params\":{\"worktree\":\"id:workspace-1\",\"absolutePath\":\"/logs/run.txt\",\"grantId\":\"grant-1\",\"content\":\"next\"}}"
+    },
+    "54a6055a16b5": {
+      "status": "fulfilled",
+      "startedAt": 0,
+      "settledAt": 0,
+      "value": {
+        "status": "saved"
+      }
+    },
+    "7c239dddee09": {
+      "name": "files.writeTerminalArtifact#1",
+      "ordinal": 1,
+      "args": [
+        {
+          "name": "method",
+          "value": "files.writeTerminalArtifact"
+        },
+        {
+          "name": "params",
+          "value": {
+            "absolutePath": "/logs/run.txt",
+            "content": "next",
+            "grantId": "grant-1",
+            "worktree": "id:workspace-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-1",
+          "ok": true,
+          "result": {
+            "ok": true
+          }
+        }
+      }
+    },
+    "b3f873eb7d0c": {
+      "saved": {
+        "status": "saved"
+      }
+    }
+  },
+  "recording": {
+    "scenario": "files-save-blind",
+    "checkpoints": [
+      {
+        "id": "settled",
+        "observation": {
+          "sender": ["7c239dddee09"],
+          "payloads": ["300dad960cb6"],
+          "settlements": {
+            "save": "54a6055a16b5"
+          },
+          "state": "b3f873eb7d0c",
+          "effects": []
+        }
+      }
+    ]
+  }
+}

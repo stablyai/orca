@@ -1,4 +1,5 @@
 import { containsTerminalVerticalLineControl } from './terminal-ansi-normalization'
+import { ownRetainedString } from '../../shared/own-retained-string'
 import { carryTerminalTailSentinelMatches } from './terminal-tail-sentinel-index'
 import {
   applyTerminalLineControls,
@@ -7,6 +8,7 @@ import {
   trimTerminalLineRight
 } from './terminal-tail-line-controls'
 import { MAX_TAIL_CHARS, MAX_TAIL_LINES, MAX_TAIL_PARTIAL_CHARS } from './terminal-tail-limits'
+import { maxUpwardCursorReach } from './terminal-tail-redraw-reach'
 import {
   appendNormalizedToMultilineTailBufferUnwindowed,
   type RetainedTailRedrawCursor
@@ -18,9 +20,7 @@ type RetainedTailLineStats = {
   rightTrimmed: boolean
 }
 
-// Why weak + array-keyed: the tail is replaced (never mutated) on every append, so an entry dies
-// with the array it describes and only the live tail per PTY is retained. Carrying the char total
-// this way replaces a full-tail re-sum on every chunk.
+// Append replaces arrays; weak array keys let stats die with each tail while avoiding a full character re-sum per chunk.
 const tailLineStatsByLines = new WeakMap<readonly string[], RetainedTailLineStats>()
 
 function getRetainedTailLineStats(lines: readonly string[]): RetainedTailLineStats {
@@ -47,16 +47,7 @@ type CarriedTailBuild = {
   truncated: boolean
 }
 
-/**
- * The only way to produce a next tail array: `previousLines[keepStart, keepEnd) ++ appended`,
- * capped by `MAX_TAIL_LINES` and — when `charCapPartialChars` is non-null — `MAX_TAIL_CHARS`.
- *
- * Why a constructor rather than three call sites doing their own arithmetic: the carried-match
- * window handed to the sentinel index, the character total, and the array itself are all derived
- * here from the same keep bounds, including whatever the caps drop, so they cannot disagree. The
- * one thing a caller still has to get right is that every row in `appended` is already
- * right-trimmed, which every producer of retained rows does.
- */
+/** Derive array, character total and sentinel carry window from the same capped keep bounds; callers must right-trim appended rows. */
 function buildCarriedTailLines(
   previousLines: string[],
   keepStart: number,
@@ -171,11 +162,13 @@ export function appendNormalizedToTailBuffer(
   const pieces = processTerminalTailCompleteSegments(segments.completeSegments)
   const newlyCompletedLines: string[] = []
   for (const piece of pieces) {
-    newlyCompletedLines.push(trimTerminalLineRight(piece))
+    // Why own: every retained row is sliced from this chunk but outlives it by up to
+    // MAX_TAIL_LINES chunks, so an un-owned row pins its whole 64 KiB chunk.
+    newlyCompletedLines.push(ownRetainedString(trimTerminalLineRight(piece)))
   }
   const partialResult = applyTerminalLineControls(segments.partialSegment)
   const nextPartialLine = trimTerminalLineRight(partialResult.text)
-  const retainedPartialLine = nextPartialLine.slice(-MAX_TAIL_PARTIAL_CHARS)
+  const retainedPartialLine = ownRetainedString(nextPartialLine.slice(-MAX_TAIL_PARTIAL_CHARS))
   const newCompleteLines = segments.completeLineCount
   const omittedNewCompleteLines = newCompleteLines - pieces.length
 
@@ -217,26 +210,8 @@ export function appendNormalizedToTailBuffer(
   }
 }
 
-// Why a window: the unwindowed impl below is O(tail) per chunk (~93% of the event loop under TUI flood, findings log 2026-07-03); a redraw only touches rows the cursor reaches, so window the suffix and share the prefix by reference. Equivalence fuzz-verified in retained-tail-redraw-window.equivalence.test.ts.
+// Redraw reaches only a suffix; window it and share untouched rows to avoid O(tail) work per TUI chunk (retained-tail-redraw-window.equivalence.test.ts).
 const REDRAW_WINDOW_SAFETY_ROWS = 8
-
-// Why module-level: this ran `new RegExp` per redraw chunk — i.e. per TUI frame per PTY.
-// Safe to share because `maxUpwardCursorReach` is synchronous and non-reentrant; it resets
-// `lastIndex` before every scan.
-const CURSOR_UP_PATTERN = new RegExp(`${String.fromCharCode(27)}\\[(\\d*)(?:;[\\d;]*)?A`, 'g')
-
-function maxUpwardCursorReach(
-  normalizedChunk: string,
-  previousRedrawCursor: RetainedTailRedrawCursor | null
-): number {
-  let reach = previousRedrawCursor ? previousRedrawCursor.rowFromEnd : 0
-  CURSOR_UP_PATTERN.lastIndex = 0
-  let match: RegExpExecArray | null
-  while ((match = CURSOR_UP_PATTERN.exec(normalizedChunk)) !== null) {
-    reach += match[1] ? Number.parseInt(match[1], 10) : 1
-  }
-  return reach
-}
 
 function appendNormalizedToMultilineTailBuffer(
   previousLines: string[],
@@ -253,7 +228,11 @@ function appendNormalizedToMultilineTailBuffer(
   newlyCompletedLines: string[]
 } {
   const windowRows =
-    maxUpwardCursorReach(normalizedChunk, previousRedrawCursor) + REDRAW_WINDOW_SAFETY_ROWS
+    maxUpwardCursorReach(
+      normalizedChunk,
+      previousRedrawCursor,
+      previousLines.length - REDRAW_WINDOW_SAFETY_ROWS
+    ) + REDRAW_WINDOW_SAFETY_ROWS
   if (windowRows >= previousLines.length) {
     const unwindowed = appendNormalizedToMultilineTailBufferUnwindowed(
       previousLines,
@@ -281,9 +260,7 @@ function appendNormalizedToMultilineTailBuffer(
     previousPartialWasCapped,
     previousRedrawCursor
   )
-  // The window provably cannot reach the prefix, so it carries unchanged — unless the tail
-  // entered un-right-trimmed, in which case the prefix has to be rewritten to match the
-  // unwindowed finalize's trailing-space trim and is therefore no longer the previous tail's rows.
+  // Carry the unreachable prefix only when already right-trimmed; otherwise rewrite it to match unwindowed finalization.
   const previousStats = getRetainedTailLineStats(previousLines)
   let keepEnd = prefixLength
   let appended: readonly string[] = windowed.lines

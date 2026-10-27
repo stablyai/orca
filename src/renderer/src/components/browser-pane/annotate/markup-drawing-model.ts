@@ -1,13 +1,9 @@
-// Pure drawing model for browser screenshot markup. No DOM access — shapes are
-// vector objects in CSS-viewport coordinates so the same data drives both the
-// live canvas overlay and the final composited PNG. Keeping this canvas-free
-// makes the undo/redo and geometry logic unit-testable.
+// Keep shapes in CSS viewport coordinates without DOM dependencies so preview, export and geometry tests use the same model.
 
 export type MarkupToolKind = 'pen' | 'highlight' | 'arrow' | 'rect' | 'ellipse' | 'text'
 
-// Toolbar selection. Draw-only: markup is a throwaway scribble the user copies
-// once, so there is no select/move/restyle cursor.
-export type MarkupTool = MarkupToolKind
+// Marks are disposable ink: erase whole shapes without a selection/move/restyle cursor.
+export type MarkupTool = MarkupToolKind | 'eraser'
 
 export type MarkupPoint = { x: number; y: number }
 
@@ -52,8 +48,7 @@ export type MarkupShape =
   | EllipseShape
   | TextShape
 
-// Concrete ink colors (baked into the exported PNG, so these are content colors,
-// not UI-chrome tokens). Ordered for a compact swatch row.
+// These colors become exported PNG content, so they are independent of UI chrome tokens.
 export const MARKUP_COLORS = [
   '#ef4444',
   '#f97316',
@@ -70,11 +65,8 @@ export const DEFAULT_MARKUP_WIDTH = 4
 export const MARKUP_FONT_SIZES = [14, 18, 24, 32, 48] as const
 export const DEFAULT_MARKUP_FONT_SIZE = 18
 
-// Highlight strokes are intentionally fat and translucent.
 export const HIGHLIGHT_WIDTH_MULTIPLIER = 4
 export const HIGHLIGHT_ALPHA = 0.35
-
-// ─── Document with undo/redo ────────────────────────────────────────────────
 
 export type MarkupDocument = {
   shapes: MarkupShape[]
@@ -88,8 +80,7 @@ export function createMarkupDocument(): MarkupDocument {
   return { shapes: [], past: [], future: [] }
 }
 
-// Replace the whole shape list as one undoable step. Snapshot-based so every
-// edit — add, move, restyle, delete — is reversible, not just adding a shape.
+// Snapshot whole lists so replacement edits are undoable along with additions.
 export function setShapes(doc: MarkupDocument, shapes: MarkupShape[]): MarkupDocument {
   return { shapes, past: [...doc.past, doc.shapes], future: [] }
 }
@@ -130,8 +121,6 @@ export function isEmptyDocument(doc: MarkupDocument): boolean {
   return doc.shapes.length === 0
 }
 
-// ─── Geometry helpers (shared by live overlay + compositor) ─────────────────
-
 export type NormalizedRect = { x: number; y: number; width: number; height: number }
 
 export function normalizeRect(from: MarkupPoint, to: MarkupPoint): NormalizedRect {
@@ -147,9 +136,7 @@ export function scalePoint(point: MarkupPoint, scale: number): MarkupPoint {
   return { x: point.x * scale, y: point.y * scale }
 }
 
-// Why: the compositor draws into a canvas sized to the base-image's physical
-// pixels, while shapes are authored in CSS-viewport pixels. Scaling every shape
-// by (imagePx / cssPx) keeps strokes aligned with the underlying screenshot.
+// Scale CSS-authored shapes to image pixels so export stays aligned with the screenshot.
 export function scaleShape(shape: MarkupShape, scale: number): MarkupShape {
   switch (shape.kind) {
     case 'pen':
@@ -185,8 +172,7 @@ export function arrowHeadLength(width: number): number {
   return Math.max(10, width * 3.5)
 }
 
-// Returns the two wing points of an arrowhead at `to`, or null when the segment
-// has no direction (from === to) so callers can skip drawing a degenerate head.
+// Directionless segments have no arrowhead; callers skip the null result.
 export function arrowHeadGeometry(
   from: MarkupPoint,
   to: MarkupPoint,
@@ -210,4 +196,12 @@ export function arrowHeadGeometry(
 
 export function highlightWidth(width: number): number {
   return width * HIGHLIGHT_WIDTH_MULTIPLIER
+}
+
+export function strokeDotRadius(width: number): number {
+  return Math.max(width / 2, 1)
+}
+
+export function textHaloWidth(fontSize: number): number {
+  return Math.max(fontSize / 6, 2)
 }

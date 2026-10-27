@@ -74,6 +74,34 @@ final class SnapshotRenderingTests: XCTestCase {
         XCTAssertEqual(SnapshotRenderHeuristics.meaningfulActions(node.rawActions, role: node.role), ["AXScrollUpByPage", "AXScrollDownByPage"])
     }
 
+    func testKeepsHorizontalOnlyActionsInTheirOriginalOrder() {
+        let actions = ["AXScrollRightByPage", "AXPress", "AXScrollLeftByPage", "AXScrollRightByPage"]
+        let node = SnapshotRenderNode(role: "AXScrollArea", rawActions: actions)
+
+        XCTAssertEqual(
+            SnapshotRenderHeuristics.meaningfulActions(actions, role: node.role),
+            ["AXScrollRightByPage", "AXScrollLeftByPage", "AXScrollRightByPage"]
+        )
+        XCTAssertEqual(
+            SnapshotRenderHeuristics.line(index: 2, node: node),
+            "2 scroll area, Secondary Actions: scroll right, scroll left, scroll right"
+        )
+    }
+
+    func testKeepsMixedScrollActionsOutsideScrollAreas() {
+        let actions = ["AXScrollLeftByPage", "AXScrollDownByPage", "AXScrollRightByPage", "AXCancel"]
+        let node = SnapshotRenderNode(role: "AXMenu", rawActions: actions)
+
+        XCTAssertEqual(
+            SnapshotRenderHeuristics.meaningfulActions(actions, role: node.role),
+            ["AXScrollLeftByPage", "AXScrollDownByPage", "AXScrollRightByPage"]
+        )
+        XCTAssertEqual(
+            SnapshotRenderHeuristics.line(index: 3, node: node),
+            "3 menu, Secondary Actions: scroll left, scroll down, scroll right"
+        )
+    }
+
     func testTextFieldsKeepDistinctValueAndPlaceholder() {
         let node = SnapshotRenderNode(
             role: "AXTextField",

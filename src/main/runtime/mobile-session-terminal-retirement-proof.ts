@@ -1,21 +1,15 @@
-import type { RuntimeMobileSessionTabsSnapshot } from '../../shared/runtime-types'
+import type {
+  RuntimeMobileSessionRetiredTerminalSurface,
+  RuntimeMobileSessionTabsSnapshot
+} from '../../shared/runtime-types'
 import {
   appendRetiredTerminalSurfaceProofs,
-  dropRetirementProofsForLiveSurfaces
+  dropRetirementProofsForLiveSurfaces,
+  retirementProofKey
 } from '../../shared/terminal-retirement-proof-ledger'
 
-export {
-  appendRetiredTerminalSurfaceProofs,
-  dropRetirementProofsForLiveSurfaces
-} from '../../shared/terminal-retirement-proof-ledger'
-
-/**
- * Renderer snapshots omit the host's durable close acknowledgements; carry them forward.
- *
- * Why the identity inheritance: host-authored writes never set `worktreeInstanceId`. Without it
- * the stored entry forgets which occupant minted the proofs, and renderer(A) -> host write ->
- * renderer(B) would launder A's proofs into B.
- */
+/** Carry durable host close proofs through renderer snapshots. Inherit worktreeInstanceId on identity-less host writes
+ * so renderer(A) -> host -> renderer(B) cannot launder A's proofs into B. */
 export function preserveTerminalRetirementProofs(
   snapshot: RuntimeMobileSessionTabsSnapshot,
   existing: RuntimeMobileSessionTabsSnapshot | undefined
@@ -46,5 +40,41 @@ export function preserveTerminalRetirementProofs(
       ),
       snapshot.tabs
     )
+  }
+}
+
+/** Attach proofs even after surface removal; bump snapshotVersion so freshness-gated clients accept retractions.
+ * Return null for identical proofs to prevent no-op fan-out. */
+export function attachRetirementProofsToSnapshot(
+  snapshot: RuntimeMobileSessionTabsSnapshot,
+  proofs: readonly RuntimeMobileSessionRetiredTerminalSurface[]
+): RuntimeMobileSessionTabsSnapshot | null {
+  if (proofs.length === 0) {
+    return null
+  }
+  const merged = appendRetiredTerminalSurfaceProofs(snapshot.retiredTerminalSurfaces, proofs)
+  const existing = snapshot.retiredTerminalSurfaces
+  // Re-supplied proofs move to the tail; compare by key to avoid no-op version bumps.
+  const priorByKey = new Map(
+    (existing ?? []).map((proof) => [retirementProofKey(proof), proof] as const)
+  )
+  const unchanged =
+    existing !== undefined &&
+    merged.length === existing.length &&
+    merged.every((proof) => {
+      const prior = priorByKey.get(retirementProofKey(proof))
+      return (
+        prior !== undefined &&
+        proof.ptyId === prior.ptyId &&
+        proof.incarnationId === prior.incarnationId
+      )
+    })
+  if (unchanged) {
+    return null
+  }
+  return {
+    ...snapshot,
+    snapshotVersion: snapshot.snapshotVersion + 1,
+    retiredTerminalSurfaces: merged
   }
 }

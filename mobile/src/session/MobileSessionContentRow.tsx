@@ -3,12 +3,20 @@ import { AlertTriangle, X } from 'lucide-react-native'
 import { SessionDockColumn } from './SessionDockColumn'
 import { dismissMobileSessionCreateWarningState } from './mobile-session-create-warning-state'
 import { colors } from '../theme/mobile-theme'
+import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import { styles } from './mobile-session-styles'
 import type { MobileSessionController } from './use-mobile-session-controller'
 import { MobileSessionActiveContent } from './MobileSessionActiveContent'
 import { MobileSessionCommandDock } from './MobileSessionCommandDock'
 
-export function MobileSessionContentRow({ controller }: { controller: MobileSessionController }) {
+export function MobileSessionContentRow({
+  controller,
+  keysInRail
+}: {
+  controller: MobileSessionController
+  keysInRail: boolean
+}) {
+  useMobileColorScheme()
   const {
     hostId,
     worktreeId,
@@ -42,7 +50,7 @@ export function MobileSessionContentRow({ controller }: { controller: MobileSess
         ) : null}
         <MobileSessionActiveContent controller={controller} />
         {/* Why: translate instead of resize so keyboard toggles don't trigger a server-side PTY viewport change. */}
-        <MobileSessionCommandDock controller={controller} />
+        <MobileSessionCommandDock controller={controller} keysInRail={keysInRail} />
       </View>
       {canDockPanel && activePanel !== null && (
         <SessionDockColumn

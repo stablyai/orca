@@ -4,7 +4,7 @@ import type {
   DocPreviewFileFailure,
   DocPreviewFileFailureReason
 } from '../../../../../shared/doc-preview-scheme'
-import type { BrowserPageConversionOrigin } from '../../../../../shared/browser-workspace-types'
+import type { HtmlDocPreviewProps } from './html-doc-preview-props'
 import {
   advanceAcrossBrowserPageConversion,
   returnAcrossBrowserPageConversion
@@ -14,7 +14,8 @@ import { attachDocPreviewWebview } from './doc-preview-webview-attach'
 import {
   buildDocPreviewGrantRequest,
   ensureDocPreviewGrant,
-  releaseDocPreviewGrant
+  releaseDocPreviewGrant,
+  type DocPreviewGrantHandle
 } from '@/lib/doc-preview-grants'
 import { selectWorktreeHostDisplayLabel } from '@/lib/execution-host-display-label'
 import { translate } from '@/i18n/i18n'
@@ -25,23 +26,22 @@ import {
   useDocPreviewDirectoryAccess
 } from './doc-preview-directory-access'
 import { buildDocPreviewDocumentIdentity } from './doc-preview-document-identity'
-import {
-  docPreviewAssetNotice,
-  docPreviewDownloadBlockedNotice,
-  docPreviewFailureDetail
-} from './doc-preview-failure-messages'
+import { docPreviewFailureDetail, docPreviewNotices } from './doc-preview-failure-messages'
 import { DocPreviewToolbar } from './doc-preview-toolbar'
+import { buildDocPreviewShareControl } from './doc-preview-artifact-share'
 import { useDocPreviewWebviewHistory } from './doc-preview-webview-history'
+import { useDocPreviewGuestFocus } from './use-doc-preview-guest-focus'
 import { useDocPreviewGuestTools } from './use-doc-preview-guest-tools'
+import { useConfirmationDialog } from '@/components/confirmation-dialog-context'
+import { subscribeDocPreviewExternalLinkConfirmation } from './doc-preview-external-link-confirmation'
 
 type PreviewState = 'loading' | 'ready' | 'unavailable'
 
-/** Frames a preview keeps offering focus to a guest that is still attaching. */
-const GUEST_FOCUS_FRAMES = 10
 const MAX_ASSET_FAILURES = 50
 
 export function HtmlDocPreview({
   previewId,
+  browserWorkspaceId,
   filePath,
   relativePath,
   worktreeId,
@@ -51,21 +51,8 @@ export function HtmlDocPreview({
   externalSshTargetId = null,
   convertedFrom = null,
   convertedTo = null
-}: {
-  previewId: string
-  filePath: string
-  relativePath: string
-  worktreeId: string
-  /** Whether this preview is the surface the reader is in, and so may hold the keyboard. */
-  holdsGuestFocus?: boolean
-  isActive?: boolean
-  runtimeEnvironmentId?: string | null
-  externalSshTargetId?: string | null
-  /** Set when the address bar converted this page; Back returns across it once guest history runs out. */
-  convertedFrom?: BrowserPageConversionOrigin | null
-  /** Set when Back returned across a conversion to this page; Forward re-crosses it. */
-  convertedTo?: BrowserPageConversionOrigin | null
-}): React.JSX.Element {
+}: HtmlDocPreviewProps): React.JSX.Element {
+  const confirm = useConfirmationDialog()
   const containerRef = useRef<HTMLDivElement | null>(null)
   const webviewRef = useRef<Electron.WebviewTag | null>(null)
   const reloadRef = useRef<(() => void) | null>(null)
@@ -74,7 +61,8 @@ export function HtmlDocPreview({
   const [assetFailures, setAssetFailures] = useState<DocPreviewFileFailure[]>([])
   const [downloadBlocked, setDownloadBlocked] = useState(false)
   const [remintCount, setRemintCount] = useState(0)
-  const [grantId, setGrantId] = useState<string | null>(null)
+  const [grant, setGrant] = useState<DocPreviewGrantHandle | null>(null)
+  const grantId = grant?.grantId ?? null
   const {
     requests: accessRequests,
     busy: accessRequestBusy,
@@ -86,9 +74,7 @@ export function HtmlDocPreview({
 
   const history = useDocPreviewWebviewHistory(webviewRef)
   const { sync: syncHistory, reset: resetHistory } = history
-  // Why wrapped rather than a second control: guest history cannot survive a conversion (the
-  // guest was replaced), so once it runs out Back returns across the conversion — and Forward
-  // re-crosses it — instead of dying.
+  // Guest replacement loses history; exhausted history crosses the document/browser conversion in both directions.
   const historyWithConversionCrossings = useMemo(
     () =>
       convertedFrom || convertedTo
@@ -126,17 +112,23 @@ export function HtmlDocPreview({
     [filePath, hostLabel, worktreeRoot]
   )
   const isUnavailable = state === 'unavailable' || failureReason !== null
-  const { grab, markup, annotationSend, grabAnnotations, browserOverlayViewport, elementTools } =
-    useDocPreviewGuestTools({
-      previewId,
-      worktreeId,
-      grantId,
-      webviewRef,
-      containerRef,
-      toolsReady: state === 'ready' && !isUnavailable
-    })
-  // Not `document`: shadowing the global inside a component is how a stray DOM call silently
-  // starts reading a plain object.
+  const {
+    grab,
+    markup,
+    annotationSend,
+    grabAnnotations,
+    browserOverlayViewport,
+    handleAnnotationViewportMessage,
+    resetBrowserOverlayViewport,
+    elementTools
+  } = useDocPreviewGuestTools({
+    previewId,
+    worktreeId,
+    grantId,
+    webviewRef,
+    containerRef,
+    toolsReady: state === 'ready' && !isUnavailable
+  })
   const previewDocument = useMemo(
     () => ({ filePath, relativePath, worktreeId, runtimeEnvironmentId, externalSshTargetId }),
     [externalSshTargetId, filePath, relativePath, runtimeEnvironmentId, worktreeId]
@@ -145,8 +137,10 @@ export function HtmlDocPreview({
   useEffect(() => {
     let disposed = false
     let detach: (() => void) | undefined
+    let unsubscribeExternalLinks: (() => void) | undefined
     let loadFailed = false
     const onLoadStarted = (): void => {
+      resetBrowserOverlayViewport()
       loadFailed = false
       setFailureReason(null)
       setAssetFailures([])
@@ -173,7 +167,7 @@ export function HtmlDocPreview({
     setAssetFailures([])
     resetDirectoryAccess()
     setDownloadBlocked(false)
-    setGrantId(null)
+    setGrant(null)
     resetHistory()
     const request = buildDocPreviewGrantRequest(useAppStore.getState(), worktreeId, filePath)
     if (!request) {
@@ -182,15 +176,13 @@ export function HtmlDocPreview({
         disposed = true
       }
     }
-    // Why: an unreadable document answers with a status the guest renders as text, so the reason
-    // arrives out-of-band. Subscribe before minting so the entry document's failure cannot be missed.
+    // Subscribe before minting: entry failures arrive out-of-band while the guest paints the error body as text.
     let boundGrantId: string | null = null
     const unsubscribeFailure = window.api.docPreview?.onLoadFailure?.((payload) => {
       if (disposed || payload.grantId !== boundGrantId) {
         return
       }
-      // Why first: a refused download is the fences answering for the reader, not the document
-      // failing to load, so it can never take the page away — and it names no file to compare.
+      // A blocked download is a policy response without a file path, not a document-load failure.
       if (payload.reason === 'download-blocked') {
         setDownloadBlocked(true)
         return
@@ -216,6 +208,12 @@ export function HtmlDocPreview({
         if (disposed || !containerRef.current) {
           return
         }
+        unsubscribeExternalLinks = subscribeDocPreviewExternalLinkConfirmation(confirm, {
+          grantId: handle.grantId,
+          owner: handle.location.owner,
+          worktreeId,
+          browserWorkspaceId
+        })
         const attached = attachDocPreviewWebview({
           previewId,
           container: containerRef.current,
@@ -228,6 +226,7 @@ export function HtmlDocPreview({
           onLoadStopped,
           onLoadFailed,
           onNavigated: syncHistory,
+          onViewportMessage: handleAnnotationViewportMessage,
           onTitleUpdated: (event) => {
             useAppStore.getState().updateBrowserPageState(previewId, { title: event.title })
             // A rename only — the mount already recorded this document's visit.
@@ -243,9 +242,8 @@ export function HtmlDocPreview({
         detach = attached.detach
         reloadRef.current = attached.reload
         webviewRef.current = attached.webview
-        // Why only now: main binds this grant to the guest on its first commit, so the tools have
-        // nothing to name until the webview exists and is pointed at it.
-        setGrantId(handle.grantId)
+        // Main binds the grant on first commit; tools need the attached guest pointed at it.
+        setGrant(handle)
       })
       .catch(() => {
         if (!disposed) {
@@ -258,14 +256,19 @@ export function HtmlDocPreview({
       reloadRef.current = null
       webviewRef.current = null
       unsubscribeFailure?.()
+      unsubscribeExternalLinks?.()
       detach?.()
     }
   }, [
+    browserWorkspaceId,
+    confirm,
     filePath,
     offerDirectoryAccess,
     previewId,
     remintCount,
     resetDirectoryAccess,
+    handleAnnotationViewportMessage,
+    resetBrowserOverlayViewport,
     resetHistory,
     syncHistory,
     worktreeId
@@ -278,70 +281,22 @@ export function HtmlDocPreview({
     }
   }, [isActive, previewId])
 
-  // The dropdown's doc-history source: opening a document is a visit, once per document per mount
-  // (a hard reload re-mints the grant but is not a new visit).
+  // Record one visit per document mount; re-minting on hard reload is not a new visit.
   useEffect(() => {
     useAppStore
       .getState()
       .recordWorkspaceDocVisit({ kind: 'workspace-doc', worktreeId, filePath }, null)
   }, [filePath, worktreeId])
 
-  // Why the guest is handed focus: a preview has no address bar to make the usual handoff, so a
-  // surfaced document would otherwise look active while its keyboard and link input land elsewhere.
-  useEffect(() => {
-    if (!holdsGuestFocus || state !== 'ready') {
-      return
-    }
-    let frameId = 0
-    let attempts = 0
-    let claimedOnly = false
-    const focusGuest = (): void => {
-      const webview = webviewRef.current
-      attempts += 1
-      // Why a re-offer yields: it is a handoff for focus nothing else wanted, and the reader
-      // pressing a tab lands here first. Taking it back would fight them for the keyboard, which
-      // is what shut the tab strip while a preview was open.
-      if (
-        claimedOnly &&
-        document.activeElement !== document.body &&
-        document.activeElement !== webview
-      ) {
-        return
-      }
-      try {
-        webview?.focus()
-      } catch {
-        // Why swallowed: WebViewElement.focus() reads null internals once the guest is destroyed.
-        return
-      }
-      // Why retried: the guest takes focus only once it is attached and laid out, a frame or two
-      // after it reports ready.
-      if (document.activeElement !== webview && attempts < GUEST_FOCUS_FRAMES) {
-        frameId = window.requestAnimationFrame(focusGuest)
-      }
-    }
-    const offerFocus = (yieldToOtherClaims: boolean): void => {
-      window.cancelAnimationFrame(frameId)
-      attempts = 0
-      claimedOnly = yieldToOtherClaims
-      frameId = window.requestAnimationFrame(focusGuest)
-    }
-    // Why assertive: the reader just made this preview their surface, so the handoff is the point.
-    offerFocus(false)
-    // Why re-offered on the window's own focus: another app taking the front takes focus out of the
-    // guest, and coming back puts it on the embedder. Nothing hands it on, so the route out of the
-    // preview would stay shut until something remounted it.
-    const reofferFocus = (): void => offerFocus(true)
-    window.addEventListener('focus', reofferFocus)
-    return () => {
-      window.removeEventListener('focus', reofferFocus)
-      window.cancelAnimationFrame(frameId)
-    }
-  }, [holdsGuestFocus, previewId, remintCount, state])
+  useDocPreviewGuestFocus({
+    webviewRef,
+    holdsGuestFocus,
+    ready: state === 'ready',
+    previewId,
+    remintCount
+  })
 
-  // Why: a grant is pinned to the owner ids resolved when it was minted, so after a pairing or
-  // SSH reconnect the old one reads nothing and reloading the guest would just refetch the
-  // failure. Drop it and mint against today's ids instead of making the user close the tab.
+  // Reconnect changes the grant’s pinned owner IDs; mint a new grant rather than reloading the same failure.
   const handleHardReload = useCallback(() => {
     releaseDocPreviewGrant(previewId)
     setRemintCount((count) => count + 1)
@@ -355,13 +310,7 @@ export function HtmlDocPreview({
     reloadRef.current?.()
   }, [failureReason, handleHardReload, state])
 
-  // Nothing rendered on an unavailable preview, so a notice strip would be a footnote on a blank page.
-  const notices = isUnavailable
-    ? []
-    : [
-        downloadBlocked ? docPreviewDownloadBlockedNotice() : null,
-        docPreviewAssetNotice(assetFailures)
-      ].filter((notice): notice is string => notice !== null)
+  const notices = docPreviewNotices(isUnavailable, downloadBlocked, assetFailures)
 
   return (
     <div className="flex min-h-0 flex-1 flex-col overflow-hidden bg-editor-surface">
@@ -370,7 +319,6 @@ export function HtmlDocPreview({
         previewId={previewId}
         worktreeId={worktreeId}
         history={historyWithConversionCrossings}
-        loading={state === 'loading' && failureReason === null}
         onReload={handleReload}
         onHardReload={handleHardReload}
         onCopyPath={() => void window.api.ui.writeClipboardText(identity.absolutePath)}
@@ -382,6 +330,7 @@ export function HtmlDocPreview({
         onToggleMarkup={() => (markup.isActive ? markup.cancel() : void markup.start())}
         // Nothing has painted yet on a loading or failed preview, so there is nothing to draw on.
         markupDisabled={isUnavailable || state !== 'ready' || grab.state !== 'idle'}
+        shareControl={buildDocPreviewShareControl(filePath, grant?.location ?? null)}
       />
       {notices.map((notice) => (
         <div

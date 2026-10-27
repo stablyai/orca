@@ -173,8 +173,7 @@ describe('getActiveChecksStatus caching', () => {
   })
 
   it('reads no store field the cache is not keyed on', () => {
-    // Guards against a cast or widened type bypassing the derived key list: every property the
-    // computation touches on the state object must invalidate the cache.
+    // Every property read must invalidate the cache, even if a cast bypasses its derived input type.
     const reads = new Set<PropertyKey>()
     const keyed = new Set<PropertyKey>(ACTIVE_CHECKS_STATUS_INPUT_KEYS)
     const state = new Proxy(
@@ -182,6 +181,7 @@ describe('getActiveChecksStatus caching', () => {
       {
         get(target, prop, receiver) {
           reads.add(prop)
+          // oxlint-disable-next-line anti-slop/no-reflect-get -- Proxy get trap default forward.
           return Reflect.get(target, prop, receiver)
         },
         has(target, prop) {
@@ -193,7 +193,7 @@ describe('getActiveChecksStatus caching', () => {
 
     expect(getActiveChecksStatus(state)).toBe('success')
     expect([...reads].filter((prop) => !keyed.has(prop))).toEqual([])
-    // The read set must also be non-trivial, or the guard proves nothing.
+    // Require a nonempty read set so the guard cannot pass vacuously.
     expect(reads.has('prCache')).toBe(true)
   })
 })

@@ -14,6 +14,14 @@ function makeTocItem(
 }
 
 describe('findRichMarkdownTocHeadingTarget', () => {
+  it('returns undefined when the requested duplicate occurrence is missing', () => {
+    const container = document.createElement('div')
+    container.innerHTML = '<h2>Repeat</h2><h2>Other</h2>'
+    const items = [makeTocItem('repeat', 2, 'Repeat'), makeTocItem('repeat-1', 2, 'Repeat')]
+    expect(findRichMarkdownTocHeadingTarget(container, items, 'repeat-1')).toBeUndefined()
+    expect(findRichMarkdownTocHeadingTarget(container, items, 'missing')).toBeUndefined()
+  })
+
   it('finds deep headings that the table of contents exposes', () => {
     const container = document.createElement('div')
     container.innerHTML = `

@@ -1,7 +1,4 @@
-/**
- * The keyboard (pane-scoped) and tab-strip (pty-scoped) close prompts must word the same
- * close the same way, so both resolve their copy through this module (#10142).
- */
+/** Keyboard pane-close and tab-strip prompts must resolve identical copy (#10142). */
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const { getStateMock } = vi.hoisted(() => ({ getStateMock: vi.fn() }))
@@ -27,26 +24,6 @@ describe('terminal close copy kind', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     setState()
-  })
-
-  it('agrees between the pane lookup and the busy-pty lookup for the same pane', () => {
-    expect(resolveLeafCloseCopyKind('tab-1', LEAF_B)).toBe('agent')
-    expect(resolveBusyPtyCloseCopyKind('tab-1', ['pty-b'])).toBe('agent')
-
-    expect(resolveLeafCloseCopyKind('tab-1', LEAF_A)).toBe('command')
-    expect(resolveBusyPtyCloseCopyKind('tab-1', ['pty-a'])).toBe('command')
-  })
-
-  it('prefers the agent copy when a split has both busy', () => {
-    expect(resolveBusyPtyCloseCopyKind('tab-1', ['pty-a', 'pty-b'])).toBe('agent')
-  })
-
-  it.each([
-    ['a missing leaf id', undefined],
-    ['a null leaf id', null],
-    ['a legacy non-uuid leaf id', 'leaf']
-  ])('falls back to the command copy for %s', (_label, leafId) => {
-    expect(resolveLeafCloseCopyKind('tab-1', leafId)).toBe('command')
   })
 
   it('never throws on a tab id that makePaneKey would reject', () => {

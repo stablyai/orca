@@ -1,19 +1,29 @@
 import { useEffect, useState } from 'react'
-import type { SshConnectionState } from '../../../src/shared/ssh-types'
 import type { RpcClient } from '../transport/rpc-client'
-import type { RpcSuccess } from '../transport/types'
-import { deriveWorkspaceSshGate, type WorkspaceSshGate } from '../tasks/workspace-ssh-gate'
+import {
+  localAgentDetectionRead,
+  remoteAgentDetectionRead,
+  sshRepoConnectRun,
+  sshRepoStateRead
+} from '../tasks/mobile-workspace-source-operations'
+import {
+  deriveWorkspaceSshGate,
+  type WorkspaceSshGate,
+  type WorkspaceSshRecord
+} from '../tasks/workspace-ssh-gate'
 
 type DetectedAgentIdsState = {
+  client: RpcClient
   connectionId: string | null
+  repoId: string | null
   ids: Set<string>
 }
 
 function fallbackSshState(
   targetId: string,
-  status: SshConnectionState['status'],
+  status: WorkspaceSshRecord['status'],
   error: string | null
-): SshConnectionState {
+): WorkspaceSshRecord {
   return { targetId, status, error, reconnectAttempt: 0 }
 }
 
@@ -21,13 +31,14 @@ export function useNewWorkspaceExecutionTarget(args: {
   client: RpcClient | null
   connectionId: string | null
   visible: boolean
+  repoId?: string | null
 }): {
   sshGate: WorkspaceSshGate
   detectedAgentIds: Set<string> | null
   connect: () => Promise<void>
 } {
-  const { client, connectionId, visible } = args
-  const [sshState, setSshState] = useState<SshConnectionState | null>(null)
+  const { client, connectionId, visible, repoId = null } = args
+  const [sshState, setSshState] = useState<WorkspaceSshRecord | null>(null)
   const [connectingTargetId, setConnectingTargetId] = useState<string | null>(null)
   const [detectedAgentIdsState, setDetectedAgentIdsState] = useState<DetectedAgentIdsState | null>(
     null
@@ -38,7 +49,9 @@ export function useNewWorkspaceExecutionTarget(args: {
     connecting: connectingTargetId === connectionId
   })
   const detectedAgentIds =
-    detectedAgentIdsState?.connectionId === connectionId &&
+    detectedAgentIdsState?.client === client &&
+    detectedAgentIdsState.connectionId === connectionId &&
+    detectedAgentIdsState.repoId === repoId &&
     (connectionId === null || sshGate.status === 'connected')
       ? detectedAgentIdsState.ids
       : null
@@ -48,17 +61,14 @@ export function useNewWorkspaceExecutionTarget(args: {
       return
     }
     let stale = false
-    void client
-      .sendRequest('ssh.getState', { targetId: connectionId })
-      .then((response) => {
+    void sshRepoStateRead
+      .request(client, { targetId: connectionId })
+      .then((reply) => {
         if (stale) {
           return
         }
-        if (!response.ok) {
-          throw new Error(response.error.message)
-        }
-        const state = (response as RpcSuccess).result as { state?: SshConnectionState | null }
-        setSshState(state.state ?? fallbackSshState(connectionId, 'disconnected', null))
+        const state = sshRepoStateRead.interpret(reply)
+        setSshState(state ?? fallbackSshState(connectionId, 'disconnected', null))
       })
       .catch((error) => {
         if (!stale) {
@@ -83,25 +93,33 @@ export function useNewWorkspaceExecutionTarget(args: {
     let stale = false
     void (async () => {
       try {
-        const response = connectionId
-          ? await client.sendRequest('preflight.detectRemoteAgents', { connectionId })
-          : await client.sendRequest('preflight.detectAgents')
+        const detected = connectionId
+          ? remoteAgentDetectionRead.interpret(
+              await remoteAgentDetectionRead.request(client, { connectionId })
+            )
+          : localAgentDetectionRead.interpret(
+              await (repoId
+                ? localAgentDetectionRead.request(client, { repoId })
+                : localAgentDetectionRead.request(client))
+            )
         if (!stale) {
           setDetectedAgentIdsState({
+            client,
             connectionId,
-            ids: response.ok ? new Set((response as RpcSuccess).result as string[]) : new Set()
+            repoId,
+            ids: detected.accepted ? new Set(detected.value) : new Set()
           })
         }
       } catch {
         if (!stale) {
-          setDetectedAgentIdsState({ connectionId, ids: new Set() })
+          setDetectedAgentIdsState({ client, connectionId, repoId, ids: new Set() })
         }
       }
     })()
     return () => {
       stale = true
     }
-  }, [client, connectionId, sshGate.status, visible])
+  }, [client, connectionId, repoId, sshGate.status, visible])
 
   async function connect(): Promise<void> {
     if (!client || !connectionId) {
@@ -110,16 +128,13 @@ export function useNewWorkspaceExecutionTarget(args: {
     setConnectingTargetId(connectionId)
     setSshState(fallbackSshState(connectionId, 'connecting', null))
     try {
-      const response = await client.sendRequest(
-        'ssh.connect',
+      const reply = await sshRepoConnectRun.request(
+        client,
         { targetId: connectionId },
         { timeoutMs: 120_000 }
       )
-      if (!response.ok) {
-        throw new Error(response.error.message)
-      }
-      const result = (response as RpcSuccess).result as { state?: SshConnectionState | null }
-      setSshState(result.state ?? fallbackSshState(connectionId, 'connected', null))
+      const state = sshRepoConnectRun.interpret(reply)
+      setSshState(state ?? fallbackSshState(connectionId, 'connected', null))
     } catch (error) {
       setSshState(
         fallbackSshState(

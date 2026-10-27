@@ -4,11 +4,12 @@ import { callRuntimeRpc } from '@/runtime/runtime-rpc-client'
 import {
   resetGitHubChecksTabForSource,
   updateGitHubChecksTabLocalChecks,
+  type GitHubChecksContextOwner,
   type GitHubChecksTabState
 } from '@/components/github-checks-tab-state'
 import { getGitHubRuntimeRepoId, type GitHubRuntimeHost } from '@/lib/github-source-runtime-context'
 import { startFixChecksAgent } from '@/lib/fix-checks-agent-launch'
-import { buildFixBrokenChecksPrompt } from '@/components/pr-checks-fix-prompt'
+import { buildFixBrokenChecksPrompt } from '../../../../../shared/pr-checks-fix-prompt'
 import type { PRCheckDetail } from '../../../../../shared/github/check-types'
 import type { GitHubOwnerRepo } from '../../../../../shared/github/pull-request-types'
 import type { GitHubWorkItem } from '../../../../../shared/github/work-item-types'
@@ -28,21 +29,21 @@ export type ChecksTabActionContext = {
   headSha: string | undefined
   prRepo: GitHubOwnerRepo | null
   mountedRef: { current: boolean }
-  committedChecksContextOwnerRef: { current: object }
+  committedChecksContextOwnerRef: { current: GitHubChecksContextOwner }
   nextChecksRefreshRequestIdRef: { current: number }
   activeChecksRefreshRequestIdRef: { current: number | null }
   nextCheckDetailsRequestIdRef: { current: number }
   setChecksState: React.Dispatch<React.SetStateAction<GitHubChecksTabState>>
   setRefreshingOwner: React.Dispatch<
-    React.SetStateAction<{ contextOwner: object; requestId: number } | null>
+    React.SetStateAction<{ contextOwner: GitHubChecksContextOwner; requestId: number } | null>
   >
-  setRerunningOwner: React.Dispatch<React.SetStateAction<object | null>>
+  setRerunningOwner: React.Dispatch<React.SetStateAction<GitHubChecksContextOwner | null>>
   onChecksUpdated: (checks: PRCheckDetail[]) => void
 }
 
 export async function refreshGitHubChecksTab(
   ctx: ChecksTabActionContext,
-  expectedContextOwner?: object
+  expectedContextOwner?: GitHubChecksContextOwner
 ): Promise<PRCheckDetail[] | null> {
   if (!ctx.canUseChecksRepoContext) {
     toast.error(

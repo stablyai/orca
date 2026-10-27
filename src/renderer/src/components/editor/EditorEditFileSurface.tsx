@@ -1,4 +1,5 @@
 import { translate } from '@/i18n/i18n'
+import { getConnectionIdForFile } from '@/lib/connection-context'
 import type { MarkdownViewMode, OpenFile, PendingEditorReveal } from '@/store/slices/editor'
 import type { GitDiffResult } from '../../../../shared/git-diff-compare-types'
 import type { GitStatusEntry } from '../../../../shared/git-status-types'
@@ -6,18 +7,24 @@ import { ChangesModeView } from './ChangesModeView'
 import { ConflictBanner, ConflictPlaceholderView } from './ConflictComponents'
 import {
   CsvViewer,
+  CsvPagedViewer,
   ImageViewer,
   IpynbViewer,
   MermaidViewer,
-  MonacoEditor
+  MonacoEditor,
+  MediaViewer
 } from './editor-lazy-views'
 import type { EditorConflictNavigation } from './useEditorConflictNavigation'
 import { EditorFileLoadErrorView } from './EditorFileLoadErrorView'
+import { RecoverableRenderErrorBoundary } from '../error-boundaries/RecoverableRenderErrorBoundary'
 import type { FileContent } from './editor-panel-content-types'
 import { ExternalFileChangeBanner } from './ExternalFileChangeBanner'
 import type { useMarkdownDocuments } from './useMarkdownDocuments'
 import { EditorMarkdownFileSurface } from './EditorMarkdownFileSurface'
 import type { MarkdownRenderState } from './markdown-render-mode'
+
+// Retry is a user act: it may start a stopped WSL distro.
+const USER_RETRY = { wakeWslDistro: true }
 
 const noopEditorContentChange = (_content: string): void => {}
 const noopEditorSave = async (_content: string): Promise<boolean> => false
@@ -30,6 +37,7 @@ export function EditorEditFileSurface({
   editorViewStateKey,
   diffViewStateKey,
   pdfViewStateKey,
+  pdfPreferenceKey,
   fileContent,
   diffContent,
   editBuffer,
@@ -61,6 +69,7 @@ export function EditorEditFileSurface({
   editorViewStateKey: string
   diffViewStateKey: string
   pdfViewStateKey: string
+  pdfPreferenceKey: string
   fileContent: FileContent | undefined
   diffContent: GitDiffResult | undefined
   editBuffer: string | undefined
@@ -85,7 +94,7 @@ export function EditorEditFileSurface({
   handleContentChange: (content: string) => void
   handleDirtyStateHint: (dirty: boolean) => void
   handleSave: (content: string) => Promise<boolean>
-  reloadContent: (file: OpenFile) => void
+  reloadContent: (file: OpenFile, options?: { wakeWslDistro?: boolean }) => void
 }): React.JSX.Element {
   if (activeFile.conflict?.kind === 'conflict-placeholder') {
     return <ConflictPlaceholderView file={activeFile} />
@@ -97,21 +106,50 @@ export function EditorEditFileSurface({
       </div>
     )
   }
+  if (fileContent.csvPreview) {
+    return (
+      <CsvPagedViewer
+        key={activeFile.id}
+        file={fileContent.csvPreview}
+        preferenceKey={pdfPreferenceKey}
+        filePath={activeFile.filePath}
+        onReload={() => reloadContent(activeFile)}
+      />
+    )
+  }
   if (fileContent.loadError) {
     return (
       <EditorFileLoadErrorView
         message={fileContent.loadError}
-        onRetry={() => reloadContent(activeFile)}
+        code={fileContent.loadErrorCode}
+        onRetry={() => reloadContent(activeFile, USER_RETRY)}
       />
     )
   }
   if (fileContent.isBinary) {
+    if (fileContent.mediaUrl) {
+      return (
+        <MediaViewer
+          key={fileContent.mediaUrl}
+          src={fileContent.mediaUrl}
+          mimeType={fileContent.mimeType ?? 'video/mp4'}
+          filePath={activeFile.filePath}
+          playbackCacheKey={pdfViewStateKey}
+          canOpenLocally={
+            !activeFile.externalSshTargetId &&
+            !activeFile.runtimeEnvironmentId &&
+            getConnectionIdForFile(activeFile.worktreeId, activeFile.filePath) === null
+          }
+        />
+      )
+    }
     if (fileContent.isImage) {
       return (
         <ImageViewer
           content={fileContent.content}
           filePath={activeFile.filePath}
           mimeType={fileContent.mimeType}
+          preferenceKey={pdfPreferenceKey}
           scrollCacheKey={pdfViewStateKey}
         />
       )
@@ -162,48 +200,57 @@ export function EditorEditFileSurface({
     )
   }
 
+  // Remount per pane/path so cleanup snapshots scroll instead of reusing an instance across files.
+  const monacoRemountKey = `${viewStateScopeId}\u0000${activeFile.filePath}`
   const monacoEditor = (
-    // Why: without a key React reuses the instance and skips cleanup (scroll snapshot); key forces a remount per pane+path.
-    <MonacoEditor
-      key={`${viewStateScopeId}\u0000${activeFile.filePath}`}
-      fileId={activeFile.id}
-      filePath={activeFile.filePath}
-      viewStateKey={editorViewStateKey}
-      viewStateId={viewStateScopeId}
-      relativePath={activeFile.relativePath}
-      content={currentContent}
-      language={monacoLanguage}
-      // Why: read-only tabs no-op the change/save callbacks so no draft, dirty state, or write can occur.
-      readOnly={activeFile.readOnly === true}
-      liveTail={activeFile.liveTail === true}
-      onContentChange={activeFile.readOnly === true ? noopEditorContentChange : handleContentChange}
-      onSave={
-        activeFile.readOnly === true
-          ? noopEditorSave
-          : isMarkdown
-            ? markdownDocuments.mdSave
-            : handleSave
-      }
-      worktreeId={activeFile.worktreeId}
-      markdownAnnotationsEnabled={markdownAnnotationsEnabled && isMarkdown}
-      conflictDecorationsEnabled={activeFile.conflict?.conflictStatus === 'unresolved'}
-      revealLine={
-        matchesPendingEditorReveal(pendingEditorReveal, activeFile)
-          ? pendingEditorReveal.line
-          : undefined
-      }
-      revealColumn={
-        matchesPendingEditorReveal(pendingEditorReveal, activeFile)
-          ? pendingEditorReveal.column
-          : undefined
-      }
-      revealMatchLength={
-        matchesPendingEditorReveal(pendingEditorReveal, activeFile)
-          ? pendingEditorReveal.matchLength
-          : undefined
-      }
-      markdownDocuments={isMarkdown ? markdownDocuments.markdownDocuments : undefined}
-    />
+    // Contain Monaco initialization errors to this pane; retry remounts the editor.
+    <RecoverableRenderErrorBoundary
+      boundaryId="editor.monaco"
+      surface="code-editor"
+      resetKey={monacoRemountKey}
+    >
+      <MonacoEditor
+        key={monacoRemountKey}
+        fileId={activeFile.id}
+        filePath={activeFile.filePath}
+        viewStateKey={editorViewStateKey}
+        viewStateId={viewStateScopeId}
+        relativePath={activeFile.relativePath}
+        content={currentContent}
+        language={monacoLanguage}
+        readOnly={activeFile.readOnly === true}
+        liveTail={activeFile.liveTail === true}
+        onContentChange={
+          activeFile.readOnly === true ? noopEditorContentChange : handleContentChange
+        }
+        onSave={
+          activeFile.readOnly === true
+            ? noopEditorSave
+            : isMarkdown
+              ? markdownDocuments.mdSave
+              : handleSave
+        }
+        worktreeId={activeFile.worktreeId}
+        markdownAnnotationsEnabled={markdownAnnotationsEnabled && isMarkdown}
+        conflictDecorationsEnabled={activeFile.conflict?.conflictStatus === 'unresolved'}
+        revealLine={
+          matchesPendingEditorReveal(pendingEditorReveal, activeFile, viewStateScopeId)
+            ? pendingEditorReveal.line
+            : undefined
+        }
+        revealColumn={
+          matchesPendingEditorReveal(pendingEditorReveal, activeFile, viewStateScopeId)
+            ? pendingEditorReveal.column
+            : undefined
+        }
+        revealMatchLength={
+          matchesPendingEditorReveal(pendingEditorReveal, activeFile, viewStateScopeId)
+            ? pendingEditorReveal.matchLength
+            : undefined
+        }
+        markdownDocuments={isMarkdown ? markdownDocuments.markdownDocuments : undefined}
+      />
+    </RecoverableRenderErrorBoundary>
   )
 
   const editorSurface = isMarkdown ? (
@@ -227,7 +274,19 @@ export function EditorEditFileSurface({
   ) : isMermaid && mdViewMode === 'rich' ? (
     <MermaidViewer key={activeFile.id} content={currentContent} filePath={activeFile.filePath} />
   ) : isCsv && mdViewMode === 'rich' ? (
-    <CsvViewer key={activeFile.id} content={currentContent} filePath={activeFile.filePath} />
+    <CsvViewer
+      key={activeFile.id}
+      content={currentContent}
+      filePath={activeFile.filePath}
+      worktreeId={activeFile.worktreeId}
+      runtimeEnvironmentId={activeFile.runtimeEnvironmentId}
+      preferenceKey={pdfPreferenceKey}
+      fileId={activeFile.id}
+      isDirty={activeFile.isDirty}
+      onDirtyStateHint={activeFile.readOnly ? undefined : handleDirtyStateHint}
+      onContentChange={activeFile.readOnly ? undefined : handleContentChange}
+      onSave={activeFile.readOnly ? undefined : handleSave}
+    />
   ) : isNotebook && mdViewMode === 'rich' ? (
     <IpynbViewer
       key={activeFile.id}
@@ -261,9 +320,10 @@ export function EditorEditFileSurface({
 
 function matchesPendingEditorReveal(
   reveal: PendingEditorReveal | null,
-  file: Pick<OpenFile, 'id' | 'filePath'>
+  file: Pick<OpenFile, 'id' | 'filePath'>,
+  viewStateId: string
 ): reveal is PendingEditorReveal {
-  if (!reveal) {
+  if (!reveal || (reveal.viewStateId && reveal.viewStateId !== viewStateId)) {
     return false
   }
   return reveal.fileId ? reveal.fileId === file.id : reveal.filePath === file.filePath

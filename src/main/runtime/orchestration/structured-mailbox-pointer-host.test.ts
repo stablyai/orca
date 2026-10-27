@@ -1,5 +1,14 @@
+import { agentSessionConversationView } from '../../../shared/agent-session-conversation-view'
+import {
+  agentSessionLeaseFixture,
+  agentSessionRecordFixture
+} from '../../../shared/agent-session-record.test-fixture'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import type { AgentJournalRenderItem } from '../../../shared/agent-session-journal-types'
+import type {
+  AgentJournalRenderItem,
+  AgentJournalSubmission
+} from '../../../shared/agent-session-journal-types'
+import type { AgentMessageSource } from '../../../shared/agent-session/agent-session-message-source'
 
 const hostRef: { current: unknown } = { current: null }
 
@@ -9,6 +18,7 @@ vi.mock('../../native-chat/agent-session-wire/structured-agent-session-registry'
 
 const {
   createStructuredMailboxPointerHost,
+  readStructuredSessionGateFacts,
   structuredPointerCallerKey,
   structuredSessionPointerCallerKey
 } = await import('./structured-mailbox-pointer-host')
@@ -33,35 +43,132 @@ function transcript(count: number): AgentJournalRenderItem[] {
   )
 }
 
+function pointerSubmission(
+  clientMessageId: string,
+  fence: number,
+  acceptedSequence: number
+): AgentJournalSubmission {
+  return {
+    clientMessageId,
+    acceptedSequence,
+    submittedAt: 1_000,
+    fence,
+    payloadFingerprint: 'fp',
+    dispatchState: 'pending',
+    providerItemId: null,
+    reason: null,
+    resolvedAt: null
+  }
+}
+
+const NOTICE_SOURCE: AgentMessageSource = {
+  kind: 'agent',
+  senders: [],
+  orchestration: { message: 'mail-notice', mailbox: 'dispatch:d1', dispatchId: 'd1', messages: [] }
+}
+
 describe('structured mailbox pointer host', () => {
   beforeEach(() => {
     hostRef.current = null
   })
 
-  it('reads the gate facts from the FULL timeline, never a bounded tail', () => {
-    // The defect this pins: a running turn is announced by ONE lifecycle item, and settlement
-    // tombstones it rather than rewriting it. A long tool-calling turn pushes that item arbitrarily
-    // far from the tail, so any page-sized read reports a busy worker as idle — and the pointer is
-    // then delivered mid-turn, which Codex answers with `turn already running` and Claude settles
-    // `unknown` while the message is really queued.
+  it('reads the gate facts from the FULL timeline, never a bounded tail', async () => {
+    // Read the full timeline: a busy turn's lifecycle item may be far from the tail, and false idle can interrupt it.
     const items = [runningTurn(), ...transcript(500)]
-    hostRef.current = { journalSnapshot: () => ({ items }) }
-    expect(createStructuredMailboxPointerHost().readGateFacts('s1')).toEqual({
+    hostRef.current = {
+      journalSnapshot: () => ({ items, submissions: [] }),
+      currentWork: () => null
+    }
+    expect(await readStructuredSessionGateFacts('s1')).toEqual({
       turnRunning: true,
       awaitingHuman: false
     })
   })
 
-  it('answers null rather than idle when the session cannot be read', () => {
-    // Null retains the pointer; `{turnRunning:false}` would deliver a nudge into a session this
-    // runtime cannot see at all.
-    expect(createStructuredMailboxPointerHost().readGateFacts('s1')).toBeNull()
+  it("reads what the session's sends settled as", async () => {
+    const submissions = [{ clientMessageId: 'op1', dispatchState: 'unknown' }]
+    hostRef.current = {
+      deps: { store: { getConversation: () => null } },
+      journalSnapshot: () => ({ items: [], submissions }),
+      currentWork: () => null
+    }
+    expect(await createStructuredMailboxPointerHost().readSessionFacts('s1')).toEqual({
+      submissions
+    })
+  })
+
+  it('scopes settlements to the record fence when the journal marker disagrees', async () => {
+    const items: AgentJournalRenderItem[] = [
+      {
+        itemId: 'clear-marker',
+        revision: 1,
+        sequence: 5,
+        observedAt: 1_000,
+        body: {
+          kind: 'status',
+          text: 'Context cleared',
+          contextClear: { operationId: 'clear-old', afterFence: 1, clearedAt: 1_000 }
+        }
+      }
+    ]
+    const current = pointerSubmission('current', 3, 4)
+    hostRef.current = {
+      deps: {
+        store: {
+          getConversation: () =>
+            agentSessionConversationView({
+              ...agentSessionRecordFixture(),
+              providerContextBoundary: { operationId: 'clear-1', afterFence: 2, clearedAt: 1_000 }
+            })
+        }
+      },
+      journalSnapshot: () => ({
+        items,
+        submissions: [pointerSubmission('earlier', 2, 6), current]
+      }),
+      currentWork: () => null
+    }
+    const host = createStructuredMailboxPointerHost()
+    expect(await host.readSessionFacts('s1')).toEqual({
+      submissions: [current]
+    })
+    expect(host.currentContextClearOperationId('s1')).toBe('clear-1')
+  })
+
+  it('keeps the record context when an older rewind removed its journal marker', async () => {
+    const current = pointerSubmission('current', 3, 1)
+    hostRef.current = {
+      deps: {
+        store: {
+          getConversation: () =>
+            agentSessionConversationView({
+              ...agentSessionRecordFixture(),
+              providerContextBoundary: { operationId: 'clear-1', afterFence: 2, clearedAt: 1_000 }
+            })
+        }
+      },
+      journalSnapshot: () => ({
+        items: [],
+        submissions: [pointerSubmission('earlier', 2, 2), current]
+      }),
+      currentWork: () => null
+    }
+    const host = createStructuredMailboxPointerHost()
+    expect(await host.readSessionFacts('s1')).toEqual({
+      submissions: [current]
+    })
+    expect(host.currentContextClearOperationId('s1')).toBe('clear-1')
+  })
+
+  it('answers null rather than nothing recorded when the session cannot be read', async () => {
+    // Unreadable sessions retain pointers; treating them as empty would authorize an unseen send.
+    expect(await createStructuredMailboxPointerHost().readSessionFacts('s1')).toBeNull()
     hostRef.current = {
       journalSnapshot: () => {
         throw new Error('agent_session_ownership_unknown')
       }
     }
-    expect(createStructuredMailboxPointerHost().readGateFacts('s1')).toBeNull()
+    expect(await createStructuredMailboxPointerHost().readSessionFacts('s1')).toBeNull()
   })
 
   it('reports an unattached host rather than a rejection when nothing can be sent', async () => {
@@ -71,7 +178,6 @@ describe('structured mailbox pointer host', () => {
         dispatchId: 'd1',
         operationId: 'op1',
         expectedRuntimeFence: 1,
-        payloadFingerprint: 'fp',
         body: { kind: 'message', role: 'user', blocks: [] }
       } as never)
     ).resolves.toEqual({ kind: 'unattached' })
@@ -80,8 +186,7 @@ describe('structured mailbox pointer host', () => {
   it.each([
     ['accepted', 'accepted'],
     ['rejected', 'rejected'],
-    // Neither is an acknowledgement, and only `accepted` may consume mail: both have to reach the
-    // caller as `unknown` so the pointer is retained for the next journal edge.
+    // Only accepted consumes mail; pending and unknown must both retain the pointer.
     ['pending', 'unknown'],
     ['unknown', 'unknown']
   ])('maps a %s submission to %s', async (dispatchState, expected) => {
@@ -91,6 +196,27 @@ describe('structured mailbox pointer host', () => {
         value: { submission: { dispatchState } }
       })
     )
+    hostRef.current = { send, waitForSendSettlement: async () => undefined }
+    await expect(
+      createStructuredMailboxPointerHost().send({
+        sessionId: 's1',
+        dispatchId: 'd1',
+        operationId: 'op1',
+        expectedRuntimeFence: 1,
+        body: { kind: 'message', role: 'user', blocks: [] }
+      } as never)
+    ).resolves.toEqual({ kind: 'sent', state: expected })
+    expect(send.mock.calls[0]![0]).toEqual({ callerKey: structuredPointerCallerKey('d1') })
+    expect(send.mock.calls[0]![1]!.retryUnknown).toBeUndefined()
+  })
+
+  it('sends the pointer as a plain send for every agent, with who it is from', async () => {
+    const send = vi.fn(
+      async (_caller: unknown, _payload: { delivery?: string; body?: unknown }) => ({
+        ok: true,
+        value: { clientMessageId: 'op1', submission: { dispatchState: 'accepted' } }
+      })
+    )
     hostRef.current = { send }
     await expect(
       createStructuredMailboxPointerHost().send({
@@ -98,20 +224,37 @@ describe('structured mailbox pointer host', () => {
         dispatchId: 'd1',
         operationId: 'op1',
         expectedRuntimeFence: 1,
-        payloadFingerprint: 'fp',
+        body: { kind: 'message', role: 'user', blocks: [], from: NOTICE_SOURCE },
+        holdWhileWorking: false
+      })
+    ).resolves.toEqual({ kind: 'sent', state: 'accepted' })
+    expect(send.mock.calls[0]![1]).toMatchObject({ body: { from: NOTICE_SOURCE } })
+    expect(send.mock.calls[0]![1]!.delivery).toBeUndefined()
+  })
+
+  it('consumes mail once an accepted nudge is delivered while the worker starts (W10)', async () => {
+    hostRef.current = {
+      send: async () => ({
+        ok: true,
+        value: { clientMessageId: 'op1', submission: { dispatchState: 'pending' } }
+      }),
+      waitForSendSettlement: async () => ({
+        value: { clientMessageId: 'op1', submission: { dispatchState: 'accepted' } }
+      })
+    }
+    await expect(
+      createStructuredMailboxPointerHost().send({
+        sessionId: 's1',
+        dispatchId: 'd1',
+        operationId: 'op1',
+        expectedRuntimeFence: 1,
         body: { kind: 'message', role: 'user', blocks: [] }
       } as never)
-    ).resolves.toEqual({ kind: 'sent', state: expected })
-    // Per-dispatch, so one worker's nudges cannot exhaust the shared operation-ledger budget.
-    expect(send.mock.calls[0]![0]).toEqual({ callerKey: structuredPointerCallerKey('d1') })
-    expect(send.mock.calls[0]![1]!.retryUnknown).toBe(true)
+    ).resolves.toEqual({ kind: 'sent', state: 'accepted' })
   })
 
   it('scopes direct peer mail to the session when there is no dispatch to scope to', async () => {
-    // Direct mail is addressed to the worker's own handle, so there may be no dispatch at all.
-    // The ledger is keyed on (callerKey, operationId): a key derived from the session keeps that
-    // nudge's own retry lane, and leaves the dispatch key byte-identical so nudges already in
-    // flight under it still replay rather than being re-minted as a second turn.
+    // Direct mail has no Dispatch; a session-scoped key preserves its retry lane without changing existing Dispatch ledger keys.
     const send = vi.fn(async (_caller: { callerKey: string }) => ({
       ok: true,
       value: { submission: { dispatchState: 'accepted' } }
@@ -123,7 +266,6 @@ describe('structured mailbox pointer host', () => {
         dispatchId: null,
         operationId: 'op1',
         expectedRuntimeFence: 1,
-        payloadFingerprint: 'fp',
         body: { kind: 'message', role: 'user', blocks: [] }
       } as never)
     ).resolves.toEqual({ kind: 'sent', state: 'accepted' })
@@ -145,7 +287,6 @@ describe('structured mailbox pointer host', () => {
           dispatchId: 'd1',
           operationId: 'op1',
           expectedRuntimeFence: 1,
-          payloadFingerprint: 'fp',
           body: { kind: 'message', role: 'user', blocks: [] }
         } as never)
       ).resolves.toEqual(expected)
@@ -153,9 +294,18 @@ describe('structured mailbox pointer host', () => {
   })
 
   it('reads the runtime fence off the durable record', () => {
-    hostRef.current = { deps: { store: { getRecord: () => ({ lease: { runtimeFence: 9 } }) } } }
+    hostRef.current = {
+      deps: {
+        store: {
+          getConversation: () =>
+            agentSessionConversationView(
+              agentSessionRecordFixture(agentSessionLeaseFixture({ runtimeFence: 9 }))
+            )
+        }
+      }
+    }
     expect(createStructuredMailboxPointerHost().currentFence('s1')).toBe(9)
-    hostRef.current = { deps: { store: { getRecord: () => null } } }
+    hostRef.current = { deps: { store: { getConversation: () => null } } }
     expect(createStructuredMailboxPointerHost().currentFence('s1')).toBeNull()
   })
 })

@@ -1,26 +1,24 @@
+import { loadMobileResumeMetadata } from './mobile-agent-history-resume-metadata'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { ActivityIndicator, Pressable, Text, TextInput, View } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
-import { useRouter } from 'expo-router'
 import { ChevronLeft, RefreshCw } from 'lucide-react-native'
 import { colors } from '../theme/mobile-theme'
-import { useHostClient } from '../transport/client-context'
-import type { RpcSuccess } from '../transport/types'
-import type { RpcClient } from '../transport/rpc-client'
-import { readMobileRuntimeHostPlatform } from '../transport/mobile-runtime-host-platform'
+import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
+import { useWorkspaceClient } from '../transport/use-workspace-client'
+import { useWorkspaceRouteHandoff } from '../navigation/workspace-route-handoff'
+import { useSessionScreenHandlers } from '../session/session-screen-handlers'
+import { worktreeCatalogRead } from '../worktree/worktree-catalog-operations'
 import { getWorktreeLabel } from '../session/worktree-label'
 import {
   buildMobileAiVaultResumeLaunch,
   createMobileAiVaultResumeMutationRegistry,
+  readMobileAiVaultResumeHost,
   readMobileRuntimeTerminalWindowsShell,
   resolveMobileAiVaultResumePlatform,
-  resumeAiVaultSessionInTerminal,
-  type MobileAiVaultResumeSettings
+  resumeAiVaultSessionInTerminal
 } from '../session/ai-vault-resume-launch'
-import {
-  prepareMobileAiVaultSessionResume,
-  RESUME_RPC_TIMEOUT_MS
-} from '../session/ai-vault-resume-preparation'
+import { prepareMobileAiVaultSessionResume } from '../session/ai-vault-resume-preparation'
 import { triggerError, triggerSuccess } from '../platform/haptics'
 import type { AiVaultScope, AiVaultSession } from '../../../src/shared/ai-vault-types'
 import type { Worktree } from '../worktree/workspace-list-types'
@@ -28,20 +26,17 @@ import { useMobileAgentHistoryState } from './use-mobile-agent-history-state'
 import { buildMobileAgentHistorySections } from './agent-history-sections'
 import { shouldShowMobileCurrentWorktreeBadge } from './agent-history-current-worktree-badge'
 import { MobileAgentSessionHistoryList } from './MobileAgentSessionHistoryList'
-import {
-  resolveMobileAiVaultSessionResumeTarget,
-  type MobileAiVaultResumeFolderWorkspace,
-  type MobileAiVaultResumeProjectGroup,
-  type MobileAiVaultResumeRepo
-} from './agent-history-resume-target'
+import { resolveMobileAiVaultSessionResumeTarget } from './agent-history-resume-target'
 import { buildMobileAgentHistoryResumeActionState } from './agent-history-session-card'
 import { styles } from './agent-history-styles'
 import { useNow } from '../hooks/use-now'
+import { useMobileResumeOperationOwnership } from './use-mobile-resume-operation-ownership'
 
 export type MobileAgentSessionHistoryPanelProps = {
   hostId: string
   worktreeId: string
   name?: string
+  origin?: string
 }
 
 const SCOPE_TABS: { scope: AiVaultScope; label: string }[] = [
@@ -50,13 +45,27 @@ const SCOPE_TABS: { scope: AiVaultScope; label: string }[] = [
   { scope: 'all', label: 'All' }
 ]
 
-export function MobileAgentSessionHistoryPanel({
+export function MobileAgentSessionHistoryPanel(props: MobileAgentSessionHistoryPanelProps) {
+  return <MobileAgentSessionHistoryPanelContent key={props.hostId} {...props} />
+}
+
+function MobileAgentSessionHistoryPanelContent({
   hostId,
   worktreeId,
-  name = ''
+  name = '',
+  origin = ''
 }: MobileAgentSessionHistoryPanelProps) {
-  const router = useRouter()
-  const { client, state: connState } = useHostClient(hostId)
+  useMobileColorScheme()
+  // Use handoff, not useRouter: resumed session is a native route outside this single-document page.
+  const router = useWorkspaceRouteHandoff()
+  const sessionBelow = useSessionScreenHandlers(hostId, worktreeId)
+  const { client, state: connState } = useWorkspaceClient(hostId)
+  const claimResumeOwnership = useMobileResumeOperationOwnership(
+    hostId,
+    worktreeId,
+    client,
+    connState
+  )
   const [worktrees, setWorktrees] = useState<Worktree[]>([])
   const [worktreesLoaded, setWorktreesLoaded] = useState(false)
   const [query, setQuery] = useState('')
@@ -69,39 +78,6 @@ export function MobileAgentSessionHistoryPanel({
   )
   const worktreeLabel = getWorktreeLabel(name, worktreeId)
 
-  // Why: the worktree list seeds the host-local scopePaths derivation and the
-  // active-worktree path for the "current worktree" badge.
-  useEffect(() => {
-    if (!client || connState !== 'connected') {
-      return
-    }
-    let cancelled = false
-    void (async () => {
-      try {
-        const worktreeResponse = await client.sendRequest('worktree.ps', { limit: 10000 })
-        if (cancelled) {
-          return
-        }
-        if (worktreeResponse.ok) {
-          const result = (worktreeResponse as RpcSuccess).result as { worktrees: Worktree[] }
-          setWorktrees(result.worktrees)
-        }
-      } catch {
-        // Why: worktree list is best-effort context; the session scan still runs
-        // (without it, scoped tabs can't narrow and fall back to the full list).
-      } finally {
-        // Why: mark loaded even on failure so a scoped tab proceeds with an
-        // unscoped fetch instead of holding a spinner forever.
-        if (!cancelled) {
-          setWorktreesLoaded(true)
-        }
-      }
-    })()
-    return () => {
-      cancelled = true
-    }
-  }, [client, connState])
-
   const {
     scope,
     screenState,
@@ -113,6 +89,39 @@ export function MobileAgentSessionHistoryPanel({
     onRefresh,
     retry
   } = useMobileAgentHistoryState({ hostId, worktreeId, worktrees, worktreesLoaded })
+
+  // Worktree list seeds host-local scopePaths and current-worktree badge.
+  useEffect(() => {
+    if (!client || connState !== 'connected') {
+      return
+    }
+    let cancelled = false
+    void (async () => {
+      try {
+        const worktreeReply = await worktreeCatalogRead.request(client, { limit: 10000 })
+        if (cancelled) {
+          return
+        }
+        const catalog = worktreeCatalogRead.interpret(worktreeReply)
+        if (catalog.accepted) {
+          // Why `?? []`: the member is salvaged, so an envelope the host answers without rows leaves it
+          // absent, and `use-mobile-agent-history-state.ts:61` calls `.find` on it unguarded.
+          // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the rows stay opaque in the reader because three screens project them differently; this panel reads only `path` off a row to seed `scopePaths`, and `matrix-aivault.history-screen-worktree.ps-1` records every partition of its own family rendering a list rather than a crash.
+          setWorktrees((catalog.value.worktrees ?? []) as Worktree[])
+        }
+      } catch {
+        // Best-effort context: failed worktree list leaves scoped tabs scanning full history.
+      } finally {
+        // Mark loaded on failure too so scoped tabs fetch unscoped instead of spinning forever.
+        if (!cancelled) {
+          setWorktreesLoaded(true)
+        }
+      }
+    })()
+    return () => {
+      cancelled = true
+    }
+  }, [client, connState])
 
   const sessions = screenState.kind === 'ready' ? screenState.sessions : EMPTY_SESSIONS
   const issues = screenState.kind === 'ready' ? screenState.issues : EMPTY_ISSUES
@@ -132,8 +141,8 @@ export function MobileAgentSessionHistoryPanel({
     [sessions, query, scope, scopeFilterPaths, activeWorktreePath, now]
   )
 
-  const hostPlatform = useMemo(
-    () => readMobileRuntimeHostPlatform(hostStatusResult),
+  const resumeHost = useMemo(
+    () => readMobileAiVaultResumeHost(hostStatusResult),
     [hostStatusResult]
   )
   const hostTerminalWindowsShell = useMemo(
@@ -162,27 +171,24 @@ export function MobileAgentSessionHistoryPanel({
         return
       }
 
+      const assertCurrentOwner = claimResumeOwnership()
       resumeLaunchInFlightRef.current = true
       setResumingSessionId(session.id)
       setResumeMessage(null)
       try {
         const {
-          repos,
-          folderWorkspaces,
-          projectGroups,
           settings,
-          worktrees: freshWorktrees
+          worktrees: freshWorktrees,
+          ...catalog
         } = await loadMobileResumeMetadata(client)
+        assertCurrentOwner()
         const target = resolveMobileAiVaultSessionResumeTarget({
           session,
           activeWorktreeId: worktreeId,
-          // Why: resolve against live worktrees so a workspace deleted or
-          // archived since panel mount can't be picked; the mount-time list is
-          // only a fallback when the fresh fetch fails.
+          // Prefer live worktrees so deleted/archived workspace cannot be selected; fall back to mount list only on fetch failure.
           worktrees: freshWorktrees ?? worktrees,
-          repos,
-          folderWorkspaces,
-          projectGroups
+          catalog,
+          hostPlatform: resumeHost.platform
         })
         if (target.status !== 'ready') {
           setResumeMessage(target.message)
@@ -192,7 +198,7 @@ export function MobileAgentSessionHistoryPanel({
 
         const platform = resolveMobileAiVaultResumePlatform(
           target.targetStatus,
-          hostPlatform,
+          resumeHost.platform,
           target.workspacePath,
           target.terminalPlatform
         )
@@ -203,24 +209,41 @@ export function MobileAgentSessionHistoryPanel({
         }
 
         const preparedSession = await prepareMobileAiVaultSessionResume(client, session)
+        assertCurrentOwner()
         const launch = buildMobileAiVaultResumeLaunch({
           session: preparedSession,
-          hostPlatform: platform,
+          workspacePlatform: platform,
           hostTerminalWindowsShell,
           settings
         })
-        await resumeAiVaultSessionInTerminal(client, target.worktreeId, {
-          ...launch,
-          clientMutationId: resumeMutationRegistryRef.current.claim(session.id)
-        })
+        const resumed = await resumeAiVaultSessionInTerminal(
+          client,
+          target.worktreeId,
+          {
+            ...launch,
+            hostCapabilities: resumeHost.capabilities,
+            clientMutationId: resumeMutationRegistryRef.current.claim(session.id)
+          },
+          assertCurrentOwner
+        )
         resumeMutationRegistryRef.current.releaseOnSuccess(session.id)
         triggerSuccess()
+        // The host accepted the resume; a cutover now only stops navigation.
+        try {
+          assertCurrentOwner()
+        } catch {
+          return
+        }
         setResumeMessage('Agent session queued.')
-        router.push(
-          `/h/${encodeURIComponent(hostId)}/session/${encodeURIComponent(target.worktreeId)}` as Parameters<
-            typeof router.push
-          >[0]
-        )
+        // From a session screen the same workspace is the screen below; otherwise the session takes this screen's place.
+        if (origin === 'session' && target.worktreeId === worktreeId) {
+          sessionBelow?.onResumedTerminal(resumed.terminal)
+          router.back()
+        } else {
+          router.replace(
+            `/h/${encodeURIComponent(hostId)}/session/${encodeURIComponent(target.worktreeId)}`
+          )
+        }
       } catch (err) {
         triggerError()
         setResumeMessage(err instanceof Error ? err.message : 'Failed to resume session.')
@@ -233,11 +256,14 @@ export function MobileAgentSessionHistoryPanel({
       client,
       connState,
       hostId,
-      hostPlatform,
+      origin,
+      sessionBelow,
+      resumeHost,
       hostTerminalWindowsShell,
       router,
       worktreeId,
-      worktrees
+      worktrees,
+      claimResumeOwnership
     ]
   )
 
@@ -249,6 +275,7 @@ export function MobileAgentSessionHistoryPanel({
             style={({ pressed }) => [styles.backButton, pressed && styles.backButtonPressed]}
             onPress={() => router.back()}
             hitSlop={8}
+            accessibilityRole="button"
             accessibilityLabel="Back"
           >
             <ChevronLeft size={22} color={colors.textSecondary} strokeWidth={2.2} />
@@ -287,9 +314,11 @@ export function MobileAgentSessionHistoryPanel({
         <View style={styles.state}>
           <Text style={styles.stateTitle}>Unable to Load</Text>
           <Text style={styles.stateText}>{screenState.message}</Text>
-          <Pressable style={styles.retryButton} onPress={retry}>
-            <Text style={styles.retryText}>Retry</Text>
-          </Pressable>
+          {retry ? (
+            <Pressable style={styles.retryButton} onPress={retry}>
+              <Text style={styles.retryText}>Retry</Text>
+            </Pressable>
+          ) : null}
         </View>
       ) : (
         <>
@@ -358,67 +387,6 @@ export function MobileAgentSessionHistoryPanel({
 
 const EMPTY_SESSIONS: AiVaultSession[] = []
 const EMPTY_ISSUES: { agent: AiVaultSession['agent']; path: string; message: string }[] = []
-
-async function loadMobileResumeMetadata(client: Pick<RpcClient, 'sendRequest'>): Promise<{
-  repos: MobileAiVaultResumeRepo[]
-  folderWorkspaces: MobileAiVaultResumeFolderWorkspace[]
-  projectGroups: MobileAiVaultResumeProjectGroup[]
-  settings: MobileAiVaultResumeSettings | null
-  worktrees: Worktree[] | null
-}> {
-  // Why: repo.list can enrich repo remote identities, so fetch resume-only
-  // metadata after explicit user intent instead of delaying history browsing.
-  // timeoutMs: without it a socket drop parks these on the reconnect waiter
-  // for minutes, pinning the resume spinner (see RESUME_RPC_TIMEOUT_MS).
-  const [
-    repoResponse,
-    folderWorkspaceResponse,
-    projectGroupResponse,
-    settingsResponse,
-    worktreeResponse
-  ] = await Promise.all([
-    client.sendRequest('repo.list', undefined, { timeoutMs: RESUME_RPC_TIMEOUT_MS }),
-    client
-      .sendRequest('folderWorkspace.list', undefined, { timeoutMs: RESUME_RPC_TIMEOUT_MS })
-      .catch(() => null),
-    client
-      .sendRequest('projectGroup.list', undefined, { timeoutMs: RESUME_RPC_TIMEOUT_MS })
-      .catch(() => null),
-    client
-      .sendRequest('settings.get', undefined, { timeoutMs: RESUME_RPC_TIMEOUT_MS })
-      .catch(() => null),
-    client
-      .sendRequest('worktree.ps', { limit: 10000 }, { timeoutMs: RESUME_RPC_TIMEOUT_MS })
-      .catch(() => null)
-  ])
-  if (!repoResponse.ok) {
-    throw new Error(repoResponse.error?.message || 'Unable to load workspace metadata.')
-  }
-  const repoResult = repoResponse.result as { repos?: MobileAiVaultResumeRepo[] }
-  const folderWorkspaceResult =
-    folderWorkspaceResponse?.ok === true
-      ? (folderWorkspaceResponse.result as {
-          folderWorkspaces?: MobileAiVaultResumeFolderWorkspace[]
-        })
-      : null
-  const projectGroupResult =
-    projectGroupResponse?.ok === true
-      ? (projectGroupResponse.result as { groups?: MobileAiVaultResumeProjectGroup[] })
-      : null
-  const settingsResult =
-    settingsResponse?.ok === true
-      ? (settingsResponse.result as { settings?: MobileAiVaultResumeSettings })
-      : null
-  const worktreeResult =
-    worktreeResponse?.ok === true ? (worktreeResponse.result as { worktrees?: Worktree[] }) : null
-  return {
-    repos: repoResult.repos ?? [],
-    folderWorkspaces: folderWorkspaceResult?.folderWorkspaces ?? [],
-    projectGroups: projectGroupResult?.groups ?? [],
-    settings: settingsResult?.settings ?? null,
-    worktrees: worktreeResult?.worktrees ?? null
-  }
-}
 
 function createMobileAiVaultResumeMutationId(sessionId: string): string {
   const sessionPart = sessionId.replace(/[^a-zA-Z0-9_.:-]/g, '_').slice(0, 64) || 'session'

@@ -39,7 +39,8 @@ export const ProviderRateLimitsSchema = z
       'kimi',
       'minimax',
       'grok',
-      'antigravity'
+      'antigravity',
+      'cursor'
     ]),
     session: RateLimitWindowSchema.nullable(),
     weekly: RateLimitWindowSchema.nullable(),
@@ -174,8 +175,7 @@ export const AccountsSnapshotSchema = z
       .object({
         claude: ProviderRateLimitsSchema.nullable(),
         codex: ProviderRateLimitsSchema.nullable(),
-        // Why: protocol-compatible hosts from before runtime targeting omit
-        // these fields; their account selection semantics were host-only.
+        // Older compatible hosts omit runtime target fields and retain host-only selection semantics.
         claudeTarget: RateLimitRuntimeTargetSchema.default(HostRateLimitRuntimeTarget),
         codexTarget: RateLimitRuntimeTargetSchema.default(HostRateLimitRuntimeTarget),
         inactiveClaudeAccounts: z.array(InactiveAccountUsageSchema),

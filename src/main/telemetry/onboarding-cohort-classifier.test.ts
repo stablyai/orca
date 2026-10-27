@@ -1,10 +1,5 @@
-// Pins the onboarding-cohort-classifier contract: synchronous read of
-// `existedBeforeTelemetryRelease` plus the upgrade-backfill onboarding
-// shape, fail-soft to `undefined` on any failure mode, at most one warn per
-// session. See docs/onboarding-telemetry-extensions.md §2.
-
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { ONBOARDING_FINAL_STEP } from '../../shared/constants'
+import { ONBOARDING_FINAL_STEP } from '../../shared/onboarding-defaults'
 import type { GlobalSettings } from '../../shared/global-settings-types'
 import type { OnboardingState } from '../../shared/onboarding-state-types'
 import type { Store } from '../persistence'
@@ -79,12 +74,7 @@ describe('onboarding-cohort-classifier', () => {
   })
 
   it('classifies a live-completed existing user as upgrade_backfill (known limitation)', () => {
-    // Pins current behavior: a real existing-user who completes the wizard
-    // live writes the same canonical (`outcome: 'completed'`,
-    // `lastCompletedStep === ONBOARDING_FINAL_STEP`) shape that the migration
-    // backfill writes, so the classifier cannot distinguish them. This test
-    // documents the limitation; dashboards should filter `cohort` on
-    // `_started` and forward-fill across the session.
+    // Migration backfill and existing-user live completion share one shape; dashboards must forward-fill cohort from session _started events.
     initOnboardingCohortClassifier(
       makeFakeStore({
         existedBefore: true,
@@ -99,9 +89,7 @@ describe('onboarding-cohort-classifier', () => {
   })
 
   it('classifies an existing user mid-wizard as fresh_install (the funnel cohort)', () => {
-    // Existing user but the onboarding state isn't the migration's
-    // canonical force-completed shape. Funnel-wise this user is going
-    // through the wizard live, so they belong with `fresh_install`.
+    // Without canonical backfill completion, existing users still going through the wizard belong to fresh_install.
     initOnboardingCohortClassifier(
       makeFakeStore({
         existedBefore: true,

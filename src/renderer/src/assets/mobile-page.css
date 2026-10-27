@@ -1,6 +1,4 @@
-/* Why: ported from mobile/orca-mobile-sidebar-mock-v3.html. The mock is the
-   1:1 design spec for the in-app Mobile page; styles are scoped under
-   .mobile-page-root so they don't leak into the rest of the app shell. */
+/* Scoped under .mobile-page-root; mobile/orca-mobile-sidebar-mock-v3.html is the 1:1 design spec. */
 
 .mobile-page-root .mp-page-toolbar {
   position: absolute;
@@ -31,8 +29,7 @@
 }
 
 .mobile-page-root {
-  /* Real mobile-app tokens (from mobile/src/theme/mobile-theme.ts) — used
-     inside .mp-device-screen so simulated screens match the app exactly. */
+  /* Use mobile-theme.ts tokens inside simulated device screens. */
   --mp-flow-card-padding: 24px;
   --mp-flow-card-border-width: 1px;
   --mp-flow-card-inset: calc(var(--mp-flow-card-padding) + var(--mp-flow-card-border-width));
@@ -62,8 +59,6 @@
   overflow-y: auto;
   color: var(--foreground);
 }
-
-/* ── Hero ────────────────────────────────────────────────────────── */
 
 .mobile-page-root .mp-hero {
   position: relative;
@@ -95,9 +90,7 @@
   max-width: 560px;
   display: flex;
   flex-direction: column;
-  /* Why: min-height (rather than fixed height) keeps the intro/flow
-     screens at a uniform 400px box for centering, while letting the
-     paired view grow when the device list needs more room. */
+  /* Keep intro/flow centering at least 400px tall while allowing paired-device lists to grow. */
   min-height: var(--mp-flow-shell-height);
 }
 
@@ -190,8 +183,7 @@
   flex-direction: column;
   gap: 8px;
   max-width: 452px;
-  /* Why: cap so 4 rows fit fully and the 5th onward scrolls. Rows render
-     at ~64px each plus 8px gap, so 4 × 64 + 3 × 8 ≈ 280px. */
+  /* Fit four ~64px rows plus three 8px gaps; scroll later rows. */
   max-height: 288px;
   overflow-y: auto;
   scrollbar-width: none;
@@ -344,8 +336,6 @@
   background: var(--accent);
 }
 
-/* Step flow ─────────────────────────────────────────────────────── */
-
 .mobile-page-root .mp-flow-card {
   display: flex;
   flex-direction: column;
@@ -387,8 +377,7 @@
   color: var(--foreground);
 }
 
-/* Why: only the active step contributes to layout; the measured height lets
-   the card grow for Step 2 without making the shorter Step 1 oversized. */
+/* Only the active step affects layout; measure it to grow Step 2 without oversizing Step 1. */
 .mobile-page-root .mp-flow-viewport {
   position: relative;
   overflow: hidden;
@@ -426,9 +415,7 @@
   justify-content: space-between;
   margin-top: auto;
   padding-top: 16px;
-  /* Why: keep row height stable across steps so the back button doesn't jump
-     vertically when the right side switches between a 40px Continue button
-     and a placeholder span. */
+  /* Keep action height stable so the back button stays put when Continue becomes a placeholder. */
   min-height: calc(40px + 16px);
 }
 
@@ -652,9 +639,7 @@
   min-width: 0;
 }
 
-/* Why: align-items:center sizes children to max-content. Cap width AND set
-   min-width:0 so max-width can actually win over flex/grid min-size:auto and
-   long under-QR copy (relay-degraded notice, regenerate label) wraps. */
+/* Cap width and clear min-width:auto so flex/grid max-content cannot prevent under-QR text wrapping. */
 .mobile-page-root .mp-qr-stack > * {
   max-width: 100%;
   min-width: 0;
@@ -682,14 +667,8 @@
   cursor: not-allowed;
 }
 
-/* Step 1 (Get the app) + Step 2 (Pair) — QR column width */
-/* Why: pin the QR column to the QR's own width rather than `auto`. When the flow
-   card is narrow (mp-hero pins it to minmax(360px,560px)) an `auto` track grows
-   to its content's max-content — the relay-degraded notice under the pairing QR
-   is an unwrapped single line — starving the minmax(0,1fr) copy column to ~1 char
-   wide, so CJK copy wrapped one glyph per line (#9700). A fixed track stops that
-   starvation; .mp-qr-stack min-width:0 + max-width:100% (and the notice's
-   min-w-0 text span) stop the notice overflowing the track. */
+/* #9700: fix the QR track width so long notices cannot starve CJK copy into one-glyph lines.
+   Pair with min-width:0/max-width:100% on the QR stack and min-w-0 notice text. */
 .mobile-page-root .mp-step2-layout {
   display: grid;
   grid-template-columns: minmax(0, 1fr) var(--mp-qr-large-size);
@@ -729,6 +708,11 @@
   margin-top: 48px;
 }
 
+/* Keep the field inside copy so web’s absent field leaves no empty grid track/gap. */
+.mobile-page-root .mp-pairing-machine {
+  margin-top: 18px;
+}
+
 .mobile-page-root .mp-pairing-relay {
   grid-area: relay;
   min-width: 0;
@@ -743,10 +727,7 @@
   grid-area: failure;
 }
 
-/* Why: align the QR's top with the body copy ("Scan the QR…") instead
-   of the eyebrow row above it. The eyebrow row is ~22px tall + 22px
-   margin-bottom, and the h2 is ~38px line-height with no top margin —
-   so push the QR down by roughly that combined height. */
+/* Offset QR by eyebrow/margin/heading height to align it with body copy. */
 .mobile-page-root .mp-step2-layout > .mp-qr,
 .mobile-page-root .mp-step2-layout > .mp-qr-stack {
   margin-top: 72px;
@@ -802,7 +783,6 @@
   border-bottom-color: var(--foreground);
 }
 
-/* iOS release-channel switch (Preview vs Stable), shown above the install CTA */
 .mobile-page-root .mp-channel-toggle {
   display: inline-flex;
   align-items: center;
@@ -973,7 +953,6 @@
   opacity: 0.6;
 }
 
-/* Pairing settings card */
 .mobile-page-root .mp-pair-settings {
   margin-top: 12px;
   background: var(--m-bg-panel);
@@ -1074,8 +1053,6 @@
   opacity: 0.6;
 }
 
-/* ── Phone stage ────────────────────────────────────────────────── */
-
 .mobile-page-root .mp-stage {
   position: relative;
   z-index: 1;
@@ -1104,9 +1081,7 @@
   overflow: hidden;
   border-radius: 41px;
   background: var(--m-bg-base);
-  /* Why: Chromium occasionally fails to clip transformed children to a
-     rounded-corner overflow:hidden ancestor. Forcing a paint containment
-     boundary guarantees the off-screen slide can't leak past the bezel. */
+  /* Paint containment prevents transformed slides leaking past Chromium’s rounded overflow clipping. */
   contain: paint;
   isolation: isolate;
 }
@@ -1148,8 +1123,6 @@
   animation: mp-tap-pulse 280ms ease-out;
 }
 
-/* ── Simulated mobile-app screens (real tokens) ─────────────────── */
-
 .mobile-page-root .mp-device-screen {
   display: flex;
   width: 100%;
@@ -1157,12 +1130,7 @@
   flex-direction: column;
   background: var(--m-bg-base);
   color: var(--m-text-primary);
-  font-family:
-    'Geist',
-    -apple-system,
-    BlinkMacSystemFont,
-    'Segoe UI',
-    sans-serif;
+  font-family: 'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
   font-size: 13px;
   box-sizing: border-box;
   /* Why: the phone frame is viewport-fit now; the preview content must stay
@@ -1175,7 +1143,6 @@
   padding-top: 18px;
 }
 
-/* Top bar */
 .mobile-page-root .mp-app-topbar {
   display: flex;
   align-items: center;
@@ -1274,7 +1241,6 @@
   text-transform: uppercase;
 }
 
-/* Host card */
 .mobile-page-root .mp-host-card {
   display: flex;
   align-items: center;
@@ -1365,7 +1331,6 @@
   stroke-width: 1.75;
 }
 
-/* Resume card */
 .mobile-page-root .mp-resume-card {
   display: flex;
   align-items: center;
@@ -1426,7 +1391,6 @@
   flex: 0 0 auto;
 }
 
-/* Quick actions */
 .mobile-page-root .mp-quick-actions {
   display: grid;
   grid-template-columns: 1fr 1fr;
@@ -1467,7 +1431,6 @@
   white-space: nowrap;
 }
 
-/* Tasks home card */
 .mobile-page-root .mp-task-home-card {
   display: flex;
   align-items: center;
@@ -1528,7 +1491,6 @@
   stroke-width: 1.75;
 }
 
-/* Account usage */
 .mobile-page-root .mp-accounts-card {
   background: var(--m-bg-panel);
   border: 1px solid var(--m-border);
@@ -1607,8 +1569,6 @@
   background: var(--m-text-secondary);
   border-radius: inherit;
 }
-
-/* ── Worktree-list screen ───────────────────────────────────────── */
 
 .mobile-page-root .mp-wl-chrome {
   background: var(--m-bg-panel);
@@ -1858,8 +1818,6 @@
   text-align: right;
 }
 
-/* ── Session / terminal screen ─────────────────────────────────── */
-
 .mobile-page-root .mp-session-chrome {
   background: var(--m-bg-panel);
   border-bottom: 1px solid var(--m-border);
@@ -1965,7 +1923,6 @@
   stroke-width: 2.2;
 }
 
-/* Tokyonight terminal */
 .mobile-page-root .mp-terminal {
   flex: 1;
   background: #1a1b26;
@@ -2024,7 +1981,6 @@
   }
 }
 
-/* Accessory + input bar */
 .mobile-page-root .mp-accessory-bar {
   background: var(--m-bg-panel);
   border-top: 1px solid var(--m-border);
@@ -2104,7 +2060,6 @@
   stroke-width: 2.4;
 }
 
-/* Reduced motion: pin to home, no slide transitions */
 @media (prefers-reduced-motion: reduce) {
   .mobile-page-root .mp-screen-slide,
   .mobile-page-root .mp-flow-viewport,
@@ -2113,7 +2068,6 @@
   }
 }
 
-/* Narrow viewport: stack the hero so the phone falls below the copy */
 @media (max-width: 920px) {
   .mobile-page-root {
     --mp-flow-card-padding: 20px;
@@ -2175,8 +2129,7 @@
   }
 }
 
-/* Why: the app sidebar narrows this page without changing viewport media
-   queries; keep this after viewport rules so real page width wins. */
+/* Container rules follow viewport rules: the app sidebar changes page width without changing the viewport. */
 @container (max-width: 1080px) {
   .mobile-page-root .mp-hero {
     --mp-flow-card-padding: 20px;

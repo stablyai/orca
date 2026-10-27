@@ -1,8 +1,4 @@
-// Argument parsing for `node run.mjs` (crash-survival harness).
-//
-// Unlike win-update-e2e, this harness installs nothing: it drives an ALREADY
-// installed, packaged Orca.exe. So its only source is `--exe-path` (defaulting
-// to the per-user install location). Exactly one profile (--expect) is required.
+// Drive an already-installed Orca.exe without installers; --exe-path defaults to per-user location and --expect is required.
 
 import { existsSync } from 'node:fs'
 import path from 'node:path'
@@ -50,9 +46,7 @@ export function parseArgs(argv) {
 
   const exePathFlagPresent = argv.includes('--exe-path')
   const opts = {
-    // Only auto-locate on win32: off-win32 this would needlessly spawn powershell,
-    // and run.mjs asserts win32 first so the platform message wins over any
-    // "no Orca.exe found" default-resolution error.
+    // Auto-locate only on Windows so platform refusal wins before PowerShell/default-path errors.
     exePath:
       takeValue(argv, '--exe-path') ??
       (process.platform === 'win32' ? locateInstalledExe() : undefined) ??
@@ -69,14 +63,13 @@ export function parseArgs(argv) {
 
 function validate(opts, exePathFlagPresent, argv) {
   const errors = []
-  errors.push(...validateArgShape(argv))
+  errors.push(...validateArgSyntax(argv))
   if (!opts.expect) {
     errors.push('Missing --expect <survival|orphaned>')
   } else if (!VALID_PROFILES.has(opts.expect)) {
     errors.push(`Invalid --expect "${opts.expect}" (expected survival or orphaned)`)
   }
-  // Distinguish "--exe-path omitted" (fall back to auto-locate) from
-  // "--exe-path with no value" (a mistake that must fail, not silently default).
+  // An omitted exe path may auto-locate; a present flag without value must fail.
   if (exePathFlagPresent && takeValue(argv, '--exe-path') === undefined) {
     errors.push('--exe-path requires a path value')
   } else if (!opts.exePath) {
@@ -94,7 +87,7 @@ function validate(opts, exePathFlagPresent, argv) {
   return errors
 }
 
-function validateArgShape(argv) {
+function validateArgSyntax(argv) {
   const errors = []
   const seen = new Set()
   for (let index = 0; index < argv.length; index++) {

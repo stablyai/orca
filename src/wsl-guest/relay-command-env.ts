@@ -1,0 +1,172 @@
+import { homedir } from 'node:os'
+import { posix, win32 } from 'node:path'
+import { gitCredentialPromptGuardEnv } from '../shared/git-credential-prompt-env'
+import { UNTRANSLATED_GIT_OUTPUT_ENV } from '../shared/git-output-locale'
+
+const POSIX_RELAY_PATH_FALLBACKS = ['/usr/local/bin', '/opt/homebrew/bin', '/usr/bin', '/bin']
+const WINDOWS_RELAY_PATH_FALLBACKS = [
+  'C:\\Program Files\\Git\\cmd',
+  'C:\\Program Files\\Git\\bin',
+  'C:\\Windows\\System32',
+  'C:\\Windows'
+]
+
+// Login-only probes omit interactive package-manager paths; add documented relocations before home defaults.
+function getPosixUserInstallBinFallbacks(
+  baseEnv: NodeJS.ProcessEnv,
+  platform: NodeJS.Platform
+): string[] {
+  const home = baseEnv.HOME || homedir()
+  const bins: string[] = []
+  if (baseEnv.PNPM_HOME) {
+    bins.push(baseEnv.PNPM_HOME)
+  }
+  if (home) {
+    bins.push(posix.join(home, '.local', 'bin'), posix.join(home, '.npm-global', 'bin'))
+    if (platform === 'darwin') {
+      bins.push(posix.join(home, 'Library', 'pnpm'))
+    }
+  }
+  const cargoBin = baseEnv.CARGO_HOME
+    ? posix.join(baseEnv.CARGO_HOME, 'bin')
+    : home
+      ? posix.join(home, '.cargo', 'bin')
+      : null
+  if (cargoBin) {
+    bins.push(cargoBin)
+  }
+  const bunBin = baseEnv.BUN_INSTALL
+    ? posix.join(baseEnv.BUN_INSTALL, 'bin')
+    : home
+      ? posix.join(home, '.bun', 'bin')
+      : null
+  if (bunBin) {
+    bins.push(bunBin)
+  }
+  const denoBin = baseEnv.DENO_INSTALL
+    ? posix.join(baseEnv.DENO_INSTALL, 'bin')
+    : home
+      ? posix.join(home, '.deno', 'bin')
+      : null
+  if (denoBin) {
+    bins.push(denoBin)
+  }
+  // GOBIN is the bin dir itself; otherwise go installs into $GOPATH/bin (default ~/go/bin).
+  const goBin = baseEnv.GOBIN
+    ? baseEnv.GOBIN
+    : baseEnv.GOPATH
+      ? posix.join(baseEnv.GOPATH, 'bin')
+      : home
+        ? posix.join(home, 'go', 'bin')
+        : null
+  if (goBin) {
+    bins.push(goBin)
+  }
+  // pnpm/PNPM_HOME point at the global-bin dir directly; the default lives under
+  // XDG_DATA_HOME (default ~/.local/share).
+  const pnpmHome = baseEnv.PNPM_HOME
+    ? null
+    : baseEnv.XDG_DATA_HOME
+      ? posix.join(baseEnv.XDG_DATA_HOME, 'pnpm')
+      : home
+        ? posix.join(home, '.local', 'share', 'pnpm')
+        : null
+  if (pnpmHome) {
+    bins.push(pnpmHome)
+  }
+  const npmPrefix = baseEnv.npm_config_prefix
+  if (npmPrefix) {
+    bins.push(posix.join(npmPrefix, 'bin'))
+  }
+  return bins
+}
+
+function getWindowsUserInstallBinFallbacks(baseEnv: NodeJS.ProcessEnv): string[] {
+  const bins = baseEnv.PNPM_HOME ? [baseEnv.PNPM_HOME] : []
+  if (baseEnv.APPDATA) {
+    bins.push(win32.join(baseEnv.APPDATA, 'npm'))
+  }
+  if (baseEnv.LOCALAPPDATA) {
+    bins.push(win32.join(baseEnv.LOCALAPPDATA, 'pnpm'))
+  }
+  if (baseEnv.CARGO_HOME) {
+    bins.push(win32.join(baseEnv.CARGO_HOME, 'bin'))
+  }
+  if (baseEnv.BUN_INSTALL) {
+    bins.push(win32.join(baseEnv.BUN_INSTALL, 'bin'))
+  }
+  if (baseEnv.DENO_INSTALL) {
+    bins.push(win32.join(baseEnv.DENO_INSTALL, 'bin'))
+  }
+  if (baseEnv.GOBIN) {
+    bins.push(baseEnv.GOBIN)
+  } else if (baseEnv.GOPATH) {
+    bins.push(win32.join(baseEnv.GOPATH, 'bin'))
+  }
+  if (baseEnv.USERPROFILE) {
+    if (!baseEnv.CARGO_HOME) {
+      bins.push(win32.join(baseEnv.USERPROFILE, '.cargo', 'bin'))
+    }
+    if (!baseEnv.BUN_INSTALL) {
+      bins.push(win32.join(baseEnv.USERPROFILE, '.bun', 'bin'))
+    }
+    if (!baseEnv.GOBIN && !baseEnv.GOPATH) {
+      bins.push(win32.join(baseEnv.USERPROFILE, 'go', 'bin'))
+    }
+    if (!baseEnv.DENO_INSTALL) {
+      bins.push(win32.join(baseEnv.USERPROFILE, '.deno', 'bin'))
+    }
+  }
+  return bins
+}
+
+function getPathKey(env: NodeJS.ProcessEnv): 'PATH' | 'Path' {
+  return env.Path !== undefined && env.PATH === undefined ? 'Path' : 'PATH'
+}
+
+function getPathDelimiter(platform: NodeJS.Platform): string {
+  return platform === 'win32' ? ';' : ':'
+}
+
+function getFallbackSegments(platform: NodeJS.Platform, baseEnv: NodeJS.ProcessEnv): string[] {
+  if (platform === 'win32') {
+    return [...WINDOWS_RELAY_PATH_FALLBACKS, ...getWindowsUserInstallBinFallbacks(baseEnv)]
+  }
+  return [...POSIX_RELAY_PATH_FALLBACKS, ...getPosixUserInstallBinFallbacks(baseEnv, platform)]
+}
+
+export function buildRelayCommandEnv(
+  baseEnv: NodeJS.ProcessEnv = process.env,
+  platform: NodeJS.Platform = process.platform
+): NodeJS.ProcessEnv {
+  const key = getPathKey(baseEnv)
+  const delimiter = getPathDelimiter(platform)
+  const segments = new Set((baseEnv[key] ?? '').split(delimiter).filter(Boolean))
+
+  for (const segment of getFallbackSegments(platform, baseEnv)) {
+    segments.add(segment)
+  }
+
+  return {
+    ...baseEnv,
+    [key]: [...segments].join(delimiter)
+  }
+}
+
+// Pin English UTF-8 for machine-parsed git stderr/progress; translated output breaks matching (#7808).
+export function buildRelayGitEnv(
+  baseEnv: NodeJS.ProcessEnv = process.env,
+  platform: NodeJS.Platform = process.platform
+): NodeJS.ProcessEnv {
+  return { ...buildRelayCommandEnv(baseEnv, platform), ...UNTRANSLATED_GIT_OUTPUT_ENV }
+}
+
+/** Env for unattended Git RPCs, which have no terminal that can answer auth UI. */
+export function buildRelayUnattendedGitEnv(
+  baseEnv: NodeJS.ProcessEnv = process.env,
+  platform: NodeJS.Platform = process.platform
+): NodeJS.ProcessEnv {
+  // GCM can open OAuth UI without usable stdin; unattended RPCs must suppress it.
+  const env = gitCredentialPromptGuardEnv(buildRelayGitEnv(baseEnv, platform), platform)
+  return env
+}

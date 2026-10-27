@@ -1,19 +1,15 @@
 import type { Terminal } from '@xterm/xterm'
+import { PaneReparentFrameTracker } from '@/lib/pane-manager/pane-reparent-frame-tracker'
 
 type PreviewBoxFitTerminal = Pick<Terminal, 'rows' | 'buffer'>
 
-/**
- * Scales the preview terminal down to the dialog box it lives in. The terminal
- * keeps the PTY's real cols/rows (replaying serialized ANSI into different
- * dimensions rewraps into garbage), so an oversized frame is transform-scaled
- * and anchored at whichever end keeps the CURSOR row visible: a fresh shell
- * prompts at the TOP of its screen (blind bottom-anchoring clipped it away),
- * while a busy TUI keeps its action at the bottom.
- */
+/** Replay at real PTY dimensions to avoid ANSI rewrap corruption; scale oversized frames and anchor the end containing the cursor. */
 export function createPreviewBoxFit(args: {
   container: HTMLElement
   getTerminal: () => PreviewBoxFitTerminal | null
-}): { fit: () => void; schedule: () => void } {
+}): { fit: () => void; schedule: () => void; dispose: () => void } {
+  let disposed = false
+  const frames = new PaneReparentFrameTracker(() => disposed)
   const fit = (): void => {
     const terminal = args.getTerminal()
     const screen = args.container.querySelector<HTMLElement>('.xterm-screen')
@@ -33,15 +29,25 @@ export function createPreviewBoxFit(args: {
   // Re-fit after every parsed write (cursor may move ends); rAF coalesces.
   let scheduled = false
   const schedule = (): void => {
-    if (scheduled) {
+    if (disposed || scheduled) {
       return
     }
     scheduled = true
-    requestAnimationFrame(() => {
+    frames.request(() => {
       scheduled = false
       fit()
     })
   }
 
-  return { fit, schedule }
+  return {
+    fit,
+    schedule,
+    dispose: (): void => {
+      if (disposed) {
+        return
+      }
+      disposed = true
+      frames.cancelPending()
+    }
+  }
 }

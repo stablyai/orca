@@ -41,35 +41,39 @@ function result(overrides: Partial<SkillDiscoveryResult> = {}): SkillDiscoveryRe
 }
 
 describe('summarizeSkillSources', () => {
-  it('counts a symlinked skill under every root that reached it', () => {
-    const shared = source({ id: 'repo', path: '/repo/.agents/skills', sourceKind: 'repo' })
+  it('counts each skill once per root, including a primary root omitted from rootPaths', () => {
+    const shared = skill({ rootPaths: ['/other', '/other', '/unknown'] })
+    const home = source()
+    const other = source({ path: '/other' })
     const entries = summarizeSkillSources(
       result({
-        sources: [source(), shared],
-        skills: [skill({ rootPaths: ['/home/dev/.agents/skills', '/repo/.agents/skills'] })]
+        sources: [home, other, other, source({ path: '/OTHER' })],
+        skills: [shared, shared, skill({ rootPaths: [home.path, home.path] })]
       })
     )
-    expect(entries.map((entry) => entry.skillCount)).toEqual([1, 1])
+    expect(entries.map((entry) => entry.skillCount)).toEqual([3, 2, 2, 0])
+    expect(entries[0].source).toBe(home)
+    expect(entries[1].source).toBe(other)
+    expect(entries[2].source).toBe(other)
   })
 
-  it('reports why a root produced nothing instead of showing an empty count', () => {
-    const entries = summarizeSkillSources(
-      result({
-        sources: [
-          source({ id: 'missing', exists: false, skippedReason: 'missing' }),
-          source({ id: 'remote', exists: false, skippedReason: 'remote-repo' }),
-          source({ id: 'unknown', exists: false })
-        ]
-      })
-    )
-    expect(entries.map((entry) => entry.status)).toEqual(['missing', 'remote-repo', 'unavailable'])
-    expect(scannedSkillSourceCount(entries)).toBe(0)
+  it('does not scan every skill again for each source', () => {
+    let rootReads = 0
+    const skills = Array.from({ length: 1000 }, () => ({
+      ...skill(),
+      get rootPath() {
+        rootReads++
+        return '/home/dev/.agents/skills'
+      }
+    }))
+    const sources = Array.from({ length: 87 }, (_, index) => source({ id: `${index}` }))
+    const entries = summarizeSkillSources(result({ skills, sources }))
+    expect(entries.every((entry) => entry.skillCount === 1000)).toBe(true)
+    expect(rootReads).toBeLessThanOrEqual(skills.length)
   })
 
   it('reports an unanswered root as unavailable even though it claims to exist', () => {
-    // Why: the host cannot prove a stalled root is gone, so it reports exists:true
-    // and carries the uncertainty in skippedReason. Reading exists first counted a
-    // root nobody walked as scanned, and its retained skills as its full contents.
+    // An unavailable root retains exists:true because absence is unproven; retained skills do not establish a full scan.
     const entries = summarizeSkillSources(
       result({
         sources: [source({ id: 'stalled', exists: true, skippedReason: 'unavailable' })],
@@ -78,12 +82,5 @@ describe('summarizeSkillSources', () => {
     )
     expect(entries.map((entry) => entry.status)).toEqual(['unavailable'])
     expect(scannedSkillSourceCount(entries)).toBe(0)
-  })
-
-  it('counts only roots that were actually scanned', () => {
-    const entries = summarizeSkillSources(
-      result({ sources: [source(), source({ id: 'gone', exists: false })] })
-    )
-    expect(scannedSkillSourceCount(entries)).toBe(1)
   })
 })

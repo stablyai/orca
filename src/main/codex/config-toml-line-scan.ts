@@ -1,7 +1,4 @@
-// Why: Orca edits Codex config.toml byte-preservingly (no TOML dependency), so
-// every editor must agree on which lines sit inside multiline strings or
-// arrays vs real TOML structure. Keep the line-scanner in one place to avoid
-// drift.
+// Scan structure without reserializing so TOML edits preserve surrounding bytes.
 
 export type TomlLineScanState = {
   basic: boolean
@@ -21,8 +18,7 @@ export function createTomlLineScanState(): TomlLineScanState {
   return { basic: false, literal: false, arrayDepth: 0 }
 }
 
-// Why: lines inside multiline strings or unclosed arrays can look exactly like
-// `[section]` headers or `key = value` pairs but are data, not structure.
+// Multiline values can contain text resembling headers and assignments.
 export function isTomlStructuralLine(state: TomlLineScanState): boolean {
   return !state.basic && !state.literal && state.arrayDepth === 0
 }
@@ -77,8 +73,7 @@ export function updateTomlLineScanState(state: TomlLineScanState, line: string):
       index = skipTomlLiteralString(line, index + 1)
       continue
     }
-    // Why: table-header brackets balance within their line, so a depth that
-    // stays positive across lines means a multiline array is still open.
+    // Header brackets balance on one line; remaining depth belongs to a multiline array.
     if (char === '[') {
       arrayDepth += 1
       index += 1
@@ -95,8 +90,18 @@ export function updateTomlLineScanState(state: TomlLineScanState, line: string):
 }
 
 export function getTomlTableHeader(line: string): string | null {
-  const match = /^(\s*\[\[?.+\]\]?\s*)(?:#.*)?$/.exec(line)
-  return match?.[1] ?? null
+  let index = 0
+  while (index < line.length && line[index] !== '#') {
+    if (line[index] === '"') {
+      index = skipTomlBasicString(line, index + 1)
+    } else if (line[index] === "'") {
+      index = skipTomlLiteralString(line, index + 1)
+    } else {
+      index++
+    }
+  }
+  const header = line.slice(0, index).trimEnd()
+  return /^\s*\[\[?.+\]\]?$/.test(header) ? header : null
 }
 
 export function parseTomlSingleLineStringValue(
@@ -143,8 +148,7 @@ export function parseTomlSingleLineStringValue(
   return null
 }
 
-// Why: serde accepts multiline TOML strings for String settings such as
-// model_provider, so safety classifiers cannot treat triple quotes as absent.
+// Codex accepts multiline string settings, so classifiers must inspect them too.
 export function parseTomlStringValue(source: string, offset: number): ParsedTomlString | null {
   let index = offset
   while (source[index] === ' ' || source[index] === '\t') {
@@ -285,8 +289,7 @@ function parseTomlUnicodeEscape(
     return null
   }
   const codePoint = Number.parseInt(raw, 16)
-  // Why: TOML escapes must be Unicode scalar values; String.fromCodePoint
-  // accepts lone surrogates, which would round-trip into invalid TOML.
+  // String.fromCodePoint accepts lone surrogates, but TOML requires Unicode scalar values.
   if (codePoint >= 0xd800 && codePoint <= 0xdfff) {
     return null
   }
@@ -295,4 +298,20 @@ function parseTomlUnicodeEscape(
   } catch {
     return null
   }
+}
+
+export function withTrailingCr(originalLine: string, rendered: string): string {
+  return originalLine.endsWith('\r') ? `${rendered}\r` : rendered
+}
+
+export function withCrLine(rendered: string, usesCrlf: boolean): string {
+  return usesCrlf ? `${rendered}\r` : rendered
+}
+
+export function joinPreservingTrailingNewline(lines: string[], usesCrlf: boolean): string {
+  const result = lines.join('\n')
+  if (result.endsWith('\n') || result.length === 0) {
+    return result
+  }
+  return result.endsWith('\r') ? `${result}\n` : `${result}${usesCrlf ? '\r\n' : '\n'}`
 }

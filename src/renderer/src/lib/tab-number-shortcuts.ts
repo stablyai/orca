@@ -1,13 +1,11 @@
 import { focusTerminalTabSurface } from '@/lib/focus-terminal-tab-surface'
 import { useAppStore } from '@/store'
 import type { AppState } from '@/store/types'
-import { getRuntimeEnvironmentIdForWorktree } from '@/lib/worktree-runtime-owner'
-import { dedupeTabOrder } from '@/store/slices/tab-group-state'
+import { runtimeEnvironmentIdOrLocalUnlessTwin } from '@/lib/worktree-runtime-owner'
+import { dedupeTabOrder } from '../../../shared/workspace-layout/tab-order'
 import type { Tab } from '../../../shared/tab-types'
-import {
-  activateWebRuntimeSessionTab,
-  isWebRuntimeSessionActive
-} from '@/runtime/web-runtime-session'
+import { activateWebRuntimeSessionTab } from '@/runtime/web-runtime-session-tab-lifecycle'
+import { isWebRuntimeSessionActive } from '@/runtime/web-runtime-session-environment'
 
 type TabNumberShortcutState = Pick<
   AppState,
@@ -43,9 +41,7 @@ export function resolveTabNumberShortcutTarget(
     (tab) => tab.groupId === group.id
   )
   const tabById = new Map(groupTabs.map((tab) => [tab.id, tab]))
-  // Why: mirror TabBar's reconcile behavior. Stored group tabOrder is the
-  // visible left-to-right source, but stale/missing entries can happen during
-  // hydration and drag races, so append currently mounted group tabs.
+  // Match TabBar reconciliation: stored order is authoritative, but append mounted tabs missing during hydration/drag races.
   const orderedIds = dedupeTabOrder([
     ...group.tabOrder.filter((tabId) => tabById.has(tabId)),
     ...groupTabs.map((tab) => tab.id)
@@ -62,7 +58,7 @@ export function activateTabNumberShortcut(index: number): boolean {
   }
 
   const worktreeId = target.worktreeId
-  const runtimeEnvironmentId = getRuntimeEnvironmentIdForWorktree(store, worktreeId)
+  const runtimeEnvironmentId = runtimeEnvironmentIdOrLocalUnlessTwin(store, worktreeId)
   store.focusGroup(worktreeId, target.groupId)
   store.activateTab(target.id)
 
@@ -75,7 +71,7 @@ export function activateTabNumberShortcut(index: number): boolean {
       })
     }
     store.setActiveTab(target.entityId)
-    store.setActiveTabType('terminal')
+    store.setActiveTabType('terminal', worktreeId)
     focusTerminalTabSurface(target.entityId)
     return true
   }
@@ -89,17 +85,17 @@ export function activateTabNumberShortcut(index: number): boolean {
       })
     }
     store.setActiveBrowserTab(target.entityId)
-    store.setActiveTabType('browser')
+    store.setActiveTabType('browser', worktreeId)
     return true
   }
 
   if (target.contentType === 'simulator') {
     store.setActiveTab(target.id)
-    store.setActiveTabType('simulator')
+    store.setActiveTabType('simulator', worktreeId)
     return true
   }
 
   store.setActiveFile(target.entityId)
-  store.setActiveTabType('editor')
+  store.setActiveTabType('editor', worktreeId)
   return true
 }

@@ -5,6 +5,7 @@ on:
     - cron: '15 9 * * *'
   workflow_dispatch:
   pull_request:
+    types: [opened, synchronize, reopened, ready_for_review, converted_to_draft]
     paths:
       - '.github/workflows/performance-contracts.yml'
       - 'config/vitest.performance.config.ts'
@@ -12,15 +13,29 @@ on:
       - 'config/oxlint-plugins/*performance.mjs'
       - 'config/oxlint-plugins/quadratic-buffer-concat.mjs'
       - 'config/scripts/*-plugin.test.mjs'
+      - '!config/scripts/renderer-scrollbar-style-plugin.test.mjs'
       # Keep in sync with the contract list in config/vitest.performance.config.ts;
       # without these a rename lands green and only breaks the next nightly.
+      - 'src/main/ipc/pty-spawn-scaling.performance.test.ts'
+      - 'src/main/ipc/pty/runtime/spawn-preflight-saved-resume.test.ts'
+      - 'src/main/native-chat/agent-session-wire/structured-agent-session-terminal-writer-acquire.test.ts'
+      - 'src/main/runtime/hook-status-resume-sleep-ordering.test.ts'
+      - 'src/renderer/src/hooks/ipc-events/agent-status-refused-resume.performance.test.ts'
+      - 'src/renderer/src/components/terminal-pane/pty-connection/saved-resume-cancellation.test.ts'
       - 'src/main/sqlite/sync-database.test.ts'
       - 'src/main/runtime/orchestration/db/row-column-lists.test.ts'
-      - 'src/relay/fs-path-metadata-symlink-concurrency.test.ts'
+      - 'src/shared/native-chat/tools/native-chat-tool-attribution-allocation.test.ts'
+      - 'src/shared/native-chat/tools/native-chat-tool-pairing.performance.test.ts'
+      - 'src/main/codex-usage/codex-rollout-file-lifetime.test.ts'
+      - 'src/main/codex-usage/scanner-incremental-append.test.ts'
+      - 'src/main/usage/jsonl-file-reader.test.ts'
+      - 'src/main/usage/jsonl-file-snapshot.test.ts'
       - 'src/renderer/src/components/editor/rich-markdown-list-tokenizers.test.ts'
       - 'src/renderer/src/components/editor/rich-markdown-lowlight-cache.test.ts'
       - 'src/renderer/src/components/terminal-pane/agent-completion-coordinator-queued-inspection-disposal.test.ts'
       - 'src/renderer/src/lib/pane-manager/pane-terminal-output-scheduler-queue-retention.test.ts'
+      - 'src/main/claude-usage/scanner-incremental-append.test.ts'
+      - 'src/main/claude-usage/store-checkpoint-persistence.test.ts'
 
 permissions:
   contents: read
@@ -31,11 +46,12 @@ concurrency:
 
 jobs:
   contracts:
+    if: github.event_name != 'pull_request' || github.event.pull_request.draft != true
     strategy:
       fail-fast: false
       matrix:
         os: [ubuntu-latest, macos-latest, windows-latest]
-    runs-on: ${{ matrix.os }}
+    runs-on: ${{ fromJSON('{"ubuntu-latest":"blacksmith-4vcpu-ubuntu-2404","macos-latest":"blacksmith-6vcpu-macos-latest","windows-latest":"blacksmith-4vcpu-windows-2025"}')[matrix.os] || matrix.os }}
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@v6

@@ -1,8 +1,8 @@
 import { describe, expect, it, vi } from 'vitest'
 import type { RpcClient } from '../transport/rpc-client'
+import { RpcIncompatibleReplyError } from '../transport/rpc-incompatible-reply-error'
 import {
   admitWorktreeCatalogResponse,
-  WORKTREE_PS_FULL_LIMIT,
   WorktreeCatalogSnapshotClient,
   type WorktreeCatalogFetchResult
 } from './worktree-catalog-snapshot-client'
@@ -80,6 +80,7 @@ describe('admitWorktreeCatalogResponse', () => {
 })
 
 function clientWithResults(...results: unknown[]): RpcClient {
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: this request-only seam intentionally supplies unchecked envelopes to snapshot admission.
   return {
     sendRequest: vi.fn(
       async () =>
@@ -120,21 +121,25 @@ describe('WorktreeCatalogSnapshotClient', () => {
     admitFetched(snapshots, await snapshots.fetch(client, 'host-1'))
 
     expect(client.sendRequest).toHaveBeenNthCalledWith(2, 'worktree.ps', {
-      limit: WORKTREE_PS_FULL_LIMIT,
+      limit: 10_000,
       afterSnapshotId: null
     })
   })
 
   it('preserves the last admitted token across transport failures', async () => {
-    const client = clientWithResults({ worktrees: [], snapshotId: 'snapshot-1' })
+    const client = clientWithResults(
+      { worktrees: [], snapshotId: 'snapshot-1' },
+      { unchanged: true, snapshotId: 'snapshot-1' }
+    )
     const snapshots = new WorktreeCatalogSnapshotClient()
 
     admitFetched(snapshots, await snapshots.fetch(client, 'host-1'))
-    snapshots.admit(null)
+    vi.mocked(client.sendRequest).mockRejectedValueOnce(new Error('connection lost'))
+    await expect(snapshots.fetch(client, 'host-1')).rejects.toThrow('connection lost')
     await snapshots.fetch(client, 'host-1')
 
-    expect(client.sendRequest).toHaveBeenNthCalledWith(2, 'worktree.ps', {
-      limit: WORKTREE_PS_FULL_LIMIT,
+    expect(client.sendRequest).toHaveBeenNthCalledWith(3, 'worktree.ps', {
+      limit: 10_000,
       afterSnapshotId: 'snapshot-1'
     })
   })
@@ -152,7 +157,7 @@ describe('WorktreeCatalogSnapshotClient', () => {
     await snapshots.fetch(client, 'host-1')
 
     expect(client.sendRequest).toHaveBeenNthCalledWith(3, 'worktree.ps', {
-      limit: WORKTREE_PS_FULL_LIMIT,
+      limit: 10_000,
       afterSnapshotId: null
     })
   })
@@ -166,36 +171,38 @@ describe('WorktreeCatalogSnapshotClient', () => {
     await snapshots.fetch(secondClient, 'host-2')
 
     expect(secondClient.sendRequest).toHaveBeenCalledWith('worktree.ps', {
-      limit: WORKTREE_PS_FULL_LIMIT,
+      limit: 10_000,
       afterSnapshotId: null
     })
   })
 
   it('drops a superseded host response without invalidating the current token', async () => {
     const firstClient = clientWithResults({ worktrees: [], snapshotId: 'snapshot-1' })
-    const secondClient = clientWithResults({ worktrees: [], snapshotId: 'snapshot-2' })
+    const secondClient = clientWithResults(
+      { worktrees: [], snapshotId: 'snapshot-2' },
+      { unchanged: true, snapshotId: 'snapshot-2' }
+    )
     const snapshots = new WorktreeCatalogSnapshotClient()
 
-    // Host A's response is still in flight when the screen switches to host B.
     const stale = await snapshots.fetch(firstClient, 'host-1')
     admitFetched(snapshots, await snapshots.fetch(secondClient, 'host-2'))
     expect(admitFetched(snapshots, stale)).toBeNull()
 
     await snapshots.fetch(secondClient, 'host-2')
     expect(secondClient.sendRequest).toHaveBeenNthCalledWith(2, 'worktree.ps', {
-      limit: WORKTREE_PS_FULL_LIMIT,
+      limit: 10_000,
       afterSnapshotId: 'snapshot-2'
     })
   })
 
-  // Why (STA-3123): a failed worktree.ps rendered as "0 worktrees"; callers need the
-  // failure code to show an error state instead of an empty host.
+  // Catalog failure must remain distinct from an empty host (STA-3123).
   it('surfaces the RPC error code on failure and keeps the admitted token', async () => {
     const responses: unknown[] = [
       { id: 'request', ok: true, result: { worktrees: [], snapshotId: 'snapshot-1' } },
       { id: 'request', ok: false, error: { code: 'forbidden', message: 'nope' } },
       { id: 'request', ok: true, result: { unchanged: true, snapshotId: 'snapshot-1' } }
     ]
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: this request-only seam intentionally supplies unchecked envelopes to snapshot admission.
     const client = {
       sendRequest: vi.fn(async () => responses.shift())
     } as unknown as RpcClient
@@ -207,12 +214,23 @@ describe('WorktreeCatalogSnapshotClient', () => {
 
     await snapshots.fetch(client, 'host-1')
     expect(client.sendRequest).toHaveBeenNthCalledWith(3, 'worktree.ps', {
-      limit: WORKTREE_PS_FULL_LIMIT,
+      limit: 10_000,
       afterSnapshotId: 'snapshot-1'
     })
   })
 
+  // The screen keys invalid_response on the error class; pin it here so host payload defects cannot become network failures.
+  it('rejects with RpcIncompatibleReplyError when the host answers a result the reader refuses', async () => {
+    const client = clientWithResults('all')
+    const snapshots = new WorktreeCatalogSnapshotClient()
+
+    await expect(snapshots.fetch(client, 'host-1')).rejects.toBeInstanceOf(
+      RpcIncompatibleReplyError
+    )
+  })
+
   it('falls back to a generic failure code when the error carries none', async () => {
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: this request-only seam intentionally supplies unchecked envelopes to snapshot admission.
     const client = {
       sendRequest: vi.fn(async () => ({ id: 'request', ok: false, error: { message: 'x' } }))
     } as unknown as RpcClient

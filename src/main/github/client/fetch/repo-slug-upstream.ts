@@ -23,12 +23,7 @@ export async function getRepoSlug(
   )
 }
 
-/**
- * Resolve a fork's upstream/parent owner/repo, or null when not a fork.
- * Why: drives the fork indicator, and a same-name fork's avatar prefers the
- * upstream owner (a renamed fork keeps its own owner).
- * Best-effort: any failure (offline, unauthed, non-GitHub) resolves to null.
- */
+/** Best-effort fork parent for indicators/avatar selection; failures return null. */
 export async function getRepoUpstream(
   repoPath: string,
   connectionId?: string | null,
@@ -56,11 +51,10 @@ export async function getRepoUpstream(
   }
   await acquire()
   try {
-    // Why: positional slugs bypass the runner's --repo qualifier, so the slug
-    // itself must carry the Enterprise host.
+    // Positional slugs bypass --repo qualification, so include the Enterprise host directly.
     const { stdout } = await ghExecFileAsync(
       ['repo', 'view', githubRepositorySlugArg(origin), '--json', 'isFork,parent'],
-      // Why: cap this best-effort add-time lookup so a stalled gh process can't hold up repo creation.
+      // Do not let optional metadata stall repository creation.
       {
         ...ghOptions,
         timeout: 10_000
@@ -72,7 +66,6 @@ export async function getRepoUpstream(
     }
     const owner = data.parent?.owner?.login
     const repo = data.parent?.name
-    // Why: a fork parent lives on the same server as the fork.
     return data.isFork && owner && repo
       ? { owner, repo, ...(origin.host ? { host: origin.host } : {}) }
       : null

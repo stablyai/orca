@@ -6,10 +6,11 @@ export type PtyDataEvent = {
   sequenceChars?: number
   transformed?: boolean
   seq?: number
+  /** The emitting provider already fed this chunk to the runtime through configure().onData. */
+  runtimeFed?: true
 }
 
-/** Notification-bearing fact a thinning transport detected while it held
- *  scan authority for a backgrounded PTY (see onBackgroundStreamEvent). */
+/** Notification fact observed while the thinning transport owned scan authority for this PTY. */
 export type PtyTransientFact =
   | { kind: 'bell' }
   | { kind: 'command-finished'; exitCode: number | null }

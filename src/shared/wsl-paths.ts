@@ -11,8 +11,7 @@ function isPathSeparatorCharCode(charCode: number): boolean {
 }
 
 export function parseWslUncPath(path: string): WslUncPathInfo | null {
-  // The match is anchored at `//` after the fold, so only two leading separators can ever reach it.
-  // Every POSIX path pays the fold + regex otherwise, and this is on the FS-event storm path.
+  // Skip normalization/regex for non-UNC paths on the FS-event hot path.
   if (
     !isPathSeparatorCharCode(path.charCodeAt(0)) ||
     !isPathSeparatorCharCode(path.charCodeAt(1))
@@ -35,18 +34,9 @@ export function isWslUncPath(path: string): boolean {
   return parseWslUncPath(path) !== null
 }
 
-/**
- * Convert a Windows path to a Linux path for commands that will execute inside WSL.
- * Returns the path unchanged if it is already POSIX-style.
- *
- * Why: WSL hook/setup environments may need both the worktree UNC path
- * (\\wsl.localhost\...) and regular Windows install paths (C:\Users\...)
- * translated before passing them to bash. Leaving drive paths untouched
- * breaks scripts that read ORCA_ROOT_PATH or similar env vars inside WSL.
- */
+/** Translate UNC and drive paths before passing hook/setup paths to WSL bash; leave POSIX paths unchanged. */
 export function toLinuxPath(windowsPath: string): string {
-  // Why the platform guard: on a POSIX host a literal `//wsl$/x` path is an
-  // ordinary directory, not a distro mount, so it must survive unchanged.
+  // A literal //wsl$/x on POSIX is an ordinary directory and must survive unchanged.
   const info = process.platform === 'win32' ? parseWslUncPath(windowsPath) : null
   if (info) {
     return info.linuxPath
@@ -72,28 +62,8 @@ export function toWindowsWslUncPath(linuxPath: string, distro: string): string {
   return `\\\\wsl.localhost\\${distro}${linuxPath === '/' ? '\\' : linuxPath.replace(/\//g, '\\')}`
 }
 
-/**
- * Resolve a repo-scoped worktree base path against the repo's own WSL distro.
- *
- * Why: project setup stores the value verbatim, and for a WSL-backed repo an
- * absolute Linux path like /home/user/trees is the natural spelling of a
- * location inside that distro. Windows path code reads it as drive-relative,
- * so the WSL workspace-mirroring heuristic silently replaced it with
- * ~/orca/workspaces (STA-4772). The repo path pins the distro, making the
- * value unambiguous — translate it to its UNC form. Non-WSL repos and
- * non-POSIX values (UNC, drive, relative) pass through untouched, so native
- * Windows, macOS/Linux, and SSH base paths keep their meaning.
- *
- * Why not toWindowsWslPath: its /mnt/<drive> branch emits a drive-letter path,
- * which the workspace-mirroring heuristic reads as desktop-local and discards —
- * the very bug this resolves. drvfs bases stay on the distro UNC view instead,
- * deliberately trading Windows-side throughput for a distro-addressable path
- * that keeps terminals inside WSL. The single-leading-slash guard is also
- * deliberate: multi-slash (//x) and backslash-rooted spellings are ambiguous
- * with Windows UNC and drive-relative forms and keep their old behavior.
- * Dot segments collapse here because ownership layouts compare paths without
- * resolving them, so creation and classification must see the same spelling.
- */
+/** Resolve an absolute POSIX base within the repo’s WSL distro; Windows otherwise treats it as drive-relative and discards it (STA-4772). Other forms pass through.
+ * Keep drvfs on the distro UNC view so mirroring retains WSL terminal routing. Preserve ambiguous multi-slash/backslash roots unchanged; collapse dot segments so creation and ownership classification agree. */
 export function resolveWslRepoWorktreeBasePath(repoPath: string, basePath: string): string {
   const repoWsl = parseWslUncPath(repoPath)
   if (!repoWsl || !/^\/(?!\/)/.test(basePath)) {
@@ -118,15 +88,13 @@ function collapsePosixDotSegments(absolutePosixPath: string): string {
   return `/${segments.join('/')}`
 }
 
-// Why: Windows folds the share (\\wsl$ aliases \\wsl.localhost), the distro, and
-// drvfs /mnt/<drive> tails case-insensitively; the rest of the Linux path is not.
+// Fold share aliases, distro and drvfs drive tails; ordinary Linux paths remain case-sensitive.
 export function foldWslUncPathCaseInsensitiveParts(path: string): string | null {
   const parsed = parseWslUncPath(path)
   if (!parsed) {
     return null
   }
-  // Why: the drvfs automount is literally lowercase /mnt — a case-variant like
-  // /MNT is an ordinary case-sensitive Linux dir and must not be folded.
+  // Only lowercase /mnt is drvfs; /MNT stays case-sensitive.
   const linuxPath = /^\/mnt\/[a-zA-Z](?:\/|$)/.test(parsed.linuxPath)
     ? parsed.linuxPath.toLowerCase()
     : parsed.linuxPath
@@ -141,12 +109,7 @@ export function toWslExecutionSpace(path: string): string {
   return parseWslUncPath(path)?.linuxPath ?? path
 }
 
-/**
- * The drvfs automount is literally lowercase `/mnt/<letter>`; `/MNT` is an ordinary Linux dir.
- * Deliberately looser than `toWindowsWslDrivePath`'s end-anchored matcher below: this one only
- * classifies a prefix, so do not unify them — the anchoring there is what keeps a path carrying a
- * stray line terminator off the drive spelling.
- */
+/** Classify the lowercase drvfs prefix only. Keep separate from toWindowsWslDrivePath’s whole-path validation, which rejects stray line terminators. */
 const DRVFS_LINUX_PATH = /^\/mnt\/[a-z](?:\/|$)/
 
 /** True for a Linux path that is really a Windows drive reached through drvfs. */
@@ -154,13 +117,9 @@ export function isDrvfsLinuxPath(linuxPath: string): boolean {
   return DRVFS_LINUX_PATH.test(linuxPath)
 }
 
-/**
- * The Windows drive spelling of a drvfs path, or null when the path is not one. Needs no distro:
- * the bytes sit on the drive whichever distro mounted them.
- */
+/** Drvfs bytes belong to a Windows drive regardless of which distro mounted it. */
 export function toWindowsWslDrivePath(linuxPath: string): string | null {
-  // `.` excludes every line terminator, so a drvfs prefix on a stray output line (an rg hit that
-  // still carries its CR) stays off the drive spelling.
+  // Dot excludes line terminators, preventing stray CR/output lines from becoming drive paths.
   const match = linuxPath.match(/^\/mnt\/([a-z])(\/.*)?$/)
   if (!match) {
     return null
@@ -169,17 +128,7 @@ export function toWindowsWslDrivePath(linuxPath: string): string | null {
   return `${match[1].toUpperCase()}:${tail || '\\'}`
 }
 
-/**
- * The distro whose git would reach `projectPath` across the 9p/drvfs boundary, or null when it
- * would not.
- *
- * Two shapes cross it. A Windows drive path (`C:\...`) crosses it whenever the project's runtime is
- * WSL. The UNC spelling of a distro's own drvfs mount (`\\wsl.localhost\Ubuntu\mnt\c\...`) crosses
- * it however the runtime is set, because the bytes sit on the Windows drive either way.
- *
- * Everything else returns null: a real Linux path inside the distro, a drive path under Windows-host
- * git, a plain UNC share (not mounted in the distro at all), and any POSIX or SSH path.
- */
+/** Return the distro crossing the 9p/drvfs boundary: drive paths under WSL runtime, or UNC drvfs mounts regardless of runtime. Linux-native, ordinary UNC, POSIX and SSH paths do not cross. */
 export function getWslFilesystemBoundaryDistro(args: {
   projectPath: string
   wslRuntimeDistro?: string | null
@@ -192,4 +141,17 @@ export function getWslFilesystemBoundaryDistro(args: {
     return null
   }
   return args.wslRuntimeDistro || null
+}
+
+/** Queue dead-share subdirectories by host. Local disks need no lane because they do not block comparably. */
+export function uncRouteKey(cwd: string): string | null {
+  if (!cwd.startsWith('\\\\')) {
+    return null
+  }
+  const wslInfo = parseWslUncPath(cwd)
+  if (wslInfo) {
+    return `wsl:${wslInfo.distro.trim().toLowerCase()}`
+  }
+  const server = cwd.slice(2).split(/[\\/]/, 1)[0]
+  return `unc:${server.toLowerCase()}`
 }

@@ -101,6 +101,12 @@ describePostgres('PostgreSQL control supersession', () => {
         cell.id
       ]
     )
+    // The store reserves a unit per control lease, so a hand-written pair has to
+    // carry its own reservation or the fixture starts out of balance.
+    await databases[0]!.query(
+      `UPDATE relay_cells SET reserved_requests = reserved_requests + 2 WHERE cell_id = ?`,
+      [cell.id]
+    )
     await stores[0]!.activateControl(identity, {
       cellId: cell.id,
       assignmentEpoch: assignment.assignmentEpoch,

@@ -1,24 +1,24 @@
 import { useCallback, useState } from 'react'
-import { Alert, StyleSheet } from 'react-native'
+import { Alert } from 'react-native'
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useOpenMobileAccounts } from '../accounts/use-open-mobile-accounts'
 import { getProvenCachedWorktrees } from '../cache/worktree-cache'
 import { ActionSheetModal } from '../components/ActionSheetModal'
 import { ConfirmModal } from '../components/ConfirmModal'
 import { getHostListActionSheetActions } from '../host-list-action-sheet-actions'
-import { hostNewWorktreeRoute } from '../host-route-action-state'
 import { hostRouteWithNotice } from '../host-route-notice'
 import { useResponsiveLayout } from '../layout/responsive-layout'
 import { triggerMediumImpact } from '../platform/haptics'
 import { useOpenMobileSession } from '../session/use-open-mobile-session'
-import type { TaskProvider } from '../tasks/mobile-task-providers'
 import { useOpenMobileTasks } from '../tasks/use-open-mobile-tasks'
 import { colors } from '../theme/mobile-theme'
+import { themedStyleSheet } from '../theme/themed-styles'
+import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import {
   useDisconnectHostClient,
   useForceReconnect,
   useForgetHostClient
-} from '../transport/client-context'
+} from '../transport/host-client-hooks'
 import { hostEndpointLabel } from '../transport/host-endpoint-label'
 import { resolveHomeHostConnectionState } from '../transport/home-host-auto-connect'
 import { removeHostAndCloseClient } from '../transport/host-removal-lifecycle'
@@ -32,8 +32,10 @@ import { MobileHomeHostList } from './MobileHomeHostList'
 import { MobileHomeListFooter } from './MobileHomeListFooter'
 import { MobileHomeTopBar } from './MobileHomeTopBar'
 import { useMobileHomeData } from './use-mobile-home-data'
+import { newWorkspaceOverlayHref } from '../new-workspace/new-workspace-overlay-route'
 
 export function MobileHomeScreen() {
+  useMobileColorScheme()
   const data = useMobileHomeData()
   const insets = useSafeAreaInsets()
   const { isWideLayout, contentMaxWidth } = useResponsiveLayout()
@@ -65,15 +67,6 @@ export function MobileHomeScreen() {
       })
     },
     [data.router, openMobileSession]
-  )
-
-  const openTasks = useCallback(
-    (provider?: TaskProvider) => {
-      if (data.primaryHost) {
-        openMobileTasks(data.primaryHost.id, provider)
-      }
-    },
-    [data.primaryHost, openMobileTasks]
   )
 
   function openHost(host: HostCatalogEntry): void {
@@ -130,22 +123,22 @@ export function MobileHomeScreen() {
             <MobileHomeListFooter
               accountsHosts={data.accountsHosts}
               connectedHosts={data.connectedHosts}
-              primaryHost={data.primaryHost}
-              primaryTaskProviders={data.primaryTaskProviders}
               resumeCard={data.resumeCard}
-              onCreateWorkspace={(hostId) => data.router.push(hostNewWorktreeRoute(hostId))}
+              taskProvidersByHost={data.taskProvidersByHost}
+              onCreateWorkspace={() =>
+                data.router.push(
+                  newWorkspaceOverlayHref(data.connectedHosts.map((host) => host.id))
+                )
+              }
               onOpenAccounts={openMobileAccounts}
               onOpenResume={openResume}
-              onOpenTasks={openTasks}
+              onOpenTasks={openMobileTasks}
               onPairDesktop={() => data.router.push('/pair-scan')}
             />
           }
           hostAttempts={data.hostAttempts}
           hostLastConnected={data.hostLastConnected}
-          hostPairingRejected={data.hostPairingRejected}
-          hostSignedOut={data.hostSignedOut}
-          hostPaths={data.hostPaths}
-          hostPendingPaths={data.hostPendingPaths}
+          hostConnections={data.hostConnections}
           hosts={data.sortedHostCatalog}
           hostStates={data.hostStates}
           isWideLayout={isWideLayout}
@@ -176,7 +169,7 @@ export function MobileHomeScreen() {
             ? (data.hostLastConnected[actionTarget.id] ?? null) != null
             : false,
           onDismiss: () => setActionTarget(null),
-          onReconnect: (hostId) => void forceReconnectHost(hostId),
+          onReconnect: (hostId) => void forceReconnectHost?.(hostId),
           onDisconnect: disconnectHostClient,
           onDiagnostics: (hostId) =>
             data.router.push({ pathname: '/connection-log', params: { hostId } }),
@@ -198,6 +191,6 @@ export function MobileHomeScreen() {
   )
 }
 
-const styles = StyleSheet.create({
+const styles = themedStyleSheet(() => ({
   container: { flex: 1, backgroundColor: colors.bgBase }
-})
+}))

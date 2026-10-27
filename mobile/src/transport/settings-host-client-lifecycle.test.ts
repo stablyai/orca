@@ -1,16 +1,16 @@
+vi.mock('../notifications/push-registration', () => ({
+  attachPushRegistration: () => () => {}
+}))
 import { createElement, Fragment, useEffect } from 'react'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { useAllHostClients } from './use-all-host-clients'
 import { useFocusedSettingsHostClients } from './settings-host-client-connections'
-import {
-  RpcClientProvider,
-  useHostClient,
-  usePrimeHosts,
-  useRpcClientContext,
-  type RpcClientContextValue
-} from './client-context'
+import type { MobileRelayEndpoint } from '../../../src/shared/mobile-relay-credential-contract'
+import { RpcClientProvider, useRpcClientContext } from './client-context'
+import { useHostClient, usePrimeHosts } from './host-client-hooks'
 import { selectHomeAutoConnectHostIds } from './home-host-auto-connect'
+import type { RpcClientContextValue } from './rpc-client-context-contract'
 import type { RpcClient } from './rpc-client'
 import type { ConnectionState, HostProfile } from './types'
 
@@ -18,6 +18,12 @@ const connectMock = vi.fn()
 const loadHostsMock = vi.fn()
 const routeFocus = vi.hoisted(() => ({
   effect: null as null | (() => void | (() => void))
+}))
+
+// Why: the opener starts a descriptor status probe per connection; these fakes have no RPC surface.
+const descriptorProbe = vi.hoisted(() => ({ start: vi.fn((..._args: unknown[]) => vi.fn()) }))
+vi.mock('./runtime-status-probe', () => ({
+  startRuntimeStatusProbe: (...args: unknown[]) => descriptorProbe.start(...args)
 }))
 
 vi.mock('expo-router', () => ({
@@ -34,6 +40,9 @@ vi.mock('./host-store', () => ({
 }))
 vi.mock('./connection-revival-triggers', () => ({
   subscribeConnectionRevivalTriggers: () => () => {}
+}))
+vi.mock('./connection-log-background-flush', () => ({
+  subscribeConnectionLogBackgroundFlush: () => () => {}
 }))
 
 type FakeClient = RpcClient & {
@@ -72,9 +81,18 @@ function host(id: string, lastConnected: number, extra: Partial<HostProfile> = {
   }
 }
 
+const RELAY: MobileRelayEndpoint = {
+  v: 1,
+  directorUrl: 'https://relay-staging.onorca.dev',
+  cellUrl: 'https://c1.relay-staging.onorca.dev',
+  assignmentEpoch: 4,
+  relayHostId: 'AbCdEf0123_-xyZ9',
+  e2eeFraming: 2
+}
+
 const HOSTS = [
   host('direct-recent', 50),
-  host('relay-recent', 40, { relayHostId: 'AbCdEf0123_-xyZ9' }),
+  host('relay-recent', 40, { relay: RELAY }),
   host('ssh-provider-recent', 30),
   host('folder-workspace-host', 20),
   host('offline-host', 10)
@@ -270,7 +288,7 @@ describe('settings host client lifecycle', () => {
       )
     }
 
-    act(() => renderer.unmount())
+    act(() => renderer?.unmount())
   })
 
   it('leaves no zero-reference clients after repeated settings navigation', async () => {
@@ -362,7 +380,7 @@ describe('settings host client lifecycle', () => {
     expect(clients.get(removedHostId)?.closeMock).toHaveBeenCalledOnce()
     expect(clients.get(addedHostId)?.closeMock).not.toHaveBeenCalled()
 
-    act(() => renderer.unmount())
+    act(() => renderer?.unmount())
     expect(clients.get(retainedHostId)?.closeMock).toHaveBeenCalledOnce()
     expect(clients.get(sharedHostId)?.closeMock).toHaveBeenCalledOnce()
     expect(clients.get(addedHostId)?.closeMock).toHaveBeenCalledOnce()
@@ -434,7 +452,7 @@ describe('settings host client lifecycle', () => {
       resolveInitial?.([retryHost])
       await initialLookup
     })
-    if (!context) {
+    if (!context?.forceReconnect) {
       throw new Error('client context was not captured')
     }
 
@@ -587,7 +605,7 @@ describe('settings host client lifecycle', () => {
   })
 
   it('releases a manual host after Home demotes or stops tracking it', async () => {
-    const manualHost = host('manual-relay-host', 1, { relayHostId: 'AbCdEf0123_-xyZ9' })
+    const manualHost = host('manual-relay-host', 1, { relay: RELAY })
     const clients: FakeClient[] = []
     connectMock.mockImplementation(() => {
       const client = makeFakeClient('reconnecting')
@@ -630,7 +648,7 @@ describe('settings host client lifecycle', () => {
       throw new Error('manual connection harness did not initialize')
     }
     await act(async () => {
-      await context?.forceReconnect(manualHost.id)
+      await context?.forceReconnect?.(manualHost.id)
     })
     expect(activeHostIds()).toEqual([manualHost.id])
 
@@ -649,7 +667,7 @@ describe('settings host client lifecycle', () => {
     expect(clients[0]?.closeMock).toHaveBeenCalledOnce()
 
     await act(async () => {
-      await context?.forceReconnect(manualHost.id)
+      await context?.forceReconnect?.(manualHost.id)
     })
     expect(activeHostIds()).toEqual([manualHost.id])
     expect(clients).toHaveLength(2)

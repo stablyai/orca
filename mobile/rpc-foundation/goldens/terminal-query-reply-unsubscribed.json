@@ -1,0 +1,34 @@
+{
+  "goldenFormatVersion": 6,
+  "operation": "terminal.query-reply",
+  "family": "terminal.query-reply",
+  "namedDeltas": [],
+  "values": {
+    "7ed3d39f0607": {
+      "status": "fulfilled",
+      "startedAt": 0,
+      "settledAt": 0,
+      "value": false
+    },
+    "f043bb99cc1d": {
+      "accepted": false
+    }
+  },
+  "recording": {
+    "scenario": "terminal-query-reply-unsubscribed",
+    "checkpoints": [
+      {
+        "id": "dropped",
+        "observation": {
+          "sender": [],
+          "payloads": [],
+          "settlements": {
+            "send": "7ed3d39f0607"
+          },
+          "state": "f043bb99cc1d",
+          "effects": []
+        }
+      }
+    ]
+  }
+}

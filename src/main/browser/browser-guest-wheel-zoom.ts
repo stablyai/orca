@@ -1,5 +1,6 @@
 import type { BrowserPageZoomDirection } from '../../shared/browser-page-zoom'
 import type { ResolveRenderer } from './browser-guest-renderer-target'
+import { forwardGuestMousePress } from './browser-guest-mouse-press'
 
 const CONTROL_MODIFIERS = new Set(['control', 'ctrl'])
 const MAC_COMMAND_MODIFIERS = new Set(['meta', 'command', 'cmd'])
@@ -81,12 +82,19 @@ export function setupGuestMouseWheelZoomForwarding(args: {
     onViewportWheelConsumed
   } = args
   const handler = (event: Electron.Event, mouse: Electron.MouseInputEvent): void => {
+    // Why here: presses ride this per-guest listener and its cleanup rather than a second one.
+    if (forwardGuestMousePress(guest, browserTabId, resolveRenderer, mouse)) {
+      return
+    }
     const direction = resolveGuestMouseWheelZoomDirection(mouse)
     if (direction) {
-      // Why: wheel input over a focused webview never reaches renderer DOM handlers, so consume and forward here.
+      // Focused guest wheel events do not reach renderer DOM handlers.
       event.preventDefault()
       markGuestWheelZoom(guest, direction)
-      resolveRenderer(browserTabId)?.send('ui:zoomBrowserPage', direction)
+      resolveRenderer(browserTabId)?.send('ui:zoomBrowserPage', {
+        browserPageId: browserTabId,
+        direction
+      })
       return
     }
     if (
@@ -102,7 +110,7 @@ export function setupGuestMouseWheelZoomForwarding(args: {
     if (safeDeltaX === 0 && safeDeltaY === 0) {
       return
     }
-    // Why: the host owns panning once emulation makes the guest viewport larger than the pane.
+    // The host pans emulated viewports larger than the pane.
     event.preventDefault()
     onViewportWheelConsumed?.(safeDeltaX, safeDeltaY)
     resolveRenderer(browserTabId)?.send('ui:scrollBrowserPage', {
@@ -117,7 +125,7 @@ export function setupGuestMouseWheelZoomForwarding(args: {
     try {
       guest.off('before-mouse-event', handler)
     } catch {
-      // Why: best-effort — guest may already be destroyed during teardown.
+      // The guest may already be destroyed.
     }
   }
 }

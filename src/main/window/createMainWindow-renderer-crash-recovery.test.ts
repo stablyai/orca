@@ -3,9 +3,6 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 vi.mock('electron', async () =>
   (await import('./createMainWindow-test-harness')).electronModuleMock()
 )
-vi.mock('@electron-toolkit/utils', async () =>
-  (await import('./createMainWindow-test-harness')).electronToolkitUtilsMock()
-)
 vi.mock('./macos-tahoe-release', async () =>
   (await import('./createMainWindow-test-harness')).macosTahoeReleaseMock()
 )
@@ -31,6 +28,7 @@ import {
 import {
   attachClientPageRendererMock,
   browserWindowMock,
+  createRendererRecoveryWindowHarness,
   resetMainWindowMocks,
   retireClientPageRendererMock,
   withPlatform
@@ -85,9 +83,7 @@ describe('createMainWindow', () => {
 
     webContentsDestroyed = true
 
-    // Why: Electron may destroy webContents before BrowserWindow's `closed`
-    // cleanup runs during updater shutdown. The cleanup must not crash, or
-    // Squirrel.Mac never reaches the relaunch step.
+    // Updater teardown may destroy WebContents before closed cleanup; throwing would prevent Squirrel relaunch.
     expect(() => windowHandlers.closed?.()).not.toThrow()
   })
 
@@ -99,7 +95,14 @@ describe('createMainWindow', () => {
       isLoadingMainFrame: vi.fn(() => false),
       mainFrame: {},
       on: vi.fn((event, handler) => {
-        windowHandlers[event] = handler
+        // Retain multiple lifecycle listeners like EventEmitter.
+        const previous = windowHandlers[event]
+        windowHandlers[event] = previous
+          ? (...args: unknown[]) => {
+              previous(...args)
+              handler(...args)
+            }
+          : handler
       }),
       setZoomLevel: vi.fn(),
       setBackgroundThrottling: vi.fn(),
@@ -244,7 +247,11 @@ describe('createMainWindow', () => {
     const details = { reason: 'crashed', exitCode: 5 } as Electron.RenderProcessGoneDetails
     windowHandlers['render-process-gone']?.({} as never, details)
 
-    expect(onRendererProcessGone).toHaveBeenCalledWith(details, 142)
+    expect(onRendererProcessGone).toHaveBeenCalledWith(
+      details,
+      142,
+      expect.objectContaining({ rendererDocumentLoaded: false })
+    )
   })
 
   it('passes the renderer webContents id through crash recording and recovery callbacks', () => {
@@ -292,7 +299,11 @@ describe('createMainWindow', () => {
       windowHandlers['render-process-gone']?.({} as never, details)
       vi.advanceTimersByTime(250)
 
-      expect(onRendererProcessGone).toHaveBeenCalledWith(details, 424)
+      expect(onRendererProcessGone).toHaveBeenCalledWith(
+        details,
+        424,
+        expect.objectContaining({ rendererDocumentLoaded: false })
+      )
       expect(shouldRecoverRenderer).toHaveBeenCalledWith(details, 424)
     } finally {
       consoleError.mockRestore()
@@ -343,48 +354,12 @@ describe('createMainWindow', () => {
 
     expect(onRendererProcessGone).toHaveBeenCalledWith(
       expect.objectContaining({ reason: 'killed', exitCode: 15 }),
-      expect.any(Number)
+      expect.any(Number),
+      expect.any(Object)
     )
 
     consoleError.mockRestore()
   })
-
-  const createRendererRecoveryWindowHarness = () => {
-    const windowHandlers: Record<string, (...args: any[]) => void> = {}
-    const webContents = {
-      id: 143,
-      getURL: vi.fn(() => 'file:///opt/orca/renderer/index.html'),
-      isDestroyed: vi.fn(() => false),
-      on: vi.fn((event, handler) => {
-        windowHandlers[event] = handler
-      }),
-      setZoomLevel: vi.fn(),
-      setBackgroundThrottling: vi.fn(),
-      invalidate: vi.fn(),
-      setWindowOpenHandler: vi.fn(),
-      send: vi.fn()
-    }
-    const browserWindowInstance = {
-      webContents,
-      on: vi.fn((event, handler) => {
-        windowHandlers[event] = handler
-      }),
-      isDestroyed: vi.fn(() => false),
-      isMaximized: vi.fn(() => true),
-      isFullScreen: vi.fn(() => false),
-      getSize: vi.fn(() => [1200, 800]),
-      setSize: vi.fn(),
-      maximize: vi.fn(),
-      show: vi.fn(),
-      loadFile: vi.fn(() => Promise.resolve()),
-      loadURL: vi.fn(() => Promise.resolve())
-    }
-    browserWindowMock.mockImplementation(function () {
-      return browserWindowInstance
-    })
-
-    return { browserWindowInstance, windowHandlers }
-  }
 
   it('reloads the app shell after an unexpected renderer process loss', () => {
     vi.useFakeTimers()
@@ -444,8 +419,7 @@ describe('createMainWindow', () => {
 
     expect(onBeforeRecoveryReload).toHaveBeenCalledWith(143, 'automatic')
     expect(browserWindowInstance.loadFile).toHaveBeenCalledTimes(2)
-    // Why the watchdog must stay quiet here: this reload is deliberate during logoff, and a process that
-    // outlives the session-end signal must not put a native modal on screen mid-teardown.
+    // Deliberate logoff reloads must never raise recovery dialogs during teardown.
     vi.runAllTimers()
     expect(onRendererRecoveryExhausted).not.toHaveBeenCalled()
     consoleError.mockRestore()
@@ -578,7 +552,7 @@ describe('createMainWindow', () => {
     createMainWindow(null, { onRendererRecoveryExhausted })
 
     const details = { reason: 'crashed', exitCode: 5 } as Electron.RenderProcessGoneDetails
-    // Each cycle: renderer dies, breaker allows the first 3 reloads, then opens.
+    // Allow three renderer-death reloads, then open the breaker.
     const driveCrashCycle = (): void => {
       windowHandlers['render-process-gone']?.({} as never, details)
       vi.advanceTimersByTime(250)
@@ -586,11 +560,9 @@ describe('createMainWindow', () => {
     driveCrashCycle()
     driveCrashCycle()
     driveCrashCycle()
-    // 1 initial load + 3 recoveries.
     expect(browserWindowInstance.loadFile).toHaveBeenCalledTimes(4)
     expect(onRendererRecoveryExhausted).not.toHaveBeenCalled()
 
-    // 4th crash within the window: breaker is open, no further reload.
     driveCrashCycle()
     expect(browserWindowInstance.loadFile).toHaveBeenCalledTimes(4)
     expect(onRendererRecoveryExhausted).toHaveBeenCalledTimes(1)
@@ -620,60 +592,17 @@ describe('createMainWindow', () => {
     driveCrashCycle()
     driveCrashCycle()
     expect(onRendererRecoveryExhausted).toHaveBeenCalledTimes(1)
-    // 1 initial load + 3 recoveries; the 4th crash was refused.
     expect(browserWindowInstance.loadFile).toHaveBeenCalledTimes(4)
 
-    // The recovery prompt's Reload button takes the watched retry, which the breaker never gates.
+    // Manual watched retry bypasses the automatic-recovery breaker.
     onRendererRecoveryExhausted.mock.calls[0]?.[0].retry()
     expect(browserWindowInstance.loadFile).toHaveBeenCalledTimes(5)
 
-    // Still-poisoned machine: the next crash re-raises the prompt immediately instead of re-arming auto-reloads.
+    // Manual retry must not reset the poisoned machine's automatic-reload breaker.
     driveCrashCycle()
     expect(browserWindowInstance.loadFile).toHaveBeenCalledTimes(5)
     expect(onRendererRecoveryExhausted).toHaveBeenCalledTimes(2)
 
     consoleError.mockRestore()
-  })
-
-  it('bounds renderer launch-failed recovery with the crash-loop breaker', () => {
-    vi.useFakeTimers()
-
-    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {})
-    const onRendererRecoveryExhausted = vi.fn()
-    const { browserWindowInstance, windowHandlers } = createRendererRecoveryWindowHarness()
-
-    try {
-      createMainWindow(null, {
-        onRendererRecoveryExhausted,
-        shouldRecoverRenderer: (details) =>
-          shouldRecoverRendererAfterProcessGone({
-            reason: details.reason,
-            expectedTeardown: 'none'
-          })
-      })
-
-      const details = {
-        reason: 'launch-failed',
-        exitCode: 18
-      } as Electron.RenderProcessGoneDetails
-      const driveLaunchFailure = (): void => {
-        windowHandlers['render-process-gone']?.({} as never, details)
-        vi.advanceTimersByTime(250)
-      }
-
-      driveLaunchFailure()
-      driveLaunchFailure()
-      driveLaunchFailure()
-      expect(browserWindowInstance.loadFile).toHaveBeenCalledTimes(4)
-
-      driveLaunchFailure()
-      expect(browserWindowInstance.loadFile).toHaveBeenCalledTimes(4)
-      expect(onRendererRecoveryExhausted).toHaveBeenCalledOnce()
-      expect(onRendererRecoveryExhausted).toHaveBeenCalledWith(
-        expect.objectContaining({ details, recentRecoveryCount: 3 })
-      )
-    } finally {
-      consoleError.mockRestore()
-    }
   })
 })

@@ -8,7 +8,7 @@ const userDataDir = mkdtempSync(join(tmpdir(), 'orca-pi-overlay-path-userdata-')
 
 import { PiTitlebarExtensionService } from './titlebar-extension-service'
 
-const PATH_SHAPED_PTY_ID = [
+const PATH_LIKE_PTY_ID = [
   '50c010a2-bc8e-4eb1-8847-5812133ad6df',
   'Users',
   'dev',
@@ -45,7 +45,7 @@ describe('PiTitlebarExtensionService legacy overlay paths', () => {
     const svc = new PiTitlebarExtensionService()
 
     try {
-      const env = svc.buildPtyEnv(PATH_SHAPED_PTY_ID, piHome, 'pi')
+      const env = svc.buildPtyEnv(PATH_LIKE_PTY_ID, piHome, 'pi')
 
       expect(env.PI_CODING_AGENT_DIR).toBeUndefined()
       expect(env.ORCA_PI_SOURCE_AGENT_DIR).toBe(piHome)
@@ -61,12 +61,12 @@ describe('PiTitlebarExtensionService legacy overlay paths', () => {
   })
 
   it('clears legacy raw path-shaped daemon overlays during teardown', () => {
-    const legacyOverlayDir = legacyOverlayPath('pi', PATH_SHAPED_PTY_ID)
+    const legacyOverlayDir = legacyOverlayPath('pi', PATH_LIKE_PTY_ID)
     mkdirSync(legacyOverlayDir, { recursive: true })
     writeFileSync(join(legacyOverlayDir, 'stale.txt'), 'stale overlay')
 
     const svc = new PiTitlebarExtensionService()
-    svc.clearPty(PATH_SHAPED_PTY_ID)
+    svc.clearPty(PATH_LIKE_PTY_ID)
 
     expect(existsSync(legacyOverlayDir)).toBe(false)
   })

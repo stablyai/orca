@@ -1,30 +1,35 @@
 import type { GitDiffResult } from '../../../../shared/git-diff-compare-types'
+import type { CsvFilePreview } from './csv/csv-file-content'
 
-/**
- * Thrown when a worktree's host owner is not yet known (the backing repo has
- * not hydrated). The retry gate treats this as transient so the read recovers
- * once the SSH connection finishes establishing, instead of latching a local
- * "access denied" for a remote path (#6648).
- */
+/** Transient owner hydration/connection failure; retry instead of reading remote paths locally and latching access errors. */
 export const WORKTREE_OWNER_NOT_READY_ERROR =
   'Connecting to the remote host… retrying once the workspace is ready.'
 
-/**
- * Terminal message shown once the owner-not-ready retry budget is exhausted —
- * the remote host never finished connecting. Truthful (no longer claims it is
- * still retrying) and points the user at the Retry button, which starts a fresh
- * budget (#6648).
- */
+/** Show after connection retry exhaustion; explicit Retry starts a fresh budget. */
 export const WORKTREE_OWNER_UNREACHABLE_ERROR =
   "Couldn't reach the remote host. Check the connection, then retry."
 
+/** Selector failure means unresolved ownership, never proven deletion: cold scans, removed repos and unregistered folder workspaces share this code. Bound retries and show a terminal error without closing the tab. */
+export const WORKTREE_HOST_SELECTOR_NOT_FOUND_CODE = 'selector_not_found'
+
+/** Namespaced terminal sentinel after selector retries expire; localize by code and leave draft-aware closing to the tab strip. */
+export const WORKTREE_HOST_UNRESOLVED_CODE = 'editor_host_workspace_unresolved'
+
+/** English fallback for `loadError` alongside the code above; the error view localizes it by code. */
+export const WORKTREE_HOST_UNRESOLVED_ERROR =
+  "The host couldn't find this file's workspace. It may have been removed, or the host may not know about it yet. Retry, or close this tab from the tab strip."
+
 export type FileContent = {
+  mediaUrl?: string
+  csvPreview?: CsvFilePreview
   content: string
   isBinary: boolean
   isImage?: boolean
   mimeType?: string
   fileIdentity?: string
   loadError?: string
+  /** Machine code from a runtime RPC failure; `loadError` alone may be prose (#21041). */
+  loadErrorCode?: string
   /** Superseded by an external change; still rendered until the lazy reload lands. */
   isStale?: boolean
 }

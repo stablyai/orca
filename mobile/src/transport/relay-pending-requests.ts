@@ -5,9 +5,9 @@ type PendingRequest = {
   resolve: (response: RpcResponse) => void
   reject: (error: Error) => void
   timer: ReturnType<typeof setTimeout>
+  written: boolean
 }
 
-/** In-flight relay RPC requests awaiting their response frame, keyed by request id. */
 export class RelayPendingRequests {
   private readonly pending = new Map<string, PendingRequest>()
   private requestCounter = 0
@@ -24,7 +24,13 @@ export class RelayPendingRequests {
     this.pending.delete(id)
   }
 
-  /** Settle the waiter for this response; false when no request owns it. */
+  markWritten(id: string): void {
+    const request = this.pending.get(id)
+    if (request) {
+      request.written = true
+    }
+  }
+
   settle(response: RpcResponse): boolean {
     const request = this.pending.get(response.id)
     if (!request) {
@@ -40,13 +46,9 @@ export class RelayPendingRequests {
     if (this.pending.size === 0) {
       return
     }
-    // Why: pending entries only exist after their frame reached the authenticated
-    // link (sendFrame failures delete them synchronously), so the desktop may
-    // have processed them — mark the ambiguity for callers.
-    markRpcDeliveryUnknown(error)
     for (const request of this.pending.values()) {
       clearTimeout(request.timer)
-      request.reject(error)
+      request.reject(request.written ? markRpcDeliveryUnknown(new Error(error.message)) : error)
     }
     this.pending.clear()
   }

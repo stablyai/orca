@@ -14,12 +14,8 @@ export type ComposerBaseState = {
   branchNameOverride?: string
 }
 
-// Mirrors the desktop composer's `linkedWorkItem` (a FolderWorkspaceLinkedTask
-// superset): the one work item a Smart selection pins the workspace to. Linear
-// items carry the workspace/org routing the runtime needs to relink the issue.
-export type MobileLinkedWorkItem = Omit<WorkspaceSourceLinkedItem, 'provider'> & {
-  provider: Exclude<WorkspaceSourceLinkedItem['provider'], 'jira'>
-}
+// Linear selections retain workspace/org routing needed to relink the issue at create time.
+export type MobileLinkedWorkItem = WorkspaceSourceLinkedItem
 
 export type SmartNameSelectionKind =
   | 'github-pr'
@@ -28,20 +24,14 @@ export type SmartNameSelectionKind =
   | 'gitlab-issue'
   | 'branch'
   | 'linear'
+  | 'jira'
 
-// The pill descriptor the field renders once a source is selected. Same shape
-// as desktop's `SmartWorkspaceNameSelection`.
 export type SmartNameSelection = Omit<WorkspaceSourceSelection, 'kind'> & {
   kind: SmartNameSelectionKind
 }
 
-// GitLab MR-state filter chips, mirroring desktop's getMrStateFilters(). Default
-// is 'opened' (Open).
 export type MrStateFilter = 'opened' | 'merged' | 'closed' | 'all'
 
-// The resolved selection the create flow consumes. Work-item selections carry
-// the base/push fields the composer resolved at select time; branch selections
-// carry the ref + reuse intent.
 export type MobileComposerCreateSelection =
   | {
       kind: 'work-item'
@@ -59,6 +49,5 @@ export type MobileComposerCreateSelection =
       reuse: boolean
       branchNameOverride?: string
     }
-  // A brand-new branch created by name (no ref picked); the branch is created off
-  // the repo's default base and the typed name is kept verbatim as the branch.
+  // New-by-name branches start at the default base and preserve the typed branch name verbatim.
   | { kind: 'new-branch'; branchName: string }

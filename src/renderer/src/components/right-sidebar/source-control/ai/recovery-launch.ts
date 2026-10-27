@@ -1,25 +1,36 @@
+import { ensureAgentLaunchPreferences } from '@/components/settings/use-host-agent-launch-preferences'
+import {
+  AgentLaunchChoiceCancelled,
+  acquireAgentLaunchChoices
+} from '@/lib/host-chat-program-acquisition'
 import { toast } from 'sonner'
 import type { AppState } from '@/store'
+import { useAppStore } from '@/store'
+import type { TuiAgent } from '../../../../../../shared/tui-agent'
 import { focusTerminalTabSurface } from '@/lib/focus-terminal-tab-surface'
 import { launchAgentInNewTab } from '@/lib/launch-agent-in-new-tab'
+import { newAgentLaunchRequestId } from '@/lib/agent-launch-request-id'
 import { getConnectionId } from '@/lib/connection-context'
-import { planAgentCliArgsSuffix } from '@/lib/tui-agent-startup'
+import {
+  ensureDetectedAgentsForWorktree,
+  type WorktreeAgentInventoryState
+} from '@/lib/agent-detection-target-inventory'
 import {
   pickSourceControlLaunchAgent,
   readSourceControlLaunchRecipeAgentId
-} from '@/lib/source-control-launch-agent-selection'
+} from '../../../../../../shared/source-control-launch-agent-selection'
 import { isTuiAgentEnabled } from '../../../../../../shared/tui-agent-selection'
+import { projectSourceControlActionLaunch } from '../../../../../../shared/source-control-action-launch-preferences'
 import type {
   SourceControlActionRecipe,
   SourceControlLaunchActionId
 } from '../../../../../../shared/source-control-ai-actions'
 import { buildSourceControlRecoveryAgentCommandInput } from '../../../../../../shared/source-control-recovery-agent-command'
 import { translate } from '@/i18n/i18n'
+import { agentChoiceMayOpenAsChat } from '@/lib/host-chat-program'
+import { worktreeLaunchWorkspace } from '@/lib/agent-launch-route-input'
 
-type SourceControlAiLaunchStoreSnapshot = Pick<
-  AppState,
-  'settings' | 'ensureDetectedAgents' | 'ensureRemoteDetectedAgents'
->
+type SourceControlAiLaunchStoreSnapshot = Pick<AppState, 'settings'> & WorktreeAgentInventoryState
 
 export type SourceControlRecoveryLaunchCopy = {
   promptUnavailable: string
@@ -88,7 +99,7 @@ export async function launchSourceControlRecoveryAgentWithDefault({
 }: {
   activeWorktreeId: string
   activeGroupId: string | null | undefined
-  activeSourceControlLaunchPlatform: NodeJS.Platform
+  activeSourceControlLaunchPlatform: NodeJS.Platform | undefined
   sourceRepoConnectionId?: string | null
   actionId: SourceControlLaunchActionId
   basePrompt: string | null
@@ -105,18 +116,28 @@ export async function launchSourceControlRecoveryAgentWithDefault({
     return false
   }
 
-  const store = getStoreState()
-  const savedRecipe = getLaunchActionRecipe(actionId)
-  const agentArgsPlan = planAgentCliArgsSuffix(
-    savedRecipe.agentArgs,
-    activeSourceControlLaunchPlatform === 'win32' ? 'powershell' : 'posix'
-  )
-  if (!agentArgsPlan.ok) {
-    // Why: saved launch recipes are shared with direct launches; reject bad
-    // argv before remote agent detection or terminal creation has side effects.
-    toast.error(agentArgsPlan.error)
+  const workspace = worktreeLaunchWorkspace(activeWorktreeId)
+  const inventory = await Promise.all([
+    acquireAgentLaunchChoices(workspace, () =>
+      ensureDetectedAgentsForWorktree(getStoreState(), activeWorktreeId)
+    ),
+    ensureAgentLaunchPreferences(useAppStore.getState(), workspace)
+  ]).catch((error) => {
+    if (
+      error instanceof AgentLaunchChoiceCancelled ||
+      (error instanceof DOMException && error.name === 'AbortError')
+    ) {
+      return null
+    }
+    throw error
+  })
+  if (!inventory) {
     return false
   }
+  const [choices, preferences] = inventory
+  const detectedAgents = [...(choices.detected ?? [])]
+  const store = getStoreState()
+  const savedRecipe = getLaunchActionRecipe(actionId)
   if (!basePrompt) {
     toast.error(copy.promptUnavailable)
     return false
@@ -132,35 +153,40 @@ export async function launchSourceControlRecoveryAgentWithDefault({
     return false
   }
 
-  const detectedAgents =
-    typeof connectionId === 'string'
-      ? await store.ensureRemoteDetectedAgents(connectionId)
-      : await store.ensureDetectedAgents()
+  // A saved or default agent may open as a chat without its CLI.
+  const opensAsChat = (agent: TuiAgent): boolean =>
+    agentChoiceMayOpenAsChat(useAppStore.getState(), agent, workspace, choices.detected)
   const savedAgent = readSourceControlLaunchRecipeAgentId(savedRecipe)
   if (
     savedAgent &&
-    (!detectedAgents.includes(savedAgent) ||
-      !isTuiAgentEnabled(savedAgent, store.settings?.disabledTuiAgents))
+    ((!detectedAgents.includes(savedAgent) && !opensAsChat(savedAgent)) ||
+      !isTuiAgentEnabled(savedAgent, preferences.disabledTuiAgents))
   ) {
     toast.error(copy.savedAgentUnavailable)
     return false
   }
   const agent = pickSourceControlLaunchAgent({
     savedAgent,
-    defaultAgent: store.settings?.defaultTuiAgent,
+    defaultAgent: preferences.defaultTuiAgent,
     detectedAgents,
-    disabledAgents: store.settings?.disabledTuiAgents
+    disabledAgents: preferences.disabledTuiAgents,
+    chosenOpensAsChat: opensAsChat
   })
   if (!agent) {
     toast.error(copy.noEnabledAgent)
     return false
   }
+  const { commandInput, ...projection } = projectSourceControlActionLaunch(savedRecipe, agent, {
+    renderedPrompt: prompt,
+    settings: store.settings
+  })
   const result = launchAgentInNewTab({
+    requestId: newAgentLaunchRequestId(),
     agent,
     worktreeId: activeWorktreeId,
     groupId: activeGroupId ?? activeWorktreeId,
-    prompt,
-    agentArgs: savedRecipe.agentArgs,
+    prompt: commandInput,
+    ...projection,
     promptDelivery: 'submit-after-ready',
     launchPlatform: activeSourceControlLaunchPlatform,
     launchSource: 'source_control_recovery'
@@ -170,8 +196,8 @@ export async function launchSourceControlRecoveryAgentWithDefault({
     return false
   }
 
-  if (result.tabId) {
-    focusTerminalTabSurface(result.tabId)
+  if (result.surface.kind === 'local-terminal') {
+    focusTerminalTabSurface(result.surface.tabId)
   }
   toast.success(copy.success)
   return true

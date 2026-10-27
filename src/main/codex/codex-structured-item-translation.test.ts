@@ -4,12 +4,13 @@ import {
   briefToolArg,
   createToolInputDisplay,
   describeToolInput
-} from '../../shared/native-chat-tool-summary'
+} from '../../shared/native-chat/tools/native-chat-tool-summary'
 import {
   codexItemBody,
   codexItemIdentity,
   codexJournalItem,
   codexMessageBlocks,
+  codexStreamingJournalItem,
   CodexTurnOrdinals,
   MAX_CODEX_TURN_ORDINAL_BYTES,
   MAX_CODEX_TURN_ORDINAL_ENTRIES,
@@ -18,8 +19,6 @@ import {
   type CodexThreadItem
 } from './codex-structured-item-translation'
 
-/** The tool-call input a Codex item lands on, which is what the row label and
- *  the collapsed run header are both derived from. */
 function toolCallInput(item: CodexThreadItem): unknown {
   const body = codexItemBody(item)
   return body !== null && body.kind === 'tool-call' ? body.input : null
@@ -28,10 +27,7 @@ function toolCallInput(item: CodexThreadItem): unknown {
 const THREAD_ID = 'thread-abc'
 const TURN_ID = 'turn-1'
 
-/**
- * Captured from a live `codex app-server` turn: Codex numbers items in arrival
- * order and includes the command it ran.
- */
+// Captured from a live app-server turn.
 const LIVE_TURN: CodexThreadItem[] = [
   { type: 'userMessage', id: 'item-0', content: [{ type: 'text', text: 'list the files' }] },
   { type: 'agentMessage', id: 'item-1', text: 'Let me look.' },
@@ -47,10 +43,7 @@ const LIVE_TURN: CodexThreadItem[] = [
   { type: 'agentMessage', id: 'item-3', text: 'Two files.' }
 ]
 
-/**
- * The SAME turn read back after `thread/resume`: ids are renumbered from 1 and
- * the command execution is gone entirely, because Codex does not persist it.
- */
+// The same turn after resume: IDs were renumbered and command execution omitted.
 const RESUMED_TURN: CodexThreadItem[] = [
   { type: 'userMessage', id: 'item-1', content: [{ type: 'text', text: 'list the files' }] },
   { type: 'agentMessage', id: 'item-2', text: 'Let me look.' },
@@ -79,9 +72,7 @@ describe('codex turn ordinals', () => {
     }
 
     expect(ordinals.forgottenTurnCount).toBe(MAX_CODEX_TURN_ORDINAL_ENTRIES)
-    // The newest completed turn still keeps its counter for a late frame.
     expect(ordinals.ordinalFor('thread-many', `turn-${total - 1}`, 'item-late')).toBe(1)
-    // The oldest turn was deterministically evicted and starts a fresh key.
     expect(ordinals.ordinalFor('thread-many', 'turn-0', 'item-late')).toBe(0)
   })
 
@@ -92,11 +83,9 @@ describe('codex turn ordinals', () => {
 
     ordinals.forgetTurn('thread-1', 'turn-1')
 
-    // A straggler for the released turn — even a previously seen item id — gets
-    // a FRESH ordinal: reusing a released slot would upsert another item's row.
+    // Reusing a released ordinal would overwrite another item row.
     expect(ordinals.ordinalFor('thread-1', 'turn-1', 'item-1')).toBe(2)
     expect(ordinals.ordinalFor('thread-1', 'turn-1', 'item-3')).toBe(3)
-    // Other turns are untouched.
     expect(ordinals.ordinalFor('thread-1', 'turn-2', 'item-1')).toBe(0)
   })
 
@@ -201,6 +190,7 @@ describe('codex item bodies', () => {
     expect(codexItemBody(LIVE_TURN[2] as CodexThreadItem)).toEqual({
       kind: 'tool-call',
       name: 'shell',
+      callId: 'item-2',
       input: { command: 'ls', cwd: '/tmp' },
       exitCode: 0,
       state: 'completed',
@@ -229,14 +219,11 @@ describe('codex item bodies', () => {
     expect(body).toEqual({
       kind: 'tool-call',
       name: 'read',
-      // `name` is the target's basename, which `path` already carries and no
-      // label ever reads, so it stays out of the bounded journal payload.
+      callId: 'item-read',
       input: { command: "sed -n '1,200p' notes.txt", cwd: '/repo', path: '/repo/notes.txt' },
       exitCode: 0,
       state: 'completed'
     })
-    // `read` is the one class that keeps `path`, so its row stays a tappable
-    // file on mobile — the other half of the rule `list`/`search` obey below.
     const display = createToolInputDisplay(body?.kind === 'tool-call' ? body.input : null)
     expect(display.filePath).toBe('/repo/notes.txt')
     expect(display.label).toBe('/repo/notes.txt')
@@ -257,6 +244,7 @@ describe('codex item bodies', () => {
     ).toEqual({
       kind: 'tool-call',
       name: 'search',
+      callId: 'item-search',
       input: { command: 'rg -n --no-heading beta .', cwd: '/repo', query: 'beta', directory: '.' },
       state: 'running'
     })
@@ -276,6 +264,7 @@ describe('codex item bodies', () => {
     ).toEqual({
       kind: 'tool-call',
       name: 'search',
+      callId: 'item-search-bare',
       input: { command: 'rg beta', cwd: '/repo' },
       exitCode: 0,
       state: 'completed'
@@ -296,20 +285,18 @@ describe('codex item bodies', () => {
     expect(body).toEqual({
       kind: 'tool-call',
       name: 'list',
+      callId: 'item-list',
       input: { command: 'ls', cwd: '/repo' },
       exitCode: 0,
       state: 'completed'
     })
-    // A stand-in `.` reaches mobile as a tappable "open file" link onto a
-    // directory, which can only fail. The raw command is the honest label.
+    // A directory in path would become a broken open-file link on mobile.
     const display = createToolInputDisplay(body?.kind === 'tool-call' ? body.input : null)
     expect(display.filePath).toBeNull()
     expect(display.label).toBe('ls')
   })
 
   it('keeps the shell row when one command did two different classified things', () => {
-    // `cat a.txt && ls src` classifies as a read and a listing; naming the row
-    // after either drops the other.
     expect(
       codexItemBody({
         type: 'commandExecution',
@@ -326,6 +313,7 @@ describe('codex item bodies', () => {
     ).toEqual({
       kind: 'tool-call',
       name: 'shell',
+      callId: 'item-mixed',
       input: { command: 'cat a.txt && ls src', cwd: '/repo' },
       exitCode: 0,
       state: 'completed'
@@ -349,6 +337,7 @@ describe('codex item bodies', () => {
     ).toEqual({
       kind: 'tool-call',
       name: 'read',
+      callId: 'item-two-reads',
       input: { command: 'cat a.ts && cat b.ts', cwd: '/repo' },
       exitCode: 0,
       state: 'completed'
@@ -384,8 +373,6 @@ describe('codex item bodies', () => {
     })
 
     expect(body).toMatchObject({ name: 'list', input: { directory: 'src' } })
-    // Under `path` this reaches mobile as a tappable open-file link onto a
-    // directory — the same dead link a stand-in `.` would have produced.
     const display = createToolInputDisplay(body?.kind === 'tool-call' ? body.input : null)
     expect(display.filePath).toBeNull()
     expect(display.label).toBe('src')
@@ -403,8 +390,6 @@ describe('codex item bodies', () => {
     })
 
     expect(body).toMatchObject({ name: 'search', input: { directory: 'src' } })
-    // `path` is only excluded from the file target while a query is present, so
-    // a term-less search under it would link to the folder it scanned.
     expect(
       createToolInputDisplay(body?.kind === 'tool-call' ? body.input : null).filePath
     ).toBeNull()
@@ -424,6 +409,7 @@ describe('codex item bodies', () => {
     ).toEqual({
       kind: 'tool-call',
       name: 'read',
+      callId: 'item-read-null',
       input: { command: 'cat', cwd: '/repo' },
       exitCode: 0,
       state: 'completed'
@@ -451,6 +437,7 @@ describe('codex item bodies', () => {
     const shellRow = {
       kind: 'tool-call',
       name: 'shell',
+      callId: 'item-fallback',
       input: { command: 'ls', cwd: '/tmp' },
       exitCode: 0,
       state: 'completed'
@@ -474,15 +461,12 @@ describe('codex item bodies', () => {
     expect(codexItemBody({ ...base, commandActions: [null, 7, 'read', {}, { type: 5 }] })).toEqual(
       shellRow
     )
-    // The classification table is a Map because an object index answers
-    // `__proto__`/`constructor` with a truthy non-string tool name.
     expect(
       codexItemBody({ ...base, commandActions: [{ type: '__proto__', command: 'ls' }] })
     ).toEqual(shellRow)
     expect(
       codexItemBody({ ...base, commandActions: [{ type: 'constructor', command: 'ls' }] })
     ).toEqual(shellRow)
-    // The rollout-file shape is a different lane and never reaches app-server.
     expect(
       codexItemBody({ ...base, parsedCmd: [{ type: 'read', cmd: 'ls', path: 'a.ts' }] })
     ).toEqual(shellRow)
@@ -505,14 +489,14 @@ describe('codex item bodies', () => {
       state: 'completed',
       output: {
         byteLength: 1_100_000,
-        truncated: true,
+        truncated: false,
         digest: expect.any(String)
       }
     })
     if (body?.kind !== 'tool-call' || !body.output) {
-      throw new Error('expected bounded command output')
+      throw new Error('expected command output')
     }
-    expect(body.output.head.length).toBeLessThan(20_000)
+    expect(body.output.head).toBe(output)
   })
 
   it('continues to accept camel-case command completion output', () => {
@@ -530,19 +514,19 @@ describe('codex item bodies', () => {
     })
   })
 
-  it('aggregates assistant content parts before bounding the message body', () => {
+  it('saves a long assistant reply whole, its content parts joined', () => {
+    const parts = Array.from({ length: 200 }, () => 'a'.repeat(10_000))
     const body = codexItemBody({
       type: 'agentMessage',
       id: 'assistant-parts',
-      content: Array.from({ length: 200 }, () => ({ type: 'text', text: 'a'.repeat(10_000) }))
+      content: parts.map((text) => ({ type: 'text', text }))
     })
     const text =
       body?.kind === 'message' && body.blocks[0]?.type === 'text' ? body.blocks[0].text : ''
 
     expect(body).toMatchObject({ kind: 'message', role: 'assistant' })
     expect(body?.kind === 'message' ? body.blocks : []).toHaveLength(1)
-    expect(text).toContain('output truncated')
-    expect(Buffer.byteLength(JSON.stringify(body), 'utf8')).toBeLessThan(20 * 1024)
+    expect(text).toBe(parts.join('\n'))
   })
 
   it('calls a nonzero exit a failure even though codex calls the status completed', () => {
@@ -584,10 +568,25 @@ describe('codex item bodies', () => {
     })
   })
 
-  it('renders reasoning as status and exposes an unknown item as a provider frame', () => {
+  it('preserves plan prose documents byte-for-byte as status text', () => {
+    const text =
+      '  # Implementation plan\r\n\r\n- [ ] Preserve prose\r\n- [x] Keep café → 日本語\r\n\r\n```ts\r\nconst task = "pending"\r\n```\r\n  '
+
+    expect(codexJournalItem({ type: 'plan', id: 'plan-document', text })).toEqual({
+      body: { kind: 'status', text, presentation: 'plan-document' },
+      handled: true
+    })
+    expect(codexItemBody({ type: 'plan', id: 'plan-document', text })).not.toMatchObject({
+      kind: 'message',
+      role: 'reasoning'
+    })
+  })
+
+  it('renders reasoning as a typed message and exposes an unknown item as a provider frame', () => {
     expect(codexItemBody({ type: 'reasoning', id: 'r', text: 'thinking' })).toEqual({
-      kind: 'status',
-      text: 'thinking'
+      kind: 'message',
+      role: 'reasoning',
+      blocks: [{ type: 'text', text: 'thinking' }]
     })
     expect(codexItemBody({ type: 'reasoning', id: 'r' })).toBeNull()
     expect(codexItemBody({ type: 'agentMessage', id: 'm', text: '' })).toBeNull()
@@ -595,6 +594,15 @@ describe('codex item bodies', () => {
       kind: 'status',
       text: 'codex · item:somethingCodexAddedLater',
       providerFrame: { provider: 'codex', kind: 'item:somethingCodexAddedLater' }
+    })
+  })
+
+  it('keeps non-reasoning item streams as status activity', () => {
+    expect(
+      codexStreamingJournalItem({ type: 'somethingCodexAddedLater', id: 'x' }, 'still working')
+    ).toEqual({
+      body: { kind: 'status', text: 'still working' },
+      handled: true
     })
   })
 
@@ -611,9 +619,8 @@ describe('codex item bodies', () => {
       })
     ).toEqual({
       kind: 'tool-call',
-      // Server-qualified, and the arguments stay top level so the row label can
-      // read `query`/`command`/`file_path` out of them.
       name: 'weather/get_forecast',
+      callId: 'mcp-1',
       mcpIdentity: { server: 'weather', tool: 'get_forecast' },
       input: { city: 'Oslo' },
       state: 'completed',
@@ -622,8 +629,6 @@ describe('codex item bodies', () => {
   })
 
   it('passes an mcp tool name through with no casing transform', () => {
-    // Downstream dispatch is exact-match on raw identifiers, so every shape —
-    // bare snake_case included — has to survive byte-identical.
     for (const tool of ['get_forecast', 'mcp__server__tool', 'ns.tool', 'urn:tool', 'listTools']) {
       expect(
         codexItemBody({ type: 'mcpToolCall', id: 'm', tool, status: 'inProgress' }),
@@ -649,19 +654,16 @@ describe('codex item bodies', () => {
   })
 
   it('keeps non-object mcp arguments addressable and empty ones off the label', () => {
-    // `arguments` is arbitrary JSON upstream; a scalar or array must still reach
-    // the row rather than being dropped or unwrapped into a bare value.
     expect(
       codexItemBody({ type: 'mcpToolCall', id: 'm', tool: 't', arguments: 'raw text' })
     ).toMatchObject({ input: { arguments: 'raw text' } })
     expect(
       codexItemBody({ type: 'mcpToolCall', id: 'm', tool: 't', arguments: [1, 2] })
     ).toMatchObject({ input: { arguments: [1, 2] } })
-    // `arguments` is required on the wire, so `{}` — not an absent key — is what
-    // an argument-less MCP tool sends, and passing it through labels the row `{}`.
     expect(codexItemBody({ type: 'mcpToolCall', id: 'm', tool: 't', arguments: {} })).toEqual({
       kind: 'tool-call',
       name: 't',
+      callId: 'm',
       input: null,
       state: 'running'
     })
@@ -704,11 +706,10 @@ describe('codex item bodies', () => {
   })
 
   it('models a web search as a tool call that runs until codex sends the action', () => {
-    // The start frame Codex actually emits: empty query, no action. Nothing is
-    // labelable yet, so the input is absent rather than a hull of null keys.
     expect(codexItemBody({ type: 'webSearch', id: 'w', query: '', action: null })).toEqual({
       kind: 'tool-call',
       name: 'web_search',
+      callId: 'w',
       input: null,
       state: 'running'
     })
@@ -723,6 +724,7 @@ describe('codex item bodies', () => {
     ).toEqual({
       kind: 'tool-call',
       name: 'web_search',
+      callId: 'w',
       input: {
         query: 'orca release notes',
         description: 'search',
@@ -748,7 +750,6 @@ describe('codex item bodies', () => {
       state: 'completed',
       output: { head: JSON.stringify(results), truncated: false }
     })
-    // Nothing to show is no output block at all, not an empty one.
     for (const empty of [undefined, null, []]) {
       expect(
         codexItemBody({
@@ -764,10 +765,8 @@ describe('codex item bodies', () => {
   })
 
   it('labels every web search shape without falling back to raw JSON', () => {
-    // Both the row label and the run header read top-level input keys only, so a
-    // shape whose detail sits inside `action` renders as the input's raw JSON.
     const url = 'https://example.com/docs/page'
-    const shapes: [string, unknown, string, string][] = [
+    const cases: [string, unknown, string, string][] = [
       ['started', null, '', ''],
       [
         'search',
@@ -784,8 +783,7 @@ describe('codex item bodies', () => {
       ],
       ['other', { type: 'other' }, 'other', '']
     ]
-    for (const [name, action, label, brief] of shapes) {
-      // Codex leaves the item's own `query` empty on most completed searches.
+    for (const [name, action, label, brief] of cases) {
       const query = name === 'search' || name === 'findInPage' ? 'a sample query' : ''
       const input = toolCallInput({ type: 'webSearch', id: 'w', query, action })
       expect(describeToolInput(input), name).toBe(label)
@@ -812,6 +810,34 @@ describe('codex item bodies', () => {
     })
   })
 
+  it('keeps streamed reasoning as a message and leaves streamed plans as status', () => {
+    expect(codexStreamingJournalItem({ type: 'reasoning', id: 'r' }, 'thinking')).toEqual({
+      handled: true,
+      body: {
+        kind: 'message',
+        role: 'reasoning',
+        blocks: [{ type: 'text', text: 'thinking' }]
+      }
+    })
+    expect(codexStreamingJournalItem({ type: 'reasoning', id: 'r' }, ' \n ')).toEqual({
+      handled: true,
+      body: null
+    })
+    expect(codexStreamingJournalItem({ type: 'plan', id: 'p' }, 'First\nSecond')).toEqual({
+      handled: true,
+      body: { kind: 'status', text: 'First\nSecond', presentation: 'plan-document' }
+    })
+  })
+
+  it('omits blank reasoning and preserves the plan document body', () => {
+    expect(codexItemBody({ type: 'reasoning', id: 'r', text: ' \n ' })).toBeNull()
+    expect(codexItemBody({ type: 'plan', id: 'p', text: 'First\nSecond' })).toEqual({
+      kind: 'status',
+      text: 'First\nSecond',
+      presentation: 'plan-document'
+    })
+  })
+
   it('renders array-shaped reasoning content', () => {
     expect(
       codexItemBody({
@@ -820,7 +846,11 @@ describe('codex item bodies', () => {
         summary: ['first', 'second'],
         content: [{ text: 'fallback' }]
       })
-    ).toEqual({ kind: 'status', text: 'first\nsecond' })
+    ).toEqual({
+      kind: 'message',
+      role: 'reasoning',
+      blocks: [{ type: 'text', text: 'first\nsecond' }]
+    })
   })
 
   it('refuses a value that is not a thread item at all', () => {

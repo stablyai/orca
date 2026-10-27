@@ -18,8 +18,10 @@ import { clearTerminalHistoryRecoveryProtection } from './terminal-history-recov
 import type { PendingOutputRecord, TerminalSnapshot } from './types'
 import { TERMINAL_HISTORY_CHECKPOINT_MAX_BYTES } from './terminal-history-file-limits'
 import { serializeTerminalCheckpointWithinLimit } from './terminal-checkpoint-serializer'
+import { PRIVATE_FILE_MODE, tightenPathMode } from './daemon-private-file-modes'
+import { tightenTerminalHistorySessionDirMode } from './terminal-history-session-files'
 
-// Why 5MB: bounds cold-restore replay time and per-session disk; hitting the cap triggers one checkpoint that resets the log.
+// Bound replay work and disk use; a full log requests a checkpoint before accepting more output.
 const LOG_MAX_BYTES = 5 * 1024 * 1024
 
 export class TerminalHistorySessionWriter {
@@ -37,6 +39,8 @@ export class TerminalHistorySessionWriter {
     this.logPath = join(dir, 'output.log')
     this.logGeneration = fresh ? 0 : null
     this.logBytes = fresh ? 0 : null
+    // Warm attach must tighten files created with older, umask-derived permissions.
+    tightenTerminalHistorySessionDirMode(dir)
   }
 
   async appendIncrements(
@@ -50,10 +54,12 @@ export class TerminalHistorySessionWriter {
       return 'needs-checkpoint'
     }
     if (this.logBytes === 0) {
-      await fsPromises.writeFile(this.logPath, encodeLogHeader(this.logGeneration ?? 0))
+      await fsPromises.writeFile(this.logPath, encodeLogHeader(this.logGeneration ?? 0), {
+        mode: PRIVATE_FILE_MODE
+      })
       this.logBytes = LOG_HEADER_BYTES
     }
-    await fsPromises.appendFile(this.logPath, batch)
+    await fsPromises.appendFile(this.logPath, batch, { mode: PRIVATE_FILE_MODE })
     this.logBytes = (this.logBytes ?? LOG_HEADER_BYTES) + batch.length
     return 'ok'
   }
@@ -62,7 +68,7 @@ export class TerminalHistorySessionWriter {
     snapshot: TerminalSnapshot,
     opts?: { pendingOutputSeq?: number }
   ): Promise<{ result: 'committed' } | { result: 'retryable'; error: Error }> {
-    // Why: snapshot.cwd is null until OSC-7; preserve meta.json's usable cwd for cold restore.
+    // Preserve metadata cwd until the shell sends OSC 7.
     const effectiveCwd = snapshot.cwd ?? this.readMeta()?.cwd ?? null
     this.resolveLogState()
     const generation = (this.logGeneration ?? 0) + 1
@@ -87,16 +93,21 @@ export class TerminalHistorySessionWriter {
       }
     }
     const tmpPath = `${this.checkpointPath}.tmp`
-    await fsPromises.writeFile(tmpPath, data)
+    // Create temporary files privately before publishing the checkpoint.
+    await fsPromises.writeFile(tmpPath, data, { mode: PRIVATE_FILE_MODE })
+    // Creation mode does not tighten a temporary file left by an earlier crash.
+    tightenPathMode(tmpPath, PRIVATE_FILE_MODE)
     await fsPromises.rename(tmpPath, this.checkpointPath)
-    await fsPromises.writeFile(this.logPath, encodeLogHeader(generation))
+    await fsPromises.writeFile(this.logPath, encodeLogHeader(generation), {
+      mode: PRIVATE_FILE_MODE
+    })
     this.logGeneration = generation
     this.logBytes = LOG_HEADER_BYTES
     clearTerminalHistoryRecoveryProtection(this.dir)
     return { result: 'committed' }
   }
 
-  // Why: a warm writer must append to the existing generation without clobbering its log.
+  // Warm writers must extend the existing generation without clobbering its log.
   private resolveLogState(): void {
     if (this.logBytes !== null && this.logGeneration !== null) {
       return
@@ -115,7 +126,7 @@ export class TerminalHistorySessionWriter {
         closeSync(fd)
       }
     } catch {
-      // Missing log file — fresh state below.
+      // An unreadable log falls back to a fresh header using the checkpoint generation.
     }
     if (headerGeneration !== null) {
       this.logGeneration = headerGeneration

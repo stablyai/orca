@@ -1,14 +1,12 @@
 import type { RuntimeWorktreeAgentRow } from '../../../src/shared/runtime-types'
+import { isAgentStatusFresh } from '../../../src/shared/agent-status-freshness'
+import { agentVerdictDisplayMark } from '../../../src/shared/agent-main-agent-verdict'
+import {
+  formatCompactDuration,
+  resolveDecayedAgentRowState
+} from '../../../src/shared/agent-row-decay-state'
 
-// Mirrors the desktop AGENT_STATUS_STALE_AFTER_MS (src/shared/agent-status-types.ts:
-// 30 min). Defined locally rather than imported because a runtime-value import
-// from a root .ts breaks mobile's vitest transform (no tsconfig in the
-// mobile-only checkout); root type-only imports stay fine.
-export const AGENT_STATUS_STALE_AFTER_MS = 30 * 60 * 1000
-
-// Mirrors the desktop AgentStateDot vocabulary. The wire `state` is the agent
-// status state; 'blocked'/'waiting' read as attention states, 'done' as
-// complete, everything else idle.
+// Mirror desktop AgentStateDot vocabulary.
 export type AgentDotState =
   | 'working'
   | 'monitoring'
@@ -16,31 +14,37 @@ export type AgentDotState =
   | 'waiting'
   | 'done'
   | 'idle'
+  | 'unverifiable'
   | 'interrupted'
+  | 'failed'
+  | 'unconfirmed'
+
+// A session tab's AgentStatusEntry leaves `interrupted` optional; worktree rows always send it.
+type AgentRowVerdictSource = Pick<RuntimeWorktreeAgentRow, 'state' | 'mainAgent'> & {
+  interrupted?: boolean
+}
 
 export function agentDotState(
-  row: Pick<RuntimeWorktreeAgentRow, 'state' | 'workingMode' | 'interrupted' | 'updatedAt'>,
+  row: AgentRowVerdictSource &
+    Pick<RuntimeWorktreeAgentRow, 'workingMode' | 'hasLivePty'> &
+    Parameters<typeof isAgentStatusFresh>[0],
   now: number
 ): AgentDotState {
-  if (row.interrupted) {
-    return 'interrupted'
+  const mark = agentVerdictDisplayMark(row)
+  if (mark) {
+    return mark
   }
-  switch (row.state) {
-    case 'blocked':
-    case 'waiting':
-      // Why: an agent that exits without a final report would otherwise read as
-      // active forever. Decay a stale active state to idle, matching desktop's
-      // renderer-side staleness decay (worktree-agent-rows.ts).
-      return now - row.updatedAt > AGENT_STATUS_STALE_AFTER_MS ? 'idle' : row.state
-    case 'working':
-      if (now - row.updatedAt > AGENT_STATUS_STALE_AFTER_MS) {
-        return 'idle'
-      }
-      return row.workingMode === 'monitoring' ? 'monitoring' : 'working'
-    case 'done':
-      return 'done'
+  if (row.state === 'done') {
+    return 'done'
   }
-  return 'idle'
+  // Decay stale active states like desktop: a live terminal can't prove the agent ended, so it reads unverifiable.
+  if (!isAgentStatusFresh(row, now)) {
+    return resolveDecayedAgentRowState(row, row.hasLivePty === true)
+  }
+  if (row.state === 'working') {
+    return row.workingMode === 'monitoring' ? 'monitoring' : 'working'
+  }
+  return row.state === 'blocked' || row.state === 'waiting' ? row.state : 'idle'
 }
 
 // Mirrors desktop agentStateLabel.
@@ -56,17 +60,27 @@ export function agentStateLabel(state: AgentDotState): string {
       return 'Waiting for input'
     case 'interrupted':
       return 'Interrupted'
+    case 'failed':
+      return 'Failed'
+    case 'unconfirmed':
+      return 'Couldn’t confirm'
     case 'done':
       return 'Done'
     case 'idle':
       return 'Idle'
+    case 'unverifiable':
+      return 'No recent update'
   }
 }
 
-// Primary row text: prefer the agent's last message, then the user prompt, then
-// a human-readable state label so a row is never blank. Matches the desktop
-// DashboardAgentRow displayLabel fallback chain.
+// Mirrors NATIVE_CHAT_TURN_STATUS_COPY.stopping.
+const STOPPING_LABEL = 'Stopping…'
+
+// Match DashboardAgentRow fallback order; a user-requested Stop takes precedence while ending the turn.
 export function agentDisplayLabel(row: RuntimeWorktreeAgentRow, now: number): string {
+  if (row.state === 'working' && row.mainAgent?.stopping === true) {
+    return STOPPING_LABEL
+  }
   const message = row.lastAssistantMessage?.trim()
   if (message) {
     return message
@@ -78,41 +92,17 @@ export function agentDisplayLabel(row: RuntimeWorktreeAgentRow, now: number): st
   return agentStateLabel(agentDotState(row, now))
 }
 
-// Short agent identity label by type (Claude/Codex/Gemini/…), used when no
-// identity icon is available on mobile. Falls back to the first two letters.
-export function agentIdentityLabel(agentType: string | null): string {
-  if (!agentType) {
-    return ''
+// Mirror desktop lastEnteredDoneAt: date main-agent failures independently while subagents remain active.
+export function agentRowTimeAt(
+  row: Pick<RuntimeWorktreeAgentRow, 'state' | 'interrupted' | 'mainAgent' | 'stateStartedAt'>
+): number {
+  if (row.state !== 'done' && row.mainAgent && agentVerdictDisplayMark(row) === 'failed') {
+    return row.mainAgent.stateStartedAt
   }
-  const normalized = agentType.toLowerCase()
-  const known: Record<string, string> = {
-    claude: 'CL',
-    codex: 'CX',
-    gemini: 'GM',
-    cursor: 'CR',
-    copilot: 'CP',
-    amp: 'AM',
-    aider: 'AI',
-    opencode: 'OC',
-    'mimo-code': 'MC'
-  }
-  return known[normalized] ?? normalized.slice(0, 2).toUpperCase()
+  return row.stateStartedAt
 }
 
-// Relative time, matching desktop formatTimeAgo thresholds (just now / Xm / Xh / Xd).
 export function formatTimeAgo(ts: number, now: number): string {
   const delta = now - ts
-  if (delta < 60_000) {
-    return 'just now'
-  }
-  const minutes = Math.floor(delta / 60_000)
-  if (minutes < 60) {
-    return `${minutes}m`
-  }
-  const hours = Math.floor(minutes / 60)
-  if (hours < 24) {
-    return `${hours}h`
-  }
-  const days = Math.floor(hours / 24)
-  return `${days}d`
+  return delta < 60_000 ? 'just now' : formatCompactDuration(delta)
 }

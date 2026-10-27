@@ -23,6 +23,22 @@ class FakeResponse extends EventEmitter {
 }
 
 describe('diagnostic upload HTTP', () => {
+  it('reports only the status for an error response with an invalid JSON body', async () => {
+    const request = new FakeRequest()
+    const response = new FakeResponse()
+    response.statusCode = 503
+    httpRequestMock.mockImplementationOnce((_options, callback) => {
+      callback(response)
+      return request
+    })
+    const result = postJsonForJson('http://diagnostics.example/upload', {}, 1000)
+    response.emit('data', Buffer.from('private backend details: not JSON'))
+    response.emit('end')
+    await expect(result).rejects.toThrow(/^HTTP 503$/)
+    expect(response.listenerCount('data')).toBe(0)
+    expect(request.listenerCount('error')).toBe(0)
+  })
+
   it('removes request and response listeners after a successful response', async () => {
     const request = new FakeRequest()
     const response = new FakeResponse()

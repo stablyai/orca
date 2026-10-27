@@ -43,7 +43,7 @@ vi.mock('@/lib/new-workspace', () => ({
 }))
 
 vi.mock('sonner', () => ({
-  toast: { error: vi.fn() }
+  toast: { error: vi.fn(), success: vi.fn() }
 }))
 
 vi.mock('@/lib/ephemeral-vm-workspace-target', () => ({

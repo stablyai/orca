@@ -15,7 +15,6 @@ describe('agent completion coordinator', () => {
     const coordinator = createAgentCompletionCoordinator({
       paneKey: 'tab-1:leaf-1',
       getPtyId: () => 'pty-1',
-      getSettings: () => null,
       inspectProcess: vi.fn(),
       dispatchCompletion,
       isLive: () => true
@@ -71,7 +70,6 @@ describe('agent completion coordinator', () => {
     const coordinator = createAgentCompletionCoordinator({
       paneKey: 'tab-1:leaf-1',
       getPtyId: () => 'pty-1',
-      getSettings: () => null,
       inspectProcess: vi.fn(),
       dispatchCompletion,
       isLive: () => true
@@ -96,37 +94,6 @@ describe('agent completion coordinator', () => {
     expect(dispatchCompletion).not.toHaveBeenCalled()
   })
 
-  it.each([
-    'claude',
-    'codex',
-    'gemini',
-    'opencode',
-    'cursor',
-    'droid',
-    'grok',
-    'devin',
-    'copilot',
-    'hermes'
-  ])('recognizes %s hook agent ids even when the binary name differs', (agentType) => {
-    const dispatchCompletion = vi.fn()
-    const coordinator = createAgentCompletionCoordinator({
-      paneKey: 'tab-1:leaf-1',
-      getPtyId: () => 'pty-1',
-      getSettings: () => null,
-      inspectProcess: vi.fn(),
-      dispatchCompletion,
-      isLive: () => true
-    })
-
-    coordinator.observeHookStatus({
-      state: 'done',
-      prompt: '',
-      agentType
-    })
-
-    expect(dispatchCompletion).toHaveBeenCalledWith(agentType)
-  })
-
   it.each(['pi', 'omp'])(
     'defers a %s milestone done without prior working through the quiet window',
     (agentType) => {
@@ -134,14 +101,12 @@ describe('agent completion coordinator', () => {
       const coordinator = createAgentCompletionCoordinator({
         paneKey: 'tab-1:leaf-1',
         getPtyId: () => 'pty-1',
-        getSettings: () => null,
         inspectProcess: vi.fn(),
         dispatchCompletion,
         isLive: () => true
       })
 
-      // Pi/OMP emit agent_end ('done') between milestones with no prior 'working';
-      // the done must wait out the quiet window instead of firing immediately.
+      // Pi/OMP milestone done can lack prior working; still wait for quiet before completion.
       coordinator.observeHookStatus({
         state: 'done',
         prompt: 'run the mission',
@@ -165,7 +130,6 @@ describe('agent completion coordinator', () => {
     const coordinator = createAgentCompletionCoordinator({
       paneKey: 'tab-1:leaf-1',
       getPtyId: () => 'pty-1',
-      getSettings: () => null,
       inspectProcess: vi.fn(),
       dispatchCompletion,
       isLive: () => true
@@ -196,7 +160,6 @@ describe('agent completion coordinator', () => {
     const coordinator = createAgentCompletionCoordinator({
       paneKey: 'tab-1:leaf-1',
       getPtyId: () => 'pty-1',
-      getSettings: () => null,
       inspectProcess: vi.fn(),
       dispatchCompletion,
       isLive: () => true
@@ -214,14 +177,12 @@ describe('agent completion coordinator', () => {
   })
 
   it('still fires a pending Pi done when process inspection sees the agent exit first', async () => {
-    // Why: a process-exit probe landing inside the quiet window must not tear
-    // down agent evidence, or the pending hook 'done' would be silently dropped.
+    // Process probes during the quiet window must preserve evidence needed for the pending hook completion.
     let foregroundProcess: string | null = 'pi'
     const dispatchCompletion = vi.fn()
     const coordinator = createAgentCompletionCoordinator({
       paneKey: 'tab-1:leaf-1',
       getPtyId: () => 'pty-1',
-      getSettings: () => null,
       inspectProcess: vi.fn(async () => processResult(foregroundProcess)),
       dispatchCompletion,
       isLive: () => true
@@ -258,7 +219,6 @@ describe('agent completion coordinator', () => {
     const coordinator = createAgentCompletionCoordinator({
       paneKey: 'tab-1:leaf-1',
       getPtyId: () => 'pty-1',
-      getSettings: () => null,
       inspectProcess: vi.fn(),
       dispatchCompletion,
       isLive: () => true

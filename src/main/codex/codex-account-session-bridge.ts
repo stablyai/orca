@@ -3,40 +3,106 @@ import { dirname, join, relative } from 'node:path'
 import { normalizeRuntimePathForComparison } from '../../shared/cross-platform-path'
 import { listCodexSessionRolloutFilesIncrementally } from './codex-session-file-listing'
 import type { CodexSessionBridgeIncrementalOptions } from './codex-session-file-listing'
+import {
+  createCodexAccountStateDb,
+  healCodexAccountSessionIndex
+} from './codex-account-session-index-heal'
+import { parseCodexRolloutThreadId } from './codex-session-index-heal-state'
 import { linkCodexSessionFile } from './codex-session-link'
+import {
+  countCodexSessionFilesUpTo,
+  findNewestCodexStateDbPath,
+  readCodexStateDbBackfillStatus
+} from './codex-state-db'
 
-/**
- * Bridges Codex history between Orca-managed Codex homes.
- *
- * Why: a managed account launches Codex against its own self-contained
- * CODEX_HOME, and Codex's `/resume` picker only lists rollouts under that home.
- * Without this, switching accounts hides every conversation the user recorded
- * under a different account (or under their real ~/.codex). Rollouts are
- * hardlinked, so each conversation stays one physical log no matter how many
- * homes list it.
- */
-
+// Hardlink history across homes so account switching preserves /resume entries and one physical log.
 export type CodexAccountSessionBridgeSummary = {
   scannedFiles: number
   linkedFiles: number
+  /** Thread ID to rollout timestamp for history present in the target home. */
+  bridgedThreads: Map<string, string>
 }
 
 const backgroundBridgeTasksByTargetHome = new Map<string, Promise<void>>()
+let stopping = false
 
-/**
- * Starts one background bridge per target home, sharing in-flight work.
- */
-export function startCodexAccountSessionBridgeInBackground(args: {
-  targetCodexHomePath: string
-  sourceCodexHomePaths: readonly string[]
-  options?: CodexSessionBridgeIncrementalOptions
-}): Promise<void> {
+type BackgroundBridgeDependencies = {
+  createStateDb: typeof createCodexAccountStateDb
+  healIndex: typeof healCodexAccountSessionIndex
+}
+
+const defaultBackgroundBridgeDependencies: BackgroundBridgeDependencies = {
+  createStateDb: createCodexAccountStateDb,
+  healIndex: healCodexAccountSessionIndex
+}
+
+// Create the DB before linking history to avoid first-launch backfill timeouts; heal indexes later.
+async function isReadyForBridgedHistory(
+  targetCodexHomePath: string,
+  sourceCodexHomePaths: readonly string[],
+  dependencies: BackgroundBridgeDependencies
+): Promise<boolean> {
+  if (
+    !findNewestCodexStateDbPath(targetCodexHomePath) &&
+    !hasSessionRollouts(targetCodexHomePath)
+  ) {
+    if (
+      !sourceCodexHomePaths.some(hasSessionRollouts) ||
+      !(await dependencies.createStateDb(targetCodexHomePath))
+    ) {
+      return false
+    }
+  }
+  const status = readCodexStateDbBackfillStatus(targetCodexHomePath)
+  if (status.kind === 'unreadable') {
+    // Why: contention clears by the next launch; corruption would skip every launch, so surface it.
+    console.warn(
+      '[codex-account-session-bridge] Skipping history bridge; Codex state DB is unreadable:',
+      status.error
+    )
+    return false
+  }
+  // Existing history without a local DB implies sqlite_home or an older CLI; linking is safe.
+  // `not-tracked` is a pre-backfill schema that Codex migrates to `pending`.
+  return status.kind === 'complete' || status.kind === 'missing'
+}
+
+function hasSessionRollouts(codexHomePath: string): boolean {
+  return countCodexSessionFilesUpTo(join(codexHomePath, 'sessions'), 1) > 0
+}
+
+export function startCodexAccountSessionBridgeInBackground(
+  args: {
+    targetCodexHomePath: string
+    sourceCodexHomePaths: readonly string[]
+    options?: CodexSessionBridgeIncrementalOptions
+  },
+  dependenciesOverride: Partial<BackgroundBridgeDependencies> = {}
+): Promise<void> {
+  if (stopping) {
+    return Promise.resolve()
+  }
   const key = normalizeRuntimePathForComparison(args.targetCodexHomePath)
   const inFlight = backgroundBridgeTasksByTargetHome.get(key)
   if (inFlight) {
     return inFlight
   }
-  const task = bridgeCodexSessionsIntoAccountHome(args)
+  const dependencies = { ...defaultBackgroundBridgeDependencies, ...dependenciesOverride }
+  const task = isReadyForBridgedHistory(
+    args.targetCodexHomePath,
+    args.sourceCodexHomePaths,
+    dependencies
+  )
+    .then(async (ready) => {
+      // Why: skip rather than feed a running backfill; the next launch retries.
+      if (!ready || stopping) {
+        return
+      }
+      const summary = await bridgeCodexSessionsIntoAccountHome(args)
+      await dependencies.healIndex(args.targetCodexHomePath, summary.bridgedThreads, {
+        shouldStop: () => stopping
+      })
+    })
     .catch((error: unknown) => {
       console.warn('[codex-account-session-bridge] Background session bridge failed:', error)
     })
@@ -50,15 +116,25 @@ export function startCodexAccountSessionBridgeInBackground(args: {
   return task
 }
 
-/**
- * Mirrors every source home's rollouts into the target home's sessions tree.
- */
+/** Stops background bridges at quit; links and index reads made so far are kept. */
+export function stopCodexAccountSessionBridges(): void {
+  stopping = true
+}
+
+export function isCodexAccountSessionBridgeStopping(): boolean {
+  return stopping
+}
+
 export async function bridgeCodexSessionsIntoAccountHome(args: {
   targetCodexHomePath: string
   sourceCodexHomePaths: readonly string[]
   options?: CodexSessionBridgeIncrementalOptions
 }): Promise<CodexAccountSessionBridgeSummary> {
-  const summary: CodexAccountSessionBridgeSummary = { scannedFiles: 0, linkedFiles: 0 }
+  const summary: CodexAccountSessionBridgeSummary = {
+    scannedFiles: 0,
+    linkedFiles: 0,
+    bridgedThreads: new Map()
+  }
   const targetSessionsRoot = join(args.targetCodexHomePath, 'sessions')
   for (const sourceHomePath of dedupeSourceHomes(
     args.sourceCodexHomePaths,
@@ -73,40 +149,42 @@ export async function bridgeCodexSessionsIntoAccountHome(args: {
       args.options ?? {}
     )) {
       summary.scannedFiles += 1
-      if (bridgeRolloutIntoAccountHome(sourceSessionsRoot, targetSessionsRoot, sourceFilePath)) {
+      const result = bridgeRolloutIntoAccountHome(
+        sourceSessionsRoot,
+        targetSessionsRoot,
+        sourceFilePath
+      )
+      if (result === 'linked') {
         summary.linkedFiles += 1
+      }
+      const rollout = parseCodexRolloutThreadId(sourceFilePath)
+      if (result !== 'failed' && rollout) {
+        summary.bridgedThreads.set(rollout.threadId, rollout.rolloutStamp)
       }
     }
   }
   return summary
 }
 
-/**
- * Links one rollout into the target sessions tree at the same relative path.
- */
 function bridgeRolloutIntoAccountHome(
   sourceSessionsRoot: string,
   targetSessionsRoot: string,
   sourceFilePath: string
-): boolean {
+): 'linked' | 'existing' | 'failed' {
   const targetFilePath = join(targetSessionsRoot, relative(sourceSessionsRoot, sourceFilePath))
-  // Why: rollout names carry the session UUID, so an existing target path is the
-  // same conversation already bridged (often the same inode) — never a conflict.
+  // Rollout filenames contain session UUIDs; an existing path already represents this conversation.
   if (existsSync(targetFilePath)) {
-    return false
+    return 'existing'
   }
   try {
     mkdirSync(dirname(targetFilePath), { recursive: true })
   } catch (error) {
     console.warn('[codex-account-session-bridge] Failed to create session directory:', error)
-    return false
+    return 'failed'
   }
-  return linkCodexSessionFile(sourceFilePath, targetFilePath)
+  return linkCodexSessionFile(sourceFilePath, targetFilePath) ? 'linked' : 'failed'
 }
 
-/**
- * Drops duplicate and self-referential sources so one launch links each home once.
- */
 function dedupeSourceHomes(
   sourceCodexHomePaths: readonly string[],
   targetCodexHomePath: string
@@ -127,5 +205,6 @@ function dedupeSourceHomes(
 export const _internals = {
   resetBackgroundBridgeTasks: (): void => {
     backgroundBridgeTasksByTargetHome.clear()
+    stopping = false
   }
 }

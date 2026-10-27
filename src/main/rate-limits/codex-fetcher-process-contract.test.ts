@@ -2,18 +2,32 @@ import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type * as Win32Utils from '../win32-utils'
+import type * as RunProcess from '@orca/process-host'
 
-const { getSpawnArgsForWindowsMock, ptySpawnMock, resolveCodexCommandMock } = vi.hoisted(() => ({
-  getSpawnArgsForWindowsMock: vi.fn(),
+const { ptySpawnMock, resolveCodexCommandMock, stubScript } = vi.hoisted(() => ({
+  stubScript: { path: '' },
   ptySpawnMock: vi.fn(),
   resolveCodexCommandMock: vi.fn()
 }))
 
-vi.mock('../win32-utils', async (importOriginal) => ({
-  ...(await importOriginal<typeof Win32Utils>()),
-  getSpawnArgsForWindows: getSpawnArgsForWindowsMock
-}))
+// Run the Node fixture through the real process chokepoint; worker transport has separate coverage.
+vi.mock(
+  '../worker-thread-child-process/worker-thread-child-process',
+  () =>
+    import('../worker-thread-child-process/worker-thread-child-process-in-process.test-fixtures')
+)
+vi.mock('@orca/process-host', async (importOriginal) => {
+  const actual = await importOriginal<typeof RunProcess>()
+  return {
+    ...actual,
+    spawnProcess: (spec: Parameters<typeof actual.spawnProcess>[0]) =>
+      actual.spawnProcess({
+        ...spec,
+        program: process.execPath,
+        args: [stubScript.path, ...(spec.args ?? [])]
+      })
+  }
+})
 
 vi.mock('../codex-cli/command', () => ({
   resolveCodexCommand: resolveCodexCommandMock
@@ -41,6 +55,8 @@ const STUB_CODEX_SOURCE = `
 const expectedArgs = [
   '-c',
   'approval_policy=never',
+  '-c',
+  'features.plugins=false',
   '-s',
   'read-only',
   '-a',
@@ -57,6 +73,14 @@ if (JSON.stringify(process.argv.slice(2)) !== JSON.stringify(expectedArgs)) {
 if (process.env.CODEX_HOME !== process.env.ORCA_EXPECTED_CODEX_HOME) {
   process.stderr.write('managed CODEX_HOME was not preserved\\n')
   process.exit(3)
+}
+if (process.env.ORCA_EXPECTED_PROXY_ENV) {
+  for (const [key, value] of Object.entries(JSON.parse(process.env.ORCA_EXPECTED_PROXY_ENV))) {
+    if (process.env[key] !== value) {
+      process.stderr.write('probe proxy environment mismatch: ' + key + '\\n')
+      process.exit(4)
+    }
+  }
 }
 let buffer = ''
 function send(message) {
@@ -103,13 +127,11 @@ describe('Codex rate-limit process contract', () => {
     previousExpectedHome = process.env.ORCA_EXPECTED_CODEX_HOME
     process.env.ORCA_EXPECTED_CODEX_HOME = join(tempRoot, 'managed-codex-home')
     resolveCodexCommandMock.mockReturnValue('codex')
-    getSpawnArgsForWindowsMock.mockImplementation((_command: string, args: string[]) => ({
-      spawnCmd: process.execPath,
-      spawnArgs: [stubPath, ...args]
-    }))
+    stubScript.path = stubPath
   })
 
   afterEach(() => {
+    vi.unstubAllEnvs()
     if (previousExpectedHome === undefined) {
       delete process.env.ORCA_EXPECTED_CODEX_HOME
     } else {
@@ -122,8 +144,7 @@ describe('Codex rate-limit process contract', () => {
   it('starts a read-only non-interactive app-server with the managed home', async () => {
     await expect(
       fetchCodexRateLimits({
-        codexHomePath: process.env.ORCA_EXPECTED_CODEX_HOME,
-        allowPtyFallback: false
+        codexHomePath: process.env.ORCA_EXPECTED_CODEX_HOME
       })
     ).resolves.toMatchObject({
       provider: 'codex',
@@ -134,4 +155,52 @@ describe('Codex rate-limit process contract', () => {
     })
     expect(ptySpawnMock).not.toHaveBeenCalled()
   })
+
+  it.each(['localhost;*.fixture.invalid', ''])(
+    'passes configured proxy and bypass %j to the actual probe',
+    async (bypassRules) => {
+      const proxy = 'http://proxy.fixture.invalid:8080'
+      const expected = {
+        HTTP_PROXY: proxy,
+        HTTPS_PROXY: proxy,
+        ALL_PROXY: proxy,
+        http_proxy: proxy,
+        https_proxy: proxy,
+        all_proxy: proxy,
+        NO_PROXY: bypassRules.replaceAll(';', ','),
+        no_proxy: bypassRules.replaceAll(';', ',')
+      }
+      vi.stubEnv('NO_PROXY', 'inherited.invalid')
+      vi.stubEnv('no_proxy', 'inherited.invalid')
+      vi.stubEnv('ORCA_EXPECTED_PROXY_ENV', JSON.stringify(expected))
+
+      await expect(
+        fetchCodexRateLimits({
+          codexHomePath: process.env.ORCA_EXPECTED_CODEX_HOME,
+          networkProxySettings: { httpProxyUrl: proxy, httpProxyBypassRules: bypassRules }
+        })
+      ).resolves.toMatchObject({ status: 'ok', session: { usedPercent: 17 } })
+      expect(process.env.NO_PROXY).toBe('inherited.invalid')
+    }
+  )
+
+  it.each([undefined, { httpProxyUrl: '' }, { httpProxyUrl: 'file:///invalid-proxy' }])(
+    'preserves inherited proxy settings when app settings are unset or invalid: %j',
+    async (networkProxySettings) => {
+      const inherited = {
+        HTTPS_PROXY: 'http://inherited.fixture.invalid:8080',
+        NO_PROXY: 'fixture.invalid'
+      }
+      for (const [key, value] of Object.entries(inherited)) {
+        vi.stubEnv(key, value)
+      }
+      vi.stubEnv('ORCA_EXPECTED_PROXY_ENV', JSON.stringify(inherited))
+      await expect(
+        fetchCodexRateLimits({
+          codexHomePath: process.env.ORCA_EXPECTED_CODEX_HOME,
+          networkProxySettings
+        })
+      ).resolves.toMatchObject({ status: 'ok', session: { usedPercent: 17 } })
+    }
+  )
 })

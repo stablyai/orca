@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { loadUpdaterModule, warmUpdaterModule } from './updater-test-module-loader'
+import { updaterMainWindow } from './updater-test-main-window'
 
 const {
   appMock,
@@ -14,8 +15,7 @@ const {
 vi.mock('electron', () => moduleFactories.electron())
 vi.mock('electron-updater', () => moduleFactories.electronUpdater())
 vi.mock('./electron-updater-loader', () => moduleFactories.electronUpdaterLoader())
-vi.mock('@electron-toolkit/utils', () => moduleFactories.electronToolkitUtils())
-vi.mock('./ipc/pty', () => moduleFactories.ipcPty())
+vi.mock('./ipc/pty/kill-all', () => moduleFactories.ptyKillAll())
 vi.mock('./linux-update-package-type', () => moduleFactories.linuxUpdatePackageType())
 vi.mock('./updater-lifecycle-diagnostics', () => moduleFactories.updaterLifecycleDiagnostics())
 vi.mock('./updater-changelog', () => moduleFactories.updaterChangelog())
@@ -25,7 +25,7 @@ vi.mock('./updater-prerelease-feed', () => moduleFactories.updaterPrereleaseFeed
 vi.mock('./local-builds/local-build-switch', () => moduleFactories.localBuildSwitch())
 vi.mock('./local-builds/local-build-feed-server', () => moduleFactories.localBuildFeedServer())
 
-/** Mirrors AUTO_UPDATE_CHECK_INTERVAL_MS in updater.ts. */
+// Matches updater/updater-state.ts.
 const AUTO_UPDATE_CHECK_INTERVAL_MS = 24 * 60 * 60 * 1000
 
 warmUpdaterModule()
@@ -58,7 +58,7 @@ describe('updater', () => {
       try {
         const send = vi.fn()
         const { setupAutoUpdater, checkForUpdatesFromMenu } = await loadUpdaterModule()
-        setupAutoUpdater({ webContents: { send } } as never, {
+        setupAutoUpdater(updaterMainWindow(send), {
           getLastUpdateCheckAt: () => Date.now()
         })
 
@@ -76,18 +76,14 @@ describe('updater', () => {
     }
   )
 
-  // Why this refuses rather than trying: electron-updater would download the
-  // whole installer and then fail it with a raw ERR_UPDATER_INVALID_SIGNATURE,
-  // because a signed build verifies every installer against the publisherName
-  // baked into its own app-update.yml. The picker disables this, but IPC is
-  // reachable regardless.
+  // Signed Windows builds verify publisherName; refuse unsigned dev jumps before downloading.
   it('refuses to pin a Windows dev build from a signed build, and says what to do', async () => {
     const platformSpy = vi.spyOn(process, 'platform', 'get').mockReturnValue('win32')
     try {
       appMock.getVersion.mockReturnValue('1.4.160')
       const send = vi.fn()
       const { setupAutoUpdater, checkForUpdatesFromMenu } = await loadUpdaterModule()
-      setupAutoUpdater({ webContents: { send } } as never, {
+      setupAutoUpdater(updaterMainWindow(send), {
         getLastUpdateCheckAt: () => Date.now()
       })
 
@@ -104,8 +100,7 @@ describe('updater', () => {
     }
   })
 
-  // The way out of a dev channel must stay in-app: an unsigned build carries no
-  // publisherName, so electron-updater skips verification entirely.
+  // Unsigned dev builds can return to stable because they carry no publisherName.
   it.each([
     ['another dev build', 'adhoc', 'v1.4.160-adhoc.20260728140533'],
     ['back to stable', 'stable', 'v1.4.160']
@@ -117,7 +112,7 @@ describe('updater', () => {
         appMock.getVersion.mockReturnValue('1.4.160-hourly.202607281400')
         const send = vi.fn()
         const { setupAutoUpdater, checkForUpdatesFromMenu } = await loadUpdaterModule()
-        setupAutoUpdater({ webContents: { send } } as never, {
+        setupAutoUpdater(updaterMainWindow(send), {
           getLastUpdateCheckAt: () => Date.now()
         })
 
@@ -150,7 +145,7 @@ describe('updater', () => {
       })
       const send = vi.fn()
       const { setupAutoUpdater, checkForUpdatesFromMenu } = await loadUpdaterModule()
-      setupAutoUpdater({ webContents: { send } } as never, {
+      setupAutoUpdater(updaterMainWindow(send), {
         getLastUpdateCheckAt: () => Date.now()
       })
 
@@ -176,7 +171,7 @@ describe('updater', () => {
         )
       })
 
-      setupAutoUpdater({ webContents: { send } } as never, {
+      setupAutoUpdater(updaterMainWindow(send), {
         getLastUpdateCheckAt: () => Date.now()
       })
       expect(autoUpdaterMock.setFeedURL).toHaveBeenLastCalledWith({
@@ -203,7 +198,7 @@ describe('updater', () => {
       const send = vi.fn()
       const { setupAutoUpdater, checkForUpdates, checkForUpdatesFromMenu } =
         await loadUpdaterModule()
-      setupAutoUpdater({ webContents: { send } } as never, {
+      setupAutoUpdater(updaterMainWindow(send), {
         getLastUpdateCheckAt: () => Date.now()
       })
 
@@ -225,7 +220,7 @@ describe('updater', () => {
       expect(autoUpdaterMock.disableDifferentialDownload).toBe(false)
       expect(autoUpdaterMock.setFeedURL).toHaveBeenLastCalledWith({
         provider: 'generic',
-        url: 'https://github.com/stablyai/orca/releases/latest/download'
+        url: 'https://github.com/stablyai/orca/releases/download/v1.0.51'
       })
     }
   )
@@ -246,7 +241,7 @@ describe('updater', () => {
       const send = vi.fn()
       const { setupAutoUpdater, checkForUpdates, checkForUpdatesFromMenu } =
         await loadUpdaterModule()
-      setupAutoUpdater({ webContents: { send } } as never, {
+      setupAutoUpdater(updaterMainWindow(send), {
         getLastUpdateCheckAt: () => Date.now()
       })
 
@@ -268,7 +263,7 @@ describe('updater', () => {
       })
       expect(autoUpdaterMock.setFeedURL).toHaveBeenLastCalledWith({
         provider: 'generic',
-        url: 'https://github.com/stablyai/orca/releases/latest/download'
+        url: 'https://github.com/stablyai/orca/releases/download/v1.0.51'
       })
     }
   )
@@ -285,7 +280,7 @@ describe('updater', () => {
       const send = vi.fn()
       const { setupAutoUpdater, checkForUpdates, checkForUpdatesFromMenu } =
         await loadUpdaterModule()
-      setupAutoUpdater({ webContents: { send } } as never, {
+      setupAutoUpdater(updaterMainWindow(send), {
         getLastUpdateCheckAt: () => Date.now()
       })
 
@@ -308,7 +303,7 @@ describe('updater', () => {
       })
       expect(autoUpdaterMock.setFeedURL).toHaveBeenLastCalledWith({
         provider: 'generic',
-        url: 'https://github.com/stablyai/orca/releases/latest/download'
+        url: 'https://github.com/stablyai/orca/releases/download/v1.0.51'
       })
     }
   )
@@ -331,7 +326,7 @@ describe('updater', () => {
       const send = vi.fn()
       const { setupAutoUpdater, checkForUpdatesFromMenu, downloadUpdate } =
         await loadUpdaterModule()
-      setupAutoUpdater({ webContents: { send } } as never, {
+      setupAutoUpdater(updaterMainWindow(send), {
         getLastUpdateCheckAt: () => Date.now()
       })
 
@@ -342,20 +337,17 @@ describe('updater', () => {
         expect.objectContaining({ state: 'available', source: 'local' })
       )
 
-      // Why: assert through this window rather than the shared updater mock — a status only lands here
-      // when this module instance owns the check attempt, so sibling tests' timers can't fake a pass.
+      // This window observes only its owning module's attempts, excluding stale sibling timers.
       autoUpdaterMock.checkForUpdates.mockReset().mockImplementation(() => {
         autoUpdaterMock.emit('checking-for-update')
         autoUpdaterMock.emit('update-not-available')
         return Promise.resolve(undefined)
       })
 
-      // The scheduled release check fires while the local session still owns the feed, so it defers.
       send.mockClear()
       await vi.advanceTimersByTimeAsync(AUTO_UPDATE_CHECK_INTERVAL_MS)
       expect(send).not.toHaveBeenCalledWith('updater:status', { state: 'not-available' })
 
-      // A failed local download ends the session and restores the release source.
       downloadUpdate()
       await vi.advanceTimersByTimeAsync(0)
       expect(autoUpdaterMock.allowDowngrade).toBe(false)
@@ -365,7 +357,7 @@ describe('updater', () => {
       expect(send).toHaveBeenCalledWith('updater:status', { state: 'not-available' })
       expect(autoUpdaterMock.setFeedURL).toHaveBeenLastCalledWith({
         provider: 'generic',
-        url: 'https://github.com/stablyai/orca/releases/latest/download'
+        url: 'https://github.com/stablyai/orca/releases/download/v1.0.51'
       })
     }
   )
@@ -386,7 +378,7 @@ describe('updater', () => {
       const send = vi.fn()
       const { setupAutoUpdater, checkForUpdates, checkForUpdatesFromMenu, dismissAvailableUpdate } =
         await loadUpdaterModule()
-      setupAutoUpdater({ webContents: { send } } as never, {
+      setupAutoUpdater(updaterMainWindow(send), {
         getLastUpdateCheckAt: () => Date.now()
       })
 
@@ -411,7 +403,7 @@ describe('updater', () => {
       })
       expect(autoUpdaterMock.setFeedURL).toHaveBeenLastCalledWith({
         provider: 'generic',
-        url: 'https://github.com/stablyai/orca/releases/latest/download'
+        url: 'https://github.com/stablyai/orca/releases/download/v1.0.51'
       })
     }
   )
@@ -433,7 +425,7 @@ describe('updater', () => {
       const send = vi.fn()
       const { setupAutoUpdater, checkForUpdatesFromMenu, dismissAvailableUpdate, downloadUpdate } =
         await loadUpdaterModule()
-      setupAutoUpdater({ webContents: { send } } as never, {
+      setupAutoUpdater(updaterMainWindow(send), {
         getLastUpdateCheckAt: () => Date.now()
       })
 
@@ -462,12 +454,12 @@ describe('updater', () => {
     appMock.getVersion.mockReturnValue('1.3.17')
     fetchNewerReleaseTagsMock.mockResolvedValue(['v1.3.18-rc.1'])
     autoUpdaterMock.checkForUpdates.mockResolvedValue(undefined)
-    const mainWindow = { webContents: { send: vi.fn() } }
+    const mainWindow = updaterMainWindow(vi.fn())
 
     const { setupAutoUpdater, checkForUpdatesFromMenu } = await loadUpdaterModule()
 
-    // Why: recent timestamp defers the startup check so we observe updater state before any RC-mode call, without racing.
-    setupAutoUpdater(mainWindow as never, { getLastUpdateCheckAt: () => Date.now() })
+    // Defer startup checks to inspect initial state without racing an RC check.
+    setupAutoUpdater(mainWindow, { getLastUpdateCheckAt: () => Date.now() })
     const setupFeedUrlCalls = autoUpdaterMock.setFeedURL.mock.calls.length
     expect(autoUpdaterMock.allowPrerelease).not.toBe(true)
 
@@ -491,11 +483,11 @@ describe('updater', () => {
     appMock.getVersion.mockReturnValue('1.4.120')
     fetchNewerReleaseTagsMock.mockResolvedValue(['v1.4.121-rc.6.perf'])
     autoUpdaterMock.checkForUpdates.mockResolvedValue(undefined)
-    const mainWindow = { webContents: { send: vi.fn() } }
+    const mainWindow = updaterMainWindow(vi.fn())
 
     const { setupAutoUpdater, checkForUpdatesFromMenu } = await loadUpdaterModule()
 
-    setupAutoUpdater(mainWindow as never, { getLastUpdateCheckAt: () => Date.now() })
+    setupAutoUpdater(mainWindow, { getLastUpdateCheckAt: () => Date.now() })
 
     checkForUpdatesFromMenu({ includePerfPrerelease: true })
 
@@ -518,11 +510,11 @@ describe('updater', () => {
     fetchNewerReleaseTagsMock.mockResolvedValue({ tags: [], state: 'no-newer' })
     autoUpdaterMock.checkForUpdates.mockResolvedValue(undefined)
     const sendMock = vi.fn()
-    const mainWindow = { webContents: { send: sendMock } }
+    const mainWindow = updaterMainWindow(sendMock)
 
     const { setupAutoUpdater, checkForUpdatesFromMenu } = await loadUpdaterModule()
 
-    setupAutoUpdater(mainWindow as never, { getLastUpdateCheckAt: () => Date.now() })
+    setupAutoUpdater(mainWindow, { getLastUpdateCheckAt: () => Date.now() })
     const setupFeedUrlCalls = autoUpdaterMock.setFeedURL.mock.calls.length
 
     checkForUpdatesFromMenu({ includePerfPrerelease: true })
@@ -549,11 +541,11 @@ describe('updater', () => {
       .mockResolvedValueOnce(['v1.4.121'])
     autoUpdaterMock.checkForUpdates.mockResolvedValue(undefined)
     const sendMock = vi.fn()
-    const mainWindow = { webContents: { send: sendMock } }
+    const mainWindow = updaterMainWindow(sendMock)
 
     const { setupAutoUpdater, checkForUpdatesFromMenu } = await loadUpdaterModule()
 
-    setupAutoUpdater(mainWindow as never, { getLastUpdateCheckAt: () => Date.now() })
+    setupAutoUpdater(mainWindow, { getLastUpdateCheckAt: () => Date.now() })
 
     checkForUpdatesFromMenu({ includePerfPrerelease: true })
 
@@ -583,11 +575,11 @@ describe('updater', () => {
     fetchNewerReleaseTagsMock.mockResolvedValue({ tags: [], state: 'not-ready' })
     autoUpdaterMock.checkForUpdates.mockResolvedValue(undefined)
     const sendMock = vi.fn()
-    const mainWindow = { webContents: { send: sendMock } }
+    const mainWindow = updaterMainWindow(sendMock)
 
     const { setupAutoUpdater, checkForUpdatesFromMenu } = await loadUpdaterModule()
 
-    setupAutoUpdater(mainWindow as never, { getLastUpdateCheckAt: () => Date.now() })
+    setupAutoUpdater(mainWindow, { getLastUpdateCheckAt: () => Date.now() })
     checkForUpdatesFromMenu({ includePrerelease: true })
 
     await vi.waitFor(() => {
@@ -605,11 +597,11 @@ describe('updater', () => {
 
   it('leaves the feed URL alone for a normal user-initiated check', async () => {
     autoUpdaterMock.checkForUpdates.mockResolvedValue(undefined)
-    const mainWindow = { webContents: { send: vi.fn() } }
+    const mainWindow = updaterMainWindow(vi.fn())
 
     const { setupAutoUpdater, checkForUpdatesFromMenu } = await loadUpdaterModule()
 
-    setupAutoUpdater(mainWindow as never, { getLastUpdateCheckAt: () => Date.now() })
+    setupAutoUpdater(mainWindow, { getLastUpdateCheckAt: () => Date.now() })
     const initialFeedUrlCalls = autoUpdaterMock.setFeedURL.mock.calls.length
 
     checkForUpdatesFromMenu()

@@ -1,0 +1,183 @@
+// Cache host-shipped sources and install guest overlays without binding the hook listener.
+import { existsSync } from 'node:fs'
+
+import { getRelayOpenCodePluginPath, type PluginOverlayManager } from './plugin-overlay'
+import { resolveOpenCodeSourceConfigDir } from './plugin-overlay-env'
+import { resolveOpenCodeConfigDirectory } from '../shared/opencode-config-directory'
+import { assertPluginSourceUnderByteCap } from './plugin-source-limit'
+import {
+  sanitizeWslHookInstanceKey,
+  WSL_HOOK_RELAY_INSTANCE_ENV
+} from '../shared/wsl-hook-relay-contract'
+
+export type InstallPluginsResult = {
+  installed: {
+    opencodeStartupPrompt?: boolean
+    opencode: boolean
+    opencode2?: boolean
+    pi: boolean
+    omp: boolean
+    primeAgent: boolean
+  }
+  overlayDirs: {
+    claudeAgentView?: string
+    claudeConfig?: string
+    opencode?: string
+    opencode2?: string
+    pi?: string
+    omp?: string
+  }
+}
+
+export type InstallPluginsHandler = (params: Record<string, unknown>) => InstallPluginsResult
+
+// OpenCode replaces its default config root when OPENCODE_CONFIG_DIR is set,
+// so mirror the default root into the guest overlay as well as explicit paths.
+export function createInstallPluginsHandler(
+  pluginOverlay: PluginOverlayManager,
+  env: NodeJS.ProcessEnv
+): InstallPluginsHandler {
+  // Rebuild only changed sources: repeat installs share an instance overlay that running/spawning agents may already use.
+  let materialized: { source: string; sourceDir: string | undefined; dir: string } | null = null
+  let materialized2: { source: string; sourceDir: string | undefined; dir: string } | null = null
+
+  return (params) => {
+    const claudeAgentView = params.claudeAgentViewSource
+    assertPluginSourceUnderByteCap('claudeAgentViewSource', claudeAgentView)
+    const startupPrompt = params.opencodeStartupPromptSource
+    const opencode = params.opencodePluginSource
+    const opencode2 = params.opencode2PluginSource
+    const pi = params.piExtensionSource
+    const omp = params.ompExtensionSource
+    const primeAgent = params.primeAgentExtensionSource
+    // Why: bound per-source bytes so a buggy/hostile host can't OOM the guest relay.
+    assertPluginSourceUnderByteCap('opencodeStartupPromptSource', startupPrompt)
+    assertPluginSourceUnderByteCap('opencodePluginSource', opencode)
+    assertPluginSourceUnderByteCap('opencode2PluginSource', opencode2)
+    assertPluginSourceUnderByteCap('piExtensionSource', pi)
+    assertPluginSourceUnderByteCap('ompExtensionSource', omp)
+    assertPluginSourceUnderByteCap('primeAgentExtensionSource', primeAgent)
+    pluginOverlay.setSources({
+      ...(typeof claudeAgentView === 'string' ? { claudeAgentViewSource: claudeAgentView } : {}),
+      opencodeStartupPromptSource: typeof startupPrompt === 'string' ? startupPrompt : undefined,
+      opencodePluginSource: typeof opencode === 'string' ? opencode : undefined,
+      opencode2PluginSource: typeof opencode2 === 'string' ? opencode2 : undefined,
+      piExtensionSource: typeof pi === 'string' ? pi : undefined,
+      ompExtensionSource: typeof omp === 'string' ? omp : undefined,
+      primeAgentExtensionSource: typeof primeAgent === 'string' ? primeAgent : undefined
+    })
+    let opencodeDir: string | undefined
+    const launchKind =
+      params.launchKind === 'pi' || params.launchKind === 'omp' ? params.launchKind : undefined
+    let piDir: string | undefined
+    let ompDir: string | undefined
+    if (pluginOverlay.hasOpenCodeSource()) {
+      // An omitted source leaves the manager's cache untouched, so it counts as unchanged.
+      const incoming = typeof opencode === 'string' ? opencode : null
+      // Include the resolved source dir in the cache key; shell-startup lookup is memoized.
+      const sourceDir =
+        resolveOpenCodeSourceConfigDir(env as Record<string, string>, env.SHELL) ??
+        resolveOpenCodeConfigDirectory(env as Record<string, string>, env.HOME)
+      const existingSourceDir = sourceDir && existsSync(sourceDir) ? sourceDir : undefined
+      const cached = materialized
+      if (
+        cached &&
+        (incoming === null || incoming === cached.source) &&
+        existingSourceDir === cached.sourceDir &&
+        // Why: the dir surviving a failed rebuild proves nothing — the plugin does.
+        existsSync(getRelayOpenCodePluginPath(cached.dir))
+      ) {
+        opencodeDir = cached.dir
+      } else {
+        const overlayId =
+          sanitizeWslHookInstanceKey(env[WSL_HOOK_RELAY_INSTANCE_ENV]) ?? 'wsl-opencode'
+        // Write failure falls back to guest config without status; never pass a Windows overlay path into WSL.
+        opencodeDir = pluginOverlay.materializeOpenCode(overlayId, existingSourceDir) ?? undefined
+        materialized =
+          opencodeDir && incoming !== null
+            ? { source: incoming, sourceDir: existingSourceDir, dir: opencodeDir }
+            : null
+      }
+    }
+    let opencode2Dir: string | undefined
+    if (pluginOverlay.hasOpenCode2Source()) {
+      const incoming = typeof opencode2 === 'string' ? opencode2 : null
+      const sourceDir =
+        resolveOpenCodeSourceConfigDir(env as Record<string, string>, env.SHELL) ??
+        resolveOpenCodeConfigDirectory(env as Record<string, string>, env.HOME)
+      const existingSourceDir = sourceDir && existsSync(sourceDir) ? sourceDir : undefined
+      const cached = materialized2
+      if (
+        cached &&
+        (incoming === null || incoming === cached.source) &&
+        existingSourceDir === cached.sourceDir &&
+        existsSync(getRelayOpenCodePluginPath(cached.dir, 'opencode2'))
+      ) {
+        opencode2Dir = cached.dir
+      } else {
+        const overlayId =
+          sanitizeWslHookInstanceKey(env[WSL_HOOK_RELAY_INSTANCE_ENV]) ?? 'wsl-opencode2'
+        opencode2Dir = pluginOverlay.materializeOpenCode2(overlayId, existingSourceDir) ?? undefined
+        materialized2 =
+          opencode2Dir && incoming !== null
+            ? { source: incoming, sourceDir: existingSourceDir, dir: opencode2Dir }
+            : null
+      }
+    }
+    // Materialize only the explicitly requested agent. Bare shells must not create
+    // ~/.pi/agent or ~/.omp/agent (#10196).
+    if (launchKind === 'pi' || launchKind === 'omp') {
+      const source = launchKind === 'pi' ? pi : omp
+      if (typeof source === 'string') {
+        const result = pluginOverlay.materializePi(`wsl-${launchKind}`, undefined, launchKind, {
+          materializeDefaultHome: true
+        })
+        if (launchKind === 'pi') {
+          piDir = result?.sourceAgentDir
+        } else {
+          ompDir = result?.statusExtensionPath
+        }
+      }
+    }
+    const promptConfigDirs = [opencodeDir, opencode2Dir].filter(
+      (dir): dir is string => typeof dir === 'string'
+    )
+    if (promptConfigDirs.length === 0) {
+      promptConfigDirs.push(
+        resolveOpenCodeSourceConfigDir(
+          Object.fromEntries(
+            Object.entries(env).flatMap(([key, value]) =>
+              typeof value === 'string' ? [[key, value]] : []
+            )
+          ),
+          env.SHELL
+        ) ?? resolveOpenCodeConfigDirectory(env, env.HOME)
+      )
+    }
+    const promptInstallResults = promptConfigDirs.map((dir) =>
+      pluginOverlay.installOpenCodeStartupPromptPlugin(env, dir)
+    )
+    const startupPromptInstalled = promptInstallResults.every(Boolean)
+    const claude = pluginOverlay.claudeAgentView.materialize(
+      env[WSL_HOOK_RELAY_INSTANCE_ENV] ?? 'wsl-claude',
+      env.CLAUDE_CONFIG_DIR
+    )
+    return {
+      installed: {
+        opencodeStartupPrompt: startupPromptInstalled,
+        opencode: pluginOverlay.hasOpenCodeSource(),
+        opencode2: pluginOverlay.hasOpenCode2Source(),
+        pi: pluginOverlay.hasPiSource('pi'),
+        omp: pluginOverlay.hasPiSource('omp'),
+        primeAgent: pluginOverlay.hasPiSource('prime-agent')
+      },
+      overlayDirs: {
+        ...(claude ? { claudeAgentView: claude.pluginDir, claudeConfig: claude.configDir } : {}),
+        ...(opencodeDir ? { opencode: opencodeDir } : {}),
+        ...(opencode2Dir ? { opencode2: opencode2Dir } : {}),
+        ...(piDir ? { pi: piDir } : {}),
+        ...(ompDir ? { omp: ompDir } : {})
+      }
+    }
+  }
+}

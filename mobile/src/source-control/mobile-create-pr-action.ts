@@ -1,12 +1,13 @@
-import type { HostedReviewCreationEligibility } from '../../../src/shared/hosted-review'
+import type { MobileHostedReviewEligibilityReply } from './hosted-review-reply-schema'
 import { supportsHostedReviewCreation } from '../../../src/shared/hosted-review-creation-providers'
+import { resolveCreateReviewIntentEligibility } from '../../../src/shared/source-control-create-review-intent'
 import { hostedReviewCopy } from './hosted-review-copy'
 import { getMobilePrCreateBlockMessage } from './mobile-pr-create'
 
 export type MobileCreatePrEligibilityState =
   | { kind: 'idle' }
-  | { kind: 'loading'; eligibility: HostedReviewCreationEligibility | null }
-  | { kind: 'ready'; eligibility: HostedReviewCreationEligibility }
+  | { kind: 'loading'; eligibility: MobileHostedReviewEligibilityReply | null }
+  | { kind: 'ready'; eligibility: MobileHostedReviewEligibilityReply }
   | { kind: 'error' }
 
 export type MobileCreatePrAction = {
@@ -19,10 +20,17 @@ export type MobileCreatePrAction = {
   onPress: () => void
 }
 
+export type MobileCreatePrPrepareInputs = Omit<
+  Parameters<typeof resolveCreateReviewIntentEligibility>[0],
+  'hostedReviewCreation'
+>
+
 export type BuildMobileCreatePrActionArgs = {
   branch: string | null | undefined
   eligibilityState: MobileCreatePrEligibilityState
   busyAction: string | null
+  // What desktop's intent rule needs to know the branch can be prepared (commit, publish, sync).
+  prepareInputs?: MobileCreatePrPrepareInputs
   onCreatePr: (pushFirst: boolean) => void
 }
 
@@ -43,6 +51,7 @@ export function buildMobileCreatePrAction({
   branch,
   eligibilityState,
   busyAction,
+  prepareInputs,
   onCreatePr
 }: BuildMobileCreatePrActionArgs): MobileCreatePrAction {
   const noop = () => {}
@@ -70,9 +79,7 @@ export function buildMobileCreatePrAction({
       onPress: noop
     }
   }
-  // Why: mirror desktop's structural provider gate (supportsHostedReviewCreation)
-  // instead of relying on the host always emitting a hidden blockedReason for
-  // non-creatable providers.
+  // Mirror the desktop provider gate; do not depend on hosts supplying hidden blocked reasons.
   if (!supportsHostedReviewCreation(eligibility.provider)) {
     return {
       visible: true,
@@ -85,17 +92,19 @@ export function buildMobileCreatePrAction({
   }
   const copy = hostedReviewCopy(eligibility.provider)
   const label = `Create ${copy.titleLabel}`
-  // Any in-flight git work blocks the action: runGitWorkflow no-ops while
-  // busyActionRef is set, so an enabled-looking button would silently do nothing.
+  // Busy workflows no-op; disable the action rather than expose an inert button.
   const busy = busyAction !== null
   const loading = busyAction !== null && BUSY_ACTIONS.has(busyAction)
-  // Why: while a newer eligibility request is loading we keep the prior ready
-  // snapshot for stable chrome, but must not act on it — treat stale-loading as
-  // disabled so a tap cannot fire against an out-of-date canCreate/pushFirst.
+  // Retain stale chrome during reload, but never create from its outdated eligibility.
   const stale = eligibilityState.kind === 'loading'
   const pushFirst = eligibility.blockedReason === 'needs_push'
 
-  if (eligibility.canCreate || pushFirst) {
+  // Desktop's intent rule: a branch Create PR can commit, publish or sync is enterable; the gate rechecks before create.
+  const preparable =
+    prepareInputs !== undefined &&
+    resolveCreateReviewIntentEligibility({ ...prepareInputs, hostedReviewCreation: eligibility })
+      .eligible
+  if (eligibility.canCreate || pushFirst || preparable) {
     const disabled = busy || stale
     return {
       visible: true,
@@ -103,8 +112,7 @@ export function buildMobileCreatePrAction({
       disabled,
       loading,
       pushFirst,
-      // Why: never hand a disabled descriptor a live handler — a tap must be a
-      // true no-op when busy/stale, not a deferred create against stale state.
+      // Disabled descriptors must have no live handler that can act against stale state.
       onPress: disabled ? noop : () => onCreatePr(pushFirst)
     }
   }
@@ -117,7 +125,8 @@ export function buildMobileCreatePrAction({
       body: eligibility.body || '',
       canCreate: false,
       blockedReason: eligibility.blockedReason,
-      nextAction: eligibility.nextAction
+      nextAction: eligibility.nextAction,
+      reviewLookupOutcome: eligibility.reviewLookupOutcome
     }) ?? `This branch is not ready for a ${copy.reviewLabel} yet.`
 
   return {

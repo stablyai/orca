@@ -3,16 +3,17 @@ import {
   InteractionManager,
   Platform,
   Pressable,
-  StyleSheet,
   TextInput,
   View,
   type TextInputProps
 } from 'react-native'
 import { Search, X } from 'lucide-react-native'
-import { colors, radii, spacing, typography } from '../theme/mobile-theme'
+import { colors, radii, spacing } from '../theme/mobile-theme'
+import { themedStyleSheet } from '../theme/themed-styles'
+import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
+import { TEXT_INPUT_FONT_SIZE } from '../platform/text-input-font-size'
 
-// Why: toolbar/list chrome paints and settles after the open tap; native
-// autoFocus alone often fails to raise the soft keyboard on iOS/Android.
+// Delay focus until opening chrome settles; native autoFocus alone often shows caret without iOS/Android keyboard.
 const SEARCH_AUTO_FOCUS_DELAY_MS = 120
 
 type MobileSearchFieldProps = {
@@ -33,10 +34,7 @@ type MobileSearchFieldProps = {
   accessibilityLabel?: string
 }
 
-/**
- * Raised search field used on list screens. Sits above the base/panel canvas
- * so it reads as a tappable control instead of chrome that blends into the list.
- */
+// Raised search field stays visibly tappable above list/panel canvas.
 export function MobileSearchField({
   value,
   onChangeText,
@@ -52,6 +50,7 @@ export function MobileSearchField({
   editable = true,
   accessibilityLabel
 }: MobileSearchFieldProps) {
+  useMobileColorScheme()
   const inputRef = useRef<TextInput>(null)
   const [focused, setFocused] = useState(false)
   const clearVisible = showClear ?? value.length > 0
@@ -62,8 +61,7 @@ export function MobileSearchField({
     }
 
     let timeout: ReturnType<typeof setTimeout> | undefined
-    // Why: wait for the open-press interaction + layout to finish, then focus
-    // so the soft keyboard actually appears (not just a caret with no IME).
+    // Wait for press/layout completion before focusing so soft keyboard appears.
     const task = InteractionManager.runAfterInteractions(() => {
       timeout = setTimeout(() => {
         inputRef.current?.focus()
@@ -84,8 +82,7 @@ export function MobileSearchField({
     } else {
       onChangeText('')
     }
-    // Why: pressing the clear chip steals focus and drops the keyboard;
-    // re-focus so the user can keep typing without tapping the field again.
+    // Clear chip steals focus; restore it so typing can continue without another tap.
     requestAnimationFrame(() => {
       inputRef.current?.focus()
     })
@@ -104,8 +101,7 @@ export function MobileSearchField({
         value={value}
         onChangeText={onChangeText}
         placeholder={placeholder}
-        // Why: textSecondary keeps the hint readable on bgRaised; textMuted
-        // disappears against the raised shell and makes the field look empty.
+        // textSecondary keeps hint readable on bgRaised; textMuted looked empty.
         placeholderTextColor={colors.textSecondary}
         autoCapitalize="none"
         autoCorrect={false}
@@ -132,8 +128,7 @@ export function MobileSearchField({
           accessibilityLabel={clearAccessibilityLabel}
           style={({ pressed }) => [styles.clearButton, pressed && styles.clearButtonPressed]}
         >
-          {/* Why: chip + larger hit target — a bare 14px X was hard to tap and
-              read as decoration rather than a clear control. */}
+          {/* Use chip and large hit target: bare 14px X looked decorative and was hard to tap. */}
           <View style={styles.clearChip}>
             <X size={12} color={colors.surfaceBright} strokeWidth={2.6} />
           </View>
@@ -143,7 +138,7 @@ export function MobileSearchField({
   )
 }
 
-const styles = StyleSheet.create({
+const styles = themedStyleSheet(() => ({
   shell: {
     minHeight: 42,
     flexDirection: 'row',
@@ -159,8 +154,7 @@ const styles = StyleSheet.create({
     paddingVertical: Platform.OS === 'ios' ? spacing.sm : spacing.xs + 2
   },
   shellFocused: {
-    // Why: monochrome focus cue without burning the blue accent token
-    // (reserved for state/selection). textMuted reads clearly on bgRaised.
+    // Monochrome focus cue reserves blue for state/selection; textMuted remains visible on bgRaised.
     borderColor: colors.textMuted
   },
   shellDisabled: {
@@ -172,9 +166,8 @@ const styles = StyleSheet.create({
     padding: 0,
     margin: 0,
     color: colors.textPrimary,
-    fontSize: typography.bodySize,
-    // Why: Android TextInput draws extra vertical padding that misaligns the
-    // icon/clear chip unless we zero it out.
+    fontSize: TEXT_INPUT_FONT_SIZE,
+    // Remove Android TextInput vertical padding to align icon/clear chip.
     includeFontPadding: false,
     textAlignVertical: 'center'
   },
@@ -193,8 +186,7 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     alignItems: 'center',
     justifyContent: 'center',
-    // Why: textMuted reads as a solid chip on bgRaised; borderSubtle was nearly
-    // invisible and made the clear control feel like decorative chrome.
+    // textMuted makes solid clear chip on bgRaised; borderSubtle looked decorative.
     backgroundColor: colors.textMuted
   }
-})
+}))

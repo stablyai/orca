@@ -1,10 +1,14 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Share2, Trash2 } from 'lucide-react'
+import { readIpcErrorDetail } from '@/lib/ipc-error'
 import { cn } from '@/lib/utils'
 import { useAppStore } from '@/store'
 import { discoverSkillsForRuntimeTarget } from '@/runtime/runtime-skills-client'
+import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
 import { useActiveSkillDiscoveryRuntimeTarget } from '@/hooks/use-active-skill-discovery-runtime-target'
 import { useMountedRef } from '@/hooks/useMountedRef'
+import { getRuntimeTargetHostId } from '@/runtime/runtime-client-target'
+import { UNRESOLVED_OWNER_HOST_ID } from '../../../../shared/execution-host'
 import type { DiscoveredSkill, SkillDiscoveryResult } from '../../../../shared/skills'
 import { MAX_SKILL_DELETE_BATCH } from '../../../../shared/skill-delete-contract'
 import { SkillsList } from './SkillsList'
@@ -58,6 +62,12 @@ const NO_FILTERS: SkillsFilterState = {
   agent: 'all'
 }
 
+type SkillScanState = {
+  runtimeTarget: RuntimeClientTarget
+  result: SkillDiscoveryResult | null
+  error: { detail?: string } | null
+}
+
 export default function SkillsPage(): React.JSX.Element {
   const closeSkillsPage = useAppStore((s) => s.closeSkillsPage)
   const pendingSkillShareId = useAppStore((s) => s.pendingSkillShareId)
@@ -66,9 +76,12 @@ export default function SkillsPage(): React.JSX.Element {
   const clearPendingSkillsSharedView = useAppStore((s) => s.clearPendingSkillsSharedView)
   const runtimeTarget = useActiveSkillDiscoveryRuntimeTarget()
   const hostLabel = useSkillDiscoveryHostLabel(runtimeTarget)
-  const [result, setResult] = useState<SkillDiscoveryResult | null>(null)
+  const [scanState, setScanState] = useState<SkillScanState | null>(null)
+  // Target identity changes on host switches and same-ID re-pairs.
+  const currentScan = scanState?.runtimeTarget === runtimeTarget ? scanState : null
+  const result = currentScan?.result ?? null
   const [loading, setLoading] = useState(true)
-  const [scanError, setScanError] = useState<string | null>(null)
+  const scanError = currentScan?.error ?? null
   const [shareSkills, setShareSkills] = useState<DiscoveredSkill[]>([])
   const [selectionMode, setSelectionMode] = useState<'share' | 'delete' | null>(null)
   const [selectedSkillIds, setSelectedSkillIds] = useState<Set<string>>(() => new Set())
@@ -80,9 +93,7 @@ export default function SkillsPage(): React.JSX.Element {
   const ownedShares = useOwnedSkillShares()
   const mountedRef = useMountedRef()
   const scanGenerationRef = useRef(0)
-  // Why a ref: `loadSkills` must not re-identify (and re-scan) when the user
-  // merely switches selection mode. Switching modes clears the selection anyway,
-  // so a one-render lag here cannot retain the wrong rows.
+  // Keep selection mode in a ref so changing modes cannot trigger discovery; mode changes already clear selection.
   const selectionModeRef = useRef(selectionMode)
   useEffect(() => {
     selectionModeRef.current = selectionMode
@@ -91,14 +102,12 @@ export default function SkillsPage(): React.JSX.Element {
   const loadSkills = useCallback(
     async (refresh = false): Promise<void> => {
       setLoading(true)
-      // Why: a cold local scan walks every skill root, so switching runtimes can
-      // land a stale result after a newer one. Only the newest scan may write.
+      // Guard generations because a cold local scan can resolve after a newer remote scan.
       const scanGeneration = ++scanGenerationRef.current
       const isCurrentScan = (): boolean =>
         mountedRef.current && scanGeneration === scanGenerationRef.current
       if (!runtimeTarget) {
-        // Why: keep scanning until the owning runtime is known, rather than
-        // showing the client's skills to someone whose skills live remotely.
+        // Wait for the owner instead of substituting client-local skills for an unresolved remote target.
         return
       }
       try {
@@ -108,8 +117,7 @@ export default function SkillsPage(): React.JSX.Element {
         )
         const local = runtimeTarget.kind === 'local'
         if (isCurrentScan()) {
-          setResult(nextResult)
-          setScanError(null)
+          setScanState({ runtimeTarget, result: nextResult, error: null })
           setSelectedSkillIds((current) =>
             selectionModeRef.current === 'delete'
               ? retainedDeletableSkillSelection(current, nextResult.skills)
@@ -119,11 +127,12 @@ export default function SkillsPage(): React.JSX.Element {
       } catch (error) {
         console.error('Failed to discover skills:', error)
         if (isCurrentScan()) {
-          // Why: a failed scan needs to stay on screen with a retry — a toast
-          // disappears before the user can act on it.
-          setScanError(
-            translate('auto.components.skills.SkillsPage.ea72d6185b', 'Could not scan skills')
-          )
+          // Persist scan errors with retry because toasts disappear before the user can act.
+          setScanState((current) => ({
+            runtimeTarget,
+            result: current?.runtimeTarget === runtimeTarget ? current.result : null,
+            error: { detail: readIpcErrorDetail(error) }
+          }))
         }
       } finally {
         if (isCurrentScan()) {
@@ -168,15 +177,12 @@ export default function SkillsPage(): React.JSX.Element {
 
   const deleteFlow = useSkillDeleteFlow(runtimeTarget, hostLabel, () => {
     exitSelection()
-    // Why an explicit refresh instead of firing the change event: this page
-    // would then run a second, non-refresh scan of the host it just refreshed.
-    // Other subscribers (settings badges, pickers) still hear the event.
+    // Refresh this page explicitly and notify other consumers separately to avoid a duplicate host scan.
     void loadSkills(true)
     window.dispatchEvent(new Event(INSTALLED_AGENT_SKILLS_REFRESHED_EVENT))
   })
 
-  // Why: the search box is shared between the two lists, but a link query means
-  // nothing against skill names and vice versa.
+  // Clear search between skills and shared links because their query domains differ.
   const exitSharedLinks = useCallback((): void => {
     setView('skills')
     setFilters(NO_FILTERS)
@@ -310,7 +316,7 @@ export default function SkillsPage(): React.JSX.Element {
       />
       {scanError ? (
         <SkillsScanErrorBand
-          message={scanError}
+          detail={scanError.detail}
           disabled={loading}
           onRetry={() => {
             deleteFlow.reprobe()
@@ -336,6 +342,9 @@ export default function SkillsPage(): React.JSX.Element {
                   skills={visibleSkills}
                   allSkills={skills}
                   local={local}
+                  ownerHostId={
+                    runtimeTarget ? getRuntimeTargetHostId(runtimeTarget) : UNRESOLVED_OWNER_HOST_ID
+                  }
                   agentByRootPath={agentByRootPath}
                   selectedIds={selectedSkillIds}
                   selectionMode={selectionMode}
@@ -359,7 +368,7 @@ export default function SkillsPage(): React.JSX.Element {
                 />
               ) : skills.length > 0 ? (
                 <SkillsNoMatchesState onClearFilters={() => setFilters(NO_FILTERS)} />
-              ) : (
+              ) : result ? (
                 <SkillsEmptyState
                   onRefresh={() => {
                     deleteFlow.reprobe()
@@ -367,7 +376,7 @@ export default function SkillsPage(): React.JSX.Element {
                   }}
                   onInstallFromLink={openInstallDialog}
                 />
-              )}
+              ) : null}
             </>
           )}
         </div>

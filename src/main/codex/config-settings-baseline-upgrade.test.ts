@@ -85,7 +85,7 @@ describe('Codex settings baseline schema upgrade', () => {
     syncSystemConfigIntoManagedCodexHome()
 
     expect(readBaseline()).toMatchObject({
-      version: 2,
+      version: 3,
       settings: { model: '"gpt-5"', 'tui.theme': '"dark"' }
     })
     expect(readBaseline().conflicts).toBeUndefined()

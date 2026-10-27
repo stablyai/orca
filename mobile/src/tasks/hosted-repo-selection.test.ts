@@ -24,8 +24,6 @@ describe('reconcileRepoSelection', () => {
     expect(reconcileRepoSelection(repos, ['a', 'gone'])).toEqual(new Set(['a']))
   })
 
-  // An empty set means "all repos", so a selection that survives nothing widens
-  // back out rather than filtering every row away.
   it('widens back to all repos when nothing in the selection survives', () => {
     expect(reconcileRepoSelection(repos, ['gone'])).toEqual(new Set())
   })

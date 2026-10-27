@@ -1,8 +1,4 @@
-// NDJSON trace sink with size-based rotation (`main.trace.ndjson` → `.1` → … → `.N`, oldest deleted).
-// Defaults 10 MB × 10 files bound the on-disk footprint at ~100 MB with no network dependency.
-// Writes are synchronous so the error-tracking lane survives a crash — an async buffered flush is
-// exactly what we don't want when main/renderer is about to die. Lines batch into one syscall, with
-// a periodic `batchWindowMs` flush so sparse-trace sessions still land on disk.
+// Flush synchronously so buffered diagnostics can survive crash boundaries; batch sparse writes on a timer.
 
 import {
   chmodSync,
@@ -20,11 +16,13 @@ import {
 import { dirname } from 'node:path'
 
 const DEFAULT_FLUSH_BUFFER_THRESHOLD = 32
-export const DEFAULT_MAX_BYTES = 10 * 1024 * 1024 // 10 MB
+export const DEFAULT_MAX_BYTES = 10 * 1024 * 1024
 export const DEFAULT_MAX_FILES = 10
 export const DEFAULT_BATCH_WINDOW_MS = 200
 const PRIVATE_DIRECTORY_MODE = 0o700
 const PRIVATE_FILE_MODE = 0o600
+export const DROPPED_RECORD_TYPE = 'trace-record-dropped'
+const MAX_MARKER_NAME_CHARS = 120
 
 export type LocalFileSinkOptions = {
   readonly filePath: string
@@ -36,11 +34,9 @@ export type LocalFileSinkOptions = {
 
 export type LocalFileSink = {
   readonly filePath: string
-  /** Serialize and enqueue one JSON-shaped record. */
   push(record: unknown): void
-  /** Force any buffered lines to disk synchronously. Called from shutdown. */
+  /** Flush buffered lines synchronously. */
   flush(): void
-  /** Stop the periodic timer + flush + close the underlying fd. */
   close(): void
 }
 
@@ -50,7 +46,7 @@ function chmodPathIfPresent(path: string, mode: number): void {
       chmodSync(path, mode)
     }
   } catch {
-    /* best effort — permissions hardening must not break trace writes */
+    // Permission hardening must not stop trace writes.
   }
 }
 
@@ -67,17 +63,17 @@ export function createLocalFileSink(opts: LocalFileSinkOptions): LocalFileSink {
   const batchWindowMs = opts.batchWindowMs ?? DEFAULT_BATCH_WINDOW_MS
   const flushThreshold = opts.flushBufferThreshold ?? DEFAULT_FLUSH_BUFFER_THRESHOLD
 
-  // Traces hold paths and crash context; lock to current-user regardless of umask.
+  // Traces contain paths and crash context; restrict access regardless of umask.
   const traceDirectory = dirname(filePath)
   mkdirSync(traceDirectory, { recursive: true, mode: PRIVATE_DIRECTORY_MODE })
   chmodPathIfPresent(traceDirectory, PRIVATE_DIRECTORY_MODE)
   tightenTraceFamilyPermissions(filePath, maxFiles)
 
-  // Hold the fd directly (not `appendFileSync`) so fstatSync sizing can't race another process truncating the file.
+  // Size the open file descriptor so path replacement cannot race sizing.
   let fd: number = openAppend(filePath)
   let currentBytes: number = safeFstatSize(fd)
 
-  let buffer: string[] = []
+  let buffer: (string | null)[] = []
   let timer: NodeJS.Timeout | null = null
   let closed = false
 
@@ -86,7 +82,7 @@ export function createLocalFileSink(opts: LocalFileSinkOptions): LocalFileSink {
     try {
       fchmodSync(handle, PRIVATE_FILE_MODE)
     } catch {
-      /* best effort — Windows can reject POSIX-style chmod on some volumes */
+      // Some Windows volumes reject POSIX chmod.
     }
     return handle
   }
@@ -95,19 +91,16 @@ export function createLocalFileSink(opts: LocalFileSinkOptions): LocalFileSink {
     try {
       return fstatSync(handle).size
     } catch {
-      // fstat failed (fresh-open / out-of-band fd); start at 0 — the next write re-sizes.
+      // Fall back to zero; the next write resizes.
       return 0
     }
   }
 
   function rotate(): void {
-    // Close fd before rename: some filesystems (notably CIFS) refuse to rename an open file.
+    // CIFS and other filesystems may refuse to rename open files.
     try {
       closeSync(fd)
-    } catch {
-      /* swallow — best-effort */
-    }
-    // Cascade base → `.1` → … → `.N`, walking highest index down so we never overwrite a file we still need.
+    } catch {}
     for (let i = maxFiles - 1; i >= 1; i--) {
       const src = i === 1 ? filePath : `${filePath}.${i - 1}`
       const dst = `${filePath}.${i}`
@@ -116,15 +109,14 @@ export function createLocalFileSink(opts: LocalFileSinkOptions): LocalFileSink {
       }
       try {
         if (existsSync(dst)) {
-          // Stale dst left by a crashed prior session; drop it rather than fail the rename.
+          // Remove a destination left by a crashed rotation before renaming.
           unlinkSync(dst)
         }
         renameSync(src, dst)
       } catch {
-        /* keep going — partial rotation is preferable to crash */
+        // Partial rotation must not crash the process.
       }
     }
-    // The post-cascade slot is empty; reopen the base file fresh.
     fd = openAppend(filePath)
     currentBytes = 0
   }
@@ -147,20 +139,15 @@ export function createLocalFileSink(opts: LocalFileSinkOptions): LocalFileSink {
         writeSync(fd, chunk)
         currentBytes += chunkBytes
       } catch {
-        // Reopen + retry once; if that also fails, drop the chunk — telemetry must never crash main.
+        // Retry once; optional diagnostics must not crash main.
         try {
-          // Best-effort close of the prior fd to prevent fd-leak on transient errors.
           try {
             closeSync(fd)
-          } catch {
-            /* swallow — best effort */
-          }
+          } catch {}
           fd = openAppend(filePath)
           writeSync(fd, chunk)
           currentBytes = safeFstatSize(fd)
-        } catch {
-          /* swallow — telemetry must never crash main */
-        }
+        } catch {}
       }
     }
 
@@ -171,15 +158,14 @@ export function createLocalFileSink(opts: LocalFileSinkOptions): LocalFileSink {
     }
 
     for (const line of lines) {
-      const lineBytes = Buffer.byteLength(line, 'utf8')
-      if (lineBytes > maxBytes) {
-        // Oversized single span would blow the maxFiles × maxBytes envelope; drop just this record.
+      if (line === null) {
         continue
       }
+      const lineBytes = Buffer.byteLength(line, 'utf8')
       if (pendingChunkBytes > 0 && currentBytes + pendingChunkBytes + lineBytes > maxBytes) {
         flushPendingChunk()
       }
-      // Skip empty-file rotations (currentBytes > 0) so a new install never produces zero-byte `.N` files.
+      // Avoid empty rotated files on new installations.
       if (currentBytes > 0 && currentBytes + lineBytes > maxBytes) {
         rotate()
       }
@@ -187,6 +173,24 @@ export function createLocalFileSink(opts: LocalFileSinkOptions): LocalFileSink {
       pendingChunkBytes += lineBytes
     }
     flushPendingChunk()
+  }
+
+  /** Count dropped UTF-16 units to avoid scanning rejected payloads for byte length. */
+  function oversizeMarker(record: unknown, droppedChars: number): string | null {
+    const span =
+      typeof record === 'object' && record !== null ? (record as Record<string, unknown>) : {}
+    const name = typeof span.name === 'string' ? span.name.slice(0, MAX_MARKER_NAME_CHARS) : null
+    const traceId = typeof span.traceId === 'string' ? span.traceId.slice(0, 32) : null
+    const marker = `${JSON.stringify({
+      type: DROPPED_RECORD_TYPE,
+      reason: 'oversize',
+      droppedChars,
+      // Let the collector age markers out like spans.
+      endTimeUnixNano: `${Date.now()}000000`,
+      ...(name === null ? {} : { name }),
+      ...(traceId === null ? {} : { traceId })
+    })}\n`
+    return Buffer.byteLength(marker, 'utf8') > maxBytes ? null : marker
   }
 
   function ensureTimer(): void {
@@ -197,7 +201,6 @@ export function createLocalFileSink(opts: LocalFileSinkOptions): LocalFileSink {
       timer = null
       flushBuffer()
     }, batchWindowMs)
-    // unref so the flush timer can't keep the process alive; close() does the final flush on quit.
     if (typeof timer.unref === 'function') {
       timer.unref()
     }
@@ -213,10 +216,15 @@ export function createLocalFileSink(opts: LocalFileSinkOptions): LocalFileSink {
       try {
         line = `${JSON.stringify(record)}\n`
       } catch {
-        // Redactor handles cycles upstream; a throw here means pre-redact data slipped in — drop rather than crash (best-effort).
+        // Drop unserializable input rather than crash main.
         return
       }
-      buffer.push(line)
+      // UTF-8 uses at most three bytes per UTF-16 unit; small records need no admission scan.
+      const oversized =
+        line.length > maxBytes ||
+        (line.length * 3 > maxBytes && Buffer.byteLength(line, 'utf8') > maxBytes)
+      // Preserve flush timing with a marker slot so rejected records leave a visible gap.
+      buffer.push(oversized ? oversizeMarker(record, line.length) : line)
       if (buffer.length >= flushThreshold) {
         flushBuffer()
       } else {
@@ -241,15 +249,12 @@ export function createLocalFileSink(opts: LocalFileSinkOptions): LocalFileSink {
       flushBuffer()
       try {
         closeSync(fd)
-      } catch {
-        /* swallow */
-      }
+      } catch {}
       closed = true
     }
   }
 }
 
-/** Total byte usage across the rotated file family (read-buffer sizing + Privacy footprint hint). */
 export function getRotatedFamilySize(
   filePath: string,
   maxFiles: number = DEFAULT_MAX_FILES
@@ -261,14 +266,14 @@ export function getRotatedFamilySize(
       try {
         total += statSync(path).size
       } catch {
-        /* ignore — file disappeared between exists and stat */
+        // The file may disappear between exists and stat.
       }
     }
   }
   return total
 }
 
-/** Rotated files in age order (newest → oldest) for `bundle.ts` trace collection. */
+/** Newest to oldest. */
 export function listRotatedFiles(filePath: string, maxFiles: number = DEFAULT_MAX_FILES): string[] {
   const out: string[] = []
   for (let i = 0; i < maxFiles; i++) {

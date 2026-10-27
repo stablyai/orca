@@ -96,9 +96,6 @@ afterEach(async () => {
   await _resetWorktreeCreatePreparationsForTests()
 })
 
-// Why this file exists separately from worktree-create-preparation.test.ts: it holds the
-// in-flight checkout cancellation paths (eviction, expiry, caller abort) and the discard that
-// follows, keeping both suites under the test-file line limit.
 describe('worktree create preparation cancellation', () => {
   it('cancels an evicted checkout and cleans up with the original options', async () => {
     let signal: AbortSignal | undefined
@@ -118,7 +115,7 @@ describe('worktree create preparation cancellation', () => {
     expect(signal?.aborted).toBe(true)
     expect((await settled)[0].status).toBe('rejected')
     await flushBackgroundWork()
-    expect(mocks.discard).toHaveBeenCalledWith(repo.path, obsoletePath, {})
+    expect(mocks.discard).toHaveBeenCalledWith(repo.path, obsoletePath, {}, expect.any(String))
   })
 
   it('does not retry a discard whose registration the aborted checkout already removed', async () => {

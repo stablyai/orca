@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { buildMobileSessionTabSnapshots } from './sync-runtime-graph'
+import { buildMobileSessionTabSnapshots } from './sync-runtime-graph/mobile-session-snapshots'
 import { makeState } from './sync-runtime-graph-test-harness'
 import type { AppState } from '../store/types'
 

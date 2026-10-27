@@ -1,6 +1,19 @@
+import { randomUUID } from 'node:crypto'
+import type { WorktreeCatalogVersion } from '../shared/worktree/catalog-version'
+
 const generationByRepoId = new Map<string, number>()
 let generationSequence = 0
 let mutationRevision = 0
+// A new epoch lets clients distinguish a host restart from older catalog publications.
+const LOCAL_WORKTREE_CATALOG_EPOCH = randomUUID()
+
+export function localWorktreeCatalogVersionAt(generation: number): WorktreeCatalogVersion {
+  return { epoch: LOCAL_WORKTREE_CATALOG_EPOCH, sequence: generation }
+}
+
+export function getLocalWorktreeCatalogVersion(repoId: string): WorktreeCatalogVersion {
+  return localWorktreeCatalogVersionAt(getLocalWorktreeScanGeneration(repoId))
+}
 
 export function getLocalWorktreeScanGeneration(repoId: string): number {
   const existing = generationByRepoId.get(repoId)
@@ -17,17 +30,16 @@ export function bumpLocalWorktreeScanGeneration(repoId: string): void {
   mutationRevision += 1
 }
 
-/**
- * Advances on every event above that can change what a worktree scan would find — repo add,
- * removal, update, and scan-cache invalidation — and on nothing else. A cache that must not answer
- * for repos it never saw compares this in O(1) instead of walking the repo list.
- *
- * Why not `generationSequence`: that also advances when `getLocalWorktreeScanGeneration` mints a key
- * for a repo id nothing has scanned yet, which is a read. Keying a snapshot on it would let a read
- * path discard a snapshot that is still perfectly valid.
- *
- * Ordering-only: the value means nothing outside a same-process comparison.
- */
+export function forgetLocalWorktreeScanGeneration(repoId: string): void {
+  generationByRepoId.delete(repoId)
+}
+
+export function retireLocalWorktreeScanGeneration(repoId: string): void {
+  bumpLocalWorktreeScanGeneration(repoId)
+  forgetLocalWorktreeScanGeneration(repoId)
+}
+
+/** Same-process mutation counter; unlike generationSequence, reads cannot advance it. */
 export function getWorktreeScanMutationRevision(): number {
   return mutationRevision
 }
@@ -40,4 +52,8 @@ export function resetLocalWorktreeScanGenerationsForTests(): void {
   generationSequence += 1
   mutationRevision += 1
   generationByRepoId.clear()
+}
+
+export function _getLocalWorktreeScanGenerationCacheSize(): number {
+  return generationByRepoId.size
 }

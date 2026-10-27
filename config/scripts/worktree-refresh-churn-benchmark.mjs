@@ -1,7 +1,15 @@
 #!/usr/bin/env node
 import { performance } from 'node:perf_hooks'
-import { planWorktreeSortOrderUpdates } from '../../src/shared/worktree/sort-order-update.ts'
-import { reuseEqualCatalogRows } from '../../src/renderer/src/store/slices/worktree-catalog-reconciliation.ts'
+import { createJiti } from 'jiti'
+
+// Use jiti: Node type stripping cannot resolve graph’s extensionless imports.
+const jiti = createJiti(import.meta.url)
+const { planWorktreeSortOrderUpdates } = await jiti.import(
+  '../../src/shared/worktree/sort-order-update.ts'
+)
+const { reuseEqualCatalogRows } = await jiti.import(
+  '../../src/renderer/src/store/slices/worktree-catalog-reconciliation.ts'
+)
 
 const WORKTREE_COUNT = 655
 const TAB_COUNT = 1_895

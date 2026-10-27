@@ -4,11 +4,8 @@ import { createSessionOutputPipeline } from './session-output-pipeline'
 import { SessionProducerPause } from './session-producer-pause'
 import { SessionShellReadyBarrier } from './session-shell-ready-barrier'
 import type { TerminalShellRecoveryBarrier } from './terminal-shell-recovery-barrier'
-import {
-  SessionTerminationController,
-  IMMEDIATE_KILL_PHYSICAL_EXIT_TIMEOUT_MS
-} from './session-termination-controller'
-import type { SubprocessHandle } from './session-subprocess-handle'
+import { SessionTerminationController } from './session-termination-controller'
+import type { ChildProcessVerdictRead, SubprocessHandle } from './session-subprocess-handle'
 import type { JobTerminationOutcome } from '../windows/windows-pty-job'
 import type { SessionOptions } from './session-options'
 import type { TuiAgent } from '../../shared/tui-agent'
@@ -29,6 +26,8 @@ export class Session {
   readonly terminalHandle: string | null
   readonly launchAgent: TuiAgent | null
   readonly wslDistro: string | null
+  readonly processNameIsSpawnFile: boolean
+  readonly shellIsRootChild: boolean
   private _state: SessionState = 'running'
   private _exitCode: number | null = null
   private _disposed = false
@@ -38,7 +37,7 @@ export class Session {
   private readonly producerPause: SessionProducerPause
   private readonly shellReady: SessionShellReadyBarrier
   private readonly termination: SessionTerminationController
-  private readonly startupIngress: PtyStartupIngress
+  readonly startupIngress: PtyStartupIngress
   private readonly recoveryBarrier: TerminalShellRecoveryBarrier
 
   constructor(opts: SessionOptions) {
@@ -47,6 +46,8 @@ export class Session {
     this.launchAgent = opts.launchAgent ?? null
     this.wslDistro = opts.wslDistro ?? null
     this.subprocess = opts.subprocess
+    this.processNameIsSpawnFile = opts.subprocess.processNameIsSpawnFile === true
+    this.shellIsRootChild = opts.subprocess.shellIsRootChild === true
     this.onSessionExit = opts.onExit
     const pipeline = createSessionOutputPipeline({
       cols: opts.cols,
@@ -54,6 +55,7 @@ export class Session {
       scrollback: opts.scrollback,
       wslDistro: opts.wslDistro,
       historySeedChunks: opts.historySeedChunks,
+      ownerBackend: opts.ownerBackend,
       subprocess: this.subprocess,
       isAlive: () => !this._disposed && this._state !== 'exited'
     })
@@ -63,7 +65,6 @@ export class Session {
     this.termination = new SessionTerminationController({
       sessionId: this.sessionId,
       subprocess: this.subprocess,
-      launchAgent: this.launchAgent,
       isExited: () => this._state === 'exited',
       releaseProducerPause: (pauseOpts) => this.producerPause.release(pauseOpts)
     })
@@ -86,7 +87,6 @@ export class Session {
       write: (data) => this.subprocess.write(data),
       onEmission: (emission) => this.recoveryBarrier.accept(emission)
     })
-    this.shellReady.startPromptReadinessProbe()
     this.subprocess.onData((data) => {
       if (!this._disposed) {
         this.shellReady.ingestSubprocessData(data)
@@ -115,7 +115,6 @@ export class Session {
     return this._state !== 'exited'
   }
 
-  /** A viewing client is attached; a dropped transport must clear this or pause/resume semantics leak. */
   get hasAttachedClients(): boolean {
     return this.output.hasAttachedClients
   }
@@ -124,8 +123,7 @@ export class Session {
     return this.termination.isTerminating
   }
 
-  /** Claims termination synchronously so attach/re-entry cannot race async
-   * teardown preparation. Returns false when another owner already claimed it. */
+  /** Claim termination before async teardown; false means exited or already claimed. */
   beginTermination(): boolean {
     return this.termination.beginTermination()
   }
@@ -134,29 +132,23 @@ export class Session {
     return this.subprocess.pid
   }
 
-  /** Terminate this session's pty job object. `unavailable` is not proof of death. */
+  /** A PTY job result of unavailable does not prove child exit. */
   terminateOwnedTree(): JobTerminationOutcome {
     return this.subprocess.terminateOwnedTree()
   }
 
   write(data: string): void {
-    if (this._state === 'exited' || this._disposed) {
-      return
+    // Human input must reach rc-file readers while automatic startup commands wait for readiness.
+    if (this.isAlive && !this._disposed && !this.startupIngress.answerLiveQueryReply(data)) {
+      this.subprocess.write(data)
     }
+  }
 
-    // Daemon POSIX PTYs need the local provider's cooked-echo containment (#13137).
-    // DA1/CPR stay immediate unless an echo-risk reply is already held (#13892, #15559).
-    if (this.startupIngress.answerLiveQueryReply(data)) {
-      return
+  /** Orca's own startup command: held by the shell-ready barrier until the shell can read it. */
+  writeStartupCommand(data: string): void {
+    if (this._state !== 'exited' && !this._disposed && !this.shellReady.tryEnqueue(data)) {
+      this.subprocess.write(data)
     }
-
-    // Why: keep queuing during the post-ready flush-gate window ('ready' but not yet flushed); a
-    // direct write would race fresh input ahead of the buffered startup command.
-    if (this.shellReady.tryEnqueue(data)) {
-      return
-    }
-
-    this.subprocess.write(data)
   }
 
   resize(cols: number, rows: number): void {
@@ -167,36 +159,29 @@ export class Session {
     this.subprocess.resize(cols, rows)
   }
 
-  /** Producer-side flow control: stop reading the PTY fd so a flooding child blocks on write.
-   *  Arms the lost-resume failsafe; re-pausing re-arms it. */
-  pauseProducer(): void {
+  /** Apply PTY backpressure with separate lost-resume and stream-stall protection. */
+  pauseProducer(source?: 'stream', onStreamStall?: () => void): void {
     if (this._state === 'exited' || this._disposed) {
       return
     }
-    this.producerPause.pause()
+    this.producerPause.pause(source, this.hasAttachedClients && !this.isTerminating, onStreamStall)
   }
 
-  resumeProducer(): void {
-    this.producerPause.release({ resume: true })
+  resumeProducer(source?: 'stream'): void {
+    this.producerPause.resumeClient(source)
   }
 
-  kill(): void {
-    this.termination.kill()
-  }
-
-  /** Signals a root whose descendant snapshot has completed. */
+  /** Signal the root only after its descendant snapshot has completed. */
   signalTerminationRoot(): void {
     this.termination.signalTerminationRoot()
   }
 
-  /** Starts the graceful-kill deadline when a coordinator owns the snapshot-first portion of teardown. */
+  /** Arm escalation after a coordinator begins snapshot-first teardown. */
   scheduleForceDisposeFallback(): void {
     this.termination.scheduleForceDisposeFallback()
   }
 
-  async forceKillAndWaitForExit(
-    timeoutMs = IMMEDIATE_KILL_PHYSICAL_EXIT_TIMEOUT_MS
-  ): Promise<void> {
+  async forceKillAndWaitForExit(timeoutMs?: number): Promise<void> {
     await this.termination.forceKillAndWaitForExit(timeoutMs)
   }
 
@@ -210,7 +195,7 @@ export class Session {
 
   detachClient(token: symbol): void {
     this.output.detachClient(token)
-    // Why: with no attached client nobody will send resumePty, so a paused shell would wedge until the failsafe; resume eagerly.
+    // With no viewer left to resume the producer, release its pause eagerly.
     if (!this.output.hasAttachedClients) {
       this.producerPause.release({ resume: true })
     }
@@ -241,23 +226,27 @@ export class Session {
     if (this._disposed) {
       return null
     }
-    const releasedHeldBytes =
+    const heldBytes =
       includeSnapshot && opts.teardownSnapshot === true ? this.prepareForFinalSnapshot() : ''
-    return this.output.takePendingOutput(includeSnapshot, releasedHeldBytes, () =>
-      this.getSnapshot()
-    )
+    return this.output.takePendingOutput(includeSnapshot, heldBytes, () => this.getSnapshot())
   }
 
   getCwd(): string | null {
     return this.output.getCwd()
   }
 
-  getForegroundProcess(options?: { rawFallback?: boolean }): string | null {
+  inspectChildProcesses(fresh?: boolean, ignoreDetached?: boolean): ChildProcessVerdictRead {
+    return this.subprocess.inspectChildProcesses?.(fresh, ignoreDetached) ?? 'unverifiable'
+  }
+
+  getForegroundProcess(options?: { rawFallback?: boolean; cachedOnly?: boolean }): string | null {
     return this.subprocess.getForegroundProcess(options)
   }
 
-  async confirmForegroundProcess(): Promise<string | null> {
-    return this.subprocess.confirmForegroundProcess?.() ?? this.subprocess.getForegroundProcess()
+  async confirmForegroundProcess(context?: { decision?: boolean }): Promise<string | null> {
+    return (
+      this.subprocess.confirmForegroundProcess?.(context) ?? this.subprocess.getForegroundProcess()
+    )
   }
 
   confirmShellForeground(): Promise<boolean> {
@@ -266,7 +255,7 @@ export class Session {
 
   async settleShellOwnershipConfirmation(): Promise<void> {
     await this.recoveryBarrier.awaitProofSettled()
-    // Why the fence: a snapshot at settle-resolution must not race the drained prompt's async parse.
+    // Snapshot only after the drained prompt is parsed into the model.
     await this.output.flushParsedWrites()
   }
 
@@ -274,11 +263,14 @@ export class Session {
     this.output.clearScrollback(this.subprocess, this.shellReady.isGatingWrites)
   }
 
+  resetInputModes(): void {
+    this.output.applyInputModeGround(this.recoveryBarrier.groundInputModes())
+  }
+
   prepareForFinalSnapshot(): string {
     const held = this.shellReady.releaseHeldBytes()
     this.startupIngress.snapshotBarrier()
-    // Why last: snapshotBarrier can emit held spans into the barrier, and a
-    // teardown checkpoint mid-episode must not lose the barrier's queued bytes.
+    // Flush last: the ingress snapshot barrier can emit more held bytes into recovery.
     this.recoveryBarrier.flushPending()
     return held
   }
@@ -288,23 +280,18 @@ export class Session {
       return
     }
 
-    // Why: `wasTerminating` below must be read BEFORE the `_state = 'exited'` flip — it guards the
-    // "dispose while kill() in flight" case and the invariant needs the pre-flip `_state`; do NOT move it down.
+    // Capture termination intent before flipping the state to exited.
     this.shellReady.releaseDeviceAttributes()
     this.shellReady.releaseHeldBytes()
     this.startupIngress.drainAndClose()
-    // Why after drainAndClose (and before clearClients below): a dispose
-    // mid-episode must deliver the barrier's queued bytes — drained ingress
-    // included — while clients are attached and the emulator accepts writes.
+    // Deliver drained recovery bytes while clients are attached and the emulator still accepts writes.
     this.recoveryBarrier.flushPending()
     const wasTerminating = this.termination.isTerminating && this._state !== 'exited'
     const clientsToNotify = wasTerminating ? this.output.snapshotClients() : []
     if (wasTerminating) {
       try {
         this.subprocess.forceKill()
-      } catch {
-        /* child may already be gone */
-      }
+      } catch {}
       this._exitCode = -1
       this.termination.clearTerminating()
     }
@@ -322,32 +309,25 @@ export class Session {
     }
   }
 
-  /** fd-release-only teardown for ALREADY-exited sessions still retained in the host map; skips
-   *  SIGKILL, so callers MUST NOT use it on live sessions. Separate method because a reaped pid is
-   *  eligible for POSIX reuse, so SIGKILL could otherwise hit an unrelated process. */
+  /** Free an exited child’s handle without signalling its PID, which may have been reused. */
   disposeSubprocess(): void {
     this.#teardownSubprocess()
     this._state = 'exited'
   }
 
-  /** Orderly-shutdown path (TerminalHost.dispose()) for live sessions: force-kills the child, then
-   *  synchronously frees the ptmx fd, bypassing the 5s KILL_TIMEOUT_MS fallback. Does NOT fan out
-   *  onExit (renderer reconnects cold after daemon exit). Callers MUST check isAlive first. */
+  /** Wait for physical child exit before final shutdown disposal; callers must check isAlive first. */
   async forceKillAndDisposeSubprocess(): Promise<void> {
-    // Why: daemon exit can't neutralize the native handle until a bounded retry lands and onExit proves the child was reaped.
     await this.forceKillAndWaitForExit()
     this.dispose()
   }
 
-  /** Shared teardown for dispose()/forceKillAndDisposeSubprocess(). Does NOT set `_state` — the
-   *  caller owns that after capturing pre-flip invariants (see the wasTerminating capture in dispose). */
+  /** The caller owns state changes after capturing pre-teardown termination intent. */
   #teardownSubprocess(): void {
     if (this._disposed) {
       return
     }
     this._disposed = true
     this.output.markDisposed()
-    // Why: never leave a paused fd behind on teardown; the handle's dead-guard makes this a no-op once the child is reaped.
     this.producerPause.release({ resume: true })
     this.termination.cancelForceKillFallback()
     this.shellReady.dispose()
@@ -355,37 +335,36 @@ export class Session {
   }
 
   private handleSubprocessExit(code: number, cause?: TerminalExitCause): void {
+    // Preserve operator-close intent even when process exit beats the control reply.
+    if (this.termination.isTerminating) {
+      cause = { kind: 'operator_close' }
+    }
     this.termination.markPhysicalExit()
     if (this._disposed) {
       return
     }
 
     this.shellReady.releaseDeviceAttributes()
-    this.shellReady.disposePromptReadinessProbe()
     this.shellReady.releaseHeldBytes()
     this.startupIngress.drainAndClose()
-    // Why after drainAndClose: drained ingress bytes re-enter the barrier and can
-    // open a fresh episode; flushing here delivers them too. A shell exiting
-    // mid-proof must not strand the queued post-133;D prompt — those bytes belong
-    // to clients, records, and history before broadcastExit below.
+    // Flush after ingress drains so prompts held mid-proof reach clients and history before the exit event.
     this.recoveryBarrier.flushPending()
     this._exitCode = code
     this._state = 'exited'
     this.termination.clearTerminating()
-    // Why resume:false — the child is reaped (nothing to unblock); only the failsafe timer must not outlive the session.
+    // The child is reaped; clear pause timers without resuming its handle.
     this.producerPause.release({ resume: false })
 
     this.termination.cancelForceKillFallback()
     this.shellReady.clearReadyTimer()
     this.shellReady.clearFlushGate()
 
-    // Why: release the ptmx fd here or node-pty's _socket leaks the master fd until GC (docs/fix-pty-fd-leak.md).
-    // Not via #teardownSubprocess: it flips `_disposed`, short-circuiting the later Session.dispose() reaper.
+    // Free the native fd before GC without marking Session disposed, which would skip its reaper.
     this.termination.disposeSubprocessHandle()
 
     this.output.broadcastExit(code, this.incarnationId, cause)
 
-    // Why: hand off to the owner's reaper (disposes emulator, drops session from host map); else dead sessions accumulate.
+    // Let the host release the emulator and remove the exited session from its map.
     this.onSessionExit?.(code)
   }
 

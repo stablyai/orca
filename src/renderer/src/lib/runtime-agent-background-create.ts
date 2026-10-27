@@ -1,11 +1,16 @@
+import { buildDefaultTerminalOptions } from '@/lib/pane-manager/pane-terminal-options'
+import { createAgentSessionKeyboardOptions } from '@/runtime/agent-session-keyboard-capability'
 import type { SleepingAgentLaunchConfig } from '../../../shared/agent-session-resume'
 import type { StartupCommandDelivery } from '../../../shared/codex-startup-delivery'
-import type { SessionOptionValue } from '../../../shared/native-chat-session-options'
+import type { SessionOptionValue } from '../../../shared/native-chat/input/native-chat-session-options'
 import type { RuntimeTerminalCreate } from '../../../shared/runtime-types'
 import type { TuiAgent } from '../../../shared/tui-agent'
 import {
+  agentPermissionNeedsPreparedCommand,
+  toAgentLaunchPreferences
+} from '../../../shared/agent-launch-preferences'
+import {
   createAgentSessionCreateOperation,
-  toAgentLaunchPreferences,
   withAgentSessionCreateOperationId
 } from '@/runtime/agent-session-create-operation'
 import { callRuntimeRpc } from '@/runtime/runtime-rpc-client'
@@ -29,32 +34,37 @@ export async function createRuntimeAgentBackgroundTerminal(args: {
     title?: string
   }
 }): Promise<{ terminal: RuntimeTerminalCreate }> {
+  const keyboardProtocol = buildDefaultTerminalOptions().vtExtensions?.kittyKeyboard
+  const keyboardOptions = createAgentSessionKeyboardOptions(keyboardProtocol)
   const operation = createAgentSessionCreateOperation()
-  const launchPreferences = toAgentLaunchPreferences(args.sessionOptions)
+  const launchPreferences = toAgentLaunchPreferences(args.sessionOptions, args.agent)
   return await runRemoteAgentSessionLaunch({
     environmentId: args.environmentId,
-    hostAuthority: () =>
-      operation.run((clientOperationId) =>
-        callRuntimeRpc<{ terminal: RuntimeTerminalCreate }>(
-          { kind: 'environment', environmentId: args.environmentId },
-          'terminal.createAgentSession',
-          withAgentSessionCreateOperationId(
-            {
-              worktree: toRuntimeWorktreeSelector(args.worktreeId),
-              agent: args.agent,
-              ...(args.prompt
-                ? { prompt: args.prompt, promptDelivery: 'auto-submit' as const }
-                : {}),
-              ...(launchPreferences ? { launchPreferences } : {}),
-              placement: { tabId: args.tabId, leafId: args.leafId },
-              // Why: local renderer owns the hidden tab; remote runtime should not reveal UI.
-              presentation: 'background'
-            },
-            clientOperationId
+    hostAuthority: agentPermissionNeedsPreparedCommand(args.agent, args.sessionOptions)
+      ? undefined
+      : () =>
+          operation.run(async (clientOperationId) =>
+            callRuntimeRpc<{ terminal: RuntimeTerminalCreate }>(
+              { kind: 'environment', environmentId: args.environmentId },
+              'terminal.createAgentSession',
+              withAgentSessionCreateOperationId(
+                {
+                  ...(await keyboardOptions(args.environmentId)),
+                  worktree: toRuntimeWorktreeSelector(args.worktreeId),
+                  agent: args.agent,
+                  ...(args.prompt
+                    ? { prompt: args.prompt, promptDelivery: 'auto-submit' as const }
+                    : {}),
+                  ...(launchPreferences ? { launchPreferences } : {}),
+                  placement: { tabId: args.tabId, leafId: args.leafId },
+                  // Why: local renderer owns the hidden tab; remote runtime should not reveal UI.
+                  presentation: 'background'
+                },
+                clientOperationId
+              ),
+              { timeoutMs: 15_000 }
+            )
           ),
-          { timeoutMs: 15_000 }
-        )
-      ),
     legacy: ({ skipCompatibilityCheck }) =>
       callRuntimeRpc<{ terminal: RuntimeTerminalCreate }>(
         { kind: 'environment', environmentId: args.environmentId },
@@ -62,6 +72,7 @@ export async function createRuntimeAgentBackgroundTerminal(args: {
         {
           worktree: toRuntimeWorktreeSelector(args.worktreeId),
           command: args.legacy.command,
+          ...(keyboardProtocol === true ? { terminalKittyKeyboardProtocol: true } : {}),
           ...(args.legacy.startupCommandDelivery
             ? { startupCommandDelivery: args.legacy.startupCommandDelivery }
             : {}),

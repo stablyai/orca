@@ -1,4 +1,7 @@
-type TerminalOutputAckTarget = object
+import type { ForegroundTerminalOutputTarget } from './pane-terminal-foreground-render-settle'
+
+/** The xterm instance the credits belong to; only its reference is used as a key. */
+type TerminalOutputAckTarget = ForegroundTerminalOutputTarget
 
 const inFlightAckCompletions = new WeakMap<TerminalOutputAckTarget, Set<() => void>>()
 

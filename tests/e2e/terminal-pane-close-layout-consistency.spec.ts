@@ -7,36 +7,24 @@ import {
   waitForSessionReady
 } from './helpers/store'
 import {
+  requestTerminalPaneClose,
   sendToTerminal,
   splitActiveTerminalPane,
   waitForActiveTerminalManager,
   waitForPaneIdentitySnapshot
 } from './helpers/terminal'
 import { parkHiddenTabBehindDecoy } from './helpers/terminal-hidden-parking'
+import { readMainLayout } from './helpers/main-terminal-layout'
+import { REQUEST_ACTIVE_TERMINAL_PANE_CLOSE_EVENT } from '../../src/renderer/src/constants/terminal'
 
-/**
- * Repro hunt for the "ghost blank pane" field incident: a split pane whose PTY
- * and leaf→PTY binding were torn down while the persisted layout `root` kept
- * the leaf, so revisiting the tab materialized a permanently blank pane with
- * no terminal behind it.
- *
- * Field state (workspace remote-issue-2, 2026-07-09): root held 3 leaves,
- * ptyIdsByLeafId held 2, no daemon session for the third — the close/exit ran
- * near a hidden/park boundary. Each test here closes (or exits) a split pane
- * at a different phase of the hidden-view parking lifecycle and asserts the
- * invariant that broke in the field:
- *
- *   leaves(persisted root) === keys(persisted ptyIdsByLeafId) === live panes
- *
- * A failing scenario IS the finding — it pins which boundary loses the layout
- * collapse.
- */
+// Ghost-pane repro: remote-issue-2 (2026-07-09) retained three root leaves but only two bindings/live PTYs near a hide/park close boundary.
+// Close or exit at each lifecycle phase and require persisted root leaves === persisted binding keys === live panes.
 
-// Why 2000ms: the override shrinks BOTH cold-park delay and hot-retain, and
-// the hidden-but-mounted scenario needs the shell exit to land well inside the
-// hot-retain window — 500ms let slow shell teardown race past parking and turn
-// that scenario into the exits-while-parked one.
+// Use 2000ms for cold/hot retention: 500ms lets slow shell teardown race past mounted-hidden into parked-exit coverage.
 const PARKING_DELAY_MS = Number(process.env.ORCA_E2E_TERMINAL_PARKING_DELAY_MS) || 2_000
+
+// Why exit 0: zsh startup on macOS can leave $? at 1, and a non-zero exit stays behind the exited card on purpose.
+const CLEAN_SHELL_EXIT = 'exit 0\r'
 
 test.use({
   orcaAppExtraEnv: { ORCA_E2E_TERMINAL_PARKING_DELAY_MS: String(PARKING_DELAY_MS) }
@@ -110,11 +98,7 @@ async function readLayoutConsistency(page: Page, tabId: string): Promise<LayoutC
   }, tabId)
 }
 
-/**
- * The invariant under hunt. Polls so post-close persists can land, then does a
- * final full read whose diff names the divergence (stale root leaf vs dropped
- * binding vs ghost live pane).
- */
+// Poll persistence then read the full shape so failures distinguish stale root leaves, missing bindings and ghost live panes.
 async function expectLayoutConsistent(
   page: Page,
   tabId: string,
@@ -122,8 +106,7 @@ async function expectLayoutConsistent(
   phase: string,
   deadPtyId?: string
 ): Promise<void> {
-  // Why: polling a shape (not a boolean) makes a timeout print the diverged
-  // state — which of root/bindings/live panes went stale is the finding.
+  // Poll a shape so timeout prints the divergent root/binding/live state.
   await expect
     .poll(
       async () => {
@@ -156,18 +139,21 @@ async function expectLayoutConsistent(
     })
 }
 
-async function closeLastPaneOnTab(page: Page, tabId: string): Promise<void> {
-  await page.evaluate((tabId) => {
-    const manager = window.__paneManagers?.get(tabId)
-    if (!manager) {
-      throw new Error(`closeLastPaneOnTab: no mounted pane manager for tab ${tabId}`)
-    }
-    const target = manager.getPanes().at(-1)
-    if (!target) {
-      throw new Error('closeLastPaneOnTab: tab has no panes')
-    }
-    manager.closePane(target.id)
-  }, tabId)
+/** Main's stored panes for the tab are the window's: the close the window drew reached main. */
+async function expectMainHoldsWindowPanes(
+  page: Page,
+  worktreeId: string,
+  tabId: string,
+  phase: string
+): Promise<void> {
+  const { rootLeafIds } = await readLayoutConsistency(page, tabId)
+  await expect
+    .poll(
+      async () =>
+        (await readMainLayout(page, worktreeId)).find(([id]) => id === tabId)?.[1] ?? null,
+      { timeout: 15_000, message: `[${phase}] main's stored panes differ from the window's` }
+    )
+    .toEqual(rootLeafIds)
 }
 
 async function createActiveTerminalTab(page: Page, worktreeId: string): Promise<string> {
@@ -179,7 +165,7 @@ async function createActiveTerminalTab(page: Page, worktreeId: string): Promise<
     const state = store.getState()
     const tab = state.createTab(worktreeId, undefined, undefined, { activate: true })
     state.setActiveTab(tab.id)
-    state.setActiveTabType('terminal')
+    state.setActiveTabType('terminal', store.getState().activeWorktreeId)
     return tab.id
   }, worktreeId)
   await expect
@@ -200,7 +186,7 @@ async function activateTerminalTab(page: Page, tabId: string): Promise<void> {
       throw new Error('activateTerminalTab: window.__store is unavailable')
     }
     const state = store.getState()
-    state.setActiveTabType('terminal')
+    state.setActiveTabType('terminal', store.getState().activeWorktreeId)
     state.setActiveTab(targetTabId)
   }, tabId)
   await expect
@@ -227,8 +213,7 @@ type SplitTabSetup = {
   splitPtyId: string
 }
 
-// Why: every scenario starts from the field shape — a tab whose main pane got
-// a split (the "setup pane" analog) that is fully bound and settled.
+// Seed the field shape: main plus fully bound/settled split pane.
 async function setUpSplitTab(page: Page): Promise<SplitTabSetup> {
   await waitForSessionReady(page)
   const worktreeId = await waitForActiveWorktree(page)
@@ -251,15 +236,16 @@ async function setUpSplitTab(page: Page): Promise<SplitTabSetup> {
 
 test.describe('terminal pane close vs hidden/park lifecycle keeps layout consistent', () => {
   test('control: close while visible', async ({ orcaPage }) => {
-    const { tabId } = await setUpSplitTab(orcaPage)
-    await closeLastPaneOnTab(orcaPage, tabId)
+    const { worktreeId, tabId } = await setUpSplitTab(orcaPage)
+    await requestTerminalPaneClose(orcaPage, tabId, 'last')
     await expectLayoutConsistent(orcaPage, tabId, 1, 'close-visible')
+    await expectMainHoldsWindowPanes(orcaPage, worktreeId, tabId, 'close-visible')
   })
 
   test('close and hide the tab in the same tick', async ({ orcaPage }) => {
     const { worktreeId, tabId } = await setUpSplitTab(orcaPage)
     await orcaPage.evaluate(
-      ({ tabId, worktreeId }) => {
+      ({ tabId, worktreeId, closeEvent }) => {
         const store = window.__store
         const manager = window.__paneManagers?.get(tabId)
         if (!store || !manager) {
@@ -269,31 +255,35 @@ test.describe('terminal pane close vs hidden/park lifecycle keeps layout consist
         if (!target) {
           throw new Error('close+hide: no split pane')
         }
-        manager.closePane(target.id)
+        // The user's close (see requestTerminalPaneClose), sent without waiting for it.
+        manager.setActivePane(target.id, { focus: false })
+        window.dispatchEvent(new CustomEvent(closeEvent, { detail: { tabId } }))
         // Hide tab A before any deferred post-close work can run.
         const state = store.getState()
         const tab = state.createTab(worktreeId, undefined, undefined, { activate: true })
         state.setActiveTab(tab.id)
-        state.setActiveTabType('terminal')
+        state.setActiveTabType('terminal', window.__store?.getState().activeWorktreeId ?? null)
       },
-      { tabId, worktreeId }
+      { tabId, worktreeId, closeEvent: REQUEST_ACTIVE_TERMINAL_PANE_CLOSE_EVENT }
     )
     await orcaPage.waitForTimeout(PARKING_DELAY_MS * 3)
     await activateTerminalTab(orcaPage, tabId)
     await waitForTabRemounted(orcaPage, tabId)
     await expectLayoutConsistent(orcaPage, tabId, 1, 'close-then-hide-same-tick')
+    await expectMainHoldsWindowPanes(orcaPage, worktreeId, tabId, 'close-then-hide-same-tick')
   })
 
   test('close while hidden but still mounted (hot-retain window)', async ({ orcaPage }) => {
     const { worktreeId, tabId } = await setUpSplitTab(orcaPage)
     await createActiveTerminalTab(orcaPage, worktreeId)
-    await closeLastPaneOnTab(orcaPage, tabId)
+    await requestTerminalPaneClose(orcaPage, tabId, 'last')
     await parkHiddenTabBehindDecoy(orcaPage, worktreeId, tabId, {
       parkDelayMs: PARKING_DELAY_MS
     })
     await activateTerminalTab(orcaPage, tabId)
     await waitForTabRemounted(orcaPage, tabId)
     await expectLayoutConsistent(orcaPage, tabId, 1, 'close-while-hidden-mounted')
+    await expectMainHoldsWindowPanes(orcaPage, worktreeId, tabId, 'close-while-hidden-mounted')
   })
 
   test('close immediately after reveal remount, before panes settle', async ({ orcaPage }) => {
@@ -305,19 +295,14 @@ test.describe('terminal pane close vs hidden/park lifecycle keeps layout consist
     await activateTerminalTab(orcaPage, tabId)
     await waitForTabRemounted(orcaPage, tabId)
     // Close as soon as the manager exists — panes may still be attaching.
-    await orcaPage.evaluate((tabId) => {
-      const manager = window.__paneManagers?.get(tabId)
-      const target = manager?.getPanes().at(-1)
-      if (manager && target) {
-        manager.closePane(target.id)
-      }
-    }, tabId)
+    await requestTerminalPaneClose(orcaPage, tabId, 'last')
     await expectLayoutConsistent(orcaPage, tabId, 1, 'close-mid-reveal')
+    await expectMainHoldsWindowPanes(orcaPage, worktreeId, tabId, 'close-mid-reveal')
   })
 
   test('clean visible close survives a later park/reveal cycle', async ({ orcaPage }) => {
     const { worktreeId, tabId } = await setUpSplitTab(orcaPage)
-    await closeLastPaneOnTab(orcaPage, tabId)
+    await requestTerminalPaneClose(orcaPage, tabId, 'last')
     await expectLayoutConsistent(orcaPage, tabId, 1, 'pre-park close')
     await createActiveTerminalTab(orcaPage, worktreeId)
     await parkHiddenTabBehindDecoy(orcaPage, worktreeId, tabId, {
@@ -326,18 +311,19 @@ test.describe('terminal pane close vs hidden/park lifecycle keeps layout consist
     await activateTerminalTab(orcaPage, tabId)
     await waitForTabRemounted(orcaPage, tabId)
     await expectLayoutConsistent(orcaPage, tabId, 1, 'post-park-reveal')
+    await expectMainHoldsWindowPanes(orcaPage, worktreeId, tabId, 'post-park-reveal')
   })
 
   test('split pane shell exits while hidden but still mounted', async ({ orcaPage }) => {
     const { worktreeId, tabId, splitPtyId } = await setUpSplitTab(orcaPage)
     await createActiveTerminalTab(orcaPage, worktreeId)
-    // The setup-script analog: the split's shell ends on its own while the
-    // tab is hidden-but-mounted.
-    await sendToTerminal(orcaPage, splitPtyId, 'exit\r')
+    // Model setup-script shell exit while hidden but still mounted.
+    await sendToTerminal(orcaPage, splitPtyId, CLEAN_SHELL_EXIT)
     await orcaPage.waitForTimeout(PARKING_DELAY_MS / 2)
     await activateTerminalTab(orcaPage, tabId)
     await waitForTabRemounted(orcaPage, tabId)
     await expectLayoutConsistent(orcaPage, tabId, 1, 'shell-exit-while-hidden-mounted', splitPtyId)
+    await expectMainHoldsWindowPanes(orcaPage, worktreeId, tabId, 'shell-exit-while-hidden-mounted')
   })
 
   test('split pane shell exits while the tab is parked', async ({ orcaPage }) => {
@@ -346,13 +332,12 @@ test.describe('terminal pane close vs hidden/park lifecycle keeps layout consist
     await parkHiddenTabBehindDecoy(orcaPage, worktreeId, tabId, {
       parkDelayMs: PARKING_DELAY_MS
     })
-    await sendToTerminal(orcaPage, splitPtyId, 'exit\r')
+    await sendToTerminal(orcaPage, splitPtyId, CLEAN_SHELL_EXIT)
     await orcaPage.waitForTimeout(PARKING_DELAY_MS)
     await activateTerminalTab(orcaPage, tabId)
     await waitForTabRemounted(orcaPage, tabId)
-    // Why: the parked exit is deliberately deferred (no PaneManager to promote
-    // siblings) — the reveal remount owns the per-leaf teardown. This asserts
-    // that ownership actually resolves instead of leaving a ghost pane.
+    // Parked exits defer sibling promotion to reveal’s remounted PaneManager; require per-leaf teardown to finish without a ghost pane.
     await expectLayoutConsistent(orcaPage, tabId, 1, 'shell-exit-while-parked', splitPtyId)
+    await expectMainHoldsWindowPanes(orcaPage, worktreeId, tabId, 'shell-exit-while-parked')
   })
 })

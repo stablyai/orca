@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   TerminalStreamOpcode,
   decodeTerminalStreamFrame,
@@ -14,6 +14,18 @@ import {
   createRemoteRuntimeTransportMocks,
   type MultiplexSubscriptionCallbacks
 } from './remote-runtime-pty-transport-test-harness'
+
+const appStore = vi.hoisted(() => ({
+  getState: vi.fn(() => {
+    throw new Error('These transport fixtures must not read app-store ownership')
+  })
+}))
+
+vi.mock('@/store', () => ({ useAppStore: { getState: appStore.getState } }))
+
+afterEach(() => {
+  expect(appStore.getState).not.toHaveBeenCalled()
+})
 
 let subscriptionCallbacks: MultiplexSubscriptionCallbacks = null
 let resolvedPaneHandle = 'terminal-1'
@@ -64,20 +76,14 @@ describe('createRemoteRuntimePtyTransport', () => {
   })
 
   it('replays a viewport that changed during the subscribe round-trip once the stream is current', async () => {
-    // Why: a resize landing while the subscribe is in flight takes the one-shot
-    // RPC fallback, which is refresh-only (no leak) and no-ops before the stream
-    // floor exists. The transport must replay the latest viewport over the
-    // now-current stream so the PTY does not stall at the subscribe-time width.
-    // Hold the multiplex "ready" to keep the round-trip open across the resize.
+    // Hold subscribe readiness while resize hits the refresh-only fallback; the resolved stream must replay latest geometry before the viewport timer.
     runtimeSubscribe.mockImplementation(
       async (_args: unknown, callbacks: typeof subscriptionCallbacks) => {
         subscriptionCallbacks = callbacks
         return { unsubscribe: vi.fn(), sendBinary: subscriptionSendBinary }
       }
     )
-    // Drain microtasks WITHOUT advancing timers, so the 33ms viewport batcher
-    // cannot fire — the replayed Resize frame must come from the round-trip
-    // flush alone (this test fails if that flush is removed).
+    // Drain only microtasks so the 33ms viewport timer cannot hide a missing round-trip flush.
     const flushMicrotasks = async (): Promise<void> => {
       for (let i = 0; i < 20; i += 1) {
         await Promise.resolve()
@@ -108,8 +114,7 @@ describe('createRemoteRuntimePtyTransport', () => {
 
     // The Subscribe frame still carries the subscribe-time viewport...
     expect(latestSubscribePayload().viewport).toEqual({ cols: 80, rows: 24 })
-    // ...and the newer viewport is replayed as a Resize frame over the stream,
-    // before the batcher's 33ms timer could have produced it.
+    // Require newer Resize before the batch timer can produce it.
     const resizeFrame = latestFrameForOpcode(TerminalStreamOpcode.Resize)
     expect(resizeFrame && decodeTerminalStreamJson(resizeFrame.payload)).toEqual({
       cols: 132,
@@ -143,9 +148,9 @@ describe('createRemoteRuntimePtyTransport', () => {
       })
       await vi.waitFor(() => expect(runtimeSubscribe).toHaveBeenCalled())
       expect(transport.claimViewport?.(101, 33)).toBe(true)
-      expect(transport.sendInput('x')).toBe(true)
+      expect(transport.sendInput('x', 'driving')).toBe(true)
       expect(transport.sendInputImmediate('\x1b[?1;2c')).toBe(true)
-      expect(transport.sendInput('z')).toBe(true)
+      expect(transport.sendInput('z', 'driving')).toBe(true)
       await vi.advanceTimersByTimeAsync(8)
       expect(runtimeCall).not.toHaveBeenCalledWith(
         expect.objectContaining({ method: 'terminal.send' })
@@ -165,8 +170,7 @@ describe('createRemoteRuntimePtyTransport', () => {
           TerminalStreamOpcode.Input
         ])
       })
-      // Query replies must stay their own frames: concatenating them with keystrokes
-      // produces a mixed payload the host classifier cannot recognise as a reply.
+      // Keep query replies in distinct frames so host classification can recognize them after queued typing.
       const input = subscriptionSendBinary.mock.calls
         .map((call) => decodeTerminalStreamFrame(call[0]))
         .filter((frame) => frame?.opcode === TerminalStreamOpcode.Input)
@@ -193,8 +197,8 @@ describe('createRemoteRuntimePtyTransport', () => {
       runtimeCall.mockClear()
       subscriptionSendBinary.mockClear()
 
-      expect(transport.sendInput('a')).toBe(true)
-      expect(transport.sendInput('b')).toBe(true)
+      expect(transport.sendInput('a', 'driving')).toBe(true)
+      expect(transport.sendInput('b', 'driving')).toBe(true)
       expect(runtimeCall).not.toHaveBeenCalled()
 
       await vi.runOnlyPendingTimersAsync()
@@ -210,37 +214,7 @@ describe('createRemoteRuntimePtyTransport', () => {
     }
   })
 
-  it('sends coalesced terminal input as binary frames once the stream is established', async () => {
-    vi.useFakeTimers()
-    try {
-      const { createRemoteRuntimePtyTransport } = await import('./remote-runtime-pty-transport')
-      const transport = createRemoteRuntimePtyTransport('env-1', {
-        worktreeId: 'wt-1',
-        tabId: 'tab-1',
-        leafId: 'pane:1'
-      })
-
-      await transport.connect({ url: '', callbacks: {} })
-      const { streamId } = latestSubscribePayload()
-      runtimeCall.mockClear()
-      subscriptionSendBinary.mockClear()
-
-      expect(transport.sendInput('a')).toBe(true)
-      expect(transport.sendInput('b')).toBe(true)
-      await vi.runOnlyPendingTimersAsync()
-
-      expect(runtimeCall).not.toHaveBeenCalled()
-      expect(subscriptionSendBinary).toHaveBeenCalledTimes(1)
-      const frame = decodeTerminalStreamFrame(subscriptionSendBinary.mock.calls[0][0])
-      expect(frame?.opcode).toBe(TerminalStreamOpcode.Input)
-      expect(frame?.streamId).toBe(streamId)
-      expect(frame ? decodeTerminalStreamText(frame.payload) : '').toBe('ab')
-    } finally {
-      vi.useRealTimers()
-    }
-  })
-
-  it('does not coalesce large remote terminal input chunks above the terminal ceiling', async () => {
+  it('flushes a full terminal input chunk before the following input', async () => {
     vi.useFakeTimers()
     try {
       const { createRemoteRuntimePtyTransport } = await import('./remote-runtime-pty-transport')
@@ -256,14 +230,14 @@ describe('createRemoteRuntimePtyTransport', () => {
       subscriptionSendBinary.mockClear()
 
       const chunk = 'x'.repeat(TERMINAL_INPUT_CHUNK_MAX_BYTES)
-      expect(transport.sendInput(chunk)).toBe(true)
+      expect(transport.sendInput(chunk, 'driving')).toBe(true)
       expect(subscriptionSendBinary).toHaveBeenCalledTimes(1)
       let frame = decodeTerminalStreamFrame(subscriptionSendBinary.mock.calls[0][0])
       expect(frame?.opcode).toBe(TerminalStreamOpcode.Input)
       expect(frame?.streamId).toBe(streamId)
       expect(frame ? decodeTerminalStreamText(frame.payload) : '').toBe(chunk)
 
-      expect(transport.sendInput('tail')).toBe(true)
+      expect(transport.sendInput('tail', 'driving')).toBe(true)
       await vi.runOnlyPendingTimersAsync()
 
       expect(runtimeCall).not.toHaveBeenCalled()
@@ -299,7 +273,7 @@ describe('createRemoteRuntimePtyTransport', () => {
 
     await transport.connect({ url: '', callbacks: {} })
 
-    await expect(transport.sendInputAccepted?.('\x03')).resolves.toBe(true)
+    await expect(transport.sendInputAccepted?.('\x03', 'driving')).resolves.toBe(true)
     expect(runtimeCall).toHaveBeenCalledWith({
       selector: 'env-1',
       method: 'terminal.send',
@@ -339,8 +313,8 @@ describe('createRemoteRuntimePtyTransport', () => {
       await transport.connect({ url: '', callbacks: {} })
       subscriptionSendBinary.mockClear()
 
-      expect(transport.sendInput('a')).toBe(true)
-      await expect(transport.sendInputAccepted?.('\x03')).resolves.toBe(true)
+      expect(transport.sendInput('a', 'driving')).toBe(true)
+      await expect(transport.sendInputAccepted?.('\x03', 'driving')).resolves.toBe(true)
       await vi.runOnlyPendingTimersAsync()
 
       expect(runtimeCall).toHaveBeenCalledWith({
@@ -383,7 +357,7 @@ describe('createRemoteRuntimePtyTransport', () => {
 
     await transport.connect({ url: '', callbacks: {} })
 
-    await expect(transport.sendInputAccepted?.('\x03')).resolves.toBe(false)
+    await expect(transport.sendInputAccepted?.('\x03', 'driving')).resolves.toBe(false)
   })
 
   it('splits large acknowledged remote input before terminal.send RPCs', async () => {
@@ -415,7 +389,7 @@ describe('createRemoteRuntimePtyTransport', () => {
     await transport.connect({ url: '', callbacks: {} })
 
     const chunk = '😀'.repeat(TERMINAL_INPUT_CHUNK_MAX_BYTES / 4)
-    await expect(transport.sendInputAccepted?.(`${chunk}tail`)).resolves.toBe(true)
+    await expect(transport.sendInputAccepted?.(`${chunk}tail`, 'driving')).resolves.toBe(true)
 
     const sendCalls = runtimeCall.mock.calls.filter((call) => call[0].method === 'terminal.send')
     expect(sendCalls).toHaveLength(2)
@@ -455,7 +429,7 @@ describe('createRemoteRuntimePtyTransport', () => {
       await transport.connect({ url: '', callbacks: {} })
       runtimeCall.mockClear()
 
-      const accepted = transport.sendInputAccepted?.(text)
+      const accepted = transport.sendInputAccepted?.(text, 'driving')
       await Promise.resolve()
 
       expect(runtimeCall).not.toHaveBeenCalled()
@@ -502,9 +476,9 @@ describe('createRemoteRuntimePtyTransport', () => {
 
     await transport.connect({ url: '', callbacks: {} })
 
-    await expect(transport.sendInputAccepted?.(`${firstChunk}${rejectedChunk}after`)).resolves.toBe(
-      false
-    )
+    await expect(
+      transport.sendInputAccepted?.(`${firstChunk}${rejectedChunk}after`, 'driving')
+    ).resolves.toBe(false)
 
     const sendTexts = runtimeCall.mock.calls
       .filter((call) => call[0].method === 'terminal.send')
@@ -530,7 +504,10 @@ describe('createRemoteRuntimePtyTransport', () => {
     runtimeCall.mockClear()
 
     await expect(
-      transport.sendInputAccepted?.('😀'.repeat(Math.floor(TERMINAL_INPUT_MAX_BYTES / 4) + 1))
+      transport.sendInputAccepted?.(
+        '😀'.repeat(Math.floor(TERMINAL_INPUT_MAX_BYTES / 4) + 1),
+        'driving'
+      )
     ).resolves.toBe(false)
     expect(runtimeCall).not.toHaveBeenCalled()
   })
@@ -550,7 +527,7 @@ describe('createRemoteRuntimePtyTransport', () => {
       runtimeCall.mockClear()
       subscriptionSendBinary.mockClear()
 
-      expect(transport.sendInput('echo one\necho two\r\n')).toBe(true)
+      expect(transport.sendInput('echo one\necho two\r\n', 'driving')).toBe(true)
       await vi.runOnlyPendingTimersAsync()
 
       expect(runtimeCall).not.toHaveBeenCalled()
@@ -614,7 +591,7 @@ describe('createRemoteRuntimePtyTransport', () => {
       subscriptionSendBinary.mockClear()
 
       expect(transport.claimViewport?.(101, 33)).toBe(true)
-      expect(transport.sendInput('x')).toBe(true)
+      expect(transport.sendInput('x', 'driving')).toBe(true)
       await vi.runOnlyPendingTimersAsync()
 
       const frames = subscriptionSendBinary.mock.calls.map((call) =>

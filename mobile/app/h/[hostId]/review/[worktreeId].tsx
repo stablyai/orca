@@ -1,15 +1,20 @@
-import { useCallback, useMemo } from 'react'
-import { useLocalSearchParams, useRouter } from 'expo-router'
-import { MobileDiffReviewScreenView } from '../../../../src/components/MobileDiffReviewScreenView'
+import { withWorkspaceRoute } from '../../../../src/navigation/workspace-route'
 import {
-  firstReviewParam,
-  normalizeReviewFilterParam
-} from '../../../../src/session/mobile-diff-review-screen-model'
-import { normalizeReviewAreaParam } from '../../../../src/session/mobile-diff-review-positioning'
-import { useMobileDiffReviewController } from '../../../../src/session/use-mobile-diff-review-controller'
-import { useForceReconnect, useHostClient } from '../../../../src/transport/client-context'
+  useWorkspaceExecutionHost,
+  workspaceRouteParams
+} from '../../../../src/navigation/workspace-execution-host'
+import { useLocalSearchParams } from 'expo-router'
+import { firstReviewParam } from '../../../../src/session/mobile-diff-review-screen-model'
+import {
+  shellScreenRoute,
+  shellScreenRouteKey
+} from '../../../../src/mobile-web-shell/shell-screen-route'
+import { MobileWebShellScreen } from '../../../../src/mobile-web-shell/MobileWebShellScreen'
+import { PageRouteUnavailableScreen } from '../../../../src/mobile-web-shell/PageRouteUnavailableScreen'
 
-export default function MobileDiffReviewScreen() {
+// Review and explorer routes both have five segments; exact static-segment matching distinguishes review from files.
+export default withWorkspaceRoute(function MobileDiffReviewScreen() {
+  // Use firstReviewParam: encoding String(array) could turn repeated query keys into a valid but nonexistent workspace segment.
   const params = useLocalSearchParams<{
     hostId?: string | string[]
     worktreeId?: string | string[]
@@ -20,36 +25,28 @@ export default function MobileDiffReviewScreen() {
   }>()
   const hostId = firstReviewParam(params.hostId)
   const worktreeId = firstReviewParam(params.worktreeId)
-  const name = firstReviewParam(params.name)
-  const initialFilter = normalizeReviewFilterParam(firstReviewParam(params.scope))
-  const initialFile = firstReviewParam(params.file)
-  const initialArea = normalizeReviewAreaParam(firstReviewParam(params.area))
-  const initialTarget = useMemo(
-    () => (initialFile && initialArea ? { filePath: initialFile, area: initialArea } : null),
-    [initialArea, initialFile]
-  )
-  const router = useRouter()
-  const { client, state: connState } = useHostClient(hostId)
-  const forceReconnect = useForceReconnect()
+  const executionHost = useWorkspaceExecutionHost()
 
-  const openSession = useCallback(() => {
-    const query = name ? `?${new URLSearchParams({ name }).toString()}` : ''
-    router.replace(
-      `/h/${encodeURIComponent(hostId)}/session/${encodeURIComponent(worktreeId)}${query}`
-    )
-  }, [hostId, name, router, worktreeId])
+  // Carry screen query params unchanged, omitting empty values: screen normalizers distinguish absence from empty scope/file/area.
+  const routeParams: Record<string, string> = {
+    ...Object.fromEntries(
+      (['name', 'scope', 'file', 'area'] as const)
+        .map((key) => [key, firstReviewParam(params[key])] as const)
+        .filter(([, value]) => value !== '')
+    ),
+    ...workspaceRouteParams(executionHost)
+  }
+  const route =
+    hostId && worktreeId
+      ? shellScreenRoute({
+          pathname: `/h/${encodeURIComponent(hostId)}/review/${encodeURIComponent(worktreeId)}`,
+          ...(Object.keys(routeParams).length === 0 ? {} : { params: routeParams })
+        })
+      : null
 
-  const controller = useMobileDiffReviewController({
-    client,
-    connState,
-    hostId,
-    worktreeId,
-    name,
-    initialFilter,
-    initialTarget,
-    onOpenSession: openSession,
-    onReconnect: forceReconnect
-  })
-
-  return <MobileDiffReviewScreenView controller={controller} onBack={() => router.back()} />
-}
+  if (route === null) {
+    return <PageRouteUnavailableScreen hostId={hostId} />
+  }
+  // Key by full route including file params to dispose the old grant-bearing bridge on route changes.
+  return <MobileWebShellScreen key={shellScreenRouteKey(route)} hostId={hostId} route={route} />
+})

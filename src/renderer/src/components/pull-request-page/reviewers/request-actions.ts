@@ -1,9 +1,9 @@
 import { toast } from 'sonner'
-import { callRuntimeRpc, getActiveRuntimeTarget } from '@/runtime/runtime-rpc-client'
+import { callRuntimeRpc } from '@/runtime/runtime-rpc-client'
 import {
   normalizeGitHubReviewerLogins,
   parseGitHubReviewerInputLogins
-} from '@/components/github-pr-reviewer-display'
+} from '../../../../../shared/github/pr-reviewer-display'
 import { notifyWorkItemDetailsMutation } from '@/components/github/github-work-item-comment-mutations'
 import { buildRequestedReviewUsers } from '@/components/github/work-item-state-presentation'
 import { getGitHubRuntimeRepoId } from '@/lib/github-source-runtime-context'
@@ -14,7 +14,7 @@ import type {
 } from '../../../../../shared/github/pull-request-types'
 import type { GitHubWorkItem } from '../../../../../shared/github/work-item-types'
 import type { TaskSourceContext } from '../../../../../shared/task-source-context'
-import type { GlobalSettings } from '../../../../../shared/global-settings-types'
+import type { RuntimeClientTarget } from '../../../../../shared/runtime-client-target'
 
 const MAX_REQUESTED_REVIEWERS = 15
 
@@ -27,7 +27,7 @@ type ReviewerRequestActionsArgs = {
   selectedReviewerLogins: Set<string>
   localReviewRequests: GitHubAssignableUser[]
   setLocalReviewRequests: (value: GitHubAssignableUser[]) => void
-  sourceSettings: Pick<GlobalSettings, 'activeRuntimeEnvironmentId'>
+  ownerTarget: RuntimeClientTarget
   repoPath: string | null
   sourceContext?: TaskSourceContext | null
   item: GitHubWorkItem
@@ -70,7 +70,7 @@ export function createReviewerRequestActions(args: ReviewerRequestActionsArgs): 
       )
       return
     }
-    const target = getActiveRuntimeTarget(args.sourceSettings)
+    const target = args.ownerTarget
     if (target.kind !== 'environment' && !args.repoPath) {
       toast.error(
         translate(
@@ -171,7 +171,7 @@ export function createReviewerRequestActions(args: ReviewerRequestActionsArgs): 
     if (logins.length === 0) {
       return
     }
-    const target = getActiveRuntimeTarget(args.sourceSettings)
+    const target = args.ownerTarget
     if (target.kind !== 'environment' && !args.repoPath) {
       toast.error(
         translate(

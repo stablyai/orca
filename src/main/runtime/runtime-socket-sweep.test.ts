@@ -6,14 +6,10 @@ import {
   createRuntimeTransportMetadata,
   RUNTIME_SOCKET_NAME_REGEX,
   sweepOrphanedRuntimeSockets
-} from './runtime-rpc'
+} from './runtime-rpc/runtime-rpc-socket-metadata'
 
 describe('sweepOrphanedRuntimeSockets', () => {
-  // Why: a pid we know is always alive and is never the test runner's own
-  // pid — init on POSIX, so process.kill(1, 0) resolves without ESRCH. Using
-  // this synthetic pid for ownPid cleanly separates three retention branches
-  // (own-pid-skipped / alive-non-own-retained / dead-swept) into distinct
-  // observations.
+  // Use an always-live non-runner pid (POSIX init) to distinguish own-pid skip, live sibling retention and dead sweep.
   const SYNTHETIC_OWN_PID = 1
   const KNOWN_DEAD_PID = 99999999
 
@@ -34,15 +30,9 @@ describe('sweepOrphanedRuntimeSockets', () => {
 
       sweepOrphanedRuntimeSockets(userDataPath, SYNTHETIC_OWN_PID)
 
-      // Why: own pid (1) is skipped by the ownPid === pid early-exit.
       expect(existsSync(ownPidSocket)).toBe(true)
-      // Why: alive non-own pid — process.kill(pid, 0) succeeds without
-      // throwing, so the sweep leaves it alone.
       expect(existsSync(aliveSocket)).toBe(true)
-      // Why: dead pid — process.kill throws ESRCH, sweep removes it.
       expect(existsSync(deadSocket)).toBe(false)
-      // Why: regex miss — not `o-<digits>-<suffix>.sock` shape, so the
-      // sweep never touches it.
       expect(existsSync(unrelatedFile)).toBe(true)
     }
   )
@@ -54,9 +44,7 @@ describe('sweepOrphanedRuntimeSockets', () => {
   })
 
   it('regex invariant: matches sockets produced by createRuntimeTransportMetadata', () => {
-    // Why: if the socket-name factory ever changes shape (e.g. adds a new
-    // separator or allows different characters), the sweep will silently
-    // stop matching real sockets. Assert the two stay in lockstep.
+    // Pin factory and sweep naming together or new socket shapes silently stop matching.
     const userDataPath = '/tmp'
     const transport = createRuntimeTransportMetadata(userDataPath, 12345, 'linux', 'rt_abcdef')
     expect(transport.kind).toBe('unix')
@@ -68,9 +56,7 @@ describe('sweepOrphanedRuntimeSockets', () => {
   })
 
   it('regex invariant: also matches the fallback runtimeId suffix ("rt")', () => {
-    // Why: createRuntimeTransportMetadata falls back to the literal 'rt'
-    // suffix when the runtimeId contains no allowed characters; the sweep
-    // regex must still match that shape.
+    // Even sanitized runtime ids with fallback suffix rt must match sweep naming.
     const userDataPath = '/tmp'
     const transport = createRuntimeTransportMetadata(userDataPath, 99, 'darwin', '!!!!')
     if (transport.kind !== 'unix') {

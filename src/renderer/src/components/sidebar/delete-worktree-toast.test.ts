@@ -2,9 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { getDeleteWorktreeToastCopy } from './delete-worktree-toast'
 import { classifyWorktreeForceDeleteReason } from '../../../../shared/worktree/removal'
 
-// Why: production never hands this function a literal reason — the store derives it from
-// classifyWorktreeForceDeleteReason (store/slices/worktrees.ts). Passing one in would let a
-// message the classifier rejects still render the force copy, testing a UI that never runs.
+// Use the production classifier so tests cannot render force-delete copy for an unreachable reason.
 function toastCopyForRemovalError(worktreeName: string, error: string): unknown {
   return getDeleteWorktreeToastCopy(worktreeName, classifyWorktreeForceDeleteReason(error), error)
 }
@@ -18,8 +16,6 @@ describe('getDeleteWorktreeToastCopy', () => {
     })
   })
 
-  // Why (#11960): the PTY gate's error tells the user to force-delete, so the
-  // toast has to actually offer it — a reason of null hides the button entirely.
   it('uses terminal-teardown guidance when a PTY stop could not be proven', () => {
     expect(
       toastCopyForRemovalError(
@@ -34,8 +30,6 @@ describe('getDeleteWorktreeToastCopy', () => {
     })
   })
 
-  // Why: Force Delete proceeds on a proven-live PTY too, so the copy must not describe
-  // that as an unconfirmed exit — the user is killing a terminal Orca watched running.
   it('names the running terminals when verification proved they are still live', () => {
     expect(
       toastCopyForRemovalError(
@@ -50,8 +44,34 @@ describe('getDeleteWorktreeToastCopy', () => {
     })
   })
 
-  // Why: a sweep that never answered wedges removal the same way, and the waiver clears
-  // both — so it must reach the same force affordance instead of a dead end.
+  it('offers force delete when an agent session could not be confirmed closed', () => {
+    expect(
+      toastCopyForRemovalError(
+        'feature/foo',
+        'Refusing to remove worktree with running agent sessions: repo-1::/w — could not confirm these closed: 1 agent session (claude). Retry with force delete (--force) to remove it anyway.'
+      )
+    ).toEqual({
+      title: 'Failed to delete workspace feature/foo',
+      description:
+        'Orca could not confirm every agent session in this workspace has closed, so it stopped before deleting any files. Use Force Delete to remove it anyway.',
+      isDestructive: false
+    })
+  })
+
+  it('names the running agent sessions when the close left them attached', () => {
+    expect(
+      toastCopyForRemovalError(
+        'feature/foo',
+        'Refusing to remove worktree with running agent sessions: repo-1::/w — still live: 2 agent sessions (claude, codex). Retry with force delete (--force) to remove it anyway.'
+      )
+    ).toEqual({
+      title: 'Failed to delete workspace feature/foo',
+      description:
+        'This workspace still has running agent sessions that Orca could not close, so it stopped before deleting any files. Force Delete will discard any work they hold.',
+      isDestructive: false
+    })
+  })
+
   it('offers force delete when the teardown sweep itself timed out', () => {
     expect(
       toastCopyForRemovalError(
@@ -66,8 +86,6 @@ describe('getDeleteWorktreeToastCopy', () => {
     })
   })
 
-  // Why: the same wedge worded by the provider instead of the deadline — a dropped SSH
-  // channel — must reach the same offer, or the escape hatch misses the case it was for.
   it('offers force delete when the sweep failed rather than timed out', () => {
     expect(
       toastCopyForRemovalError(

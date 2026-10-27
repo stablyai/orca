@@ -1,4 +1,4 @@
-import type { WebContents } from 'electron'
+import type { PtyRendererDelivery } from '../session'
 import {
   didFinishLoadHandler,
   didFinishLoadWebContents,
@@ -27,13 +27,12 @@ export function clearDidFinishLoadHandler(): void {
 }
 
 export function markRendererPtysHiddenForRendererLifecycleReset(): void {
-  // A reload/crash in the breadcrumb history is load-bearing context for any freeze report.
   mainDeliveryBreadcrumbs.record('renderer-lifecycle-reset')
-  // Why: renderer-owned hints die with the page; clear visibility so surviving daemon/SSH PTYs fail closed until the new renderer reports.
+  // Visibility hints belong to the dead page; surviving PTYs must wait for fresh reports.
   const activePriorityChanged = activeRendererPtys.size > 0
   activeRendererPtys.clear()
   visibleRendererPtys.clear()
-  // Why: the dead page never ACKs its in-flight bytes, so leaked accounting would delivery-gate surviving PTYs forever after a reload/crash.
+  // The dead page cannot ACK; retire its accounting so surviving PTYs do not remain gated.
   resetRendererDeliveryAccountingForLifecycleReset()
   if (activePriorityChanged) {
     invalidatePendingPtyDrainPriority()
@@ -60,9 +59,14 @@ export function clearRendererLifecycleResetHandlers(): void {
   setRendererLifecycleResetState({ contents: null, handler: null, navigation: null })
 }
 
-export function registerRendererLifecycleResetHandlers(webContents: WebContents): void {
+export function registerRendererLifecycleResetHandlers(
+  webContents?: PtyRendererDelivery['webContents']
+): void {
   clearRendererLifecycleResetHandlers()
   markRendererPtysHiddenForRendererLifecycleReset()
+  if (!webContents) {
+    return
+  }
   const handler = markRendererPtysHiddenForRendererLifecycleReset
   const navigationHandler = (details: { isMainFrame: boolean; isSameDocument: boolean }) => {
     if (!details.isMainFrame || details.isSameDocument) {

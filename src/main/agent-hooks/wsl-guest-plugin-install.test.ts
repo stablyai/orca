@@ -26,9 +26,33 @@ describe('requestGuestOpenCodeOverlayDir', () => {
     })
   })
 
+  // OpenCode major versions need separate overlays because each plugin gates on its version.
+  it('carries the per-major guest overlay dirs independently', async () => {
+    const { mux } = fakeMux(async () => ({
+      overlayDirs: {
+        opencode: '/home/jin/.orca-relay/opencode-overlays/x',
+        opencode2: '/home/jin/.orca-relay/opencode2-overlays/y'
+      }
+    }))
+    await expect(requestGuestOpenCodeOverlayDir(mux, deps(), 'Ubuntu')).resolves.toEqual({
+      kind: 'dir',
+      dir: '/home/jin/.orca-relay/opencode-overlays/x',
+      dir2: '/home/jin/.orca-relay/opencode2-overlays/y'
+    })
+  })
+
+  it('reports an OpenCode 2 overlay even when the v1 overlay is missing', async () => {
+    const { mux } = fakeMux(async () => ({
+      overlayDirs: { opencode2: '/home/jin/.orca-relay/opencode2-overlays/y' }
+    }))
+    await expect(requestGuestOpenCodeOverlayDir(mux, deps(), 'Ubuntu')).resolves.toEqual({
+      kind: 'dir',
+      dir2: '/home/jin/.orca-relay/opencode2-overlays/y'
+    })
+  })
+
   it("reports 'none' when the guest answered but materialization produced no dir", async () => {
-    // Why: distinct from 'unavailable' — the caller must CLEAR a previously recorded
-    // dir here, since a rebuild that failed after wiping leaves it plugin-less.
+    // A failed rebuild invalidates the previously recorded overlay, unlike an unavailable guest.
     const { mux } = fakeMux(async () => ({ installed: { opencode: true }, overlayDirs: {} }))
     await expect(requestGuestOpenCodeOverlayDir(mux, deps(), 'Ubuntu')).resolves.toEqual({
       kind: 'none'

@@ -2,8 +2,7 @@ import type { Mock } from 'vitest'
 import type { SleepingAgentLaunchConfig } from '../../../shared/agent-session-resume'
 import type { TuiAgent } from '../../../shared/tui-agent'
 
-// Why: the terminal-create scenario returns spies whose inferred types can't be named
-// across module boundaries, so the harness annotates itself with the shapes below.
+// Annotate scenario spy shapes because inferred types cannot be named across module boundaries.
 
 export type ListenerRef<TListener> = { current: TListener | null }
 
@@ -21,6 +20,7 @@ export type TerminalCreateListenerPayload = {
   activate?: boolean
   focus?: boolean
   presentation?: 'background' | 'focused'
+  surfaceOwner?: false
   tabId?: string
   leafId?: string
   splitFromLeafId?: string
@@ -53,7 +53,6 @@ export type FocusTerminalListenerPayload = {
   scrollToBottomIfOutputSinceLastView?: boolean
 }
 
-/** Store surface useIpcEvents reads while surfacing a terminal create. */
 export type TerminalCreateSurfacingStore = {
   setUpdateStatus: SpyMock
   createTab: Mock<
@@ -78,8 +77,12 @@ export type TerminalCreateSurfacingStore = {
   clearAgentLaunchConfig: SpyMock
   updateTabPtyId: Mock<(tabId: string, ptyId: string) => void>
   setTabLayout: Mock<(tabId: string, layout: unknown) => void>
-  tabsByWorktree: Record<string, { id: string; ptyId?: string | null; title?: string }[]>
+  tabsByWorktree: Record<
+    string,
+    { id: string; ptyId?: string | null; title?: string; agentLaunchPane?: { leafId: string } }[]
+  >
   folderWorkspaces: unknown[]
+  sleepingAgentSessionsByPaneKey: Record<string, unknown>
   projectGroups: unknown[]
   repos: { id: string; connectionId: string | null; executionHostId: string }[]
   worktreesByRepo: Record<string, { id: string; repoId: string }[]>
@@ -106,6 +109,7 @@ export type TerminalCreateSurfacingStore = {
   setSshConnectionState: SpyMock
   setSshTargetLabels: SpyMock
   setPortForwards: SpyMock
+  setUnrestoredPortForwards: SpyMock
   clearPortForwards: SpyMock
   setDetectedPorts: SpyMock
   enqueueSshCredentialRequest: SpyMock
@@ -114,7 +118,6 @@ export type TerminalCreateSurfacingStore = {
   settings: {
     terminalFontSize: number
     experimentalNativeChat: boolean
-    openAgentTabsInChatByDefault: boolean
     activeRuntimeEnvironmentId: string | undefined
   }
 }
@@ -149,5 +152,4 @@ export type TerminalCreateSurfacingScenario = Pick<
     (data: RequestTerminalCreateListenerPayload) => void
   >
   focusTerminalListenerRef: ListenerRef<(data: FocusTerminalListenerPayload) => void>
-  newTerminalTabListenerRef: ListenerRef<() => void>
 }

@@ -1,0 +1,398 @@
+diff --git a/dist/cjs/extractor/core/extractor.js b/dist/cjs/extractor/core/extractor.js
+index 6d61ade2471..23ad9f5ba49 100644
+--- a/dist/cjs/extractor/core/extractor.js
++++ b/dist/cjs/extractor/core/extractor.js
+@@ -143,6 +143,8 @@ const extractionSiteRegexes = new WeakMap();
+  * @internal
+  */
+ function mayContainExtractionSite(code, config) {
++    // Escaped identifiers need the parser; comments can separate a name from its call.
++    if (code.includes('\\u')) return true;
+     let re = extractionSiteRegexes.get(config);
+     if (!re) {
+         const calls = new Set(['t']);
+@@ -160,7 +162,7 @@ function mayContainExtractionSite(code, config) {
+         for (const component of config.extract.transComponents || ['Trans'])
+             names.add(component.split('.').pop());
+         const alt = (set) => [...set].map(s => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('|');
+-        re = new RegExp(`(?<!\\w)(?:(?:${alt(calls)})\\s*(?:\\?\\.\\s*)?[(<]|(?:${alt(names)})(?![\\w$]))`);
++        re = new RegExp(`(?<![\\w$])(?:${alt(calls)}|${alt(names)})(?![\\w$])`);
+         extractionSiteRegexes.set(config, re);
+     }
+     return re.test(code);
+@@ -185,13 +187,15 @@ function mayContainExtractionSite(code, config) {
+  *
+  * @internal
+  */
+-async function processFile(file, plugins, astVisitors, pluginContext, config, logger$1 = new logger.ConsoleLogger(), fileErrors) {
++async function processFile(file, plugins, astVisitors, pluginContext, config, logger$1 = new logger.ConsoleLogger(), fileErrors, parsedFiles) {
+     try {
+         // Skip directories that happen to match file-extension globs (e.g. a directory named "Foo.tsx")
+         const fileStat = await promises.stat(file);
+         if (fileStat.isDirectory())
+             return;
+-        let code = await promises.readFile(file, 'utf-8');
++        const cached = parsedFiles?.get(file);
++        parsedFiles?.delete(file);
++        let code = cached?.code ?? await promises.readFile(file, 'utf-8');
+         // Run onLoad hooks from plugins with error handling.
+         // Track whether any plugin actually transformed the code so we can make
+         // the right parse decision for non-native file types (e.g. .svelte, .vue).
+@@ -241,59 +245,61 @@ async function processFile(file, plugins, astVisitors, pluginContext, config, lo
+         const isTypeScriptFile = effectiveExt === '.ts' || effectiveExt === '.tsx' || effectiveExt === '.mts' || effectiveExt === '.cts';
+         const isTSX = effectiveExt === '.tsx';
+         const isJSX = effectiveExt === '.jsx';
+-        let ast;
+-        try {
+-            ast = await core.parse(code, {
+-                syntax: isTypeScriptFile ? 'typescript' : 'ecmascript',
+-                tsx: isTSX,
+-                jsx: isJSX,
+-                decorators: true,
+-                dynamicImport: true,
+-                comments: true,
+-            });
+-        }
+-        catch (err) {
+-            // Fallback for .ts files with JSX (already present)
+-            if (effectiveExt === '.ts' && !isTSX) {
+-                try {
+-                    ast = await core.parse(code, {
+-                        syntax: 'typescript',
+-                        tsx: true,
+-                        decorators: true,
+-                        dynamicImport: true,
+-                        comments: true,
+-                    });
+-                    logger$1.info?.(`Parsed ${file} using TSX fallback`);
+-                }
+-                catch (err2) {
+-                    throw new validation.ExtractorError('Failed to process file', file, err2);
+-                }
+-                // Fallback for .js files with JSX
++        let ast = cached?.ast;
++        if (!cached) {
++            try {
++                ast = await core.parse(code, {
++                    syntax: isTypeScriptFile ? 'typescript' : 'ecmascript',
++                    tsx: isTSX,
++                    jsx: isJSX,
++                    decorators: true,
++                    dynamicImport: true,
++                    comments: true,
++                });
+             }
+-            else if (effectiveExt === '.js' && !isJSX) {
+-                try {
+-                    ast = await core.parse(code, {
+-                        syntax: 'ecmascript',
+-                        jsx: true,
+-                        decorators: true,
+-                        dynamicImport: true,
+-                        comments: true,
+-                    });
+-                    logger$1.info?.(`Parsed ${file} using JSX fallback`);
++            catch (err) {
++                // Fallback for .ts files with JSX (already present)
++                if (effectiveExt === '.ts' && !isTSX) {
++                    try {
++                        ast = await core.parse(code, {
++                            syntax: 'typescript',
++                            tsx: true,
++                            decorators: true,
++                            dynamicImport: true,
++                            comments: true,
++                        });
++                        logger$1.info?.(`Parsed ${file} using TSX fallback`);
++                    }
++                    catch (err2) {
++                        throw new validation.ExtractorError('Failed to process file', file, err2);
++                    }
++                    // Fallback for .js files with JSX
+                 }
+-                catch (err2) {
+-                    throw new validation.ExtractorError('Failed to process file', file, err2);
++                else if (effectiveExt === '.js' && !isJSX) {
++                    try {
++                        ast = await core.parse(code, {
++                            syntax: 'ecmascript',
++                            jsx: true,
++                            decorators: true,
++                            dynamicImport: true,
++                            comments: true,
++                        });
++                        logger$1.info?.(`Parsed ${file} using JSX fallback`);
++                    }
++                    catch (err2) {
++                        throw new validation.ExtractorError('Failed to process file', file, err2);
++                    }
++                }
++                else {
++                    throw new validation.ExtractorError('Failed to process file', file, err);
+                 }
+             }
+-            else {
+-                throw new validation.ExtractorError('Failed to process file', file, err);
+-            }
++            // Normalize SWC span offsets so every span is a file-relative (0-based)
++            // character index.  SWC accumulates byte offsets across successive parse()
++            // calls and Module.span.start points to the first token, NOT to byte 0 of
++            // the source.
++            astUtils.normalizeSpansToCharIndices(ast, code);
+         }
+-        // Normalize SWC span offsets so every span is a file-relative (0-based)
+-        // character index.  SWC accumulates byte offsets across successive parse()
+-        // calls and Module.span.start points to the first token, NOT to byte 0 of
+-        // the source.
+-        astUtils.normalizeSpansToCharIndices(ast, code);
+         // "Wire up" the visitor's scope method to the context.
+         // This avoids a circular dependency while giving plugins access to the scope.
+         pluginContext.getVarFromScope = astVisitors.getVarFromScope.bind(astVisitors);
+@@ -344,7 +350,7 @@ async function processFile(file, plugins, astVisitors, pluginContext, config, lo
+  * @param logger - Logger for warnings/errors
+  * @param fileErrors - Optional array to collect per-file error messages
+  */
+-async function preScanFile(file, astVisitors, config, logger$1 = new logger.ConsoleLogger(), fileErrors) {
++async function preScanFile(file, astVisitors, config, logger$1 = new logger.ConsoleLogger(), fileErrors, parsedFiles) {
+     try {
+         // Skip directories that happen to match file-extension globs (e.g. a directory named "Foo.tsx")
+         const fileStat = await promises.stat(file);
+@@ -396,6 +402,8 @@ async function preScanFile(file, astVisitors, config, logger$1 = new logger.Cons
+         astUtils.normalizeSpansToCharIndices(ast, code);
+         astVisitors.setCurrentFile(file, code);
+         astVisitors.preScanForConstants(ast);
++        if (parsedFiles && mayContainExtractionSite(code, config))
++            parsedFiles.set(file, { code, ast });
+     }
+     catch (error) {
+         if (error instanceof pluginManager.ConflictError)
+diff --git a/dist/cjs/extractor/core/key-finder.js b/dist/cjs/extractor/core/key-finder.js
+index 1411f287157..200b6b974b6 100644
+--- a/dist/cjs/extractor/core/key-finder.js
++++ b/dist/cjs/extractor/core/key-finder.js
+@@ -40,6 +40,8 @@ async function findKeys(config, logger$1 = new logger.ConsoleLogger(), fileError
+     const plugins = pluginsOrUndefined || [];
+     const sourceFiles = await processSourceFiles(config);
+     const allKeys = new Map();
++    // Retain only translation-site trees; plugins can transform code between passes.
++    const parsedFiles = plugins.length === 0 ? new Map() : undefined;
+     // 1. Create the base context with config and logger.
+     const pluginContext = pluginManager.createPluginContext(allKeys, plugins, otherConfig, logger$1);
+     // 2. Create hooks for plugins to hook into AST
+@@ -92,7 +94,7 @@ async function findKeys(config, logger$1 = new logger.ConsoleLogger(), fileError
+     //    correctly even when the defining constants file is processed after the file that
+     //    uses the identifier.
+     for (const file of sourceFiles) {
+-        await extractor.preScanFile(file, astVisitors$1, otherConfig, logger$1, fileErrors);
++        await extractor.preScanFile(file, astVisitors$1, otherConfig, logger$1, fileErrors, parsedFiles);
+     }
+     // 6b. Mirror declarations onto the local names they were imported as, so that
+     //     `import { ResourceStatus as Status }` resolves like the unaliased import.
+@@ -100,7 +102,7 @@ async function findKeys(config, logger$1 = new logger.ConsoleLogger(), fileError
+     // 7. Extraction pass: all shared tables are now fully populated, so every
+     //    identifier reference can be resolved regardless of file order.
+     for (const file of sourceFiles) {
+-        await extractor.processFile(file, plugins, astVisitors$1, pluginContext, otherConfig, logger$1, fileErrors);
++        await extractor.processFile(file, plugins, astVisitors$1, pluginContext, otherConfig, logger$1, fileErrors, parsedFiles);
+     }
+     // 7. Run onEnd hooks
+     for (const plugin of plugins) {
+diff --git a/dist/esm/extractor/core/extractor.js b/dist/esm/extractor/core/extractor.js
+index 910bdb6e25e..a3868d29950 100644
+--- a/dist/esm/extractor/core/extractor.js
++++ b/dist/esm/extractor/core/extractor.js
+@@ -141,6 +141,8 @@ const extractionSiteRegexes = new WeakMap();
+  * @internal
+  */
+ function mayContainExtractionSite(code, config) {
++    // Escaped identifiers need the parser; comments can separate a name from its call.
++    if (code.includes('\\u')) return true;
+     let re = extractionSiteRegexes.get(config);
+     if (!re) {
+         const calls = new Set(['t']);
+@@ -158,7 +160,7 @@ function mayContainExtractionSite(code, config) {
+         for (const component of config.extract.transComponents || ['Trans'])
+             names.add(component.split('.').pop());
+         const alt = (set) => [...set].map(s => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('|');
+-        re = new RegExp(`(?<!\\w)(?:(?:${alt(calls)})\\s*(?:\\?\\.\\s*)?[(<]|(?:${alt(names)})(?![\\w$]))`);
++        re = new RegExp(`(?<![\\w$])(?:${alt(calls)}|${alt(names)})(?![\\w$])`);
+         extractionSiteRegexes.set(config, re);
+     }
+     return re.test(code);
+@@ -183,13 +185,15 @@ function mayContainExtractionSite(code, config) {
+  *
+  * @internal
+  */
+-async function processFile(file, plugins, astVisitors, pluginContext, config, logger = new ConsoleLogger(), fileErrors) {
++async function processFile(file, plugins, astVisitors, pluginContext, config, logger = new ConsoleLogger(), fileErrors, parsedFiles) {
+     try {
+         // Skip directories that happen to match file-extension globs (e.g. a directory named "Foo.tsx")
+         const fileStat = await stat(file);
+         if (fileStat.isDirectory())
+             return;
+-        let code = await readFile(file, 'utf-8');
++        const cached = parsedFiles?.get(file);
++        parsedFiles?.delete(file);
++        let code = cached?.code ?? await readFile(file, 'utf-8');
+         // Run onLoad hooks from plugins with error handling.
+         // Track whether any plugin actually transformed the code so we can make
+         // the right parse decision for non-native file types (e.g. .svelte, .vue).
+@@ -239,59 +243,61 @@ async function processFile(file, plugins, astVisitors, pluginContext, config, lo
+         const isTypeScriptFile = effectiveExt === '.ts' || effectiveExt === '.tsx' || effectiveExt === '.mts' || effectiveExt === '.cts';
+         const isTSX = effectiveExt === '.tsx';
+         const isJSX = effectiveExt === '.jsx';
+-        let ast;
+-        try {
+-            ast = await parse(code, {
+-                syntax: isTypeScriptFile ? 'typescript' : 'ecmascript',
+-                tsx: isTSX,
+-                jsx: isJSX,
+-                decorators: true,
+-                dynamicImport: true,
+-                comments: true,
+-            });
+-        }
+-        catch (err) {
+-            // Fallback for .ts files with JSX (already present)
+-            if (effectiveExt === '.ts' && !isTSX) {
+-                try {
+-                    ast = await parse(code, {
+-                        syntax: 'typescript',
+-                        tsx: true,
+-                        decorators: true,
+-                        dynamicImport: true,
+-                        comments: true,
+-                    });
+-                    logger.info?.(`Parsed ${file} using TSX fallback`);
+-                }
+-                catch (err2) {
+-                    throw new ExtractorError('Failed to process file', file, err2);
+-                }
+-                // Fallback for .js files with JSX
++        let ast = cached?.ast;
++        if (!cached) {
++            try {
++                ast = await parse(code, {
++                    syntax: isTypeScriptFile ? 'typescript' : 'ecmascript',
++                    tsx: isTSX,
++                    jsx: isJSX,
++                    decorators: true,
++                    dynamicImport: true,
++                    comments: true,
++                });
+             }
+-            else if (effectiveExt === '.js' && !isJSX) {
+-                try {
+-                    ast = await parse(code, {
+-                        syntax: 'ecmascript',
+-                        jsx: true,
+-                        decorators: true,
+-                        dynamicImport: true,
+-                        comments: true,
+-                    });
+-                    logger.info?.(`Parsed ${file} using JSX fallback`);
++            catch (err) {
++                // Fallback for .ts files with JSX (already present)
++                if (effectiveExt === '.ts' && !isTSX) {
++                    try {
++                        ast = await parse(code, {
++                            syntax: 'typescript',
++                            tsx: true,
++                            decorators: true,
++                            dynamicImport: true,
++                            comments: true,
++                        });
++                        logger.info?.(`Parsed ${file} using TSX fallback`);
++                    }
++                    catch (err2) {
++                        throw new ExtractorError('Failed to process file', file, err2);
++                    }
++                    // Fallback for .js files with JSX
+                 }
+-                catch (err2) {
+-                    throw new ExtractorError('Failed to process file', file, err2);
++                else if (effectiveExt === '.js' && !isJSX) {
++                    try {
++                        ast = await parse(code, {
++                            syntax: 'ecmascript',
++                            jsx: true,
++                            decorators: true,
++                            dynamicImport: true,
++                            comments: true,
++                        });
++                        logger.info?.(`Parsed ${file} using JSX fallback`);
++                    }
++                    catch (err2) {
++                        throw new ExtractorError('Failed to process file', file, err2);
++                    }
++                }
++                else {
++                    throw new ExtractorError('Failed to process file', file, err);
+                 }
+             }
+-            else {
+-                throw new ExtractorError('Failed to process file', file, err);
+-            }
++            // Normalize SWC span offsets so every span is a file-relative (0-based)
++            // character index.  SWC accumulates byte offsets across successive parse()
++            // calls and Module.span.start points to the first token, NOT to byte 0 of
++            // the source.
++            normalizeSpansToCharIndices(ast, code);
+         }
+-        // Normalize SWC span offsets so every span is a file-relative (0-based)
+-        // character index.  SWC accumulates byte offsets across successive parse()
+-        // calls and Module.span.start points to the first token, NOT to byte 0 of
+-        // the source.
+-        normalizeSpansToCharIndices(ast, code);
+         // "Wire up" the visitor's scope method to the context.
+         // This avoids a circular dependency while giving plugins access to the scope.
+         pluginContext.getVarFromScope = astVisitors.getVarFromScope.bind(astVisitors);
+@@ -342,7 +348,7 @@ async function processFile(file, plugins, astVisitors, pluginContext, config, lo
+  * @param logger - Logger for warnings/errors
+  * @param fileErrors - Optional array to collect per-file error messages
+  */
+-async function preScanFile(file, astVisitors, config, logger = new ConsoleLogger(), fileErrors) {
++async function preScanFile(file, astVisitors, config, logger = new ConsoleLogger(), fileErrors, parsedFiles) {
+     try {
+         // Skip directories that happen to match file-extension globs (e.g. a directory named "Foo.tsx")
+         const fileStat = await stat(file);
+@@ -394,6 +400,8 @@ async function preScanFile(file, astVisitors, config, logger = new ConsoleLogger
+         normalizeSpansToCharIndices(ast, code);
+         astVisitors.setCurrentFile(file, code);
+         astVisitors.preScanForConstants(ast);
++        if (parsedFiles && mayContainExtractionSite(code, config))
++            parsedFiles.set(file, { code, ast });
+     }
+     catch (error) {
+         if (error instanceof ConflictError)
+diff --git a/dist/esm/extractor/core/key-finder.js b/dist/esm/extractor/core/key-finder.js
+index 86612731b2d..4e724e84538 100644
+--- a/dist/esm/extractor/core/key-finder.js
++++ b/dist/esm/extractor/core/key-finder.js
+@@ -38,6 +38,8 @@ async function findKeys(config, logger = new ConsoleLogger(), fileErrors) {
+     const plugins = pluginsOrUndefined || [];
+     const sourceFiles = await processSourceFiles(config);
+     const allKeys = new Map();
++    // Retain only translation-site trees; plugins can transform code between passes.
++    const parsedFiles = plugins.length === 0 ? new Map() : undefined;
+     // 1. Create the base context with config and logger.
+     const pluginContext = createPluginContext(allKeys, plugins, otherConfig, logger);
+     // 2. Create hooks for plugins to hook into AST
+@@ -90,7 +92,7 @@ async function findKeys(config, logger = new ConsoleLogger(), fileErrors) {
+     //    correctly even when the defining constants file is processed after the file that
+     //    uses the identifier.
+     for (const file of sourceFiles) {
+-        await preScanFile(file, astVisitors, otherConfig, logger, fileErrors);
++        await preScanFile(file, astVisitors, otherConfig, logger, fileErrors, parsedFiles);
+     }
+     // 6b. Mirror declarations onto the local names they were imported as, so that
+     //     `import { ResourceStatus as Status }` resolves like the unaliased import.
+@@ -98,7 +100,7 @@ async function findKeys(config, logger = new ConsoleLogger(), fileErrors) {
+     // 7. Extraction pass: all shared tables are now fully populated, so every
+     //    identifier reference can be resolved regardless of file order.
+     for (const file of sourceFiles) {
+-        await processFile(file, plugins, astVisitors, pluginContext, otherConfig, logger, fileErrors);
++        await processFile(file, plugins, astVisitors, pluginContext, otherConfig, logger, fileErrors, parsedFiles);
+     }
+     // 7. Run onEnd hooks
+     for (const plugin of plugins) {

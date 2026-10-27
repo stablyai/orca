@@ -14,7 +14,7 @@ import type {
   SkillInstallRequest
 } from '../../shared/skill-install-contract'
 import type { SkillCloudDownloadGrant } from '../../shared/skill-cloud-contract'
-import { getRuntimeEnvironmentStatus } from '../ipc/runtime-environment-transport-routing'
+import { getRuntimeEnvironmentStatus } from '../ipc/runtime-environments/runtime-environment-status-probe'
 import type { OrcaRuntimeService } from '../runtime/orca-runtime'
 import { skillInstallFailureFromError } from './skill-install-operation-error'
 import { recordSkillCapabilityAbsence } from './skill-operation-observability'
@@ -49,6 +49,7 @@ function bundleFailureResult(
   if (!('skills' in manifest)) {
     throw new Error('skill-bundle-cloud-manifest-required')
   }
+  const selectedSkillIds = new Set(request.selectedSkillIds)
   return {
     operationId: request.operationId,
     packageId: request.package.packageId,
@@ -56,7 +57,7 @@ function bundleFailureResult(
     bundleDigest: request.package.bundleDigest,
     status: failure.category === 'cancelled' ? 'cancelled' : 'failed',
     skills: manifest.skills
-      .filter((skill) => request.selectedSkillIds.includes(skill.id))
+      .filter((skill) => selectedSkillIds.has(skill.id))
       .map((skill) => ({
         skillId: skill.id,
         name: skill.name,

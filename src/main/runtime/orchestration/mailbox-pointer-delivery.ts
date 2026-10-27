@@ -9,6 +9,10 @@ import {
   OrchestrationMailboxPointerState,
   type OrchestrationMailboxDeliveryFlight
 } from './mailbox-pointer-state'
+import {
+  MAILBOX_POINTER_RESERVED,
+  MAILBOX_POINTER_WRITE_ATTEMPTED
+} from './db/messages/mailbox-pointer-enter-state'
 import { resumePendingOrchestrationMailboxPointer } from './mailbox-pointer-resume'
 import { stageOrchestrationMailboxPointer } from './mailbox-pointer-stage'
 
@@ -63,7 +67,9 @@ export class OrchestrationMailboxPointerDelivery<TWaiter extends OrchestrationMe
     if (!this.deps.getTerminalHandleForLeafKey(this.leafKey(leaf))) {
       return
     }
-    if (db.hasOutstandingMailboxDelivery?.(mailboxHandle)) {
+    // Gate settled-agent input at this shared commit point; refusal parks for recheck instead of dropping mail.
+    if (!this.deps.isAgentSettledForDelivery(leaf)) {
+      this.parkRedelivery(mailboxHandle, options.reservedTypes)
       return
     }
     if (leaf.ptyId) {
@@ -104,7 +110,7 @@ export class OrchestrationMailboxPointerDelivery<TWaiter extends OrchestrationMe
     ) {
       return
     }
-    const unread = selectOrchestrationPointerBatch({
+    const { messages: unread, heldDeliveryId } = selectOrchestrationPointerBatch({
       db,
       mailboxHandle,
       waiters,
@@ -144,6 +150,7 @@ export class OrchestrationMailboxPointerDelivery<TWaiter extends OrchestrationMe
       leaf,
       mailboxHandle,
       messages: unread,
+      heldDeliveryId,
       newestSequence,
       enterDelayMs: pointerEnterDelayMs(),
       leafKey: this.leafKey(leaf),
@@ -163,7 +170,17 @@ export class OrchestrationMailboxPointerDelivery<TWaiter extends OrchestrationMe
       clearTimeout(flight.enterTimer)
     }
     if (flight?.stagedMessageIds.length) {
-      this.deps.getDb()?.markAsUndelivered(flight.stagedMessageIds)
+      const db = this.deps.getDb()
+      if (db && flight.processIncarnation) {
+        // Release only phases that provably never sent Enter; an attempted Enter may already have landed.
+        db.releaseMailboxPointerEnter(
+          flight.stagedMessageIds,
+          { ptyId, processIncarnation: flight.processIncarnation },
+          [MAILBOX_POINTER_RESERVED, MAILBOX_POINTER_WRITE_ATTEMPTED]
+        )
+      } else {
+        db?.markAsUndelivered(flight.stagedMessageIds)
+      }
     }
     for (const mailboxHandle of releasedMailboxes) {
       this.redrive(mailboxHandle, true)

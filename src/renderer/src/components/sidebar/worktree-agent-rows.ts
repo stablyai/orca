@@ -1,6 +1,6 @@
 import type { DashboardAgentRow } from '@/components/dashboard/useDashboardData'
 import { isExplicitAgentStatusFresh } from '@/lib/agent-status'
-import type { RetainedAgentEntry } from '@/store/slices/agent-status'
+import type { RetainedAgentEntry } from '@/store/slices/agent-status/agent-status-contract'
 import {
   AGENT_STATUS_STALE_AFTER_MS,
   type AgentStatusEntry,
@@ -16,10 +16,11 @@ import type {
   TerminalPaneLayoutNode,
   TerminalTab
 } from '../../../../shared/terminal-tab-types'
-import { resolveRuntimePaneTitleLeafId } from '@/lib/runtime-pane-title-leaf-id'
-import { resolveDecayedAgentRowState } from '@/lib/agent-row-decay-state'
-import { tabHasLivePty } from '@/lib/tab-has-live-pty'
+import { resolveRuntimePaneTitleLeafId } from '../../../../shared/runtime-pane-title-leaf-id'
+import { resolveDecayedAgentRowState } from '../../../../shared/agent-row-decay-state'
+import { tabHasLivePty } from '../../../../shared/tab-has-live-pty'
 import { buildTitleDerivedAgentRows } from './worktree-title-derived-agent-rows'
+import type { TitleDerivedPaneForeground } from './title-derived-pane-agent-identity'
 import { buildSubagentChildRows } from './worktree-subagent-child-rows'
 import { compareWorktreeAgentRows } from './worktree-agent-row-order'
 import {
@@ -70,15 +71,13 @@ function isRetainedLegacyAliasOfSeenStablePane(args: {
     return args.seenPaneKeys.has(makePaneKey(legacy.tabId, leafId))
   }
 
-  // Why: old PaneManager ids can advance across remounts/updates even for a
-  // single physical pane. Once the tab has exactly one current stable pane,
-  // retained numeric rows under that tab are stale aliases of it.
+  // A single stable pane supersedes retained numeric aliases left by old PaneManager remounts.
   return countTerminalLayoutLeaves(layout?.root) === 1 && stablePaneKeys.length === 1
 }
 
 function markSeenPaneKeyForCurrentTab(args: {
   paneKey: string | undefined
-  currentTabIds: Set<string>
+  currentTabsById: ReadonlyMap<string, TerminalTab>
   terminalLayoutsByTabId?: Record<string, TerminalLayoutSnapshot | undefined>
   seenPaneKeys: Set<string>
 }): void {
@@ -87,14 +86,14 @@ function markSeenPaneKeyForCurrentTab(args: {
   }
   const parsed = parsePaneKey(args.paneKey)
   if (parsed) {
-    if (args.currentTabIds.has(parsed.tabId)) {
+    if (args.currentTabsById.has(parsed.tabId)) {
       args.seenPaneKeys.add(args.paneKey)
     }
     return
   }
 
   const legacy = parseLegacyNumericPaneKey(args.paneKey)
-  if (!legacy || !args.currentTabIds.has(legacy.tabId)) {
+  if (!legacy || !args.currentTabsById.has(legacy.tabId)) {
     return
   }
   args.seenPaneKeys.add(args.paneKey)
@@ -112,7 +111,7 @@ function markCompletedWorkerParentPaneKeysSeen(args: {
   retained: RetainedAgentEntry[]
   runtimeAgentOrchestrationByPaneKey?: Record<string, AgentStatusOrchestrationContext>
   terminalLayoutsByTabId?: Record<string, TerminalLayoutSnapshot | undefined>
-  currentTabIds: Set<string>
+  currentTabsById: ReadonlyMap<string, TerminalTab>
   seenPaneKeys: Set<string>
 }): void {
   const markEntry = (entry: AgentStatusEntry): void => {
@@ -120,11 +119,10 @@ function markCompletedWorkerParentPaneKeysSeen(args: {
     if (rowEntry.state !== 'done') {
       return
     }
-    // Why: completed worker rows can be attributed to a child pane while the
-    // visible parent pane still has a stale spinner title.
+    // Completed workers may own a visible parent pane’s stale spinner title.
     markSeenPaneKeyForCurrentTab({
       paneKey: rowEntry.orchestration?.parentPaneKey,
-      currentTabIds: args.currentTabIds,
+      currentTabsById: args.currentTabsById,
       terminalLayoutsByTabId: args.terminalLayoutsByTabId,
       seenPaneKeys: args.seenPaneKeys
     })
@@ -146,11 +144,12 @@ export function buildWorktreeAgentRows(args: {
   ptyIdsByTabId?: Record<string, string[]>
   terminalLayoutsByTabId?: Record<string, TerminalLayoutSnapshot | undefined>
   runtimeAgentOrchestrationByPaneKey?: Record<string, AgentStatusOrchestrationContext>
+  paneForegroundAgentByPaneKey?: Record<string, TitleDerivedPaneForeground>
   now: number
 }): DashboardAgentRow[] {
   const rows: DashboardAgentRow[] = []
   const seenPaneKeys = new Set<string>()
-  const currentTabIds = new Set(args.tabs.map((tab) => tab.id))
+  const currentTabsById = new Map(args.tabs.map((tab) => [tab.id, tab] as const))
 
   const entriesByTabId = new Map<string, AgentStatusEntry[]>()
   for (const entry of args.entries) {
@@ -199,15 +198,13 @@ export function buildWorktreeAgentRows(args: {
     retained: args.retained,
     runtimeAgentOrchestrationByPaneKey: args.runtimeAgentOrchestrationByPaneKey,
     terminalLayoutsByTabId: args.terminalLayoutsByTabId,
-    currentTabIds,
+    currentTabsById,
     seenPaneKeys
   })
 
   rows.push(...buildTitleDerivedAgentRows({ ...args, seenPaneKeys }))
 
-  // Why: orchestration workers can be attributed to a worktree by main before
-  // their tab is present in this renderer. Keep those live rows visible in the
-  // worktree card instead of waiting for tab membership that may never arrive.
+  // Main can attribute workers before tabs hydrate; keep them visible without waiting for local membership.
   for (const entry of args.entries) {
     if (seenPaneKeys.has(entry.paneKey)) {
       continue
@@ -228,8 +225,7 @@ export function buildWorktreeAgentRows(args: {
       tab,
       agentType: resolveRowAgentType(rowEntry, tab),
       rowSource: 'live',
-      // Why: this row's tab is synthesized because no tab for it exists in this renderer,
-      // so there is no live-PTY evidence to hold — the decay destination is always `idle`.
+      // Even synthesized tabs use available PTY evidence to distinguish idle from unverifiable decay.
       state: shouldDecay
         ? resolveDecayedAgentRowState(rowEntry, tabHasLivePty(ptyIdsByTabId, tab.id))
         : rowEntry.state,
@@ -256,19 +252,19 @@ export function buildWorktreeAgentRows(args: {
       ra.entry,
       args.runtimeAgentOrchestrationByPaneKey
     )
+    const tab = currentTabsById.get(ra.tab.id) ?? ra.tab
     rows.push({
       paneKey: rowEntry.paneKey,
       entry: rowEntry,
-      tab: ra.tab,
-      agentType: resolveRowAgentType(rowEntry, ra.tab),
+      tab,
+      agentType: resolveRowAgentType(rowEntry, tab),
       rowSource: 'retained',
       state: 'done',
       startedAt: ra.startedAt
     })
   }
 
-  // Why: hook pings can rebuild the live entry list in a different iteration
-  // order. Equal-start agents still need a deterministic sidebar order.
+  // Status pings can reorder entries; sort equal-start agents deterministically.
   rows.sort(compareWorktreeAgentRows)
   return rows
 }

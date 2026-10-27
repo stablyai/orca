@@ -3,7 +3,7 @@ import type { Worktree } from '../../../../shared/worktree/types'
 import {
   getCyclicProjectedWorktreeLineageIds,
   getLineageRenderInfo
-} from './worktree-lineage-projection'
+} from '../../../../shared/sidebar-list/worktree-lineage-projection'
 
 type ParentEligibilityArgs = {
   child: Worktree
@@ -42,8 +42,7 @@ export function canAssignWorktreeParent({
       return false
     }
     const lineageInfo = getLineageRenderInfo(current, lineageById, worktreeMap, cyclicLineageIds)
-    // Why: stale instance links are broken edges for renderer filtering; the
-    // backend remains the authoritative final cycle guard.
+    // Ignore stale-instance edges for filtering; the backend remains the final cycle guard.
     current = lineageInfo.state === 'valid' ? lineageInfo.parent : undefined
   }
 

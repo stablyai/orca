@@ -1,5 +1,6 @@
 import { z } from 'zod'
 import { AGENT_HOOK_TARGETS } from './agent-hook-types'
+import { ERRNO_CODE_PATTERN } from './errno-code'
 import {
   DAEMON_LIFECYCLE_SESSION_BUCKETS,
   DAEMON_LIFECYCLE_TRANSITIONS,
@@ -16,13 +17,14 @@ import {
 } from './daemon-audit-eligibility'
 import {
   DAEMON_ADOPTED_APP_VERSION_MATCH,
+  DAEMON_CODE_IDENTITY_VALUES,
   DAEMON_PTY_CWD_CLASSES,
   DAEMON_SPAWNER_PATH_CLASSES,
   DAEMON_TCC_ATTRIBUTION_VALUES
 } from './daemon-adoption-telemetry'
 import { errorClassSchema, settingsChangedKeySchema } from './telemetry-property-schemas'
 
-// Why: daemon start-failure signal (fleet-wide outage like v1.4.129-rc.1); enum-only so raw stderr never reaches the wire.
+// Enum-only start-failure signals diagnose fleet outages without sending raw stderr (v1.4.129-rc.1).
 export const daemonStartFailedSchema = z.object({ error_class: errorClassSchema }).strict()
 
 export const runtimeRpcStartErrorClassSchema = z.enum([
@@ -34,7 +36,7 @@ export const runtimeRpcStartErrorClassSchema = z.enum([
 ])
 export type RuntimeRpcStartErrorClass = z.infer<typeof runtimeRpcStartErrorClassSchema>
 
-// Why: runtime discovery failures can contain user paths; keep telemetry to closed filesystem/socket categories.
+// Discovery errors may contain user paths; send only closed filesystem/socket categories.
 export const runtimeRpcStartFailedSchema = z
   .object({ error_class: runtimeRpcStartErrorClassSchema })
   .strict()
@@ -44,11 +46,8 @@ export const remoteOutboundBudgetCloseSchema = z
   .object({ emitter: z.enum(['size', 'queue']) })
   .strict()
 
-// Why: a deadlocked main thread never crashes, so it produces no crash report and no user report
-// beyond "it froze" — incidence has been unmeasurable. `self_recovered` splits stalls that cleared
-// from ones that never did, which is the number that decides whether auto-recovery is ever safe to
-// build: every self-recovered stall is a kill that design would have gotten wrong. `unresponsive_ms`
-// is the observed silence, kept raw so the 45s threshold can be calibrated against real tails.
+// Main deadlocks yield no crash report. self_recovered separates stalls that resolved from those a recovery kill might help;
+// keep observed unresponsive_ms raw to calibrate the 45s threshold without assuming every stall needs termination.
 export const mainThreadHangDetectedSchema = z
   .object({
     unresponsive_ms: z.number().int().nonnegative(),
@@ -56,30 +55,67 @@ export const mainThreadHangDetectedSchema = z
   })
   .strict()
 
-// Why: #17696 — a macOS app adopting a daemon from an earlier bundle is invisible to
-// `daemon_lifecycle` (nothing is replaced). Once per macOS launch that adopts; enum-only.
+// Where the daemon came from; `code_identity` is #21826's unlinked-executable theory under measurement.
+const daemonOriginProps = {
+  app_version_match: z.enum(DAEMON_ADOPTED_APP_VERSION_MATCH),
+  spawner_path_class: z.enum(DAEMON_SPAWNER_PATH_CLASSES),
+  code_identity: z.enum(DAEMON_CODE_IDENTITY_VALUES)
+}
+
+// Once per macOS launch adopting an old-bundle daemon, which replacement lifecycle events miss (#17696); enum-only.
 export const daemonAdoptedSchema = z
   .object({
-    app_version_match: z.enum(DAEMON_ADOPTED_APP_VERSION_MATCH),
-    spawner_path_class: z.enum(DAEMON_SPAWNER_PATH_CLASSES),
+    ...daemonOriginProps,
     tcc_attribution: z.enum(DAEMON_TCC_ATTRIBUTION_VALUES),
     live_session_count_bucket: z.enum(DAEMON_LIFECYCLE_SESSION_BUCKETS)
   })
   .strict()
 
-// Why: the #17696 symptom itself — the daemon spawned a terminal into a cwd it cannot read while
-// the app can. Emitted only on that proven divergence, so a missing or app-unreadable cwd never counts.
-export const daemonPtyCwdDeniedSchema = z
+export const DAEMON_ASYNC_IO_STALL_DURATION_BUCKETS = ['<1m', '1-5m', '5-30m', '30m+'] as const
+
+// Why: measures how often daemon worker-pool stalls start and how long they last before clearing.
+const daemonAsyncIoHealthBase = {
+  protocol_generation: z.number().int().positive().max(1_000),
+  app_version_match: z.enum(DAEMON_ADOPTED_APP_VERSION_MATCH)
+}
+export const daemonAsyncIoHealthSchema = z.discriminatedUnion('transition', [
+  z.object({ transition: z.literal('stalled'), ...daemonAsyncIoHealthBase }).strict(),
+  z
+    .object({
+      transition: z.literal('recovered'),
+      ...daemonAsyncIoHealthBase,
+      stalled_for_bucket: z.enum(DAEMON_ASYNC_IO_STALL_DURATION_BUCKETS)
+    })
+    .strict()
+])
+
+// Denied means proven app/daemon cwd-access divergence; readable is the TCC-folder-only control (#17696).
+export const daemonPtyCwdVerdictSchema = z
+  .object({ cwd_class: z.enum(DAEMON_PTY_CWD_CLASSES), ...daemonOriginProps })
+  .strict()
+
+// Count notice exposure/action/restart outcome against daemon_pty_cwd_denied incidence (STA-7948).
+export const daemonFolderAccessNoticeSchema = z
   .object({
-    cwd_class: z.enum(DAEMON_PTY_CWD_CLASSES),
-    app_version_match: z.enum(DAEMON_ADOPTED_APP_VERSION_MATCH),
-    spawner_path_class: z.enum(DAEMON_SPAWNER_PATH_CLASSES)
+    action: z.enum([
+      'shown',
+      'fix_opened',
+      'settings_opened',
+      'restart_clicked',
+      'dismissed',
+      'restart_outcome_fixed',
+      'restart_outcome_still_denied',
+      'reset_clicked',
+      'reset_outcome_allowed',
+      'reset_outcome_still_denied',
+      'reset_outcome_unknown'
+    ]),
+    cwd_class: z.enum(DAEMON_PTY_CWD_CLASSES)
   })
   .strict()
 
-// Why: daemon replace/retire lifecycle signal — issue #7936 was undiagnosable without asking a user for daemon.log.
-// Enum-only + bucketed session count so no paths, raw versions, or exact counts reach the wire.
-// The union keeps each reason pinned to its transition, so a death can't be reported as a replace.
+// Diagnose replacement/retirement without requesting daemon.log (#7936). Enum/bucket-only fields exclude paths/raw versions/exact counts;
+// the union pins reasons to transitions so death cannot masquerade as replacement.
 export const daemonLifecycleSchema = z.discriminatedUnion('transition', [
   z
     .object({
@@ -130,13 +166,8 @@ export const daemonAuditEligibilitySchema = z.discriminatedUnion('exact_incarnat
   daemonAuditEligibilityBaseSchema.extend({ exact_incarnation: z.literal('unavailable') }).strict()
 ])
 
-// Rollout signal for granting Codex hook trust via codex app-server RPCs
-// instead of Orca's self-computed trusted_hash. `fallback`/`verify_failed`
-// spikes mean the RPC lane is not taking; steady-state ledger skips are not
-// reported (they would only measure launch volume). `lane` attributes the
-// grant surface (real ~/.codex vs managed home); `error_class`/`verify_class`
-// are closed classifications so `error` fallbacks are diagnosable in the
-// field — e.g. `binary-missing` = codex CLI absent, no rollout impact.
+// Measure Codex app-server trust grants instead of computed trusted_hash: fallback/verify_failed detect rollout failures.
+// Omit steady ledger skips (launch volume only); lane separates real/managed homes and closed error/verify classes explain failures without raw errors.
 export const codexTrustGrantSchema = z
   .object({
     outcome: z.enum(['granted', 'fallback', 'verify_failed']),
@@ -176,26 +207,36 @@ export const settingsChangedSchema = z
   })
   .strict()
 
+// Verify profile authority/migration rollout with enums only; never send paths, profile IDs or serialized state.
+export const profileStateAuthoritySelectedSchema = z
+  .object({
+    backend: z.enum(['json', 'sqlite']),
+    classification: z.enum(['neither', 'json-only', 'sqlite-only', 'both']),
+    authority_mode: z.enum(['legacy', 'sqlite-candidate', 'sqlite-established']),
+    runtime: z.enum(['desktop', 'orcad']),
+    migrated: z.boolean()
+  })
+  .strict()
+
 // Managed-hook installer label from `AGENT_HOOK_TARGETS`, distinct from `AGENT_KIND_VALUES`; `claude` (not `claude-code`) is intentional.
 export const hookInstallAgentSchema = z.enum(AGENT_HOOK_TARGETS)
 export type HookInstallAgent = z.infer<typeof hookInstallAgentSchema>
 
-// Why: config-shape errors (not user content); callers must truncate before `track` — `.max(200)` drops overlength strings.
+// Why (#21492): field name kept for dashboards, but it holds an errno code or 'unknown', never the raw message (home-dir paths).
 export const agentHookInstallFailedSchema = z
   .object({
     agent: hookInstallAgentSchema,
-    error_message: z.string().max(200)
+    error_message: z.union([z.literal('unknown'), z.string().regex(ERRNO_CODE_PATTERN)])
   })
   .strict()
 
-// Why: regression signal for paneKey attribution — a hook event that can't route to a pane. See docs/cli-terminal-hook-pane-key.md.
+// Measure paneKey routing failures; see docs/cli-terminal-hook-pane-key.md.
 export const agentHookUnattributedSchema = z
   .object({ reason: z.enum(['empty_pane_key', 'unknown_tab_id']) })
   .strict()
 
-// Why (#11217): loopback hook POSTs reset mid-body by local security software kill agent status for
-// every runtime at once. Count only — the truncated bodies carry user prompts and tool I/O, so
-// nothing derived from them may reach the wire.
+// Security software resetting loopback hook bodies can kill all runtime status (#11217). Count only;
+// truncated bodies contain prompts/tool I/O, so send nothing derived from them.
 export const agentHookTransportBlockedSchema = z
   .object({ count: z.number().int().nonnegative() })
   .strict()

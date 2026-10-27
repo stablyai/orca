@@ -2,6 +2,7 @@ import { View, Text, TextInput, Pressable } from 'react-native'
 import { MessageSquare, Plus, X } from 'lucide-react-native'
 import { MobileSyntaxSegments } from '../components/MobileSyntaxSegments'
 import { colors } from '../theme/mobile-theme'
+import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import { styles } from './mobile-session-styles'
 import type { DiffComment } from '../../../src/shared/diff-comment-types'
 import type { RenderableDiffLine } from './mobile-session-route-types'
@@ -33,6 +34,7 @@ export function DiffLineRow({
   onSubmitComment: (lineNumber: number) => void
   onDeleteComment: (commentId: string) => void
 }) {
+  useMobileColorScheme()
   const commentLine = line.newLineNumber
   const isCommenting = commentLine !== undefined && activeCommentLine === commentLine
   const canComment = commentLine !== undefined

@@ -1,3 +1,5 @@
+import { MobileFileMediaPreview } from '../files/MobileFileMediaPreview'
+import type { MobileFilePreviewRpcSender } from '../files/mobile-file-preview-operations'
 import { useState, useEffect, useCallback, useMemo } from 'react'
 import {
   FlatList,
@@ -20,6 +22,7 @@ import {
 } from './mobile-file-syntax'
 import { MobileHtmlPreview } from '../components/MobileHtmlPreview'
 import { colors } from '../theme/mobile-theme'
+import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import { styles } from './mobile-session-styles'
 import type { DiffComment } from '../../../src/shared/diff-comment-types'
 import type {
@@ -30,20 +33,34 @@ import type {
   RenderableDiffLine
 } from './mobile-session-route-types'
 import { DiffLineRow } from './MobileSessionDiffLineRow'
+import { sendableMobileDiffComments } from './mobile-diff-comments'
+import { MobileLoadErrorState } from '../components/MobileLoadErrorState'
 
-export function FileReader({
+type FileReaderProps = {
+  doc: FileDocState | undefined
+  client?: MobileFilePreviewRpcSender | null
+  title: string
+  relativePath: string
+  documentId?: string
+  language?: string
+  diffCommentActions?: DiffCommentActions
+}
+
+export function FileReader(props: FileReaderProps) {
+  return (
+    <FileReaderDocument key={JSON.stringify([props.documentId, props.relativePath])} {...props} />
+  )
+}
+
+function FileReaderDocument({
   doc,
+  client = null,
   title,
   relativePath,
   language,
   diffCommentActions
-}: {
-  doc: FileDocState | undefined
-  title: string
-  relativePath: string
-  language?: string
-  diffCommentActions?: DiffCommentActions
-}) {
+}: FileReaderProps) {
+  useMobileColorScheme()
   const syntaxLanguage = useMemo(
     () => resolveMobileSyntaxLanguage(relativePath || title, language),
     [language, relativePath, title]
@@ -144,9 +161,8 @@ export function FileReader({
       return undefined
     }
 
-    // Why: defer highlighting one tick so large files show as plain text immediately before colors are applied.
+    // Defer highlighting one tick so large files appear as plain text immediately.
     const timer = setTimeout(() => {
-      // file + html share the syntax-segment source view (html's "Source" toggle).
       if (doc.kind === 'file' || doc.kind === 'html') {
         setFileSyntax({
           doc,
@@ -162,7 +178,6 @@ export function FileReader({
           lines: highlightMobileDiffLines(doc.lines, syntaxLanguage)
         })
       }
-      // image: no syntax highlighting.
     }, 0)
 
     return () => clearTimeout(timer)
@@ -176,19 +191,19 @@ export function FileReader({
     )
   }
   if (doc.status === 'error') {
-    return (
-      <View style={styles.markdownState}>
-        <Text style={styles.markdownError}>{doc.message}</Text>
-      </View>
-    )
+    return <MobileLoadErrorState message={doc.message} />
   }
 
   if (doc.kind === 'diff') {
     const activeDiffSyntax =
       diffSyntax?.doc === doc && diffSyntax.language === syntaxLanguage ? diffSyntax.lines : null
     const commentCount = diffCommentActions?.comments.length ?? 0
-    const unsentCommentCount =
-      diffCommentActions?.comments.filter((comment) => !comment.sentAt).length ?? 0
+    const unsentCommentCount = diffCommentActions
+      ? sendableMobileDiffComments(
+          diffCommentActions.comments,
+          diffCommentActions.sendingCommentIds
+        ).length
+      : 0
     const commentsBusy = diffCommentActions?.busy === true
     const canCopyNotes = commentCount > 0 && !commentsBusy
     const canSendNotes = unsentCommentCount > 0 && !commentsBusy
@@ -250,6 +265,9 @@ export function FileReader({
     )
   }
 
+  if (doc.kind === 'media') {
+    return <MobileFileMediaPreview media={doc.media} client={client} title={title} />
+  }
   if (doc.kind === 'image') {
     return (
       <View style={styles.imagePreviewContainer}>

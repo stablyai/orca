@@ -8,17 +8,8 @@ import {
   type PersistedUIWriteBaseline
 } from '../store/slices/persisted-ui-write-baseline'
 
-/**
- * Send one field patch and settle it against the baseline. Fields are marked
- * in flight so a hydration during the round-trip can't revert a newer local
- * flip-back; on ack the patch folds into the baseline (generation-guarded: a
- * hydration during the round trip wins instead) and a debounced trailing
- * flush re-diffs the mirror — an edit made while the write was in flight,
- * which diffed empty against the pre-fold baseline, is re-sent then. A
- * rejected write folds nothing, leaving its fields dirty to re-flush on the
- * next change (no automatic retry loop) — which is why this sends through
- * setWithAck: the web preload's plain set swallows transport failures.
- */
+/** Protect in-flight fields from hydration reverting local flip-backs. Fold acknowledged patches only into the same baseline generation, then debounce a fresh diff for edits made during flight.
+ * Rejected writes remain dirty until a new edit; never auto-retry a terminal failure. setWithAck exposes failures swallowed by web’s plain set. */
 type PersistedUIWriteController = {
   activate: () => void
   send: (changed: Partial<PersistedUIWriteBaseline>) => void
@@ -67,18 +58,15 @@ function createPersistedUIWriteController(): PersistedUIWriteController {
     state.notePersistedUIWriteStarted(fields)
     let request: Promise<void>
     try {
-      // setWithAck rejects when the host did not apply the patch (web's plain set
-      // swallows transport failures); older preloads without it fall back to set.
+      // Use acknowledged writes when available; older preloads fall back to set, which web may silently reject.
       const send = window.api.ui.setWithAck ?? window.api.ui.set
       request = send(persistedUIWriteFieldsToWireUpdate(changed))
     } catch {
-      // A synchronous throw (e.g. a non-cloneable value) must still settle the
-      // in-flight marker, or the field stays pinned against hydration forever.
+      // Settle even synchronous failure so fields cannot stay pinned against hydration forever.
       useAppStore.getState().notePersistedUIWriteSettled(fields, null)
       return
     }
-    // Two-arg then: the rejection handler must not catch throws from the ack
-    // handler, which would double-settle these fields and leak the trailing ones.
+    // Use two-argument then so an ack-handler throw cannot trigger double settlement in the rejection branch.
     request.then(
       () => {
         useAppStore.getState().notePersistedUIWriteSettled(fields, changed, { sentAtGeneration })
@@ -86,8 +74,7 @@ function createPersistedUIWriteController(): PersistedUIWriteController {
       },
       () => {
         useAppStore.getState().notePersistedUIWriteSettled(fields, null)
-        // Preserve a pending edit made during this round trip, but don't retry the
-        // rejected patch itself: a terminal transport failure must not loop.
+        // Flush newer pending edits, not the rejected patch itself; terminal failures must not loop.
         const state = useAppStore.getState()
         const baseline = state.persistedUIWriteBaseline
         const dirty = baseline
@@ -126,18 +113,8 @@ function createPersistedUIWriteController(): PersistedUIWriteController {
   return controller
 }
 
-/**
- * Mirrors the sidebar/right-sidebar/filter preferences into the durable UI file.
- *
- * Why field-level diffs (STA-5781): the durable UI state is shared with mobile/web
- * clients, which edit it concurrently. Writing the whole snapshot let this client's
- * stale mirror overwrite fields another client had just changed. The writer now
- * diffs the mirror against the last state hydrated from main and persists only the
- * fields this client changed itself; main merges partial updates field-by-field.
- *
- * Why (#9002): activeView is deliberately kept off this debounced writer. It used to ride the
- * same 150ms save (#8265), so every top-level view switch scheduled a full durable-state write.
- */
+/** Diff against hydrated/acknowledged state so concurrent mobile/web writes cannot be overwritten by stale sibling fields (STA-5781). Main merges partial updates.
+ * Keep activeView off this debounce; its tiny separate preference avoids full durable writes per navigation (#9002). */
 export function usePersistedUIWriter(): void {
   const controller = useMemo(() => createPersistedUIWriteController(), [])
   const persistedUIReady = useAppStore((s) => s.persistedUIReady)
@@ -145,6 +122,7 @@ export function usePersistedUIWriter(): void {
   const ui = useAppStore(
     useShallow((s): PersistedUIWriteBaseline => ({
       sidebarWidth: s.sidebarWidth,
+      sidebarOpen: s.sidebarOpen,
       rightSidebarOpen: s.rightSidebarOpen,
       rightSidebarTab: s.rightSidebarTab,
       rightSidebarExplorerView: s.rightSidebarExplorerView,
@@ -155,22 +133,22 @@ export function usePersistedUIWriter(): void {
       sortBy: s.sortBy,
       projectOrderBy: s.projectOrderBy,
       showSleepingWorkspaces: s.showSleepingWorkspaces,
+      workspaceHostScope: s.workspaceHostScope,
+      visibleWorkspaceHostIds: s.visibleWorkspaceHostIds,
       hideDefaultBranchWorkspace: s.hideDefaultBranchWorkspace,
       hideAutomationGeneratedWorkspaces: s.hideAutomationGeneratedWorkspaces,
       hideCliCreatedWorkspaces: s.hideCliCreatedWorkspaces,
       hideDetachedHeadWorkspaces: s.hideDetachedHeadWorkspaces,
       hideWorkspacesFromOtherDevices: s.hideWorkspacesFromOtherDevices,
       alwaysShowDefaultBranchWorkspace: s.alwaysShowDefaultBranchWorkspace,
+      explorerDisplayRootByWorktree: s.explorerDisplayRootByWorktree,
       showDotfilesByWorktree: s.showDotfilesByWorktree,
       filterRepoIds: s.filterRepoIds,
-      // Why: dashboard auto-acks (fire on focus/visibility) and the in-memory ack cleanup
-      // paths in agent-status.ts (close/dismiss) flow to disk through map identity changes.
-      // Without persisting, agent rows that survive restart come back bold even when the
-      // user had already visited them.
+      // Persist focus/visibility acknowledgements and close/dismiss cleanup by map identity so retained rows do not return unread after restart.
       acknowledgedAgentsByPaneKey: s.acknowledgedAgentsByPaneKey,
-      // Why: "Clear completed" must survive restart, or cleared done/interrupted rows return.
+      // Retain Clear completed across restart.
       activityClearedAtByPaneKey: s.activityClearedAtByPaneKey,
-      // Why: an explicit "mark unread" must survive restart, or the row comes back read.
+      // Retain explicit mark-unread across restart.
       manuallyUnreadTurnsByPaneKey: s.manuallyUnreadTurnsByPaneKey
     }))
   )
@@ -179,12 +157,7 @@ export function usePersistedUIWriter(): void {
     return () => controller.dispose()
   }, [controller])
   useEffect(() => {
-    // The baseline holds the values this client last saw persisted (newest
-    // hydration from main, overlaid with this client's flushed writes); fields
-    // equal to it are never written, so remote changes are never echoed back.
-    // Read via getState, not a selector: baseline identity changes on every
-    // broadcast, and subscribing would re-render and re-arm the debounce on
-    // remote traffic that changed nothing this writer owns.
+    // Diff against last hydration plus flushed writes; never echo unchanged remote fields. Read baseline via getState so broadcasts cannot rerender/rearm this debounce.
     const armBaseline = useAppStore.getState().persistedUIWriteBaseline
     if (!persistedUIReady || !armBaseline) {
       return
@@ -193,9 +166,7 @@ export function usePersistedUIWriter(): void {
       return
     }
     const timer = window.setTimeout(() => {
-      // Re-diff against the store at fire time: a broadcast landing inside the
-      // debounce window may have refreshed the baseline (its identity is
-      // deliberately NOT an effect dep, so remote traffic can't starve the timer).
+      // Rediff at fire time for intervening broadcasts; baseline is not an effect dependency so remote traffic cannot starve the timer.
       const state = useAppStore.getState()
       const baseline = state.persistedUIWriteBaseline
       if (!baseline) {
@@ -211,8 +182,7 @@ export function usePersistedUIWriter(): void {
     return () => window.clearTimeout(timer)
   }, [controller, persistedUIReady, ui])
 
-  // Why (#9002): activeView has its own tiny profile preference, so it can track
-  // every switch without scheduling the multi-MB durable-state writer.
+  // activeView uses a tiny profile preference rather than the multi-MB durable writer (#9002).
   useEffect(() => {
     if (!persistedUIReady) {
       return

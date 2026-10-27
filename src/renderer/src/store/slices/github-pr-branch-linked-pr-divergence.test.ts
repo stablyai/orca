@@ -1,3 +1,4 @@
+import { CLEARED_HOSTED_REVIEW_SELECTION_UPDATES } from '../../../../shared/worktree/hosted-review-links'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { _clearGitHubPRRefreshStartedEntriesForTest } from '../github/request-coordination'
 import {
@@ -86,6 +87,8 @@ describe('createGitHubSlice.fetchPRForBranch', () => {
       hostedReviewCache: {},
       prCache: {}
     } as unknown as Partial<AppState>)
+    const subscriber = vi.fn()
+    const unsubscribe = store.subscribe(subscriber)
     resolveRefresh({
       kind: 'found',
       pr: makePR({ number: 12, title: 'Stale exact linked PR' }),
@@ -93,6 +96,8 @@ describe('createGitHubSlice.fetchPRForBranch', () => {
     })
 
     await expect(request).resolves.toBeNull()
+    unsubscribe()
+    expect(subscriber).not.toHaveBeenCalled()
     expect(store.getState().prCache[`${repoId}::${branch}`]).toBeUndefined()
     expect(store.getState().hostedReviewCache[hostedReviewCacheKey]).toBeUndefined()
   })
@@ -138,10 +143,15 @@ describe('createGitHubSlice.fetchPRForBranch', () => {
 
     expect(updateWorktreeMeta).toHaveBeenCalledWith(
       worktreeId,
-      { linkedPR: null },
+      CLEARED_HOSTED_REVIEW_SELECTION_UPDATES,
       { shouldApply: expect.any(Function) }
     )
     expect(store.getState().worktreesByRepo[repoId]?.[0]?.linkedPR).toBeNull()
+    expect(store.getState().worktreesByRepo[repoId]?.[0]?.linkedItems).toContainEqual({
+      provider: 'github',
+      type: 'pr',
+      number: 12
+    })
     expect(store.getState().prCache[`${repoId}::${branch}`]).toBeUndefined()
   })
 
@@ -194,7 +204,7 @@ describe('createGitHubSlice.fetchPRForBranch', () => {
     })
     expect(updateWorktreeMeta).toHaveBeenCalledWith(
       worktreeId,
-      { linkedPR: null },
+      CLEARED_HOSTED_REVIEW_SELECTION_UPDATES,
       {
         suppressHostedReviewRefresh: true,
         shouldApply: expect.any(Function)
@@ -252,7 +262,7 @@ describe('createGitHubSlice.fetchPRForBranch', () => {
     expect(mockApi.gh.refreshPRNow).not.toHaveBeenCalled()
     expect(updateWorktreeMeta).toHaveBeenCalledWith(
       worktreeId,
-      { linkedPR: null },
+      CLEARED_HOSTED_REVIEW_SELECTION_UPDATES,
       { shouldApply: expect.any(Function) }
     )
     expect(store.getState().worktreesByRepo[repoId]?.[0]?.linkedPR).toBeNull()
@@ -568,7 +578,7 @@ describe('createGitHubSlice.fetchPRForBranch', () => {
     await expect(request).resolves.toMatchObject({ number: 12 })
     expect(updateWorktreeMeta).toHaveBeenCalledWith(
       worktreeId,
-      { linkedPR: null },
+      CLEARED_HOSTED_REVIEW_SELECTION_UPDATES,
       { shouldApply: expect.any(Function) }
     )
     expect(store.getState().worktreesByRepo[repoId]?.[0]?.linkedPR).toBe(12)

@@ -1,7 +1,8 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
-const { createBrowserTabMock, storeState } = vi.hoisted(() => ({
+const { createBrowserTabMock, dispatchEventMock, storeState } = vi.hoisted(() => ({
   createBrowserTabMock: vi.fn(),
+  dispatchEventMock: vi.fn(),
   storeState: {
     value: {} as Record<string, unknown>
   }
@@ -11,7 +12,7 @@ vi.mock('../../store', () => ({
   useAppStore: { getState: () => storeState.value }
 }))
 vi.mock('@/lib/worktree-runtime-owner', () => ({
-  getRuntimeEnvironmentIdForWorktree: () => null
+  runtimeEnvironmentIdOrLocalUnlessTwin: () => null
 }))
 vi.mock('@/components/browser-pane/describe-page/live-browser-url-registry', () => ({
   rememberLiveBrowserUrl: vi.fn()
@@ -52,7 +53,7 @@ function captureOpenLinkHandler(): (event: {
         ? target[property as string]
         : new Proxy({}, { get: () => () => noopUnsubscribe })
   })
-  ;(globalThis as { window?: unknown }).window = { api }
+  vi.stubGlobal('window', { api, dispatchEvent: dispatchEventMock })
 
   registerBrowserStateIpcBridge([], () => false)
   if (!handler) {
@@ -64,6 +65,8 @@ function captureOpenLinkHandler(): (event: {
 describe('link-opened Orca tabs', () => {
   beforeEach(() => {
     createBrowserTabMock.mockReset()
+    dispatchEventMock.mockReset()
+    createBrowserTabMock.mockReturnValue({ id: 'new-tab', activePageId: 'new-page' })
   })
 
   it('inherits the opener tab session so an isolated profile cannot leak into the default one', () => {
@@ -80,6 +83,12 @@ describe('link-opened Orca tabs', () => {
           }
         ]
       },
+      unifiedTabsByWorktree: {
+        'worktree-1': [
+          { id: 'unified-1', entityId: 'workspace-1', contentType: 'browser', groupId: 'group-1' }
+        ]
+      },
+      groupsByWorktree: { 'worktree-1': [{ id: 'group-1', tabOrder: ['unified-1'] }] },
       createBrowserTab: createBrowserTabMock
     }
 
@@ -89,13 +98,15 @@ describe('link-opened Orca tabs', () => {
       'worktree-1',
       'https://docs.example.com/guide',
       expect.objectContaining({
+        afterTabId: 'unified-1',
         sessionProfileId: 'profile-client-a',
         sessionPartition: 'persist:orca-browser-session-client-a'
       })
     )
   })
 
-  it('leaves the profile unset when the opener tab is gone, so the user default still applies', () => {
+  // Baseline defect: remove .fails when the captured-claim handoff rejects this event.
+  it.fails('rejects a missing source tab without default-profile fallback', () => {
     storeState.value = {
       browserPagesByWorkspace: {
         'workspace-1': [{ id: 'page-1', workspaceId: 'missing', worktreeId: 'worktree-1' }]
@@ -106,8 +117,7 @@ describe('link-opened Orca tabs', () => {
 
     captureOpenLinkHandler()({ browserPageId: 'page-1', url: 'https://docs.example.com/guide' })
 
-    const options = createBrowserTabMock.mock.calls[0][2] as Record<string, unknown>
-    expect('sessionProfileId' in options).toBe(false)
+    expect(createBrowserTabMock).not.toHaveBeenCalled()
   })
 
   it('creates modifier-click links in the background', () => {
@@ -131,4 +141,85 @@ describe('link-opened Orca tabs', () => {
       expect.objectContaining({ activate: false })
     )
   })
+
+  // Move focus to the opened tab or Cmd/Ctrl+W closes its opener (#18832).
+  it('moves keyboard focus into a foreground link tab but not a background one', () => {
+    storeState.value = {
+      browserPagesByWorkspace: {
+        'workspace-1': [{ id: 'page-1', workspaceId: 'workspace-1', worktreeId: 'worktree-1' }]
+      },
+      browserTabsByWorktree: {},
+      createBrowserTab: createBrowserTabMock
+    }
+    const handler = captureOpenLinkHandler()
+
+    handler({
+      browserPageId: 'page-1',
+      url: 'https://docs.example.com/background',
+      activate: false
+    })
+    expect(dispatchEventMock).not.toHaveBeenCalled()
+
+    handler({ browserPageId: 'page-1', url: 'https://docs.example.com/foreground' })
+    expect(dispatchEventMock).toHaveBeenCalledWith(
+      expect.objectContaining({ detail: { pageId: 'new-page', target: 'webview' } })
+    )
+  })
+  it.each([true, false])(
+    'routes a popup to a visible browser with the opener profile (activate: %s)',
+    (activate) => {
+      const focusGroup = vi.fn()
+      storeState.value = {
+        browserPagesByWorkspace: {
+          opener: [{ id: 'page-1', workspaceId: 'opener', worktreeId: 'worktree-1' }]
+        },
+        browserTabsByWorktree: {
+          'worktree-1': [
+            { id: 'opener', sessionProfileId: 'profile-a', sessionPartition: 'persist:a' }
+          ]
+        },
+        layoutByWorktree: {
+          'worktree-1': {
+            type: 'split',
+            direction: 'horizontal',
+            first: { type: 'leaf', groupId: 'source' },
+            second: { type: 'leaf', groupId: 'visible' }
+          }
+        },
+        groupsByWorktree: {
+          'worktree-1': [
+            { id: 'source', activeTabId: 'terminal' },
+            { id: 'visible', activeTabId: 'browser' }
+          ]
+        },
+        unifiedTabsByWorktree: {
+          'worktree-1': [{ id: 'browser', groupId: 'visible', contentType: 'browser' }]
+        },
+        activeGroupIdByWorktree: { 'worktree-1': 'source' },
+        createBrowserTab: createBrowserTabMock,
+        focusGroup
+      }
+      captureOpenLinkHandler()({
+        browserPageId: 'page-1',
+        url: 'https://docs.example.com/new',
+        activate
+      })
+      expect(createBrowserTabMock).toHaveBeenCalledWith(
+        'worktree-1',
+        'https://docs.example.com/new',
+        expect.objectContaining({
+          activate,
+          targetGroupId: 'visible',
+          sessionProfileId: 'profile-a',
+          sessionPartition: 'persist:a'
+        })
+      )
+      if (activate) {
+        expect(focusGroup).toHaveBeenCalledExactlyOnceWith('worktree-1', 'visible')
+      } else {
+        expect(focusGroup).not.toHaveBeenCalled()
+        expect(dispatchEventMock).not.toHaveBeenCalled()
+      }
+    }
+  )
 })

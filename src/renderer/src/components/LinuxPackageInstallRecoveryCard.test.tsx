@@ -104,10 +104,7 @@ function isAriaDisabled(element: HTMLElement): boolean {
   return element.getAttribute('aria-disabled') === 'true'
 }
 
-/**
- * Trailing <p> of the actions column. It owns no live-region role of its own — the surrounding
- * update Card is already aria-live, and nesting one inside another duplicates announcements.
- */
+/** The actions footnote must not nest another live region inside the already-live update card. */
 function footnoteElement(): HTMLElement | null {
   const cardRoot = document.body.firstElementChild?.firstElementChild
   const last = cardRoot?.lastElementChild?.lastElementChild
@@ -201,10 +198,9 @@ describe('LinuxPackageInstallRecoveryCard copy action', () => {
     fireEvent.click(button('Copy Install Command'))
     await flushActions()
 
-    // Why: the Electron channel prefix must be stripped before the user sees the message.
     expect(footnoteText()).toBe('Unauthorized updater package recovery sender')
     expect(footnoteElement()?.className).toContain('text-destructive')
-    // Why: only main can rule out a command; a rejection must not push the 160 MB redownload.
+    // Only main can declare a command unavailable; other rejections must not promote a full redownload.
     expect(button('Copy Install Command').dataset.variant).toBe('default')
     expect(screen.getByText(/Copy the command, quit Orca/)).toBeTruthy()
     expect(button('Download Manually')).toBeTruthy()
@@ -250,7 +246,6 @@ describe('LinuxPackageInstallRecoveryCard copy action', () => {
 
     expect(footnoteText()).toBe('Clipboard is unavailable.')
     expect(screen.queryByText(COPIED_NOTE)).toBeNull()
-    // Why: the command was built and validated — only the clipboard failed, so nothing is demoted.
     const copyButton = button('Copy Install Command')
     expect(copyButton.dataset.variant).toBe('default')
     expect(isAriaDisabled(copyButton)).toBe(false)
@@ -351,7 +346,7 @@ describe('LinuxPackageInstallRecoveryCard hashing state', () => {
     fireEvent.click(checking)
     fireEvent.click(button('Show Package'))
 
-    // Why: the buttons stay clickable for focus reasons, so the handlers must do the refusing.
+    // aria-disabled preserves focus/click delivery, so handlers must refuse duplicate actions.
     expect(getInstructions).toHaveBeenCalledTimes(1)
     expect(showLinuxPackage).not.toHaveBeenCalled()
 
@@ -369,7 +364,7 @@ describe('LinuxPackageInstallRecoveryCard hashing state', () => {
 
     fireEvent.click(button('Copy Install Command'))
 
-    // Why: ui/button styles only `disabled:`, so without these an inert action looks fully live.
+    // aria-disabled needs explicit styles because ui/button dims only native disabled.
     for (const name of ['Checking package...', 'Show Package']) {
       expect(button(name).className).toContain('aria-disabled:opacity-50')
       expect(button(name).className).toContain('aria-disabled:cursor-default')
@@ -387,7 +382,7 @@ describe('LinuxPackageInstallRecoveryCard hashing state', () => {
     copyButton.focus()
     fireEvent.click(copyButton)
 
-    // Why: a native `disabled` here would blur the button and dump focus to <body>.
+    // Native disabled would blur the pressed button to body.
     expect(document.activeElement).toBe(button('Checking package...'))
     expect(document.activeElement).not.toBe(document.body)
 
@@ -438,7 +433,7 @@ describe('LinuxPackageInstallRecoveryCard details', () => {
 
     expect(screen.getByText('Details')).toBeTruthy()
     expect(screen.queryByText('Last error')).toBeNull()
-    // Why: the digest check is a point-in-time claim, not a standing guarantee about the file.
+    // The digest check proves a moment in time, not continued file integrity.
     const detail = screen.getByText(/Orca checks the downloaded file against the release metadata/)
     expect(detail.textContent).not.toContain(DIAGNOSTIC)
     expect(detail.textContent).toContain('at the moment it builds this command')
@@ -496,7 +491,6 @@ describe('LinuxPackageInstallRecoveryCard reveal', () => {
     await flushActions()
 
     expect(footnoteText()).toBe('Package file is missing.')
-    // Why: a reveal failure is not a command-build failure, so the copy path must survive it.
     expect(button('Copy Install Command')).toBeTruthy()
   })
 
@@ -599,7 +593,6 @@ describe('LinuxPackageInstallRecoveryCard keyboard', () => {
 
     fireEvent.click(button('Copy Install Command'))
 
-    // Why: aria-disabled keeps the control in the tab sequence; native disabled would remove it.
     const show = button('Show Package')
     show.focus()
     expect(document.activeElement).toBe(show)

@@ -4,7 +4,11 @@ import type { BrowserSessionProfile } from '../../shared/browser-workspace-types
 const BROWSER_SESSION_PROFILE_ID_RE =
   /^[\da-f-]{8}-[\da-f-]{4}-[\da-f-]{4}-[\da-f-]{4}-[\da-f-]{12}$/
 
-// Why: validate on-disk profile shape so a tampered JSON file can't inject an arbitrary partition into the will-attach-webview allowlist.
+type PersistedProfileWithUserAgentMode = Record<string, unknown> & {
+  readonly userAgentMode: unknown
+}
+
+// Persisted metadata must not add arbitrary partitions to the webview allowlist.
 export function isValidPersistedBrowserSessionProfile(
   profile: unknown,
   activeOrcaProfileId: string
@@ -19,11 +23,42 @@ export function isValidPersistedBrowserSessionProfile(
     typeof candidate.id === 'string' &&
     typeof candidate.partition === 'string' &&
     typeof candidate.label === 'string' &&
-    (candidate.userAgentMode === undefined ||
-      candidate.userAgentMode === 'clean' ||
-      candidate.userAgentMode === 'native') &&
     isProfileOwnedSessionPartition(candidate.id, candidate.partition, activeOrcaProfileId)
   )
+}
+
+export function inspectRetiredBrowserSessionProfileUserAgentModes(
+  profiles: readonly unknown[],
+  activeOrcaProfileId: string
+): { noticePending: boolean; degraded: boolean } {
+  let noticePending = false
+  let degraded = false
+  for (const profile of profiles) {
+    // Invalid profiles without a retired choice must not trigger a migration notice.
+    if (!isRecord(profile) || !hasPersistedProfileUserAgentMode(profile)) {
+      continue
+    }
+    noticePending = true
+    const mode = profile.userAgentMode
+    // Unknown modes and unhydratable profiles make the retired choice uninspectable.
+    if (
+      (mode !== 'clean' && mode !== 'native') ||
+      !isValidPersistedBrowserSessionProfile(profile, activeOrcaProfileId)
+    ) {
+      degraded = true
+    }
+  }
+  return { noticePending, degraded }
+}
+
+function hasPersistedProfileUserAgentMode(
+  profile: Record<string, unknown>
+): profile is PersistedProfileWithUserAgentMode {
+  return Object.hasOwn(profile, 'userAgentMode')
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null
 }
 
 function isProfileOwnedSessionPartition(

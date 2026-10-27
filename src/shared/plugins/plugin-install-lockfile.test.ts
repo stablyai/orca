@@ -31,18 +31,35 @@ describe('pluginInstallSourceSchema marketplace provenance', () => {
   })
 
   it('requires pinned refs and an exact marketplace snapshot commit', () => {
+    const source = {
+      kind: 'marketplace',
+      marketplace: {
+        url: 'https://github.com/stablyai/orca-plugins.git',
+        ref: 'main',
+        resolvedCommit: 'a'.repeat(40)
+      },
+      plugin: {
+        url: 'https://github.com/stablyai/orca-skills.git',
+        ref: 'v1.0.0'
+      }
+    }
+
     expect(
       pluginInstallSourceSchema.safeParse({
-        kind: 'marketplace',
-        marketplace: {
-          url: 'https://github.com/stablyai/orca-plugins.git',
-          ref: '',
-          resolvedCommit: 'main'
-        },
-        plugin: {
-          url: 'https://github.com/stablyai/orca-skills.git',
-          ref: ''
-        }
+        ...source,
+        marketplace: { ...source.marketplace, ref: '' }
+      }).success
+    ).toBe(false)
+    expect(
+      pluginInstallSourceSchema.safeParse({
+        ...source,
+        marketplace: { ...source.marketplace, resolvedCommit: 'main' }
+      }).success
+    ).toBe(false)
+    expect(
+      pluginInstallSourceSchema.safeParse({
+        ...source,
+        plugin: { ...source.plugin, ref: '' }
       }).success
     ).toBe(false)
   })

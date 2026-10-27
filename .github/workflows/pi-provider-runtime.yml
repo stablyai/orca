@@ -1,0 +1,34 @@
+name: Pi extension provider verification
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review, converted_to_draft]
+    paths:
+      - 'src/shared/commit-message-agent-specs-primary.ts'
+      - 'tests/tools/pi-provider-runtime-smoke.mjs'
+      - 'src/main/pi/rpc-history-*.ts'
+      - '.github/workflows/pi-provider-runtime.yml'
+permissions:
+  contents: read
+concurrency:
+  group: pi-provider-runtime-${{ github.event.pull_request.number || github.run_id }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+jobs:
+  runtime:
+    if: github.event_name != 'pull_request' || github.event.pull_request.draft != true
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    runs-on: ${{ fromJSON('{"ubuntu-latest":"blacksmith-4vcpu-ubuntu-2404","macos-latest":"blacksmith-6vcpu-macos-latest","windows-latest":"blacksmith-4vcpu-windows-2025"}')[matrix.os] || matrix.os }}
+    timeout-minutes: 20
+    env:
+      ORCA_BACKGROUND_LAUNCH: '1'
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+      - uses: ./.github/actions/install-node-dependencies
+      - name: Install pinned Pi runtime
+        run: npm install --prefix .cache/pi-provider --ignore-scripts --no-audit --no-fund @earendil-works/pi-coding-agent@0.84.2
+      - name: Verify extension model generation and session entry ids
+        run: node tests/tools/pi-provider-runtime-smoke.mjs .cache/pi-provider/node_modules/@earendil-works/pi-coding-agent/dist/cli.js

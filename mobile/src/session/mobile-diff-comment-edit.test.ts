@@ -33,6 +33,7 @@ describe('mobile diff comment editing', () => {
 
     expect(result.comment).toMatchObject({ id: 'a', body: 'updated', updatedAt: 200 })
     expect(result.comment?.sentAt).toBeUndefined()
+    expect(result.comments).toEqual([result.comment])
   })
 
   it('marks notes sent and excludes them from unsent counts', () => {

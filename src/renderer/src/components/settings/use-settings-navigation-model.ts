@@ -2,15 +2,11 @@ import { useCallback, useMemo } from 'react'
 import { applyDocumentTheme } from '@/lib/document-theme'
 import { useSettingsNavigationMetadata } from '@/hooks/useSettingsNavigationMetadata'
 import type { SettingsNavInstallStatus } from '@/lib/settings-navigation-types'
-import {
-  COMPUTER_USE_SKILL_NAME,
-  ORCHESTRATION_SKILL_NAME
-} from '@/lib/agent-feature-install-commands'
+import { COMPUTER_USE_SKILL_NAME, ORCHESTRATION_SKILL_NAME } from '@/lib/agent-feature-skill-names'
 import {
   getAgentSkillNavInstallStatus,
   getLinearAgentSkillNavInstallStatus
 } from '@/lib/agent-skill-nav-install-status'
-import { getProjectHostSetupProjectionFromState } from '../../store/selectors'
 import { getSettingsSectionSearchEntries, rankSettingsSearchItems } from './settings-search'
 import { deriveNeededSectionIds } from './settings-load-performance'
 import { SCROLLBACK_PRESETS_ROWS } from './SettingsConstants'
@@ -22,7 +18,7 @@ export function useSettingsNavigationModel(
   model: SettingsStoreModel,
   interactions: SettingsInteractionController
 ) {
-  // Why: recompute scrollback mode only when the row value changes, not on every settings mutation.
+  // Unrelated settings mutations must not recompute scrollback mode.
   if (model.settings?.terminalScrollbackRows !== model.prevScrollbackRows) {
     model.setPrevScrollbackRows(model.settings?.terminalScrollbackRows)
     if (model.settings) {
@@ -52,9 +48,7 @@ export function useSettingsNavigationModel(
   const { installed: computerUseSkillInstalled, loading: computerUseSkillLoading } =
     model.computerUseSkill
   const capabilityInstallStatusBySectionId = useMemo(() => {
-    const applicableFreshnessInventory = model.skillFreshnessApplies
-      ? model.skillFreshnessInventory
-      : null
+    const applicableSkillPlan = model.skillFreshnessApplies ? model.skillPlan : null
     const next = new Map<string, SettingsNavInstallStatus>([
       [
         'orchestration',
@@ -62,7 +56,7 @@ export function useSettingsNavigationModel(
           name: ORCHESTRATION_SKILL_NAME,
           installed: orchestrationSkillInstalled,
           loading: orchestrationSkillLoading,
-          inventory: applicableFreshnessInventory
+          plan: applicableSkillPlan
         })
       ]
     ])
@@ -73,7 +67,7 @@ export function useSettingsNavigationModel(
           skills: linearSkills,
           installed: linearSkillInstalled,
           loading: linearSkillLoading,
-          inventory: applicableFreshnessInventory
+          plan: applicableSkillPlan
         })
       )
     }
@@ -84,7 +78,7 @@ export function useSettingsNavigationModel(
           name: COMPUTER_USE_SKILL_NAME,
           installed: computerUseSkillInstalled,
           loading: computerUseSkillLoading,
-          inventory: applicableFreshnessInventory
+          plan: applicableSkillPlan
         })
       )
       if (model.settings) {
@@ -110,7 +104,7 @@ export function useSettingsNavigationModel(
     model.settings,
     model.showDesktopOnlySettings,
     model.skillFreshnessApplies,
-    model.skillFreshnessInventory,
+    model.skillPlan,
     model.voiceModelStatesLoading,
     orchestrationSkillInstalled,
     orchestrationSkillLoading
@@ -138,16 +132,21 @@ export function useSettingsNavigationModel(
       navSections,
       getSettingsSectionSearchEntries
     ).map(({ item }) => item)
-    if (
-      !interactions.hasUnsavedSourceControlAiPromptChanges ||
-      rankedSections.some((section) => section.id === 'git')
-    ) {
-      return rankedSections
+    const visible = [...rankedSections]
+    for (const [id, dirty] of [
+      ['git', model.hasUnsavedCommitPromptChanges || model.hasUnsavedBranchPromptChanges],
+      ['chat', model.hasUnsavedChatPromptChanges]
+    ] as const) {
+      const section = navSectionById.get(id)
+      if (dirty && section && !visible.some((item) => item.id === id)) {
+        visible.push(section)
+      }
     }
-    const gitSection = navSectionById.get('git')
-    return gitSection ? [...rankedSections, gitSection] : rankedSections
+    return visible
   }, [
-    interactions.hasUnsavedSourceControlAiPromptChanges,
+    model.hasUnsavedCommitPromptChanges,
+    model.hasUnsavedBranchPromptChanges,
+    model.hasUnsavedChatPromptChanges,
     navSectionById,
     navSections,
     model.settingsSearchQuery
@@ -157,11 +156,7 @@ export function useSettingsNavigationModel(
     [visibleNavSections]
   )
   const projectByRepoId = useMemo(() => {
-    const projection = getProjectHostSetupProjectionFromState({
-      repos: model.repos,
-      projects: model.projects,
-      projectHostSetups: model.projectHostSetups
-    })
+    const projection = { projects: model.projects, setups: model.projectHostSetups }
     const projectById = new Map(projection.projects.map((project) => [project.id, project]))
     const nextProjectByRepoId = new Map<string, (typeof projection.projects)[number]>()
     for (const setup of projection.setups) {

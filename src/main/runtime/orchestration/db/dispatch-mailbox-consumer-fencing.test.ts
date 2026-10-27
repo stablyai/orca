@@ -1,18 +1,13 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { OrchestrationDb } from '../db'
 import { ORCHESTRATION_CONTRACT_VERSION } from '../../../../shared/protocol-version'
-import { ORCHESTRATION_LEGACY_RUN_ID } from '../../../../shared/orchestration-rpc-contract'
-import { createRootDispatch } from './root-dispatch-test-fixture'
+import { createRootDispatch, reattachDispatchConsumer } from './root-dispatch-test-fixture'
 import type { DeliveryRow } from '../types'
 
 const PANE_A = 'tab_a:aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa'
 const PANE_B = 'tab_b:bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb'
 
-/**
- * Before schema v36 the `dispatch:<id>` mailbox pinned every consumer to generation 0, so the
- * `consumer_fenced` branch could never fire: a stale worker and its replacement shared one
- * outstanding Delivery and either one's ack marked the messages read for both.
- */
+/** Consumer generations fence stale workers so their acknowledgments cannot consume replacement deliveries. */
 describe('dispatch mailbox consumer fencing', () => {
   let db: OrchestrationDb
 
@@ -35,11 +30,17 @@ describe('dispatch mailbox consumer fencing', () => {
     return { id: dispatch.id, runId: dispatch.run_id }
   }
 
-  function openDelivery(dispatchId: string, runId: string, generation: number) {
+  function openDelivery(
+    dispatchId: string,
+    runId: string,
+    generation: number,
+    consumerSource: 'dispatch' | 'attachment' = 'dispatch'
+  ) {
     return db.getOrCreateMailboxDelivery({
       runId,
       mailboxHandle: `dispatch:${dispatchId}`,
-      consumerGeneration: generation
+      consumerGeneration: generation,
+      consumerSource
     })
   }
 
@@ -49,7 +50,7 @@ describe('dispatch mailbox consumer fencing', () => {
 
   it('fences worker A once worker B re-attaches, and hands B the same unread mail', () => {
     const dispatch = dispatchWithMail(['first', 'second'])
-    db.mintDispatchCapability({
+    reattachDispatchConsumer(db, {
       dispatchId: dispatch.id,
       paneKey: PANE_A,
       processIncarnation: 'runtime:pty-a:1'
@@ -58,7 +59,7 @@ describe('dispatch mailbox consumer fencing', () => {
     const deliveryA = openDelivery(dispatch.id, dispatch.runId, generationA)
     expect(deliveryA?.messages.map((message) => message.subject)).toEqual(['first', 'second'])
 
-    db.mintDispatchCapability({
+    reattachDispatchConsumer(db, {
       dispatchId: dispatch.id,
       paneKey: PANE_B,
       processIncarnation: 'runtime:pty-b:1'
@@ -92,7 +93,7 @@ describe('dispatch mailbox consumer fencing', () => {
 
   it("leaves A's ack able to strand mail unread only when B never took over", () => {
     const dispatch = dispatchWithMail(['first'])
-    db.mintDispatchCapability({
+    reattachDispatchConsumer(db, {
       dispatchId: dispatch.id,
       paneKey: PANE_A,
       processIncarnation: 'runtime:pty-a:1'
@@ -100,7 +101,6 @@ describe('dispatch mailbox consumer fencing', () => {
     const generation = generationOf(dispatch.id)
     const delivery = openDelivery(dispatch.id, dispatch.runId, generation)
 
-    // A PTY restart with no re-attach must keep the live worker on its own generation.
     expect(generationOf(dispatch.id)).toBe(generation)
     const replayed = openDelivery(dispatch.id, dispatch.runId, generation)
     expect(replayed?.delivery.id).toBe(delivery!.delivery.id)
@@ -169,11 +169,10 @@ describe('dispatch mailbox consumer fencing', () => {
       from: 'home-peer',
       to: `dispatch:${dispatchId}`,
       subject: 'relayed before attach',
-      runId: ORCHESTRATION_LEGACY_RUN_ID
+      runId: 'run-home'
     })
-    const stale = openDelivery(dispatchId, ORCHESTRATION_LEGACY_RUN_ID, 0)
+    const stale = openDelivery(dispatchId, 'run-home', 0, 'attachment')
 
-    // The worker host holds no dispatch_contexts row for a federated Dispatch.
     expect(db.getDispatchContextById(dispatchId)).toBeUndefined()
 
     db.prepareRemoteAttachmentAuthority({
@@ -210,7 +209,6 @@ describe('dispatch mailbox consumer fencing', () => {
       startOptions: {}
     })
 
-    // A retry owns a new dispatch id, so it never inherits the failed Attempt's mailbox address.
     expect(retry.dispatch.id).not.toBe(first.dispatch.id)
     expect(retry.dispatch.consumer_generation).toBe(0)
   })

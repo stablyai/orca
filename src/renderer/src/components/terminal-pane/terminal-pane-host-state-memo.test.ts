@@ -1,8 +1,4 @@
-/**
- * `useShallow` suppresses the render, not the selector: before the memo, every
- * store publication re-resolved the execution host and allocated a fresh 7-key
- * object for every mounted TerminalPane, then threw it away.
- */
+// useShallow skips renders, not selectors; memoize host resolution to avoid per-tab traversal and discarded objects on every publication.
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type * as ConnectionContext from '@/lib/connection-context'
 import type { AppState } from '@/store/types'
@@ -54,11 +50,27 @@ beforeEach(() => {
 })
 
 describe('selectTerminalPaneHostState memo', () => {
+  it('releases the last store snapshot when no terminal selects again', async () => {
+    if (typeof globalThis.gc !== 'function') {
+      throw new Error('Run with the repository Vitest --expose-gc config')
+    }
+    function selectRetiredState(): WeakRef<AppState> {
+      const state = makeState()
+      selectTerminalPaneHostState(state, LOCAL_WORKTREE)
+      return new WeakRef(state)
+    }
+    const retired = selectRetiredState()
+    for (let round = 0; round < 3; round++) {
+      await new Promise<void>((resolve) => setImmediate(resolve))
+      globalThis.gc()
+    }
+    expect(retired.deref()).toBeUndefined()
+  })
+
   it('returns the same object across an unrelated store write', () => {
     const first = makeState()
     const before = selectTerminalPaneHostState(first, LOCAL_WORKTREE)
 
-    // A new published state object with no host-relevant change.
     const second = makeState({ rightSidebarOpen: true })
     const after = selectTerminalPaneHostState(second, LOCAL_WORKTREE)
 
@@ -71,13 +83,11 @@ describe('selectTerminalPaneHostState memo', () => {
     const afterFirstTab = connectionIdCalls.count
     expect(afterFirstTab).toBe(1)
 
-    // Four more tabs of the same worktree, same publication.
     for (let index = 0; index < 4; index += 1) {
       selectTerminalPaneHostState(state, LOCAL_WORKTREE)
     }
     expect(connectionIdCalls.count).toBe(afterFirstTab)
 
-    // A different worktree in the same publication still resolves.
     selectTerminalPaneHostState(state, OTHER_WORKTREE)
     expect(connectionIdCalls.count).toBe(afterFirstTab + 1)
   })
@@ -112,7 +122,6 @@ describe('selectTerminalPaneHostState memo', () => {
     let allocations = 0
 
     for (let publication = 0; publication < 1_000; publication += 1) {
-      // One published state object, then every mounted tab's selector run.
       const state = makeState({ agentStatusEpoch: publication })
       for (const worktreeId of worktreeIds) {
         for (let tab = 0; tab < 5; tab += 1) {
@@ -124,7 +133,6 @@ describe('selectTerminalPaneHostState memo', () => {
     }
 
     expect(allocations).toBe(0)
-    // One host resolve per worktree per publication instead of one per tab.
     expect(connectionIdCalls.count).toBe(6 * 1_000)
   })
 })

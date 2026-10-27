@@ -3,7 +3,6 @@ import { resolveNativeChatTranscriptAgent } from '../../../shared/native-chat-ag
 import type { OrchestrationWorkerReadFallbackReason } from '../../../shared/orchestration-worker-output'
 import { resolveSessionFilePath } from '../../native-chat/session-file-resolver'
 import { nativeChatLineDecoderForAgent } from '../../native-chat/transcript-tail-reader'
-import type { IFilesystemProvider } from '../../providers/types'
 import {
   boundWorkerTranscriptMessages,
   clampWorkerTranscriptLimit
@@ -12,7 +11,6 @@ import {
   readForwardLocalWorkerTranscriptPage,
   readInitialLocalWorkerTranscriptPage
 } from './worker-transcript-local-read'
-import { readRemoteWorkerTranscript } from './worker-transcript-remote-read'
 
 type WorkerTranscriptReadFailure = {
   ok: false
@@ -46,8 +44,6 @@ export async function readWorkerTranscript(args: {
   expectedSourceFingerprint?: string
   /** Hash of the bounded content immediately before a cursor offset. */
   expectedBoundaryCheckpoint?: string
-  /** Remote execution-host provider. When present no local filesystem lookup occurs. */
-  filesystemProvider?: IFilesystemProvider
 }): Promise<WorkerTranscriptReadResult> {
   const transcriptAgent = resolveNativeChatTranscriptAgent(args.agent)
   if (!transcriptAgent) {
@@ -58,24 +54,6 @@ export async function readWorkerTranscript(args: {
     return { ok: false, reason: 'provider_unsupported', warnings: [] }
   }
   let filePath: string | null
-  if (args.filesystemProvider) {
-    // A remote provider can only read the hook-attested path. Never search the
-    // desktop's provider roots for a remote session (same-path sentinels are a
-    // real authority boundary, not merely a portability concern).
-    filePath = args.transcriptPath?.trim() || null
-    if (!filePath) {
-      return { ok: false, reason: 'transcript_missing', warnings: [] }
-    }
-    const page = await readRemoteWorkerTranscript(args, filePath, decode)
-    if (
-      page.ok &&
-      args.expectedSourceFingerprint &&
-      page.sourceFingerprint !== args.expectedSourceFingerprint
-    ) {
-      return { ok: false, reason: 'source_changed', warnings: [] }
-    }
-    return page
-  }
   try {
     filePath = await resolveSessionFilePath(args.agent, args.sessionId, {
       transcriptPath: args.transcriptPath,

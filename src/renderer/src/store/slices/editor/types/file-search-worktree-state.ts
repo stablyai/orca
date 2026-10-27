@@ -10,6 +10,7 @@ export type FileSearchWorktreeState = {
   excludePattern: string
   results: SearchResult | null
   resultOwner: FileSearchResultOwner | null
+  error?: string | null
   loading: boolean
   collapsedFiles: Set<string>
   seedRequestId?: number

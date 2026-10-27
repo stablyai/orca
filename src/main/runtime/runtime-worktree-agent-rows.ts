@@ -1,34 +1,15 @@
-import {
-  AGENT_STATUS_STALE_AFTER_MS,
-  isFreshNonDoneAgentStatus,
-  pickParsedAgentStatusPayload,
-  type AgentStatusIpcPayload,
-  type ParsedAgentStatusPayload
-} from '../../shared/agent-status-types'
-import { terminalStatusPayloadMatchesHook } from '../../shared/agent-terminal-status-equivalence'
+import { isFreshNonDoneAgentStatus } from '../../shared/agent-status-types'
+import { isAgentStatusFresh } from '../../shared/agent-status-freshness'
 import type { RuntimeWorktreeAgentRow, RuntimeWorktreePsSummary } from '../../shared/runtime-types'
-import { parseLegacyNumericPaneKey, parsePaneKey } from '../../shared/stable-pane-id'
-import { isWslHookRelayConnectionId } from '../../shared/wsl-hook-relay-contract'
 import { mergeWorktreeSummaryStatus } from './runtime-worktree-status-projection'
-import type { RuntimeWorktreeSummaryPathIndex } from './runtime-worktree-summary-paths'
-import type { RuntimeWorkingTerminalEvidence } from './runtime-worktree-ps-activity'
-
-export type RuntimeAgentRowSnapshot = {
-  paneKey: string
-  ptyId: string
-  worktreeId?: string
-  tabId?: string
-  connectionId: string | null
-  payload: ParsedAgentStatusPayload
-  stateStartedAt: number
-  updatedAt: number
-}
-
-type ConnectedPtyEvidence = {
-  tabIds: ReadonlySet<string>
-  paneKeys: ReadonlySet<string>
-  ptyIds: ReadonlySet<string>
-}
+import {
+  resolveRuntimeWorktreeSidebarStatus,
+  terminalTitleEvidenceMatchesSource
+} from './runtime-worktree-sidebar-status'
+import type { RuntimeWorktreePsSummaryLookup } from './runtime-worktree-summary-paths'
+import type { RuntimeTerminalTitleEvidence } from './runtime-worktree-ps-activity'
+import type { RuntimeWorktreeAgentSource } from './runtime-worktree-agent-source'
+export type { RuntimeAgentRowSnapshot } from './runtime-hook-agent-row-selection'
 
 type OrchestrationDisplay = {
   taskTitle?: string | null
@@ -36,137 +17,22 @@ type OrchestrationDisplay = {
   parentPaneKey?: string | null
 }
 
-type RuntimeWorktreeAgentSource = {
-  paneKey: string
-  ptyId?: string
-  tabId?: string
-  worktreeId?: string
-  connectionId: string | null
-  payload: ParsedAgentStatusPayload
-  state: ParsedAgentStatusPayload['state']
-  workingMode?: ParsedAgentStatusPayload['workingMode']
-  agentType: string | null
-  prompt: string
-  lastAssistantMessage: string | null
-  toolName: string | null
-  toolInput: string | null
-  interrupted: boolean
-  stateStartedAt: number
-  updatedAt: number
-  restoredUnconfirmed?: boolean
-}
-
 export function attachRuntimeWorktreeAgentRows(args: {
   summaries: Map<string, RuntimeWorktreePsSummary>
-  pathIndex: RuntimeWorktreeSummaryPathIndex
-  missingWorktreeIds: Set<string>
-  mirroredWorktreeIdByTabId: ReadonlyMap<string, string>
-  connectedPtyEvidence: ConnectedPtyEvidence
-  workingTerminalEvidenceByWorktreeId: ReadonlyMap<
-    string,
-    readonly RuntimeWorkingTerminalEvidence[]
-  >
-  retainedSnapshots: Iterable<RuntimeAgentRowSnapshot>
-  hookSnapshots: readonly AgentStatusIpcPayload[]
+  rowSources: ReadonlyMap<string, RuntimeWorktreeAgentSource>
+  terminalTitleEvidenceByWorktreeId: ReadonlyMap<string, readonly RuntimeTerminalTitleEvidence[]>
   orchestrationByPaneKey: Record<string, OrchestrationDisplay> | null | undefined
-  getSummary: (
-    summaries: Map<string, RuntimeWorktreePsSummary>,
-    pathIndex: RuntimeWorktreeSummaryPathIndex,
-    missingWorktreeIds: Set<string>,
-    worktreeId: string
-  ) => RuntimeWorktreePsSummary | null
+  getSummary: RuntimeWorktreePsSummaryLookup
 }): void {
-  const rowSources = new Map<string, RuntimeWorktreeAgentSource>()
+  const { rowSources } = args
   const now = Date.now()
-  for (const snapshot of args.retainedSnapshots) {
-    const { payload } = snapshot
-    rowSources.set(snapshot.paneKey, {
-      paneKey: snapshot.paneKey,
-      ptyId: snapshot.ptyId,
-      tabId: snapshot.tabId,
-      worktreeId: snapshot.worktreeId,
-      connectionId: snapshot.connectionId,
-      payload,
-      state: payload.state,
-      ...(payload.workingMode ? { workingMode: payload.workingMode } : {}),
-      agentType: payload.agentType ?? null,
-      prompt: payload.prompt,
-      lastAssistantMessage: payload.lastAssistantMessage ?? null,
-      toolName: payload.toolName ?? null,
-      toolInput: payload.toolInput ?? null,
-      interrupted: payload.interrupted ?? false,
-      stateStartedAt: snapshot.stateStartedAt,
-      updatedAt: snapshot.updatedAt
-    })
-  }
-  for (const entry of args.hookSnapshots) {
-    if (entry.restoredUnconfirmed === true) {
-      continue
-    }
-    const existing = rowSources.get(entry.paneKey)
-    const hookPayload = pickParsedAgentStatusPayload(entry)
-    if (existing && existing.updatedAt > entry.receivedAt) {
-      if (
-        entry.workingMode === 'monitoring' &&
-        now - entry.receivedAt <= AGENT_STATUS_STALE_AFTER_MS &&
-        terminalStatusPayloadMatchesHook(hookPayload, existing.payload)
-      ) {
-        existing.workingMode = 'monitoring'
-        if (existing.payload.workingMode === undefined) {
-          existing.payload = { ...existing.payload, workingMode: 'monitoring' }
-        }
-      }
-      continue
-    }
-    rowSources.set(entry.paneKey, {
-      paneKey: entry.paneKey,
-      ptyId: existing?.ptyId,
-      tabId: entry.tabId,
-      worktreeId: entry.worktreeId,
-      connectionId: entry.connectionId,
-      payload: hookPayload,
-      state: entry.state,
-      ...(entry.workingMode ? { workingMode: entry.workingMode } : {}),
-      agentType: entry.agentType ?? null,
-      prompt: entry.prompt,
-      lastAssistantMessage: entry.lastAssistantMessage ?? null,
-      toolName: entry.toolName ?? null,
-      toolInput: entry.toolInput ?? null,
-      interrupted: entry.interrupted ?? false,
-      stateStartedAt: entry.stateStartedAt,
-      updatedAt: entry.receivedAt
-    })
-  }
-  if (rowSources.size === 0) {
-    return
-  }
   const rowsByWorktree = new Map<string, RuntimeWorktreeAgentRow[]>()
   for (const source of rowSources.values()) {
-    const tabId =
-      source.tabId ??
-      parsePaneKey(source.paneKey)?.tabId ??
-      parseLegacyNumericPaneKey(source.paneKey)?.tabId
-    const mirroredWorktreeId = tabId ? args.mirroredWorktreeIdByTabId.get(tabId) : undefined
-    if (
-      tabId !== undefined &&
-      mirroredWorktreeId === undefined &&
-      (source.connectionId === null || isWslHookRelayConnectionId(source.connectionId)) &&
-      !args.connectedPtyEvidence.tabIds.has(tabId) &&
-      !args.connectedPtyEvidence.paneKeys.has(source.paneKey) &&
-      (source.ptyId === undefined || !args.connectedPtyEvidence.ptyIds.has(source.ptyId))
-    ) {
-      continue
-    }
-    const worktreeId = mirroredWorktreeId ?? source.worktreeId
+    const { worktreeId } = source
     if (!worktreeId) {
       continue
     }
-    const summary = args.getSummary(
-      args.summaries,
-      args.pathIndex,
-      args.missingWorktreeIds,
-      worktreeId
-    )
+    const summary = args.getSummary(worktreeId)
     if (!summary) {
       continue
     }
@@ -184,8 +50,17 @@ export function attachRuntimeWorktreeAgentRows(args: {
       toolName: source.toolName,
       toolInput: source.toolInput,
       interrupted: source.interrupted,
+      ...(source.mainAgent ? { mainAgent: source.mainAgent } : {}),
       stateStartedAt: source.stateStartedAt,
-      updatedAt: source.updatedAt
+      updatedAt: source.updatedAt,
+      ...(source.children !== undefined ? { children: source.children } : {}),
+      ...(source.subagents !== undefined ? { subagents: source.subagents } : {}),
+      ...(source.structuredHost === 'owned' ? { structuredHostOwned: true as const } : {}),
+      ...(source.hasLivePty ? { hasLivePty: true as const } : {}),
+      ...(source.programStatus ? { programStatus: source.programStatus } : {})
+    }
+    if (source.children !== undefined || source.subagents !== undefined) {
+      row.subagentObservation = isAgentStatusFresh(row, now) ? 'live' : 'unverifiable'
     }
     const rows = rowsByWorktree.get(summary.worktreeId)
     if (rows) {
@@ -223,9 +98,11 @@ export function attachRuntimeWorktreeAgentRows(args: {
     }
     if (hasForegroundWorkingAgent || monitoringSources.length > 0) {
       const hasIndependentWorkingTerminal = (
-        args.workingTerminalEvidenceByWorktreeId.get(worktreeId) ?? []
-      ).some((evidence) =>
-        monitoringSources.every((source) => !workingTerminalEvidenceMatchesSource(evidence, source))
+        args.terminalTitleEvidenceByWorktreeId.get(worktreeId) ?? []
+      ).some(
+        (evidence) =>
+          evidence.status === 'working' &&
+          monitoringSources.every((source) => !terminalTitleEvidenceMatchesSource(evidence, source))
       )
       mergeWorktreeSummaryStatus(
         summary,
@@ -234,20 +111,12 @@ export function attachRuntimeWorktreeAgentRows(args: {
       )
     }
   }
-}
-
-function workingTerminalEvidenceMatchesSource(
-  evidence: RuntimeWorkingTerminalEvidence,
-  source: RuntimeWorktreeAgentSource
-): boolean {
-  if (evidence.paneKey) {
-    return (
-      evidence.paneKey === source.paneKey ||
-      Boolean(evidence.ptyId && source.ptyId && evidence.ptyId === source.ptyId)
+  for (const summary of args.summaries.values()) {
+    summary.sidebarStatus = resolveRuntimeWorktreeSidebarStatus(
+      summary,
+      now,
+      args.terminalTitleEvidenceByWorktreeId.get(summary.worktreeId) ?? [],
+      (paneKey) => rowSources.get(paneKey)
     )
   }
-  if (evidence.ptyId && source.ptyId) {
-    return evidence.ptyId === source.ptyId
-  }
-  return Boolean(evidence.tabId && evidence.tabId === source.tabId)
 }

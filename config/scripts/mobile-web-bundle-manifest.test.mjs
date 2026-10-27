@@ -1,0 +1,123 @@
+import { existsSync } from 'node:fs'
+import { mkdtemp, readFile, rm } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
+import { describe, expect, it } from 'vitest'
+import {
+  computeMobileWebBundleBuildId,
+  contentTypeForExtension,
+  hashedAsset,
+  serializeMobileWebBundleAssets,
+  sha256Hex,
+  writeMobileWebBundleTree
+} from './mobile-web-bundle-manifest.mjs'
+import {
+  MOBILE_WEB_PAGE_VERSION,
+  MobileWebBundleManifestSchema
+} from '../../src/shared/mobile-web-bundle/manifest-contract.js'
+
+describe('computeMobileWebBundleBuildId', () => {
+  const assets = [
+    { path: 'index.html', sha256: 'a'.repeat(64), byteLength: 3, contentType: 'text/html' },
+    { path: 'assets/b.js', sha256: 'b'.repeat(64), byteLength: 5, contentType: 'text/javascript' }
+  ]
+
+  it('sorts by path, so input order cannot change the id', () => {
+    expect(computeMobileWebBundleBuildId(assets.toReversed())).toBe(
+      computeMobileWebBundleBuildId(assets)
+    )
+  })
+
+  it('serializes a fixed key order regardless of the input object key order', () => {
+    const reordered = assets.map(({ contentType, byteLength, sha256, path }) => ({
+      contentType,
+      byteLength,
+      sha256,
+      path
+    }))
+    expect(serializeMobileWebBundleAssets(reordered)).toBe(serializeMobileWebBundleAssets(assets))
+  })
+
+  it('changes when any hashed field changes', () => {
+    const baseline = computeMobileWebBundleBuildId(assets)
+    for (const field of ['sha256', 'byteLength', 'contentType', 'path']) {
+      const mutated = assets.map((asset, index) =>
+        index === 0 ? { ...asset, [field]: field === 'byteLength' ? 4 : `${asset[field]}x` } : asset
+      )
+      expect(computeMobileWebBundleBuildId(mutated)).not.toBe(baseline)
+    }
+  })
+})
+
+describe('hashedAsset', () => {
+  it('names an asset by its own digest, which is what makes the tree content-addressed', () => {
+    const asset = hashedAsset(Buffer.from('body', 'utf8'), 'js')
+
+    expect(asset.path).toBe(`assets/${asset.sha256}.js`)
+    expect(asset.sha256).toBe('230d8358dc8e8890b4c58deeb62912ee2f20357ae92a5cc861b98e68fe31acb5')
+    expect(asset.byteLength).toBe(4)
+    expect(asset.contentType).toBe('text/javascript; charset=utf-8')
+  })
+
+  it('refuses an extension with no registered content type', () => {
+    // Unknown content type must fail rather than leave phone guessing how to serve addressed bytes.
+    expect(() => hashedAsset(Buffer.from('body'), 'wasm')).toThrow(/no content type registered/)
+  })
+})
+
+describe('writeMobileWebBundleTree', () => {
+  it('stamps the page version the contract names, which the shell floors on', async () => {
+    const outDir = await mkdtemp(join(tmpdir(), 'mobile-web-bundle-manifest-'))
+    try {
+      const bytes = Buffer.from('<!doctype html>\n', 'utf8')
+      const entry = {
+        path: 'index.html',
+        bytes,
+        sha256: sha256Hex(bytes),
+        byteLength: bytes.byteLength,
+        contentType: contentTypeForExtension('html')
+      }
+      await writeMobileWebBundleTree({
+        outDir,
+        written: [entry],
+        desktopVersion: '1.0.0',
+        protocolWindow: { runtimeProtocolVersion: 3, minCompatibleRuntimeProtocolVersion: 3 }
+      })
+      const manifest = JSON.parse(await readFile(join(outDir, 'manifest.json'), 'utf8'))
+      expect(manifest.pageVersion).toBe(MOBILE_WEB_PAGE_VERSION)
+      expect(MobileWebBundleManifestSchema.parse(manifest).pageVersion).toBe(manifest.pageVersion)
+    } finally {
+      await rm(outDir, { recursive: true, force: true })
+    }
+  })
+
+  it('marks a dark build outside the manifest, so its buildId is the same tree’s', async () => {
+    const outDir = await mkdtemp(join(tmpdir(), 'mobile-web-bundle-manifest-'))
+    try {
+      const bytes = Buffer.from('<!doctype html>\n', 'utf8')
+      const tree = (env) =>
+        writeMobileWebBundleTree({
+          outDir,
+          written: [
+            {
+              path: 'index.html',
+              bytes,
+              sha256: sha256Hex(bytes),
+              byteLength: bytes.byteLength,
+              contentType: contentTypeForExtension('html')
+            }
+          ],
+          desktopVersion: '1.0.0',
+          protocolWindow: { runtimeProtocolVersion: 3, minCompatibleRuntimeProtocolVersion: 3 },
+          env
+        })
+      const dark = await tree({ ORCA_SIDEBAR_INPUTS: 'main' })
+      expect(existsSync(join(outDir, 'ORCA_SIDEBAR_INPUTS_MAIN'))).toBe(true)
+      const off = await tree({})
+      expect(existsSync(join(outDir, 'ORCA_SIDEBAR_INPUTS_MAIN'))).toBe(false)
+      expect(dark.manifest.buildId).toBe(off.manifest.buildId)
+    } finally {
+      await rm(outDir, { recursive: true, force: true })
+    }
+  })
+})

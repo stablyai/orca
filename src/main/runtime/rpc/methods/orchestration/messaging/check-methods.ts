@@ -1,4 +1,4 @@
-import { defineMethod, type RpcMethod } from '../../../core'
+import { defineMethod } from '../../../core'
 import { OrchestrationError } from '../../../../orchestration/orchestration-error'
 import { CheckParams } from '../schemas'
 import { parseMessageTypes } from '../routing'
@@ -6,20 +6,24 @@ import { checkRunMailbox } from './check-run'
 import { checkWorkerMailbox } from './check-worker'
 import { checkDirectMailbox } from './check-direct'
 import { orchestrationSkillRecoveryData } from '../../../../../../shared/orchestration-rpc-contract'
+import { hasRunBindingKey } from '../../../../orchestration/orchestration-caller-identity'
+import { orchestrationCallerIdentity } from '../runs/run-scope'
 import {
   callerHoldsDispatchPane,
   dispatchFenced,
   isSupersededDispatch
 } from './dispatch-mailbox-fence'
 
-export const ORCHESTRATION_CHECK_METHODS: RpcMethod[] = [
+export const ORCHESTRATION_CHECK_METHODS = [
   defineMethod({
     name: 'orchestration.check',
+    permission: 'workspace',
     params: CheckParams,
     handler: async (
       params,
       {
         orchestrationCompatibilityEvidence,
+        orchestrationCaller,
         runtime,
         signal,
         legacyCoordinatorRunId,
@@ -31,9 +35,14 @@ export const ORCHESTRATION_CHECK_METHODS: RpcMethod[] = [
       const handle = params.terminal ?? 'unknown'
       const typeFilter = parseMessageTypes(params.types)
 
-      // Why: a live runtime handle is authoritative; pane metadata is only the restart fallback.
-      const paneKey = runtime.getTerminalPaneKey(handle) ?? params.terminalPaneKey
-      const boundRun = paneKey ? db.getCurrentRunForPane(paneKey) : undefined
+      const caller = orchestrationCallerIdentity(runtime, {
+        handle,
+        session: orchestrationCaller,
+        // Why: a live runtime handle is authoritative; pane metadata is only the restart fallback.
+        paneKey: runtime.getTerminalPaneKey(handle) ?? params.terminalPaneKey
+      })
+      const paneKey = caller.paneKey ?? undefined
+      const boundRun = hasRunBindingKey(caller) ? db.getCurrentRunForCoordinator(caller) : undefined
       if (params.run || boundRun) {
         return checkRunMailbox({
           params,
@@ -41,6 +50,7 @@ export const ORCHESTRATION_CHECK_METHODS: RpcMethod[] = [
           db,
           handle,
           paneKey,
+          callerSession: orchestrationCaller,
           typeFilter,
           signal,
           legacyCoordinatorRunId,
@@ -80,23 +90,21 @@ export const ORCHESTRATION_CHECK_METHODS: RpcMethod[] = [
           typeFilter,
           signal,
           activeDispatch,
-          remoteAttachment
+          remoteAttachment,
+          recordMutationReceipt
         })
       }
       const consumingCheck = params.peek !== true && params.all !== true && params.unread !== false
-      // Why: an empty consuming check is the worker contract's "checkpoint, not a failure", so a
-      // caller whose Attempt moved on has to be told rather than handed an empty direct mailbox.
-      // This outranks the pane guard: a paneless loser cannot run-use anyway, it has to stop.
+      // A superseded Attempt must receive a stop signal, not an empty checkpoint; this outranks pane rebind advice.
       const settledDispatch = consumingCheck ? db.getLatestDispatchForTerminal(handle) : undefined
       if (settledDispatch && isSupersededDispatch(settledDispatch)) {
         throw dispatchFenced()
       }
-      // Why: a consuming check on a handle with no live pane and no Dispatch can never see
-      // Run mail, so an empty inbox would read as "nothing yet" instead of a stale caller.
-      if (!paneKey && consumingCheck) {
+      // Without a live pane or Dispatch, an empty consuming inbox would disguise a stale caller as still waiting.
+      if (!hasRunBindingKey(caller) && consumingCheck) {
         throw new OrchestrationError(
           'stable_pane_required',
-          `Terminal ${handle} has no live pane bound to a Run, so this inbox can never receive Run mail. Rebind this terminal with orchestration run-use, or read the Run mailbox with --run <run_id>.`,
+          `Terminal ${handle} has no live pane and no active Dispatch, so a consuming check here can never receive mail. Run check from the agent's own live terminal.`,
           orchestrationSkillRecoveryData()
         )
       }

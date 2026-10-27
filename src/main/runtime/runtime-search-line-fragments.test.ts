@@ -1,10 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 import { EventEmitter } from 'node:events'
-import {
-  checkRgAvailableMock,
-  resolveAuthorizedPathMock,
-  wslAwareSpawnMock
-} from './orca-runtime-files-mock-registry'
+import { resolveAuthorizedPathMock, wslAwareSpawnMock } from './orca-runtime-files-mock-registry'
 import {
   createRuntimeFileCommands,
   useRuntimeFileCommandsLifecycle
@@ -18,27 +14,15 @@ vi.mock(
   './file-watcher-host',
   async () => (await import('./orca-runtime-files-mock-registry')).fileWatcherHostMock
 )
-vi.mock('../ipc/filesystem-auth', async () =>
+vi.mock('../ipc/filesystem/filesystem-auth', async () =>
   (await import('./orca-runtime-files-mock-registry')).filesystemAuthModuleMock()
 )
 vi.mock('../git/runner', async () =>
   (await import('./orca-runtime-files-mock-registry')).gitRunnerModuleMock()
 )
 vi.mock(
-  '../ipc/rg-availability',
-  async () => (await import('./orca-runtime-files-mock-registry')).rgAvailabilityMock
-)
-vi.mock(
   '../ipc/local-worktree-runtime-options',
   async () => (await import('./orca-runtime-files-mock-registry')).localWorktreeRuntimeOptionsMock
-)
-vi.mock(
-  '../ipc/filesystem-search-git',
-  async () => (await import('./orca-runtime-files-mock-registry')).filesystemSearchGitMock
-)
-vi.mock(
-  '../providers/ssh-filesystem-dispatch',
-  async () => (await import('./orca-runtime-files-mock-registry')).sshFilesystemDispatchMock
 )
 
 type MockRuntimeSearchChild = EventEmitter & {
@@ -74,7 +58,6 @@ describe('RuntimeFileCommands', () => {
     })
     const child = createRuntimeSearchChild()
     resolveAuthorizedPathMock.mockResolvedValue('/repo')
-    checkRgAvailableMock.mockResolvedValue(true)
     wslAwareSpawnMock.mockReturnValue(child)
     const resultPromise = commands.searchRuntimeFiles('id:wt-1', {
       query: 'needle',
@@ -90,7 +73,9 @@ describe('RuntimeFileCommands', () => {
         submatches: [{ start: 0, end: 6 }]
       }
     })
-    const originalSplit = String.prototype.split
+    // Method-shaped type: a call-signature capture would reject `split`'s splitter-object overload.
+    const originalSplit: { split(separator: unknown, limit?: number): string[] }['split'] =
+      String.prototype.split
     let scanned = 0
     const spy = vi.spyOn(String.prototype, 'split').mockImplementation(function (
       this: string,
@@ -100,7 +85,7 @@ describe('RuntimeFileCommands', () => {
       if (separator === '\n') {
         scanned += this.length
       }
-      return Reflect.apply(originalSplit, this, [separator, limit])
+      return originalSplit.call(this, separator, limit)
     })
     try {
       for (let offset = 0; offset < line.length; offset += 1024) {

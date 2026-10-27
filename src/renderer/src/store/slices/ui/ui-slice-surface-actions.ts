@@ -8,6 +8,7 @@ import {
   type CustomPet
 } from '../../../../../shared/pet-types'
 import { clampPetSize } from './ui-slice-hydration-sanitizers'
+import { readPersistedFloatingTerminalPanelViewState } from '../../../components/floating-terminal/floating-terminal-panel-view-state'
 
 export function createUiSurfaceActions(set: UISliceSet, _get: UISliceGet): Partial<UISlice> {
   return {
@@ -79,8 +80,13 @@ export function createUiSurfaceActions(set: UISliceSet, _get: UISliceGet): Parti
               : state.workspacePortScan
         }
       }),
+    // Preserve root identity so no-op writes do not notify every store subscriber.
     setWorkspacePortScanRefreshing: (refreshing) =>
-      set({ workspacePortScanRefreshing: refreshing }),
+      set((state) =>
+        state.workspacePortScanRefreshing === refreshing
+          ? state
+          : { workspacePortScanRefreshing: refreshing }
+      ),
 
     // Why: default true so enabling experimentalPet shows the pet immediately (persisted; "Hide pet" flips it false).
     petVisible: true,
@@ -143,31 +149,49 @@ export function createUiSurfaceActions(set: UISliceSet, _get: UISliceGet): Parti
 
     pendingRevealWorktree: null,
     pendingRevealSidebarRow: null,
-    // Why sidebarBody here: the worktree list (and its reveal consumer) is unmounted while the
-    // Agents body is showing, so a reveal that does not switch bodies silently no-ops.
+    // Activity view unmounts workspaces; incidental activation must not switch bodies or queue a surprise reveal.
     revealWorktreeInSidebar: (worktreeId, options) =>
-      set({
-        sidebarBody: 'workspaces',
-        pendingRevealWorktree: {
-          worktreeId,
-          ...(options?.executionHostId ? { executionHostId: options.executionHostId } : {}),
-          behavior: options?.behavior ?? 'smooth',
-          ...(options?.highlight ? { highlight: true } : {}),
-          ...(options?.beginRename ? { beginRename: true } : {})
-        }
-      }),
+      set((state) =>
+        state.sidebarBody === 'agents'
+          ? state
+          : {
+              pendingRevealWorktree: {
+                worktreeId,
+                ...(options?.executionHostId ? { executionHostId: options.executionHostId } : {}),
+                behavior: options?.behavior ?? 'smooth',
+                ...(options?.highlight ? { highlight: true } : {}),
+                ...(options?.beginRename ? { beginRename: true } : {})
+              }
+            }
+      ),
     revealSidebarRow: (rowKey, options) =>
-      set({
-        sidebarBody: 'workspaces',
-        pendingRevealSidebarRow: {
-          rowKey,
-          behavior: options?.behavior ?? 'smooth',
-          ...(options?.highlight === false ? {} : { highlight: true })
-        }
-      }),
+      set((state) =>
+        state.sidebarBody === 'agents'
+          ? state
+          : {
+              pendingRevealSidebarRow: {
+                rowKey,
+                behavior: options?.behavior ?? 'smooth',
+                ...(options?.highlight === false ? {} : { highlight: true })
+              }
+            }
+      ),
     clearPendingRevealWorktreeId: () => set({ pendingRevealWorktree: null }),
     clearPendingRevealSidebarRow: () => set({ pendingRevealSidebarRow: null }),
     scrollToDiffCommentId: null,
-    setScrollToDiffCommentId: (id) => set({ scrollToDiffCommentId: id })
+    setScrollToDiffCommentId: (id) => set({ scrollToDiffCommentId: id }),
+    floatingWorkspacePath: null,
+    setFloatingWorkspacePath: (path) =>
+      set((state) =>
+        state.floatingWorkspacePath === (path || null)
+          ? state
+          : { floatingWorkspacePath: path || null }
+      ),
+    // Restore floating panel size/open state to avoid reopen/remaximize reflow of live TUI buffers (floating-terminal-panel-view-state).
+    floatingWorkspacePanelOpen: readPersistedFloatingTerminalPanelViewState()?.open === true,
+    setFloatingWorkspacePanelOpen: (open) =>
+      set((state) =>
+        state.floatingWorkspacePanelOpen === open ? state : { floatingWorkspacePanelOpen: open }
+      )
   }
 }

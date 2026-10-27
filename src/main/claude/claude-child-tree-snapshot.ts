@@ -1,16 +1,6 @@
 import type { DescendantSnapshot } from '../pty-descendant-termination'
-import type { WindowsDescendantSnapshot } from '../windows-descendant-exit-verification'
 
-/** One platform's descendant tree, tagged so neither verifier can be handed the other's rows. */
-export type ClaudeCapturedTree =
-  | { platform: 'posix'; tree: DescendantSnapshot }
-  | { platform: 'win32'; tree: WindowsDescendantSnapshot }
-
-/**
- * Process-table reads are not atomic: a refresh can omit a still-live row, but
- * it can also observe a new process after the old row exited. Retain rows absent
- * from the refresh, but reject a PID whose identity changed between reads.
- */
+// Non-atomic scans may omit live rows; retain them, but reject any PID whose identity changed.
 function mergeRowsByPid<Row extends { pid: number }>(
   previous: readonly Row[],
   next: readonly Row[],
@@ -48,81 +38,35 @@ function mergeRowsByPid<Row extends { pid: number }>(
   }
 }
 
-export function mergeClaudeCapturedTrees(
-  previous: ClaudeCapturedTree,
-  next: ClaudeCapturedTree
-): ClaudeCapturedTree | null {
-  if (previous.platform !== next.platform) {
+export function mergeClaudeDescendantSnapshots(
+  previous: DescendantSnapshot,
+  next: DescendantSnapshot
+): DescendantSnapshot | null {
+  if (previous.rootPgid !== next.rootPgid) {
     return null
   }
-  if (previous.platform === 'posix' && next.platform === 'posix') {
-    if (previous.tree.rootPgid !== next.tree.rootPgid) {
-      return null
-    }
-    // A refresh cannot repair an earlier capture that lacked root identity;
-    // retaining those rows would permit a later numeric-pid kill without proof.
-    if (!previous.tree.root || !next.tree.root) {
-      return null
-    }
-    if (
-      previous.tree.root.pid !== next.tree.root.pid ||
-      previous.tree.root.startedAt !== next.tree.root.startedAt
-    ) {
-      return null
-    }
-    const descendants = mergeRowsByPid(
-      previous.tree.descendants,
-      next.tree.descendants,
-      (left, right) => left.pgid === right.pgid && left.startedAt === right.startedAt,
-      (row) => previous.tree.capturedAtMsByPid?.[String(row.pid)] ?? previous.tree.capturedAtMs,
-      (row) => next.tree.capturedAtMsByPid?.[String(row.pid)] ?? next.tree.capturedAtMs,
-      next.tree.capturedAtMs
-    )
-    if (!descendants) {
-      return null
-    }
-    return {
-      platform: 'posix',
-      tree: {
-        ...next.tree,
-        // Retained rows keep their earlier boundary; new rows use the refresh
-        // boundary. The scalar remains the latest scan for legacy consumers.
-        descendants: descendants.rows,
-        ...(descendants.capturedAtMsByPid
-          ? { capturedAtMsByPid: descendants.capturedAtMsByPid }
-          : {})
-      }
-    }
+  // New root identity cannot validate rows retained without identity evidence.
+  if (!previous.root || !next.root) {
+    return null
   }
-  if (previous.platform === 'win32' && next.platform === 'win32') {
-    if (
-      previous.tree.root.pid !== next.tree.root.pid ||
-      previous.tree.root.creationTimeMs !== next.tree.root.creationTimeMs
-    ) {
-      return null
-    }
-    const descendants = mergeRowsByPid(
-      previous.tree.descendants,
-      next.tree.descendants,
-      (left, right) => left.creationTimeMs === right.creationTimeMs,
-      (row) => previous.tree.capturedAtMsByPid?.[String(row.pid)] ?? previous.tree.capturedAtMs,
-      (row) => next.tree.capturedAtMsByPid?.[String(row.pid)] ?? next.tree.capturedAtMs,
-      next.tree.capturedAtMs
-    )
-    if (!descendants) {
-      return null
-    }
-    return {
-      platform: 'win32',
-      tree: {
-        ...next.tree,
-        descendants: descendants.rows,
-        ...(descendants.capturedAtMsByPid
-          ? { capturedAtMsByPid: descendants.capturedAtMsByPid }
-          : {}),
-        unidentifiedCount: Math.max(previous.tree.unidentifiedCount, next.tree.unidentifiedCount)
-      }
-    }
+  if (previous.root.pid !== next.root.pid || previous.root.startedAt !== next.root.startedAt) {
+    return null
   }
-  return null
+  const descendants = mergeRowsByPid(
+    previous.descendants,
+    next.descendants,
+    (left, right) => left.pgid === right.pgid && left.startedAt === right.startedAt,
+    (row) => previous.capturedAtMsByPid?.[String(row.pid)] ?? previous.capturedAtMs,
+    (row) => next.capturedAtMsByPid?.[String(row.pid)] ?? next.capturedAtMs,
+    next.capturedAtMs
+  )
+  if (!descendants) {
+    return null
+  }
+  return {
+    ...next,
+    // Retained rows keep their first capture boundary; the scalar stays current for legacy consumers.
+    descendants: descendants.rows,
+    ...(descendants.capturedAtMsByPid ? { capturedAtMsByPid: descendants.capturedAtMsByPid } : {})
+  }
 }

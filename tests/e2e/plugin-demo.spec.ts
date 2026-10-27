@@ -1,13 +1,11 @@
-/**
- * Invariant: the documented hello-orca plugin stays inert before visible
- * consent, then its panel, worker command, and event subscription all work.
- */
+// Require visible consent before the hello-orca panel, worker command or event subscription runs.
 
 import { cp, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import type { Page } from '@stablyai/playwright-test'
 import { expect, test } from './helpers/orca-app'
+import { removeWorktreeViaStore } from './helpers/dead-terminal'
 
 async function openPluginSettings(page: Page): Promise<void> {
   await page.evaluate(() => {
@@ -169,13 +167,12 @@ test('runs hello-orca panel, command, and event behind visible consent', async (
       )
       .toBe(true)
   } finally {
-    if (createdWorktreeId) {
-      await orcaPage
-        .evaluate(async (worktreeId) => {
-          await window.__store?.getState().removeWorktree(worktreeId, true)
-        }, createdWorktreeId)
-        .catch(() => undefined)
+    try {
+      if (createdWorktreeId) {
+        await removeWorktreeViaStore(orcaPage, createdWorktreeId)
+      }
+    } finally {
+      await rm(tempRoot, { recursive: true, force: true })
     }
-    await rm(tempRoot, { recursive: true, force: true })
   }
 })

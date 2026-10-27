@@ -1,13 +1,7 @@
 import type { SentinelEvidence } from './terminal-render-desync-sentinel'
+import { createBrowserUuid } from '@/lib/browser-uuid'
 
-/**
- * Durable persistence for render-desync captures, split from the sentinel so
- * the detection loop, trigger gestures and storage lifecycles stay separately
- * readable. Failure contract: a failed write must leave the live pane intact —
- * recovering after a failed write would destroy the only evidence without
- * producing a durable capture, so callers gate recovery on the returned
- * directory.
- */
+/** Persist before recovery; failed writes leave the live pane as the only evidence, so callers recover only with a returned capture directory. */
 export async function persistCorruptEvidence(entry: SentinelEvidence): Promise<string | null> {
   const pngDataUrl = entry.livePngDataUrl
   const bufferText = entry.bufferText
@@ -36,8 +30,7 @@ export async function persistCorruptEvidence(entry: SentinelEvidence): Promise<s
     console.error('[terminal] could not persist render-desync evidence; leaving pane intact', error)
     return null
   } finally {
-    // Why: persistence owns a successful payload, while a failed write leaves
-    // the live pane intact; neither path should retain duplicate full-canvas data.
+    // Release duplicate canvas data after either persistence or failure; the live pane remains intact on failure.
     entry.livePngDataUrl = undefined
     entry.bufferText = undefined
   }
@@ -59,8 +52,11 @@ export async function persistHealedReference(
   }
 }
 
+/** Use only leaf identity plus UUID nonce to fit main’s 120-character capture-ID cap; full tab:leaf keys overflow it. */
+const MAX_CAPTURE_ID_PANE_PART_LENGTH = 40
+
 export function createCaptureId(paneKey: string): string {
-  const panePart = paneKey.replace(/[^a-zA-Z0-9_-]/g, '-')
-  const nonce = globalThis.crypto?.randomUUID?.() ?? Math.random().toString(36).slice(2)
+  const panePart = paneKey.replace(/[^a-zA-Z0-9_-]/g, '-').slice(-MAX_CAPTURE_ID_PANE_PART_LENGTH)
+  const nonce = createBrowserUuid()
   return `${Date.now()}-${panePart}-${nonce}`
 }

@@ -17,7 +17,6 @@ type TerminalBindingRecovery = Pick<
   | 'hasRestorableSshRemotePtyLease'
 >
 
-/** A bare tab id cannot select one binding when persisted rows disagree on its worktree. */
 function collectAmbiguousTabIds(
   tabsByWorktree: WorkspaceSessionState['tabsByWorktree']
 ): ReadonlySet<string> {
@@ -36,9 +35,7 @@ function collectAmbiguousTabIds(
 }
 
 export type WorkspaceSessionTerminalBindingReplayOptions = {
-  /** Resolve the SSH target that owns bindings in a host partition. */
   targetIdForWorktree?: (worktreeId: string) => string | null
-  /** Reject a binding that explicitly names another execution host. */
   executionHostId?: ExecutionHostId
 }
 
@@ -50,18 +47,11 @@ function ptyBindingMatchesExecutionHost(
     return true
   }
   const owner = getPtyExecutionHost(ptyId)
-  // Legacy unscoped ids carry no host proof; lease/context checks below still
-  // decide whether they are restorable. Known foreign ids must never cross a partition.
+  // Unscoped legacy IDs still need lease/context checks; known foreign IDs cannot cross hosts.
   return owner === null || owner === executionHostId
 }
 
-/**
- * Reapplies durable pane bindings omitted by an older or in-flight renderer snapshot.
- *
- * An empty binding map is ambiguous: it can be a pre-spawn snapshot, or an intentional close.
- * Lease/tombstone state is the authority that distinguishes those cases. A partial map is only
- * repaired when a live SSH lease proves the omitted sibling still belongs to this host.
- */
+/** Recover stale empty maps unless retirement proves a close; partial maps need live SSH lease proof. */
 export function preserveMissingWorkspaceSessionTerminalBindings(
   session: WorkspaceSessionState,
   prior: WorkspaceSessionState | undefined,
@@ -76,9 +66,7 @@ export function preserveMissingWorkspaceSessionTerminalBindings(
   const nextTabs = session.tabsByWorktree ?? {}
   const priorLayouts = prior.terminalLayoutsByTabId ?? {}
   const nextLayouts = session.terminalLayoutsByTabId ?? {}
-  // Both snapshots are independently allowed to contain the same id during a
-  // normal worktree move. Only ids duplicated within one snapshot are unsafe;
-  // skip their replay rather than assigning a global layout to an arbitrary row.
+  // Cross-snapshot duplicates can be moves; duplicates within either snapshot make replay ambiguous.
   const ambiguousTabIds = new Set<string>([
     ...collectAmbiguousTabIds(priorTabs),
     ...collectAmbiguousTabIds(nextTabs)
@@ -87,12 +75,12 @@ export function preserveMissingWorkspaceSessionTerminalBindings(
     options.targetIdForWorktree ??
     ((worktreeId: string) => bindingRecovery.getConnectionIdForWorktree(worktreeId))
 
-  // Keep a tab-level binding when the renderer has not observed the host's spawn yet.
   for (const [worktreeId, tabs] of Object.entries(nextTabs)) {
     const priorList = priorTabs[worktreeId]
     if (!priorList) {
       continue
     }
+    let priorById: Map<string, (typeof priorList)[number]> | undefined
     for (const tab of tabs) {
       if (ambiguousTabIds.has(tab.id)) {
         continue
@@ -100,7 +88,8 @@ export function preserveMissingWorkspaceSessionTerminalBindings(
       if (tab.ptyId) {
         continue
       }
-      const priorTab = priorList.find((candidate) => candidate.id === tab.id)
+      priorById ??= new Map(priorList.map((candidate) => [candidate.id, candidate]))
+      const priorTab = priorById.get(tab.id)
       const incomingLayout = nextLayouts[tab.id]
       const priorLayout = priorLayouts[tab.id]
       const priorPtyLeafId = priorLayout
@@ -154,8 +143,6 @@ export function preserveMissingWorkspaceSessionTerminalBindings(
           liveLeafIds.has(leafId) &&
           incoming[leafId] === undefined &&
           ptyBindingMatchesExecutionHost(ptyId, options.executionHostId) &&
-          // An empty map may be a stale pre-spawn snapshot; a partial map is intentional unless
-          // a durable SSH lease proves the omitted sibling is still live on this host.
           (incomingHasAnyBinding
             ? bindingRecovery.hasRestorableSshRemotePtyLease({
                 ptyId,
@@ -178,7 +165,6 @@ export function preserveMissingWorkspaceSessionTerminalBindings(
     }
 
     layout.ptyIdsByLeafId = { ...restorableBindings, ...incoming }
-    // Keep pane metadata alongside a binding rescued from a stale renderer write.
     const buffersByLeafId = preserveMissingLeafRecordEntries(
       priorLayout.buffersByLeafId,
       layout.buffersByLeafId,
@@ -208,7 +194,6 @@ export function preserveMissingWorkspaceSessionTerminalBindings(
   return session
 }
 
-/** Target resolver for a persisted execution-host partition. */
 export function sshTargetIdForWorkspaceSessionHost(
   hostId: ExecutionHostId
 ): ((worktreeId: string) => string | null) | undefined {

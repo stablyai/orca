@@ -2,17 +2,19 @@ import type {
   AgentJournalApprovalItem,
   AgentJournalItemBody,
   AgentJournalPromptOption,
-  AgentJournalQuestionItem
+  AgentJournalQuestion,
+  AgentJournalQuestionItem,
+  AgentJournalFreeTextInput
 } from '../../../shared/agent-session-journal-types'
-import {
-  boundInlineText,
-  boundPayload,
-  DEFAULT_JOURNAL_PAYLOAD_LIMITS
-} from './journal-payload-bounds'
+import { isPlanApprovalSubject } from '../../../shared/agent-session-approval-subject'
+import { boundInlineText, boundPayload } from './journal-payload-bounds'
 
 export const MAX_JOURNAL_PROMPT_OPTIONS = 64
+export const MAX_JOURNAL_GROUPED_PROMPT_QUESTIONS = 4
 
 const JOURNAL_PROMPT_OPTION_LIMITS = { inlineHeadBytes: 1024 }
+// Agent prompt content permits larger bounds than client replies but must still fit settlement batches.
+const JOURNAL_PROMPT_TEXT_LIMITS = { inlineHeadBytes: 128 * 1024 }
 const JOURNAL_PROMPT_ID_MAX_BYTES = 1024
 
 export function cancelledJournalPromptBody(
@@ -33,17 +35,49 @@ export function cancelledJournalPromptBody(
   }
 }
 
-export function boundJournalStatusText(text: string): string {
-  return boundInlineText(text, DEFAULT_JOURNAL_PAYLOAD_LIMITS).text
-}
-
-function boundJournalPromptBody(
+export function boundJournalPromptBody(body: AgentJournalApprovalItem): AgentJournalApprovalItem
+export function boundJournalPromptBody(body: AgentJournalQuestionItem): AgentJournalQuestionItem
+export function boundJournalPromptBody(
+  body: AgentJournalApprovalItem | AgentJournalQuestionItem
+): AgentJournalApprovalItem | AgentJournalQuestionItem
+export function boundJournalPromptBody(
   body: AgentJournalApprovalItem | AgentJournalQuestionItem
 ): AgentJournalApprovalItem | AgentJournalQuestionItem {
   if (body.kind === 'approval') {
     return {
       ...body,
       title: boundPromptText(body.title),
+      ...(body.displayName === undefined ? {} : { displayName: boundPromptText(body.displayName) }),
+      ...(body.description === undefined ? {} : { description: boundPromptText(body.description) }),
+      ...(body.decisionReason === undefined
+        ? {}
+        : { decisionReason: boundPromptText(body.decisionReason) }),
+      ...(body.blockedPath === undefined ? {} : { blockedPath: boundPromptText(body.blockedPath) }),
+      ...(body.matchedAskRule === undefined
+        ? {}
+        : {
+            matchedAskRule: {
+              source: boundPromptText(body.matchedAskRule.source),
+              toolName: boundPromptText(body.matchedAskRule.toolName),
+              ...(body.matchedAskRule.ruleContent === undefined
+                ? {}
+                : { ruleContent: boundPromptText(body.matchedAskRule.ruleContent) })
+            }
+          }),
+      // Preserve unknown subjects verbatim; rebuilding them as plans would change the requested approval.
+      ...(body.subject === undefined
+        ? {}
+        : {
+            subject: isPlanApprovalSubject(body.subject)
+              ? {
+                  kind: 'plan',
+                  text: boundPromptText(body.subject.text),
+                  ...(body.subject.filePath === undefined
+                    ? {}
+                    : { filePath: boundPromptText(body.subject.filePath) })
+                }
+              : body.subject
+          }),
       detail: body.detail === null ? null : boundPromptText(body.detail),
       options: boundPromptOptions(body.options)
     }
@@ -52,9 +86,42 @@ function boundJournalPromptBody(
     ...body,
     question: boundPromptText(body.question),
     options: boundPromptOptions(body.options),
+    ...(body.questions
+      ? {
+          questions: body.questions
+            .slice(0, MAX_JOURNAL_GROUPED_PROMPT_QUESTIONS)
+            .map(boundPromptQuestion)
+        }
+      : {}),
     ...(body.freeTextQuestionId
       ? { freeTextQuestionId: boundPromptIdentifier(body.freeTextQuestionId) }
-      : {})
+      : {}),
+    ...(body.freeTextInput ? { freeTextInput: boundFreeTextInput(body.freeTextInput) } : {})
+  }
+}
+
+function boundPromptQuestion(question: AgentJournalQuestion): AgentJournalQuestion {
+  return {
+    id: boundPromptIdentifier(question.id),
+    question: boundPromptText(question.question),
+    ...(question.header === undefined ? {} : { header: boundPromptText(question.header) }),
+    multiSelect: question.multiSelect,
+    options: boundPromptOptions(question.options),
+    ...(question.freeTextQuestionId
+      ? { freeTextQuestionId: boundPromptIdentifier(question.freeTextQuestionId) }
+      : {}),
+    ...(question.freeTextInput ? { freeTextInput: boundFreeTextInput(question.freeTextInput) } : {})
+  }
+}
+
+function boundFreeTextInput(input: AgentJournalFreeTextInput): AgentJournalFreeTextInput {
+  return {
+    ...(input.allowEmpty === undefined ? {} : { allowEmpty: input.allowEmpty }),
+    ...(input.multiline === undefined ? {} : { multiline: input.multiline }),
+    ...(input.initialValue === undefined
+      ? {}
+      : { initialValue: boundPromptText(input.initialValue) }),
+    ...(input.placeholder === undefined ? {} : { placeholder: boundPromptText(input.placeholder) })
   }
 }
 
@@ -63,13 +130,18 @@ function boundPromptOptions(
 ): AgentJournalPromptOption[] {
   return options.slice(0, MAX_JOURNAL_PROMPT_OPTIONS).map((option) => ({
     id: boundPromptIdentifier(option.id),
-    label: boundInlineText(option.label, JOURNAL_PROMPT_OPTION_LIMITS).text
+    label: boundInlineText(option.label, JOURNAL_PROMPT_OPTION_LIMITS).text,
+    ...(option.description === undefined
+      ? {}
+      : { description: boundInlineText(option.description, JOURNAL_PROMPT_OPTION_LIMITS).text })
   }))
 }
 
 function boundPromptText(value: string): string {
-  return boundInlineText(value, DEFAULT_JOURNAL_PAYLOAD_LIMITS).text
+  return boundInlineText(value, JOURNAL_PROMPT_TEXT_LIMITS).text
 }
+
+export const boundJournalPromptText = boundPromptText
 
 function boundPromptIdentifier(value: string): string {
   if (Buffer.byteLength(value, 'utf8') <= JOURNAL_PROMPT_ID_MAX_BYTES) {

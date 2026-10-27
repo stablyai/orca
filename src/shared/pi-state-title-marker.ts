@@ -1,15 +1,7 @@
 import type { AgentStatus } from './agent-title-core'
 
-/**
- * Markers Pi/OMP write between the `π` prefix and their label to encode turn state
- * (`π : cwd` working, `π > cwd` idle, `π ! cwd` needs input).
- *
- * Kept as a table because upstream re-punctuates this channel between releases: OMP
- * 17.2.12 replaced its animated braille frames with these static markers on WSL/ConPTY,
- * where the console host cannot repaint fast enough to animate (#13890, #8014). Every
- * consumer — status detection, the display-title normalizer, and the stale-title clear —
- * reads this one table, so teaching Orca a later protocol is a row, not a reparse.
- */
+/** One state-marker table serves detection, display normalization and stale-title clearing. OMP 17.2.12 replaced braille
+ * with static markers on WSL/ConPTY’s slow repaint path (#13890, #8014); future protocol changes belong here. */
 const PI_STATE_MARKER_STATUS = {
   ':': 'working',
   '!': 'permission',
@@ -27,30 +19,33 @@ function escapeForCharacterClass(marker: string): string {
   return marker.replace(/[\\\]^-]/g, '\\$&')
 }
 
-// Why: `π` must sit at a token boundary so wrapper prefixes of any shape (`zsh | π : cwd`,
-// `tmux: π : cwd`) still expose the marker, and whitespace must separate the marker so the
-// legacy no-space `π: cwd` disabled title keeps its historical idle classification.
+// Token boundaries allow wrapper prefixes; require marker whitespace to preserve legacy disabled π: titles as idle.
 const PI_STATE_TITLE_RE = new RegExp(
-  `(?:^|[\\s|])π[ \\t]+([${PI_STATE_MARKERS.map(escapeForCharacterClass).join('')}])(?=\\s|$)`,
+  `(?:^|[\\s|])(π|Pi|OMP)[ \\t]+([${PI_STATE_MARKERS.map(escapeForCharacterClass).join('')}])(?=\\s|$)`,
   'u'
 )
 
 type PiStateTitleMatch = {
+  brand: string
+  brandIndex: number
   marker: PiStateMarker
   markerIndex: number
 }
 
-/**
- * Leftmost marker wins: everything after it is Pi/OMP's own label, which legally contains
- * the wrapper separator and marker-shaped punctuation of its own (`π > release | π : note`).
- */
+/** The first marker owns state; the opaque label may contain wrapper separators and further marker-shaped text. */
 function matchPiStateTitle(title: string): PiStateTitleMatch | null {
   const match = PI_STATE_TITLE_RE.exec(title)
   if (!match) {
     return null
   }
+  const marker = match[2]
+  if (marker !== ':' && marker !== '!' && marker !== '>') {
+    return null
+  }
   return {
-    marker: match[1] as PiStateMarker,
+    brand: match[1],
+    brandIndex: match.index + match[0].indexOf(match[1]),
+    marker,
     markerIndex: match.index + match[0].length - 1
   }
 }
@@ -61,15 +56,28 @@ export function getPiStateTitleStatus(title: string): AgentStatus | null {
   return match ? PI_STATE_MARKER_STATUS[match.marker] : null
 }
 
-/**
- * Rewrite a working marker to the idle marker so a title left behind by an agent that
- * stopped emitting stops reporting working. Returns null when there is nothing to clear —
- * the caller's other strip passes still apply.
- */
+/** Clear stale working markers to idle; null lets callers continue their other stripping passes. */
 export function clearPiStateWorkingMarker(title: string): string | null {
   const match = matchPiStateTitle(title)
   if (!match || PI_STATE_MARKER_STATUS[match.marker] !== 'working') {
     return null
   }
   return `${title.slice(0, match.markerIndex)}${PI_IDLE_MARKER}${title.slice(match.markerIndex + 1)}`
+}
+
+/** The state marker owns identity too; its label may mention another agent. */
+export function getPiStateTitleBrand(title: string): 'Pi' | 'OMP' | null {
+  const match = matchPiStateTitle(title)
+  return match ? (match.brand === 'OMP' ? 'OMP' : 'Pi') : null
+}
+
+/** Rebrand only the protocol prefix, preserving wrappers and the opaque session label. */
+export function rebrandPiStateTitle(title: string, brand: string): string | null {
+  const match = matchPiStateTitle(title)
+  if (!match) {
+    return null
+  }
+  return (
+    title.slice(0, match.brandIndex) + brand + title.slice(match.brandIndex + match.brand.length)
+  )
 }

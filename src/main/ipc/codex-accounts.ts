@@ -1,6 +1,8 @@
 import { ipcMain } from 'electron'
 import type { CodexAccountAddTarget, CodexAccountService } from '../codex-accounts/service'
 import type { CodexAccountSelectionTarget } from '../codex-accounts/runtime-selection'
+import { broadcastCodexPendingLoginUrl } from './codex-pending-login-url-broadcast'
+import { openAccountSignInLink } from './account-sign-in-link-opener'
 import { listRecordedCodexPaneLanes } from '../codex/codex-pane-account-registry'
 import { forgetStaleCodexPanes, listStaleCodexPanes } from '../codex/codex-stale-pane-accounts'
 import type { GlobalSettings } from '../../shared/global-settings-types'
@@ -16,8 +18,7 @@ export function registerCodexAccountHandlers(
     }
     return listStaleCodexPanes({
       ptyIds: args.ptyIds.filter((ptyId): ptyId is string => typeof ptyId === 'string'),
-      settings,
-      activeHostHomeRoute: codexAccounts.runtimeHomeService.getSelectedHostCodexHomeRoute()
+      settings
     })
   })
   ipcMain.handle('codexAccounts:listRecordedPaneLanes', (_event, args: { ptyIds?: unknown }) => {
@@ -38,6 +39,11 @@ export function registerCodexAccountHandlers(
   ipcMain.handle('codexAccounts:add', (_event, args?: CodexAccountAddTarget) =>
     codexAccounts.addAccount(args)
   )
+  ipcMain.handle('codexAccounts:cancelPendingLogin', () => codexAccounts.cancelPendingLogin())
+  ipcMain.handle('codexAccounts:pendingLoginUrl', () => codexAccounts.getPendingLoginUrl())
+  // Settings reads the current link on mount; broadcasts carry later changes.
+  codexAccounts.onPendingLoginUrlChanged(broadcastCodexPendingLoginUrl)
+  codexAccounts.setWslLoginUrlOpener((url) => openAccountSignInLink('codex', url))
   ipcMain.handle(
     'codexAccounts:reauthenticate',
     (_event, args: { accountId: string; activateIfSelectionWasEmpty?: boolean }) =>
@@ -52,9 +58,7 @@ export function registerCodexAccountHandlers(
     'codexAccounts:select',
     (_event, args: { accountId: string | null } & CodexAccountSelectionTarget) => {
       if (!args.runtime) {
-        // Why: older renderer surfaces selected by account id only. Let the
-        // service infer the account's runtime instead of treating missing
-        // runtime as Windows/host and rejecting valid WSL accounts.
+        // Legacy renderers omit runtime; infer it from the account so valid WSL selection still works.
         return codexAccounts.selectAccount(args.accountId)
       }
       return codexAccounts.selectAccountForTarget(args.accountId, args)

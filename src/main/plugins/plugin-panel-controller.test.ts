@@ -49,7 +49,7 @@ describe('PluginPanelController identity binding', () => {
       resolveApprovedPlugin: (pluginKey) => (pluginKey === plugin.pluginKey ? plugin : null),
       contentVerifier: { verify: vi.fn().mockResolvedValue(undefined) },
       executeHostCall,
-      log: vi.fn()
+      log: () => vi.fn()
     })
     const entry = await controller.open('runtime:one', plugin.pluginKey, 'dashboard')
     expect(entry).not.toBeNull()
@@ -90,7 +90,7 @@ describe('PluginPanelController identity binding', () => {
       resolveApprovedPlugin: () => plugin,
       contentVerifier: { verify: vi.fn().mockResolvedValue(undefined) },
       executeHostCall,
-      log: vi.fn(),
+      log: () => vi.fn(),
       panelAdmission: createPluginPanelCallAdmission({
         limits: { maxBytes: 128, maxMessages: 2, perMs: 10_000 },
         now: () => 0
@@ -141,7 +141,7 @@ describe('PluginPanelController identity binding', () => {
       resolveApprovedPlugin: () => (approved ? plugin : null),
       contentVerifier: { verify: () => verification },
       executeHostCall: vi.fn(),
-      log: vi.fn()
+      log: () => vi.fn()
     })
 
     const opening = controller.open('runtime:one', plugin.pluginKey, 'dashboard')
@@ -159,7 +159,7 @@ describe('PluginPanelController identity binding', () => {
       resolveApprovedPlugin: () => current,
       contentVerifier: { verify: vi.fn().mockResolvedValue(undefined) },
       executeHostCall,
-      log: vi.fn()
+      log: () => vi.fn()
     })
     const entry = await controller.open('runtime:one', plugin.pluginKey, 'dashboard')
     current = {

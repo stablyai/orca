@@ -1,26 +1,31 @@
 import type { ClosedTerminalTabTombstonesByTabId } from '../../../../shared/closed-terminal-tab-tombstones'
 import type { TerminalLayoutSnapshot, TerminalTab } from '../../../../shared/terminal-tab-types'
-import type { TuiAgent } from '../../../../shared/tui-agent'
-import type { SetupSplitDirection } from '../../../../shared/worktree/launch-types'
 import type {
+  PaneResumeOutcome,
+  PaneStartStatus
+} from '../../../../shared/workspace-layout/workspace-layout-published'
+import type { TuiAgent } from '../../../../shared/tui-agent'
+import type {
+  SavedResumeStartupSource,
   AgentProviderSessionMetadata,
   SleepingAgentLaunchConfig
 } from '../../../../shared/agent-session-resume'
 import type { ExecutionHostId } from '../../../../shared/execution-host'
 import type { StartupCommandDelivery } from '../../../../shared/codex-startup-delivery'
-import type { SessionOptionValue } from '../../../../shared/native-chat-session-options'
+import type { SessionOptionValue } from '../../../../shared/native-chat/input/native-chat-session-options'
 import type { AgentStartedTelemetry } from '../../lib/worktree-startup-payload'
-import type {
-  DirectSshLivePtyBinding,
-  DirectSshPaneRetryAttempt,
-  DirectSshPaneRetryHistory
-} from '../slices/direct-ssh-terminal-recovery'
 import type { NativeChatLaunchDraft, NativeChatLaunchPrompt } from '@/lib/native-chat-launch-prompt'
 import type { HostSessionSlices } from '@/lib/workspace-session-host-split'
-import type { AutomaticAgentResumeClaim, CodexRestartNotice } from './terminal-contracts'
+import type {
+  AccountRestartAgent,
+  AutomaticAgentResumeClaim,
+  CodexRestartNotice
+} from './terminal-contracts'
 import type { StateCreator } from 'zustand'
 import type { AppState } from '../types'
 import type { TerminalActions } from './terminal-actions'
+import type { AgentPaneLaunchRequest } from '../../../../shared/agent-pane-launch-request'
+import type { PairedTerminalTabCloseIntentSlice } from './paired-terminal-tab-close-intent-actions'
 
 export type TerminalState = {
   tabsByWorktree: Record<string, TerminalTab[]>
@@ -29,20 +34,21 @@ export type TerminalState = {
   activeTabIdByWorktree: Record<string, string | null>
   ptyIdsByTabId: Record<string, string[]>
   runtimePaneTitlesByTabId: Record<string, Record<number, string>>
-  unreadTerminalTabs: Record<string, true>
-  unreadTerminalPanes: Record<string, true>
-  unreadAgentCompletionPanes: Record<string, true>
   /** Scoped exit suppression and reference-counted shutdown ownership prevent teardown races. */
   suppressedPtyExitIds: Record<string, true>
   pendingPtyShutdownIds: Record<string, number>
-  pendingCodexPaneRestartIds: Record<string, true>
+  /** Account-switch restarts awaiting execution, keyed by the PTY they replace. */
+  pendingPaneAccountRestarts: Record<string, AccountRestartAgent>
   codexRestartNoticeByPtyId: Record<string, CodexRestartNotice>
-  directSshPaneRetryByTabId: Record<string, DirectSshPaneRetryAttempt>
-  directSshLivePtyBindingByTabId: Record<string, DirectSshLivePtyBinding>
-  directSshPaneRetryHistoryByTabId: Record<string, DirectSshPaneRetryHistory>
   expandedPaneByTabId: Record<string, boolean>
   canExpandPaneByTabId: Record<string, boolean>
   terminalLayoutsByTabId: Record<string, TerminalLayoutSnapshot>
+  /** Unsaved main-owned start markers; panes with entries must not start their own terminals. */
+  terminalPaneStartsByPaneKey: Record<string, TerminalPaneStart>
+  /** Unsaved main-published agent resume outcome scoped to the named terminal. */
+  terminalPaneResumeOutcomesByPaneKey: Record<string, TerminalPaneResumeOutcome>
+  /** Local-only parked scrollback by tab/leaf; never upload, read via resolveLeafScrollbackBuffers (WorkspaceSessionState.localOnlyScrollbackByTabId). */
+  localOnlyScrollbackByTabId: Record<string, Record<string, string>>
   recentQuickCommandIdByGroup: Record<string, string>
   /** Runtime-only claim bridging startup payload consumption until terminal hooks mount. */
   automaticAgentResumeClaimsByTabId: Record<string, AutomaticAgentResumeClaim>
@@ -58,8 +64,12 @@ export type TerminalState = {
       envToDelete?: string[]
       launchConfig?: SleepingAgentLaunchConfig
       resumeProviderSession?: AgentProviderSessionMetadata
+      resumeOrigin?: 'saved'
+      resumeSource?: SavedResumeStartupSource
       launchToken?: string
       launchAgent?: TuiAgent
+      /** The agent launch the pane's own spawn starts, instead of `command`. */
+      agentLaunch?: AgentPaneLaunchRequest
       agentArgsOverride?: string | null
       draftPrompt?: string
       sessionOptions?: Record<string, SessionOptionValue>
@@ -72,14 +82,6 @@ export type TerminalState = {
     }
   >
   pendingInitialCwdByTabId: Record<string, string>
-  pendingSetupSplitByTabId: Record<
-    string,
-    {
-      command: string
-      env?: Record<string, string>
-      direction: SetupSplitDirection
-    }
-  >
   pendingIssueCommandSplitByTabId: Record<
     string,
     {
@@ -93,14 +95,12 @@ export type TerminalState = {
   /** True after main ownership restoration, renderer PTY adoption, and structured-tab projection settle. */
   terminalStartupRestorationReady: boolean
   restoredRuntimeHostIdByWorkspaceSessionKey: Record<string, ExecutionHostId>
-  /**
-   * Worktree-keyed session rows belonging to hosts that co-publish a workspace id with the host
-   * that owns it here. Never read by the UI: it is the carrier that lets a write for the owning
-   * host round-trip the other hosts' partitions instead of erasing them.
-   */
+  /** Carry non-owning hosts’ same-ID session partitions through owner writes without erasing them; never rendered directly. */
   contestedHostWorkspaceSessions: HostSessionSlices
   /** Partition each restored session key was read from, so a write returns its rows there. */
   contestedPrimaryHostBySessionKey: Record<string, ExecutionHostId>
+  /** Runtime partitions the startup read loaded; only these may receive emptied host-keyed fields. */
+  hydratedRuntimeSessionHostIds: ExecutionHostId[]
   defaultTerminalTabsAppliedByWorktreeId: Record<string, true>
   closedTerminalTabTombstonesByTabId: ClosedTerminalTabTombstonesByTabId
   hydrationSucceeded: boolean
@@ -110,22 +110,9 @@ export type TerminalState = {
   pendingReconnectPtyIdByTabId: Record<string, string>
   /** Retained across relay disconnect after tab.ptyId is cleared so persistence can reattach. */
   lastKnownRelayPtyIdByTabId: Record<string, string>
-  /**
-   * Tabs whose PTY vanished without positive evidence of process death.
-   *
-   * This is session-scoped (never persisted) and protects a tab from the
-   * orphan sweep while its execution host is unavailable. A replacement PTY
-   * or an explicit close settles the marker.
-   */
+  /** Session-only protection after unverifiable PTY loss; replacement bind or explicit close settles it, not host unavailability. */
   unverifiedPtyLossTabIds: Record<string, true>
-  /**
-   * PTY ids a reachable relay disowned — no relay will hand them back.
-   *
-   * Session-scoped: the counterpart to the marker above, and the only signal strong enough to let a
-   * reconnect retire a binding and respawn the pane. Short of `exited`, because a restarted relay
-   * disowns ids it never minted. Settled when the id is bound again
-   * (see terminal-disowned-pty-sources.ts).
-   */
+  /** Session-only reachable-relay disown evidence permits binding retirement/respawn but is weaker than exited; rebind settles it (terminal-disowned-pty-sources.ts). */
   disownedPtyIds: Record<string, true>
   /** Reattach snapshots are consumed once by the pane that receives the replacement PTY. */
   pendingSnapshotByPtyId: Record<
@@ -149,7 +136,15 @@ export type TerminalState = {
   deferredSshReconnectTargets: string[]
   deferredSshSessionIdsByTabId: Record<string, string>
 }
-export type TerminalSlice = TerminalState & TerminalActions
+export type TerminalSlice = TerminalState & TerminalActions & PairedTerminalTabCloseIntentSlice
 
 export type TerminalStoreSet = Parameters<StateCreator<AppState, [], [], AppState>>[0]
 export type TerminalStoreGet = Parameters<StateCreator<AppState, [], [], AppState>>[1]
+
+export type TerminalPaneStart = { status: PaneStartStatus; reason?: string }
+/** `ptyGeneration` tells two starts under one terminal id apart (a daemon session id is reused). */
+export type TerminalPaneResumeOutcome = {
+  ptyId: string
+  ptyGeneration?: number
+  outcome: PaneResumeOutcome
+}

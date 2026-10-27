@@ -6,28 +6,12 @@ import {
   type AutomationHostCatalogEntry
 } from './automation-host-catalog-types'
 
-/**
- * Catalog generation, tracked *per authority*.
- *
- * It advances only when that authority's authoritative membership or
- * incarnation changes. Runtime connection status and SSH connection status feed
- * health, not this counter — otherwise one host's target bucket hydrating would
- * discard every other host's in-flight response and burn the retry cap.
- *
- * Callers must report the last known query support for an offline authority:
- * synthesising `legacy-unscoped` on a mere disconnect would drop the entries'
- * owner refs and read as an incarnation change.
- */
+/** Advance per authority only for membership/incarnation changes, never connection health. Preserve last-known query support offline: inventing legacy-unscoped would strip owners and mimic re-adoption. */
 
 export type AutomationCatalogGenerationSync = {
   /** Authority keys whose catalog generation advanced. */
   advancedAuthorityKeys: readonly string[]
-  /**
-   * Hosts that stayed listed while their owner incarnation changed underneath —
-   * a same-id SSH re-adoption or re-pair. Nothing else in the entry moves, so
-   * this is the only signal that the rows already held answer for a host that no
-   * longer exists.
-   */
+  /** Stable keys whose captured owner changed; same-ID re-adoption/re-pair needs an explicit stale-row signal. */
   reincarnatedStableKeys: readonly string[]
 }
 
@@ -37,6 +21,8 @@ export type AutomationCatalogGenerationRegistry = {
   sync: (catalog: AutomationHostCatalog) => AutomationCatalogGenerationSync
   reset: () => void
 }
+
+const AUTOMATION_AUTHORITY_GENERATION_MAX_ENTRIES = 512
 
 // Health is deliberately absent: only membership and incarnation belong here.
 export function automationHostCatalogEntryFingerprint(entry: AutomationHostCatalogEntry): string {
@@ -62,6 +48,21 @@ export function createAutomationCatalogGenerationRegistry(): AutomationCatalogGe
   const generationByAuthorityKey = new Map<string, number>()
   const fingerprintByAuthorityKey = new Map<string, string>()
   const ownerKeyByStableKey = new Map<string, string>()
+  let generationSequence = 0
+  let evictedGeneration = 0
+
+  const trimAuthorityGenerations = (): void => {
+    while (generationByAuthorityKey.size > AUTOMATION_AUTHORITY_GENERATION_MAX_ENTRIES) {
+      const oldest = generationByAuthorityKey.keys().next()
+      if (oldest.done) {
+        break
+      }
+      const key = oldest.value
+      evictedGeneration = Math.max(evictedGeneration, generationByAuthorityKey.get(key) ?? 0)
+      generationByAuthorityKey.delete(key)
+      fingerprintByAuthorityKey.delete(key)
+    }
+  }
 
   /** Compared only where an owner exists: a disconnect can strip owner refs, and that is not a new incarnation. */
   const reincarnations = (catalog: AutomationHostCatalog): string[] => {
@@ -90,14 +91,17 @@ export function createAutomationCatalogGenerationRegistry(): AutomationCatalogGe
 
   const advance = (authorityKey: string, fingerprint: string): void => {
     fingerprintByAuthorityKey.set(authorityKey, fingerprint)
-    generationByAuthorityKey.set(
-      authorityKey,
-      (generationByAuthorityKey.get(authorityKey) ?? 0) + 1
-    )
+    const next = ++generationSequence
+    generationByAuthorityKey.set(authorityKey, next)
+    trimAuthorityGenerations()
   }
 
   return {
-    get: (authority) => generationByAuthorityKey.get(automationAuthorityCatalogKey(authority)) ?? 0,
+    get: (authority) => {
+      const key = automationAuthorityCatalogKey(authority)
+      const generation = generationByAuthorityKey.get(key)
+      return generation ?? evictedGeneration
+    },
     sync: (catalog) => {
       const reincarnatedStableKeys = reincarnations(catalog)
       const next = fingerprintByAuthority(catalog)
@@ -121,13 +125,15 @@ export function createAutomationCatalogGenerationRegistry(): AutomationCatalogGe
       generationByAuthorityKey.clear()
       fingerprintByAuthorityKey.clear()
       ownerKeyByStableKey.clear()
+      generationSequence = 0
+      evictedGeneration = 0
     }
   }
 }
 
 const registry = createAutomationCatalogGenerationRegistry()
 
-/** Generation Step 4's commit fence compares for the authority that owns the entry. */
+/** Catalog generation used by the owning authority’s commit fence. */
 export function getAuthorityCatalogGeneration(authority: StableAutomationAuthorityRef): number {
   return registry.get(authority)
 }

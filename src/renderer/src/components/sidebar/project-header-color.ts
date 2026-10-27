@@ -10,8 +10,7 @@ export function resolveRepoHeaderColor(badgeColor: string | null | undefined): s
     return DEFAULT_REPO_BADGE_COLOR
   }
 
-  // Why: persisted repo colors are rendered as inline CSS here, so only
-  // normalized hex values from the palette or custom picker reach the sidebar.
+  // Normalize persisted values before using them as inline CSS colors.
   return REPO_COLORS.find((repoColor) => repoColor === normalizedBadgeColor) ?? normalizedBadgeColor
 }
 
@@ -20,8 +19,7 @@ export function resolveProjectGroupHeaderColor(args: {
   headerKey: string
   badgeColor: string | null | undefined
 }): string | undefined {
-  // Why: pinned/project-folder headers can appear while grouped by repo; only
-  // actual project headers should inherit user-authored project colors.
+  // Pinned and folder headers must not inherit project colors just because grouping is by repo.
   if (
     args.groupBy !== 'repo' ||
     (!args.headerKey.startsWith(PROJECT_GROUP_HEADER_KEY_PREFIX) &&

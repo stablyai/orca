@@ -1,3 +1,10 @@
+import { hostTestState } from '../native-chat/agent-session-wire/structured-agent-session-host-test-harness'
+import {
+  agentSessionLeaseFixture,
+  agentSessionRecordFixture
+} from '../../shared/agent-session-record.test-fixture'
+import { agentSessionConversationView } from '../../shared/agent-session-conversation-view'
+import type { AgentSessionLease } from '../../shared/agent-session-record'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { PtyProcessInfo } from '../providers/pty-process-info'
 import { setStructuredAgentSessionHost } from '../native-chat/agent-session-wire/structured-agent-session-registry'
@@ -8,7 +15,7 @@ const SSH_SCOPE = JSON.stringify({ kind: 'ssh', targetId: 'ssh-1' })
 const PROCESS_INCARNATION = 'remote:ssh-1:pty-1:inc-1'
 
 function runtimeWithInventory(
-  listProcesses: (connectionId?: string | null) => Promise<PtyProcessInfo[]>
+  listProcesses: (hostId?: string) => Promise<PtyProcessInfo[]>
 ): OrcaRuntimeService {
   const runtime = new OrcaRuntimeService()
   runtime.setPtyController({
@@ -38,8 +45,8 @@ describe('terminal process incarnation liveness', () => {
     await expect(
       runtime.inspectTerminalProcessIncarnationLiveness('remote:ssh-1:pty-1:inc-old', SSH_SCOPE)
     ).resolves.toBe('exited')
-    expect(listProcesses).toHaveBeenNthCalledWith(1, 'ssh-1')
-    expect(listProcesses).toHaveBeenNthCalledWith(2, 'ssh-1')
+    expect(listProcesses).toHaveBeenNthCalledWith(1, 'ssh:ssh-1')
+    expect(listProcesses).toHaveBeenNthCalledWith(2, 'ssh:ssh-1')
   })
 
   it('keeps missing or malformed identity and unavailable inventory unverifiable', async () => {
@@ -77,16 +84,16 @@ describe('terminal process incarnation liveness', () => {
   })
 
   it.each([
-    [{ kind: 'local', hostId: 'local' }, null],
-    [{ kind: 'wsl', hostId: 'local', distro: 'Ubuntu' }, null]
-  ] as const)('uses the local provider inventory for %s scope', async (scope, connectionId) => {
+    [{ kind: 'local', hostId: 'local' }, 'local'],
+    [{ kind: 'wsl', hostId: 'local', distro: 'Ubuntu' }, 'local']
+  ] as const)('uses the local provider inventory for %s scope', async (scope, hostId) => {
     const listProcesses = vi.fn().mockResolvedValue([])
     const runtime = runtimeWithInventory(listProcesses)
 
     await expect(
       runtime.inspectTerminalProcessIncarnationLiveness('local-pty:inc-1', JSON.stringify(scope))
     ).resolves.toBe('exited')
-    expect(listProcesses).toHaveBeenCalledWith(connectionId)
+    expect(listProcesses).toHaveBeenCalledWith(hostId)
   })
 })
 
@@ -95,15 +102,15 @@ describe('structured worker incarnation liveness', () => {
   const INCARNATION = `structured:${SESSION}`
   const LOCAL_SCOPE = JSON.stringify({ kind: 'local', hostId: 'local' })
 
-  function installHost(lease: Record<string, unknown>): void {
-    setStructuredAgentSessionHost({
-      hasSession: () => false,
-      deps: {
-        store: {
-          getRecord: () => ({ location: { executionHostId: 'local', wslDistro: null }, lease })
-        }
-      }
-    } as never)
+  function installHost(lease: Partial<AgentSessionLease>): void {
+    const { host, store } = hostTestState()
+    vi.spyOn(host, 'hasSession').mockReturnValue(false)
+    vi.spyOn(store, 'getConversation').mockImplementation(() =>
+      agentSessionConversationView(
+        agentSessionRecordFixture(agentSessionLeaseFixture({ ...lease, sessionId: SESSION }))
+      )
+    )
+    setStructuredAgentSessionHost(host)
   }
 
   afterEach(() => {
@@ -112,9 +119,7 @@ describe('structured worker incarnation liveness', () => {
   })
 
   it('settles a stopped worker as exited after its identity was forgotten', async () => {
-    // Settlement forgets the in-memory identity. Gating on one left the durable resource answering
-    // `unverifiable` forever, so its row never reconciled out of `worker-list --terminalState
-    // retained` for the life of the DB. The durable agent-session record is what actually knows.
+    // Settlement forgets in-memory identity; durable session records must still reconcile retained workers.
     installHost({
       runtimeKind: 'native',
       claimStatus: 'released',

@@ -2,7 +2,11 @@ import { ASSIGNMENT_LIMITS } from '@orca-cloud/relay-contract'
 import { createHash } from 'node:crypto'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { RelayCellConfig } from './config.js'
-import { RelayAssignmentStore, STRANDED_MIGRATION_ABANDON_MS } from './assignment-store.js'
+import {
+  RelayAssignmentRowBusyError,
+  RelayAssignmentStore,
+  STRANDED_MIGRATION_ABANDON_MS
+} from './assignment-store.js'
 import {
   encodeMembership,
   type CellAdmissionMembership
@@ -110,6 +114,7 @@ class OneShotInventoryFailureDatabase implements RelayDatabase {
     return await this.delegate.transaction(
       async (transaction) =>
         await operation({
+          dialect: transaction.dialect,
           query: async (sql, params = []) => await transaction.query(sql, params),
           queryLocked: async (sql, params = [], options = {}) =>
             await this.lockedQuery(transaction, sql, params, options),
@@ -173,6 +178,7 @@ class RepeatedDrainAccountingFailureDatabase implements RelayDatabase {
     return await this.delegate.transaction(
       async (transaction) =>
         await operation({
+          dialect: transaction.dialect,
           query: async (sql, params = []) => await transaction.query(sql, params),
           queryLocked: async (sql, params = [], options = {}) =>
             await this.lockedQuery(transaction, sql, params, options),
@@ -1506,12 +1512,7 @@ describe('RelayAssignmentStore', () => {
   })
 
   it('moves a stranded host off an existing-only cell that stopped serving it', async () => {
-    // Why: C3's decommission created an existing-only cell that rejects
-    // attaches; the #194 pin then loops returning hosts forever while each
-    // grant refreshes their own activity (issue #225). C3 has no
-    // connection-limits row and expired leases are cleaned within a
-    // maintenance cycle, so the only durable evidence is the assignment row:
-    // a recent grant with no live real activity behind it.
+    // C3 rejected attaches on an existing-only cell; repeated grants defeated dormancy (#194, #225). Use recent failed grants on assignment rows: no cap reservations exist, and expired leases are pruned.
     let now = 100
     const store = await setup(() => now)
     const identity = { userId: 'user-a', relayHostId: 'host000000000001' }
@@ -1556,6 +1557,7 @@ describe('RelayAssignmentStore', () => {
   })
 
   it('keeps migration-only cells pinned inside the stranded window', async () => {
+    // migration-only durably holds evacuation/Asia rollback/failed-wave hosts; only same-cap roll stamps authorize re-placement.
     let now = 100
     const store = await setup(() => now)
     const identity = { userId: 'user-a', relayHostId: 'host000000000001' }
@@ -1651,6 +1653,39 @@ describe('RelayAssignmentStore', () => {
     ).toEqual([{ activity_kind: 'control', cell_id: 'cell-b' }])
   })
 
+  it('skips a host whose row is busy and still evacuates the rest of the dead cell', async () => {
+    let now = 100
+    const cells: RelayCellConfig[] = [
+      { id: 'cell-a', url: 'https://relay-a.example.com', capacityRequests: 10 },
+      { id: 'cell-b', url: 'https://relay-b.example.com', capacityRequests: 10 }
+    ]
+    const store = await setupWithHeartbeats(() => now, cells)
+    for (const cell of cells) await heartbeat(store, cell)
+    await store.setCellEnabled('cell-b', false)
+    const busy = { userId: 'a-busy', relayHostId: 'host000000000001' }
+    const later = { userId: 'b-later', relayHostId: 'host000000000002' }
+    expect(await store.assign(busy)).toMatchObject({ cellId: 'cell-a' })
+    expect(await store.assign(later)).toMatchObject({ cellId: 'cell-a' })
+    await store.setCellEnabled('cell-b', true)
+
+    now += 45_001
+    await heartbeat(store, cells[1]!)
+    // The sweep reaches the busy host first: its own release holds its row.
+    const assign = store.assign.bind(store)
+    vi.spyOn(store, 'assign').mockImplementation(async (identity, ...rest) => {
+      if (identity.relayHostId === busy.relayHostId) throw new RelayAssignmentRowBusyError()
+      return await assign(identity, ...rest)
+    })
+
+    expect(await store.evacuateDeadCells()).toBe(1)
+    expect(await store.resolve(later)).toMatchObject({ cellId: 'cell-b' })
+    expect(
+      await database!.query(`SELECT cell_id FROM relay_assignments WHERE user_id = ?`, [
+        busy.userId
+      ])
+    ).toEqual([{ cell_id: 'cell-a' }])
+  })
+
   it('does not let an unfenced capped cell starve eligible legacy recovery', async () => {
     let now = 100
     const cells: RelayCellConfig[] = [
@@ -1706,7 +1741,8 @@ describe('RelayAssignmentStore', () => {
     const first = await store.assign(identity)
     const second = await store.assign(identity)
 
-    expect(second).toEqual(first)
+    expect(first.placed).toBe(true)
+    expect(second).toEqual({ ...first, placed: undefined })
     expect(await cellReservations(database!)).toEqual({ 'cell-a': 1, 'cell-b': 0 })
   })
 
@@ -1885,6 +1921,11 @@ describe('RelayAssignmentStore', () => {
         identity.relayHostId,
         'control:cell-b:3'
       ]
+    )
+    // The store reserves a unit per control lease, so a hand-written pair has to
+    // carry its own reservation or the fixture starts out of balance.
+    await database!.query(
+      `UPDATE relay_cells SET reserved_requests = reserved_requests + 2 WHERE cell_id = 'cell-b'`
     )
     const latest = await store.activateControl(identity, {
       cellId: 'cell-b',
@@ -2427,6 +2468,39 @@ describe('RelayAssignmentStore', () => {
     })
   })
 
+  it('logs the drift reconciliation corrects, once, after it commits', async () => {
+    const store = await setup(() => 100, [
+      { id: 'cell-a', url: 'https://relay-a.example.com', capacityRequests: 10 },
+      { id: 'cell-b', url: 'https://relay-b.example.com', capacityRequests: 10 }
+    ])
+    const grant = await store.assign({ userId: 'user-a', relayHostId: 'host000000000001' })
+    await database!.query(`UPDATE relay_cells SET reserved_requests = 5 WHERE cell_id = ?`, [
+      grant.cellId
+    ])
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+
+    let lines: string[]
+    try {
+      await store.cellEvacuationStatus('cell-a', 'cell-b', true)
+      await store.cellEvacuationStatus('cell-a', 'cell-b', true)
+    } finally {
+      lines = warn.mock.calls.map((call) => String(call[0]))
+      warn.mockRestore()
+    }
+
+    const drift = lines
+      .filter((line) => line.includes('orca_relay_reservation_drift'))
+      .map((line) => JSON.parse(line) as unknown)
+    expect(drift).toEqual([
+      {
+        event: 'orca_relay_reservation_drift',
+        cellId: grant.cellId,
+        reservedRequests: 5,
+        leaseUnits: 1
+      }
+    ])
+  })
+
   it('blocks aggregate fenced completion on assignment accounting mismatch', async () => {
     let now = 100
     const cells = [
@@ -2565,8 +2639,7 @@ describe('RelayAssignmentStore', () => {
     expect(await cellReservations(database!)).toEqual({ 'cell-a': 1, 'cell-b': 0 })
   })
 
-  // Why: completion needs an enabled target and expiry rollback needs an unregistered one, so a
-  // target disabled after it registered satisfies neither and the migration never leaves the table.
+  // Disabled registered targets satisfy neither completion nor expiry rollback, stranding migration rows.
   async function wedgeRegisteredMigration(
     now: () => number,
     cells: RelayCellConfig[],
@@ -2632,8 +2705,7 @@ describe('RelayAssignmentStore', () => {
     // A disabled target can never satisfy completion, so waiting cannot help.
     expect(await store.completeReadyEvacuations()).toBe(0)
     expect(await store.abortExpiredEvacuations()).toBe(1)
-    // Rollback lands on the disabled source, so the host resolves to nothing and is placed afresh
-    // by evacuateDeadCells; the point is that the row is retired rather than reaped every tick.
+    // Rollback to disabled source resolves empty for evacuateDeadCells to re-place; retire the row rather than revisit every tick.
     expect(await store.resolve(identity)).toBeNull()
     expect(await store.abortExpiredEvacuations()).toBe(0)
   })

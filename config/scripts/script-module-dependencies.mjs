@@ -1,16 +1,13 @@
 import { copyFileSync, mkdirSync, readFileSync } from 'node:fs'
-import { basename, dirname, join } from 'node:path'
+import { dirname, join, relative } from 'node:path'
 
-/**
- * Copy a script and every co-located module it imports into a fixture's `config/scripts`.
- *
- * Walked rather than listed: a module the script needs but the fixture never copied fails every
- * test in the suite with a module-resolution error that looks nothing like the defect it hides.
- */
+// Walk/copy relative modules instead of maintaining fixture list: omitted dependencies hide target failures behind resolution errors.
 export function copyScriptWithLocalModules(sourceScriptPath, destinationScriptsDir) {
   mkdirSync(destinationScriptsDir, { recursive: true })
   for (const modulePath of collectScriptModules(sourceScriptPath)) {
-    copyFileSync(modulePath, join(destinationScriptsDir, basename(modulePath)))
+    const destination = join(destinationScriptsDir, relative(dirname(sourceScriptPath), modulePath))
+    mkdirSync(dirname(destination), { recursive: true })
+    copyFileSync(modulePath, destination)
   }
 }
 
@@ -19,7 +16,12 @@ function collectScriptModules(scriptPath, seen = new Set()) {
     return seen
   }
   seen.add(scriptPath)
-  for (const [, specifier] of readFileSync(scriptPath, 'utf8').matchAll(/from '(\.\/[^']+)'/g)) {
+  // Follow static/dynamic imports and plain require for CJS gates; exclude projectRequire/requireLocal, which resolve from project root rather than this module.
+  const source = readFileSync(scriptPath, 'utf8')
+  const specifiers = source.matchAll(
+    /(?:\bfrom|\brequire\s*\(|\bimport\s*\(|\bimport)\s*'(\.\.?\/[^']+)'/g
+  )
+  for (const [, specifier] of specifiers) {
     collectScriptModules(join(dirname(scriptPath), specifier), seen)
   }
   return seen

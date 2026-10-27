@@ -1,4 +1,3 @@
-import { readFileSync } from 'node:fs'
 import {
   BaseAgent,
   createAgent,
@@ -9,7 +8,8 @@ import {
   type SignCallback,
   type SigningRequestOptions
 } from 'ssh2'
-import { resolveSshConfigHomePath } from './ssh-config-path-expansion'
+import { resolveSshConfigHomePath } from './config/ssh-config-path-expansion'
+import { readSshIdentityFileSync } from './ssh-identity-file-read'
 
 type AgentPublicKey = ParsedKey | Buffer | string | PublicKeyEntry
 
@@ -69,8 +69,12 @@ class IdentityFilteredAgent extends BaseAgent<ParsedKey | Buffer | string> {
 }
 
 function parseIdentityKeyFile(filePath: string): ParsedKey | undefined {
+  const { contents } = readSshIdentityFileSync(filePath)
+  if (!contents) {
+    return undefined
+  }
   try {
-    const parsed = utils.parseKey(readFileSync(filePath)) as ParsedKey | ParsedKey[] | Error
+    const parsed = utils.parseKey(contents) as ParsedKey | ParsedKey[] | Error
     if (parsed instanceof Error) {
       return undefined
     }
@@ -100,7 +104,6 @@ export function createIdentityFilteredAgent(
   if (identityKeys.length === 0) {
     return undefined
   }
-  // Why: IdentitiesOnly must not offer every key loaded in the agent. ssh2 has
-  // no built-in equivalent, so wrap the agent and expose only IdentityFile keys.
+  // ssh2 lacks IdentitiesOnly; expose only configured IdentityFile keys instead of every agent key.
   return new IdentityFilteredAgent(agentSocket, createAgent(agentSocket), identityKeys)
 }

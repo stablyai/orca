@@ -66,6 +66,23 @@ describe('mobile diff review queue', () => {
     ])
   })
 
+  it('leaves out a status entry whose staging area it does not know', () => {
+    const queue = buildMobileDiffReviewQueue({
+      worktreeId: 'wt-1',
+      statusEntries: [
+        statusEntry({ path: 'placed.ts', area: 'unstaged' }),
+        statusEntry({ path: 'placeless.ts', area: undefined })
+      ],
+      branchEntries: [],
+      branchHeadOid: 'head',
+      branchMergeBase: 'base',
+      comments: [],
+      reviewState: emptyReviewState
+    })
+
+    expect(queue.map((item) => item.filePath)).toEqual(['placed.ts'])
+  })
+
   it('uses stable keys for renamed files', () => {
     expect(createMobileDiffReviewFileKey('branch', 'branch', 'new.ts', 'old.ts')).toBe(
       'branch\0branch\0old.ts\0new.ts'
@@ -85,6 +102,68 @@ describe('mobile diff review queue', () => {
     })
 
     expect(queue[0]).toMatchObject({ noteCount: 2, unsentNoteCount: 1, staleNoteCount: 1 })
+  })
+
+  it('keeps scope, rename, and source matching when notes share a path', () => {
+    const queue = buildMobileDiffReviewQueue({
+      worktreeId: 'wt-1',
+      statusEntries: [
+        statusEntry({ area: 'unstaged', status: 'renamed', oldPath: 'old.ts' }),
+        statusEntry({ area: 'staged' }),
+        statusEntry({ path: 'other.ts' })
+      ],
+      branchEntries: [branchEntry({ path: 'src/app.ts', oldPath: 'old.ts' })],
+      comments: [
+        comment({ id: 'legacy', sentAt: 20 }),
+        comment({ id: 'unstaged', scope: 'unstaged' }),
+        comment({ id: 'staged', scope: 'staged' }),
+        comment({ id: 'branch', scope: 'branch' }),
+        comment({ id: 'rename', oldPath: 'old.ts', diffIdentity: 'stale' }),
+        comment({ id: 'wrong-rename', oldPath: 'different.ts' }),
+        comment({ id: 'markdown', source: 'markdown' }),
+        comment({ id: 'unrelated', filePath: 'absent.ts' })
+      ],
+      reviewState: emptyReviewState
+    })
+
+    expect(
+      queue.map(({ scope, filePath, noteCount, unsentNoteCount, staleNoteCount }) => ({
+        scope,
+        filePath,
+        noteCount,
+        unsentNoteCount,
+        staleNoteCount
+      }))
+    ).toEqual([
+      {
+        scope: 'unstaged',
+        filePath: 'other.ts',
+        noteCount: 0,
+        unsentNoteCount: 0,
+        staleNoteCount: 0
+      },
+      {
+        scope: 'unstaged',
+        filePath: 'src/app.ts',
+        noteCount: 3,
+        unsentNoteCount: 2,
+        staleNoteCount: 1
+      },
+      {
+        scope: 'staged',
+        filePath: 'src/app.ts',
+        noteCount: 2,
+        unsentNoteCount: 1,
+        staleNoteCount: 0
+      },
+      {
+        scope: 'branch',
+        filePath: 'src/app.ts',
+        noteCount: 3,
+        unsentNoteCount: 2,
+        staleNoteCount: 1
+      }
+    ])
   })
 
   it('filters unreviewed files and noted files', () => {
@@ -111,11 +190,18 @@ describe('mobile diff review queue', () => {
       reviewState
     })
 
-    expect(filterMobileDiffReviewQueue(queue, 'unreviewed').map((item) => item.filePath)).toEqual([
-      'a.ts',
-      'b.ts'
-    ])
-    expect(filterMobileDiffReviewQueue(queue, 'notes').map((item) => item.filePath)).toEqual([
+    const reviewedItem: MobileDiffReviewQueueItem = {
+      ...queue[0],
+      key: createMobileDiffReviewFileKey('unstaged', 'unstaged', 'c.ts'),
+      filePath: 'c.ts',
+      isReviewed: true
+    }
+    const filterQueue = [...queue, reviewedItem]
+
+    expect(
+      filterMobileDiffReviewQueue(filterQueue, 'unreviewed').map((item) => item.filePath)
+    ).toEqual(['a.ts', 'b.ts'])
+    expect(filterMobileDiffReviewQueue(filterQueue, 'notes').map((item) => item.filePath)).toEqual([
       'b.ts'
     ])
   })

@@ -40,19 +40,13 @@ export const pluginKillListSchema = z
 export type PluginKillList = z.infer<typeof pluginKillListSchema>
 export type PluginKillListEntry = z.infer<typeof pluginKillListEntrySchema>
 
-/** A far-future generatedAt makes every genuine later list look "older" and
- *  disables revocation permanently. Checked only on freshly fetched snapshots:
- *  a cached list was already accepted once, and re-judging it against the
- *  device clock would drop live revocations whenever that clock runs slow. */
+/** Reject freshly fetched far-future lists that would permanently suppress later revocations. Do not rejudge accepted
+ * caches against a slow device clock and accidentally drop active revocations. */
 export function isPluginKillListTooFarInFuture(
   killList: PluginKillList,
   now = Date.now()
 ): boolean {
   return Date.parse(killList.generatedAt) > now + PLUGIN_KILL_LIST_FUTURE_SKEW_MS
-}
-
-export function killedPluginKeys(killList: PluginKillList): ReadonlySet<string> {
-  return new Set(killList.plugins.map((plugin) => plugin.pluginKey))
 }
 
 export function findKilledPlugin(

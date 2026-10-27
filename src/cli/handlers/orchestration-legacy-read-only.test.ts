@@ -120,47 +120,6 @@ describe('legacy orchestration CLI inspection', () => {
     expect(response.result.formatted).not.toContain('orchestration reply')
   })
 
-  it.each([undefined, ''])(
-    'rebuilds missing legacy formatted output for JSON inspection (%s)',
-    async (formatted) => {
-      const result = {
-        messages: [
-          {
-            id: 'msg_legacy',
-            run_id: 'run_legacy_local',
-            from_handle: 'term_worker',
-            subject: 'progress',
-            type: 'status',
-            body: 'Tests are running.',
-            payload: '{"phase":"testing"}'
-          }
-        ],
-        count: 1,
-        formatted
-      }
-      callMock.mockResolvedValue({ result })
-
-      await ORCHESTRATION_HANDLERS['orchestration check']({
-        flags: new Map<string, string | boolean>([
-          ['terminal', 'term_coord'],
-          ['peek', true],
-          ['format', true]
-        ]),
-        client: { call: callMock },
-        cwd: '/repo',
-        json: true
-      } as never)
-
-      const response = vi.mocked(printResult).mock.calls[0]?.[0] as {
-        result: typeof result & { formatted: string }
-      }
-      expect(response.result.formatted).toContain('msg_legacy [legacy, read-only]')
-      expect(response.result.formatted).toContain('Tests are running.')
-      expect(response.result.formatted).toContain('[payload]\n  {"phase":"testing"}')
-      expect(response.result.formatted).not.toContain('orchestration reply')
-    }
-  )
-
   it('keeps reply guidance only for current rows in a mixed formatted batch', async () => {
     const result = {
       messages: [

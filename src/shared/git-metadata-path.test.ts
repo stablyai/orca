@@ -47,8 +47,7 @@ describe('resolveGitMetadataPath', () => {
     ).toBe(String.raw`\\wsl.localhost\Ubuntu\home\me\repo\.git`)
   })
 
-  // Git for Windows spells a UNC gitdir with forward slashes; that is already a host path, and
-  // translating it would produce `\\wsl.localhost\Ubuntu\\wsl.localhost\Ubuntu\...`.
+  // Forward-slash UNC gitdirs are already host paths; translation would prepend the share twice.
   it('keeps a forward-slash UNC pointer verbatim rather than re-prefixing the share', () => {
     expect(
       resolveGitMetadataPath(
@@ -136,8 +135,7 @@ describe('resolveGitMetadataPath', () => {
     )
   })
 
-  // Both production callers omit options entirely, so the defaults must stay the old behavior:
-  // the reading host's own path flavor, and no distro.
+  // Production callers omit options: default to the reader’s path flavor without guessing a distro.
   it.each([
     [
       String.raw`\\wsl.localhost\Debian\home\me\repo`,
@@ -160,8 +158,7 @@ describe('resolveGitMetadataPath', () => {
 })
 
 describe('resolveWorktreeHostPath', () => {
-  // A gitfile payload ends in a newline; a directory name can end in a space, and trimming one
-  // away points every read at a directory that does not exist.
+  // Gitfile payloads end with newlines; directory-name whitespace is real and must survive.
   it.each(['/repo/my feature ', ' /repo/my feature'])(
     'keeps whitespace that belongs to the directory name (%j)',
     (worktreePath) => {
@@ -208,8 +205,7 @@ describe('resolveWorktreeHostPath', () => {
     ).toBe('/mnt/c/repo/feature')
   })
 
-  // `//x` is a host UNC spelling, not a guest path: translating it would prepend a second share.
-  // A relative path is deliberately absent: the wrapper resolves one against the cwd.
+  // //x is host UNC syntax; do not prefix a second share. Relative paths are resolved by the wrapper.
   it.each([
     String.raw`C:\Users\me\repo\feature`,
     String.raw`\\wsl.localhost\Ubuntu\home\me\repo\feature`,

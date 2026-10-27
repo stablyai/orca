@@ -34,7 +34,10 @@ export type PairedElectronClient = {
   page: Page
   environmentId: string
   captureDirectSshAttempts: () => Promise<void>
+  /** Closes the app AND deletes the profile. For a restart, use `quitPreservingProfile`. */
   dispose: () => Promise<void>
+  // Keep the profile and bounded shutdown path for restart; dispose deletes persistence and bare app.close can hang.
+  quitPreservingProfile: () => Promise<void>
   getDirectSshAttemptTargetIds: () => Promise<string[]>
   installDirectSshAttemptProbe: () => Promise<void>
   replacePairingInPlace: (offer: RuntimeDesktopPairingOffer) => Promise<SameIdPairingReplacement>
@@ -97,6 +100,22 @@ export async function createRuntimeDesktopPairingOffer(
   })
 }
 
+/** The phone QR a desktop shows in Settings, minted LAN-only so no Relay is involved. */
+export async function createDesktopMobilePairingOffer(
+  desktopPage: Page
+): Promise<RuntimeDesktopPairingOffer> {
+  return desktopPage.evaluate(async () => {
+    const offer = await window.api.mobile.getPairingQR({
+      address: '127.0.0.1',
+      connectionMode: 'local-only'
+    })
+    if (!offer.available) {
+      throw new Error(`Desktop did not mint a mobile pairing offer: ${JSON.stringify(offer)}`)
+    }
+    return { pairingUrl: offer.pairingUrl }
+  })
+}
+
 export async function launchPairedWebClient(
   hubApp: ElectronApplication,
   offer: RuntimeDesktopPairingOffer,
@@ -148,8 +167,7 @@ export async function launchPairedElectronClient(
   offer: RuntimeDesktopPairingOffer,
   testInfo: TestInfo,
   name: string,
-  // reuseUserDataDir relaunches on an existing profile, so its stored pairing credential — and
-  // therefore its pairedDeviceId — survives the restart, as it does for a real force-quit reopen.
+  // Reuse the stored pairing credential/device id across relaunch, matching a real reopen.
   options: { extraEnv?: Record<string, string>; reuseUserDataDir?: string } = {}
 ): Promise<PairedElectronClient> {
   const reusedProfile = options.reuseUserDataDir !== undefined
@@ -181,8 +199,7 @@ export async function launchPairedElectronClient(
     }
   })
 
-  // Why before the home assert: forwarding starts here, so a client that fails during startup
-  // otherwise reaches CI as a bare Playwright error with none of its own output attached.
+  // Forward logs before the home assertion so startup failures retain app diagnostics.
   forwardElectronProcessLogs(app, testInfo)
   try {
     assertElectronResolvedIsolatedHome(
@@ -239,6 +256,10 @@ export async function launchPairedElectronClient(
         await closeElectronAppForE2E(app)
         await cleanupE2EDaemons(userDataDir)
         await removeProfile(userDataDir)
+      },
+      quitPreservingProfile: async () => {
+        await closeElectronAppForE2E(app)
+        await cleanupE2EDaemons(userDataDir)
       },
       getDirectSshAttemptTargetIds: async () => {
         return readDirectSshAttemptTargetIds(directSshProbePath).filter(

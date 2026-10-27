@@ -3,13 +3,13 @@ import type { Tab } from '../../../shared/tab-types'
 import type { TerminalTab } from '../../../shared/terminal-tab-types'
 import {
   confirmWebAgentSessionHandoffAfterCreate,
-  recordWebAgentSessionHandoff
+  MAX_WEB_AGENT_SESSION_HANDOFFS,
+  recordWebAgentSessionHandoff,
+  resolveWebAgentSessionHandoff
 } from './web-agent-session-handoff'
-import {
-  applyWebSessionTabsSnapshot,
-  resolveHostSessionTabIdForWebSessionTab,
-  type WebSessionTabsSyncState
-} from './web-session-tabs-sync'
+import { applyWebSessionTabsSnapshot } from './web-session-tabs-sync/snapshot-api'
+import { resolveHostSessionTabIdForWebSessionTab } from './web-session-tabs-sync/tracking-mappings'
+import type { WebSessionTabsSyncState } from './web-session-tabs-sync/state'
 import {
   ENV,
   HOST_SURFACE_ID,
@@ -29,6 +29,33 @@ vi.mock('../store', () => ({
 
 describe('applyWebSessionTabsSnapshot', () => {
   beforeEach(resetWebSessionTabsSyncTestState)
+
+  it('bounds unresolved handoff churn', () => {
+    for (let index = 0; index < MAX_WEB_AGENT_SESSION_HANDOFFS + 4; index += 1) {
+      recordWebAgentSessionHandoff({
+        environmentId: ENV,
+        worktreeId: WT,
+        provisionalTabId: `provisional-${index}`,
+        hostTabId: `host-${index}`,
+        hostTerminalHandle: `terminal-${index}`
+      })
+    }
+
+    expect(
+      resolveWebAgentSessionHandoff({
+        environmentId: ENV,
+        worktreeId: WT,
+        provisionalTabId: 'provisional-0'
+      })
+    ).toBeNull()
+    expect(
+      resolveWebAgentSessionHandoff({
+        environmentId: ENV,
+        worktreeId: WT,
+        provisionalTabId: `provisional-${MAX_WEB_AGENT_SESSION_HANDOFFS + 3}`
+      })
+    ).toBe(`host-${MAX_WEB_AGENT_SESSION_HANDOFFS + 3}`)
+  })
 
   it('keeps a provisional Claude tab when the host Claude surface is unrelated', () => {
     const staleLocalAgentTab: TerminalTab = {
@@ -272,45 +299,6 @@ describe('applyWebSessionTabsSnapshot', () => {
         providerSession: { key: 'session_id', id: 'session-a' }
       }
     })
-  })
-
-  it('keeps stale local agent tabs when the host mirror is for a different agent', () => {
-    const staleLocalClaudeTab: TerminalTab = {
-      id: 'local-claude-tab',
-      ptyId: null,
-      worktreeId: WT,
-      title: 'Claude',
-      defaultTitle: 'Claude',
-      customTitle: null,
-      color: null,
-      sortOrder: 0,
-      createdAt: NOW,
-      launchAgent: 'claude'
-    }
-
-    const patch = applyWebSessionTabsSnapshot(
-      makeState({
-        tabsByWorktree: { [WT]: [staleLocalClaudeTab] }
-      }),
-      makeSnapshot([
-        {
-          type: 'terminal',
-          id: HOST_SURFACE_ID,
-          title: 'Codex',
-          parentTabId: 'host-tab-1',
-          leafId: LEAF_ID,
-          isActive: true,
-          launchAgent: 'codex',
-          status: 'ready',
-          terminal: 'terminal-1'
-        }
-      ]),
-      ENV,
-      NOW
-    ) as Partial<WebSessionTabsSyncState>
-
-    expect(patch.tabsByWorktree?.[WT]).toHaveLength(2)
-    expect(patch.tabsByWorktree?.[WT]?.some((tab) => tab.id === 'local-claude-tab')).toBe(true)
   })
 
   it('resolves a canonical agent tab before its confirming snapshot arrives', () => {

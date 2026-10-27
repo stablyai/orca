@@ -1,6 +1,8 @@
 import { useMemo } from 'react'
+import { useAllWorktrees, useProjectHostSetupProjection } from '@/store/selectors'
+import { getProjectHostSetupLookup } from '../../../../shared/project-host-setup-lookup'
+import type { ProjectHostSetup } from '../../../../shared/project-types'
 import type { Worktree } from '../../../../shared/worktree/types'
-import { useAllWorktrees } from '@/store/selectors'
 import { NEW_WORKSPACE_PROJECT_GROUP_OPTION_PREFIX } from '@/lib/new-workspace-project-options'
 
 /**
@@ -9,10 +11,14 @@ import { NEW_WORKSPACE_PROJECT_GROUP_OPTION_PREFIX } from '@/lib/new-workspace-p
  * per-project recency, and workspace creation is exactly the action this picker
  * is about to repeat, so it's the honest proxy rather than a new store field.
  */
-export function orderProjectIdsByRecency(worktrees: readonly Worktree[]): string[] {
+export function orderProjectIdsByRecency(
+  worktrees: readonly Worktree[],
+  setups?: readonly ProjectHostSetup[]
+): string[] {
+  const owners = getProjectHostSetupLookup(setups)
   const newestByProject = new Map<string, number>()
   for (const worktree of worktrees) {
-    const projectId = worktree.projectId
+    const projectId = owners.projectId(worktree)
     // Legacy repo-only workspaces have no projectId and can't be attributed.
     if (projectId === undefined || projectId === '') {
       continue
@@ -34,5 +40,6 @@ export function orderProjectIdsByRecency(worktrees: readonly Worktree[]): string
 
 export function useRecentProjectIds(): string[] {
   const worktrees = useAllWorktrees()
-  return useMemo(() => orderProjectIdsByRecency(worktrees), [worktrees])
+  const { setups } = useProjectHostSetupProjection()
+  return useMemo(() => orderProjectIdsByRecency(worktrees, setups), [worktrees, setups])
 }

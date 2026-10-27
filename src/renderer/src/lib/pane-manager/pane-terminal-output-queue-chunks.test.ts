@@ -18,7 +18,8 @@ function createEntry(): QueueEntry {
     foregroundHoldSafetyTimer: null,
     foregroundCoalesceTimer: null,
     foregroundReleaseDeadlineAt: null,
-    foregroundReleaseDeadlineFixed: false
+    foregroundReleaseDeadlineFixed: false,
+    foregroundHoldSafetyExtended: false
   }
 }
 
@@ -37,6 +38,22 @@ describe('pane terminal output queue chunks', () => {
 
     const second = takeQueuedChunk(entry, 2)
     expect(second?.data).toBe(allData.slice(-2))
+    expect(entry.queuedChars).toBe(0)
+  })
+
+  it('does not cut a queued chunk inside an open DEC 2026 frame', () => {
+    const entry = createEntry()
+    const open = '\x1b[?2026h'
+    const close = '\x1b[?2026l'
+    const firstFrame = `${open}aaaa${close}`
+    const data = `${firstFrame}${open}bbbbbbbbbbbb${close}`
+    enqueueChunk(entry, data, { foreground: true })
+
+    // Stop after the first complete frame: a cut inside the next strands its close marker and freezes painting until drain/1000ms timeout.
+    const taken = takeQueuedChunk(entry, firstFrame.length + 6)
+    expect(taken?.data).toBe(firstFrame)
+    const rest = takeQueuedChunk(entry, data.length)
+    expect(`${taken?.data ?? ''}${rest?.data ?? ''}`).toBe(data)
     expect(entry.queuedChars).toBe(0)
   })
 })

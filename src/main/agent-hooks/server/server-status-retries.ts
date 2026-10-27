@@ -1,11 +1,17 @@
-import { hasCodexTranscriptSubagents } from '../../../shared/agent-hook-listener/providers/codex-state'
+import { pollCodexTranscriptStatus } from '../../../shared/agent-hook-listener/providers/codex-transcript-poll'
 import { normalizeHookPayload } from '../../../shared/agent-hook-listener'
 import {
   hasPendingAgentResultText,
   preparePendingGrokResultDiscovery
 } from '../../../shared/agent-hook-listener/grok-result-discovery'
 import type { AgentHookSource } from '../../../shared/agent-hook-relay'
-import { CodexSubagentPollScheduler } from '../../../shared/codex-subagent-poll-scheduler'
+import { pickHostTurnEnd } from '../../../shared/agent-status-types'
+import {
+  shouldPollHookTranscript,
+  hookTranscriptWatchPath,
+  transcriptPollUpdate
+} from '../../../shared/agent-hook-listener/transcript-poll-policy'
+import { AgentTranscriptPollScheduler } from '../../../shared/agent-transcript-poll-scheduler'
 import type { EnrichedAgentHookEventPayload } from './server-types'
 import {
   ASSISTANT_MESSAGE_RETRY_ATTEMPTS,
@@ -14,20 +20,20 @@ import {
 } from './server-constants'
 import { AgentHookServerStatusUpdate } from './server-status-update'
 
-type CodexSubagentPoll = {
+type TranscriptPoll = {
   source: AgentHookSource
   body: unknown
   original: EnrichedAgentHookEventPayload
 }
 
 export abstract class AgentHookServerStatusRetries extends AgentHookServerStatusUpdate {
-  private readonly codexSubagentPollScheduler = new CodexSubagentPollScheduler<CodexSubagentPoll>(
+  private readonly transcriptPollScheduler = new AgentTranscriptPollScheduler<TranscriptPoll>(
     CODEX_SUBAGENT_POLL_MS,
-    (paneKey, poll) => this.runCodexSubagentPoll(paneKey, poll)
+    (paneKey, poll) => this.runTranscriptPoll(paneKey, poll)
   )
 
-  protected clearAllCodexSubagentPolls(): void {
-    this.codexSubagentPollScheduler.clearAll()
+  protected clearAllTranscriptPolls(): void {
+    this.transcriptPollScheduler.clearAll()
   }
 
   protected clearAssistantMessageRetry(paneKey: string): void {
@@ -39,30 +45,33 @@ export abstract class AgentHookServerStatusRetries extends AgentHookServerStatus
     this.assistantMessageRetryTimers.delete(paneKey)
   }
 
-  protected clearCodexSubagentPoll(paneKey: string): void {
-    this.codexSubagentPollScheduler.clear(paneKey)
+  protected clearTranscriptPoll(paneKey: string): void {
+    this.transcriptPollScheduler.clear(paneKey)
   }
 
-  protected scheduleCodexSubagentPoll(
+  protected scheduleTranscriptPoll(
     source: AgentHookSource,
     body: unknown,
     original: EnrichedAgentHookEventPayload
   ): void {
-    // Why: a nested non-codex CLI inherits ORCA_PANE_KEY, so clearing here would silently end a live codex poll.
-    if (source !== 'codex') {
+    // Nested CLIs inherit pane keys; another provider must not clear this transcript poll.
+    if (source !== 'codex' && source !== 'muse') {
       return
     }
-    this.codexSubagentPollScheduler.clear(original.paneKey)
-    if (!hasCodexTranscriptSubagents(this.state, original.paneKey)) {
+    if (!shouldPollHookTranscript(this.state, source, original)) {
+      this.transcriptPollScheduler.clear(original.paneKey)
       return
     }
-    this.codexSubagentPollScheduler.schedule(original.paneKey, { source, body, original })
+    this.transcriptPollScheduler.schedule(
+      original.paneKey,
+      { source, body, original },
+      hookTranscriptWatchPath(this.state, source, original.paneKey)
+    )
   }
 
-  private runCodexSubagentPoll(paneKey: string, poll: CodexSubagentPoll): void {
+  private runTranscriptPoll(paneKey: string, poll: TranscriptPoll): void {
     const { source, body, original } = poll
-    // Keep the identity check at callback time: a newer event supersedes this
-    // payload even when its pane still has transcript children.
+    // Recheck ownership at callback time; newer events supersede this payload even if children remain.
     if (
       paneKey !== original.paneKey ||
       !this.server ||
@@ -70,14 +79,18 @@ export abstract class AgentHookServerStatusRetries extends AgentHookServerStatus
     ) {
       return
     }
-    const normalized = normalizeHookPayload(this.state, source, body, this.env)
+    const normalized =
+      source === 'codex'
+        ? pollCodexTranscriptStatus(this.state, original, body, this.env)
+        : normalizeHookPayload(this.state, source, body, this.env)
     if (!normalized) {
       return
     }
-    const subagentsChanged =
-      JSON.stringify(normalized.payload.subagents) !== JSON.stringify(original.payload.subagents)
-    const next = subagentsChanged ? this.applyNormalizedStatus(normalized) : original
-    this.scheduleCodexSubagentPoll(source, body, next)
+    const update = transcriptPollUpdate(source, original, normalized)
+    const next = update ? this.applyNormalizedStatus(update) : original
+    if (next) {
+      this.scheduleTranscriptPoll(source, body, next)
+    }
   }
 
   protected scheduleAssistantMessageRetry(
@@ -98,7 +111,7 @@ export abstract class AgentHookServerStatusRetries extends AgentHookServerStatus
     if (!discoveryReady) {
       const discovery = preparePendingGrokResultDiscovery(source, body)
       if (discovery) {
-        // Why: slug-group discovery can outlive the bounded flush timers; its completion must drive the first retry deterministically.
+        // Discovery may outlast flush timers; retry as soon as it completes.
         void discovery
           .then(() => {
             if (this.server) {
@@ -149,7 +162,10 @@ export abstract class AgentHookServerStatusRetries extends AgentHookServerStatus
       this.scheduleAssistantMessageRetry(source, body, original, nextAttempt, requireExactOriginal)
       return
     }
-    // Why: some agents POST Stop before their transcript line is flushed; discovery is event-driven, later content retries stay timed.
-    this.applyNormalizedStatus(normalized.event, normalized.onAccepted)
+    // Stop can precede transcript flush; retries add text while preserving the same turn end.
+    this.applyNormalizedStatus(
+      { ...normalized.event, ...pickHostTurnEnd(current) },
+      normalized.onAccepted
+    )
   }
 }

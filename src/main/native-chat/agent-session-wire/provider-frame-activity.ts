@@ -15,17 +15,16 @@ function stringField(source: Record<string, unknown> | null, key: string): strin
   return typeof value === 'string' && value.trim() ? value : null
 }
 
-/** A reasoning summary streams as a bold headline plus body; only the headline is activity copy. */
+/** Use reasoning headlines for activity, excluding the summary body. */
 function reasoningHeadline(text: string | null | undefined): ActivityText {
   const line = text?.split(/\r?\n/).find((candidate) => candidate.trim())
   if (!line) {
     return null
   }
-  // Hold the previous copy until the closing marker streams in; a half headline would flicker.
+  // Partial bold headlines flicker; retain previous activity until their closing marker.
   return /^\s*\*\*/.test(line) && !/\*\*.+\*\*/.test(line) ? undefined : line
 }
 
-/** Keep only a short sentence-shaped preview from provider-declared display fields. */
 export function providerActivityText(value: unknown): string | null {
   const normalized = normalizeOptionalField(value, MAX_PROVIDER_ACTIVITY_LENGTH + 1)
   if (!normalized) {
@@ -39,7 +38,7 @@ export function providerActivityText(value: unknown): string | null {
   if (
     !unwrapped ||
     /^[{[]/.test(unwrapped) ||
-    /^[\w.-]+\s*[·-]\s*(?:notification:|message:|item\/)/i.test(unwrapped) ||
+    /^[\w.-]+\s*[\u00B7-]\s*(?:notification:|message:|item\/)/i.test(unwrapped) ||
     (/^[\w:./-]+$/.test(unwrapped) && /[:/]/.test(unwrapped)) ||
     !/\p{L}/u.test(unwrapped)
   ) {
@@ -100,46 +99,25 @@ export function codexProviderFrameActivity(
   return itemType ? (CODEX_ITEM_ACTIVITY[itemType] ?? null) : null
 }
 
+/** Claude status tokens add no useful narration; task prose belongs to spawned work. Only compaction explains a wait. */
 export function claudeProviderFrameActivity(kind: string, payload: unknown): ActivityText {
   const source = record(payload)
-  if (kind === 'message:system:task_started') {
-    if (source?.ambient === true || source?.skip_transcript === true) {
-      return null
-    }
-    const description = providerActivityText(stringField(source, 'description'))
-    return description ? providerActivityText(`Working on: ${description}`) : null
-  }
-  if (kind === 'message:system:task_progress') {
-    return providerActivityText(
-      stringField(source, 'summary') ?? stringField(source, 'description')
-    )
-  }
-  if (kind === 'message:system:task_updated') {
-    return providerActivityText(stringField(record(source?.patch), 'description'))
-  }
   if (kind === 'message:system:status') {
-    const status = stringField(source, 'status')
-    return status === 'compacting'
-      ? 'Compacting the conversation'
-      : status === 'requesting'
-        ? 'Requesting a response'
-        : null
+    return stringField(source, 'status') === 'compacting' ? 'Compacting the conversation' : null
   }
-  if (kind === 'message:system:control_request_progress') {
-    const status = stringField(source, 'status')
-    return status === 'started'
-      ? 'Exploring a side question'
-      : status === 'api_retry'
-        ? 'Retrying a side question'
-        : null
-  }
-  if (kind === 'message:tool_progress') {
+  if (
+    kind === 'message:system:task_started' ||
+    kind === 'message:system:task_progress' ||
+    kind === 'message:system:task_updated' ||
+    kind === 'message:system:control_request_progress' ||
+    kind === 'message:tool_progress'
+  ) {
     return null
   }
   return undefined
 }
 
-/** Retain only the current summary headline, never materialize the growing transcript. */
+/** Retain the current headline without materializing the full transcript. */
 export function createCodexProviderActivityReader(): (
   method: string,
   payload: unknown

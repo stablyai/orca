@@ -1,242 +1,271 @@
+import {
+  codexStartReport,
+  codexStartedLink,
+  acquireReadyCodexForTest,
+  THREAD_ID,
+  USER_MESSAGE,
+  acquired,
+  adapterFor,
+  answerWithOpenedTurn,
+  fakeCodex,
+  identityFor
+} from './codex-structured-session-adapter-fixture'
 import { describe, expect, it, vi } from 'vitest'
-import type {
-  AgentJournalMessageItem,
-  AgentSessionJournalIdentity
-} from '../../shared/agent-session-journal-types'
-import { CodexAppServerRequestError } from './codex-app-server-connection'
-import type {
-  CodexAppServerConnection,
-  CodexAppServerConnectionHandlers,
-  CodexAppServerLaunch,
-  openCodexAppServerConnection
-} from './codex-app-server-connection'
+import { CodexAppServerRequestError } from './app-server/codex-app-server-request-error'
+import type { openCodexAppServerConnection } from './codex-app-server-connection'
 import type { StructuredAgentSessionEventSink } from '../native-chat/agent-session-wire/structured-agent-session-event-sink'
-import { CODEX_SPAWN_TOKEN_ENV } from './codex-structured-owner-identity'
-import { ORCA_STRUCTURED_SESSION_ENV } from '../../shared/structured-session-marker'
-import { encodeCodexQuestionOptionId } from './codex-structured-prompt-replies'
 import {
   CodexStructuredSessionAdapter,
   type CodexStructuredLaunch,
-  type CodexStructuredSessionAdapterDeps,
   type CodexStructuredSessionEvent
 } from './codex-structured-session-adapter'
-
-const THREAD_ID = 'thread-abc'
-
-function identityFor(sessionId: string): AgentSessionJournalIdentity {
-  return {
-    sessionId,
-    workspaceId: 'ws-1',
-    hostId: 'host-1',
-    agent: 'codex',
-    providerHandle: { kind: 'codex', threadId: THREAD_ID }
-  }
-}
-
-const USER_MESSAGE: AgentJournalMessageItem = {
-  kind: 'message',
-  role: 'user',
-  blocks: [{ type: 'text', text: 'ship it' }]
-}
-
-type Route = (params: Record<string, unknown> | undefined) => unknown
-
-// `closed` is readonly on the real connection; the fake flips it so a test can
-// kill the child at a chosen moment.
-type FakeConnection = Omit<CodexAppServerConnection, 'closed'> & {
-  closed: boolean
-  launch: CodexAppServerLaunch
-  handlers: CodexAppServerConnectionHandlers
-  calls: { method: string; params?: Record<string, unknown> }[]
-  replies: { id: number | string; result?: unknown; code?: number; message?: string }[]
-  closeCount: number
-}
-
-/** Stands in for a live `codex app-server`: every RPC is answered from `routes`,
- *  and the test drives Codex's own traffic through `handlers`. */
-function fakeCodex(routes: Record<string, Route> = {}): {
-  connections: FakeConnection[]
-  openConnection: typeof openCodexAppServerConnection
-  routes: Record<string, Route>
-} {
-  const connections: FakeConnection[] = []
-  const openConnection = (async (launch, handlers = {}) => {
-    const connection: FakeConnection = {
-      launch,
-      handlers,
-      calls: [],
-      replies: [],
-      closeCount: 0,
-      pid: 4321,
-      closed: false,
-      request: async (method, params) => {
-        connection.calls.push({ method, params })
-        const route = routes[method]
-        return route ? route(params) : {}
-      },
-      notify: () => {},
-      respond: (id, result) => connection.replies.push({ id, result }),
-      respondWithError: (id, code, message) => connection.replies.push({ id, code, message }),
-      close: async () => {
-        connection.closeCount += 1
-        connection.closed = true
-        return true
-      }
-    }
-    connections.push(connection)
-    return connection
-  }) as typeof openCodexAppServerConnection
-  routes['thread/start'] ??= () => ({
-    thread: { id: THREAD_ID, path: '/rollouts/abc.jsonl' },
-    model: 'gpt-live',
-    reasoningEffort: 'medium'
-  })
-  routes['thread/resume'] ??= (params) => ({
-    thread: { id: (params as { threadId: string }).threadId },
-    model: 'gpt-live',
-    reasoningEffort: 'medium'
-  })
-  return { connections, openConnection, routes }
-}
-
-function adapterFor(
-  codex: ReturnType<typeof fakeCodex>,
-  launch: Partial<CodexStructuredLaunch> = {},
-  events: CodexStructuredSessionEvent[] = [],
-  processControl: Partial<
-    Pick<CodexStructuredSessionAdapterDeps, 'captureTurnProcesses' | 'terminateTurnProcesses'>
-  > = {}
-): CodexStructuredSessionAdapter {
-  let acquisitionGeneration = 0
-  return new CodexStructuredSessionAdapter({
-    resolveLaunch: async () => ({
-      command: 'codex',
-      args: ['app-server'],
-      cwd: '/work/repo',
-      codexHome: null,
-      resumeThreadId: null,
-      ...launch
-    }),
-    onEvent: (event) => events.push(event),
-    openConnection: codex.openConnection,
-    readProcessStartTime: async () => 1_700_000_000_000,
-    captureTurnProcesses: async () => ({ platform: 'win32', identities: new Map() }),
-    terminateTurnProcesses: async () => true,
-    now: () => 1_700_000_000_500,
-    mintAcquisitionGeneration: () => `generation-${++acquisitionGeneration}`,
-    ...processControl
-  })
-}
-
-async function acquired(
-  codex: ReturnType<typeof fakeCodex>,
-  launch: Partial<CodexStructuredLaunch> = {},
-  events: CodexStructuredSessionEvent[] = []
-): Promise<CodexStructuredSessionAdapter> {
-  const adapter = adapterFor(codex, launch, events)
-  await adapter.acquire({ identity: identityFor('session-1'), fence: 7, spawnToken: 'spawn-9' })
-  return adapter
-}
+import { codexProviderHandle } from '../../shared/agent-session-provider-handle-encoding'
+import { AgentModelCatalogStore } from '../native-chat/agent-model-catalog/agent-model-catalog-store'
+import { createCodexStructuredLaunchResolver } from '../runtime/structured-agent-launch-composition.test-support'
+import { agentSessionRecordFixture } from '../native-chat/agent-session-record-test-fixture'
 
 describe('CodexStructuredSessionAdapter.acquire', () => {
-  it('starts a new thread and reports the process and link the lease will prove', async () => {
-    const codex = fakeCodex()
-    const adapter = adapterFor(codex, { codexHome: '/codex/home' })
+  it('keeps a started thread usable when its model listing never answers', async () => {
+    const codex = fakeCodex({ 'model/list': () => new Promise<never>(() => {}) })
+    const adapter = adapterFor(codex)
 
-    const acquisition = await adapter.acquire({
+    await acquireReadyCodexForTest(adapter, {
+      identity: identityFor('session-1'),
+      fence: 7,
+      spawnToken: 'spawn-9',
+      options: { model: 'gpt-saved', effort: 'low', serviceTier: 'priority' }
+    })
+
+    expect(codexStartReport(adapter).reportedOptions).toEqual({
+      model: 'gpt-saved',
+      effort: 'low',
+      serviceTier: 'priority',
+      reportedPermissionMode: null
+    })
+    expect(codex.connections[0].calls.map((call) => call.method)).toEqual([
+      'initialize',
+      'thread/start',
+      'skills/list'
+    ])
+  })
+
+  it('keeps a saved next-turn pick when resuming a thread that reports its previous pick', async () => {
+    const codex = fakeCodex()
+    codex.routes['turn/start'] = () => ({ turn: { id: 'turn-1' } })
+    const adapter = adapterFor(codex, { resumeThreadId: THREAD_ID })
+    await acquireReadyCodexForTest(adapter, {
+      identity: identityFor('session-1'),
+      fence: 7,
+      spawnToken: 'spawn-9',
+      options: { model: 'gpt-next', effort: 'low' }
+    })
+
+    const saved = codexStartReport(adapter).reportedOptions
+    expect(saved).toMatchObject({ model: 'gpt-next', effort: 'low' })
+    await adapter.dispatch({
+      sessionId: 'session-1',
+      clientMessageId: 'next-turn',
+      body: USER_MESSAGE,
+      fence: 7
+    })
+    expect(
+      codex.connections[0].calls.find((call) => call.method === 'turn/start')?.params
+    ).toMatchObject({
+      model: 'gpt-next',
+      effort: 'low'
+    })
+    await adapter.closeSession('session-1')
+    await acquireReadyCodexForTest(adapter, {
+      identity: identityFor('session-1'),
+      fence: 8,
+      spawnToken: 'spawn-10',
+      options: {
+        ...(saved.model ? { model: saved.model } : {}),
+        ...(saved.effort ? { effort: saved.effort } : {})
+      }
+    })
+    expect(codexStartReport(adapter).reportedOptions).toMatchObject({
+      model: 'gpt-next',
+      effort: 'low'
+    })
+  })
+
+  it('keeps current intent usable without inventing controls when a listing fails', async () => {
+    const codex = fakeCodex({
+      'model/list': () => {
+        throw new Error('stub model/list rejected')
+      }
+    })
+    const adapter = adapterFor(codex)
+
+    await acquireReadyCodexForTest(adapter, {
+      identity: identityFor('session-1'),
+      fence: 7,
+      spawnToken: 'spawn-9',
+      options: { model: 'gpt-live', effort: 'medium' }
+    })
+
+    expect(codexStartReport(adapter).reportedOptions).toEqual({
+      model: 'gpt-live',
+      effort: 'medium',
+      reportedPermissionMode: null
+    })
+    await expect(adapter.readOptions({ sessionId: 'session-1', fence: 7 })).resolves.toEqual({
+      current: { model: 'gpt-live', effort: 'medium', reportedPermissionMode: null },
+      models: [
+        {
+          id: 'gpt-live',
+          label: 'gpt-live',
+          isDefault: false,
+          efforts: [],
+          effortsKnown: false
+        }
+      ]
+    })
+    codex.routes['turn/start'] = answerWithOpenedTurn(codex, 'turn-1')
+    await expect(
+      adapter.dispatch({
+        sessionId: 'session-1',
+        clientMessageId: 'after-listing-failure',
+        body: USER_MESSAGE,
+        fence: 7
+      })
+    ).resolves.toMatchObject({ state: 'admitted' })
+    expect(
+      codex.connections[0].calls.findLast((call) => call.method === 'turn/start')?.params
+    ).toMatchObject({ model: 'gpt-live', effort: 'medium' })
+    expect(codex.connections[0].closeCount).toBe(0)
+  })
+
+  it('opens the thread with the chat identity every command must keep', async () => {
+    const codex = fakeCodex()
+    const record = agentSessionRecordFixture({
+      sessionId: 'session-1',
+      provider: 'codex',
+      accountHome: { variable: 'CODEX_HOME', path: '/codex/home' }
+    })
+    const adapter = adapterFor(codex, {}, [], {
+      resolveLaunch: createCodexStructuredLaunchResolver({
+        store: { getRecord: () => record, pinLaunchDirectory: vi.fn() },
+        resolveWorkspacePath: async () => '/work/repo',
+        resolveCommand: () => 'codex',
+        resolveLaunchArgs: () => []
+      })
+    })
+
+    await acquireReadyCodexForTest(adapter, {
       identity: identityFor('session-1'),
       fence: 7,
       spawnToken: 'spawn-9'
     })
 
-    expect(codex.connections[0].launch.env).toEqual({
-      [CODEX_SPAWN_TOKEN_ENV]: 'spawn-9',
-      CODEX_HOME: '/codex/home',
-      [ORCA_STRUCTURED_SESSION_ENV]: '1'
-    })
-    expect(codex.connections[0].launch.cwd).toBe('/work/repo')
-    expect(codex.connections[0].calls[0]).toEqual({
+    expect(codex.connections[0].calls[1]).toEqual({
       method: 'thread/start',
-      params: { cwd: '/work/repo' }
+      params: {
+        cwd: '/work/repo',
+        approvalPolicy: 'on-request',
+        sandbox: 'read-only',
+        approvalsReviewer: 'user',
+        // Explicit values survive inherit = core.
+        config: {
+          'shell_environment_policy.set.ORCA_AGENT_SESSION_ID': 'session-1',
+          'shell_environment_policy.set.ORCA_STRUCTURED_SESSION': '1',
+          'shell_environment_policy.set.ORCA_CLI_COMMAND': expect.stringMatching(
+            /^[^:;]*[\\/]cli[\\/]bin[\\/]orca-dev$/
+          ),
+          'shell_environment_policy.set.ORCA_USER_DATA_PATH': expect.any(String),
+          'shell_environment_policy.set.ORCA_ENVIRONMENT': '',
+          'shell_environment_policy.set.ORCA_PAIRING_CODE': '',
+          'shell_environment_policy.set.ORCA_REMOTE_PAIRING': ''
+        }
+      }
     })
-    expect(acquisition.process).toEqual({
-      hostId: 'host-1',
-      pid: 4321,
-      processStartTimeMs: 1_700_000_000_000,
-      spawnToken: 'spawn-9'
-    })
-    expect(acquisition.link).toEqual({
-      linkId: `codex-7-${THREAD_ID}`,
-      handle: { provider: 'codex', threadId: THREAD_ID },
-      origin: 'created',
-      mintedAtFence: 7,
-      observedAt: 1_700_000_000_500
-    })
-    expect(acquisition.acquisitionGeneration).toBe('generation-1')
   })
 
   it('resumes the thread the durable handle chain names, not the client one', async () => {
     const codex = fakeCodex()
     const adapter = adapterFor(codex, {
-      resumeThreadId: 'thread-proven',
-      resumePath: '/rollouts/thread-proven.jsonl'
+      resumeThreadId: 'thread-proven'
     })
 
-    const acquisition = await adapter.acquire({
+    await acquireReadyCodexForTest(adapter, {
       identity: identityFor('session-1'),
       fence: 9,
       spawnToken: 'spawn-9'
     })
 
-    expect(codex.connections[0].calls[0]).toEqual({
+    expect(codex.connections[0].calls[1]).toEqual({
       method: 'thread/resume',
       params: expect.objectContaining({
         threadId: 'thread-proven',
-        cwd: '/work/repo',
-        path: '/rollouts/thread-proven.jsonl'
+        cwd: '/work/repo'
       })
     })
-    expect(acquisition.link.origin).toBe('resumed')
-    expect(acquisition.link.handle).toEqual({ provider: 'codex', threadId: 'thread-proven' })
+    expect(codexStartedLink(adapter)?.origin).toBe('resumed')
+    expect(codexStartedLink(adapter)?.handle).toEqual(codexProviderHandle('thread-proven'))
   })
 
-  it('refuses a resume that lands on a different thread and reaps the child', async () => {
+  it('starts a thread in place of a creation Codex never saved, and says which it replaced', async () => {
+    const codex = fakeCodex({
+      'thread/resume': () => {
+        throw new CodexAppServerRequestError(
+          'thread/resume',
+          -32600,
+          'codex app-server thread/resume failed: no rollout found for thread id thread-unsaved'
+        )
+      }
+    })
+    const adapter = adapterFor(codex, {
+      resumeThreadId: 'thread-unsaved',
+      supersedeIfUnsaved: true
+    })
+
+    await acquireReadyCodexForTest(adapter, {
+      identity: identityFor('session-1'),
+      fence: 9,
+      spawnToken: 'spawn-9'
+    })
+
+    expect(codex.connections[0].calls.slice(1, 3).map((call) => call.method)).toEqual([
+      'thread/resume',
+      'thread/start'
+    ])
+    expect(codexStartedLink(adapter)).toEqual({
+      linkId: `codex-9-${THREAD_ID}`,
+      handle: codexProviderHandle(THREAD_ID),
+      origin: 'created',
+      supersedesKey: 'codex:"thread-unsaved"',
+      mintedAtFence: 9,
+      observedAt: 1_700_000_000_500
+    })
+    expect(codex.connections[0].closeCount).toBe(0)
+  })
+
+  it('rejects a resume that lands on a different thread; the host closes once', async () => {
     const codex = fakeCodex({ 'thread/resume': () => ({ thread: { id: 'thread-other' } }) })
     const adapter = adapterFor(codex, { resumeThreadId: 'thread-proven' })
-
+    const acquired = await adapter.acquire({
+      identity: identityFor('session-1'),
+      fence: 9,
+      spawnToken: 'spawn-9'
+    })
     await expect(
-      adapter.acquire({ identity: identityFor('session-1'), fence: 9, spawnToken: 'spawn-9' })
+      adapter.open({
+        sessionId: 'session-1',
+        fence: 9,
+        acquisitionGeneration: acquired.acquisitionGeneration ?? null,
+        signal: new AbortController().signal
+      })
     ).rejects.toThrow('resumed thread-other instead of thread-proven')
+    expect(codex.connections[0].closeCount).toBe(0)
+    expect(await adapter.closeSession('session-1')).toBe(true)
     expect(codex.connections[0].closeCount).toBe(1)
-  })
-
-  it('refuses a thread Codex never named', async () => {
-    const codex = fakeCodex({ 'thread/start': () => ({}) })
-    const adapter = adapterFor(codex)
-
-    await expect(
-      adapter.acquire({ identity: identityFor('session-1'), fence: 1, spawnToken: 'spawn-9' })
-    ).rejects.toThrow('did not name the thread')
-    expect(codex.connections[0].closeCount).toBe(1)
-  })
-
-  it('closes the previous child before re-acquiring at a new fence', async () => {
-    const codex = fakeCodex()
-    const adapter = await acquired(codex)
-
-    await adapter.acquire({ identity: identityFor('session-1'), fence: 8, spawnToken: 'spawn-10' })
-
-    expect(codex.connections).toHaveLength(2)
-    expect(codex.connections[0].closeCount).toBe(1)
-    expect(codex.connections[1].closeCount).toBe(0)
   })
 
   it('keeps the traffic Codex sends before the session is published', async () => {
     const codex = fakeCodex()
     const events: CodexStructuredSessionEvent[] = []
     codex.routes['thread/start'] = () => {
-      // Codex talks as soon as the child is up, which is before the adapter has
-      // a thread id to publish the session under.
       codex.connections[0].handlers.onNotification?.('item/started', { threadId: THREAD_ID })
       codex.connections[0].handlers.onServerRequest?.({
         id: 5,
@@ -249,14 +278,13 @@ describe('CodexStructuredSessionAdapter.acquire', () => {
     const adapter = await acquired(codex, {}, events)
 
     expect(events.map((event) => event.type)).toEqual(['notification', 'prompt'])
-    // The early approval is answerable, so Codex is not left blocked on a
-    // request that arrived a moment too soon.
     await adapter.answerPrompt({
       sessionId: 'session-1',
       itemId: 'codex-item-early',
       kind: 'approval',
-      optionId: 'accept',
-      fence: 7
+      response: { kind: 'option', optionId: 'accept' },
+      fence: 7,
+      commit: async () => undefined
     })
     expect(codex.connections[0].replies).toEqual([{ id: 5, result: { decision: 'accept' } }])
   })
@@ -279,7 +307,7 @@ describe('CodexStructuredSessionAdapter.acquire', () => {
       })
     }
     const adapter = adapterFor(codex, {}, events)
-    await adapter.acquire({
+    await acquireReadyCodexForTest(adapter, {
       identity: identityFor('session-1'),
       fence: 7,
       spawnToken: 'spawn-9',
@@ -308,7 +336,6 @@ describe('CodexStructuredSessionAdapter.acquire', () => {
         resumeThreadId: null
       }),
       openConnection: codex.openConnection,
-      // The child dies while the acquisition is still reading its identity.
       readProcessStartTime: async () => {
         codex.connections[0].closed = true
         return 1_700_000_000_000
@@ -347,18 +374,6 @@ describe('CodexStructuredSessionAdapter.acquire', () => {
       message: 'workspace no longer exists'
     })
     expect(codex.connections).toHaveLength(0)
-  })
-
-  it('reports the rollout path Codex named, and null when it named none', async () => {
-    const withPath = fakeCodex()
-    const adapter = await acquired(withPath)
-    expect(await adapter.historyFilePath({ identity: identityFor('session-1') })).toBe(
-      '/rollouts/abc.jsonl'
-    )
-
-    const withoutPath = fakeCodex({ 'thread/start': () => ({ thread: { id: THREAD_ID } }) })
-    const bare = await acquired(withoutPath)
-    expect(await bare.historyFilePath({ identity: identityFor('session-1') })).toBeNull()
   })
 
   it('lets closeAll cancel and reap an acquisition still opening', async () => {
@@ -432,8 +447,9 @@ describe('CodexStructuredSessionAdapter.acquire', () => {
 })
 
 describe('CodexStructuredSessionAdapter.dispatch', () => {
-  it('accepts a turn Codex names in its response', async () => {
-    const codex = fakeCodex({ 'turn/start': () => ({ turn: { id: 'turn-1' } }) })
+  it('admits a send as soon as Codex owns it', async () => {
+    const codex = fakeCodex()
+    codex.routes['turn/start'] = answerWithOpenedTurn(codex, 'turn-1')
     const adapter = await acquired(codex)
 
     const outcome = await adapter.dispatch({
@@ -451,22 +467,25 @@ describe('CodexStructuredSessionAdapter.dispatch', () => {
       fence: 7
     })
 
-    expect(outcome).toEqual({
-      state: 'accepted',
-      providerIdentity: { provider: 'codex', threadId: THREAD_ID, turnId: 'turn-1', ordinal: 0 }
-    })
-    expect(codex.connections[0].calls[1].params).toEqual({
-      threadId: THREAD_ID,
-      clientUserMessageId: 'client-1',
-      input: [
-        { type: 'text', text: 'ship it' },
-        { type: 'localImage', path: '/tmp/shot.png' },
-        { type: 'image', url: 'https://example.test/a.png' }
-      ]
-    })
+    // Coalesced sends share a turn ID; the echo supplies message identity.
+    expect(outcome).toMatchObject({ state: 'admitted' })
+    expect(codex.connections[0].calls.find((call) => call.method === 'turn/start')?.params).toEqual(
+      {
+        threadId: THREAD_ID,
+        clientUserMessageId: 'client-1',
+        approvalPolicy: 'on-request',
+        approvalsReviewer: 'user',
+        sandboxPolicy: { type: 'readOnly' },
+        input: [
+          { type: 'text', text: 'ship it' },
+          { type: 'localImage', path: '/tmp/shot.png' },
+          { type: 'image', url: 'https://example.test/a.png' }
+        ]
+      }
+    )
   })
 
-  it('accepts a turn named only by the notification that raced the ack', async () => {
+  it('admits a send on a build whose turn/start answers before the turn is named', async () => {
     const codex = fakeCodex()
     const events: CodexStructuredSessionEvent[] = []
     const adapter = await acquired(codex, {}, events)
@@ -485,8 +504,7 @@ describe('CodexStructuredSessionAdapter.dispatch', () => {
       fence: 7
     })
 
-    expect(outcome).toMatchObject({ state: 'accepted' })
-    expect(outcome).toMatchObject({ providerIdentity: { turnId: 'turn-late' } })
+    expect(outcome).toMatchObject({ state: 'admitted' })
     expect(events.at(-1)).toMatchObject({ type: 'notification', method: 'turn/started' })
   })
 
@@ -494,8 +512,6 @@ describe('CodexStructuredSessionAdapter.dispatch', () => {
     const codex = fakeCodex()
     const events: CodexStructuredSessionEvent[] = []
     codex.routes['turn/start'] = () => {
-      // A subagent runs its own thread over the same connection, and its turn
-      // starts first.
       const notify = codex.connections[0].handlers.onNotification
       notify?.('turn/started', { threadId: 'thread-child', turn: { id: 'turn-child' } })
       notify?.('turn/started', { threadId: THREAD_ID, turn: { id: 'turn-root' } })
@@ -510,39 +526,11 @@ describe('CodexStructuredSessionAdapter.dispatch', () => {
       fence: 7
     })
 
-    expect(outcome).toEqual({
-      state: 'accepted',
-      providerIdentity: { provider: 'codex', threadId: THREAD_ID, turnId: 'turn-root', ordinal: 0 }
-    })
-    // Each event carries the thread it actually came from, so the journal can
-    // keep a subagent's turn out of the root conversation.
+    expect(outcome).toMatchObject({ state: 'admitted' })
     expect(events.map((event) => (event.type === 'notification' ? event.threadId : null))).toEqual([
       'thread-child',
       THREAD_ID
     ])
-  })
-
-  it('settles unknown rather than failed when Codex never names the turn', async () => {
-    vi.useFakeTimers()
-    try {
-      const codex = fakeCodex()
-      const adapter = await acquired(codex)
-
-      const dispatching = adapter.dispatch({
-        sessionId: 'session-1',
-        clientMessageId: 'client-1',
-        body: USER_MESSAGE,
-        fence: 7
-      })
-      await vi.advanceTimersByTimeAsync(10_000)
-
-      expect(await dispatching).toEqual({
-        state: 'unknown',
-        reason: 'codex app-server started a turn it did not name in time'
-      })
-    } finally {
-      vi.useRealTimers()
-    }
   })
 
   it('rejects only when Codex answered and declined', async () => {
@@ -560,7 +548,11 @@ describe('CodexStructuredSessionAdapter.dispatch', () => {
         body: USER_MESSAGE,
         fence: 7
       })
-    ).toEqual({ state: 'rejected', reason: 'turn already running' })
+    ).toEqual({
+      state: 'rejected',
+      reason: "Codex didn't accept this message.",
+      rejection: { kind: 'providerRejected', neverReachedAgent: true }
+    })
   })
 
   it('rethrows a dead child so the wire settles the submission unknown', async () => {
@@ -597,16 +589,27 @@ describe('CodexStructuredSessionAdapter.dispatch', () => {
           }
         ],
         nextCursor: null
-      }),
-      'turn/start': () => ({ turn: { id: 'turn-1' } })
+      })
     })
-    const adapter = await acquired(codex)
+    codex.routes['turn/start'] = answerWithOpenedTurn(codex, 'turn-1')
+    const adapter = adapterFor(codex, { codexHome: '/codex/home' }, [], {
+      modelCatalog: new AgentModelCatalogStore()
+    })
+    await acquireReadyCodexForTest(adapter, {
+      identity: identityFor('session-1'),
+      fence: 7,
+      spawnToken: 'spawn-9'
+    })
+    await adapter.readOptions({ sessionId: 'session-1', fence: 7 })
 
     await adapter.setOption({ sessionId: 'session-1', key: 'model', value: 'gpt-5', fence: 7 })
     await adapter.setOption({ sessionId: 'session-1', key: 'effort', value: 'high', fence: 7 })
     await expect(
       adapter.setOption({ sessionId: 'session-1', key: 'sandboxEscape', value: 'yes', fence: 7 })
     ).rejects.toThrow('no thread option named sandboxEscape')
+    await expect(
+      adapter.setOption({ sessionId: 'session-1', key: 'approvalPolicy', value: 'never', fence: 7 })
+    ).rejects.toThrow('no thread option named approvalPolicy')
     await adapter.dispatch({
       sessionId: 'session-1',
       clientMessageId: 'client-1',
@@ -617,268 +620,5 @@ describe('CodexStructuredSessionAdapter.dispatch', () => {
     const turnStart = codex.connections[0].calls.findLast((call) => call.method === 'turn/start')
     expect(turnStart?.params).toMatchObject({ model: 'gpt-5', effort: 'high' })
     expect(turnStart?.params).not.toHaveProperty('sandboxEscape')
-  })
-})
-
-describe('CodexStructuredSessionAdapter prompts', () => {
-  function askApproval(codex: ReturnType<typeof fakeCodex>): void {
-    codex.connections[0].handlers.onServerRequest?.({
-      id: 11,
-      method: 'item/commandExecution/requestApproval',
-      params: { itemId: 'codex-item-1', threadId: THREAD_ID, turnId: 'turn-1' }
-    })
-  }
-
-  it('surfaces an approval request and answers it exactly once', async () => {
-    const codex = fakeCodex()
-    const events: CodexStructuredSessionEvent[] = []
-    const adapter = await acquired(codex, {}, events)
-
-    askApproval(codex)
-    adapter.bindPromptItemId('session-1', 'codex:thread-abc:turn-1:3', 'codex-item-1')
-    await adapter.answerPrompt({
-      sessionId: 'session-1',
-      itemId: 'codex:thread-abc:turn-1:3',
-      kind: 'approval',
-      optionId: 'accept',
-      fence: 7
-    })
-
-    expect(events.at(-1)).toMatchObject({ type: 'prompt', codexItemId: 'codex-item-1' })
-    expect(codex.connections[0].replies).toEqual([{ id: 11, result: { decision: 'accept' } }])
-
-    await expect(
-      adapter.answerPrompt({
-        sessionId: 'session-1',
-        itemId: 'codex:thread-abc:turn-1:3',
-        kind: 'approval',
-        optionId: 'decline',
-        fence: 7
-      })
-    ).rejects.toThrow('no longer waiting on')
-    expect(codex.connections[0].replies).toHaveLength(1)
-  })
-
-  it('responds with an error when a prompt cannot be admitted to the journal sink', async () => {
-    const codex = fakeCodex()
-    const events: CodexStructuredSessionEvent[] = []
-    const sink: StructuredAgentSessionEventSink = {
-      appendItem: vi.fn(),
-      appendTombstone: vi.fn(),
-      publish: vi.fn(),
-      tryAppendItem: vi.fn(() => ({ accepted: false as const, reason: 'closed' as const }))
-    }
-    const adapter = adapterFor(codex, {}, events)
-    await adapter.acquire({
-      identity: identityFor('session-1'),
-      fence: 7,
-      spawnToken: 'spawn-9',
-      events: sink
-    })
-
-    askApproval(codex)
-
-    expect(events.filter((event) => event.type === 'prompt')).toEqual([])
-    expect(codex.connections[0].replies).toEqual([
-      {
-        id: 11,
-        code: -32001,
-        message:
-          'Orca could not durably record item/commandExecution/requestApproval prompt (closed)'
-      }
-    ])
-    await expect(
-      adapter.answerPrompt({
-        sessionId: 'session-1',
-        itemId: 'codex-item-1',
-        kind: 'approval',
-        optionId: 'accept',
-        fence: 7
-      })
-    ).rejects.toThrow('no longer waiting on')
-  })
-
-  it('force-closes when an unhandled provider frame cannot be admitted', async () => {
-    const codex = fakeCodex()
-    const events: CodexStructuredSessionEvent[] = []
-    const sink: StructuredAgentSessionEventSink = {
-      appendItem: vi.fn(),
-      appendTombstone: vi.fn(),
-      publish: vi.fn(),
-      tryAppendItem: vi.fn(() => ({ accepted: false as const, reason: 'backpressure' as const }))
-    }
-    const adapter = adapterFor(codex, {}, events)
-    await adapter.acquire({
-      identity: identityFor('session-1'),
-      fence: 7,
-      spawnToken: 'spawn-9',
-      events: sink
-    })
-
-    codex.connections[0].handlers.onUnhandledFrame?.('frame:invalid-json', '{')
-
-    await vi.waitFor(() => expect(codex.connections[0].closeCount).toBe(1))
-    expect(events.filter((event) => event.type === 'ended')).toMatchObject([
-      { cause: 'unexpected-exit', fence: 7, acquisitionGeneration: 'generation-1' }
-    ])
-  })
-
-  it('force-closes after a responded server request is not durably admitted', async () => {
-    const codex = fakeCodex()
-    const events: CodexStructuredSessionEvent[] = []
-    const sink: StructuredAgentSessionEventSink = {
-      appendItem: vi.fn(),
-      appendTombstone: vi.fn(),
-      publish: vi.fn(),
-      tryAppendItem: vi.fn(() => ({ accepted: false as const, reason: 'failed' as const }))
-    }
-    const adapter = adapterFor(codex, {}, events)
-    await adapter.acquire({
-      identity: identityFor('session-1'),
-      fence: 7,
-      spawnToken: 'spawn-9',
-      events: sink
-    })
-
-    codex.connections[0].handlers.onServerRequest?.({
-      id: 17,
-      method: 'item/permissions/requestApproval',
-      params: { threadId: THREAD_ID }
-    })
-
-    await vi.waitFor(() => expect(codex.connections[0].closeCount).toBe(1))
-    expect(events.filter((event) => event.type === 'ended')).toMatchObject([
-      { cause: 'unexpected-exit', fence: 7, acquisitionGeneration: 'generation-1' }
-    ])
-  })
-
-  it('answers each approval a tool item asks for separately', async () => {
-    const codex = fakeCodex()
-    const events: CodexStructuredSessionEvent[] = []
-    const adapter = await acquired(codex, {}, events)
-    // A shell bridge re-asks per command under one parent tool item, so only the
-    // approval id tells the two requests apart.
-    const ask = (id: number, approvalId: string): void => {
-      codex.connections[0].handlers.onServerRequest?.({
-        id,
-        method: 'item/commandExecution/requestApproval',
-        params: { itemId: 'codex-item-1', approvalId, threadId: THREAD_ID, turnId: 'turn-1' }
-      })
-    }
-
-    ask(11, 'approval-a')
-    ask(12, 'approval-b')
-    adapter.bindPromptItemId('session-1', 'journal-a', 'approval-a')
-    adapter.bindPromptItemId('session-1', 'journal-b', 'approval-b')
-    for (const [itemId, optionId] of [
-      ['journal-b', 'decline'],
-      ['journal-a', 'accept']
-    ]) {
-      await adapter.answerPrompt({
-        sessionId: 'session-1',
-        itemId,
-        kind: 'approval',
-        optionId,
-        fence: 7
-      })
-    }
-
-    expect(codex.connections[0].replies).toEqual([
-      { id: 12, result: { decision: 'decline' } },
-      { id: 11, result: { decision: 'accept' } }
-    ])
-    expect(events.map((event) => (event.type === 'prompt' ? event.promptKey : null))).toEqual([
-      'approval-a',
-      'approval-b'
-    ])
-  })
-
-  it('rejects an option id that is not a Codex decision', async () => {
-    const codex = fakeCodex()
-    const adapter = await acquired(codex)
-
-    askApproval(codex)
-
-    await expect(
-      adapter.answerPrompt({
-        sessionId: 'session-1',
-        itemId: 'codex-item-1',
-        kind: 'approval',
-        optionId: 'yolo',
-        fence: 7
-      })
-    ).rejects.toThrow('is not a Codex approval decision')
-    expect(codex.connections[0].replies).toEqual([])
-  })
-
-  it('holds a multi-question request until every question is answered', async () => {
-    const codex = fakeCodex()
-    const adapter = await acquired(codex)
-    codex.connections[0].handlers.onServerRequest?.({
-      id: 12,
-      method: 'item/tool/requestUserInput',
-      params: {
-        itemId: 'codex-item-2',
-        threadId: THREAD_ID,
-        turnId: 'turn-1',
-        questions: [
-          { id: 'q1', question: 'Use this answer?' },
-          { id: 'q2', question: 'Use that answer?' }
-        ]
-      }
-    })
-
-    await adapter.answerPrompt({
-      sessionId: 'session-1',
-      itemId: 'codex-item-2',
-      kind: 'question',
-      optionId: encodeCodexQuestionOptionId('q1', 'yes'),
-      fence: 7
-    })
-    expect(codex.connections[0].replies).toEqual([])
-
-    await adapter.answerPrompt({
-      sessionId: 'session-1',
-      itemId: 'codex-item-2',
-      kind: 'question',
-      optionId: encodeCodexQuestionOptionId('q2', 'no'),
-      fence: 7
-    })
-
-    expect(codex.connections[0].replies).toEqual([
-      { id: 12, result: { answers: { q1: { answers: ['yes'] }, q2: { answers: ['no'] } } } }
-    ])
-  })
-
-  it('declines MCP elicitation and journals the explicit disposition', async () => {
-    const codex = fakeCodex()
-    const events: CodexStructuredSessionEvent[] = []
-    await acquired(codex, {}, events)
-
-    codex.connections[0].handlers.onServerRequest?.({
-      id: 13,
-      method: 'mcpServer/elicitation/request',
-      params: { itemId: 'codex-item-3', threadId: THREAD_ID }
-    })
-
-    expect(codex.connections[0].replies).toEqual([
-      { id: 13, result: { action: 'decline', content: null, _meta: null } }
-    ])
-    expect(events.some((event) => event.type === 'prompt')).toBe(false)
-  })
-
-  it('surfaces an answer to a prompt Codex already forgot', async () => {
-    const codex = fakeCodex()
-    const adapter = await acquired(codex)
-
-    await expect(
-      adapter.answerPrompt({
-        sessionId: 'session-1',
-        itemId: 'codex-item-gone',
-        kind: 'approval',
-        optionId: 'accept',
-        fence: 7
-      })
-    ).rejects.toThrow('no longer waiting on codex-item-gone')
   })
 })

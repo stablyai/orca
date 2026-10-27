@@ -15,7 +15,7 @@ const WORKER_PANE = 'tab_w:leaf_w'
 const IDLE_HANDLE = 'term_idle'
 const IDLE_PANE = 'tab_i:leaf_i'
 
-// Why: mirrors SyncDatabase's `isStatementCacheable` — aggregate `(*)` is fine, any other `*` is not.
+// Match SyncDatabase cacheability: allow aggregate (*), reject other wildcards.
 const WILDCARD_PROJECTION = /(?<!\(\s*)\*/
 
 const openDatabases: OrchestrationDb[] = []
@@ -89,6 +89,7 @@ function buildProjection(db: OrchestrationDb): RuntimeAgentOrchestrationProjecti
     getDb: () => db,
     getLeaves: () => leaves,
     getPtys: () => [],
+    paneOf: () => ({ tabId: null, paneKey: null, recordedAtGraphSequence: 0 }),
     issueLeafHandle: (leaf) => handleByLeaf.get(leaf) ?? '',
     issuePtyHandle: () => '',
     makePaneKey: (leaf) => paneByLeaf.get(leaf) ?? '',
@@ -125,15 +126,13 @@ describe('orchestration hot-path statement compilation', () => {
     }
     expect([...compilationsPerSql].filter(([, count]) => count > 1)).toEqual([])
     expect(compiled).toEqual(compiledByFirstPublish)
-    // Why: a cache that changed what the fan-out returns would be worse than the recompiles.
     expect(publishes[0]).toBeDefined()
     for (const publish of publishes) {
       expect(publish).toEqual(publishes[0])
     }
   })
 
-  // Why: getTask sits on the dispatch/lifecycle path and listTasks runs several times per
-  // coordinator tick, so a wildcard there recompiles on every call the same way the publish did.
+  // Task lookups and coordinator listings need cached projections too.
   it('compiles the task lookup and listing SQL exactly once across repeated calls', () => {
     const db = openDatabase(':memory:')
     seedDispatchedWorker(db)
@@ -158,9 +157,7 @@ describe('orchestration hot-path statement compilation', () => {
     expect(compiled.filter((sql) => WILDCARD_PROJECTION.test(sql))).toEqual([])
   })
 
-  // Why: `SELECT *` is what made these statements uncacheable, and a retained wildcard is the only
-  // way node:sqlite could build a row from stale column names after another connection's ALTER.
-  // Seeds on one connection and publishes on a second so every compilation here is hot-path SQL.
+  // Seed through another connection so wildcard recompilation is measured only on the publish hot path.
   it('publishes without compiling a single wildcard projection', () => {
     const path = temporaryDatabasePath()
     seedDispatchedWorker(openDatabase(path))

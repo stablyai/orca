@@ -7,6 +7,7 @@ import { cn } from '@/lib/utils'
 import { translate } from '@/i18n/i18n'
 import { useAppStore } from '@/store'
 import { OrcaProfileSignOutConfirmDialog } from '../orca-profiles/OrcaProfileSignOutConfirmDialog'
+import { OrcaSignInButton, OrcaSignInWaitNotice } from '../OrcaSignInProgress'
 
 function accountStatusCopy(
   state: 'local' | 'unconfigured' | 'connected' | 'reconnect-required' | undefined,
@@ -60,8 +61,6 @@ function AccountBenefit({
 
 export function OrcaAccountSettingsPane(): React.JSX.Element {
   const authStatus = useAppStore((state) => state.orcaProfileAuthStatus)
-  const connecting = useAppStore((state) => state.orcaProfileConnecting)
-  const connect = useAppStore((state) => state.connectCurrentOrcaProfile)
   const signOut = useAppStore((state) => state.signOutCurrentOrcaProfile)
   const [signOutOpen, setSignOutOpen] = useState(false)
   const [signingOut, setSigningOut] = useState(false)
@@ -117,19 +116,13 @@ export function OrcaAccountSettingsPane(): React.JSX.Element {
               {translate('auto.components.settings.orcaAccount.signOut', 'Sign out')}
             </Button>
           ) : (
-            <Button
-              type="button"
-              size="sm"
-              disabled={!canConnect || connecting}
-              onClick={() => void connect()}
-            >
-              {connecting
-                ? translate('auto.components.settings.orcaAccount.signingIn', 'Signing in…')
-                : authStatus?.state === 'reconnect-required'
-                  ? translate('auto.components.settings.orcaAccount.signInAgain', 'Sign in again')
-                  : translate('auto.components.settings.orcaAccount.signIn', 'Sign in to Orca')}
-            </Button>
+            <OrcaSignInButton size="sm" disabled={!canConnect}>
+              {authStatus?.state === 'reconnect-required'
+                ? translate('auto.components.settings.orcaAccount.signInAgain', 'Sign in again')
+                : translate('auto.components.settings.orcaAccount.signIn', 'Sign in to Orca')}
+            </OrcaSignInButton>
           )}
+          {connected ? null : <OrcaSignInWaitNotice className="basis-full" />}
         </div>
 
         <div className="space-y-4 border-t border-border/60 pt-5">
@@ -163,8 +156,7 @@ export function OrcaAccountSettingsPane(): React.JSX.Element {
                 )}
               />
             </div>
-            {/* Why: a third column would squeeze all three; a full-width row
-                below keeps the pair's divider and reads as one list. */}
+            {/* Put the third benefit below at full width so it cannot squeeze the existing pair. */}
             <AccountBenefit
               icon={BookOpen}
               className="border-t border-border/60 pt-5"

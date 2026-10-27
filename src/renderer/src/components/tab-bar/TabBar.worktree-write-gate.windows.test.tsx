@@ -1,10 +1,6 @@
 // @vitest-environment happy-dom
 
-/**
- * Windows half of the tab-strip worktree-write gate. `isWindows` is read once at module
- * load, so the two client platforms cannot share a file; see
- * TabBar.worktree-write-gate.test.tsx for the non-Windows half and the full rationale.
- */
+/** Separate Windows/non-Windows files because client platform is captured at module load. */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { act, cleanup, render } from '@testing-library/react'
 import {
@@ -26,7 +22,6 @@ vi.mock('@/hooks/useDetectedAgents', () => tabBarRuntimeModelStubs().detectedAge
 vi.mock('@/hooks/useAgentDetectionTarget', () => tabBarRuntimeModelStubs().detectionTarget())
 vi.mock('@/lib/connection-context', () => tabBarRuntimeModelStubs().connectionContext())
 vi.mock('@/lib/worktree-runtime-owner', () => tabBarRuntimeModelStubs().runtimeOwner())
-vi.mock('@/runtime/runtime-rpc-client', () => tabBarRuntimeModelStubs().runtimeRpcClient())
 vi.mock('@/lib/native-chat-transcript-readability', () =>
   tabBarRuntimeModelStubs().nativeChatReadability()
 )
@@ -57,7 +52,12 @@ describe('TabBar worktree-write gate (Windows client)', () => {
     probeWindowsCapabilities.hostPlatform = null
     tabBarSurfaceRenders.count = 0
     localProjectRuntimeSpy.mockClear()
-    ;(await createTabBarProbeStore()).setState({ worktreesByRepo: {}, projects: [], repos: [] })
+    ;(await createTabBarProbeStore()).setState({
+      worktreesByRepo: {},
+      endpointProjects: [],
+      endpointProjectHostSetups: [],
+      repos: []
+    })
   })
 
   afterEach(() => {

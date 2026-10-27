@@ -1,5 +1,6 @@
+import './rpc/unused-default-rpc-methods.test-fixture'
 import { describe, expect, it, vi } from 'vitest'
-import type { GitAdmissionEvent } from '../git/command-runner/git-admission-state'
+import type { GitAdmissionEvent } from '../../shared/git-admission-state'
 import { GitAdmissionScheduler } from '../git/command-runner/git-subprocess-admission'
 import type * as GitStatusModule from '../git/status'
 import type { OrcaRuntimeService } from './orca-runtime'

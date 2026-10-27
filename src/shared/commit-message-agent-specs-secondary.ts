@@ -10,13 +10,15 @@ type SecondaryAgentSpecDeps = {
   OPENAI_THINKING_LEVELS: ThinkingLevel[]
   parseCursorModels: (stdout: string) => CommitMessageModel[]
   parseAntigravityModels: (stdout: string) => CommitMessageModel[]
+  parseLineModels: (stdout: string) => CommitMessageModel[]
 }
 
 export function buildSecondaryCommitMessageAgentSpecs({
   BASIC_THINKING_LEVELS,
   OPENAI_THINKING_LEVELS,
   parseCursorModels,
-  parseAntigravityModels
+  parseAntigravityModels,
+  parseLineModels
 }: SecondaryAgentSpecDeps): Partial<Record<TuiAgent, CommitMessageAgentSpec>> {
   return {
     amp: {
@@ -79,35 +81,62 @@ export function buildSecondaryCommitMessageAgentSpecs({
       id: 'kimi',
       label: 'Kimi',
       binary: 'kimi',
-      // Why: kimi-code accepts the generation prompt only via --prompt/-p (Claude's
-      // --print is rejected). Deliver on argv so --prompt receives the text (#11669).
+      // kimi-code requires --prompt/-p text on argv; Claude-style --print is rejected (#11669).
       promptDelivery: 'argv',
-      buildArgs: ({ prompt, model, thinkingLevel }) => [
+      // Why: Kimi Code has no --quiet/--thinking/--no-thinking; -p alone is headless (#14771).
+      buildArgs: ({ prompt, model }) => [
         '--prompt',
         prompt,
-        '--quiet',
-        ...(model && model !== 'default' ? ['--model', model] : []),
-        ...(thinkingLevel === 'on'
-          ? ['--thinking']
-          : thinkingLevel === 'off'
-            ? ['--no-thinking']
-            : [])
+        ...(model && model !== 'default' ? ['--model', model] : [])
       ],
       modelSource: 'static',
       models: [
         { id: 'default', label: 'Config default' },
         {
-          // Why: Kimi resolves its managed model by provider/model; bare model
-          // names are rejected by the CLI with "LLM not set".
+          // Kimi requires provider/model IDs; bare names fail with LLM not set.
           id: 'kimi-code/kimi-for-coding',
-          label: 'Kimi K2.6',
-          thinkingLevels: [
-            { id: 'on', label: 'On' },
-            { id: 'off', label: 'Off' }
-          ],
-          defaultThinkingLevel: 'on'
+          label: 'Kimi K2.6'
         }
       ],
+      defaultModelId: 'default'
+    },
+    muse: {
+      id: 'muse',
+      label: 'Muse',
+      binary: 'muse',
+      // Muse exec takes a positional prompt; keep generation one-shot and read-only.
+      promptDelivery: 'argv',
+      buildArgs: ({ prompt, model, thinkingLevel }) => [
+        'exec',
+        '--no-session-log',
+        '--approval-mode',
+        'never',
+        '--disable-sandbox',
+        '--disable-shell',
+        '--disable-write',
+        '--disable-web-tools',
+        ...(model && model !== 'default' ? ['--model', model] : []),
+        ...(thinkingLevel ? ['--reasoning-effort', thinkingLevel] : []),
+        '--',
+        prompt
+      ],
+      singletonOptions: [['--model'], ['--reasoning-effort']],
+      modelSource: 'static',
+      models: [{ id: 'default', label: 'Config default' }],
+      defaultModelId: 'default'
+    },
+    dsh: {
+      id: 'dsh',
+      label: 'DeepSeek Harness',
+      binary: 'dsh',
+      // DSH headless runs one persisted session, prints and exits. Use stdin to hide diffs from process listings and avoid argv limits. 0.1.5-rc.1 requires explicit - even with piped stdin.
+      promptDelivery: 'stdin',
+      buildArgs: () => ['--profile', 'headless', '-'],
+      // Why: the launcher owns `--profile`; a second one would boot a different profile.
+      singletonOptions: [['--profile']],
+      modelSource: 'static',
+      // Headless has no --model; its llm-deepseek profile row owns selection, so offer only configured default.
+      models: [{ id: 'default', label: 'Config default' }],
       defaultModelId: 'default'
     },
     copilot: {
@@ -127,8 +156,7 @@ export function buildSecondaryCommitMessageAgentSpecs({
         ...(thinkingLevel ? ['--effort', thinkingLevel] : [])
       ],
       modelSource: 'static',
-      // Why: Copilot CLI's picker is policy-filtered per account/org. Keep the
-      // full hosted CLI catalog here so users can select models enabled for them.
+      // Copilot filters the picker by account/org policy; retain the full hosted catalog for permitted selections.
       models: [
         { id: 'auto', label: 'Auto' },
         {
@@ -212,16 +240,52 @@ export function buildSecondaryCommitMessageAgentSpecs({
       id: 'antigravity',
       label: 'Antigravity',
       binary: 'agy',
+      // Empty --print selects stream input without consuming the next flag (agy >= 1.1.15).
       promptDelivery: 'stdin',
-      buildArgs: ({ model }) => ['--print', '--sandbox', '--model', model],
+      buildArgs: ({ model, thinkingLevel }) => [
+        '--print=',
+        '--input-format=stream-json',
+        '--output-format=stream-json',
+        '--sandbox',
+        ...(model && model !== 'default' ? ['--model', model] : []),
+        ...(thinkingLevel ? ['--effort', thinkingLevel] : [])
+      ],
+      singletonOptions: [['--model'], ['--effort']],
       modelSource: 'dynamic',
       modelDiscovery: { binary: 'agy', args: ['models'], parse: parseAntigravityModels },
-      models: [
-        { id: 'Gemini 3.5 Flash (Medium)', label: 'Gemini 3.5 Flash (Medium)' },
-        { id: 'Gemini 3.5 Flash (High)', label: 'Gemini 3.5 Flash (High)' },
-        { id: 'Gemini 3.5 Flash (Low)', label: 'Gemini 3.5 Flash (Low)' }
+      models: [{ id: 'default', label: 'Config default' }],
+      defaultModelId: 'default'
+    },
+    jcode: {
+      id: 'jcode',
+      label: 'Jcode',
+      binary: 'jcode',
+      // jcode run supports positional argv only; large diffs remain subject to Windows argv limits.
+      promptDelivery: 'argv',
+      buildArgs: ({ prompt, model }) => [
+        // clap accepts these global flags only before run.
+        '--no-update',
+        '--quiet',
+        '--no-selfdev',
+        // Staged patches are attacker-influenced; none removes shell/read/write and MCP via tools.rs base_allowed_tools, matching read-only siblings.
+        '--tool-profile',
+        'none',
+        ...(model && model !== 'default' ? ['--model', model] : []),
+        'run',
+        '--json',
+        prompt
       ],
-      defaultModelId: 'Gemini 3.5 Flash (Medium)'
+      singletonOptions: [['--model']],
+      modelSource: 'dynamic',
+      // Read bare model IDs from jcode’s authenticated-provider catalog instead of hardcoding it.
+      modelDiscovery: {
+        binary: 'jcode',
+        args: ['--no-update', '--quiet', 'model', 'list'],
+        parse: parseLineModels
+      },
+      // default omits --model so jcode’s config.toml chooses an authenticated provider; it is not a real model ID.
+      models: [{ id: 'default', label: 'Config default' }],
+      defaultModelId: 'default'
     }
   }
 }

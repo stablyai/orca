@@ -1,23 +1,5 @@
-/**
- * E2E tests for what happens when tabs are closed: which neighbor becomes
- * active, and how the app returns to Landing when the last tab is gone.
- *
- * Why these flows:
- * - PR #693 (`close editor/diff tabs should navigate to visual neighbor tab`)
- *   fixed a regression where closing the active editor tab jumped to an
- *   arbitrary file. The existing `tabs.spec.ts` only covers terminal tab
- *   close; the editor/diff close path has no E2E guard today.
- * - PR #677 (`return to Orca landing screen after closing last terminal`)
- *   plus editor.ts's `shouldDeactivateWorktree` branch (also hardened in
- *   tabs.ts's `closeUnifiedTab`) require that when a worktree's last visible
- *   surface closes, the app clears `activeWorktreeId` instead of leaving a
- *   selected worktree with nothing to render. Any regression here shows up
- *   as a blank workspace.
- * - PR #532 had to be patched because `closeFile` forgot to keep
- *   `activeFileIdByWorktree` honest. This spec covers the user-visible
- *   invariant: after closing the active editor tab, the replacement active
- *   file is one that is still open.
- */
+// #693/#532: editor/diff close must select the exact surviving visual neighbor.
+// #677: closing the final visible surface must deselect the workspace and return to Landing.
 
 import { test, expect } from './helpers/orca-app'
 import {
@@ -29,15 +11,7 @@ import {
   ensureTerminalVisible
 } from './helpers/store'
 
-/**
- * Why: take the worktreeId explicitly instead of reading activeWorktreeId
- * inside the page. Tests in this file deliberately drain other surfaces
- * (terminals/browser tabs) which can trigger the `shouldDeactivateWorktree`
- * cascade and clear activeWorktreeId. A helper that silently depends on
- * activeWorktreeId would then return `[]` and fail in a confusing way. Taking
- * the id as an argument keeps each test's setup self-contained and order-
- * independent.
- */
+// Take worktreeId explicitly because draining setup surfaces can deactivate the workspace.
 async function openSeededEditorTabs(
   page: Parameters<typeof getActiveWorktreeId>[0],
   worktreeId: string,
@@ -98,7 +72,7 @@ async function setActiveFile(
 
     const state = store.getState()
     state.setActiveFile(id)
-    state.setActiveTabType('editor')
+    state.setActiveTabType('editor', state.activeWorktreeId)
   }, fileId)
 }
 
@@ -124,10 +98,7 @@ test.describe('Tab Close Navigation', () => {
     await ensureTerminalVisible(orcaPage)
   })
 
-  /**
-   * Covers PR #693: closing the active editor tab should activate the visual
-   * neighbor in the same worktree, not the first file in the list.
-   */
+  // #693: choose the next visual neighbor after a middle editor close.
   test('closing the active editor tab activates its visual neighbor', async ({ orcaPage }) => {
     const worktreeId = await waitForActiveWorktree(orcaPage)
 
@@ -138,9 +109,7 @@ test.describe('Tab Close Navigation', () => {
     ])
     expect(fileIds.length).toBe(3)
 
-    // Activate the middle tab and close it. The neighbor-picking logic in
-    // closeFile should pick the file that sat immediately after the closed
-    // one in the worktree's openFiles slice.
+    // Close the middle of package/README/tsconfig so tsconfig is the required successor.
     await setActiveFile(orcaPage, fileIds[1])
     await expect.poll(async () => getActiveFileId(orcaPage), { timeout: 3_000 }).toBe(fileIds[1])
 
@@ -150,13 +119,7 @@ test.describe('Tab Close Navigation', () => {
     const remainingIds = new Set(openFilesAfter.map((f) => f.id))
     expect(remainingIds.has(fileIds[1])).toBe(false)
 
-    // Why tsconfig.json specifically: `closeFile` picks `worktreeFiles[closedIdx]`
-    // from the post-close list (editor.ts:681-684). For a middle close on
-    // [pkg, README, tsconfig], closedIdx=1 and the post-close list is
-    // [pkg, tsconfig], so the neighbor is tsconfig.json (fileIds[2]). PR #693
-    // regressed this by leaving `activeFileId` pointing at a closed file — a
-    // laxer assertion like "some open file is active" would have missed that
-    // specific regression, since any order-agnostic fallback would still pass.
+    // Require tsconfig’s exact id; any-open-file assertions miss stale or arbitrarily chosen selection (#693).
     await expect
       .poll(async () => getActiveFileId(orcaPage), {
         timeout: 5_000,
@@ -164,20 +127,14 @@ test.describe('Tab Close Navigation', () => {
       })
       .toBe(fileIds[2])
 
-    // And the workspace must still be showing an editor, not silently flipping
-    // back to terminal while editors remain open.
+    // Keep editor view while other files remain.
     await expect.poll(async () => getActiveTabType(orcaPage), { timeout: 3_000 }).toBe('editor')
   })
 
-  /**
-   * Same visual-neighbor invariant but for diff tabs — they share the
-   * openFiles list with editor tabs (contentType='diff') and route through
-   * the same closeFile path, which is where #693 regressed.
-   */
+  // Diffs share closeFile/openFiles ordering and must select the same visual neighbor (#693).
   test('closing the active diff tab activates a still-open neighbor', async ({ orcaPage }) => {
     const worktreeId = await waitForActiveWorktree(orcaPage)
 
-    // Seed two editor tabs + one diff tab in the same worktree.
     const editorIds = await openSeededEditorTabs(orcaPage, worktreeId, [
       'package.json',
       'README.md'
@@ -219,12 +176,7 @@ test.describe('Tab Close Navigation', () => {
     expect(remainingIds.has(diffId!)).toBe(false)
     expect(remainingIds.size).toBe(2)
 
-    // Why README.md specifically: the diff tab was appended last
-    // (index 2 in openFiles). Closing it hits the
-    // `closedWorktreeIdx >= worktreeFiles.length` branch in closeFile
-    // (editor.ts:681-683) which picks `worktreeFiles.at(-1)` — the last
-    // remaining file, README.md (editorIds[1]). Asserting the exact ID makes
-    // this a real guard against #693 instead of a tautology.
+    // The final diff closes at index 2, so require the exact preceding README id (#693).
     await expect
       .poll(async () => getActiveFileId(orcaPage), {
         timeout: 5_000,
@@ -233,25 +185,11 @@ test.describe('Tab Close Navigation', () => {
       .toBe(editorIds[1])
   })
 
-  /**
-   * Covers PR #677 and the `shouldDeactivateWorktree` branch in closeFile:
-   * when the last editor closes and no terminal/browser surface remains for
-   * the worktree, the app must return to Landing (activeWorktreeId === null).
-   */
+  // #677: no terminal/browser/editor surface means activeWorktreeId must clear.
   test('closing the last visible surface returns the app to Landing', async ({ orcaPage }) => {
     const worktreeId = await waitForActiveWorktree(orcaPage)
 
-    // Prepare the worktree so only a single editor tab is present as a
-    // visible surface: no browser tabs and no terminal tabs.
-    //
-    // Why re-activate at the end: closing the last unified tab for a worktree
-    // that has no editor/browser surfaces triggers the `shouldDeactivateWorktree`
-    // cascade in closeUnifiedTab, which clears activeWorktreeId. That's the
-    // exact behavior this test eventually asserts — but we need the worktree
-    // active again in order to seed the editor that we will close. Re-selecting
-    // it here keeps the helpers below self-contained and the test's setup
-    // order-independent instead of depending on whichever surface-close
-    // happens to leave activeWorktreeId untouched.
+    // Drain terminal/browser surfaces, then reactivate to seed the final editor; last-surface cleanup can deselect during setup.
     await orcaPage.evaluate((wId) => {
       const store = window.__store
       if (!store) {
@@ -259,19 +197,15 @@ test.describe('Tab Close Navigation', () => {
       }
 
       const state = store.getState()
-      // Close every terminal tab in this worktree so removing the last editor
-      // leaves nothing visible. Terminal tabs persist in tabsByWorktree even
-      // when activeTabType flips to 'editor'.
+      // Drain terminal rows even while editor view is active.
       for (const tab of state.tabsByWorktree[wId] ?? []) {
         state.closeTab(tab.id)
       }
 
-      // Drop any browser tabs too, for the same reason.
       for (const bt of state.browserTabsByWorktree[wId] ?? []) {
         state.closeBrowserTab(bt.id)
       }
 
-      // Re-select the worktree if surface-close cascades deactivated it.
       if (store.getState().activeWorktreeId !== wId) {
         store.getState().setActiveWorktree(wId)
       }
@@ -283,14 +217,7 @@ test.describe('Tab Close Navigation', () => {
     await setActiveFile(orcaPage, editorIds[0])
     await expect.poll(async () => getActiveFileId(orcaPage), { timeout: 3_000 }).toBe(editorIds[0])
 
-    // Sanity: confirm the worktree has no backing terminal/browser surfaces
-    // before we close the last editor. Otherwise the deactivate branch would
-    // not trigger for reasons unrelated to this regression.
-    //
-    // Why close inside the poll: the worktree's startup default-terminal spawn
-    // is async, so under CI load it can land *after* the setup close and re-add
-    // a terminal. Re-close any straggler each iteration so the drain converges
-    // regardless of when the in-flight spawn settles.
+    // Re-close late startup terminals inside the poll, then require no backing surfaces before testing editor-only deactivation.
     await expect
       .poll(
         () =>
@@ -321,8 +248,6 @@ test.describe('Tab Close Navigation', () => {
 
     await closeFile(orcaPage, editorIds[0])
 
-    // The worktree should be deselected. Landing renders when
-    // activeWorktreeId === null.
     await expect
       .poll(async () => getActiveWorktreeId(orcaPage), {
         timeout: 5_000,

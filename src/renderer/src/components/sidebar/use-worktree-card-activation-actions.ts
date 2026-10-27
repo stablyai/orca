@@ -19,10 +19,12 @@ export function useWorktreeCardActivationActions({
   isActive,
   activationRowKey,
   onActivate,
+  onWorktreeCardClick,
   onImmediateActivate,
   isDeleting,
   isSshDisconnected,
   updateWorktreeMeta,
+  setWorkspaceUnreadByUser,
   openModal
 }: Pick<
   WorktreeCardProps,
@@ -33,15 +35,18 @@ export function useWorktreeCardActivationActions({
   | 'isActive'
   | 'activationRowKey'
   | 'onActivate'
+  | 'onWorktreeCardClick'
   | 'onImmediateActivate'
 > &
-  Pick<Foundation, 'isSshDisconnected' | 'updateWorktreeMeta' | 'openModal'> &
+  Pick<
+    Foundation,
+    'isSshDisconnected' | 'updateWorktreeMeta' | 'setWorkspaceUnreadByUser' | 'openModal'
+  > &
   Pick<LinkedDetails, 'isDeleting'>) {
   const worktreeRef = useRef(worktree)
   useLayoutEffect(() => {
     worktreeRef.current = worktree
   }, [worktree])
-  // Stable click handler – ignore clicks that are really text selections.
   const handleClick = useCallback(
     (event: React.MouseEvent<HTMLDivElement>) => {
       if (!isEventTargetInsideCurrentTarget(event.currentTarget, event.target)) {
@@ -73,7 +78,8 @@ export function useWorktreeCardActivationActions({
         event.stopPropagation()
         return
       }
-      // Why: route sidebar clicks through the shared activation path so the back/forward stack stays complete.
+      onWorktreeCardClick?.()
+      // Use shared activation so sidebar navigation participates in back/forward history.
       recordRendererCrashBreadcrumb('sidebar_worktree_activate', {
         worktreeId: worktree.id,
         repoId: worktree.repoId,
@@ -98,14 +104,14 @@ export function useWorktreeCardActivationActions({
       activationRowKey,
       isSshDisconnected,
       onActivate,
+      onWorktreeCardClick,
       onImmediateActivate,
       onSelectionGesture
     ]
   )
 
   const handleRenameTitle = useCallback(
-    // Inline rename has no surface for the failure; the store already logs and
-    // refetches, which reverts the optimistic title in place.
+    // Store logging/refetch reverts failed optimistic renames; inline rename has no separate error surface.
     async (displayName: string): Promise<void> => {
       await updateWorktreeMeta(
         worktree.id,
@@ -151,13 +157,9 @@ export function useWorktreeCardActivationActions({
     (event: React.MouseEvent<HTMLButtonElement>) => {
       event.preventDefault()
       event.stopPropagation()
-      updateWorktreeMeta(
-        worktree.id,
-        { isUnread: !worktree.isUnread },
-        { executionHostId: worktree.hostId ?? 'local' }
-      )
+      setWorkspaceUnreadByUser(worktree.id, !worktree.isUnread, worktree.hostId ?? 'local')
     },
-    [worktree.hostId, worktree.id, worktree.isUnread, updateWorktreeMeta]
+    [worktree.hostId, worktree.id, worktree.isUnread, setWorkspaceUnreadByUser]
   )
 
   return { handleClick, handleRenameTitle, handleDoubleClick, handleToggleUnreadQuick }

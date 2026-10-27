@@ -1,7 +1,4 @@
-// ── Token + workspace storage ────────────────────────────────────────
-// Why: tokens remain encrypted via safeStorage, while workspace metadata stays
-// plaintext so status checks can render connected accounts without decrypting
-// and triggering OS keychain prompts after app updates.
+// Keep account metadata readable without decrypting tokens or triggering keychain prompts.
 import { existsSync, readFileSync, writeFileSync } from 'node:fs'
 import {
   LEGACY_WORKSPACE_ID,
@@ -15,49 +12,29 @@ import {
   normalizeWorkspace,
   type LinearWorkspaceFile
 } from './linear-workspace-record'
-import { credentialFileHasContent } from '../integration-credential-file'
 import type { LinearWorkspace } from '../../shared/linear/workspace-types'
+import { createIntegrationStateFileCache } from '../integration-state-file-cache'
+import { createIntegrationTokenFileCache } from '../integration-token-file-cache'
 
-let cachedTokens = new Map<string, string>()
-// Why: decrypt failures are recorded per workspace so getStatus can explain
-// failing reads without re-touching the keychain on every status poll.
-const credentialErrors = new Map<string, string>()
-let cachedWorkspaceFile: LinearWorkspaceFile | null = null
-let workspaceFileLoadedFromDisk = false
-
-export function getCachedToken(workspaceId: string): string | undefined {
-  return cachedTokens.get(workspaceId)
-}
-
-export function cacheToken(workspaceId: string, token: string): void {
-  cachedTokens.set(workspaceId, token)
-}
-
-export function forgetCachedToken(workspaceId: string): void {
-  cachedTokens.delete(workspaceId)
-  credentialErrors.delete(workspaceId)
-}
+export const workspaceTokenFileCache = createIntegrationTokenFileCache({
+  service: 'Linear',
+  filePath: getWorkspaceTokenPath
+})
+const workspaceFileCache = createIntegrationStateFileCache({
+  filePath: getWorkspaceFilePath,
+  readFromDisk: readWorkspaceFileFromDisk
+})
 
 export function resetCredentialCaches(): void {
-  cachedTokens = new Map()
-  credentialErrors.clear()
-}
-
-export function recordCredentialError(workspaceId: string, message: string): void {
-  credentialErrors.set(workspaceId, message)
-}
-
-export function clearCredentialError(workspaceId: string): void {
-  credentialErrors.delete(workspaceId)
+  workspaceTokenFileCache.clear()
 }
 
 export function getCredentialError(workspaceId: string): string | undefined {
-  return credentialErrors.get(workspaceId)
+  return workspaceTokenFileCache.error(workspaceId)
 }
 
 export function resetWorkspaceFileCacheToEmpty(): void {
-  cachedWorkspaceFile = emptyWorkspaceFile()
-  workspaceFileLoadedFromDisk = true
+  workspaceFileCache.invalidate()
 }
 
 function readWorkspaceFileFromDisk(): LinearWorkspaceFile {
@@ -72,7 +49,6 @@ function readWorkspaceFileFromDisk(): LinearWorkspaceFile {
       ? parsed.workspaces
           .map((workspace) => normalizeWorkspace(workspace))
           .filter((workspace): workspace is LinearWorkspace => workspace !== null)
-          .filter((workspace) => hasStoredToken(workspace.id))
       : []
     const activeWorkspaceId =
       typeof parsed.activeWorkspaceId === 'string' &&
@@ -98,11 +74,7 @@ function readWorkspaceFileFromDisk(): LinearWorkspaceFile {
 }
 
 export function getWorkspaceFile(): LinearWorkspaceFile {
-  if (!workspaceFileLoadedFromDisk || !cachedWorkspaceFile) {
-    cachedWorkspaceFile = readWorkspaceFileFromDisk()
-    workspaceFileLoadedFromDisk = true
-  }
-  return cachedWorkspaceFile
+  return workspaceFileCache.get()
 }
 
 export function writeWorkspaceFile(file: LinearWorkspaceFile): void {
@@ -126,17 +98,17 @@ export function writeWorkspaceFile(file: LinearWorkspaceFile): void {
         ? file.selectedWorkspaceId
         : activeWorkspaceId
 
-  cachedWorkspaceFile = {
+  const next: LinearWorkspaceFile = {
     version: 1,
     activeWorkspaceId,
     selectedWorkspaceId,
     workspaces: persistedWorkspaces
   }
-  workspaceFileLoadedFromDisk = true
-  writeFileSync(getWorkspaceFilePath(), JSON.stringify(cachedWorkspaceFile, null, 2), {
+  writeFileSync(getWorkspaceFilePath(), JSON.stringify(next, null, 2), {
     encoding: 'utf-8',
     mode: 0o600
   })
+  workspaceFileCache.invalidate()
 }
 
 export function getLegacyWorkspace(): LinearWorkspace | null {
@@ -187,10 +159,7 @@ export function hasStoredToken(workspaceId?: string): boolean {
   if (!workspaceId) {
     return getWorkspaceState().workspaces.length > 0
   }
-  if (cachedTokens.has(workspaceId)) {
-    return true
-  }
-  return credentialFileHasContent(getWorkspaceTokenPath(workspaceId))
+  return workspaceTokenFileCache.has(workspaceId)
 }
 
 export function upsertWorkspace(

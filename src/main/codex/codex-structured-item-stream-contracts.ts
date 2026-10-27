@@ -2,14 +2,18 @@ import type { AgentJournalItemIdentity } from '../../shared/agent-session-journa
 import type { AgentSessionDeltaCoalescerDeps } from '../native-chat/agent-session-wire/agent-session-delta-coalescer'
 import type { StructuredAgentSessionEventSink } from '../native-chat/agent-session-wire/structured-agent-session-event-sink'
 import type { codexJournalItem, CodexThreadItem } from './codex-structured-item-translation'
+import type { CodexRowAttribution } from './codex-subagent-linkage'
 
 export type CodexItemStreamDeps = {
   sink: StructuredAgentSessionEventSink
+  /** Resolve turn provenance from the first delta. */
+  turnIdFor: (threadId: string, params: unknown) => string | null
   identityFor: (
     threadId: string,
-    params: unknown,
+    turnId: string | null,
     item: CodexThreadItem
   ) => AgentJournalItemIdentity
+  attributionFor: CodexRowAttribution
   coalesceMs?: number
   maxRetainedBytes?: number
   maxTotalRetainedBytes?: number
@@ -19,6 +23,8 @@ export type CodexItemStreamDeps = {
 export type CodexItemStreamState = {
   identity: AgentJournalItemIdentity
   item: CodexThreadItem
+  /** Host start time for rows first written by a stream. */
+  startedAt?: number
 }
 
 export type CodexPendingItemPatch = {
@@ -36,7 +42,14 @@ export type CodexStructuredItemStreamHandleResult = {
 }
 
 export type CodexStructuredItemStreams = {
-  track: (threadId: string, item: CodexThreadItem, identity: AgentJournalItemIdentity) => void
+  readonly persistentCount: number
+  track: (
+    threadId: string,
+    turnId: string | null,
+    item: CodexThreadItem,
+    identity: AgentJournalItemIdentity,
+    startedAt?: number
+  ) => void
   handle: (
     threadId: string,
     method: string,

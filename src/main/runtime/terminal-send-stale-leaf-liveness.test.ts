@@ -4,12 +4,7 @@ import { OrcaRuntimeService } from './orca-runtime'
 import { getDefaultWorkspaceSession } from '../../shared/constants'
 import type { WorkspaceSessionState } from '../../shared/workspace-session-state-types'
 
-// STA repro (silent-send incident): `orca terminal send` to a leaf whose ptyId
-// no provider in this process owns was a silent no-op reported as success —
-// the stale graph mirror answers writable=true and provider writes to unknown
-// ids are accepted fire-and-forget. The leaf branch must reject ONLY on
-// controller-proven absence; unknown liveness never rejects (a restored daemon
-// session legitimately accepts writes before its pane remounts).
+// Stale graphs can advertise writable PTYs no provider owns. Refuse only controller-proven absence; unknown restored-daemon liveness still permits writes.
 
 const WORKTREE_ID = 'repo-1::/tmp/probe-worktree'
 const LEAF_ID = '11111111-1111-4111-8111-111111111111'
@@ -96,9 +91,9 @@ describe('sendTerminal absence gate for leaf-branch writes', () => {
     const probe = vi.fn(async () => false)
     const { runtime, handle, write } = await makeRuntimeWithLeafHandle({ probePtyLiveness: probe })
 
-    await expect(runtime.sendTerminal(handle, { text: 'ping' })).rejects.toThrow(
-      'terminal_not_writable'
-    )
+    await expect(
+      runtime.sendTerminal(handle, { text: 'ping' }, { inputKind: 'driving' })
+    ).rejects.toThrow('terminal_not_writable')
 
     expect(probe).toHaveBeenCalledWith(STALE_PTY_ID)
     expect(write).not.toHaveBeenCalled()
@@ -108,9 +103,9 @@ describe('sendTerminal absence gate for leaf-branch writes', () => {
     const probe = vi.fn(async () => false)
     const { runtime, handle, write } = await makeRuntimeWithLeafHandle({ probePtyLiveness: probe })
 
-    await expect(runtime.sendTerminalAgentPrompt(handle, 'do the thing')).rejects.toThrow(
-      'terminal_not_writable'
-    )
+    await expect(
+      runtime.sendTerminalAgentPrompt(handle, 'do the thing', { inputKind: 'driving' })
+    ).rejects.toThrow('terminal_not_writable')
 
     expect(write).not.toHaveBeenCalled()
   })
@@ -120,12 +115,14 @@ describe('sendTerminal absence gate for leaf-branch writes', () => {
       probePtyLiveness: async () => null
     })
 
-    await expect(runtime.sendTerminal(handle, { text: 'ping' })).resolves.toMatchObject({
+    await expect(
+      runtime.sendTerminal(handle, { text: 'ping' }, { inputKind: 'driving' })
+    ).resolves.toMatchObject({
       handle,
       accepted: true
     })
 
-    expect(write).toHaveBeenCalledWith(STALE_PTY_ID, 'ping')
+    expect(write).toHaveBeenCalledWith(STALE_PTY_ID, 'ping', 'driving')
   })
 
   it('treats a throwing probe as unknown and proceeds', async () => {
@@ -135,11 +132,13 @@ describe('sendTerminal absence gate for leaf-branch writes', () => {
       }
     })
 
-    await expect(runtime.sendTerminal(handle, { text: 'ping' })).resolves.toMatchObject({
+    await expect(
+      runtime.sendTerminal(handle, { text: 'ping' }, { inputKind: 'driving' })
+    ).resolves.toMatchObject({
       accepted: true
     })
 
-    expect(write).toHaveBeenCalledWith(STALE_PTY_ID, 'ping')
+    expect(write).toHaveBeenCalledWith(STALE_PTY_ID, 'ping', 'driving')
   })
 
   it('proceeds when the probe answers live (restored session before its pane remounts)', async () => {
@@ -147,21 +146,25 @@ describe('sendTerminal absence gate for leaf-branch writes', () => {
       probePtyLiveness: async () => true
     })
 
-    await expect(runtime.sendTerminal(handle, { text: 'ping' })).resolves.toMatchObject({
+    await expect(
+      runtime.sendTerminal(handle, { text: 'ping' }, { inputKind: 'driving' })
+    ).resolves.toMatchObject({
       accepted: true
     })
 
-    expect(write).toHaveBeenCalledWith(STALE_PTY_ID, 'ping')
+    expect(write).toHaveBeenCalledWith(STALE_PTY_ID, 'ping', 'driving')
   })
 
   it('proceeds unchanged when the controller exposes no probe', async () => {
     const { runtime, handle, write } = await makeRuntimeWithLeafHandle({})
 
-    await expect(runtime.sendTerminal(handle, { text: 'ping' })).resolves.toMatchObject({
+    await expect(
+      runtime.sendTerminal(handle, { text: 'ping' }, { inputKind: 'driving' })
+    ).resolves.toMatchObject({
       accepted: true
     })
 
-    expect(write).toHaveBeenCalledWith(STALE_PTY_ID, 'ping')
+    expect(write).toHaveBeenCalledWith(STALE_PTY_ID, 'ping', 'driving')
   })
 
   it('never probes when the provider synchronously knows the id (live pty)', async () => {
@@ -171,24 +174,26 @@ describe('sendTerminal absence gate for leaf-branch writes', () => {
       hasPty: (ptyId) => ptyId === STALE_PTY_ID
     })
 
-    await expect(runtime.sendTerminal(handle, { text: 'ping' })).resolves.toMatchObject({
+    await expect(
+      runtime.sendTerminal(handle, { text: 'ping' }, { inputKind: 'driving' })
+    ).resolves.toMatchObject({
       accepted: true
     })
 
     expect(probe).not.toHaveBeenCalled()
-    expect(write).toHaveBeenCalledWith(STALE_PTY_ID, 'ping')
+    expect(write).toHaveBeenCalledWith(STALE_PTY_ID, 'ping', 'driving')
   })
 
   it('reuses a proven-absent verdict across repeated sends instead of re-probing', async () => {
     const probe = vi.fn(async () => false)
     const { runtime, handle } = await makeRuntimeWithLeafHandle({ probePtyLiveness: probe })
 
-    await expect(runtime.sendTerminal(handle, { text: 'a' })).rejects.toThrow(
-      'terminal_not_writable'
-    )
-    await expect(runtime.sendTerminal(handle, { text: 'b' })).rejects.toThrow(
-      'terminal_not_writable'
-    )
+    await expect(
+      runtime.sendTerminal(handle, { text: 'a' }, { inputKind: 'driving' })
+    ).rejects.toThrow('terminal_not_writable')
+    await expect(
+      runtime.sendTerminal(handle, { text: 'b' }, { inputKind: 'driving' })
+    ).rejects.toThrow('terminal_not_writable')
 
     expect(probe).toHaveBeenCalledTimes(1)
   })
@@ -201,17 +206,19 @@ describe('sendTerminal absence gate for leaf-branch writes', () => {
       hasPty: (ptyId) => livePtyIds.has(ptyId)
     })
 
-    await expect(runtime.sendTerminal(handle, { text: 'a' })).rejects.toThrow(
-      'terminal_not_writable'
-    )
+    await expect(
+      runtime.sendTerminal(handle, { text: 'a' }, { inputKind: 'driving' })
+    ).rejects.toThrow('terminal_not_writable')
     // Same id recreated by a fresh spawn: provider knowledge must beat the verdict.
     livePtyIds.add(STALE_PTY_ID)
 
-    await expect(runtime.sendTerminal(handle, { text: 'b' })).resolves.toMatchObject({
+    await expect(
+      runtime.sendTerminal(handle, { text: 'b' }, { inputKind: 'driving' })
+    ).resolves.toMatchObject({
       accepted: true
     })
     expect(probe).toHaveBeenCalledTimes(1)
-    expect(write).toHaveBeenCalledWith(STALE_PTY_ID, 'b')
+    expect(write).toHaveBeenCalledWith(STALE_PTY_ID, 'b', 'driving')
   })
 })
 
@@ -386,6 +393,7 @@ function makeOrchestrationDbStub(toHandle: () => string) {
     runMailbox,
     markAsDelivered,
     markAsUndelivered,
+    releaseMailboxPointerEnter,
     stageMailboxPointerEnter,
     insert(subject: string, type: StoredMessageRow['type'] = 'status'): void {
       rows.push({
@@ -480,9 +488,7 @@ describe('push-on-idle orchestration delivery absence gate', () => {
     return { runtime, handle, write, stub }
   }
 
-  // Why: the gate that authorizes a push runs BEFORE the probe defers, so a
-  // same-id cold restore inside the probe window would otherwise be written to on
-  // the dead process's authority — ptyId is exactly what a same-id respawn keeps.
+  // Recheck live-idle authority after async probes; same-id cold restore keeps ptyId but replaces the process.
   it('re-applies the live-idle gate when the probe answers after a same-id respawn', async () => {
     let resolveProbe!: (value: boolean | null) => void
     const { runtime, handle, write, stub } = await makeIdleLeafWithoutPtyRecord({
@@ -521,11 +527,7 @@ describe('push-on-idle orchestration delivery absence gate', () => {
     )
   })
 
-  // Why: a `remote:` pty answers probePtyLiveness with null before its first
-  // await (ipc/pty.ts), so the probe settles on a pure microtask chain. Without a
-  // macrotask hop the continuation runs BEFORE the resumption of a check resolved
-  // in the meantime — the waiter is already out of the map and its rows are not
-  // yet read, so the push injects exactly what that check is about to return.
+  // Remote probes can settle entirely in microtasks; yield a macrotask so a resolved check consumes mail before pointer injection.
   it('waits a macrotask before delivering so a resolved check consumes its rows first', async () => {
     const { runtime, handle, write, stub } = await makeIdleLeafWithoutPtyRecord({
       probePtyLiveness: async () => null
@@ -566,10 +568,7 @@ describe('push-on-idle orchestration delivery absence gate', () => {
     expect(payloads.some((data) => data.includes('Subject: worker completion'))).toBe(false)
   })
 
-  // Why: the notify-time reservation snapshot exists for a waiter resolved inside
-  // one microtask drain. The probe continuation runs many macrotasks later, and
-  // the probe dedup swallows every notify arriving meanwhile — so a reservation
-  // carried in here would skip a row with nothing left to retry it (#12536 again).
+  // Probe dedup spans many macrotasks; notify-time waiter reservations expire and must not suppress later delivery (#12536).
   it('does not carry a stale waiter reservation into the probe continuation', async () => {
     let resolveProbe!: (value: boolean | null) => void
     const { runtime, handle, write, stub } = await makeIdleLeafWithoutPtyRecord({
@@ -642,8 +641,7 @@ describe('push-on-idle orchestration delivery absence gate', () => {
     )
   })
 
-  // Why: the whole pointer→Enter span must be single-flight; a trigger inside
-  // the 500ms window must park until the sequence watermark advances.
+  // Single-flight must span pointer through Enter; park new triggers until the sequence watermark advances.
   it('delivers once across concurrent probe triggers and an in-window re-trigger, then flushes parked rows', async () => {
     vi.useFakeTimers()
     try {
@@ -739,8 +737,7 @@ describe('push-on-idle orchestration delivery absence gate', () => {
     }
   })
 
-  // Why: cold restore respawns under the SAME session id. An Enter armed for
-  // the dead incarnation must not submit stale input into the replacement.
+  // Cold restore reuses the id; an Enter authorized by the dead incarnation must not reach its replacement.
   it('retires an armed Enter when the pty exits and respawns under the same id inside the window', async () => {
     vi.useFakeTimers()
     try {
@@ -759,12 +756,10 @@ describe('push-on-idle orchestration delivery absence gate', () => {
       await vi.advanceTimersByTimeAsync(500)
       expect(write.mock.calls.filter(([, data]) => data === '\r')).toHaveLength(0)
       expect(stub.stageMailboxPointerEnter).toHaveBeenCalledOnce()
-      expect(stub.markAsUndelivered).toHaveBeenCalledOnce()
+      expect(stub.releaseMailboxPointerEnter).toHaveBeenCalledOnce()
       expect(stub.rows[0].delivered_at).toBeNull()
 
-      // The replacement's own delivery starts a fresh flight and completes —
-      // but only once ITS live title proves idle; the dead session's live status
-      // no longer authorizes a write into the new process.
+      // Only the replacement's live-idle status authorizes a fresh delivery after cold restore.
       runtime.deliverPendingMessagesForHandle(handle)
       expect(
         write.mock.calls.filter(
@@ -804,7 +799,7 @@ describe('push-on-idle orchestration delivery absence gate', () => {
       await vi.advanceTimersByTimeAsync(500)
       expect(write.mock.calls.filter(([, data]) => data === '\r')).toHaveLength(0)
       expect(stub.stageMailboxPointerEnter).toHaveBeenCalledOnce()
-      expect(stub.markAsUndelivered).toHaveBeenCalledOnce()
+      expect(stub.releaseMailboxPointerEnter).toHaveBeenCalledOnce()
       // No stray settle flushed the parked trigger into the dead pty.
       expect(write).toHaveBeenCalledTimes(1)
       expect(stub.rows.every((row) => row.delivered_at === null)).toBe(true)
@@ -813,9 +808,7 @@ describe('push-on-idle orchestration delivery absence gate', () => {
     }
   })
 
-  // Why: graph resync replaces leaf objects, so onPtyExit flips writable only
-  // on the replacement — a callback trusting its closure snapshot would still
-  // read writable=true and inject Enter after the exit, without any respawn.
+  // Graph resync replaces leaf objects; read current writable state rather than a stale closure before Enter.
   it('does not fire a stale Enter through an orphaned leaf snapshot after resync and exit', async () => {
     vi.useFakeTimers()
     try {
@@ -835,7 +828,7 @@ describe('push-on-idle orchestration delivery absence gate', () => {
       await vi.advanceTimersByTimeAsync(500)
       expect(write.mock.calls.filter(([, data]) => data === '\r')).toHaveLength(0)
       expect(stub.stageMailboxPointerEnter).toHaveBeenCalledOnce()
-      expect(stub.markAsUndelivered).toHaveBeenCalledOnce()
+      expect(stub.releaseMailboxPointerEnter).toHaveBeenCalledOnce()
       expect(stub.rows[0].delivered_at).toBeNull()
     } finally {
       vi.useRealTimers()

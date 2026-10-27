@@ -1,5 +1,4 @@
-import { z } from 'zod'
-import { defineMethod, type RpcContext, type RpcMethod } from '../core'
+import { defineMethod, type RpcContext } from '../core'
 import type { PluginPanelEntry } from '../../../../shared/plugins/plugin-panel-bridge'
 import { listPluginsForClients } from '../../../plugins/plugin-client-list'
 import type { PluginListEntry } from '../../../plugins/plugin-list-projection'
@@ -8,18 +7,16 @@ import {
   pluginConsentRequestSchema,
   type PluginConsentRequest
 } from '../../../../shared/plugins/plugin-consent-request'
-import { isQualifiedPluginKey } from '../../../../shared/plugins/plugin-manifest'
+import {
+  PluginInvokeCommandParams,
+  PluginReadPanelEntryParams,
+  PluginSetEnabledParams,
+  PluginsPanelActionParams
+} from '../../../../shared/rpc-contract/plugins-params'
 
-/**
- * Serve/headless parity surface: the same consent, enablement, panel-action,
- * and command paths the desktop IPC handlers expose, over runtime RPC. Both
- * routes execute through PluginService's single chokepoint, so a permission
- * decision can never differ between a local window and a paired client.
- */
+/** Expose desktop IPC's plugin consent/actions over serve/headless RPC through the same PluginService permission boundary. */
 
-// Why: RpcContext only carries the OrcaRuntimeService, and plugins are a
-// separate composition-root service — inject via module setter the way the
-// desktop entry wires it, instead of widening the shared RPC context type.
+// Inject the separate composition-root PluginService without widening shared RpcContext.
 let pluginServiceForRpc: PluginService | null = null
 // Consent/enablement need the settings Store too, so the entry injects bound
 // closures instead of the store itself.
@@ -45,29 +42,12 @@ function requirePluginService(): PluginService {
   return pluginServiceForRpc
 }
 
-const PluginSetEnabledParams = z.object({
-  pluginKey: z.string().refine(isQualifiedPluginKey, 'invalid qualified plugin key'),
-  enabled: z.boolean()
-})
-
-const PluginReadPanelEntryParams = z.object({
-  pluginKey: z.string().min(1),
-  panelId: z.string().min(1)
-})
-
-const PluginInvokeCommandParams = z.object({
-  pluginKey: z.string().min(1),
-  commandId: z.string().min(1),
-  args: z.unknown().optional()
-})
-
 async function listForRpc(): Promise<PluginListEntry[]> {
   return listPluginsForClients(requirePluginService())
 }
 
 function rpcPanelOwner(context: RpcContext): string {
-  // Why: the bearer session must not cross paired-client connections even
-  // when two sockets authenticate as the same device.
+  // Bind bearer sessions to individual paired connections, even for sibling sockets of one device.
   return `runtime:${context.connectionId ?? context.clientId ?? 'local'}`
 }
 
@@ -77,16 +57,17 @@ function bindRpcPanelOwner(service: PluginService, context: RpcContext): string 
   return ownerKey
 }
 
-export const PLUGIN_METHODS: readonly RpcMethod[] = [
+export const PLUGIN_METHODS = [
   defineMethod({
     name: 'plugins.list',
+    permission: 'workspace',
     params: null,
     handler: async () => listForRpc()
   }),
   defineMethod({
-    // Why: headless serve has no consent dialog — an explicit consent call is
-    // the only way a pending plugin becomes active on a server.
+    // Headless servers have no dialog; only explicit consent can activate a pending plugin.
     name: 'plugins.consent',
+    permission: 'host-admin',
     params: pluginConsentRequestSchema,
     handler: async (params) => {
       const service = requirePluginService()
@@ -100,6 +81,7 @@ export const PLUGIN_METHODS: readonly RpcMethod[] = [
   }),
   defineMethod({
     name: 'plugins.setEnabled',
+    permission: 'host-admin',
     params: PluginSetEnabledParams,
     handler: async (params) => {
       const service = requirePluginService()
@@ -112,13 +94,11 @@ export const PLUGIN_METHODS: readonly RpcMethod[] = [
     }
   }),
   defineMethod({
-    // Why: headless serve clients relay panel bridge requests over RPC, so
-    // capability enforcement must live behind this method too, not only in
-    // the desktop IPC handler.
+    // Enforce panel capabilities here too because headless clients relay bridge calls over RPC.
     name: 'plugins.panelAction',
-    // Why: raw admission must run before strict schema parsing so malformed
-    // and oversized traffic cannot bypass the panel budget.
-    params: z.unknown(),
+    permission: 'host-admin',
+    // Apply raw admission before strict parsing so malformed/oversize traffic still consumes panel budget.
+    params: PluginsPanelActionParams,
     handler: async (params, context) => {
       const service = requirePluginService()
       await service.whenReady()
@@ -129,6 +109,7 @@ export const PLUGIN_METHODS: readonly RpcMethod[] = [
   }),
   defineMethod({
     name: 'plugins.readPanelEntry',
+    permission: 'workspace',
     params: PluginReadPanelEntryParams,
     handler: async (params, context): Promise<PluginPanelEntry | null> => {
       const service = requirePluginService()
@@ -144,6 +125,7 @@ export const PLUGIN_METHODS: readonly RpcMethod[] = [
   }),
   defineMethod({
     name: 'plugins.invokeCommand',
+    permission: 'host-admin',
     params: PluginInvokeCommandParams,
     handler: async (params) => {
       const service = requirePluginService()

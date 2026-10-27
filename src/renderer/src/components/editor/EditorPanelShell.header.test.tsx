@@ -3,8 +3,7 @@ import { describe, expect, it, vi } from 'vitest'
 import type { OpenFile } from '@/store/slices/editor'
 import { EditorPanelShell } from './EditorPanelShell'
 
-// Why stub both children: the claim under test is which of them the shell renders for a given tab
-// mode, and mounting the real editor surface would drag in Monaco for a layout question.
+// Stub child renderers to test tab-mode layout without loading Monaco.
 vi.mock('./EditorPanelHeader', () => ({
   EditorPanelHeader: () => <div data-editor-panel-header />
 }))
@@ -82,7 +81,6 @@ function renderShell(file: OpenFile, isCombinedDiff = false): string {
       onOpenDiffTargetFile={noop}
       onOpenPreviewToSide={noop}
       onOpenMarkdownPreview={noop}
-      onOpenContainingFolder={noop}
       onToggleSideBySide={noop}
       onEditorToggleChange={noop}
       onToggleMarkdownTableOfContents={noop}
@@ -103,8 +101,7 @@ function renderShell(file: OpenFile, isCombinedDiff = false): string {
 }
 
 describe('EditorPanelShell path header', () => {
-  // Why assert every remaining mode: a gate that hides the header everywhere would satisfy the
-  // check-details claim below while silently removing the path from every ordinary file tab.
+  // Cover ordinary tabs too so hiding every header cannot satisfy the check-details case.
   it.each(['edit', 'diff', 'conflict-review', 'markdown-preview'] as const)(
     'keeps the header for a %s tab',
     (mode) => {

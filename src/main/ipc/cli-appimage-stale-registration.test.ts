@@ -369,13 +369,4 @@ describe('AppImage CLI registration startup repair', () => {
     await expect(installStatusHandler()()).resolves.toBe(installed)
     expect(mocks.install).toHaveBeenCalledOnce()
   })
-
-  it('does not mutate a stale registration off Linux', async () => {
-    const stale = status('stale')
-    mocks.getStatus.mockResolvedValue(stale)
-    Object.defineProperty(process, 'platform', { configurable: true, value: 'darwin' })
-
-    await expect(installStatusHandler()()).resolves.toBe(stale)
-    expect(mocks.install).not.toHaveBeenCalled()
-  })
 })

@@ -1,36 +1,61 @@
-import type { CodexAppServerServerRequest } from './codex-app-server-connection'
+import type { CodexAppServerServerRequest } from './app-server/codex-app-server-connection-types'
 import { disposeCodexServerRequest } from './codex-server-request-disposition'
 import type { CodexJournalTranslationAdmission } from './codex-structured-journal-translation'
+import * as codexRewind from './codex-structured-rewind'
 import type { CodexSession, CodexStructuredSessionEvent } from './codex-structured-session-state'
-import { readCodexThreadId, readCodexTurnId } from './codex-structured-thread-facts'
+import { readCodexThreadId } from './codex-structured-thread-facts'
 
 type EmitCodexEvent = (
   session: CodexSession,
   event: CodexStructuredSessionEvent
 ) => CodexJournalTranslationAdmission
 
+export function translateCodexNotification(input: {
+  sessionId: string
+  session: CodexSession
+  method: string
+  params: unknown
+  observedAt?: number
+  dispatchSequenceAtReceipt?: number
+  emit: EmitCodexEvent
+}): CodexJournalTranslationAdmission {
+  const { sessionId, session, method, params, observedAt, dispatchSequenceAtReceipt } = input
+  codexRewind.observeCodexRewindActivity(session, method, params)
+  session.turnOpenWaits.observe(session.threadId, method, params)
+  return deliverCodexNotification(
+    sessionId,
+    session,
+    method,
+    params,
+    input.emit,
+    observedAt,
+    dispatchSequenceAtReceipt
+  )
+}
+
 export function deliverCodexNotification(
   sessionId: string,
   session: CodexSession | undefined,
   method: string,
   params: unknown,
-  emit: EmitCodexEvent
+  emit: EmitCodexEvent,
+  observedAt?: number,
+  dispatchSequenceAtReceipt?: number
 ): CodexJournalTranslationAdmission {
   if (!session) {
     return { accepted: true }
   }
   const threadId = readCodexThreadId(params) ?? session.threadId
-  const turnId =
-    method === 'turn/started' && threadId === session.threadId ? readCodexTurnId(params) : null
-  const turnWaiter = turnId ? session.turnIdWaiters[0] : undefined
-  const admission = emit(session, { type: 'notification', sessionId, threadId, method, params })
-  if (method === 'turn/started' && threadId === session.threadId) {
-    if (admission.accepted && turnId && session.turnIdWaiters[0] === turnWaiter) {
-      session.turnIdWaiters.shift()
-      turnWaiter?.(turnId)
-    }
-  }
-  return admission
+  // Settle echoes in the translator, where replay-stable ordinals are assigned.
+  return emit(session, {
+    type: 'notification',
+    sessionId,
+    threadId,
+    method,
+    params,
+    ...(observedAt !== undefined ? { observedAt } : {}),
+    ...(dispatchSequenceAtReceipt !== undefined ? { dispatchSequenceAtReceipt } : {})
+  })
 }
 
 export function deliverCodexServerRequest(
@@ -100,9 +125,7 @@ export function deliverCodexUnhandledFrame(
     payload
   })
   if (!admission.accepted) {
-    // There is no safe replay cursor for malformed/unhandled frames. Close the
-    // provider so host recovery records a truthful terminal failure instead of
-    // silently dropping the diagnostic under sink backpressure.
+    // Unhandled frames have no replay cursor; recover the provider rather than drop diagnostics.
     void session.forceCloseUnexpected?.(
       new Error(`Codex provider frame ${kind} could not be durably recorded (${admission.reason})`)
     )

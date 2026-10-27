@@ -9,6 +9,7 @@ import {
   hydrateOwnerWorktreeVisibilityDefaults,
   readRuntimeWorktreeVisibilityDefaults
 } from './worktree-visibility-owner-settings'
+import { stubRuntimeEnvironmentBridge } from '../../runtime/runtime-environment-bridge-fixture'
 
 const runtimeCall = vi.fn()
 
@@ -16,7 +17,7 @@ beforeEach(() => {
   clearRuntimeCompatibilityCacheForTests()
   markRuntimeEnvironmentCompatible('env-1')
   runtimeCall.mockReset()
-  vi.stubGlobal('window', { api: { runtimeEnvironments: { call: runtimeCall } } })
+  stubRuntimeEnvironmentBridge({ call: runtimeCall })
 })
 
 describe('runtime worktree visibility defaults', () => {

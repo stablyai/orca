@@ -25,6 +25,8 @@ const { sessionsByPartition, fromPartitionMock } = vi.hoisted(() => {
   return { sessionsByPartition, fromPartitionMock }
 })
 
+const identityState = vi.hoisted(() => ({ unavailable: false }))
+
 vi.mock('electron', () => ({
   session: {
     defaultSession: { resolveProxy: vi.fn(async () => 'DIRECT'), setProxy: vi.fn(async () => {}) },
@@ -44,11 +46,18 @@ vi.mock('./browser-media-access', () => ({
   requestSystemMediaAccess: vi.fn(async () => false)
 }))
 vi.mock('./browser-session-ua', () => ({
-  setupGoogleAuthUserAgentOverride: vi.fn()
+  installBrowserSessionUserAgentPolicy: vi.fn(() => vi.fn())
 }))
-vi.mock('./browser-session-user-agent-mode', () => ({
-  setBrowserSessionUserAgentMode: vi.fn(),
-  clearBrowserSessionUserAgentMode: vi.fn()
+vi.mock('./browser-process-user-agent', () => ({
+  getBrowserProcessUserAgentIdentity: () => {
+    if (identityState.unavailable) {
+      throw new Error('Browser process user agent is not initialized')
+    }
+    return {
+      mode: 'clean',
+      userAgent: 'Mozilla/5.0 Chrome/150.0.0.0 Safari/537.36'
+    }
+  }
 }))
 vi.mock('./browser-webauthn-access', () => ({
   allowsBrowserWebAuthnPermission: vi.fn(() => false),
@@ -83,7 +92,7 @@ function nextProfile() {
 describe('installBrowserSessionPartitionPolicies proxy wiring', () => {
   beforeEach(() => {
     setBrowserNetworkProxySettingsResolver(null)
-    // Why: the host shell may export proxy vars, which would otherwise stand in for the setting.
+    // Ignore host-shell proxy variables when testing settings.
     for (const key of [
       'HTTP_PROXY',
       'http_proxy',
@@ -98,10 +107,20 @@ describe('installBrowserSessionPartitionPolicies proxy wiring', () => {
 
   afterEach(() => {
     vi.unstubAllEnvs()
+    identityState.unavailable = false
   })
 
-  // Why (STA-4779): the installer is the single funnel every browser partition passes through.
-  // If it stops applying the proxy, embedded tabs silently go direct again.
+  it('reports an unavailable process identity through the promise, not a synchronous throw', async () => {
+    const profile = nextProfile()
+    identityState.unavailable = true
+
+    let installation: Promise<void> | undefined
+    expect(() => {
+      installation = installBrowserSessionPartitionPolicies(profile)
+    }).not.toThrow()
+    await expect(installation).rejects.toThrow('Browser process user agent is not initialized')
+  })
+
   it('applies the app-wide proxy to a newly configured partition', async () => {
     setBrowserNetworkProxySettingsResolver(() => ({
       httpProxyUrl: 'socks5://127.0.0.1:1080',

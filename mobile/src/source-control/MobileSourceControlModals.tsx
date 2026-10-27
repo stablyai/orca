@@ -61,7 +61,6 @@ export function MobileSourceControlModals({ state, actionSheetActions }: Props) 
               filePath: discardTarget.path
             })
           }
-          // Modal visibility is derived from discardTarget — clear it so it dismisses.
           setDiscardTarget(null)
         }}
         onCancel={() => setDiscardTarget(null)}

@@ -1,4 +1,7 @@
-import { remoteSessionContentLines } from './remote-session-content-lines'
+import {
+  remoteSessionContentLines,
+  type RemoteSessionContent
+} from './remote-session-content-lines'
 import { openTranscriptReadStream } from '../native-chat/wsl-transcript-fs-access'
 import { createInterface } from 'node:readline'
 import type { AiVaultSession } from '../../shared/ai-vault-types'
@@ -10,14 +13,16 @@ import type {
   ResumableSessionParseState,
   SessionAccumulator
 } from './session-scanner-types'
+import type { TranscriptMessageSink } from './session-transcript-consumers'
 import {
-  addPreviewContent,
+  accumulatorSessionIdentity,
   createAccumulator,
   finalizeSession,
   sessionIdFromFileName,
   updateLatestLocation,
   updateTimeline
 } from './session-scanner-accumulator'
+import { addSessionContent } from './session-scanner-messages'
 import { countSubagentTranscripts } from './session-scanner-subagent-transcripts'
 import {
   asRecord,
@@ -33,8 +38,6 @@ type ParserSessionOptions = {
   executionHostPlatform?: NodeJS.Platform | null
 }
 
-// Parse state kept resumable so the scan cache can append newly written
-// transcript lines without re-reading the whole (potentially huge) file.
 export type ClaudeSessionParseState = {
   accumulator: SessionAccumulator
   metaTitle: string | null
@@ -42,12 +45,16 @@ export type ClaudeSessionParseState = {
   firstUserTitle: string | null
 }
 
-export function createClaudeSessionParseState(file: FileWithMtime): ClaudeSessionParseState {
+export function createClaudeSessionParseState(
+  file: FileWithMtime,
+  messages?: TranscriptMessageSink
+): ClaudeSessionParseState {
   return {
     accumulator: createAccumulator({
       agent: 'claude',
       file,
-      sessionId: sessionIdFromFileName(file.path)
+      sessionId: sessionIdFromFileName(file.path),
+      messages
     }),
     metaTitle: null,
     generatedTitle: null,
@@ -70,11 +77,17 @@ export function cloneClaudeSessionParseState(
 }
 
 export function consumeClaudeSessionLine(state: ClaudeSessionParseState, line: string): void {
-  const { accumulator } = state
   const record = parseJsonObject(line)
-  if (!record) {
-    return
+  if (record) {
+    consumeClaudeSessionRecord(state, record)
   }
+}
+
+export function consumeClaudeSessionRecord(
+  state: ClaudeSessionParseState,
+  record: Record<string, unknown>
+): void {
+  const { accumulator } = state
 
   if (typeof record.sessionId === 'string' && record.sessionId.trim()) {
     accumulator.sessionId = record.sessionId.trim()
@@ -90,7 +103,6 @@ export function consumeClaudeSessionLine(state: ClaudeSessionParseState, line: s
   if (record.type === 'ai-title') {
     const title = normalizeTitleText(extractString(record.aiTitle) ?? '')
     if (title) {
-      // Claude can revise generated names; AI Vault should mirror the current one.
       state.generatedTitle = title
     }
     return
@@ -102,13 +114,7 @@ export function consumeClaudeSessionLine(state: ClaudeSessionParseState, line: s
   }
 
   if (record.type === 'queue-operation') {
-    // Enqueued prompts hold real content (e.g. queued subagent messages) that
-    // survives even when the conversation was never persisted — recoverable
-    // signal for an otherwise-empty session, but not a conversation turn.
-    // Count net of remove/dequeue: consumed or user-removed prompts are written
-    // as later queue-operation records and are no longer queued. Accepted gap:
-    // a dequeue/remove of an uncounted empty-content enqueue can undercount,
-    // which only hides the recoverable badge — it never fabricates one.
+    // Track recoverable queued content separately from turns; uncounted empty enqueues can make removals undercount.
     if (record.operation === 'enqueue' && (extractString(record.content)?.trim().length ?? 0) > 0) {
       accumulator.queuedMessageCount++
     } else if (record.operation === 'remove' || record.operation === 'dequeue') {
@@ -128,13 +134,10 @@ export function consumeClaudeSessionLine(state: ClaudeSessionParseState, line: s
   if (record.type === 'user') {
     accumulator.messageCount++
     const title = extractMessageText(record.message)
-    // Meta prompts (injected context) only seed the last-resort title. Some
-    // injected turns (task notifications) carry no isMeta, so also gate on
-    // the known-tag classifier — a real prompt pasting a custom `<my-element>`
-    // must seed the primary title, not be demoted as machinery.
+    // Known injected tags may lack isMeta; custom tags must remain real prompts rather than fallback titles.
     const isMetaUserTurn =
       record.isMeta === true || (title != null && isKnownHarnessInjectedUserTurnText(title))
-    addPreviewContent(accumulator, 'user', asRecord(record.message)?.content, record.timestamp, {
+    addSessionContent(accumulator, 'user', asRecord(record.message)?.content, record.timestamp, {
       seedFirstUserPrompt: !isMetaUserTurn
     })
     if (title) {
@@ -150,7 +153,7 @@ export function consumeClaudeSessionLine(state: ClaudeSessionParseState, line: s
   if (record.type === 'assistant') {
     accumulator.messageCount++
     const message = asRecord(record.message)
-    addPreviewContent(accumulator, 'assistant', message?.content, record.timestamp)
+    addSessionContent(accumulator, 'assistant', message?.content, record.timestamp)
     const model = extractString(message?.model)
     if (model) {
       accumulator.model = model
@@ -164,20 +167,12 @@ export async function finalizeClaudeSessionParseState(
   platform: NodeJS.Platform,
   options: ParserSessionOptions = {}
 ): Promise<AiVaultSession | null> {
-  // Finalize a snapshot: the live state (and its preview array) may keep
-  // accumulating appended lines after this session object is handed out.
+  // Detach previews so later appends cannot mutate a published session.
   const snapshot = cloneClaudeSessionParseState(state)
-  // Why: a user-set custom-title (accumulator.title) wins, but Claude's generated
-  // session name (ai-title) should outrank the raw first prompt when present.
+  // Explicit custom titles win, then generated names, real prompts and injected-context fallbacks.
   snapshot.accumulator.fallbackTitle =
     snapshot.generatedTitle ?? snapshot.firstUserTitle ?? snapshot.metaTitle
-  // Every session's sibling subagent transcripts are counted (one readdir):
-  // the row UI shows the count without expanding details, and for zero-turn
-  // transcripts it doubles as the recoverable-content signal. The sibling dir
-  // lives on the host that owns the transcript, so content fetched from a
-  // remote (SSH) host must not readdir this machine's disk. Runtime hosts scan
-  // their own local disk (their host id is stamped after parse), so they are
-  // already covered by the undefined-executionHostId branch.
+  // Count only on the transcript-owning host; runtime hosts stamp identity after parsing, while SSH walks supply counts.
   const ownsTranscriptDisk =
     !options.executionHostId || options.executionHostId === LOCAL_EXECUTION_HOST_ID
   if (ownsTranscriptDisk) {
@@ -188,8 +183,11 @@ export async function finalizeClaudeSessionParseState(
   return finalizeSession(snapshot.accumulator, platform, options)
 }
 
-export function createClaudeSessionResumeState(file: FileWithMtime): ResumableSessionParseState {
-  return claudeResumeStateFromParseState(createClaudeSessionParseState(file))
+export function createClaudeSessionResumeState(
+  file: FileWithMtime,
+  messages?: TranscriptMessageSink
+): ResumableSessionParseState {
+  return claudeResumeStateFromParseState(createClaudeSessionParseState(file, messages))
 }
 
 function claudeResumeStateFromParseState(
@@ -197,6 +195,7 @@ function claudeResumeStateFromParseState(
 ): ResumableSessionParseState {
   return {
     consumeLine: (line) => consumeClaudeSessionLine(state, line),
+    identity: () => accumulatorSessionIdentity(state.accumulator),
     clone: () => claudeResumeStateFromParseState(cloneClaudeSessionParseState(state)),
     touchFile: (file) => {
       state.accumulator.modifiedAt = file.modifiedAt
@@ -207,18 +206,19 @@ function claudeResumeStateFromParseState(
 
 export async function parseClaudeSessionFile(
   file: FileWithMtime,
-  platform: NodeJS.Platform = process.platform
+  platform: NodeJS.Platform = process.platform,
+  messages?: TranscriptMessageSink
 ): Promise<AiVaultSession | null> {
   const lines = createInterface({
     input: openTranscriptReadStream(file.path, { encoding: 'utf-8' }, 'scan'),
     crlfDelay: Infinity
   })
-  return parseClaudeSessionLines({ file, lines, platform })
+  return parseClaudeSessionLines({ file, lines, platform, messages })
 }
 
 export async function parseClaudeSessionContent(
   file: FileWithMtime,
-  content: string,
+  content: RemoteSessionContent,
   platform: NodeJS.Platform = process.platform,
   options: ParserSessionOptions = {},
   signal?: AbortSignal
@@ -236,8 +236,9 @@ async function parseClaudeSessionLines(args: {
   lines: AsyncIterable<string> | Iterable<string>
   platform: NodeJS.Platform
   options?: ParserSessionOptions
+  messages?: TranscriptMessageSink
 }): Promise<AiVaultSession | null> {
-  const state = createClaudeSessionParseState(args.file)
+  const state = createClaudeSessionParseState(args.file, args.messages)
   for await (const line of args.lines) {
     consumeClaudeSessionLine(state, line)
   }

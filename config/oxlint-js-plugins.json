@@ -1,0 +1,82 @@
+{
+  "$schema": "../node_modules/oxlint/configuration_schema.json",
+  "plugins": [],
+  "categories": {
+    "correctness": "off",
+    "suspicious": "off",
+    "pedantic": "off",
+    "perf": "off",
+    "style": "off",
+    "restriction": "off",
+    "nursery": "off"
+  },
+  "jsPlugins": [
+    {
+      "name": "app-store-performance",
+      "specifier": "./oxlint-plugins/app-store-performance.mjs"
+    },
+    {
+      "name": "quadratic-buffer-concat",
+      "specifier": "./oxlint-plugins/quadratic-buffer-concat.mjs"
+    },
+    {
+      "name": "renderer-scrollbar-style",
+      "specifier": "./oxlint-plugins/renderer-scrollbar-style.mjs"
+    },
+    {
+      "name": "ime-enter-guard",
+      "specifier": "./oxlint-plugins/ime-enter-guard.mjs"
+    }
+  ],
+  "rules": {
+    "app-store-performance/require-selector": "error",
+    "app-store-performance/no-identity-selector": "error",
+    "app-store-performance/no-fresh-selector-result": "error",
+    "quadratic-buffer-concat/no-loop-carried-concat": "error"
+  },
+  "overrides": [
+    {
+      "files": ["**/src/renderer/src/**/*.{ts,tsx}"],
+      "rules": {
+        "app-store-performance/no-raw-project-catalog-computed": "error",
+        "renderer-scrollbar-style/require-styled-vertical-scrollbar": "error",
+        "ime-enter-guard/require-ime-guard": "error"
+      }
+    },
+    {
+      "files": ["**/*.test.*", "**/*.spec.*", "**/*-benchmark.*"],
+      "rules": {
+        "quadratic-buffer-concat/no-loop-carried-concat": "off",
+        "renderer-scrollbar-style/require-styled-vertical-scrollbar": "off",
+        "ime-enter-guard/require-ime-guard": "off"
+      }
+    },
+    {
+      "files": [
+        "src/renderer/src/store/project-host-setup-selector.ts",
+        "src/renderer/src/store/repos/repo-catalog-identity.ts",
+        "src/renderer/src/store/repos/repo-catalog-actions.ts",
+        "src/renderer/src/store/repos/runtime-repo-catalog-actions.ts",
+        "src/renderer/src/store/repos/all-host-repo-catalog-actions.ts",
+        "src/renderer/src/store/repos/repo-add-actions.ts",
+        "src/renderer/src/store/repos/repo-update.ts",
+        "src/renderer/src/store/repos/repo-removal.ts",
+        "src/renderer/src/store/projects/project-host-setup-actions.ts",
+        "src/renderer/src/store/projects/project-update.ts",
+        "src/renderer/src/store/project-groups/project-group-mutations.ts",
+        "src/renderer/src/store/slices/worktrees/teardown/purge-stale-runtime-host-state.ts",
+        "src/renderer/src/store/slices/worktrees/teardown/orphaned-runtime-ssh-project-purge.ts",
+        "src/renderer/src/app-shell/use-runtime-graph-sync.ts",
+        "src/renderer/src/**/*.test.{ts,tsx}",
+        "src/renderer/src/**/*.spec.{ts,tsx}",
+        "src/renderer/src/**/*-test-*.ts",
+        "src/renderer/src/**/*.test-fixture.ts",
+        "src/renderer/src/components/automations/automations-page-runtime-fixtures.ts"
+      ],
+      "rules": {
+        "app-store-performance/no-raw-project-catalog-computed": "off"
+      }
+    }
+  ],
+  "ignorePatterns": ["**/node_modules", "**/dist", "**/out"]
+}

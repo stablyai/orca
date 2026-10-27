@@ -1,28 +1,36 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const launchAgentInNewTab = vi.hoisted(() => vi.fn())
-const connectionId = vi.hoisted(() => ({ value: null as string | null }))
-const runtimeEnvironmentId = vi.hoisted(() => ({ value: null as string | null }))
-const toast = vi.hoisted(() => ({ error: vi.fn(), success: vi.fn() }))
-const store = vi.hoisted(() => ({
-  settings: { disabledTuiAgents: [] as string[] },
-  ensureDetectedAgents: vi.fn(async () => ['claude', 'codex']),
-  ensureRemoteDetectedAgents: vi.fn(async () => ['claude', 'codex']),
-  ensureRuntimeDetectedAgents: vi.fn(async () => ['claude', 'codex'])
-}))
+const writeClipboardText = vi.hoisted(() => vi.fn(async () => undefined))
+const ensureDetectedAgentsForWorktree = vi.hoisted(() => vi.fn())
+const toast = vi.hoisted(() => ({ error: vi.fn(), success: vi.fn(), warning: vi.fn() }))
+const store: { settings: { disabledTuiAgents: string[]; experimentalNativeChat?: boolean } } =
+  vi.hoisted(() => ({
+    settings: { disabledTuiAgents: [] }
+  }))
 
 vi.mock('@/store', () => ({ useAppStore: { getState: () => store } }))
 vi.mock('@/lib/launch-agent-in-new-tab', () => ({ launchAgentInNewTab }))
 vi.mock('@/lib/agent-catalog', () => ({
+  getAgentCatalog: () => [{ id: 'claude', label: 'Claude' }],
   getAgentLabel: (agent: string) => (agent === 'codex' ? 'Codex' : 'Claude')
 }))
-vi.mock('@/lib/connection-context', () => ({
-  getConnectionIdFromState: () => connectionId.value
-}))
-vi.mock('@/lib/worktree-runtime-owner', () => ({
-  getRuntimeEnvironmentIdForWorktree: () => runtimeEnvironmentId.value
+vi.mock('@/lib/agent-detection-target-inventory', () => ({
+  ensureDetectedAgentsForWorktree,
+  // A declined chat falls back to a terminal only where the agent's CLI was detected.
+  readAgentInventoryForTarget: () => ({ ids: ['claude'], state: 'successful' })
 }))
 vi.mock('sonner', () => ({ toast }))
+vi.mock('./host-chat-program-acquisition', () => ({
+  acquireAgentLaunchChoices: async (_: unknown, run: () => unknown) => {
+    const detected = await run()
+    return { detected, offered: detected }
+  }
+}))
+vi.mock('./host-chat-program', () => ({ agentChoicePending: () => false }))
+vi.mock('@/runtime/structured-agent-session-client', () => ({
+  callStructuredAgentSession: vi.fn(async () => ({ supported: false, reason: 'wsl' }))
+}))
 vi.mock('@/i18n/i18n', () => ({
   translate: (_key: string, fallback: string, values?: Record<string, string>) =>
     Object.entries(values ?? {}).reduce(
@@ -34,18 +42,17 @@ vi.mock('@/i18n/i18n', () => ({
 describe('launchAgentSessionContinuation', () => {
   beforeEach(() => {
     vi.clearAllMocks()
-    connectionId.value = null
-    runtimeEnvironmentId.value = null
     store.settings.disabledTuiAgents = []
-    store.ensureDetectedAgents.mockResolvedValue(['claude', 'codex'])
-    store.ensureRemoteDetectedAgents.mockResolvedValue(['claude', 'codex'])
-    store.ensureRuntimeDetectedAgents.mockResolvedValue(['claude', 'codex'])
+    ensureDetectedAgentsForWorktree.mockResolvedValue(['claude', 'codex'])
     launchAgentInNewTab.mockReturnValue({
-      tabId: 'tab-new',
+      surface: { kind: 'local-terminal', tabId: 'tab-new' },
       promptDeliveryResult: Promise.resolve({ delivered: true, failureNotified: false })
     })
+    writeClipboardText.mockClear()
     vi.stubGlobal('window', {
-      api: { agentTrust: { markTrusted: vi.fn(async () => undefined) } }
+      api: {
+        ui: { writeClipboardText }
+      }
     })
   })
 
@@ -60,7 +67,6 @@ describe('launchAgentSessionContinuation', () => {
         prompt: 'continue the unfinished task',
         worktreeId: 'wt-1',
         groupId: 'group-1',
-        workspacePath: '/repo/worktree',
         initialCwd: '/repo/worktree/packages/app',
         launchSource: 'terminal_context_menu'
       })
@@ -72,32 +78,22 @@ describe('launchAgentSessionContinuation', () => {
         worktreeId: 'wt-1',
         groupId: 'group-1',
         initialCwd: '/repo/worktree/packages/app',
-        promptDelivery: 'submit-after-ready'
+        promptDelivery: 'draft'
       })
     )
   })
 
-  it('detects the target Agent on the SSH host that owns the workspace', async () => {
-    connectionId.value = 'ssh-1'
+  it("detects the target Agent in the workspace host's inventory", async () => {
     const { detectAgentSessionContinuationAgents } =
       await import('./launch-agent-session-continuation')
 
-    await expect(detectAgentSessionContinuationAgents('wt-1')).resolves.toEqual(['claude', 'codex'])
-    expect(store.ensureRemoteDetectedAgents).toHaveBeenCalledWith('ssh-1')
-    expect(store.ensureDetectedAgents).not.toHaveBeenCalled()
-  })
-
-  it('detects local Agents in the target worktree runtime', async () => {
-    const { detectAgentSessionContinuationAgents } =
-      await import('./launch-agent-session-continuation')
-
-    await detectAgentSessionContinuationAgents('wt-1')
-
-    expect(store.ensureDetectedAgents).toHaveBeenCalledWith('wt-1')
+    const { detected } = await detectAgentSessionContinuationAgents('wt-1')
+    expect(detected).toEqual(['claude', 'codex'])
+    expect(ensureDetectedAgentsForWorktree).toHaveBeenCalledWith(store, 'wt-1')
   })
 
   it('stops before launch when the selected Agent is unavailable', async () => {
-    store.ensureDetectedAgents.mockResolvedValue(['claude'])
+    ensureDetectedAgentsForWorktree.mockResolvedValue(['claude'])
     const { launchAgentSessionContinuation } = await import('./launch-agent-session-continuation')
 
     await expect(
@@ -105,7 +101,6 @@ describe('launchAgentSessionContinuation', () => {
         agent: 'codex',
         prompt: 'continue',
         worktreeId: 'wt-1',
-        workspacePath: '/repo/worktree',
         launchSource: 'sidebar'
       })
     ).resolves.toBe(false)
@@ -116,7 +111,7 @@ describe('launchAgentSessionContinuation', () => {
 
   it('distinguishes prompt delivery failure from terminal launch failure', async () => {
     launchAgentInNewTab.mockReturnValue({
-      tabId: 'tab-new',
+      surface: { kind: 'local-terminal', tabId: 'tab-new' },
       promptDeliveryResult: Promise.resolve({ delivered: false, failureNotified: false })
     })
     const { launchAgentSessionContinuation } = await import('./launch-agent-session-continuation')
@@ -125,14 +120,119 @@ describe('launchAgentSessionContinuation', () => {
       agent: 'codex',
       prompt: 'continue',
       worktreeId: 'wt-1',
-      workspacePath: '/repo/worktree',
       launchSource: 'sidebar'
     })
 
+    expect(launchAgentInNewTab).toHaveBeenCalledWith(
+      expect.objectContaining({ agent: 'codex', promptDelivery: 'submit-after-ready' })
+    )
     await vi.waitFor(() =>
       expect(toast.error).toHaveBeenCalledWith(
-        'The new Codex session started, but its context could not be sent.'
+        'The new Codex session started, but its context could not be sent.',
+        expect.objectContaining({ action: expect.objectContaining({ label: 'Copy prompt' }) })
       )
     )
   })
+
+  it('hedges instead of claiming success when the paste went out unconfirmed', async () => {
+    // Windows may force blind paste; do not report a handoff delivered when its composer was never observed (#22479).
+    launchAgentInNewTab.mockImplementation(
+      (args: {
+        onPromptDelivered?: () => void
+        onPromptDeliveryUnconfirmed?: () => void
+      }): unknown => {
+        args.onPromptDeliveryUnconfirmed?.()
+        args.onPromptDelivered?.()
+        return {
+          surface: { kind: 'local-terminal', tabId: 'tab-new' },
+          promptDeliveryResult: Promise.resolve({ delivered: true, failureNotified: false })
+        }
+      }
+    )
+    const { launchAgentSessionContinuation } = await import('./launch-agent-session-continuation')
+
+    await launchAgentSessionContinuation({
+      agent: 'codex',
+      prompt: 'continue the unfinished task',
+      worktreeId: 'wt-1',
+      launchSource: 'sidebar'
+    })
+
+    expect(toast.success).not.toHaveBeenCalled()
+    expect(toast.warning).toHaveBeenCalledWith(
+      'Orca could not confirm Codex received the session context. Check the new session, and paste it yourself if its input is empty.',
+      expect.objectContaining({ action: expect.objectContaining({ label: 'Copy prompt' }) })
+    )
+    toast.warning.mock.calls[0][1].action.onClick()
+    expect(writeClipboardText).toHaveBeenCalledWith('continue the unfinished task')
+  })
+
+  it('still reports a confirmed delivery as a success', async () => {
+    launchAgentInNewTab.mockImplementation((args: { onPromptDelivered?: () => void }): unknown => {
+      args.onPromptDelivered?.()
+      return {
+        surface: { kind: 'local-terminal', tabId: 'tab-new' },
+        promptDeliveryResult: Promise.resolve({ delivered: true, failureNotified: false })
+      }
+    })
+    const { launchAgentSessionContinuation } = await import('./launch-agent-session-continuation')
+
+    await launchAgentSessionContinuation({
+      agent: 'codex',
+      prompt: 'continue',
+      worktreeId: 'wt-1',
+      launchSource: 'sidebar'
+    })
+
+    expect(toast.success).toHaveBeenCalledWith('Session context sent to Codex in a new session.')
+    expect(toast.warning).not.toHaveBeenCalled()
+  })
+})
+
+it('retains the accepted route across detection, and explicit chat declines without the preference fallback', async () => {
+  const { launchAgentSessionContinuation } = await import('./launch-agent-session-continuation')
+  const { beginHostAdmittedStructuredLaunch } =
+    await import('./structured-agent-session-launch-admission')
+  for (const requestedSurface of [undefined, 'chat'] as const) {
+    const detected = Promise.withResolvers<string[]>()
+    ensureDetectedAgentsForWorktree.mockReturnValueOnce(detected.promise)
+    const pending = launchAgentSessionContinuation({
+      agent: 'claude',
+      prompt: 'continue',
+      worktreeId: 'wt-1',
+      groupId: 'group-1',
+      initialCwd: '/repo/.',
+      launchSource: 'sidebar',
+      launchChoice: {
+        agent: 'claude',
+        route: 'structured-native-chat',
+        executionHostId: 'local',
+        requestedSurface
+      }
+    })
+    store.settings.experimentalNativeChat = false
+    detected.resolve(['claude'])
+    await pending
+    const args = launchAgentInNewTab.mock.calls.at(-1)?.[0]
+    expect(args).toMatchObject({
+      initialCwd: '/repo/.',
+      groupId: 'group-1',
+      prompt: 'continue',
+      agentSessionLaunchPlan: { route: 'structured-native-chat', requestedSurface }
+    })
+    const fallback = vi.fn(() => ({ opened: true }))
+    const launch = beginHostAdmittedStructuredLaunch({
+      plan: args.agentSessionLaunchPlan,
+      hooks: {},
+      worktreeId: 'wt-1',
+      executionHostId: 'local',
+      target: { kind: 'local' },
+      openAdmitted: vi.fn(),
+      onHostDeclined: fallback
+    })
+    await expect(launch.settlement).resolves.toMatchObject({
+      kind: requestedSurface ? 'failed' : 'terminal'
+    })
+    expect(fallback).toHaveBeenCalledTimes(requestedSurface ? 0 : 1)
+  }
 })

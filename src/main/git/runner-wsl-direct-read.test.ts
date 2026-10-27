@@ -19,7 +19,7 @@ vi.mock('../diagnostics/main-thread-churn-probe', () => ({ recordSubprocessSpawn
 
 import { getBranchConflictKind } from './repo-branch-conflict'
 import { pendingWslDirectGitReadEnvironment } from './command-runner/git-command-resolution'
-import { gitExecFileAsync, gitSpawn, gitStreamStdout } from './runner'
+import { gitExecFileAsync, gitExecFileAsyncBuffer, gitSpawn, gitStreamStdout } from './runner'
 import {
   GitAdmissionScheduler,
   _resetGitAdmissionForTests,
@@ -28,6 +28,7 @@ import {
 import {
   disableWslGitReadEnvironment,
   getWslGitReadEnvironment,
+  peekWslGitReadEnvironment,
   resetWslGitReadEnvironmentForTests,
   seedWslGitReadEnvironmentForTests,
   WSL_GIT_READ_ENVIRONMENT_WAIT_MS
@@ -50,7 +51,7 @@ const LOGIN_ENVIRONMENT = {
 
 /** Stand in for the guest shell: rc chatter first, then the payload inside the command's own fence. */
 function fencedProbeStdout(command: unknown, payload: string): string {
-  const nonce = /__ORCA_WSL_CAPTURE_BEGIN_([^_]+)__/.exec(String(command))?.[1] ?? ''
+  const nonce = /__ORCA_WSL_CAPTURE_BEGIN_ ([^_]+)__/.exec(String(command))?.[1] ?? ''
   return `profile banner\n__ORCA_WSL_CAPTURE_BEGIN_${nonce}__${payload}__ORCA_WSL_CAPTURE_END_${nonce}__`
 }
 
@@ -165,6 +166,14 @@ describe('WSL direct Git reads', () => {
     } finally {
       nowSpy.mockRestore()
     }
+  })
+
+  it('bounds settled environment entries during distro churn', () => {
+    for (let index = 0; index < 132; index += 1) {
+      seedWslGitReadEnvironmentForTests(`distro-${index}`, LOGIN_ENVIRONMENT)
+    }
+    expect(peekWslGitReadEnvironment('distro-0')).toBeUndefined()
+    expect(peekWslGitReadEnvironment('distro-131')).toEqual(LOGIN_ENVIRONMENT)
   })
 
   it('runs an opted-in read directly with translated cwd and arguments', async () => {
@@ -360,8 +369,6 @@ describe('WSL direct Git reads', () => {
     })
   })
 
-  // A UNC worktree names its distro in the path, so a read there needs no resolved WSL project
-  // runtime to skip the shell -- requiring one is what kept every diff read on the login shell.
   it('takes the direct read route for an override-less WSL UNC cwd', async () => {
     await withPlatform('win32', async () => {
       seedWslGitReadEnvironmentForTests(DISTRO, LOGIN_ENVIRONMENT)
@@ -379,8 +386,6 @@ describe('WSL direct Git reads', () => {
     })
   })
 
-  // The classifier already recognizes `show`, so the blob reads behind every diff take the
-  // direct route from the cwd alone -- no caller-supplied distro, no explicit opt-in.
   it('takes the direct read route for an unclassified-caller blob read on a UNC cwd', async () => {
     await withPlatform('win32', async () => {
       seedWslGitReadEnvironmentForTests(DISTRO, LOGIN_ENVIRONMENT)
@@ -394,8 +399,6 @@ describe('WSL direct Git reads', () => {
     })
   })
 
-  // Kicking the probe off and resolving without it left the reads issued before it
-  // answered on the login shell -- the slow route, chosen by nothing but timing.
   it('waits for a cold probe so the first read already skips the shell', async () => {
     await withPlatform('win32', async () => {
       execFileMock.mockImplementation((_command, args, _options, callback) => {
@@ -426,7 +429,6 @@ describe('WSL direct Git reads', () => {
       try {
         execFileMock.mockImplementation((_command, args, _options, callback) => {
           const child = createMockChild()
-          // The probe never answers; only the git command itself does.
           if (!String(args).includes('_orca_git_path')) {
             queueMicrotask(() => callback?.(null, 'ok', ''))
           }
@@ -439,8 +441,6 @@ describe('WSL direct Git reads', () => {
         await vi.advanceTimersByTimeAsync(WSL_GIT_READ_ENVIRONMENT_WAIT_MS)
         await pending
 
-        // Exactly the routing this read had before the wait existed: an unanswered
-        // probe must cost the bound and nothing else.
         const resolved = execFileMock.mock.calls.at(-1)?.[1] ?? []
         expect(resolved.slice(3, 5)).toEqual(['bash', '-c'])
         expect(resolved).not.toContain('/usr/bin/env')
@@ -450,8 +450,6 @@ describe('WSL direct Git reads', () => {
     })
   })
 
-  // Once the route is disabled the answer is already known, so paying for a timer and two
-  // extra microtask hops on every later read is pure overhead on the host this PR targets.
   it('stops deferring reads once the direct route is disabled for the distro', async () => {
     await withPlatform('win32', async () => {
       seedWslGitReadEnvironmentForTests(DISTRO, LOGIN_ENVIRONMENT)
@@ -484,7 +482,6 @@ describe('WSL direct Git reads', () => {
     await withPlatform('win32', async () => {
       vi.useFakeTimers()
       try {
-        // The probe never answers, so only the abort can end the wait.
         execFileMock.mockImplementation(() => createMockChild())
         const controller = new AbortController()
 
@@ -607,7 +604,7 @@ describe('WSL direct Git reads', () => {
       await expect(
         getBranchConflictKind(String.raw`\\wsl.localhost\Ubuntu\repo`, 'new-feature')
       ).resolves.toBeNull()
-      expect(execFileMock).toHaveBeenCalledTimes(2)
+      expect(execFileMock).toHaveBeenCalledTimes(3)
       expect(execFileMock.mock.calls[0]?.[1]).toContain('--quiet')
     })
   })
@@ -816,38 +813,41 @@ describe('WSL direct Git reads', () => {
     })
   })
 
-  it('aborts an async Git call while linked-worktree discovery remains pending', async () => {
-    await withPlatform('win32', async () => {
-      let releaseStat: (() => void) | undefined
-      const delayedStat = new Promise<void>((resolve) => {
-        releaseStat = resolve
-      })
-      const fileSystem: WslLinkedWorktreeRoutingFileSystem = {
-        stat: vi.fn(async () => {
-          await delayedStat
-          return { isDirectory: () => false, isFile: () => true }
-        }),
-        readFile: vi.fn(async () => 'gitdir: C:/main/.git/worktrees/linked\n')
-      }
-      const discovery = prepareWslLinkedWorktreeGitRouting(String.raw`C:\repo`, DISTRO, {
-        platform: 'win32',
-        fileSystem
-      })
-      const controller = new AbortController()
+  it.each([gitExecFileAsync, gitExecFileAsyncBuffer])(
+    'aborts an async Git read while linked-worktree discovery remains pending (%s)',
+    async (readGit) => {
+      await withPlatform('win32', async () => {
+        let releaseStat: (() => void) | undefined
+        const delayedStat = new Promise<void>((resolve) => {
+          releaseStat = resolve
+        })
+        const fileSystem: WslLinkedWorktreeRoutingFileSystem = {
+          stat: vi.fn(async () => {
+            await delayedStat
+            return { isDirectory: () => false, isFile: () => true }
+          }),
+          readFile: vi.fn(async () => 'gitdir: C:/main/.git/worktrees/linked\n')
+        }
+        const discovery = prepareWslLinkedWorktreeGitRouting(String.raw`C:\repo`, DISTRO, {
+          platform: 'win32',
+          fileSystem
+        })
+        const controller = new AbortController()
 
-      const command = gitExecFileAsync(['status', '--short'], {
-        cwd: String.raw`C:\repo`,
-        wslDistro: DISTRO,
-        signal: controller.signal
-      })
-      controller.abort()
+        const command = readGit(['show', 'HEAD:file'], {
+          cwd: String.raw`C:\repo`,
+          wslDistro: DISTRO,
+          signal: controller.signal
+        })
+        controller.abort()
 
-      await expect(command).rejects.toMatchObject({ name: 'AbortError' })
-      expect(execFileMock).not.toHaveBeenCalled()
-      releaseStat?.()
-      await expect(discovery).resolves.toBe(true)
-    })
-  })
+        await expect(command).rejects.toMatchObject({ name: 'AbortError' })
+        expect(execFileMock).not.toHaveBeenCalled()
+        releaseStat?.()
+        await expect(discovery).resolves.toBe(true)
+      })
+    }
+  )
 
   it('keeps gitSpawn cache-only when a linked-worktree route expires', async () => {
     await withPlatform('win32', async () => {

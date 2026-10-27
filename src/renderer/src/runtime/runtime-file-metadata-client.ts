@@ -1,14 +1,16 @@
 import type { MarkdownDocument } from '../../../shared/filesystem-entry-types'
 import type { RuntimeFileOperationArgs } from './runtime-file-client-types'
 import { assertLocalFilesystemFallbackAllowed, getRemoteFileArgs } from './runtime-file-routing'
-import { callRuntimeRpc, getActiveRuntimeTarget } from './runtime-rpc-client'
+import { callRuntimeRpc } from './runtime-rpc-client'
 import { toRuntimeWorktreeSelector } from './runtime-worktree-selector'
+import type { LocalFileAccess } from '../../../shared/local-file-access'
+import { localAccess } from './runtime-file-read-client'
 
 export async function listRuntimeMarkdownDocuments(
   context: RuntimeFileOperationArgs,
   rootPath: string
 ): Promise<MarkdownDocument[]> {
-  const target = getActiveRuntimeTarget(context.settings)
+  const target = context.target
   if (target.kind !== 'environment' || !context.worktreeId) {
     return window.api.fs.listMarkdownDocuments({
       rootPath,
@@ -25,14 +27,19 @@ export async function listRuntimeMarkdownDocuments(
 
 export async function statRuntimePath(
   context: RuntimeFileOperationArgs,
-  absolutePath: string
+  absolutePath: string,
+  access?: LocalFileAccess,
+  /** A user act; may start a stopped WSL distro. Local stats only. */
+  options: { wakeWslDistro?: boolean } = {}
 ): Promise<{ size: number; isDirectory: boolean; mtime: number }> {
   const remoteArgs = getRemoteFileArgs(context, absolutePath)
   if (!remoteArgs) {
     assertLocalFilesystemFallbackAllowed(context)
     return window.api.fs.stat({
       filePath: absolutePath,
-      connectionId: context.connectionId
+      connectionId: context.connectionId,
+      ...localAccess(context.connectionId, access),
+      ...(options.wakeWslDistro && !context.connectionId ? { wakeWslDistro: true } : {})
     })
   }
   return callRuntimeRpc<{ size: number; isDirectory: boolean; mtime: number }>(
@@ -40,6 +47,17 @@ export async function statRuntimePath(
     'files.stat',
     { worktree: remoteArgs.worktreeSelector, relativePath: remoteArgs.relativePath },
     { timeoutMs: 15_000 }
+  )
+}
+
+export function isMissingRuntimePathError(error: unknown): boolean {
+  const message = error instanceof Error ? error.message.toLowerCase() : String(error).toLowerCase()
+  return (
+    message.includes('enoent') ||
+    message.includes('not found') ||
+    message.includes('no such file') ||
+    // Old hosts’ full ENOTDIR errno means absence like ENOENT; do not mistake a filename beginning enotdir for an error.
+    message.includes('enotdir: not a directory')
   )
 }
 
@@ -66,12 +84,7 @@ export async function runtimePathExists(
     )
     return true
   } catch (err) {
-    const message = err instanceof Error ? err.message.toLowerCase() : String(err).toLowerCase()
-    if (
-      message.includes('enoent') ||
-      message.includes('not found') ||
-      message.includes('no such file')
-    ) {
+    if (isMissingRuntimePathError(err)) {
       return false
     }
     throw err

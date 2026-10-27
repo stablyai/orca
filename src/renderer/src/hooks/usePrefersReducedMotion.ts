@@ -2,11 +2,16 @@ import { useEffect, useState } from 'react'
 
 const REDUCED_MOTION_QUERY = '(prefers-reduced-motion: reduce)'
 
-function readPrefersReducedMotion(): boolean {
+export function readPrefersReducedMotion(): boolean {
   if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') {
     return false
   }
   return window.matchMedia(REDUCED_MOTION_QUERY).matches
+}
+
+// Why: a scripted scroll's explicit `behavior` is not affected by CSS or the OS setting.
+export function motionSafeScrollBehavior(behavior: ScrollBehavior = 'smooth'): ScrollBehavior {
+  return behavior === 'smooth' && readPrefersReducedMotion() ? 'auto' : behavior
 }
 
 export function usePrefersReducedMotion(): boolean {

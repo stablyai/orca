@@ -1,12 +1,12 @@
+import { installPtyKittyFileReader } from './pty-kitty-file-reader'
+import { installSpawnDeferredSleep } from './spawn-deferred-sleep'
 import type { PaneManager, ManagedPane } from '@/lib/pane-manager/pane-manager'
 import { useAppStore } from '@/store'
 import { TerminalKittyKeyboardModeTracker } from '../../../../../shared/terminal-kitty-keyboard-mode-tracker'
 import type { PtyConnectionDeps } from '../pty-connection-types'
-import {
-  captureTerminalPaneRecoveryGeneration,
-  registerTerminalPaneRecoveryInstance
-} from '../terminal-pane-recovery'
-import { RESET_TERMINAL_CURSOR_STYLE } from '../../../../../shared/terminal-mode-reset-profiles'
+import { registerTerminalPaneRecoveryInstance } from '../terminal-pane-recovery'
+import { captureTabRecoveryGeneration } from '@/store/terminals/terminal-tab-recovery-ledger'
+import { TerminalIdleCursorReset } from '../terminal-idle-cursor-reset'
 import { writeTerminalOutput } from '@/lib/pane-manager/pane-terminal-output-scheduler'
 import { createTerminalStructuralReplayCoordinator } from '@/lib/pane-manager/terminal-structural-replay-coordinator'
 import { makePaneKey } from '../../../../../shared/stable-pane-id'
@@ -31,17 +31,14 @@ import { installTerminalKeydownFit } from './terminal-keydown-fit'
 import { installPtyExitHibernate } from './pty-exit-hibernate'
 import { installTitleSpawnBell } from './title-spawn-bell'
 import { installAgentTaskCompleteNotify } from './agent-task-complete-notify'
-import { installDirectSshRetryStatus } from './direct-ssh-retry-status'
+import { installPaneHostCapabilityFlags } from './pane-host-capability-flags'
 import { installPtyInputRecovery } from './pty-input-recovery'
+import { installAgentPreReadyTypedDraft } from './agent-pre-ready-typed-draft'
 import { installPtyInputForward } from './pty-input-forward'
 import { installPtyResizeGeometry } from './pty-resize-geometry'
 import { installSessionReconcileDispose } from './session-reconcile-dispose'
-import { resolveTerminalTabId } from './terminal-tab-id'
+import { findTerminalTabForPane } from './terminal-tab-id'
 
-/**
- * Establishes a binding between a terminal pane and its corresponding PTY stream,
- * managing input, output, title synchronization, and agent status tracking.
- */
 export function connectPanePty(
   pane: ManagedPane,
   manager: PaneManager,
@@ -50,46 +47,11 @@ export function connectPanePty(
   const session = { pane, manager, deps } as ConnectPanePtySession
   session.shouldRefreshForegroundSynchronously = (): boolean =>
     !session.manager.hasWebglRenderer(session.pane.id)
-  const state = useAppStore.getState()
-  const unifiedTab = state.getTab?.(deps.tabId)
-  const initialOwnerWorktreeId =
-    state.getTerminalTabOwnerWorktreeId?.(deps.tabId) ??
-    (unifiedTab?.contentType === 'terminal'
-      ? state.getTerminalTabOwnerWorktreeId?.(unifiedTab.entityId)
-      : null)
-  const terminalTabId = resolveTerminalTabId(
-    {
-      getTab: state.getTab,
-      hasTerminalTab: (candidateId) =>
-        Boolean(
-          state.tabsByWorktree[deps.worktreeId]?.some(
-            (candidate) => candidate.id === candidateId
-          ) ||
-          (initialOwnerWorktreeId
-            ? state.tabsByWorktree[initialOwnerWorktreeId]?.some(
-                (candidate) => candidate.id === candidateId
-              )
-            : false)
-        )
-    },
-    deps.tabId
-  )
-  const ownerWorktreeId =
-    state.getTerminalTabOwnerWorktreeId?.(terminalTabId) ?? initialOwnerWorktreeId
-  const terminalTab =
-    state.tabsByWorktree[deps.worktreeId]?.find((candidate) => candidate.id === terminalTabId) ??
-    (ownerWorktreeId
-      ? state.tabsByWorktree[ownerWorktreeId]?.find((candidate) => candidate.id === terminalTabId)
-      : undefined) ??
-    // Why: folder/worktree migrations can leave the pane's render key stale for one commit.
-    Object.values(state.tabsByWorktree)
-      .find((tabs) => tabs.some((candidate) => candidate.id === terminalTabId))
-      ?.find((candidate) => candidate.id === terminalTabId)
-  const tab = terminalTab ?? (unifiedTab && 'generation' in unifiedTab ? unifiedTab : null)
-  session.tabGeneration = tab?.generation ?? 0
-  // Why: recovery ownership belongs to this xterm instance. A request that
-  // settles after remount must not remount its already-replaced successor.
-  session.terminalRecoveryGeneration = captureTerminalPaneRecoveryGeneration(session.deps.tabId)
+  // Resolve both remount and recovery epochs from one row to avoid a second global tab scan.
+  const terminalTab = findTerminalTabForPane(useAppStore.getState(), deps.worktreeId, deps.tabId)
+  session.tabGeneration = terminalTab?.generation ?? 0
+  // Recovery belongs to this xterm instance; late requests cannot replace its already-remounted successor.
+  session.terminalRecoveryGeneration = captureTabRecoveryGeneration(terminalTab)
   session.terminalRecoveryInstance = registerTerminalPaneRecoveryInstance(session.deps.tabId)
   session.mountFollowsTerminalPark = session.deps.mountFollowsTerminalPark
   session.authoritativeReattachGeneration = 0
@@ -100,8 +62,6 @@ export function connectPanePty(
   )
   session.connectFrame = null
   session.connectFallbackTimer = null
-  session.startupGridSettleHandle = null
-  session.startupGridSettledForConnect = false
   session.connectStarted = false
   session.unregisterBacklogRecovery = null
   session.unregisterDocumentVisibilityRecovery = null
@@ -112,12 +72,14 @@ export function connectPanePty(
   session.cleanupHiddenOutputRestoreDeferredRetry = (): void => {}
   session.cleanupHiddenOutputRestoreForegroundDeadline = (): void => {}
   session.cleanupHiddenOutputRestoreFloodRepaint = (): void => {}
+  session.flushRemoteProgramRedraw = (): void => {}
   session.resetRendererOrderedSeqForPtyExit = () => {}
   session.cleanupStartupDraftPasteTimers = (): void => {}
   session.unregisterE2ePtyDataInjection = (): void => {}
   session.startupInjectTimer = null
   session.agentTaskCompleteNotificationGraceTimer = null
   session.agentTaskCompleteNotificationMaxTimer = null
+  session.hookOwnedIdleAbsorbsBell = false
   session.agentTaskCompleteStatusUnsubscribe = null
   session.agentTaskCompleteSettingsUnsubscribe = null
   session.agentTaskCompleteNotificationGeneration = 0
@@ -128,30 +90,23 @@ export function connectPanePty(
   session.terminalBellNotificationTimer = null
   session.pendingTerminalBellNotification = false
   session.reattachIdleAgentCursorResetTimer = null
-  session.alternateScreenBackgroundRepaintTimer = null
   session.shiftEnterReconfirmTimer = null
   session.synchronizedForegroundOutputActive = false
   // Why: carries up to one marker-length-1 of trailing bytes so a ConPTY-split DEC 2026 marker is still detected (#8754).
   session.synchronizedForegroundMarkerTail = ''
-  // Why: tracks the keystroke proximity captured when the current synchronized
-  // foreground frame opened, so a split end marker that lands after the redraw
-  // window still drains on the fast path instead of the 1s coalesce fallback.
+  // Classify latency at frame open so ConPTY-split closing markers retain the fast drain after the keystroke window.
   session.synchronizedForegroundFrameInteractive = false
+  session.synchronizedForegroundInteractivePresentPending = false
   session.suppressStructuralReplayPtyResize = false
-  // Why: hidden-delivery gate sync is wired up alongside the deferred PTY
-  // output plumbing inside the connect frame; lifecycle hooks (visibility
-  // flips, exit, dispose) run before/after it exists, so start with no-ops.
+  // Lifecycle can precede deferred output setup; initialize hidden-delivery callbacks as no-ops.
   session.syncHiddenRendererPtyDelivery = () => {}
   session.releaseHiddenRendererPtyDelivery = () => {}
   session.handleRemoteOutputPauseChanged = () => {}
+  session.handleRemotePausedOutputDropped = () => {}
   session.handleRendererOwnedAgentStatus = () => {}
   session.remoteOutputGatedPtyId = null
   session.remoteOutputFactConsumerPtyId = null
   session.suppressViewportClaimTerminalResize = false
-  // Why: idle callbacks are registered before the deferred PTY output plumbing
-  // exists. Start with the shared scheduler, then switch to the PTY writer
-  // below so hidden-tab resets keep backlog-recovery callbacks and byte order.
-  session.idleAgentTerminalModeReset = RESET_TERMINAL_CURSOR_STYLE
   session.suppressNativeWindowsIdleCodexFocusReports = false
   session.setFocusReportSuppressionForAgentCompletion = (
     title: string | undefined,
@@ -161,42 +116,49 @@ export function connectPanePty(
     session.suppressNativeWindowsIdleCodexFocusReports =
       agentType && agentType !== 'unknown' ? agentType === 'codex' : titleAgentType === 'codex'
   }
+  // Idle callbacks precede deferred setup; switch from the shared scheduler to the PTY writer to preserve hidden-byte ordering and recovery.
+  session.idleCursorReset = new TerminalIdleCursorReset()
   session.queueAgentIdleTerminalModeReset = (): void => {
     if (session.disposed) {
       return
     }
-    writeTerminalOutput(session.pane.terminal, session.idleAgentTerminalModeReset, {
-      foreground: shouldWritePtyOutputForeground(session.deps.isVisibleRef.current)
-    })
+    const reset = session.idleCursorReset.request()
+    if (reset) {
+      writeTerminalOutput(session.pane.terminal, reset, {
+        foreground: shouldWritePtyOutputForeground(session.deps.isVisibleRef.current)
+      })
+    }
   }
-  // Why: passphrase-gate waits register a teardown here so dispose() can
-  // actively unsubscribe + resolve them. Without this, a pane disposed
-  // mid-wait leaks its zustand subscriber and the surrounding async IIFE
-  // forever, since the subscriber's `disposed` check only fires when the
-  // store next emits — which may never happen after disconnect.
+  // Dispose actively unsubscribes and resolves passphrase waits; disconnected stores may never emit to release them.
   session.waitTeardowns = []
-  // Why: startup commands must only run once — in the pane they were
-  // targeted at. Capture `deps.startup` into a local and clear the field on
-  // the (already spread-copied) `deps` so nothing else inside this function
-  // can accidentally re-read it. The caller is responsible for clearing its
-  // own outer reference, since `deps` here is a shallow copy and our
-  // mutation does not propagate back.
+  // Consume startup once from this shallow-copied deps; callers must clear their separate outer reference.
   session.paneStartup = session.deps.startup ?? null
+  if (session.paneStartup?.resumeOrigin === 'saved') {
+    session.paneStartup.resumeSource ??= { cancelled: false }
+  }
   session.deps.startup = undefined
+  // Hold replacement PTY retirement until main takes it in a spawn request or disposal kills it.
+  session.pendingReplacedPtyId = session.deps.replacesPtyId ?? null
+  // Why: the first spawn claims the PTY, but a deferred retry is still the same user restart.
+  session.userRestart = session.pendingReplacedPtyId !== null
+  session.deps.replacesPtyId = undefined
+  session.claimPendingReplacedPtyId = (): string | null => {
+    const ptyId: string | null = session.pendingReplacedPtyId
+    session.pendingReplacedPtyId = null
+    return ptyId
+  }
 
-  // Why: paneKey crosses PTY env, hook IPC, retained rows, and reload/replay.
-  // Use the stable layout leaf UUID, not the renderer-local numeric pane id.
+  // Use stable leaf UUIDs for keys crossing env, hook IPC and replay; numeric pane IDs are renderer-local.
   session.cacheKey = makePaneKey(session.deps.tabId, session.pane.leafId)
-  // Why: mirrors the kitty keyboard flags the pane's application negotiates.
-  // Fed only from application output (live PTY bytes + daemon replay
-  // payloads), never from renderer-generated resets, so it reflects what the
-  // application expects even after defensive renderer-side kitty wipes.
+  // xterm exposes no Kitty read; mirror the flags its encoder applies.
   session.kittyKeyboardModes = (() => {
     const existing = session.deps.paneKittyKeyboardModesRef.current.get(session.pane.id)
     if (existing) {
       return existing
     }
-    const created = new TerminalKittyKeyboardModeTracker()
+    const created = new TerminalKittyKeyboardModeTracker({
+      kittyKeyboard: session.pane.terminal.options.vtExtensions?.kittyKeyboard === true
+    })
     session.deps.paneKittyKeyboardModesRef.current.set(session.pane.id, created)
     return created
   })()
@@ -205,13 +167,13 @@ export function connectPanePty(
   installInterruptInputIntent(session)
   installTerminalKeydownFit(session)
   installPtyExitHibernate(session)
+  installSpawnDeferredSleep(session)
   installTitleSpawnBell(session)
   installAgentTaskCompleteNotify(session)
-  installDirectSshRetryStatus(session)
+  installPaneHostCapabilityFlags(session)
   installPtyInputRecovery(session)
-  // Async reattach/exit callbacks can outlive the PaneManager that created
-  // them. Keep their layout writes keyed by the durable leaf identity and
-  // admit them only while this transport still owns the pane slot.
+  installAgentPreReadyTypedDraft(session)
+  // Async callbacks may outlive PaneManager; use durable leaf identity and require current transport ownership.
   const isCurrentPaneTransport = (): boolean =>
     !session.disposed &&
     session.deps.paneTransportsRef.current.get(session.pane.id) === session.transport
@@ -235,6 +197,7 @@ export function connectPanePty(
     }
     session.deps.clearExitedPanePtyLayoutBinding(session.pane.id, exitedPtyId)
   }
+  installPtyKittyFileReader(session)
   installPtyInputForward(session)
   installPtyResizeGeometry(session)
   installRunDeferredConnect(session)

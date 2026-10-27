@@ -1,39 +1,48 @@
-import type { AgentSessionPtyWriteRefusal } from './agent-session-pty-write-admission'
-import type {
-  AgentProviderSessionMetadata,
-  SleepingAgentLaunchConfig
-} from './agent-session-resume'
+import type { TerminalLaunchResult } from './agent-session-resume'
+import type * as AgentSessionResume from './agent-session-resume'
 import type { StartupCommandDelivery } from './codex-startup-delivery'
 import type { ExecutionHostId } from './execution-host'
 import type { PtyIncarnationId } from './pty-incarnation'
+import type { PtyLivenessVerdict } from './pty-liveness-verdict'
 import type { RuntimeListingHostScope } from './runtime-listing-host-scope'
 import type { RuntimeMobileSessionTabsResult } from './runtime-session-contracts'
 import type { TabGroupLayoutNode } from './tab-types'
 import type { TerminalExitCause } from './terminal-exit-cause'
 import type { TerminalPaneLayoutNode } from './terminal-tab-types'
-import type { TuiAgent } from './tui-agent'
+import type { TerminalAgent, TuiAgent } from './terminal-agent'
+export type {
+  RuntimeTerminalSend,
+  RuntimeTerminalPromptStage,
+  RuntimeTerminalPromptDelivery
+} from './runtime-terminal-send-contract'
 
 export type RuntimeTerminalSummary = {
   handle: string
   ptyId: string | null
   incarnationId?: string | null
   orphaned?: boolean
+  /** Orphaned PTY’s last recorded pane may survive in its owning renderer despite graph omission; absent if unknown/old host. */
+  recordedPaneKey?: string
   worktreeId: string
   worktreePath: string
   branch: string
   tabId: string
   leafId: string
   title: string | null
+  /** A user's name for this pane from the host's saved layout; absent when unset or the host predates it. */
+  paneTitle?: string
   connected: boolean
   writable: boolean
   lastOutputAt: number | null
   preview: string
-  /** Host-resolved agent identity for action consumers; absent when unknown or unsupported. */
-  agentIdentity?: TuiAgent
+  /** Host-resolved observed agent identity; absent when unknown. Does not imply launch support. */
+  agentIdentity?: TerminalAgent
   /** Absent while running or when the host predates the field; never infer a clean finish. */
   exitCause?: TerminalExitCause
   /** Absent when the host predates the field or could not name the execution host. */
   executionHostId?: ExecutionHostId
+  /** Read verdict for host liveness: legacy connected can stay true while unreachable. Absent on older hosts. */
+  verdict?: PtyLivenessVerdict['status']
 }
 
 export type RuntimeTerminalVisualTerminalNode = {
@@ -184,10 +193,17 @@ export type RuntimeTerminalShow = RuntimeTerminalSummary & {
 
 export type RuntimeTerminalState = 'running' | 'exited' | 'unknown'
 
+export type RuntimeTerminalRowMetadata = {
+  wrapped: boolean
+  trailingSpaces: number
+}
+
 export type RuntimeTerminalRead = {
   handle: string
   status: RuntimeTerminalState
   tail: string[]
+  /** Execution-host wrap evidence, aligned with tail; absent on older peers. */
+  tailRows?: RuntimeTerminalRowMetadata[]
   truncated: boolean
   limited?: boolean
   oldestCursor?: string
@@ -205,33 +221,11 @@ export type RuntimeTerminalRename = {
   title: string | null
 }
 
-export type RuntimeTerminalSend = {
+export type RuntimeTerminalSetPaneTitle = {
   handle: string
-  accepted: boolean
-  bytesWritten: number
-  refusedReason?: 'no-agent' | 'permission'
-  /**
-   * Present only when a durable agent-session lease refused the write. Additive and optional: an
-   * old client sees the `accepted: false` it already handles and ignores this field.
-   */
-  agentSessionRefusal?: AgentSessionPtyWriteRefusal
-  prompt?: RuntimeTerminalPromptDelivery
-}
-
-export type RuntimeTerminalPromptStage = 'input_accepted' | 'turn_started'
-
-export type RuntimeTerminalPromptDelivery = {
-  requestId: string
-  stages: RuntimeTerminalPromptStage[]
-  provider: 'claude' | 'codex' | 'unsupported' | 'old-host'
-  observation: 'supported' | 'unsupported' | 'incarnation_replaced' | 'permission'
-  processIncarnation: string
-  generation: number
-  baselineWorkingSequence: number
-  /** Hook turn-start timestamp before this prompt was accepted. */
-  baselineExplicitWorkingStartedAt?: number | null
-  /** Permission observations seen before this prompt was accepted. */
-  baselinePermissionSequence?: number
+  tabId: string
+  leafId: string
+  title: string | null
 }
 
 export type RuntimeTerminalAgentStatusState = 'working' | 'permission' | 'idle' | null
@@ -253,8 +247,8 @@ type RuntimeTerminalCreateBaseRequestPayload = {
   cwd?: string
   env?: Record<string, string>
   envToDelete?: string[]
-  launchConfig?: SleepingAgentLaunchConfig
-  resumeProviderSession?: AgentProviderSessionMetadata
+  launchConfig?: AgentSessionResume.SleepingAgentLaunchConfig
+  resumeProviderSession?: AgentSessionResume.AgentProviderSessionMetadata
   launchToken?: string
   launchAgent?: TuiAgent
   viewMode?: 'terminal' | 'chat'
@@ -263,6 +257,8 @@ type RuntimeTerminalCreateBaseRequestPayload = {
   activate?: boolean
   presentation?: RuntimeTerminalPresentation
   surfaceOwner?: false
+  /** Windows shell the created tab spawns AS, instead of the host default. */
+  shellOverride?: string
 }
 
 export type RuntimeTerminalCreateRequestPayload =
@@ -272,24 +268,7 @@ export type RuntimeTerminalCreateRequestPayload =
       source: 'runtime-session'
     })
 
-export type RuntimeTerminalCreate = {
-  handle: string
-  /** Host-owned PTY incarnation used to fence remote identity observations. */
-  incarnationId?: string | null
-  tabId?: string
-  paneKey?: string | null
-  ptyId?: string | null
-  worktreeId: string
-  title: string | null
-  executionHostId?: ExecutionHostId
-  hostPlatform?: NodeJS.Platform
-  surface?: 'background' | 'visible'
-  warning?: string
-  agentSessionDisposition?: 'created' | 'adopted'
-  isReattach?: true
-  /** Spawn process identity for host-internal ownership proof. */
-  processId?: number
-}
+export type { RuntimeTerminalCreate } from './runtime-terminal-create-contract'
 
 export type RuntimeTerminalSplit = {
   handle: string
@@ -299,7 +278,7 @@ export type RuntimeTerminalSplit = {
   leafId?: string
 }
 
-export type RuntimeTerminalResolvePane = {
+export type RuntimeTerminalResolvePane = TerminalLaunchResult & {
   handle: string
   /** Host-owned PTY incarnation used to fence remote identity observations. */
   incarnationId?: string | null
@@ -326,10 +305,14 @@ export type RuntimeTerminalClose = {
   ptyKilled: boolean
   ptyStopVerdict?: 'live' | 'unverifiable'
   ptyStopReason?: string
+  /** Durable host kill order replays on SSH reconnect; promise kill replay only when the host reports this field. */
+  pendingKillRecorded?: true
 }
 
 export type RuntimeTerminalWaitCondition = 'exit' | 'tui-idle'
 
+// Keep published codex-* reasons readable forever; emit them only for plausibly Codex-specific wording.
+// Agent-agnostic matchers use agent-* reasons.
 export type RuntimeTerminalWaitBlockedReason =
   | 'codex-update-prompt'
   | 'codex-trust-workspace'
@@ -337,6 +320,11 @@ export type RuntimeTerminalWaitBlockedReason =
   | 'codex-model-migration-prompt'
   | 'codex-hooks-review-prompt'
   | 'codex-interactive-prompt'
+  | 'agent-update-prompt'
+  | 'agent-trust-workspace'
+  | 'agent-cwd-prompt'
+  | 'agent-hooks-review-prompt'
+  | 'agent-interactive-prompt'
   | 'agent-approval-prompt'
 
 export type RuntimeTerminalWait = {

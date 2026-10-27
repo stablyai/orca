@@ -178,6 +178,17 @@ describe('Orca cloud profile service', () => {
     })
   })
 
+  it('reports callback failures as failed instead of cancelled', async () => {
+    configureCloudEnv()
+    beginOrcaCloudPkceFlowMock.mockRejectedValue(new Error('orca_cloud_auth_callback_failed'))
+
+    const result = await connectCurrentOrcaProfile(userDataPath)
+
+    expect(result).toMatchObject({ status: 'failed', error: 'orca_cloud_auth_callback_failed' })
+    expect(exchangeOrcaCloudAuthCodeMock).not.toHaveBeenCalled()
+    expect(getCurrentOrcaProfileAuthStatus(userDataPath)).toMatchObject({ state: 'local' })
+  })
+
   it('does not report a saved cloud session as connected when cloud config is unavailable', async () => {
     configureCloudEnv()
     mockSuccessfulConnect()

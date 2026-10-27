@@ -1,3 +1,4 @@
+import { readPersistedProfileState } from './helpers/persisted-profile-state'
 import { chmodSync, existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
@@ -17,13 +18,13 @@ import { DaemonClient } from '../../src/main/daemon/client'
 import { getDaemonSocketPath, getDaemonTokenPath } from '../../src/main/daemon/daemon-spawner'
 import Database from '../../src/main/sqlite/sync-database'
 import { LEGACY_CONTRACT_VERSION } from '../../src/main/runtime/orchestration/db'
-import { DEFAULT_LOCAL_ORCA_PROFILE_ID } from '../../src/shared/orca-profiles'
 import type { RuntimeTerminalListResult, RuntimeTerminalRead } from '../../src/shared/runtime-types'
 import {
   buildFakeAgentCommandOverride,
   FAKE_AGENT_WINDOWS_SHELL
 } from './helpers/fake-agent-command-override'
 import { FAKE_AGENT_PASTE_END_SCANNER_SOURCE } from './helpers/fake-agent-paste-end-scanner'
+import { FAKE_CODEX_LAUNCH_PROBES_SOURCE } from './helpers/fake-codex-launch-probes'
 
 const PROVIDER_SESSION_ID = 'e2e-missing-legacy-worker'
 const fakeCliDir = mkdtempSync(path.join(os.tmpdir(), 'orca-e2e-missing-legacy-worker-'))
@@ -41,10 +42,7 @@ function appendLedger(envName, event) {
     appendFileSync(ledgerPath, JSON.stringify({ pid: process.pid, ...event }) + '\\n')
   } catch {}
 }
-if (process.argv.slice(2).includes('app-server')) {
-  process.stderr.write("error: unrecognized subcommand 'app-server'\\n")
-  process.exit(2)
-}
+${FAKE_CODEX_LAUNCH_PROBES_SOURCE}
 appendLedger('ORCA_E2E_SPAWN_LEDGER', { event: 'spawn' })
 process.stdout.write('\\u001b]0;Codex Ready\\u0007OpenAI Codex\\nmodel: e2e\\ndirectory: e2e\\n')
 let acknowledged = false
@@ -144,12 +142,9 @@ async function detachedDaemonSessionExists(userDataDir: string, ptyId: string): 
   }
 }
 
-function persistedDataPath(userDataDir: string): string {
-  return path.join(userDataDir, 'profiles', DEFAULT_LOCAL_ORCA_PROFILE_ID, 'orca-data.json')
-}
-
 function hasPersistedResumeRecord(userDataDir: string, paneKey: string): boolean {
-  const data = JSON.parse(readFileSync(persistedDataPath(userDataDir), 'utf8')) as {
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: This test owns the persisted fixture; optional fields are checked at use sites.
+  const data = readPersistedProfileState(userDataDir) as {
     workspaceSession?: {
       sleepingAgentSessionsByPaneKey?: Record<string, { providerSession?: { id?: unknown } }>
     }
@@ -274,6 +269,10 @@ test('a missing legacy worker cannot spawn a replacement during restart recovery
         return worker?.ptyId ?? null
       })
       .toBeTruthy()
+    const workerPtyId = worker?.ptyId
+    if (!workerPtyId) {
+      throw new Error('Codex worker PTY was not listed')
+    }
     const workerPaneKey = `${worker!.tabId}:${worker!.leafId}`
     await expect
       .poll(async () => {
@@ -307,9 +306,7 @@ test('a missing legacy worker cannot spawn a replacement during restart recovery
               transcriptPath: transcript
             },
             launchConfig: {
-              // Why not bare 'codex': resume prefers the captured command over
-              // agentCmdOverrides, so a bare name would resolve the machine's real
-              // Codex off PATH and unpin the adoption leg this spec exercises.
+              // Resume prefers the captured command over overrides; pin its path so bare codex cannot launch the user’s installation.
               agentCommand,
               agentArgs: '--dangerously-bypass-approvals-and-sandbox',
               agentEnv: {}
@@ -332,9 +329,9 @@ test('a missing legacy worker cannot spawn a replacement during restart recovery
 
     await session.close(firstApp)
     firstApp = null
-    await removeDetachedDaemonSession(session.userDataDir, worker!.ptyId)
+    await removeDetachedDaemonSession(session.userDataDir, workerPtyId)
     await expect
-      .poll(() => detachedDaemonSessionExists(session.userDataDir, worker!.ptyId))
+      .poll(() => detachedDaemonSessionExists(session.userDataDir, workerPtyId))
       .toBe(false)
     await expect.poll(() => isProcessAlive(initialSpawn.pid)).toBe(false)
     rmSync(interruptionLedgerPath, { force: true })
@@ -348,7 +345,7 @@ test('a missing legacy worker cannot spawn a replacement during restart recovery
       .poll(async () => {
         const listed = await secondClient.call<RuntimeTerminalListResult>('terminal.list')
         return listed.result.terminals.filter(
-          (terminal) => terminal.ptyId === worker!.ptyId || terminal.title === 'Codex Ready'
+          (terminal) => terminal.ptyId === workerPtyId || terminal.title === 'Codex Ready'
         )
       })
       .toEqual([])

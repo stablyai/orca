@@ -127,6 +127,8 @@ function createRuntimeHarness(initialSnapshots: RuntimeMobileSessionTabsSnapshot
       connectionId: 'conn-runtime-census-race',
       requestId: 'req-runtime-census-race',
       pairedDeviceId: 'paired-runtime-census-race',
+      // Legacy clients skip structured restore; these interleavings follow their census timing.
+      clientKind: 'runtime',
       clientCapabilities: [SESSION_TABS_AUTHORITATIVE_INVENTORY_RUNTIME_CAPABILITY]
     },
     emit
@@ -526,6 +528,7 @@ describe.skipIf(runningBaselineOracle)('real runtime session tabs census boundar
         runtime,
         connectionId: 'conn-abort',
         requestId: 'req-abort',
+        clientKind: 'runtime',
         signal: controller.signal
       },
       vi.fn()

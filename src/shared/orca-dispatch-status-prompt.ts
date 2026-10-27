@@ -1,50 +1,58 @@
-// Why: full Orca dispatch preambles are multi-KB (CLI instructions before
-// `=== TASK ===`). A naive first-N-char fold of the agent-status prompt keeps
-// only lifecycle boilerplate and drops the task body the UI needs as a
-// fallback label before orchestration metadata arrives. Compact the status
-// prompt so preamble detection, the live task id, and the task body all fit
-// inside AGENT_STATUS_MAX_FIELD_LENGTH.
+// Compact multi-KB dispatch boilerplate so preamble identity, task id and task-body fallback all fit AGENT_STATUS_MAX_FIELD_LENGTH.
 
 export const ORCA_DISPATCH_STATUS_PREAMBLE_PREFIX =
   'You are working inside Orca, a multi-agent IDE.'
 export const ORCA_DISPATCH_STATUS_TASK_MARKER = '=== TASK ==='
+// Type this lead: Claude follows pasted briefs only when user prose explicitly asks; bare pasted_content was refused (STA-8200).
+export const ORCA_DISPATCH_PROMPT_LEAD_LINE =
+  'Please carry out this task from my Orca coordinator by following the brief I pasted below.'
 const ORCA_DISPATCH_STATUS_TASK_ID_MARKER = 'Your task ID is:'
-// Why: real preambles put === TASK === near the end (~4KB+). Scan past the
-// normal single-line budget so the task body is still reachable for compacting.
+// Real task markers follow 4KB+ preambles; scan beyond the one-line preview budget to reach the body.
 const ORCA_DISPATCH_STATUS_SOURCE_SCAN_LIMIT = 24_576
+const PASTED_CONTENT_OPEN_TAG = '<pasted_content'
+// Why: Claude Code's tag carries only a short id; bound the search for `>`.
+const PASTED_CONTENT_OPEN_TAG_MAX_LENGTH = 64
 
-export function isOrcaDispatchStatusPrompt(value: string): boolean {
-  // Why: status payloads cross a trust boundary. Keep dispatch detection
-  // bounded too, or leading whitespace can bypass the normalizer's scan cap.
+/** Find preamble start or -1 through optional typed lead/pasted_content wrappers, including older hosts’ bare preambles. */
+export function findOrcaDispatchPreambleStart(value: string): number {
+  // Bound trusted-shape detection too: arbitrary leading whitespace must not bypass the status normalizer’s scan cap.
   const scanEnd = Math.min(value.length, ORCA_DISPATCH_STATUS_SOURCE_SCAN_LIMIT)
-  let start = 0
-  while (start < scanEnd && isEcmaTrimWhitespace(value.charCodeAt(start))) {
-    start++
+  let start = skipTrimWhitespace(value, 0, scanEnd)
+  if (value.startsWith(ORCA_DISPATCH_PROMPT_LEAD_LINE, start)) {
+    start = skipTrimWhitespace(value, start + ORCA_DISPATCH_PROMPT_LEAD_LINE.length, scanEnd)
   }
-  return (
-    start + ORCA_DISPATCH_STATUS_PREAMBLE_PREFIX.length <= scanEnd &&
+  if (value.startsWith(PASTED_CONTENT_OPEN_TAG, start)) {
+    const tagLength = value.slice(start, start + PASTED_CONTENT_OPEN_TAG_MAX_LENGTH).indexOf('>')
+    if (tagLength === -1) {
+      return -1
+    }
+    start = skipTrimWhitespace(value, start + tagLength + 1, scanEnd)
+  }
+  return start + ORCA_DISPATCH_STATUS_PREAMBLE_PREFIX.length <= scanEnd &&
     value.startsWith(ORCA_DISPATCH_STATUS_PREAMBLE_PREFIX, start)
-  )
+    ? start
+    : -1
 }
 
-/**
- * Collapse a multi-KB dispatch preamble into a single-line status preview that
- * still carries enough structure for UI helpers:
- *   `<preamble prefix> Your task ID is: <id> === TASK === <task body>`
- */
+function skipTrimWhitespace(value: string, from: number, scanEnd: number): number {
+  let index = from
+  while (index < scanEnd && isEcmaTrimWhitespace(value.charCodeAt(index))) {
+    index++
+  }
+  return index
+}
+
+/** Single-line <prefix> Your task ID is: <id> === TASK === <body> status preview; null for non-dispatch prompts. */
 export function compactDispatchPromptForStatus(
   value: string,
   maxLength: number,
   normalizeSingleLine: (value: string, maxLength: number) => string
-): string {
-  const scanEnd = Math.min(value.length, ORCA_DISPATCH_STATUS_SOURCE_SCAN_LIMIT)
-  // Bound leading trim to the scan window so a multi-MB paste of pure
-  // whitespace cannot walk the entire string before we give up.
-  let start = 0
-  while (start < scanEnd && isEcmaTrimWhitespace(value.charCodeAt(start))) {
-    start++
+): string | null {
+  const start = findOrcaDispatchPreambleStart(value)
+  if (start === -1) {
+    return null
   }
-  const scan = value.slice(start, scanEnd)
+  const scan = value.slice(start, Math.min(value.length, ORCA_DISPATCH_STATUS_SOURCE_SCAN_LIMIT))
 
   let taskId = ''
   const idMarkerIndex = scan.indexOf(ORCA_DISPATCH_STATUS_TASK_ID_MARKER)
@@ -65,6 +73,9 @@ export function compactDispatchPromptForStatus(
     const body = scan.slice(taskMarkerIndex + ORCA_DISPATCH_STATUS_TASK_MARKER.length)
     for (const line of body.split(/\r?\n/)) {
       const preview = line.trim().replace(/\s+/g, ' ')
+      if (preview.startsWith('</pasted_content')) {
+        break
+      }
       if (preview) {
         taskBody = preview
         break
@@ -72,8 +83,7 @@ export function compactDispatchPromptForStatus(
     }
   }
 
-  // Why: keep the dispatch prefix (isOrcaDispatchPrompt) + task id (label match)
-  // + task body (fallback preview) so UI helpers still work on the 200-char field.
+  // Retain preamble identity, task-label id and fallback body inside the 200-character status field.
   let compact = ORCA_DISPATCH_STATUS_PREAMBLE_PREFIX
   if (taskId) {
     compact += ` ${ORCA_DISPATCH_STATUS_TASK_ID_MARKER} ${taskId}`
@@ -84,13 +94,8 @@ export function compactDispatchPromptForStatus(
   return normalizeSingleLine(compact, maxLength)
 }
 
-/**
- * Locate the Orca task separator in a dispatch prompt scan window.
- * Why: base-drift commit subjects are repository-controlled and may mention
- * `=== TASK ===`. Raw multi-line preambles must use the standalone line Orca
- * emits; already-normalized single-line status previews intentionally keep the
- * marker inline so re-normalization and UI helpers stay consistent.
- */
+/** Require standalone === TASK === in multiline preambles because repository-controlled commit subjects may quote it.
+ * Normalized single-line previews retain inline markers for idempotent cross-hop/UI reads. */
 export function findOrcaDispatchTaskMarkerIndex(value: string): number {
   let searchFrom = 0
   while (searchFrom < value.length) {

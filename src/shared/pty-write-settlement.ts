@@ -1,10 +1,5 @@
-/**
- * Three-valued settlement for a PTY write, mirroring the `live`/`unverifiable`/`exited`
- * vocabulary the execution boundary already uses. Ambiguity is a value here: it is never a
- * rejected promise, never a bare `false`, and never an absent optional flag. Flattening any
- * of the three arms to a boolean is what let a lost SSH settlement clear a durable mailbox
- * reservation and write the same pointer bytes twice.
- */
+/** Represent accepted/refused/ambiguous writes explicitly. Boolean flattening once released durable mailbox reservations
+ * after lost SSH settlement and duplicated pointer writes; ambiguity cannot be a rejection or missing flag. */
 
 /** Proven refusal: the write was declined before any byte could reach the transport. */
 export type WriteRefusalReason =
@@ -15,7 +10,6 @@ export type WriteRefusalReason =
   | 'endpoint_disconnected'
   | 'endpoint_awaiting_recovery'
   | 'encode_failed'
-  | 'write_gate_denied'
   | 'provider_unavailable'
   | 'provider_refused_write'
   | 'provider_cannot_settle'
@@ -26,6 +20,7 @@ export type WriteAmbiguityReason =
   | 'settlement_timeout'
   | 'endpoint_write_threw'
   | 'provider_threw_after_handoff'
+  | 'partial_write'
 
 export type WriteSettlement =
   | Readonly<{ outcome: 'accepted' }>

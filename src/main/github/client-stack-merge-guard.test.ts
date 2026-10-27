@@ -9,7 +9,6 @@ const { clientMocks, moduleMocks } = await vi.hoisted(async () => {
 
 vi.mock('./gh-utils', () => moduleMocks.ghUtilsModuleMock(clientMocks))
 vi.mock('../git/runner', () => moduleMocks.gitRunnerModuleMock(clientMocks))
-vi.mock('../providers/ssh-git-dispatch', () => moduleMocks.sshGitDispatchModuleMock(clientMocks))
 vi.mock('./local-git-config-signature', () =>
   moduleMocks.localGitConfigSignatureModuleMock(clientMocks)
 )
@@ -26,7 +25,8 @@ vi.mock('./github-api-repository', async (importOriginal) =>
   )
 )
 
-import { getPRForBranch, mergePR } from './client'
+import { getPRForBranch } from './client/lookup/get-pr-for-branch'
+import { mergePR } from './client/merge/merge-pr'
 import { resetGraphQLRateLimitGuardMocks } from './client-test-harness'
 
 const { ghExecFileAsyncMock, getOwnerRepoMock, acquireMock, releaseMock } = clientMocks
@@ -538,7 +538,7 @@ describe('GitHub GraphQL rate-limit guard', () => {
     } else {
       ghExecFileAsyncMock.mockResolvedValueOnce(scenario.probeResponse)
     }
-    // Why: disabling the guard must expose the legacy merge fallthrough, not fail on an unstubbed call.
+    // Stub legacy merge fallthrough so disabling the guard cannot fail on an unrelated missing fixture.
     ghExecFileAsyncMock
       .mockResolvedValueOnce({
         stdout: JSON.stringify({
@@ -592,9 +592,9 @@ describe('GitHub GraphQL rate-limit guard', () => {
   })
 
   it.each([
-    { stackShape: 'omits stack', stackField: {} },
-    { stackShape: 'sets stack to null', stackField: { stack: null } }
-  ])('keeps legacy merge when an ordinary GitHub response $stackShape', async (scenario) => {
+    { stackVariant: 'omits stack', stackField: {} },
+    { stackVariant: 'sets stack to null', stackField: { stack: null } }
+  ])('keeps legacy merge when an ordinary GitHub response $stackVariant', async (scenario) => {
     ghExecFileAsyncMock
       .mockResolvedValueOnce({
         stdout: JSON.stringify({

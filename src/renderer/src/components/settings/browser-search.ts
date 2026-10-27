@@ -1,9 +1,12 @@
 import type { SettingsSearchEntry } from './settings-search'
 import { translate } from '@/i18n/i18n'
 import { translateSearchKeyword } from './settings-search-keywords'
+import { getBrowserUserAgentSearchEntry } from './browser-user-agent-search'
+import { getBrowserProfileScopeSearchEntry } from './browser-profile-scope-search'
+import { getBrowserSitePermissionsSearchEntry } from './browser-site-permissions-search'
 import {
   getBrowserLinkRoutingDescription,
-  getTerminalLinkActionsDescription,
+  getLinkRoutingBackgroundSearchEntry,
   getLinkRoutingModifierDescription,
   getLinkRoutingModifierTitle
 } from './browser-link-routing-copy'
@@ -58,6 +61,11 @@ export function getTerminalLinkActionSearchKeywords(platform: BrowserShortcutPla
       'auto.components.settings.browser.search.terminalLinkActions.disable',
       'disable'
     ),
+    'link click behavior',
+    'open directly',
+    'modifier-click only',
+    'middle click',
+    'mouse 3',
     platform.isMac ? 'cmd' : 'ctrl'
   ]
 }
@@ -177,8 +185,7 @@ export function getBrowserPaneSearchEntries(
           'auto.components.settings.browser.search.linkRoutingModifier.opposite',
           'opposite'
         ),
-        // Why: the row renders live copy but this entry is built with openLinksInApp
-        // false, so index the other title too or the row is unfindable by its own text.
+        // Index the alternate live title because this entry is built with openLinksInApp false.
         getLinkRoutingModifierTitle(true),
         platform.isMac ? 'cmd' : 'ctrl'
       ]
@@ -186,9 +193,12 @@ export function getBrowserPaneSearchEntries(
     {
       title: translate(
         'auto.components.settings.BrowserTerminalLinkActionsSetting.title',
-        'Show link actions'
+        'Terminal URL clicks'
       ),
-      description: getTerminalLinkActionsDescription(platform),
+      description: translate(
+        'auto.components.settings.BrowserTerminalLinkActionsSetting.descriptionV2',
+        'Control clicks on detected URLs printed in terminal panes and chat transcripts.'
+      ),
       keywords: getTerminalLinkActionSearchKeywords(platform)
     },
     {
@@ -232,7 +242,7 @@ export function getBrowserPaneSearchEntries(
         ...translateSearchKeyword('auto.components.settings.browser.search.7539f6336c', 'profile')
       ]
     },
-    // Appended, not inserted: BrowserPane selects these entries by index.
+    // Append entries because BrowserPane indexes this catalog by position.
     {
       title: getBrowserClientHostedRemoteTitle(),
       description: getBrowserClientHostedRemoteDescription(),
@@ -287,6 +297,10 @@ export function getBrowserPaneSearchEntries(
           'network'
         )
       ]
-    }
+    },
+    getBrowserUserAgentSearchEntry(),
+    getBrowserSitePermissionsSearchEntry(),
+    getBrowserProfileScopeSearchEntry(),
+    getLinkRoutingBackgroundSearchEntry()
   ]
 }

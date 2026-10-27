@@ -3,7 +3,7 @@
 import { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
-import { MatchedText } from './ProjectComboboxRow'
+import { MatchedText, ProjectOptionDetail } from './ProjectComboboxRow'
 import { rankProjectOptions } from './project-combobox-matching'
 import type { NewWorkspaceProjectOption } from '@/lib/new-workspace-project-options'
 
@@ -30,17 +30,7 @@ function markedText(): string {
 }
 
 describe('MatchedText', () => {
-  it('underlines the matched run', () => {
-    act(() => {
-      root.render(<MatchedText text="orca" hits={[0, 1, 2, 3]} />)
-    })
-
-    expect(markedText()).toBe('orca')
-  })
-
-  // Hits are UTF-16 offsets; rendering splits by code point. An astral glyph is
-  // two code units but one rendered character, so every mark landed one glyph
-  // late (and the last one fell off the end).
+  // UTF-16 hit offsets and code-point rendering differ for emoji; marks must stay on the matched glyphs.
   it('aligns marks with the query when the name starts with an emoji', () => {
     const option: NewWorkspaceProjectOption = {
       kind: 'project',
@@ -67,5 +57,19 @@ describe('MatchedText', () => {
 
     expect(container.querySelectorAll('mark')).toHaveLength(0)
     expect(container.textContent).toBe('🚀 orca')
+  })
+})
+
+describe('ProjectOptionDetail', () => {
+  it('keeps Windows path matches highlighted in the preserved tail', () => {
+    const detail = 'C:\\Users\\ada\\projects\\orca\\src\\renderer\\app.ts'
+    const start = detail.indexOf('src')
+
+    act(() => {
+      root.render(<ProjectOptionDetail detail={detail} hits={[start, start + 1, start + 2]} />)
+    })
+
+    expect(container.textContent).toBe(detail)
+    expect(markedText()).toBe('src')
   })
 })

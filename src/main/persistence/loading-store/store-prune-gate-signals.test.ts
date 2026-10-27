@@ -1,13 +1,12 @@
-/**
- * Drives the real `Store`, because the value of the prune gate is entirely in whether the shipping
- * write paths signal it. A mutation that unwires the call site survives any test that pokes the gate
- * module directly.
- */
+import { hostWorktreeTarget } from '../../../shared/worktree/host-qualified-identity'
+import { closeTestStores, createSqliteTestStore } from '../persistence-test-harness'
+// Drive real Store writers so disconnected prune-gate call sites cannot pass unnoticed.
 import { mkdtempSync, realpathSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { WorkspaceSessionState } from '../../../shared/workspace-session-state-types'
+import { removeWorktreeMetaRow } from '../host-qualified-worktree-meta'
 
 vi.mock('electron', () => ({
   app: {
@@ -43,22 +42,22 @@ beforeEach(() => {
   __resetLocalWorktreeMetadataPruneGateForTests()
 })
 
-afterEach(() => {
-  // Leaving a debounced save armed would write into a temp dir after the test file finishes.
+afterEach(async () => {
+  // Freeze debounced writes before their temporary directories disappear.
   for (const store of stores.splice(0)) {
-    store.flush()
+    store.freezeWrites()
   }
+  await closeTestStores()
   vi.restoreAllMocks()
 })
 
 function createStore(): InstanceType<typeof Store> {
   const dir = realpathSync(mkdtempSync(join(tmpdir(), 'orca-store-prune-gate-')))
-  const store = new Store({ dataFile: join(dir, 'orca-data.json') })
+  const store = createSqliteTestStore(Store, { dataFile: join(dir, 'orca-data.json') })
   stores.push(store)
   return store
 }
 
-/** Park the gate the way a completed hygiene pass does. */
 function parkGate(): void {
   markLocalWorktreeMetadataPruneStarted(REPO_ID)
   expect(isLocalWorktreeMetadataPruneDue(REPO_ID)).toBe(false)
@@ -76,17 +75,22 @@ describe('store signals to the worktree metadata prune gate', () => {
     } as unknown as WorkspaceSessionState)
     parkGate()
 
-    store.removeWorkspaceSessionStateForWorktree(WORKTREE_ID)
+    store.removeWorkspaceSessionStateForWorktree(
+      hostWorktreeTarget({ id: WORKTREE_ID, hostId: 'local' })
+    )
 
     expect(isLocalWorktreeMetadataPruneDue(REPO_ID)).toBe(true)
   })
 
   it('re-arms the gate when a metadata row is removed', () => {
     const store = createStore()
-    store.setWorktreeMeta(WORKTREE_ID, { displayName: 'a', hostId: 'local' })
+    store.setWorktreeMeta(hostWorktreeTarget({ id: WORKTREE_ID, hostId: 'local' }), {
+      displayName: 'a',
+      hostId: 'local'
+    })
     parkGate()
 
-    store.removeWorktreeMeta(WORKTREE_ID)
+    removeWorktreeMetaRow(store, WORKTREE_ID, undefined)
 
     expect(isLocalWorktreeMetadataPruneDue(REPO_ID)).toBe(true)
   })
@@ -95,11 +99,16 @@ describe('store signals to the worktree metadata prune gate', () => {
     const store = createStore()
     parkGate()
 
-    store.setWorktreeMeta(WORKTREE_ID, { displayName: 'a', hostId: 'local' })
-    store.setWorktreeMeta(WORKTREE_ID, { displayName: 'b', hostId: 'local' })
+    store.setWorktreeMeta(hostWorktreeTarget({ id: WORKTREE_ID, hostId: 'local' }), {
+      displayName: 'a',
+      hostId: 'local'
+    })
+    store.setWorktreeMeta(hostWorktreeTarget({ id: WORKTREE_ID, hostId: 'local' }), {
+      displayName: 'b',
+      hostId: 'local'
+    })
 
-    // Why this matters: the worktree listing itself stamps metadata on every scan, so a gate that
-    // re-armed on ordinary writes would restore the storm it exists to stop (#17775).
+    // Ordinary scan writes must not rearm pruning and recreate the scan storm.
     expect(isLocalWorktreeMetadataPruneDue(REPO_ID)).toBe(false)
   })
 })

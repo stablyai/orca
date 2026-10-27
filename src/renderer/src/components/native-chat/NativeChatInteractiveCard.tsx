@@ -1,186 +1,170 @@
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
-import { useAppStore } from '../../store'
-import { resolveNativeChatAsk } from '../../../../shared/native-chat-ask'
-import type { NativeChatMessage } from '../../../../shared/native-chat-types'
-import { parseInteractivePrompt } from './native-chat-interactive-prompt'
-import { nativeChatCardDismissKey } from './native-chat-dismiss-key'
+import { useCallback, useLayoutEffect, useRef, useState } from 'react'
+import type { InteractivePromptCard } from '../../../../shared/native-chat-interactive-prompt'
 import { NativeChatQuestionCard } from './NativeChatQuestionCard'
 import { NativeChatApprovalCard } from './NativeChatApprovalCard'
 import type { NativeChatInteractiveSend } from './use-native-chat-interactive-send'
+import { Button } from '@/components/ui/button'
+import { translate } from '@/i18n/i18n'
 
-/**
- * Render the live interactive card for the pane while the agent's
- * `interactivePrompt` is present: a question wizard (precedence) or a tool
- * approval. Cleared by the host once the agent moves on, so it disappears
- * automatically. Sends through the composer's verified runtime path (R8/R6):
- * answers via agent-specific paste or selector keystrokes; cancel/deny as ESC.
- * Guarded by `canSend` so a mobile presence-lock blocks desktop sends too.
- *
- * Dismiss-on-answer (mobile parity): the live status lingers after answering —
- * the agent emits a post-tool event carrying the same prompt — so we track the
- * answered prompt by content key and hide the card until a genuinely different
- * prompt arrives. The dismissal resets once the prompt clears, so a later
- * (even identical) prompt shows again instead of staying hidden.
- *
- * The transcript is the second source (mobile parity again): a question that the
- * live status never delivered — headless host, relay gap, replay, reconnect —
- * still has its unresolved tool call in the messages we already parsed. Without
- * it the composer stays mounted over a pane parked on a selector, and the next
- * send commits the highlighted option instead of the typed message (#11761).
- */
+/** Dismiss only after acknowledged delivery; unmount cancels scheduled writes and ignores late results, but cannot recall issued writes. */
 export function NativeChatInteractiveCard({
-  paneKey,
+  card,
   send,
-  canSend,
-  messages,
-  transcriptSettled,
-  onShowingQuestionChange,
+  onDismiss,
+  onCollapse,
+  requiresTerminal = false,
+  onAnswerInTerminal,
+  shouldFocus = false,
   answerInputRef
 }: {
-  paneKey: string
+  card: NonNullable<InteractivePromptCard>
   send: NativeChatInteractiveSend
-  canSend: boolean
-  /** Transcript to fall back on when live status carries no prompt. Pass the
-   *  command-boundary-trimmed messages so an ask abandoned via `/clear` stays gone. */
-  messages?: readonly NativeChatMessage[]
-  transcriptSettled: boolean
-  /** Reports whether a question card is on screen so the view can replace the
-   *  composer with it (the card's free-text row is the answer input). */
-  onShowingQuestionChange?: (showing: boolean) => void
-  /** Forwarded to the question card's free-text row so pane-level Paste keeps
-   *  a target while the composer is unmounted. */
+  /** Hide this occurrence after its answer write was acknowledged. */
+  onDismiss: () => void
+  /** Fold this occurrence to a strip above the composer, writing nothing. */
+  onCollapse?: () => void
+  requiresTerminal?: boolean
+  onAnswerInTerminal?: () => void
+  /** Take focus when the card takes the input region from the composer. */
+  shouldFocus?: boolean
+  /** Paste target while the prompt card replaces the composer. */
   answerInputRef?: React.RefObject<HTMLInputElement | null>
-}): React.JSX.Element | null {
-  const interactivePrompt = useAppStore(
-    (s) => s.agentStatusByPaneKey[paneKey]?.interactivePrompt ?? null
-  )
-  // Thread the sibling `toolName` from the same status entry so the question
-  // parser can dispatch through the tool's registered parser (mobile parity).
-  const interactiveToolName = useAppStore((s) => s.agentStatusByPaneKey[paneKey]?.toolName ?? null)
-  const { sendAnswer, sendRaw, cancelPending, cancel } = send
-
-  const card = useMemo(() => {
-    const statusCard = parseInteractivePrompt(interactivePrompt, interactiveToolName ?? undefined)
-    if (statusCard?.kind === 'approval') {
-      return statusCard
-    }
-    const prompt = resolveNativeChatAsk({
-      liveAsk: statusCard?.prompt ?? null,
-      messages: messages ?? [],
-      transcriptSettled: transcriptSettled && messages != null
-    })
-    return prompt ? { kind: 'question' as const, prompt } : null
-  }, [interactivePrompt, interactiveToolName, messages, transcriptSettled])
-  const cardKey = useMemo(() => nativeChatCardDismissKey(card), [card])
-  const [dismissedKey, setDismissedKey] = useState<string | null>(null)
-  // A question answer is a paced multi-step write (body→Enter per question); keep
-  // the card up until it settles instead of dismissing on the click, so it doesn't
-  // vanish mid-send. `submitting` also gates a second submit racing the first.
-  const dismissTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+}): React.JSX.Element {
+  const { sendAnswer, sendRawVerified, cancelPending, cancelAsk } = send
+  // Keep paced multi-step answers visible until delivery settles; block duplicate submissions meanwhile.
   const submittingRef = useRef(false)
   const [submitting, setSubmitting] = useState(false)
-  const clearDismissTimer = useCallback((): void => {
-    if (dismissTimerRef.current) {
-      clearTimeout(dismissTimerRef.current)
-      dismissTimerRef.current = null
-    }
+  const activeRef = useRef(true)
+  const attemptRef = useRef(0)
+  const cancellingRef = useRef(false)
+  const [cancelling, setCancelling] = useState(false)
+  const settle = useCallback((): void => {
     submittingRef.current = false
     setSubmitting(false)
+    cancellingRef.current = false
+    setCancelling(false)
   }, [])
-  // A replacement prompt, ownership loss, or unmount must stop both timers and
-  // PTY writes during commit, before an old answer can type into the new prompt.
-  useLayoutEffect(
-    () => () => {
-      clearDismissTimer()
+  // Retire callbacks during commit; an already-issued write may still settle later.
+  useLayoutEffect(() => {
+    activeRef.current = true
+    return () => {
+      activeRef.current = false
+      attemptRef.current += 1
       cancelPending()
-    },
-    [canSend, cardKey, cancelPending, clearDismissTimer]
-  )
-
-  // Forget the dismissal once the prompt clears so a fresh prompt can show.
-  const present = card != null
-  useEffect(() => {
-    if (!present) {
-      setDismissedKey(null)
-      clearDismissTimer()
     }
-  }, [present, clearDismissTimer])
+  }, [cancelPending])
 
-  // Tell the view when a question card is up so it can hide the composer (this
-  // card supplies its own input). Reset on unmount so the composer comes back.
-  const showingQuestion = card?.kind === 'question' && canSend && cardKey !== dismissedKey
-  useEffect(() => {
-    onShowingQuestionChange?.(showingQuestion)
-    return () => onShowingQuestionChange?.(false)
-  }, [showingQuestion, onShowingQuestionChange])
-
-  if (!card || !canSend || cardKey === dismissedKey) {
-    return null
-  }
   if (card.kind === 'question') {
+    if (requiresTerminal) {
+      return (
+        <div className="shrink-0 bg-chat-canvas">
+          <div className="mx-auto w-full max-w-(--chat-content-max-width) px-3 pt-2 pb-4 sm:px-4">
+            <div className="rounded-lg border border-input bg-card p-3 shadow-xs">
+              <p className="text-sm text-foreground">
+                {translate(
+                  'components.native-chat.question.terminalRequired',
+                  'Answer this OMP question in the terminal.'
+                )}
+              </p>
+              <Button
+                className="mt-3"
+                size="sm"
+                disabled={!onAnswerInTerminal}
+                onClick={onAnswerInTerminal}
+              >
+                {translate('components.native-chat.question.openTerminal', 'Answer in terminal')}
+              </Button>
+            </div>
+          </div>
+        </div>
+      )
+    }
     return (
       <NativeChatQuestionCard
-        key={cardKey ?? 'question'}
         prompt={card.prompt}
         isSubmitting={submitting}
+        isCancelling={cancelling}
         answerInputRef={answerInputRef}
         onAnswer={(selections) => {
           if (submittingRef.current) {
             return
           }
           submittingRef.current = true
-          const dismissAnsweredCard = (): void => {
-            setDismissedKey(cardKey)
-            submittingRef.current = false
-            setSubmitting(false)
-            dismissTimerRef.current = null
-          }
-          const keepRejectedAnswerVisible = (): void => {
-            submittingRef.current = false
-            setSubmitting(false)
-          }
+          const attempt = ++attemptRef.current
           const result = sendAnswer(card.prompt, selections, (delivered) => {
+            if (!activeRef.current || attempt !== attemptRef.current) {
+              return
+            }
+            settle()
             if (delivered) {
-              dismissAnsweredCard()
-            } else {
-              keepRejectedAnswerVisible()
+              onDismiss()
             }
           })
           if (result.settleAfterMs <= 0) {
-            // Keep the actionable card visible when its PTY disappeared between
-            // render and submit; the next live target update can make it retryable.
-            keepRejectedAnswerVisible()
+            // Keep the card retryable if its PTY disappeared before submission.
+            settle()
             return
           }
           setSubmitting(true)
-          if (result.waitsForVerifiedDelivery) {
-            // Why: remote acceptance can outlive the keystroke pacing window.
-            // Keep the card until delivery is proven instead of cancelling the
-            // inference callback at the old fixed dismissal deadline.
+        }}
+        onCollapse={onCollapse}
+        shouldFocus={shouldFocus}
+        onCancel={() => {
+          if (card.prompt.replyAsMessage) {
+            // The agent is not waiting on this card, and Escape would interrupt its turn.
+            onDismiss()
             return
           }
-          // Hold the card until the paced write finishes, then mark it answered
-          // (which hides it and restores the composer).
-          dismissTimerRef.current = setTimeout(() => {
-            cancelPending()
-            dismissAnsweredCard()
-          }, result.settleAfterMs)
-        }}
-        onCancel={() => {
-          clearDismissTimer()
-          setDismissedKey(cardKey)
-          cancel()
+          if (cancellingRef.current) {
+            return
+          }
+          settle()
+          const attempt = ++attemptRef.current
+          cancellingRef.current = true
+          setCancelling(true)
+          submittingRef.current = true
+          setSubmitting(true)
+          void cancelAsk()
+            .catch(() => false)
+            .then((delivered) => {
+              if (!activeRef.current || attempt !== attemptRef.current) {
+                return
+              }
+              settle()
+              if (delivered) {
+                onDismiss()
+              }
+            })
         }}
       />
     )
   }
+  const choose = (raw: string): void => {
+    if (submittingRef.current) {
+      return
+    }
+    submittingRef.current = true
+    const attempt = ++attemptRef.current
+    setSubmitting(true)
+    void sendRawVerified(raw)
+      .catch(() => false)
+      .then((delivered) => {
+        if (!activeRef.current || attempt !== attemptRef.current) {
+          return
+        }
+        settle()
+        if (delivered) {
+          onDismiss()
+        }
+      })
+  }
   return (
     <NativeChatApprovalCard
       approval={card.approval}
-      onChoose={(raw) => {
-        setDismissedKey(cardKey)
-        sendRaw(raw)
-      }}
+      shouldFocus={shouldFocus}
+      isSubmitting={submitting}
+      onChoose={choose}
+      onCollapse={onCollapse}
     />
   )
 }

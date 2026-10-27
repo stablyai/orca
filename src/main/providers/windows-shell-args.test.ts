@@ -5,18 +5,17 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { buildWslInteractiveLoginShellCommand } from '../../shared/wsl-login-shell-command'
 import { resolveSetupRunnerCommand } from '../../shared/setup-runner-command'
 import { resolveWindowsShellLaunchArgs } from './windows-shell-args'
-// Why resolved rather than hardcoded: the wrapper tree is content-addressed.
+// Resolve content-addressed wrapper paths instead of assuming a fixed directory.
 import { getShellReadyWrapperRoot } from './local-pty-shell-ready-wrapper-root'
 
 const CODEX_LAUNCH_PREFLIGHT = 'C:\\Program Files\\Orca\\orca.exe'
+const POWERSHELL_STARTUP_COMMAND_C_MARK = '[Console]::Write("$([char]27)]133;C$([char]7)")'
 const CMD_CODEX_LAUNCH_PREFLIGHT =
   'if defined ORCA_CODEX_LAUNCH_PREFLIGHT call %ORCA_CODEX_LAUNCH_PREFLIGHT_CMD_QUOTE%%ORCA_CODEX_LAUNCH_PREFLIGHT%%ORCA_CODEX_LAUNCH_PREFLIGHT_CMD_QUOTE% agent hooks prepare-codex > nul 2>&1'
 
 function expectedWslArgs(linuxCwd: string, distro?: string): string[] {
   const command = `cd '${linuxCwd}' && export PATH="$HOME/.local/bin:$PATH" && ${buildWslInteractiveLoginShellCommand()}`
-  // Why spelled out rather than calling buildWslExecArgs: deriving the
-  // expectation from the helper under test would still pass if it regressed
-  // to the `--` separator.
+  // Spell out --exec so a regressed -- separator cannot change both implementation and expected args.
   const shellArgs = ['--exec', 'sh', '-c', command]
   return distro ? ['-d', distro, ...shellArgs] : shellArgs
 }
@@ -89,8 +88,7 @@ describe('resolveWindowsShellLaunchArgs', () => {
   })
 
   it('keeps quoted cmd.exe startup commands on stdin delivery', () => {
-    // Why: direct queued cmd commands need normal quotes, which node-pty's
-    // C-runtime argv escaping corrupts when delivered through `/K`.
+    // node-pty C-runtime escaping corrupts cmd /K quotes; stdin preserves normal interactive parsing.
     const result = resolveWindowsShellLaunchArgs(
       'cmd.exe',
       'C:\\Users\\alice\\repo',
@@ -128,7 +126,9 @@ describe('resolveWindowsShellLaunchArgs', () => {
     const opencodeRestoreIndex = command.indexOf(
       '$env:OPENCODE_CONFIG_DIR = $env:ORCA_OPENCODE_CONFIG_DIR'
     )
-    const mimocodeRestoreIndex = command.indexOf('$env:MIMOCODE_HOME = $env:ORCA_MIMOCODE_HOME')
+    const mimocodeRestoreIndex = command.indexOf(
+      '$env:MIMOCODE_CONFIG_DIR = $env:ORCA_MIMOCODE_CONFIG_DIR'
+    )
     const duplicateStateGuardIndex = command.indexOf('Test-Path variable:global:__OrcaOsc133State')
     const languageModeGuardIndex = command.indexOf('LanguageMode -eq "FullLanguage"')
     const ompWrapperIndex = command.indexOf('function Global:omp')
@@ -201,6 +201,10 @@ describe('resolveWindowsShellLaunchArgs', () => {
     expect(command).toContain('function Global:prompt')
     expect(command).toContain(expectedPowerShellRestoreCwdCommand("'C:\\Users\\alice'"))
     expect(command.trimEnd().endsWith("& 'codex' '--no-alt-screen'")).toBe(true)
+    // Without the mark, the first prompt after the agent exits withholds 133;D (#18180).
+    expect(command).toContain(
+      `${POWERSHELL_STARTUP_COMMAND_C_MARK}; $Global:__OrcaOsc133State.HasSeenPrompt = $true }\n& 'codex' '--no-alt-screen'`
+    )
   })
 
   it('preserves complex PowerShell startup command text through EncodedCommand', () => {
@@ -231,9 +235,10 @@ describe('resolveWindowsShellLaunchArgs', () => {
 
     expect(result.startupCommandDeliveredInShellArgs).toBeUndefined()
     expect(result.shellArgs).toEqual(['-NoLogo', '-NoExit', '-EncodedCommand', expect.any(String)])
-    expect(decodePowerShellCommand(result)).toContain(
-      expectedPowerShellRestoreCwdCommand("'C:\\Users\\alice'")
-    )
+    const command = decodePowerShellCommand(result)
+    expect(command).toContain(expectedPowerShellRestoreCwdCommand("'C:\\Users\\alice'"))
+    // Stdin-typed commands get readline's 133;C; an early latch would emit a false 133;D.
+    expect(command).not.toContain(POWERSHELL_STARTUP_COMMAND_C_MARK)
   })
 
   it('handles pwsh.exe (PowerShell Core) the same as Windows PowerShell', () => {
@@ -270,20 +275,14 @@ describe('resolveWindowsShellLaunchArgs', () => {
       CODEX_LAUNCH_PREFLIGHT
     )
 
-    // Why: Git Bash inherits the ConPTY OEM code page (CP437), so a byte-writing
-    // UTF-8 TUI mojibakes unless the console is switched to UTF-8 before it runs.
-    // Assert the contract behaviorally: chcp.com 65001 must precede the exec'd
-    // interactive login shell (which preserves `--login -i` and the shell's
-    // foreground identity), rather than pinning the exact command string.
+    // Git Bash inherits OEM codepage; UTF-8 must precede exec of the interactive shell.
     expect(result.shellArgs[0]).toBe('-c')
     const bashCommand = result.shellArgs[1]
     expect(bashCommand).toContain('chcp.com 65001')
     expect(bashCommand).toContain('--rcfile')
     expect(bashCommand).toMatch(/exec "\$BASH" .* -i$/)
-    // The UTF-8 switch must run before the login shell is exec'd.
     expect(bashCommand.indexOf('chcp.com')).toBeLessThan(bashCommand.indexOf('exec'))
-    // Must stay fail-open: `;` (not `&&`) so a missing chcp.com can't abort the
-    // exec and kill the terminal on startup.
+    // Missing chcp.com must not prevent exec; semicolon preserves startup.
     expect(bashCommand).not.toContain('&&')
     expect(result.effectiveCwd).toBe('C:\\')
     expect(result.validationCwd).toBe('C:\\')
@@ -306,6 +305,29 @@ describe('resolveWindowsShellLaunchArgs', () => {
     expect(result.shellArgs[1]).toContain('chcp.com 65001')
     expect(result.shellArgs[1]).toContain('--rcfile')
     expect(result.startupCommandDeliveredInShellArgs).toBeUndefined()
+  })
+
+  it('gives a plain Git Bash tab the same rcfile as one with a startup command', () => {
+    const plain = resolveWindowsShellLaunchArgs(
+      'C:\\Program Files\\Git\\bin\\bash.exe',
+      'C:\\Users\\alice',
+      'C:\\Users\\alice'
+    )
+    const launched = resolveWindowsShellLaunchArgs(
+      'C:\\Program Files\\Git\\bin\\bash.exe',
+      'C:\\Users\\alice',
+      'C:\\Users\\alice',
+      undefined,
+      "codex 'fix the bug'"
+    )
+
+    expect(plain.shellArgs).toEqual(launched.shellArgs)
+    // The rcfile owns account-following Claude and Codex no-daemon wrappers.
+    const rcfile = readFileSync(getGitBashRcfilePath(plain.shellArgs[1]), 'utf8')
+    expect(rcfile).toContain('function claude {')
+    expect(rcfile).toContain('set -- --no-daemon "$@"')
+    expect(rcfile).toContain('source "$HOME/.bash_profile"')
+    expect(launched.startupCommandDeliveredInShellArgs).toBeUndefined()
   })
 
   it('quotes a spaced preflight path through each shell environment', () => {
@@ -366,8 +388,7 @@ describe('resolveWindowsShellLaunchArgs', () => {
     expect(result).toEqual(baseline)
     expect(result.shellArgs).toEqual(expectedWslArgs('/mnt/c/Users/alice/code'))
     expect(result.startupCommandDeliveredInShellArgs).toBeUndefined()
-    // Why: WSL cannot cd into a Windows path, so node-pty must start from the
-    // user's Windows home and we inject the Linux cd into the shellArgs above.
+    // Launch wsl.exe from Windows home; shell argv performs the guest Linux cd.
     expect(result.effectiveCwd).toBe('C:\\Users\\alice')
     expect(result.validationCwd).toBe('C:\\Users\\alice\\code')
   })
@@ -383,10 +404,8 @@ describe('resolveWindowsShellLaunchArgs', () => {
     expect(existsSync(join(getShellReadyWrapperRoot(), 'bash', 'rcfile'))).toBe(true)
     expect(existsSync(join(getShellReadyWrapperRoot(), 'zsh', '.zshenv'))).toBe(true)
 
-    // Why: typed OMP keeps its existing shell integration, while typed Prime
-    // commands must reach the user's binary without Orca rewriting argv.
+    // Typed OMP uses status integration; typed Prime must reach user argv unchanged.
     const bashRcfile = readFileSync(join(getShellReadyWrapperRoot(), 'bash', 'rcfile'), 'utf8')
-    // Why .zshenv: the omp wrapper is part of the epilogue defined there.
     const zshEnv = readFileSync(join(getShellReadyWrapperRoot(), 'zsh', '.zshenv'), 'utf8')
     for (const wrapperFile of [bashRcfile, zshEnv]) {
       expect(wrapperFile).toContain('command omp --extension "${ORCA_OMP_STATUS_EXTENSION}" "$@"')
@@ -425,8 +444,7 @@ describe('resolveWindowsShellLaunchArgs', () => {
 
   it('escapes single quotes when translating a WSL cwd', () => {
     const result = resolveWindowsShellLaunchArgs('wsl.exe', "C:\\weird'path", 'C:\\Users\\alice')
-    // The injected sh cmd must not break out of the surrounding single quotes
-    // when the path contains a ' character.
+    // Single quotes in paths must remain within the generated sh argument.
     expect(result.shellArgs[3]).toContain("cd '/mnt/c/weird'\\''path'")
     expect(result.shellArgs[3]).toContain('exec "$_orca_wsl_shell" -l')
   })
@@ -490,12 +508,7 @@ describe('resolveWindowsShellLaunchArgs', () => {
   })
 })
 
-// Regression guard for issue #7236: a worktree Setup Script runs through a
-// generated `.cmd` runner invoked as `cmd.exe /c "<runner>"`. When PowerShell
-// received that command as raw typed stdin, a dropped/unbalanced quote surfaced
-// as a "missing terminator" parser error. Delivering it via -EncodedCommand
-// (base64 UTF-16) keeps the quotes balanced and the text verbatim, so it can
-// never be re-parsed as an open string.
+// #7236: UTF-16 base64 delivers setup-runner quotes intact instead of risking partial typed-stdin parsing.
 describe('issue #7236: PowerShell setup-runner command delivery', () => {
   // git rev-parse hands back a forward-slash Windows-absolute path for the runner.
   const runnerPath = 'C:/Users/alice/repo/.git/orca/setup-runner.cmd'
@@ -516,15 +529,13 @@ describe('issue #7236: PowerShell setup-runner command delivery', () => {
       command
     )
 
-    // The flag tells the daemon/provider NOT to also type the command over
-    // stdin — raw stdin delivery is the pre-encoded path that broke in #7236.
+    // The argv-delivery flag prevents a second unencoded stdin write (#7236).
     expect(result.startupCommandDeliveredInShellArgs).toBe(true)
     expect(result.shellArgs.slice(0, 3)).toEqual(['-NoLogo', '-NoExit', '-EncodedCommand'])
 
     const decoded = Buffer.from(result.shellArgs[3] ?? '', 'base64').toString('utf16le')
     expect(decoded).toContain(`\n${command}`)
     expect(decoded.trimEnd().endsWith(command)).toBe(true)
-    // Quotes survive encoding intact, so PowerShell parses one balanced string.
     expect((decoded.slice(decoded.lastIndexOf(command)).match(/"/g) ?? []).length % 2).toBe(0)
   })
 })

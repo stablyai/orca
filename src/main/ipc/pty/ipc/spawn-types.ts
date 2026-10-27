@@ -1,3 +1,6 @@
+import type { PtySpawnOutcome } from '../spawn-outcome'
+import type { PaneSpawnReservation } from '../pane/spawn-reservation'
+import type { PaneSpawnOperation } from '../pane/pane-spawn-operation'
 import type { TuiAgent } from '../../../../shared/tui-agent'
 import type {
   AgentProviderSessionMetadata,
@@ -9,48 +12,59 @@ import type { GlobalSettings } from '../../../../shared/global-settings-types'
 import type { TerminalStartupCwdMissingDirFallback } from '../../../../shared/terminal-startup-cwd'
 import type { OrcaRuntimeService } from '../../../runtime/orca-runtime'
 import type { Store } from '../../../persistence'
-import type { PtySpawnResult } from '../../../providers/types'
-import type { CodexAccountSelectionTarget } from '../../../codex-accounts/runtime-selection'
-import type { CodexSessionResumePreparation } from '../../../codex/codex-session-resume-home'
+import type { PtySpawnResult } from '../../../providers/pty-provider-contract'
 import type {
   CodexHomePtySpawnedLifecycleArgs,
   GetSelectedCodexHomePath,
   PrepareClaudeAuth,
   PrepareCodexSessionResume
 } from '../host-env/types'
-import type { CodexResumeLaunch, PreparedCodexResumeHome } from '../host-env/codex-resume'
 import type { StablePaneOwner } from '../pane/stable-owner'
+import type { ReplacedPaneOwner } from '../pane/replaced-pane-owner'
+import type { ResolvedPtyHost } from '../provider/registry'
+import type { PtySpawnCodexResumeDeps } from '../spawn-host-env'
 
 export type PtySpawnIpcArgs = {
   cols: number
   rows: number
   cwd?: string
-  // Why: fresh local spawns opt into recovering a saved cwd whose dir was deleted (#7239); reattach/remote need exact cwd, so the flag alone isn't sufficient.
-  cwdFallback?: 'worktree'
   env?: Record<string, string>
   envToDelete?: string[]
   command?: string
   commandDelivery?: 'renderer' | 'provider'
   launchConfig?: SleepingAgentLaunchConfig
   resumeProviderSession?: AgentProviderSessionMetadata
+  // Untyped on purpose: only `'saved'` marks a resume built from saved facts.
+  resumeOrigin?: unknown
   launchToken?: unknown
   launchAgent?: TuiAgent
   startupCommandDelivery?: StartupCommandDelivery
   connectionId?: string | null
   worktreeId?: string
   sessionId?: string
+  // A view attaches to the main-started session or starts nothing.
+  attachOnlyView?: boolean
   shellOverride?: string
   projectRuntime?: ProjectExecutionRuntimeResolution
+  terminalKittyKeyboardProtocol?: boolean
   terminalColorQueryReplies?: {
     foreground?: unknown
     background?: unknown
   }
-  // Why: hidden-at-spawn declaration (terminal-query-authority.md §races) — main marks hidden before byte zero so the gate owns spawn-time queries.
+  // Declare hidden state before output so main owns startup queries.
   initiallyHidden?: boolean
-  // Why: closes the SIGKILL race (INVESTIGATION.md) by letting main sync-flush the binding before pty:spawn returns; only the Ctrl+T daemon-host path threads these.
+  // Persist pane binding before returning spawn so an abrupt app kill cannot lose daemon history.
   tabId?: string
   leafId?: string
-  // Why: renderer-threaded launch telemetry (telemetry-plan.md§Agent launch semantics); loosely typed because the main-side schema validator is the single enforcement point.
+  // Explicit restart must replace a live owner that ordinary spawn would reattach.
+  replacesPtyId?: string
+  // Validate untyped placement only through parseTerminalPanePlacement.
+  placement?: unknown
+  // Accept declared restore intent only through isRestoreSpawnIntent.
+  spawnIntent?: unknown
+  // Validate untyped launch input through AgentLaunch.safeParse.
+  agentLaunch?: unknown
+  // Main validates renderer telemetry; retain unknown input types at the IPC boundary.
   telemetry?: {
     agent_kind?: unknown
     launch_source?: unknown
@@ -63,20 +77,33 @@ export type AdoptStablePaneArgs = {
   rows: number
   cwd?: string
   connectionId?: string | null
-  worktreeId: string
+  worktreeId?: string
   preAllocatedHandle?: string
   tabId: string
   leafId: string
+  onAdopted?: (result: PtySpawnResult) => void
+  onOutcome?: (outcome: PtySpawnOutcome, operation: PaneSpawnOperation) => void
+  completed?: AdoptStablePaneResult
   ownsPaneSpawnReservation?: true
+  reservation?: PaneSpawnReservation
+  stoppedPtyId?: string
+  renderer?: boolean
+  signal?: AbortSignal
+  spawnFresh?: (operation: PaneSpawnOperation) => Promise<PtySpawnResult>
+  /** See StablePaneSpawnContext; adoption holds the pane's reservation through its fresh launch. */
+  keepAbsentBinding?: (dead: ReplacedPaneOwner) => void
+  attachOnlyView?: true
 }
 
 export type AdoptStablePaneResult = {
+  operation?: PaneSpawnOperation
   result: PtySpawnResult
+  outcome?: PtySpawnOutcome
   owner: StablePaneOwner
   materialized?: true
 }
 
-export type PtySpawnIpcDeps = {
+export type PtySpawnIpcDeps = PtySpawnCodexResumeDeps & {
   runtime?: OrcaRuntimeService
   store?: Store
   getSettings?: () => GlobalSettings
@@ -86,38 +113,20 @@ export type PtySpawnIpcDeps = {
     prepareCodexSessionResume?: PrepareCodexSessionResume
     onCodexHomePtySpawned?: (args: CodexHomePtySpawnedLifecycleArgs) => void
   }
-  getLocalPtyStartupPromise: (connectionId?: string | null) => Promise<void> | undefined
+  getLocalPtyStartupPromise: (hostId?: ResolvedPtyHost) => Promise<void> | undefined
   adoptStablePane: (args: AdoptStablePaneArgs) => Promise<AdoptStablePaneResult | null>
-  assertFolderWorkspacePtyPathUsable: (worktreeId: string | undefined) => Promise<void> | void
+  assertWorkspaceAcceptsNewPty: (
+    worktreeId: string | undefined,
+    sessionId?: string
+  ) => Promise<void> | void
   resolvePtySpawnStartupCwd: (
     worktreeId: string | undefined,
     cwd: string | undefined,
     missingDirFallback?: TerminalStartupCwdMissingDirFallback
   ) => string | undefined
-  localStartupCwdDirectoryExists: (path: string) => boolean
-  prepareCodexResumeHome: (args: {
-    connectionId?: string | null
-    launchAgent?: TuiAgent
-    providerSession?: AgentProviderSessionMetadata
-    target: CodexAccountSelectionTarget
-    launchEnv?: NodeJS.ProcessEnv
-    workspacePath?: string
-  }) => PreparedCodexResumeHome | null
-  noCodexResumeLaunch: (command: string | undefined) => CodexResumeLaunch
-  resolveCodexResumeLaunch: (
-    command: string | undefined,
-    prepared: PreparedCodexResumeHome
-  ) => Promise<CodexResumeLaunch>
-  reconcileSharedRuntimeResumeHome: (
-    resumeHome: Extract<CodexSessionResumePreparation, { outcome: 'resume' }>,
-    resolveCurrent: () => string | null | Promise<string | null>
-  ) => Promise<string>
-  stripSequencedStartupResumeArgv: <T extends Record<string, string> | undefined>(
-    env: T,
-    launch: CodexResumeLaunch
-  ) => T
   transitionSpawnHiddenRendererPtyDeliveryState: (id: string, hidden: boolean) => void
   trustedTerminalHandleEnv: Set<string>
   sendPtySpawnedToRenderer: (id: string) => void
   syncPtyBackgroundedDelivery: (id: string, caller: string) => void
+  stopReplacedPty: (id: string) => Promise<void>
 }

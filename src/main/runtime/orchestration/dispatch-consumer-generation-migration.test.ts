@@ -3,6 +3,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 import Database from '../../sqlite/sync-database'
+import { dropDerivedDeliverySchema } from './db/schema/derived-delivery-test-fixture'
 import { OrchestrationDb } from './db'
 import { SCHEMA_VERSION } from './db/contract-constants'
 import { createRootDispatch } from './db/root-dispatch-test-fixture'
@@ -22,7 +23,6 @@ describe('OrchestrationDb v35 to v36 migration', () => {
     }
   })
 
-  /** Builds a current database, then strips it back to the v35 shape it would have on disk. */
   function createV35Database(): { path: string; dispatchId: string; deliveryId: string } {
     tempDir = mkdtempSync(join(tmpdir(), 'orca-db-v36-'))
     const dbPath = join(tempDir, 'orchestration.db')
@@ -48,6 +48,7 @@ describe('OrchestrationDb v35 to v36 migration', () => {
     seed.close()
 
     const raw = new Database(dbPath)
+    dropDerivedDeliverySchema(raw)
     raw.exec(`
       ALTER TABLE dispatch_contexts DROP COLUMN consumer_generation;
       ALTER TABLE remote_dispatch_attachments DROP COLUMN consumer_generation;
@@ -78,6 +79,7 @@ describe('OrchestrationDb v35 to v36 migration', () => {
   it('does not send a v35 stamp back to the pre-Run repair floor', () => {
     const v35 = createV35Database()
     const raw = new Database(v35.path)
+    dropDerivedDeliverySchema(raw)
     try {
       expect(resolveOrchestrationMigrationStartVersion(raw, 35, SCHEMA_VERSION)).toBe(35)
     } finally {
@@ -88,9 +90,10 @@ describe('OrchestrationDb v35 to v36 migration', () => {
   it('repairs a database stamped v36 that never got the columns', () => {
     const v35 = createV35Database()
     const raw = new Database(v35.path)
+    dropDerivedDeliverySchema(raw)
     raw.pragma('user_version = 36')
     try {
-      // Why: the skew repair is the only thing that catches a partially-written v36.
+      // Only schema-skew repair detects a partially written v36.
       expect(resolveOrchestrationMigrationStartVersion(raw, 36, SCHEMA_VERSION)).toBe(6)
     } finally {
       raw.close()

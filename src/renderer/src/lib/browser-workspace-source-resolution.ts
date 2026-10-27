@@ -1,3 +1,4 @@
+import type { Tab } from '../../../shared/tab-types'
 import type { AppState } from '../store/types'
 
 export type BrowserWorkspaceOwner = {
@@ -24,4 +25,37 @@ export function resolveBrowserWorkspaceOwner(
     }
   }
   return null
+}
+
+/** Keep a source relationship only when exactly one live wrapper exists in the caller’s workspace. */
+export function resolveBrowserSourceUnifiedTab(
+  state: Pick<
+    AppState,
+    | 'browserTabsByWorktree'
+    | 'browserPagesByWorkspace'
+    | 'unifiedTabsByWorktree'
+    | 'groupsByWorktree'
+  >,
+  sourcePageId: string,
+  worktreeId: string
+): Tab | undefined {
+  const owningWorkspaceIds = (state.browserTabsByWorktree[worktreeId] ?? [])
+    .filter((workspace) =>
+      (state.browserPagesByWorkspace[workspace.id] ?? []).some((page) => page.id === sourcePageId)
+    )
+    .map((workspace) => workspace.id)
+  if (owningWorkspaceIds.length !== 1) {
+    return undefined
+  }
+  const wrappers = (state.unifiedTabsByWorktree[worktreeId] ?? []).filter(
+    (tab) => tab.contentType === 'browser' && tab.entityId === owningWorkspaceIds[0]
+  )
+  if (wrappers.length !== 1) {
+    return undefined
+  }
+  const wrapper = wrappers[0]
+  const group = (state.groupsByWorktree[worktreeId] ?? []).find(
+    (candidate) => candidate.id === wrapper.groupId
+  )
+  return group?.tabOrder.includes(wrapper.id) ? wrapper : undefined
 }

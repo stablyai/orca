@@ -1,13 +1,16 @@
 import { ChevronRight, ListTodo } from 'lucide-react-native'
-import { Pressable, StyleSheet, Text, View } from 'react-native'
+import { Pressable, Text, View } from 'react-native'
 import { TaskProviderLogo } from '../components/TaskProviderLogo'
-import type { TaskProvider } from '../tasks/mobile-task-providers'
+import type { TaskProvider } from '../../../src/shared/task-providers'
 import { colors, radii, spacing } from '../theme/mobile-theme'
+import { themedStyleSheet } from '../theme/themed-styles'
+import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 
 const TASK_PROVIDER_LABELS: Record<TaskProvider, string> = {
   github: 'GitHub',
   gitlab: 'GitLab',
-  linear: 'Linear'
+  linear: 'Linear',
+  jira: 'Jira'
 }
 
 export function MobileHomeTasksCard(props: {
@@ -15,6 +18,7 @@ export function MobileHomeTasksCard(props: {
   providers: TaskProvider[]
   onOpen: (provider?: TaskProvider) => void
 }) {
+  useMobileColorScheme()
   return (
     <Pressable
       disabled={!props.enabled}
@@ -68,7 +72,7 @@ export function MobileHomeTasksCard(props: {
   )
 }
 
-const styles = StyleSheet.create({
+const styles = themedStyleSheet(() => ({
   card: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -115,4 +119,4 @@ const styles = StyleSheet.create({
     borderRadius: radii.button
   },
   providerButtonPressed: { backgroundColor: colors.bgRaised }
-})
+}))

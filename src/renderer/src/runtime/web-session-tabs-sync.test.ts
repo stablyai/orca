@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { RuntimeMobileSessionTabsResult } from '../../../shared/runtime-types'
 import { toWebTerminalSurfaceTabId } from '../../../shared/terminal-surface-id'
+import { structuredAgentSessionTabId } from '../../../shared/structured-agent-session-projection'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../shared/constants'
 import {
   clearWebSessionCloseIntent,
@@ -12,13 +13,20 @@ import type { Tab } from '../../../shared/tab-types'
 import type { TerminalTab } from '../../../shared/terminal-tab-types'
 import {
   acceptReplayedWebSessionTabsSnapshot,
+  clearWebSessionTabsTrackingForEnvironment
+} from './web-session-tabs-sync/tracking-lifecycle'
+import {
   applyFreshWebSessionTabsSnapshot,
-  applyWebSessionTabsSnapshot,
-  clearWebSessionTabsTrackingForEnvironment,
-  resolveHostSessionTabIdForWebSessionTab,
-  shouldApplyWebSessionTabsSnapshot,
-  type WebSessionTabsSyncState
-} from './web-session-tabs-sync'
+  applyWebSessionTabsSnapshot
+} from './web-session-tabs-sync/snapshot-api'
+import { resolveHostSessionTabIdForWebSessionTab } from './web-session-tabs-sync/tracking-mappings'
+import { shouldApplyWebSessionTabsSnapshot } from './web-session-tabs-sync/tracking-decisions'
+import type { WebSessionTabsSyncState } from './web-session-tabs-sync/state'
+import {
+  recordReceivedWebSessionTabsSnapshot,
+  shouldApplyRecoveredWebSessionTabsSnapshot
+} from './web-session-tabs-sync/tracking'
+import { nextReceivedSessionTabsFrame } from './web-session-tabs-sync/state'
 import {
   ENV,
   HOST_SURFACE_ID,
@@ -33,7 +41,9 @@ import {
 
 vi.mock('../store', () => ({
   useAppStore: {
-    setState: vi.fn()
+    setState: vi.fn(),
+    // Snapshot receipt reads the held paired-tab closes; none here.
+    getState: () => ({})
   }
 }))
 
@@ -84,6 +94,49 @@ describe('applyWebSessionTabsSnapshot', () => {
         { environmentId: ENV, worktreeId: WT, tabId: 'structured-agent-session-session-1' }
       )
     ).toBe(agentTab.id)
+  })
+
+  it('mints a first publication under the id the launch draft seed is keyed on', () => {
+    // First structured publication must use the draft’s structuredAgentSessionTabId or lose launch context; only previously seen sessions may need collision IDs.
+    const agentTab = {
+      type: 'agent-session' as const,
+      id: 'agent-session:session-seed',
+      title: 'Codex Chat',
+      sessionId: 'session-seed',
+      agent: 'codex' as const,
+      isActive: true
+    }
+    const snapshot = makeSnapshot([agentTab], { activeTabId: agentTab.id })
+
+    expect(
+      applyWebSessionTabsSnapshot(makeState(), snapshot, ENV, NOW).unifiedTabsByWorktree?.[WT]
+    ).toEqual([expect.objectContaining({ id: structuredAgentSessionTabId('session-seed') })])
+
+    const squatter: Tab = {
+      id: structuredAgentSessionTabId('session-seed'),
+      entityId: 'other-session',
+      groupId: 'host-group-1',
+      worktreeId: WT,
+      contentType: 'agent-session',
+      agentSessionAgent: 'codex',
+      label: 'Codex Chat',
+      customLabel: null,
+      color: null,
+      sortOrder: 0,
+      createdAt: NOW
+    }
+    const collided = applyWebSessionTabsSnapshot(
+      makeState({
+        unifiedTabsByWorktree: { [WT]: [squatter] },
+        tabBarOrderByWorktree: { [WT]: [squatter.id] }
+      }),
+      snapshot,
+      ENV,
+      NOW
+    )
+    expect(
+      collided.unifiedTabsByWorktree?.[WT]?.find((tab) => tab.entityId === 'session-seed')?.id
+    ).not.toBe(structuredAgentSessionTabId('session-seed'))
   })
 
   it('removes a restored structured tab when the host publishes no structured sessions', () => {
@@ -142,11 +195,7 @@ describe('applyWebSessionTabsSnapshot', () => {
   })
 
   it('applies a lower-version snapshot from a different epoch (host restart safety)', () => {
-    // Why: snapshotVersion resets when the host restarts, and a restart produces
-    // a new publicationEpoch. Since the client's freshness tracking survives a
-    // transparent transport reconnect, rejecting on version alone would
-    // permanently drop the post-restart snapshot. A different epoch must apply
-    // even at a lower version; only same-epoch non-newer frames are stale.
+    // Restart resets version under a new epoch while client tracking survives reconnect; gate versions only within the same epoch.
     const before = makeSnapshot([], {
       publicationEpoch: 'epoch-gen-1',
       snapshotVersion: 10,
@@ -188,8 +237,7 @@ describe('applyWebSessionTabsSnapshot', () => {
 
     expect(shouldApplyWebSessionTabsSnapshot(renderer, ENV)).toBe(true)
     expect(shouldApplyWebSessionTabsSnapshot(merged, ENV)).toBe(true)
-    // listAll can return the renderer base after a host-side headless merge;
-    // the newer base revision must still be allowed to refresh the mirror.
+    // A newer renderer-base revision must apply after a host-side headless merge.
     expect(shouldApplyWebSessionTabsSnapshot(refreshedRenderer, ENV)).toBe(true)
     expect(
       shouldApplyWebSessionTabsSnapshot(
@@ -224,8 +272,7 @@ describe('applyWebSessionTabsSnapshot', () => {
     expect(shouldApplyWebSessionTabsSnapshot(pendingRestart, ENV)).toBe(true)
     expect(shouldApplyWebSessionTabsSnapshot(afterRestart, ENV)).toBe(true)
 
-    // The pending publication may still be queued on another subscription;
-    // once the ready restart epoch wins, it must not roll the mirror back.
+    // Queued pending frames must not roll back the ready restart epoch.
     expect(shouldApplyWebSessionTabsSnapshot(pendingRestart, ENV)).toBe(false)
   })
 
@@ -248,16 +295,15 @@ describe('applyWebSessionTabsSnapshot', () => {
 
     expect(shouldApplyWebSessionTabsSnapshot(beforeRestart, ENV, 'runtime-old')).toBe(true)
     expect(shouldApplyWebSessionTabsSnapshot(afterRestart, ENV, 'runtime-new')).toBe(true)
-    // The epoch was never accepted for this worktree, but its runtime process
-    // is known to be retired, so it cannot roll the restart back.
+    // Known retired runtime processes cannot return through epochs unseen by this worktree.
     expect(shouldApplyWebSessionTabsSnapshot(delayedOldEpoch, ENV, 'runtime-old')).toBe(false)
 
-    // Teardown starts a fresh identity epoch; a later connection may reuse the
-    // same test id without inheriting the retired-runtime fence.
+    // Teardown clears retired-runtime identity so later connections may reuse IDs.
     clearWebSessionTabsTrackingForEnvironment(ENV)
     expect(shouldApplyWebSessionTabsSnapshot(delayedOldEpoch, ENV, 'runtime-old')).toBe(true)
   })
 
+  // Reject pre-retraction in-flight lists even at higher versions by receivedFrame, not epoch: live publishers reuse epochs and must not be locked out.
   it('keeps a removed worktree fenced against delayed predecessor epochs', () => {
     const beforeRemoval = makeSnapshot([], {
       publicationEpoch: 'epoch-before-removal',
@@ -275,35 +321,44 @@ describe('applyWebSessionTabsSnapshot', () => {
       removed: true as const
     }
 
+    const beforeFrame = recordReceivedWebSessionTabsSnapshot(ENV, beforeRemoval)
     expect(shouldApplyWebSessionTabsSnapshot(beforeRemoval, ENV)).toBe(true)
+
+    // A list for this worktree reserves its received frame here, before the removal lands.
+    const delayedFrame = nextReceivedSessionTabsFrame()
+    expect(delayedFrame).toBeGreaterThan(beforeFrame)
+
+    const removedFrame = recordReceivedWebSessionTabsSnapshot(ENV, removed)
     expect(shouldApplyWebSessionTabsSnapshot(removed, ENV)).toBe(true)
+    expect(removedFrame).toBeGreaterThan(delayedFrame)
+
+    const delayed = makeSnapshot([], {
+      publicationEpoch: 'epoch-before-removal',
+      snapshotVersion: 4,
+      activeTabType: null
+    })
+    recordReceivedWebSessionTabsSnapshot(ENV, delayed, delayedFrame, undefined, 'bootstrap')
+    expect(shouldApplyRecoveredWebSessionTabsSnapshot(ENV, delayed, delayedFrame)).toBe(false)
+    // The composed gate, exactly as every production apply path spells it.
     expect(
-      shouldApplyWebSessionTabsSnapshot(
-        makeSnapshot([], {
-          publicationEpoch: 'epoch-before-removal',
-          snapshotVersion: 4,
-          activeTabType: null
-        }),
-        ENV
-      )
+      shouldApplyRecoveredWebSessionTabsSnapshot(ENV, delayed, delayedFrame) &&
+        shouldApplyWebSessionTabsSnapshot(delayed, ENV)
     ).toBe(false)
+
+    const recreated = makeSnapshot([], {
+      publicationEpoch: 'epoch-recreated',
+      snapshotVersion: 1,
+      activeTabType: null
+    })
+    const recreatedFrame = recordReceivedWebSessionTabsSnapshot(ENV, recreated)
     expect(
-      shouldApplyWebSessionTabsSnapshot(
-        makeSnapshot([], {
-          publicationEpoch: 'epoch-recreated',
-          snapshotVersion: 1,
-          activeTabType: null
-        }),
-        ENV
-      )
+      shouldApplyRecoveredWebSessionTabsSnapshot(ENV, recreated, recreatedFrame) &&
+        shouldApplyWebSessionTabsSnapshot(recreated, ENV)
     ).toBe(true)
   })
 
   it('accepts a replayed same-epoch same-version snapshot after a transport reconnect', () => {
-    // Why: after a shared-control reconnect the server re-emits the current
-    // snapshot with an UNCHANGED epoch/version (the host did not restart).
-    // Without the replay reset the monotonic gate rejects it and the mirror
-    // stays frozen (#7718).
+    // Reconnect can replay unchanged epoch/version; reset replay once or monotonic gating freezes shared-control mirrors (#7718).
     const snapshot = makeSnapshot([], { snapshotVersion: 5, activeTabType: null })
 
     expect(shouldApplyWebSessionTabsSnapshot(snapshot, ENV)).toBe(true)
@@ -315,8 +370,7 @@ describe('applyWebSessionTabsSnapshot', () => {
     expect(shouldApplyWebSessionTabsSnapshot(older, ENV)).toBe(false)
     expect(shouldApplyWebSessionTabsSnapshot(snapshot, ENV)).toBe(true)
 
-    // The replay reset re-primes tracking: ordering protection resumes for
-    // subsequent frames (an older same-epoch frame is still rejected).
+    // After replay reset, normal same-epoch ordering resumes.
     expect(shouldApplyWebSessionTabsSnapshot(older, ENV)).toBe(false)
     const newer = makeSnapshot([], { snapshotVersion: 6, activeTabType: null })
     expect(shouldApplyWebSessionTabsSnapshot(newer, ENV)).toBe(true)
@@ -422,8 +476,7 @@ describe('applyWebSessionTabsSnapshot', () => {
       toWebTerminalSurfaceTabId('host-tab-1')
     )
 
-    // The host's post-close snapshot omits the tab -> intent clears; a later
-    // snapshot that re-adds the SAME id (a genuinely new tab) is no longer hidden.
+    // Host omission clears close intent; a genuinely new tab reusing that ID must show.
     applyWebSessionTabsSnapshot(makeState(), makeSnapshot([]), ENV, NOW + 1)
     const reopened = applyWebSessionTabsSnapshot(
       makeState(),
@@ -457,8 +510,7 @@ describe('applyWebSessionTabsSnapshot', () => {
       toWebTerminalSurfaceTabId('host-tab-1')
     )
 
-    // The host vetoed lifecycle cleanup because the PTY is still live. Its
-    // unchanged snapshot must become usable immediately, without a new publish.
+    // Live-PTY refusal needs unchanged snapshot replay immediately, without waiting for a publish.
     clearWebSessionCloseIntent({ environmentId: ENV }, WT, 'host-tab-1')
     acceptReplayedWebSessionTabsSnapshot(ENV, WT)
     const restoredPatch = applyFreshWebSessionTabsSnapshot(hidden, authoritative, ENV, NOW + 1)
@@ -517,8 +569,7 @@ describe('applyWebSessionTabsSnapshot', () => {
       { id: 'host-group-1', activeTabId: 'host-tab-1', tabOrder }
     ]
 
-    // Client dragged tab 2 ahead of tab 1; an in-flight snapshot still has the
-    // original host order.
+    // Optimistic reorder must survive in-flight pre-move host order.
     recordWebSessionReorderIntent({ environmentId: ENV }, WT, 'host-group-1', [local2, local1], NOW)
     const stalePreMove = applyWebSessionTabsSnapshot(
       makeState(),
@@ -528,8 +579,7 @@ describe('applyWebSessionTabsSnapshot', () => {
     ) as Partial<WebSessionTabsSyncState>
     expect(stalePreMove.groupsByWorktree?.[WT]?.[0]?.tabOrder).toEqual([local2, local1])
 
-    // The host's post-move snapshot echoes the new order -> intent clears; a
-    // later snapshot reverting to the old order is no longer overridden.
+    // Host confirmation clears reorder intent; later host order changes must apply.
     applyWebSessionTabsSnapshot(
       makeState(),
       makeSnapshot(surfaces, {

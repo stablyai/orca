@@ -2,26 +2,17 @@ import { homedir } from 'node:os'
 import { join, sep } from 'node:path'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { AiVaultListResult, AiVaultSession } from '../../shared/ai-vault-types'
-import type { IFilesystemProvider } from '../providers/types'
 import type * as CachedSessionListModule from '../ai-vault/cached-session-list'
 import type * as SessionParseCacheModule from '../ai-vault/session-scanner-parse-cache'
-import { getRemoteHostPlatform } from '../ssh/ssh-remote-platform'
-import { SSH_MUX_REQUEST_TIMEOUT_CODE } from '../ssh/ssh-channel-multiplexer'
 
 const mocks = vi.hoisted(() => ({
-  scanAiVaultSessionsInWorker: vi.fn(),
-  resolveAiVaultSessionTitlesInWorker: vi.fn(),
-  scanRemoteAiVaultSessions: vi.fn(),
-  listClaudeSubagentSessions: vi.fn(),
-  listOmpSubagentSessions: vi.fn(),
+  scanLocalSessions: vi.fn(),
+  resolveAiVaultSessionTitlesInService: vi.fn(),
+  listSubagentsInService: vi.fn(),
   scanRuntimeAiVaultSessions: vi.fn(),
   getAiVaultWslHomeDirs: vi.fn(),
-  getSshFilesystemProvider: vi.fn(),
-  getActiveSshAiVaultHostInfo: vi.fn(),
-  getActiveSshAiVaultHostInfos: vi.fn(),
-  requestActiveSshAiVaultSessionList: vi.fn(),
-  requestActiveSshAiVaultSessionTitles: vi.fn(),
   ipcHandle: vi.fn(),
+  trashItem: vi.fn(),
   deleteAiVaultSessionFile: vi.fn(),
   invalidateAiVaultSessionListCache: vi.fn(),
   invalidateSessionParseCacheEntry: vi.fn()
@@ -29,34 +20,22 @@ const mocks = vi.hoisted(() => ({
 
 vi.mock('electron', () => ({
   app: { on: vi.fn() },
-  ipcMain: { handle: mocks.ipcHandle }
+  ipcMain: { handle: mocks.ipcHandle },
+  shell: { trashItem: mocks.trashItem }
 }))
 
-vi.mock('../ai-vault/session-scanner-worker-spawn', () => ({
-  scanAiVaultSessionsInWorker: mocks.scanAiVaultSessionsInWorker,
-  resolveAiVaultSessionTitlesInWorker: mocks.resolveAiVaultSessionTitlesInWorker,
-  resetAiVaultScannerWorkerForTests: vi.fn()
-}))
-
-vi.mock('../ai-vault/remote-session-scanner', () => ({
-  scanRemoteAiVaultSessions: mocks.scanRemoteAiVaultSessions
-}))
-
-vi.mock('../ai-vault/session-scanner-claude-subagents', () => ({
-  listClaudeSubagentSessions: mocks.listClaudeSubagentSessions
-}))
-
-vi.mock('../ai-vault/session-scanner-omp-subagent-listing', () => ({
-  listOmpSubagentSessions: mocks.listOmpSubagentSessions
+vi.mock('../ai-vault/session-scanner-service-spawn', async (importOriginal) => ({
+  ...(await importOriginal<object>()),
+  scanAiVaultSessionsInService: mocks.scanLocalSessions,
+  resolveAiVaultSessionTitlesInService: mocks.resolveAiVaultSessionTitlesInService,
+  listAiVaultSubagentSessionsInService: mocks.listSubagentsInService
 }))
 
 vi.mock('../ai-vault/session-delete', () => ({
   deleteAiVaultSessionFile: mocks.deleteAiVaultSessionFile
 }))
 
-// Why: only the invalidation seam is replaced — everything else (cachedList,
-// listAiVaultSessions, ...) keeps its real implementation so the existing
-// host-routing/caching tests below stay exercising real behavior.
+// Mock only invalidation so routing and cache tests retain the real list implementation.
 vi.mock('../ai-vault/cached-session-list', async (importOriginal) => {
   const actual = await importOriginal<typeof CachedSessionListModule>()
   return {
@@ -75,329 +54,68 @@ vi.mock('../ai-vault/session-scanner-parse-cache', async (importOriginal) => {
 
 vi.mock('../wsl', () => ({
   listRunningWslDistrosAsync: vi.fn().mockResolvedValue([]),
-  listRunningWslHomeDirsAsync: vi.fn().mockResolvedValue([])
+  listRunningWslHomeDirsAsync: vi.fn().mockResolvedValue([]),
+  hasCachedWslDistros: vi.fn(() => false)
 }))
 
-vi.mock('../providers/ssh-filesystem-dispatch', () => ({
-  SSH_FILESYSTEM_PROVIDER_UNAVAILABLE_MESSAGE:
-    'Remote connection dropped. Click Reconnect on the SSH target before retrying.',
-  getSshFilesystemProvider: mocks.getSshFilesystemProvider
-}))
-
-vi.mock('./ssh', () => ({
-  getActiveSshAiVaultHostInfo: mocks.getActiveSshAiVaultHostInfo,
-  getActiveSshAiVaultHostInfos: mocks.getActiveSshAiVaultHostInfos,
-  requestActiveSshAiVaultSessionList: mocks.requestActiveSshAiVaultSessionList,
-  requestActiveSshAiVaultSessionTitles: mocks.requestActiveSshAiVaultSessionTitles
-}))
-
-const { OMP_SESSIONS_DIR } = await import('../ai-vault/session-scanner-roots')
+const { resolveOmpSessionsDir } = await import('../ai-vault/omp-session-root')
 const { _internals, registerAiVaultHandlers } = await import('./ai-vault')
 const { deleteAiVaultSession: deleteAiVaultSessionWithDeps } = await import('./ai-vault-delete')
-
-const provider = {} as IFilesystemProvider
+const { deleteAiVaultSessionForRemoteClient } = await import('../ai-vault/host-session-delete')
 
 beforeEach(() => {
   vi.clearAllMocks()
   _internals.resetAiVaultCacheForTests()
-  mocks.scanAiVaultSessionsInWorker.mockResolvedValue(result([session('local', 'local-session')]))
-  mocks.resolveAiVaultSessionTitlesInWorker.mockResolvedValue({ titles: [] })
-  mocks.scanRemoteAiVaultSessions.mockResolvedValue(
-    result([session('ssh:dev-box', 'remote-session')])
-  )
-  mocks.listClaudeSubagentSessions.mockResolvedValue({ sessions: [], issues: [] })
-  mocks.listOmpSubagentSessions.mockResolvedValue({ sessions: [], issues: [] })
+  mocks.scanLocalSessions.mockResolvedValue(result([session('local', 'local-session')]))
+  mocks.resolveAiVaultSessionTitlesInService.mockResolvedValue({ titles: [] })
+  mocks.listSubagentsInService.mockResolvedValue({ sessions: [], issues: [] })
   mocks.scanRuntimeAiVaultSessions.mockResolvedValue(
     result([session('runtime:remote-server', 'runtime-session')])
   )
-  mocks.getSshFilesystemProvider.mockReturnValue(provider)
-  mocks.requestActiveSshAiVaultSessionList.mockResolvedValue(null)
-  mocks.requestActiveSshAiVaultSessionTitles.mockResolvedValue(null)
-  mocks.getActiveSshAiVaultHostInfo.mockReturnValue(hostInfo('dev-box'))
-  mocks.getActiveSshAiVaultHostInfos.mockReturnValue([hostInfo('dev-box')])
 })
 
 describe('listAiVaultSessions host routing', () => {
   it('routes local scope to the local scanner', async () => {
-    await _internals.listAiVaultSessions({ executionHostScope: 'local', scopePaths: ['/repo'] })
+    await _internals.listAiVaultSessions({
+      executionHostScope: 'local',
+      scopePaths: ['/repo'],
+      includeAntigravityIdeSessions: true
+    })
 
-    expect(mocks.scanAiVaultSessionsInWorker).toHaveBeenCalledWith(
+    expect(mocks.scanLocalSessions).toHaveBeenCalledWith(
       expect.objectContaining({
         scopePaths: ['/repo'],
+        includeAntigravityIdeSessions: true,
         executionHostId: 'local'
       }),
-      expect.any(AbortSignal)
-    )
-    expect(mocks.scanRemoteAiVaultSessions).not.toHaveBeenCalled()
-  })
-
-  it('routes SSH scope to only that SSH target', async () => {
-    await _internals.listAiVaultSessions({
-      executionHostScope: 'ssh:dev-box',
-      scopePaths: ['/home/ada/repo']
-    })
-
-    expect(mocks.scanAiVaultSessionsInWorker).not.toHaveBeenCalled()
-    expect(mocks.getActiveSshAiVaultHostInfo).toHaveBeenCalledWith('dev-box')
-    expect(mocks.scanRemoteAiVaultSessions).toHaveBeenCalledWith(
+      expect.any(AbortSignal),
       expect.objectContaining({
-        provider,
-        executionHostId: 'ssh:dev-box',
-        remoteHome: '/home/ada',
-        scopePaths: ['/home/ada/repo']
+        work: expect.any(Function),
+        finish: expect.any(Function),
+        fail: expect.any(Function)
       })
     )
   })
 
-  it('uses one target-side relay scan when the SSH relay supports it', async () => {
-    mocks.requestActiveSshAiVaultSessionList.mockResolvedValue(
-      result([session('local', 'remote-session')])
-    )
-
-    const scanned = await _internals.listAiVaultSessions({
-      executionHostScope: 'ssh:dev-box',
-      scopePaths: ['/home/ada/repo']
-    })
-
-    expect(mocks.requestActiveSshAiVaultSessionList).toHaveBeenCalledWith(
-      'dev-box',
-      {
-        limit: undefined,
-        scopePaths: ['/home/ada/repo']
-      },
-      expect.objectContaining({ signal: expect.any(AbortSignal) })
-    )
-    expect(mocks.scanRemoteAiVaultSessions).not.toHaveBeenCalled()
-    expect(scanned.sessions[0]).toMatchObject({
-      executionHostId: 'ssh:dev-box',
-      id: expect.stringContaining('ssh:dev-box:')
-    })
-  })
-
-  it('marks oversized project scopes when sending their bounded relay form', async () => {
-    const scopePaths = Array.from({ length: 80 }, (_, index) => `/repo/${index}`)
-    mocks.requestActiveSshAiVaultSessionList.mockResolvedValue(result([]))
-
-    await _internals.listAiVaultSessions({
-      executionHostScope: 'ssh:dev-box',
-      scopePaths
-    })
-
-    expect(mocks.requestActiveSshAiVaultSessionList).toHaveBeenCalledWith(
-      'dev-box',
-      {
-        limit: undefined,
-        scopePaths: scopePaths.slice(0, 64),
-        scopePathsTruncated: true
-      },
-      expect.objectContaining({ signal: expect.any(AbortSignal) })
-    )
-  })
-
-  it('caps and reports oversized project scopes on the SSH filesystem fallback', async () => {
-    const scopePaths = Array.from({ length: 80 }, (_, index) => `/repo/${index}`)
-
-    const scanned = await _internals.listAiVaultSessions({
-      executionHostScope: 'ssh:dev-box',
-      scopePaths
-    })
-
-    expect(mocks.scanRemoteAiVaultSessions).toHaveBeenCalledWith(
-      expect.objectContaining({ scopePaths: scopePaths.slice(0, 64) })
-    )
-    expect(scanned.issues).toContainEqual(
-      expect.objectContaining({
-        kind: 'scope',
-        message: expect.stringContaining('first 64 project paths')
-      })
-    )
-  })
-
-  it('coalesces concurrent cancellable requests into one scan', async () => {
-    let resolveRelay: (() => void) | undefined
-    mocks.requestActiveSshAiVaultSessionList.mockImplementation(
-      () =>
-        new Promise((resolve) => {
-          resolveRelay = () => resolve(result([]))
-        })
-    )
-    const args = { executionHostScope: 'ssh:dev-box' as const }
-
-    const first = _internals.listAiVaultSessions(args, { signal: new AbortController().signal })
-    const second = _internals.listAiVaultSessions(args, { signal: new AbortController().signal })
-    await vi.waitFor(() => expect(resolveRelay).toBeDefined())
-
-    expect(mocks.requestActiveSshAiVaultSessionList).toHaveBeenCalledTimes(1)
-    resolveRelay?.()
-    await expect(Promise.all([first, second])).resolves.toHaveLength(2)
-  })
-
-  it('does not start a second remote crawl after the relay scan budget expires', async () => {
-    mocks.requestActiveSshAiVaultSessionList.mockRejectedValue(relayTimeoutError())
-
-    const scanned = await _internals.listAiVaultSessions({
-      executionHostScope: 'ssh:dev-box'
-    })
-
-    expect(mocks.scanRemoteAiVaultSessions).not.toHaveBeenCalled()
-    expect(scanned.sessions).toEqual([])
-    expect(scanned.issues[0]?.message).toContain('timed out')
-  })
-
-  it('does not cache a host-level relay failure', async () => {
-    mocks.requestActiveSshAiVaultSessionList.mockRejectedValue(relayTimeoutError())
-
-    await _internals.listAiVaultSessions({ executionHostScope: 'ssh:dev-box' })
-    await _internals.listAiVaultSessions({ executionHostScope: 'ssh:dev-box' })
-
-    expect(mocks.requestActiveSshAiVaultSessionList).toHaveBeenCalledTimes(2)
-  })
-
-  it('falls back to the filesystem crawl after a non-timeout relay failure', async () => {
-    mocks.requestActiveSshAiVaultSessionList.mockRejectedValue(
-      new Error('Invalid aiVault.listSessions response')
-    )
-
-    const scanned = await _internals.listAiVaultSessions({
-      executionHostScope: 'ssh:dev-box'
-    })
-
-    expect(mocks.scanRemoteAiVaultSessions).toHaveBeenCalledTimes(1)
-    expect(scanned.sessions).toEqual([expect.objectContaining({ sessionId: 'remote-session' })])
-  })
-
-  it('falls back when a nonempty relay sessions array contains no valid rows', async () => {
-    mocks.requestActiveSshAiVaultSessionList.mockResolvedValue({
-      sessions: [{ id: 42 }],
-      issues: [],
-      scannedAt: '2026-07-27T00:00:00.000Z'
-    })
-
-    const scanned = await _internals.listAiVaultSessions({ executionHostScope: 'ssh:dev-box' })
-
-    expect(mocks.scanRemoteAiVaultSessions).toHaveBeenCalledTimes(1)
-    expect(scanned.sessions).toEqual([expect.objectContaining({ sessionId: 'remote-session' })])
-  })
-
-  it('uses the relay scan without requiring the fallback filesystem provider', async () => {
-    mocks.getSshFilesystemProvider.mockReturnValue(undefined)
-    mocks.requestActiveSshAiVaultSessionList.mockResolvedValue(
-      result([session('local', 'remote-session')])
-    )
-
-    const scanned = await _internals.listAiVaultSessions({
-      executionHostScope: 'ssh:dev-box'
-    })
-
-    expect(scanned.sessions).toHaveLength(1)
-    expect(mocks.scanRemoteAiVaultSessions).not.toHaveBeenCalled()
-  })
-
-  it('merges local plus connected SSH targets for all hosts', async () => {
-    const result = await _internals.listAiVaultSessions({ executionHostScope: 'all' })
-
-    expect(mocks.scanAiVaultSessionsInWorker).toHaveBeenCalledTimes(1)
-    expect(mocks.scanRemoteAiVaultSessions).toHaveBeenCalledTimes(1)
-    expect(mocks.requestActiveSshAiVaultSessionList).toHaveBeenCalledWith(
-      'dev-box',
-      expect.any(Object),
-      expect.objectContaining({ timeoutMs: 15_000 })
-    )
-    expect(result.sessions.map((entry) => entry.executionHostId)).toEqual(['ssh:dev-box', 'local'])
-  })
-
-  it('merges paired runtime servers for all hosts', async () => {
+  it('gives servers reached over an SSH tunnel the longer all-hosts scan budget', async () => {
     registerAiVaultHandlers({
       getActiveRuntimeAiVaultHostInfos: () => [
+        { environmentId: 'lan-server', executionHostId: 'runtime:lan-server' },
         {
-          environmentId: 'remote-server',
-          executionHostId: 'runtime:remote-server'
+          environmentId: 'ssh-server',
+          executionHostId: 'runtime:ssh-server',
+          connectionDependency: 'ssh-tunnel'
         }
       ],
       scanRuntimeAiVaultSessions: mocks.scanRuntimeAiVaultSessions
     })
 
-    const result = await _internals.listAiVaultSessions({ executionHostScope: 'all' })
+    await _internals.listAiVaultSessions({ executionHostScope: 'all', force: true })
 
-    expect(mocks.scanRuntimeAiVaultSessions).toHaveBeenCalledWith(
-      'remote-server',
-      {
-        executionHostScope: 'runtime:remote-server'
-      },
-      expect.objectContaining({ timeoutMs: expect.any(Number) })
-    )
-    expect(result.sessions.map((entry) => entry.executionHostId)).toEqual([
-      'runtime:remote-server',
-      'ssh:dev-box',
-      'local'
-    ])
-  })
-
-  it('keeps local and SSH results when runtime host discovery fails', async () => {
-    registerAiVaultHandlers({
-      getActiveRuntimeAiVaultHostInfos: () => {
-        throw new Error('runtime store is invalid')
-      },
-      scanRuntimeAiVaultSessions: mocks.scanRuntimeAiVaultSessions
-    })
-
-    const result = await _internals.listAiVaultSessions({ executionHostScope: 'all' })
-
-    expect(mocks.scanAiVaultSessionsInWorker).toHaveBeenCalledTimes(1)
-    expect(mocks.scanRemoteAiVaultSessions).toHaveBeenCalledTimes(1)
-    expect(mocks.scanRuntimeAiVaultSessions).not.toHaveBeenCalled()
-    expect(result.sessions.map((entry) => entry.executionHostId)).toEqual(['ssh:dev-box', 'local'])
-    expect(result.issues).toEqual([
-      expect.objectContaining({
-        agent: 'codex',
-        path: 'runtime environments',
-        message: 'runtime store is invalid'
-      })
-    ])
-  })
-
-  it('keeps SSH results when the local scan itself throws', async () => {
-    // Why: `all` awaits every leg together, so an unguarded local throw (parse
-    // cache load, WSL home resolution) would discard every host's sessions.
-    mocks.scanAiVaultSessionsInWorker.mockRejectedValue(new Error('session parse cache is corrupt'))
-    registerAiVaultHandlers({
-      getActiveRuntimeAiVaultHostInfos: () => [],
-      scanRuntimeAiVaultSessions: mocks.scanRuntimeAiVaultSessions
-    })
-
-    const result = await _internals.listAiVaultSessions({ executionHostScope: 'all' })
-
-    expect(result.sessions.map((entry) => entry.executionHostId)).toEqual(['ssh:dev-box'])
-    expect(result.issues).toEqual([
-      expect.objectContaining({
-        executionHostId: 'local',
-        kind: 'host',
-        path: 'this computer',
-        message: 'session parse cache is corrupt'
-      })
-    ])
-  })
-
-  it('keeps local results when SSH host discovery fails', async () => {
-    mocks.getActiveSshAiVaultHostInfos.mockImplementation(() => {
-      throw new Error('relay session map is unavailable')
-    })
-    registerAiVaultHandlers({
-      getActiveRuntimeAiVaultHostInfos: () => [],
-      scanRuntimeAiVaultSessions: mocks.scanRuntimeAiVaultSessions
-    })
-
-    const result = await _internals.listAiVaultSessions({ executionHostScope: 'all' })
-
-    expect(mocks.scanAiVaultSessionsInWorker).toHaveBeenCalledTimes(1)
-    expect(result.sessions.map((entry) => entry.executionHostId)).toEqual(['local'])
-    expect(result.issues).toEqual([
-      expect.objectContaining({
-        agent: 'codex',
-        path: 'SSH hosts',
-        message: 'relay session map is unavailable'
-      })
-    ])
+    const timeoutFor = (environmentId: string): unknown =>
+      mocks.scanRuntimeAiVaultSessions.mock.calls.find(([id]) => id === environmentId)?.[2]
+    expect(timeoutFor('lan-server')).toEqual({ timeoutMs: 3_000 })
+    expect(timeoutFor('ssh-server')).toEqual({ timeoutMs: 15_000 })
   })
 
   it('keeps direct runtime host scans on the normal runtime timeout', async () => {
@@ -420,89 +138,6 @@ describe('listAiVaultSessions host routing', () => {
       {}
     )
   })
-
-  it('returns a scan issue for a disconnected SSH target', async () => {
-    mocks.getActiveSshAiVaultHostInfo.mockReturnValue(null)
-    mocks.getSshFilesystemProvider.mockReturnValue(undefined)
-
-    const result = await _internals.listAiVaultSessions({
-      executionHostScope: 'ssh:disconnected'
-    })
-
-    expect(result.sessions).toEqual([])
-    expect(result.issues).toMatchObject([
-      {
-        executionHostId: 'ssh:disconnected',
-        agent: 'codex',
-        path: 'disconnected'
-      }
-    ])
-  })
-
-  it('keeps host scope in the cache key', async () => {
-    await _internals.listAiVaultSessions({ executionHostScope: 'local' })
-    await _internals.listAiVaultSessions({ executionHostScope: 'ssh:dev-box' })
-
-    expect(mocks.scanAiVaultSessionsInWorker).toHaveBeenCalledTimes(1)
-    expect(mocks.scanRemoteAiVaultSessions).toHaveBeenCalledTimes(1)
-  })
-
-  it('caches completed SSH scans by host and workspace scope', async () => {
-    await _internals.listAiVaultSessions({
-      executionHostScope: 'ssh:dev-box',
-      scopePaths: ['/home/ada/repo-a', '/home/ada/repo-b']
-    })
-    await _internals.listAiVaultSessions({
-      executionHostScope: 'ssh:dev-box',
-      scopePaths: ['/home/ada/repo-b', '/home/ada/repo-a']
-    })
-
-    expect(mocks.scanRemoteAiVaultSessions).toHaveBeenCalledTimes(1)
-  })
-
-  it('serves lower SSH depths from a larger completed scan', async () => {
-    const base = { executionHostScope: 'ssh:dev-box' as const, scopePaths: ['/home/ada/repo'] }
-    await _internals.listAiVaultSessions({ ...base, limit: 1000 })
-    await _internals.listAiVaultSessions({ ...base, limit: 250 })
-    await _internals.listAiVaultSessions({ ...base, limit: 500 })
-
-    expect(mocks.scanRemoteAiVaultSessions).toHaveBeenCalledTimes(1)
-  })
-
-  it('threads renderer cancellation into the SSH relay request', async () => {
-    let relaySignal: AbortSignal | undefined
-    mocks.requestActiveSshAiVaultSessionList.mockImplementation(
-      (_targetId, _params, options: { signal?: AbortSignal }) =>
-        new Promise((_resolve, reject) => {
-          relaySignal = options.signal
-          options.signal?.addEventListener(
-            'abort',
-            () => {
-              const error = new Error('cancelled')
-              error.name = 'AbortError'
-              reject(error)
-            },
-            { once: true }
-          )
-        })
-    )
-    registerAiVaultHandlers()
-    const event = { sender: { id: 7 } }
-    const pending = getIpcHandler('aiVault:listSessions')(event, {
-      executionHostScope: 'ssh:dev-box',
-      requestToken: 'scan-1'
-    })
-    await vi.waitFor(() => expect(relaySignal).toBeDefined())
-
-    await getIpcHandler('aiVault:cancelListSessions')(event, {
-      requestToken: 'scan-1'
-    })
-
-    expect(relaySignal?.aborted).toBe(true)
-    // Resolved, not rejected: Electron logs every rejected handler, and a
-    // superseded scan is normal control flow rather than a failure.
-    await expect(pending).resolves.toMatchObject({ cancelled: true, sessions: [] })
-  })
 })
 
 describe('resolveAiVaultSessionTitles host routing', () => {
@@ -513,31 +148,15 @@ describe('resolveAiVaultSessionTitles host routing', () => {
     titles: [{ agent: 'codex' as const, sessionId: 'session-1', title: 'Exact title' }]
   }
 
-  it('routes local identities to the worker without a broad scan', async () => {
-    mocks.resolveAiVaultSessionTitlesInWorker.mockResolvedValue(titles)
+  it('routes local identities to the scanner service without a broad scan', async () => {
+    mocks.resolveAiVaultSessionTitlesInService.mockResolvedValue(titles)
 
     await expect(
       _internals.resolveAiVaultSessionTitles({ executionHostScope: 'local', requests })
     ).resolves.toEqual(titles)
 
-    expect(mocks.resolveAiVaultSessionTitlesInWorker).toHaveBeenCalledWith(requests, undefined)
-    expect(mocks.scanAiVaultSessionsInWorker).not.toHaveBeenCalled()
-  })
-
-  it('routes SSH identities to the transcript-owning relay', async () => {
-    mocks.requestActiveSshAiVaultSessionTitles.mockResolvedValue(titles)
-
-    await expect(
-      _internals.resolveAiVaultSessionTitles({
-        executionHostScope: 'ssh:dev-box',
-        requests
-      })
-    ).resolves.toEqual(titles)
-
-    expect(mocks.requestActiveSshAiVaultSessionTitles).toHaveBeenCalledWith('dev-box', {
-      requests
-    })
-    expect(mocks.scanRemoteAiVaultSessions).not.toHaveBeenCalled()
+    expect(mocks.resolveAiVaultSessionTitlesInService).toHaveBeenCalledWith(requests, undefined)
+    expect(mocks.scanLocalSessions).not.toHaveBeenCalled()
   })
 
   it('routes runtime identities to the paired runtime host', async () => {
@@ -558,11 +177,7 @@ describe('resolveAiVaultSessionTitles host routing', () => {
     expect(mocks.scanRuntimeAiVaultSessions).not.toHaveBeenCalled()
   })
 
-  it('degrades unsupported hosts without falling back to a broad scan', async () => {
-    mocks.requestActiveSshAiVaultSessionTitles.mockRejectedValue(
-      new Error('Method not found: aiVault.resolveSessionTitles')
-    )
-
+  it('degrades unserved SSH hosts without falling back to a broad scan', async () => {
     await expect(
       _internals.resolveAiVaultSessionTitles({
         executionHostScope: 'ssh:dev-box',
@@ -570,8 +185,7 @@ describe('resolveAiVaultSessionTitles host routing', () => {
       })
     ).resolves.toEqual({ titles: [] })
 
-    expect(mocks.scanAiVaultSessionsInWorker).not.toHaveBeenCalled()
-    expect(mocks.scanRemoteAiVaultSessions).not.toHaveBeenCalled()
+    expect(mocks.scanLocalSessions).not.toHaveBeenCalled()
   })
 })
 
@@ -648,14 +262,6 @@ function getPrepareSessionResumeHandler(): (
   return registration[1]
 }
 
-function getIpcHandler(channel: string): (...args: unknown[]) => unknown {
-  const registration = mocks.ipcHandle.mock.calls.find(([registered]) => registered === channel)
-  if (!registration) {
-    throw new Error(`${channel} was not registered`)
-  }
-  return registration[1]
-}
-
 describe('listAiVaultSubagentSessions gating', () => {
   const claudeRoot = join(homedir(), '.claude', 'projects')
 
@@ -668,7 +274,7 @@ describe('listAiVaultSubagentSessions gating', () => {
       executionHostId: 'local'
     })
 
-    expect(mocks.listClaudeSubagentSessions).toHaveBeenCalledWith({ parentFilePath })
+    expect(mocks.listSubagentsInService).toHaveBeenCalledWith({ agent: 'claude', parentFilePath })
   })
 
   it('returns empty for a remote Claude session without reading the filesystem', async () => {
@@ -679,7 +285,7 @@ describe('listAiVaultSubagentSessions gating', () => {
     })
 
     expect(result).toEqual({ sessions: [], issues: [] })
-    expect(mocks.listClaudeSubagentSessions).not.toHaveBeenCalled()
+    expect(mocks.listSubagentsInService).not.toHaveBeenCalled()
   })
 
   it('rejects a path outside the Claude projects root', async () => {
@@ -690,7 +296,7 @@ describe('listAiVaultSubagentSessions gating', () => {
     })
 
     expect(result).toEqual({ sessions: [], issues: [] })
-    expect(mocks.listClaudeSubagentSessions).not.toHaveBeenCalled()
+    expect(mocks.listSubagentsInService).not.toHaveBeenCalled()
   })
 
   it('rejects a dot-segment traversal out of the Claude projects root', async () => {
@@ -704,7 +310,7 @@ describe('listAiVaultSubagentSessions gating', () => {
     })
 
     expect(result).toEqual({ sessions: [], issues: [] })
-    expect(mocks.listClaudeSubagentSessions).not.toHaveBeenCalled()
+    expect(mocks.listSubagentsInService).not.toHaveBeenCalled()
   })
 
   it('resolves empty for malformed IPC payloads instead of throwing', async () => {
@@ -717,7 +323,7 @@ describe('listAiVaultSubagentSessions gating', () => {
 
     expect(missing).toEqual({ sessions: [], issues: [] })
     expect(badPath).toEqual({ sessions: [], issues: [] })
-    expect(mocks.listClaudeSubagentSessions).not.toHaveBeenCalled()
+    expect(mocks.listSubagentsInService).not.toHaveBeenCalled()
   })
 
   it('returns empty for an agent with no sibling subagent layout', async () => {
@@ -728,13 +334,12 @@ describe('listAiVaultSubagentSessions gating', () => {
     })
 
     expect(result).toEqual({ sessions: [], issues: [] })
-    expect(mocks.listClaudeSubagentSessions).not.toHaveBeenCalled()
-    expect(mocks.listOmpSubagentSessions).not.toHaveBeenCalled()
+    expect(mocks.listSubagentsInService).not.toHaveBeenCalled()
   })
 
   it('lists subagents for a local OMP session inside the sessions root', async () => {
     const parentFilePath = join(
-      OMP_SESSIONS_DIR,
+      resolveOmpSessionsDir(),
       'home-app-85dfa2f0',
       '2026-05-01T10-00-00-000Z_cccccccc-dddd-4eee-8fff-000000000000.jsonl'
     )
@@ -745,19 +350,18 @@ describe('listAiVaultSubagentSessions gating', () => {
       executionHostId: 'local'
     })
 
-    expect(mocks.listOmpSubagentSessions).toHaveBeenCalledWith({ parentFilePath })
-    expect(mocks.listClaudeSubagentSessions).not.toHaveBeenCalled()
+    expect(mocks.listSubagentsInService).toHaveBeenCalledWith({ agent: 'omp', parentFilePath })
   })
 
   it('returns empty for a remote OMP session without reading the filesystem', async () => {
     const result = await _internals.listAiVaultSubagentSessions({
       agent: 'omp',
-      parentFilePath: join(OMP_SESSIONS_DIR, 'slug', 'sess.jsonl'),
+      parentFilePath: join(resolveOmpSessionsDir(), 'slug', 'sess.jsonl'),
       executionHostId: 'ssh:dev-box'
     })
 
     expect(result).toEqual({ sessions: [], issues: [] })
-    expect(mocks.listOmpSubagentSessions).not.toHaveBeenCalled()
+    expect(mocks.listSubagentsInService).not.toHaveBeenCalled()
   })
 
   it('rejects an OMP path that only sits inside another agent root', async () => {
@@ -771,13 +375,13 @@ describe('listAiVaultSubagentSessions gating', () => {
     const traversal = await _internals.listAiVaultSubagentSessions({
       agent: 'omp',
       // Built with sep (not join) so the `..` segments survive into the arg.
-      parentFilePath: [OMP_SESSIONS_DIR, '..', '..', '..', 'etc', 'passwd.jsonl'].join(sep),
+      parentFilePath: [resolveOmpSessionsDir(), '..', '..', '..', 'etc', 'passwd.jsonl'].join(sep),
       executionHostId: 'local'
     })
 
     expect(crossAgent).toEqual({ sessions: [], issues: [] })
     expect(traversal).toEqual({ sessions: [], issues: [] })
-    expect(mocks.listOmpSubagentSessions).not.toHaveBeenCalled()
+    expect(mocks.listSubagentsInService).not.toHaveBeenCalled()
   })
 })
 
@@ -806,7 +410,8 @@ describe('deleteAiVaultSession', () => {
         sessionId: args.sessionId,
         filePath: args.filePath,
         executionHostId: 'local'
-      })
+      }),
+      expect.any(Function)
     )
     expect(invalidateMultiHostListCache).toHaveBeenCalledTimes(1)
     expect(mocks.invalidateAiVaultSessionListCache).toHaveBeenCalledTimes(1)
@@ -857,9 +462,65 @@ describe('deleteAiVaultSession', () => {
       reason: 'invalid-path'
     })
     expect(mocks.deleteAiVaultSessionFile).toHaveBeenCalledWith(
-      expect.objectContaining({ filePath: '' })
+      expect.objectContaining({ filePath: '' }),
+      expect.any(Function)
     )
     expect(mocks.invalidateAiVaultSessionListCache).not.toHaveBeenCalled()
+  })
+
+  it("routes a server-hosted session to its owning host and drops that host's cached list", async () => {
+    const deleteRuntimeAiVaultSession = vi.fn().mockResolvedValue({ outcome: 'deleted' })
+    const invalidateMultiHostListCache = vi.fn()
+
+    const result = await deleteAiVaultSessionWithDeps(
+      { ...args, executionHostId: 'runtime:gpu%20box' },
+      { invalidateMultiHostListCache, deleteRuntimeSession: deleteRuntimeAiVaultSession }
+    )
+
+    expect(result).toEqual({ outcome: 'deleted' })
+    expect(deleteRuntimeAiVaultSession).toHaveBeenCalledWith(
+      'gpu box',
+      expect.objectContaining({ agent: 'gemini', filePath: args.filePath })
+    )
+    expect(invalidateMultiHostListCache).toHaveBeenCalledTimes(1)
+    // This computer never touches a path that belongs to another host.
+    expect(mocks.deleteAiVaultSessionFile).not.toHaveBeenCalled()
+  })
+
+  it('never routes the unresolved-owner sentinel to a host', async () => {
+    const deleteRuntimeAiVaultSession = vi.fn()
+    mocks.deleteAiVaultSessionFile.mockResolvedValue({
+      outcome: 'rejected',
+      agent: 'gemini',
+      reason: 'non-local-host'
+    })
+
+    await deleteAiVaultSessionWithDeps(
+      { ...args, executionHostId: 'runtime:unresolved-owner' },
+      {
+        invalidateMultiHostListCache: vi.fn(),
+        deleteRuntimeSession: deleteRuntimeAiVaultSession
+      }
+    )
+
+    expect(deleteRuntimeAiVaultSession).not.toHaveBeenCalled()
+  })
+
+  it("gives a paired client's delete on this desktop the Trash and the host-leg fence", async () => {
+    registerAiVaultHandlers()
+    mocks.deleteAiVaultSessionFile.mockResolvedValue({ outcome: 'deleted' })
+
+    const result = await deleteAiVaultSessionForRemoteClient({
+      agent: 'gemini',
+      filePath: args.filePath
+    })
+
+    expect(result).toEqual({ outcome: 'deleted' })
+    const [target, removePath] = mocks.deleteAiVaultSessionFile.mock.calls[0]
+    expect(target).toMatchObject({ executionHostId: 'local', filePath: args.filePath })
+    await removePath({ path: args.filePath, kind: 'file', roots: [] })
+    expect(mocks.trashItem).toHaveBeenCalledWith(args.filePath)
+    expect(mocks.invalidateAiVaultSessionListCache).toHaveBeenCalledTimes(1)
   })
 
   it('registers the aiVault:deleteSession IPC channel', () => {
@@ -867,63 +528,7 @@ describe('deleteAiVaultSession', () => {
 
     expect(mocks.ipcHandle).toHaveBeenCalledWith('aiVault:deleteSession', expect.any(Function))
   })
-
-  // Observes the real multi-host invalidation seam (not mocked) end-to-end:
-  // deleting must clear this module's own cache, not only the two shared caches.
-  it('clears the multi-host scan-result cache after a real delete', async () => {
-    await _internals.listAiVaultSessions({ executionHostScope: 'ssh:dev-box' })
-    await _internals.listAiVaultSessions({ executionHostScope: 'ssh:dev-box' })
-    // Second list is a cache hit, so only one scan so far.
-    expect(mocks.scanRemoteAiVaultSessions).toHaveBeenCalledTimes(1)
-
-    mocks.deleteAiVaultSessionFile.mockResolvedValue({ outcome: 'deleted' })
-    await _internals.deleteAiVaultSession(args)
-
-    // Cache was cleared, so the next list re-scans instead of serving the stale
-    // list that still contained the deleted session.
-    await _internals.listAiVaultSessions({ executionHostScope: 'ssh:dev-box' })
-    expect(mocks.scanRemoteAiVaultSessions).toHaveBeenCalledTimes(2)
-  })
-
-  // Generation guard: a scan already in flight when the delete lands must not
-  // write its pre-delete result back into the multi-host cache.
-  it('does not let an in-flight multi-host scan repopulate the cache after a delete', async () => {
-    let resolveScan: (value: AiVaultListResult) => void = () => {}
-    mocks.scanRemoteAiVaultSessions.mockReturnValueOnce(
-      new Promise<AiVaultListResult>((resolve) => {
-        resolveScan = resolve
-      })
-    )
-    const inFlight = _internals.listAiVaultSessions({ executionHostScope: 'ssh:dev-box' })
-
-    mocks.deleteAiVaultSessionFile.mockResolvedValue({ outcome: 'deleted' })
-    await _internals.deleteAiVaultSession(args)
-
-    resolveScan(result([session('ssh:dev-box', 'stale-session')]))
-    await inFlight
-
-    // The late scan must not have cached its stale result: the next list re-scans.
-    await _internals.listAiVaultSessions({ executionHostScope: 'ssh:dev-box' })
-    expect(mocks.scanRemoteAiVaultSessions).toHaveBeenCalledTimes(2)
-  })
 })
-
-function hostInfo(targetId: string) {
-  return {
-    targetId,
-    executionHostId: `ssh:${targetId}` as const,
-    remoteHome: '/home/ada',
-    hostPlatform: getRemoteHostPlatform('linux-x64')
-  }
-}
-
-/** Mirrors the multiplexer's typed timeout: callers branch on the code, not on
- * the message text. */
-function relayTimeoutError(): Error {
-  return Object.assign(new Error('Request "aiVault.listSessions" timed out after 130000ms'), {
-    code: SSH_MUX_REQUEST_TIMEOUT_CODE
-  })
-}
 
 function result(sessions: AiVaultSession[]): AiVaultListResult {
   return { sessions, issues: [], scannedAt: new Date().toISOString() }

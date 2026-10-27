@@ -1,10 +1,9 @@
-// Execution-host coverage for launchAgentInNewTab, split from launch-agent-in-new-tab.test.ts to
-// keep both files within the lines budget.
-
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const mockCreateTab = vi.fn()
-const mockQueueTabStartupCommand = vi.fn()
+function queuedStartups() {
+  return mockCreateTab.mock.calls.flatMap((call) => call[3]?.pendingStartup ?? [])
+}
 
 type StoreRepo = {
   id: string
@@ -35,7 +34,14 @@ const store = {
   repos: [] as StoreRepo[],
   folderWorkspaces: [] as unknown[],
   projectGroups: [] as unknown[],
-  sshConnectionStates: new Map<string, { status: string }>(),
+  sshConnectionStates: new Map<string, { status: string; remotePlatform?: string }>([
+    ['openclaw', { status: 'connected', remotePlatform: 'linux' }],
+    ['m4air', { status: 'connected', remotePlatform: 'linux' }]
+  ]),
+  sshStateByEnvironment: new Map([
+    ['vm-1', { connectionStates: new Map([['nested', { remotePlatform: 'linux' }]]) }]
+  ]),
+  runtimeStatusByEnvironmentId: new Map([['vm-1', { status: { hostPlatform: 'linux' } }]]),
   transientClearedAgentStatusConnectionIds: {} as Record<string, true>,
   worktreesByRepo: {} as Record<string, StoreWorktree[]>,
   allWorktrees: vi.fn(() => store.worktreesByRepo['repo-1'] ?? []),
@@ -50,7 +56,6 @@ const store = {
   ptyIdsByTabId: {} as Record<string, string[]>,
   createTab: mockCreateTab,
   closeTab: vi.fn(),
-  queueTabStartupCommand: mockQueueTabStartupCommand,
   setActiveTabType: vi.fn(),
   setTabBarOrder: vi.fn(),
   setAgentStatus: vi.fn(),
@@ -80,9 +85,13 @@ vi.mock('@/lib/telemetry', () => ({
   tuiAgentToAgentKind: (agent: string) => agent
 }))
 
-vi.mock('@/runtime/web-runtime-session', () => ({
-  createWebRuntimeSessionTerminal: vi.fn(),
-  isWebRuntimeSessionActive: vi.fn(() => false),
+vi.mock('@/runtime/web-runtime-terminal-creation', () => ({
+  createWebRuntimeSessionTerminal: vi.fn()
+}))
+vi.mock('@/runtime/web-runtime-session-environment', () => ({
+  isWebRuntimeSessionActive: vi.fn(() => false)
+}))
+vi.mock('../../../shared/terminal-surface-id', () => ({
   isWebTerminalSurfaceTabId: vi.fn(() => false)
 }))
 
@@ -92,11 +101,16 @@ function worktreeOn(hostId: string, path: string): StoreWorktree {
 
 async function launchOnLinux(): Promise<void> {
   const { launchAgentInNewTab } = await import('./launch-agent-in-new-tab')
-  launchAgentInNewTab({ agent: 'claude-agent-teams', worktreeId: 'wt-1', launchPlatform: 'linux' })
+  launchAgentInNewTab({
+    requestId: 'request-1',
+    agent: 'claude-agent-teams',
+    worktreeId: 'wt-1',
+    launchPlatform: 'linux'
+  })
 }
 
 function queuedCommand(): string {
-  return mockQueueTabStartupCommand.mock.calls[0]?.[1]?.command
+  return queuedStartups()[0]?.command
 }
 
 describe('launchAgentInNewTab execution host resolution', () => {
@@ -118,8 +132,7 @@ describe('launchAgentInNewTab execution host resolution', () => {
   })
 
   it('shapes the launch from the worktree host, not a rival repo row on another SSH host', async () => {
-    // `store.repos.find` is host-blind, so a worktree that names its own host could be shaped by
-    // an `ssh:openclaw` row it has nothing to do with (#11163).
+    // Host-blind repos.find could shape this worktree using another SSH host’s same-ID repo (#11163).
     store.repos = [
       { id: 'repo-1', connectionId: 'openclaw', path: '/srv/openclaw' },
       { id: 'repo-1', connectionId: null, executionHostId: 'local', path: '/repo' }
@@ -154,7 +167,7 @@ describe('launchAgentInNewTab execution host resolution', () => {
     expect(queuedCommand()).toBe("orca claude-teams '--dangerously-skip-permissions'")
   })
 
-  it('keeps a runtime host with no nested SSH target on the local CLI name', async () => {
+  it('uses the headless runtime CLI with no nested SSH target (#33920)', async () => {
     store.repos = [
       { id: 'repo-1', connectionId: null, executionHostId: 'runtime:vm-1', path: '/srv/vm' }
     ]
@@ -162,6 +175,6 @@ describe('launchAgentInNewTab execution host resolution', () => {
 
     await launchOnLinux()
 
-    expect(queuedCommand()).toBe("orca-ide claude-teams '--dangerously-skip-permissions'")
+    expect(queuedCommand()).toBe("orca claude-teams '--dangerously-skip-permissions'")
   })
 })

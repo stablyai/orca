@@ -1,3 +1,4 @@
+import { normalizeNativeChatAppearanceSettings } from '../../../shared/native-chat/native-chat-appearance-settings'
 import { getDefaultVoiceSettings } from '../../../shared/constants'
 import { normalizePRBotAuthorOverrides } from '../../../shared/pr-bot-author-overrides'
 import { normalizeTerminalQuickCommands } from '../../../shared/terminal-quick-commands'
@@ -5,10 +6,16 @@ import { normalizeOpenInApplications } from '../../../shared/open-in-application
 import { normalizeTerminalShortcutPolicy } from '../../../shared/keybindings'
 import { normalizeAppIconId } from '../../../shared/app-icon'
 import { normalizeTerminalCustomThemes } from '../../../shared/terminal-custom-themes'
+import { normalizeTerminalDefaultShell } from '../../../shared/terminal-default-shell'
 import { projectSourceControlAiToLegacyCommitMessageAi } from '../../../shared/source-control-ai'
-import { normalizeUiLanguage } from '../../../shared/ui-language'
-import { stripRetiredGlobalSettings } from '../applying-settings/terminal-settings-migrations'
+import { normalizeNativeChatShellEnvironmentVariables } from '../../../shared/native-chat/native-chat-shell-environment'
+import { publishedLegacyChatPermissionMode } from '../../../shared/agent-chat-permission-mode'
+import {
+  savedChatUiWithTerminalDefaultView,
+  stripRetiredGlobalSettings
+} from '../applying-settings/terminal-settings-migrations'
 import { readLegacySidekickFlag } from '../applying-settings/onboarding-normalization'
+import { normalizeMachineName } from '../../../shared/machine-name'
 import type { PersistedState } from '../../../shared/persisted-state-types'
 import type { PreparedLoadedTerminalSettings } from './prepare-loaded-terminal-settings'
 import type { PreparedLoadedProfileSettings } from './prepare-loaded-profile-settings'
@@ -31,6 +38,7 @@ export function normalizeLoadedGlobalSettings(
     migratedFloatingTerminalTrustedCwds
   } = terminal
   const {
+    migratedPortugueseUiLanguage,
     migratedExperimentalActivity,
     migratedAutoRenameBranchFromWork,
     migratedTerminalCursorStyle,
@@ -43,6 +51,7 @@ export function normalizeLoadedGlobalSettings(
     stampPrimarySelectionTerminalDefaults,
     migratedDisabledTuiAgents,
     migratedAgentYoloDefaults,
+    migratedAgentPermission,
     migratedWindowsRuntimeDefault,
     migratedLocalAccountRuntime,
     loadedCompactWorktreeCards,
@@ -54,15 +63,20 @@ export function normalizeLoadedGlobalSettings(
 
   return {
     ...defaults.settings,
-    // Why (#7977): v1.4.130 onboarding persisted this as a plain boolean, making the
-    // old default indistinguishable from a real opt-in. Preserve stored `true`; only
-    // the default changed.
+    // Legacy stored booleans cannot distinguish opt-in from the old default; retain explicit true.
     ...stripRetiredGlobalSettings(parsed.settings),
+    // Preserve terminal-first new tabs when retiring the old default-view switch.
+    ...(savedChatUiWithTerminalDefaultView(parsed.settings)
+      ? { experimentalNativeChat: false }
+      : {}),
+    nativeChatAppearance: normalizeNativeChatAppearanceSettings(
+      parsed.settings?.nativeChatAppearance
+    ),
     worktreeVisibilityDefaults: migratedExternalVisibility.defaults,
     prBotAuthorOverrides: normalizePRBotAuthorOverrides(parsed.settings?.prBotAuthorOverrides),
-    // Why: v1.3.42 renamed the sidekick setting to pet; carry the old flag forward once so enabled users don't lose it.
+    // Carry the retired sidekick flag into pet settings.
     experimentalPet: parsed.settings?.experimentalPet ?? readLegacySidekickFlag(parsed) ?? false,
-    // Why: early builds saved the disabled default; flip Linux/macOS profiles once to match platform, guards keep opt-outs.
+    // Migrate old platform defaults once; retain later opt-outs.
     primarySelectionMiddleClickPaste: migratePrimarySelectionPlatformDefault
       ? true
       : (parsed.settings?.primarySelectionMiddleClickPaste ??
@@ -75,7 +89,7 @@ export function normalizeLoadedGlobalSettings(
     ...migratedAutoRenameBranchFromWork,
     ...migratedTerminalCursorStyle,
     terminalLineHeight: migratedTerminalLineHeight,
-    // Why: the old true default was inherited, but false was always an explicit opt-out and must survive this one-shot reset.
+    // False was always explicit; the old true default may be reset once.
     terminalRightClickToPaste: terminalRightClickToPasteDefaultedForPlatform
       ? (parsed.settings?.terminalRightClickToPaste ?? defaults.settings.terminalRightClickToPaste)
       : parsed.settings?.terminalRightClickToPaste === false
@@ -85,11 +99,9 @@ export function normalizeLoadedGlobalSettings(
     ...migratedTerminalTuiScrollSensitivity.settings,
     experimentalActivity: migratedExperimentalActivity,
     experimentalActivityDefaultedOffForAllUsers: true,
-    // Preserve the legacy opt-in so the one-time introduction copy can target existing users.
     agentsSidebarMigratedFromExperimental:
       parsed.settings?.agentsSidebarMigratedFromExperimental === true ||
       migratedExperimentalActivity,
-    // Why: compact worktree cards graduated from Experimental; preserve the old opt-in for rollout-era profiles.
     compactWorktreeCards: loadedCompactWorktreeCards,
     experimentalCompactWorktreeCards: undefined,
     terminalMacOptionAsAlt: migratedOptionAsAlt,
@@ -104,16 +116,27 @@ export function normalizeLoadedGlobalSettings(
     floatingTerminalTrustedCwds: migratedFloatingTerminalTrustedCwds,
     floatingTerminalCwdMigratedToAppWorkspace: true,
     terminalScrollbackRows: migratedTerminalScrollback.rows,
+    terminalDefaultShell: normalizeTerminalDefaultShell(parsed.settings?.terminalDefaultShell),
     terminalQuickCommands: normalizeTerminalQuickCommands(parsed.settings?.terminalQuickCommands),
     terminalCustomThemes: normalizeTerminalCustomThemes(parsed.settings?.terminalCustomThemes),
     appIcon: normalizeAppIconId(parsed.settings?.appIcon),
     mobilePairingCustomAddress,
     mobilePairingCustomAddresses,
-    // Why: persisted settings may be hand-edited or from older builds; keep tray-minimize false unless stored value is true.
+    machineName: normalizeMachineName(parsed.settings?.machineName),
     minimizeToTrayOnClose: parsed.settings?.minimizeToTrayOnClose === true,
-    // Why: missing means default-on; round-trips unchanged on non-mac since darwin consumers gate the effect.
+    // Default-on values round-trip off-platform; macOS consumers gate the actual effect.
     showMenuBarIcon: parsed.settings?.showMenuBarIcon !== false,
-    uiLanguage: normalizeUiLanguage(parsed.settings?.uiLanguage),
+    ...migratedPortugueseUiLanguage,
+    nativeChatInheritShellEnvironment: parsed.settings?.nativeChatInheritShellEnvironment !== false,
+    nativeChatShellEnvironmentVariables: normalizeNativeChatShellEnvironmentVariables(
+      parsed.settings?.nativeChatShellEnvironmentVariables
+    ),
+    // Old clients identify hosts with per-chat permissions through this valid value.
+    nativeChatPermissionMode: publishedLegacyChatPermissionMode({
+      ...parsed.settings,
+      ...migratedAgentYoloDefaults,
+      ...migratedAgentPermission
+    }),
     defaultTaskSource: taskProviderSettings.defaultTaskSource,
     visibleTaskProviders: taskProviderSettings.visibleTaskProviders,
     visibleTaskProvidersDefaultedForJira: true,
@@ -122,14 +145,16 @@ export function normalizeLoadedGlobalSettings(
     ),
     disabledTuiAgents: migratedDisabledTuiAgents,
     ...migratedAgentYoloDefaults,
+    ...migratedAgentPermission,
     claudeAgentTeamsDefaultDisabledMigrated: true,
+    sshRemoteCliControlExistingHostsMigrated: true,
     openInApplications: normalizeOpenInApplications(parsed.settings?.openInApplications, {
       seedDefaults: true
     }),
     notifications: normalizedNotifications,
     sourceControlAi: migratedSourceControlAi,
     sourceControlGroupOrder: normalizedSourceControlGroupOrder,
-    // Why: rollback builds still read commitMessageAi, so refresh the legacy projection from sourceControlAi for compat.
+    // Refresh the legacy projection for rollback builds that still read commitMessageAi.
     commitMessageAi: projectSourceControlAiToLegacyCommitMessageAi(
       migratedSourceControlAi,
       parsed.settings?.commitMessageAi ?? defaults.settings.commitMessageAi

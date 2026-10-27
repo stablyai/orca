@@ -1,11 +1,9 @@
 import { describe, expect, it } from 'vitest'
 import {
   canDockPrSidebar,
-  prSidebarRenderBranch,
   resolvePresentationMode,
   shouldShowTrigger
 } from './mobile-pr-sidebar-presentation'
-import type { PrSidebarData, PrSidebarState } from '../session/mobile-pr-sidebar-state'
 
 describe('resolvePresentationMode', () => {
   it('docks inline on wide layouts and overlays on narrow', () => {
@@ -46,22 +44,5 @@ describe('shouldShowTrigger', () => {
   it('hides the trigger on a non-GitHub repo regardless of layout', () => {
     expect(shouldShowTrigger({ isGithubRepo: false, isWideLayout: false })).toBe(false)
     expect(shouldShowTrigger({ isGithubRepo: false, isWideLayout: true })).toBe(false)
-  })
-})
-
-describe('prSidebarRenderBranch', () => {
-  const cases: PrSidebarState[] = [
-    { kind: 'hidden' },
-    { kind: 'loading' },
-    { kind: 'none' },
-    { kind: 'error', message: 'boom' },
-    { kind: 'blocked', message: 'no auth' },
-    { kind: 'ready', data: {} as PrSidebarData }
-  ]
-
-  it('maps each state kind to its render branch', () => {
-    for (const state of cases) {
-      expect(prSidebarRenderBranch(state)).toBe(state.kind)
-    }
   })
 })

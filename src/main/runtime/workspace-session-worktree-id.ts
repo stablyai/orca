@@ -8,12 +8,15 @@ export function canonicalizeTerminalSessionWorktreeId(
   if (sourceWorktreeId === targetWorktreeId) {
     return
   }
-  const tabs = session.tabsByWorktree[sourceWorktreeId] ?? []
-  delete session.tabsByWorktree[sourceWorktreeId]
-  session.tabsByWorktree[targetWorktreeId] = tabs.map((tab) => ({
-    ...tab,
-    worktreeId: targetWorktreeId
-  }))
+  // Preserve absence: inventing an empty closed-last-tab tombstone would suppress the initial terminal.
+  if (Object.hasOwn(session.tabsByWorktree, sourceWorktreeId)) {
+    const tabs = session.tabsByWorktree[sourceWorktreeId] ?? []
+    delete session.tabsByWorktree[sourceWorktreeId]
+    session.tabsByWorktree[targetWorktreeId] = tabs.map((tab) => ({
+      ...tab,
+      worktreeId: targetWorktreeId
+    }))
+  }
 
   const groups = session.tabGroups?.[sourceWorktreeId]
   if (groups) {

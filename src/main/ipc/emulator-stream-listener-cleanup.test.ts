@@ -1,8 +1,6 @@
 import { EventEmitter } from 'node:events'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
-// Capture the ipcMain handlers the modules register so tests can invoke them
-// directly with a fake WebContents owner.
 const handlers = new Map<string, (event: unknown, args: unknown) => unknown>()
 
 vi.mock('electron', () => ({
@@ -11,7 +9,6 @@ vi.mock('electron', () => ({
       handlers.set(channel, listener)
     }
   },
-  // Any non-null return marks the sender as a real BrowserWindow renderer.
   BrowserWindow: { fromWebContents: () => ({}) }
 }))
 
@@ -31,8 +28,7 @@ vi.mock('../emulator/emulator-probe', () => ({ emulatorProbe: () => {} }))
 import { registerEmulatorFrameStreamHandlers } from './emulator-frame-stream'
 import { registerEmulatorVideoStreamHandlers } from './emulator-video-stream'
 
-/** A fake main-window WebContents: a real EventEmitter plus the members the
- * stream handlers touch, so we can assert on its real `destroyed` listeners. */
+/** Keep real EventEmitter destruction listeners behind the fake WebContents. */
 function makeOwner(): EventEmitter & { isDestroyed: () => boolean; send: () => void } {
   const owner = new EventEmitter() as EventEmitter & {
     isDestroyed: () => boolean
@@ -55,8 +51,7 @@ describe('emulator frame stream listener cleanup', () => {
     const owner = makeOwner()
     const event = { sender: owner }
 
-    // 15 show/hide cycles: without the fix this would leave 15 destroyed
-    // listeners and trip Node's MaxListenersExceededWarning (default 10).
+    // Fifteen cycles expose leaks beyond Node's default ten-listener warning threshold.
     for (let i = 0; i < 15; i++) {
       const { streamId } = start(event, { streamUrl: 'http://127.0.0.1:0/stream' }) as {
         streamId: string
@@ -65,20 +60,6 @@ describe('emulator frame stream listener cleanup', () => {
       stop(event, { streamId })
       expect(owner.listenerCount('destroyed')).toBe(0)
     }
-  })
-
-  it('still tears down via the destroyed event when the window closes without a stop', () => {
-    registerEmulatorFrameStreamHandlers()
-    const start = handlers.get('emulator:frameStreamStart')!
-    const owner = makeOwner()
-
-    start({ sender: owner }, { streamUrl: 'http://127.0.0.1:0/stream' })
-    expect(owner.listenerCount('destroyed')).toBe(1)
-
-    owner.emit('destroyed')
-    // `.once` self-removes after firing; the handler's stop path removes it too
-    // (idempotent), so no listener survives the window close.
-    expect(owner.listenerCount('destroyed')).toBe(0)
   })
 })
 

@@ -6,7 +6,11 @@ import { callRuntimeRpc } from '../../runtime/runtime-rpc-client'
 import { prCommentsCacheSuffix, sourceScopedRepoCacheKey } from './cache-identity'
 import { isFresh, withBoundedCacheEntry } from './cache-policy'
 import { inflightCommentsRequests } from './request-coordination'
-import { getGitHubRepoSourceSettings, getGitHubWorkItemRequestContext } from './work-item-routing'
+import {
+  getGitHubRepoSourceSettings,
+  getGitHubSourceTarget,
+  getGitHubWorkItemRequestContext
+} from './work-item-routing'
 
 export const createCommentFetchActions = (
   set: Parameters<StateCreator<AppState>>[0],
@@ -17,11 +21,7 @@ export const createCommentFetchActions = (
       options?.repoId ? candidate.id === options.repoId : candidate.path === repoPath
     )
     const repoId = options?.repoId ?? repo?.id
-    const requestSettings = getGitHubRepoSourceSettings(
-      get().settings,
-      repo,
-      options?.sourceContext
-    )
+    const requestSettings = getGitHubRepoSourceSettings(get(), repo, options?.sourceContext)
     const cacheKey = sourceScopedRepoCacheKey(
       repoPath,
       repoId,
@@ -46,7 +46,7 @@ export const createCommentFetchActions = (
       try {
         const requestContext = getGitHubWorkItemRequestContext(
           get(),
-          requestSettings,
+          getGitHubSourceTarget(get(), repo, options?.sourceContext),
           repoId ?? repoPath,
           repoPath,
           options?.sourceContext

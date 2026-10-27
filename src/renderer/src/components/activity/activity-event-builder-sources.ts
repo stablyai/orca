@@ -1,4 +1,4 @@
-import { migrationUnsupportedToAgentStatusEntry } from '@/lib/migration-unsupported-agent-entry'
+import { migrationUnsupportedToAgentStatusEntry } from '../../../../shared/migration-unsupported-agent-entry'
 import { parsePaneKey } from '../../../../shared/stable-pane-id'
 import type { TerminalTab } from '../../../../shared/terminal-tab-types'
 import type { AgentStatusEntry } from '../../../../shared/agent-status-types'
@@ -20,7 +20,7 @@ export function appendUnsupportedAndRetainedEvents(context: {
     entry: AgentStatusEntry,
     terminalPtyId?: string | null
   ) => { worktree: Worktree; repo: Repo | null; knownWorktree: boolean }
-  pushPaneEvents: (paneEvents: ActivityEvent[]) => void
+  pushPaneEvents: (paneEvents: ActivityEvent[], rowEntry: AgentStatusEntry) => void
 }): void {
   const {
     args,
@@ -45,7 +45,11 @@ export function appendUnsupportedAndRetainedEvents(context: {
       continue
     }
     const owner = resolveOwner(tabEntry, entry, unsupported.ptyId)
-    const { events: paneEvents, live } = resolvePaneBuild(
+    const {
+      events: paneEvents,
+      live,
+      rowEntry
+    } = resolvePaneBuild(
       {
         cacheKey,
         source: unsupported,
@@ -67,7 +71,7 @@ export function appendUnsupportedAndRetainedEvents(context: {
     if (live) {
       liveAgentByPaneKey[entry.paneKey] = live
     }
-    pushPaneEvents(paneEvents)
+    pushPaneEvents(paneEvents, rowEntry)
   }
 
   for (const [paneKey, retained] of Object.entries(args.retainedAgentsByPaneKey)) {
@@ -82,7 +86,7 @@ export function appendUnsupportedAndRetainedEvents(context: {
     if (!owner.knownWorktree) {
       continue
     }
-    const { events: paneEvents } = resolvePaneBuild(
+    const { events: paneEvents, rowEntry } = resolvePaneBuild(
       {
         cacheKey: `retained:${paneKey}`,
         source: retained,
@@ -100,6 +104,6 @@ export function appendUnsupportedAndRetainedEvents(context: {
       cache,
       seenCacheKeys
     )
-    pushPaneEvents(paneEvents)
+    pushPaneEvents(paneEvents, rowEntry)
   }
 }

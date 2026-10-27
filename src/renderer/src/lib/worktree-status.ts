@@ -1,7 +1,7 @@
 import { resolveAgentTypeFromTerminalTitle } from '@/components/sidebar/worktree-title-derived-agent-rows'
 import { classifyTitleActivity } from '@/lib/pane-agent-evidence'
-import { tabHasLivePty } from '@/lib/tab-has-live-pty'
-import { resolveRuntimePaneTitleLeafIdFromRoot } from '@/lib/runtime-pane-title-leaf-id'
+import { tabHasLivePty } from '../../../shared/tab-has-live-pty'
+import { resolveRuntimePaneTitleLeafIdFromRoot } from '../../../shared/runtime-pane-title-leaf-id'
 import { containsAgentSpinnerGlyph } from '../../../shared/agent-title-core'
 import { isSyntheticAgentPermissionTitle } from '../../../shared/synthetic-agent-title'
 import type {
@@ -11,18 +11,14 @@ import type {
 } from '../../../shared/terminal-tab-types'
 import type { TuiAgent } from '../../../shared/tui-agent'
 import type { LiveAgentWorktreeStatus } from './worktree-activity-state'
+import { rankWorktreeStatus, type WorktreeStatus } from '../../../shared/worktree-status-rollup'
 
-export type WorktreeStatus =
-  | 'active'
-  | 'working'
-  | 'monitoring'
-  | 'permission'
-  | 'interrupted'
-  | 'done'
-  | 'inactive'
+export type { WorktreeStatus } from '../../../shared/worktree-status-rollup'
 
 type WorktreeStatusHeuristicOptions = {
   liveAgentStatus?: LiveAgentWorktreeStatus
+  /** An awake chat tab has no PTY until its first message, but the user sees an open session. */
+  hasStructuredChat?: boolean
   agentStatusPaneIdsByTabId?: Record<string, ReadonlySet<string>>
   /** Stale rows suppress Orca's generated permission labels; native title fallback stays live. */
   stalePaneIdsByTabId?: Record<string, ReadonlySet<string>>
@@ -35,7 +31,9 @@ const STATUS_LABELS: Record<WorktreeStatus, string> = {
   working: 'Working',
   monitoring: 'Monitoring background tasks',
   permission: 'Needs permission',
+  failed: 'Failed',
   interrupted: 'Interrupted',
+  unconfirmed: 'Couldn’t confirm',
   done: 'Done',
   inactive: 'Inactive'
 }
@@ -63,8 +61,8 @@ export function getWorktreeStatus(
   if (options.liveAgentStatus === 'monitoring') {
     return 'monitoring'
   }
-  if (liveTabs.length > 0 || browserTabs.length > 0) {
-    // Why: browser-only worktrees (no PTY) are still active from the user's point of view.
+  if (liveTabs.length > 0 || browserTabs.length > 0 || options.hasStructuredChat) {
+    // Why: browser-only and chat-only worktrees (no PTY) are still active from the user's point of view.
     return 'active'
   }
   return 'inactive'
@@ -151,9 +149,7 @@ function titleStatusIsAgentAttributable(title: string, launchAgent?: TuiAgent | 
   if (resolveAgentTypeFromTerminalTitle(title) !== null) {
     return true
   }
-  // Why: a spinner proves activity but not identity (Claude's thinking title has no provider
-  // token, #9040); the tab's launch identity supplies it, mirroring the row builder's spinner
-  // fallback (#9647) so the dot and the sidebar row agree.
+  // Spinner proves activity, not provider (Claude titles lack it, #9040); use launch identity like sidebar rows (#9647).
   return containsAgentSpinnerGlyph(title) && Boolean(launchAgent)
 }
 
@@ -167,11 +163,12 @@ export function getWorktreeStatusLabel(status: WorktreeStatus): string {
  *
  * Map args are narrowed to this worktree. `hasPermission`/`hasLiveWorking`/
  * `hasLiveDone` are fresh hook entries ({blocked,waiting} / {working} / {done});
- * `hasRetainedDone` is a retained-agent snapshot scoped to this worktreeId.
+ * `hasRetainedDone`/`hasRetainedFailed` are retained-agent snapshots scoped to this worktreeId.
  */
 export function resolveWorktreeStatus(args: {
   tabs: readonly Pick<TerminalTab, 'id' | 'title' | 'launchAgent'>[]
   browserTabs: readonly { id: string }[]
+  hasStructuredChat?: boolean
   ptyIdsByTabId: Record<string, string[]>
   runtimePaneTitlesByTabId?: Record<string, Record<number, string>>
   agentStatusPaneIdsByTabId?: Record<string, ReadonlySet<string>>
@@ -181,9 +178,12 @@ export function resolveWorktreeStatus(args: {
   hasPermission: boolean
   hasLiveWorking: boolean
   hasLiveMonitoring?: boolean
+  hasFailed?: boolean
   hasInterrupted?: boolean
+  hasUnconfirmed?: boolean
   hasLiveDone: boolean
   hasRetainedDone: boolean
+  hasRetainedFailed?: boolean
 }): WorktreeStatus {
   const heuristic = getWorktreeStatus(
     args.tabs,
@@ -191,32 +191,12 @@ export function resolveWorktreeStatus(args: {
     args.ptyIdsByTabId,
     args.runtimePaneTitlesByTabId ?? {},
     {
+      hasStructuredChat: args.hasStructuredChat,
       agentStatusPaneIdsByTabId: args.agentStatusPaneIdsByTabId,
       stalePaneIdsByTabId: args.stalePaneIdsByTabId,
       terminalLayoutsByTabId: args.terminalLayoutsByTabId,
       terminalLayoutRootsByTabId: args.terminalLayoutRootsByTabId
     }
   )
-  if (args.hasPermission) {
-    return 'permission'
-  }
-  // Why: heuristic 'permission' outranks heuristic 'working' — the user-actionable signal wins when panes in one tab disagree.
-  if (heuristic === 'permission') {
-    return 'permission'
-  }
-  // Why: restored cards get the hook snapshot before panes mount; trust the explicit working row so they stay yellow on restart.
-  if (args.hasLiveWorking || heuristic === 'working') {
-    return 'working'
-  }
-  if (args.hasLiveMonitoring || heuristic === 'monitoring') {
-    return 'monitoring'
-  }
-  // Terminal outcomes follow live states, but an interrupted outcome must not collapse into success.
-  if (args.hasInterrupted) {
-    return 'interrupted'
-  }
-  if (args.hasLiveDone || args.hasRetainedDone) {
-    return 'done'
-  }
-  return heuristic
+  return rankWorktreeStatus(heuristic, args)
 }

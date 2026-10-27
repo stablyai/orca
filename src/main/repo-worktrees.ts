@@ -1,3 +1,4 @@
+import { preserveFolderUpgradeWorktreePath } from './folder-upgrade-worktree-path'
 import type { Repo } from '../shared/repo-types'
 import type { GitWorktreeInfo } from '../shared/worktree/types'
 import {
@@ -9,7 +10,7 @@ import {
 import { isFolderRepo } from '../shared/repo-kind'
 import { getRepoExecutionHostId, LOCAL_EXECUTION_HOST_ID } from '../shared/execution-host'
 import { resolveGitRouteForHost } from './providers/execution-host-provider-dispatch'
-import { areWorktreePathsEqual } from './ipc/worktree-logic'
+import { areWorktreePathsEqual } from './git/worktree-path-comparison'
 import { WorktreeCatalogUnavailableError } from '../shared/worktree/worktree-catalog-availability'
 
 type LocalRepoWorktreeListOptions = {
@@ -22,8 +23,6 @@ function hasLocalRepoWorktreeListOptions(options: LocalRepoWorktreeListOptions |
 }
 
 export function isRepoRoot(repos: Repo[], resolvedTarget: string): boolean {
-  // Why: `!repo.connectionId` matched a remote path against a local one for a row that spells its
-  // owner only as `executionHostId: 'ssh:<target>'`. Resolve the host instead of reading one field.
   return repos.some(
     (repo) =>
       getRepoExecutionHostId(repo) === LOCAL_EXECUTION_HOST_ID &&
@@ -37,9 +36,7 @@ export function createFolderWorktree(repo: Repo): GitWorktreeInfo {
     head: '',
     branch: '',
     isBare: false,
-    // Why: folder mode has no linked worktree graph. Treat the folder itself
-    // as the single primary worktree so the rest of Orca's worktree-first UI
-    // can keep using one stable workspace identity.
+    // Folder workspaces use the folder itself as their sole primary worktree.
     isMainWorktree: true
   }
 }
@@ -51,16 +48,28 @@ export async function listRepoWorktrees(
   return listRoutedRepoWorktrees(repo, options, listWorktrees)
 }
 
-/**
- * The detected scan's listing: a Git or host failure rejects instead of softening to `[]`, so a
- * failed scan cannot be published as an authoritative empty listing and prune the repo's worktrees
- * (#1158's retention guard only fires when the listing admits it failed).
- */
+// A failed scan must reject: an authoritative empty list would prune live worktrees.
 export async function listRepoWorktreesForDetectedScan(
   repo: Repo,
   options?: LocalRepoWorktreeListOptions
 ): Promise<GitWorktreeInfo[]> {
   return listRoutedRepoWorktrees(repo, options, listWorktreesSharedStrictAllowingTrueEmpty)
+}
+
+function assertLocalGitRoute(repo: Repo): void {
+  const route = resolveGitRouteForHost(getRepoExecutionHostId(repo))
+  if (route.kind === 'runtime') {
+    // Nested runtime SSH targets belong to the server's namespace.
+    throw new WorktreeCatalogUnavailableError(
+      `Worktree catalog unavailable for ${repo.path}: host ${route.hostId} is not reachable from this process.`
+    )
+  }
+  if (route.kind === 'ssh') {
+    // An unreachable host is not an empty catalog; callers would prune live worktrees.
+    throw new WorktreeCatalogUnavailableError(
+      `Worktree catalog unavailable for ${repo.path}: SSH connection "${route.connectionId}" is not connected.`
+    )
+  }
 }
 
 async function listRoutedRepoWorktrees(
@@ -74,37 +83,14 @@ async function listRoutedRepoWorktrees(
   if (isFolderRepo(repo)) {
     return [createFolderWorktree(repo)]
   }
-  const route = resolveGitRouteForHost(getRepoExecutionHostId(repo))
-  if (route.kind === 'runtime') {
-    // A runtime row's `connectionId` names a target in the *server's* namespace, not one this
-    // client may dial. Reading it here would answer from a same-named local target.
-    throw new WorktreeCatalogUnavailableError(
-      `Worktree catalog unavailable for ${repo.path}: host ${route.hostId} is not reachable from this process.`
-    )
-  }
-  if (route.kind === 'ssh') {
-    // Why: runtime worktree resolution can run before SSH providers have reattached during startup.
-    // Never fall back to local git against a server path, and never report the unreachable host as an
-    // empty catalog (#14004) — callers treat a resolved listing as authoritative.
-    if (!route.provider) {
-      throw new WorktreeCatalogUnavailableError(
-        `Worktree catalog unavailable for ${repo.path}: SSH connection "${route.connectionId}" is not connected.`
-      )
-    }
-    return await route.provider.listWorktrees(repo.path)
-  }
-  return hasLocalRepoWorktreeListOptions(options)
+  assertLocalGitRoute(repo)
+  const worktrees = hasLocalRepoWorktreeListOptions(options)
     ? await listLocal(repo.path, options)
     : await listLocal(repo.path)
+  return preserveFolderUpgradeWorktreePath(repo, worktrees)
 }
 
-/**
- * Worktree rows for callers that read only `worktree.path`.
- *
- * Skips the sparse-checkout probe behind the badge, which those callers discard. On a WSL repo the
- * probe is a 9p stat plus a config read per worktree, re-paid cold after every worktree
- * create/remove because that invalidates both the authorized-roots cache and the sparse cache.
- */
+// Path-only callers skip the expensive per-worktree sparse-checkout probe.
 export async function listRepoWorktreeGraph(
   repo: Repo,
   options?: LocalRepoWorktreeListOptions
@@ -112,19 +98,11 @@ export async function listRepoWorktreeGraph(
   if (isFolderRepo(repo)) {
     return [createFolderWorktree(repo)]
   }
-  const route = resolveGitRouteForHost(getRepoExecutionHostId(repo))
-  // An unreachable remote host answers `[]` here, unlike listRepoWorktrees above, which throws.
-  // Preserved as-is: this call site's callers treat the graph as best-effort. The inconsistency is
-  // real but is a separate behavior decision from resolving the host correctly.
-  if (route.kind === 'runtime') {
-    return []
-  }
-  if (route.kind === 'ssh') {
-    return route.provider ? await route.provider.listWorktrees(repo.path) : []
-  }
-  return hasLocalRepoWorktreeListOptions(options)
+  assertLocalGitRoute(repo)
+  const worktrees = hasLocalRepoWorktreeListOptions(options)
     ? await listWorktreeGraph(repo.path, options)
     : await listWorktreeGraph(repo.path)
+  return preserveFolderUpgradeWorktreePath(repo, worktrees)
 }
 
 export async function listLocalRepoWorktreesStrict(
@@ -137,7 +115,8 @@ export async function listLocalRepoWorktreesStrict(
   if (isFolderRepo(repo)) {
     return [createFolderWorktree(repo)]
   }
-  return hasLocalRepoWorktreeListOptions(options)
+  const worktrees = hasLocalRepoWorktreeListOptions(options)
     ? await listWorktreesStrict(repo.path, options)
     : await listWorktreesStrict(repo.path)
+  return preserveFolderUpgradeWorktreePath(repo, worktrees)
 }

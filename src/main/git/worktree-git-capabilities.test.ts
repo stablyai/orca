@@ -93,7 +93,7 @@ describe('worktree Git capabilities', () => {
           })
         )
       }
-      return Promise.resolve({ stdout: '/repo\n/git-store/project.git\n' })
+      return Promise.resolve({ stdout: '/repo\n/git-store/project.git\n/git-store/project.git\n' })
     })
 
     await listWorktrees('/repo')
@@ -103,9 +103,9 @@ describe('worktree Git capabilities', () => {
       ([args]) => (args as string[])[0] === 'rev-parse'
     )
     expect(revParseCalls.map(([args]) => args)).toEqual([
-      ['rev-parse', '--path-format=absolute', '--show-toplevel', '--git-common-dir'],
-      ['rev-parse', '--show-toplevel', '--git-common-dir'],
-      ['rev-parse', '--show-toplevel', '--git-common-dir']
+      ['rev-parse', '--path-format=absolute', '--show-toplevel', '--git-common-dir', '--git-dir'],
+      ['rev-parse', '--show-toplevel', '--git-common-dir', '--git-dir'],
+      ['rev-parse', '--show-toplevel', '--git-common-dir', '--git-dir']
     ])
   })
 
@@ -118,10 +118,10 @@ describe('worktree Git capabilities', () => {
       }
       if (args.includes('--path-format=absolute')) {
         return Promise.resolve({
-          stdout: '--path-format=absolute\n/repo\n/git-store/project.git\n'
+          stdout: '--path-format=absolute\n/repo\n/git-store/project.git\n/git-store/project.git\n'
         })
       }
-      return Promise.resolve({ stdout: '/repo\n/git-store/project.git\n' })
+      return Promise.resolve({ stdout: '/repo\n/git-store/project.git\n/git-store/project.git\n' })
     })
 
     await listWorktrees('/repo')
@@ -131,8 +131,8 @@ describe('worktree Git capabilities', () => {
       ([args]) => (args as string[])[0] === 'rev-parse'
     )
     expect(revParseCalls.map(([args]) => args)).toEqual([
-      ['rev-parse', '--path-format=absolute', '--show-toplevel', '--git-common-dir'],
-      ['rev-parse', '--show-toplevel', '--git-common-dir']
+      ['rev-parse', '--path-format=absolute', '--show-toplevel', '--git-common-dir', '--git-dir'],
+      ['rev-parse', '--show-toplevel', '--git-common-dir', '--git-dir']
     ])
   })
 })

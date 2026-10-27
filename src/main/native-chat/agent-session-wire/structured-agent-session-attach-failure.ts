@@ -2,9 +2,13 @@ import type { AgentSessionRecord } from '../../../shared/agent-session-record'
 import type { AttachFlowInput } from './structured-agent-session-attach-flow'
 import {
   AgentSessionAcquisitionExitUnprovenError,
-  AgentSessionAcquisitionRootExitObservedError,
-  rethrowAfterAgentSessionAcquisitionCleanup
+  AgentSessionAcquisitionRootExitObservedError
 } from './structured-agent-session-adapter'
+import { rethrowAfterAgentSessionAcquisitionCleanup } from './structured-agent-session-provider-exit-proof'
+import { agentSessionFailureFact } from '../../../shared/agent-session-failure'
+import type { StructuredAgentSessionAttachContext } from './structured-agent-session-attach-context'
+import type { StructuredAgentSessionStopVerdict } from './structured-agent-session-host-types'
+import { endProviderChild } from './structured-agent-session-provider-child'
 
 export async function settlePostAcquisitionAttachFailure(
   input: AttachFlowInput,
@@ -24,8 +28,7 @@ export async function settlePostAcquisitionAttachFailure(
           ? 'root-exit-observed'
           : 'exit-proven'
   }
-  // A failed close must not prevent durable failure settlement.
-  await Promise.resolve(input.onAttachFailed?.()).catch(() => undefined)
+  input.onAcquisitionReleased?.(cause, { rootGone: exitProof !== 'unproven' })
   try {
     await input.store.settleFailedPostAcquisitionAttachment({
       sessionId: record.sessionId,
@@ -36,6 +39,7 @@ export async function settlePostAcquisitionAttachFailure(
       outcome: {
         status: 'failed',
         code: 'agent_session_operation_invalid',
+        details: { reason: 'attachFailed' },
         message: cause instanceof Error ? cause.message : String(cause)
       },
       exitProof,
@@ -48,4 +52,67 @@ export async function settlePostAcquisitionAttachFailure(
     )
   }
   throw cleanupError
+}
+
+export function endStructuredAgentSessionReleasedChild(
+  context: StructuredAgentSessionAttachContext,
+  sessionId: string,
+  cause: unknown,
+  verdict: StructuredAgentSessionStopVerdict
+): void {
+  const session = context.sessions.get(sessionId)
+  const child = session?.child
+  if (child) {
+    context.runtimeState.startupAttempts.childEnded(sessionId, child)
+  }
+  if (
+    !session ||
+    !child ||
+    !endProviderChild(session, {
+      generation: child.generation,
+      fence: child.fence,
+      cause: 'attach-failed',
+      reason: cause instanceof Error ? cause.message : String(cause),
+      // Host attach faults are not provider failures.
+      failure: agentSessionFailureFact('hostFault'),
+      duringStartup: child.phase === 'starting',
+      ...verdict
+    })
+  ) {
+    return
+  }
+  context.runtimeState.currentEventSink(sessionId)?.close()
+  context.runtimeState.discardEventSink(sessionId)
+  context.publishStatus?.(sessionId)
+  // Re-derive reader/queue state after releasing the live acquisition.
+  context.generationEnded?.(sessionId)
+}
+
+export async function settleUnsupportedReservation(
+  input: AttachFlowInput,
+  record: AgentSessionRecord
+): Promise<void> {
+  const spawnToken = record.lease.reservedSpawnToken
+  if (!spawnToken) {
+    return
+  }
+  try {
+    await input.store.settleFailedAcquisition({
+      sessionId: record.sessionId,
+      fence: record.lease.runtimeFence,
+      spawnToken,
+      callerKey: input.callerKey,
+      operationId: input.params.envelope.clientOperationId,
+      outcome: {
+        status: 'failed',
+        code: 'structured_agent_session_unsupported',
+        details: { reason: 'hostUnsupported' },
+        message: 'Structured session support changed before the provider could start.'
+      },
+      exitProof: 'processless',
+      now: input.now()
+    })
+  } catch (error) {
+    throw new AggregateError([error], 'agent session unsupported reservation settlement failed')
+  }
 }

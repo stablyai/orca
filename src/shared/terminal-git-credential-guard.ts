@@ -1,4 +1,4 @@
-import { recognizeAgentProcessFromCommandLine } from './agent-process-recognition'
+import { recognizeAgentLaunchCommand } from './agent-command-line-intent'
 import { gitCredentialPromptGuardEnv } from './git-credential-prompt-env'
 
 const GIT_CONFIG_PROTOCOL_KEY_RE = /^GIT_CONFIG_(?:COUNT|KEY_\d+|VALUE_\d+)$/
@@ -23,7 +23,9 @@ export function applyTerminalGitCredentialPromptGuard(
   const shouldGuard =
     opts.isUnattended === true ||
     Boolean(
-      recognizeAgentProcessFromCommandLine(opts.launchCommand, { includeHeadlessOneShot: true })
+      recognizeAgentLaunchCommand(opts.launchCommand, {
+        includeHeadlessOneShot: true
+      })
     )
   if (!explicitlyGuarded && !shouldGuard) {
     return false
@@ -35,8 +37,7 @@ export function applyTerminalGitCredentialPromptGuard(
     return true
   }
 
-  // Why: the daemon must append indexed config after merging its own inherited
-  // environment; the sparse wire carries only the guard decision and scalars.
+  // The daemon must append indexed config after merging inherited env; send only the policy and scalar guards.
   env[TERMINAL_GIT_CREDENTIAL_GUARD_POLICY_ENV] = 'guard'
   for (const [key, value] of Object.entries(guarded)) {
     if (typeof value !== 'string' || GIT_CONFIG_PROTOCOL_KEY_RE.test(key)) {

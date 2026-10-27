@@ -16,8 +16,6 @@ import { translate } from '@/i18n/i18n'
 import { lazyWithRetry } from '@/lib/lazy-with-retry'
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
 
-export { getSetupGuideSidebarEntryReady, shouldShowSetupGuideEntry } from './SetupGuideSidebarEntry'
-
 export function shouldShowMobileButton(
   settings: Partial<Pick<GlobalSettings, 'showMobileButton'>> | null | undefined
 ): boolean {
@@ -51,8 +49,7 @@ export function shouldShowAgentDashboardButton(
 const AgentDashboardSidebarEntry = lazyWithRetry(() => import('./AgentDashboardSidebarEntry'))
 
 const SidebarNav = React.memo(function SidebarNav() {
-  // Why: this memo boundary needs its own language subscription, while
-  // translate() preserves Orca's pseudo-localization behavior.
+  // Subscribe across this memo boundary; translate still handles pseudo-localization.
   useTranslation()
   const worktreePaletteShortcutCombos = useShortcutKeyComboDetails('worktree.palette')
   const openAutomationsPage = useAppStore((s) => s.openAutomationsPage)

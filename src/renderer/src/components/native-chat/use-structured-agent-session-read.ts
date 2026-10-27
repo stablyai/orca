@@ -1,5 +1,9 @@
-import { useEffect, useMemo, useSyncExternalStore } from 'react'
-import type { RuntimeClientTarget } from '@/runtime/runtime-rpc-client'
+import { useAppStore } from '@/store'
+import { subscribeRuntimeHostContactRegained } from '@/runtime/runtime-host-contact-regained'
+import { useEffect, useMemo, useRef, useSyncExternalStore } from 'react'
+import { notifyStructuredAttentionView } from '@/attention/agent-subject-read-actions'
+import { structuredAttentionReadObservation } from './structured-attention-read-observation'
+import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
 import {
   getStructuredAgentSessionReadOwner,
   type StructuredAgentSessionReadSnapshot
@@ -24,28 +28,51 @@ export function useStructuredAgentSessionRead(args: {
   sessionId: string
   target: RuntimeClientTarget
   isVisible?: boolean
+  isViewed?: boolean
 }) {
   const { sessionId, target, isVisible = true } = args
   const { owner, snapshot } = useReadOwnerSnapshot(sessionId, target)
-
-  useEffect(() => (isVisible ? owner.activate() : undefined), [isVisible, owner])
+  const isViewed = args.isViewed ?? isVisible
+  const environmentId = target.kind === 'environment' ? target.environmentId : null
+  const observationKey = structuredAttentionReadObservation(snapshot.state)
+  const lastView = useRef<{ owner: typeof owner; observationKey: string } | null>(null)
 
   useEffect(() => {
-    if (!isVisible) {
+    if (isVisible) {
+      return owner.activate({
+        getState: useAppStore.getState,
+        subscribeRetryNow: (retry) =>
+          environmentId ? subscribeRuntimeHostContactRegained(environmentId, retry) : () => {}
+      })
+    }
+    return undefined
+  }, [isVisible, owner, environmentId])
+  useEffect(() => {
+    const observedCursor = snapshot.state.cursor
+    if (!isViewed) {
+      lastView.current = null
       return
     }
-    const refresh = (): void => {
-      if (document.hasFocus()) {
-        owner.refresh()
-      }
+    if (
+      !observedCursor ||
+      (lastView.current?.owner === owner && lastView.current.observationKey === observationKey)
+    ) {
+      return
     }
-    window.addEventListener('focus', refresh)
-    return () => window.removeEventListener('focus', refresh)
-  }, [isVisible, owner])
+    lastView.current = { owner, observationKey }
+    notifyStructuredAttentionView({
+      sessionId,
+      target,
+      observedCursor: { ...observedCursor },
+      observationKey
+    })
+  }, [isViewed, observationKey, owner, sessionId, snapshot.state.cursor, target])
 
   return {
     state: snapshot.state,
+    readCurrent: snapshot.current,
     loadingOlder: snapshot.loadingOlder,
+    olderHistoryGeneration: snapshot.olderHistoryGeneration,
     loadOlder: owner.loadOlder,
     providerSession: snapshot.providerSession
   }

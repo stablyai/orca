@@ -1,9 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-// Why this file: detach drops the session-bound primary exit observer (it pinned
-// the disposed pane's xterm buffers), so the parked watcher sidecar is the sole
-// owner of a parked PTY's exit. Orchestrated sleep/shutdown exits must keep the
-// tab and the layout the wake path restores.
+// Without a detached primary observer, the sidecar alone must preserve parked sleep/shutdown tabs and wake layouts.
 
 const WORKTREE_ID = 'repo::/worktree'
 const TAB_ID = 'tab-1'
@@ -63,6 +60,7 @@ import {
   markCommittedPtyShutdowns
 } from './pty-shutdown-exit-deferral'
 import { startParkedPtyWatcher } from './terminal-parked-pty-watcher'
+import { deliverPtyExitToHandlers } from './pty-exit-delivery'
 import type { ParkedTabWatcherEntry } from './terminal-parked-watcher-registry'
 
 function startSplitWatchers(): ParkedTabWatcherEntry {
@@ -132,6 +130,25 @@ describe('sleep-preserved parked exits (sole-owner sidecar)', () => {
     expect(entry.disposersByPtyId.has(PTY_ID)).toBe(false)
     // The one-shot committed marker is consumed by the guard, never leaked.
     expect(consumeCommittedPtyShutdownExit(PTY_ID, null)).toBe(false)
+  })
+
+  it('keeps the tab on an exit main labeled as a restart replacement', () => {
+    const entry = startSplitWatchers()
+    exitCallbacksByPtyId.get(SECOND_PTY_ID)?.(0, { hadPrimary: false })
+    discardPreHandlerPtyState.mockClear()
+
+    // The last parked pane's PTY is replaced; an ordinary exit here would close the tab.
+    deliverPtyExitToHandlers({
+      ptyId: PTY_ID,
+      code: 0,
+      replacedByRestart: true,
+      sidecars: [exitCallbacksByPtyId.get(PTY_ID)!]
+    })
+
+    expect(closeTerminalTab).not.toHaveBeenCalled()
+    expect(mockStoreState.clearRuntimePaneTitle).toHaveBeenCalledWith(TAB_ID, 1)
+    expect(startedWatcherDisposers[0]).toHaveBeenCalled()
+    expect(entry.disposersByPtyId.size).toBe(0)
   })
 
   it('leaves the committed marker to the primary when one handled the exit', () => {

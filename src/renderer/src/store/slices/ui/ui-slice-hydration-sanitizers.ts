@@ -1,3 +1,4 @@
+import { normalizeExplorerDisplayRootByWorktree } from '../../../../../shared/file-explorer-display-root'
 import type { AppState } from '../../types'
 import type { PersistedTrustedOrcaHooks } from '../../../../../shared/orca-yaml-hook-types'
 import type { PersistedUIState } from '../../../../../shared/persisted-ui-state-types'
@@ -10,16 +11,13 @@ import type {
 import type { WorkspaceCleanupDismissal } from '../../../../../shared/workspace-cleanup'
 import { WORKSPACE_CLEANUP_CLASSIFIER_VERSION } from '../../../../../shared/workspace-cleanup'
 import { isTopLevelView } from '../../../../../shared/top-level-view'
-import {
-  normalizeVisibleExecutionHostIds,
-  normalizeExecutionHostScope
-} from '../../../../../shared/execution-host'
+import { AGENT_STATUS_HYDRATE_MAX_AGE_MS } from '../../../../../shared/agent-status-freshness'
+import { resolveVisibleWorkspaceHostIds } from '../../../../../shared/workspace-view/workspace-host-visibility'
 import { persistedUIValuesEqual } from '../../../../../shared/persisted-ui-equality'
 import { DEFAULT_STATUS_BAR_ITEMS } from '../../../../../shared/constants'
 import type { UISlice } from './ui-slice-contract'
 
 const MIN_SIDEBAR_WIDTH = 220
-const HYDRATE_MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000
 
 export function preserveStringArrayIdentity<T extends string>(
   current: readonly T[] | null,
@@ -106,7 +104,7 @@ export function sanitizePersistedSidebarWidth(
 
 export function sanitizePaneKeyTimestampRecord(
   value: unknown,
-  maxAgeMs: number = HYDRATE_MAX_AGE_MS
+  maxAgeMs: number = AGENT_STATUS_HYDRATE_MAX_AGE_MS
 ): Record<string, number> {
   if (value === null || typeof value !== 'object' || Array.isArray(value)) {
     return {}
@@ -127,12 +125,9 @@ export function sanitizePaneKeyTimestampRecord(
 
 export const sanitizeAcknowledgedAgentsByPaneKey = sanitizePaneKeyTimestampRecord
 
-/** Cleared-at cutoffs must outlive any persisted status entry they guard: main prunes entries
- *  at HYDRATE_MAX_AGE_MS from receivedAt, and cutoff values trail receipt time, so pruning them
- *  on the same clock can resurrect a cleared entry. Double the TTL keeps the guard alive past
- *  every entry it can still shadow. */
+/** Cutoffs trail status receipt times; double the status TTL so pruning cannot resurrect a cleared entry still retained by main. */
 export function sanitizeActivityClearedAtByPaneKey(value: unknown): Record<string, number> {
-  return sanitizePaneKeyTimestampRecord(value, 2 * HYDRATE_MAX_AGE_MS)
+  return sanitizePaneKeyTimestampRecord(value, 2 * AGENT_STATUS_HYDRATE_MAX_AGE_MS)
 }
 
 export function sanitizeWorkspaceCleanupDismissals(
@@ -191,12 +186,7 @@ export function hydratedUIPartialMatchesState(
 export function normalizeHydratedVisibleWorkspaceHostIds(
   ui: PersistedUIState
 ): VisibleWorkspaceHostIds {
-  const visibleHostIds = normalizeVisibleExecutionHostIds(ui.visibleWorkspaceHostIds)
-  if (visibleHostIds) {
-    return visibleHostIds
-  }
-  const legacyScope = normalizeExecutionHostScope(ui.workspaceHostScope)
-  return legacyScope === 'all' ? null : [legacyScope]
+  return resolveVisibleWorkspaceHostIds(ui.visibleWorkspaceHostIds, ui.workspaceHostScope)
 }
 
 export function clampPetSize(
@@ -237,4 +227,29 @@ export function migrateStatusBarItems(items: readonly string[] | undefined): Sta
     }
   }
   return out as StatusBarItem[]
+}
+
+export function hydrateUnexpectedSignoutDismissal(
+  state: Pick<UISlice, 'unexpectedSignoutDismissedVersions'>,
+  version: string | null | undefined
+): Pick<UISlice, 'dismissedUnexpectedSignoutVersion' | 'unexpectedSignoutDismissedVersions'> {
+  const observed = state.unexpectedSignoutDismissedVersions
+  return {
+    dismissedUnexpectedSignoutVersion: version ?? null,
+    // A later sync must never undo any dismissal observed in this session.
+    unexpectedSignoutDismissedVersions:
+      typeof version === 'string' && !observed.includes(version) ? [...observed, version] : observed
+  }
+}
+
+/** Normalizes persisted explorer records before hydration, including malformed or absent legacy values. */
+export function sanitizeExplorerPreferences(
+  ui: PersistedUIState
+): Pick<AppState, 'explorerDisplayRootByWorktree' | 'showDotfilesByWorktree'> {
+  return {
+    explorerDisplayRootByWorktree: normalizeExplorerDisplayRootByWorktree(
+      ui.explorerDisplayRootByWorktree
+    ),
+    showDotfilesByWorktree: sanitizeShowDotfilesByWorktree(ui.showDotfilesByWorktree)
+  }
 }

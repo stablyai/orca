@@ -1,25 +1,18 @@
+import type { LocalGitExecOptions } from './repo-default-base-ref'
+import type { GitExecOptions } from './command-runner/git-exec-options'
 import { toWslExecutionSpace } from '../../shared/wsl-paths'
 import { gitExecFileAsync } from './runner'
 import { resolveRevParsePath } from './worktree-path-comparison'
 
-/**
- * One repository on one execution host, named by its Git common dir.
- *
- * Shared by the fetch controller (which serializes fetches on it) and idle ref
- * maintenance (which scopes all of its state to it), so both agree on what "the
- * same repo" means across every worktree that points at it.
- */
+/** Fetch serialization and ref maintenance share a host-scoped Git common-dir identity across worktrees. */
 
-export type CanonicalRepoKeyOptions = { wslDistro?: string }
+export type CanonicalRepoKeyOptions = LocalGitExecOptions &
+  Pick<GitExecOptions, 'signal' | 'canStart'>
 
 const CACHE_MAX = 512
 const cache = new Map<string, string>()
 
-/**
- * Git < 2.31 ignores `--path-format=absolute`: it echoes the unrecognized flag,
- * exits 0, and prints a relative `.git`. Taking the raw stdout there would give
- * every repository on the host the same key.
- */
+/** Git < 2.31 echoes unsupported --path-format=absolute; resolve its relative answer to prevent key collisions. */
 export function readGitCommonDir(stdout: string, repoPath: string): string | undefined {
   const commonDir = stdout
     .split('\n')
@@ -61,7 +54,11 @@ export async function getCanonicalRepoKey(
     if (commonDir) {
       return remember(cacheKey, `${runtimeKey}::${commonDir}`)
     }
-  } catch {
+  } catch (error) {
+    // Cancellation is unavailable identity, not a caller-path identity to cache.
+    if (options.signal?.aborted || (error instanceof Error && error.name === 'AbortError')) {
+      throw error
+    }
     // The caller path remains a safe serialization key when canonicalization fails.
   }
   return remember(cacheKey, cacheKey)

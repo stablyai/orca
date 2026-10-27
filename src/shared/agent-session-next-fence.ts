@@ -1,14 +1,5 @@
-// The only place a new fence number is chosen.
-//
-// Normally that is just "one past the current fence". After the record store falls back to its
-// backup it is not: the commit that never landed may already have granted a fence the backup cannot
-// show, and `isAgentSessionFenceCurrent` compares with STRICT EQUALITY, so minting that exact
-// number would hand a second writer a lease the first one still believes it holds.
-//
-// Recovery records the floor instead of rewriting the current fence, because `live` means a handle
-// proven at exactly the current fence — moving it would invalidate the very records recovery exists
-// to save. Every mint site routes through here so a new transition cannot quietly reintroduce a
-// bare `+ 1`; the floor is pinned by a test that drives each transition.
+// Imported backup/set-aside records may hide an already granted fence: choose above the recovery floor to prevent a second equal-fence writer.
+// Keep the current fence for proven live handles; moving it invalidates them. The source ratchet catches direct + 1 mints only; transition tests pin the bound/floor.
 
 import type { AgentSessionLease } from './agent-session-record'
 

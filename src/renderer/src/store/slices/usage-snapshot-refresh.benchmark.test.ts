@@ -56,6 +56,7 @@ function createSummary(totalTokens: number): CodexUsageSummary {
     reasoningOutputTokens: 0,
     totalTokens,
     estimatedCostUsd: 1,
+    hasUnpricedModels: false,
     topModel: 'gpt-5',
     topProject: 'orca',
     hasAnyCodexData: true

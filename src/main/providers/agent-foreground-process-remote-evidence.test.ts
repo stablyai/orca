@@ -75,6 +75,71 @@ describe('host-stamped remote foreground resolver', () => {
     expect(evidence).toMatchObject({ verdict: 'unverifiable', reason })
   })
 
+  it.each(['?', '??', '-', '0', '0,0'])(
+    'keeps the OpenCode TUI live beside a detached service with tty %s',
+    (tty) => {
+      const rows = rowsFor(['opencode'], { tty: 'ttys096' })
+      rows.push({
+        pid: 102,
+        ppid: 101,
+        pgid: 102,
+        tpgid: 0,
+        tty,
+        startTime: 'service-start',
+        stat: 'Ss',
+        command: 'opencode serve --hostname 127.0.0.1 --port 59374'
+      })
+      expect(
+        resolveRemoteForegroundEvidence(
+          { rootPid: 100, fallbackProcess: 'zsh' },
+          { ...metadata, platform: 'darwin' },
+          rows
+        )
+      ).toMatchObject({
+        verdict: 'live',
+        processName: 'opencode',
+        fence: { process: { pid: 101, startTime: 'candidate-0' }, tty: 'ttys096' }
+      })
+    }
+  )
+
+  it.each(['?', '??', '-', '0', '0,0'])(
+    'refuses a foreground-group member whose controlling tty is %s',
+    (tty) => {
+      const rows = rowsFor(['opencode'])
+      rows[1].tty = tty
+      expect(
+        resolveRemoteForegroundEvidence({ rootPid: 100, fallbackProcess: 'zsh' }, metadata, rows)
+      ).toMatchObject({ verdict: 'unverifiable', reason: 'fence_incomplete' })
+    }
+  )
+
+  it.each(['?', '??', '-', '0', '0,0'])('refuses a root without a controlling tty: %s', (tty) => {
+    const rows = rowsFor(['opencode'], { tty })
+    expect(
+      resolveRemoteForegroundEvidence({ rootPid: 100, fallbackProcess: 'zsh' }, metadata, rows)
+    ).toMatchObject({ verdict: 'unverifiable', reason: 'fence_incomplete' })
+  })
+
+  it('refuses a descendant attached to another real terminal', () => {
+    const rows = rowsFor(['opencode', '/bin/bash'])
+    rows[2].pgid = 102
+    rows[2].tty = '/dev/pts/3'
+    expect(
+      resolveRemoteForegroundEvidence({ rootPid: 100, fallbackProcess: 'zsh' }, metadata, rows)
+    ).toMatchObject({ verdict: 'unverifiable', reason: 'tty_boundary' })
+  })
+
+  it('still refuses a detached multiplexer without a session fence', () => {
+    const rows = rowsFor(['opencode', 'tmux new-session'])
+    rows[2].pgid = 102
+    rows[2].tpgid = 0
+    rows[2].tty = '??'
+    expect(
+      resolveRemoteForegroundEvidence({ rootPid: 100, fallbackProcess: 'zsh' }, metadata, rows)
+    ).toMatchObject({ verdict: 'unverifiable', reason: 'multiplexer_boundary' })
+  })
+
   it('always degrades SSH-to-Windows without a job/console foreground primitive', () => {
     expect(
       resolveRemoteForegroundEvidence(

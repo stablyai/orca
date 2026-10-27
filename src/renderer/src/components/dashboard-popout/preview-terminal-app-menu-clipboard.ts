@@ -10,17 +10,7 @@ import type { PreviewTerminalPasteSource } from './preview-terminal-paste'
 
 type PreviewTerminalSelection = Pick<Terminal, 'getSelection' | 'selectAll' | 'clearSelection'>
 
-/**
- * Routes Edit-menu and context-menu clipboard commands to the preview terminal.
- *
- * Listens to the renderer-wide ownership events, exactly like a real pane, and
- * NOT to the raw ui:appMenuPaste / ui:appMenuSelectionAction IPC. The
- * preventDefault() claim is load-bearing: without it the App-level handler
- * falls back to the focused text control, which for a focused terminal is
- * xterm's hidden .xterm-helper-textarea — the clipboard text lands there and
- * never reaches the PTY. Leaving an event unclaimed is equally deliberate: the
- * App handler then performs the native action for text controls.
- */
+/** Claim renderer ownership events to paste into the PTY; unclaimed events fall back to native controls, including xterm’s hidden textarea. */
 export function installPreviewTerminalAppMenuClipboard({
   container,
   getTerminal,

@@ -6,7 +6,11 @@ vi.mock('node:child_process', () => ({
   execFile: execFileMock
 }))
 
-import { _internals, createCodexWslRuntimeHookInstallPlan } from './codex-wsl-hook-install-plan'
+import {
+  MAX_WSL_CANONICAL_PATH_CACHE_ENTRIES,
+  _internals,
+  createCodexWslRuntimeHookInstallPlan
+} from './codex-wsl-hook-install-plan'
 
 const originalPlatform = process.platform
 
@@ -24,6 +28,26 @@ afterEach(() => {
 })
 
 describe('canonicalizeWslLinuxPath', () => {
+  it('bounds successful canonical path entries', () => {
+    setPlatform('win32')
+    execFileMock.mockImplementation(
+      (
+        _file: string,
+        _args: string[],
+        _options: unknown,
+        callback: (error: null, stdout: string) => void
+      ) => callback(null, '/home/canonical\n')
+    )
+
+    for (let index = 0; index < MAX_WSL_CANONICAL_PATH_CACHE_ENTRIES + 4; index += 1) {
+      _internals.canonicalizeWslLinuxPath('Ubuntu', `/home/path-${index}`)
+    }
+
+    expect(_internals.getWslCanonicalPathCacheSizeForTests()).toBe(
+      MAX_WSL_CANONICAL_PATH_CACHE_ENTRIES
+    )
+  })
+
   it('joins guest paths without producing a double slash at the filesystem root', () => {
     const plan = createCodexWslRuntimeHookInstallPlan(
       'C:\\runtime',
@@ -144,9 +168,7 @@ describe('canonicalizeWslLinuxPath', () => {
     ) => void
     secondCallback(new Error('path disappeared'), '')
 
-    // Why: a cold or wedged distro times out without proving the path changed.
-    // Dropping the cache would force the next launch onto /mnt/... and rewrite
-    // trust under a path Codex will not use when automount is customized.
+    // Transport failure cannot invalidate a known-good custom-automount identity.
     expect(settled).toHaveBeenCalledWith({ status: 'unavailable' })
     expect(_internals.canonicalizeWslLinuxPath('Ubuntu', '/home/alias')).toBe('/home/alice')
   })

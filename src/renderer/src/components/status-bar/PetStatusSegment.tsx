@@ -18,11 +18,7 @@ import { BUNDLED_PET, BUNDLED_PETS, findBundledPet, isBundledPetId } from '../pe
 import { PET_SIZE_MAX, PET_SIZE_MIN } from '../../../../shared/pet-types'
 import { translate } from '@/i18n/i18n'
 
-// Why: cluster pet-related controls (show/hide, character picker, custom
-// upload + removal, jump-to-settings) behind a single status-bar segment. Only
-// rendered when experimentalPet is on (gated by the caller). Pet
-// visibility is independently tracked so users can dismiss without having to
-// find the experimental flag again.
+// Keep visibility separate from experimental enablement so users can dismiss the pet without revisiting Settings.
 function PetStatusSegmentInner(): React.JSX.Element {
   const petVisible = useAppStore((s) => s.petVisible)
   const setPetVisible = useAppStore((s) => s.setPetVisible)
@@ -143,10 +139,7 @@ function PetStatusSegmentInner(): React.JSX.Element {
             ? translate('auto.components.status.bar.PetStatusSegment.1fbc51cc77', 'Hide pet')
             : translate('auto.components.status.bar.PetStatusSegment.6d0a8cd179', 'Show pet')}
         </DropdownMenuItem>
-        {/* Why: in-menu range so users can resize the overlay without leaving
-            the dropdown — pet sprites can import larger than the default 180px
-            box and visually overwhelm the viewport. preventDefault on pointer
-            events stops Radix from closing the menu while the user drags. */}
+        {/* Resize in place for oversized imports; stop pointer propagation so Radix keeps the menu open during dragging. */}
         <div
           className="px-2 py-1.5"
           onPointerDown={(e) => e.stopPropagation()}
@@ -180,10 +173,7 @@ function PetStatusSegmentInner(): React.JSX.Element {
           <DropdownMenuSubTrigger>
             {translate('auto.components.status.bar.PetStatusSegment.0608ad02a2', 'Choose pet')}
           </DropdownMenuSubTrigger>
-          {/* Why: portal so the submenu escapes the parent Content's overflow
-              clipping — without this, the submenu opens inside the scroll
-              container and gets clipped. Matches the convention used in
-              BrowserToolbarMenu/BrowserProfileRow. */}
+          {/* Portal the submenu out of the parent content’s scroll clipping. */}
           <DropdownMenuPortal>
             <DropdownMenuSubContent className="min-w-[220px]">
               {BUNDLED_PETS.map((pet) => {
@@ -245,10 +235,7 @@ function PetStatusSegmentInner(): React.JSX.Element {
               <DropdownMenuSeparator />
               <DropdownMenuItem
                 onSelect={() => {
-                  // Why: let the menu close naturally (no preventDefault) before
-                  // invoking the native file picker. Keeping the menu open when
-                  // the OS dialog opens caused the dialog to appear behind the
-                  // dropdown overlay on macOS.
+                  // Close the menu before the native picker so macOS cannot show it behind the dropdown overlay.
                   void handleImport()
                 }}
               >

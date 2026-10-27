@@ -5,6 +5,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip
 import ProjectCombobox from '@/components/new-workspace/ProjectCombobox'
 import RunTargetCombobox from '@/components/new-workspace/RunTargetCombobox'
 import { translate } from '@/i18n/i18n'
+import { cn } from '@/lib/utils'
 import type {
   EphemeralVmRecipeOption,
   NeedsProjectHostOption,
@@ -27,10 +28,12 @@ type NewWorkspaceComposerProjectSectionProps = Pick<
   | 'selectedRepoConnectInProgress'
   | 'onConnectSelectedRepo'
   | 'selectedProjectHostSetupId'
+  | 'selectedRepoExecutionHostId'
   | 'onEphemeralVmRecipeChange'
   | 'selectedEphemeralVmRecipeId'
   | 'ephemeralVmRecipeError'
 > & {
+  disabled?: boolean
   projectDescriptionId: string
   onAddProject: () => void
   focusNameInput: () => void
@@ -48,6 +51,7 @@ type NewWorkspaceComposerProjectSectionProps = Pick<
 }
 
 export function NewWorkspaceComposerProjectSection({
+  disabled = false,
   projectOptions = EMPTY_PROJECT_OPTIONS,
   selectedProjectId = null,
   onProjectChange,
@@ -62,6 +66,7 @@ export function NewWorkspaceComposerProjectSection({
   shouldShowRunTargetPicker,
   projectHostSetupOptions,
   selectedProjectHostSetupId,
+  selectedRepoExecutionHostId,
   handleProjectHostSetupChange,
   ephemeralVmRecipes,
   selectedEphemeralVmRecipeId = null,
@@ -80,91 +85,95 @@ export function NewWorkspaceComposerProjectSection({
   selectedProjectName
 }: NewWorkspaceComposerProjectSectionProps): React.JSX.Element {
   return (
-    <div className="space-y-1">
-      <div className="space-y-1">
-        <div className="flex items-center justify-between gap-2">
-          <label className="text-xs font-medium text-muted-foreground">
-            {projectLabel ??
-              translate('auto.components.NewWorkspaceComposerCard.969a8bff66', 'Project')}
-          </label>
-          {showAddProjectButton ? (
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="icon-xs"
-                  onClick={onAddProject}
-                  className="size-5 shrink-0 rounded-sm text-muted-foreground hover:text-foreground"
-                  aria-label={translate(
-                    'auto.components.NewWorkspaceComposerCard.d6b0a96f32',
-                    'Add project'
+    <fieldset disabled={disabled} className="space-y-1">
+      <div className={cn('grid gap-3', shouldShowRunTargetPicker && 'grid-cols-2')}>
+        <div className="min-w-0 space-y-1">
+          <div className="flex h-5 items-center justify-between gap-2">
+            <label className="text-xs font-medium text-muted-foreground">
+              {projectLabel ??
+                translate('auto.components.NewWorkspaceComposerCard.969a8bff66', 'Project')}
+            </label>
+            {showAddProjectButton ? (
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon-xs"
+                    onClick={onAddProject}
+                    className="size-5 shrink-0 rounded-sm text-muted-foreground hover:text-foreground"
+                    aria-label={translate(
+                      'auto.components.NewWorkspaceComposerCard.d6b0a96f32',
+                      'Add project'
+                    )}
+                  >
+                    <FolderPlus className="size-3" />
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent side="top" sideOffset={6}>
+                  {translate('auto.components.NewWorkspaceComposerCard.d6b0a96f32', 'Add project')}
+                </TooltipContent>
+              </Tooltip>
+            ) : null}
+          </div>
+          <div className="space-y-1" data-contextual-tour-target="workspace-creation-project">
+            <ProjectCombobox
+              options={projectOptions}
+              value={selectedProjectId}
+              onValueChange={onProjectChange}
+              onValueSelected={focusNameInput}
+              onAddProject={onAddProject}
+              placeholder={
+                projectPlaceholder ??
+                translate('auto.components.NewWorkspaceComposerCard.dccd26d4e4', 'Choose project')
+              }
+              triggerClassName="h-9 w-full border-input text-sm focus:border-ring focus:ring-[3px] focus:ring-ring/50"
+              invalid={Boolean(projectError)}
+              describedBy={projectDescriptionId}
+            />
+            {projectError ? (
+              <p id={projectDescriptionId} className="text-[11px] text-destructive">
+                {projectError}
+              </p>
+            ) : projectOptions.length === 0 ? (
+              <p id={projectDescriptionId} className="text-[11px] text-muted-foreground">
+                {emptyProjectMessage ??
+                  translate(
+                    'auto.components.NewWorkspaceComposerCard.addProjectBeforeWorkspace',
+                    'Add a project before creating a workspace.'
                   )}
-                >
-                  <FolderPlus className="size-3" />
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent side="top" sideOffset={6}>
-                {translate('auto.components.NewWorkspaceComposerCard.d6b0a96f32', 'Add project')}
-              </TooltipContent>
-            </Tooltip>
-          ) : null}
+              </p>
+            ) : null}
+          </div>
         </div>
-        <div className="space-y-1" data-contextual-tour-target="workspace-creation-project">
-          <ProjectCombobox
-            options={projectOptions}
-            value={selectedProjectId}
-            onValueChange={onProjectChange}
-            onValueSelected={focusNameInput}
-            onAddProject={onAddProject}
-            placeholder={
-              projectPlaceholder ??
-              translate('auto.components.NewWorkspaceComposerCard.dccd26d4e4', 'Choose project')
-            }
-            triggerClassName="h-9 w-full border-input text-sm focus:border-ring focus:ring-[3px] focus:ring-ring/50"
-            invalid={Boolean(projectError)}
-            describedBy={projectDescriptionId}
-          />
-          {projectError ? (
-            <p id={projectDescriptionId} className="text-[11px] text-destructive">
-              {projectError}
-            </p>
-          ) : projectOptions.length === 0 ? (
-            <p id={projectDescriptionId} className="text-[11px] text-muted-foreground">
-              {emptyProjectMessage ??
-                translate(
-                  'auto.components.NewWorkspaceComposerCard.addProjectBeforeWorkspace',
-                  'Add a project before creating a workspace.'
-                )}
-            </p>
-          ) : null}
-        </div>
+        {shouldShowRunTargetPicker ? (
+          <div className="min-w-0 space-y-1">
+            <label className="flex h-5 min-w-0 items-center truncate text-xs font-medium text-muted-foreground">
+              {translate('auto.components.NewWorkspaceComposerCard.runOn', 'Run on')}
+            </label>
+            <RunTargetCombobox
+              hostOptions={projectHostSetupOptions ?? []}
+              hostValue={selectedProjectHostSetupId ?? null}
+              hostExecutionHostId={selectedRepoExecutionHostId}
+              onHostChange={handleProjectHostSetupChange}
+              recipes={ephemeralVmRecipes}
+              recipeValue={selectedEphemeralVmRecipeId}
+              onRecipeChange={onEphemeralVmRecipeChange}
+              onAddSshHost={handleAddSshHost}
+              onAddRemoteServer={handleAddRemoteServer}
+              onConnectHost={handleConnectRunTargetHost}
+              onSetLocation={handleSetLocation}
+            />
+            {ephemeralVmRecipeError ? (
+              <p className="whitespace-pre-line text-[11px] text-destructive">
+                {ephemeralVmRecipeError}
+              </p>
+            ) : null}
+          </div>
+        ) : null}
       </div>
-      {shouldShowRunTargetPicker ? (
-        <div className="space-y-1 pt-3">
-          <label className="block min-w-0 truncate text-xs font-medium text-muted-foreground">
-            {translate('auto.components.NewWorkspaceComposerCard.runOn', 'Run on')}
-          </label>
-          <RunTargetCombobox
-            hostOptions={projectHostSetupOptions ?? []}
-            hostValue={selectedProjectHostSetupId ?? null}
-            onHostChange={handleProjectHostSetupChange}
-            recipes={ephemeralVmRecipes}
-            recipeValue={selectedEphemeralVmRecipeId}
-            onRecipeChange={onEphemeralVmRecipeChange}
-            onAddSshHost={handleAddSshHost}
-            onAddRemoteServer={handleAddRemoteServer}
-            onConnectHost={handleConnectRunTargetHost}
-            onSetLocation={handleSetLocation}
-          />
-          {ephemeralVmRecipeError ? (
-            <p className="whitespace-pre-line text-[11px] text-destructive">
-              {ephemeralVmRecipeError}
-            </p>
-          ) : null}
-        </div>
-      ) : ephemeralVmRecipeError ? (
-        <p className="whitespace-pre-line text-[11px] text-destructive">{ephemeralVmRecipeError}</p>
+      {!shouldShowRunTargetPicker && ephemeralVmRecipeError ? (
+        <p className="whitespace-pre-line text-2xs text-destructive">{ephemeralVmRecipeError}</p>
       ) : null}
       {selectedRepoRequiresConnection && selectedRepoConnectionId ? (
         <div
@@ -198,6 +207,6 @@ export function NewWorkspaceComposerProjectSection({
           </Button>
         </div>
       ) : null}
-    </div>
+    </fieldset>
   )
 }

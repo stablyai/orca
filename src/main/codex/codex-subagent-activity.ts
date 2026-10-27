@@ -1,18 +1,13 @@
-// Reading Codex's subagent wire shapes.
-//
-// Established by a live probe against `codex app-server` 0.152.1, not inferred:
-//   * `subAgentActivity` items carry `{kind, agentThreadId, agentPath}`, and each
-//     one arrives TWICE — via `item/started` and again via `item/completed`.
-//   * `agentPath` is a tree path (`/root`, `/root/list_directory`); the trailing
-//     segment is a semantic task name and the only label available. There is no
-//     `thread/started` for a child, so nickname/role/depth do not exist.
-//   * `agentsStates` on `collabAgentToolCall` arrived empty (`{}`) throughout the
-//     probe, so nothing here reads it — state comes from `kind` alone.
-//   * `thread/tokenUsage/updated` reports a per-thread RUNNING TOTAL, so the
-//     latest frame replaces the previous one — it is never accumulated.
+// Wire shapes verified with app-server 0.152.1; default mode may announce helpers only through collab calls.
 
-import type { NativeChatSubagentState } from '../../shared/native-chat-types'
-import type { CodexThreadItem } from './codex-structured-item-translation'
+import {
+  codexCollabHelperLabel,
+  readCodexCollabAgentToolCall
+} from './codex-collab-agent-tool-call'
+import type { CodexThreadItem } from './codex-thread-item-identity'
+import { codexSubagentPathLabel, codexSubagentPathSegments } from '../../shared/codex-agent-path'
+
+export { codexSubagentPathSegments } from '../../shared/codex-agent-path'
 
 export const CODEX_SUBAGENT_ITEM_TYPE = 'subAgentActivity'
 export const CODEX_TOKEN_USAGE_METHOD = 'thread/tokenUsage/updated'
@@ -48,66 +43,60 @@ export function readCodexSubagentActivity(item: CodexThreadItem): CodexSubagentA
   }
 }
 
-/**
- * The state a `kind` implies for the child it names.
- *
- * An unrecognized kind means "this child exists and reported something we
- * cannot classify" — `working`, which the session sweep will later settle to
- * `unverifiable` if nothing better ever arrives. Claiming a terminal state from
- * an unknown kind would assert an outcome the wire never gave us.
- */
-export function codexSubagentStateForKind(kind: string): NativeChatSubagentState {
-  if (kind === 'completed') {
-    return 'completed'
-  }
-  if (kind === 'interrupted') {
-    return 'stopped'
-  }
-  return 'working'
-}
-
-/** Path segments, empty ones dropped: `/root/list_directory` → 2 segments. */
-export function codexSubagentPathSegments(agentPath: string | null): string[] {
-  return agentPath === null ? [] : agentPath.split('/').filter((part) => part.length > 0)
-}
-
-/** The one path segment that names the parent turn itself rather than a child.
- *  Compared after the same normalization the label uses, not against the raw
- *  string: `/root/` and `/root//` are the same node as `/root`, and a check that
- *  disagreed with `codexSubagentPathSegments` would let one path be both the
- *  turn and a child of it — a phantom row labelled `root` inflating the group.
- *  Only this segment is the root; `/morpheus` is single-segment too but IS a
- *  child. */
 const CODEX_ROOT_AGENT_SEGMENT = 'root'
 
-/**
- * Whether an activity item describes the ROOT of the agent tree rather than a
- * spawned child. Counting the root would make the parent turn report itself as
- * its own subagent.
- *
- * A path-less item cannot be placed in the tree at all, so it is treated as a
- * child: dropping it would lose a real spawn, while an extra row is visible and
- * self-correcting.
- */
+/** Normalize root paths like labels; missing paths remain children to avoid losing a real spawn. */
 export function isCodexRootAgentActivity(activity: CodexSubagentActivity): boolean {
   const segments = codexSubagentPathSegments(activity.agentPath)
   return segments.length === 1 && segments[0] === CODEX_ROOT_AGENT_SEGMENT
 }
 
-/** Row label: the agent path's trailing segment, trimmed. A segment with nothing
- *  visible in it survives the empty-segment filter but would draw a nameless row,
- *  so it reads as no label and the caller's placeholder takes over. Trimmed
- *  because the caller keys its collision ordinals on this string: ` read ` and
- *  `read` render identically and must therefore collide. */
+/** Trim before collision numbering so visually identical labels share an ordinal group. */
 export function codexSubagentLabel(activity: CodexSubagentActivity): string | null {
-  const trailing = codexSubagentPathSegments(activity.agentPath).at(-1)?.trim()
-  return trailing !== undefined && trailing.length > 0 ? trailing : null
+  return codexSubagentPathLabel(activity.agentPath)
+}
+
+export type CodexSubagentAnnouncement = {
+  agentThreadId: string
+  label: string | null
+  /** Only spawn items establish the carrying thread as the parent. */
+  spawned: boolean
+}
+
+/** Collab references recover compacted-out spawns; even failed spawns can name a runnable child. */
+export function readCodexSubagentAnnouncements(
+  item: CodexThreadItem,
+  primaryThreadId: string | null
+): CodexSubagentAnnouncement[] {
+  return readAnnouncements(item).filter(({ agentThreadId }) => agentThreadId !== primaryThreadId)
+}
+
+function readAnnouncements(item: CodexThreadItem): CodexSubagentAnnouncement[] {
+  const activity = readCodexSubagentActivity(item)
+  if (activity) {
+    return isCodexRootAgentActivity(activity)
+      ? []
+      : [
+          {
+            agentThreadId: activity.agentThreadId,
+            label: codexSubagentLabel(activity),
+            spawned: activity.kind === 'started'
+          }
+        ]
+  }
+  const call = readCodexCollabAgentToolCall(item)
+  if (!call) {
+    return []
+  }
+  const spawned = call.tool === 'spawnAgent'
+  // Follow-up prompts are messages, not the child's task label.
+  const label = spawned ? codexCollabHelperLabel(call.prompt) : null
+  return call.helperThreadIds.map((agentThreadId) => ({ agentThreadId, label, spawned }))
 }
 
 export type CodexThreadTokenTotal = { threadId: string; totalTokens: number }
 
-/** `{threadId, tokenUsage: {total: {totalTokens}}}`. Older builds put the total
- *  on the envelope, so both shapes are accepted. */
+/** Totals are cumulative per thread; accept nested and legacy envelope fields. */
 export function readCodexThreadTokenTotal(params: unknown): CodexThreadTokenTotal | null {
   const root = record(params)
   if (!root) {
@@ -124,12 +113,6 @@ export function readCodexThreadTokenTotal(params: unknown): CodexThreadTokenTota
     : null
 }
 
-/** Pull the `subAgentActivity` item out of a raw notification payload.
- *
- *  Lives beside the readers rather than in the translator: the translator's job
- *  is routing, and this is the shape check that decides whether a frame is one
- *  of ours at all. Returns null for anything that is not a thread item, which is
- *  the translator's signal to keep looking. */
 export function readCodexNotificationThreadItem(
   params: unknown,
   read: (value: unknown) => CodexThreadItem | null

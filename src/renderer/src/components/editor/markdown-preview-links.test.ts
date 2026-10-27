@@ -141,9 +141,7 @@ describe('isMarkdownPreviewSystemBrowserModifier', () => {
 })
 
 describe('resolveMarkdownPreviewHttpOpenOptions', () => {
-  // modifierHeld -> openHttpLink resolves the escape hatch against the
-  // openLinksInApp / openLinksInAppModifierInverts pair; worktreeId (no
-  // modifier) routes per the setting. See http-link-routing.test.ts.
+  // Pass modifier intent to openHttpLink, which applies settings; see http-link-routing.test.ts.
   it('marks the modifier held on Cmd+Shift-click on macOS', () => {
     expect(
       resolveMarkdownPreviewHttpOpenOptions(
@@ -189,7 +187,6 @@ describe('resolveMarkdownPreviewHttpOpenOptions', () => {
   })
 
   it('does not force the system browser for Shift without the platform mod key', () => {
-    // Plain Shift-click (no Cmd/Ctrl) is not the escape hatch.
     expect(
       resolveMarkdownPreviewHttpOpenOptions(
         { metaKey: false, ctrlKey: false, shiftKey: true },
@@ -201,7 +198,6 @@ describe('resolveMarkdownPreviewHttpOpenOptions', () => {
   })
 
   it('does not treat Mac Ctrl+Shift-click as the escape hatch', () => {
-    // On macOS the mod key is Cmd; Ctrl+Shift must not force the system browser.
     expect(
       resolveMarkdownPreviewHttpOpenOptions(
         { metaKey: false, ctrlKey: true, shiftKey: true },

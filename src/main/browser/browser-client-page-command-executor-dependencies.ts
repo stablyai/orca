@@ -12,15 +12,23 @@ import type {
   BrowserClientRetainedPage
 } from './browser-client-page-retained-state'
 
-/**
- * Storage identity of the connection a page's partition is derived from.
- *
- * The legacy half names the partition an older build already populated, so a client
- * upgrade adopts that jar instead of deriving an empty one.
- */
+/** Superseded connection identities let upgrades adopt populated partitions. */
 export type BrowserClientPageAuthorityIdentity = {
   authorityConnectionIdentity: string
+  /** Previous identity tied to the pairing revision. */
+  pairingAuthorityConnectionIdentity: string
+  /** Earlier per-process identity. */
   legacyAuthorityConnectionIdentity: string
+}
+
+export function pageAuthorityIdentity(
+  input: BrowserClientPageAuthorityIdentity
+): BrowserClientPageAuthorityIdentity {
+  return {
+    authorityConnectionIdentity: input.authorityConnectionIdentity,
+    pairingAuthorityConnectionIdentity: input.pairingAuthorityConnectionIdentity,
+    legacyAuthorityConnectionIdentity: input.legacyAuthorityConnectionIdentity
+  }
 }
 
 export type BrowserClientPageCommandExecutorDependencies = BrowserClientPageAuthorityIdentity & {
@@ -47,12 +55,13 @@ export type BrowserClientPageCommandExecutorDependencies = BrowserClientPageAuth
     signal: AbortSignal
   ): Promise<unknown>
   retireAutomation(input: {
+    keepGuestBinding?: boolean
     browserPageId: string
     pageHostGeneration: number
     registration: BrowserClientRetainedPage['registration']
   }): Promise<void>
   onPageUnavailable?(browserPageId: string, pageHostGeneration: number): void
-  // Why: remote-path uploads need the negotiated file channel; without both the command fails closed.
+  // Remote uploads require both a negotiated file channel and upload staging.
   fileChannel?: BrowserClientFileChannelTransport
   uploadStaging?: BrowserClientUploadStaging
   maxPages?: number

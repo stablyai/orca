@@ -9,35 +9,19 @@ describe('routeAddRepoBrowse', () => {
 
     routeAddRepoBrowse(parseExecutionHostId('runtime:paired-host'), {
       browseLocal: pickFolders,
-      browseRuntime,
-      browseSsh: vi.fn()
+      browseRuntime
     })
 
     expect(browseRuntime).toHaveBeenCalledOnce()
     expect(pickFolders).not.toHaveBeenCalled()
   })
 
-  it('preserves native folder browsing for desktop local hosts', () => {
-    const pickFolders = vi.fn()
+  it('opens nothing for an SSH host, which holds projects only through its server', () => {
+    const actions = { browseLocal: vi.fn(), browseRuntime: vi.fn() }
 
-    routeAddRepoBrowse(parseExecutionHostId('local'), {
-      browseLocal: pickFolders,
-      browseRuntime: vi.fn(),
-      browseSsh: vi.fn()
-    })
+    routeAddRepoBrowse(parseExecutionHostId('ssh:builder'), actions)
 
-    expect(pickFolders).toHaveBeenCalledOnce()
-  })
-
-  it('preserves SSH host browsing', () => {
-    const browseSsh = vi.fn()
-
-    routeAddRepoBrowse(parseExecutionHostId('ssh:builder'), {
-      browseLocal: vi.fn(),
-      browseRuntime: vi.fn(),
-      browseSsh
-    })
-
-    expect(browseSsh).toHaveBeenCalledWith('builder')
+    expect(actions.browseLocal).not.toHaveBeenCalled()
+    expect(actions.browseRuntime).not.toHaveBeenCalled()
   })
 })

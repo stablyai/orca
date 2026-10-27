@@ -1,22 +1,20 @@
 import type { GitHubWorkItem } from '../../../../../shared/github/work-item-types'
 import type { GitHubPRMergeMethod } from '../../../../../shared/github/pull-request-types'
 import type { Repo } from '../../../../../shared/repo-types'
-import {
-  type TaskSourceContext,
-  getTaskSourceRuntimeSettings
-} from '../../../../../shared/task-source-context'
-import React, { useState, useMemo } from 'react'
+import type { TaskSourceContext } from '../../../../../shared/task-source-context'
+import React, { useState } from 'react'
 import { useConfirmationDialog } from '@/components/confirmation-dialog-context'
 import { useAppStore } from '@/store'
 import { useShallow } from 'zustand/react/shallow'
-import { getSettingsForRepoRuntimeOwner } from '@/lib/repo-runtime-owner'
+import { getGitHubRepoRoutingTarget } from '@/lib/github-source-runtime-context'
 import { translate } from '@/i18n/i18n'
-import { presentGitHubPRMergeState } from '@/components/github-pr-merge-state'
 import {
-  resolveGitHubPRMergeMethods,
-  GITHUB_PR_MERGE_METHOD_LABELS
-} from '../../../../../shared/github/pull-request-merge-methods'
-import { getActiveRuntimeTarget, callRuntimeRpc } from '@/runtime/runtime-rpc-client'
+  getPullRequestMergeConfirmationTitle,
+  getPullRequestMergeMethodLabel
+} from '@/components/github/pull-request-confirmation-copy'
+import { presentGitHubPRMergeState } from '@/components/github-pr-merge-state'
+import { resolveGitHubPRMergeMethods } from '../../../../../shared/github/pull-request-merge-methods'
+import { callRuntimeRpc } from '@/runtime/runtime-rpc-client'
 import {
   DropdownMenu,
   DropdownMenuTrigger,
@@ -27,8 +25,8 @@ import {
 import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip'
 import { cn } from '@/lib/utils'
 import { LoaderCircle, GitMerge, ChevronDown, ExternalLink } from 'lucide-react'
-import type { TaskPageGitHubWorkItemMutationRunner } from '../../task-page-linear-jira-list-model'
-import { resolveTaskPullRequestRepo } from '../../task-page-github-review-model'
+import type { TaskPageGitHubWorkItemMutationRunner } from '../linear/task-page-linear-jira-list-model'
+import { resolveTaskPullRequestRepo } from './task-page-github-review-model'
 export function PRMergeCell({
   item,
   repo,
@@ -42,18 +40,8 @@ export function PRMergeCell({
 }): React.JSX.Element {
   const [merging, setMerging] = useState(false)
   const confirm = useConfirmationDialog()
-  const repoOwnerSettings = useAppStore(
-    useShallow((s) => getSettingsForRepoRuntimeOwner(s, repo?.id ?? null))
-  )
-  const sourceSettings = useMemo(
-    () =>
-      sourceContext?.provider === 'github'
-        ? ({
-            ...repoOwnerSettings,
-            ...getTaskSourceRuntimeSettings(sourceContext)
-          } as typeof repoOwnerSettings)
-        : repoOwnerSettings,
-    [repoOwnerSettings, sourceContext]
+  const ownerTarget = useAppStore(
+    useShallow((s) => getGitHubRepoRoutingTarget(s, repo?.id ?? null, sourceContext))
   )
   if (item.type !== 'pr') {
     return (
@@ -88,12 +76,9 @@ export function PRMergeCell({
     if (!repo || mergeDisabled) {
       return
     }
-    const label = GITHUB_PR_MERGE_METHOD_LABELS[method]
+    const label = getPullRequestMergeMethodLabel(method)
     const confirmed = await confirm({
-      title: translate('auto.components.TaskPage.844dc193c7', '{{value0}} PR #{{value1}}?', {
-        value0: label,
-        value1: item.number
-      }),
+      title: getPullRequestMergeConfirmationTitle(method, item.number),
       description: translate(
         'auto.components.TaskPage.0506a78337',
         'This will update the pull request on GitHub.'
@@ -117,7 +102,7 @@ export function PRMergeCell({
           'Failed to merge pull request'
         ),
         mutate: async () => {
-          const target = getActiveRuntimeTarget(sourceSettings)
+          const target = ownerTarget
           const runtimeRepoId =
             sourceContext?.provider === 'github' ? (sourceContext.repoId ?? repo.id) : repo.id
           return target.kind === 'environment'
@@ -172,7 +157,7 @@ export function PRMergeCell({
           ? translate('auto.components.TaskPage.a3318684bc', 'Failed to enable auto-merge')
           : translate('auto.components.TaskPage.1a9ea003dc', 'Failed to disable auto-merge'),
         mutate: async () => {
-          const target = getActiveRuntimeTarget(sourceSettings)
+          const target = ownerTarget
           const runtimeRepoId =
             sourceContext?.provider === 'github' ? (sourceContext.repoId ?? repo.id) : repo.id
           return target.kind === 'environment'
@@ -246,14 +231,14 @@ export function PRMergeCell({
           </DropdownMenuItem>
         )}
         {mergePresentation.autoMergeAction && <DropdownMenuSeparator />}
-        {mergeMethods.methods.map(({ method, label }) => (
+        {mergeMethods.methods.map((method) => (
           <DropdownMenuItem
             key={method}
             disabled={mergeDisabled}
             onSelect={() => void handleMerge(method)}
           >
             <GitMerge className="size-4" />
-            {label}
+            {getPullRequestMergeMethodLabel(method)}
           </DropdownMenuItem>
         ))}
         <DropdownMenuItem onSelect={() => window.api.shell.openUrl(item.url)}>

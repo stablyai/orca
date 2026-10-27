@@ -5,45 +5,27 @@ import { translate } from '@/i18n/i18n'
 
 export type QuickOpenInstallRgGuidanceParts = {
   reason: string
-  // Why: the fallback runs on whichever host performs the scan. A local scan
-  // must not tell the user to install ripgrep "on the remote"; the location
-  // phrase in the message is the only signal for which wording to render.
-  location: 'local' | 'remote'
   command: string | null
   guidance: string | null
 }
 
-const REMOTE_LOCATION_PHRASE = 'on the remote'
-
-/**
- * Parses the install-ripgrep guidance message produced by the relay's
- * buildInstallRgMessage(). Returns the parts needed to render as formatted
- * guidance (reason + install command) when matched, or null otherwise so
- * callers can fall back to plain-text display.
- *
- * Why: the message is plain text on the wire (thrown as an Error), but the
- * renderer is the only place with enough UI vocabulary to present ripgrep
- * as an inline code span and the install command as a copyable code block.
- */
+/** Parse relay plain-text errors into reason/install-command UI; return null for callers’ plain-text fallback. */
 export function parseQuickOpenInstallRgGuidance(
   message: string
 ): QuickOpenInstallRgGuidanceParts | null {
+  // Older paired hosts can still publish the retired local-scan wording.
   const match = message.match(
-    /^Quick Open scan too large \((.+?)\)\. Install ripgrep (on the remote|on the host running the Quick Open scan) to enable fast, gitignore-aware listing: (.+)$/
+    /^Quick Open scan too large \((.+?)\)\. Install ripgrep (?:on the remote|on this machine|on the host running the Quick Open scan) to enable fast, gitignore-aware listing: (.+)$/
   )
   if (!match) {
     return null
   }
   const reason = match[1]
-  const location = match[2] === REMOTE_LOCATION_PHRASE ? 'remote' : 'local'
-  const tail = match[3].trim()
-  // Why: on unknown distros the relay emits prose like "install ripgrep via
-  // your package manager (e.g. apt/dnf/pacman)"; there is no single command
-  // to copy, so surface it as plain guidance without the code block.
+  const tail = match[2].trim()
+  // Unknown distros provide package-manager prose; show guidance without a copyable command block.
   const looksLikeCommand = /^(sudo\s+)?(brew|apt|dnf|pacman|apk)\s/.test(tail)
   return {
     reason,
-    location,
     command: looksLikeCommand ? tail : null,
     guidance: looksLikeCommand ? null : tail
   }
@@ -51,14 +33,12 @@ export function parseQuickOpenInstallRgGuidance(
 
 export function QuickOpenInstallRgGuidance({
   reason,
-  location,
   command,
   guidance
 }: QuickOpenInstallRgGuidanceParts): React.JSX.Element {
   const [copied, setCopied] = useState(false)
   const copiedResetTimerRef = useRef<number | null>(null)
-  // Why: clipboard IPC can resolve after this guidance unmounts; avoid
-  // starting a reset timer that will outlive the component.
+  // Late clipboard completion must not start timers after unmount.
   const isMountedRef = useRef(false)
 
   const clearCopiedResetTimer = useCallback((): void => {
@@ -82,10 +62,7 @@ export function QuickOpenInstallRgGuidance({
     if (!command) {
       return
     }
-    // Why: use Electron's clipboard IPC instead of navigator.clipboard; the
-    // latter often fails silently in the renderer due to focus/permission
-    // quirks inside Radix dialogs. All other copy buttons in the app go
-    // through window.api.ui.writeClipboardText for consistency.
+    // Use Electron clipboard IPC because browser focus/permission checks can fail inside dialogs.
     void window.api.ui
       .writeClipboardText(command)
       .then(() => {
@@ -99,9 +76,7 @@ export function QuickOpenInstallRgGuidance({
           setCopied(false)
         }, 1500)
       })
-      .catch(() => {
-        /* best-effort */
-      })
+      .catch(() => {})
   }, [clearCopiedResetTimer, command])
 
   return (
@@ -121,15 +96,10 @@ export function QuickOpenInstallRgGuidance({
         <code className="rounded bg-muted px-1 py-0.5 font-mono text-foreground">
           {translate('auto.components.QuickOpen.5d80dc39bb', 'ripgrep')}
         </code>{' '}
-        {location === 'remote'
-          ? translate(
-              'auto.components.QuickOpen.1cf8561ab4',
-              'on the remote to enable fast, gitignore-aware listing:'
-            )
-          : translate(
-              'auto.components.QuickOpen.344f8a48dd',
-              'on the host running the Quick Open scan to enable fast, gitignore-aware listing:'
-            )}
+        {translate(
+          'auto.components.QuickOpen.1cf8561ab4',
+          'on the remote to enable fast, gitignore-aware listing:'
+        )}
       </p>
       {command ? (
         <div className="flex items-center gap-2 rounded border border-border bg-muted/50 px-3 py-2 font-mono text-xs text-foreground">

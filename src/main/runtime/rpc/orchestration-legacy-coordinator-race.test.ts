@@ -1,3 +1,4 @@
+import './unused-default-rpc-methods.test-fixture'
 import { createHash } from 'node:crypto'
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -315,13 +316,25 @@ describe('legacy coordinator takeover races', () => {
 
   it('partitions a coordinator group send by legacy recipient contract', async () => {
     const harness = createHarness()
+    // Use two current-contract Dispatches in the adopted Run: group mail targets Dispatches, so a loose pane cannot prove partitioning.
+    const currentTask = harness.db.createTask({
+      runId: harness.adoptedRunId,
+      spec: 'current-contract assignment',
+      createdByTerminalHandle: COORDINATOR_HANDLE
+    })
+    const currentDispatch = createRootDispatch(
+      harness.db,
+      currentTask.id,
+      'term_current_worker',
+      'tab_current_worker:22222222-2222-4222-8222-222222222222'
+    )
     vi.mocked(harness.runtime.getTerminalPaneKey).mockImplementation((handle) =>
       handle === COORDINATOR_HANDLE
         ? COORDINATOR_PANE
         : handle === WORKER_HANDLE
           ? WORKER_PANE
           : handle === 'term_current_worker'
-            ? 'tab_current_worker:leaf_current_worker'
+            ? 'tab_current_worker:22222222-2222-4222-8222-222222222222'
             : null
     )
     vi.spyOn(harness.runtime, 'listTerminals').mockResolvedValue({
@@ -355,7 +368,7 @@ describe('legacy coordinator takeover races', () => {
         }),
         expect.objectContaining({
           run_id: harness.adoptedRunId,
-          to_handle: 'term_current_worker',
+          to_handle: `dispatch:${currentDispatch.id}`,
           delivery_contract: 'current_delivery'
         })
       ])
@@ -409,7 +422,7 @@ describe('legacy coordinator takeover races', () => {
     const pending = harness.dispatcher.dispatch(
       request(
         'orchestration.send',
-        { from: COORDINATOR_HANDLE, to: '@all', subject: 'must remain unsent' },
+        { from: COORDINATOR_HANDLE, to: '@codex', subject: 'must remain unsent' },
         'send-group-takeover'
       )
     )
@@ -662,8 +675,7 @@ describe('legacy coordinator takeover races', () => {
       () =>
         new Promise<boolean>((resolve, reject) => {
           detectionCalls += 1
-          // Why reject instead of re-arming: a second call would overwrite resolveDetection and
-          // strand the first promise, hanging to a timeout instead of naming what changed.
+          // Reject rearming: replacing resolveDetection would strand the first promise until timeout.
           if (detectionCalls > 1) {
             reject(
               new Error(

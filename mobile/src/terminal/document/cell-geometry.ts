@@ -1,0 +1,38 @@
+import { getCellHeight, getCellWidth, getTotalScale } from './cell-metrics'
+import type { TerminalDocumentScope } from './document-scope'
+
+export function cellToViewportPx(scope: TerminalDocumentScope, col: number, absRow: number) {
+  if (!scope.term) {
+    return { x: 0, y: 0 }
+  }
+  const cellW = getCellWidth(scope)
+  const cellH = getCellHeight(scope)
+  const viewportRow = absRow - scope.term.buffer.active.viewportY
+  const sx = col * cellW
+  const sy = viewportRow * cellH
+  const total = getTotalScale(scope)
+  return { x: sx * total + scope.panX, y: sy * total + scope.panY }
+}
+
+export function getLineText(scope: TerminalDocumentScope, absRow: number) {
+  if (!scope.term) {
+    return ''
+  }
+  const line = scope.term.buffer.active.getLine(absRow)
+  if (!line) {
+    return ''
+  }
+  return line.translateToString(false)
+}
+
+// Wide cells collapse in strings; convert cell columns to string offsets before slicing row text.
+export function cellColToStringIndex(scope: TerminalDocumentScope, absRow: number, col: number) {
+  if (!scope.term) {
+    return col
+  }
+  const line = scope.term.buffer.active.getLine(absRow)
+  if (!line) {
+    return col
+  }
+  return line.translateToString(false, 0, col).length
+}

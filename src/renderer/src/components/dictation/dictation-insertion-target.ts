@@ -8,6 +8,7 @@ import {
   measureTextControlPasteByteLengthWithYield,
   pasteTextIntoTextControl
 } from '@/lib/text-control-paste'
+import { DICTATION_FOCUS_INPUT_EVENT } from './dictation-control-events'
 
 export type DictationInsertionTarget =
   | { kind: 'terminal'; tabId: string; paneId: number }
@@ -15,6 +16,15 @@ export type DictationInsertionTarget =
   | { kind: 'contentEditable'; element: HTMLElement }
 
 export function captureInsertionTarget(): DictationInsertionTarget | null {
+  const focused = readFocusedInsertionTarget()
+  if (focused) {
+    return focused
+  }
+  document.dispatchEvent(new Event(DICTATION_FOCUS_INPUT_EVENT))
+  return readFocusedInsertionTarget()
+}
+
+function readFocusedInsertionTarget(): DictationInsertionTarget | null {
   const activeElement = document.activeElement
 
   if (!activeElement) {
@@ -102,8 +112,7 @@ async function insertTextIntoContentEditableTarget(
   }
 
   let textIndex = 0
-  // Why: dictation can produce paste-sized text; chunking avoids one large
-  // execCommand while keeping editor beforeinput/input semantics.
+  // Chunk paste-sized dictation while preserving editor beforeinput/input semantics.
   while (textIndex < text.length) {
     if (!isContentEditableDictationTargetCurrent(element)) {
       return

@@ -4,6 +4,7 @@ import { extname } from 'node:path'
 import { isBinaryBuffer } from './binary-buffer'
 import { isPathInsideOrEqual } from './cross-platform-path'
 import { IMAGE_FILE_MIME_TYPES } from './image-file-extensions'
+import { FONT_FILE_MIME_TYPES } from './font-file-extensions'
 import {
   NodeFileReadTooLargeError,
   readNodeFileHandleWithinLimit
@@ -29,14 +30,14 @@ export type DocPreviewFileAccessResult = {
 
 const DOC_PREVIEW_BINARY_MIME_TYPES: Record<string, string> = {
   ...IMAGE_FILE_MIME_TYPES,
+  ...FONT_FILE_MIME_TYPES,
   '.pdf': 'application/pdf'
 }
 const DOC_PREVIEW_MAX_TEXT_BYTES = 10 * 1024 * 1024
 const DOC_PREVIEW_MAX_BINARY_BYTES = 50 * 1024 * 1024
 
 const OPEN_NOFOLLOW = typeof constants.O_NOFOLLOW === 'number' ? constants.O_NOFOLLOW : 0
-// Why: opening a writer-less FIFO blocks before the regular-file check can refuse it, pinning a
-// threadpool slot for good; non-blocking open returns at once and does not change regular-file reads.
+// Nonblocking open prevents writer-less FIFOs pinning a threadpool slot before regular-file checks; regular reads are unaffected.
 const OPEN_NONBLOCK = typeof constants.O_NONBLOCK === 'number' ? constants.O_NONBLOCK : 0
 
 function authorizationError(): Error {

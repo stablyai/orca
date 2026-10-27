@@ -1,21 +1,8 @@
-/**
- * A LOCAL workspace agent that FINISHED its turn must keep its resume identity
- * without being treated as unfinished work.
- *
- * `retainsResumableRecoveryIdentity` (store/slices/agent-status.ts) records a
- * completed turn so a cold restore after an abrupt app death re-enters the agent
- * instead of a bare shell (#9454). It used to do that by restating `done` as
- * `state: 'working'`, which left nothing able to tell "finished" from
- * "interrupted": once the pane was killed, activation opened a fresh tab running
- * `--resume` for every completed agent.
- *
- * No paired runtime here: the host-mirror park added in #15644 gates on a web
- * surface tab id, so this path never reaches it.
- */
+/** Completed local agents retain cold-restore identity (#9454) without posing as unfinished work or resurrecting after pane removal. This path does not use paired-runtime web-tab recovery. */
 import { afterEach, describe, expect, it } from 'vitest'
 import { makePaneKey } from '../../../shared/stable-pane-id'
 import { useAppStore } from '@/store'
-import { isPassiveCompletedHibernationEvidence } from './sleeping-agent-pane-ownership'
+import { activationTreatsNoteAsFinished } from './sleeping-agent-pane-ownership'
 import { resumeSleepingAgentSessionsForWorktree } from './resume-sleeping-agent-session'
 
 const initialAppStoreState = useAppStore.getState()
@@ -29,7 +16,6 @@ afterEach(() => {
   useAppStore.setState(initialAppStoreState, true)
 })
 
-/** A local codex pane with a live PTY, mid-turn. */
 function seedLiveLocalCodexPane(): void {
   useAppStore.setState({
     activeWorktreeId: WORKTREE_ID,
@@ -80,7 +66,7 @@ function reportTurnFinished(interrupted = false): void {
 describe('a finished local agent', () => {
   it('keeps completed quit records resumable', () => {
     expect(
-      isPassiveCompletedHibernationEvidence({
+      activationTreatsNoteAsFinished({
         paneKey: 'quit-tab:quit-leaf',
         tabId: 'quit-tab',
         worktreeId: WORKTREE_ID,
@@ -104,11 +90,10 @@ describe('a finished local agent', () => {
     expect(record, 'a finished codex turn leaves a resume record').toBeDefined()
     expect(record?.state, 'the done turn stays done').toBe('done')
     expect(record?.origin).toBe('live')
-    // The identity a cold restore needs survives; only the turn text is dropped.
     expect(record?.agent).toBe('codex')
     expect(record?.providerSession).toEqual({ key: 'session_id', id: SESSION_ID })
     expect(
-      isPassiveCompletedHibernationEvidence(record!),
+      activationTreatsNoteAsFinished(record!),
       'a finished agent must read as history, or activation restarts it'
     ).toBe(true)
   })
@@ -120,7 +105,7 @@ describe('a finished local agent', () => {
     const record = useAppStore.getState().sleepingAgentSessionsByPaneKey[PANE_KEY]
     expect(record?.state).toBe('done')
     expect(record?.interrupted).toBe(true)
-    expect(isPassiveCompletedHibernationEvidence(record!)).toBe(false)
+    expect(activationTreatsNoteAsFinished(record!)).toBe(false)
 
     useAppStore.setState({
       tabsByWorktree: { [WORKTREE_ID]: [] },
@@ -141,7 +126,6 @@ describe('a finished local agent', () => {
     seedLiveLocalCodexPane()
     reportTurnFinished()
 
-    // `orca terminal stop` / app death: the PTY and pane go, the record stays.
     useAppStore.setState({
       tabsByWorktree: { [WORKTREE_ID]: [] },
       ptyIdsByTabId: {},
@@ -153,7 +137,6 @@ describe('a finished local agent', () => {
     expect(launched, 'a finished agent must never be respawned').toBe(0)
     const state = useAppStore.getState()
     expect(state.tabsByWorktree[WORKTREE_ID] ?? []).toEqual([])
-    // The orphaned record is retired rather than left queued for the next visit.
     expect(state.sleepingAgentSessionsByPaneKey[PANE_KEY]).toBeUndefined()
   })
 
@@ -161,8 +144,7 @@ describe('a finished local agent', () => {
     seedLiveLocalCodexPane()
     reportTurnFinished()
 
-    // The pane survives (app relaunch restored the tab): #9454's crash-recovery
-    // case. The record must NOT be cleared, or the pane cold-restores to a shell.
+    // A restored surviving pane still needs its identity or crash recovery would reopen a bare shell (#9454).
     const launched = resumeSleepingAgentSessionsForWorktree(WORKTREE_ID)
 
     expect(launched, 'an owned pane resumes in place, never in a new tab').toBe(0)

@@ -12,6 +12,7 @@ export type OpenCodeUsageLocationBreakdown = {
   eventCount: number
   inputTokens: number
   cachedInputTokens: number
+  cacheWriteInputTokens?: number
   outputTokens: number
   reasoningOutputTokens: number
   totalTokens: number
@@ -25,6 +26,7 @@ export type OpenCodeUsageModelBreakdown = {
   eventCount: number
   inputTokens: number
   cachedInputTokens: number
+  cacheWriteInputTokens?: number
   outputTokens: number
   reasoningOutputTokens: number
   totalTokens: number
@@ -39,6 +41,7 @@ export type OpenCodeUsageLocationModelBreakdown = {
   eventCount: number
   inputTokens: number
   cachedInputTokens: number
+  cacheWriteInputTokens?: number
   outputTokens: number
   reasoningOutputTokens: number
   totalTokens: number
@@ -58,6 +61,7 @@ export type OpenCodeUsageSession = {
   eventCount: number
   totalInputTokens: number
   totalCachedInputTokens: number
+  cacheWriteInputTokens?: number
   totalOutputTokens: number
   totalReasoningOutputTokens: number
   totalTokens: number
@@ -77,6 +81,7 @@ export type OpenCodeUsageDailyAggregate = {
   eventCount: number
   inputTokens: number
   cachedInputTokens: number
+  cacheWriteInputTokens?: number
   outputTokens: number
   reasoningOutputTokens: number
   totalTokens: number
@@ -86,12 +91,9 @@ export type OpenCodeUsageDailyAggregate = {
 export type OpenCodeUsagePersistedDatabase = OpenCodeUsageProcessedDatabase & {
   sessions: OpenCodeUsageSession[]
   dailyAggregates: OpenCodeUsageDailyAggregate[]
-  /** Session ids this database counted. Sibling copies (opencode-backup.db)
-   *  duplicate sessions; ownership keeps each session counted by exactly one
-   *  cached database across incremental scans. */
+  /** Persist ownership so sibling backups cannot double-count sessions across scans. */
   ownedSessionIds: string[]
-  /** True when this database saw sessions already claimed by another database.
-   *  When that owner disappears, only deferred databases need reparse. */
+  /** Only databases with deferred claims need reparse when an owner disappears. */
   hasDeferredClaims: boolean
 }
 
@@ -117,6 +119,7 @@ export type OpenCodeUsageParsedEvent = {
   estimatedCostUsd: number | null
   inputTokens: number
   cachedInputTokens: number
+  cacheWriteInputTokens?: number
   outputTokens: number
   reasoningOutputTokens: number
   totalTokens: number

@@ -12,7 +12,6 @@ export class AiVaultServiceRestartPolicy {
     return this.timer !== null
   }
 
-  /** A forced refresh starts a fresh retry window immediately. */
   clearCircuit(): void {
     this.circuitUntil = 0
     this.faults = []
@@ -38,15 +37,17 @@ export class AiVaultServiceRestartPolicy {
       this.circuitUntil = now + AI_VAULT_SERVICE_FAULT_WINDOW_MS
     }
     const delay = AI_VAULT_SERVICE_RESTART_DELAYS_MS[Math.min(this.faults.length - 1, 2)]
-    // Why: a second fault before the pending restart fires would otherwise strand
-    // the old timer, leaving a restart that dispose() can no longer cancel.
+    // Replace pending timers so dispose() can still cancel every restart.
     if (this.timer) {
       clearTimeout(this.timer)
     }
-    this.timer = setTimeout(() => {
-      this.timer = null
-      restart()
-    }, delay)
+    this.timer = setTimeout(
+      () => {
+        this.timer = null
+        restart()
+      },
+      Math.max(delay, this.circuitUntil - now)
+    )
     this.timer.unref?.()
   }
 

@@ -6,6 +6,7 @@ export type MockSshClient = {
   setNoDelay: ReturnType<typeof vi.fn>
   _sock: Socket | undefined
   lastExecCommand?: string
+  lastShellWindow?: unknown
   lastConnectConfig?: unknown
   on: (event: string, handler: (...args: unknown[]) => void) => void
   off: (event: string, handler: (...args: unknown[]) => void) => void
@@ -24,7 +25,7 @@ export type Ssh2ModuleMock = {
   utils: { parseKey: Mock<(...args: unknown[]) => unknown> }
 }
 
-// Read-only from tests: live ESM bindings so importers observe the mock's writes.
+// Live ESM bindings expose mock updates to importers.
 export let eventHandlers = new Map<string, Set<(...args: unknown[]) => void>>()
 export let clientInstances: MockSshClient[] = []
 export let connectAttempts = 0
@@ -38,18 +39,30 @@ export const VALID_ED25519_HOST_KEY = Buffer.from(
 )
 
 // Knobs tests assign to; grouped because imported bindings cannot be reassigned.
-export const ssh2Mock = {
-  presentedHostKey: undefined as Buffer | undefined,
+export const ssh2Mock: {
+  presentedHostKey: Buffer | undefined
+  lastHostKeyAccepted: boolean | undefined
+  connectBehavior: 'ready' | 'error' | 'pending'
+  connectErrorMessage: string
+  connectErrorCode: string
+  destroyErrorMessage: string
+  connectSequence: ('ready' | 'silent' | Error)[]
+  execBehavior: 'callback' | 'pending'
+  sftpBehavior: 'callback' | 'pending'
+  notifyClientCreated: (() => void) | undefined
+} = {
+  presentedHostKey: undefined,
   /** What the verifier decided about the presented key on the most recent connect. */
-  lastHostKeyAccepted: undefined as boolean | undefined,
-  connectBehavior: 'ready' as 'ready' | 'error' | 'pending',
+  lastHostKeyAccepted: undefined,
+  connectBehavior: 'ready',
   connectErrorMessage: '',
   connectErrorCode: '',
   destroyErrorMessage: '',
-  connectSequence: [] as ('ready' | Error)[],
-  execBehavior: 'callback' as 'callback' | 'pending',
-  sftpBehavior: 'callback' as 'callback' | 'pending',
-  notifyClientCreated: undefined as (() => void) | undefined
+  // Silent connect lets tests drive authentication events before ready/error.
+  connectSequence: [],
+  execBehavior: 'callback',
+  sftpBehavior: 'callback',
+  notifyClientCreated: undefined
 }
 
 export const emitSshEvent = (event: string, ...args: unknown[]): void =>
@@ -59,9 +72,7 @@ export function createSsh2Module(): Ssh2ModuleMock {
   class MockBaseAgent {}
   class MockSshClient {
     setNoDelay = vi.fn()
-    // Why: production code reads `client._sock` and checks `instanceof net.Socket`
-    // to decide which log line to emit. A real Socket instance lets the test
-    // exercise the "enabled" branch instead of the "skipped (proxy socket)" branch.
+    // Use a real Socket to exercise production instanceof checks rather than proxy-socket logging.
     _sock: Socket | undefined = new Socket()
     lastExecCommand?: string
     lastConnectConfig?: unknown
@@ -103,10 +114,7 @@ export function createSsh2Module(): Ssh2ModuleMock {
     connect(config?: unknown) {
       connectAttempts += 1
       this.lastConnectConfig = config
-      // Why the callback form: ssh2 calls hostVerifier(key, verify) and only accepts synchronously
-      // when the return is not undefined. A mock that passed one argument and ignored the result
-      // would pass against a verifier that never decides — which is the regression host key
-      // verification exists to prevent.
+      // Model ssh2's callback verifier and synchronous return; ignoring the decision would hide a verifier that never settles.
       const hostVerifier = (
         config as
           | { hostVerifier?: (key: Buffer, verify: (ok: boolean) => void) => undefined }
@@ -118,8 +126,7 @@ export function createSsh2Module(): Ssh2ModuleMock {
         ssh2Mock.lastHostKeyAccepted = ok
       })
       if (ssh2Mock.lastHostKeyAccepted === false) {
-        // ssh2 aborts the handshake when the verifier denies; a mock that carried on to 'ready'
-        // would let a rejected host key look like a successful connect.
+        // A denied key must abort before ready, matching ssh2.
         this.connectTimer = setTimeout(() => {
           this.connectTimer = null
           this.emit('error', new Error('All configured authentication methods failed'))
@@ -135,6 +142,9 @@ export function createSsh2Module(): Ssh2ModuleMock {
         }
         if (next === 'ready') {
           this.emit('ready')
+          return
+        }
+        if (next === 'silent') {
           return
         }
         if (ssh2Mock.connectBehavior === 'pending') {
@@ -186,6 +196,15 @@ export function createSsh2Module(): Ssh2ModuleMock {
         pendingExecCallback = cb
         return
       }
+      cb(undefined, { close: vi.fn() })
+    }
+    lastShellWindow?: unknown
+    shell(
+      window: unknown,
+      _options: unknown,
+      cb: (err: Error | undefined, channel: unknown) => void
+    ) {
+      this.lastShellWindow = window
       cb(undefined, { close: vi.fn() })
     }
     sftp(cb: (err: Error | undefined, channel: unknown) => void) {

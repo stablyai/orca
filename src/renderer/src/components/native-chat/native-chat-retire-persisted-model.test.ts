@@ -15,11 +15,14 @@ const mocks = vi.hoisted(() => ({
   discoverNativeChatCatalogModels: vi.fn()
 }))
 
-vi.mock('@/runtime/runtime-rpc-client', () => ({
-  callRuntimeRpc: mocks.callRuntimeRpc
+vi.mock('../../store', () => ({
+  useAppStore: (selector: (state: { agentStatusByPaneKey: Record<string, never> }) => unknown) =>
+    selector({ agentStatusByPaneKey: {} })
 }))
 
-vi.mock('./native-chat-pty-session-options', () => ({
+vi.mock('@/runtime/runtime-rpc-client', () => ({ callRuntimeRpc: mocks.callRuntimeRpc }))
+
+vi.mock('../../../../shared/native-chat-pty-session-options', () => ({
   createNativeChatPtySessionOptions: mocks.createNativeChatPtySessionOptions
 }))
 
@@ -36,8 +39,7 @@ const models = (...ids: string[]): CatalogModel[] =>
 
 const LOCAL_TARGET = { kind: 'local' } as const
 
-/** The persisted model becomes `-m <id>` at every launch site, including ones that
- *  never render the picker, and grok exits fatally on an id it no longer lists. */
+/** Retire stale persisted models even without a picker; Grok exits fatally on unknown -m ids. */
 describe('retirePersistedModelMissingFromDiscovery', () => {
   beforeEach(() => {
     mocks.callRuntimeRpc.mockReset().mockResolvedValue({ ok: true })
@@ -94,8 +96,7 @@ describe('retirePersistedModelMissingFromDiscovery', () => {
   })
 })
 
-/** The enrichment subscription never replays, so a pane that mounts after the
- *  once-per-host probe settled would otherwise never reach retirement. */
+/** Replay cached discovery on mount because enrichment subscriptions do not replay prior probes. */
 describe('useNativeChatSessionOptions retirement on mount', () => {
   const mountPane = (): void => {
     renderHook(() =>

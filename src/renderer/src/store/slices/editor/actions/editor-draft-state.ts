@@ -1,4 +1,9 @@
+import type { AppState } from '../../../types'
 import type { EditorGet, EditorSet } from '../types/editor-set-get'
+import {
+  editorBufferSiblingViewIds,
+  type EditorBufferViewIndex
+} from '../buffers/editor-buffer-views'
 import type { EditorViewMode, MarkdownViewMode } from '../types/open-file'
 import { clampMarkdownTocPanelWidth } from '../../../../../../shared/markdown-toc-panel-width'
 import {
@@ -10,6 +15,7 @@ export type EditorDraftState = {
   // Why: drafts live in the store (not a hidden mounted EditorPanel, #300) so the editor UI can unmount without losing edits.
   editorDrafts: Record<string, string>
   setEditorDraft: (fileId: string, content: string) => void
+  setCsvPreviewOnly: (fileId: string, enabled: boolean) => void
   clearEditorDraft: (fileId: string) => void
   clearEditorDrafts: (fileIds: string[]) => void
   markdownViewMode: Record<string, MarkdownViewMode>
@@ -29,51 +35,66 @@ export type EditorDraftState = {
   setCombinedDiffFileTreeWidth: (width: number) => void
 }
 
+/** Drops the drafts of every view sharing a record with `fileIds`. */
+function clearEditorDraftsOf<TState extends Pick<AppState, 'editorDrafts'> & EditorBufferViewIndex>(
+  s: TState,
+  fileIds: readonly string[]
+): TState | Pick<AppState, 'editorDrafts'> {
+  let next = s.editorDrafts
+  for (const fileId of fileIds) {
+    for (const id of [fileId, ...editorBufferSiblingViewIds(s, fileId)]) {
+      if (id in next) {
+        next = next === s.editorDrafts ? { ...next } : next
+        delete next[id]
+      }
+    }
+  }
+  return next === s.editorDrafts ? s : { editorDrafts: next }
+}
+
 export function createEditorDraftState(set: EditorSet, _get: EditorGet): EditorDraftState {
   return {
     editorDrafts: {},
+    setCsvPreviewOnly: (fileId, enabled) =>
+      set((state) => {
+        const file = state.openFiles.find((candidate) => candidate.id === fileId)
+        if (!file || Boolean(file.csvPreviewOnly) === enabled) {
+          return state
+        }
+        return {
+          openFiles: state.openFiles.map((candidate) =>
+            candidate.id === fileId
+              ? { ...candidate, csvPreviewOnly: enabled || undefined }
+              : candidate
+          )
+        }
+      }),
     setEditorDraft: (fileId, content) =>
       set((s) => {
-        // Why: read-only tabs must never accrue a draft — it seeds dirty/autosave/hot-exit restore that could overwrite an agent transcript.
-        const file = s.openFiles.find((f) => f.id === fileId)
-        if (file?.readOnly === true) {
+        const viewIds = [fileId, ...editorBufferSiblingViewIds(s, fileId)]
+        if (viewIds.every((id) => s.editorDrafts[id] === content)) {
           return s
         }
-        return { editorDrafts: { ...s.editorDrafts, [fileId]: content } }
-      }),
-    clearEditorDraft: (fileId) =>
-      set((s) => {
-        if (!(fileId in s.editorDrafts)) {
+        // Read-only drafts could trigger dirty/autosave/hot-exit overwrite of agent transcripts; refuse them.
+        const file = s.openFiles.find((f) => f.id === fileId)
+        if (file?.readOnly === true || file?.csvPreviewOnly === true) {
           return s
         }
         const next = { ...s.editorDrafts }
-        delete next[fileId]
+        for (const id of viewIds) {
+          next[id] = content
+        }
         return { editorDrafts: next }
       }),
-    clearEditorDrafts: (fileIds) =>
-      set((s) => {
-        if (fileIds.length === 0) {
-          return s
-        }
-        const next = { ...s.editorDrafts }
-        let changed = false
-        for (const fileId of fileIds) {
-          if (fileId in next) {
-            delete next[fileId]
-            changed = true
-          }
-        }
-        return changed ? { editorDrafts: next } : s
-      }),
+    clearEditorDraft: (fileId) => set((s) => clearEditorDraftsOf(s, [fileId])),
+    clearEditorDrafts: (fileIds) => set((s) => clearEditorDraftsOf(s, fileIds)),
 
-    // Markdown view mode
     markdownViewMode: {},
     setMarkdownViewMode: (fileId, mode) =>
       set((s) => ({
         markdownViewMode: { ...s.markdownViewMode, [fileId]: mode }
       })),
 
-    // Rich-markdown size-limit override
     markdownRichModeSizeOverride: {},
     setMarkdownRichModeSizeOverride: (fileId, enabled) =>
       set((s) => {
@@ -91,7 +112,6 @@ export function createEditorDraftState(set: EditorSet, _get: EditorGet): EditorD
         }
       }),
 
-    // Editor view mode (edit vs changes-diff). See EditorViewMode.
     editorViewMode: {},
     setEditorViewMode: (fileId, mode) =>
       set((s) => {
@@ -107,7 +127,6 @@ export function createEditorDraftState(set: EditorSet, _get: EditorGet): EditorD
         return { editorViewMode: { ...s.editorViewMode, [fileId]: mode } }
       }),
 
-    // Markdown preview front-matter visibility (#4468).
     markdownFrontmatterVisible: {},
     setMarkdownFrontmatterVisible: (fileId, visible) =>
       set((s) => {
@@ -123,7 +142,6 @@ export function createEditorDraftState(set: EditorSet, _get: EditorGet): EditorD
         return { markdownFrontmatterVisible: { ...s.markdownFrontmatterVisible, [fileId]: false } }
       }),
 
-    // Markdown table of contents visibility
     markdownTableOfContentsVisible: {},
     setMarkdownTableOfContentsVisible: (fileId, visible) =>
       set((s) => {
@@ -143,14 +161,12 @@ export function createEditorDraftState(set: EditorSet, _get: EditorGet): EditorD
         }
       }),
 
-    // Markdown table of contents panel sizing
     markdownTocPanelWidth: 240,
     setMarkdownTocPanelWidth: (width) =>
       set((s) => ({
         markdownTocPanelWidth: clampMarkdownTocPanelWidth(width, undefined, s.markdownTocPanelWidth)
       })),
 
-    // Combined diff file tree sizing
     combinedDiffFileTreeWidth: COMBINED_DIFF_FILE_TREE_DEFAULT_WIDTH,
     setCombinedDiffFileTreeWidth: (width) =>
       set((s) => ({

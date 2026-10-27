@@ -1,10 +1,8 @@
-// @ts-nocheck -- mechanically split from OrcaRuntimeService; behavior is covered by AST equivalence and characterization tests.
 import type { RuntimeWorktreeScanResult } from './repo-worktree-resolution-scan'
 import type { TerminalWorkspaceLaunchScope } from './runtime-legacy-worker-terminal-recovery-types'
 import type { ResolvedWorktree } from './runtime-worktree-path-identity'
-import type { RuntimeLeafRecord } from './runtime-terminal-state-records'
-import { isCursorAgentTitle } from '../../shared/agent-detection'
-import { isAbsolute, relative, resolve } from 'node:path'
+import type { RuntimeTerminalRowMetadata } from '../../shared/runtime-terminal-contracts'
+import { IMMEDIATE_KILL_REPLY_BUDGET_MS } from '../daemon/immediate-kill-reply-budget'
 import type {
   RuntimeTerminalDriverState,
   RuntimeTerminalPresentation
@@ -16,7 +14,7 @@ import type { RuntimeGitCommandSurface } from './runtime-git-command-surface'
 import type { RuntimeRepositoryCommandSurface } from './runtime-repository-command-surface'
 import type { RuntimeReviewCommandSurface } from './runtime-review-command-surface'
 import type { RuntimeServiceCommandSurface } from './runtime-service-command-surface'
-import type { RuntimeSkillCommandSurface } from './runtime-skill-command-surface'
+import type { RuntimeSkillCommandSurface } from './runtime-skill-command-contract'
 
 export type PtyIncarnationHandleRecord = {
   handle: string
@@ -51,53 +49,41 @@ export type ResolvedTerminalWorkspaceLaunchTarget = {
   managedWorktree: ResolvedWorktree | null
 }
 
-export function isCursorAgentOrchestrationTarget(
-  leaf: RuntimeLeafRecord,
-  tabTitle: string | null | undefined
-): boolean {
-  return [leaf.lastOscTitle, leaf.paneTitle, tabTitle].some(isCursorAgentTitle)
-}
-
-export const AGENT_SESSION_OPERATION_PER_CLIENT_LIMIT = 512
-
-export const AGENT_SESSION_OPERATION_GLOBAL_LIMIT = 4_096
-
-// Why: long enough for a phone to reconnect and retry a create whose response
-// was lost, short enough that an intentional later re-resume forks fresh.
+// Allow lost-response reconnect retries for one minute; later intentional resumes fork fresh.
 export const MOBILE_TERMINAL_CREATE_RESULT_TTL_MS = 60_000
 
-// Why: same idempotency window for worktree.create — a phone whose create was
-// interrupted by a connection migration retries with the same clientMutationId
-// and reuses the just-created worktree instead of spawning a duplicate.
+// Connection-migration retries reuse clientMutationId to avoid duplicate workspaces.
 export const WORKTREE_CREATE_RESULT_TTL_MS = 60_000
 
 export const MOBILE_TERMINAL_SURFACE_TIMEOUT_MS = 10_000
 
-// Why: the split already failed; the caller waits on this teardown only to learn whether the
-// fallback kill is needed, so keep it short — an unreachable host must not stall the rejection.
+// Rejected splits need only a quick teardown verdict before fallback kill; unreachable hosts must not stall rejection.
 export const REJECTED_SPLIT_PTY_STOP_TIMEOUT_MS = 2_000
 
-export const EXPLICIT_TERMINAL_CLOSE_STOP_TIMEOUT_MS = 2_000
+// Include immediate-kill and follow-up inventory budgets; agent exit hooks can delay verification.
+export const EXPLICIT_TERMINAL_CLOSE_STOP_TIMEOUT_MS = IMMEDIATE_KILL_REPLY_BUDGET_MS + 2_000
 
 export const CLAUDE_AGENT_PROMPT_RENDER_TIMEOUT_MS = 8000
 
 export const CLAUDE_AGENT_PROMPT_RENDER_QUIET_MS = 1500
 
-// Why: Claude emits show-cursor while rendering its composer; output must settle afterward.
+// Claude shows its cursor before composer rendering settles.
 export const CLAUDE_AGENT_PROMPT_RENDER_MARKER = '\x1b[?25h'
 
 export const MOBILE_TERMINAL_READY_FALLBACK_MS = 1000
 
 export const SSH_PANE_RECOVERY_GRACE_MS = 30_000
 
-// Why: long enough that a keystroke burst to a proven-dead leaf probes once,
-// short enough that a recreated session id regains writability quickly even if
-// its runtime record (which also invalidates the verdict) is late.
+// Cache proven absence across keystroke bursts, but let recreated session ids recover promptly.
 export const PROVEN_ABSENT_LEAF_PTY_TTL_MS = 15_000
 
 export const TERMINAL_INTERACTIVE_WAIT_PROBE_TIMEOUT_MS = 2_000
 
-export type RuntimeTerminalProjection = { lines: string[]; draft?: string }
+export type RuntimeTerminalProjection = {
+  lines: string[]
+  draft?: string
+  tailRows?: RuntimeTerminalRowMetadata[]
+}
 
 export function assertAgentPromptRequestActive(signal?: AbortSignal): void {
   if (signal?.aborted) {
@@ -137,17 +123,6 @@ export async function waitForAgentPromptPromise<T>(
       (value) => finish({ value }),
       (error: unknown) => finish({ error })
     )
-  })
-}
-
-// Generic terminal.send uses setImmediate to let abort/permission/data callbacks run between
-// chunks without paying a full Windows timer tick for every 16 KiB write. Agent prompts use an
-// atomic bracketed-paste write, so they do not rely on this scheduler.
-// Why the global and not node:timers/promises: only the global is intercepted by fake timers,
-// so a chunked paste stays observable on the test clock.
-export function yieldBetweenTerminalInputChunks(): Promise<void> {
-  return new Promise<void>((resolve) => {
-    setImmediate(resolve)
   })
 }
 
@@ -229,8 +204,7 @@ export function createTerminalRevealWarning(handle: string, error?: unknown): st
   ].join(' ')
 }
 
-// Why: an absent `surfaceOwner` means "default", so surfacing callers must omit
-// the key rather than send `true`.
+// Absence means default; surfacing callers must omit surfaceOwner instead of sending true.
 export function ownerSurfacing(shouldSurface: boolean): { surfaceOwner?: false } {
   return shouldSurface ? {} : { surfaceOwner: false }
 }
@@ -249,8 +223,6 @@ export function resolveTerminalPresentation(opts: {
   return undefined
 }
 
-// Subscribe a listener to a per-key Set, pruning the key's entry once its last
-// listener unsubscribes. Returns the unsubscribe callback.
 export function addListenerToMap<T>(
   map: Map<string, Set<T>>,
   key: string,
@@ -271,11 +243,6 @@ export function addListenerToMap<T>(
   }
 }
 
-export function isPathWithinDirectory(directory: string, candidate: string): boolean {
-  const relativePath = relative(resolve(directory), resolve(candidate))
-  return relativePath === '' || (!relativePath.startsWith('..') && !isAbsolute(relativePath))
-}
-
 export const AGENT_HOOK_RUNTIME_ENV_KEYS = [
   'ORCA_AGENT_HOOK_PORT',
   'ORCA_AGENT_HOOK_TOKEN',
@@ -285,47 +252,28 @@ export const AGENT_HOOK_RUNTIME_ENV_KEYS = [
   'ORCA_AGENT_HOOK_ENDPOINT'
 ] as const
 
-// Why: notificationSeq is the desktop-assigned monotonic sequence used for
-// mobile reconnect catch-up (#8129). It is added on dispatch (and replay) so a
-// client can watermark the last event it delivered and request exactly the
-// events after it — idempotent, no duplicate local pushes.
 export type RuntimeWorktreeLifecycleEvent =
   | { kind: 'created'; worktreeId: string; path: string; branch: string }
   | { kind: 'removed'; worktreeId: string; path: string }
 
-// Why: presence-based driver state for the mobile-presence lock. Exactly one
-// driver per PTY at any moment. See docs/mobile-presence-lock.md.
-//   - `idle`: no mobile subscribers; desktop input flows freely
-//   - `desktop`: at least one mobile client subscribed but desktop reclaimed
-//      (or all mobile clients are passive `desktop`-mode watchers); desktop
-//      input flows freely
-//   - `mobile{clientId}`: a mobile client is the active driver; desktop
-//      input/resize are dropped server-side and the lock banner is mounted.
-//      `clientId` is the most recent mobile actor for this PTY.
+// One driver per PTY: idle has no subscriber; desktop has passive/reclaimed subscribers.
+// mobile owns input/resize and blocks desktop writes; see docs/mobile-presence-lock.md.
 export type DriverState = RuntimeTerminalDriverState
 
-// Why: per-PTY layout target — what the PTY *should* be at right now.
-// `desktop` ⇒ runs at the desktop renderer's pane geometry; mobile passive
-// watchers (mode='desktop') still receive scrollback. `phone` ⇒ runs at
-// `ownerClientId`'s viewport; the desktop renderer's auto-fit is suppressed.
+// Desktop uses renderer geometry while phones watch passively; phone uses its owner viewport and suppresses desktop fit.
 // See docs/mobile-terminal-layout-state-machine.md.
 export type PtyLayoutTarget =
   | { kind: 'desktop'; cols: number; rows: number }
   | { kind: 'phone'; cols: number; rows: number; ownerClientId: string }
   | { kind: 'remote-desktop'; cols: number; rows: number; ownerSubscriptionKey: string }
 
-// Why: authoritative layout state with monotonic seq. Bumped on every
-// applyLayout success; emitted on mobile subscribe-stream events so clients
-// drop stale events that arrive after a newer transition.
+// Increment on successful layout changes so clients reject stale transitions.
 export type PtyLayoutState = PtyLayoutTarget & {
   seq: number
   appliedAt: number
 }
 
-// Why: applyLayout result discriminator. Callers (especially RPC handlers)
-// need to distinguish "shipped a new state at seq N" from "no-op — caller
-// should not claim a seq it didn't produce." `pty-exited` is terminal;
-// `resize-failed` is transient and the caller may retry.
+// Only successful changes own a new seq; pty-exited is terminal, resize-failed retryable.
 export type ApplyLayoutResult =
   | { ok: true; state: PtyLayoutState }
   | { ok: false; reason: 'pty-exited' | 'resize-failed' }

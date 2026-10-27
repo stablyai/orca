@@ -7,7 +7,7 @@ import type {
   NativeChatSubagentEntry
 } from '../../../shared/native-chat-types'
 import type { OrchestrationWorkerReadResult } from '../../../shared/orchestration-worker-output'
-import { formatWorkerRead, formatWorkerStart } from './worker-output'
+import { formatWorkerRead, formatWorkerRelease, formatWorkerStart } from './worker-output'
 
 function fleetProjection(verdict: 'live' | 'unverifiable' | 'exited'): OrchestrationFleetWorker {
   return {
@@ -259,7 +259,7 @@ describe('worker-read plain formatting', () => {
   it('distinguishes a released archive read from a live one', () => {
     const output = formatWorkerRead({
       dispatchId: 'dispatch_1',
-      status: { worker: 'succeeded', terminal: 'released', liveness: 'unverifiable' },
+      status: { worker: 'succeeded', terminal: 'exited', liveness: 'unverifiable' },
       source: 'terminal',
       sourceIdentity: 'private-source-identity',
       terminal: {
@@ -273,7 +273,7 @@ describe('worker-read plain formatting', () => {
       fallbackReason: null,
       warnings: [],
       archived: true
-    } as unknown as OrchestrationWorkerReadResult)
+    })
 
     expect(output).toContain('Archived: true')
     expect(output).toContain('Terminal liveness: unverifiable')
@@ -288,7 +288,7 @@ function workerReadResult(
     dispatchId: 'dispatch_1',
     status: { worker: 'ready', terminal: 'running' },
     ...value
-  } as OrchestrationWorkerReadResult
+  }
 }
 
 type WorkerReadResultWithoutContext<T> = T extends unknown
@@ -329,13 +329,7 @@ function occurrences(haystack: string, needle: string): number {
 }
 
 describe('formatWorkerRead', () => {
-  // The replay case this row is durable for: SQLite-backed, re-sent on every
-  // reconnect, and read here by a client that draws no roster block, runs no
-  // reconciliation, and cannot re-check whether those children still exist. A
-  // sentence frozen mid-flight outlives the process that wrote it, so it must
-  // not keep asserting a liveness only that process could have observed —
-  // `docs/reference/ssh-execution-boundary.md` calls that loss of contact
-  // reported as a live state.
+  // Replayed journal rows cannot prove current child liveness.
   it('replays a mid-flight roster row without claiming a child is still working', () => {
     const midFlight: readonly NativeChatSubagentEntry[] = [
       { id: 'child-1', label: 'read', state: 'working' },
@@ -354,10 +348,7 @@ describe('formatWorkerRead', () => {
     expect(output).not.toMatch(/\bworking\b/)
   })
 
-  // The body `codexSubagentGroupBody` actually writes: the plain-text twin, then
-  // the block it stands in for. The twin exists for clients that cannot draw the
-  // block, so a client printing the block must not print the twin beside it —
-  // the renderer drops the twin for the same reason, from the other side.
+  // Producers emit a text twin for clients that cannot render roster blocks; print only one copy.
   it('prints the roster sentence once for the two-block row the producer writes', () => {
     const sentence = subagentGroupFallbackText(ROSTER)
     const output = formatWorkerRead(
@@ -370,13 +361,10 @@ describe('formatWorkerRead', () => {
       )
     )
 
-    expect(output).toContain(`[system] ${sentence}`)
-    expect(occurrences(output, sentence)).toBe(1)
+    expect(output).toContain('[system] Kicked off 2 subagents (1 failed)')
+    expect(occurrences(output, 'Kicked off 2 subagents (1 failed)')).toBe(1)
   })
 
-  // Suppression is per twin, not per message. One twin beside two roster blocks
-  // silenced BOTH groups and printed one sentence, so the second roster vanished
-  // with no marker — the same silent drop the missing-twin case above avoids.
   it('stands in for the second roster block when only one twin accompanies two', () => {
     const other: readonly NativeChatSubagentEntry[] = [
       { id: 'child-3', label: 'plan', state: 'completed' }
@@ -392,14 +380,10 @@ describe('formatWorkerRead', () => {
       )
     )
 
-    expect(occurrences(output, subagentGroupFallbackText(ROSTER))).toBe(1)
-    expect(output).toContain(`[subagents] ${subagentGroupFallbackText(other)}`)
+    expect(occurrences(output, 'Kicked off 2 subagents (1 failed)')).toBe(1)
+    expect(output).toContain('[subagents] Ran 1 subagent')
   })
 
-  // Which group a lone twin belongs to is decided by its TEXT, not its position.
-  // Claiming positionally silenced whichever group came first, so a twin
-  // belonging to a LATER group erased the earlier group's roster and printed the
-  // later one's sentence twice — the same silent drop, one permutation over.
   it('claims a lone twin for the group it names, not the first group in the message', () => {
     const other: readonly NativeChatSubagentEntry[] = [
       { id: 'child-3', label: 'plan', state: 'completed' }
@@ -416,12 +400,10 @@ describe('formatWorkerRead', () => {
       )
     )
 
-    expect(occurrences(output, second)).toBe(1)
-    expect(output).toContain(`[subagents] ${subagentGroupFallbackText(ROSTER)}`)
+    expect(occurrences(output, 'Ran 1 subagent')).toBe(1)
+    expect(output).toContain('[subagents] Kicked off 2 subagents (1 failed)')
   })
 
-  // The same claim, with the twin written after both blocks: nothing about the
-  // ORDER of a twin and its group is guaranteed by the block schema.
   it('claims a trailing twin for the group it names', () => {
     const other: readonly NativeChatSubagentEntry[] = [
       { id: 'child-3', label: 'plan', state: 'completed' }
@@ -438,26 +420,19 @@ describe('formatWorkerRead', () => {
       )
     )
 
-    expect(occurrences(output, second)).toBe(1)
-    expect(output).toContain(`[subagents] ${subagentGroupFallbackText(ROSTER)}`)
+    expect(occurrences(output, 'Ran 1 subagent')).toBe(1)
+    expect(output).toContain('[subagents] Kicked off 2 subagents (1 failed)')
   })
 
-  // A group with no twin beside it is a shape the block schema admits and no
-  // producer writes. Dropping it would lose the roster entirely, so the block
-  // itself carries the sentence when nothing else does.
   it('stands in for a roster block that arrived without its twin', () => {
     const output = formatWorkerRead(
       transcriptRead([{ type: 'subagent-group', groupId: 'thread:turn-1', agents: [...ROSTER] }])
     )
 
-    expect(output).toContain(`[assistant] [subagents] ${subagentGroupFallbackText(ROSTER)}`)
+    expect(output).toContain('[assistant] [subagents] Kicked off 2 subagents (1 failed)')
   })
 
-  // A roster from a newer build holds a state this build does not know, which
-  // `summarizeSubagentGroup` reads as `unverifiable`. Recomputing the sentence
-  // to compare it against the frozen twin therefore produced a DIFFERENT string,
-  // and the CLI printed the roster twice: the twin's own wording plus a
-  // `[subagents]` line contradicting it.
+  // Unknown roster states can change recomputed text; preserve the producer's twin without duplicating it.
   it('prints the roster once when the twin names a state this build cannot reproduce', () => {
     const frozenTwin = 'Ran 2 subagents (1 cancelled)'
     const output = formatWorkerRead(
@@ -467,6 +442,7 @@ describe('formatWorkerRead', () => {
           {
             type: 'subagent-group',
             groupId: 'thread:turn-1',
+            // SAFETY: This fixture models a newer host's unrecognized state at the RPC boundary.
             agents: [
               { id: 'child-1', label: 'read', state: 'completed' },
               { id: 'child-2', label: 'edit', state: 'cancelled' }
@@ -482,19 +458,94 @@ describe('formatWorkerRead', () => {
     expect(output).not.toContain('unverifiable')
   })
 
-  // The journal admits block types this build does not know, and `client.call`
-  // casts the RPC result rather than validating it — so a newer remote host's
-  // block reaches this formatter as-is. Reading fields off it threw a TypeError
-  // and took down the whole `worker read`.
+  // RPC results are not schema-validated here, so newer hosts' unknown block types reach the formatter.
   it('degrades an unknown block type from a newer host instead of throwing', () => {
     const output = formatWorkerRead(
       transcriptRead([
         { type: 'text', text: 'before' },
+        // SAFETY: This fixture models a newer host's unrecognized block at the RPC boundary.
         { type: 'plan-step', title: 'ship it' } as unknown as NativeChatBlock,
         { type: 'text', text: 'after' }
       ])
     )
 
     expect(output).toContain('[assistant] before\n[unsupported block]\nafter')
+  })
+})
+
+describe('worker output compatibility and release receipts', () => {
+  it('renders terminal tails without changing line boundaries', () => {
+    expect(
+      formatWorkerRead({
+        dispatchId: 'dispatch_1',
+        terminal: {
+          handle: 'term_worker',
+          status: 'running',
+          tail: ['first', '', 'third'],
+          truncated: false,
+          nextCursor: null
+        }
+      })
+    ).toBe('first\n\nthird')
+  })
+
+  it('renders transcript blocks and survives unserializable tool input', () => {
+    const circular: { self?: unknown } = {}
+    circular.self = circular
+
+    expect(
+      formatWorkerRead({
+        dispatchId: 'dispatch_1',
+        source: 'transcript',
+        sourceIdentity: 'pane:1',
+        provider: 'codex',
+        status: { worker: 'ready', terminal: 'running' },
+        transcript: {
+          messages: [
+            {
+              id: 'message_1',
+              role: 'assistant',
+              blocks: [
+                { type: 'text', text: 'working' },
+                { type: 'tool-call', name: 'inspect', input: circular },
+                { type: 'tool-result', output: 'failed', isError: true },
+                { type: 'image-ref', url: 'https://example.test/proof.png' }
+              ],
+              timestamp: null,
+              source: 'transcript'
+            }
+          ],
+          nextCursor: 'owr1_next',
+          limited: false,
+          returnedMessageCount: 1
+        },
+        cursor: 'owr1_next',
+        fallbackReason: null,
+        warnings: []
+      })
+    ).toBe(
+      'Source: transcript (provider=codex)\n' +
+        'Worker: ready\n' +
+        'Archived: false\n' +
+        'Continuation cursor (opaque; pass unchanged to --cursor): owr1_next\n\n' +
+        '[assistant] working\n[tool inspect] [unserializable input]\n[tool result error] failed\n[image] https://example.test/proof.png'
+    )
+  })
+
+  it('renders release evidence in receipt order', () => {
+    expect(
+      formatWorkerRelease({
+        dispatchId: 'dispatch_1',
+        state: 'release_unknown',
+        reason: 'host_unreachable',
+        processAction: 'unverifiable',
+        archive: { source: 'transcript', status: 'saved' },
+        lastError: 'transport closed',
+        recovery: 'Reconnect and retry.'
+      })
+    ).toBe(
+      'Worker dispatch_1 terminal [release_unknown] reason=host_unreachable process=unverifiable\n' +
+        'archive transcript [saved]\ntransport closed\nReconnect and retry.'
+    )
   })
 })

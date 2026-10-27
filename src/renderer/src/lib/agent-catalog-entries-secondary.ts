@@ -1,0 +1,158 @@
+import { translate } from '@/i18n/i18n'
+import type { AgentCatalogEntry } from './agent-catalog'
+
+export function secondaryAgentCatalogEntries(): AgentCatalogEntry[] {
+  return [
+    {
+      id: 'aider',
+      label: translate('auto.lib.agent.catalog.b32627f09b', 'Aider'),
+      cmd: 'aider',
+      homepageUrl: 'https://aider.chat/docs/'
+    },
+    {
+      id: 'goose',
+      label: translate('auto.lib.agent.catalog.8da11d876c', 'Goose'),
+      cmd: 'goose',
+      homepageUrl: 'https://block.github.io/goose/docs/quickstart/'
+    },
+    {
+      id: 'amp',
+      label: translate('auto.lib.agent.catalog.c73c573939', 'Amp'),
+      cmd: 'amp',
+      homepageUrl: 'https://ampcode.com/manual#install'
+    },
+    {
+      id: 'kilo',
+      label: translate('auto.lib.agent.catalog.918ba4ffed', 'Kilocode'),
+      cmd: 'kilo',
+      homepageUrl: 'https://kilo.ai/docs/cli'
+    },
+    {
+      id: 'kiro',
+      label: translate('auto.lib.agent.catalog.e0247254f2', 'Kiro'),
+      // Kiro installs as kiro-cli; match detection so the settings hint names the actual executable.
+      cmd: 'kiro-cli',
+      homepageUrl: 'https://kiro.dev/docs/cli/'
+    },
+    {
+      id: 'crush',
+      label: translate('auto.lib.agent.catalog.9477377a2a', 'Charm'),
+      cmd: 'crush',
+      homepageUrl: 'https://github.com/charmbracelet/crush'
+    },
+    {
+      id: 'aug',
+      label: translate('auto.lib.agent.catalog.5e8eff11b3', 'Auggie'),
+      cmd: 'auggie',
+      homepageUrl: 'https://docs.augmentcode.com/cli/overview'
+    },
+    {
+      id: 'autohand',
+      label: translate('auto.lib.agent.catalog.1f8a19e9ad', 'Autohand Code'),
+      cmd: 'autohand',
+      homepageUrl: 'https://github.com/autohandai/code-cli'
+    },
+    {
+      id: 'cline',
+      label: translate('auto.lib.agent.catalog.cbaf0c2e0b', 'Cline'),
+      cmd: 'cline',
+      homepageUrl: 'https://docs.cline.bot/cline-cli/overview'
+    },
+    {
+      id: 'codebuff',
+      label: translate('auto.lib.agent.catalog.4238b771b5', 'Codebuff'),
+      cmd: 'codebuff',
+      homepageUrl: 'https://www.codebuff.com/docs/help/quick-start'
+    },
+    {
+      id: 'freebuff',
+      label: translate('auto.lib.agent.catalog.freebuff_label', 'Freebuff'),
+      cmd: 'freebuff',
+      homepageUrl: 'https://freebuff.com/cli'
+    },
+    {
+      id: 'command-code',
+      label: translate('auto.lib.agent.catalog.6f8056a565', 'Command Code'),
+      // Prefer command-code over its cmd alias to match detection and avoid confusion with Windows cmd.exe.
+      cmd: 'command-code',
+      homepageUrl: 'https://commandcode.ai/docs/quickstart'
+    },
+    {
+      id: 'continue',
+      label: translate('auto.lib.agent.catalog.9e2a9bb87b', 'Continue'),
+      // Continue installs as cn; continue is commonly a shell builtin.
+      cmd: 'cn',
+      homepageUrl: 'https://docs.continue.dev/guides/cli'
+    },
+    {
+      id: 'cursor',
+      label: translate('auto.lib.agent.catalog.667c104cff', 'Cursor'),
+      cmd: 'cursor-agent',
+      homepageUrl: 'https://cursor.com/cli'
+    },
+    {
+      id: 'droid',
+      label: translate('auto.lib.agent.catalog.739a930554', 'Droid'),
+      cmd: 'droid',
+      homepageUrl: 'https://docs.factory.ai/cli/getting-started/quickstart'
+    },
+    {
+      id: 'kimi',
+      label: translate('auto.lib.agent.catalog.28810273af', 'Kimi'),
+      cmd: 'kimi',
+      homepageUrl: 'https://www.kimi.com/code/docs/en/kimi-code-cli/getting-started.html'
+    },
+    {
+      id: 'mistral-vibe',
+      label: translate('auto.lib.agent.catalog.ca73055bd0', 'Mistral Vibe'),
+      // mistral-vibe installs the interactive executable as vibe.
+      cmd: 'vibe',
+      homepageUrl: 'https://github.com/mistralai/mistral-vibe'
+    },
+    {
+      id: 'qwen-code',
+      label: translate('auto.lib.agent.catalog.bee242fe3d', 'Qwen Code'),
+      // QwenLM/qwen-code installs as qwen; retain the catalog id for stable identity.
+      cmd: 'qwen',
+      homepageUrl: 'https://github.com/QwenLM/qwen-code'
+    },
+    {
+      id: 'rovo',
+      label: translate('auto.lib.agent.catalog.4e63c7b956', 'Rovo Dev'),
+      // Why: seeds the full-command override, so it must be the launch command, not `acli`.
+      cmd: 'acli rovodev run',
+      homepageUrl:
+        'https://support.atlassian.com/rovo/docs/install-and-run-rovo-dev-cli-on-your-device/'
+    },
+    {
+      id: 'hermes',
+      label: translate('auto.lib.agent.catalog.8a9ba743cc', 'Hermes'),
+      cmd: 'hermes',
+      homepageUrl: 'https://hermes-agent.nousresearch.com/docs/'
+    },
+    {
+      id: 'devin',
+      label: translate('auto.lib.agent.catalog.fc80296033', 'Devin'),
+      cmd: 'devin',
+      homepageUrl: 'https://devin.ai/cli'
+    },
+    {
+      id: 'openclaw',
+      label: translate('auto.lib.agent.catalog.5dff448636', 'OpenClaw'),
+      cmd: 'openclaw',
+      homepageUrl: 'https://github.com/openclaw/openclaw'
+    },
+    {
+      id: 'codebuddy',
+      label: translate('auto.lib.agent.catalog.codebuddy_label', 'CodeBuddy'),
+      cmd: 'codebuddy',
+      homepageUrl: 'https://www.codebuddy.ai/cli'
+    },
+    {
+      id: 'jcode',
+      label: translate('auto.lib.agent.catalog.jcode_label', 'Jcode'),
+      cmd: 'jcode',
+      homepageUrl: 'https://github.com/1jehuang/jcode'
+    }
+  ]
+}

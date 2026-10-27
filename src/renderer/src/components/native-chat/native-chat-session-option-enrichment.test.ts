@@ -7,24 +7,94 @@ import {
 import {
   clearNativeChatModelEnrichmentForTests,
   ensureNativeChatModelEnrichment,
+  getNativeChatModelEnrichmentEntryCountForTests,
+  NATIVE_CHAT_MODEL_ENRICHMENT_MAX_ENTRIES,
   readNativeChatEnrichedModels,
   resolveNativeChatLaunchSessionOptions,
   subscribeNativeChatEnrichedModels
 } from './native-chat-session-option-enrichment'
 
 const mocks = vi.hoisted(() => ({
-  discoverRuntimeCommitMessageModels: vi.fn()
+  discoverRuntimeCommitMessageModels: vi.fn(),
+  callStructuredAgentSession: vi.fn()
 }))
 
-vi.mock('@/runtime/runtime-git-client', () => ({
-  discoverRuntimeCommitMessageModels: mocks.discoverRuntimeCommitMessageModels,
-  getRuntimeGitScope: vi.fn()
+vi.mock('@/runtime/runtime-git-generation-client', () => ({
+  discoverRuntimeCommitMessageModels: mocks.discoverRuntimeCommitMessageModels
+}))
+vi.mock('@/runtime/runtime-git-client-context', () => ({ getRuntimeGitScope: vi.fn() }))
+
+vi.mock('@/runtime/structured-agent-session-client', () => ({
+  callStructuredAgentSession: mocks.callStructuredAgentSession
 }))
 
 describe('native chat session option enrichment', () => {
   beforeEach(() => {
     clearNativeChatModelEnrichmentForTests()
     mocks.discoverRuntimeCommitMessageModels.mockReset()
+    mocks.callStructuredAgentSession.mockReset().mockResolvedValue({
+      origin: 'live-session',
+      models: [{ id: 'gpt-host', label: 'GPT Host', isDefault: true, efforts: [] }],
+      fetchedAt: 1
+    })
+  })
+
+  it('reads the host catalog only for a pane on this machine', async () => {
+    mocks.discoverRuntimeCommitMessageModels.mockResolvedValue({
+      success: true,
+      catalogOrigin: 'probe',
+      models: [{ id: 'gpt-cli', label: 'GPT CLI' }]
+    })
+    const context = {
+      target: { kind: 'local' as const },
+      worktreeId: 'repo::/worktree',
+      worktreePath: '/worktree'
+    }
+
+    const local = await discoverNativeChatCatalogModels('codex', context, 'local')
+    expect(local?.map(({ id }) => id)).toEqual(['gpt-host'])
+    expect(mocks.discoverRuntimeCommitMessageModels).not.toHaveBeenCalled()
+
+    // Paired-runtime keys can cover SSH/WSL worktrees; only worktree-scoped CLI discovery knows their models.
+    mocks.callStructuredAgentSession.mockClear()
+    const paired = await discoverNativeChatCatalogModels('codex', context, 'runtime:env-1')
+    expect(mocks.callStructuredAgentSession).not.toHaveBeenCalled()
+    expect(paired?.map(({ id }) => id)).toContain('gpt-cli')
+  })
+
+  it('lists through the CLI when this machine runs a custom launch command', async () => {
+    mocks.discoverRuntimeCommitMessageModels.mockResolvedValue({
+      success: true,
+      catalogOrigin: 'probe',
+      models: [{ id: 'gpt-custom', label: 'GPT Custom' }]
+    })
+    const context = {
+      target: { kind: 'local' as const },
+      prefs: { agentCmdOverrides: { codex: 'codex-nightly' } },
+      worktreeId: 'repo::/worktree',
+      worktreePath: '/worktree'
+    }
+
+    // The structured catalog lists the built-in binary, which this terminal does not run.
+    const models = await discoverNativeChatCatalogModels('codex', context, 'local')
+    expect(mocks.callStructuredAgentSession).not.toHaveBeenCalled()
+    expect(models?.map(({ id }) => id)).toContain('gpt-custom')
+  })
+
+  it('bounds settled host enrichment entries', async () => {
+    for (let index = 0; index < NATIVE_CHAT_MODEL_ENRICHMENT_MAX_ENTRIES + 4; index += 1) {
+      ensureNativeChatModelEnrichment({
+        agent: 'cursor',
+        hostKey: `ssh:${index}`,
+        discover: async () => []
+      })
+    }
+    await Promise.resolve()
+    await Promise.resolve()
+
+    expect(getNativeChatModelEnrichmentEntryCountForTests()).toBe(
+      NATIVE_CHAT_MODEL_ENRICHMENT_MAX_ENTRIES
+    )
   })
 
   it('keeps reads synchronous while one host-scoped probe is in flight', async () => {
@@ -98,6 +168,37 @@ describe('native chat session option enrichment', () => {
     )
   })
 
+  it('carries the context window OMP lists for each model, absent from an older host', async () => {
+    mocks.discoverRuntimeCommitMessageModels.mockResolvedValue({
+      success: true,
+      catalogOrigin: 'probe',
+      models: [
+        {
+          id: 'openai-codex/gpt-5.5',
+          label: 'GPT-5.5',
+          description: 'openai-codex',
+          contextWindowTokens: 272_000
+        },
+        { id: 'openai-codex/gpt-5.4', label: 'GPT-5.4', description: 'openai-codex' }
+      ]
+    })
+    const models = await discoverNativeChatCatalogModels('omp', {
+      target: { kind: 'local' as const },
+      worktreeId: 'repo::/worktree',
+      worktreePath: '/worktree'
+    })
+    expect(models).toEqual([
+      {
+        id: 'openai-codex/gpt-5.5',
+        label: 'GPT-5.5',
+        description: 'openai-codex',
+        contextWindowTokens: 272_000,
+        options: []
+      },
+      { id: 'openai-codex/gpt-5.4', label: 'GPT-5.4', description: 'openai-codex', options: [] }
+    ])
+  })
+
   it('uses only discovered Claude rows and capabilities per host', async () => {
     mocks.discoverRuntimeCommitMessageModels.mockResolvedValue({
       success: true,
@@ -123,7 +224,7 @@ describe('native chat session option enrichment', () => {
     })
     const discover = vi.fn(() =>
       discoverNativeChatCatalogModels('claude', {
-        settings: {},
+        target: { kind: 'local' as const },
         worktreeId: 'repo::/worktree',
         worktreePath: '/worktree'
       })
@@ -171,7 +272,7 @@ describe('native chat session option enrichment', () => {
     })
     const discover = vi.fn(() =>
       discoverNativeChatCatalogModels('grok', {
-        settings: {},
+        target: { kind: 'local' as const },
         worktreeId: 'repo::/worktree',
         worktreePath: '/worktree'
       })
@@ -183,8 +284,7 @@ describe('native chat session option enrichment', () => {
     await vi.waitFor(() => expect(listener).toHaveBeenCalledOnce())
 
     const models = readNativeChatEnrichedModels('grok', 'ssh:host')!
-    // The seed's grok-4.5 is gone (discovery is authoritative) and its default flag
-    // did not survive onto a row the account no longer calls default.
+    // Authoritative discovery replaces both seed ids and their default flags.
     expect(models.map(({ id, isDefault }) => [id, isDefault])).toEqual([
       ['grok-build', undefined],
       ['grok-5', true]
@@ -197,8 +297,7 @@ describe('native chat session option enrichment', () => {
   })
 
   it('publishes no default when an older host omits the flag entirely', async () => {
-    // A remote Orca predating `isDefault` sends rows without it; the picker must
-    // name no model rather than fall back to a seed row the account may have retired.
+    // Older hosts omit isDefault; never substitute a possibly retired seed model.
     mocks.discoverRuntimeCommitMessageModels.mockResolvedValue({
       success: true,
       catalogOrigin: 'probe',
@@ -206,7 +305,7 @@ describe('native chat session option enrichment', () => {
     })
     const discover = vi.fn(() =>
       discoverNativeChatCatalogModels('grok', {
-        settings: {},
+        target: { kind: 'local' as const },
         worktreeId: 'repo::/worktree',
         worktreePath: '/worktree'
       })
@@ -223,8 +322,7 @@ describe('native chat session option enrichment', () => {
   })
 
   it('rejects a spec fallback for grok too, not just claude', async () => {
-    // Grok's list replaces the seed rather than extending it, so letting a static
-    // fallback through would retire real models and blank the picker.
+    // Static fallbacks cannot retire real models or replace authoritative account listings.
     mocks.discoverRuntimeCommitMessageModels.mockResolvedValue({
       success: true,
       catalogOrigin: 'spec',
@@ -233,7 +331,7 @@ describe('native chat session option enrichment', () => {
 
     await expect(
       discoverNativeChatCatalogModels('grok', {
-        settings: {},
+        target: { kind: 'local' as const },
         worktreeId: 'repo::/worktree',
         worktreePath: '/worktree'
       })
@@ -241,8 +339,7 @@ describe('native chat session option enrichment', () => {
   })
 
   it('still lets a spec fallback through for an additive agent', async () => {
-    // Cursor merges onto its seed, so a fallback list costs nothing and dropping it
-    // would be a regression — the probe guard must stay scoped to authoritative agents.
+    // Keep additive-agent fallback support; only authoritative catalogs require probe origin.
     mocks.discoverRuntimeCommitMessageModels.mockResolvedValue({
       success: true,
       catalogOrigin: 'spec',
@@ -251,7 +348,7 @@ describe('native chat session option enrichment', () => {
 
     await expect(
       discoverNativeChatCatalogModels('cursor', {
-        settings: {},
+        target: { kind: 'local' as const },
         worktreeId: 'repo::/worktree',
         worktreePath: '/worktree'
       })
@@ -259,8 +356,6 @@ describe('native chat session option enrichment', () => {
   })
 
   it('uses the authoritative merge for grok and the additive one for cursor', async () => {
-    // Both branches of the same ternary: deleting the authoritative arm typechecks
-    // and leaves every additive-agent test passing.
     const discoverGrok = vi.fn().mockResolvedValue([{ id: 'grok-5', label: 'Grok 5', options: [] }])
     const discoverCursor = vi.fn().mockResolvedValue([{ id: 'extra', label: 'Extra', options: [] }])
     ensureNativeChatModelEnrichment({ agent: 'grok', hostKey: 'm', discover: discoverGrok })
@@ -275,9 +370,7 @@ describe('native chat session option enrichment', () => {
   })
 
   it('drops a persisted grok launch model missing from every settled probe', async () => {
-    // Regression: launch sites resolved the persisted model with no discovery gate,
-    // so the first launch after a probe (but before async settings retirement
-    // landed) still emitted the fatal `-m <retired>`.
+    // Reject probe-retired launch flags immediately, before asynchronous settings retirement completes.
     const persisted = {
       grok: { model: 'grok-4.5', valuesByModel: { 'grok-4.5': { effort: 'low' } } }
     }
@@ -292,11 +385,9 @@ describe('native chat session option enrichment', () => {
     await vi.waitFor(() => expect(readNativeChatEnrichedModels('grok', 'local')).not.toBeNull())
 
     expect(resolveNativeChatLaunchSessionOptions(persisted, 'grok')).toBeUndefined()
-    // A model any settled host still lists keeps resolving.
     expect(resolveNativeChatLaunchSessionOptions({ grok: { model: 'grok-5' } }, 'grok')).toEqual({
       model: 'grok-5'
     })
-    // Non-authoritative agents are untouched by the gate.
     expect(
       resolveNativeChatLaunchSessionOptions({ claude: { model: 'retired' } }, 'claude')
     ).toEqual({ model: 'retired' })
@@ -311,7 +402,7 @@ describe('native chat session option enrichment', () => {
 
     await expect(
       discoverNativeChatCatalogModels('claude', {
-        settings: {},
+        target: { kind: 'local' as const },
         worktreeId: 'repo::/worktree',
         worktreePath: '/worktree'
       })

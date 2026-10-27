@@ -6,6 +6,10 @@ import {
   addWorktreeCreatePhaseAttributes,
   withGitSpan
 } from './instrumentation'
+import {
+  addAgentSessionCreatePhaseAttributes,
+  withAgentSessionSpan
+} from './agent-session-instrumentation'
 
 type SpanRecord = {
   readonly name: string
@@ -47,12 +51,8 @@ function makeCapturingSink(): CapturedSink {
       }
       records.push(record)
     },
-    flush() {
-      /* no-op */
-    },
-    close() {
-      /* no-op */
-    }
+    flush() {},
+    close() {}
   }
 }
 
@@ -185,8 +185,7 @@ describe('addWorktreeCreatePhaseAttributes', () => {
 
   it('counts concurrent phases once when measuring unattributed time', () => {
     const { attributes, span } = capture()
-    // Create resolves shared directories and .worktreeinclude concurrently; summing their
-    // durations would claim 400ms of coverage for a 200ms window.
+    // Concurrent phases must not double-count covered wall time.
     addWorktreeCreatePhaseAttributes(span, {
       totalDurationMs: 1000,
       phases: [
@@ -197,7 +196,6 @@ describe('addWorktreeCreatePhaseAttributes', () => {
 
     expect(attributes['worktree.create.phase.resolve_shared_directories_ms']).toBe(200)
     expect(attributes['worktree.create.phase.resolve_worktreeinclude_ms']).toBe(150)
-    // Covered wall clock is 100..300, so 800ms is genuinely unaccounted for.
     expect(attributes['worktree.create.unattributed_ms']).toBe(800)
   })
 
@@ -215,16 +213,23 @@ describe('addWorktreeCreatePhaseAttributes', () => {
     expect(attributes['worktree.create.unattributed_ms']).toBe(200)
   })
 
-  it('records a prepared-checkout hit and whether it had to be retargeted', () => {
+  it('records a prepared-checkout hit, the reset it needed and who armed it', () => {
     const { attributes, span } = capture()
     addWorktreeCreatePhaseAttributes(span, {
       totalDurationMs: 900,
       phases: [{ phase: 'git_worktree_add', startedAtMs: 0, durationMs: 400 }],
-      preparedCheckout: { status: 'hit', retargeted: true }
+      preparedCheckout: {
+        status: 'hit',
+        reset: 'retargeted',
+        origin: 'rearm',
+        buildMs: 1,
+        idleMs: 0
+      }
     })
 
     expect(attributes['worktree.create.prepared_checkout']).toBe('hit')
-    expect(attributes['worktree.create.prepared_checkout_retargeted']).toBe(true)
+    expect(attributes['worktree.create.prepared_checkout_reset']).toBe('retargeted')
+    expect(attributes['worktree.create.prepared_checkout_origin']).toBe('rearm')
     expect(attributes['worktree.create.prepared_checkout_miss']).toBeUndefined()
     expect(attributes['worktree.create.unattributed_ms']).toBe(500)
   })
@@ -239,7 +244,7 @@ describe('addWorktreeCreatePhaseAttributes', () => {
 
     expect(attributes['worktree.create.prepared_checkout']).toBe('miss')
     expect(attributes['worktree.create.prepared_checkout_miss']).toBe('base_mismatch')
-    expect(attributes['worktree.create.prepared_checkout_retargeted']).toBeUndefined()
+    expect(attributes['worktree.create.prepared_checkout_reset']).toBeUndefined()
   })
 
   it('stays silent on paths that never consult the prepared checkout', () => {
@@ -247,5 +252,36 @@ describe('addWorktreeCreatePhaseAttributes', () => {
     addWorktreeCreatePhaseAttributes(span, { totalDurationMs: 10, phases: [] })
 
     expect(attributes['worktree.create.prepared_checkout']).toBeUndefined()
+  })
+})
+
+describe('agentSession.create tracing', () => {
+  it('emits one span with the closed phase vocabulary and no user content attributes', async () => {
+    await withAgentSessionSpan(async (span) => {
+      addAgentSessionCreatePhaseAttributes(span, {
+        totalDurationMs: 57,
+        phases: [
+          { phase: 'reconcile_leases', startedAtMs: 0, durationMs: 1 },
+          { phase: 'resolve_recovery', startedAtMs: 1, durationMs: 5 },
+          { phase: 'probe_owner', startedAtMs: 6, durationMs: 4 },
+          { phase: 'reserve_owner', startedAtMs: 10, durationMs: 5 },
+          { phase: 'acquire_owner', startedAtMs: 15, durationMs: 6 },
+          { phase: 'auth_settle', startedAtMs: 21, durationMs: 7 },
+          { phase: 'spawn', startedAtMs: 28, durationMs: 8 },
+          { phase: 'restore_options', startedAtMs: 36, durationMs: 10 },
+          { phase: 'publish', startedAtMs: 46, durationMs: 11 }
+        ]
+      })
+    })
+
+    const records = sink.records.filter((record) => record.name === 'agentSession.create')
+    expect(records).toHaveLength(1)
+    const attributes = records[0]!.attributes
+    expect(attributes['agent_session.create.phase.reconcile_leases_ms']).toBe(1)
+    expect(attributes['agent_session.create.phase.publish_ms']).toBe(11)
+    expect(attributes['agent_session.create.unattributed_ms']).toBe(0)
+    expect(Object.keys(attributes).some((key) => /path|branch|prompt|content/i.test(key))).toBe(
+      false
+    )
   })
 })

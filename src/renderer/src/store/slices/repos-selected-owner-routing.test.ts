@@ -186,8 +186,8 @@ describe('selected Add Project owner routing', () => {
     projectGroupsList.mockResolvedValue([localGroup])
     folderWorkspacesList.mockResolvedValue([localFolder])
     store.setState({ settings: { activeRuntimeEnvironmentId: null } as never })
-    await store.getState().fetchProjectGroups()
-    await store.getState().fetchFolderWorkspaces()
+    await store.getState().fetchProjectGroups(catalogOwner(store))
+    await store.getState().fetchFolderWorkspaces(catalogOwner(store))
 
     expect(store.getState().projectGroups).toEqual([
       localGroup,
@@ -536,3 +536,10 @@ describe('selected Add Project owner routing', () => {
     expect(runtimeEnvironmentCall).not.toHaveBeenCalled()
   })
 })
+
+// The catalog these tests read is the one the focused host would have shown.
+function catalogOwner(store: {
+  getState: () => { settings: { activeRuntimeEnvironmentId?: string | null } | null }
+}): { runtimeEnvironmentId: string | null } {
+  return { runtimeEnvironmentId: store.getState().settings?.activeRuntimeEnvironmentId ?? null }
+}

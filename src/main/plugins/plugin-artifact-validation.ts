@@ -17,52 +17,27 @@ type DeclaredArtifact =
   | { label: string; path: string; kind: 'file'; maxBytes: number }
   | { label: string; path: string; kind: 'directory' }
 
+function declaredFile(label: string, path: string | undefined, maxBytes: number) {
+  return path === undefined ? [] : [{ label, path, kind: 'file' as const, maxBytes }]
+}
+
 function declaredArtifactPaths(manifest: PluginManifest): DeclaredArtifact[] {
+  const c = manifest.contributes
   return [
-    ...(manifest.icon
-      ? [
-          {
-            label: 'icon',
-            path: manifest.icon,
-            kind: 'file' as const,
-            maxBytes: PLUGIN_ICON_MAX_BYTES
-          }
-        ]
-      : []),
-    ...(manifest.main
-      ? [
-          {
-            label: 'worker entry',
-            path: manifest.main,
-            kind: 'file' as const,
-            maxBytes: PLUGIN_WORKER_ENTRY_MAX_BYTES
-          }
-        ]
-      : []),
-    ...manifest.contributes.panels.map((panel) => ({
-      label: `panel "${panel.id}" entry`,
-      path: panel.entry,
-      kind: 'file' as const,
-      maxBytes: PLUGIN_PANEL_ENTRY_MAX_BYTES
-    })),
-    ...manifest.contributes.languagePacks.map((languagePack) => ({
-      label: `language pack "${languagePack.locale}"`,
-      path: languagePack.path,
-      kind: 'file' as const,
-      maxBytes: PLUGIN_LANGUAGE_PACK_MAX_BYTES
-    })),
-    ...manifest.contributes.vmRecipes.map((recipe) => ({
-      label: 'VM recipe',
-      path: recipe.path,
-      kind: 'file' as const,
-      maxBytes: PLUGIN_VM_RECIPE_MAX_BYTES
-    })),
-    ...manifest.contributes.agents.map((agent) => ({
-      label: 'agent profile',
-      path: agent.path,
-      kind: 'file' as const,
-      maxBytes: PLUGIN_AGENT_PROFILE_MAX_BYTES
-    }))
+    ...declaredFile('icon', manifest.icon, PLUGIN_ICON_MAX_BYTES),
+    ...declaredFile('worker entry', manifest.main, PLUGIN_WORKER_ENTRY_MAX_BYTES),
+    ...c.panels.flatMap((panel) =>
+      declaredFile(`panel "${panel.id}" entry`, panel.entry, PLUGIN_PANEL_ENTRY_MAX_BYTES)
+    ),
+    ...c.languagePacks.flatMap((pack) =>
+      declaredFile(`language pack "${pack.locale}"`, pack.path, PLUGIN_LANGUAGE_PACK_MAX_BYTES)
+    ),
+    ...c.vmRecipes.flatMap((recipe) =>
+      declaredFile('VM recipe', recipe.path, PLUGIN_VM_RECIPE_MAX_BYTES)
+    ),
+    ...c.agents.flatMap((agent) =>
+      declaredFile('agent profile', agent.path, PLUGIN_AGENT_PROFILE_MAX_BYTES)
+    )
   ]
 }
 
@@ -163,7 +138,6 @@ export async function validateDeclaredPluginArtifacts(
   return { ok: true }
 }
 
-/** Parses declared VM recipe artifacts at the immutable install boundary. */
 export async function validatePluginInstallContent(
   rootDir: string,
   manifest: PluginManifest

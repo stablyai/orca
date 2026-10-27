@@ -1,9 +1,11 @@
 import { describe, expect, it, vi } from 'vitest'
-import type { NativeChatMessage } from '../../../../shared/native-chat-types'
+import type {
+  NativeChatMessage,
+  NativeChatSubagentEntry
+} from '../../../../shared/native-chat-types'
 import type { RpcContext } from '../core'
 
-// Stub the bounded tail reader so the handler returns a deterministic transcript with
-// one oversized tool-result block; the test then asserts clip behavior per client.
+// Return a deterministic transcript with an oversized tool result to verify client-specific clipping.
 const OVERSIZED = 'x'.repeat(5000)
 const cachedResult = vi.hoisted(() => ({
   value: {
@@ -88,6 +90,7 @@ vi.mock('../../../native-chat/transcript-watch', () => ({
   }
 }))
 
+import { boundSubagentEntryId } from '../../../native-chat/subagent-entry-id-bounds'
 import { NATIVE_CHAT_METHODS } from './native-chat'
 
 function makeMessage(text: string): NativeChatMessage {
@@ -129,19 +132,22 @@ function subscribeHandler(): (
 }
 
 function streamingContext(clientKind: RpcContext['clientKind']): RpcContext {
-  return {
-    runtime: {
-      registerSubscriptionCleanup: vi.fn(),
-      cleanupSubscription: vi.fn(),
-      cleanupSubscriptionsByPrefix: vi.fn()
-    } as unknown as RpcContext['runtime'],
-    connectionId: 'connection-1',
-    clientKind
+  const runtime = {
+    getAgentProviderSessionRows: () => [],
+    registerSubscriptionCleanup: vi.fn(),
+    cleanupSubscription: vi.fn(),
+    cleanupSubscriptionsByPrefix: vi.fn()
   }
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: native chat handlers use only the hook rows and these subscription members.
+  const handlerRuntime = runtime as unknown as RpcContext['runtime']
+  return { runtime: handlerRuntime, connectionId: 'connection-1', clientKind }
 }
 
 function ctxWith(clientKind: RpcContext['clientKind']): RpcContext {
-  return { runtime: {} as RpcContext['runtime'], clientKind }
+  const runtime = { getAgentProviderSessionRows: () => [] }
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: readSession uses only the hook rows.
+  const handlerRuntime = runtime as unknown as RpcContext['runtime']
+  return { runtime: handlerRuntime, clientKind }
 }
 
 function firstOutput(result: unknown): string {
@@ -176,8 +182,7 @@ describe('nativeChat.readSession clientKind truncation gating', () => {
     expect(output).toBe(`${OVERSIZED.slice(0, 4000)}\n… (truncated)`)
   })
 
-  // STA-3230: a paired desktop or mobile client saw long assistant replies cut
-  // at the tool-preview cap with `… (truncated)` and no way to read the rest.
+  // Preserve full assistant replies beyond the tool-preview cap; mobile has no way to read clipped text (STA-3230).
   it('passes a long assistant text block through unclipped for mobile clients', async () => {
     const text = 'prose '.repeat(1000)
     cachedResult.value = { messages: [makeTextMessage(text)] }
@@ -189,6 +194,34 @@ describe('nativeChat.readSession clientKind truncation gating', () => {
       text: string
     }
     expect(block.text).toBe(text)
+  })
+
+  it('bounds a subagent roster before it reaches mobile', async () => {
+    const agents: NativeChatSubagentEntry[] = Array.from({ length: 100 }, (_, index) => ({
+      id: `task-${index}-${'i'.repeat(600)}`,
+      label: 'l'.repeat(600),
+      state: 'working'
+    }))
+    cachedResult.value = {
+      messages: [
+        {
+          ...makeMessage(''),
+          blocks: [{ type: 'subagent-group', groupId: 'g', agents }]
+        }
+      ]
+    }
+    const result = await readSessionHandler()(
+      { agent: 'claude', sessionId: 's' },
+      ctxWith('mobile')
+    )
+    const block = (result as { messages: NativeChatMessage[] }).messages[0].blocks[0] as {
+      agents: { id: string; label: string }[]
+    }
+    expect(block.agents).toHaveLength(64)
+    expect(block.agents[0].label).toBe(`${'l'.repeat(512)}\n… (truncated)`)
+    // Roster ids are untrusted keys: digest-bound them rather than merge equal prefixes.
+    expect(block.agents[0].id).toHaveLength(512)
+    expect(block.agents[0].id).toBe(boundSubagentEntryId(`task-0-${'i'.repeat(600)}`))
   })
 
   it('clips a pathological text block at the safety ceiling for mobile clients', async () => {
@@ -266,8 +299,7 @@ describe('nativeChat.readSession clientKind truncation gating', () => {
     expect(JSON.stringify(input)).toContain('truncated')
   })
 
-  // The roster block reached mobile through a bare fall-through, uncapped, on the
-  // one path that exists to keep the payload off the phone.
+  // Mobile spawn rosters must not escape through uncapped fall-through.
   it('bounds a spawn-group roster before sending it to mobile', async () => {
     cachedResult.value = {
       messages: [
@@ -420,8 +452,7 @@ describe('nativeChat.readSession clientKind truncation gating', () => {
   it('clamps a limit past the max window instead of rejecting (keeps pagination unstuck)', () => {
     const method = NATIVE_CHAT_METHODS.find((m) => m.name === 'nativeChat.readSession')
     const parsed = method?.params?.parse({ agent: 'claude', sessionId: 's', limit: 5000 })
-    // A hard reject here would fail the read and stall "load earlier" at the cap;
-    // clamping returns the 2000-tail so pagination stops cleanly instead.
+    // Clamp to the tail so load-earlier ends cleanly instead of stalling on a rejected cap.
     expect((parsed as { limit: number }).limit).toBe(2000)
   })
 
@@ -442,7 +473,6 @@ describe('nativeChat.readSession clientKind truncation gating', () => {
     )
     const messages = (result as { messages: NativeChatMessage[] }).messages
     expect(messages).toHaveLength(40)
-    // Tail-only: the last id survives, the first is dropped.
     expect(messages.at(-1)?.id).toBe('m-59')
     expect(messages[0].id).toBe('m-20')
     expect(result).toMatchObject({ hasMore: true, beforeOffset: 123 })
@@ -478,8 +508,7 @@ describe('nativeChat.subscribe initial snapshot', () => {
   })
 
   it('settles a not-yet-flushed transcript with a pending window, then the real snapshot', async () => {
-    // A brand-new session's JSONL can be a minute out, or never written at all
-    // until the agent is prompted. With no frame the client just spins.
+    // New sessions may not write JSONL until prompted; send an initial frame to end the client's spinner.
     watcher.watching = true
     watcher.args = null
     const emitted: unknown[] = []
@@ -497,7 +526,6 @@ describe('nativeChat.subscribe initial snapshot', () => {
     callbacks.onInitialSnapshot?.([message], false, 123)
     expect(emitted).toHaveLength(2)
     expect(emitted[1]).toMatchObject({ type: 'snapshot', hasMore: false })
-    // The real window is authoritative and carries no pending marker.
     expect((emitted[1] as { pending?: boolean }).pending).toBeUndefined()
   })
 

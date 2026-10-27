@@ -1,12 +1,13 @@
 import type { RelayReconnectController } from './mobile-relay-reconnect-controller'
 import type { StableLogicalRpcClient } from './stable-logical-rpc-client'
+import type { ScheduleTimer } from './timer-scheduler'
 
 // Retain a healthy Relay briefly across routine app switches without waking the app.
 export const RELAY_BACKGROUND_GRACE_MS = 30_000
 
 type RelayBackgroundGraceDependencies = {
   now: () => number
-  setTimer: typeof setTimeout
+  setTimer: ScheduleTimer
   clearTimer: typeof clearTimeout
 }
 

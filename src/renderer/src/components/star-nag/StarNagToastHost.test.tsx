@@ -292,4 +292,14 @@ describe('StarNagToastHost', () => {
     expect(toastDismissMock).toHaveBeenCalledWith('toast-1')
     expect(starNag.dismiss).not.toHaveBeenCalled()
   })
+
+  it('dismisses an infinite toast when the host unmounts', () => {
+    ;({ root, container } = renderHost())
+
+    act(() => showCallback?.({ mode: 'gh', surface: 'toast' }))
+    act(() => root?.unmount())
+
+    expect(toastDismissMock).toHaveBeenCalledWith('toast-1')
+    expect(starNag.dismiss).not.toHaveBeenCalled()
+  })
 })

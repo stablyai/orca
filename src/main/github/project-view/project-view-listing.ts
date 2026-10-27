@@ -7,8 +7,6 @@ import type {
 import { assertPositiveInt, assertSlug } from './internals'
 import { fetchProjectViewsPage } from './project-view-config'
 
-// ─── listProjectViews ──────────────────────────────────────────────────
-
 export async function listProjectViews(
   args: ListProjectViewsArgs
 ): Promise<ListProjectViewsResult> {

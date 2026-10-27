@@ -25,12 +25,11 @@ import {
 import {
   admitProcessTreeKill,
   setProcessTreeKillGate
-} from '../../shared/child-process/process-tree-kill-gate'
+} from '@orca/process-host/process-tree-kill-gate'
 import { terminateWindowsProcessTree } from '../windows-process-tree-kill'
 import { installMainProcessTreeKillGate } from '../own-chromium-tree-kill-guard'
 import { _resetTracerForTests, setActiveSink } from '../observability/tracer'
 
-/** The field shape: renderer, `reason=killed exitCode=1`, win32 (#G2). */
 function killedRendererEvent(): ProcessGoneCrashEvent {
   return {
     source: 'renderer',
@@ -54,7 +53,6 @@ function capturingStore(recorded: RecordedReport[]) {
   }
 }
 
-/** Drives one crash through the recorder and returns the persisted details. */
 async function recordKilledRenderer(): Promise<Record<string, unknown>> {
   const recorded: RecordedReport[] = []
   recordProcessGoneCrash(
@@ -84,7 +82,6 @@ afterEach(() => {
 
 describe('self-initiated tree kill breadcrumb', () => {
   it('separates an Orca-issued tree kill from an external kill of the same shape', async () => {
-    // Arm A — Orca issues the kill through its own taskkill choke point.
     await terminateWindowsProcessTree(4242, {
       execFileImpl: ((_program, _args, _options, done) => {
         ;(done as () => void)()
@@ -97,7 +94,6 @@ describe('self-initiated tree kill breadcrumb', () => {
     resetSelfInitiatedTreeKillLogForTest()
     clearCrashBreadcrumbsForTest()
 
-    // Arm B — identical crash, nobody inside Orca issued a kill.
     const externallyKilled = await recordKilledRenderer()
 
     expect(selfKilled.selfInitiatedKills).toMatch(
@@ -106,7 +102,6 @@ describe('self-initiated tree kill breadcrumb', () => {
     expect(selfKilled.selfInitiatedTreeKillCount).toBe(1)
     expect(externallyKilled.selfInitiatedKills).toBeUndefined()
     expect(externallyKilled.selfInitiatedTreeKillCount).toBeUndefined()
-    // Every other recorded field is identical — that is why the breadcrumb exists.
     expect({
       ...selfKilled,
       selfInitiatedKills: null,
@@ -124,7 +119,7 @@ describe('self-initiated tree kill breadcrumb', () => {
         ;(done as () => void)()
         return undefined as never
       }) as never,
-      site: 'codex-turn-added-roots'
+      site: 'codex-app-server-teardown'
     })
 
     expect(getCrashBreadcrumbSnapshot()).toEqual([
@@ -132,7 +127,7 @@ describe('self-initiated tree kill breadcrumb', () => {
         name: 'self_tree_kill',
         data: expect.objectContaining({
           pid: 777,
-          site: 'codex-turn-added-roots',
+          site: 'codex-app-server-teardown',
           scope: 'win-taskkill-tree'
         })
       })
@@ -178,7 +173,6 @@ describe('self-initiated tree kill breadcrumb', () => {
   })
 
   it('never lets routine teardown kills evict the refusal crumb from the ring', () => {
-    // The reproduction from review: 12 terminal closes x 3 process groups.
     for (let close = 0; close < 12; close += 1) {
       for (let group = 0; group < 3; group += 1) {
         recordSelfInitiatedTreeKill({
@@ -219,8 +213,6 @@ describe('self-initiated tree kill breadcrumb', () => {
 
     const details = selfInitiatedTreeKillDetails(goneAt)
 
-    // A killpg on a PTY's own groups cannot reach a renderer, so it must not
-    // read as a self-inflicted renderer kill.
     expect(details.selfInitiatedTreeKillCount).toBeUndefined()
     expect(details.selfInitiatedGroupKillCount).toBe(2)
     expect(details.selfInitiatedKills).toContain('posix-process-group/')
@@ -253,9 +245,6 @@ describe('self-initiated tree kill breadcrumb', () => {
   })
 
   it('keeps the pid-addressed kill when a window-close burst overruns the ring', () => {
-    // Review probe: one taskkill, then 32 routine Job Object teardowns. Under
-    // plain FIFO the discriminating entry is evicted and the persisted detail
-    // becomes byte-identical to the external-kill arm.
     const goneAt = 5_000_000
     recordSelfInitiatedTreeKill({
       pid: 4242,
@@ -282,10 +271,6 @@ describe('self-initiated tree kill breadcrumb', () => {
   })
 
   it('keeps the newest teardown when a session has saturated the ring with pid kills', () => {
-    // Review probe, the mirror of the case above: 32 session-old taskkills (six
-    // routine families feed them) then the Job Object teardown 50ms before the
-    // death. A scope-preference eviction with no floor splices the entry it just
-    // pushed, and `{}` is byte-identical to the external-kill arm.
     const goneAt = 5_000_000
     for (let index = 0; index < 32; index += 1) {
       recordSelfInitiatedTreeKill({

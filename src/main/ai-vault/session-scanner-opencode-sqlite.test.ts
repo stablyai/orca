@@ -6,6 +6,7 @@ import Database from '../sqlite/sync-database'
 import { buildOpenCodeSqliteCandidatePath } from './session-scanner-opencode-sqlite-paths'
 import { listOpenCodeSqliteSessions } from './session-scanner-opencode-sqlite-discovery'
 import { parseOpenCodeSqliteSession } from './session-scanner-opencode-sqlite'
+import { captureOpenCodeSqliteSession } from './session-scanner-opencode-sqlite-capture'
 import { withFullFirstUserPromptCapture } from './session-scanner-first-user-prompt-capture'
 import type { AiVaultScanIssue } from '../../shared/ai-vault-types'
 
@@ -219,6 +220,34 @@ describe('listOpenCodeSqliteSessions', () => {
     expect(candidates[0].file.mtimeMs).toBe(1_777_634_003_000)
     expect(candidates[0].file.path).toBe(buildOpenCodeSqliteCandidatePath(path, 'ses_new'))
     expect(candidates[1].file.path).toBe(buildOpenCodeSqliteCandidatePath(path, 'ses_old'))
+  })
+
+  it('lists in-scope sessions past a newer out-of-scope one when scoped', async () => {
+    const { db, path } = createTempDb()
+    applyOpenCodeSchema(db)
+    insertSession(db, {
+      id: 'ses_in_scope',
+      directory: '/repo/app/packages/web',
+      timeCreated: 1_777_634_000_000,
+      timeUpdated: 1_777_634_001_000
+    })
+    insertSession(db, {
+      id: 'ses_elsewhere',
+      directory: '/repo/app-sibling',
+      timeCreated: 1_777_634_002_000,
+      timeUpdated: 1_777_634_003_000
+    })
+    db.close()
+
+    const candidates = await listOpenCodeSqliteSessions({
+      dbPaths: [path],
+      limit: 1,
+      issues: [],
+      scopePaths: ['/repo/app']
+    })
+    expect(candidates.map((candidate) => candidate.file.path)).toEqual([
+      buildOpenCodeSqliteCandidatePath(path, 'ses_in_scope')
+    ])
   })
 
   it('dedups matching session ids across databases and keeps the newest row', async () => {
@@ -479,6 +508,18 @@ describe('parseOpenCodeSqliteSession', () => {
     expect(session!.previewMessages).toEqual([])
   })
 
+  // Empty successful capture advances the search cursor, so unreadable parts must fail for retry.
+  it('refuses to capture a transcript it cannot read the message parts of', async () => {
+    const { db, path } = createTempDb()
+    applyMinimalOpenCodeSchema(db)
+    db.prepare(`INSERT INTO session VALUES ('ses_minimal', 1777634000000, 1777634001000)`).run()
+    db.close()
+
+    await expect(
+      captureOpenCodeSqliteSession({ dbPath: path, sessionId: 'ses_minimal', platform: 'darwin' })
+    ).rejects.toThrow(/unreadable message-part schema/)
+  })
+
   it('extracts model from older modelID schema', async () => {
     const { db, path } = createTempDb()
     applyOpenCodeSchema(db)
@@ -526,7 +567,6 @@ describe('parseOpenCodeSqliteSession', () => {
       timeCreated: 20,
       text: 'first ask line two'
     })
-    // Non-text parts of the same message must not leak into the copied prompt.
     insertPart(db, {
       id: 'part_1c',
       messageId: 'msg_1',

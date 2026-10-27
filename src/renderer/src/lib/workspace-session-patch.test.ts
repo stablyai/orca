@@ -90,6 +90,23 @@ describe('buildWorkspaceSessionPatch', () => {
     expect(patch).toEqual({ activeTabId: 'tab-2' })
   })
 
+  it('writes a changed workspace key and host so a refocus replaces the persisted ones', () => {
+    const patch = buildWorkspaceSessionPatch(
+      createSnapshot({
+        activeWorktreeId: 'wt-2',
+        activeWorkspaceKey: 'worktree:wt-2',
+        activeWorkspaceExecutionHostId: null
+      }),
+      ['activeWorktreeId', 'activeWorkspaceKey', 'activeWorkspaceExecutionHostId']
+    )
+
+    expect(patch).toEqual({
+      activeWorktreeId: 'wt-2',
+      activeWorkspaceKey: 'worktree:wt-2',
+      activeWorkspaceExecutionHostId: null
+    })
+  })
+
   it('derives only editor session keys for open file changes', () => {
     const patch = buildWorkspaceSessionPatch(createSnapshot(), ['openFiles'])
 
@@ -182,7 +199,15 @@ describe('buildWorkspaceSessionPatch', () => {
               title: 'shell',
               ptyId: 'pty-1',
               worktreeId: localWorktreeId,
-              pendingActivationSpawn: true
+              pendingActivationSpawn: true,
+              recovery: {
+                attemptedAt: [1],
+                generation: 1,
+                outcome: 'pending',
+                startedAt: 1,
+                reason: 'reattach-unverifiable',
+                tabGeneration: 1
+              }
             } as never
           ]
         },
@@ -206,19 +231,73 @@ describe('buildWorkspaceSessionPatch', () => {
 
     expect(Object.keys(patch).sort()).toEqual(
       [
-        // Why: the reconnect list derives from remote session ids, so any
-        // patch that rewrites remoteSessionIdsByTabId must carry it too —
-        // otherwise a crash between patches strands a stale target on disk.
+        // Remote-session patches must carry derived reconnect targets too, or crash between writes strands stale target IDs.
         'activeConnectionIdsAtShutdown',
         'activeWorktreeIdsOnShutdown',
+        'localOnlyScrollbackByTabId',
         'remoteSessionIdsByTabId',
         'tabsByWorktree',
         'terminalLayoutsByTabId'
       ].sort()
     )
     expect('pendingActivationSpawn' in patch.tabsByWorktree![localWorktreeId][0]).toBe(false)
+    // Recovery ledgers describe live mounted heals; persisting them blocks legitimate post-restart recovery.
+    expect('recovery' in patch.tabsByWorktree![localWorktreeId][0]).toBe(false)
     expect(patch.terminalLayoutsByTabId?.['tab-local'].buffersByLeafId).toBeUndefined()
     expect(patch.terminalLayoutsByTabId?.['tab-local'].scrollbackRefsByLeafId).toBeUndefined()
+  })
+
+  it('patches the local-only scrollback home on its own, pruned like the shared one', () => {
+    const remoteWorktreeId = 'repo-ssh::/remote/worktree'
+    const localWorktreeId = 'repo-1::/local/worktree'
+    const patch = buildWorkspaceSessionPatch(
+      createSnapshot({
+        tabsByWorktree: {
+          [remoteWorktreeId]: [
+            {
+              id: 'tab-remote',
+              title: 'shell',
+              customTitle: null,
+              color: null,
+              sortOrder: 0,
+              createdAt: 1,
+              ptyId: 'pty-r',
+              worktreeId: remoteWorktreeId
+            }
+          ],
+          [localWorktreeId]: [
+            {
+              id: 'tab-local',
+              title: 'shell',
+              customTitle: null,
+              color: null,
+              sortOrder: 0,
+              createdAt: 1,
+              ptyId: 'pty-l',
+              worktreeId: localWorktreeId
+            }
+          ]
+        },
+        localOnlyScrollbackByTabId: {
+          'tab-remote': { 'pane:1': 'remote-park' },
+          'tab-local': { 'pane:1': 'local-park' }
+        },
+        repos: [createRepo('repo-1', null), createRepo('repo-ssh', 'conn-1')]
+      }),
+      ['localOnlyScrollbackByTabId']
+    )
+
+    // Local-only and remote layouts change independently; do not resend all layouts after local-only parks.
+    expect(Object.keys(patch)).toEqual(['localOnlyScrollbackByTabId'])
+    expect(patch.localOnlyScrollbackByTabId).toEqual({ 'tab-remote': { 'pane:1': 'remote-park' } })
+  })
+
+  it('writes an emptied local-only scrollback home as an empty map so the clear sticks', () => {
+    const patch = buildWorkspaceSessionPatch(createSnapshot({ localOnlyScrollbackByTabId: {} }), [
+      'localOnlyScrollbackByTabId'
+    ])
+
+    expect(patch).toEqual({ localOnlyScrollbackByTabId: {} })
   })
 
   it('keeps optional clearing keys in patches', () => {
@@ -328,14 +407,14 @@ describe('buildWorkspaceSessionPatch', () => {
     expect(patch.defaultTerminalTabsAppliedByWorktreeId).toBeUndefined()
   })
 
-  it('keeps sleeping agent session clearing keys in patches', () => {
+  it('clears the last sleeping agent session with an empty map the host split keeps', () => {
     const patch = buildWorkspaceSessionPatch(
       createSnapshot({ sleepingAgentSessionsByPaneKey: {} }),
       ['sleepingAgentSessionsByPaneKey']
     )
 
-    expect(Object.hasOwn(patch, 'sleepingAgentSessionsByPaneKey')).toBe(true)
-    expect(patch.sleepingAgentSessionsByPaneKey).toBeUndefined()
+    // undefined would be dropped before the write, leaving the record on disk until quit.
+    expect(patch.sleepingAgentSessionsByPaneKey).toEqual({})
   })
 
   it('keeps a staged browser tab out of incremental patches too', () => {
@@ -367,8 +446,7 @@ describe('buildWorkspaceSessionPatch', () => {
     expect(patch.activeBrowserTabIdByWorktree).toEqual({ 'wt-1': null })
   })
 
-  // Why: adoption can leave every browser row byte-identical and only clear the staged flag, so
-  // the handle map is the sole signal that the tab just became persistable.
+  // Clearing staged flags can leave row bytes unchanged; handle-map changes alone can make tabs persistable.
   it('persists an adopted browser tab when only the handle map changed', () => {
     const patch = buildWorkspaceSessionPatch(
       createSnapshot({
@@ -418,8 +496,7 @@ describe('buildWorkspaceSessionPatch', () => {
     expect(patch.unifiedTabs?.['wt-1']).toHaveLength(1)
   })
 
-  // Why: the incremental writer is the one that runs on quit, so a remote page identity the full
-  // payload stamps but the patch drops never reaches disk in the case this exists for.
+  // Quit uses incremental writes; preserving remote-page identity only in full payloads still loses it on actual shutdown.
   it('stamps the remote page identity onto incrementally patched browser page rows', () => {
     const patch = buildWorkspaceSessionPatch(
       createSnapshot({

@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { RuntimeRpcResponse } from '../../../shared/runtime-rpc-envelope'
+import type { WebRuntimeSubscriptionCallbacks } from './web-runtime-subscription-contract'
 import {
   installBrowserGlobals,
   writeStoredRuntimeEnvironment
@@ -102,7 +103,7 @@ describe('web preload runtime calls', () => {
     if (!(rejection instanceof Error)) {
       throw new Error('Expected a domain Error rejection')
     }
-    expect(Reflect.get(rejection, 'code')).toBe('repo_unavailable')
+    expect('code' in rejection ? rejection.code : undefined).toBe('repo_unavailable')
     expect(
       JSON.parse(globals.storage.getItem('orca.web.runtimeEnvironment.v1') ?? '{}')
     ).toMatchObject({ runtimeId: 'runtime-domain-failure' })
@@ -143,6 +144,74 @@ describe('web preload runtime calls', () => {
     expect(call).toHaveBeenCalledTimes(8)
     release()
     await expect(Promise.all(accepted)).resolves.toHaveLength(264)
+  })
+
+  it('revokes unsent work and refuses queued or delivered work after pairing replacement', async () => {
+    let release!: () => void
+    const blocked = new Promise<RuntimeRpcResponse<unknown>>((resolve) => {
+      release = () =>
+        resolve({ id: 'blocked', ok: true, result: null, _meta: { runtimeId: 'runtime-a' } })
+    })
+    let response = (_value: RuntimeRpcResponse<unknown>) => {}
+    const call = vi.fn(() => blocked)
+    const subscribe = vi.fn(
+      async (_method: string, _params: unknown, callbacks: WebRuntimeSubscriptionCallbacks) => {
+        response = callbacks.onResponse
+        return { unsubscribe: vi.fn(), sendBinary: vi.fn() }
+      }
+    )
+    vi.doMock('./web-runtime-client', () => ({
+      WebRuntimeClient: class {
+        call = call
+        subscribe = subscribe
+        close(): void {}
+      }
+    }))
+    const globals = installBrowserGlobals('Linux')
+    writeStoredRuntimeEnvironment(globals.storage, 'web-server-a')
+    const { installWebPreloadApi } = await import('./web-preload-api')
+    const { callAbortableRuntimeEnvironment } =
+      await import('@/runtime/abortable-runtime-environment-call')
+    const { webRuntimeState } = await import('./preload-api/web-runtime-session')
+    installWebPreloadApi()
+    const environment = webRuntimeState.activeEnvironment!
+    const revision = environment.pairingRevision ?? environment.createdAt
+    const blockers = Array.from({ length: 8 }, () =>
+      globals.window.api.runtime.call({ method: 'blocker' })
+    )
+    const prepare = (signal: AbortSignal) =>
+      callAbortableRuntimeEnvironment(
+        'web-server-a',
+        'aiVault.prepareSessionResume',
+        {},
+        90_000,
+        signal,
+        revision
+      )
+    const source = new AbortController()
+    const cancelled = expect(prepare(source.signal)).rejects.toThrow('aborted')
+    source.abort()
+    await cancelled
+    const queued = globals.window.api.runtimeEnvironments.call({
+      selector: 'web-server-a',
+      method: 'aiVault.prepareSessionResume',
+      expectedEnvironmentPairingRevision: revision
+    })
+    const refused = expect(queued).rejects.toThrow('paired Orca server changed')
+    webRuntimeState.activeEnvironment = { ...environment, pairingRevision: revision + 1 }
+    release()
+    await Promise.all(blockers)
+    await refused
+    expect(call).toHaveBeenCalledTimes(8)
+    expect(subscribe).not.toHaveBeenCalled()
+    webRuntimeState.activeEnvironment = environment
+    const staleResponse = expect(prepare(new AbortController().signal)).rejects.toThrow(
+      'paired Orca server changed'
+    )
+    await vi.waitFor(() => expect(subscribe).toHaveBeenCalledTimes(1))
+    webRuntimeState.activeEnvironment = { ...environment, pairingRevision: revision + 1 }
+    response({ id: 'prepare', ok: true, result: {}, _meta: { runtimeId: 'old' } })
+    await staleResponse
   })
 
   it('does not spend a selected call timeout while queued and forwards it unchanged', async () => {
@@ -204,5 +273,101 @@ describe('web preload runtime calls', () => {
     await Promise.all(blockers)
     await expect(queued).resolves.toMatchObject({ ok: true, result: 'done' })
     expect(call).toHaveBeenLastCalledWith('runtime.queued-timeout', undefined, { timeoutMs: 25 })
+  })
+})
+
+describe('direct History search lifetime on the real browser queue', () => {
+  it('retires queued work and preserves captured pairing across an awaited status response', async () => {
+    vi.resetModules()
+    const calls: string[] = []
+    let release: () => void = () => {}
+    let held = new Promise<void>((resolve) => {
+      release = resolve
+    })
+    vi.doMock('./web-runtime-client', () => ({
+      WebRuntimeClient: class {
+        connectionEpoch = 1
+        async call(method: string): Promise<RuntimeRpcResponse<unknown>> {
+          calls.push(method)
+          if (method === 'hold' || method === 'aiVault.searchStatus') {
+            await held
+          }
+          const { searchResults } = await import('../../../shared/ai-vault-search-test-fixture')
+          const { unavailableSessionSearchStatus } =
+            await import('../../../shared/ai-vault-search-client')
+          return {
+            id: method,
+            ok: true,
+            result:
+              method === 'aiVault.searchStatus'
+                ? { ...unavailableSessionSearchStatus(), supportedAgents: ['codex'] }
+                : searchResults(),
+            _meta: { runtimeId: 'runtime-a' }
+          }
+        }
+        close(): void {}
+      }
+    }))
+    const globals = installBrowserGlobals('Linux')
+    writeStoredRuntimeEnvironment(globals.storage, 'selected')
+    const { createWebAiVaultApi } = await import('./preload-api/web-ai-vault-api')
+    const { webRuntimeState, runtimeCallQueuePool } =
+      await import('./preload-api/web-runtime-session')
+    const api = createWebAiVaultApi()
+    const blockers = Array.from({ length: 8 }, () =>
+      runtimeCallQueuePool.enqueue('selected', 'hold', () => held)
+    )
+    let active = true
+    const queued = api
+      .searchSessions({ query: 'needle' }, 'runtime:selected', () => active)
+      .then(
+        () => {
+          throw new Error('retired work accepted')
+        },
+        (error: unknown) => error
+      )
+    active = false
+    release()
+    await Promise.all(blockers)
+    expect(await queued).toBeInstanceOf(Error)
+    expect(calls).not.toContain('aiVault.searchSessions')
+    calls.length = 0
+    held = new Promise<void>((resolve) => {
+      release = resolve
+    })
+    const waiting = api
+      .searchSessions({ query: 'needle', filters: { agents: ['codex'] } }, 'runtime:selected')
+      .then(
+        () => {
+          throw new Error('replaced pairing accepted')
+        },
+        (error: unknown) => error
+      )
+    await vi.waitFor(() => expect(calls).toContain('aiVault.searchStatus'))
+    const selected = webRuntimeState.activeEnvironment!
+    webRuntimeState.activeEnvironment = { ...selected, pairingRevision: 2 }
+    release()
+    expect(await waiting).toBeInstanceOf(Error)
+    expect(calls).not.toContain('aiVault.searchSessions')
+    // Already-issued work may settle, but a selected-environment switch cannot launch its search.
+    calls.length = 0
+    held = new Promise<void>((resolve) => {
+      release = resolve
+    })
+    const switched = api
+      .searchSessions({ query: 'needle', filters: { agents: ['codex'] } }, 'runtime:selected')
+      .then(
+        () => {
+          throw new Error('switched target accepted')
+        },
+        (error: unknown) => error
+      )
+    await vi.waitFor(() => expect(calls).toContain('aiVault.searchStatus'))
+    webRuntimeState.activeEnvironment = { ...selected, id: 'other' }
+    release()
+    expect(await switched).toBeInstanceOf(Error)
+    expect(calls).not.toContain('aiVault.searchSessions')
+    vi.unstubAllGlobals()
+    vi.doUnmock('./web-runtime-client')
   })
 })

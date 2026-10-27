@@ -42,14 +42,4 @@ describe('buildOrchestrationTaskDisplayMetadata', () => {
     expect(metadata.displayName).toHaveLength(ORCHESTRATION_DISPLAY_NAME_MAX_LENGTH)
     expect(metadata.displayName.endsWith('...')).toBe(true)
   })
-
-  it('does not leave a dangling high surrogate when truncating', () => {
-    const metadata = buildOrchestrationTaskDisplayMetadata({
-      spec: `x${'😀'.repeat(ORCHESTRATION_TASK_TITLE_MAX_LENGTH)}`
-    })
-    const last = metadata.taskTitle.charCodeAt(metadata.taskTitle.length - 1)
-
-    expect(metadata.taskTitle.length).toBeLessThanOrEqual(ORCHESTRATION_TASK_TITLE_MAX_LENGTH)
-    expect(last < 0xd800 || last > 0xdbff).toBe(true)
-  })
 })

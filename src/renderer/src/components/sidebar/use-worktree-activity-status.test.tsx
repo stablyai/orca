@@ -1,6 +1,8 @@
 import { renderToStaticMarkup } from 'react-dom/server'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { AgentStatusEntry } from '../../../../shared/agent-status-types'
+import { structuredAgentSessionPaneKey } from '../../../../shared/structured-agent-session-projection'
+import type { Tab } from '../../../../shared/tab-types'
 import { makePaneKey } from '../../../../shared/stable-pane-id'
 import type { TerminalLayoutSnapshot, TerminalTab } from '../../../../shared/terminal-tab-types'
 import { useWorktreeActivityStatus } from './use-worktree-activity-status'
@@ -20,6 +22,8 @@ type MockState = {
   runtimeAgentOrchestrationByPaneKey: Record<string, NonNullable<AgentStatusEntry['orchestration']>>
   migrationUnsupportedByPtyId: Record<string, never>
   retainedAgentsByPaneKey: Record<string, unknown>
+  unifiedTabsByWorktree: Record<string, Tab[]>
+  structuredChatSleptAtByPaneKey: Record<string, number | null>
 }
 
 let mockState: MockState
@@ -113,8 +117,41 @@ describe('useWorktreeActivityStatus', () => {
       agentStatusByPaneKey: {},
       runtimeAgentOrchestrationByPaneKey: {},
       migrationUnsupportedByPtyId: {},
-      retainedAgentsByPaneKey: {}
+      retainedAgentsByPaneKey: {},
+      unifiedTabsByWorktree: {},
+      structuredChatSleptAtByPaneKey: {}
     }
+  })
+
+  it('shows a chat-only workspace as active before its first message, until the chat sleeps', () => {
+    const worktreeId = 'repo1::/path/wt1'
+    const chatTab: Tab = {
+      id: 'chat-tab',
+      entityId: 'session-1',
+      groupId: 'group-1',
+      worktreeId,
+      contentType: 'agent-session',
+      agentSessionAgent: 'codex',
+      label: 'Codex',
+      customLabel: null,
+      color: null,
+      sortOrder: 0,
+      createdAt: 0
+    }
+    mockState = { ...mockState, unifiedTabsByWorktree: { [worktreeId]: [chatTab] } }
+    expect(renderToStaticMarkup(<StatusProbe worktreeId={worktreeId} />)).toBe(
+      '<span>active</span>'
+    )
+
+    mockState = {
+      ...mockState,
+      structuredChatSleptAtByPaneKey: {
+        [structuredAgentSessionPaneKey(chatTab.id, chatTab.entityId)]: 1_000
+      }
+    }
+    expect(renderToStaticMarkup(<StatusProbe worktreeId={worktreeId} />)).toBe(
+      '<span>inactive</span>'
+    )
   })
 
   afterEach(() => {

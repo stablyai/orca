@@ -1,3 +1,4 @@
+import { StructuredAgentSessionDeliveryOrder } from './structured-agent-session-delivery-order'
 import type { AgentSessionOwnerProbe } from '../../../shared/agent-session-lease-adjudication'
 import type { AgentSessionRecord } from '../../../shared/agent-session-record'
 import {
@@ -6,31 +7,57 @@ import {
   type StructuredAgentSessionSinkBarrier
 } from './structured-agent-session-event-sink'
 import type { StructuredAgentSessionHostDeps } from './structured-agent-session-host'
+import { StructuredAgentSessionAcquireAborts } from './structured-agent-session-acquire-aborts'
+import { StructuredAgentSessionStartFlights } from './structured-agent-session-start-flight'
 import { StructuredAgentSessionLeaseRenewer } from './structured-agent-session-lease-renewer'
+import {
+  heldProviderChildReader,
+  type ProviderChildSessions
+} from './structured-agent-session-provider-child'
 import { resolveStructuredSessionRecovery } from './structured-agent-session-recovery-resolution'
+import { recordAgentSessionStartup } from '../../observability/agent-session-instrumentation'
+import {
+  StructuredAgentSessionStartupAttempts,
+  type StructuredAgentSessionExpiredStartup
+} from './structured-agent-session-startup-attempt'
+import { StructuredAgentSessionStartupExpiredError } from './structured-agent-session-startup-attempt-contract'
 
 export class StructuredAgentSessionHostRuntimeState {
   private readonly eventSinks = new Map<string, DeferredStructuredAgentSessionEventSink>()
+  readonly deliveryOrder = new StructuredAgentSessionDeliveryOrder()
+  readonly acquireAborts = new StructuredAgentSessionAcquireAborts()
+  readonly startFlights = new StructuredAgentSessionStartFlights()
+  readonly startupAttempts: StructuredAgentSessionStartupAttempts
   private readonly leaseRenewer: StructuredAgentSessionLeaseRenewer
   private readonly onEventSinkFailure?: (sessionId: string, error: unknown) => void
 
   constructor(
     private readonly deps: StructuredAgentSessionHostDeps,
-    onLeaseRenewed?: (record: AgentSessionRecord) => Promise<void>,
-    onDeadTuiOwner?: (record: AgentSessionRecord, probe: AgentSessionOwnerProbe) => Promise<void>,
-    onEventSinkFailure?: (sessionId: string, error: unknown) => void
+    /** Held children renew without PID probes. */
+    sessions: ProviderChildSessions,
+    onEventSinkFailure?: (sessionId: string, error: unknown) => void,
+    /** Expire published starts; still-acquiring attempts abort here. */
+    onStartupExpired?: (expired: StructuredAgentSessionExpiredStartup) => void
   ) {
     this.onEventSinkFailure = onEventSinkFailure
+    this.startupAttempts = new StructuredAgentSessionStartupAttempts({
+      ...(deps.startupLimits ? { limits: deps.startupLimits } : {}),
+      settled: recordAgentSessionStartup,
+      expire: (expired) => {
+        this.acquireAborts.abort(expired.sessionId, new StructuredAgentSessionStartupExpiredError())
+        if (expired.child !== null) {
+          onStartupExpired?.(expired)
+        }
+      }
+    })
     this.leaseRenewer = new StructuredAgentSessionLeaseRenewer({
       store: deps.store,
       probe: (record) => this.probeRecord(record),
       ...(deps.probeOwners ? { probeMany: deps.probeOwners } : {}),
+      holdsLiveChild: heldProviderChildReader(sessions, deps.adapter),
       now: () => deps.now?.() ?? Date.now(),
-      ...(onLeaseRenewed ? { onRenewed: onLeaseRenewed } : {}),
-      ...(onDeadTuiOwner ? { onDeadTuiOwner } : {}),
-      // Lease/ownership failures are transient and stay on the visible lease-error path.
-      // Only deferred sink I/O failures are terminal and may force-close a provider.
-      onError: ({ sessionId, error }) => deps.onEventSinkError?.({ sessionId, error })
+      // Ownership errors remain transient/visible; only sink I/O failure may force provider shutdown.
+      logger: deps.logger
     })
   }
 
@@ -38,32 +65,53 @@ export class StructuredAgentSessionHostRuntimeState {
     this.leaseRenewer.start()
   }
 
-  stopLeaseRenewal(): void {
-    this.leaseRenewer.stop()
+  stopLeaseRenewal(): Promise<void> {
+    return this.leaseRenewer.stop()
   }
 
   eventSinkFor(sessionId: string): DeferredStructuredAgentSessionEventSink {
-    const existing = this.eventSinks.get(sessionId)
+    const existing = this.currentEventSink(sessionId)
     if (existing) {
-      // A sink failure is terminal for that sink instance. Reusing it on a
-      // recovery attach makes `drained()` return the old error forever and
-      // prevents the newly acquired journal from accepting provider events.
-      // Replace the cache entry before attach calls its drain barrier.
-      if (existing.state().failed) {
-        existing.close()
-        this.eventSinks.delete(sessionId)
-      } else {
-        return existing
-      }
+      return existing
     }
-    const created = createDeferredStructuredAgentSessionEventSink({
-      onError: (error) => {
-        this.deps.onEventSinkError?.({ sessionId, error })
-        this.onEventSinkFailure?.(sessionId, error)
-      }
-    })
+    const created = this.mintEventSink(sessionId)
     this.eventSinks.set(sessionId, created)
     return created
+  }
+
+  /** Failed sinks retain permanent barrier errors; discard instead of reusing them. */
+  currentEventSink(sessionId: string): DeferredStructuredAgentSessionEventSink | undefined {
+    const existing = this.eventSinks.get(sessionId)
+    if (existing?.state().failed) {
+      existing.close()
+      this.eventSinks.delete(sessionId)
+      return undefined
+    }
+    return existing
+  }
+
+  /** Cache only after adoption so failed attempts cannot leave queues for later attaches. */
+  mintEventSink(sessionId: string): DeferredStructuredAgentSessionEventSink {
+    const minted: DeferredStructuredAgentSessionEventSink =
+      createDeferredStructuredAgentSessionEventSink({
+        sessionId,
+        logger: this.deps.logger,
+        onFailed: (error) => {
+          // Attempt sinks cannot force down the session’s adopted provider.
+          if (this.eventSinks.get(sessionId) === minted) {
+            this.onEventSinkFailure?.(sessionId, error)
+          }
+        }
+      })
+    return minted
+  }
+
+  adoptEventSink(sessionId: string, sink: DeferredStructuredAgentSessionEventSink): void {
+    const replaced = this.eventSinks.get(sessionId)
+    if (replaced && replaced !== sink) {
+      replaced.close()
+    }
+    this.eventSinks.set(sessionId, sink)
   }
 
   discardEventSink(sessionId: string): void {
@@ -72,7 +120,7 @@ export class StructuredAgentSessionHostRuntimeState {
 
   flushEventSink(sessionId: string): Promise<void> {
     return this.requireSuccessfulBarrier(
-      this.eventSinks.get(sessionId)?.drained() ?? Promise.resolve({ ok: true } as const)
+      this.currentEventSink(sessionId)?.drained() ?? Promise.resolve({ ok: true } as const)
     )
   }
 
@@ -95,7 +143,6 @@ export class StructuredAgentSessionHostRuntimeState {
     }
   }
 
-  /** Exit from a latched recovery stage when present-time evidence permits one. */
   resolveRecovery(sessionId: string): Promise<'resolved' | 'unresolved' | 'not-applicable'> {
     return resolveStructuredSessionRecovery(
       {
@@ -114,11 +161,9 @@ export class StructuredAgentSessionHostRuntimeState {
       !record ||
       (record.lease.ownerProcess === null && record.lease.claimStatus !== 'reserved')
     ) {
-      // Acquisition only consults the probe against a recorded owner or a live reservation.
       return Promise.resolve({ outcome: 'reservation-unused' })
     }
-    // A live reservation goes through the strict probe: calling it unused without its
-    // processless proof is the answer that mints a second writer.
+    // Live reservations require strict processless proof before another writer can spawn.
     return this.probeRecord(record)
   }
 

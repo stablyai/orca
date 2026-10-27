@@ -1,4 +1,4 @@
-import { isTerminalLeafId, makePaneKey } from '../../../shared/stable-pane-id'
+import { isTerminalLeafId, makePaneKey, parsePaneKey } from '../../../shared/stable-pane-id'
 import type {
   RuntimeTerminalListHostScope,
   RuntimeTerminalListResult,
@@ -6,6 +6,7 @@ import type {
 } from '../../../shared/runtime-types'
 import { worktreeIdsEqual } from '../../../shared/worktree/id'
 import { toRuntimeWorktreeSelector } from '@/runtime/runtime-worktree-selector'
+import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../shared/layout-owner-switch'
 
 /** The exact surface the execution host records as owning a live PTY. */
 export type LiveTerminalSurfaceOwner = {
@@ -14,18 +15,12 @@ export type LiveTerminalSurfaceOwner = {
   tabId: string
 }
 
-/**
- * ptyId → owning surface, as the execution host records it. The renderer's own
- * binding maps are a projection that hydration, a second window, or a
- * client-created tab can leave empty, so they cannot answer "is this PTY
- * unowned?" — only the host can.
- *
- * Three verdicts, never two: an entry is the owner, a `null` entry is
- * `unverifiable` (the host named a surface this renderer cannot address, or
- * named two), and a whole-index `null` is `unverifiable` for every PTY. Absence
- * from a readable index is the only proof of `unowned`.
- */
-export type LiveTerminalSurfaceOwnerIndex = ReadonlyMap<string, LiveTerminalSurfaceOwner | null>
+/** Host-observed live PTY with no surface. recorded names its former pane, which this renderer may retain despite its absence from the mounted/live host graph. */
+export type UnownedLiveTerminal = { unowned: true; recorded: LiveTerminalSurfaceOwner | null }
+
+/** Host PTY ownership is authoritative; renderer projections can be empty during hydration, multiwindow or client-created tabs. Only UnownedLiveTerminal proves a live unowned PTY; null/missing entries are unverifiable, and earlier inventories may name retired PTYs. */
+type LiveTerminalSurfaceOwnership = LiveTerminalSurfaceOwner | UnownedLiveTerminal | null
+export type LiveTerminalSurfaceOwnerIndex = ReadonlyMap<string, LiveTerminalSurfaceOwnership>
 
 const OWNER_LISTING_LIMIT = 200
 
@@ -62,28 +57,42 @@ function toSurfaceOwner(terminal: RuntimeTerminalSummary): LiveTerminalSurfaceOw
     : null
 }
 
+function toRecordedSurface(terminal: RuntimeTerminalSummary): LiveTerminalSurfaceOwner | null {
+  const pane = parsePaneKey(terminal.recordedPaneKey ?? '')
+  return terminal.ptyId && pane
+    ? { paneKey: makePaneKey(pane.tabId, pane.leafId), ptyId: terminal.ptyId, tabId: pane.tabId }
+    : null
+}
+
+function ownershipPaneKey(ownership: LiveTerminalSurfaceOwnership | undefined): string | null {
+  if (!ownership) {
+    return null
+  }
+  return 'unowned' in ownership ? 'unowned' : ownership.paneKey
+}
+
 export function indexLiveTerminalSurfaceOwners(
   terminals: readonly RuntimeTerminalSummary[],
   worktreeId: string
-): Map<string, LiveTerminalSurfaceOwner | null> {
-  const owners = new Map<string, LiveTerminalSurfaceOwner | null>()
+): Map<string, LiveTerminalSurfaceOwnership> {
+  const owners = new Map<string, LiveTerminalSurfaceOwnership>()
   for (const terminal of terminals) {
-    // `orphaned` is the host's own word for "live PTY, no surface owns it".
-    // Path spelling can differ between the host's row and the renderer's id; dropping a row
-    // over that would read as `unowned` and mint the duplicate this index exists to prevent.
-    if (
-      !worktreeIdsEqual(terminal.worktreeId, worktreeId) ||
-      !terminal.ptyId ||
-      terminal.orphaned === true
-    ) {
+    if (!worktreeIdsEqual(terminal.worktreeId, worktreeId) || !terminal.ptyId) {
       continue
     }
-    const owner = toSurfaceOwner(terminal)
-    const recorded = owners.get(terminal.ptyId)
-    // Two surfaces claiming one PTY is the duplicate this index must not endorse.
+    const owner: LiveTerminalSurfaceOwnership =
+      terminal.orphaned === true
+        ? terminal.connected === true
+          ? { unowned: true, recorded: toRecordedSurface(terminal) }
+          : null
+        : toSurfaceOwner(terminal)
+    // Conflicting ownership claims cannot authorize adoption.
     owners.set(
       terminal.ptyId,
-      owners.has(terminal.ptyId) && recorded?.paneKey !== owner?.paneKey ? null : owner
+      owners.has(terminal.ptyId) &&
+        ownershipPaneKey(owners.get(terminal.ptyId)) !== ownershipPaneKey(owner)
+        ? null
+        : owner
     )
   }
   return owners
@@ -104,17 +113,17 @@ export async function readWorktreeLiveTerminalSurfaceOwners(
     params: {
       worktree: toRuntimeWorktreeSelector(worktreeId),
       limit: OWNER_LISTING_LIMIT,
-      includeVisualLayouts: false
+      requireFreshPtyLiveness: true,
+      includeVisualLayouts: false,
+      // Main places unshown live terminals before listing; this sweep only reads its panes.
+      ...(ORCA_LAYOUT_OWNER_IS_MAIN ? { placeUnshownLiveTerminals: true } : {})
     }
   })
   if (!response.ok || !isScopedTerminalListResult(response.result)) {
     return null
   }
   const { hostScope, terminals, truncated } = response.result
-  // A worktree-scoped listing names every host but the target's as omitted by
-  // design, so completeness here is "the workspace's own host answered" —
-  // `hostIds` holds exactly that host when it did. A truncated list never proves
-  // any PTY unowned.
+  // Workspace-scoped completeness requires its own host in hostIds; other hosts are intentionally omitted. Truncated listings never prove a PTY unowned.
   return truncated === true || hostScope.hostIds.length === 0
     ? null
     : indexLiveTerminalSurfaceOwners(terminals, worktreeId)

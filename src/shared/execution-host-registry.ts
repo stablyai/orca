@@ -1,8 +1,11 @@
+import type { RuntimeEnvironmentStatus, RuntimeHostBlockedReason } from './runtime-host-status'
 import {
   LOCAL_EXECUTION_HOST_ID,
   getLocalExecutionHostLabel,
   getSettingsFocusedExecutionHostId,
-  isRuntimeOwnedSshTargetId,
+  getRepoDialableSshTargetId,
+  isOwnedSshTargetId,
+  normalizeHostPart,
   parseExecutionHostId,
   toRuntimeExecutionHostId,
   toSshExecutionHostId,
@@ -16,14 +19,13 @@ import type { SshConnectionState, SshConnectionStatus } from './ssh-types'
 import type { RuntimeEnvironmentSource } from './runtime-environments'
 import type { GlobalSettings } from './global-settings-types'
 import type { Repo } from './repo-types'
+import {
+  annotateManagedOrcadExecutionHosts,
+  type ManagedOrcadDeploymentSummary
+} from './managed-orcad-execution-host'
+import { getSshConnectionHealth, type ExecutionHostHealth } from './execution-host-health'
 
-export type ExecutionHostHealth =
-  | 'local'
-  | 'available'
-  | 'connecting'
-  | 'blocked'
-  | 'disconnected'
-  | 'error'
+export type { ExecutionHostHealth } from './execution-host-health'
 
 export type ExecutionHostRegistryEntry = {
   id: ExecutionHostId
@@ -33,6 +35,8 @@ export type ExecutionHostRegistryEntry = {
   health: ExecutionHostHealth
   connectionStatus?: SshConnectionStatus
   compatibility?: RuntimeCompatVerdict
+  /** Present only while health is blocked; local evidence, never published to peers. */
+  blockedReason?: RuntimeHostBlockedReason
   capabilities?: readonly string[]
   appVersion?: string | null
   protocolVersion?: number | null
@@ -40,28 +44,21 @@ export type ExecutionHostRegistryEntry = {
   platform?: NodeJS.Platform | null
   remoteControlState?: RuntimeStatus['remoteControl']
   source?: RuntimeEnvironmentSource
+  /** See managed-orcad-execution-host: pairs an SSH host with its managed server. */
+  aliasHostIds?: readonly ExecutionHostId[]
+  mergedIntoHostId?: ExecutionHostId
 }
 
 type RuntimeEnvironmentSummary = {
   id: string
   name?: string | null
   source?: RuntimeEnvironmentSource
+  orcadDeployment?: ManagedOrcadDeploymentSummary | null
 }
 
-type RuntimeHostStatus = {
-  status?: RuntimeStatus | null
-  remoteControl?: RuntimeStatus['remoteControl'] | null
-  appVersion?: string | null
-}
-
-type RuntimeStatusByEnvironmentId = ReadonlyMap<string, RuntimeHostStatus>
+type RuntimeStatusByEnvironmentId = ReadonlyMap<string, RuntimeEnvironmentStatus>
 
 export type ExecutionHostSource = 'configured-only' | 'include-references'
-
-function normalizeHostPart(value: string | null | undefined): string | null {
-  const trimmed = value?.trim()
-  return trimmed ? trimmed : null
-}
 
 function runtimeCompatibility(
   status: RuntimeStatus | null | undefined
@@ -83,8 +80,7 @@ function runtimeHealth(
   compatibility: RuntimeCompatVerdict | null,
   remoteControl: RuntimeStatus['remoteControl'] | null | undefined
 ): ExecutionHostHealth {
-  // Why: with no live status we have no evidence the Orca server is reachable,
-  // unless a ready shared-control socket already proved the transport is up.
+  // Without live status, only ready shared control proves server reachability.
   if (!status) {
     return remoteControl?.state === 'ready' ? 'available' : 'disconnected'
   }
@@ -111,24 +107,6 @@ function runtimeControlHealth(
   }
 }
 
-function sshHealth(state: SshConnectionState | undefined): ExecutionHostHealth {
-  switch (state?.status) {
-    case 'connected':
-      return 'available'
-    case 'connecting':
-    case 'deploying-relay':
-    case 'reconnecting':
-      return 'connecting'
-    case 'auth-failed':
-    case 'error':
-    case 'reconnection-failed':
-      return 'error'
-    case 'disconnected':
-    case undefined:
-      return 'disconnected'
-  }
-}
-
 function setHost(
   hosts: Map<ExecutionHostId, ExecutionHostRegistryEntry>,
   entry: ExecutionHostRegistryEntry
@@ -141,10 +119,7 @@ function setHost(
   if (existing.health !== 'disconnected') {
     return
   }
-  // Why: a later status-bearing registration may upgrade health, but the first
-  // (named) registration is authoritative for the label — runtime envs are
-  // seeded with a friendly name before the id-labeled status/focus/repo
-  // fallbacks run, so keep the existing label on a health-only upgrade.
+  // Health upgrades must retain the first friendly label/source seeded before id-only fallbacks.
   hosts.set(entry.id, { ...entry, label: existing.label, source: existing.source ?? entry.source })
 }
 
@@ -158,22 +133,48 @@ function addRuntimeHost(
   const hostId = toRuntimeExecutionHostId(environmentId)
   const runtimeStatus = statusByEnvironmentId?.get(environmentId)
   const status = runtimeStatus?.status
-  const compatibility = runtimeCompatibility(status)
+  const snapshot = runtimeStatus?.snapshot
+  const metadata = status ?? snapshot?.status
+  const compatibility = runtimeCompatibility(metadata)
   const remoteControl = runtimeStatus?.remoteControl ?? status?.remoteControl
-  const controlHealth = runtimeControlHealth(remoteControl)
+  // Status owners withdraw verified on socket loss, so it proves reachability while shared control connects (#10704).
+  const reachable =
+    snapshot?.transport === 'ready'
+      ? snapshot.verification !== 'checking'
+      : snapshot?.verification === 'verified' && snapshot.transport !== 'disconnected'
+  const controlHealth = snapshot?.retired
+    ? 'disconnected'
+    : snapshot?.verification === 'blocked'
+      ? 'blocked'
+      : reachable
+        ? compatibility?.kind === 'blocked'
+          ? 'blocked'
+          : 'available'
+        : !runtimeStatus ||
+            snapshot?.verification === 'checking' ||
+            snapshot?.transport === 'disconnected' ||
+            snapshot?.transport === 'connecting'
+          ? 'connecting'
+          : runtimeControlHealth(remoteControl)
+  const health = controlHealth ?? runtimeHealth(status, compatibility, remoteControl)
+  const blockedReason =
+    health === 'blocked'
+      ? (snapshot?.verification === 'blocked' && snapshot.blockedReason) || 'incompatible'
+      : undefined
   setHost(hosts, {
     id: hostId,
     kind: 'runtime',
     label,
     detail: 'Orca server',
-    health: controlHealth ?? runtimeHealth(status, compatibility, remoteControl),
+    health,
+    ...(blockedReason ? { blockedReason } : {}),
     compatibility: compatibility ?? undefined,
-    capabilities: status?.capabilities,
-    appVersion: runtimeStatus?.appVersion ?? status?.appVersion ?? null,
-    protocolVersion: status?.runtimeProtocolVersion ?? status?.protocolVersion ?? null,
+    capabilities: metadata?.capabilities,
+    appVersion: runtimeStatus?.appVersion ?? metadata?.appVersion ?? null,
+    protocolVersion: metadata?.runtimeProtocolVersion ?? metadata?.protocolVersion ?? null,
     minCompatibleClientVersion:
-      status?.minCompatibleRuntimeClientVersion ?? status?.minCompatibleMobileVersion ?? null,
-    platform: status?.hostPlatform ?? null,
+      metadata?.minCompatibleRuntimeClientVersion ?? metadata?.minCompatibleMobileVersion ?? null,
+    platform: metadata?.hostPlatform ?? null,
     remoteControlState: remoteControl ?? null,
     ...(source ? { source } : {})
   })
@@ -187,15 +188,16 @@ export function buildExecutionHostRegistry(args: {
   sshConnectionStates?: ReadonlyMap<string, SshConnectionState>
   runtimeEnvironments?: readonly RuntimeEnvironmentSummary[]
   runtimeStatusByEnvironmentId?: RuntimeStatusByEnvironmentId
-  // Why: user-chosen per-host display labels override the derived label so a
-  // rename in the host menu/settings shows everywhere the registry feeds.
+  // Per-host user labels must appear wherever this registry feeds.
   hostLabelOverrides?: ReadonlyMap<ExecutionHostId, string>
+  /** Defaults to this process's platform, which only the host itself may use. */
+  localHostLabel?: string
 }): ExecutionHostRegistryEntry[] {
   const hosts = new Map<ExecutionHostId, ExecutionHostRegistryEntry>()
   hosts.set(LOCAL_EXECUTION_HOST_ID, {
     id: LOCAL_EXECUTION_HOST_ID,
     kind: 'local',
-    label: getLocalExecutionHostLabel(),
+    label: args.localHostLabel ?? getLocalExecutionHostLabel(),
     detail: 'This computer',
     health: 'local'
   })
@@ -248,23 +250,23 @@ export function buildExecutionHostRegistry(args: {
           args.runtimeStatusByEnvironmentId
         )
       }
-      // Why: a VM-backed repo's executionHostId is `ssh:runtime-ssh-<id>`. Runtime-owned
-      // targets are hidden, so they must not become visible SSH run-target hosts here.
-      if (parsedHost?.kind === 'ssh' && !isRuntimeOwnedSshTargetId(parsedHost.targetId)) {
+      // VM-owned SSH targets are plumbing and must stay out of visible run targets.
+      if (parsedHost?.kind === 'ssh' && !isOwnedSshTargetId(parsedHost.targetId)) {
         sshTargetIds.add(parsedHost.targetId)
       }
     }
   }
   for (const targetId of args.sshTargetLabels?.keys() ?? []) {
     const normalized = normalizeHostPart(targetId)
-    if (normalized && !isRuntimeOwnedSshTargetId(normalized)) {
+    if (normalized && !isOwnedSshTargetId(normalized)) {
       sshTargetIds.add(normalized)
     }
   }
   if (args.hostSource !== 'configured-only') {
     for (const repo of args.repos) {
-      const targetId = normalizeHostPart(repo.connectionId)
-      if (targetId && !isRuntimeOwnedSshTargetId(targetId)) {
+      // A paired-server repo’s raw connectionId belongs to that server and is not client-dialable.
+      const targetId = getRepoDialableSshTargetId(repo)
+      if (targetId && !isOwnedSshTargetId(targetId)) {
         sshTargetIds.add(targetId)
       }
     }
@@ -277,17 +279,26 @@ export function buildExecutionHostRegistry(args: {
       kind: 'ssh',
       label: args.sshTargetLabels?.get(targetId) || targetId,
       detail: 'SSH',
-      health: sshHealth(state),
+      health: getSshConnectionHealth(state?.status),
       connectionStatus: state?.status
     })
   }
+
+  annotateManagedOrcadExecutionHosts({
+    hosts,
+    runtimeEnvironments: args.runtimeEnvironments ?? [],
+    sshConnectionStates: args.sshConnectionStates
+  })
 
   const overrides = args.hostLabelOverrides
   if (!overrides || overrides.size === 0) {
     return [...hosts.values()]
   }
   return [...hosts.values()].map((host) => {
-    const label = overrides.get(host.id)
+    // A rename on a merged-away alias still names the merged row.
+    const label =
+      overrides.get(host.id) ??
+      host.aliasHostIds?.map((aliasHostId) => overrides.get(aliasHostId)).find(Boolean)
     return label ? { ...host, label } : host
   })
 }

@@ -1,13 +1,5 @@
-/**
- * Chooses which rows survive a listing's row cap so that no execution host is starved by it.
- *
- * Worktree rows are resolved repo by repo, so every SSH repo's rows land contiguously at the end
- * of the fleet order — 24 remote worktrees sat at indices 496-520 of 521 and a 200-row cap
- * returned zero of them (#18104). A per-host round robin gives each host a share of the cap.
- *
- * Chosen rows keep the caller's original relative order, so the page stays a subsequence of the
- * unbounded listing and nothing downstream has to re-sort. An uncapped listing is returned as-is.
- */
+/** Round-robin hosts under row caps so contiguous late SSH repos cannot disappear (#18104).
+ * Keep selected rows in original relative order; uncapped listings pass through unchanged. */
 export function selectHostBalancedPage<TRow>(
   rows: readonly TRow[],
   limit: number,
@@ -28,22 +20,27 @@ export function selectHostBalancedPage<TRow>(
     }
   })
   const buckets = [...indicesByHost.values()]
-  const cursors = buckets.map(() => 0)
   const chosen: number[] = []
-  while (chosen.length < limit) {
-    let advanced = false
-    for (let bucket = 0; bucket < buckets.length && chosen.length < limit; bucket += 1) {
-      const cursor = cursors[bucket] ?? 0
-      const index = buckets[bucket]?.[cursor]
-      if (index !== undefined) {
-        chosen.push(index)
-        cursors[bucket] = cursor + 1
-        advanced = true
+  // Retain buckets longer than round in first-appearance order; write at or before the read cursor.
+  // Retiring exhausted buckets avoids rescanning them for every row of a long host bucket.
+  let activeCount = buckets.length
+  let round = 0
+  while (chosen.length < limit && activeCount > 0) {
+    let nextActiveCount = 0
+    for (
+      let bucketIndex = 0;
+      bucketIndex < activeCount && chosen.length < limit;
+      bucketIndex += 1
+    ) {
+      const bucket = buckets[bucketIndex]
+      chosen.push(bucket[round])
+      if (bucket.length > round + 1) {
+        buckets[nextActiveCount] = bucket
+        nextActiveCount += 1
       }
     }
-    if (!advanced) {
-      break
-    }
+    activeCount = nextActiveCount
+    round += 1
   }
   return chosen.sort((left, right) => left - right).map((index) => rows[index] as TRow)
 }

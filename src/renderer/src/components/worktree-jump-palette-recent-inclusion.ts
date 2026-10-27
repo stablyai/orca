@@ -1,9 +1,10 @@
+import type { ReadableAgentAttentionUnread } from '@/attention/agent-attention-contract'
 import {
   resolveTerminalTabAttentionBadge,
   terminalTabHasUnreadActivity
 } from '@/components/tab-bar/terminal-tab-activity-status'
 import { resolveRecentWorkspaceTabStatus } from '@/lib/recent-workspace-tab-rows'
-import type { TabPaneInputSources } from '@/components/sidebar/smart-attention'
+import type { TabPaneInputSources } from '../../../shared/sidebar-list/smart-attention'
 import type { OpenTabPaletteItem, OpenTabRecentRow } from './worktree-jump-palette-model'
 import type { Worktree } from '../../../shared/worktree/types'
 
@@ -24,8 +25,8 @@ export function shouldIncludeOpenTabInRecentSection({
   worktree: Worktree
   row: OpenTabRecentRow['row']
   paneSources: TabPaneInputSources
-  unreadTerminalTabs: Record<string, boolean | undefined>
-  unreadAgentCompletionPanes: Record<string, boolean | undefined>
+  unreadTerminalTabs: Record<string, ReadableAgentAttentionUnread>
+  unreadAgentCompletionPanes: Record<string, ReadableAgentAttentionUnread>
   now: number
 }): boolean {
   if (worktree.isArchived) {
@@ -45,5 +46,12 @@ export function shouldIncludeOpenTabInRecentSection({
       unreadAgentCompletionPanes
     })
   })
-  return badge != null && badge !== 'done' && badge !== 'interrupted'
+  // Why: a settled outcome on the tab you are on is not news; a failure ranks like a completion.
+  return (
+    badge != null &&
+    badge !== 'done' &&
+    badge !== 'failed' &&
+    badge !== 'interrupted' &&
+    badge !== 'unconfirmed'
+  )
 }

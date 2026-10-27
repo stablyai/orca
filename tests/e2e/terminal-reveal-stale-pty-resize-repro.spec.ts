@@ -1,33 +1,7 @@
-/**
- * Repro: stale PTY resize after worktree reveal (issues #7951 / #7240 family).
- *
- * Symptom (field reports + internal, v1.4.136): returning to a worktree
- * garbles the bottom of an idle TUI (Claude Code) until a manual window
- * resize.
- *
- * Mechanism: on reveal, noteVisibilityResume() requests a PTY size readback
- * that captures xterm's pre-reveal grid as the resize target
- * (pty-size-reassertion.ts). The reveal fit then refits xterm and resizes the
- * PTY while that read is in flight, with no follow-up request queued.
- * Instrumented traces show this stale-capture interleaving on EVERY reveal;
- * correctness then hinges solely on the applied-size read being processed
- * before the fit's resize (local FIFO luck). When the read loses that race —
- * busy daemon serializing reveal snapshots, SSH/relay round-trips — the
- * resolved callback sees applied != captured target and "repairs" the PTY
- * back to the pre-reveal grid. An idle TUI redraws for the wrong grid and
- * nothing heals it: no output means no grid-drift check, and no later layout
- * change means no ResizeObserver request.
- *
- * Test 1 drives the choreography with the natural read ordering (documents
- * the FIFO-lucky path). Test 2 delays the readback dispatch (e2e seam in
- * pty-applied-size-read-e2e-delay.ts) to model the losing ordering — on an
- * unpatched build the stale forward fires live (verified via instrumented
- * traces: FORWARD of the pre-reveal grid over the freshly fitted one). On
- * fast idle machines a follow-up reassertion heals it within tens of ms, so
- * the deterministic regression guard for the stale forward itself lives in
- * pty-size-reassertion.test.ts; this spec catches the persistent-desync
- * variant and keeps the full reveal path exercised under the field ordering.
- */
+// #7951/#7240 (v1.4.136): reveal can fit a new grid while an applied-size read still holds the old target, then incorrectly resize PTY backward.
+// Busy daemon/SSH ordering exposes the stale forward; idle output/layout provide no later correction until manual resize.
+// Exercise natural ordering and delayed dispatch through pty-applied-size-read-e2e-delay.ts. Fast local follow-up may heal in milliseconds;
+// pty-size-reassertion.test.ts deterministically rejects the stale forward, while this arm catches persistent desync along the full reveal path.
 
 import type { Page, TestInfo } from '@stablyai/playwright-test'
 import { writeFileSync } from 'node:fs'
@@ -72,10 +46,7 @@ type CycleFailure = {
 }
 
 const CONVERGE_TIMEOUT_MS = 6_000
-// Why: sweep the applied-size read delay across the gap between the reveal
-// fit's PTY resize landing in the daemon and the ResizeObserver follow-up
-// request — the window where the stale forward fires. Fast idle machines
-// rescue within ~30-50ms; the field (SSH/relay, loaded frames) may never.
+// Sweep read delay across fit resize→ResizeObserver follow-up; idle local runs heal in ~30–50ms, loaded/remote runs may not.
 const GETSIZE_DELAY_SWEEP_MS = [15, 20, 25, 30, 40, 60]
 const VIEWPORTS = [
   { width: 1280, height: 800 },
@@ -84,17 +55,8 @@ const VIEWPORTS = [
 ]
 
 function bottomBarTuiScript(runId: string): string {
-  // Why: redraw ONLY on SIGWINCH, like an idle Claude Code session. Periodic
-  // output would trigger the foreground grid-drift check, which heals the
-  // desync and masks the bug the field reports hit while idle.
-  //
-  // The bar is illustrative, NOT the assertion target: this spec asserts on
-  // pty:getSize converging to xterm's grid. Do not assert on the bar's printed
-  // cols — Node's `process.stdout.on('resize')` is unreliable under Windows
-  // ConPTY (no SIGWINCH; a long-lived process can miss the notification while
-  // the OS PTY is in fact resized), so a bar-content check flakes there even
-  // though delivery succeeded (confirmed via base-vs-fix A/B + fresh-process
-  // console read on Windows).
+  // Redraw only on SIGWINCH: periodic output would trigger grid-drift healing and mask idle-TUI desync.
+  // Assert applied pty:getSize against xterm, not the illustrative bar: ConPTY can resize correctly without notifying a long-lived Node process.
   return [
     'const draw = () => {',
     '  const rows = process.stdout.rows || 24',
@@ -119,8 +81,7 @@ async function readGridSnapshot(page: Page, ptyId: string): Promise<GridSnapshot
         }
       }
     }
-    // Why: the delay seam only affects the product's own readback wiring in
-    // pty-connection, so probing window.api.pty.getSize directly stays fast.
+    // Direct pty.getSize probes stay fast; the seam delays only product readback wiring.
     const applied = (await window.api?.pty?.getSize?.(ptyId)) ?? null
     return { xterm, applied }
   }, ptyId)
@@ -132,7 +93,9 @@ async function closeRightSidebarAndFeatureTips(page: Page): Promise<void> {
     if (!store) {
       return
     }
-    store.getState().markFeatureTipsSeen(['orca-cli', 'cmd-j-palette', 'voice-dictation'])
+    store
+      .getState()
+      .markFeatureTipsSeen(['orca-cli', 'cmd-j-palette', 'voice-dictation', 'agent-session-search'])
     if (store.getState().rightSidebarOpen) {
       store.getState().setRightSidebarOpen(false)
     }
@@ -150,9 +113,7 @@ function gridsConverged(snapshot: GridSnapshot): boolean {
   )
 }
 
-/** Arm the e2e seam that delays the reassertion's applied-size read dispatch
- *  past the reveal fit — the ordering a busy daemon or SSH/relay round-trip
- *  produces in the field (pty-applied-size-read-e2e-delay.ts). */
+// Delay reassertion read dispatch past reveal fit to model busy daemon/SSH ordering.
 async function armSlowAppliedSizeRead(page: Page, delayMs: number): Promise<void> {
   await page.evaluate((delayMs) => {
     ;(window as StaleResizeReproWindow).__e2ePtyAppliedSizeReadDelayMs = delayMs
@@ -207,10 +168,7 @@ async function driveHiddenResizeRevealCycles(args: CycleDriverArgs): Promise<Cyc
     }
     await switchToWorktree(page, firstWorktreeId)
     await expect.poll(() => getActiveWorktreeId(page), { timeout: 10_000 }).toBe(firstWorktreeId)
-    // Why: the field shape — the window changes while the idle TUI worktree
-    // is hidden; hidden xterm refits drop their PTY forwards
-    // (isRendererPtyResizeAuthoritative), so the reveal-time readback is the
-    // sole owner of the correction.
+    // Resize while hidden so renderer PTY forwarding is non-authoritative and reveal readback owns correction.
     viewportIndex = (viewportIndex + 1) % VIEWPORTS.length
     await page.setViewportSize(VIEWPORTS[viewportIndex])
     await page.waitForTimeout(400)
@@ -218,9 +176,7 @@ async function driveHiddenResizeRevealCycles(args: CycleDriverArgs): Promise<Cyc
     await switchToWorktree(page, secondWorktreeId)
     await expect.poll(() => getActiveWorktreeId(page), { timeout: 10_000 }).toBe(secondWorktreeId)
 
-    // Why: sample tightly right after reveal — a stale forward that a later
-    // follow-up request heals is still the corruption firing (the TUI redraws
-    // for the wrong grid in that window); record every desynced sample.
+    // Sample immediately and record every desync, including stale forwards later healed after a wrong-grid TUI redraw.
     for (let sample = 0; sample < 20; sample += 1) {
       const snapshot = await readGridSnapshot(page, ptyId)
       if (!gridsConverged(snapshot) && snapshot.xterm !== null && snapshot.applied !== null) {

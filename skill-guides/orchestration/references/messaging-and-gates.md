@@ -15,11 +15,14 @@ the caller; pass it explicitly from anywhere else, including a dispatched
 worker reading coordinator follow-ups.
 
 A consuming coordinator `check` returns the bound Run's oldest FIFO Delivery,
-up to 50 messages, and replays that exact batch until acknowledged. Process
-every row and required terminal ownership decision before `--ack`. Type filters
-decide when a waiter wakes; they do not authorize skipping older actionable
-mail. A Delivery therefore always carries the whole FIFO batch whatever its
-types, and a `check` without `--wait` hands that batch over unfiltered.
+up to 50 messages, and replays that exact batch until acknowledged or all its
+messages are marked read. Concurrent waits on one Run inbox are allowed; they
+share the outstanding batch and reserve nothing, and acknowledging the same
+Delivery twice is a no-op. Process every row and required terminal ownership
+decision before `--ack`. Type filters decide when a waiter wakes; they do not
+authorize skipping older actionable mail. A Delivery therefore always carries
+the whole FIFO batch whatever its types, and a `check` without `--wait` hands
+that batch over unfiltered.
 `--peek` and `--all` are read-only inspection, not progress through the
 coordinator inbox.
 
@@ -36,18 +39,28 @@ ORCA orchestration send --to dispatch:<dispatch_id> --subject "Follow-up" --body
 
 Do not substitute a remote terminal handle. Omit `--from` for ordinary
 coordinator calls; a dispatched worker instead copies the exact `--from` and
-capability arguments in its preamble. `check` is the exception: it identifies
+other arguments in its preamble. `check` is the exception: it identifies
 its caller with `--terminal`, never `--from`.
 
 Group addresses include `@all`, `@idle`, `@claude`, `@codex`, `@opencode`,
-`@gemini`, `@droid`, `@grok`, `@cursor`, and `@worktree:<id>`. Use them only for
-intentional fan-out status or questions. `worker_done`, heartbeat, and other
+`@gemini`, `@droid`, `@grok`, `@cursor`, and `@worktree:<id>`. Every group but
+`@worktree:<id>` means the live Dispatches of the sender's own Run. Mail goes
+to each `dispatch:<id>` mailbox, except a worker coordinating a child Run
+receives it in that `run:<id>` mailbox. A sender bound to no Run is refused;
+`--run` must match the group audience and never grants membership.
+A Run group excludes its owning coordinator; a worker raising a blocker sends
+to `run:<id>`. A worker that created its own Run addresses that Run's workers,
+not its siblings. `@worktree:<id>` reaches matching workspace terminals,
+including coordinators. Use groups only for intentional fan-out status or
+questions. `worker_done`, heartbeat, and other
 Dispatch lifecycle messages never target groups.
 
 ## Questions and gates
 
 A worker uses `ask`; its timeout leaves one durable question pending, which the
-worker resumes by message ID. The coordinator answers that message with `reply`.
+worker resumes by message ID. The coordinator answers that message with `reply`;
+a helper's question goes to the worker that started it, which answers it the
+same way.
 
 Use a gate only for a coordinator-owned Task-DAG decision:
 

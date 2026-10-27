@@ -1,5 +1,6 @@
 import { consumeCodexRateLimitResetCredit } from '../codex-fetcher'
 import { RateLimitServiceInactiveAccounts } from './service-inactive-accounts'
+import { hasUsageWindows } from './service-result-policy'
 import {
   normalizeCodexAccountSelectionTarget,
   normalizeClaudeAccountSelectionTarget,
@@ -12,13 +13,13 @@ import {
 
 export abstract class RateLimitServiceAccountRefresh extends RateLimitServiceInactiveAccounts {
   async refresh(): Promise<RateLimitState> {
-    // Why: this user-directed refresh must bypass the poll throttle, else the click can no-op after wake/focus and feel broken.
+    // User refresh must bypass recent poll/focus throttles.
     await this.fetchAll({ force: true })
     return this.getState()
   }
 
   async refreshIfStale(): Promise<RateLimitState> {
-    // Why: reconnecting mobile subscribers need fresh backgrounded-desktop data, but replaying a subscription must not queue another forced fetch.
+    // Reconnecting mobile needs fresh data, but subscription replay must not force redundant fetches.
     const plan = this.getActiveWindowRefreshPlan(Date.now())
     await this.runActiveWindowRefreshPlan(plan)
     return this.getState()
@@ -29,12 +30,42 @@ export abstract class RateLimitServiceAccountRefresh extends RateLimitServiceIna
     return this.getState()
   }
 
+  invalidateOpenCodeGoCredentialState(options: { apiKeyCleared?: boolean } = {}): void {
+    this.opencodeFetchGeneration += 1
+    // Store/env keys survive cookie changes; only clearing the saved override hides its presence.
+    if (options.apiKeyCleared) {
+      this.openCodeGoApiKeyConfigured = false
+    }
+    // Invalidate visible and in-flight usage when credentials change.
+    this.updateState({
+      ...this.state,
+      opencodeGo: this.withFetchingStatus(null, 'opencode-go')
+    })
+  }
+
+  invalidateAntigravityCredentialState(): void {
+    this.antigravityFetchGeneration += 1
+    this.updateState({
+      ...this.state,
+      antigravity: null
+    })
+  }
+
   invalidateMiniMaxCredentialState(): void {
     this.minimaxFetchGeneration += 1
-    // Why: saving/forgetting the cookie can race an in-flight fetch; clear the visible snapshot before any old-cookie result returns.
+    // Clear before an old-cookie fetch can return.
     this.updateState({
       ...this.state,
       minimax: this.withFetchingStatus(null, 'minimax')
+    })
+  }
+
+  invalidateZcodeCredentialState(): void {
+    this.zcodeFetchGeneration += 1
+    // Clear before an old-key fetch can return.
+    this.updateState({
+      ...this.state,
+      zcode: this.withFetchingStatus(null, 'zcode')
     })
   }
 
@@ -43,8 +74,7 @@ export abstract class RateLimitServiceAccountRefresh extends RateLimitServiceIna
     target?: CodexAccountSelectionTarget
   ): Promise<RateLimitState> {
     const nextTarget = normalizeCodexAccountSelectionTarget(target)
-    // Why: weekly-only plans report no session window, so gating on session alone
-    // dropped their snapshot and left the switcher's inline bars empty.
+    // Weekly-only plans still need outgoing switcher snapshots.
     if (
       outgoingAccountId &&
       (this.state.codex?.session || this.state.codex?.weekly) &&
@@ -54,15 +84,11 @@ export abstract class RateLimitServiceAccountRefresh extends RateLimitServiceIna
     }
     this.codexFetchTarget = nextTarget
     this.codexFetchGeneration += 1
-    // Why: a new account/target starts with a clean retry schedule.
     this.activeFailureStreakByProvider.codex = 0
     this.inactiveCodexAccountsGeneration += 1
     this.pruneInactiveCodexState()
-    // Why: the switch must NOT reset the inactive-fetch debounce — re-probing
-    // every inactive account per switch spawns codex in each credential home
-    // and endangers rotating refresh tokens; the switcher shows the cached
-    // snapshot (seeded above for the outgoing account) until the debounce ends.
-    // Why: clear the old Codex view immediately, else the previous account's limits show under the newly selected identity until the next poll.
+    // Preserve inactive debounce: probing every live credential home on each switch risks rotating tokens.
+    // Clear active usage immediately so outgoing figures cannot appear under the new account.
     this.updateState({
       ...this.state,
       codex: this.withFetchingStatus(null, 'codex')
@@ -110,7 +136,8 @@ export abstract class RateLimitServiceAccountRefresh extends RateLimitServiceIna
       const state = await this.fetchCodexResetResultState(
         codexTarget,
         codexHomePath,
-        scopedStateBeforeReset
+        scopedStateBeforeReset,
+        outcome
       )
       return { outcome, state }
     } catch (error) {
@@ -126,10 +153,11 @@ export abstract class RateLimitServiceAccountRefresh extends RateLimitServiceIna
     target?: ClaudeAccountSelectionTarget
   ): Promise<RateLimitState> {
     const nextTarget = normalizeClaudeAccountSelectionTarget(target)
-    // Why: snapshot the outgoing account's usage before clearing so the switcher's inline bars can show last-known data immediately.
+    // Seed outgoing switcher data before clearing; a weekly-only kept snapshot still counts.
     if (
       outgoingAccountId &&
-      this.state.claude?.session &&
+      this.state.claude &&
+      hasUsageWindows(this.state.claude) &&
       this.isSameClaudeTarget(this.claudeFetchTarget, nextTarget)
     ) {
       this.inactiveClaudeCache.set(outgoingAccountId, this.state.claude)
@@ -138,9 +166,9 @@ export abstract class RateLimitServiceAccountRefresh extends RateLimitServiceIna
     this.inactiveClaudeAccountsGeneration += 1
     this.pruneInactiveClaudeState()
     this.claudeFetchGeneration += 1
-    // Why: a new account/target starts with a clean retry schedule.
+    this.lastClaudeCheckCompletedAt = null
     this.activeFailureStreakByProvider.claude = 0
-    // Why: statusline posts from the outgoing account's sessions must not land on the incoming account's bar mid-switch.
+    // Outgoing statusline posts must not land on the incoming account during the switch.
     this.lastClaudeAuthSnapshot = null
     this.lastInactiveClaudeFetchAt = 0
     this.updateState({
@@ -156,9 +184,10 @@ export abstract class RateLimitServiceAccountRefresh extends RateLimitServiceIna
     const targetChanged = !this.isSameClaudeTarget(this.claudeFetchTarget, nextTarget)
     this.claudeFetchTarget = nextTarget
     this.claudeFetchGeneration += 1
+    this.lastClaudeCheckCompletedAt = null
     this.activeFailureStreakByProvider.claude = 0
     if (targetChanged) {
-      // Why: statusline posts from the outgoing target's sessions must not land on the incoming target's bar mid-switch.
+      // Outgoing target posts must not land on the incoming target during the switch.
       this.lastClaudeAuthSnapshot = null
     }
     this.updateState({
@@ -167,16 +196,5 @@ export abstract class RateLimitServiceAccountRefresh extends RateLimitServiceIna
     })
     await this.fetchClaudeOnly({ force: true })
     return this.getState()
-  }
-
-  async refreshAfterClaudeLivePtysDrained(): Promise<void> {
-    // Why: "Waiting for Claude session" can only recover once no live claude
-    // owns the credentials. Refetch on the last PTY exit instead of leaving
-    // the stale terminal error up until the failure backoff elapses.
-    if (!this.state.claude?.usageMetadata?.deferredByLiveClaudeSession) {
-      return
-    }
-    this.activeFailureStreakByProvider.claude = 0
-    await this.fetchClaudeOnly({ force: true })
   }
 }

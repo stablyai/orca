@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from 'vitest'
 import { SearchSubprocessLineAccumulator } from './search-subprocess-lines'
 
 describe('SearchSubprocessLineAccumulator', () => {
-  it('keeps complete decoded batches as strings without allocating byte copies', () => {
+  it('emits decoded batches without re-encoding them with Buffer.from', () => {
     const parser = new SearchSubprocessLineAccumulator()
     const lines: string[] = []
     const from = vi.spyOn(Buffer, 'from')
@@ -59,7 +59,7 @@ describe('SearchSubprocessLineAccumulator', () => {
     expect(lines).toEqual(['', 'a', ''])
   })
 
-  it('retains one growable buffer for adversarial one-byte fragments', () => {
+  it('retains a fragmented line until finish and releases its capacity', () => {
     const parser = new SearchSubprocessLineAccumulator(256 * 1024)
     const byte = Buffer.from('x')
     let accepted = true
@@ -69,9 +69,9 @@ describe('SearchSubprocessLineAccumulator', () => {
     }
 
     expect(accepted).toBe(true)
-    expect(Reflect.get(parser, 'buffer')).toBeInstanceOf(Buffer)
+    expect(parser.retainedCapacityBytes()).toBeGreaterThanOrEqual(200_000)
     expect(parser.finish()).toBe('x'.repeat(200_000))
-    expect(Reflect.get(parser, 'buffer')).toBeNull()
+    expect(parser.retainedCapacityBytes()).toBeNull()
   })
 
   it('rejects invalid byte limits', () => {

@@ -1,4 +1,5 @@
 import type { HostedReviewProvider } from '../../../../../../shared/hosted-review'
+import { normalizeGitLabRemoteHost } from '../../../../../../shared/git-remote-host-alias'
 
 export type ManualReviewProvider = Exclude<HostedReviewProvider, 'unsupported'>
 
@@ -47,7 +48,7 @@ function cleanPath(path: string): string | null {
 }
 
 function providerForHost(host: string): ManualReviewProvider | null {
-  const normalized = host.toLowerCase()
+  const normalized = normalizeGitLabRemoteHost(host)
   if (normalized === 'github.com' || normalized === 'ssh.github.com') {
     return 'github'
   }
@@ -153,7 +154,7 @@ export function parseRemoteRepo(
     ? trimmed.match(/^(?:[^@/:]+@)?([^:\s/]+):([^\s]+?)(?:\.git)?$/)
     : null
   if (scpLike) {
-    const host = scpLike[1].toLowerCase()
+    const host = normalizeGitLabRemoteHost(scpLike[1].toLowerCase())
     const path = cleanPath(scpLike[2])
     if (!path) {
       return null
@@ -176,14 +177,19 @@ export function parseRemoteRepo(
     if (!path) {
       return null
     }
-    const host = url.hostname.toLowerCase()
+    const remoteHost = url.hostname.toLowerCase()
+    const host = normalizeGitLabRemoteHost(remoteHost)
     const hintedProvider = normalizeProvider(providerHint)
     const inferredProvider = providerForHost(host)
     const provider = hintedProvider ?? inferredProvider
-    const webOrigin =
-      host === 'ssh.github.com'
-        ? 'https://github.com'
-        : buildWebOrigin(protocol, url.host, url.hostname).replace(/\/+$/, '')
+    let webOrigin: string
+    if (host === 'ssh.github.com') {
+      webOrigin = 'https://github.com'
+    } else if (remoteHost === 'altssh.gitlab.com') {
+      webOrigin = 'https://gitlab.com'
+    } else {
+      webOrigin = buildWebOrigin(protocol, url.host, url.hostname).replace(/\/+$/, '')
+    }
     return {
       provider,
       path,

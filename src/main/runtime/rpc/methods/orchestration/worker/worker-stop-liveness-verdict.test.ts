@@ -2,10 +2,9 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { OrcaRuntimeService } from '../../../../orca-runtime'
 import { OrchestrationDb } from '../../../../orchestration/db'
 import { ORCHESTRATION_METHODS } from '../../orchestration'
+import { eraseRpcMethods } from '../../../core'
 
-// The aggregate terminal inventory only iterates registered providers, so a
-// dropped relay clears `connected` for every remote PTY at once. That is lost
-// contact, not a death certificate.
+// Dropped relays clear connected across remote PTYs; use host verdicts to distinguish lost contact from death.
 describe('worker-stop against a terminal we lost contact with', () => {
   let db: OrchestrationDb
   let runtime: OrcaRuntimeService
@@ -29,7 +28,9 @@ describe('worker-stop against a terminal we lost contact with', () => {
   afterEach(() => db.close())
 
   async function call(name: string, params: Record<string, unknown>) {
-    const method = ORCHESTRATION_METHODS.find((candidate) => candidate.name === name)
+    const method = eraseRpcMethods(ORCHESTRATION_METHODS).find(
+      (candidate) => candidate.name === name
+    )
     if (!method) {
       throw new Error(`Method not found: ${name}`)
     }
@@ -93,7 +94,6 @@ describe('worker-stop against a terminal we lost contact with', () => {
       processAction: string
       lastError: string
     }
-    // Losing contact is a reason to report honestly, never to stop trying.
     expect(closeTerminal).toHaveBeenCalledWith('term_worker')
     expect(stopped.processAction).toBe('closed_agent_terminal')
     expect(stopped.state).toBe('stop_unknown')
@@ -226,7 +226,7 @@ describe('worker-stop against a terminal we lost contact with', () => {
     const dispatch = createWorker()
     expect(db.beginWorkerStop(dispatch.id, runtime.getRuntimeId()).disposition).toBe('stopping')
 
-    expect(() => db.abandonWorkerDispatch(dispatch.id)).toThrow(
+    expect(() => db.abandonWorkerDispatch(dispatch.id, runtime.getRuntimeId())).toThrow(
       'is stopping; wait for worker-stop to settle before abandoning'
     )
     expect(db.getWorkerDispatch(dispatch.id)?.state).toBe('stopping')

@@ -16,13 +16,16 @@ export const effectiveUpstreamStatusInFlight = new Map<string, Promise<GitUpstre
 const retiredEffectiveUpstreamStatusInFlight = new Map<string, Promise<GitUpstreamStatus>>()
 
 export const effectiveUpstreamStatusWriteGeneration = new Map<string, number>()
+let writeGenerationSequence = 0
+let evictedWriteGeneration = 0
 
-// Why: tests reuse this hook, so every memoization layer resets together despite the upstream-only name.
 export function clearEffectiveUpstreamStatusCacheForTests(): void {
   effectiveUpstreamStatusCache.clear()
   effectiveUpstreamStatusInFlight.clear()
   retiredEffectiveUpstreamStatusInFlight.clear()
   effectiveUpstreamStatusWriteGeneration.clear()
+  writeGenerationSequence = 0
+  evictedWriteGeneration = 0
   invalidateGitReadCaches()
 }
 
@@ -32,6 +35,10 @@ export function getEffectiveUpstreamStatusCacheCountForTests(): number {
 
 export function getEffectiveUpstreamStatusGenerationCountForTests(): number {
   return effectiveUpstreamStatusWriteGeneration.size
+}
+
+export function getEffectiveUpstreamStatusWriteGeneration(cacheKey: string): number {
+  return effectiveUpstreamStatusWriteGeneration.get(cacheKey) ?? evictedWriteGeneration
 }
 
 export function getEffectiveUpstreamStatusCacheKey(
@@ -59,10 +66,7 @@ export function clearEffectiveUpstreamNegativeStatusCache(identity: {
   effectiveUpstreamStatusCache.delete(cacheKey)
   effectiveUpstreamStatusInFlight.delete(cacheKey)
   resolvedUpstreamNameCache.delete(cacheKey)
-  effectiveUpstreamStatusWriteGeneration.set(
-    cacheKey,
-    (effectiveUpstreamStatusWriteGeneration.get(cacheKey) ?? 0) + 1
-  )
+  effectiveUpstreamStatusWriteGeneration.set(cacheKey, ++writeGenerationSequence)
 }
 
 function retireEffectiveUpstreamStatusProbe(cacheKey: string): void {
@@ -98,6 +102,10 @@ export function trimEffectiveUpstreamStatusGeneration(): void {
     if (hasPendingEffectiveUpstreamStatusProbe(cacheKey)) {
       continue
     }
+    evictedWriteGeneration = Math.max(
+      evictedWriteGeneration,
+      effectiveUpstreamStatusWriteGeneration.get(cacheKey) ?? 0
+    )
     effectiveUpstreamStatusWriteGeneration.delete(cacheKey)
   }
 }
@@ -124,20 +132,23 @@ export function rememberEffectiveUpstreamStatus(
   probedSameNameOriginRef: boolean,
   writeGeneration: number
 ): void {
-  // Why: hasConfiguredPushTarget gates a write action; re-probe each poll rather than cache a stale positive.
+  // Positive state gates writes; probe each poll instead of caching stale permission to push.
   if (status.hasUpstream || status.hasConfiguredPushTarget) {
     effectiveUpstreamStatusCache.delete(cacheKey)
-    effectiveUpstreamStatusWriteGeneration.set(cacheKey, writeGeneration + 1)
+    effectiveUpstreamStatusWriteGeneration.set(cacheKey, ++writeGenerationSequence)
     trimEffectiveUpstreamStatusGeneration()
     return
   }
-  if ((effectiveUpstreamStatusWriteGeneration.get(cacheKey) ?? 0) !== writeGeneration) {
+  if (
+    (effectiveUpstreamStatusWriteGeneration.get(cacheKey) ?? evictedWriteGeneration) !==
+    writeGeneration
+  ) {
     return
   }
   if (!probedSameNameOriginRef) {
     return
   }
-  // Why: cache the negative so a stable no-upstream branch doesn't re-probe every poll (TTL lets push/fetch refs appear).
+  // Cache negative state briefly to avoid repeated probes while allowing new refs to appear.
   effectiveUpstreamStatusCache.set(cacheKey, {
     status,
     expiresAt: now + EFFECTIVE_UPSTREAM_NEGATIVE_CACHE_TTL_MS
@@ -148,6 +159,10 @@ export function rememberEffectiveUpstreamStatus(
       break
     }
     effectiveUpstreamStatusCache.delete(oldest.value)
+    evictedWriteGeneration = Math.max(
+      evictedWriteGeneration,
+      effectiveUpstreamStatusWriteGeneration.get(oldest.value) ?? 0
+    )
     effectiveUpstreamStatusWriteGeneration.delete(oldest.value)
   }
   trimEffectiveUpstreamStatusGeneration()

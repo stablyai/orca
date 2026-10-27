@@ -1,0 +1,86 @@
+{
+  "id": "codex",
+  "engineVersion": 1,
+  "profile": { "screenSource": "live", "hooks": "turn-end" },
+  "anchors": [
+    {
+      "id": "plan_implement_menu",
+      "why": "A Plan-mode turn ends in this menu after Codex's Stop hook fired, and it owns the keyboard, so text sent to the pane picks a choice. Codex paints it by cell diff, which drops spaces from the text copy, and leaves it in the tail once answered, so the key row must end the tail.",
+      "when": {
+        "region": "text",
+        "find": { "lastOf": "implement this plan?" },
+        "after": {
+          "all": [
+            { "regex": "no,\\s*stay\\s*in\\s*plan\\s*mode" },
+            { "regex": "enter\\s*select\\s*·\\s*esc\\s*back\\s*$" }
+          ]
+        }
+      },
+      "answer": { "state": "blocked", "reason": "agent-interactive-prompt" }
+    },
+    {
+      "id": "ready_header",
+      "why": "The startup header with its model and directory labels is the stable ready text across versions; Codex prints permissions only in YOLO mode. Its last occurrence counts, so a header repainted after a dialog proves the dialog was answered.",
+      "when": {
+        "region": "text",
+        "find": { "lastOf": "openai codex" },
+        "after": { "all": [{ "contains": "model:" }, { "contains": "directory:" }] }
+      },
+      "answer": { "state": "idle" }
+    },
+    {
+      "id": "header",
+      "why": "Codex repaints its whole screen, header included, once a startup dialog closes, and no dialog draws the header. 0.158's header has no labels, so the header alone proves an earlier dialog was answered, but not that Codex is ready.",
+      "when": { "region": "text", "find": { "lastOf": "openai codex (v" } },
+      "answer": { "state": "live" }
+    },
+    {
+      "id": "provisional_startup",
+      "why": "0.157 paints a provisional header (`model: loading`) while its daemon starts and discards input typed behind it, so no ready text may settle a wait until the live chat paints a footer row, each of which draws a `·`. Read from the text because 0.157 leaves its alternate screen while the daemon starts; a later model repaint rewrites only the value, never the label.",
+      "when": {
+        "region": "text",
+        "find": { "lastOf": "openai codex" },
+        "after": {
+          "all": [{ "regex": "model:\\s+loading" }],
+          "none": [{ "regex": "model:\\s+loading[\\s\\S]*·" }]
+        }
+      },
+      "answer": { "state": "hold" }
+    }
+  ],
+  "rules": [
+    {
+      "id": "header_ready",
+      "why": "The 0.150-0.157 header, loaded and with no blocker below it, read from the live screen because Codex repaints it by cell diff, which only a grid reassembles. Quiet because the header stays painted through a turn.",
+      "priority": 500,
+      "when": { "region": "screen", "predicate": "codex-header-ready" },
+      "answer": { "state": "idle", "strength": "strong", "requiresQuiet": true }
+    },
+    {
+      "id": "composer_ready",
+      "why": "The empty composer with no busy status row above it: 0.158 dropped the header labels and a long session scrolls the header away, so this is the version-stable rest screen. Quiet because Codex keeps the composer painted mid-turn, and skipped without an output clock, where nothing could tell a running turn apart.",
+      "priority": 500,
+      "when": { "region": "screen", "predicate": "codex-composer-ready" },
+      "answer": {
+        "state": "idle",
+        "strength": "strong",
+        "requiresQuiet": true,
+        "withoutClock": "skip"
+      }
+    },
+    {
+      "id": "text_header_ready",
+      "why": "The ready header in the text tail, settled. Quiet because it stays in the tail through a turn; an idle Codex titles its pane with its cwd, so no title says it is at rest.",
+      "priority": 500,
+      "when": { "region": "text", "anchor": "ready_header" },
+      "answer": { "state": "idle", "strength": "strong", "requiresQuiet": true }
+    },
+    {
+      "id": "idle_title",
+      "why": "A shell auto-title names Codex from launch, over a startup dialog or a busy turn alike, while its hooks drive an explicit `Codex ready` title at rest, so a bare name counts only once quiet (#6011).",
+      "priority": 100,
+      "when": { "region": "title", "status": "idle" },
+      "answer": { "state": "idle", "strength": "weak", "requiresQuiet": true }
+    }
+  ]
+}

@@ -41,6 +41,7 @@ vi.mock('child_process', async () => {
 })
 
 import { main } from './index'
+import { COMMAND_SPECS } from './specs'
 import { okFixture, queueFixtures } from './test-fixtures'
 import { pairRuntimeEnvironment, useWorktreeAwarenessEnvironment } from './index-test-harness'
 
@@ -71,9 +72,6 @@ describe('omittedHostIds selector annotation', () => {
   })
 
   it('marks a stale runtime host that no caller can select', async () => {
-    // Why: `omittedHostIds` is built from the runtime's own bookkeeping, so it names `runtime:`
-    // ids for servers that are no longer paired. An agent looping over the list to complete a
-    // partial listing hard-errors on those — 6 of 9 in the recorded QA run.
     pairRuntimeEnvironment(listEnvironmentsMock, 'env-paired', 'm4air')
     queueFixtures(
       callMock,
@@ -125,32 +123,70 @@ describe('omittedHostIds selector annotation', () => {
     expect(printed).toContain('runtime:env-retired (not selectable from this machine)')
   })
 
-  it('resolves an omitted SSH host against the targets the runtime actually knows', async () => {
-    listEnvironmentsMock.mockReturnValue([])
+  it.each([
+    ['terminal', 'list', 'req_terminal_list', { terminals: [TERMINAL_ROW] }],
+    ['worktree', 'list', 'req_worktree_list', { worktrees: [] }],
+    ['worktree', 'ps', 'req_worktree_ps', { worktrees: [] }]
+  ] as const)(
+    'only suggests flags that `%s %s` accepts',
+    async (group, action, requestId, rows) => {
+      pairRuntimeEnvironment(listEnvironmentsMock, 'env-paired', 'm4air')
+      queueFixtures(
+        callMock,
+        okFixture(requestId, {
+          ...rows,
+          totalCount: 1,
+          truncated: false,
+          hostScope: {
+            hostIds: [],
+            omittedHostIds: ['local', 'runtime:env-paired', 'ssh:box-1']
+          }
+        })
+      )
+      const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
+
+      await main([group, action, '--json'], '/tmp/repo')
+
+      const printed = JSON.parse(String(logSpy.mock.calls[0]?.[0]))
+      expect(printed.result.hostScope.omittedHostSelectors).toEqual([
+        { hostId: 'local', selector: null },
+        { hostId: 'runtime:env-paired', selector: '--environment m4air' },
+        { hostId: 'ssh:box-1', selector: null }
+      ])
+      const spec = COMMAND_SPECS.find(
+        (candidate) => candidate.path.join(' ') === `${group} ${action}`
+      )
+      for (const { selector } of printed.result.hostScope.omittedHostSelectors) {
+        if (selector) {
+          expect(spec?.allowedFlags).toContain(selector.split(' ')[0].replace(/^--/, ''))
+        }
+      }
+      // SSH hosts are reached through the answering runtime, without another target lookup.
+      expect(callMock).toHaveBeenCalledTimes(1)
+    }
+  )
+
+  it('says this runtime reaches an omitted local or SSH host in the human listing', async () => {
     queueFixtures(
       callMock,
       okFixture('req_terminal_list', {
         terminals: [TERMINAL_ROW],
         totalCount: 1,
         truncated: false,
-        hostScope: { hostIds: ['local'], omittedHostIds: ['ssh:box-1', 'ssh:box-gone'] }
-      }),
-      okFixture('req_ssh_targets', { targets: [{ id: 'box-1', label: 'openclaw' }] })
+        hostScope: { hostIds: [], omittedHostIds: ['local', 'ssh:box-1'] }
+      })
     )
     const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
 
-    await main(['terminal', 'list', '--json'], '/tmp/repo')
+    await main(['terminal', 'list'], '/tmp/repo')
 
-    const printed = JSON.parse(String(logSpy.mock.calls[0]?.[0]))
-    expect(printed.result.hostScope.omittedHostSelectors).toEqual([
-      { hostId: 'ssh:box-1', selector: '--host ssh:box-1' },
-      { hostId: 'ssh:box-gone', selector: null }
-    ])
+    const printed = String(logSpy.mock.calls[0]?.[0])
+    expect(printed).toContain('local (reached through this runtime; no flag selects it)')
+    expect(printed).toContain('ssh:box-1 (reached through this runtime; no flag selects it)')
+    expect(printed).not.toContain('--host')
   })
 
   it('never keeps a host id out of omittedHostIds', async () => {
-    // Why: filtering the unreachable ones would shrink what the listing admits it did not cover.
-    // The gap is real whether or not this machine can name the host that owns it.
     listEnvironmentsMock.mockReturnValue([])
     queueFixtures(
       callMock,
@@ -179,11 +215,24 @@ describe('omittedHostIds selector annotation', () => {
         hostScope: { hostIds: ['local'], omittedHostIds: [] }
       })
     )
-    vi.spyOn(console, 'log').mockImplementation(() => {})
+    const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
 
     await main(['terminal', 'list', '--json'], '/tmp/repo')
 
-    expect(callMock).toHaveBeenCalledTimes(1)
+    expect(callMock).toHaveBeenCalledExactlyOnceWith('terminal.list', {
+      worktree: undefined,
+      limit: undefined,
+      includeVisualLayouts: false
+    })
+    expect(JSON.parse(String(logSpy.mock.calls[0]?.[0]))).toMatchObject({
+      ok: true,
+      result: {
+        terminals: [TERMINAL_ROW],
+        totalCount: 1,
+        truncated: false,
+        hostScope: { hostIds: ['local'], omittedHostIds: [] }
+      }
+    })
   })
 })
 

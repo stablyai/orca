@@ -7,8 +7,7 @@ import { gitExecFileAsync } from '../runner'
 import { runWithGitReadCacheInvalidation } from './git-read-cache-invalidation'
 import { resolveGitDir } from './resolve-git-dir'
 
-// Why: the git-status → existsSync race can miss a transient HEAD; fall back to 'unknown' for one poll cycle.
-// Why: detect rebase from rebase-merge/ or rebase-apply/ dirs (persist all steps), not REBASE_HEAD (partial, lingers → stale badge).
+// HEAD detection races may yield unknown for one poll; rebase directories persist more reliably than REBASE_HEAD.
 export async function detectConflictOperation(
   worktreePath: string,
   options: Pick<GitRuntimeOptions, 'wslDistro'> = {}
@@ -19,8 +18,7 @@ export async function detectConflictOperation(
   const rebaseMergeDir = path.join(gitDir, 'rebase-merge')
   const rebaseApplyDir = path.join(gitDir, 'rebase-apply')
 
-  // Why async and concurrent: this runs on every status poll, and on a WSL/UNC git dir each
-  // probe is a 9p round trip — four of them synchronously blocked the Electron main thread.
+  // Probe concurrently without blocking main: each WSL/UNC path can cost a 9p round trip.
   const [hasMergeHead, hasCherryPickHead, hasRebaseMergeDir, hasRebaseApplyDir] = await Promise.all(
     [mergeHead, cherryPickHead, rebaseMergeDir, rebaseApplyDir].map(pathExists)
   )
@@ -38,7 +36,7 @@ export async function detectConflictOperation(
   return 'unknown'
 }
 
-/** Mirrors existsSync: any failure to reach the path reads as absent, never as a throw. */
+/** Treat inaccessible paths as absent without throwing. */
 async function pathExists(target: string): Promise<boolean> {
   try {
     await access(target)

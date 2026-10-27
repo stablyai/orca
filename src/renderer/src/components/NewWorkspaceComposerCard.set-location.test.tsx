@@ -25,7 +25,8 @@ vi.mock('@/store', () => ({
         activeModal: 'new-workspace-composer',
         settings: { defaultTuiAgent: null, disabledTuiAgents: [] },
         updateSettings: vi.fn(),
-        projects: [],
+        endpointProjects: [],
+        endpointProjectHostSetups: [],
         repos: []
       }),
     { getState: () => ({}) }
@@ -110,7 +111,7 @@ describe('NewWorkspaceComposerCard set location', () => {
     container = null
   })
 
-  // Async because the dialog is a lazy chunk: the click mounts Suspense, the chunk resolves next tick.
+  // Flush lazy resolution; the click mounts Suspense before the chunk arrives.
   it('opens set-location over the composer without leaving the create dialog', async () => {
     const nestedOpenChanges: boolean[] = []
     container = await renderCard({
@@ -136,8 +137,7 @@ describe('NewWorkspaceComposerCard set location', () => {
     expect(storeMocks.openSettingsPage).not.toHaveBeenCalled()
   })
 
-  // Async for the same reason: without the flush this only passes when an earlier
-  // test in this file already resolved the shared lazy chunk.
+  // Flush independently so this test cannot rely on an earlier test warming the chunk.
   it('closes the nested dialog before publishing the ready run target', async () => {
     const nestedOpenChanges: boolean[] = []
     const setupChanges: string[] = []

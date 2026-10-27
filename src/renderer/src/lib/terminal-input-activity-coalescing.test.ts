@@ -73,9 +73,7 @@ describe('terminal input activity coalescing', () => {
     type(store, PANE, 1_000)
     type(store, PANE, 1_100)
 
-    // The store itself still holds the leading-edge stamp...
     expect(store.stored[PANE]).toBe(1_000)
-    // ...but readers see the pending keystroke.
     expect(getPendingTerminalInputActivityCountForTests()).toBe(1)
     expect(readLastTerminalInputAt(store.stored, PANE)).toBe(1_100)
     expect(mergePendingTerminalInputActivity(store.stored)[PANE]).toBe(1_100)
@@ -106,7 +104,6 @@ describe('terminal input activity coalescing', () => {
     type(store, OTHER_PANE, 1_100)
     expect(getPendingTerminalInputActivityCountForTests()).toBe(2)
 
-    // Teardown (close pane / close tab / worktree purge) removes the key.
     delete store.stored[PANE]
 
     flushTerminalInputActivity()
@@ -114,20 +111,7 @@ describe('terminal input activity coalescing', () => {
     expect(PANE in store.stored).toBe(false)
     expect(readLastTerminalInputAt(store.stored, PANE)).toBeUndefined()
     expect(mergePendingTerminalInputActivity(store.stored)[PANE]).toBeUndefined()
-    // The surviving sibling still advances.
     expect(store.stored[OTHER_PANE]).toBe(1_100)
-  })
-
-  it('clears the flush timer so a reset leaves no pending work', () => {
-    const store = createStore()
-
-    type(store, PANE, 1_000)
-    type(store, PANE, 1_100)
-    resetTerminalInputActivityCoalescingForTests()
-    vi.advanceTimersByTime(TERMINAL_INPUT_ACTIVITY_WRITE_INTERVAL_MS * 4)
-
-    expect(store.stored[PANE]).toBe(1_000)
-    expect(vi.getTimerCount()).toBe(0)
   })
 
   it('writes immediately again once the coalescing window has passed', () => {

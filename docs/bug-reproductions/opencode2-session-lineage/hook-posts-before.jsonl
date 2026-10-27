@@ -1,0 +1,7 @@
+{"t":1790145632961,"path":"/hook/opencode2","payload":{"hook_event_name":"SessionStart","sessionID":"ses_f33016571ffenJDTLmPcLATavv"}}
+{"t":1790145632978,"path":"/hook/opencode2","payload":{"hook_event_name":"MessagePart","role":"user","text":"Use your task tool to spawn exactly one subagent. Give that subagent this instruction: run the shell command 'echo hello-from-subagent' and report its output. Do not run the command yourself; you must delegate it. When the subagent returns, reply with just its output.","messageID":"msg_0ccfe9a8f001QOK3S43JBuKODf","sessionID":"ses_f33016571ffenJDTLmPcLATavv"}}
+{"t":1790145633014,"path":"/hook/opencode2","payload":{"hook_event_name":"SessionBusy","sessionID":"ses_f33016571ffenJDTLmPcLATavv"}}
+{"t":1790145637796,"path":"/hook/opencode2","payload":{"hook_event_name":"SessionBusy","sessionID":"ses_f330152d1ffer9a1SCLERqCLv8"}}
+{"t":1790145640105,"path":"/hook/opencode2","payload":{"hook_event_name":"SessionBusy","sessionID":"ses_f33016571ffenJDTLmPcLATavv"}}
+{"t":1790145641557,"path":"/hook/opencode2","payload":{"hook_event_name":"MessagePart","role":"assistant","text":"hello-from-subagent","messageID":"msg_0ccfeb695001yjXsR63opaMap9","sessionID":"ses_f33016571ffenJDTLmPcLATavv"}}
+{"t":1790145641574,"path":"/hook/opencode2","payload":{"hook_event_name":"SessionIdle","sessionID":"ses_f33016571ffenJDTLmPcLATavv"}}

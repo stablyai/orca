@@ -1,0 +1,12 @@
+[?2026$p[?2027$p[>4m[=0;1u[?1049h[?25l[?5W[?2004h[>4;2m[=1;1u[?u[H[2J[38;2;224;175;104;1mAccessing workspace:[m
+
+[1m/private/tmp/agy-trust-scratch-77950[m
+
+Do you trust the contents of this project?
+
+[38;2;66;133;244mAntigravity CLI[m requires permission to read, edit, and execute files here.
+
+[38;2;122;162;247m> Yes, I trust this folder[m
+  [38;2;154;165;206mNo, exit[m
+
+  [38;2;122;162;247;1m↑/↓[38;2;154;165;206;22m Navigate · [38;2;122;162;247;1menter[38;2;154;165;206;22m Confirm[m[13;99H[38;2;154;165;206mGemini 3.7 Flash · low[m[>4m[=0;1u[40d[?1049l[?25h[?2004l

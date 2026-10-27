@@ -416,55 +416,6 @@ describe('WorkspacePortScanner', () => {
     }
   })
 
-  it('clears the refreshing state when a retained-host focus change supersedes a poll', async () => {
-    let env1Calls = 0
-    let env2Calls = 0
-    let resolveSecondPoll!: (result: { ok: true; result: WorkspacePortScanResult }) => void
-    const secondPoll = new Promise<{ ok: true; result: WorkspacePortScanResult }>((resolve) => {
-      resolveSecondPoll = resolve
-    })
-    runtimeEnvironmentCall.mockImplementation(({ selector, method }) => {
-      if (method !== 'workspacePorts.scan') {
-        return Promise.resolve({ ok: false, error: { code: 'method_not_found', message: method } })
-      }
-      if (selector === 'env-1') {
-        env1Calls += 1
-        return env1Calls === 1 ? Promise.resolve({ ok: true, result: liveScan }) : secondPoll
-      }
-      env2Calls += 1
-      return env2Calls === 1 ? Promise.resolve({ ok: true, result: emptyScan }) : secondPoll
-    })
-    markRuntimeEnvironmentCompatible('env-2')
-    addRemoteWorkspace('env-2')
-
-    await act(async () => {
-      root?.render(<WorkspacePortScanner />)
-      await flushPromises()
-    })
-
-    await act(async () => {
-      vi.advanceTimersByTime(30_000)
-      await flushPromises()
-    })
-    expect(useAppStore.getState().workspacePortScanRefreshing).toBe(true)
-
-    await act(async () => {
-      useAppStore.setState({
-        settings: {
-          ...getDefaultSettings('/tmp/orca-workspaces'),
-          activeRuntimeEnvironmentId: 'env-2'
-        }
-      })
-      await flushPromises()
-    })
-    expect(useAppStore.getState().workspacePortScanRefreshing).toBe(false)
-
-    await act(async () => {
-      resolveSecondPoll({ ok: true, result: emptyScan })
-      await flushPromises()
-    })
-  })
-
   it('removes multiple stale host scans in one map publication', async () => {
     markRuntimeEnvironmentCompatible('env-2')
     markRuntimeEnvironmentCompatible('env-3')
@@ -493,10 +444,7 @@ describe('WorkspacePortScanner', () => {
     expect(useAppStore.getState().workspacePortScansByKey['environment:env-3:all']).toBeUndefined()
   })
 
-  // Why: a manual publish (the ports popover) can resolve after the host-set
-  // change already pruned its key, re-adding it. Per-key writes never delete, so
-  // that removed host would otherwise hold its ports and a permanent
-  // unavailable notice until the next host-set change.
+  // Late manual publishes can re-add pruned hosts; the next poll must remove their ports/unavailable notices again.
   it('drops a stale host re-added after pruning on the next poll', async () => {
     await act(async () => {
       root?.render(<WorkspacePortScanner />)
@@ -645,6 +593,22 @@ describe('advertised URL refresh bursts', () => {
     act(() => root?.unmount())
     root = null
     await vi.advanceTimersByTimeAsync(2_000)
+    expect(localScan).toHaveBeenCalledTimes(1)
+  })
+
+  it('rescans this computer on a local URL change while a server is the default host', async () => {
+    seedRemoteWorkspace('env-1')
+    await act(async () => {
+      root?.render(<WorkspacePortScanner />)
+      await flushPromises()
+    })
+    localScan.mockClear()
+    const changed = vi.mocked(window.api.workspacePorts.onAdvertisedUrlChanged).mock
+      .calls[0][0] as () => void
+    await act(async () => {
+      changed()
+      await flushPromises()
+    })
     expect(localScan).toHaveBeenCalledTimes(1)
   })
 

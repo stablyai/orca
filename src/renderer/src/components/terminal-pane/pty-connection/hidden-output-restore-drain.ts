@@ -1,17 +1,17 @@
+import { isRemoteRuntimePtyId } from '../../../../../shared/remote-runtime/remote-runtime-pty-id'
 import { recordTerminalFreezeBreadcrumb } from '../terminal-freeze-breadcrumbs'
 import { redactPtyIdForDiagnostics } from '../../../../../shared/pty-delivery-diagnostics'
-import { RESET_AFTER_BYTE_GAP } from '../../../../../shared/terminal-mode-reset-profiles'
 import { cancelScheduledHiddenOutputRestore } from '../hidden-output-restore-scheduler'
-import { isRemoteExecutionHostPtyId } from '../remote-execution-host-pty'
+import { isRemoteExecutionHostPtyId } from '../../../../../shared/remote-execution-host-pty-id'
 
 import {
   HIDDEN_OUTPUT_RESTORE_FOREGROUND_TIMEOUT_MS,
   HIDDEN_OUTPUT_RESTORE_REMOTE_REARM_MAX
 } from './hidden-output-restore-limits'
 import { shouldWritePtyOutputForeground } from './foreground-output-scan'
-import { isRemoteRuntimePtyId } from './paired-parked-terminal-restore'
 
 import type { ConnectPanePtySession } from './connect-pane-pty-session'
+import type { PendingHiddenOutputRestoreChunk } from './pending-hidden-output-restore-chunk'
 
 export function bindHiddenOutputRestoreDrain(session: ConnectPanePtySession): void {
   // 'drained' = painted all queued bytes; 'overflow' = queue blew its cap (stream outran fetch+replay); 'refetch' = offsets unmappable, need a fresher snapshot.
@@ -129,27 +129,33 @@ export function bindHiddenOutputRestoreDrain(session: ConnectPanePtySession): vo
       ) {
         return
       }
-      // A fetched snapshot plus live overflow is backpressure, not unavailable recovery. The
-      // replay paints synchronously before it awaits its fit, so this deadline never lands
-      // mid-paint: adopt that painted image as the baseline — the overflow abandon below
-      // returns before arming one, and without it main's ACK backlog repaints as duplicates.
-      const replayed = session.hiddenOutputRestorePendingOverflow
-        ? session.hiddenOutputRestoreReplayingSnapshot
-        : null
+      // A painted snapshot awaiting fit proves recovery answered, regardless of live queue size.
+      const replayed = session.hiddenOutputRestoreReplayingSnapshot
+      let preserveReplayState = false
       if (replayed) {
         session.setRestoredSnapshotBaseline(ptyId, replayed, replayed.paintsContent === true)
-        session.noteHiddenOutputRestoreFloodBackpressure()
+        const needsRepaint =
+          session.hiddenOutputRestorePendingOverflow ||
+          session.hiddenOutputRestoreFreshSnapshotNeeded ||
+          (session.hiddenOutputRestoreUnhideSeq !== null &&
+            replayed.seq < session.hiddenOutputRestoreUnhideSeq) ||
+          session.hiddenOutputRestorePendingChunks.some(
+            (chunk: PendingHiddenOutputRestoreChunk) =>
+              session.getChunkDataAfterSnapshot(chunk, replayed.seq) === null
+          )
+        preserveReplayState = !needsRepaint
+        if (needsRepaint) {
+          session.noteHiddenOutputRestoreFloodBackpressure()
+        }
       }
       session.abandonHiddenOutputRestoreAndDrainPendingForeground(ptyId, {
-        quiet: replayed !== null
+        quiet: replayed !== null,
+        preserveReplayState
       })
     }, HIDDEN_OUTPUT_RESTORE_FOREGROUND_TIMEOUT_MS)
   }
 
-  // Trades the loss banner for one bounded post-suppression repaint from whatever
-  // answers for this PTY — the paired runtime's own buffer, or main's model of the
-  // direct-SSH stream. Ordered before the state reset so the repaint timer arms
-  // against the live ptyId (mirrors the flood-abandon call sites).
+  // Arm one quiet host/main repaint before resetting the PTY ID, matching other flood-abandon paths.
   session.rearmRemoteHiddenOutputRestoreInsteadOfWarning = function (
     ptyId: string,
     reason: string
@@ -158,11 +164,7 @@ export function bindHiddenOutputRestoreDrain(session: ConnectPanePtySession): vo
       return false
     }
     if (session.hiddenOutputRestoreRemoteAbandonCycles >= HIDDEN_OUTPUT_RESTORE_REMOTE_REARM_MAX) {
-      // Why the reset: the budget bounds ONE stall, and returning false ends that
-      // stall with the loss banner. Without this, the counter only ever clears on a
-      // successful snapshot or a PTY change, so a single ~10s outage leaves a
-      // long-lived SSH pane at zero tolerance — every later hidden episode banners
-      // on the first null even though that null is still only `unverifiable`.
+      // Reset budgets after disclosed stalls so one outage cannot make every later unverifiable snapshot immediately banner.
       session.hiddenOutputRestoreRemoteAbandonCycles = 0
       return false
     }
@@ -173,7 +175,7 @@ export function bindHiddenOutputRestoreDrain(session: ConnectPanePtySession): vo
       cycle: session.hiddenOutputRestoreRemoteAbandonCycles
     })
     session.noteHiddenOutputRestoreFloodBackpressure()
-    session.writePtyOutputToXterm(RESET_AFTER_BYTE_GAP, true)
+    session.writeAbandonedRestoreGap()
     return true
   }
 }

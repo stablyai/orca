@@ -10,6 +10,7 @@ import { runWithGitReadCacheInvalidation } from './status'
 import { invalidateWslLinkedWorktreeGitRouting } from './wsl-linked-worktree-git-routing'
 import {
   getLocalBaseRefUpdateSuggestionForWorktreeCreate,
+  parseRemoteTrackingLocalBaseRef,
   refreshLocalBaseRefForWorktreeCreate
 } from './worktree-base-refresh'
 import { resolveWorktreeBaseCommitOid } from './worktree-base-ref-probe'
@@ -20,32 +21,46 @@ import type {
 } from './worktree-operation-options'
 import { gitExecOptions, resolveWorktreeAddTimeoutMs } from './worktree-operation-options'
 import { bumpWorktreeScanGeneration } from './worktree-scan-cache'
+import { assertNoPendingWorktreeRemovalConflict } from '../worktree-removal-table'
+import { createWorktreeCheckoutProgressReader } from './worktree-checkout-progress'
 
-export type WorktreeAddBaseContext = AddWorktreeResult & {
+export type WorktreeAddBaseContext = Pick<AddWorktreeResult, 'localBaseRefUpdateSuggestion'> & {
   effectiveBase: string
   effectiveBaseOid?: string
+  /** Never rejects; refresh can overlap creation from the remote-tracking commit. */
+  pendingLocalBaseRefRefresh?: Promise<LocalBaseRefRefreshResult | undefined>
 }
 
 export async function resolveWorktreeAddBaseContext(
   repoPath: string,
   baseBranch: string,
   refreshLocalBaseRef: boolean,
-  options: AddWorktreeOptions
+  options: AddWorktreeOptions,
+  createdBranch: string
 ): Promise<WorktreeAddBaseContext> {
   let effectiveBaseOid: string | null = null
   const effectiveBase = await resolveWorktreeAddBaseRef(baseBranch, async (qualifiedRef) => {
     effectiveBaseOid = await resolveWorktreeBaseCommitOid(repoPath, qualifiedRef, options)
     return effectiveBaseOid !== null
   })
-  const localBaseRefRefresh = refreshLocalBaseRef
-    ? await refreshLocalBaseRefForWorktreeCreate(
-        repoPath,
-        baseBranch,
-        effectiveBase,
-        options.remoteTrackingBase,
-        options
-      )
-    : undefined
+  // -b rejects existing branches; refreshing the branch it creates would race its own ref write.
+  const createsLocalBaseBranch =
+    parseRemoteTrackingLocalBaseRef(baseBranch, effectiveBase, options.remoteTrackingBase)
+      ?.localBranch === createdBranch
+  const pendingLocalBaseRefRefresh =
+    refreshLocalBaseRef && !createsLocalBaseBranch
+      ? refreshLocalBaseRefForWorktreeCreate(
+          repoPath,
+          baseBranch,
+          effectiveBase,
+          options.remoteTrackingBase,
+          options
+        ).catch((error: unknown) => {
+          // An advisory refresh must not fail a checkout that may already have succeeded.
+          console.warn('addWorktree: local base ref refresh failed unexpectedly', error)
+          return undefined
+        })
+      : undefined
   const localBaseRefUpdateSuggestion =
     !refreshLocalBaseRef && options.suggestLocalBaseRefUpdate
       ? await getLocalBaseRefUpdateSuggestionForWorktreeCreate(
@@ -62,7 +77,7 @@ export async function resolveWorktreeAddBaseContext(
     ...(!refreshLocalBaseRef && !options.suggestLocalBaseRefUpdate && effectiveBaseOid
       ? { effectiveBaseOid }
       : {}),
-    ...(localBaseRefRefresh ? { localBaseRefRefresh } : {}),
+    ...(pendingLocalBaseRefRefresh ? { pendingLocalBaseRefRefresh } : {}),
     ...(localBaseRefUpdateSuggestion ? { localBaseRefUpdateSuggestion } : {})
   }
 }
@@ -81,7 +96,7 @@ export async function persistWorktreeCreationBase(
   } catch (error) {
     console.warn(`addWorktree: failed to set ${configKey} for ${worktreePath}`, error)
     try {
-      // Why: reused branch names may carry stale base metadata; if replacement fails, unset it so consumers don't trust stale lineage.
+      // Clear stale lineage if replacing reused branch metadata fails.
       await gitExecFileAsync(['config', '--local', '--unset-all', configKey], {
         ...gitExecOptions(worktreePath, options)
       })
@@ -99,7 +114,7 @@ export async function configurePushAutoSetupRemote(
   options: GitWorktreeExecOptions
 ): Promise<void> {
   try {
-    // Why: `--get` (not `--local --get`) treats a value at any scope as an explicit user choice.
+    // Honor explicit config at any scope.
     let alreadySet = false
     try {
       await gitExecFileAsync(['config', '--get', 'push.autoSetupRemote'], {
@@ -132,21 +147,39 @@ export async function unsetWorktreeCreationBase(
     await gitExecFileAsync(['config', '--local', '--unset-all', `branch.${branch}.base`], {
       ...gitExecOptions(worktreePath, options)
     })
-  } catch {
-    // Best-effort cleanup; leave the original sparse-setup error as the actionable failure.
+  } catch {}
+}
+
+/** Track a same-name remote base; other newly created branches stay untracked. */
+export async function trackSameNameRemoteBase(
+  worktreePath: string,
+  branch: string,
+  baseBranch: string,
+  effectiveBase: string,
+  options: AddWorktreeOptions
+): Promise<void> {
+  if (!effectiveBase.startsWith('refs/remotes/')) {
+    return
+  }
+  const parsed = parseRemoteTrackingLocalBaseRef(
+    baseBranch,
+    effectiveBase,
+    options.remoteTrackingBase
+  )
+  if (parsed?.localBranch !== branch) {
+    return
+  }
+  try {
+    // Git 1.8+ resolves slash-containing remote names via fetch refspecs without another probe.
+    await gitExecFileAsync(['branch', '--set-upstream-to', effectiveBase, branch], {
+      ...gitExecOptions(worktreePath, options)
+    })
+  } catch (error) {
+    console.warn(`addWorktree: failed to track ${effectiveBase} for ${branch}`, error)
   }
 }
 
-/**
- * Create a new worktree.
- * @param repoPath - Path to the main repo (or bare repo)
- * @param worktreePath - Absolute path where the worktree will be created
- * @param branch - Branch name for the new worktree
- * @param baseBranch - Optional base branch to create from (defaults to HEAD)
- * @remarks Side effects (best-effort, warn-only): passes `--no-track`, writes
- * `branch.<branch>.base` for new-branch worktrees with a base ref, and may
- * write `push.autoSetupRemote=true` to the repo's shared config.
- */
+/** Create a worktree; new branches record base lineage and may enable repo-wide push.autoSetupRemote. */
 export async function addWorktree(
   repoPath: string,
   worktreePath: string,
@@ -184,59 +217,68 @@ async function performAddWorktree(
   noCheckout = false,
   options: AddWorktreeOptions = {}
 ): Promise<AddWorktreeResult> {
-  let localBaseRefRefresh: LocalBaseRefRefreshResult | undefined
+  // Wait for background removal ownership to end before reusing its path or branch.
+  assertNoPendingWorktreeRemovalConflict(repoPath, { worktreePath, branch })
+  let pendingLocalBaseRefRefresh: Promise<LocalBaseRefRefreshResult | undefined> | undefined
   let localBaseRefUpdateSuggestion: LocalBaseRefUpdateSuggestion | undefined
-  // Why: enable long paths for this Windows checkout without changing user Git config.
   const args = [...windowsLongPathGitArgs(repoPath), 'worktree', 'add']
   let effectiveBase: string | undefined
   if (noCheckout) {
     args.push('--no-checkout')
   }
   if (options.checkoutExistingBranch) {
-    // Why: -b would create a new branch instead of checking out the selected one.
     args.push(worktreePath, branch)
   } else {
-    // Why: --no-track avoids inheriting the base's upstream so `git status` won't misreport "behind by N" pre-publish; first push sets it (see push.autoSetupRemote below).
+    // Avoid inheriting the base's upstream; same-name remote bases are tracked explicitly afterward.
     args.push('--no-track', '-b', branch, worktreePath)
     if (baseBranch) {
       const baseContext = await resolveWorktreeAddBaseContext(
         repoPath,
         baseBranch,
         refreshLocalBaseRef,
-        options
+        options,
+        branch
       )
       effectiveBase = baseContext.effectiveBase
-      localBaseRefRefresh = baseContext.localBaseRefRefresh
+      pendingLocalBaseRefRefresh = baseContext.pendingLocalBaseRefRefresh
       localBaseRefUpdateSuggestion = baseContext.localBaseRefUpdateSuggestion
       args.push(effectiveBase)
     }
   }
+  // Read Git's existing stderr meter without requesting extra progress output.
+  const checkoutProgress =
+    options.onCheckoutProgress && !noCheckout
+      ? createWorktreeCheckoutProgressReader(options.onCheckoutProgress)
+      : null
   try {
     await gitExecFileAsync(args, {
       ...gitExecOptions(repoPath, options),
-      // Why: resolve per call — hoisting this to a module const would freeze the override at import.
-      timeout: resolveWorktreeAddTimeoutMs()
+      // Resolve per call so later environment overrides take effect.
+      timeout: resolveWorktreeAddTimeoutMs(),
+      ...(checkoutProgress ? { onStderr: checkoutProgress.read } : {})
     })
+  } catch (error) {
+    // Settle the refresh before leaving the caller's maintenance pause on failure.
+    await pendingLocalBaseRefRefresh
+    throw error
   } finally {
-    // Git may have written the target's `.git` marker even when it reports a late
-    // failure, so drop any pre-create route before the follow-up commands route.
+    checkoutProgress?.close()
+    // Even late failures can rewrite .git; invalidate pre-create routing before follow-up commands.
     invalidateWslLinkedWorktreeGitRouting(worktreePath)
   }
 
   if (options.checkoutExistingBranch) {
-    return localBaseRefRefresh ? { localBaseRefRefresh } : {}
+    return {}
   }
 
-  if (effectiveBase) {
+  if (effectiveBase && baseBranch) {
     await persistWorktreeCreationBase(worktreePath, branch, effectiveBase, options)
+    await trackSameNameRemoteBase(worktreePath, branch, baseBranch, effectiveBase, options)
   }
 
-  // SSH parity: relay's addWorktreeOp (src/relay/git-handler-worktree-ops.ts) mirrors this — change both in lockstep.
-  // Why: --no-track leaves no upstream until first push; push.autoSetupRemote=true lets a plain
-  // `git push` create+set origin/<branch> (git >=2.37; older clients ignore it). `--local` on a
-  // linked worktree writes the shared common-dir config (whole repo) — intentional and idempotent,
-  // so it's warn-only and not rolled back on failure.
+  // Git >= 2.37 can set an upstream on first push; --local intentionally writes shared repo config.
   await configurePushAutoSetupRemote(worktreePath, options)
+  const localBaseRefRefresh = await pendingLocalBaseRefRefresh
   return {
     ...(localBaseRefRefresh ? { localBaseRefRefresh } : {}),
     ...(localBaseRefUpdateSuggestion ? { localBaseRefUpdateSuggestion } : {})

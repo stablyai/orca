@@ -15,11 +15,18 @@ import {
   getOrCreateArtifactCreateIntent,
   removeArtifactCreateIntent
 } from './artifact-create-intent-store'
-import { runProcessSync } from '../../shared/child-process/run-process'
-import { __resetSecureFileWindowsUserSidForTests } from '../../shared/secure-file'
+import { runProcess, runProcessSync } from '@orca/process-host'
+import {
+  resetWindowsSecurityLoadForTests,
+  setWindowsSecurityForTests
+} from '../../shared/windows-security-addon'
+import {
+  createFakeWindowsSecurity,
+  FAKE_USER_SID
+} from '../../shared/windows-security-addon.test-fixture'
 import type { ArtifactShareScope } from './artifact-share-record-store'
 
-vi.mock('../../shared/child-process/run-process', () => ({
+vi.mock('@orca/process-host', () => ({
   runProcess: vi.fn(),
   runProcessSync: vi.fn()
 }))
@@ -172,59 +179,50 @@ describe('artifact create intent store', () => {
     expect((await readdir(directory)).some((name) => name.endsWith('.tmp'))).toBe(false)
   })
 
-  it('hardens one Windows journal directory without per-file ACL launches', async () => {
+  it('writes each Windows intent born restricted and relocks the directory once, off the write', async () => {
     const originalPlatform = Object.getOwnPropertyDescriptor(process, 'platform')
     Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
-    const ok = { code: 0, signal: null, stdout: '', stderr: '', timedOut: false }
-    // Earlier cases in this file already resolved (and cached) the SID against an unstubbed mock.
-    __resetSecureFileWindowsUserSidForTests()
-    vi.mocked(runProcessSync).mockImplementation((spec) => {
-      if (spec.program.endsWith('whoami.exe')) {
-        return { ...ok, stdout: '"USER","S-1-5-21-1000"' }
-      }
-      const args = spec.args ?? []
-      if (args.length > 1) {
-        return ok // /reset and the /grant:r pass
-      }
-      // The verify pass re-reads the DACL; answer with the three protected inheritable rules.
-      const rules = ['host\\me', 'NT AUTHORITY\\SYSTEM', 'BUILTIN\\Administrators'].map(
-        (name, index) => (index === 0 ? `${args[0]} ${name}:(OI)(CI)(F)` : `   ${name}:(OI)(CI)(F)`)
-      )
-      return { ...ok, stdout: `${rules.join('\r\n')}\r\n\r\nSuccessfully processed 1 files\r\n` }
-    })
+    const fake = createFakeWindowsSecurity()
+    setWindowsSecurityForTests(fake)
     try {
       const userDataPath = await createUserDataPath()
-      getOrCreateArtifactCreateIntent(
-        'local-profile',
-        userDataPath,
-        '/repo/report.html',
-        scope,
-        'key-a',
-        body
-      )
-      getOrCreateArtifactCreateIntent(
-        'local-profile',
-        userDataPath,
-        '/repo/other.html',
-        scope,
-        'key-b',
-        body
-      )
+      const directory = join(userDataPath, 'profiles', 'local-profile', 'artifact-create-intents')
+      for (const [sourceKey, key] of [
+        ['/repo/report.html', 'key-a'],
+        ['/repo/other.html', 'key-b']
+      ]) {
+        getOrCreateArtifactCreateIntent('local-profile', userDataPath, sourceKey, scope, key, body)
+      }
+      await new Promise((resolve) => setTimeout(resolve, 0))
 
-      // One harden across both intents: counted by its /reset pass, which opens each harden.
-      const aclCalls = vi
-        .mocked(runProcessSync)
-        .mock.calls.map(([spec]) => spec)
-        .filter((spec) => spec.program.endsWith('icacls.exe'))
-      expect(aclCalls.filter((spec) => spec.args?.includes('/reset'))).toHaveLength(1)
-      // The child intent files rely on inheritance, so the directory rules must carry (OI)(CI).
-      const grant = aclCalls.find((spec) => spec.args?.includes('/grant:r'))
-      expect(grant?.args?.filter((arg) => arg.endsWith(':(OI)(CI)(F)'))).toHaveLength(3)
+      const creates = fake.callsFor('create')
+      expect(creates).toHaveLength(2)
+      for (const create of creates) {
+        expect(create.path.startsWith(directory)).toBe(true)
+        expect(create.path.endsWith('.tmp')).toBe(true)
+        expect(create).toMatchObject({
+          sddl: `D:P(A;;FA;;;S-1-5-18)(A;;FA;;;S-1-5-32-544)(A;;FA;;;${FAKE_USER_SID})`
+        })
+      }
+      expect(fake.callsFor('setAsync')).toMatchObject([
+        {
+          op: 'setAsync',
+          path: directory,
+          sddl: `D:P(A;OICI;FA;;;S-1-5-18)(A;OICI;FA;;;S-1-5-32-544)(A;OICI;FA;;;${FAKE_USER_SID})`
+        }
+      ])
+      expect(fake.callsFor('set')).toEqual([])
+      expect(
+        getArtifactCreateIntent('local-profile', userDataPath, '/repo/other.html', scope)
+      ).toMatchObject({ idempotencyKey: 'key-b' })
+      expect((await readdir(directory)).filter((name) => name.endsWith('.tmp'))).toEqual([])
+      expect(runProcess).not.toHaveBeenCalled()
+      expect(runProcessSync).not.toHaveBeenCalled()
     } finally {
       if (originalPlatform) {
         Object.defineProperty(process, 'platform', originalPlatform)
       }
-      vi.mocked(runProcessSync).mockReset()
+      resetWindowsSecurityLoadForTests()
     }
   })
 

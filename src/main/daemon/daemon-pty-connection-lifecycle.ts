@@ -13,28 +13,43 @@ import type { DaemonEvidenceSource, ExactDaemonIncarnation } from './daemon-inca
 import { notifyDaemonAuditListeners } from './daemon-listener-registry'
 import { DaemonPtyEventSubscriptions } from './daemon-pty-event-subscriptions'
 import { parseDaemonPidFile, type ParsedDaemonPid } from './daemon-pid-file-parse'
+import { supportsColorQueryReplyColors } from './daemon-protocol-version'
+import type { TerminalOscColorQueryReplyColors } from '../../shared/terminal-osc-color-reply'
 
 export abstract class DaemonPtyConnectionLifecycle extends DaemonPtyEventSubscriptions {
+  private colorQueryReplyColors: TerminalOscColorQueryReplyColors | null = null
+
+  setColorQueryReplyColors(colors: TerminalOscColorQueryReplyColors): void {
+    this.colorQueryReplyColors = colors
+    this.syncColorQueryReplyColors()
+  }
+
   protected async ensureConnected(deadlineMs?: number): Promise<void> {
     try {
-      // Why: destructive teardown bounds the handshake by its deadline so a wedged
-      // connect fails fast; undefined keeps the default connect behavior.
+      // Bound destructive teardown's handshake by its deadline so a wedged connection fails promptly.
       await (deadlineMs !== undefined
         ? this.client.ensureConnectedWithin(Math.max(1, deadlineMs - Date.now()))
         : this.client.ensureConnected())
     } finally {
-      // Why: a respawn launcher holds a temporary pair until this adapter's permanent reconnect, preventing both gaps and leaks.
+      // Release the temporary respawn pair once permanent reconnect succeeds or fails.
       this.releasePendingRespawnAdoptionLease()
     }
     this.recordAuthenticatedIdentity()
-    // Why sampled before setupEventRouting: "no listener yet" identifies a fresh connect — the only time the
-    // daemon-side backgrounded set (process state lost with the old daemon) needs a resync.
+    // Sample before installing routing so a fresh connection resyncs daemon-local background state.
     const isFreshConnection = this.removeEventListener === null
     this.setupEventRouting()
     this.scheduleCheckpointTimer()
     this.flushOwedProducerResumes()
     if (isFreshConnection) {
       this.resyncBackgroundedSessions()
+      // Replacement daemons lack colors; pushes sent while disconnected were dropped.
+      this.syncColorQueryReplyColors()
+    }
+  }
+
+  private syncColorQueryReplyColors(): void {
+    if (this.colorQueryReplyColors && supportsColorQueryReplyColors(this.protocolVersion)) {
+      this.client.notify('setColorQueryReplyColors', { colors: this.colorQueryReplyColors })
     }
   }
 
@@ -48,8 +63,7 @@ export abstract class DaemonPtyConnectionLifecycle extends DaemonPtyEventSubscri
       return
     }
     if (previous) {
-      // Capability probes belong to one daemon incarnation; a replacement may
-      // support getSize even when the preserved owner did not.
+      // Recheck capabilities for each incarnation: the replacement may support getSize.
       this.getSizeUnsupported = false
     }
     this.lastAuthenticatedIdentity = { ...current }
@@ -143,7 +157,6 @@ export abstract class DaemonPtyConnectionLifecycle extends DaemonPtyEventSubscri
 
   protected resyncBackgroundedSessions(): void {
     for (const id of this.backgroundedSessionIds) {
-      // Harmless no-op for sessions the daemon doesn't know (yet).
       this.client.notify('setSessionBackground', { sessionId: id, background: true })
     }
   }
@@ -153,7 +166,7 @@ export abstract class DaemonPtyConnectionLifecycle extends DaemonPtyEventSubscri
       return
     }
     for (const id of this.producerResumesOwedOnReconnect) {
-      // Why: resuming an unknown session is a harmless no-op; leaving a survivor paused would waste 5s of failsafe latency.
+      // Unknown-session resumes are harmless; a paused survivor otherwise waits for its failsafe.
       this.client.notify('resumePty', { sessionId: id })
     }
     this.producerResumesOwedOnReconnect.clear()

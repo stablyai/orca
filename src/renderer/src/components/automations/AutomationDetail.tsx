@@ -7,7 +7,11 @@ import { getAgentCatalog, AgentIcon } from '@/lib/agent-catalog'
 import type { Automation, AutomationRun } from '../../../../shared/automations-types'
 import { formatUiAutomationSchedule } from './automation-schedule-label'
 import { formatAutomationPrecheckTimeout } from '../../../../shared/automation-precheck'
-import { formatAutomationDateTimeWithRelative } from './automation-page-parts'
+import {
+  AutomationRunErrorNotice,
+  formatAutomationDateTimeWithRelative
+} from './automation-page-parts'
+import { indexLatestAutomationRuns } from './automation-list-last-run'
 import {
   formatAutomationCost,
   formatAutomationTokens,
@@ -144,6 +148,8 @@ export function AutomationDetail({
     hostLabelById
   })
   const runNowDisabled = runNowAvailability?.canRunNow === false
+  const latestRun = indexLatestAutomationRuns(runs).get(automation.id)
+  const latestRunError = latestRun?.status === 'dispatch_failed' ? latestRun.error : null
 
   return (
     <div className="flex w-full flex-col gap-4">
@@ -235,6 +241,16 @@ export function AutomationDetail({
         </div>
       ) : null}
 
+      {latestRunError ? (
+        <AutomationRunErrorNotice
+          label={translate(
+            'auto.components.automations.AutomationDetail.lastRunFailed',
+            'Last run failed.'
+          )}
+          error={latestRunError}
+        />
+      ) : null}
+
       <div className="grid grid-cols-[repeat(auto-fit,minmax(9rem,1fr))] gap-5 rounded-md border border-border/50 bg-muted/30 px-4 py-3 shadow-sm">
         <DetailMetric
           label={translate('auto.components.automations.AutomationDetail.18763ded26', 'Schedule')}
@@ -293,6 +309,16 @@ export function AutomationDetail({
             <span className="truncate">{agentLabel}</span>
           </div>
         </div>
+        {automation.extraAgentArgs ? (
+          <DetailMetric
+            label={translate(
+              'auto.components.automations.extraAgentArgs.detailLabel',
+              'Extra arguments'
+            )}
+            value={automation.extraAgentArgs}
+            title={automation.extraAgentArgs}
+          />
+        ) : null}
       </div>
 
       <div className="grid grid-cols-[repeat(auto-fit,minmax(9rem,1fr))] gap-5 rounded-md border border-border/50 bg-muted/20 px-4 py-3 shadow-sm">

@@ -1,0 +1,17 @@
+{
+  "capturedAt": "2026-10-06T07:26:03.075Z",
+  "platform": "darwin",
+  "command": [
+    "claude",
+    "--model",
+    "sonnet",
+    "--effort",
+    "low",
+    "--settings",
+    "/Users/xxxxxxxx/orca/workspaces/orca/claude-interrupt/.tmp/claude-interrupt-verification/settings.json"
+  ],
+  "cols": 120,
+  "rows": 40,
+  "note": "Claude Code 2.1.291 real PTY; tool-cancel; supported terminal capability; inputs and signals in adjacent timeline",
+  "exitCode": 129
+}

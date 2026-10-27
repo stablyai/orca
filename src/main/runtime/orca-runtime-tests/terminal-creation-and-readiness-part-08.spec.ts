@@ -1,4 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
+import { committingSpawn } from '../bind-first-pane.test-fixture'
+import { getDefaultWorkspaceSession } from '../../../shared/constants'
 import {
   AGENT_PROMPT_BRACKETED_PASTE_END,
   AGENT_PROMPT_BRACKETED_PASTE_START,
@@ -14,6 +16,7 @@ import {
   TEST_WORKTREE_ID,
   TEST_WORKTREE_PATH,
   UUID_RE,
+  makeRuntimeStoreWithWorkspaceSession,
   renderGateCapMs,
   store
 } from '../orca-runtime-test-fixtures.spec'
@@ -44,7 +47,9 @@ describe('OrcaRuntimeService', () => {
       const { handle } = await runtime.createTerminal(`path:${TEST_WORKTREE_PATH}`)
 
       await expect(runtime.isTerminalRunningSettledPromptAgent(handle)).resolves.toBe(true)
-      const sendPromise = runtime.sendTerminalAgentPrompt(handle, 'review this change')
+      const sendPromise = runtime.sendTerminalAgentPrompt(handle, 'review this change', {
+        inputKind: 'driving'
+      })
       await vi.advanceTimersByTimeAsync(1_199)
       expect(writes).not.toContain('\r')
       await vi.advanceTimersByTimeAsync(1_500)
@@ -78,7 +83,9 @@ describe('OrcaRuntimeService', () => {
         launchAgent: 'claude'
       })
 
-      const sendPromise = runtime.sendTerminalAgentPrompt(handle, 'review this change')
+      const sendPromise = runtime.sendTerminalAgentPrompt(handle, 'review this change', {
+        inputKind: 'driving'
+      })
       await vi.advanceTimersByTimeAsync(renderGateCapMs('review this change') - 1)
       expect(writes).not.toContain('\r')
 
@@ -117,7 +124,9 @@ describe('OrcaRuntimeService', () => {
         launchAgent: 'codex'
       })
 
-      const sendPromise = runtime.sendTerminalAgentPrompt(handle, 'review this change')
+      const sendPromise = runtime.sendTerminalAgentPrompt(handle, 'review this change', {
+        inputKind: 'driving'
+      })
       await vi.advanceTimersByTimeAsync(8_000)
       expect(writes).not.toContain('\r')
       await vi.advanceTimersByTimeAsync(1_599)
@@ -159,9 +168,10 @@ describe('OrcaRuntimeService', () => {
         launchAgent: 'claude'
       })
 
-      const sendPromise = runtime.sendTerminalAgentPrompt(handle, 'review this change')
-      // The marker at 100 ms re-arms the cap, but the ingest term is absolute: a prompt this
-      // small is already ingested by then, so the fallback is one flat render timeout later.
+      const sendPromise = runtime.sendTerminalAgentPrompt(handle, 'review this change', {
+        inputKind: 'driving'
+      })
+      // The 100ms marker re-arms render timeout, but cannot move the absolute ingest bound.
       await vi.advanceTimersByTimeAsync(100 + 8_000 - 1)
       expect(writes).not.toContain('\r')
 
@@ -193,7 +203,7 @@ describe('OrcaRuntimeService', () => {
       })
       const prompt = `${'x'.repeat(TERMINAL_INPUT_CHUNK_MAX_BYTES)}\ntail`
 
-      const sendPromise = runtime.sendTerminalAgentPrompt(handle, prompt)
+      const sendPromise = runtime.sendTerminalAgentPrompt(handle, prompt, { inputKind: 'driving' })
       await vi.runAllTimersAsync()
       const result = await sendPromise
 
@@ -230,7 +240,7 @@ describe('OrcaRuntimeService', () => {
       })
       const prompt = 'x'.repeat(TERMINAL_INPUT_CHUNK_MAX_BYTES + 1)
 
-      const sendPromise = runtime.sendTerminalAgentPrompt(handle, prompt)
+      const sendPromise = runtime.sendTerminalAgentPrompt(handle, prompt, { inputKind: 'driving' })
       const sendRejection = expect(sendPromise).rejects.toThrow('terminal_not_writable')
       await vi.runAllTimersAsync()
 
@@ -258,7 +268,7 @@ describe('OrcaRuntimeService', () => {
     const { handle } = await runtime.createTerminal(`path:${TEST_WORKTREE_PATH}`)
     const text = ['x'.repeat(TERMINAL_INPUT_CHUNK_MAX_BYTES), 'tail'].join('')
 
-    const result = await runtime.sendTerminal(handle, { text })
+    const result = await runtime.sendTerminal(handle, { text }, { inputKind: 'driving' })
 
     expect(result).toMatchObject({
       handle,
@@ -269,29 +279,49 @@ describe('OrcaRuntimeService', () => {
   })
 
   it('yields chunked terminal input through immediates between writes', async () => {
-    const immediate = vi.spyOn(globalThis, 'setImmediate')
+    const writes: string[] = []
+    const bodyWritten = Promise.withResolvers<void>()
+    let turnObserved = false
+    let secondWriteFollowedTurn = false
+    const runtime = new OrcaRuntimeService(store)
+    runtime.setPtyController({
+      spawn: vi.fn().mockResolvedValue({ id: 'pty-bg' }),
+      write: (_ptyId, data) => {
+        writes.push(data)
+        if (writes.length === 1) {
+          setImmediate(() => {
+            turnObserved = true
+          })
+        } else if (writes.length === 2) {
+          secondWriteFollowedTurn = turnObserved
+          bodyWritten.resolve()
+        }
+        return true
+      },
+      kill: () => true,
+      getForegroundProcess: async () => null
+    })
+    const { handle } = await runtime.createTerminal(`path:${TEST_WORKTREE_PATH}`)
+
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'], shouldClearNativeTimers: true })
     try {
-      const writes: string[] = []
-      const runtime = new OrcaRuntimeService(store)
-      runtime.setPtyController({
-        spawn: vi.fn().mockResolvedValue({ id: 'pty-bg' }),
-        write: (_ptyId, data) => {
-          writes.push(data)
-          return true
-        },
-        kill: () => true,
-        getForegroundProcess: async () => null
-      })
-      const { handle } = await runtime.createTerminal(`path:${TEST_WORKTREE_PATH}`)
-
       const text = `${'x'.repeat(TERMINAL_INPUT_CHUNK_MAX_BYTES)}\nline two\nline three`
-      await runtime.sendTerminal(handle, { text, enter: true })
+      await Promise.all([
+        runtime.sendTerminal(handle, { text, enter: true }, { inputKind: 'driving' }),
+        (async () => {
+          await bodyWritten.promise
+          // Let the write continuation arm the separate Enter timeout.
+          await new Promise<void>((resolve) => setImmediate(resolve))
+          await vi.runAllTimersAsync()
+        })()
+      ])
 
+      expect(secondWriteFollowedTurn).toBe(true)
       expect(writes.at(-1)).toBe('\r')
       expect(writes.slice(0, -1).join('')).toBe(text)
-      expect(immediate).toHaveBeenCalled()
     } finally {
-      immediate.mockRestore()
+      vi.clearAllTimers()
+      vi.useRealTimers()
     }
   })
 
@@ -312,7 +342,7 @@ describe('OrcaRuntimeService', () => {
 
     vi.useFakeTimers()
     try {
-      const sendPromise = runtime.sendTerminal(handle, { text })
+      const sendPromise = runtime.sendTerminal(handle, { text }, { inputKind: 'driving' })
 
       expect(writes).toEqual([])
 
@@ -346,7 +376,11 @@ describe('OrcaRuntimeService', () => {
     const { handle } = await runtime.createTerminal(`path:${TEST_WORKTREE_PATH}`)
 
     await expect(
-      runtime.sendTerminal(handle, { text: 'x'.repeat(TERMINAL_INPUT_MAX_BYTES + 1) })
+      runtime.sendTerminal(
+        handle,
+        { text: 'x'.repeat(TERMINAL_INPUT_MAX_BYTES + 1) },
+        { inputKind: 'driving' }
+      )
     ).rejects.toThrow(TERMINAL_INPUT_TOO_LARGE_ERROR)
     expect(writes).toEqual([])
   })
@@ -355,7 +389,7 @@ describe('OrcaRuntimeService', () => {
     const revealTerminalSession = vi.fn().mockResolvedValue({ tabId: 'tab-adopted' })
     const runtime = new OrcaRuntimeService(store)
     runtime.setPtyController({
-      spawn: vi.fn().mockResolvedValue({ id: 'pty-bg' }),
+      spawn: vi.fn(committingSpawn(runtime, async () => ({ id: 'pty-bg' }))),
       write: () => true,
       kill: () => true,
       getForegroundProcess: async () => null
@@ -370,7 +404,6 @@ describe('OrcaRuntimeService', () => {
       renameTerminal: vi.fn(),
       focusTerminal: vi.fn(),
       closeTerminal: vi.fn(),
-      sleepWorktree: vi.fn(),
       terminalFitOverrideChanged: vi.fn(),
       terminalDriverChanged: vi.fn()
     })
@@ -385,7 +418,7 @@ describe('OrcaRuntimeService', () => {
       tabId: 'tab-adopted',
       worktreeId: TEST_WORKTREE_ID
     })
-    // Why: focus reveal must reuse createTerminal's pre-minted tabId so a retry adopts under the paneKey baked into env.
+    // Reveal must reuse the pre-minted tabId stamped into paneKey env.
     expect(revealTerminalSession).toHaveBeenLastCalledWith(TEST_WORKTREE_ID, {
       ptyId: 'pty-bg',
       title: 'worker',
@@ -398,7 +431,7 @@ describe('OrcaRuntimeService', () => {
     const revealTerminalSession = vi.fn().mockResolvedValue({ tabId: 'tab-adopted' })
     const runtime = new OrcaRuntimeService(store)
     runtime.setPtyController({
-      spawn: vi.fn().mockResolvedValue({ id: 'pty-bg' }),
+      spawn: vi.fn(committingSpawn(runtime, async () => ({ id: 'pty-bg' }))),
       write: () => true,
       kill: () => true,
       getForegroundProcess: async () => null
@@ -413,7 +446,6 @@ describe('OrcaRuntimeService', () => {
       renameTerminal: vi.fn(),
       focusTerminal: vi.fn(),
       closeTerminal: vi.fn(),
-      sleepWorktree: vi.fn(),
       terminalFitOverrideChanged: vi.fn(),
       terminalDriverChanged: vi.fn()
     })
@@ -470,7 +502,6 @@ describe('OrcaRuntimeService', () => {
       renameTerminal: vi.fn(),
       focusTerminal: vi.fn(),
       closeTerminal: vi.fn(),
-      sleepWorktree: vi.fn(),
       terminalFitOverrideChanged: vi.fn(),
       terminalDriverChanged: vi.fn()
     })
@@ -511,7 +542,6 @@ describe('OrcaRuntimeService', () => {
       renameTerminal: vi.fn(),
       focusTerminal: vi.fn(),
       closeTerminal: vi.fn(),
-      sleepWorktree: vi.fn(),
       terminalFitOverrideChanged: vi.fn(),
       terminalDriverChanged: vi.fn()
     })
@@ -526,9 +556,10 @@ describe('OrcaRuntimeService', () => {
   })
 
   it('renames background terminal handles without requiring a visible tab', async () => {
-    const runtime = new OrcaRuntimeService(store)
+    const { runtimeStore } = makeRuntimeStoreWithWorkspaceSession(getDefaultWorkspaceSession())
+    const runtime = new OrcaRuntimeService(runtimeStore)
     runtime.setPtyController({
-      spawn: vi.fn().mockResolvedValue({ id: 'pty-bg' }),
+      spawn: vi.fn(committingSpawn(runtime, async () => ({ id: 'pty-bg' }))),
       write: () => true,
       kill: () => true,
       getForegroundProcess: async () => null
@@ -567,7 +598,6 @@ describe('OrcaRuntimeService', () => {
       renameTerminal: vi.fn(),
       focusTerminal: vi.fn(),
       closeTerminal: vi.fn(),
-      sleepWorktree: vi.fn(),
       terminalFitOverrideChanged: vi.fn(),
       terminalDriverChanged: vi.fn()
     })
@@ -587,7 +617,7 @@ describe('OrcaRuntimeService', () => {
   })
 
   it('coalesces concurrent focusTerminal navigations so only the latest full reveal runs', async () => {
-    // Instant reveals during createTerminal; switch to gated mock before focus storm.
+    // Resolve initial create immediately, then gate reveals for the focus storm.
     const revealTerminalSession = vi.fn().mockResolvedValue({ tabId: 'tab-create' })
     const runtime = new OrcaRuntimeService(store)
     runtime.setPtyController({
@@ -610,7 +640,6 @@ describe('OrcaRuntimeService', () => {
       renameTerminal: vi.fn(),
       focusTerminal: vi.fn(),
       closeTerminal: vi.fn(),
-      sleepWorktree: vi.fn(),
       terminalFitOverrideChanged: vi.fn(),
       terminalDriverChanged: vi.fn()
     })
@@ -650,13 +679,11 @@ describe('OrcaRuntimeService', () => {
     const pB = runtime.focusTerminal(b.handle)
     const pC = runtime.focusTerminal(c.handle)
 
-    // B is superseded while A is in flight — identity only, never navigated.
     await expect(pB).resolves.toMatchObject({
       handle: b.handle,
       navigated: false
     })
     releaseFirstReveal({ tabId: 'tab-a' })
-    // A may still complete reveal work, but if C superseded it, navigated is false.
     const aResult = await pA
     expect(aResult.handle).toBe(a.handle)
     expect(aResult.navigated).toBe(false)
@@ -666,7 +693,6 @@ describe('OrcaRuntimeService', () => {
       navigated: true
     })
 
-    // B must never have started a reveal; only A and/or C.
     const revealedPtyIds = revealTerminalSession.mock.calls.map(
       (call) => (call[1] as { ptyId?: string }).ptyId
     )

@@ -357,8 +357,7 @@ function buildReport(payload, mode, marker) {
   }
   return {
     ...base,
-    // Codex/Claude-like TUIs need generated multi-line prompts to arrive as
-    // one paste frame; unframed newlines are treated as live editor keys.
+    // Send generated multiline TUI prompts as one paste frame; unframed newlines become editor keys.
     contractOk: hasSubmit && rawContainsMarker && hasBracketedPasteFrame && unframedLineBreaks === 0
   }
 }
@@ -367,7 +366,8 @@ function parseInjectedIds(text) {
   return {
     taskId: /Your task ID is:\s*(task_[A-Za-z0-9_]+)/.exec(text)?.[1] ?? null,
     dispatchId: /--dispatch-id\s+(ctx_[A-Za-z0-9_]+)/.exec(text)?.[1] ?? null,
-    coordinatorHandle: /Your coordinator's terminal handle is:\s*([^\s]+)/.exec(text)?.[1] ?? null
+    coordinatorHandle:
+      /Your coordinator's (?:terminal handle|Orca session ID) is:\s*(\S+)/.exec(text)?.[1] ?? null
   }
 }
 

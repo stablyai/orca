@@ -10,12 +10,6 @@ const pluginHostCallRequestSchema = z
   })
   .strict()
 
-export type PluginHostCallRequest = z.infer<typeof pluginHostCallRequestSchema>
-
-export function isPluginHostCallRequest(request: unknown): request is PluginHostCallRequest {
-  return pluginHostCallRequestSchema.safeParse(request).success
-}
-
 export type PluginHostCallPolicy = Pick<
   ExecutePluginHostCallInput,
   'grantedCapabilities' | 'services' | 'audit'
@@ -25,8 +19,7 @@ export type ResolvePluginHostCallPolicy = (
   pluginKey: string
 ) => PluginHostCallPolicy | Promise<PluginHostCallPolicy>
 
-/** Validates the transport envelope, resolves all authority host-side, then
- *  enters the one capability/schema/audit execution chokepoint. */
+/** Authenticate transport input and resolve host policy before capability/schema/audit checks. */
 export async function executePluginHostCallRequest(input: {
   /** Qualified identity already authenticated by the owning transport. */
   pluginKey: string

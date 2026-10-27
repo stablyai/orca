@@ -1,6 +1,9 @@
 import { View, Text, Pressable, TextInput, StyleSheet, ActivityIndicator } from 'react-native'
 import { Check, Plus, Search } from 'lucide-react-native'
 import { colors, spacing } from '../theme/mobile-theme'
+import { themedStyleSheet } from '../theme/themed-styles'
+import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
+import { TEXT_INPUT_FONT_SIZE } from '../platform/text-input-font-size'
 import { MobileAgentIcon } from '../components/MobileAgentIcon'
 import { MOBILE_AGENT_CATALOG } from '../tasks/mobile-agent-catalog'
 import type { TerminalQuickCommand } from '../../../src/shared/terminal-quick-command-types'
@@ -21,7 +24,6 @@ type ListProps = {
   query: string
   loading: boolean
   disabled: boolean
-  canAdd: boolean
   error: string | null
   onQueryChange: (value: string) => void
   onLaunch: (command: TerminalQuickCommand) => void
@@ -37,7 +39,6 @@ export function QuickCommandsList({
   query,
   loading,
   disabled,
-  canAdd,
   error,
   onQueryChange,
   onLaunch,
@@ -45,8 +46,8 @@ export function QuickCommandsList({
   onDelete,
   onAdd
 }: ListProps) {
+  useMobileColorScheme()
   const hasVisible = repoCommands.length + globalCommands.length > 0
-  const addDisabled = disabled || !canAdd
   // Why: keep an active filter clearable if a delete or paired desktop edit
   // leaves only one command while the sheet is open.
   const showSearch = totalCount > 1 || query.length > 0
@@ -109,17 +110,15 @@ export function QuickCommandsList({
       <Pressable
         style={({ pressed }) => [
           styles.addRow,
-          addDisabled && styles.disabled,
-          pressed && !addDisabled && styles.pressed
+          disabled && styles.disabled,
+          pressed && !disabled && styles.pressed
         ]}
-        disabled={addDisabled}
+        disabled={disabled}
         onPress={onAdd}
         accessibilityRole="button"
       >
         <Plus size={18} color={colors.textSecondary} />
-        <Text style={styles.addText}>
-          {canAdd ? 'New quick command' : 'Quick command limit reached'}
-        </Text>
+        <Text style={styles.addText}>New quick command</Text>
       </Pressable>
     </View>
   )
@@ -140,6 +139,7 @@ function QuickCommandGroup({
   onDelete: (command: TerminalQuickCommand) => void
   disabled: boolean
 }) {
+  useMobileColorScheme()
   return (
     <View>
       <Text style={styles.groupLabel}>{label}</Text>
@@ -167,6 +167,7 @@ export function QuickCommandAgentPicker({
   selected: TuiAgent | null
   onSelect: (agent: TuiAgent) => void
 }) {
+  useMobileColorScheme()
   return (
     <View style={styles.group}>
       {QUICK_COMMAND_SUPPORTED_AGENTS.map((agent, index) => (
@@ -192,7 +193,7 @@ export function QuickCommandAgentPicker({
   )
 }
 
-const styles = StyleSheet.create({
+const styles = themedStyleSheet(() => ({
   pressed: { backgroundColor: colors.bgRaised },
   disabled: { opacity: 0.45 },
   listBody: { gap: spacing.sm, paddingBottom: spacing.sm },
@@ -207,7 +208,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.md,
     paddingVertical: spacing.sm
   },
-  searchInput: { flex: 1, color: colors.textPrimary, fontSize: 14, padding: 0 },
+  searchInput: { flex: 1, color: colors.textPrimary, fontSize: TEXT_INPUT_FONT_SIZE, padding: 0 },
   error: { color: colors.statusRed, fontSize: 13, paddingHorizontal: spacing.xs },
   loading: { paddingVertical: spacing.lg },
   empty: {
@@ -252,4 +253,4 @@ const styles = StyleSheet.create({
     marginTop: spacing.xs
   },
   addText: { fontSize: 14, fontWeight: '600', color: colors.textPrimary }
-})
+}))

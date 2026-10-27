@@ -15,8 +15,7 @@ export function recordStoppedSession(
     return
   }
 
-  // Why: stopped events can arrive for abandoned startup attempts that will
-  // never wait on the id. Keep the early-event cache bounded across sessions.
+  // Abandoned startups may never await their stopped event; bound cached early IDs across sessions.
   stoppedSessionIdsRef.current.delete(sessionId)
   stoppedSessionIdsRef.current.add(sessionId)
   while (stoppedSessionIdsRef.current.size > MAX_EARLY_STOPPED_SESSION_IDS) {

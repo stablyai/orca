@@ -7,15 +7,21 @@ import {
   COMPUTER_USE_SKILL_NAME,
   ORCA_CLI_SKILL_NAME,
   ORCHESTRATION_SKILL_NAME
-} from '@/lib/agent-feature-install-commands'
+} from '@/lib/agent-feature-skill-names'
 import {
   GLOBAL_AGENT_SKILL_SOURCE_KINDS,
   useInstalledAgentSkill
 } from '@/hooks/useInstalledAgentSkills'
 import { useActiveProjectSkillRuntime } from '@/hooks/useActiveProjectSkillRuntime'
 import { translate } from '@/i18n/i18n'
+import { isAgentCapabilitiesDone } from './feature-wall-setup-progress'
 
-export type AgentCapabilityInstallStatusTone = 'ready' | 'pending' | 'checking' | 'error'
+export type AgentCapabilityInstallStatusTone =
+  | 'ready'
+  | 'pending'
+  | 'checking'
+  | 'error'
+  | 'unavailable'
 
 export type AgentCapabilityInstallStatus = {
   label: string
@@ -85,8 +91,7 @@ export function useAgentCapabilitySetupStatus(): AgentCapabilitySetupStatus {
       browserUse: getSkillInstallStatus(browserUseSkill),
       computerUse: getComputerUseInstallStatus(computerUseSkill, computerUsePermissionStatus),
       orchestration: getSkillInstallStatus(orchestrationSkill),
-      // Why: linearTickets remains in the onboarding selection shape, but the
-      // generic feature wall must not become a Linear skill install surface.
+      // Retain the selection field without offering Linear installation in the generic feature wall.
       linearTickets: getFeatureWallExcludedLinearTicketsStatus()
     }),
     [browserUseSkill, computerUsePermissionStatus, computerUseSkill, orchestrationSkill]
@@ -100,8 +105,7 @@ export function getDefaultAgentCapabilitySetupSelection(
 ): OnboardingFeatureSetupSelection {
   return {
     browserUse: !readiness.browserUseSkillInstalled,
-    // Why: Computer Use has OS permission setup in addition to the skill install.
-    // Keep it selected when permissions still need action, even if the skill exists.
+    // Keep Computer Use selected when OS permission still needs action, even if its skill is installed.
     computerUse:
       !readiness.computerUseSkillInstalled ||
       (!readiness.computerUseReady && !readiness.computerUseUnavailable),
@@ -119,14 +123,18 @@ export function isAgentCapabilityReadinessChecking(readiness: AgentCapabilityRea
   )
 }
 
+export function isAgentCapabilityReadinessComplete(readiness: AgentCapabilityReadiness): boolean {
+  return !isAgentCapabilityReadinessChecking(readiness) && isAgentCapabilitiesDone(readiness)
+}
+
 export function getAgentCapabilityStatusClassName(tone: AgentCapabilityInstallStatusTone): string {
   switch (tone) {
-    case 'ready':
-      return 'text-green-600 dark:text-green-300'
     case 'error':
       return 'text-destructive'
+    case 'ready':
     case 'checking':
     case 'pending':
+    case 'unavailable':
       return 'text-muted-foreground'
   }
 }
@@ -166,8 +174,8 @@ function getSkillInstallStatus(skill: {
   }
   return {
     label: translate(
-      'auto.components.feature.wall.agent.capability.setup.status.aae94eeb52',
-      'Click Install CLI & Skills'
+      'auto.components.feature.wall.agent.capability.setup.status.notInstalled',
+      'Not installed'
     ),
     tone: 'pending'
   }
@@ -211,22 +219,22 @@ function getComputerUseInstallStatus(
       label:
         permissions.unavailableReason === 'web_client'
           ? translate(
-              'auto.components.feature.wall.agent.capability.setup.status.4c8e1f92a7',
-              'open Orca Desktop on this Mac'
+              'auto.components.feature.wall.agent.capability.setup.status.requiresOrcaDesktop',
+              'Requires Orca Desktop'
             )
           : translate(
               'auto.components.feature.wall.agent.capability.setup.status.6d2b0a84e1',
               'Unavailable in this build'
             ),
-      tone: 'pending',
+      tone: 'unavailable',
       installed: true
     }
   }
   if (!permissions.ready) {
     return {
       label: translate(
-        'auto.components.feature.wall.agent.capability.setup.status.21d4f79c93',
-        'click Install CLI & Skills to open macOS access settings'
+        'auto.components.feature.wall.agent.capability.setup.status.needsMacAccess',
+        'Needs macOS access'
       ),
       tone: 'pending',
       installed: true

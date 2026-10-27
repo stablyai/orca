@@ -1,3 +1,4 @@
+import { ImeTextarea } from '@/lib/ime-text-field'
 import React, { useCallback, useEffect, useRef, useState } from 'react'
 import { Bold, Code2, Italic, List, Quote } from 'lucide-react'
 import { Button } from '@/components/ui/button'
@@ -109,8 +110,7 @@ export function RightPanelCommentComposer({
   const setTextareaRef = useCallback((node: HTMLTextAreaElement | null) => {
     textareaRef.current = node
     if (node === null) {
-      // Why: markdown toolbar selection restoration is scoped to this textarea;
-      // clearing here prevents stale focus after the composer unmounts.
+      // Cancel selection restoration on unmount so toolbar callbacks cannot focus a stale textarea.
       clearRightPanelCommentFocusTimer(selectionTimerRef)
     }
   }, [])
@@ -172,8 +172,7 @@ export function RightPanelCommentComposer({
 
   const handleKeyDown = useCallback(
     (event: React.KeyboardEvent<HTMLTextAreaElement>) => {
-      // Why: the Enter that only confirms a CJK candidate still reports the held
-      // modifier, so submitting here posts the comment without its last syllable.
+      // IME confirm Enter may retain the modifier; submitting then would omit the final CJK syllable.
       if (isImeCompositionKeyDown(event)) {
         return
       }
@@ -238,7 +237,7 @@ export function RightPanelCommentComposer({
       onClick={stopPropagation}
       onMouseDown={stopPropagation}
     >
-      <textarea
+      <ImeTextarea
         ref={setTextareaRef}
         value={body}
         rows={3}

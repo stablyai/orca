@@ -14,11 +14,7 @@ import type { RelayRuntimeObserver } from './relay-observability.js'
 import type { RelayTokenClaims } from './relay-token-verifier.js'
 import { ProcessQueuedByteBudget } from './splice-forwarder.js'
 
-// Incident 2026-09-04 ~01:05Z: the phone's dial bound ran out while the cell was
-// still inside acceptClient's serialized Postgres phase (cell-inventory lock
-// contention). The cell then finished the work for a socket nobody held, holding
-// an activity lease for the 10s attach deadline before its timer unwound it, and
-// logged `host_data_reservation_already_bound`.
+// 2026-09-04: phone dial timed out during serialized SQL; late accept leaked a 10s lease and failed bind with host_data_reservation_already_bound.
 
 class FakeSocket extends EventEmitter {
   readonly OPEN = 1
@@ -114,7 +110,9 @@ function harness(options: { random?: () => number; now?: () => number } = {}) {
     recordSql: vi.fn(),
     recordClientAcceptAbandoned: vi.fn(),
     recordClientAcceptCompleted: vi.fn(),
-    recordControlRtt: vi.fn()
+    recordControlRtt: vi.fn(),
+    recordPhoneRejection: vi.fn(),
+    recordPhoneAttachDeadline: vi.fn()
   } satisfies RelayRuntimeObserver
   const registry = new HostSessionRegistry(
     config,
@@ -153,6 +151,66 @@ describe('client accept abandoned mid-DB-phase', () => {
   afterEach(() => {
     vi.clearAllTimers()
     vi.useRealTimers()
+  })
+
+  it('does not admit new source work after a drain crosses activity acquisition', async () => {
+    const h = harness()
+    const control = await activeHost(h)
+    const slow = deferred<void>()
+    h.acquireActivity.mockReturnValueOnce(slow.promise)
+    const client = new FakeSocket()
+    const capacity = { bind: vi.fn(), release: vi.fn() }
+    const accepting = h.registry.acceptClient(
+      client as unknown as WebSocket,
+      identity.relayHostId,
+      'credential',
+      capacity
+    )
+    await vi.advanceTimersByTimeAsync(0)
+    h.registry.drainHost({
+      attemptId: 'attempt',
+      userId: identity.sub,
+      relayHostId: identity.relayHostId,
+      sourceAssignmentEpoch: 1,
+      graceMs: 60_000
+    })
+    slow.resolve()
+    await accepting
+    expect(control.send).not.toHaveBeenCalledWith(expect.stringContaining('conn-open'))
+    expect(capacity.bind).not.toHaveBeenCalled()
+    expect(client.close).toHaveBeenCalledWith(RELAY_CLOSE_CODE.WRONG_CELL, expect.any(String))
+    expect(h.releaseActivity).toHaveBeenCalled()
+  })
+
+  it('does not splice an attachment whose generation retired during basis persistence', async () => {
+    const h = harness()
+    await activeHost(h)
+    const client = new FakeSocket()
+    await h.registry.acceptClient(
+      client as unknown as WebSocket,
+      identity.relayHostId,
+      'credential'
+    )
+    const session = h.registry.get({ userId: identity.sub, relayHostId: identity.relayHostId })!
+    const pending = [...session.pendingConns.values()][0]!
+    const slow = deferred<void>()
+    h.store.recordConnectionBasis.mockReturnValueOnce(slow.promise)
+    const host = new FakeSocket()
+    const attaching = h.registry.acceptHostData(
+      host as unknown as WebSocket,
+      pending.connId,
+      pending.connTicket,
+      1
+    )
+    await vi.advanceTimersByTimeAsync(0)
+    h.registry.drain(0)
+    await vi.advanceTimersByTimeAsync(0)
+    slow.resolve()
+    expect(await attaching).toBe(false)
+    expect(session.activeSplices.size).toBe(0)
+    expect(h.store.deactivateBasis).toHaveBeenCalledWith(pending.connId)
+    expect(client.send).not.toHaveBeenCalledWith(expect.stringContaining('\"ok\":true'))
+    expect(host.close).toHaveBeenCalled()
   })
 
   it('stops after a slow activity acquire when the phone already hung up', async () => {
@@ -309,6 +367,51 @@ describe('client accept abandoned mid-DB-phase', () => {
     }
   })
 
+  it('logs and counts an attach deadline with what the cell knew of the control', async () => {
+    let now = 1_700_000_000_000
+    const h = harness({ now: () => now })
+    await activeHost(h)
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined)
+    try {
+      const client = new FakeSocket()
+      await h.registry.acceptClient(
+        client as unknown as WebSocket,
+        identity.relayHostId,
+        'credential'
+      )
+      now += RELAY_PROTOCOL_LIMITS.hostAttachDeadlineMs
+      vi.advanceTimersByTime(RELAY_PROTOCOL_LIMITS.hostAttachDeadlineMs)
+      // The phone-only reason; relay-hello itself is unchanged for strict old parsers.
+      expect(client.close).toHaveBeenCalledWith(RELAY_CLOSE_CODE.HOST_OFFLINE, 'attach-timeout')
+      expect(client.send).toHaveBeenCalledWith(
+        JSON.stringify({ type: 'relay-hello', ok: false, code: 4404 })
+      )
+      expect(h.observer.recordPhoneAttachDeadline).toHaveBeenCalledOnce()
+      expect(h.observer.recordPhoneRejection).toHaveBeenCalledWith(RELAY_CLOSE_CODE.HOST_OFFLINE)
+      const lines = warn.mock.calls
+        .map(([line]) => String(line))
+        .filter((line) => line.includes('orca_relay_attach_deadline_offline'))
+      expect(lines.map((line) => JSON.parse(line))).toEqual([
+        {
+          event: 'orca_relay_attach_deadline_offline',
+          relayHostIdDigest: expect.any(String),
+          credentialKind: 'resume',
+          msSinceLastPong: RELAY_PROTOCOL_LIMITS.hostAttachDeadlineMs,
+          pingOutstanding: false,
+          controlAgeMs: RELAY_PROTOCOL_LIMITS.hostAttachDeadlineMs,
+          controlRttMs: null,
+          pong: 'fresh',
+          cellId: config.cellId
+        }
+      ])
+      expect(lines[0]).not.toContain(identity.relayHostId)
+    } finally {
+      warn.mockRestore()
+      h.registry.drain(0)
+      vi.advanceTimersByTime(0)
+    }
+  })
+
   it('still opens the connection when the phone is holding on', async () => {
     const h = harness()
     const control = await activeHost(h)
@@ -374,7 +477,8 @@ describe('successful client accept timing', () => {
       expect(accepted).toBe(true)
       expect(h.observer.recordClientAcceptCompleted).toHaveBeenCalledWith({
         totalMs: 49,
-        stageMs: { assignment: 5, credential: 7, activity: 11, attach: 23, basis: 3 }
+        stageMs: { assignment: 5, credential: 7, activity: 11, attach: 23, basis: 3 },
+        phonePath: 'db'
       })
       const line = log.mock.calls
         .map((call) => String(call[0]))
@@ -390,6 +494,7 @@ describe('successful client accept timing', () => {
         relayHostIdDigest: string
       }
       expect(event.credentialKind).toBe('resume')
+      expect(event).toMatchObject({ assignmentEpoch: 1, controlGeneration: 1, drainMode: 'none' })
       // Joins the line back to the emitting process, like the runtime metrics event.
       expect(event).toMatchObject({ role: 'cell', cellId: config.cellId, region: 'us-central1' })
       expect(Object.keys(event.stageMs).sort()).toEqual([
@@ -423,6 +528,80 @@ async function advanceToPing(control: FakeSocket, clock: { now: number }): Promi
     .at(-1)!
   return (JSON.parse(String(ping[0])) as { t: number }).t
 }
+
+// The attach resolves its owning session once and hands it to the unfenced leg;
+// these hold the session it must be and the order the client hears about it.
+describe('host data attach ownership', () => {
+  beforeEach(() => vi.useFakeTimers())
+  afterEach(() => {
+    vi.clearAllTimers()
+    vi.useRealTimers()
+  })
+
+  const bystander = { ...identity, sub: 'user-2', relayHostId: 'qponmlkjihgfedcb' }
+
+  async function pendingAttach(h: ReturnType<typeof harness>) {
+    const client = new FakeSocket()
+    await h.registry.acceptClient(
+      client as unknown as WebSocket,
+      identity.relayHostId,
+      'credential'
+    )
+    const session = h.registry.get({ userId: identity.sub, relayHostId: identity.relayHostId })!
+    return { client, session, pending: [...session.pendingConns.values()][0]! }
+  }
+
+  it('attaches the session that owns the connection, not the first one registered', async () => {
+    const h = harness()
+    const idle = new FakeSocket()
+    await h.activate(idle as unknown as WebSocket, bystander, null, 1, false, 1, '1.4.197')
+    await activeHost(h)
+    const { client, session, pending } = await pendingAttach(h)
+    const idleSession = h.registry.get({
+      userId: bystander.sub,
+      relayHostId: bystander.relayHostId
+    })!
+    const host = new FakeSocket()
+    expect(
+      await h.registry.acceptHostData(
+        host as unknown as WebSocket,
+        pending.connId,
+        pending.connTicket,
+        1
+      )
+    ).toBe(true)
+    expect(client.send).toHaveBeenCalledWith(expect.stringContaining('"type":"relay-hello"'))
+    expect(session.activeSplices.has(pending.connId)).toBe(true)
+    expect(idleSession.activeSplices.size).toBe(0)
+    expect(idleSession.activeConnIds.size).toBe(0)
+    h.registry.drain(0)
+    vi.advanceTimersByTime(0)
+  })
+
+  it('acknowledges the client only after the connection basis is persisted', async () => {
+    const h = harness()
+    await activeHost(h)
+    const { client, session, pending } = await pendingAttach(h)
+    const basis = deferred<void>()
+    h.store.recordConnectionBasis.mockReturnValueOnce(basis.promise)
+    const host = new FakeSocket()
+    const attaching = h.registry.acceptHostData(
+      host as unknown as WebSocket,
+      pending.connId,
+      pending.connTicket,
+      1
+    )
+    await vi.advanceTimersByTimeAsync(0)
+    expect(h.store.recordConnectionBasis).toHaveBeenCalledOnce()
+    expect(client.send).not.toHaveBeenCalledWith(expect.stringContaining('relay-hello'))
+    basis.resolve()
+    expect(await attaching).toBe(true)
+    expect(client.send).toHaveBeenCalledWith(expect.stringContaining('"type":"relay-hello"'))
+    expect(session.activeSplices.has(pending.connId)).toBe(true)
+    h.registry.drain(0)
+    vi.advanceTimersByTime(0)
+  })
+})
 
 describe('control round-trip sampling', () => {
   beforeEach(() => vi.useFakeTimers())
@@ -460,6 +639,9 @@ describe('control round-trip sampling', () => {
         cellId: config.cellId,
         region: 'us-central1',
         rttMsMedian: 40,
+        assignmentEpoch: 1,
+        controlGeneration: 1,
+        drainMode: 'none',
         sampleCount: 4
       })
       expect(rttLines()[0]).not.toContain(identity.relayHostId)
@@ -586,5 +768,77 @@ describe('control lease jitter', () => {
     expect(first.close).toHaveBeenCalledWith(RELAY_CLOSE_CODE.PEER_DROPPED, 'control rebound')
     h.registry.drain(0)
     vi.advanceTimersByTime(0)
+  })
+})
+
+describe('paced drain and the phones of a host not yet told', () => {
+  beforeEach(() => vi.useFakeTimers())
+  afterEach(() => {
+    vi.clearAllTimers()
+    vi.useRealTimers()
+  })
+
+  const laterHostId = 'qrstuvwxyz012345'
+  const laterIdentity = { ...identity, sub: 'user-2', relayHostId: laterHostId }
+
+  async function twoHostCell(): Promise<{
+    h: ReturnType<typeof harness>
+    told: FakeSocket
+    untold: FakeSocket
+  }> {
+    const h = harness()
+    const told = await activeHost(h)
+    const untold = new FakeSocket()
+    await h.activate(untold as unknown as WebSocket, laterIdentity, null, 1, false, 1, '1.4.197')
+    // Both hosts now dial in, so the credential mocks have to answer for either.
+    h.store.resolveResume.mockImplementation(async (hostId: string) => ({
+      userId: hostId === laterHostId ? laterIdentity.sub : identity.sub
+    }))
+    h.store.reserveCredential.mockImplementation(async (hostId: string) => ({
+      ...reservation,
+      userId: hostId === laterHostId ? laterIdentity.sub : identity.sub,
+      relayHostId: hostId
+    }))
+    return { h, told, untold }
+  }
+
+  async function dial(h: ReturnType<typeof harness>, hostId: string): Promise<FakeSocket> {
+    const client = new FakeSocket()
+    await h.registry.acceptClient(client as unknown as WebSocket, hostId, 'credential')
+    return client
+  }
+
+  it('serves a host whose drain has not been sent and refuses one whose has', async () => {
+    const { h, told, untold } = await twoHostCell()
+    h.registry.drain(0, { paceWindowMs: 40_000 })
+
+    const refused = await dial(h, identity.relayHostId)
+    expect(refused.close).toHaveBeenCalledWith(RELAY_CLOSE_CODE.DRAINING, expect.any(String))
+    expect(told.send).not.toHaveBeenCalledWith(expect.stringContaining('conn-open'))
+
+    const served = await dial(h, laterHostId)
+    expect(served.close).not.toHaveBeenCalled()
+    expect(untold.send).toHaveBeenCalledWith(expect.stringContaining('conn-open'))
+  })
+
+  it('refuses that host\'s phones as soon as its own drain is sent', async () => {
+    const { h, untold } = await twoHostCell()
+    h.registry.drain(0, { paceWindowMs: 40_000 })
+    await vi.advanceTimersByTimeAsync(40_000)
+    // Told by its zero-grace close, a timer nested 1 ms after the send.
+    await vi.advanceTimersByTimeAsync(1)
+    expect(untold.send).toHaveBeenCalledWith(expect.stringContaining('"type":"drain"'))
+
+    const refused = await dial(h, laterHostId)
+    expect(refused.close).toHaveBeenCalledWith(RELAY_CLOSE_CODE.DRAINING, expect.any(String))
+  })
+
+  it('keeps an unpaced drain refusing every phone at once', async () => {
+    const { h } = await twoHostCell()
+    h.registry.drain(0)
+    for (const hostId of [identity.relayHostId, laterHostId]) {
+      const refused = await dial(h, hostId)
+      expect(refused.close).toHaveBeenCalledWith(RELAY_CLOSE_CODE.DRAINING, expect.any(String))
+    }
   })
 })

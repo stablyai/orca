@@ -53,6 +53,8 @@ const CALLER_EDGES: [string, string, string, string][] = [
   ['worker', 'stop_unknown', 'failed', 'dispatch-completion.ts'],
   ['worker', 'ready', 'succeeded', 'worker-report-settlement.ts'],
   ['worker', 'start_unknown', 'failed', 'worker-report-settlement.ts'],
+  ['worker', 'stop_unknown', 'ready', 'worker-report-settlement.ts'],
+  ['worker', 'stop_unknown', 'failed', 'worker-report-settlement.ts'],
   ['worker', 'ready', 'stopping', 'worker-dispatch-stop.ts'],
   ['worker', 'start_unknown', 'stopping', 'worker-dispatch-stop.ts'],
   ['worker', 'stopping', 'stopped', 'worker-dispatch-stop.ts'],
@@ -118,7 +120,6 @@ describe('lifecycle graph against its callers', () => {
     expect(database.beginWorkerStop(dispatchId, 'runtime_test').disposition).toBe('stopping')
     expect(database.getWorkerDispatch(dispatchId)?.state).toBe('stopping')
 
-    // Real path: failActiveDispatchOnExit -> failDispatch({ workerProcessExited: true }).
     expect(() =>
       database.failDispatch(dispatchId, 'process exited', {
         workerProcessExited: true,

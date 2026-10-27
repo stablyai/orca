@@ -2,9 +2,9 @@ import { useCallback, useEffect } from 'react'
 import { getConnectionId } from '@/lib/connection-context'
 import {
   cancelRuntimeGenerateCommitMessage,
-  generateRuntimeCommitMessage,
-  type RuntimeGenerateCommitMessageOverrides
-} from '@/runtime/runtime-git-client'
+  generateRuntimeCommitMessage
+} from '@/runtime/runtime-git-generation-client'
+import type { RuntimeGenerateCommitMessageOverrides } from '@/runtime/runtime-git-client-context'
 import { useAppStore } from '@/store'
 import {
   createRunningCommitMessageGenerationRecord,
@@ -23,13 +23,10 @@ import type { SourceControlWorktreeContext } from '../listing/use-worktree-conte
 import type { SourceControlWorktreeOperationState } from '../panel/use-worktree-operation-state'
 import { writeCommitDraftForWorktree } from './commit-drafts'
 
-/**
- * Drives AI commit-message generation for the active worktree: start, cancel, and the store record
- * that lets a run which outlived an unmount hydrate the textarea exactly once on remount.
- */
+/** Persist generation records so results completed after unmount hydrate the textarea once on return. */
 export function useSourceControlCommitMessageGeneration({
   activeRepo,
-  activeRepoSettings,
+  activeRepoTarget,
   activeWorktreeId,
   allocateCommitMessageGenerationRequestId,
   commitMessageGenerationRecords,
@@ -48,7 +45,7 @@ export function useSourceControlCommitMessageGeneration({
   worktreePath
 }: {
   activeRepo: SourceControlWorktreeContext['activeRepo']
-  activeRepoSettings: SourceControlWorktreeContext['activeRepoSettings']
+  activeRepoTarget: SourceControlWorktreeContext['activeRepoTarget']
   activeWorktreeId: string | null
   allocateCommitMessageGenerationRequestId: SourceControlStoreActions['allocateCommitMessageGenerationRequestId']
   commitMessageGenerationRecords: SourceControlStoreActions['commitMessageGenerationRecords']
@@ -82,7 +79,12 @@ export function useSourceControlCommitMessageGeneration({
 
   const handleGenerate = useCallback(
     async (overrides?: RuntimeGenerateCommitMessageOverrides): Promise<void> => {
-      if (!activeWorktreeId || !worktreePath || !activeCommitMessageGenerationKey) {
+      if (
+        !activeWorktreeId ||
+        !worktreePath ||
+        !activeCommitMessageGenerationKey ||
+        !activeRepoTarget
+      ) {
         return
       }
       if (generateInFlightRef.current[activeWorktreeId]) {
@@ -118,7 +120,7 @@ export function useSourceControlCommitMessageGeneration({
           worktreePath,
           connectionId,
           requestId,
-          runtimeTargetSettings: activeRepoSettings
+          runtimeTarget: activeRepoTarget
         })
       )
       setGenerateInFlightByWorktree((prev) => ({ ...prev, [activeWorktreeId]: true }))
@@ -126,8 +128,9 @@ export function useSourceControlCommitMessageGeneration({
       try {
         const result = await generateRuntimeCommitMessage(
           {
-            // Why: route generation by the repo OWNER host, not the focused runtime.
-            settings: activeRepoSettings,
+            // Route generation through workspace ownership rather than focused runtime.
+            target: activeRepoTarget,
+            prefs: settings,
             worktreeId: activeWorktreeId,
             worktreePath,
             connectionId
@@ -136,7 +139,7 @@ export function useSourceControlCommitMessageGeneration({
         )
 
         if (!result.success) {
-          // Why: cancellation is a deliberate user action, not a failure to surface.
+          // Cancellation is an intentional action and must not surface as failure.
           if (result.canceled) {
             setGenerateErrors((prev) => ({ ...prev, [activeWorktreeId]: null }))
             updateCommitMessageGenerationRecord(activeCommitMessageGenerationKey, (record) =>
@@ -163,20 +166,21 @@ export function useSourceControlCommitMessageGeneration({
           return
         }
 
-        updateCommitMessageGenerationRecord(activeCommitMessageGenerationKey, (record) =>
-          resolveCommitMessageGenerationSuccess({
-            record,
-            requestId,
-            message: result.message
-          })
-        )
-        // Why: race protection — drop the generated message if the user typed into the textarea while the agent ran, rather than overwrite their edits.
+        const succeeded = resolveCommitMessageGenerationSuccess({
+          record:
+            useAppStore.getState().commitMessageGenerationRecords[activeCommitMessageGenerationKey],
+          requestId,
+          message: result.message
+        })
+        if (succeeded) {
+          setCommitMessageGenerationRecord(activeCommitMessageGenerationKey, succeeded)
+        }
+        // Preserve typed edits and drop cancelled runs even if the host succeeds; their message may describe obsolete changes.
         updateCommitDrafts((prev) => {
           const current = prev[activeWorktreeId]
-          if (current && current.length > 0) {
-            return prev
-          }
-          return writeCommitDraftForWorktree(prev, activeWorktreeId, result.message)
+          return !succeeded || (current && current.length > 0)
+            ? prev
+            : writeCommitDraftForWorktree(prev, activeWorktreeId, result.message)
         })
         useAppStore.getState().recordFeatureInteraction('ai-commit-generation')
         setGenerateErrors((prev) => ({ ...prev, [activeWorktreeId]: null }))
@@ -200,7 +204,7 @@ export function useSourceControlCommitMessageGeneration({
     },
     [
       activeCommitMessageGenerationKey,
-      activeRepoSettings,
+      activeRepoTarget,
       activeWorktreeId,
       allocateCommitMessageGenerationRequestId,
       generateInFlightRef,
@@ -208,6 +212,7 @@ export function useSourceControlCommitMessageGeneration({
       setCommitMessageGenerationRecord,
       setGenerateErrors,
       setGenerateInFlightByWorktree,
+      settings,
       updateCommitDrafts,
       updateCommitMessageGenerationRecord,
       worktreePath
@@ -246,17 +251,20 @@ export function useSourceControlCommitMessageGeneration({
       resolveCommitMessageGenerationCancel(record)
     )
     const connectionId = getConnectionId(activeWorktreeId) ?? undefined
-    // Why: fire-and-forget; the in-flight promise resolves {canceled: true} where the spinner clears, so awaiting would just delay UI feedback.
+    if (!activeRepoTarget) {
+      return
+    }
+    // Do not await cancellation; the running promise clears the spinner when it reports cancelled.
     void cancelRuntimeGenerateCommitMessage({
-      // Why: route the cancel by the repo OWNER host, not the focused runtime.
-      settings: activeRepoSettings,
+      // Cancel through the workspace owner rather than focused runtime.
+      target: activeRepoTarget,
       worktreeId: activeWorktreeId,
       worktreePath,
       connectionId
     })
   }, [
     activeCommitMessageGenerationKey,
-    activeRepoSettings,
+    activeRepoTarget,
     activeWorktreeId,
     generateInFlightRef,
     updateCommitMessageGenerationRecord,
@@ -264,7 +272,7 @@ export function useSourceControlCommitMessageGeneration({
   ])
 
   useEffect(() => {
-    // Why: generation can finish after Source Control unmounts; the store record lets the remounted textarea consume it once.
+    // Consume stored results once after generation completes across Source Control unmounts.
     if (
       !activeCommitMessageGenerationKey ||
       !activeWorktreeId ||

@@ -1,0 +1,343 @@
+import { acquireReadyCodexForTest } from './codex-structured-session-adapter-fixture'
+import { describe, expect, it, vi } from 'vitest'
+import type { AgentSessionJournalIdentity } from '../../shared/agent-session-journal-types'
+import type { AgentChildWorkEvidence } from '../../shared/agent-status-child-work-evidence'
+import type {
+  CodexAppServerConnection,
+  CodexAppServerConnectionHandlers
+} from './app-server/codex-app-server-connection-types'
+import type { openCodexAppServerConnection } from './codex-app-server-connection'
+import { CodexStructuredSessionAdapter } from './codex-structured-session-adapter'
+import { CodexBackgroundTaskTracker } from './codex-background-task-tracker'
+import { CodexJournalItems } from './codex-structured-journal-items'
+import type { CodexStructuredSessionEvent } from './codex-structured-session-state'
+import type { StructuredAgentSessionEndedEvent } from '../native-chat/agent-session-wire/structured-agent-session-adapter'
+import type { StructuredAgentSessionEventSink } from '../native-chat/agent-session-wire/structured-agent-session-event-sink'
+import { codexProviderHandle } from '../../shared/agent-session-provider-handle-encoding'
+
+type Published = { sessionId: string; evidence: AgentChildWorkEvidence['type'][] }
+
+const THREAD_ID = '01a07d54-3785-71d0-b065-82c8ebbc572a'
+const PARENT_TURN = '01a07d54-37be-72e1-8206-8f0c23dd2cef'
+const CHILD_ID = '01a07d54-5523-78a3-91f5-e0acb1dab065'
+
+function fakeCodex(
+  close: () => Promise<boolean> = async () => true,
+  proof?: StructuredAgentSessionEndedEvent['processExit']
+): {
+  handlers: () => CodexAppServerConnectionHandlers
+  openConnection: typeof openCodexAppServerConnection
+} {
+  let live: CodexAppServerConnectionHandlers = {}
+  const openConnection: typeof openCodexAppServerConnection = async (_launch, handlers = {}) => {
+    live = handlers
+    const connection: CodexAppServerConnection = {
+      pid: 4321,
+      closed: false,
+      request: async (method) =>
+        method === 'thread/start' ? { thread: { id: THREAD_ID, path: null } } : {},
+      notify: () => {},
+      respond: () => {},
+      respondWithError: () => {},
+      close
+    }
+    if (proof) {
+      Object.defineProperty(connection, 'closeResult', {
+        value: { root: proof.root, tree: proof.workload }
+      })
+    }
+    return connection
+  }
+  return { handlers: () => live, openConnection }
+}
+
+function identity(sessionId: string): AgentSessionJournalIdentity {
+  return {
+    sessionId,
+    workspaceId: 'ws-1',
+    hostId: 'host-1',
+    agent: 'codex',
+    providerHandle: codexProviderHandle(THREAD_ID)
+  }
+}
+
+function subagentNotification(kind: string): { method: string; params: unknown } {
+  return {
+    method: 'item/started',
+    params: {
+      item: {
+        type: 'subAgentActivity',
+        id: 'call_1',
+        kind,
+        agentThreadId: CHILD_ID,
+        agentPath: '/root/count_a'
+      },
+      threadId: THREAD_ID,
+      turnId: PARENT_TURN
+    }
+  }
+}
+
+const TURN_COMPLETED = {
+  method: 'turn/completed',
+  params: { threadId: THREAD_ID, turn: { id: PARENT_TURN, status: 'completed' } }
+}
+
+async function adapterWithSession(
+  published: Published[],
+  events?: StructuredAgentSessionEventSink,
+  onEvent?: (event: CodexStructuredSessionEvent) => void,
+  close?: () => Promise<boolean>,
+  proof?: StructuredAgentSessionEndedEvent['processExit']
+): Promise<{ adapter: CodexStructuredSessionAdapter; codex: ReturnType<typeof fakeCodex> }> {
+  const codex = fakeCodex(close, proof)
+  const adapter = new CodexStructuredSessionAdapter({
+    resolveLaunch: async () => ({
+      command: 'codex',
+      args: ['app-server'],
+      cwd: '/work/repo',
+      codexHome: null,
+      resumeThreadId: null
+    }),
+    openConnection: codex.openConnection,
+    readProcessStartTime: async () => 1_700_000_000_000,
+    onEvent,
+    onChildWorkEvidence: (sessionId, evidence) =>
+      published.push({ sessionId, evidence: evidence.map((edge) => edge.type) })
+  })
+  await acquireReadyCodexForTest(adapter, {
+    identity: identity('session-1'),
+    fence: 7,
+    spawnToken: 'spawn-9',
+    events
+  })
+  codex.handlers().onNotification?.('turn/started', {
+    threadId: THREAD_ID,
+    turn: { id: PARENT_TURN, status: 'inProgress' }
+  })
+  codex.handlers().onNotification?.('turn/started', {
+    threadId: CHILD_ID,
+    turn: { id: 'child-turn', status: 'inProgress' }
+  })
+  return { adapter, codex }
+}
+
+describe("codex background tasks reach the host's child records", () => {
+  it('clears natural-exit state before lifecycle observers can read it', async () => {
+    const published: Published[] = []
+    const onEvent = vi.fn()
+    const { adapter, codex } = await adapterWithSession(published, undefined, onEvent)
+    const spawn = subagentNotification('started')
+    codex.handlers().onNotification?.(spawn.method, spawn.params)
+    codex.handlers().onNotification?.(TURN_COMPLETED.method, TURN_COMPLETED.params)
+    expect(adapter.backgroundTaskState('session-1')?.tasks).toHaveLength(1)
+    published.length = 0
+    onEvent.mockImplementation((event: CodexStructuredSessionEvent) => {
+      if (event.type === 'ended') {
+        expect(adapter.backgroundTaskState('session-1')).toBeNull()
+      }
+    })
+    codex.handlers().onExit?.(new Error('provider exited'))
+    expect(adapter.backgroundTaskState('session-1')).toBeNull()
+    expect(published).toEqual([{ sessionId: 'session-1', evidence: ['session-ended'] }])
+    await adapter.closeSession('session-1')
+  })
+
+  it('keeps live tasks when close is refused', async () => {
+    const published: Published[] = []
+    const close = vi.fn(async () => false)
+    const { adapter, codex } = await adapterWithSession(published, undefined, undefined, close)
+    const spawn = subagentNotification('started')
+    codex.handlers().onNotification?.(spawn.method, spawn.params)
+    codex.handlers().onNotification?.(TURN_COMPLETED.method, TURN_COMPLETED.params)
+    const before = adapter.backgroundTaskState('session-1')
+    published.length = 0
+    expect(await adapter.closeSession('session-1')).toBe(false)
+    expect(adapter.backgroundTaskState('session-1')).toEqual(before)
+    expect(published).toEqual([])
+    close.mockResolvedValue(true)
+    await adapter.closeSession('session-1')
+  })
+
+  it('does not let an old exit callback clear a replacement roster', async () => {
+    const published: Published[] = []
+    const { adapter, codex } = await adapterWithSession(published)
+    const oldExit = codex.handlers().onExit
+    await acquireReadyCodexForTest(adapter, {
+      identity: identity('session-1'),
+      fence: 8,
+      spawnToken: 'spawn-10'
+    })
+    codex.handlers().onNotification?.('turn/started', {
+      threadId: CHILD_ID,
+      turn: { id: 'replacement-child-turn' }
+    })
+    const spawn = subagentNotification('started')
+    codex.handlers().onNotification?.(spawn.method, spawn.params)
+    const before = adapter.backgroundTaskState('session-1')
+    expect(before?.tasks).toHaveLength(1)
+    published.length = 0
+    oldExit?.(new Error('old provider exited late'))
+    expect(adapter.backgroundTaskState('session-1')).toEqual(before)
+    expect(published).toEqual([])
+    await adapter.closeSession('session-1')
+  })
+
+  it('recovers the exact provider generation when a notification cannot be admitted', async () => {
+    const published: Published[] = []
+    const observed: CodexStructuredSessionEvent[] = []
+    const appendItem = vi.fn()
+    const { adapter, codex } = await adapterWithSession(
+      published,
+      { appendItem, appendTombstone: () => {}, publish: () => {} },
+      (event) => observed.push(event)
+    )
+    appendItem.mockClear()
+    observed.length = 0
+    const admission = vi
+      .spyOn(CodexJournalItems.prototype, 'handle')
+      .mockReturnValue({ handled: true, admission: { accepted: false, reason: 'failed' } })
+    try {
+      codex.handlers().onNotification?.('item/started', {
+        threadId: THREAD_ID,
+        turnId: PARENT_TURN,
+        item: {
+          type: 'commandExecution',
+          id: 'refused',
+          command: 'sleep 1',
+          source: 'unifiedExecStartup',
+          status: 'inProgress'
+        }
+      })
+      await vi.waitFor(() => expect(adapter.backgroundTaskState('session-1')).toBeUndefined())
+      expect(appendItem.mock.calls.map((call) => call[1])).toEqual([
+        expect.objectContaining({ kind: 'turn', state: 'interrupted' })
+      ])
+      expect(observed).toEqual([
+        expect.objectContaining({
+          type: 'ended',
+          cause: 'unexpected-exit',
+          fence: 7,
+          acquisitionGeneration: expect.any(String),
+          reason: 'notification admission failed (failed)'
+        })
+      ])
+      expect(published).toEqual([{ sessionId: 'session-1', evidence: ['session-ended'] }])
+    } finally {
+      admission.mockRestore()
+      await adapter.closeSession('session-1')
+    }
+  })
+
+  it('publishes a child whose turn starts while 256 others are running', async () => {
+    const published: Published[] = []
+    const { adapter, codex } = await adapterWithSession(published, {
+      appendItem: () => {},
+      appendTombstone: () => {},
+      publish: () => {}
+    })
+    const startChild = (index: number): void => {
+      const childId = `child-${index}`
+      codex.handlers().onNotification?.('turn/started', {
+        threadId: childId,
+        turn: { id: `turn-${index}`, status: 'inProgress' }
+      })
+      codex.handlers().onNotification?.('item/started', {
+        threadId: THREAD_ID,
+        turnId: PARENT_TURN,
+        item: {
+          type: 'subAgentActivity',
+          id: `call-${index}`,
+          kind: 'started',
+          agentThreadId: childId,
+          agentPath: `/root/worker_${index}`
+        }
+      })
+    }
+    // Setup already opened the parent and first child, leaving 254 slots.
+    for (let index = 0; index < 254; index += 1) {
+      startChild(index)
+    }
+    published.length = 0
+    startChild(254)
+    expect(published).toEqual([{ sessionId: 'session-1', evidence: ['live'] }])
+    await adapter.closeSession('session-1')
+  })
+
+  it('publishes the fan-out while it runs and keeps it past the spawning turn', async () => {
+    const published: Published[] = []
+    const { adapter, codex } = await adapterWithSession(published)
+    const running = {
+      state: 'monitoring',
+      supportsStopAll: false,
+      tasks: [{ id: `codex-agent:${CHILD_ID}`, kind: 'agent', description: 'count_a' }]
+    }
+
+    const spawn = subagentNotification('started')
+    codex.handlers().onNotification?.(spawn.method, spawn.params)
+    expect(published).toEqual([{ sessionId: 'session-1', evidence: ['live'] }])
+    expect(adapter.backgroundTaskState('session-1')).toEqual(running)
+
+    published.length = 0
+    codex.handlers().onNotification?.(TURN_COMPLETED.method, TURN_COMPLETED.params)
+
+    // The spawning turn's end does not prove the child's outcome.
+    expect(published).toEqual([])
+    expect(adapter.backgroundTaskState('session-1')).toEqual(running)
+  })
+
+  it("hands the session's end to its child records when the session closes", async () => {
+    const published: Published[] = []
+    const { adapter, codex } = await adapterWithSession(published)
+    const spawn = subagentNotification('started')
+    codex.handlers().onNotification?.(spawn.method, spawn.params)
+    codex.handlers().onNotification?.(TURN_COMPLETED.method, TURN_COMPLETED.params)
+    published.length = 0
+
+    expect(await adapter.closeSession('session-1')).toBe(true)
+
+    expect(published).toEqual([{ sessionId: 'session-1', evidence: ['session-ended'] }])
+    expect(adapter.backgroundTaskState('session-1')).toBeUndefined()
+  })
+
+  it.each([
+    [{ root: 'exited', workload: 'exited' }, true],
+    [{ root: 'exited', workload: 'unverifiable' }, false],
+    [{ root: 'live', workload: 'exited' }, false]
+  ] as const)('hands close proof %j to the host child-work path', async (proof, ended) => {
+    const published: Published[] = []
+    const { adapter, codex } = await adapterWithSession(
+      published,
+      undefined,
+      undefined,
+      undefined,
+      proof
+    )
+    const spawn = subagentNotification('started')
+    codex.handlers().onNotification?.(spawn.method, spawn.params)
+    published.length = 0
+    const drain = vi.spyOn(CodexBackgroundTaskTracker.prototype, 'drainChildWorkEvidence')
+    try {
+      expect(await adapter.closeSession('session-1')).toBe(true)
+      const endings = drain.mock.results.flatMap((result) =>
+        result.type === 'return' ? result.value.filter((edge) => edge.type === 'ended') : []
+      )
+      expect(endings).toEqual(
+        ended
+          ? [
+              expect.objectContaining({
+                type: 'ended',
+                handle: { idKind: 'thread_id', id: CHILD_ID, runId: 'child-turn' },
+                outcome: 'cancelled'
+              })
+            ]
+          : []
+      )
+      expect(published).toEqual([
+        { sessionId: 'session-1', evidence: ended ? ['ended', 'session-ended'] : ['session-ended'] }
+      ])
+    } finally {
+      drain.mockRestore()
+    }
+  })
+})

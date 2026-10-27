@@ -103,6 +103,37 @@ describe('OrcaRuntimeService', () => {
     await expect(waiting).resolves.toEqual({ exitCode: 9 })
   })
 
+  it('cancels setup completion observation when the caller aborts', async () => {
+    const runtime = new OrcaRuntimeService(store)
+    runtime.setPtyController({
+      spawn: vi.fn().mockResolvedValue({ id: 'pty-cancelled-setup' }),
+      write: () => true,
+      kill: () => true,
+      getForegroundProcess: async () => null
+    })
+    runtime.attachWindow(1)
+    runtime.syncWindowGraph(1, { tabs: [], leaves: [] })
+    const { handle } = await runtime.createTerminal(`path:${TEST_WORKTREE_PATH}`)
+    ;(
+      runtime as unknown as { setupCompletionTokenByPtyId: Map<string, string> }
+    ).setupCompletionTokenByPtyId.set('pty-cancelled-setup', 'token-cancelled')
+    const unsubscribe = vi.fn()
+    vi.spyOn(runtime, 'subscribeToTerminalData').mockReturnValue(unsubscribe)
+    const controller = new AbortController()
+
+    const waiting = runtime.waitForSetupTerminalCompletion(handle, controller.signal)
+    expect(runtime.subscribeToTerminalData).toHaveBeenCalledWith(
+      'pty-cancelled-setup',
+      expect.any(Function)
+    )
+
+    const reason = new Error('cancelled')
+    controller.abort(reason)
+
+    await expect(waiting).rejects.toBe(reason)
+    expect(unsubscribe).toHaveBeenCalledOnce()
+  })
+
   it('keeps observing after an uncertain setup terminal status', async () => {
     const runtime = new OrcaRuntimeService(store)
     runtime.setPtyController({
@@ -167,7 +198,6 @@ describe('OrcaRuntimeService', () => {
             tailTruncated: boolean
           }
         >
-        recentPtyPathCandidatesById: Map<string, string[]>
       }
     ).ptysById.get('pty-bg')
     expect(pty).toMatchObject({
@@ -180,11 +210,6 @@ describe('OrcaRuntimeService', () => {
       status: 'exited',
       tail: []
     })
-    expect(
-      (
-        runtime as unknown as { recentPtyPathCandidatesById: Map<string, string[]> }
-      ).recentPtyPathCandidatesById.has('pty-bg')
-    ).toBe(false)
   })
 
   it('bounds disconnected background PTY records and their synthetic handles', async () => {
@@ -211,14 +236,12 @@ describe('OrcaRuntimeService', () => {
       ptysById: Map<string, unknown>
       handles: Map<string, unknown>
       handleByPtyId: Map<string, string>
-      recentPtyPathCandidatesById: Map<string, string[]>
     }
     expect(internals.ptysById.size).toBeLessThanOrEqual(128)
     expect(internals.ptysById.has('pty-bg-0')).toBe(false)
     expect(internals.ptysById.has('pty-bg-139')).toBe(true)
     expect(internals.handleByPtyId.has('pty-bg-0')).toBe(false)
     expect(internals.handles.has(handles[0]!)).toBe(false)
-    expect(internals.recentPtyPathCandidatesById.has('pty-bg-0')).toBe(false)
 
     await expect(runtime.readTerminal(handles[0]!)).rejects.toThrow('terminal_handle_stale')
     await expect(runtime.readTerminal(handles.at(-1)!)).resolves.toMatchObject({

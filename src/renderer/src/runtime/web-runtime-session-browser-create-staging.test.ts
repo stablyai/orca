@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { createWebRuntimeSessionBrowserTab } from './web-runtime-session'
+import { createWebRuntimeSessionBrowserTab } from './web-runtime-browser-creation'
 import { discardStagedWebRuntimeBrowserTab } from './web-runtime-browser-tab-staging'
 import { resetWebSessionCloseIntentForTests } from './web-session-close-intent'
 import type * as BrowserMaterializationModule from './web-runtime-browser-materialization'
@@ -10,9 +10,14 @@ import {
   resetBrowserTabCreateEnvironment,
   stagedBrowserTabMocks,
   stagedBrowserWorkspaces,
-  stubBrowserTabCreateEnvironment,
-  webRuntimeSessionWindowApi
+  stubBrowserTabCreateEnvironment
 } from './web-runtime-session-test-harness'
+import { stubBrowserCreateRuntimeEnvironmentBridge } from './runtime-environment-bridge-fixture'
+import {
+  _resetStagedBrowserFrameHandoversForTests,
+  noteStagedBrowserTabHandedToFrames,
+  wasStagedBrowserTabHandedToFrames
+} from '@/lib/staged-browser-frame-handover'
 
 const mocks = vi.hoisted(() => ({
   getState: vi.fn(),
@@ -32,7 +37,6 @@ const mocks = vi.hoisted(() => ({
   trackTerminalPaneSplit: vi.fn(),
   deliverLaunchPromptToAgentTab: vi.fn(),
   seedNativeChatLaunchDraftForAgentTab: vi.fn(),
-  getRuntimeEnvironmentIdForWorktree: vi.fn(),
   hasMaterializedWebRuntimeBrowserPage: vi.fn()
 }))
 
@@ -44,25 +48,28 @@ vi.mock('../store', () => ({
   }
 }))
 
-vi.mock('./web-session-tabs-sync', () => ({
+vi.mock('./web-session-tabs-sync/tracking-lifecycle', () => ({
   acceptReplayedWebSessionTabsSnapshot: mocks.acceptReplayedWebSessionTabsSnapshot,
-  applyWebSessionTabsSnapshot: mocks.applyWebSessionTabsSnapshot,
-  decideWebSessionTabsSnapshot: mocks.decideWebSessionTabsSnapshot,
-  getWebSessionTabsTrackingGeneration: mocks.getWebSessionTabsTrackingGeneration,
+  getWebSessionTabsTrackingGeneration: mocks.getWebSessionTabsTrackingGeneration
+}))
+vi.mock('./web-session-tabs-sync/snapshot-api', () => ({
+  applyWebSessionTabsSnapshot: mocks.applyWebSessionTabsSnapshot
+}))
+vi.mock('./web-session-tabs-sync/tracking-decisions', () => ({
+  decideWebSessionTabsSnapshot: mocks.decideWebSessionTabsSnapshot
+}))
+vi.mock('./web-session-tabs-sync/store-patch', () => ({
   applyWebSessionTabsStorePatch: (buildPatch: (state: unknown) => unknown) => {
     mocks.setState(buildPatch)
-    // The production caller invokes the returned settle receipt.
     return () => {}
-  },
+  }
+}))
+vi.mock('./web-session-tabs-sync/tracking-mappings', () => ({
   resolveHostSessionTabIdForWebSessionTab: mocks.resolveHostSessionTabIdForWebSessionTab
 }))
 
 vi.mock('@/lib/feature-education-telemetry', () => ({
   trackTerminalPaneSplit: mocks.trackTerminalPaneSplit
-}))
-
-vi.mock('@/lib/worktree-runtime-owner', () => ({
-  getRuntimeEnvironmentIdForWorktree: mocks.getRuntimeEnvironmentIdForWorktree
 }))
 
 vi.mock('@/lib/agent-launch-prompt-delivery', () => ({
@@ -158,7 +165,10 @@ function closedHostPages(runtimeCall: { mock: { calls: unknown[][] } }): string[
     .map((request) => request.params?.page ?? '')
 }
 
-afterEach(() => resetWebSessionCloseIntentForTests())
+afterEach(() => {
+  resetWebSessionCloseIntentForTests()
+  _resetStagedBrowserFrameHandoversForTests()
+})
 
 describe('createWebRuntimeSessionBrowserTab optimistic staging', () => {
   beforeEach(() => {
@@ -172,7 +182,7 @@ describe('createWebRuntimeSessionBrowserTab optimistic staging', () => {
   it('shows the tab before the create RPC answers', async () => {
     // Never resolves: everything asserted below has to be true off the click alone.
     const runtimeCall = vi.fn(() => new Promise(() => {}))
-    vi.stubGlobal('window', webRuntimeSessionWindowApi(runtimeCall))
+    stubBrowserCreateRuntimeEnvironmentBridge(runtimeCall)
 
     void createWebRuntimeSessionBrowserTab({
       worktreeId: WORKTREE_ID,
@@ -183,15 +193,14 @@ describe('createWebRuntimeSessionBrowserTab optimistic staging', () => {
     expect(stagedBrowserWorkspaces(mocks)).toEqual([
       { workspaceId: 'staged-workspace-1', pageId: expect.any(String), staged: true }
     ])
-    // Why waitFor: the create consults the main process for its placement first, so the RPC lands a
-    // few microtasks after the click that already staged the tab above.
+    // Placement preparation delays RPC by microtasks; staging above must already exist synchronously.
     await vi.waitFor(() => expect(runtimeCall).toHaveBeenCalledOnce())
   })
 
   it('stages under the very page id it asks the host to mint', async () => {
     advertiseKnownPageId()
     const runtimeCall = vi.fn((_request: { params: { page?: string } }) => new Promise(() => {}))
-    vi.stubGlobal('window', webRuntimeSessionWindowApi(runtimeCall))
+    stubBrowserCreateRuntimeEnvironmentBridge(runtimeCall)
 
     void createWebRuntimeSessionBrowserTab({
       worktreeId: WORKTREE_ID,
@@ -219,7 +228,7 @@ describe('createWebRuntimeSessionBrowserTab optimistic staging', () => {
         result: { browserPageId: 'host-minted-page' }
       })
       .mockResolvedValueOnce({ id: 'list', ok: true, result: makeSnapshot() })
-    vi.stubGlobal('window', webRuntimeSessionWindowApi(runtimeCall))
+    stubBrowserCreateRuntimeEnvironmentBridge(runtimeCall)
 
     await expect(
       createWebRuntimeSessionBrowserTab({
@@ -241,8 +250,7 @@ describe('createWebRuntimeSessionBrowserTab optimistic staging', () => {
     const runtimeCall = vi
       .fn()
       .mockImplementationOnce(() => {
-        // A subscription snapshot beat the create response and mirrored the host page under
-        // its own ids; keeping the staged tab too would leave two tabs for one page.
+        // Snapshot beat create response with host IDs; retained staging would duplicate the page.
         const state = mocks.getState()
         state.browserPagesByWorkspace['mirrored-workspace'] = [
           { id: 'mirrored-page', workspaceId: 'mirrored-workspace', url: 'https://example.com/' }
@@ -267,7 +275,7 @@ describe('createWebRuntimeSessionBrowserTab optimistic staging', () => {
         })
       })
       .mockResolvedValueOnce({ id: 'list', ok: true, result: makeSnapshot() })
-    vi.stubGlobal('window', webRuntimeSessionWindowApi(runtimeCall))
+    stubBrowserCreateRuntimeEnvironmentBridge(runtimeCall)
 
     await expect(
       createWebRuntimeSessionBrowserTab({
@@ -282,10 +290,7 @@ describe('createWebRuntimeSessionBrowserTab optimistic staging', () => {
   })
 
   it('unwinds a staged tab without offering it to the reopen stack', async () => {
-    vi.stubGlobal(
-      'window',
-      webRuntimeSessionWindowApi(vi.fn().mockRejectedValue(new Error('offline')))
-    )
+    stubBrowserCreateRuntimeEnvironmentBridge(vi.fn().mockRejectedValue(new Error('offline')))
 
     await expect(
       createWebRuntimeSessionBrowserTab({
@@ -297,16 +302,14 @@ describe('createWebRuntimeSessionBrowserTab optimistic staging', () => {
     expect(stagedBrowserTabMocks.closeBrowserTab).toHaveBeenCalledWith('staged-workspace-1', {
       reason: 'cleanup'
     })
-    // Why: the create path owns retiring the host page, so the local unwind must not fire a
-    // second browser.tabClose through the handle.
+    // Create owns host cleanup; local unwind must not send another browser.tabClose.
     expect(
       stagedBrowserTabMocks.removeRemoteBrowserPageHandle.mock.invocationCallOrder[0]
     ).toBeLessThan(stagedBrowserTabMocks.closeBrowserTab.mock.invocationCallOrder[0]!)
     expect(stagedBrowserWorkspaces(mocks)).toEqual([])
   })
 
-  // Why: re-staging a page the snapshot already published would hide it from persistence and
-  // suppress its stream, for a tab the user can see and is already using.
+  // Restaging adopted rows would hide them from persistence and suppress a visible tab’s stream.
   it('leaves a page the snapshot adopted mid-flight alone', async () => {
     const runtimeCall = vi
       .fn()
@@ -324,7 +327,7 @@ describe('createWebRuntimeSessionBrowserTab optimistic staging', () => {
         })
       })
       .mockResolvedValueOnce({ id: 'list', ok: true, result: makeSnapshot() })
-    vi.stubGlobal('window', webRuntimeSessionWindowApi(runtimeCall))
+    stubBrowserCreateRuntimeEnvironmentBridge(runtimeCall)
 
     await expect(
       createWebRuntimeSessionBrowserTab({
@@ -340,9 +343,7 @@ describe('createWebRuntimeSessionBrowserTab optimistic staging', () => {
     expect(stagedBrowserTabMocks.closeBrowserTab).not.toHaveBeenCalled()
   })
 
-  // Why: the strip's X on a staged tab can only unwind local rows — the host page did not exist
-  // when the user clicked. Without this the create finishes into a snapshot that re-adds the tab
-  // the user just closed, and the host keeps a page nobody can see.
+  // Staged X has no host page ID to close; create must retire it later or snapshots resurrect the tab.
   it('retires the host page when the staged tab is closed before the create answers', async () => {
     mocks.hasMaterializedWebRuntimeBrowserPage.mockReturnValue(false)
     const runtimeCall = vi.fn((request: { method: string; params: { page?: string } }) => {
@@ -359,7 +360,7 @@ describe('createWebRuntimeSessionBrowserTab optimistic staging', () => {
       }
       return Promise.resolve({ id: 'list', ok: true, result: makeSnapshot() })
     })
-    vi.stubGlobal('window', webRuntimeSessionWindowApi(runtimeCall))
+    stubBrowserCreateRuntimeEnvironmentBridge(runtimeCall)
 
     await expect(
       createWebRuntimeSessionBrowserTab({
@@ -368,9 +369,7 @@ describe('createWebRuntimeSessionBrowserTab optimistic staging', () => {
       })
     ).resolves.toBe(false)
 
-    // Why: the sequence is the assertion. Left to run on, the create waits out the materialization
-    // timeout and refreshes the snapshot first — and that refresh, taken while the host page is
-    // still open, is what re-adds the tab the user just closed under a fresh workspace id.
+    // Require immediate cleanup: waiting for materialization timeout refreshes an open host page and resurrects the cancelled tab.
     expect(calledMethods(runtimeCall)).toEqual([
       'browser.tabCreate',
       'browser.tabClose',
@@ -378,15 +377,11 @@ describe('createWebRuntimeSessionBrowserTab optimistic staging', () => {
     ])
     expect(closedHostPages(runtimeCall)).toEqual(['host-page-1'])
     expect(stagedBrowserWorkspaces(mocks)).toEqual([])
-    // Why: the cancelling close already dropped the handle, so the unwind must not fire a second
-    // teardown for rows that are gone.
+    // Cancelling close already dropped the handle; unwind must not repeat teardown.
     expect(stagedBrowserTabMocks.closeBrowserTab).not.toHaveBeenCalled()
   })
 
-  // Why: materialization asks whether *some* workspace in the worktree carries the page, not whether
-  // the staged one does. A host that mirrors the page under its own workspace id answers yes for a
-  // tab the user already X-ed, so a single pre-wait liveness check lets the create report success and
-  // walk past the cleanup that owes the host a tabClose.
+  // Materialization can see the host’s row after staged X; checking liveness only before the wait skips required host tabClose.
   it('cancels when the close lands while the host mirrors the page under its own workspace', async () => {
     const { hasMaterializedWebRuntimeBrowserPage: realPredicate } = await vi.importActual<
       typeof BrowserMaterializationModule
@@ -401,8 +396,7 @@ describe('createWebRuntimeSessionBrowserTab optimistic staging', () => {
         forgetHostPage('host-workspace-9', 'host-page-1')
         return Promise.resolve({ id: 'close', ok: true, result: { closed: true } })
       }
-      // The X lands after the pre-wait check has already passed, and the host's own snapshot row
-      // arrives in the same window — exactly the state the materialization wait sits in.
+      // X and host-owned snapshot arrive during the materialization wait, after the first liveness check.
       if (!cancelled) {
         cancelled = true
         closeStagedWorkspace('staged-workspace-1')
@@ -410,7 +404,7 @@ describe('createWebRuntimeSessionBrowserTab optimistic staging', () => {
       }
       return Promise.resolve({ id: 'list', ok: true, result: makeSnapshot() })
     })
-    vi.stubGlobal('window', webRuntimeSessionWindowApi(runtimeCall))
+    stubBrowserCreateRuntimeEnvironmentBridge(runtimeCall)
 
     await expect(
       createWebRuntimeSessionBrowserTab({
@@ -429,9 +423,137 @@ describe('createWebRuntimeSessionBrowserTab optimistic staging', () => {
     expect(stagedBrowserWorkspaces(mocks)).toEqual([])
   })
 
-  // Why: with a known-id host nothing rehomes, so `staged` still points at rows a snapshot may
-  // have adopted by the time a later failure unwinds. Those rows are the host's now, and the
-  // unwind must not take a tab the user is looking at down with it.
+  describe("a server-hosted create the server's frames take over (L284)", () => {
+    async function useRealMaterialization(): Promise<void> {
+      const { hasMaterializedWebRuntimeBrowserPage: realPredicate } = await vi.importActual<
+        typeof BrowserMaterializationModule
+      >('./web-runtime-browser-materialization')
+      mocks.hasMaterializedWebRuntimeBrowserPage.mockImplementation(realPredicate)
+    }
+
+    /** The frame build replacing the staged rows with the server's tab for the page. */
+    function framesDrawHostPage(handedOver: boolean): void {
+      closeStagedWorkspace('staged-workspace-1')
+      mirrorHostPage('host-workspace-9', 'host-page-1')
+      if (handedOver) {
+        noteStagedBrowserTabHandedToFrames('staged-workspace-1', 'host-page-1')
+      }
+    }
+
+    function createAnswering(onCreate: () => void, onClose?: () => void) {
+      return vi.fn((request: { method: string; params: { page?: string } }) => {
+        if (request.method === 'browser.tabCreate') {
+          onCreate()
+          return Promise.resolve({
+            id: 'create',
+            ok: true,
+            result: { browserPageId: 'host-page-1' }
+          })
+        }
+        if (request.method === 'browser.tabClose') {
+          onClose?.()
+          return Promise.resolve({ id: 'close', ok: true, result: { closed: true } })
+        }
+        return Promise.resolve({ id: 'list', ok: true, result: makeSnapshot() })
+      })
+    }
+
+    it('completes into the drawn tab and closes nothing', async () => {
+      await useRealMaterialization()
+      const runtimeCall = createAnswering(() => framesDrawHostPage(true))
+      stubBrowserCreateRuntimeEnvironmentBridge(runtimeCall)
+
+      await expect(
+        createWebRuntimeSessionBrowserTab({
+          worktreeId: WORKTREE_ID,
+          environmentId: ENVIRONMENT_ID
+        })
+      ).resolves.toBe(true)
+
+      expect(closedHostPages(runtimeCall)).toEqual([])
+      // The record does not outlive the create.
+      expect(wasStagedBrowserTabHandedToFrames('staged-workspace-1', 'host-page-1')).toBe(false)
+    })
+
+    it('completes when the drawn tab has no handle yet, its pane not mounted', async () => {
+      await useRealMaterialization()
+      const runtimeCall = createAnswering(() => {
+        closeStagedWorkspace('staged-workspace-1')
+        noteStagedBrowserTabHandedToFrames('staged-workspace-1', 'host-page-1')
+      })
+      stubBrowserCreateRuntimeEnvironmentBridge(runtimeCall)
+
+      await expect(
+        createWebRuntimeSessionBrowserTab({
+          worktreeId: WORKTREE_ID,
+          environmentId: ENVIRONMENT_ID
+        })
+      ).resolves.toBe(true)
+
+      expect(closedHostPages(runtimeCall)).toEqual([])
+    })
+
+    it('still cancels a staged tab the user closed before the frames drew the page', async () => {
+      await useRealMaterialization()
+      const runtimeCall = createAnswering(
+        () => framesDrawHostPage(false),
+        () => forgetHostPage('host-workspace-9', 'host-page-1')
+      )
+      stubBrowserCreateRuntimeEnvironmentBridge(runtimeCall)
+
+      await expect(
+        createWebRuntimeSessionBrowserTab({
+          worktreeId: WORKTREE_ID,
+          environmentId: ENVIRONMENT_ID
+        })
+      ).resolves.toBe(false)
+
+      expect(closedHostPages(runtimeCall)).toEqual(['host-page-1'])
+    })
+
+    it('does not reuse a handover an earlier create left for another page', async () => {
+      await useRealMaterialization()
+      noteStagedBrowserTabHandedToFrames('staged-workspace-1', 'earlier-host-page')
+      const runtimeCall = createAnswering(
+        () => framesDrawHostPage(false),
+        () => forgetHostPage('host-workspace-9', 'host-page-1')
+      )
+      stubBrowserCreateRuntimeEnvironmentBridge(runtimeCall)
+
+      await expect(
+        createWebRuntimeSessionBrowserTab({
+          worktreeId: WORKTREE_ID,
+          environmentId: ENVIRONMENT_ID
+        })
+      ).resolves.toBe(false)
+
+      expect(closedHostPages(runtimeCall)).toEqual(['host-page-1'])
+      expect(wasStagedBrowserTabHandedToFrames('staged-workspace-1', 'earlier-host-page')).toBe(
+        false
+      )
+    })
+
+    it("leaves a close of the drawn tab after the handover to the server tab's own close", async () => {
+      await useRealMaterialization()
+      // The user closes the frames' tab: the server closes the page, and frames drop the tab.
+      const runtimeCall = createAnswering(() => {
+        framesDrawHostPage(true)
+        forgetHostPage('host-workspace-9', 'host-page-1')
+      })
+      stubBrowserCreateRuntimeEnvironmentBridge(runtimeCall)
+      await expect(
+        createWebRuntimeSessionBrowserTab({
+          worktreeId: WORKTREE_ID,
+          environmentId: ENVIRONMENT_ID
+        })
+      ).resolves.toBe(true)
+
+      // Not read as a staged-tab cancel: the create sends no close of its own.
+      expect(closedHostPages(runtimeCall)).toEqual([])
+    })
+  })
+
+  // Known-ID staging may already be adopted when failure unwinds; those visible rows belong to the snapshot and must survive.
   it('leaves rows a snapshot already adopted alone when the unwind runs', () => {
     const state = mocks.getState()
     state.browserPagesByWorkspace['adopted-workspace'] = [
@@ -462,13 +584,11 @@ describe('createWebRuntimeSessionBrowserTab optimistic staging', () => {
     ])
   })
 
-  // Why: adoption and cancellation both clear the staged flag, so the flag cannot tell them apart.
-  // Reading adoption as a cancel would close the tab the user is already looking at.
+  // Adoption and cancellation both clear staged; treating adoption as cancel would close the live tab.
   it('does not read a snapshot adopting the staged rows mid-create as a cancel', async () => {
     const runtimeCall = vi.fn((request: { method: string }) => {
       if (request.method === 'browser.tabCreate') {
-        // The host's snapshot lands first and takes the staged rows over in place: the flag goes,
-        // the workspace row stays.
+        // Adoption clears staged but retains the workspace row.
         const state = mocks.getState()
         const pageId = Object.keys(state.remoteBrowserPageHandlesByPageId)[0]!
         state.remoteBrowserPageHandlesByPageId[pageId] = {
@@ -479,7 +599,7 @@ describe('createWebRuntimeSessionBrowserTab optimistic staging', () => {
       }
       return Promise.resolve({ id: 'list', ok: true, result: makeSnapshot() })
     })
-    vi.stubGlobal('window', webRuntimeSessionWindowApi(runtimeCall))
+    stubBrowserCreateRuntimeEnvironmentBridge(runtimeCall)
 
     await expect(
       createWebRuntimeSessionBrowserTab({
@@ -494,8 +614,7 @@ describe('createWebRuntimeSessionBrowserTab optimistic staging', () => {
     ])
   })
 
-  // Why: without browser.tab-create-known-id.v1 every create rehomes onto a host-minted id, and
-  // that is the path where a mixed-up mapping would silently rekey one click's tab onto another's.
+  // Legacy hosts mint new IDs; prove rehoming cannot map one click’s tab onto another’s.
   it('keeps three rapid creates distinct when the host mints every page id', async () => {
     let hostPageCounter = 0
     const runtimeCall = vi.fn((request: { method: string }) => {
@@ -509,7 +628,7 @@ describe('createWebRuntimeSessionBrowserTab optimistic staging', () => {
         result: { browserPageId: `host-page-${hostPageCounter}` }
       })
     })
-    vi.stubGlobal('window', webRuntimeSessionWindowApi(runtimeCall))
+    stubBrowserCreateRuntimeEnvironmentBridge(runtimeCall)
 
     const creates = [1, 2, 3].map(() =>
       createWebRuntimeSessionBrowserTab({
@@ -544,7 +663,7 @@ describe('createWebRuntimeSessionBrowserTab optimistic staging', () => {
           })
         : Promise.resolve({ id: 'list', ok: true, result: makeSnapshot() })
     )
-    vi.stubGlobal('window', webRuntimeSessionWindowApi(runtimeCall))
+    stubBrowserCreateRuntimeEnvironmentBridge(runtimeCall)
 
     const creates = [1, 2, 3].map(() =>
       createWebRuntimeSessionBrowserTab({

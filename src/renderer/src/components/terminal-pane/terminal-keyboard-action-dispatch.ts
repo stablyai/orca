@@ -1,6 +1,6 @@
 import type { ManagedPane, PaneManager } from '@/lib/pane-manager/pane-manager'
 import type { PaneCwdMap } from './resolve-split-cwd'
-import type { PtyTransport } from './pty-transport'
+import type { PtyTransport } from './pty-transport-types'
 import { copyTerminalSelection } from './terminal-selection-copy'
 import { splitTerminalPaneWithInheritedCwd } from './terminal-pane-split-with-inherited-cwd'
 import {
@@ -9,6 +9,7 @@ import {
   syncTerminalScrollIntentFromViewport
 } from '@/lib/pane-manager/terminal-scroll-intent'
 import type { resolveTerminalKeyboardShortcutAction } from './terminal-keyboard-shortcut-matching'
+import { equalizeTerminalPanes } from './terminal-pane-layout-owner-commands'
 
 type TerminalShortcutAction = NonNullable<ReturnType<typeof resolveTerminalKeyboardShortcutAction>>
 
@@ -23,6 +24,8 @@ type ActionDispatchContext = {
   persistLayoutSnapshot: () => void
   toggleExpandPane: (paneId: number) => void
   setSearchOpen: React.Dispatch<React.SetStateAction<boolean>>
+  focusSearchInput: () => void
+  searchOpenRef: React.RefObject<boolean>
   onRequestClosePane: (paneId: number) => void
   onClearPaneScrollback: (pane: ManagedPane) => void
   onSetTitle: (paneId: number) => void
@@ -51,6 +54,8 @@ export function dispatchTerminalShortcutAction(
     persistLayoutSnapshot,
     toggleExpandPane,
     setSearchOpen,
+    focusSearchInput,
+    searchOpenRef,
     onRequestClosePane,
     onClearPaneScrollback,
     onSetTitle,
@@ -75,10 +80,6 @@ export function dispatchTerminalShortcutAction(
     event.stopImmediatePropagation()
     return
   }
-  if (event.repeat) {
-    return
-  }
-
   if (action.type === 'copySelection') {
     const pane = manager.getActivePane() ?? manager.getPanes()[0]
     if (!pane || !pane.terminal.getSelection()) {
@@ -86,16 +87,26 @@ export function dispatchTerminalShortcutAction(
     }
     event.preventDefault()
     event.stopImmediatePropagation()
-    void copyTerminalSelection({
-      terminal: pane.terminal,
-      writeClipboardText: window.api.ui.writeTerminalClipboardText
-    }).catch(() => {})
+    if (!event.repeat) {
+      armNativeOnlyShortcut(event)
+      void copyTerminalSelection({
+        terminal: pane.terminal,
+        writeClipboardText: window.api.ui.writeTerminalClipboardText
+      }).catch(() => {})
+    }
+    return
+  }
+  if (event.repeat) {
     return
   }
   if (action.type === 'toggleSearch') {
     event.preventDefault()
     event.stopImmediatePropagation()
-    setSearchOpen((prev) => !prev)
+    if (searchOpenRef.current) {
+      focusSearchInput()
+    } else {
+      setSearchOpen(true)
+    }
     return
   }
   if (action.type === 'clearActivePane') {
@@ -154,8 +165,9 @@ export function dispatchTerminalShortcutAction(
     if (expandedPaneIdRef.current !== null) {
       return
     }
-    manager.equalizePaneSizes()
-    ;(manager.getActivePane() ?? manager.getPanes()[0])?.terminal.focus()
+    equalizeTerminalPanes({ worktreeId, tabId, getManager: () => managerRef.current }, (current) =>
+      (current.getActivePane() ?? current.getPanes()[0])?.terminal.focus()
+    )
     return
   }
   if (action.type === 'toggleExpandActivePane') {

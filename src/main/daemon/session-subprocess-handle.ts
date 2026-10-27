@@ -1,46 +1,48 @@
+import type { PtyChildProcessVerdict } from '../../shared/terminal-process-inspection'
 import type { TerminalExitCause } from '../../shared/terminal-exit-cause'
 
 import type { JobTerminationOutcome } from '../windows/windows-pty-job'
 
+export type ChildProcessVerdictRead = PtyChildProcessVerdict | Promise<PtyChildProcessVerdict>
+
 export type SubprocessHandle = {
   pid: number
-  /** Live foreground process name of the PTY (node-pty's `.process`), e.g.
-   *  'claude' / 'codex' / 'zsh'. Null once the child has exited. */
-  getForegroundProcess(options?: { rawFallback?: boolean }): string | null
+  processNameIsSpawnFile?: boolean
+  /** The job-control shell is the root's only child (macOS login(1) wrapper), not the root itself. */
+  shellIsRootChild?: boolean
+  inspectChildProcesses?(fresh?: boolean, ignoreDetached?: boolean): ChildProcessVerdictRead
+  /** cachedOnly must neither query the process nor schedule inspection. */
+  getForegroundProcess(options?: { rawFallback?: boolean; cachedOnly?: boolean }): string | null
   /** Await process-table evidence captured after this confirmation request. */
-  confirmForegroundProcess?(): Promise<string | null>
+  confirmForegroundProcess?(context?: { decision?: boolean }): Promise<string | null>
   /** Proves a fresh post-boundary PTY process tree contains only the shell. */
   confirmShellForeground?(): Promise<boolean>
-  /** True when shell launch args already delivered the startup command, so the host skips its stdin fallback write. */
+  /** Skip stdin command delivery when shell arguments already delivered it. */
   startupCommandDeliveredInShellArgs?: boolean
-  /** Shell the subprocess actually spawned, after fallbacks. The host reconciles the caller's shell-ready
-   *  assumption against it so a fallback shell without a ready marker never gates startup commands. */
+  /** Report the actual fallback shell so unsupported readiness markers cannot stall startup. */
   shellPath?: string
   shellCwd?: string
   shellPathEnv?: string
-  /** Slave device path, so the shell-readiness probe can read the line discipline.
-   *  Absent on handles with no POSIX slave to read (ConPTY, tests). */
+  /** POSIX slave path for reading line discipline; absent for ConPTY. */
   slavePath?: string
   write(data: string): void
+  /** True once writes can no longer reach the PTY while the child may still be running. */
+  isInputClosed?(): boolean
+  /** Fires once when input closes for a reason other than child exit. */
+  onInputClosed?(cb: (reason: string) => void): void
   resize(cols: number, rows: number): void
-  /** Stop reading the PTY fd (node-pty pause()) so a flooding child blocks on write. Optional:
-   *  handles that cannot pause omit it and flow control degrades to a no-op. */
+  /** Omit pause when the handle cannot apply PTY backpressure. */
   pause?(): void
   resume?(): void
-  /** Resync the native PTY's screen state after a frontend clear. No-op except on Windows/ConPTY,
-   *  where a stale cursor row makes the next prompt repaint below a blank gap. */
+  /** Resync ConPTY after frontend clears to prevent stale-row prompt repaint. */
   clear?(): void
   kill(): void
   forceKill(): void
-  /**
-   * Terminate this pty's job object, covering descendants that detached or
-   * reparented. `unavailable` when the pty has no job -- never a false
-   * `terminated`, so callers must fall back rather than assume the tree is gone.
-   */
+  /** Cover detached descendants via the PTY job; unavailable requires fallback and never proves death. */
   terminateOwnedTree(): JobTerminationOutcome
   signal(sig: string): void
   onData(cb: (data: string) => void): void
   onExit(cb: (code: number, cause?: TerminalExitCause) => void): void
-  /** Release the native PTY handle via node-pty's destroy(). Idempotent; safe to call after exit. */
+  /** Release the native PTY handle idempotently, including after child exit. */
   dispose(): void
 }

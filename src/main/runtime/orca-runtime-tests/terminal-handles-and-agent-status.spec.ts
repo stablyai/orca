@@ -1,4 +1,6 @@
+import { withDurableRuntimeStore } from '../runtime-durable-store-fixture'
 import { describe, expect, it, vi } from 'vitest'
+import { registerLivePty } from '../bind-first-pane.test-fixture'
 import {
   OrcaRuntimeService,
   advertisedUrlWatcher,
@@ -20,7 +22,9 @@ describe('OrcaRuntimeService', () => {
       ...getDefaultWorkspaceSession(),
       tabsByWorktree: { [TEST_WORKTREE_ID]: [] }
     })
-    const runtime = new OrcaRuntimeService({ ...runtimeStore, flushOrThrow: vi.fn() } as never)
+    const runtime = new OrcaRuntimeService(
+      withDurableRuntimeStore({ ...runtimeStore, flushOrThrow: vi.fn() })
+    )
     let process = {
       id: 'reused-pty-id',
       incarnationId: 'inc-old',
@@ -66,7 +70,9 @@ describe('OrcaRuntimeService', () => {
       ...getDefaultWorkspaceSession(),
       tabsByWorktree: { [TEST_WORKTREE_ID]: [] }
     })
-    const runtime = new OrcaRuntimeService({ ...runtimeStore, flushOrThrow: vi.fn() } as never)
+    const runtime = new OrcaRuntimeService(
+      withDurableRuntimeStore({ ...runtimeStore, flushOrThrow: vi.fn() })
+    )
     runtime.syncWindowGraph(1, {
       tabs: [
         {
@@ -86,6 +92,10 @@ describe('OrcaRuntimeService', () => {
           ptyId: 'visual-pty'
         }
       ]
+    })
+    registerLivePty(runtime, 'visual-pty', TEST_WORKTREE_ID, null, {
+      tabId: 'occupied-tab',
+      leafId: HEADLESS_LEAF_ID
     })
     runtime.setPtyController({
       write: () => true,
@@ -156,7 +166,9 @@ describe('OrcaRuntimeService', () => {
         [`duplicate-b:${HEADLESS_SECOND_LEAF_ID}`]: 'inc-duplicate'
       }
     })
-    const runtime = new OrcaRuntimeService({ ...runtimeStore, flushOrThrow: vi.fn() } as never)
+    const runtime = new OrcaRuntimeService(
+      withDurableRuntimeStore({ ...runtimeStore, flushOrThrow: vi.fn() })
+    )
     runtime.setPtyController({
       write: () => true,
       kill: () => true,
@@ -223,7 +235,7 @@ describe('OrcaRuntimeService', () => {
     expect(new Set(handles).size).toBe(handles.length)
 
     await expect(
-      runtime.sendTerminal('term_victim', { text: 'for victim' })
+      runtime.sendTerminal('term_victim', { text: 'for victim' }, { inputKind: 'driving' })
     ).resolves.toMatchObject({ accepted: true })
     expect(writesByPty.get('pty-victim')).toEqual(['for victim'])
     expect(writesByPty.has('pty-imposter')).toBe(false)
@@ -253,10 +265,9 @@ describe('OrcaRuntimeService', () => {
     const listed = await runtime.listTerminals()
     expect(listed.terminals[0]?.handle).toBe('term_already_bound')
     await expect(
-      runtime.sendTerminal('term_already_bound', { text: 'still routed' })
+      runtime.sendTerminal('term_already_bound', { text: 'still routed' }, { inputKind: 'driving' })
     ).resolves.toMatchObject({ accepted: true })
     expect(writes).toEqual(['still routed'])
-    // the reported-but-not-adopted handle must not resolve to the live pty
     await expect(runtime.readTerminal('term_from_env')).rejects.toThrow()
   })
 
@@ -340,7 +351,9 @@ describe('OrcaRuntimeService', () => {
       handle,
       tail: ['after unavailable']
     })
-    await expect(runtime.sendTerminal(handle, { text: 'still writable' })).resolves.toMatchObject({
+    await expect(
+      runtime.sendTerminal(handle, { text: 'still writable' }, { inputKind: 'driving' })
+    ).resolves.toMatchObject({
       handle,
       accepted: true
     })
@@ -460,9 +473,7 @@ describe('OrcaRuntimeService', () => {
       kill: () => true,
       getForegroundProcess: async () => null
     })
-    // Why: the native title is identity, not liveness — Cursor never decorates it, so it
-    // reads the same whether cursor-agent is parked or long gone. Sends auto-submit Enter,
-    // so identity alone must not unlock one.
+    // Bare Cursor titles prove identity, not liveness; auto-Enter requires confirmed foreground.
     syncSinglePty(runtime, 'pty-1', { tabTitle: 'bash', paneTitle: 'Cursor Agent' })
     const [terminal] = (await runtime.listTerminals()).terminals
 
@@ -533,9 +544,7 @@ describe('OrcaRuntimeService', () => {
     })
   })
 
-  // Why: a leaf with no PTY is the same no-evidence case as an unreadable foreground —
-  // nothing was even asked, so the bare title is all that is left. The corroborating
-  // foreground here is deliberately unreachable: no ptyId means no read.
+  // Without a PTY, foreground corroboration is unreachable and the bare title is insufficient.
   it('does not treat a bare Cursor title as an agent on a leaf with no pty', async () => {
     const runtime = new OrcaRuntimeService(store)
     runtime.setPtyController({
@@ -549,11 +558,7 @@ describe('OrcaRuntimeService', () => {
     await expect(runtime.isTerminalRunningAgent(terminal.handle)).resolves.toBe(false)
   })
 
-  // Why: a renderer can push the bare title straight onto the pane, skipping the stale
-  // clear the other tests drive. Arriving that way it lands on top of a `working` status
-  // the spinner left behind, so the pane looks doubly like an agent — and is still just a
-  // shell. The tab is left untitled so the bare title is the only evidence in play: the
-  // refusal is decided at the foreground, and the stale-status gate is held shut behind it.
+  // A renderer can push a bare Cursor title over stale working status; neither proves a live agent.
   it('does not let a renderer-pushed bare Cursor title revive stale agent status', async () => {
     const runtime = new OrcaRuntimeService(store)
     runtime.setPtyController({
@@ -570,9 +575,7 @@ describe('OrcaRuntimeService', () => {
     await expect(runtime.isTerminalRunningAgent(terminal.handle)).resolves.toBe(false)
   })
 
-  // Why: pins the outer catch, not a reachable state — the production controller
-  // (src/main/ipc/pty.ts) already normalizes provider failures, a dropped SSH channel
-  // included, to null before this sees them. Nothing else here makes the read throw.
+  // Exercise the outer catch; production providers normalize foreground failures to null.
   it('does not treat a bare Cursor title as an agent when the foreground read throws', async () => {
     const runtime = new OrcaRuntimeService(store)
     runtime.setPtyController({
@@ -588,9 +591,7 @@ describe('OrcaRuntimeService', () => {
     await expect(runtime.isTerminalRunningAgent(terminal.handle)).resolves.toBe(false)
   })
 
-  // Why: cursor-agent is a node program, so `node` in the foreground plus a Cursor title
-  // looks like corroboration. It is not — the wrapper retry has to resolve a real agent
-  // name, and timing out means it never did.
+  // node plus a Cursor title is insufficient unless the wrapper retry resolves cursor-agent.
   it('does not treat a bare Cursor title as an agent behind a wrapper foreground', async () => {
     vi.useFakeTimers()
     try {

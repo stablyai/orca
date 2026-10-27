@@ -1,18 +1,24 @@
 export type CommandSpec = {
   path: string[]
-  // Why: conventional alternate verbs should resolve without duplicating specs or handlers.
   aliases?: string[][]
   argumentMode?: 'parsed' | 'passthrough'
-  // Why: typo recovery must never steer a benign mistake into destructive state changes.
+  // Prevent typo recovery from suggesting destructive actions for unrelated commands.
   destructive?: boolean
   hidden?: boolean
   summary: string
   usage: string
   allowedFlags: string[]
+  // Flag repeatability varies by command, even for the same flag name.
+  repeatableFlags?: string[]
   positionalArgs?: string[]
+  variadicPositional?: boolean
   examples?: string[]
   notes?: string[]
+  // Caller flags must match the acting agent session; target flags may name another session.
+  identityFlagRoles?: Partial<Record<IdentityFlag, 'caller' | 'target'>>
 }
+
+export type IdentityFlag = 'from' | 'terminal'
 
 export function specPaths(spec: CommandSpec): string[][] {
   return spec.aliases ? [spec.path, ...spec.aliases] : [spec.path]

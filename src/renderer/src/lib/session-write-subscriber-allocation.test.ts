@@ -4,12 +4,7 @@ import { createSessionWriteSubscriber } from './session-write-subscriber'
 import { SESSION_RELEVANT_FIELDS } from './workspace-session'
 import { buildWorkspaceSessionPatch } from './workspace-session-patch'
 
-/**
- * Why a hand-built store: the subscriber allocates a 35-field snapshot plus a changed-field array
- * on every fire that reaches its body, and both are invisible from outside. Driving it through an
- * injected store lets `Array.prototype.filter` stand in as the allocation counter — the changed
- * list is built 1:1 with the snapshot, in the same block, so one count measures both.
- */
+/** Inject a store to count Array.filter allocations: each changed-field list shares the block allocating its 35-field snapshot, so one count observes both costs. */
 function makeSessionState(overrides: Partial<AppState> = {}): AppState {
   const base: Record<string, unknown> = {
     workspaceSessionReady: true,
@@ -50,7 +45,9 @@ function createHarness() {
       },
       getState: () => state
     },
-    persist: (payload) => persisted.push(payload)
+    persist: (payload) => {
+      persisted.push(payload)
+    }
   })
   return {
     dispose,
@@ -121,7 +118,6 @@ describe('session write subscriber allocation', () => {
   it('allocates nothing for store writes that touch no session field', () => {
     const harness = createHarness()
     try {
-      // Prime `prev` on the first fire.
       harness.write()
       vi.advanceTimersByTime(500)
 
@@ -133,7 +129,6 @@ describe('session write subscriber allocation', () => {
           }))
         }
       })
-      // Before: one changed-field array (and one 35-field snapshot) per write.
       expect(calls).toBe(0)
     } finally {
       harness.dispose()
@@ -165,7 +160,7 @@ describe('session write subscriber allocation', () => {
     let state = makeSessionState()
     const listeners: ((next: AppState) => void)[] = []
     const persisted: unknown[] = []
-    let gateOpen = false
+    let refuse = true
     const dispose = createSessionWriteSubscriber({
       store: {
         subscribe: (listener) => {
@@ -174,9 +169,12 @@ describe('session write subscriber allocation', () => {
         },
         getState: () => state
       },
-      persist: (payload) => persisted.push(payload),
-      shouldSchedulePersist: () => gateOpen,
-      subscribeToPersistGateOpen: () => () => {}
+      persist: (payload) => {
+        if (refuse) {
+          throw new Error('write refused')
+        }
+        persisted.push(payload)
+      }
     })
     const write = (patch: Partial<AppState>): void => {
       state = { ...state, ...patch } as AppState
@@ -185,14 +183,13 @@ describe('session write subscriber allocation', () => {
       }
     }
     try {
-      // A real session change lands while the gate is closed, so the write is owed but deferred.
+      // A real session change whose write is refused, so the write is owed but deferred.
       write({ activeTabId: 'tab-1' })
       vi.advanceTimersByTime(500)
       expect(persisted).toHaveLength(0)
 
-      // An unrelated write with the gate open must re-arm it even though nothing session-relevant
-      // moved — the identity-scan fast path must not swallow this wake-up.
-      gateOpen = true
+      // Unrelated writes must wake deferred persistence even when session identities are unchanged.
+      refuse = false
       write({ agentStatusByPaneKey: { a: {} } as never })
       vi.advanceTimersByTime(500)
       expect(persisted).toHaveLength(1)
@@ -202,14 +199,14 @@ describe('session write subscriber allocation', () => {
   })
 
   it('gates on a strict superset of the fields the patch builder reads', () => {
-    // A gate that misses a projection input persists stale state, so this is a correctness lock,
-    // not a perf one. Record what the builder actually touches rather than trusting the types.
+    // Record actual projection reads; missing one persists stale data, making this a correctness gate, not just performance.
     const read = new Set<string>()
     const snapshot = new Proxy(makeSessionState() as unknown as Record<string, unknown>, {
       get(target, property, receiver) {
         if (typeof property === 'string') {
           read.add(property)
         }
+        // oxlint-disable-next-line anti-slop/no-reflect-get -- Proxy `get` trap: only Reflect.get forwards a raw string|symbol key with the proxy receiver.
         return Reflect.get(target, property, receiver)
       }
     })

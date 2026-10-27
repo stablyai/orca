@@ -21,12 +21,7 @@ const {
   existsSyncMock: vi.fn()
 }))
 
-/**
- * A tiny in-memory filesystem, because every assertion here is about what the
- * cache does when one specific path's mtime or bytes move. Sequenced
- * `mockResolvedValueOnce` stacks cannot express that: the stamp and the diff
- * read touch overlapping paths in an order the test should not have to know.
- */
+// Key mocks by path: stamp and blob reads overlap without a fixed ordering.
 type FakeFile = { content: Buffer; mtimeMs: number; ino: number }
 
 const { files } = vi.hoisted(() => ({ files: new Map<string, FakeFile>() }))
@@ -99,8 +94,7 @@ const REF_PATH = `${REPO}/.git/refs/heads/main`
 const INDEX_PATH = `${REPO}/.git/index`
 const GITMODULES_PATH = `${REPO}/.gitmodules`
 
-// Old enough that a further write is guaranteed to move the mtime, which is what
-// lets the cache store at all.
+// Old enough to satisfy the racy-write margin.
 const SETTLED_MTIME_MS = Date.now() - 60_000
 let nextInode = 100
 
@@ -114,7 +108,6 @@ function blobReadCount(): number {
 
 function seedRepo(): void {
   files.clear()
-  // No `.git` file entry: `.git` is a directory, so reading it as a pointer misses.
   writeFile(HEAD_PATH, 'ref: refs/heads/main\n')
   writeFile(REF_PATH, `${'a'.repeat(40)}\n`)
   writeFile(INDEX_PATH, 'index-bytes')
@@ -133,7 +126,6 @@ describe('settled diff cache', () => {
     invalidateGitReadCaches()
     settledDiffCache.resetStatsForTests()
     seedRepo()
-    // `.gitmodules` is absent, so submodule routing resolves to "no submodules".
     gitExecFileAsyncMock.mockResolvedValue({ stdout: '', stderr: '' })
     gitExecFileAsyncBufferMock.mockResolvedValue({ stdout: Buffer.from('index-content\n') })
   })
@@ -150,8 +142,6 @@ describe('settled diff cache', () => {
     expect(settledDiffCache.stats().hits).toBe(1)
   })
 
-  // A WSL-routed read whose worktree path never went through UNC translation: git resolves
-  // `/home/...` inside the distro, but every Node read here has to be spelled for Win32.
   describe('on a Windows host reading a raw Linux WSL worktree path', () => {
     const WSL_WORKTREE = '/home/me/repo/feature'
     const WSL_OPTIONS = { wslDistro: 'Ubuntu' }
@@ -162,7 +152,6 @@ describe('settled diff cache', () => {
       platformDescriptor = Object.getOwnPropertyDescriptor(process, 'platform')
       Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
       files.clear()
-      // `.git` is a directory here, so the gitdir is the worktree path plus a segment.
       writeFile(path.join(HOST_WORKTREE, '.git/HEAD'), 'ref: refs/heads/main\n')
       writeFile(path.join(HOST_WORKTREE, '.git/refs/heads/main'), `${'a'.repeat(40)}\n`)
       writeFile(path.join(HOST_WORKTREE, '.git/index'), 'index-bytes')
@@ -195,8 +184,7 @@ describe('settled diff cache', () => {
       expect(statMock).toHaveBeenCalledWith(path.join(HOST_WORKTREE, '.git/index'))
     })
 
-    // Each stamp component has to be stat'd under the host spelling too: one that permanently
-    // misses is a constant, so the stamp stops moving and the cache serves a stale diff.
+    // A permanently absent component would stop the stamp moving and serve stale diffs.
     it('invalidates when the working tree file is edited under the host spelling', async () => {
       await getDiff(WSL_WORKTREE, FILE, false, false, WSL_OPTIONS)
       const spawnsAfterFirst = blobReadCount()
@@ -220,8 +208,7 @@ describe('settled diff cache', () => {
     })
   })
 
-  // An empty worktree path has no host spelling, and `path.join('', x)` is a *relative* path:
-  // every fs read would land in the process cwd, which in dev is Orca's own checkout.
+  // Empty worktrees must not turn filesystem reads into paths relative to Orca's own checkout.
   it('reads nothing relative to the cwd when the worktree path has no host spelling', async () => {
     await getDiff('', FILE, false)
 
@@ -230,8 +217,6 @@ describe('settled diff cache', () => {
     expect(settledDiffCache.stats().entries).toBe(0)
   })
 
-  // The four invalidation axes, one per diff input. Each proves the stale result is
-  // never served, which matters more than any of the hits above.
   it.each([
     [
       'the working tree file is edited',
@@ -263,8 +248,6 @@ describe('settled diff cache', () => {
     expect(blobReadCount()).toBeGreaterThan(spawnsAfterFirst)
   })
 
-  // The dangerous ordering: the read observed pre-mutation state, so storing its
-  // result after the mutation would pin a diff that was already wrong.
   it('refuses to store a result for a read that a mutation overtook', async () => {
     let releaseBlob = (): void => {}
     const blocked = new Promise<{ stdout: Buffer }>((resolve) => {
@@ -289,8 +272,7 @@ describe('settled diff cache', () => {
     expect(second).toMatchObject({ originalContent: 'post-mutation\n' })
   })
 
-  // The stamp is itself several awaited stats, so a mutation can begin and end entirely
-  // inside it — leaving a stamp torn across the mutation that no later stamp can match.
+  // Mutations may begin and end during the awaited stamp reads.
   it('refuses to store a result for a mutation that landed inside the stamp read', async () => {
     const baseStat = statMock.getMockImplementation()
     if (!baseStat) {
@@ -315,8 +297,6 @@ describe('settled diff cache', () => {
     expect(settledDiffCache.stats().entries).toBe(0)
   })
 
-  // A write inside the mtime granularity window could be overwritten again without
-  // moving the timestamp, so that read is not allowed to become a cache entry.
   it('refuses to store a diff of a file written moments ago', async () => {
     writeFile(WORKING_TREE_PATH, 'just-saved', Date.now())
 
@@ -329,7 +309,6 @@ describe('settled diff cache', () => {
     expect(settledDiffCache.stats().entries).toBe(0)
   })
 
-  // A folder workspace, or any path that is not a git checkout, cannot be stamped.
   it('never caches when the repo layout cannot be stamped', async () => {
     files.delete(HEAD_PATH)
 
@@ -342,8 +321,6 @@ describe('settled diff cache', () => {
     expect(settledDiffCache.stats().entries).toBe(0)
   })
 
-  // A WSL relay that never reached git returns the same empty left side as a new
-  // file does, so persisting it would pin a wrong diff until something else moved.
   it('refuses to store a diff whose blob read failed rather than proved absence', async () => {
     gitExecFileAsyncBufferMock.mockRejectedValue(
       Object.assign(new Error('wsl.exe failed'), { code: 1 })
@@ -358,9 +335,12 @@ describe('settled diff cache', () => {
   })
 
   it('caches a new file whose absence from the index git actually reported', async () => {
-    gitExecFileAsyncBufferMock.mockRejectedValue(
-      Object.assign(new Error("fatal: path 'src/file.ts' does not exist"), { code: 128 })
-    )
+    gitExecFileAsyncBufferMock.mockImplementation(async (args: string[]) => {
+      const stderr = args.some((arg) => arg.startsWith(':'))
+        ? "fatal: path 'src/file.ts' exists on disk, but not in the index"
+        : "fatal: path 'src/file.ts' exists on disk, but not in 'HEAD'"
+      throw Object.assign(new Error(stderr), { code: 128, stderr: Buffer.from(stderr) })
+    })
 
     await getDiff(REPO, FILE, false)
     const spawnsAfterFirst = blobReadCount()
@@ -379,7 +359,6 @@ describe('settled diff cache', () => {
     expect(blobReadCount()).toBeGreaterThan(spawnsAfterUnstaged)
   })
 
-  // A staged diff compares HEAD to the index, so a working-tree edit must not evict it.
   it('keeps a staged diff across a working-tree edit', async () => {
     await getDiff(REPO, FILE, true)
     const spawnsAfterFirst = blobReadCount()
@@ -406,7 +385,6 @@ describe('settled diff cache', () => {
     releaseBlob()
     await Promise.all([first, second])
 
-    // Why exactly equal: the second read must join the first, not start its own spawns.
     expect(blobReadCount()).toBe(spawnsBeforePoll)
   })
 })

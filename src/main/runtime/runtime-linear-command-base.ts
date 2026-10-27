@@ -9,7 +9,7 @@ export type RuntimeLinearCommandPorts = {
   resolveWorktreeSelector: (selector: string) => Promise<ResolvedWorktree>
   listResolvedWorktrees: () => Promise<ResolvedWorktree[]>
   setWorktreeMeta: (
-    worktreeId: string,
+    worktree: Pick<ResolvedWorktree, 'id' | 'hostId'>,
     meta: {
       linkedLinearIssueWorkspaceId: string
       linkedLinearIssueOrganizationUrlKey: string | null
@@ -18,7 +18,7 @@ export type RuntimeLinearCommandPorts = {
   emitClientEvent: (event: LinearLinkedIssueUpdatedEvent) => void
 }
 
-// Why: browse reads sit at the chain root so write commands can re-enter them through `this`, as they did on the facade.
+// Root browse reads so write commands can reenter through this, preserving facade dispatch.
 export class RuntimeLinearCommandBase extends RuntimeLinearBrowseCommands {
   constructor(private readonly ports: RuntimeLinearCommandPorts) {
     super()
@@ -41,13 +41,13 @@ export class RuntimeLinearCommandBase extends RuntimeLinearBrowseCommands {
   }
 
   protected setWorktreeMeta(
-    worktreeId: string,
+    worktree: Pick<ResolvedWorktree, 'id' | 'hostId'>,
     meta: {
       linkedLinearIssueWorkspaceId: string
       linkedLinearIssueOrganizationUrlKey: string | null
     }
   ): void {
-    this.ports.setWorktreeMeta(worktreeId, meta)
+    this.ports.setWorktreeMeta(worktree, meta)
   }
 
   protected emitClientEvent(event: LinearLinkedIssueUpdatedEvent): void {

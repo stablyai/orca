@@ -1,6 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { resolve } from 'node:path'
-import type { CreateWorktreeResult } from '../../shared/worktree/create-types'
 import { resolveRegisteredWorktreePath } from './registered-worktree-roots-cache'
 import { computeWorkspaceRootAsync } from './worktree-logic'
 import type * as WorktreeLogic from './worktree-logic'
@@ -22,6 +21,10 @@ import {
 } from './worktrees-test-module-mocks'
 import { handlers, mainWindow, setupWorktreeHandlers, store } from './worktrees-test-harness'
 import type { WorktreeRuntimeStub } from './worktrees-test-runtime-stub'
+import {
+  hostWorktreeTarget,
+  type HostWorktreeTarget
+} from '../../shared/worktree/host-qualified-identity'
 
 vi.mock('electron', async () =>
   (await import('./worktrees-test-module-mocks')).electronModuleMock()
@@ -46,18 +49,8 @@ vi.mock('../github/client', async () =>
 vi.mock('../source-control/hosted-review', async () =>
   (await import('./worktrees-test-module-mocks')).hostedReviewModuleMock()
 )
-vi.mock('../providers/ssh-git-dispatch', async () =>
-  (await import('./worktrees-test-module-mocks')).sshGitDispatchModuleMock()
-)
-vi.mock('../providers/ssh-filesystem-dispatch', async () =>
-  (await import('./worktrees-test-module-mocks')).sshFilesystemDispatchModuleMock()
-)
 vi.mock('./worktree-symlinks', async () =>
   (await import('./worktrees-test-module-mocks')).worktreeSymlinksModuleMock()
-)
-vi.mock('./ssh', async () => (await import('./worktrees-test-module-mocks')).sshModuleMock())
-vi.mock('../ssh/ssh-target-registry', async () =>
-  (await import('./worktrees-test-module-mocks')).sshTargetRegistryModuleMock()
 )
 vi.mock('../hooks', async () => (await import('./worktrees-test-module-mocks')).hooksModuleMock())
 vi.mock('../setup-runner-script-text', async (importOriginal) =>
@@ -105,7 +98,12 @@ vi.mock('../workspace-cleanup-removal-snapshot-prune', async () =>
 vi.mock('../runtime/worktree-teardown', async () =>
   (await import('./worktrees-test-module-mocks')).worktreeTeardownModuleMock()
 )
-vi.mock('./pty', async () => (await import('./worktrees-test-module-mocks')).ptyModuleMock())
+vi.mock('./pty/provider/registry', async () =>
+  (await import('./worktrees-test-module-mocks')).ptyRegistryModuleMock()
+)
+vi.mock('./pty/provider/state-cleanup', async () =>
+  (await import('./worktrees-test-module-mocks')).ptyStateCleanupModuleMock()
+)
 
 describe('registerWorktreeHandlers', () => {
   let runtimeStub: WorktreeRuntimeStub
@@ -234,6 +232,7 @@ describe('registerWorktreeHandlers', () => {
       baseBranch: sha
     })
 
+    // Speculative warm-up stays at default priority; only awaited creation is promoted.
     expect(gitExecFileAsyncMock).toHaveBeenCalledWith(
       ['rev-parse', '--verify', '--quiet', `${sha}^{commit}`],
       { cwd: '/workspace/repo' }
@@ -272,7 +271,9 @@ describe('registerWorktreeHandlers', () => {
       '/workspace/pr-title',
       'feature/fix',
       sha,
-      false
+      false,
+      false,
+      {}
     )
   })
 
@@ -330,7 +331,6 @@ describe('registerWorktreeHandlers', () => {
   })
 
   it('auto-suffixes the branch name when the first choice collides with a remote branch', async () => {
-    // Why: new-workspace flow should silently try improve-dashboard-2, -3, … rather than failing back to the name picker.
     getBranchConflictKindMock.mockImplementation(async (_repoPath: string, branch: string) =>
       branch === 'improve-dashboard' ? 'remote' : null
     )
@@ -344,17 +344,27 @@ describe('registerWorktreeHandlers', () => {
       }
     ])
 
-    const result = (await handlers['worktrees:create'](null, {
+    addWorktreeMock.mockImplementationOnce(async () => {
+      expect(mainWindow.webContents.send).toHaveBeenCalledWith('createWorktree:progress', {
+        phase: 'creating',
+        creationId: 'creation-1',
+        worktreeId: 'repo-1::/workspace/improve-dashboard-2'
+      })
+    })
+    const result = await handlers['worktrees:create'](null, {
       repoId: 'repo-1',
-      name: 'improve-dashboard'
-    })) as CreateWorktreeResult
+      name: 'improve-dashboard',
+      creationId: 'creation-1'
+    })
 
     expect(addWorktreeMock).toHaveBeenCalledWith(
       '/workspace/repo',
       '/workspace/improve-dashboard-2',
       'improve-dashboard-2',
       'origin/main',
-      false
+      false,
+      false,
+      { onCheckoutProgress: expect.any(Function) }
     )
     expect(result).toMatchObject({
       worktree: expect.objectContaining({
@@ -385,10 +395,12 @@ describe('registerWorktreeHandlers', () => {
       '/workspace/rocket',
       'rocket',
       'origin/main',
-      false
+      false,
+      false,
+      {}
     )
     expect(store.setWorktreeMeta).toHaveBeenCalledWith(
-      'repo-1::/workspace/rocket',
+      hostWorktreeTarget({ id: 'repo-1::/workspace/rocket', hostId: 'local' }),
       expect.objectContaining({ displayName: '🚀' })
     )
   })
@@ -435,10 +447,12 @@ describe('registerWorktreeHandlers', () => {
       '../worktrees/feature',
       'feature',
       'origin/main',
-      false
+      false,
+      false,
+      {}
     )
     expect(store.setWorktreeMeta).toHaveBeenCalledWith(
-      'repo-1::../worktrees/feature',
+      hostWorktreeTarget({ id: 'repo-1::../worktrees/feature', hostId: 'local' }),
       expect.objectContaining({
         orcaCreationWorkspaceLayout: { path: '../worktrees', nestWorkspaces: false }
       })
@@ -475,7 +489,7 @@ describe('registerWorktreeHandlers', () => {
     expect(listWorktreesMock).toHaveBeenCalledTimes(listWorktreesCallsAfterCreate)
   })
 
-  it('completes a create the listing failed and keeps sibling worktrees authorized', async () => {
+  it('verifies a create without re-listing and keeps sibling worktrees authorized', async () => {
     const sibling = {
       path: '/workspace/existing-sibling',
       head: 'sib123',
@@ -494,8 +508,8 @@ describe('registerWorktreeHandlers', () => {
       sibling
     ])
     await handlers['worktrees:create'](null, { repoId: 'repo-1', name: 'existing-sibling' })
+    const listingCalls = listWorktreesMock.mock.calls.length
 
-    // The create Git could no longer list, recovered by reading the worktree directly.
     listWorktreesMock.mockRejectedValue(new Error('git worktree list timed out.'))
     describeCreatedWorktreeMock.mockResolvedValue({
       path: '/workspace/improve-dashboard',
@@ -508,14 +522,14 @@ describe('registerWorktreeHandlers', () => {
     await expect(
       handlers['worktrees:create'](null, { repoId: 'repo-1', name: 'improve-dashboard' })
     ).resolves.toMatchObject({ worktree: { path: '/workspace/improve-dashboard' } })
-    // Why: registration replaces the repo's root set, so a one-row recovery must not revoke it.
+    // Full registration replaces roots; one-row recovery must preserve siblings.
     await expect(
       resolveRegisteredWorktreePath('/workspace/existing-sibling', store as never)
     ).resolves.toBe(resolve('/workspace/existing-sibling'))
-    // Why: the recovered create is still a real worktree, so its own path must be usable at once.
     await expect(
       resolveRegisteredWorktreePath('/workspace/improve-dashboard', store as never)
     ).resolves.toBe(resolve('/workspace/improve-dashboard'))
+    expect(listWorktreesMock).toHaveBeenCalledTimes(listingCalls)
   })
 
   it('uses branchNameOverride for the git branch while keeping the sanitized worktree path', async () => {
@@ -551,7 +565,9 @@ describe('registerWorktreeHandlers', () => {
       '/workspace/feature-something',
       'feature/something',
       'origin/main',
-      false
+      false,
+      false,
+      {}
     )
     expect(resolveLocalGitUsernameMock).not.toHaveBeenCalled()
     expect(result).toMatchObject({
@@ -572,7 +588,7 @@ describe('registerWorktreeHandlers', () => {
       kind: 'folder' as const
     }
     store.getRepo.mockReturnValue(repo)
-    store.setWorktreeMeta.mockImplementation((_worktreeId, meta) => ({
+    store.setWorktreeMeta.mockImplementation((_target: HostWorktreeTarget, meta) => ({
       displayName: '',
       comment: '',
       linkedIssue: null,
@@ -674,8 +690,9 @@ describe('registerWorktreeHandlers', () => {
           launch_source: 'new_workspace_composer',
           request_kind: 'new'
         },
-        activate: true
-      }
+        surfaceOwner: false
+      },
+      expect.objectContaining({ id: 'repo-1::/workspace/improve-dashboard' })
     )
     expect(runtimeStub.createTerminal).toHaveBeenNthCalledWith(
       2,
@@ -687,14 +704,18 @@ describe('registerWorktreeHandlers', () => {
           ORCA_ROOT_PATH: '/workspace/repo',
           ORCA_WORKTREE_PATH: '/workspace/improve-dashboard'
         },
-        activate: false
-      }
+        activate: false,
+        surfaceOwner: false
+      },
+      expect.objectContaining({ id: 'repo-1::/workspace/improve-dashboard' })
     )
     const startupCreateCall = runtimeStub.createTerminal.mock.calls[0]
     const setupCreateCall = runtimeStub.createTerminal.mock.calls[1]
     if (!startupCreateCall || !setupCreateCall) {
       throw new Error('expected startup and setup terminal calls')
     }
+    // The submitting renderer controls navigation; host startup panes must not activate the workspace (#9944).
+    expect(startupCreateCall[1]).not.toHaveProperty('activate')
     const startupCommand = (startupCreateCall[1] as { command: string }).command
     const setupCommand = (setupCreateCall[1] as { command: string }).command
     expect(startupCommand).toBe('claude --prefill test')
@@ -714,7 +735,6 @@ describe('registerWorktreeHandlers', () => {
         'spawn_startup_terminal'
       ])
     )
-    // Nothing warmed this repo, so the create must report the cold path rather than stay silent.
     expect(result.timing?.preparedCheckout).toEqual({ status: 'miss', reason: 'none_armed' })
   })
 
@@ -768,6 +788,51 @@ describe('registerWorktreeHandlers', () => {
       })
     )
     expect(result.setup?.command).toContain('printf')
+  })
+
+  it('opens Setup beside the startup terminal without surfacing the workspace', async () => {
+    addWorktreeMock.mockResolvedValue({})
+    listWorktreesMock.mockResolvedValueOnce([
+      {
+        path: '/workspace/improve-dashboard',
+        head: 'def',
+        branch: 'improve-dashboard',
+        isBare: false,
+        isMainWorktree: false
+      }
+    ])
+    store.getSettings.mockReturnValue({
+      branchPrefix: 'none',
+      nestWorkspaces: false,
+      refreshLocalBaseRefOnWorktreeCreate: false,
+      workspaceDir: '/workspace',
+      setupScriptLaunchMode: 'split-vertical'
+    })
+    loadHooksMock.mockReturnValue({ scripts: { setup: 'pnpm install' } })
+    getEffectiveHooksMock.mockReturnValue({ scripts: { setup: 'pnpm install' } })
+    getEffectiveHooksFromConfigMock.mockReturnValue({ scripts: { setup: 'pnpm install' } })
+    shouldRunSetupForCreateMock.mockReturnValue(true)
+
+    await handlers['worktrees:create'](null, {
+      repoId: 'repo-1',
+      name: 'improve-dashboard',
+      createdWithAgent: 'claude',
+      startup: { command: 'claude' }
+    })
+
+    expect(runtimeStub.createTerminal).toHaveBeenCalledTimes(2)
+    expect(runtimeStub.splitTerminal).not.toHaveBeenCalled()
+    expect(runtimeStub.createTerminal).toHaveBeenLastCalledWith(
+      'id:repo-1::/workspace/improve-dashboard',
+      {
+        title: 'Setup',
+        command: expect.stringContaining('setup-runner.sh'),
+        env: expect.any(Object),
+        activate: false,
+        surfaceOwner: false
+      },
+      expect.objectContaining({ id: 'repo-1::/workspace/improve-dashboard' })
+    )
   })
 
   it('rejects ask-policy creates before mutating git state when setup decision is missing', async () => {

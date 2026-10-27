@@ -2,6 +2,8 @@ import { describe, expect, it } from 'vitest'
 import {
   getResourceUsageAllWorktrees,
   getResourceUsageDeferredSshSessionIdsByTabId,
+  getResourceUsageFolderWorkspaces,
+  getResourceUsageProjectGroups,
   getResourceUsagePtyIdsByTabId,
   getResourceUsageRepos,
   getResourceUsageRuntimePaneTitlesByTabId,
@@ -42,6 +44,19 @@ const worktree = (): AppState['worktreesByRepo'][string][number] => ({
 })
 
 describe('resource usage open slices', () => {
+  it('subscribes to folder and group catalogs only while open', () => {
+    const folderWorkspaces: AppState['folderWorkspaces'] = []
+    const projectGroups: AppState['projectGroups'] = []
+    expect(getResourceUsageFolderWorkspaces({ folderWorkspaces }, true)).toBe(folderWorkspaces)
+    expect(getResourceUsageProjectGroups({ projectGroups }, true)).toBe(projectGroups)
+    expect(getResourceUsageFolderWorkspaces({ folderWorkspaces }, false)).toBe(
+      getResourceUsageFolderWorkspaces({ folderWorkspaces: [] }, false)
+    )
+    expect(getResourceUsageProjectGroups({ projectGroups }, false)).toBe(
+      getResourceUsageProjectGroups({ projectGroups: [] }, false)
+    )
+  })
+
   it('returns stable empty slices while the popover is closed', () => {
     const tabsByWorktree = { 'wt-1': [terminalTab('tab-1')] }
     const ptyIdsByTabId = { 'tab-1': ['pty-1'] }

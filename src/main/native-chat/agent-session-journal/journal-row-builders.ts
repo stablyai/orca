@@ -1,12 +1,21 @@
+import { journalItemEchoFields, type JournalItemEcho } from './journal-item-echo'
 import type {
-  AgentJournalDispatchState,
+  AgentJournalSubmission,
   AgentJournalItemBody,
   AgentJournalItemIdentity,
   AgentJournalMessageItem,
-  AgentSessionProviderHandle
+  AgentJournalProducerLinkage,
+  AgentJournalRowAttribution,
+  AgentJournalTurnScope,
+  AgentSessionJournalIdentity,
+  AgentSessionJournalProviderHandle
 } from '../../../shared/agent-session-journal-types'
-import { AGENT_SESSION_JOURNAL_SCHEMA_VERSION } from '../../../shared/agent-session-journal-types'
+import type { AgentSessionExecutionOptions } from '../../../shared/agent-session-execution-options'
+import { agentSessionJournalProviderHandle } from '../../../shared/agent-session-provider-handle-encoding'
+import { journalRowSchemaVersion } from '../../../shared/agent-session-journal-types'
+import { agentJournalLinkageFields } from '../../../shared/agent-session-journal-producer'
 import { agentJournalItemKey } from '../../../shared/agent-session-journal-item-key'
+import { journalItemOwnerFence } from './journal-item-provenance'
 import type { JournalReducerState } from './journal-reducer'
 import type {
   JournalDispatchRow,
@@ -20,48 +29,100 @@ import {
   MAX_JOURNAL_LIFECYCLE_BATCH_BYTES,
   MAX_JOURNAL_LIFECYCLE_BATCH_MUTATIONS
 } from './journal-row-schema'
+import { boundInlineText, JOURNAL_DISPATCH_REASON_LIMITS } from './journal-payload-bounds'
+import { assertSubmissionIdUnused } from './journal-write-guards'
+import { turnEndAfterStop } from './journal-stop-turn-end'
+import { nextJournalItemRevision } from './journal-item-revision'
 import type { ResolveDispatchInput } from './journal-store-contracts'
+import {
+  journalLifecycleMutationItemId,
+  journalLifecycleMutationRow,
+  type JournalItemAddress,
+  type JournalLifecycleMutationInput
+} from './journal-lifecycle-mutation'
+export {
+  journalLifecycleItemMutation,
+  journalLifecycleMutationItemId,
+  journalLifecycleMutationRow,
+  type JournalLifecycleMutationInput,
+  type JournalLifecycleIdentityMutationInput
+} from './journal-lifecycle-mutation'
 
 type RowBuilder<T> = (seq: number, ts: number) => T
 
 export function journalItemRowBuilder(
   state: () => JournalReducerState,
-  identity: AgentJournalItemIdentity,
+  address: AgentJournalItemIdentity | string,
   body: AgentJournalItemBody,
-  options: { fence: number; observedAt?: number; recovered?: true }
+  options: AgentJournalRowAttribution & {
+    echoOf?: JournalItemEcho['echoOf']
+    fence: number
+    ownerFence?: number
+    executionOwner?: number
+    observedAt?: number
+    recovered?: true
+  },
+  revisions?: Map<string, number>
 ): RowBuilder<JournalItemRow> {
   return (seq, ts) =>
     buildJournalItemRow({
       state: state(),
-      identity,
+      ...(typeof address === 'string' ? { itemId: address } : { identity: address }),
       body,
+      ...journalItemEchoFields(options),
       seq,
       fence: options.fence,
+      ownerFence: options.ownerFence,
+      executionOwner: options.executionOwner,
       ts: options.observedAt ?? ts,
-      recovered: options.recovered
+      recovered: options.recovered,
+      linkage: options,
+      turnScope: options.turnScope,
+      revisions
     })
 }
 
 export function journalTombstoneRowBuilder(
   state: () => JournalReducerState,
   itemId: string,
-  fence: number
+  fence: number,
+  revisions?: Map<string, number>
 ): RowBuilder<JournalTombstoneRow> {
-  return (seq, ts) => buildJournalTombstoneRow({ state: state(), itemId, seq, fence, ts })
+  return (seq, ts) =>
+    buildJournalTombstoneRow({ state: state(), itemId, seq, fence, ts, revisions })
 }
 
 export function journalSubmissionRowBuilder(
   state: () => JournalReducerState,
-  providerHandle: AgentSessionProviderHandle,
+  identity: Pick<AgentSessionJournalIdentity, 'providerHandle' | 'agent'>,
   input: {
     clientMessageId: string
     payloadFingerprint: string
     body: AgentJournalMessageItem
     fence: number
-  }
+    handoverRecorded?: true
+    queuedMessageId?: string
+    origin?: 'client' | 'host'
+    options?: AgentSessionExecutionOptions
+  },
+  /** Stamp queue links from consumption here so every handoff preserves them. */
+  consume?: { messageId: string }
 ): RowBuilder<JournalSubmissionRow> {
-  return (seq, ts) =>
-    buildJournalSubmissionRow({ state: state(), providerHandle, ...input, seq, ts })
+  return (seq, ts) => {
+    assertSubmissionIdUnused(state().submissions, input.clientMessageId)
+    if (consume && (input.queuedMessageId ?? consume.messageId) !== consume.messageId) {
+      throw new Error(`submission ${input.clientMessageId} names a draft it does not consume`)
+    }
+    const queuedMessageId = consume?.messageId ?? input.queuedMessageId
+    return buildJournalSubmissionRow({
+      state: state(),
+      providerHandle: agentSessionJournalProviderHandle(identity),
+      ...input,
+      ...(queuedMessageId !== undefined ? { queuedMessageId } : {}),
+      seq,
+      ts
+    })
+  }
 }
 
 export function journalDispatchRowBuilder(
@@ -69,56 +130,86 @@ export function journalDispatchRowBuilder(
   input: ResolveDispatchInput
 ): RowBuilder<JournalDispatchRow> {
   const providerItemId =
-    input.state === 'accepted' ? agentJournalItemKey(input.providerIdentity) : null
-  return (seq, ts) =>
-    buildJournalDispatchRow({
-      state: state(),
-      clientMessageId: input.clientMessageId,
-      dispatchState: input.state,
-      providerItemId,
-      reason: input.state === 'accepted' ? null : (input.reason ?? null),
-      seq,
-      fence: input.fence,
-      ts,
-      recovered: input.recovered
-    })
+    input.state === 'accepted' && input.providerIdentity
+      ? agentJournalItemKey(input.providerIdentity)
+      : null
+  return (seq, ts) => ({
+    kind: 'dispatch',
+    clientMessageId: input.clientMessageId,
+    state: input.state,
+    providerItemId,
+    reason: boundedDispatchReason(input),
+    ...(input.state === 'rejected' ? { rejection: input.rejection } : {}),
+    ...(input.state === 'rejected' && input.keptAsQueuedMessageId !== undefined
+      ? { keptAsQueuedMessageId: input.keptAsQueuedMessageId }
+      : {}),
+    // Explicit null distinguishes no answered turn from older rows lacking the field.
+    ...(input.state === 'rejected'
+      ? {
+          answeredInTurn: input.answeredInTurn
+            ? {
+                turnItemId: agentJournalItemKey(input.answeredInTurn.turn),
+                via: input.answeredInTurn.via
+              }
+            : null
+        }
+      : {}),
+    ...journalRowBase(state().epoch, seq, input.fence, ts),
+    ...(input.recovered ? { recovered: input.recovered } : {}),
+    ...(input.state === 'pending' ? { turnScope: input.turnScope } : {}),
+    ...(input.state === 'pending' && input.carries?.length ? { carries: [...input.carries] } : {})
+  })
 }
 
-export type JournalLifecycleMutationInput =
-  | { kind: 'item'; identity: AgentJournalItemIdentity; body: AgentJournalItemBody }
-  | { kind: 'tombstone'; identity: AgentJournalItemIdentity }
+/** Bound provider error heads to preserve prefix-based classification; legacy readers still need their own bound. */
+function boundedDispatchReason(input: ResolveDispatchInput): string | null {
+  if (input.state === 'accepted' || input.state === 'pending' || !input.reason) {
+    return null
+  }
+  return boundInlineText(input.reason, JOURNAL_DISPATCH_REASON_LIMITS).text
+}
 
 export function journalLifecycleBatchRowBuilder(
   state: () => JournalReducerState,
   settlementId: string,
   mutations: readonly JournalLifecycleMutationInput[],
-  options: { fence: number; recovered?: true }
+  /** Each mutation owns producer linkage; whole-row stamping would misattribute mixed-agent batches. */
+  options: { fence: number; recovered?: true },
+  revisions?: Map<string, number>
 ): RowBuilder<JournalLifecycleBatchRow> {
   return (seq, ts) => {
     if (mutations.length === 0 || mutations.length > MAX_JOURNAL_LIFECYCLE_BATCH_MUTATIONS) {
       throw new Error('journal_lifecycle_batch_mutation_bound_exceeded')
     }
     const current = state()
-    const revisions = new Map<string, number>()
+    const runningRevisions = revisions ?? new Map<string, number>()
     const built: JournalLifecycleMutation[] = mutations.map((mutation) => {
-      const itemId = agentJournalItemKey(mutation.identity)
+      const itemId = journalLifecycleMutationItemId(mutation)
       const resolved = current.aliases.get(itemId) ?? itemId
-      const revision =
-        (revisions.get(resolved) ??
-          Math.max(
-            current.items.get(resolved)?.revision ?? 0,
-            current.tombstones.get(resolved) ?? 0
-          )) + 1
-      revisions.set(resolved, revision)
-      return mutation.kind === 'item'
-        ? { kind: 'item', itemId, revision, body: mutation.body }
-        : { kind: 'tombstone', itemId, revision }
+      const revision = nextJournalItemRevision(current, itemId, runningRevisions)
+      return journalLifecycleMutationRow(
+        mutation.kind === 'item'
+          ? { ...mutation, body: turnEndAfterStop(current, resolved, mutation.body) }
+          : mutation,
+        itemId,
+        revision,
+        journalItemOwnerFence(current, resolved, {
+          fence: options.fence,
+          ownerFence: mutation.kind === 'item' ? mutation.ownerFence : undefined
+        })
+      )
     })
     const row: JournalLifecycleBatchRow = {
       kind: 'lifecycle-batch',
       settlementId,
       mutations: built,
-      ...journalRowBase(current.epoch, seq, options.fence, ts),
+      ...journalRowBase(
+        current.epoch,
+        seq,
+        options.fence,
+        ts,
+        built.flatMap((mutation) => (mutation.kind === 'item' ? [mutation.body] : []))
+      ),
       ...(options.recovered ? { recovered: options.recovered } : {})
     }
     if (Buffer.byteLength(JSON.stringify(row), 'utf8') + 1 > MAX_JOURNAL_LIFECYCLE_BATCH_BYTES) {
@@ -132,30 +223,45 @@ export function journalRowBase(
   epoch: string,
   seq: number,
   fence: number,
-  ts: number
+  ts: number,
+  bodies: readonly { kind: string }[] = []
 ): { v: number; epoch: string; seq: number; fence: number; ts: number } {
-  return { v: AGENT_SESSION_JOURNAL_SCHEMA_VERSION, epoch, seq, fence, ts }
+  return { v: journalRowSchemaVersion(bodies), epoch, seq, fence, ts }
 }
 
-export function buildJournalItemRow(input: {
-  state: JournalReducerState
-  identity: AgentJournalItemIdentity
-  body: AgentJournalItemBody
-  seq: number
-  fence: number
-  ts: number
-  recovered?: true
-}): JournalItemRow {
-  const itemId = agentJournalItemKey(input.identity)
+export function buildJournalItemRow(
+  input: JournalItemAddress & {
+    echoOf?: JournalItemEcho['echoOf']
+    state: JournalReducerState
+    body: AgentJournalItemBody
+    seq: number
+    fence: number
+    ownerFence?: number
+    executionOwner?: number
+    ts: number
+    recovered?: true
+    linkage?: AgentJournalProducerLinkage
+    turnScope: AgentJournalTurnScope
+    revisions?: Map<string, number>
+  }
+): JournalItemRow {
+  const itemId = journalLifecycleMutationItemId(input)
   const resolved = input.state.aliases.get(itemId) ?? itemId
-  const revision = (input.state.items.get(resolved)?.revision ?? 0) + 1
+  // Recreated items must outrank tombstones or the reducer will discard them.
+  const revision = nextJournalItemRevision(input.state, itemId, input.revisions)
+  const body = turnEndAfterStop(input.state, resolved, input.body)
   return {
     kind: 'item',
+    ...journalItemEchoFields(input),
     itemId,
     revision,
-    body: input.body,
-    ...journalRowBase(input.state.epoch, input.seq, input.fence, input.ts),
-    ...(input.recovered ? { recovered: input.recovered } : {})
+    body,
+    ...journalRowBase(input.state.epoch, input.seq, input.fence, input.ts, [body]),
+    ownerFence: journalItemOwnerFence(input.state, resolved, input),
+    ...(input.executionOwner === undefined ? {} : { executionOwner: input.executionOwner }),
+    ...(input.recovered ? { recovered: input.recovered } : {}),
+    turnScope: input.turnScope,
+    ...agentJournalLinkageFields(input.linkage)
   }
 }
 
@@ -165,12 +271,13 @@ export function buildJournalTombstoneRow(input: {
   seq: number
   fence: number
   ts: number
+  revisions?: Map<string, number>
 }): JournalTombstoneRow {
-  const resolved = input.state.aliases.get(input.itemId) ?? input.itemId
   return {
     kind: 'tombstone',
     itemId: input.itemId,
-    revision: (input.state.items.get(resolved)?.revision ?? 0) + 1,
+    // Rank above both live and tombstone revisions even if map-disjointness is later relaxed.
+    revision: nextJournalItemRevision(input.state, input.itemId, input.revisions),
     ...journalRowBase(input.state.epoch, input.seq, input.fence, input.ts)
   }
 }
@@ -179,11 +286,16 @@ export function buildJournalSubmissionRow(input: {
   state: JournalReducerState
   clientMessageId: string
   payloadFingerprint: string
-  providerHandle: AgentSessionProviderHandle
+  providerHandle: AgentSessionJournalProviderHandle
   body: AgentJournalMessageItem
   seq: number
   fence: number
   ts: number
+  handoverRecorded?: true
+  queuedMessageId?: string
+  origin?: 'client' | 'host'
+  source?: AgentJournalSubmission['source']
+  options?: AgentSessionExecutionOptions
 }): JournalSubmissionRow {
   return {
     kind: 'submission',
@@ -191,28 +303,12 @@ export function buildJournalSubmissionRow(input: {
     payloadFingerprint: input.payloadFingerprint,
     providerHandle: input.providerHandle,
     body: input.body,
-    ...journalRowBase(input.state.epoch, input.seq, input.fence, input.ts)
-  }
-}
-
-export function buildJournalDispatchRow(input: {
-  state: JournalReducerState
-  clientMessageId: string
-  dispatchState: Exclude<AgentJournalDispatchState, 'pending'>
-  providerItemId: string | null
-  reason: string | null
-  seq: number
-  fence: number
-  ts: number
-  recovered?: true
-}): JournalDispatchRow {
-  return {
-    kind: 'dispatch',
-    clientMessageId: input.clientMessageId,
-    state: input.dispatchState,
-    providerItemId: input.providerItemId,
-    reason: input.reason,
     ...journalRowBase(input.state.epoch, input.seq, input.fence, input.ts),
-    ...(input.recovered ? { recovered: input.recovered } : {})
+    ...(input.handoverRecorded ? { handoverRecorded: true } : {}),
+    ...(input.queuedMessageId !== undefined ? { queuedMessageId: input.queuedMessageId } : {}),
+    ...(input.origin !== undefined ? { origin: input.origin } : {}),
+    // Sender identities belong to message bodies; persist only the source kind here.
+    ...(input.source !== undefined ? { source: { kind: input.source.kind } } : {}),
+    ...(input.options ? { options: input.options } : {})
   }
 }

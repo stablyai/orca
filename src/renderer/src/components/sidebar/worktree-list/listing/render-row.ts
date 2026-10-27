@@ -1,4 +1,4 @@
-import type { HostSectionRow } from '../../host-section-rows'
+import type { HostSectionRow } from '../../../../../../shared/sidebar-list/host-section-rows'
 
 type WorktreeItemRow = Extract<HostSectionRow, { type: 'item' }>
 export type RenderRow =
@@ -25,7 +25,7 @@ export function getRenderRowKey(row: RenderRow): string {
     return `pending:${row.creationId}`
   }
   if (row.type === 'folder-workspace') {
-    return `folder-workspace:${row.folderWorkspace.id}`
+    return row.key
   }
   return `wt:${row.rowKey}`
 }

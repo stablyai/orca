@@ -2,7 +2,7 @@ import type { CommandHandler } from '../../dispatch'
 import { printResult } from '../../format'
 import { getOptionalJsonFlag, getOptionalStringFlag, getRequiredStringFlag } from '../../flags'
 import { callOrchestrationMutation } from './mutation-request'
-import { resolveCoordinatorTerminalHandle } from './terminal-identity'
+import { resolveCoordinatorTerminalHandle, runScopedSessionCaller } from './terminal-identity'
 
 export const ORCHESTRATION_GATE_HANDLERS: Record<string, CommandHandler> = {
   'orchestration gate-create': async ({ flags, client, cwd, json }) => {
@@ -12,7 +12,6 @@ export const ORCHESTRATION_GATE_HANDLERS: Record<string, CommandHandler> = {
       task: getRequiredStringFlag(flags, 'task'),
       question: getRequiredStringFlag(flags, 'question'),
       options: getOptionalJsonFlag(flags, 'options'),
-      // Why: gates are Run-scoped, so the coordinator handle is the authorized caller identity.
       from: await resolveCoordinatorTerminalHandle(flags, cwd, client)
     })
     printResult(
@@ -36,8 +35,10 @@ export const ORCHESTRATION_GATE_HANDLERS: Record<string, CommandHandler> = {
 
   'orchestration gate-list': async ({ flags, client, cwd, json }) => {
     const run = getOptionalStringFlag(flags, 'run')
-    // Why: named runs remain inspectable without a pane; only implicit runs resolve identity.
-    const from = run ? undefined : await resolveCoordinatorTerminalHandle(flags, cwd, client)
+    // Named runs can be inspected without resolving a pane identity.
+    const from = run
+      ? runScopedSessionCaller(flags)
+      : await resolveCoordinatorTerminalHandle(flags, cwd, client)
     const result = await client.call<{
       gates: { id: string; task_id: string; question: string; status: string }[]
       count: number

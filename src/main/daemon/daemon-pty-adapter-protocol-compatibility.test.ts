@@ -1,4 +1,4 @@
-/* DaemonPtyAdapter behaviour that varies with the negotiated daemon protocol version. */
+import './mock-descendant-sweep'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { rmSync } from 'node:fs'
 import { DaemonClient } from './client'
@@ -72,12 +72,7 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
 
   describe('mode 2031 fact compatibility (#9993)', () => {
     let onEventSpy: ReturnType<typeof vi.spyOn>
-    // Why these tests exist: daemons survive app updates, so a NEW desktop can be
-    // driving a PRESERVED older daemon. Those daemons emit '2031-subscribe' but have
-    // no unsubscribe fact at all. For a gate-managed pane the renderer never sees the
-    // bytes, so main's facts are the only thing that can retire the subscription —
-    // trusting a subscribe that can never be retracted leaves it live forever, and the
-    // next theme flip injects CSI 997 into whatever shell replaced the exited TUI.
+    // Preserved pre-v29 daemons cannot retract 2031 subscriptions, leaving later shells exposed to theme replies.
     function captureForwardedFacts(target: DaemonPtyAdapter): {
       kinds: () => string[]
       emit: (fact: { kind: string }) => void
@@ -98,7 +93,6 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
         emit: (fact) => {
           expect(listeners.length).toBeGreaterThan(0)
           for (const listener of listeners) {
-            // `type: 'event'` is the envelope the routing switch requires.
             listener({
               type: 'event',
               event: 'transientFact',
@@ -111,19 +105,15 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
     }
 
     it('drops a pre-v29 daemon 2031-subscribe it could never retract', () => {
-      // v28 is the version shipping today, so this is the live upgrade hazard: a v28
-      // daemon preserved across an app update, still holding real sessions.
       const legacy = new DaemonPtyAdapter({ socketPath, tokenPath, protocolVersion: 28 })
       try {
         const captured = captureForwardedFacts(legacy)
-        // Force a fresh wire-up so the spy above is the listener the adapter installs.
+        // Reinstall routing so the spy captures the adapter’s listener.
         legacy['removeEventListener'] = null
         legacy['setupEventRouting']()
         captured.emit({ kind: '2031-subscribe' })
         captured.emit({ kind: 'bell' })
 
-        // The unretractable subscribe is withheld; unrelated facts still flow, so the
-        // gate is narrow rather than "ignore this daemon's facts".
         expect(captured.kinds()).toEqual(['bell'])
       } finally {
         legacy.dispose()
@@ -132,11 +122,7 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
     })
 
     it('never delegates scan authority to a v28 daemon, so a hidden withdrawal is still seen', () => {
-      // The scenario the fact filter alone does NOT cover, and the reason the gate sits
-      // on backgrounding: while the pane is VISIBLE, main's own scanner registers the
-      // 2031 subscribe (bytes transit main either way). Only backgrounding hands scan
-      // authority to the daemon. If a v28 daemon were allowed to take it, the TUI could
-      // exit while hidden with no party able to emit the withdrawal — #9993 via upgrade.
+      // Main must retain background scan authority when the daemon cannot report subscription withdrawal.
       const notifySpy = vi.spyOn(DaemonClient.prototype, 'notify')
       const legacy = new DaemonPtyAdapter({ socketPath, tokenPath, protocolVersion: 28 })
       try {
@@ -207,9 +193,7 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
     })
 
     it('forwards a v28 unsubscribe, which can only retire state main registered', () => {
-      // Asymmetric on purpose: an unretractable subscribe is the hazard, a withdrawal
-      // never is. A stale relay tracker on a preserved daemon must still be able to
-      // clear a subscription rather than be silenced into stranding it.
+      // Legacy withdrawals can still clear subscriptions registered by main.
       const legacy = new DaemonPtyAdapter({ socketPath, tokenPath, protocolVersion: 28 })
       try {
         const captured = captureForwardedFacts(legacy)
@@ -242,14 +226,24 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
   })
 
   describe('background stream thinning compatibility', () => {
-    it('reports authoritative snapshot support only for the corrected serializer protocol', () => {
+    it('reports authoritative snapshot support only for the corrected serializer protocol', async () => {
+      const { id } = await adapter.spawn({ cols: 80, rows: 24 })
       const legacy = new DaemonPtyAdapter({ socketPath, tokenPath, protocolVersion: 31 })
       try {
-        expect(legacy.canProvideAuthoritativeBufferSnapshot('legacy-session')).toBe(false)
-        expect(adapter.canProvideAuthoritativeBufferSnapshot('current-session')).toBe(true)
+        expect(legacy.canProvideAuthoritativeBufferSnapshot(id)).toBe(false)
+        expect(adapter.canProvideAuthoritativeBufferSnapshot(id)).toBe(true)
       } finally {
         legacy.dispose()
       }
+    })
+
+    // Provider fallback can route unknown IDs here; false authority would let the renderer discard their panes.
+    it('refuses an authoritative snapshot claim for a session it does not own', async () => {
+      const { id } = await adapter.spawn({ cols: 80, rows: 24 })
+
+      expect(adapter.canProvideAuthoritativeBufferSnapshot(id)).toBe(true)
+      expect(adapter.canProvideAuthoritativeBufferSnapshot('remote:env-1:pty-1')).toBe(false)
+      expect(adapter.canProvideAuthoritativeBufferSnapshot('never-spawned-session')).toBe(false)
     })
 
     it('reports background state on the authoritative-snapshot protocol', () => {
@@ -357,10 +351,7 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
     )
 
     it('clears a preserved v28 background hint before attaching, so scan authority comes home', async () => {
-      // The gate on setPtyBackgrounded only binds THIS process. Daemons outlive the desktop:
-      // a v28 that a previous desktop backgrounded is still scanning when a new desktop
-      // attaches, and this process never called setPtyBackgrounded for it — so without the
-      // pre-attach clear the daemon keeps authority it can never retract (#9993).
+      // A previous desktop may have delegated scan authority; clear that state before attaching.
       const ensureConnectedSpy = vi
         .spyOn(DaemonClient.prototype, 'ensureConnected')
         .mockResolvedValue()
@@ -492,11 +483,8 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
       return probeAdapter
     }
 
-    // Why: a pre-v18 daemon rejects `getSize` as an unknown request type, so it would answer
-    // `null` forever — and one `null` makes the owner fan-out permanently unprovable, which
-    // would leave a genuinely dead pane unable to ever retire and respawn.
+    // Legacy inventory must prove absence or one unsupported getSize can block retirement across the owner fanout.
     it('answers a pre-getSize daemon from its session inventory', async () => {
-      // Faithful pre-v18 daemon: routeRequest falls through its switch and error-replies.
       const request = vi.fn(async (type: string) => {
         if (type !== 'listSessions') {
           throw new Error(`Unknown request type: ${type}`)
@@ -519,7 +507,6 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
       legacy.dispose()
     })
 
-    // The P0 boundary: an owner that cannot be reached must never read as one that answered "absent".
     it('still answers unknown when a pre-getSize daemon cannot be reached', async () => {
       const request = vi.fn(async () => {
         throw new Error('Not connected')
@@ -531,9 +518,7 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
       legacy.dispose()
     })
 
-    // Why: `getSize` shipped into an already-released protocol without a version bump, so a
-    // daemon can report a version that implies support and still reject the request. Gating on
-    // the number alone left those daemons permanently unprovable — the same wedge, narrowed.
+    // getSize shipped without a protocol bump; the reported version alone cannot prove support.
     it('falls back when a daemon rejects getSize despite reporting a version that has it', async () => {
       const request = vi.fn(async (type: string) => {
         if (type === 'getSize') {
@@ -546,10 +531,8 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
       await expect(ambiguous.probePtyLiveness('ambiguous-live')).resolves.toBe(true)
       await expect(ambiguous.probePtyLiveness('never-existed')).resolves.toBe(false)
 
-      // The rejection is remembered, so later probes skip the round trip that cannot work.
       expect(request.mock.calls.filter(([type]) => type === 'getSize')).toHaveLength(1)
-      // Why pinned here: a wedged daemon holds its socket open, so an unbounded getSize would
-      // stall a pane mount for the client's 30s default instead of answering "unknown" in 2s.
+      // Bound liveness probes so a wedged daemon cannot stall pane mounts for the default request timeout.
       expect(request).toHaveBeenCalledWith(
         'getSize',
         { sessionId: 'ambiguous-live' },
@@ -559,8 +542,6 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
       ambiguous.dispose()
     })
 
-    // The safety direction: only the daemon's own "I do not implement that" may switch strategy.
-    // A transient failure must stay unproven rather than be retried as a capability question.
     it('keeps a transient getSize failure unproven instead of treating it as unsupported', async () => {
       const request = vi.fn(async (type: string) => {
         if (type === 'getSize') {
@@ -783,8 +764,7 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
     })
 
     it('rejects rather than reading as idle when the daemon call fails', async () => {
-      // Why: getForegroundProcess swallows errors into null; composing through it would turn a dead
-      // socket into a false "agent exited" completion, the mirror of the bug this path fixes.
+      // getForegroundProcess suppresses transport errors; using it here would falsely report agent completion.
       const legacy = createInspectionAdapter(
         COMPLETION_PROCESS_INSPECTION_PROTOCOL_VERSION - 1,
         vi.fn(async () => {

@@ -1,15 +1,4 @@
-/**
- * Samples the store writes made during a suspected React commit cascade.
- *
- * Why sampling writes and not the throw site: React #185 lands on whichever
- * fiber dispatched after a root-global counter tripped, so the reported
- * component is a bystander (see shared/react-update-depth-attribution.ts). The
- * writes that kept scheduling are the only frames that identify the loop.
- *
- * Cost discipline: the armed flag is the only thing the store-write path reads
- * when no cascade is suspected, capture is capped per cascade, and frames are
- * formatted at report time so a sampled write pays for nothing it may not use.
- */
+/** Sample the writes driving suspected cascades; React #185’s reported fiber is often a bystander. Unarmed writes read only a flag, per-cascade capture is capped, and formatting waits until reporting (shared/react-update-depth-attribution.ts). */
 
 /**
  * Read on every store write, so it is a plain field load on a shared object
@@ -32,6 +21,9 @@ export const MAX_SAMPLED_WRITES = 6
 export const MAX_REPORTED_CHANGED_KEYS = 12
 
 type SampledWrite = { stack?: string }
+
+/** The wrapping `set` function: V8 elides it and every frame above it, so only identity matters. */
+export type ReactCommitCascadeWriteBoundary = (...args: never[]) => unknown
 
 let storeWrites = 0
 let samples: SampledWrite[] = []
@@ -58,14 +50,14 @@ export function resetReactCommitCascadeWriteSamples(): void {
 
 /**
  * Call only while armed. `boundary` is the wrapping `set` function, so V8 elides
- * our own frames and the first captured frame is the real caller. Typed as
- * `object` because zustand's `set` is an overload set, not a plain signature.
+ * our own frames and the first captured frame is the real caller.
  */
-export function noteReactCommitCascadeStoreWrite(boundary: object, partial: unknown): void {
+export function noteReactCommitCascadeStoreWrite(
+  boundary: ReactCommitCascadeWriteBoundary,
+  partial: unknown
+): void {
   storeWrites += 1
-  // Why the write count and not samples.length: samples only grows where
-  // Error.captureStackTrace exists, so that cap would never engage without it and
-  // key collection would run for the whole cascade.
+  // Cap writes, not samples.length: non-V8 engines have no captureStackTrace, so samples cannot bound key collection.
   if (storeWrites > MAX_SAMPLED_WRITES) {
     return
   }
@@ -76,23 +68,20 @@ export function noteReactCommitCascadeStoreWrite(boundary: object, partial: unkn
       changedKeys.add(key)
     }
   }
-  const capture = Error as ErrorConstructor & {
-    captureStackTrace?: (target: object, constructorOpt?: unknown) => void
-    stackTraceLimit?: number
-  }
-  if (typeof capture.captureStackTrace !== 'function') {
+  // Only V8 has it; a non-V8 host gets no samples rather than a synthesized stack.
+  if (typeof Error.captureStackTrace !== 'function') {
     return
   }
-  const previousLimit = capture.stackTraceLimit
+  const previousLimit = Error.stackTraceLimit
   const sample: SampledWrite = {}
   try {
-    capture.stackTraceLimit = CAPTURE_STACK_FRAME_LIMIT
-    capture.captureStackTrace(sample, boundary)
+    Error.stackTraceLimit = CAPTURE_STACK_FRAME_LIMIT
+    Error.captureStackTrace(sample, boundary)
     samples.push(sample)
   } catch {
     // Best-effort crash evidence only.
   } finally {
-    capture.stackTraceLimit = previousLimit
+    Error.stackTraceLimit = previousLimit
   }
 }
 
@@ -103,8 +92,7 @@ function reduceFrame(frame: string): string | undefined {
     return undefined
   }
   const [, fn, location, line, column] = match
-  // Why basename only: the redaction that strips paths is keyed on the detail
-  // NAME, so a full path inside this value would ship a developer's home dir.
+  // Keep basenames only: detail-name-based redaction cannot remove full paths embedded in this value.
   const basename = location?.split(/[/\\]/).pop() ?? ''
   return fn ? `${basename}:${line}:${column} ${fn}` : `${basename}:${line}:${column}`
 }

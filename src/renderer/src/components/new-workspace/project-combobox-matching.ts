@@ -13,10 +13,7 @@ function substringHits(text: string, query: string): number[] | null {
   return at === -1 ? null : Array.from({ length: query.length }, (_, offset) => at + offset)
 }
 
-/**
- * Verbatim run, else scattered subsequence. Only names get the loose pass —
- * a subsequence over a detail line matches "scr" against "3 hosts configured".
- */
+/** Allow loose subsequences only in names; detail text would create noisy matches such as scr in hosts configured. */
 function nameHitsFor(name: string, query: string): number[] | null {
   const verbatim = substringHits(name, query)
   if (verbatim) {
@@ -44,10 +41,7 @@ function nameScore(name: string, hits: readonly number[]): number {
   return base - name.length * 0.4
 }
 
-/**
- * Ranks options for a query, with recency breaking ties (and ordering the
- * unfiltered list). `recentIds` is most-recent-first.
- */
+/** Rank matches with most-recent-first IDs breaking ties and ordering empty queries. */
 export function rankProjectOptions(
   options: readonly NewWorkspaceProjectOption[],
   rawQuery: string,
@@ -95,10 +89,7 @@ export type ProjectOptionSection = {
 const SECTION_THRESHOLD = 6
 const RECENT_LIMIT = 4
 
-/**
- * While a query is live the ranking *is* the order, so sections would fight it:
- * everything collapses into one unlabelled result list.
- */
+/** Use one unlabelled list while searching so sections cannot reorder ranked results. */
 export function sectionProjectOptions(
   matches: readonly ScoredProjectOption[],
   query: string,
@@ -123,8 +114,7 @@ export function sectionProjectOptions(
     {
       key: 'folders',
       heading: 'Folders',
-      // Same recent exclusion as Projects: a row must appear in exactly one
-      // section, or arming and rendering see two rows for one option.
+      // Exclude recent rows from folders too; duplicate options would desynchronize arming/rendering.
       items: matches.filter((m) => m.option.kind === 'project-group' && !recentSet.has(m.option.id))
     }
   ]
@@ -142,17 +132,4 @@ export function getAmbiguousProjectOptionIds(
   return new Set(
     options.filter((o) => (counts.get(o.displayName) ?? 0) > 1).map((option) => option.id)
   )
-}
-
-/**
- * A deep path's identity lives in its tail (`…/services/checkout-api`), which is
- * exactly what a plain truncate throws away — two sibling paths then render
- * identically. Split so the head can elide while the tail keeps its width.
- */
-export function splitDetailForElision(detail: string): { head: string; tail: string } | null {
-  const segments = detail.split('/')
-  if (segments.length <= 3 || detail.length <= 28) {
-    return null
-  }
-  return { head: segments.slice(0, -2).join('/'), tail: segments.slice(-2).join('/') }
 }
