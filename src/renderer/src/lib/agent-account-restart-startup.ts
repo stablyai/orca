@@ -103,7 +103,7 @@ export function resolveAgentAccountRestartResumeStartup(
     // Both restart executors spawn in the tab's start folder.
     launchCwd:
       state.tabsByWorktree[args.worktreeId]?.find((tab) => tab.id === args.tabId)?.startupCwd ??
-      worktree?.path
+      state.getKnownWorktreeById(args.worktreeId)?.path
   })
   if (!startupPlan) {
     return null

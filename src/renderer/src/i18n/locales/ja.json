@@ -8160,6 +8160,10 @@
           "heartbeatDescription": "割り当てられたワーカーが数分ごとに状況を知らせるので、コーディネーターは作業中の Agent と応答しなくなった Agent を見分けられます。オフにするとコーディネーターへのメッセージは減りますが、その定期連絡がなくなります。変更後に割り当てられたワーカーに適用されます。",
           "heartbeatKeywordHeartbeat": "ハートビート",
           "heartbeatKeywordStalled": "停止",
+          "heartbeatKeywordInterval": "間隔",
+          "heartbeatIntervalTitle": "ハートビートの間隔",
+          "heartbeatIntervalDescription": "間隔を短くするとコーディネーターへの定期連絡が増えますが、メッセージも増えます。長くするとメッセージは減りますが、連絡の間隔が空きます。変更後に割り当てられたワーカーに適用されます。",
+          "heartbeatIntervalSuffix": "分",
           "7bc082f4de": "インストールコマンドのコピー"
         },
         "OrchestrationSetupCard": {

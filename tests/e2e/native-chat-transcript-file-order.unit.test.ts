@@ -170,7 +170,7 @@ describe('canonical source positions', () => {
 
   it('retains reader-produced tied image pages through prepend, append and reconnect into bubbles', async () => {
     const { applyMobileNativeChatStreamFrame } =
-      await import('../../mobile/src/session/mobile-native-chat-stream-frame')
+      await import('../../mobile/src/session/native-chat/mobile-native-chat-stream-frame')
     const { foldMobileNativeChatMessages } =
       await import('../../mobile/src/session/mobile-native-chat-render-data')
     const filePath = await transcriptFile(

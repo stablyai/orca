@@ -123,10 +123,13 @@ describe('Store', () => {
   it('loads an old heartbeat profile, saves off, and reopens with heartbeats still off', async () => {
     const persisted = getDefaultPersistedState(testState.dir)
     delete persisted.settings.orchestrationHeartbeatsEnabled
+    delete persisted.settings.orchestrationHeartbeatIntervalMinutes
     writeDataFile(persisted)
     const store = await createStore()
     expect(store.getSettings().orchestrationHeartbeatsEnabled).toBe(true)
+    expect(store.getSettings().orchestrationHeartbeatIntervalMinutes).toBe(5)
     expect(new OrcaRuntimeService(store).getOrchestrationHeartbeatMinutes()).toBe(5)
+    store.updateSettings({ orchestrationHeartbeatIntervalMinutes: 15 })
     store.updateSettings({ orchestrationHeartbeatsEnabled: false })
     store.flush()
     expect(readDataFile()).toHaveProperty('settings.orchestrationHeartbeatsEnabled', false)
@@ -134,6 +137,16 @@ describe('Store', () => {
     const reopened = await createStore()
     expect(reopened.getSettings().orchestrationHeartbeatsEnabled).toBe(false)
     expect(new OrcaRuntimeService(reopened).getOrchestrationHeartbeatMinutes()).toBeNull()
+    expect(reopened.getSettings().orchestrationHeartbeatIntervalMinutes).toBe(15)
+    reopened.updateSettings({ orchestrationHeartbeatsEnabled: true })
+    expect(new OrcaRuntimeService(reopened).getOrchestrationHeartbeatMinutes()).toBe(15)
+    expect(
+      reopened.updateSettings({ orchestrationHeartbeatIntervalMinutes: 61 })
+        .orchestrationHeartbeatIntervalMinutes
+    ).toBe(5)
+    reopened.flush()
+    expect(readDataFile()).toHaveProperty('settings.orchestrationHeartbeatIntervalMinutes', 5)
+    expect(new OrcaRuntimeService(reopened).getOrchestrationHeartbeatMinutes()).toBe(5)
   })
 
   it('returns default UI state when no data file exists', async () => {

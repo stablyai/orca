@@ -12,6 +12,24 @@ export function getOrchestrationHeartbeatDescription(): string {
   )
 }
 
+export function getOrchestrationHeartbeatIntervalTitle(): string {
+  return translate(
+    'auto.components.settings.OrchestrationPane.heartbeatIntervalTitle',
+    'Heartbeat interval'
+  )
+}
+
+export function getOrchestrationHeartbeatIntervalDescription(): string {
+  return translate(
+    'auto.components.settings.OrchestrationPane.heartbeatIntervalDescription',
+    'Shorter intervals give the coordinator more frequent check-ins but send it more messages. Longer intervals send fewer messages but leave longer gaps between check-ins. Applies to workers dispatched after the change.'
+  )
+}
+
+export function getOrchestrationHeartbeatIntervalSuffix(): string {
+  return translate('auto.components.settings.OrchestrationPane.heartbeatIntervalSuffix', 'minutes')
+}
+
 export function getOrchestrationHeartbeatSearchKeywords(): string[] {
   return searchKeywords([
     { key: 'auto.components.settings.orchestration.search.21c28ccdf7', fallback: 'coordinator' },
@@ -23,6 +41,10 @@ export function getOrchestrationHeartbeatSearchKeywords(): string[] {
     {
       key: 'auto.components.settings.OrchestrationPane.heartbeatKeywordStalled',
       fallback: 'stalled'
+    },
+    {
+      key: 'auto.components.settings.OrchestrationPane.heartbeatKeywordInterval',
+      fallback: 'interval'
     }
   ])
 }

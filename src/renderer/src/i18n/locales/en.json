@@ -8559,6 +8559,10 @@
           "heartbeatDescription": "Dispatched workers check in every few minutes so the coordinator can tell a working agent from a hung one. Turning this off means fewer messages to the coordinator, but it loses that check-in signal. Applies to workers dispatched after the change.",
           "heartbeatKeywordHeartbeat": "heartbeat",
           "heartbeatKeywordStalled": "stalled",
+          "heartbeatKeywordInterval": "interval",
+          "heartbeatIntervalTitle": "Heartbeat interval",
+          "heartbeatIntervalDescription": "Shorter intervals give the coordinator more frequent check-ins but send it more messages. Longer intervals send fewer messages but leave longer gaps between check-ins. Applies to workers dispatched after the change.",
+          "heartbeatIntervalSuffix": "minutes",
           "7bc082f4de": "Copy install command"
         },
         "OrchestrationSetupCard": {

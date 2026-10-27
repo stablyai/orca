@@ -8123,6 +8123,10 @@
           "heartbeatDescription": "已分派的工作者每隔几分钟报告一次，让协调者能区分正在工作的智能体和卡住的智能体。关闭后发给协调者的消息会减少，但协调者也不再收到这一报告信号。仅对更改后分派的工作者生效。",
           "heartbeatKeywordHeartbeat": "心跳",
           "heartbeatKeywordStalled": "卡住",
+          "heartbeatKeywordInterval": "间隔",
+          "heartbeatIntervalTitle": "心跳间隔",
+          "heartbeatIntervalDescription": "间隔越短，协调者收到报告越频繁，但消息也越多。间隔越长，消息越少，但两次报告之间的空档也越长。仅对更改后分派的工作者生效。",
+          "heartbeatIntervalSuffix": "分钟",
           "7bc082f4de": "复制安装命令"
         },
         "OrchestrationSetupCard": {

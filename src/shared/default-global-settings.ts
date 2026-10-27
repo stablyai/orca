@@ -153,6 +153,7 @@ export function buildDefaultSettings(args: {
     nestedWorkerMaxDepth: 1,
     orchestrationChatErrorEscalationEnabled: true,
     orchestrationHeartbeatsEnabled: true,
+    orchestrationHeartbeatIntervalMinutes: 5,
     showArtifactsButton: false,
     showSkillsButton: false,
     showMobileButton: true,

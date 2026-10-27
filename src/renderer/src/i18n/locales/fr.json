@@ -8330,6 +8330,10 @@
           "heartbeatDescription": "Les travailleurs assignés se signalent toutes les quelques minutes pour que le coordinateur distingue un agent qui travaille d'un agent figé. Les désactiver réduit les messages envoyés au coordinateur, mais il perd ce signal de suivi. S'applique aux travailleurs assignés après le changement.",
           "heartbeatKeywordHeartbeat": "signal de vie",
           "heartbeatKeywordStalled": "bloqué",
+          "heartbeatKeywordInterval": "intervalle",
+          "heartbeatIntervalTitle": "Intervalle des signaux de vie",
+          "heartbeatIntervalDescription": "Un intervalle plus court donne au coordinateur des nouvelles plus fréquentes, mais lui envoie plus de messages. Un intervalle plus long envoie moins de messages, mais laisse plus de temps entre deux signaux. S'applique aux travailleurs assignés après le changement.",
+          "heartbeatIntervalSuffix": "minutes",
           "7bc082f4de": "Copier la commande d'installation"
         },
         "OrchestrationSetupCard": {

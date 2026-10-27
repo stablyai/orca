@@ -153,6 +153,11 @@ describe('buildDispatchPreamble', () => {
     expect(result).not.toMatch(/(^|\s)orca orchestration/m)
   })
 
+  it('tells the worker the heartbeat interval the user chose', () => {
+    const result = buildDispatchPreamble(baseParams({ heartbeatIntervalMinutes: 15 }))
+    expect(result).toContain('# Send a heartbeat every 15 minutes')
+  })
+
   it('never mentions heartbeats when the user turned them off', () => {
     const result = buildDispatchPreamble(baseParams({ heartbeatIntervalMinutes: null }))
     expect(result).not.toMatch(/heartbeat/i)

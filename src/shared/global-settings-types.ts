@@ -249,8 +249,6 @@ export type GlobalSettings = GlobalSettingsBase & {
   nestedWorkerMaxDepth?: number
   /** Escalate native-chat worker turn errors to the dispatching Run; absent means on. Renderer-only so workers cannot silence failures via CLI. */
   orchestrationChatErrorEscalationEnabled?: boolean
-  /** Tell dispatched workers to send periodic heartbeats; absent means on. Renderer-only so workers cannot change it via CLI. */
-  orchestrationHeartbeatsEnabled?: boolean
   /** Only toggles the sidebar shortcut; Artifacts stay reachable from Settings. */
   showArtifactsButton?: boolean
   /** Only toggles the sidebar shortcut; Skills stay reachable from Settings. */

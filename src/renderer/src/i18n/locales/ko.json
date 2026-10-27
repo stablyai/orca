@@ -8123,6 +8123,10 @@
           "heartbeatDescription": "할당된 워커가 몇 분마다 상태를 알려 코디네이터가 작업 중인 에이전트와 응답 없는 에이전트를 구분할 수 있습니다. 끄면 코디네이터로 가는 메시지가 줄지만 그 상태 신호를 더 이상 받을 수 없습니다. 변경 이후 할당된 워커에 적용됩니다.",
           "heartbeatKeywordHeartbeat": "하트비트",
           "heartbeatKeywordStalled": "멈춤",
+          "heartbeatKeywordInterval": "간격",
+          "heartbeatIntervalTitle": "하트비트 간격",
+          "heartbeatIntervalDescription": "간격이 짧을수록 코디네이터가 더 자주 상태를 받지만 메시지도 많아집니다. 간격이 길수록 메시지는 줄지만 상태 보고 사이의 공백이 길어집니다. 변경 이후 할당된 워커에 적용됩니다.",
+          "heartbeatIntervalSuffix": "분",
           "7bc082f4de": "설치 명령 복사"
         },
         "OrchestrationSetupCard": {

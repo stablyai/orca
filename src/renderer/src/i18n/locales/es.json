@@ -8154,6 +8154,10 @@
           "heartbeatDescription": "Los trabajadores asignados se reportan cada pocos minutos para que el coordinador distinga un agente que trabaja de uno colgado. Si lo desactivas, el coordinador recibe menos mensajes, pero pierde esa señal de actividad. Se aplica a los trabajadores asignados después del cambio.",
           "heartbeatKeywordHeartbeat": "latido",
           "heartbeatKeywordStalled": "atascado",
+          "heartbeatKeywordInterval": "intervalo",
+          "heartbeatIntervalTitle": "Intervalo de latidos",
+          "heartbeatIntervalDescription": "Un intervalo más corto le da al coordinador reportes más frecuentes, pero le envía más mensajes. Un intervalo más largo envía menos mensajes, pero deja más tiempo entre reportes. Se aplica a los trabajadores asignados después del cambio.",
+          "heartbeatIntervalSuffix": "minutos",
           "7bc082f4de": "Copiar comando de instalación"
         },
         "OrchestrationSetupCard": {
