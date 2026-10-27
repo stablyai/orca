@@ -6,7 +6,10 @@ import type { Repo } from '../../../../shared/repo-types'
 import { parseWorkspaceKey } from '../../../../shared/workspace-scope'
 
 /** Git repos whose tasks the quick panel lists: the active repo, or every repo of a folder workspace's group. */
-export function getQuickTasksRepos(args: {
+export function getQuickTasksRepos({
+  folderWorkspaces,
+  ...args
+}: {
   activeWorkspaceKey: string | null
   activeRepo: Repo | null
   folderWorkspaces: readonly Pick<FolderWorkspace, 'id' | 'projectGroupId'>[]
@@ -17,7 +20,7 @@ export function getQuickTasksRepos(args: {
   if (scope?.type !== 'folder') {
     return args.activeRepo && isGitRepoKind(args.activeRepo) ? [args.activeRepo] : []
   }
-  const folderWorkspace = args.folderWorkspaces.find(
+  const folderWorkspace = folderWorkspaces.find(
     (workspace) => workspace.id === scope.folderWorkspaceId
   )
   if (!folderWorkspace) {

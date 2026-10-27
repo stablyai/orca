@@ -157,7 +157,7 @@ export default function QuickTasksPanel({
         {github.enabled ? (
           <QuickTasksSection
             icon={<Github className="size-3.5" />}
-            label="GitHub"
+            label={translate('auto.components.TaskPage.acef77f7ca', 'GitHub')}
             loading={github.loading}
             failed={github.failed}
             count={github.items.length}
@@ -210,7 +210,7 @@ export default function QuickTasksPanel({
         {gitlab.enabled ? (
           <QuickTasksSection
             icon={<Gitlab className="size-3.5" />}
-            label="GitLab"
+            label={translate('auto.components.TaskPage.11a828abf8', 'GitLab')}
             loading={gitlab.loading}
             failed={gitlab.failed}
             count={gitlab.items.length}
@@ -263,7 +263,7 @@ export default function QuickTasksPanel({
         {jira.enabled ? (
           <QuickTasksSection
             icon={<JiraIcon className="size-3.5" />}
-            label="Jira"
+            label={translate('auto.components.TaskPage.9cd11ba218', 'Jira')}
             loading={jira.loading}
             failed={jira.failed}
             count={jira.items.length}
