@@ -137,14 +137,12 @@ export async function prepareOpenCodePtyLaunch(options: {
       }
     }
   }
-  if (
-    capabilities.pluginApi === 'v2' &&
-    options.shell &&
-    !options.wsl &&
-    command &&
-    needsOpenCodePrivateServer(probeEnv)
-  ) {
-    command = withOpenCodeStandaloneServer(command, options.shell)
+  if (capabilities.pluginApi === 'v2' && options.shell && !options.wsl && command) {
+    // Only launches that would start the shared service may claim its port.
+    const standalone = withOpenCodeStandaloneServer(command, options.shell)
+    if (standalone !== command && needsOpenCodePrivateServer(probeEnv)) {
+      command = standalone
+    }
   }
   if (options.wsl) {
     addWslEnvKeys(launchEnv, ['ORCA_OPENCODE_PLUGIN_API'])

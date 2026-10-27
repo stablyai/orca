@@ -51,9 +51,12 @@ export function needsOpenCodePrivateServer(env: Record<string, string>): boolean
   const original: Record<string, string | undefined> = { ...env }
   service.restoreOriginalEnvironment(original)
   const userState = stateHome(original)
+  // Daemon spawns already resolved (and consumed) the resume request into the env.
   const own =
+    (env.ORCA_DATA_ACCOUNT_PROVIDER === 'opencode' && env.ORCA_DATA_ACCOUNT_STATE_HOME) ||
     managedAccountLaunchEnvironment(service, 'opencode', env[MANAGED_DATA_ACCOUNT_RESUME_ENV])
-      .XDG_STATE_HOME ?? userState
+      .XDG_STATE_HOME ||
+    userState
   if (hasLiveService(own)) {
     return false
   }
@@ -68,6 +71,10 @@ export function needsOpenCodePrivateServer(env: Record<string, string>): boolean
   }
   sharedServiceClaim = { stateHome: own, expires: Date.now() + CLAIM_MS }
   return false
+}
+
+export function resetOpenCodeSharedServiceClaimForTests(): void {
+  sharedServiceClaim = undefined
 }
 
 /** OpenCode 2's one-port background service serves one data dir; a private server picks its own port. */
