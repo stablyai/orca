@@ -323,6 +323,7 @@
 1 src/renderer/src/store/slices/worktrees/metadata/worktree-lineage-actions.ts
 3 src/renderer/src/store/slices/worktrees/metadata/worktree-lineage-host-merge.ts
 3 src/renderer/src/store/slices/worktrees/session/worktree-terminal-reference.ts
+2 src/renderer/src/store/task-provider-connections.ts # provider sign-in checks are keyed by the focused runtime and local preflight context; an older context reads as pending
 1 src/renderer/src/store/terminals/terminal-active-workspace-creation.ts
 1 src/renderer/src/store/terminals/terminal-tab-appearance.ts
 1 src/renderer/src/store/terminals/terminal-tab-close-providers.ts

@@ -130,10 +130,6 @@ export function useTaskPageRepoSelection(model: TaskPageStoreBindingsModel) {
   )
   const defaultTaskSource = settings?.defaultTaskSource ?? 'github'
   const taskProviderConnections = useTaskProviderConnections()
-  const noTaskProviderConnected = areAllTaskProvidersDisconnected(
-    preferredVisibleTaskProviders,
-    taskProviderConnections
-  )
   const visibleTaskProviders = useMemo(
     () =>
       restoreAvailableDefaultTaskProvider(
@@ -153,6 +149,11 @@ export function useTaskPageRepoSelection(model: TaskPageStoreBindingsModel) {
       preflightStatusCurrent,
       preflightStatus?.glab?.installed
     ]
+  )
+  // Why: a connected saved default can be restored outside the preferred list; pending sources keep the page.
+  const noTaskProviderConnected = areAllTaskProvidersDisconnected(
+    [...preferredVisibleTaskProviders, ...visibleTaskProviders],
+    taskProviderConnections
   )
   const sourceOptions = getSourceOptions()
   const githubModeButtons = getGitHubModeButtons()

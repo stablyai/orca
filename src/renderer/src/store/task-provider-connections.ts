@@ -1,10 +1,16 @@
 import type { AppState } from '@/store/types'
+import { getLocalPreflightContext, localPreflightContextKey } from '@/lib/local-preflight-context'
+import { getProviderRuntimeContextKey } from '@/lib/provider-runtime-context'
 import type { TaskProviderConnections } from '../../../shared/task-providers'
 
-// Why: the last settled check decides visibility; the status checks themselves already follow the focused runtime.
+// Why: a check from another runtime, project or WSL context is pending here, not a verdict.
 export function selectTaskProviderConnections(state: AppState): TaskProviderConnections {
+  const providerRuntimeContextKey = getProviderRuntimeContextKey(state.settings)
   const preflightSettled =
-    state.preflightStatusChecked && !state.preflightStatusLoading && !state.preflightStatusError
+    state.preflightStatusContextKey === localPreflightContextKey(getLocalPreflightContext(state)) &&
+    state.preflightStatusChecked &&
+    !state.preflightStatusLoading &&
+    !state.preflightStatusError
   const gh = state.preflightStatus?.gh
   const glab = state.preflightStatus?.glab
   return {
@@ -14,7 +20,11 @@ export function selectTaskProviderConnections(state: AppState): TaskProviderConn
           gitlab: glab?.installed === true && glab.authenticated === true
         }
       : {}),
-    ...(state.linearStatusChecked ? { linear: state.linearStatus.connected === true } : {}),
-    ...(state.jiraStatusChecked ? { jira: state.jiraStatus.connected === true } : {})
+    ...(state.linearStatusChecked && state.linearStatusContextKey === providerRuntimeContextKey
+      ? { linear: state.linearStatus.connected === true }
+      : {}),
+    ...(state.jiraStatusChecked && state.jiraStatusContextKey === providerRuntimeContextKey
+      ? { jira: state.jiraStatus.connected === true }
+      : {})
   }
 }
