@@ -12,6 +12,7 @@ type ContextMenuProps = Parameters<typeof ActivityThreadContextMenu>[0]
 
 export function ActivityThreadVirtualRow({
   item,
+  projectLabelsByRepoId,
   collapsed,
   onToggleGroup,
   selectedPaneKey,
@@ -31,6 +32,7 @@ export function ActivityThreadVirtualRow({
   groupBy
 }: {
   item: ActivityVirtualItemDescriptor
+  projectLabelsByRepoId: ReadonlyMap<string, string>
   collapsed: boolean
   onToggleGroup: (groupKey: string) => void
   selectedPaneKey: string | null
@@ -89,6 +91,16 @@ export function ActivityThreadVirtualRow({
         <div className="pb-0.5">
           <ActivityThreadRow
             thread={item.thread}
+            projectLabel={
+              item.thread.repo
+                ? (projectLabelsByRepoId.get(item.thread.repo.id) ?? item.thread.repo.displayName)
+                : undefined
+            }
+            projectGroupLabel={
+              item.thread.repo && item.groupKey === `project:${item.thread.repo.id}`
+                ? item.thread.repo.displayName
+                : undefined
+            }
             selected={isOpen}
             multiSelected={!isOpen && multiSelectedKeys.has(item.thread.paneKey)}
             onSelect={onSelectThread}

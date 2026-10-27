@@ -5,6 +5,12 @@ import type { Translate } from '@/i18n/use-translate'
 import { formatAgentTypeLabel } from '../../../../../shared/agent-status/presentation/agent-type-label'
 import { getAgentRowPrimaryText } from '../../../../../shared/agent-status/presentation/agent-row-primary-text'
 import { getActivityThreadWorkspaceTitle } from '@/lib/workspace/activity/activity-thread-display'
+import {
+  buildProjectGroupingIndex,
+  getProjectGroupingForRepo,
+  type ProjectGroupingModel
+} from '../../../../../shared/sidebar-list/sections/project-section-grouping'
+import type { Repo } from '../../../../../shared/repository/repo-types'
 import { isClipboardTextByteLengthOverLimit } from '../../../../../shared/clipboard/clipboard-text'
 import {
   activityThreadStatusId,
@@ -19,6 +25,17 @@ import type { ActivityThreadGroup, AgentPaneThread } from '../threads/activity-t
 
 function activityStatusRank(thread: AgentPaneThread): number {
   return AGENT_LIST_STATUS_RANK[activityThreadStatusId(thread)]
+}
+
+export function getActivityProjectLabelsByRepoId(
+  repos: readonly Repo[],
+  projectGrouping: ProjectGroupingModel
+): ReadonlyMap<string, string> {
+  const repoMap = new Map(repos.map((repo) => [repo.id, repo]))
+  const projectIndex = buildProjectGroupingIndex(projectGrouping)
+  return new Map(
+    repos.map((repo) => [repo.id, getProjectGroupingForRepo(repo.id, repoMap, projectIndex).label])
+  )
 }
 
 export function getActivityThreadGroup(
