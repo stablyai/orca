@@ -232,6 +232,14 @@ export function uploadNativeChatSessionAttachmentPaths(
   return window.api.fs.uploadPathsToAgentSessionAttachments({ ...target, paths })
 }
 
+/** True while no status has been verified yet, as just after connecting, so a missing capability is not known. */
+export function nativeChatPasteUploadHostUnverified(
+  owner: NativeChatRuntimeSessionAttachmentOwner
+): boolean {
+  const entry = useAppStore.getState().runtimeStatusByEnvironmentId.get(owner.environmentId)
+  return !isRuntimeHostContactRevoked(entry) && !lastVerifiedRuntimeStatus(entry)
+}
+
 /** The runtime status slice evicts replaced peers and accepts only current pairing snapshots. */
 export function cachedNativeChatPasteUploadTarget(
   owner: NativeChatRuntimeSessionAttachmentOwner

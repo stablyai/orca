@@ -214,7 +214,7 @@ const NativeChatComposerPane = forwardRef<NativeChatComposerHandle, NativeChatCo
       revealPendingImageAttachment: attachments.revealPendingImageAttachment,
       dropPendingImageAttachment: attachments.dropPendingImageAttachment,
       pastesInline: () => goalMode.active,
-      pastedTextEditor: structuredTransport ? attachments.scopeEditor : null,
+      pastedTextEditor: attachments.scopeEditor,
       setNotice
     })
 

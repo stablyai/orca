@@ -430,6 +430,91 @@ import { nativeChatPastedTextOperations } from './native-chat-pasted-text-refere
 import { resolveNativeChatPastedText } from './native-chat-composer-pasted-text-references'
 import { promptTextContent } from './native-chat-prompt-document'
 
+function renderTerminalBackedChat(handle: RefObject<NativeChatComposerHandle | null>): void {
+  writeNativeChatDraftCache(PANE, 'keep this draft')
+  render(
+    <NativeChatComposer
+      ref={handle}
+      terminalTabId="tab-1"
+      paneKey={PANE}
+      targetPtyId="test-pty"
+      agent="claude"
+    />
+  )
+}
+
+describe('a large paste in a terminal-backed chat', () => {
+  it('is stored as a file when the agent runs on this machine', async () => {
+    mocks.state.owner = { kind: 'local' }
+    const handle = createRef<NativeChatComposerHandle>()
+    const text = 'x'.repeat(1024 * 1024)
+    const saveText = vi.fn().mockResolvedValue('/tmp/pasted.txt')
+    installPreloadApi({
+      readClipboardText: async () => text,
+      readClipboardFilePaths: async () => [],
+      clipboardHasImage: async () => false,
+      savePastedTextAsFile: saveText
+    })
+    renderTerminalBackedChat(handle)
+    await act(async () => handle.current?.pasteFromClipboard())
+    expect(saveText).toHaveBeenCalledWith({ text })
+    expect(promptValue(screen.getByRole('textbox'))).toContain('keep this draft')
+    expect(promptValue(screen.getByRole('textbox')).length).toBeLessThan(1000)
+  })
+
+  it('is refused before building its editor document when the agent runs elsewhere', async () => {
+    mocks.state.owner = { kind: 'remote' }
+    const handle = createRef<NativeChatComposerHandle>()
+    const saveText = vi.fn()
+    installPreloadApi({
+      readClipboardText: async () => 'x'.repeat(1024 * 1024),
+      readClipboardFilePaths: async () => [],
+      clipboardHasImage: async () => false,
+      savePastedTextAsFile: saveText
+    })
+    renderTerminalBackedChat(handle)
+    await act(async () => handle.current?.pasteFromClipboard())
+    expect(promptValue(screen.getByRole('textbox'))).toBe('keep this draft')
+    expect(
+      screen.getByText('This paste is too large to edit inline. Paste a smaller section.')
+    ).toBeTruthy()
+    expect(saveText).not.toHaveBeenCalled()
+  })
+
+  it('keeps a multi-line log inline when the agent runs elsewhere', async () => {
+    mocks.state.owner = { kind: 'remote' }
+    const handle = createRef<NativeChatComposerHandle>()
+    const text = 'log line number one two three four\n'.repeat(2500)
+    installPreloadApi({
+      readClipboardText: async () => text,
+      readClipboardFilePaths: async () => [],
+      clipboardHasImage: async () => false,
+      savePastedTextAsFile: vi.fn()
+    })
+    renderTerminalBackedChat(handle)
+    await act(async () => handle.current?.pasteFromClipboard())
+    expect(promptValue(screen.getByRole('textbox'))).toContain(text.slice(0, 1000))
+  })
+})
+
+describe('quoting a transcript selection', () => {
+  it('is refused when it holds a line too long to edit, and appended otherwise', () => {
+    mocks.state.owner = { kind: 'local' }
+    const handle = createRef<NativeChatComposerHandle>()
+    installPreloadApi({})
+    renderTerminalBackedChat(handle)
+    act(() => handle.current?.appendText(`> ${'y'.repeat(20000)}`))
+    expect(promptValue(screen.getByRole('textbox'))).toBe('keep this draft')
+    expect(
+      screen.getByText(
+        'This paste has a line that is too long to edit. Add line breaks, or paste a smaller section.'
+      )
+    ).toBeTruthy()
+    act(() => handle.current?.appendText('> a short quote'))
+    expect(promptValue(screen.getByRole('textbox'))).toContain('> a short quote')
+  })
+})
+
 it.each([false, true])(
   'keeps a selected paste through completion, clear, history and reload (%s)',
   async (reconstruct) => {
