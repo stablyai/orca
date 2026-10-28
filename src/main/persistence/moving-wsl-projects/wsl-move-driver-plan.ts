@@ -3,7 +3,11 @@
  * the terminal gate. The preview shows exactly this; the move re-runs it and starts only if it
  * still passes.
  */
-import type { WslMoveRefusal, WslMoveRequest } from '../../../shared/wsl-move/wsl-move-driver-types'
+import {
+  WSL_MOVE_FINISH_PENDING_DETAIL,
+  type WslMoveRefusal,
+  type WslMoveRequest
+} from '../../../shared/wsl-move/wsl-move-driver-types'
 import {
   WSL_MOVE_CUTOVER_PHASES,
   wslMoveJournalKey
@@ -71,19 +75,32 @@ export function manifestTooLargeRefusal(error: unknown): WslMoveRefusal | null {
  * it: back to zero, or forward to the rewrite when the host committed. Only an answer it cannot
  * get keeps the fence, and the new move waits.
  */
+/**
+ * How a settle that finds the host committed finishes on this desktop: now (a move the user
+ * started reloads the window), or at the next start (an automatic step never reloads it).
+ */
+export type WslMoveInterruptedSettle = 'finish-now' | 'finish-at-restart'
+
 async function settleInterruptedWslMove(
   deps: WslMoveDriverDeps,
   host: WslMoveHost,
-  request: WslMoveRequest
+  request: WslMoveRequest,
+  settle: WslMoveInterruptedSettle
 ): Promise<WslMoveRefusal | null> {
   const journalKey = wslMoveJournalKey(request.distro)
   // Before this move stages: a leftover stage of an earlier reset would refuse it.
   await settleWslMoveOwedHostAborts(deps.userDataPath, journalKey, host.catalog)
   const head = listWslMoveCutoverChain(deps.userDataPath, journalKey).at(-1)
+  if (!head) {
+    return null
+  }
+  if (head.phase === 'destination-committed') {
+    // Committed, its desktop rewrite still owed (e.g. an automatic settle left it for a restart).
+    return finishCommittedOnDesktop(deps, settle)
+  }
   if (
-    !head ||
-    WSL_MOVE_CUTOVER_PHASES.indexOf(head.phase) >=
-      WSL_MOVE_CUTOVER_PHASES.indexOf('destination-committed')
+    WSL_MOVE_CUTOVER_PHASES.indexOf(head.phase) >
+    WSL_MOVE_CUTOVER_PHASES.indexOf('destination-committed')
   ) {
     return null
   }
@@ -95,13 +112,27 @@ async function settleInterruptedWslMove(
     return refusal('wsl_move_already_in_flight', { detail: reset.reason })
   }
   if (reset.outcome === 'committed') {
-    await deps.finishOnDesktop().catch((error: unknown) => {
-      console.warn('[wsl-move] Finishing an interrupted move on this desktop paused:', error)
-    })
-    // The window must reload before another move starts under it.
-    return refusal('wsl_move_finished_earlier_move')
+    return finishCommittedOnDesktop(deps, settle)
   }
   return null
+}
+
+/** The desktop half of a committed earlier move: now, or the next start's pass before any window. */
+async function finishCommittedOnDesktop(
+  deps: WslMoveDriverDeps,
+  settle: WslMoveInterruptedSettle
+): Promise<WslMoveRefusal> {
+  if (settle === 'finish-at-restart') {
+    // The rewrite reloads the window past its unload veto; an automatic step never does that.
+    return refusal('wsl_move_finished_earlier_move', {
+      detail: WSL_MOVE_FINISH_PENDING_DETAIL
+    })
+  }
+  await deps.finishOnDesktop().catch((error: unknown) => {
+    console.warn('[wsl-move] Finishing an interrupted move on this desktop paused:', error)
+  })
+  // The window must reload before another move starts under it.
+  return refusal('wsl_move_finished_earlier_move')
 }
 
 /**
@@ -161,8 +192,8 @@ export async function prepareWslMove(
   request: WslMoveRequest,
   migrationId: string,
   startedAt: Date,
-  /** Move only: settle an earlier move of the distro an interruption left short of commit. */
-  settleInterrupted = false
+  /** Settle an earlier move of the distro an interruption left short of commit; false leaves it. */
+  settleInterrupted: WslMoveInterruptedSettle | false = false
 ): Promise<WslMovePrepared | WslMoveRefusal> {
   if (!wslHostsGateOpen()) {
     return refusal('wsl_move_unavailable')
@@ -188,7 +219,9 @@ export async function prepareWslMove(
   if (wslMoveHostReadiness(host.capabilities) !== 'ready') {
     return refusal('wsl_move_host_update_required')
   }
-  const unsettled = settleInterrupted ? await settleInterruptedWslMove(deps, host, request) : null
+  const unsettled = settleInterrupted
+    ? await settleInterruptedWslMove(deps, host, request, settleInterrupted)
+    : null
   if (unsettled) {
     return unsettled
   }

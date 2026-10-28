@@ -344,7 +344,8 @@ it.each([1, 10, 100])(
       await act(async () => {
         subscriptions.forEach((dispose) => dispose())
       })
-      expect(descriptions()).toEqual(Array(count * 2).fill('Permissions'))
+      // Report loss falls back to the saved mode, which the next turn applies.
+      expect(descriptions()).toEqual(Array(count * 2).fill('Full access'))
     } finally {
       cleanup()
       resetStructuredAgentSessionStatusFeedsForTests()

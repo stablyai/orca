@@ -121,6 +121,12 @@ describe('the status line, by state', () => {
     expect(html).toContain('Check again')
   })
 
+  it('says a committed earlier move finishes at restart, or now with Check again', () => {
+    const html = show({ kind: 'parked', reason: 'finish-pending' })
+    expect(html).toContain('finishes it here when it restarts, or now with Check again')
+    expect(html).toContain('Check again')
+  })
+
   it('offers only Move again for a distro the user brought back, never Not now', () => {
     const html = show({ kind: 'parked', reason: 'declined', cause: 'released-here' })
     expect(html).toContain('brought these projects back to this computer')

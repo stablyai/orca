@@ -131,6 +131,8 @@ export function useTerminalPaneGlobalEffects({
       return
     }
     manager.setAtlasRecoveryVisible?.(rendererVisible)
+    // Why: hidden-worktree panes keep their WebGL backing; tab-hidden ones may release it (pane-webgl-renderer).
+    containerRef.current?.toggleAttribute('data-worktree-surface-hidden', !isWorktreeActive)
     const wasVisible = wasVisibleRef.current
     const wasWorktreeActive = wasWorktreeActiveRef.current
     isActiveRef.current = isActive
@@ -179,6 +181,7 @@ export function useTerminalPaneGlobalEffects({
     rendererVisible,
     applyPendingFollowOutputRequests,
     captureViewportPositions,
+    containerRef,
     isActiveRef,
     isVisibleRef,
     managerRef,

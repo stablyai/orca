@@ -43,6 +43,8 @@ export type WorktreeItemRowContext = {
   getLineageToggleHandler: (groupKey: string) => LineageToggleHandler
   onSelectionGesture: (event: React.MouseEvent<HTMLElement>, worktree: Worktree) => boolean
   onWorktreeCardClick?: () => void
+  /** False while the workspace board is open: a press may start a drag onto the board, which activation would close. */
+  activateOnPress: boolean
   onContextMenuSelect: (
     event: React.MouseEvent<HTMLElement>,
     worktree: Worktree
@@ -191,6 +193,7 @@ export function renderWorktreeItemRow(
         flushSurface
         activationRowKey={itemRow.rowKey}
         onImmediateActivate={ctx.onImmediateActivate}
+        activateOnPress={ctx.activateOnPress}
         onSelectionGesture={ctx.onSelectionGesture}
         onWorktreeCardClick={ctx.onWorktreeCardClick}
         onContextMenuSelect={ctx.onContextMenuSelect}

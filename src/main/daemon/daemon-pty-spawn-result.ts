@@ -88,11 +88,12 @@ export abstract class DaemonPtySpawnResult extends DaemonPtySpawnRequest {
     // Null overrides caller WSL preference; undefined preserves compatibility with older daemons.
     wslDistro = providerWslDistro ?? undefined
     context.wslDistro = wslDistro
-    if (wslDistro) {
-      this.wslDistrosBySessionId.set(sessionId, wslDistro)
-    } else if (providerWslDistro === null || result.isNew) {
-      this.wslDistrosBySessionId.delete(sessionId)
-    }
+    this.noteSpawnWslDistro(
+      sessionId,
+      wslDistro,
+      providerWslDistro === null || result.isNew,
+      result.incarnationId
+    )
     if (wslDistro && opts.env?.ORCA_PANE_KEY) {
       this.wslPaneKeysBySessionId.set(sessionId, opts.env.ORCA_PANE_KEY)
     }
@@ -160,11 +161,12 @@ export abstract class DaemonPtySpawnResult extends DaemonPtySpawnRequest {
         providerWslDistro = result.wslDistro === undefined ? wslDistro : result.wslDistro
         wslDistro = providerWslDistro ?? undefined
         context.wslDistro = wslDistro
-        if (wslDistro) {
-          this.wslDistrosBySessionId.set(sessionId, wslDistro)
-        } else if (providerWslDistro === null || result.isNew) {
-          this.wslDistrosBySessionId.delete(sessionId)
-        }
+        this.noteSpawnWslDistro(
+          sessionId,
+          wslDistro,
+          providerWslDistro === null || result.isNew,
+          result.incarnationId
+        )
         pid = typeof result.pid === 'number' && result.pid > 0 ? result.pid : null
         this.initialCwds.set(sessionId, effectiveCwd)
       }

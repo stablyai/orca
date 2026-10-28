@@ -1,18 +1,9 @@
 import { realpathSync, statSync } from 'node:fs'
-import { isAbsolute, join, resolve, sep } from 'node:path'
-
-export function expandFloatingWorkspaceHomePath(input: string, home: string): string {
-  if (input === '~') {
-    return home
-  }
-  if (input.startsWith(`~${sep}`) || (process.platform === 'win32' && input.startsWith('~/'))) {
-    return join(home, input.slice(2))
-  }
-  return input
-}
+import { isAbsolute, resolve } from 'node:path'
+import { expandLeadingHomePath } from '../../home-path-expansion'
 
 export function resolveFloatingWorkspacePath(input: string, home: string): string {
-  const expanded = expandFloatingWorkspaceHomePath(input, home)
+  const expanded = expandLeadingHomePath(input, home)
   return isAbsolute(expanded) ? resolve(expanded) : resolve(home, expanded)
 }
 

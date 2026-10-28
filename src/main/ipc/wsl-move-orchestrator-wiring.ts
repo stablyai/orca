@@ -128,11 +128,12 @@ function createOrchestrator(
     hasHost: (distro) =>
       getWslHostService()?.recordForEnvironment(defaultWslOrcadEnvironmentId(distro)) != null,
     isHostReady,
-    preview: async (distro) =>
-      previewWslMove(driverDeps(), {
-        distro,
-        sleptPanes: await requestSleptPanes()
-      }),
+    preview: async (distro, userAsked) =>
+      previewWslMove(
+        driverDeps(),
+        { distro, sleptPanes: await requestSleptPanes() },
+        { settleInterrupted: userAsked ? 'finish-now' : 'finish-at-restart' }
+      ),
     start: async (distro, stillWanted) => {
       const sleptPanes = await requestSleptPanes()
       // The user may have released or snoozed the distro while the window answered.

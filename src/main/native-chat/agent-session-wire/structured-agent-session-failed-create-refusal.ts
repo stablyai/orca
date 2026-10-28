@@ -29,7 +29,10 @@ import {
   structuredAgentSessionStartFailure
 } from './structured-agent-session-failure-text'
 import { structuredAgentSessionFailureWordsContext } from './structured-agent-session-send-preparation'
-import { providerExecutableMissing } from '../../provider-process/provider-executable-missing'
+import {
+  providerExecutableMissing,
+  providerLaunchFolderMissing
+} from '../../provider-process/provider-executable-missing'
 import { argumentProblemOf } from '../structured-agent-arguments-error'
 import { agentCliInstallationProblemOf } from '../agent-cli-installation-error'
 import { agentCliInstallationFacts } from '../../../shared/agent-cli-installation-problem'
@@ -127,6 +130,9 @@ function failedAcquisitionDetails(
   }
   if (isExitProvenAcquisitionFailure(error) && providerExecutableMissing(error)) {
     return { reason: 'cliMissing' }
+  }
+  if (isExitProvenAcquisitionFailure(error) && providerLaunchFolderMissing(error)) {
+    return { reason: 'launchFolderMissing' }
   }
   if (isExitProvenAcquisitionFailure(error) && providerExitObserved(error)) {
     return { reason: 'providerStartFailed' }

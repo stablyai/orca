@@ -733,7 +733,8 @@
         "french": "Français",
         "portuguese": "Português (Brasil)",
         "russian": "Русский",
-        "turkish": "Türkçe"
+        "turkish": "Türkçe",
+        "german": "Deutsch"
       },
       "statusBar": {
         "claudeToggleDescription": "Mostra o uso de tokens e custo do Claude para o espaço de trabalho ativo.",
@@ -10624,7 +10625,7 @@
           "advanced": "Avançado",
           "alsoDeleteRemoteHint": "Exclui permanentemente as worktrees Git remotas e suas branches. Não pode ser desfeito.",
           "alsoForgetLocalHint": "Limpa-os apenas do Orca. Os arquivos, worktrees e branches remotos permanecem intocados.",
-          "wslHostEndsTerminals": "Remove {{value0}} do Orca, encerra os terminais abertos e interrompe o servidor Orca nessa distribuição. Os arquivos da distribuição não são alterados."
+          "wslHostEndsTerminalsUnlessShared": "Remove {{value0}} do Orca. A menos que outro Orca aberto neste computador o esteja usando, também encerra seus terminais abertos e para o servidor do Orca nessa distro. Os arquivos da distro não são alterados."
         },
         "AddRepoSteps": {
           "569326d9cc": "Escolher pasta",
@@ -11364,6 +11365,7 @@
           "removalPending": "A remoção não foi concluída"
         },
         "wslHostRemoval": {
+          "keptForOthers": "Removido deste Orca. O host continua em execução para {{value0}}.",
           "partial": "O host foi removido, mas algo na distribuição ainda está em execução: {{value0}}",
           "pending": "O Orca ainda não removeu o host: {{value0}} Remova-o novamente para tentar de novo, ou conecte-o para mantê-lo."
         },
@@ -18756,7 +18758,6 @@
         "pausedSendFailedWaiting": "Não foi possível enviar — pressione Enviar para tentar novamente quando o agente terminar.",
         "save": "Salvar",
         "editingMessage": "Editando mensagem",
-        "cancelEditing": "Cancelar edição",
         "editChanged": "Esta mensagem mudou durante a edição. Sua versão está no campo de texto do chat.",
         "editChangedPrompt": "Esta mensagem mudou durante a edição. Sua versão estará no campo de texto do chat depois que você responder ao agente.",
         "editChangedNotSaved": "Esta mensagem mudou durante a edição. Sua versão não foi salva.",
@@ -18770,8 +18771,6 @@
         "expand": "Expandir",
         "queued": "Na fila",
         "clearAll": "Limpar tudo",
-        "pasteOrDropImages": "Cole ou solte imagens",
-        "saveNeedsContent": "Adicione texto ou uma imagem para salvar",
         "moveChanged": "A fila mudou antes desta movimentação. Tente arrastar a mensagem novamente.",
         "reorderHint": "Arraste para reordenar ou use as teclas de seta para cima e para baixo.",
         "reorderMessage": "Reordenar mensagem"

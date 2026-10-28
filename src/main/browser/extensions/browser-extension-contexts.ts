@@ -1,4 +1,10 @@
 import { forgetBrowserExtensionContextLifetime } from './browser-extension-context-lifetime'
+import {
+  createBrowserExtensionFrameContext,
+  forgetBrowserExtensionFrame,
+  trackBrowserExtensionDocument,
+  type FrameContext
+} from './browser-extension-frame-lifetime'
 import { webFrameMain } from 'electron'
 import {
   BROWSER_EXTENSION_EVENT_CHANNEL,
@@ -16,15 +22,6 @@ import {
   type QueuedWorkerEvent,
   type WorkerEventStream
 } from './browser-extension-worker-event-stream'
-
-type FrameContext = {
-  extensionId: string
-  webContentsId: number
-  processId: number
-  routingId: number
-  events: Set<string>
-  filters: ListenerFilters
-}
 
 /** Event key → every listener's filter; absent when some listener takes everything. */
 export type ListenerFilters = Map<string, unknown[]>
@@ -49,7 +46,6 @@ export type HostSessionState = {
 }
 
 const stateBySession = new Map<Electron.Session, HostSessionState>()
-const trackedWebContents = new WeakSet<Electron.WebContents>()
 
 export function eventKey(namespace: string, event: string): string {
   return `${namespace}.${event}`
@@ -72,8 +68,14 @@ export function ensureHostSessionState(
 }
 
 export function forgetHostSession(sess: Electron.Session): void {
-  forgetBrowserExtensionContextLifetime(stateBySession.get(sess))
-  for (const context of stateBySession.get(sess)?.workers.values() ?? []) {
+  const state = stateBySession.get(sess)
+  forgetBrowserExtensionContextLifetime(state)
+  if (state) {
+    for (const [key, context] of state.frames) {
+      forgetBrowserExtensionFrame(state.frames, key, context)
+    }
+  }
+  for (const context of state?.workers.values() ?? []) {
     detachWorkerEventStream(context)
   }
   stateBySession.delete(sess)
@@ -92,7 +94,7 @@ export function forgetExtensionContexts(sess: Electron.Session, extensionId: str
   state.workers.delete(extensionId)
   for (const [key, frame] of state.frames) {
     if (frame.extensionId === extensionId) {
-      state.frames.delete(key)
+      forgetBrowserExtensionFrame(state.frames, key, frame)
     }
   }
 }
@@ -134,15 +136,13 @@ export function setFrameListening(
     if (!active) {
       return
     }
-    context = {
+    context = createBrowserExtensionFrameContext(
+      state.frames,
+      frameKey,
       extensionId,
-      webContentsId: webContents.id,
-      processId: frame.processId,
-      routingId: frame.routingId,
-      events: new Set(),
-      filters: new Map()
-    }
-    state.frames.set(frameKey, context)
+      webContents.id,
+      frame
+    )
   }
   if (active) {
     context.events.add(key)
@@ -150,18 +150,11 @@ export function setFrameListening(
     context.events.delete(key)
   }
   setListenerFilters(context.filters, key, active ? filters : undefined)
-  if (!trackedWebContents.has(webContents)) {
-    trackedWebContents.add(webContents)
-    webContents.once('destroyed', () => {
-      for (const sessionState of stateBySession.values()) {
-        for (const [candidateKey, candidate] of sessionState.frames) {
-          if (candidate.webContentsId === webContents.id) {
-            sessionState.frames.delete(candidateKey)
-          }
-        }
-      }
-    })
+  if (context.events.size === 0) {
+    forgetBrowserExtensionFrame(state.frames, frameKey, context)
   }
+  const webSession = webContents.session
+  trackBrowserExtensionDocument(webContents, () => stateBySession.get(webSession)?.frames)
 }
 
 export function setListenerFilters(
@@ -205,11 +198,8 @@ export function dispatchToWorkerWhenListening(
     return
   }
   const key = eventKey(namespace, event)
-  const context = ensureWorkerContext(
-    state,
-    extensionId,
-    `${getChromeExtensionOrigin(extensionId)}/`
-  )
+  const scope = `${getChromeExtensionOrigin(extensionId)}/`
+  const context = ensureWorkerContext(state, extensionId, scope)
   const payload: BrowserExtensionEventPayload = { namespace, event, args }
   if (context.events.has(key)) {
     deliverToWorker(sess, context, key, payload, startWorker)
@@ -242,13 +232,13 @@ function deliverToFrames(
     const frame = webFrameMain.fromId(context.processId, context.routingId)
     // Why: a frame that navigated away from the extension must stop receiving its events.
     if (!frame || frame.isDestroyed() || !frame.url.startsWith(origin)) {
-      state.frames.delete(frameKey)
+      forgetBrowserExtensionFrame(state.frames, frameKey, context)
       continue
     }
     try {
       frame.send(BROWSER_EXTENSION_EVENT_CHANNEL, payload)
     } catch {
-      state.frames.delete(frameKey)
+      forgetBrowserExtensionFrame(state.frames, frameKey, context)
     }
   }
 }

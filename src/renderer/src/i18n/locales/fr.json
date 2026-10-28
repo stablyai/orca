@@ -290,7 +290,8 @@
         "french": "Français",
         "portuguese": "Português (Brasil)",
         "russian": "Русский",
-        "turkish": "Türkçe"
+        "turkish": "Türkçe",
+        "german": "Deutsch"
       },
       "statusBar": {
         "claudeToggleDescription": "Afficher l'utilisation des tokens et des coûts de Claude pour l'espace de travail actif.",
@@ -6053,7 +6054,7 @@
           "advanced": "Avancé",
           "alsoDeleteRemoteHint": "Supprime définitivement les worktrees Git distants et leurs branches. Irréversible.",
           "alsoForgetLocalHint": "Les retire uniquement d'Orca. Les fichiers, worktrees et branches distants restent intacts.",
-          "wslHostEndsTerminals": "Retire {{value0}} d'Orca, ferme ses terminaux ouverts et arrête le serveur d'Orca dans cette distro. Les fichiers de la distro restent intacts."
+          "wslHostEndsTerminalsUnlessShared": "Retire {{value0}} d'Orca. Sauf si un autre Orca ouvert sur cet ordinateur l'utilise, cela ferme aussi ses terminaux ouverts et arrête le serveur d'Orca dans cette distro. Les fichiers de la distro restent intacts."
         },
         "HostRenameDialog": {
           "1a2b3c4d5e": "Renommer l'hôte",
@@ -6410,6 +6411,7 @@
           "removalPending": "La suppression n'a pas abouti"
         },
         "wslHostRemoval": {
+          "keptForOthers": "Retiré de cet Orca. L'hôte reste actif pour {{value0}}.",
           "partial": "L'hôte a été retiré, mais quelque chose dans la distro est encore en cours d'exécution : {{value0}}",
           "pending": "Orca n'a pas encore supprimé l'hôte : {{value0}} Supprimez-le à nouveau pour réessayer, ou connectez-le pour le conserver."
         },
@@ -18266,7 +18268,6 @@
         "pausedSendFailedWaiting": "Envoi impossible. Quand l'agent aura terminé, appuyez sur Envoyer pour réessayer.",
         "save": "Enregistrer",
         "editingMessage": "Modification du message",
-        "cancelEditing": "Annuler la modification",
         "editChanged": "Ce message a changé pendant que vous le modifiiez. Votre modification se trouve dans le champ de discussion.",
         "editChangedPrompt": "Ce message a changé pendant que vous le modifiiez. Votre modification sera dans le champ de discussion une fois que vous aurez répondu à l'agent.",
         "editChangedNotSaved": "Ce message a changé pendant que vous le modifiiez. Votre modification n'a pas été enregistrée.",
@@ -18280,8 +18281,6 @@
         "expand": "Développer",
         "queued": "En file d'attente",
         "clearAll": "Tout effacer",
-        "pasteOrDropImages": "Collez ou déposez des images",
-        "saveNeedsContent": "Ajoutez du texte ou une image pour enregistrer",
         "moveChanged": "La file d'attente a changé avant ce déplacement. Essayez de faire glisser le message à nouveau.",
         "reorderHint": "Faites glisser pour réorganiser, ou utilisez les touches fléchées Haut et Bas.",
         "reorderMessage": "Réorganiser le message"
@@ -19194,6 +19193,7 @@
       "useHereConfirm": "Utiliser sur cet ordinateur",
       "useHereSuperseded": "Un déplacement ultérieur vers l'hôte {{distro}} inclut ce projet. Ramenez d'abord celui-là.",
       "useHereMoveRunning": "Un déplacement vers l'hôte {{distro}} est encore en cours. Réessayez une fois terminé.",
+      "useHereHostKeptForPeers": "{{project}} a été déplacé vers l'hôte {{distro}}, qui reste actif pour un autre Orca. Ajoutez de nouveau l'hôte pour l'utiliser ici.",
       "useHereHostUnreachable": "L'hôte {{distro}} ne répond pas : Orca ne peut pas arrêter sa copie de ce projet, et ses agents y tournent peut-être encore. Connectez l'hôte dans les Réglages, ou supprimez-le, puis réessayez.",
       "useHereHostStillRunning": "La copie de ce projet sur l'hôte {{distro}} a encore des terminaux en cours : ses agents pourraient tourner deux fois. Patientez un instant, puis réessayez.",
       "useHereFailed": "Impossible de ramener ce projet sur cet ordinateur.",

@@ -160,3 +160,6 @@ export type WslMoveUnfinished = {
 }
 
 export const WSL_MOVE_PROGRESS_CHANNEL = 'wslMove:progress'
+
+/** The `detail` of an earlier move committed on the host whose desktop half waits for a restart. */
+export const WSL_MOVE_FINISH_PENDING_DETAIL = 'finish-pending'

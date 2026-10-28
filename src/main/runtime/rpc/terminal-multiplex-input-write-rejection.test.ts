@@ -335,7 +335,7 @@ describe('terminal multiplex RPC', () => {
           enter: false,
           interrupt: false
         },
-        { inputKind: 'driving' }
+        { inputKind: 'driving', inputSource: 'desktop' }
       )
     )
 
@@ -415,7 +415,7 @@ describe('terminal multiplex RPC', () => {
           enter: false,
           interrupt: false
         },
-        { inputKind: 'driving' }
+        { inputKind: 'driving', inputSource: 'desktop' }
       )
     )
 

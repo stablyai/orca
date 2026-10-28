@@ -95,9 +95,12 @@ export async function resolveSimulatorUdid(
   try {
     const devices = await listSimulatorDevices()
     const needle = deviceOrName.toLowerCase()
-    const match = devices.find(
-      (device) => device.name.toLowerCase().includes(needle) || device.udid === deviceOrName
-    )
+    // An exact name wins so `iPhone 17` cannot resolve to an earlier `iPhone 17e`.
+    const match =
+      devices.find((device) => device.name.toLowerCase() === needle) ??
+      devices.find(
+        (device) => device.name.toLowerCase().includes(needle) || device.udid === deviceOrName
+      )
     if (match) {
       return match.udid
     }

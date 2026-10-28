@@ -14,7 +14,10 @@ import {
   AgentSessionAcquisitionRefusal,
   AgentSessionPreSpawnError
 } from './structured-agent-session-adapter'
-import { withMissingProviderExecutable } from '../../provider-process/provider-executable-missing'
+import {
+  withMissingProviderExecutable,
+  withProviderSpawnAbsence
+} from '../../provider-process/provider-executable-missing'
 import { withProviderRequestTimeout } from '../../provider-process/provider-request-timeout'
 import { MAX_UNEXPECTED_EXIT_REASON_CHARS } from './structured-agent-session-dead-generation-settlement'
 import { StructuredAgentArgumentsError } from '../structured-agent-arguments-error'
@@ -99,6 +102,16 @@ describe('structuredAgentSessionStartFailure', () => {
       structuredAgentSessionStartFailure({ error: new Error('Not logged in. Run /login.') })
         .rejection
     ).toEqual({ kind: 'startFailed' })
+  })
+
+  it('words a working folder deleted under the chat as the folder, never a missing CLI', () => {
+    const gone = new AgentSessionAcquisitionExitProvenError(
+      withProviderSpawnAbsence(new Error('spawn claude ENOENT'), 'launchFolder')
+    )
+    expect(structuredAgentSessionStartFailure({ error: gone }, { agentName: 'Claude' })).toEqual({
+      reason: 'The folder this chat ran in no longer exists. Restore it to continue this chat.',
+      rejection: { kind: 'launchFolderMissing' }
+    })
   })
 
   it("words a CLI that was never found as the chat's notice does, with the step to take", () => {

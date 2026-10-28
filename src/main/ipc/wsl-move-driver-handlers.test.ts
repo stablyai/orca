@@ -16,6 +16,10 @@ const driver = vi.hoisted(() => ({
   cancelWslMove: vi.fn(() => true)
 }))
 vi.mock('../persistence/moving-wsl-projects/wsl-move-driver', () => driver)
+const running = vi.hoisted(() => ({ any: false }))
+vi.mock('../persistence/moving-wsl-projects/wsl-move-running-moves', () => ({
+  isAnyWslMoveRunning: () => running.any
+}))
 const track = vi.hoisted(() => vi.fn())
 vi.mock('../telemetry/client', () => ({ track }))
 
@@ -85,5 +89,14 @@ describe('WSL move driver IPC', () => {
       expect(await invoke('wslMove:start', bad)).toMatchObject({ detail: 'invalid-request' })
     }
     expect(driver.moveProjectsToWslHost).not.toHaveBeenCalled()
+  })
+
+  // The quit prompt asks this; with the gate closed it is always false, so nothing prompts.
+  it('says whether a move is running, and never with the gate closed', async () => {
+    running.any = true
+    expect(await invoke('wslMove:isRunning')).toBe(true)
+    vi.stubEnv(WSL_HOSTS_INTERNAL_GATE_ENV, '')
+    expect(await invoke('wslMove:isRunning')).toBe(false)
+    running.any = false
   })
 })

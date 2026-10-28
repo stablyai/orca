@@ -130,7 +130,7 @@ export async function runWslMoveOrchestratorStep(
       return
     }
   }
-  const preview = await settle(() => ports.preview(distro))
+  const preview = await settle(() => ports.preview(distro, trigger === 'user'))
   if (changedUnder(record)) {
     return
   }

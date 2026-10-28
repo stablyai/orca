@@ -23,9 +23,10 @@ import { recordCrashBreadcrumb } from '../../crash-reporting/crash-breadcrumb-st
 import { buildReadDirErrorBreadcrumb, type ReadDirThrowSite } from '../readdir-error-diagnostics'
 import type { FilesystemHandlerContext } from './filesystem-handler-context'
 import { registerFilesystemChunkReadHandler } from './filesystem-chunk-read-handler'
-import { readMediaPreview } from '../../media/media-preview-protocol'
+import { grantRemoteFilePreview, readMediaPreview } from '../../media/media-preview-protocol'
 import { windowsFsPath } from '../../wsl/wsl-unc-drive-fs-path'
 import { assertWslUncPathRunning, guardWslUncPathAccess } from '../../wsl/wsl-unc-access-gate'
+import { parseRemoteFilePreviewAddress } from '../../../shared/remote-file-preview-address'
 import {
   readLocalFileContent,
   readLocalLogSnapshot,
@@ -118,6 +119,14 @@ export function registerFilesystemReadHandlers(context: FilesystemHandlerContext
       )
     }
   )
+
+  ipcMain.handle('fs:grantRuntimeFilePreview', (event, args: unknown) => {
+    const remote = parseRemoteFilePreviewAddress(args)
+    if (!remote) {
+      throw new Error('Invalid preview path')
+    }
+    return grantRemoteFilePreview(event, remote, store)
+  })
 
   ipcMain.handle(
     'fs:listMarkdownDocuments',

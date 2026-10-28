@@ -1,3 +1,7 @@
+import {
+  updateMobileNativeChatDraftInputs,
+  resetMobileNativeChatDraftInputsForTests
+} from './native-chat/composer/mobile-native-chat-draft-inputs'
 import { createElement, useState } from 'react'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -12,6 +16,9 @@ import {
 import { markRpcDeliveryUnknown } from '../transport/rpc-delivery-ambiguity'
 import { structuredSendResultFixture } from './structured-agent-send-result.test-fixture'
 import { useMobileStructuredAgentSession } from './use-mobile-structured-agent-session'
+import { useMobileStructuredNativeChatSendBridge } from './use-mobile-structured-native-chat-send-bridge'
+import { useMobileNativeChatDrafts } from './native-chat/composer/use-mobile-native-chat-drafts'
+import type { AgentSessionSlashCommand } from '../../../src/shared/agent-session-wire'
 import {
   AGENT_SESSION_SEND_OPTIONS_RUNTIME_CAPABILITY,
   AGENT_SESSION_SEND_SKILLS_RUNTIME_CAPABILITY
@@ -61,6 +68,8 @@ describe('mobile structured send actions', () => {
   let listener: ((value: unknown) => void) | null = null
   let storedOperations: Map<string, string>
   let agent = 'codex'
+  let sessionCommands: readonly AgentSessionSlashCommand[] | undefined
+  let sendOrdinary: ReturnType<typeof useMobileStructuredNativeChatSendBridge>['sendWithOutcome']
   let hostSupport: StructuredAgentSessionHostSupport | null = null
   const onSendError = vi.fn()
   const sendRequest = vi.fn<RpcClient['sendRequest']>()
@@ -104,18 +113,39 @@ describe('mobile structured send actions', () => {
       client,
       sessionId: 'session-1',
       sourceIdentity: 'host-a\0workspace-a',
+      composerScopeKey: 'ordinary-draft',
       enabled: true,
       connected: true,
       agent,
+      sessionCommands,
       hostSupport,
       onSendError
     })
     return createElement('span', null, banner.message)
   }
 
-  async function mountSession(): Promise<void> {
+  function BridgeHarness() {
+    const drafts = useMobileNativeChatDrafts({
+      hostId: 'host-a',
+      worktreeId: 'workspace-a',
+      tabId: 'performance',
+      sessionId: 'session-1',
+      messages: [],
+      transcriptSettled: true
+    })
+    sendOrdinary = useMobileStructuredNativeChatSendBridge({
+      ...drafts,
+      agent: 'codex',
+      sessionCommands,
+      sendStructured: (...args) => hook!.sendWithOutcome(...args),
+      onSendError
+    }).sendWithOutcome
+    return createElement(Harness)
+  }
+
+  async function mountSession(ordinary = false): Promise<void> {
     act(() => {
-      renderer = create(createElement(Harness))
+      renderer = create(createElement(ordinary ? BridgeHarness : Harness))
     })
     await vi.waitFor(() => expect(listener).toEqual(expect.any(Function)))
     act(() => listener?.(snapshotEvent()))
@@ -159,8 +189,49 @@ describe('mobile structured send actions', () => {
     banner = null
     listener = null
     agent = 'codex'
+    sessionCommands = undefined
     hostSupport = null
+    resetMobileNativeChatDraftInputsForTests()
   })
+
+  it.each([10, 100])(
+    'ordinary phone bridge and Send skip %i commands for prose but still route slash controls',
+    async (count) => {
+      let kinds = 0
+      let names = 0
+      sessionCommands = Array.from({ length: count }, (_, index) => ({
+        get kind() {
+          kinds++
+          return 'command' as const
+        },
+        get name() {
+          names++
+          return `provider-${index}`
+        }
+      }))
+      sendRequest.mockImplementation(async (method) =>
+        method === 'agentSession.send' ? sendResult('accepted') : ok({})
+      )
+      await mountSession(true)
+      kinds = 0
+      names = 0
+      await act(async () => {
+        expect(await sendOrdinary('hello')).toBe('accepted')
+      })
+      expect(calls()).toHaveLength(1)
+      expect(fieldsOf(calls()[0]![1]).body).toMatchObject({
+        blocks: [{ type: 'text', text: 'hello' }]
+      })
+      expect({ kinds, names }).toEqual({ kinds: 0, names: 0 })
+      await act(async () => {
+        expect(await sendOrdinary('/compact extra')).toBe('rejected')
+      })
+      expect(calls()).toHaveLength(1)
+      expect(onSendError).toHaveBeenCalledWith('Use /compact without arguments.', undefined)
+      expect(kinds).toBeGreaterThanOrEqual(count)
+      expect(names).toBeGreaterThanOrEqual(count)
+    }
+  )
 
   it('selects a native OMP skill and sends the exact token and arguments through RPC', async () => {
     agent = 'omp'
@@ -517,6 +588,23 @@ describe('mobile structured send actions', () => {
       })
     }
   )
+
+  it('does not infer omitted captured skills from the live composer draft', async () => {
+    hostSupport = structuredAgentSessionHostSupport([AGENT_SESSION_SEND_SKILLS_RUNTIME_CAPABILITY])
+    sendRequest.mockImplementation(async (method) =>
+      method === 'agentSession.send' ? sendResult('accepted') : ok({ models: [], current: {} })
+    )
+    updateMobileNativeChatDraftInputs('ordinary-draft', () => ({
+      images: [],
+      files: [],
+      skills: [{ name: 'review', path: '/live/SKILL.md' }]
+    }))
+    await mountSession()
+    await act(async () => {
+      await hook!.sendWithOutcome('$review text')
+    })
+    expect(fieldsOf(calls()[0]?.[1]).body).not.toHaveProperty('skills')
+  })
 
   it('sends an attached file as a reference after the text, and only images as image blocks', async () => {
     sendRequest.mockImplementation(async (method) =>

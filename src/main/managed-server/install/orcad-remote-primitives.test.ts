@@ -282,4 +282,20 @@ describe('orcad remote context', () => {
     })
     expect(order).toEqual(['prepare', 'record'])
   })
+
+  it('uses a WSL caller-known platform and login home instead of probing them', async () => {
+    vi.mocked(detectRemoteHostPlatform).mockClear()
+    const commands: string[] = []
+    mockExec.mockImplementation(async (_conn, command: string) => {
+      commands.push(command)
+      return command.includes('ldd') ? 'ldd (GNU libc) 2.39\n' : '__ORCAD_RECORD_ABSENT__\n'
+    })
+    const wslTarget = { kind: 'wsl', id: 'wsl:u', distro: 'U', label: 'U' } as const
+
+    const context = await resolveOrcadRemoteContext(wslTarget, conn, undefined, linux, '/home/u\n')
+
+    expect(context).toMatchObject({ remoteHome: '/home/u', userDataDir: '/home/u/.orca' })
+    expect(detectRemoteHostPlatform).not.toHaveBeenCalled()
+    expect(commands.some((command) => command.includes('$HOME'))).toBe(false)
+  })
 })

@@ -1,3 +1,4 @@
+import { stripSentImagePromptMarkers } from '../../../src/shared/native-chat-image-transcript-markers'
 // The shared projection decides each card's hold; this layer words it for the phone.
 
 import type { AgentSessionFailureFact } from '../../../src/shared/agent-session-failure'
@@ -67,7 +68,10 @@ export function mobileQueuedMessageCards(
 ): MobileQueuedMessageCard[] {
   return projectQueuedMessageCards(queuedMessages, submissions, facts).map((card) => ({
     ...card,
-    line: queuedMessageCardLine(card),
+    line: queuedMessageCardLine({
+      ...card,
+      text: stripSentImagePromptMarkers(card.text, card.images?.length ?? 0)
+    }),
     needsAttention: queuedMessageCardNeedsAttention(card),
     caption: queuedMessageCardCaption(card, facts.agentName, facts.statedFailures ?? []),
     attribution: agentMessageAttribution('From', card.from)

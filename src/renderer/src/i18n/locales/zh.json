@@ -117,7 +117,8 @@
         "french": "Français",
         "portuguese": "Português (Brasil)",
         "russian": "Русский",
-        "turkish": "Türkçe"
+        "turkish": "Türkçe",
+        "german": "Deutsch"
       },
       "statusBar": {
         "claudeToggleDescription": "显示当前工作区的 Claude Token 与费用消耗情况。",
@@ -5929,7 +5930,7 @@
           "advanced": "高级",
           "alsoDeleteRemoteHint": "永久删除远程 Git 工作树及其分支。此操作不可撤销。",
           "alsoForgetLocalHint": "仅从 Orca 中清除。远程文件、工作树和分支均不受影响。",
-          "wslHostEndsTerminals": "从 Orca 中移除 {{value0}}，结束其打开的终端，并停止该发行版中的 Orca 服务器。发行版中的文件不受影响。"
+          "wslHostEndsTerminalsUnlessShared": "从 Orca 中移除 {{value0}}。除非此计算机上打开的另一个 Orca 正在使用它，否则还会结束其打开的终端，并停止该发行版中的 Orca 服务器。发行版中的文件不受影响。"
         },
         "HostRenameDialog": {
           "1a2b3c4d5e": "重命名主机",
@@ -6231,6 +6232,7 @@
           "removalPending": "移除未完成"
         },
         "wslHostRemoval": {
+          "keptForOthers": "已从此 Orca 中移除。该主机将继续为 {{value0}} 运行。",
           "partial": "主机已被移除，但发行版中仍有内容在运行：{{value0}}",
           "pending": "Orca 尚未移除该主机：{{value0}} 可再次移除以重试，或连接以保留它。"
         },
@@ -18096,7 +18098,6 @@
         "pausedSendFailedWaiting": "无法发送。智能体完成后，点按发送以重试。",
         "save": "保存",
         "editingMessage": "正在编辑消息",
-        "cancelEditing": "取消编辑",
         "editChanged": "你编辑时此消息已更改。你编辑的内容已放入聊天输入框。",
         "editChangedPrompt": "你编辑时此消息已更改。回答智能体后，你编辑的内容会出现在聊天输入框中。",
         "editChangedNotSaved": "你编辑时此消息已更改。你的编辑未保存。",
@@ -18109,9 +18110,7 @@
         "collapse": "收起",
         "expand": "展开",
         "queued": "已排队",
-        "clearAll": "全部清除",
-        "pasteOrDropImages": "粘贴或拖入图片",
-        "saveNeedsContent": "添加文字或图片后才能保存"
+        "clearAll": "全部清除"
       },
       "thought": "已思考",
       "thoughtForDuration": "思考了 {{duration}}",
@@ -19124,6 +19123,7 @@
       "useHereConfirm": "在此电脑上使用",
       "useHereSuperseded": "之后一次移动到 {{distro}} 主机的操作包含此项目。请先将那次移动恢复。",
       "useHereMoveRunning": "移动到 {{distro}} 主机的操作仍在进行。请在其结束后重试。",
+      "useHereHostKeptForPeers": "{{project}} 已移到 {{distro}} 主机，该主机仍在为另一个 Orca 运行。重新添加该主机即可在此处再次使用它。",
       "useHereHostUnreachable": "{{distro}} 主机没有响应，Orca 无法停止它上面的此项目副本，其代理可能仍在运行。请在设置中连接或移除该主机，然后重试。",
       "useHereHostStillRunning": "{{distro}} 主机上的此项目副本仍有终端在运行，其代理可能会运行两次。请稍候再试。",
       "useHereFailed": "无法将此项目恢复到此电脑。",

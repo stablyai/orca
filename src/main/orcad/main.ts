@@ -8,7 +8,11 @@ import {
   ORCAD_PROFILE_PREFLIGHT_FLAG,
   ORCAD_STARTUP_PREFLIGHT_FLAG
 } from '../../shared/orcad-profile-preflight'
-import { preflightBundledOrcadStartup, runOrcadProfilePreflight } from './orcad-profile-preflight'
+import {
+  confirmBundledOrcadStartupQualified,
+  preflightBundledOrcadStartup,
+  runOrcadProfilePreflight
+} from './orcad-profile-preflight'
 import { assertOrcadServerRuntime } from './orcad-bundled-runtime'
 import {
   formatOrcadNativePreflightReport,
@@ -94,6 +98,7 @@ function startOrcadProcess(): void {
           runOrcadNativePreflight()
           return main()
         })
+        .then(confirmBundledOrcadStartupQualified)
         .catch(failStartup)
     }
   } catch (error) {

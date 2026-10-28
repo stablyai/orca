@@ -126,9 +126,9 @@ export function MobileNativeChatQueuedMessages({
   const attentionCaption = !expanded ? cards.find((card) => card.needsAttention)?.caption : null
   const headerCountStyle = [styles.headerCount, attentionCaption && styles.captionReturned]
   return (
-    <View style={styles.list}>
+    <View style={[styles.list, editor && styles.inlineList]}>
       {}
-      <View style={styles.box} testID="queued-box">
+      <View style={[styles.box, editor && styles.inlineBox]} testID="queued-box">
         {/* A polite region, as the app's other notices: React Native has no status role. */}
         <View
           testID="queued-header"
@@ -178,6 +178,7 @@ export function MobileNativeChatQueuedMessages({
           <MobileQueuedMessageScrollList
             messageIds={cards.map((card) => card.messageId)}
             newestIsPersons={!cards.at(-1)?.attribution}
+            inlineEditorActive={editor !== undefined}
           >
             {(reveal, drag) => {
               const renderRow = (card: MobileQueuedMessageCard, handle?: React.ReactNode) => (

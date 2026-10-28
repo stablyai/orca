@@ -46,7 +46,9 @@ export async function submitCrashReport(
 ): Promise<CrashReportSubmitResult> {
   const report = await getRequestedCrashReport(store, args)
   if (!report) {
-    const diagnosticUpload = prepareCrashDiagnosticBundle(args.includeDiagnosticLogs !== false)
+    const diagnosticUpload = await prepareCrashDiagnosticBundle(
+      args.includeDiagnosticLogs !== false
+    )
     const diagnosticBundle = diagnosticUpload.diagnosticBundle
     const reportOnlyDiagnosticBundle = diagnosticBundleForReportOnlyRetry(diagnosticUpload)
     const result = await submitFeedback({
@@ -98,7 +100,9 @@ export async function submitCrashReport(
 
   inFlightSubmissions.add(report.id)
   try {
-    const diagnosticUpload = prepareCrashDiagnosticBundle(args.includeDiagnosticLogs !== false)
+    const diagnosticUpload = await prepareCrashDiagnosticBundle(
+      args.includeDiagnosticLogs !== false
+    )
     const diagnosticBundle = diagnosticUpload.diagnosticBundle
     const reportOnlyDiagnosticBundle = diagnosticBundleForReportOnlyRetry(diagnosticUpload)
     const result = await submitFeedback({

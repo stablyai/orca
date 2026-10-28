@@ -132,7 +132,7 @@ describe('orcad GC', () => {
       listing: ['orcad-0.1.0+01d', 'orcad-0.2.0+9ee0', 'orcad-0.3.0+cc0'],
       removed
     })
-    await gcOldOrcadVersions({
+    const clean = await gcOldOrcadVersions({
       conn,
       host,
       remoteHome: '/home/u',
@@ -144,6 +144,8 @@ describe('orcad GC', () => {
       }
     })
     expect(removed).toEqual(['orcad-0.1.0+01d'])
+    // Pinned versions are not stale, so the pass still counts as clean.
+    expect(clean).toBe(true)
   })
 
   it('never removes the version a live daemon was forked from', async () => {
@@ -167,7 +169,7 @@ describe('orcad GC', () => {
       liveness: { 'orcad-0.1.0+bb0': 'UNKNOWN', 'orcad-0.0.9+dead': 'DEAD' },
       removed
     })
-    await gcOldOrcadVersions({
+    const clean = await gcOldOrcadVersions({
       conn,
       host,
       remoteHome: '/home/u',
@@ -175,6 +177,8 @@ describe('orcad GC', () => {
       record: emptyOrcadActivationRecord()
     })
     expect(removed).toEqual(['orcad-0.0.9+dead'])
+    // A kept candidate must be retried by a later pass.
+    expect(clean).toBe(false)
   })
 
   it('stops before later versions when liveness probe termination is unconfirmed', async () => {

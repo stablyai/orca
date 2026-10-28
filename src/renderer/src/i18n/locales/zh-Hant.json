@@ -359,7 +359,8 @@
         "french": "Français",
         "portuguese": "Português (Brasil)",
         "russian": "Русский",
-        "turkish": "Türkçe"
+        "turkish": "Türkçe",
+        "german": "Deutsch"
       },
       "statusBar": {
         "claudeToggleDescription": "顯示目前工作區的 Claude token 用量與費用。",
@@ -6168,7 +6169,7 @@
           "advanced": "進階",
           "alsoDeleteRemoteHint": "永久刪除遠端 Git 工作樹及其分支。此操作不可復原。",
           "alsoForgetLocalHint": "僅從 Orca 中清除。遠端檔案、工作樹和分支不受影響。",
-          "wslHostEndsTerminals": "從 Orca 中移除 {{value0}}，結束其開啟的終端機，並停止該發行版中的 Orca 伺服器。發行版中的檔案不受影響。"
+          "wslHostEndsTerminalsUnlessShared": "從 Orca 移除 {{value0}}。除非此電腦上開啟的另一個 Orca 正在使用它，否則也會結束其開啟的終端機，並停止該發行版中的 Orca 伺服器。發行版中的檔案不受影響。"
         },
         "HostRenameDialog": {
           "1a2b3c4d5e": "重新命名主機",
@@ -6525,6 +6526,7 @@
           "removalPending": "尚未完成移除"
         },
         "wslHostRemoval": {
+          "keptForOthers": "已從此 Orca 移除。該主機將繼續為 {{value0}} 執行。",
           "partial": "主機已被移除，但發行版中仍有內容在執行：{{value0}}",
           "pending": "Orca 尚未移除此主機：{{value0}}。請再次移除以重試，或連線至此主機以保留它。"
         },
@@ -18402,7 +18404,6 @@
         "pausedSendFailedWaiting": "無法傳送。代理程式完成後，點按傳送以重試。",
         "save": "儲存",
         "editingMessage": "正在編輯訊息",
-        "cancelEditing": "取消編輯",
         "editChanged": "你編輯時此訊息已更改。你編輯的內容已放入聊天輸入框。",
         "editChangedPrompt": "你編輯時此訊息已更改。回答代理程式後，你編輯的內容會出現在聊天輸入框中。",
         "editChangedNotSaved": "編輯期間，這則訊息已變更。編輯內容未儲存。",
@@ -18415,9 +18416,7 @@
         "collapse": "收合",
         "expand": "展開",
         "queued": "已排隊",
-        "clearAll": "全部清除",
-        "pasteOrDropImages": "貼上或拖入圖片",
-        "saveNeedsContent": "新增文字或圖片後才能儲存"
+        "clearAll": "全部清除"
       },
       "thought": "已思考",
       "thoughtForDuration": "思考了 {{duration}}",
@@ -19074,7 +19073,6 @@
       "subagents_other": "{{count}} 個子代理程式"
     },
     "terminal": {
-      "closed": "沒有作用中的終端機 — 此代理程式的窗格已關閉。",
       "remotePreviewUnavailable": "無法預覽此遠端工作階段；請開啟工作區以檢視終端機。",
       "focusWorktree": "開啟工作樹",
       "close": "關閉"

@@ -338,3 +338,65 @@ describe('a stray local copy beside a leftover in another ssh partition', () => 
     expect(read.session.tabsByWorktree[WORKTREE_ID]?.map((entry) => entry.id)).toEqual(['tab-live'])
   })
 })
+
+describe("an ssh partition left over from before the host's managed server", () => {
+  const REPO_ID = 'repo-managed'
+  const WORKTREE_ID = `${REPO_ID}::/remote/checkout`
+  const RUNTIME_HOST_ID: ExecutionHostId = 'runtime:managed-env'
+
+  it("keeps the runtime partition's rows when this desktop still catalogs the old ssh repo (#34376, #34416)", async () => {
+    const runtimeLayout = {
+      type: 'split' as const,
+      direction: 'horizontal' as const,
+      first: { type: 'leaf' as const, groupId: 'host-group' },
+      second: { type: 'leaf' as const, groupId: 'editor-group' }
+    }
+    const read = await fetchWorkspaceSessionWithRuntimeHostOwners(
+      partitionedApi({
+        local: session({}),
+        [RUNTIME_HOST_ID]: session({
+          tabsByWorktree: { [WORKTREE_ID]: [tab('tab-host', WORKTREE_ID)] },
+          openFilesByWorktree: {
+            [WORKTREE_ID]: [
+              {
+                filePath: '/remote/checkout/new.ts',
+                relativePath: 'new.ts',
+                worktreeId: WORKTREE_ID,
+                language: 'typescript'
+              }
+            ]
+          },
+          tabGroupLayouts: { [WORKTREE_ID]: runtimeLayout }
+        }),
+        [SSH_HOST_ID]: session({
+          tabsByWorktree: { [WORKTREE_ID]: [tab('tab-closed', WORKTREE_ID)] },
+          openFilesByWorktree: {
+            [WORKTREE_ID]: [
+              {
+                filePath: '/remote/checkout/closed.ts',
+                relativePath: 'closed.ts',
+                worktreeId: WORKTREE_ID,
+                language: 'typescript'
+              }
+            ]
+          },
+          tabGroupLayouts: { [WORKTREE_ID]: { type: 'leaf', groupId: 'ssh-group' } }
+        })
+      }),
+      [{ id: REPO_ID, connectionId: TARGET_ID, executionHostId: null }],
+      [RUNTIME_HOST_ID],
+      new Map([[RUNTIME_HOST_ID, SSH_HOST_ID]])
+    )
+
+    expect(read.session.tabsByWorktree[WORKTREE_ID]?.map((entry) => entry.id)).toEqual(['tab-host'])
+    expect(read.session.openFilesByWorktree?.[WORKTREE_ID]?.map((f) => f.relativePath)).toEqual([
+      'new.ts'
+    ])
+    expect(read.session.tabGroupLayouts?.[WORKTREE_ID]).toEqual(runtimeLayout)
+    expect(read.contestedPrimaryHostBySessionKey?.[WORKTREE_ID]).toBe(RUNTIME_HOST_ID)
+    // Declined rows stay parked for their own partition so a downgraded client still finds them.
+    expect(
+      read.contestedHostWorkspaceSessions[SSH_HOST_ID]?.tabsByWorktree?.[WORKTREE_ID]?.[0]?.id
+    ).toBe('tab-closed')
+  })
+})

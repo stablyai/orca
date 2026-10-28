@@ -17,7 +17,10 @@ import {
   type AgentSessionWireRefusal
 } from '../../../shared/agent-session-wire-refusals'
 import { AgentSessionAcquisitionRefusal } from './structured-agent-session-adapter'
-import { providerExecutableMissing } from '../../provider-process/provider-executable-missing'
+import {
+  providerExecutableMissing,
+  providerLaunchFolderMissing
+} from '../../provider-process/provider-executable-missing'
 import { providerRequestTimeoutOf } from '../../provider-process/provider-request-timeout'
 import { findInErrorChain } from '../../provider-process/provider-error-chain'
 import { argumentProblemOf } from '../structured-agent-arguments-error'
@@ -104,6 +107,9 @@ export function providerStartupFailureFact(cause?: unknown): SubmissionRejection
   }
   if (providerExecutableMissing(cause)) {
     return agentSessionFailureFact('cliMissing')
+  }
+  if (providerLaunchFolderMissing(cause)) {
+    return agentSessionFailureFact('launchFolderMissing')
   }
   const exited = providerExitObserved(cause)
   return agentSessionFailureFact(exited ? 'providerStartFailed' : 'startFailed', {

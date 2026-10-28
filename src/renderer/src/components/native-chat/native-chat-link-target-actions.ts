@@ -48,6 +48,7 @@ export function nativeChatFileOpenDeps(
     worktreeId: context.worktreeId,
     worktreePath: context.worktreePath,
     runtimeEnvironmentId: context.runtimeEnvironmentId,
+    hostFileOnly: true,
     sourceTabId: context.sourceTabId,
     onOpenFailure: (failure) => showFileLinkOpenFailureToast(target.absolutePath, failure)
   }

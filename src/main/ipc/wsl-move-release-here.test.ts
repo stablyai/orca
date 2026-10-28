@@ -18,6 +18,13 @@ const window = vi.hoisted(() => ({
   steps: new Array<string>()
 }))
 const releaseFails = vi.hoisted(() => ({ value: false }))
+const host = vi.hoisted(() => ({ listed: true, keptForPeers: false }))
+vi.mock('../../shared/runtime-environment-store', () => ({
+  listEnvironments: () => (host.listed ? [{ id: 'wsl:Ubuntu' }] : [])
+}))
+vi.mock('../wsl/wsl-host-kept-for-peers', () => ({
+  wasWslHostKeptForPeers: () => host.keptForPeers
+}))
 
 function move(migrationId: string, repoId: string): Move {
   return {
@@ -90,6 +97,8 @@ beforeEach(() => {
   window.fencesReleased = 0
   releaseFails.value = false
   window.steps = []
+  host.listed = true
+  host.keptForPeers = false
 })
 
 describe('releasing moved projects here', () => {
@@ -117,6 +126,26 @@ describe('releasing moved projects here', () => {
     expect(journal.released).toEqual(['m2'])
     expect(result).toMatchObject({ released: false, reason: 'host-unreachable' })
     expect(window.reloads).toBe(1)
+  })
+
+  // R39: removed here but kept running for another Orca, so only re-adding the host reaches it.
+  it('says a removed host kept for another Orca needs re-adding, not just connecting', async () => {
+    host.listed = false
+    host.keptForPeers = true
+    const result = await releaseWslMoveChainHere('/user-data', 'Ubuntu', [], () => ({
+      stopHostCopies: vi.fn(async () => 'unreachable' as const)
+    }))
+    expect(result).toMatchObject({
+      released: false,
+      reason: 'host-unreachable',
+      detail: 'host-kept-for-peers'
+    })
+    // A host still listed that just isn't answering keeps the plain refusal.
+    host.listed = true
+    const unanswered = await releaseWslMoveChainHere('/user-data', 'Ubuntu', [], () => ({
+      stopHostCopies: vi.fn(async () => 'unreachable' as const)
+    }))
+    expect(unanswered).not.toHaveProperty('detail')
   })
 
   // Review #2: only the user's "Use on this computer again" parks the distro; Restore does not.

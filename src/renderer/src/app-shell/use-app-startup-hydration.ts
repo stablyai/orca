@@ -34,7 +34,7 @@ import {
   isOwnedSshTargetId,
   parseExecutionHostId
 } from '../../../shared/execution-host'
-import { listRuntimeSessionHostIdsForStartup } from './startup-runtime-session-hosts'
+import { listRuntimeSessionHostsForStartup } from './startup-runtime-session-hosts'
 import { mapWithConcurrency } from '../../../shared/map-with-concurrency'
 import { collectWslMovedWorkspaceKeysFromSession } from '../store/repos/wsl-moved-projects'
 import { wslMovedSessionReadApi } from '../store/repos/wsl-moved-local-session-rows'
@@ -101,7 +101,7 @@ export function useAppStartupHydration(onOnboardingLoaded: (state: OnboardingSta
         // Runtime session hosts need no repo state; overlap their IPC and handle rejection until the later await.
         const runtimeHostsPromise = timeRendererStartupStep(
           'list-runtime-session-hosts',
-          listRuntimeSessionHostIdsForStartup
+          listRuntimeSessionHostsForStartup
         )
         runtimeHostsPromise.catch(() => {})
         // Before the session read: a moved project's local rows must leave before the host's merge in.
@@ -124,14 +124,15 @@ export function useAppStartupHydration(onOnboardingLoaded: (state: OnboardingSta
           )
         })()
         const sessionReadPromise = Promise.all([runtimeHostsPromise, wslMovedProjectsPromise]).then(
-          ([startupRuntimeHostIds]) =>
+          ([startupRuntimeHosts]) =>
             // Restore cached runtime-host partitions without network waits; skip unreadable ones.
             timeRendererStartupStep('session-get', () =>
               fetchWorkspaceSessionWithRuntimeHostOwners(
                 // A moved workspace's retained rows share tab ids with its host's live ones.
                 wslMovedSessionReadApi(useAppStore.getState().wslMovedProjects),
                 useAppStore.getState().repos,
-                startupRuntimeHostIds
+                startupRuntimeHosts.hostIds,
+                startupRuntimeHosts.sshHostIdByRuntimeHostId
               )
             )
         )

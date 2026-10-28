@@ -2,12 +2,18 @@ import { createElement, createRef, StrictMode, type ComponentProps, type ReactNo
 import { act, create, type ReactTestInstance, type ReactTestRenderer } from 'react-test-renderer'
 import { Keyboard, type TextInput } from 'react-native'
 import { afterEach, describe, expect, it, vi } from 'vitest'
+import {
+  useMobileNativeChatDraft,
+  setMobileNativeChatDraftText
+} from './mobile-native-chat-draft-store'
 import { radii, spacing } from '../../../theme/mobile-theme'
 import { MobileNativeChatComposer as NativeChatComposer } from './MobileNativeChatComposer'
 import {
   findAllByHostType,
   findByHostType
 } from '../../../test-support/react-test-renderer-host-nodes'
+
+import { captureMobileNativeChatTextDestination } from './mobile-native-chat-draft-inputs'
 
 const getNoComposerEditGeneration = () => 0
 
@@ -108,6 +114,34 @@ describe('MobileNativeChatComposer', () => {
         String(node.type) === 'Pressable' && node.props.accessibilityLabel === 'Send message'
     )
   }
+
+  it('uses ordinary append semantics through the registered focused dictation destination', async () => {
+    const scope = 'dictation-ordinary'
+    setMobileNativeChatDraftText(scope, '/compact')
+    function Registered() {
+      const value = useMobileNativeChatDraft(scope)
+      return createElement(MobileNativeChatComposer, {
+        value,
+        draftScopeKey: scope,
+        onChangeText: (text) => setMobileNativeChatDraftText(scope, text),
+        onSend: async () => true,
+        sendSurfaceId: scope,
+        getSendCompletionGeneration: () => 0
+      })
+    }
+    await act(async () => {
+      renderer = create(createElement(Registered))
+    })
+    const input = () => findByHostType(renderer!.root, 'TextInput')
+    act(() => input().props.onFocus())
+    const insert = captureMobileNativeChatTextDestination()!
+    act(() => {
+      insert('hello')
+      insert('hello')
+      insert(' there ')
+    })
+    expect(input().props.value).toBe('/compact hello hello  there ')
+  })
 
   it('reports an accepted send without owning route-scoped draft cleanup', async () => {
     const onChangeText = vi.fn()

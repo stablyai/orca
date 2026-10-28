@@ -27,6 +27,7 @@ const LAZY_LOCALE_LOADERS: Record<
   Exclude<SupportedUiLocale, 'en'>,
   () => Promise<{ default: Record<string, unknown> }>
 > = {
+  de: () => import('../../renderer/src/i18n/locales/de.json'),
   es: () => import('../../renderer/src/i18n/locales/es.json'),
   fr: () => import('../../renderer/src/i18n/locales/fr.json'),
   ja: () => import('../../renderer/src/i18n/locales/ja.json'),

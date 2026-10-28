@@ -57,14 +57,7 @@ export function registerUIHandlers(
   store: Store,
   options: { isDashboardPopoutRenderer?: (sender: WebContents) => boolean } = {}
 ): void {
-  // Broadcast UI state so desktop rehydrates mobile or sibling-window changes.
-  store.onUIChanged((ui) => {
-    for (const window of BrowserWindow.getAllWindows()) {
-      if (!window.isDestroyed() && !window.webContents.isDestroyed()) {
-        window.webContents.send('ui:stateChanged', ui)
-      }
-    }
-  })
+  store.onUIChanged((ui) => sendToTrustedUIRenderer('ui:stateChanged', ui))
 
   ipcMain.handle('ui:getJiraQuickFilters', () =>
     normalizeJiraQuickFilterState(store.getUI().jiraQuickFilterState)

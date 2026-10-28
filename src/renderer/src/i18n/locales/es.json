@@ -117,7 +117,8 @@
         "french": "Français",
         "portuguese": "Português (Brasil)",
         "russian": "Русский",
-        "turkish": "Türkçe"
+        "turkish": "Türkçe",
+        "german": "Deutsch"
       },
       "statusBar": {
         "claudeToggleDescription": "Muestra el consumo de tokens y el costo de Claude para el espacio de trabajo activo.",
@@ -5931,7 +5932,7 @@
           "advanced": "Avanzado",
           "alsoDeleteRemoteHint": "Elimina permanentemente los espacios de trabajo Git remotos y sus ramas. Esta acción no se puede deshacer.",
           "alsoForgetLocalHint": "Solo limpia de Orca. Los archivos, espacios de trabajo y ramas remotas permanecen intactos.",
-          "wslHostEndsTerminals": "Quita {{value0}} de Orca, cierra sus terminales abiertas y detiene el servidor de Orca en esa distro. Los archivos de la distro no se tocan."
+          "wslHostEndsTerminalsUnlessShared": "Quita {{value0}} de Orca. Salvo que otro Orca abierto en este equipo lo esté usando, también cierra sus terminales abiertas y detiene el servidor de Orca en esa distro. Los archivos de la distro no se tocan."
         },
         "HostRenameDialog": {
           "1a2b3c4d5e": "Renombrar host",
@@ -6233,6 +6234,7 @@
           "removalPending": "La eliminación no terminó"
         },
         "wslHostRemoval": {
+          "keptForOthers": "Se quitó de este Orca. El host sigue en marcha para {{value0}}.",
           "partial": "Se quitó el host, pero algo en la distro sigue en ejecución: {{value0}}",
           "pending": "Orca aún no eliminó el host: {{value0}} Vuelve a eliminarlo para reintentarlo o conéctalo para conservarlo."
         },
@@ -17950,7 +17952,6 @@
         "pausedSendFailedWaiting": "No se pudo enviar. Cuando el agente termine, pulsa Enviar para reintentar.",
         "save": "Guardar",
         "editingMessage": "Editando mensaje",
-        "cancelEditing": "Cancelar edición",
         "editChanged": "Este mensaje cambió mientras lo editabas. Tu edición está en el cuadro de chat.",
         "editChangedPrompt": "Este mensaje cambió mientras lo editabas. Tu edición estará en el cuadro de chat cuando respondas al agente.",
         "editChangedNotSaved": "Este mensaje cambió mientras lo editabas. Tu edición no se guardó.",
@@ -17964,8 +17965,6 @@
         "expand": "Expandir",
         "queued": "En cola",
         "clearAll": "Borrar todo",
-        "pasteOrDropImages": "Pega o suelta imágenes",
-        "saveNeedsContent": "Añade texto o una imagen para guardar",
         "moveChanged": "La cola cambió antes de este movimiento. Intenta arrastrar el mensaje de nuevo.",
         "reorderHint": "Arrastra para reordenar o usa las teclas de flecha arriba y abajo.",
         "reorderMessage": "Reordenar mensaje"
@@ -19423,6 +19422,7 @@
       "useHereConfirm": "Usar en este equipo",
       "useHereSuperseded": "Un traslado posterior al host {{distro}} incluye este proyecto. Trae ese de vuelta primero.",
       "useHereMoveRunning": "Todavía hay un traslado al host {{distro}} en curso. Inténtalo de nuevo cuando termine.",
+      "useHereHostKeptForPeers": "{{project}} se movió al host {{distro}}, que sigue en marcha para otro Orca. Vuelve a añadir el host para usarlo aquí de nuevo.",
       "useHereHostUnreachable": "El host {{distro}} no responde, así que Orca no puede detener su copia de este proyecto y sus agentes podrían seguir ejecutándose allí. Conecta el host en Configuración, o quítalo, e inténtalo de nuevo.",
       "useHereHostStillRunning": "La copia de este proyecto en el host {{distro}} todavía tiene terminales en ejecución, así que sus agentes podrían ejecutarse dos veces. Espera un momento e inténtalo de nuevo.",
       "useHereFailed": "No se pudo devolver este proyecto a este equipo.",

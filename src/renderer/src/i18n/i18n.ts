@@ -7,6 +7,7 @@ import i18next, {
 import { initReactI18next } from 'react-i18next'
 
 import enRuntimeRequired from './en-runtime-required.json'
+import deCatalogUrl from './locales/de.json?url'
 import esCatalogUrl from './locales/es.json?url'
 import frCatalogUrl from './locales/fr.json?url'
 import jaCatalogUrl from './locales/ja.json?url'
@@ -32,6 +33,7 @@ export const i18n: I18nInstance = i18next.createInstance()
 
 // Fetch catalogs as data: Chromium caches rejected module imports for the document's lifetime.
 const NON_DEFAULT_LOCALE_URLS: Record<Exclude<SupportedUiLocale, 'en'>, string> = {
+  de: deCatalogUrl,
   es: esCatalogUrl,
   fr: frCatalogUrl,
   ja: jaCatalogUrl,

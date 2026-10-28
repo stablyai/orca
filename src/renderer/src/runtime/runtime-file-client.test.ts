@@ -3,6 +3,7 @@ import { readRuntimeDirectory } from './runtime-file-mutation-client'
 import { readRuntimeFileContent, readRuntimeFilePreview } from './runtime-file-read-client'
 import {
   fsReadFile,
+  fsGrantRuntimeFilePreview,
   runtimeEnvironmentCall,
   installRuntimeFileClientEnvironment
 } from './runtime-file-client-test-harness'
@@ -344,5 +345,89 @@ describe('runtime file client', () => {
     ).rejects.toThrow('outside the owning runtime worktree')
 
     expect(runtimeEnvironmentCall).not.toHaveBeenCalled()
+  })
+
+  describe('remote audio and video', () => {
+    const env = { kind: 'environment' as const, environmentId: 'env-1' }
+    const media = {
+      content: '',
+      isBinary: true as const,
+      mimeType: 'video/mp4',
+      mediaUrl: 'orca-media://file/t'
+    }
+    const binaryRefusal = {
+      id: 'rpc-1',
+      ok: false,
+      error: { code: 'runtime_error', message: 'binary_file' },
+      _meta: { runtimeId: 'remote-runtime' }
+    }
+
+    it('streams a remote video to its viewer instead of reading it over files.read', async () => {
+      fsGrantRuntimeFilePreview.mockResolvedValue(media)
+
+      await expect(
+        readRuntimeFileContent({
+          target: env,
+          filePath: '/remote/repo/out/clip.mp4',
+          relativePath: 'out/clip.mp4',
+          worktreeId: 'wt-1',
+          pageOversizedBinary: true
+        })
+      ).resolves.toEqual(media)
+
+      expect(fsGrantRuntimeFilePreview).toHaveBeenCalledWith({
+        environmentId: 'env-1',
+        worktree: 'id:wt-1',
+        relativePath: 'out/clip.mp4',
+        expectedEnvironmentPairingRevision: undefined
+      })
+      expect(runtimeEnvironmentCall).not.toHaveBeenCalled()
+    })
+
+    it('mints nothing for a baseline read that discards binary content', async () => {
+      runtimeEnvironmentCall.mockResolvedValue(binaryRefusal)
+
+      await expect(
+        readRuntimeFileContent({
+          target: env,
+          filePath: '/remote/repo/out/clip.mp4',
+          relativePath: 'out/clip.mp4',
+          worktreeId: 'wt-1'
+        })
+      ).resolves.toEqual({ content: '', isBinary: true })
+      expect(fsGrantRuntimeFilePreview).not.toHaveBeenCalled()
+    })
+
+    it('keeps the binary placeholder where the client cannot stream (paired web client)', async () => {
+      runtimeEnvironmentCall.mockResolvedValue(binaryRefusal)
+
+      await expect(
+        readRuntimeFileContent({
+          target: env,
+          filePath: '/remote/repo/out/clip.mp4',
+          relativePath: 'out/clip.mp4',
+          worktreeId: 'wt-1',
+          pageOversizedBinary: true
+        })
+      ).resolves.toEqual({ content: '', isBinary: true })
+      expect(fsGrantRuntimeFilePreview).toHaveBeenCalledOnce()
+    })
+
+    it('streams a chat scratch video from its own address', async () => {
+      fsGrantRuntimeFilePreview.mockResolvedValue(media)
+      const root = `/state/chat-scratch/${'a'.repeat(32)}`
+
+      await readRuntimeFileContent({
+        target: env,
+        filePath: `${root}/demo.mp4`,
+        relativePath: `${root}/demo.mp4`,
+        worktreeId: 'wt-1',
+        pageOversizedBinary: true
+      })
+
+      expect(fsGrantRuntimeFilePreview).toHaveBeenCalledWith(
+        expect.objectContaining({ worktree: `path:${root}`, relativePath: 'demo.mp4' })
+      )
+    })
   })
 })

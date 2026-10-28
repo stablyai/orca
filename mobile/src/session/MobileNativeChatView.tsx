@@ -100,6 +100,7 @@ type Props = ComposerTrayProps & {
   pending: MobileNativeChatPendingItem[]
   // Retain local preview URIs after authoritative image messages replace optimistic rows.
   imagePreviewsByMessageId?: Record<string, string[]>
+  composerScopeKey?: string | null
   draftKey: string | null
   onComposerTextChange: (text: string) => void
   onAttachImage?: () => void
@@ -171,6 +172,7 @@ export function MobileNativeChatView({
   pending,
   imagePreviewsByMessageId,
   draftKey,
+  composerScopeKey,
   onComposerTextChange,
   onAttachImage,
   attachments,
@@ -388,6 +390,7 @@ export function MobileNativeChatView({
       {}
       {trayContent}
       <MobileNativeChatDraftComposer
+        draftScopeKey={composerScopeKey}
         structured={structuredActivityUi ? structuredComposer : null}
         draftKey={draftKey}
         onChangeText={onComposerTextChange}

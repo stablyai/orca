@@ -10,18 +10,13 @@
  * Sleep runs before the export because the journal binds the manifest at `prepared` and never
  * rebinds it: a manifest taken before Sleep would carry scrollback Sleep then rewrites.
  */
-import type {
-  WslMovePreview,
-  WslMoveRequest,
-  WslMoveResult
-} from '../../../shared/wsl-move/wsl-move-driver-types'
+import type { WslMoveRequest, WslMoveResult } from '../../../shared/wsl-move/wsl-move-driver-types'
 import type { WslMoveCutover } from '../../../shared/wsl-move/wsl-move-cutover'
 import { removeWslMoveCutover, writeWslMoveCutover } from './wsl-move-cutover-journal'
 import { journalSleptWslMove } from './wsl-move-driver-journal'
 import type { WslMoveDriverDeps, WslMoveHost } from './wsl-move-driver-ports'
 import {
   readSleptScrollback,
-  unreadableSleptHistory,
   daemonHistoryLeafOf,
   type WslMoveSleptScrollback
 } from './wsl-move-slept-scrollback'
@@ -59,40 +54,7 @@ const WSL_MOVE_TERMINALS_STARTED = 'terminals-started-after-pause'
 const WSL_MOVE_EXIT_UNVERIFIABLE = 'exit-unverifiable'
 
 export { cancelWslMove, isWslMoveRunning } from './wsl-move-running-moves'
-
-export async function previewWslMove(
-  deps: WslMoveDriverDeps,
-  request: WslMoveRequest
-): Promise<WslMovePreview> {
-  const migrationId = deps.newMigrationId()
-  const prepared = await prepareWslMove(deps, request, migrationId, deps.now())
-  if ('outcome' in prepared) {
-    return prepared
-  }
-  const unreadable = await unreadableSleptHistory(
-    deps,
-    request,
-    migrationId,
-    prepared.scope.workspaceIds
-  )
-  if (unreadable.length > 0) {
-    return refusal('wsl_move_export_incomplete', { reasons: unreadable })
-  }
-  const { plan, host } = prepared
-  return {
-    outcome: 'ready',
-    distro: plan.distro,
-    repoIds: plan.repoIds,
-    folderWorkspaceIds: plan.folderWorkspaceIds,
-    changed: plan.changed,
-    heldByHost: plan.heldByHost,
-    refused: plan.refused,
-    blockers: prepared.blockers,
-    ...(host.browserLoginsNotCarried
-      ? { browserLoginsNotCarried: host.browserLoginsNotCarried }
-      : {})
-  }
-}
+export { previewWslMove } from './wsl-move-driver-preview'
 
 export async function moveProjectsToWslHost(
   deps: WslMoveDriverDeps,
@@ -103,6 +65,7 @@ export async function moveProjectsToWslHost(
     return refusal('wsl_move_already_running')
   }
   const migrationId = deps.newMigrationId()
+  running.migrationId = migrationId
   // Anything unforeseen: back to zero without the host, which never resets a possible commit.
   return reportWslMoveRunEnd(deps, request.distro, (tracked) =>
     runMove(tracked, request, migrationId, running)
@@ -125,7 +88,7 @@ async function runMove(
   const { distro } = request
   deps.progress({ distro, step: 'preparing' })
   const startedAt = deps.now()
-  const prepared = await prepareWslMove(deps, request, migrationId, startedAt, true)
+  const prepared = await prepareWslMove(deps, request, migrationId, startedAt, 'finish-now')
   if ('outcome' in prepared) {
     return prepared
   }

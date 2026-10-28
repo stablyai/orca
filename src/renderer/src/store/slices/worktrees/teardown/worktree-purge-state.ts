@@ -176,6 +176,7 @@ export function buildFullWorktreePurgeState(
       s.gitBranchCompareRequestStatusHeadByWorktree
     ),
     gitStatusHugeByWorktree: omitByWorktree(s.gitStatusHugeByWorktree),
+    gitStatusReadErrorByWorktree: omitByWorktree(s.gitStatusReadErrorByWorktree),
     explorerDisplayRootByWorktree: omitByWorktree(s.explorerDisplayRootByWorktree),
     showDotfilesByWorktree: omitByWorktree(s.showDotfilesByWorktree),
     expandedDirs: omitByWorktree(s.expandedDirs),

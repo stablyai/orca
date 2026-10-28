@@ -39,6 +39,8 @@ export type WorktreeCardProps = {
   onLineageToggle?: (event: React.MouseEvent<HTMLButtonElement>) => void
   isLineageDropTarget?: boolean
   onActivate?: () => void
+  /** Switch on a plain primary mouse press instead of the later click; the hold before release hides the switch cost. */
+  activateOnPress?: boolean
   onWorktreeCardClick?: () => void
   onImmediateActivate?: (worktreeId: string, rowKey: string | undefined) => void
   onSelectionGesture?: (event: React.MouseEvent<HTMLElement>, worktree: Worktree) => boolean

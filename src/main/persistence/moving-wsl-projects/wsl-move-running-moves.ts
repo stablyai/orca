@@ -2,9 +2,18 @@
  * The WSL moves this process is running, one per distro; the journal's compare-and-swap orders a
  * run against other processes.
  */
-import { wslMoveJournalKey } from '../../../shared/wsl-move/wsl-move-cutover'
+import {
+  isWslMoveCutoverFinished,
+  wslMoveJournalKey
+} from '../../../shared/wsl-move/wsl-move-cutover'
+import { scanWslMoveCutovers } from './wsl-move-cutover-journal'
 
-export type RunningWslMove = { controller: AbortController; commitRequested: boolean }
+export type RunningWslMove = {
+  controller: AbortController
+  commitRequested: boolean
+  /** The cutover this run journals; unset for a run that only settles an earlier one. */
+  migrationId?: string
+}
 
 const runningMoves = new Map<string, RunningWslMove>()
 
@@ -34,6 +43,21 @@ export function isWslMoveRunning(distro: string): boolean {
 /** True while this process runs a move of any distro. */
 export function isAnyWslMoveRunning(): boolean {
   return runningMoves.size > 0
+}
+
+/**
+ * True while this process runs a move of the distro that has journaled its own cutover: from then
+ * on the host holds the move's state, so its server must not be replaced under it. An earlier
+ * move's record does not count, or settling it could never update an outdated server.
+ */
+export function isWslMoveUnderwayOnHost(userDataPath: string, distro: string): boolean {
+  const migrationId = runningMoves.get(wslMoveJournalKey(distro))?.migrationId
+  return (
+    migrationId !== undefined &&
+    scanWslMoveCutovers(userDataPath).some(
+      (cutover) => cutover.migrationId === migrationId && !isWslMoveCutoverFinished(cutover)
+    )
+  )
 }
 
 /** Cancels a run that has not asked the host to commit yet; true when one was running. */

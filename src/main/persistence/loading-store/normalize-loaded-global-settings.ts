@@ -11,6 +11,7 @@ import { projectSourceControlAiToLegacyCommitMessageAi } from '../../../shared/s
 import { normalizeNativeChatShellEnvironmentVariables } from '../../../shared/native-chat/native-chat-shell-environment'
 import { publishedLegacyChatPermissionMode } from '../../../shared/agent-chat-permission-mode'
 import {
+  expandWorkspaceDirHome,
   savedChatUiWithTerminalDefaultView,
   stripRetiredGlobalSettings
 } from '../applying-settings/terminal-settings-migrations'
@@ -64,7 +65,7 @@ export function normalizeLoadedGlobalSettings(
   return {
     ...defaults.settings,
     // Legacy stored booleans cannot distinguish opt-in from the old default; retain explicit true.
-    ...stripRetiredGlobalSettings(parsed.settings),
+    ...expandWorkspaceDirHome(stripRetiredGlobalSettings(parsed.settings)),
     // Preserve terminal-first new tabs when retiring the old default-view switch.
     ...(savedChatUiWithTerminalDefaultView(parsed.settings)
       ? { experimentalNativeChat: false }

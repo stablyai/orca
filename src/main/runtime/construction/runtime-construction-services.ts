@@ -268,6 +268,10 @@ export abstract class RuntimeConstructionServices {
   protected abstract getLeavesForPty(ptyId: string): RuntimeLeafRecord[]
   abstract notifyMessageArrived(handle: string, messageType?: string): void
   protected abstract resolveWorktreeSelector(selector: string): Promise<ResolvedWorktree>
+  protected abstract resolveWorkspaceSelector(
+    selector: string,
+    options?: { requireUsableFolderPath?: boolean }
+  ): Promise<ResolvedWorktree>
   protected abstract refreshPtyWorktreeRecordsWithControllerInventory(
     resolvedWorktrees: ResolvedWorktree[],
     targetWorktreeId?: string | null,

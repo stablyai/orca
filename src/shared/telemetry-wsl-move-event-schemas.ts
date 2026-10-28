@@ -100,7 +100,8 @@ export const WSL_MOVE_ORCHESTRATOR_PARK_REASON_VALUES = [
   'not_now',
   'declined',
   'removal_pending',
-  'stuck'
+  'stuck',
+  'finish_pending'
 ] as const
 
 export const WSL_MOVE_ORCHESTRATOR_ATTEMPT_BUCKETS = ['0', '1', '2_3', 'gte_4'] as const

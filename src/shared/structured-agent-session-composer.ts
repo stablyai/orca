@@ -142,6 +142,17 @@ export function isStructuredAgentSessionComposerCommand(
   )
 }
 
+export function prepareStructuredAgentSessionComposerCommand(
+  agent: AgentType,
+  reported?: readonly AgentSessionSlashCommand[]
+): (text: string) => boolean {
+  const names = new Set(structuredRecognizedCommands(agent, reported).map((entry) => entry.name))
+  return (text) => {
+    const command = commandParts(text)
+    return command !== null && names.has(command.name)
+  }
+}
+
 /** `/clear` or `/compact` alone: a conversation command with nothing after it. */
 export function isLoneStructuredAgentSessionConversationCommand(text: string): boolean {
   const command = commandParts(text.trim())

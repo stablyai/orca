@@ -117,7 +117,8 @@
         "french": "Français",
         "portuguese": "Português (Brasil)",
         "russian": "Русский",
-        "turkish": "Türkçe"
+        "turkish": "Türkçe",
+        "german": "Deutsch"
       },
       "statusBar": {
         "claudeToggleDescription": "활성 워크스페이스에 대한 Claude 토큰 및 비용 사용량을 표시합니다.",
@@ -5929,7 +5930,7 @@
           "advanced": "고급",
           "alsoDeleteRemoteHint": "원격 Git 워크트리와 해당 브랜치를 영구적으로 삭제합니다. 이 작업은 되돌릴 수 없습니다.",
           "alsoForgetLocalHint": "Orca에서만 제거합니다. 원격 파일, 워크트리, 브랜치는 그대로 남아 있습니다.",
-          "wslHostEndsTerminals": "Orca에서 {{value0}}을(를) 제거하고, 열려 있는 터미널을 종료하며, 해당 배포판에서 Orca 서버를 중지합니다. 배포판의 파일은 변경되지 않습니다."
+          "wslHostEndsTerminalsUnlessShared": "Orca에서 {{value0}}을(를) 제거합니다. 이 컴퓨터에서 열려 있는 다른 Orca가 사용 중이지 않다면 열린 터미널도 종료하고 해당 배포판의 Orca 서버를 중지합니다. 배포판의 파일은 변경되지 않습니다."
         },
         "HostRenameDialog": {
           "1a2b3c4d5e": "호스트 이름 바꾸기",
@@ -6231,6 +6232,7 @@
           "removalPending": "제거가 완료되지 않음"
         },
         "wslHostRemoval": {
+          "keptForOthers": "이 Orca에서 제거했습니다. 호스트는 {{value0}}을(를) 위해 계속 실행됩니다.",
           "partial": "호스트는 제거되었지만 배포판에서 아직 실행 중인 항목이 있습니다: {{value0}}",
           "pending": "Orca가 아직 호스트를 제거하지 않았습니다: {{value0}} 다시 시도하려면 다시 제거하고, 유지하려면 연결하세요."
         },
@@ -18123,7 +18125,6 @@
         "pausedSendFailedWaiting": "보낼 수 없습니다. 에이전트가 끝나면 보내기를 눌러 다시 시도하세요.",
         "save": "저장",
         "editingMessage": "메시지 편집 중",
-        "cancelEditing": "편집 취소",
         "editChanged": "편집하는 동안 이 메시지가 변경되었습니다. 편집한 내용은 채팅 입력란에 있습니다.",
         "editChangedPrompt": "편집하는 동안 이 메시지가 변경되었습니다. 에이전트에 답하면 편집한 내용이 채팅 입력란에 표시됩니다.",
         "editChangedNotSaved": "편집하는 동안 이 메시지가 변경되었습니다. 편집한 내용은 저장되지 않았습니다.",
@@ -18137,8 +18138,6 @@
         "expand": "펼치기",
         "queued": "대기 중",
         "clearAll": "모두 지우기",
-        "pasteOrDropImages": "이미지를 붙여넣거나 끌어다 놓기",
-        "saveNeedsContent": "저장하려면 텍스트나 이미지를 추가하세요",
         "moveChanged": "이동하기 전에 대기열이 변경되었습니다. 메시지를 다시 드래그해 보세요.",
         "reorderHint": "드래그하거나 위쪽 및 아래쪽 화살표 키를 사용하여 순서를 변경하세요.",
         "reorderMessage": "메시지 순서 변경"
@@ -19123,6 +19122,7 @@
       "useHereConfirm": "이 컴퓨터에서 사용",
       "useHereSuperseded": "이후 {{distro}} 호스트로의 이동에 이 프로젝트가 포함되어 있습니다. 그 이동을 먼저 되돌리세요.",
       "useHereMoveRunning": "{{distro}} 호스트로의 이동이 아직 진행 중입니다. 끝난 후 다시 시도하세요.",
+      "useHereHostKeptForPeers": "{{project}}이(가) {{distro}} 호스트로 이동했으며, 해당 호스트는 다른 Orca를 위해 계속 실행 중입니다. 여기서 다시 사용하려면 호스트를 다시 추가하세요.",
       "useHereHostUnreachable": "{{distro}} 호스트가 응답하지 않아 Orca가 이 프로젝트의 호스트 사본을 중지할 수 없으며, 그 에이전트가 아직 실행 중일 수 있습니다. 설정에서 호스트를 연결하거나 제거한 후 다시 시도하세요.",
       "useHereHostStillRunning": "{{distro}} 호스트에 있는 이 프로젝트의 사본에서 아직 터미널이 실행 중이라 에이전트가 두 번 실행될 수 있습니다. 잠시 후 다시 시도하세요.",
       "useHereFailed": "이 프로젝트를 이 컴퓨터로 되돌리지 못했습니다.",

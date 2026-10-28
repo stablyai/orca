@@ -359,7 +359,8 @@
         "french": "Français",
         "portuguese": "Português (Brasil)",
         "russian": "Русский",
-        "turkish": "Türkçe"
+        "turkish": "Türkçe",
+        "german": "Deutsch"
       },
       "statusBar": {
         "claudeToggleDescription": "Etkin çalışma alanı için Claude token ve maliyet kullanımını göster.",
@@ -6179,7 +6180,7 @@
           "advanced": "Gelişmiş",
           "alsoDeleteRemoteHint": "Uzak Git worktree'lerini ve branch'lerini kalıcı olarak siler. Geri alınamaz.",
           "alsoForgetLocalHint": "Yalnızca Orca'dan temizler. Uzak dosyalar, worktree'ler ve branch'ler dokunulmadan bırakılır.",
-          "wslHostEndsTerminals": "{{value0}} öğesini Orca'dan kaldırır, açık terminallerini sonlandırır ve bu dağıtımdaki Orca sunucusunu durdurur. Dağıtımdaki dosyalar değiştirilmez."
+          "wslHostEndsTerminalsUnlessShared": "{{value0}} öğesini Orca'dan kaldırır. Bu bilgisayarda açık olan başka bir Orca onu kullanmıyorsa açık terminallerini de sonlandırır ve bu dağıtımdaki Orca sunucusunu durdurur. Dağıtımdaki dosyalar değiştirilmez."
         },
         "HostRenameDialog": {
           "1a2b3c4d5e": "Host'u yeniden adlandır",
@@ -6536,6 +6537,7 @@
           "removalPending": "Kaldırma tamamlanamadı"
         },
         "wslHostRemoval": {
+          "keptForOthers": "Bu Orca’dan kaldırıldı. Ana bilgisayar {{value0}} için çalışmaya devam ediyor.",
           "partial": "Ana makine kaldırıldı ancak dağıtım içinde hâlâ çalışan bir şey var: {{value0}}",
           "pending": "Orca ana makineyi henüz kaldırmadı: {{value0}} Tekrar denemek için yeniden kaldırın veya tutmak için bağlanın."
         },
@@ -18413,7 +18415,6 @@
         "pausedSendFailedWaiting": "Gönderilemedi — ajan işi bitirdiğinde yeniden denemek için Gönder'e basın.",
         "save": "Kaydet",
         "editingMessage": "Mesaj düzenleniyor",
-        "cancelEditing": "Düzenlemeyi iptal et",
         "editChanged": "Siz düzenlerken bu mesaj değişti. Düzenlediğiniz metin sohbet kutusunda.",
         "editChangedPrompt": "Siz düzenlerken bu mesaj değişti. Ajana yanıt verdikten sonra düzenlediğiniz metin sohbet kutusuna getirilecek.",
         "editChangedNotSaved": "Siz düzenlerken bu mesaj değişti. Düzenlemeniz kaydedilmedi.",
@@ -18426,9 +18427,7 @@
         "collapse": "Daralt",
         "expand": "Genişlet",
         "queued": "Sıraya alındı",
-        "clearAll": "Tümünü temizle",
-        "pasteOrDropImages": "Görselleri yapıştırın veya bırakın",
-        "saveNeedsContent": "Kaydetmek için metin veya görsel ekleyin"
+        "clearAll": "Tümünü temizle"
       },
       "thought": "Düşündü",
       "thoughtForDuration": "{{duration}} boyunca düşündü",
@@ -19085,7 +19084,6 @@
       "subagents_other": "{{count}} alt ajan"
     },
     "terminal": {
-      "closed": "Canlı terminal yok, bu ajanın bölmesi kapandı.",
       "remotePreviewUnavailable": "Bu uzak oturum için önizleme yok, terminali görüntülemek için çalışma alanını açın.",
       "focusWorktree": "Worktree'yi aç",
       "close": "Kapat"

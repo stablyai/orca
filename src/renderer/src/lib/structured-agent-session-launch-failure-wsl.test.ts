@@ -6,14 +6,17 @@ import { structuredChatUnavailableText } from './structured-agent-session-launch
 const initialSettings = useAppStore.getState().settings
 const OLD = 'Chat is not available in WSL. Open the agent in a terminal instead.'
 
-function desktop(gateOpen: boolean, experimentalWslHosts: boolean): void {
+function desktop(gateOpen: boolean, experimentalWslHosts: boolean, acceptsNewWork = true): void {
   vi.stubGlobal('window', { api: { runtimeEnvironments: gateOpen ? { wslHosts: {} } : {} } })
-  useAppStore.setState({ settings: { ...getDefaultSettings('/home/me'), experimentalWslHosts } })
+  useAppStore.setState({
+    settings: { ...getDefaultSettings('/home/me'), experimentalWslHosts },
+    wslHostsAcceptNewWork: acceptsNewWork
+  })
 }
 
 afterEach(() => {
   vi.unstubAllGlobals()
-  useAppStore.setState({ settings: initialSettings })
+  useAppStore.setState({ settings: initialSettings, wslHostsAcceptNewWork: false })
 })
 
 it('points a WSL-bridge chat refusal at adding the distro as a WSL host once hosts are on', () => {
@@ -25,6 +28,11 @@ it('keeps the terminal-only words with the internal gate closed or the setting o
   desktop(false, true)
   expect(structuredChatUnavailableText('wsl')).toBe(OLD)
   desktop(true, false)
+  expect(structuredChatUnavailableText('wsl')).toBe(OLD)
+})
+
+it('keeps the terminal-only words in serve-only, where Add WSL distro is hidden', () => {
+  desktop(true, true, false)
   expect(structuredChatUnavailableText('wsl')).toBe(OLD)
 })
 

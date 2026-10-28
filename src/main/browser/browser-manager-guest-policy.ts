@@ -27,8 +27,6 @@ export abstract class BrowserManagerGuestPolicy extends BrowserManagerGuestClean
       this.popupOwnerContextByGuestId.set(guest.id, inheritedOwnerContext)
     }
     const disposeDetachTracking = this.trackDebuggerDetachForCdpOverrides(guest)
-    // Keep background compositor frames available for screenshots.
-    guest.setBackgroundThrottling(false)
     const disposePopupPolicy = this.installGuestPopupPolicy(guest)
     const disposeNavigationPolicy = this.installGuestNavigationPolicy(guest)
     const forwardAudioState = (

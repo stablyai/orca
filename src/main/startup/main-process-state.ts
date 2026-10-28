@@ -67,6 +67,8 @@ function createInitialProfileStateAdmission(): ProfileStateRuntimeAdmission | un
 /** Mutable composition-root state shared by startup, window, serve, and quit phases. */
 export const mainProcessState = {
   mainWindow: null as BrowserWindow | null,
+  // Never cleared: closing the last main window still quits on Windows/Linux.
+  hasOpenedMainWindow: false,
   /** User quit bypasses running-process confirmation during close. */
   isQuitting: false,
   store: null as Store | null,

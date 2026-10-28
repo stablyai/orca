@@ -60,6 +60,7 @@
       "useHereRefusedOk": "OK",
       "useHereSupersededBy": "{{names}} moved to the {{distro}} host after this project. Use those on this computer again first, then this project.",
       "useHereMoveRunning": "A move to the {{distro}} host is still running. Try again once it ends.",
+      "useHereHostKeptForPeers": "{{project}} moved to the {{distro}} host, which is still running for another Orca. Re-add the host to use it here again.",
       "useHereHostUnreachable": "The {{distro}} host isn't answering, so Orca can't stop its copy of this project, and its agents may still be running there. Connect the host in Settings, or remove it, then try again.",
       "useHereHostStillRunning": "The {{distro}} host's copy of this project is still running terminals, so its agents could run twice. Wait a moment, then try again.",
       "useHereFailed": "Could not bring this project back to this computer.",
@@ -67,7 +68,10 @@
       "useHereHostAutomations": "Orca couldn't turn off this project's automations on the {{distro}} host, so they could run twice. Connect the host in Settings, then try again.",
       "useHereUnsavedTitle": "Save your files first",
       "useHereUnsavedDescription": "Bringing {{name}} back reloads this window. Save or close these files first: {{files}}",
-      "automationRunsOnHost": "Runs on the {{distro}} host"
+      "automationRunsOnHost": "Runs on the {{distro}} host",
+      "quitDuringMoveTitle": "Quit while a project is moving?",
+      "quitDuringMoveDescription": "A project is moving to its WSL host. Quit anyway? The move will be undone at next launch.",
+      "quitDuringMoveConfirm": "Quit anyway"
     },
     "startupWorktreeRefresh": {
       "loading": "Discovering workspaces…",
@@ -278,6 +282,10 @@
     "fileLoad": {
       "hostUnresolved": "The host couldn't find this file's workspace. It may have been removed, or the host may not know about it yet. Retry, or close this tab from the tab strip.",
       "remoteTooLarge": "This file is too large to open from its host."
+    },
+    "diffTooLarge": {
+      "title": "File too large to diff",
+      "detail": "One version of this file is over 10 MB, so Orca doesn’t load it for a text diff."
     }
   },
   "githubChecks": {
@@ -383,7 +391,8 @@
         "french": "Français",
         "portuguese": "Português (Brasil)",
         "russian": "Русский",
-        "turkish": "Türkçe"
+        "turkish": "Türkçe",
+        "german": "Deutsch"
       },
       "statusBar": {
         "claudeToggleDescription": "Show Claude token and cost usage for the active workspace.",
@@ -6228,7 +6237,7 @@
           "advanced": "Advanced",
           "alsoDeleteRemoteHint": "Permanently deletes the remote Git worktrees and their branches. Cannot be undone.",
           "alsoForgetLocalHint": "Clears them from Orca only. Remote files, worktrees, and branches are left untouched.",
-          "wslHostEndsTerminals": "Removes {{value0}} from Orca, ends its open terminals and stops Orca’s server in that distro. Files in the distro are untouched."
+          "wslHostEndsTerminalsUnlessShared": "Removes {{value0}} from Orca. Unless another Orca that’s open on this computer is using it, this also ends its open terminals and stops Orca’s server in that distro. Files in the distro are untouched."
         },
         "HostRenameDialog": {
           "1a2b3c4d5e": "Rename host",
@@ -6568,7 +6577,8 @@
           "adding": "Setting up…",
           "startAndAdd": "Start and add",
           "add": "Add host",
-          "refresh": "Refresh"
+          "refresh": "Refresh",
+          "wsl1Hint": "WSL 1 distros can’t be hosts. Convert one in a Windows terminal with: wsl --set-version {{value0}} 2"
         },
         "wslHostRowStatus": {
           "connecting": "Starting",
@@ -6582,9 +6592,12 @@
           "turnedOffShort": "Turned off in Settings → Experimental",
           "serverFilesMissing": "This build of Orca can’t run WSL hosts (server files missing).",
           "serverFilesMissingShort": "This build can’t run WSL hosts",
-          "removalPending": "Removal didn’t finish"
+          "removalPending": "Removal didn’t finish",
+          "paused": "WSL hosts are paused in this build. Your saved hosts and their projects keep working; adding hosts and moving projects onto them is paused.",
+          "pausedShort": "Adding WSL distros is paused in this build."
         },
         "wslHostRemoval": {
+          "keptForOthers": "Removed from this Orca. The host keeps running for {{value0}}.",
           "partial": "The host was removed, but something in the distro is still running: {{value0}}",
           "pending": "Orca didn’t remove the host yet: {{value0}} Remove it again to retry, or connect it to keep it."
         },
@@ -12037,7 +12050,8 @@
             "migration": "Not done: a move onto this server is unfinished. Resume it first.",
             "deferred": "Not done yet: the server isn’t ready for this. Try again later.",
             "failed": "Orca couldn’t finish this on the server. Try again.",
-            "defaultServer": "Not done: this server is the default host for new projects. Choose another one under New projects open on before stopping it."
+            "defaultServer": "Not done: this server is the default host for new projects. Choose another one under New projects open on before stopping it.",
+            "wslMoveRunning": "Not done: a project is moving onto this server. Orca updates it once the move finishes."
           },
           "reassurance": "Runs on each host, reached over your own SSH connection. Your code and files stay where they are. Only Orca’s list of projects, tabs and terminals moves to the host."
         },
@@ -12923,7 +12937,8 @@
             "discardFailedSingular": "Failed to discard {{count}} file",
             "discardFailedPlural": "Failed to discard {{count}} files",
             "noteCountSingular": "{{count}} note",
-            "noteCountPlural": "{{count}} notes"
+            "noteCountPlural": "{{count}} notes",
+            "statusReadFailed": "Git could not read this workspace. Changes shown may be out of date."
           },
           "SourceControlAgentActionDialog": {
             "8e856842d1": "Could not start the selected agent.",
@@ -18462,7 +18477,6 @@
         "pausedSendFailedWaiting": "Couldn't send — press Send to retry once the agent finishes.",
         "save": "Save",
         "editingMessage": "Editing message",
-        "cancelEditing": "Cancel editing",
         "editChanged": "This message changed while you were editing. Your edit is in the chat box.",
         "editChangedPrompt": "This message changed while you were editing. Your edit will be in the chat box after you answer the agent.",
         "editChangedNotSaved": "This message changed while you were editing. Your edit wasn't saved.",
@@ -18476,8 +18490,8 @@
         "expand": "Expand",
         "queued": "Queued",
         "clearAll": "Clear all",
-        "pasteOrDropImages": "Paste or drop images",
-        "saveNeedsContent": "Add text or an image to save"
+        "editReturned": "Your edit is in the chat box.",
+        "commandsUnsupported": "Commands can't be saved in a queued message."
       },
       "thought": "Thought",
       "thoughtForDuration": "Thought for {{duration}}",
@@ -20355,7 +20369,8 @@
         "manifestTooLarge": "there is more saved state than one move can carry",
         "hostUpdate": "the host needs an update first",
         "attemptsExhausted": "it didn't complete after several tries"
-      }
+      },
+      "finishPending": "An earlier move to the {{distro}} host is done there. Orca finishes it here when it restarts, or now with Check again."
     }
   },
   "onboarding": {

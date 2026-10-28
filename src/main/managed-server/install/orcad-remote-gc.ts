@@ -39,13 +39,14 @@ type OrcadGcOptions = {
   signal?: AbortSignal
 }
 
-export async function gcOldOrcadVersions(options: OrcadGcOptions): Promise<void> {
+/** True when no stale version dir was left behind (skipped, kept or unlistable ones make it false). */
+export async function gcOldOrcadVersions(options: OrcadGcOptions): Promise<boolean> {
   const transaction = await readOrcadGcTransactionPins(options)
   if (transaction.state === 'keep-all') {
     console.warn('[orcad-gc] An activation transaction is unreadable or unjournaled; skipping GC.')
-    return
+    return false
   }
-  await gcOldRemoteInstallVersions(
+  const versionsClean = await gcOldRemoteInstallVersions(
     options.conn,
     ORCAD_INSTALL_MODEL,
     options.remoteHome,
@@ -88,6 +89,7 @@ export async function gcOldOrcadVersions(options: OrcadGcOptions): Promise<void>
       signal: options.signal
     })
   }
+  return versionsClean
 }
 
 /** Null means unknown host state and keeps every candidate; otherwise pin anything not proven dead. */

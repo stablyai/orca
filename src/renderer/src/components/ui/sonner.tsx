@@ -8,6 +8,7 @@ import {
 import type { SyntheticEvent } from 'react'
 import { Toaster as Sonner, type ToasterProps } from 'sonner'
 import { useAppStore } from '@/store'
+import { MODAL_OVERLAY_CHILD_SELECTOR } from '@/lib/body-overlay-attributes'
 
 // Why: a short outcome reads best with its action beside it; the toaster's default wraps actions below.
 export const INLINE_ACTION_CLASS_NAMES = {
@@ -17,11 +18,7 @@ export const INLINE_ACTION_CLASS_NAMES = {
 
 // Why: scope to real modals; Radix menus/selects also set body pointer-events:none.
 function isModalOverlayOpen(element: Element): boolean {
-  return (
-    element.ownerDocument.body.querySelector(
-      ":scope > [data-slot='dialog-overlay'], :scope > [data-slot='sheet-overlay']"
-    ) !== null
-  )
+  return element.ownerDocument.body.querySelector(MODAL_OVERLAY_CHILD_SELECTOR) !== null
 }
 
 function blockModalToastInteraction(event: SyntheticEvent): void {

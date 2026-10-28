@@ -24,6 +24,8 @@ import {
 } from '../persistence/moving-wsl-projects/wsl-move-window-write-hold'
 import type { WslMoveUndoPorts } from './wsl-move-undo-wiring'
 import { runWslMoveHostAutomationsExclusive } from '../persistence/moving-wsl-projects/wsl-move-undo-host-automations'
+import { listEnvironments } from '../../shared/runtime-environment-store'
+import { wasWslHostKeptForPeers } from '../wsl/wsl-host-kept-for-peers'
 
 const COMMITTED_FROM = WSL_MOVE_CUTOVER_PHASES.indexOf('destination-committed')
 
@@ -150,6 +152,18 @@ async function releaseWslMovesHere(
   }
 }
 
+/** R39: removed here but kept running for another Orca; only re-adding the host reaches it again. */
+function wslMoveHostKeptForPeers(userDataPath: string, move: WslMoveCutover): boolean {
+  return (
+    wasWslHostKeptForPeers(userDataPath, move.destinationEnvironmentId) &&
+    !listEnvironments(userDataPath).some((env) => env.id === move.destinationEnvironmentId)
+  )
+}
+
+function keptForPeersRefusal(): WslMoveUseLocallyResult {
+  return { released: false, reason: 'host-unreachable', detail: 'host-kept-for-peers' }
+}
+
 /** One move: host automations off, host terminals stopped, then released; refused, all undone. */
 async function releaseOneMoveHere(
   userDataPath: string,
@@ -163,6 +177,9 @@ async function releaseOneMoveHere(
     applyHere: () => () => {}
   }
   if (automations.outcome !== 'stopped') {
+    if (automations.outcome === 'unreachable' && wslMoveHostKeptForPeers(userDataPath, move)) {
+      return keptForPeersRefusal()
+    }
     return {
       released: false,
       reason: automations.outcome === 'unreachable' ? 'host-unreachable' : 'failed',
@@ -174,6 +191,9 @@ async function releaseOneMoveHere(
   const stop = await ports.stopHostCopies(move).catch(() => 'unreachable' as const)
   if (stop !== 'stopped') {
     await automations.restore()
+    if (stop === 'unreachable' && wslMoveHostKeptForPeers(userDataPath, move)) {
+      return keptForPeersRefusal()
+    }
     return {
       released: false,
       reason: stop === 'unreachable' ? 'host-unreachable' : 'host-still-running'

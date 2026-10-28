@@ -260,6 +260,7 @@ describe('entry points with the gate closed', () => {
     vi.resetModules()
     vi.doMock('../sidebar/use-wsl-hosts-enabled', () => ({
       useWslHostsEnabled: () => false,
+      useWslHostsAcceptNewWork: () => false,
       useWslHostServerFilesMissing: () => false
     }))
     vi.doMock('@/store', () => ({

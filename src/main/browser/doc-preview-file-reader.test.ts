@@ -7,8 +7,8 @@ const mocks = vi.hoisted(() => ({
 vi.mock('../ipc/runtime-environments/runtime-environment-transport-routing', () => ({
   callRuntimeEnvironment: mocks.callRuntimeEnvironment
 }))
-vi.mock('../persistence', () => ({
-  getCanonicalUserDataPath: () => '/user-data'
+vi.mock('../ipc/runtime-environments/runtime-environment-registry-root', () => ({
+  getRuntimeEnvironmentRegistryRoot: () => '/user-data'
 }))
 
 import { docPreviewContentType, readDocPreviewFile } from './doc-preview-file-reader'

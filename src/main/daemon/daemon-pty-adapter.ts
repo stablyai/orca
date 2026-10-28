@@ -6,7 +6,7 @@ import {
 import { FENCED_TERMINATION_PROTOCOL_VERSION } from './daemon-protocol-version'
 import { emitPtyListeners, createPtyExitPayload } from './daemon-pty-listener-emission'
 import type { DaemonPtyRouterExitEvent } from './daemon-pty-router-events'
-import { checkWslBridgeDistro, WSL_DISTRO_LOSS_EXIT_CODE } from './daemon-wsl-bridge-exit'
+import { classifyWslBridgeExit, WSL_DISTRO_LOSS_EXIT_CODE } from './daemon-wsl-bridge-exit'
 import { isProvenProcessExit } from '../../shared/terminal-exit-cause'
 import { DaemonPtyDaemonRecovery } from './daemon-pty-daemon-recovery'
 import type { DaemonPtyAdapterOptions } from './daemon-pty-runtime-state'
@@ -211,15 +211,25 @@ export class DaemonPtyAdapter extends DaemonPtyDaemonRecovery implements IPtyPro
           )
           operation.exitsBySessionId.set(event.sessionId, exits)
         }
+        const wslDistro = this.wslDistrosBySessionId.get(event.sessionId)
         // Retain raced exits for pending spawns; only this adapter's published incarnation may clear state or notify.
         if (
           currentIncarnationId !== undefined &&
           event.payload.incarnationId !== currentIncarnationId
         ) {
+          // A stale exit may still be a reboot's; the respawn that beat it re-reads its boot id.
+          if (wslDistro) {
+            this.wslBridgeBootIdentity.noteStaleExit(event.sessionId, wslDistro)
+          }
           return
         }
-        const wslDistro = this.wslDistrosBySessionId.get(event.sessionId)
-        if (wslDistro && isProvenProcessExit(event.payload.code)) {
+        // Every bridge exit marks a possible stop (unseen to the user; covers poweroff or --shutdown).
+        if (wslDistro) {
+          this.wslBridgeBootIdentity.noteExit(wslDistro)
+        }
+        // A terminate never exits 0 (awin: -1 per bridge pane; `exit`/`exit 0` gave 0): a clean exit is
+        // the user's own, so it closes at once, without the settle wait or classification.
+        if (wslDistro && event.payload.code !== 0 && isProvenProcessExit(event.payload.code)) {
           const exitAt = performance.now()
           void this.finishWslBridgeExit(event.sessionId, event.payload, wslDistro, exitAt)
           return
@@ -243,17 +253,20 @@ export class DaemonPtyAdapter extends DaemonPtyDaemonRecovery implements IPtyPro
     wslDistro: string,
     exitAt: number
   ): Promise<void> {
-    const verdict = await checkWslBridgeDistro(wslDistro, exitAt, this.readRunningWslDistros)
-    // Only 'lost' keeps the tab; a reboot (or slow wsl.exe) racing the probe reads as an exit.
+    const verdict = await classifyWslBridgeExit(wslDistro, exitAt, this.readRunningWslDistros, () =>
+      this.wslBridgeBootIdentity.rebootedSinceSpawn(sessionId, wslDistro)
+    )
+    // Lost, or booted again since the spawn, keeps the tab; an unanswered check reads as an exit.
+    // The code shows a verify run which codes a terminate yields.
     console.info(
-      `[pty] WSL bridge exit: ${verdict} (distro ${wslDistro}, probe ${Math.round(performance.now() - exitAt)}ms)`
+      `[pty] WSL bridge exit: ${verdict} (distro ${wslDistro}, code ${exit.code}, probe ${Math.round(performance.now() - exitAt)}ms)`
     )
     // A spawn that replaced this incarnation meanwhile owns the session now.
     const current = this.sessionIncarnations.get(sessionId)
     if (current !== undefined && current !== exit.incarnationId) {
       return
     }
-    if (verdict !== 'lost') {
+    if (verdict !== 'lost' && verdict !== 'rebooted') {
       this.finishExit(sessionId, exit)
       return
     }

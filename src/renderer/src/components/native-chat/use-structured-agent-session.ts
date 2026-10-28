@@ -1,3 +1,4 @@
+import { useQueuedMessageEditTransport } from './use-queued-message-edit-transport'
 import type { StructuredAgentSessionViewArgs } from './structured-agent-session-view-contract'
 import { refreshStructuredAgentSessionCommands } from './structured-agent-session-command-refresh'
 import { useMemo, useRef } from 'react'
@@ -10,9 +11,6 @@ import { structuredAgentLabel } from '@/lib/structured-agent-session-launch-labe
 import { useStructuredLegacyLaunchStop } from '@/lib/structured-agent-session-legacy-launch-stop'
 import {
   useStructuredAgentSessionHostQueuesCommands,
-  useStructuredAgentSessionHostEditsQueuedMessages,
-  useStructuredAgentSessionHostReordersQueuedMessages,
-  useStructuredAgentSessionHostEditsQueuedImages,
   useStructuredAgentSessionHostQueuesMessagesState
 } from '@/runtime/structured-agent-session-host-capability'
 import { structuredAgentSessionStopControl } from '../../../../shared/structured-agent-session-stop-control'
@@ -196,13 +194,7 @@ export function useStructuredAgentSession(args: StructuredAgentSessionViewArgs) 
     transcriptPending,
     transportState.submissions
   )
-  const editCapable = useStructuredAgentSessionHostEditsQueuedMessages(target)
-  const imagesCapable = useStructuredAgentSessionHostEditsQueuedImages(target)
-  const reorderCapable = useStructuredAgentSessionHostReordersQueuedMessages(target)
-  const editTransport = useMemo(
-    () => ({ target, sessionId, capable: editCapable, imagesCapable, reorderCapable, write }),
-    [editCapable, imagesCapable, reorderCapable, sessionId, target, write]
-  )
+  const editTransport = useQueuedMessageEditTransport(target, sessionId, write)
   const queuedController = useStructuredAgentSessionQueuedMessages({
     ...transportState,
     enabled: queueCapability === 'supported' && transportState.fence !== null,
