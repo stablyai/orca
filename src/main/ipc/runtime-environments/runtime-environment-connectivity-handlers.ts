@@ -36,6 +36,9 @@ import {
   isRuntimeEnvironmentManuallyDisconnected
 } from './runtime-environment-manual-disconnect'
 import { callRuntimeEnvironment } from './runtime-environment-transport-routing'
+import { callRelayedRuntimeEnvironment } from './runtime-environment-relayed-transport'
+import { isRelayedRuntimeEnvironmentId } from '../../../shared/relayed-runtime-environment'
+import { registerPassiveRuntimeEnvironmentStatusHandler } from './runtime-environment-passive-status-handler'
 import { getRuntimeEnvironmentStatus } from './runtime-environment-status-probe'
 import { noteRuntimeEnvironmentConnectRequested } from './runtime-environment-pairing-refusal-registry'
 import { publicRuntimeEnvironmentWithHostKey } from './runtime-environment-host-key'
@@ -190,7 +193,7 @@ export function registerRuntimeEnvironmentPassiveHandlers(
   getUserDataPath: () => string,
   recordAnswer?: RecordRuntimeEnvironmentAnswer
 ): void {
-  registerPassiveStatusHandler(getUserDataPath)
+  registerPassiveRuntimeEnvironmentStatusHandler(getUserDataPath)
   registerPassiveCallHandler(getUserDataPath, recordAnswer)
 }
 
@@ -199,31 +202,6 @@ function closeLegacySelectorTransport(selector: string, environmentId: string): 
     return
   }
   closeRemoteRuntimeRequestConnection(selector)
-}
-
-function registerPassiveStatusHandler(getUserDataPath: () => string): void {
-  ipcMain.handle(
-    'runtimeEnvironments:getStatus',
-    async (
-      _event,
-      args: { selector: string; timeoutMs?: number; observeOnly?: true }
-    ): Promise<RuntimeRpcResponse<RuntimeStatus>> => {
-      const environment = resolveEnvironment(getUserDataPath(), args.selector)
-      if (isRuntimeEnvironmentManuallyDisconnected(environment.id)) {
-        return manuallyDisconnectedResponse(environment)
-      }
-      const response = await getRuntimeEnvironmentStatus(
-        getUserDataPath(),
-        environment.id,
-        args.timeoutMs,
-        args.observeOnly ? { observeOnly: true } : undefined
-      )
-      observeWslOrcadHostResponse(environment.id, 'status.get', response)
-      return isRuntimeEnvironmentManuallyDisconnected(environment.id)
-        ? manuallyDisconnectedResponse(environment)
-        : response
-    }
-  )
 }
 
 type RecordRuntimeEnvironmentAnswer = (
@@ -249,6 +227,10 @@ function registerPassiveCallHandler(
         expectedEnvironmentRuntimeId?: string
       }
     ): Promise<RuntimeRpcResponse<unknown>> => {
+      // Before resolveEnvironment and the WSL/account steps: a relayed server is no paired environment.
+      if (isRelayedRuntimeEnvironmentId(args.selector)) {
+        return callRelayedRuntimeEnvironment(getUserDataPath(), args)
+      }
       const environment = resolveEnvironment(getUserDataPath(), args.selector)
       if (isRuntimeEnvironmentManuallyDisconnected(environment.id)) {
         return manuallyDisconnectedResponse(environment)

@@ -78,6 +78,8 @@ export type RuntimeOrchestrationEnvelope = {
   orchestrationRequestId?: string
   compatibilityInvocationId?: string
   orchestrationCompatibilityEvidence?: OrchestrationCompatibilityEvidence
+  /** A server the paired host relays this call to; send only after that host advertised `runtime.client-relay.v1`. */
+  executionHost?: `runtime:${string}`
 }
 
 /** Which runtime a request is meant for; a host that is not that runtime refuses it before any handler. */

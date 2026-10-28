@@ -85,7 +85,8 @@ export function serializeRemoteRuntimeRpcRequest(args: {
     orchestrationContractVersion: args.envelope?.orchestrationContractVersion,
     orchestrationRequestId: args.envelope?.orchestrationRequestId,
     compatibilityInvocationId: args.envelope?.compatibilityInvocationId,
-    orchestrationCompatibilityEvidence: args.envelope?.orchestrationCompatibilityEvidence
+    orchestrationCompatibilityEvidence: args.envelope?.orchestrationCompatibilityEvidence,
+    executionHost: args.envelope?.executionHost
   })
 }
 
