@@ -553,6 +553,98 @@ describe('maybeAutoRenameBranchOnFirstWork', () => {
     expect(setRenameError).not.toHaveBeenCalledWith(WORKTREE_ID, expect.any(String))
   })
 
+  it('renames a branch derived from a workspace named in a non-Latin script', async () => {
+    // Why: a non-ASCII leaf is only ever Orca folding a non-Latin workspace
+    // name, and that name has to survive remotes, CI, and Windows paths. The
+    // creature-only gate skipped it, so a Japanese branch was permanent.
+    gitExecFileAsyncMock.mockImplementation(
+      gitResponder({ currentBranch: 'you/検索ダイアログのバグを修正', hasUpstream: false })
+    )
+    const { deps, onRenamed } = makeDeps({
+      getCurrentDisplayName: () => '検索ダイアログのバグを修正'
+    })
+    await maybeAutoRenameBranchOnFirstWork(workingEvent(), deps)
+    expect(generateBranchNameMock).toHaveBeenCalled()
+    expect(onRenamed).toHaveBeenCalledWith(REPO_ID)
+  })
+
+  it('keeps the non-Latin workspace label when it renames that branch', async () => {
+    // The sidebar name is the user's own text, not something Orca derived from
+    // the branch, so the rename must not humanize the new slug over it.
+    gitExecFileAsyncMock.mockImplementation(
+      gitResponder({ currentBranch: 'you/検索ダイアログのバグを修正', hasUpstream: false })
+    )
+    const { deps, setDisplayName } = makeDeps({
+      getCurrentDisplayName: () => '検索ダイアログのバグを修正'
+    })
+    await maybeAutoRenameBranchOnFirstWork(workingEvent(), deps)
+    expect(setDisplayName).not.toHaveBeenCalled()
+  })
+
+  it('still leaves an ASCII branch the user named untouched', async () => {
+    gitExecFileAsyncMock.mockImplementation(
+      gitResponder({ currentBranch: 'you/my-feature', hasUpstream: false })
+    )
+    const { deps, onRenamed } = makeDeps({ getCurrentDisplayName: () => 'My feature' })
+    await maybeAutoRenameBranchOnFirstWork(workingEvent(), deps)
+    expect(generateBranchNameMock).not.toHaveBeenCalled()
+    expect(onRenamed).not.toHaveBeenCalled()
+  })
+
+  it('leaves a non-Latin branch untouched when creation never recorded the name provenance', async () => {
+    // Why: worktrees created before `branchNameWasExplicit` existed carry no
+    // flag, and a missing flag is not evidence that Orca derived the name.
+    // Creature names still qualify, since the leaf proves its own origin.
+    gitExecFileAsyncMock.mockImplementation(
+      gitResponder({ currentBranch: 'you/修正', hasUpstream: false })
+    )
+    const { deps, onRenamed } = makeDeps({
+      isBranchNameDerived: () => false,
+      getCurrentDisplayName: () => '修正'
+    })
+    await maybeAutoRenameBranchOnFirstWork(workingEvent(), deps)
+    expect(generateBranchNameMock).not.toHaveBeenCalled()
+    expect(onRenamed).not.toHaveBeenCalled()
+  })
+
+  it('still renames a creature branch with no recorded name provenance', async () => {
+    gitExecFileAsyncMock.mockImplementation(
+      gitResponder({ currentBranch: 'you/Nautilus', hasUpstream: false })
+    )
+    const { deps, onRenamed } = makeDeps({ isBranchNameDerived: () => false })
+    await maybeAutoRenameBranchOnFirstWork(workingEvent(), deps)
+    expect(generateBranchNameMock).toHaveBeenCalled()
+    expect(onRenamed).toHaveBeenCalledWith(REPO_ID)
+  })
+
+  it('leaves a non-Latin branch the user typed into the branch field untouched', async () => {
+    // Why: `branchNameOverride` reaches git as written, so `you/修正` is a name
+    // the user chose, not one Orca folded from the workspace name. Provenance
+    // is the only thing that separates the two, since the leaf looks the same.
+    gitExecFileAsyncMock.mockImplementation(
+      gitResponder({ currentBranch: 'you/修正', hasUpstream: false })
+    )
+    const { deps, onRenamed } = makeDeps({
+      canRenameOrcaCreatedBranch: () => false,
+      getCurrentDisplayName: () => '修正'
+    })
+    await maybeAutoRenameBranchOnFirstWork(workingEvent(), deps)
+    expect(generateBranchNameMock).not.toHaveBeenCalled()
+    expect(onRenamed).not.toHaveBeenCalled()
+  })
+
+  it('never rewrites a non-Latin branch that is already published', async () => {
+    gitExecFileAsyncMock.mockImplementation(
+      gitResponder({ currentBranch: 'you/検索ダイアログのバグを修正', hasUpstream: true })
+    )
+    const { deps, onRenamed } = makeDeps({
+      getCurrentDisplayName: () => '検索ダイアログのバグを修正'
+    })
+    await maybeAutoRenameBranchOnFirstWork(workingEvent(), deps)
+    expect(generateBranchNameMock).not.toHaveBeenCalled()
+    expect(onRenamed).not.toHaveBeenCalled()
+  })
+
   it('clears a stale error when a retryable worktree later reaches a benign stop', async () => {
     generateBranchNameMock.mockResolvedValueOnce({ success: false, error: 'agent not ready' })
     const { deps, setRenameError } = makeDeps()

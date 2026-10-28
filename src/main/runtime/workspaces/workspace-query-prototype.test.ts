@@ -16,6 +16,8 @@ import type { BrowserTabInfo } from '../../../shared/runtime-browser-contracts'
 import type { RuntimeMobileSessionTabsSnapshot } from '../../../shared/runtime-session-contracts'
 import type { WorkspaceSessionState } from '../../../shared/workspace-session-state-types'
 import { firstWorkRenameDeps } from '../../agent-hooks/first-work-rename-runtime'
+import type { WorktreeMeta } from '../../../shared/worktree/meta-types'
+import { WORKTREE_META_PERSISTED_DEFAULTS } from '../../../shared/worktree/meta-persisted-defaults'
 
 const repo: Repo = {
   id: 'workspace-query',
@@ -505,6 +507,49 @@ describe('first-work rename lazy Store capabilities', () => {
       expect(deps.renameWorktreeFolder).toBeUndefined()
     }
   )
+
+  it('refuses to auto-rename a branch the user named explicitly', () => {
+    // Why: `branchNameOverride` reaches git as written, so the leaf is the
+    // user's choice even on an Orca-created worktree. Without this, a typed
+    // non-Latin branch would pass the auto-rename eligibility gate.
+    const store = renameStore()
+    const runtime = new OrcaRuntimeService(null)
+    const orcaCreated: WorktreeMeta = {
+      ...WORKTREE_META_PERSISTED_DEFAULTS,
+      displayName: '修正',
+      comment: '',
+      isUnread: false,
+      sortOrder: 0,
+      lastActivityAt: 0,
+      orcaCreationSource: 'desktop'
+    }
+    store.getWorktreeMeta = () => ({ ...orcaCreated, branchNameWasExplicit: true })
+    expect(firstWorkRenameDeps(store, runtime).canRenameOrcaCreatedBranch('repo::/wt')).toBe(false)
+
+    store.getWorktreeMeta = () => ({ ...orcaCreated, branchNameWasExplicit: false })
+    expect(firstWorkRenameDeps(store, runtime).canRenameOrcaCreatedBranch('repo::/wt')).toBe(true)
+  })
+
+  it('treats missing branch-name provenance as unknown, not as derived', () => {
+    // Why: a worktree created before the flag existed must not be read as
+    // proof that Orca chose the name, which the non-ASCII path relies on.
+    const store = renameStore()
+    const runtime = new OrcaRuntimeService(null)
+    const legacy: WorktreeMeta = {
+      ...WORKTREE_META_PERSISTED_DEFAULTS,
+      displayName: '修正',
+      comment: '',
+      isUnread: false,
+      sortOrder: 0,
+      lastActivityAt: 0,
+      orcaCreationSource: 'desktop'
+    }
+    store.getWorktreeMeta = () => legacy
+    expect(firstWorkRenameDeps(store, runtime).isBranchNameDerived('repo::/wt')).toBe(false)
+
+    store.getWorktreeMeta = () => ({ ...legacy, branchNameWasExplicit: false })
+    expect(firstWorkRenameDeps(store, runtime).isBranchNameDerived('repo::/wt')).toBe(true)
+  })
 
   it('looks up the current writer on each call and retains Store and Root receivers', () => {
     const store = renameStore()

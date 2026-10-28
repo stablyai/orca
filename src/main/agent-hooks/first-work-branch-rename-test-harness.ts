@@ -75,6 +75,7 @@ export function makeBranchRenameDeps(
       getAgentEnvResolvers: () => undefined,
       getCurrentDisplayName: () => 'Nautilus-8',
       canRenameOrcaCreatedBranch: () => true,
+      isBranchNameDerived: () => true,
       setDisplayName,
       renameWorktreeFolder,
       setRenameError,

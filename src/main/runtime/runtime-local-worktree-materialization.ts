@@ -86,6 +86,7 @@ export async function materializeRuntimeLocalWorktree<T>(args: {
       ...displayNameMeta,
       baseRef: metadataBaseRef,
       ...(checkoutExistingBranch ? { preserveBranchOnDelete: true } : {}),
+      branchNameWasExplicit: Boolean(request.branchNameOverride),
       ...(configuredPushTarget ? { pushTarget: configuredPushTarget } : {}),
       ...(sparseDirectories.length > 0
         ? {

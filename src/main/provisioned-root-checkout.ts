@@ -133,6 +133,7 @@ export function buildProvisionedRootMeta(
     createdAt: now,
     orcaCreatedAt: now,
     orcaCreationSource: options.source,
+    branchNameWasExplicit: Boolean(args.branchNameOverride),
     creatorProvenance: { kind: 'host' },
     orcaCreationWorkspaceLayout: getWorktreeCreationLayout(repo, store.getSettings()),
     ...(args.automationProvenance ? { automationProvenance: args.automationProvenance } : {}),
