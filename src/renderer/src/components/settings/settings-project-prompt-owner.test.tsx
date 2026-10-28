@@ -9,7 +9,7 @@ import {
   type ProjectSettingsRenderContext
 } from './settings-project-section-renderer'
 
-vi.mock('./RepositoryPane', () => ({ RepositoryPane: () => null }))
+vi.mock('./repository/RepositoryPane', () => ({ RepositoryPane: () => null }))
 vi.mock('./SettingsSection', () => ({ SettingsSection: () => null }))
 
 const project: Project = {
@@ -54,8 +54,7 @@ describe('Project Settings prompt template host routing', () => {
             projectId: project.id,
             project,
             setups,
-            representativeRepoId: 'local-repo',
-            selectionKey: project.id
+            representativeRepoId: 'local-repo'
           }
         ],
         settingsProjectHostSelection: { project: 'runtime:remote' },
