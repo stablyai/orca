@@ -1,9 +1,12 @@
+import type { GitHubPRRefreshEvent } from '../../shared/github/pull-request-refresh-types'
 import type { BrowserWindow, IpcMainEvent, WebContents } from 'electron'
 
 /** Optional Electron facilities for runtime hosts: notifications, renderer lookup and renderer-backed tab creation IPC.
  * Node hosts legitimately lack these; terminal creation uses background spawn without a window (#10333), and notifications route to paired clients. */
 
 export type RuntimeDesktopSurface = {
+  isRendererAlive?(id: number): boolean
+  publishPRRefreshEvent?(event: GitHubPRRefreshEvent): void
   /** Headless hosts retain the formatter's English defaults. */
   translateNotification?(key: string, fallback: string): string
   /** This machine's own idle state; undefined is unknown. Absent on hosts with no desktop. */

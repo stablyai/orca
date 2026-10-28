@@ -1,5 +1,6 @@
 import type {
   GitHubPRRefreshCandidate,
+  GitHubPRRefreshEvent,
   GitHubPRRefreshReason,
   PRRefreshOutcome
 } from '../../shared/github/pull-request-refresh-types'
@@ -32,6 +33,12 @@ const visibility = new PRRefreshVisibility()
 const events = new PRRefreshEventPublisher()
 const drainer = new PRRefreshQueueDrainer(queue, pacing, visibility, retry, events)
 
+export function subscribePRRefreshEvents(
+  listener: (event: GitHubPRRefreshEvent) => void
+): () => void {
+  return events.subscribe(listener)
+}
+
 export function setPRRefreshOutcomeObserver(observer: PRRefreshOutcomeObserver | null): void {
   events.setOutcomeObserver(observer)
 }
@@ -52,9 +59,11 @@ function removeInvisibleVisibleRefreshes(): void {
   }
 }
 
-export function clearVisiblePRRefreshWindow(windowId: number): void {
+export function clearVisiblePRRefreshWindow(windowId: number | string): void {
   const hadVisibleRefreshes = visibility.clearWindow(windowId)
-  pacing.clearActiveBurstWindow(windowId)
+  if (typeof windowId === 'number') {
+    pacing.clearActiveBurstWindow(windowId)
+  }
   if (hadVisibleRefreshes) {
     removeInvisibleVisibleRefreshes()
     queue.retimeVisible((key, candidate) => visibility.candidate(key, candidate))
@@ -98,11 +107,20 @@ export function enqueuePRRefresh(
 export function reportVisiblePRRefreshCandidates(
   candidates: GitHubPRRefreshCandidate[],
   generation: number,
-  windowId: number
+  ownerId: number | string
 ): void {
+  const windowId = typeof ownerId === 'number' ? ownerId : undefined
   const newlyExposed = new Set(candidates.map(refreshKey).filter((key) => !visibility.has(key)))
-  if (!visibility.report(candidates, generation, windowId)) {
+  const foregroundExposure = new Set(
+    typeof ownerId === 'string'
+      ? candidates.map(refreshKey).filter((key) => !visibility.ownerHas(ownerId, key))
+      : []
+  )
+  if (!visibility.report(candidates, generation, ownerId)) {
     return
+  }
+  for (const candidate of candidates) {
+    visibility.update(candidate)
   }
   removeInvisibleVisibleRefreshes()
   queue.retimeVisible((key, candidate) => visibility.candidate(key, candidate))
@@ -112,13 +130,22 @@ export function reportVisiblePRRefreshCandidates(
       enqueuePRRefresh(candidate, 'visible', 40, windowId)
       continue
     }
-    queue.enqueue(
+    const enqueued = queue.enqueue(
       visibility.candidate(key, candidate),
       'visible',
-      40,
+      typeof ownerId === 'string' ? 80 : 40,
       windowId,
       newlyExposed.has(key)
     )
+    const pending = queue.get(key)
+    if (
+      pending &&
+      foregroundExposure.has(key) &&
+      candidate.isSelected &&
+      enqueued.dueAt <= Date.now()
+    ) {
+      pending.bypassBackgroundBudget = true
+    }
   }
   drainer.schedule()
 }

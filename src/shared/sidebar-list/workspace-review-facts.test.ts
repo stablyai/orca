@@ -17,6 +17,17 @@ describe('readWorkspaceReviewFact', () => {
     )
   })
 
+  it('retains local legacy candidates when explicit execution ownership overrides repo metadata', () => {
+    const cache = { '/r::a': pr('closed'), 'ssh:c1::repo-1::a': pr('open') }
+    expect(
+      readWorkspaceReviewFact(row, { ...repo, connectionId: 'c1', executionHostId: 'local' }, cache)
+        ?.reviewState
+    ).toBe('closed')
+    expect(
+      readWorkspaceReviewFact(row, { ...repo, executionHostId: 'runtime:env' }, cache)
+    ).toBeNull()
+  })
+
   it('reads only host-scoped entries for SSH and paired-server repos', () => {
     const cache = { 'repo-1::a': pr('merged'), 'ssh:c1::repo-1::a': pr('open') }
     expect(readWorkspaceReviewFact(row, { ...repo, connectionId: 'c1' }, cache)?.reviewState).toBe(

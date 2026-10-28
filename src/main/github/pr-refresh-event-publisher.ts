@@ -6,7 +6,7 @@ import type {
   PRRefreshOutcome
 } from '../../shared/github/pull-request-refresh-types'
 import { recordCoalescedCrashBreadcrumb } from '../crash-reporting/crash-breadcrumb-store'
-import { sendToTrustedUIRenderer } from '../ipc/ui'
+import { getRuntimeDesktopSurface } from '../runtime/runtime-desktop-surface'
 
 export type PRRefreshOutcomeObserver = (
   candidate: GitHubPRRefreshCandidate,
@@ -16,9 +16,17 @@ export type PRRefreshOutcomeObserver = (
 const DIAGNOSTIC_BREADCRUMB_MIN_INTERVAL_MS = 30_000
 
 export class PRRefreshEventPublisher {
+  private readonly listeners = new Set<(event: GitHubPRRefreshEvent) => void>()
   private sequence = 0
   private observer: PRRefreshOutcomeObserver | null = null
   private readonly counters = { enqueued: 0, coalesced: 0, skipped: 0, backgroundPauses: 0 }
+
+  subscribe(listener: (event: GitHubPRRefreshEvent) => void): () => void {
+    this.listeners.add(listener)
+    return () => {
+      this.listeners.delete(listener)
+    }
+  }
 
   setOutcomeObserver(observer: PRRefreshOutcomeObserver | null): void {
     this.observer = observer
@@ -38,7 +46,14 @@ export class PRRefreshEventPublisher {
       ...event,
       sequence: sequenceOverride ?? this.nextSequence()
     } as GitHubPRRefreshEvent
-    sendToTrustedUIRenderer('gh:prRefreshEvent', payload)
+    for (const listener of this.listeners) {
+      try {
+        listener(payload)
+      } catch {
+        /* A disconnected stream must not interrupt desktop delivery. */
+      }
+    }
+    getRuntimeDesktopSurface().publishPRRefreshEvent?.(payload)
   }
 
   record(

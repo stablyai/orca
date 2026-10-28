@@ -1,5 +1,6 @@
+import { sendToTrustedUIRenderer } from '../ipc/ui'
 import { isResourceWindowVisible } from '../window/resource-view-admission'
-import { BrowserWindow, ipcMain, Notification, powerMonitor } from 'electron'
+import { BrowserWindow, ipcMain, Notification, powerMonitor, webContents } from 'electron'
 import { readDesktopAwayState } from '../notifications/desktop-away-state'
 import type { RuntimeDesktopSurface } from '../runtime/runtime-desktop-surface'
 import { translateMain } from '../i18n/main-i18n'
@@ -8,6 +9,11 @@ import { fetchRepoIconWithManualRedirects } from './electron-repo-icon-fetch'
 import { ORCA_SIDEBAR_INPUTS_IS_MAIN } from '../../shared/sidebar-inputs-switch'
 
 export const electronRuntimeDesktopSurface: RuntimeDesktopSurface = {
+  isRendererAlive: (id) => {
+    const renderer = webContents.fromId(id)
+    return !!renderer && !renderer.isDestroyed()
+  },
+  publishPRRefreshEvent: (event) => sendToTrustedUIRenderer('gh:prRefreshEvent', event),
   translateNotification: translateMain,
   isAwayForMobileNotifications: () => readDesktopAwayState(powerMonitor),
   showNotification: ({ title, body }) => {

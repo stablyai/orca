@@ -11,8 +11,15 @@ vi.mock('electron', () => ({
   ipcMain: {
     handle: (channel: string, handler: (...args: unknown[]) => unknown) =>
       handlers.set(channel, handler)
-  },
-  webContents: { fromId: (id: number) => contents.get(id) }
+  }
+}))
+vi.mock('../runtime/runtime-desktop-surface', () => ({
+  getRuntimeDesktopSurface: () => ({
+    isRendererAlive: (id: number) => {
+      const renderer = contents.get(id)
+      return !!renderer && !renderer.isDestroyed()
+    }
+  })
 }))
 vi.mock('../github/client', () => ({ getPRForBranch: vi.fn(), getPRForBranchOutcome: lookup }))
 vi.mock('../github/pr-refresh-rate-limit-gate', () => ({

@@ -1,3 +1,4 @@
+import type { RuntimeDesktopSurface } from '../runtime/runtime-desktop-surface'
 import { vi, type Mock } from 'vitest'
 import { isWslUncPath } from '../../shared/wsl-paths'
 
@@ -36,22 +37,6 @@ export function createPRRefreshCoordinatorMocks(): PRRefreshCoordinatorMocks {
   }
 }
 
-export type ElectronModuleMock = {
-  webContents: {
-    getAllWebContents: PRRefreshCoordinatorMocks['getAllWebContentsMock']
-    fromId: PRRefreshCoordinatorMocks['webContentsFromIdMock']
-  }
-}
-
-export function electronModuleMock(mocks: PRRefreshCoordinatorMocks): ElectronModuleMock {
-  return {
-    webContents: {
-      getAllWebContents: mocks.getAllWebContentsMock,
-      fromId: mocks.webContentsFromIdMock
-    }
-  }
-}
-
 export type ClientModuleMock = { getPRForBranchOutcome: Mock }
 
 export function clientModuleMock(mocks: PRRefreshCoordinatorMocks): ClientModuleMock {
@@ -83,14 +68,6 @@ export function rateLimitModuleMock(mocks: PRRefreshCoordinatorMocks): RateLimit
     noteRepositoryRateLimitSpend: mocks.noteRepositoryRateLimitSpendMock,
     repositoryRateLimitGuard: mocks.repositoryRateLimitGuardMock,
     spendsSharedGitHubComQuota: mocks.spendsSharedGitHubComQuotaMock
-  }
-}
-
-export type IpcUiModuleMock = { sendToTrustedUIRenderer: Mock }
-
-export function ipcUiModuleMock(mocks: PRRefreshCoordinatorMocks): IpcUiModuleMock {
-  return {
-    sendToTrustedUIRenderer: mocks.sendToTrustedUIRendererMock
   }
 }
 
@@ -147,4 +124,22 @@ export function resetPRRefreshCoordinatorMocks(mocks: PRRefreshCoordinatorMocks)
     }
   ])
   getRateLimitMock.mockResolvedValue({ ok: true })
+}
+
+export function runtimeDesktopSurfaceModuleMock(mocks: PRRefreshCoordinatorMocks): {
+  getRuntimeDesktopSurface(): Pick<
+    RuntimeDesktopSurface,
+    'isRendererAlive' | 'publishPRRefreshEvent'
+  >
+} {
+  return {
+    getRuntimeDesktopSurface: () => ({
+      isRendererAlive: (id) => {
+        const renderer = mocks.webContentsFromIdMock(id)
+        return !!renderer && !renderer.isDestroyed()
+      },
+      publishPRRefreshEvent: (event) =>
+        mocks.sendToTrustedUIRendererMock('gh:prRefreshEvent', event)
+    })
+  }
 }

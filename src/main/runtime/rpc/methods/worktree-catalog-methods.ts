@@ -1,3 +1,4 @@
+import { WORKTREE_REVIEW_METHODS } from './worktree-review'
 import { defineMethod } from '../core'
 import { resolveWorktreeCatalogSnapshot } from '../worktree-catalog-snapshot'
 import { coarsenWorktreePsActivity } from '../worktree-ps-coarse-activity'
@@ -15,6 +16,7 @@ import {
 } from '../../../../shared/rpc-contract/worktree-params'
 
 export const WORKTREE_CATALOG_METHODS = [
+  ...WORKTREE_REVIEW_METHODS,
   defineMethod({
     name: 'worktree.ps',
     permission: 'workspace',

@@ -1,3 +1,4 @@
+import { reviewStatusPresentation } from '../../../../shared/review-status-presentation'
 import { GitMerge, GitPullRequestClosed, GitPullRequestDraft, type LucideIcon } from 'lucide-react'
 import type { HostedReviewState } from '../../../../shared/hosted-review'
 
@@ -26,13 +27,14 @@ export function getReviewStateTone(state: ReviewStateForDisplay): string {
 
 // Encode state in the glyph too; failing checks must not make a draft PR look closed.
 export function getReviewStateIcon(state: ReviewStateForDisplay): LucideIcon | null {
-  if (state === 'merged') {
+  const { glyph } = reviewStatusPresentation({ state, showChecks: false })
+  if (glyph === 'merge') {
     return GitMerge
   }
-  if (state === 'closed') {
+  if (glyph === 'closed') {
     return GitPullRequestClosed
   }
-  if (state === 'draft') {
+  if (glyph === 'draft') {
     return GitPullRequestDraft
   }
   return null

@@ -1,10 +1,10 @@
-import { webContents } from 'electron'
+import { getRuntimeDesktopSurface } from '../runtime/runtime-desktop-surface'
 import type { GitHubPRRefreshCandidate } from '../../shared/github/pull-request-refresh-types'
 import { refreshKey } from './pr-refresh-candidate-policy'
 
 export class PRRefreshVisibility {
   private readonly visibleByWindow = new Map<
-    number,
+    number | string,
     { generation: number; candidates: Map<string, GitHubPRRefreshCandidate> }
   >()
 
@@ -12,11 +12,15 @@ export class PRRefreshVisibility {
     return this.visibleByWindow.size
   }
 
-  clearWindow(windowId: number): boolean {
+  clearWindow(windowId: number | string): boolean {
     return this.visibleByWindow.delete(windowId)
   }
 
-  report(candidates: GitHubPRRefreshCandidate[], generation: number, windowId: number): boolean {
+  report(
+    candidates: GitHubPRRefreshCandidate[],
+    generation: number,
+    windowId: number | string
+  ): boolean {
     this.pruneDestroyedWindows()
     const existing = this.visibleByWindow.get(windowId)
     if (existing && generation < existing.generation) {
@@ -40,6 +44,10 @@ export class PRRefreshVisibility {
     return true
   }
 
+  ownerHas(ownerId: number | string, key: string): boolean {
+    return this.visibleByWindow.get(ownerId)?.candidates.has(key) ?? false
+  }
+
   has(key: string): boolean {
     this.pruneDestroyedWindows()
     return Array.from(this.visibleByWindow.values()).some((window) => window.candidates.has(key))
@@ -54,7 +62,10 @@ export class PRRefreshVisibility {
         continue
       }
       selected ||= candidate.isSelected === true
-      if ((candidate.cachedFetchedAt ?? 0) > (latest.cachedFetchedAt ?? 0)) {
+      if (
+        candidate.cachedFetchedAt != null &&
+        candidate.cachedFetchedAt >= (latest.cachedFetchedAt ?? 0)
+      ) {
         latest = { ...fallback, ...this.cachedFields(candidate) }
       }
     }
@@ -85,8 +96,10 @@ export class PRRefreshVisibility {
 
   private pruneDestroyedWindows(): void {
     for (const windowId of this.visibleByWindow.keys()) {
-      const contents = webContents.fromId(windowId)
-      if (!contents || contents.isDestroyed()) {
+      if (typeof windowId !== 'number') {
+        continue
+      }
+      if (!getRuntimeDesktopSurface().isRendererAlive?.(windowId)) {
         this.visibleByWindow.delete(windowId)
       }
     }

@@ -85,7 +85,7 @@ export type PersistedState = {
   settings: GlobalSettings
   ui: PersistedUIState
   githubCache: {
-    pr: Record<string, { data: PRInfo | null; fetchedAt: number }>
+    pr: Record<string, { data: PRInfo | null; fetchedAt: number; fetchedHeadOid?: string | null }>
     issue: Record<string, { data: IssueInfo | null; fetchedAt: number }>
   }
   /** Legacy single-blob session, kept as the canonical 'local' host partition so an app downgrade still reads its workspace. */

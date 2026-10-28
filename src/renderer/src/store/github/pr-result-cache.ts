@@ -3,7 +3,10 @@ import type { RuntimeFocusSettings } from '../../../../shared/github/github-cach
 import type { PRInfo } from '../../../../shared/github/pull-request-types'
 import { getHostedReviewCacheKey } from '../slices/hosted-review-cache-identity'
 import type { GitHubPRFallbackSource } from './cache-model'
-import { withBoundedCacheEntry } from './cache-policy'
+import {
+  applyPRCacheResult,
+  shouldPreserveMergedPRForFallbackMiss
+} from '../../../../shared/github/pr-cache-result'
 import { prRefreshStartedHostedReviewEntries } from './request-coordination'
 import {
   shouldWritePRCacheForHostedReviewSync,
@@ -32,33 +35,6 @@ type GitHubPRResultCacheArgs = {
   requestStartedAt?: number
   fetchedHeadOid?: string | null
   requestStartedEntry?: AppState['hostedReviewCache'][string]
-}
-
-export function applyPRCacheResult(
-  cache: AppState['prCache'],
-  cacheKey: string,
-  pr: PRInfo | null,
-  fetchedAt: number,
-  accepted: boolean,
-  preserveExisting: boolean,
-  fetchedHeadOid?: string | null
-): AppState['prCache'] {
-  if (preserveExisting) {
-    return cache
-  }
-  if (accepted) {
-    return withBoundedCacheEntry(cache, cacheKey, {
-      data: pr,
-      fetchedAt,
-      ...(fetchedHeadOid ? { fetchedHeadOid } : {})
-    })
-  }
-  if (!cache[cacheKey]) {
-    return cache
-  }
-  const next = { ...cache }
-  delete next[cacheKey]
-  return next
 }
 
 export function prRefreshStartedEntryKey(sequence: number, cacheKey: string): string {
@@ -204,15 +180,10 @@ export function shouldPreserveExistingPRForFallbackMiss(args: {
   ) {
     return false
   }
-  // Why: gate the global worktree scan so batched refresh aliases don't multiply full scans (common paths don't need it).
+  // Gate the global worktree lookup before evaluating the shared head-retention policy.
   const worktree = args.worktreeId ? findWorktreeById(args.state, args.worktreeId) : null
-  const worktreeHead = worktree?.head
-  // Why: keep a merged PR only when its cached head matches the worktree head — exactly or a confirmed-contained commit.
-  const preservesMergedPRForCurrentHead =
-    typeof worktreeHead === 'string' &&
-    worktreeHead.length > 0 &&
-    (args.currentPR.headSha === worktreeHead ||
-      args.currentPR.confirmedContainedHeadOid === worktreeHead)
-
-  return preservesMergedPRForCurrentHead
+  return shouldPreserveMergedPRForFallbackMiss({
+    ...args,
+    currentHeadOid: worktree?.head
+  })
 }

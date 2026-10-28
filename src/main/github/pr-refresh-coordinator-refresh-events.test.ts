@@ -5,13 +5,14 @@ const { coordinatorMocks, moduleMocks } = await vi.hoisted(async () => {
   return { coordinatorMocks: moduleMocks.createPRRefreshCoordinatorMocks(), moduleMocks }
 })
 
-vi.mock('electron', () => moduleMocks.electronModuleMock(coordinatorMocks))
+vi.mock('../runtime/runtime-desktop-surface', () =>
+  moduleMocks.runtimeDesktopSurfaceModuleMock(coordinatorMocks)
+)
 vi.mock('./client', () => moduleMocks.clientModuleMock(coordinatorMocks))
 vi.mock('./github-api-repository', () =>
   moduleMocks.githubApiRepositoryModuleMock(coordinatorMocks)
 )
 vi.mock('./rate-limit', () => moduleMocks.rateLimitModuleMock(coordinatorMocks))
-vi.mock('../ipc/ui', () => moduleMocks.ipcUiModuleMock(coordinatorMocks))
 
 import { makeCandidate, makePR } from './pr-refresh-coordinator-test-harness'
 

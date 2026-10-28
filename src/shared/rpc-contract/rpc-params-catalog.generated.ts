@@ -679,6 +679,7 @@ import {
   WorktreeTeardownMissingTerminalsParams
 } from './worktree-params'
 import { WorktreeAdoptProvisionedRoot } from './worktree-provisioned-root-params'
+import { WorktreeReviewSubscribe, WorktreeReviewSubscription } from './worktree-review-params'
 import { RepoIconDataUrlsParams } from '../sidebar-list/repo-icon-data-urls-contract'
 import { SidebarInputsReadParams } from '../sidebar-list/sidebar-inputs-feed-contract'
 import { SkillBundleInstallRequestSchema } from '../skill-bundle-install-contract'
@@ -1479,6 +1480,9 @@ export const RPC_PARAMS_BY_METHOD = {
   'worktree.ps': WorktreePsParams,
   'worktree.resolveMrBase': WorktreeResolveMrBase,
   'worktree.resolvePrBase': WorktreeResolvePrBase,
+  'worktree.review.renew': WorktreeReviewSubscription,
+  'worktree.review.subscribe': WorktreeReviewSubscribe,
+  'worktree.review.unsubscribe': WorktreeReviewSubscription,
   'worktree.rm': WorktreeRemove,
   'worktree.set': WorktreeSet,
   'worktree.show': WorktreeSelectorOfWorktreeParams,

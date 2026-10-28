@@ -12,7 +12,10 @@ import { getGitHubRepoLookupIndex } from '../slices/github-repo-lookup-index'
 import { prCacheKey } from './cache-identity'
 import { settingsForGitHubRepoOwner } from './work-item-routing'
 import { githubHostedReviewFallbackPRNumber } from './pr-result-routing'
-import type { GitHubPRFallbackSource } from './cache-model'
+import {
+  cachedPRCandidateFields,
+  selectPRRefreshFallback
+} from '../../../../shared/github/pr-refresh-selection'
 import { selectWorktreesByRepo } from '../workspace-record-selectors'
 
 export function findWorktreeById(state: AppState, worktreeId: string): Worktree | null {
@@ -150,23 +153,12 @@ export function buildPRRefreshCandidate(
     repo.executionHostId,
     true
   )
-  const cachedFallbackPRNumber = cachedPR?.number ?? null
-  // Why: a merged PR is a valid fallback only while the worktree sits on its head or a confirmed-contained commit — else the branch moved on.
-  const cachedMergedPRMovedPastHead =
-    worktree.linkedPR == null &&
-    cachedPR?.state === 'merged' &&
-    cachedPR.headSha !== worktree.head &&
-    cachedPR.confirmedContainedHeadOid !== worktree.head
-  const fallbackPRNumber =
-    worktree.linkedPR == null && !cachedMergedPRMovedPastHead
-      ? (cachedFallbackPRNumber ?? hostedReviewFallbackPRNumber)
-      : null
-  const fallbackPRSource: GitHubPRFallbackSource | null =
-    worktree.linkedPR != null || fallbackPRNumber == null
-      ? null
-      : cachedFallbackPRNumber != null
-        ? 'pr-cache'
-        : 'hosted-review'
+  const fallback = selectPRRefreshFallback({
+    linkedPRNumber: worktree.linkedPR,
+    cachedPR,
+    currentHeadOid: worktree.head,
+    hostedReviewFallbackPRNumber
+  })
   const sshStatus = repo.connectionId
     ? state.sshConnectionStates.get(repo.connectionId)?.status
     : null
@@ -178,12 +170,10 @@ export function buildPRRefreshCandidate(
     cacheKey,
     worktreeId: worktree.id,
     currentHeadOid: worktree.head ?? null,
-    cachedHeadOid: state.prCache[cacheKey]?.fetchedHeadOid ?? cachedPR?.headSha ?? null,
     isSelected: state.activeWorktreeId === worktree.id,
     // Why: persisted linked PR metadata is exact; PR cache numbers are only fallback hints after branch-lookup misses.
     linkedPRNumber: worktree.linkedPR ?? null,
-    fallbackPRNumber,
-    fallbackPRSource,
+    ...fallback,
     isBare: worktree.isBare,
     isArchived: worktree.isArchived,
     connectionId: repo.connectionId ?? null,
@@ -193,11 +183,6 @@ export function buildPRRefreshCandidate(
         ? 'connected'
         : 'disconnected'
       : 'unknown',
-    cachedFetchedAt: state.prCache[cacheKey]?.fetchedAt ?? null,
-    cachedHasPR: cachedPR ? true : state.prCache[cacheKey] ? false : null,
-    cachedPRState: cachedPR?.state ?? null,
-    cachedChecksStatus: cachedPR?.checksStatus ?? null,
-    cachedMergeable: cachedPR?.mergeable ?? null,
-    cachedMergeStateStatus: cachedPR?.mergeStateStatus ?? null
+    ...cachedPRCandidateFields(state.prCache[cacheKey])
   }
 }

@@ -5,7 +5,11 @@ import { getGitHubPRCacheKeyCandidates } from '../github/github-cache-key'
 import { isGitHubPRSuppressed } from '../worktree/github-pr-suppression'
 import { getPRGroupKeyForState, type PRGroupKey } from '../workspace-view/workspace-pr-groups'
 import type { PairedServerWorkspaceRow } from './paired-server-rows'
-import { parseExecutionHostId } from '../execution-host'
+import {
+  getRepoExecutionHostId,
+  LOCAL_EXECUTION_HOST_ID,
+  parseExecutionHostId
+} from '../execution-host'
 import {
   composeWorktreeHostIdentity,
   type HostScopedWorktreeKey
@@ -46,7 +50,7 @@ export function readWorkspaceReviewPR<T extends CachedPR>(
   }
   const keys = getGitHubPRCacheKeyCandidates(repo, branch)
   // Legacy keys lack host identity; only local repos may use them.
-  const lookup = !repo.connectionId && !repo.executionHostId ? keys : keys.slice(0, 1)
+  const lookup = getRepoExecutionHostId(repo) === LOCAL_EXECUTION_HOST_ID ? keys : keys.slice(0, 1)
   const entry = lookup.map((key) => prCache[key]).find((candidate) => candidate != null)
   const pr = entry?.data
   if (!pr || (typeof pr.number === 'number' && isGitHubPRSuppressed(worktree, pr.number))) {

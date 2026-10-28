@@ -1,3 +1,4 @@
+import { getRepoExecutionHostId } from '../../shared/execution-host'
 import { reviewRefreshIntervalMs } from '../../shared/review-refresh-policy'
 import type {
   GitHubPRRefreshAlias,
@@ -130,6 +131,7 @@ export function aliasFromCandidate(candidate: GitHubPRRefreshCandidate): GitHubP
     branch: candidate.branch,
     worktreeId: candidate.worktreeId,
     connectionId: candidate.connectionId ?? null,
+    executionHostId: candidate.executionHostId ?? null,
     currentHeadOid: candidate.currentHeadOid ?? null,
     linkedPRNumber: candidate.linkedPRNumber ?? null,
     fallbackPRNumber:
@@ -200,7 +202,7 @@ export function sameAliasRequestIdentity(
     left.branch === right.branch &&
     left.worktreeId === right.worktreeId &&
     left.connectionId === right.connectionId &&
-    left.executionHostId === right.executionHostId &&
+    getRepoExecutionHostId(left) === getRepoExecutionHostId(right) &&
     left.linkedPRNumber === right.linkedPRNumber &&
     left.fallbackPRNumber === right.fallbackPRNumber &&
     left.fallbackPRSource === right.fallbackPRSource &&

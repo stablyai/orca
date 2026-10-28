@@ -8,6 +8,7 @@ import {
   resetRemoteRuntimeMocks
 } from './github-slice-test-harness'
 import type { AppState } from '../types'
+import { shouldPreserveExistingPRForFallbackMiss } from '../github/pr-result-cache'
 import { getHostedReviewCacheKey } from './hosted-review-cache-identity'
 
 describe('createGitHubSlice.fetchPRForBranch', () => {
@@ -511,3 +512,31 @@ describe('createGitHubSlice.fetchPRForBranch', () => {
     })
   })
 })
+
+it.each(['found', 'linked', 'open', 'rejected', 'missing-head', 'empty-head'] as const)(
+  'rejects %s retention without reading the workspace inventory',
+  (condition) => {
+    const currentPR = makePR({
+      state: condition === 'open' ? 'open' : 'merged',
+      headSha: condition === 'missing-head' ? undefined : condition === 'empty-head' ? '' : 'head'
+    })
+    const readRepos = vi.fn(() => [])
+    const state = {
+      ...createTestStore().getState(),
+      get repos() {
+        return readRepos()
+      }
+    }
+    expect(
+      shouldPreserveExistingPRForFallbackMiss({
+        state,
+        currentPR,
+        nextPR: condition === 'found' ? makePR() : null,
+        worktreeId: 'wt-1',
+        linkedPRNumber: condition === 'linked' ? currentPR.number : null,
+        rejectedPRUrls: condition === 'rejected' ? [currentPR.url] : []
+      })
+    ).toBe(false)
+    expect(readRepos).not.toHaveBeenCalled()
+  }
+)

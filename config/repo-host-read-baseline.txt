@@ -54,6 +54,5 @@
 1 src/shared/github/github-cache-key.ts
 1 src/shared/new-workspace-dialog-repo.ts
 1 src/shared/sidebar-list/host-section-rows.ts
-1 src/shared/sidebar-list/workspace-review-facts.ts
 1 src/shared/workspace-session-terminal-buffers.ts
 1 src/shared/worktree/ownership.ts
