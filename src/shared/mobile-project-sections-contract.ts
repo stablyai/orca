@@ -2,6 +2,7 @@ import type { ProjectGroup } from './project-group-types'
 import type { ProjectHostSetupProjection } from './project-host-setup-projection'
 import type { ProjectSectionProject, ProjectSectionSetup } from './project-section-grouping'
 import type { RepoIcon } from './repo-icon'
+import { normalizeLinkedWorkItemPromptTemplate } from './linked-work-item-prompt-settings'
 import type { Repo } from './repo-types'
 import type { ProjectOrderBy } from './ui-chrome-types'
 
@@ -20,7 +21,7 @@ export type MobileProjectSectionRepo = Pick<Repo, 'id' | 'displayName' | 'path' 
 export type MobileProjectSectionCatalog = {
   /** Every repo the sidebar holds, across hosts, in its header order. */
   repos: MobileProjectSectionRepo[]
-  projects: ProjectSectionProject[]
+  projects: (ProjectSectionProject & { linkedWorkItemPromptTemplate?: string | null })[]
   setups: ProjectSectionSetup[]
   projectOrderBy: ProjectOrderBy
   /** Every host's project groups, which a feed reader lists folder workspaces under; older desktops omit it. */
@@ -60,7 +61,12 @@ export function buildMobileProjectSectionCatalog(
 ): MobileProjectSectionCatalog {
   return {
     repos: repos.map(sectionRepo),
-    projects: projection.projects.map(({ id, displayName }) => ({ id, displayName })),
+    projects: projection.projects.map(({ id, displayName, linkedWorkItemPromptTemplate }) => ({
+      id,
+      displayName,
+      linkedWorkItemPromptTemplate:
+        normalizeLinkedWorkItemPromptTemplate(linkedWorkItemPromptTemplate) ?? null
+    })),
     setups: projection.setups.map((setup) => ({
       id: setup.id,
       projectId: setup.projectId,

@@ -1,6 +1,7 @@
 import { translate } from '@/i18n/i18n'
 import { translateSearchKeyword } from './settings-search-keywords'
 import { createLocalizedCatalog } from '@/i18n/localized-catalog'
+import { getTaskPromptTemplateSearchEntry } from './task-prompt-template-search'
 
 export const getTasksPaneSearchKeywords = createLocalizedCatalog(() => [
   ...translateSearchKeyword('auto.components.settings.tasks.search.2ec54bee51', 'tasks'),
@@ -20,6 +21,7 @@ export const getTasksPaneSearchKeywords = createLocalizedCatalog(() => [
 ])
 
 export const getTasksPaneSearchEntries = createLocalizedCatalog(() => [
+  getTaskPromptTemplateSearchEntry(),
   {
     title: translate('auto.components.settings.tasks.search.5b8e4aace5', 'Task Providers'),
     description: translate(

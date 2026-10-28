@@ -19108,6 +19108,18 @@
       "stepDownload": "Download",
       "stepUnpack": "Unpack",
       "stepCheck": "Check"
+    },
+    "TaskPromptTemplateSetting": {
+      "projectHint": "Overrides the global prompt for this project. Leave blank to use Settings → Task Sources.",
+      "globalHint": "Applies to all task sources. Projects can override this prompt. Leave blank to keep the default draft.",
+      "inherit": "Use global prompt",
+      "reset": "Reset to default",
+      "title": "Task start prompt",
+      "description": "Customize the draft for a new workspace linked to a task. Use {{url}} for its URL. You review and send the draft yourself.",
+      "keywordTemplate": "template",
+      "keywordSkill": "skill",
+      "saveError": "Could not save the prompt. Edit it or leave the field again to retry.",
+      "saved": "Saved"
     }
   },
   "dashboardPopout": {

@@ -1,4 +1,25 @@
 import type { TaskProvider } from '../../../shared/task-providers'
+import {
+  getLinkedWorkItemPromptTemplate,
+  renderLinkedWorkItemPromptTemplate
+} from '../../../shared/linked-work-item-prompt-settings'
+import type { ExecutionHostId } from '../../../shared/execution-host'
+import type { AppState } from '@/store/types'
+import { getProjectHostSetupProjectionFromState } from '@/store/project-host-setup-selector'
+export { getLinkedWorkItemPromptTemplate } from '../../../shared/linked-work-item-prompt-settings'
+
+export function getDesktopLinkedWorkItemPromptTemplate(
+  state: AppState,
+  repoId?: string,
+  hostId?: ExecutionHostId
+): string | undefined {
+  const projection = getProjectHostSetupProjectionFromState(state)
+  return getLinkedWorkItemPromptTemplate(
+    { settings: state.settings, projects: projection.projects, setups: projection.setups },
+    repoId,
+    hostId
+  )
+}
 
 export type LinkedWorkItemContext = {
   provider: TaskProvider
@@ -146,16 +167,23 @@ function capLinkedContextSourceLines(args: { sourceLines: string; fixedChars: nu
   return [capped, truncationLine].filter(Boolean).join('\n')
 }
 
-export function getLaunchableWorkItemDraftContent(args: {
-  provider?: TaskProvider
-  pasteContent?: string
-  url: string
-  title?: string
-  linearIdentifier?: string
-  linkedContext?: LinkedWorkItemContext
-}): string {
+export function getLaunchableWorkItemDraftContent(
+  args: {
+    provider?: TaskProvider
+    pasteContent?: string
+    url: string
+    title?: string
+    linearIdentifier?: string
+    linkedContext?: LinkedWorkItemContext
+  },
+  template?: string
+): string {
   if (args.pasteContent?.trim()) {
     return args.pasteContent
+  }
+  const customDraft = renderLinkedWorkItemPromptTemplate(template, args.url)
+  if (customDraft) {
+    return customDraft
   }
   if (isLinearWorkItemReference(args)) {
     const linearBlock = buildLinearLaunchContextBlock({
@@ -183,9 +211,23 @@ export function resolveQuickCreateLinkedWorkItemPrompt(
       > & { linkedContext?: LinkedWorkItemContext })
     | null
     | undefined,
-  note: string
+  note: string,
+  template?: string
 ): { prompt: string; draftPrompt: string | null } {
   const trimmedNote = note.trim()
+  if (
+    linkedWorkItem?.number === 0 &&
+    !linkedWorkItem.url.trim() &&
+    !linkedWorkItem.linearIdentifier?.trim()
+  ) {
+    return { prompt: trimmedNote, draftPrompt: null }
+  }
+  const customDraft = linkedWorkItem
+    ? renderLinkedWorkItemPromptTemplate(template, linkedWorkItem.url)
+    : null
+  if (customDraft) {
+    return { prompt: '', draftPrompt: [trimmedNote, customDraft].filter(Boolean).join('\n\n') }
+  }
   const linearBlock = isLinearWorkItemReference(linkedWorkItem)
     ? buildLinearLaunchContextBlock({
         provider: linkedWorkItem?.provider,
@@ -201,9 +243,5 @@ export function resolveQuickCreateLinkedWorkItemPrompt(
     : linkedUrl
       ? [trimmedNote, linkedUrl].filter(Boolean).join('\n\n')
       : null
-  const isLinearTypedOnly = linkedWorkItem?.number === 0 && Boolean(trimmedNote) && !draftPrompt
-  return {
-    prompt: isLinearTypedOnly ? trimmedNote : '',
-    draftPrompt
-  }
+  return { prompt: '', draftPrompt }
 }

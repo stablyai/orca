@@ -26,7 +26,11 @@ export function getProjectHostIds(
   repos: readonly Repo[]
 ): Set<string> {
   const hostIds = getExplicitProjectHostIds(project, setups, repos)
-  if (hostIds.size === 0) {
+  // Direct SSH project metadata lives in this client's local catalog.
+  if (
+    hostIds.size === 0 ||
+    [...hostIds].some((hostId) => parseExecutionHostId(hostId)?.kind === 'ssh')
+  ) {
     hostIds.add(LOCAL_EXECUTION_HOST_ID)
   }
   return hostIds
@@ -151,6 +155,7 @@ export function mergeFetchedProjectCompatibilityForHost({
     (setup) => !setupBelongsToFetchedCatalog(setup)
   )
   const projectHostSetups = mergeProjectHostSetupsByOwner(preservedSetups, fetchedSetupsForHost)
+  const projectSetupsByProjectId = indexProjectHostSetupsByProjectId(projectHostSetups)
   const previousProjectById = new Map(previous.projects.map((project) => [project.id, project]))
   const reposById = getReposById(repos)
   const currentRepoIds = new Set(repos.map((repo) => repo.id))
@@ -193,7 +198,8 @@ export function mergeFetchedProjectCompatibilityForHost({
             previousProject,
             project,
             restrictReposToProjectPair(previousProject, project, reposById),
-            hostId
+            hostId,
+            projectSetupsByProjectId.get(project.id) ?? []
           )
         : projectWithCurrentSourceRepoIds(project, currentRepoIds)
     })

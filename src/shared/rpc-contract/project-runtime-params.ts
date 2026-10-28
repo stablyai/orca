@@ -53,7 +53,8 @@ export const LocalWindowsRuntimePreference = z.discriminatedUnion('kind', [
 export const ProjectUpdate = z.object({
   projectId: requiredString('Missing project ID'),
   updates: z.object({
-    localWindowsRuntimePreference: LocalWindowsRuntimePreference.optional()
+    localWindowsRuntimePreference: LocalWindowsRuntimePreference.optional(),
+    linkedWorkItemPromptTemplate: z.string().nullable().optional()
   })
 })
 

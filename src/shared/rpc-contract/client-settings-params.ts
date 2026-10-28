@@ -107,6 +107,7 @@ export const SettingsUpdate = z
       .transform((value) => normalizeTuiAgentEnvRecord(value))
       .optional(),
     defaultTaskSource: TaskProviderParam.optional(),
+    linkedWorkItemPromptTemplate: z.string().optional(),
     visibleTaskProviders: z.array(TaskProviderParam).optional(),
     defaultTaskViewPreset: z
       .enum(['issues', 'my-issues', 'prs', 'my-prs', 'review', 'all'])

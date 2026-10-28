@@ -9,6 +9,7 @@ import {
 } from '../../shared/tui-agent-launch-defaults'
 import { agentLaunchSettingsMutationUpdates } from '../../shared/agent-launch-settings'
 import { AgentLaunchSettingsMutation } from '../../shared/rpc-contract/agent-launch-settings-params'
+import { SettingsUpdate } from '../../shared/rpc-contract/client-settings-params'
 import { MOBILE_RPC_METHOD_ALLOWLIST } from './runtime-rpc/runtime-rpc-mobile-method-allowlist'
 import type { RuntimeStore } from './runtime-store-contract'
 
@@ -35,6 +36,15 @@ function fixture() {
 }
 
 describe('execution-host agent launch settings', () => {
+  it('projects and updates the host global task prompt for paired clients', async () => {
+    const { controller, host } = fixture()
+    host.linkedWorkItemPromptTemplate = '{url} /host-engineer'
+    expect(controller.get().linkedWorkItemPromptTemplate).toBe('{url} /host-engineer')
+    const updates = SettingsUpdate.parse({ linkedWorkItemPromptTemplate: '{url} /updated' })
+    expect((await controller.update(updates)).linkedWorkItemPromptTemplate).toBe('{url} /updated')
+    expect(SettingsUpdate.safeParse({ linkedWorkItemPromptTemplate: 12 }).success).toBe(false)
+  })
+
   it('presents an existing retired None default as Blank Terminal to every client', () => {
     const { controller, host } = fixture()
     host.defaultTuiAgent = 'blank'

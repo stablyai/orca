@@ -1,3 +1,4 @@
+import { resolveMobileLinkedWorkItemPromptTemplate } from '../tasks/linked-work-item-prompt-template'
 import { settingsRead } from '../transport/settings-read-operations'
 import { useRef, useState, type Dispatch, type SetStateAction } from 'react'
 import type { PersistedTrustedOrcaHooks } from '../../../src/shared/orca-yaml-hook-types'
@@ -170,6 +171,22 @@ export function useNewWorkspaceCreateSubmit(args: {
             agent: { choice: normalizeWorkspaceAgent(args.selectedAgent.id) ?? 'blank' },
             workspaceName: trimmedName || undefined,
             note: trimmedNote,
+            ...(selection.kind === 'work-item' && args.selectedAgent.id !== '__blank__'
+              ? {
+                  linkedWorkItemPromptTemplate: await resolveMobileLinkedWorkItemPromptTemplate(
+                    client,
+                    {
+                      ...selectedRepo,
+                      id:
+                        (selection.item.provider === 'github' ||
+                        selection.item.provider === 'gitlab'
+                          ? selection.item.repoId
+                          : undefined) ?? selectedRepo.id
+                    },
+                    latestRuntimeSettings
+                  )
+                }
+              : {}),
             nameIsAutoManaged: args.composer.isNameAutoManaged,
             worktreeCreateIdempotency: args.getWorktreeCreateCutoverSupport(),
             agentLaunchSupported: args.getAgentLaunchSupport()

@@ -38,6 +38,17 @@ Settings are grouped into panes. Everything here is searchable with `Cmd-,` then
 - Auto-Rename Branch From Work — rename Orca-generated creature branches after an agent starts work.
 - **GitHub API Budget** — remaining REST (core), Search, and GraphQL quota from the local `gh` CLI. Useful when PR checks or Tasks stop refreshing; see [Troubleshooting GitHub errors](/docs/github-errors) if the numbers look fine but GitHub still rate-limits live calls.
 
+## Task Sources
+
+- Connect task providers and choose which appear in Tasks.
+- **Task start prompt** — customize the initial draft when creating a workspace from a Jira, Linear, GitHub, or GitLab task. Use `{{url}}` for the task URL; fixed text and multiple lines are supported. For example:
+
+  ```text
+  {{url}} /jira-engineer
+  ```
+
+  Set a global template here, or override it under the project's **Task start prompt** setting. Project overrides apply across that project's host setups. Folder groups use the global template. A blank project template inherits the global setting; a blank global template preserves Orca's default draft. **Use global prompt** and **Reset to default** clear the respective template. Templates prepare a draft for you to review and send; they do not automatically invoke a skill or send a message.
+
 ## Terminal
 
 - Font, theme, cursor style, padding.

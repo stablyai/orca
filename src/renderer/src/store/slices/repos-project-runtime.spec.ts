@@ -72,6 +72,34 @@ export function registerReposProjectRuntimeTests(): void {
   }
 
   describe('repo slice project runtime updates', () => {
+    it('rejects unapplied templates from older hosts and accepts an explicit reset', async () => {
+      const project: Project = {
+        id: 'project-1',
+        displayName: 'Project',
+        badgeColor: '#000',
+        sourceRepoIds: ['local-repo'],
+        createdAt: 1,
+        updatedAt: 1,
+        linkedWorkItemPromptTemplate: '{url} /old'
+      }
+      const { linkedWorkItemPromptTemplate: _template, ...withoutTemplate } = project
+      projectsUpdate.mockResolvedValue(withoutTemplate)
+      const store = createTestStore()
+      store.setState({ projects: [project] })
+      expect(
+        await store
+          .getState()
+          .updateProject(project.id, { linkedWorkItemPromptTemplate: '{url} /new' }, 'local')
+      ).toBe(false)
+      expect(store.getState().projects[0]?.linkedWorkItemPromptTemplate).toBe('{url} /old')
+      expect(
+        await store
+          .getState()
+          .updateProject(project.id, { linkedWorkItemPromptTemplate: null }, 'local')
+      ).toBe(true)
+      expect(store.getState().projects[0]?.linkedWorkItemPromptTemplate).toBeUndefined()
+    })
+
     it('clears local runtime-scoped detection state when project runtime changes', async () => {
       const project: Project = {
         id: 'project-1',
