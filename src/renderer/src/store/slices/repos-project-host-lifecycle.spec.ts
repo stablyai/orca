@@ -106,9 +106,14 @@ export function registerReposProjectHostLifecycleTests(): void {
       })
     })
 
-    it.each([true, false])(
-      'preserves a canonical project default when target support is %s',
-      async (supported) => {
+    it.each([
+      { supported: true, defaultTuiAgent: 'codex' as const },
+      { supported: false, defaultTuiAgent: 'codex' as const },
+      { supported: true, defaultTuiAgent: null },
+      { supported: false, defaultTuiAgent: null }
+    ])(
+      'preserves a canonical project default $defaultTuiAgent when target support is $supported',
+      async ({ supported, defaultTuiAgent }) => {
         const repo: Repo = {
           ...runtimeRepo,
           id: 'local-repo',
@@ -119,7 +124,7 @@ export function registerReposProjectHostLifecycleTests(): void {
         const sourceProject = {
           ...project,
           id: 'repo:local-repo',
-          defaultTuiAgent: 'codex' as const
+          defaultTuiAgent
         }
         const store = createTestStore()
         store.setState({
@@ -171,11 +176,11 @@ export function registerReposProjectHostLifecycleTests(): void {
           .getState()
           .createProjectHostSetup({ projectId: canonicalId, hostId: 'runtime:env-1' })
         if (supported) {
-          expect(result?.project.defaultTuiAgent).toBe('codex')
+          expect(result?.project.defaultTuiAgent).toBe(defaultTuiAgent)
           expect(runtimeEnvironmentCall).toHaveBeenCalledWith(
             expect.objectContaining({
               method: 'projectHostSetup.create',
-              params: { projectId: canonicalId, hostId: 'runtime:env-1', defaultTuiAgent: 'codex' }
+              params: { projectId: canonicalId, hostId: 'runtime:env-1', defaultTuiAgent }
             })
           )
         } else {
@@ -219,21 +224,67 @@ export function registerReposProjectHostLifecycleTests(): void {
       expect(runtimeEnvironmentCall).toHaveBeenCalledTimes(1)
     })
 
-    it('does not adopt a setup when the host omits the requested default in its response', async () => {
-      const store = createTestStore()
-      store.setState({ projects: [{ ...project, defaultTuiAgent: 'codex' }] })
-      runtimeEnvironmentCall.mockResolvedValue({
-        id: 'create',
-        ok: true,
-        result: { result: { project, setup: runtimeSetup } }
-      })
+    it.each(['create', 'existing-folder'] as const)(
+      'sends and confirms an explicit inherited default for %s setups',
+      async (method) => {
+        const sourceProject = { ...project, defaultTuiAgent: null }
+        const store = createTestStore()
+        store.setState({ projects: [sourceProject] })
+        let persistedProject: Project = { ...project, defaultTuiAgent: 'claude' }
+        runtimeEnvironmentCall.mockImplementation(async (args: RuntimeEnvironmentCallRequest) => {
+          const params = args.params
+          if (
+            typeof params === 'object' &&
+            params !== null &&
+            'defaultTuiAgent' in params &&
+            params.defaultTuiAgent === null
+          ) {
+            persistedProject = { ...persistedProject, defaultTuiAgent: null }
+          }
+          return {
+            id: 'setup',
+            ok: true,
+            result: {
+              result: { project: persistedProject, setup: runtimeSetup, repo: runtimeRepo }
+            }
+          }
+        })
+        const result =
+          method === 'create'
+            ? await store
+                .getState()
+                .createProjectHostSetup({ projectId: project.id, hostId: 'runtime:env-1' })
+            : await store.getState().setupProjectExistingFolder({
+                projectId: project.id,
+                hostId: 'runtime:env-1',
+                path: runtimeRepo.path,
+                kind: 'git'
+              })
+        expect(result?.project.defaultTuiAgent).toBeNull()
+        expect(store.getState().projects[0]?.defaultTuiAgent).toBeNull()
+      }
+    )
 
-      await expect(
-        store.getState().createProjectHostSetup({ projectId: project.id, hostId: 'runtime:env-1' })
-      ).resolves.toBeNull()
-      expect(store.getState().projectHostSetups).toEqual([])
-      expect(runtimeEnvironmentCall).toHaveBeenCalledTimes(1)
-    })
+    it.each(['codex', null] as const)(
+      'does not adopt a setup when the host omits requested default %s',
+      async (defaultTuiAgent) => {
+        const store = createTestStore()
+        store.setState({ projects: [{ ...project, defaultTuiAgent }] })
+        runtimeEnvironmentCall.mockResolvedValue({
+          id: 'create',
+          ok: true,
+          result: { result: { project, setup: runtimeSetup } }
+        })
+
+        await expect(
+          store
+            .getState()
+            .createProjectHostSetup({ projectId: project.id, hostId: 'runtime:env-1' })
+        ).resolves.toBeNull()
+        expect(store.getState().projectHostSetups).toEqual([])
+        expect(runtimeEnvironmentCall).toHaveBeenCalledTimes(1)
+      }
+    )
 
     it('does not retry a timed-out setup create request with a project default', async () => {
       const store = createTestStore()

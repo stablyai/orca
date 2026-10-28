@@ -16,7 +16,7 @@ export async function assertProjectDefaultSetupSupport(
   target: RuntimeClientTarget,
   defaultTuiAgent: Project['defaultTuiAgent']
 ): Promise<void> {
-  if (defaultTuiAgent != null && target.kind === 'environment') {
+  if (defaultTuiAgent !== undefined && target.kind === 'environment') {
     await assertRuntimeEnvironmentCapability(
       target.environmentId,
       PROJECT_DEFAULT_AGENT_RUNTIME_CAPABILITY,
@@ -30,7 +30,7 @@ export function confirmProjectDefaultOnSetupHost<T extends { project: Project }>
   result: T,
   defaultTuiAgent: Project['defaultTuiAgent']
 ): T {
-  if (defaultTuiAgent != null && result.project.defaultTuiAgent !== defaultTuiAgent) {
+  if (defaultTuiAgent !== undefined && result.project.defaultTuiAgent !== defaultTuiAgent) {
     throw new Error(
       'Project setup may have been created, but the target host did not confirm its default agent. Refresh projects before retrying.'
     )

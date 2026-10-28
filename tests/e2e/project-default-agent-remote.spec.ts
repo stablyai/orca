@@ -110,6 +110,48 @@ test('a paired client starts the target project default on its server and refuse
       updates: { defaultTuiAgent: 'codex' }
     })
 
+    await host.client.call('settings.update', { defaultTuiAgent: 'codex' })
+    await host.client.call('project.update', {
+      projectId: project.id,
+      updates: { defaultTuiAgent: null }
+    })
+    await client.page.evaluate(
+      async ({ repoId, projectId, hostId }) => {
+        const store = window.__store
+        if (!store) {
+          throw new Error('The paired client store is unavailable')
+        }
+        await store.getState().fetchReposForAllHosts()
+        store.setState((state) => ({
+          settings: state.settings ? { ...state.settings, defaultTuiAgent: 'claude' } : null
+        }))
+        store.getState().openModal('new-workspace-composer', {
+          prefilledName: 'inherited-default-preview',
+          initialRepoId: repoId,
+          initialWorkspaceTarget: { projectId, hostId }
+        })
+      },
+      { repoId: repo.id, projectId: project.id, hostId: `runtime:${client.environmentId}` as const }
+    )
+    const composer = client.page.getByRole('dialog', { name: 'Create worktree', exact: true })
+    await expect(composer).toBeVisible()
+    await expect(
+      composer
+        .locator('[data-contextual-tour-target="workspace-creation-agent"]')
+        .getByRole('combobox')
+    ).toContainText('Codex')
+    await expect(
+      composer.getByRole('button', { name: 'Create worktree', exact: true })
+    ).toBeEnabled()
+    await composer.screenshot({ path: testInfo.outputPath('inherited-server-default.png') })
+    await client.page.keyboard.press('Escape')
+    await expect(composer).not.toBeVisible()
+    await host.client.call('settings.update', { defaultTuiAgent: 'claude' })
+    await host.client.call('project.update', {
+      projectId: project.id,
+      updates: { defaultTuiAgent: 'codex' }
+    })
+
     const cliArgs = (name: string) => [
       'worktree',
       'create',

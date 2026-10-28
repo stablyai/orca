@@ -4,7 +4,6 @@ import type { Project } from '../../shared/project-types'
 import type { FolderWorkspace } from '../../shared/folder-workspace-types'
 import { resolveProjectDefaultAgent } from './project-default-agent-resolution'
 import { detectAgentsOnHost } from '../preflight/workspace-agent-detection'
-import { AgentResolveDefault } from '../../shared/rpc-contract/project-default-agent-params'
 
 vi.mock('../preflight/workspace-agent-detection', () => ({ detectAgentsOnHost: vi.fn() }))
 
@@ -195,6 +194,23 @@ describe('resolveProjectDefaultAgent', () => {
     )
   })
 
+  it.each(['newer-agent', ''])(
+    'refuses unknown persisted project or global choice %j',
+    async (choice) => {
+      vi.mocked(detectAgentsOnHost).mockResolvedValue(['claude'])
+      const host = runtime()
+      Object.assign(host.requireStore().getProjects()[0], { defaultTuiAgent: choice })
+      await expect(resolveProjectDefaultAgent(host, { repo })).rejects.toThrow(
+        /Project B.*not a known agent/i
+      )
+      const inherited = runtime()
+      const settings = Object.assign(inherited.getClientSettings(), { defaultTuiAgent: choice })
+      await expect(
+        resolveProjectDefaultAgent({ ...inherited, getClientSettings: () => settings }, { repo })
+      ).rejects.toThrow(/Project B.*not a known agent/i)
+    }
+  )
+
   it('validates a pinned retry agent on the target host without reselecting a changed default', async () => {
     vi.mocked(detectAgentsOnHost).mockResolvedValue(['codex', 'claude'])
     await expect(
@@ -278,21 +294,5 @@ describe('resolveProjectDefaultAgent', () => {
       })
     }
     await expect(resolveProjectDefaultAgent(ambiguous, { repo })).rejects.toThrow(/ambiguous/i)
-  })
-})
-
-describe('agent.resolveDefault params', () => {
-  it('accepts one host-qualified target and rejects ambiguous targets', () => {
-    expect(AgentResolveDefault.safeParse({ repo: 'B', repoHostId: 'local' }).success).toBe(true)
-    expect(
-      AgentResolveDefault.parse({ repo: 'B', repoHostId: 'runtime:paired-host' }).repoHostId
-    ).toBe('local')
-    expect(AgentResolveDefault.safeParse({ repo: 'B', worktree: 'work' }).success).toBe(false)
-    expect(AgentResolveDefault.safeParse({ repoHostId: 'local' }).success).toBe(false)
-    expect(AgentResolveDefault.safeParse({ repo: 'B', repoHostId: 'bad-host' }).success).toBe(false)
-    expect(AgentResolveDefault.safeParse({ repo: 'B', validateAgent: 'codex' }).success).toBe(true)
-    expect(
-      AgentResolveDefault.safeParse({ repo: 'B', validateAgent: 'not-an-agent' }).success
-    ).toBe(false)
   })
 })

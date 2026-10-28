@@ -263,7 +263,9 @@ describe('orca cli worktree awareness', () => {
     )
     expect(process.exitCode).toBe(1)
     process.exitCode = priorExitCode
-    expect(JSON.parse(String(logSpy.mock.calls[0]?.[0])).error.message).toContain('Blank Terminal')
+    const message = JSON.parse(String(logSpy.mock.calls[0]?.[0])).error.message
+    expect(message).toContain('Blank Terminal')
+    expect(message).toContain('create the workspace without --agent')
     expect(
       callMock.mock.calls.some(
         ([method]) => method === 'worktree.create' || method === 'agent.launchReplay'

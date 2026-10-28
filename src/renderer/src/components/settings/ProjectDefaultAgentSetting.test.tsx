@@ -163,4 +163,60 @@ describe('ProjectDefaultAgentSetting', () => {
     })
     expect(toast.success).toHaveBeenCalled()
   })
+
+  it('retries a partial save after an acknowledged host already displays the requested value', async () => {
+    const updateProject = vi
+      .fn()
+      .mockRejectedValueOnce(new Error('Saved on some hosts but not others. Retry the setting.'))
+      .mockResolvedValueOnce(true)
+    const render = (value: Project) =>
+      root.render(
+        <ProjectDefaultAgentSetting
+          project={value}
+          globalDefault={null}
+          updateProject={updateProject}
+        />
+      )
+    act(() => render(project))
+    await act(async () => {
+      const select = selectElement()
+      select.value = 'codex'
+      select.dispatchEvent(new Event('change', { bubbles: true }))
+    })
+    act(() => render({ ...project, defaultTuiAgent: 'codex' }))
+    expect(selectElement().value).toBe('codex')
+    expect(toast.success).not.toHaveBeenCalled()
+    const retry = container.querySelector('button')
+    if (!retry) {
+      throw new Error('A partial save must offer a way to retry the same value')
+    }
+    await act(async () => retry.click())
+    expect(updateProject).toHaveBeenCalledTimes(2)
+    expect(updateProject).toHaveBeenLastCalledWith(project.id, { defaultTuiAgent: 'codex' })
+    expect(container.querySelector('[role="alert"]')).toBeNull()
+    expect(toast.success).toHaveBeenCalledTimes(1)
+  })
+
+  it('does not offer an old project save for retry after changing projects', async () => {
+    const updateProject = vi.fn().mockRejectedValue(new Error('Partial save'))
+    const render = (value: Project) =>
+      root.render(
+        <ProjectDefaultAgentSetting
+          project={value}
+          globalDefault={null}
+          updateProject={updateProject}
+        />
+      )
+    act(() => render(project))
+    await act(async () => {
+      const select = selectElement()
+      select.value = 'codex'
+      select.dispatchEvent(new Event('change', { bubbles: true }))
+    })
+    expect(container.querySelector('button')).not.toBeNull()
+    act(() => render({ ...project, id: 'other-project' }))
+    expect(container.querySelector('[role="alert"]')).toBeNull()
+    expect(container.querySelector('button')).toBeNull()
+    expect(updateProject).toHaveBeenCalledTimes(1)
+  })
 })

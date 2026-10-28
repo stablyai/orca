@@ -57,7 +57,7 @@ export function createProjectHostSetupActions(
         const setupArgs = {
           ...args,
           ...(projectProviderIdentity ? { projectProviderIdentity } : {}),
-          ...(defaultTuiAgent != null ? { defaultTuiAgent } : {})
+          ...(defaultTuiAgent !== undefined ? { defaultTuiAgent } : {})
         }
         const created =
           target.kind === 'local'
@@ -122,7 +122,7 @@ export function createProjectHostSetupActions(
         await assertProjectDefaultSetupSupport(target, defaultTuiAgent)
         const setupArgs = {
           ...args,
-          ...(defaultTuiAgent != null ? { defaultTuiAgent } : {})
+          ...(defaultTuiAgent !== undefined ? { defaultTuiAgent } : {})
         }
         const created =
           target.kind === 'local'

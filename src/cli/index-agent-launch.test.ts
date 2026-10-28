@@ -223,6 +223,8 @@ describe('orca cli agent launch', () => {
       '--json'
     ])
     expect(output).toContain('Blank Terminal')
+    expect(output).toContain('update the project default agent')
+    expect(output).not.toContain('create the workspace without --agent')
     expect(launchCalls()).toEqual([])
   })
 
@@ -242,6 +244,8 @@ describe('orca cli agent launch', () => {
       '--json'
     ])
     expect(output).toContain('No enabled agent is available')
+    expect(output).toContain('Install an agent')
+    expect(output).not.toContain('create the workspace without --agent')
     expect(output).toContain('B')
     expect(launchCalls()).toEqual([])
   })

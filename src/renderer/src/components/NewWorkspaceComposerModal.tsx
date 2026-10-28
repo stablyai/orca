@@ -39,6 +39,7 @@ import {
   projectWorkspaceDefault
 } from '@/lib/quick-workspace-project-default'
 import { resolveDesktopWorkspaceDefaultAgent } from '@/lib/desktop-workspace-default-agent'
+import { useWorkspaceDefaultAgent } from '@/hooks/use-workspace-default-agent'
 
 // Keep Add Project’s clone/SSH machinery outside the composer entry render, matching App loading.
 const HostedAddRepoDialog = lazyWithRetry(() => import('@/components/sidebar/AddRepoDialog'), {
@@ -147,10 +148,8 @@ function QuickTabBody({
   const [quickAgentOverride, setQuickAgentOverride] = useState<TuiAgent | null | undefined>(
     undefined
   )
-  const [hostDefault, setHostDefault] = useState<{
-    target: string
-    agent: TuiAgent | null
-  } | null>(null)
+  const creationInFlightRef = useRef(false)
+  const [creationInFlight, setCreationInFlight] = useState(false)
   const selectedProjectOption = cardProps.projectOptions.find(
     (option) => option.id === cardProps.selectedProjectId
   )
@@ -166,7 +165,11 @@ function QuickTabBody({
   const defaultTargetRepoId = isFolderWorkspaceTarget
     ? folderDefaultTarget?.repoId
     : cardProps.repoId
-  const targetKey = `${defaultTargetRepoId}\0${cardProps.selectedRepoExecutionHostId}`
+  const { hostDefaultAgent, defaultError, recordAgent, defaultPending } = useWorkspaceDefaultAgent(
+    defaultTargetRepoId,
+    cardProps.selectedRepoExecutionHostId,
+    quickAgentOverride === undefined
+  )
   const launchWorkspace =
     cardProps.agentRows?.target.workspace ?? composerLaunchWorkspace(cardProps)
   const offeredAgentIds = useAgentsOfferedForLaunch(launchWorkspace, cardProps.detectedAgentIds)
@@ -174,15 +177,12 @@ function QuickTabBody({
   const choicePending = (agent: TuiAgent): boolean =>
     agentChoicePending(useAppStore.getState(), agent, launchWorkspace, detected)
   const configuredDefault =
-    hostDefault?.target === targetKey
-      ? hostDefault.agent === null
-        ? 'blank'
-        : hostDefault.agent
-      : projectWorkspaceDefault(
-          projects,
-          folderDefaultTarget?.projectId ?? cardProps.selectedRepoProjectId,
-          settings?.defaultTuiAgent
-        )
+    hostDefaultAgent ??
+    projectWorkspaceDefault(
+      projects,
+      folderDefaultTarget?.projectId ?? cardProps.selectedRepoProjectId,
+      settings?.defaultTuiAgent
+    )
   const preferredQuickAgent =
     configuredDefault && configuredDefault !== 'blank'
       ? configuredDefault
@@ -225,7 +225,8 @@ function QuickTabBody({
     cardProps.agentRows?.detectionTarget
   )
   const launchSelection = observation.selectionFor(quickAgent, quickAgentSurface)
-  const createDisabled = formDisabled || !launchSelection.ready
+  const createDisabled =
+    formDisabled || creationInFlight || defaultPending || !launchSelection.ready
 
   const handleQuickAgentChange = useCallback(
     (agent: TuiAgent | null, surface?: AgentLaunchSurface) => {
@@ -242,54 +243,61 @@ function QuickTabBody({
   }, [])
 
   const handleCreate = useCallback(async (): Promise<void> => {
-    if (createDisabled) {
+    if (createDisabled || creationInFlightRef.current) {
       return
     }
-    if (
-      quickAgentOverride === undefined &&
-      quickAgent &&
-      isFolderWorkspaceTarget &&
-      !folderDefaultTarget
-    ) {
-      toast.error(
-        translate(
-          'auto.components.NewWorkspaceComposerModal.folderDefaultAmbiguous',
-          'This folder workspace has no single target project. Choose an explicit agent.'
+    creationInFlightRef.current = true
+    setCreationInFlight(true)
+    try {
+      if (
+        quickAgentOverride === undefined &&
+        quickAgent &&
+        isFolderWorkspaceTarget &&
+        !folderDefaultTarget
+      ) {
+        toast.error(
+          translate(
+            'auto.components.NewWorkspaceComposerModal.folderDefaultAmbiguous',
+            'This folder workspace has no single target project. Choose an explicit agent.'
+          )
         )
-      )
-      return
-    }
-    let agent = quickAgent
-    let selection = launchSelection
-    if (quickAgentOverride === undefined && defaultTargetRepoId) {
-      try {
-        const resolved = await resolveDesktopWorkspaceDefaultAgent({
-          repo: defaultTargetRepoId,
-          hostId: cardProps.selectedRepoExecutionHostId
-        })
-        agent = resolved.agent
-        setHostDefault({ target: targetKey, agent })
-        if (agent !== quickAgent) {
-          selection = observation.selectionFor(agent, undefined)
-          if (!selection.ready) {
-            toast.error(
-              translate(
-                'auto.components.NewWorkspaceComposerModal.targetDefaultChanged',
-                'The target project default changed. Check its agent and retry.'
-              )
-            )
-            return
-          }
-        }
-      } catch (error) {
-        toast.error(error instanceof Error ? error.message : String(error))
         return
       }
+      let agent = quickAgent
+      let selection = launchSelection
+      if (quickAgentOverride === undefined && defaultTargetRepoId) {
+        try {
+          const resolved = await resolveDesktopWorkspaceDefaultAgent({
+            repo: defaultTargetRepoId,
+            hostId: cardProps.selectedRepoExecutionHostId
+          })
+          agent = resolved.agent
+          recordAgent(agent)
+          if (agent !== quickAgent) {
+            selection = observation.selectionFor(agent, undefined)
+            if (!selection.ready) {
+              toast.error(
+                translate(
+                  'auto.components.NewWorkspaceComposerModal.targetDefaultChanged',
+                  'The target project default changed. Check its agent and retry.'
+                )
+              )
+              return
+            }
+          }
+        } catch (error) {
+          toast.error(error instanceof Error ? error.message : String(error))
+          return
+        }
+      }
+      await submitQuick(agent, {
+        setupOnly: quickSetupOnly,
+        launchChoice: selection.choice
+      })
+    } finally {
+      creationInFlightRef.current = false
+      setCreationInFlight(false)
     }
-    await submitQuick(agent, {
-      setupOnly: quickSetupOnly,
-      launchChoice: selection.choice
-    })
   }, [
     createDisabled,
     quickAgent,
@@ -298,7 +306,7 @@ function QuickTabBody({
     isFolderWorkspaceTarget,
     folderDefaultTarget,
     cardProps.selectedRepoExecutionHostId,
-    targetKey,
+    recordAgent,
     observation,
     launchSelection,
     quickSetupOnly,
@@ -360,6 +368,18 @@ function QuickTabBody({
           )}
         </DialogDescription>
       </DialogHeader>
+      {quickAgentOverride === undefined && defaultPending ? (
+        <p className="text-xs text-muted-foreground" aria-live="polite">
+          {translate(
+            'auto.components.NewWorkspaceComposerModal.resolvingTargetDefault',
+            'Resolving target project default…'
+          )}
+        </p>
+      ) : quickAgentOverride === undefined && defaultError ? (
+        <p role="alert" className="text-xs text-destructive">
+          {defaultError}
+        </p>
+      ) : null}
       <NewWorkspaceComposerCard
         contextualTourSource={modalData.contextualTourSource}
         containerClassName="px-2"
@@ -368,7 +388,6 @@ function QuickTabBody({
         onComposerNodeChange={onComposerNodeChange}
         nameInputRef={nameInputRef}
         quickAgent={quickAgent}
-        effectiveDefaultAgent={configuredDefault}
         onQuickAgentChange={handleQuickAgentChange}
         quickSetupOnly={quickSetupOnly}
         onQuickSetupOnlySelect={handleQuickSetupOnlySelect}

@@ -108,14 +108,14 @@ describe('RuntimeProjectHostSetupController host routing', () => {
   it('refuses to clone onto an SSH host, because nothing here clones remotely', async () => {
     const { controller, cloneRepo, projectId } = makeController()
 
-    await expect(
-      controller.setupClone({
-        projectId,
-        hostId: `ssh:${TARGET_ID}`,
-        url: 'https://example.com/app.git',
-        destination: REPO_PATH
-      })
-    ).rejects.toThrow(/Cloning onto an SSH host is not supported/)
+    const setup = controller.setupClone({
+      projectId,
+      hostId: `ssh:${TARGET_ID}`,
+      url: 'https://example.com/app.git',
+      destination: REPO_PATH
+    })
+    await expect(setup).rejects.toThrow(/Cloning onto an SSH host is not supported/)
+    await expect(setup).rejects.toThrow(SERVER_SSH_PROJECT_ADD_UNAVAILABLE_MESSAGE)
     expect(cloneRepo).not.toHaveBeenCalled()
   })
 })

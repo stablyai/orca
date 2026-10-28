@@ -166,9 +166,15 @@ export async function resolveProjectDefaultAgent(
     return { agent: null, source, ...identity }
   }
 
+  if (choice != null && !isTuiAgent(choice)) {
+    throw new Error(
+      `Default agent for ${project?.displayName ?? 'this host'}: ${String(choice)} is not a known agent on the execution host. Choose an explicit agent or update the default.`
+    )
+  }
+
   const installed = (await detectAgentsOnHost(detectionHost)).filter(isTuiAgent)
   const enabled = new Set(settings.disabledTuiAgents ?? [])
-  if (choice && isTuiAgent(choice)) {
+  if (choice != null) {
     if (!installed.includes(choice) || enabled.has(choice)) {
       throw new Error(
         `${validateAgent ? 'Retried agent' : 'Default agent'} for ${project?.displayName ?? 'this host'}: ${choice} is unavailable or disabled on the execution host. Choose an explicit agent or update the default.`

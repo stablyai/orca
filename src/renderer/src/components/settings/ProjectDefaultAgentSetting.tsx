@@ -7,6 +7,7 @@ import { isTuiAgent } from '../../../../shared/tui-agent-config'
 import { getAgentCatalog, getAgentLabel } from '@/lib/agent-catalog'
 import { translate } from '@/i18n/i18n'
 import { Label } from '../ui/label'
+import { Button } from '../ui/button'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select'
 import { readHostAgentLaunchSettings } from './agent-launch-settings-transport'
 
@@ -24,7 +25,12 @@ export function ProjectDefaultAgentSetting({
   updateProject
 }: ProjectDefaultAgentSettingProps): React.JSX.Element {
   const [saving, setSaving] = useState(false)
-  const [error, setError] = useState<string | null>(null)
+  const [failure, setFailure] = useState<{
+    projectId: string
+    value: string
+    message: string
+  } | null>(null)
+  const error = failure?.projectId === project.id ? failure : null
   const [remoteGlobal, setRemoteGlobal] = useState<
     | { status: 'loading' | 'unavailable' }
     | { status: 'ready'; value: GlobalSettings['defaultTuiAgent'] }
@@ -83,7 +89,7 @@ export function ProjectDefaultAgentSetting({
       return
     }
     setSaving(true)
-    setError(null)
+    setFailure(null)
     try {
       const result = await updateProject(project.id, { defaultTuiAgent: next })
       if (result !== true) {
@@ -96,7 +102,11 @@ export function ProjectDefaultAgentSetting({
       }
       toast.success(translate('settings.projectDefaultAgent.saved', 'Project default agent saved'))
     } catch (caught) {
-      setError(caught instanceof Error ? caught.message : String(caught))
+      setFailure({
+        projectId: project.id,
+        value,
+        message: caught instanceof Error ? caught.message : String(caught)
+      })
     } finally {
       setSaving(false)
     }
@@ -140,9 +150,19 @@ export function ProjectDefaultAgentSetting({
             )}
       </p>
       {error ? (
-        <p role="alert" className="text-xs text-destructive">
-          {error}
-        </p>
+        <div className="space-y-2">
+          <p role="alert" className="text-xs text-destructive">
+            {error.message}
+          </p>
+          <Button
+            size="sm"
+            variant="outline"
+            disabled={saving}
+            onClick={() => void save(error.value)}
+          >
+            {translate('settings.projectDefaultAgent.retry', 'Retry save')}
+          </Button>
+        </div>
       ) : null}
     </div>
   )

@@ -78,11 +78,14 @@ export async function resolveCliDefaultAgent(
   }
   const resolved = result.result
   if (resolved.agent === null) {
+    const name = resolved.projectName ?? resolved.projectId ?? 'the target workspace'
+    const recovery =
+      'repo' in target ? 'create the workspace without --agent' : 'update the project default agent'
     throw new RuntimeClientError(
       'invalid_argument',
       resolved.source === 'automatic'
-        ? `No enabled agent is available on the execution host for ${resolved.projectName ?? resolved.projectId ?? 'the target workspace'}. Install an agent, choose an explicit --agent, or create the workspace without --agent.`
-        : `The effective default for ${resolved.projectName ?? resolved.projectId ?? 'the target workspace'} is Blank Terminal. Choose an explicit --agent or create the workspace without --agent.`
+        ? `No enabled agent is available on the execution host for ${name}. Install an agent, choose an explicit --agent, or ${recovery}.`
+        : `The effective default for ${name} is Blank Terminal. Choose an explicit --agent or ${recovery}.`
     )
   }
   return { ...resolved, agent: resolved.agent }

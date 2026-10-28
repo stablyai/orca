@@ -20,7 +20,10 @@ export async function resolveDesktopWorkspaceDefaultAgent(target: {
   if (!target.hostId) {
     throw new Error('The target project host is unresolved. Choose a host and retry.')
   }
-  const runtimeTarget = runtimeRpcTargetForAuthorityKey(target.hostId) ?? { kind: 'local' as const }
+  const runtimeTarget = runtimeRpcTargetForAuthorityKey(target.hostId)
+  if (!runtimeTarget) {
+    throw new Error('The target project host cannot be served by this runtime.')
+  }
   const supported =
     runtimeTarget.kind === 'local'
       ? (await ensureLocalRuntimeCapabilities())?.includes(

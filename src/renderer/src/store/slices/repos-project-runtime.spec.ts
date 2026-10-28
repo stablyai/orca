@@ -452,6 +452,75 @@ export function registerReposProjectRuntimeTests(): void {
       expect(store.getState().projects[0]?.defaultTuiAgent).toBe('codex')
     })
 
+    it('clears a saved project default when the host acknowledges an undefined update', async () => {
+      const project: Project = {
+        id: 'project-1',
+        displayName: 'Project',
+        badgeColor: '#000',
+        sourceRepoIds: ['local-repo', 'remote-repo'],
+        defaultTuiAgent: 'codex',
+        createdAt: 1,
+        updatedAt: 1
+      }
+      const clearedProject = { ...project, sourceRepoIds: ['local-repo'] }
+      delete clearedProject.defaultTuiAgent
+      projectsUpdate.mockResolvedValue(clearedProject)
+      const store = createTestStore()
+      store.setState({ projects: [project] })
+
+      await expect(
+        store.getState().updateProject(project.id, { defaultTuiAgent: undefined }, 'local')
+      ).resolves.toBe(true)
+      expect(store.getState().projects[0]).not.toHaveProperty('defaultTuiAgent')
+      expect(store.getState().projects[0]?.sourceRepoIds).toEqual(['local-repo', 'remote-repo'])
+    })
+
+    it.each(['local', 'ssh:remote'] as const)(
+      'preserves the %s caller when local and SSH setups share an endpoint',
+      async (hostId) => {
+        const repos: Repo[] = [
+          { ...localRepo, id: 'a', upstream: { owner: 'acme', repo: 'app' } },
+          {
+            ...localRepo,
+            id: 'b',
+            path: '/ssh',
+            executionHostId: 'ssh:remote',
+            upstream: { owner: 'acme', repo: 'app' }
+          }
+        ]
+        const projection = projectHostSetupProjectionFromRepos(repos)
+        const canonicalId = projection.projects[0]!.id
+        const localProject = { ...projection.projects[0]!, id: 'repo:a', sourceRepoIds: ['a'] }
+        const sshProject = { ...projection.projects[0]!, id: 'repo:b', sourceRepoIds: ['b'] }
+        const callerProject = hostId === 'local' ? localProject : sshProject
+        const updates = {
+          defaultTuiAgent: 'codex' as const,
+          localWindowsRuntimePreference: { kind: 'windows-host' as const }
+        }
+        const store = createTestStore()
+        store.setState({
+          repos,
+          projects: [localProject, sshProject],
+          projectHostSetups: projection.setups.map((setup) => ({
+            ...setup,
+            projectId: setup.repoId === 'a' ? localProject.id : sshProject.id
+          }))
+        })
+        projectsUpdate.mockResolvedValue({ ...callerProject, ...updates })
+
+        await expect(store.getState().updateProject(canonicalId, updates, hostId)).resolves.toBe(
+          true
+        )
+        expect(projectsUpdate).toHaveBeenCalledExactlyOnceWith({
+          projectId: callerProject.id,
+          updates
+        })
+        expect(store.getState().projects.find((row) => row.id === callerProject.id)).toMatchObject(
+          updates
+        )
+      }
+    )
+
     it('saves a project default on every known owner host before reporting success', async () => {
       const project: Project = {
         id: 'project-1',
@@ -535,7 +604,8 @@ export function registerReposProjectRuntimeTests(): void {
       const remoteProject: Project = {
         ...projection.projects[0]!,
         id: 'repo:b',
-        sourceRepoIds: ['b']
+        sourceRepoIds: ['b'],
+        localWindowsRuntimePreference: { kind: 'wsl', distro: 'Ubuntu' }
       }
       const store = createTestStore()
       store.setState({
@@ -546,7 +616,11 @@ export function registerReposProjectRuntimeTests(): void {
           projectId: setup.repoId === 'a' ? localProject.id : remoteProject.id
         }))
       })
-      projectsUpdate.mockResolvedValue({ ...localProject, defaultTuiAgent: 'codex' })
+      projectsUpdate.mockResolvedValue({
+        ...localProject,
+        defaultTuiAgent: 'codex',
+        localWindowsRuntimePreference: { kind: 'windows-host' }
+      })
       runtimeEnvironmentCall.mockResolvedValue({
         id: 'remote-update',
         ok: true,
@@ -554,11 +628,21 @@ export function registerReposProjectRuntimeTests(): void {
       })
 
       await expect(
-        store.getState().updateProject(canonicalId, { defaultTuiAgent: 'codex' }, 'local')
+        store.getState().updateProject(
+          canonicalId,
+          {
+            defaultTuiAgent: 'codex',
+            localWindowsRuntimePreference: { kind: 'windows-host' }
+          },
+          'local'
+        )
       ).resolves.toBe(true)
       expect(projectsUpdate).toHaveBeenCalledWith({
         projectId: localProject.id,
-        updates: { defaultTuiAgent: 'codex' }
+        updates: {
+          defaultTuiAgent: 'codex',
+          localWindowsRuntimePreference: { kind: 'windows-host' }
+        }
       })
       expect(runtimeEnvironmentCall).toHaveBeenCalledWith(
         expect.objectContaining({
@@ -567,6 +651,10 @@ export function registerReposProjectRuntimeTests(): void {
           params: { projectId: remoteProject.id, updates: { defaultTuiAgent: 'codex' } }
         })
       )
+      expect(store.getState().projects[1]?.localWindowsRuntimePreference).toEqual({
+        kind: 'wsl',
+        distro: 'Ubuntu'
+      })
       expect(store.getState().projects.map((project) => project.defaultTuiAgent)).toEqual([
         'codex',
         'codex'
@@ -628,56 +716,70 @@ export function registerReposProjectRuntimeTests(): void {
       expect(runtimeEnvironmentCall).not.toHaveBeenCalled()
     })
 
-    it('reports a partial cross-host save without updating the displayed value', async () => {
-      const project: Project = {
-        id: 'project-1',
-        displayName: 'Project',
-        badgeColor: '#000',
-        sourceRepoIds: ['local-repo', 'remote-repo'],
-        createdAt: 1,
-        updatedAt: 1
+    it('reconciles acknowledged rows while reporting a partial cross-host save', async () => {
+      const repos: Repo[] = [
+        { ...localRepo, id: 'a', upstream: { owner: 'acme', repo: 'app' } },
+        {
+          ...localRepo,
+          id: 'b',
+          path: '/remote',
+          executionHostId: 'runtime:env-1',
+          upstream: { owner: 'acme', repo: 'app' }
+        }
+      ]
+      const projection = projectHostSetupProjectionFromRepos(repos)
+      const canonicalId = projection.projects[0]!.id
+      const localProject: Project = {
+        ...projection.projects[0]!,
+        id: 'repo:a',
+        sourceRepoIds: ['a'],
+        defaultTuiAgent: 'claude'
+      }
+      const remoteProject: Project = {
+        ...projection.projects[0]!,
+        id: 'repo:b',
+        displayName: 'Remote project',
+        sourceRepoIds: ['b'],
+        defaultTuiAgent: 'blank'
       }
       const store = createTestStore()
       store.setState({
-        projects: [project],
-        projectHostSetups: [
-          {
-            id: 'local-setup',
-            projectId: project.id,
-            hostId: 'local',
-            repoId: 'local-repo',
-            path: '/local',
-            displayName: 'Local',
-            setupState: 'ready',
-            setupMethod: 'legacy-repo',
-            createdAt: 1,
-            updatedAt: 1
-          },
-          {
-            id: 'remote-setup',
-            projectId: project.id,
-            hostId: 'runtime:env-1',
-            repoId: 'remote-repo',
-            path: '/remote',
-            displayName: 'Remote',
-            setupState: 'ready',
-            setupMethod: 'imported-existing-folder',
-            createdAt: 1,
-            updatedAt: 1
-          }
-        ]
+        repos,
+        projects: [localProject, remoteProject],
+        projectHostSetups: projection.setups.map((setup) => ({
+          ...setup,
+          projectId: setup.repoId === 'a' ? localProject.id : remoteProject.id
+        }))
       })
-      projectsUpdate.mockResolvedValue({ ...project, defaultTuiAgent: 'codex' })
+      const savedProject = {
+        ...localProject,
+        defaultTuiAgent: 'codex' as const,
+        localWindowsRuntimePreference: { kind: 'windows-host' as const }
+      }
+      projectsUpdate.mockResolvedValue(savedProject)
       runtimeEnvironmentCall.mockRejectedValue(new Error('Remote disconnected'))
       const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {})
       try {
         await expect(
-          store.getState().updateProject(project.id, { defaultTuiAgent: 'codex' }, 'local')
+          store.getState().updateProject(
+            canonicalId,
+            {
+              defaultTuiAgent: 'codex',
+              localWindowsRuntimePreference: { kind: 'windows-host' }
+            },
+            'local'
+          )
         ).rejects.toThrow('some hosts but not others')
       } finally {
         consoleError.mockRestore()
       }
-      expect(store.getState().projects[0]?.defaultTuiAgent).toBeUndefined()
+      expect(store.getState().projects).toEqual([savedProject, remoteProject])
+      expect(runtimeEnvironmentCall).toHaveBeenCalledWith(
+        expect.objectContaining({
+          method: 'project.update',
+          params: { projectId: remoteProject.id, updates: { defaultTuiAgent: 'codex' } }
+        })
+      )
     })
   })
 

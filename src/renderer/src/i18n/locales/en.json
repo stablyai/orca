@@ -666,7 +666,8 @@
       "keywordAgent": "agent",
       "keywordDefault": "default agent",
       "keywordBlank": "blank terminal",
-      "keywordInherit": "inherit global"
+      "keywordInherit": "inherit global",
+      "retry": "Retry save"
     },
     "general": {
       "openInMenu": {
@@ -2238,7 +2239,8 @@
         "createWorktree": "Create worktree",
         "createWorkspace": "Create workspace",
         "targetDefaultChanged": "The target project default changed. Check its agent and retry.",
-        "folderDefaultAmbiguous": "This folder workspace has no single target project. Choose an explicit agent."
+        "folderDefaultAmbiguous": "This folder workspace has no single target project. Choose an explicit agent.",
+        "resolvingTargetDefault": "Resolving target project default…"
       },
       "PullRequestConfirmation": {
         "closeTitle": "Close PR #{{number}}?",

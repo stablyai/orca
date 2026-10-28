@@ -32,17 +32,18 @@ export function createProjectUpdateActions(
           updatingDefault && owners.length
             ? [...new Set(owners.map((setup) => setup.hostId))]
             : [hostId]
-        const targets = [
-          ...new Map(
-            hostIds.map((id) => {
-              const target = getProjectSetupRuntimeTarget(id)
-              return [
-                target.kind === 'local' ? 'local' : target.environmentId,
-                { id, target }
-              ] as const
-            })
-          ).values()
-        ]
+        const targetsByKey = new Map<
+          string,
+          { id: ExecutionHostId; target: ReturnType<typeof getProjectSetupRuntimeTarget> }
+        >()
+        for (const id of hostIds) {
+          const target = getProjectSetupRuntimeTarget(id)
+          const key = target.kind === 'local' ? 'local' : target.environmentId
+          if (!targetsByKey.has(key) || id === hostId) {
+            targetsByKey.set(key, { id, target })
+          }
+        }
+        const targets = [...targetsByKey.values()]
         if (updatingDefault) {
           for (const { target } of targets) {
             if (target.kind === 'environment') {
@@ -55,7 +56,6 @@ export function createProjectUpdateActions(
             }
           }
         }
-        const acknowledged = new Map<string, Project>()
         for (const { id, target } of targets.sort(
           (a, b) => Number(a.target.kind !== 'local') - Number(b.target.kind !== 'local')
         )) {
@@ -88,27 +88,21 @@ export function createProjectUpdateActions(
             )
           }
           completedHosts += 1
-          // Why: distinct hosts can advertise different endpoint project IDs for one canonical project.
-          acknowledged.set(targetProjectId, normalizeProjectRow(result))
+          const updated = normalizeProjectRow(result)
+          set((state) => ({
+            projects: state.projects.map((project) =>
+              project.id === targetProjectId
+                ? mergeUpdatedProjectCompatibilityProject(project, updated, targetUpdates)
+                : project
+            ),
+            folderWorkspacePathStatuses: {}
+          }))
+          if ('localWindowsRuntimePreference' in targetUpdates) {
+            get().clearLocalDetectedAgents()
+            notifyInstalledAgentSkillsChanged()
+          }
         }
-        if (acknowledged.size === 0) {
-          return false
-        }
-        const runtimePreferenceChanged = 'localWindowsRuntimePreference' in updates
-        set((state) => ({
-          projects: state.projects.map((project) => {
-            const updated = acknowledged.get(project.id)
-            return updated
-              ? mergeUpdatedProjectCompatibilityProject(project, updated, updates)
-              : project
-          }),
-          folderWorkspacePathStatuses: {}
-        }))
-        if (runtimePreferenceChanged) {
-          get().clearLocalDetectedAgents()
-          notifyInstalledAgentSkillsChanged()
-        }
-        return true
+        return completedHosts > 0
       } catch (err) {
         console.error('Failed to update project:', err)
         if (updatingDefault && completedHosts > 0) {
