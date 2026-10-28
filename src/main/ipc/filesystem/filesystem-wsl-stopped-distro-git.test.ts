@@ -89,6 +89,7 @@ describe('background Git for a stopped WSL distro', () => {
     ['git:status', { worktreePath: UNC_ROOT }],
     ['git:conflictOperation', { worktreePath: UNC_ROOT }],
     ['git:upstreamStatus', { worktreePath: UNC_ROOT }],
+    ['git:submoduleRepos', { worktreePath: UNC_ROOT }],
     ['git:branchCompare', { worktreePath: UNC_ROOT, baseRef: 'main' }]
   ])('%s refuses before resolving the path or running Git', async (channel, args) => {
     await expect(invoke(channel, args)).rejects.toBeInstanceOf(WslDistroStoppedError)

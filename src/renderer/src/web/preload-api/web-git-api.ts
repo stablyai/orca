@@ -41,6 +41,13 @@ export async function callAbortableRuntimeStatus<TResult>(
   }
 }
 
+// The runtime route cannot target a submodule yet; running on the parent repository would be wrong.
+function refuseSubmoduleAction(submodulePath: string | undefined): void {
+  if (submodulePath !== undefined) {
+    throw new Error('Submodule actions are not available on this host yet')
+  }
+}
+
 export function createGitApi(): NonNullable<Partial<PreloadApi>['git']> {
   return {
     status: async ({
@@ -152,7 +159,10 @@ export function createGitApi(): NonNullable<Partial<PreloadApi>['git']> {
         pushTarget
       })
     },
-    fetch: async ({ worktreePath, pushTarget }) => {
+    // Submodule repositories are served by this machine's main process only.
+    submoduleRepos: async () => [],
+    fetch: async ({ worktreePath, pushTarget, submodulePath }) => {
+      refuseSubmoduleAction(submodulePath)
       const worktree = await resolveRuntimeWorktreeByPath(worktreePath)
       await callRuntimeResult('git.fetch', {
         worktree: toRuntimeWorktreeSelector(worktree.id),
@@ -170,7 +180,8 @@ export function createGitApi(): NonNullable<Partial<PreloadApi>['git']> {
         60_000
       )
     },
-    push: async ({ worktreePath, publish, pushTarget }) => {
+    push: async ({ worktreePath, publish, pushTarget, submodulePath }) => {
+      refuseSubmoduleAction(submodulePath)
       const worktree = await resolveRuntimeWorktreeByPath(worktreePath)
       await callRuntimeResult('git.push', {
         worktree: toRuntimeWorktreeSelector(worktree.id),
@@ -178,7 +189,8 @@ export function createGitApi(): NonNullable<Partial<PreloadApi>['git']> {
         pushTarget
       })
     },
-    pull: async ({ worktreePath, pushTarget }) => {
+    pull: async ({ worktreePath, pushTarget, submodulePath }) => {
+      refuseSubmoduleAction(submodulePath)
       const worktree = await resolveRuntimeWorktreeByPath(worktreePath)
       await callRuntimeResult('git.pull', {
         worktree: toRuntimeWorktreeSelector(worktree.id),
