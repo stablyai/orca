@@ -12,6 +12,7 @@ import { managedOrcadSlot } from '../managed-server/lifecycle/orcad-managed-runt
 import { resolveOrcadRemoteContext } from '../managed-server/install/orcad-remote-context'
 import { decommissionRemoteOrcad } from '../managed-server/install/orcad-remote-decommission'
 import type { WslOrcadHostTarget } from './wsl-orcad-host-target'
+import { readWslHostPeerDesktops, type WslHostPeerDesktops } from './wsl-host-peer-desktops'
 
 const CENSUS_ATTEMPTS = 20
 const CENSUS_INTERVAL_MS = 250
@@ -20,6 +21,8 @@ const CENSUS_INTERVAL_MS = 250
 export type WslHostTerminalLeftover = { handle: string; worktreeId: string; reason: string }
 
 export type WslHostServerStopSteps = {
+  /** Which other desktops share this server; throws when it can't say. */
+  peerDesktops: () => Promise<WslHostPeerDesktops>
   /** Closes every terminal orcad runs; returns the ones that refused instead of stopping. */
   endTerminals: () => Promise<WslHostTerminalLeftover[]>
   census: () => Promise<OrcadTerminalCensus>
@@ -45,6 +48,27 @@ export async function stopWslHostServer(steps: WslHostServerStopSteps): Promise<
   const problems: string[] = []
   // Anything proven still running makes the stop `live`; only doubt leaves it `unverifiable`.
   let provenLive = false
+  // Another Orca using this server keeps it: only this desktop lets go (R39).
+  let peers: WslHostPeerDesktops
+  try {
+    peers = await steps.peerDesktops()
+  } catch (error) {
+    await steps.closeBridge()
+    return {
+      stopped: false,
+      verdict: 'unverifiable',
+      reason: `Orca couldn’t ask the WSL host whether another Orca on this computer still uses it: ${errorMessage(error)}`
+    }
+  }
+  if (peers.kind === 'shared') {
+    await steps.closeBridge()
+    return { stopped: true, keptForOtherDesktops: peers.names }
+  }
+  if (peers.kind === 'unsupported') {
+    console.warn(
+      '[wsl-hosts] This WSL host’s server predates the shared-host check; removing it ends its terminals for every Orca using it.'
+    )
+  }
   let leftovers: WslHostTerminalLeftover[] = []
   try {
     leftovers = await steps.endTerminals()
@@ -111,8 +135,10 @@ const RuntimeIdSchema = z.object({ runtimeId: z.string().min(1) })
 export function wslHostRuntimeStopSteps(
   access: WslHostRuntimeAccess,
   environmentId: string
-): Pick<WslHostServerStopSteps, 'endTerminals' | 'census' | 'servingRuntimeId'> {
+): Pick<WslHostServerStopSteps, 'peerDesktops' | 'endTerminals' | 'census' | 'servingRuntimeId'> {
   return {
+    peerDesktops: () =>
+      readWslHostPeerDesktops((method, params) => access.call(environmentId, method, params)),
     endTerminals: async () => {
       const list = TerminalHandlesSchema.parse(
         await access.call(environmentId, 'terminal.list', { limit: 1000 })

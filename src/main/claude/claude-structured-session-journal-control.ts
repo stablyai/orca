@@ -10,11 +10,11 @@ import type { ClaudeStreamJsonConnection } from './claude-stream-json-connection
 import type { ClaudeJournalTranslator } from './claude-journal-translator-contract'
 import { createClaudeJournalTranslator } from './claude-structured-journal-translation'
 import type { ClaudeGoalBackgroundWork } from './claude-background-task-tracker'
-import type { ClaudeInitProof } from './claude-structured-init-proof'
+import type { ClaudeInitProof } from './structured/claude-structured-init-proof'
 import type {
   ClaudeAcquisitionAttempt,
   ClaudeAcquireCallbacks
-} from './claude-structured-session-state'
+} from './structured/claude-structured-session-state'
 
 export function createClaudeSessionJournalTranslator(
   sink: StructuredAgentSessionEventSink | undefined,

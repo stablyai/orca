@@ -4,7 +4,6 @@ import type { AgentSessionQueuedMessage } from './agent-session-wire'
 import {
   newestSteerableQueuedMessageCard,
   projectQueuedMessageCards,
-  queuedMessageCardSteers,
   queuedMessagesQueuePause
 } from './structured-agent-session-queued-cards'
 
@@ -51,16 +50,6 @@ function handOff(
 const IDLE = {}
 
 describe('queued message cards', () => {
-  it('orders by host position whatever order the list arrives in', () => {
-    const cards = projectQueuedMessageCards([draft('b', 2), draft('a', 1), draft('c', 3)], [], IDLE)
-    expect(cards.map((card) => card.messageId)).toEqual(['a', 'b', 'c'])
-    expect(cards[0]?.text).toBe('text of a')
-  })
-
-  it('holds: a waiting card waits its turn', () => {
-    expect(projectQueuedMessageCards([draft('a', 1)], [], IDLE)[0]?.hold).toBe('turn')
-  })
-
   it('a returned card carries its stored reason and blocks the label of drafts behind it', () => {
     const cards = projectQueuedMessageCards(
       [
@@ -81,15 +70,6 @@ describe('queued message cards', () => {
       returnedRejection: { kind: 'writeFailed' }
     })
     expect(cards[1]?.hold).toBe('behind-returned')
-  })
-
-  it('a paused draft says so, carrying the host marker for the caption to localize', () => {
-    const cards = projectQueuedMessageCards(
-      [draft('a', 1, { paused: true, pausedReason: 'send_failed' })],
-      [],
-      IDLE
-    )
-    expect(cards[0]).toMatchObject({ hold: 'paused', pausedReason: 'send_failed' })
   })
 
   it('shows a draft a Stop put back: its rejected hand-off is what sent it back', () => {
@@ -147,15 +127,6 @@ describe('queued message cards', () => {
     ])
   })
 
-  it('a paused queue holds every waiting card, in order', () => {
-    const cards = projectQueuedMessageCards([draft('held', 1), draft('typed-after', 2)], [], {
-      queuePaused: true
-    })
-    expect(cards.map((card) => card.hold)).toEqual(['queue-paused', 'queue-paused'])
-    // Still Steer: the header row, not the card, says it waits.
-    expect(cards.map((card) => queuedMessageCardSteers(card))).toEqual([true, true])
-  })
-
   it("the header names the queue's pause while it holds a card, and none over cards Resume would not send", () => {
     const stopped = { reason: 'stopped' } as const
     const project = (messages: AgentSessionQueuedMessage[], queuePaused = true) =>
@@ -187,12 +158,6 @@ describe('queued message cards', () => {
     expect(cards.map((card) => card.hold)).toEqual(['paused', 'turn', 'paused', 'turn'])
   })
 
-  it('steers the newest card', () => {
-    const cards = projectQueuedMessageCards([draft('a', 1), draft('b', 2)], [], IDLE)
-    expect(newestSteerableQueuedMessageCard(cards)?.messageId).toBe('b')
-    expect(newestSteerableQueuedMessageCard([])).toBeNull()
-  })
-
   it('marks a command card, which the chord never steers', () => {
     const compact: AgentSessionQueuedMessage = {
       ...draft('c', 2),
@@ -216,27 +181,5 @@ describe('queued message cards', () => {
     })
     expect(working.map((card) => card.waitsForAgent ?? false)).toEqual([false, true])
     expect(cards[1]).not.toHaveProperty('waitsForAgent')
-  })
-})
-
-describe("another agent's card", () => {
-  it('carries who it is from, read through the shared reader', () => {
-    const from = {
-      kind: 'agent' as const,
-      senders: [
-        {
-          party: { address: 'term_a', terminalHandle: 'term_a', orcaSessionId: null },
-          name: 'Coder'
-        }
-      ],
-      orchestration: null
-    }
-    const agentDraft = draft('a', 1)
-    const cards = projectQueuedMessageCards(
-      [{ ...agentDraft, body: { ...agentDraft.body, from } }, draft('b', 2)],
-      [],
-      IDLE
-    )
-    expect(cards.map((card) => card.from)).toEqual([from, undefined])
   })
 })

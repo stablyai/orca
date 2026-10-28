@@ -1,6 +1,7 @@
 import { View, Text } from 'react-native'
 import { AuthFailedBannerActions } from './AuthFailedBannerActions'
 import { authFailedBannerStyles as styles } from './auth-failed-banner-styles'
+import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 
 // Transient auth failure may leave desktop pairing valid (#5200); offer fresh-client/handshake Retry before disruptive re-pair.
 export function AuthFailedBanner({
@@ -14,6 +15,7 @@ export function AuthFailedBanner({
   onRepair: () => void
   onRemove: () => void
 }) {
+  useMobileColorScheme()
   return (
     <View style={styles.banner}>
       <Text style={styles.text}>

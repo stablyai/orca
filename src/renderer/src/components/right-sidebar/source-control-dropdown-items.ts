@@ -1,6 +1,10 @@
 // Primary and dropdown actions have independent priority ladders.
 
 import { translate } from '@/i18n/i18n'
+import {
+  COMMIT_MESSAGE_REQUIRED_REASON,
+  type CommitDisabledReason
+} from '../../../../shared/source-control-commit-eligibility'
 import type {
   DropdownActionInputs,
   DropdownEntry
@@ -10,17 +14,47 @@ import {
   buildCommitDropdownItems,
   type CommitDropdownCopy
 } from '../../../../shared/source-control-dropdown-commit-items'
-import {
-  buildRemoteDropdownItems,
-  type RemoteDropdownCopy
-} from '../../../../shared/source-control-dropdown-remote-items'
+import { buildRemoteDropdownItems } from '../../../../shared/source-control-dropdown-remote-items'
+import { localizedRemoteCopy } from './source-control-dropdown-remote-localized-copy'
 import { buildHostedReviewDropdownItems } from './source-control-dropdown-review-items'
+
+function localizedCommitDisabledReason(reason: CommitDisabledReason): string {
+  switch (reason) {
+    case 'Resolve conflicts before committing':
+      return translate(
+        'auto.components.right.sidebar.source.control.primary.action.a6457b46a7',
+        'Resolve conflicts before committing'
+      )
+    case 'Stage at least one file to commit':
+      return translate(
+        'auto.components.right.sidebar.source.control.primary.action.fa3bd4f40c',
+        'Stage at least one file to commit'
+      )
+    case COMMIT_MESSAGE_REQUIRED_REASON:
+      return translate(
+        'auto.components.right.sidebar.source.control.primary.action.f01f16d77f',
+        'Enter a commit message to commit'
+      )
+  }
+}
 
 function localizedCommitCopy(): CommitDropdownCopy {
   return {
     commit: translate(
       'auto.components.right.sidebar.source.control.dropdown.items.2b8e6595fd',
       'Commit'
+    ),
+    commitStagedChanges: translate(
+      'auto.components.right.sidebar.source.control.primary.action.ab41fb926b',
+      'Commit staged changes'
+    ),
+    commitPush: translate(
+      'auto.components.right.sidebar.source.control.dropdown.items.commitPush',
+      'Commit & Push'
+    ),
+    commitForcePush: translate(
+      'auto.components.right.sidebar.source.control.dropdown.items.commitForcePush',
+      'Commit & Force Push'
     ),
     commitSync: translate(
       'auto.components.right.sidebar.source.control.dropdown.items.323bb614aa',
@@ -38,6 +72,30 @@ function localizedCommitCopy(): CommitDropdownCopy {
       'auto.components.right.sidebar.source.control.dropdown.items.titlePrAlreadyMerged',
       'PR is already merged'
     ),
+    checkOutBranchToPush: translate(
+      'auto.components.right.sidebar.source.control.dropdown.items.titleCheckOutBranchToPush',
+      'Check out a branch before pushing commits'
+    ),
+    linkedReviewTargetUnavailable: translate(
+      'auto.components.right.sidebar.source.control.dropdown.items.titleLinkedReviewTargetUnavailable',
+      'Linked review branch target is unavailable'
+    ),
+    publishBranchFirstToPush: translate(
+      'auto.components.right.sidebar.source.control.dropdown.items.titlePublishBranchFirstToPush',
+      'Publish the branch first to push commits'
+    ),
+    commitAndForcePush: translate(
+      'auto.components.right.sidebar.source.control.dropdown.items.titleCommitAndForcePush',
+      'Commit staged changes and force push with lease'
+    ),
+    commitAndTryPush: translate(
+      'auto.components.right.sidebar.source.control.dropdown.items.titleCommitAndTryPush',
+      'Commit staged changes and try to push'
+    ),
+    commitAndPush: translate(
+      'auto.components.right.sidebar.source.control.dropdown.items.titleCommitAndPush',
+      'Commit staged changes and push'
+    ),
     checkOutBranchToSync: translate(
       'auto.components.right.sidebar.source.control.dropdown.items.titleCheckOutBranchToSync',
       'Check out a branch before syncing commits'
@@ -53,44 +111,8 @@ function localizedCommitCopy(): CommitDropdownCopy {
     commitThenPullPush: translate(
       'auto.components.right.sidebar.source.control.dropdown.items.titleCommitThenPullPush',
       'Commit, then pull and push'
-    )
-  }
-}
-
-function localizedRemoteCopy(): RemoteDropdownCopy {
-  return {
-    rebaseFromNamedBase: (baseRef) =>
-      translate(
-        'auto.components.right.sidebar.source.control.dropdown.items.rebaseFromNamedBase',
-        'Rebase from {{baseRef}}',
-        { baseRef }
-      ),
-    rebaseFromBase: translate(
-      'auto.components.right.sidebar.source.control.dropdown.items.rebaseFromBase',
-      'Rebase from Base'
     ),
-    rebaseChooseRemoteBase: translate(
-      'auto.components.right.sidebar.source.control.dropdown.items.rebaseChooseRemoteBase',
-      'Choose a remote base branch to rebase from'
-    ),
-    rebaseDirtyHint: translate(
-      'auto.components.right.sidebar.source.control.dropdown.items.rebaseDirtyHint',
-      'Try rebasing; git may require committing or stashing local changes first'
-    ),
-    rebaseWithLatestFrom: (baseRef) =>
-      translate(
-        'auto.components.right.sidebar.source.control.dropdown.items.rebaseWithLatestFrom',
-        'Rebase current branch with latest commits from {{baseRef}}',
-        { baseRef }
-      ),
-    fetch: translate(
-      'auto.components.right.sidebar.source.control.dropdown.items.226b85a3a7',
-      'Fetch'
-    ),
-    fetchTitle: translate(
-      'auto.components.right.sidebar.source.control.dropdown.items.04d709801d',
-      'Fetch from remote without merging'
-    )
+    commitDisabledReason: localizedCommitDisabledReason
   }
 }
 
@@ -121,13 +143,28 @@ export function resolveDropdownItems(inputs: DropdownActionInputs): DropdownEntr
   ]
   if (conflictOperation === 'merge' || conflictOperation === 'rebase') {
     const isRebase = conflictOperation === 'rebase'
-    const label = isRebase ? 'Abort rebase' : 'Abort merge'
+    const label = isRebase
+      ? translate('auto.components.right.sidebar.SourceControl.425f138269', 'Abort rebase')
+      : translate('auto.components.right.sidebar.SourceControl.540ca8f78c', 'Abort merge')
     entries.push(
       { kind: 'separator', id: 'before-abort' },
       {
         kind: isRebase ? 'abort_rebase' : 'abort_merge',
         label,
-        title: globalBusy ? 'Operation in progress…' : `Abort the ${conflictOperation} in progress`,
+        title: globalBusy
+          ? translate(
+              'auto.components.right.sidebar.source.control.dropdown.items.titleOperationInProgress',
+              'Operation in progress…'
+            )
+          : isRebase
+            ? translate(
+                'auto.components.right.sidebar.source.control.dropdown.items.titleAbortRebaseInProgress',
+                'Abort the rebase in progress'
+              )
+            : translate(
+                'auto.components.right.sidebar.source.control.dropdown.items.titleAbortMergeInProgress',
+                'Abort the merge in progress'
+              ),
         disabled: globalBusy,
         variant: 'destructive'
       }

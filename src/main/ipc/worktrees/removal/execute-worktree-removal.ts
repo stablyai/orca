@@ -9,6 +9,11 @@ import { getLocalProjectWorktreeGitOptions } from '../../../project-runtime-git-
 import { listWorktreesStrict as listGitWorktreesStrict } from '../../../git/worktree'
 import { SshHostNotServedError } from '../../../providers/ssh-host-not-served-error'
 import { resolveWorktreeRemovalMetadata } from '../../../worktree-removal-repo-owner'
+import {
+  authorizeUnregisteredWindowsRemoval,
+  nativeWindowsMarkerMissing,
+  usesNativeWindowsRemoval
+} from '../../../git/windows-worktree-removal'
 import { isPrunableGitFileWorktree } from '../../../worktree-prunable-git-file'
 import { findRegisteredDeletableWorktree } from '../../../worktree-removal-safety'
 import { assertNestedWorktreeRemovalApproval } from '../../../nested-worktree-removal-plan'
@@ -69,11 +74,19 @@ export async function executeWorktreeRemoval(
       args.expectedCheckout
     ])
   }
+  await authorizeUnregisteredWindowsRemoval(
+    !!registeredWorktree,
+    repo.path,
+    worktreePath,
+    args.force ?? false,
+    localWorktreeGitOptions
+  )
   if (
     await retryFailedRemovalUnlessRegistered(
       args.worktreeId,
       worktreePath,
       registeredWorktrees,
+      localWorktreeGitOptions,
       () => retryFailedLocalWorktreeRemoval(context, args, removalHostId)
     )
   ) {
@@ -105,12 +118,13 @@ export async function executeWorktreeRemoval(
 
   // Stale registrations have no checkout to archive; missing cwd must not block metadata cleanup.
   if (
-    (await isPrunableGitFileWorktree(registeredWorktree, localWorktreeGitOptions)) ||
-    (args.force === true &&
-      process.platform === 'win32' &&
-      (isWindowsAbsolutePathLike(canonicalWorktreePath) || !!localWorktreeGitOptions.wslDistro) &&
-      removedMeta &&
-      (await isAlreadyRemovedWorktreePath(canonicalWorktreePath, localWorktreeGitOptions)))
+    !usesNativeWindowsRemoval(canonicalWorktreePath, localWorktreeGitOptions) &&
+    ((await isPrunableGitFileWorktree(registeredWorktree, localWorktreeGitOptions)) ||
+      (args.force === true &&
+        process.platform === 'win32' &&
+        (isWindowsAbsolutePathLike(canonicalWorktreePath) || !!localWorktreeGitOptions.wslDistro) &&
+        removedMeta &&
+        (await isAlreadyRemovedWorktreePath(canonicalWorktreePath, localWorktreeGitOptions))))
   ) {
     const removalResult = await removeStaleLocalWorktreeRegistration({
       canonicalWorktreePath,
@@ -151,7 +165,11 @@ export async function executeWorktreeRemoval(
 
   // Archive failure must refuse before PTY teardown or checkout deletion (#19334).
   let archiveHookOverride: ArchiveHookOverride | undefined
-  if (archiveScript && !args.skipArchive) {
+  if (
+    archiveScript &&
+    !args.skipArchive &&
+    !(await nativeWindowsMarkerMissing(canonicalWorktreePath, localWorktreeGitOptions))
+  ) {
     await withWorktreeRemoveStageSpan('archive_hook', 'local', async () => {
       const result = await runHook(
         'archive',

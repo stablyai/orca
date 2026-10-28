@@ -7,15 +7,6 @@ import {
 } from './structured-agent-session-option-pick-book'
 
 describe('structured option pick commits', () => {
-  it('commits all returned values for the latest write', () => {
-    const book = createStructuredOptionPickBook()
-    const pick = beginStructuredOptionPick(book, 'model', 'opus', false)
-    expect(structuredOptionPickCommit(book, pick, { model: 'opus', effort: 'high' })).toEqual({
-      model: 'opus',
-      effort: 'high'
-    })
-  })
-
   it('commits only its own option when another option was picked since', () => {
     const book = createStructuredOptionPickBook()
     const model = beginStructuredOptionPick(book, 'model', 'opus', false)

@@ -8,6 +8,7 @@ import Animated, {
   type SharedValue
 } from 'react-native-reanimated'
 import { colors, spacing } from '../theme/mobile-theme'
+import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 
 /** Desktop's `max-h-40`: three one-line cards and part of a fourth, whose cut-off edge is the
  *  sign that the list scrolls. */
@@ -22,15 +23,17 @@ export type MobileQueueDragViewport = {
 
 type Metrics = { offset: number; viewport: number; content: number }
 
-/** The queued cards under the fixed header, capped so a long queue never takes over the screen. */
+/** Compact cards are capped; the full editor yields to the available chat viewport. */
 export function MobileQueuedMessageScrollList({
   messageIds,
   newestIsPersons,
+  inlineEditorActive = false,
   children
 }: {
   messageIds: readonly string[]
   /** The newest card has no sender: the person just queued it, so the list shows it. */
   newestIsPersons: boolean
+  inlineEditorActive?: boolean
   /** Rows, given `reveal` to keep an edited row in view. */
   children: (reveal: (row: LayoutRectangle) => void, drag: MobileQueueDragViewport) => ReactNode
 }): React.JSX.Element {
@@ -74,17 +77,17 @@ export function MobileQueuedMessageScrollList({
     // Never past the content's end, which may not have caught up with a row that just grew.
     const top = Math.max(0, row.y - spacing.lg)
     const bottom = Math.min(Math.max(content, rowBottom), rowBottom + spacing.lg)
-    if (top < offset) {
+    if (row.height > viewport || top < offset) {
       scrollRef.current?.scrollTo({ y: top, animated: false })
     } else if (bottom > offset + viewport) {
       scrollRef.current?.scrollTo({ y: bottom - viewport, animated: false })
     }
   }
   return (
-    <View>
+    <View style={inlineEditorActive && styles.inline}>
       <Animated.ScrollView
         ref={scrollRef}
-        style={styles.scroll}
+        style={inlineEditorActive ? styles.inline : styles.scroll}
         scrollEnabled={!dragging}
         nestedScrollEnabled
         showsVerticalScrollIndicator
@@ -116,6 +119,7 @@ export function MobileQueuedMessageScrollList({
 
 /** Fades the cards into the box's fill at an edge more content lies past. */
 function ListEdgeFade({ edge }: { edge: 'top' | 'bottom' }): React.JSX.Element {
+  useMobileColorScheme()
   const id = `queued-list-fade-${edge}`
   const top = edge === 'top'
   return (
@@ -135,6 +139,7 @@ function ListEdgeFade({ edge }: { edge: 'top' | 'bottom' }): React.JSX.Element {
 
 const styles = StyleSheet.create({
   scroll: { maxHeight: QUEUE_LIST_MAX_HEIGHT },
+  inline: { flexShrink: 1, minHeight: 0 },
   fade: { position: 'absolute', left: 0, right: 0, height: spacing.lg },
   fadeTop: { top: 0 },
   fadeBottom: { bottom: 0 }

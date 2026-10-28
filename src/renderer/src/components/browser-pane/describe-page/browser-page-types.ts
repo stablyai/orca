@@ -25,7 +25,7 @@ export type { GrabIntent } from '../../../../../shared/browser-grab-types'
 
 export type BrowserPageContextMenuState = Pick<
   BrowserContextMenuRequestedEvent,
-  'linkUrl' | 'pageUrl' | 'selectionText' | 'editable' | 'image'
+  'linkUrl' | 'pageUrl' | 'selectionText' | 'editable' | 'image' | 'extensionMenu'
 > & {
   x: number
   y: number

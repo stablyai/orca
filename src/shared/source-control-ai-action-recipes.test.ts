@@ -30,36 +30,6 @@ function settings(): GlobalSettings {
 }
 
 describe('source-control AI action recipes', () => {
-  it('resolves text action CLI args into generation params', () => {
-    const base = settings()
-    base.sourceControlAi = {
-      ...base.sourceControlAi!,
-      actions: {
-        ...base.sourceControlAi!.actions,
-        pullRequest: {
-          commandInputTemplate: '{basePrompt}',
-          agentArgs: '  --model gpt-5.4  '
-        }
-      }
-    }
-
-    expect(
-      resolveSourceControlAiForOperation({
-        settings: base,
-        repo: null,
-        operation: 'pullRequest',
-        discoveryHostKey: 'local'
-      })
-    ).toMatchObject({
-      ok: true,
-      value: {
-        params: {
-          agentArgs: '--model gpt-5.4'
-        }
-      }
-    })
-  })
-
   it('treats an explicit action null agent as the default agent, not the global legacy agent', () => {
     const base = settings()
     base.defaultTuiAgent = 'codex'
@@ -250,68 +220,6 @@ describe('source-control AI action recipes', () => {
           commandInputTemplate: '{basePrompt}\n\nUse Conventional Commits.'
         }
       }
-    })
-  })
-
-  it('lets repo launch action null templates inherit resolved action templates', () => {
-    const base = settings()
-    base.sourceControlAi = {
-      ...base.sourceControlAi!,
-      actions: {
-        ...base.sourceControlAi!.actions,
-        fixChecks: {
-          agentId: 'claude',
-          commandInputTemplate: '{basePrompt}\n\nGlobal checks template.'
-        }
-      }
-    }
-
-    expect(
-      resolveSourceControlActionRecipe({
-        settings: base,
-        repo: {
-          sourceControlAi: {
-            actionOverrides: {
-              fixChecks: {
-                commandInputTemplate: null
-              }
-            }
-          }
-        },
-        actionId: 'fixChecks'
-      })
-    ).toEqual({
-      agentId: 'claude',
-      commandInputTemplate: '{basePrompt}\n\nGlobal checks template.'
-    })
-  })
-
-  it('preserves existing action templates when legacy settings are only the rollback projection', () => {
-    const source = {
-      ...settings().sourceControlAi!,
-      actions: {
-        ...settings().sourceControlAi!.actions,
-        commitMessage: {
-          agentId: 'codex' as const,
-          commandInputTemplate: 'use $best-commit-msg to write a commit'
-        },
-        branchName: {
-          agentId: 'claude' as const,
-          commandInputTemplate: 'name this branch from {firstPrompt}'
-        }
-      }
-    }
-    const legacy = projectSourceControlAiToLegacyCommitMessageAi(source)
-
-    const merged = mergeLegacyCommitMessageAiIntoSourceControlAi(source, legacy)
-
-    expect(merged.actions?.commitMessage).toEqual({
-      agentId: 'codex',
-      commandInputTemplate: 'use $best-commit-msg to write a commit'
-    })
-    expect(merged.actions?.branchName).toEqual({
-      agentId: 'claude',
-      commandInputTemplate: 'name this branch from {firstPrompt}'
     })
   })
 

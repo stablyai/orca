@@ -4,7 +4,7 @@ import {
   createNewProfileNativeChatUpgradeTipAudience,
   parseNativeChatUpgradeTipAudience,
   type NativeChatUpgradeTipAudience
-} from '../../../shared/native-chat-upgrade-tip-audience'
+} from '../../../shared/native-chat/native-chat-upgrade-tip-audience'
 import { savedChatUiWithTerminalDefaultView } from '../applying-settings/terminal-settings-migrations'
 
 import type { StoreRuntimeState } from './store-runtime-state'

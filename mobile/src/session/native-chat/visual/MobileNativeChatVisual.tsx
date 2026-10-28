@@ -4,6 +4,8 @@ import { Maximize2, X } from 'lucide-react-native'
 import type { NativeChatVisualDirective } from '../../../../../src/shared/native-chat/native-chat-visual-directive'
 import { useWindowSafeAreaInsets } from '../../../layout/side-safe-area'
 import { colors, radii, spacing, typography } from '../../../theme/mobile-theme'
+import { themedStyleSheet } from '../../../theme/themed-styles'
+import { useMobileColorScheme } from '../../../theme/use-mobile-color-scheme'
 import type { MobileNativeChatVisualSource } from './mobile-native-chat-visual-read'
 import { MOBILE_NATIVE_CHAT_VISUAL_INITIAL_HEIGHT } from './mobile-native-chat-visual-host-document'
 import { MobileNativeChatVisualFrame } from './MobileNativeChatVisualFrame'
@@ -13,6 +15,7 @@ import type { MobileNativeChatVisualRender } from './mobile-native-chat-visual-c
 const DEFAULT_TITLE = 'Visualization'
 
 function MobileNativeChatVisualPlaceholder() {
+  useMobileColorScheme()
   return (
     <View style={[styles.frame, styles.placeholder]}>
       <ActivityIndicator size="small" color={colors.textMuted} />
@@ -39,6 +42,7 @@ export const MobileNativeChatVisual = memo(function MobileNativeChatVisual({
   directive: NativeChatVisualDirective
   source: MobileNativeChatVisualSource
 }) {
+  useMobileColorScheme()
   const { state, retry } = useMobileNativeChatVisual(source, directive.file)
   const [frameFailed, setFrameFailed] = useState(false)
   const [fullscreen, setFullscreen] = useState(false)
@@ -109,6 +113,7 @@ function MobileNativeChatVisualFullscreen({
   onClose: () => void
   onFailed: () => void
 }) {
+  useMobileColorScheme()
   const insets = useWindowSafeAreaInsets()
   return (
     <Modal visible animationType="slide" presentationStyle="fullScreen" onRequestClose={onClose}>
@@ -148,7 +153,7 @@ function MobileNativeChatVisualFullscreen({
   )
 }
 
-const styles = StyleSheet.create({
+const styles = themedStyleSheet(() => ({
   frame: {
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: colors.borderSubtle,
@@ -192,4 +197,4 @@ const styles = StyleSheet.create({
     fontWeight: '600'
   },
   closeButton: { padding: spacing.xs }
-})
+}))

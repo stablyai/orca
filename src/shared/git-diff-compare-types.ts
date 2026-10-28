@@ -63,6 +63,8 @@ export type GitDiffBinaryResult = {
   mimeType?: string
   /** True only for a proven deletion — distinct from an empty modified side caused by a read failure or size cap. */
   modifiedDeleted?: boolean
+  /** A side passed the 10 MiB read cap: too large to diff, not necessarily binary. Older clients show it as binary. */
+  tooLarge?: boolean
 } & (
   | { originalIsBinary: true; modifiedIsBinary: boolean }
   | { originalIsBinary: boolean; modifiedIsBinary: true }

@@ -91,6 +91,14 @@ export function useDetectedAgents(
       : 'down'
   })
 
+  // The SSH counterpart: its disconnect clears the list, so only the return to connected re-lists it.
+  // Null when the connection has no state yet: probe as before.
+  const sshConnected = useAppStore((s) => {
+    const status =
+      targetKind === 'ssh' && targetId ? s.sshConnectionStates.get(targetId)?.status : undefined
+    return status === undefined ? null : status === 'connected'
+  })
+
   const detectedIds = useAppStore((s) => {
     if (isUnknown) {
       return null
@@ -173,8 +181,12 @@ export function useDetectedAgents(
     }
     const state = useAppStore.getState()
     if (targetKind === 'ssh' && targetId) {
+      const failedWhileOffline =
+        sshConnected === false && state.remoteAgentInventoryOutcome(targetId) === 'failed'
       if (detectedIds === null) {
-        void state.ensureRemoteDetectedAgents(targetId)
+        if (!failedWhileOffline) {
+          void state.ensureRemoteDetectedAgents(targetId)
+        }
       } else if (isNewRemoteTarget && detectedIds.length > 0) {
         // Refresh once when a new launch surface observes a host; cached inventory may predate installs.
         void state.refreshRemoteDetectedAgents(targetId)
@@ -211,6 +223,7 @@ export function useDetectedAgents(
     recordKey,
     pairingRevision,
     runtimeContactEpoch,
+    sshConnected,
     detectedIds,
     localProbePending,
     localWorktreeId,

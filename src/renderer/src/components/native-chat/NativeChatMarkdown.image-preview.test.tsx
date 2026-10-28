@@ -723,6 +723,87 @@ describe('native chat Markdown image preview', () => {
     expect(mocks.readRuntimeFilePreview).toHaveBeenCalledOnce()
   })
 
+  it.each(['inline', 'reference'])(
+    'loads %s file: images and links on the chat host with literal paths and line locations (#30774)',
+    async (syntax) => {
+      useAppStore.setState({
+        settings: { ...getDefaultSettings('/tmp'), terminalLinkClickBehavior: 'open' }
+      })
+      const owner: ImageOwner = {
+        ...localOwner,
+        runtimeContext: {
+          ...localOwner.runtimeContext,
+          target: { kind: 'environment', environmentId: 'remote-a' }
+        },
+        fileLinkContext: {
+          ...localOwner.fileLinkContext,
+          runtimeEnvironmentId: 'remote-a'
+        }
+      }
+      render(
+        <Transcript
+          owner={owner}
+          content={
+            syntax === 'inline'
+              ? [
+                  '![Chart](file:///srv/out/report.png%3A7)',
+                  '[**![Thumb](file:///srv/out/thumb.png)**](https://example.com/full)',
+                  '[Image source](file:///srv/out/report.png%3A7)',
+                  '[Download PDF](file:///srv/out/report.pdf#L9)'
+                ].join('\n\n')
+              : [
+                  '![Chart][chart]',
+                  '[**![Thumb][thumb]**](https://example.com/full)',
+                  '[Image source][chart]',
+                  '[Download PDF][report]',
+                  '[chart]: file:///srv/out/report.png%3A7',
+                  '[thumb]: file:///srv/out/thumb.png',
+                  '[report]: file:///srv/out/report.pdf#L9'
+                ].join('\n\n')
+          }
+        />
+      )
+
+      expect(
+        screen
+          .getByRole('button', { name: 'View image: Thumb' })
+          .closest('[data-native-chat-link-href]')
+      ).toHaveAttribute('data-native-chat-link-href', 'https://example.com/full')
+      fireEvent.click(screen.getByRole('button', { name: 'View image: Chart' }))
+      expect(
+        await within(screen.getByRole('dialog', { name: 'Chart' })).findByRole('img', {
+          name: 'Chart'
+        })
+      ).toHaveAttribute('src', expect.stringMatching(/^blob:/))
+      for (const path of ['/srv/out/report.png:7', '/srv/out/thumb.png']) {
+        expect(mocks.readRuntimeFilePreview).toHaveBeenCalledWith(
+          expect.objectContaining({
+            target: { kind: 'environment', environmentId: 'remote-a' }
+          }),
+          path,
+          { kind: 'chat-image' }
+        )
+      }
+      fireEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Close' }))
+      fireEvent.click(screen.getByRole('link', { name: 'Image source' }))
+      expect(mocks.openDetectedFilePath).toHaveBeenCalledWith(
+        '/srv/out/report.png',
+        7,
+        null,
+        expect.objectContaining({ runtimeEnvironmentId: 'remote-a', sourceTabId: 'tab-1' })
+      )
+      fireEvent.click(screen.getByRole('link', { name: 'Download PDF' }))
+      expect(mocks.openDetectedFilePath).toHaveBeenCalledWith(
+        '/srv/out/report.pdf',
+        9,
+        null,
+        expect.objectContaining({
+          runtimeEnvironmentId: 'remote-a'
+        })
+      )
+    }
+  )
+
   it('closes the preview when the owning chat becomes hidden', () => {
     const { rerender } = render(<Transcript />)
     fireEvent.click(screen.getByRole('button', { name: 'View image: Chart' }))
@@ -738,6 +819,12 @@ describe('native chat Markdown image preview', () => {
     )
     expect(screen.queryByRole('img')).toBeNull()
     expect(screen.getByRole('link', { name: 'Chart' })).toBeInTheDocument()
+    rerender(<Transcript variant="compact" content="![Chart](file:///srv/out/chart.png)" />)
+    expect(screen.queryByRole('img')).toBeNull()
+    expect(screen.getByRole('link', { name: 'Chart' })).toHaveAttribute(
+      'href',
+      '#orca-native-chat-file-path=%2Fsrv%2Fout%2Fchart.png'
+    )
     rerender(
       <Transcript content="![Attachment](https://github.com/user-attachments/assets/secret)" />
     )

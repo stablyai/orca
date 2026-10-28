@@ -85,7 +85,9 @@ describe('WSL install discovery verification', () => {
     expect(discoverSkillsInWslMock).toHaveBeenCalledWith({
       distro: 'Ubuntu',
       homeDir: '/home/alice',
-      cwd: '/home/alice'
+      cwd: '/home/alice',
+      names: ['review'],
+      sourceKinds: ['home', 'repo']
     })
   })
 
@@ -103,7 +105,9 @@ describe('WSL install discovery verification', () => {
     expect(discoverSkillsInWslMock).toHaveBeenCalledWith({
       distro: 'Ubuntu',
       homeDir: '/mnt/c/Users/alice',
-      cwd: '/mnt/c/work/repo'
+      cwd: '/mnt/c/work/repo',
+      names: ['review'],
+      sourceKinds: ['home', 'repo']
     })
   })
 

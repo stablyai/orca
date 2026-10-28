@@ -35,7 +35,10 @@ export function getEncryptionKey(
     return getMacEncryptionKey(keychainService, keychainAccount)
   }
   if (process.platform === 'linux') {
-    return getLinuxEncryptionKey(keychainService, keychainAccount)
+    const application = CHROMIUM_BROWSERS.find(
+      (b) => b.family === browser?.family
+    )?.linuxKeyringApplication
+    return getLinuxEncryptionKey(keychainService, keychainAccount, application)
   }
   if (process.platform === 'win32' && browser) {
     return getWindowsEncryptionKey(browser)
@@ -66,17 +69,17 @@ export function getMacEncryptionKey(
 
 export function getLinuxEncryptionKey(
   keychainService: string,
-  keychainAccount: string
+  keychainAccount: string,
+  application = keychainAccount.toLowerCase().replaceAll(' ', '')
 ): EncryptionKeyResult | null {
   // Linux v10 uses "peanuts"; v11 requires OS key storage, and CBC cannot authenticate a wrong key.
   const v10Key = pbkdf2Sync('peanuts', PBKDF2_SALT, 1, PBKDF2_KEY_LENGTH, 'sha1')
 
   let keyringPassword = ''
   let keyringFailure: LinuxCookieKeyFailure = 'key-unavailable'
-  const app = keychainAccount.toLowerCase().replaceAll(' ', '')
   for (const args of [
     ['lookup', 'service', keychainService, 'account', keychainAccount],
-    ['lookup', 'application', app]
+    ['lookup', 'application', application]
   ]) {
     try {
       keyringPassword = runKeychainCommand('secret-tool', args, 5_000)

@@ -17,6 +17,10 @@ import { buildAppFontFamily } from './lib/app-font-family'
 import { getOrCreateRendererRoot } from './lib/react-renderer-root'
 import { I18nProvider } from './i18n/I18nProvider'
 import { useAppStore } from './store'
+import { installBodyOverlayAttributes } from './lib/body-overlay-attributes'
+
+const disposeBodyOverlayAttributes = installBodyOverlayAttributes()
+import.meta.hot?.dispose(disposeBodyOverlayAttributes)
 
 function SpaceWindowRoot(): React.JSX.Element {
   const { t } = useTranslation()

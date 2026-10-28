@@ -8,7 +8,6 @@ import { formatAgentTypeLabel } from '@/lib/agent-status'
 import { cn } from '@/lib/utils'
 import { viewClaudeAgentFromRow } from '@/lib/claude-agent-row-view'
 import { useClaudeAgentRowView } from '@/components/dashboard/use-claude-agent-row-view'
-import { ClaudeAgentViewIndicator } from '@/components/ClaudeAgentViewIndicator'
 import { getAgentDotState } from './worktree-card-agent-summary'
 import { getAgentRowPrimaryText } from '../../../../shared/agent-row-primary-text'
 import { formatAgentToolPreview } from '@/lib/agent-row-tool-preview'
@@ -249,7 +248,6 @@ export const CompactAgentRow = React.memo(function CompactAgentRow({
           </span>
         </>
       )}
-      <ClaudeAgentViewIndicator view={view} showChild={!childAgentsExpanded} />
       {model && (
         <span
           className={cn(

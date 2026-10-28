@@ -1,13 +1,14 @@
 import type { AgentSessionRecord } from '../../shared/agent-session-record'
 import { claudeProviderHandle } from '../../shared/agent-session-provider-handle-encoding'
 import { resolveClaudeCommand } from '../codex-cli/command'
-import {
-  ClaudeStructuredSessionAdapter,
-  type ClaudeStructuredSessionAdapterDeps
-} from '../claude/claude-structured-session-adapter'
-import { claudeProviderHandleLink } from '../claude/claude-structured-owner-identity'
+import { ClaudeStructuredSessionAdapter } from '../claude/claude-structured-session-adapter'
+import type {
+  ClaudeStructuredSessionAdapterDeps,
+  ClaudeStructuredSessionEvent
+} from '../claude/structured/claude-structured-session-state'
+import { claudeProviderHandleLink } from '../claude/structured/claude-structured-owner-identity'
 import type { StructuredAgentSessionLifecycleEvent } from '../native-chat/agent-session-wire/structured-agent-session-adapter'
-import type { ClaudeStructuredSessionEvent } from '../claude/claude-structured-session-state'
+
 import {
   recordAgentSessionProviderHandle,
   reviseAgentSessionProviderResumePoint

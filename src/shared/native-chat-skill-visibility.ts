@@ -39,7 +39,9 @@ export function nativeChatSessionSkills(
   reported: readonly AgentSessionSlashCommand[] | undefined
 ): readonly NativeChatSessionSkill[] | undefined {
   const keepsScannedSkills = getNativeChatAgentProfile(agent)?.keepsScannedSkills === true
-  return reported !== undefined && !keepsScannedSkills ? sessionReportedSkills(reported) : undefined
+  return reported !== undefined && !keepsScannedSkills
+    ? sessionReportedSkills(reported, agent)
+    : undefined
 }
 
 export function nativeChatPickerCommands(

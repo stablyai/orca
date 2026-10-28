@@ -24,6 +24,7 @@ import type {
 import type { NativeChatTurnJournal } from '../../../src/shared/native-chat-turn-membership'
 import type { NativeChatResolvedPrompt } from '../../../src/shared/native-chat-resolution-receipt'
 import { colors } from '../theme/mobile-theme'
+import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import { styles } from './mobile-native-chat-view-styles'
 import { mobileNativeChatListFooter } from './mobile-native-chat-list-footer'
 import { mobileNativeChatListHeader } from './mobile-native-chat-list-header'
@@ -99,6 +100,7 @@ type Props = ComposerTrayProps & {
   pending: MobileNativeChatPendingItem[]
   // Retain local preview URIs after authoritative image messages replace optimistic rows.
   imagePreviewsByMessageId?: Record<string, string[]>
+  composerScopeKey?: string | null
   draftKey: string | null
   onComposerTextChange: (text: string) => void
   onAttachImage?: () => void
@@ -170,6 +172,7 @@ export function MobileNativeChatView({
   pending,
   imagePreviewsByMessageId,
   draftKey,
+  composerScopeKey,
   onComposerTextChange,
   onAttachImage,
   attachments,
@@ -209,6 +212,7 @@ export function MobileNativeChatView({
   onOpenFile,
   keyboardInset = 0
 }: Props): React.JSX.Element {
+  useMobileColorScheme()
   const insets = useSafeAreaInsets()
   const bottomPad = keyboardInset > 0 ? keyboardInset + insets.bottom : insets.bottom
   const { fontScale, pinchGesture } = useMobileNativeChatPinchGesture()
@@ -386,6 +390,7 @@ export function MobileNativeChatView({
       {}
       {trayContent}
       <MobileNativeChatDraftComposer
+        draftScopeKey={composerScopeKey}
         structured={structuredActivityUi ? structuredComposer : null}
         draftKey={draftKey}
         onChangeText={onComposerTextChange}

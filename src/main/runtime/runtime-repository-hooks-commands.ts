@@ -10,6 +10,7 @@ import { isENOENT } from '../ipc/filesystem/filesystem-path-containment'
 import { isFolderRepo } from '../../shared/repo-kind'
 import { inspectSetupScriptImportCandidates } from '../../shared/setup-script-imports'
 import { joinWorktreeRelativePath } from './runtime-relative-paths'
+import { blockedWslDistroForPath } from '../wsl/wsl-unc-access-gate'
 
 type RuntimeRepositoryHooksCommandsDeps = {
   resolveRepo: (selector: string) => Promise<Repo>
@@ -70,7 +71,8 @@ export class RuntimeRepositoryHooksCommands {
 
   async inspectRepoSetupScriptImports(repoSelector: string) {
     const repo = await this.deps.resolveRepo(repoSelector)
-    if (isFolderRepo(repo)) {
+    // A stopped distro's `\\wsl.localhost` paths would boot it for a background inspection (E9).
+    if (isFolderRepo(repo) || (await blockedWslDistroForPath(repo.path))) {
       return []
     }
     return inspectSetupScriptImportCandidates(async (relativePath) => {

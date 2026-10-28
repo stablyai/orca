@@ -1,3 +1,4 @@
+import { retireStructuredAgentSessionReadOwner } from '@/components/native-chat/structured-agent-session-read-owner-registry'
 import type { TabsSlice, TabsSliceGet, TabsSliceSet } from './tabs-slice-contract'
 import { collapseGroupLayout } from '../../../../../shared/workspace-layout/tab-group-layout-tree'
 import {
@@ -68,6 +69,9 @@ export function createTabsCloseActions(
           shouldRetainStructuredAgentSessionLaunchTab(worktreeId, tab.entityId) ||
           hasStructuredAgentSessionLaunchCancellationTombstone(worktreeId, tab.entityId)
         const target = structuredAgentSessionTargetForTab(state, tab)
+        if (!tab.executionHostId || !target) {
+          retireStructuredAgentSessionReadOwner(tab.entityId, null, tab.executionHostId ?? '')
+        }
         if (target) {
           if (provisional) {
             clearWebSessionFocusIntentIfMatches(

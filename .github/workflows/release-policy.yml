@@ -16,7 +16,7 @@ concurrency:
 jobs:
   enforce:
     if: github.repository == 'stablyai/orca'
-    runs-on: blacksmith-2vcpu-ubuntu-2404
+    runs-on: ubuntu-24.04
     timeout-minutes: 5
     steps:
       # Why: release events run this file from the tagged commit, so load the module from the same commit.

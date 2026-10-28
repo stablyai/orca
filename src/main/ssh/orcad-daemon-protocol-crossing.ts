@@ -26,10 +26,18 @@ export function orcadBuildCanAttachDaemon(
 }
 
 export type OrcadLiveDaemonCrossing =
-  | 'no-live-terminals'
-  | 'attachable'
-  | 'strands-live-terminals'
-  | 'unverifiable'
+  | { state: 'no-live-terminals' }
+  | { state: 'attachable' }
+  | { state: 'strands-live-terminals'; unattachable: readonly number[] }
+  | { state: 'unverifiable' }
+
+/** Hosts predating the protocol set report only a single-generation scalar. */
+function liveDaemonProtocols(census: OrcadTerminalCensus): readonly number[] | null {
+  if (census.daemonProtocolVersions !== undefined) {
+    return census.daemonProtocolVersions
+  }
+  return census.daemonProtocolVersion === null ? null : [census.daemonProtocolVersion]
+}
 
 /** An unknown session count or daemon protocol is planned for as live and unattachable. */
 export function assessOrcadLiveDaemonCrossing(
@@ -37,12 +45,21 @@ export function assessOrcadLiveDaemonCrossing(
   incoming: OrcadDaemonProtocolFacts
 ): OrcadLiveDaemonCrossing {
   if (census.liveSessions === 0) {
-    return 'no-live-terminals'
+    return { state: 'no-live-terminals' }
   }
-  if (census.daemonProtocolVersion === null) {
-    return 'unverifiable'
+  const protocols = liveDaemonProtocols(census)
+  if (protocols === null || protocols.length === 0) {
+    return { state: 'unverifiable' }
   }
-  return orcadBuildCanAttachDaemon(incoming, census.daemonProtocolVersion)
-    ? 'attachable'
-    : 'strands-live-terminals'
+  // Every generation must stay reachable; one unattachable daemon strands its terminals.
+  const unattachable = protocols.filter(
+    (protocol) => !orcadBuildCanAttachDaemon(incoming, protocol)
+  )
+  return unattachable.length === 0
+    ? { state: 'attachable' }
+    : { state: 'strands-live-terminals', unattachable }
+}
+
+export function describeDaemonProtocols(protocols: readonly number[]): string {
+  return protocols.length === 1 ? `protocol ${protocols[0]}` : `protocols ${protocols.join(', ')}`
 }

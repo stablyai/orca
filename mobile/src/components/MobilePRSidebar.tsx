@@ -1,6 +1,7 @@
 import { ActivityIndicator, Pressable, ScrollView, Text, View } from 'react-native'
 import { RotateCw } from 'lucide-react-native'
 import { colors } from '../theme/mobile-theme'
+import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import type { PrSidebarState } from '../session/mobile-pr-sidebar-state'
 import type { PrSidebarLoadOptions } from '../session/use-mobile-pr-sidebar-controller'
 import type { ConnectionState } from '../transport/types'
@@ -64,6 +65,7 @@ export function MobilePRSidebar({
   showOpenOnWeb = true,
   workspaceLabel
 }: Props) {
+  useMobileColorScheme()
   const launchWorkspaceLabel = workspaceLabel || gitBranch
   const branch = prSidebarRenderBranch(state)
   const prNumber = state.kind === 'ready' ? state.data.pr.number : 0
@@ -177,6 +179,7 @@ function PrSidebarContent({
   showOpenOnWeb: boolean
   botAuthorOverrides: ReadonlySet<string>
 }) {
+  useMobileColorScheme()
   if (branch === 'loading') {
     return (
       <View style={styles.stateArea}>
@@ -271,6 +274,7 @@ function PrSidebarSections({
   showOpenOnWeb: boolean
   botAuthorOverrides: ReadonlySet<string>
 }) {
+  useMobileColorScheme()
   const pr = data.pr
   // Build pure triage prompts lazily at launch so each uses current PR data.
   const checksTriage = {

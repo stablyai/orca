@@ -1,6 +1,8 @@
 import { useEffect, useState } from 'react'
-import { ActivityIndicator, Image, Pressable, StyleSheet, Text, View } from 'react-native'
+import { ActivityIndicator, Image, Pressable, Text, View } from 'react-native'
 import { colors, spacing, typography } from '../theme/mobile-theme'
+import { themedStyleSheet } from '../theme/themed-styles'
+import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import { MobileLoadErrorState } from '../components/MobileLoadErrorState'
 import { MobileNativeChatImageViewer } from '../session/native-chat/visual/MobileNativeChatImageViewer'
 import type { MobileFilePreviewRpcSender } from './mobile-file-preview-operations'
@@ -15,6 +17,7 @@ type Props = {
 }
 
 export function MobileMarkdownPreviewImage({ client, worktreeId, documentPath, href, alt }: Props) {
+  useMobileColorScheme()
   const [load, setLoad] = useState<{ uri?: string; error?: string }>({})
   const [attempt, setAttempt] = useState(0)
   const [aspectRatio, setAspectRatio] = useState(16 / 9)
@@ -86,7 +89,7 @@ export function MobileMarkdownPreviewImage({ client, worktreeId, documentPath, h
   )
 }
 
-const styles = StyleSheet.create({
+const styles = themedStyleSheet(() => ({
   frame: { gap: spacing.xs },
   caption: { color: colors.textSecondary, fontSize: typography.metaSize }
-})
+}))

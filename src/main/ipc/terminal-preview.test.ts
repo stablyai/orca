@@ -1,3 +1,4 @@
+import { EventEmitter } from 'node:events'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const { handlers, ipcMainMock, isDashboardPopoutRendererMock, isTrustedUIRendererMock } =
@@ -65,17 +66,14 @@ function makeRuntime() {
 }
 
 function makeSender(id = 1) {
-  const destroyedListeners: (() => void)[] = []
+  const events = new EventEmitter()
   return {
     id,
     isDestroyed: () => false,
     send: vi.fn(),
-    once: (event: string, cb: () => void) => {
-      if (event === 'destroyed') {
-        destroyedListeners.push(cb)
-      }
-    },
-    fireDestroyed: () => destroyedListeners.forEach((cb) => cb())
+    on: events.on.bind(events),
+    removeListener: events.removeListener.bind(events),
+    fireDestroyed: () => events.emit('destroyed')
   }
 }
 

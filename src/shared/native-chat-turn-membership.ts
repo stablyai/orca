@@ -21,7 +21,7 @@ import {
   nativeChatTurnDrawOrder,
   nativeChatUserRowOpensTurn,
   type NativeChatOpensTurn
-} from './native-chat-turn-grouping'
+} from './native-chat/transcript/native-chat-turn-grouping'
 import type { NativeChatMessage, NativeChatRole } from './native-chat-types'
 import { dispatchWasWithdrawn } from './structured-agent-session-dispatch-rejection'
 import { inSendOrder } from './native-chat/native-chat-send-order'

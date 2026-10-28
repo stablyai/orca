@@ -1,11 +1,13 @@
 import { useContext } from 'react'
-import { Pressable, StyleSheet, Text, View } from 'react-native'
+import { Pressable, Text, View } from 'react-native'
 import { ChevronRight } from 'lucide-react-native'
-import { nativeChatReasoningDisclosureKey } from '../../../../../src/shared/native-chat-reasoning-row'
+import { nativeChatReasoningDisclosureKey } from '../../../../../src/shared/native-chat/transcript/native-chat-reasoning-row'
 import { formatNativeChatActiveTurnLabel } from '../../../../../src/shared/native-chat-turn-status'
 import { INLINE_TEXT_SELECTION } from '../../../components/inline-text-selection'
 import { LoadingSpinner } from '../../../components/LoadingSpinner'
 import { colors, spacing, typography } from '../../../theme/mobile-theme'
+import { themedStyleSheet } from '../../../theme/themed-styles'
+import { useMobileColorScheme } from '../../../theme/use-mobile-color-scheme'
 import { MobileNativeChatReasoningBody } from './MobileNativeChatReasoningRow'
 import { MobileNativeChatRowOverlaysContext } from './mobile-native-chat-row-overlays'
 import type { MobileNativeChatLiveLine as LiveLine } from './use-mobile-native-chat-turn-disclosure'
@@ -22,6 +24,7 @@ export function MobileNativeChatLiveLine({
   fontScale: number
   onOpenFile?: (relativePath: string) => void
 }): React.JSX.Element {
+  useMobileColorScheme()
   const { reasoning, reasoningExpanded } = line
   const open = reasoning !== null && reasoningExpanded
   const label = formatNativeChatActiveTurnLabel(line)
@@ -73,7 +76,7 @@ export function MobileNativeChatLiveLine({
 }
 
 // Match the finished reasoning row’s geometry so its takeover cannot shift the text.
-const styles = StyleSheet.create({
+const styles = themedStyleSheet(() => ({
   row: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -101,4 +104,4 @@ const styles = StyleSheet.create({
   body: {
     paddingHorizontal: spacing.lg
   }
-})
+}))

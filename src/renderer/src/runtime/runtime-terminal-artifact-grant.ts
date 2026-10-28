@@ -54,6 +54,18 @@ export async function renewRestoredHostFileGrant(
 export async function renewTerminalArtifactGrant(
   args: TerminalArtifactGrantTarget
 ): Promise<RenewedTerminalArtifactGrant | null> {
+  const granted = await acquireTerminalArtifactGrant(args)
+  // Why: restoration and renewal must not follow a path redirected since the first grant.
+  if (granted && granted.absolutePath !== args.absolutePath) {
+    throw new Error(`The host no longer grants ${args.absolutePath}`)
+  }
+  return granted ? { grantId: granted.grantId, readOnly: granted.readOnly } : null
+}
+
+/** First acquisition adopts the canonical path the host bound to its grant. */
+export async function acquireTerminalArtifactGrant(
+  args: TerminalArtifactGrantTarget
+): Promise<(RenewedTerminalArtifactGrant & { absolutePath: string }) | null> {
   const resolved = await callRuntimeRpc<RuntimeTerminalPathResolution>(
     args.target,
     'files.resolveTerminalPath',
@@ -68,8 +80,12 @@ export async function renewTerminalArtifactGrant(
     }
   )
   const openTarget = resolved.openTarget
-  if (openTarget?.kind === 'absolute-file' && openTarget.absolutePath === args.absolutePath) {
-    return { grantId: openTarget.grantId, readOnly: openTarget.readOnly === true }
+  if (openTarget?.kind === 'absolute-file') {
+    return {
+      absolutePath: openTarget.absolutePath,
+      grantId: openTarget.grantId,
+      readOnly: openTarget.readOnly === true
+    }
   }
   if (!resolved.exists) {
     // Why: older hosts re-grant only for the terminal that printed the path, so their "absent" is no proof.
@@ -84,7 +100,7 @@ export async function renewTerminalArtifactGrant(
     }
     return null
   }
-  // Why: never redirect a read or save elsewhere; the host must grant this exact path.
+  // Why: an existing path without an absolute-file grant cannot authorize a read or save.
   throw new Error(`The host no longer grants ${args.absolutePath}`)
 }
 

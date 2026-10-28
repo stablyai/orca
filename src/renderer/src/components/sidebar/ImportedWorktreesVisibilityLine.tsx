@@ -102,7 +102,7 @@ export default function ImportedWorktreesVisibilityLine({
     hiddenCount === 1
       ? translate(
           'auto.components.sidebar.ImportedWorktreesVisibilityLine.keepHiddenAriaLabel_one',
-          'Keep 1 discovered worktree hidden for {{repo}}; recover from the project menu',
+          'Keep {{count}} discovered worktree hidden for {{repo}}; recover from the project menu',
           { count: hiddenCount, repo: repoScopeLabel }
         )
       : translate(
@@ -120,7 +120,7 @@ export default function ImportedWorktreesVisibilityLine({
       ? hiddenCount === 1
         ? translate(
             'auto.components.sidebar.ImportedWorktreesVisibilityLine.hidingInRepo_one',
-            'Hiding 1 discovered worktree in {{repo}}',
+            'Hiding {{count}} discovered worktree in {{repo}}',
             { count: hiddenCount, repo: repoScopeLabel }
           )
         : translate(
@@ -131,7 +131,7 @@ export default function ImportedWorktreesVisibilityLine({
       : hiddenCount === 1
         ? translate(
             'auto.components.sidebar.ImportedWorktreesVisibilityLine.hiding_one',
-            'Hiding 1 discovered worktree',
+            'Hiding {{count}} discovered worktree',
             { count: hiddenCount }
           )
         : translate(

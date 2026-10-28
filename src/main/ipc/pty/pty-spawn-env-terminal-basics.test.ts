@@ -19,6 +19,7 @@ import {
 } from '../../../shared/jcode-runtime-dir'
 import { makePaneKey } from '../../../shared/stable-pane-id'
 import { selectShellStartupFeatures } from '../../shell-startup-features'
+import { REMOTE_VIEWER_CLIPBOARD_ENV } from '../../../shared/remote-viewer-clipboard-env'
 import {
   CODEX_REMOTE_VIEWER_SSH_CONNECTION,
   PI_CLIPBOARD_OSC52_ENV
@@ -299,8 +300,7 @@ describe('registerPtyHandlers', () => {
         }
       )
 
-      // #33937: pi started by hand in a headless host's shell copied only to the host clipboard.
-      it('asks a hand-started pi for OSC 52 copies in a plain shell', () => {
+      it('installs clipboard forwarding for agents started by hand in a remote shell', () => {
         vi.stubEnv(PI_CLIPBOARD_OSC52_ENV, undefined)
         try {
           const env = buildPtyHostEnv(
@@ -315,7 +315,17 @@ describe('registerPtyHandlers', () => {
             }
           )
           expect(env[PI_CLIPBOARD_OSC52_ENV]).toBe('1')
+          expect(env[REMOTE_VIEWER_CLIPBOARD_ENV]).toBe('1')
           expect(env.SSH_CONNECTION).toBeUndefined()
+          expect(
+            selectShellStartupFeatures({
+              shellPath: '/bin/bash',
+              env,
+              hasStartupCommand: false,
+              waitsForShellReady: false,
+              emitsStartupIdentity: false
+            })
+          ).toContain('overlay')
         } finally {
           vi.unstubAllEnvs()
         }

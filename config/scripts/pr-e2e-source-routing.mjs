@@ -393,6 +393,20 @@ export const PR_E2E_SOURCE_ROUTES = [
         ))
   },
   {
+    id: 'wsl-host.fake-connector',
+    specs: ['tests/e2e/wsl-host-fake-transport.spec.ts', 'tests/e2e/wsl-host-chat.spec.ts'],
+    matches: (file) => file === 'src/main/wsl/wsl-host-e2e-fake-connector.ts'
+  },
+  {
+    // Remove runs through the fake transport spec; its peer check asks the server who else uses it.
+    id: 'wsl-host.remove',
+    specs: ['tests/e2e/wsl-host-fake-transport.spec.ts'],
+    matches: (file) =>
+      /^src\/main\/wsl\/(?:wsl-host-server-stop|wsl-host-peer-desktops|wsl-host-removal)\.ts$/.test(
+        file
+      )
+  },
+  {
     id: 'terminal.windows-wsl-launch-and-paste',
     specs: [
       'tests/e2e/golden-tab-bar-agent-launch.spec.ts',

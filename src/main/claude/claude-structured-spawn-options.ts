@@ -4,7 +4,7 @@ import type {
   ClaudeStructuredLaunch,
   ClaudeStructuredSdkOptions
 } from './claude-structured-launch-resolution'
-import type { ClaudeSession } from './claude-structured-session-state'
+import type { ClaudeSession } from './structured/claude-structured-session-state'
 import { restoredClaudeStructuredSessionOptions } from './claude-structured-options'
 
 const EFFORT_LEVELS: ReadonlySet<string> = new Set<EffortLevel>([

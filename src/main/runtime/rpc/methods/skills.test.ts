@@ -76,7 +76,8 @@ describe('skills.discover RPC', () => {
     )
     expect(resolveProjectRuntimeForWorktree).toHaveBeenCalledWith('worktree-1')
     expect(vi.mocked(resolveSkillDiscoveryTarget)).toHaveBeenLastCalledWith(
-      expect.objectContaining({ projectRuntime: WSL_RUNTIME })
+      expect.objectContaining({ projectRuntime: WSL_RUNTIME }),
+      { refuseStoppedWslDistro: true }
     )
   })
 
@@ -91,7 +92,8 @@ describe('skills.discover RPC', () => {
     )
     expect(resolveRuntimeFileTarget).toHaveBeenCalledWith('id:repo::/repo/feature')
     expect(vi.mocked(resolveSkillDiscoveryTarget)).toHaveBeenLastCalledWith(
-      expect.objectContaining({ cwd: '/repo/feature' })
+      expect.objectContaining({ cwd: '/repo/feature' }),
+      { refuseStoppedWslDistro: true }
     )
 
     const discoveries = vi.mocked(discoverSkillsOnTarget).mock.calls.length
@@ -117,7 +119,8 @@ describe('skills.discover RPC', () => {
     )
     expect(resolveProjectRuntimeForWorktree).not.toHaveBeenCalled()
     expect(vi.mocked(resolveSkillDiscoveryTarget)).toHaveBeenLastCalledWith(
-      expect.objectContaining({ projectRuntime: WSL_RUNTIME })
+      expect.objectContaining({ projectRuntime: WSL_RUNTIME }),
+      { refuseStoppedWslDistro: true }
     )
   })
 
@@ -146,7 +149,8 @@ describe('skills.discover RPC', () => {
     )
 
     expect(vi.mocked(resolveSkillDiscoveryTarget)).toHaveBeenLastCalledWith(
-      expect.objectContaining({ names: ['orchestration'], sourceKinds: ['home'] })
+      expect.objectContaining({ names: ['orchestration'], sourceKinds: ['home'] }),
+      { refuseStoppedWslDistro: true }
     )
   })
 
@@ -154,7 +158,8 @@ describe('skills.discover RPC', () => {
     await discoverMethod().handler({ names: [], sourceKinds: [] }, makeContext({}))
 
     expect(vi.mocked(resolveSkillDiscoveryTarget)).toHaveBeenLastCalledWith(
-      expect.objectContaining({ names: [], sourceKinds: [] })
+      expect.objectContaining({ names: [], sourceKinds: [] }),
+      { refuseStoppedWslDistro: true }
     )
   })
 })
@@ -333,7 +338,7 @@ describe('skills.share RPC', () => {
     expect(discoverSkillsOnTarget).toHaveBeenCalledWith(
       expect.objectContaining({ kind: 'native-host', cwd: '/repo' }),
       [],
-      { providerRootOverrides: {}, refresh: true }
+      { providerRootOverrides: {}, refresh: true, gateStoppedWslDistros: false }
     )
     expect(publishDiscoveredSkillsFromAgent).toHaveBeenCalledWith(request, discoveredSkills, signal)
   })

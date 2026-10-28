@@ -7,6 +7,8 @@ import { BottomDrawer } from '../../../components/BottomDrawer'
 import { useClipboardWriter } from '../../../platform/clipboard'
 import { useWindowSafeAreaInsets } from '../../../layout/side-safe-area'
 import { colors, spacing, typography } from '../../../theme/mobile-theme'
+import { themedStyleSheet } from '../../../theme/themed-styles'
+import { useMobileColorScheme } from '../../../theme/use-mobile-color-scheme'
 import { nativeChatMessageCopyText } from '../../../../../src/shared/native-chat-message-copy-text'
 
 type Props = {
@@ -74,6 +76,7 @@ function SelectTextScreen({
   text: string
   onClose: () => void
 }): React.JSX.Element {
+  useMobileColorScheme()
   const insets = useWindowSafeAreaInsets()
   return (
     <Modal visible animationType="slide" onRequestClose={onClose}>
@@ -110,7 +113,7 @@ function SelectTextScreen({
   )
 }
 
-const styles = StyleSheet.create({
+const styles = themedStyleSheet(() => ({
   screen: { flex: 1, backgroundColor: colors.bgBase },
   header: {
     flexDirection: 'row',
@@ -125,4 +128,4 @@ const styles = StyleSheet.create({
   close: { padding: spacing.xs },
   body: { padding: spacing.lg },
   text: { color: colors.textPrimary, fontSize: typography.bodySize, lineHeight: 22 }
-})
+}))

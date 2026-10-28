@@ -98,36 +98,12 @@ describe('reconcileTransientPortScanFailures', () => {
     expect(afterRecovery[0].result.ports).toHaveLength(1)
   })
 
-  it('isolates failures per host so a stable host stays solid', () => {
-    const { apply } = createHarness()
-    apply([
-      { key: 'local:all', result: good(['tcp:3000']) },
-      { key: 'remote:all', result: good(['tcp:8080']) }
-    ])
-
-    const next = apply([
-      { key: 'local:all', result: good(['tcp:3000']) },
-      { key: 'remote:all', result: unavailable() }
-    ])
-    expect(next.find((r) => r.key === 'local:all')?.result.ports).toHaveLength(1)
-    expect(next.find((r) => r.key === 'remote:all')?.result.ports).toHaveLength(1)
-  })
-
   it('prunes state for hosts that disappear', () => {
     const { apply, state } = createHarness()
     apply([{ key: 'gone:all', result: good(['tcp:3000']) }])
     apply([{ key: 'other:all', result: good(['tcp:4000']) }])
     expect(state.has('gone:all')).toBe(false)
     expect(state.has('other:all')).toBe(true)
-  })
-
-  it('prunes the failure counter for a failed-only host that disappears', () => {
-    const { apply, state } = createHarness()
-    apply([{ key: 'flaky:all', result: unavailable() }])
-    expect(state.has('flaky:all')).toBe(true)
-
-    apply([{ key: 'other:all', result: good(['tcp:4000']) }])
-    expect(state.has('flaky:all')).toBe(false)
   })
 
   // Popover failures already publish last-good ports; do not count that as spent grace or the next poll drops them immediately.

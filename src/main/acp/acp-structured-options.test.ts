@@ -5,6 +5,9 @@ import { grokModelEfforts } from './acp-dialects/grok-model-catalog'
 import { GROK_ACP_DIALECT } from './acp-dialects/grok-dialect'
 import { OMP_ACP_DIALECT } from './acp-dialects/omp-dialect'
 import { OPENCODE_ACP_DIALECT } from './acp-dialects/opencode-dialect'
+import type { AcpCommandOptionsFixtureModule } from '../../shared/mobile-queued-edit-host.test-fixture-contract'
+
+const mobileProducer = { AcpStructuredOptions } satisfies AcpCommandOptionsFixtureModule
 
 const configOptions = [
   {
@@ -36,7 +39,7 @@ describe('ACP session options', () => {
     'projects %i live models once while retaining current/report values',
     async (count) => {
       const modelEfforts = vi.fn(grokModelEfforts)
-      const options = new AcpStructuredOptions({ ...GROK_ACP_DIALECT, modelEfforts })
+      const options = new mobileProducer.AcpStructuredOptions({ ...GROK_ACP_DIALECT, modelEfforts })
       options.adoptSession({
         configOptions: [
           ...configOptions.slice(1),

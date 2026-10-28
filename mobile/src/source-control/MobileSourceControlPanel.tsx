@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { ActivityIndicator, Pressable, Text, View } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { colors } from '../theme/mobile-theme'
+import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import { connectionRetryAction } from '../transport/connection-retry-action'
 import { useMobileSourceControlState } from './use-mobile-source-control-state'
 import { useMobileSourceControlActionSheet } from './use-mobile-source-control-action-sheet'
@@ -48,6 +49,7 @@ export function MobileSourceControlPanel({
   onFileOpenStart,
   onOpenedFileDiff
 }: MobileSourceControlPanelProps) {
+  useMobileColorScheme()
   const [activeTab, setActiveTab] = useState<SourceControlHubTab>(initialTab)
   const [visitedTabs, setVisitedTabs] = useState<ReadonlySet<SourceControlHubTab>>(
     () => new Set<SourceControlHubTab>([initialTab])

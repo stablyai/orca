@@ -179,6 +179,7 @@ class RemovalRuntime extends OrcaRuntimeService {
       { kind: 'local' },
       { id: record.worktreeId, path: record.worktreePath },
       [],
+      {},
       {}
     )
   }

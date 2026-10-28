@@ -1,3 +1,4 @@
+import { shallow } from 'zustand/shallow'
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
 import type { Repo } from '../../../../shared/repo-types'
 import type { WorkspaceHostScope } from '../../../../shared/ui-chrome-types'
@@ -9,7 +10,8 @@ import {
 } from '../../../../shared/execution-host'
 import {
   buildExecutionHostRegistry,
-  type ExecutionHostHealth
+  type ExecutionHostHealth,
+  type ExecutionHostRegistryEntry
 } from '../../../../shared/execution-host-registry'
 import { getExecutionHostHealthLabel } from '../../../../shared/execution-host-health'
 import { pickerExecutionHosts } from '../../../../shared/managed-orcad-execution-host'
@@ -213,4 +215,29 @@ export function getSidebarHostHealthLabel(
   blockedReason?: RuntimeHostBlockedReason
 ): string {
   return health === 'mixed' ? 'Mixed' : getExecutionHostHealthLabel(health, blockedReason)
+}
+
+// Diagnostics do not change host choices; retain every other exposed registry field.
+export function sidebarHostSemantics(host: SidebarHostOption & ExecutionHostRegistryEntry) {
+  const { remoteControlState, ...option } = host
+  return {
+    ...option,
+    remoteControlState: remoteControlState && {
+      state: remoteControlState.state,
+      lastError: remoteControlState.lastError,
+      lastClose: remoteControlState.lastClose,
+      lastCloseCause: remoteControlState.lastCloseCause
+    }
+  }
+}
+
+export function createSidebarHostLabelsSelector() {
+  let result = new Map<ExecutionHostId, string>()
+  return (hosts: readonly SidebarHostOption[]): ReadonlyMap<ExecutionHostId, string> => {
+    const next = new Map(hosts.map((host) => [host.id, host.label]))
+    if (!shallow(result, next)) {
+      result = next
+    }
+    return result
+  }
 }

@@ -70,6 +70,7 @@ export function useAddRepoLocalFolderFlow({
 }): {
   handleBrowse: () => Promise<void>
   resetLocalFolderFlow: () => void
+  handleAddLocalPath: (path: string, source: AddRepoExistingWorkspaceSource) => Promise<unknown>
 } {
   const localAddGenRef = useRef(0)
   const droppedLocalPathHandledRef = useRef<string | null>(null)
@@ -310,5 +311,5 @@ export function useAddRepoLocalFolderFlow({
     }
   }, [clearNestedScanState, handleAddLocalPaths, setAddProjectBusyLabel, setIsAdding])
 
-  return { handleBrowse, resetLocalFolderFlow }
+  return { handleBrowse, resetLocalFolderFlow, handleAddLocalPath }
 }

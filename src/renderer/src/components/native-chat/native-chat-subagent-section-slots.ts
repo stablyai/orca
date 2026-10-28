@@ -24,7 +24,7 @@ import {
 import {
   nativeChatRowRendersProse,
   nativeChatRowSpeaksOrActs
-} from '../../../../shared/native-chat-trailing-run'
+} from '../../../../shared/native-chat/native-chat-trailing-run'
 import type { NativeChatTranscriptSlot } from './native-chat-transcript-slots'
 
 /** The head of a section no loaded roster row holds: it names whose rows follow it. */

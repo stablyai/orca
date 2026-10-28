@@ -1,4 +1,7 @@
-import { extname } from 'node:path'
+import {
+  IMAGE_AND_PDF_PREVIEW_MIME_TYPES,
+  filePreviewExtension
+} from '../../../shared/file-preview-kind'
 import { localLogFileIdentity } from '../../ai-vault/local-log-tail-reader'
 import { BINARY_PROBE_BYTES, isBinaryBuffer } from '../../../shared/binary-buffer'
 import {
@@ -11,18 +14,6 @@ import {
 // Monaco degrades features on large files; a 5MB cap would reject ordinary logs and JSON.
 export const MAX_TEXT_FILE_SIZE = 50 * 1024 * 1024
 export const MAX_PREVIEWABLE_BINARY_SIZE = 50 * 1024 * 1024
-export const PREVIEWABLE_BINARY_MIME_TYPES: Record<string, string> = {
-  '.png': 'image/png',
-  '.avif': 'image/avif',
-  '.jpg': 'image/jpeg',
-  '.jpeg': 'image/jpeg',
-  '.gif': 'image/gif',
-  '.svg': 'image/svg+xml',
-  '.webp': 'image/webp',
-  '.bmp': 'image/bmp',
-  '.ico': 'image/x-icon',
-  '.pdf': 'application/pdf'
-}
 
 export type LocalFileContent = {
   mediaUrl?: string
@@ -37,7 +28,7 @@ export type LocalFileContent = {
 export async function readLocalFileContent(filePath: string): Promise<LocalFileContent> {
   const { handle, stats } = await openLocalRegularFile(filePath)
   try {
-    const mimeType = PREVIEWABLE_BINARY_MIME_TYPES[extname(filePath).toLowerCase()]
+    const mimeType = IMAGE_AND_PDF_PREVIEW_MIME_TYPES[filePreviewExtension(filePath)]
     const sizeLimit = mimeType ? MAX_PREVIEWABLE_BINARY_SIZE : MAX_TEXT_FILE_SIZE
     if (stats.size > sizeLimit) {
       throw fileTooLargeError(stats.size, sizeLimit)

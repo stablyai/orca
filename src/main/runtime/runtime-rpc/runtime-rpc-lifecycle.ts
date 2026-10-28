@@ -271,6 +271,7 @@ export class RuntimeRpcLifecycle extends RuntimeRpcWebSocketDispatch {
         this.runtime.cleanupSubscriptionsForConnection(socket.connectionId)
         this.runtime.cancelMobileDictationForConnection(socket.connectionId)
         this.binaryMessageRouter.deleteConnection(socket.connectionId)
+        this.declaredDesktopClients.forget(socket.connectionId)
         if (!hasOtherConnections) {
           this.runtime.onClientDisconnected(socket.device.clientId)
         }

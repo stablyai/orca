@@ -3,7 +3,7 @@ import {
   type NativeChatBlock,
   type NativeChatMessage
 } from '../../shared/native-chat-types'
-import { NATIVE_CHAT_NOTICE_COPY } from '../../shared/native-chat-notice'
+import { NATIVE_CHAT_NOTICE_COPY } from '../../shared/native-chat/native-chat-notice'
 import {
   asRecord,
   extractString,

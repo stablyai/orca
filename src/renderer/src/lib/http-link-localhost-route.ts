@@ -1,8 +1,3 @@
-import { getProjectHostSetupProjectionFromState } from '@/store/project-host-setup-selector'
-import {
-  getProjectHostSetupLookup,
-  type WorkspaceProjectOwner
-} from '../../../shared/project-host-setup-lookup'
 import type { HttpLinkSourceOwner, HttpLinkStoreState } from './http-link-routing'
 import {
   parseLoopbackUrlWithPort,
@@ -17,7 +12,10 @@ export type LocalhostLinkRepo = {
 
 export type LocalhostLinkProject = LocalhostLinkRepo
 
-export type LocalhostLinkWorktree = { id: string } & Partial<WorkspaceProjectOwner>
+export type LocalhostLinkWorktree = {
+  id: string
+  projectId?: string
+}
 
 export function localhostLabelRouteForHttpLink(
   url: string,
@@ -75,14 +73,10 @@ function localhostLabelRouteForTerminalLink(
     return null
   }
   const worktree = findWorktreeById(state, port.owner.worktreeId)
-  const projection = getProjectHostSetupProjectionFromState(state)
-  const projectId = getProjectHostSetupLookup(projection.setups).projectId({
-    ...worktree,
-    repoId: port.owner.repoId
-  })
-  const project = projectId
-    ? (projection.projects.find((entry) => entry.id === projectId) ?? null)
-    : null
+  const project =
+    worktree?.projectId && state.projects
+      ? (state.projects.find((entry) => entry.id === worktree.projectId) ?? null)
+      : null
   const projectSource = project ?? repo
   return {
     targetUrl: parsed.toString(),

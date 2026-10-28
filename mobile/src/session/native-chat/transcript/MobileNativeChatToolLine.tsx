@@ -20,10 +20,12 @@ import type {
   NativeChatToolCallBlock,
   NativeChatToolResultBlock
 } from '../../../../../src/shared/native-chat-types'
+import { MobileSourceCopyButton } from '../../../components/MobileSourceCopyButton'
 import { MobileSyntaxSegments } from '../../../components/MobileSyntaxSegments'
 import { INLINE_TEXT_SELECTION } from '../../../components/inline-text-selection'
 import { openExternalLink } from '../../../platform/external-link'
 import { colors } from '../../../theme/mobile-theme'
+import { useMobileColorScheme } from '../../../theme/use-mobile-color-scheme'
 import { highlightMobileCode } from '../../mobile-file-syntax'
 import { MobileNativeChatToolGlyph } from './MobileNativeChatToolIcon'
 import { MobileNativeChatToolOutput } from '../../MobileNativeChatFullContent'
@@ -38,6 +40,7 @@ function SearchResults({
   results: NativeChatWebSearchResult[]
   fontScale: number
 }): React.JSX.Element {
+  useMobileColorScheme()
   const type = toolType(fontScale).meta
   return (
     <View style={[styles.codeBox, styles.searchResults]}>
@@ -58,6 +61,7 @@ function SearchResults({
 }
 
 function DiffView({ lines, fontScale }: { lines: NativeChatDiffLine[]; fontScale: number }) {
+  useMobileColorScheme()
   const type = toolType(fontScale).code
   return (
     <View style={styles.codeBox}>
@@ -100,6 +104,7 @@ function ToolLineDetail({
   disclosureKey?: string
   memberId?: string
 }): React.JSX.Element {
+  useMobileColorScheme()
   const diff = call
     ? diffFromToolCall(call.name, call.input)
     : body
@@ -158,12 +163,14 @@ export function MobileNativeChatToolLine({
   fontScale: number
   onOpenFile?: (path: string) => void
 }): React.JSX.Element {
+  useMobileColorScheme()
   const [expanded, setExpanded] = useMobileNativeChatDisclosure(disclosureKey, false)
   const { call, label, body, resultPreview, failed, results, hasDetail } = useMemo(
     () => nativeChatToolLineView(block, result),
     [block, result]
   )
-  const fullCommand = label?.commandDetail ?? null
+  const commandDetail = label?.commandDetail ?? null
+  const fullCommand = label?.fullCommand ?? null
   const verb = label?.verb ? NATIVE_CHAT_TOOL_ROW_VERB_COPY[label.verb] : null
   const commandAlone = label?.command === true && verb !== null && label.target.length > 0
   const mcp = call ? mcpToolIdentity(call.name, call.mcpIdentity) : null
@@ -181,60 +188,65 @@ export function MobileNativeChatToolLine({
 
   return (
     <View testID={memberId}>
-      <Pressable
-        style={styles.line}
-        onPress={() => hasDetail && setExpanded(!expanded)}
-        disabled={!hasDetail}
-        accessibilityRole="button"
-        accessibilityState={hasDetail ? { expanded } : undefined}
-      >
-        <View style={[styles.iconSlot, { width: iconSize }]}>
-          {call ? (
-            <MobileNativeChatToolGlyph
-              name={nativeChatToolIconName(call.name, call.mcpIdentity, call.input)}
-              size={iconSize}
-              color={failed ? colors.statusRed : colors.textMuted}
-            />
-          ) : null}
-        </View>
-        {commandAlone ? null : (
-          <Text style={[styles.lineWord, type.row, !verb && styles.lineName]} numberOfLines={1}>
-            {verb ?? name}
-          </Text>
-        )}
-        {target ? (
-          <Text
-            style={[styles.lineTarget, type.row, filePath && onOpenFile && styles.lineLink]}
-            numberOfLines={1}
-            onPress={filePath && onOpenFile ? () => onOpenFile(filePath) : undefined}
-            suppressHighlighting={!(filePath && onOpenFile)}
-            accessibilityRole={filePath && onOpenFile ? 'link' : undefined}
-          >
-            {target}
-          </Text>
-        ) : null}
-        {/* Held at the row's right edge, so the carets of a run line up in one column. */}
-        <View style={styles.lineTrailing}>
-          {exitCode !== undefined ? (
-            <Text style={[styles.lineMeta, type.meta, exitCode !== 0 && styles.errorText]}>
-              {`exit ${exitCode}`}
+      <View style={styles.line}>
+        <Pressable
+          style={[styles.line, styles.cardToggle]}
+          onPress={() => hasDetail && setExpanded(!expanded)}
+          disabled={!hasDetail}
+          accessibilityRole="button"
+          accessibilityState={hasDetail ? { expanded } : undefined}
+        >
+          <View style={[styles.iconSlot, { width: iconSize }]}>
+            {call ? (
+              <MobileNativeChatToolGlyph
+                name={nativeChatToolIconName(call.name, call.mcpIdentity, call.input)}
+                size={iconSize}
+                color={failed ? colors.statusRed : colors.textMuted}
+              />
+            ) : null}
+          </View>
+          {commandAlone ? null : (
+            <Text style={[styles.lineWord, type.row, !verb && styles.lineName]} numberOfLines={1}>
+              {verb ?? name}
+            </Text>
+          )}
+          {target ? (
+            <Text
+              style={[styles.lineTarget, type.row, filePath && onOpenFile && styles.lineLink]}
+              numberOfLines={1}
+              onPress={filePath && onOpenFile ? () => onOpenFile(filePath) : undefined}
+              suppressHighlighting={!(filePath && onOpenFile)}
+              accessibilityRole={filePath && onOpenFile ? 'link' : undefined}
+            >
+              {target}
             </Text>
           ) : null}
-          {duration ? <Text style={[styles.lineMeta, type.meta]}>{duration}</Text> : null}
-          {hasDetail ? (
-            <View style={expanded ? styles.caretOpen : undefined}>
-              <ChevronRight size={14 * fontScale} color={colors.textMuted} strokeWidth={2} />
-            </View>
-          ) : null}
-        </View>
-      </Pressable>
+          {/* Held at the row's right edge, so the carets of a run line up in one column. */}
+          <View style={styles.lineTrailing}>
+            {exitCode !== undefined ? (
+              <Text style={[styles.lineMeta, type.meta, exitCode !== 0 && styles.errorText]}>
+                {`exit ${exitCode}`}
+              </Text>
+            ) : null}
+            {duration ? <Text style={[styles.lineMeta, type.meta]}>{duration}</Text> : null}
+            {hasDetail ? (
+              <View style={expanded ? styles.caretOpen : undefined}>
+                <ChevronRight size={14 * fontScale} color={colors.textMuted} strokeWidth={2} />
+              </View>
+            ) : null}
+          </View>
+        </Pressable>
+        {fullCommand ? (
+          <MobileSourceCopyButton text={fullCommand} accessibilityLabel="Copy command" />
+        ) : null}
+      </View>
       {hasDetail && expanded ? (
         <ToolLineDetail
           memberId={memberId}
           disclosureKey={disclosureKey}
           call={call}
           body={body}
-          fullCommand={fullCommand}
+          fullCommand={commandDetail}
           commandLanguage={label?.commandLanguage ?? null}
           results={results}
           fontScale={fontScale}

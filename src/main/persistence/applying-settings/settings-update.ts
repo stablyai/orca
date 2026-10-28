@@ -1,5 +1,5 @@
 import { legacyChatPermissionWrite } from './legacy-chat-permission-write'
-import { normalizeNativeChatAppearanceSettings } from '../../../shared/native-chat-appearance-settings'
+import { normalizeNativeChatAppearanceSettings } from '../../../shared/native-chat/native-chat-appearance-settings'
 import type { GlobalSettings } from '../../../shared/global-settings-types'
 import { retireAtRestCommandSettings } from '../../native-chat/agent-session-wire/at-rest-command-context'
 import { normalizeDisabledTuiAgents } from '../../../shared/tui-agent-selection'

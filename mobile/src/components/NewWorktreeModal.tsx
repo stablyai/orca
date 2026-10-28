@@ -2,7 +2,7 @@ import { useMemo, useState } from 'react'
 import { Keyboard } from 'react-native'
 import { getComposerRepoWorktreeBranches } from '../../../src/shared/composer-branch-selection'
 import { getRepoExecutionHostId, parseExecutionHostId } from '../../../src/shared/execution-host'
-import { getRepoHostIdentity } from '../../../src/shared/repo-host-identity'
+import { getProjectIdentityKey } from '../../../src/shared/project-host-setup-projection'
 import { shouldPreserveWorkspaceSourceOnRepoChange } from '../../../src/shared/new-workspace/workspace-source'
 import type { SmartModeAvailabilityInput } from '../tasks/mobile-smart-source-modes'
 import { deriveRepoSlug, type PasteRepoCandidate } from '../tasks/smart-source-paste-intent'
@@ -22,7 +22,6 @@ import {
   type NewWorktreeModalProps
 } from './new-worktree-modal-types'
 import {
-  getNewWorkspaceProjectIds,
   buildNewWorkspaceProjectOptions,
   buildNewWorkspaceRunTargetOptions,
   getNewWorkspaceRunTarget
@@ -180,26 +179,13 @@ function NewWorktreeModalContent(props: NewWorktreeModalProps) {
       })),
     [hostRepos]
   )
-  const projectIds = useMemo(() => getNewWorkspaceProjectIds(repos), [repos])
-  const projectPickerItems = useMemo(
-    () => buildNewWorkspaceProjectOptions(repos, projectIds),
-    [repos, projectIds]
-  )
-  const selectedProjectId = selectedRepo
-    ? (projectIds.get(getRepoHostIdentity(selectedRepo)) ?? null)
-    : null
+  const projectPickerItems = useMemo(() => buildNewWorkspaceProjectOptions(repos), [repos])
+  const selectedProjectId = selectedRepo ? getProjectIdentityKey(selectedRepo) : null
   const selectedProject =
     projectPickerItems.find((project) => project.id === selectedProjectId) ?? null
   const runTargetPickerItems = useMemo(
-    () =>
-      buildNewWorkspaceRunTargetOptions(
-        repos,
-        selectedProjectId,
-        hostPlatform,
-        hostLabelById,
-        projectIds
-      ),
-    [hostLabelById, hostPlatform, repos, selectedProjectId, projectIds]
+    () => buildNewWorkspaceRunTargetOptions(repos, selectedProjectId, hostPlatform, hostLabelById),
+    [hostLabelById, hostPlatform, repos, selectedProjectId]
   )
   const selectedRunTarget = selectedRepo
     ? getNewWorkspaceRunTarget(selectedRepo, hostPlatform, hostLabelById)

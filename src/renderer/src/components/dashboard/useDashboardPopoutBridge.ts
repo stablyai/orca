@@ -7,7 +7,7 @@ import {
 } from '@/runtime/structured-chat-name-observation'
 import { subscribeChatProgramFacts } from '@/lib/host-chat-program'
 import {
-  type AgentLaunchRouteWatchState,
+  type AgentLaunchRouteView,
   agentLaunchRouteInputsChanged,
   selectAgentLaunchRouteView
 } from '@/lib/agent-launch-route-input'
@@ -37,7 +37,7 @@ export function repoIconsUnchanged(
 
 type DashboardSnapshotWatchState = DashboardSnapshotState &
   Pick<AppState, 'agentStatusEpoch'> &
-  AgentLaunchRouteWatchState
+  AgentLaunchRouteView
 
 export function dashboardSnapshotInputsChanged(
   state: DashboardSnapshotWatchState,

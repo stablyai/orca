@@ -13,6 +13,7 @@ import { colors } from '../../../theme/mobile-theme'
 import { useMobileNativeChatOpenedDetail } from '../visual/mobile-native-chat-opened-detail'
 import { toolStyles as styles, toolType } from '../transcript/mobile-native-chat-tool-styles'
 import { useMobileNativeChatDisclosure } from '../transcript/mobile-native-chat-disclosure-store'
+import { useMobileColorScheme } from '../../../theme/use-mobile-color-scheme'
 
 const STATUS_WORD: Record<NativeChatTask['status'], string> = {
   completed: NATIVE_CHAT_TASK_LIST_COPY.completed,
@@ -40,6 +41,7 @@ function TaskRow({
   label?: string
   fontScale: number
 }): React.JSX.Element {
+  useMobileColorScheme()
   const Icon =
     task.status === 'completed' ? CircleCheck : task.status === 'in_progress' ? CircleDot : Circle
   const active = task.status === 'in_progress'
@@ -70,6 +72,7 @@ function TaskRow({
 }
 
 function Checklist({ list, fontScale }: { list: TaskList; fontScale: number }) {
+  useMobileColorScheme()
   return list.tasks.length === 0 ? (
     <Text style={[styles.lineMeta, toolType(fontScale).meta]}>
       {NATIVE_CHAT_TASK_LIST_COPY.empty}
@@ -92,6 +95,7 @@ function FullList({
   fontScale: number
   disclosureKey?: string
 }) {
+  useMobileColorScheme()
   const [open, setOpen] = useMobileNativeChatDisclosure(disclosureKey, false)
   return (
     <View>
@@ -133,6 +137,7 @@ export function MobileNativeChatTaskList({
   fontScale: number
   disclosureKey?: string
 }): React.JSX.Element {
+  useMobileColorScheme()
   const completed = nativeChatCompletedTaskCount(list)
   const changes = previous ? diffNativeChatTaskLists(previous, list) : null
   const type = toolType(fontScale)

@@ -1,4 +1,5 @@
 import { spawn } from 'node:child_process'
+import { assertWslDistroAllowed } from '@orca/process-host/wsl-distro-allowlist'
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { delimiter, join } from 'node:path'
@@ -95,6 +96,12 @@ async function runAgentLoginInTerminal(
       resolvedCommand,
       addAgentNodePaths({ ...stripElectronRunAsNode(process.env), ...extraEnv })
     )
+    try {
+      assertWslDistroAllowed(spawnCmd, spawnArgs)
+    } catch (error) {
+      rejectPromise(error)
+      return
+    }
     const consoleStdio = stdioForWindowsInteractiveChild(json)
     let child: ReturnType<typeof spawn>
     try {

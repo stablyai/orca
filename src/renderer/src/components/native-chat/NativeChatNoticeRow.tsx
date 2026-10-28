@@ -15,7 +15,7 @@ import type { NativeChatTextBlock } from '../../../../shared/native-chat-types'
 import {
   NATIVE_CHAT_NOTICE_COPY,
   nativeChatNoticeLook
-} from '../../../../shared/native-chat-notice'
+} from '../../../../shared/native-chat/native-chat-notice'
 import { useNativeChatOrcaStopView } from './native-chat-orca-stop-context'
 import { NativeChatInterruptedContinueButton } from './NativeChatInterruptedContinue'
 import { nativeChatOrcaStopRowText } from '../../../../shared/native-chat/native-chat-orca-stop-words'

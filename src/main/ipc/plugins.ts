@@ -148,12 +148,12 @@ export function registerPluginHandlers(
       )
       await pluginService.whenReady()
       const parsed = readPanelEntryArgsSchema.parse(args)
-      const entry = await pluginService.panels.open(ownerKey, parsed.pluginKey, parsed.panelId)
-      if (!ownerLease.isCurrent()) {
-        pluginService.panels.revokeOwner(ownerKey)
-        return null
-      }
-      return entry
+      return pluginService.panels.open(
+        ownerKey,
+        parsed.pluginKey,
+        parsed.panelId,
+        ownerLease.isCurrent
+      )
     }
   )
 

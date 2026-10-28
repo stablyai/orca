@@ -16,9 +16,34 @@ import {
   terminalTabFixture
 } from './native-chat-workspace-test-fixtures'
 import { getDefaultSettings } from '../../../../shared/constants'
+import type * as StructuredClient from '@/runtime/structured-agent-session-client'
+import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
+import type { AgentSessionStatusEvent } from '../../../../shared/agent-session-wire'
+import type { AgentSessionContinuationRequest } from '@/lib/agent-session-continuation'
+import { useNativeChatHandOff, type NativeChatHandOff } from './use-native-chat-hand-off'
+import {
+  getStructuredAgentSessionStatusFeed,
+  resetStructuredAgentSessionStatusFeedsForTests
+} from '@/runtime/structured-agent-session-status-feed'
 
 const rpc = vi.hoisted(() => vi.fn())
-vi.mock('@/runtime/runtime-rpc-client', () => ({ callRuntimeRpc: rpc }))
+vi.mock('@/runtime/runtime-rpc-client', () => ({
+  callRuntimeRpc: rpc,
+  runtimeEnvironmentSupportsCapability: vi.fn(async () => true)
+}))
+const handOffTransport = vi.hoisted(() => ({ subscribe: vi.fn() }))
+vi.mock('@/runtime/structured-agent-session-client', async (importOriginal) => ({
+  ...(await importOriginal<typeof StructuredClient>()),
+  subscribeStructuredAgentSessionStatus: handOffTransport.subscribe,
+  supportsStructuredAgentSessionContinuationContext: vi.fn(async () => false)
+}))
+vi.mock('@/components/agent-session-continuation/AgentSessionContinuationDialog', () => ({
+  AgentSessionContinuationDialog: ({
+    request
+  }: {
+    request: AgentSessionContinuationRequest | null
+  }) => <output>{request?.source.sourceTitle}</output>
+}))
 vi.mock('@/lib/native-chat-telemetry', () => ({ emitNativeChatSkillDiscovery: vi.fn() }))
 
 import {
@@ -112,7 +137,7 @@ function corpus(scale: number, dense = false) {
     worktreesByRepo: {},
     detectedWorktreesByRepo: {},
     projectGroups: [],
-    endpointProjects: [],
+    projects: [],
     runtimeEnvironments: [],
     runtimeEnvironmentCatalogHydrated: true,
     removedRuntimeEnvironmentIds: new Set(),
@@ -201,6 +226,8 @@ afterEach(() => {
   cleanup()
   useAppStore.setState(initialState, true)
   resetNativeChatSkillDiscoveryCacheForTests()
+  resetStructuredAgentSessionStatusFeedsForTests()
+  handOffTransport.subscribe.mockReset()
   rpc.mockReset()
 })
 
@@ -250,6 +277,139 @@ function measureImageSubscriptions(scale: number) {
 }
 
 describe('native chat store subscription performance', () => {
+  it('keeps hand-off tab scans and unrelated renders at zero at N and 10N while titles stay live', async () => {
+    for (const scale of [1, 10]) {
+      const data = corpus(scale, true)
+      const emits = new Map<string, (event: AgentSessionStatusEvent) => void>()
+      handOffTransport.subscribe.mockImplementation(
+        async (target: RuntimeClientTarget, emit: (event: AgentSessionStatusEvent) => void) => {
+          emits.set(target.kind === 'local' ? 'local' : target.environmentId, emit)
+          return { unsubscribe: vi.fn() }
+        }
+      )
+      const controls = new Map<string, NativeChatHandOff>()
+      const renders = new Map<string, number>()
+      function Probe({ chatId, index }: { chatId: string; index: number }) {
+        const handOff = useNativeChatHandOff({
+          pane: {
+            tabId: chatId,
+            sessionId: `session-${index}`,
+            groupId: 'group',
+            agent: 'codex',
+            target: { kind: 'local' },
+            isVisible: true
+          },
+          directory: {
+            worktreeId: workspace(0),
+            worktreePath: '/repo/0',
+            runtimeEnvironmentId: null
+          },
+          epoch: 'epoch',
+          messages: [
+            {
+              id: 'message',
+              role: 'user',
+              blocks: [{ type: 'text', text: 'Saved context' }],
+              timestamp: 1,
+              source: 'transcript'
+            }
+          ],
+          focusComposer: () => undefined
+        })
+        controls.set(chatId, handOff)
+        renders.set(chatId, (renders.get(chatId) ?? 0) + 1)
+        return handOff.dialog
+      }
+      const view = render(
+        data.chatIds.map((chatId, index) => <Probe key={chatId} chatId={chatId} index={index} />)
+      )
+      const otherFeed = getStructuredAgentSessionStatusFeed({
+        kind: 'environment',
+        environmentId: 'other'
+      })
+      let stopOther: () => void = () => undefined
+      await act(async () => {
+        stopOther = otherFeed.activate()
+      })
+      const baseline = new Map(renders)
+      const publishName = (host: string, sessionId: string, conversationName: string) => {
+        const emit = emits.get(host)
+        if (!emit) {
+          throw new Error(`Missing ${host} status transport`)
+        }
+        act(() =>
+          emit({
+            type: 'snapshot',
+            sessions: [],
+            conversationNames: [{ sessionId, conversationName }]
+          })
+        )
+      }
+      const operations: Work[] = []
+      for (let tick = 0; tick < 3; tick++) {
+        data.reset()
+        act(() => useAppStore.setState({ lastTerminalInputAtByPaneKey: { other: tick } }))
+        operations.push({ ...data.work })
+        expect(renders).toEqual(baseline)
+        data.reset()
+        publishName('other', 'session-0', `Other host ${tick}`)
+        operations.push({ ...data.work })
+        expect(renders).toEqual(baseline)
+        data.reset()
+        publishName('local', 'unmounted-session', `Unrelated name ${tick}`)
+        operations.push({ ...data.work })
+        expect(renders).toEqual(baseline)
+      }
+      for (const work of operations) {
+        expect(work.unifiedRows).toBe(0)
+        expect(work.terminalRows).toBe(0)
+        expect(work.unifiedMapEnumerations).toBe(0)
+      }
+      const current = useAppStore.getState()
+      const rows = current.unifiedTabsByWorktree[workspace(0)]
+      const renamed = countRow(
+        { ...rows[0], customLabel: null, label: 'Live label' },
+        () => data.work.unifiedRows++
+      )
+      data.reset()
+      act(() =>
+        useAppStore.setState({
+          unifiedTabsByWorktree: {
+            ...current.unifiedTabsByWorktree,
+            [workspace(0)]: [renamed, ...rows.slice(1)]
+          }
+        })
+      )
+      expect(data.work.unifiedRows).toBeLessThanOrEqual(data.mounted)
+      expect(renders.get('chat-0')).toBe(baseline.get('chat-0')! + 1)
+      for (const chatId of data.chatIds.slice(1)) {
+        expect(renders.get(chatId)).toBe(baseline.get(chatId))
+      }
+      const openTitle = async (title: string) => {
+        await act(async () => controls.get('chat-0')!.open())
+        expect(view.container.textContent).toBe(title)
+        act(() => controls.get('chat-0')!.reset())
+      }
+      await openTitle('Live label')
+      const beforeName = new Map(renders)
+      data.reset()
+      publishName('local', 'session-0', 'Live saved name')
+      expect(data.work.unifiedRows).toBe(0)
+      expect(renders.get('chat-0')).toBe(beforeName.get('chat-0')! + 1)
+      for (const chatId of data.chatIds.slice(1)) {
+        expect(renders.get(chatId)).toBe(beforeName.get(chatId))
+      }
+      await openTitle('Live saved name')
+      console.info(
+        'native-chat-handoff-subscription-work',
+        JSON.stringify({ mounted: data.mounted, operations })
+      )
+      view.unmount()
+      stopOther()
+      resetStructuredAgentSessionStatusFeedsForTests()
+    }
+  })
+
   it('does no tab work for closed pickers at N and 10N, then discovers the latest owner on activation', async () => {
     rpc.mockResolvedValue({ skills: [], sources: [], scannedAt: 1 })
     for (const scale of [1, 10]) {

@@ -5,7 +5,6 @@ import {
   Keyboard,
   Platform,
   Pressable,
-  StyleSheet,
   Text,
   View
 } from 'react-native'
@@ -20,7 +19,8 @@ import {
   type LucideIcon
 } from 'lucide-react-native'
 import { BottomDrawer } from '../../../components/BottomDrawer'
-import { colors, radii, spacing, typography } from '../../../theme/mobile-theme'
+import { colors } from '../../../theme/mobile-theme'
+import { useMobileColorScheme } from '../../../theme/use-mobile-color-scheme'
 import {
   isReadOnlySessionOptionValue,
   sessionOptionDispatchUnconfirmed,
@@ -52,6 +52,7 @@ import {
   isAgentChatPermissionMode
 } from '../../../../../src/shared/agent-chat-permission-mode'
 import type { MobileNativeChatSessionOptionsController } from './use-mobile-native-chat-session-options'
+import { sessionOptionPickerStyles as styles } from './mobile-native-chat-session-option-picker-styles'
 
 export type MobileNativeChatPickerPresentation = { page: string | null; refocus: boolean }
 
@@ -105,6 +106,7 @@ export function MobileNativeChatSessionOptionPickers({
   onDrawerOpen,
   onDrawerAfterClose
 }: MobileNativeChatSessionOptionPickersProps & PresentationProps): React.JSX.Element | null {
+  useMobileColorScheme()
   const open = presentation?.page != null
   const wasOpen = useRef(false)
   useEffect(() => {
@@ -304,6 +306,7 @@ function OptionRows({
   onNavigate: (page: string) => void
   onSetOption: (descriptor: SessionOptionDescriptor, value: SessionOptionValue) => void
 }): React.JSX.Element | null {
+  useMobileColorScheme()
   if (descriptors.length === 0) {
     return null
   }
@@ -343,77 +346,3 @@ function OptionRows({
     </View>
   )
 }
-
-const styles = StyleSheet.create({
-  // The action row's only shrinkable item: a long label truncates before it pushes Send off.
-  pillSlot: {
-    flexShrink: 1,
-    minWidth: 0
-  },
-  sheet: {
-    paddingBottom: spacing.xs
-  },
-  sheetHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingBottom: spacing.lg
-  },
-  sheetTitle: {
-    flex: 1,
-    color: colors.textPrimary,
-    fontSize: typography.titleSize,
-    fontWeight: '700',
-    textAlign: 'center'
-  },
-  sheetNav: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: colors.bgRaised,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: colors.borderSubtle
-  },
-  sheetHeaderSide: {
-    width: 36,
-    height: 36,
-    alignItems: 'center',
-    justifyContent: 'center'
-  },
-  lockNotice: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.sm,
-    paddingHorizontal: spacing.md,
-    paddingBottom: spacing.lg
-  },
-  lockNoticeBody: {
-    flex: 1,
-    gap: spacing.xs
-  },
-  lockNoticeTitle: {
-    color: colors.textPrimary,
-    fontSize: typography.bodySize,
-    fontWeight: '600'
-  },
-  lockNoticeDescription: {
-    color: colors.textSecondary,
-    fontSize: typography.metaSize
-  },
-  group: {
-    overflow: 'hidden',
-    borderRadius: radii.card,
-    backgroundColor: colors.bgRaised
-  },
-  groupSpaced: {
-    marginTop: spacing.md
-  },
-  divided: {
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: colors.composerBorder
-  },
-  pressed: {
-    opacity: 0.7
-  }
-})

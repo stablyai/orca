@@ -6,7 +6,11 @@ vi.mock('@/runtime/runtime-file-mutation-client', () => ({
 }))
 vi.mock('./file-explorer-operation-owner', () => ({
   getFileExplorerOperationOwner: () => ({ kind: 'local' }),
-  getFileExplorerOperationRoute: () => ({ settings: null, connectionId: null }),
+  getFileExplorerOperationRoute: () => ({
+    target: { kind: 'local' },
+    settings: null,
+    connectionId: null
+  }),
   getFileExplorerOwnerUnresolvedMessage: () => 'unresolved'
 }))
 

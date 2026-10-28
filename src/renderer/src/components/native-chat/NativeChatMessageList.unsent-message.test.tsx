@@ -4,7 +4,8 @@
 
 import '@testing-library/jest-dom/vitest'
 
-import { cleanup, render } from '@testing-library/react'
+import { cleanup } from '@testing-library/react'
+import { render } from './native-chat-tooltip-test-harness'
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest'
 
 // Why: these fixtures have neither inline visual owners nor sender navigation.

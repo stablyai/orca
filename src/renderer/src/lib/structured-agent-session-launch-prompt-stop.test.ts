@@ -1,3 +1,4 @@
+import { subscribeToNativeChatComposerDraftAppend } from '../components/native-chat/native-chat-composer-draft-store'
 // @vitest-environment happy-dom
 // A Stop pressed while a new chat starts, through the chat's own Stop control.
 
@@ -21,8 +22,7 @@ import {
 } from '@/components/native-chat/structured-agent-session-message-sender'
 import {
   clearNativeChatDraftCacheForTests,
-  readNativeChatDraftCache,
-  subscribeToNativeChatDraftAppend
+  readNativeChatDraftCache
 } from '@/components/native-chat/native-chat-draft-cache'
 import { structuredAgentSessionDraftScopeKey } from '@/components/native-chat/native-chat-composer-draft-store'
 import {
@@ -169,7 +169,7 @@ describe('Stop before a new chat is published', () => {
   // Bookkeeping never gates a Stop: a draft write that throws is reported, and the Stop goes on.
   it("still stops the chat's sends and says so when putting the text back throws", async () => {
     const report = vi.spyOn(console, 'error').mockImplementation(() => {})
-    const unsubscribe = subscribeToNativeChatDraftAppend(
+    const unsubscribe = subscribeToNativeChatComposerDraftAppend(
       structuredAgentSessionDraftScopeKey(SESSION),
       () => {
         throw new Error('draft listener failed')

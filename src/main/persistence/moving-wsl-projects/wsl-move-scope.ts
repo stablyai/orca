@@ -5,8 +5,11 @@ import { resolveFolderWorkspaceHost } from '../../../shared/folder-workspace-exe
 import type { FolderWorkspace } from '../../../shared/folder-workspace-types'
 import type { ProjectGroup } from '../../../shared/project-group-types'
 import type { Repo } from '../../../shared/repo-types'
-import { isDrvfsLinuxPath, resolveWslRepoWorktreeBasePath } from '../../../shared/wsl-paths'
-import { wslUncPathToLinux } from './wsl-move-path-rewriter'
+import {
+  isDrvfsLinuxPath,
+  resolveWslRepoWorktreeBasePath,
+  wslUncPathToLinux
+} from '../../../shared/wsl-paths'
 
 export type WslMoveScopeRefusal =
   /** Distro access does not make Windows-drive projects Linux-owned. */

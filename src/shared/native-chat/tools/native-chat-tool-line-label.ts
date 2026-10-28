@@ -45,6 +45,8 @@ export type NativeChatToolLineLabel = {
   title: string
   command: boolean
   filePath: string | null
+  /** The whole command a command row ran; null when its input names none. */
+  fullCommand: string | null
   /** The whole command, when the row had to shorten it. */
   commandDetail: string | null
   /** Grammar of `commandDetail`; null when the row holds no command text. */
@@ -79,6 +81,7 @@ export function nativeChatToolLineLabel(
     (call.state === 'completed' || result !== undefined)
   const failed = call.state === 'failed' || result?.isError === true
   const phase = { running, completed, failed }
+  let fullCommand: string | null = null
   let commandDetail: string | null = null
   let commandLanguage: string | null = null
   let verb: NativeChatToolRowVerb | null = null
@@ -93,7 +96,7 @@ export function nativeChatToolLineLabel(
       : null
 
   if (command) {
-    const fullCommand = nativeChatFullCommand(call.input)
+    fullCommand = nativeChatFullCommand(call.input)
     target = fullCommand === null ? target : summarizeToolInput(fullCommand)
     title = fullCommand ?? target
     if (fullCommand !== null) {
@@ -140,5 +143,5 @@ export function nativeChatToolLineLabel(
       })
     }
   }
-  return { verb, target, title, command, filePath, commandDetail, commandLanguage }
+  return { verb, target, title, command, filePath, fullCommand, commandDetail, commandLanguage }
 }

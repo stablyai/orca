@@ -1,13 +1,17 @@
 import { DEFAULT_UI_LOCALE, resolveRendererUiLocale } from '../../../shared/ui-locale'
 import {
   UI_LANGUAGE_CHINESE,
+  UI_LANGUAGE_CHINESE_TRADITIONAL,
   UI_LANGUAGE_ENGLISH,
   UI_LANGUAGE_FRENCH,
+  UI_LANGUAGE_GERMAN,
   UI_LANGUAGE_JAPANESE,
   UI_LANGUAGE_KOREAN,
   UI_LANGUAGE_PORTUGUESE,
+  UI_LANGUAGE_RUSSIAN,
   UI_LANGUAGE_SPANISH,
   UI_LANGUAGE_SYSTEM,
+  UI_LANGUAGE_TURKISH,
   type BuiltInUiLanguage,
   type UiLanguage
 } from '../../../shared/ui-language'
@@ -25,22 +29,33 @@ export const UI_LANGUAGE_CHOICES: UiLanguageChoice[] = [
   { value: UI_LANGUAGE_SYSTEM, labelKey: 'settings.appearance.language.system' },
   { value: UI_LANGUAGE_ENGLISH, labelKey: 'settings.appearance.language.english' },
   { value: UI_LANGUAGE_CHINESE, labelKey: 'settings.appearance.language.chinese' },
+  {
+    value: UI_LANGUAGE_CHINESE_TRADITIONAL,
+    labelKey: 'settings.appearance.language.chineseTraditional'
+  },
   { value: UI_LANGUAGE_KOREAN, labelKey: 'settings.appearance.language.korean' },
   { value: UI_LANGUAGE_JAPANESE, labelKey: 'settings.appearance.language.japanese' },
   { value: UI_LANGUAGE_SPANISH, labelKey: 'settings.appearance.language.spanish' },
   { value: UI_LANGUAGE_FRENCH, labelKey: 'settings.appearance.language.french' },
-  { value: UI_LANGUAGE_PORTUGUESE, labelKey: 'settings.appearance.language.portuguese' }
+  { value: UI_LANGUAGE_PORTUGUESE, labelKey: 'settings.appearance.language.portuguese' },
+  { value: UI_LANGUAGE_RUSSIAN, labelKey: 'settings.appearance.language.russian' },
+  { value: UI_LANGUAGE_TURKISH, labelKey: 'settings.appearance.language.turkish' },
+  { value: UI_LANGUAGE_GERMAN, labelKey: 'settings.appearance.language.german' }
 ]
 
 const UI_LANGUAGE_CHOICE_FALLBACKS: Record<BuiltInUiLanguage, string> = {
   [UI_LANGUAGE_SYSTEM]: 'System',
   [UI_LANGUAGE_ENGLISH]: 'English',
   [UI_LANGUAGE_CHINESE]: '中文（简体）',
+  [UI_LANGUAGE_CHINESE_TRADITIONAL]: '繁體中文（台灣）',
   [UI_LANGUAGE_KOREAN]: '한국어',
   [UI_LANGUAGE_JAPANESE]: '日本語',
   [UI_LANGUAGE_SPANISH]: 'Español',
   [UI_LANGUAGE_FRENCH]: 'Français',
-  [UI_LANGUAGE_PORTUGUESE]: 'Português (Brasil)'
+  [UI_LANGUAGE_PORTUGUESE]: 'Português (Brasil)',
+  [UI_LANGUAGE_RUSSIAN]: 'Русский',
+  [UI_LANGUAGE_TURKISH]: 'Türkçe',
+  [UI_LANGUAGE_GERMAN]: 'Deutsch'
 }
 
 export function getUiLanguageChoiceLabel(

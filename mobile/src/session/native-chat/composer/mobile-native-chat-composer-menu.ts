@@ -67,15 +67,12 @@ export function mobileComposerCatalog({
 }
 
 export function mobileComposerSkillTokens(catalog: MobileComposerCatalog): ReadonlySet<string> {
-  if (!catalog.profile) {
-    return new Set()
-  }
   return new Set(
     buildNativeChatPickerItems(
       catalog.commands,
       nativeChatPickerScannedSkills(catalog.profile, catalog.discovery.skills),
       '',
-      catalog.profile.skillPrefix,
+      catalog.profile?.skillPrefix ?? '/',
       catalog.sessionSkills,
       Infinity
     ).flatMap((item) => (item.kind === 'skill' ? [item.token] : []))

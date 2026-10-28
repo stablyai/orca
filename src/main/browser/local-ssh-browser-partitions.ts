@@ -36,7 +36,12 @@ type PreparedLocalSshPartition = {
   proxyEndpoint: BrowserRouteProxyEndpoint
 }
 
-const preparedByIdentityKey = new Map<string, Promise<PreparedLocalSshPartition>>()
+type PendingLocalSshPartition = {
+  targetId: string
+  promise: Promise<PreparedLocalSshPartition>
+}
+
+const preparedByIdentityKey = new Map<string, PendingLocalSshPartition>()
 const preparedByPartition = new Map<string, PreparedLocalSshPartition>()
 const partitionBySession = new WeakMap<Session, string>()
 
@@ -77,15 +82,16 @@ export async function prepareLocalSshBrowserPartition(input: {
   ])
   let pending = preparedByIdentityKey.get(identityKey)
   if (!pending) {
-    pending = prepareFresh(input)
+    const promise = prepareFresh(input)
+    pending = { targetId: input.targetId, promise }
     preparedByIdentityKey.set(identityKey, pending)
-    pending.catch(() => {
+    promise.catch(() => {
       if (preparedByIdentityKey.get(identityKey) === pending) {
         preparedByIdentityKey.delete(identityKey)
       }
     })
   }
-  const prepared = await pending
+  const prepared = await pending.promise
   return { partition: prepared.partition }
 }
 
@@ -184,20 +190,42 @@ function ensureLocalSshWebRtcGuard(): void {
 /** Stops guests and releases route records; the caller clears storage afterward. */
 export async function releaseLocalSshBrowserPartitionsForTarget(targetId: string): Promise<void> {
   await closeLocalSshBrowserRouteForTarget(targetId)
-  for (const [identityKey, pending] of preparedByIdentityKey) {
-    const prepared = await pending.catch(() => null)
-    if (prepared?.targetId === targetId) {
-      preparedByIdentityKey.delete(identityKey)
-      preparedByPartition.delete(prepared.partition)
-      // Close guests before clearing storage so they cannot recreate cookies after bindings are removed.
-      const partitionSession = session.fromPartition(prepared.partition)
-      for (const contents of webContents.getAllWebContents()) {
-        if (!contents.isDestroyed() && contents.session === partitionSession) {
-          closeRouteGuest(contents)
-        }
+  let contentsBySession: Map<Session, WebContents[]> | null = null
+  const invalidateContents = (): void => {
+    contentsBySession = null
+  }
+  app.on('web-contents-created', invalidateContents)
+  try {
+    for (const [identityKey, pending] of preparedByIdentityKey) {
+      if (pending.targetId !== targetId) {
+        continue
       }
-      browserSessionRegistry.clearRoutePartitionPolicies(prepared.partition)
+      const prepared = await pending.promise.catch(() => null)
+      if (prepared?.targetId === targetId) {
+        preparedByIdentityKey.delete(identityKey)
+        preparedByPartition.delete(prepared.partition)
+        // Close guests before clearing storage so they cannot recreate cookies after bindings are removed.
+        const partitionSession = session.fromPartition(prepared.partition)
+        if (!contentsBySession) {
+          contentsBySession = new Map()
+          for (const contents of webContents.getAllWebContents()) {
+            if (!contents.isDestroyed()) {
+              const peers = contentsBySession.get(contents.session) ?? []
+              peers.push(contents)
+              contentsBySession.set(contents.session, peers)
+            }
+          }
+        }
+        for (const contents of contentsBySession.get(partitionSession) ?? []) {
+          if (!contents.isDestroyed()) {
+            closeRouteGuest(contents)
+          }
+        }
+        browserSessionRegistry.clearRoutePartitionPolicies(prepared.partition)
+      }
     }
+  } finally {
+    app.removeListener('web-contents-created', invalidateContents)
   }
 }
 

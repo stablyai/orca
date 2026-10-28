@@ -14,6 +14,11 @@ import {
   type TerminalMultiplexConnection
 } from './terminal-multiplex-connection'
 import type { TerminalMultiplexStream } from './terminal-stream-types'
+import type { TerminalOutputFrameChunk } from '../../terminal-output-frame-chunks'
+import {
+  markYieldedQueriesDiscardedInFrames,
+  replaySnapshotCoveredStatelessQueries
+} from './terminal-multiplex-yielded-queries'
 
 export function installMultiplexFlowControl(state: TerminalMultiplexConnection): void {
   const { runtime, streams } = state
@@ -44,6 +49,8 @@ export function installMultiplexFlowControl(state: TerminalMultiplexConnection):
       if (!serialized) {
         throw new Error('Remote terminal recovery snapshot unavailable.')
       }
+      // Overflow still queues, so batched covered output reaches the cutoff below instead of settling queries the viewer drops.
+      stream.outputBatcher.flush()
       const displayMode = runtime.getMobileDisplayMode(stream.ptyId)
       const publication = sendSnapshotFrames(
         (opcode, payload) =>
@@ -73,9 +80,10 @@ export function installMultiplexFlowControl(state: TerminalMultiplexConnection):
       }
       if (typeof serialized.seq === 'number') {
         const snapshotSeq = serialized.seq
-        const retained = stream.ackPendingOutput.filter(
-          (chunk) => !(typeof chunk.seq === 'number' && chunk.seq <= snapshotSeq)
-        )
+        const isCovered = (chunk: TerminalOutputFrameChunk): boolean =>
+          typeof chunk.seq === 'number' && chunk.seq <= snapshotSeq
+        markYieldedQueriesDiscardedInFrames(stream, stream.ackPendingOutput.filter(isCovered))
+        const retained = stream.ackPendingOutput.filter((chunk) => !isCovered(chunk))
         stream.ackPendingOutput = retained
         stream.ackPendingOutputBytes = retained.reduce(
           (total, chunk) => total + chunk.bytes.byteLength,
@@ -84,6 +92,7 @@ export function installMultiplexFlowControl(state: TerminalMultiplexConnection):
       }
       stream.ackPendingOutputOverflowed = false
       stream.ackRecoveryHistoryOwed = !carriesHistory
+      replaySnapshotCoveredStatelessQueries(state, stream, [], serialized.seq)
     } catch (error) {
       if (!isMultiplexStreamAttached(state, stream)) {
         return

@@ -13,6 +13,7 @@
     "./scripts/happy-dom-mutation-observer-retention.ts",
     "./scripts/happy-dom-animation-cancel.ts",
     "./scripts/vitest-node-runtime-pool.ts",
+    "./scripts/vitest-module-cache-resolution-key.ts",
     "../src/main/**/*",
     "../src/renderer/src/store/slices/worktrees/create/worktree-create-payload.ts",
     "../src/renderer/src/components/native-chat/native-chat-resolution-receipt.ts",

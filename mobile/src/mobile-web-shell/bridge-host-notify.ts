@@ -9,6 +9,7 @@ import {
 import { BRIDGE_HAPTICS_NOTIFY } from './bridge/bridge-haptics-notify'
 import { bridgeNotifyRefusal } from './bridge/bridge-notify-grants'
 import { BRIDGE_BACK_CLAIM_NOTIFY } from './bridge/bridge-page-back'
+import { BRIDGE_PAGE_LOCATION } from './bridge/bridge-page-location'
 import { BRIDGE_PAGE_PAINTED } from './bridge/bridge-page-painted'
 import { BRIDGE_ROUTE_PARAM_CLEAR } from './bridge/bridge-route-update'
 import type { BridgeHostOptions } from './bridge-host-contract'
@@ -37,6 +38,10 @@ export function createBridgeNotifyForwarder(args: {
       options.onPagePainted()
       return
     }
+    if (message.name === BRIDGE_PAGE_LOCATION) {
+      options.onPageLocation(message.href)
+      return
+    }
     if (message.name === BRIDGE_BACK_CLAIM_NOTIFY) {
       // Forward Back claims to the screen that owns the native key; this host serves only its document.
       args.onBackClaim(message.claimed)
@@ -51,7 +56,7 @@ export function createBridgeNotifyForwarder(args: {
       return
     }
     if (message.name === 'navigate') {
-      options.onNavigate(message.href)
+      options.onNavigate(message.href, message.replace === true)
       return
     }
     if (message.name === BRIDGE_NAVIGATE_BACK_NOTIFY) {

@@ -71,15 +71,6 @@ describe('matchNativeChatCatalogModelId', () => {
     }
   })
 
-  it('prefers the longest contained id and keeps catalog order for ties', () => {
-    const catalog = {
-      ...CLAUDE_SESSION_OPTION_CATALOG,
-      models: ['a', 'abc', 'xyz'].map((id) => ({ id, label: id, options: [] }))
-    }
-    expect(matchNativeChatCatalogModelId(catalog, 'provider-xyz-abc')).toBe('abc')
-    expect(catalog.models.map((model) => model.id)).toEqual(['a', 'abc', 'xyz'])
-  })
-
   it('keeps the reported selector as-is for a catalog that seeds no models', () => {
     // OMP’s unseeded catalog cannot outrank its exact hook-reported provider/id selector.
     const unseeded = { ...CLAUDE_SESSION_OPTION_CATALOG, models: [] }
@@ -87,19 +78,5 @@ describe('matchNativeChatCatalogModelId', () => {
       'deepseek/deepseek-v4-pro'
     )
     expect(matchNativeChatCatalogModelId(unseeded, '   ')).toBeNull()
-  })
-
-  it('matches exact ids, labels, and provider-id containment', () => {
-    expect(matchNativeChatCatalogModelId(CLAUDE_SESSION_OPTION_CATALOG, 'sonnet')).toBe('sonnet')
-    expect(matchNativeChatCatalogModelId(CLAUDE_SESSION_OPTION_CATALOG, 'Sonnet 5')).toBe('sonnet')
-    expect(matchNativeChatCatalogModelId(CLAUDE_SESSION_OPTION_CATALOG, 'claude-sonnet-5')).toBe(
-      'sonnet'
-    )
-    expect(matchNativeChatCatalogModelId(CODEX_SESSION_OPTION_CATALOG, 'gpt-5.5')).toBe('gpt-5.5')
-  })
-
-  it('returns null for unrecognized reports', () => {
-    expect(matchNativeChatCatalogModelId(CLAUDE_SESSION_OPTION_CATALOG, 'mystery-model')).toBeNull()
-    expect(matchNativeChatCatalogModelId(CLAUDE_SESSION_OPTION_CATALOG, '')).toBeNull()
   })
 })

@@ -7,6 +7,7 @@ import type * as CodexConfigMirror from '../codex/codex-config-mirror'
 import type * as CodexHomePaths from '../codex/codex-home-paths'
 import type * as LegacyWslRuntimeAuthDrain from './legacy-wsl-runtime-auth-drain'
 import type * as WslCodexAuthBatchReader from './wsl-codex-auth-batch-reader'
+import type * as WslCodexSessionBridge from '../codex/wsl-codex-session-bridge'
 import { createSettings } from './runtime-home-settings-test-fixtures'
 import {
   createCodexAuthJson,
@@ -424,6 +425,11 @@ describe('CodexRuntimeHomeService', () => {
       vi.doMock('../codex/codex-config-mirror', async (importOriginal) => ({
         ...(await importOriginal<typeof CodexConfigMirror>()),
         syncSystemConfigIntoManagedCodexHome: vi.fn()
+      }))
+      // Launch-time sibling bridging is covered elsewhere; this pins only the drain's own target.
+      vi.doMock('../codex/wsl-codex-session-bridge', async (importOriginal) => ({
+        ...(await importOriginal<typeof WslCodexSessionBridge>()),
+        startWslCodexSessionBridgeInBackground: vi.fn(() => Promise.resolve())
       }))
       const retiredHome = join(guestHome, '.local', 'share', 'orca', 'codex-runtime-home', 'home')
       const relativeSessionPath = join('sessions', '2026', '08', '26', 'retired.jsonl')

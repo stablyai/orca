@@ -6,9 +6,18 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { performance } from 'node:perf_hooks'
 import { promisify } from 'node:util'
-import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import * as nativeFs from '../asar-transparent-fs'
+import * as diskFs from 'node:fs/promises'
+import * as runner from './runner'
+import {
+  runUnderWorktreeDeleteLimit,
+  _worktreeDeleteLimitSnapshotForTests
+} from './worktree-delete-limit'
 import { installRealWorkerThreadChildProcesses } from '../worker-thread-child-process/worker-thread-child-process-real.test-fixtures'
 import { removeTree } from '../../shared/windows-transient-lock-removal'
+import { canSafelyRemoveOrphanedWorktreeDirectory } from '../worktree-removal-safety'
+import { CLIENT_REMOVAL_HOME } from '../worktree-removal-home-guard'
 import { classifyWorktreeForceDeleteReason } from '../../shared/worktree/removal'
 import { formatWorktreeRemovalError } from '../ipc/worktree-logic'
 import { assertWorktreeCleanForRemoval, listWorktreesStrict, removeWorktree } from './worktree'
@@ -62,17 +71,119 @@ beforeEach(async () => {
 })
 
 afterEach(async () => {
+  vi.restoreAllMocks()
+  vi.unstubAllEnvs()
   await removeTree(scratchDir)
 })
 
 describe('worktree removal against the real Git binary', () => {
-  it('deletes the checkout and its registration before returning', async () => {
-    await removeWorktree(repoPath, worktreePath, false, { deleteBranch: false })
+  it.each(['ordinary', 'bare', 'link-before', 'link-after'])(
+    'deletes the checkout and only its target administration from a %s parent',
+    async (layout) => {
+      if (layout === 'bare') {
+        await git(['worktree', 'remove', '--force', worktreePath], repoPath)
+        const bare = join(scratchDir, 'bare.git')
+        await git(['clone', '--bare', '-q', repoPath, bare], scratchDir)
+        repoPath = bare
+        await git(['worktree', 'add', '-q', worktreePath, 'feature'], repoPath)
+      }
+      if (layout.startsWith('link-')) {
+        if (layout === 'link-before') {
+          await git(['worktree', 'remove', '--force', worktreePath], repoPath)
+        }
+        const metadata = join(scratchDir, 'metadata')
+        await diskFs.rename(join(repoPath, '.git'), metadata)
+        await diskFs.symlink(
+          metadata,
+          join(repoPath, '.git'),
+          process.platform === 'win32' ? 'junction' : 'dir'
+        )
+        if (layout === 'link-before') {
+          await git(['worktree', 'add', '-q', worktreePath, 'feature'], repoPath)
+        }
+        expect((await diskFs.lstat(join(repoPath, '.git'))).isSymbolicLink()).toBe(true)
+      }
+      const sibling = join(scratchDir, 'unrelated')
+      await git(['worktree', 'add', '-q', sibling, '-b', 'sibling'], repoPath)
+      await diskFs.rename(sibling, join(scratchDir, 'offline'))
+      const marker = await readFile(join(worktreePath, '.git'), 'utf8')
+      const admin = marker.trim().slice(8)
+      const backlink = await readFile(join(admin, 'gitdir'), 'utf8')
+      console.info('owning metadata layout', { layout, marker, backlink })
+      expect(
+        await canSafelyRemoveOrphanedWorktreeDirectory(worktreePath, repoPath, CLIENT_REMOVAL_HOME)
+      ).toBe(true)
 
-    expect(existsSync(worktreePath)).toBe(false)
-    expect(await isRegistered(worktreePath)).toBe(false)
-    expect(existsSync(join(workspaceRoot, 'repo', WORKTREE_TRASH_DIR_NAME))).toBe(false)
-  })
+      await removeWorktree(repoPath, worktreePath, false, { deleteBranch: false })
+
+      expect(existsSync(worktreePath)).toBe(false)
+      expect(await isRegistered(worktreePath)).toBe(false)
+      expect(existsSync(join(workspaceRoot, 'repo', WORKTREE_TRASH_DIR_NAME))).toBe(false)
+      expect(existsSync(admin)).toBe(false)
+      expect(await isRegistered(sibling)).toBe(true)
+    }
+  )
+
+  it.skipIf(process.platform !== 'win32').each(['redirect', 'ls-files', 'status'])(
+    'preserves the accepted checkout across bound Git checks: %s',
+    async (schedule) => {
+      const dispatch = vi.spyOn(nativeFs, 'rm')
+      if (schedule === 'redirect') {
+        const clean = join(scratchDir, 'clean')
+        await git(['worktree', 'add', '-q', clean, '-b', 'clean'], repoPath)
+        await git(['config', 'extensions.worktreeConfig', 'true'], repoPath)
+        await git(['config', '--worktree', 'core.worktree', clean], worktreePath)
+        await writeFile(join(worktreePath, 'seed.txt'), 'do not delete\n')
+        vi.stubEnv('GIT_WORK_TREE', clean)
+      } else {
+        if (schedule === 'ls-files') {
+          await writeFile(join(repoPath, '.git', 'info', 'exclude'), 'nested/\n')
+        }
+        const execute = runner.gitExecFileAsync
+        vi.spyOn(runner, 'gitExecFileAsync').mockImplementation(async (args, options) => {
+          const result = await execute(args, options)
+          if (args[0] === schedule && options?.env?.GIT_WORK_TREE === worktreePath) {
+            if (schedule === 'status') {
+              await git(['worktree', 'lock', worktreePath], repoPath)
+            } else {
+              const nested = join(worktreePath, 'nested')
+              await git(['worktree', 'add', '-q', nested, '-b', 'nested'], repoPath)
+            }
+          }
+          return result
+        })
+      }
+      await expect(removeWorktree(repoPath, worktreePath, false)).rejects.toThrow(
+        /uncommitted|locked|contains another/
+      )
+      expect(dispatch).not.toHaveBeenCalled()
+      expect(await readFile(join(worktreePath, 'seed.txt'), 'utf8')).toBe(
+        schedule === 'redirect' ? 'do not delete\n' : 'seed\n'
+      )
+      expect(await isRegistered(worktreePath)).toBe(true)
+    }
+  )
+
+  it.skipIf(process.platform !== 'win32')(
+    'freezes accepted absence across the delete-slot wait',
+    async () => {
+      await git(['worktree', 'remove', worktreePath], repoPath)
+      const paused = Promise.withResolvers<void>()
+      const blockers = [0, 1].map(() => runUnderWorktreeDeleteLimit(() => paused.promise))
+      const removal = removeWorktree(repoPath, worktreePath, true, {
+        knownRemovedWorktree: null
+      }).catch((error: unknown) => error)
+      try {
+        await vi.waitFor(() => expect(_worktreeDeleteLimitSnapshotForTests().waiting).toBe(1))
+        await git(['worktree', 'add', '-q', '--detach', worktreePath], repoPath)
+      } finally {
+        paused.resolve()
+        await Promise.all([...blockers, removal])
+      }
+      expect(String(await removal)).toContain('different checkout')
+      expect(await readFile(join(worktreePath, 'seed.txt'), 'utf8')).toBe('seed\n')
+    }
+  )
 
   it('leaves sibling worktrees registered', async () => {
     const siblingPath = join(workspaceRoot, 'repo', 'sibling')

@@ -206,6 +206,21 @@ describe('ToolRun', () => {
       expect(onOpenFile).toHaveBeenCalledTimes(1)
     })
 
+    it('copies exactly the command a shell row ran, and offers no copy on other rows', () => {
+      const tree = render([
+        { type: 'tool-call', name: 'Read', input: { file_path: 'src/a.ts' } },
+        { type: 'tool-result', output: 'a' },
+        {
+          type: 'tool-call',
+          name: 'exec_command',
+          input: { cmd: "/bin/zsh -lc 'cd mobile &&\n  pnpm test'", workdir: '/repo' }
+        },
+        { type: 'tool-result', output: 'ok' }
+      ])
+      const copies = tree.root.findAll((node) => String(node.type) === 'CopyButton')
+      expect(copies.map((node) => node.props.text)).toEqual(['cd mobile &&\n  pnpm test'])
+    })
+
     it('offers no caret on a row with nothing to show', () => {
       const tree = render([{ type: 'tool-call', name: 'Agent', input: { description: 'Explore' } }])
       expect(textIn(tree.root)).toEqual(expect.arrayContaining(['Subagent', 'Explore']))

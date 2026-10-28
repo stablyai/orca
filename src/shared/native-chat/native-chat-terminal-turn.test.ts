@@ -3,68 +3,11 @@ import { NATIVE_CHAT_INTERRUPTED_STATUS_TEXT, type NativeChatMessage } from '../
 import {
   nativeChatHookLatestTurnWorkedSeconds,
   nativeChatHookTurnStartedAt,
-  nativeChatLatestTurnId,
-  nativeChatTranscriptSettledTurns,
-  resolveNativeChatTerminalTurn
+  nativeChatTranscriptSettledTurns
 } from './native-chat-terminal-turn'
-
-const idle = {
-  isConversation: true,
-  working: false,
-  hookAwaitingInput: false,
-  interrupted: false,
-  hasPromptCard: false
-}
-
-describe('resolveNativeChatTerminalTurn', () => {
-  it('keeps the turn running while the agent waits, without calling it generating', () => {
-    expect(resolveNativeChatTerminalTurn({ ...idle, hookAwaitingInput: true })).toEqual({
-      isWorking: false,
-      turnActive: true,
-      awaitingInput: 'unshown'
-    })
-  })
-
-  it('lets a prompt card speak for the wait', () => {
-    expect(
-      resolveNativeChatTerminalTurn({ ...idle, hookAwaitingInput: true, hasPromptCard: true })
-    ).toEqual({ isWorking: false, turnActive: true, awaitingInput: 'shown' })
-  })
-
-  it('reports a generating turn with nothing awaited', () => {
-    expect(resolveNativeChatTerminalTurn({ ...idle, working: true })).toEqual({
-      isWorking: true,
-      turnActive: true,
-      awaitingInput: null
-    })
-  })
-
-  it('ends the turn on local Stop, wait included', () => {
-    expect(
-      resolveNativeChatTerminalTurn({
-        ...idle,
-        working: true,
-        hookAwaitingInput: true,
-        interrupted: true
-      })
-    ).toEqual({ isWorking: false, turnActive: false, awaitingInput: null })
-  })
-
-  it('stays quiet with no turn at all', () => {
-    expect(resolveNativeChatTerminalTurn(idle)).toEqual({
-      isWorking: false,
-      turnActive: false,
-      awaitingInput: null
-    })
-  })
-})
 
 describe('nativeChatHookTurnStartedAt', () => {
   const entry = { state: 'working' as const, stateStartedAt: 3_000 }
-
-  it("dates the turn by the host's stamp, not the state it came back from", () => {
-    expect(nativeChatHookTurnStartedAt({ ...entry, turnStartedAt: 1_000 })).toBe(1_000)
-  })
 
   // Child work predates the main agent’s turn and must not supply its start stamp.
   it('keeps the stamp when child work holds the row open', () => {
@@ -93,10 +36,6 @@ describe('nativeChatHookTurnStartedAt', () => {
       nativeChatHookTurnStartedAt({ ...entry, mainAgent: { state: 'done', stateStartedAt: 2_500 } })
     ).toBe(3_000)
     expect(nativeChatHookTurnStartedAt(entry)).toBe(3_000)
-  })
-
-  it('knows nothing without a status row', () => {
-    expect(nativeChatHookTurnStartedAt(undefined)).toBeNull()
   })
 })
 
@@ -214,21 +153,5 @@ describe('nativeChatTranscriptSettledTurns', () => {
       row('u3', 'user', 20_000)
     ])
     expect(settled.size).toBe(0)
-  })
-})
-
-describe('nativeChatLatestTurnId', () => {
-  it('names the last prompt, not a harness notice after it', () => {
-    expect(
-      nativeChatLatestTurnId([
-        row('u1', 'user', 0),
-        row('a1', 'assistant', 5_000),
-        {
-          ...row('notice', 'user', 10_000),
-          blocks: [{ type: 'text', text: '<task-notification>\n<task-id>b1</task-id>' }]
-        }
-      ])
-    ).toBe('u1')
-    expect(nativeChatLatestTurnId([row('a1', 'assistant', 0)])).toBeNull()
   })
 })

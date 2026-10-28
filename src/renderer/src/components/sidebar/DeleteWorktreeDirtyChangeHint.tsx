@@ -45,7 +45,7 @@ export function DeleteWorktreeDirtyChangeHint({
       ? changeCount === 1
         ? translate(
             'auto.components.sidebar.DeleteWorktreeDirtyChangeHint.changeCount_one',
-            '1 uncommitted or untracked change',
+            '{{count}} uncommitted or untracked change',
             { count: changeCount }
           )
         : translate(

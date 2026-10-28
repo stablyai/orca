@@ -79,6 +79,23 @@ describe('createBrowserSlice annotations', () => {
     })
   })
 
+  it('announces a tab that creation activates, but not one opened in the background', async () => {
+    const { store } = await createTestStoreDrawnFromMain()
+    mockApi.browser.notifyActiveTabChanged.mockClear()
+
+    const background = store
+      .getState()
+      .createBrowserTab('wt-1', 'https://background.example.com', { activate: false })
+    const active = store.getState().createBrowserTab('wt-1', 'https://active.example.com')
+
+    expect(mockApi.browser.notifyActiveTabChanged).not.toHaveBeenCalledWith({
+      browserPageId: background.activePageId
+    })
+    expect(mockApi.browser.notifyActiveTabChanged).toHaveBeenLastCalledWith({
+      browserPageId: active.activePageId
+    })
+  })
+
   it('keeps a requested canonical page identity distinct from its workspace', async () => {
     const { store, main } = await createTestStoreDrawnFromMain()
     const tab = store.getState().createBrowserTab('wt-1', 'about:blank', {

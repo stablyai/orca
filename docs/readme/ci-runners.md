@@ -1,12 +1,43 @@
 # CI runners
 
-Use Blacksmith for ordinary PR checks, Linux E2E, cache preparation, mobile checks,
-and unsigned desktop builds. Small routing and reporting jobs use 2 vCPUs; most
-test jobs use 4; compilation and shared JavaScript builds use 8. Mac checks use
-the 6-vCPU Apple Silicon runners. Adhoc Mac packaging uses 12 vCPUs.
+Default to free GitHub-hosted standard runners: the repository is public and the
+Enterprise plan allows 500 concurrent jobs (50 macOS). Use Blacksmith only for:
+
+- PR critical-path jobs: unit test shards, preflight and typecheck, and the layout
+  oracle gate (`e2e.yml` with `fast_runners: true`). Advisory e2e lanes run hosted.
+- `pr.yml` Git compatibility: its parallel real-Git lanes, two through Docker,
+  exceed test timeouts on 4-vCPU hosted runners.
+- macOS packaging: adhoc, hourly, daily and `release-mac-build.yml`. Hosted
+  `macos-15` cannot boot the packaged x64 terminal host that `afterPack` verifies.
+- The adhoc Windows build (a developer is waiting).
+- Hardware-sensitive performance benchmarks. Operation-count contracts
+  (`performance-contracts.yml`) are not, and run hosted.
+
+Everything else, including the hourly and daily Windows builds, template
+qualification and node-server lanes, runs on hosted `ubuntu-*`, `macos-15` and
+`windows-2022` images. Do not use paid GitHub
+larger runners: they cost more than Blacksmith at every size and Enterprise
+included minutes do not cover them.
+
+On Blacksmith, small routing and reporting jobs use 2 vCPUs; most test jobs use
+4; compilation and shared JavaScript builds use 8. Mac checks use the 6-vCPU
+Apple Silicon runners, including adhoc and release Mac packaging.
 
 Keep matrix platform keys separate from runner labels: platform keys select
 native slots, architectures, cache identities, and upload conditions.
+
+## Cache stores
+
+Blacksmith redirects `actions/cache` to its own store ("Enabling Blacksmith
+transparent cache"); GitHub-hosted jobs use the repository's Actions cache. The
+stores do not share entries, so the warmers (`ci-cache-warmup*.yml`) seed each
+identity in both pools. Native module keys include the OS image, so a hosted
+`ubuntu-22.04` consumer needs a hosted `ubuntu-22.04` warm leg.
+
+GitHub's Actions cache is capped at 10 GB per repository and evicts the least
+recently used entries first. Seed shared caches from `main`; avoid per-PR saves
+of large or single-use artifacts, and prefer the lookup-only and restore-only
+patterns in `.github/actions`.
 
 ## Production signing
 
@@ -22,6 +53,8 @@ Moving more production work to Blacksmith requires another isolated workflow;
 changing a runner label inside `release-cut.yml` breaks signing provenance.
 
 ## Platform exceptions
+
+These stay on GitHub-hosted runners even where the policy above picks Blacksmith:
 
 - Windows WSL and WSL2 tests retain GitHub runners: Blacksmith Windows runners do
   not support the required nested virtualization.

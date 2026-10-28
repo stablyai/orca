@@ -54,6 +54,7 @@ export type WslHookRelayManagerDeps = {
   runInstall: typeof runWslInstallProcess
   waitForSentinel: typeof waitForWslRelaySentinel
   ingest: (envelope: Record<string, unknown>, connectionId: string) => void
+  beginRelaySession?: (connectionId: string) => void
   receiveClaudeAgentView?: (body: unknown) => unknown
   bindInterruptReconciliation?: (
     mux: Parameters<typeof bindRemoteClaudeInterruptReconciliation>[1],
@@ -106,6 +107,7 @@ export const defaultWslHookRelayDeps: WslHookRelayManagerDeps = {
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: envelope is the wire-deserialized notification; ingestRemote independently re-validates paneKey's type before trusting anything here.
     return agentHookServer.ingestRemote(capped as IngestEnvelope, connectionId)
   },
+  beginRelaySession: (connectionId) => agentHookServer.beginRemoteRelaySession(connectionId),
   bindInterruptReconciliation: (mux, connectionId, isCurrent) =>
     bindRemoteClaudeInterruptReconciliation(agentHookServer, mux, connectionId, isCurrent),
   installHooks: installRemoteManagedAgentHooks,

@@ -53,7 +53,8 @@ async function loadBranchDiff(
       rightBlob.content,
       leftBlob.isBinary,
       rightBlob.isBinary,
-      args.filePath
+      args.filePath,
+      leftBlob.tooLarge === true || rightBlob.tooLarge === true
     )
   } catch {
     return {

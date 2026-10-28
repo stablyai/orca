@@ -45,6 +45,7 @@ vi.mock('@/store', () => ({
     getState: () => ({
       settings: mocks.settings,
       unifiedTabsByWorktree: {},
+      groupsByWorktree: {},
       seedNativeChatLaunchDraft: vi.fn(),
       clearNativeChatLaunchDraft: vi.fn()
     }),
@@ -94,13 +95,7 @@ import {
 import { structuredAgentSessionDraftScopeKey } from '@/components/native-chat/native-chat-composer-draft-store'
 
 function deferred<T>() {
-  let resolve = (_value: T): void => {}
-  let reject = (_error: unknown): void => {}
-  const promise = new Promise<T>((yes, no) => {
-    resolve = yes
-    reject = no
-  })
-  return { promise, resolve, reject }
+  return Promise.withResolvers<T>()
 }
 function createParams() {
   return CreateIntentParams.parse(
@@ -427,6 +422,10 @@ describe('the first message owned by create', () => {
     const create = deferred<unknown>()
     mocks.call.mockReturnValue(create.promise)
     const launch = start()
+    const state = getStructuredLaunchStateBySessionId(launch.sessionId)
+    if (state) {
+      state.intent.surfaceAddress = { worktreeId: 'workspace-1', precedingTabIds: [] }
+    }
     await vi.waitFor(() => expect(mocks.call).toHaveBeenCalledOnce())
     writeNativeChatDraftCache(
       structuredAgentSessionDraftScopeKey(launch.sessionId),
@@ -443,6 +442,7 @@ describe('the first message owned by create', () => {
     expect(draft(launch.sessionId)).toBe('typed meanwhile\n\nopening text')
     expect(mocks.call.mock.calls.map(([, method]) => method)).toEqual(['agentSession.create'])
     expect(getStructuredAgentSessionPendingSends(launch.sessionId)).toEqual([])
+    expect(findStructuredAgentSessionReadOwner(launch.sessionId, target)).toBeUndefined()
   })
 
   it('returns text at 30 seconds and a late create reply cannot send it again', async () => {

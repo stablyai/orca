@@ -5,6 +5,7 @@ import { TerminalPaneView } from './TerminalPaneView'
 import { MobileNativeChatOverlay } from './MobileNativeChatOverlay'
 import { resolveMobileNativeChatSessionId } from './native-chat/mobile-native-chat-eligibility'
 import { colors } from '../theme/mobile-theme'
+import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import { styles } from './mobile-session-styles'
 import type { MobileSessionController } from './use-mobile-session-controller'
 import { useWorkspaceExecutionHost } from '../navigation/workspace-execution-host'
@@ -18,6 +19,7 @@ export function MobileSessionActiveContent({
 }: {
   controller: MobileSessionController
 }) {
+  useMobileColorScheme()
   const executionHost = useWorkspaceExecutionHost()
   const {
     hostId,

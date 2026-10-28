@@ -28,6 +28,7 @@ import { revealElementInScrollContainer } from './worktree-sidebar-reveal'
 import { useWorktreeAgentExpansionState } from './worktree-card-agents-expansion-state'
 import { translate } from '@/i18n/i18n'
 import { activateStructuredAgentSessionTab } from '@/lib/agent-session/structured-agent-session-tab-activation'
+import { activateRetainedAgentRow } from './activate-retained-agent-row'
 import { selectAgentRowsUnread } from './worktree-card-agent-ack-inputs'
 
 export const SUPPRESS_WORKTREE_LIST_SCROLL_ADJUSTMENT_EVENT =
@@ -185,9 +186,10 @@ const WorktreeCardAgentsBody = React.memo(function WorktreeCardAgentsBody({
     },
     [worktreeId]
   )
-  const handleActivateRetainedAgent = useCallback(() => {
-    // Retained rows are completion evidence; activation would resume sleeping sessions, so keep them inert.
-  }, [])
+  const handleActivateRetainedAgent = useCallback(
+    (tabId: string, paneKey: string) => activateRetainedAgentRow(worktreeId, tabId, paneKey),
+    [worktreeId]
+  )
 
   const now = useNow(30_000)
   const { rootRows: rootAgents, childrenByParentPaneKey } = useMemo(

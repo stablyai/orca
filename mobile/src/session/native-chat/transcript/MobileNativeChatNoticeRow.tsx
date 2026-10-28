@@ -7,7 +7,7 @@ import {
   nativeChatNoticeBlock,
   nativeChatNoticeLook,
   type NativeChatNoticeTone
-} from '../../../../../src/shared/native-chat-notice'
+} from '../../../../../src/shared/native-chat/native-chat-notice'
 import {
   isTextBlock,
   type NativeChatBlock,
@@ -27,12 +27,12 @@ import {
 import { MobileMarkdown } from '../../../components/MobileMarkdown'
 import { INLINE_TEXT_SELECTION } from '../../../components/inline-text-selection'
 import { colors, radii, spacing, typography } from '../../../theme/mobile-theme'
+import { themedStyleSheet } from '../../../theme/themed-styles'
+import { useMobileColorScheme } from '../../../theme/use-mobile-color-scheme'
 import { MONO_SIZE, TEXT_SIZE, scaledType } from './mobile-native-chat-message-styles'
 
-const TONE_COLOR: Record<NativeChatNoticeTone, string> = {
-  warning: colors.statusAmber,
-  error: colors.statusRed,
-  notice: colors.textMuted
+function toneColor(tone: NativeChatNoticeTone): string {
+  return { warning: colors.statusAmber, error: colors.statusRed, notice: colors.textMuted }[tone]
 }
 
 // Desktop's no-Continue wording; the phone always reads its Orca host as remote.
@@ -65,6 +65,7 @@ export function MobileNativeChatNoticeRow({
   onOpenFile?: (relativePath: string) => void
   onLongPress?: () => void
 }): React.JSX.Element | null {
+  useMobileColorScheme()
   const names = useContext(MobileNativeChatNoticeContext)
   const notice = nativeChatNoticeBlock(blocks)
   const aside = [styles.faint, scaledType(typography.bodySize, fontScale)]
@@ -133,7 +134,7 @@ export function MobileNativeChatNoticeRow({
       const textStyle = [
         styles.line,
         scaledType(TEXT_SIZE, fontScale),
-        look.tone && { color: TONE_COLOR[look.tone] }
+        look.tone && { color: toneColor(look.tone) }
       ]
       if (!look.tone) {
         return (
@@ -148,7 +149,7 @@ export function MobileNativeChatNoticeRow({
         <View style={[styles.card, styles.toneCard]}>
           <Icon
             size={16 * fontScale}
-            color={TONE_COLOR[look.tone]}
+            color={toneColor(look.tone)}
             strokeWidth={2}
             style={styles.toneIcon}
           />
@@ -161,7 +162,7 @@ export function MobileNativeChatNoticeRow({
   }
 }
 
-const styles = StyleSheet.create({
+const styles = themedStyleSheet(() => ({
   divider: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -210,4 +211,4 @@ const styles = StyleSheet.create({
   toneText: {
     flex: 1
   }
-})
+}))

@@ -4,6 +4,7 @@ import type { MobileWebShellUpdateFailure } from '../mobile-web-shell/mobile-web
 import { processGenerationStore } from '../mobile-web-shell/process-generation-store'
 import { loadHosts } from '../transport/host-store'
 import { formatUpdateFailure } from './mobile-web-shell-update-failure-copy'
+import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import { troubleshootScreenStyles as styles } from './troubleshoot-screen-styles'
 
 type Line = { readonly hostId: string; readonly text: string }
@@ -24,6 +25,7 @@ export function updateFailureLines(
 
 // Release console output never reaches logcat; this row is the only update-failure evidence visible there. Mount only in shell-capable builds.
 export function MobileWebShellUpdateFailureRow() {
+  useMobileColorScheme()
   const [lines, setLines] = useState<readonly Line[]>([])
 
   useEffect(() => {

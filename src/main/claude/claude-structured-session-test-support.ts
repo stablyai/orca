@@ -11,17 +11,15 @@ import type {
 } from './claude-stream-json-connection'
 import {
   ClaudeStructuredSessionAdapter,
-  type ClaudeStructuredSessionAdapterDeps,
-  type ClaudeStructuredLaunch,
-  type ClaudeStructuredSessionEvent
+  type ClaudeStructuredLaunch
 } from './claude-structured-session-adapter'
+import type {
+  ClaudeStructuredSessionAdapterDeps,
+  ClaudeStructuredSessionEvent
+} from './structured/claude-structured-session-state'
 import type { StructuredAgentSessionEventSink } from '../native-chat/agent-session-wire/structured-agent-session-event-sink'
 import { claudeProviderHandle } from '../../shared/agent-session-provider-handle-encoding'
 import { claudeStartupSettled } from './claude-structured-startup-settled-test-support'
-export {
-  claudeStartupSettled,
-  claudeOpened
-} from './claude-structured-startup-settled-test-support'
 
 export const PROVIDER_SESSION_ID = '819cf9f8-e43c-4ad7-b50f-54aa158a726a'
 

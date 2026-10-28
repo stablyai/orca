@@ -2,6 +2,7 @@ import { Pressable, Text, View } from 'react-native'
 import { ArrowDown, ArrowUp } from 'lucide-react-native'
 import type { DiffComment } from '../../../src/shared/diff-comment-types'
 import { colors } from '../theme/mobile-theme'
+import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import type { MobileDiffReviewQueueItem } from '../session/mobile-diff-review-queue'
 import { STATUS_LABELS } from '../../../src/shared/git-status-labels'
 import {
@@ -49,6 +50,7 @@ export function MobileDiffReviewFileSummary({
   onEditNote,
   onJumpHunk
 }: Props) {
+  useMobileColorScheme()
   const hunkDisabled = diffState.kind !== 'ready' || diffState.hunks.length === 0
   const badgeColor = statusColor(item.status)
   return (

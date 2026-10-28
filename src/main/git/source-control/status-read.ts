@@ -13,6 +13,7 @@ import {
   reuseOrRecomputeGitStatusLineStats
 } from '../../../shared/git-status-line-stats-cache'
 import { resolveWorktreeHostPath } from '../../../shared/git-metadata-path'
+import { readGitCommandFailureStderr } from '../../../shared/git-command-failure-text'
 import { gitOptionalLocksDisabledEnv, gitStreamStdout } from '../runner'
 import {
   findExistingWorktreeSymlinkPaths,
@@ -100,6 +101,15 @@ async function dropSharedSymlinkUntrackedEntries(
   }
 }
 
+// Git's stderr is unbounded and travels to remote clients; the first lines say what failed.
+const STATUS_READ_ERROR_MAX_LENGTH = 1_000
+
+function describeStatusReadError(error: unknown): string {
+  const stderr = readGitCommandFailureStderr(error)?.trim()
+  const text = stderr || (error instanceof Error ? error.message : String(error))
+  return text.slice(0, STATUS_READ_ERROR_MAX_LENGTH)
+}
+
 async function runGetStatus(
   worktreePath: string,
   options: GetStatusOptions = {}
@@ -109,6 +119,7 @@ async function runGetStatus(
     options.includeLineStats === false ? null : beginGitStatusLineStatsCacheWrite(lineStatsCacheKey)
   let effectiveUpstreamStatus: GitUpstreamStatus | undefined
   let statusSucceeded = false
+  let readError: string | undefined
   const limit = resolveGitStatusLimit(options.limit)
 
   const conflictPromise = detectConflictOperation(worktreePath, options)
@@ -161,6 +172,7 @@ async function runGetStatus(
     if (options.signal?.aborted) {
       throw error
     }
+    readError = describeStatusReadError(error)
   }
 
   let entries: GitStatusEntry[] = []
@@ -251,6 +263,7 @@ async function runGetStatus(
     conflictOperation,
     head,
     branch,
+    ...(readError !== undefined ? { readError } : {}),
     ...(options.includeIgnored ? { ignoredPaths: parser.ignoredPaths } : {}),
     ...(branchLineTotal ? { branchLineTotal } : {}),
     ...(branchLineTotalUnavailable ? { branchLineTotalUnavailable } : {}),

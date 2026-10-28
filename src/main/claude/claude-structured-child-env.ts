@@ -1,3 +1,4 @@
+import { waitForPromiseWithSignal } from '../../shared/abort-signal-reason'
 import { withCliRuntimeOnPath } from '../../shared/node-cli-command-resolution'
 import { applyClaudeEnvPatch } from '../claude-accounts/environment'
 import { resolveClaudeCommand } from '../codex-cli/command'
@@ -15,6 +16,7 @@ function cloneDefinedEnv(env: NodeJS.ProcessEnv | Record<string, string>): Recor
 }
 
 export type ClaudeEnvDeps = {
+  signal?: AbortSignal
   resolveCommand?: (options?: { pathEnv?: string | null; homePath?: string }) => string
   /** Refresh once after command lookup misses; absent disables retry. */
   refreshEnvironmentAfterMiss?: (askedAt: number) => Promise<void>
@@ -40,16 +42,18 @@ export function resolveClaudeChildEnvSources(deps: ClaudeEnvDeps): Promise<Claud
     deps.refreshEnvironmentAfterMiss,
     {
       env: ({ inheritedEnv, overlay }) => ({ ...inheritedEnv, ...overlay }),
-      cwd: deps.resolveWorkingDirectory
+      cwd: deps.resolveWorkingDirectory,
+      signal: deps.signal
     }
   )
 }
 
 async function readClaudeChildEnvSources(deps: ClaudeEnvDeps): Promise<ClaudeChildEnvSources> {
-  const overlay = await deps.resolveEnv?.()
+  const overlay = await waitForPromiseWithSignal(Promise.resolve(deps.resolveEnv?.()), deps.signal)
   const inheritedEnv = deps.resolveInheritedEnv
-    ? await deps.resolveInheritedEnv()
+    ? await waitForPromiseWithSignal(deps.resolveInheritedEnv(), deps.signal)
     : cloneDefinedEnv(process.env)
+  deps.signal?.throwIfAborted()
   const effectiveEnv = { ...inheritedEnv, ...overlay }
   const command = (deps.resolveCommand ?? resolveClaudeCommand)({
     pathEnv: effectiveEnv.PATH ?? effectiveEnv.Path ?? null,

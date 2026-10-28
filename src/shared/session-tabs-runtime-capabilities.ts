@@ -35,6 +35,11 @@ export const SESSION_TABS_TAB_DELTA_RUNTIME_CAPABILITY = 'session-tabs.tab-delta
 export const AGENT_STATUS_RESTORED_UNCONFIRMED_RUNTIME_CAPABILITY =
   'agent-status.restored-unconfirmed.v1' as const
 
+// Why: only a WSL host advertises this, with session.readTerminalScrollback; a client asks for a
+// pane's stored scrollback only when it is advertised and otherwise paints from its own store.
+export const SESSION_TERMINAL_SCROLLBACK_READ_RUNTIME_CAPABILITY =
+  'session.terminal-scrollback-read.v1' as const
+
 export const SESSION_TABS_RUNTIME_CAPABILITIES = [
   QODER_OWNED_TERMINAL_CREATE_CAPABILITY,
   SESSION_TAB_CLOSE_INTENT_RUNTIME_CAPABILITY,

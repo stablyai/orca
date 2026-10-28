@@ -17,6 +17,7 @@ export type PluginLanguagePackRegistration = {
   resourceLanguage: `plugin${string}`
   pluginKey: string
   locale: string
+  displayName?: string
   catalog: Record<string, unknown>
 }
 
@@ -34,6 +35,7 @@ export function isPluginLanguagePackRegistration(
     pack.resourceLanguage === pluginLanguageResourceId(pack.id as `plugin:${string}`) &&
     typeof pack.pluginKey === 'string' &&
     typeof pack.locale === 'string' &&
+    (pack.displayName === undefined || typeof pack.displayName === 'string') &&
     checkPluginLanguagePackCatalog(pack.catalog).ok
   )
 }

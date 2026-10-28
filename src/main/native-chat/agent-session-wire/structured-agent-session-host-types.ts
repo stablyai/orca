@@ -47,6 +47,7 @@ import type { StructuredAgentId } from '../../../shared/agent-session-provider-h
 import type { StructuredAgentRegistry } from './structured-agent-registry'
 import type { StructuredAgentSessionStartupLimits } from './structured-agent-session-startup-attempt-contract'
 import type { AgentChatPermissionChoice } from '../../../shared/agent-chat-permission-mode'
+import type { AgentSessionSwitchResult } from '../../../shared/agent-session-switch-execution'
 
 export type StructuredAgentSessionCaller = { callerKey: string }
 
@@ -116,6 +117,10 @@ export type StructuredAgentSessionEndedChild = StructuredAgentSessionProviderChi
 
 /** Conversation state outlives its provider children. */
 export type StructuredAgentSessionHostSession = {
+  switchCommand?: {
+    invocationId: string
+    completion: Promise<AgentSessionSwitchResult>
+  }
   /** Enter only through session-map set, which binds delivery. */
   readonly journal: AgentSessionJournal
   params: AgentSessionAttachParams
@@ -161,6 +166,8 @@ export type StructuredAgentSessionHostDeps = {
   hasOpenDispatch?: (
     record: Pick<AgentSessionRecord, 'sessionId' | 'location' | 'conversationCommand'>
   ) => boolean
+  /** Explicit switch admission also includes direct chat assignments, even at rest. */
+  hasOwedSwitchWork?: (record: AgentSessionRecord) => boolean
   /** Advisory tab-hidden notice; failures are logged. */
   onSessionTabHidden?: (sessionId: string) => void
   /** Throws while a terminal may still write the record's head conversation; run before a spawn. */

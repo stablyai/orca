@@ -7,7 +7,7 @@ import {
 import { isStructuredAgentSessionMainAgentWorking } from '../../../../shared/structured-agent-session-main-agent-working'
 import type { StructuredAgentSessionState } from '../../../../shared/structured-agent-session-reducer'
 import type { StructuredAgentSubagentRoster } from '../../../../shared/structured-agent-session-subagent-roster'
-import { selectStructuredAgentTurnActivity } from '../../../../shared/native-chat-turn-activity'
+import { selectStructuredAgentTurnActivity } from '../../../../shared/native-chat/transcript/native-chat-turn-activity'
 import { structuredSessionBackgroundTasksView } from '../../../../shared/structured-session-background-tasks-view'
 import { structuredSessionForegroundCommands } from '../../../../shared/structured-session-foreground-commands'
 import { useStructuredAgentTurnTiming } from './use-structured-agent-turn-timing'

@@ -8,7 +8,6 @@ import { recoverInterruptedOrcadActivation } from '../managed-server/activation/
 import { readOrcadActivationRecord } from '../managed-server/activation/orcad-activation-record-store'
 import { readOrcadActivationTransaction } from '../managed-server/activation/orcad-activation-transaction-store'
 import { materializeOrcadArtifact } from '../orcad/orcad-artifact-materializer'
-import { OrcadHostUnsupportedError } from '../orcad/orcad-host-unavailable'
 import type { OrcadHostTransport } from '../ssh/orcad-host-transport'
 import { ORCAD_ACTIVATION_POLICY_REFUSED_CODE } from '../ssh/orcad-installed-activation'
 import { orcadBoundPort } from '../managed-server/lifecycle/orcad-managed-bound-port'
@@ -24,12 +23,12 @@ import { clearOrcadUpdateFailedThisLaunch } from '../managed-server/lifecycle/or
 import type { OrcadUpdateIntent } from '../managed-server/lifecycle/orcad-managed-update-decision'
 import type { OrcadActivationRecord } from '../managed-server/activation/orcad-activation-record'
 import { errorMessage } from '../../shared/error-message'
-import { pruneManagedOrcadVersions } from '../managed-server/lifecycle/orcad-managed-version-gc'
+import { pruneWslOrcadVersionsUntilClean } from './wsl-orcad-version-gc-memo'
 import { wakeAlreadyActiveOrcad } from '../ssh/orcad-already-active-wake'
 import { OrcadActiveReadinessError } from '../ssh/orcad-active-readiness'
 import { WslDistroNotRunningError } from './wsl-orcad-connection-errors'
-import { resolveOrcadRemoteContext } from '../managed-server/install/orcad-remote-context'
 import { deployOrcad } from '../ssh/orcad-remote-deploy'
+import { isWslMoveUnderwayOnHost } from '../persistence/moving-wsl-projects/wsl-move-running-moves'
 import { ORCAD_PID_FILENAME } from '../managed-server/install/orcad-remote-host-support'
 import { quotePosixShell } from '../../shared/shell-argument-quoting'
 import { execCommand } from '../ssh/remote-exec/remote-exec-command'
@@ -40,6 +39,7 @@ import { wslDistroHolderKey } from './wsl-distro-holder-record'
 import { readWslDistroRegistryIdShared } from './wsl-distro-registry-id'
 import type { WslOrcadHostTarget } from './wsl-orcad-host-target'
 import { createWslOrcadHostTransport, type WslOrcadHostTransport } from './wsl-orcad-host-transport'
+import { holdWslDistroWithContext } from './wsl-orcad-held-context'
 import { readWslOrcadIncumbent, type WslOrcadIncumbent } from './wsl-orcad-incumbent'
 import { adoptUnrecordedWslOrcad } from './wsl-orcad-instance-adoption'
 import {
@@ -97,11 +97,6 @@ export function defaultWslOrcadEnvironmentId(distro: string): string {
   return `wsl:${wslDistroHolderKey(distro)}`
 }
 
-/** WSL 1 runs no Linux kernel, so the pinned Node and its pty cannot run there. */
-export function isWsl1KernelRelease(release: string): boolean {
-  return /^\d+\.\d+\.\d+-\d+-Microsoft$/.test(release.trim())
-}
-
 export async function deployAndLaunchWslOrcad(
   distro: string,
   options: WslOrcadDeployOptions = {}
@@ -133,19 +128,13 @@ async function launchOverTransport(
   const { signal } = options
   let ownBuildVersion: string | null = null
   const conn = withOwnBuildLaunchEnv(transport, () => ownBuildVersion)
-  const kernel = await execCommand(conn, 'uname -r', { signal })
-  if (isWsl1KernelRelease(kernel)) {
-    throw new OrcadHostUnsupportedError(
-      `The WSL 1 distro ${name} isn’t supported by Orca’s server. ` +
-        `Convert it with: wsl --set-version ${name} 2`
-    )
-  }
   // Acquire a holder before launch or WSL can idle-stop orcad's distro.
   const holder = options.holder ?? createWslDistroHolder({ userDataPath: userDataPath() })
-  const held = await holder.ensureHeld(name)
   // Read GUID alongside deploy; failure leaves the record without one.
   const distroId = (options.readRegistryId ?? readWslDistroRegistryIdShared)(name).catch(() => null)
-  let context = await resolveOrcadRemoteContext(target, conn, signal)
+  const first = await holdWslDistroWithContext(name, target, conn, holder, signal)
+  const held = first.held
+  let context = first.context
   const slot = managedOrcadSlot(context, ORCAD_MANAGED_REMOTE_PORT, signal)
   const recovery = await recoverInterruptedOrcadActivation(slot)
   if (recovery.outcome === 'pending' || recovery.outcome === 'refused') {
@@ -171,7 +160,15 @@ async function launchOverTransport(
   const intent = options.intent ?? 'connect'
   const admit = (record: OrcadActivationRecord, admitIntent: OrcadUpdateIntent) =>
     admitWslOrcadLaunch(
-      { slot, record, candidateVersion, appVersion, host: failureHost, intent: admitIntent },
+      {
+        slot,
+        record,
+        candidateVersion,
+        appVersion,
+        host: failureHost,
+        intent: admitIntent,
+        moveRunning: isWslMoveUnderwayOnHost(userDataPath(), name)
+      },
       name,
       readyLaunch
     )
@@ -273,7 +270,7 @@ async function launchOverTransport(
   } else {
     readiness = await probe()
   }
-  await pruneManagedOrcadVersions({
+  await pruneWslOrcadVersionsUntilClean(target.id, {
     slot,
     serverTarget: context.serverTarget,
     activeVersion: deployed.fullVersion,

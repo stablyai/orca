@@ -4,6 +4,11 @@ import {
   serializeBudgetedMobileSnapshot
 } from './terminal-snapshot-publication'
 import { getOutputAfterSnapshotSeq } from './terminal-stream-replay'
+import { isMovedPaneHistorySessionId } from '../../../../../shared/orcad-migration/orcad-migration-terminal-history'
+import {
+  MOBILE_SUBSCRIBE_SCROLLBACK_ROWS,
+  MOVED_PANE_SUBSCRIBE_SCROLLBACK_ROWS
+} from '../../../scrollback-limits'
 import { getTerminalInputSequenceLedger } from './terminal-input-sequence-ledger'
 import {
   isMultiplexStreamAttached,
@@ -11,6 +16,10 @@ import {
   type TerminalMultiplexConnection
 } from './terminal-multiplex-connection'
 import type { TerminalMultiplexStream } from './terminal-stream-types'
+import {
+  discardPendingMultiplexOutput,
+  replaySnapshotCoveredStatelessQueries
+} from './terminal-multiplex-yielded-queries'
 
 export type MultiplexPublishedInitialState = {
   isMobile: boolean
@@ -29,26 +38,26 @@ export async function publishMultiplexInitialSnapshot(
   const isMobile = stream.isMobile
   const forcedInitialSnapshotTruncated =
     process.env.ORCA_E2E_FORCE_REMOTE_TERMINAL_INITIAL_SNAPSHOT_TRUNCATED === '1'
+  // A WSL-moved pane replays its whole carried history once; the first view must hold all of it.
+  const firstRows = isMovedPaneHistorySessionId(ptyId)
+    ? MOVED_PANE_SUBSCRIBE_SCROLLBACK_ROWS
+    : MOBILE_SUBSCRIBE_SCROLLBACK_ROWS
   let read = await runtime.readTerminal(request.terminal)
-  let serialized = await serializeBudgetedMobileSnapshot(runtime, ptyId)
+  let serialized = await serializeBudgetedMobileSnapshot(runtime, ptyId, undefined, firstRows)
   if (!isMultiplexStreamAttached(state, stream)) {
     return null
   }
   let initialOutputOverflowed = forcedInitialSnapshotTruncated
   if (stream.pendingOutputOverflowed) {
-    stream.pendingOutput.splice(0)
-    stream.pendingOutputBytes = 0
-    stream.pendingOutputOverflowed = false
+    discardPendingMultiplexOutput(stream)
     read = await runtime.readTerminal(request.terminal)
-    serialized = await serializeBudgetedMobileSnapshot(runtime, ptyId)
+    serialized = await serializeBudgetedMobileSnapshot(runtime, ptyId, undefined, firstRows)
     if (!isMultiplexStreamAttached(state, stream)) {
       return null
     }
     if (stream.pendingOutputOverflowed) {
       initialOutputOverflowed = true
-      stream.pendingOutput.splice(0)
-      stream.pendingOutputBytes = 0
-      stream.pendingOutputOverflowed = false
+      discardPendingMultiplexOutput(stream)
     }
   }
   const size = runtime.getTerminalSize(ptyId)
@@ -120,6 +129,13 @@ export async function publishMultiplexInitialSnapshot(
   stream.lastResizeCols = serialized?.cols ?? size?.cols
   stream.buffering = false
   const pendingOutput = stream.pendingOutput.splice(0)
+  replaySnapshotCoveredStatelessQueries(
+    state,
+    stream,
+    pendingOutput,
+    snapshotOutputSeq,
+    serialized?.pendingEscapeTailAnsi
+  )
   if (!initialOutputOverflowed) {
     for (const chunk of pendingOutput) {
       const uncovered = getOutputAfterSnapshotSeq(chunk, snapshotOutputSeq)

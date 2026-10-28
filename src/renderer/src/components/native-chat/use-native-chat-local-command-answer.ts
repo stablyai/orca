@@ -1,7 +1,7 @@
 import { useCallback, type Dispatch, type SetStateAction } from 'react'
 import type { AgentType } from '../../../../shared/agent-status-types'
 import { getNativeChatCommandReply } from '../../../../shared/native-chat-agent-profiles'
-import { deriveNativeChatContextUsage } from '../../../../shared/native-chat-context-usage'
+import { deriveNativeChatContextUsage } from '../../../../shared/native-chat/native-chat-context-usage'
 import type { NativeChatMessage } from '../../../../shared/native-chat-types'
 import { ompModelSelector } from '../../../../shared/omp-model-list-probe'
 import {

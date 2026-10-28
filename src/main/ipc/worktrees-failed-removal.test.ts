@@ -15,6 +15,8 @@ import { worktreeCheckoutExists } from '../worktree-removal-table'
 import type * as WorktreeRemovalModule from '../git/worktree-removal'
 import type * as WorktreeRemovalTable from '../worktree-removal-table'
 import type * as WorktreeRemovalLeftover from '../worktree-removal-leftover'
+import { removeLocalWorktreePath } from '../local-worktree-filesystem'
+import type * as LocalWorktreeFilesystem from '../local-worktree-filesystem'
 import {
   _resetPendingWorktreeRemovalsForTests,
   _settlePendingWorktreeRemovalsForTests,
@@ -108,6 +110,10 @@ vi.mock('../worktree-removal-table', async (importOriginal) => ({
   ...(await importOriginal<typeof WorktreeRemovalTable>()),
   worktreeCheckoutExists: vi.fn(async () => true)
 }))
+vi.mock('../local-worktree-filesystem', async (importOriginal) => {
+  const actual = await importOriginal<typeof LocalWorktreeFilesystem>()
+  return { ...actual, removeLocalWorktreePath: vi.fn(actual.removeLocalWorktreePath) }
+})
 vi.mock('../worktree-removal-leftover', async (importOriginal) => ({
   ...(await importOriginal<typeof WorktreeRemovalLeftover>()),
   isUnregisteredRemovalLeftover: vi.fn(async () => true)
@@ -115,6 +121,8 @@ vi.mock('../worktree-removal-leftover', async (importOriginal) => ({
 
 const featureId = 'repo-1::/workspace/feature-wt'
 const GIT_ERROR = "error: failed to delete '/workspace/feature-wt': Operation not permitted"
+const FOLLOW_UP_DELETE_ERROR =
+  "EPERM: operation not permitted, unlink '/workspace/feature-wt/locked'"
 
 function remove(args: Record<string, unknown>): Promise<RemoveWorktreeResult> {
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: worktrees:remove resolves a RemoveWorktreeResult.
@@ -182,15 +190,17 @@ describe('a failed delete Git no longer registers, over desktop IPC', () => {
       listWorktreesMock.mockResolvedValue([main])
       throw new Error(GIT_ERROR)
     })
+    // Orca's follow-up delete of the folder Git left also fails, so the row stays listed.
+    vi.mocked(removeLocalWorktreePath).mockRejectedValueOnce(new Error(FOLLOW_UP_DELETE_ERROR))
 
-    await expect(remove({ worktreeId: featureId })).rejects.toThrow(/Operation not permitted/)
+    await expect(remove({ worktreeId: featureId })).rejects.toThrow(FOLLOW_UP_DELETE_ERROR)
     await _settlePendingWorktreeRemovalsForTests()
 
     expect(gitExecFileAsyncMock).toHaveBeenCalledWith(['remote', 'remove', pushTarget.remoteName], {
       cwd: '/workspace/repo'
     })
     expect(await listFeature()).toMatchObject({
-      removalError: expect.stringMatching(/Operation not permitted/)
+      removalError: expect.stringContaining(FOLLOW_UP_DELETE_ERROR)
     })
   })
 

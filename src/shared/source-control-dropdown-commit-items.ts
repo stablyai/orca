@@ -1,31 +1,53 @@
 // Share commit blockers across Commit, Commit & Push, and Commit & Sync so disabled reasons agree.
 
+import type { CommitDisabledReason } from './source-control-commit-eligibility'
 import type { DropdownItem } from './source-control-dropdown-item-types'
 import type { DropdownActionContext } from './source-control-dropdown-action-context'
 
 // Desktop localizes these strings; other clients pass their own copy.
 export type CommitDropdownCopy = {
   commit: string
+  commitStagedChanges: string
+  commitPush: string
+  commitForcePush: string
   commitSync: string
   checkingBranchStatus: string
   checkingPrStatus: string
   prAlreadyMerged: string
+  checkOutBranchToPush: string
+  linkedReviewTargetUnavailable: string
+  publishBranchFirstToPush: string
+  commitAndForcePush: string
+  commitAndTryPush: string
+  commitAndPush: string
   checkOutBranchToSync: string
   publishBranchFirstToSync: string
   useCommitAndForcePush: string
   commitThenPullPush: string
+  // Eligibility compares the English reasons, so copy translates them only for display.
+  commitDisabledReason: (reason: CommitDisabledReason) => string
 }
 
 export const ENGLISH_COMMIT_DROPDOWN_COPY: CommitDropdownCopy = {
   commit: 'Commit',
+  commitStagedChanges: 'Commit staged changes',
+  commitPush: 'Commit & Push',
+  commitForcePush: 'Commit & Force Push',
   commitSync: 'Commit & Sync',
   checkingBranchStatus: 'Checking branch status…',
   checkingPrStatus: 'Checking PR status…',
   prAlreadyMerged: 'PR is already merged',
+  checkOutBranchToPush: 'Check out a branch before pushing commits',
+  linkedReviewTargetUnavailable: 'Linked review branch target is unavailable',
+  publishBranchFirstToPush: 'Publish the branch first to push commits',
+  commitAndForcePush: 'Commit staged changes and force push with lease',
+  commitAndTryPush: 'Commit staged changes and try to push',
+  commitAndPush: 'Commit staged changes and push',
   checkOutBranchToSync: 'Check out a branch before syncing commits',
   publishBranchFirstToSync: 'Publish the branch first to sync commits',
   useCommitAndForcePush: 'Use Commit & Force Push — remote only has older copies of local commits',
-  commitThenPullPush: 'Commit, then pull and push'
+  commitThenPullPush: 'Commit, then pull and push',
+  commitDisabledReason: (reason) => reason
 }
 
 export type CommitDropdownItems = {
@@ -53,36 +75,38 @@ export function buildCommitDropdownItems(
     commitDisabledReason,
     canCommit
   } = ctx
+  const commitDisabledTitle =
+    commitDisabledReason === null ? null : copy.commitDisabledReason(commitDisabledReason)
 
   const commit: DropdownItem = {
     kind: 'commit',
     label: copy.commit,
-    title: commitDisabledReason ?? 'Commit staged changes',
+    title: commitDisabledTitle ?? copy.commitStagedChanges,
     disabled: !canCommit
   }
 
   // Committing changes divergence, so compound labels must omit pre-commit counts.
   const commitPushTitle = upstreamLoading
-    ? 'Checking branch status…'
+    ? copy.checkingBranchStatus
     : publishBlockedByPRLoading
-      ? 'Checking PR status…'
+      ? copy.checkingPrStatus
       : publishBlockedByMergedPR
-        ? 'PR is already merged'
+        ? copy.prAlreadyMerged
         : publishBlockedByDetachedHead
-          ? 'Check out a branch before pushing commits'
+          ? copy.checkOutBranchToPush
           : pushBlockedByOpenHostedReviewTarget
-            ? 'Linked review branch target is unavailable'
+            ? copy.linkedReviewTargetUnavailable
             : !hasUpstream && !(hasOpenHostedReview && canPushLinkedReviewWithoutUpstream)
-              ? 'Publish the branch first to push commits'
-              : (commitDisabledReason ??
+              ? copy.publishBranchFirstToPush
+              : (commitDisabledTitle ??
                 (shouldForcePushWithLease
-                  ? 'Commit staged changes and force push with lease'
+                  ? copy.commitAndForcePush
                   : behind > 0
-                    ? 'Commit staged changes and try to push'
-                    : 'Commit staged changes and push'))
+                    ? copy.commitAndTryPush
+                    : copy.commitAndPush))
   const commitPush: DropdownItem = {
     kind: 'commit_push',
-    label: shouldForcePushWithLease ? 'Commit & Force Push' : 'Commit & Push',
+    label: shouldForcePushWithLease ? copy.commitForcePush : copy.commitPush,
     title: commitPushTitle,
     // Match Push: without upstream, Commit & Push requires a known open-review head.
     disabled:
@@ -113,9 +137,9 @@ export function buildCommitDropdownItems(
       return copy.publishBranchFirstToSync
     }
     if (shouldForcePushWithLease) {
-      return commitDisabledReason ?? copy.useCommitAndForcePush
+      return commitDisabledTitle ?? copy.useCommitAndForcePush
     }
-    return commitDisabledReason ?? copy.commitThenPullPush
+    return commitDisabledTitle ?? copy.commitThenPullPush
   })()
   const commitSync: DropdownItem = {
     kind: 'commit_sync',

@@ -50,8 +50,6 @@ function stateForWorktree(args: {
   return {
     folderWorkspaces: [],
     projectGroups: [],
-    endpointProjects: [],
-    endpointProjectHostSetups: [],
     repos: [
       {
         ...TEST_REPO,
@@ -116,8 +114,6 @@ describe('useAiVaultExecutionHostScope', () => {
         folderWorkspaces: [],
         projectGroups: [],
         repos: [],
-        endpointProjects: [],
-        endpointProjectHostSetups: [],
         worktreesByRepo: {}
       }
     })
@@ -133,8 +129,6 @@ describe('useAiVaultExecutionHostScope', () => {
         folderWorkspaces: [],
         projectGroups: [],
         repos: [],
-        endpointProjects: [],
-        endpointProjectHostSetups: [],
         worktreesByRepo: {}
       }
     })

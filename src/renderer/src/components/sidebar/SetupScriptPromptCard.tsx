@@ -9,7 +9,8 @@ import {
   formatCandidateSource,
   isSetupScriptPromptDismissed,
   ignoresSharedSetupScripts,
-  inspectSetupScriptPromptState
+  inspectSetupScriptPromptState,
+  isSilentSetupScriptPromptState
 } from '@/lib/setup-script-prompt'
 import { checkRuntimeHooks, inspectRuntimeSetupScriptImports } from '@/runtime/runtime-hooks-client'
 import { isGitRepoKind } from '../../../../shared/repo-kind'
@@ -75,7 +76,7 @@ function SetupScriptPromptCard(): React.JSX.Element | null {
       const hostId = getRepoExecutionHostId(repo)
       const inspection = await inspectSetupScriptPromptState({
         repo,
-        checkHooks: () => checkRuntimeHooks(hostId, repo.id),
+        checkHooks: () => checkRuntimeHooks(hostId, repo.id, { background: true }),
         inspectImports: () => inspectRuntimeSetupScriptImports(hostId, repo.id)
       })
       if (!cancelled) {
@@ -270,7 +271,7 @@ function SetupScriptPromptCard(): React.JSX.Element | null {
                 ? skippedCount === 1
                   ? translate(
                       'auto.components.sidebar.SetupScriptPromptCard.savedWithSkippedFields_one',
-                      '1 unsupported field skipped. Saved the setup command.',
+                      '{{count}} unsupported field skipped. Saved the setup command.',
                       { count: skippedCount }
                     )
                   : translate(
@@ -381,8 +382,7 @@ function SetupScriptPromptCard(): React.JSX.Element | null {
     return null
   }
 
-  // Mobile-scope inspection is permanently forbidden; the global banner explains it, and retrying would probe on every focus.
-  if (renderedPromptState.status === 'forbidden') {
+  if (isSilentSetupScriptPromptState(renderedPromptState)) {
     return null
   }
 

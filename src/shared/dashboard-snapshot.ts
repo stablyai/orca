@@ -74,7 +74,7 @@ export type DashboardWorkspace = {
 export type DashboardCard = {
   /** Stable identity for React keys. */
   paneKey: string
-  /** Null when retained/done cards have no live pane; otherwise resolve the live preview PTY. */
+  /** Live preview PTY; null does not imply that the agent's destination is closed. */
   ptyId: string | null
   agentType: AgentType
   bucket: DashboardBucket

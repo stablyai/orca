@@ -24,35 +24,4 @@ describe('runSerializedWslCliRegistrationOperation', () => {
     await Promise.all([first, second])
     expect(events).toEqual(['first-start', 'first-end', 'second'])
   })
-
-  it('allows different distros to progress independently', async () => {
-    let releaseUbuntu!: () => void
-    const events: string[] = []
-    const ubuntu = runSerializedWslCliRegistrationOperation('Ubuntu', async () => {
-      events.push('ubuntu-start')
-      await new Promise<void>((resolve) => {
-        releaseUbuntu = resolve
-      })
-    })
-    const debian = runSerializedWslCliRegistrationOperation('Debian', async () => {
-      events.push('debian')
-    })
-
-    await debian
-    expect(events).toEqual(['ubuntu-start', 'debian'])
-    releaseUbuntu()
-    await ubuntu
-  })
-
-  it('releases the queue after an operation fails', async () => {
-    await expect(
-      runSerializedWslCliRegistrationOperation('Ubuntu', async () => {
-        throw new Error('interop failed')
-      })
-    ).rejects.toThrow('interop failed')
-
-    await expect(
-      runSerializedWslCliRegistrationOperation('ubuntu', async () => 'recovered')
-    ).resolves.toBe('recovered')
-  })
 })

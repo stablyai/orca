@@ -16,6 +16,7 @@ vi.mock('react-native', async () => {
   const Text = ({ children, ...props }: { children?: ReactNode }): ReactNode =>
     React.createElement('Text', props, children)
   return {
+    AppState: { currentState: 'active', addEventListener: () => ({ remove: () => {} }) },
     ActivityIndicator: 'ActivityIndicator',
     Animated: {
       Text,
@@ -63,6 +64,9 @@ vi.mock('lucide-react-native', () => ({
   Wrench: 'Wrench'
 }))
 vi.mock('../../../components/MobileMarkdown', () => ({ MobileMarkdown: 'MobileMarkdown' }))
+vi.mock('../../../components/MobileSourceCopyButton', () => ({
+  MobileSourceCopyButton: 'CopyButton'
+}))
 vi.mock('./MobileNativeChatMessageActionsSheet', () => ({
   MobileNativeChatMessageActionsSheet: 'MessageActionsSheet'
 }))

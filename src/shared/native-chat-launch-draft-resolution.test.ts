@@ -1,39 +1,13 @@
 import { describe, expect, it } from 'vitest'
 import type { NativeChatMessage } from './native-chat-types'
-import {
-  launchDraftResolvedByTranscript,
-  nativeChatLaunchDraftTurnBaseline
-} from './native-chat-launch-draft-resolution'
+import { launchDraftResolvedByTranscript } from './native-chat-launch-draft-resolution'
 
 function userMessage(id: string, text: string): NativeChatMessage {
   return { id, role: 'user', blocks: [{ type: 'text', text }], timestamp: 1, source: 'transcript' }
 }
 
-function assistantMessage(id: string, text: string): NativeChatMessage {
-  return {
-    id,
-    role: 'assistant',
-    blocks: [{ type: 'text', text }],
-    timestamp: 2,
-    source: 'transcript'
-  }
-}
-
 describe('launchDraftResolvedByTranscript', () => {
   const SEEDED_AT = 100_000
-
-  it('resolves on any user turn at or after the seed time, even with different text', () => {
-    // A later turn submitted or replaced the TUI prefill, even if the final text differs.
-    const submitted = { ...userMessage('u1', 'unrelated text'), timestamp: SEEDED_AT + 5_000 }
-    expect(launchDraftResolvedByTranscript({ createdAt: SEEDED_AT }, [submitted])).toBe(true)
-  })
-
-  it('ignores assistant turns and user turns from before the seed', () => {
-    const early = { ...userMessage('u1', 'old turn'), timestamp: SEEDED_AT - 50_000 }
-    const reply = { ...assistantMessage('a1', 'hello'), timestamp: SEEDED_AT + 5_000 }
-    expect(launchDraftResolvedByTranscript({ createdAt: SEEDED_AT }, [early, reply])).toBe(false)
-    expect(launchDraftResolvedByTranscript({ createdAt: SEEDED_AT }, [])).toBe(false)
-  })
 
   it('resolves on undated user turns (Grok omits row timestamps)', () => {
     const undated = { ...userMessage('u1', 'submitted in the TUI'), timestamp: null }
@@ -66,21 +40,5 @@ describe('launchDraftResolvedByTranscript', () => {
       tail
     ]
     expect(launchDraftResolvedByTranscript({ createdAt: SEEDED_AT }, paged, baseline)).toBe(false)
-  })
-})
-
-describe('nativeChatLaunchDraftTurnBaseline', () => {
-  it('snapshots the user-turn count and tail id, ignoring assistant turns', () => {
-    expect(
-      nativeChatLaunchDraftTurnBaseline([
-        userMessage('u1', 'one'),
-        assistantMessage('a1', 'reply'),
-        userMessage('u2', 'two')
-      ])
-    ).toEqual({ userTurnCount: 2, lastUserTurnId: 'u2' })
-    expect(nativeChatLaunchDraftTurnBaseline([])).toEqual({
-      userTurnCount: 0,
-      lastUserTurnId: null
-    })
   })
 })

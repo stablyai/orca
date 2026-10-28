@@ -16,6 +16,7 @@ import { useFileExplorerImport } from './useFileExplorerImport'
 import { useFileExplorerInlineInput } from './useFileExplorerInlineInput'
 import { useFileExplorerNodeCommands } from './use-file-explorer-node-commands'
 import { useFileExplorerRowScrolling } from './use-file-explorer-row-scrolling'
+import { useFileExplorerLoadMore } from './use-file-explorer-load-more'
 import { useFileExplorerTreeLoadEffects } from './use-file-explorer-tree-load-effects'
 import { useFileExplorerWatch } from './useFileExplorerWatch'
 import type { useFileExplorerSelection } from './useFileExplorerSelection'
@@ -93,6 +94,7 @@ export function useFileExplorerTreePaneState({
     markPathAsDirectory,
     refreshTree,
     refreshDir,
+    loadMoreDir,
     isDirStale,
     resetAndLoad
   } = tree
@@ -236,9 +238,18 @@ export function useFileExplorerTreePaneState({
     loadingDirPaths,
     rootCache,
     loadDir,
+    loadMoreDir,
     setSelectedPath: setSingleSelectedPath,
     activeFileId,
     openFiles
+  })
+
+  useFileExplorerLoadMore({
+    virtualizer: rowScrolling.virtualizer,
+    rowProjection,
+    dirCache,
+    loadingDirPaths,
+    loadMoreDir
   })
 
   const handlers = useFileExplorerHandlers({

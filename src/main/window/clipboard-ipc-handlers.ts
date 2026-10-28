@@ -13,6 +13,7 @@ import type { Store } from '../persistence'
 import { PATH_ACCESS_DENIED_MESSAGE } from '../ipc/filesystem/filesystem-auth'
 import { resolveDesktopAuthorizedPath } from '../ipc/local-file-access-resolution'
 import { isENOENT } from '../ipc/filesystem/filesystem-path-containment'
+import { isTrustedMainRendererSender } from '../ipc/main-renderer-sender-trust'
 import {
   assertClipboardTextWriteWithinLimitWithYield,
   assertClipboardTextWithinLimitWithYield,
@@ -308,21 +309,5 @@ function assertTrustedClipboardTextSender(event: IpcMainInvokeEvent): void {
 }
 
 function isTrustedClipboardRenderer(sender: WebContents): boolean {
-  if (sender.isDestroyed() || sender.getType() !== 'window') {
-    return false
-  }
-  if (trustedClipboardRendererWebContentsId != null) {
-    return sender.id === trustedClipboardRendererWebContentsId
-  }
-
-  const senderUrl = sender.getURL()
-  if (process.env.ELECTRON_RENDERER_URL) {
-    try {
-      return new URL(senderUrl).origin === new URL(process.env.ELECTRON_RENDERER_URL).origin
-    } catch {
-      return false
-    }
-  }
-
-  return senderUrl.startsWith('file://')
+  return isTrustedMainRendererSender(sender, trustedClipboardRendererWebContentsId)
 }

@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import { once } from 'node:events'
-import { mkdtemp, mkdir, writeFile, rm } from 'node:fs/promises'
+import { mkdtemp, mkdir, writeFile, rm, symlink } from 'node:fs/promises'
 import { createServer } from 'node:http'
 import { spawn } from 'node:child_process'
 import { createInterface } from 'node:readline'
@@ -44,7 +44,11 @@ const server = createServer(async (req, res) => {
   res.end('data: [DONE]\n\n')
 })
 try {
-  const bundle = join(scratch, 'orca.cjs')
+  const bundleDir = join(scratch, 'bundle')
+  await mkdir(bundleDir)
+  // The bundle keeps packages external, so it must resolve them from the repo's node_modules.
+  await symlink(resolve('node_modules'), join(bundleDir, 'node_modules'), 'junction')
+  const bundle = join(bundleDir, 'orca.cjs')
   await build({
     stdin: {
       contents: "export {planCommitMessageGeneration} from './src/shared/commit-message-plan';",

@@ -37,6 +37,8 @@ export type DaemonHandle = {
   recordOrderlyExit(): void
   /** Marks this run as stopped from outside before the teardown, which may not finish. */
   recordStopRequested(): void
+  /** SIGKILLs each live PTY's process group synchronously, for a shutdown that overran its deadline. */
+  killLiveSessionGroupsSync(): void
 }
 
 export async function startDaemon(opts: DaemonStartOptions): Promise<DaemonHandle> {
@@ -86,6 +88,7 @@ export async function startDaemon(opts: DaemonStartOptions): Promise<DaemonHandl
   return {
     shutdown: () => server.shutdown(),
     recordOrderlyExit: () => server.automaticWork.recordOrderlyExit(),
-    recordStopRequested: () => server.automaticWork.recordStopRequested()
+    recordStopRequested: () => server.automaticWork.recordStopRequested(),
+    killLiveSessionGroupsSync: () => server.host.killLiveSessionGroupsSync()
   }
 }

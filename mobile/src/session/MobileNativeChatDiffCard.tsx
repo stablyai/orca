@@ -16,6 +16,7 @@ import {
 import { NATIVE_CHAT_TOOL_ROW_VERB_COPY } from '../../../src/shared/native-chat/tools/native-chat-tool-line-label'
 import { MobileSourceCopyButton } from '../components/MobileSourceCopyButton'
 import { colors } from '../theme/mobile-theme'
+import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import { useMobileNativeChatOpenedDetail } from './native-chat/visual/mobile-native-chat-opened-detail'
 import { useMobileNativeChatDisclosure } from './native-chat/transcript/mobile-native-chat-disclosure-store'
 import {
@@ -24,6 +25,7 @@ import {
 } from './native-chat/transcript/mobile-native-chat-tool-styles'
 
 function VerbIcon({ kind, size }: { kind: NativeChatEditFile['changeKind']; size: number }) {
+  useMobileColorScheme()
   const Icon = kind === 'added' ? FilePlus2 : kind === 'deleted' ? FileMinus2 : FilePen
   return <Icon size={size} color={colors.textMuted} strokeWidth={2} />
 }
@@ -37,6 +39,7 @@ function DiffRow({
   gutterChars: number
   type: ReturnType<typeof toolType>['code']
 }): React.JSX.Element {
+  useMobileColorScheme()
   if (line.kind === 'gap') {
     return (
       <Text style={[styles.diffGap, type]} accessibilityLabel={NATIVE_CHAT_DIFF_CARD_COPY.diffGap}>
@@ -94,6 +97,7 @@ function DiffCardRows({
   disclosureKey?: string
   rootIdentity?: string
 }) {
+  useMobileColorScheme()
   const onLayout = useMobileNativeChatOpenedDetail()
   const type = toolType(fontScale).code
   const gutterChars = nativeChatEditGutterChars(file)
@@ -137,6 +141,7 @@ export function MobileNativeChatDiffCard({
   rootIdentity?: string
   onOpenFile?: (path: string) => void
 }): React.JSX.Element {
+  useMobileColorScheme()
   const [expanded, setExpanded] = useMobileNativeChatDisclosure(disclosureKey, false)
   const hasBody = file.lines.length > 0
   const copyText = useMemo(() => nativeChatEditFilePatchText(file.lines), [file.lines])

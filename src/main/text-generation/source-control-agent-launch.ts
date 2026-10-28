@@ -5,6 +5,7 @@ import { createProviderSpawnSpec } from '../provider-process/provider-process-su
 import { guardSupervisedProviderGroup } from '../provider-process/provider-group-orphan-guard'
 import { SOURCE_CONTROL_KILL_SITE } from './source-control-local-process'
 import { wslAwareSpawn } from '../git/runner'
+import { guestNativeSpawnEnv } from '../ipc/wsl-guest-windows-drive-path'
 import type {
   SourceControlAgentSpawnInput,
   SpawnedSourceControlAgentProcess,
@@ -98,7 +99,8 @@ function spawnSupervisedAgent(
       args: input.args,
       ...(input.useCwdForNative && input.cwd !== undefined ? { cwd: input.cwd } : {})
     },
-    withCliRuntimeOnPath(input.binary, spawnEnv),
+    // On a WSL-host orcad, a missing CLI must fail rather than run a Windows shim found via PATH.
+    withCliRuntimeOnPath(input.binary, guestNativeSpawnEnv(spawnEnv)),
     process.platform,
     { lifetime: 'one-shot' }
   )

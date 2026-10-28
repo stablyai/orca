@@ -1,5 +1,5 @@
 import { parseWslUncPath } from '../../shared/wsl-paths'
-import { isWslUserActFor, runAsWslUserAct } from './wsl-user-act-scope'
+import { isWslUserActFor, runAsWslUserAct as runScopedWslUserAct } from './wsl-user-act-scope'
 import {
   noteWslDistroWoken,
   noteWslDistrosRunning,
@@ -8,12 +8,19 @@ import {
 } from '../wsl-background-distro-gate'
 
 export { noteWslDistroMayHaveStopped } from '../wsl-background-distro-gate'
-export { runAsWslUserAct } from './wsl-user-act-scope'
 
 // Any 9P touch of `\\wsl.localhost\<distro>` boots a stopped distro, so background reads ask first.
 // Stops are signalled (watcher or relay exit, or a read that saw it), so a running read is trusted
 // this long without one, keeping wsl.exe spawns to about one a minute.
 export const WSL_UNC_RUNNING_LEASE_MS = 60_000
+
+/**
+ * Runs a user act on `distro`. When it settles, even by throwing, background reads stop trusting a
+ * "stopped" read taken before it: the act may have started the distro.
+ */
+export function runAsWslUserAct<T>(distro: string | null, act: () => Promise<T>): Promise<T> {
+  return runScopedWslUserAct(distro, act, { onSettled: noteWslDistroWoken })
+}
 
 export class WslDistroStoppedError extends Error {
   readonly code = 'WSL_DISTRO_STOPPED'

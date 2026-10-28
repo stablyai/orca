@@ -2,7 +2,7 @@ import { useMemo } from 'react'
 import type { StructuredAgentSessionState } from '../../../src/shared/structured-agent-session-reducer'
 import type { NativeChatLiveTurnIndicator } from '../../../src/shared/native-chat-turn-status'
 import { isStructuredAgentSessionThinking } from '../../../src/shared/structured-agent-session-live-turn'
-import { selectStructuredAgentTurnActivity } from '../../../src/shared/native-chat-turn-activity'
+import { selectStructuredAgentTurnActivity } from '../../../src/shared/native-chat/transcript/native-chat-turn-activity'
 import { agentStopDisplayStatus } from '../../../src/shared/agent-stop-display-status'
 import { mobileStructuredSendQueues } from './use-mobile-structured-send-with-outcome'
 

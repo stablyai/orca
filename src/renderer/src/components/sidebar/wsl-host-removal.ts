@@ -27,6 +27,19 @@ async function removeWslHostImpl(environmentId: string): Promise<void> {
 
 /** Says what a WSL host's Remove left behind; true when it warned. Shared by every Remove entry. */
 export function warnWslHostServerStop(serverStop: WslHostServerStop | undefined): boolean {
+  if (serverStop?.stopped === true && serverStop.keptForOtherDesktops?.length) {
+    // R39: another Orca on this computer shares the server, so only this Orca let go of it.
+    // Several unnamed peers all read "another Orca"; say it once.
+    const names = [...new Set(serverStop.keptForOtherDesktops)].join(', ')
+    toast.info(
+      translate(
+        'auto.components.sidebar.wslHostRemoval.keptForOthers',
+        'Removed from this Orca. The host keeps running for {{value0}}.',
+        { value0: names }
+      )
+    )
+    return true
+  }
   if (serverStop?.stopped !== false) {
     return false
   }

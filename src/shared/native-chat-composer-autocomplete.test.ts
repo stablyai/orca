@@ -180,6 +180,22 @@ describe('deriveComposerAutocomplete — one grammar for every agent', () => {
     expect(tokens([{ name: 'skill:caveman' }])).toEqual([['/skill:caveman', 'On disk']])
   })
 
+  it('does not offer scanned OMP skills or wait on a scan without native metadata', () => {
+    for (const reported of [undefined, []]) {
+      const result = deriveComposerAutocomplete(
+        '/',
+        1,
+        [],
+        skills,
+        getNativeChatAgentProfile('omp'),
+        { status: 'idle', skills },
+        null,
+        reported
+      )
+      expect(result).toMatchObject({ mode: 'slash', items: [], skillStatus: 'ready' })
+    }
+  })
+
   it('opens only Codex skills under `$`, and a pick keeps Codex `$` token', () => {
     for (const [draft, query] of [
       ['use $type', 'type'],
@@ -664,4 +680,15 @@ it('preserves known skill completion for unclassified session members only', () 
   expect(
     buildNativeChatPickerItems(classified, diskSkills, '', '/', []).map(({ kind }) => kind)
   ).toEqual(['command'])
+})
+
+it('selected slash membership uses real token starts and keeps Codex provider membership dollar-only', () => {
+  const picked = [{ name: 'model', path: '/A/SKILL.md' }]
+  for (const text of ['/model', 'use /model,', '/model\nnext']) {
+    expect(pickedSkillsInText(text, picked, ['$', '/'])).toEqual(picked)
+    expect(pickedSkillsInText(text, picked)).toEqual([])
+  }
+  for (const text of ['/dir/model', '/model-extra', '/model:other', 'prefix/model']) {
+    expect(pickedSkillsInText(text, picked, ['$', '/'])).toEqual([])
+  }
 })

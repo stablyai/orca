@@ -6,8 +6,8 @@ const { spawnMock } = vi.hoisted(() => ({
   spawnMock: vi.fn()
 }))
 
-vi.mock('child_process', () => ({
-  spawn: spawnMock
+vi.mock('@orca/process-host', () => ({
+  spawnProcess: spawnMock
 }))
 
 import { createWslWatcher } from './filesystem-watcher-wsl'
@@ -90,16 +90,13 @@ describe('createWslWatcher', () => {
 
     await promise
 
-    expect(spawnMock).toHaveBeenCalledWith(
-      'wsl.exe',
-      ['-d', 'Ubuntu', '--exec', 'sh', '-s', '--', '/home/me/repo'],
-      expect.objectContaining({
-        stdio: ['pipe', 'pipe', 'pipe'],
-        windowsHide: true,
-        // Explicit cwd survives deletion of Orca's inherited worktree (#16463).
-        cwd: expect.any(String)
-      })
-    )
+    expect(spawnMock).toHaveBeenCalledWith({
+      program: 'wsl.exe',
+      args: ['-d', 'Ubuntu', '--exec', 'sh', '-s', '--', '/home/me/repo'],
+      stdio: 'pipe',
+      // Explicit cwd survives deletion of Orca's inherited worktree (#16463).
+      cwd: expect.any(String)
+    })
   })
 
   it('counts WSL watcher processes against the global physical child cap', async () => {

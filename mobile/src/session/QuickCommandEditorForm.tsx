@@ -1,7 +1,8 @@
 import { useState } from 'react'
-import { View, Text, Pressable, TextInput, StyleSheet, Switch } from 'react-native'
+import { View, Text, Pressable, TextInput, Switch } from 'react-native'
 import { ChevronDown, ChevronRight } from 'lucide-react-native'
 import { colors, spacing, radii, typography } from '../theme/mobile-theme'
+import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import { TEXT_INPUT_FONT_SIZE } from '../platform/text-input-font-size'
 import { MobileAgentIcon } from '../components/MobileAgentIcon'
 import {
@@ -13,6 +14,7 @@ import {
 } from '../terminal/quick-commands'
 import type { QuickCommandDraft } from './quick-command-draft'
 import { isQuickCommandDraftPromptTooLong, isQuickCommandDraftValid } from './quick-command-draft'
+import { themedStyleSheet } from '../theme/themed-styles'
 
 type Props = {
   draft: QuickCommandDraft
@@ -37,6 +39,7 @@ function ActionToggle({
   value: QuickCommandDraft['action']
   onChange: (action: QuickCommandDraft['action']) => void
 }) {
+  useMobileColorScheme()
   return (
     <View style={styles.toggleGroup}>
       {(['terminal-command', 'agent-prompt'] as const).map((action) => {
@@ -76,6 +79,7 @@ export function QuickCommandEditorForm({
   onCancel,
   onSave
 }: Props) {
+  useMobileColorScheme()
   const hasRepoScope = repoId !== null
   const [advancedOpen, setAdvancedOpen] = useState(draft.scope.type === 'repo')
   const isAgent = draft.action === 'agent-prompt'
@@ -263,7 +267,7 @@ export function QuickCommandEditorForm({
   )
 }
 
-const styles = StyleSheet.create({
+const styles = themedStyleSheet(() => ({
   form: { gap: spacing.md, paddingTop: spacing.xs, paddingBottom: spacing.sm },
   field: { gap: spacing.sm },
   label: { fontSize: 12, fontWeight: '600', color: colors.textSecondary },
@@ -337,4 +341,4 @@ const styles = StyleSheet.create({
   saveButtonDisabled: { backgroundColor: colors.bgRaised },
   saveText: { fontSize: 14, fontWeight: '700', color: colors.bgBase },
   saveTextDisabled: { color: colors.textMuted }
-})
+}))

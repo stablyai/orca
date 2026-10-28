@@ -17,6 +17,7 @@ vi.mock('react-native', async () => {
   const Text = ({ children, ...props }: { children?: ReactNode }): unknown =>
     React.createElement('Text', props, children)
   return {
+    AppState: { currentState: 'active', addEventListener: () => ({ remove: () => {} }) },
     ActivityIndicator: 'ActivityIndicator',
     Animated: {
       Text,
@@ -536,12 +537,12 @@ describe('MobileNativeChatMessage', () => {
     ).toEqual(thumbnails)
   })
 
-  it('draws your message as selectable Markdown in the bubble’s dark-on-light colours', () => {
+  it('draws your message as selectable Markdown in the bubble’s text colour', () => {
     const tree = render(userMessage([{ type: 'text', text: '**Fix** `src/a.ts`' }]))
     const markdown = findByHostType(tree.root, 'MobileMarkdown')
     expect(markdown.props).toMatchObject({
       content: '**Fix** `src/a.ts`',
-      tone: 'onBright',
+      tone: 'userMessage',
       rangeSelectable: true
     })
     expect(markdown.props.renderVisual).toBeUndefined()

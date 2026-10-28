@@ -1,4 +1,4 @@
-import { StyleSheet, Text, View } from 'react-native'
+import { Text, View } from 'react-native'
 import { MessageSquareMore } from 'lucide-react-native'
 import {
   NATIVE_CHAT_ASK_ROW_COPY,
@@ -6,6 +6,8 @@ import {
 } from '../../../../../src/shared/native-chat/input/native-chat-ask-row'
 import { INLINE_TEXT_SELECTION } from '../../../components/inline-text-selection'
 import { colors, spacing, typography } from '../../../theme/mobile-theme'
+import { themedStyleSheet } from '../../../theme/themed-styles'
+import { useMobileColorScheme } from '../../../theme/use-mobile-color-scheme'
 import { scaledType } from './mobile-native-chat-message-styles'
 
 const ICON_SIZE = 15
@@ -22,6 +24,7 @@ export function MobileNativeChatAwaitingInputRow({
   // Suppress duplicate question lists when the grouped prompt already renders them.
   listsQuestions?: boolean
 }): React.JSX.Element {
+  useMobileColorScheme()
   const label = !pending
     ? NATIVE_CHAT_ASK_ROW_COPY.asked
     : subject === null
@@ -67,7 +70,7 @@ export function MobileNativeChatAwaitingInputRow({
   )
 }
 
-const styles = StyleSheet.create({
+const styles = themedStyleSheet(() => ({
   row: {
     flexDirection: 'row',
     alignItems: 'flex-start',
@@ -81,4 +84,4 @@ const styles = StyleSheet.create({
   question: {
     color: colors.textPrimary
   }
-})
+}))

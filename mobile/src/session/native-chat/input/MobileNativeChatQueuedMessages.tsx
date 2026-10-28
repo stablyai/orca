@@ -5,6 +5,7 @@ import { Pressable, Text, View } from 'react-native'
 import { ChevronDown, ChevronRight, Pencil, Play, Trash2 } from 'lucide-react-native'
 import { ActionSheetModal } from '../../../components/ActionSheetModal'
 import { colors } from '../../../theme/mobile-theme'
+import { useMobileColorScheme } from '../../../theme/use-mobile-color-scheme'
 import { useLargeSystemText } from '../../../theme/use-large-system-text'
 import type { MobileQueuedMessageCard } from '../../mobile-structured-queued-message-cards'
 import type { AgentSessionQueuePause } from '../../../../../src/shared/agent-session-wire'
@@ -45,6 +46,7 @@ export function MobileNativeChatQueuedMessages({
   onResume,
   steerHeld = false
 }: MobileNativeChatQueuedMessagesProps): React.JSX.Element | null {
+  useMobileColorScheme()
   // Use a ref to block duplicate actions before disabled state renders.
   const [busyIds, setBusyIds] = useState<ReadonlySet<string>>(() => new Set())
   const inFlightRef = useRef(new Set<string>())
@@ -124,9 +126,9 @@ export function MobileNativeChatQueuedMessages({
   const attentionCaption = !expanded ? cards.find((card) => card.needsAttention)?.caption : null
   const headerCountStyle = [styles.headerCount, attentionCaption && styles.captionReturned]
   return (
-    <View style={styles.list}>
+    <View style={[styles.list, editor && styles.inlineList]}>
       {}
-      <View style={styles.box} testID="queued-box">
+      <View style={[styles.box, editor && styles.inlineBox]} testID="queued-box">
         {/* A polite region, as the app's other notices: React Native has no status role. */}
         <View
           testID="queued-header"
@@ -176,6 +178,7 @@ export function MobileNativeChatQueuedMessages({
           <MobileQueuedMessageScrollList
             messageIds={cards.map((card) => card.messageId)}
             newestIsPersons={!cards.at(-1)?.attribution}
+            inlineEditorActive={editor !== undefined}
           >
             {(reveal, drag) => {
               const renderRow = (card: MobileQueuedMessageCard, handle?: React.ReactNode) => (
