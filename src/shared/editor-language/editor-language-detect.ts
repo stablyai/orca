@@ -91,6 +91,12 @@ const EXT_TO_LANGUAGE: Record<string, string> = {
   '.r': 'r',
   '.make': 'makefile',
   '.scala': 'scala',
+  '.groovy': 'groovy',
+  '.gvy': 'groovy',
+  '.gy': 'groovy',
+  '.gsh': 'groovy',
+  '.gradle': 'groovy',
+  '.jenkinsfile': 'groovy',
   '.dart': 'dart',
   '.ex': 'elixir',
   '.exs': 'elixir',
@@ -124,6 +130,7 @@ const EXT_TO_LANGUAGE: Record<string, string> = {
 
 const FILENAME_TO_LANGUAGE: Record<string, string> = {
   Dockerfile: 'dockerfile',
+  Jenkinsfile: 'groovy',
   Makefile: 'makefile',
   'CMakeLists.txt': 'cmake',
   '.gitignore': 'ini',
@@ -172,7 +179,8 @@ const SHEBANG_INTERPRETER_TO_LANGUAGE: Record<string, string> = {
   lua: 'lua',
   luajit: 'lua',
   pwsh: 'powershell',
-  powershell: 'powershell'
+  powershell: 'powershell',
+  groovy: 'groovy'
 }
 
 function detectShebangLanguage(content: string): string | null {
@@ -203,6 +211,8 @@ export function detectLanguage(filePath: string, content?: string): string {
   const language =
     EXT_TO_LANGUAGE[ext] ??
     detectMonacoFilenameLanguage(filename) ??
+    // Pipeline variants like Jenkinsfile.release; a known extension (Jenkinsfile.md) still wins.
+    (lowerName.startsWith('jenkinsfile.') ? 'groovy' : undefined) ??
     (lowerName === '.env' || lowerName.startsWith('.env.') ? 'ini' : 'plaintext')
   // Why: only extensionless names fall back to the shebang; unmapped extensions like .txt stay plaintext.
   if (language === 'plaintext' && ext === '' && content !== undefined) {
