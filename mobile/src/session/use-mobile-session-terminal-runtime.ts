@@ -61,6 +61,9 @@ export function useMobileSessionTerminalRuntime(scope: MobileSessionScreenStateM
   const commandInputRef = useRef<TextInput>(null)
   const liveInputFocusTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const sendLiveTerminalInputRef = useRef<TerminalLiveInputSender>(async () => false)
+  const predictLiveInput = useCallback((handle: string, bytes: string) => {
+    terminalRefs.current.get(handle)?.predictInput?.(bytes)
+  }, [])
   const sessionTabActionSheetKeyboardHideSubRef = useRef<ReturnType<
     typeof Keyboard.addListener
   > | null>(null)
@@ -134,7 +137,8 @@ export function useMobileSessionTerminalRuntime(scope: MobileSessionScreenStateM
     liveInputTerminalHandles,
     liveInputTerminalHandlesRef,
     sendLiveTerminalInputRef,
-    setLiveInputCapture
+    setLiveInputCapture,
+    predictLiveInput
   })
   const inputGate = resolveMobileTerminalInputGate({
     connState,

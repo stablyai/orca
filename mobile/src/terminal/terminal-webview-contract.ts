@@ -113,6 +113,8 @@ export type TerminalWebViewHandle = {
   // iOS can preserve the view but lose document state; await liveness before foreground replay.
   prepareForForegroundRecovery: () => void
   write: (data: string) => void
+  // Draw just-typed text locally until the host echo lands; never reaches the PTY.
+  predictInput?: (data: string) => void
   init: (init: TerminalInit) => void
   resize: (cols: number, rows: number, frame: TerminalFrame | null) => void
   // Rewrap local scrollback after PTY width changes; alternate screens use full repaints instead.

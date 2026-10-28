@@ -74,6 +74,18 @@ export const TERMINAL_DOCUMENT_ELEMENT_STYLE = `  #terminal-container {
   /* Why: selection overlay sits in unscaled viewport coords, above the
      transformed surface, so handle hit areas and Copy menu positions
      don't depend on getTotalScale() for their on-screen size. */
+  #local-echo {
+    position: fixed;
+    top: 0; left: 0; right: 0; bottom: 0;
+    pointer-events: none;
+    z-index: 5;
+  }
+  #local-echo span {
+    position: absolute;
+    white-space: pre;
+    text-align: center;
+    overflow: hidden;
+  }
   #selection-overlay {
     position: fixed;
     top: 0; left: 0; right: 0; bottom: 0;

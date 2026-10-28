@@ -2,6 +2,7 @@
 export const TERMINAL_DOCUMENT_MARKUP = `<div id="terminal-container">
   <div id="terminal-surface"></div>
 </div>
+<div id="local-echo"></div>
 <div id="scroll-indicator"><div id="scroll-thumb"></div></div>
 <div id="selection-overlay">
   <div id="sel-handle-start" class="sel-handle start"></div>

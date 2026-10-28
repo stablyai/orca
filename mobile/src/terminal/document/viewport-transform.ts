@@ -1,4 +1,5 @@
 import { paintBottomRowBackdrop } from './bottom-row-backdrop'
+import { paintLocalEcho } from './local-echo'
 import { repositionOverlay } from './selection-overlay'
 import { shouldRouteScrollToTerminalInput } from './mouse-input-encoding'
 import type { TerminalDocumentScope } from './document-scope'
@@ -40,6 +41,7 @@ export function updateTransform(scope: TerminalDocumentScope) {
     'translate(' + scope.panX + 'px,' + scope.panY + 'px) scale(' + getTotalScale(scope) + ')'
   updateScrollIndicator(scope, false)
   paintBottomRowBackdrop(scope)
+  paintLocalEcho(scope)
   if (scope.selMode === 'select') {
     repositionOverlay(scope)
   }

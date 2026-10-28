@@ -1,5 +1,6 @@
 import { afterWritesDrained, disposeTermObservers } from './write-queue'
 import { paintBottomRowBackdrop } from './bottom-row-backdrop'
+import { paintLocalEcho, reconcileLocalEcho } from './local-echo'
 import { updateScrollIndicator } from './viewport-transform'
 import type { TerminalDocumentScope } from './document-scope'
 import { logFeedAndEvict } from './selection-state-and-eviction'
@@ -24,6 +25,7 @@ export function attachTermObservers(scope: TerminalDocumentScope) {
       scope.term.onScroll!(function () {
         updateScrollIndicator(scope, false)
         paintBottomRowBackdrop(scope)
+        paintLocalEcho(scope)
       })
     )
   } catch {}
@@ -35,6 +37,7 @@ export function attachTermObservers(scope: TerminalDocumentScope) {
           emitModesIfChanged(scope)
           emitKeyboardAvoidanceMetrics(scope)
           paintBottomRowBackdrop(scope)
+          reconcileLocalEcho(scope)
         })
       )
     }

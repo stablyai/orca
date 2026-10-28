@@ -41,6 +41,7 @@ type TerminalLiveInputCommitOptions<TTabType extends string> = {
   readonly liveInputTerminalHandlesRef: RefObject<Set<string>>
   readonly sendLiveTerminalInputRef: RefObject<TerminalLiveInputSender>
   readonly setLiveInputCapture: (text: string) => void
+  readonly predictLiveInput?: (handle: string, bytes: string) => void
 }
 
 type TerminalLiveInputCommitHandlers = {
@@ -66,7 +67,8 @@ export function useTerminalLiveInputCommit<TTabType extends string>({
   liveInputTerminalHandles,
   liveInputTerminalHandlesRef,
   sendLiveTerminalInputRef,
-  setLiveInputCapture
+  setLiveInputCapture,
+  predictLiveInput
 }: TerminalLiveInputCommitOptions<TTabType>): TerminalLiveInputCommitHandlers {
   const liveInputInteractionGenerationRef = useRef(0)
   // Click guards compare against the field text cleared before the cursor moved.
@@ -103,7 +105,8 @@ export function useTerminalLiveInputCommit<TTabType extends string>({
     liveInputRef,
     liveInputTerminalHandlesRef,
     sendLiveTerminalInputRef,
-    setLiveInputCapture: updateLiveInputCapture
+    setLiveInputCapture: updateLiveInputCapture,
+    predictLiveInput
   })
 
   useEffect(() => {

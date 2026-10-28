@@ -98,6 +98,14 @@ export type TerminalDocumentState = {
   interactionActive: boolean
   tapCandidate: TerminalDocumentTapCandidate | null
   bottomRowBackdrop: string
+  // Typed chars drawn ahead of the host echo, anchored at the cursor cell when the first was typed.
+  localEchoPending: string[]
+  // Date.now() of each pending guess, parallel to localEchoPending.
+  localEchoTimes: number[]
+  localEchoAnchor: { col: number; row: number } | null
+  localEchoTimer: ReturnType<typeof setTimeout> | null
+  localEchoTrustedRow: number | null
+  localEchoBufferType: string | null
   surface: HTMLElement | null
   pendingTerm: TerminalDocumentTerminal | null
   // The anchor the pending replay will restore; null after a clear or an alternate-screen snapshot.
@@ -224,6 +232,12 @@ function createTerminalDocumentState(): TerminalDocumentState {
     tapCandidate: null,
     wheelAccumDeltaY: 0,
     bottomRowBackdrop: '',
+    localEchoPending: [],
+    localEchoTimes: [],
+    localEchoAnchor: null,
+    localEchoTimer: null,
+    localEchoTrustedRow: null,
+    localEchoBufferType: null,
     surface: null,
     pendingTerm: null,
     pendingReplayScrollAnchorRows: null,

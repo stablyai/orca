@@ -22,6 +22,7 @@ type TerminalLivePendingInputFlushOptions<TTabType extends string> = {
   readonly liveInputTerminalHandlesRef: RefObject<Set<string>>
   readonly sendLiveTerminalInputRef: RefObject<TerminalLiveInputSender>
   readonly setLiveInputCapture: (text: string) => void
+  readonly predictLiveInput?: (handle: string, bytes: string) => void
 }
 
 type RunTerminalLiveMirrorStep = (
@@ -54,7 +55,8 @@ export function useTerminalLivePendingInputFlush<TTabType extends string>({
   liveInputRef,
   liveInputTerminalHandlesRef,
   sendLiveTerminalInputRef,
-  setLiveInputCapture
+  setLiveInputCapture,
+  predictLiveInput
 }: TerminalLivePendingInputFlushOptions<TTabType>): TerminalLivePendingInputFlush {
   const heldCommitTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const pendingLiveInputFlushRef = useRef(createTerminalLivePendingFlushState())
@@ -92,8 +94,11 @@ export function useTerminalLivePendingInputFlush<TTabType extends string>({
 
   const sendQueuedMirrorPayload = useCallback(
     (handle: string, payload: string): Promise<boolean> =>
-      sendLiveTerminalInputRef.current(handle, payload),
-    [sendLiveTerminalInputRef]
+      // Without a predictor the sender must keep its own send-time prediction.
+      sendLiveTerminalInputRef.current(handle, payload, {
+        predicted: predictLiveInput !== undefined
+      }),
+    [predictLiveInput, sendLiveTerminalInputRef]
   )
 
   const runMirrorStep = useCallback<RunTerminalLiveMirrorStep>(
@@ -137,6 +142,8 @@ export function useTerminalLivePendingInputFlush<TTabType extends string>({
       if (payload.length === 0) {
         return waitForPendingLiveInputFlush()
       }
+      // Draw now: sends are serialized on host acks, so send time is about one round trip late (2026-10-27 device test).
+      predictLiveInput?.(handle, payload)
       return queueTerminalLiveMirrorSend(
         pendingLiveInputFlushRef.current,
         handle,
@@ -149,6 +156,7 @@ export function useTerminalLivePendingInputFlush<TTabType extends string>({
       activeSessionTabTypeRef,
       clearHeldCommitTimer,
       liveInputTerminalHandlesRef,
+      predictLiveInput,
       resetMirrorState,
       sendQueuedMirrorPayload,
       waitForPendingLiveInputFlush
@@ -194,6 +202,8 @@ export function useTerminalLivePendingInputFlush<TTabType extends string>({
     (handle: string, bytes: string): Promise<boolean> => {
       // Own the queued bytes so a terminal switch retires them even with an empty field.
       pendingLiveInputHandleRef.current = handle
+      // Controls skip send-time prediction like mirror bytes, so drop local echo trust here.
+      predictLiveInput?.(handle, bytes)
       return queueTerminalLiveControlSend(
         pendingLiveInputFlushRef.current,
         handle,
@@ -201,7 +211,7 @@ export function useTerminalLivePendingInputFlush<TTabType extends string>({
         sendQueuedMirrorPayload
       )
     },
-    [sendQueuedMirrorPayload]
+    [predictLiveInput, sendQueuedMirrorPayload]
   )
 
   // Queue held text and the control synchronously so the next keystroke follows them.
