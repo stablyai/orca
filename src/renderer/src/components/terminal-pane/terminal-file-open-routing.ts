@@ -242,7 +242,7 @@ export function openDetectedFilePath(
     if (
       !openWithSystemDefault &&
       !explicitGroupRequest &&
-      hostGrantId === null &&
+      hostGrant === null &&
       (await openOsViewerOnlyTerminalFile(
         fileContext,
         mappedFilePath,
