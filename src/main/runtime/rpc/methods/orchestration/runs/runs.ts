@@ -1,6 +1,7 @@
 import { defineMethod } from '../../../core'
 import { OrchestrationError } from '../../../../orchestration/orchestration-error'
 import { readRunRemovedWork } from '../../../../orchestration/db/reset/removed-orchestration-work-read'
+import { readRunEvents } from '../../../../orchestration/db/runs/run-event-read'
 import { assertCallerHandleMatchesEvidence, resolveOrchestrationCaller } from './run-scope'
 import { exposeRun } from './run-receipt'
 import type { OrcaRuntimeService } from '../../../../orca-runtime'
@@ -8,6 +9,7 @@ import type { OrchestrationCallerIdentity } from '../../../../orchestration/orch
 import { currentDispatchAssigneeRun } from '../messaging/recipient-routing'
 import {
   RunCreateParams,
+  RunEventsParams,
   RunCurrentParams,
   RunListParams,
   RunShowParams,
@@ -27,6 +29,13 @@ function cancelBoundDispatchWaiters(
 }
 
 export const ORCHESTRATION_RUN_METHODS = [
+  defineMethod({
+    name: 'orchestration.runEvents',
+    permission: 'workspace',
+    params: RunEventsParams,
+    handler: (params, { runtime }) =>
+      readRunEvents(runtime.getOrchestrationDb().db, params.id, params)
+  }),
   defineMethod({
     name: 'orchestration.runCreate',
     permission: 'workspace',

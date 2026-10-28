@@ -112,6 +112,7 @@ export const ROOT_HELP_TEXT_PRIMARY = [
   '  orchestration run-use     Resume coordinating a Run (workers never use this)',
   "  orchestration run-current Show this coordinator's bound Run",
   '  orchestration run-list    List lightweight orchestration Runs',
+  '  orchestration run-events  Read the recorded history of a Run',
   '  orchestration run-show    Show one lightweight orchestration Run',
   '  orchestration send        Send an inter-agent message',
   '  orchestration check       Check the bound Run mailbox',

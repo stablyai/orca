@@ -53,7 +53,7 @@ import { RUNTIME_COMPAT_BLOCK_CODE } from '@/runtime/runtime-protocol-compat'
 import type { AgentMessageSource } from '../../../shared/agent-session/agent-session-message-source'
 import { AGENT_SESSION_WRITE_NOTICE_COPY } from '../../../shared/agent-session-write-notice-copy'
 import { testOrcaSessionId } from '../../../shared/orca-session-address-test-fixture'
-import { openAgentMessageSender } from './open-agent-message-sender'
+import { openAgentMessageSender, openOrchestrationAddress } from './open-agent-message-sender'
 
 const HOST = { kind: 'environment', environmentId: 'env-host' }
 const ROOT = testOrcaSessionId('4a1f6c2e-8b3d-4e7a-9c15-0d2b6e8f1a37')
@@ -108,6 +108,25 @@ beforeEach(() => {
 })
 
 describe("opening a message's sender", () => {
+  it('opens a history Dispatch through its selected host without a message or workspace', async () => {
+    mocks.callRuntimeRpc.mockResolvedValue({
+      location: { kind: 'terminal', handle: 'term_worker' }
+    })
+    mocks.focusRenderer.mockReturnValue(true)
+    await expect(
+      openOrchestrationAddress('dispatch:d1', { kind: 'environment', environmentId: 'env-host' })
+    ).resolves.toBe(true)
+    expect(mocks.callRuntimeRpc).toHaveBeenCalledWith(HOST, 'orchestration.partyLocation', {
+      address: 'dispatch:d1'
+    })
+    expect(mocks.focusRenderer).toHaveBeenCalledWith('term_worker', 'env-host')
+  })
+
+  it('keeps history open when its agent cannot be found', async () => {
+    mocks.callRuntimeRpc.mockResolvedValue({ location: null, lost: 'terminal' })
+    await expect(openOrchestrationAddress('dispatch:gone', { kind: 'local' })).resolves.toBe(false)
+    expect(mocks.paneUnavailable).toHaveBeenCalledTimes(1)
+  })
   it("asks the chat's host where a terminal is, with the mail it sent, and focuses what it finds", async () => {
     mocks.callRuntimeRpc.mockResolvedValue({ location: { kind: 'terminal', handle: 'term_now' } })
     mocks.focusRenderer.mockReturnValue(true)

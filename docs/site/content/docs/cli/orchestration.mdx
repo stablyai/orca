@@ -165,6 +165,47 @@ orca orchestration gate-resolve --id <gateId> --resolution "yes" --json
 
 ## Recovery
 
+### Read a Run's recorded history
+
+```bash
+orca orchestration run-events --id <runId> --limit 50 --json
+# Continue the same snapshot with the nextCursor returned by the previous page:
+orca orchestration run-events --id <runId> --cursor <nextCursor> --json
+```
+
+History records Run creation, coordinator changes, Task creation and status changes,
+Dispatch creation and status changes, and decision-gate creation and status changes.
+It also records removal of Tasks, Dispatches, and gates. Removal means that Orca deleted
+the record. It does not mean that a worker stopped.
+
+Events are saved with the database change. A failed transaction leaves no event.
+Events use the host's UTC recording time and a sequence number. The sequence determines
+their order, including events recorded at the same time. Each page contains at most 100
+events. A cursor keeps the upper sequence from the first page, so new events do not
+extend a page sequence. Start again without a cursor to read a newer snapshot.
+
+The result includes `coverage.completeFromCreation` and `coverage.recordedSince`.
+Runs that existed before recording started have incomplete earlier history. Orca does
+not reconstruct missing events from current state. If recording is interrupted and
+repaired, coverage becomes incomplete and previous cursors are invalidated. Existing
+events remain available, including events before the interruption.
+
+History remains when Tasks or messages are reset. Deleting a Run, including through
+`reset --all`, deletes its history. Task titles and recorded Dispatch assignees are included.
+Heartbeats, message bodies, full prompts, results, and decision text are not copied into
+history. This command requires a host that supports
+Run history. The CLI asks you to update an older host rather than reporting an empty history.
+
+On desktop, open **Agents → Run history**, choose a host, and select a Run. The same
+view is available in the in-window Agents dashboard. **Filter loaded events** searches
+the pages already loaded, including Task titles, worker addresses, and status changes.
+Load more pages to search more history. **Refresh** starts a new snapshot.
+
+**Open agent** asks the selected host for the agent's current chat or terminal. If the
+host cannot find or open it, Orca keeps the history view open and shows the reason.
+
+The mobile app does not yet include a Run timeline view.
+
 ```bash
 orca orchestration dispatch-show --task <taskId> --json
 orca orchestration dispatch-show --task <taskId> --preamble --json

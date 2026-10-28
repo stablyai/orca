@@ -10,8 +10,58 @@ import type { RunRemovedWork } from '../../../shared/orchestration-removed-work'
 import { callOrchestrationMutation } from './mutation-request'
 import { formatRemovedWorkListing, formatRunRemovedWorkLine } from './removed-work-format'
 import { resolveCoordinatorTerminalHandle } from './terminal-identity'
+import { RuntimeClientError } from '../../runtime-client'
+import {
+  ORCHESTRATION_RUN_EVENT_PAGE_LIMIT,
+  type RunEventsPage
+} from '../../../shared/orchestration-run-events'
 
 export const ORCHESTRATION_RUN_HANDLERS: Record<string, CommandHandler> = {
+  'orchestration run-events': async ({ flags, client, json }) => {
+    const result = await client
+      .call<RunEventsPage>('orchestration.runEvents', {
+        id: getRequiredStringFlag(flags, 'id'),
+        limit: getOptionalPositiveIntegerFlag(flags, 'limit') ?? ORCHESTRATION_RUN_EVENT_PAGE_LIMIT,
+        cursor: getOptionalStringFlag(flags, 'cursor')
+      })
+      .catch((error: unknown) => {
+        if (error instanceof RuntimeClientError && error.code === 'method_not_found') {
+          throw new RuntimeClientError(
+            'incompatible_runtime',
+            'This Orca host does not support Run history. Update Orca on the host and try again.'
+          )
+        }
+        throw error
+      })
+    printResult(result, json, (page) => {
+      const lines = [
+        page.coverage.completeFromCreation
+          ? 'History recorded from Run creation.'
+          : `Earlier history is incomplete. Continuous recording since ${page.coverage.recordedSince}.`
+      ]
+      for (const event of page.events) {
+        const transition = event.data.previousStatus
+          ? ` ${event.data.previousStatus} -> ${event.data.status}`
+          : event.data.status
+            ? ` ${event.data.status}`
+            : ''
+        const coordinator =
+          event.kind === 'run.coordinator_changed'
+            ? ` ${event.data.previousCoordinator ?? 'unbound'} -> ${event.data.coordinator ?? 'unbound'}`
+            : ''
+        lines.push(
+          `${event.sequence} ${event.recordedAt} ${event.kind} ${event.entityId}${transition}${coordinator}`
+        )
+      }
+      if (!page.events.length) {
+        lines.push('No recorded events.')
+      }
+      if (page.nextCursor) {
+        lines.push(`More events: --cursor ${page.nextCursor}`)
+      }
+      return lines.join('\n')
+    })
+  },
   'orchestration run-create': async ({ flags, client, cwd, json }) => {
     const from = await resolveCoordinatorTerminalHandle(flags, cwd, client)
     const result = await callOrchestrationMutation<{
