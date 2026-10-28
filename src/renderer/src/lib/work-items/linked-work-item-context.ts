@@ -215,6 +215,13 @@ export function resolveQuickCreateLinkedWorkItemPrompt(
   template?: string
 ): { prompt: string; draftPrompt: string | null } {
   const trimmedNote = note.trim()
+  if (
+    linkedWorkItem?.number === 0 &&
+    !linkedWorkItem.url.trim() &&
+    !linkedWorkItem.linearIdentifier?.trim()
+  ) {
+    return { prompt: trimmedNote, draftPrompt: null }
+  }
   const customDraft = linkedWorkItem
     ? renderLinkedWorkItemPromptTemplate(template, linkedWorkItem.url)
     : null
@@ -236,9 +243,5 @@ export function resolveQuickCreateLinkedWorkItemPrompt(
     : linkedUrl
       ? [trimmedNote, linkedUrl].filter(Boolean).join('\n\n')
       : null
-  const isLinearTypedOnly = linkedWorkItem?.number === 0 && Boolean(trimmedNote) && !draftPrompt
-  return {
-    prompt: isLinearTypedOnly ? trimmedNote : '',
-    draftPrompt
-  }
+  return { prompt: '', draftPrompt }
 }
