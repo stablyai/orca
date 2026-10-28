@@ -29,6 +29,7 @@ import { buildDiffEditorHideUnchangedOptions } from './diff-editor-hide-unchange
 import { useDiffEditorRegistration } from './diff-navigation-context'
 import { preserveDiffViewStateAcrossModelSwaps } from './diff-model-swap-view-state'
 import { monacoFindOptions } from './monaco-find-options'
+import { buildEditorUnicodeHighlightOptions } from './editor-unicode-highlight-options'
 import { useDocumentDarkTheme } from '@/hooks/use-document-dark-theme'
 
 export default function DiffViewer({
@@ -354,7 +355,8 @@ export default function DiffViewer({
               renderOverviewRuler: true,
               scrollbar: diffEditorScrollbarOptions,
               padding: { top: 0 },
-              find: monacoFindOptions
+              find: monacoFindOptions,
+              unicodeHighlight: buildEditorUnicodeHighlightOptions(language)
             }}
           />
         )}

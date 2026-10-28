@@ -18,6 +18,7 @@ import {
   syncDiffEditorOriginalWordWrap
 } from './diff-editor-word-wrap-options'
 import { monacoFindOptions } from './monaco-find-options'
+import { buildEditorUnicodeHighlightOptions } from './editor-unicode-highlight-options'
 import { installDiffEditorShiftWheelScroll } from './diff-editor-shift-wheel-scroll'
 
 const ImageDiffViewer = lazy(() => import('./ImageDiffViewer'))
@@ -235,7 +236,8 @@ export function DiffSectionBody({
             renderOverviewRuler: false,
             scrollbar: combinedDiffSectionScrollbarOptions,
             hideUnchangedRegions: { enabled: true },
-            find: monacoFindOptions
+            find: monacoFindOptions,
+            unicodeHighlight: buildEditorUnicodeHighlightOptions(language)
           }}
         />
       )}
