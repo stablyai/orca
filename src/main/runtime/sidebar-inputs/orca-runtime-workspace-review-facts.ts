@@ -1,3 +1,4 @@
+import { readSharedGitHubCache } from '../github-participant-shared-cache'
 import { OrcaRuntimeWithWorkspaceActivityFacts } from './orca-runtime-workspace-activity-facts'
 import {
   buildWorkspaceReviewFacts,
@@ -15,7 +16,7 @@ export abstract class OrcaRuntimeWithWorkspaceReviewFacts extends OrcaRuntimeWit
       facts: buildWorkspaceReviewFacts(
         worktrees,
         this.store.getRepos(),
-        this.store.getGitHubCache().pr
+        readSharedGitHubCache(this.store).pr
       )
     }
   }

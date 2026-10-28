@@ -1,3 +1,4 @@
+import { readSharedGitHubCache } from '../github-participant-shared-cache'
 import {
   getRegisteredSshState,
   listRegisteredSshTargets
@@ -262,7 +263,7 @@ export function sidebarInputsFeedDomains(
           return null
         }
         const store = requireStore()
-        const prCache = store.getGitHubCache().pr
+        const prCache = readSharedGitHubCache(store).pr
         return {
           ...buildWorkspaceReviewFacts(worktrees, store.getRepos(), prCache),
           // A paired server's rows by the window's cache too.

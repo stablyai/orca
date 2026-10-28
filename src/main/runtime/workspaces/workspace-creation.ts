@@ -1,4 +1,8 @@
 import {
+  captureGitHubExecutionIdentity,
+  runWithGitHubExecutionIdentity
+} from '../github-participant-execution'
+import {
   RuntimeLineageError,
   LINEAGE_PARENT_AMBIGUOUS,
   formatAmbiguousCwdParentMessage,
@@ -66,7 +70,10 @@ export abstract class OrcaRuntimeWithCreateManagedWorktree extends OrcaRuntimeWi
     )
 
     const repo = await this.resolveRepoSelector(args.repoSelector)
-    const request = await applyWorkspaceCreatePluginHook(args, repo)
+    const identity = captureGitHubExecutionIdentity(this.getGitHubParticipantRegistry(), repo.id)
+    const request = await runWithGitHubExecutionIdentity(identity, () =>
+      applyWorkspaceCreatePluginHook(args, repo)
+    )
     // Listed from here: a create refused before its project resolved has nothing to show.
     const creation = this.workspaceLifecycle?.openCreate({
       creationId: request.creationId,
@@ -74,7 +81,15 @@ export abstract class OrcaRuntimeWithCreateManagedWorktree extends OrcaRuntimeWi
       keyOf: (worktreeId) => workspaceLifecycleKey(getRepoExecutionHostId(repo), worktreeId)
     })
     try {
-      return await this.createInResolvedProject(request, repo, creation, rearm, events)
+      return await runWithGitHubExecutionIdentity(identity, () =>
+        this.createInResolvedProject(
+          { ...request, githubExecutionIdentity: identity },
+          repo,
+          creation,
+          rearm,
+          events
+        )
+      )
     } finally {
       creation?.close()
     }

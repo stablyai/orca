@@ -21,6 +21,7 @@ import {
 import type { PRComment } from '../../../../../shared/github/comment-types'
 import { translate } from '@/i18n/i18n'
 import { useAppStore } from '@/store'
+import { trackGitHubMutationCacheWrite } from '@/store/github/request-coordination'
 import { isReviewThreadResolutionInFlight } from '@/store/github/review-thread-resolution-in-flight'
 import { worktreeLaunchWorkspace } from '@/lib/agent-launch-route-input'
 import { codeHostErrorText } from '@/lib/code-host-error-copy'
@@ -129,41 +130,49 @@ export function useChecksPanelCommentResolution(model: ChecksPanelCommentResolut
         pr?.prRepo,
         pr?.headSha
       )
-      let previousThreadComments: PRComment[] = []
-      let ok: boolean
+      const cacheWrite = trackGitHubMutationCacheWrite(prCacheKey)
       try {
-        const repoOwnerExecutionHostId = forgeOwnerHostIdForWorkspace(repo, activeWorktree)
-        setComments((prev) => {
-          previousThreadComments = prev.filter((comment) => comment.threadId === threadId)
-          return markPRCommentThreadResolved(prev, threadId, resolve)
-        })
-        ok = await resolveReviewThread(repo.path, prNumber, threadId, resolve, {
-          repoId: repo.id,
-          repoOwnerExecutionHostId,
-          prRepo: pr?.prRepo
-        })
-      } catch {
-        ok = false
-      }
-      if (!ok) {
-        // Why: a head push mid-request must not strand the optimistic state the cache re-read copied in.
-        if (
-          previousThreadComments.length > 0 &&
-          checksPanelReviewStableKey(asyncResultKeyRef.current) ===
-            checksPanelReviewStableKey(requestKey)
-        ) {
-          rollbackThread(previousThreadComments)
+        let previousThreadComments: PRComment[] = []
+        let ok: boolean
+        try {
+          const repoOwnerExecutionHostId = forgeOwnerHostIdForWorkspace(repo, activeWorktree)
+          setComments((prev) => {
+            previousThreadComments = prev.filter((comment) => comment.threadId === threadId)
+            return markPRCommentThreadResolved(prev, threadId, resolve)
+          })
+          ok = await resolveReviewThread(repo.path, prNumber, threadId, resolve, {
+            repoId: repo.id,
+            repoOwnerExecutionHostId,
+            prRepo: pr?.prRepo
+          })
+        } catch {
+          ok = false
         }
-        if (notifyOnFailure) {
-          toast.error(
-            translate(
-              'auto.components.right.sidebar.ChecksPanel.5788d1059d',
-              'Could not update review thread. Check the GitHub API budget.'
+        if (!cacheWrite.isCurrent()) {
+          return ok
+        }
+        if (!ok) {
+          // Why: a head push mid-request must not strand the optimistic state the cache re-read copied in.
+          if (
+            previousThreadComments.length > 0 &&
+            checksPanelReviewStableKey(asyncResultKeyRef.current) ===
+              checksPanelReviewStableKey(requestKey)
+          ) {
+            rollbackThread(previousThreadComments)
+          }
+          if (notifyOnFailure) {
+            toast.error(
+              translate(
+                'auto.components.right.sidebar.ChecksPanel.5788d1059d',
+                'Could not update review thread. Check the GitHub API budget.'
+              )
             )
-          )
+          }
         }
+        return ok
+      } finally {
+        cacheWrite.dispose()
       }
-      return ok
     },
     [
       activeGitLabReview,

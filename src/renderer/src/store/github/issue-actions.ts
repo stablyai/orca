@@ -6,7 +6,11 @@ import { isWslDistroNotRunningRefusal } from '../../../../shared/wsl-distro-not-
 import { callRuntimeRpc } from '../../runtime/runtime-rpc-client'
 import { sourceScopedRepoCacheKey } from './cache-identity'
 import { isFresh, withBoundedCacheEntry } from './cache-policy'
-import { inflightIssueRequests } from './request-coordination'
+import {
+  inflightIssueRequests,
+  nextProviderRequestId,
+  ownsInflightRequest
+} from './request-coordination'
 import { findRepoForGitHubOwner } from './repository-routing'
 import {
   getGitHubRepoSourceSettings,
@@ -39,9 +43,10 @@ export const createIssueActions = (
 
     const inflightRequest = inflightIssueRequests.get(cacheKey)
     if (inflightRequest) {
-      return inflightRequest
+      return inflightRequest.promise
     }
 
+    const requestId = nextProviderRequestId()
     const request = (async () => {
       try {
         const requestContext = getGitHubWorkItemRequestContext(
@@ -65,6 +70,9 @@ export const createIssueActions = (
                 number,
                 sourceContext: options?.sourceContext
               })
+        if (!ownsInflightRequest(inflightIssueRequests, cacheKey, requestId)) {
+          return null
+        }
         set((s) => ({
           issueCache: withBoundedCacheEntry(s.issueCache, cacheKey, {
             data: issue,
@@ -78,6 +86,9 @@ export const createIssueActions = (
           return get().issueCache[cacheKey]?.data ?? null
         }
         console.error('Failed to fetch issue:', err)
+        if (!ownsInflightRequest(inflightIssueRequests, cacheKey, requestId)) {
+          return null
+        }
         set((s) => ({
           issueCache: withBoundedCacheEntry(s.issueCache, cacheKey, {
             data: null,
@@ -86,11 +97,13 @@ export const createIssueActions = (
         }))
         return null
       } finally {
-        inflightIssueRequests.delete(cacheKey)
+        if (ownsInflightRequest(inflightIssueRequests, cacheKey, requestId)) {
+          inflightIssueRequests.delete(cacheKey)
+        }
       }
     })()
 
-    inflightIssueRequests.set(cacheKey, request)
+    inflightIssueRequests.set(cacheKey, { promise: request, requestId })
     return request
   }
 })

@@ -12,6 +12,7 @@ import {
   type RpcResponse
 } from './core'
 import { RpcDispatcher } from './dispatcher'
+import { getActiveRpcCaller } from './rpc-active-caller'
 import { OrchestrationLegacyCompatibility } from './orchestration-legacy-compatibility'
 import {
   attachMutationReplayNudge,
@@ -171,6 +172,38 @@ describe('RpcDispatcher unary transport parity', () => {
       expect(seen).toEqual(['legacy-fingerprint'])
     }
   )
+
+  it('keeps transport-proven callers isolated throughout concurrent streaming handlers', async () => {
+    const seen = new Map<string, unknown>()
+    const dispatcher = createDispatcher([
+      defineStreamingMethod({
+        name: 'terminal.read',
+        permission: 'workspace',
+        params: z.object({ terminal: z.string() }),
+        handler: async (params) => {
+          await Promise.resolve()
+          seen.set(params.terminal, getActiveRpcCaller())
+        }
+      })
+    ])
+    await Promise.all(
+      ['alice', 'bob'].map((deviceId) =>
+        dispatcher.dispatchStreaming(
+          {
+            id: deviceId,
+            authToken: 'token',
+            method: 'terminal.read',
+            params: { terminal: deviceId }
+          },
+          () => {},
+          { caller: { kind: 'paired-device', deviceId } }
+        )
+      )
+    )
+    expect(seen.get('alice')).toEqual({ kind: 'paired-device', deviceId: 'alice' })
+    expect(seen.get('bob')).toEqual({ kind: 'paired-device', deviceId: 'bob' })
+    expect(getActiveRpcCaller()).toBeUndefined()
+  })
 
   it('refuses a streaming method over one-shot dispatch for a pinned non-owner caller', async () => {
     const dispatcher = new RpcDispatcher({

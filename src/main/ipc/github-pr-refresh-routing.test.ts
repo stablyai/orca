@@ -6,6 +6,12 @@ const mocks = await vi.hoisted(async () => {
   return createGitHubIpcMocks()
 })
 
+const participantMode = vi.hoisted(() => ({ enabled: false }))
+vi.mock('../runtime/github-participant-store', () => ({
+  getStoreGitHubParticipants: () =>
+    participantMode.enabled ? { isRepoEnabled: () => true, hasEnabledRepos: () => true } : undefined
+}))
+
 vi.mock('electron', () => mocks.electron)
 vi.mock('../github/client', () => mocks.client)
 vi.mock('../github/work-item-details', () => mocks.workItemDetails)
@@ -27,7 +33,33 @@ describe('registerGitHubHandlers', () => {
   const harness = createGitHubIpcHarness(mocks)
   const { handlers, store, stats } = harness
 
-  beforeEach(harness.reset)
+  beforeEach(() => {
+    harness.reset()
+    participantMode.enabled = false
+  })
+
+  it('refuses shared polling and returns manual results without broadcast in participant mode', async () => {
+    registerGitHubHandlers(store as never, stats as never)
+    participantMode.enabled = true
+    const candidate = {
+      cacheKey: 'repo-1::main',
+      repoPath: '/workspace/repo',
+      repoId: 'repo-1',
+      branch: 'main',
+      repoKind: 'git'
+    }
+    const outcome = { kind: 'no-pr', fetchedAt: 123 }
+    mocks.client.getPRForBranchOutcome.mockResolvedValue(outcome)
+    expect(await handlers['gh:enqueuePRRefresh'](null, { candidate, reason: 'active' })).toEqual({
+      kind: 'skipped',
+      skippedReason: 'validation-denied'
+    })
+    expect(enqueuePRRefreshMock).not.toHaveBeenCalled()
+    expect(mocks.prRefresh.setPRRefreshRegistrationCheck.mock.lastCall?.[0](candidate)).toBe(false)
+    expect(await handlers['gh:refreshPRNow'](null, { candidate })).toEqual(outcome)
+    expect(refreshPRNowMock).not.toHaveBeenCalled()
+    expect(mocks.client.getPRForBranchOutcome).toHaveBeenCalledTimes(1)
+  })
 
   it('returns typed automatic PR refresh validation skips without enqueueing', async () => {
     registerGitHubHandlers(store as never, stats as never)

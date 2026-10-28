@@ -76,3 +76,5 @@ export function terminalRevealViewerOptions(
     ...(opts.agentLaunchViewer ? { agentLaunchViewer: opts.agentLaunchViewer() } : {})
   }
 }
+
+export { bindParticipantLaunch } from './github-participant-job-binding'

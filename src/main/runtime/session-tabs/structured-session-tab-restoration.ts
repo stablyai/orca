@@ -13,6 +13,7 @@ import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../shared/layout-owner-switch'
 import type { RuntimeRepoSearchRefs } from '../../../shared/runtime-types'
 import { DEFAULT_REPO_SEARCH_REFS_LIMIT } from '../orca-runtime-postlude'
 import type { Repo } from '../../../shared/repo-types'
+import { getRuntimeHostedReviewExecutionOptions } from '../runtime-github-execution-options'
 import type { GitAdmissionTier } from '../../git/command-runner/git-exec-options'
 import {
   getLocalProjectGhExecOptions,
@@ -197,13 +198,12 @@ export abstract class OrcaRuntimeWithRestoreStructuredAgentSessionTabsOnce exten
   ):
     | { localGitExecOptions: LocalProjectGhExecOptions & { admissionTier?: GitAdmissionTier } }
     | undefined {
-    const localGitOptions = {
-      ...this.getLocalGitExecutionOptionArgs(repo)[0],
-      ...(admissionTier && { admissionTier })
-    }
-    return Object.keys(localGitOptions).length > 0
-      ? { localGitExecOptions: localGitOptions }
-      : undefined
+    return getRuntimeHostedReviewExecutionOptions(
+      this.requireStore(),
+      this.getGitHubParticipantRegistry(),
+      repo,
+      admissionTier
+    )
   }
 
   protected getLocalGitExecutionOptionArgs(repo: Repo): [] | [LocalProjectGhExecOptions] {

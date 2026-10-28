@@ -27,7 +27,8 @@ const ORCA_OWNED_PROVENANCE_META_KEYS = [
   'orcaCreationWorkspaceLayout',
   'automationProvenance',
   'cliProvenance',
-  'creatorProvenance'
+  'creatorProvenance',
+  'githubExecutionIdentity'
 ] as const
 type UnregisteredOrcaCleanupMeta = Pick<
   WorktreeMeta,

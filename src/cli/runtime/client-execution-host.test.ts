@@ -117,7 +117,17 @@ const CALLER_CHAT = 'codex_6cba3e14_b1a0_4b36_8f25_96c0dfa39fbb'
 // A native chat's agent has its session id but no terminal handle, pane key or launch token.
 function nativeChatEnv(extra: Record<string, string> = {}): void {
   vi.stubEnv('ORCA_AGENT_SESSION_ID', CALLER_CHAT)
-  for (const key of ['ORCA_TERMINAL_HANDLE', 'ORCA_PANE_KEY', 'ORCA_AGENT_LAUNCH_TOKEN']) {
+  for (const key of [
+    'ORCA_TERMINAL_HANDLE',
+    'ORCA_PANE_KEY',
+    'ORCA_AGENT_LAUNCH_TOKEN',
+    'ORCA_AGENT_SESSION_SPAWN_TOKEN',
+    'ORCA_AGENT_SESSION_PROOF',
+    'ORCA_ORCHESTRATION_COMPATIBILITY_HOST_KIND',
+    'ORCA_ORCHESTRATION_COMPATIBILITY_HOST_ID',
+    'ORCA_ORCHESTRATION_COMPATIBILITY_HOST_INCARNATION',
+    'ORCA_ORCHESTRATION_COMPATIBILITY_ATTACHMENT'
+  ]) {
     vi.stubEnv(key, undefined)
   }
   for (const [key, value] of Object.entries(extra)) {
@@ -131,17 +141,18 @@ async function evidenceSent(client: RuntimeClient, method: string): Promise<unkn
   return transport.local.mock.calls[0]?.[4]?.orchestrationCompatibilityEvidence
 }
 
-it('names the launching chat on launches from a native chat, and on nothing else', async () => {
+it('keeps native job identity and proof on local calls, including agent launches', async () => {
   const root = serverProfileWith({})
-  nativeChatEnv()
+  nativeChatEnv({ ORCA_AGENT_SESSION_SPAWN_TOKEN: 'fixture-spawn-proof' })
   const client = new RuntimeClient(root)
+  const evidence = { agentSessionId: CALLER_CHAT, agentSessionSpawnToken: 'fixture-spawn-proof' }
 
-  expect(await evidenceSent(client, 'agent.launchReplay')).toEqual({ agentSessionId: CALLER_CHAT })
-  expect(await evidenceSent(client, 'agent.launch')).toEqual({ agentSessionId: CALLER_CHAT })
-  expect(await evidenceSent(client, 'terminal.list')).toBeUndefined()
+  expect(await evidenceSent(client, 'agent.launchReplay')).toEqual(evidence)
+  expect(await evidenceSent(client, 'agent.launch')).toEqual(evidence)
+  expect(await evidenceSent(client, 'terminal.list')).toEqual(evidence)
 })
 
-it('names no chat from a WSL session, whose id this host cannot resolve', async () => {
+it('keeps the WSL host stamp so the server cannot mistake its job for a native owner', async () => {
   const root = serverProfileWith({})
   nativeChatEnv({
     ORCA_ORCHESTRATION_COMPATIBILITY_HOST_KIND: 'wsl',
@@ -149,12 +160,15 @@ it('names no chat from a WSL session, whose id this host cannot resolve', async 
     ORCA_ORCHESTRATION_COMPATIBILITY_HOST_INCARNATION: 'Ubuntu'
   })
 
-  expect(await evidenceSent(new RuntimeClient(root), 'agent.launchReplay')).toBeUndefined()
+  expect(await evidenceSent(new RuntimeClient(root), 'agent.launchReplay')).toEqual({
+    agentSessionId: CALLER_CHAT,
+    host: { kind: 'wsl', hostId: 'wsl-host', distro: 'Ubuntu' }
+  })
 })
 
-it('names no chat to a paired server', async () => {
+it('sends no local chat identity or proof to a paired server', async () => {
   serverProfileWith({ ORCA_PAIRING_CODE: pairingCode })
-  nativeChatEnv()
+  nativeChatEnv({ ORCA_AGENT_SESSION_SPAWN_TOKEN: 'fixture-spawn-proof' })
 
   await new RuntimeClient().call('agent.launchReplay', {})
   expect(transport.local).not.toHaveBeenCalled()
