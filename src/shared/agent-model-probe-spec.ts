@@ -1,9 +1,9 @@
 import { getCommitMessageAgentSpec, type CommitMessageAgentSpec } from './commit-message-agent-spec'
 import { GROK_MODEL_LIST_ARGS, parseGrokModelList } from './grok-model-list-probe'
+import { OMP_MODEL_LIST_ARGS, parseOmpModelList } from './omp-model-list-probe'
 import type { TuiAgent } from './tui-agent'
 
-/** Why: model discovery reads only these fields; excluding the prompt-delivery
- *  half is what keeps a probe-only agent out of the commit-message registry. */
+/** Exclude generation inputs so discovery-only agents stay outside the commit-message registry. */
 export type AgentModelProbeSpec = Omit<CommitMessageAgentSpec, 'promptDelivery' | 'buildArgs'>
 
 /** Agents that support model discovery but are not commit-message agents. */
@@ -18,13 +18,38 @@ const MODEL_DISCOVERY_ONLY_SPECS: Partial<Record<TuiAgent, AgentModelProbeSpec>>
       args: GROK_MODEL_LIST_ARGS,
       parse: parseGrokModelList
     },
-    // Why: empty so a failed probe degrades to the catalog seed instead of a
-    // second model list here that can drift from it.
+    // Fall back to the catalog seed instead of maintaining a second model list.
     models: [],
-    defaultModelId: 'grok-4.6'
+    defaultModelId: 'grok-4.7'
+  },
+  omp: {
+    id: 'omp',
+    label: 'OMP',
+    binary: 'omp',
+    modelSource: 'dynamic',
+    modelDiscovery: {
+      binary: 'omp',
+      args: OMP_MODEL_LIST_ARGS,
+      parse: parseOmpModelList
+    },
+    // No OMP model is universal; use discovered first row when a default is required.
+    models: [],
+    defaultModelId: ''
   }
 }
 
 export function getAgentModelProbeSpec(agentId: TuiAgent): AgentModelProbeSpec | undefined {
-  return getCommitMessageAgentSpec(agentId) ?? MODEL_DISCOVERY_ONLY_SPECS[agentId]
+  const spec = getCommitMessageAgentSpec(agentId) ?? MODEL_DISCOVERY_ONLY_SPECS[agentId]
+  if (!spec) {
+    return undefined
+  }
+  // OMP's `default` means the provider configured in its own settings, not a selectable model.
+  if (agentId !== 'omp') {
+    return spec
+  }
+  return {
+    ...spec,
+    models: spec.models.filter((model) => model.id !== 'default'),
+    defaultModelId: spec.defaultModelId === 'default' ? '' : spec.defaultModelId
+  }
 }

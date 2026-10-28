@@ -1,4 +1,5 @@
 import { escapeMarkdownLinkDestination } from './adf-media-destination'
+import { applyAdfTextMarks, joinAdfInlineMarkdown } from './adf-text-marks'
 
 type JiraAdfRecord = Record<string, unknown>
 
@@ -73,12 +74,11 @@ function mediaAttrsFromRecord(record: JiraAdfRecord): JiraAdfMediaAttrs {
 
 export function unresolvedMediaPlaceholder(attrs: JiraAdfMediaAttrs): string {
   const label = escapeMarkdownAlt(attrs.alt?.trim() || 'Image')
-  // Why: keep a visible marker when media cannot be downloaded so screenshots
-  // are not silently dropped from the issue body.
+  // Preserve a visible marker when media cannot be downloaded.
   return `*[${label}]*`
 }
 
-/** Collect media attrs in document order (read-only; separate from adfToMarkdownText). */
+/** Collect media attributes in document order without rendering. */
 export function collectAdfMediaAttrs(value: unknown): JiraAdfMediaAttrs[] {
   const collected: JiraAdfMediaAttrs[] = []
 
@@ -130,7 +130,12 @@ function renderInline(node: unknown, options?: AdfToMarkdownOptions): string {
     return node
   }
   if (Array.isArray(node)) {
-    return node.map((child) => renderInline(child, options)).join('')
+    return joinAdfInlineMarkdown(
+      node.map((child) => ({
+        markdown: renderInline(child, options),
+        marks: asRecord(child).marks
+      }))
+    )
   }
   if (typeof node !== 'object') {
     return ''
@@ -138,13 +143,11 @@ function renderInline(node: unknown, options?: AdfToMarkdownOptions): string {
 
   const record = node as JiraAdfRecord
   if (typeof record.text === 'string') {
-    return record.text
+    return applyAdfTextMarks(record.text, record.marks)
   }
   if (record.type === 'hardBreak') {
     return '\n'
   }
-  // Why: Jira pastes screenshots as media/mediaInline ADF nodes; without this
-  // branch they collapse to empty strings and disappear from the UI.
   if (record.type === 'media' || record.type === 'mediaInline') {
     return renderMediaMarkdown(record, options)
   }
@@ -254,8 +257,6 @@ function renderBlock(node: unknown, options?: AdfToMarkdownOptions): MarkdownBlo
     }
   }
   if (type === 'bulletList') {
-    // Why: Orca renders Jira bodies as Markdown, so ADF list containers need
-    // concrete list markers instead of newline-only flattened text.
     return { kind: 'list', text: renderList(record, false, options) }
   }
   if (type === 'orderedList') {

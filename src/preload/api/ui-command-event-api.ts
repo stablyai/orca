@@ -1,6 +1,32 @@
+import type {
+  RuntimeEditorTabReveal,
+  RuntimeFileOpenPosition
+} from '../../shared/runtime-file-contracts'
+import type { JiraQuickFilterState } from '../../shared/jira/jira-quick-filters'
+import type {
+  JiraSavedFilterState,
+  JiraSavedFilterMutation
+} from '../../shared/jira/jira-saved-filters'
 import type { MarkdownDocument } from '../../shared/filesystem-entry-types'
 import type { PersistedUIState } from '../../shared/persisted-ui-state-types'
 import type { TuiAgent } from '../../shared/tui-agent'
+import type {
+  AgentLaunchTabPublishReply,
+  AgentLaunchTabViewerRule,
+  AgentLaunchTabPublishRequest
+} from '../../shared/agent-launch-tab-publication'
+import type { AgentLaunchPaneVerdictEvent } from '../../shared/agent-launch-pane-verdict'
+import type { PaneLaunchRecipe } from '../../shared/terminal-attachment-launch-result'
+import type {
+  TerminalPaneRevealReply,
+  TerminalPaneRevealRequest
+} from '../../shared/terminal-pane-reveal'
+import type { RuntimeNavigationTarget } from '../../shared/runtime-navigation'
+import type {
+  ProjectMovePauseRequest,
+  ProjectMovePauseResponse
+} from '../../shared/project-move-pause'
+import type { TerminalSurfaceCloseTarget } from '../../shared/terminal-surface-close-target'
 import type {
   WorktreeDefaultTabsLaunch,
   WorktreeSetupLaunch,
@@ -9,6 +35,12 @@ import type {
 import type { FeatureInteractionId } from '../../shared/feature-interactions'
 import type { KeybindingActionId } from '../../shared/keybindings'
 import type { BrowserFindSource } from '../../shared/browser-find-source'
+import type {
+  BrowserHistoryNavigateCommand,
+  BrowserPageCommandTarget,
+  BrowserPageTabShortcut
+} from '../../shared/browser-page-command-target'
+import type { BrowserPageZoomCommand } from '../../shared/browser-page-zoom'
 import type {
   AgentProviderSessionMetadata,
   SleepingAgentLaunchConfig
@@ -19,10 +51,6 @@ import type {
   RuntimeTerminalCreateRequestPayload,
   RuntimeTerminalPresentation
 } from '../../shared/runtime-types'
-import type {
-  RuntimeMobileMarkdownRequest,
-  RuntimeMobileMarkdownResponse
-} from '../../shared/mobile-markdown-document'
 import type { TerminalTabCreateReply } from '../../shared/terminal-reveal-identity'
 import type {
   TerminalTabCloseRequest,
@@ -32,26 +60,37 @@ import type {
   SessionTabCloseRequest,
   SessionTabCloseResponse
 } from '../../shared/session-tab-close'
+import type { WorkspaceSleepNotice } from '../../shared/workspace-sleep'
+import type {
+  RemoteCliBrowserScopeQuery,
+  RemoteCliBrowserScopeReply
+} from '../../shared/desktop-browser-bridge-protocol'
 
 export type CloseActiveTabPayload = { sourceId: string }
 
 export type UiCommandEventApi = {
+  getJiraQuickFilters?: () => Promise<JiraQuickFilterState>
+  setJiraQuickFilters?: (state: JiraQuickFilterState) => Promise<JiraQuickFilterState>
+  getJiraSavedFilters?: () => Promise<JiraSavedFilterState>
+  mutateJiraSavedFilters?: (mutation: JiraSavedFilterMutation) => Promise<JiraSavedFilterState>
   get: () => Promise<PersistedUIState>
   set: (args: Partial<PersistedUIState>) => Promise<void>
-  /** Like set, but REJECTS when the update did not reach the host (the web preload's set
-   *  swallows transport failures for offline use). The diff writer needs the distinction:
-   *  folding an unacked patch into its baseline would silently stop retrying it (STA-5781). */
+  /** Unlike web set, rejects transport failures so the diff writer retries unacknowledged patches. */
   setWithAck?: (args: Partial<PersistedUIState>) => Promise<void>
   recordFeatureInteraction: (id: FeatureInteractionId) => Promise<PersistedUIState>
   onStateChanged: (callback: (ui: PersistedUIState) => void) => () => void
   onOpenSettings: (callback: () => void) => () => void
-  /** Consumes a one-shot tray/menu-bar "open settings" intent queued before mount. */
   consumePendingOpenSettings: () => Promise<boolean>
+  /** Main confirmed Quit Completely; consume the request before acting. */
+  onQuitAndStopAllSessions: (callback: () => void) => () => void
+  /** Consumes the one-shot Quit Completely request; true at most once per request. */
+  consumePendingQuitAndStopAllSessions: () => Promise<boolean>
+  /** Tells main every session stopped; false when main still lists one and stays open. The web client never gets a request. */
+  quitAfterStoppingAllSessions?: () => Promise<boolean>
   onOpenSkillShare: (callback: (shareId: string) => void) => () => void
   consumePendingSkillShare: () => Promise<string | null>
-  /** OS "Open With" markdown paths pushed while a renderer is already listening. */
+  /** OS "Open With" Markdown/CSV/TSV documents; the local IPC name is retained. */
   onOpenMarkdownFiles: (callback: (documents: MarkdownDocument[]) => void) => () => void
-  /** Drains the "Open With" paths queued before this renderer's listener attached. */
   consumePendingMarkdownFileOpens: () => Promise<MarkdownDocument[]>
   onOpenSetupGuide: (callback: () => void) => () => void
   onOpenFeatureTour: (callback: () => void) => () => void
@@ -73,9 +112,6 @@ export type UiCommandEventApi = {
   onJumpToWorktreeIndex: (callback: (index: number) => void) => () => void
   onJumpToTabIndex: (callback: (index: number) => void) => () => void
   onWorktreeHistoryNavigate: (callback: (direction: 'back' | 'forward') => void) => () => void
-  onNewBrowserTab: (callback: () => void) => () => void
-  onNewMarkdownTab: (callback: () => void) => () => void
-  onNewSimulatorTab: (callback: () => void) => () => void
   onRequestTabCreate: (
     callback: (data: {
       requestId: string
@@ -85,9 +121,17 @@ export type UiCommandEventApi = {
       sessionProfileId?: string | null
       sessionPartition?: string
       activate?: boolean
+      fallbackWorktreeId?: string
     }) => void
   ) => () => void
   replyTabCreate: (reply: { requestId: string; browserPageId?: string; error?: string }) => void
+  /** Tells main this window can take browser tab requests: listening, with its workspaces restored. */
+  browserTabRequestsReady: () => void
+  /** Main asks whether a paired environment owns a workspace before running that host's CLI command. */
+  onRequestRemoteCliBrowserScope: (
+    callback: (data: RemoteCliBrowserScopeQuery) => void
+  ) => () => void
+  replyRemoteCliBrowserScope: (reply: RemoteCliBrowserScopeReply) => void
   onRequestTabSetProfile: (
     callback: (data: {
       requestId: string
@@ -105,23 +149,24 @@ export type UiCommandEventApi = {
     error?: string
     code?: 'browser_tab_not_found'
   }) => void
-  onNewTerminalTab: (callback: () => void) => () => void
-  onFocusBrowserAddressBar: (callback: () => void) => () => void
+  onBrowserPageTabShortcut: (callback: (input: BrowserPageTabShortcut) => void) => () => void
+  onFocusBrowserAddressBar: (callback: (target: BrowserPageCommandTarget) => void) => () => void
+  onShowBrowserHistory: (callback: (target: BrowserPageCommandTarget) => void) => () => void
   onFindInBrowserPage: (source: BrowserFindSource, callback: () => void) => () => void
-  onReloadBrowserPage: (callback: () => void) => () => void
-  onBrowserHistoryNavigate: (callback: (direction: 'back' | 'forward') => void) => () => void
-  onZoomBrowserPage: (callback: (direction: 'in' | 'out' | 'reset') => void) => () => void
+  onReloadBrowserPage: (callback: (target: BrowserPageCommandTarget) => void) => () => void
+  onBrowserHistoryNavigate: (
+    callback: (command: BrowserHistoryNavigateCommand) => void
+  ) => () => void
+  onBrowserPagePointerDown: (callback: (target: BrowserPageCommandTarget) => void) => () => void
+  onZoomBrowserPage: (callback: (command: BrowserPageZoomCommand) => void) => () => void
   onScrollBrowserPage?: (
     callback: (event: { browserPageId: string; deltaX: number; deltaY: number }) => void
   ) => () => void
-  onHardReloadBrowserPage: (callback: () => void) => () => void
+  onHardReloadBrowserPage: (callback: (target: BrowserPageCommandTarget) => void) => () => void
   onCloseActiveTab: (callback: (payload?: CloseActiveTabPayload) => void) => () => void
   onCloseFloatingItem: (callback: (payload: { sourceId: string }) => void) => () => void
   onSelectFloatingIndex: (callback: (payload: { index: number }) => void) => () => void
-  onSwitchTab: (callback: (direction: 1 | -1) => void) => () => void
-  onSwitchTabAcrossAllTypes: (callback: (direction: 1 | -1) => void) => () => void
   onSwitchRecentTab: (callback: () => void) => () => void
-  onSwitchTerminalTab: (callback: (direction: 1 | -1) => void) => () => void
   onCtrlTabKeyDown: (callback: (data: { shiftKey: boolean }) => void) => () => void
   onCtrlTabKeyUp: (callback: () => void) => () => void
   onToggleStatusBar: (callback: () => void) => () => void
@@ -137,6 +182,7 @@ export type UiCommandEventApi = {
       setup?: WorktreeSetupLaunch
       startup?: WorktreeStartupLaunch
       defaultTabs?: WorktreeDefaultTabsLaunch
+      providesInitialSurface?: boolean
     }) => void
   ) => () => void
   onCreateTerminal: (
@@ -151,12 +197,16 @@ export type UiCommandEventApi = {
       launchToken?: string
       launchAgent?: TuiAgent
       viewMode?: 'terminal' | 'chat'
+      targetGroupId?: string
+      afterTabId?: string
+      shellOverride?: string
       title?: string
       ptyId?: string
       activate?: boolean
       focus?: boolean
       presentation?: RuntimeTerminalPresentation
       surfaceOwner?: false
+      agentLaunchViewer?: AgentLaunchTabViewerRule
       tabId?: string
       leafId?: string
       splitFromLeafId?: string
@@ -171,6 +221,12 @@ export type UiCommandEventApi = {
     callback: (data: { worktreeId: string; tabId?: string; ptyId?: string }) => void
   ) => () => void
   replyTerminalCreate: (reply: TerminalTabCreateReply) => void
+  onPublishAgentLaunchTab: (callback: (data: AgentLaunchTabPublishRequest) => void) => () => void
+  replyAgentLaunchTabPublish: (reply: AgentLaunchTabPublishReply) => void
+  onAgentLaunchPaneVerdict: (callback: (data: AgentLaunchPaneVerdictEvent) => void) => () => void
+  onLaunchRecipe: (callback: (data: PaneLaunchRecipe) => void) => () => void
+  onRevealTerminalPane: (callback: (data: TerminalPaneRevealRequest) => void) => () => void
+  replyTerminalPaneReveal: (reply: TerminalPaneRevealReply) => void
   onSplitTerminal: (
     callback: (data: {
       tabId: string
@@ -184,7 +240,10 @@ export type UiCommandEventApi = {
     }) => void
   ) => () => void
   onRenameTerminal: (
-    callback: (data: { tabId: string; title: string | null }) => void
+    callback: (data: { tabId: string; title: string | null; recordInteraction?: false }) => void
+  ) => () => void
+  onSetPaneTitle?: (
+    callback: (data: { tabId: string; leafId: string; title: string | null }) => void
   ) => () => void
   onFocusTerminal: (
     callback: (data: {
@@ -196,7 +255,14 @@ export type UiCommandEventApi = {
       scrollToBottomIfOutputSinceLastView?: boolean
     }) => void
   ) => () => void
-  onFocusEditorTab: (callback: (data: { tabId: string; worktreeId: string }) => void) => () => void
+  onFocusEditorTab: (
+    callback: (data: {
+      tabId: string
+      worktreeId: string
+      /** A notification click authorizes revealing the tab. */
+      userInitiated?: boolean
+    }) => void
+  ) => () => void
   onCloseSessionTab: (callback: (data: { tabId: string; worktreeId: string }) => void) => () => void
   onSessionTabCloseRequest: (callback: (request: SessionTabCloseRequest) => void) => () => void
   respondSessionTabClose: (response: SessionTabCloseResponse) => void
@@ -208,26 +274,29 @@ export type UiCommandEventApi = {
       worktreeId: string
       filePath: string
       relativePath: string
-      runtimeEnvironmentId?: string
+      runtimeEnvironmentId?: string | null
+      navigation?: RuntimeNavigationTarget
+      position?: RuntimeFileOpenPosition
     }) => void
   ) => () => void
+  onRevealEditorTabFromRuntime: (callback: (data: RuntimeEditorTabReveal) => void) => () => void
   onOpenDiffFromMobile: (
     callback: (data: {
       worktreeId: string
       filePath: string
       relativePath: string
       staged: boolean
-      runtimeEnvironmentId?: string
+      runtimeEnvironmentId?: string | null
+      navigation?: RuntimeNavigationTarget
     }) => void
   ) => () => void
-  onMobileMarkdownRequest: (callback: (request: RuntimeMobileMarkdownRequest) => void) => () => void
-  respondMobileMarkdownRequest: (response: RuntimeMobileMarkdownResponse) => void
-  onCloseTerminal: (
-    callback: (data: { tabId: string; paneRuntimeId?: number }) => void
-  ) => () => void
+  onCloseTerminal: (callback: (target: TerminalSurfaceCloseTarget) => void) => () => void
   onTerminalTabCloseRequest: (callback: (request: TerminalTabCloseRequest) => void) => () => void
   respondTerminalTabClose: (response: TerminalTabCloseResponse) => void
-  onSleepWorktree: (callback: (data: { worktreeId: string }) => void) => () => void
+  /** Follow main's workspace sleep even when another client requested it. */
+  onWorkspaceSleep: (callback: (notice: WorkspaceSleepNotice) => void) => () => void
+  onProjectMovePause?: (callback: (request: ProjectMovePauseRequest) => void) => () => void
+  respondProjectMovePause?: (response: ProjectMovePauseResponse) => void
   onResumeSleepingAgents: (callback: (data: { worktreeId: string }) => void) => () => void
   onTerminalZoom: (callback: (direction: 'in' | 'out' | 'reset') => void) => () => void
   onSystemResumed: (callback: () => void) => () => void

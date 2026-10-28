@@ -1,0 +1,254 @@
+{
+  "goldenFormatVersion": 6,
+  "operation": "session.pr-reads",
+  "family": "github.pr-read",
+  "namedDeltas": [],
+  "values": {
+    "04c85ffba34f": {
+      "pr-for-branch": {
+        "error": "The host sent a reply this app could not read (github.prForBranch)",
+        "ok": false
+      }
+    },
+    "0a56183795de": {
+      "pr-for-branch": {
+        "ok": true,
+        "result": {
+          "$rpc": "null"
+        }
+      }
+    },
+    "0bd591f1a6ca": {
+      "status": "fulfilled",
+      "startedAt": 0,
+      "settledAt": 0,
+      "value": {
+        "error": "The host sent a reply this app could not read (github.prForBranch)",
+        "ok": false
+      }
+    },
+    "1a108e871484": {
+      "name": "github.prForBranch#1",
+      "ordinal": 2,
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"github.prForBranch\",\"params\":{\"repo\":\"id:repo-9\",\"branch\":\"feature\",\"linkedPRNumber\":null,\"fallbackPRNumber\":null,\"currentHeadOid\":null}}"
+    },
+    "213941c6e0b6": {
+      "name": "github.prForBranch#2",
+      "ordinal": 4,
+      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"github.prForBranch\",\"params\":{\"repo\":\"id:repo-9\",\"branch\":\"feature\",\"linkedPRNumber\":null,\"fallbackPRNumber\":null,\"currentHeadOid\":null}}"
+    },
+    "302342a5179d": {
+      "name": "github.prForBranch#1",
+      "ordinal": 1,
+      "args": [
+        {
+          "name": "method",
+          "value": "github.prForBranch"
+        },
+        {
+          "name": "params",
+          "value": {
+            "branch": "feature",
+            "currentHeadOid": {
+              "$rpc": "null"
+            },
+            "fallbackPRNumber": {
+              "$rpc": "null"
+            },
+            "linkedPRNumber": {
+              "$rpc": "null"
+            },
+            "repo": "id:repo-9"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-1",
+          "ok": true,
+          "result": {
+            "fetchedAt": 0,
+            "kind": "upstream-error",
+            "message": "GitHub API rate limit exceeded"
+          }
+        }
+      }
+    },
+    "331d7e1af815": {
+      "pr-for-branch": {
+        "error": "GitHub API rate limit exceeded",
+        "ok": false
+      }
+    },
+    "67ff0839185a": {
+      "name": "github.prForBranch#2",
+      "ordinal": 3,
+      "args": [
+        {
+          "name": "method",
+          "value": "github.prForBranch"
+        },
+        {
+          "name": "params",
+          "value": {
+            "branch": "feature",
+            "currentHeadOid": {
+              "$rpc": "null"
+            },
+            "fallbackPRNumber": {
+              "$rpc": "null"
+            },
+            "linkedPRNumber": {
+              "$rpc": "null"
+            },
+            "repo": "id:repo-9"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-2",
+          "ok": true,
+          "result": {
+            "fetchedAt": 0,
+            "kind": "found",
+            "pr": {
+              "state": "open"
+            }
+          }
+        }
+      }
+    },
+    "7c6cc446e5da": {
+      "name": "github.prForBranch#3",
+      "ordinal": 6,
+      "json": "{\"id\":\"frame-3\",\"deviceToken\":\"recording-device\",\"method\":\"github.prForBranch\",\"params\":{\"repo\":\"id:repo-9\",\"branch\":\"feature\",\"linkedPRNumber\":null,\"fallbackPRNumber\":null,\"currentHeadOid\":null}}"
+    },
+    "8a5cb8b66303": {
+      "status": "fulfilled",
+      "startedAt": 0,
+      "settledAt": 0,
+      "value": {
+        "ok": true,
+        "result": {
+          "$rpc": "null"
+        }
+      }
+    },
+    "c75314a70300": {
+      "name": "github.prForBranch#3",
+      "ordinal": 5,
+      "args": [
+        {
+          "name": "method",
+          "value": "github.prForBranch"
+        },
+        {
+          "name": "params",
+          "value": {
+            "branch": "feature",
+            "currentHeadOid": {
+              "$rpc": "null"
+            },
+            "fallbackPRNumber": {
+              "$rpc": "null"
+            },
+            "linkedPRNumber": {
+              "$rpc": "null"
+            },
+            "repo": "id:repo-9"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-3",
+          "ok": true,
+          "result": {
+            "$rpc": "null"
+          }
+        }
+      }
+    },
+    "fe9c1046b91d": {
+      "status": "fulfilled",
+      "startedAt": 0,
+      "settledAt": 0,
+      "value": {
+        "error": "GitHub API rate limit exceeded",
+        "ok": false
+      }
+    }
+  },
+  "recording": {
+    "scenario": "pr-read-upstream-error",
+    "checkpoints": [
+      {
+        "id": "upstream",
+        "observation": {
+          "sender": ["302342a5179d"],
+          "payloads": ["1a108e871484"],
+          "settlements": {
+            "upstream": "fe9c1046b91d"
+          },
+          "state": "331d7e1af815",
+          "effects": []
+        }
+      },
+      {
+        "id": "malformed",
+        "observation": {
+          "sender": ["302342a5179d", "67ff0839185a"],
+          "payloads": ["1a108e871484", "213941c6e0b6"],
+          "settlements": {
+            "upstream": "fe9c1046b91d",
+            "malformed": "0bd591f1a6ca"
+          },
+          "state": "04c85ffba34f",
+          "effects": []
+        }
+      },
+      {
+        "id": "no-pr",
+        "observation": {
+          "sender": ["302342a5179d", "67ff0839185a", "c75314a70300"],
+          "payloads": ["1a108e871484", "213941c6e0b6", "7c6cc446e5da"],
+          "settlements": {
+            "upstream": "fe9c1046b91d",
+            "malformed": "0bd591f1a6ca",
+            "no-pr": "8a5cb8b66303"
+          },
+          "state": "0a56183795de",
+          "effects": []
+        }
+      }
+    ]
+  }
+}

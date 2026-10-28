@@ -22,6 +22,7 @@ function makeAgentStatusEntry(args: {
   restoredUnconfirmed?: true
   workingMode?: AgentStatusEntry['workingMode']
   interrupted?: true
+  mainAgent?: AgentStatusEntry['mainAgent']
 }): AgentStatusEntry {
   return {
     paneKey: args.paneKey,
@@ -34,6 +35,7 @@ function makeAgentStatusEntry(args: {
     restoredUnconfirmed: args.restoredUnconfirmed,
     workingMode: args.workingMode,
     interrupted: args.interrupted,
+    mainAgent: args.mainAgent,
     orchestration: args.parentPaneKey
       ? {
           taskId: 'task-1',
@@ -199,7 +201,14 @@ describe('selectWorktreeAgentActivitySummary', () => {
     expect(summary).toMatchObject({ hasLiveWorking: false, hasLiveMonitoring: true })
   })
 
-  it('separates interrupted outcomes from clean completion', () => {
+  it.each([
+    ['success', { hasLiveDone: true }],
+    ['failure', { hasFailed: true, hasLiveDone: false }],
+    // A user's Stop reads interrupted; a turn anything else cut short is a fault, like a failure.
+    ['cancellation', { hasInterrupted: true, hasLiveDone: false }],
+    ['interruption', { hasFailed: true, hasInterrupted: false, hasLiveDone: false }],
+    ['unconfirmed', { hasUnconfirmed: true, hasLiveDone: false }]
+  ] as const)('flags a %s outcome apart from the others', (outcome, flags) => {
     vi.spyOn(Date, 'now').mockReturnValue(2_000)
     const paneKey = makePaneKey('tab-1', LEAF_ID)
     const summary = selectWorktreeAgentActivitySummary(
@@ -210,7 +219,7 @@ describe('selectWorktreeAgentActivitySummary', () => {
           [paneKey]: makeAgentStatusEntry({
             paneKey,
             state: 'done',
-            interrupted: true
+            mainAgent: { state: 'done', outcome, stateStartedAt: 1_000 }
           })
         },
         migrationUnsupportedByPtyId: {},
@@ -220,7 +229,135 @@ describe('selectWorktreeAgentActivitySummary', () => {
       'repo::/wt-1'
     )
 
-    expect(summary).toMatchObject({ hasInterrupted: true, hasLiveDone: false })
+    expect(summary).toMatchObject(flags)
+  })
+
+  it('separates a failed outcome from clean completion and from a cancellation', () => {
+    vi.spyOn(Date, 'now').mockReturnValue(2_000)
+    const paneKey = makePaneKey('tab-1', LEAF_ID)
+    const summary = selectWorktreeAgentActivitySummary(
+      {
+        tabsByWorktree: { 'repo::/wt-1': [makeTab('tab-1', 'repo::/wt-1')] },
+        agentStatusEpoch: 3,
+        agentStatusByPaneKey: {
+          [paneKey]: makeAgentStatusEntry({
+            paneKey,
+            state: 'done',
+            mainAgent: { state: 'done', outcome: 'failure', stateStartedAt: 1_000 }
+          })
+        },
+        migrationUnsupportedByPtyId: {},
+        runtimeAgentOrchestrationByPaneKey: {},
+        retainedAgentsByPaneKey: {}
+      },
+      'repo::/wt-1'
+    )
+
+    expect(summary).toMatchObject({ hasFailed: true, hasInterrupted: false, hasLiveDone: false })
+  })
+
+  it('reports a main agent that failed while its subagents run, beside their pending question', () => {
+    vi.spyOn(Date, 'now').mockReturnValue(2_000)
+    const paneKey = makePaneKey('tab-1', LEAF_ID)
+    const summaryFor = (state: 'working' | 'waiting', outcome: 'failure' | 'success') =>
+      selectWorktreeAgentActivitySummary(
+        {
+          tabsByWorktree: { 'repo::/wt-1': [makeTab('tab-1', 'repo::/wt-1')] },
+          agentStatusEpoch: state === 'working' ? (outcome === 'failure' ? 5 : 6) : 7,
+          agentStatusByPaneKey: {
+            [paneKey]: makeAgentStatusEntry({
+              paneKey,
+              state,
+              mainAgent: { state: 'done', outcome, stateStartedAt: 1_000 }
+            })
+          },
+          migrationUnsupportedByPtyId: {},
+          runtimeAgentOrchestrationByPaneKey: {},
+          retainedAgentsByPaneKey: {}
+        },
+        'repo::/wt-1'
+      )
+
+    expect(summaryFor('working', 'failure')).toMatchObject({
+      hasFailed: true,
+      hasLiveWorking: false
+    })
+    expect(summaryFor('working', 'success')).toMatchObject({
+      hasFailed: false,
+      hasLiveWorking: true
+    })
+    expect(summaryFor('waiting', 'failure')).toMatchObject({ hasFailed: true, hasPermission: true })
+  })
+
+  describe('a failed agent on the worktree card', () => {
+    const worktreeId = 'repo::/wt-2'
+    const liveTab = makeTab('tab-1', worktreeId)
+    const retainedTab = makeTab('tab-2', worktreeId)
+    const failure = { state: 'done', outcome: 'failure', stateStartedAt: 1_000 } as const
+    const workingKey = makePaneKey('tab-1', LEAF_ID)
+    const failedKey = makePaneKey('tab-1', '22222222-2222-4222-8222-222222222222')
+    const working = makeAgentStatusEntry({ paneKey: workingKey, state: 'working' })
+    const retainedFailure = {
+      'tab-2:0': {
+        entry: makeAgentStatusEntry({ paneKey: 'tab-2:0', state: 'done', mainAgent: failure }),
+        worktreeId,
+        tab: retainedTab,
+        agentType: 'claude' as const,
+        startedAt: 1_000
+      }
+    }
+    let epoch = 100
+    const cardFor = (
+      agentStatusByPaneKey: AgentActivityInput['agentStatusByPaneKey'],
+      retainedAgentsByPaneKey: AgentActivityInput['retainedAgentsByPaneKey']
+    ) => {
+      vi.spyOn(Date, 'now').mockReturnValue(2_000)
+      const summary = selectWorktreeAgentActivitySummary(
+        {
+          tabsByWorktree: { [worktreeId]: [liveTab, retainedTab] },
+          agentStatusEpoch: epoch++,
+          agentStatusByPaneKey,
+          migrationUnsupportedByPtyId: {},
+          runtimeAgentOrchestrationByPaneKey: {},
+          retainedAgentsByPaneKey
+        },
+        worktreeId
+      )
+      return {
+        summary,
+        status: resolveWorktreeStatus({ tabs: [], browserTabs: [], ptyIdsByTabId: {}, ...summary })
+      }
+    }
+
+    it('reads a retained failure as failed once nothing else is live, not done', () => {
+      const { summary, status } = cardFor({}, retainedFailure)
+
+      expect(summary).toMatchObject({ hasRetainedFailed: true, hasRetainedDone: false })
+      expect(status).toBe('failed')
+    })
+
+    it('lets live work outrank a departed agent that failed', () => {
+      const { summary, status } = cardFor({ [workingKey]: working }, retainedFailure)
+
+      expect(summary).toMatchObject({ hasFailed: false, hasRetainedFailed: true })
+      expect(status).toBe('working')
+    })
+
+    it('keeps a live failure above live work', () => {
+      const { status } = cardFor(
+        {
+          [workingKey]: working,
+          [failedKey]: makeAgentStatusEntry({
+            paneKey: failedKey,
+            state: 'done',
+            mainAgent: failure
+          })
+        },
+        {}
+      )
+
+      expect(status).toBe('failed')
+    })
   })
 
   it('lets an unconfirmed restored row suppress only its pane title', () => {
@@ -294,8 +431,7 @@ describe('selectWorktreeAgentActivitySummary', () => {
       (summary, index) => !shallow(summary, before[index])
     ).length
 
-    // Why: shallow store subscriptions wake on the nested pane-id map reference.
-    // One transition must not schedule downstream work for every other card.
+    // One transition must change only its worktree’s nested pane map to avoid waking every card.
     expect(changedReferenceCount).toBe(1)
     expect(shallowNotificationCount).toBe(1)
     expect(after[11]).toMatchObject({ hasLiveWorking: false, hasLiveDone: true })
@@ -445,10 +581,7 @@ describe('selectWorktreeAgentActivitySummary', () => {
     expect(summary.agentStatusPaneIdsByTabId['tab-parent']).toEqual(new Set([LEAF_ID]))
   })
 
-  // Why: Orca injects its own "<Agent> - action required" OSC title on a blocked/waiting hook,
-  // then classifies that title back as evidence. If a pane stopped registering its identity once
-  // its row aged out, that self-authored title outranked the pane's own `done` row and pinned the
-  // workspace card to the question icon with no agent asking anything.
+  // Retain stale pane identity so Orca’s generated permission title cannot outlive its authoritative row.
   it('records a stale entry pane id separately so permission titles stay suppressed', () => {
     const paneKey = makePaneKey('tab-1', LEAF_ID)
     const entry = makeAgentStatusEntry({ paneKey, state: 'done', worktreeId: 'repo::/wt-1' })
@@ -470,10 +603,7 @@ describe('selectWorktreeAgentActivitySummary', () => {
     expect(summary.hasLiveDone).toBe(false)
   })
 
-  // Reproduces the reported card: a Codex pane parked at its composer, its only agent row `done`
-  // and ~2h old, and the workspace still painting the amber question icon. `permission` outranks
-  // `hasLiveDone` in resolveWorktreeStatus, so the pane's stale self-authored title decided the
-  // card. With no fresh evidence the honest answer is `active`, never a question nobody asked.
+  // A two-hour-old done row must suppress its generated question title without claiming fresh completion.
   it('does not paint a stale self-authored action-required title as a live question', () => {
     const paneKey = makePaneKey('tab-1', LEAF_ID)
     const entry = makeAgentStatusEntry({ paneKey, state: 'done', worktreeId: 'repo::/wt-1' })

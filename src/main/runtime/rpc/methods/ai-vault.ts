@@ -1,105 +1,117 @@
-import { z } from 'zod'
-import { defineMethod, type RpcMethod } from '../core'
-import { OptionalBoolean } from '../schemas'
+import { prepareStructuredChatCliFork } from '../../../ai-vault/structured-chat-cli-fork'
+import {
+  AiVaultSearchRequestSchema,
+  AiVaultSearchStatusRequestSchema,
+  AiVaultSetSearchEnabledParamsSchema
+} from '../../../../shared/ai-vault-search-contract'
+import {
+  searchSessionService,
+  sessionSearchServiceStatus
+} from '../../../ai-vault-search/session-search-service-registry'
+import { defineMethod } from '../core'
+import { conditionalAiVaultListResult } from '../../../ai-vault/session-list-fingerprint'
 import { restampAiVaultListResult } from '../../../ai-vault/session-list-results'
-import { AI_VAULT_AGENTS, AI_VAULT_SCOPE_PATHS_MAX_COUNT } from '../../../../shared/ai-vault-types'
-import { AI_VAULT_SESSION_TITLE_REQUEST_MAX_COUNT } from '../../../../shared/ai-vault-session-title'
+import { copyStructuredChatConversation } from '../../../ai-vault/structured-chat-conversation-copy'
 import type { AiVaultPrepareSessionResumeArgs } from '../../../../shared/ai-vault-resume-preparation'
-import { LOCAL_EXECUTION_HOST_ID, parseExecutionHostId } from '../../../../shared/execution-host'
+import { LOCAL_EXECUTION_HOST_ID } from '../../../../shared/execution-host'
+import { isWslUncPath } from '../../../../shared/wsl-paths'
 import { describeAiVaultScanError } from '../../../../shared/ai-vault-scan-error-message'
-import { STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY } from '../../../../shared/protocol-version'
 import {
   assertLegacyAiVaultResumeAllowed,
-  projectStructuredAiVaultSessions
+  projectStructuredAiVaultSessions,
+  searchWithStructuredOwners
 } from '../../../ai-vault/structured-session-ownership'
+import {
+  ensureStructuredAgentSessionHostUnlessRefused,
+  tryEnsureStructuredAgentSessionHostForResume
+} from '../../structured-agent-session-host-refusal'
+import {
+  clientOpensStructuredChatFromHistory,
+  supportsStructuredAgentSessions
+} from './structured-agent-session-policy'
+import {
+  AiVaultDeleteSessionParams,
+  AiVaultListSessionsParams,
+  AiVaultPrepareSessionResumeParams,
+  AiVaultSessionTitlesParams
+} from '../../../../shared/rpc-contract/ai-vault-params'
+export {
+  AiVaultDeleteSessionParams,
+  AiVaultListSessionsParams,
+  AiVaultPrepareSessionResumeParams,
+  AiVaultSessionTitlesParams
+}
 
-// Why: bound limit + scopePaths so a client cannot force an unbounded scan.
-// Each scopePath is a host-local match prefix (validated/capped, never used for
-// traversal); the count/length caps mirror the worktree-schemas bounding style.
-const AI_VAULT_SCOPE_PATH_MAX_LENGTH = 4096
-const AI_VAULT_LIMIT_MAX = 2000
-
-const executionHostIdSchema = z.string().transform((value, ctx): `runtime:${string}` => {
-  const parsed = parseExecutionHostId(value)
-  if (parsed?.kind === 'runtime') {
-    return parsed.id
-  }
-  ctx.addIssue({
-    code: 'custom',
-    message: 'Invalid runtime execution host id'
-  })
-  return z.NEVER
-})
-
-export const AiVaultListSessionsParams = z
-  .object({
-    limit: z
-      .unknown()
-      .transform((value) =>
-        typeof value === 'number' && Number.isFinite(value) && value >= 0 ? value : undefined
-      )
-      .pipe(z.union([z.number().int(), z.undefined()]))
-      .optional(),
-    unlimited: OptionalBoolean,
-    force: OptionalBoolean,
-    scopePaths: z
-      .array(z.string().min(1).max(AI_VAULT_SCOPE_PATH_MAX_LENGTH))
-      // Why: clamp instead of reject — scope paths only ever widen discovery, and
-      // rejecting would hard-break older/uncapped producers (web client, pre-cap
-      // desktop parents) that send more than the bound.
-      .transform((paths) => paths.slice(0, AI_VAULT_SCOPE_PATHS_MAX_COUNT))
-      .optional(),
-    // Why: desktop/web callers name the runtime host they are addressing; mobile
-    // omits it. The scan itself is host-local either way, so the id must never
-    // change what is scanned — it only restamps the shared cached result.
-    executionHostId: executionHostIdSchema.optional()
-  })
-  .superRefine((params, ctx) => {
-    if (params.unlimited !== true && params.limit && params.limit > AI_VAULT_LIMIT_MAX) {
-      ctx.addIssue({ code: 'custom', path: ['limit'], message: 'Limit exceeds maximum' })
+export const AI_VAULT_METHODS = [
+  defineMethod({
+    name: 'aiVault.searchSessions',
+    permission: 'workspace',
+    params: AiVaultSearchRequestSchema,
+    handler: (params, context) => {
+      const response = searchSessionService(params, context.clientKind ? 'relay' : 'runtime')
+      // A client that reads no structured sessions keeps the transcript hit, as before.
+      return supportsStructuredAgentSessions(context)
+        ? searchWithStructuredOwners(response, {
+            ensureHost: () => context.runtime.ensureStructuredAgentSessionHost(),
+            opensChat: (agent) => clientOpensStructuredChatFromHistory(context, agent)
+          })
+        : response
     }
-  })
-
-export const AiVaultPrepareSessionResumeParams = z.object({
-  agent: z.enum(AI_VAULT_AGENTS),
-  sessionId: z.string().min(1).max(512).optional(),
-  filePath: z.string().min(1).max(AI_VAULT_SCOPE_PATH_MAX_LENGTH),
-  codexHome: z.string().min(1).max(AI_VAULT_SCOPE_PATH_MAX_LENGTH).nullable(),
-  executionHostId: z.string().optional()
-})
-
-export const AiVaultSessionTitlesParams = z.object({
-  requests: z
-    .array(
-      z.object({
-        agent: z.enum(['claude', 'codex']),
-        sessionId: z.string().min(1).max(512),
-        transcriptPath: z.string().min(1).max(32_768).optional()
-      })
-    )
-    .max(AI_VAULT_SESSION_TITLE_REQUEST_MAX_COUNT)
-})
-
-export const AI_VAULT_METHODS: RpcMethod[] = [
+  }),
+  defineMethod({
+    name: 'aiVault.searchStatus',
+    permission: 'workspace',
+    params: AiVaultSearchStatusRequestSchema,
+    handler: (params, { clientKind }) =>
+      sessionSearchServiceStatus(params, clientKind ? 'relay' : 'runtime')
+  }),
+  defineMethod({
+    name: 'aiVault.setSearchEnabled',
+    permission: 'settings-write',
+    params: AiVaultSetSearchEnabledParamsSchema,
+    handler: async (params, { runtime, clientKind, pairedDeviceId }) => {
+      // Only authenticated paired clients may flip host consent; local callers write settings directly.
+      if (!pairedDeviceId) {
+        throw Object.assign(
+          new Error('Session search consent can only be changed by a paired client.'),
+          { code: 'forbidden' }
+        )
+      }
+      await runtime.setSessionSearchEnabled(params.enabled)
+      console.warn(
+        `[ai-vault-search] device ${pairedDeviceId} set indexing enabled=${params.enabled}`
+      )
+      return sessionSearchServiceStatus({}, clientKind ? 'relay' : 'runtime')
+    }
+  }),
   defineMethod({
     name: 'aiVault.resolveSessionTitles',
+    permission: 'workspace',
     params: AiVaultSessionTitlesParams,
     handler: (params, { runtime, signal }) =>
       runtime.resolveAiVaultSessionTitles(params.requests, signal)
   }),
   defineMethod({
     name: 'aiVault.listSessions',
+    permission: 'workspace',
     params: AiVaultListSessionsParams,
-    handler: async (params, { runtime, clientKind, clientCapabilities }) => {
-      await runtime.ensureStructuredAgentSessionHost()
+    handler: async (params, { runtime, clientKind, clientCapabilities, signal }) => {
+      await ensureStructuredAgentSessionHostUnlessRefused(() =>
+        runtime.ensureStructuredAgentSessionHost()
+      )
       let result
       try {
-        result = await runtime.listAiVaultSessions({
-          limit: params.unlimited ? undefined : params.limit,
-          unlimited: params.unlimited,
-          force: params.force,
-          scopePaths: params.scopePaths
-        })
+        result = await runtime.listAiVaultSessions(
+          {
+            limit: params.unlimited ? undefined : params.limit,
+            unlimited: params.unlimited,
+            force: params.force,
+            historyOwnership: params.historyOwnership,
+            scopePaths: params.scopePaths,
+            includeAntigravityIdeSessions: params.includeAntigravityIdeSessions
+          },
+          signal
+        )
       } catch (error) {
         if (error instanceof Error) {
           error.message = describeAiVaultScanError(error.message)
@@ -107,34 +119,55 @@ export const AI_VAULT_METHODS: RpcMethod[] = [
         }
         throw new Error(describeAiVaultScanError(String(error)))
       }
-      // Why: web clients consume this response directly (no parent-side retag),
-      // so sessions must come back stamped as the runtime host they addressed.
-      const stamped = params.executionHostId
-        ? restampAiVaultListResult(result, params.executionHostId)
-        : result
-      return projectStructuredAiVaultSessions(
-        stamped,
-        clientKind === undefined ||
-          (clientCapabilities?.includes(STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY) ?? false)
+      // Web clients have no parent retagging, so stamp sessions with the runtime host they addressed.
+      const projected = projectStructuredAiVaultSessions(result, (agent) =>
+        clientOpensStructuredChatFromHistory({ clientKind, clientCapabilities }, agent)
+      )
+      return conditionalAiVaultListResult(
+        params.executionHostId
+          ? restampAiVaultListResult(projected, params.executionHostId)
+          : projected,
+        params.unlimited ? undefined : params.afterFingerprint,
+        params.force
       )
     }
   }),
   defineMethod({
     name: 'aiVault.prepareSessionResume',
+    permission: 'workspace',
     params: AiVaultPrepareSessionResumeParams,
     handler: async (params, { runtime }) => {
+      if ('sourceChat' in params) {
+        await runtime.ensureStructuredAgentSessionHost()
+        return prepareStructuredChatCliFork(params, (args) =>
+          runtime.prepareAiVaultSessionResume(args)
+        )
+      }
       const args: AiVaultPrepareSessionResumeArgs = {
         agent: params.agent,
         ...(params.sessionId ? { sessionId: params.sessionId } : {}),
+        ...(params.fork ? { fork: true } : {}),
         filePath: params.filePath,
         codexHome: params.codexHome,
-        // Why: the RPC executes on the transcript-owning host; never let a
-        // client-provided runtime/SSH stamp escape that host boundary.
+        // This host owns the transcripts; never echo a client-supplied runtime/SSH owner stamp.
         executionHostId: LOCAL_EXECUTION_HOST_ID
       }
-      await runtime.ensureStructuredAgentSessionHost()
-      assertLegacyAiVaultResumeAllowed(args)
-      return runtime.prepareAiVaultSessionResume(args)
+      if (!isWslUncPath(args.filePath)) {
+        const ensureHost = () => runtime.ensureStructuredAgentSessionHost()
+        await (args.codexHome === null && !args.fork
+          ? tryEnsureStructuredAgentSessionHostForResume(ensureHost)
+          : ensureStructuredAgentSessionHostUnlessRefused(ensureHost))
+        assertLegacyAiVaultResumeAllowed(args)
+      }
+      return (
+        (await copyStructuredChatConversation(args)) ?? runtime.prepareAiVaultSessionResume(args)
+      )
     }
+  }),
+  defineMethod({
+    name: 'aiVault.deleteSession',
+    permission: 'workspace',
+    params: AiVaultDeleteSessionParams,
+    handler: (params, { runtime }) => runtime.deleteAiVaultSession(params)
   })
 ]

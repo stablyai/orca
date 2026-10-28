@@ -1,8 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 import {
   coordinateHostStackNavigation,
-  hostStackHostRoute,
-  hostStackRouteHref,
   navigateToHostStackRoute,
   type HostStackNavigationState
 } from './host-stack-navigation'
@@ -13,8 +11,7 @@ const OTHER_TARGET = {
   params: { hostId: 'host/one', worktreeId: 'repo::/tmp/wt' }
 } as const
 
-// Removal is modeled for real: a no-op unsubscribe would let `setState` keep
-// calling a canceled listener, testing the `active` guard instead of teardown.
+// Remove listeners for real so teardown is tested instead of merely the active guard.
 function navigationHarness(initialState: HostStackNavigationState | undefined) {
   const stateListeners = new Set<() => void>()
   let state = initialState
@@ -59,8 +56,7 @@ function committedHostState(hostIdParam: string): HostStackNavigationState {
   }
 }
 
-// The shape app/_layout.tsx sees: Expo Router mounts it as a screen of its own internal
-// navigator, so every route the host stack lives in sits one level below.
+// Model Expo’s internal root navigator: the host stack sits one level below the layout screen.
 function rootLayoutScopedState(inner: HostStackNavigationState): HostStackNavigationState {
   return { key: 'internal', index: 0, routes: [{ key: '__root', name: '__root', state: inner }] }
 }
@@ -71,7 +67,7 @@ describe('host stack navigation', () => {
     const push = vi.fn()
 
     navigateToHostStackRoute(harness.navigation, { push, replace: vi.fn() }, 'host/one', TARGET)
-    expect(push).toHaveBeenCalledWith(hostStackHostRoute('host/one'))
+    expect(push).toHaveBeenCalledWith('/h/host%2Fone')
     expect(harness.navigation.dispatch).not.toHaveBeenCalled()
 
     harness.setState(committedHostState(encodeURIComponent('host/one')))
@@ -134,7 +130,10 @@ describe('host stack navigation', () => {
     })
 
     expect(harness.navigation.dispatch).not.toHaveBeenCalled()
-    expect(replace).toHaveBeenCalledWith(hostStackRouteHref(TARGET))
+    expect(replace).toHaveBeenCalledWith({
+      pathname: '/h/[hostId]/tasks',
+      params: { hostId: 'host/one' }
+    })
     expect(harness.listenerCount()).toBe(0)
   })
 

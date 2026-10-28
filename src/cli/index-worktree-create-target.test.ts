@@ -43,6 +43,27 @@ vi.mock('child_process', async () => {
 import { main } from './index'
 import { buildWorktree, okFixture, queueFixtures, worktreeListFixture } from './test-fixtures'
 import { pairRuntimeEnvironment, useWorktreeAwarenessEnvironment } from './index-test-harness'
+import { RuntimeRpcFailureError } from './runtime-client'
+
+function buildSetup(overrides: {
+  id: string
+  hostId: string
+  repoId: string
+  projectId?: string
+  path?: string
+  displayName?: string
+}) {
+  return {
+    projectId: 'github:stablyai/orca',
+    path: '/tmp/orca',
+    displayName: 'Orca',
+    setupState: 'ready',
+    setupMethod: 'legacy-repo',
+    createdAt: 1,
+    updatedAt: 1,
+    ...overrides
+  }
+}
 
 describe('orca cli worktree awareness', () => {
   useWorktreeAwarenessEnvironment({
@@ -79,7 +100,7 @@ describe('orca cli worktree awareness', () => {
       comment: undefined,
       runHooks: false,
       activate: true,
-      navigation: 'all',
+      navigation: 'host',
       parentWorktree: undefined,
       cwdParentWorktree: 'id:repo-1::/tmp/repo',
       noParent: false,
@@ -148,6 +169,7 @@ describe('orca cli worktree awareness', () => {
     expect(callMock).toHaveBeenNthCalledWith(1, 'projectHostSetup.list')
     expect(callMock).toHaveBeenNthCalledWith(2, 'worktree.create', {
       repo: 'id:repo-gpu',
+      repoHostId: 'runtime:gpu',
       name: 'feature',
       displayName: 'feature',
       displayNameKind: 'user',
@@ -208,6 +230,280 @@ describe('orca cli worktree awareness', () => {
       2,
       'worktree.create',
       expect.objectContaining({ repo: 'id:repo-gpu' })
+    )
+  })
+
+  it('surfaces a project.list failure instead of reporting the project as not set up', async () => {
+    const { RuntimeClientError } = await import('./runtime/types.js')
+    const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
+    const errSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+    const priorExitCode = process.exitCode
+    queueFixtures(
+      callMock,
+      okFixture('req_project_setups', {
+        setups: [buildSetup({ id: 'setup-local', hostId: 'local', repoId: 'repo-local' })]
+      })
+    )
+    callMock.mockRejectedValueOnce(
+      new RuntimeClientError('internal_error', 'project store offline')
+    )
+
+    await main(
+      ['worktree', 'create', '--project', 'scalp-it', '--name', 'feature', '--no-parent', '--json'],
+      '/tmp/repo'
+    )
+
+    const printed = [...logSpy.mock.calls, ...errSpy.mock.calls].flat().join('\n')
+    expect(printed).toContain('project store offline')
+    expect(printed).not.toContain('Project is not set up')
+    expect(callMock).not.toHaveBeenCalledWith('worktree.create', expect.anything())
+    expect(process.exitCode).toBe(1)
+
+    process.exitCode = priorExitCode
+  })
+
+  it('refuses a legacy display-name match that spans two projects', async () => {
+    const { RuntimeClientError } = await import('./runtime/types.js')
+    const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
+    const errSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+    const priorExitCode = process.exitCode
+    queueFixtures(
+      callMock,
+      okFixture('req_project_setups', {
+        setups: [
+          buildSetup({
+            id: 'setup-a',
+            hostId: 'local',
+            repoId: 'repo-a',
+            projectId: 'github:acme/scalp-it',
+            displayName: 'scalp-it'
+          }),
+          buildSetup({
+            id: 'setup-b',
+            hostId: 'local',
+            repoId: 'repo-b',
+            projectId: 'gitlab:other/scalp-it',
+            displayName: 'scalp-it'
+          })
+        ]
+      })
+    )
+    callMock.mockRejectedValueOnce(
+      new RuntimeClientError('method_not_found', 'Unknown method: project.list')
+    )
+
+    await main(
+      ['worktree', 'create', '--project', 'scalp-it', '--name', 'feature', '--no-parent', '--json'],
+      '/tmp/repo'
+    )
+
+    const printed = [...logSpy.mock.calls, ...errSpy.mock.calls].flat().join('\n')
+    expect(printed).toContain('2 projects have a setup named that')
+    expect(printed).toContain('github:acme/scalp-it')
+    expect(printed).toContain('gitlab:other/scalp-it')
+    expect(callMock).not.toHaveBeenCalledWith('worktree.create', expect.anything())
+    expect(process.exitCode).toBe(1)
+
+    process.exitCode = priorExitCode
+  })
+
+  it('falls back to the setup display name when the server has no project.list', async () => {
+    const { RuntimeClientError } = await import('./runtime/types.js')
+    queueFixtures(
+      callMock,
+      okFixture('req_project_setups', {
+        setups: [
+          buildSetup({
+            id: 'setup-local',
+            hostId: 'local',
+            repoId: 'repo-local',
+            projectId: 'github:stablyai/scalp-it',
+            displayName: 'scalp-it'
+          })
+        ]
+      })
+    )
+    callMock.mockRejectedValueOnce(
+      new RuntimeClientError('method_not_found', 'Unknown method: project.list')
+    )
+    queueFixtures(
+      callMock,
+      okFixture('req_create', {
+        worktree: buildWorktree('/tmp/scalp-it/feature', 'feature', 'abc', 'repo-local'),
+        lineage: null,
+        warnings: []
+      })
+    )
+    vi.spyOn(console, 'log').mockImplementation(() => {})
+
+    await main(
+      ['worktree', 'create', '--project', 'scalp-it', '--name', 'feature', '--no-parent', '--json'],
+      '/tmp/repo'
+    )
+
+    expect(callMock).toHaveBeenNthCalledWith(
+      3,
+      'worktree.create',
+      expect.objectContaining({ repo: 'id:repo-local' })
+    )
+  })
+
+  it('resolves --project by display name and infers the only host it is set up on', async () => {
+    queueFixtures(
+      callMock,
+      okFixture('req_project_setups', {
+        setups: [
+          buildSetup({
+            id: 'setup-local',
+            hostId: 'local',
+            repoId: 'repo-local',
+            projectId: 'github:stablyai/scalp-it',
+            path: '/tmp/scalp-it',
+            displayName: 'scalp-it'
+          })
+        ]
+      }),
+      okFixture('req_projects', {
+        projects: [{ id: 'github:stablyai/scalp-it', displayName: 'scalp-it' }]
+      }),
+      okFixture('req_create', {
+        worktree: buildWorktree('/tmp/scalp-it/feature', 'feature', 'abc', 'repo-local'),
+        lineage: null,
+        warnings: []
+      })
+    )
+    vi.spyOn(console, 'log').mockImplementation(() => {})
+
+    await main(
+      ['worktree', 'create', '--project', 'scalp-it', '--name', 'feature', '--no-parent', '--json'],
+      '/tmp/repo'
+    )
+
+    expect(callMock).toHaveBeenNthCalledWith(1, 'projectHostSetup.list')
+    expect(callMock).toHaveBeenNthCalledWith(2, 'project.list')
+    expect(callMock).toHaveBeenNthCalledWith(
+      3,
+      'worktree.create',
+      expect.objectContaining({ repo: 'id:repo-local' })
+    )
+  })
+
+  it('reports an unknown project as a project miss, not a host one', async () => {
+    queueFixtures(
+      callMock,
+      okFixture('req_project_setups', { setups: [] }),
+      okFixture('req_projects', { projects: [] })
+    )
+    const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
+    const errSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+    const priorExitCode = process.exitCode
+
+    await main(
+      ['worktree', 'create', '--project', 'nope', '--name', 'feature', '--no-parent', '--json'],
+      '/tmp/repo'
+    )
+
+    const printed = [...logSpy.mock.calls, ...errSpy.mock.calls].flat().join('\n')
+    expect(printed).toContain('No ready setup found for --project nope on any host.')
+    expect(printed).not.toContain('selected host')
+    expect(process.exitCode).toBe(1)
+    process.exitCode = priorExitCode
+  })
+
+  it('asks which host only when the project is set up on more than one', async () => {
+    const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
+    const errSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+    const priorExitCode = process.exitCode
+    queueFixtures(
+      callMock,
+      okFixture('req_project_setups', {
+        setups: [
+          buildSetup({
+            id: 'setup-local',
+            hostId: 'local',
+            repoId: 'repo-local',
+            path: '/tmp/orca'
+          }),
+          buildSetup({
+            id: 'setup-gpu',
+            hostId: 'runtime:gpu',
+            repoId: 'repo-gpu',
+            path: '/srv/orca'
+          })
+        ]
+      })
+    )
+
+    await main(
+      [
+        'worktree',
+        'create',
+        '--project',
+        'github:stablyai/orca',
+        '--name',
+        'feature',
+        '--no-parent',
+        '--json'
+      ],
+      '/tmp/repo'
+    )
+
+    expect(callMock).toHaveBeenCalledTimes(1)
+    const printed = [...logSpy.mock.calls, ...errSpy.mock.calls].flat().join('\n')
+    expect(printed).toContain('it is set up on 2 hosts')
+    expect(printed).toContain('--host local')
+    expect(printed).toContain('--host runtime:gpu')
+    expect(process.exitCode).toBe(1)
+
+    process.exitCode = priorExitCode
+  })
+
+  it('accepts the host alias that `orca host list` prints', async () => {
+    queueFixtures(
+      callMock,
+      okFixture('req_ssh_targets', {
+        targets: [{ id: 'ssh-1783599077486-fyasux', label: 'trader-local' }]
+      }),
+      okFixture('req_project_setups', {
+        setups: [
+          buildSetup({ id: 'setup-local', hostId: 'local', repoId: 'repo-local' }),
+          buildSetup({
+            id: 'setup-trader',
+            hostId: 'ssh:ssh-1783599077486-fyasux',
+            repoId: 'repo-trader',
+            path: '/home/trader/orca'
+          })
+        ]
+      }),
+      okFixture('req_create', {
+        worktree: buildWorktree('/home/trader/orca/feature', 'feature', 'abc', 'repo-trader'),
+        lineage: null,
+        warnings: []
+      })
+    )
+    vi.spyOn(console, 'log').mockImplementation(() => {})
+
+    await main(
+      [
+        'worktree',
+        'create',
+        '--project',
+        'github:stablyai/orca',
+        '--host',
+        'trader-local',
+        '--name',
+        'feature',
+        '--no-parent',
+        '--json'
+      ],
+      '/tmp/repo'
+    )
+
+    expect(callMock).toHaveBeenNthCalledWith(1, 'ssh.listTargetSummaries')
+    expect(callMock).toHaveBeenNthCalledWith(
+      3,
+      'worktree.create',
+      expect.objectContaining({ repo: 'id:repo-trader' })
     )
   })
 
@@ -279,8 +575,6 @@ describe('orca cli worktree awareness', () => {
   })
 
   it('marks every worktree.create as CLI-created even from an external shell', async () => {
-    // Why: the sidebar badge/filter must catch hand-typed creates too, so the
-    // provenance request is sent with no terminal handle rather than omitted.
     delete process.env.ORCA_TERMINAL_HANDLE
     queueFixtures(
       callMock,
@@ -302,5 +596,30 @@ describe('orca cli worktree awareness', () => {
       'worktree.create',
       expect.objectContaining({ cliProvenanceRequest: {} })
     )
+  })
+
+  it('tells the user which --setup flag answers an undecided ask repo', async () => {
+    callMock.mockRejectedValueOnce(
+      new RuntimeRpcFailureError({
+        id: 'req_create',
+        ok: false,
+        error: { code: 'runtime_error', message: 'Setup decision required for this repository' },
+        _meta: { runtimeId: 'runtime-1' }
+      })
+    )
+    const errSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+    const priorExitCode = process.exitCode
+
+    await main(
+      ['worktree', 'create', '--repo', 'id:repo-1', '--name', 'child', '--no-parent'],
+      '/tmp/repo'
+    )
+
+    expect(errSpy.mock.calls.flat().join('\n')).toBe(
+      'Setup decision required for this repository\n' +
+        'Next step: Pass --setup run to run the setup script, or --setup skip to create without it.'
+    )
+    expect(process.exitCode).toBe(1)
+    process.exitCode = priorExitCode
   })
 })

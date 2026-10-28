@@ -1,3 +1,4 @@
+import type * as ReactModule from 'react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
 import type { UseWarpThemeImportReturn } from './useWarpThemeImport'
@@ -5,7 +6,7 @@ import type { UseWarpThemeImportReturn } from './useWarpThemeImport'
 let themeTarget: 'dark' | 'light' | undefined = 'dark'
 
 vi.mock('react', async () => {
-  const actual = await vi.importActual<typeof import('react')>('react') // eslint-disable-line @typescript-eslint/consistent-type-imports -- vi.importActual requires inline import()
+  const actual = await vi.importActual<typeof ReactModule>('react')
   return {
     ...actual,
     useState: <T>(initial: T | (() => T)) => {
@@ -208,6 +209,44 @@ describe('TerminalThemeCatalogSection', () => {
     selectTheme('GitHub Light')
 
     expect(updateSettings).toHaveBeenCalledWith({ terminalThemeLight: 'GitHub Light' })
+  })
+
+  it('clears imported color overrides when selecting a different theme', () => {
+    const updateSettings = vi.fn()
+    const element = renderCatalog(
+      makeSettings({ terminalColorOverrides: { background: '#111111' } }),
+      updateSettings
+    )
+    const picker = findElementByTypeName(element, 'ThemePicker')
+    const selectTheme = picker?.props?.onSelectTheme as (theme: string) => void
+
+    selectTheme('GitHub Dark')
+
+    expect(updateSettings.mock.calls[0]?.[0]).toStrictEqual({
+      terminalThemeDark: 'GitHub Dark',
+      terminalColorOverrides: undefined
+    })
+  })
+
+  it('clears imported color overrides when selecting a light theme', () => {
+    const updateSettings = vi.fn()
+    const element = renderCatalog(
+      makeSettings({
+        terminalUseSeparateLightTheme: true,
+        terminalColorOverrides: { background: '#111111' }
+      }),
+      updateSettings,
+      'light'
+    )
+    const picker = findElementByTypeName(element, 'ThemePicker')
+    const selectTheme = picker?.props?.onSelectTheme as (theme: string) => void
+
+    selectTheme('GitHub Light')
+
+    expect(updateSettings.mock.calls[0]?.[0]).toStrictEqual({
+      terminalThemeLight: 'GitHub Light',
+      terminalColorOverrides: undefined
+    })
   })
 
   it('reopens the manually edited light target while the active appearance is dark', () => {

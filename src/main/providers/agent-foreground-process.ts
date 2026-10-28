@@ -13,7 +13,15 @@ import {
   type AgentForegroundResolutionOptions
 } from './windows-agent-foreground-process'
 import { isShellProcess } from '../../shared/shell-process-detection'
-import { selectForegroundProcessCandidate } from '../../shared/foreground-process-selection'
+import {
+  selectForegroundProcessCandidate,
+  type SelectedForegroundProcess
+} from '../../shared/foreground-process-selection'
+import { isWindowsShellAloneInJob } from './windows-shell-alone-in-job'
+import {
+  readWindowsProcessIdentityTableFresh,
+  type WindowsProcessIdentityRow
+} from '../windows/windows-process-table'
 
 export type { AgentForegroundResolutionOptions } from './windows-agent-foreground-process'
 export {
@@ -29,11 +37,7 @@ export {
 export type AgentForegroundProcessResolution = {
   available: boolean
   processName: string | null
-  /**
-   * Windows: pid of the process a recognized name belongs to — a liveness
-   * anchor callers may check against the pane's job. Absent when the name is a
-   * fallback, ambiguous, or resolved on POSIX (where `+` already marks it).
-   */
+  /** Windows liveness anchor for an unambiguous recognized name; omitted for fallbacks and POSIX. */
   processId?: number
   /** Windows: the scan proved the caller's `anchorProcessId` is now a non-agent. */
   anchorPidForeign?: boolean
@@ -44,6 +48,7 @@ type ShellForegroundConfirmationOptions = {
     | ReadonlySet<number>
     | null
     | Promise<ReadonlySet<number> | null>
+  readWindowsProcessIdentityTable?: () => Promise<WindowsProcessIdentityRow[]>
 }
 
 function commandExecutable(command: string): string {
@@ -69,10 +74,14 @@ export async function confirmShellForegroundProcess(
   }
   if (process.platform === 'win32') {
     try {
-      const processIds = await options.readWindowsPtyJobProcessIds?.()
-      return processIds?.size === 1 && processIds.has(shellPid)
+      return await isWindowsShellAloneInJob(
+        shellPid,
+        spawnedShellProcess,
+        await options.readWindowsPtyJobProcessIds?.(),
+        options.readWindowsProcessIdentityTable ?? readWindowsProcessIdentityTableFresh
+      )
     } catch {
-      // Unavailable job inspection is missing proof, never a thrown confirmation.
+      // Unavailable job or process-table inspection is missing proof, never a thrown confirmation.
       return false
     }
   }
@@ -83,7 +92,8 @@ export async function confirmShellForegroundProcess(
       return false
     }
     const tree = [{ ...root, depth: 0 }, ...collectDescendantsFromIndex(index, shellPid)]
-    const spawnedShellBasename = executableBasename(spawnedShellProcess)
+    // Shell paths may contain spaces; command-line tokenization would truncate their basename.
+    const spawnedShellBasename = spawnedShellProcess.split(/[\\/]/).pop()?.toLowerCase() ?? ''
     const foregroundShell = tree
       .filter(
         (row) =>
@@ -133,8 +143,7 @@ export async function resolveAgentForegroundProcessWithAvailability(
     )
     return {
       available: resolution.available,
-      // Why: a forced confirmation scan that no longer sees the recognized
-      // fallback is authoritative evidence that the agent exited meanwhile.
+      // A forced scan that loses the recognized fallback proves exit during confirmation.
       processName:
         resolution.processName ??
         (options.forceProcessScan && recognizeAgentProcessFromCommandLine(fallbackProcess)
@@ -169,28 +178,46 @@ export function resolveAgentForegroundProcessFromPs(
   rows: readonly ProcessTableRow[],
   shellPid: number
 ): string | null {
-  // Memoized per snapshot identity, so the caller's own index build is reused.
+  const found = selectAgentForegroundFromPs(rows, shellPid)
+  // Preserve the outer OMP identity across its embedded Pi child.
+  return found
+    ? resolveOuterWrapperForegroundProcess(
+        found.selected.recognized,
+        found.selected.candidate,
+        found.candidates
+      )
+    : null
+}
+
+/** The full command line of the pane's foreground agent process, for argv-level policy. */
+export async function resolveAgentForegroundCommandLine(shellPid: number): Promise<string | null> {
+  try {
+    const rows = await getFreshShellForegroundSnapshot()
+    return selectAgentForegroundFromPs(rows, shellPid)?.selected.candidate.command ?? null
+  } catch {
+    return null
+  }
+}
+
+function selectAgentForegroundFromPs(
+  rows: readonly ProcessTableRow[],
+  shellPid: number
+): {
+  selected: SelectedForegroundProcess
+  candidates: (ProcessTableRow & { depth: number })[]
+} | null {
   const index = getProcessTableIndex(rows)
   const shellRow = index.byPid.get(shellPid)
   const candidates = collectDescendantsFromIndex(index, shellPid)
-  // Why: `+` in `ps stat` marks the process holding the terminal foreground.
-  // The root shell can hold it after Ctrl-Z, so use the whole PTY tree as the
-  // foreground gate; otherwise a stopped agent child still masquerades as live.
+  // Include the shell in the foreground gate: after Ctrl-Z it owns + while the stopped agent remains a child.
   const foregroundIsKnown =
     shellRow?.stat.includes('+') === true ||
     candidates.some((candidate) => candidate.stat.includes('+'))
   const foregroundCandidates = foregroundIsKnown
     ? candidates.filter((candidate) => candidate.stat.includes('+'))
     : candidates
-  // Keep the complete process tree for ancestry checks. A recognized agent can
-  // sit above a non-foreground helper before another recognized process; the
-  // helper is filtered from selection but must remain traversable.
+  // Keep non-foreground helpers in ancestry so wrapper recognition can traverse them.
   const ancestryCandidates = shellRow ? [{ ...shellRow, depth: 0 }, ...candidates] : candidates
   const selected = selectForegroundProcessCandidate(foregroundCandidates, ancestryCandidates)
-  if (selected) {
-    // Why: return the outer wrapper (omp) rather than the deeper wrapped child
-    // (pi) of a shell→omp→pi tree — see resolveOuterWrapperForegroundProcess.
-    return resolveOuterWrapperForegroundProcess(selected.recognized, selected.candidate, candidates)
-  }
-  return null
+  return selected ? { selected, candidates } : null
 }

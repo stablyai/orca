@@ -7,7 +7,7 @@ export function getNativeChatExperimentalSearchEntry(): SettingsSearchEntry {
     title: translate('auto.components.settings.experimental.search.nativeChat.title', 'Chat UI'),
     description: translate(
       'auto.components.settings.experimental.search.nativeChat.description',
-      'Preview the desktop chat surface for supported agent terminal sessions.'
+      'Open supported new agents in Chat UI.'
     ),
     keywords: [
       ...translateSearchKeyword(

@@ -2,11 +2,11 @@ import {
   getLinearTeamMembersOrThrow,
   isLinearUuid,
   getLinearIssueByUuidForAgent,
-  linearError,
-  readLinearIssueContext,
   getLinearTeamStatesOrThrow,
   labelsForIds
 } from './runtime-linear-command-dependencies'
+import { linearError } from '../linear/issue-context/errors'
+import { readLinearIssueContext } from '../linear/issue-context/read-context'
 import type {
   LinearIssueTaskUpdateRequest,
   LinearSaveIssueRequest,
@@ -37,7 +37,7 @@ export class RuntimeLinearTaskFieldCommands extends RuntimeLinearLabelWriteComma
       (state) =>
         state.id.toLocaleLowerCase() === normalized || state.name.toLocaleLowerCase() === normalized
     )
-    // Why: Linear MCP accepts lifecycle types; keep explicit IDs/names authoritative when they collide.
+    // Accept MCP lifecycle types, but explicit ids/names win collisions.
     return exact ?? states.find((state) => state.type.toLocaleLowerCase() === normalized) ?? null
   }
 
@@ -200,7 +200,7 @@ export class RuntimeLinearTaskFieldCommands extends RuntimeLinearLabelWriteComma
     if (input.toLocaleLowerCase() === 'me') {
       return (await this.getLinearViewerForWrite(workspaceId)).id
     }
-    // Why: caller-supplied IDs were accepted directly before save-issue; avoid a paginated member scan on that existing fast path.
+    // Keep the existing direct-id fast path; avoid a paginated member scan.
     if (isLinearUuid(input)) {
       return input
     }

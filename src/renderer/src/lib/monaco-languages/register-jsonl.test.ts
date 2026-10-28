@@ -1,54 +1,53 @@
-import { describe, expect, it, vi } from 'vitest'
-import {
-  JSONL_LANGUAGE_ID,
-  jsonlLanguageConfiguration,
-  jsonlMonarchLanguage,
-  registerJsonlLanguage
-} from './register-jsonl'
+import { describe, expect, it } from 'vitest'
+import { tokenizeMonarchDocument, tokenTypeAt } from './monarch-tokenizer-test-harness'
+import { JSONL_LANGUAGE_ID, jsonlMonarchLanguage } from './register-jsonl'
 
-function createMonacoMock(existingLanguageIds: string[] = []) {
-  return {
-    languages: {
-      getLanguages: vi.fn(() => existingLanguageIds.map((id) => ({ id }))),
-      register: vi.fn(),
-      setLanguageConfiguration: vi.fn(),
-      setMonarchTokensProvider: vi.fn()
-    }
-  }
+function tokenizeJsonl(source: string) {
+  return tokenizeMonarchDocument(JSONL_LANGUAGE_ID, jsonlMonarchLanguage, source)
 }
 
-describe('registerJsonlLanguage', () => {
-  it('registers the jsonl language with a Monarch tokenizer and .jsonl extension', () => {
-    const monaco = createMonacoMock()
+describe('jsonl tokenization', () => {
+  it('colours a property key differently from a string value', () => {
+    // Keep the colon lookahead or property keys become string values.
+    const [line] = tokenizeJsonl('{"key": "value"}')
 
-    registerJsonlLanguage(monaco as never)
-
-    expect(monaco.languages.register).toHaveBeenCalledWith(
-      expect.objectContaining({ id: JSONL_LANGUAGE_ID, extensions: ['.jsonl'] })
-    )
-    expect(monaco.languages.setLanguageConfiguration).toHaveBeenCalledWith(
-      JSONL_LANGUAGE_ID,
-      jsonlLanguageConfiguration
-    )
-    expect(monaco.languages.setMonarchTokensProvider).toHaveBeenCalledWith(
-      JSONL_LANGUAGE_ID,
-      jsonlMonarchLanguage
-    )
+    expect(tokenTypeAt(line, 1)).toBe('type.identifier')
+    expect(tokenTypeAt(line, 8)).toBe('string')
   })
 
-  it('does not attach the JSON language service / diagnostics', () => {
-    // Why: whole-document JSON validation would flag every record after line one
-    // as trailing content. A Monarch tokens provider is presentation-only.
-    expect(jsonlMonarchLanguage.tokenizer).toBeDefined()
-    expect('json' in jsonlMonarchLanguage).toBe(false)
+  // Truncated strings must not carry state into later JSONL records.
+  it.each([
+    ['mid-string', '{"a": "truncated here'],
+    ['mid-escape', '{"a": "truncated\\'],
+    ['on a trailing backslash', '{"a": "x\\']
+  ])('does not let a record truncated %s poison the next one', (_name, truncated) => {
+    const [, second] = tokenizeJsonl(`${truncated}\n{"b": 1}`)
+
+    expect(tokenTypeAt(second, 1)).toBe('type.identifier')
+    expect(tokenTypeAt(second, 6)).toBe('number')
   })
 
-  it('registers once and is idempotent when the language already exists', () => {
-    const monaco = createMonacoMock([JSONL_LANGUAGE_ID])
+  it('marks the unterminated remainder of a truncated record', () => {
+    const [first] = tokenizeJsonl('{"a": "truncated here')
 
-    registerJsonlLanguage(monaco as never)
+    expect(tokenTypeAt(first, 6)).toBe('string.invalid')
+  })
 
-    expect(monaco.languages.register).not.toHaveBeenCalled()
-    expect(monaco.languages.setMonarchTokensProvider).not.toHaveBeenCalled()
+  it.each([
+    ['escaped quote', '{"m": "he said \\"hi\\""}', 15],
+    ['escaped backslash', '{"m": "C:\\\\Users"}', 10],
+    ['unicode escape', '{"m": "\\u00e9"}', 7],
+    ['newline escape', '{"m": "a\\nb"}', 8]
+  ])('still highlights an %s inside a well-formed record', (_name, record, escapeOffset) => {
+    // Retain escape fidelity; replacing string state with one regex previously lost these cases.
+    const [line] = tokenizeJsonl(record)
+
+    expect(tokenTypeAt(line, escapeOffset)).toBe('string.escape')
+  })
+
+  it('flags an invalid escape inside a well-formed record', () => {
+    const [line] = tokenizeJsonl('{"m": "a\\qb"}')
+
+    expect(tokenTypeAt(line, 8)).toBe('string.escape.invalid')
   })
 })

@@ -9,6 +9,7 @@ import { accountNameFromUser, fetchBitbucketUserResult } from './user-request'
 import {
   clearStoredBitbucketCredential,
   getStoredBitbucketMetadata,
+  getBitbucketCredentialProtection,
   hasStoredBitbucketCredential,
   saveBitbucketCredential
 } from './credential-store'
@@ -36,8 +37,6 @@ function buildCandidateConfig(input: BitbucketConnectArgs): BitbucketAuthConfig 
   }
 }
 
-// Verifying against `/user` before persisting keeps the stored "connected
-// account" honest and lets the dialog reject a dead token inline.
 export async function connectBitbucket(
   input: BitbucketConnectArgs
 ): Promise<BitbucketConnectResult> {
@@ -55,8 +54,6 @@ export async function connectBitbucket(
   if (!result.ok) {
     return {
       ok: false,
-      // Why (STA-3944): telling someone their token is invalid when the network
-      // is down sends them to regenerate a credential that was fine.
       error:
         result.reason === 'rejected'
           ? 'Bitbucket rejected these credentials. Check the email and token, then try again.'
@@ -79,14 +76,14 @@ export function disconnectBitbucket(): void {
   clearStoredBitbucketCredential()
 }
 
-// Reads env vars and plaintext metadata only — never decrypts — so the Settings
-// card can call it on every open without a keychain prompt.
+// Status reads must avoid keychain prompts.
 export function getBitbucketConnectionStatus(): BitbucketConnectionStatus {
   const env = getEnvAuthConfig()
   if (hasAuth(env)) {
     return {
       configured: true,
       source: 'environment',
+      credentialProtection: null,
       account: null,
       authMode: env.accessToken ? 'token' : 'basic',
       email: env.email,
@@ -98,6 +95,7 @@ export function getBitbucketConnectionStatus(): BitbucketConnectionStatus {
     return {
       configured: true,
       source: 'stored',
+      credentialProtection: getBitbucketCredentialProtection(),
       account: metadata?.account ?? null,
       authMode: metadata?.authMode ?? null,
       email: metadata?.email ?? null,
@@ -107,6 +105,7 @@ export function getBitbucketConnectionStatus(): BitbucketConnectionStatus {
   return {
     configured: false,
     source: 'none',
+    credentialProtection: null,
     account: null,
     authMode: null,
     email: null,

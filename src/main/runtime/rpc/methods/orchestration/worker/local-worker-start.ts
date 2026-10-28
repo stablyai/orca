@@ -1,14 +1,24 @@
-import type { TuiAgent } from '../../../../../../shared/tui-agent'
+import { probeWorkerOpenCodeModelLaunchSupport } from './worker-opencode-model-preflight'
+import { resolveWorkerConfiguredAgentParams } from './worker-configured-agent-preflight'
+import { waitForWorkerAgentReady } from '../../../../launched-agent-composer-readiness'
 import type { OrcaRuntimeService } from '../../../../orca-runtime'
+import { describeTerminalWaitBlockedReason } from '../../../../../../shared/terminal-wait-blocked-reason-legacy-alias'
 import type { OrchestrationDb } from '../../../../orchestration/db'
-import type { RunRow, TaskRow } from '../../../../orchestration/types'
+import type { DispatchContextRow, RunRow, TaskRow } from '../../../../orchestration/types'
+import type {
+  OrchestrationCallerIdentity,
+  OrchestrationSessionCaller
+} from '../../../../orchestration/orchestration-caller-identity'
 import { resolveDispatchCreator } from '../runs/dispatch-creator'
 import { resolveDispatchCallerWorktreeId } from '../../orchestration-caller-workspace'
 import {
   resolveWorkerStartModeOnHost,
   type WorkerStartModeReceipt
 } from '../../orchestration-worker-start-mode'
+import { EXISTING_WORKTREE_SETUP, placeWorkerAgent } from './worker-start-agent-placement'
+import { awaitStructuredWorkerSetupGate } from './worker-start-structured-setup-gate'
 import { assertOrchestrationWorktreeCreationSupported } from './folder-worktree-placement'
+import { resolveWorkerWorktreeCreationTarget } from './worker-worktree-creation'
 import type { WorkerStartInput } from './worker-start-schema'
 import {
   persistGatedSetupSpawnFailure,
@@ -17,77 +27,117 @@ import {
 } from './worker-setup-gate'
 import { failWorkerStartWithReceipt } from './worker-start-receipt'
 import { parseTaskDeps } from './task-deps-argument'
-import { assertExplicitWorkerTerminalUsable } from './explicit-worker-terminal-validation'
-import { deliverWorkerDispatchPreamble } from './deliver-worker-dispatch-preamble'
+import { assertExplicitWorkerUsable } from './explicit-worker-terminal-validation'
+import { resolveDispatchAssigneeParty } from '../../../../orchestration/orchestration-party'
+import { CHAT_WORKER_AUTHORITY, chatAssigneeOf, chatWorkerMode } from '../chat-assignee-admission'
 import { recordCreatedWorkerTerminalCustody } from './created-worker-terminal-custody'
-import { tearDownFailedWorkerStart } from './failed-worker-start-teardown'
-import {
-  createExistingWorktreeWorkerTerminal,
-  createStructuredWorkerSessionForWorktree,
-  createWorkerWorktree,
-  monitorWorkerSetup,
-  requireWorkerAuthority,
-  type WorkerEffect,
-  type WorkerSetupReceipt
-} from './worker-topology'
+import { releaseRetriedWorkerTerminal } from './retried-worker-terminal-release'
+import { requireWorkerAuthority, type WorkerEffect } from './worker-topology'
 import { prepareLocalWorkerStart } from './worker-start-validation'
-
-type WorkerStartMutation = {
-  callerFingerprint: string
-  requestId: string
-  method: string
-  payloadHash: string
-}
+import { deliverAndSettleWorkerStartReadiness } from './worker-start-readiness-settlement'
+import type { WorkerStartMutation } from './worker-start-mutation'
 
 export async function startLocalWorker(args: {
   params: WorkerStartInput
   runtime: OrcaRuntimeService
   db: OrchestrationDb
   run: RunRow
-  coordinatorPane: string | null
+  coordinator: OrchestrationCallerIdentity | null
+  callerSession?: OrchestrationSessionCaller
   existingTask?: TaskRow
   orchestrationMutation?: WorkerStartMutation
   /** Settings-driven; the executing host still gets to refuse below. */
   mode: WorkerStartModeReceipt
+  /** Set when a worker starts its own helper; the helper reports to this Dispatch. */
+  helperCreator?: DispatchContextRow
 }): Promise<unknown> {
-  const { params, runtime, db, run, coordinatorPane, existingTask, orchestrationMutation } = args
+  const { runtime, db, run, coordinator, callerSession, existingTask, orchestrationMutation } = args
+  // `--terminal` names a party: a chat by its `/clear` root address, as its Dispatch does.
+  const terminal = args.params.terminal && resolveDispatchAssigneeParty(args.params.terminal, db)
+  const params = terminal ? { ...args.params, terminal: terminal.address } : args.params
+  const chat = terminal ? chatAssigneeOf(terminal) : null
   const requestedWorktree = params.worktree ?? 'current'
   const createsWorktree = requestedWorktree === 'new-child' || requestedWorktree === 'new-top-level'
-  const { agent, launch } = prepareLocalWorkerStart({ params, createsWorktree, runtime })
+  const creationTargetFor = (callerWorktreeId: string) =>
+    resolveWorkerWorktreeCreationTarget({
+      runtime,
+      requestedWorktree,
+      repo: params.repo,
+      callerWorktreeId
+    })
+  const launchParams = await resolveWorkerConfiguredAgentParams(runtime, params, async () => {
+    const callerWorkspaceId = await resolveDispatchCallerWorktreeId(
+      runtime,
+      params.from,
+      callerSession
+    )
+    return createsWorktree
+      ? { repo: (await creationTargetFor(callerWorkspaceId)).repoSelector }
+      : {
+          worktree: requestedWorktree === 'current' ? `id:${callerWorkspaceId}` : requestedWorktree
+        }
+  })
+  let openCodeModelLaunchSupported = false
+  if (!createsWorktree && launchParams.agent === 'opencode' && launchParams.model) {
+    const callerWorkspaceId = await resolveDispatchCallerWorktreeId(
+      runtime,
+      params.from,
+      callerSession
+    )
+    openCodeModelLaunchSupported = await probeWorkerOpenCodeModelLaunchSupport(
+      runtime,
+      launchParams,
+      { worktree: requestedWorktree === 'current' ? `id:${callerWorkspaceId}` : requestedWorktree }
+    )
+  }
 
-  const coordinatorWorktreeId = await resolveDispatchCallerWorktreeId(runtime, params.from)
-  const creationWorktree = createsWorktree
-    ? await runtime.showManagedWorktree(`id:${coordinatorWorktreeId}`)
+  const { agent, launch } = prepareLocalWorkerStart({
+    params: launchParams,
+    createsWorktree,
+    runtime,
+    openCodeModelLaunchSupported
+  })
+
+  const coordinatorWorktreeId = await resolveDispatchCallerWorktreeId(
+    runtime,
+    params.from,
+    callerSession
+  )
+  const creationTarget = createsWorktree
+    ? await creationTargetFor(coordinatorWorktreeId)
     : undefined
-  if (creationWorktree) {
+  if (creationTarget) {
     await assertOrchestrationWorktreeCreationSupported({
       runtime,
-      repoSelector: params.repo ?? creationWorktree.repoId,
+      repoSelector: creationTarget.repoSelector,
       existingPlacement: 'current or an exact existing folder workspace'
     })
   }
-  let resolvedWorktree = creationWorktree
-    ? undefined
-    : requestedWorktree === 'current'
-      ? await runtime.showManagedTerminalWorkspace(`id:${coordinatorWorktreeId}`)
-      : await runtime.showManagedTerminalWorkspace(requestedWorktree)
-  if (params.terminal) {
-    await assertExplicitWorkerTerminalUsable({
+  let resolvedWorktree: Awaited<ReturnType<typeof placeWorkerAgent>>['worktree'] | undefined =
+    creationTarget
+      ? undefined
+      : requestedWorktree === 'current'
+        ? await runtime.showManagedTerminalWorkspace(`id:${coordinatorWorktreeId}`)
+        : await runtime.showManagedTerminalWorkspace(requestedWorktree)
+  if (terminal) {
+    await assertExplicitWorkerUsable({
       runtime,
-      terminal: params.terminal,
+      db,
+      terminal,
       from: params.from,
-      coordinatorPane,
+      coordinator,
       resolvedWorktreeId: resolvedWorktree?.id
     })
   }
-  const mode = await resolveWorkerStartModeOnHost(runtime, args.mode, resolvedWorktree?.id, agent)
+  const hostMode = resolveWorkerStartModeOnHost(runtime, args.mode, resolvedWorktree?.id, agent)
+  let mode = chatWorkerMode(await hostMode, chat)
 
   const startOptions = {
     worktree: requestedWorktree,
     mode,
     resolvedWorktreeId: resolvedWorktree?.id ?? null,
     name: params.name ?? null,
-    repo: params.repo ?? creationWorktree?.repoId ?? null,
+    repo: creationTarget?.repoSelector ?? params.repo ?? null,
     baseBranch: params.baseBranch ?? null,
     terminal: params.terminal ?? null,
     agent: agent ?? null,
@@ -101,24 +151,29 @@ export async function startLocalWorker(args: {
       : 'existing_worktree'
   }
   const started = db.createStartingWorkerDispatch({
-    creator: resolveDispatchCreator(runtime, params.from),
+    creator: resolveDispatchCreator(runtime, params.from, callerSession),
     maxDepth: runtime.getNestedWorkerMaxDepth(),
+    requiredCreatorDispatchId: args.helperCreator?.id,
     taskId: existingTask?.id,
     taskSpec: params.spec,
     taskTitle: params.taskTitle,
     taskDeps: parseTaskDeps(params.deps),
-    taskParentId: params.parent,
+    // A helper's Task sits under its creator's Task, so the Run's Task tree shows who started it.
+    taskParentId: params.parent ?? args.helperCreator?.task_id,
     taskRunId: run.id,
-    taskCreatedByTerminalHandle: params.from,
-    taskCreatedByPaneKey: coordinatorPane ?? undefined,
-    taskCreatedByProcessIncarnation:
-      runtime.getTerminalProcessIncarnation(params.from) ?? undefined,
+    // A handle-less session creates root Tasks: Task lineage is recorded by terminal only.
+    taskCreatedByTerminalHandle: coordinator?.terminalHandle ?? undefined,
+    taskCreatedByPaneKey: coordinator?.paneKey ?? undefined,
+    taskCreatedByProcessIncarnation: coordinator?.terminalHandle
+      ? (runtime.getTerminalProcessIncarnation(coordinator.terminalHandle) ?? undefined)
+      : undefined,
     taskCreatedByRunGeneration: run.consumer_generation,
     retryOf: params.retryOf,
     startOptions,
     runtimeEpoch: runtime.getRuntimeId(),
     mutationReceipt: orchestrationMutation
   })
+  releaseRetriedWorkerTerminal(runtime, db, params)
   const effects: WorkerEffect[] = []
   const task = started.task
   if (resolvedWorktree) {
@@ -128,74 +183,31 @@ export async function startLocalWorker(args: {
     )
   }
   let terminalHandle = params.terminal
-  let structuredSession: Awaited<
-    ReturnType<typeof createStructuredWorkerSessionForWorktree>
-  > | null = null
-  let terminalRevealWarning: string | undefined
+  let placed: Awaited<ReturnType<typeof placeWorkerAgent>> | undefined
   let failedStage = 'terminal_create'
-  let setupReceipt: WorkerSetupReceipt = {
-    requested: 'not_applicable',
-    effective: 'not_applicable',
-    source: 'existing_worktree',
-    hookFound: false,
-    startupPolicy: 'start-immediately',
-    state: 'not_applicable'
-  }
   try {
-    if (creationWorktree) {
-      failedStage = 'worktree_create'
-      const created = await createWorkerWorktree({
-        runtime,
-        db,
-        dispatchId: started.dispatch.id,
-        requestedWorktree,
-        coordinatorWorktree: creationWorktree,
-        params,
-        agent: agent as TuiAgent,
-        launchPreferences: launch.preferences,
-        effects
-      })
-      resolvedWorktree = created.worktree
-      terminalHandle = created.terminalHandle
-      setupReceipt = created.setupReceipt
-    } else if (!terminalHandle && mode.mode === 'structured') {
-      db.recordWorkerStage({
-        dispatchId: started.dispatch.id,
-        stage: 'terminal_creating',
-        worktreeId: resolvedWorktree!.id,
-        effects
-      })
-      structuredSession = await createStructuredWorkerSessionForWorktree({
-        runtime,
-        worktreeId: resolvedWorktree!.id,
-        agent: agent as TuiAgent,
-        dispatchId: started.dispatch.id,
-        effects
-      })
-      terminalHandle = structuredSession.identity.handle
-    } else if (!terminalHandle) {
-      db.recordWorkerStage({
-        dispatchId: started.dispatch.id,
-        stage: 'terminal_creating',
-        worktreeId: resolvedWorktree!.id,
-        effects
-      })
-      const terminal = await createExistingWorktreeWorkerTerminal({
-        runtime,
-        worktreeId: resolvedWorktree!.id,
-        agent: agent as TuiAgent,
-        launchPreferences: launch.preferences,
-        taskId: task.id,
-        effects
-      })
-      terminalHandle = terminal.handle
-      terminalRevealWarning = terminal.warning
-    } else {
-      effects.push({ kind: 'terminal', role: 'agent', action: 'reused', id: terminalHandle })
-    }
-    if (!resolvedWorktree || !terminalHandle) {
-      throw new Error('Worker topology did not resolve an agent terminal and worktree.')
-    }
+    placed = await placeWorkerAgent({
+      runtime,
+      db,
+      dispatchId: started.dispatch.id,
+      taskId: task.id,
+      params,
+      requestedWorktree,
+      creationTarget,
+      resolvedWorktree,
+      mode,
+      agent,
+      launchPreferences: launch.preferences,
+      effects,
+      onStage: (stage) => {
+        failedStage = stage
+      }
+    })
+    // New worktrees resolve host support after creation, so the final mode receipt may differ from preflight.
+    mode = placed.mode
+    resolvedWorktree = placed.worktree
+    terminalHandle = placed.terminalHandle
+    const { structuredSession, setupReceipt } = placed
     const setupStage = {
       db,
       dispatchId: started.dispatch.id,
@@ -212,13 +224,25 @@ export async function startLocalWorker(args: {
     persistWorkerReadinessStage(setupStage)
 
     failedStage = 'agent_readiness'
-    // A structured session is ready the moment its attach returns ok: there is no boot-to-idle
-    // gap and no terminal title to read an idle edge from.
-    if (!structuredSession) {
-      const wait = await runtime.waitForTerminal(terminalHandle, {
-        condition: 'tui-idle',
-        timeoutMs: params.timeoutMs ?? 60_000
-      })
+    // A structured worker's setup gate and its preamble's wait share one deadline: the timeout.
+    const readinessDeadline = Date.now() + (params.timeoutMs ?? 60_000)
+    // Structured readiness comes from preamble delivery, not TUI idle; only repo wait-for-setup policy gates here.
+    const wait = structuredSession
+      ? await awaitStructuredWorkerSetupGate({
+          runtime,
+          setup: setupReceipt,
+          effects,
+          timeoutMs: Math.max(0, readinessDeadline - Date.now())
+        })
+      : chat
+        ? // A chat takes its task as a queued send whatever it is doing, so nothing is waited on.
+          null
+        : await waitForWorkerAgentReady(runtime, terminalHandle, {
+            agent,
+            reusesTerminal: Boolean(params.terminal),
+            timeoutMs: params.timeoutMs ?? 60_000
+          })
+    if (wait) {
       persistWorkerSetupWaitOutcome({ ...setupStage, wait })
       if (!wait.satisfied) {
         if (setupReceipt.state === 'failed') {
@@ -226,13 +250,18 @@ export async function startLocalWorker(args: {
         }
         throw new Error(
           wait.blockedReason
-            ? `Agent startup blocked: ${wait.blockedReason}`
-            : `Agent did not become ready (${wait.status}).`
+            ? `Agent startup blocked: ${describeTerminalWaitBlockedReason(wait.blockedReason)}`
+            : structuredSession
+              ? `Setup did not finish before the structured worker started (${wait.status}).`
+              : `Agent did not become ready (${wait.status}).`
         )
       }
     }
-    const terminalAuthority = requireWorkerAuthority(runtime, terminalHandle)
-    const capability = db.prepareStartingWorkerAuthority({
+    // A chat has no pane or process; its Dispatch names it by its Orca session ID alone.
+    const terminalAuthority = chat
+      ? CHAT_WORKER_AUTHORITY
+      : requireWorkerAuthority(runtime, terminalHandle)
+    db.prepareStartingWorkerAuthority({
       dispatchId: started.dispatch.id,
       handle: terminalHandle,
       ...terminalAuthority,
@@ -242,64 +271,42 @@ export async function startLocalWorker(args: {
       terminalOwnership: params.terminal ? 'external' : 'created'
     })
 
-    failedStage = 'dispatch_input'
-    const promptDelivery = await deliverWorkerDispatchPreamble({
-      runtime,
-      structuredSession,
-      terminalHandle,
-      dispatchId: started.dispatch.id,
-      dispatchDepth: started.dispatch.depth,
-      taskId: task.id,
-      taskSpec: task.spec,
-      coordinatorHandle: params.from,
-      dispatchCapability: capability,
-      devMode: params.devMode,
-      requestId: orchestrationMutation?.requestId ?? started.dispatch.id
-    })
-    effects.push({
-      kind: 'dispatch_input',
-      role: 'agent',
-      id: terminalHandle,
-      state: 'accepted'
-    })
-    const worker = db.markWorkerDispatchReady(started.dispatch.id, effects)
-    monitorWorkerSetup({
+    return await deliverAndSettleWorkerStartReadiness({
       runtime,
       db,
-      runId: run.id,
+      run,
+      task,
       dispatchId: started.dispatch.id,
+      dispatchDepth: started.dispatch.depth,
+      structuredSession,
+      terminalHandle,
+      coordinatorHandle: params.from,
+      devMode: params.devMode,
+      requestId: orchestrationMutation?.requestId ?? started.dispatch.id,
+      agent: agent ?? null,
+      launchedAgent: params.terminal ? null : (agent ?? null),
       setupReceipt,
-      effects
-    })
-    return {
-      runId: run.id,
-      taskId: task.id,
-      dispatchId: started.dispatch.id,
-      state: worker.state,
-      stage: worker.stage,
-      setup: setupReceipt,
-      launch: launch.receipt,
+      launchReceipt: launch.receipt,
       mode,
       timeoutMs: params.timeoutMs ?? 60_000,
+      readinessDeadline,
       effects,
-      ...(promptDelivery ? { prompt: promptDelivery } : {}),
-      residualResources: [],
-      ...(terminalRevealWarning ? { warning: terminalRevealWarning } : {})
-    }
-  } catch (error) {
-    await tearDownFailedWorkerStart({
-      runtime,
-      structuredSession,
-      dispatchId: started.dispatch.id
+      terminalRevealWarning: placed.warning,
+      onStage: (stage) => {
+        failedStage = stage
+      }
     })
-    return failWorkerStartWithReceipt({
+  } catch (error) {
+    return await failWorkerStartWithReceipt({
+      runtime,
+      structuredSession: placed?.structuredSession ?? null,
       db,
       runId: run.id,
       taskId: task.id,
       dispatchId: started.dispatch.id,
       failedStage,
       error,
-      setup: setupReceipt,
+      setup: placed?.setupReceipt ?? EXISTING_WORKTREE_SETUP,
       launch: launch.receipt,
       mode
     })

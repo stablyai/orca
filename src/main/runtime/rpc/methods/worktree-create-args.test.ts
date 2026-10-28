@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { buildManagedWorktreeCreateArgs } from './worktree-create-args'
-import { WorktreeCreate } from './worktree-create-schemas'
+import { WorktreeCreate } from '../../../../shared/rpc-contract/worktree-create-params'
 
 const PROVENANCE = {
   automationProvenance: undefined,
@@ -12,9 +12,21 @@ const build = (params: Record<string, unknown>) =>
   buildManagedWorktreeCreateArgs(WorktreeCreate.parse(params), PROVENANCE)
 
 describe('buildManagedWorktreeCreateArgs', () => {
+  it('carries explicit existing intent through the RPC schema without inferring it for legacy names', () => {
+    const request = {
+      repo: 'repo-1',
+      name: 'feature/test',
+      baseBranch: 'origin/main',
+      branchNameOverride: 'feature/test'
+    }
+    expect(build(request)).not.toHaveProperty('branchIntent')
+    expect(build({ ...request, branchIntent: 'open-existing' })).toMatchObject({
+      branchIntent: 'open-existing'
+    })
+  })
+
   it('omits name provenance when the client did not claim a generated name', () => {
-    // Why: absent must mean user-typed. A truthy default would let the host permanently retire
-    // names people chose on purpose — the pool contains ordinary words like "orca" and "molly".
+    // Absent means user-typed: default true would permanently retire deliberate names such as orca and molly.
     expect(build({ repo: 'id:repo-1', name: 'nautilus' })).not.toHaveProperty('nameWasGenerated')
     expect(
       build({ repo: 'id:repo-1', name: 'nautilus', nameWasGenerated: false })
@@ -41,7 +53,7 @@ describe('buildManagedWorktreeCreateArgs', () => {
   })
 
   it('carries the parent-pick provenance only when the client marked it manual', () => {
-    // Why: older clients never send it, and those creates really are CLI-flag equivalents.
+    // Older clients omit this and retain CLI-flag behavior.
     expect(
       build({ repo: 'id:repo-1', name: 'child', parentWorkspace: 'folder:f1' }).lineage
     ).not.toHaveProperty('parentWorkspaceOrigin')
@@ -53,5 +65,36 @@ describe('buildManagedWorktreeCreateArgs', () => {
         parentWorkspaceOrigin: 'manual'
       }).lineage
     ).toMatchObject({ parentWorkspaceOrigin: 'manual' })
+  })
+
+  it('lets a person-driven create fall back to a local base, but not an automation run', () => {
+    expect(build({ repo: 'id:repo-1', name: 'feature' })).toMatchObject({
+      allowLocalBaseFallback: true
+    })
+    const automationRun = buildManagedWorktreeCreateArgs(
+      WorktreeCreate.parse({ repo: 'id:repo-1', name: 'nightly' }),
+      {
+        ...PROVENANCE,
+        automationProvenance: {
+          kind: 'created-by-automation',
+          automationId: 'automation-1',
+          automationNameSnapshot: 'Nightly',
+          automationRunId: 'run-1',
+          automationRunTitleSnapshot: 'Nightly run',
+          createdAt: 1,
+          executionTargetType: 'local',
+          executionTargetId: 'local',
+          projectId: 'repo-1'
+        }
+      }
+    )
+    expect(automationRun).not.toHaveProperty('allowLocalBaseFallback')
+  })
+})
+
+describe('worktree setup choice', () => {
+  it.each([false, true])('preserves the submitted choice across RPC (%s)', (setupOnly) => {
+    const params = WorktreeCreate.parse({ repo: 'repo-1', name: 'choice', setupOnly })
+    expect(buildManagedWorktreeCreateArgs(params, {})).toMatchObject({ setupOnly })
   })
 })

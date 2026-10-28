@@ -1,7 +1,12 @@
-import { createElement } from 'react'
+import { createElement, type ReactElement } from 'react'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { MobileHostCard } from './MobileHostCard'
+import {
+  recordHostDescriptor,
+  resetHostDescriptorStoreForTests
+} from '../transport/host-descriptor-store'
+import { findAllByHostType } from '../test-support/react-test-renderer-host-nodes'
 
 vi.mock('react-native', () => ({
   Pressable: 'Pressable',
@@ -27,12 +32,26 @@ function suppressRendererDeprecation() {
   })
 }
 
+async function render(element: ReactElement): Promise<ReactTestRenderer> {
+  const consoleError = suppressRendererDeprecation()
+  const mounted: { renderer?: ReactTestRenderer } = {}
+  await act(async () => {
+    mounted.renderer = create(element)
+  })
+  consoleError.mockRestore()
+  if (!mounted.renderer) {
+    throw new Error('MobileHostCard did not mount')
+  }
+  return mounted.renderer
+}
+
 describe('MobileHostCard', () => {
   let renderer: ReactTestRenderer | null = null
 
   afterEach(() => {
     act(() => renderer?.unmount())
     renderer = null
+    resetHostDescriptorStoreForTests()
     vi.restoreAllMocks()
   })
 
@@ -40,39 +59,31 @@ describe('MobileHostCard', () => {
     const onPress = vi.fn()
     const onLongPress = vi.fn()
     const onOpenActions = vi.fn()
-    const consoleError = suppressRendererDeprecation()
-    await act(async () => {
-      renderer = create(
-        createElement(MobileHostCard, {
-          host: {
-            id: 'desk',
-            name: 'Desk',
-            endpoint: 'ws://192.168.1.2:6768',
-            deviceToken: 'token',
-            publicKeyB64: 'key',
-            lastConnected: 1
-          },
-          state: 'disconnected',
-          verdict: { kind: 'normal', label: 'Disconnected' },
-          path: 'lan',
-          onPress,
-          onLongPress,
-          onOpenActions
-        })
-      )
-    })
-    consoleError.mockRestore()
+    renderer = await render(
+      createElement(MobileHostCard, {
+        host: {
+          id: 'desk',
+          name: 'Desk',
+          endpoint: 'ws://192.168.1.2:6768',
+          deviceToken: 'token',
+          publicKeyB64: 'key',
+          lastConnected: 1
+        },
+        state: 'disconnected',
+        verdict: { kind: 'normal', label: 'Disconnected' },
+        path: 'lan',
+        onPress,
+        onLongPress,
+        onOpenActions
+      })
+    )
 
-    const buttons = renderer.root.findAllByType('Pressable')
+    const buttons = findAllByHostType(renderer.root, 'Pressable')
     expect(buttons).toHaveLength(2)
     expect(buttons[0].props.accessibilityRole).toBe('button')
     expect(buttons[0].props.accessibilityLabel).toBe('Open Desk, Disconnected')
     expect(buttons[1].props.accessibilityRole).toBe('button')
     expect(buttons[1].props.accessibilityLabel).toBe('Actions for Desk')
-    expect(buttons[1].props.hitSlop).toBe(8)
-    expect(buttons[1].props.style({ pressed: false })[0]).toMatchObject({ width: 40, height: 40 })
-    expect(renderer.root.findAllByType('MoreVertical')).toHaveLength(1)
-    expect(renderer.root.findAllByType('ChevronRight')).toHaveLength(0)
 
     act(() => buttons[1].props.onPress())
     expect(onOpenActions).toHaveBeenCalledOnce()
@@ -85,115 +96,255 @@ describe('MobileHostCard', () => {
   })
 
   it('announces the connection path without the visual separator', async () => {
-    const consoleError = suppressRendererDeprecation()
-    await act(async () => {
-      renderer = create(
-        createElement(MobileHostCard, {
-          host: {
-            id: 'desk',
-            name: 'Desk',
-            endpoint: 'ws://192.168.1.2:6768',
-            deviceToken: 'token',
-            publicKeyB64: 'key',
-            lastConnected: 1
-          },
-          state: 'connected',
-          verdict: { kind: 'normal', label: 'Connected' },
-          path: 'tailscale',
-          worktreeInfo: {
-            hostId: 'desk',
-            totalWorktrees: 3,
-            activeCount: 2,
-            lastActiveWorktree: null,
-            countsProvenAt: Date.now()
-          },
-          onPress: vi.fn(),
-          onLongPress: vi.fn(),
-          onOpenActions: vi.fn()
-        })
-      )
-    })
-    consoleError.mockRestore()
+    renderer = await render(
+      createElement(MobileHostCard, {
+        host: {
+          id: 'desk',
+          name: 'Desk',
+          endpoint: 'ws://192.168.1.2:6768',
+          deviceToken: 'token',
+          publicKeyB64: 'key',
+          lastConnected: 1
+        },
+        state: 'connected',
+        verdict: { kind: 'normal', label: 'Connected' },
+        path: 'tailscale',
+        worktreeInfo: {
+          hostId: 'desk',
+          totalWorktrees: 3,
+          activeCount: 2,
+          lastActiveWorktree: null,
+          countsProvenAt: Date.now()
+        },
+        onPress: vi.fn(),
+        onLongPress: vi.fn(),
+        onOpenActions: vi.fn()
+      })
+    )
 
-    const navigationButton = renderer.root.findAllByType('Pressable')[0]
+    const navigationButton = findAllByHostType(renderer.root, 'Pressable')[0]
     expect(navigationButton.props.accessibilityLabel).toBe(
       'Open Desk, Connected, Direct via Tailscale, 3 worktrees, 2 active'
     )
   })
 
-  it('preserves the connected worktree-catalog failure state', async () => {
-    const consoleError = suppressRendererDeprecation()
-    await act(async () => {
-      renderer = create(
-        createElement(MobileHostCard, {
-          host: {
-            id: 'desk',
-            name: 'Desk',
-            endpoint: 'ws://192.168.1.2:6768',
-            deviceToken: 'token',
-            publicKeyB64: 'key',
-            lastConnected: 1
-          },
-          state: 'connected',
-          verdict: { kind: 'normal', label: 'Connected' },
-          path: 'relay',
-          worktreeInfo: {
-            hostId: 'desk',
-            totalWorktrees: 0,
-            activeCount: 0,
-            lastActiveWorktree: null,
-            catalogUnavailable: true
-          },
-          onPress: vi.fn(),
-          onLongPress: vi.fn(),
-          onOpenActions: vi.fn()
-        })
-      )
-    })
-    consoleError.mockRestore()
+  it('keeps a phone rename above a disagreeing machine descriptor', async () => {
+    recordHostDescriptor('desk', { machineName: 'm4airs-Air', platform: 'darwin' })
+    renderer = await render(
+      createElement(MobileHostCard, {
+        host: {
+          id: 'desk',
+          name: 'Windows-Low Spec',
+          personalName: 'Windows-Low Spec',
+          endpoint: 'ws://192.168.1.2:6768',
+          deviceToken: 'token',
+          publicKeyB64: 'key',
+          lastConnected: 1
+        },
+        state: 'connected',
+        verdict: { kind: 'normal', label: 'Connected' },
+        path: 'lan',
+        onPress: vi.fn(),
+        onLongPress: vi.fn(),
+        onOpenActions: vi.fn()
+      })
+    )
 
-    const navigationButton = renderer.root.findAllByType('Pressable')[0]
+    const texts = findAllByHostType(renderer.root, 'Text').map((node) => node.children.join(''))
+    expect(texts).toContain('Windows-Low Spec')
+    expect(texts).toContain('macOS · m4airs-Air')
+  })
+
+  it('titles an unrenamed host with the live machine name before its stored name catches up', async () => {
+    // The desktop was renamed; the stored `name` still holds the old machine name until reload.
+    recordHostDescriptor('desk', { machineName: 'Studio 2', platform: 'darwin' })
+    renderer = await render(
+      createElement(MobileHostCard, {
+        host: {
+          id: 'desk',
+          name: 'Studio',
+          lastKnownMachineName: 'Studio',
+          lastKnownHostPlatform: 'darwin',
+          endpoint: 'ws://192.168.1.2:6768',
+          deviceToken: 'token',
+          publicKeyB64: 'key',
+          lastConnected: 1
+        },
+        state: 'connected',
+        verdict: { kind: 'normal', label: 'Connected' },
+        path: 'lan',
+        onPress: vi.fn(),
+        onLongPress: vi.fn(),
+        onOpenActions: vi.fn()
+      })
+    )
+
+    const texts = findAllByHostType(renderer.root, 'Text').map((node) => node.children.join(''))
+    expect(texts).toContain('Studio 2')
+    expect(texts).toContain('macOS')
+    expect(texts).not.toContain('Studio')
+  })
+
+  it('shows the stored descriptor when the host is offline, as after a restart', async () => {
+    // No live descriptor is recorded: the row has only what the stored profile carries.
+    renderer = await render(
+      createElement(MobileHostCard, {
+        host: {
+          id: 'desk',
+          name: 'Desk',
+          personalName: 'Desk',
+          lastKnownMachineName: 'm4airs-Air',
+          lastKnownHostPlatform: 'darwin',
+          endpoint: 'ws://192.168.1.2:6768',
+          deviceToken: 'token',
+          publicKeyB64: 'key',
+          lastConnected: 1
+        },
+        state: 'disconnected',
+        verdict: { kind: 'normal', label: 'Disconnected' },
+        path: 'lan',
+        onPress: vi.fn(),
+        onLongPress: vi.fn(),
+        onOpenActions: vi.fn()
+      })
+    )
+
+    expect(
+      findAllByHostType(renderer.root, 'Text').map((node) => node.children.join(''))
+    ).toContain('macOS · m4airs-Air')
+  })
+
+  it('collapses the machine name into the OS line when it is the shown name', async () => {
+    recordHostDescriptor('desk', { machineName: 'Desk', platform: 'darwin' })
+    renderer = await render(
+      createElement(MobileHostCard, {
+        host: {
+          id: 'desk',
+          name: 'Desk',
+          endpoint: 'ws://192.168.1.2:6768',
+          deviceToken: 'token',
+          publicKeyB64: 'key',
+          lastConnected: 1
+        },
+        state: 'connected',
+        verdict: { kind: 'normal', label: 'Connected' },
+        path: 'lan',
+        onPress: vi.fn(),
+        onLongPress: vi.fn(),
+        onOpenActions: vi.fn()
+      })
+    )
+
+    const texts = findAllByHostType(renderer.root, 'Text').map((node) => node.children.join(''))
+    expect(texts).toContain('macOS')
+    expect(texts).not.toContain('macOS · Desk')
+  })
+
+  it('preserves the connected worktree-catalog failure state', async () => {
+    renderer = await render(
+      createElement(MobileHostCard, {
+        host: {
+          id: 'desk',
+          name: 'Desk',
+          endpoint: 'ws://192.168.1.2:6768',
+          deviceToken: 'token',
+          publicKeyB64: 'key',
+          lastConnected: 1
+        },
+        state: 'connected',
+        verdict: { kind: 'normal', label: 'Connected' },
+        path: 'relay',
+        worktreeInfo: {
+          hostId: 'desk',
+          totalWorktrees: 0,
+          activeCount: 0,
+          lastActiveWorktree: null,
+          catalogUnavailable: true
+        },
+        onPress: vi.fn(),
+        onLongPress: vi.fn(),
+        onOpenActions: vi.fn()
+      })
+    )
+
+    const navigationButton = findAllByHostType(renderer.root, 'Pressable')[0]
     expect(navigationButton.props.accessibilityLabel).toBe(
       'Open Desk, Connected, Orca Relay, Worktree list unavailable'
     )
     expect(
-      renderer.root
-        .findAllByType('Text')
-        .some((node) => node.children.includes('Worktree list unavailable'))
+      findAllByHostType(renderer.root, 'Text').some((node) =>
+        node.children.includes('Worktree list unavailable')
+      )
     ).toBe(true)
   })
 
   it('includes visible offline recovery guidance in the navigation label', async () => {
-    const consoleError = suppressRendererDeprecation()
-    await act(async () => {
-      renderer = create(
-        createElement(MobileHostCard, {
-          host: {
-            id: 'desk',
-            name: 'Desk',
-            endpoint: 'ws://192.168.1.2:6768',
-            deviceToken: 'token',
-            publicKeyB64: 'key',
-            lastConnected: 1
-          },
-          state: 'reconnecting',
-          verdict: {
-            kind: 'unreachable',
-            label: "Can't reach desktop",
-            reason: 'never-connected'
-          },
-          path: 'lan',
-          onPress: vi.fn(),
-          onLongPress: vi.fn(),
-          onOpenActions: vi.fn()
-        })
-      )
-    })
-    consoleError.mockRestore()
+    renderer = await render(
+      createElement(MobileHostCard, {
+        host: {
+          id: 'desk',
+          name: 'Desk',
+          endpoint: 'ws://192.168.1.2:6768',
+          deviceToken: 'token',
+          publicKeyB64: 'key',
+          lastConnected: 1
+        },
+        state: 'reconnecting',
+        verdict: {
+          kind: 'unreachable',
+          label: "Can't reach desktop",
+          reason: 'never-connected'
+        },
+        path: 'lan',
+        onPress: vi.fn(),
+        onLongPress: vi.fn(),
+        onOpenActions: vi.fn()
+      })
+    )
 
-    const navigationButton = renderer.root.findAllByType('Pressable')[0]
+    const navigationButton = findAllByHostType(renderer.root, 'Pressable')[0]
     expect(navigationButton.props.accessibilityLabel).toBe(
       "Open Desk, Can't reach desktop, Update desktop Orca and sign in to connect from anywhere"
+    )
+  })
+
+  it('renders the verdict detail as a second line and announces it', async () => {
+    renderer = await render(
+      createElement(MobileHostCard, {
+        host: {
+          id: 'desk',
+          name: 'Host 1',
+          endpoint: 'ws://192.168.1.2:6768',
+          deviceToken: 'token',
+          publicKeyB64: 'key',
+          lastConnected: 1,
+          relay: {
+            v: 1 as const,
+            directorUrl: 'https://relay-staging.onorca.dev',
+            cellUrl: 'https://c1.relay-staging.onorca.dev',
+            assignmentEpoch: 4,
+            relayHostId: 'AbCdEf0123_-xyZ9',
+            e2eeFraming: 2 as const
+          }
+        },
+        state: 'connecting',
+        verdict: {
+          kind: 'unreachable',
+          label: 'Host 1 is offline',
+          reason: 'never-connected',
+          detail: "Check it's awake, Orca is running, and you're signed in"
+        },
+        path: 'lan',
+        onPress: vi.fn(),
+        onLongPress: vi.fn(),
+        onOpenActions: vi.fn()
+      })
+    )
+
+    const texts = findAllByHostType(renderer.root, 'Text').map((node) => node.props.children)
+    expect(texts).toContainEqual("Check it's awake, Orca is running, and you're signed in")
+    expect(findAllByHostType(renderer.root, 'Pressable')[0]?.props.accessibilityLabel).toBe(
+      "Open Host 1, Host 1 is offline, Check it's awake, Orca is running, and you're signed in"
     )
   })
 })

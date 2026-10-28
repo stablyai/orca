@@ -1,3 +1,4 @@
+import './unused-default-rpc-methods.test-fixture'
 import { describe, expect, it, vi } from 'vitest'
 import { RpcDispatcher } from './dispatcher'
 import { TERMINAL_METHODS } from './methods/terminal'
@@ -20,13 +21,11 @@ describe('terminal multiplex RPC', () => {
       (frame: NonNullable<ReturnType<typeof decodeTerminalStreamFrame>>) => void
     >()
     const cleanups = new Map<string, () => void>()
-    // Why: a leaked registration permanently suppresses the model query
-    // responder (terminal-query-authority.md) — the count must return to 0.
+    // Leaked view registrations suppress model query replies permanently; count must return to zero (terminal-query-authority.md).
     let viewSubscriberCount = 0
     let leafResolved = false
     let resolveFirstWait: (ptyId: string) => void = () => {}
-    // Why: the multiplex subscribe path resolves via resolveLiveLeafForHandle
-    // (#7718); null makes subscribe A block in waitForLeafPtyId until B resolves.
+    // Null live-handle resolution parks A in waitForLeafPtyId until B resolves (#7718).
     const resolveLeaf = (): { ptyId: string | null } =>
       leafResolved ? { ptyId: 'pty-1' } : { ptyId: null }
     const runtime = stubRuntime({
@@ -98,8 +97,7 @@ describe('terminal multiplex RPC', () => {
       )
     }
 
-    // Subscribe A blocks in waitForLeafPtyId; subscribe B (same streamId)
-    // then resolves the leaf directly and fully registers.
+    // A waits for PTY; B resolves the same streamId directly and registers.
     sendSubscribe()
     await vi.waitFor(() => expect(runtime.waitForLeafPtyId).toHaveBeenCalled())
     leafResolved = true
@@ -110,8 +108,7 @@ describe('terminal multiplex RPC', () => {
       )
     )
 
-    // A resumes and takes the slot; B's registration must be released, not
-    // orphaned by the overwrite.
+    // When A resumes and takes the slot, release B's registration rather than orphan it.
     resolveFirstWait('pty-1')
     await vi.waitFor(() =>
       expect(messages.filter((msg) => JSON.parse(msg).result?.type === 'subscribed')).toHaveLength(
@@ -150,8 +147,6 @@ describe('terminal multiplex RPC', () => {
     }[] = []
     const runtime = stubRuntime({
       resolveLeafForHandle: vi.fn().mockReturnValue({ ptyId: 'pty-1' }),
-      // Why: the multiplex subscribe path resolves the leaf via
-      // resolveLiveLeafForHandle (#7718), so it must return a live pty here.
       resolveLiveLeafForHandle: vi.fn().mockReturnValue({ ptyId: 'pty-1' }),
       registerRemoteTerminalViewSubscriber: vi.fn(() => {
         viewSubscriberCount += 1
@@ -218,8 +213,7 @@ describe('terminal multiplex RPC', () => {
       )
     }
 
-    // A registers, then blocks in handleMobileSubscribe. B (same streamId)
-    // evicts A on arrival and completes its own registration.
+    // A registers then waits in layout; B evicts it and completes registration.
     sendSubscribe()
     await vi.waitFor(() => expect(mobileSubscribeWaiters).toHaveLength(1))
     sendSubscribe()
@@ -232,8 +226,7 @@ describe('terminal multiplex RPC', () => {
     )
     expect(viewSubscriberCount).toBe(1)
 
-    // A's pending await now rejects. The evicted stream must not detach the
-    // successor that owns the slot.
+    // A's failed continuation must not detach successor B.
     mobileSubscribeWaiters[0]!.reject(new Error('mobile_subscribe_failed'))
     await Promise.resolve()
     await Promise.resolve()
@@ -245,10 +238,7 @@ describe('terminal multiplex RPC', () => {
   })
 
   it('rejects a stale terminal handle with terminal_handle_stale instead of binding the wrong PTY', async () => {
-    // Why: after a reconnect a client can resubscribe with a handle whose
-    // pane now hosts a different PTY. Binding the stream anyway would mirror
-    // (and type into) the wrong terminal (#7718); the client recovers from
-    // terminal_handle_stale by re-deriving the handle from the next snapshot.
+    // Refuse stale handles rather than mirror/type into a replacement PTY (#7718); clients rederive from the next snapshot.
     const messages: string[] = []
     const binaryFrames: Uint8Array<ArrayBufferLike>[] = []
     const handlers = new Map<
@@ -314,7 +304,6 @@ describe('terminal multiplex RPC', () => {
       .map((frame) => decodeTerminalStreamFrame(frame))
       .find((frame) => frame?.opcode === TerminalStreamOpcode.Error)
     expect(errorFrame && decodeTerminalStreamText(errorFrame.payload)).toBe('terminal_handle_stale')
-    // The stream must never have bound to any PTY.
     expect(runtime.subscribeToTerminalData).not.toHaveBeenCalled()
 
     cleanups.get('terminal-multiplex:conn-stale-handle')?.()

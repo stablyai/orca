@@ -1,23 +1,6 @@
-/**
- * How many grid cells does an end-of-row preedit overlay actually occupy on screen?
- *
- * #12729 reported a black block over the last syllable of `가나다라`, and measured it at one cell
- * wide (14px against a 14px grid). We answer that report by saying the block is the preedit
- * overlay, not the cursor — but an overlay holding one Hangul syllable is shrink-to-fit around a
- * full-width glyph, so it should span about two cells, not one. That mismatch is the only measured
- * quantity in the report that argues against our explanation, and nothing in the unit suite can
- * settle it: `CompositionHelper` sets `maxWidth` but never `width`, so the rendered width comes
- * entirely from layout, and happy-dom reports every rect as zero.
- *
- * So this is the arm that measures it. If it fails, our answer to #12729 is wrong and the report's
- * one-cell measurement was right.
- *
- * The assertion is a floor, not a band. How many cells a syllable occupies is a function of the
- * runner's font metrics and fallback — the mid-line spec records a preedit measured at 34.4px over
- * an 8.43px grid, which is four cells, not two — so pinning "about two" would pin the machine. The
- * claim under test is only that the overlay is materially wider than the single cell the report
- * measured, which is what discriminates the overlay from the cursor.
- */
+// #12729 measured a one-cell black block, inconsistent with a full-width Hangul preedit overlay.
+// Measure real browser width: shrink-to-fit layout is invisible to zero-rect DOM emulators.
+// Assert only a >one-cell floor because font fallback can span four cells; an exact two-cell band would pin the runner.
 import type { Page } from '@stablyai/playwright-test'
 import { expect, test } from './helpers/orca-app'
 import { closeTerminalImePaneArena, openTerminalImePaneArena } from './terminal-ime-pane-arena'
@@ -32,11 +15,7 @@ import { samplePreeditOverlay } from './terminal-ime-preedit-overlay-probe'
 /** Below this the overlay is the one-cell block the report measured; above it, a full-width glyph. */
 const MIN_CELLS_FOR_A_FULL_WIDTH_SYLLABLE = 1.5
 
-/**
- * Waits for the preedit to reach the overlay at a non-zero size, then samples once — the pane runs
- * a live shell that can repaint the row, so only the frame the composition opened on carries the
- * state under assertion.
- */
+// Sample once after nonzero preedit readiness: a live shell can repaint the row after the composition frame.
 async function sampleOpenComposition(page: Page): Promise<MidlinePreeditOcclusionSample> {
   await expect
     .poll(
@@ -129,8 +108,7 @@ test.describe('Terminal end-of-row Korean preedit cell span', () => {
     const arena = await openTerminalImePaneArena(orcaPage)
     let completed = false
     try {
-      // 안녕하세요 is ten cells, so the cursor lands at the end of the row with nothing after it —
-      // the shape #12729 hits, and the one where the overlay carries the preedit alone.
+      // 안녕하세요 spans ten cells, leaving the end-of-row overlay with only preedit, matching #12729.
       await writeToActiveTerminal(orcaPage, '\x1b[2J\x1b[H안녕하세요')
       await setImeComposition(arena.session, '가')
 
@@ -142,9 +120,7 @@ test.describe('Terminal end-of-row Korean preedit cell span', () => {
         'the grid reported no cell width to measure against'
       ).toBeGreaterThan(0)
 
-      // The load-bearing assertion, and the one no unit arm can make: a preedit overlay holding a
-      // full-width syllable is wider than a single cell, so the one-cell block in the report
-      // cannot be an overlay rendering the same way this one does.
+      // Require a full-width preedit wider than the reported single-cell block.
       expect(
         sample.overlayRect.width / sample.cellWidth,
         `a composing Hangul syllable must occupy more than one cell — ${describeSpan(sample)}`

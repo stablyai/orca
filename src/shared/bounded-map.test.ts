@@ -89,8 +89,7 @@ describe('BoundedMap', () => {
 
   it('never reports success for an entry it did not retain', () => {
     const onEvict = vi.fn()
-    // maxEntryBytes above maxBytes previously admitted an entry, then evicted it (and everything
-    // else) to satisfy the aggregate — set() returned true for a key the map no longer held.
+    // An entry ceiling above total once admitted then evicted the same key while set returned true.
     const m = new BoundedMap<string, string>({
       maxEntries: 10,
       maxBytes: 3,

@@ -1,13 +1,13 @@
-import { POST_REPLAY_DEAD_TUI_RESET } from '../../shared/terminal-mode-reset-profiles'
 import { TerminalShellCleanExitConfirmation } from './terminal-shell-clean-exit-confirmation'
 import { TerminalShellLifecycleScanner } from './terminal-shell-lifecycle-scanner'
 import type { PtyIngressEmission } from '../../shared/pty-startup-ingress'
 import type { TerminalOwner } from '../../shared/terminal-owner'
 
-// Why bounded: a pause only bridges one process proof (~100ms measured p95); a
-// flood or hang means the trigger misfired, so bail out and flush unmodified.
+// Bound proof latency and queued output; timeout or overflow releases the original stream.
 const MAX_QUEUED_BYTES = 262_144
 const MAX_PENDING_MS = 750
+// Keep the reset’s indivisible source span small enough for relay delivery.
+const MAX_HELD_MARK_CHARS = 4096
 
 export type TerminalShellRecoveryBarrierOptions = {
   /** Fresh execution-host proof that the spawned shell owns the PTY foreground. */
@@ -19,19 +19,7 @@ export type TerminalShellRecoveryBarrierOptions = {
   maxPendingMs?: number
 }
 
-/**
- * Ordered output barrier for dead-TUI mode recovery. Sits between startup
- * ingress and the output plane. When a shell-integration command-done marker
- * (OSC 133;D) arrives while the alternate screen is still active, the stream
- * pauses at that exact byte boundary, the execution host proves the shell owns
- * the PTY foreground, and on proof a mode reset is injected as in-stream output
- * so every downstream consumer (host emulator, mirrors, attached renderers,
- * history) converges — and the queued shell prompt then paints onto the normal
- * buffer instead of the discarded alternate screen. Any failure (refuted proof,
- * timeout, overflow, death, disposal) flushes the queue unmodified, preserving
- * incumbent behavior. Clean alternate-screen exits prove ownership without
- * pausing: the model needs no correction, only snapshot metadata.
- */
+/** Hold suspected-death output for foreground proof; attach resets to a raw marker so relay credit and snapshot dedup retain them. */
 export class TerminalShellRecoveryBarrier {
   private readonly scanner = new TerminalShellLifecycleScanner()
   private readonly confirmShellForeground: () => Promise<boolean>
@@ -44,7 +32,6 @@ export class TerminalShellRecoveryBarrier {
   private queuedBytes = 0
   private pending = false
   private pendingGeneration = 0
-  private pendingRawSeq = 0
   private pendingEpisode = 0
   private bailTimer: ReturnType<typeof setTimeout> | null = null
   private idleWaiters: (() => void)[] = []
@@ -81,10 +68,12 @@ export class TerminalShellRecoveryBarrier {
     return this.scanner.owner
   }
 
-  /** Answers a paired runtime's ownership question from the barrier's settled
-   *  state. The barrier scans bytes before any consumer receives them, so its
-   *  verdict is never behind the caller's parse position — a fresh process
-   *  inspection here would prove nothing the barrier didn't already. */
+  /** Return a local ground without broadcasting; relay credit and snapshot dedup drop zero-raw resets. */
+  groundInputModes(): string {
+    return this.scanner.groundProcessBoundary()
+  }
+
+  /** Reuse settled barrier evidence because downstream consumers cannot be ahead of its scan position. */
   async confirmOwnerSettled(): Promise<boolean> {
     if (this.scanner.owner === 'shell') {
       return true
@@ -93,10 +82,7 @@ export class TerminalShellRecoveryBarrier {
     return this.scanner.owner === 'shell'
   }
 
-  /** Synchronous bail for teardown: resolves the current episode as refuted so
-   *  the queued bytes reach the emulator and records before a final snapshot.
-   *  Queue replay can re-enter pending on a nested trigger, so drain to
-   *  completion — bounded, because a pathological stream must not spin teardown. */
+  /** Flush before final snapshots; cap nested rescans so teardown cannot spin forever. */
   flushPending(): void {
     for (let guard = 0; this.pending && guard < 16; guard += 1) {
       this.finishPending(this.pendingEpisode, false)
@@ -104,9 +90,7 @@ export class TerminalShellRecoveryBarrier {
     if (!this.pending) {
       return
     }
-    // Pathological episode storm: stop rescanning but never drop bytes. The
-    // scanner's model is stale from here on — a checkpoint after this may
-    // publish a stale owner, acceptable only past a >16-nested-episode storm.
+    // After 16 nested episodes, preserve queued bytes without rescanning; ownership may remain stale.
     const queued = this.queue
     this.queue = []
     this.queuedBytes = 0
@@ -125,9 +109,7 @@ export class TerminalShellRecoveryBarrier {
     this.resolveIdleWaiters()
   }
 
-  /** Resolves when the current recovery episode (if any) has settled. Bounded
-   *  by the bail timer; resolves at each episode boundary so a hostile stream
-   *  of back-to-back episodes cannot starve an attach. */
+  /** Resolve at each episode boundary so repeated triggers cannot starve an attach. */
   idle(): Promise<void> {
     if (!this.pending) {
       return Promise.resolve()
@@ -135,11 +117,7 @@ export class TerminalShellRecoveryBarrier {
     return new Promise((resolve) => this.idleWaiters.push(resolve))
   }
 
-  /** Like idle(), but also waits out an in-flight clean-exit proof so snapshot
-   *  and RPC readers see a settled owner. A generation advance past the entry
-   *  point ends the wait (that proof is stale), and the wait itself is bounded
-   *  by the barrier's own budget — attach latency must never inherit a slow
-   *  out-of-process inspection; an unsettled proof just reads as no owner. */
+  /** Bound waits for recovery and clean-exit proofs; a newer generation makes the requested proof stale. */
   async awaitProofSettled(): Promise<void> {
     const target = this.scanner.generation
     let deadlineHit = false
@@ -169,8 +147,7 @@ export class TerminalShellRecoveryBarrier {
       clearTimeout(this.bailTimer)
       this.bailTimer = null
     }
-    // Callers flush first (exit, dispose, prepareForFinalSnapshot); anything
-    // still queued here has no live downstream left to receive it.
+    // Callers must flush before disposal; no live sink remains for queued output.
     this.queue = []
     this.queuedBytes = 0
     this.pending = false
@@ -189,34 +166,40 @@ export class TerminalShellRecoveryBarrier {
       return
     }
     const splittable =
-      !emission.transformed && emission.rawEndSeq - emission.rawStartSeq === emission.data.length
+      end >= 1 &&
+      !emission.transformed &&
+      emission.rawEndSeq - emission.rawStartSeq === emission.data.length
     if (!splittable) {
-      // Why skip the episode: the raw-seq boundary inside a transformed emission
-      // cannot be reconstructed, so release everything and keep the scanner
-      // honest about the remainder — incumbent behavior for this rare corner.
+      // Transformed spans lack a recoverable raw split point; release unchanged and scan the remainder.
       try {
         this.releaseDownstream(emission)
       } catch {
-        // Why swallowed: emit already wrote and recorded before a client threw;
-        // the scanner must still advance past the remainder below.
+        // A client may throw after recording; the scanner must still advance.
       }
       this.consumeForStateOnly(emission.data.slice(end))
       return
     }
+    const start = Math.max(events.uncleanDeathTriggerStart ?? 0, end - MAX_HELD_MARK_CHARS)
+    const markSeq = emission.rawStartSeq + start
     const splitSeq = emission.rawStartSeq + end
-    try {
-      this.releaseDownstream({
-        data: emission.data.slice(0, end),
-        rawStartSeq: emission.rawStartSeq,
-        rawEndSeq: splitSeq,
-        transformed: false
-      })
-    } catch {
-      // Why swallowed: the emulator and records already took the head inside
-      // emit before a client's broadcast threw; aborting here would cost the
-      // post-boundary prompt its entire recovery episode.
+    if (start > 0) {
+      try {
+        this.releaseDownstream({
+          data: emission.data.slice(0, start),
+          rawStartSeq: emission.rawStartSeq,
+          rawEndSeq: markSeq,
+          transformed: false
+        })
+      } catch {
+        // A client failure must not prevent recovery of the remaining prompt.
+      }
     }
-    this.enterPending(splitSeq)
+    this.enterPending({
+      data: emission.data.slice(start, end),
+      rawStartSeq: markSeq,
+      rawEndSeq: splitSeq,
+      transformed: false
+    })
     if (end < emission.data.length) {
       this.enqueue({
         data: emission.data.slice(end),
@@ -241,24 +224,22 @@ export class TerminalShellRecoveryBarrier {
     }
   }
 
-  private enterPending(rawSeq: number): void {
+  private enterPending(mark: PtyIngressEmission): void {
     this.pending = true
     this.pendingEpisode += 1
     this.pendingGeneration = this.scanner.generation
-    this.pendingRawSeq = rawSeq
     const episode = this.pendingEpisode
     this.bailTimer = setTimeout(() => this.finishPending(episode, false), this.maxPendingMs)
     this.bailTimer.unref?.()
-    // Why the guard: the callback is injected; a synchronous throw must not
-    // escape after pending flipped true and strand the episode until the bail.
+    this.enqueue(mark)
+    // Injected callbacks may throw synchronously; still settle the recovery episode.
     let proof: Promise<boolean>
     try {
       proof = this.confirmShellForeground()
     } catch {
       proof = Promise.resolve(false)
     }
-    // Why the two-step then: a throw escaping finishPending must not re-enter
-    // it through a catch arm as a phantom refutation.
+    // Handle proof rejection before finishPending so its own exceptions cannot refute the episode again.
     void proof
       .then(
         (confirmed) => confirmed,
@@ -280,43 +261,47 @@ export class TerminalShellRecoveryBarrier {
     this.queue = []
     this.queuedBytes = 0
     try {
-      if (confirmed && this.isAlive()) {
-        // Scanned before release so alt-state stays honest; the reset bytes are
-        // deliberately inert for ownership (no OSC 133, no TUI mode enables).
-        this.scanner.scan(POST_REPLAY_DEAD_TUI_RESET)
-        try {
-          this.releaseDownstream({
-            data: POST_REPLAY_DEAD_TUI_RESET,
-            rawStartSeq: this.pendingRawSeq,
-            rawEndSeq: this.pendingRawSeq,
-            transformed: true
-          })
-        } catch {
-          // Why swallowed: a throwing downstream client must not strand the
-          // queued prompt bytes below.
-        }
-        this.scanner.trySetOwner(this.pendingGeneration)
+      const mark = queued.shift()
+      if (mark) {
+        this.releaseMark(mark, confirmed && this.isAlive())
       }
       for (let index = 0; index < queued.length; index += 1) {
         if (this.disposed) {
           break
         }
         if (this.pending) {
-          // A nested trigger inside the queue re-entered pending; requeue the rest.
           this.enqueue(queued[index]!)
           continue
         }
         try {
           this.scanAndRelease(queued[index]!)
         } catch {
-          // Why swallowed: one throwing downstream client must not cost the
-          // rest of the queue its delivery.
+          // A downstream failure must not prevent delivery of the remaining queue.
         }
       }
     } finally {
-      // Why finally: an escaping throw must never orphan an attach waiting in
-      // settleShellOwnershipConfirmation — that wedges createOrAttach forever.
+      // Always release attach waiters, including after downstream failures.
       this.resolveIdleWaiters()
+    }
+  }
+
+  private releaseMark(mark: PtyIngressEmission, grounded: boolean): void {
+    try {
+      this.releaseDownstream(
+        grounded
+          ? {
+              ...mark,
+              // Ground the scanner before downstream consumers see the reset.
+              data: mark.data + this.scanner.groundProcessBoundary(),
+              transformed: true
+            }
+          : mark
+      )
+    } catch {
+      // A downstream failure must not strand the remaining prompt bytes.
+    }
+    if (grounded) {
+      this.scanner.trySetOwner(this.pendingGeneration)
     }
   }
 

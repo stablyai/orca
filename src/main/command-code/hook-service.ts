@@ -9,11 +9,11 @@ import {
   readHooksJson,
   removeManagedCommands,
   wrapPosixHookCommand,
-  wrapWindowsHookCommand,
   writeHooksJson,
   writeManagedScript,
   type HookDefinition
 } from '../agent-hooks/installer-utils'
+import { wrapWindowsBatchHookCommand } from '../agent-hooks/windows-direct-cmd-hook-command'
 import { refreshManagedScriptIfPresent } from '../agent-hooks/managed-hook-script-refresh'
 import {
   readHooksJsonRemote,
@@ -48,7 +48,7 @@ function getManagedScriptPath(): string {
 
 function getManagedCommand(scriptPath: string): string {
   return process.platform === 'win32'
-    ? wrapWindowsHookCommand(scriptPath)
+    ? wrapWindowsBatchHookCommand(scriptPath)
     : wrapPosixHookCommand(scriptPath)
 }
 
@@ -61,8 +61,7 @@ function buildInstalledConfig(
   const isManagedCommand = createManagedCommandMatcher(scriptFileName)
   const managedEvents = new Set<string>(COMMAND_CODE_EVENTS.map((event) => event.eventName))
 
-  // Why: Orca owns only command-code-hook.* entries. Sweep retired managed
-  // events while preserving user-authored Command Code hooks.
+  // Remove retired Orca-managed entries while preserving user-authored hooks.
   for (const [eventName, definitions] of Object.entries(nextHooks)) {
     if (managedEvents.has(eventName) || !Array.isArray(definitions)) {
       continue

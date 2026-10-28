@@ -1,11 +1,14 @@
+import { agentSessionConversationView } from '../../shared/agent-session-conversation-view'
 import { describe, expect, it, beforeEach } from 'vitest'
 import { isTerminalLeafId, parsePaneKey } from '../../shared/stable-pane-id'
-import { structuredAgentSessionPaneKey } from '../../shared/structured-agent-session-projection'
+import {
+  structuredAgentSessionPaneKey,
+  structuredAgentSessionTabId
+} from '../../shared/structured-agent-session-projection'
 import { selectExactWorkerProviderSession } from './orchestration/worker-provider-session'
-import { structuredWorkerChildIdentityEnv } from './structured-worker-child-identity-env'
+import { sealedChildEnv } from './structured-session-child-env.test-support'
 import {
   StructuredWorkerIdentityRegistry,
-  isStructuredWorkerHandle,
   mintStructuredWorkerHandle,
   mintStructuredWorkerPaneKey,
   sessionIdFromStructuredWorkerIncarnation,
@@ -15,14 +18,15 @@ import {
   structuredWorkerProcessIncarnation,
   structuredWorkerRecordIsCurrent
 } from './structured-worker-identity'
+import { isStructuredWorkerHandle } from '../../shared/structured-worker-handle'
 import type { AgentSessionRecord } from '../../shared/agent-session-record'
+import type { ExecutionHostId } from '../../shared/execution-host'
 
 const SESSION_ID = 'a1b2c3d4-e5f6-4a7b-8c9d-0e1f2a3b4c5d'
 
 function record(overrides: {
-  runtimeKind?: 'native' | 'tui'
   claimStatus?: AgentSessionRecord['lease']['claimStatus']
-  executionHostId?: string
+  executionHostId?: ExecutionHostId
   wslDistro?: string | null
   runtimeFence?: number
 }): AgentSessionRecord {
@@ -40,7 +44,7 @@ function record(overrides: {
     accountHome: { variable: 'CLAUDE_CONFIG_DIR', path: '/home/me/.claude' },
     lease: {
       sessionId: SESSION_ID,
-      runtimeKind: overrides.runtimeKind ?? 'native',
+      runtimeKind: 'native',
       runtimeFence: overrides.runtimeFence ?? 1,
       handoffStage: null,
       provenHandleLinkId: null,
@@ -49,7 +53,6 @@ function record(overrides: {
       leaseDeadlineAt: 0,
       lastRenewedAt: 0,
       handoffOperationId: null,
-      journalCheckpoint: null,
       claimKeyId: 'k',
       claimStatus: overrides.claimStatus ?? 'live',
       unreconciled: false,
@@ -57,7 +60,7 @@ function record(overrides: {
     },
     createdAt: 0,
     updatedAt: 0
-  } as AgentSessionRecord
+  }
 }
 
 describe('structured worker identity', () => {
@@ -71,13 +74,11 @@ describe('structured worker identity', () => {
   })
 
   it('mints an UNGUESSABLE pane key, because check accepts a caller-supplied one', () => {
-    // A derivable pane key would let anyone who learns a session id read that worker's mailbox:
-    // orchestration.check falls back to params.terminalPaneKey and matches assignee_pane_key.
+    // A pane key derived from session id would let known tab ids read/consume worker mail through caller-supplied terminalPaneKey.
     const first = mintStructuredWorkerPaneKey(SESSION_ID)
     const second = mintStructuredWorkerPaneKey(SESSION_ID)
     expect(first).not.toBe(second)
-    // The TAB half legitimately names the session; it is the LEAF that must be unguessable,
-    // because both dispatch lookups key on the leaf (exact match, then leaf-suffix equivalence).
+    // Tab ids may name sessions; dispatch lookup matches the leaf, which must remain random.
     expect(parsePaneKey(first)!.leafId).not.toContain(SESSION_ID.slice(0, 8))
     // Specifically not the sha256-of-session-id helper the chat tab projection uses.
     expect(first).not.toBe(
@@ -85,12 +86,57 @@ describe('structured worker identity', () => {
     )
   })
 
-  it("accepts a persisted pane key for its own session and rejects another session's", () => {
+  it('accepts only the registered pane key for its session', () => {
+    const handle = mintStructuredWorkerHandle()
     const paneKey = mintStructuredWorkerPaneKey(SESSION_ID)
-    expect(structuredWorkerPaneKeyBelongsToSession(paneKey, SESSION_ID)).toBe(true)
-    expect(structuredWorkerPaneKeyBelongsToSession(paneKey, 'another-session-id')).toBe(false)
-    expect(structuredWorkerPaneKeyBelongsToSession('not-a-pane-key', SESSION_ID)).toBe(false)
-    expect(structuredWorkerPaneKeyBelongsToSession(null, SESSION_ID)).toBe(false)
+    structuredWorkerIdentities.register({
+      handle,
+      sessionId: SESSION_ID,
+      agent: 'claude',
+      paneKey,
+      processIncarnation: structuredWorkerProcessIncarnation(SESSION_ID),
+      worktreeId: 'wt_1',
+      hostScope: { kind: 'local', hostId: 'local' }
+    })
+    try {
+      expect(structuredWorkerPaneKeyBelongsToSession(paneKey, SESSION_ID)).toBe(true)
+      expect(
+        structuredWorkerPaneKeyBelongsToSession(mintStructuredWorkerPaneKey(SESSION_ID), SESSION_ID)
+      ).toBe(false)
+      expect(structuredWorkerPaneKeyBelongsToSession(paneKey, 'another-session-id')).toBe(false)
+      expect(structuredWorkerPaneKeyBelongsToSession('not-a-pane-key', SESSION_ID)).toBe(false)
+      expect(structuredWorkerPaneKeyBelongsToSession(null, SESSION_ID)).toBe(false)
+    } finally {
+      structuredWorkerIdentities.forget(handle)
+    }
+  })
+
+  it('rejects the deterministic public status key even for a registered worker', () => {
+    const handle = mintStructuredWorkerHandle()
+    const paneKey = mintStructuredWorkerPaneKey(SESSION_ID)
+    structuredWorkerIdentities.register({
+      handle,
+      sessionId: SESSION_ID,
+      agent: 'claude',
+      paneKey,
+      processIncarnation: structuredWorkerProcessIncarnation(SESSION_ID),
+      worktreeId: 'wt_1',
+      hostScope: { kind: 'local', hostId: 'local' }
+    })
+    try {
+      const statusPaneKey = structuredAgentSessionPaneKey(
+        structuredAgentSessionTabId(SESSION_ID),
+        SESSION_ID
+      )
+      expect(structuredWorkerPaneKeyBelongsToSession(statusPaneKey, SESSION_ID)).toBe(false)
+    } finally {
+      structuredWorkerIdentities.forget(handle)
+    }
+  })
+
+  it('fails closed when the session has no registry record', () => {
+    const paneKey = mintStructuredWorkerPaneKey(SESSION_ID)
+    expect(structuredWorkerPaneKeyBelongsToSession(paneKey, SESSION_ID)).toBe(false)
   })
 
   it('derives a pane key whose leaf passes the terminal leaf check', () => {
@@ -99,6 +145,15 @@ describe('structured worker identity', () => {
     expect(parsed).not.toBeNull()
     expect(isTerminalLeafId(parsed!.leafId)).toBe(true)
     expect(parsed!.tabId).toBe(`structured-agent-session-${SESSION_ID}`)
+  })
+
+  it('rejects a public status pane even though its leaf is a valid terminal UUID', () => {
+    const paneKey = structuredAgentSessionPaneKey(
+      `structured-agent-session-${SESSION_ID}`,
+      SESSION_ID
+    )
+    expect(isTerminalLeafId(parsePaneKey(paneKey)!.leafId)).toBe(true)
+    expect(structuredWorkerPaneKeyBelongsToSession(paneKey, SESSION_ID)).toBe(false)
   })
 
   it('round-trips the session id through the process incarnation', () => {
@@ -113,23 +168,60 @@ describe('structured worker identity', () => {
       hostId: 'local'
     })
     expect(structuredWorkerHostScope(record({ wslDistro: 'Ubuntu' }).location)).toBeNull()
-    expect(structuredWorkerHostScope(record({ executionHostId: 'ssh-1' }).location)).toBeNull()
+    expect(structuredWorkerHostScope(record({ executionHostId: 'ssh:host-1' }).location)).toBeNull()
   })
 
   it('keeps a recovered session current across a fence bump', () => {
     // The host bumps the fence on its own transparent crash recovery; fencing identity on it
     // would wedge the SAME worker as identity_unproven forever.
-    expect(structuredWorkerRecordIsCurrent(record({ runtimeFence: 1 }))).toBe(true)
-    expect(structuredWorkerRecordIsCurrent(record({ runtimeFence: 9 }))).toBe(true)
+    expect(
+      structuredWorkerRecordIsCurrent(
+        agentSessionConversationView(record({ runtimeFence: 1 })),
+        false
+      )
+    ).toBe(true)
+    expect(
+      structuredWorkerRecordIsCurrent(
+        agentSessionConversationView(record({ runtimeFence: 9 })),
+        false
+      )
+    ).toBe(true)
     expect(structuredWorkerProcessIncarnation(SESSION_ID)).toBe(
       structuredWorkerProcessIncarnation(SESSION_ID)
     )
   })
 
-  it('refuses a session handed to a TUI owner or released', () => {
-    expect(structuredWorkerRecordIsCurrent(record({ runtimeKind: 'tui' }))).toBe(false)
-    expect(structuredWorkerRecordIsCurrent(record({ claimStatus: 'released' }))).toBe(false)
-    expect(structuredWorkerRecordIsCurrent(null)).toBe(false)
+  it('refuses a conflicted session, and a released one whose chat tab is gone', () => {
+    // A terminal owner an older build recorded loads conflicted; it is not this worker.
+    expect(
+      structuredWorkerRecordIsCurrent(
+        agentSessionConversationView(record({ claimStatus: 'conflicted' })),
+        true
+      )
+    ).toBe(false)
+    expect(
+      structuredWorkerRecordIsCurrent(
+        agentSessionConversationView(record({ claimStatus: 'released' })),
+        false
+      )
+    ).toBe(false)
+    expect(structuredWorkerRecordIsCurrent(null, true)).toBe(false)
+  })
+
+  it('keeps a released session with a listed tab: that worker is at rest, not gone', () => {
+    expect(
+      structuredWorkerRecordIsCurrent(
+        agentSessionConversationView(record({ claimStatus: 'released' })),
+        true
+      )
+    ).toBe(true)
+    // A live lease is owned whether or not a tab shows it.
+    expect(
+      structuredWorkerRecordIsCurrent(
+        agentSessionConversationView(record({ claimStatus: 'live' })),
+        false
+      )
+    ).toBe(true)
   })
 })
 
@@ -169,6 +261,39 @@ describe('structured worker identity registry', () => {
     ).toBeNull()
   })
 
+  it('refuses to rehydrate the deterministic public status key as a worker credential', () => {
+    expect(
+      registry.rehydrate({
+        terminal_handle: mintStructuredWorkerHandle(),
+        pane_key: structuredAgentSessionPaneKey(
+          structuredAgentSessionTabId(SESSION_ID),
+          SESSION_ID
+        ),
+        process_incarnation: structuredWorkerProcessIncarnation(SESSION_ID),
+        worktree_id: 'wt_1',
+        host_scope: JSON.stringify({ kind: 'local', hostId: 'local' })
+      })
+    ).toBeNull()
+  })
+
+  it('cannot rehydrate a worker credential from a public status subject', () => {
+    const handle = mintStructuredWorkerHandle()
+    expect(
+      registry.rehydrate({
+        terminal_handle: handle,
+        pane_key: structuredAgentSessionPaneKey(
+          `structured-agent-session-${SESSION_ID}`,
+          SESSION_ID
+        ),
+        process_incarnation: structuredWorkerProcessIncarnation(SESSION_ID),
+        worktree_id: 'wt_1',
+        host_scope: JSON.stringify({ kind: 'local', hostId: 'local' })
+      })
+    ).toBeNull()
+    expect(registry.get(handle)).toBeNull()
+    expect(registry.getBySessionId(SESSION_ID)).toBeNull()
+  })
+
   it('forgets both indexes', () => {
     const handle = mintStructuredWorkerHandle()
     registry.register({
@@ -188,10 +313,7 @@ describe('structured worker identity registry', () => {
 
 describe('structured workers stay outside the PTY-only fail-closed paths', () => {
   it('keeps the selector shut by never letting a structured pane key reach a hook status', () => {
-    // The selector matches on pane key, so it is fail-closed for a structured worker only while
-    // ORCA_PANE_KEY is absent from its child's environment. That absence IS the guard: put the key
-    // back and the first assertion below is what an attacker gets.
-    // The PROCESS registry, because that is the one the spawn path reads.
+    // Production spawn must omit ORCA_PANE_KEY: adding it would enable hook-based provider selection for structured workers.
     const handle = mintStructuredWorkerHandle()
     structuredWorkerIdentities.register({
       handle,
@@ -203,9 +325,8 @@ describe('structured workers stay outside the PTY-only fail-closed paths', () =>
       hostScope: { kind: 'local', hostId: 'local' }
     })
     try {
-      const env = structuredWorkerChildIdentityEnv(SESSION_ID, {})
-      // Registered, so this is a populated env — not the empty one an unregistered session gets,
-      // which would satisfy the pane-key assertion for the wrong reason.
+      const env = sealedChildEnv(SESSION_ID)
+      // Verify worker registration succeeded so absent pane key cannot pass for the wrong reason.
       expect(env.ORCA_TERMINAL_HANDLE).toBe(handle)
       expect(Object.keys(env)).not.toContain('ORCA_PANE_KEY')
     } finally {
@@ -232,7 +353,6 @@ describe('structured workers stay outside the PTY-only fail-closed paths', () =>
         ]
       })
     ).not.toBeNull()
-    // With no hook status at all — the real structured case — it is null.
     expect(
       selectExactWorkerProviderSession({
         paneKey,

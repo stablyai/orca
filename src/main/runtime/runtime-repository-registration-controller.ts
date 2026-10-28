@@ -9,13 +9,20 @@ import {
 } from '../../shared/execution-host'
 import type { Repo } from '../../shared/repo-types'
 import { gitExecFileAsync, awaitWindowsHostGitEnvironmentReady } from '../git/runner'
-import { getRepoName, isGitRepo } from '../git/repo'
-import { invalidateAuthorizedRootsCache, isENOENT } from '../ipc/filesystem-auth'
+import { getRepoName, inspectGitRepoForRegistrationAsync } from '../git/repo'
+import { invalidateAuthorizedRootsCache } from '../ipc/registered-worktree-roots-cache'
+import { isENOENT } from '../ipc/filesystem/filesystem-path-containment'
+import { findProjectAtSameRealPath } from '../project-realpath-identity'
 import { detectRepoIconAndUpstream } from '../repo-icon-autodetect'
 import { prepareLocalWorktreeRootForRepo } from '../worktree-root-preparation'
 import type { RuntimeStore } from './runtime-store-contract'
 import { runtimePathsEqual } from './runtime-worktree-path-identity'
-import { runtimeRepoMatchesExecutionHost } from './runtime-worktree-selection'
+import { runtimeRepoIsRegistrationCandidate } from './runtime-worktree-selection'
+import { refuseWslHostWindowsDrivePath } from './wsl-host-windows-drive-guard'
+import {
+  WslHostWindowsDriveRefusalError,
+  type WslHostWindowsDriveRefusal
+} from '../../shared/wsl-host-windows-drive-refusal'
 
 type RuntimeRepositoryRegistrationDependencies = {
   getStore: () => RuntimeStore | null
@@ -37,42 +44,42 @@ export class RuntimeRepositoryRegistrationController {
     if (!isAbsolute(path)) {
       throw new Error('Project path must be an absolute path')
     }
+    await refuseWslHostWindowsDrivePath(path)
     if (kind === 'git') {
       await awaitWindowsHostGitEnvironmentReady({ cwd: path })
     }
-    if (kind === 'git' && !isGitRepo(path)) {
+    const gitInfo = kind === 'git' ? await inspectGitRepoForRegistrationAsync(path) : null
+    if (gitInfo && !gitInfo.isRepo) {
       throw new Error(`Not a valid git repository: ${path}`)
     }
-    const existing = store.getRepos().find((repo) => {
-      return (
-        runtimePathsEqual(repo.path, path) && runtimeRepoMatchesExecutionHost(repo, executionHostId)
+    // Store Git's resolved toplevel; symlink aliases/subfolders hide the main checkout as external.
+    const repoPath = gitInfo?.rootPath ?? path
+    const sameHostRepos = (): Repo[] =>
+      store.getRepos().filter((repo) => runtimeRepoIsRegistrationCandidate(repo, executionHostId))
+    // Resolved toplevel lets symlink aliases find existing registrations.
+    const findAtPath = (): Repo | undefined =>
+      sameHostRepos().find(
+        (repo) => runtimePathsEqual(repo.path, path) || runtimePathsEqual(repo.path, repoPath)
       )
-    })
+    const existing = findAtPath() ?? (await findProjectAtSameRealPath(sameHostRepos(), repoPath))
     if (existing) {
-      if (
-        existing.executionHostId == null &&
-        parseExecutionHostId(executionHostId)?.kind === 'runtime'
-      ) {
-        const adopted =
-          store.updateRepo(existing.id, { executionHostId }) ??
-          ({ ...existing, executionHostId } as Repo)
-        this.invalidate(existing.id)
-        return adopted
-      }
-      return existing
+      return this.reuseExisting(store, existing, executionHostId)
     }
-    // Local on purpose, whatever `executionHostId` stamps on the row: this controller already
-    // validated and will read `path` in this process. A `runtime:` stamp is how a paired client
-    // addresses the row, not a second machine holding the files.
+    // This controller validated/read the path locally; runtime: is the paired-client address, not another machine.
     const detected = await detectRepoIconAndUpstream({
-      repoPath: path,
+      repoPath,
       kind,
       executionHostId: LOCAL_EXECUTION_HOST_ID
     })
+    // A concurrent add of the same folder can finish while the awaits above are pending.
+    const raceWinner = findAtPath()
+    if (raceWinner) {
+      return this.reuseExisting(store, raceWinner, executionHostId)
+    }
     const repo: Repo = {
       id: randomUUID(),
-      path,
-      displayName: displayName?.trim() || getRepoName(path),
+      path: repoPath,
+      displayName: displayName?.trim() || getRepoName(repoPath),
       badgeColor: DEFAULT_REPO_BADGE_COLOR,
       ...(executionHostId != null ? { executionHostId } : {}),
       ...detected,
@@ -86,11 +93,29 @@ export class RuntimeRepositoryRegistrationController {
     return store.getRepo(repo.id) ?? repo
   }
 
+  private reuseExisting(
+    store: RuntimeStore,
+    existing: Repo,
+    executionHostId: ExecutionHostId | null | undefined
+  ): Repo {
+    if (
+      existing.executionHostId == null &&
+      parseExecutionHostId(executionHostId)?.kind === 'runtime'
+    ) {
+      const adopted =
+        store.updateRepo(existing, { executionHostId }) ??
+        ({ ...existing, executionHostId } as Repo)
+      this.invalidate(existing.id)
+      return adopted
+    }
+    return existing
+  }
+
   async create(
     parentPath: string,
     name: string,
     kind: 'git' | 'folder' = 'git'
-  ): Promise<{ repo: Repo } | { error: string }> {
+  ): Promise<{ repo: Repo } | { error: string; windowsDriveRefusal?: WslHostWindowsDriveRefusal }> {
     const store = this.requireStore()
     const trimmedName = name.trim()
     const trimmedParentPath = parentPath.trim()
@@ -107,8 +132,24 @@ export class RuntimeRepositoryRegistrationController {
     if (!isAbsolute(trimmedParentPath)) {
       return { error: 'Parent directory must be an absolute path' }
     }
+    try {
+      await refuseWslHostWindowsDrivePath(trimmedParentPath)
+    } catch (error) {
+      // An optional field: older clients read only `error`.
+      return error instanceof WslHostWindowsDriveRefusalError
+        ? { error: error.message, windowsDriveRefusal: error.data }
+        : { error: error instanceof Error ? error.message : String(error) }
+    }
     const targetPath = join(trimmedParentPath, trimmedName)
-    const existing = store.getRepos().find((repo) => runtimePathsEqual(repo.path, targetPath))
+    // Qualify by host: identical SSH paths name another machine's directory.
+    const findLocalAtTarget = (): Repo | undefined =>
+      store
+        .getRepos()
+        .find(
+          (repo) =>
+            runtimeRepoIsRegistrationCandidate(repo) && runtimePathsEqual(repo.path, targetPath)
+        )
+    const existing = findLocalAtTarget()
     if (existing) {
       return { repo: existing }
     }
@@ -144,7 +185,7 @@ export class RuntimeRepositoryRegistrationController {
         return { error }
       }
     }
-    const raceWinner = store.getRepos().find((repo) => runtimePathsEqual(repo.path, targetPath))
+    const raceWinner = findLocalAtTarget()
     if (raceWinner) {
       return { repo: raceWinner }
     }

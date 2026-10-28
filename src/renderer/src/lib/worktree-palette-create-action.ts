@@ -1,4 +1,4 @@
-import { isWorktreePaletteQueryTooLarge } from './worktree-palette-query-bounds'
+import { isWorktreePaletteQueryTooLarge } from '../../../shared/palette-match/worktree-palette-query-bounds'
 
 export const CREATE_WORKTREE_ITEM_ID = '__create_worktree__'
 
@@ -19,8 +19,7 @@ export function getWorktreePaletteCreateActionState({
       showCreateAction: false
     }
   }
-  // Why no project gate: the composer can add the first project inline, so
-  // creation stays offered with zero projects.
+  // Composer can add the first project inline, so creation needs no existing project.
   return {
     createWorktreeName,
     showCreateAction: createWorktreeName.length > 0
@@ -41,23 +40,12 @@ export function isWorktreePaletteCreateActivationAllowed(args: {
   return args.hasTaskUrlIntent || args.hasCreateName || args.selectionMovedByUser
 }
 
-export const WORKTREE_PALETTE_SELECTION_MOVE_KEYS: ReadonlySet<string> = new Set([
-  'ArrowDown',
-  'ArrowUp',
-  'Home',
-  'End',
-  'PageDown',
-  'PageUp'
-])
-
 type WorktreePaletteSelectionCandidateEntry = {
   id: string
   type: string
 }
 
-// Why every rendered CommandItem type belongs here: an id missing from this list fails the
-// `includes` check in getNextWorktreePaletteSelection, so arrowing onto that row snaps the
-// highlight back to the top — making the whole section mouse-only.
+// Include every rendered item type or keyboard navigation’s includes guard snaps its highlight to top, leaving mouse-only rows.
 const SELECTABLE_ENTRY_TYPES = [
   'worktree',
   'create-worktree',
@@ -85,11 +73,8 @@ export function isSelectableWorktreePaletteEntry(
 export function getWorktreePaletteSelectionItemIds<
   T extends WorktreePaletteSelectionCandidateEntry
 >(entries: readonly T[], renderKeys: readonly string[] = []): string[] {
-  // Why: keyboard focus should mirror rendered order, including synthetic
-  // action rows, while skipping only section headers.
-  // Why renderKeys wins: rows render under de-duplicated keys, so naming the bare
-  // id here would leave a duplicate row absent from the list the `includes` check
-  // above consults — arrowing onto it would snap the highlight back to the top.
+  // Keyboard order must include synthetic actions and skip only headers.
+  // Prefer deduplicated renderKeys; bare IDs omit duplicate rows and snap keyboard highlight to top.
   return entries
     .map((entry, index) => ({ entry, id: renderKeys[index] ?? entry.id }))
     .filter(({ entry }) => isSelectableWorktreePaletteEntry(entry))

@@ -4,9 +4,10 @@ import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogFooter } from '@/components/ui/dialog'
 import { translate } from '@/i18n/i18n'
-import type {
-  SkillSharePreview,
-  SkillShareProgress
+import {
+  SKILL_SHARE_NAME_TAKEN_ERROR,
+  type SkillSharePreview,
+  type SkillShareProgress
 } from '../../../../shared/skill-sharing-contract'
 import type { ManagedSkillInstall } from '../../../../shared/skill-install-contract'
 import type { DiscoveredSkill } from '../../../../shared/skills'
@@ -40,6 +41,17 @@ function operationError(status: string): string {
       )
 }
 
+// Why: IPC wraps the main-process message, so match it as a substring.
+function nameTakenError(cause: unknown, name: string): string | null {
+  return String(cause).includes(SKILL_SHARE_NAME_TAKEN_ERROR)
+    ? translate(
+        'auto.components.skills.SkillShareDialog.nameTaken',
+        'The skill name “{{name}}” is already in use. Rename your skill to share it.',
+        { name }
+      )
+    : null
+}
+
 export function SkillShareDialog({
   skills,
   skill,
@@ -48,8 +60,7 @@ export function SkillShareDialog({
 }: SkillShareDialogProps): React.JSX.Element {
   const selectedSkills = useMemo(() => skills ?? (skill ? [skill] : []), [skill, skills])
   const [preview, setPreview] = useState<SkillSharePreview | null>(null)
-  // Why: the dialog never shows who is publishing — it only needs to know that a
-  // Cloud account exists, since publishing fails without one.
+  // Publishing requires a Cloud account; this dialog needs presence, not publisher identity.
   const [hasCloudAccount, setHasCloudAccount] = useState(false)
   const [releaseNotes, setReleaseNotes] = useState('')
   const [progress, setProgress] = useState<SkillShareProgress | null>(null)
@@ -78,6 +89,7 @@ export function SkillShareDialog({
     setError(null)
     setPublishingNewVersion(false)
     setPreparing(true)
+    const bundleName = derivedBundleName(selectedSkills)
     void (async () => {
       let managedInstall: ManagedSkillInstall | null = null
       try {
@@ -90,7 +102,7 @@ export function SkillShareDialog({
       }
       const nextPreview = await window.api.skills.prepareShare({
         skillIds: selectedSkills.map((skill) => skill.id),
-        bundleName: derivedBundleName(selectedSkills),
+        bundleName,
         ...(managedInstall ? { packageId: managedInstall.packageId } : {})
       })
       retainedPreparationId = nextPreview.preparationId
@@ -119,10 +131,11 @@ export function SkillShareDialog({
         console.warn('[skills] share preparation failed:', cause)
         if (generation.current === current) {
           setError(
-            translate(
-              'auto.components.skills.SkillShareDialog.prepareFailed',
-              'Could not prepare this skill for sharing.'
-            )
+            nameTakenError(cause, bundleName) ??
+              translate(
+                'auto.components.skills.SkillShareDialog.prepareFailed',
+                'Could not prepare this skill for sharing.'
+              )
           )
         }
       })
@@ -157,8 +170,7 @@ export function SkillShareDialog({
     })
   }, [preview])
 
-  // Why: nothing has to be typed to publish, so the primary action takes focus
-  // as soon as there is something to publish — Enter then completes the flow.
+  // Focus the primary action once preview loads so Enter can publish without filling another field.
   useEffect(() => {
     if (preview && !shareUrl) {
       publishButtonRef.current?.focus()
@@ -250,8 +262,7 @@ export function SkillShareDialog({
 
   return (
     <Dialog open={open} onOpenChange={(next) => !next && !publishing && void close()}>
-      {/* Why: the review scrolls on its own so progress, errors, and the primary
-          action stay visible on a short window instead of below the fold. */}
+      {/* Scroll review independently so progress, errors and publishing controls stay visible in short windows. */}
       <DialogContent
         className="grid max-h-[calc(100vh-3rem)] grid-rows-[auto_minmax(0,1fr)_auto] overflow-hidden sm:max-w-xl [&>*]:min-w-0"
         {...(skillShareDialogHasDescription(Boolean(shareUrl), publishingNewVersion)

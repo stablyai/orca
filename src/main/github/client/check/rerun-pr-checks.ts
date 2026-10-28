@@ -1,6 +1,6 @@
 import type { GitHubRerunPRChecksResult } from '../../../../shared/github/check-types'
 import { ghExecFileAsync, acquire, release, type LocalGitExecOptions } from '../../gh-utils'
-// Why: pure error helpers come from their own modules so tests that mock gh-utils still classify for real.
+// Keep real error parsing available when tests mock gh-utils.
 import { extractExecError } from '../../../git/exec-error'
 import { classifyRerunChecksError } from '../../gh-error-classification'
 import { resolveGitHubRepoExecution, type GitHubApiRepository } from '../../github-api-repository'
@@ -91,7 +91,7 @@ export async function rerunPRChecks(
   } catch (err) {
     const { stderr } = extractExecError(err)
     const classified = classifyRerunChecksError(stderr).message
-    // Why: these POSTs are not idempotent — say how many reruns already started so a retry isn't blind.
+    // Rerun POSTs are not idempotent; report partial success before the user retries.
     return {
       ok: false,
       error:

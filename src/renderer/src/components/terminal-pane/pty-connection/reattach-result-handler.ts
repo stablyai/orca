@@ -1,16 +1,21 @@
+import {
+  applyTerminalLaunchResult,
+  captureTerminalLaunchContext,
+  type TerminalLaunchContext
+} from './terminal-launch-result-policy'
+import { isRemoteRuntimePtyId } from '../../../../../shared/remote-runtime/remote-runtime-pty-id'
 import { scheduleRuntimeGraphSync } from '@/runtime/sync-runtime-graph'
-import type { PtyBufferSnapshot, PtyConnectResult } from '../pty-transport'
+import type { PtyBufferSnapshot, PtyConnectResult } from '../pty-transport-types'
 import { warnTerminalLifecycleAnomaly } from '../terminal-lifecycle-diagnostics'
-// Why: a restored pane's stale-account prompt can only be raised once a PTY is
-// actually attached — nothing is inspectable while the session hydrates.
+// Inspect stale-account state only after a concrete PTY attaches.
 import { notifyCodexPaneBoundForStaleSweep } from '@/lib/codex-stale-pane-sweep'
 import { useAppStore } from '@/store'
-import { isPassiveCompletedHibernationEvidence } from '@/lib/sleeping-agent-pane-ownership'
-import { parseAppSshPtyId } from '../../../../../shared/ssh-pty-id'
 import { resolveHiddenRestoreScrollbackRows } from '../terminal-hidden-restore-scrollback'
 import { shouldIgnoreStalePanePtyLayoutBinding } from './pane-pty-layout-binding'
 
-import { isRemoteRuntimePtyId } from './paired-parked-terminal-restore'
+import { hasEmptyReattachRetireEvidence } from './empty-reattach-retire-evidence'
+import { mainStartsPane } from './main-starts-pane'
+import { showMainPaneResumeOutcome } from './main-pane-resume-banner'
 import type { ColdRestoreAgentResumeStartup } from './fresh-spawn-types'
 
 import type { ConnectPanePtySession } from './connect-pane-pty-session'
@@ -18,33 +23,43 @@ import type { ConnectPanePtySession } from './connect-pane-pty-session'
 import type { ReattachPayloadContext } from './reattach-payload-context'
 import { createReattachPayloadHandlers } from './apply-reattach-payload'
 import type { ReattachPayloadSession } from './reattach-payload-session'
-import { recoverUnverifiableDirectSshReattach } from './direct-ssh-reattach-recovery'
+import {
+  classifyHiddenOutputSnapshotReject,
+  type HiddenOutputSnapshotResult
+} from './hidden-output-snapshot-serialize'
+import {
+  classifyParkRevealSnapshot,
+  type ParkRevealNoHostImageReason,
+  type ParkRevealRetryLedger
+} from './park-reveal-snapshot-verdict'
 
 type ReattachResultSession = ReattachPayloadSession &
   Pick<
     ConnectPanePtySession,
     | 'agentCompletionCoordinator'
+    | 'buildColdRestoreAgentResumeStartup'
+    | 'discardAgentPreReadyDraft'
+    | 'mainStartAttach'
+    | 'runtimeEnvironmentId'
     | 'activePanePtyBinding'
     | 'activePanePtyBindingBoundAt'
     | 'authoritativeReattachGeneration'
-    | 'capturedDirectSshRetryPtyAccepted'
     | 'cacheKey'
-    | 'connectionId'
     | 'deps'
-    | 'directSshRetryAttempt'
     | 'disposed'
-    | 'getSshMainModelSnapshotProbe'
     | 'handleReattachResult'
-    | 'followsDirectSshReconnect'
     | 'mountFollowsTerminalPark'
     | 'registerEffectiveLaunchConfig'
+    | 'cancelSavedResumeStartup'
     | 'registerPaneSerializerFor'
     | 'registerSideEffectFactConsumerForPty'
-    | 'rejectObsoleteDirectSshReattach'
     | 'reportPanePtyVisibility'
+    | 'retryUnverifiableParkRevealSnapshot'
     | 'sampleVisiblePaneForegroundAgent'
+    | 'warnParkRevealNoHostImage'
     | 'scheduleReattachIdleAgentCursorReset'
     | 'serializeHiddenOutputSnapshot'
+    | 'settlePaneAttachAttempt'
     | 'setPanePtyFitBinding'
     | 'startFreshColdRestoreAgentResume'
     | 'structuralReplayCoordinator'
@@ -60,7 +75,11 @@ export function bindHandleReattachResult(sessionBag: ConnectPanePtySession): voi
     result: PtyConnectResult | string | void,
     staleSessionId?: string | null,
     coldRestoreStartup?: ColdRestoreAgentResumeStartup | null,
-    attemptGeneration = session.transportStreamGeneration
+    attemptGeneration = session.transportStreamGeneration,
+    launchContext: TerminalLaunchContext = captureTerminalLaunchContext(
+      sessionBag,
+      coldRestoreStartup ?? sessionBag.paneStartup
+    )
   ): Promise<boolean> => {
     if (session.disposed) {
       return false
@@ -70,38 +89,38 @@ export function bindHandleReattachResult(sessionBag: ConnectPanePtySession): voi
     }
     const isCurrentReattachTransport = (): boolean =>
       !session.disposed &&
-      // A remount can register its successor before the old async result settles.
-      // Do not let the stale session mutate or retire the successor's ownership.
+      // Require current transport ownership before old async results can mutate or retire a successor.
       session.deps.paneTransportsRef.current.get(session.pane.id) === session.transport &&
       attemptGeneration === session.transportStreamGeneration
     if (!isCurrentReattachTransport()) {
       return false
     }
-    // Why: bump only once this attempt owns the stream, or a superseded result
-    // would cancel the current attempt's in-flight snapshot prepaint.
+    // Bump generation only after ownership admission so superseded results cannot cancel current snapshot prepaint.
     session.authoritativeReattachGeneration += 1
     const connectResult =
       result && typeof result === 'object' && 'id' in result ? (result as PtyConnectResult) : null
     if (connectResult?.incarnationId) {
       session.remotePtyIncarnationId = connectResult.incarnationId
     } else if (connectResult?.isReattach || typeof result === 'string') {
-      // Legacy hosts do not publish an incarnation; force client-only
-      // unverifiable evidence until a fresh attach returns one.
+      // Missing legacy incarnation remains client-only unverifiable evidence until a stamped attach.
       session.remotePtyIncarnationId = null
     }
 
+    if (connectResult) {
+      applyTerminalLaunchResult(sessionBag, connectResult, launchContext, 'creator')
+    }
     if (connectResult?.exitedBeforeAttach) {
       // Why: the transport already delivered the dead session's final frame + exit; treat as terminal state, not a failed reattach.
       return true
     }
 
-    const retryPtyId =
-      connectResult?.id ??
-      (typeof result === 'string' ? result : (staleSessionId ?? session.transport.getPtyId()))
-    if (session.rejectObsoleteDirectSshReattach(retryPtyId)) {
-      // Why: an obsolete reattach must stop consuming frames without killing the durable PTY a newer lease may adopt.
-      return false
-    }
+    // Why: main started a plain shell instead, so nothing of the plan may be registered over it.
+    const startup =
+      connectResult?.agentResumeRefused ||
+      connectResult?.agentResumeUnavailable ||
+      connectResult?.isReattach
+        ? null
+        : coldRestoreStartup
     const ptyId =
       connectResult?.id ?? (typeof result === 'string' ? result : session.transport.getPtyId())
     const hasExplicitPtyId = Boolean(connectResult?.id || typeof result === 'string')
@@ -113,10 +132,6 @@ export function bindHandleReattachResult(sessionBag: ConnectPanePtySession): voi
         paneId: session.pane.id,
         ptyId: staleSessionId ?? null
       })
-      if (session.connectionId) {
-        recoverUnverifiableDirectSshReattach(sessionBag, staleSessionId)
-        return false
-      }
       // Why: a stale restored session can fail reattach after mount; don't leave xterm alive without a backing PTY.
       if (staleSessionId) {
         session.clearExitedPanePtyLayoutBinding(staleSessionId)
@@ -131,14 +146,6 @@ export function bindHandleReattachResult(sessionBag: ConnectPanePtySession): voi
       })
       return false
     }
-    session.registerEffectiveLaunchConfig(connectResult?.launchConfig, {
-      ...(coldRestoreStartup ? { launchToken: coldRestoreStartup.launchToken } : {}),
-      ...(connectResult?.launchAgent
-        ? { launchAgent: connectResult.launchAgent }
-        : coldRestoreStartup
-          ? { launchAgent: coldRestoreStartup.agent }
-          : {})
-    })
     if (connectResult?.sessionExpired) {
       if (staleSessionId) {
         session.clearExitedPanePtyLayoutBinding(staleSessionId)
@@ -148,34 +155,48 @@ export function bindHandleReattachResult(sessionBag: ConnectPanePtySession): voi
       if (staleSessionId) {
         session.deps.clearTabPtyId(session.deps.tabId, staleSessionId)
       }
-      // Why: SSH sleep/reconnect can invalidate the relay PTY while the tab stays mounted; replace the dead lease in-place, not a stale overlay.
-      session.startFreshColdRestoreAgentResume(coldRestoreStartup, {
+      // Why: a host can invalidate the PTY while the tab stays mounted; replace it in place, not with a stale overlay.
+      session.startFreshColdRestoreAgentResume(startup, {
         forceBlankRestoredViewport: true
       })
       return false
     }
     const isCurrentReattachPayload = (): boolean => {
       const currentPtyId = session.transport.getPtyId()
-      // Remote transports may publish the result object before their async
-      // bind callback updates getPtyId(); the explicit result is authoritative.
+      // Explicit attach results outrank transient getPtyId nulls before the async bind callback.
       return isCurrentReattachTransport() && (currentPtyId === ptyId || hasExplicitPtyId)
     }
     if (!isCurrentReattachPayload()) {
       return false
     }
+    // Settle recovery success only after PTY/expiry validation; fallback failures stay pending for bounded ledger expiration.
+    session.settlePaneAttachAttempt?.('success')
     // Strict precedence snapshot > replay > coldRestore: paint exactly one, else overlapping tails duplicate TUI output on worktree switch.
     const hasStructuralReplay = Boolean(
       connectResult?.snapshot || connectResult?.replay || connectResult?.coldRestore
     )
-    const resumeComesFromPassiveHibernation = Boolean(
-      coldRestoreStartup &&
-      !coldRestoreStartup.useLiveEntry &&
-      coldRestoreStartup.sleepingRecordEntry &&
-      isPassiveCompletedHibernationEvidence(coldRestoreStartup.sleepingRecordEntry.record)
-    )
-    // Why: reattach drops startup commands; only passive hibernation is authority to retire an empty adopted shell and resume its provider session.
-    if (!hasStructuralReplay && connectResult?.isReattach && resumeComesFromPassiveHibernation) {
+    // Why: reattach drops startup commands; only real hibernation is authority to retire an empty adopted shell and resume its provider session.
+    const mainStarts = mainStartsPane(session)
+    if (
+      !hasStructuralReplay &&
+      connectResult?.isReattach &&
+      // Why: main already judged this terminal after its start; asking again would loop.
+      !(mainStarts && session.mainStartAttach) &&
+      hasEmptyReattachRetireEvidence(
+        ptyId,
+        connectResult.agentResumeRefused
+          ? null
+          : mainStarts
+            ? session.buildColdRestoreAgentResumeStartup()
+            : coldRestoreStartup
+      )
+    ) {
       session.transport.disconnect()
+      if (mainStarts) {
+        // Main retires the empty shell and resumes the agent in its place (startPane).
+        session.startFreshColdRestoreAgentResume(null)
+        return false
+      }
       if (staleSessionId) {
         session.clearExitedPanePtyLayoutBinding(staleSessionId)
         session.deps.clearTabPtyId(session.deps.tabId, staleSessionId)
@@ -188,10 +209,11 @@ export function bindHandleReattachResult(sessionBag: ConnectPanePtySession): voi
       return false
     }
     session.setPanePtyFitBinding(ptyId)
-    // Keep the session-local identity in step with the transport before any
-    // queued spawn callback can arrive during replay.
+    // Commit session identity before replay can admit queued spawn callbacks.
     session.activePanePtyBinding = ptyId
     session.activePanePtyBindingBoundAt = performance.now()
+    // Why discard: a cold restore can reach a bare shell that `--resume` is typed into next.
+    session.discardAgentPreReadyDraft?.()
     session.reportPanePtyVisibility(ptyId, session.deps.isVisibleRef.current)
     session.registerSideEffectFactConsumerForPty(ptyId)
     session.syncHiddenRendererPtyDelivery()
@@ -202,10 +224,7 @@ export function bindHandleReattachResult(sessionBag: ConnectPanePtySession): voi
       useAppStore.getState().terminalLayoutsByTabId[session.deps.tabId]?.ptyIdsByLeafId?.[
         session.pane.leafId
       ]
-    // A split pane has its own PTY while the legacy tab-level field still
-    // names the source pane. Only infer a tab-wide replacement when that
-    // field is actually bound to this leaf; an unrelated sibling must not be
-    // rewritten to the new pane's PTY.
+    // Only replace tab-level PTY identity when it belongs to this leaf; split spawn cannot rewrite its unrelated source sibling.
     const inferredReplacementPtyId =
       currentTabPtyId &&
       shouldIgnoreStalePanePtyLayoutBinding({
@@ -217,14 +236,7 @@ export function bindHandleReattachResult(sessionBag: ConnectPanePtySession): voi
         : undefined
     const replacementPtyId =
       staleSessionId && staleSessionId !== ptyId ? staleSessionId : inferredReplacementPtyId
-    if (session.capturedDirectSshRetryPtyAccepted && session.directSshRetryAttempt) {
-      session.deps.updateTabPtyId(
-        session.deps.tabId,
-        ptyId,
-        replacementPtyId,
-        session.directSshRetryAttempt.attemptId
-      )
-    } else if (replacementPtyId) {
+    if (replacementPtyId) {
       session.deps.updateTabPtyId(session.deps.tabId, ptyId, replacementPtyId)
     } else {
       session.deps.updateTabPtyId(session.deps.tabId, ptyId)
@@ -239,61 +251,41 @@ export function bindHandleReattachResult(sessionBag: ConnectPanePtySession): voi
     // Why: mobile streaming needs xterm's exact screen state; install the serializer + lastTitle source for main-process hydration parity.
     session.registerPaneSerializerFor(ptyId)
 
-    // Why (C1 SSH parking): main's headless model holds ~5k rows for SSH ptys
-    // while the relay replay is a 100KiB raw-byte tail; prefer the model on
-    // reveal. Only a non-empty 'headless'-sourced snapshot qualifies — the
-    // renderer-serializer fallback has no mounted xterm after a park. The
-    // paint happens inline in the snapshot-branch style: session.applyMainBufferSnapshot
-    // would nest session.structuralReplayCoordinator.run inside the reattach task and
-    // deadlock on the coordinator's tail chain.
-    // Memoized: the prefetch and the payload task share one probe result, so a
-    // null prefetch can never buy a second timeout before the relay paint.
-    const fetchSshMainModelReattachSnapshot = session.getSshMainModelSnapshotProbe(ptyId)
-    // Why consume-once: only the first reattach of a reveal remount may pay
-    // the probe; a later in-place reconnect on this same mount must not buy a
-    // second timeout before the relay paint.
+    // Spend the park-reveal probe once; later in-place reconnects must not pay another timeout before replay.
     const revealFollowsTerminalPark =
       session.mountFollowsTerminalPark &&
       (connectResult?.isReattach === true || isRemoteRuntimePtyId(ptyId))
     session.mountFollowsTerminalPark = false
-    // An SSH reconnect remounts the pane (tab.generation is its React key), so it also paints into
-    // a fresh xterm — but unlike a park it may only use the model for a FULL-SCREEN app. See
-    // sshReconnectPaintsFromModel for why.
-    //
-    // NOT consume-once, unlike mountFollowsTerminalPark: followsDirectSshReconnect is captured per
-    // connectPanePty and never cleared, so this re-arms if one connect reaches handleReattachResult
-    // twice. Bounded by connectStarted and by the emptiness/alt-screen gates rather than by the
-    // read itself. It still reads the PENDING retry rather than directSshRetryAttempt, which also
-    // accepts the live binding and so stays truthy for every later remount of the generation.
-    const reconnectMayUseModel =
-      Boolean(session.followsDirectSshReconnect) && !revealFollowsTerminalPark
-    // Why: ordinary parking destroys xterm. Rebuild from the authoritative
-    // host snapshot before releasing queued live bytes; null falls back to
-    // the subscribe screen without keeping the old xterm mounted.
+    // Parking destroys xterm; restore the host image before live bytes, preserving subscribe paint if no image was proven.
     let prefetchedParkModelSnapshot: PtyBufferSnapshot | null = null
+    // Null means no proven paint, never empty; unverifiable probes need a bounded retry after payload settlement.
+    let unverifiableParkRevealLedger: ParkRevealRetryLedger | undefined
+    let noHostImageReason: ParkRevealNoHostImageReason | undefined
     if (revealFollowsTerminalPark && (!hasStructuralReplay || isRemoteRuntimePtyId(ptyId))) {
-      if (parseAppSshPtyId(ptyId)) {
-        prefetchedParkModelSnapshot = await fetchSshMainModelReattachSnapshot()
+      let result: HiddenOutputSnapshotResult
+      try {
+        result = await session.serializeHiddenOutputSnapshot(ptyId, {
+          scrollbackRows: resolveHiddenRestoreScrollbackRows(
+            session.pane.terminal.options.scrollback
+          )
+        })
+      } catch {
+        result = classifyHiddenOutputSnapshotReject(sessionBag, ptyId)
+      }
+      const verdict = classifyParkRevealSnapshot(result, ptyId)
+      if (verdict.kind === 'host-snapshot') {
+        prefetchedParkModelSnapshot = verdict.snapshot
+      } else if (verdict.kind === 'unverifiable') {
+        unverifiableParkRevealLedger = verdict.ledger
       } else {
-        try {
-          const result = await session.serializeHiddenOutputSnapshot(ptyId, {
-            scrollbackRows: resolveHiddenRestoreScrollbackRows(
-              session.pane.terminal.options.scrollback
-            )
-          })
-          prefetchedParkModelSnapshot = result.kind === 'snapshot' ? result.snapshot : null
-        } catch {
-          prefetchedParkModelSnapshot = null
-        }
+        noHostImageReason = verdict.reason
       }
       if (!isCurrentReattachPayload()) {
         return false
       }
     }
-    // A reconnect with no relay tail can still restore main's model. Keep that probe and paint in
-    // the structural transaction so live output cannot overtake the snapshot.
-    const shouldApplyStructuralPayload =
-      hasStructuralReplay || prefetchedParkModelSnapshot !== null || reconnectMayUseModel
+    // Keep the model paint in the structural transaction so live output cannot overtake the snapshot.
+    const shouldApplyStructuralPayload = hasStructuralReplay || prefetchedParkModelSnapshot !== null
     const reattachPayload: ReattachPayloadContext = {
       isCurrentReattachPayload,
       connectResult,
@@ -301,11 +293,10 @@ export function bindHandleReattachResult(sessionBag: ConnectPanePtySession): voi
       attemptGeneration,
       prefetchedParkModelSnapshot,
       revealFollowsTerminalPark,
-      reconnectMayUseModel,
-      fetchSshMainModelReattachSnapshot,
       shouldApplyStructuralPayload,
-      coldRestoreStartup,
-      reattachPayloadApplied: !shouldApplyStructuralPayload
+      coldRestoreStartup: startup,
+      reattachPayloadApplied: !shouldApplyStructuralPayload,
+      skippedAltFrameCaptureCols: null
     }
     const { applyReattachPayload, fitAfterReattachRestore } = createReattachPayloadHandlers(
       session,
@@ -323,7 +314,14 @@ export function bindHandleReattachResult(sessionBag: ConnectPanePtySession): voi
     if (!isCurrentReattachPayload() || !reattachPayload.reattachPayloadApplied) {
       return false
     }
+    if (unverifiableParkRevealLedger !== undefined) {
+      // After the payload, so the retry's own structural repaint queues behind this attempt instead of nesting in it.
+      session.retryUnverifiableParkRevealSnapshot(ptyId, unverifiableParkRevealLedger)
+    } else if (noHostImageReason !== undefined) {
+      session.warnParkRevealNoHostImage(ptyId, noHostImageReason)
+    }
     session.scheduleReattachIdleAgentCursorReset()
+    showMainPaneResumeOutcome(sessionBag, ptyId)
 
     scheduleRuntimeGraphSync()
     return true

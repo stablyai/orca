@@ -7,30 +7,19 @@ import type {
   ExternalAutomationAction,
   ExternalAutomationJob,
   ExternalAutomationManager,
-  ExternalAutomationRun,
   AutomationRun
 } from '../../../../shared/automations-types'
 import type { Worktree } from '../../../../shared/worktree/types'
 import { AutomationDetail } from './AutomationDetail'
-import { HermesCronOutputView } from './HermesCronOutputView'
-import { AutomationRunPageFrame } from './AutomationRunPageFrame'
 import { AutomationRunHistory } from './AutomationRunHistory'
 import { ExternalAutomationManagers } from './ExternalAutomationManagers'
-import type { FetchExternalAutomationRuns } from './ExternalAutomationRunTable'
 import type { ExternalAutomationListEntry } from './external-automation-list-entries'
 import type { ExternalAutomationScope } from './external-automation-scope-client'
-import {
-  formatExternalDate,
-  getExternalProviderLabel,
-  getExternalRunContent,
-  getExternalRunStatusLabel,
-  getExternalRunStatusVariant
-} from './external-automation-display'
 import type { AutomationActionNotice } from './automation-row-action-dispatch'
 import type { AutomationHostRecoveryAction } from './automation-host-status-descriptors'
 import type { AutomationHostCatalogEntry } from './automation-host-catalog-types'
 import type { AutomationTargetAvailability } from './automation-target-availability'
-import type { AutomationPaneTab, SelectedExternalRunPage } from './automation-page-state'
+import type { AutomationPaneTab } from './automation-page-state'
 import {
   getAutomationDetailNextTab,
   shouldHandleAutomationDetailEscapeKey,
@@ -41,7 +30,6 @@ import { translate } from '@/i18n/i18n'
 type AutomationsDetailPaneProps = {
   selected: Automation | null
   selectedExternal: ExternalAutomationListEntry | null
-  selectedExternalRunPage: SelectedExternalRunPage | null
   selectedRuns: AutomationRun[]
   /** Set when the selected automation's history read failed; its runs are unknown. */
   selectedRunsNotice: AutomationActionNotice | null
@@ -56,23 +44,11 @@ type AutomationsDetailPaneProps = {
   hostLabelById: ReadonlyMap<string, string>
   selectedRunNowAvailability: AutomationTargetAvailability | null
   worktreeMap: ReadonlyMap<string, Worktree>
-  fetchExternalAutomationRuns: FetchExternalAutomationRuns
   onActivePaneTabChange: (tab: AutomationPaneTab) => void
-  onClearExternalRunPage: () => void
   requestExternalAction: (
     manager: ExternalAutomationManager,
     job: ExternalAutomationJob,
     action: ExternalAutomationAction,
-    scope: ExternalAutomationScope
-  ) => void
-  openExternalRunPage: (
-    manager: ExternalAutomationManager,
-    job: ExternalAutomationJob,
-    run: ExternalAutomationRun
-  ) => void
-  openEditExternalDialog: (
-    manager: ExternalAutomationManager,
-    job: ExternalAutomationJob,
     scope: ExternalAutomationScope
   ) => void
   runNow: (automation: Automation) => void
@@ -87,7 +63,6 @@ type AutomationsDetailPaneProps = {
 export function AutomationsDetailPane({
   selected,
   selectedExternal,
-  selectedExternalRunPage,
   selectedRuns,
   selectedRunsNotice,
   activePaneTab,
@@ -100,12 +75,8 @@ export function AutomationsDetailPane({
   hostLabelById,
   selectedRunNowAvailability,
   worktreeMap,
-  fetchExternalAutomationRuns,
   onActivePaneTabChange,
-  onClearExternalRunPage,
   requestExternalAction,
-  openExternalRunPage,
-  openEditExternalDialog,
   runNow,
   openEditDialog,
   toggleAutomation,
@@ -118,10 +89,6 @@ export function AutomationsDetailPane({
     const handleKeyDown = (event: KeyboardEvent): void => {
       if (shouldHandleAutomationDetailEscapeKey(event)) {
         event.preventDefault()
-        if (selectedExternalRunPage) {
-          onClearExternalRunPage()
-          return
-        }
         onBackToList()
         return
       }
@@ -145,15 +112,7 @@ export function AutomationsDetailPane({
 
     window.addEventListener('keydown', handleKeyDown)
     return () => window.removeEventListener('keydown', handleKeyDown)
-  }, [
-    activePaneTab,
-    onActivePaneTabChange,
-    onBackToList,
-    onClearExternalRunPage,
-    selected,
-    selectedExternal,
-    selectedExternalRunPage
-  ])
+  }, [activePaneTab, onActivePaneTabChange, onBackToList, selected, selectedExternal])
 
   return (
     <section className="flex min-h-0 flex-1 flex-col overflow-hidden">
@@ -168,42 +127,22 @@ export function AutomationsDetailPane({
               )}
             </Button>
           </div>
-          {selectedExternalRunPage ? (
-            <AutomationRunPageFrame
-              title={selectedExternalRunPage.job.name}
-              breadcrumbs={[
-                formatExternalDate(selectedExternalRunPage.run.runAt, relativeNow),
-                getExternalProviderLabel(selectedExternalRunPage.manager),
-                selectedExternalRunPage.manager.targetLabel
-              ]}
-              detail={selectedExternalRunPage.run.outputPath}
-              statusLabel={getExternalRunStatusLabel(selectedExternalRunPage.run)}
-              statusVariant={getExternalRunStatusVariant(selectedExternalRunPage.run)}
-              onBack={onClearExternalRunPage}
-            >
-              <HermesCronOutputView content={getExternalRunContent(selectedExternalRunPage.run)} />
-            </AutomationRunPageFrame>
-          ) : (
-            <ExternalAutomationManagers
-              managers={[
-                {
-                  // The synthesized single-job manager keeps the entry's scope, so
-                  // every action it dispatches names the host the row came from.
-                  scope: selectedExternal.scope,
-                  manager: {
-                    ...selectedExternal.manager,
-                    jobs: [selectedExternal.job]
-                  }
+          <ExternalAutomationManagers
+            managers={[
+              {
+                // The synthesized single-job manager keeps the entry's scope, so
+                // every action it dispatches names the host the row came from.
+                scope: selectedExternal.scope,
+                manager: {
+                  ...selectedExternal.manager,
+                  jobs: [selectedExternal.job]
                 }
-              ]}
-              now={relativeNow}
-              runningActionKey={externalActionKey}
-              onAction={requestExternalAction}
-              onFetchRuns={fetchExternalAutomationRuns}
-              onOpenRun={openExternalRunPage}
-              onEdit={openEditExternalDialog}
-            />
-          )}
+              }
+            ]}
+            now={relativeNow}
+            runningActionKey={externalActionKey}
+            onAction={requestExternalAction}
+          />
         </div>
       ) : (
         <Tabs
@@ -258,24 +197,27 @@ export function AutomationsDetailPane({
             />
           </TabsContent>
 
-          <TabsContent value="runs" className="scrollbar-sleek min-h-0 overflow-auto p-5">
-            {selected ? (
-              <AutomationRunHistory
-                runs={selectedRuns}
-                automationId={selected.id}
-                worktreeMap={worktreeMap}
-                notice={selectedRunsNotice}
-                onRecoverHistory={recoverSelectedRuns}
-                onOpenRun={openAutomationRunPage}
-              />
-            ) : (
-              <div className="flex h-full items-center justify-center text-sm text-muted-foreground">
-                {translate(
-                  'auto.components.automations.AutomationsPage.c3a28c9793',
-                  'Select an automation to view runs.'
-                )}
-              </div>
-            )}
+          <TabsContent value="runs" className="flex min-h-0 flex-1 flex-col overflow-hidden">
+            {/* The history owns the scrolling, so the padding rides a wrapper it can size against. */}
+            <div className="flex min-h-0 flex-1 flex-col p-5">
+              {selected ? (
+                <AutomationRunHistory
+                  runs={selectedRuns}
+                  automationId={selected.id}
+                  worktreeMap={worktreeMap}
+                  notice={selectedRunsNotice}
+                  onRecoverHistory={recoverSelectedRuns}
+                  onOpenRun={openAutomationRunPage}
+                />
+              ) : (
+                <div className="flex h-full items-center justify-center text-sm text-muted-foreground">
+                  {translate(
+                    'auto.components.automations.AutomationsPage.c3a28c9793',
+                    'Select an automation to view runs.'
+                  )}
+                </div>
+              )}
+            </div>
           </TabsContent>
         </Tabs>
       )}

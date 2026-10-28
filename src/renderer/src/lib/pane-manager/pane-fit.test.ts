@@ -32,7 +32,7 @@ function createPane(options: {
   proposed?: () => { cols: number; rows: number } | undefined
 }): TestPane {
   let rect = options.rect
-  // Why: the reveal gate measures the inner xterm host, which can differ from the outer .pane.
+  // Reveal measures the inner xterm host, which can differ from the outer pane.
   let xtermRect: { width: number; height: number } | null = null
   let display = 'block'
   const leafId = '22222222-2222-4222-8222-222222222222'
@@ -193,8 +193,7 @@ describe('safeFitAndThen unmeasurable-pane retry', () => {
     }
 
     expect(continuation).not.toHaveBeenCalled()
-    // Why census fields: main coalesces this crumb by name, so the pane count
-    // must ride on the payload — the burst multiplicity no longer carries it.
+    // Coalesced crumbs must carry pane counts explicitly; multiplicity no longer measures the population.
     expect(recordRendererCrashBreadcrumb).toHaveBeenCalledWith(
       'terminal_safe_fit_retry_exhausted',
       {
@@ -212,9 +211,7 @@ describe('safeFitAndThen unmeasurable-pane retry', () => {
   })
 
   it('runs a display:none pane continuation on the first fit after it is revealed', async () => {
-    // Why: a restored floating-workspace pane is display:none for its whole reattach, so the
-    // reattach grid push has to survive to the reveal — dropping it strands the PTY at the
-    // replay grid with nothing left to correct it.
+    // Floating-workspace reattach can stay hidden throughout; retain its grid push until reveal or the PTY stays at replay dimensions.
     const pane = createPane({ rect: { width: 0, height: 0 } })
     pane.setDisplay('none')
     const continuation = vi.fn()
@@ -225,7 +222,6 @@ describe('safeFitAndThen unmeasurable-pane retry', () => {
       deferIfHidden: true
     })
 
-    // Completion resolves immediately so reattach never holds live output behind a hidden pane.
     await expect(handle.completion).resolves.toBe(false)
     expect(continuation).not.toHaveBeenCalled()
     expect(recordRendererCrashBreadcrumb).not.toHaveBeenCalled()
@@ -235,16 +231,12 @@ describe('safeFitAndThen unmeasurable-pane retry', () => {
     safeFit(pane)
     expect(continuation).toHaveBeenCalledTimes(1)
 
-    // One-shot: a later fit must not re-send the reattach grid.
     safeFit(pane)
     expect(continuation).toHaveBeenCalledTimes(1)
   })
 
   it('runs the continuation when the reveal fit arrives on a different pane object', async () => {
-    // Why: PTY connections hold a toPublicPane() wrapper while PaneManager.fitAllRevealedPanes
-    // iterates the internal panes, so park and drain are never the same object. Anything keyed
-    // on the pane identity is silently unreachable — see the same trap in
-    // pane-metric-options-deferral.
+    // PTY connections use public wrappers while fitAllRevealedPanes uses internal panes; pane-identity keys lose deferred work (as in pane-metric-options-deferral).
     const pane = createPane({ rect: { width: 0, height: 0 } })
     pane.setDisplay('none')
     const continuation = vi.fn()
@@ -262,8 +254,7 @@ describe('safeFitAndThen unmeasurable-pane retry', () => {
   })
 
   it('stops a deferred continuation when its handle is cancelled before reveal', async () => {
-    // Why: callers cancel to invalidate stale work (a new stream generation must not inherit an
-    // old replay's grid push). A deferred entry is that same work waiting for a box.
+    // Cancellation invalidates deferred work too; a new stream generation must not inherit an old replay’s grid push.
     const pane = createPane({ rect: { width: 0, height: 0 } })
     pane.setDisplay('none')
     const continuation = vi.fn()
@@ -281,8 +272,7 @@ describe('safeFitAndThen unmeasurable-pane retry', () => {
   })
 
   it('does not fire an older deferred continuation alongside its replacement', async () => {
-    // Why: re-registering the key hands ownership to the new continuation; leaving the old
-    // deferred twin armed would double-send the grid and its SIGWINCH in one tick.
+    // Same-key replacement must disarm the deferred twin or both send grid/SIGWINCH in one tick.
     const pane = createPane({ rect: { width: 0, height: 0 } })
     pane.setDisplay('none')
     const first = vi.fn()
@@ -304,7 +294,7 @@ describe('safeFitAndThen unmeasurable-pane retry', () => {
   })
 
   it('does not let a stale handle cancel its deferred replacement', () => {
-    // Why: stream replacement can park under the same key before the superseded owner cancels.
+    // A replacement can park before the superseded stream owner cancels.
     const pane = createPane({ rect: { width: 0, height: 0 } })
     pane.setDisplay('none')
     const first = vi.fn()
@@ -454,8 +444,7 @@ describe('paneFitClientSizeChanged (reveal fit gate)', () => {
   })
 
   it('reports changed when the inner xterm host shrank but the outer pane did not', () => {
-    // A title bar / restored-session banner reduces the fittable area while the
-    // outer .pane pixels stay constant; the reveal must fit, not skip.
+    // Title/banner changes shrink the inner fit area without changing outer pane pixels.
     const pane = createPane({
       rect: { width: 800, height: 600 },
       proposed: () => ({ cols: 80, rows: 24 })
@@ -469,8 +458,7 @@ describe('paneFitClientSizeChanged (reveal fit gate)', () => {
 describe('deferred metric flush inside safeFit', () => {
   function createMetricPane(): ManagedPane & { fitAddon: { fit: ReturnType<typeof vi.fn> } } {
     const terminal = { cols: 80, rows: 24, options: {} as Record<string, unknown> }
-    // Grid shrinks once the parked large font lands — the case the min-dimension
-    // gate exists to reject, but which it can only see after the flush.
+    // Flush can shrink the grid below the fit floor; recheck after applying parked metrics.
     const proposeDimensions = (): { cols: number; rows: number } =>
       Number(terminal.options.fontSize ?? 10) >= 24 ? { cols: 5, rows: 2 } : { cols: 40, rows: 20 }
     return {
@@ -489,9 +477,7 @@ describe('deferred metric flush inside safeFit', () => {
     applyOrDeferPaneMetricOptions(pane, { fontSize: 24 }, false)
 
     expect(safeFit(pane)).toBe(false)
-    // The parked value still lands so the pane is not stuck on stale metrics.
     expect(pane.terminal.options.fontSize).toBe(24)
-    // But the PTY must not be pinned to the 5x2 grid the floor rejects.
     expect(pane.fitAddon.fit).not.toHaveBeenCalled()
   })
 

@@ -7,6 +7,7 @@ import {
 } from '../../../src/shared/worktree/retired-name-cache'
 import type { RetiredNameRegistry } from '../../../src/shared/worktree/retired-name-registry'
 import type { RpcClient } from '../transport/rpc-client'
+import { retiredWorktreeNamesRead } from './worktree-catalog-operations'
 
 export function buildRetiredWorktreeNamesRefreshKey(
   existingWorktreePaths: readonly string[] | undefined
@@ -14,15 +15,8 @@ export function buildRetiredWorktreeNamesRefreshKey(
   return [...(existingWorktreePaths ?? [])].sort().join('\0')
 }
 
-/** Names already spent in a repo, including workspaces that have since been deleted.
- *
- *  Why a targeted request rather than the workspace catalog: the catalog is served by `worktree.ps`,
- *  which carries rows only. Retired names are needed just while the create sheet is open and only
- *  for one repo, so this asks for exactly that.
- *
- *  `refreshKey` must change on every workspace-list mutation. Caching rules live in
- *  `retired-name-cache` so this and the desktop hook cannot drift on what a failure means, and no
- *  loading state is reported because create is never gated on this fetch. */
+// worktree.ps has no retired names; fetch only this repo while its create sheet is open.
+// Change refreshKey on every catalog mutation; shared retired-name-cache rules keep failure behavior aligned with desktop.
 export function useRetiredWorktreeNames(
   client: RpcClient | null | undefined,
   repoId: string | null | undefined,
@@ -42,13 +36,15 @@ export function useRetiredWorktreeNames(
         setLoaded((previous) => retiredNamesAfterRefresh(previous, activeRepoId, registry))
       }
     }
-    void client
-      .sendRequest('worktree.listRetiredNames', { repo: `id:${activeRepoId}` })
-      .then((response) =>
+    void retiredWorktreeNamesRead
+      .request(client, { repo: `id:${activeRepoId}` })
+      .then((reply) => {
+        const names = retiredWorktreeNamesRead.interpret(reply)
+        // Refusal intentionally settles as an empty registry; transport rejection preserves the previous names.
         settle(
-          readRetiredNameRegistryForRepo((response as { result?: unknown }).result, activeRepoId)
+          readRetiredNameRegistryForRepo(names.accepted ? names.value : undefined, activeRepoId)
         )
-      )
+      })
       .catch(() => settle(null))
     return () => {
       cancelled = true

@@ -130,7 +130,12 @@ describe('getDiff', () => {
 
   it('falls back to HEAD for unstaged diffs when the file is not in the index', async () => {
     gitExecFileAsyncBufferMock
-      .mockRejectedValueOnce(new Error('missing index'))
+      .mockRejectedValueOnce(
+        Object.assign(new Error("fatal: path 'src/file.ts' exists on disk, but not in the index"), {
+          code: 128,
+          stderr: "fatal: path 'src/file.ts' exists on disk, but not in the index"
+        })
+      )
       .mockResolvedValueOnce({ stdout: Buffer.from('head-content\n') })
     readFileMock.mockResolvedValue(Buffer.from('working-tree-content'))
 
@@ -163,8 +168,7 @@ describe('getDiff', () => {
   it('does not read oversized working-tree files into memory', async () => {
     const workingTreePath = path.join('/repo', 'dist/large.log')
     gitExecFileAsyncBufferMock.mockResolvedValueOnce({ stdout: Buffer.from('index-content\n') })
-    // Why by path: the diff also stats git-dir entries to stamp its inputs, so a
-    // one-shot queue would hand the oversized size to whichever stat ran first.
+    // Route stats by path so stamp reads cannot consume the oversized-file response.
     statMock.mockImplementation(async (target: string) =>
       target === workingTreePath
         ? { isFile: () => true, size: 10 * 1024 * 1024 + 1 }
@@ -315,8 +319,7 @@ describe('getDiff', () => {
 
     const reads = Array.from({ length: 8 }, () => getDiff('/repo', 'src/file.ts', true))
 
-    // Why both up front: the two sides are independent spawns issued concurrently,
-    // so 8 identical reads still collapse to exactly 2 — one per side, not per read.
+    // Eight coalesced reads should spawn only once for each independent side.
     await waitForMockCalls(gitExecFileAsyncBufferMock, 2)
     expect(gitExecFileAsyncBufferMock).toHaveBeenCalledTimes(2)
 

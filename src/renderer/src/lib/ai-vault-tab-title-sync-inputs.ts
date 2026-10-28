@@ -4,6 +4,11 @@ import type { TerminalTab } from '../../../shared/terminal-tab-types'
 import { getExecutionHostIdForWorktree } from '@/lib/worktree-runtime-owner'
 import type { AppState } from '@/store/types'
 import { collectAiVaultTitleRequests } from './ai-vault-tab-title-requests'
+import {
+  selectDetectedWorktreesByRepo,
+  selectFolderWorkspaces,
+  selectWorktreesByRepo
+} from '@/store/workspace-record-selectors'
 
 function providerSessionEqual(
   left: AgentProviderSessionMetadata | undefined,
@@ -22,6 +27,9 @@ function relevantRecordEqual<T>(
   relevant: (entry: T) => boolean,
   equal: (current: T, previous: T) => boolean
 ): boolean {
+  if (current === previous) {
+    return true
+  }
   let currentCount = 0
   let previousCount = 0
   for (const [key, entry] of Object.entries(current)) {
@@ -178,9 +186,9 @@ export function aiVaultTitleSyncInputsChanged(current: AppState, previous: AppSt
 
   const ownerInputsChanged =
     current.repos !== previous.repos ||
-    current.worktreesByRepo !== previous.worktreesByRepo ||
-    current.detectedWorktreesByRepo !== previous.detectedWorktreesByRepo ||
-    current.folderWorkspaces !== previous.folderWorkspaces ||
+    selectWorktreesByRepo(current) !== selectWorktreesByRepo(previous) ||
+    selectDetectedWorktreesByRepo(current) !== selectDetectedWorktreesByRepo(previous) ||
+    selectFolderWorkspaces(current) !== selectFolderWorkspaces(previous) ||
     current.projectGroups !== previous.projectGroups ||
     current.settings !== previous.settings ||
     current.activeWorktreeId !== previous.activeWorktreeId ||

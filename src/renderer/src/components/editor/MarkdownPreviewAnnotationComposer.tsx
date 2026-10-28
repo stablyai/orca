@@ -1,3 +1,4 @@
+import { ImeTextarea } from '@/lib/ime-text-field'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { CornerDownLeft } from 'lucide-react'
 import { Button } from '@/components/ui/button'
@@ -32,7 +33,7 @@ export function MarkdownPreviewSingleNoteSendMenu({
           id: 'note',
           label: translate('auto.components.editor.MarkdownPreview.f37b98999e', 'This note'),
           notes: note.sentAt ? [] : [note],
-          prompt: formatMarkdownReviewNotes([note], content)
+          formatPrompt: (notes) => formatMarkdownReviewNotes(notes, content)
         }
       ]}
       targetModeLabel="This note"
@@ -57,7 +58,6 @@ export function MarkdownPreviewAnnotationComposer({
   const mountedRef = useMountedRef()
   const composerRef = useRef<HTMLDivElement | null>(null)
 
-  // Why: scope the add-review-note chord to this composer subtree.
   useEffect(() => {
     const composer = composerRef.current
     if (!composer) {
@@ -101,7 +101,7 @@ export function MarkdownPreviewAnnotationComposer({
       <div className="orca-diff-comment-popover-label">
         {translate('auto.components.editor.MarkdownPreview.b1bfc04034', 'Selected text')}
       </div>
-      <textarea
+      <ImeTextarea
         ref={focusTextareaRef}
         className="orca-diff-comment-popover-textarea"
         placeholder={translate(

@@ -6,11 +6,17 @@ vi.mock('@/lib/telemetry', () => ({
   track: vi.fn(),
   tuiAgentToAgentKind: (agent: string) => agent
 }))
-vi.mock('@/i18n/i18n', () => ({ translate: (_key: string, value: string) => value }))
+vi.mock('@/i18n/i18n', () => ({
+  translate: (_key: string, value: string, vars?: Record<string, string>) =>
+    value.replace(/\{\{(\w+)\}\}/g, (_match, name: string) => vars?.[name] ?? '')
+}))
 
+import { toast } from 'sonner'
+import { track } from '@/lib/telemetry'
 import {
   buildDirectWorkItemAgentStartupPlan,
-  buildDirectWorkItemStartupOpts
+  buildDirectWorkItemStartupOpts,
+  notifyDirectWorkItemAgentStartTimeout
 } from './launch-work-item-direct-agent'
 import type { AgentStartupPlan } from './tui-agent-startup'
 
@@ -40,9 +46,7 @@ describe('buildDirectWorkItemStartupOpts', () => {
     })
   })
 
-  it('carries launchDraftText for a natively-prefilled draft launch', () => {
-    // Why: the draft is already inside launchCommand, so draftPrompt stays unset
-    // and launchDraftText is the only signal the view-mode gate can read.
+  it('keeps a natively-prefilled draft in the terminal command', () => {
     const plan: AgentStartupPlan = {
       agent: 'claude',
       launchCommand: "claude --prefill 'https://github.com/o/r/issues/12'",
@@ -51,15 +55,10 @@ describe('buildDirectWorkItemStartupOpts', () => {
       launchConfig: { agentArgs: '', agentEnv: {} }
     }
 
-    const opts = buildDirectWorkItemStartupOpts(
-      'claude',
-      plan,
-      'task_page',
-      'https://github.com/o/r/issues/12'
-    )
+    const opts = buildDirectWorkItemStartupOpts('claude', plan, 'task_page')
 
     expect(opts.startup?.draftPrompt).toBeUndefined()
-    expect(opts.startup?.launchDraftText).toBe('https://github.com/o/r/issues/12')
+    expect(opts.startup?.command).toContain('https://github.com/o/r/issues/12')
   })
 })
 
@@ -77,34 +76,89 @@ const settings = {
 }
 
 describe('buildDirectWorkItemAgentStartupPlan', () => {
-  it('omits native-chat preferences when the new workspace opens in terminal mode', () => {
+  it('keeps Chat UI model preferences out of the terminal startup', () => {
     const result = buildDirectWorkItemAgentStartupPlan({
       agent: 'codex',
       draftContent: 'Review issue 42',
       promptDelivery: 'draft',
-      settings: { ...settings, openAgentTabsInChatByDefault: false },
-      launchPlatform: 'darwin',
-      nativeChatTranscriptIsLocalReadable: true
+      settings,
+      launchPlatform: 'darwin'
     })
 
     expect(result.startupPlan?.launchCommand).not.toContain("'-m'")
+    expect(result.startupPlan?.launchCommand).not.toContain('model_reasoning_effort=')
     expect(result.startupPlan?.sessionOptions).toBeUndefined()
   })
+})
 
-  it('applies native-chat preferences when the new workspace opens in chat', () => {
-    const result = buildDirectWorkItemAgentStartupPlan({
-      agent: 'codex',
-      draftContent: 'Review issue 42',
-      promptDelivery: 'draft',
-      settings: { ...settings, openAgentTabsInChatByDefault: true },
-      launchPlatform: 'darwin',
-      nativeChatTranscriptIsLocalReadable: true
-    })
+describe('notifyDirectWorkItemAgentStartTimeout', () => {
+  it('toasts the paste hint and records the startup timeout', () => {
+    notifyDirectWorkItemAgentStartTimeout('codex', true)
 
-    expect(result.startupPlan?.launchCommand).toContain("'-m' 'gpt-5.2-codex'")
-    expect(result.startupPlan?.sessionOptions).toEqual({
-      model: 'gpt-5.2-codex',
-      effort: 'medium'
+    expect(toast.message).toHaveBeenCalledWith(expect.stringContaining('paste the prompt'))
+    expect(track).toHaveBeenCalledWith('agent_error', {
+      error_class: 'unknown',
+      agent_kind: 'codex'
     })
   })
+
+  it('names the work item context for an unsubmitted paste', () => {
+    notifyDirectWorkItemAgentStartTimeout('codex', false)
+
+    expect(toast.message).toHaveBeenCalledWith(
+      expect.stringContaining('paste the work item context')
+    )
+  })
+})
+
+// Omitted hidden arguments must stay undefined to inherit settings; empty string explicitly clears them.
+describe('buildDirectWorkItemAgentStartupPlan global arguments fallback', () => {
+  const withGlobalArgs = {
+    ...settings,
+    agentDefaultArgs: { codex: '--sandbox danger-full-access' }
+  }
+
+  it('resolves the global Agents arguments when the launch names none', () => {
+    const result = buildDirectWorkItemAgentStartupPlan({
+      agent: 'codex',
+      draftContent: 'Fix the broken checks',
+      promptDelivery: 'draft',
+      settings: withGlobalArgs,
+      launchPlatform: 'darwin'
+    })
+
+    expect(result.startupPlan?.launchCommand).toContain("'--sandbox' 'danger-full-access'")
+  })
+
+  it('lets an explicit per-action value win over the global one', () => {
+    const result = buildDirectWorkItemAgentStartupPlan({
+      agent: 'codex',
+      agentArgs: '--model gpt-5',
+      draftContent: 'Fix the broken checks',
+      promptDelivery: 'draft',
+      settings: withGlobalArgs,
+      launchPlatform: 'darwin'
+    })
+
+    expect(result.startupPlan?.launchCommand).toContain("'--model' 'gpt-5'")
+    expect(result.startupPlan?.launchCommand).not.toContain('danger-full-access')
+  })
+})
+
+it('keeps own permission on the direct terminal route with unrelated args and env', () => {
+  const result = buildDirectWorkItemAgentStartupPlan({
+    agent: 'codex',
+    draftContent: 'Fix checks',
+    promptDelivery: 'draft',
+    launchPlatform: 'linux',
+    settings: {
+      agentPermissionDefault: 'full-access',
+      agentDefaultArgs: { codex: '--search' },
+      agentDefaultEnv: { codex: { KEEP: 'value' } }
+    },
+    sessionOptions: { permissionMode: 'own' }
+  })
+  expect(result.startupPlan?.launchCommand).not.toContain('bypass')
+  expect(result.startupPlan?.launchCommand).toContain("'--search'")
+  expect(result.startupPlan?.env).toEqual({ KEEP: 'value' })
 })

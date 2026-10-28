@@ -6,6 +6,9 @@ import {
   getUnavailableQuickActionMessage
 } from '@/components/cmd-j/quick-action-context'
 import { rankCmdJMiddleResults } from '@/components/cmd-j/palette-results'
+import { buildCmdJBrowserNavigationAction } from '@/components/cmd-j/browser-navigation-action'
+import { openWorkspaceBrowserTab } from '@/lib/workspace-browser-tab-open'
+import { findGroupAndWorktree } from '@/store/slices/tab-group-state'
 import {
   getComposerEligibleRepos,
   resolveComposerActiveRepoId,
@@ -93,6 +96,21 @@ export function useWorktreeJumpPaletteQuickActions({
       )
     )
   }, [])
+  const openBrowserUrlAction = useCallback(async (groupId: string, url: string) => {
+    const state = useAppStore.getState()
+    // Why: the invoking group owns its workspace, as for New Browser Tab.
+    const workspaceId =
+      findGroupAndWorktree(state.groupsByWorktree, groupId)?.worktreeId ?? state.activeWorktreeId
+    if (!workspaceId) {
+      return
+    }
+    await openWorkspaceBrowserTab({
+      workspaceId,
+      targetGroupId: groupId,
+      url,
+      intent: { kind: 'url' }
+    })
+  }, [])
   const openAddQuickCommandAction = useCallback(() => {
     openSettingsTarget({ pane: 'quick-commands', repoId: null, intent: 'add-quick-command' })
     openSettingsPage()
@@ -103,26 +121,26 @@ export function useWorktreeJumpPaletteQuickActions({
         state: useAppStore.getState(),
         activeGroupSnapshot: activeGroupSnapshotRef.current,
         openNewBrowserTab: openNewBrowserTabInActiveWorkspace,
+        openBrowserUrl: openBrowserUrlAction,
         openNewMarkdownFile: openNewMarkdownInActiveWorkspace,
         openNewTerminalTab: openNewTerminalTabInActiveWorkspace,
         openCreateWorkspace: openCreateWorkspaceAction,
         deleteActiveWorkspace: deleteActiveWorkspaceAction,
         openAddQuickCommand: openAddQuickCommandAction
       }),
-    // oxlint-disable-next-line react-hooks/exhaustive-deps -- the controller ref preserves its original stable identity.
     [
+      activeGroupSnapshotRef,
       deleteActiveWorkspaceAction,
       openAddQuickCommandAction,
+      openBrowserUrlAction,
       openCreateWorkspaceAction,
       openNewBrowserTabInActiveWorkspace,
       openNewMarkdownInActiveWorkspace,
       openNewTerminalTabInActiveWorkspace
     ]
   )
-  // Why: buildQuickActionContext() reads the store imperatively, so these voided values are the
-  // memo's real inputs — each one is read (some transitively, e.g. runtimeStatusByEnvironmentId
-  // via the managed-browser creation policy) while availability is computed.
-  const availableActionResults = useMemo(() => {
+  // Availability reads store state imperatively; these values supply its real memo dependencies, including managed-browser runtime status.
+  const availableActions = useMemo(() => {
     void activeView
     void activeWorktreeId
     void worktreesByRepo
@@ -135,7 +153,10 @@ export function useWorktreeJumpPaletteQuickActions({
     void settings?.activeRuntimeEnvironmentId
     void runtimeStatusByEnvironmentId
     const context = buildQuickActionContext()
-    return actionResults.filter((action) => action.isAvailable(context).available)
+    return {
+      context,
+      actionResults: actionResults.filter((action) => action.isAvailable(context).available)
+    }
   }, [
     actionResults,
     buildQuickActionContext,
@@ -151,19 +172,22 @@ export function useWorktreeJumpPaletteQuickActions({
     settings?.activeRuntimeEnvironmentId,
     runtimeStatusByEnvironmentId
   ])
-  const middleItems = useMemo<(SettingsPaletteItem | QuickActionPaletteItem)[]>(
-    () =>
-      rankCmdJMiddleResults({
-        query: deferredQuery,
-        settingsResults,
-        actionResults: availableActionResults
-      }).map((result) =>
-        result.kind === 'settings'
-          ? { id: result.id, type: 'settings' as const, result }
-          : { id: `quick-action:${result.id}`, type: 'quick-action' as const, result }
-      ),
-    [availableActionResults, deferredQuery, settingsResults]
-  )
+  const middleItems = useMemo<(SettingsPaletteItem | QuickActionPaletteItem)[]>(() => {
+    const results = rankCmdJMiddleResults({
+      query: deferredQuery,
+      settingsResults,
+      actionResults: availableActions.actionResults
+    })
+    const navigationAction = buildCmdJBrowserNavigationAction(deferredQuery)
+    if (navigationAction?.isAvailable(availableActions.context).available) {
+      results.unshift({ ...navigationAction, order: 0, qualityClass: 'exact-intent' })
+    }
+    return results.map((result) =>
+      result.kind === 'settings'
+        ? { id: result.id, type: 'settings' as const, result }
+        : { id: `quick-action:${result.id}`, type: 'quick-action' as const, result }
+    )
+  }, [availableActions, deferredQuery, settingsResults])
   return { prefetchCreateWorkspaceBaseForComposer, buildQuickActionContext, middleItems }
 }
 

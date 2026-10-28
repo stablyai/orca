@@ -1,10 +1,10 @@
-import type { MobileRelayHostOverlay } from './mobile-relay-host-overlay'
+import type { MobileRelayEndpoint } from '../../../src/shared/mobile-relay-credential-contract'
 import type { HostListSnapshot } from './host-list-load-sharing'
 import type { HostCatalogEntry, StoredHostProfile } from './types'
 
 export async function joinHostCatalogCredentials(args: {
   storedHosts: readonly StoredHostProfile[]
-  overlays: ReadonlyMap<string, MobileRelayHostOverlay>
+  relays: ReadonlyMap<string, MobileRelayEndpoint>
   tokenCache: Map<string, string>
   readToken: (hostId: string) => Promise<string | null>
   getRevision: () => number
@@ -31,17 +31,8 @@ export async function joinHostCatalogCredentials(args: {
         args.tokenCache.set(stored.id, token)
       }
     }
-    const overlay = args.overlays.get(stored.id)
-    const base = {
-      ...stored,
-      ...(overlay
-        ? {
-            endpoints: overlay.endpoints,
-            relayHostId: overlay.relayHostId,
-            relay: overlay.relay
-          }
-        : {})
-    }
+    const relay = args.relays.get(stored.id)
+    const base = { ...stored, ...(relay ? { relay } : {}) }
     const profile = token ? { ...base, deviceToken: token } : null
     catalog.push({ ...base, credentialStatus, profile })
     if (profile) {

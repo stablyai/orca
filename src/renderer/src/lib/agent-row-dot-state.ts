@@ -1,11 +1,10 @@
 import type { AgentDotState } from '@/components/AgentStateDot'
-import type { AgentWorkingMode } from '../../../shared/agent-status-types'
-import type { AgentRowState } from './agent-row-decay-state'
+import type { AgentChildRowModel } from '../../../shared/agent-child-row-model'
+import { agentVerdictDisplayMark } from '../../../shared/agent-main-agent-verdict'
+import type { AgentStatusEntry, AgentWorkingMode } from '../../../shared/agent-status-types'
+import type { AgentRowState } from '../../../shared/agent-row-decay-state'
 
-/**
- * Map an agent row's state onto the shared state-indicator vocabulary. One copy so the
- * sidebar card, the dashboard row and the notes send menu cannot drift on a new member.
- */
+/** Share row-state mapping across sidebar, dashboard and notes so new states cannot diverge. */
 export function agentRowDotState(
   state: AgentRowState,
   workingMode?: AgentWorkingMode
@@ -21,4 +20,18 @@ export function agentRowDotState(
       return state
   }
   return 'idle'
+}
+
+/** Use a child’s own verdict; otherwise prefer main-agent stop/failure, including failure while subagents still work. */
+export function agentRowDisplayDotState(agent: {
+  state: AgentRowState
+  entry: Pick<AgentStatusEntry, 'state' | 'interrupted' | 'mainAgent' | 'workingMode'>
+  childRow?: Pick<AgentChildRowModel, 'displayState'>
+}): AgentDotState {
+  if (agent.childRow) {
+    return agent.childRow.displayState
+  }
+  return (
+    agentVerdictDisplayMark(agent.entry) ?? agentRowDotState(agent.state, agent.entry.workingMode)
+  )
 }

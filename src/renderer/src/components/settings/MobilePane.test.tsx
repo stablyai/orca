@@ -67,8 +67,7 @@ vi.mock('sonner', () => ({
 }))
 vi.mock('./mobile-pairing-device-polling', () => ({ useMobilePairingDevicePolling: vi.fn() }))
 
-// Stub the child sections so the test targets MobilePane's own connection-mode
-// safety wiring (effective mode, canGenerate gate, persistence) in isolation.
+// Stub sections to isolate MobilePane’s mode safety, generation gate and persistence.
 vi.mock('./MobilePairingSetupSection', () => ({
   MobilePairingSetupSection: (props: {
     connectionMode: MobilePairingConnectionMode
@@ -95,8 +94,7 @@ vi.mock('./MobilePairingSetupSection', () => ({
       <span data-testid="custom-addresses">{props.customAddresses.join(',')}</span>
       <span data-testid="refreshing-addresses">{String(props.refreshingNetworkInterfaces)}</span>
       {props.connectionPathControl}
-      {/* Mirror the real Generate gate (loading/canGenerate) so a stuck
-          loading flag surfaces as a disabled control the tests can catch. */}
+      {/* Mirror real generation gating so wedged loading state remains observable. */}
       <button
         type="button"
         onClick={props.onGenerateQr}
@@ -222,19 +220,17 @@ describe('MobilePane pairing connection mode', () => {
     await waitFor(() => expect(getPairingQR).toHaveBeenCalledWith({ connectionMode: 'automatic' }))
   })
 
-  it('keeps Anywhere selected but blocks generation when signed out', async () => {
+  it('preselects LAN on a signed-out desktop and gates Generate once Relay is chosen', async () => {
     mocks.holder.state.orcaProfileAuthStatus = { state: 'local' }
     const user = userEvent.setup()
     render(<MobilePane />)
-    expect(screen.getByTestId('mode')).toHaveTextContent('automatic')
-    // Why: the signed-out desktop cannot serve Relay, so Generate is gated off
-    // and no misleading local-only QR is minted under the Relay label.
+    expect(screen.getByTestId('mode')).toHaveTextContent('local-only')
+    await user.click(screen.getByRole('button', { name: 'choose-anywhere' }))
+    // Why: signed-out Relay is gated off; no local-only QR is minted under its label.
     expect(screen.getByTestId('can-generate')).toHaveTextContent('false')
     expect(screen.getByRole('button', { name: 'Generate' })).toBeDisabled()
-
     await user.click(screen.getByRole('button', { name: 'Generate' }))
-    await new Promise((resolve) => setTimeout(resolve, 10))
-    expect(getPairingQR).not.toHaveBeenCalled()
+    await waitFor(() => expect(getPairingQR).not.toHaveBeenCalled())
   })
 
   it('surfaces Relay mint failure without a QR and offers Use LAN', async () => {
@@ -628,12 +624,10 @@ describe('MobilePane pairing connection mode', () => {
     await user.click(screen.getByRole('button', { name: 'Generate' }))
     await waitFor(() => expect(getPairingQR).toHaveBeenCalledWith({ connectionMode: 'automatic' }))
 
-    // Sign out while the Relay mint is still in flight.
     mocks.holder.state.orcaProfileAuthStatus = { state: 'local' }
     rerender(<MobilePane />)
 
-    // The superseded response arrives; it must not paint a QR on a desktop that
-    // can no longer serve Relay.
+    // Late superseded responses must not show Relay codes after sign-out.
     resolveQr?.({
       available: true,
       qrDataUrl: 'data:image/png;base64,relay',
@@ -656,11 +650,9 @@ describe('MobilePane pairing connection mode', () => {
     const { rerender } = render(<MobilePane />)
     await user.click(screen.getByRole('button', { name: 'Generate' }))
     await waitFor(() => expect(getPairingQR).toHaveBeenCalledWith({ connectionMode: 'automatic' }))
-    // The hung generate holds the spinner up.
     expect(screen.getByTestId('loading')).toHaveTextContent('true')
 
-    // Sign out while the Relay mint is still in flight; the superseded request
-    // must drop loading so Generate isn't wedged disabled forever.
+    // Sign-out must release hung generation so its loading flag cannot wedge Generate.
     mocks.holder.state.orcaProfileAuthStatus = { state: 'local' }
     rerender(<MobilePane />)
     await waitFor(() => expect(screen.getByTestId('loading')).toHaveTextContent('false'))
@@ -675,7 +667,6 @@ describe('MobilePane pairing connection mode', () => {
     await new Promise((resolve) => setTimeout(resolve, 10))
     expect(screen.getByTestId('loading')).toHaveTextContent('false')
 
-    // Switching to LAN re-enables Generate (no signed-in gate).
     await user.click(screen.getByRole('button', { name: 'choose-local' }))
     expect(screen.getByRole('button', { name: 'Generate' })).toBeEnabled()
   })
@@ -688,8 +679,7 @@ describe('MobilePane pairing connection mode', () => {
     await waitFor(() => expect(getPairingQR).toHaveBeenCalledWith({ connectionMode: 'automatic' }))
     expect(screen.getByTestId('loading')).toHaveTextContent('true')
 
-    // Switch to LAN before the mint resolves; loading must clear so
-    // Generate can be used again for the new path.
+    // Switching modes must clear the old mint’s loading flag so the new path can generate.
     await user.click(screen.getByRole('button', { name: 'choose-local' }))
     await waitFor(() => expect(screen.getByTestId('loading')).toHaveTextContent('false'))
     expect(screen.getByRole('button', { name: 'Generate' })).toBeEnabled()
@@ -701,8 +691,7 @@ describe('MobilePane pairing connection mode', () => {
     await user.click(screen.getByRole('button', { name: 'Generate' }))
     await waitFor(() => expect(screen.getByTestId('qr')).toHaveTextContent('base64,qr'))
 
-    // Another window persists a new path; the shared hook syncs it in without
-    // routing through changeConnectionMode.
+    // Model cross-window persistence bypassing changeConnectionMode.
     mocks.holder.state.settings = {
       mobileAutoRestoreFitMs: null,
       mobilePairingConnectionMode: 'local-only'
@@ -726,7 +715,6 @@ describe('MobilePane pairing connection mode', () => {
     await user.click(screen.getByRole('button', { name: 'Generate' }))
     await waitFor(() => expect(getPairingQR).toHaveBeenCalledWith({ connectionMode: 'automatic' }))
 
-    // Switch to LAN before the Relay mint resolves — LAN may auto-mint a new code.
     getPairingQR.mockResolvedValue({
       available: true,
       qrDataUrl: 'data:image/png;base64,local',
@@ -841,8 +829,7 @@ describe('MobilePane', () => {
     await vi.waitFor(() =>
       expect(mocks.latestPairedDevicesProps?.devices.map((d) => d.deviceId)).toEqual(['phone-2'])
     )
-    // Positive control so the unmount test below can't stay green if the
-    // success toast is ever dropped from the revoke path.
+    // Require a successful revoke toast first so the unmount test cannot pass if toasts disappear entirely.
     await vi.waitFor(() => expect(mocks.toastSuccess).toHaveBeenCalledTimes(1))
   })
 
@@ -886,8 +873,7 @@ describe('MobilePane', () => {
       mocks.latestPairedDevicesProps?.onRevokeDevice('phone-1')
     })
 
-    // Refresh rejected, so the fallback republishes the optimistic list without
-    // the revoked device, and success is still reported.
+    // Failed refresh retains optimistic removal and still reports the successful revoke.
     await vi.waitFor(() =>
       expect(mocks.latestPairedDevicesProps?.devices.map((d) => d.deviceId)).toEqual(['phone-2'])
     )

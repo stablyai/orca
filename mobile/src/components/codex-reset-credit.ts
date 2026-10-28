@@ -3,13 +3,13 @@ import {
   buildCodexResetCreditExpectedScope,
   type CodexResetCreditExpectedScope
 } from '../../../src/shared/codex-reset-credit-scope'
-import type { RpcClient } from '../transport/rpc-client'
 import {
-  clearCodexResetAttemptAfterAuthoritativeResponse,
-  CodexResetCreditExpectedScopeSchema,
-  getCodexResetAttemptIdentityKey,
-  getOrCreateCodexResetAttempt
-} from '../storage/codex-reset-attempt-journal'
+  codexResetCreditConsume,
+  type MobileCodexResetCreditRpcSender,
+  type MobileCodexResetCreditSendScope
+} from './codex-reset-credit-consume-operations'
+import { CodexResetCreditExpectedScopeSchema } from './codex-reset-credit-reply-schema'
+import { randomV4Uuid } from '../platform/random-v4-uuid'
 import {
   decodeAccountsSnapshot,
   type AccountsSnapshot,
@@ -44,12 +44,6 @@ export type CodexResetCreditRpcResult =
   | CodexResetCreditConsumedRpcResult
   | CodexResetCreditRejectedRpcResult
 
-export type CodexResetCreditRequestResult = CodexResetCreditRpcResult & {
-  // A valid host result remains authoritative even if local cleanup fails.
-  // The retained UUID makes a later retry idempotent instead of hiding success.
-  attemptJournalRetained: boolean
-}
-
 export type CodexResetCreditSummary = {
   availableCount: number
   availabilityLabel: string
@@ -57,7 +51,6 @@ export type CodexResetCreditSummary = {
 }
 
 const RESET_RPC_TIMEOUT_MS = 90_000
-const resetRequests = new Map<string, Promise<CodexResetCreditRequestResult>>()
 
 export function getCodexResetCreditSummary(
   limits: ProviderRateLimits | null,
@@ -139,7 +132,8 @@ export function getCodexResetCreditScope(
   return parsed.success ? parsed.data : null
 }
 
-function scopesEqual(
+// Match account scope, not offer: host may return unresolved retry attempt against earlier offer.
+function sameAccountScope(
   left: CodexResetCreditExpectedScope,
   right: CodexResetCreditExpectedScope
 ): boolean {
@@ -147,8 +141,7 @@ function scopesEqual(
     left.target.runtime === right.target.runtime &&
     left.target.wslDistro === right.target.wslDistro &&
     left.accountId === right.accountId &&
-    left.accountRevision === right.accountRevision &&
-    left.offerRevision === right.offerRevision
+    left.accountRevision === right.accountRevision
   )
 }
 
@@ -161,7 +154,7 @@ function decodeResetResult(
   }
   const result = value as Record<string, unknown>
   const scope = CodexResetCreditExpectedScopeSchema.safeParse(result.scope)
-  if (!scope.success || !scopesEqual(scope.data, expectedScope)) {
+  if (!scope.success || !sameAccountScope(scope.data, expectedScope)) {
     throw new Error('Invalid reset response from host')
   }
   const snapshot = decodeAccountsSnapshot(result.snapshot)
@@ -216,67 +209,20 @@ function decodeResetResult(
   }
 }
 
-async function performCodexResetCreditRequest(
-  client: Pick<RpcClient, 'sendRequest'>,
-  options: {
-    hostId: string
-    expectedScope: CodexResetCreditExpectedScope
-    createIdempotencyKey: () => string
-  }
-): Promise<CodexResetCreditRequestResult> {
-  const attempt = await getOrCreateCodexResetAttempt(options)
-  const response = await client.sendRequest(
-    'accounts.consumeCodexResetCredit',
+// Use fresh key per attempt without phone journal; host ledger resumes same-offer/unknown-account attempts so lost replies cannot spend twice.
+export async function requestCodexResetCredit(
+  client: MobileCodexResetCreditRpcSender,
+  expectedScope: CodexResetCreditExpectedScope
+): Promise<CodexResetCreditRpcResult> {
+  const scope = CodexResetCreditExpectedScopeSchema.parse(expectedScope)
+  const response = await codexResetCreditConsume.request(
+    client,
     {
-      idempotencyKey: attempt.idempotencyKey,
-      expectedScope: attempt.expectedScope
+      idempotencyKey: randomV4Uuid(),
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: parsed just above through CodexResetCreditExpectedScopeSchema, whose refinement pairs runtime 'host' with a null distro and 'wsl' with a trimmed non-empty one. The bytes are unchanged.
+      expectedScope: scope as MobileCodexResetCreditSendScope
     },
     { timeoutMs: RESET_RPC_TIMEOUT_MS }
   )
-  if (!response.ok) {
-    throw new Error(response.error.message)
-  }
-  const result = decodeResetResult(response.result, attempt.expectedScope)
-  let attemptJournalRetained = false
-  try {
-    await clearCodexResetAttemptAfterAuthoritativeResponse({
-      hostId: options.hostId,
-      expectedScope: attempt.expectedScope,
-      idempotencyKey: attempt.idempotencyKey
-    })
-  } catch {
-    attemptJournalRetained = true
-  }
-  return { ...result, attemptJournalRetained }
-}
-
-export async function requestCodexResetCredit(
-  client: Pick<RpcClient, 'sendRequest'>,
-  options: {
-    hostId: string
-    expectedScope: CodexResetCreditExpectedScope
-    createIdempotencyKey: () => string
-  }
-): Promise<CodexResetCreditRequestResult> {
-  const requestKey = getCodexResetAttemptIdentityKey(options)
-  const existing = resetRequests.get(requestKey)
-  if (existing) {
-    return existing
-  }
-  // Why: two mounted views can confirm the same offer concurrently. Share the
-  // whole attempt so one authoritative response cannot clear the other's retry key.
-  const operation = performCodexResetCreditRequest(client, options)
-  resetRequests.set(requestKey, operation)
-  try {
-    return await operation
-  } finally {
-    if (resetRequests.get(requestKey) === operation) {
-      resetRequests.delete(requestKey)
-    }
-  }
-}
-
-/** Test-only: clear request singleflight state between cases. */
-export function resetCodexResetCreditRequestsForTests(): void {
-  resetRequests.clear()
+  return decodeResetResult(codexResetCreditConsume.interpret(response), scope)
 }

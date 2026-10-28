@@ -1,4 +1,4 @@
-import type { BrowserWindow } from 'electron'
+import { settledDaemonRestart } from '../../daemon/daemon-restart-state'
 import { getAppEnvironment } from '../../../shared/app-environment'
 import type { OrcaRuntimeService } from '../../runtime/orca-runtime'
 import type { Store } from '../../persistence'
@@ -8,19 +8,27 @@ import type { TerminalStartupCwdMissingDirFallback } from '../../../shared/termi
 import {
   getHiddenRendererPtyDeliveryDebug,
   resetRendererScopedHiddenPtyDeliveryState
-} from '../pty-hidden-delivery-gate'
-import { localProvider } from './provider/registry'
+} from './delivery/pty-hidden-delivery-gate'
+import { localProvider, type ResolvedPtyHost } from './provider/registry'
 import { finishPtyShutdown } from './provider/liveness'
 import type { GetSelectedCodexHomePath, PrepareClaudeAuth } from './host-env/types'
 import { installPtyInspectIpcHandlers } from './ipc/inspect'
-import { installPtyKillIpcHandler } from './ipc/renderer-kill'
+import { installPtyCodexSharedServerIpcHandler } from './ipc/codex-shared-server'
+import { installPtyClaudeOldTerminalIpcHandler } from './ipc/claude-old-terminal'
+import { installPtyClaudeDiffPanelNoticeIpcHandler } from './ipc/claude-diff-panel-notice'
+import { installPtyNewerDaemonHoldIpcHandlers } from './ipc/newer-daemon-hold'
+import {
+  installPtyKillIpcHandler,
+  stopReplacedPanePty,
+  type PtyKillIpcDeps
+} from './ipc/renderer-kill'
 import { installPtyWriteIpcHandlers } from './ipc/write'
 import { installPtySpawnIpcHandler } from './ipc/spawn'
+import { installPtyLeafMoveIpcHandler } from './ipc/leaf-move'
 import { installPtyRuntimeController } from './runtime/controller'
 import { installPtySnapshotIpcHandlers } from './ipc/snapshot'
 import {
-  assertFolderWorkspacePtyPathUsable as assertFolderWorkspacePtyPathUsableImpl,
-  localStartupCwdDirectoryExists,
+  assertWorkspaceAcceptsNewPty as assertWorkspaceAcceptsNewPtyImpl,
   resolvePtySpawnStartupCwd as resolvePtySpawnStartupCwdImpl
 } from './host-env/spawn-cwd'
 import {
@@ -43,15 +51,14 @@ import {
   clearRendererGateResetHandlers,
   clearDidFinishLoadHandler
 } from './delivery/lifecycle-reset'
-import { createPtyIpcSession, type PtyIpcSessionOptions } from './session'
+import { createPtyIpcSession, type PtyIpcSessionOptions, type PtyRendererDelivery } from './session'
 import { wirePtyIpcSession } from './delivery/wire-session'
 import { configureLocalPtyProvider } from './provider/local-configure'
 import { bindProviderListeners } from './provider/bind-listeners'
-import { installSessionSshOutputIntake } from './delivery/ssh-intake'
 import { installPtySerializeBufferIpc } from './ipc/serialize-buffer'
 import { installPtyResizeVisibilityIpc } from './ipc/resize-visibility'
 import { adoptStablePane } from './pane/adopt-stable'
-import { getPtyIpc } from '../pty-host-bindings'
+import { getPtyIpc } from './pty-host-bindings'
 import {
   noCodexResumeLaunch,
   prepareCodexResumeHome,
@@ -60,9 +67,10 @@ import {
   stripSequencedStartupResumeArgv
 } from './host-env/codex-resume'
 import { ensureLinuxTerminalOrcaCliShimDir } from '../../cli/linux-terminal-orca-cli-shim'
+import { LOCAL_EXECUTION_HOST_ID } from '../../../shared/execution-host'
 
 export function registerPtyHandlers(
-  mainWindow: BrowserWindow,
+  mainWindow?: PtyRendererDelivery,
   runtime?: OrcaRuntimeService,
   getSelectedCodexHomePath?: GetSelectedCodexHomePath,
   getSettings?: () => GlobalSettings,
@@ -77,44 +85,60 @@ export function registerPtyHandlers(
     }
   }
   const ipcMain = getPtyIpc()
-  // Why first: the outgoing session owns the producer pauses, so its real reset must run
-  // before the bridge is neutralized or a PTY paused during re-registration stays paused.
+  // Reset the outgoing session before neutralizing its bridge, or producer pauses lose their release path.
   resetRendererDeliveryAccountingForLifecycleReset()
-  // Why: a re-registration means a new window owns delivery — cancel the prior closure's watchdog and neutralize its bridged reset so mark-hidden below can't arm a timer against the dead closure.
+  // Cancel the old watchdog and neutralize its reset before new marks can touch the outgoing closure.
   clearRendererDispatcherReadyWatchdog()
   setResetRendererDeliveryAccountingForLifecycleReset(() => {})
   setInvalidatePendingPtyDrainPriority(() => {})
   setInvalidatePendingPtyDrainPolicy(() => {})
-  // Why: neutralize rebind at the same moment as drain so a daemon replace in this window cannot attach the old accept/exit closures.
+  // Provider replacement during registration must not reattach old delivery closures.
   setRebindProviderListeners(() => {})
-  registerRendererLifecycleResetHandlers(mainWindow.webContents)
+  registerRendererLifecycleResetHandlers(mainWindow?.webContents)
 
-  const getLocalPtyStartupPromise = (connectionId?: string | null): Promise<void> | undefined => {
-    if (connectionId) {
+  // Only local PTYs change ownership during this machine's daemon swap.
+  const getLocalPtyStartupPromise = (
+    hostId: ResolvedPtyHost = LOCAL_EXECUTION_HOST_ID
+  ): Promise<void> | undefined => {
+    if (hostId !== LOCAL_EXECUTION_HOST_ID) {
       return undefined
     }
-    // Why: during cold start the daemon provider swap overlaps first paint, so local spawns must wait; SSH/headless don't use the desktop daemon.
-    return options?.awaitLocalPtyStartup?.()
+    // Cold-start local spawns must await daemon handoff; other hosts own their startup.
+    const startup = options?.awaitLocalPtyStartup?.()
+    // Restart replacements must reach the new daemon.
+    const restart = settledDaemonRestart()
+    return startup && restart
+      ? Promise.all([startup, restart]).then(() => undefined)
+      : (startup ?? restart)
   }
 
   const getLocalPtyProviderStartupPromise = (
-    connectionId?: string | null
+    hostId: ResolvedPtyHost = LOCAL_EXECUTION_HOST_ID
   ): Promise<void> | undefined => {
-    if (connectionId) {
+    if (hostId !== LOCAL_EXECUTION_HOST_ID) {
       return undefined
     }
     return options?.awaitLocalPtyProviderStartup?.() ?? options?.awaitLocalPtyStartup?.()
   }
 
-  // Remove prior handlers so re-registration (e.g. macOS re-activate creating a new window) doesn't double-register.
+  // macOS window reactivation can re-register; remove old handlers first.
   ipcMain.removeHandler('pty:spawn')
+  ipcMain.removeHandler('pty:moveLeafToNewTab')
   ipcMain.removeHandler('pty:kill')
+  ipcMain.removeHandler('pty:killFenced')
   ipcMain.removeHandler('pty:listSessions')
   ipcMain.removeHandler('pty:hasPty')
   ipcMain.removeHandler('pty:hasChildProcesses')
   ipcMain.removeHandler('pty:getForegroundProcess')
   ipcMain.removeHandler('pty:inspectProcess')
   ipcMain.removeHandler('pty:confirmForegroundProcess')
+  ipcMain.removeHandler('pty:isCodexOnSharedServer')
+  ipcMain.removeHandler('pty:disableCodexSharedServerAutoStart')
+  ipcMain.removeHandler('pty:stopCodexSharedServer')
+  ipcMain.removeHandler('pty:openedBeforeClaudeAccounts')
+  ipcMain.removeHandler('pty:claudeDiffPanelMayAutoOpen')
+  ipcMain.removeHandler('pty:readNewerDaemonHeldScreen')
+  ipcMain.removeHandler('pty:reopenNewerDaemonTerminals')
   ipcMain.removeHandler('pty:getCwd')
   ipcMain.removeHandler('pty:getSize')
   ipcMain.removeHandler('pty:getAuthoritativeBufferSnapshotCapabilities')
@@ -130,6 +154,7 @@ export function registerPtyHandlers(
   ipcMain.removeHandler('pty:writeAccepted')
   ipcMain.removeAllListeners('pty:write')
   ipcMain.removeAllListeners('pty:ackColdRestore')
+  ipcMain.removeAllListeners('pty:hiddenOutputRestoreApplied')
   ipcMain.removeAllListeners('pty:ackData')
   ipcMain.removeAllListeners('pty:deliveryResyncResponse')
   ipcMain.removeAllListeners('pty:serializeBuffer:response')
@@ -148,12 +173,11 @@ export function registerPtyHandlers(
     getSelectedCodexHomePath,
     trustedTerminalHandleEnv: session.trustedTerminalHandleEnv
   })
-  installSessionSshOutputIntake(session)
   bindProviderListeners(session)
   setRebindProviderListeners(() => bindProviderListeners(session))
   installPtySerializeBufferIpc(session)
 
-  // Why: reload/crash orphans delivery-interest holds and hidden marks; reset so surviving PTYs aren't stuck force-fed or gated — each pane's first sync re-marks.
+  // Reload/crash abandons renderer marks/interest; reset them before fresh view sync.
   clearRendererGateResetHandlers()
   const resetRendererPtyDeliveryGateState = (): void => {
     const gateDebug = getHiddenRendererPtyDeliveryDebug()
@@ -161,37 +185,40 @@ export function registerPtyHandlers(
     if (gateDebug.hiddenDeliveryGatedPtyCount > 0 || gateDebug.deliveryInterestPtyCount > 0) {
       invalidatePendingPtyDrainPolicy()
     }
-    // Why: the daemon pacer must not keep throttling ptys whose hidden marks died with the renderer; the fresh renderer's sync re-marks the still-hidden ones.
+    // Remove pacing derived from the dead page's hidden marks; fresh reports restore it.
     session.resyncBackgroundedDeliveriesAfterGateReset()
   }
-  setRendererGateResetState({
-    contents: mainWindow.webContents,
-    load: resetRendererPtyDeliveryGateState,
-    gone: resetRendererPtyDeliveryGateState
-  })
-  mainWindow.webContents.on('did-finish-load', resetRendererPtyDeliveryGateState)
-  mainWindow.webContents.on('render-process-gone', resetRendererPtyDeliveryGateState)
+  if (mainWindow) {
+    setRendererGateResetState({
+      contents: mainWindow.webContents,
+      load: resetRendererPtyDeliveryGateState,
+      gone: resetRendererPtyDeliveryGateState
+    })
+    mainWindow.webContents.on('did-finish-load', resetRendererPtyDeliveryGateState)
+    mainWindow.webContents.on('render-process-gone', resetRendererPtyDeliveryGateState)
+  }
 
-  // Why: only LocalPtyProvider PTYs (main-process) can be orphaned on reload; daemon sessions survive by design and cleanup would kill them.
+  // Only in-process PTYs are reload orphans; daemon sessions intentionally survive.
   clearDidFinishLoadHandler()
-  if (localProvider instanceof LocalPtyProvider) {
+  if (mainWindow && localProvider instanceof LocalPtyProvider) {
     const lp = localProvider
     const finishLoadHandler = () => {
-      // Why: always advance to keep the generation monotonic, but skip the sweep on crash/freeze-recovery reload — it would kill live local PTYs before session restore (#5787).
+      // Keep generations monotonic but skip recovery sweeps until restore re-adopts live PTYs (#5787).
       const generation = lp.advanceGeneration()
       if (options?.isRecoveryReloadInFlight?.(mainWindow.webContents.id)) {
         return
       }
-      // Why: the retained provider onExit callback is the only physical-exit proof; it clears ownership after the OS reaps it.
+      // The retained onExit callback releases ownership only after physical process exit.
       lp.killOrphanedPtys(generation - 1)
     }
     setDidFinishLoadHandler(finishLoadHandler, mainWindow.webContents)
     mainWindow.webContents.on('did-finish-load', finishLoadHandler)
   }
 
-  const assertFolderWorkspacePtyPathUsable = (
-    worktreeId: string | undefined
-  ): Promise<void> | void => assertFolderWorkspacePtyPathUsableImpl(store, worktreeId)
+  const assertWorkspaceAcceptsNewPty = (
+    worktreeId: string | undefined,
+    sessionId?: string
+  ): Promise<void> | void => assertWorkspaceAcceptsNewPtyImpl(store, worktreeId, sessionId)
   const resolvePtySpawnStartupCwd = (
     worktreeId: string | undefined,
     cwd: string | undefined,
@@ -202,9 +229,12 @@ export function registerPtyHandlers(
   ): ReturnType<typeof prepareCodexResumeHome> =>
     prepareCodexResumeHome(options?.prepareCodexSessionResume, args)
   const adoptStablePaneBound = (args: Parameters<typeof adoptStablePane>[2]) =>
-    adoptStablePane(runtime, store, args)
+    adoptStablePane(runtime, store, {
+      ...args,
+      onAdopted: (result) => session.sendPtySpawnedToRenderer(result.id)
+    })
 
-  // Why: route through getProviderForPty() so CLI commands work for remote PTYs too; localProvider would silently fail for them.
+  // Resolve by PTY owner so CLI operations also reach remote providers.
   installPtyRuntimeController({
     runtime,
     store,
@@ -216,7 +246,7 @@ export function registerPtyHandlers(
     noCodexResumeLaunch,
     reconcileSharedRuntimeResumeHome,
     stripSequencedStartupResumeArgv,
-    assertFolderWorkspacePtyPathUsable,
+    assertWorkspaceAcceptsNewPty,
     resolvePtySpawnStartupCwd,
     requestSerializedBuffer: session.requestSerializedBuffer,
     shutdownProviderAndDetectExit: session.shutdownProviderAndDetectExit,
@@ -231,11 +261,22 @@ export function registerPtyHandlers(
     options,
     trustedTerminalHandleEnv: session.trustedTerminalHandleEnv,
     retiredRejectedPtyIds: session.retiredRejectedPtyIds,
-    reversibleStopOwnersByPtyId: session.reversibleStopOwnersByPtyId,
-    mainWindow
+    mainWindow,
+    transitionSpawnHiddenRendererPtyDeliveryState:
+      session.transitionSpawnHiddenRendererPtyDeliveryState,
+    syncPtyBackgroundedDelivery: session.syncPtyBackgroundedDelivery
   })
 
   installPtySnapshotIpcHandlers({ runtime, pendingData: session.pendingData })
+  const killDeps: PtyKillIpcDeps = {
+    store,
+    runtime,
+    getLocalPtyProviderStartupPromise,
+    shutdownProviderAndDetectExit: session.shutdownProviderAndDetectExit,
+    rememberSyntheticKillExit: session.rememberSyntheticKillExit,
+    sendPtyExitToRenderer: session.sendPtyExitToRenderer
+  }
+  installPtyLeafMoveIpcHandler({ store, runtime })
   installPtySpawnIpcHandler({
     runtime,
     store,
@@ -245,9 +286,8 @@ export function registerPtyHandlers(
     options,
     getLocalPtyStartupPromise,
     adoptStablePane: adoptStablePaneBound,
-    assertFolderWorkspacePtyPathUsable,
+    assertWorkspaceAcceptsNewPty,
     resolvePtySpawnStartupCwd,
-    localStartupCwdDirectoryExists,
     prepareCodexResumeHome: prepareCodexResumeHomeBound,
     noCodexResumeLaunch,
     resolveCodexResumeLaunch,
@@ -257,21 +297,15 @@ export function registerPtyHandlers(
       session.transitionSpawnHiddenRendererPtyDeliveryState,
     trustedTerminalHandleEnv: session.trustedTerminalHandleEnv,
     sendPtySpawnedToRenderer: session.sendPtySpawnedToRenderer,
-    syncPtyBackgroundedDelivery: session.syncPtyBackgroundedDelivery
+    syncPtyBackgroundedDelivery: session.syncPtyBackgroundedDelivery,
+    stopReplacedPty: (id) => stopReplacedPanePty(killDeps, id)
   })
-  installPtyWriteIpcHandlers({
-    mainWindow,
-    runtime,
-    clearHiddenRendererResizeOutput: session.clearHiddenRendererResizeOutput
-  })
+  installPtyWriteIpcHandlers({ mainWindow, runtime })
   installPtyResizeVisibilityIpc(session)
   installPtyInspectIpcHandlers({ getLocalPtyProviderStartupPromise })
-  installPtyKillIpcHandler({
-    store,
-    runtime,
-    getLocalPtyProviderStartupPromise,
-    shutdownProviderAndDetectExit: session.shutdownProviderAndDetectExit,
-    rememberSyntheticKillExit: session.rememberSyntheticKillExit,
-    sendPtyExitToRenderer: session.sendPtyExitToRenderer
-  })
+  installPtyCodexSharedServerIpcHandler({ getLocalPtyProviderStartupPromise })
+  installPtyClaudeOldTerminalIpcHandler({ getLocalPtyProviderStartupPromise })
+  installPtyClaudeDiffPanelNoticeIpcHandler({ getLocalPtyProviderStartupPromise })
+  installPtyNewerDaemonHoldIpcHandlers()
+  installPtyKillIpcHandler(killDeps)
 }

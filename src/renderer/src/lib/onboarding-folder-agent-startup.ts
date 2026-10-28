@@ -10,15 +10,8 @@ import type { StartupCommandDelivery } from '../../../shared/codex-startup-deliv
 import type { SleepingAgentLaunchConfig } from '../../../shared/agent-session-resume'
 import type { GlobalSettings } from '../../../shared/global-settings-types'
 import type { OnboardingState } from '../../../shared/onboarding-state-types'
+import type { AgentStartupShell } from '../../../shared/tui-agent-startup-shell'
 import type { TuiAgent } from '../../../shared/tui-agent'
-import { resolveInitialNativeChatSessionOptions } from '@/components/native-chat/native-chat-launch-session-options'
-import type { SessionOptionValue } from '../../../shared/native-chat-session-options'
-import {
-  hasExplicitTuiLaunchCustomization,
-  resolveAgentLaunchRoute,
-  type AgentLaunchRoute
-} from '@/lib/agent-launch-routing'
-import { readLocalRuntimeCapabilitiesOrUnknown } from '@/runtime/local-runtime-capabilities'
 
 export type OnboardingFolderAgentStartup = {
   command: string
@@ -26,28 +19,28 @@ export type OnboardingFolderAgentStartup = {
   launchConfig?: SleepingAgentLaunchConfig
   launchAgent?: TuiAgent
   startupCommandDelivery?: StartupCommandDelivery
-  sessionOptions?: Record<string, SessionOptionValue>
   telemetry: AgentStartedTelemetry
 }
 
-function getClientPlatform(): NodeJS.Platform {
-  if (navigator.userAgent.includes('Windows')) {
-    return 'win32'
-  }
-  return navigator.userAgent.includes('Mac') ? 'darwin' : 'linux'
+type OnboardingStartupHost = {
+  platform: NodeJS.Platform
+  shell: AgentStartupShell | undefined
+  isRemote: boolean
+}
+
+export function onboardingFolderDefaultAgent(settings: GlobalSettings | null): TuiAgent | null {
+  const agent = settings?.defaultTuiAgent
+  return agent && agent !== 'blank' && isTuiAgentEnabled(agent, settings?.disabledTuiAgents)
+    ? agent
+    : null
 }
 
 export function buildOnboardingFolderAgentStartup(
   settings: GlobalSettings | null,
-  nativeChatTranscriptIsLocalReadable = true
+  host: OnboardingStartupHost
 ): OnboardingFolderAgentStartup | undefined {
-  const agent = settings?.defaultTuiAgent
-  if (
-    !settings ||
-    !agent ||
-    agent === 'blank' ||
-    !isTuiAgentEnabled(agent, settings.disabledTuiAgents)
-  ) {
+  const agent = onboardingFolderDefaultAgent(settings)
+  if (!settings || !agent) {
     return undefined
   }
 
@@ -55,13 +48,9 @@ export function buildOnboardingFolderAgentStartup(
     agent,
     prompt: '',
     cmdOverrides: settings.agentCmdOverrides ?? {},
-    agentArgs: resolveTuiAgentLaunchArgs(agent, settings.agentDefaultArgs),
-    agentEnv: resolveTuiAgentLaunchEnv(agent, settings.agentDefaultEnv),
-    sessionOptions: resolveInitialNativeChatSessionOptions(settings, {
-      agent,
-      nativeChatTranscriptIsLocalReadable
-    }),
-    platform: getClientPlatform(),
+    agentArgs: resolveTuiAgentLaunchArgs(agent, settings),
+    agentEnv: resolveTuiAgentLaunchEnv(agent, settings, host.platform),
+    ...host,
     allowEmptyPromptLaunch: true
   })
   if (!startupPlan) {
@@ -73,7 +62,6 @@ export function buildOnboardingFolderAgentStartup(
     ...(startupPlan.env ? { env: startupPlan.env } : {}),
     launchConfig: startupPlan.launchConfig,
     launchAgent: agent,
-    ...(startupPlan.sessionOptions ? { sessionOptions: startupPlan.sessionOptions } : {}),
     ...(startupPlan.startupCommandDelivery
       ? { startupCommandDelivery: startupPlan.startupCommandDelivery }
       : {}),
@@ -95,55 +83,4 @@ export function shouldSeedFolderAgentAfterDismissedOnboarding(
     !onboarding.checklist.addedRepo &&
     !onboarding.checklist.addedFolder
   )
-}
-
-export function buildDismissedOnboardingFolderAgentStartup(
-  settings: GlobalSettings | null,
-  onboarding: OnboardingState | null,
-  hasExistingProject: boolean,
-  nativeChatTranscriptIsLocalReadable = true
-): OnboardingFolderAgentStartup | undefined {
-  if (!shouldSeedFolderAgentAfterDismissedOnboarding(onboarding, hasExistingProject)) {
-    return undefined
-  }
-  return buildOnboardingFolderAgentStartup(settings, nativeChatTranscriptIsLocalReadable)
-}
-
-export function resolveDismissedOnboardingFolderAgentLaunch(args: {
-  settings: GlobalSettings | null
-  onboarding: OnboardingState | null
-  hasExistingProject: boolean
-  executionHostId: string
-  nativeChatTranscriptIsLocalReadable?: boolean
-}): {
-  agent: TuiAgent | null
-  route: AgentLaunchRoute
-  startup?: OnboardingFolderAgentStartup
-  fallbackStartup?: OnboardingFolderAgentStartup
-} {
-  const startup = buildDismissedOnboardingFolderAgentStartup(
-    args.settings,
-    args.onboarding,
-    args.hasExistingProject,
-    args.nativeChatTranscriptIsLocalReadable
-  )
-  const agent = startup?.launchAgent ?? null
-  if (!startup || !agent) {
-    return { agent: null, route: 'terminal-tui' }
-  }
-  const route = resolveAgentLaunchRoute({
-    agent,
-    settings: args.settings,
-    executionHostId: args.executionHostId,
-    hostCapabilities: readLocalRuntimeCapabilitiesOrUnknown(),
-    workspaceKind: 'folder',
-    nativeChatTranscriptIsLocalReadable: args.nativeChatTranscriptIsLocalReadable,
-    requiresTuiLaunchCustomization: hasExplicitTuiLaunchCustomization(args.settings, agent),
-    initialSessionOptions: startup.sessionOptions
-  })
-  return {
-    agent,
-    route,
-    ...(route === 'structured-native-chat' ? { fallbackStartup: startup } : { startup })
-  }
 }

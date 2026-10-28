@@ -1,9 +1,9 @@
 import { StyleSheet } from 'react-native'
 import { colors, radii, spacing, typography } from '../theme/mobile-theme'
+import { themedStyleSheet } from '../theme/themed-styles'
+import { TEXT_INPUT_FONT_SIZE } from '../platform/text-input-font-size'
 
-// Changed-files list, section headers, file rows, and the commit bar. Split
-// from the main source-control stylesheet to stay under the line limit.
-export const listStyles = StyleSheet.create({
+export const listStyles = themedStyleSheet(() => ({
   listContent: {
     paddingHorizontal: spacing.lg,
     paddingBottom: 136
@@ -138,7 +138,8 @@ export const listStyles = StyleSheet.create({
     backgroundColor: colors.bgBase,
     color: colors.textPrimary,
     paddingHorizontal: spacing.md,
-    fontSize: typography.bodySize
+    // Keep input sizing above iOS’s web focus-zoom threshold.
+    fontSize: TEXT_INPUT_FONT_SIZE
   },
   commitInputDisabled: {
     backgroundColor: colors.bgPanel,
@@ -263,4 +264,4 @@ export const listStyles = StyleSheet.create({
     fontSize: typography.metaSize,
     lineHeight: 16
   }
-})
+}))

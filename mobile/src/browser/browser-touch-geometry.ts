@@ -20,6 +20,8 @@ export type BrowserFrameGeometry = {
   offsetX: number
   offsetY: number
   scale: number
+  // Convert frame device pixels to page CSS pixels: no-meta mobile page scales Chromium’s 980px layout into phone viewport; web mode has scale 1.
+  pageScale: number
 }
 
 export type BrowserZoomState = {
@@ -44,6 +46,7 @@ export function computeBrowserFrameGeometry(
   const renderedWidth = sourceWidth * scale
   const renderedHeight = sourceHeight * scale
   return {
+    pageScale: getPositiveFiniteNumber(metadata?.pageScaleFactor) ?? 1,
     sourceWidth,
     sourceHeight,
     viewportWidth: layout.width,
@@ -79,18 +82,48 @@ export function mapScreenToBrowserPoint(
   ) {
     return null
   }
+  // CDP input uses viewport CSS coordinates; adding scrollOffset aims past target by a page scroll.
   return {
     x: clamp(
-      Math.round((localX / geometry.renderedWidth) * geometry.sourceWidth),
+      Math.round(((localX / geometry.renderedWidth) * geometry.sourceWidth) / geometry.pageScale),
       0,
-      geometry.sourceWidth
+      geometry.sourceWidth / geometry.pageScale
     ),
     y: clamp(
-      Math.round((localY / geometry.renderedHeight) * geometry.sourceHeight),
+      Math.round(((localY / geometry.renderedHeight) * geometry.sourceHeight) / geometry.pageScale),
       0,
-      geometry.sourceHeight
+      geometry.sourceHeight / geometry.pageScale
     )
   }
+}
+
+/** A scroll the page should receive, in its own CSS pixels, the way a wheel reports one. */
+export type BrowserWheelDelta = { dx: number; dy: number }
+
+// Compose frame-to-pane fit, pinch zoom and page scale for every screen delta; omitting last factor produced only 41% scroll on no-meta page. Return null if unreadable.
+export function browserScreenToPageCssScale(
+  geometry: BrowserFrameGeometry | null,
+  zoomScale: number
+): number | null {
+  const scale = geometry === null ? zoomScale : geometry.scale * zoomScale * geometry.pageScale
+  return Number.isFinite(scale) && scale > 0 ? scale : null
+}
+
+/** A screen-space gesture delta as the page's own CSS pixels, inverted the way a wheel reports it. */
+export function browserWheelDeltaFromScreen(
+  screenDx: number,
+  screenDy: number,
+  geometry: BrowserFrameGeometry | null,
+  zoomScale: number
+): BrowserWheelDelta {
+  const scale = browserScreenToPageCssScale(geometry, zoomScale) ?? 1
+  return { dx: roundedWheelDelta(-screenDx / scale), dy: roundedWheelDelta(-screenDy / scale) }
+}
+
+/** `Math.round` answers -0 for an axis that moved nothing; the wheel carries a plain zero. */
+function roundedWheelDelta(value: number): number {
+  const rounded = Math.round(value)
+  return rounded === 0 ? 0 : rounded
 }
 
 export function computeBrowserTouchClickRadiusCss(
@@ -100,12 +133,11 @@ export function computeBrowserTouchClickRadiusCss(
   touchRadiusDip: number
 ): number {
   const geometry = computeBrowserFrameGeometry(layout, metadata)
-  const scale = geometry ? geometry.scale * zoom.scale : 1
-  if (!Number.isFinite(scale) || scale <= 0) {
+  const scale = browserScreenToPageCssScale(geometry, zoom.scale)
+  if (scale === null) {
     return 10
   }
-  // Why: phone taps are finger-sized while CDP clicks are pixel exact. Convert a
-  // small screen radius back into page CSS pixels so tiny links remain hittable.
+  // Convert finger-sized screen radius back to CSS pixels so pixel-exact CDP taps can hit tiny links.
   return clamp(Math.round(touchRadiusDip / scale), 6, 48)
 }
 

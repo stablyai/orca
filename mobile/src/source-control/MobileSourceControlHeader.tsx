@@ -1,6 +1,7 @@
 import { Pressable, Text, View } from 'react-native'
 import { ChevronLeft, ExternalLink, RefreshCw, X } from 'lucide-react-native'
 import { colors } from '../theme/mobile-theme'
+import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import { styles } from './mobile-source-control-styles'
 
 type Props = {
@@ -8,9 +9,10 @@ type Props = {
   worktreeLabel: string
   ioBusy: boolean
   onBack: () => void
+  // Dock dismissal does not pop a route; keep it separate from Back.
+  onClose: () => void
   onRefresh: () => void
-  // When set (PR segment ready with a host URL), show open-on-web flush-right of
-  // the title so the control stays visible while the PR body scrolls.
+  // Keep open-on-web in the header while the PR body scrolls.
   onOpenPrWeb?: () => void
   prNumber?: number | null
 }
@@ -20,24 +22,36 @@ export function MobileSourceControlHeader({
   worktreeLabel,
   ioBusy,
   onBack,
+  onClose,
   onRefresh,
   onOpenPrWeb,
   prNumber = null
 }: Props) {
+  useMobileColorScheme()
   return (
     <View style={styles.topBar}>
-      <Pressable
-        style={({ pressed }) => [styles.backButton, pressed && styles.backButtonPressed]}
-        onPress={onBack}
-        hitSlop={8}
-        accessibilityLabel={embedded ? 'Close source control' : 'Back to session'}
-      >
-        {embedded ? (
+      {/* Dock dismissal and route Back have distinct semantics. */}
+      {embedded ? (
+        <Pressable
+          style={({ pressed }) => [styles.backButton, pressed && styles.backButtonPressed]}
+          onPress={onClose}
+          hitSlop={8}
+          accessibilityRole="button"
+          accessibilityLabel="Close source control"
+        >
           <X size={22} color={colors.textSecondary} strokeWidth={2.2} />
-        ) : (
+        </Pressable>
+      ) : (
+        <Pressable
+          style={({ pressed }) => [styles.backButton, pressed && styles.backButtonPressed]}
+          onPress={onBack}
+          hitSlop={8}
+          accessibilityRole="button"
+          accessibilityLabel="Back to session"
+        >
           <ChevronLeft size={22} color={colors.textSecondary} strokeWidth={2.2} />
-        )}
-      </Pressable>
+        </Pressable>
+      )}
       <View style={styles.titleBlock}>
         <Text style={styles.title} numberOfLines={1}>
           Source Control
@@ -70,6 +84,7 @@ export function MobileSourceControlHeader({
         onPress={onRefresh}
         disabled={ioBusy}
         hitSlop={8}
+        accessibilityRole="button"
         accessibilityLabel="Refresh source control"
       >
         <RefreshCw size={18} color={colors.textSecondary} strokeWidth={2.1} />

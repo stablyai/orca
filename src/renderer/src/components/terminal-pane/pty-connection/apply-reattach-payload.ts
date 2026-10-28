@@ -1,9 +1,12 @@
-import { safeFitAndThen } from '@/lib/pane-manager/pane-tree-ops'
-import { getFitOverrideForPty } from '@/lib/pane-manager/mobile-fit-overrides'
+import {
+  applyTerminalLaunchResult,
+  captureTerminalLaunchContext
+} from './terminal-launch-result-policy'
 import { waitForTerminalReplayWritesParsed } from '../replay-guard'
 import {
   POST_REPLAY_MODE_RESET,
-  RESET_GRAPHIC_RENDITION
+  RESET_GRAPHIC_RENDITION,
+  RELEASE_SYNCHRONIZED_OUTPUT
 } from '../../../../../shared/terminal-mode-reset-profiles'
 import {
   buildMainModelSnapshotReplayWrites,
@@ -13,9 +16,10 @@ import {
   shouldSkipAltFrameForWidthMismatch
 } from '../terminal-snapshot-replay-paint'
 
-import { isRemoteRuntimePtyId } from './paired-parked-terminal-restore'
 import { restoredSnapshotPaintsPrintableContent } from '../restored-snapshot-coverage'
-import { resolveSshReconnectModelPaint } from './resolve-ssh-reconnect-model-paint'
+import { ackPaintedColdRestore } from './painted-cold-restore-ack'
+import { mainStartsPane } from './main-starts-pane'
+import { fitReattachedPaneToGrid, noteReattachAltFrameSkip } from './reattach-grid-fit'
 
 import type { ReattachPayloadContext } from './reattach-payload-context'
 import type { ReattachPayloadSession } from './reattach-payload-session'
@@ -44,7 +48,7 @@ export function createReattachPayloadHandlers(
         ? snapshotPrefixAnsi + snapshotFrameAnsi
         : ctx.connectResult.snapshot
       session.rememberReattachPayloadAgentSignal(daemonSnapshotReplay, { fullScreenReplay: true })
-      // Why: replay at the snapshot's own dimensions to avoid rewrapping soft-wrapped rows at a different column count (#7279); suppress the PTY forward so this layout-only resize doesn't SIGWINCH the remote TUI.
+      // Replay at capture geometry to preserve wraps; suppress layout-only resize forwarding so it cannot SIGWINCH the host TUI (#7279).
       const snapshotDimensions = resolvePositiveTerminalDimensions(
         ctx.connectResult.snapshotCols,
         ctx.connectResult.snapshotRows
@@ -61,21 +65,25 @@ export function createReattachPayloadHandlers(
           session.suppressStructuralReplayPtyResize = false
         }
       }
-      session.writeReplayData(`${RESET_GRAPHIC_RENDITION}\x1b[2J\x1b[3J\x1b[H`)
+      session.writeReplayData(
+        `${RELEASE_SYNCHRONIZED_OUTPUT}${RESET_GRAPHIC_RENDITION}\x1b[2J\x1b[3J\x1b[H`
+      )
       // Why: re-arm the kitty keyboard mirror from the snapshot preamble so Option chords keep their encoding after a window reload.
       session.applySnapshotKittyKeyboardModes(daemonSnapshotReplay, {
         kittyKeyboardFlags: ctx.connectResult.snapshotKittyKeyboardFlags,
         snapshotSeq: ctx.connectResult.snapshotSeq
       })
-      // A narrower fit clips the fixed-grid alt frame; drop it and let SIGWINCH repaint.
-      // A dead-owner restore keeps history plus its restored-session treatment;
-      // a frozen foreign-width frame would look live when no owner remains.
+      // Drop clipped foreign-width live frames for SIGWINCH repaint; dead owners retain history without showing a frozen frame as live.
       const daemonAltFrameSkippable =
         hasSplitDaemonAltFrame &&
         typeof snapshotFrameRestoreAnsi === 'string' &&
-        shouldSkipAltFrameForWidthMismatch(
-          ctx.connectResult.snapshotCols,
-          readProposedTerminalCols(session.pane)
+        noteReattachAltFrameSkip(
+          ctx,
+          shouldSkipAltFrameForWidthMismatch(
+            ctx.connectResult.snapshotCols,
+            readProposedTerminalCols(session.pane)
+          ),
+          ctx.connectResult.snapshotCols
         )
       const groundDaemonSnapshot =
         Boolean(ctx.connectResult.coldRestore) ||
@@ -88,8 +96,8 @@ export function createReattachPayloadHandlers(
             : daemonSnapshotReplay
         }`
       )
-      session.writeReplayData(
-        session.reattachReplayResetSequence(
+      session.writeReplayEpilogue(
+        session.chooseReattachReplayReset(
           daemonSnapshotReplay,
           Boolean(ctx.connectResult.coldRestore),
           ctx.connectResult.isAlternateScreen,
@@ -110,45 +118,16 @@ export function createReattachPayloadHandlers(
       session.sendFocusedReattachFocusInAfterReplay(ctx.ptyId, ctx.attemptGeneration)
       if (ctx.connectResult.coldRestore) {
         // Snapshot superseded the cold-restore payload; ack so the daemon doesn't redeliver it.
-        if (!isRemoteRuntimePtyId(ctx.ptyId)) {
-          window.api.pty.ackColdRestore(ctx.ptyId)
-        }
+        ackPaintedColdRestore(session, ctx.ptyId)
       }
-    } else if (
-      ctx.connectResult?.replay ||
-      ctx.prefetchedParkModelSnapshot ||
-      ctx.reconnectMayUseModel
-    ) {
-      // Why scoped to a park-reveal: the 100KiB relay tail loses scrollback the
-      // model still holds, but an in-place reattach (network reconnect, wake,
-      // reload) already has that replay in hand, so probing would only delay its
-      // paint by the timeout. Memoized, so this is never a second probe.
-      // An SSH reconnect may use the model only under sshReconnectPaintsFromModel: the reconnect
-      // replay reaches the renderer without passing through main's model (forwardReattachReplay
-      // and the inline attach replay both bypass onPtyData), so the model is stale by exactly
-      // the outage and the replay is the only witness to it. A park has no such hole, so it
-      // keeps using the model either way.
-      const revealSnapshot = ctx.revealFollowsTerminalPark
-        ? (ctx.prefetchedParkModelSnapshot ??
-          (isRemoteRuntimePtyId(ctx.ptyId) ? null : await ctx.fetchSshMainModelReattachSnapshot()))
-        : null
-      const reconnectPaint = await resolveSshReconnectModelPaint({
-        reconnectMayUseModel: !revealSnapshot && ctx.reconnectMayUseModel,
-        replay: ctx.connectResult?.replay,
-        fetchSnapshot: ctx.fetchSshMainModelReattachSnapshot,
-        readTargetCols: () => readProposedTerminalCols(session.pane)
-      })
-      const paintsReconnectFromModel = reconnectPaint.paintsFromModel
-      const modelSnapshot =
-        revealSnapshot ?? (paintsReconnectFromModel ? reconnectPaint.snapshot : null)
+    } else if (ctx.connectResult?.replay || ctx.prefetchedParkModelSnapshot) {
+      // Only park-reveal needs this lookup; in-place reconnect already carries its replay.
+      const modelSnapshot = ctx.revealFollowsTerminalPark ? ctx.prefetchedParkModelSnapshot : null
       if (!ctx.isCurrentReattachPayload()) {
         return
       }
       if (modelSnapshot) {
-        // Why composed for scan/reset only: kitty + reset heuristics need
-        // the full byte stream; the actual writes go through the shared
-        // alt-screen choreography below (scrollbackAnsi is '' for
-        // normal-buffer snapshots, so composition matches data there).
+        // Scan/reset needs composed snapshot bytes; actual writes use alt-screen choreography to preserve scrollback.
         const modelData = `${modelSnapshot.scrollbackAnsi ?? ''}${modelSnapshot.data}`
         session.rememberReattachPayloadAgentSignal(modelData, { fullScreenReplay: true })
         const modelCols = modelSnapshot.cols
@@ -169,27 +148,19 @@ export function createReattachPayloadHandlers(
           kittyKeyboardFlags: modelSnapshot.kittyKeyboardFlags,
           snapshotSeq: modelSnapshot.seq
         })
-        if (paintsReconnectFromModel && ctx.connectResult?.replay) {
-          // Why after the snapshot: painting the model discards the replay, but the app's kitty
-          // pushes during the outage exist ONLY there. Snapshot first for the pre-outage
-          // baseline, then the replay layers the outage on top — otherwise Option/Alt chords
-          // encode against a stale flag stack.
-          session.kittyKeyboardModes.scanReplay(ctx.connectResult.replay)
-        }
-        // Why shared: park+reveal of an alt-screen TUI needs the same
-        // ?1049l/?1049h rebuild as applyMainBufferSnapshot (main strips
-        // the ?1049h marker when splitting scrollbackAnsi) — inlined here
-        // because nesting structuralReplayCoordinator would deadlock.
+        // Share alt-screen rebuild with model snapshots; nesting replay coordinators here would deadlock.
         for (const replayChunk of buildMainModelSnapshotReplayWrites(modelSnapshot, {
-          skipAltFrame: paintsReconnectFromModel
-            ? reconnectPaint.altFrameWouldBeSkipped
-            : shouldSkipAltFrameForWidthMismatch(modelCols, readProposedTerminalCols(session.pane)),
+          skipAltFrame: noteReattachAltFrameSkip(
+            ctx,
+            shouldSkipAltFrameForWidthMismatch(modelCols, readProposedTerminalCols(session.pane)),
+            modelCols
+          ),
           paneOnAlternateScreen: session.isPaneOnAlternateScreen()
         })) {
           session.writeReplayData(replayChunk)
         }
-        session.writeReplayData(
-          session.reattachReplayResetSequence(
+        session.writeReplayEpilogue(
+          session.chooseReattachReplayReset(
             modelData,
             Boolean(ctx.connectResult?.coldRestore),
             modelSnapshot.alternateScreen ?? ctx.connectResult?.isAlternateScreen,
@@ -208,27 +179,24 @@ export function createReattachPayloadHandlers(
         )
         session.recordRendererOrderedSeq(modelSnapshot)
         session.sendFocusedReattachFocusInAfterReplay(ctx.ptyId, ctx.attemptGeneration)
-        if (ctx.connectResult?.coldRestore && !isRemoteRuntimePtyId(ctx.ptyId)) {
-          window.api.pty.ackColdRestore(ctx.ptyId)
+        if (ctx.connectResult?.coldRestore) {
+          ackPaintedColdRestore(session, ctx.ptyId)
         }
       } else if (ctx.connectResult?.replay) {
         session.rememberReattachPayloadAgentSignal(ctx.connectResult.replay, {
           fullScreenReplay: true
         })
         // Relay replay may overlap xterm's pre-disconnect content; clear first to avoid duplication.
-        session.writeReplayData(`${RESET_GRAPHIC_RENDITION}\x1b[2J\x1b[3J\x1b[H`)
-        // Why: raw relay replay may contain the app's own kitty pushes; re-arm with set semantics so redelivery can't grow the stack.
-        // A constructor-fresh mirror (window reload) first demotes to unproven:
-        // the replay window proves nothing about negotiations that predate it.
-        if (!session.kittyKeyboardModes.hasProvenBaseline) {
-          session.kittyKeyboardModes.resetForSnapshot()
-        }
-        session.kittyKeyboardModes.scanReplay(ctx.connectResult.replay)
+        session.writeReplayData(
+          `${RELEASE_SYNCHRONIZED_OUTPUT}${RESET_GRAPHIC_RENDITION}\x1b[2J\x1b[3J\x1b[H`
+        )
+        // Replay Kitty pushes with set semantics to avoid stack growth; fresh mirrors stay unproven for negotiations predating replay.
+        session.kittyKeyboardModes.adoptSnapshot(ctx.connectResult.replay, undefined)
         session.writeReplayData(
           `${ctx.connectResult.coldRestore ? RESET_GRAPHIC_RENDITION : ''}${ctx.connectResult.replay}`
         )
-        session.writeReplayData(
-          session.reattachReplayResetSequence(
+        session.writeReplayEpilogue(
+          session.chooseReattachReplayReset(
             ctx.connectResult.replay,
             Boolean(ctx.connectResult.coldRestore),
             ctx.connectResult.isAlternateScreen
@@ -236,9 +204,7 @@ export function createReattachPayloadHandlers(
         )
         session.sendFocusedReattachFocusInAfterReplay(ctx.ptyId, ctx.attemptGeneration)
         if (ctx.connectResult.coldRestore) {
-          if (!isRemoteRuntimePtyId(ctx.ptyId)) {
-            window.api.pty.ackColdRestore(ctx.ptyId)
-          }
+          ackPaintedColdRestore(session, ctx.ptyId)
         }
       }
     } else if (ctx.connectResult?.coldRestore) {
@@ -256,7 +222,9 @@ export function createReattachPayloadHandlers(
         // The current xterm grid remains a safe lower bound for blanking.
       }
       // Why: shrinking first would promote clipped stale viewport rows into scrollback, beyond the reach of a later viewport-only clear.
-      session.writeReplayData(`${RESET_GRAPHIC_RENDITION}\x1b[2J\x1b[H`)
+      session.writeReplayData(
+        `${RELEASE_SYNCHRONIZED_OUTPUT}${RESET_GRAPHIC_RENDITION}\x1b[2J\x1b[H`
+      )
       await waitForTerminalReplayWritesParsed(session.pane.terminal)
       if (!ctx.isCurrentReattachPayload()) {
         return
@@ -278,32 +246,49 @@ export function createReattachPayloadHandlers(
           session.suppressStructuralReplayPtyResize = false
         }
       }
-      // Why: recorded scrollback is raw PTY output that may hold query sequences; xterm.write would auto-reply into the new shell's stdin. See replay-guard.ts.
+      // Guard raw replay queries from auto-replying into the fresh shell (replay-guard.ts).
       session.writeReplayData(
         `${RESET_GRAPHIC_RENDITION}${ctx.connectResult.coldRestore.scrollback}`
       )
-      const preparedStartup = ctx.coldRestoreStartup ?? session.buildColdRestoreAgentResumeStartup()
-      const didPrepareResume = session.applyColdRestoreAgentResumeStartup(preparedStartup)
-      if (didPrepareResume) {
-        if (ctx.connectResult.agentResumeUnavailable) {
-          // Why: main dropped the resume argv, so this pane is a NEW session —
-          // the plain restored banner would claim the old one came back.
-          session.showSessionRestoredBanner('resume-unavailable')
-        } else if (preparedStartup?.hasSleepingRecord) {
-          session.showSessionRestoredBanner()
+      // An existing owner permits history replay, not another saved continuation.
+      let resumeUnavailable = Boolean(ctx.connectResult.agentResumeUnavailable)
+      let preparedStartup =
+        mainStartsPane(session) ||
+        ctx.connectResult.isReattach === true ||
+        ctx.connectResult.agentResumeRefused ||
+        resumeUnavailable
+          ? null
+          : (ctx.coldRestoreStartup ?? session.buildColdRestoreAgentResumeStartup())
+      if (preparedStartup && !ctx.coldRestoreStartup) {
+        const rejected = applyTerminalLaunchResult(
+          session,
+          ctx.connectResult,
+          captureTerminalLaunchContext(session, preparedStartup),
+          'candidate'
+        )
+        if (rejected) {
+          resumeUnavailable = true
+          preparedStartup = null
         }
+      }
+      const didPrepareResume =
+        ctx.connectResult.isReattach !== true &&
+        session.applyColdRestoreAgentResumeStartup(preparedStartup)
+      if (resumeUnavailable) {
+        // Dropped resume argv starts a new session; the restored banner must not claim the old session returned.
+        session.showSessionRestoredBanner('resume-unavailable')
+      } else if (didPrepareResume && preparedStartup?.hasSleepingRecord) {
+        session.showSessionRestoredBanner()
+      }
+      if (didPrepareResume) {
         session.clearSleepingRecordAfterColdRestoreSpawn(preparedStartup)
       }
       // Why: cold-restore spawned a fresh shell; reset mode bytes a crashed TUI (e.g. Claude's \e[?1004h) left in scrollback that no live TUI now consumes.
-      session.writeReplayData(POST_REPLAY_MODE_RESET)
-      // Why: the dead run's kitty flags died with it and its scrollback was never scanned — the fresh shell starts at zero.
-      session.kittyKeyboardModes.reset()
+      session.writeInputModeGround(POST_REPLAY_MODE_RESET)
       session.consumeRestoredViewportBlankingMarker()
       // Why: a taller destination fit must not pull recovered rows back into the fresh shell's viewport after source-grid replay.
       session.writeFreshShellViewportBlanking(Math.max(destinationRows, session.pane.terminal.rows))
-      if (!isRemoteRuntimePtyId(ctx.ptyId)) {
-        window.api.pty.ackColdRestore(ctx.ptyId)
-      }
+      ackPaintedColdRestore(session, ctx.ptyId)
       if (didPrepareResume && !ctx.coldRestoreStartup) {
         session.schedulePendingStartupCommandDelivery()
       }
@@ -317,38 +302,7 @@ export function createReattachPayloadHandlers(
     }
   }
 
-  const fitAfterReattachRestore = async (): Promise<void> => {
-    if (!ctx.isCurrentReattachPayload()) {
-      return
-    }
-    const reattachPtyId = session.transport.getPtyId()
-    if (!reattachPtyId) {
-      return
-    }
-    if (!getFitOverrideForPty(reattachPtyId)) {
-      const gridPush = session.createReattachGridPush(ctx.attemptGeneration, reattachPtyId)
-      const fit = safeFitAndThen(session.pane, 'reattach-pty-resize', gridPush.continuation, {
-        shouldContinue: gridPush.shouldContinue,
-        retryIfUnmeasurable: true,
-        // Why only this caller: a restored floating workspace is display:none until the
-        // user opens it, so dropping the grid push strands the PTY at the replay grid.
-        deferIfHidden: true
-      })
-      session.pendingReattachFit = fit
-      try {
-        // Why: reattach resize is fire-and-forget, so the continuation itself requests the
-        // applied-grid verification — it is the only point reached by both the immediate
-        // and the deferred-until-revealed path.
-        await fit.completion
-      } finally {
-        if (session.pendingReattachFit === fit) {
-          session.pendingReattachFit = null
-        }
-      }
-    } else if (ctx.isCurrentReattachPayload() && !isRemoteRuntimePtyId(reattachPtyId)) {
-      window.api.pty.signal(reattachPtyId, 'SIGWINCH')
-    }
-  }
+  const fitAfterReattachRestore = (): Promise<void> => fitReattachedPaneToGrid(session, ctx)
 
   return { applyReattachPayload, fitAfterReattachRestore }
 }

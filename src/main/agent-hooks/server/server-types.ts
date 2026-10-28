@@ -1,4 +1,6 @@
+import type { ProgramStatusFacet } from '../../../shared/program-status/facet'
 import type { ClaudeStatusLineRateLimits } from '../../../shared/claude-statusline-rate-limits'
+import type { PersistedAgentExitEvidence } from './agent-exit-evidence'
 import type { AgentHookEventPayload } from '../../../shared/agent-hook-listener/listener-event'
 import type {
   AgentStatusClearIpcPayload,
@@ -8,34 +10,41 @@ import type { AgentStatusObservation } from '../../../shared/agent-status-observ
 import type { AgentKind } from '../../../shared/telemetry-events'
 import type { LegacyPaneKeyAliasEntry } from '../../../shared/persisted-state-types'
 
-// Why: server-side enrichment — receivedAt = latest event arrival, stateStartedAt = when the current state first appeared; extra fields ride the shared map untouched (it only writes/clears).
 export type EnrichedAgentHookEventPayload = AgentHookEventPayload & {
+  /** Live acknowledgement of the matching renderer retirement; never cached. */
+  authorityRestartId?: string
   receivedAt: number
-  /** When this evidence was first observed, as distinct from `receivedAt`. A relay reconnect
-   *  replays cached rows and `receivedAt` must restamp to clear the connection watermark, so
-   *  only this clock can answer how old the evidence itself is. Persisted so it survives a
-   *  main restart; absent means "never separately observed" and consumers use `receivedAt`. */
+  /** Persisted evidence age survives replay; absent values fall back to receivedAt, which tracks delivery order. */
   evidenceObservedAt?: number
   stateStartedAt: number
-  /** Provenance/ordering stamped by this server as the pane authority (STA-4293). Read by nothing yet. */
+  /** Server-stamped main-agent turn start; absent until a live boundary establishes it. */
+  turnStartedAt?: number
+  /** Runtime provenance and ordering, including hook/OSC precedence. */
   observation?: AgentStatusObservation
-  /** Stamped at hydrate for nonterminal states; never persisted (hydrate re-stamps) and cleared by any accepted live event replacing the entry. */
+  /** Hydrated work remains unconfirmed until reconciled; this marker is never persisted. */
   restoredUnconfirmed?: true
   /** User-hidden resume identity retained solely for destructive liveness checks. */
   retainedForLiveness?: true
-  /** Persisted proof that a lead boundary was held working only by child agents. */
-  claudeLeadBoundaryChildOnly?: true
+  /** OSC 7501 facet stitched at publication, never persisted. */
+  programStatus?: ProgramStatusFacet
+  /** Facet-only publication; state readers must not infer a transition. */
+  programStatusOnly?: true
 }
 
+// Persist non-agent work too: mainAgent cannot describe shell/cron/notification work that affects hydration.
 export type PersistedAgentHookEventPayload = Omit<
   EnrichedAgentHookEventPayload,
-  | 'claudeRunningNonAgentTask'
+  | 'authorityRestartId'
   | 'launchToken'
+  | 'hostTurnRevision'
   | 'promptInteractionKey'
+  | 'programStatus'
+  | 'programStatusOnly'
   | 'restoredUnconfirmed'
-  // Why: revision counters are in-memory and the authority id is regenerated per process, so
-  // a stored observation could only rehydrate as a stale ordering claim from a dead authority.
+  // Authority IDs and revision counters belong to the runtime that issued them.
   | 'observation'
+  // Terminal handles belong to one runtime.
+  | 'terminalHandle'
 > & {
   launchTokenHash?: string
 }
@@ -50,9 +59,15 @@ export type PersistedAgentHookAuthorityCommitment = {
 }
 
 export type AgentHookStatusChangeEntry = {
+  paneKey: string
   state: AgentStatusState
   receivedAt: number
   observedInCurrentRuntime: boolean
+}
+
+export type AgentHookStatusFreshnessObservation = AgentHookStatusChangeEntry & {
+  worktreeId?: string
+  terminalHandle?: string
 }
 
 export type AgentHookProviderSessionIdentity = {
@@ -77,9 +92,20 @@ export type AgentHookAuthorityAttestation = Readonly<{
 }>
 
 export type StatusChangeListener = (statuses: AgentHookStatusChangeEntry[]) => void
+export type StatusFreshnessListener = (status: AgentHookStatusFreshnessObservation) => void
 export type ProviderSessionChangeListener = (
   providerSessions: AgentHookProviderSessionIdentity[]
 ) => void
+export type AgentHookStatusRowIdentity = {
+  paneKey: string
+  worktreeId?: string
+  terminalHandle?: string
+}
+export type AgentHookStatusRowMutation = {
+  before: AgentHookStatusRowIdentity | null
+  after: AgentHookStatusRowIdentity | null
+}
+export type StatusRowMutationListener = (mutation: AgentHookStatusRowMutation) => void
 export type PaneStatusClearListener = (clear: AgentStatusClearIpcPayload) => void
 export type StatusDropListener = (paneKey: string) => void
 export type PaneKeyAliasPersistenceListener = (entries: LegacyPaneKeyAliasEntry[]) => void
@@ -95,12 +121,16 @@ export type RetiredPaneAlias = { physicalPaneKey: string; entry: PaneKeyAliasEnt
 export type RetiredPaneFence = {
   paneKeys: readonly string[]
   aliases: readonly RetiredPaneAlias[]
+  closed?: true
+  retirementIdsByPaneKey: Record<string, string>
 }
 
 export type LastStatusFile = {
   version: number
   entries: Record<string, PersistedAgentHookEventPayload>
   authorityCommitments?: Record<string, PersistedAgentHookAuthorityCommitment>
+  /** Proven agent exits whose rows were reconciled away; absent from older files. */
+  agentExits?: PersistedAgentExitEvidence[]
 }
 
 export type AgentPromptSentDedupeEntry = {

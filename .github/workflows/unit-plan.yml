@@ -1,0 +1,44 @@
+name: Unit plan
+
+# Plan independently of static/type gates so checkout/diff/import-graph/timing work overlaps them; moving it out of unit-tests advanced shards by median 93s.
+on:
+  workflow_call:
+    inputs:
+      selection_mode:
+        description: Shadow validates selection; selected applies it only to draft PRs.
+        required: false
+        default: shadow
+        type: string
+
+    outputs:
+      shards:
+        description: JSON array of shard assignments for the unit matrix.
+        value: ${{ jobs.plan.outputs.shards }}
+
+permissions:
+  contents: read
+
+jobs:
+  plan:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    outputs:
+      shards: ${{ steps.plan.outputs.shards }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 2
+          persist-credentials: false
+      - uses: ./.github/actions/install-node-dependencies
+      - name: Plan unit selection
+        id: plan
+        env:
+          ORCA_UNIT_SELECTION_MODE: ${{ inputs.selection_mode }}
+          ORCA_PULL_REQUEST_DRAFT: ${{ github.event.pull_request.draft }}
+        run: node config/scripts/ci-unit-plan.mjs
+      - uses: actions/upload-artifact@v7
+        continue-on-error: true
+        with:
+          name: unit-selection-attempt-${{ github.run_attempt }}
+          path: ci-shards/unit-selection.json
+          retention-days: 14

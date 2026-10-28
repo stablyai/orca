@@ -16,18 +16,18 @@ import {
   Palette,
   Rocket,
   Server,
+  // `Shapes` is lucide's own export name; exempted in config/oxlint-anti-slop.json.
   Shapes,
   Sparkles,
   SquareTerminal,
   Wrench
 } from 'lucide-react-native'
 import { Image, StyleSheet, Text, View } from 'react-native'
-import type { RepoIcon } from '../../../src/shared/repo-icon'
+import type { MobileRenderableRepoIcon } from '../host-screen/host-screen-reply-schema'
 import { colors } from '../theme/mobile-theme'
+import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 
-// The lucide names the desktop repo-icon picker offers (src/renderer/src/
-// components/repo/repo-icon.tsx). Mobile renders the same glyph so the project
-// header icon matches desktop instead of a bare colored dot.
+// Match desktop repo-icon picker’s lucide glyphs so mobile project headers retain chosen icons.
 const REPO_LUCIDE_ICONS: Record<string, LucideIcon> = {
   Folder,
   Code2,
@@ -52,15 +52,15 @@ const REPO_LUCIDE_ICONS: Record<string, LucideIcon> = {
 }
 
 type Props = {
-  repoIcon?: RepoIcon | null
+  // Accept decoded catalog icon fields (type/src/label/emoji/name), not unused source; RepoIcon remains compatible.
+  repoIcon?: MobileRenderableRepoIcon | null
   size?: number
   color?: string
 }
 
-// Renders a repo/project icon matching the desktop sidebar: a custom image
-// (favicon/avatar/upload), an emoji, or a lucide glyph. Falls back to Folder,
-// the desktop default, so a project always shows an icon rather than a dot.
+// Render desktop-style custom image/emoji/lucide with Folder fallback, never bare project dot.
 export function MobileRepoIcon({ repoIcon, size = 14, color = colors.textSecondary }: Props) {
+  useMobileColorScheme()
   if (repoIcon?.type === 'image') {
     return (
       <Image

@@ -152,9 +152,7 @@ describe('guarded Grok hook config mutation', () => {
     expect(statSync(configPath).mode & 0o777).toBe(0o600)
   })
 
-  // Why this is pinned: Grok stats every global hook JSON and refuses to build a sandbox profile
-  // for one whose st_nlink != 1, failing the whole session. A publish-by-hard-link swap leaves the
-  // config at nlink 2 for the width of the write, so any Grok session starting in that window dies.
+  // Grok rejects global hook files with nlink !=1; publishing through a hard link creates a session-failure window.
   it('never publishes the config through a second hard link', async () => {
     const configPath = makeConfigPath()
     const installed = '{"hooks":{"SessionStart":[]}}\n'

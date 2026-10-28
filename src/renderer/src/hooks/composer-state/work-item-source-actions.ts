@@ -8,7 +8,9 @@ type WorkItemSourceActionsInput = Pick<
   | 'repoId'
   | 'reuseEligibleBranch'
   | 'setBaseBranch'
+  | 'setBaseBranchNamesWorkspace'
   | 'setBranchNameOverride'
+  | 'setBranchIntent'
   | 'setBranchNameOverridePreservesNameEdits'
   | 'setCompareBaseRef'
   | 'setForkPushWarning'
@@ -17,7 +19,7 @@ type WorkItemSourceActionsInput = Pick<
   | 'setReuseEligibleBranch'
   | 'setReuseSelectedBranch'
   | 'setStartFromResetHint'
-  | 'smartGitHubPrStartPointSelectionRef'
+  | 'smartSourceSelectionRef'
   | 'worktreesByRepo'
 >
 
@@ -35,7 +37,9 @@ export function useWorkItemSourceActions(input: WorkItemSourceActionsInput) {
     repoId,
     reuseEligibleBranch,
     setBaseBranch,
+    setBaseBranchNamesWorkspace,
     setBranchNameOverride,
+    setBranchIntent,
     setBranchNameOverridePreservesNameEdits,
     setCompareBaseRef,
     setForkPushWarning,
@@ -44,13 +48,13 @@ export function useWorkItemSourceActions(input: WorkItemSourceActionsInput) {
     setReuseEligibleBranch,
     setReuseSelectedBranch,
     setStartFromResetHint,
-    smartGitHubPrStartPointSelectionRef,
+    smartSourceSelectionRef,
     worktreesByRepo
   } = input
 
   const handleSmartBranchSelect = useCallback(
     (refName: string, localBranchName: string): void => {
-      smartGitHubPrStartPointSelectionRef.current = null
+      smartSourceSelectionRef.current = null
       const selection = resolveComposerBranchPick({
         refName,
         localBranchName,
@@ -59,12 +63,12 @@ export function useWorkItemSourceActions(input: WorkItemSourceActionsInput) {
         worktreeBranches: getComposerRepoWorktreeBranches(worktreesByRepo[repoId] ?? [], repoId)
       })
       setBaseBranch(selection.baseBranch)
+      setBaseBranchNamesWorkspace(true)
       setCompareBaseRef(undefined)
       setPushTarget(undefined)
       setStartFromResetHint(null)
       setForkPushWarning(null)
-      // Why (#5181): reuse (check out) an existing branch instead of branching off it; git allows a branch in only one worktree, so gate eligibility on that.
-      // Note: worktreesByRepo covers only visible worktrees; a branch busy in a hidden external worktree falls through to the backend "already exists locally" check.
+      // Git allows one worktree per branch: visible busy branches cannot reuse (#5181); hidden external conflicts remain backend-checked.
       const { reuseEligibleBranch: nextReuseEligibleBranch, defaultReuse } = selection
       setReuseEligibleBranch(nextReuseEligibleBranch)
       setReuseSelectedBranch(defaultReuse)
@@ -78,6 +82,13 @@ export function useWorkItemSourceActions(input: WorkItemSourceActionsInput) {
         setBranchNameOverride(selection.branchNameOverride)
         branchAutoNameRef.current = selection.branchNameOverride ? selection.branchAutoName : ''
       }
+      if (
+        selection.branchNameOverride &&
+        refName !== localBranchName &&
+        refName !== `refs/heads/${localBranchName}`
+      ) {
+        setBranchIntent('open-existing')
+      }
     },
     [
       name,
@@ -86,7 +97,9 @@ export function useWorkItemSourceActions(input: WorkItemSourceActionsInput) {
       branchAutoNameRef,
       lastAutoNameRef,
       setBaseBranch,
+      setBaseBranchNamesWorkspace,
       setBranchNameOverride,
+      setBranchIntent,
       setBranchNameOverridePreservesNameEdits,
       setCompareBaseRef,
       setForkPushWarning,
@@ -95,7 +108,7 @@ export function useWorkItemSourceActions(input: WorkItemSourceActionsInput) {
       setReuseEligibleBranch,
       setReuseSelectedBranch,
       setStartFromResetHint,
-      smartGitHubPrStartPointSelectionRef
+      smartSourceSelectionRef
     ]
   )
 
@@ -105,7 +118,7 @@ export function useWorkItemSourceActions(input: WorkItemSourceActionsInput) {
         return
       }
       setReuseSelectedBranch(next)
-      // Why (#5181): reuse pins the existing branch as override (preserved across name edits); opting out drops it so a fresh branch is created from the ref.
+      // Reuse pins the branch across name edits; opting out restores fresh-branch creation from the ref (#5181).
       setBranchNameOverridePreservesNameEdits(next)
       setBranchNameOverride(next ? reuseEligibleBranch : undefined)
       if (next) {

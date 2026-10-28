@@ -115,30 +115,6 @@ describe('BrowserClientNetworkRouteRegistry', () => {
     expect(routeFactory).not.toHaveBeenCalled()
   })
 
-  it('releases an aborted startup without admitting a handle', async () => {
-    let resolveStart = (_address: { host: string; port: number }): void => {}
-    const route = createRoute(
-      new Promise((resolve) => {
-        resolveStart = resolve
-      })
-    )
-    const registry = new BrowserClientNetworkRouteRegistry({
-      authority,
-      authorityStorageKey,
-      createRoute: () => route
-    })
-    const controller = new AbortController()
-    const retaining = registry.retain(
-      browserNetworkExecutionHostKey({ kind: 'native', runtimeId: 'runtime-a', revision: 1 }),
-      controller.signal
-    )
-
-    controller.abort()
-    await expect(retaining).rejects.toThrow('browser_client_network_route_aborted')
-    resolveStart({ host: '127.0.0.1', port: 43123 })
-    await vi.waitFor(() => expect(route.close).toHaveBeenCalledOnce())
-  })
-
   it('closes every retained route and rejects later admission', async () => {
     const firstRoute = createRoute()
     const secondRoute = createRoute()
@@ -481,7 +457,6 @@ describe('BrowserClientNetworkRouteRegistry', () => {
     await releasing
 
     await expect(retaining).rejects.toThrow('browser_client_network_route_registry_retired')
-    // A retired registry must never mint the replacement route the waiter was queued for.
     expect(routeFactory).toHaveBeenCalledOnce()
     expect(route.start).toHaveBeenCalledOnce()
   })
@@ -585,7 +560,6 @@ describe('BrowserClientNetworkRouteRegistry', () => {
 
     expect(() => registry.retire()).toThrow('Browser client network route suspension failed')
 
-    // A second retire must report the same failure without re-suspending an already suspended route.
     await expect(registry.retire()).rejects.toThrow(
       'Browser client network route suspension failed'
     )

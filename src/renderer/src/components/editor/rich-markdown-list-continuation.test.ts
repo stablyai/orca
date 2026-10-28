@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { Editor } from '@tiptap/core'
+import { Editor, type JSONContent } from '@tiptap/core'
 import StarterKit from '@tiptap/starter-kit'
 import { createIsolatedMarkdownExtensionForTests } from './isolated-markdown-extension-for-tests'
 import {
@@ -10,9 +10,8 @@ import {
   isSingleEmptyTopLevelOrderedList
 } from './rich-markdown-list-continuation'
 
-function createEditor(content: object): Editor {
-  // Why: each Editor needs its own marked registry; sharing one module-scoped
-  // extension accumulates tokenizer state across tests.
+function createEditor(content: JSONContent): Editor {
+  // Isolate each editor’s marked registry so tokenizer state cannot accumulate across tests.
   return new Editor({
     element: null,
     extensions: [StarterKit, createIsolatedMarkdownExtensionForTests()],

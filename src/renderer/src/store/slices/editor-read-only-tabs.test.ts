@@ -63,7 +63,7 @@ describe('read-only editor tabs (AI Vault View Log)', () => {
     expect(store.getState().openFiles[0]?.fileContentReloadNonce).toBe(1)
   })
 
-  it('keeps read-only sticky when the same path is opened writable (no silent upgrade)', () => {
+  it('restores editability when the same path is explicitly opened writable', () => {
     const store = createEditorStore()
     openReadOnlyLog(store)
 
@@ -77,7 +77,8 @@ describe('read-only editor tabs (AI Vault View Log)', () => {
     })
 
     expect(store.getState().openFiles).toHaveLength(1)
-    expect(store.getState().openFiles[0]?.readOnly).toBe(true)
+    expect(store.getState().openFiles[0]?.readOnly).toBeUndefined()
+    expect(store.getState().openFiles[0]?.liveTail).toBeUndefined()
   })
 
   it('never flips an existing writable tab to read-only on View Log', () => {
@@ -138,7 +139,6 @@ describe('read-only editor tabs (AI Vault View Log)', () => {
     expect(restored).toEqual(
       expect.objectContaining({ readOnly: true, liveTail: true, isDirty: false, mode: 'edit' })
     )
-    expect(restored?.pendingDiskBaselineVerification).toBeUndefined()
     expect(store.getState().editorDrafts[LOG_PATH]).toBeUndefined()
   })
 

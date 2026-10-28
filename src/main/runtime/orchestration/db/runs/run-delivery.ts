@@ -12,7 +12,7 @@ export function requireCurrentConsumer(
   if (!run || run.legacy === 1 || run.consumer_generation !== consumerGeneration) {
     throw new OrchestrationError(
       'consumer_fenced',
-      'This mailbox consumer has been replaced. Rebind with orchestration run-use.'
+      `Another session now coordinates Run ${runId}; stop reading this mailbox.`
     )
   }
   return run
@@ -32,8 +32,7 @@ export function getOrCreateRunDelivery(
     mailboxHandle: `run:${params.runId}`,
     consumerGeneration: params.consumerGeneration,
     limit: params.limit,
-    wakeTypes: params.wakeTypes,
-    requireCurrentRunConsumer: true
+    wakeTypes: params.wakeTypes
   })
 }
 
@@ -49,8 +48,7 @@ export function acknowledgeRunDelivery(
     runId: params.runId,
     mailboxHandle: `run:${params.runId}`,
     consumerGeneration: params.consumerGeneration,
-    deliveryId: params.deliveryId,
-    requireCurrentRunConsumer: true
+    deliveryId: params.deliveryId
   })
 }
 
@@ -61,7 +59,7 @@ export function getRunMailboxHistory(
   types?: MessageType[]
 ): MessageRow[] {
   const address = `run:${runId}`
-  // Why: SQLite reads a negative LIMIT as unbounded, so an unsanitized caller value dumps the whole mailbox.
+  // SQLite treats negative LIMIT as unbounded; clamp it to avoid dumping the mailbox.
   const rowLimit = Math.max(1, Math.floor(limit))
   if (types && types.length > 0) {
     const placeholders = types.map(() => '?').join(',')

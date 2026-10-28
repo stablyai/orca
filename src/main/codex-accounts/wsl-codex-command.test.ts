@@ -8,9 +8,6 @@ import {
 import { CODEX_READ_ONLY_APP_SERVER_ARGS } from '../codex-cli/codex-read-only-app-server-args'
 
 describe('WSL Codex commands', () => {
-  // The distro argv and the login-shell PATH are the runner's now (its probe
-  // lane caches the same getent-resolved login environment); only the
-  // alias-neutral lookup is still this module's to get right.
   it('checks the alias-neutral PATH the runner supplies', () => {
     const script = buildWslCodexAvailabilityScript()
 
@@ -27,6 +24,15 @@ describe('WSL Codex commands', () => {
     expect(command).toContain('export CODEX_HOME=')
     expect(command).toContain('/home/alice/managed-home')
     expect(command).toContain('exec "$resolved" login')
+    expect(command).not.toContain('BROWSER')
+  })
+
+  it('stops the distro opening a second tab only when Orca opens the link', () => {
+    const command = buildWslCodexLoginArgs('Ubuntu', '/home/alice/managed-home', {
+      orcaOpensSignInLink: true
+    }).at(-1)
+
+    expect(command).toContain('export BROWSER=true\nexec "$resolved" login')
   })
 
   it('quotes an explicit read-only app-server contract without changing the default', () => {

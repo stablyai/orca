@@ -1,14 +1,44 @@
-import type { AgentSessionJournalIdentity } from '../../shared/agent-session-journal-types'
-import { randomUUID } from 'node:crypto'
-import { cancelProcessAcquisition } from '../../shared/child-process/cancel-process-acquisition'
+import type { CodexAppliedSettings } from './codex-structured-applied-settings'
+import type { StructuredAgentSessionChildWorkProducer } from '../native-chat/agent-session-wire/structured-agent-session-subagent-rows'
+import type { StructuredAgentSessionLogger } from '../native-chat/agent-session-wire/structured-agent-session-logger'
+import type { StructuredAgentSessionAtRestCommands } from '../native-chat/agent-session-wire/structured-agent-session-at-rest-commands'
+import type { AgentSessionAccountKind } from '../../shared/agent-session-availability'
 import type {
-  CodexAppServerConnection,
-  openCodexAppServerConnection
-} from './codex-app-server-connection'
+  AgentJournalAnsweredTurnIdentity,
+  AgentJournalItemIdentity
+} from '../../shared/agent-session-journal-types'
+import { randomUUID } from 'node:crypto'
+import type { AgentJournalDispatchRejection } from '../../shared/agent-session-failure-words'
+import { cancelProcessAcquisition } from '@orca/process-host/cancel-process-acquisition'
+import type { CodexAppServerConnection } from './app-server/codex-app-server-connection-types'
+import type { openCodexAppServerConnection } from './codex-app-server-connection'
 import { CodexAcquisitionWindow } from './codex-structured-acquisition-window'
+import {
+  createCodexTurnOpenWaits,
+  type CodexTurnOpenWaits
+} from './codex-structured-turn-open-wait'
+import type { CodexDispatchEchoes } from './codex-structured-dispatch-echo'
+import type { AgentChildWorkEvidence } from '../../shared/agent-status-child-work-evidence'
+import type { CodexBackgroundTaskTracker } from './codex-background-task-tracker'
+import type { CodexSkillReport } from './codex-structured-skill-report'
 import type { CodexJournalTranslator } from './codex-structured-journal-translation'
-import type { CodexTurnProcessSnapshot } from './codex-structured-turn-processes'
 import type { StructuredAgentSessionLifecycleEvent } from '../native-chat/agent-session-wire/structured-agent-session-adapter'
+import type { CodexStructuredPermissionPolicy } from '../../shared/codex-permission-policy'
+import type { StructuredLaunchRequest } from '../runtime/structured-agent-launch-composition'
+import type {
+  AgentModelCatalogSessionAccess,
+  AgentModelCatalogStore
+} from '../native-chat/agent-model-catalog/agent-model-catalog-store'
+import type { StructuredAgentSessionProviderOpen } from '../native-chat/agent-session-wire/structured-agent-session-provider-open-contract'
+import type { NativeChatVisualsLaunch } from '../native-chat/native-chat-visuals-delivery'
+import type { AgentChatPermissionChoice } from '../../shared/agent-chat-permission-mode'
+import type { CodexSandboxPolicy } from './codex-structured-sandbox-policy'
+import type { StructuredAgentSessionEventSink } from '../native-chat/agent-session-wire/structured-agent-session-event-sink'
+
+export type CodexSessionCatalogAccess = AgentModelCatalogSessionAccess & {
+  read?: (verifiedOnly?: boolean) => ReturnType<AgentModelCatalogStore['get']>
+  demand?: (legacy?: boolean) => Promise<unknown>
+}
 
 export type CodexStructuredLaunch = {
   command: string
@@ -16,12 +46,39 @@ export type CodexStructuredLaunch = {
   cwd: string
   codexHome: string | null
   resumeThreadId: string | null
-  resumePath?: string | null
+  /** Replace an unsaved thread created by this session; never supersede a proven resume. */
+  supersedeIfUnsaved?: boolean
+  permissionPolicy?: CodexStructuredPermissionPolicy
+  /** Open on the chosen model to avoid a first-turn switch. */
+  model?: string
+  /** Sealed child environment; envToDelete removes inherited keys. */
   env?: Record<string, string>
+  envToDelete?: readonly string[]
+  /** Command values that must survive the user's shell environment policy. */
+  commandEnv?: Record<string, string>
+  visuals?: NativeChatVisualsLaunch
 }
 
+/** Boundaries retain host receipt time through buffering and retries. */
+export const CODEX_RECEIPT_TIMED_METHODS: ReadonlySet<string> = new Set([
+  'turn/started',
+  'turn/completed',
+  'item/started',
+  'item/completed'
+])
+
 export type CodexStructuredSessionEvent =
-  | { type: 'notification'; sessionId: string; threadId: string; method: string; params: unknown }
+  | {
+      type: 'notification'
+      sessionId: string
+      threadId: string
+      method: string
+      params: unknown
+      /** Original host receipt time for CODEX_RECEIPT_TIMED_METHODS boundaries. */
+      observedAt?: number
+      /** Highest dispatch sequence armed when this turn-start was first received. */
+      dispatchSequenceAtReceipt?: number
+    }
   | { type: 'server-request'; sessionId: string; threadId: string; method: string; params: unknown }
   | { type: 'provider-frame'; sessionId: string; threadId: string; kind: string; payload: unknown }
   | {
@@ -35,44 +92,98 @@ export type CodexStructuredSessionEvent =
     }
   | StructuredAgentSessionLifecycleEvent
   /** Translator-only compatibility for callers that do not participate in host recovery. */
-  | { type: 'ended'; sessionId: string; reason: string }
+  | { type: 'ended'; sessionId: string; reason: string; observedAt?: number }
 
 export type CodexStructuredSessionAdapterDeps = {
-  resolveLaunch: (input: {
-    identity: AgentSessionJournalIdentity
-  }) => Promise<CodexStructuredLaunch>
-  /** Host capability seam; production uses the native Windows process table. */
-  isWindowsProcessStartTimeAvailable?: () => boolean
+  resolveAccountKind?: (home: string) => AgentSessionAccountKind | undefined
+  atRestCommands?: StructuredAgentSessionAtRestCommands
+  resolveLaunch: (input: StructuredLaunchRequest) => Promise<CodexStructuredLaunch>
   onEvent?: (event: CodexStructuredSessionEvent) => void
+  logger?: StructuredAgentSessionLogger
+  /** Delivered after journal admission; producer is the reporting child's sink. */
+  onChildWorkEvidence?: (
+    sessionId: string,
+    evidence: AgentChildWorkEvidence[],
+    producer?: StructuredAgentSessionChildWorkProducer
+  ) => void
+  /** Settle an admitted send by provider echo or rejection at its answered turn's end. */
+  onDispatchSettledLate?: (
+    input: { sessionId: string; clientMessageId: string } & (
+      | { providerIdentity: AgentJournalItemIdentity }
+      | ({
+          state: 'rejected'
+          answeredInTurn?: AgentJournalAnsweredTurnIdentity
+        } & AgentJournalDispatchRejection)
+    )
+  ) => void
+  /** The sends Codex holds (`CodexDispatchEchoes.heldSends`) changed with no journal row. */
+  onHeldSendsChanged?: (input: { sessionId: string }) => void
   openConnection?: typeof openCodexAppServerConnection
   readProcessStartTime?: (pid: number) => Promise<number | null>
   mintLinkId?: () => string
   mintAcquisitionGeneration?: () => string
   now?: () => number
   requestTimeoutMs?: number
-  captureTurnProcesses?: (rootPid: number) => Promise<CodexTurnProcessSnapshot | null>
-  terminateTurnProcesses?: (
-    rootPid: number,
-    baseline: CodexTurnProcessSnapshot | null
-  ) => Promise<boolean>
+  /** Host model catalog; sessions write their listings through and read back. */
+  modelCatalog?: AgentModelCatalogStore
+  readModelCatalog?: (
+    sessionId: string,
+    verifiedOnly?: boolean
+  ) => ReturnType<AgentModelCatalogStore['get']>
+  demandModelCatalog?: (sessionId: string, legacy?: boolean) => Promise<unknown>
 }
 
 export type CodexSession = {
+  events?: StructuredAgentSessionEventSink
+  account?: AgentSessionAccountKind
   connection: CodexAppServerConnection
   ended: boolean
-  requestedClose: boolean
+  /** First observed child exit survives rejected settlement admission. */
+  exitObservedAt?: number
+  /** Preserve the initiating close's cause and reason through later exit reports. */
+  orcaClose?: { requested: boolean; reason: Error }
   fence: number
   acquisitionGeneration: string
   threadId: string
-  historyPath: string | null
   historyMode?: 'legacy' | 'paginated'
+  /** Provider facts from this acquisition, not another copy of the chat's selected mode. */
+  permissions?: {
+    acquiredMode: AgentChatPermissionChoice
+    acquiredSandbox?: CodexSandboxPolicy
+    launchSandboxIntact: boolean
+    cwd: string
+    visualsFolder?: string
+    preparedMode?: AgentChatPermissionChoice
+    preparedAuto?: CodexSandboxPolicy
+  }
+  /** Wire-observed open primary turns; rewind and untargeted Stop use these before journal admission. */
   activeTurnIds?: Set<string>
+  /** Interrupt-acknowledged turns cannot accept steers while awaiting turn/completed. */
+  abortedTurnIds?: Set<string>
+  turnOpenWaits: CodexTurnOpenWaits
   dispatchPending?: boolean
   prompts: CodexAcquisitionWindow['prompts']
   options: Map<string, string>
-  reportedOptions: { model?: string; effort?: string }
-  turnIdWaiters: ((turnId: string) => void)[]
+  /** Startup reports and accepted fresh-turn policies describe this child, never saved intent. */
+  reportedOptions: {
+    reportedPermissionMode?: string | null
+    model?: string
+    effort?: string
+    serviceTier?: string | null
+    serviceTierKnown?: true
+  }
+  /** The configured personality and tier a reset returns to, read before the first override. */
+  nativeDefaults?: { personality?: string; serviceTier?: string }
+  /** Overrides actually attempted on this child, independently of future saved picks. */
+  appliedTurnOptions?: Readonly<Record<string, string>>
+  appliedSettings?: CodexAppliedSettings
+  /** Optional for adapters without a host catalog store. */
+  catalogAccess?: CodexSessionCatalogAccess
+  dispatchEchoes: CodexDispatchEchoes
   translator: CodexJournalTranslator | null
+  /** Ephemeral compatibility roster; durable child records own runtime state. */
+  backgroundTasks: CodexBackgroundTaskTracker
+  skillReport?: CodexSkillReport
   unbindReadingControl?: () => void
   /** Terminates this exact child as an unexpected death and enters host recovery. */
   forceCloseUnexpected?: (reason: Error) => Promise<boolean>
@@ -85,8 +196,22 @@ export function mintCodexAcquisitionGeneration(deps: CodexStructuredSessionAdapt
 export function codexSessionLifecycle(
   fence: number,
   acquisitionGeneration: string
-): Pick<CodexSession, 'ended' | 'requestedClose' | 'fence' | 'acquisitionGeneration'> {
-  return { ended: false, requestedClose: false, fence, acquisitionGeneration }
+): Pick<CodexSession, 'ended' | 'fence' | 'acquisitionGeneration' | 'turnOpenWaits'> {
+  return {
+    ended: false,
+    fence,
+    acquisitionGeneration,
+    turnOpenWaits: createCodexTurnOpenWaits()
+  }
+}
+
+export function assertCodexConnectionOpen(
+  connection: Pick<CodexAppServerConnection, 'closed'>,
+  sessionId: string
+): void {
+  if (connection.closed) {
+    throw new Error(`codex app-server for session ${sessionId} exited while being acquired`)
+  }
 }
 
 export function requireLiveCodexSession(
@@ -102,8 +227,13 @@ export function requireLiveCodexSession(
 
 export type CodexAcquisitionAttempt = {
   window: CodexAcquisitionWindow
+  acquisitionGeneration?: string
+  open?: StructuredAgentSessionProviderOpen
+  dispose?: () => void
   cancelled: boolean
+  requestedClose?: boolean
   exitProven: boolean
+  exitError?: Error
   finished: Promise<void>
   finish: () => void
 }
@@ -188,17 +318,24 @@ export class CodexAcquisitionRegistry {
 }
 
 export async function cancelCodexAcquisitionAttempt(
-  attempt: CodexAcquisitionAttempt | undefined
+  attempt: CodexAcquisitionAttempt | undefined,
+  requestedClose = true
 ): Promise<boolean> {
   if (!attempt) {
     return true
   }
-  return cancelProcessAcquisition({
+  const closed = await cancelProcessAcquisition({
     cancel: () => {
       attempt.cancelled = true
+      attempt.requestedClose = requestedClose
     },
     connection: () => attempt.window.connection,
     exitProven: () => attempt.exitProven,
     finished: attempt.finished
   })
+  if (closed) {
+    attempt.exitProven = true
+    attempt.dispose?.()
+  }
+  return closed
 }

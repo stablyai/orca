@@ -23,7 +23,6 @@ type HookObserverOptions = {
   establishAgentEvidence: () => void
   recordPaneActivity: () => void
   clearPendingHookDone: () => void
-  clearPendingCodexAttention: () => void
   dispatchAttention: (payload: AgentCompletionStatusSnapshot) => void
   dispatchCompletion: (source: 'hook', title: string, override?: Record<string, unknown>) => boolean
   scheduleHookDoneCompletion: (title: string, payload: AgentCompletionStatusSnapshot) => void
@@ -37,6 +36,7 @@ type HookObserverOptions = {
   consumePendingStampedTailForAgent: (agent: string | null, identity: string | null) => boolean
   consumeStampedTailForCurrentCoordinator: (timestamp: number) => void
   clearOriginStampedTail: () => void
+  clearProcessExitCompletion: () => void
   recordWorkingBoundary: (timestamp: number | undefined) => void
   dropPendingTitle: () => void
 }
@@ -55,7 +55,6 @@ export function createAgentCompletionHookObserver({
   establishAgentEvidence,
   recordPaneActivity,
   clearPendingHookDone,
-  clearPendingCodexAttention,
   dispatchAttention,
   dispatchCompletion,
   scheduleHookDoneCompletion,
@@ -69,18 +68,12 @@ export function createAgentCompletionHookObserver({
   consumePendingStampedTailForAgent,
   consumeStampedTailForCurrentCoordinator,
   clearOriginStampedTail,
+  clearProcessExitCompletion,
   recordWorkingBoundary,
   dropPendingTitle
 }: HookObserverOptions) {
   function observeHookStatus(payload: AgentCompletionStatusSnapshot): void {
     recordPaneActivity()
-    if (options.shouldSuppressHookCompletion?.(payload)) {
-      if (isAttentionHookState(payload.state)) {
-        clearPendingHookDone()
-        clearPendingCodexAttention()
-      }
-      return
-    }
     if (isRecognizedAgentType(payload.agentType)) {
       establishAgentEvidence()
     }
@@ -123,9 +116,10 @@ export function createAgentCompletionHookObserver({
         return
       }
       clearOriginStampedTail()
+      // Clear exit identity on a new turn or agent-only matching would swallow every later Done from that agent.
+      clearProcessExitCompletion()
       recordWorkingBoundary(payload.stateStartedAt)
       clearPendingHookDone()
-      clearPendingCodexAttention()
       state.workingStatusObserved = true
       state.requiresFreshWorking = false
       state.lastCompletionIdentity = null
@@ -146,7 +140,6 @@ export function createAgentCompletionHookObserver({
     if (payload.state !== 'done') {
       return
     }
-    clearPendingCodexAttention()
     const identity = hookCompletionIdentity(payload)
     const turnCompletedAt = isFiniteTurnCompletedAt(payload.turnCompletedAt)
       ? payload.turnCompletedAt
@@ -185,7 +178,8 @@ export function createAgentCompletionHookObserver({
       !state.workingStatusObserved &&
       state.lastCompletionSource === 'hook' &&
       state.lastCompletedTurn === state.currentTurn &&
-      Date.now() - state.lastCompletionAt >= 1_000
+      // Why: a new host turn-end stamp is a real end even right after a banner; replays restate it.
+      (Date.now() - state.lastCompletionAt >= 1_000 || payload.turnEndedAt !== undefined)
     ) {
       state.currentTurn += 1
     }

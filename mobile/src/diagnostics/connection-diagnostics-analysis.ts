@@ -1,4 +1,8 @@
-import { isTailscaleEndpoint } from '../../../src/shared/remote-runtime-tailscale-hint'
+import { isTailscaleEndpoint } from '../../../src/shared/remote-runtime/remote-runtime-tailscale-hint'
+import {
+  relayHostReachabilityForCloseCode,
+  type RelayHostReachabilityFromCloseCode
+} from '../transport/relay-host-reachability'
 import type {
   ConnectionLogEntry,
   ConnectionState,
@@ -27,9 +31,28 @@ export function diagnoseConnection(args: DiagnoseConnectionArgs): ConnectionDiag
       reportability: 'none'
     }
   }
-  const failure = findCurrentDiagnosticFailure(args.entries)
-  const evidence = failure ? `${failure.code ?? ''} ${failure.message} ${failure.detail ?? ''}` : ''
+  const selected = selectDiagnosticFailure(args.entries)
+  const failure = selected?.entry
+  const evidence = failure ? diagnosticEvidence(failure) : ''
+  const diagnosis = diagnoseFailure(args, failure, evidence)
+  if (!selected?.staleSince) {
+    return diagnosis
+  }
+  // Pre-resume/network-change evidence can explain an unanswered host, but cannot be submitted as a current incident.
+  const boundary =
+    selected.staleSince === 'network-changed' ? 'the last network change' : 'the app last resumed'
+  return {
+    likelyCause: `Before ${boundary}: ${diagnosis.likelyCause}`,
+    nextStep: diagnosis.nextStep,
+    reportability: 'none'
+  }
+}
 
+function diagnoseFailure(
+  args: DiagnoseConnectionArgs,
+  failure: ConnectionLogEntry | undefined,
+  evidence: string
+): ConnectionDiagnosis {
   if (/relay director resolve failed \(401\)/i.test(evidence)) {
     return {
       likelyCause: 'Relay rejected the saved resume credential.',
@@ -43,6 +66,20 @@ export function diagnoseConnection(args: DiagnoseConnectionArgs): ConnectionDiag
     return {
       likelyCause: `Relay service was temporarily unavailable${retryMs == null ? '.' : ` and asked Orca to retry in ${formatDelay(retryMs)}.`}`,
       nextStep: 'Keep Orca open; recovery should retry automatically.',
+      reportability: 'none'
+    }
+  }
+
+  // After the director branches: a director error also arrives as a relay dial failure.
+  const relayDial = relayDialFailure(failure)
+  if (relayDial) {
+    return relayDial
+  }
+
+  if (failure?.code === 'suspended-dial') {
+    return {
+      likelyCause: 'Connection deadline delivery was delayed; the app may have been suspended.',
+      nextStep: 'Orca is re-dialing to check the connection. Keep the app open while it retries.',
       reportability: 'none'
     }
   }
@@ -117,37 +154,108 @@ export function diagnoseConnection(args: DiagnoseConnectionArgs): ConnectionDiag
 }
 
 export function getReportableConnectionIncidentId(args: DiagnoseConnectionArgs): string | null {
-  if (diagnoseConnection(args).reportability !== 'orca-relay') {
+  const selected = selectDiagnosticFailure(args.entries)
+  if (!selected || selected.staleSince) {
     return null
   }
-  return findCurrentDiagnosticFailure(args.entries)?.id ?? null
+  return diagnoseFailure(args, selected.entry, diagnosticEvidence(selected.entry)).reportability ===
+    'orca-relay'
+    ? selected.entry.id
+    : null
 }
 
-function findCurrentDiagnosticFailure(
+// Include the relay close code in the longer copy users paste into bug reports.
+const RELAY_DIAL_ADVICE: Record<
+  RelayHostReachabilityFromCloseCode,
+  { likelyCause: (code: number) => string; nextStep: string }
+> = {
+  'host-offline': {
+    likelyCause: (code) =>
+      `Relay answered, but the desktop is not connected to it (close code ${code}, host offline).`,
+    nextStep: 'Check the desktop is awake, Orca is running, and it is signed in to Orca Cloud.'
+  },
+  'credential-refused': {
+    likelyCause: (code) => `Relay refused this device’s relay credential (close code ${code}).`,
+    nextStep: 'Re-pair this phone with the desktop.'
+  },
+  unreachable: {
+    likelyCause: (code) => `The phone could not reach the Relay cell (transport close ${code}).`,
+    nextStep: 'Check this phone’s network connection; Relay recovery retries automatically.'
+  },
+  connecting: {
+    likelyCause: (code) =>
+      `Relay closed the dial with code ${code}; recovery re-resolves and retries.`,
+    nextStep: 'Keep Orca open while Relay recovery retries.'
+  }
+}
+
+// The relay code names desktop state; a direct timeout may only mean the phone is off LAN. Neither cause is reportable as a relay fault.
+function relayDialFailure(failure: ConnectionLogEntry | undefined): ConnectionDiagnosis | null {
+  if (failure?.code !== 'relay-dial-failed') {
+    return null
+  }
+  const code = failure.relayCloseCode
+  if (code == null) {
+    return {
+      likelyCause: 'The Relay dial failed before the cell answered.',
+      nextStep: RELAY_DIAL_ADVICE.unreachable.nextStep,
+      reportability: 'none'
+    }
+  }
+  const advice = RELAY_DIAL_ADVICE[relayHostReachabilityForCloseCode(code)]
+  return { likelyCause: advice.likelyCause(code), nextStep: advice.nextStep, reportability: 'none' }
+}
+
+// Prefer current-window failures, then mark older evidence stale; frequent iOS resumes must not erase the only known cause.
+function selectDiagnosticFailure(
   entries: readonly ConnectionLogEntry[]
-): ConnectionLogEntry | undefined {
-  const boundaryIndex = entries.findLastIndex(isDiagnosticBoundary)
-  return entries
-    .slice(boundaryIndex + 1)
-    .toReversed()
-    .find(isDiagnosticFailure)
+): { entry: ConnectionLogEntry; staleSince: ResumeBoundary | null } | undefined {
+  const sessionStart = entries.findLastIndex(isSessionBoundary) + 1
+  const sinceSession = entries.slice(sessionStart)
+  const boundaryIndex = sinceSession.findLastIndex(isResumeBoundary)
+  const current = newestFailure(sinceSession.slice(boundaryIndex + 1))
+  if (current) {
+    return { entry: current, staleSince: null }
+  }
+  const stale = newestFailure(sinceSession.slice(0, boundaryIndex + 1))
+  const boundary = sinceSession[boundaryIndex]?.code
+  return stale && isResumeBoundaryCode(boundary)
+    ? { entry: stale, staleSince: boundary }
+    : undefined
 }
 
-function isDiagnosticBoundary(entry: ConnectionLogEntry): boolean {
+// Relay evidence names desktop state and outranks off-LAN direct timeouts; among relay failures, prefer the newest.
+function newestFailure(entries: readonly ConnectionLogEntry[]): ConnectionLogEntry | undefined {
+  const newestFirst = entries.toReversed().filter(isDiagnosticFailure)
+  return newestFirst.find((entry) => entry.path === 'relay') ?? newestFirst[0]
+}
+
+function isSessionBoundary(entry: ConnectionLogEntry): boolean {
   return (
     entry.code === 'client-session-started' ||
-    entry.code === 'app-resumed' ||
-    entry.code === 'network-changed' ||
     entry.code === 'relay-connected' ||
     entry.code === 'direct-connected' ||
     entry.message === 'Authenticated'
   )
 }
 
+type ResumeBoundary = 'app-resumed' | 'network-changed'
+
+function isResumeBoundaryCode(code: ConnectionLogEntry['code']): code is ResumeBoundary {
+  return code === 'app-resumed' || code === 'network-changed'
+}
+
+function isResumeBoundary(entry: ConnectionLogEntry): boolean {
+  return isResumeBoundaryCode(entry.code)
+}
+
+function diagnosticEvidence(entry: ConnectionLogEntry): string {
+  return `${entry.code ?? ''} ${entry.message} ${entry.detail ?? ''}`
+}
+
 function isDiagnosticFailure(entry: ConnectionLogEntry): boolean {
-  const evidence = `${entry.code ?? ''} ${entry.message} ${entry.detail ?? ''}`
-  return /relay director resolve failed \((?:401|503)\)|liveness-timeout|liveness timeout|connection health check failed|relay-session-failed|active relay session failed|authentication-rejected|unauthorized|pairing may be revoked|connect-timeout|websocket connect timeout|handshake-timeout|handshake timeout/i.test(
-    evidence
+  return /suspended-dial|relay director resolve failed \((?:401|503)\)|liveness-timeout|liveness timeout|connection health check failed|relay-dial-failed|relay dial failed|relay-session-failed|active relay session failed|authentication-rejected|unauthorized|pairing may be revoked|connect-timeout|websocket connect timeout|handshake-timeout|handshake timeout/i.test(
+    diagnosticEvidence(entry)
   )
 }
 

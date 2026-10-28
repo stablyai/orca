@@ -1,0 +1,80 @@
+/** Desktop-only WSL host IPC; never part of the wire protocol (C7). */
+
+export const WSL_HOST_STATUS_CHANNEL = 'wslHosts:statusChanged'
+
+export type WslHostDistro = {
+  name: string
+  state: 'running' | 'stopped'
+  /** WSL 1 runs no Linux kernel, so it cannot host orcad; null when the registry did not say. */
+  version: 1 | 2 | null
+  environmentId: string | null
+}
+
+export type WslHostConnectionState =
+  | 'connecting'
+  | 'ready'
+  | 'reconnecting'
+  | 'distro-stopped'
+  | 'unverifiable'
+  | 'idle'
+  | 'failed'
+  | 'closed'
+
+export type WslHostStatus = {
+  environmentId: string
+  distro: string
+  state: WslHostConnectionState
+  /** Why it failed or is unverifiable, in the main process's words. */
+  detail: string | null
+  /** An app update the running server waits to take (e.g. live terminals); Update/Force retry it. */
+  deferredUpdate?: WslHostDeferredUpdate | null
+  /** A Remove that could not prove the server stopped; `detail` says why. Remove retries it. */
+  removalPending?: boolean
+}
+
+/** An explicit Update retries a skipped build behind the terminal census; Force also passes it. */
+export type WslHostConnectIntent = 'update' | 'force'
+
+/** A host a newer Orca runs refused this build: only Force (or updating Orca) changes that. */
+export const ORCAD_HOST_NEWER_DEFERRAL_CODE = 'orcad_host_newer'
+
+export type WslHostDeferredUpdate = {
+  candidateVersion: string
+  /** The update planner's deferral code, as Managed servers reports it. */
+  code: string
+  reason: string
+  /** False when forcing cannot make the update safe (e.g. it would strand terminals). */
+  forceable: boolean
+}
+
+export type WslHostCapability = {
+  /** False when the packaged orcad template is missing, so no WSL host can deploy or connect. */
+  serverFiles: boolean
+}
+
+/**
+ * What removing a host left behind in its distro, in the census vocabulary: `live` when something
+ * is proven still running, `unverifiable` when Orca could not tell. `kept` (E11): the host stays
+ * listed with its stop pending, so Remove can retry; older mains removed it anyway.
+ */
+export type WslHostServerStop =
+  | { stopped: true }
+  | { stopped: false; reason: string; verdict?: 'live' | 'unverifiable'; kept?: boolean }
+
+export type WslHostAddFailureKind =
+  | 'unsupported-wsl1'
+  | 'distro-stopped'
+  | 'already-added'
+  | 'ssh-managed'
+  | 'deferred'
+  | 'disabled'
+  | 'server-files-missing'
+  | 'failed'
+
+export type WslHostAddResult =
+  | { ok: true; environmentId: string }
+  | { ok: false; kind: WslHostAddFailureKind; message: string }
+
+export function wslHostEnvironmentLabel(distro: string): string {
+  return `${distro} (WSL)`
+}

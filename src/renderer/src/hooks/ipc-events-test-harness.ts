@@ -3,7 +3,6 @@ import type * as ReactModule from 'react'
 import type { HarnessStoreState } from './ipc-events-harness-store-state'
 import type { ClientHostedBrowserRowsEvent } from '../../../shared/client-hosted-browser-rows'
 
-// Re-exported so a suite needs one import for the harness and the store surface it seeds.
 export {
   createHarnessStoreState,
   type HarnessStoreState,
@@ -34,6 +33,13 @@ export type RequestTerminalCreateRequest = {
   surfaceOwner?: boolean
 }
 
+/** A notification click sets userInitiated; a chat-completion courtesy reveal leaves it off. */
+export type FocusEditorTabRequest = {
+  tabId: string
+  worktreeId: string
+  userInitiated?: boolean
+}
+
 /** Subscription no-ops for every listener useIpcEvents attaches beyond the ones under test. */
 function createApiNamespaceStub(overrides: Record<string, unknown> = {}): Record<string, unknown> {
   return new Proxy(overrides, {
@@ -46,34 +52,26 @@ export type IpcEventsHarness = {
   useIpcEvents: () => void
   createTerminal: (request: CreateTerminalRequest) => void
   requestTerminalCreate: (request: RequestTerminalCreateRequest) => void
-  focusEditorTab: (request: { tabId: string; worktreeId: string }) => void
+  focusEditorTab: (request: FocusEditorTabRequest) => void
   replyTerminalCreate: ReturnType<typeof vi.fn>
-  /** Fire a main-process digit chord (zero-based index). */
   jumpToWorktreeIndex: (index: number) => void
   jumpToTabIndex: (index: number) => void
   navigationUpdate: (event: { browserPageId: string; url: string; title: string }) => void
   certificateFailureChanged: (event: { browserPageId: string; failure: unknown }) => void
-  /** Fire a host-local push of the pages a paired client renders for a worktree. */
   clientHostedBrowserRowsChanged: (event: ClientHostedBrowserRowsEvent) => void
-  /** Resolves the hydration round trip the hook starts, so buffered pushes drain. */
   settleClientHostedBrowserRowsSnapshot: () => Promise<void>
-  /** Standard (non-palette) target of a workspace digit chord. */
   activateAndRevealWorkspace: ReturnType<typeof vi.fn>
 }
 
 export type IpcEventsHarnessOptions = {
-  /** Sidebar order the workspace digit chord indexes into. */
   visibleWorktreeIds?: string[]
   visibleWorktreeTargets?: { id: string; executionHostId?: 'local' | `ssh:${string}` }[]
-  /** Snapshot the client-hosted row hydration round trip resolves with. */
   clientHostedBrowserRowsSnapshot?: ClientHostedBrowserRowsEvent[]
-  /** Rejects the hydration round trip instead of resolving it. */
   clientHostedBrowserRowsSnapshotError?: Error
+  /** Extra `window.api.browser` members, e.g. a listener capture for a channel under test. */
+  browserApi?: Record<string, unknown>
 }
 
-/**
- * Loads useIpcEvents against a stubbed preload API so IPC behavior is asserted through the hook.
- */
 export async function loadIpcEventsHarness(
   storeState: HarnessStoreState,
   options: IpcEventsHarnessOptions = {}
@@ -82,8 +80,7 @@ export async function loadIpcEventsHarness(
   const activateAndRevealWorkspace = vi.fn()
   let createTerminalListener: ((request: CreateTerminalRequest) => void) | null = null
   let requestTerminalCreateListener: ((request: RequestTerminalCreateRequest) => void) | null = null
-  let focusEditorTabListener: ((request: { tabId: string; worktreeId: string }) => void) | null =
-    null
+  let focusEditorTabListener: ((request: FocusEditorTabRequest) => void) | null = null
   let navigationUpdateListener:
     | ((event: { browserPageId: string; url: string; title: string }) => void)
     | null = null
@@ -120,26 +117,38 @@ export async function loadIpcEventsHarness(
   }))
   vi.doMock('@/lib/floating-workspace-terminal-actions', () => ({
     createFloatingWorkspaceTerminalTab: vi.fn(),
-    isEmptyFloatingWorkspacePanelVisible: () => false,
     isFloatingWorkspacePanelFocused: () => false
   }))
-  vi.doMock('@/runtime/web-runtime-session', () => ({
+  vi.doMock('@/runtime/web-runtime-session-tab-lifecycle', () => ({
     activateWebRuntimeSessionTab: vi.fn(),
-    closeWebRuntimeSessionTab: vi.fn(),
-    createWebRuntimeSessionBrowserTab: vi.fn().mockResolvedValue(false),
-    createWebRuntimeSessionTerminal: vi.fn().mockResolvedValue({ status: 'failed', message: '' }),
+    closeWebRuntimeSessionTab: vi.fn()
+  }))
+  vi.doMock('@/runtime/web-runtime-browser-creation', () => ({
+    createWebRuntimeSessionBrowserTab: vi.fn().mockResolvedValue(false)
+  }))
+  vi.doMock('@/runtime/web-runtime-terminal-creation', () => ({
+    createWebRuntimeSessionTerminal: vi.fn().mockResolvedValue({ status: 'failed', message: '' })
+  }))
+  vi.doMock('@/runtime/web-runtime-session-environment', () => ({
     isWebRuntimeSessionActive: vi.fn(() => false)
   }))
   vi.doMock('@/lib/focus-terminal-tab-surface', () => ({ focusTerminalTabSurface: vi.fn() }))
-  vi.doMock('@/runtime/sync-runtime-graph', () => ({
+  vi.doMock('@/runtime/mounted-terminal-tab-registry', () => ({
     focusRuntimeTerminalSurface: vi.fn(() => false)
   }))
   vi.doMock('@/lib/activate-tab-and-focus-pane', () => ({ activateTabAndFocusPane: vi.fn() }))
 
   vi.stubGlobal('window', {
     dispatchEvent: vi.fn(),
-    api: new Proxy(
+    api: new Proxy<Record<string, unknown>>(
       {
+        runtimeEnvironments: createApiNamespaceStub({
+          getStatusSnapshots: () => Promise.resolve([]),
+          subscribe: async () => ({ unsubscribe: () => {} })
+        }),
+        legacyRelayBridge: createApiNamespaceStub({
+          listPanes: () => Promise.resolve([])
+        }),
         ui: createApiNamespaceStub({
           getZoomLevel: () => 0,
           consumePendingOpenSettings: () => Promise.resolve(false),
@@ -153,6 +162,7 @@ export async function loadIpcEventsHarness(
             createTerminalListener = listener
             return () => {}
           },
+          onLaunchRecipe: () => () => {},
           onRequestTerminalCreate: (listener: (request: RequestTerminalCreateRequest) => void) => {
             requestTerminalCreateListener = listener
             return () => {}
@@ -200,6 +210,7 @@ export async function loadIpcEventsHarness(
         ssh: {
           listTargets: () => Promise.resolve([]),
           listPortForwards: () => Promise.resolve([]),
+          listUnrestoredPortForwards: () => Promise.resolve([]),
           listDetectedPorts: () => Promise.resolve([]),
           listRemovedTargetLabels: () => Promise.resolve({}),
           getState: () => Promise.resolve(null),
@@ -215,6 +226,7 @@ export async function loadIpcEventsHarness(
           onClearDismissal: () => () => {}
         },
         browser: createApiNamespaceStub({
+          ...options.browserApi,
           onNavigationUpdate: (
             listener: (event: { browserPageId: string; url: string; title: string }) => void
           ) => {
@@ -230,9 +242,8 @@ export async function loadIpcEventsHarness(
         }),
         mobile: createApiNamespaceStub({
           consumePendingUnpairedDeviceAuthFailure: () => Promise.resolve(false)
-        }),
-        remoteWorkspace: createApiNamespaceStub({ clientId: () => Promise.resolve(null) })
-      } as Record<string, unknown>,
+        })
+      },
       { get: (target, prop: string) => target[prop] ?? createApiNamespaceStub() }
     )
   })

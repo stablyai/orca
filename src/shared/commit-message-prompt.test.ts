@@ -5,6 +5,7 @@ import {
   excerptAgentFailureOutput,
   planCustomCommand,
   STAGED_DIFF_BYTE_BUDGET,
+  stripPrefilledReasoningPreamble,
   tokenizeCustomCommandTemplate,
   truncateDiffForPrompt
 } from './commit-message-prompt'
@@ -50,7 +51,6 @@ describe('truncateDiffForPrompt', () => {
     const diff = `${'keep this line\n'.repeat(40)}`
     const result = truncateDiffForPrompt(diff, 95)
     const body = result.split('\n...(diff truncated')[0]
-    // Every retained line is whole.
     for (const line of body.split('\n').filter(Boolean)) {
       expect(line).toBe('keep this line')
     }
@@ -71,10 +71,8 @@ describe('truncateDiffForPrompt', () => {
     const smallFile = 'diff --git a/src/app.ts b/src/app.ts\n+const meaningful = true\n'
     const result = truncateDiffForPrompt(`${hugeFile}${smallFile}`, 1_000)
 
-    // The small, human-authored change survives instead of being cut off.
     expect(result).toContain('a/src/app.ts')
     expect(result).toContain('const meaningful = true')
-    // The huge file is clipped, not the small one.
     expect(result).toMatch(/diff truncated, \d+ bytes omitted/)
   })
 })
@@ -97,6 +95,16 @@ describe('cleanGeneratedCommitMessage', () => {
   it('drops a leading "Generating…" preamble line', () => {
     const raw = 'Generating…\nfeat: hello world'
     expect(cleanGeneratedCommitMessage(raw)).toBe('feat: hello world')
+  })
+
+  it('strips the trailing jcode [Tokens] usage line', () => {
+    const raw = 'feat: hello\n[Tokens] upload: 14926 download: 17 cache_read: 14720 cache_write: 0'
+    expect(cleanGeneratedCommitMessage(raw)).toBe('feat: hello')
+  })
+
+  it('extracts the answer from a jcode --json envelope', () => {
+    const raw = JSON.stringify({ session_id: 's1', model: 'm', text: 'fix-login-crash', usage: {} })
+    expect(cleanGeneratedCommitMessage(raw)).toBe('fix-login-crash')
   })
 
   it('normalizes CRLF line endings', () => {
@@ -133,6 +141,44 @@ describe('cleanGeneratedCommitMessage', () => {
 
   it('returns empty string when input is whitespace', () => {
     expect(cleanGeneratedCommitMessage('   \n\t')).toBe('')
+  })
+
+  it('drops a leading <think> reasoning block and unwraps the answer', () => {
+    expect(
+      cleanGeneratedCommitMessage('<think>\nThe diff fixes a typo.\n</think>\n\nFix typo\n\n- Why')
+    ).toBe('Fix typo\n\n- Why')
+    expect(cleanGeneratedCommitMessage('<think>short</think>\n```\nfeat: add parser\n```')).toBe(
+      'feat: add parser'
+    )
+  })
+
+  it('drops a leading Kimi-VL ◁think▷ reasoning block', () => {
+    expect(cleanGeneratedCommitMessage('◁think▷Typo in README.◁/think▷Fix typo in README')).toBe(
+      'Fix typo in README'
+    )
+  })
+
+  it('keeps think tags that are not a leading reasoning block', () => {
+    const quoted = 'Strip <think>…</think> blocks from generated messages'
+    expect(cleanGeneratedCommitMessage(quoted)).toBe(quoted)
+    expect(cleanGeneratedCommitMessage('fix: handle stray </think> in stream')).toBe(
+      'fix: handle stray </think> in stream'
+    )
+    expect(cleanGeneratedCommitMessage('<think>still reasoning')).toBe('<think>still reasoning')
+  })
+})
+
+describe('stripPrefilledReasoningPreamble', () => {
+  it('drops reasoning that ends in a closing tag whose opening tag was prefilled', () => {
+    expect(
+      stripPrefilledReasoningPreamble("We need the message only.\nLet's final.</think>Fix typo")
+    ).toBe('Fix typo')
+    expect(stripPrefilledReasoningPreamble('Reasoning.◁/think▷\nFix typo')).toBe('Fix typo')
+  })
+
+  it('keeps a closing tag that follows its own opening tag', () => {
+    const quoted = 'Strip <think>…</think> blocks'
+    expect(stripPrefilledReasoningPreamble(quoted)).toBe(quoted)
   })
 })
 

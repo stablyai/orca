@@ -19,23 +19,16 @@ type AgentHookHandlerDependencies = {
   getPtyIdForPaneKey?: (paneKey: string) => string | undefined
 }
 
-// Why: install/remove are intentionally not exposed to the renderer. Orca
-// auto-installs managed hooks at app startup (see src/main/index.ts), so a
-// renderer-triggered remove would be silently reverted on the next launch
-// and mislead the user.
+// Startup auto-installs hooks; renderer removal would misleadingly revert on the next launch.
 export function registerAgentHookHandlers(
   runtime?: AgentStatusRuntimeEnrichment,
   dependencies: AgentHookHandlerDependencies = {}
 ): void {
-  // Why: matches the defensive pattern in src/main/ipc/pty.ts so re-registration
-  // never throws "Attempted to register a second handler..." if this function is
-  // ever invoked more than once (e.g. the macOS app re-activation path that
-  // recreates the main window). Today the module-level `registered` guard in
-  // register-core-handlers.ts prevents re-entry, but decoupling from that guard
-  // future-proofs this file.
+  // Allow safe re-registration independently of the outer module guard.
   ipcMain.removeHandler('agentStatus:getSnapshot')
   ipcMain.removeHandler('agentStatus:inferInterrupt')
   ipcMain.removeHandler('agentStatus:inferQuestionAnswered')
+  ipcMain.removeHandler('agentStatus:hasVerifiableAgentProcess')
   ipcMain.removeHandler('agentStatus:getMigrationUnsupportedSnapshot')
   registerAgentStatusRowTeardownIpcHandlers()
   registerAgentPaneAuthorityIpcHandlers({
@@ -46,12 +39,14 @@ export function registerAgentHookHandlers(
     })
   })
   ipcMain.handle('agentStatus:getSnapshot', (): AgentStatusIpcPayload[] => {
-    // Why: the renderer pulls this after workspace hydration, so startup cannot
-    // lose replayed statuses while its local store is still empty. Match the
-    // live push enrichment in main/index.ts so parent/child rows survive replay.
-    return agentHookServer
-      .getStatusSnapshot()
-      .map((entry) => enrichAgentStatusIpcPayload(entry, runtime))
+    // Pull after workspace hydration to replay enriched statuses without losing startup rows.
+    return (
+      agentHookServer
+        .getStatusSnapshot()
+        // Same rule as the live push: the renderer's feed bridge owns structured rows for now.
+        .filter((entry) => entry.structuredHost === undefined)
+        .map((entry) => enrichAgentStatusIpcPayload(entry, runtime))
+    )
   })
   ipcMain.handle('agentStatus:inferInterrupt', (_event, request: unknown): boolean => {
     if (typeof request !== 'object' || request === null) {
@@ -65,6 +60,9 @@ export function registerAgentHookHandlers(
     }
     return agentHookServer.inferQuestionAnswered(request as AgentQuestionAnsweredInferenceRequest)
   })
+  ipcMain.handle('agentStatus:hasVerifiableAgentProcess', (_event, paneKey: unknown): boolean =>
+    typeof paneKey === 'string' ? agentHookServer.hasVerifiableAgentProcess(paneKey) : false
+  )
   ipcMain.handle(
     'agentStatus:getMigrationUnsupportedSnapshot',
     (): MigrationUnsupportedPtyEntry[] => getMigrationUnsupportedPtySnapshot()

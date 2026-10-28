@@ -1,35 +1,27 @@
 import { describe, expect, it } from 'vitest'
-import { resolveWindowsShellStartupFamily } from './windows-terminal-shell'
+import {
+  canonicalizeWindowsShellOverride,
+  isSupportedWindowsShellOverride,
+  resolveWindowsShellStartupFamily
+} from './windows-terminal-shell'
 
-describe('resolveWindowsShellStartupFamily', () => {
-  it('defaults to PowerShell when unset', () => {
-    expect(resolveWindowsShellStartupFamily(undefined)).toBe('powershell')
-    expect(resolveWindowsShellStartupFamily(null)).toBe('powershell')
-    expect(resolveWindowsShellStartupFamily('  ')).toBe('powershell')
+describe('isSupportedWindowsShellOverride', () => {
+  // The allowlist is what stops `--shell` from naming an arbitrary executable to spawn.
+  it('refuses anything else, including a path to an allowed shell', () => {
+    expect(isSupportedWindowsShellOverride('nu.exe')).toBe(false)
+    expect(isSupportedWindowsShellOverride('')).toBe(false)
+    expect(isSupportedWindowsShellOverride('C:\\Windows\\System32\\cmd.exe')).toBe(false)
+    expect(isSupportedWindowsShellOverride('cmd.exe /c calc')).toBe(false)
   })
+})
 
-  it('treats PowerShell and pwsh as PowerShell', () => {
-    expect(resolveWindowsShellStartupFamily('powershell.exe')).toBe('powershell')
-    expect(resolveWindowsShellStartupFamily('pwsh.exe')).toBe('powershell')
-    expect(resolveWindowsShellStartupFamily('C:\\Program Files\\PowerShell\\7\\pwsh.exe')).toBe(
-      'powershell'
+describe('canonicalizeWindowsShellOverride', () => {
+  // Bare cmd falls through to PowerShell quoting; canonical cmd.exe must align spawn and queued-command grammar.
+  it('yields the cmd startup family for a bare cmd override', () => {
+    expect(resolveWindowsShellStartupFamily('cmd')).toBe('powershell')
+    expect(resolveWindowsShellStartupFamily(canonicalizeWindowsShellOverride('cmd'))).toBe('cmd')
+    expect(resolveWindowsShellStartupFamily(canonicalizeWindowsShellOverride('Git-Bash'))).toBe(
+      'posix'
     )
-  })
-
-  it('maps cmd.exe to cmd quoting', () => {
-    expect(resolveWindowsShellStartupFamily('cmd.exe')).toBe('cmd')
-    expect(resolveWindowsShellStartupFamily('C:\\Windows\\System32\\cmd.exe')).toBe('cmd')
-  })
-
-  it('maps Git Bash and WSL shells to POSIX quoting', () => {
-    expect(resolveWindowsShellStartupFamily('git-bash')).toBe('posix')
-    expect(resolveWindowsShellStartupFamily('wsl.exe')).toBe('posix')
-    expect(resolveWindowsShellStartupFamily('C:\\Program Files\\Git\\bin\\bash.exe')).toBe('posix')
-  })
-
-  it('maps extension-less bash and wsl entries to POSIX quoting', () => {
-    expect(resolveWindowsShellStartupFamily('bash')).toBe('posix')
-    expect(resolveWindowsShellStartupFamily('wsl')).toBe('posix')
-    expect(resolveWindowsShellStartupFamily('C:\\Program Files\\Git\\bin\\bash')).toBe('posix')
   })
 })

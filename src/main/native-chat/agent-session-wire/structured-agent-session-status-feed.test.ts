@@ -1,17 +1,32 @@
+import { agentSessionConversationView } from '../../../shared/agent-session-conversation-view'
+import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../shared/agent-session-journal-types'
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { AgentSessionRecord } from '../../../shared/agent-session-record'
-import type { AgentSessionStatusEvent } from '../../../shared/agent-session-wire'
+import { agentSessionRecordFixture } from '../../../shared/agent-session-record.test-fixture'
+import type {
+  AgentSessionStatusEvent,
+  AgentSessionStatusSummary
+} from '../../../shared/agent-session-wire'
+import type { AgentChildWorkView } from '../../../shared/agent-status-child-work-view'
 import { createClaudeJournalTranslator } from '../../claude/claude-structured-journal-translation'
 import { publishCodexTurnLifecycle } from '../../codex/codex-structured-journal-translation-turns'
 import { createDeferredStructuredAgentSessionEventSink } from './structured-agent-session-event-sink'
-import { createTrackedJournalOpener } from '../agent-session-journal/journal-store-test-open'
+import { createTrackedJournalOpener } from '../agent-session-journal/journal-host-database-test-support'
+import {
+  indexedStatusFeedSession as indexed,
+  statusFeedChildView
+} from './structured-agent-session-status-feed-test-session'
 import {
   StructuredAgentSessionStatusFeed,
-  type StructuredAgentSessionStatusFeedDeps
+  type StructuredAgentSessionStatusFeedDeps,
+  type StructuredAgentSessionStatusSink
 } from './structured-agent-session-status-feed'
+import { createStructuredAgentSessionLogger } from './structured-agent-session-logger'
+import { testEventSinkLogging } from './structured-agent-session-logger-test-support'
+import { codexProviderHandle } from '../../../shared/agent-session-provider-handle-encoding'
 
 const SESSION = 'status-session'
 const TURN_IDENTITY = {
@@ -26,6 +41,8 @@ const USER_IDENTITY = {
   turnId: 'turn-1',
   ordinal: 1
 } as const
+
+type Indexed = Parameters<typeof indexed>[0]
 
 let root: string
 const journals = createTrackedJournalOpener()
@@ -46,28 +63,28 @@ async function openJournal(sessionId = SESSION, now?: () => number) {
       workspaceId: 'workspace-1',
       hostId: 'local',
       agent: 'codex',
-      providerHandle: { kind: 'codex', threadId: 'thread-1' }
+      providerHandle: codexProviderHandle('thread-1')
     },
     now,
-    journalDir: join(root, sessionId)
+    stateDirectory: join(root, sessionId)
   })
 }
 
-function indexed(session: { journal: Awaited<ReturnType<typeof openJournal>> }) {
-  return {
-    journal: session.journal,
-    params: { location: { workspaceId: 'workspace-1' }, provider: 'codex' as const }
-  }
-}
-
 function feedFor(
-  sessions: Map<string, { journal: Awaited<ReturnType<typeof openJournal>> }>,
+  sessions: Map<string, Parameters<typeof indexed>[0]>,
   record: Partial<AgentSessionRecord> | null = null,
-  onStatusChanged?: StructuredAgentSessionStatusFeedDeps['onStatusChanged']
+  onStatusChanged?: StructuredAgentSessionStatusFeedDeps['onStatusChanged'],
+  readChildWork?: () => AgentChildWorkView[],
+  statusSink?: StructuredAgentSessionStatusSink
 ) {
   let now = 1_000
+  const sink =
+    statusSink ??
+    (readChildWork ? { publish: () => {}, forget: () => {}, readChildWork } : undefined)
   const feed = new StructuredAgentSessionStatusFeed({
+    logger: createStructuredAgentSessionLogger(),
     ...(onStatusChanged ? { onStatusChanged } : {}),
+    ...(sink ? { statusSink: () => sink } : {}),
     sessions: {
       get: (sessionId: string) => {
         const session = sessions.get(sessionId)
@@ -79,7 +96,9 @@ function feedFor(
         }
       }
     } as unknown as ReadonlyMap<string, ReturnType<typeof indexed>>,
-    getRecord: () => record as AgentSessionRecord | null,
+    // A partial record still has a lease: the feed reads the conversation's fence off it.
+    getConversation: () =>
+      record ? agentSessionConversationView({ ...agentSessionRecordFixture(), ...record }) : null,
     now: () => (now += 1)
   })
   const events: AgentSessionStatusEvent[] = []
@@ -88,6 +107,43 @@ function feedFor(
 }
 
 describe('StructuredAgentSessionStatusFeed', () => {
+  it('publishes provider ownership transitions without changing journal time', async () => {
+    const journal = await openJournal()
+    const sessions = new Map<string, Indexed>([
+      [SESSION, { journal, child: { phase: 'ready', generation: 'child-1', fence: 1 } }]
+    ])
+    const { feed, events, dispose } = feedFor(sessions)
+    events.length = 0
+    await journal.appendItem(
+      USER_IDENTITY,
+      { kind: 'message', role: 'user', blocks: [{ type: 'text', text: 'hello' }] },
+      { fence: 1, turnScope: AGENT_JOURNAL_THREAD_SCOPE }
+    )
+    feed.publish(SESSION, journal)
+    expect(events.at(-1)).toEqual({
+      type: 'status',
+      session: expect.objectContaining({ hostExecutionOwned: true, updatedAt: expect.any(Number) })
+    })
+    const firstStatus = events.at(-1)
+    expect(firstStatus?.type).toBe('status')
+    if (firstStatus?.type !== 'status') {
+      throw new Error('status publication missing')
+    }
+    const journalTime = firstStatus.session.updatedAt
+    sessions.get(SESSION)!.child = null
+    feed.publish(SESSION, journal)
+    expect(events.at(-1)).toEqual({
+      type: 'status',
+      session: expect.objectContaining({ status: 'idle', updatedAt: journalTime })
+    })
+    const secondStatus = events.at(-1)
+    expect(secondStatus?.type).toBe('status')
+    if (secondStatus?.type === 'status') {
+      expect(secondStatus.session).not.toHaveProperty('hostExecutionOwned')
+    }
+    dispose()
+  })
+
   it('opens with every readable session and reports no status before a persisted turn', async () => {
     const journal = await openJournal()
     const { events } = feedFor(new Map([[SESSION, { journal }]]))
@@ -102,11 +158,66 @@ describe('StructuredAgentSessionStatusFeed', () => {
             agent: 'codex',
             status: null,
             latestPrompt: '',
+            runtimePermission: null,
             updatedAt: expect.any(Number)
           }
         ]
       }
     ])
+  })
+
+  it('stops projecting an old-host unknown submission after the owner fence advances', async () => {
+    const journal = await openJournal()
+    const lease = agentSessionRecordFixture().lease
+    const record = agentSessionRecordFixture({ ...lease, runtimeFence: 1 })
+    const { feed, events } = feedFor(new Map([[SESSION, { journal }]]), record)
+    await journal.appendSubmission({
+      clientMessageId: 'old-host',
+      payloadFingerprint: 'fp',
+      body: { kind: 'message', role: 'user', blocks: [{ type: 'text', text: 'slow' }] },
+      fence: 1
+    })
+    await journal.resolveDispatch({
+      clientMessageId: 'old-host',
+      state: 'unknown',
+      reason: 'ack timeout',
+      fence: 1
+    })
+    feed.publish(SESSION)
+    expect(events.at(-1)).toMatchObject({ session: { status: 'working' } })
+    record.lease.runtimeFence = 2
+    feed.publish(SESSION)
+    expect(events.at(-1)).toMatchObject({ session: { status: null } })
+  })
+
+  it('publishes working from the pending submission, before the provider replays the turn', async () => {
+    const journal = await openJournal()
+    const { feed, events } = feedFor(new Map([[SESSION, { journal }]]))
+    events.length = 0
+    await journal.appendSubmission({
+      clientMessageId: 'client-1',
+      payloadFingerprint: 'fingerprint-1',
+      body: { kind: 'message', role: 'user', blocks: [{ type: 'text', text: 'write a poem' }] },
+      fence: 1
+    })
+
+    feed.publish(SESSION)
+    expect(events.at(-1)).toEqual({
+      type: 'status',
+      session: expect.objectContaining({ status: 'working' })
+    })
+
+    await journal.resolveDispatch({
+      clientMessageId: 'client-1',
+      state: 'accepted',
+      providerIdentity: USER_IDENTITY,
+      fence: 1
+    })
+    feed.publish(SESSION)
+    expect(events.at(-1)).toEqual({
+      type: 'status',
+      session: expect.objectContaining({ status: 'idle' })
+    })
   })
 
   it('publishes working, then idle once the running marker is tombstoned, and never a repeat', async () => {
@@ -115,12 +226,12 @@ describe('StructuredAgentSessionStatusFeed', () => {
     await journal.appendItem(
       USER_IDENTITY,
       { kind: 'message', role: 'user', blocks: [{ type: 'text', text: 'write a poem' }] },
-      { fence: 1 }
+      { fence: 1, turnScope: AGENT_JOURNAL_THREAD_SCOPE }
     )
     await journal.appendItem(
       TURN_IDENTITY,
       { kind: 'status', text: 'Working', turnLifecycle: { turnId: 'turn-1', state: 'running' } },
-      { fence: 1 }
+      { fence: 1, turnScope: AGENT_JOURNAL_THREAD_SCOPE }
     )
 
     feed.publish(SESSION)
@@ -151,12 +262,12 @@ describe('StructuredAgentSessionStatusFeed', () => {
     await journal.appendItem(
       USER_IDENTITY,
       { kind: 'message', role: 'user', blocks: [{ type: 'text', text: 'hello' }] },
-      { fence: 1 }
+      { fence: 1, turnScope: AGENT_JOURNAL_THREAD_SCOPE }
     )
     await journal.appendItem(
       TURN_IDENTITY,
       { kind: 'status', text: 'Working', turnLifecycle: { turnId: 'turn-1', state: 'running' } },
-      { fence: 1 }
+      { fence: 1, turnScope: AGENT_JOURNAL_THREAD_SCOPE }
     )
     const { feed, events } = feedFor(new Map([[SESSION, { journal }]]))
     now = 200
@@ -182,20 +293,20 @@ describe('StructuredAgentSessionStatusFeed', () => {
     await journal.appendItem(
       USER_IDENTITY,
       { kind: 'message', role: 'user', blocks: [{ type: 'text', text: 'hello' }] },
-      { fence: 1 }
+      { fence: 1, turnScope: AGENT_JOURNAL_THREAD_SCOPE }
     )
     const assistant = { ...USER_IDENTITY, ordinal: 2 }
     await journal.appendItem(
       assistant,
       { kind: 'message', role: 'assistant', blocks: [{ type: 'text', text: 'first' }] },
-      { fence: 1 }
+      { fence: 1, turnScope: AGENT_JOURNAL_THREAD_SCOPE }
     )
     const { feed, events } = feedFor(new Map([[SESSION, { journal }]]))
     now = 200
     await journal.appendItem(
       assistant,
       { kind: 'message', role: 'assistant', blocks: [{ type: 'text', text: 'finished' }] },
-      { fence: 1 }
+      { fence: 1, turnScope: AGENT_JOURNAL_THREAD_SCOPE }
     )
     feed.publish(SESSION)
     expect(events.at(-1)).toMatchObject({
@@ -219,12 +330,12 @@ describe('StructuredAgentSessionStatusFeed', () => {
     await journal.appendItem(
       USER_IDENTITY,
       { kind: 'message', role: 'user', blocks: [{ type: 'text', text: 'hello' }] },
-      { fence: 1 }
+      { fence: 1, turnScope: AGENT_JOURNAL_THREAD_SCOPE }
     )
     await journal.appendItem(
       TURN_IDENTITY,
       { kind: 'status', text: 'Working', turnLifecycle: { turnId: 'turn-1', state: 'running' } },
-      { fence: 1 }
+      { fence: 1, turnScope: AGENT_JOURNAL_THREAD_SCOPE }
     )
     const { feed, events } = feedFor(new Map([[SESSION, { journal }]]))
     for (let revision = 1; revision <= 20; revision += 1) {
@@ -232,7 +343,7 @@ describe('StructuredAgentSessionStatusFeed', () => {
       await journal.appendItem(
         TURN_IDENTITY,
         { kind: 'status', text: 'Working', turnLifecycle: { turnId: 'turn-1', state: 'running' } },
-        { fence: 1 }
+        { fence: 1, turnScope: AGENT_JOURNAL_THREAD_SCOPE }
       )
       feed.publish(SESSION)
     }
@@ -249,19 +360,21 @@ describe('StructuredAgentSessionStatusFeed', () => {
 
   it('carries the record model and the running tool line the sidebar row shows', async () => {
     const journal = await openJournal()
+    const fence = agentSessionRecordFixture().lease.runtimeFence
     const { feed, events } = feedFor(new Map([[SESSION, { journal }]]), {
+      location: indexed({ journal }).params.location,
       options: { model: 'gpt-5-codex' },
       providerHandleChain: []
     })
     await journal.appendItem(
       USER_IDENTITY,
       { kind: 'message', role: 'user', blocks: [{ type: 'text', text: 'run the tests' }] },
-      { fence: 1 }
+      { fence, turnScope: AGENT_JOURNAL_THREAD_SCOPE }
     )
     await journal.appendItem(
       TURN_IDENTITY,
       { kind: 'status', text: 'Working', turnLifecycle: { turnId: 'turn-1', state: 'running' } },
-      { fence: 1 }
+      { fence, turnScope: AGENT_JOURNAL_THREAD_SCOPE }
     )
     feed.publish(SESSION)
     expect(events.at(-1)).toEqual({
@@ -272,12 +385,11 @@ describe('StructuredAgentSessionStatusFeed', () => {
     await journal.appendItem(
       { ...USER_IDENTITY, ordinal: 2 },
       { kind: 'tool-call', name: 'shell', input: { command: 'pnpm test' }, state: 'running' },
-      { fence: 1 }
+      { fence, turnScope: AGENT_JOURNAL_THREAD_SCOPE }
     )
     feed.publish(SESSION)
 
-    // A tool boundary changes nothing else about the session, so only comparing the new
-    // fields keeps it from being deduped away as an unchanged projection.
+    // Tool boundaries must change the equality key even when every other status field is unchanged.
     expect(events.at(-1)).toEqual({
       type: 'status',
       session: expect.objectContaining({ toolName: 'shell', toolInput: 'pnpm test' })
@@ -290,7 +402,7 @@ describe('StructuredAgentSessionStatusFeed', () => {
     await journal.appendItem(
       USER_IDENTITY,
       { kind: 'message', role: 'user', blocks: [{ type: 'text', text: 'run it' }] },
-      { fence: 1 }
+      { fence: 1, turnScope: AGENT_JOURNAL_THREAD_SCOPE }
     )
     await journal.appendItem(
       TURN_IDENTITY,
@@ -301,7 +413,7 @@ describe('StructuredAgentSessionStatusFeed', () => {
         options: [{ id: 'yes', label: 'Allow' }],
         resolution: { state: 'pending', selectedOptionId: null, resolvedBy: null, resolvedAt: null }
       },
-      { fence: 1 }
+      { fence: 1, turnScope: AGENT_JOURNAL_THREAD_SCOPE }
     )
 
     feed.publish(SESSION)
@@ -318,7 +430,7 @@ describe('StructuredAgentSessionStatusFeed', () => {
     await journal.appendItem(
       USER_IDENTITY,
       { kind: 'message', role: 'user', blocks: [{ type: 'text', text: 'hello' }] },
-      { fence: 1 }
+      { fence: 1, turnScope: AGENT_JOURNAL_THREAD_SCOPE }
     )
     feed.publish(SESSION)
     expect(events.at(-1)).toEqual({
@@ -326,7 +438,6 @@ describe('StructuredAgentSessionStatusFeed', () => {
       session: expect.objectContaining({ status: 'idle', latestPrompt: 'hello' })
     })
 
-    // Eviction drops the host's index entry; the projection it already made stays true.
     sessions.delete(SESSION)
     feed.publish(SESSION)
     const late: AgentSessionStatusEvent[] = []
@@ -344,12 +455,11 @@ describe('StructuredAgentSessionStatusFeed', () => {
   it('tells the sitting subscribers about a change a new subscriber re-projected', async () => {
     const journal = await openJournal()
     const { feed, events } = feedFor(new Map([[SESSION, { journal }]]))
-    // Journal appends and the feed's publish are separate queue submissions, so the journal
-    // can already hold the turn when a second client connects and re-projects it.
+    // Journal append may precede feed publish; a new subscriber must update existing readers too.
     await journal.appendItem(
       USER_IDENTITY,
       { kind: 'message', role: 'user', blocks: [{ type: 'text', text: 'hello' }] },
-      { fence: 1 }
+      { fence: 1, turnScope: AGENT_JOURNAL_THREAD_SCOPE }
     )
 
     const late: AgentSessionStatusEvent[] = []
@@ -359,14 +469,12 @@ describe('StructuredAgentSessionStatusFeed', () => {
       type: 'status',
       session: expect.objectContaining({ status: 'idle', latestPrompt: 'hello' })
     })
-    // The arriving subscriber reads that same state once, from its snapshot.
     expect(late).toEqual([
       {
         type: 'snapshot',
         sessions: [expect.objectContaining({ status: 'idle', latestPrompt: 'hello' })]
       }
     ])
-    // The cache is not left holding a value nobody was told about.
     feed.publish(SESSION)
     expect(events).toHaveLength(2)
   })
@@ -381,7 +489,7 @@ describe('StructuredAgentSessionStatusFeed', () => {
     await journal.appendItem(
       USER_IDENTITY,
       { kind: 'message', role: 'user', blocks: [{ type: 'text', text: 'hello' }] },
-      { fence: 1 }
+      { fence: 1, turnScope: AGENT_JOURNAL_THREAD_SCOPE }
     )
     feed.publish(SESSION)
 
@@ -400,23 +508,21 @@ describe('StructuredAgentSessionStatusFeed', () => {
     await journal.appendItem(
       USER_IDENTITY,
       { kind: 'message', role: 'user', blocks: [{ type: 'text', text: 'fix the auth bug' }] },
-      { fence: 1 }
+      { fence: 1, turnScope: AGENT_JOURNAL_THREAD_SCOPE }
     )
     await journal.appendItem(
       TURN_IDENTITY,
       { kind: 'status', text: 'Working', turnLifecycle: { turnId: 'turn-1', state: 'running' } },
-      { fence: 1 }
+      { fence: 1, turnScope: AGENT_JOURNAL_THREAD_SCOPE }
     )
 
     feed.publish(SESSION, journal)
-    // A second identical publication is deduped, so the observer only ever sees changes.
     feed.publish(SESSION, journal)
-    // seen[0] is the opening projection the harness's own subscriber triggered.
+    // The rig subscriber created the opening projection.
     expect(seen.slice(1)).toEqual([
       { status: 'working', prompt: 'fix the auth bug', replay: false }
     ])
 
-    // An arriving subscriber re-projects state the host already knew.
     await journal.appendTombstone(TURN_IDENTITY, { fence: 1 })
     feed.subscribe({ id: 'list-2', emit: () => undefined })
     expect(seen.at(-1)).toEqual({ status: 'idle', prompt: 'fix the auth bug', replay: true })
@@ -433,13 +539,13 @@ describe('StructuredAgentSessionStatusFeed', () => {
           role: 'user',
           blocks: [{ type: 'text', text: 'Fix auth' }]
         },
-        { fence: 1 }
+        { fence: 1, turnScope: AGENT_JOURNAL_THREAD_SCOPE }
       )
       const seen: (string | null)[] = []
       const { feed } = feedFor(new Map([[SESSION, { journal }]]), null, (summary) =>
         seen.push(summary.status)
       )
-      const deferred = createDeferredStructuredAgentSessionEventSink()
+      const deferred = createDeferredStructuredAgentSessionEventSink(testEventSinkLogging())
       if (agent === 'claude') {
         const translator = createClaudeJournalTranslator({ sink: deferred.sink })
         translator.handle({
@@ -481,7 +587,6 @@ describe('StructuredAgentSessionStatusFeed', () => {
       for (let index = 0; index < 100; index++) {
         deferred.sink.publish()
       }
-      // This queue is also reached while a previous asynchronous journal write is pending.
       let publications = 0
       let activityPublications = 0
       deferred.bind({
@@ -513,13 +618,158 @@ describe('StructuredAgentSessionStatusFeed', () => {
     await journal.appendItem(
       USER_IDENTITY,
       { kind: 'message', role: 'user', blocks: [{ type: 'text', text: 'hello' }] },
-      { fence: 1 }
+      { fence: 1, turnScope: AGENT_JOURNAL_THREAD_SCOPE }
     )
 
     expect(() => feed.publish(SESSION, journal)).not.toThrow()
     expect(events.at(-1)).toEqual({
       type: 'status',
       session: expect.objectContaining({ status: 'idle', latestPrompt: 'hello' })
+    })
+  })
+
+  it('reuses the journal projection across task progress and invalidates on journal changes', async () => {
+    const journal = await openJournal()
+    await journal.appendItem(
+      USER_IDENTITY,
+      { kind: 'message', role: 'user', blocks: [{ type: 'text', text: 'fan out' }] },
+      { fence: 1, turnScope: AGENT_JOURNAL_THREAD_SCOPE }
+    )
+    await journal.appendItem(
+      TURN_IDENTITY,
+      { kind: 'status', text: 'Working', turnLifecycle: { turnId: 'turn-1', state: 'running' } },
+      { fence: 1, turnScope: AGENT_JOURNAL_THREAD_SCOPE }
+    )
+    const snapshot = vi.spyOn(journal, 'snapshot')
+    let taskState: 'working' | 'waiting' = 'working'
+    const { feed, events } = feedFor(new Map([[SESSION, { journal }]]), null, undefined, () => [
+      statusFeedChildView({ state: taskState })
+    ])
+    for (let tick = 1; tick <= 100; tick++) {
+      taskState = tick % 2 === 1 ? 'waiting' : 'working'
+      feed.publish(SESSION)
+    }
+    expect(events).toHaveLength(101)
+    expect(snapshot).toHaveBeenCalledTimes(1)
+    expect(events.at(-1)).toMatchObject({
+      type: 'status',
+      session: { status: 'working', backgroundTasks: [{ state: 'working' }] }
+    })
+    await journal.appendTombstone(TURN_IDENTITY, { fence: 1 })
+    feed.publish(SESSION)
+    expect(snapshot).toHaveBeenCalledTimes(2)
+    expect(events.at(-1)).toMatchObject({ type: 'status', session: { status: 'idle' } })
+  })
+
+  it('keeps record metadata live', async () => {
+    const journal = await openJournal()
+    await journal.appendItem(
+      USER_IDENTITY,
+      { kind: 'message', role: 'user', blocks: [{ type: 'text', text: 'hello' }] },
+      { fence: 1, turnScope: AGENT_JOURNAL_THREAD_SCOPE }
+    )
+    const record = {
+      location: indexed({ journal }).params.location,
+      options: { model: 'first-model' },
+      providerHandleChain: []
+    }
+    const { feed, events } = feedFor(new Map([[SESSION, { journal }]]), record)
+    record.options.model = 'second-model'
+    feed.publish(SESSION)
+    expect(events.at(-1)).toMatchObject({
+      type: 'status',
+      session: { status: 'idle', model: 'second-model' }
+    })
+  })
+})
+
+// Broadcast cache retains closed history; roster reads must intersect it with live sessions.
+describe('the status sink sees the roster the broadcast cache deliberately lacks', () => {
+  function sinkFor() {
+    const published: AgentSessionStatusSummary[] = []
+    const forgotten: Parameters<StructuredAgentSessionStatusSink['forget']>[0][] = []
+    const sink: StructuredAgentSessionStatusSink = {
+      publish: (summary) => published.push(summary),
+      forget: (sessionId) => forgotten.push(sessionId)
+    }
+    return { sink, published, forgotten }
+  }
+
+  it('receives every change once, ownership revocation, and the forget edge', async () => {
+    const journal = await openJournal()
+    const sessions = new Map<string, Indexed>([
+      [SESSION, { journal, child: { phase: 'ready', generation: 'child-1', fence: 1 } }]
+    ])
+    const { sink, published, forgotten } = sinkFor()
+    const { feed } = feedFor(sessions, null, undefined, undefined, sink)
+    await journal.appendItem(
+      USER_IDENTITY,
+      { kind: 'message', role: 'user', blocks: [{ type: 'text', text: 'hello' }] },
+      { fence: 1, turnScope: AGENT_JOURNAL_THREAD_SCOPE }
+    )
+    feed.publish(SESSION, journal)
+    feed.publish(SESSION, journal)
+    expect(published.map((summary) => summary.status)).toEqual([null, 'idle'])
+    expect(published.at(-1)).toMatchObject({
+      sessionId: SESSION,
+      status: 'idle',
+      hostExecutionOwned: true
+    })
+
+    feed.revokeLive(SESSION)
+    expect(published.at(-1)).toMatchObject({ sessionId: SESSION, status: 'idle' })
+    expect(published.at(-1)?.hostExecutionOwned).toBeUndefined()
+    expect(published.at(-1)?.hostExecutionPhase).toBeUndefined()
+
+    sessions.delete(SESSION)
+    feed.forget(SESSION)
+    expect(forgotten).toEqual([
+      {
+        kind: 'structured-session',
+        sessionId: SESSION,
+        executionHostId: 'local',
+        wslDistro: null,
+        workspaceId: 'workspace-1',
+        workspaceKind: 'git-worktree'
+      }
+    ])
+    const late: AgentSessionStatusEvent[] = []
+    feed.subscribe({ id: 'list-2', emit: (event) => late.push(event) })
+    expect(late).toEqual([
+      {
+        type: 'snapshot',
+        sessions: [expect.objectContaining({ sessionId: SESSION, status: 'idle' })]
+      }
+    ])
+  })
+
+  it('keeps publishing to subscribers when the sink throws', async () => {
+    const journal = await openJournal()
+    const sink: StructuredAgentSessionStatusSink = {
+      publish: () => {
+        throw new Error('store down')
+      },
+      forget: () => {
+        throw new Error('store down')
+      }
+    }
+    const { feed, events } = feedFor(
+      new Map([[SESSION, { journal }]]),
+      null,
+      undefined,
+      undefined,
+      sink
+    )
+    await journal.appendItem(
+      USER_IDENTITY,
+      { kind: 'message', role: 'user', blocks: [{ type: 'text', text: 'hello' }] },
+      { fence: 1, turnScope: AGENT_JOURNAL_THREAD_SCOPE }
+    )
+    feed.publish(SESSION, journal)
+    expect(() => feed.forget(SESSION)).not.toThrow()
+    expect(events.at(-1)).toMatchObject({
+      type: 'status',
+      session: expect.objectContaining({ sessionId: SESSION, status: 'idle' })
     })
   })
 })

@@ -1,51 +1,104 @@
-import {
-  detectAgentStatusFromTitle,
-  isOpenCodeNativeTitle,
-  type AgentStatus
-} from '../../shared/agent-detection'
+import { isQoderComposerReady } from './qoder-terminal-readiness'
+import { memoizeTitleClassification } from '../../shared/terminal-title-classification-memo'
+import { detectAgentStatusFromTitle, type AgentStatus } from '../../shared/agent-detection'
 import type { RuntimeTerminalWaitBlockedReason } from '../../shared/runtime-types'
+import type { TuiAgent } from '../../shared/tui-agent'
 import {
-  isTerminalWaitWhitespace,
-  startOfLastLines,
-  startOfLastNonBlankLines
-} from './terminal-wait-tail-window'
+  evaluateAgentStateRules,
+  hasQuietReadyRules,
+  holdsReadyTextToQuiet,
+  type AgentStateVerdict
+} from './agent-state-rules/agent-state-rules-engine'
+import { findPromptAnchorIndexes } from './agent-state-rules/agent-state-text-anchors'
+import { showsIdleTitleAnchor } from './agent-state-rules/agent-state-title-anchors'
+import { compiledFromActiveAgentStateRules } from './agent-state-rules/active-agent-state-rules'
+import {
+  findTerminalWaitBlockedSignal,
+  isSettledAfter,
+  isUnblockedAfter
+} from './agent-state-rules/blocked-text-layer'
 
+// Include Orca ready titles and agents that state rest in words.
 const EXPLICIT_IDLE_TITLE_RE = /(^|\s)(ready|idle|done)(\s|$|[.!?])/i
-const CLAUDE_IDLE_PREFIX = '\u2733'
-const GEMINI_IDLE_PREFIX = '\u25c7'
-const PI_IDLE_PREFIX = '\u03c0 - '
+
+function computeExplicitIdleStatusFromTitle(title: string): AgentStatus | null {
+  const status = detectAgentStatusFromTitle(title)
+  // Agent-name launch titles such as Codex YOLO do not prove readiness.
+  return status === 'idle' && (EXPLICIT_IDLE_TITLE_RE.test(title) || showsIdleTitleAnchor(title))
+    ? 'idle'
+    : null
+}
+
+/** Polls and repaints repeat unchanged titles; memoize per rule set so reloads invalidate classification. */
+const explicitIdleTitleMemo = compiledFromActiveAgentStateRules(() =>
+  memoizeTitleClassification(computeExplicitIdleStatusFromTitle)
+)
 
 export function detectExplicitIdleStatusFromTitle(title: string): AgentStatus | null {
-  const status = detectAgentStatusFromTitle(title)
-  if (status !== 'idle') {
-    return null
-  }
-  // Why: launch titles like "Codex YOLO" contain an agent name but aren't readiness signals; terminal.wait needs explicit idle evidence.
-  if (
-    EXPLICIT_IDLE_TITLE_RE.test(title) ||
-    // Why: unblock hookless remote waits; guarded writes corroborate this marker.
-    isOpenCodeNativeTitle(title) ||
-    title.startsWith(CLAUDE_IDLE_PREFIX) ||
-    title.startsWith('* ') ||
-    title.includes(GEMINI_IDLE_PREFIX) ||
-    title.startsWith(PI_IDLE_PREFIX)
-  ) {
-    return 'idle'
-  }
-  return null
+  return explicitIdleTitleMemo()(title)
 }
 
 export function isKnownReadyPromptPreview(preview: string): boolean {
   const normalized = preview.toLowerCase()
-  const readyIndex = findKnownReadyPromptIndex(normalized)
-  if (readyIndex === null) {
+  return isUnblockedAfter(normalized, findPromptAnchorIndexes(normalized).ready)
+}
+
+/** Codex 0.157 discards input behind its provisional startup header; hold anchors veto ready text. */
+export function isKnownReadyPromptSettled(preview: string): boolean {
+  const normalized = preview.toLowerCase()
+  return isSettledAfter(normalized, findPromptAnchorIndexes(normalized).ready)
+}
+
+/** Agent screen refusals also veto shared text. Quiet-only rules settle here only without an output clock; clocked panes use isQuietReadyScreenBody. */
+export function isKnownReadyPromptBody(
+  waitText: string,
+  agent: TuiAgent | null,
+  readScreenLines: () => readonly string[] | null,
+  hasOutputClock: boolean
+): boolean {
+  if (agent === 'qoder' || agent === 'qoder-cn') {
+    return isQoderComposerReady(readScreenLines())
+  }
+  // With an output clock, this agent settles only after quiet.
+  if (hasOutputClock && holdsReadyTextToQuiet(agent)) {
     return false
   }
-  const blockedSignal = findTerminalWaitBlockedSignal(normalized)
-  if (blockedSignal !== null && blockedSignal.index > readyIndex) {
-    return false
+  const ruled = evaluateAgentStateRules(agent, {
+    readScreenLines,
+    readText: () => waitText.toLowerCase(),
+    hasOutputClock
+  })
+  if (ruled !== null) {
+    return isStrongIdle(ruled) && (!ruled.requiresQuiet || !hasOutputClock)
   }
-  return true
+  return isKnownReadyPromptSettled(waitText)
+}
+
+/** Mid-turn ready screens/text require quiet. Require Muse identity so pasted transcripts and pagers cannot settle unknown panes. */
+export function isQuietReadyScreenBody(
+  waitText: string,
+  agent: TuiAgent | null,
+  readScreenLines: () => readonly string[] | null
+): boolean {
+  if (hasQuietReadyRules(agent)) {
+    const ruled = evaluateAgentStateRules(agent, {
+      readScreenLines,
+      readText: () => waitText.toLowerCase()
+    })
+    return ruled !== null && isStrongIdle(ruled) && ruled.requiresQuiet
+  }
+  return (agent === null || agent === 'muse') && isMuseReadyPromptPreview(waitText)
+}
+
+function isStrongIdle(
+  verdict: AgentStateVerdict
+): verdict is Extract<AgentStateVerdict, { state: 'idle' }> {
+  return verdict.state === 'idle' && verdict.strength === 'strong'
+}
+
+export function isMuseReadyPromptPreview(preview: string): boolean {
+  const normalized = preview.toLowerCase()
+  return isUnblockedAfter(normalized, findMuseReadyPromptIndex(normalized))
 }
 
 export function detectTerminalWaitBlockedReason(
@@ -63,253 +116,27 @@ export function findActionableTerminalWaitBlockedSignal(
     return null
   }
   const dismissedModalIndex = findDismissedStartupModalIndex(normalized)
-  // Why: a live prompt after the modal means it was dismissed → signal no longer actionable, even mid-run (Cursor never reports idle via OSC title).
+  // A later live prompt dismisses the modal even mid-turn; Cursor never titles itself idle.
   return dismissedModalIndex !== null && dismissedModalIndex > blockedSignal.index
     ? null
     : blockedSignal
 }
 
-// Why: a live prompt (idle OR busy) proves the startup modal was dismissed, so a mid-run Cursor lane stops reporting stale trust hits.
+// Live idle/busy prompts supersede startup modals; Muse still needs anchors outside agent-state-rules.
 function findDismissedStartupModalIndex(normalized: string): number | null {
-  const indexes = [
-    findCodexReadyPromptIndex(normalized),
-    findAntigravityReadyPromptIndex(normalized),
-    findCursorActivePromptIndex(normalized)
-  ].filter((index): index is number => index !== null)
-  return indexes.length > 0 ? Math.max(...indexes) : null
+  const live = findPromptAnchorIndexes(normalized).live
+  const muse = findMuseReadyPromptIndex(normalized)
+  return live === null || muse === null ? (live ?? muse) : Math.max(live, muse)
 }
 
-function findKnownReadyPromptIndex(normalized: string): number | null {
-  const indexes = [
-    findCodexReadyPromptIndex(normalized),
-    findAntigravityReadyPromptIndex(normalized),
-    findCursorReadyPromptIndex(normalized)
-  ].filter((index): index is number => index !== null)
-  return indexes.length > 0 ? Math.max(...indexes) : null
-}
-
-// Why: match the banner's last occurrence to skip the trust dialog's own "Cursor Agent" text; "→" is cursor-agent's persistent input prompt.
-function findCursorActivePromptIndex(normalized: string): number | null {
-  const headerIndex = normalized.lastIndexOf('cursor agent')
+// Muse keeps its bare-cwd OSC title; only the body proves readiness, including the voice composer without skills.
+function findMuseReadyPromptIndex(normalized: string): number | null {
+  const headerIndex = normalized.lastIndexOf('muse code')
   if (headerIndex === -1) {
     return null
   }
-  return normalized.includes('→', headerIndex) ? headerIndex : null
-}
-
-// Why: cursor-agent emits no idle OSC title; infer idle from the tail (braille spinner = busy, its absence = idle).
-const CURSOR_BUSY_SPINNER_RE = /[⠁-⣿]/
-
-function findCursorReadyPromptIndex(normalized: string): number | null {
-  const activeIndex = findCursorActivePromptIndex(normalized)
-  if (activeIndex === null) {
-    return null
-  }
-  return CURSOR_BUSY_SPINNER_RE.test(normalized.slice(activeIndex)) ? null : activeIndex
-}
-
-function findCodexReadyPromptIndex(normalized: string): number | null {
-  const headerIndex = normalized.lastIndexOf('openai codex')
-  if (headerIndex === -1) {
-    return null
-  }
-  const readySegment = normalized.slice(headerIndex)
-  // Why: Codex prints permissions only in YOLO mode; the stable ready header is OpenAI Codex + model + directory.
-  return readySegment.includes('model:') && readySegment.includes('directory:') ? headerIndex : null
-}
-
-function findAntigravityReadyPromptIndex(normalized: string): number | null {
-  const headerIndex = normalized.lastIndexOf('antigravity cli')
-  if (headerIndex === -1) {
-    return null
-  }
-  let lineStart = headerIndex
-  let modelIndex: number | null = null
-  let promptIndex: number | null = null
-
-  // Why: ready previews can include echoed paste after the header; scan line bounds directly instead of splitting the whole tail.
-  for (let cursor = headerIndex; cursor <= normalized.length; cursor += 1) {
-    if (cursor < normalized.length && normalized.charCodeAt(cursor) !== 10) {
-      continue
-    }
-    let trimmedStart = lineStart
-    let trimmedEnd = cursor
-    while (trimmedStart < trimmedEnd && isTerminalWaitWhitespace(normalized, trimmedStart)) {
-      trimmedStart += 1
-    }
-    while (trimmedEnd > trimmedStart && isTerminalWaitWhitespace(normalized, trimmedEnd - 1)) {
-      trimmedEnd -= 1
-    }
-    if (lineStart > headerIndex && trimmedStart < trimmedEnd) {
-      if (modelIndex === null && normalized.startsWith('gemini', trimmedStart)) {
-        modelIndex = trimmedStart
-      }
-      if (
-        promptIndex === null &&
-        trimmedEnd - trimmedStart === 1 &&
-        normalized.charCodeAt(trimmedStart) === 62
-      ) {
-        promptIndex = trimmedStart
-      }
-    }
-    lineStart = cursor + 1
-  }
-
-  return modelIndex !== null && promptIndex !== null ? Math.max(modelIndex, promptIndex) : null
-}
-
-export const TERMINAL_WAIT_BLOCKED_SENTINEL_RE =
-  /update available|choose working directory to|codex just got an upgrade|hooks need review|do you trust|trust this|trusted workspace|press enter to (?:confirm|continue|view|insert)|press t to trust|permission required|requires permission|allow once|allow always|run this command\?/i
-
-// Why text at all: cursor-agent has no approval hook, so the key-bound menu is the only authority.
-const CURSOR_APPROVAL_CHOICE_MARKERS = [
-  'run (once)',
-  'to allowlist?',
-  'run everything',
-  'skip & tell the agent'
-]
-// Why bounded: an answered menu remains in scrollback; only a dialog owning the screen bottom is live.
-const CURSOR_APPROVAL_TAIL_LINES = 8
-
-function findCursorApprovalPromptIndex(normalized: string): number | null {
-  const windowStart = startOfLastLines(normalized, CURSOR_APPROVAL_TAIL_LINES)
-  const tail = normalized.slice(windowStart)
-  if (!tail.includes('run this command?')) {
-    return null
-  }
-  const lines = tail.split('\n')
-  while (lines.length > 0 && lines.at(-1)?.trim() === '') {
-    lines.pop()
-  }
-  let matchedLines = 0
-  let lastChoiceLine = -1
-  for (let index = 0; index < lines.length; index += 1) {
-    if (!isCursorApprovalChoiceLine(lines[index])) {
-      continue
-    }
-    matchedLines += 1
-    lastChoiceLine = index
-  }
-  return matchedLines >= 2 && lastChoiceLine === lines.length - 1
-    ? windowStart + tail.lastIndexOf('run this command?')
-    : null
-}
-
-// Why the trailing key: narration can repeat the menu wording, but it does not end in a selectable key.
-const CURSOR_APPROVAL_CHOICE_KEY_RE =
-  /\((?:shift\+tab|ctrl\+[a-z]|esc(?: or [a-z])*|tab|enter|return|space|[a-z]|[\u21b5\u21e7\u21b9\u238b\u23ce]{1,3})\)\s*$/
-
-function isCursorApprovalChoiceLine(line: string): boolean {
-  return (
-    CURSOR_APPROVAL_CHOICE_KEY_RE.test(line) &&
-    CURSOR_APPROVAL_CHOICE_MARKERS.some((marker) => line.includes(marker))
-  )
-}
-
-// Why bounded: answered dialogs and quoted prompt wording (agents grep this file and its specs) stay in the
-// retained tail; only a dialog owning the screen bottom is live. Real Codex dialogs (trust, hooks review,
-// update, exec approval) are 4-8 lines; the slack covers a wrapped command or a longer hook list.
-const LIVE_PROMPT_TAIL_LINES = 12
-
-function findTerminalWaitBlockedSignal(
-  fullTail: string
-): { reason: RuntimeTerminalWaitBlockedReason; index: number } | null {
-  const windowStart = startOfLastNonBlankLines(fullTail, LIVE_PROMPT_TAIL_LINES)
-  const normalized = windowStart === 0 ? fullTail : fullTail.slice(windowStart)
-  // Why: one combined negative scan avoids a dozen searches when no prompt can match.
-  if (!TERMINAL_WAIT_BLOCKED_SENTINEL_RE.test(normalized)) {
-    return null
-  }
-  const signal = findBlockedSignalInLiveWindow(normalized)
-  // Why: callers compare this index against ready-header indexes found over the full tail.
-  return signal === null ? null : { reason: signal.reason, index: signal.index + windowStart }
-}
-
-function findBlockedSignalInLiveWindow(
-  normalized: string
-): { reason: RuntimeTerminalWaitBlockedReason; index: number } | null {
-  const candidates: { reason: RuntimeTerminalWaitBlockedReason; index: number }[] = []
-  const updateIndex = normalized.lastIndexOf('update available')
-  if (updateIndex !== -1 && normalized.includes('press enter to continue', updateIndex)) {
-    candidates.push({ reason: 'codex-update-prompt', index: updateIndex })
-  }
-  const cwdIndex = normalized.lastIndexOf('choose working directory to')
-  if (cwdIndex !== -1 && normalized.includes('press enter to continue', cwdIndex)) {
-    candidates.push({ reason: 'codex-cwd-prompt', index: cwdIndex })
-  }
-  const modelMigrationIndex = normalized.lastIndexOf('codex just got an upgrade')
-  if (
-    modelMigrationIndex !== -1 &&
-    normalized.includes('press enter to continue', modelMigrationIndex)
-  ) {
-    candidates.push({ reason: 'codex-model-migration-prompt', index: modelMigrationIndex })
-  }
-  const hooksIndex = normalized.lastIndexOf('hooks need review')
-  if (hooksIndex !== -1 && normalized.includes('press enter to confirm', hooksIndex)) {
-    candidates.push({ reason: 'codex-hooks-review-prompt', index: hooksIndex })
-  }
-  const trustIndex = Math.max(
-    normalized.lastIndexOf('do you trust'),
-    normalized.lastIndexOf('trust this'),
-    normalized.lastIndexOf('trusted workspace')
-  )
-  const trustSegment = trustIndex === -1 ? '' : normalized.slice(trustIndex)
-  if (
-    trustIndex !== -1 &&
-    (trustSegment.includes('workspace') ||
-      trustSegment.includes('folder') ||
-      trustSegment.includes('directory') ||
-      trustSegment.includes('repo'))
-  ) {
-    candidates.push({ reason: 'codex-trust-workspace', index: trustIndex })
-  }
-  const interactivePromptIndex = Math.max(
-    normalized.lastIndexOf('press enter to confirm'),
-    normalized.lastIndexOf('press enter to continue'),
-    normalized.lastIndexOf('press enter to view'),
-    normalized.lastIndexOf('press enter to insert'),
-    normalized.lastIndexOf('press t to trust')
-  )
-  const interactivePromptContext =
-    interactivePromptIndex === -1
-      ? ''
-      : normalized.slice(Math.max(0, interactivePromptIndex - 600), interactivePromptIndex + 200)
-  const hasCodexInteractiveContext =
-    interactivePromptContext.includes('codex') ||
-    interactivePromptContext.includes('permission') ||
-    interactivePromptContext.includes('sandbox') ||
-    interactivePromptContext.includes('trust') ||
-    interactivePromptContext.includes('hook')
-  if (interactivePromptIndex !== -1 && hasCodexInteractiveContext) {
-    const contextStart = Math.max(0, interactivePromptIndex - 600)
-    const hasSpecificPromptInContext = candidates.some(
-      (candidate) => candidate.index >= contextStart && candidate.index <= interactivePromptIndex
-    )
-    if (!hasSpecificPromptInContext) {
-      candidates.push({ reason: 'codex-interactive-prompt', index: interactivePromptIndex })
-    }
-  }
-  const cursorApprovalIndex = findCursorApprovalPromptIndex(normalized)
-  if (cursorApprovalIndex !== null) {
-    candidates.push({ reason: 'agent-approval-prompt', index: cursorApprovalIndex })
-  }
-  const permissionPromptIndex = Math.max(
-    normalized.lastIndexOf('permission required'),
-    normalized.lastIndexOf('requires permission')
-  )
-  if (permissionPromptIndex !== -1) {
-    const permissionSegment = normalized.slice(permissionPromptIndex, permissionPromptIndex + 1_500)
-    const decisionCount = ['allow once', 'allow always', 'reject', 'deny'].filter((choice) =>
-      permissionSegment.includes(choice)
-    ).length
-    if (decisionCount >= 2) {
-      // Why: preserve the existing remote receipt value for mixed-version clients.
-      candidates.push({ reason: 'codex-interactive-prompt', index: permissionPromptIndex })
-    }
-  }
-  return candidates.length > 0
-    ? candidates.reduce((latest, candidate) =>
-        candidate.index > latest.index ? candidate : latest
-      )
+  const segment = normalized.slice(headerIndex)
+  return segment.includes('voice') && segment.includes('input') && segment.includes('❯')
+    ? headerIndex
     : null
 }

@@ -113,14 +113,8 @@ export function BrowserProfileRow({
   const sourceLabel = profile.source
     ? `${BROWSER_FAMILY_LABELS[profile.source.browserFamily] ?? profile.source.browserFamily}${profile.source.profileName ? ` (${profile.source.profileName})` : ''}`
     : translate('auto.components.settings.BrowserProfileRow.796d846483', 'No cookies imported')
-  const userAgentLabel =
-    profile.userAgentMode === 'native'
-      ? translate('auto.components.settings.BrowserProfileRow.b5c0479e21', 'Unmodified user agent')
-      : null
 
-  // Why: uses div[role=button] instead of <button> to avoid nested <button>
-  // elements — the dropdown trigger and trash actions inside also render as
-  // <button>, which is invalid HTML and causes React hydration warnings.
+  // Use role=button because nested dropdown/trash buttons make a native button invalid and trigger hydration warnings.
   return (
     <div
       role="button"
@@ -147,17 +141,13 @@ export function BrowserProfileRow({
             </span>
           ) : null}
         </div>
-        <p className="truncate text-[11px] text-muted-foreground">
-          {sourceLabel}
-          {userAgentLabel ? ` · ${userAgentLabel}` : ''}
-        </p>
+        <p className="truncate text-[11px] text-muted-foreground">{sourceLabel}</p>
       </div>
       <div className="flex shrink-0 items-center gap-1" onClick={(e) => e.stopPropagation()}>
         <DropdownMenu
           onOpenChange={(open) => {
             if (open) {
-              // Why: macOS treats other browsers' profile folders as app
-              // data. Only probe them when the user opens the import menu.
+              // Probe profile folders only when import opens; macOS treats them as protected app data.
               void fetchDetectedBrowsers()
             }
           }}

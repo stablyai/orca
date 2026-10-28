@@ -1,102 +1,143 @@
-import type { RuntimeSpeechSetupState } from '../../../src/shared/runtime-types'
-import type { RpcClient } from '../transport/rpc-client'
+import type { RpcOperationSender } from '../transport/rpc-operation-sender'
+import type { RpcResponse } from '../transport/types'
+import { interpretOrThrowRefusalMessage } from '../transport/rpc-refusal-message'
 import { LogicalClientCutoverError } from '../transport/stable-logical-rpc-client'
-import type { RpcSuccess } from '../transport/types'
+import {
+  dictationConfigWrite,
+  dictationModelDelete,
+  dictationModelDownload,
+  dictationSetupRead
+} from './mobile-dictation-operations'
+import type { MobileSpeechModelReply, MobileSpeechSetupReply } from './dictation-reply-schema'
 
-export type MobileSpeechSetup = RuntimeSpeechSetupState
-export type MobileSpeechModel = RuntimeSpeechSetupState['models'][number]
+// Expose the reader’s salvaged shape; guarded members need not satisfy the host’s full setup type.
+export type MobileSpeechSetup = MobileSpeechSetupReply
+export type MobileSpeechModel = MobileSpeechModelReply
 
-// Dictation-setup errors startMobileDictation throws when the desktop isn't
-// configured. Mapping them lets the mic entry point open the setup sheet
-// instead of dead-ending on a toast.
+// Map setup errors to the setup sheet instead of leaving the mic entry point at a toast.
 const SETUP_REQUIRED_CODES = new Set(['voice_dictation_disabled', 'voice_model_not_selected'])
 const LEGACY_DESKTOP_SPEECH_SETUP_MESSAGE =
   'Update the paired desktop Orca app to use mobile voice settings.'
 
-// Why: mobile can pair with older desktop runtimes that predate speech.models.list;
-// show upgrade guidance instead of leaking the raw denial or not-found error.
-function isLegacyDesktopSpeechSetupError(
-  error: { code?: string; message?: string } | undefined
-): boolean {
-  const message = error?.message ?? ''
+// Older runtimes predate models.list; show upgrade guidance. Keep the raw refusal because guidance needs both code and message.
+function isLegacyDesktopSpeechSetupReply(reply: RpcResponse): boolean {
+  if (reply.ok) {
+    return false
+  }
+  const message = reply.error?.message ?? ''
   return (
     message.includes('speech.models.list') &&
-    (error?.code === 'method_not_found' || message.includes('not available to mobile clients'))
+    (reply.error?.code === 'method_not_found' ||
+      message.includes('not available to mobile clients'))
   )
+}
+
+// Headless servers lacked speech from 1.4.229 until #31174; name the required fix.
+export const SPEECHLESS_SERVER_MESSAGE = 'Update Orca on this server to use voice dictation.'
+
+export function isSpeechlessServerError(message: string): boolean {
+  return message.startsWith('speech_unavailable')
+}
+
+function isSpeechlessServerReply(reply: RpcResponse): boolean {
+  return !reply.ok && isSpeechlessServerError(reply.error?.message ?? '')
 }
 
 export function isDictationSetupRequiredError(message: string): boolean {
   return SETUP_REQUIRED_CODES.has(message) || message.startsWith('voice_model_not_ready:')
 }
 
-export async function fetchDictationSetup(
-  client: Pick<RpcClient, 'sendRequest'>
-): Promise<MobileSpeechSetup> {
-  const response = await fetchDictationSetupResponse(client)
-  if (!response.ok) {
-    if (isLegacyDesktopSpeechSetupError(response.error)) {
-      throw new Error(LEGACY_DESKTOP_SPEECH_SETUP_MESSAGE)
-    }
-    throw new Error(response.error?.message || 'Failed to load dictation models')
+export async function fetchDictationSetup(client: RpcOperationSender): Promise<MobileSpeechSetup> {
+  const reply = await requestDictationSetupReply(client)
+  if (isLegacyDesktopSpeechSetupReply(reply)) {
+    throw new Error(LEGACY_DESKTOP_SPEECH_SETUP_MESSAGE)
   }
-  return (response as RpcSuccess).result as MobileSpeechSetup
+  if (isSpeechlessServerReply(reply)) {
+    throw new Error(SPEECHLESS_SERVER_MESSAGE)
+  }
+  return interpretOrThrowRefusalMessage(
+    () => dictationSetupRead.interpret(reply),
+    'Failed to load dictation models'
+  )
 }
 
-async function fetchDictationSetupResponse(client: Pick<RpcClient, 'sendRequest'>) {
+async function requestDictationSetupReply(client: RpcOperationSender): Promise<RpcResponse> {
   try {
-    return await client.sendRequest('speech.models.list', null)
+    return await dictationSetupRead.request(client, null)
   } catch (error) {
     if (!(error instanceof LogicalClientCutoverError)) {
       throw error
     }
-    // Why: this read can safely repeat on the authenticated replacement; mutation
-    // RPCs must still surface cutover so callers never replay unknown commits.
-    return client.sendRequest('speech.models.list', null)
+    // Replay this read on authenticated replacement; mutations must surface cutover to avoid replaying unknown commits.
+    return dictationSetupRead.request(client, null)
   }
 }
 
 export async function downloadDictationModel(
-  client: Pick<RpcClient, 'sendRequest'>,
+  client: RpcOperationSender,
   modelId: string
 ): Promise<void> {
-  const response = await client.sendRequest('speech.models.download', { modelId })
-  if (!response.ok) {
-    throw new Error(response.error?.message || 'Failed to start download')
-  }
+  const reply = await dictationModelDownload.request(client, { modelId })
+  interpretOrThrowRefusalMessage(
+    () => dictationModelDownload.interpret(reply),
+    'Failed to start download'
+  )
 }
 
 export async function deleteDictationModel(
-  client: Pick<RpcClient, 'sendRequest'>,
+  client: RpcOperationSender,
   modelId: string
 ): Promise<MobileSpeechSetup> {
-  const response = await client.sendRequest('speech.models.delete', { modelId })
-  if (!response.ok) {
-    throw new Error(response.error?.message || 'Failed to delete model')
-  }
-  return (response as RpcSuccess).result as MobileSpeechSetup
+  const reply = await dictationModelDelete.request(client, { modelId })
+  return interpretOrThrowRefusalMessage(
+    () => dictationModelDelete.interpret(reply),
+    'Failed to delete model'
+  )
 }
 
 export async function setDictationConfig(
-  client: Pick<RpcClient, 'sendRequest'>,
+  client: RpcOperationSender,
   params: { enabled?: boolean; modelId?: string; dictationMode?: 'toggle' | 'hold' }
 ): Promise<MobileSpeechSetup> {
-  const response = await client.sendRequest('speech.dictation.setup', params)
-  if (!response.ok) {
-    throw new Error(response.error?.message || 'Failed to update dictation settings')
-  }
-  return (response as RpcSuccess).result as MobileSpeechSetup
+  const reply = await dictationConfigWrite.request(client, params)
+  return interpretOrThrowRefusalMessage(
+    () => dictationConfigWrite.interpret(reply),
+    'Failed to update dictation settings'
+  )
 }
 
-// A model is mid-download (or extracting) and the sheet should keep polling.
 export function isModelInFlight(model: MobileSpeechModel): boolean {
   return model.status === 'downloading' || model.status === 'extracting'
 }
 
-// Whether dictation can be used right now: enabled + a selected model that's ready.
 export function isDictationReady(setup: MobileSpeechSetup): boolean {
   if (!setup.enabled || !setup.selectedModelId) {
     return false
   }
   const selected = setup.models.find((m) => m.id === setup.selectedModelId)
   return selected?.status === 'ready'
+}
+
+// Keep copy short and host-neutral: the paired computer may be a headless server.
+export const CLOUD_MODEL_NEEDS_KEY = 'Needs an OpenAI key'
+
+export type DictationModelRowAction =
+  | 'in-use'
+  | 'use'
+  | 'download'
+  | 'downloading'
+  | 'needs-api-key'
+
+// Windows and managed SSH hosts may offer only cloud models; those rows must remain selectable.
+export function dictationModelRowAction(
+  model: MobileSpeechModel,
+  selectedModelId: string | undefined
+): DictationModelRowAction {
+  if (model.status === 'ready') {
+    return model.id === selectedModelId ? 'in-use' : 'use'
+  }
+  if (model.provider === 'openai') {
+    return 'needs-api-key'
+  }
+  return isModelInFlight(model) ? 'downloading' : 'download'
 }

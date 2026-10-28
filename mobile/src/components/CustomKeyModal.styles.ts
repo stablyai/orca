@@ -1,11 +1,27 @@
 import { StyleSheet } from 'react-native'
-import { colors, spacing, radii, typography } from '../theme/mobile-theme'
+import { colors, getMobileColorScheme, spacing, radii, typography } from '../theme/mobile-theme'
+import { themedStyleSheet } from '../theme/themed-styles'
+import { TEXT_INPUT_FONT_SIZE } from '../platform/text-input-font-size'
 
-export const customKeyModalStyles = StyleSheet.create({
+export const customKeyModalStyles = themedStyleSheet(() => ({
   header: {
     flexDirection: 'row',
     alignItems: 'center',
     paddingBottom: spacing.sm
+  },
+  keyInput: {
+    width: '100%',
+    height: 56,
+    borderRadius: 10,
+    backgroundColor: colors.bgPanel,
+    borderWidth: 1,
+    borderColor: colors.borderSubtle,
+    color: colors.textPrimary,
+    fontFamily: typography.monoFamily,
+    // Keep 22px key capture above input floor; binding seam would lower it to 16px merely to satisfy census (C7 ruling 12).
+    fontSize: 22,
+    fontWeight: '600',
+    textAlign: 'center'
   },
   backButton: {
     width: 30,
@@ -151,20 +167,7 @@ export const customKeyModalStyles = StyleSheet.create({
     fontFamily: typography.monoFamily
   },
   chipGlyphSelected: {
-    color: 'rgba(10,10,10,0.5)'
-  },
-  keyInput: {
-    width: '100%',
-    height: 56,
-    borderRadius: 10,
-    backgroundColor: colors.bgPanel,
-    borderWidth: 1,
-    borderColor: colors.borderSubtle,
-    color: colors.textPrimary,
-    fontFamily: typography.monoFamily,
-    fontSize: 22,
-    fontWeight: '600',
-    textAlign: 'center'
+    color: getMobileColorScheme() === 'dark' ? 'rgba(10,10,10,0.5)' : 'rgba(255,255,255,0.5)'
   },
   moreLink: {
     paddingVertical: spacing.sm,
@@ -240,7 +243,7 @@ export const customKeyModalStyles = StyleSheet.create({
     borderRadius: radii.input,
     paddingHorizontal: spacing.md,
     paddingVertical: spacing.sm,
-    fontSize: 14,
+    fontSize: TEXT_INPUT_FONT_SIZE,
     fontFamily: typography.monoFamily,
     borderWidth: 1,
     borderColor: colors.borderSubtle
@@ -273,4 +276,4 @@ export const customKeyModalStyles = StyleSheet.create({
   saveButtonTextDisabled: {
     color: colors.textMuted
   }
-})
+}))

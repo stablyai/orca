@@ -1,6 +1,8 @@
 import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native'
 import { RotateCcw } from 'lucide-react-native'
 import { colors, radii, spacing, typography } from '../theme/mobile-theme'
+import { themedStyleSheet } from '../theme/themed-styles'
+import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import type { CodexResetCreditSummary } from './codex-reset-credit'
 
 export function CodexResetCreditAction({
@@ -16,6 +18,7 @@ export function CodexResetCreditAction({
   disabled: boolean
   onPress: () => void
 }) {
+  useMobileColorScheme()
   return (
     <>
       <View style={styles.separator} />
@@ -57,7 +60,7 @@ export function CodexResetCreditAction({
   )
 }
 
-const styles = StyleSheet.create({
+const styles = themedStyleSheet(() => ({
   separator: {
     height: StyleSheet.hairlineWidth,
     backgroundColor: colors.borderSubtle,
@@ -107,4 +110,4 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: colors.textPrimary
   }
-})
+}))

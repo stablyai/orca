@@ -1,35 +1,35 @@
+import { createMarkdownTokenizerStart } from './markdown-tokenizer-start'
 import type { AnyExtension } from '@tiptap/core'
 import StarterKit from '@tiptap/starter-kit'
+import { RichMarkdownTrailingParagraph } from './rich-markdown-trailing-paragraph'
 import Link from '@tiptap/extension-link'
 import { Code } from '@tiptap/extension-code'
 import Image from '@tiptap/extension-image'
 import Placeholder from '@tiptap/extension-placeholder'
-import TaskItem from '@tiptap/extension-task-item'
-import { Table } from '@tiptap/extension-table'
-import { TableCell } from '@tiptap/extension-table-cell'
-import { TableHeader } from '@tiptap/extension-table-header'
-import { TableRow } from '@tiptap/extension-table-row'
+import { TaskItem } from '@tiptap/extension-list'
+import { RichMarkdownTable } from './rich-markdown-table'
+import { TableCell, TableHeader, TableRow } from '@tiptap/extension-table'
 import { BlockMath, InlineMath } from '@tiptap/extension-mathematics'
-import { Markdown } from '@tiptap/markdown'
+import { createRichMarkdownExtension } from './rich-markdown-extension'
 import { createLowlight, common } from 'lowlight'
 import {
   acquireLocalImageSrcLease,
   loadLocalImageSrc,
   onImageCacheInvalidated
 } from './useLocalImageSrc'
-import type { RuntimeFileOperationArgs } from '@/runtime/runtime-file-client'
+import type { RuntimeFileOperationArgs } from '@/runtime/runtime-file-client-types'
 import {
   createRawMarkdownHtmlBlock,
   createRawMarkdownHtmlInline,
   createRichMarkdownLiteral
-} from './raw-markdown-html'
+} from './raw-markdown-html-nodes'
 import {
   createOrcaDetailsExtensions,
   getRichMarkdownPlaceholder
 } from './rich-markdown-details-extension'
 import { createMarkdownDocLink } from './rich-markdown-doc-link'
 import { RichMarkdownCodeBlock } from './RichMarkdownCodeBlock'
-import { safeReactNodeViewRenderer } from './safe-react-node-view-renderer'
+import { ReactNodeViewRenderer } from '@tiptap/react'
 import { positionStableNodeViewUpdate } from './position-stable-node-view-update'
 import { DragSelectionGuard } from './drag-selection-guard'
 import { createRichMarkdownAnnotationHighlightExtension } from './rich-markdown-annotation-highlight'
@@ -37,21 +37,20 @@ import type { RichMarkdownEditorCodec } from './rich-markdown-source-transport'
 import { createRichMarkdownHtmlSuperscriptLink } from './rich-markdown-html-superscript-link'
 import type { RichMarkdownHtmlSuperscriptLinkContext } from './rich-markdown-html-superscript-link-context'
 import { RichMarkdownOrderedList } from './rich-markdown-ordered-list'
+import { RichMarkdownParagraph } from './rich-markdown-paragraph'
 import { RichMarkdownCodeBlockLowlight } from './rich-markdown-lowlight'
 import { RichMarkdownTaskList } from './rich-markdown-task-list'
 import { createCachedLowlight } from './rich-markdown-lowlight-cache'
+import { documentResourceAccess } from '@/lib/local-file-access'
+import {
+  readRichMarkdownImageRuntimeContext,
+  resolveRichMarkdownImageUrl
+} from './rich-markdown-image-context'
 
 const lowlight = createCachedLowlight(createLowlight(common))
 
-const RichMarkdownLink = Link.extend({
-  // Why: link's priority must stay below code's default 100 so Markdown
-  // serializes code-styled labels as [`label`](href).
-  priority: 90
-})
-
 const RichMarkdownCode = Code.extend({
-  // Why: Markdown supports linked code labels, so code cannot exclude the link
-  // mark even though it should still stay exclusive with emphasis marks.
+  // Permit linked code labels while keeping emphasis marks excluded.
   excludes: 'code bold italic strike underline'
 })
 
@@ -70,21 +69,22 @@ export function createRichMarkdownExtensions({
     throw new Error('HTML superscript links require a document interaction context')
   }
   const extensions: AnyExtension[] = [
-    // Why: rich-mode detection must use the exact same markdown extension set as
-    // the live editor. If these drift, Orca can claim a document is editable in
-    // preview and then still lose syntax on save.
+    // Eligibility and live editing must share extensions or a document deemed safe could still lose syntax on save.
     StarterKit.configure({
       link: false,
       code: false,
       codeBlock: false,
-      orderedList: false
+      orderedList: false,
+      paragraph: false,
+      trailingNode: false
     }),
+    RichMarkdownParagraph,
+    RichMarkdownTrailingParagraph,
     RichMarkdownCode,
     RichMarkdownCodeBlockLowlight.extend({
       addNodeView() {
-        // Why: RichMarkdownCodeBlock never reads getPos, so it must not re-render
-        // just because earlier edits shifted this block's document position.
-        return safeReactNodeViewRenderer(RichMarkdownCodeBlock, {
+        // This component never reads getPos; earlier typing must not rerender it merely by shifting its position.
+        return ReactNodeViewRenderer(RichMarkdownCodeBlock, {
           update: positionStableNodeViewUpdate
         })
       }
@@ -92,15 +92,12 @@ export function createRichMarkdownExtensions({
       lowlight,
       defaultLanguage: null
     }),
-    RichMarkdownLink.configure({
+    Link.configure({
       openOnClick: false,
       autolink: true,
       linkOnPaste: true
     }),
-    // Why: in dev mode the renderer is served from http://localhost, so
-    // file:// URLs in <img> tags are blocked by cross-origin restrictions.
-    // A nodeView loads local images via IPC → blob URL, which bypasses this
-    // and works identically in dev and production modes.
+    // Load local images through IPC/blob URLs so dev-server cross-origin restrictions cannot block file URLs.
     Image.extend({
       addStorage() {
         return {
@@ -112,12 +109,12 @@ export function createRichMarkdownExtensions({
       },
       addNodeView() {
         return ({ node, HTMLAttributes }) => {
-          // Why: wrapping the <img> in a container prevents the browser's
-          // native image drag (which sends image bytes) from conflicting with
-          // ProseMirror's node-level drag (which serializes the schema node
-          // for relocation within the document).
-          const dom = document.createElement('div')
+          // A wrapper prevents native image-byte dragging from conflicting with ProseMirror’s schema-node relocation.
+          const dom = document.createElement('span')
+          // Keep the image wrapper inline so it cannot break surrounding text onto separate lines.
+          dom.style.display = 'inline-block'
           dom.style.lineHeight = '0'
+          dom.style.maxWidth = '100%'
 
           const img = document.createElement('img')
           img.draggable = false
@@ -136,27 +133,32 @@ export function createRichMarkdownExtensions({
             releaseImageLease?.()
             releaseImageLease = undefined
             const fp = this.storage.filePath as string
-            const runtimeContext = this.storage.runtimeContext as
-              | RuntimeFileOperationArgs
-              | undefined
+            const runtimeContext = readRichMarkdownImageRuntimeContext(this.storage)
             const contextVersionAtLoad = getImageContextVersion(this.storage)
             if (src && fp) {
-              releaseImageLease = acquireLocalImageSrcLease(src, fp, undefined, runtimeContext)
-              void loadLocalImageSrc(src, fp, undefined, runtimeContext).then((resolved) => {
-                if (currentSrc !== src || currentContextVersion !== contextVersionAtLoad) {
-                  return
+              const access = documentResourceAccess(fp)
+              releaseImageLease = acquireLocalImageSrcLease(
+                src,
+                fp,
+                undefined,
+                runtimeContext,
+                access
+              )
+              void loadLocalImageSrc(src, fp, undefined, runtimeContext, access).then(
+                (resolved) => {
+                  if (currentSrc !== src || currentContextVersion !== contextVersionAtLoad) {
+                    return
+                  }
+                  if (resolved) {
+                    img.src = resolved
+                    return
+                  }
+                  // Local paths require main’s file checks; failed loads must not fall back to Chromium reading raw paths.
+                  img.removeAttribute('src')
                 }
-                if (resolved) {
-                  img.src = resolved
-                  return
-                }
-                // Why: local image paths must stay behind IPC/runtime
-                // authorization; a failed load should render missing, not
-                // hand the raw path back to Chromium.
-                img.removeAttribute('src')
-              })
+              )
             } else if (src) {
-              img.src = src
+              img.src = resolveRichMarkdownImageUrl(this.storage, src)
             } else {
               img.removeAttribute('src')
             }
@@ -164,9 +166,7 @@ export function createRichMarkdownExtensions({
 
           loadImage(currentSrc)
 
-          // Why: when the user refocuses the window after deleting or replacing
-          // image files, the blob URL cache is cleared and this callback re-loads
-          // the image from disk so the editor reflects the current filesystem state.
+          // Cache invalidation on refocus must reload replaced/deleted image files from disk.
           const unsubscribe = onImageCacheInvalidated(() => {
             loadImage(currentSrc)
           })
@@ -205,7 +205,9 @@ export function createRichMarkdownExtensions({
         }
       }
     }).configure({
-      allowBase64: true
+      allowBase64: true,
+      // Markdown nests images in paragraphs; block image nodes would become schema-invalid and crash on the first edit.
+      inline: true
     }),
     RichMarkdownOrderedList,
     RichMarkdownTaskList,
@@ -213,7 +215,7 @@ export function createRichMarkdownExtensions({
       nested: true
     }),
     ...createOrcaDetailsExtensions(),
-    Table.configure({
+    RichMarkdownTable.configure({
       resizable: false
     }),
     TableRow,
@@ -224,7 +226,16 @@ export function createRichMarkdownExtensions({
         throwOnError: false
       }
     }),
-    BlockMath.configure({
+    BlockMath.extend({
+      markdownTokenizer:
+        BlockMath.config.markdownTokenizer &&
+        typeof BlockMath.config.markdownTokenizer !== 'function'
+          ? {
+              ...BlockMath.config.markdownTokenizer,
+              start: createMarkdownTokenizerStart('$$')
+            }
+          : BlockMath.config.markdownTokenizer
+    }).configure({
       katexOptions: {
         displayMode: true,
         throwOnError: false
@@ -238,7 +249,7 @@ export function createRichMarkdownExtensions({
     createRawMarkdownHtmlBlock(codec.transport),
     createMarkdownDocLink(codec.transport),
     DragSelectionGuard,
-    Markdown.configure({
+    createRichMarkdownExtension(codec, htmlSuperscriptLinks).configure({
       marked: codec.marked,
       markedOptions: {
         gfm: true

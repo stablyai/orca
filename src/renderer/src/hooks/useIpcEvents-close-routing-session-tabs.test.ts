@@ -20,8 +20,7 @@ describe('useIpcEvents browser tab close routing', () => {
   beforeEach(() => {
     vi.resetModules()
     vi.unstubAllGlobals()
-    // Undo a partial mock of this module leaked by an earlier describe so the real
-    // resolveFloatingWorkspaceBrowserWorkspaceId (source validation) is used here.
+    // Clear leaked partial mocks so floating browser source validation uses the real resolver.
     vi.doUnmock('@/lib/floating-workspace-terminal-actions')
     closeTerminalTabMock.mockReset()
   })
@@ -48,8 +47,7 @@ describe('useIpcEvents browser tab close routing', () => {
 
     closeSessionTabListenerRef.current?.({ tabId: 'host-tab-1', worktreeId: 'wt-1' })
 
-    // Why: closeUnifiedTab alone would leave the file in openFiles, which the host
-    // republishes — so the editor close must go through closeFile.
+    // Editor close must remove openFiles via closeFile or host publication resurrects it.
     expect(closeFile).toHaveBeenCalledWith('file-1')
     expect(closeUnifiedTab).not.toHaveBeenCalled()
   })
@@ -78,8 +76,7 @@ describe('useIpcEvents browser tab close routing', () => {
 
     closeSessionTabListenerRef.current?.({ tabId: 'sim-tab-1', worktreeId: 'wt-1' })
 
-    // Why: only editor tabs need the closeFile (openFiles) path; other content types
-    // must keep closeUnifiedTab so the editor-only routing stays scoped.
+    // Other tab kinds must retain unified close; only editors own openFiles cleanup.
     expect(closeUnifiedTab).toHaveBeenCalledWith('sim-tab-1')
     expect(closeFile).not.toHaveBeenCalled()
   })
@@ -92,7 +89,7 @@ describe('useIpcEvents browser tab close routing', () => {
       getState: () => ({})
     })
 
-    closeTerminalListenerRef.current?.({ tabId: 'terminal-1' })
+    closeTerminalListenerRef.current?.({ kind: 'tab', tabId: 'terminal-1' })
 
     // The CLI/RPC caller is answered immediately, so this close must never raise a modal.
     expect(closeTerminalTabMock).toHaveBeenCalledWith('terminal-1', {

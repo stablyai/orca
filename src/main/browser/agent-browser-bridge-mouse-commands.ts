@@ -2,37 +2,17 @@ import type { BrowserMouseModifier } from './agent-browser-bridge-types'
 import { BrowserError } from './cdp-bridge'
 import {
   normalizeCdpMouseButton,
-  cdpMouseButtonMask,
+  cdpPointerButtonMask,
   cdpMouseModifierMask,
   resolveMobileTouchClickPoint
 } from './agent-browser-bridge-mouse'
 import { acquireElectronDebugger } from './electron-debugger-lease'
-import { AgentBrowserBridgeInputCommands } from './agent-browser-bridge-input-commands'
+import { sendGuestCdpCommand } from './guest-cdp-command'
+import { assertRemoteCliBrowserAccess } from '../runtime/desktop-browser-bridge/remote-cli-browser-scope'
+import { AgentBrowserBridgePointerCommands } from './agent-browser-bridge-pointer-commands'
+import { agentBrowserSetMediaArguments } from './agent-browser-set-media-arguments'
 
-export abstract class AgentBrowserBridgeMouseCommands extends AgentBrowserBridgeInputCommands {
-  // ── Mouse commands ──
-
-  async mouseMove(
-    x: number,
-    y: number,
-    worktreeId?: string,
-    browserPageId?: string
-  ): Promise<unknown> {
-    return this.enqueueTargetedCommand(worktreeId, browserPageId, async (sessionName) => {
-      return await this.execAgentBrowser(sessionName, ['mouse', 'move', String(x), String(y)])
-    })
-  }
-
-  async mouseDown(button?: string, worktreeId?: string, browserPageId?: string): Promise<unknown> {
-    return this.enqueueTargetedCommand(worktreeId, browserPageId, async (sessionName) => {
-      const args = ['mouse', 'down']
-      if (button) {
-        args.push(button)
-      }
-      return await this.execAgentBrowser(sessionName, args)
-    })
-  }
-
+export abstract class AgentBrowserBridgeMouseCommands extends AgentBrowserBridgePointerCommands {
   async mouseClick(
     x: number,
     y: number,
@@ -54,20 +34,29 @@ export abstract class AgentBrowserBridgeMouseCommands extends AgentBrowserBridge
           )
         }
         const cdpButton = normalizeCdpMouseButton(button)
-        const buttons = cdpMouseButtonMask(cdpButton)
+        const buttons = cdpPointerButtonMask(cdpButton)
         const cdpModifiers = cdpMouseModifierMask(modifiers)
         const lease = acquireElectronDebugger(wc)
+        let releaseFocusGuard = (): void => {}
         try {
-          wc.focus()
+          await this.waitForPagePaint(wc, target.webContentsId)
+          await this.browserManager.showAgentPointer(wc, { type: 'mouseMoved', x, y })
+          releaseFocusGuard = await this.focusPageForPress(wc, target.webContentsId)
+          // Hit testing can activate an element; recheck access after awaiting focus.
+          assertRemoteCliBrowserAccess(target.webContentsId)
           const point =
             cdpButton === 'left'
-              ? // Why: DOM activation can't carry Cmd/Ctrl/Alt/Shift, so modifier clicks use the adjusted point and let CDP dispatch the event.
+              ? // DOM activation drops modifiers; let CDP dispatch modifier clicks.
                 await resolveMobileTouchClickPoint(wc.debugger, x, y, radius, cdpModifiers === 0)
               : { x, y, adjusted: false, handled: false }
-          // Why: land the tap as one atomic op — separate move/down/up CLI calls visibly hover and can miss small controls.
-          // Why: mobile-emulated BrowserViews can ignore CDP mouse clicks, so the runtime may already have activated DOM controls.
+          // Mobile-emulated guests can ignore CDP clicks, so hit testing may already activate the control.
+          await this.browserManager.showAgentPointer(wc, {
+            type: 'mousePressed',
+            x: point.x,
+            y: point.y
+          })
           if (!point.handled) {
-            await wc.debugger.sendCommand('Input.dispatchMouseEvent', {
+            await sendGuestCdpCommand(wc, 'Input.dispatchMouseEvent', {
               type: 'mousePressed',
               x: point.x,
               y: point.y,
@@ -76,7 +65,7 @@ export abstract class AgentBrowserBridgeMouseCommands extends AgentBrowserBridge
               modifiers: cdpModifiers,
               clickCount: 1
             })
-            await wc.debugger.sendCommand('Input.dispatchMouseEvent', {
+            await sendGuestCdpCommand(wc, 'Input.dispatchMouseEvent', {
               type: 'mouseReleased',
               x: point.x,
               y: point.y,
@@ -96,39 +85,13 @@ export abstract class AgentBrowserBridgeMouseCommands extends AgentBrowserBridge
             }
           }
         } finally {
+          releaseFocusGuard()
           lease.release()
         }
       },
       { ensureSession: false }
     )
   }
-
-  async mouseUp(button?: string, worktreeId?: string, browserPageId?: string): Promise<unknown> {
-    return this.enqueueTargetedCommand(worktreeId, browserPageId, async (sessionName) => {
-      const args = ['mouse', 'up']
-      if (button) {
-        args.push(button)
-      }
-      return await this.execAgentBrowser(sessionName, args)
-    })
-  }
-
-  async mouseWheel(
-    dy: number,
-    dx?: number,
-    worktreeId?: string,
-    browserPageId?: string
-  ): Promise<unknown> {
-    return this.enqueueTargetedCommand(worktreeId, browserPageId, async (sessionName) => {
-      const args = ['mouse', 'wheel', String(dy)]
-      if (dx != null) {
-        args.push(String(dx))
-      }
-      return await this.execAgentBrowser(sessionName, args)
-    })
-  }
-
-  // ── Find (semantic locators) ──
 
   async find(
     locator: string,
@@ -146,8 +109,6 @@ export abstract class AgentBrowserBridgeMouseCommands extends AgentBrowserBridge
       return await this.execAgentBrowser(sessionName, args)
     })
   }
-
-  // ── Set commands ──
 
   async setDevice(name: string, worktreeId?: string, browserPageId?: string): Promise<unknown> {
     return this.enqueueTargetedCommand(worktreeId, browserPageId, async (sessionName) => {
@@ -192,14 +153,8 @@ export abstract class AgentBrowserBridgeMouseCommands extends AgentBrowserBridge
     worktreeId?: string,
     browserPageId?: string
   ): Promise<unknown> {
+    const args = agentBrowserSetMediaArguments(colorScheme, reducedMotion)
     return this.enqueueTargetedCommand(worktreeId, browserPageId, async (sessionName) => {
-      const args = ['set', 'media']
-      if (colorScheme) {
-        args.push(colorScheme)
-      }
-      if (reducedMotion) {
-        args.push(reducedMotion)
-      }
       return await this.execAgentBrowser(sessionName, args)
     })
   }

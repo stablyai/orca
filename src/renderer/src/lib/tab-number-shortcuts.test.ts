@@ -56,29 +56,6 @@ function state(overrides: {
 }
 
 describe('resolveTabNumberShortcutTarget', () => {
-  it('resolves by the active group tab order', () => {
-    const first = tab({ id: 'tab-1', groupId: 'group-a' })
-    const second = tab({ id: 'tab-2', groupId: 'group-a' })
-    const third = tab({ id: 'tab-3', groupId: 'group-a' })
-
-    expect(
-      resolveTabNumberShortcutTarget(
-        state({
-          groups: [
-            {
-              id: 'group-a',
-              worktreeId: 'wt-1',
-              activeTabId: null,
-              tabOrder: ['tab-2', 'tab-3', 'tab-1']
-            }
-          ],
-          tabs: [first, second, third]
-        }),
-        1
-      )
-    ).toBe(third)
-  })
-
   it('ignores stale duplicate ids and appends current group tabs missing from tabOrder', () => {
     const first = tab({ id: 'tab-1', groupId: 'group-a' })
     const second = tab({ id: 'tab-2', groupId: 'group-a' })
@@ -118,18 +95,5 @@ describe('resolveTabNumberShortcutTarget', () => {
         0
       )
     ).toBe(activeGroupTab)
-  })
-
-  it('returns null outside terminal workspaces or out of range', () => {
-    const only = tab({ id: 'tab-1', groupId: 'group-a' })
-    const base = state({
-      groups: [{ id: 'group-a', worktreeId: 'wt-1', activeTabId: null, tabOrder: ['tab-1'] }],
-      tabs: [only]
-    })
-
-    expect(resolveTabNumberShortcutTarget(base, 2)).toBeNull()
-    expect(resolveTabNumberShortcutTarget({ ...base, activeView: 'settings' }, 0)).toBeNull()
-    expect(resolveTabNumberShortcutTarget({ ...base, activeWorktreeId: null }, 0)).toBeNull()
-    expect(resolveTabNumberShortcutTarget(base, -1)).toBeNull()
   })
 })

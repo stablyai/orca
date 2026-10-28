@@ -26,8 +26,9 @@ export type PtySubprocessOptions = {
   command?: string
   startupCommandDelivery?: StartupCommandDelivery
   launchAgent?: TuiAgent
-  /** Explicit shell executable path/basename requested by the renderer. */
   shellOverride?: string
+  /** Unix interactive profile args are ignored for command and agent launches. */
+  terminalShellArgs?: string[]
   terminalWindowsWslDistro?: string | null
   terminalWindowsPowerShellImplementation?: 'auto' | 'powershell.exe' | 'pwsh.exe'
   isCanceled?: () => boolean
@@ -58,13 +59,7 @@ export async function checkPtySpawnHealth(): Promise<void> {
   throw lastError instanceof Error ? lastError : new Error(String(lastError))
 }
 
-/**
- * Spawns the daemon-owned PTY subprocess for a terminal session.
- *
- * Launch planning stays ahead of validation so Windows validates the effective
- * host or WSL cwd selected by the same fallback chain that native spawn uses.
- * The handle then owns all event buffering, foreground identity, and teardown.
- */
+/** Plan first so validation uses the host or WSL cwd that spawn will actually use. */
 export async function createPtySubprocess(opts: PtySubprocessOptions): Promise<SubprocessHandle> {
   const size = normalizePtySize(opts.cols, opts.rows)
   const env = createDaemonPtyEnvironment(opts)
@@ -82,7 +77,7 @@ export async function createPtySubprocess(opts: PtySubprocessOptions): Promise<S
 
   let spawned: SpawnedDaemonPty
   try {
-    spawned = spawnNativeDaemonPty({
+    spawned = await spawnNativeDaemonPty({
       shellPath: launch.shellPath,
       shellArgs: launch.shellArgs,
       spawnCwd: launch.spawnCwd,
@@ -90,9 +85,17 @@ export async function createPtySubprocess(opts: PtySubprocessOptions): Promise<S
       cols: size.cols,
       rows: size.rows,
       windowsFallbackAttempts: launch.windowsFallbackAttempts,
-      onMacosTccSpawnStrategy: opts.onMacosTccSpawnStrategy
+      // User-configured shell args can carry a command (`pwsh -Command ...`); never respawn those.
+      primaryArgsRespawnSafe:
+        !launch.startupCommandDeliveredInShellArgs && !opts.terminalShellArgs?.length,
+      onMacosTccSpawnStrategy: opts.onMacosTccSpawnStrategy,
+      ...(opts.cancelSignal ? { signal: opts.cancelSignal } : {})
     })
   } catch (error) {
+    // A cancel that lands while ConPTY's startup is awaited is a cancel, not a spawn failure.
+    if (opts.cancelSignal?.aborted) {
+      throw new TerminalAttachCanceledError(opts.sessionId)
+    }
     if (process.platform === 'win32') {
       throw formatPtySpawnError(error, launch.shellPath, launch.spawnCwd)
     }
@@ -109,6 +112,8 @@ export async function createPtySubprocess(opts: PtySubprocessOptions): Promise<S
     reportsChildExitStatus: spawned.reportsChildExitStatus,
     requestedCwd: opts.cwd,
     sessionId: opts.sessionId,
-    startupAgentRecognition: launch.startupAgentRecognition
+    startupAgentRecognition: launch.startupAgentRecognition,
+    // Claimed here, synchronously with the handle's own subscription, so no event falls between.
+    ...(spawned.claimStartupEvents ? { startupEvents: spawned.claimStartupEvents() } : {})
   })
 }

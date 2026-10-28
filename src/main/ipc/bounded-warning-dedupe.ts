@@ -1,7 +1,6 @@
 export const DEFAULT_WARNING_DEDUPE_MAX_KEYS = 256
 
-// Why: diagnostic "warn once" keys often include dynamic paths/providers; keep
-// repeated warnings quiet without retaining every stale key forever.
+// Bound dynamic path/provider keys while suppressing repeated diagnostics.
 export function shouldEmitBoundedWarning(
   warningKeys: Set<string>,
   key: string,
@@ -10,7 +9,7 @@ export function shouldEmitBoundedWarning(
   if (warningKeys.has(key)) {
     return false
   }
-  // Why: evicting during a stable max+1 scan cascades into re-emitting every warning.
+  // Eviction during repeated max+1 scans would re-emit every warning.
   if (warningKeys.size >= maxKeys) {
     return true
   }

@@ -1,5 +1,9 @@
+import {
+  publishCodexResponseTool,
+  publishCodexCompletedTool
+} from './session-scanner-codex-tool-records'
 import { normalizePromptField } from '../../shared/agent-status-field-normalization'
-import { addPreviewContent } from './session-scanner-accumulator'
+import { addSessionContent } from './session-scanner-messages'
 import type { SessionAccumulator } from './session-scanner-types'
 import { asRecord, extractContentText, extractPreviewContentText } from './session-scanner-values'
 
@@ -8,6 +12,10 @@ export function consumeCodexResponseMessage(
   payload: Record<string, unknown>,
   timestamp: unknown
 ): boolean {
+  publishCodexResponseTool(accumulator, payload, timestamp)
+  if (payload.type !== 'message') {
+    return false
+  }
   accumulator.messageCount++
   const role =
     payload.role === 'assistant' ? 'assistant' : payload.role === 'user' ? 'user' : 'unknown'
@@ -15,7 +23,7 @@ export function consumeCodexResponseMessage(
   if (setTitle) {
     accumulator.title = extractContentText(payload.content)
   }
-  addPreviewContent(accumulator, role, payload.content, timestamp)
+  addSessionContent(accumulator, role, payload.content, timestamp)
   return setTitle && Boolean(accumulator.title)
 }
 
@@ -24,6 +32,7 @@ export function consumeCodexCompletedMessage(
   payload: Record<string, unknown>,
   timestamp: unknown
 ): boolean {
+  publishCodexCompletedTool(accumulator, payload, timestamp)
   const item = asRecord(payload.item)
   if (!item) {
     return false
@@ -44,7 +53,7 @@ export function consumeCodexCompletedMessage(
       accumulator.title = extractContentText(item.content)
     }
   }
-  addPreviewContent(accumulator, isUser ? 'user' : 'assistant', item.content, timestamp)
+  addSessionContent(accumulator, isUser ? 'user' : 'assistant', item.content, timestamp)
   return setTitle && Boolean(accumulator.title)
 }
 
@@ -65,6 +74,6 @@ export function consumeCodexLegacyEventMessage(
       accumulator.title = extractContentText(payload.message)
     }
   }
-  addPreviewContent(accumulator, isUser ? 'user' : 'assistant', payload.message, timestamp)
+  addSessionContent(accumulator, isUser ? 'user' : 'assistant', payload.message, timestamp)
   return setTitle && Boolean(accumulator.title)
 }

@@ -1,19 +1,28 @@
+import { isRemoteRuntimePtyId } from '../../../../../shared/remote-runtime/remote-runtime-pty-id'
+import { makePaneKey } from '../../../../../shared/stable-pane-id'
 import { useAppStore } from '@/store'
 import { safeFit } from '@/lib/pane-manager/pane-tree-ops'
 import { bindPanePtyId, getFitOverrideForPty } from '@/lib/pane-manager/mobile-fit-overrides'
-import { inspectRuntimeTerminalProcess } from '@/runtime/runtime-terminal-inspection'
+import {
+  confirmRuntimeTerminalForegroundProcess,
+  inspectRuntimeTerminalProcess
+} from '@/runtime/runtime-terminal-inspection'
 import { isFreshNonDoneAgentStatus } from '../../../../../shared/agent-status-types'
 import { isCtrlCKeyEvent, isPlainEscapeKeyEvent } from '../agent-interrupt-inference'
 import { createAgentCompletionCoordinator } from '../agent-completion-coordinator'
 import { dispatchAgentHookTerminalLifecycle } from '../agent-hook-terminal-lifecycle'
-import { createCodexAutoApprovalHookCompletionSuppressor } from '../codex-auto-approval-notification-suppression'
+import {
+  hookLaneOwnsAgentTurnEnds,
+  hookLaneTitleTurnEndEvidence
+} from '@/hooks/agent-hook-turn-end-ownership'
+import { absorbBurstBellForHookOwnedIdle } from './agent-task-complete-notify'
 import { resolveCompatibleAgentTypeForOwner } from '../../../../../shared/agent-title-owner'
 import { registerTerminalSideEffectFactConsumer } from '../terminal-side-effect-facts-handler'
 
 import { isAgentTaskCompleteTrackingEnabled } from './agent-task-complete-settings'
 import { isAgentProcessInspectionCostly } from '../agent-process-inspection-cost'
-import { isRemoteRuntimePtyId } from './paired-parked-terminal-restore'
-import { isRemoteExecutionHostPtyId } from '../remote-execution-host-pty'
+import { isRemoteExecutionHostPtyId } from '../../../../../shared/remote-execution-host-pty-id'
+import { retireLiveAgentRowOnConfirmedProcessExit } from './confirmed-process-exit-row-retire'
 
 import type { ConnectPanePtySession } from './connect-pane-pty-session'
 
@@ -22,12 +31,6 @@ export function installTerminalKeydownFit(session: ConnectPanePtySession): void 
   session.onTerminalKeyDown = (event: KeyboardEvent): void => {
     if (isPlainEscapeKeyEvent(event)) {
       session.setPendingTerminalInputIntent('plain-escape')
-      // Why: plain Escape produces real terminal input (\x1b), so it is a
-      // genuine "user is here" signal and must still dismiss attention before
-      // the early return for interrupt-intent inference.
-      session.deps.clearTerminalTabUnread(session.deps.tabId)
-      session.deps.clearTerminalPaneUnread(session.cacheKey)
-      session.deps.clearWorktreeUnread(session.deps.worktreeId)
       return
     }
     if (isCtrlCKeyEvent(event)) {
@@ -36,10 +39,8 @@ export function installTerminalKeydownFit(session: ConnectPanePtySession): void 
       }
       session.setPendingTerminalInputIntent('ctrl-c')
     }
-    // Why: only treat keydowns that will produce real terminal input as the
-    // "user is here" signal. Modifier-only presses, autorepeat, and Cmd/Ctrl+C
-    // copy chords with an active selection must not dismiss attention on a
-    // sibling pane before the user has seen it.
+    // Why: only keydowns that will produce real terminal input reach the sample
+    // below; modifier-only presses, autorepeat, and copy chords do not.
     if (
       event.repeat ||
       event.key === 'Alt' ||
@@ -57,21 +58,12 @@ export function installTerminalKeydownFit(session: ConnectPanePtySession): void 
     ) {
       return
     }
-    // Why: user shell frameworks (bash-preexec/iTerm2) can replace Orca's
-    // OSC 133;C hook, so a manually launched agent produces no command-start
-    // signal at all. Enter at a shell-foreground prompt is the user-side
-    // equivalent; the sample is gated to panes with no live agent identity
-    // and publishes nothing for an idle shell.
+    // Enter at shell foreground backs up OSC 133;C hooks replaced by shell frameworks; confirm only panes without live agent identity.
     if (event.key === 'Enter' && !event.metaKey && !event.ctrlKey && !event.altKey) {
       session.sampleVisiblePaneForegroundAgent()
     }
-    session.deps.clearTerminalTabUnread(session.deps.tabId)
-    session.deps.clearTerminalPaneUnread(session.cacheKey)
-    session.deps.clearWorktreeUnread(session.deps.worktreeId)
   }
-  // Why: infer only from focused xterm key events. Raw PTY bytes cannot
-  // distinguish plain Escape from Alt/meta sequences, and programmatic writes
-  // should not clear agent status.
+  // Infer from focused key events; raw bytes conflate Escape with Alt/meta and programmatic writes must not clear status.
   session.terminalKeyTarget = session.pane.terminal.element ?? session.pane.container
   session.terminalKeyTargetSupportsEvents =
     typeof session.terminalKeyTarget?.addEventListener === 'function' &&
@@ -108,11 +100,7 @@ export function installTerminalKeydownFit(session: ConnectPanePtySession): void 
   // before this PTY bound (newborn race). Null disables the guard (fail-safe).
   session.activePanePtyBindingBoundAt = null
 
-  // Why: with main side-effect authority on, the pane's title/bell/agent
-  // policy callbacks consume pty:sideEffect facts instead of transport byte
-  // parsers (which stay unregistered) — same policy code, single consumer.
-  // restoreTitleOnRegister replaces the eager-replay title restore: main's
-  // title-only snapshot carries the no-attention-replay rule.
+  // Main-authority facts replace byte parsers as the single policy consumer; title snapshots restore metadata without attention replay.
   session.unregisterSideEffectFactConsumer = null
   session.registerSideEffectFactConsumerForPty = (
     ptyId: string,
@@ -134,10 +122,13 @@ export function installTerminalKeydownFit(session: ConnectPanePtySession): void 
         onPrLink: (link) =>
           useAppStore
             .getState()
-            .observeTerminalGitHubPullRequestLink(session.deps.worktreeId, link),
-        // Why: the Command Code settle policy stays here — the done settle
-        // timer must consult the live store row (which hook events and
-        // renderer seeds also write), so main only emits scrape facts.
+            .observeTerminalGitHubPullRequestLink(session.deps.worktreeId, link, {
+              tabId: session.deps.tabId,
+              paneKey: makePaneKey(session.deps.tabId, session.pane.leafId),
+              ptyId: session.transport.getPtyId(),
+              executionHostId: session.transport.getExecutionHostId?.() ?? undefined
+            }),
+        // Pane policy owns Command Code settling against the live row; main supplies scrape facts only.
         onCommandCodeWorking: session.seedCommandCodeOutputWorkingStatus,
         onCommandCodeDone: session.scheduleCommandCodeOutputDoneStatus,
         ...(session.shouldOwnAgentStatusInRenderer
@@ -161,8 +152,7 @@ export function installTerminalKeydownFit(session: ConnectPanePtySession): void 
     session.remoteOutputFactConsumerPtyId = null
   }
   session.clearPanePtyFitBinding = (): void => {
-    // Why: fit bindings live in a module-level map, so pane teardown must
-    // clear them explicitly instead of relying on DOM removal.
+    // Clear module-level fit bindings explicitly; DOM removal cannot release them.
     bindPanePtyId(session.pane.id, null, session.deps.tabId)
     session.visibleRemoteViewportClaimPtyId = null
     session.pendingVisibleRemoteViewportClaim = false
@@ -176,14 +166,25 @@ export function installTerminalKeydownFit(session: ConnectPanePtySession): void 
     paneKey: session.cacheKey,
     statusLane: 'pty',
     getPtyId: () => session.transport.getPtyId(),
-    isRemotePtyId: (ptyId) =>
-      Boolean(isRemoteExecutionHostPtyId(ptyId) || isRemoteRuntimePtyId(ptyId)),
+    isRemotePtyId: isRemoteExecutionHostPtyId,
     getExpectedIncarnationId: () => session.remotePtyIncarnationId ?? null,
-    getSettings: () => useAppStore.getState().settings,
     inspectProcess: inspectRuntimeTerminalProcess,
+    confirmForegroundProcess: confirmRuntimeTerminalForegroundProcess,
     dispatchHookLifecycle: (payload) =>
       dispatchAgentHookTerminalLifecycle(session.cacheKey, payload),
-    shouldSuppressProcessReplacementCompletion: (_exited, replacement) => {
+    titleTurnEndEvidence: (title, foregroundAgent) =>
+      hookLaneTitleTurnEndEvidence(
+        session.cacheKey,
+        session.transport.getPtyId(),
+        title,
+        foregroundAgent
+      ),
+    onHookOwnedTitleIdle: () => absorbBurstBellForHookOwnedIdle(session),
+    shouldSuppressProcessReplacementCompletion: (exited, replacement) => {
+      // Why: the hook lane owns this pane's turn ends and its last turn ended, so quitting ends none.
+      if (hookLaneOwnsAgentTurnEnds(session.cacheKey, session.transport.getPtyId(), exited.agent)) {
+        return true
+      }
       const currentStatus = useAppStore.getState().agentStatusByPaneKey[session.cacheKey]
       const currentAgentForReplacement = resolveCompatibleAgentTypeForOwner(
         currentStatus?.agentType,
@@ -194,6 +195,9 @@ export function installTerminalKeydownFit(session: ConnectPanePtySession): void 
       )
     },
     shouldSuppressConfirmedProcessExitCompletion: (exited) => {
+      if (hookLaneOwnsAgentTurnEnds(session.cacheKey, session.transport.getPtyId(), exited.agent)) {
+        return true
+      }
       const currentStatus = useAppStore.getState().agentStatusByPaneKey[session.cacheKey]
       const currentAgentForExited = resolveCompatibleAgentTypeForOwner(
         currentStatus?.agentType,
@@ -207,6 +211,12 @@ export function installTerminalKeydownFit(session: ConnectPanePtySession): void 
         currentStatus.agentType !== 'unknown' &&
         currentAgentForExited !== exited.agent
       )
+    },
+    // Why: the pane's only re-derivation of a process read where the shell emits no command marks.
+    onForegroundAgentExited: (exited) => {
+      session.paneForegroundAgentTracker?.onProcessExitConfirmed(exited)
+      // Why: not behind the tracker's process-read guard, so hook-identified panes retire too.
+      retireLiveAgentRowOnConfirmedProcessExit(session, exited)
     },
     dispatchCompletion: (title, meta) => {
       if (meta?.source === 'process-exit') {
@@ -233,17 +243,16 @@ export function installTerminalKeydownFit(session: ConnectPanePtySession): void 
       }),
     shouldPollProcessCadence: () => {
       const ptyId = session.transport.getPtyId()
-      if (ptyId && (isRemoteExecutionHostPtyId(ptyId) || isRemoteRuntimePtyId(ptyId))) {
+      if (isRemoteExecutionHostPtyId(ptyId)) {
         return false
       }
       return isAgentTaskCompleteTrackingEnabled() && session.deps.isVisibleRef.current
     },
     shouldPollNoEvidenceProcessCadence: () => {
       const ptyId = session.transport.getPtyId()
-      return !(ptyId && (isRemoteExecutionHostPtyId(ptyId) || isRemoteRuntimePtyId(ptyId)))
+      return !isRemoteExecutionHostPtyId(ptyId)
     },
-    isProcessInspectionCostly: () =>
-      isAgentProcessInspectionCostly(navigator.userAgent, session.transport.getPtyId()),
+    isProcessInspectionCostly: () => isAgentProcessInspectionCostly(session.transport.getPtyId()),
     isLive: () => {
       if (session.disposed) {
         return false
@@ -252,13 +261,6 @@ export function installTerminalKeydownFit(session: ConnectPanePtySession): void 
         return true
       }
       return (useAppStore.getState().ptyIdsByTabId[session.deps.tabId] ?? []).length > 0
-    },
-    shouldSuppressHookCompletion: createCodexAutoApprovalHookCompletionSuppressor(
-      session.cacheKey,
-      () => ({
-        tabId: session.deps.tabId,
-        ...(session.launchToken ? { launchToken: session.launchToken } : {})
-      })
-    )
+    }
   })
 }

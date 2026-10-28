@@ -50,8 +50,7 @@ describe('diff section layout', () => {
     ).toBe(188)
   })
 
-  // Why: every viewer's virtualizer must estimate the same height DiffSectionItem
-  // renders for these rows, or each large row drifts ~100px per measure pass.
+  // Match actual fallback height in every viewer or repeated measurement drifts virtualized rows.
   it('estimates deferred and in-flight large rows at the rendered fallback height', () => {
     expect(getDiffSectionRowEstimatedHeight(largeTextSection, undefined)).toBe(188)
     expect(getDiffSectionRowEstimatedHeight(largeTextSection, 3_800_000)).toBe(188)
@@ -110,8 +109,10 @@ describe('diff section layout', () => {
   })
 
   it('estimates line-count height without allocating split arrays', () => {
-    const originalSplit = String.prototype.split
-    const patchedSplit = function patchedSplit(
+    // Method-shaped type: a call-signature capture would reject `split`'s splitter-object overload.
+    const originalSplit: { split(separator: unknown, limit?: number): string[] }['split'] =
+      String.prototype.split
+    const patchedSplit: typeof String.prototype.split = function patchedSplit(
       this: string,
       separator?: unknown,
       limit?: number
@@ -119,9 +120,8 @@ describe('diff section layout', () => {
       if (String(this).startsWith('line 0')) {
         throw new Error('layout should not split full diff content')
       }
-      const args = limit === undefined ? [separator] : [separator, limit]
-      return Reflect.apply(originalSplit, this, args) as string[]
-    } as typeof String.prototype.split
+      return originalSplit.call(this, separator, limit)
+    }
     String.prototype.split = patchedSplit
 
     try {

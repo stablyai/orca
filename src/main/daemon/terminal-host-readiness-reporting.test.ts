@@ -1,14 +1,9 @@
+import './mock-descendant-sweep'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { SubprocessHandle } from './session-subprocess-handle'
 import { TerminalHost } from './terminal-host'
 
-/**
- * Why this test exists: the shell-ready barrier used to report a timeout with
- * console.warn, and the daemon is spawned detached with stdio 'ignore', so that
- * output reached nobody. The diagnostic looked present in code and was absent in
- * production. Asserting it at the barrier alone would not have caught that --
- * the callback has to survive every hop out to the daemon's file log.
- */
+/** Verify the diagnostic sink reaches the host: detached daemon console output is discarded. */
 function createSubprocess(): SubprocessHandle & { exit: () => void } {
   let onExit: ((code: number) => void) | null = null
   return {
@@ -69,8 +64,7 @@ describe('TerminalHost readiness reporting', () => {
     expect(events.map((entry) => entry.event)).toContain('shell-ready-timeout')
     const timeout = events.find((entry) => entry.event === 'shell-ready-timeout')
     expect(timeout?.details).toMatchObject({ sessionId: 'session-readiness', timeoutMs: 15_000 })
-    // Why a basename: the shell path can carry a home dir, and the daemon log is
-    // documented to hold terse fields only.
+    // Shell paths may contain home directories; diagnostics retain only the basename.
     expect(timeout?.details.shell).toBe('zsh')
   })
 })

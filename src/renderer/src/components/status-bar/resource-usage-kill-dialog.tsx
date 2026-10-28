@@ -37,7 +37,8 @@ export function renderResourceUsageKillDialog({
       }}
     >
       <DialogContent
-        className="max-w-md"
+        className="z-[80] max-w-md"
+        overlayClassName="z-[80]"
         showCloseButton={!killing}
         onPointerDownOutside={(e) => {
           if (killing) {

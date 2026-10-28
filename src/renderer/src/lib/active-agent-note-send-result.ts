@@ -1,3 +1,5 @@
+import { agentSessionWriteNoticeEnglish } from '../../../shared/agent-session-refusal-notice'
+
 export type ActiveAgentNotesSendStatus =
   | 'sent'
   | 'empty'
@@ -8,6 +10,8 @@ export type ActiveAgentNotesSendStatus =
   | 'not-ready'
   | 'not-writable'
   | 'partial-submit-failed'
+  /** Sent, but nobody could confirm the agent got it: the host may hold it. */
+  | 'unconfirmed'
 
 export type ActiveAgentNotesSendFailureCode =
   | 'empty'
@@ -33,6 +37,7 @@ export type ActiveAgentNotesSendFailureCode =
   | 'submit-send-error'
   | 'runtime-unverifiable'
   | 'runtime-timeout'
+  | 'session-send-refused'
 
 export type ActiveAgentNotesSendResult = {
   status: ActiveAgentNotesSendStatus
@@ -69,12 +74,15 @@ export function activeAgentNotesSendFailureMessage(
       message = `The ${target} agent was not ready for input yet.`
       break
     case 'not-writable':
-      message = `The ${target} terminal did not accept the notes.`
+      message = `The ${target} agent did not accept the notes.`
       break
     case 'partial-submit-failed':
       message = options.explicitTarget
         ? 'The notes may already be pasted in the selected terminal, but Orca could not submit them.'
         : 'The notes may already be pasted in the active terminal, but Orca could not submit them.'
+      break
+    case 'unconfirmed':
+      message = agentSessionWriteNoticeEnglish(['sendOutcomeLost'])
       break
     case 'sent':
       message = ''

@@ -7,8 +7,9 @@ export type HostedReviewCreationProvider =
   | 'azure-devops'
   | 'gitea'
 
+// Accept arbitrary wire strings so newer hosts’ unknown provider tokens fail the creation gate safely.
 export function supportsHostedReviewCreation(
-  provider: HostedReviewProvider | null | undefined
+  provider: string | null | undefined
 ): provider is HostedReviewCreationProvider {
   return (
     provider === 'github' ||

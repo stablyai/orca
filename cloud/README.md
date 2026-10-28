@@ -10,6 +10,10 @@ This directory is an independent pnpm workspace inside the Orca monorepo. Run
 its commands from `cloud/`, not the repository root. The source is covered by
 the repository's root [MIT license](../LICENSE).
 
+The [2026-10-21 security review](docs/relay-security-2026-10-21.md) records
+dependency/container scans, remaining upstream advisories, CI coverage, and
+the validation required before rolling out the updated images and host pins.
+
 ## Packages
 
 - `packages/relay-contract`: the wire contract shared by the relay, the
@@ -21,50 +25,54 @@ the repository's root [MIT license](../LICENSE).
   mutation lease, the Terraform checkout, and the narrow Compute mutation used
   when a registered target is superseded. The workflow that calls it holds read
   and invoke rights only, never those mutation permissions.
-- `apps/relay-ops`: the relay operations console and the incident monitor
-  behind `pnpm ops:relay`, `pnpm incident:relay`, and
-  `pnpm incident:relay-preflight`.
+- `apps/push` and `packages/push-contract`: the mobile push gateway that holds
+  the APNs key and sends to phones through APNs and FCM, and its wire contract.
+  Deployment and operations are owned by the private `stablyai/orca-cloud` repository.
+- `apps/connector` and `packages/connector-contract`: the Slack connector service
+  (experimental). A signed-in Orca calls it with short-lived connector tokens
+  from the auth service, checked the way the relay checks relay tokens.
+  Deployed like push from the private repository.
 
-## Infrastructure and operations
+## Mobile push gateway
 
-- `infra/terraform`: the relay Terraform root. It owns the cells, the director,
-  the shared Cloud SQL instance, DNS, observability, and every GitHub Workload
-  Identity provider the relay workflows authenticate through. `backend/` holds
-  the per-environment backend configuration and `environments/` the tfvars.
-  Drive it through `pnpm infra:init`, `pnpm infra:plan`, and `pnpm infra:apply`.
-- `dev/scripts`: the deploy, capacity, admission, rehome, monitoring, and load
-  scripts the workflows call, plus the contract tests that pin each workflow
-  and Terraform surface. Run them with `pnpm test`.
-- `dev/contracts` and `dev/fixtures`: the checked-in data those contract tests
-  read, including the Terraform root partition.
-- `docs/`: the relay runbooks, capacity-testing guide, incident-monitor
-  reference, and the workflow variable reference in `docs/relay-workflows.md`.
+`apps/push` is a separate Cloud Run service from the relay. Phones never hold an
+Orca credential for it: the desktop host authenticates with the same X25519
+key it uses for the relay, answering an encrypted challenge to mint a 24 hour
+session, then registers each paired phone's native push token and asks the
+gateway to push. The gateway queues each event as its own notification,
+enforces per-host quotas and request limits, and retires a
+registration as soon as Apple or Google reports the token unregistered.
+Provider push is the only ordinary mobile OS-banner path. The notification
+socket is retained only for live dismissal and reconnect tray reconciliation;
+it never creates or recovers banners. Desktop notification categories remain
+authoritative.
+Each delivery is persisted as one notification event. Before deploying an
+incompatible queue format, stop all older push gateway revisions and clear only
+unpublished push delivery fixtures; no queue preservation or migration is required.
+FCM notification messages are inherently collapsible while offline and have a
+small concurrent collapse-key budget, so every pending alert is not guaranteed.
 
-## Workflows
+Storage follows the relay pattern: PostgreSQL in production, SQLite for tests
+and local development. Configure it with `ORCA_PUSH_PUBLIC_URL`, `ORCA_PUSH_FCM_PROJECT_ID`,
+`ORCA_PUSH_DATABASE_URL`, the three APNs variables (`ORCA_PUSH_APNS_KEY`,
+`ORCA_PUSH_APNS_KEY_ID`, `ORCA_PUSH_APPLE_TEAM_ID`, all three or none), and
+optionally `ORCA_PUSH_APNS_TOPIC`. The FCM credential comes from
+the runtime service account, so no key material is configured for Android. See
+[push gateway operations](https://github.com/stablyai/orca-cloud/blob/main/cloud/docs/push-gateway.md) for deployment and recovery.
 
-The 24 `.github/workflows/cloud-*.yml` workflows are the relay's deploy and
-operate surface: publish and deploy the director, roll GCE cell capacity,
-operate Asia admission and regional rehoming, prove staging capacity, monitor
-production, and power staging up and down. `.github/actions/cloud-sql-rollout-lease`
-is the compare-and-swap lease that serializes every rollout against the shared
-Cloud SQL instance.
+Logging is aggregate counters only. Tokens, notification titles, notification
+bodies, and full host fingerprints never reach a log line.
 
-Every one of them is inert. Each top-level job is gated on
-`vars.ORCA_CLOUD_OPERATIONS_ENABLED == 'true'`, a repository variable that is
-unset here, so the two scheduled triggers and every manual dispatch skip
-without running a step. Only the repository owner, holding the GCP identities
-these workflows authenticate as, can turn them on.
+## Deployment configuration
 
-`Cloud Verify` is not gated. It builds, typechecks, lints, tests, secret-scans,
-and validates the relay Terraform on every change under `cloud/`, and it runs
-on fork pull requests, so it configures no backend and holds no credential.
+The relay runtime and wire contracts are public. Production and staging Terraform,
+backend configuration, operator tools, runbooks, broker image assembly, and deployment
+workflows live in the private `stablyai/orca-cloud` repository. That repository pins
+an immutable public source revision and combines it with its deployment configuration.
 
-## What is not here
-
-The `terraform-foundation` and `terraform-apps` roots and the API and auth
-services live in the private `stablyai/orca-cloud` repository. Scripts and
-tests that spanned both trees were narrowed to the relay side rather than
-carrying a dangling reference.
+`Cloud Verify` here builds and tests public runtime code, audits dependencies, scans
+relay and push images, and checks for secrets without cloud credentials. Private CI
+also validates Terraform, scans the SQL proxy and broker, and runs deployment contracts.
 
 ## Local development
 

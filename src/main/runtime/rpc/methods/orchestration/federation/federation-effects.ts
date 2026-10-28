@@ -29,7 +29,8 @@ export function appendFederationTerminalEffects(
           : terminal.handle === setupHandle
             ? 'setup'
             : 'configured_tab',
-      action: terminal.handle === agentHandle ? 'reused_agent_terminal' : 'created',
+      // Agent-first creation made every listed terminal; lifecycle verbs do not distinguish agent roles.
+      action: 'created',
       id: terminal.handle,
       tabId: terminal.tabId,
       leafId: terminal.leafId

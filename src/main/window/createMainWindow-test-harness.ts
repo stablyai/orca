@@ -27,7 +27,11 @@ export const notificationMock: Mock<(...args: unknown[]) => { show: MainWindowSp
 export const powerMonitorOnMock: MainWindowSpy = vi.fn()
 export const powerMonitorRemoveListenerMock: MainWindowSpy = vi.fn()
 export const routePartitionAllowedMock: Mock<(partition: string) => boolean> = vi.fn(() => false)
-export const isMock = { dev: false }
+export const appMock: { isPackaged: boolean; on: MainWindowSpy; removeListener: MainWindowSpy } = {
+  isPackaged: true,
+  on: vi.fn(),
+  removeListener: vi.fn()
+}
 export const macosTahoeMock = { value: false }
 
 type IpcMainMock = {
@@ -45,7 +49,7 @@ const ipcMainMock: IpcMainMock = {
 }
 
 export type ElectronModuleMock = {
-  app: { on: MainWindowSpy; removeListener: MainWindowSpy }
+  app: typeof appMock
   BrowserWindow: typeof browserWindowMock
   ipcMain: IpcMainMock
   Menu: { buildFromTemplate: typeof buildFromTemplateMock }
@@ -66,11 +70,10 @@ export type BrowserManagerModuleMock = {
   }
 }
 
-// Why: vi.mock factories are hoisted per test file, so each file calls these builders instead of
-// re-declaring the shared electron surface.
+// vi.mock factories are hoisted per suite; builders reuse the Electron surface without duplicating it.
 export function electronModuleMock(): ElectronModuleMock {
   return {
-    app: { on: vi.fn(), removeListener: vi.fn() },
+    app: appMock,
     BrowserWindow: browserWindowMock,
     ipcMain: ipcMainMock,
     Menu: { buildFromTemplate: buildFromTemplateMock },
@@ -82,12 +85,6 @@ export function electronModuleMock(): ElectronModuleMock {
       getDisplayMatching: () => ({ scaleFactor: 2 })
     },
     shell: { openExternal: openExternalMock }
-  }
-}
-
-export function electronToolkitUtilsMock() {
-  return {
-    is: isMock
   }
 }
 
@@ -129,7 +126,7 @@ export function resetMainWindowMocks(): void {
   powerMonitorRemoveListenerMock.mockReset()
   routePartitionAllowedMock.mockReset()
   routePartitionAllowedMock.mockReturnValue(false)
-  isMock.dev = false
+  appMock.isPackaged = true
   macosTahoeMock.value = false
   ipcMainMock.on.mockReset()
   ipcMainMock.removeListener.mockReset()
@@ -145,4 +142,47 @@ export function withPlatform<T>(platform: NodeJS.Platform, run: () => T): T {
   } finally {
     Object.defineProperty(process, 'platform', { configurable: true, value: original })
   }
+}
+
+export type RendererRecoveryWindowHarness = {
+  browserWindowInstance: { loadFile: Mock<() => Promise<void>>; loadURL: Mock<() => Promise<void>> }
+  windowHandlers: Record<string, (...args: any[]) => void>
+}
+
+/** A main window whose webContents events land in `windowHandlers` for suites that drive renderer recovery. */
+export function createRendererRecoveryWindowHarness(): RendererRecoveryWindowHarness {
+  const windowHandlers: RendererRecoveryWindowHarness['windowHandlers'] = {}
+  const webContents = {
+    id: 143,
+    getURL: vi.fn(() => 'file:///opt/orca/renderer/index.html'),
+    isDestroyed: vi.fn(() => false),
+    on: vi.fn((event: string, handler: (...args: unknown[]) => void) => {
+      windowHandlers[event] = handler
+    }),
+    setZoomLevel: vi.fn(),
+    setBackgroundThrottling: vi.fn(),
+    invalidate: vi.fn(),
+    setWindowOpenHandler: vi.fn(),
+    send: vi.fn()
+  }
+  const browserWindowInstance = {
+    webContents,
+    on: vi.fn((event: string, handler: (...args: unknown[]) => void) => {
+      windowHandlers[event] = handler
+    }),
+    isDestroyed: vi.fn(() => false),
+    isMaximized: vi.fn(() => true),
+    isFullScreen: vi.fn(() => false),
+    getSize: vi.fn(() => [1200, 800]),
+    setSize: vi.fn(),
+    maximize: vi.fn(),
+    show: vi.fn(),
+    loadFile: vi.fn(() => Promise.resolve()),
+    loadURL: vi.fn(() => Promise.resolve())
+  }
+  browserWindowMock.mockImplementation(function () {
+    return browserWindowInstance
+  })
+
+  return { browserWindowInstance, windowHandlers }
 }

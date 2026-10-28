@@ -48,6 +48,5 @@ export function shouldPreferSidebarStatusDropTarget(args: {
     return false
   }
   const sourceStatus = getWorkspaceStatusFromGroupKey(args.sourceGroupKey, args.workspaceStatuses)
-  // Why: overlapping edge zones — the section under the pointer must win so guide and drop agree.
   return sourceStatus !== null && args.target.status !== sourceStatus
 }

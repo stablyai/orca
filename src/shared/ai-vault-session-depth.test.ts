@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import type { AiVaultListResult, AiVaultSession } from './ai-vault-types'
 import {
   aiVaultScanLimit,
@@ -64,7 +64,7 @@ describe('Agent Session History depth', () => {
     expect(aiVaultScanLimit({ unlimited: true })).toBe(Number.POSITIVE_INFINITY)
   })
 
-  it('keeps the newest global and scoped sessions when truncating', () => {
+  it('keeps every scoped session and the newest out-of-scope ones when truncating', () => {
     const loaded = result([
       session('global-1', '/other', 6),
       session('global-2', '/other', 5),
@@ -78,8 +78,77 @@ describe('Agent Session History depth', () => {
       'global-1',
       'global-2',
       'scoped-1',
-      'scoped-2'
+      'scoped-2',
+      'scoped-3'
+    ])
+    expect(truncateAiVaultListResult(loaded, 2).sessions.map(({ id }) => id)).toEqual([
+      'global-1',
+      'global-2'
     ])
     expect(truncateAiVaultListResult(loaded, 'unlimited')).toBe(loaded)
+  })
+
+  // Repeat opens served from a cache used to drop to `depth` scoped rows (341 -> 250 in QA).
+  it('returns a scan result with more scoped rows than the depth unchanged', () => {
+    const scanned = result([
+      ...Array.from({ length: 3 }, (_, i) => session(`global-${i}`, '/other', 100 - i)),
+      ...Array.from({ length: 5 }, (_, i) => session(`codex-${i}`, '/repo', 50 - i)),
+      ...Array.from({ length: 4 }, (_, i) => session(`claude-${i}`, '/repo/app', 40 - i))
+    ])
+
+    const cachedHit = truncateAiVaultListResult(scanned, 3, ['/repo'])
+    expect(cachedHit.sessions).toEqual(scanned.sessions)
+    expect(truncateAiVaultListResult(cachedHit, 3, ['/repo']).sessions).toEqual(scanned.sessions)
+  })
+})
+
+describe('Agent Session History scope truncation', () => {
+  it('normalizes scope roots and candidate cwd once per truncation pass', () => {
+    const loaded = result(
+      Array.from({ length: 1000 }, (_, i) => session(`id-${i}`, `/other/${i}`, i))
+    )
+    const scopes = Array.from({ length: 100 }, (_, i) => `/repo/${i}`)
+    const normalize = vi.spyOn(String.prototype, 'normalize')
+    let selected: AiVaultListResult
+    try {
+      selected = truncateAiVaultListResult(loaded, 10, scopes)
+      expect(normalize.mock.calls.length).toBeLessThanOrEqual(1100)
+    } finally {
+      normalize.mockRestore()
+    }
+    expect(selected.sessions).toEqual(loaded.sessions.slice(0, 10))
+  })
+
+  it('selects scoped sessions across host path spellings', () => {
+    const cases: [scope: string, cwd: string, kept: boolean][] = [
+      ['C:\\Users\\Ada\\repo', 'c:/users/ada/repo/app', true],
+      ['C:/Users/Ada/repo/', 'C:\\Users\\Ada\\repo', true],
+      ['C:\\Users\\Ada\\repo', 'C:\\Users\\Ada\\repo-other', false],
+      ['//wsl.localhost/Ubuntu/home/Ada/Repo', '//wsl$/Ubuntu/home/Ada/Repo/App', true],
+      ['//wsl.localhost/Ubuntu/home/ada/repo', '//wsl.localhost/Debian/home/ada/repo', false],
+      ['/Users/ada/repo', '/Users/ada/repo//app/', true],
+      ['/Users/ada/repo', '/Users/ada/repository', false],
+      ['/', '/anywhere', true]
+    ]
+    for (const [scope, cwd, expected] of cases) {
+      const loaded = result([session('scoped', cwd!, 0)])
+      const selected = truncateAiVaultListResult(loaded, 0, [scope!])
+      expect({ scope, cwd, kept: selected.sessions.length === 1 }).toEqual({
+        scope,
+        cwd,
+        kept: expected
+      })
+    }
+  })
+})
+
+describe('truncateAiVaultListResult symlinked scope', () => {
+  it('keeps a session whose host alias is in scope when depth drops out-of-scope rows', () => {
+    const linked = { ...session('linked', '/data/src/api', 1), cwdAliases: ['/home/me/work/api'] }
+    const other = session('other', '/elsewhere', 2)
+
+    const truncated = truncateAiVaultListResult(result([other, linked]), 0, ['/home/me/work/api'])
+
+    expect(truncated.sessions.map((entry) => entry.id)).toEqual(['linked'])
   })
 })

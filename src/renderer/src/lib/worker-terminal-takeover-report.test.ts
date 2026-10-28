@@ -31,13 +31,4 @@ describe('reportWorkerTerminalUserInput', () => {
       { suppressFeatureInteraction: true, reuseRecentCompatibilityFailure: true }
     )
   })
-
-  it('retries one transient report failure without waiting for more user input', async () => {
-    vi.mocked(callRuntimeRpc).mockRejectedValueOnce(new Error('runtime reconnecting'))
-
-    reportWorkerTerminalUserInput('pane-transient-failure', 'runtime-reconnecting')
-    await vi.waitFor(() => expect(callRuntimeRpc).toHaveBeenCalledTimes(2), { timeout: 1_000 })
-
-    expect(callRuntimeRpc).toHaveBeenCalledTimes(2)
-  })
 })

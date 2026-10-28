@@ -4,6 +4,7 @@ import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import {
   CODEX_CREDENTIAL_ABSENCE_GRACE_MS,
+  CODEX_CREDENTIAL_ABSENCE_MAX_TRACKED_PATHS,
   CodexCredentialAbsenceGrace
 } from './codex-credential-absence-grace'
 
@@ -23,6 +24,17 @@ describe('CodexCredentialAbsenceGrace', () => {
 
   afterEach(() => {
     rmSync(dir, { recursive: true, force: true })
+  })
+
+  it('bounds unresolved credential paths', () => {
+    const grace = new CodexCredentialAbsenceGrace()
+    for (let index = 0; index < CODEX_CREDENTIAL_ABSENCE_MAX_TRACKED_PATHS + 4; index += 1) {
+      expect(grace.assess(join(dir, `account-${index}.json`), 1_000)).toMatchObject({
+        durable: false
+      })
+    }
+
+    expect(grace.trackedPathCountForTests()).toBe(CODEX_CREDENTIAL_ABSENCE_MAX_TRACKED_PATHS)
   })
 
   it('treats a torn mid-write read as transient until it outlives the grace window', () => {
@@ -48,7 +60,6 @@ describe('CodexCredentialAbsenceGrace', () => {
     writeFileSync(authPath, VALID_AUTH, 'utf-8')
     expect(grace.assess(authPath, 2_000)).toEqual({ state: 'present', durable: true })
 
-    // A later absence starts a fresh grace window instead of inheriting the old clock.
     rmSync(authPath)
     expect(grace.assess(authPath, 100_000)).toEqual({ state: 'missing', durable: false })
     expect(grace.assess(authPath, 100_000 + CODEX_CREDENTIAL_ABSENCE_GRACE_MS)).toEqual({

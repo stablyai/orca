@@ -3,7 +3,10 @@ import { LOCAL_EXECUTION_HOST_ID, type ExecutionHostId } from '../../../shared/e
 import { parseWorkspaceKey } from '../../../shared/workspace-scope'
 import type { PersistedState } from '../../../shared/persisted-state-types'
 import type { WorkspaceSessionState } from '../../../shared/workspace-session-state-types'
-import { removeWorkspaceSessionOwners } from '../restoring-sessions/session-owner-removal'
+import {
+  removeWorkspaceSessionOwners,
+  withoutWslMoveFrozenOwners
+} from '../restoring-sessions/session-owner-removal'
 import {
   getExecutionHostIdFromWorktreeHostIdentity,
   getWorktreeIdFromHostIdentity,
@@ -18,7 +21,7 @@ export function pruneWorktreeStateForRepo(
   pruneMobileClientTabSelections: (matchesWorktreeId: (worktreeId: string) => boolean) => void
 ): void {
   const prefix = `${id}::`
-  // Why snapshot up front: the first loop deletes metas, so reading meta.hostId live later would misclassify an SSH worktree as local.
+  // Capture host stamps before deletion or later checks could misclassify SSH rows as local.
   const hostMembership = new Map<string, boolean>()
   const belongsToHost = (key: string): boolean => {
     if (!key.startsWith(prefix)) {
@@ -31,24 +34,20 @@ export function pruneWorktreeStateForRepo(
     if (cached !== undefined) {
       return cached
     }
-    // Why default to local: metas without hostId predate host stamping, so a host-scoped prune skips them rather than risk deleting another host's live meta.
+    // Unstamped legacy metadata defaults local; remote pruning cannot claim it safely.
     const metaHostId = state.worktreeMeta[key]?.hostId ?? LOCAL_EXECUTION_HOST_ID
     const result = metaHostId === hostId
     hostMembership.set(key, result)
     return result
   }
-  // Why: leftover session owner keys re-materialize into worktreeMeta next launch as orphaned
-  // "unknown" workspaces. Owner keys carry no host and can repeat across partitions, so collect every
-  // prefix match (before the worktreeMeta deletes below) and let the per-partition gating decide.
+  // Collect owner keys before deleting metadata; per-partition gates prevent orphan resurrection across hosts.
   const ownerKeysToPrune = new Set<string>()
   const collectPrefixedKeys = (keys: Iterable<string>): void => {
     for (const key of keys) {
       const rawKey = isWorktreeHostIdentity(key) ? getWorktreeIdFromHostIdentity(key) : key
       const keyHost = isWorktreeHostIdentity(key) ? key.slice(0, key.indexOf('|')) : null
-      // Why: bare keys are scoped by the per-partition gating below; only host-qualified
-      // keys can sit in another host's partition and need host-matching at collection time.
-      // Why the empty-host arm: the host split parks the canonical unknown-host form (`|<id>`) in
-      // the local partition, so a local prune must claim it or the orphan restores next launch.
+      // Bare keys defer host proof to partitions; qualified keys require matching hosts here.
+      // Empty qualifiers live in local and must be claimed by local pruning to prevent resurrection.
       const belongsToPrunedHost =
         hostId === null ||
         keyHost === null ||
@@ -59,9 +58,7 @@ export function pruneWorktreeStateForRepo(
       }
     }
   }
-  // Why the pane-keyed records contribute owner keys: they are pruned by the worktreeId they name,
-  // not by their own key, so a worktree with no meta and no visit row would otherwise keep its
-  // sleeping agents and tombstones forever -- and keep re-seeding the orphan sweep every load.
+  // Pane-keyed evidence can own workspaces with no metadata/visit rows; collect it to avoid permanent orphans.
   const collectScannedRecordOwners = (session: WorkspaceSessionState | undefined): void => {
     collectPrefixedKeys(Object.keys(session?.lastVisitedAtByWorktreeId ?? {}))
     collectPrefixedKeys(
@@ -72,6 +69,11 @@ export function pruneWorktreeStateForRepo(
     collectPrefixedKeys(
       Object.values(session?.terminalSurfaceTombstonesByPaneKey ?? {}).map(
         (tombstone) => tombstone.worktreeId
+      )
+    )
+    collectPrefixedKeys(
+      Object.values(session?.closedTerminalTabTombstonesByTabId ?? {}).map(
+        (record) => record.worktreeId
       )
     )
   }
@@ -94,13 +96,14 @@ export function pruneWorktreeStateForRepo(
     }
   }
   pruneUnreferencedWorktreeIdentityMeta(state)
-  // Why: a host-scoped prune must touch only that host's session (legacy blob = local, one partition
-  // per remote host); pruning every partition would wipe a surviving host's tabs and sleeping agents
-  // for a shared repo id/path. A full removal (hostId === null) still clears every host.
+  // Host-scoped removal preserves sibling sessions; only full removal may clear all partitions.
   const pruneLegacyLocalSession = hostId === null || hostId === LOCAL_EXECUTION_HOST_ID
   const pruneAllHostPartitions = hostId === null
   if (pruneLegacyLocalSession) {
-    state.workspaceSession = removeWorkspaceSessionOwners(state.workspaceSession, ownerKeysToPrune)!
+    state.workspaceSession = removeWorkspaceSessionOwners(
+      state.workspaceSession,
+      withoutWslMoveFrozenOwners(ownerKeysToPrune)
+    )!
   }
   if (state.workspaceSessionsByHostId) {
     for (const [partitionHostId, session] of Object.entries(state.workspaceSessionsByHostId)) {

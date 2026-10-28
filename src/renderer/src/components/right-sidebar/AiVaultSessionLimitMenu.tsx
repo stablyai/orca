@@ -45,9 +45,7 @@ export function AiVaultSessionLimitMenu({
         <DropdownMenuRadioGroup
           value={String(sessionLimit)}
           onValueChange={(value) =>
-            onSessionLimitChange(
-              value === 'unlimited' ? 'unlimited' : (Number(value) as AiVaultSessionLimit)
-            )
+            onSessionLimitChange(value === 'unlimited' ? 'unlimited' : Number(value))
           }
         >
           {AI_VAULT_SESSION_LIMITS.map((limit) => (

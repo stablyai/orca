@@ -9,10 +9,10 @@ import {
   writeEncryptedCredential
 } from '../integration-credential-file'
 import type { BitbucketAuthMode } from '../../shared/bitbucket-credentials'
+import { readCredentialFileProtection } from '../credential-file-protection'
+import type { SecretAtRestProtection } from '../../shared/secret-at-rest-protection'
 
-// Why: the secret stays encrypted via safeStorage while this metadata stays
-// plaintext, so status reads render the connected account without decrypting —
-// otherwise every Settings open would trigger an OS keychain prompt.
+// Plaintext display metadata lets status reads avoid keychain prompts.
 export type BitbucketStoredMetadata = {
   version: 1
   authMode: BitbucketAuthMode
@@ -22,10 +22,7 @@ export type BitbucketStoredMetadata = {
   updatedAt: string
 }
 
-// Why (STA-3941): the envelope carries everything auth needs, so a torn write
-// between the two files can only leave stale display metadata — never a new
-// secret paired with an old email that cannot authenticate. Fields are optional
-// because credentials saved before this change hold only the two tokens.
+// Envelope auth fields prevent torn identity/secret pairs; optional fields support legacy files.
 export type BitbucketStoredSecret = {
   accessToken: string | null
   apiToken: string | null
@@ -56,7 +53,7 @@ function getMetadataPath(): string {
   return join(getOrcaDir(), 'bitbucket-credential.json')
 }
 
-function getSecretPath(): string {
+export function getSecretPath(): string {
   return join(getOrcaDir(), 'bitbucket-credential.enc')
 }
 
@@ -67,8 +64,6 @@ function ensureOrcaDir(): void {
   }
 }
 
-// Why: hand-edited or truncated JSON must not put a non-string into an auth
-// header, so every field is narrowed rather than trusted.
 function asOptionalString(value: unknown): string | null {
   return typeof value === 'string' ? value : null
 }
@@ -104,8 +99,7 @@ export function getStoredBitbucketMetadata(): BitbucketStoredMetadata | null {
   return cachedMetadata
 }
 
-// Cheap "is a credential saved?" check: metadata present and a non-empty secret
-// file. Never decrypts, so it is safe on every status poll.
+// Presence checks must avoid keychain prompts.
 export function hasStoredBitbucketCredential(): boolean {
   return getStoredBitbucketMetadata() !== null && credentialFileHasContent(getSecretPath())
 }
@@ -114,9 +108,7 @@ export function getStoredBitbucketCredentialError(): string | null {
   return credentialError
 }
 
-// Cache-first; only touches the keychain when `force` is set and the secret is
-// not already in memory (mirrors Linear's `loadToken({ force })`). Throws
-// CredentialDecryptionError when ciphertext cannot be decrypted.
+// Without force, read memory only; forced decryption can throw CredentialDecryptionError.
 export function loadStoredBitbucketSecret(
   options: { force?: boolean } = {}
 ): BitbucketStoredSecret | null {
@@ -156,6 +148,10 @@ export function loadStoredBitbucketSecret(
   }
 }
 
+export function getBitbucketCredentialProtection(): SecretAtRestProtection | null {
+  return readCredentialFileProtection(getSecretPath())
+}
+
 export function saveBitbucketCredential(input: BitbucketCredentialSaveInput): void {
   ensureOrcaDir()
   const secret: BitbucketStoredSecret = {
@@ -184,8 +180,7 @@ export function saveBitbucketCredential(input: BitbucketCredentialSaveInput): vo
   credentialError = null
 }
 
-// Why: swallowing a non-ENOENT unlink failure would clear memory while the
-// files survive, so the credential silently returns on the next launch.
+// Surface failed deletes so credentials cannot silently reappear on relaunch.
 export function clearStoredBitbucketCredential(): void {
   try {
     for (const path of [getSecretPath(), getMetadataPath()]) {
@@ -198,8 +193,7 @@ export function clearStoredBitbucketCredential(): void {
       }
     }
   } finally {
-    // Why: on a partial delete the caches must still be dropped, or the session
-    // keeps authenticating with a credential the user just disconnected.
+    // Clear cached credentials even when deletion only partly succeeds.
     cachedMetadata = null
     metadataLoadedFromDisk = true
     cachedSecret = null

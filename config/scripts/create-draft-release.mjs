@@ -1,9 +1,10 @@
 #!/usr/bin/env node
 
+import { execFileSync } from 'node:child_process'
 import { pathToFileURL } from 'node:url'
 
 const API_VERSION = '2022-11-28'
-const MAX_RELEASE_BODY_LENGTH = 120_000
+export const MAX_RELEASE_BODY_LENGTH = 120_000
 const TRUNCATION_NOTICE =
   '\n\n---\nRelease notes were truncated because GitHub release bodies are limited to 125,000 characters.'
 const DESKTOP_RELEASE_TAG_PATTERN = /^v(\d+)\.(\d+)\.(\d+)(?:-rc\.(\d+))?$/
@@ -49,8 +50,7 @@ export function latestPreviousPublishedDesktopReleaseTag(releases, tag) {
     .map((release) => parseDesktopReleaseTag(release.tag_name))
     .filter((candidate) => candidate && candidate.tag !== current.tag)
     .filter((candidate) => compareDesktopReleaseTags(candidate, current) < 0)
-    // Why: public changelogs should be bounded by releases users could see;
-    // stable releases summarize since the prior stable, not the latest RC.
+    // Bound notes by public releases; stable summarizes since prior stable, not the latest RC.
     .filter((candidate) => current.rc !== null || candidate.rc === null)
     .sort(compareDesktopReleaseTags)
   return previousReleases.at(-1)?.tag ?? ''
@@ -115,6 +115,7 @@ export async function createDraftRelease({
   repo,
   tag,
   token,
+  targetCommitish,
   fetchImpl = fetch,
   log = console.log
 }) {
@@ -126,6 +127,9 @@ export async function createDraftRelease({
   }
   if (!token) {
     throw new Error('token is required')
+  }
+  if (!targetCommitish) {
+    throw new Error('targetCommitish is required')
   }
 
   const releases = await fetchRepoReleases(repo, token, fetchImpl)
@@ -142,8 +146,7 @@ export async function createDraftRelease({
     ...(previousTag ? { previous_tag_name: previousTag } : {})
   }
 
-  // Why: GitHub's generate-notes baseline ignores draft releases, so pass the
-  // previous public changelog boundary explicitly.
+  // generate-notes ignores drafts; pass previous public changelog boundary explicitly.
   const releaseNotes = await githubJson(
     fetchImpl,
     `https://api.github.com/repos/${repo}/releases/generate-notes`,
@@ -164,8 +167,7 @@ export async function createDraftRelease({
     if (!Number.isInteger(existingRelease.id)) {
       throw new Error(`Draft release ${tag} is missing a GitHub release id`)
     }
-    // Why: the listing is a snapshot; the draft can be published while notes
-    // generate, and patching then overwrites a live release body.
+    // Draft may publish while notes generate; recheck before overwriting a live body.
     const currentRelease = await githubJson(
       fetchImpl,
       `https://api.github.com/repos/${repo}/releases/${existingRelease.id}`,
@@ -175,9 +177,7 @@ export async function createDraftRelease({
       log(`Release ${tag} was published while notes were generated; leaving it unchanged.`)
       return
     }
-    // Why: the PATCH endpoint supports no conditional/versioned update, so the
-    // GET above cannot close the window. The PATCH response reports the state we
-    // actually wrote to; if publication won, put the published body back.
+    // PATCH has no conditional/version guard; if publication wins the GET/PATCH race, restore the published body.
     const patchedRelease = await githubJson(
       fetchImpl,
       `https://api.github.com/repos/${repo}/releases/${existingRelease.id}`,
@@ -193,8 +193,7 @@ export async function createDraftRelease({
         log(`Release ${tag} was published while notes were patched; its body is unchanged.`)
         return
       }
-      // Why: the rollback must not clobber a body written after our PATCH, so
-      // restore only while the release still carries exactly what we wrote.
+      // Rollback only our exact body or it can clobber a newer edit.
       const releaseBeforeRollback = await githubJson(
         fetchImpl,
         `https://api.github.com/repos/${repo}/releases/${existingRelease.id}`,
@@ -221,19 +220,29 @@ export async function createDraftRelease({
       return
     }
   } else {
-    // Why: GitHub's generated release notes can exceed the release body API
-    // limit, so create with a bounded body. Omit target_commitish because the
-    // release-cut tag already exists and GitHub rejects the tag name there.
-    await githubJson(fetchImpl, `https://api.github.com/repos/${repo}/releases`, token, {
-      method: 'POST',
-      body: JSON.stringify({
-        tag_name: tag,
-        name,
-        body,
-        draft: true,
-        prerelease
-      })
-    })
+    // Set target_commitish to detached release-bump commit; default branch creates an untagged draft that electron-builder misses, publishing incomplete assets to /latest.
+    const createdRelease = await githubJson(
+      fetchImpl,
+      `https://api.github.com/repos/${repo}/releases`,
+      token,
+      {
+        method: 'POST',
+        body: JSON.stringify({
+          tag_name: tag,
+          target_commitish: targetCommitish,
+          name,
+          body,
+          draft: true,
+          prerelease,
+          make_latest: 'false'
+        })
+      }
+    )
+    if (createdRelease?.draft !== true || createdRelease?.tag_name !== tag) {
+      throw new Error(
+        `GitHub created ${createdRelease?.draft ? 'draft' : 'published'} release ${createdRelease?.tag_name ?? '<missing>'} instead of draft ${tag}`
+      )
+    }
   }
 
   if (generatedBody.length !== body.length) {
@@ -251,7 +260,8 @@ async function main() {
   const tag = process.argv[2]
   const token = process.env.GH_TOKEN || process.env.GITHUB_TOKEN
   const repo = process.env.GITHUB_REPOSITORY || 'stablyai/orca'
-  await createDraftRelease({ repo, tag, token })
+  const targetCommitish = execFileSync('git', ['rev-parse', 'HEAD'], { encoding: 'utf8' }).trim()
+  await createDraftRelease({ repo, tag, token, targetCommitish })
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {

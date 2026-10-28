@@ -1,40 +1,48 @@
-// Persisted journal row shapes plus read-time upcasting.
-//
-// The journal is append-only, so migration is upcasting on read and never an
-// in-place rewrite. A row whose version this build does not understand is
-// UNREADABLE, not skippable: the caller must degrade to read-only rather than
-// render a partial timeline or compact past a row it cannot interpret.
+import type { JournalItemEcho } from './journal-item-echo'
+// Upcast on read; preserve unknown versions/kinds and fail load instead of skipping history.
+// New kinds need reader-first rollout or a version bump because older builds may delete them.
+// Unknown body kinds remain readable; malformed annotations are dropped, malformed content fails load.
 
+import type { AgentSessionFailureFact } from '../../../shared/agent-session-failure'
+import type { AgentSessionExecutionOptions } from '../../../shared/agent-session-execution-options'
 import {
   AGENT_SESSION_JOURNAL_SCHEMA_VERSION,
   type AgentJournalDispatchState,
   type AgentJournalItemBody,
   type AgentJournalMessageItem,
-  type AgentSessionProviderHandle
+  type AgentJournalProducerLinkage,
+  type AgentJournalTurnScope,
+  type AgentSessionJournalProviderHandle
 } from '../../../shared/agent-session-journal-types'
 import {
-  isAdmissibleAgentJournalItemBody,
-  isAdmissibleAgentJournalMessageBody
-} from '../../../shared/agent-session-journal-schemas'
+  readAgentJournalItemBody,
+  readAgentJournalMessageBody,
+  type AgentJournalContentVerdict
+} from '../../../shared/agent-session-journal-body-admission'
+import { isJournalTag } from '../../../shared/agent-session-journal-open-union'
+import type { StructuredAgentSessionStopCause } from '../agent-session-wire/structured-agent-session-stop-cause'
+import { dropUnusableRowAnnotations } from './journal-row-unusable-annotations'
+import { journalQueueRowContent, type JournalQueueRow } from './journal-queue-events'
 
-type JournalRowBase = {
-  /** Schema version of THIS row. */
+/** Put additive annotations on the base: older strict prompt bodies reject unknown keys. */
+export type JournalRowBase = AgentJournalProducerLinkage & {
   v: number
   epoch: string
   seq: number
-  /** Runtime fence held by the writer that appended the row. */
   fence: number
-  /** Observed (provider or host) timestamp. Ordering is by `seq`, not by this. */
+  /** Timestamp is observational; seq determines ordering. */
   ts: number
-  /** Set when crash reconciliation appended the row after the fact. */
   recovered?: true
+  /** Additive base field; absent legacy scopes are derived during replay. */
+  turnScope?: AgentJournalTurnScope
 }
 
-/** First row of every epoch: binds the epoch to a provider handle and records why it opened. */
 export type JournalEpochRow = JournalRowBase & {
   kind: 'epoch'
   reason: AgentJournalEpochReason
-  providerHandle: AgentSessionProviderHandle
+  providerHandle: AgentSessionJournalProviderHandle
+  /** Preserve original adoption through same-conversation epoch replacement. */
+  historyOrigin?: unknown
 }
 
 export const AGENT_JOURNAL_EPOCH_REASONS = [
@@ -47,49 +55,116 @@ export const AGENT_JOURNAL_EPOCH_REASONS = [
 ] as const
 export type AgentJournalEpochReason = (typeof AGENT_JOURNAL_EPOCH_REASONS)[number]
 
-export type JournalItemRow = JournalRowBase & {
-  kind: 'item'
-  itemId: string
-  revision: number
-  body: AgentJournalItemBody
+/** Creation provenance differs from writer authority; legacy rows fall back to their creating fence. */
+type JournalItemProvenance = {
+  ownerFence?: number
+  /** Later execution owner for resumable children; absent falls back to ownerFence. */
+  executionOwner?: number
 }
+
+export type JournalItemRow = JournalRowBase &
+  JournalItemProvenance &
+  JournalItemEcho & {
+    kind: 'item'
+    itemId: string
+    revision: number
+    body: AgentJournalItemBody
+  }
 
 export type JournalTombstoneRow = JournalRowBase & {
   kind: 'tombstone'
   itemId: string
   revision: number
+  /** Stop marker, not item removal; uses an unoccupied ID. */
+  stopEvent?: JournalStopEvent
+  /** Resume marker, not item removal; uses an unoccupied ID. */
+  queueResume?: true
+  /** Queue-reopen marker, not item removal; uses an unoccupied ID. */
+  queueReopen?: true
+  /** Earlier stop position lets subsequent acceptance lift the reopen mark; absent uses this row. */
+  queueReopenSince?: number
+  queueClear?: { operationId: string; messageIds: string[]; lifted?: true }
+  retireSubmission?: true
 }
 
-/** The write-ahead row. Durable BEFORE the adapter dispatches anything; it
- *  doubles as the optimistic user bubble so an accepted echo has a slot to
- *  reconcile into instead of appending a second copy. */
+/** Carry Stops as additive tombstone fields for readers that cannot safely handle unknown row kinds. */
+export type JournalStopEvent = {
+  /** Persisted reason names are stable; only user-stop pauses the queue. */
+  reason: StructuredAgentSessionStopCause
+  turnId?: string
+  at: number
+  caller?: string
+}
+
+export type JournalStopOrResumeRow = JournalTombstoneRow &
+  (
+    | { stopEvent: NonNullable<JournalTombstoneRow['stopEvent']> }
+    | { queueResume: NonNullable<JournalTombstoneRow['queueResume']> }
+    | { queueReopen: NonNullable<JournalTombstoneRow['queueReopen']> }
+    | { queueClear: NonNullable<JournalTombstoneRow['queueClear']> }
+  )
+
+/** Any marker value suppresses removal, including values from newer builds. */
+export function isJournalStopOrResumeRow(row: JournalRow): row is JournalStopOrResumeRow {
+  return (
+    row.kind === 'tombstone' &&
+    (row.stopEvent !== undefined ||
+      row.queueResume !== undefined ||
+      row.queueReopen !== undefined ||
+      row.queueClear !== undefined)
+  )
+}
+
+/** Persist before dispatch; the optimistic bubble gives provider echoes a slot without duplication. */
 export type JournalSubmissionRow = JournalRowBase & {
   kind: 'submission'
   clientMessageId: string
   payloadFingerprint: string
-  providerHandle: AgentSessionProviderHandle
+  providerHandle: AgentSessionJournalProviderHandle
   body: AgentJournalMessageItem
+  /** Acceptance defers handover to dispatch/pending; absent legacy rows dispatched immediately. */
+  handoverRecorded?: true
+  queuedMessageId?: string
+  /** client means explicit user send; host includes automatic queue drain and orchestration. */
+  origin?: JournalSubmissionOrigin
+  source?: { kind: string }
+  /** Apply accepted execution choices at handover; ignore unknown legacy option keys. */
+  options?: AgentSessionExecutionOptions
 }
+
+export type JournalSubmissionOrigin = 'client' | 'host'
 
 export type JournalDispatchRow = JournalRowBase & {
   kind: 'dispatch'
   clientMessageId: string
-  state: Exclude<AgentJournalDispatchState, 'pending'>
-  /** Provider item identity adopted on accept. */
+  state: AgentJournalDispatchState
   providerItemId: string | null
   reason: string | null
+  turnScope?: AgentJournalTurnScope
+  /** Host-only ordered IDs of stopped messages carried into provider history on pending. */
+  carries?: string[]
+  /** Drop malformed typed rejection annotations without rejecting the row. */
+  rejection?: AgentSessionFailureFact
+  keptAsQueuedMessageId?: string
+  /** Explicit null means no answered turn; absent is legacy. Unknown joins degrade to null. */
+  answeredInTurn?: { turnItemId: string; via: string } | null
 }
 
+/** Per-mutation linkage supports mixed-agent creation; absent keeps the existing producer. */
 export type JournalLifecycleMutation =
-  | {
-      kind: 'item'
-      itemId: string
-      revision: number
-      body: AgentJournalItemBody
-    }
+  | (AgentJournalProducerLinkage &
+      JournalItemProvenance &
+      JournalItemEcho & {
+        kind: 'item'
+        itemId: string
+        revision: number
+        body: AgentJournalItemBody
+        turnScope?: AgentJournalTurnScope
+        /** Source creation time; absent uses the batch row's timestamp. */
+        observedAt?: number
+      })
   | { kind: 'tombstone'; itemId: string; revision: number }
 
-/** One durable append whose nested mutations share the outer ordering facts. */
 export type JournalLifecycleBatchRow = JournalRowBase & {
   kind: 'lifecycle-batch'
   settlementId: string
@@ -106,31 +181,18 @@ export type JournalRow =
   | JournalSubmissionRow
   | JournalDispatchRow
   | JournalLifecycleBatchRow
+  | JournalQueueRow
 
 export type JournalRowParse =
   | { ok: true; row: JournalRow }
-  /** Malformed JSON or a shape this build rejects outright. */
   | { ok: false; unreadable: false }
-  /** A future schema version. The host must not write or compact this journal. */
+  /** Future content forbids writing/compacting this journal. */
   | { ok: false; unreadable: true }
-
-const ROW_KINDS = new Set([
-  'epoch',
-  'item',
-  'tombstone',
-  'submission',
-  'dispatch',
-  'lifecycle-batch'
-])
 
 export function serializeJournalRow(row: JournalRow): string {
   return JSON.stringify(row)
 }
 
-/**
- * Parse one persisted line. Older versions are upcast; newer versions are
- * reported as unreadable so the caller fails closed.
- */
 export function parseJournalRow(line: string): JournalRowParse {
   let parsed: unknown
   try {
@@ -150,15 +212,17 @@ export function parseJournalRow(line: string): JournalRowParse {
     return { ok: false, unreadable: true }
   }
   const upcast = upcastRow(record, version)
-  return isJournalRow(upcast) ? { ok: true, row: upcast } : { ok: false, unreadable: false }
+  dropUnusableRowAnnotations(upcast)
+  if (isJournalRow(upcast)) {
+    return { ok: true, row: upcast }
+  }
+  return { ok: false, unreadable: journalRowContent(upcast) === 'unreadable' }
 }
 
-/** Read-time upcast chain. Each step raises a row exactly one version. */
 function upcastRow(record: Record<string, unknown>, version: number): Record<string, unknown> {
   let current = record
   let at = version
   while (at < AGENT_SESSION_JOURNAL_SCHEMA_VERSION) {
-    // No upcasters yet — v1 is the first shipped schema. New cases go here.
     current = { ...current, v: at + 1 }
     at += 1
   }
@@ -169,84 +233,123 @@ function isPlainObject(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value)
 }
 
-/** Open field values are type-checked, never enum-checked: a future build
- *  adding a dispatch state or handle kind must bump the row version, but this
- *  build should not misread a same-version row as malformed over a wider enum.
- *  Render BODIES are the exception and validate against the canonical deep
- *  schema — their nested shapes are dereferenced unguarded all the way to the
- *  rendered surface, so a JSON-valid corruption must fail here, not there. */
-function isJournalRow(record: Record<string, unknown>): record is JournalRow {
-  if (typeof record.kind !== 'string' || !ROW_KINDS.has(record.kind)) {
-    return false
+/** Deep-check bodies before rendering; keep annotation enums open for compatible future values. */
+function journalRowContent(record: Record<string, unknown>): AgentJournalContentVerdict {
+  if (!hasJournalRowEnvelope(record)) {
+    return 'malformed'
   }
-  if (
-    typeof record.epoch !== 'string' ||
-    !record.epoch ||
-    !Number.isInteger(record.seq) ||
-    (record.seq as number) < 1 ||
-    !Number.isInteger(record.fence) ||
-    typeof record.ts !== 'number'
-  ) {
-    return false
+  const { kind } = record
+  const contentCheck = typeof kind === 'string' ? KNOWN_ROW_KINDS.get(kind) : undefined
+  if (contentCheck) {
+    return contentCheck(record)
   }
-  if (record.kind === 'item') {
-    return (
-      typeof record.itemId === 'string' &&
-      Number.isInteger(record.revision) &&
-      isAdmissibleAgentJournalItemBody(record.body)
-    )
-  }
-  if (record.kind === 'tombstone') {
-    return typeof record.itemId === 'string' && Number.isInteger(record.revision)
-  }
-  if (record.kind === 'submission') {
-    return (
-      typeof record.clientMessageId === 'string' &&
-      record.clientMessageId.length > 0 &&
-      typeof record.payloadFingerprint === 'string' &&
-      isPlainObject(record.providerHandle) &&
-      isAdmissibleAgentJournalMessageBody(record.body)
-    )
-  }
-  if (record.kind === 'dispatch') {
-    return (
-      typeof record.clientMessageId === 'string' &&
-      record.clientMessageId.length > 0 &&
-      typeof record.state === 'string' &&
-      record.state.length > 0 &&
-      (record.providerItemId === null || typeof record.providerItemId === 'string') &&
-      (record.reason === null || typeof record.reason === 'string')
-    )
-  }
-  if (record.kind === 'lifecycle-batch') {
-    return (
-      typeof record.settlementId === 'string' &&
-      record.settlementId.length > 0 &&
-      Array.isArray(record.mutations) &&
-      record.mutations.length > 0 &&
-      record.mutations.length <= MAX_JOURNAL_LIFECYCLE_BATCH_MUTATIONS &&
-      Buffer.byteLength(JSON.stringify(record), 'utf8') + 1 <= MAX_JOURNAL_LIFECYCLE_BATCH_BYTES &&
-      record.mutations.every(isLifecycleMutation)
-    )
-  }
-  return typeof record.reason === 'string' && isPlainObject(record.providerHandle)
+  return isJournalTag(kind) ? 'unreadable' : 'malformed'
 }
 
-function isLifecycleMutation(value: unknown): value is JournalLifecycleMutation {
-  if (!isPlainObject(value) || typeof value.itemId !== 'string') {
-    return false
+function isJournalRow(record: Record<string, unknown>): record is JournalRow {
+  return journalRowContent(record) === 'readable'
+}
+
+// Future content outranks adjacent corruption so unsupported history is never discarded.
+function combinedContent(...verdicts: AgentJournalContentVerdict[]): AgentJournalContentVerdict {
+  if (verdicts.includes('unreadable')) {
+    return 'unreadable'
   }
-  if (value.kind === 'tombstone') {
-    return Number.isInteger(value.revision)
-  }
+  return verdicts.includes('malformed') ? 'malformed' : 'readable'
+}
+
+function fieldsContent(hold: boolean): AgentJournalContentVerdict {
+  return hold ? 'readable' : 'malformed'
+}
+
+// Exhaustive kind keys make missing checks a compile error.
+const ROW_CONTENT_CHECK_BY_KIND: Record<
+  JournalRow['kind'],
+  (record: Record<string, unknown>) => AgentJournalContentVerdict
+> = {
+  epoch: (record) =>
+    fieldsContent(typeof record.reason === 'string' && isPlainObject(record.providerHandle)),
+  item: (record) =>
+    combinedContent(
+      fieldsContent(typeof record.itemId === 'string' && Number.isInteger(record.revision)),
+      readAgentJournalItemBody(record.body)
+    ),
+  tombstone: (record) =>
+    fieldsContent(typeof record.itemId === 'string' && Number.isInteger(record.revision)),
+  submission: (record) =>
+    combinedContent(
+      fieldsContent(
+        typeof record.clientMessageId === 'string' &&
+          record.clientMessageId.length > 0 &&
+          typeof record.payloadFingerprint === 'string' &&
+          isPlainObject(record.providerHandle)
+      ),
+      readAgentJournalMessageBody(record.body)
+    ),
+  dispatch: (record) =>
+    fieldsContent(
+      typeof record.clientMessageId === 'string' &&
+        record.clientMessageId.length > 0 &&
+        typeof record.state === 'string' &&
+        record.state.length > 0 &&
+        (record.providerItemId === null || typeof record.providerItemId === 'string') &&
+        (record.reason === null || typeof record.reason === 'string')
+    ),
+  'lifecycle-batch': (record) => {
+    const mutations = Array.isArray(record.mutations) ? record.mutations : []
+    return combinedContent(
+      fieldsContent(
+        typeof record.settlementId === 'string' &&
+          record.settlementId.length > 0 &&
+          mutations.length > 0 &&
+          mutations.length <= MAX_JOURNAL_LIFECYCLE_BATCH_MUTATIONS &&
+          Buffer.byteLength(JSON.stringify(record), 'utf8') + 1 <= MAX_JOURNAL_LIFECYCLE_BATCH_BYTES
+      ),
+      ...mutations.map((mutation) => lifecycleMutationContent(mutation))
+    )
+  },
+  queue: journalQueueRowContent
+}
+export const KNOWN_ROW_KINDS = new Map(Object.entries(ROW_CONTENT_CHECK_BY_KIND))
+
+function hasJournalRowEnvelope(record: Record<string, unknown>): boolean {
   return (
-    value.kind === 'item' &&
-    Number.isInteger(value.revision) &&
-    isAdmissibleAgentJournalItemBody(value.body)
+    typeof record.epoch === 'string' &&
+    record.epoch !== '' &&
+    Number.isInteger(record.seq) &&
+    Number(record.seq) >= 1 &&
+    Number.isInteger(record.fence) &&
+    typeof record.ts === 'number'
   )
 }
 
-/** Approximate on-disk cost of a row, used for the per-session size bound. */
+const MUTATION_CONTENT_CHECK_BY_KIND: Record<
+  JournalLifecycleMutation['kind'],
+  (mutation: Record<string, unknown>) => AgentJournalContentVerdict
+> = {
+  item: (mutation) =>
+    combinedContent(
+      fieldsContent(typeof mutation.itemId === 'string' && Number.isInteger(mutation.revision)),
+      readAgentJournalItemBody(mutation.body)
+    ),
+  tombstone: (mutation) =>
+    fieldsContent(typeof mutation.itemId === 'string' && Number.isInteger(mutation.revision))
+}
+export const KNOWN_MUTATION_KINDS = new Map(Object.entries(MUTATION_CONTENT_CHECK_BY_KIND))
+
+// Unknown mutation kinds require no fields specific to known mutations.
+function lifecycleMutationContent(value: unknown): AgentJournalContentVerdict {
+  if (!isPlainObject(value)) {
+    return 'malformed'
+  }
+  const { kind } = value
+  const contentCheck = typeof kind === 'string' ? KNOWN_MUTATION_KINDS.get(kind) : undefined
+  if (contentCheck) {
+    return contentCheck(value)
+  }
+  return isJournalTag(kind) ? 'unreadable' : 'malformed'
+}
+
 export function journalRowByteLength(row: JournalRow): number {
   return Buffer.byteLength(serializeJournalRow(row), 'utf8') + 1
 }

@@ -3,7 +3,9 @@ import { getSystemPrefersDarkSnapshot } from '../components/terminal-pane/use-sy
 import {
   canSkipRuntimeMobileSessionSyncKeyBuild,
   getRuntimeMobileSessionSyncKey,
-  runtimeMobileSessionSyncKeysEqual,
+  runtimeMobileSessionSyncKeysEqual
+} from '../runtime/sync-runtime-graph/sync-key'
+import {
   scheduleRuntimeGraphSync,
   setRuntimeGraphStoreStateGetter,
   setRuntimeGraphSyncEnabled
@@ -24,9 +26,9 @@ export function useRuntimeGraphSync(): void {
   useEffect(() => {
     let previousKey = getRuntimeMobileSessionSyncKey(useAppStore.getState())
     return useAppStore.subscribe((state, previousState) => {
-      // Why: this fires on every store mutation; read the cached prefers-dark snapshot instead of allocating a throwaway MediaQueryList via matchMedia each tick.
+      // Read cached dark-mode state; allocating matchMedia on every store mutation creates garbage.
       const systemPrefersDark = getSystemPrefersDarkSnapshot()
-      // Why: skip the key build when every input is reference-unchanged; the gate mirrors every field getRuntimeMobileSessionSyncKey uses.
+      // Skip key construction when every input reference is unchanged; mirror getRuntimeMobileSessionSyncKey’s fields.
       if (
         canSkipRuntimeMobileSessionSyncKeyBuild(
           state,
@@ -50,6 +52,22 @@ export function useRuntimeGraphSync(): void {
       scheduleRuntimeGraphSync()
     })
   }, [])
+
+  useEffect(
+    () =>
+      useAppStore.subscribe((state, previousState) => {
+        // Publish project-catalog changes to paired phones.
+        if (
+          state.repos !== previousState.repos ||
+          state.endpointProjects !== previousState.endpointProjects ||
+          state.endpointProjectHostSetups !== previousState.endpointProjectHostSetups ||
+          state.projectOrderBy !== previousState.projectOrderBy
+        ) {
+          scheduleRuntimeGraphSync()
+        }
+      }),
+    []
+  )
 
   useEffect(() => {
     setRuntimeGraphSyncEnabled(workspaceSessionReady)

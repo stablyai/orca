@@ -11,9 +11,7 @@ import {
 import type * as BranchLineTotal from '../../shared/git-branch-line-total'
 import type * as GitRunner from './runner'
 
-// Why: real git, spied argv. Every exec is recorded so the performance contract
-// ("no ranged diff unless asked", "one exec for concurrent callers") can be
-// asserted on the actual command list rather than on a stubbed return value.
+// Spy on real Git argv to validate opt-in and coalescing without stubbing results.
 const { gitExecCalls, execHooks, coalescerJoins } = vi.hoisted(() => ({
   gitExecCalls: [] as string[][],
   execHooks: { beforeExec: undefined as undefined | ((args: string[]) => Promise<void> | void) },
@@ -27,8 +25,7 @@ vi.mock('../../shared/git-branch-line-total', async (importOriginal) => {
     computeGitBranchLineTotal: (
       input: Parameters<typeof BranchLineTotal.computeGitBranchLineTotal>[0]
     ) => {
-      // The lease is taken synchronously inside, so counting after the call
-      // means a join is observable the instant it has happened.
+      // Lease acquisition is synchronous, so a join is observable immediately after this call.
       const total = actual.computeGitBranchLineTotal(input)
       coalescerJoins.count += 1
       coalescerJoins.onJoin?.()
@@ -67,7 +64,6 @@ import {
 } from './status'
 
 const BOGUS_MERGE_BASE = 'deadbeef'.repeat(5)
-// No fixture path here looks like test or generated code, so it is all source.
 const NO_LINES = { added: 0, removed: 0 }
 const tempRoots: string[] = []
 
@@ -157,17 +153,18 @@ describe('branch line total completeness', () => {
 
     expect(result.didHitLimit).toBe(true)
     expect(result.branchLineTotal).toBeUndefined()
+    expect(result.branchLineTotalUnavailable).toBeUndefined()
     expect(rangedDiffCalls()).toEqual([])
   })
 
-  it('omits the total when the ranged numstat fails, rather than reporting zero', async () => {
+  it('invalidates the total when the ranged numstat fails, rather than reporting zero', async () => {
     const { repo } = await createFixtureRepo()
 
     const result = await getStatus(repo, { branchLineTotalMergeBase: BOGUS_MERGE_BASE })
 
     expect(result.entries.length).toBeGreaterThan(0)
     expect(result.branchLineTotal).toBeUndefined()
-    // The diff really was attempted, so this is a failure path and not a gate.
+    expect(result.branchLineTotalUnavailable).toBe(BOGUS_MERGE_BASE)
     expect(rangedDiffCalls()).toHaveLength(1)
   })
 
@@ -178,6 +175,7 @@ describe('branch line total completeness', () => {
     const result = await getStatus(root, { branchLineTotalMergeBase: BOGUS_MERGE_BASE })
 
     expect(result.branchLineTotal).toBeUndefined()
+    expect(result.branchLineTotalUnavailable).toBeUndefined()
     expect(rangedDiffCalls()).toEqual([])
   })
 
@@ -193,8 +191,6 @@ describe('branch line total completeness', () => {
     await expect(
       getStatus(repo, { branchLineTotalMergeBase: mergeBase, signal: controller.signal })
     ).rejects.toMatchObject({ name: 'AbortError' })
-    // The pass had already streamed status and reached the ranged diff, so this
-    // is a cancellation in flight rather than a pre-flight rejection.
     expect(rangedDiffCalls()).toHaveLength(1)
   })
 })
@@ -272,11 +268,7 @@ describe('branch line total exec budget', () => {
 
   it('shares one ranged diff across status passes the status lease cannot merge', async () => {
     const { repo, mergeBase } = await createFixtureRepo()
-    // Why: `limit` is part of the status read key, so these two passes each run
-    // their own `git status`; only the branch-total coalescer can merge the diff.
-    // Hold the first diff exactly until the second pass has taken the lease: a
-    // fixed sleep would either release too early or, on a slow machine, outrun
-    // GIT_BRANCH_LINE_TOTAL_SOFT_DEADLINE_MS and publish without an exact total.
+    // Different limits require separate status leases; hold the diff until both join its shared lease.
     execHooks.beforeExec = async (args) => {
       if (args.includes('--numstat') && args.at(-1) === '--') {
         await waitForCoalescerJoins(2)
@@ -296,8 +288,6 @@ describe('branch line total exec budget', () => {
       generated: NO_LINES
     })
     expect(second.branchLineTotal).toEqual(first.branchLineTotal)
-    // Proves the saving came from the branch-total coalescer: both passes really
-    // ran their own `git status`, so the status lease merged nothing.
     expect(gitExecCalls.filter((args) => args.includes('status'))).toHaveLength(2)
     expect(rangedDiffCalls()).toHaveLength(1)
   })

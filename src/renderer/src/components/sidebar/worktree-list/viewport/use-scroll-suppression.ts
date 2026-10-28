@@ -14,16 +14,26 @@ export function shouldAdjustWorktreeSidebarMeasuredRowScroll(args: {
   isScrolling: boolean
   now: number
   suppressUntil: number
+  itemStart: number
+  itemEnd: number
+  scrollOffset: number
+  isFirstMeasurement: boolean
+  scrollDirection: 'forward' | 'backward' | null
 }): boolean {
-  return !args.isScrolling && args.now >= args.suppressUntil
+  if (args.isScrolling || args.now < args.suppressUntil) {
+    return false
+  }
+  // Preserve TanStack's fold rule so below-anchor growth cannot invent a scroll offset.
+  return args.isFirstMeasurement
+    ? args.itemStart < args.scrollOffset
+    : args.itemEnd <= args.scrollOffset && args.scrollDirection !== 'backward'
 }
 
 export type WorktreeSidebarScrollSuppression = ReturnType<
   typeof useWorktreeSidebarScrollSuppression
 >
 
-// Tracks the two suppression windows the virtualizer honours: measurement correction
-// (any scroll movement) and anchor restore (direct user input or a settling reveal).
+// Track measurement suppression for all scrolling and anchor suppression for direct input or smooth reveals.
 export function useWorktreeSidebarScrollSuppression(
   scrollRef: React.RefObject<HTMLDivElement | null>
 ) {
@@ -58,8 +68,7 @@ export function useWorktreeSidebarScrollSuppression(
     }
     return settling
   }, [scrollRef])
-  // Why: programmatic scrolls keep measurement correction quiet, but only direct input blocks anchor-restore retries.
-  // A reveal's smooth scroll is the exception: restoring the anchor mid-animation cancels it a few pixels in.
+  // Programmatic scrolling suppresses measurements; only direct input or an in-flight reveal blocks anchor restore.
   const shouldSkipScrollAnchorRestore = useCallback(
     () =>
       window.performance.now() < directScrollInputUntilRef.current || isRevealScrollSettlingNow(),

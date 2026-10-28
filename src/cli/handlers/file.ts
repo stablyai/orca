@@ -1,11 +1,14 @@
+import { getFileOpenPosition } from './file-open-position'
 import type { GitStatusEntry, GitStatusResult } from '../../shared/git-status-types'
 import type { RuntimeFileOpenResult, RuntimeWorktreeRecord } from '../../shared/runtime-types'
+import type { RuntimeNavigationTarget } from '../../shared/runtime-navigation'
 import { isRuntimePathAbsolute, relativePathInsideRoot } from '../../shared/cross-platform-path'
 import { isWslUncPath, parseWslUncPath, toWindowsWslPath } from '../../shared/wsl-paths'
 import type { CommandHandler, HandlerContext } from '../dispatch'
 import { getOptionalStringFlag, getRequiredStringFlag } from '../flags'
 import { printResult } from '../format'
 import { RuntimeClientError } from '../runtime-client'
+import { callFileOpen } from './file-open-call'
 import { getOptionalWorktreeSelector, resolveCurrentWorktreeSelector } from '../selectors'
 
 type FileOpenMode = 'edit' | 'diff'
@@ -47,20 +50,9 @@ async function getFileWorktreeSelector({ flags, cwd, client }: HandlerContext): 
   return await resolveCurrentWorktreeSelector(cwd, client)
 }
 
-/**
- * Why: a WSL workspace stores its worktree root as a Windows UNC path while the
- * user types the Linux path they see inside the distro, so the two never match
- * (#11393). Only the distro the caller is sitting in can name that Linux path, and
- * only a UNC root wants the rewrite — a POSIX root already matches, so rewriting
- * it would strand every absolute path.
- *
- * Backslash is a legal Linux filename character but a separator once the path
- * reads as UNC, so `a\b.ts` would relativize to a different file, `a/b.ts`.
- * Such a path has no Windows spelling; leave it to fail the match instead.
- */
+// Only UNC roots need Linux-path translation; backslash filenames have no equivalent Windows spelling.
 function toWorktreeRootPathFlavor(rootPath: string, cwd: string, path: string): string {
-  // Why: WSL_DISTRO_NAME reaches this process only if interop forwards it, but the
-  // WSL launcher always sets ORCA_CLI_CWD, and its UNC form names the distro itself.
+  // Interop may omit WSL_DISTRO_NAME; the launcher's UNC cwd also identifies the caller's distro.
   const distro = process.env.WSL_DISTRO_NAME || parseWslUncPath(cwd)?.distro
   if (
     !distro ||
@@ -82,7 +74,7 @@ async function resolveFilePath(
   if (!isRuntimePathAbsolute(path)) {
     return path
   }
-  // Why: only in-worktree absolute paths should be relativized here; outside paths must reach the runtime guard unchanged.
+  // Relativize only paths inside the worktree; leave others for the runtime guard.
   const result = await ctx.client.call<{ worktree: RuntimeWorktreeRecord }>('worktree.show', {
     worktree
   })
@@ -116,6 +108,11 @@ function getOpenChangedMode(flags: Map<string, string | boolean>): OpenChangedMo
   throw new RuntimeClientError('invalid_argument', 'Invalid --mode. Use edit, diff, or both.')
 }
 
+// caller leaves views unchanged; --focus moves only the host window, preserving paired viewers.
+function getFileOpenNavigation(flags: Map<string, string | boolean>): RuntimeNavigationTarget {
+  return flags.get('focus') === true ? 'all' : 'caller'
+}
+
 function canOpenEntryForEdit(entry: GitStatusEntry): string | null {
   if (entry.status === 'deleted') {
     return 'deleted file has no edit target'
@@ -129,11 +126,13 @@ function canOpenEntryForEdit(entry: GitStatusEntry): string | null {
 async function openFileEdit(
   ctx: HandlerContext,
   worktree: string,
-  path: string
+  path: string,
+  navigation: RuntimeNavigationTarget
 ): Promise<FileOpenRecord> {
-  const result = await ctx.client.call<RuntimeFileOpenResult>('files.open', {
+  const result = await callFileOpen(ctx, 'files.open', {
     worktree,
-    relativePath: path
+    relativePath: path,
+    navigation
   })
   return {
     path,
@@ -148,12 +147,14 @@ async function openFileDiff(
   ctx: HandlerContext,
   worktree: string,
   path: string,
-  staged: boolean
+  staged: boolean,
+  navigation: RuntimeNavigationTarget
 ): Promise<FileOpenRecord> {
-  const result = await ctx.client.call<RuntimeFileOpenResult>('files.openDiff', {
+  const result = await callFileOpen(ctx, 'files.openDiff', {
     worktree,
     relativePath: path,
-    staged
+    staged,
+    navigation
   })
   return {
     path,
@@ -179,27 +180,38 @@ function formatOpenChangedResult(result: FileOpenChangedResult): string {
   return lines.join('\n')
 }
 
+// A declined single-file open must exit unsuccessfully even when the RPC succeeded.
+function requireOpened(result: RuntimeFileOpenResult, target: string): void {
+  if (!result.opened) {
+    throw new RuntimeClientError(
+      'file_not_opened',
+      `Did not open ${target}: the Orca app declined this ${result.kind} file.`,
+      { nextSteps: ['Update the Orca app, which opens every file type the File Explorer does.'] }
+    )
+  }
+}
+
 function formatFileOpen(result: RuntimeFileOpenResult): string {
-  return result.opened
-    ? `Opened ${result.relativePath}.`
-    : `Did not open ${result.relativePath}: ${result.kind} file.`
+  return `Opened ${result.relativePath}.`
 }
 
 function formatFileDiff(result: RuntimeFileOpenResult): string {
-  return result.opened
-    ? `Opened diff for ${result.relativePath}.`
-    : `Did not open diff for ${result.relativePath}: ${result.kind} file.`
+  return `Opened diff for ${result.relativePath}.`
 }
 
 export const FILE_HANDLERS: Record<string, CommandHandler> = {
   'file open': async (ctx) => {
     const path = getRequiredStringFlag(ctx.flags, 'path')
+    const position = getFileOpenPosition(ctx.flags)
     const worktree = await getFileWorktreeSelector(ctx)
     const relativePath = await resolveFilePath(ctx, worktree, path)
-    const result = await ctx.client.call<RuntimeFileOpenResult>('files.open', {
+    const result = await callFileOpen(ctx, 'files.open', {
       worktree,
-      relativePath
+      relativePath,
+      navigation: getFileOpenNavigation(ctx.flags),
+      ...position
     })
+    requireOpened(result.result, relativePath)
     printResult(result, ctx.json, formatFileOpen)
   },
   'file diff': async (ctx) => {
@@ -207,11 +219,13 @@ export const FILE_HANDLERS: Record<string, CommandHandler> = {
     const staged = ctx.flags.get('staged') === true
     const worktree = await getFileWorktreeSelector(ctx)
     const relativePath = await resolveFilePath(ctx, worktree, path)
-    const result = await ctx.client.call<RuntimeFileOpenResult>('files.openDiff', {
+    const result = await callFileOpen(ctx, 'files.openDiff', {
       worktree,
       relativePath,
-      staged
+      staged,
+      navigation: getFileOpenNavigation(ctx.flags)
     })
+    requireOpened(result.result, `diff for ${relativePath}`)
     printResult(result, ctx.json, formatFileDiff)
   },
   'file open-changed': async (ctx) => {
@@ -221,6 +235,17 @@ export const FILE_HANDLERS: Record<string, CommandHandler> = {
     const opened: FileOpenRecord[] = []
     const skipped: FileOpenRecord[] = []
     const openedEditPaths = new Set<string>()
+    // Apply focus to the first successful open only.
+    let navigation = getFileOpenNavigation(ctx.flags)
+    const openWithFocusOnce = async (
+      open: () => Promise<FileOpenRecord>
+    ): Promise<FileOpenRecord> => {
+      const record = await open()
+      if (record.opened) {
+        navigation = 'caller'
+      }
+      return record
+    }
 
     for (const entry of status.result.entries) {
       if (mode === 'edit' || mode === 'both') {
@@ -235,7 +260,9 @@ export const FILE_HANDLERS: Record<string, CommandHandler> = {
           })
         } else if (!openedEditPaths.has(entry.path)) {
           openedEditPaths.add(entry.path)
-          const record = await openFileEdit(ctx, worktree, entry.path)
+          const record = await openWithFocusOnce(() =>
+            openFileEdit(ctx, worktree, entry.path, navigation)
+          )
           const records = record.opened ? opened : skipped
           records.push(record)
         }
@@ -253,7 +280,9 @@ export const FILE_HANDLERS: Record<string, CommandHandler> = {
             reason: 'unresolved conflict may not have a single diff target'
           })
         } else {
-          const record = await openFileDiff(ctx, worktree, entry.path, staged)
+          const record = await openWithFocusOnce(() =>
+            openFileDiff(ctx, worktree, entry.path, staged, navigation)
+          )
           const records = record.opened ? opened : skipped
           records.push(record)
         }

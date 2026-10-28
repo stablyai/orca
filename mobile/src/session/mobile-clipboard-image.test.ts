@@ -1,6 +1,8 @@
 import { describe, expect, it, vi } from 'vitest'
+import { AppendImageUploadChunk } from '../../../src/shared/rpc-contract/clipboard-params'
 import {
   buildMobileImagePastePayload,
+  buildMobileTerminalImagePastePayload,
   computeMobileClipboardImageDownscale,
   MOBILE_CLIPBOARD_IMAGE_UPLOAD_CHUNK_BASE64_CHARS,
   normalizeMobileClipboardImageBase64,
@@ -61,6 +63,12 @@ describe('mobile clipboard image paste helpers', () => {
         connectionId: 'ssh-1'
       })
     ).resolves.toBe('/tmp/orca-paste-image.png')
+
+    for (const call of client.calls) {
+      if (call.method === 'clipboard.appendImageUploadChunk') {
+        expect(AppendImageUploadChunk.safeParse(call.params).success).toBe(true)
+      }
+    }
 
     expect(client.calls).toEqual([
       {
@@ -150,8 +158,49 @@ describe('mobile clipboard image paste helpers', () => {
   })
 
   it('brackets generated image paths before sending to the terminal', () => {
-    expect(buildMobileImagePastePayload('/tmp/orca.png')).toBe('\x1b[200~/tmp/orca.png\x1b[201~')
-    expect(buildMobileImagePastePayload('/tmp/\x1b.png')).toBe('\x1b[200~/tmp/\u241b.png\x1b[201~')
+    expect(buildMobileImagePastePayload('/tmp/orca.png', 'claude')).toBe(
+      '\x1b[200~/tmp/orca.png\x1b[201~'
+    )
+    expect(buildMobileImagePastePayload('/tmp/\x1b.png', 'claude')).toBe(
+      '\x1b[200~/tmp/\u241b.png\x1b[201~'
+    )
+  })
+
+  it('escapes spaced paths for Codex and unidentified terminals', () => {
+    const escaped = '\x1b[200~/tmp/or\\ ca.png\x1b[201~'
+    expect(buildMobileTerminalImagePastePayload('/tmp/or ca.png', 'codex')).toBe(escaped)
+    expect(buildMobileTerminalImagePastePayload('/tmp/or ca.png', null)).toBe(escaped)
+    expect(buildMobileTerminalImagePastePayload('/tmp/or ca.png', undefined)).toBe(escaped)
+    expect(buildMobileTerminalImagePastePayload('/tmp/or ca.png', 'unknown')).toBe(escaped)
+    expect(buildMobileTerminalImagePastePayload('/tmp/\x1b.png', null)).toBe(
+      '\x1b[200~/tmp/\u241b.png\x1b[201~'
+    )
+  })
+
+  it('keeps file mentions for agents that need them', () => {
+    const mention = '\x1b[200~@"/tmp/or ca.png"\x1b[201~'
+    expect(buildMobileTerminalImagePastePayload('/tmp/or ca.png', 'opencode')).toBe(mention)
+    expect(buildMobileImagePastePayload('/tmp/or ca.png', null)).toBe(mention)
+  })
+
+  it.each([null, 'unknown', 'codex', 'omp'])(
+    'contains embedded paste markers inside the image paste for %s',
+    (agent) => {
+      const payload = buildMobileTerminalImagePastePayload(
+        '/tmp/image\x1b[201~\ncommand\x1b[200~.png',
+        agent
+      )
+      expect(payload.split('\x1b')).toHaveLength(3)
+      expect(payload.startsWith('\x1b[200~')).toBe(true)
+      expect(payload.endsWith('\x1b[201~')).toBe(true)
+      expect(payload).toContain('image\u241b[201~\ncommand\u241b[200~.png')
+    }
+  )
+
+  it('quotes Windows paths with spaces using the host path dialect', () => {
+    expect(
+      buildMobileTerminalImagePastePayload('C:\\Users\\Jane Doe\\Temp\\orca-paste.png', null)
+    ).toBe('\x1b[200~"C:\\Users\\Jane Doe\\Temp\\orca-paste.png"\x1b[201~')
   })
 })
 
@@ -161,8 +210,6 @@ describe('mobile clipboard image downscaling', () => {
   })
 
   it('shrinks both edges by ~sqrt(budget/actual) when over the budget', () => {
-    // 400 base64 chars vs 100 budget -> scale sqrt(0.25) * 0.85 safety = 0.425
-    // 40 * 0.425 = 17, 20 * 0.425 = 8.5 -> floor 8
     expect(computeMobileClipboardImageDownscale(400, 40, 20, 100)).toEqual({ width: 17, height: 8 })
   })
 

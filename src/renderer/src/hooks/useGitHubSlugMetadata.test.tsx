@@ -14,13 +14,7 @@ const apiMocks = vi.hoisted(() => ({
   listAssignableUsersBySlug: vi.fn()
 }))
 
-vi.mock('@/runtime/runtime-rpc-client', () => ({
-  callRuntimeRpc: vi.fn(),
-  getActiveRuntimeTarget: (settings?: { activeRuntimeEnvironmentId?: string | null } | null) =>
-    settings?.activeRuntimeEnvironmentId
-      ? { kind: 'environment', environmentId: settings.activeRuntimeEnvironmentId }
-      : { kind: 'local' }
-}))
+vi.mock('@/runtime/runtime-rpc-client', () => ({ callRuntimeRpc: vi.fn() }))
 
 const roots: Root[] = []
 
@@ -76,9 +70,7 @@ describe('useGitHubSlugMetadata', () => {
 
     function LabelsProbe(): null {
       renders += 1
-      const metadata = useRepoLabelsBySlug('stablyai', 'orca', {
-        activeRuntimeEnvironmentId: null
-      })
+      const metadata = useRepoLabelsBySlug('stablyai', 'orca', { kind: 'local' })
       labels = metadata.data
       return null
     }
@@ -105,9 +97,7 @@ describe('useGitHubSlugMetadata', () => {
 
     function AssigneesProbe(): null {
       renders += 1
-      const metadata = useRepoAssigneesBySlug('stablyai', 'orca', ['jinwoo'], {
-        activeRuntimeEnvironmentId: null
-      })
+      const metadata = useRepoAssigneesBySlug('stablyai', 'orca', ['jinwoo'], { kind: 'local' })
       assigneeLogins = metadata.data.map((user) => user.login)
       return null
     }
@@ -126,25 +116,20 @@ describe('useGitHubSlugMetadata', () => {
   })
 
   it('does not re-issue a failed label fetch when a fresh settings object re-renders', async () => {
-    // Regression: with an unreachable provider, the failure setState re-rendered
-    // the consumer, the fresh settings identity re-armed the effect, and the hook
-    // re-issued the fetch each settlement — a render-paced request storm.
+    // Fresh settings identities previously rearmed fetch after each failure settlement, creating a render-paced request storm.
     let renders = 0
     let error: string | null = null
     apiMocks.listLabelsBySlug.mockRejectedValue(new Error('Could not connect'))
 
     function FailingLabelsProbe(): null {
       renders += 1
-      const metadata = useRepoLabelsBySlug('stablyai', 'orca', {
-        activeRuntimeEnvironmentId: null
-      })
+      const metadata = useRepoLabelsBySlug('stablyai', 'orca', { kind: 'local' })
       error = metadata.error
       return null
     }
 
     renderProbe(<FailingLabelsProbe />)
     await flushEffects()
-    // Extra settlement rounds give a storm the chance to manifest.
     await flushEffects()
     await flushEffects()
 
@@ -157,12 +142,7 @@ describe('useGitHubSlugMetadata', () => {
     apiMocks.listLabelsBySlug.mockResolvedValue({ ok: true, labels: ['enterprise'] })
 
     function LabelsProbe(): null {
-      useRepoLabelsBySlug(
-        'stablyai',
-        'orca',
-        { activeRuntimeEnvironmentId: null },
-        'ghe.example.com'
-      )
+      useRepoLabelsBySlug('stablyai', 'orca', { kind: 'local' }, 'ghe.example.com')
       return null
     }
 
@@ -183,9 +163,7 @@ describe('useGitHubSlugMetadata', () => {
 
     function FailingAssigneesProbe(): null {
       renders += 1
-      const metadata = useRepoAssigneesBySlug('stablyai', 'orca', ['jinwoo'], {
-        activeRuntimeEnvironmentId: null
-      })
+      const metadata = useRepoAssigneesBySlug('stablyai', 'orca', ['jinwoo'], { kind: 'local' })
       error = metadata.error
       return null
     }

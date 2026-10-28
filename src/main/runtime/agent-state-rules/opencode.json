@@ -1,0 +1,22 @@
+{
+  "id": "opencode",
+  "engineVersion": 1,
+  "profile": { "hooks": "authoritative" },
+  "anchors": [
+    {
+      "id": "native_title",
+      "why": "OpenCode's own session title (`OC | <session>`, after an optional wrapper label or status glyph). It unblocks waits on hookless remote panes; guarded writes corroborate it. Named because presence detection reads the same marker.",
+      "when": { "region": "title", "match": { "predicate": "opencode-native-title" } },
+      "answer": { "state": "idle" }
+    }
+  ],
+  "rules": [
+    {
+      "id": "name_title",
+      "why": "OpenCode owns its session title, so Orca writes no `ready` title over it; its name is its only other rest sign, so it settles once held, with no quiet asked.",
+      "priority": 100,
+      "when": { "region": "title", "status": "idle" },
+      "answer": { "state": "idle", "strength": "weak", "requiresQuiet": false }
+    }
+  ]
+}

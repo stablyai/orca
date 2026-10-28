@@ -5,6 +5,7 @@ import {
 
 export type PtyStartupIngressIntent = {
   colors: TerminalOscColorQueryReplyColors
+  kittyKeyboardProtocol?: boolean
   deadlineMs: number
 }
 
@@ -14,27 +15,36 @@ export function parsePtyStartupIngressIntent(value: unknown): PtyStartupIngressI
   if (!value || typeof value !== 'object') {
     return undefined
   }
-  const record = value as Record<string, unknown>
-  const colors = record.colors
-  if (!colors || typeof colors !== 'object') {
-    return undefined
-  }
-  const colorRecord = colors as Record<string, unknown>
+  const kittyKeyboardProtocol =
+    'kittyKeyboardProtocol' in value && value.kittyKeyboardProtocol === true
+  const colors = 'colors' in value ? value.colors : undefined
   const normalizedColors = {
-    ...(typeof colorRecord.foreground === 'string' ? { foreground: colorRecord.foreground } : {}),
-    ...(typeof colorRecord.background === 'string' ? { background: colorRecord.background } : {})
+    ...(colors &&
+    typeof colors === 'object' &&
+    'foreground' in colors &&
+    typeof colors.foreground === 'string'
+      ? { foreground: colors.foreground }
+      : {}),
+    ...(colors &&
+    typeof colors === 'object' &&
+    'background' in colors &&
+    typeof colors.background === 'string'
+      ? { background: colors.background }
+      : {})
   }
+  const deadlineMs = 'deadlineMs' in value ? value.deadlineMs : undefined
   if (
-    !terminalOscColorQueryReplies(normalizedColors, [10, 11]) ||
-    typeof record.deadlineMs !== 'number' ||
-    !Number.isFinite(record.deadlineMs) ||
-    record.deadlineMs < 0 ||
-    record.deadlineMs > 30_000
+    (!kittyKeyboardProtocol && !terminalOscColorQueryReplies(normalizedColors, [10, 11])) ||
+    typeof deadlineMs !== 'number' ||
+    !Number.isFinite(deadlineMs) ||
+    deadlineMs < 0 ||
+    deadlineMs > 30_000
   ) {
     return undefined
   }
   return {
     colors: normalizedColors,
-    deadlineMs: record.deadlineMs
+    ...(kittyKeyboardProtocol ? { kittyKeyboardProtocol: true } : {}),
+    deadlineMs
   }
 }

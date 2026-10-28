@@ -4,6 +4,7 @@ import { Label } from '../ui/label'
 import { SearchableSetting } from './SearchableSetting'
 import { SettingsSegmentedControl, SettingsSwitch } from './SettingsFormControls'
 import { getExperimentalSearchEntry } from './experimental-search'
+import { canOpenAgentDashboardPopout } from '../dashboard/agent-dashboard-open-mode'
 
 type AgentDashboardExperimentalSettingProps = {
   settings: GlobalSettings
@@ -55,7 +56,7 @@ export function AgentDashboardExperimentalSetting({
           onChange={() => updateSettings({ experimentalAgentDashboardPopout: !enabled })}
         />
       </div>
-      {enabled ? (
+      {enabled && canOpenAgentDashboardPopout() ? (
         <div className="ml-4 space-y-3 border-l border-border pl-4">
           <div className="flex items-start justify-between gap-4">
             <div className="min-w-0 shrink space-y-0.5">

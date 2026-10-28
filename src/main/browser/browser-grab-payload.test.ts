@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { clampGrabPayload } from './browser-grab-payload'
 
-function makeRawPayload(overrides: Record<string, unknown> = {}): Record<string, unknown> {
+function makeRawPayload(overrides: Record<string, unknown> = {}) {
   return {
     page: {
       sanitizedUrl: 'https://example.com/page?access_token=secret#hash',
@@ -66,7 +66,7 @@ describe('clampGrabPayload', () => {
     const payload = clampGrabPayload(
       makeRawPayload({
         target: {
-          ...(makeRawPayload().target as Record<string, unknown>),
+          ...makeRawPayload().target,
           cssClasses: 'primary access_token=secret'
         }
       })
@@ -79,7 +79,7 @@ describe('clampGrabPayload', () => {
     const payload = clampGrabPayload(
       makeRawPayload({
         target: {
-          ...(makeRawPayload().target as Record<string, unknown>),
+          ...makeRawPayload().target,
           elementPath: 'main > button[aria-label="access_token=secret"]',
           fullPath: 'body > main > button#client_secret',
           reactComponents: '<App> <PasswordSecretPanel>',
@@ -110,7 +110,7 @@ describe('clampGrabPayload', () => {
     const payload = clampGrabPayload(
       makeRawPayload({
         target: {
-          ...(makeRawPayload().target as Record<string, unknown>),
+          ...makeRawPayload().target,
           nearbyElements: Array.from({ length: 10 }, (_, index) => `item-${index}`),
           reactComponents: '<App>'.repeat(200),
           sourceFile: 'src/Button.tsx:12:4'
@@ -118,8 +118,15 @@ describe('clampGrabPayload', () => {
       })
     )
 
-    expect(payload?.target.nearbyElements).toHaveLength(6)
-    expect(payload?.target.reactComponents?.length).toBeLessThanOrEqual(512)
+    expect(payload?.target.nearbyElements).toEqual([
+      'item-0',
+      'item-1',
+      'item-2',
+      'item-3',
+      'item-4',
+      'item-5'
+    ])
+    expect(payload?.target.reactComponents).toBe(`${'<App>'.repeat(100)} (truncated)`)
     expect(payload?.target.sourceFile).toBe('src/Button.tsx:12:4')
   })
 
@@ -127,11 +134,11 @@ describe('clampGrabPayload', () => {
     const payload = clampGrabPayload(
       makeRawPayload({
         page: {
-          ...(makeRawPayload().page as Record<string, unknown>),
+          ...makeRawPayload().page,
           sanitizedUrl: 'javascript:alert(1)'
         },
         target: {
-          ...(makeRawPayload().target as Record<string, unknown>),
+          ...makeRawPayload().target,
           attributes: {
             href: 'javascript:alert(1)',
             src: 'data:text/html,<script>alert(1)</script>',
@@ -147,5 +154,61 @@ describe('clampGrabPayload', () => {
     expect(payload?.target.attributes.src).toBe('')
     expect(payload?.target.attributes.action).toBe('')
     expect(payload?.target.attributes.title).toBe('Safe label')
+  })
+
+  it('keeps safe and ARIA attributes while stripping unsafe names', () => {
+    const payload = clampGrabPayload(
+      makeRawPayload({
+        target: {
+          ...makeRawPayload().target,
+          attributes: {
+            ID: 'checkout',
+            class: 'source-code stateful auth token',
+            role: 'button',
+            type: 'button',
+            'aria-label': 'Submit',
+            'aria-labelledby': 'checkout-label',
+            'aria-hidden': 'false',
+            onclick: 'alert(1)',
+            style: 'display:none',
+            'data-secret': 'hidden',
+            'notaria-label': 'unexpected'
+          }
+        }
+      })
+    )
+
+    expect(payload?.target.attributes).toEqual({
+      id: 'checkout',
+      class: 'source-code stateful auth token',
+      role: 'button',
+      type: 'button',
+      'aria-label': 'Submit',
+      'aria-labelledby': 'checkout-label',
+      'aria-hidden': 'false'
+    })
+  })
+
+  it.each([
+    'access_token=credential',
+    'API_KEY=credential',
+    'password=credential',
+    'secret=credential',
+    'session_id=credential',
+    'csrf=credential'
+  ])('redacts %s in allowed attribute values', (value) => {
+    const payload = clampGrabPayload(
+      makeRawPayload({
+        target: {
+          ...makeRawPayload().target,
+          attributes: { title: value, 'aria-label': value }
+        }
+      })
+    )
+
+    expect(payload?.target.attributes).toEqual({
+      title: '[redacted]',
+      'aria-label': '[redacted]'
+    })
   })
 })

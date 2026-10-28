@@ -6,12 +6,12 @@ import type { TerminalLayoutSnapshot, TerminalTab } from './terminal-tab-types'
 import type { BrowserHistoryEntry, BrowserPage, BrowserWorkspace } from './browser-workspace-types'
 import type { WorkspaceDocHistoryEntry } from './workspace-doc-history'
 import type { ClientHostedBrowserCloseIntent } from './client-hosted-browser-close-intent'
+import type { PairedTerminalTabCloseIntent } from './paired-terminal-tab-close-intent'
 import type { PersistedClientHostedBrowserPage } from './client-hosted-browser-page-record'
 import type { ClosedTerminalTabTombstonesByTabId } from './closed-terminal-tab-tombstones'
+import type { ClosedTerminalPanesByPaneKey } from './closed-terminal-panes'
 
-/** Minimal subset of OpenFile persisted across restarts.
- *  Only edit-mode files are saved — diffs, conflict reviews, and other
- *  transient views are reconstructed on demand from git state. */
+/** Persist edit-mode files only; reconstruct transient diffs/conflicts from git state. */
 export type PersistedOpenFile = {
   filePath: string
   relativePath: string
@@ -19,15 +19,14 @@ export type PersistedOpenFile = {
   language: string
   isPreview?: boolean
   runtimeEnvironmentId?: string | null
+  mirroredFromRuntimeSession?: true
   /** SSH target that owns an absolute path outside the worktree. */
   externalSshTargetId?: string
   /** Unsaved editor buffer captured for hot exit; presence restores the tab dirty. */
   dirtyDraftContent?: string
-  /** Signature of the disk content the dirty draft is based on; lets restore
-   *  re-derive a changed-on-disk conflict from ground truth. */
+  /** Base disk signature for re-detecting changed-on-disk conflicts after draft restore. */
   lastKnownDiskSignature?: string
-  /** Why: a read-only tab (AI Vault View Log) must survive restart still
-   *  read-only; persisted only when true so old sessions stay writable. */
+  /** Persist read-only only when true so log tabs stay read-only and older sessions stay writable. */
   readOnly?: boolean
   /** Opt-in streaming append for a read-only local log tab. */
   liveTail?: boolean
@@ -43,13 +42,12 @@ export type WorkspaceSessionState = {
   /** Keys may be legacy raw worktree IDs or canonical WorkspaceKey values. */
   tabsByWorktree: Record<string, TerminalTab[]>
   terminalLayoutsByTabId: Record<string, TerminalLayoutSnapshot>
-  /** Worktree IDs that had at least one tab with a live PTY at shutdown.
-   *  Used on startup to eagerly re-spawn PTY processes so the Active filter
-   *  works immediately after restart. */
+  /** Ordinary cold-park scrollback, tabId → leafId → buffer; never leaves this client.
+   * Keep separate from peer-shared layout buffers: wholesale layout copies would upload frequent hidden-workspace captures. Inventory apply rewrites layouts, leaving this home intact. Read through resolveLeafScrollbackBuffers for precedence between homes. */
+  localOnlyScrollbackByTabId?: Record<string, Record<string, string>>
+  /** Workspaces with live PTYs at shutdown; eagerly respawn on startup so the Active filter is immediately useful. */
   activeWorktreeIdsOnShutdown?: string[]
-  /** Editor files that were open at shutdown, keyed by worktree ID.
-   *  Only edit-mode files are persisted — diffs and conflict views are
-   *  transient and not restored. */
+  /** Edit-mode files open at shutdown; transient diff/conflict views are rebuilt on demand. */
   openFilesByWorktree?: Record<string, PersistedOpenFile[]>
   /** Per-worktree active editor file ID (filePath) at shutdown. */
   activeFileIdByWorktree?: Record<string, string | null>
@@ -61,18 +59,12 @@ export type WorkspaceSessionState = {
   browserPagesByWorkspace?: Record<string, BrowserPage[]>
   /** Per-worktree active browser workspace ID at shutdown. */
   activeBrowserTabIdByWorktree?: Record<string, string | null>
-  /**
-   * Runtime-authored: the client-hosted logical pages this runtime owns, keyed by worktree ID.
-   * Written and read only by the runtime that is the pages' authority — the desktop's own
-   * `browserPagesByWorkspace` rows are the client-side half of the same tabs.
-   */
+  /** Runtime-authoritative logical client-hosted pages; desktop browserPagesByWorkspace holds the client half. */
   clientHostedBrowserPagesByWorktree?: Record<string, PersistedClientHostedBrowserPage[]>
-  /**
-   * Client-authored: closes of client-hosted pages that could not reach their owning runtime,
-   * keyed by runtime environment ID. Replayed on reconnect so persistence cannot resurrect a tab
-   * the user deliberately closed while the host was down.
-   */
+  /** Undelivered client-hosted page closes by runtime environment; replay on reconnect to prevent persistence resurrecting closed tabs. */
   clientHostedBrowserCloseIntentsByEnvironment?: Record<string, ClientHostedBrowserCloseIntent[]>
+  /** Undelivered paired-runtime session-tab closes; replay when a host snapshot still lists the tab. */
+  pairedTerminalTabCloseIntentsByEnvironment?: Record<string, PairedTerminalTabCloseIntent[]>
   /** Per-worktree active tab type (terminal vs editor vs browser) at shutdown. */
   activeTabTypeByWorktree?: Record<string, WorkspaceVisibleTabType>
   /** Global browser URL history for address bar autocomplete. */
@@ -81,8 +73,7 @@ export type WorkspaceSessionState = {
   workspaceDocHistory?: WorkspaceDocHistoryEntry[]
   /** Per-worktree last-active terminal tab ID at shutdown. */
   activeTabIdByWorktree?: Record<string, string | null>
-  /** Unified tab model — present when saved by a build that includes TabsSlice.
-   *  Read-path checks for this first; falls back to legacy fields if absent. */
+  /** Unified tabs take precedence on read; fall back to legacy fields when absent. */
   unifiedTabs?: Record<string, Tab[]>
   /** Tab group model — present alongside unifiedTabs. */
   tabGroups?: Record<string, TabGroup[]>
@@ -93,22 +84,11 @@ export type WorkspaceSessionState = {
   /** SSH target IDs that were connected at shutdown. Used on startup to
    *  auto-reconnect before attempting remote PTY reattach. */
   activeConnectionIdsAtShutdown?: string[]
-  /** Maps tab IDs to their remote relay PTY session IDs. Populated at
-   *  shutdown from renderer state so remote PTYs can be reattached via
-   *  the relay's pty.attach RPC on startup. */
+  /** Relay PTY session IDs captured at shutdown for startup pty.attach. */
   remoteSessionIdsByTabId?: Record<string, string>
-  /** Per-worktree focus-recency timestamps used by the Cmd+J empty-query
-   *  ordering. Separate from worktree.lastActivityAt (background signal)
-   *  and worktreeNavHistory (Back/Forward stack). See
-   *  docs/cmd-j-empty-query-ordering.md. Absent in sessions written by
-   *  older builds — hydration tolerates missing/partial maps and the
-   *  active worktree is seeded on first restore. New host-qualified keys use
-   *  `${executionHostId}|${worktreeId}`; legacy bare keys remain readable
-   *  during migration and remote snapshot projection. */
+  /** Cmd+J focus recency, distinct from background activity and navigation history (docs/cmd-j-empty-query-ordering.md). Accept missing/partial legacy maps; seed the active workspace on restore. Keys may be <hostId>|<worktreeId> or legacy bare IDs. */
   lastVisitedAtByWorktreeId?: Record<string, number>
-  /** Worktrees whose repo-defined default terminal tabs have already been
-   *  considered. Persisted so closing all tabs and re-opening the workspace
-   *  does not recreate the template. */
+  /** Persist default-tab admission so reopening a workspace after closing all tabs does not recreate its template. */
   defaultTerminalTabsAppliedByWorktreeId?: Record<string, true>
   /** Provider-session resume records captured when workspaces sleep. */
   sleepingAgentSessionsByPaneKey?: Record<string, SleepingAgentSessionRecord>
@@ -131,6 +111,9 @@ export type WorkspaceSessionState = {
   /** Terminal tabs this client watched the user close, kept until the host's own snapshot stops
    *  listing them. See shared/closed-terminal-tab-tombstones.ts for why absence alone cannot say it. */
   closedTerminalTabTombstonesByTabId?: ClosedTerminalTabTombstonesByTabId
+  /** Layout-owner builds: panes main's layout dropped while their terminals may run on. See
+   *  shared/closed-terminal-panes.ts. */
+  closedTerminalPanesByPaneKey?: ClosedTerminalPanesByPaneKey
 }
 
 export type WorkspaceSessionPatch = Partial<WorkspaceSessionState>

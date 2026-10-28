@@ -3,96 +3,65 @@ import type { AppState } from '../types'
 import type {
   SshConnectionState,
   PortForwardEntry,
+  UnrestoredPortForward,
   EnrichedDetectedPort,
   SshTargetSummary
 } from '../../../../shared/ssh-types'
 import {
   buildRemovedSshTargetCleanupPatch,
   collectSshTargetGenerations,
-  sshConnectionStatesEqual,
   sshTargetGenerationsEqual,
   sshTargetLabelsEqual
 } from './ssh-target-cleanup'
-
-export type RemoteWorkspaceSyncStatus = {
-  phase: 'idle' | 'pulling' | 'pushing' | 'synced' | 'conflict' | 'error' | 'offline'
-  direction?: 'pull' | 'push'
-  revision?: number
-  updatedAt?: number
-  hostObservationToken?: string
-  lastSyncedAt?: number
-  message?: string
-}
+import { sshConnectionStatesEqual } from './ssh-connection-state-equality'
+import { createBoundedGenerationMap } from '../../lib/bounded-generation-map'
 
 export type SshCredentialRequest = {
   requestId: string
   targetId: string
   kind: 'passphrase' | 'password' | 'keyboard-interactive'
   detail: string
+  /** RFC 4256 echo flag for keyboard-interactive prompts: when true the
+   * server allows the typed response to be shown. */
+  echo?: boolean
 }
 
 export type SshSlice = {
   sshConnectionStates: Map<string, SshConnectionState>
-  /** Maps target IDs to their user-facing labels. Populated during hydration
-   * so components can look up labels without per-component IPC calls. */
+  /** Hydrate labels once so components need no per-host IPC reads. */
   sshTargetLabels: Map<string, string>
-  /**
-   * Maps target IDs to their *registration* generations — the incarnation an
-   * owner is fenced against, not `SshConnectionState.connectionGeneration`.
-   *
-   * Mirrored here for the same reason as the labels, and mirrored by the runtime
-   * buckets already: only a generation makes a desktop SSH host fenceable, so a
-   * consumer without it degrades every such host to view-only. A target with no
-   * usable generation is simply absent — see `collectSshTargetGenerations`.
-   */
+  /** Registration incarnation for owner fences, independent of connectionGeneration; absent usable generation leaves the host view-only (collectSshTargetGenerations). */
   sshTargetGenerations: Map<string, number>
-  /** Maps REMOVED target IDs to their last known label (from re-adoption
-   * tombstones). Lets ghost-host UI show a friendly name instead of the raw id
-   * for a workspace still pinned to a deleted target. */
+  /** Retain removed-target labels from re-adoption tombstones for workspaces still pinned to them. */
   removedSshTargetLabels: Map<string, string>
-  /** True once a target list actually loaded (even an empty one). Distinguishes
-   * "this client knows the target set" from "never hydrated" (e.g. a paired
-   * client on a host without the ssh RPC), so absence from sshTargetLabels
-   * only counts as removal evidence when this is set. */
+  /** Absence proves removal only after a target list loads, including empty; legacy servers may never hydrate. */
   sshTargetsHydrated: boolean
-  remoteWorkspaceHydratedTargetIds: Set<string>
-  remoteWorkspaceSyncStatusByTargetId: Record<string, RemoteWorkspaceSyncStatus>
   sshCredentialQueue: SshCredentialRequest[]
-  /** Incremented when an SSH target transitions to 'connected'. Allows
-   * components like the file explorer to re-trigger data loads that failed
-   * before the connection was established. */
+  /** Connected-transition epoch lets failed consumers retry loads. */
   sshConnectedGeneration: number
-  /** Port forwards keyed by connection ID. Updated via push events from main.
-   *  Why Record instead of Map: Zustand selectors use shallow-equality on plain
-   *  objects. Spreading a Record produces a new reference that Zustand can diff
-   *  by identity, whereas Map mutations are easy to get wrong. */
+  /** Use immutable Record updates for Zustand selector identity; per-connection forwards arrive via main push events. */
   portForwardsByConnection: Record<string, PortForwardEntry[]>
-  /** Detected remote listening ports after main-process enrichment, keyed by
-   *  connection ID. Updated from SSH IPC snapshots and push events. */
+  /** Saved forwards that aren't open, keyed by connection ID, so one that can't start stays removable. */
+  unrestoredPortForwardsByConnection: Record<string, UnrestoredPortForward[]>
+  /** Remote listening ports enriched by main, from SSH snapshots/push events. */
   detectedPortsByConnection: Record<string, EnrichedDetectedPort[]>
   setSshConnectionState: (targetId: string, state: SshConnectionState) => void
   setSshTargetLabels: (labels: Map<string, string>) => void
   setRemovedSshTargetLabels: (labels: Record<string, string>) => void
   setSshTargetsMetadata: (targets: SshTargetSummary[]) => void
   clearRemovedSshTargetState: (targetId: string) => void
-  markRemoteWorkspaceHydrated: (targetId: string) => void
-  clearRemoteWorkspaceHydrated: (targetId: string) => void
-  setRemoteWorkspaceSyncStatus: (targetId: string, status: RemoteWorkspaceSyncStatus) => void
   enqueueSshCredentialRequest: (req: SshCredentialRequest) => void
   removeSshCredentialRequest: (requestId: string) => void
   setPortForwards: (targetId: string, forwards: PortForwardEntry[]) => void
+  setUnrestoredPortForwards: (targetId: string, forwards: UnrestoredPortForward[]) => void
   clearPortForwards: (targetId: string) => void
   setDetectedPorts: (targetId: string, ports: EnrichedDetectedPort[]) => void
 }
 
-const targetConnectionGeneration = new Map<string, number>()
+const localTargetConnectionGenerations = createBoundedGenerationMap(4096)
 
 export function getLocalSshTargetConnectionGeneration(targetId: string): number {
-  return targetConnectionGeneration.get(targetId) ?? 0
-}
-
-function advanceLocalSshTargetConnectionGeneration(targetId: string): void {
-  targetConnectionGeneration.set(targetId, getLocalSshTargetConnectionGeneration(targetId) + 1)
+  return localTargetConnectionGenerations.get(targetId)
 }
 
 export const createSshSlice: StateCreator<AppState, [], [], SshSlice> = (set) => ({
@@ -101,11 +70,10 @@ export const createSshSlice: StateCreator<AppState, [], [], SshSlice> = (set) =>
   sshTargetGenerations: new Map(),
   removedSshTargetLabels: new Map(),
   sshTargetsHydrated: false,
-  remoteWorkspaceHydratedTargetIds: new Set(),
-  remoteWorkspaceSyncStatusByTargetId: {},
   sshCredentialQueue: [],
   sshConnectedGeneration: 0,
   portForwardsByConnection: {},
+  unrestoredPortForwardsByConnection: {},
   detectedPortsByConnection: {},
 
   setSshConnectionState: (targetId, state) =>
@@ -115,7 +83,7 @@ export const createSshSlice: StateCreator<AppState, [], [], SshSlice> = (set) =>
       if (sshConnectionStatesEqual(previous, state)) {
         return s
       }
-      advanceLocalSshTargetConnectionGeneration(targetId)
+      localTargetConnectionGenerations.advance(targetId)
       next.set(targetId, state)
       const didReconnect = previous?.status !== 'connected' && state.status === 'connected'
       let blockedConnections = s.transientClearedAgentStatusConnectionIds
@@ -144,8 +112,7 @@ export const createSshSlice: StateCreator<AppState, [], [], SshSlice> = (set) =>
         sshTargetLabelsEqual(s.sshTargetLabels, targets) &&
         sshTargetGenerationsEqual(s.sshTargetGenerations, sshTargetGenerations)
       ) {
-        // Why: an unchanged (even empty) list is still a successful load — the
-        // hydration flag must flip on the first fetch of an empty target set.
+        // An unchanged empty list still proves first hydration.
         return s.sshTargetsHydrated ? s : { sshTargetsHydrated: true }
       }
       return {
@@ -156,25 +123,6 @@ export const createSshSlice: StateCreator<AppState, [], [], SshSlice> = (set) =>
     }),
   clearRemovedSshTargetState: (targetId) =>
     set((s) => buildRemovedSshTargetCleanupPatch(s, targetId) ?? s),
-  markRemoteWorkspaceHydrated: (targetId) =>
-    set((s) => {
-      const next = new Set(s.remoteWorkspaceHydratedTargetIds)
-      next.add(targetId)
-      return { remoteWorkspaceHydratedTargetIds: next }
-    }),
-  clearRemoteWorkspaceHydrated: (targetId) =>
-    set((s) => {
-      const next = new Set(s.remoteWorkspaceHydratedTargetIds)
-      next.delete(targetId)
-      return { remoteWorkspaceHydratedTargetIds: next }
-    }),
-  setRemoteWorkspaceSyncStatus: (targetId, status) =>
-    set((s) => ({
-      remoteWorkspaceSyncStatusByTargetId: {
-        ...s.remoteWorkspaceSyncStatusByTargetId,
-        [targetId]: status
-      }
-    })),
   enqueueSshCredentialRequest: (req) =>
     set((s) => ({ sshCredentialQueue: [...s.sshCredentialQueue, req] })),
   removeSshCredentialRequest: (requestId) =>
@@ -191,6 +139,19 @@ export const createSshSlice: StateCreator<AppState, [], [], SshSlice> = (set) =>
         delete next[targetId]
       }
       return { portForwardsByConnection: next }
+    }),
+
+  setUnrestoredPortForwards: (targetId, forwards) =>
+    set((s) => {
+      const next = { ...s.unrestoredPortForwardsByConnection }
+      if (forwards.length > 0) {
+        next[targetId] = forwards
+      } else if (targetId in next) {
+        delete next[targetId]
+      } else {
+        return s
+      }
+      return { unrestoredPortForwardsByConnection: next }
     }),
 
   clearPortForwards: (targetId) =>

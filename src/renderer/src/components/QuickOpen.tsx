@@ -1,9 +1,8 @@
+import { useQuickOpenInteraction } from './use-quick-open-interaction'
 import React, { useCallback, useDeferredValue, useEffect, useMemo, useState } from 'react'
 import { useAppStore } from '@/store'
 import { useActiveWorktree } from '@/store/selectors'
-import { detectLanguage } from '@/lib/language-detect'
-import { joinPath } from '@/lib/path'
-import { getFileTypeIcon } from '@/lib/file-type-icons'
+import { FileTypeIcon } from '@/components/FileTypeIcon'
 import {
   CommandDialog,
   CommandInput,
@@ -12,7 +11,13 @@ import {
   CommandItem
 } from '@/components/ui/command'
 import { FilePathCursorTooltip, splitTrailingSegment } from '@/components/file-path-cursor-tooltip'
-import { prepareQuickOpenFiles, rankQuickOpenFiles } from '@/components/quick-open-search'
+import {
+  parseQuickOpenQueryTarget,
+  isQuickOpenAbsolutePath
+} from '../../../shared/quick-open-query-target'
+import { openQuickOpenFile } from './quick-open-file-navigation'
+import { rankQuickOpenFilesWithHistory } from './quick-open-history-ranking'
+import { useQuickOpenHistory } from '@/lib/quick-open-file-history'
 import { useRuntimeFileListForWorktree } from '@/components/quick-open-file-list'
 import { useModalReturnFocus } from '@/hooks/useModalReturnFocus'
 import { translate } from '@/i18n/i18n'
@@ -39,7 +44,7 @@ export default function QuickOpen(): React.JSX.Element | null {
       setLingering(true)
       return
     }
-    // Why: keep scan cancellation and the dialog exit animation mounted before releasing remote file state.
+    // Retain scan cancellation/exit animation before releasing remote file state.
     const timer = window.setTimeout(() => setLingering(false), QUICK_OPEN_CLOSE_LINGER_MS)
     return () => window.clearTimeout(timer)
   }, [visible])
@@ -53,27 +58,28 @@ export default function QuickOpen(): React.JSX.Element | null {
 function QuickOpenContent({ visible }: { visible: boolean }): React.JSX.Element {
   const closeModal = useAppStore((s) => s.closeModal)
   const activeWorktreeId = useAppStore((s) => s.activeWorktreeId)
-  const openFile = useAppStore((s) => s.openFile)
   const activeWorktree = useActiveWorktree()
 
   const [query, setQuery] = useState('')
   const deferredQuery = useDeferredValue(query)
-  const { files, loading, loadError, truncated } = useRuntimeFileListForWorktree({
-    enabled: visible,
+  const parsedTarget = useMemo(() => parseQuickOpenQueryTarget(deferredQuery), [deferredQuery])
+  const absoluteQuery = isQuickOpenAbsolutePath(parsedTarget.pathQuery)
+  const [openError, setOpenError] = useState<string | null>(null)
+  const { opening, invalidate, begin } = useQuickOpenInteraction(activeWorktreeId)
+  const [selectedPath, setSelectedPath] = useState('')
+  const worktreePath = activeWorktree?.path ?? null
+  const history = useQuickOpenHistory(activeWorktreeId, worktreePath)
+  const { files, loading, loadError, truncated, recentError } = useRuntimeFileListForWorktree({
+    enabled: visible && !absoluteQuery,
     worktreeId: activeWorktreeId,
-    query: deferredQuery
+    query: parsedTarget.pathQuery,
+    recentPaths: history
   })
 
-  const worktreePath = activeWorktree?.path ?? null
-
-  // Why: Radix's onCloseAutoFocus restore is suppressed below, so dismissing
-  // the dialog (Esc / click-away) would otherwise leave the active panel
-  // unfocused. This returns focus to the surface that was active on open.
+  // Restore the opening surface because Radix trigger restoration is suppressed.
   const { captureReturnFocus, skipReturnFocus } = useModalReturnFocus(visible)
 
-  // Why: reset input only on open. Keeping this out of the file-load effect
-  // prevents unrelated store updates (which can produce a new excludePaths
-  // array reference) from wiping a query the user is currently typing.
+  // Reset only on open; file-load/exclusion identity changes must not erase a typed query.
   const [previousVisible, setPreviousVisible] = useState(visible)
   if (visible !== previousVisible) {
     setPreviousVisible(visible)
@@ -82,39 +88,65 @@ function QuickOpenContent({ visible }: { visible: boolean }): React.JSX.Element 
     }
   }
 
-  const indexedFiles = useMemo(() => prepareQuickOpenFiles(files), [files])
-  const filtered = useMemo(
-    () => rankQuickOpenFiles(deferredQuery, indexedFiles),
-    [deferredQuery, indexedFiles]
+  const effectiveTarget = useMemo(
+    () =>
+      files.includes(deferredQuery.trim()) ? { pathQuery: deferredQuery.trim() } : parsedTarget,
+    [files, deferredQuery, parsedTarget]
   )
+  const filtered = useMemo(() => {
+    if (absoluteQuery) {
+      return [{ path: parsedTarget.pathQuery, score: 0 }]
+    }
+    return rankQuickOpenFilesWithHistory(effectiveTarget.pathQuery, files, history)
+  }, [absoluteQuery, parsedTarget.pathQuery, effectiveTarget.pathQuery, files, history])
 
   const handleSelect = useCallback(
-    (relativePath: string) => {
-      if (!activeWorktreeId || !worktreePath) {
+    async (selectedPath: string) => {
+      if (!activeWorktreeId || !worktreePath || opening) {
         return
       }
-      // Why: opening a file moves focus into the editor; don't restore focus to
-      // the surface that was active before QuickOpen opened.
-      skipReturnFocus()
-      closeModal()
-      openFile({
-        filePath: joinPath(worktreePath, relativePath),
-        relativePath,
-        worktreeId: activeWorktreeId,
-        language: detectLanguage(relativePath),
-        mode: 'edit'
-      })
+      const interaction = begin()
+      setOpenError(null)
+      try {
+        await openQuickOpenFile(
+          selectedPath,
+          activeWorktreeId,
+          worktreePath,
+          effectiveTarget,
+          deferredQuery,
+          interaction.assertCurrent
+        )
+        interaction.assertCurrent()
+        skipReturnFocus()
+        closeModal()
+      } catch (error) {
+        if (interaction.isCurrent()) {
+          setOpenError(error instanceof Error ? error.message : String(error))
+        }
+      } finally {
+        interaction.finish()
+      }
     },
-    [activeWorktreeId, worktreePath, openFile, closeModal, skipReturnFocus]
+    [
+      activeWorktreeId,
+      worktreePath,
+      effectiveTarget,
+      deferredQuery,
+      opening,
+      begin,
+      closeModal,
+      skipReturnFocus
+    ]
   )
 
   const handleOpenChange = useCallback(
     (open: boolean) => {
       if (!open) {
+        invalidate()
         closeModal()
       }
     },
-    [closeModal]
+    [closeModal, invalidate]
   )
 
   const handleCloseAutoFocus = useCallback((e: Event) => {
@@ -131,6 +163,12 @@ function QuickOpenContent({ visible }: { visible: boolean }): React.JSX.Element 
       open={visible}
       onOpenChange={handleOpenChange}
       shouldFilter={false}
+      commandProps={{
+        value: filtered.some((item) => item.path === selectedPath)
+          ? selectedPath
+          : (filtered[0]?.path ?? ''),
+        onValueChange: setSelectedPath
+      }}
       onOpenAutoFocus={handleOpenAutoFocus}
       onCloseAutoFocus={handleCloseAutoFocus}
       title={translate('auto.components.QuickOpen.ec31e058f7', 'Go to file')}
@@ -139,21 +177,35 @@ function QuickOpenContent({ visible }: { visible: boolean }): React.JSX.Element 
       <CommandInput
         placeholder={translate('auto.components.QuickOpen.1cb6ef47b7', 'Go to file...')}
         value={query}
-        onValueChange={setQuery}
+        onValueChange={(value) => {
+          invalidate()
+          setQuery(value)
+          setSelectedPath('')
+          setOpenError(null)
+        }}
         className="!h-9 !py-2"
       />
       <CommandList className="p-2">
-        {loading ? (
+        {recentError ? (
+          <div role="status" className="px-3 py-2 text-xs text-muted-foreground">
+            {recentError}
+          </div>
+        ) : null}
+        {openError ? (
+          <div role="alert" className="px-3 py-2 text-xs text-destructive">
+            {openError}
+          </div>
+        ) : null}
+        {loading && !absoluteQuery ? (
           <div className="py-6 text-center text-sm text-muted-foreground">
             {translate('auto.components.QuickOpen.722a21e1a8', 'Loading files...')}
           </div>
-        ) : loadError ? (
+        ) : loadError && !absoluteQuery ? (
           (() => {
             const guidance = parseQuickOpenInstallRgGuidance(loadError)
             return guidance ? (
               <QuickOpenInstallRgGuidance
                 reason={guidance.reason}
-                location={guidance.location}
                 command={guidance.command}
                 guidance={guidance.guidance}
               />
@@ -170,24 +222,26 @@ function QuickOpenContent({ visible }: { visible: boolean }): React.JSX.Element 
         ) : (
           filtered.map((item) => {
             const { directory, filename } = splitTrailingSegment(item.path)
-            const FileIcon = getFileTypeIcon(item.path)
 
             return (
               <CommandItem
                 key={item.path}
                 value={item.path}
-                onSelect={() => handleSelect(item.path)}
+                onSelect={() => {
+                  void handleSelect(item.path)
+                }}
+                disabled={opening}
                 // Why: CommandDialog's descendant rule otherwise adds 24px of vertical padding.
                 className="min-w-0 !p-0"
               >
-                {/* Why: the trigger is this inner element, not the CommandItem.
-                    cmdk sets its own onPointerMove after spreading props, which
-                    drops the one Radix needs to open the tooltip. */}
+                {/* Use an inner tooltip trigger: cmdk overwrites CommandItem’s onPointerMove after spreading props. */}
                 <FilePathCursorTooltip path={item.path}>
                   <div className="flex w-full min-w-0 items-center gap-2 px-3 py-1">
-                    <FileIcon className="size-3.5 shrink-0 text-muted-foreground" />
-                    {/* shrink-0 + max-w-full: the directory gives up all of its
-                        width before the filename loses a character. */}
+                    <FileTypeIcon
+                      filePath={item.path}
+                      className="size-3.5 shrink-0 text-muted-foreground"
+                    />
+                    {/* Let the directory shrink before the filename. */}
                     <span className="min-w-0 max-w-full shrink-0 truncate text-foreground">
                       {filename}
                     </span>
@@ -219,7 +273,7 @@ function QuickOpenContent({ visible }: { visible: boolean }): React.JSX.Element 
           <span>{translate('auto.components.QuickOpen.1dbd3f59ff', 'Move')}</span>
         </div>
       </div>
-      {/* Accessibility: announce result count changes */}
+      {/* Announce result count changes to assistive technology. */}
       <div aria-live="polite" className="sr-only">
         {deferredQuery.trim()
           ? translate('auto.components.QuickOpen.b227d88520', '{{value0}} files found', {

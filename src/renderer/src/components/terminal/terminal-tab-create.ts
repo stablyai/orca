@@ -1,61 +1,61 @@
 import { useAppStore } from '@/store'
-import { reconcileTabOrder } from '../tab-bar/reconcile-order'
-import {
-  createWebRuntimeSessionTerminal,
-  isWebRuntimeSessionActive
-} from '@/runtime/web-runtime-session'
+import { createWebRuntimeSessionTerminal } from '@/runtime/web-runtime-terminal-creation'
+import { isWebRuntimeSessionActive } from '@/runtime/web-runtime-session-environment'
 import { resolveTerminalWorktreeRoute } from '@/lib/terminal-worktree-route'
+import { persistAgentLaunchTabOrder } from '@/lib/launch-agent-tab-order'
+import { createBrowserUuid } from '@/lib/browser-uuid'
 
 export function createNewTerminalTab(
   activeWorktreeId: string | null,
   shellOverride?: string,
-  options?: { startupCwd?: string }
+  options?: {
+    startupCwd?: string
+    command?: string
+    /** Reports whether the tab was created; a caller that passes it reports failure itself. */
+    onSettled?: (started: boolean) => void
+  }
 ): void {
   if (!activeWorktreeId) {
+    options?.onSettled?.(false)
     return
   }
   const state = useAppStore.getState()
   const worktreeRoute = resolveTerminalWorktreeRoute(state, activeWorktreeId)
   if (!worktreeRoute) {
+    options?.onSettled?.(false)
     return
   }
   const runtimeEnvironmentId = worktreeRoute.runtimeEnvironmentId
   if (isWebRuntimeSessionActive(runtimeEnvironmentId)) {
-    // Why: paired web clients receive host-owned terminal tabs through
-    // session.tabs. Creating a local tab first races the host snapshot and can
-    // leave stale remote handles in the web store.
-    void createWebRuntimeSessionTerminal({
-      worktreeId: activeWorktreeId,
-      environmentId: runtimeEnvironmentId,
-      command: shellOverride,
-      ...(options?.startupCwd ? { cwd: options.startupCwd } : {}),
-      activate: true
-    })
+    // Paired web clients receive host-owned tabs through session.tabs; creating locally races that snapshot and leaves stale handles.
+    const onSettled = options?.onSettled
+    const launch = createWebRuntimeSessionTerminal(
+      {
+        worktreeId: activeWorktreeId,
+        environmentId: runtimeEnvironmentId,
+        shell: shellOverride,
+        ...(options?.startupCwd ? { cwd: options.startupCwd } : {}),
+        ...(options?.command ? { command: options.command } : {}),
+        activate: true
+      },
+      ...(onSettled ? [{ notifyFailure: false }] : [])
+    )
+    if (onSettled) {
+      void launch.then(
+        (outcome) => onSettled(outcome.status === 'created'),
+        () => onSettled(false)
+      )
+    }
     return
   }
-  const newTab = state.createTab(
-    activeWorktreeId,
-    undefined,
-    shellOverride,
-    options?.startupCwd ? { startupCwd: options.startupCwd } : undefined
-  )
-  state.setActiveTabType('terminal')
-  // Why: persist the tab bar order with the new terminal at the end of the
-  // current visual order. Without this, reconcileTabOrder falls back to
-  // terminals-first when tabBarOrderByWorktree is unset, causing a new
-  // terminal to jump to index 0 instead of appending after editor tabs.
-  const freshState = useAppStore.getState()
-  const termIds = (freshState.tabsByWorktree[activeWorktreeId] ?? []).map((t) => t.id)
-  const editorIds = freshState.openFiles
-    .filter((f) => f.worktreeId === activeWorktreeId)
-    .map((f) => f.id)
-  const base = reconcileTabOrder(
-    freshState.tabBarOrderByWorktree[activeWorktreeId],
-    termIds,
-    editorIds
-  )
-  // The new tab is already in base via termIds; move it to the end
-  const order = base.filter((id) => id !== newTab.id)
-  order.push(newTab.id)
-  state.setTabBarOrder(activeWorktreeId, order)
+  const tabId = createBrowserUuid()
+  state.createTab(activeWorktreeId, undefined, shellOverride, {
+    id: tabId,
+    ...(options?.startupCwd ? { startupCwd: options.startupCwd } : {}),
+    ...(options?.command ? { pendingStartup: { command: options.command } } : {})
+  })
+  state.setActiveTabType('terminal', activeWorktreeId)
+  // Save visual order with the new terminal last or fallback ordering puts terminals first.
+  persistAgentLaunchTabOrder(activeWorktreeId, tabId)
+  options?.onSettled?.(true)
 }

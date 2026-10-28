@@ -11,6 +11,7 @@ import {
 import { cn } from '@/lib/utils'
 import { translate } from '@/i18n/i18n'
 import type { TerminalThemeOption } from '@/lib/terminal-theme'
+import { motionSafeScrollBehavior } from '@/hooks/usePrefersReducedMotion'
 
 type ThemePickerProps = {
   label: string
@@ -20,8 +21,7 @@ type ThemePickerProps = {
   query: string
   onQueryChange: (value: string) => void
   onSelectTheme: (theme: string) => void
-  /** Bumps when themes are imported; scrolls the Imported group into view and
-   *  briefly highlights it so freshly-imported themes are easy to find. */
+  /** After import, reveal and briefly highlight the Imported group. */
   importedHighlightSignal?: number
 }
 
@@ -38,14 +38,15 @@ export function ThemePicker({
   const importedGroupRef = useRef<HTMLDivElement | null>(null)
   const [highlightImported, setHighlightImported] = useState(false)
 
-  // Why: imported themes render below the built-in list inside a fixed-height
-  // scroll area, so after an import they sit off-screen. On each import signal,
-  // scroll the Imported group into view and flash a highlight so it's easy to spot.
+  // Imported themes sit below the fixed-height built-in list; reveal them after import.
   useEffect(() => {
     if (!importedHighlightSignal) {
       return
     }
-    importedGroupRef.current?.scrollIntoView({ behavior: 'smooth', block: 'nearest' })
+    importedGroupRef.current?.scrollIntoView({
+      behavior: motionSafeScrollBehavior(),
+      block: 'nearest'
+    })
     setHighlightImported(true)
     const timer = setTimeout(() => setHighlightImported(false), 2000)
     return () => clearTimeout(timer)
@@ -154,8 +155,7 @@ export function ThemePicker({
                           </span>
                         ) : null}
                       </span>
-                      {/* Why: hide swatches on the current row so the color grid
-                        doesn't shift left to make room for the "Current" label. */}
+                      {/* Hide current-row swatches so the Current label cannot shift their grid. */}
                       {theme.group === 'imported' &&
                       theme.previewTheme &&
                       selectedTheme !== theme.value ? (

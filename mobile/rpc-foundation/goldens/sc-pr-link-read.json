@@ -1,0 +1,142 @@
+{
+  "goldenFormatVersion": 6,
+  "operation": "source-control.pr-link",
+  "family": "worktree.review-link",
+  "namedDeltas": [],
+  "values": {
+    "17ab8ab0a9f4": {
+      "linkedPR": 7,
+      "outcome": "unlinked"
+    },
+    "23cf25973682": {
+      "name": "worktree.show#2",
+      "ordinal": 4,
+      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"worktree.show\",\"params\":{\"worktree\":\"id:repo42::/p\"}}"
+    },
+    "6f0c2307a94d": {
+      "status": "fulfilled",
+      "startedAt": 0,
+      "settledAt": 0,
+      "value": 7
+    },
+    "ae6ed2aa18df": {
+      "linkedPR": {
+        "$rpc": "null"
+      },
+      "outcome": "unlinked"
+    },
+    "c0b049a3056b": {
+      "name": "worktree.show#1",
+      "ordinal": 1,
+      "args": [
+        {
+          "name": "method",
+          "value": "worktree.show"
+        },
+        {
+          "name": "params",
+          "value": {
+            "worktree": "id:repo42::/p"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-1",
+          "ok": true,
+          "result": {
+            "worktree": {
+              "linkedPR": 7
+            }
+          }
+        }
+      }
+    },
+    "e6131d48fd98": {
+      "name": "worktree.show#2",
+      "ordinal": 3,
+      "args": [
+        {
+          "name": "method",
+          "value": "worktree.show"
+        },
+        {
+          "name": "params",
+          "value": {
+            "worktree": "id:repo42::/p"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-2",
+          "ok": true,
+          "result": {
+            "$rpc": "null"
+          }
+        }
+      }
+    },
+    "ee20a1dc39e7": {
+      "status": "fulfilled",
+      "startedAt": 0,
+      "settledAt": 0,
+      "value": {
+        "$rpc": "null"
+      }
+    },
+    "fd03e9caa747": {
+      "name": "worktree.show#1",
+      "ordinal": 2,
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"worktree.show\",\"params\":{\"worktree\":\"id:repo42::/p\"}}"
+    }
+  },
+  "recording": {
+    "scenario": "sc-pr-link-read",
+    "checkpoints": [
+      {
+        "id": "read-settled",
+        "observation": {
+          "sender": ["c0b049a3056b"],
+          "payloads": ["fd03e9caa747"],
+          "settlements": {
+            "read": "6f0c2307a94d"
+          },
+          "state": "17ab8ab0a9f4",
+          "effects": []
+        }
+      },
+      {
+        "id": "null-result-settled",
+        "observation": {
+          "sender": ["c0b049a3056b", "e6131d48fd98"],
+          "payloads": ["fd03e9caa747", "23cf25973682"],
+          "settlements": {
+            "read": "6f0c2307a94d",
+            "read-again": "ee20a1dc39e7"
+          },
+          "state": "ae6ed2aa18df",
+          "effects": []
+        }
+      }
+    ]
+  }
+}

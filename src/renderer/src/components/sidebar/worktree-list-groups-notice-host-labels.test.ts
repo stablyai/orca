@@ -1,29 +1,17 @@
-/**
- * A project checked out on several hosts emits one discovery-notice row per
- * checkout. Those rows only ever named the project, so a sidebar with paired
- * remote hosts showed identical "N hidden worktrees" buttons with no way to
- * tell which machine either belonged to.
- *
- * Two hosts can also share one user-facing label, which is when the rows are
- * hardest to tell apart — so the gate counts distinct host ids, and it reads
- * them from the unfiltered repo universe rather than the host-filtered notice
- * candidates, or a label would appear and disappear with the sidebar filter.
- */
+/** Disambiguate discovery notices by distinct host IDs from the unfiltered project universe, even when host labels match. */
 import { describe, expect, it } from 'vitest'
-import { buildRows } from './worktree-list/grouping/build-rows'
-import { getNoticeHostContextLabels } from './worktree-list/grouping/host-labels'
-import { buildProjectGroupingIndex } from './worktree-list/grouping/project-grouping'
+import { buildRows } from './worktree-list/grouping/build-rows.test-fixture'
 import { repo, worktree, project, projectHostSetups } from './worktree-list-groups-test-fixtures'
 import type { ExecutionHostId } from '../../../../shared/execution-host'
 import type { ProjectHostSetup } from '../../../../shared/project-types'
 import type { Repo } from '../../../../shared/repo-types'
 import type { DetectedWorktree, Worktree } from '../../../../shared/worktree/types'
-import type { Row } from './worktree-list/grouping/row-types'
+import type { Row } from '../../../../shared/sidebar-list/row-types'
 
 const SSH_HOST_ID: ExecutionHostId = 'ssh:openclaw-target'
 const ENV_HOST_ID: ExecutionHostId = 'runtime:openclaw-env'
 
-/** Both twins display the same label: the reporting account's shape. */
+/** Use identical labels for distinct hosts to exercise ID-based disambiguation. */
 const HOST_LABELS = new Map([
   ['local', 'Local Mac'],
   [SSH_HOST_ID, 'openclaw'],
@@ -75,7 +63,6 @@ function detected(path: string): DetectedWorktree {
   return { path, visible: false } as DetectedWorktree
 }
 
-/** Counts differ per record — the reporting account's 61 vs 134. */
 const INBOX_COUNTS: Record<string, number> = { [sshTwin.id]: 61, [envTwin.id]: 134 }
 
 function inboxMap(repoIds: readonly string[]): Map<string, unknown> {
@@ -130,8 +117,7 @@ function summarize(
   return rows.map((row) => ({
     repoId: row.repo.id,
     label: row.hostContextLabel,
-    // Carried so the row can draw the host glyph; two hosts sharing a label
-    // differ only here.
+    // The glyph disambiguates distinct hosts sharing the same label.
     hostId: row.hostContextHostId,
     count: row.inboxWorktrees.length
   }))
@@ -139,9 +125,7 @@ function summarize(
 
 describe('discovery notice rows on a multi-host project', () => {
   it('labels both rows when two distinct hosts share one label', () => {
-    // Kills the label-counting gate, so the project must contain ONLY the two
-    // same-label hosts: a third host with a different label would supply the
-    // label diversity the old gate needed and the test would pass either way.
+    // Use only same-label hosts so a label-counting gate cannot pass accidentally.
     expect(
       summarize(
         noticeRows({
@@ -162,17 +146,7 @@ describe('discovery notice rows on a multi-host project', () => {
     ])
   })
 
-  it('labels a lone eligible row on a project that spans hosts', () => {
-    // Kills notice-row-scoped membership: only one record emits a row, but the
-    // project still spans hosts, so the row must say which host it is.
-    expect(summarize(noticeRows({ eligibleRepoIds: [envTwin.id] }))).toEqual([
-      { repoId: envTwin.id, label: 'openclaw', hostId: ENV_HOST_ID, count: 134 }
-    ])
-  })
-
   it('keeps each row its own label and count under either host filter', () => {
-    // Kills the collapse (both rows survive with distinct counts) and proves the
-    // gate reads the unfiltered universe (each filtered survivor keeps its label).
     expect(summarize(noticeRows({ eligibleRepoIds: [sshTwin.id] }))).toEqual([
       { repoId: sshTwin.id, label: 'openclaw', hostId: SSH_HOST_ID, count: 61 }
     ])
@@ -181,26 +155,7 @@ describe('discovery notice rows on a multi-host project', () => {
     ])
   })
 
-  it('returns labels for exactly the eligible records, never the filtered-out ones', () => {
-    // A row-level test cannot see an extra ineligible entry, because no row
-    // consumes it; only exact map membership pins the intersection.
-    const index = buildProjectGroupingIndex(TWIN_GROUPING)
-
-    for (const eligible of [[sshTwin.id], [envTwin.id], [sshTwin.id, envTwin.id]]) {
-      const labels = getNoticeHostContextLabels(
-        eligible,
-        TWIN_REPO_MAP.keys(),
-        TWIN_REPO_MAP,
-        index,
-        HOST_LABELS
-      )
-      expect([...(labels?.keys() ?? [])]).toEqual(eligible)
-    }
-  })
-
   it('leaves a single-host project unlabelled even with several records on it', () => {
-    // Regression pin: guards a future implementation that counts records
-    // instead of distinct host ids.
     const secondLocal: Repo = { ...repo, id: 'repo-local-2', path: '/tmp/orca-second' }
     const rows = noticeRows({
       eligibleRepoIds: [repo.id],

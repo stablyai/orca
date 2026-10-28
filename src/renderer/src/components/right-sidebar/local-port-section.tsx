@@ -23,7 +23,7 @@ export function LocalPortSection({
   onToggle: () => void
   onStopPort: (port: WorkspacePort) => void
   onShowDetails: (port: WorkspacePort) => void
-  onOpenInBrowser: (port: WorkspacePort, event?: React.MouseEvent<HTMLButtonElement>) => void
+  onOpenInBrowser?: (port: WorkspacePort, event?: React.MouseEvent<HTMLButtonElement>) => void
 }): React.JSX.Element | null {
   if (ports.length === 0 && !emptyText) {
     return null

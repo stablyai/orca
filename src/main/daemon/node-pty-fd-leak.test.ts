@@ -92,8 +92,7 @@ describeOnDarwin('node-pty macOS spawn fd handling', () => {
   }, 15000)
 })
 
-// Linux is the only platform where node-pty takes the forkpty() path, which has no atomic
-// O_CLOEXEC. /proc is what makes the inheritance observable, so the assertions live here.
+// Linux forkpty lacks atomic O_CLOEXEC; /proc exposes whether later execs inherit the master fd.
 const describeOnLinux = process.platform === 'linux' ? describe : describe.skip
 
 const O_CLOEXEC = 0o2000000
@@ -137,7 +136,6 @@ describeOnLinux('node-pty Linux forkpty fd handling', () => {
         )
       }
 
-      // The masters this process owns must not survive an exec in any child it forks later.
       expect(terms.map((term) => isCloseOnExec(ptyMasterFd(term)))).toEqual([true, true, true])
 
       child = spawn('/bin/sh', ['-c', 'sleep 5'], { stdio: 'ignore' })
@@ -161,8 +159,7 @@ describeOnLinux('node-pty Linux forkpty fd handling', () => {
       env: { ...process.env }
     })
     try {
-      // Why the read: the child must not be able to run its listing before onData is armed, or an
-      // empty capture would satisfy the negative assertion without inspecting a single fd.
+      // Hold the child until its listener is armed, or an empty capture could falsely prove no leaked fd.
       const second = pty.spawn(
         '/bin/sh',
         ['-c', `IFS= read -r _; printf '${LISTING_READY}\\n'; ls -l /proc/self/fd; exit 0`],
@@ -184,7 +181,7 @@ describeOnLinux('node-pty Linux forkpty fd handling', () => {
       })
       await delay(100)
 
-      // The listing is the evidence; assert it arrived before reading anything into its absence.
+      // Prove the listing arrived before asserting that leaked master fds are absent.
       expect(output).toContain(LISTING_READY)
       expect(output).toMatch(/\d+ -> \/dev\/pts\//)
       expect(output).not.toMatch(/ptmx/)

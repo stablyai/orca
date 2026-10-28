@@ -7,12 +7,7 @@ import type { RpcResponse } from './types'
 
 type CapabilityRequest = (method: string, params: unknown) => Promise<RpcResponse>
 
-/**
- * The advisory is one-way and its result is discarded, so an unanswered request says nothing about
- * the link — only a frame that never reached the wire proves the socket cannot carry traffic.
- * Everything else (timeout, mid-flight drop) settles like an explicit rejection: capabilities
- * unavailable, proceed. Rejects for the unsent case alone.
- */
+// Only an unsent advisory proves the socket unusable; timeout/drop/refusal mean capabilities unavailable and must still allow connection.
 export async function settleMobileRuntimeCapabilities(
   sendRequest: CapabilityRequest
 ): Promise<void> {

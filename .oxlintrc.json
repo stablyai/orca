@@ -1,40 +1,13 @@
 {
   "$schema": "./node_modules/oxlint/configuration_schema.json",
   "plugins": ["typescript", "react", "react-hooks", "react-perf", "unicorn"],
-  "jsPlugins": [
-    {
-      "name": "sort-comparator-performance",
-      "specifier": "./config/oxlint-plugins/sort-comparator-performance.mjs"
-    },
-    {
-      "name": "mobile-pairing",
-      "specifier": "./config/oxlint-plugins/mobile-pairing-qrcode-import.mjs"
-    },
-    {
-      "name": "app-store-performance",
-      "specifier": "./config/oxlint-plugins/app-store-performance.mjs"
-    },
-    {
-      "name": "quadratic-buffer-concat",
-      "specifier": "./config/oxlint-plugins/quadratic-buffer-concat.mjs"
-    },
-    {
-      "name": "renderer-scrollbar-style",
-      "specifier": "./config/oxlint-plugins/renderer-scrollbar-style.mjs"
-    }
-  ],
   "categories": {
     "correctness": "error"
   },
   "rules": {
-    "sort-comparator-performance/no-repeated-collator": "warn",
-    "app-store-performance/require-selector": "error",
-    "app-store-performance/no-identity-selector": "error",
-    "app-store-performance/no-fresh-selector-result": "error",
     "no-fallthrough": "error",
     "eslint/no-useless-call": "error",
     "oxc/no-accumulating-spread": "error",
-    "quadratic-buffer-concat/no-loop-carried-concat": "error",
     "react/jsx-no-duplicate-props": "error",
     "react/jsx-no-undef": "error",
     "react/no-children-prop": "error",
@@ -69,6 +42,7 @@
     "react/jsx-no-useless-fragment": ["error", { "allowExpressions": true }],
     "react/jsx-pascal-case": "error",
     "react/no-object-type-as-default-prop": "error",
+    "react/no-unstable-nested-components": ["warn", { "allowAsProps": true }],
     "react/self-closing-comp": "error",
     "react-hooks/rules-of-hooks": "error",
     "react-hooks/exhaustive-deps": "warn",
@@ -109,7 +83,6 @@
         ]
       }
     ],
-    "mobile-pairing/no-eager-qrcode-import": "error",
     "no-useless-return": "error",
     "prefer-template": "error",
     "unicorn/consistent-empty-array-spread": "error",
@@ -141,21 +114,77 @@
   },
   "overrides": [
     {
+      "files": ["**/*.{js,cjs,mjs,jsx,ts,tsx,mts,cts}"],
+      "excludeFiles": [
+        "**/*.{test,spec}.{js,cjs,mjs,jsx,ts,tsx,mts,cts}",
+        "**/__tests__/**",
+        "src/renderer/src/runtime/web-runtime-browser-creation-placement-test-rig.ts"
+      ],
+      "rules": {
+        "no-restricted-imports": [
+          "error",
+          {
+            "paths": [
+              {
+                "name": "@linear/sdk",
+                "allowTypeImports": true,
+                "message": "Value-importing @linear/sdk hoists its ~2.6MB CJS bundle into the eager top-level require block and defeats the lazy loader. Use `import type` plus loadLinearSdk() from src/main/linear/linear-sdk.ts."
+              }
+            ],
+            "patterns": [
+              {
+                "regex": "(?i)(?:^|[/\\\\])(?:web-session-tabs-sync-test-harness|web-runtime-browser-creation-placement-test-rig)(?:\\.[cm]?[jt]sx?)?(?:[?#].*)?$",
+                "message": "This module is unit-test support. Import the production web-session owner instead."
+              },
+              {
+                "regex": "\\.fixture(?:\\.tsx?)?(?:[?#].*)?$",
+                "message": "Component fixtures are dev-only and load through the fixture explorer's import.meta.glob; importing one would ship it in a production bundle."
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
       "files": ["src/renderer/src/**/*.{ts,tsx}"],
       "rules": {
-        "renderer-scrollbar-style/require-styled-vertical-scrollbar": "error"
+        "no-restricted-properties": [
+          "error",
+          {
+            "property": "randomUUID",
+            "message": "crypto.randomUUID is missing in non-secure contexts (Remote Web over plain HTTP), which white-screens the app. Use createBrowserUuid() from '@/lib/browser-uuid'."
+          },
+          {
+            "property": "endpointProjects",
+            "message": "Read canonical affiliation through project-host-setup-selector; endpoint facts are reserved for ingestion and concrete operation adapters."
+          },
+          {
+            "property": "endpointProjectHostSetups",
+            "message": "Read canonical affiliation through project-host-setup-selector; endpoint facts are reserved for ingestion and concrete operation adapters."
+          }
+        ]
+      }
+    },
+    {
+      "files": ["src/shared/**/*.ts"],
+      "rules": {
+        "no-restricted-properties": [
+          "error",
+          {
+            "property": "randomUUID",
+            "message": "src/shared is compiled into the web bundle, where crypto.randomUUID is missing in non-secure contexts (Remote Web over plain HTTP). Use createNonSecureContextUuid() from './non-secure-context-uuid', or import randomUUID from 'node:crypto' in main-only code."
+          }
+        ]
       }
     },
     {
       "files": ["**/*.test.*", "**/*.spec.*", "**/*-benchmark.*"],
       "rules": {
-        "react/globals": "off",
-        "quadratic-buffer-concat/no-loop-carried-concat": "off",
-        "renderer-scrollbar-style/require-styled-vertical-scrollbar": "off"
+        "react/globals": "off"
       }
     },
     {
-      "files": ["**/*.ts"],
+      "files": ["**/*.ts", "**/*.mts", "**/*.cts"],
       "rules": {
         "max-lines": ["error", { "max": 300, "skipBlankLines": true, "skipComments": true }]
       }
@@ -173,13 +202,58 @@
       }
     },
     {
-      "files": ["**/*.test.ts", "**/*.test.tsx", "**/*.spec.ts", "**/*.spec.tsx"],
+      "files": [
+        "**/*.test.ts",
+        "**/*.test.tsx",
+        "**/*.spec.ts",
+        "**/*.spec.tsx",
+        "**/*.test.mts",
+        "**/*.test.cts",
+        "**/*.spec.mts",
+        "**/*.spec.cts"
+      ],
       "rules": {
         "max-lines": ["error", { "max": 800, "skipBlankLines": true, "skipComments": true }]
+      }
+    },
+    {
+      "files": [
+        "src/renderer/src/store/project-host-setup-selector.ts",
+        "src/renderer/src/store/project-search-catalog.ts",
+        "src/renderer/src/store/repos/repo-catalog-identity.ts",
+        "src/renderer/src/store/repos/repo-catalog-actions.ts",
+        "src/renderer/src/store/repos/runtime-repo-catalog-actions.ts",
+        "src/renderer/src/store/repos/all-host-repo-catalog-actions.ts",
+        "src/renderer/src/store/repos/repo-add-actions.ts",
+        "src/renderer/src/store/repos/repo-update.ts",
+        "src/renderer/src/store/repos/repo-removal.ts",
+        "src/renderer/src/store/projects/project-host-setup-actions.ts",
+        "src/renderer/src/store/projects/project-update.ts",
+        "src/renderer/src/store/project-groups/project-group-mutations.ts",
+        "src/renderer/src/store/slices/worktrees/teardown/purge-stale-runtime-host-state.ts",
+        "src/renderer/src/store/slices/worktrees/teardown/orphaned-runtime-ssh-project-purge.ts",
+        "src/renderer/src/app-shell/use-runtime-graph-sync.ts",
+        "src/renderer/src/**/*.test.{ts,tsx}",
+        "src/renderer/src/**/*.spec.{ts,tsx}",
+        "src/renderer/src/**/*-test-*.ts",
+        "src/renderer/src/**/*.test-fixture.ts",
+        "src/renderer/src/components/automations/automations-page-runtime-fixtures.ts"
+      ],
+      "rules": {
+        "no-restricted-properties": [
+          "error",
+          {
+            "property": "randomUUID",
+            "message": "crypto.randomUUID is missing in non-secure contexts (Remote Web over plain HTTP), which white-screens the app. Use createBrowserUuid() from '@/lib/browser-uuid'."
+          }
+        ]
       }
     }
   ],
   "ignorePatterns": [
+    "src/main/acp/generated/acp-protocol.generated.ts",
+    "src/shared/rpc-contract/rpc-params-catalog.generated.ts",
+    "src/cli/bundled-skill-guides.ts",
     "**/node_modules",
     "**/dist",
     "**/out",

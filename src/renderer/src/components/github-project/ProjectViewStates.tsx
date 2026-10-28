@@ -5,6 +5,8 @@ import { HoverCard, HoverCardContent, HoverCardTrigger } from '@/components/ui/h
 import { cn } from '@/lib/utils'
 import { translate } from '@/i18n/i18n'
 import { GhAuthErrorHelp } from './GhAuthErrorHelp'
+import { projectViewErrorMessage } from './project-view-error-copy'
+import { isRenderableProjectViewLayout } from '../../../../shared/github/project-types'
 import type { GitHubProjectViewSummary } from '../../../../shared/github/project-types'
 import type { GitHubProjectViewError } from '../../../../shared/github/project-result-types'
 
@@ -42,16 +44,14 @@ function ProjectViewTab({
   active: boolean
   onPick: (viewId: string) => void
 }): React.JSX.Element {
-  // Why: allowlist, not denylist — raw.layout is cast unchecked, so a future
-  // GitHub layout value must stay disabled instead of masquerading as a table.
-  const supported = view.layout === 'TABLE_LAYOUT' || view.layout === 'ROADMAP_LAYOUT'
+  const supported = isRenderableProjectViewLayout(view.layout)
   const layoutLabel =
     view.layout === 'BOARD_LAYOUT'
-      ? 'Board'
+      ? translate('projectViews.layout.board', 'Board')
       : view.layout === 'ROADMAP_LAYOUT'
-        ? 'Roadmap'
+        ? translate('projectViews.layout.roadmap', 'Roadmap')
         : view.layout === 'TABLE_LAYOUT'
-          ? 'Table'
+          ? translate('projectViews.layout.table', 'Table')
           : formatUnknownLayout(view.layout)
   const Icon =
     view.layout === 'BOARD_LAYOUT'
@@ -89,7 +89,11 @@ function ProjectViewTab({
   if (supported) {
     return tab
   }
-  const message = `Orca doesn't support ${layoutLabel} project views yet.`
+  const message = translate(
+    'projectViews.unsupported.layoutNotSupported',
+    "Orca doesn't support {{layout}} project views yet.",
+    { layout: layoutLabel }
+  )
   return (
     <HoverCard openDelay={200} closeDelay={100}>
       <HoverCardTrigger asChild>
@@ -110,8 +114,8 @@ function ProjectViewTab({
           <p className="text-xs leading-5 text-muted-foreground">
             {message}{' '}
             {translate(
-              'auto.components.github.project.ProjectViewStates.ac83c45672',
-              'Switch to a Table or Roadmap view to work with this project in Orca.'
+              'projectViews.unsupported.switchLayout',
+              'Switch to a Table, Board, or Roadmap view to work with this project in Orca.'
             )}
           </p>
           <Button
@@ -155,20 +159,11 @@ export function ProjectViewErrorState({
     )
   }
   const copy =
-    error.type === 'too_large'
-      ? `This view has ${totalCount ?? 'many'} items — too large to render in Orca. Narrow the view's filter on GitHub.`
-      : error.type === 'unsupported_layout'
-        ? // Why: an older paired host still reports roadmaps as unsupported, so this
-          // copy must not name the layout — the tab strip already does that.
-          translate(
-            'auto.components.github.project.ProjectViewStates.e4cc8b14f2',
-            'Orca renders table and roadmap project views. This view uses a layout it cannot render yet.'
-          )
-        : error.type === 'not_found'
-          ? 'Could not find this project or view.'
-          : error.type === 'schema_drift'
-            ? 'Could not read this project view.'
-            : error.message
+    error.type === 'not_found'
+      ? translate('projectViews.error.notFoundState', 'Could not find this project or view.')
+      : error.type === 'schema_drift'
+        ? translate('projectViews.error.schemaDrift', 'Could not read this project view.')
+        : projectViewErrorMessage(error, { host, totalCount })
   return (
     <div className="flex flex-1 flex-col items-start gap-3 p-6 text-sm">
       <div className="text-muted-foreground">{copy}</div>
@@ -222,6 +217,36 @@ export function ProjectTableSkeleton(): React.JSX.Element {
           </div>
         ))}
       </div>
+    </div>
+  )
+}
+
+/** Unfiltered empty results may be transient; blaming a nonexistent filter would imply data loss. */
+export function ProjectItemsEmptyState({ filter }: { filter: string }): React.JSX.Element {
+  if (filter.trim().length > 0) {
+    return (
+      <div className="flex min-h-[120px] items-center justify-center p-6 text-sm text-muted-foreground">
+        {translate(
+          'auto.components.github.project.ProjectViewList.4f57d2e0b1',
+          "No items match this view's filter."
+        )}
+      </div>
+    )
+  }
+  return (
+    <div className="flex min-h-[120px] flex-col items-center justify-center gap-1 p-6 text-center text-sm text-muted-foreground">
+      <span>
+        {translate(
+          'auto.components.github.project.ProjectViewStates.3b9c1d5e47',
+          'This view has no items yet.'
+        )}
+      </span>
+      <span className="text-xs">
+        {translate(
+          'auto.components.github.project.ProjectViewStates.7e4a2f80c6',
+          'Recently added items can take a while to appear.'
+        )}
+      </span>
     </div>
   )
 }

@@ -4,17 +4,13 @@ import {
   registerStaleDocumentVisibilityRecovery
 } from '@/components/terminal-pane/stale-document-visibility'
 
-// Why the stale-latch term is load-bearing: macOS can wedge document.visibilityState at 'hidden'
-// with no further visibilitychange, so a window the user is looking at would park its work
-// forever (same bug class as the field report of 78MB of terminal bytes dropped on visible ptys).
+// macOS can latch visibilityState hidden without later events; stale-latch proof prevents parking visible work forever, including terminal output.
 export function getWindowParkVisible(): boolean {
   return isWindowVisible() || isDocumentVisibilityProvenStale()
 }
 
 export function subscribeWindowParkVisibility(onChange: () => void): () => void {
-  // Why: the stale latch flips to proven-visible without emitting a visibilitychange, and
-  // registering it first lets its own visibilitychange handler clear the latch before `onChange`
-  // reads it.
+  // Subscribe stale-latch handling first so visibilitychange clears it before onChange reads the signal.
   const unregisterStaleRecovery = registerStaleDocumentVisibilityRecovery(onChange)
   const canListenToVisibility =
     typeof document !== 'undefined' && typeof document.addEventListener === 'function'
@@ -29,7 +25,5 @@ export function subscribeWindowParkVisibility(onChange: () => void): () => void 
   }
 }
 
-// Why: every park site debounces this one signal against the same user behaviour — a quick
-// app-switch round trip — so the grace period is one number. Only the cost of resuming differs,
-// and sites that pay a steep one layer their own backoff on top of this base.
+// Share grace for quick app-switch round trips across park sites; expensive resume paths may add their own backoff.
 export const WINDOW_HIDE_PARK_GRACE_MS = 500

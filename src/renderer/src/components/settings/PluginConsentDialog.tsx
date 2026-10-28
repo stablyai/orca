@@ -58,8 +58,6 @@ function hasInstructionalContent(plugin: PluginHostListEntry): boolean {
   )
 }
 
-/** Short one-word trust label for the header chip; the single warning below
- *  carries the full explanation. */
 function trustTierShort(plugin: PluginHostListEntry): string {
   if (plugin.hasWorker) {
     return translate('auto.components.settings.PluginConsentDialog.trustShortWorker', 'Worker')
@@ -102,7 +100,7 @@ export function PluginConsentDialog({
   plugin: currentPlugin,
   onDecision
 }: PluginConsentDialogProps): React.JSX.Element {
-  // Why: a same-key update must not replace the trust boundary while the user is reviewing it.
+  // Freeze the rendered trust boundary while the user reviews, even through same-key updates.
   const plugin = useRef(currentPlugin).current
   const keepDisabledRef = useRef<HTMLButtonElement>(null)
   const [busyDecision, setBusyDecision] = useState<'approve' | 'keep-disabled' | null>(null)
@@ -114,7 +112,7 @@ export function PluginConsentDialog({
     setBusyDecision(decision)
     setError(null)
     try {
-      // Why: consent is conditional on the exact trust boundary rendered by this dialog.
+      // Bind consent to the exact rendered trust fingerprint.
       await onDecision(plugin.pluginKey, plugin.consentFingerprint, decision)
     } catch (cause) {
       console.warn('[plugins] consent update failed:', cause)
@@ -134,9 +132,11 @@ export function PluginConsentDialog({
       }}
     >
       <DialogContent
-        className="plugin-security-chrome max-h-[calc(100vh-3rem)] overflow-y-auto scrollbar-sleek sm:max-w-xl"
+        surface="security"
+        scrollable
+        className="sm:max-w-xl"
         onOpenAutoFocus={(event) => {
-          // Why: dismissal is the safety-preserving path, so it receives initial focus.
+          // Initially focus the safe dismissal action.
           event.preventDefault()
           keepDisabledRef.current?.focus()
         }}

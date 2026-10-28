@@ -1,4 +1,4 @@
-import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { TERMINAL_SCROLLBACK_SESSION_BUFFER_BYTE_LIMIT } from '../../../../shared/terminal-scrollback-limits'
 import type { TerminalLayoutSnapshot } from '../../../../shared/terminal-tab-types'
 import { getUtf8ByteLength } from '../../../../shared/utf8-byte-limits'
@@ -6,9 +6,7 @@ import { getUtf8ByteLength } from '../../../../shared/utf8-byte-limits'
 const LEAF_ID = '11111111-1111-4111-8111-111111111111' as const
 const LEAF_ID_2 = '22222222-2222-4222-8222-222222222222' as const
 
-// Why: capture now appends an absolute cursor restore (see
-// terminal-serialize-absolute-cursor.ts), so pane mocks must expose the
-// cursor fields and content expectations carry the home-position CUP suffix.
+// Absolute cursor serialization adds a CUP suffix; mocks and byte limits must include its coordinates/bytes.
 const CURSOR_HOME = '\x1b[1;1H'
 
 function mockTerminal(scrollback: number): {
@@ -33,64 +31,84 @@ vi.mock('@/lib/pane-manager/pane-terminal-output-scheduler', () => ({
   flushTerminalOutput: mocks.flushTerminalOutput
 }))
 
-class MockHTMLElement {
-  classList: { contains: (cls: string) => boolean }
-  dataset: Record<string, string>
-  children: MockHTMLElement[]
-  style: Record<string, string>
-  firstElementChild: MockHTMLElement | null
-
-  constructor(opts: {
-    classList?: string[]
-    dataset?: Record<string, string>
-    children?: MockHTMLElement[]
-    style?: Record<string, string>
-    firstElementChild?: MockHTMLElement | null
-  }) {
-    const classes = opts.classList ?? []
-    this.classList = { contains: (cls: string) => classes.includes(cls) }
-    this.dataset = opts.dataset ?? {}
-    this.children = opts.children ?? []
-    this.style = opts.style ?? {}
-    this.firstElementChild = opts.firstElementChild ?? null
-  }
-}
-
-beforeAll(() => {
-  ;(globalThis as unknown as Record<string, unknown>).HTMLElement = MockHTMLElement
-})
-
 beforeEach(() => {
   mocks.flushTerminalOutput.mockReset()
 })
 
-function mockRootForPane(paneId: number, leafId: string = LEAF_ID): HTMLDivElement {
-  const pane = new MockHTMLElement({
-    classList: ['pane'],
-    dataset: { paneId: String(paneId), leafId }
-  })
-  return new MockHTMLElement({ firstElementChild: pane }) as unknown as HTMLDivElement
+const SINGLE_PANE_LAYOUT: TerminalLayoutSnapshot = {
+  root: { type: 'leaf', leafId: LEAF_ID },
+  activeLeafId: LEAF_ID,
+  expandedLeafId: null
 }
 
-function mockRootForSplit(firstPaneId = 1, secondPaneId = 2): HTMLDivElement {
-  const first = new MockHTMLElement({
-    classList: ['pane'],
-    dataset: { paneId: String(firstPaneId), leafId: LEAF_ID },
-    style: { flex: '1' }
-  })
-  const second = new MockHTMLElement({
-    classList: ['pane'],
-    dataset: { paneId: String(secondPaneId), leafId: LEAF_ID_2 },
-    style: { flex: '1' }
-  })
-  const split = new MockHTMLElement({
-    classList: ['pane-split'],
-    children: [first, second]
-  })
-  return new MockHTMLElement({ firstElementChild: split }) as unknown as HTMLDivElement
+const SPLIT_ROOT: TerminalLayoutSnapshot['root'] = {
+  type: 'split',
+  direction: 'vertical',
+  first: { type: 'leaf', leafId: LEAF_ID },
+  second: { type: 'leaf', leafId: LEAF_ID_2 }
 }
 
 describe('captureTerminalShutdownLayout', () => {
+  it('uses the bounded native fit check without a separate JS byte scan', async () => {
+    const byteLimits = await import('../../../../shared/utf8-byte-limits')
+    const { captureTerminalShutdownLayout } = await import('./terminal-shutdown-layout-capture')
+    const measure = vi.spyOn(byteLimits, 'measureUtf8ByteLength')
+    const contents = 'x'.repeat(32 * 1024)
+    const pane = {
+      id: 1,
+      leafId: LEAF_ID,
+      terminal: mockTerminal(5_000),
+      serializeAddon: { serialize: vi.fn(() => contents) }
+    }
+    try {
+      const layout = captureTerminalShutdownLayout({
+        // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the capture reads only the mocked pane fields.
+        manager: { getPanes: () => [pane] } as never,
+        paneTransports: new Map(),
+        existingLayout: SINGLE_PANE_LAYOUT
+      })
+      expect(layout.buffersByLeafId).toEqual({ [LEAF_ID]: `${contents}${CURSOR_HOME}` })
+      expect(pane.serializeAddon.serialize).toHaveBeenCalledExactlyOnceWith({ scrollback: 5_000 })
+      expect(measure.mock.calls.length).toBe(0)
+    } finally {
+      measure.mockRestore()
+    }
+  })
+
+  it.each(['x', 'é', '界', '😀', '\ud83d', '\udc00'])(
+    'preserves exact-cap decisions and probe options for %j',
+    async (unit) => {
+      const { captureTerminalShutdownLayout } = await import('./terminal-shutdown-layout-capture')
+      for (const delta of [-1, 0, 1]) {
+        const payloadBytes =
+          TERMINAL_SCROLLBACK_SESSION_BUFFER_BYTE_LIMIT + delta - CURSOR_HOME.length
+        const unitBytes = Buffer.byteLength(unit)
+        const contents =
+          unit.repeat(Math.floor(payloadBytes / unitBytes)) + 'x'.repeat(payloadBytes % unitBytes)
+        const serialize = vi.fn((options?: { scrollback?: number }) =>
+          options?.scrollback === 5_000 ? contents : 'short'
+        )
+        const pane = Object.freeze({
+          id: 1,
+          leafId: LEAF_ID,
+          terminal: mockTerminal(5_000),
+          serializeAddon: { serialize }
+        })
+        const layout = captureTerminalShutdownLayout({
+          // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the capture reads only the mocked pane fields.
+          manager: { getPanes: () => [pane] } as never,
+          paneTransports: new Map(),
+          existingLayout: SINGLE_PANE_LAYOUT
+        })
+        const expected = delta <= 0 ? contents : 'short'
+        expect(layout.buffersByLeafId).toEqual({ [LEAF_ID]: `${expected}${CURSOR_HOME}` })
+        expect(serialize.mock.calls.map(([options]) => options?.scrollback)).toEqual(
+          delta <= 0 ? [5_000] : [5_000, 2_500, 3_750, 4_375, 4_687]
+        )
+      }
+    }
+  )
+
   it('flushes queued terminal output before serializing shutdown scrollback', async () => {
     const { captureTerminalShutdownLayout } = await import('./terminal-shutdown-layout-capture')
     const order: string[] = []
@@ -111,8 +129,7 @@ describe('captureTerminalShutdownLayout', () => {
       }
     }
     const manager = {
-      getPanes: vi.fn(() => [pane]),
-      getActivePane: vi.fn(() => pane)
+      getPanes: vi.fn(() => [pane])
     }
     mocks.flushTerminalOutput.mockImplementation((target: typeof terminal) => {
       expect(target).toBe(terminal)
@@ -122,11 +139,12 @@ describe('captureTerminalShutdownLayout', () => {
 
     const layout = captureTerminalShutdownLayout({
       manager: manager as never,
-      container: mockRootForPane(1, LEAF_ID),
-      expandedPaneId: null,
       paneTransports: new Map([[1, { getPtyId: vi.fn(() => 'pty-1') }]]),
-      paneTitlesByPaneId: { 1: 'build logs' },
-      existingLayout: undefined
+      existingLayout: {
+        ...SINGLE_PANE_LAYOUT,
+        titlesByLeafId: { [LEAF_ID]: 'build logs' },
+        chatLeafId: LEAF_ID
+      }
     })
 
     expect(order).toEqual(['flush', 'serialize'])
@@ -136,7 +154,8 @@ describe('captureTerminalShutdownLayout', () => {
       expandedLeafId: null,
       buffersByLeafId: { [LEAF_ID]: `snapshot:queued-before-quit${CURSOR_HOME}` },
       ptyIdsByLeafId: { [LEAF_ID]: 'pty-1' },
-      titlesByLeafId: { [LEAF_ID]: 'build logs' }
+      titlesByLeafId: { [LEAF_ID]: 'build logs' },
+      chatLeafId: LEAF_ID
     })
   })
 
@@ -152,20 +171,17 @@ describe('captureTerminalShutdownLayout', () => {
       }
     }
     const manager = {
-      getPanes: vi.fn(() => [pane]),
-      getActivePane: vi.fn(() => pane)
+      getPanes: vi.fn(() => [pane])
     }
 
     const layout = captureTerminalShutdownLayout({
       manager: manager as never,
-      container: mockRootForPane(1),
-      expandedPaneId: null,
       paneTransports: new Map([[1, { getPtyId: vi.fn(() => 'pty-1') }]]),
-      paneTitlesByPaneId: { 1: 'local shell' },
       existingLayout: {
-        root: null,
+        root: SINGLE_PANE_LAYOUT.root,
         activeLeafId: null,
         expandedLeafId: null,
+        titlesByLeafId: { [LEAF_ID]: 'local shell' },
         buffersByLeafId: { [LEAF_ID]: 'previous-local-scrollback' }
       },
       captureBuffers: false
@@ -193,17 +209,13 @@ describe('captureTerminalShutdownLayout', () => {
       }
     }
     const manager = {
-      getPanes: vi.fn(() => [pane]),
-      getActivePane: vi.fn(() => pane)
+      getPanes: vi.fn(() => [pane])
     }
 
     const layout = captureTerminalShutdownLayout({
       manager: manager as never,
-      container: mockRootForPane(1),
-      expandedPaneId: null,
       paneTransports: new Map([[1, { getPtyId: vi.fn(() => 'pty-1') }]]),
-      paneTitlesByPaneId: { 1: 'ssh shell' },
-      existingLayout: undefined
+      existingLayout: SINGLE_PANE_LAYOUT
     })
 
     const buffer = layout.buffersByLeafId?.[LEAF_ID] ?? ''
@@ -211,8 +223,7 @@ describe('captureTerminalShutdownLayout', () => {
     expect(getUtf8ByteLength(buffer)).toBeLessThanOrEqual(
       TERMINAL_SCROLLBACK_SESSION_BUFFER_BYTE_LIMIT
     )
-    // Each 'e-acute' row is 2048 UTF-8 bytes; the CUP suffix joins the byte
-    // accounting, so one fewer row fits than the bare limit would allow.
+    // UTF-8 rows plus cursor suffix must fit together, reducing available history by one row here.
     const fittingRows = Math.floor(
       (TERMINAL_SCROLLBACK_SESSION_BUFFER_BYTE_LIMIT - CURSOR_HOME.length) / 2048
     )
@@ -233,17 +244,13 @@ describe('captureTerminalShutdownLayout', () => {
       serializeAddon: { serialize }
     }
     const manager = {
-      getPanes: vi.fn(() => [pane]),
-      getActivePane: vi.fn(() => pane)
+      getPanes: vi.fn(() => [pane])
     }
 
     const layout = captureTerminalShutdownLayout({
       manager: manager as never,
-      container: mockRootForPane(1),
-      expandedPaneId: null,
       paneTransports: new Map([[1, { getPtyId: vi.fn(() => 'pty-1') }]]),
-      paneTitlesByPaneId: { 1: 'ssh shell' },
-      existingLayout: undefined
+      existingLayout: SINGLE_PANE_LAYOUT
     })
 
     // Full pass plus at most MAX_SCROLLBACK_FIT_PROBES fit probes; a bisection took 10+.
@@ -255,8 +262,7 @@ describe('captureTerminalShutdownLayout', () => {
 
   it('keeps most of the byte budget when dense recent rows sit above sparse scrollback', async () => {
     const { captureTerminalShutdownLayout } = await import('./terminal-shutdown-layout-capture')
-    // Why this shape: the common terminal profile (a long quiet prompt history under a dense
-    // build/agent run) makes bytes-per-row wildly non-uniform, which a pure secant step creeps on.
+    // Dense recent rows over sparse history defeat pure secant convergence; test nonuniform byte density.
     const DENSE_ROWS = 1_000
     const DENSE_ROW = 'x'.repeat(600)
     const serialize = vi.fn((options?: { scrollback?: number }) => {
@@ -272,17 +278,13 @@ describe('captureTerminalShutdownLayout', () => {
       serializeAddon: { serialize }
     }
     const manager = {
-      getPanes: vi.fn(() => [pane]),
-      getActivePane: vi.fn(() => pane)
+      getPanes: vi.fn(() => [pane])
     }
 
     const layout = captureTerminalShutdownLayout({
       manager: manager as never,
-      container: mockRootForPane(1),
-      expandedPaneId: null,
       paneTransports: new Map([[1, { getPtyId: vi.fn(() => 'pty-1') }]]),
-      paneTitlesByPaneId: { 1: 'ssh shell' },
-      existingLayout: undefined
+      existingLayout: SINGLE_PANE_LAYOUT
     })
 
     const bytes = getUtf8ByteLength(layout.buffersByLeafId?.[LEAF_ID] ?? '')
@@ -303,20 +305,17 @@ describe('captureTerminalShutdownLayout', () => {
       }
     }
     const manager = {
-      getPanes: vi.fn(() => [pane]),
-      getActivePane: vi.fn(() => pane)
+      getPanes: vi.fn(() => [pane])
     }
 
     const layout = captureTerminalShutdownLayout({
       manager: manager as never,
-      container: mockRootForPane(1),
-      expandedPaneId: null,
       paneTransports: new Map([[1, { getPtyId: vi.fn(() => 'pty-1') }]]),
-      paneTitlesByPaneId: { 1: 'local shell' },
       existingLayout: {
-        root: null,
+        root: SINGLE_PANE_LAYOUT.root,
         activeLeafId: null,
         expandedLeafId: null,
+        titlesByLeafId: { [LEAF_ID]: 'local shell' },
         buffersByLeafId: { [LEAF_ID]: 'previous-scrollback' },
         scrollbackRefsByLeafId: { [LEAF_ID]: 'v1-previous' }
       },
@@ -350,18 +349,14 @@ describe('captureTerminalShutdownLayout', () => {
       }
     }
     const manager = {
-      getPanes: vi.fn(() => [deadPane, livePane]),
-      getActivePane: vi.fn(() => deadPane)
+      getPanes: vi.fn(() => [deadPane, livePane])
     }
 
     const layout = captureTerminalShutdownLayout({
       manager: manager as never,
-      container: mockRootForSplit(1, 2),
-      expandedPaneId: null,
       paneTransports: new Map([[2, { getPtyId: vi.fn(() => 'pty-live') }]]),
-      paneTitlesByPaneId: {},
       existingLayout: {
-        root: null,
+        root: SPLIT_ROOT,
         activeLeafId: LEAF_ID,
         expandedLeafId: null,
         ptyIdsByLeafId: { [LEAF_ID]: 'pty-stale', [LEAF_ID_2]: 'pty-live' }
@@ -397,21 +392,17 @@ describe('captureTerminalShutdownLayout', () => {
       }
     }
     const manager = {
-      getPanes: vi.fn(() => [firstPane, secondPane]),
-      getActivePane: vi.fn(() => secondPane)
+      getPanes: vi.fn(() => [firstPane, secondPane])
     }
 
     const layout = captureTerminalShutdownLayout({
       manager: manager as never,
-      container: mockRootForSplit(1, 2),
-      expandedPaneId: null,
       paneTransports: new Map([
         [1, { getPtyId: vi.fn(() => null) }],
         [2, { getPtyId: vi.fn(() => null) }]
       ]),
-      paneTitlesByPaneId: {},
       existingLayout: {
-        root: null,
+        root: SPLIT_ROOT,
         activeLeafId: LEAF_ID_2,
         expandedLeafId: null,
         ptyIdsByLeafId: { [LEAF_ID]: 'pty-first', [LEAF_ID_2]: 'pty-second' }
@@ -446,17 +437,13 @@ describe('captureTerminalShutdownLayout', () => {
       }
     }
     const manager = {
-      getPanes: vi.fn(() => [paneWithoutPty, paneWithPty]),
-      getActivePane: vi.fn(() => paneWithoutPty)
+      getPanes: vi.fn(() => [paneWithoutPty, paneWithPty])
     }
 
     const layout = captureTerminalShutdownLayout({
       manager: manager as never,
-      container: mockRootForSplit(),
-      expandedPaneId: null,
       paneTransports: new Map([[2, { getPtyId: vi.fn(() => 'pty-2') }]]),
-      paneTitlesByPaneId: {},
-      existingLayout: undefined
+      existingLayout: { root: SPLIT_ROOT, activeLeafId: LEAF_ID, expandedLeafId: null }
     })
 
     expect(layout.activeLeafId).toBe(LEAF_ID_2)
@@ -484,18 +471,14 @@ describe('captureTerminalShutdownLayout', () => {
       }
     }
     const manager = {
-      getPanes: vi.fn(() => [paneWithoutPty, paneWithPty]),
-      getActivePane: vi.fn(() => paneWithoutPty)
+      getPanes: vi.fn(() => [paneWithoutPty, paneWithPty])
     }
 
     const layout = captureTerminalShutdownLayout({
       manager: manager as never,
-      container: mockRootForSplit(),
-      expandedPaneId: null,
       paneTransports: new Map([[2, { getPtyId: vi.fn(() => 'pty-2') }]]),
-      paneTitlesByPaneId: {},
       existingLayout: {
-        root: null,
+        root: SPLIT_ROOT,
         activeLeafId: LEAF_ID,
         expandedLeafId: null,
         ptyIdsByLeafId: { [LEAF_ID]: 'stale-pty', [LEAF_ID_2]: 'pty-2' }
@@ -504,5 +487,74 @@ describe('captureTerminalShutdownLayout', () => {
 
     expect(layout.activeLeafId).toBe(LEAF_ID_2)
     expect(layout.ptyIdsByLeafId).toEqual({ [LEAF_ID_2]: 'pty-2' })
+  })
+  it('keeps the stored structure instead of rebuilding it from the panes', async () => {
+    const { captureTerminalShutdownLayout } = await import('./terminal-shutdown-layout-capture')
+    const panes = [LEAF_ID, LEAF_ID_2].map((leafId, index) => ({
+      id: index + 1,
+      leafId,
+      stablePaneId: leafId,
+      terminal: mockTerminal(1_000),
+      serializeAddon: { serialize: vi.fn(() => '') }
+    }))
+    const existingLayout: TerminalLayoutSnapshot = {
+      root: {
+        type: 'split',
+        direction: 'horizontal',
+        first: { type: 'leaf', leafId: LEAF_ID },
+        second: { type: 'leaf', leafId: LEAF_ID_2 },
+        ratio: 0.3
+      },
+      activeLeafId: LEAF_ID_2,
+      expandedLeafId: LEAF_ID_2,
+      titlesByLeafId: { [LEAF_ID]: 'server' }
+    }
+
+    const layout = captureTerminalShutdownLayout({
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the capture reads only the mocked pane fields.
+      manager: { getPanes: () => panes } as never,
+      paneTransports: new Map([
+        [1, { getPtyId: () => 'pty-1' }],
+        [2, { getPtyId: () => 'pty-2' }]
+      ]),
+      existingLayout
+    })
+
+    expect(layout).toEqual({
+      ...existingLayout,
+      ptyIdsByLeafId: { [LEAF_ID]: 'pty-1', [LEAF_ID_2]: 'pty-2' }
+    })
+  })
+  it('keeps the buffer and binding of a stored leaf whose pane is not mounted yet', async () => {
+    const { captureTerminalShutdownLayout } = await import('./terminal-shutdown-layout-capture')
+    const pane = {
+      id: 1,
+      leafId: LEAF_ID,
+      stablePaneId: LEAF_ID,
+      terminal: mockTerminal(1_000),
+      serializeAddon: { serialize: vi.fn(() => 'mounted scrollback') }
+    }
+
+    const layout = captureTerminalShutdownLayout({
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the capture reads only the mocked pane fields.
+      manager: { getPanes: () => [pane] } as never,
+      paneTransports: new Map([[1, { getPtyId: () => 'pty-1' }]]),
+      existingLayout: {
+        root: SPLIT_ROOT,
+        activeLeafId: LEAF_ID,
+        expandedLeafId: null,
+        ptyIdsByLeafId: { [LEAF_ID]: 'pty-1', [LEAF_ID_2]: 'pty-2' },
+        buffersByLeafId: { [LEAF_ID_2]: 'unmounted scrollback' },
+        scrollbackRefsByLeafId: { [LEAF_ID_2]: 'v1-unmounted' }
+      }
+    })
+
+    expect(layout.root).toEqual(SPLIT_ROOT)
+    expect(layout.buffersByLeafId).toEqual({
+      [LEAF_ID]: `mounted scrollback${CURSOR_HOME}`,
+      [LEAF_ID_2]: 'unmounted scrollback'
+    })
+    expect(layout.scrollbackRefsByLeafId).toEqual({ [LEAF_ID_2]: 'v1-unmounted' })
+    expect(layout.ptyIdsByLeafId).toEqual({ [LEAF_ID]: 'pty-1', [LEAF_ID_2]: 'pty-2' })
   })
 })

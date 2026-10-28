@@ -1,13 +1,15 @@
 // @vitest-environment happy-dom
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { cleanup, renderHook } from '@testing-library/react'
+import { act, cleanup, renderHook } from '@testing-library/react'
 import { useAppStore } from '@/store'
 import { LOCAL_EXECUTION_HOST_ID } from '../../../../../../shared/execution-host'
 import { getWorktreeHostIdentity } from '../../../../../../shared/worktree/host-qualified-identity'
 import { makeRepo, makeWorktree } from '../../../worktree-jump-palette-test-fixtures'
 import { useVisibleSidebarWorktrees } from './use-visible-worktrees'
 import type * as visibleWorktreesModule from '../../visible-worktrees'
+import { computeVisibleWorktreeIds, computeVisibleWorktrees } from '../../compute-visible-worktrees'
+import { sidebarHasActiveFilters } from '../../sidebar-filter-actions'
 
 const computeVisibleWorktreesCalls = { count: 0 }
 vi.mock('../../visible-worktrees', async (importOriginal) => {
@@ -33,6 +35,13 @@ describe('useVisibleSidebarWorktrees', () => {
   afterEach(() => {
     cleanup()
     useAppStore.setState(initialState, true)
+  })
+
+  it('keeps the pure filtering functions available through the sidebar module', async () => {
+    const facade = await vi.importActual<typeof visibleWorktreesModule>('../../visible-worktrees')
+    expect(facade.computeVisibleWorktreeIds).toBe(computeVisibleWorktreeIds)
+    expect(facade.computeVisibleWorktrees).toBe(computeVisibleWorktrees)
+    expect(facade.sidebarHasActiveFilters).toBe(sidebarHasActiveFilters)
   })
 
   it('projects both host rows through the primary sidebar pipeline', () => {
@@ -128,9 +137,7 @@ describe('useVisibleSidebarWorktrees', () => {
       defaultHostId: LOCAL_EXECUTION_HOST_ID,
       agentSendTargetWorktreeId: null
     } as Parameters<typeof useVisibleSidebarWorktrees>[0]
-    // Why the extra `settings`: it is the pre-fix memo key. Passing it keeps
-    // this test red against the old hook, which re-keyed the whole scan on the
-    // settings object identity.
+    // Pass the old settings memo key so unrelated-setting churn would still catch the former invalidation bug.
     const withSettings = (
       settings: ReturnType<typeof useAppStore.getState>['settings']
     ): Parameters<typeof useVisibleSidebarWorktrees>[0] => Object.assign({}, baseArgs, { settings })
@@ -144,7 +151,6 @@ describe('useVisibleSidebarWorktrees', () => {
     const callsAfterFirstRender = computeVisibleWorktreesCalls.count
     expect(callsAfterFirstRender).toBe(1)
 
-    // A settings write that does not move the focused execution host.
     const nextSettings = {
       ...useAppStore.getState().settings,
       sidebarWidth: 321
@@ -155,8 +161,42 @@ describe('useVisibleSidebarWorktrees', () => {
     expect(computeVisibleWorktreesCalls.count).toBe(callsAfterFirstRender)
     expect(result.current.visibleWorktrees).toBe(initialVisible)
 
-    // A write that does move it still recomputes.
     rerender(Object.assign({}, withSettings(nextSettings), { defaultHostId: 'runtime:other' }))
     expect(computeVisibleWorktreesCalls.count).toBe(callsAfterFirstRender + 1)
+  })
+
+  it('does not rescan visible worktrees for chat-tab writes when sleeping workspaces are shown', () => {
+    const repo = makeRepo()
+    const worktree = makeWorktree('alpha', 'Alpha workspace')
+    useAppStore.setState({ worktreesByRepo: { [repo.id]: [worktree] } })
+    computeVisibleWorktreesCalls.count = 0
+
+    renderHook(() =>
+      useVisibleSidebarWorktrees({
+        filterState: {
+          showSleepingWorkspaces: true,
+          filterRepoIds: [],
+          hideDefaultBranchWorkspace: false,
+          hideAutomationGeneratedWorkspaces: false,
+          hideCliCreatedWorkspaces: false,
+          hideDetachedHeadWorkspaces: false,
+          hideWorkspacesFromOtherDevices: false,
+          alwaysShowDefaultBranchWorkspace: true,
+          visibleWorkspaceHostIds: null,
+          workspaceHostScope: 'all'
+        },
+        sortBy: 'recent',
+        sortedIds: [worktree.id],
+        repoMap: new Map([[repo.id, repo]]),
+        worktreeLineageById: {},
+        defaultHostId: LOCAL_EXECUTION_HOST_ID,
+        agentSendTargetWorktreeId: null
+      })
+    )
+    const callsAfterFirstRender = computeVisibleWorktreesCalls.count
+
+    act(() => useAppStore.setState({ unifiedTabsByWorktree: { [worktree.id]: [] } }))
+
+    expect(computeVisibleWorktreesCalls.count).toBe(callsAfterFirstRender)
   })
 })

@@ -27,7 +27,10 @@ export async function updateIssueBySlug(
     return { ok: false, error: number.error }
   }
   if (!args.updates || typeof args.updates !== 'object') {
-    return { ok: false, error: { type: 'validation_error', message: 'Updates required.' } }
+    return {
+      ok: false,
+      error: { type: 'validation_error', message: 'Updates required.', reason: 'updates_required' }
+    }
   }
   const duplicateError = validateDuplicateUpdate(args)
   if (duplicateError) {
@@ -75,7 +78,8 @@ function validateDuplicateUpdate(args: UpdateIssueBySlugArgs): GitHubProjectMuta
       ok: false,
       error: {
         type: 'validation_error',
-        message: 'Duplicate target is only valid when closing as duplicate.'
+        message: 'Duplicate target is only valid when closing as duplicate.',
+        reason: 'duplicate_target_not_allowed'
       }
     }
   }
@@ -84,7 +88,8 @@ function validateDuplicateUpdate(args: UpdateIssueBySlugArgs): GitHubProjectMuta
       ok: false,
       error: {
         type: 'validation_error',
-        message: 'Duplicate target issue number is required.'
+        message: 'Duplicate target issue number is required.',
+        reason: 'duplicate_target_required'
       }
     }
   }

@@ -39,6 +39,31 @@ type LegacyWslRuntimeAuthDrainOptions = {
 const drainQueueByDistro = new Map<string, Promise<void>>()
 const completedDistroKeys = new Set<string>()
 const pendingSessionBridgeRouteByDistro = new Map<string, string>()
+const MAX_DRAIN_DISTRO_ENTRIES = 128
+
+function rememberCompletedDistro(key: string): void {
+  completedDistroKeys.delete(key)
+  completedDistroKeys.add(key)
+  while (completedDistroKeys.size > MAX_DRAIN_DISTRO_ENTRIES) {
+    const oldest = completedDistroKeys.values().next().value
+    if (oldest === undefined) {
+      break
+    }
+    completedDistroKeys.delete(oldest)
+  }
+}
+
+function rememberPendingRoute(key: string, route: string): void {
+  pendingSessionBridgeRouteByDistro.delete(key)
+  pendingSessionBridgeRouteByDistro.set(key, route)
+  while (pendingSessionBridgeRouteByDistro.size > MAX_DRAIN_DISTRO_ENTRIES) {
+    const oldest = pendingSessionBridgeRouteByDistro.keys().next().value
+    if (oldest === undefined) {
+      break
+    }
+    pendingSessionBridgeRouteByDistro.delete(oldest)
+  }
+}
 
 export function startLegacyWslRuntimeAuthDrain(
   options: LegacyWslRuntimeAuthDrainOptions,
@@ -48,16 +73,14 @@ export function startLegacyWslRuntimeAuthDrain(
   if (completedDistroKeys.has(key)) {
     return Promise.resolve()
   }
-  // Coalesce launch/rate-limit callers while a drain is in flight. Queuing a
-  // new pass for every poll can otherwise build an unbounded promise chain
-  // while a legacy pane keeps the migration pending.
+  // Coalesce callers so polling a pending migration cannot build an unbounded promise chain.
   const inFlight = drainQueueByDistro.get(key)
   if (inFlight) {
     return startOptions.throwOnFailure ? inFlight : logDrainFailure(inFlight)
   }
   const next = drainLegacyWslRuntimeAuth(options).then((status) => {
     if (status === 'complete') {
-      completedDistroKeys.add(key)
+      rememberCompletedDistro(key)
     }
   })
   drainQueueByDistro.set(key, next)
@@ -147,7 +170,7 @@ export async function drainLegacyWslRuntimeAuth(
     return recoverAfterFailedApply(options.distro, paths)
   }
   if (!deleteSource) {
-    pendingSessionBridgeRouteByDistro.set(distroKey, sessionBridgeRoute)
+    rememberPendingRoute(distroKey, sessionBridgeRoute)
   }
   return deleteSource ? 'complete' : 'pending'
 }
@@ -265,5 +288,9 @@ export const _internals = {
     drainQueueByDistro.clear()
     completedDistroKeys.clear()
     pendingSessionBridgeRouteByDistro.clear()
-  }
+  },
+  drainDistroStateCountsForTests: (): { completed: number; pendingRoutes: number } => ({
+    completed: completedDistroKeys.size,
+    pendingRoutes: pendingSessionBridgeRouteByDistro.size
+  })
 }

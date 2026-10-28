@@ -1,11 +1,4 @@
-/**
- * Daemon entry point — runs as a standalone Node.js process.
- *
- * Usage: node daemon-entry.js --socket /path/to/sock --token /path/to/token
- *
- * Signals readiness to parent via IPC: { type: 'ready' }
- * Shuts down cleanly on SIGTERM.
- */
+import '../memory/host-malloc-tunables-claim'
 import { readFileSync } from 'node:fs'
 import { startDaemon, type DaemonHandle } from './daemon-main'
 import { createPtySubprocess } from './pty-subprocess'
@@ -13,6 +6,7 @@ import { warmWindowsConptyOnce } from './windows-conpty-warmup'
 import { warmPwshAvailabilityCache } from '../pwsh'
 import { createDaemonFileLog, createNoopDaemonFileLog } from './daemon-file-log'
 import { PROTOCOL_VERSION } from './types'
+import { detectOwnCgroupScopeUnit, ownFreshDaemonScope } from './daemon-cgroup-scope'
 import {
   DAEMON_EXIT_ENDPOINT_OCCUPIED,
   DaemonEndpointUnavailableError
@@ -25,7 +19,12 @@ import { MacosLoginSessionDeathWatch } from './macos-login-session-death-watch'
 import { readCurrentProcessMacSystemResolverHealth } from '../network/macos-system-resolver-health'
 import { readCurrentDaemonReadyIdentity } from './daemon-ready-identity'
 import { publishDaemonPidFile } from './daemon-spawner'
-import { isNativePtyException } from './daemon-native-pty-exception'
+import { initializeTerminalScopes } from './terminal-scopes-runtime'
+import { isNativePtyException, uncaughtExceptionLogDetails } from './daemon-native-pty-exception'
+import { startDaemonScopeDeathWatch } from './daemon-scope-death-watch'
+import { isWindowsProcessTableAvailable } from '../windows/windows-process-table'
+import { leaseAppImageGenerationForCurrentProcess } from '../cli/appimage-generation-lease'
+import { createDaemonShutdownDeadline } from './daemon-shutdown-deadline'
 
 export type ParsedDaemonArgs = {
   socketPath: string
@@ -37,7 +36,7 @@ export type ParsedDaemonArgs = {
   spawnerExecPath?: string
   /** GUI-spawned daemons only — headless serve/SSH daemons must survive session loss. */
   loginSessionWatch?: boolean
-  /** Optional — absent for adopted old daemons and tests, which log nothing. */
+  freshDaemonScope?: boolean
   logFilePath?: string
 }
 
@@ -51,6 +50,7 @@ export function parseArgs(argv: string[]): ParsedDaemonArgs {
   let appVersion = ''
   let spawnerExecPath = ''
   let loginSessionWatch = false
+  let freshDaemonScope = false
 
   for (let i = 0; i < argv.length; i++) {
     if (argv[i] === '--socket' && argv[i + 1]) {
@@ -79,6 +79,8 @@ export function parseArgs(argv: string[]): ParsedDaemonArgs {
       i++
     } else if (argv[i] === '--login-session-watch') {
       loginSessionWatch = true
+    } else if (argv[i] === '--fresh-daemon-scope') {
+      freshDaemonScope = true
     }
   }
 
@@ -98,16 +100,13 @@ export function parseArgs(argv: string[]): ParsedDaemonArgs {
     ...(appVersion ? { appVersion } : {}),
     ...(spawnerExecPath ? { spawnerExecPath } : {}),
     ...(loginSessionWatch ? { loginSessionWatch } : {}),
+    ...(freshDaemonScope ? { freshDaemonScope } : {}),
     ...(logFilePath ? { logFilePath } : {})
   }
 }
 
 async function main(): Promise<void> {
-  // Why: the parent captures daemon startup stderr then destroys its end of the
-  // pipe once the daemon is ready. A later write here (e.g. the uncaughtException
-  // console.error below) would then hit a broken pipe and emit 'error' on
-  // process.stderr — with no listener that becomes an unhandled error that kills
-  // an otherwise healthy detached daemon. Swallow it: stderr is diagnostic only.
+  // The parent closes startup stderr after readiness; later EPIPE errors must not kill the daemon.
   process.stderr.on('error', () => {})
 
   const {
@@ -119,35 +118,33 @@ async function main(): Promise<void> {
     appVersion,
     spawnerExecPath,
     loginSessionWatch,
+    freshDaemonScope,
     logFilePath
   } = parseArgs(process.argv.slice(2))
   const startedAtMs = Date.now() - process.uptime() * 1000
+  // Keep the extracted AppImage generation alive after its launcher exits.
+  void leaseAppImageGenerationForCurrentProcess()
   const readyIdentity = await readCurrentDaemonReadyIdentity(startedAtMs)
-  // Fail-open: a broken log path must never block daemon startup.
   const daemonLog = logFilePath ? createDaemonFileLog(logFilePath) : createNoopDaemonFileLog()
   daemonLog.log('startup', { protocolVersion: PROTOCOL_VERSION, socketPath })
+  const daemonScope = ownFreshDaemonScope(freshDaemonScope === true, launchNonce)
+  const log = (event: string, details?: Record<string, unknown>): void =>
+    daemonLog.log(event, details)
+  const processCeiling = initializeTerminalScopes(daemonScope, log)
+  startDaemonScopeDeathWatch({ daemonScope, log })
   void warmPwshAvailabilityCache()
 
-  // Why: detached daemons destroy stderr, so the preflight's console.warn is lost;
-  // surface a degraded TCC attribution here where it's diagnosable (F2).
+  // Detached stderr is unavailable; retain TCC preflight failures in diagnostic logs.
   const runMacosLoginPreflight = async (): Promise<void> => {
     const outcome = await prepareMacosTccLoginShell()
     if (outcome && !outcome.ok) {
       daemonLog.log('macos-login-preflight', { ok: outcome.ok, reason: outcome.reason })
     }
   }
-  // Why: warm the PAM probe at idle startup so the first terminal spawn doesn't
-  // pay it under load — shrinking the window where a slow probe degrades (F1/F7).
+  // Warm the PAM probe before the first terminal spawn pays its latency.
   void runMacosLoginPreflight()
 
-  // Why: node-pty can throw a C++ Napi::Error that escapes all JS try/catch
-  // blocks (e.g. writing to a PTY whose fd was closed between the native
-  // exit signal and the JS onExit callback). Without this handler, Node's
-  // default behavior is to print the stack and exit — killing the entire
-  // daemon and all terminal sessions. Logging and continuing is safe because
-  // the individual PTY is already dead; the daemon itself is still healthy.
-  // Non-PTY errors (logic bugs, corrupt state) are re-thrown so they still
-  // crash the daemon — masking those would hide real issues.
+  // Suppress native PTY callback exceptions to preserve other sessions; rethrow unrelated errors.
   process.on('uncaughtException', (err) => {
     const msg = err?.message ?? ''
     if (isNativePtyException(err)) {
@@ -155,7 +152,7 @@ async function main(): Promise<void> {
       console.error('[daemon] Native PTY exception (suppressed):', err)
       return
     }
-    daemonLog.log('uncaught-exception-fatal', { name: err?.name, message: msg })
+    daemonLog.log('uncaught-exception-fatal', uncaughtExceptionLogDetails(err))
     console.error('[daemon] Uncaught exception (fatal):', err)
     throw err
   })
@@ -163,32 +160,30 @@ async function main(): Promise<void> {
   let daemon: DaemonHandle | null = null
   let deathWatch: MacosLoginSessionDeathWatch | null = null
   let shuttingDown = false
-  // Bound the wait so a wedged native shutdown can't leave the daemon running
-  // forever on SIGTERM/SIGINT (it would then survive a real quit, not just updates).
-  const SHUTDOWN_TIMEOUT_MS = 5000
+  const shutdownDeadline = createDaemonShutdownDeadline(daemonLog, () => process.exit(0))
+  const beginShutdown = (): void => {
+    shuttingDown = true
+    shutdownDeadline.start()
+    // Mark the stop before teardown: losing the AppImage mount to scope shutdown can interrupt it with SIGBUS.
+    daemon?.recordStopRequested()
+    deathWatch?.stop()
+  }
 
   const shutdown = async (reason: string): Promise<void> => {
-    // SIGTERM and SIGINT can both fire; guard against a double daemon.shutdown().
     if (shuttingDown) {
       return
     }
-    shuttingDown = true
-    deathWatch?.stop()
+    beginShutdown()
     daemonLog.log('shutdown', { reason })
     try {
       if (daemon) {
-        await Promise.race([
-          daemon.shutdown(),
-          new Promise((_, reject) =>
-            setTimeout(() => reject(new Error('shutdown timeout')), SHUTDOWN_TIMEOUT_MS)
-          )
-        ])
+        await daemon.shutdown()
         daemon = null
       }
     } catch (err) {
-      // Never let a rejected shutdown() escape as an unhandled rejection and skip exit.
       daemonLog.log('shutdown-error', { message: (err as Error)?.message })
     } finally {
+      shutdownDeadline.cancel()
       daemonLog.close()
       process.exit(0)
     }
@@ -197,10 +192,7 @@ async function main(): Promise<void> {
   process.on('SIGTERM', () => void shutdown('SIGTERM'))
   process.on('SIGINT', () => void shutdown('SIGINT'))
 
-  // Why: a dead macOS login session cannot be fabricated without root (PAM owns
-  // audit-session teardown), so e2e drives the oracles from a verdict file:
-  // 'alive' → accepted/healthy, 'dead' → rejected/unhealthy, 'hang' →
-  // timeout-inconclusive/unhealthy (the fail-safe path), else inconclusive.
+  // Inject verdicts for e2e: fabricating macOS audit-session death requires privileged PAM teardown.
   const e2eProbeFile = process.env.ORCA_E2E_LOGIN_SESSION_PROBE_FILE
   const readE2eVerdict = (): string => {
     try {
@@ -246,10 +238,9 @@ async function main(): Promise<void> {
           onRetire: (details) => {
             shuttingDown = true
             daemonLog.log('login-session-dead-retire', details)
+            daemon?.recordOrderlyExit()
             daemonLog.close()
-            // Why: crash-style exit (no PTY teardown) keeps session meta unclean so the
-            // replacement daemon cold-restores scrollback; stale socket/pid files ride
-            // the existing dead-endpoint recovery.
+            // Skip PTY teardown so replacement daemons cold-restore scrollback from unclean session metadata.
             process.exit(1)
           }
         })
@@ -268,11 +259,13 @@ async function main(): Promise<void> {
       ? {
           publishEndpointOwnership: () =>
             publishDaemonPidFile(pidPath, {
-              pid: process.pid,
               ...readyIdentity,
               ...(entryPath ? { entryPath } : {}),
               ...(appVersion ? { appVersion } : {}),
               ...(spawnerExecPath ? { spawnerExecPath } : {}),
+              // Record actual cgroup membership rather than unverified launcher intent.
+              cgroupUnit: detectOwnCgroupScopeUnit(),
+              processCeiling,
               launchNonce
             })
         }
@@ -303,34 +296,33 @@ async function main(): Promise<void> {
       process.exit(0)
     },
     onRpcShutdown: () => {
-      deathWatch?.stop()
-      shuttingDown = true
+      shutdownDeadline.cancel()
       daemonLog.close()
       process.exit(0)
-    }
+    },
+    onShutdownRequested: beginShutdown
   })
   deathWatch?.start()
 
-  // Signal readiness to parent via IPC (if available)
   if (process.send) {
     process.send({ type: 'ready', ...readyIdentity })
   }
   daemonLog.log('ready')
 
   warmWindowsConptyOnce()
+  // Log native-addon availability without stderr and pay dlopen cost before the first teardown.
+  if (process.platform === 'win32') {
+    daemonLog.log('windows-process-table', { native: isWindowsProcessTableAvailable() })
+  }
 }
 
-// Only auto-run when executed directly (not imported for testing, or for the build guard's
-// load check — see config/scripts/build-orcad.mjs).
+// Tests and build-orcad.mjs load checks import this module without starting a daemon.
 const isDirectExecution = !process.env.VITEST && !process.env.ORCA_DAEMON_ENTRY_LOAD_CHECK
 if (isDirectExecution) {
   main().catch((err) => {
     console.error('[daemon] Fatal:', err)
     if (err instanceof DaemonEndpointUnavailableError && err.reason === 'occupied') {
-      // Why an exit code and not the IPC message: process.send only proves the write left this
-      // process, not that the parent dispatched 'message' before it observed the exit — and the
-      // parent settles the launch on exit. A code rides the same event that ends the wait, so it
-      // cannot lose that race. The message is still sent best-effort for log detail.
+      // The launcher settles on exit, which can precede IPC delivery; carry occupied status in the exit code.
       process.send?.({ type: 'endpoint-unavailable', reason: err.reason })
       process.exit(DAEMON_EXIT_ENDPOINT_OCCUPIED)
     }

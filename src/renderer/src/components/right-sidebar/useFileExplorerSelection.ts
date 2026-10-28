@@ -41,8 +41,7 @@ export function useFileExplorerSelection(
   const setSingleSelectedPath = useCallback((value: React.SetStateAction<string | null>) => {
     setSelectionState((prev) => {
       if (typeof value === 'function') {
-        // Why: legacy watcher cleanup still speaks in single-path updater terms;
-        // apply it across the whole selected set so stale multi-selections converge.
+        // Apply legacy single-path cleanup across the full selection to prune stale multi-selections.
         return updateFileExplorerSelectionPaths(prev, value)
       }
       const nextPath = value
@@ -66,7 +65,7 @@ export function useFileExplorerSelection(
   }, [])
 
   const moveSelection = useCallback((targetPath: string, mode: FileExplorerSelectionMode) => {
-    const orderedPaths = rowProjectionRef.current.getOrderedPaths()
+    const orderedPaths = mode === 'replace' ? [] : rowProjectionRef.current.getOrderedPaths()
     setSelectionState((prev) => updateFileExplorerSelection(prev, orderedPaths, targetPath, mode))
   }, [])
 
@@ -90,8 +89,7 @@ export function useFileExplorerSelection(
         return
       }
 
-      // Why: tree refreshes are much more common than range/toggle selections
-      // in large repos. Build order only for the modifier path that needs it.
+      // Build order only for modifier selection; frequent large-repo refreshes do not need it.
       const orderedPaths = rowProjectionRef.current.getOrderedPaths()
       setSelectionState((prev) =>
         updateFileExplorerSelection(prev, orderedPaths, node.path, selectionMode)
@@ -101,8 +99,7 @@ export function useFileExplorerSelection(
   )
 
   const preserveSelectionForContextMenu = useCallback((node: TreeNode) => {
-    // Why: right-clicking an existing multi-selection should keep the copy
-    // target set; right-clicking outside it should behave like a single item.
+    // Preserve right-clicked multi-selections; outside targets become a single-item selection.
     setSelectionState((prev) =>
       prev.selectedPaths.has(node.path) ? prev : createSingleFileExplorerSelection(node.path)
     )

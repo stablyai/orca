@@ -2,9 +2,12 @@
 import { renderHook } from '@testing-library/react'
 import { describe, expect, it } from 'vitest'
 import type { AiVaultSession } from '../../../../shared/ai-vault-types'
+import type { FolderWorkspace } from '../../../../shared/folder-workspace-types'
 import type { Repo } from '../../../../shared/repo-types'
+import { folderWorkspaceKey } from '../../../../shared/workspace-scope'
 import type { Worktree } from '../../../../shared/worktree/types'
 import {
+  aiVaultSessionOwnerWorkspaces,
   resolveAiVaultSessionWorktreeDisplay,
   useAiVaultSessionWorktreeMap,
   withAiVaultCurrentWorktreeStatus
@@ -83,7 +86,6 @@ const sessions = [sessionInA, sessionInB, sessionUnmatched]
 
 describe('useAiVaultSessionWorktreeMap', () => {
   it('keeps the map identity across worktree switches while the current flag moves', () => {
-    // Mirrors the panel wiring: cached map + per-row current stamping.
     const { result, rerender } = renderHook(
       ({ activeWorktreeId }: { activeWorktreeId: string | null }) => {
         const map = useAiVaultSessionWorktreeMap({ sessions, repos, worktrees })
@@ -102,7 +104,6 @@ describe('useAiVaultSessionWorktreeMap', () => {
 
     rerender({ activeWorktreeId: worktreeB.id })
 
-    // The switch must not rebuild the 500-session map — only the stamp moves.
     expect(result.current.map).toBe(firstMap)
     expect(result.current.infoFor(sessionInA.id)?.status).toBe('active')
     expect(result.current.infoFor(sessionInB.id)?.status).toBe('current')
@@ -124,9 +125,9 @@ describe('useAiVaultSessionWorktreeMap', () => {
     const allWorktrees = [...worktrees, sshWorktree, archivedWorktree]
     const allRepos = [...repos, makeRepo({ id: 'repo-ssh', path: '/srv/orca' })]
     const allSessions = [
-      sessionInA, // active worktree
-      sessionInB, // non-active worktree
-      sessionUnmatched, // no worktree match
+      sessionInA,
+      sessionInB,
+      sessionUnmatched,
       makeSession({ id: 'codex:ssh', cwd: '/srv/orca/src', executionHostId: 'ssh:target-1' }),
       makeSession({ id: 'codex:attic', cwd: '/repo/attic' }),
       makeSession({ id: 'codex:no-cwd', cwd: null, branch: 'feature/x' })
@@ -157,8 +158,7 @@ describe('useAiVaultSessionWorktreeMap', () => {
   })
 
   it('matches non-ASCII cwds regardless of unicode normalization form', () => {
-    // macOS file pickers yield NFD while agents record NFC cwds (#10832) —
-    // explicit escapes so tooling can't silently re-normalize the fixture.
+    // macOS NFD and agent NFC must match; explicit escapes prevent fixture normalization (#10832).
     const nfcCafe = makeWorktree({ id: 'repo-1::/repo/caf\u00e9', path: '/repo/caf\u00e9' })
     const cjk = makeWorktree({ id: 'repo-1::/repo/作業区', path: '/repo/作業区' })
     const nfdSession = makeSession({ id: 'codex:nfd', cwd: '/repo/cafe\u0301/src' })
@@ -187,9 +187,6 @@ describe('useAiVaultSessionWorktreeMap', () => {
   })
 
   it('does not attribute a session to a workspace that merely shares a path prefix', () => {
-    // Guards the candidate matcher's boundary: hoisting the root normalization
-    // out of the loop must not degrade containment into a bare startsWith, or
-    // '/repo/alpha-sibling' would be swallowed by '/repo/alpha'.
     const sibling = makeWorktree({
       id: 'repo-1::/repo/alpha-sibling',
       path: '/repo/alpha-sibling'
@@ -208,10 +205,7 @@ describe('useAiVaultSessionWorktreeMap', () => {
   })
 
   it('builds the map at scale without re-normalizing paths per session', () => {
-    // Regression for the ~1s workspace-switch stall (#10841/#11303): the map
-    // used to rebuild and re-normalize every candidate root per session, making
-    // it O(sessions x roots) on path normalization. Times the real fan-out
-    // rather than counting calls, so it fails on any return to that shape.
+    // Use realistic fan-out to catch repeated per-session root normalization behind workspace-switch stalls (#10841/#11303).
     const manyWorktrees = Array.from({ length: 1200 }, (_, i) =>
       makeWorktree({ id: `repo-1::/repo/w${i}`, path: `/repo/w${i}` })
     )
@@ -230,8 +224,138 @@ describe('useAiVaultSessionWorktreeMap', () => {
     const elapsedMs = performance.now() - startedAt
 
     expect(result.current.size).toBe(manySessions.length)
-    // Was ~350ms+ before the hoist and ~15ms after; the bound is loose enough
-    // to stay quiet on a slow CI box while still catching the quadratic shape.
+    // Previously ~350ms, now ~15ms; allow slow CI while detecting the old normalization cost.
     expect(elapsedMs).toBeLessThan(150)
+  })
+})
+
+import { resolveAiVaultHistorySessionResumeState } from './ai-vault-session-resume'
+
+describe('lazy OMP child resume targets', () => {
+  it.each([worktreeA.id, worktreeB.id, null])(
+    'keeps child and grandchild in their own worktree with active %s',
+    (activeWorktreeId) => {
+      const parent = makeSession({ agent: 'omp', id: 'omp:parent', cwd: worktreeA.path })
+      const { result } = renderHook(() =>
+        useAiVaultSessionWorktreeMap({ sessions: [parent], repos, worktrees })
+      )
+      for (const id of ['child', 'grandchild']) {
+        const session = makeSession({
+          agent: 'omp',
+          id,
+          cwd: worktreeA.path,
+          subagent: { parentSessionId: parent.sessionId, agentType: null, status: null }
+        })
+        expect(result.current.has(id)).toBe(false)
+        const target = resolveAiVaultHistorySessionResumeState({
+          session,
+          worktreeInfo: result.current.get(id) ?? null,
+          activeWorktreeId,
+          worktrees,
+          repos
+        })
+        expect(target).toEqual({
+          blocked: false,
+          worktreeId: worktreeA.id,
+          usesSessionWorktree: true
+        })
+      }
+    }
+  )
+  it.each([{ cwd: null }, { cwd: '/missing' }, { executionHostId: 'ssh:other' as const }])(
+    'refuses unmatched child %j instead of active-workspace fallback',
+    (overrides) => {
+      const session = makeSession({
+        agent: 'omp',
+        cwd: worktreeA.path,
+        subagent: { parentSessionId: 'parent', agentType: null, status: null },
+        ...overrides
+      })
+      expect(
+        resolveAiVaultHistorySessionResumeState({
+          session,
+          worktreeInfo: null,
+          activeWorktreeId: worktreeB.id,
+          worktrees,
+          repos
+        })
+      ).toEqual({ blocked: true, worktreeId: null, usesSessionWorktree: false })
+    }
+  )
+})
+
+describe('folder workspace resume targets', () => {
+  const folder: FolderWorkspace = {
+    id: 'folder-1',
+    projectGroupId: 'group-1',
+    name: 'Notes',
+    folderPath: '/work/notes',
+    executionHostId: 'local',
+    linkedTask: null,
+    comment: '',
+    isArchived: false,
+    isUnread: false,
+    isPinned: false,
+    sortOrder: 0,
+    lastActivityAt: 1,
+    createdAt: 1,
+    updatedAt: 1
+  }
+  const folderKey = folderWorkspaceKey(folder.id)
+  const targetState = {
+    endpointProjects: [],
+    endpointProjectHostSetups: [],
+    folderWorkspaces: [folder],
+    projectGroups: [],
+    repos,
+    worktreesByRepo: { 'repo-1': worktrees }
+  }
+  const owners = aiVaultSessionOwnerWorkspaces(worktrees, [folder])
+
+  it.each([folderKey, worktreeA.id, null])(
+    'resumes a folder conversation and its subagent in the folder with active %s',
+    (activeWorktreeId) => {
+      const parent = makeSession({ agent: 'claude', id: 'claude:parent', cwd: '/work/notes' })
+      const child = makeSession({
+        agent: 'claude',
+        id: 'claude:child',
+        cwd: '/work/notes',
+        subagent: { parentSessionId: parent.sessionId, agentType: null, status: null }
+      })
+      const { result } = renderHook(() =>
+        useAiVaultSessionWorktreeMap({ sessions: [parent], repos, worktrees: owners })
+      )
+      for (const session of [parent, child]) {
+        expect(
+          resolveAiVaultHistorySessionResumeState({
+            session,
+            worktreeInfo: withAiVaultCurrentWorktreeStatus(
+              result.current.get(session.id) ?? null,
+              activeWorktreeId
+            ),
+            activeWorktreeId,
+            worktrees: owners,
+            repos,
+            targetState
+          })
+        ).toEqual({ blocked: false, worktreeId: folderKey, usesSessionWorktree: true })
+      }
+    }
+  )
+
+  it('leaves git worktree conversations on their worktree when folders exist', () => {
+    const { result } = renderHook(() =>
+      useAiVaultSessionWorktreeMap({ sessions: [sessionInA], repos, worktrees: owners })
+    )
+    expect(
+      resolveAiVaultHistorySessionResumeState({
+        session: sessionInA,
+        worktreeInfo: result.current.get(sessionInA.id) ?? null,
+        activeWorktreeId: folderKey,
+        worktrees: owners,
+        repos,
+        targetState
+      })
+    ).toEqual({ blocked: false, worktreeId: worktreeA.id, usesSessionWorktree: true })
   })
 })

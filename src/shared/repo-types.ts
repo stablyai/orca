@@ -1,29 +1,17 @@
 import type { RepoIcon } from './repo-icon'
+import type { GhAccountBinding } from './github/account-binding'
 import type { GitHubRepositoryIdentity } from './github/pull-request-types'
 import type { RepoHookSettings } from './orca-yaml-hook-types'
 import type { ForkSyncMode } from './git-fork-sync'
 import type { GitRemoteIdentity } from './git-remote-identity'
 import type { RepoSourceControlAiOverrides } from './source-control-ai-types'
 import type { RepoProjectHostSetupMethod } from './project-types'
+import type { JiraProjectReference } from './jira/jira-project-reference'
 
-// ─── Repo ────────────────────────────────────────────────────────────
 export type RepoKind = 'git' | 'folder'
 
-/**
- * Per-repo user choice for where issues are fetched and filed.
- *
- * Why three states, not two: storage must distinguish "user explicitly chose
- * upstream" from "heuristic happens to resolve to upstream right now." Collapsing
- * the two would let a remote-topology change (someone removes `upstream`, or
- * adds one later) silently move the effective source — the exact silent-source-
- * switch class the upstream-issue-source design rejects.
- *
- * - `'auto'` (or undefined): honor the heuristic in `getIssueOwnerRepo`
- *   (upstream-if-exists, else origin). Initial state for every repo.
- * - `'upstream'`: explicit upstream. Wins over heuristic and future topology
- *   changes. Falls back to origin if `upstream` remote vanishes, with a toast.
- * - `'origin'`: explicit origin. Same precedence.
- */
+/** Explicit choices survive remote-topology changes; absent/auto uses upstream when present, otherwise origin.
+ * Explicit upstream falls back to origin with a toast if that remote vanishes. */
 export type IssueSourcePreference = 'upstream' | 'origin' | 'auto'
 export type ExternalWorktreeVisibility = 'hide' | 'show'
 
@@ -39,19 +27,27 @@ export type WorktreeVisibilitySourcePreferences = {
   custom?: Record<string, ExternalWorktreeVisibility>
 }
 
+export type WorktreeVisibilityDefaults = {
+  /** Default for worktrees outside a recognized source. */
+  external?: ExternalWorktreeVisibility
+  /** Host-owned roots applied to every repository on that host. */
+  customSources?: CustomWorktreeVisibilitySource[]
+  /** Defaults for built-in and host-owned custom sources. */
+  sourcePreferences?: WorktreeVisibilitySourcePreferences
+}
+
 export type Repo = {
   id: string
   path: string
   displayName: string
   badgeColor: string
   repoIcon?: RepoIcon | null
-  /** Set when the repo is a fork: the upstream/parent owner/repo. Drives the
-   *  fork indicator and the default avatar of same-name forks (renamed forks
-   *  keep their own owner). Absent = not a fork, or fork status not yet
-   *  resolved. */
+  /** Fork parent; same-name forks use its avatar, renamed forks keep their own. Absent means non-fork or unresolved. */
   upstream?: GitHubRepositoryIdentity | null
   addedAt: number
   kind?: RepoKind
+  /** Git root proven during folder upgrade; keeps the original checkout locator stable. */
+  folderUpgradeGitRootPath?: string
   gitUsername?: string
   worktreeBaseRef?: string
   /** Optional repo-scoped workspace root override. Relative paths resolve from `path`. */
@@ -59,15 +55,14 @@ export type Repo = {
   hookSettings?: RepoHookSettings
   /** SSH target ID for remote repos. null/undefined = local. */
   connectionId?: string | null
-  /**
-   * Explicit execution owner for this repo. Runtime-host repos need this
-   * because they otherwise look identical to local repos (`connectionId: null`).
-   */
+  /** Runtime-host repos otherwise resemble local repos (connectionId: null); retain their explicit execution owner. */
   executionHostId?: 'local' | `ssh:${string}` | `runtime:${string}` | null
-  /** Per-repo override for issue-source resolution. `undefined` is treated
-   *  identically to `'auto'`; writers leave it undefined on creation so
-   *  existing persisted records stay forward-compatible. */
+  /** Absent means auto; writers omit on creation for persisted-record compatibility. */
   issueSourcePreference?: IssueSourcePreference
+  /** Host-owned Jira project default; users can override it in each composer. */
+  defaultJiraProject?: JiraProjectReference | null
+  /** Bind host/login only; resolve a short-lived gh token at spawn and inject into that child’s environment. */
+  ghAccount?: GhAccountBinding
   /** Controls Orca's fork-default-branch sync offer for repos with upstream metadata. */
   forkSyncMode?: ForkSyncMode
   /** Canonical identity for the repo remote Orca should use for provider-level grouping. */
@@ -90,9 +85,7 @@ export type Repo = {
   worktreeVisibilitySourcePreferences?: WorktreeVisibilitySourcePreferences
   /** User permanently opted out of the new-external-worktree inbox for this repo. */
   externalWorktreeDiscoverySuppressedAt?: number
-  /** Paths (relative to the primary checkout) that should be APFS clone-copied
-   *  on macOS when possible, otherwise symlinked, into newly created worktrees.
-   *  Undefined/empty means no shared paths are created for this repo. */
+  /** Relative paths to APFS-clone on macOS when possible, otherwise symlink, into new worktrees. Absent/empty creates none. */
   symlinkPaths?: string[]
   /** Durable sidebar-only repo organization. Execution remains repo-scoped. */
   projectGroupId?: string | null
@@ -104,22 +97,7 @@ export type Repo = {
   projectHostSetupMethod?: RepoProjectHostSetupMethod
 }
 
-/**
- * Envelope returned by the `repos:getBaseRefDefault` IPC handler.
- *
- * Why: declared in `shared/` rather than colocated with the handler so the
- * preload bridge and renderer can import the same named type. Before this
- * lived in `src/main/git/repo.ts` — the preload layer cannot import from
- * `src/main/`, which forced three sites to inline the same structural shape
- * and risk silent drift.
- *
- * Why `remoteCount`: BaseRefPicker renders a multi-remote hint when the repo
- * has more than one configured remote; piggybacking the count on this IPC
- * avoids a second round-trip.
- *
- * Why `defaultBaseRef` (not `default`): `default` is a reserved word and is
- * awkward to destructure.
- */
+/** Shared IPC shape for repos:getBaseRefDefault across main/preload/renderer; remoteCount avoids a second hint lookup. */
 export type BaseRefDefaultResult = {
   defaultBaseRef: string | null
   remoteCount: number

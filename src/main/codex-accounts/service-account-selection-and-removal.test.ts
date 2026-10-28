@@ -1,4 +1,5 @@
-import { describe, expect, it, vi } from 'vitest'
+import { describe, expect, it, vi, beforeEach } from 'vitest'
+import { installFakeAppEnvironment } from '../../../config/scripts/vitest-host-ports-setup'
 import { existsSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import {
@@ -17,9 +18,10 @@ vi.mock('electron', () => ({
     getPath: () => testState.userDataDir
   }
 }))
+beforeEach(() => installFakeAppEnvironment({ getPath: () => testState.userDataDir }))
 
-vi.mock('node:os', async () => {
-  const actual = await vi.importActual<typeof import('node:os')>('node:os') // eslint-disable-line @typescript-eslint/consistent-type-imports -- vi.importActual requires inline import()
+vi.mock(import('node:os'), async (importOriginal) => {
+  const actual = await importOriginal()
   return {
     ...actual,
     homedir: () => testState.fakeHomeDir
@@ -132,8 +134,6 @@ describe('CodexAccountService config sync', () => {
 
     await service.selectAccount('account-2')
 
-    // Each managed host account launches against its own home, so a switch must
-    // leave both credential files alone and never copy either into the mirror.
     expect(existsSync(runtimeAuthPath)).toBe(false)
     expect(readFileSync(join(firstManagedHomePath, 'auth.json'), 'utf-8')).toBe(firstAuth)
     expect(readFileSync(join(secondManagedHomePath, 'auth.json'), 'utf-8')).toBe(secondAuth)
@@ -215,47 +215,67 @@ describe('CodexAccountService config sync', () => {
     })
   })
 
-  it('removes an account and cleans up managed home', async () => {
-    const managedHomePath = createManagedHome(
-      testState.userDataDir,
-      'account-1',
-      '',
-      '{"account":"managed"}\n'
-    )
-    const settings = createSettings({
-      codexManagedAccounts: [
-        {
-          id: 'account-1',
-          email: 'user@example.com',
-          managedHomePath,
-          providerAccountId: null,
-          workspaceLabel: null,
-          workspaceAccountId: null,
-          createdAt: 1,
-          updatedAt: 1,
-          lastAuthenticatedAt: 1
-        }
-      ],
-      activeCodexManagedAccountId: 'account-1'
-    })
-    const store = createStore(settings)
-    const rateLimits = createRateLimits()
-    const runtimeHome = createRuntimeHome()
+  it.each(['healthy', 'unreadable'])(
+    'removes an account with a %s credit ledger',
+    async (ledger) => {
+      const managedHomePath = createManagedHome(
+        testState.userDataDir,
+        'account-1',
+        '',
+        '{"account":"managed"}\n'
+      )
+      const settings = createSettings({
+        codexManagedAccounts: [
+          {
+            id: 'account-1',
+            email: 'user@example.com',
+            managedHomePath,
+            providerAccountId: null,
+            workspaceLabel: null,
+            workspaceAccountId: null,
+            createdAt: 1,
+            updatedAt: 1,
+            lastAuthenticatedAt: 1
+          }
+        ],
+        activeCodexManagedAccountId: 'account-1'
+      })
+      const store = createStore(settings)
+      const rateLimits = createRateLimits()
+      const runtimeHome = createRuntimeHome()
 
-    const { CodexAccountService } = await import('./service')
-    const service = new CodexAccountService(
-      store as never,
-      rateLimits as never,
-      runtimeHome as never
-    )
+      const ledgerError = new Error('credit ledger unreadable')
+      if (ledger === 'unreadable') {
+        store.getCodexResetCreditAttemptLedger.mockImplementation(() => {
+          throw ledgerError
+        })
+      }
+      const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
 
-    const result = await service.removeAccount('account-1')
+      const { CodexAccountService } = await import('./service')
+      const service = new CodexAccountService(
+        store as never,
+        rateLimits as never,
+        runtimeHome as never
+      )
 
-    expect(result.accounts).toHaveLength(0)
-    expect(result.activeAccountId).toBe(null)
-    expect(existsSync(managedHomePath)).toBe(false)
-    expect(runtimeHome.syncForCurrentSelection).toHaveBeenCalled()
-  })
+      const result = await service.removeAccount('account-1')
+
+      expect(result.accounts).toHaveLength(0)
+      expect(result.activeAccountId).toBe(null)
+      expect(existsSync(managedHomePath)).toBe(false)
+      expect(runtimeHome.syncForCurrentSelection).toHaveBeenCalled()
+      expect(rateLimits.evictInactiveCodexCache).toHaveBeenCalledWith('account-1')
+      if (ledger === 'unreadable') {
+        expect(warn).toHaveBeenCalledWith(
+          '[codex-accounts] Removed account, but credit ledger cleanup failed:',
+          expect.any(Error)
+        )
+        expect(store.replaceCodexResetCreditAttemptLedgerAndFlush).not.toHaveBeenCalled()
+      }
+      warn.mockRestore()
+    }
+  )
 
   it('refuses to remove a managed home owned by a different account', async () => {
     const otherAccountHome = createManagedHome(

@@ -1,3 +1,4 @@
+import { selectCanonicalProjectHostSetups } from '../../src/renderer/src/store/project-host-setup-selector'
 /**
  * E2E: linked work item behavior when switching the composer project.
  *
@@ -74,30 +75,42 @@ async function openComposerWithLinkedWorkItem(
 }
 
 async function getJiraSourceContext(page: Page): Promise<TaskSourceContext> {
-  return page.evaluate(() => {
+  const state = await page.evaluate(() => {
     const state = window.__store?.getState()
-    const activeWorktreeId = state?.activeWorktreeId
-    const setup = state?.projectHostSetups.find((candidate) =>
-      state.worktreesByRepo[candidate.repoId]?.some((worktree) => worktree.id === activeWorktreeId)
-    )
-    if (!setup) {
-      throw new Error('Active project host setup is unavailable')
-    }
-    return {
-      kind: 'task-source',
-      provider: 'jira',
-      projectId: setup.projectId,
-      hostId: setup.hostId,
-      projectHostSetupId: setup.id,
-      repoId: setup.repoId,
-      providerIdentity: {
-        provider: 'jira',
-        siteId: 'e2e-jira-site',
-        siteUrl: 'https://example.atlassian.net',
-        projectKey: 'RDG'
-      }
-    }
+    return state
+      ? {
+          repos: state.repos,
+          endpointProjects: state.endpointProjects,
+          endpointProjectHostSetups: state.endpointProjectHostSetups,
+          activeWorktreeId: state.activeWorktreeId,
+          worktreesByRepo: state.worktreesByRepo
+        }
+      : null
   })
+  const setup =
+    state &&
+    selectCanonicalProjectHostSetups(state).find((candidate) =>
+      state.worktreesByRepo[candidate.repoId]?.some(
+        (worktree) => worktree.id === state.activeWorktreeId
+      )
+    )
+  if (!setup) {
+    throw new Error('Active project host setup is unavailable')
+  }
+  return {
+    kind: 'task-source',
+    provider: 'jira',
+    projectId: setup.projectId,
+    hostId: setup.hostId,
+    projectHostSetupId: setup.id,
+    repoId: setup.repoId,
+    providerIdentity: {
+      provider: 'jira',
+      siteId: 'e2e-jira-site',
+      siteUrl: 'https://example.atlassian.net',
+      projectKey: 'RDG'
+    }
+  }
 }
 
 async function switchComposerProject(page: Page, projectName: string): Promise<void> {

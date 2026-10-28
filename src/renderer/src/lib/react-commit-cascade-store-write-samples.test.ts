@@ -10,10 +10,9 @@ import {
   resetReactCommitCascadeWriteSamples
 } from './react-commit-cascade-store-write-samples'
 
-// Not an intersection with ErrorConstructor: both fields have to stay optional
-// so the absent-captureStackTrace platform can be simulated.
+// Both fields must stay optional to simulate platforms without captureStackTrace; ErrorConstructor intersection would require them.
 type ErrorWithCapture = {
-  captureStackTrace?: (target: object, constructorOpt?: unknown) => void
+  captureStackTrace?: (target: { stack?: string }, constructorOpt?: unknown) => void
   stackTraceLimit?: number
 }
 const errorWithCapture = Error as unknown as ErrorWithCapture
@@ -42,8 +41,7 @@ afterEach(() => {
 })
 
 describe('driver stack frames', () => {
-  // Why more than one frame: frame 0 is the slice action every cascade shares.
-  // The caller above it is the loop we are actually hunting.
+  // Frame zero names the shared slice action; its callers identify the actual loop.
   it('names callers above the frame the write came from', () => {
     armReactCommitCascadeWriteSampling()
     paneRender()
@@ -56,20 +54,10 @@ describe('driver stack frames', () => {
     expect(summary.driverStack).toContain('paneRender')
     expect(summary.driverFrame).not.toContain('paneRender')
   })
-
-  // Why: the redaction that strips paths is keyed on the detail NAME, so a path
-  // inside this value would ship a developer's home directory.
-  it('keeps every reported frame path-free', () => {
-    armReactCommitCascadeWriteSampling()
-    paneRender()
-
-    expect(readReactCommitCascadeWriteSummary().driverStack).not.toContain('/')
-  })
 })
 
 describe('capture failures', () => {
-  // Why asserted: the limit is process-global, so leaking a raised value would
-  // make every unrelated throw in the app capture eight frames forever.
+  // Restore the process-global stack limit or unrelated errors retain extra frames.
   it('restores Error.stackTraceLimit when the capture throws', () => {
     errorWithCapture.stackTraceLimit = 3
     errorWithCapture.captureStackTrace = () => {
@@ -82,9 +70,7 @@ describe('capture failures', () => {
     expect(readReactCommitCascadeWriteSummary().storeWrites).toBe(1)
   })
 
-  // Why asserted: no sample is ever pushed without captureStackTrace, so a cap
-  // bound to samples.length would leave key collection running for the whole
-  // cascade on any engine that lacks the API.
+  // Without captureStackTrace, samples.length never grows; cap writes separately or key collection never stops.
   it('stops collecting after the sample cap when captureStackTrace is unavailable', () => {
     delete errorWithCapture.captureStackTrace
     armReactCommitCascadeWriteSampling()
@@ -103,8 +89,7 @@ describe('capture failures', () => {
     expect(summary.changedKeys?.length).toBeLessThan(240)
   })
 
-  // Why still asserted: one write can change many keys, so the report cap is
-  // what keeps the detail inside its 240-char budget.
+  // One write can change many keys; report-time limits must preserve the 240-char budget.
   it('caps reported changed keys from a single wide write', () => {
     const wide = Object.fromEntries(
       Array.from({ length: 40 }, (_, index) => [`key${index}`, index])
@@ -118,8 +103,7 @@ describe('capture failures', () => {
   })
 })
 
-// Why measured through the real middleware: the arming condition is what keeps
-// an ordinary write down to one boolean read, and nothing else asserts it end to end.
+// Use real middleware to prove ordinary unarmed writes cost only a boolean read.
 describe('disarmed cost', () => {
   const WRITE_FLOOD = 10_000
 

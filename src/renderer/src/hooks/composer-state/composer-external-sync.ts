@@ -9,9 +9,7 @@ export function useComposerExternalSync(target: ComposerTargetState): ComposerEx
   const hostRuntimeEffects = useHostRuntimeEffects({
     commitHookCheckIfCurrent: target.providerRuntimeSync.commitHookCheckIfCurrent,
     connectionId: target.workspaceIdentityState.connectionId,
-    createGateMode: target.composerTargetStore.createGateMode,
     disabledTuiAgents: target.workspaceIdentityState.disabledTuiAgents,
-    enableIssueAutomation: target.composerTargetStore.enableIssueAutomation,
     ensureDetectedAgents: target.workspaceIdentityState.ensureDetectedAgents,
     ensureRemoteDetectedAgents: target.workspaceIdentityState.ensureRemoteDetectedAgents,
     ensureRuntimeDetectedAgents: target.workspaceIdentityState.ensureRuntimeDetectedAgents,
@@ -27,9 +25,7 @@ export function useComposerExternalSync(target: ComposerTargetState): ComposerEx
     selectedRepoExecutionHostId: target.runtimeTargetSelection.selectedRepoExecutionHostId,
     selectedRepoHookContextKey: target.runtimeTargetSelection.selectedRepoHookContextKey,
     selectedRepoIsGit: target.runtimeTargetSelection.selectedRepoIsGit,
-    selectedRepoSettingsRef: target.asyncComposerState.selectedRepoSettingsRef,
     selectedRepoSshStatus: target.runtimeTargetSelection.selectedRepoSshStatus,
-    setLoadedIssueCommand: target.asyncComposerState.setLoadedIssueCommand,
     setTuiAgent: target.workspaceIdentityState.setTuiAgent,
     settings: target.composerTargetStore.settings,
     tuiAgent: target.workspaceIdentityState.tuiAgent
@@ -61,6 +57,7 @@ export function useComposerExternalSync(target: ComposerTargetState): ComposerEx
   const githubSourceApplication = useGitHubSourceApplication({
     branchAutoNameRef: target.asyncComposerState.branchAutoNameRef,
     lastAutoNameRef: target.asyncComposerState.lastAutoNameRef,
+    linkedWorkItem: target.sourceContextState.linkedWorkItem,
     name: target.sourceContextState.name,
     selectedRepoGitHubSourceContext: target.sourceContextState.selectedRepoGitHubSourceContext,
     setBranchNameOverride: target.workspaceIdentityState.setBranchNameOverride,
@@ -85,6 +82,7 @@ export function useComposerExternalSync(target: ComposerTargetState): ComposerEx
     selectedRepoGitHubSourceContext: target.sourceContextState.selectedRepoGitHubSourceContext,
     selectedRepoIsGit: target.runtimeTargetSelection.selectedRepoIsGit,
     setBaseBranch: target.workspaceIdentityState.setBaseBranch,
+    setBaseBranchNamesWorkspace: target.workspaceIdentityState.setBaseBranchNamesWorkspace,
     setBranchNameOverride: target.workspaceIdentityState.setBranchNameOverride,
     setBranchNameOverridePreservesNameEdits:
       target.workspaceIdentityState.setBranchNameOverridePreservesNameEdits,
@@ -100,8 +98,7 @@ export function useComposerExternalSync(target: ComposerTargetState): ComposerEx
     setPushTarget: target.workspaceIdentityState.setPushTarget,
     setStartFromResetHint: target.workspaceIdentityState.setStartFromResetHint,
     settings: target.composerTargetStore.settings,
-    smartGitHubPrStartPointSelectionRef:
-      target.asyncComposerState.smartGitHubPrStartPointSelectionRef
+    smartSourceSelectionRef: target.asyncComposerState.smartSourceSelectionRef
   })
   return {
     hostRuntimeEffects,

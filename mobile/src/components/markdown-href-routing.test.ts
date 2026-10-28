@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { routeMarkdownHref } from './markdown-href-routing'
+import { createNativeChatFileHref } from '../../../src/shared/native-chat-href-routing'
 
 describe('routeMarkdownHref', () => {
   it('routes web and mail links to the system handler', () => {
@@ -14,14 +15,6 @@ describe('routeMarkdownHref', () => {
     expect(routeMarkdownHref(' mailto:dev@example.com ')).toEqual({
       kind: 'web',
       url: 'mailto:dev@example.com'
-    })
-  })
-
-  it('routes relative hrefs to the file opener', () => {
-    expect(routeMarkdownHref('src/foo.ts')).toEqual({ kind: 'file', pathText: 'src/foo.ts' })
-    expect(routeMarkdownHref('./docs/plan.md')).toEqual({
-      kind: 'file',
-      pathText: './docs/plan.md'
     })
   })
 
@@ -40,10 +33,10 @@ describe('routeMarkdownHref', () => {
     })
   })
 
-  it('decodes percent-encoded href paths', () => {
-    expect(routeMarkdownHref('docs/release%20notes.md')).toEqual({
+  it('preserves the existing wrapped reply-location contract', () => {
+    expect(routeMarkdownHref(createNativeChatFileHref(' docs/report.md:12:4 '))).toEqual({
       kind: 'file',
-      pathText: 'docs/release notes.md'
+      pathText: 'docs/report.md:12:4'
     })
   })
 
@@ -59,13 +52,6 @@ describe('routeMarkdownHref', () => {
     expect(routeMarkdownHref('file:///C:/repo/src/index.ts')).toEqual({
       kind: 'file',
       pathText: 'C:/repo/src/index.ts'
-    })
-  })
-
-  it('keeps Windows drive paths out of the scheme filter', () => {
-    expect(routeMarkdownHref(String.raw`C:\repo\src\index.ts`)).toEqual({
-      kind: 'file',
-      pathText: String.raw`C:\repo\src\index.ts`
     })
   })
 

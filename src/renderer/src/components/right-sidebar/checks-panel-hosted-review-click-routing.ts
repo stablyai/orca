@@ -14,19 +14,17 @@ export function resolveChecksPanelHostedReviewHttpOpenOptions(
   isMac: boolean,
   worktreeId: string | null | undefined
 ): OpenHttpLinkOptions {
-  // Why: same escape hatch as terminal and markdown links — openHttpLink resolves
-  // whether it forces the system browser or inverts the Link Routing setting.
+  // Use openHttpLink's shared modifier policy for system-browser escape or routing inversion.
   if (isChecksPanelHostedReviewSystemBrowserModifier(event, isMac)) {
-    return { worktreeId, modifierHeld: true }
+    return { worktreeId, allowRemoteInApp: true, modifierHeld: true }
   }
-  return { worktreeId }
+  return { worktreeId, allowRemoteInApp: true }
 }
 
 /** Where a Shift+modifier click lands, or null when it lands where a plain click already does. */
 export type ChecksPanelHostedReviewModifierDestination = 'system-browser' | 'orca' | null
 
-// Why: mirrors openHttpLink's routing inputs — with inverting on and Link Routing off the
-// modifier now reaches Orca here, so gating the hint on openLinksInApp alone hides a live gesture.
+// Mirror routing inputs so inverted modifiers reaching Orca still get a discoverable hint.
 export function resolveChecksPanelHostedReviewModifierDestination(
   settings:
     | {
@@ -38,9 +36,7 @@ export function resolveChecksPanelHostedReviewModifierDestination(
     | undefined,
   hasWorktree: boolean
 ): ChecksPanelHostedReviewModifierDestination {
-  // Why: trim to match openHttpLink — an untrimmed check hides the hint on a blank
-  // runtime id while the click still routes to Orca.
-  if (!hasWorktree || settings?.activeRuntimeEnvironmentId?.trim()) {
+  if (!hasWorktree) {
     return null
   }
   if (settings?.openLinksInApp === true) {

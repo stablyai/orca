@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { create } from 'zustand'
 import type { AppState } from '../types'
 import type { Repo } from '../../../../shared/repo-types'
+import { projectHostSetupProjectionFromRepos } from '../../../../shared/project-host-setup-projection'
 import type { Worktree } from '../../../../shared/worktree/types'
 import { _getRemoteDetectPromiseCountForTest, createDetectedAgentsSlice } from './detected-agents'
 import {
@@ -45,12 +46,14 @@ function createTestStore(initial?: Partial<AppState>) {
       }) as AppState
   )
   store.setState({
+    endpointProjects: [],
+    endpointProjectHostSetups: [],
     repos: [],
     worktreesByRepo: {},
     activeRepoId: null,
     activeWorktreeId: null,
     ...initial
-  } as Partial<AppState>)
+  })
   return store
 }
 
@@ -132,10 +135,10 @@ describe('createDetectedAgentsSlice WSL context', () => {
         runtime: {
           kind: 'wsl',
           hostPlatform: 'wsl',
-          projectId: 'repo-1',
+          projectId: 'repo:repo-1',
           distro: 'Ubuntu',
           reason: 'project-override',
-          cacheKey: 'repo-1:wsl:Ubuntu'
+          cacheKey: 'repo:repo-1:wsl:Ubuntu'
         }
       }
     })
@@ -373,13 +376,16 @@ describe('createDetectedAgentsSlice WSL context', () => {
   })
 
   it('detects agents in the project override runtime instead of legacy agent location', async () => {
+    const repos = [makeRepo({ id: 'repo-1', path: 'C:\\repo' })]
+    const { setups } = projectHostSetupProjectionFromRepos(repos)
     const store = createTestStore({
       settings: {
         localWindowsRuntimeDefault: { kind: 'wsl', distro: 'Ubuntu' },
         localAgentRuntime: 'wsl',
         localAgentWslDistro: 'Ubuntu'
       } as AppState['settings'],
-      projects: [
+      endpointProjectHostSetups: setups.map((setup) => ({ ...setup, projectId: 'repo-1' })),
+      endpointProjects: [
         {
           id: 'repo-1',
           displayName: 'repo-1',
@@ -390,10 +396,10 @@ describe('createDetectedAgentsSlice WSL context', () => {
           localWindowsRuntimePreference: { kind: 'windows-host' }
         }
       ],
-      repos: [makeRepo({ id: 'repo-1', path: 'C:\\repo' })],
+      repos,
       activeRepoId: 'repo-1',
       activeWorktreeId: null
-    } as Partial<AppState>)
+    })
 
     await expect(store.getState().ensureDetectedAgents()).resolves.toEqual(['claude'])
 
@@ -580,8 +586,7 @@ describe('createDetectedAgentsSlice remote detection', () => {
 
   it('re-runs remote detection after an empty result instead of pinning it', async () => {
     const store = createTestStore()
-    // An empty [] is truthy, so a prior "no agents found" must not be cached:
-    // a later install / PATH fix has to be picked up without a reconnect.
+    // Retry empty detections so later installs/PATH fixes appear without reconnect; [] truthiness must not cache misses.
     detectRemoteAgents.mockResolvedValueOnce([])
 
     await expect(store.getState().ensureRemoteDetectedAgents('ssh-1')).resolves.toEqual([])
@@ -625,9 +630,7 @@ describe('createDetectedAgentsSlice remote detection', () => {
 
   it('re-runs runtime detection after an empty result instead of pinning it', async () => {
     const store = createTestStore()
-    // An empty [] is truthy, so a prior "no agents found" must not be cached:
-    // a later install / PATH fix has to be picked up without a reconnect. This is
-    // the Orca-serve path (kind: 'runtime'), distinct from the SSH remote path.
+    // Runtime Orca-serve path must retry empty detection after install/PATH fixes too, independently of SSH.
     let detectCalls = 0
     runtimeEnvironmentCall.mockImplementation(({ method }: { method: string }) => {
       let result: unknown

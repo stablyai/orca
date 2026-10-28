@@ -39,7 +39,7 @@ describe('structured session completion focus', () => {
 
     expect(store.focusGroup).toHaveBeenCalledWith(SESSION_WORKSPACE_ID, 'group-1')
     expect(store.activateTab).toHaveBeenCalledWith(TAB_ID)
-    expect(store.setActiveTabType).toHaveBeenCalledWith('agent-session')
+    expect(store.setActiveTabType).toHaveBeenCalledWith('agent-session', SESSION_WORKSPACE_ID)
   })
 
   it('does not apply focus after the user moves to another workspace', async () => {
@@ -56,5 +56,22 @@ describe('structured session completion focus', () => {
     expect(store.activateTab).not.toHaveBeenCalled()
     expect(store.setActiveTabType).not.toHaveBeenCalled()
     expect(store.revealWorktreeInSidebar).not.toHaveBeenCalled()
+  })
+
+  it('still reveals the chat on a notification click, before activateWorktree has landed', async () => {
+    // Explicit clicks may arrive before async activation updates active ID; userInitiated distinguishes them from courtesy reveals.
+    const store = createStoreState(OTHER_WORKSPACE_ID)
+    const harness = await loadIpcEventsHarness(store)
+    harness.useIpcEvents()
+
+    harness.focusEditorTab({
+      tabId: TAB_ID,
+      worktreeId: SESSION_WORKSPACE_ID,
+      userInitiated: true
+    })
+
+    expect(store.focusGroup).toHaveBeenCalledWith(SESSION_WORKSPACE_ID, 'group-1')
+    expect(store.activateTab).toHaveBeenCalledWith(TAB_ID)
+    expect(store.setActiveTabType).toHaveBeenCalledWith('agent-session', SESSION_WORKSPACE_ID)
   })
 })

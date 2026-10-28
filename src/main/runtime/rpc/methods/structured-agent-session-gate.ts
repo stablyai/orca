@@ -1,85 +1,96 @@
-// Who may see `agentSession.*` at all.
-//
-// Shared by every structured method file so one gate governs the whole surface: a client that does
-// not advertise `agent-session.structured.v1` is told the surface does not exist rather than being
-// handed the session journal or mutation surface.
-//
-// This gate no longer implies such a client cannot make the host exist: session-tab restore runs
-// for old mobile clients while structured chat is enabled so they receive a fallback row, and that
-// path constructs the host. `agentSession.*` stays refused either way, which is what this gate is for.
+// Require structured.v1 across every agentSession method before exposing journals or mutations.
+// Legacy tab restore may still install the host for fallback rows; that never admits agentSession calls.
 
+import { agentSessionRefusalError } from '../../../../shared/agent-session-wire-refusals'
 import { getStructuredAgentSessionHost } from '../../../native-chat/agent-session-wire/structured-agent-session-registry'
 import type { StructuredAgentSessionHost } from '../../../native-chat/agent-session-wire/structured-agent-session-host'
 import type { StructuredAgentSessionCaller } from '../../../native-chat/agent-session-wire/structured-agent-session-host-types'
 import type { RpcContext } from '../core'
+import { rpcCallerOperationKey } from '../rpc-caller-identity'
+import { structuredAgentSessionHostRefusal } from '../../structured-agent-session-host-refusal'
 import {
-  supportsStructuredAgentSessionCapability,
+  createSupportFollowsHostSetting,
+  clientReadsStructuredSessionAgent,
+  isStructuredNativeChatDefaultFor,
   supportsStructuredAgentSessions
 } from './structured-agent-session-policy'
 
-/**
- * In-process callers are the same build as the host, so they carry no negotiated
- * capability list; every remote client must say it can read structured sessions.
- */
+/** In-process callers share the host build; remote callers must advertise structured-session support. */
 export function supportsStructuredSessions(ctx: RpcContext): boolean {
   return supportsStructuredAgentSessions(ctx)
 }
 
 export function requireStructuredCapability(ctx: RpcContext): void {
   if (!supportsStructuredSessions(ctx)) {
-    throw new Error('structured_agent_session_unsupported')
+    throw agentSessionRefusalError('structured_agent_session_unsupported', {
+      reason: 'clientCapabilityMissing'
+    })
   }
 }
 
-export function requireStructuredHost(ctx: RpcContext): StructuredAgentSessionHost {
+export function requireStructuredAgentAudience(ctx: RpcContext, agent: string): void {
   requireStructuredCapability(ctx)
-  const host = getStructuredAgentSessionHost()
-  if (!host) {
-    throw new Error('structured_agent_session_unsupported')
+  if (!clientReadsStructuredSessionAgent(ctx, agent)) {
+    throw agentSessionRefusalError('structured_agent_session_unsupported', {
+      reason: 'clientCapabilityMissing'
+    })
   }
+}
+
+/** Only createSupport consults launch preference for legacy mode pickers, preserving their terminal-fallback refusal. */
+export function requireStructuredCreateSupportAdmission(ctx: RpcContext, agent?: string): void {
+  requireStructuredAgentAudience(ctx, agent ?? '')
+  if (
+    createSupportFollowsHostSetting(ctx) &&
+    !isStructuredNativeChatDefaultFor(ctx.runtime, agent ?? '')
+  ) {
+    throw agentSessionRefusalError('structured_agent_session_unsupported', {
+      reason: 'clientCapabilityMissing'
+    })
+  }
+}
+
+export function requireStructuredHost(ctx: RpcContext, agent?: string): StructuredAgentSessionHost {
+  requireStructuredAgentAudience(ctx, agent ?? '')
+  return requireHostOrRefusal()
+}
+
+export function requireStructuredSessionHost(
+  ctx: RpcContext,
+  sessionId: string
+): StructuredAgentSessionHost {
+  const host = requireStructuredHost(ctx)
+  requireStructuredAgentAudience(ctx, host.sessionAgent(sessionId) ?? '')
   return host
 }
 
-/**
- * WHICH GATE DOES A NEW `agentSession.*` METHOD GET?
- *
- * The host setting is admission control, and admission can be revoked while sessions are still
- * open. So the surface splits by what a method does to work in flight, not by how dangerous it
- * sounds:
- *
- *   - Starts, extends, retains or reads work -> `requireStructuredHost`. Revoked admission means
- *     no new turns, no new holds, no new reads. create, send, ensure, setOption, requestHandoff,
- *     subscribe, hold, reveal, history, options and the status stream all live here.
- *   - Stops or retires work the caller already owns -> `requireStructuredCleanupHost`. close,
- *     cancel, unsubscribe and release live here.
- *
- * Cleanup keeps working after the setting is turned off because the alternative strands the user:
- * a session opened while the setting was on stays open, and refusing its close leaves a chat with
- * a live provider child that its own owner can no longer shut down. Stopping is never the thing
- * the policy exists to prevent.
- *
- * Cleanup is not an escape hatch. It still demands the negotiated wire capability, so a client
- * that never advertised the surface still cannot see it, and it never creates a host — it can
- * only retire what already exists.
- */
+/** Close/cancel/unsubscribe/release check wire capability and host only; new-work admission conditions must never strand already-owned children. */
 export function requireStructuredCleanupHost(ctx: RpcContext): StructuredAgentSessionHost {
-  if (!supportsStructuredAgentSessionCapability(ctx)) {
-    throw new Error('structured_agent_session_unsupported')
-  }
-  const host = getStructuredAgentSessionHost()
-  if (!host) {
-    throw new Error('structured_agent_session_unsupported')
-  }
-  return host
+  requireStructuredCapability(ctx)
+  return requireHostOrRefusal()
 }
 
-/** Builds the host for the calls that address a session by durable record rather than by live
- *  state: attach, which is the only way a session comes into being, plus hold and reveal, which
- *  each reach for a record on disk this process may not have opened yet. Every other method
- *  addresses a session that must already be attached, and correctly reports absent when none is. */
-export async function ensureStructuredHostInstalled(ctx: RpcContext): Promise<void> {
-  // Gated first: a client that cannot read structured sessions must not be able
-  // to make the host exist, which is an observable side effect of the surface.
+/** Return the host or its failure, including journal-open refusal; this process cannot stop children it never started. */
+function requireHostOrRefusal(): StructuredAgentSessionHost {
+  const host = getStructuredAgentSessionHost()
+  if (host) {
+    return host
+  }
+  throw (
+    structuredAgentSessionHostRefusal() ??
+    agentSessionRefusalError('structured_agent_session_unsupported', { reason: 'hostDisabled' })
+  )
+}
+
+/** Build lazily before durable-record reads, including chats at rest after restart. */
+export async function ensureStructuredHostInstalled(
+  ctx: RpcContext,
+  agent?: string
+): Promise<void> {
+  if (agent) {
+    requireStructuredAgentAudience(ctx, agent)
+  }
+  // Check capability before observable host installation.
   if (!supportsStructuredSessions(ctx)) {
     return
   }
@@ -89,10 +100,21 @@ export async function ensureStructuredHostInstalled(ctx: RpcContext): Promise<vo
   await ctx.runtime.ensureStructuredAgentSessionHost()
 }
 
-/** Mirrors the existing agent-session host-authority derivation so one client
- *  gets one operation namespace across both surfaces. */
+/** The host for a read, built first when this process has none: the read RPCs share this one. */
+export async function requireInstalledStructuredHost(
+  ctx: RpcContext,
+  sessionId?: string
+): Promise<StructuredAgentSessionHost> {
+  await ensureStructuredHostInstalled(ctx)
+  return sessionId ? requireStructuredSessionHost(ctx, sessionId) : requireStructuredHost(ctx)
+}
+
+/** Persist/share proven paired device id, never clientId bearer credentials (for example, who answered a prompt). */
 export function structuredCallerFor(ctx: RpcContext): StructuredAgentSessionCaller {
   return {
-    callerKey: ctx.clientId?.trim() || `trusted-local:${ctx.clientKind ?? 'runtime'}`
+    callerKey:
+      ctx.caller?.kind === 'paired-device'
+        ? rpcCallerOperationKey(ctx.caller)
+        : ctx.clientId?.trim() || `trusted-local:${ctx.clientKind ?? 'runtime'}`
   }
 }

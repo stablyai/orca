@@ -69,8 +69,7 @@ export async function waitForActivePaneHookDescriptor(
       },
       {
         timeout: timeoutMs,
-        // Why: hook IPC routing drops statuses for pane keys before the store
-        // layout knows that leaf, even if the terminal DOM already has a PTY.
+        // Hook IPC drops status until the store layout knows this leaf, even if its DOM already has a PTY.
         message: 'Active terminal pane did not become routable for hook status IPC'
       }
     )
@@ -82,8 +81,7 @@ export async function waitForActivePaneHookDescriptor(
   return descriptor
 }
 
-// Why: PTY IDs are opaque integers not exposed in the DOM. Probe each
-// candidate with a unique marker and read back via SerializeAddon.
+// PTY ids are absent from the DOM; identify candidates through unique echoed buffer markers.
 export async function discoverActivePtyId(page: Page): Promise<string> {
   const marker = `__PTY_PROBE_${Date.now()}__`
 
@@ -111,8 +109,7 @@ export async function discoverActivePtyId(page: Page): Promise<string> {
   const candidateIds = await readCandidateIds()
 
   if (candidateIds.length === 0) {
-    // Why: blind-probing arbitrary PTY IDs can write into unrelated shells and
-    // hides real regressions in the tab->PTY mapping the test depends on.
+    // Refuse blind probes that could write into unrelated shells and hide a broken tab-to-PTY mapping.
     throw new Error('discoverActivePtyId: active tab has no PTY candidates in store')
   }
 
@@ -122,11 +119,10 @@ export async function discoverActivePtyId(page: Page): Promise<string> {
 
   await page.evaluate(
     ({ candidateIds, candidateInputs }) => {
-      // Why: daemon PTY IDs can contain path separators and shell metacharacters.
-      // Echo a numeric probe index, then map it back to the opaque ID in Node.
+      // Echo numeric indices because opaque daemon ids may contain shell metacharacters.
       for (const [index, id] of candidateIds.entries()) {
         for (const input of candidateInputs[index] ?? []) {
-          window.api.pty.write(String(id), input)
+          window.api.pty.write(String(id), input, 'driving')
         }
       }
     },

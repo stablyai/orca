@@ -4,6 +4,7 @@ import { createOrchestrationRpcHarness } from '../rpc-test-harness'
 import type { OrchestrationDb } from '../../../../orchestration/db'
 import type { OrcaRuntimeService } from '../../../../orca-runtime'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../../../shared/constants'
+import { dispatchPreambleSendOptions } from '../../../../orchestration/preamble'
 
 describe('orchestration RPC methods', () => {
   const h = createOrchestrationRpcHarness()
@@ -104,8 +105,7 @@ describe('orchestration RPC methods', () => {
     it('deliberately permits present but unverifiable restored-terminal evidence', async () => {
       setup()
       mockCurrentWorkerStart()
-      // Restored/adopted terminals have no launch token, so verification returns null; this
-      // fail-open is deliberate compatibility behavior, not an oversight.
+      // Restored/adopted terminals have no launch token; preserve intentional fail-open compatibility.
       const task = db.createTask({ spec: 'restored caller limitation' })
       ctx = {
         ...ctx,
@@ -150,21 +150,18 @@ describe('orchestration RPC methods', () => {
       )
       expect(db.getTask(task.id)?.status).toBe('dispatched')
       expect(db.getWorkerDispatch(result.dispatchId)?.state).toBe('ready')
-      // Why: dispatching a worker is background work — surfaceOwner:false adopts
-      // the tab without scrolling the sidebar to the worker's workspace.
+      // Background worker adoption must not scroll the sidebar to its workspace.
       expect(runtime.createTerminal).toHaveBeenCalledWith('id:repo::worktree', {
         startupAgent: 'codex',
+        launchSource: 'orchestration',
+        suppressStartupUpdatePrompt: true,
         title: `worker-${task.id}`,
         surfaceOwner: false
       })
       expect(runtime.sendTerminalAgentPrompt).toHaveBeenCalledWith(
         'term_worker',
-        expect.stringContaining('--dispatch-capability dcap_'),
-        expect.objectContaining({
-          acceptQueued: true,
-          observationTimeoutMs: 0,
-          requestId: expect.any(String)
-        })
+        expect.any(String),
+        expect.objectContaining(dispatchPreambleSendOptions(expect.any(String)))
       )
     })
 
@@ -223,8 +220,7 @@ describe('orchestration RPC methods', () => {
       expect(db.getDispatchContext(task.id)).toBeUndefined()
     })
 
-    // Why: `cursor` on PATH is the Cursor desktop app; passing the agent id as a
-    // shell command opened the IDE and left a blank shell (issue #11926).
+    // Resolve cursor through agent config; the bare command launches the desktop IDE (#11926).
     it('never passes the agent id to the worker terminal as a shell command', async () => {
       setup()
       mockCurrentWorkerStart()
@@ -476,9 +472,14 @@ describe('orchestration RPC methods', () => {
       )
     })
 
-    it.each(['codex-update-prompt', 'codex-trust-workspace'] as const)(
+    // Older hosts emit codex-* tokens; user-facing receipts must still use neutral wording.
+    it.each([
+      ['codex-update-prompt', 'codex-update-prompt (agent-update-prompt)'],
+      ['codex-trust-workspace', 'codex-trust-workspace (agent-trust-workspace)'],
+      ['agent-trust-workspace', 'agent-trust-workspace']
+    ] as const)(
       'returns a truthful readiness failure for %s',
-      async (blockedReason) => {
+      async (blockedReason, expectedReason) => {
         setup()
         mockCurrentWorkerStart()
         vi.mocked(runtime.waitForTerminal).mockResolvedValueOnce({
@@ -500,7 +501,7 @@ describe('orchestration RPC methods', () => {
         expect(result).toMatchObject({
           state: 'failed',
           failedStage: 'agent_readiness',
-          lastError: `Agent startup blocked: ${blockedReason}`
+          lastError: `Agent startup blocked: ${expectedReason}`
         })
         expect(runtime.sendTerminalAgentPrompt).not.toHaveBeenCalled()
       }
@@ -572,7 +573,7 @@ describe('orchestration RPC methods', () => {
       )
       expect(result.effects).toEqual(
         expect.arrayContaining([
-          expect.objectContaining({ role: 'agent', action: 'reused_agent_terminal' }),
+          expect.objectContaining({ role: 'agent', action: 'created' }),
           expect.objectContaining({ role: 'setup', action: 'created' }),
           expect.objectContaining({ role: 'configured_tab', action: 'created' })
         ])

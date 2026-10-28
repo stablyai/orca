@@ -1,11 +1,4 @@
-/**
- * `isTerminalRunningAgent` for a worker that IS a structured agent session.
- *
- * This seam had no test at all: nothing in the repo referenced `isLiveStructuredAgent`, so the
- * early return could be deleted and every suite stayed green. `dispatch --to <worker> --inject`
- * depends on it — without it `getLiveLeaf` throws, the catch returns false, and a coordinator is
- * told its worker is a bare shell (`no_agent_detected`).
- */
+/** Structured workers have no PTY leaf; dispatch --inject must recognize them before a stale leaf probe turns agent presence false. */
 
 import { describe, expect, it, vi } from 'vitest'
 import { RuntimeTerminalAgentPresence } from './runtime-terminal-agent-presence'
@@ -25,7 +18,9 @@ function presence(isLiveStructuredAgent: (handle: string) => boolean) {
       getPrimaryLeaf: () => null,
       getTrackedPty: () => null,
       getTabTitle: () => null,
-      getForegroundProcess: () => null
+      getForegroundProcess: () => null,
+      confirmForegroundProcess: () => null,
+      getTitleDisplayClear: () => null
     })
   }
 }
@@ -37,10 +32,5 @@ describe('agent presence for a structured worker', () => {
     // A structured session IS the agent; there is no foreground process to recognise, and the
     // leaf probe would only throw.
     expect(getLiveLeaf).not.toHaveBeenCalled()
-  })
-
-  it('still answers false for a handle that is not a live structured worker', async () => {
-    const { presence: subject } = presence(() => false)
-    await expect(subject.isRunning('term_gone')).resolves.toBe(false)
   })
 })

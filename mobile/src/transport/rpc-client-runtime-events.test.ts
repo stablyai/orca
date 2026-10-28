@@ -1,6 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { connect, type RpcClient } from './rpc-client'
 
+vi.mock('./direct-e2ee-framing-policy', () => import('./legacy-direct-framing-test-policy'))
+
 vi.mock('./e2ee', () => ({
   generateKeyPair: () => ({
     publicKey: new Uint8Array(32),
@@ -66,7 +68,23 @@ const originalWebSocket = globalThis.WebSocket
 
 function sentRequests(socket: RuntimeEventTestSocket, method: string): SentRequest[] {
   return socket.sent
-    .map((payload) => JSON.parse(payload.replace(/^encrypted:/, '')) as SentRequest)
+    .flatMap((payload) => {
+      const value: unknown = JSON.parse(payload.replace(/^encrypted:/, ''))
+      return value &&
+        typeof value === 'object' &&
+        'id' in value &&
+        typeof value.id === 'string' &&
+        'method' in value &&
+        typeof value.method === 'string'
+        ? [
+            {
+              id: value.id,
+              method: value.method,
+              params: 'params' in value ? value.params : undefined
+            }
+          ]
+        : []
+    })
     .filter((request) => request.method === method)
 }
 
@@ -99,6 +117,7 @@ describe('runtime client-event stream disposal', () => {
   beforeEach(() => {
     vi.useFakeTimers()
     sockets.length = 0
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: This fixture supplies the socket constructor, states, handlers, send and close consumed by the client.
     globalThis.WebSocket = RuntimeEventTestSocket as unknown as typeof WebSocket
   })
 
@@ -133,6 +152,32 @@ describe('runtime client-event stream disposal', () => {
     expect(listener).not.toHaveBeenCalled()
     expect(sentRequests(socket, 'runtime.clientEvents.unsubscribe')).toEqual([
       expect.objectContaining({ params: { subscriptionId: 'runtime-events:late' } })
+    ])
+    client.close()
+  })
+
+  it('releases the replayed registration on the new socket when disposed before its ready', async () => {
+    const { client, socket: first } = connectReadyClient()
+    const unsubscribe = client.subscribe('runtime.clientEvents.subscribe', null, () => {})
+    const request = sentRequests(first, 'runtime.clientEvents.subscribe')[0]!
+    emitReady(first, request.id, 'runtime-events:first-socket')
+
+    first.close()
+    await vi.advanceTimersByTimeAsync(500)
+    const second = sockets.at(-1)!
+    expect(second).not.toBe(first)
+    second.open()
+    second.receive(JSON.stringify({ type: 'e2ee_ready' }))
+    second.receive('encrypted:{"type":"e2ee_authenticated"}')
+    expect(sentRequests(second, 'runtime.clientEvents.subscribe')).toEqual([
+      expect.objectContaining({ id: request.id })
+    ])
+
+    unsubscribe()
+    emitReady(second, request.id, 'runtime-events:second-socket')
+
+    expect(sentRequests(second, 'runtime.clientEvents.unsubscribe')).toEqual([
+      expect.objectContaining({ params: { subscriptionId: 'runtime-events:second-socket' } })
     ])
     client.close()
   })

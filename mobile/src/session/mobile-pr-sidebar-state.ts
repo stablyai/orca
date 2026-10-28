@@ -1,34 +1,38 @@
 import type { PRCheckDetail } from '../../../src/shared/github/check-types'
 import type { PRInfo } from '../../../src/shared/github/pull-request-types'
+import type { GitPushTarget } from '../../../src/shared/worktree/types'
 import type { GitHubWorkItemDetails } from '../../../src/shared/github/work-item-types'
 import type { GitHubPrReadOutcome, GitHubPrRepoSlug } from './github-pr-rpc'
-import { resolveLinkedPrNumber } from './mobile-pr-sidebar-resolve'
-
-// Pure state machine for the mobile PR sidebar. Kept free of React/native imports
-// so the transitions are unit-testable under the node Vitest config (KTD5).
+import { isGitHubPRSuppressed } from '../../../src/shared/worktree/github-pr-suppression'
+import {
+  shouldApplyBranchMismatchedLinkedPRClear,
+  shouldApplyDivergedLinkedPRClear,
+  shouldClearBranchMismatchedLinkedOpenPR,
+  shouldClearDivergedLinkedMergedPR
+} from '../../../src/shared/github/linked-pr-staleness'
+import type { MobileWorktreeSummary } from '../source-control/mobile-worktree-metadata-operations'
+import type { WorktreeGitHubPRLink } from '../source-control/mobile-pr-link'
 
 export type PrSidebarData = {
   pr: PRInfo
   details: GitHubWorkItemDetails | null
   checks: PRCheckDetail[]
+  // Contain check failures so the remaining PR controls still render.
+  checksError: string | null
+  // Source Control gates pushes on the review's own push target, as desktop does.
+  pushTarget: GitPushTarget | null
 }
 
-// `blocked` is a permanent failure (no GitHub account / permission denied) that the
-// user cannot retry away; `error` is transient (network/timeout). Keeping them
-// distinct (R9/KTD7) stops a permission denial from looping through revert+retry.
+// Separate permanent auth/permission failures from transient errors to avoid endless revert/retry loops.
 export type PrSidebarState =
   | { kind: 'hidden' }
   | { kind: 'loading' }
   | { kind: 'ready'; data: PrSidebarData }
-  // The branch has no open PR — distinct from `hidden` so the opened sidebar can
-  // explain it (the dedicated icon is always available on a GitHub repo).
   | { kind: 'none' }
   | { kind: 'error'; message: string }
   | { kind: 'blocked'; message: string }
 
-// Why: host mutations/reads return permission and network failures in the same
-// `{ ok:false, error:string }` shape; classify by message so a permanent failure
-// routes to `blocked` instead of an endlessly-retryable `error`.
+// The wire shares an error-string shape; classify permanent failures before offering retry.
 const PERMANENT_FAILURE_PATTERN =
   /\b(not connected|no github|unauthenticated|not authenticated|gh auth|login|permission|forbidden|insufficient|401|403|404)\b/i
 
@@ -51,12 +55,20 @@ export type PrSidebarLoadDeps = {
   ) => Promise<
     GitHubPrReadOutcome<import('../../../src/shared/hosted-review').HostedReviewInfo | null>
   >
-  // The worktree's persisted linkedPR (fallback resolver for closed/merged PRs).
-  // Fetched in parallel with forBranch to keep it off the critical path.
-  fetchWorktreeLinkedPR: (worktreeId: string) => Promise<number | null>
+  // Resolve persisted links in parallel so closed/merged PRs add no serial read.
+  fetchWorktreeGitHubPRLink: (worktreeId: string) => Promise<WorktreeGitHubPRLink>
+  clearWorktreeReviewLink: (
+    worktreeId: string,
+    shouldApply: (worktree: MobileWorktreeSummary) => boolean
+  ) => Promise<void>
   fetchPRForBranch: (
     worktreeId: string,
-    args: { branch: string; linkedPRNumber?: number | null }
+    args: {
+      branch: string
+      linkedPRNumber?: number | null
+      fallbackPRNumber?: number | null
+      currentHeadOid?: string | null
+    }
   ) => Promise<GitHubPrReadOutcome<PRInfo | null>>
   fetchWorkItemDetails: (
     worktreeId: string,
@@ -68,11 +80,38 @@ export type PrSidebarLoadDeps = {
   ) => Promise<GitHubPrReadOutcome<PRCheckDetail[]>>
 }
 
-// Phase 1: load the PR + checks fast and show the sidebar. The heavy comments/body
-// payload (workItemDetails) is deferred to loadPrSidebarDetails so it never blocks the
-// actionable PR UI — `data.details` starts null and is filled in by the second phase.
-// forBranch + the worktree linkedPR read run in parallel (independent), then combine
-// via resolveLinkedPrNumber so a closed/merged linked PR still resolves (KTD4).
+// The guard desktop applies before persisting the clear, or null when the link still holds.
+function resolveStaleLink(
+  pr: PRInfo | null,
+  link: WorktreeGitHubPRLink,
+  branch: string,
+  requestHeadOid: string | null
+): ((worktree: MobileWorktreeSummary) => boolean) | null {
+  const linkedPRNumber = link.linkedPR
+  if (linkedPRNumber === null) {
+    return null
+  }
+  if (shouldClearDivergedLinkedMergedPR({ pr, linkedPRNumber, requestHeadOid })) {
+    return (worktree) =>
+      shouldApplyDivergedLinkedPRClear({ worktree, linkedPRNumber, branch, requestHeadOid })
+  }
+  const pushTargetBranch = link.pushTarget?.branchName ?? null
+  if (
+    shouldClearBranchMismatchedLinkedOpenPR({
+      pr,
+      linkedPRNumber,
+      branch,
+      requestHeadOid,
+      pushTargetBranch
+    })
+  ) {
+    return (worktree) =>
+      shouldApplyBranchMismatchedLinkedPRClear({ worktree, linkedPRNumber, branch, requestHeadOid })
+  }
+  return null
+}
+
+// Show PR/checks before heavy body/comments; parallel link resolution also retains closed/merged reviews.
 export async function loadPrSidebarData(
   deps: PrSidebarLoadDeps,
   args: {
@@ -83,50 +122,85 @@ export async function loadPrSidebarData(
   }
 ): Promise<PrSidebarState> {
   try {
-    const [hintOutcome, linkedPR] = await Promise.all([
+    const [hintOutcome, link] = await Promise.all([
       deps.fetchForBranch(args.worktreeId, { branch: args.branch }),
-      deps.fetchWorktreeLinkedPR(args.worktreeId)
+      deps.fetchWorktreeGitHubPRLink(args.worktreeId)
     ])
     const branchHint =
       hintOutcome.ok && hintOutcome.result?.provider === 'github' ? hintOutcome.result.number : null
-    const linkedPRNumber = resolveLinkedPrNumber(branchHint, linkedPR)
 
-    const prOutcome = await deps.fetchPRForBranch(args.worktreeId, {
-      branch: args.branch,
-      linkedPRNumber
-    })
+    const requestHeadOid = args.headSha ?? null
+    // Same as desktop: the explicit link wins; the branch's review is only a fallback.
+    const fetchPR = (linkedPRNumber: number | null) =>
+      deps.fetchPRForBranch(args.worktreeId, {
+        branch: args.branch,
+        linkedPRNumber,
+        fallbackPRNumber: linkedPRNumber === null ? branchHint : null,
+        currentHeadOid: requestHeadOid
+      })
+    let linkedPR = link.linkedPR
+    let prOutcome = await fetchPR(linkedPR)
+    const staleLink = prOutcome.ok
+      ? resolveStaleLink(prOutcome.result, link, args.branch, requestHeadOid)
+      : null
+    // Desktop drops a link the branch has moved past, then resolves by branch.
+    if (staleLink) {
+      linkedPR = null
+      // The refetch sends no link, so it need not wait for the clear to land.
+      ;[, prOutcome] = await Promise.all([
+        deps.clearWorktreeReviewLink(args.worktreeId, staleLink),
+        fetchPR(null)
+      ])
+    }
     if (!prOutcome.ok) {
       return failureState(prOutcome.error)
     }
-    if (!prOutcome.result) {
-      // GitHub repo, but this branch has no open/linked PR — surfaced as an empty state.
+    if (
+      !prOutcome.result ||
+      isGitHubPRSuppressed(
+        { linkedPR, suppressedGitHubPR: link.suppressedGitHubPR },
+        prOutcome.result.number
+      )
+    ) {
       return { kind: 'none' }
     }
     const pr = prOutcome.result
     const checksOutcome = await deps.fetchPRChecks(args.worktreeId, {
       prNumber: pr.number,
-      // Why: mobile create can commit before opening the review; the fetched PR
-      // head is fresher than the route's cached git.status head.
+      // Creating a PR may first commit, making its fetched head fresher than cached git status.
       headSha: pr.headSha ?? args.headSha ?? null,
-      // Prefer the fetched PR's own repo identity so fork PRs key their cached
-      // checks correctly; fall back to an explicit override then null.
+      // Fork checks must use the fetched PR’s repo identity.
       prRepo: pr.prRepo ?? args.prRepo ?? null
     })
+    // A check failure must not hide title, comments or merge controls.
     if (!checksOutcome.ok) {
-      return failureState(checksOutcome.error)
+      return {
+        kind: 'ready',
+        data: {
+          pr,
+          details: null,
+          checks: [],
+          checksError: checksOutcome.error,
+          pushTarget: link.pushTarget
+        }
+      }
     }
-    // details: null = comments still loading (phase 2). The header/reviewers degrade to
-    // the PRInfo fields until it arrives.
-    return { kind: 'ready', data: { pr, details: null, checks: checksOutcome.result } }
+    return {
+      kind: 'ready',
+      data: {
+        pr,
+        details: null,
+        checks: checksOutcome.result,
+        checksError: null,
+        pushTarget: link.pushTarget
+      }
+    }
   } catch (err) {
-    // Why: a dep that rejects (instead of returning `{ ok:false }`) must still
-    // resolve to an error state, not escape as an unhandled rejection.
+    // Rejected dependencies must settle as UI errors rather than unhandled rejections.
     return failureState(err instanceof Error ? err.message : 'Unable to load pull request')
   }
 }
 
-// Phase 2: fetch the work-item details (body + comments + participants). Non-fatal —
-// a failure leaves the PR shown with an empty comments section rather than erroring out.
 export async function loadPrSidebarDetails(
   deps: PrSidebarLoadDeps,
   worktreeId: string,
@@ -136,14 +210,12 @@ export async function loadPrSidebarDetails(
     const outcome = await deps.fetchWorkItemDetails(worktreeId, { prNumber })
     return outcome.ok ? outcome.result : null
   } catch {
-    // Why: phase 2 is non-fatal — a rejection leaves the PR shown without comments
-    // rather than escaping as an unhandled rejection.
+    // Details failure leaves the PR usable without comments.
     return null
   }
 }
 
-// UI treats details===null as "still loading". After phase 2 finishes (success or
-// non-fatal failure), never leave null — use prior comments if any, else empty body.
+// Null means loading; finish failed loads with prior details or a placeholder so spinners stop.
 export function resolvePrSidebarDetailsAfterPhase2(args: {
   fetched: GitHubWorkItemDetails | null
   prior: GitHubWorkItemDetails | null
@@ -158,8 +230,6 @@ export function resolvePrSidebarDetailsAfterPhase2(args: {
   return emptyPrSidebarDetails(args.pr)
 }
 
-// Placeholder details so Description/Comments leave the spinner after a failed phase 2.
-// The synthetic id is the only id shape we mint — real GitHub node ids never match.
 export function emptyPrSidebarDetails(pr: PRInfo): GitHubWorkItemDetails {
   return {
     item: {
@@ -178,28 +248,22 @@ export function emptyPrSidebarDetails(pr: PRInfo): GitHubWorkItemDetails {
   }
 }
 
-// True when phase 2 failed and we synthesized a stand-in (no body/comments/reviews).
 export function isPrSidebarDetailsPlaceholder(details: GitHubWorkItemDetails): boolean {
   return details.item.id === `pr-${details.item.number}`
 }
 
-// Phase-2 still needs a real payload: null (in flight / not started) or a
-// synthetic placeholder from a failed fetch. Real details (including empty body)
-// do not qualify — ensure/retry must not re-pull those.
+// Retry synthetic failed-fetch placeholders, but never refetch a real empty body as though it were missing.
 export function prSidebarDetailsNeedFetch(
   details: GitHubWorkItemDetails | null | undefined
 ): boolean {
   return details == null || isPrSidebarDetailsPlaceholder(details)
 }
 
-// Soft head refresh may restart an in-flight phase-1 load; only skip when there is
-// no visible/in-flight sidebar work (hidden or terminal error states).
+// Head changes refresh visible/in-flight sidebar work only.
 export function shouldSoftRefreshPrSidebarOnHeadChange(kind: PrSidebarState['kind']): boolean {
   return kind === 'ready' || kind === 'none' || kind === 'loading'
 }
 
-// Stale-response guard (KTD6): a load tagged with an older sequence must not
-// overwrite a newer one. The hook bumps a monotonic counter per load.
 export function shouldApplyResult(resultSeq: number, latestSeq: number): boolean {
   return resultSeq === latestSeq
 }

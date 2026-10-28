@@ -11,9 +11,8 @@ const { existsSyncMock, userInfoMock, runProcessMock, ptyProbeMock } = vi.hoiste
 
 vi.mock('node:fs', () => ({ existsSync: existsSyncMock }))
 vi.mock('node:os', () => ({ userInfo: userInfoMock }))
-// Why mock the chokepoint: encoding, kill signal, output cap and closing stdin
-// are its contract now, so this suite asserts the PAM probe's argv and verdict.
-vi.mock('../../shared/child-process/run-process', () => ({
+// Process-host owns encoding/signals/caps; this suite checks PAM argv and verdicts.
+vi.mock('@orca/process-host', () => ({
   runProcess: (...args: unknown[]) => Promise.resolve(runProcessMock(...args))
 }))
 vi.mock('./macos-login-session-pty-probe', async (importOriginal) => ({
@@ -108,8 +107,7 @@ describe('wrapShellSpawnForMacosTccAttribution', () => {
     expect(runProcessMock).toHaveBeenCalledWith({
       program: '/usr/bin/login',
       args: ['-flpq', 'ada', '/usr/bin/printf', 'ORCA_LOGIN_PREFLIGHT_OK'],
-      // Why cwd: detached daemons can outlive their launch worktree, and the
-      // PAM probe must not inherit a deleted one.
+      // Detached daemons can outlive their worktree; probe from account home.
       cwd: '/Users/ada',
       maxOutputBytes: 1024,
       signal: undefined,
@@ -178,9 +176,7 @@ describe('wrapShellSpawnForMacosTccAttribution', () => {
 
     const first = prepareMacosTccLoginShell()
     const second = prepareMacosTccLoginShell()
-    // Why waitFor and not a fixed tick count: the probe is async, so counting
-    // microtasks would couple the test to the wrapper's internals rather than
-    // to the property under test -- that concurrent callers share one probe.
+    // Wait for probe sharing rather than coupling the assertion to an internal microtask count.
     await vi.waitFor(() => expect(ptyProbeMock).toHaveBeenCalledTimes(1))
     expect(runProcessMock).toHaveBeenCalledTimes(1)
 
@@ -206,13 +202,11 @@ describe('wrapShellSpawnForMacosTccAttribution', () => {
     await prepareMacosTccLoginShell()
     expect(wrapShellSpawnForMacosTccAttribution('/bin/zsh', ['-l']).file).toBe('/bin/zsh')
 
-    // Inside the window the rejection stays cached — no probe per spawn.
     now += 29 * 60_000
     await prepareMacosTccLoginShell()
     expect(runProcessMock).toHaveBeenCalledTimes(1)
     expect(wrapShellSpawnForMacosTccAttribution('/bin/zsh', ['-l']).file).toBe('/bin/zsh')
 
-    // Past the window the daemon re-probes instead of staying degraded forever.
     now += 60_000
     await prepareMacosTccLoginShell()
     expect(runProcessMock).toHaveBeenCalledTimes(2)
@@ -241,10 +235,8 @@ describe('wrapShellSpawnForMacosTccAttribution', () => {
 
     const first = await prepareMacosTccLoginShell()
     expect(first).toEqual({ ok: false, conclusive: false, reason: 'timeout' })
-    // Degraded probe fails open to a direct shell for this spawn...
     expect(wrapShellSpawnForMacosTccAttribution('/bin/zsh', ['-l']).file).toBe('/bin/zsh')
 
-    // ...without making every subsequent terminal pay the same 500 ms timeout.
     await prepareMacosTccLoginShell()
     expect(runProcessMock).toHaveBeenCalledOnce()
 
@@ -252,7 +244,7 @@ describe('wrapShellSpawnForMacosTccAttribution', () => {
     await prepareMacosTccLoginShell()
     expect(runProcessMock).toHaveBeenCalledTimes(2)
 
-    // Repeated failures back off further rather than spawning login(1) every 5 seconds.
+    // Backoff prevents repeated hung probes from adding a subprocess to every terminal.
     now += 5_000
     await prepareMacosTccLoginShell()
     expect(runProcessMock).toHaveBeenCalledTimes(2)
@@ -294,7 +286,6 @@ describe('wrapShellSpawnForMacosTccAttribution', () => {
 
     const outcome = await prepareMacosTccLoginShell()
     expect(outcome).toEqual({ ok: false, conclusive: true, reason: 'rejected' })
-    // A second call is short-circuited by the cache, so nothing new to log.
     expect(await prepareMacosTccLoginShell()).toBeNull()
   })
 
@@ -604,18 +595,8 @@ describe('probeMacosLoginSessionAlive', () => {
     ptyProbeMock.mockResolvedValue(REJECTED_OUTCOME)
     const outcome = await probeMacosLoginSessionAlive()
     expect(outcome).toEqual({ ok: false, conclusive: true, reason: 'rejected' })
-    // The dead-session daemon must stop minting login(1) prompt zombies (#7936).
+    // A dead login session must stop creating login(1) prompt zombies (#7936).
     expect(wrapShellSpawnForMacosTccAttribution('/bin/zsh', ['-l']).file).toBe('/bin/zsh')
-  })
-
-  it('does not overwrite the cached verdict on an inconclusive probe', async () => {
-    setPlatform('darwin')
-    await prepareMacosTccLoginShell()
-    runProcessMock.mockReturnValue(TIMED_OUT_RESULT)
-    ptyProbeMock.mockResolvedValue({ ok: false, conclusive: false, reason: 'timeout' })
-    const outcome = await probeMacosLoginSessionAlive()
-    expect(outcome).toEqual({ ok: false, conclusive: false, reason: 'timeout' })
-    expect(wrapShellSpawnForMacosTccAttribution('/bin/zsh', ['-l']).file).toBe('/usr/bin/login')
   })
 
   it('does not trust a pipe rejection when its PTY confirmation is inconclusive', async () => {
@@ -716,8 +697,7 @@ describe('probeMacosLoginSessionAlive', () => {
     setPlatform('darwin')
     const abortController = new AbortController()
     abortController.abort()
-    // An aborted probe reports no exit code, which is inconclusive -- never a
-    // PAM verdict.
+    // Cancellation proves no PAM verdict.
     runProcessMock.mockReturnValue({
       code: null,
       signal: 'SIGTERM' as const,

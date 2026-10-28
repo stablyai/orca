@@ -1,104 +1,127 @@
 import { homedir } from 'node:os'
-import { basename, dirname, extname, join, relative } from 'node:path'
+import { basename, dirname, join } from 'node:path'
+import { pathSegments } from './session-file-discovery'
+import { resolveAbsoluteDirOverride } from '../../shared/absolute-dir-override'
 import type { AiVaultAgent } from '../../shared/ai-vault-types'
 import type { AiVaultDeletableAgent } from '../../shared/ai-vault-session-deletion'
 import { resolveGrokSessionsDir } from '../../shared/grok-session-paths'
+import { resolveKiroHomeDir } from '../../shared/kiro-home'
 import { uniqueCodexSessionsDirs } from './session-scanner-codex-paths'
 import {
   clineMessagesPathForMetadata,
   isClineSessionMetadataPath
 } from './session-scanner-cline-parser'
+import { cursorChatMetaPath } from './session-scanner-cursor-chat-meta'
+import { devinSessionsDbDependencyPath } from './session-scanner-devin-db'
 import { resolveKimiSessionsDir } from './session-scanner-kimi-paths'
-import { OMP_SESSION_ARTIFACT_DIR_PATTERN } from './session-scanner-omp-subagent-transcripts'
-import { claudeProjectsRootDirs, OMP_SESSIONS_DIR, sessionRootDirs } from './session-scanner-roots'
+import { resolveMuseSessionsDir } from './session-scanner-muse-paths'
+import {
+  isKiroSessionMetadataPath,
+  kiroTranscriptPathForMetadata
+} from './session-scanner-kiro-parser'
+import { OPENCLAW_AGENT_SOURCE } from './openclaw-session-layout'
+import { isOmpConversationDirectory } from './session-scanner-omp-subagent-transcripts'
+import {
+  claudeProjectsRootDirs,
+  codexHomeSessionsDir,
+  ompSessionsRootDirs,
+  sessionRootDirs,
+  wslHomeSessionDirs
+} from './session-scanner-roots'
+import { getHermesHome } from '../hermes/hermes-default-home'
 import { SUBAGENT_DIR_NAME } from './session-scanner-subagent-transcripts'
 import type { AiVaultScanOptions } from './session-scanner-types'
 import { normalizeAgentSessionsDir, primeAgentSessionsDirFromEnv } from './session-scanner-values'
 
 export const DEFAULT_CODEX_HOME_DIR = join(homedir(), '.codex')
-const CODEX_SESSIONS_DIR = join(
-  process.env.CODEX_HOME?.trim() || DEFAULT_CODEX_HOME_DIR,
-  'sessions'
-)
 const GEMINI_SESSIONS_DIR = join(homedir(), '.gemini', 'tmp')
 const COPILOT_SESSIONS_DIR = join(
-  process.env.COPILOT_HOME?.trim() || join(homedir(), '.copilot'),
+  resolveAbsoluteDirOverride(process.env.COPILOT_HOME, join(homedir(), '.copilot')),
   'session-state'
 )
 const CURSOR_PROJECTS_DIR = join(homedir(), '.cursor', 'projects')
-const HERMES_SESSIONS_DIR = join(homedir(), '.hermes', 'sessions')
+const CODEBUDDY_PROJECTS_DIR = join(homedir(), '.codebuddy', 'projects')
 const ROVO_SESSIONS_DIR = join(homedir(), '.rovodev', 'sessions')
-const OPENCLAW_STATE_DIR = process.env.OPENCLAW_STATE_DIR?.trim() || join(homedir(), '.openclaw')
-const PI_SESSIONS_DIR = normalizeAgentSessionsDir(
-  process.env.PI_CODING_AGENT_DIR?.trim() || join(homedir(), '.pi', 'agent', 'sessions'),
-  '.pi'
-)
-// Why: Prime Agent brands Pi's env contract with its own prefix and adds a
-// dedicated sessions-root override, so resolution differs from Pi/OMP in shape
-// as well as in variable name.
+export function piSessionHistorySessionsDir(): string {
+  return normalizeAgentSessionsDir(
+    process.env.PI_CODING_AGENT_DIR?.trim() || join(homedir(), '.pi', 'agent', 'sessions'),
+    '.pi'
+  )
+}
 const PRIME_AGENT_SESSIONS_DIR = primeAgentSessionsDirFromEnv()
-// Why: Devin ATIF transcripts are stored under <DEVIN_HOME>/transcripts.
 const DEVIN_TRANSCRIPTS_DIR = join(
-  process.env.DEVIN_HOME?.trim() || join(homedir(), '.local', 'share', 'devin', 'cli'),
+  resolveAbsoluteDirOverride(
+    process.env.DEVIN_HOME,
+    process.platform === 'win32'
+      ? join(process.env.APPDATA?.trim() || join(homedir(), 'AppData', 'Roaming'), 'devin', 'cli')
+      : join(
+          process.env.XDG_DATA_HOME?.trim() || join(homedir(), '.local', 'share'),
+          'devin',
+          'cli'
+        )
+  ),
   'transcripts'
 )
+const KIRO_SESSIONS_DIR = join(resolveKiroHomeDir(), 'sessions', 'cli')
 const DROID_SESSIONS_DIR = join(homedir(), '.factory', 'sessions')
 const DROID_PROJECTS_DIR = join(homedir(), '.factory', 'projects')
 const CLINE_SESSIONS_DIR =
   process.env.CLINE_SESSION_DATA_DIR?.trim() || join(homedir(), '.cline', 'data', 'sessions')
 
-/**
- * Where one agent's session files live and which of them count as sessions.
- *
- * The scanner walks these roots to list sessions; the delete validator accepts
- * only paths this same shape would have surfaced. Both read this one table, so
- * "deletable" and "discoverable" cannot drift apart.
- */
+/** Shared discovery rules constrain which paths the delete validator accepts. */
 export type AiVaultAgentSource = {
-  // A function, not a value: grok resolves its root lazily because a
-  // module-scope call binds across chunks at init time and breaks on bundle
-  // ordering. Returns the local host root plus one per WSL distro home.
+  // Resolve lazily: module-time Grok resolution breaks cross-chunk initialization ordering.
   rootDirs: (options: AiVaultScanOptions, wslHomeDirs: readonly string[]) => string[]
   extensions: readonly string[]
   filePredicate?: (filePath: string) => boolean
-  // A sibling whose stat participates in candidate freshness and recency.
-  contentDependencyPath?: (filePath: string) => string
+  // Sidecar stats affect freshness and recency; async resolution supports non-derived paths.
+  contentDependencyPath?: (filePath: string) => string | undefined | Promise<string | undefined>
   // Return false to skip a directory; depth 0 is a child of the root.
   directoryPredicate?: (name: string, depth: number) => boolean
-  // Roots that are alternates for one install rather than distinct locations,
-  // so the per-agent limit applies across them rather than to each.
+  // Share the per-agent limit across alternate roots for one install.
   mergeRootDiscoveries?: boolean
 }
 
-// Every deletable agent needs an entry — the delete validator derives its roots
-// and its accept rule from this table alone, so adding an agent to
-// AI_VAULT_DELETABLE_AGENTS without a source here is a type error.
 type AiVaultAgentSourceTable = Record<AiVaultDeletableAgent, AiVaultAgentSource> &
   Partial<Record<AiVaultAgent, AiVaultAgentSource>>
 
-// Agents absent from this table are discovered by shape-specific scanners
-// instead: opencode (SQLite plus legacy files) and antigravity (brain dirs).
+// OpenCode and Antigravity use dedicated discovery for their storage layouts.
 export const AI_VAULT_AGENT_SOURCES: AiVaultAgentSourceTable = {
   claude: {
     rootDirs: (options, wslHomeDirs) =>
-      claudeProjectsRootDirs({ claudeProjectsDir: options.claudeProjectsDir, wslHomeDirs }),
+      claudeProjectsRootDirs({
+        claudeProjectsDir: options.claudeProjectsDir,
+        wslHomeDirs,
+        claudeProfileProjectsDirs: options.claudeProfileProjectsDirs
+      }),
     extensions: ['.jsonl'],
-    // Why: Task subagent transcripts under `<session>/subagents/` share the parent
-    // sessionId and aren't independently resumable, so they'd just duplicate the
-    // parent as untitled rows; prune the subtree and read them on demand under
-    // their parent instead.
+    // Read non-resumable task transcripts under their parent instead of duplicating History rows.
+    directoryPredicate: (name) => name !== SUBAGENT_DIR_NAME
+  },
+  qoder: {
+    rootDirs: (options, wslHomeDirs) =>
+      sessionRootDirs(
+        options.qoderProjectsDir ?? join(homedir(), '.qoder', 'projects'),
+        wslHomeDirs,
+        ['.qoder', 'projects']
+      ),
+    extensions: ['.jsonl'],
+    directoryPredicate: (name) => name !== SUBAGENT_DIR_NAME
+  },
+  codebuddy: {
+    rootDirs: (options, wslHomeDirs) => [
+      options.codebuddyProjectsDir ?? CODEBUDDY_PROJECTS_DIR,
+      ...wslHomeDirs.map((homeDir) => join(homeDir, '.codebuddy', 'projects'))
+    ],
+    extensions: ['.jsonl'],
+    // Nested subagent transcripts are not independent top-level conversations.
     directoryPredicate: (name) => name !== SUBAGENT_DIR_NAME
   },
   codex: {
     rootDirs: (options, wslHomeDirs) =>
       uniqueCodexSessionsDirs([
-        options.codexSessionsDir ?? CODEX_SESSIONS_DIR,
-        ...wslHomeDirs.map((homeDir) => join(homeDir, '.codex', 'sessions')),
-        // Why: Orca-launched WSL Codex sessions use an Orca-owned CODEX_HOME,
-        // not the user's default ~/.codex history root.
-        ...wslHomeDirs.map((homeDir) =>
-          join(homeDir, '.local', 'share', 'orca', 'codex-runtime-home', 'home', 'sessions')
-        ),
+        options.codexSessionsDir ?? codexHomeSessionsDir(),
+        ...wslHomeSessionDirs('codex', wslHomeDirs),
         ...(options.additionalCodexSessionsDirs ?? [])
       ]),
     extensions: ['.jsonl']
@@ -126,36 +149,71 @@ export const AI_VAULT_AGENT_SOURCES: AiVaultAgentSourceTable = {
         'projects'
       ]),
     extensions: ['.jsonl'],
-    filePredicate: (filePath) => pathSegments(filePath).includes('agent-transcripts')
+    filePredicate: (filePath) => pathSegments(filePath).includes('agent-transcripts'),
+    contentDependencyPath: cursorChatMetaPath
   },
   grok: {
-    rootDirs: (options, wslHomeDirs) =>
-      sessionRootDirs(options.grokSessionsDir ?? resolveGrokSessionsDir(), wslHomeDirs, [
-        '.grok',
-        'sessions'
-      ]),
+    rootDirs: (options, wslHomeDirs) => [
+      options.grokSessionsDir ?? resolveGrokSessionsDir(),
+      ...wslHomeSessionDirs('grok', wslHomeDirs)
+    ],
     extensions: ['.json'],
     filePredicate: (filePath) => basename(filePath) === 'summary.json'
   },
   devin: {
-    rootDirs: (options, wslHomeDirs) =>
-      sessionRootDirs(options.devinTranscriptsDir ?? DEVIN_TRANSCRIPTS_DIR, wslHomeDirs, [
+    rootDirs: (options, wslHomeDirs) => [
+      ...sessionRootDirs(options.devinTranscriptsDir ?? DEVIN_TRANSCRIPTS_DIR, wslHomeDirs, [
         '.local',
         'share',
         'devin',
         'cli',
         'transcripts'
       ]),
-    extensions: ['.json']
+      // Devin 3000.10.31 exports ATIF to agent_logs by default.
+      ...(options.devinTranscriptsDir ? [] : [join(dirname(DEVIN_TRANSCRIPTS_DIR), 'agent_logs')]),
+      ...wslHomeDirs.map((homeDir) =>
+        join(homeDir, '.local', 'share', 'devin', 'cli', 'agent_logs')
+      )
+    ],
+    mergeRootDiscoveries: true,
+    extensions: ['.json'],
+    // Database-only title or visibility changes must refresh sessions without rereading transcripts.
+    contentDependencyPath: devinSessionsDbDependencyPath
   },
   hermes: {
     rootDirs: (options, wslHomeDirs) =>
-      sessionRootDirs(options.hermesSessionsDir ?? HERMES_SESSIONS_DIR, wslHomeDirs, [
+      sessionRootDirs(options.hermesSessionsDir ?? join(getHermesHome(), 'sessions'), wslHomeDirs, [
         '.hermes',
         'sessions'
       ]),
     extensions: ['.json'],
     filePredicate: (filePath) => basename(filePath).startsWith('session_')
+  },
+  jcode: {
+    rootDirs: (options, wslHomeDirs) =>
+      sessionRootDirs(
+        options.jcodeSessionsDir ??
+          join(process.env.JCODE_HOME?.trim() || join(homedir(), '.jcode'), 'sessions'),
+        wslHomeDirs,
+        ['.jcode', 'sessions']
+      ),
+    extensions: ['.json'],
+    // Exclude live journals and consolidated backups.
+    filePredicate: (filePath) => basename(filePath).startsWith('session_')
+  },
+  kiro: {
+    rootDirs: (options, wslHomeDirs) =>
+      sessionRootDirs(options.kiroSessionsDir ?? KIRO_SESSIONS_DIR, wslHomeDirs, [
+        '.kiro',
+        'sessions',
+        'cli'
+      ]),
+    extensions: ['.json'],
+    filePredicate: isKiroSessionMetadataPath,
+    // Transcript appends must invalidate the cached metadata row.
+    contentDependencyPath: kiroTranscriptPathForMetadata,
+    // Per-session subdirectories hold background task state, not sessions.
+    directoryPredicate: () => false
   },
   rovo: {
     rootDirs: (options, wslHomeDirs) =>
@@ -168,29 +226,20 @@ export const AI_VAULT_AGENT_SOURCES: AiVaultAgentSourceTable = {
   },
   pi: {
     rootDirs: (options, wslHomeDirs) =>
-      sessionRootDirs(options.piSessionsDir ?? PI_SESSIONS_DIR, wslHomeDirs, [
+      sessionRootDirs(options.piSessionsDir ?? piSessionHistorySessionsDir(), wslHomeDirs, [
         '.pi',
         'agent',
         'sessions'
       ]),
-    extensions: ['.jsonl']
+    extensions: ['.jsonl'],
+    // OMP inherits PI_CODING_AGENT_DIR, so Pi's folder can hold OMP's task artifacts.
+    directoryPredicate: isOmpConversationDirectory
   },
   omp: {
     rootDirs: (options, wslHomeDirs) =>
-      sessionRootDirs(options.ompSessionsDir ?? OMP_SESSIONS_DIR, wslHomeDirs, [
-        '.omp',
-        'agent',
-        'sessions'
-      ]),
+      ompSessionsRootDirs({ ompSessionsDir: options.ompSessionsDir, wslHomeDirs }),
     extensions: ['.jsonl'],
-    // Why: task subagent transcripts live inside the session's same-named
-    // artifact directory (`<stamp>_<uuid>/`); surfaced as top-level rows they
-    // drown coordinators under their own workers (#9330). Prune the subtree
-    // and read them on demand under their parent instead. Unlike Claude's,
-    // these carry their own sessionId and would resume by path — but OMP's
-    // own picker only globs `*/*.jsonl`, so it never offers them either.
-    // Depth 0 is the workspace dir, which is never an artifact dir.
-    directoryPredicate: (name, depth) => depth === 0 || !OMP_SESSION_ARTIFACT_DIR_PATTERN.test(name)
+    directoryPredicate: isOmpConversationDirectory
   },
   'prime-agent': {
     rootDirs: (options, wslHomeDirs) =>
@@ -201,21 +250,7 @@ export const AI_VAULT_AGENT_SOURCES: AiVaultAgentSourceTable = {
       ]),
     extensions: ['.jsonl']
   },
-  openclaw: {
-    // Sessions live under <stateDir>/agents; a stateDir already ending in
-    // `agents` is used as-is. The current and legacy state dirs are the same
-    // install, so their discoveries merge.
-    rootDirs: (options, wslHomeDirs) =>
-      [
-        options.openclawStateDir ?? OPENCLAW_STATE_DIR,
-        options.openclawLegacyStateDir ?? join(homedir(), '.clawdbot'),
-        ...wslHomeDirs.map((homeDir) => join(homeDir, '.openclaw')),
-        ...wslHomeDirs.map((homeDir) => join(homeDir, '.clawdbot'))
-      ].map((stateDir) => (basename(stateDir) === 'agents' ? stateDir : join(stateDir, 'agents'))),
-    extensions: ['.jsonl'],
-    filePredicate: (filePath) => pathSegments(filePath).includes('sessions'),
-    mergeRootDiscoveries: true
-  },
+  openclaw: OPENCLAW_AGENT_SOURCE,
   droid: {
     rootDirs: (options, wslHomeDirs) => [
       ...sessionRootDirs(options.droidSessionsDir ?? DROID_SESSIONS_DIR, wslHomeDirs, [
@@ -249,40 +284,34 @@ export const AI_VAULT_AGENT_SOURCES: AiVaultAgentSourceTable = {
         'sessions'
       ]),
     extensions: ['.json'],
-    // Why: each Kimi session is <sessions>/wd_*/session_*/state.json; match
-    // only those (not the sibling agents/*/wire.jsonl transcripts).
+    // Match session state files rather than sibling agent wire transcripts.
     filePredicate: (filePath) =>
       basename(filePath) === 'state.json' && basename(dirname(filePath)).startsWith('session_')
+  },
+  muse: {
+    rootDirs: (options, wslHomeDirs) =>
+      sessionRootDirs(resolveMuseSessionsDir(options.museSessionsDir), wslHomeDirs, [
+        '.local',
+        'share',
+        'muse',
+        'sessions'
+      ]),
+    extensions: ['.jsonl'],
+    // Exclude log, SQLite and materialized-projection sidecars.
+    filePredicate: (filePath) => basename(filePath) === 'session.jsonl'
   }
 }
 
-/**
- * Whether a scan rooted at `rootDir` would surface `filePath`: its extension,
- * its file predicate, and every directory between the two passing the directory
- * predicate. This is the delete validator's accept rule, so a path no scan
- * would ever list can't become a delete target either.
- */
-export function isDiscoverableSessionFile(
-  source: AiVaultAgentSource,
-  rootDir: string,
-  filePath: string
-): boolean {
-  if (!source.extensions.includes(extname(filePath).toLowerCase())) {
-    return false
-  }
-  if (source.filePredicate && !source.filePredicate(filePath)) {
-    return false
-  }
-  const { directoryPredicate } = source
-  if (!directoryPredicate) {
-    return true
-  }
-  // Indexed like walkSessionFiles: depth 0 is a child of rootDir.
-  return pathSegments(relative(rootDir, dirname(filePath)))
-    .filter(Boolean)
-    .every((name, depth) => directoryPredicate(name, depth))
+// The Pi walk labels the OMP transcripts it reads, so an OMP row can sit under Pi's roots too.
+export function sessionRowRootDirs(
+  agent: AiVaultDeletableAgent,
+  options: AiVaultScanOptions,
+  wslHomeDirs: readonly string[]
+): string[] {
+  const roots = AI_VAULT_AGENT_SOURCES[agent].rootDirs(options, wslHomeDirs)
+  return agent === 'omp'
+    ? [...roots, ...AI_VAULT_AGENT_SOURCES.pi.rootDirs(options, wslHomeDirs)]
+    : roots
 }
 
-function pathSegments(filePath: string): string[] {
-  return filePath.split(/[\\/]/)
-}
+export { isDiscoverableSessionFile } from './session-file-discovery'

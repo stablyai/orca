@@ -105,7 +105,7 @@ const PROVIDERS: readonly {
 ]
 
 const fakeCliDir = mkdtempSync(path.join(os.tmpdir(), 'orca-e2e-worker-transcript-providers-'))
-const capabilityLedgerPath = path.join(fakeCliDir, 'capabilities.jsonl')
+const preambleLedgerPath = path.join(fakeCliDir, 'preambles.jsonl')
 const fakeGrokHome = path.join(fakeCliDir, 'grok-home')
 const fakeOmpHome = path.join(fakeCliDir, 'omp-home')
 
@@ -114,7 +114,7 @@ function writeFakeProvider(agent: TranscriptProvider, title: string): string {
   const hookPath = `/hook/${agent}`
   const source = `
 const { appendFileSync, readFileSync } = require('node:fs')
-const ledger = ${JSON.stringify(capabilityLedgerPath)}
+const ledger = ${JSON.stringify(preambleLedgerPath)}
 const configPath = ${JSON.stringify(configPath)}
 let hookSent = false
 async function sendProviderHook() {
@@ -142,9 +142,8 @@ async function sendProviderHook() {
 process.stdout.write('\\u001b]0;${title.replaceAll("'", "\\'")}\\u0007')
 process.stdin.on('data', (chunk) => {
   const input = chunk.toString()
-  const capability = input.match(/--dispatch-capability (dcap_[A-Za-z0-9_-]+)/)?.[1]
-  if (capability) {
-    appendFileSync(ledger, JSON.stringify({ agent: '${agent}', capability }) + '\\n')
+  if (input.includes('--type worker_done')) {
+    appendFileSync(ledger, '${agent}\\n')
     void sendProviderHook()
   }
 })
@@ -177,28 +176,21 @@ const agentCommands = Object.fromEntries(
 ) as Partial<Record<TranscriptProvider, string>>
 
 const test = base.extend({
-  launchEnv: [
-    {
-      PATH: `${fakeCliDir}${path.delimiter}${process.env.PATH ?? ''}`,
-      GROK_HOME: fakeGrokHome,
-      OMP_CODING_AGENT_DIR: fakeOmpHome
-    },
-    { option: true }
-  ]
+  launchEnv: {
+    PATH: `${fakeCliDir}${path.delimiter}${process.env.PATH ?? ''}`,
+    GROK_HOME: fakeGrokHome,
+    OMP_CODING_AGENT_DIR: fakeOmpHome
+  }
 })
 
 test.afterAll(() => {
   rmSync(fakeCliDir, { recursive: true, force: true })
 })
 
-function readCapabilities(): { agent: TranscriptProvider; capability: string }[] {
-  if (!existsSync(capabilityLedgerPath)) {
-    return []
-  }
-  return readFileSync(capabilityLedgerPath, 'utf8')
-    .split(/\r?\n/)
-    .filter(Boolean)
-    .map((line) => JSON.parse(line) as { agent: TranscriptProvider; capability: string })
+function readPreambleRecipients(): string[] {
+  return existsSync(preambleLedgerPath)
+    ? readFileSync(preambleLedgerPath, 'utf8').split(/\r?\n/).filter(Boolean)
+    : []
 }
 
 async function listWorker(client: RuntimeClient, handle: string): Promise<RuntimeTerminalSummary> {
@@ -215,7 +207,7 @@ test('worker-read uses provider transcripts across supported orchestration agent
   electronApp
 }) => {
   test.setTimeout(240_000)
-  rmSync(capabilityLedgerPath, { force: true })
+  rmSync(preambleLedgerPath, { force: true })
   await waitForSessionReady(orcaPage)
   await orcaPage.evaluate(
     async ({ commands, terminalWindowsShell }) => {
@@ -293,8 +285,7 @@ test('worker-read uses provider transcripts across supported orchestration agent
     // The initial file intentionally stops before the cursor continuation row.
     mkdirSync(path.dirname(transcriptPath), { recursive: true })
     writeFileSync(transcriptPath, `${initialTranscript.slice(0, 2).join('\n')}\n`)
-    // The fake CLI reads this after receiving the injected preamble, so the hook
-    // is emitted through the same authenticated path as a real provider hook.
+    // Emit the hook through the authenticated provider path only after the fake CLI receives its injected preamble.
     writeFileSync(
       path.join(fakeCliDir, `${provider.agent}-config.json`),
       JSON.stringify({
@@ -366,30 +357,18 @@ test('worker-read uses provider transcripts across supported orchestration agent
       )
     ).toEqual([[provider.third]])
 
-    await expect
-      .poll(() => readCapabilities().find((entry) => entry.agent === provider.agent))
-      .toBeTruthy()
-    const capability = readCapabilities().find(
-      (entry) => entry.agent === provider.agent
-    )?.capability
-    if (!capability) {
-      throw new Error(`${provider.agent} worker did not receive a dispatch capability`)
-    }
-    await client.call(
-      'orchestration.send',
-      {
-        from: worker.handle,
-        subject: 'Completed',
-        body: `The ${provider.agent} transcript read passed. Nothing remains.`,
-        type: 'worker_done',
-        payload: JSON.stringify({
-          taskId: task.result.task.id,
-          dispatchId: started.result.dispatchId,
-          outcome: 'succeeded'
-        })
-      },
-      { orchestrationCapability: capability }
-    )
+    await expect.poll(() => readPreambleRecipients()).toContain(provider.agent)
+    await client.call('orchestration.send', {
+      from: worker.handle,
+      subject: 'Completed',
+      body: `The ${provider.agent} transcript read passed. Nothing remains.`,
+      type: 'worker_done',
+      payload: JSON.stringify({
+        taskId: task.result.task.id,
+        dispatchId: started.result.dispatchId,
+        outcome: 'succeeded'
+      })
+    })
     await expect
       .poll(async () => {
         const dispatch = await client.call<{ dispatch: { status: string } | null }>(

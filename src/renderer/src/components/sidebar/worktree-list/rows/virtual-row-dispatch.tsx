@@ -6,7 +6,7 @@ import type {
   WorkspaceStatusDefinition
 } from '../../../../../../shared/worktree/types'
 import { getWorkspaceStatus } from '../../workspace-status'
-import type { WorktreeGroupBy } from '../grouping/row-types'
+import type { WorktreeGroupBy } from '../../../../../../shared/sidebar-list/row-types'
 import {
   getVirtualRowTransform,
   getWorktreeVirtualRowTransform,
@@ -124,6 +124,7 @@ function renderLineageGroupVirtualRow(
       ref={ctx.measureVirtualRowElement}
       className={cn(
         'absolute left-0 right-0 top-0',
+        parent?.worktree.id === ctx.worktreeDragState.draggingWorktreeId && 'pointer-events-none',
         ctx.worktreeDragState.draggingWorktreeId !== null &&
           'transition-transform duration-150 ease-out will-change-transform'
       )}
@@ -144,8 +145,7 @@ function renderLineageGroupVirtualRow(
   )
 }
 
-// One virtual slot -> one row renderer. Every branch owns its own absolute/sticky frame
-// because sticky headers and lineage groups position differently from plain cards.
+// Each row renderer owns its frame because sticky headers, lineage groups and plain cards position differently.
 export function renderWorktreeVirtualRow(
   ctx: WorktreeVirtualRowContext,
   row: RenderRow,
@@ -234,6 +234,7 @@ export function renderWorktreeVirtualRow(
       data-workspace-status={itemWorkspaceStatus ?? undefined}
       className={cn(
         'absolute left-0 right-0 top-0',
+        row.worktree.id === ctx.worktreeDragState.draggingWorktreeId && 'pointer-events-none',
         ctx.worktreeDragState.draggingWorktreeId !== null &&
           'transition-transform duration-150 ease-out will-change-transform'
       )}

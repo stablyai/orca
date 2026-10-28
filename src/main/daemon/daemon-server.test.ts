@@ -1,3 +1,4 @@
+import './mock-descendant-sweep'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { connect, type Server, type Socket } from 'node:net'
 import { tmpdir } from 'node:os'
@@ -209,7 +210,7 @@ describe('DaemonServer', () => {
       })
       await vi.waitFor(() => expect(preparePtySpawn).toHaveBeenCalledTimes(2))
 
-      // The old spawnSync probe blocked this ping and all live PTY traffic.
+      // Synchronous preflight previously blocked RPC and live PTY traffic.
       await expect(c.request('ping', undefined)).resolves.toEqual({ pong: true })
       expect(spawnSubprocess).not.toHaveBeenCalled()
 
@@ -327,19 +328,15 @@ describe('DaemonServer', () => {
       await server.start()
       const c = await connectClient()
 
-      // Hangs in preflight; the control-socket close must abort it before spawn.
       c.request('createOrAttach', {
         sessionId: 'disconnect-pending',
         cols: 80,
         rows: 24
-      }).catch(() => {
-        /* the disconnect rejects the in-flight request; that's expected */
-      })
+      }).catch(() => {})
       await vi.waitFor(() => expect(preparePtySpawn).toHaveBeenCalledOnce())
 
       c.disconnect()
-      // Wait for the server to process the close (and cancel the prep) before
-      // releasing the preflight, else the resumed spawn races ahead of cancellation.
+      // Let disconnect cancel the preparation before releasing preflight.
       await vi.waitFor(() =>
         expect((server as unknown as DaemonServerPrivate).connections.clients.size).toBe(0)
       )
@@ -354,8 +351,6 @@ describe('DaemonServer', () => {
       await startServer()
       const c = await connectClient()
 
-      // No preparation was canceled, so the host's not-found verdict must propagate
-      // rather than be swallowed by the pending-spawn kill reconciliation.
       await expect(
         c.request('kill', { sessionId: 'never-created', immediate: true })
       ).rejects.toThrow('Session not found: never-created')
@@ -393,7 +388,6 @@ describe('DaemonServer', () => {
       await startServer()
       const c = await connectClient()
 
-      // Create a session first
       await c.request('createOrAttach', {
         sessionId: 'test-session',
         cols: 80,
@@ -417,8 +411,6 @@ describe('DaemonServer', () => {
       await startServer()
       const c = await connectClient()
 
-      // Why: downgraded clients can send request types this daemon does not
-      // know. Reject gracefully instead of crashing the session server.
       await expect(c.request('definitelyUnknownRequest', undefined)).rejects.toThrow(
         'Unknown request type: definitelyUnknownRequest'
       )
@@ -436,21 +428,11 @@ describe('DaemonServer', () => {
       expect(['healthy', 'unhealthy', 'unknown']).toContain(result.health)
     })
 
-    it('handles write (fire-and-forget)', async () => {
+    it('probes Full Disk Access in the owning daemon', async () => {
       await startServer()
       const c = await connectClient()
-
-      await c.request('createOrAttach', {
-        sessionId: 'test-session',
-        cols: 80,
-        rows: 24
-      })
-
-      // Should not throw
-      c.notify('write', { sessionId: 'test-session', data: 'ls\n' })
-
-      // Give the server time to process
-      await new Promise((r) => setTimeout(r, 50))
+      const result = await c.request<{ status: unknown }>('fullDiskAccessStatus', undefined)
+      expect(['granted', 'denied', 'unknown', 'unsupported']).toContain(result.status)
     })
 
     it('handles resize', async () => {
@@ -516,11 +498,7 @@ describe('DaemonServer', () => {
         sessionId: 'test-session'
       })
 
-      // Mock subprocess doesn't emit OSC-7. The terminal-host fallback then
-      // calls resolveProcessCwd(55555); on CI that pid is almost always dead
-      // so the result is null, but we accept string too — a recycled pid that
-      // happens to match would legitimately return a path and we don't want
-      // this test to flake on whatever happens to be running on the host.
+      // Without OSC 7, cwd falls back to OS PID lookup; a coincident live PID may return a path.
       expect(result.cwd === null || typeof result.cwd === 'string').toBe(true)
     })
 
@@ -715,8 +693,7 @@ describe('DaemonServer', () => {
         subprocess!._simulateData(finalOutput)
         subprocess!._simulateExit(42)
 
-        // Only the refill sentinel may enter the already-deep socket; exit
-        // remains queued behind the final data for this session.
+        // Keep exit behind final output; only a refill sentinel may enter the already-full socket.
         expect(refillCallbacks).toHaveLength(1)
         const beforeRefill = streamSocket.write.mock.calls.map(([line]) => JSON.parse(String(line)))
         expect(beforeRefill).toHaveLength(1)
@@ -741,7 +718,6 @@ describe('DaemonServer', () => {
     it('rejects connections with wrong token', async () => {
       await startServer()
 
-      // Connect with raw socket and send bad token
       const socket = connect(socketPath)
       await new Promise<void>((resolve) => socket.on('connect', resolve))
 
@@ -909,14 +885,12 @@ describe('DaemonServer', () => {
       await expect(c.ensureConnected()).rejects.toThrow()
     })
 
-    // Runs everywhere: a closed Windows pipe classifies as missing, not connected.
     it('still terminates via the shutdown RPC when disposal cannot prove physical exit', async () => {
       await startServer()
       const daemon = server as unknown as DaemonServerPrivate & {
         host: { dispose: () => Promise<void> }
       }
-      // Why: an unreapable child rejects dispose after its exit deadline; the
-      // daemon must exit anyway or its replacement flow strands it as an orphan.
+      // An unreapable child can reject disposal; RPC shutdown must still retire the daemon.
       daemon.host.dispose = vi.fn(() =>
         Promise.reject(new Error('Timed out waiting for physical PTY exit'))
       )
@@ -925,7 +899,7 @@ describe('DaemonServer', () => {
       await expect(c.request('shutdown', { killSessions: true })).resolves.toEqual({})
 
       await waitFor(() => daemon.lifecycle.server === null)
-      // Why not existsSync: the dead entry remains for the next publisher to replace.
+      // Shutdown leaves the dead endpoint entry for the next publisher.
       expect(await waitForEndpointUnreachable(socketPath)).toBe(true)
       const late = new DaemonClient({ socketPath, tokenPath })
       await expect(late.ensureConnected()).rejects.toThrow()

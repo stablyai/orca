@@ -23,6 +23,7 @@ import {
   type OpenInAppPreset
 } from '@/lib/open-in-app-catalog'
 import { translate } from '@/i18n/i18n'
+import { createBrowserUuid } from '@/lib/browser-uuid'
 
 type OpenInMenuSettingProps = {
   applications: OpenInApplication[] | undefined
@@ -36,9 +37,7 @@ type OpenInApplicationsDraftState = {
 
 function createOpenInApplication(): OpenInApplication {
   return {
-    id:
-      globalThis.crypto?.randomUUID?.() ??
-      `open-in-${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}`,
+    id: createBrowserUuid(),
     label: '',
     command: ''
   }
@@ -245,8 +244,7 @@ export function OpenInMenuSetting({
 
   const resolvedDraftState = resolveOpenInApplicationsDraftState(draftState, applications)
   if (resolvedDraftState !== draftState) {
-    // Why: the Open menu rows are editable local drafts, but Settings can
-    // reload from persistence while this pane is mounted.
+    // Reconcile local menu drafts when settings reload from persistence.
     setDraftState(resolvedDraftState)
   }
   const draft = resolvedDraftState.draft

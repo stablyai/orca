@@ -11,9 +11,7 @@ export type MacNotificationPermissionState =
   | 'blocked'
 
 const MAC_PROBE_POLL_INTERVAL_MS = 2500
-// Why: bounded so an abandoned onboarding tab doesn't probe forever; ~3
-// minutes comfortably covers answering the dialog or flipping the toggle
-// in System Settings.
+// Bound polling to about three minutes so abandoned onboarding cannot probe forever.
 const MAC_PROBE_POLL_MAX_ATTEMPTS = 72
 
 export function resolveMacNotificationPermissionState(
@@ -29,9 +27,7 @@ export function resolveMacNotificationPermissionState(
   if (probeState === 'awaiting-decision') {
     return 'awaiting-permission'
   }
-  // Why: probe-fallback hosts can't tell "unanswered dialog" from "denied" —
-  // a first-ever probe is what makes macOS show the permission dialog, so
-  // its rejection means "unanswered", not "denied".
+  // Fallback probes trigger the first permission dialog; initial nondelivery means unanswered, not denied.
   return promptedBefore ? 'blocked' : 'awaiting-permission'
 }
 
@@ -42,10 +38,7 @@ export function useMacNotificationPermissionState(
     useState<MacNotificationPermissionState | null>(null)
 
   useEffect(() => {
-    // Why: while Orca's own notifications setting is off, the OS permission
-    // is irrelevant — a green "notifications are enabled" card next to a
-    // disabled toggle reads as a contradiction. Hide the card and skip the
-    // readout polling entirely until the setting is back on.
+    // When app notifications are off, hide permission status and skip polling to avoid contradictory enabled feedback.
     if (!enabled) {
       setMacPermissionState(null)
       return
@@ -65,10 +58,7 @@ export function useMacNotificationPermissionState(
             return
           }
           setMacPermissionState(resolveMacNotificationPermissionState(probe.state, promptedBefore))
-          // Why: authoritative readouts are silent, so keep tracking System
-          // Settings live in every state — flipping the toggle updates the
-          // card within a poll. Probe fallbacks flash a banner when delivery
-          // works, so for them polling stops once the card turns green.
+          // Authoritative reads are silent and keep tracking Settings; fallback probes emit banners, so stop after delivery.
           if (probe.authoritative || probe.state !== 'delivered') {
             schedulePoll(promptedBefore)
           }
@@ -85,9 +75,7 @@ export function useMacNotificationPermissionState(
         return
       }
       setMacPermissionState('checking')
-      // Why: `status.requested` is read before the probe stamps it, so a
-      // fresh install (where the check itself pops the macOS dialog) renders
-      // as "answer the dialog" instead of "blocked" on probe-fallback hosts.
+      // Read requested before probing so fresh-install dialogs show awaiting permission instead of blocked.
       const probe = await window.api.notifications.probeDelivery()
       if (cancelled) {
         return
@@ -117,7 +105,7 @@ export function MacNotificationPermissionCard({
 }): React.JSX.Element | null {
   if (state === 'checking') {
     return (
-      <section className="rounded-xl border border-border bg-muted/20 px-5 py-4 text-[13px] text-muted-foreground">
+      <section className="rounded-lg border border-border px-4 py-3.5 text-[13px] text-muted-foreground">
         {translate(
           'auto.components.onboarding.NotificationStep.56b836215c',
           'Checking notification permission…'
@@ -128,10 +116,10 @@ export function MacNotificationPermissionCard({
 
   if (state === 'enabled') {
     return (
-      <section className="flex items-center gap-2.5 rounded-xl border border-emerald-500/30 bg-emerald-500/[0.07] px-5 py-4">
-        <Check className="size-4 shrink-0 text-emerald-600 dark:text-emerald-400" strokeWidth={3} />
-        <div className="min-w-0">
-          <div className="text-sm font-semibold text-foreground">
+      <section className="flex items-start gap-3 rounded-lg border border-border px-4 py-3.5">
+        <Check className="mt-0.5 size-4 shrink-0 text-foreground" />
+        <div className="min-w-0 space-y-0.5">
+          <div className="text-sm font-medium text-foreground">
             {translate(
               'auto.components.onboarding.NotificationStep.fd84d3e9b8',
               'Notifications are enabled'
@@ -150,22 +138,24 @@ export function MacNotificationPermissionCard({
 
   if (state === 'awaiting-permission') {
     return (
-      <section className="rounded-xl border border-border bg-card px-5 py-4">
-        <div className="flex flex-wrap items-start justify-between gap-4">
-          <div className="min-w-0 space-y-1">
-            <div className="flex items-center gap-2 text-sm font-semibold text-foreground">
-              <BellRing className="size-4" />
-              {translate(
-                'auto.components.onboarding.NotificationStep.95d99b52fa',
-                'Allow notifications for Orca'
-              )}
+      <section className="rounded-lg border border-border px-4 py-3.5">
+        <div className="flex flex-wrap items-center justify-between gap-4">
+          <div className="flex min-w-0 items-start gap-3">
+            <BellRing className="mt-0.5 size-4 shrink-0 text-muted-foreground" />
+            <div className="min-w-0 space-y-0.5">
+              <div className="text-sm font-medium text-foreground">
+                {translate(
+                  'auto.components.onboarding.NotificationStep.95d99b52fa',
+                  'Allow notifications for Orca'
+                )}
+              </div>
+              <p className="max-w-[58ch] text-[13px] leading-relaxed text-muted-foreground">
+                {translate(
+                  'auto.components.onboarding.mac.notification.permission.card.f696515944',
+                  'Click Allow in the macOS dialog.'
+                )}
+              </p>
             </div>
-            <p className="max-w-[58ch] text-[13px] leading-relaxed text-muted-foreground">
-              {translate(
-                'auto.components.onboarding.mac.notification.permission.card.f696515944',
-                'Click Allow in the macOS dialog.'
-              )}
-            </p>
           </div>
           <Button
             type="button"
@@ -187,25 +177,24 @@ export function MacNotificationPermissionCard({
 
   if (state === 'blocked') {
     return (
-      <section
-        role="alert"
-        className="rounded-xl border border-amber-500/40 bg-amber-500/10 px-5 py-4"
-      >
-        <div className="flex flex-wrap items-start justify-between gap-4">
-          <div className="min-w-0 space-y-1">
-            <div className="flex items-center gap-2 text-sm font-semibold text-amber-700 dark:text-amber-300">
-              <TriangleAlert className="size-4" />
-              {translate(
-                'auto.components.onboarding.NotificationStep.90b5d2e363',
-                'macOS is not delivering Orca notifications'
-              )}
+      <section role="alert" className="rounded-lg border border-status-warning-border px-4 py-3.5">
+        <div className="flex flex-wrap items-center justify-between gap-4">
+          <div className="flex min-w-0 items-start gap-3">
+            <TriangleAlert className="mt-0.5 size-4 shrink-0 text-status-warning" />
+            <div className="min-w-0 space-y-0.5">
+              <div className="text-sm font-medium text-foreground">
+                {translate(
+                  'auto.components.onboarding.NotificationStep.90b5d2e363',
+                  'macOS is not delivering Orca notifications'
+                )}
+              </div>
+              <p className="max-w-[58ch] text-[13px] leading-relaxed text-muted-foreground">
+                {translate(
+                  'auto.components.onboarding.mac.notification.permission.card.721d2bedb6',
+                  'Turn on Allow notifications for Orca in System Settings.'
+                )}
+              </p>
             </div>
-            <p className="max-w-[58ch] text-[13px] leading-relaxed text-amber-700/80 dark:text-amber-200/80">
-              {translate(
-                'auto.components.onboarding.mac.notification.permission.card.721d2bedb6',
-                'Turn on Allow notifications for Orca in System Settings.'
-              )}
-            </p>
           </div>
           <Button
             type="button"

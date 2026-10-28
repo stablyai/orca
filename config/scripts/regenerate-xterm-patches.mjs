@@ -41,11 +41,7 @@ export function stampVersionSource(source, version) {
   return stamped
 }
 
-/**
- * The published tarball names the commit it was built from, so a version bump
- * that forgets the manifest fails here instead of producing a patch against the
- * wrong tree.
- */
+// Verify published tarball’s source commit or a version bump can generate patches against the wrong tree.
 export function assertPublishedCommit(publishedPackageJson, packageEntry, upstreamCommit) {
   if (publishedPackageJson.version !== packageEntry.version) {
     throw new Error(
@@ -80,8 +76,7 @@ export function assertBuildStepsAllowed(manifest) {
   }
 }
 
-// `delete` was dropped with the code that implemented it: accepting a policy
-// nothing honours would silently ship maps that do not match the bundle.
+// Reject retired delete policy: its implementation is gone, and accepting it ships maps mismatched to bundle.
 export const SOURCEMAP_POLICIES = new Set(['include'])
 
 /** An unrecognised policy is a manifest bug, not a default to fall through to. */
@@ -95,12 +90,7 @@ export function assertSourcemapPolicy(manifest) {
   return policy
 }
 
-/**
- * pnpm keys the patched package directory and the lockfile entry by the
- * sha256 of the patch file itself, so a regenerated patch that leaves
- * pnpm-lock.yaml alone fails `--frozen-lockfile` on every machine but the
- * author's.
- */
+// Update lockfile with regenerated patch hash or frozen installs fail outside author’s warm store.
 export function patchHash(patchText) {
   return createHash('sha256').update(patchText, 'utf8').digest('hex')
 }
@@ -122,16 +112,11 @@ function lockfileResolutionHashPattern(packageKey) {
   const separator = packageKey.lastIndexOf('@')
   const name = escapeRegExp(packageKey.slice(0, separator))
   const version = escapeRegExp(packageKey.slice(separator + 1))
-  // Two spellings: `name@version(patch_hash=…)` in dependency keys, and a bare
-  // `: version(patch_hash=…)` under `version:` and in resolved dependency maps.
+  // Replace both name@version(patch_hash=…) keys and bare version(patch_hash=…) resolution values.
   return new RegExp(`(?:${name}@|: )${version}\\(patch_hash=([0-9a-f]{64})\\)`, 'g')
 }
 
-/**
- * pnpm repeats the hash inside every resolution key that depends on the patched
- * package, not just in `patchedDependencies`. Updating one and not the other leaves
- * a lockfile that installs on a warm store and drifts on a cold one, which is CI.
- */
+// Update hash in every dependent resolution key, not just patchedDependencies, or cold CI stores diverge from warm installs.
 export function readLockfileResolutionHashes(lockfileText, packageKey) {
   return Array.from(
     lockfileText.matchAll(lockfileResolutionHashPattern(packageKey)),
@@ -160,8 +145,7 @@ export function updateLockfilePatchHash(lockfileText, packageKey, hash) {
     )
 }
 
-// npm ships as `npm.cmd` on Windows, and execFile applies no PATHEXT and refuses
-// a `.cmd` target without a shell (CVE-2024-27980). git and tar are real .exe.
+// Windows npm.cmd needs interpreter routing (CVE-2024-27980); execFile neither applies PATHEXT nor spawns .cmd without shell. Git/tar are executables.
 const WINDOWS_SHIM_COMMANDS = new Set(['npm', 'npx', 'pnpm', 'yarn'])
 
 function run(command, args, options = {}) {
@@ -194,7 +178,7 @@ function sameBytes(left, right) {
   )
 }
 
-function fetchPristinePackage(packageEntry, workDir) {
+export function fetchPristinePackage(packageEntry, workDir) {
   const target = path.join(workDir, 'pristine', packageEntry.name.replace(/[@/]/g, '_'))
   rmSync(target, { recursive: true, force: true })
   mkdirSync(target, { recursive: true })
@@ -236,6 +220,7 @@ function ensureDependencies(upstreamRoot, manifest) {
   const stamp = path.join(upstreamRoot, 'node_modules', '.orca-xterm-install-stamp')
   const want = `${manifest.upstream.commit}\n${statSync(lockfile).size}\n`
   if (existsSync(stamp) && readFileSync(stamp, 'utf8') === want) {
+    assertToolchain(upstreamRoot, manifest)
     return
   }
   run('npm', ['ci'], {
@@ -267,11 +252,7 @@ function assertToolchain(upstreamRoot, manifest) {
   }
 }
 
-/**
- * The published src/ must equal the pinned commit's src/ apart from the version
- * stamp publish.js rewrites. If it does not, the manifest points at the wrong
- * commit and every hunk below would be nonsense.
- */
+// Match published src to pinned commit except publish-time version stamp; mismatch invalidates generated hunks.
 function assertPristineSourceMatches(pristineDir, upstreamRoot, packageEntry) {
   const stampFile = packageEntry.versionStampFile
   const sourceRoot = path.join(pristineDir, 'src')
@@ -342,8 +323,7 @@ function overlayBuildOutput(pristineDir, upstreamRoot, packageEntry, destination
   cpSync(pristineDir, destination, { recursive: true })
   const packageRoot = path.join(upstreamRoot, packageEntry.packageDir)
   for (const relative of listFilesRelative(pristineDir)) {
-    // package.json carries the registry's version/commit stamp, which the build
-    // tree has no way to reproduce and which we never want to patch.
+    // Exclude registry version/commit stamp: build tree cannot reproduce it and patch must not change it.
     if (relative === 'package.json') {
       continue
     }
@@ -413,9 +393,7 @@ function regeneratePackage(packageEntry, manifest, context) {
   const patchedDir = path.join(workDir, 'patched', packageEntry.name.replace(/[@/]/g, '_'))
   overlayBuildOutput(pristineDir, upstreamRoot, packageEntry, patchedDir)
 
-  // Leave the checkout diffable: the pinned commit plus the source patch, with
-  // no publish-time version stamp mixed in, so `git diff` there is the source
-  // patch and nothing else.
+  // Leave checkout at pinned commit plus source patch, without publish-time stamp, so git diff remains the source patch alone.
   if (packageEntry.versionStampFile) {
     run('git', ['checkout', '--', packageEntry.versionStampFile], {
       cwd: path.join(upstreamRoot, packageEntry.packageDir)
@@ -555,8 +533,7 @@ function main(argv) {
     console.info(USAGE)
     return
   }
-  // --check is the default, so an unrecognised flag would otherwise silently run a full
-  // upstream build instead of whatever the caller meant.
+  // Reject unknown flags or default --check would silently launch full upstream build.
   const known = (v) =>
     !v.startsWith('-') || ['--write', '--check'].includes(v) || v.startsWith('--work-dir=')
   const unknown = argv.filter((value) => !known(value))

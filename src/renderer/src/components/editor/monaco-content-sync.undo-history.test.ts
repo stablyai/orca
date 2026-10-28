@@ -1,5 +1,5 @@
 // @vitest-environment happy-dom
-import * as monaco from 'monaco-editor'
+import * as monaco from 'monaco-editor/esm/vs/editor/editor.api.js'
 import { afterEach, describe, expect, it } from 'vitest'
 import { syncContentUpdate } from './monaco-content-sync'
 
@@ -35,7 +35,7 @@ describe('Monaco external-content undo history', () => {
 
     syncContentUpdate(editorInstance, 'first line\nappended', 'read-only-live-tail')
 
-    expect(model.getValue()).toBe('first line\nappended')
+    expect(model.getValue()).toBe(['first line', 'appended'].join(model.getEOL()))
     expect(model.canUndo()).toBe(false)
   })
 

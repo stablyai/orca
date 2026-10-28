@@ -1,3 +1,4 @@
+import './mock-descendant-sweep'
 import { readFileSync, mkdtempSync, rmSync } from 'node:fs'
 import { connect, type Socket } from 'node:net'
 import { tmpdir } from 'node:os'

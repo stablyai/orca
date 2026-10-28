@@ -7,20 +7,7 @@ import { resumePaneRendering, suspendPaneRendering } from './pane-rendering-cont
 import { resetHiddenWebglRetentionForTest } from './terminal-webgl-hidden-retention'
 import { isTerminalCursorBlinkSuspended } from './pane-cursor-blink-suspension'
 
-/**
- * Invariant (`terminal-render.hidden-pane-idle-cost`): a hidden pane must not drive
- * the cursor-blink redraw loop, and revealing it must put back exactly the blink
- * state it had — never a frozen, missing, or unexpectedly blinking cursor.
- *
- * Oracle: the cursor xterm actually renders. The DOM renderer stamps
- * `xterm-cursor` / `xterm-cursor-blink` on the cursor cell (DomRendererRowFactory),
- * so these assertions read rendered output, not the option value — an assertion on
- * `options.cursorBlink` alone would pass with the bug present.
- *
- * The hidden-side cost is proved separately by the redraw-count test at the bottom:
- * the DOM renderer already gates its blink class on per-terminal focus, whereas the
- * WebGL renderer's blink timer arms on `document.hasFocus()`, which is what leaks.
- */
+/** Hidden panes must stop redraws and restore their exact cursor state. Assert rendered cursor classes, not options alone; a separate redraw counter covers WebGL’s document-focused timer leak. */
 
 const COLS = 80
 const ROWS = 24
@@ -73,7 +60,6 @@ function createTestPane(options: { cursorBlink?: boolean; webglAddon?: boolean }
   return pane
 }
 
-/** The cursor cell as the renderer painted it, or null when no cursor is rendered. */
 function renderedCursor(pane: TestPane): HTMLElement | null {
   return pane.host.querySelector('.xterm-cursor')
 }
@@ -86,8 +72,10 @@ function renderedText(pane: TestPane): string {
   return pane.host.querySelector('.xterm-rows')?.textContent ?? ''
 }
 
-/** Reveal = the manager's resume pass, then the terminal regains real DOM focus. */
-async function reveal(panes: TestPane[], owner?: object): Promise<void> {
+async function reveal(
+  panes: TestPane[],
+  owner?: Parameters<typeof resumePaneRendering>[1]
+): Promise<void> {
   resumePaneRendering(panes, owner)
   for (const pane of panes) {
     pane.terminal.focus()
@@ -151,7 +139,6 @@ describe('hidden-pane cursor blink suspension', () => {
     expect(renderedText(pane)).toContain('before-hide')
     expect(renderedText(pane)).toContain('while-hidden')
 
-    // Real key input through xterm's textarea must still route to the PTY.
     const typed: string[] = []
     pane.terminal.onData((data) => typed.push(data))
     const keydown = new KeyboardEvent('keydown', {
@@ -178,8 +165,7 @@ describe('hidden-pane cursor blink suspension', () => {
     await flushRender()
 
     suspendPaneRendering([pane], { owner, livePanes: () => [pane] })
-    // The retention branch returns before disposeWebgl — this is the path where
-    // nothing else could have stopped the blink timer.
+    // Retention skips disposeWebgl, so only explicit blink suspension can stop this timer.
     expect(addon?.dispose).not.toHaveBeenCalled()
     expect(isTerminalCursorBlinkSuspended(pane.terminal)).toBe(true)
 
@@ -200,8 +186,7 @@ describe('hidden-pane cursor blink suspension', () => {
     for (let cycle = 0; cycle < 2; cycle++) {
       suspendPaneRendering(panes, { owner, livePanes: () => panes })
       resumePaneRendering(panes, owner)
-      // One at a time: the DOM renderer only paints a blinking cursor in the pane
-      // that currently holds real focus, so focus each split half in turn.
+      // Focus split panes one at a time because DOM blink classes follow actual terminal focus.
       for (const [name, pane] of [
         ['left', left],
         ['right', right]
@@ -220,7 +205,6 @@ describe('hidden-pane cursor blink suspension', () => {
     const pane = createTestPane({ cursorBlink: false })
     suspendPaneRendering([pane])
 
-    // What applyTerminalAppearance does when the user flips the setting.
     const { setTerminalCursorBlinkOption } = await import('./pane-cursor-blink-suspension')
     setTerminalCursorBlinkOption(pane.terminal, true)
     expect(
@@ -242,17 +226,7 @@ describe('hidden-pane cursor blink suspension', () => {
   })
 })
 
-/**
- * Deterministic cost gate for the hidden side.
- *
- * Model, taken from `@xterm/addon-webgl@0.20` sources: `CursorBlinkStateManager`
- * runs a 600 ms interval whenever `ICoreBrowserService.isFocused` is true — a
- * DOCUMENT-level fact — and every toggle calls `WebglRenderer._requestRedrawCursor()`,
- * which redraws one full row (`_updateModel` loops `x < cols` per row).
- * `WebglRenderer._updateCursorBlink()` decides whether the manager exists from
- * `decPrivateModes.cursorBlink ?? terminal.options.cursorBlink`, which is read from
- * the real Terminal below.
- */
+/** Model addon-webgl 0.20’s 600ms document-focused timer, which redraws a full row per tick; DEC cursor mode overrides cursorBlink options. Read effective state from the real Terminal. */
 const BLINK_INTERVAL_MS = 600
 
 function blinkCellsRedrawnPerWindow(terminal: Terminal, windowMs: number): number {
@@ -283,7 +257,6 @@ describe('hidden-pane cursor blink redraw cost', () => {
 
   it('drops retained hidden panes to zero blink redraws and restores them on reveal', async () => {
     const owner = {}
-    // The retention cap: MAX_RETAINED_HIDDEN_WEBGL_CONTEXTS.
     const panes = Array.from({ length: 6 }, () => createTestPane({ webglAddon: true }))
     const windowMs = 30_000
     const cells = () =>

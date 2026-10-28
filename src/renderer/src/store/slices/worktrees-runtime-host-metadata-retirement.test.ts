@@ -1,7 +1,4 @@
-// Why this file exists: a paired client's WorktreeMeta for a runtime host is exempt from
-// gcStaleWorktreeMeta (it skips any row that is not local on both the repo and the meta's hostId),
-// and `forgetPersistedWorktreeMetaForRemovals` used to bail for every non-SSH host. So the client
-// kept a row per remote worktree it had ever seen and dropped none (#17776).
+// Runtime metadata bypasses local GC; formerly SSH-only explicit retirement stranded every paired-runtime worktree ever seen (#17776).
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { AppState } from '../types'
 import { makeWorktree } from './worktrees-slice-test-fixtures'
@@ -84,6 +81,20 @@ describe('runtime-host persisted metadata retirement', () => {
     await store.getState().fetchWorktrees(REPO_ID, { executionHostId: HOST_ID })
 
     expect(forgetRemovedForExecutionHostMock).not.toHaveBeenCalled()
+  })
+
+  // Why: a host that does not answer is lost contact, never evidence a checkout is gone.
+  it('retires nothing when the runtime host does not answer', async () => {
+    const store = seedClientWithBothRows()
+    runtimeEnvironmentCall.mockRejectedValue(new Error('runtime host unreachable'))
+
+    await store
+      .getState()
+      .fetchWorktrees(REPO_ID, { executionHostId: HOST_ID })
+      .catch(() => undefined)
+
+    expect(forgetRemovedForExecutionHostMock).not.toHaveBeenCalled()
+    expect(store.getState().worktreesByRepo[REPO_ID]).toEqual([live, deletedOnHost])
   })
 
   // `session-fallback` claims authoritative but is the truncated, visibility-filtered `worktree.list`

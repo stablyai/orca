@@ -1,3 +1,4 @@
+import { subscribeLinkOpenRequests } from '../lib/link-open-request'
 import type { BrowserClientHostPlacementPreference } from '../../../shared/browser-client-host-placement'
 import { BROWSER_TAB_CREATE_KNOWN_ID_RUNTIME_CAPABILITY } from '../../../shared/protocol-version'
 import { assertRuntimeManagedBrowserCreationAvailable } from '../lib/client-creation-action-policy'
@@ -32,11 +33,15 @@ import { selectWebRuntimeSessionBrowserWorktree } from './web-runtime-session-wo
 
 export type CreateWebRuntimeSessionBrowserTabArgs = {
   worktreeId: string
+  isCurrentRequest?: () => boolean
+  onMaterialized?: (remotePageId: string) => void
   environmentId?: string | null
   url?: string
   profileId?: string | null
   targetGroupId?: string
   clientTargetGroupId?: string
+  /** Client-only unified tab id the staged row follows; never sent to the host. */
+  clientAfterTabId?: string
   clientTargetGroupCreated?: boolean
   focusOnCreate?: boolean
   /** Wait until a renderer-backed host can publish the new page in its session snapshot. */
@@ -80,10 +85,7 @@ export function createWebRuntimeBrowserCreationContext(
   const hostSupportsKnownPageId = advertisedCapabilities.includes(
     BROWSER_TAB_CREATE_KNOWN_ID_RUNTIME_CAPABILITY
   )
-  // Why the same predicate the main process uses: this mounts the staged pane one round-trip
-  // before prepareBrowserClientHostPlacement answers, so the two have to reach the same verdict
-  // from the same inputs. A cached status disagreeing with the live one is corrected by
-  // restageWebRuntimeBrowserTabHostingIntent below; it never decides the placement itself.
+  // Match main’s placement predicate for early staging; restage from the live verdict when cached status disagrees.
   const expectsClientHosting = expectsBrowserClientHosting({
     enabled: useAppStore.getState().settings?.browserClientHostedRemoteEnabled !== false,
     preference: args.placementPreference,
@@ -109,6 +111,15 @@ export function createWebRuntimeBrowserCreationContext(
   }
 }
 
+// With an anchor, only explicit client destinations count; host targetGroupId would pin staging outside the source group.
+export function resolveWebRuntimeBrowserClientTargetGroupId(
+  args: CreateWebRuntimeSessionBrowserTabArgs
+): string | undefined {
+  return args.clientAfterTabId
+    ? args.clientTargetGroupId
+    : (args.clientTargetGroupId ?? args.targetGroupId)
+}
+
 export function stageWebRuntimeBrowserCreation(context: WebRuntimeBrowserCreationContext): void {
   const { args, environmentId, intentOwner, provisionalPageId, shouldFocusOnCreate } = context
   throwIfE2eWebRuntimeBrowserCapabilityUnavailable()
@@ -125,8 +136,8 @@ export function stageWebRuntimeBrowserCreation(context: WebRuntimeBrowserCreatio
   if (context.shouldSelectWorktree) {
     selectWebRuntimeSessionBrowserWorktree(args.worktreeId, environmentId)
   }
-  // Why: everything below this point is a host round-trip; stage the tab first so the strip
-  // reacts to the click instead of to the runtime.
+  const stagedTargetGroupId = resolveWebRuntimeBrowserClientTargetGroupId(args)
+  // Stage before host round-trips so the strip responds immediately.
   context.staged = stageWebRuntimeBrowserTab({
     environmentId,
     worktreeId: args.worktreeId,
@@ -135,18 +146,14 @@ export function stageWebRuntimeBrowserCreation(context: WebRuntimeBrowserCreatio
     ...(args.url !== undefined ? { url: args.url } : {}),
     ...(args.stagedTitle !== undefined ? { title: args.stagedTitle } : {}),
     ...(args.profileId !== undefined ? { profileId: args.profileId } : {}),
-    ...((args.clientTargetGroupId ?? args.targetGroupId)
-      ? { targetGroupId: (args.clientTargetGroupId ?? args.targetGroupId) as string }
-      : {}),
+    ...(stagedTargetGroupId ? { targetGroupId: stagedTargetGroupId } : {}),
+    ...(args.clientAfterTabId ? { afterTabId: args.clientAfterTabId } : {}),
     ...(args.stagedFocusAddressBar !== undefined
       ? { focusAddressBar: args.stagedFocusAddressBar }
       : {}),
     clientHosted: context.expectsClientHosting
   })
-  // Why: sample the focus expectation and arm its guard against the state staging just wrote,
-  // before any await. Sampling after the client-host preparation round-trip baked a switch made
-  // during it into the baseline, so the guard read the user's new tab as "hasn't moved" and
-  // adoption stole focus back.
+  // Arm focus guard against staged state before awaiting; sampling later mistakes intervening navigation for the baseline and steals focus.
   const initialFocusState = shouldFocusOnCreate ? useAppStore.getState() : null
   const expectedActiveWorktreeId = initialFocusState?.activeWorktreeId
   const expectedActiveWorkspaceExecutionHostId = initialFocusState?.activeWorkspaceExecutionHostId
@@ -165,8 +172,7 @@ export function stageWebRuntimeBrowserCreation(context: WebRuntimeBrowserCreatio
       if (
         state.activeBrowserTabIdByWorktree === previousState.activeBrowserTabIdByWorktree &&
         state.activeFileIdByWorktree === previousState.activeFileIdByWorktree &&
-        // Why: resolveWebSessionVisibleTabId now reads group state, so a group-only focus move
-        // must re-evaluate it.
+        // Visible tab resolution reads groups, so group-only focus moves must re-evaluate it.
         state.activeGroupIdByWorktree === previousState.activeGroupIdByWorktree &&
         state.activeTabIdByWorktree === previousState.activeTabIdByWorktree &&
         state.activeTabType === previousState.activeTabType &&
@@ -189,6 +195,19 @@ export function stageWebRuntimeBrowserCreation(context: WebRuntimeBrowserCreatio
       context.unsubscribeFocusGuard()
     })
   }
+  if (args.isCurrentRequest) {
+    const unsubscribeState = context.unsubscribeFocusGuard
+    const unsubscribeRequests = subscribeLinkOpenRequests(() => {
+      if (args.isCurrentRequest?.() === false) {
+        clearWebSessionFocusIntentIfMatches(intentOwner, args.worktreeId, context.guardedPageId)
+        context.unsubscribeFocusGuard()
+      }
+    })
+    context.unsubscribeFocusGuard = () => {
+      unsubscribeState()
+      unsubscribeRequests()
+    }
+  }
 }
 
 export function restageWebRuntimeBrowserCreation(
@@ -198,6 +217,7 @@ export function restageWebRuntimeBrowserCreation(
   if (context.staged) {
     context.staged = restageWebRuntimeBrowserTabHostingIntent(context.staged, {
       environmentId: context.environmentId,
+      worktreeId: context.args.worktreeId,
       remotePageId: context.provisionalPageId,
       clientHosted
     })

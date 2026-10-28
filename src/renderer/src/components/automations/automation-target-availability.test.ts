@@ -186,8 +186,7 @@ describe('automation target availability', () => {
   })
 
   it('still blocks when the setup repoId drifts even though the live repo still matches', () => {
-    // Live repo matches runContext.repoId (repoMatchesContext passes), so this
-    // isolates the setup-side repoId clause that survives the projectId removal.
+    // Keep the live repo matching so this isolates setup-side repoId checks after dropping derived projectId.
     expect(
       getAutomationTargetAvailability({
         automation: makeAutomation({
@@ -258,6 +257,36 @@ describe('automation target availability', () => {
         workspace: makeWorkspace(),
         projectHostSetups: [
           makeProjectHostSetup({
+            hostId: 'runtime:gpu',
+            executionHostId: 'runtime:gpu'
+          })
+        ],
+        sshConnectionStates: new Map(),
+        automationHostTarget: { kind: 'environment', environmentId: 'gpu' }
+      })
+    ).toEqual({ canRunNow: true, reason: 'available', message: null })
+  })
+
+  it('matches the managed server setup when a moved SSH host keeps a setup with the same id', () => {
+    // A legacy setup's id is its repo id, so the retained SSH source and its server share it.
+    expect(
+      getAutomationTargetAvailability({
+        automation: makeAutomation({
+          runContext: {
+            kind: 'workspace-run',
+            projectId: 'project-1',
+            hostId: 'local',
+            projectHostSetupId: 'repo-1',
+            repoId: 'repo-1',
+            path: '/repo'
+          }
+        }),
+        repo: makeRepo({ executionHostId: 'runtime:gpu' }),
+        workspace: makeWorkspace(),
+        projectHostSetups: [
+          makeProjectHostSetup({ id: 'repo-1', hostId: 'ssh:box', executionHostId: 'ssh:box' }),
+          makeProjectHostSetup({
+            id: 'repo-1',
             hostId: 'runtime:gpu',
             executionHostId: 'runtime:gpu'
           })

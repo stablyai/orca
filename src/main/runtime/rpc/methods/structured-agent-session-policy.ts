@@ -1,27 +1,33 @@
 import {
+  CLAUDE_STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY,
+  PI_STRUCTURED_DIALOGS_RUNTIME_CAPABILITY,
+  STRUCTURED_AGENT_SESSION_CLIENT_LAUNCH_MODE_CAPABILITY,
+  STRUCTURED_AGENT_SESSION_REGISTERED_AGENTS_RUNTIME_CAPABILITY,
   STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY,
   type RuntimeCapability
 } from '../../../../shared/protocol-version'
-import type { OrcaRuntimeService } from '../../orca-runtime'
+import { AGENT_SESSION_OPTIONAL_MODEL_CLIENT_CAPABILITY } from '../../../../shared/agent-session-optional-model-capability'
+import {
+  isNativeChatDefaultFor,
+  isNativeChatEnabled
+} from '../../../../shared/structured-native-chat-launch-route'
+import { isTuiAgent } from '../../../../shared/tui-agent-config'
+import { isAgentSessionHandleProvider } from '../../../../shared/agent-session-provider-handle'
+import { readAgentLaunchModeSettings } from '../../../agent-launch/agent-launch-mode'
 import type { RpcContext } from '../core'
 
-type StructuredPolicyContext = Pick<RpcContext, 'clientCapabilities' | 'clientKind'> & {
-  runtime?: Pick<OrcaRuntimeService, 'getClientSettings'>
-  structuredNativeChatEnabled?: boolean
-}
-
-export function isStructuredNativeChatEnabled(
-  runtime: Pick<OrcaRuntimeService, 'getClientSettings'>
+export function clientReadsOptionsWithoutModel(
+  context: Pick<RpcContext, 'clientCapabilities' | 'clientKind'>
 ): boolean {
-  try {
-    return runtime.getClientSettings().experimentalStructuredNativeChat === true
-  } catch {
-    return false
-  }
+  return (
+    context.clientKind === undefined ||
+    context.clientCapabilities?.includes(AGENT_SESSION_OPTIONAL_MODEL_CLIENT_CAPABILITY) === true
+  )
 }
 
-export function supportsStructuredAgentSessionCapability(
-  context: Pick<StructuredPolicyContext, 'clientCapabilities' | 'clientKind'>
+/** Admit by client wire capability, independent of the host user's launch preference. In-process callers share this build and need no negotiation. */
+export function supportsStructuredAgentSessions(
+  context: Pick<RpcContext, 'clientCapabilities' | 'clientKind'>
 ): boolean {
   return (
     context.clientKind === undefined ||
@@ -29,26 +35,84 @@ export function supportsStructuredAgentSessionCapability(
   )
 }
 
-/**
- * One rule for every caller. The host setting is policy and applies to desktop, mobile and
- * in-process callers alike; the negotiated capability is a wire term, so it is asked of remote
- * clients only — in-process callers are the same build as the host and never negotiate one.
- */
-export function supportsStructuredAgentSessions(context: StructuredPolicyContext): boolean {
-  if (!supportsStructuredAgentSessionCapability(context)) {
+/** One audience rule for tabs and restart offers. Pi also needs dialog-shape support. */
+export function clientRendersStructuredAgent(
+  clientCapabilities: readonly RuntimeCapability[] | undefined,
+  agent: string
+): boolean {
+  if (!clientCapabilities?.includes(STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY)) {
     return false
   }
-  return (
-    context.structuredNativeChatEnabled === true ||
-    (context.runtime ? isStructuredNativeChatEnabled(context.runtime) : false)
+  if (agent === 'codex') {
+    return true
+  }
+  if (agent === 'pi' && !clientCapabilities.includes(PI_STRUCTURED_DIALOGS_RUNTIME_CAPABILITY)) {
+    return false
+  }
+  return clientCapabilities.includes(
+    agent === 'claude'
+      ? CLAUDE_STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY
+      : STRUCTURED_AGENT_SESSION_REGISTERED_AGENTS_RUNTIME_CAPABILITY
   )
 }
 
-export function structuredNativeChatProjectionEnabled(args: {
-  clientKind: 'mobile' | 'runtime' | undefined
-  clientCapabilities: readonly RuntimeCapability[] | undefined
-  // Required so no call site can silently project as if the host setting were off.
-  structuredNativeChatEnabled: boolean
-}): boolean {
-  return supportsStructuredAgentSessions(args)
+/** History opens Claude/Codex for any structured-capable client; other agents require explicit rendering support. */
+export function clientOpensStructuredChatFromHistory(
+  context: Pick<RpcContext, 'clientCapabilities' | 'clientKind'>,
+  agent: string
+): boolean {
+  return (
+    supportsStructuredAgentSessions(context) &&
+    (context.clientKind === undefined ||
+      isAgentSessionHandleProvider(agent) ||
+      clientRendersStructuredAgent(context.clientCapabilities, agent))
+  )
+}
+
+/** Preserve the existing session audience for every agent except Pi. */
+export function clientReadsStructuredSessionAgent(
+  context: Pick<RpcContext, 'clientCapabilities' | 'clientKind'>,
+  agent: string
+): boolean {
+  return (
+    agent !== 'pi' ||
+    context.clientKind === undefined ||
+    clientRendersStructuredAgent(context.clientCapabilities, agent)
+  )
+}
+
+/** Scope offers to readable registered/saved agents; undefined means all are readable and one unscoped fence applies. */
+export function structuredAgentsReadBy(
+  context: Pick<RpcContext, 'clientCapabilities' | 'clientKind'>,
+  agents: readonly string[]
+): ((agent: string) => boolean) | undefined {
+  if (context.clientKind === undefined) {
+    return undefined
+  }
+  const reads = (agent: string) => clientRendersStructuredAgent(context.clientCapabilities, agent)
+  return agents.every(reads) ? undefined : reads
+}
+
+/**
+ * COMPAT(released phones): a remote client that does not pick each launch's mode itself reads
+ * `agentSession.createSupport` as "should this launch be a chat", which the host's setting
+ * answered. Remove once the oldest supported phone build launches agents through `agent.launch`.
+ */
+export function createSupportFollowsHostSetting(
+  context: Pick<RpcContext, 'clientCapabilities' | 'clientKind'>
+): boolean {
+  return (
+    context.clientKind !== undefined &&
+    context.clientCapabilities?.includes(STRUCTURED_AGENT_SESSION_CLIENT_LAUNCH_MODE_CAPABILITY) !==
+      true
+  )
+}
+
+/** This host's resolved preference; session audience remains independent of new launches. */
+export function isStructuredNativeChatDefaultFor(
+  runtime: Parameters<typeof readAgentLaunchModeSettings>[0],
+  agent: string
+): boolean {
+  const settings = readAgentLaunchModeSettings(runtime)
+  return isTuiAgent(agent) ? isNativeChatDefaultFor(settings, agent) : isNativeChatEnabled(settings)
 }

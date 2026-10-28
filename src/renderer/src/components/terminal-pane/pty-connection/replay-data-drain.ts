@@ -1,8 +1,12 @@
+import { RELEASE_SYNCHRONIZED_OUTPUT } from '../../../../../shared/terminal-mode-reset-profiles'
 import { waitForTerminalOutputParsed } from '@/lib/pane-manager/pane-terminal-output-scheduler'
 import { safeFit, safeFitAndThen } from '@/lib/pane-manager/pane-tree-ops'
 import { getFitOverrideForPty } from '@/lib/pane-manager/mobile-fit-overrides'
 
-import { resolvePositiveTerminalDimensions } from '../terminal-snapshot-replay-paint'
+import {
+  buildFoldedImageReplayWrites,
+  resolvePositiveTerminalDimensions
+} from '../terminal-snapshot-replay-paint'
 
 import {
   CURSOR_SHOW_SEQUENCE,
@@ -31,47 +35,35 @@ export function bindReplayDataDrain(session: ConnectPanePtySession): void {
       ) {
         return
       }
-      // Why: a newer replay frame owns the judgment; its own post-parse
-      // callback will re-evaluate against its own viewport.
+      // Only the newest replay’s post-parse callback may judge its viewport.
       if (scheduledGeneration !== session.reattachReplayPayloadSignalGeneration) {
         return
       }
-      // Why: the replay-byte signal also matches a dead run's screen — in
-      // scrollback or still painted above a fresh shell prompt. The parsed
-      // viewport is the ground truth; unless it shows a parked-cursor
-      // cursor-agent screen and no status/title corroborates, downgrade to
-      // the plain-shell behavior (drop focus reporting, skip focus-in).
+      // Dead replay screens can remain above shell prompts; require parsed parked-cursor screen or corroborating status/title before retaining agent focus behavior.
       if (
         !session.hasLiveAgentReattachStatusOrTitleSignal() &&
         session.reattachReplayPayloadHasCursorAgentSignal
       ) {
         if (parsedViewportShowsParkedCursorAgentScreen(session.pane.terminal) === false) {
           session.reattachReplayPayloadHasCursorAgentSignal = false
-          // Why: the live-agent reset preserved the payload's ?25l; a plain
-          // shell never re-shows the cursor itself.
+          // Plain shells never restore cursors hidden by a dead agent’s replay.
           session.writeReplayData(`${CURSOR_SHOW_SEQUENCE}${FOCUS_REPORTING_DISABLE_SEQUENCE}`)
           return
         }
       }
-      // Why: a live TUI such as cursor-agent parks the real terminal cursor off
-      // its own input caret and moves it back only on a focus-in. Reattach
-      // reuses the same live PTY and the xterm textarea already holds DOM
-      // focus, so xterm never emits the focus-in the agent needs and the parked
-      // cursor anchors the IME/caret to the wrong cell. Gated on ?1004h so a
-      // bare shell never receives a stray \x1b[I.
+      // Reattach preserves DOM focus, so live TUIs may miss focus-in needed to unpark their cursor; inject only with ?1004h to spare bare shells.
       const sendFocusMode = terminalHasFocusReportingEnabled(session.pane.terminal)
       if (!session.shouldSendFocusedAgentReattachFocusIn() || !sendFocusMode) {
         return
       }
-      session.transport.sendInput(TERMINAL_FOCUS_IN_SEQUENCE)
+      session.transport.sendInput(TERMINAL_FOCUS_IN_SEQUENCE, 'query-reply')
     })
   }
 
   session.pendingReplayData = null
   session.replayPayloadGeneration = 0
   let replayDrainQueued = false
-  // Why: a payload replayed at a foreign grid leaves xterm sized to the source,
-  // so the destination fit belongs after the whole transaction parses.
+  // Fit destination geometry after the whole source-grid replay transaction parses.
   let replayedAtSourceGrid = false
   const drainReplayDataQueue = async (
     expectedPtyId: string | null,
@@ -100,7 +92,9 @@ export function bindReplayDataDrain(session: ConnectPanePtySession): void {
         alternateScreen,
         terminalOwner,
         snapshotCols,
-        snapshotRows
+        snapshotRows,
+        carriesNormalBuffer,
+        carriesHistory
       } = payload
       session.pendingReplayData = null
       const isCurrentPayload = (): boolean =>
@@ -111,30 +105,39 @@ export function bindReplayDataDrain(session: ConnectPanePtySession): void {
       if (!isCurrentPayload()) {
         continue
       }
-      // Relay replay buffers may overlap with content already rendered in
-      // xterm. Local eager replay decides this earlier so metadata-only frames
-      // can keep restored scrollback while still using the replay guard.
-      // Why ahead of the source-grid resize: the clear is grid-independent, so
-      // dropping the scrollback first spares a reflow of history the very next
-      // sequence discards (see use-terminal-container-fit-sync.ts on its cost).
+      // Relay replay may overlap painted output; eager replay decides earlier so metadata-only frames preserve saved scrollback.
+      // Clear before source-grid resize to avoid reflowing history that replay immediately discards.
+      let replayPayload = data
       if (clearBeforeReplay) {
-        await session.writeReplayDataAsync('\x1b[2J\x1b[3J\x1b[H')
+        if (carriesNormalBuffer) {
+          // Wait for queued alt-screen transitions before choosing replay’s target buffer.
+          await waitForTerminalOutputParsed(session.pane.terminal)
+          if (!isCurrentPayload()) {
+            continue
+          }
+          const image = buildFoldedImageReplayWrites(
+            data,
+            session.isPaneOnAlternateScreen(),
+            carriesHistory === true
+          )
+          replayPayload = image.payload
+          await session.writeReplayDataAsync(image.preamble)
+        } else {
+          // Reconnect can sever DEC 2026 mid-frame; clear-screen does not release its latch, leaving replay invisible until timeout.
+          await session.writeReplayDataAsync(`${RELEASE_SYNCHRONIZED_OUTPUT}\x1b[2J\x1b[3J\x1b[H`)
+        }
         if (!isCurrentPayload()) {
           continue
         }
       }
-      // Why before the frame: the payload's wraps and cursor moves are relative
-      // to the grid the host serialized it at. Parsing it at the pane's own grid
-      // clips or re-wraps the image, and an idle TUI never repaints to correct
-      // it — the pane stays blank until the next byte arrives.
+      // Replay wraps/cursor moves require host geometry; wrong-grid clipping can persist forever on idle TUIs.
       const sourceGrid = resolvePositiveTerminalDimensions(snapshotCols, snapshotRows)
       if (
         sourceGrid &&
         (session.pane.terminal.cols !== sourceGrid.cols ||
           session.pane.terminal.rows !== sourceGrid.rows)
       ) {
-        // Why suppressed: this resize is a layout step for parsing, not the
-        // pane's real geometry — the destination fit below owns the PTY grid.
+        // Do not forward parsing-only resize; destination fit owns the host’s real grid.
         session.suppressStructuralReplayPtyResize = true
         try {
           session.pane.terminal.resize(sourceGrid.cols, sourceGrid.rows)
@@ -144,50 +147,39 @@ export function bindReplayDataDrain(session: ConnectPanePtySession): void {
         replayedAtSourceGrid = true
       }
       if (clearBeforeReplay || data.length > 0) {
-        // Why: an empty clearing frame is still an authoritative repaint and
-        // must clear a stale agent signal from an earlier payload.
+        // Authoritative empty clearing frames must also retire prior agent-screen evidence.
         session.rememberReattachPayloadAgentSignal(data, { fullScreenReplay: clearBeforeReplay })
       }
-      // Why: replayed application bytes carry the live TUI's kitty keyboard
-      // negotiation; the mirror must re-arm from them after a reload. Replay
-      // semantics: relay reconnects redeliver the same window, so pushes
-      // apply as sets to keep the mirrored stack from accumulating frames.
+      // Re-arm Kitty from application replay using set semantics so repeated windows cannot grow its stack.
       session.applySnapshotKittyKeyboardModes(data, payload)
-      await session.writeReplayDataAsync(data)
+      await session.writeReplayDataAsync(replayPayload)
       if (!isCurrentPayload()) {
         continue
       }
       if (clearBeforeReplay || data.length > 0) {
-        await session.writeReplayDataAsync(
-          session.reattachReplayResetSequence(data, false, alternateScreen, terminalOwner)
+        await session.writeReplayEpilogue(
+          session.chooseReattachReplayReset(data, false, alternateScreen, terminalOwner),
+          session.writeReplayDataAsync
         )
         if (!isCurrentPayload()) {
           continue
         }
         session.sendFocusedReattachFocusInAfterReplay(payload.ptyId, payload.streamGeneration)
       }
-      // Why: the daemon could not serialize a PTY read that ended mid-escape,
-      // so the emulator shipped the dangling partial separately. Write it LAST
-      // — after the reset, whose ESC would otherwise abort it — so the next
-      // live chunk completes the sequence instead of rendering literally
-      // (#7329). Guarded so a later ESC cannot leave the parser wedged.
+      // Write dangling escapes last, after reset ESCs, so live tails complete them instead of printing literally; guard cancellation (#7329).
       if (pendingEscapeTailAnsi) {
         await session.writeReplayDataAsync(pendingEscapeTailAnsi)
       }
       if (!isCurrentPayload()) {
         continue
       }
-      // Why: remote-runtime snapshots can arrive after WebGL attached to an
-      // empty buffer; rebuilding after replay parses seeds the glyph atlas
-      // from the now-populated xterm state.
+      // Rebuild WebGL after replay parses so an atlas attached to an empty buffer gains current glyphs.
       session.manager.rebuildPaneWebgl(session.pane.id)
       appliedCurrentPayload = true
     }
     return appliedCurrentPayload
   }
-  // Why the same helper the reattach payload uses: a source-grid replay leaves
-  // xterm at the host's geometry, so the pane must fit back and push the
-  // resulting grid to the PTY before live bytes resume.
+  // Share reattach fitting so source-grid replay restores and pushes destination geometry before live output.
   const fitAfterSourceGridReplay = async (
     scheduledPtyId: string | null,
     scheduledStreamGeneration: number
@@ -205,8 +197,7 @@ export function bindReplayDataDrain(session: ConnectPanePtySession): void {
       return
     }
     if (getFitOverrideForPty(scheduledPtyId)) {
-      // Why fit without the grid push: a mobile driver owns the PTY geometry,
-      // but the pane must still leave the host's replay grid.
+      // Leave source replay geometry locally without changing the mobile-owned PTY grid.
       safeFit(session.pane)
       return
     }
@@ -214,8 +205,7 @@ export function bindReplayDataDrain(session: ConnectPanePtySession): void {
     const fit = safeFitAndThen(session.pane, 'replay-source-grid-fit', gridPush.continuation, {
       shouldContinue: gridPush.shouldContinue,
       retryIfUnmeasurable: true,
-      // Why: a hidden or parked pane must still leave the source grid once it
-      // is revealed, or the PTY stays pinned to the host's replay geometry.
+      // Preserve deferred destination fitting through reveal so hidden panes cannot strand host replay geometry.
       deferIfHidden: true
     })
     session.pendingReattachFit = fit
@@ -234,12 +224,9 @@ export function bindReplayDataDrain(session: ConnectPanePtySession): void {
     }
     const scheduledPtyId = session.pendingReplayData?.ptyId ?? null
     replayDrainQueued = true
-    // Why reset here: a transaction whose restore was skipped never ran its
-    // afterRestore, and a stale flag would fit a later drain that never left
-    // the pane's own grid.
+    // Skipped transactions never run afterRestore; clear their pending fit flag before a later unrelated drain.
     replayedAtSourceGrid = false
-    // Why: live bytes are newer than the authoritative replay frame. Hold
-    // them until clear + replay + reset have all parsed, or replay can erase them.
+    // Hold newer live bytes until clear/replay/reset parse so replay cannot erase them.
     const scheduledStreamGeneration =
       session.pendingReplayData?.streamGeneration ?? session.transportStreamGeneration
     session.beginReattachLiveDataDeferral(scheduledStreamGeneration)
@@ -266,8 +253,7 @@ export function bindReplayDataDrain(session: ConnectPanePtySession): void {
       .finally(() => {
         replayDrainQueued = false
         if (session.pendingReplayData !== null) {
-          // Why: preserve the PTY identity captured when the callback fired;
-          // re-reading it here could retag stale bytes for a replacement PTY.
+          // Retain callback-time PTY identity so later rebind cannot retag stale bytes.
           session.scheduleReplayDataDrain()
         }
         session.finishReattachLiveDataDeferral(replayCompleted, scheduledStreamGeneration)

@@ -1,4 +1,6 @@
+import { useBottomDrawerFollowUp } from '../components/use-bottom-drawer-follow-up'
 import type { RouteAndItemStateModel } from './use-mobile-tasks-route-and-item-state'
+import type { WorkspaceSshRecord } from './workspace-ssh-gate'
 import {
   type BaseRefSearchResult,
   type GitHubProjectPartialFailure,
@@ -8,7 +10,6 @@ import {
   type GitHubProjectViewSummary,
   type PersistedTrustedOrcaHooks,
   type SparsePreset,
-  type SshConnectionState,
   type WorkspaceAgentChoice,
   useState
 } from './mobile-tasks-dependencies'
@@ -31,9 +32,10 @@ import {
 } from './mobile-tasks-legacy-foundation'
 
 export function useMobileTasksWorkspaceAndProjectState(model: RouteAndItemStateModel) {
+  // Jira/Linear issues have no repo; ask for a target instead of choosing the first.
   const [workspaceRepoPickerItem, setWorkspaceRepoPickerItem] = useState<Extract<
     TaskItem,
-    { provider: 'linear' }
+    { provider: 'linear' | 'jira' }
   > | null>(null)
   const [workspaceCreateDraft, setWorkspaceCreateDraft] = useState<WorkspaceCreateDraft | null>(
     null
@@ -66,7 +68,7 @@ export function useMobileTasksWorkspaceAndProjectState(model: RouteAndItemStateM
   const [workspaceDetectedAgentIds, setWorkspaceDetectedAgentIds] = useState<Set<string> | null>(
     null
   )
-  const [workspaceSshState, setWorkspaceSshState] = useState<SshConnectionState | null>(null)
+  const [workspaceSshState, setWorkspaceSshState] = useState<WorkspaceSshRecord | null>(null)
   const [workspaceSshConnecting, setWorkspaceSshConnecting] = useState(false)
   const [showWorkspaceAgentPicker, setShowWorkspaceAgentPicker] = useState(false)
   const [showWorkspaceCreateRepoPicker, setShowWorkspaceCreateRepoPicker] = useState(false)
@@ -145,7 +147,14 @@ export function useMobileTasksWorkspaceAndProjectState(model: RouteAndItemStateM
   const [projectMutating, setProjectMutating] = useState(false)
   const [projectRepoNotInOrca, setProjectRepoNotInOrca] =
     useState<ProjectRepoNotInOrcaPrompt | null>(null)
+  const taskDetailHandoff = useBottomDrawerFollowUp(() => model.setActionItem(null))
+  const projectRowHandoff = useBottomDrawerFollowUp(() => setProjectRowItem(null))
+  const repoPickerHandoff = useBottomDrawerFollowUp(() => setWorkspaceRepoPickerItem(null))
+
   return Object.assign(model, {
+    taskDetailHandoff,
+    projectRowHandoff,
+    repoPickerHandoff,
     workspaceRepoPickerItem,
     setWorkspaceRepoPickerItem,
     workspaceCreateDraft,

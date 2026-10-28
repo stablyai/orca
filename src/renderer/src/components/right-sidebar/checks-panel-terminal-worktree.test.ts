@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import type { Worktree } from '../../../../shared/worktree/types'
 import {
   resolveChecksPanelTerminalPtyId,
@@ -109,8 +109,7 @@ describe('resolveChecksPanelWorktreeFromTerminalCwd', () => {
       displayName: 'Application'
     })
 
-    // `/repo/application` starts with `/repo/app` as a string, but the
-    // separator boundary must keep the cwd from matching the shorter sibling.
+    // Containment must respect separators, not just string prefixes.
     expect(
       resolveChecksPanelWorktreeFromTerminalCwd('/repo/application/src', [app, application])
     ).toBe(application)
@@ -141,4 +140,37 @@ describe('resolveChecksPanelWorktreeFromTerminalCwd', () => {
     expect(resolveChecksPanelWorktreeFromTerminalCwd('repo/src', [target])).toBeNull()
     expect(resolveChecksPanelWorktreeFromTerminalCwd('', [target])).toBeNull()
   })
+})
+
+it('selects the deepest cwd match without comparator-time path normalization', () => {
+  const worktrees = Array.from({ length: 300 }, (_, i) =>
+    worktree({
+      id: String(i),
+      path: `/repo${'/a'.repeat((i * 173) % 300)}`
+    })
+  )
+  const deepest = worktrees.find((candidate) => candidate.path.length === '/repo'.length + 299 * 2)
+  const normalize = vi.spyOn(String.prototype, 'normalize')
+  try {
+    expect(resolveChecksPanelWorktreeFromTerminalCwd(`/repo${'/a'.repeat(300)}`, worktrees)).toBe(
+      deepest
+    )
+    expect(normalize.mock.calls.length).toBeLessThanOrEqual(901)
+  } finally {
+    normalize.mockRestore()
+  }
+})
+
+it('normalizes only the cwd, each root, and the matching path when roots do not nest', () => {
+  const worktrees = Array.from({ length: 300 }, (_, i) =>
+    worktree({ id: String(i), path: `/repo/w${i}` })
+  )
+  const normalize = vi.spyOn(String.prototype, 'normalize')
+  try {
+    expect(resolveChecksPanelWorktreeFromTerminalCwd('/repo/w150/src/a', worktrees)?.id).toBe('150')
+    // One cwd + 300 roots + one matched path.
+    expect(normalize.mock.calls.length).toBe(302)
+  } finally {
+    normalize.mockRestore()
+  }
 })

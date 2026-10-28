@@ -22,10 +22,10 @@ export function registerRepoFolderPickerHandlers(mainWindow: BrowserWindow): voi
     return result.filePaths
   })
 
-  // Why: generic folder picker, separate from pickFolder's add-project flow; a clone destination may not be a git repo yet.
+  // Clone destinations need a generic picker because they may not contain a Git repo.
   ipcMain.handle('repos:pickDirectory', async () => {
     const result = await dialog.showOpenDialog(mainWindow, {
-      // Why: macOS materializes typed partial paths with directory creation on; clone/create make the final path on submit.
+      // macOS creates typed partial paths when directory creation is enabled; defer creation to submit.
       properties: ['openDirectory']
     })
     if (result.canceled || result.filePaths.length === 0) {

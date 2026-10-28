@@ -78,6 +78,7 @@ describe('useIpcEvents rate-limit hydration', () => {
           setSshConnectionState: vi.fn(),
           setSshTargetLabels: vi.fn(),
           setPortForwards: vi.fn(),
+          setUnrestoredPortForwards: vi.fn(),
           clearPortForwards: vi.fn(),
           setDetectedPorts: vi.fn(),
           enqueueSshCredentialRequest: vi.fn(),
@@ -118,8 +119,8 @@ describe('useIpcEvents rate-limit hydration', () => {
     const makeEvents = (target: Record<string, unknown> = {}): Record<string, unknown> =>
       new Proxy(target, {
         get: (namespace, prop) => {
-          if (prop in namespace) {
-            return Reflect.get(namespace, prop)
+          if (typeof prop === 'string' && prop in namespace) {
+            return namespace[prop]
           }
           return () => () => {}
         }
@@ -159,6 +160,7 @@ describe('useIpcEvents rate-limit hydration', () => {
         ssh: {
           listTargets: () => Promise.resolve([]),
           listPortForwards: () => Promise.resolve([]),
+          listUnrestoredPortForwards: () => Promise.resolve([]),
           listDetectedPorts: () => Promise.resolve([]),
           getState: () => Promise.resolve(null),
           onStateChanged: () => () => {},

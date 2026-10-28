@@ -1,7 +1,8 @@
-// Tiered matching over `state.browserUrlHistory`, shared by the browser address
-// bar and the new-tab omnibox. Pure: no store, no React.
-
 import type { BrowserHistoryEntry } from '../../../shared/browser-workspace-types'
+import {
+  LOOPBACK_LOCALHOST_HOSTS,
+  normalizeLocalhostHostname
+} from '../../../shared/localhost-worktree-labels'
 import { formatBrowserPaletteUrl } from './browser-palette-search'
 
 /** Compared before frecency, so "the site you meant" always beats "appears somewhere". */
@@ -21,9 +22,7 @@ export type PreparedBrowserHistoryEntry = {
   entry: BrowserHistoryEntry
   lowerUrl: string
   lowerTitle: string
-  /** Host with scheme and a leading "www." stripped, lowercased. */
   lowerHost: string
-  /** visitCount contribution, fixed at prepare time. */
   frecencyBase: number
 }
 
@@ -39,7 +38,7 @@ const preparedHistoryCache = new WeakMap<
   readonly PreparedBrowserHistoryEntry[]
 >()
 
-function historyHost(url: string): string {
+export function historyHost(url: string): string {
   try {
     return new URL(url).host.toLowerCase().replace(/^www\./, '')
   } catch {
@@ -47,13 +46,11 @@ function historyHost(url: string): string {
   }
 }
 
-/** Detail text for a history row: host, path, query and fragment, no scheme or "www.". */
 export function formatBrowserHistoryUrl(url: string): string {
   return formatBrowserPaletteUrl(url).replace(/^www\./, '')
 }
 
-// Why prepare: the naive scorer lowercases every url and title on every
-// keystroke. Hoisting it to once-per-open mirrors what the palette engines do.
+// Prepare lowercased URL/title once per open instead of rescanning them on every keystroke.
 export function prepareBrowserHistoryEntries(
   entries: readonly BrowserHistoryEntry[]
 ): readonly PreparedBrowserHistoryEntry[] {
@@ -72,15 +69,22 @@ export function prepareBrowserHistoryEntries(
   return prepared
 }
 
+function frecencyScore(prepared: PreparedBrowserHistoryEntry, now: number): number {
+  const ageHours = (now - prepared.entry.lastVisitedAt) / (1000 * 60 * 60)
+  // Clamped both ends: a future lastVisitedAt must not buy more than a fresh visit.
+  return (
+    prepared.frecencyBase +
+    Math.min(RECENCY_BONUS_HOURS, Math.max(0, RECENCY_BONUS_HOURS - ageHours))
+  )
+}
+
 function matchTier(
   prepared: PreparedBrowserHistoryEntry,
   lowerQuery: string
 ): BrowserHistoryMatchTier | null {
-  // A workspace-doc entry's url is a filesystem path, so it has no host: a path
-  // prefix is as deliberate as a host prefix and earns the same top tier.
+  // Workspace-doc URLs are filesystem paths; their deliberate path prefixes deserve the host-prefix tier.
   const prefixTarget = prepared.lowerHost === '' ? prepared.lowerUrl : prepared.lowerHost
-  // Preserve the address-bar's long-standing behavior for fully-qualified
-  // input (e.g. `https://github.com`), while still ranking bare hosts by host.
+  // Preserve full-URL matching while ranking bare hosts by host.
   if (prefixTarget.startsWith(lowerQuery) || prepared.lowerUrl.startsWith(lowerQuery)) {
     return 'host-prefix'
   }
@@ -117,21 +121,12 @@ export function matchBrowserHistory({
     if (tier === null || (tier === 'url-tail' && !includeUrlTail)) {
       continue
     }
-    const ageHours = (now - candidate.entry.lastVisitedAt) / (1000 * 60 * 60)
-    matches.push({
-      entry: candidate.entry,
-      tier,
-      // Clamped both ends: a future lastVisitedAt must not buy more than a fresh visit.
-      score:
-        candidate.frecencyBase +
-        Math.min(RECENCY_BONUS_HOURS, Math.max(0, RECENCY_BONUS_HOURS - ageHours))
-    })
+    matches.push({ entry: candidate.entry, tier, score: frecencyScore(candidate, now) })
   }
   if (matches.length === 0) {
     return NO_MATCHES
   }
-  // Why the url last: ordering must not wobble between renders when a snapshot
-  // reorders two entries that also tie on tier, score and recency.
+  // Break ties by URL so reordered snapshots cannot wobble otherwise-equal results.
   matches.sort(
     (a, b) =>
       TIER_RANK[a.tier] - TIER_RANK[b.tier] ||
@@ -140,4 +135,41 @@ export function matchBrowserHistory({
       a.entry.normalizedUrl.localeCompare(b.entry.normalizedUrl)
   )
   return matches.slice(0, limit)
+}
+
+// Why loopback is out: dev servers come and go, so the new-tab page lists the live ones instead.
+function isTopSiteCandidate(url: string): boolean {
+  try {
+    const parsed = new URL(url)
+    if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
+      return false
+    }
+    const hostname = normalizeLocalhostHostname(parsed.hostname)
+    return !LOOPBACK_LOCALHOST_HOSTS.has(hostname) && !hostname.endsWith('.localhost')
+  } catch {
+    return false
+  }
+}
+
+/** New-tab tiles, one per page as Chrome does, so removing a tile removes exactly that page. */
+export function rankBrowserTopSites({
+  limit,
+  now = Date.now(),
+  prepared
+}: {
+  limit: number
+  now?: number
+  prepared: readonly PreparedBrowserHistoryEntry[]
+}): readonly BrowserHistoryEntry[] {
+  return prepared
+    .filter((candidate) => isTopSiteCandidate(candidate.entry.url))
+    .map((candidate) => ({ entry: candidate.entry, score: frecencyScore(candidate, now) }))
+    .sort(
+      (a, b) =>
+        b.score - a.score ||
+        b.entry.lastVisitedAt - a.entry.lastVisitedAt ||
+        a.entry.normalizedUrl.localeCompare(b.entry.normalizedUrl)
+    )
+    .slice(0, limit)
+    .map((ranked) => ranked.entry)
 }

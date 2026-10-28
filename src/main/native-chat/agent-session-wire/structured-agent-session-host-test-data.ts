@@ -1,6 +1,9 @@
-import type { AgentJournalMessageItem } from '../../../shared/agent-session-journal-types'
+import type { AgentJournalSnapshot } from '../../../shared/agent-session-journal-types'
 import { computeAgentSessionPayloadFingerprint } from '../../../shared/agent-session-mutation-envelope'
 import type { AgentSessionExecutionLocation } from '../../../shared/agent-session-record'
+import { projectNativeChatTranscriptMessages } from '../../../shared/native-chat-transcript-projection'
+import { projectStructuredAgentSessionMessages } from '../../../shared/structured-agent-session-message-projection'
+import { structuredAgentSessionSendBody } from '../../../shared/structured-agent-session-send-mutation'
 import { attachFingerprintFields } from './structured-agent-session-attach'
 import type { AgentSessionAttachParams } from './structured-agent-session-attach'
 
@@ -26,7 +29,7 @@ export function hostTestOperationId(): string {
   return `${HOST_TEST_NOW}-${operations.toString(16).padStart(32, '0')}`
 }
 
-export function hostTestMessage(text: string): AgentJournalMessageItem {
+export function hostTestMessage(text: string): ReturnType<typeof structuredAgentSessionSendBody> {
   return { kind: 'message', role: 'user', blocks: [{ type: 'text', text }] }
 }
 
@@ -61,3 +64,52 @@ export function hostTestAttachParams(
     }
   }
 }
+
+/** Render snapshot rows while sent composer items await journal acceptance. */
+export function hostTestDrawnRowIds(
+  snapshot: AgentJournalSnapshot,
+  sent: readonly { clientMessageId: string; text: string }[]
+): string[] {
+  const optimistic = sent.map((message) => ({
+    clientMessageId: message.clientMessageId,
+    body: structuredAgentSessionSendBody(message.text, []),
+    queuedAt: HOST_TEST_NOW
+  }))
+  return projectNativeChatTranscriptMessages(
+    projectStructuredAgentSessionMessages(snapshot.items, optimistic, snapshot.submissions)
+  ).map(({ id }) => id)
+}
+
+export const CODEX_INPUT_FINALIZATION_ADMISSION_CASES = [
+  ['queue-stop', 0],
+  ['queue-close', 0],
+  ['queue-quit', 0],
+  ['pending-stop', 0],
+  ['pending-close', 0],
+  ['pending-close-cards', 0],
+  ['pending-quit', 0],
+  ['pending-exit', 0],
+  ['queue-sleep', 0],
+  ['pending-sleep', 0],
+  ['pending-close-then-quit', 0],
+  ['pending-quit-then-close', 0],
+  ['pending-close-cards', 10],
+  ['pending-close-cards', 100]
+] as const
+
+export const CODEX_INPUT_FINALIZATION_OWNER_OUTCOMES = [
+  'null',
+  'live',
+  'admitted',
+  'terminal',
+  'normal',
+  'fallback',
+  'failed',
+  'close-normal',
+  'close-failed',
+  'safe-close',
+  'new-session',
+  'new-live-child',
+  'new-ended-child',
+  'new-send'
+] as const

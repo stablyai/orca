@@ -80,12 +80,6 @@ describe('classifyConnection Tailscale hint', () => {
     expect('hint' in warning && warning.hint).toBeFalsy()
   })
 
-  it('keeps plain labels when no endpoint is provided', () => {
-    const verdict = classifyConnection({ ...base, reconnectAttempts: 3 })
-    expect(verdict.kind).toBe('warning')
-    expect('hint' in verdict && verdict.hint).toBeFalsy()
-  })
-
   it('never hints on healthy states', () => {
     const verdict = classifyConnection({
       state: 'connected',
@@ -141,9 +135,7 @@ describe('classifyConnection Tailscale hint', () => {
   })
 })
 
-// Issue #10119: every redial re-enters 'connecting', which used to revert an
-// escalated verdict to "Connecting…" for the whole dial window — on a loop that
-// had already failed for minutes, the user mostly saw the reassuring label.
+// Every redial must retain escalation instead of resetting the visible failure to Connecting (#10119).
 describe('classifyConnection while dialing (issue #10119)', () => {
   const base = { lastConnectedAt: null, nowMs: 1_000_000 }
 

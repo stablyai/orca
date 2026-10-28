@@ -1,6 +1,9 @@
+import type { ParsedFileLinkLocation } from '../../../src/shared/file-link-location'
 import type { RuntimeMobileTerminalTheme } from '../../../src/shared/runtime-types'
 import type { TerminalOscLinkRange } from '../../../src/shared/terminal-osc-link-ranges'
 import type { StyleProp, ViewStyle } from 'react-native'
+import type { TerminalFitDimensions } from './terminal-grid-fit'
+import type { TerminalFrame } from './terminal-webview-messages'
 
 type TerminalMouseTrackingMode = 'none' | 'x10' | 'vt200' | 'drag' | 'any'
 
@@ -10,14 +13,31 @@ export type TerminalModes = {
   mouseTrackingMode: TerminalMouseTrackingMode
   sgrMouseMode: boolean
   sgrMousePixelsMode: boolean
+  applicationCursorKeysMode: boolean
+  kittyKeyboardFlags: number
+  modifyOtherKeys: number
 }
 
 export type TerminalKeyboardAvoidanceMetrics = {
   cursorY: number
-  // Main-buffer TUIs can render footer rows below the caret.
   contentBottomRow: number
   rows: number
   altScreen: boolean
+  // Drawn CSS row pitch includes fit scale; older/unmeasured documents omit it.
+  rowPitch?: number
+}
+
+export function sameTerminalKeyboardAvoidanceMetrics(
+  a: TerminalKeyboardAvoidanceMetrics,
+  b: TerminalKeyboardAvoidanceMetrics
+): boolean {
+  return (
+    a.cursorY === b.cursorY &&
+    a.contentBottomRow === b.contentBottomRow &&
+    a.rows === b.rows &&
+    a.altScreen === b.altScreen &&
+    a.rowPitch === b.rowPitch
+  )
 }
 
 export function parseTerminalKeyboardAvoidanceMetrics(
@@ -30,12 +50,11 @@ export function parseTerminalKeyboardAvoidanceMetrics(
     msg.contentBottomRow === undefined
       ? cursorY
       : Math.min(toNonNegativeInteger(msg.contentBottomRow), maxRow)
-  return {
-    cursorY,
-    contentBottomRow,
-    rows,
-    altScreen: msg.altScreen === true
-  }
+  const metrics = { cursorY, contentBottomRow, rows, altScreen: msg.altScreen === true }
+  const rowPitch = msg.rowPitch
+  return typeof rowPitch === 'number' && Number.isFinite(rowPitch) && rowPitch > 0
+    ? { ...metrics, rowPitch }
+    : metrics
 }
 
 function toNonNegativeInteger(value: unknown): number {
@@ -44,60 +63,64 @@ function toNonNegativeInteger(value: unknown): number {
 
 export type MobileTerminalTheme = RuntimeMobileTerminalTheme
 
+export type TerminalPointerInput = {
+  readonly click: boolean
+}
+
 export type TerminalSelectionEvents = {
   onSelectionMode?: (active: boolean) => void
   onSelectionCopy?: (text: string) => void
   onSelectionEvicted?: () => void
+  onClipboardWrite?: (text: string) => void
   onModesChanged?: (modes: TerminalModes) => void
   onKeyboardAvoidanceMetrics?: (metrics: TerminalKeyboardAvoidanceMetrics) => void
   onHaptic?: (kind: 'selection' | 'success' | 'error' | 'edge-bump') => void
-  onTerminalInput?: (bytes: string) => void
+  onTerminalInput?: (bytes: string, input?: TerminalPointerInput) => void
   onTerminalQueryReply?: (bytes: string) => void
   onTerminalTap?: () => void
-  // Tap landed on a detected file path; RN resolves + opens it.
-  onFileTap?: (pathText: string, line: number | null, column: number | null) => void
-  // WebView-detected URL tap; RN chooses the mobile routing destination.
+  // Every reading of the tapped text (hard wraps, overlapping detections); like desktop, the longest that exists opens.
+  onFileTap?: (candidates: readonly ParsedFileLinkLocation[]) => void
   onOpenUrl?: (url: string) => void
-  // Why: pinch-to-zoom in the terminal snaps to a text-size preset and reports it
-  // here so the app persists it and keeps Settings + other panes in sync.
+  // Persist snapped text-size presets so Settings and other panes follow terminal pinches.
   onTextScaleChange?: (scale: number) => void
+  onCellBoxChange?: () => void
 }
 
 export type TerminalWebViewProps = {
   style?: StyleProp<ViewStyle>
   terminalTheme?: MobileTerminalTheme
-  // Why: baseline zoom multiplier applied on top of fit-to-width scale; raw
-  // xterm fontSize alone cannot drive apparent size because fitting cancels it.
+  // Persistent font-size preset; transient CSS pinch zoom is committed into it on release.
   textScale?: number
+  // Only initially shown views build pre-ready engines, limiting WebGL context use.
+  shownAtMount?: boolean
   onWebReady?: () => void
   onEngineError?: (message: string) => void
 } & TerminalSelectionEvents
 
+export type TerminalInit = {
+  cols: number
+  rows: number
+  initialData?: string
+  preserveScroll?: boolean
+  oscLinks?: TerminalOscLinkRange[]
+  // The host snapshot's proven Kitty keyboard flags, unvalidated.
+  kittyFlags?: unknown
+  frame: TerminalFrame | null
+}
+
 export type TerminalWebViewHandle = {
-  // Why: iOS can preserve the native view while discarding its JS/backing-store
-  // state; foreground recovery must wait for the document to answer before replay.
+  // iOS can preserve the view but lose document state; await liveness before foreground replay.
   prepareForForegroundRecovery: () => void
   write: (data: string) => void
-  init: (
-    cols: number,
-    rows: number,
-    initialData?: string,
-    preserveScroll?: boolean,
-    oscLinks?: TerminalOscLinkRange[]
-  ) => void
-  resize: (cols: number, rows: number) => void
-  // Why: reflow the local xterm buffer (scrollback included) to a new width
-  // after a server-side PTY reflow, so older wrapped lines rewrap to match the
-  // latest output. No-op on the alternate screen.
-  reflow: (cols: number, rows: number) => void
+  init: (init: TerminalInit) => void
+  resize: (cols: number, rows: number, frame: TerminalFrame | null) => void
+  // Rewrap local scrollback after PTY width changes; alternate screens use full repaints instead.
+  reflow: (cols: number, rows: number, frame: TerminalFrame | null) => void
   clear: () => void
-  measureFitDimensions: (containerHeight?: number) => Promise<{ cols: number; rows: number } | null>
+  fitDimensions: (frame: TerminalFrame) => TerminalFitDimensions | null
   resetZoom: () => void
   cancelSelect: () => void
   doSelectAll: () => void
-  // Why: lets callers await the WebView-side `init` rAF chain (term.open
-  // → renderService population → first paint) so a follow-up measure
-  // doesn't race ahead and find term=null or cellWidth=0. Resolves on
-  // the next 'ready' notify after the most recent init.
+  // Await the latest init’s ready notification so follow-up fitting uses its post-layout cell box.
   awaitReady: () => Promise<void>
 }

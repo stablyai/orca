@@ -1,6 +1,18 @@
+import { getDefaultSettings } from '../../../../shared/constants'
+import {
+  STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY as CHAT,
+  STRUCTURED_AGENT_SESSION_REGISTERED_AGENTS_RUNTIME_CAPABILITY as CATALOG,
+  STRUCTURED_AGENT_SESSION_AVAILABILITY_RUNTIME_CAPABILITY as HEALTH
+} from '../../../../shared/protocol-version'
+import { setLocalRuntimeCapabilitiesForTests } from '@/runtime/local-runtime-capabilities'
+import { resetHostStructuredAgentsForTests } from '@/runtime/host-structured-agents'
+import { useDashboardPopoutBridge } from './useDashboardPopoutBridge'
+const transport = vi.hoisted(() => ({ call: vi.fn(), subscribe: vi.fn() }))
+vi.mock('@/runtime/runtime-rpc-client', () => ({ callRuntimeRpc: transport.call }))
+vi.mock('@/runtime/runtime-rpc-subscribe', () => ({ subscribeRuntimeRpc: transport.subscribe }))
 // @vitest-environment happy-dom
-import { renderHook } from '@testing-library/react'
-import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { act, cleanup, renderHook } from '@testing-library/react'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { useAppStore } from '@/store'
 import type { AgentStatusEntry } from '../../../../shared/agent-status-types'
 import { makePaneKey } from '../../../../shared/stable-pane-id'
@@ -22,6 +34,9 @@ beforeEach(() => {
 })
 
 afterEach(() => {
+  cleanup()
+  setLocalRuntimeCapabilitiesForTests(null)
+  resetHostStructuredAgentsForTests()
   useAppStore.setState(initialAppState, true)
 })
 
@@ -105,9 +120,7 @@ function seed(settings: Partial<GlobalSettings> | null): void {
   })
 }
 
-// Why: the in-window drawer derives its own snapshot instead of receiving the
-// relayed one, so anything the builder reads has to be threaded in by hand —
-// a dropped slice silently blanks the field rather than failing loudly.
+// The drawer feeds builder slices directly; omission silently loses fields instead of failing validation.
 describe('useLiveDashboardSnapshot', () => {
   it('feeds the builder the settings that gate generated conversation names', () => {
     seed({ tabAutoGenerateTitle: true })
@@ -127,9 +140,7 @@ describe('useLiveDashboardSnapshot', () => {
     })
   })
 
-  // Why: the profile resolves from connection/runtime slices this hook does not
-  // subscribe to. Dropping one degrades the drawer's preview terminal to
-  // client-OS byte routing while the pop-out keeps encoding correctly.
+  // Seed host-profile input slices explicitly so missing plumbing cannot degrade drawer previews to client-OS routing.
   it("resolves each card's host-input profile from the slices it does not subscribe to", () => {
     seed({ tabAutoGenerateTitle: false })
     const { result: localResult } = renderHook(() => useLiveDashboardSnapshot())
@@ -145,9 +156,7 @@ describe('useLiveDashboardSnapshot', () => {
     expect(sshResult.current.cards[0].terminalInput?.hostPlatform).toBe('win32')
   })
 
-  // Why: a fresh renderHook always recomputes, so only re-rendering the SAME
-  // hook proves the memo watches the slice. An idle board publishes nothing
-  // else, so a missed subscription never heals.
+  // Re-render the same hook to prove host-only changes invalidate it; a fresh mount would conceal missing subscriptions.
   it('re-derives the host-input profile when only a host slice changes', () => {
     seed({ tabAutoGenerateTitle: false })
     useAppStore.setState({
@@ -177,4 +186,58 @@ describe('useLiveDashboardSnapshot', () => {
     rerender()
     expect(result.current.cards[0].hostLabel).toBe('Builder')
   })
+})
+
+it('publishes real chat options to main and popout, retaining card candidates and deduplicating/releasing owners', async () => {
+  const unsubscribe = vi.fn()
+  transport.call.mockResolvedValue({ agents: [{ agent: 'grok', capabilities: {} }] })
+  transport.subscribe.mockResolvedValue({ unsubscribe })
+  setLocalRuntimeCapabilitiesForTests([CHAT, CATALOG, HEALTH])
+  seed({ ...getDefaultSettings('/tmp'), experimentalNativeChat: true })
+  useAppStore.setState({
+    detectedAgentIds: [],
+    worktreesByRepo: { 'repo-1': [worktree(), { ...worktree(), id: 'wt-2' }] }
+  })
+  const publishSnapshot = vi.fn()
+  Object.defineProperty(window, 'api', {
+    configurable: true,
+    value: {
+      dashboard: {
+        onRevealAgent: () => () => {},
+        onPopoutOpenChanged: () => () => {},
+        onSnapshotRequested: () => () => {},
+        getPopoutOpen: async () => true,
+        publishSnapshot
+      }
+    }
+  })
+  const view = renderHook(() => {
+    useDashboardPopoutBridge(true)
+    return useLiveDashboardSnapshot()
+  })
+  await vi.waitFor(() => expect(transport.subscribe).toHaveBeenCalledOnce())
+  await act(async () =>
+    transport.subscribe.mock.calls[0][3].onEvent({
+      type: 'availability',
+      agents: [{ agent: 'grok', state: 'available', chatProgram: 'available' }]
+    })
+  )
+  expect(view.result.current.launchableAgentsByWorktreeId?.['wt-1']).toEqual(['claude', 'grok'])
+  expect(view.result.current.launchableAgentsByWorktreeId?.['wt-2']).toEqual(['grok'])
+  const lastPublished = () => publishSnapshot.mock.calls.at(-1)?.[0].launchableAgentsByWorktreeId
+  await vi.waitFor(() => expect(lastPublished()?.['wt-1']).toEqual(['claude', 'grok']))
+  for (const route of [
+    { endpointProjects: [] },
+    { endpointProjectHostSetups: [] },
+    { activeWorkspaceExecutionHostId: 'local' as const }
+  ]) {
+    const [live, published] = [view.result.current, publishSnapshot.mock.calls.length]
+    act(() => useAppStore.setState(route))
+    expect(view.result.current).not.toBe(live)
+    await vi.waitFor(() => expect(publishSnapshot.mock.calls.length).toBeGreaterThan(published))
+  }
+  act(() => useAppStore.setState({ worktreesByRepo: {}, tabsByWorktree: {}, folderWorkspaces: [] }))
+  view.unmount()
+  await Promise.resolve()
+  expect(unsubscribe).toHaveBeenCalledOnce()
 })

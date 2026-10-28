@@ -7,13 +7,12 @@ import {
 } from './worktree-listing'
 import type { GitWorktreeExecOptions } from './worktree-operation-options'
 import { WORKTREE_LIST_TIMEOUT_MS } from './worktree-operation-options'
+import { resolveGitAdmissionTier } from './command-runner/git-operation-executor'
 
-// Why: share concurrent `git worktree list` scans, which are expensive on Windows.
 const inFlightWorktreeScans = new Map<string, Promise<GitWorktreeInfo[]>>()
 
 type WorktreeScanKind = 'graph' | 'lenient' | 'strict' | 'strict-true-empty'
 
-// Why: mutation generations prevent listings from joining stale scans.
 const worktreeScanGenerations = new Map<string, number>()
 
 function hasInFlightWorktreeScanForRepo(repoPath: string): boolean {
@@ -27,7 +26,7 @@ function hasInFlightWorktreeScanForRepo(repoPath: string): boolean {
 }
 
 export function bumpWorktreeScanGeneration(repoPath: string): void {
-  // Why: generations only prevent joining a pre-mutation scan; with no active scan, keeping the repo path just leaks completed mutation keys.
+  // Retain generations only while a pre-mutation scan can still be joined.
   if (!hasInFlightWorktreeScanForRepo(repoPath)) {
     return
   }
@@ -35,7 +34,7 @@ export function bumpWorktreeScanGeneration(repoPath: string): void {
 }
 
 function pruneWorktreeScanGeneration(repoPath: string): void {
-  // Why: keep ordinary scan settlement O(1); only repos invalidated during an active scan need the cross-generation check.
+  // Avoid cross-generation scans on ordinary settlement.
   if (!worktreeScanGenerations.has(repoPath)) {
     return
   }
@@ -56,13 +55,7 @@ export function _resetWorktreeScanCacheForTests(): void {
   worktreeScanGenerations.clear()
 }
 
-/**
- * Share one in-flight scan per (repo, distro, deadline, generation, kind). Coalescing keeps a
- * sidebar refresh from spawning a second `git worktree list` (expensive on Windows), but only
- * within one failure discipline: a strict joiner must never inherit a lenient scan's softened `[]`,
- * so the strict and lenient runners scan separately by design. The explicit kind is intentional:
- * function names can be rewritten by a production bundler and must not define cache identity.
- */
+/** Explicit kinds preserve failure semantics and cache identity even when bundlers rename functions. */
 function shareWorktreeScan(
   repoPath: string,
   options: GitWorktreeExecOptions,
@@ -74,9 +67,8 @@ function shareWorktreeScan(
   }
   const generation = worktreeScanGenerations.get(repoPath) ?? 0
   const timeout = options.timeout ?? WORKTREE_LIST_TIMEOUT_MS
-  // Why: callers with different deadlines cannot safely share which timeout wins the scan.
-  // Why `kind`: a strict joiner must never receive a softened `[]` from a lenient scan.
-  const key = `${repoPath}\0${options.wslDistro ?? ''}\0${timeout}\0${options.includeCreatePreparations === true}\0${generation}\0${kind}`
+  // Separate deadlines, failure contracts and admission tiers so joiners cannot inherit weaker scans.
+  const key = `${repoPath}\0${options.wslDistro ?? ''}\0${timeout}\0${options.includeCreatePreparations === true}\0${generation}\0${kind}\0${resolveGitAdmissionTier(options.admissionTier)}`
   const inFlight = inFlightWorktreeScans.get(key)
   if (inFlight) {
     return inFlight
@@ -91,14 +83,7 @@ function shareWorktreeScan(
   return scan
 }
 
-/**
- * Sparse annotation layered over the shared graph scan rather than its own `git worktree list`.
- *
- * Both paths soften a Git failure to `[]`, so they can share one listing; only this one pays the
- * per-worktree sparse probe. That lets a caller which reads just `worktree.path` skip the probes
- * without costing a second subprocess when it overlaps a badge reader — the two ran Git twice
- * before. Strict stays on its own scan because it must be able to reject.
- */
+/** Add sparse annotations to the shared lenient graph scan without spawning another Git subprocess. */
 async function runAnnotatedWorktreeScan(
   repoPath: string,
   options: GitWorktreeExecOptions
@@ -107,11 +92,7 @@ async function runAnnotatedWorktreeScan(
   return annotateSparseCheckoutStatus(repoPath, worktrees, options)
 }
 
-/**
- * List all worktrees for a git repo at the given path. Concurrent calls for
- * the same repo share one scan (unless the caller passes an AbortSignal,
- * which must only cancel its own scan). Git failures soften to `[]`.
- */
+/** Git failures return []; matching callers coalesce, while AbortSignal callers stay isolated. */
 export function listWorktrees(
   repoPath: string,
   options: GitWorktreeExecOptions = {}
@@ -119,10 +100,7 @@ export function listWorktrees(
   return shareWorktreeScan(repoPath, options, 'lenient', runAnnotatedWorktreeScan)
 }
 
-/**
- * List the worktree graph without sparse-checkout probes. Concurrent callers share the same
- * generation-fenced scan, while callers with an AbortSignal retain an isolated subprocess.
- */
+/** Skip sparse probes while retaining generation fencing and AbortSignal isolation. */
 export function listWorktreeGraph(
   repoPath: string,
   options: GitWorktreeExecOptions = {}
@@ -130,10 +108,7 @@ export function listWorktreeGraph(
   return shareWorktreeScan(repoPath, options, 'graph', listWorktreeGraphUnshared)
 }
 
-/**
- * `listWorktreesStrict` through the same in-flight map, so callers that must see a Git failure
- * (worktree-create verification) still coalesce with a concurrent refresh (#16520).
- */
+/** Coalesce strict reads separately so Git failures still reject. */
 export function listWorktreesSharedStrict(
   repoPath: string,
   options: GitWorktreeExecOptions = {}
@@ -141,11 +116,7 @@ export function listWorktreesSharedStrict(
   return shareWorktreeScan(repoPath, options, 'strict', listWorktreesStrictUnshared)
 }
 
-/**
- * The detected scan's discipline: reject a Git/host failure so it cannot publish as an
- * authoritative empty listing, but still answer `[]` for a repo that is gone or not a repo.
- * Its own kind because neither a strict nor a lenient joiner may inherit that middle contract.
- */
+/** Isolate scans that reject failures but return [] for confirmed missing/non-repos. */
 export function listWorktreesSharedStrictAllowingTrueEmpty(
   repoPath: string,
   options: GitWorktreeExecOptions = {}

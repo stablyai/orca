@@ -1,4 +1,4 @@
-import { createSshOperationAbortError } from './ssh-connection-utils'
+import { createSshOperationAbortError } from './connection/ssh-exec-options'
 
 export function createLinkedSshFileTransferSignal(signals: readonly AbortSignal[]): {
   signal: AbortSignal
@@ -22,6 +22,18 @@ export function createLinkedSshFileTransferSignal(signals: readonly AbortSignal[
       }
     }
   }
+}
+
+/** Unexpected SFTP session close loses contact; whether bytes landed remotely stays unknown. */
+export function sftpSessionClosedError(): Error {
+  return Object.assign(new Error('The SSH connection closed before the transfer finished'), {
+    name: 'SftpSessionClosedError',
+    sshChannelCloseConfirmed: false
+  })
+}
+
+export function isSftpSessionClosedError(error: unknown): boolean {
+  return error instanceof Error && error.name === 'SftpSessionClosedError'
 }
 
 export function raceSftpFileTransferWithAbort<T>(
@@ -55,8 +67,7 @@ export function raceSftpFileTransferWithAbort<T>(
       fn(value as never)
     }
     const onAbort = (): void => {
-      // Why: rejecting the caller is insufficient; ending SFTP stops the
-      // abandoned transfer from mutating a successor relay install.
+      // End SFTP as well as rejecting so abandoned transfers cannot mutate a successor install.
       abortError = Object.assign(createSshOperationAbortError(), {
         sshChannelCloseConfirmed: false,
         sshTransferTeardownConfirmed: false

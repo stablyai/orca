@@ -1,13 +1,8 @@
-import type { HostedReviewProvider } from '../../../src/shared/hosted-review'
-
-// Provider-aware review labels, ported from the desktop localized-copy mapping
-// (src/renderer/src/i18n/hosted-review-localized-copy.ts) minus i18n. GitLab uses
-// "Merge Request"; everything else uses "Pull Request". Keeps the mobile create
-// UI provider-agnostic instead of hardcoding GitHub naming.
+// Use the desktop provider vocabulary: GitLab says Merge Request.
 export type HostedReviewCopy = {
-  shortLabel: string // "PR" / "MR"
-  reviewLabel: string // "pull request" / "merge request"
-  titleLabel: string // "Pull Request" / "Merge Request"
+  shortLabel: string
+  reviewLabel: string
+  titleLabel: string
 }
 
 const PR_COPY: HostedReviewCopy = {
@@ -22,6 +17,6 @@ const MR_COPY: HostedReviewCopy = {
   titleLabel: 'Merge Request'
 }
 
-export function hostedReviewCopy(provider: HostedReviewProvider | undefined): HostedReviewCopy {
+export function hostedReviewCopy(provider: string | undefined): HostedReviewCopy {
   return provider === 'gitlab' ? MR_COPY : PR_COPY
 }

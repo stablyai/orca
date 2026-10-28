@@ -1,3 +1,4 @@
+import './mock-descendant-sweep'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -147,7 +148,9 @@ describe('STA-4091 previously recoverable restore depth', () => {
         const restoreInfo = await reader.detectColdRestore('restore-depth')
         const durable = await buildDurableCheckpointSnapshot({
           liveSnapshot,
-          restoreInfo
+          restoreInfo,
+          pendingRecords: [],
+          isFirstTake: false
         })
         expect(await manager.checkpoint('restore-depth', durable)).toBe('committed')
 
@@ -175,7 +178,8 @@ describe('STA-4091 previously recoverable restore depth', () => {
           restoreInfo: null,
           pendingRecords: [
             { kind: 'output', data: numberedOutput(DESKTOP_TERMINAL_SCROLLBACK_ROWS_DEFAULT) }
-          ]
+          ],
+          isFirstTake: false
         })
         expect(snapshotText(durable)).toContain(OLDEST_WRITTEN_LINE)
         expect(snapshotText(durable)).toContain(PREVIOUSLY_RECOVERABLE_LINE)
@@ -201,7 +205,9 @@ describe('STA-4091 previously recoverable restore depth', () => {
         live.writeSync(numberedOutput(DESKTOP_TERMINAL_SCROLLBACK_ROWS_DEFAULT))
         const durable = await buildDurableCheckpointSnapshot({
           liveSnapshot: { ...live.getSnapshot(), outputSequence: 9 },
-          restoreInfo
+          restoreInfo,
+          pendingRecords: [],
+          isFirstTake: false
         })
         expect(durable.outputSequence).toBe(9)
         expect(durable.scrollbackAnsi).toBe('')
@@ -212,7 +218,7 @@ describe('STA-4091 previously recoverable restore depth', () => {
       }
     })
 
-    it('revokes persisted shell ownership when newer output starts a TUI', async () => {
+    it('takes terminal ownership from the live snapshot, not the persisted proof', async () => {
       const restoreInfo: ColdRestoreInfo = {
         snapshotAnsi: 'stale-tui',
         scrollbackAnsi: '',
@@ -228,16 +234,19 @@ describe('STA-4091 previously recoverable restore depth', () => {
         },
         terminalOwner: 'shell'
       }
-      const liveSnapshot = {
-        ...restoreInfo,
+      // Model the live recovery barrier revoking shell ownership when the TUI starts.
+      const { terminalOwner: _persistedOwner, ...liveState } = restoreInfo
+      const liveSnapshot: TerminalSnapshot = {
+        ...liveState,
         scrollbackLines: 0,
         outputSequence: 42
-      } as TerminalSnapshot
+      }
 
       const durable = await buildDurableCheckpointSnapshot({
         liveSnapshot,
         restoreInfo,
-        pendingRecords: [{ kind: 'output', data: '\x1b[?1049hLIVE-TUI' }]
+        pendingRecords: [{ kind: 'output', data: '\x1b[?1049hLIVE-TUI' }],
+        isFirstTake: false
       })
 
       expect(durable.modes.alternateScreen).toBe(true)
@@ -265,7 +274,8 @@ describe('STA-4091 previously recoverable restore depth', () => {
       const durable = await buildDurableCheckpointSnapshot({
         liveSnapshot,
         restoreInfo: null,
-        pendingRecords: [{ kind: 'resize', cols: 0, rows: 24 }]
+        pendingRecords: [{ kind: 'resize', cols: 0, rows: 24 }],
+        isFirstTake: false
       })
       expect(durable).toBe(liveSnapshot)
     })
@@ -520,7 +530,6 @@ describe('STA-4091 previously recoverable restore depth', () => {
       )
     })
 
-    // Assert durable depth, not the sequence that merely enables it.
     it('preserves durable depth when an empty incremental take precedes a warm reattach', async () => {
       const { id } = await adapter.spawn({
         cols: 80,
@@ -539,7 +548,7 @@ describe('STA-4091 previously recoverable restore depth', () => {
       })
       expect(snapshotText(beforeReattach ?? {})).toContain(OLDEST_WRITTEN_LINE)
 
-      // The trigger: a dirty mark with no new PTY records (the mock swallows the write, nothing echoes back).
+      // The mock write marks history dirty without echoing any new PTY records.
       adapter.write(id, 'noop')
       await oldInternals.checkpointDirtySessions()
 
@@ -554,7 +563,7 @@ describe('STA-4091 previously recoverable restore depth', () => {
       expect(reattach.snapshot).toContain(FRESH_AFTER_CHECKPOINT)
       expect(reattach.snapshot).toContain(OLDEST_WRITTEN_LINE)
 
-      // First post-reattach compact runs the continuity proof; it must not flatten the deep checkpoint.
+      // The first reattach compaction must prove continuity without flattening the deep checkpoint.
       const newInternals = adapter as unknown as {
         checkpointDirtySessions: () => Promise<void>
       }

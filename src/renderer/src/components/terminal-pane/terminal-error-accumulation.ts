@@ -1,5 +1,6 @@
-// The toast still consumes newline-joined copy, so legacy tab-wide messages need
-// whole-run dedup even though pane errors remain structurally separate until render.
+import { flattenRetainedSlice } from '../../lib/flatten-retained-slice'
+
+// Legacy tab messages render as newline-joined text and need whole-run dedup; pane errors stay separate until render.
 function containsWholeLineRun(accumulated: string, message: string): boolean {
   return (
     accumulated === message ||
@@ -22,12 +23,12 @@ export function boundTerminalErrorSurface(
   const lines = surface.split('\n')
   let bounded = lines.length > maxLines ? lines.slice(-maxLines).join('\n') : surface
   if (bounded.length <= maxChars) {
-    return bounded
+    return flattenRetainedSlice(bounded)
   }
   const suffix = bounded.slice(-maxChars)
   const firstNewline = suffix.indexOf('\n')
   bounded = firstNewline === -1 ? suffix : suffix.slice(firstNewline + 1) || suffix
-  return bounded
+  return flattenRetainedSlice(bounded)
 }
 
 export function appendPaneTerminalError(
@@ -114,7 +115,6 @@ export function terminalErrorForPane(
   return paneError ? appendTerminalErrorMessage(tabError, paneError) : tabError
 }
 
-/** Appends an error to the aggregated surface, keeping the first occurrence of an already-present message. */
 export function appendTerminalErrorMessage(accumulated: string | null, message: string): string {
   if (!accumulated) {
     return boundTerminalErrorSurface(message)

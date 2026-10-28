@@ -1,11 +1,19 @@
 import type { RuntimeMobileSessionTabsResult } from '../../../shared/runtime-types'
+import { nextReceivedSessionTabsFrame } from './web-session-tabs-sync/state'
 
-const inFlightBySession = new Map<string, Promise<RuntimeMobileSessionTabsResult>>()
+/** Share request identity with joiners. A fresh join-time receipt could rank a pre-close list above the retraction that overtook it; joiners never run load themselves. */
+export type RemoteRuntimeSessionTabsAnswer = {
+  snapshot: RuntimeMobileSessionTabsResult
+  receivedFrame: number
+  runtimeId?: string
+}
+
+const inFlightBySession = new Map<string, Promise<RemoteRuntimeSessionTabsAnswer>>()
 
 type RemoteRuntimeSessionTabsLoad = {
   environmentId: string
   worktreeId: string
-  load: () => Promise<RuntimeMobileSessionTabsResult>
+  load: () => Promise<{ snapshot: RuntimeMobileSessionTabsResult; runtimeId?: string }>
 }
 
 function remoteRuntimeSessionTabsKey(args: { environmentId: string; worktreeId: string }): string {
@@ -14,30 +22,36 @@ function remoteRuntimeSessionTabsKey(args: { environmentId: string; worktreeId: 
 
 export function listRemoteRuntimeSessionTabsDeduped(
   args: RemoteRuntimeSessionTabsLoad
-): Promise<RuntimeMobileSessionTabsResult> {
+): Promise<RemoteRuntimeSessionTabsAnswer> {
   const key = remoteRuntimeSessionTabsKey(args)
   const existing = inFlightBySession.get(key)
   if (existing) {
     return existing
   }
-  // Why: one runtime snapshot answers every pane in the worktree, so split-pane
-  // reconnects should share the same in-flight inventory RPC.
-  const request = args.load().finally(() => {
-    if (inFlightBySession.get(key) === request) {
-      inFlightBySession.delete(key)
-    }
-  })
+  const receivedFrame = nextReceivedSessionTabsFrame()
+  // One workspace inventory answers every split pane; share reconnects’ in-flight RPC.
+  const request = args
+    .load()
+    .then(({ snapshot, runtimeId }) => ({
+      snapshot,
+      receivedFrame,
+      ...(runtimeId ? { runtimeId } : {})
+    }))
+    .finally(() => {
+      if (inFlightBySession.get(key) === request) {
+        inFlightBySession.delete(key)
+      }
+    })
   inFlightBySession.set(key, request)
   return request
 }
 
 export async function listRemoteRuntimeSessionTabsAfterCurrentInFlight(
   args: RemoteRuntimeSessionTabsLoad
-): Promise<RuntimeMobileSessionTabsResult> {
+): Promise<RemoteRuntimeSessionTabsAnswer> {
   const current = inFlightBySession.get(remoteRuntimeSessionTabsKey(args))
   if (current) {
-    // Why: a post-operation absence proof cannot join an inventory request that
-    // began before the operation committed.
+    // Post-operation absence proof must start after commit, never join older inventories.
     await current.catch(() => undefined)
   }
   return listRemoteRuntimeSessionTabsDeduped(args)

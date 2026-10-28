@@ -38,8 +38,7 @@ describe('Option-composed characters in kitty keyboard panes', () => {
       layoutCharacterForCode
     )
 
-  // Turkish-Q composes '@' on Option+Q and '$' on Option+4. Reporting them as
-  // alt+q / alt+4 makes Codex's '@' references and '$' skills untypable (#14024).
+  // Turkish Option composition must type @/$ rather than Codex hotkeys (#14024).
   it('types the layout-composed ASCII character instead of reporting a chord', () => {
     expect(resolveKitty(event({ key: '@', code: 'KeyQ', altKey: true }))).toEqual({
       type: 'sendInput',
@@ -52,8 +51,7 @@ describe('Option-composed characters in kitty keyboard panes', () => {
   })
 
   it('types composed ASCII resolved through the active layout map', () => {
-    // The map is the layout-true source; Option+Q must still type '@' when it
-    // reports the base key rather than the US table doing so.
+    // Prefer the layout map’s Option-free base even when it differs from the US fallback.
     const turkish = (code: string): string | undefined => (code === 'KeyQ' ? 'q' : undefined)
     expect(
       resolveKitty(event({ key: '@', code: 'KeyQ', altKey: true }), 'false', 0, turkish)
@@ -136,25 +134,103 @@ describe('Option-composed characters in kitty keyboard panes', () => {
     ).toBeNull()
   })
 
-  it('still reports non-ASCII Option chords as kitty CSI-u hotkeys', () => {
-    // #8031: compose layouts must keep reaching TUI Option hotkeys, and every
-    // glyph those layouts compose on a bound key is non-ASCII.
+  it('types non-ASCII composed characters instead of reporting chords on a compose side (#20171)', () => {
     expect(resolveKitty(event({ key: 'ƒ', code: 'KeyF', altKey: true }))).toEqual({
       type: 'sendInput',
-      data: '\x1b[102;3u'
+      data: 'ƒ'
     })
     expect(resolveKitty(event({ key: '∫', code: 'KeyB', altKey: true }))).toEqual({
       type: 'sendInput',
-      data: '\x1b[98;3u'
+      data: '∫'
     })
     expect(resolveKitty(event({ key: 'å', code: 'KeyA', altKey: true }))).toEqual({
+      type: 'sendInput',
+      data: 'å'
+    })
+  })
+
+  // French Option+$ composes € through a punctuation code absent from the US base table; require layout-map resolution (#22447).
+  it.each([1, 3, 5, 7])(
+    'types a currency symbol composed on a punctuation key under kitty flags %s',
+    (flags) => {
+      const frenchMac = (code: string, shifted: boolean): string | undefined =>
+        code === 'BracketRight' ? (shifted ? '*' : '$') : undefined
+      for (const [mode, side] of [
+        ['false', 0],
+        ['left', 2],
+        ['right', 1]
+      ] as const) {
+        expect(
+          resolveKitty(
+            event({ key: '€', code: 'BracketRight', altKey: true }),
+            mode,
+            side,
+            frenchMac,
+            flags
+          )
+        ).toMatchObject({ type: 'sendInput', data: '€' })
+      }
+    }
+  )
+
+  it.each([1, 5])('types every Polish letter and uppercase form under kitty flags %s', (flags) => {
+    const letters = [
+      ['a', 'ą'],
+      ['c', 'ć'],
+      ['e', 'ę'],
+      ['l', 'ł'],
+      ['n', 'ń'],
+      ['o', 'ó'],
+      ['s', 'ś'],
+      ['x', 'ź'],
+      ['z', 'ż']
+    ]
+    for (const [base, composed] of letters) {
+      for (const shiftKey of [false, true]) {
+        const key = shiftKey ? composed.toUpperCase() : composed
+        const code = `Key${base.toUpperCase()}`
+        const layout = (candidate: string, shifted: boolean): string | undefined =>
+          candidate === code ? (shifted ? base.toUpperCase() : base) : undefined
+        for (const [mode, side] of [
+          ['false', 0],
+          ['left', 2],
+          ['right', 1]
+        ] as const) {
+          expect(
+            resolveKitty(event({ key, code, altKey: true, shiftKey }), mode, side, layout, flags)
+          ).toEqual({ type: 'sendInput', data: key })
+        }
+        for (const [mode, side] of [
+          ['true', 0],
+          ['left', 1],
+          ['right', 2]
+        ] as const) {
+          expect(
+            resolveKitty(event({ key, code, altKey: true, shiftKey }), mode, side, layout, flags)
+          ).toEqual({
+            type: 'sendInput',
+            data: `\x1b[${base.codePointAt(0)}${flags === 5 && shiftKey ? `:${base.toUpperCase().codePointAt(0)}` : ''};${shiftKey ? 4 : 3}u`
+          })
+        }
+      }
+    }
+  })
+
+  it('counts supplementary-plane compositions as one character, not a chord', () => {
+    expect(resolveKitty(event({ key: '𝕒', code: 'KeyA', altKey: true }))).toEqual({
+      type: 'sendInput',
+      data: '𝕒'
+    })
+  })
+
+  it('still reports non-ASCII chords when the user explicitly configures Option as Alt', () => {
+    expect(resolveKitty(event({ key: 'å', code: 'KeyA', altKey: true }), 'true', 0)).toEqual({
       type: 'sendInput',
       data: '\x1b[97;3u'
     })
   })
 
   it('reports a chord when the layout composed nothing and echoed the base key', () => {
-    // No composition happened, so this is a hotkey — not a request to type 'q'.
     expect(resolveKitty(event({ key: 'q', code: 'KeyQ', altKey: true }))).toEqual({
       type: 'sendInput',
       data: '\x1b[113;3u'
@@ -166,12 +242,10 @@ describe('Option-composed characters in kitty keyboard panes', () => {
   })
 
   it('keeps the configured Alt-side Option a hotkey even when the layout composed ASCII', () => {
-    // The user asked for left Option to be Alt; macOS still composes, but their setting wins.
     expect(resolveKitty(event({ key: '@', code: 'KeyQ', altKey: true }), 'left', 1)).toEqual({
       type: 'sendInput',
       data: '\x1b[113;3u'
     })
-    // The compose-side Option in the same mode still types the character.
     expect(resolveKitty(event({ key: '@', code: 'KeyQ', altKey: true }), 'left', 2)).toEqual({
       type: 'sendInput',
       data: '@'

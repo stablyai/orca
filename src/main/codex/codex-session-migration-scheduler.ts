@@ -49,7 +49,7 @@ export function createCodexSessionMigrationScheduler(args: {
   let pendingFullScan = false
   let migrationTask: Promise<void> | null = null
   const activeLaunches = new Map<string, Date>()
-  // Why: non-shared reattach exits must not masquerade as exit-before-begin races for a reused id.
+  // Keep non-shared reattach exits out of exit-before-begin recovery for reused IDs.
   const ignoredLaunches = new CodexSessionMigrationIgnoredLaunches()
   const ignoredPtyExits = new CodexSessionMigrationRecentExits()
   const earlyPtyExits = new CodexSessionMigrationRecentExits()
@@ -76,7 +76,7 @@ export function createCodexSessionMigrationScheduler(args: {
       return
     }
     if (migrationTask) {
-      // Why: delayed launches and resumed account transitions must survive an older active pass.
+      // Preserve delayed launches and resumed account transitions across an older active pass.
       rerunRequested ||= rerunIfActive || activeRunStopObserved
       return
     }
@@ -86,8 +86,7 @@ export function createCodexSessionMigrationScheduler(args: {
     let preparationNeedsFullScan = false
     if (isScheduledRun) {
       pendingScheduledRunGeneration = null
-      // Why: preparation persists these dates so an abnormal exit still yields a
-      // bounded recovery window instead of another full-tree walk.
+      // Persist dates so abnormal exits recover with a bounded scan.
       preparationNeedsFullScan = args.prepareScheduledRun?.(runScanDates) === true
     }
     const fullScanRequired = pendingFullScan || preparationNeedsFullScan
@@ -111,8 +110,7 @@ export function createCodexSessionMigrationScheduler(args: {
           scanDates,
           fullScanRequired,
           ignoreCompletionMarker: isScheduledRun,
-          // Why: a live pane keeps appending to its own date directory, so that
-          // date stays pending — but the historical baseline is still certified.
+          // Live panes keep their dates pending while historical dates can be certified.
           retainPendingScanDates: activeLaunches.size > 0,
           canWriteCompletionMarker: () =>
             scheduledTimer === null &&
@@ -178,7 +176,7 @@ export function createCodexSessionMigrationScheduler(args: {
       scheduledScanDates.clear()
       const fullScanRequired = scheduledFullScan
       scheduledFullScan = false
-      // Why: a launch can invalidate the marker while a long index-heal pass is active.
+      // A launch can invalidate the marker while index healing is still active.
       requestRun(true, generation, scanDates, fullScanRequired)
     }, args.initialDelayMs ?? 15_000)
   }
@@ -253,12 +251,20 @@ export function createCodexSessionMigrationScheduler(args: {
   }
 }
 
+type MigrationFailureCountKey = 'failedDirectories' | 'failedFiles' | 'failedHealAuditRecords'
+
+type MigrationResultFields = Partial<Record<MigrationFailureCountKey, unknown>>
+
+function isMigrationResultFields(result: unknown): result is MigrationResultFields {
+  return typeof result === 'object' && result !== null
+}
+
 function isStoppedMigrationResult(result: unknown): boolean {
   return Boolean(result && typeof result === 'object' && 'stopped' in result && result.stopped)
 }
 
 function isIncompleteBackfillResult(result: unknown): boolean {
-  if (!result || typeof result !== 'object') {
+  if (!isMigrationResultFields(result)) {
     return true
   }
   return (
@@ -269,7 +275,10 @@ function isIncompleteBackfillResult(result: unknown): boolean {
   )
 }
 
-function readPositiveResultCount(result: object, key: string): boolean {
-  const value = key in result ? (result as Record<string, unknown>)[key] : undefined
+function readPositiveResultCount(
+  result: MigrationResultFields,
+  key: MigrationFailureCountKey
+): boolean {
+  const value = result[key]
   return typeof value === 'number' && value > 0
 }

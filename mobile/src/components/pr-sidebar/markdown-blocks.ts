@@ -1,8 +1,7 @@
-// Tiny, dependency-free markdown model for PR comment bodies. We render GitHub
-// markdown without a third-party RN markdown library (the previous dependency hung
-// the JS thread when a comment list mounted). Scope is deliberately small — the
-// common comment elements — and parsing is pure + total: anything it can't classify
-// falls through as paragraph text, so it can never throw on unexpected input.
+import { createMarkdownInlineMatcher } from '../markdown-inline-matcher'
+import { splitTableRow } from '../rich-markdown/markdown-table-rows'
+
+// Use small pure/total PR Markdown parser: old third-party RN renderer hung JS thread. Unknown/unbalanced content stays paragraph text.
 
 export type InlineToken =
   | { kind: 'text'; text: string }
@@ -28,10 +27,7 @@ export type MarkdownBlock =
 
 const HEADING = /^(#{1,6})\s+(.*)$/
 const FENCE = /^```/
-// Captures the fence info string (language) on the opening fence, e.g. ```mermaid.
 const FENCE_OPEN = /^```\s*([^\s`]*)/
-// A GFM table delimiter row: cells of dashes with optional leading/trailing colons.
-const TABLE_DELIM = /^\s*\|?\s*:?-{1,}:?\s*(\|\s*:?-{1,}:?\s*)*\|?\s*$/
 const QUOTE = /^>\s?(.*)$/
 const HR = /^(?:---+|\*\*\*+|___+)\s*$/
 const UNORDERED = /^\s*[-*+]\s+(.*)$/
@@ -40,11 +36,16 @@ const ORDERED = /^\s*\d+[.)]\s+(.*)$/
 const HTML_BLOCK = /<(details|blockquote)\b[^>]*>([\s\S]*?)<\/\1>/i
 const SUMMARY = /<summary\b[^>]*>([\s\S]*?)<\/summary>/i
 
-// Removes residual HTML tags from rendered text so stray <b>/<kbd>/<sub> etc. don't
-// show literally. Conservative: only matches `<tag ...>` / `</tag>` shapes, so a bare
-// "a < b" in prose is left alone.
+// Strip tag-shaped HTML only; bare a < b prose stays literal.
 export function stripHtmlTags(text: string): string {
-  return text.replace(/<\/?[a-zA-Z][a-zA-Z0-9-]*(?:\s[^>]*)?\/?>/g, '')
+  const end = text.lastIndexOf('>') + 1
+  if (end === 0) {
+    return text
+  }
+  // No tag can close in this suffix; keep it literal without retrying every opener.
+  return (
+    text.slice(0, end).replace(/<\/?[a-zA-Z][a-zA-Z0-9-]*(?:\s[^>]*)?\/?>/g, '') + text.slice(end)
+  )
 }
 
 export function parseMarkdownBlocks(content: string): MarkdownBlock[] {
@@ -53,9 +54,7 @@ export function parseMarkdownBlocks(content: string): MarkdownBlock[] {
   return parseSegment(cleaned)
 }
 
-// Splits a segment at top-level <details>/<blockquote> regions (preserving order),
-// emitting structured blocks for them and line-parsing the text in between. Recurses
-// for nested details bodies. Non-greedy match keeps it total on unbalanced input.
+// Split top-level details/blockquote regions in order; recurse nested details and keep unmatched input total via non-greedy parse.
 function parseSegment(text: string): MarkdownBlock[] {
   const blocks: MarkdownBlock[] = []
   let rest = text
@@ -107,14 +106,13 @@ function parseLines(content: string): MarkdownBlock[] {
         code.push(lines[i])
         i += 1
       }
-      i += 1 // consume closing fence (or EOF)
+      i += 1
       blocks.push({ kind: 'code', text: code.join('\n'), lang })
       continue
     }
 
-    // GFM pipe table: a header row immediately followed by a delimiter row.
-    // Requires the delimiter row so plain prose with a stray `|` isn't captured.
-    if (line.includes('|') && i + 1 < lines.length && TABLE_DELIM.test(lines[i + 1])) {
+    // Require table delimiter row so stray prose pipe does not create table.
+    if (line.includes('|') && i + 1 < lines.length && isTableDelimiter(lines[i + 1])) {
       flushParagraph()
       const headers = splitTableRow(line)
       const align = parseAlignRow(lines[i + 1])
@@ -187,34 +185,9 @@ function parseLines(content: string): MarkdownBlock[] {
   return blocks
 }
 
-// Splits a `| a | b |` table row into trimmed cells. Tolerates missing outer
-// pipes and escaped `\|` inside cells. Total: never throws on odd input.
-function splitTableRow(line: string): string[] {
-  const cells: string[] = []
-  let cell = ''
-  let trimmed = line.trim()
-  if (trimmed.startsWith('|')) {
-    trimmed = trimmed.slice(1)
-  }
-  if (trimmed.endsWith('|')) {
-    trimmed = trimmed.slice(0, -1)
-  }
-  for (let j = 0; j < trimmed.length; j += 1) {
-    const ch = trimmed[j]
-    if (ch === '\\' && trimmed[j + 1] === '|') {
-      cell += '|'
-      j += 1
-      continue
-    }
-    if (ch === '|') {
-      cells.push(cell.trim())
-      cell = ''
-      continue
-    }
-    cell += ch
-  }
-  cells.push(cell.trim())
-  return cells
+// A single dash is a delimiter cell here, unlike the editor's three-dash separator.
+function isTableDelimiter(line: string): boolean {
+  return splitTableRow(line).every((cell) => /^:?-+:?$/.test(cell))
 }
 
 // Reads alignment from a delimiter row's colons: `:--` left, `:-:` center, `--:` right.
@@ -232,25 +205,25 @@ function parseAlignRow(line: string): CellAlign[] {
   })
 }
 
-// Inline emphasis/code/link tokenizer. Walks the string once, longest-match first,
-// emitting plain-text runs between matches. Unbalanced markers stay literal text.
-const INLINE = /(`[^`]+`)|(\*\*[^*]+\*\*)|(__[^_]+__)|(\*[^*]+\*)|(_[^_]+_)|(\[[^\]]+\]\([^)]+\))/
+// Tokenize inline emphasis/code/links once, longest match first; preserve plain runs and unbalanced markers.
+const INLINE = /(`[^`]+`)|(\*\*[^*]+\*\*)|(__[^_]+__)|(\*[^*]+\*)|(_[^_]+_)/g
 
 export function parseInline(text: string): InlineToken[] {
   const tokens: InlineToken[] = []
-  // Strip residual inline HTML tags (<b>, <kbd>, <sub>, …) so they don't render
-  // literally; emphasis/code/links below are markdown, not HTML, so this is safe.
-  let rest = stripHtmlTags(text)
+  // Strip residual inline HTML before Markdown tokenization so tags do not display literally.
+  const plain = stripHtmlTags(text)
+  const matcher = createMarkdownInlineMatcher(plain, INLINE)
+  let cursor = 0
   let guard = 0
-  while (rest.length > 0 && guard < 5000) {
+  while (cursor < plain.length && guard < 5000) {
     guard += 1
-    const m = INLINE.exec(rest)
+    const m = matcher.exec()
     if (!m || m.index === undefined) {
-      tokens.push({ kind: 'text', text: rest })
+      tokens.push({ kind: 'text', text: plain.slice(cursor) })
       break
     }
-    if (m.index > 0) {
-      tokens.push({ kind: 'text', text: rest.slice(0, m.index) })
+    if (m.index > cursor) {
+      tokens.push({ kind: 'text', text: plain.slice(cursor, m.index) })
     }
     const token = m[0]
     if (token.startsWith('`')) {
@@ -267,7 +240,7 @@ export function parseInline(text: string): InlineToken[] {
     } else {
       tokens.push({ kind: 'italic', text: token.slice(1, -1) })
     }
-    rest = rest.slice(m.index + token.length)
+    cursor = matcher.lastIndex
   }
   return tokens
 }

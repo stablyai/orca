@@ -6,7 +6,6 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { UsagePercentageDisplayChangeNotice } from './UsagePercentageDisplayChangeNotice'
 import { USAGE_PERCENTAGE_DISPLAY_SETTING_ID } from '../settings/appearance-usage-percentage-search'
 
-// Controllable ResizeObserver so tests can drive reflow deliveries by hand.
 type ResizeObserverStub = { cb: ResizeObserverCallback; targets: Element[] }
 const resizeObservers: ResizeObserverStub[] = []
 
@@ -71,9 +70,8 @@ describe('UsagePercentageDisplayChangeNotice', () => {
     document.body.appendChild(container)
     // Why: fixed positioning reads getBoundingClientRect; happy-dom needs a
     // non-zero layout box so the portal card is measured and mounted.
-    Object.defineProperty(HTMLElement.prototype, 'getBoundingClientRect', {
-      configurable: true,
-      value: () =>
+    vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockImplementation(
+      () =>
         ({
           x: 24,
           y: 700,
@@ -85,7 +83,7 @@ describe('UsagePercentageDisplayChangeNotice', () => {
           height: 24,
           toJSON: () => ({})
         }) satisfies DOMRect
-    })
+    )
     root = createRoot(container)
   })
 
@@ -96,6 +94,7 @@ describe('UsagePercentageDisplayChangeNotice', () => {
     container.remove()
     document.querySelectorAll('.status-bar-change-notice-card').forEach((node) => node.remove())
     vi.useRealTimers()
+    vi.restoreAllMocks()
   })
 
   it('portals the callout above the usage-meter anchor after a short delay', () => {
@@ -115,7 +114,6 @@ describe('UsagePercentageDisplayChangeNotice', () => {
     expect(card).not.toBeNull()
     expect(card?.parentElement).toBe(document.body)
     expect(card?.style.left).toBe('24px')
-    // viewport height default in happy-dom is often 768; bottom = 768 - 700 + 10
     expect(card?.style.bottom).toBeTruthy()
     expect(document.body.textContent).toContain('Usage now shows % used')
     expect(container.textContent).toContain('usage-meters')
@@ -265,10 +263,7 @@ describe('UsagePercentageDisplayChangeNotice', () => {
         fireResizeObservers()
       })
     }
-    // Why: without the equality guard every identical-geometry delivery churns a
-    // fresh AnchorPosition object → one re-render each (measured 20). The guard
-    // returns the same reference so React bails on all but the first settling
-    // commit → ≤1 (measured 1). This is the churn the fix removes.
+    // Equal-geometry deliveries must reuse state instead of adding a render per observer callback.
     expect(commits - commitsAfterOpen).toBeLessThanOrEqual(1)
   })
 

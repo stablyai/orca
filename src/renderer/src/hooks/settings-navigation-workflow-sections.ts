@@ -15,6 +15,7 @@ import {
   BookOpen,
   CalendarClock,
   Files,
+  History,
   GitBranch,
   Globe,
   ListChecks,
@@ -61,12 +62,30 @@ export function buildWorkflowSettingsSections(
         'auto.hooks.useSettingsNavigationMetadata.shareSkillsDescription',
         'Share your skills with an unlisted link. Anyone who has it can install them.'
       ),
-      // Why: the sidebar entry and the page header both use BookOpen for
-      // skills, so the settings row that opens them matches.
+      // Match the skills sidebar/page icon in its settings entry.
       icon: BookOpen,
       searchEntries: getShareSkillsSettingsSearchEntries(),
       group: 'workflows',
       badge: translate('auto.hooks.useSettingsNavigationMetadata.40d80bad8a', 'Beta')
+    },
+    {
+      id: 'session-history',
+      title: translate('sessionHistory.settings.title', 'Agent Session Search'),
+      description: translate(
+        'sessionHistory.settings.description',
+        'Search everything your agents have said and done, on this computer and on any paired Orca server.'
+      ),
+      icon: History,
+      searchEntries: [
+        {
+          title: translate('sessionHistory.settings.indexComputers', 'Search inside sessions'),
+          description: translate(
+            'sessionHistory.settings.searchDescription',
+            'Turn on session search for this computer and paired servers, or clear search data.'
+          )
+        }
+      ],
+      group: 'workflows'
     },
     {
       id: 'git',
@@ -79,8 +98,7 @@ export function buildWorkflowSettingsSections(
         'Branch naming, base refs, and Git AI Author.'
       ),
       icon: GitBranch,
-      // Why: Git AI Author is rendered inside Git, so shared
-      // metadata must search both surfaces wherever Git appears.
+      // Git AI Author lives inside Git, so search metadata covers both surfaces.
       searchEntries: [
         ...getGitPaneSearchEntries(),
         ...getCommitMessageAiPaneSearchEntries(),

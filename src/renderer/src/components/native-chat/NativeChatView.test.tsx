@@ -2,13 +2,40 @@
 
 import '@testing-library/jest-dom/vitest'
 
-import { afterEach, describe, expect, it } from 'vitest'
-import { cleanup, fireEvent, render, screen } from '@testing-library/react'
+import { afterEach, describe, expect, it, vi } from 'vitest'
+import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
+import { useRef } from 'react'
 import type * as React from 'react'
 import type { AgentStatusEntry } from '../../../../shared/agent-status-types'
 import { NativeChatSessionGate } from './NativeChatSessionGate'
 import { useNativeChatDraft } from './use-native-chat-draft'
 import { clearNativeChatDraftCacheForTests } from './native-chat-draft-cache'
+import NativeChatView from './NativeChatView'
+import { useNativeChatFind } from './use-native-chat-find'
+import { useAppStore } from '@/store'
+import type { NativeChatResolvedViewProps } from './native-chat-view-types'
+
+vi.mock('./NativeChatResolvedView', () => ({ NativeChatResolvedView: ResolvedFindProbe }))
+
+function ResolvedFindProbe({ sessionId }: NativeChatResolvedViewProps): React.JSX.Element {
+  const rootRef = useRef<HTMLDivElement>(null)
+  const composerRef = useRef(null)
+  const messageListRef = useRef(null)
+  const find = useNativeChatFind(true, rootRef, composerRef, messageListRef)
+  return (
+    <div ref={rootRef}>
+      <span>Session {sessionId ?? 'none'}</span>
+      <button onClick={() => find.open?.()}>Find</button>
+      {find.isOpen ? (
+        <input
+          aria-label="Find in chat"
+          value={find.query}
+          onChange={(event) => find.setQuery(event.target.value)}
+        />
+      ) : null}
+    </div>
+  )
+}
 
 function entry(overrides: Partial<AgentStatusEntry> & Pick<AgentStatusEntry, 'paneKey'>) {
   return {
@@ -35,8 +62,10 @@ function renderResolution(
   )
 }
 
+const notComposing = (): boolean => false
+
 function DraftProbe({ paneKey, sessionId }: { paneKey: string; sessionId: string | null }) {
-  const { draft, setDraft } = useNativeChatDraft(paneKey)
+  const { draft, setDraft } = useNativeChatDraft(paneKey, notComposing)
   return (
     <label>
       Session {sessionId ?? 'none'}
@@ -53,40 +82,40 @@ describe('NativeChatSessionGate', () => {
   afterEach(() => {
     cleanup()
     clearNativeChatDraftCacheForTests()
+    useAppStore.setState(useAppStore.getInitialState())
   })
 
-  it.each(['codex', 'claude'] as const)(
-    'opens the resolved native chat session from a %s title fallback',
-    (resolvedAgent) => {
-      renderResolution({
-        paneKey: 'tab-1:leaf-1',
-        launchAgent: null,
-        resolvedAgent,
-        ptyId: 'pty-1'
-      })
-
-      expect(screen.getByTestId('native-chat-resolution')).toHaveTextContent(
-        `${resolvedAgent}:no-session:tab-1:leaf-1`
-      )
-    }
-  )
-
-  it('keeps live hook identity ahead of a stale title fallback', () => {
-    renderResolution({
-      paneKey: 'tab-1:leaf-1',
-      launchAgent: null,
-      agentStatusEntry: entry({
-        paneKey: 'tab-1:leaf-1',
-        agentType: 'claude',
-        providerSession: { key: 'session_id', id: 'claude-session' }
-      }),
-      resolvedAgent: 'codex',
-      ptyId: 'pty-1'
-    })
-
-    expect(screen.getByTestId('native-chat-resolution')).toHaveTextContent(
-      'claude:claude-session:tab-1:leaf-1'
+  it('keeps Find open with its query when the bridge first receives session metadata', () => {
+    useAppStore.setState(useAppStore.getInitialState())
+    const paneKey = 'tab-1:leaf-1'
+    render(
+      <NativeChatView
+        terminalTabId="tab-1"
+        paneKey={paneKey}
+        launchAgent="codex"
+        isVisible
+        isFocusedGroup
+        ownsTabWideLaunchDraft
+      />
     )
+    expect(screen.getByText('Session none')).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: 'Find' }))
+    const input = screen.getByRole('textbox', { name: 'Find in chat' })
+    fireEvent.change(input, { target: { value: 'keep this search' } })
+    act(() => {
+      useAppStore.setState({
+        agentStatusByPaneKey: {
+          [paneKey]: entry({
+            paneKey,
+            agentType: 'codex',
+            providerSession: { key: 'session_id', id: 'codex-session' }
+          })
+        }
+      })
+    })
+    expect(screen.getByText('Session codex-session')).toBeInTheDocument()
+    expect(screen.getByRole('textbox', { name: 'Find in chat' })).toBe(input)
+    expect(input).toHaveValue('keep this search')
   })
 
   it('preserves the open composer, session, and draft through disconnect and reconnect', () => {

@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { AgentResumeLaunchTargetArgs } from './agent-resume-launch-target'
 
 function setNavigatorUserAgent(userAgent: string): () => void {
@@ -40,8 +40,11 @@ async function resolveWith(
 describe('resolveAgentResumeLaunchTarget on a Windows client', () => {
   let restoreNavigator = (): void => {}
 
-  beforeEach(() => {
+  beforeAll(() => {
     vi.resetModules()
+  })
+
+  beforeEach(() => {
     restoreNavigator = setNavigatorUserAgent('Mozilla/5.0 (Windows NT 10.0; Win64; x64)')
   })
 
@@ -84,6 +87,49 @@ describe('resolveAgentResumeLaunchTarget on a Windows client', () => {
       resolveWith({
         connectionId: 'ssh-1',
         executionHostId: 'ssh:ssh-1',
+        terminalWindowsShell: 'cmd.exe'
+      })
+    ).resolves.toEqual({ platform: 'linux', shell: undefined })
+  })
+
+  it('quotes for PowerShell on an SSH host that reported Windows', async () => {
+    await expect(
+      resolveWith({
+        connectionId: 'ssh-1',
+        executionHostId: 'ssh:ssh-1',
+        remotePlatform: 'win32',
+        terminalWindowsShell: 'cmd.exe'
+      })
+    ).resolves.toEqual({ platform: 'win32', shell: undefined })
+  })
+
+  it('quotes for cmd.exe on a Windows SSH host tab whose shell is cmd.exe', async () => {
+    await expect(
+      resolveWith({
+        connectionId: 'ssh-1',
+        executionHostId: 'ssh:ssh-1',
+        remotePlatform: 'win32',
+        tabShellOverride: 'cmd.exe'
+      })
+    ).resolves.toEqual({ platform: 'win32', shell: 'cmd' })
+  })
+
+  it('keeps POSIX quoting for a WSL UNC workspace on a Windows SSH host', async () => {
+    await expect(
+      resolveWith({
+        connectionId: 'ssh-1',
+        executionHostId: 'ssh:ssh-1',
+        remotePlatform: 'win32',
+        worktreePath: '\\\\wsl.localhost\\Ubuntu\\home\\neil\\repo'
+      })
+    ).resolves.toEqual({ platform: 'linux', shell: undefined })
+  })
+
+  it('quotes for the platform a remote runtime host reported', async () => {
+    await expect(
+      resolveWith({
+        executionHostId: 'runtime:prod-box',
+        remotePlatform: 'linux',
         terminalWindowsShell: 'cmd.exe'
       })
     ).resolves.toEqual({ platform: 'linux', shell: undefined })
@@ -136,6 +182,18 @@ describe('resolveAgentResumeLaunchTarget off Windows', () => {
 
   afterEach(() => {
     restoreNavigator()
+  })
+
+  it('quotes for cmd.exe on a Windows SSH host from a mac client', async () => {
+    await expect(
+      resolveWith({
+        connectionId: 'ssh-1',
+        executionHostId: 'ssh:ssh-1',
+        worktreePath: 'C:\\Users\\neil\\repo',
+        remotePlatform: 'win32',
+        tabShellOverride: 'cmd.exe'
+      })
+    ).resolves.toEqual({ platform: 'win32', shell: 'cmd' })
   })
 
   it('ignores a stale Windows shell setting on a mac client', async () => {

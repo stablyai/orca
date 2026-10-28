@@ -1,3 +1,10 @@
+import {
+  pendingSelectionHandle,
+  pendingSelectionTabId,
+  resolveLaunchedSelection,
+  withoutPendingHandle,
+  withoutPendingTabId
+} from './pending-session-selection'
 import { useCallback } from 'react'
 import {
   getTerminalRecordsFromSessionTabs,
@@ -13,6 +20,10 @@ import {
 import type { SessionTabsApplyOutcome } from './mobile-session-tabs-stream-health'
 import { getActiveTabIdForHandle } from './mobile-session-route-helpers'
 import { resolveActiveSessionTab } from './active-session-tab'
+import { activateMobileSessionTab } from './mobile-session-tab-activation'
+import { releaseTerminalCreateLock } from './terminal-create-lock'
+import { withSessionTabStatusReceipts } from './mobile-session-tab-status-clock'
+import { withRememberedNativeChatIdentity } from './native-chat/mobile-native-chat-eligibility'
 import type { MobileSessionTab, SessionTabsResult } from './mobile-session-route-types'
 import type { MobileSessionTerminalListModel } from './use-mobile-session-terminal-list'
 
@@ -33,30 +44,34 @@ export function useMobileSessionTabApplication(scope: MobileSessionTerminalListM
     activeSessionTabIdRef,
     selectedSessionTabIdRef,
     markdownDocsRef,
-    initializedHandlesRef,
     terminalDiagnosticsRef,
     activeHandleRef,
     activeSessionTabTypeRef,
-    pendingActiveSessionTabIdRef,
-    pendingActiveTerminalHandleRef,
+    pendingSelectionRef,
     pendingBrowserFocusPageIdRef,
     initialSessionAutoCreateRef,
     unsubscribeTerminal,
     subscribeToTerminal,
-    lastKnownTerminalCountRef
+    lastKnownTerminalCountRef,
+    clientRef,
+    creatingTerminalRef,
+    setCreating
   } = scope
   const applySessionTabs = useCallback(
     (result: SessionTabsResult): SessionTabsApplyOutcome<MobileSessionTab> => {
       const diagnostics = terminalDiagnosticsRef.current
-      // Reject stale snapshots; suppress just-closed tabs until the publisher confirms absence — see session-tab-snapshot-gate.
       if (!acceptSessionSnapshot(result, appliedSnapshotMarkerRef.current)) {
         return { accepted: false }
       }
       const applicationRevision = ++appliedSessionTabsRevisionRef.current
-      let nextTabs = applyClosedTabTombstones(
-        result.tabs,
-        closedTabTombstonesRef.current,
-        Date.now()
+      const now = Date.now()
+      let nextTabs = withRememberedNativeChatIdentity(
+        withSessionTabStatusReceipts(
+          applyClosedTabTombstones(result.tabs, closedTabTombstonesRef.current, now),
+          sessionTabsRef.current,
+          now
+        ),
+        sessionTabsRef.current
       )
       const presentTabIds = new Set(nextTabs.map((tab) => tab.id))
       const orphanedDraftTabs: MobileSessionTab[] = []
@@ -71,7 +86,7 @@ export function useMobileSessionTabApplication(scope: MobileSessionTerminalListM
             tab.type === 'markdown' && tab.id === tabId
         )
         if (draftTab) {
-          // Why: mobile edits live on the phone until Save; if the desktop tab vanishes, keep drafts reachable for copy/discard.
+          // Keep phone-local document drafts reachable after desktop tab removal so users can copy/discard them.
           orphanedDraftTabs.push({ ...draftTab, isActive: tabId === activeSessionTabIdRef.current })
         }
       }
@@ -83,7 +98,7 @@ export function useMobileSessionTabApplication(scope: MobileSessionTerminalListM
       })
       sessionTabsRef.current = nextTabs
       initialSessionAutoCreateRef.current.sawSessionTabs ||= nextTabs.length > 0
-      // Why: subscribe snapshots often repeat identical payloads; skip re-set to avoid a subscription teardown/replay loop.
+      // Avoid identical snapshot state updates that would tear down and replay subscriptions.
       setSessionTabs((prev) => (mobileSessionTabsEqual(prev, nextTabs) ? prev : nextTabs))
       const terminalTabs = getTerminalRecordsFromSessionTabs(nextTabs)
       const terminalTabHandles = terminalTabs.map((terminal) => terminal.handle)
@@ -107,15 +122,33 @@ export function useMobileSessionTabApplication(scope: MobileSessionTerminalListM
         applicationRevision
       }
 
-      const pendingActiveSessionTabId = pendingActiveSessionTabIdRef.current
       const followsHost = result.navigationIntent === 'follow'
-      const pendingActiveTerminalHandle = followsHost
-        ? null
-        : pendingActiveTerminalHandleRef.current
       if (followsHost) {
-        pendingActiveTerminalHandleRef.current = null
+        pendingSelectionRef.current = withoutPendingHandle(
+          pendingSelectionRef.current?.kind === 'launched' ? null : pendingSelectionRef.current
+        )
         pendingBrowserFocusPageIdRef.current = null
+      } else {
+        const pending = pendingSelectionRef.current
+        const launch = resolveLaunchedSelection(pending, nextTabs)
+        pendingSelectionRef.current = launch.selection
+        if (launch.landedTabId && pending?.kind === 'launched') {
+          // Release creation when its tab lands; prompt delivery can delay the reply by a minute.
+          releaseTerminalCreateLock({ creatingTerminalRef, setCreating }, pending.lock)
+        }
+        if (launch.landedTabId && clientRef.current) {
+          // Launches carry no navigation; persist the pick or this device stays on its old host tab.
+          void activateMobileSessionTab(clientRef.current, {
+            worktree: `id:${result.worktree}`,
+            tabId: launch.landedTabId,
+            notifyClients: false,
+            navigation: 'caller',
+            intent: 'user'
+          }).catch(() => {})
+        }
       }
+      const pendingActiveSessionTabId = pendingSelectionTabId(pendingSelectionRef.current)
+      const pendingActiveTerminalHandle = pendingSelectionHandle(pendingSelectionRef.current)
       const resolved = resolveActiveSessionTab(nextTabs, {
         pendingActiveSessionTabId,
         selectedSessionTabId: selectedSessionTabIdRef.current,
@@ -129,7 +162,9 @@ export function useMobileSessionTabApplication(scope: MobileSessionTerminalListM
           nextTabs.find((tab) => tab.isActive)?.id === pendingActiveSessionTabId &&
           !confirmsMirroredTabSelection(result.publicationEpoch)
         selectionSource = localAck ? 'pending-tab-local-ack' : selectionSource
-        pendingActiveSessionTabIdRef.current = localAck ? pendingActiveSessionTabId : null
+        if (!localAck) {
+          pendingSelectionRef.current = withoutPendingTabId(pendingSelectionRef.current)
+        }
       }
       if (pendingActiveTerminalHandle) {
         const pendingTerminalTab = nextTabs.find(
@@ -148,10 +183,10 @@ export function useMobileSessionTabApplication(scope: MobileSessionTerminalListM
           ) {
             selectionSource = 'pending-handle-local-ack'
           } else {
-            pendingActiveTerminalHandleRef.current = null
+            pendingSelectionRef.current = withoutPendingHandle(pendingSelectionRef.current)
           }
         } else if (pendingTerminalTab) {
-          // Why: desktop active flags lag a mobile tap; key by handle too, as fallback PTY tabs lack a stable tab id at startup.
+          // Use handle fallback because host active flags lag taps and startup PTY tabs may lack stable ids.
           active = pendingTerminalTab
           selectionSource = 'pending-handle-tab'
         } else if (pendingTerminalExists) {
@@ -159,15 +194,13 @@ export function useMobileSessionTabApplication(scope: MobileSessionTerminalListM
           activeSessionTabIdRef.current = nextActiveTabId
           setActiveSessionTabId(nextActiveTabId)
           activeSessionTabTypeRef.current = 'terminal'
-          // Why: every other active-handle branch assigns the ref alongside the
-          // state. Leaving it stale here makes `covered` resolve against the wrong
-          // handle, so a native-chat rearm silently no-ops on the webview gates.
+          // Update the active-handle ref with state so chat coverage/rearm cannot read the wrong WebView gate.
           activeHandleRef.current = pendingActiveTerminalHandle
           setActiveHandle(pendingActiveTerminalHandle)
           subscribeToTerminal(pendingActiveTerminalHandle)
           return outcome
         } else {
-          pendingActiveTerminalHandleRef.current = null
+          pendingSelectionRef.current = withoutPendingHandle(pendingSelectionRef.current)
         }
       }
       diagnostics.tabsApplied(result, nextTabs, active, selectionSource)
@@ -182,7 +215,6 @@ export function useMobileSessionTabApplication(scope: MobileSessionTerminalListM
           const previous = activeHandleRef.current
           if (previous) {
             unsubscribeTerminal(previous)
-            initializedHandlesRef.current.delete(previous)
           }
           activeHandleRef.current = null
           setActiveHandle(null)
@@ -191,17 +223,15 @@ export function useMobileSessionTabApplication(scope: MobileSessionTerminalListM
         const previous = activeHandleRef.current
         if (previous && previous !== active.terminal) {
           unsubscribeTerminal(previous)
-          initializedHandlesRef.current.delete(previous)
         }
         activeHandleRef.current = active.terminal
         setActiveHandle(active.terminal)
         subscribeToTerminal(active.terminal)
       } else if (active) {
-        // Why: an empty snapshot can transiently omit a live terminal; explicit close clears it on RPC success.
+        // Transient empty snapshots may omit a live terminal; only explicit successful close clears it.
         const previous = activeHandleRef.current
         if (previous) {
           unsubscribeTerminal(previous)
-          initializedHandlesRef.current.delete(previous)
         }
         activeHandleRef.current = null
         setActiveHandle(null)

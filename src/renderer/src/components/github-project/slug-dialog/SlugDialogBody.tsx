@@ -1,4 +1,4 @@
-/* oxlint-disable react-doctor/no-adjust-state-on-prop-change -- Why: slug dialog details are loaded through GitHub IPC and must clear stale request state before each lookup. */
+import type { RuntimeClientTarget } from '../../../../../shared/runtime-client-target'
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { CircleDot, ExternalLink, GitPullRequest, LoaderCircle, X } from 'lucide-react'
 import { toast } from 'sonner'
@@ -6,31 +6,30 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import CommentMarkdown from '@/components/sidebar/CommentMarkdown'
 import { useAppStore } from '@/store'
-import { callRuntimeRpc, getActiveRuntimeTarget } from '@/runtime/runtime-rpc-client'
+import { callRuntimeRpc } from '@/runtime/runtime-rpc-client'
 import type { GitHubWorkItemDetails } from '../../../../../shared/github/work-item-types'
-import type { GlobalSettings } from '../../../../../shared/global-settings-types'
+import type { ProjectWorkItemDetailsBySlugResult } from '../../../../../shared/github/project-result-types'
 import type { GitHubItemDialogProjectOrigin } from '@/components/GitHubItemDialog'
 import { LabelsEditor } from './LabelsEditor'
 import { AssigneesEditor } from './AssigneesEditor'
 import { CommentsList, NewCommentForm } from './Comments'
 import { translate } from '@/i18n/i18n'
+import { projectViewErrorMessage } from '../project-view-error-copy'
 
 export function SlugDialogBody({
   projectOrigin,
-  sourceSettings,
+  sourceTarget,
   onClose
 }: {
   projectOrigin: GitHubItemDialogProjectOrigin
-  sourceSettings: Pick<GlobalSettings, 'activeRuntimeEnvironmentId'> | null | undefined
+  sourceTarget: RuntimeClientTarget
   onClose: () => void
 }): React.JSX.Element {
   const { owner, repo, host, number, type, cacheKey } = projectOrigin
   const patchProjectIssueOrPr = useAppStore((s) => s.patchProjectIssueOrPr)
   const projectViewCache = useAppStore((s) => s.projectViewCache)
 
-  // Why: the Project row is the source of truth for the list-side columns;
-  // reading it reactively here keeps the dialog in sync with optimistic
-  // patches applied by the table (e.g. inline assignee edits).
+  // Read Project rows reactively so optimistic table edits also update the open dialog.
   const row = useMemo(() => {
     const table = projectViewCache[cacheKey]?.data
     if (!table) {
@@ -56,12 +55,10 @@ export function SlugDialogBody({
     setLoading(true)
     setError(null)
     setDetails(null)
-    const target = getActiveRuntimeTarget(sourceSettings)
+    const target = sourceTarget
     const request =
       target.kind === 'environment'
-        ? callRuntimeRpc<
-            { ok: true; details: GitHubWorkItemDetails } | { ok: false; error: { message: string } }
-          >(
+        ? callRuntimeRpc<ProjectWorkItemDetailsBySlugResult>(
             target,
             'github.project.workItemDetailsBySlug',
             { owner, repo, host, number, type },
@@ -76,7 +73,7 @@ export function SlugDialogBody({
         if (res.ok) {
           setDetails(res.details)
         } else {
-          setError(res.error.message)
+          setError(projectViewErrorMessage(res.error))
         }
       })
       .catch((err) => {
@@ -91,7 +88,7 @@ export function SlugDialogBody({
         }
         setLoading(false)
       })
-  }, [owner, repo, host, number, type, sourceSettings])
+  }, [owner, repo, host, number, type, sourceTarget])
 
   const title = row?.content.title ?? details?.item.title ?? ''
   const url = row?.content.url ?? details?.item.url ?? null
@@ -106,15 +103,13 @@ export function SlugDialogBody({
     if (!next || next === title) {
       return
     }
-    // Why: without a row id we can't address the project item — the helper
-    // would just return "Row not found" and toast-spam the user. The title
-    // button is also disabled in this case (see render below).
+    // Missing rows cannot be addressed; avoid mutation helpers that would only toast Row not found.
     if (!row) {
       return
     }
     const res = await patchProjectIssueOrPr(cacheKey, row.id, { title: next })
     if (!res.ok) {
-      toast.error(res.error.message)
+      toast.error(projectViewErrorMessage(res.error))
     }
   }, [titleDraft, title, patchProjectIssueOrPr, cacheKey, row])
 
@@ -126,14 +121,12 @@ export function SlugDialogBody({
     if (bodyDraft === body) {
       return
     }
-    // Why: same reason as commitTitle — bail rather than ask the helper to
-    // patch a missing row. The body button is also disabled when row is null.
     if (!row) {
       return
     }
     const res = await patchProjectIssueOrPr(cacheKey, row.id, { body: bodyDraft })
     if (!res.ok) {
-      toast.error(res.error.message)
+      toast.error(projectViewErrorMessage(res.error))
       return
     }
     setDetails((prev) => (prev ? { ...prev, body: bodyDraft } : prev))
@@ -224,10 +217,8 @@ export function SlugDialogBody({
             host={host}
             selected={labels}
             disabled={!row}
-            sourceSettings={sourceSettings}
+            sourceTarget={sourceTarget}
             onChange={async (add, remove) => {
-              // Why: bail rather than call the helper with an empty id —
-              // see commitTitle above. Trigger is also disabled when !row.
               if (!row) {
                 return
               }
@@ -236,7 +227,7 @@ export function SlugDialogBody({
                 ...(remove.length ? { removeLabels: remove } : {})
               })
               if (!res.ok) {
-                toast.error(res.error.message)
+                toast.error(projectViewErrorMessage(res.error))
               }
             }}
           />
@@ -246,7 +237,7 @@ export function SlugDialogBody({
             host={host}
             selected={assignees}
             disabled={!row}
-            sourceSettings={sourceSettings}
+            sourceTarget={sourceTarget}
             onChange={async (add, remove) => {
               if (!row) {
                 return
@@ -256,7 +247,7 @@ export function SlugDialogBody({
                 ...(remove.length ? { removeAssignees: remove } : {})
               })
               if (!res.ok) {
-                toast.error(res.error.message)
+                toast.error(projectViewErrorMessage(res.error))
               }
             }}
           />
@@ -341,7 +332,7 @@ export function SlugDialogBody({
                 repo={repo}
                 host={host}
                 comments={details.comments}
-                sourceSettings={sourceSettings}
+                sourceTarget={sourceTarget}
                 onChange={(next) => setDetails((d) => (d ? { ...d, comments: next } : d))}
               />
               <NewCommentForm
@@ -349,7 +340,7 @@ export function SlugDialogBody({
                 repo={repo}
                 host={host}
                 number={number}
-                sourceSettings={sourceSettings}
+                sourceTarget={sourceTarget}
                 onAdded={(c) => setDetails((d) => (d ? { ...d, comments: [...d.comments, c] } : d))}
               />
             </section>

@@ -1,17 +1,14 @@
-import { z } from 'zod'
-import { defineMethod, defineStreamingMethod, type RpcAnyMethod } from '../core'
-import { Screencast } from './browser-schemas'
+import { defineMethod, defineStreamingMethod } from '../core'
+import { Screencast } from '../../../../shared/rpc-contract/browser-params'
 import { BrowserError } from '../../../browser/browser-error'
 import { BROWSER_UNAVAILABLE_ERROR_CODE } from '../../../../shared/runtime-types'
 import { runtimeBrowserCommandsFactoryIsAvailable } from '../../runtime-browser-commands-factory'
+import { ScreencastUnsubscribe } from '../../../../shared/rpc-contract/browser-screencast-params'
 
-const ScreencastUnsubscribe = z.object({
-  subscriptionId: z.string().min(1, 'Missing required --subscription-id')
-})
-
-export const BROWSER_SCREENCAST_METHODS: RpcAnyMethod[] = [
+export const BROWSER_SCREENCAST_METHODS = [
   defineStreamingMethod({
     name: 'browser.screencast',
+    permission: 'workspace',
     params: Screencast,
     handler: async (
       params,
@@ -21,7 +18,7 @@ export const BROWSER_SCREENCAST_METHODS: RpcAnyMethod[] = [
       runtime.browserScreencast(params, {
         connectionId,
         pairedDeviceId,
-        // Why: the pairing scope is what tells a phone driver apart from a desktop/web viewer of the same stream.
+        // Pairing scope distinguishes phone drivers from desktop/web viewers of the same stream.
         clientKind,
         sendBinary,
         signal,
@@ -30,6 +27,7 @@ export const BROWSER_SCREENCAST_METHODS: RpcAnyMethod[] = [
   }),
   defineMethod({
     name: 'browser.screencast.unsubscribe',
+    permission: 'workspace',
     params: ScreencastUnsubscribe,
     handler: async (params, { runtime }) => {
       if (!runtimeBrowserCommandsFactoryIsAvailable()) {

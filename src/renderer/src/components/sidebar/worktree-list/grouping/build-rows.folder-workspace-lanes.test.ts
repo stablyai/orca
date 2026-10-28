@@ -1,8 +1,10 @@
 import { describe, expect, it } from 'vitest'
-import { buildRows } from './build-rows'
-import { getFolderWorkspaceLaneKey } from './folder-workspace-lanes'
-import { getPRGroupKey, getPRLaneKey } from './group-keys'
-import type { Row, WorktreeGroupBy } from './row-types'
+import { buildRows } from './build-rows.test-fixture'
+import { getFolderWorkspaceLaneKey } from '../../../../../../shared/sidebar-list/folder-workspace-lanes'
+import { getPRLaneKey } from '../../../../../../shared/sidebar-list/group-keys'
+import { getPRGroupKey } from './pr-group-key'
+import { getRenderRowKey } from '../listing/render-row'
+import type { Row, WorktreeGroupBy } from '../../../../../../shared/sidebar-list/row-types'
 import { repo, worktree } from '../../worktree-list-groups-test-fixtures'
 import type { FolderWorkspace } from '../../../../../../shared/folder-workspace-types'
 import type { ProjectGroup } from '../../../../../../shared/project-group-types'
@@ -84,8 +86,7 @@ function folderRows(rows: Row[]): Extract<Row, { type: 'folder-workspace' }>[] {
 const ALL_GROUP_BY: WorktreeGroupBy[] = ['repo', 'workspace-status', 'pr-status', 'none']
 
 describe('folder workspaces render under every Group by mode', () => {
-  // The three non-repo arms are the acceptance evidence; the repo arm is a
-  // deliberate no-regression guard that also passed before the fix.
+  // Non-repo modes exercise the fix; repo mode guards existing behavior.
   for (const groupBy of ALL_GROUP_BY) {
     it(`emits the folder-workspace row when groupBy is ${groupBy}`, () => {
       expect(folderRows(buildSidebarRows({ groupBy }))).toHaveLength(1)
@@ -94,7 +95,24 @@ describe('folder workspaces render under every Group by mode', () => {
 
   it('does not duplicate the row under repo grouping', () => {
     const rows = buildSidebarRows({ groupBy: 'repo' })
-    expect(folderRows(rows).map((row) => row.key)).toEqual(['folder-workspace:fw-1'])
+    expect(folderRows(rows).map((row) => row.key)).toEqual(['folder-workspace:local|folder:fw-1'])
+  })
+
+  it('keys the same folder id on two hosts apart, as the desktop draws them', () => {
+    const folders = [
+      makeFolderWorkspace(),
+      makeFolderWorkspace({ executionHostId: 'runtime:env-1', connectionId: null }),
+      makeFolderWorkspace({ connectionId: 'gpu-vm' })
+    ]
+    const rows = folderRows(buildSidebarRows({ groupBy: 'none', folderWorkspaces: folders }))
+    expect(new Set(rows.map((row) => row.key))).toEqual(
+      new Set([
+        'folder-workspace:local|folder:fw-1',
+        'folder-workspace:runtime:env-1|folder:fw-1',
+        'folder-workspace:ssh:gpu-vm|folder:fw-1'
+      ])
+    )
+    expect(rows.map(getRenderRowKey)).toEqual(rows.map((row) => row.key))
   })
 })
 
@@ -108,8 +126,6 @@ describe('a folder workspace can be the only member of a lane', () => {
   })
 
   it('renders in flat mode with no worktrees present', () => {
-    // Pre-fix the whole All section was gated on naturalWorktrees.length > 0,
-    // so a folder-only account saw nothing at all.
     const rows = buildSidebarRows({ groupBy: 'none', worktrees: [] })
     expect(folderRows(rows)).toHaveLength(1)
   })
@@ -156,8 +172,7 @@ describe('ordering', () => {
 })
 
 describe('membership is decided once, not per mode', () => {
-  // Negative arm alone is vacuous (zero rows either way pre-fix), so it is
-  // paired with an explicitly non-repo positive arm.
+  // Pair this negative case with a positive non-repo case so missing folder rows cannot pass vacuously.
   it('renders nothing when the owning project group is not visible', () => {
     const rows = buildSidebarRows({ groupBy: 'workspace-status', projectGroups: [] })
     expect(folderRows(rows)).toHaveLength(0)
@@ -173,8 +188,7 @@ describe('membership is decided once, not per mode', () => {
     const counts = ALL_GROUP_BY.map(
       (groupBy) => folderRows(buildSidebarRows({ groupBy, folderWorkspaces: archived })).length
     )
-    // Parity with today's behaviour: nothing filters folder workspaces by
-    // isArchived, so a mode must not be the thing that hides one.
+    // Keep archive handling consistent across modes; none currently filters folder workspaces by isArchived.
     expect(counts).toEqual([1, 1, 1, 1])
   })
 })
@@ -208,7 +222,6 @@ describe('host bookkeeping for lanes containing folder workspaces', () => {
     const header = rows.find((row) => row.type === 'header')
     expect(header).toBeDefined()
     const counts = header && 'hostWorktreeCounts' in header ? header.hostWorktreeCounts : undefined
-    // Undefined counts render globally, which is exactly the pre-fix bug.
     expect(counts).toBeDefined()
     expect(counts?.get(SSH_HOST)).toBe(1)
   })
@@ -238,8 +251,7 @@ describe('host bookkeeping for lanes containing folder workspaces', () => {
     )
     const header = rows.find((row) => row.type === 'header')
     const ids = header && 'hostWorktreeIds' in header ? header.hostWorktreeIds : undefined
-    // The key must exist even though folder workspaces contribute no worktree
-    // ids, or the host-section fallback leaks the global id list into it.
+    // Publish the empty host key or host-section fallback will leak the global worktree IDs.
     expect(ids?.has(SSH_HOST)).toBe(true)
     expect(ids?.get(SSH_HOST)).toEqual([])
   })

@@ -1,0 +1,134 @@
+{
+  "goldenFormatVersion": 6,
+  "operation": "transport.capability-probe",
+  "family": "transport.capability-probe",
+  "namedDeltas": [],
+  "values": {
+    "0f656c54115f": {
+      "name": "status.get#2",
+      "ordinal": 3,
+      "args": [
+        {
+          "name": "method",
+          "value": "status.get"
+        },
+        {
+          "name": "params",
+          "value": {
+            "$rpc": "absent"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 250,
+        "settledAt": 250,
+        "value": {
+          "id": "frame-2",
+          "ok": true,
+          "result": {
+            "capabilities": ["push.v1"]
+          }
+        }
+      }
+    },
+    "2c76473bef66": {
+      "published": []
+    },
+    "523bdccb77ba": {
+      "name": "status.get#1",
+      "ordinal": 1,
+      "args": [
+        {
+          "name": "method",
+          "value": "status.get"
+        },
+        {
+          "name": "params",
+          "value": {
+            "$rpc": "absent"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "rejected",
+        "startedAt": 0,
+        "settledAt": 0,
+        "error": {
+          "category": "LogicalClientCutoverError",
+          "message": "RPC interrupted by connection migration",
+          "isRpcDeliveryUnknown": true,
+          "cause": {
+            "category": "Error",
+            "message": "Connection closed",
+            "isRpcDeliveryUnknown": true
+          }
+        }
+      }
+    },
+    "9d1bfe4d6810": {
+      "published": [["push.v1"]]
+    },
+    "d08f74d65ee6": {
+      "name": "status.get#1",
+      "ordinal": 2,
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"status.get\"}"
+    },
+    "eb79a9b3682a": {
+      "status": "fulfilled",
+      "startedAt": 0,
+      "settledAt": 0,
+      "value": {
+        "$rpc": "undefined"
+      }
+    },
+    "f1834177e593": {
+      "name": "status.get#2",
+      "ordinal": 4,
+      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"status.get\"}"
+    }
+  },
+  "recording": {
+    "scenario": "transport-capability-probe-cutover-reasks-fast",
+    "checkpoints": [
+      {
+        "id": "cutover-rejected-the-probe",
+        "observation": {
+          "sender": ["523bdccb77ba"],
+          "payloads": ["d08f74d65ee6"],
+          "settlements": {
+            "start": "eb79a9b3682a",
+            "migrate": "eb79a9b3682a"
+          },
+          "state": "2c76473bef66",
+          "effects": []
+        }
+      },
+      {
+        "id": "published-after-cutover-reask",
+        "observation": {
+          "sender": ["523bdccb77ba", "0f656c54115f"],
+          "payloads": ["d08f74d65ee6", "f1834177e593"],
+          "settlements": {
+            "start": "eb79a9b3682a",
+            "migrate": "eb79a9b3682a"
+          },
+          "state": "9d1bfe4d6810",
+          "effects": []
+        }
+      }
+    ]
+  }
+}

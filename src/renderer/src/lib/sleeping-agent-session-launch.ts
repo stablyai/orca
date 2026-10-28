@@ -2,26 +2,22 @@ import { toast } from 'sonner'
 import { useAppStore } from '@/store'
 import { buildAgentResumeStartupPlan } from '@/lib/tui-agent-startup'
 import { tuiAgentToAgentKind } from '@/lib/telemetry'
-import { reconcileTabOrder } from '@/components/tab-bar/reconcile-order'
+import { persistAgentLaunchTabOrder } from '@/lib/launch-agent-tab-order'
 import {
+  resolveSshHostReportedPlatform,
   resolveAgentResumeLaunchTarget,
   type AgentResumeLaunchTarget
 } from '@/lib/agent-resume-launch-target'
 import { getExecutionHostIdForWorktree } from '@/lib/worktree-runtime-owner'
+import { runtimeEnvironmentIdUnlessTwin } from '@/lib/resolve-owner'
 import { getLocalProjectExecutionRuntimeContext } from '@/lib/local-preflight-context'
-import {
-  resolveTuiAgentLaunchArgs,
-  resolveTuiAgentLaunchEnv
-} from '../../../shared/tui-agent-launch-defaults'
+import { resolveResumeLaunchRecipe } from '../../../shared/tui-agent-launch-defaults'
 import type { SleepingAgentSessionRecord } from '../../../shared/agent-session-resume'
 import { translate } from '@/i18n/i18n'
 
 export type ResumeSleepingAgentSessionsOptions = {
   suppressNavigation?: boolean
-  /** Provider-session claim keys already woken in place by mounted panes
-   *  (WAKE_HIBERNATED_AGENTS_WORKTREE_EVENT). Their sleeping records are
-   *  cleared only after the in-place spawn succeeds, so the generic resume
-   *  must neither launch nor clear them here. */
+  // Mounted in-place wakes own these claim keys until spawn succeeds; generic resume must neither launch nor clear their records.
   skipClaimKeys?: ReadonlySet<string>
   /** Called with the tab id of each freshly launched resume tab, so
    *  navigation-suppressed callers can background-mount exactly those tabs. */
@@ -33,35 +29,22 @@ function getResumeLaunchTarget(worktreeId: string): AgentResumeLaunchTarget {
   const worktree = state.getKnownWorktreeById(worktreeId)
   const repo = worktree ? state.repos.find((entry) => entry.id === worktree.repoId) : null
   // The resume tab is created without a shell override, so the global Windows shell wins.
+  const executionHostId = getExecutionHostIdForWorktree(state, worktreeId)
   return resolveAgentResumeLaunchTarget({
     projectRuntime: getLocalProjectExecutionRuntimeContext(state, worktreeId),
     connectionId: repo?.connectionId,
-    executionHostId: getExecutionHostIdForWorktree(state, worktreeId),
+    executionHostId,
     worktreePath: worktree?.path,
-    terminalWindowsShell: state.settings?.terminalWindowsShell
+    terminalWindowsShell: state.settings?.terminalWindowsShell,
+    remotePlatform: resolveSshHostReportedPlatform(
+      state,
+      executionHostId,
+      runtimeEnvironmentIdUnlessTwin(state, worktreeId)
+    )
   })
 }
 
-function appendTabToWorktreeOrder(worktreeId: string, tabId: string): void {
-  const state = useAppStore.getState()
-  const termIds = (state.tabsByWorktree[worktreeId] ?? []).map((tab) => tab.id)
-  const editorIds = state.openFiles
-    .filter((file) => file.worktreeId === worktreeId)
-    .map((f) => f.id)
-  const browserIds = (state.browserTabsByWorktree?.[worktreeId] ?? []).map((tab) => tab.id)
-  const base = reconcileTabOrder(
-    state.tabBarOrderByWorktree[worktreeId],
-    termIds,
-    editorIds,
-    browserIds
-  )
-  const order = base.filter((id) => id !== tabId)
-  order.push(tabId)
-  state.setTabBarOrder(worktreeId, order)
-}
-
-// Why: mobile-driven wake runs on the desktop host renderer, so it must create
-// the resume tab without stealing the desktop's active worktree/tab/view.
+// Mobile wake runs on the desktop host renderer; create recovery tabs without stealing desktop navigation.
 export function launchSleepingAgentSession(
   record: SleepingAgentSessionRecord,
   options?: ResumeSleepingAgentSessionsOptions
@@ -73,20 +56,10 @@ export function launchSleepingAgentSession(
     agent: record.agent,
     providerSession: record.providerSession,
     cmdOverrides: state.settings?.agentCmdOverrides ?? {},
-    agentArgs:
-      launchConfig !== undefined
-        ? launchConfig.agentArgs
-        : resolveTuiAgentLaunchArgs(record.agent, state.settings?.agentDefaultArgs),
-    agentEnv:
-      launchConfig !== undefined
-        ? launchConfig.agentEnv
-        : resolveTuiAgentLaunchEnv(record.agent, state.settings?.agentDefaultEnv),
-    ...(launchConfig?.agentCommand ? { agentCommand: launchConfig.agentCommand } : {}),
-    ...(launchConfig?.ompResumeFilePath
-      ? { ompResumeFilePath: launchConfig.ompResumeFilePath }
-      : {}),
+    ...resolveResumeLaunchRecipe(launchConfig),
     platform: resumeTarget.platform,
-    shell: resumeTarget.shell
+    shell: resumeTarget.shell,
+    launchCwd: state.getKnownWorktreeById(record.worktreeId)?.path
   })
   if (!startupPlan) {
     toast.error(
@@ -105,8 +78,22 @@ export function launchSleepingAgentSession(
       ...(startupPlan.env ? { env: startupPlan.env } : {}),
       launchConfig: startupPlan.launchConfig,
       resumeProviderSession: record.providerSession,
+      resumeOrigin: 'saved',
+      resumeSource: {
+        cancelled: false,
+        record,
+        ...(state.agentStatusByPaneKey[record.paneKey]
+          ? {
+              expectedStatus: {
+                paneKey: record.paneKey,
+                receivedAt: state.agentStatusByPaneKey[record.paneKey].updatedAt,
+                stateStartedAt: state.agentStatusByPaneKey[record.paneKey].stateStartedAt
+              }
+            }
+          : {})
+      },
       launchAgent: record.agent,
-      ...(launchConfig ? { agentArgsOverride: launchConfig.agentArgs } : {}),
+      ...(launchConfig ? { agentArgsOverride: startupPlan.launchConfig.agentArgs } : {}),
       ...(startupPlan.startupCommandDelivery
         ? { startupCommandDelivery: startupPlan.startupCommandDelivery }
         : {}),
@@ -126,9 +113,9 @@ export function launchSleepingAgentSession(
   })
   state.clearSleepingAgentSession(record.paneKey)
   if (!options?.suppressNavigation) {
-    state.setActiveTabType('terminal')
+    state.setActiveTabType('terminal', record.worktreeId)
   }
-  appendTabToWorktreeOrder(record.worktreeId, tab.id)
+  persistAgentLaunchTabOrder(record.worktreeId, tab.id)
   options?.onSessionLaunched?.(tab.id)
   return true
 }

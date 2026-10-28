@@ -3,21 +3,18 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import type { WebSocket } from 'ws'
 import type { AgentStatusEntry } from '../../src/shared/agent-status-types'
+import type { NativeChatMessage } from '../../src/shared/native-chat-types'
 import type {
   RuntimeMobileSessionTabsResult,
   RuntimeMobileSessionTerminalClientTab
 } from '../../src/shared/runtime-types'
 import type { RpcRequest, RpcResponse } from './mock-server-rpc-handlers'
 
-// Why: native chat needs a live agent tab, an empty-but-subscribed transcript,
-// and a terminal send path whose acceptance can be flipped mid-session.
-// Restarting the server re-keys E2EE (forcing a re-pair), so send behaviour is
-// read from a control file on every request instead of an env var.
+// Read send behavior from control file per request: restarting mock rekeys E2EE and forces re-pair, preventing mid-session native chat repros.
 const SEND_MODE_FILE = process.env.MOCK_SEND_MODE_FILE ?? join(tmpdir(), 'orca-mock-send-mode')
 const TERMINAL_LIST_MODE_FILE =
   process.env.MOCK_TERMINAL_LIST_MODE_FILE ?? join(tmpdir(), 'orca-mock-terminal-list-mode')
-// Write `dead` here to reproduce a gone PTY: the host answers with `subscribed`
-// then `end`, which is the shape the rearm bound and terminal prune react to.
+// Write dead to model subscribed→end for gone PTY, exercising rearm bound and terminal pruning.
 const TERMINAL_STREAM_MODE_FILE =
   process.env.MOCK_TERMINAL_STREAM_MODE_FILE ?? join(tmpdir(), 'orca-mock-terminal-stream-mode')
 const TERMINAL_HANDLE = 'chat-term-1'
@@ -25,12 +22,15 @@ const TAB_ID = 'chat-tab-1'
 const SESSION_ID = 'mock-chat-session'
 const TRANSCRIPT_PATH = join(tmpdir(), 'mock-transcript.jsonl')
 const MOCK_IMAGE_PATH = join(tmpdir(), 'mock-image.png')
+// Exercise legacy OMP hooks without a transcript path; current hooks may include one.
+const CHAT_AGENT = process.env.MOCK_CHAT_AGENT === 'omp' ? 'omp' : 'claude'
+const CHAT_TITLE = CHAT_AGENT === 'omp' ? 'OMP' : 'Claude Code'
+const TRANSCRIPT_START = Date.now() - 1000 * 60 * 5
 
 function readControl(file: string): string {
   try {
     return readFileSync(file, 'utf-8').trim()
   } catch {
-    // Default to the happy path when the control file is absent.
     return ''
   }
 }
@@ -41,36 +41,34 @@ const agentStatus: AgentStatusEntry = {
   prompt: '',
   updatedAt: Date.now(),
   stateStartedAt: Date.now(),
-  agentType: 'claude',
+  agentType: CHAT_AGENT,
   paneKey: `${TAB_ID}:leaf-1`,
   terminalHandle: TERMINAL_HANDLE,
   stateHistory: [],
-  providerSession: {
-    key: 'session_id',
-    id: SESSION_ID,
-    transcriptPath: TRANSCRIPT_PATH
-  }
+  providerSession:
+    CHAT_AGENT === 'omp'
+      ? { key: 'session_id', id: SESSION_ID }
+      : { key: 'session_id', id: SESSION_ID, transcriptPath: TRANSCRIPT_PATH }
 }
 
 function buildTab(): RuntimeMobileSessionTerminalClientTab {
   return {
     type: 'terminal',
     id: TAB_ID,
-    title: 'Claude Code',
+    title: CHAT_TITLE,
     parentTabId: TAB_ID,
     leafId: 'leaf-1',
     ptyId: 'pty-1',
     status: 'ready',
     terminal: TERMINAL_HANDLE,
-    launchAgent: 'claude',
+    launchAgent: CHAT_AGENT,
     agentStatus,
     viewMode: 'chat',
     isActive: true
   }
 }
 
-// Versions are per-worktree and only advance on real content change, so the
-// mock can't fake a re-render heartbeat the runtime would never send.
+// Advance per-worktree versions only on content changes; runtime has no fake rerender heartbeat.
 function buildTabsResult(worktree: string): RuntimeMobileSessionTabsResult {
   const result: RuntimeMobileSessionTabsResult = {
     worktree,
@@ -104,8 +102,50 @@ function worktreeOf(request: RpcRequest): string {
   return typeof raw === 'string' ? raw : 'id:mock-worktree'
 }
 
-// Why: unsubscribe correlates by worktree, not request id, and a socket that
-// navigates A->B->A would otherwise stack one push loop per subscribe.
+// Mirror OMP decoder’s thinking/text/toolCall/toolResult shapes so phone exercises production render path.
+function mockTranscript(): NativeChatMessage[] {
+  if (CHAT_AGENT !== 'omp') {
+    return []
+  }
+  const t = TRANSCRIPT_START
+  return [
+    {
+      id: 'omp-1',
+      role: 'user',
+      blocks: [{ type: 'text', text: 'why is my deploy failing?' }],
+      timestamp: t,
+      source: 'transcript'
+    },
+    {
+      id: 'omp-2',
+      role: 'assistant',
+      blocks: [
+        { type: 'text', text: 'Let me check the deploy logs first.' },
+        { type: 'tool-call', name: 'bash', input: { command: 'kubectl get pods' } }
+      ],
+      timestamp: t + 1000,
+      source: 'transcript'
+    },
+    {
+      id: 'omp-3',
+      role: 'tool',
+      blocks: [{ type: 'tool-result', output: 'api-7f9c 0/1 CrashLoopBackOff' }],
+      timestamp: t + 2000,
+      source: 'transcript'
+    },
+    {
+      id: 'omp-4',
+      role: 'assistant',
+      blocks: [
+        { type: 'text', text: 'The API pod is crash-looping. Check its logs with kubectl logs.' }
+      ],
+      timestamp: t + 3000,
+      source: 'transcript'
+    }
+  ]
+}
+
+// Cancel by worktree, not request id, so A→B→A navigation cannot stack push loops.
 const tabsPushLoops = new Map<WebSocket, Map<string, ReturnType<typeof setInterval>>>()
 
 function stopTabsPushLoop(ws: WebSocket, worktree: string): void {
@@ -144,10 +184,7 @@ type Respond = (response: RpcResponse) => void
 type Success = (id: string, result: unknown, streaming?: boolean) => RpcResponse
 type Failure = (id: string, code: string, message: string) => RpcResponse
 
-/** Mock backend for the native-chat surface: session tabs, an empty transcript
- *  snapshot, terminal send, and image upload. Opt-in via MOCK_NATIVE_CHAT=1
- *  because it replaces the default terminal fixtures. No transcript or terminal
- *  output frames are pushed. Returns false for methods it does not own. */
+// Opt-in MOCK_NATIVE_CHAT=1 replaces terminal fixtures with native chat tabs/transcript/send/upload; pushes no transcript/output frames. Return false for unowned methods.
 export function handleMockNativeChatRequest(
   request: RpcRequest,
   respond: Respond,
@@ -186,15 +223,13 @@ export function handleMockNativeChatRequest(
       return true
 
     case 'terminal.list': {
-      // `omit` = empty list; `other` = a live list that just doesn't name the
-      // chat handle (what the runtime returns when the handle is scoped to a
-      // different worktree id than the one mobile queries).
+      // omit means empty list; other means live list without this handle, matching a handle scoped to another worktree.
       const mode = readControl(TERMINAL_LIST_MODE_FILE)
       const worktreeId = worktreeOf(request).replace(/^id:/, '')
       const entry = (handle: string) => ({
         handle,
         worktreeId,
-        title: 'Claude Code',
+        title: CHAT_TITLE,
         isActive: true,
         hasRunningProcess: true
       })
@@ -209,11 +244,13 @@ export function handleMockNativeChatRequest(
     }
 
     case 'nativeChat.subscribe':
-      respond(success(request.id, { type: 'snapshot', messages: [], hasMore: false }, true))
+      respond(
+        success(request.id, { type: 'snapshot', messages: mockTranscript(), hasMore: false }, true)
+      )
       return true
 
     case 'nativeChat.readSession':
-      respond(success(request.id, { messages: [], hasMore: false }))
+      respond(success(request.id, { messages: mockTranscript(), hasMore: false }))
       return true
 
     case 'terminal.subscribe': {

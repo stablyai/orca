@@ -12,6 +12,7 @@ function createSnapshot(browserUrlHistory: BrowserHistoryEntry[]): WorkspaceSess
     tabsByWorktree: {},
     ptyIdsByTabId: {},
     terminalLayoutsByTabId: {},
+    localOnlyScrollbackByTabId: {},
     activeTabIdByWorktree: {},
     openFiles: [],
     editorDrafts: {},
@@ -33,8 +34,7 @@ function createSnapshot(browserUrlHistory: BrowserHistoryEntry[]): WorkspaceSess
     worktreesByRepo: {},
     lastKnownRelayPtyIdByTabId: {},
     lastVisitedAtByWorktreeId: {},
-    defaultTerminalTabsAppliedByWorktreeId: {},
-    closedTerminalTabTombstonesByTabId: {}
+    defaultTerminalTabsAppliedByWorktreeId: {}
   }
 }
 

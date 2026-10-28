@@ -1,3 +1,5 @@
+import { resolveStatusBarCompactChangeNoticeDismissed } from '../../../shared/status-bar-compact-change-notice'
+import { migrateExplorerDisplayRoots } from '../../../shared/file-explorer-display-root'
 import {
   getWorktreeCardModeProperties,
   isDefaultedCompactWorktreeCardProperties,
@@ -28,6 +30,14 @@ export function normalizeLoadedUiState(
   osc52ClipboardNoticePending: boolean,
   markNeedsSave: () => void
 ): PersistedState['ui'] {
+  const explorerDisplayRootByWorktree = migrateExplorerDisplayRoots(
+    parsed.ui?.explorerDisplayRootByWorktree,
+    parsed.ui?._explorerDisplayRootMigrated === true,
+    parsed.worktreeMeta ?? {}
+  )
+  if (parsed.ui?._explorerDisplayRootMigrated !== true) {
+    markNeedsSave()
+  }
   const rawSort = parsed.ui?.sortBy
   const sort = normalizeSortBy(rawSort)
   const migrate = !parsed.ui?._sortBySmartMigrated && rawSort === 'recent'
@@ -42,13 +52,13 @@ export function normalizeLoadedUiState(
   }
   const workspaceStatusesDefaultOrderMigrated =
     parsed.ui?._workspaceStatusesDefaultOrderMigrated === true
-  // Why: a short-lived default put Done on the left; repair only the exact raw payload once so user reorders survive.
+  // Repair only the exact former status order, once; preserve user reorders.
   const workspaceStatusesReorderedDefaultRepaired =
     parsed.ui?._workspaceStatusesReorderedDefaultRepaired === true
-  // Why: only exact legacy default payloads migrate; customized status labels/colors/icons/order are kept.
+  // Preserve customized labels, colors, icons and ordering.
   const workspaceStatusesDefaultWorkflowMigrated =
     parsed.ui?._workspaceStatusesDefaultWorkflowMigrated === true
-  // Why: visual migration has its own guard so later user choices of valid legacy color/icon IDs are preserved.
+  // Separate the visual migration guard so later choices of legacy visuals survive.
   const workspaceStatusesDefaultVisualsMigrated =
     parsed.ui?._workspaceStatusesDefaultVisualsMigrated === true
   const workspaceStatuses = normalizePersistedWorkspaceStatuses(parsed.ui?.workspaceStatuses, {
@@ -68,6 +78,7 @@ export function normalizeLoadedUiState(
   const inlineAgentsMigrated = parsed.ui?._inlineAgentsDefaultedForAllUsers === true
   const expandedCardPropsMigrated = parsed.ui?._expandedWorktreeCardPropertiesDefaulted === true
   const jiraIssueCardPropDefaulted = parsed.ui?._jiraIssueWorktreeCardPropertyDefaulted === true
+  const hostCardPropDefaulted = parsed.ui?._hostWorktreeCardPropertyDefaulted === true
   const hadExperimentOn = readDeprecatedExperimentFlag(parsed)
   const deliberateUncheck =
     hadExperimentOn && Array.isArray(rawCardProps) && !rawCardProps.includes('inline-agents')
@@ -95,7 +106,7 @@ export function normalizeLoadedUiState(
         return candidate
       }
       const next = [...candidate]
-      // Why: Linear rode the 'issue' property and Ports were always shown; split them out once to preserve existing cards.
+      // Preserve cards formerly coupled to issue visibility or always shown.
       if (candidate.includes('issue') && !candidate.includes('linear-issue')) {
         next.push('linear-issue' as const)
       }
@@ -104,12 +115,17 @@ export function normalizeLoadedUiState(
       }
       return next
     })()
-    // Why: 'jira-issue' joined the defaults after the expansion migration already stamped upgraded profiles, so it needs its own one-shot backfill.
+    // Jira arrived after the expansion migration, so it needs a separate backfill guard.
     const jiraCandidate =
       jiraIssueCardPropDefaulted || expandedCandidate.includes('jira-issue')
         ? expandedCandidate
         : [...expandedCandidate, 'jira-issue' as const]
-    const normalized = normalizeWorktreeCardProperties(jiraCandidate)
+    // Preserve the formerly unconditional host pill once when making it configurable.
+    const hostCandidate =
+      hostCardPropDefaulted || jiraCandidate.includes('host')
+        ? jiraCandidate
+        : [...jiraCandidate, 'host' as const]
+    const normalized = normalizeWorktreeCardProperties(hostCandidate)
     const changed =
       normalized.length !== rawCardProps.length ||
       normalized.some((property, index) => property !== rawCardProps[index])
@@ -119,7 +135,8 @@ export function normalizeLoadedUiState(
     migratedCardProps !== undefined ||
     !inlineAgentsMigrated ||
     !expandedCardPropsMigrated ||
-    !jiraIssueCardPropDefaulted
+    !jiraIssueCardPropDefaulted ||
+    !hostCardPropDefaulted
   ) {
     markNeedsSave()
   }
@@ -128,8 +145,7 @@ export function normalizeLoadedUiState(
     rawExplorerView,
     parsed.ui?.rightSidebarTab
   )
-  // Why: without a dirty mark the legacy "Search tab, no explorer view" repair stays
-  // in memory only, so a profile that never writes again redoes it on every launch.
+  // Persist raw legacy Search-view repair before defaults hide its original shape.
   if (
     rawExplorerView === undefined
       ? rightSidebarExplorerView !== defaults.ui.rightSidebarExplorerView
@@ -147,17 +163,31 @@ export function normalizeLoadedUiState(
   ) {
     markNeedsSave()
   }
-  // Why: only upgraded profiles still on the new default get the one-time usage-display notice; fresh profiles stay quiet.
-  const usagePercentageDisplayChangeNoticeDismissed =
-    resolveUsagePercentageDisplayChangeNoticeDismissed({
-      rawDismissed: parsed.ui?.usagePercentageDisplayChangeNoticeDismissed,
-      rawUsagePercentageDisplay: parsed.ui?.usagePercentageDisplay,
-      isExistingProfile: isExistingPersistedProfile({
-        repoCount: parsed.repos?.length ?? 0,
-        onboardingClosedAt: normalizedOnboarding.closedAt,
-        ui: parsed.ui
-      })
+  // Only upgraded profiles on the new default need the usage-display notice.
+  const percentageNoticeDismissed = resolveUsagePercentageDisplayChangeNoticeDismissed({
+    rawDismissed: parsed.ui?.usagePercentageDisplayChangeNoticeDismissed,
+    rawUsagePercentageDisplay: parsed.ui?.usagePercentageDisplay,
+    isExistingProfile: isExistingPersistedProfile({
+      repoCount: parsed.repos?.length ?? 0,
+      onboardingClosedAt: normalizedOnboarding.closedAt,
+      ui: parsed.ui
     })
+  })
+  const statusBarCompactChangeNoticeDismissed = resolveStatusBarCompactChangeNoticeDismissed({
+    rawDismissed: parsed.ui?.statusBarCompactChangeNoticeDismissed,
+    rawUsageMode: parsed.ui?.statusBarUsageMode,
+    isExistingProfile: isExistingPersistedProfile({
+      repoCount: parsed.repos?.length ?? 0,
+      onboardingClosedAt: normalizedOnboarding.closedAt,
+      ui: parsed.ui
+    })
+  })
+  if (parsed.ui?.statusBarCompactChangeNoticeDismissed !== statusBarCompactChangeNoticeDismissed) {
+    markNeedsSave()
+  }
+  // Compact rollout notice supersedes the percentage notice.
+  const usagePercentageDisplayChangeNoticeDismissed =
+    percentageNoticeDismissed || !statusBarCompactChangeNoticeDismissed
   if (
     parsed.ui?.usagePercentageDisplayChangeNoticeDismissed !==
     usagePercentageDisplayChangeNoticeDismissed
@@ -166,29 +196,28 @@ export function normalizeLoadedUiState(
   }
   return {
     ...defaults.ui,
-    // Why: missing card properties follow the persisted layout mode; explicit choices are preserved below.
     worktreeCardProperties: getWorktreeCardModeProperties(
       loadedCompactWorktreeCards ? 'Compact' : 'Default'
     ),
     ...stripMainOwnedTelemetryMarkerFromUI(parsed.ui),
-    // Why: migrate once from the retired Appearance setting only when no explicit chrome preference exists yet.
+    // The retired Appearance setting seeds chrome only without an explicit preference.
     rightSidebarOpen,
     rightSidebarTab: normalizeRightSidebarTab(parsed.ui?.rightSidebarTab),
-    // Why here and not in getPersistedUI: only the raw payload still shows the legacy
-    // "Search tab, no explorer view" shape — the defaults spread above fills in 'files'.
     rightSidebarExplorerView,
     setupGuideSidebarDismissed,
     usagePercentageDisplayChangeNoticeDismissed,
+    statusBarCompactChangeNoticeDismissed,
     setupGuideBrowserMilestoneMigrated:
       typeof parsed.ui?.setupGuideBrowserMilestoneMigrated === 'boolean'
         ? parsed.ui.setupGuideBrowserMilestoneMigrated
         : false,
     setupGuideBrowserMilestoneLegacyComplete:
       parsed.ui?.setupGuideBrowserMilestoneLegacyComplete === true,
-    // Why persist rather than notify inline: the flip lands during load, before any
-    // window exists, and it must survive a crash before the user ever sees the notice.
+    // Persist pending notices before windows exist so a crash cannot discard them.
     osc52ClipboardDefaultOnNoticePending: osc52ClipboardNoticePending,
     sortBy: migrate ? ('smart' as const) : sort,
+    _explorerDisplayRootMigrated: true,
+    explorerDisplayRootByWorktree,
     showDotfilesByWorktree: normalizeShowDotfilesByWorktree(parsed.ui?.showDotfilesByWorktree),
     workspaceStatuses,
     _workspaceStatusesDefaultOrderMigrated: true,
@@ -197,10 +226,11 @@ export function normalizeLoadedUiState(
     _workspaceStatusesDefaultVisualsMigrated: true,
     _sortBySmartMigrated: true,
     ...(migratedCardProps !== undefined ? { worktreeCardProperties: migratedCardProps } : {}),
-    // Why: keep stamping the legacy flag for rollback forward-compat; the new flag actually gates the migration.
+    // Keep the old marker for rollback builds; the new marker gates migration.
     _inlineAgentsDefaultedForExperiment: true,
     _inlineAgentsDefaultedForAllUsers: true,
     _expandedWorktreeCardPropertiesDefaulted: true,
-    _jiraIssueWorktreeCardPropertyDefaulted: true
+    _jiraIssueWorktreeCardPropertyDefaulted: true,
+    _hostWorktreeCardPropertyDefaulted: true
   }
 }

@@ -7,12 +7,10 @@ export type HostStackNavigationState = Readonly<{
 export type HostStackNavigationRoute = Readonly<{
   key?: string
   name: string
-  params?: Readonly<{ hostId?: unknown }>
+  params?: Readonly<{ hostId?: unknown; worktreeId?: unknown }>
   state?: HostStackNavigationState
 }>
 
-/** A screen inside app/h/_layout.tsx plus the params it needs, e.g.
- *  `{ name: '[hostId]/session/[worktreeId]', params: { hostId, worktreeId } }`. */
 export type HostStackRouteTarget = Readonly<{
   name: string
   params: Readonly<Record<string, string>>
@@ -27,9 +25,17 @@ export type HostStackReplaceAction = Readonly<{
 
 export type HostStackRootNavigation = {
   addListener: (event: 'state', listener: () => void) => () => void
-  dispatch: (action: HostStackReplaceAction) => void
-  // Why: the root layout's navigator has no committed state until it hydrates, and a
-  // notification tap can arm the transition before that first commit.
+  dispatch: (
+    action:
+      | HostStackReplaceAction
+      | Readonly<{
+          type: 'SET_PARAMS'
+          target: string
+          source: string
+          payload: { params: Readonly<Record<string, string>> }
+        }>
+  ) => void
+  // Wait for hydration: notification taps can arrive before the root navigator has committed state.
   getState: () => HostStackNavigationState | undefined
 }
 
@@ -64,8 +70,7 @@ export function hostStackRouteHref(target: HostStackRouteTarget): HostStackRoute
   return { pathname: `/h/${target.name}`, params: target.params }
 }
 
-// Why: the host is pushed as an encoded segment, so the committed route may hold
-// either form — an id with `/`, `#`, or `%` must still match its own push.
+// Match decoded and encoded ids so slash/hash/percent host ids recognize their own push.
 function hostParamMatches(param: unknown, expectedHostId: string): boolean {
   if (typeof param !== 'string') {
     return false
@@ -76,13 +81,11 @@ function hostParamMatches(param: unknown, expectedHostId: string): boolean {
   try {
     return decodeURIComponent(param) === expectedHostId
   } catch {
-    return false // Lone `%` — not our encoding.
+    return false
   }
 }
 
-/** The focused `h` route, however deep the caller's navigator sits above it: a screen
- *  inside the root stack sees it at the top, but app/_layout.tsx is itself a screen of
- *  Expo Router's internal navigator, so from there the root stack is one level down. */
+// Find the focused h route through Expo’s internal root navigator as well as callers already inside the root stack.
 function focusedHostRoute(state: HostStackNavigationState): HostStackNavigationRoute | null {
   let current: HostStackNavigationState | undefined = state
   while (current) {
@@ -115,15 +118,32 @@ function mountedHostStack(
   return { key: hostState.key, routeKey: hostRoute.key }
 }
 
-/** Opens a deep host route by mounting `/h/[hostId]` first and replacing it once
- *  its stack is committed. A cold push straight to a nested route resolves to the
- *  host index without the dynamic id, which lands on a blank host screen. */
+// Mount the host first, then replace after its stack commits; a cold nested push otherwise resolves to a blank index without hostId.
 export function navigateToHostStackRoute(
   navigation: HostStackRootNavigation,
   router: HostStackRouter,
   hostId: string,
   target: HostStackRouteTarget
 ): HostStackNavigationController {
+  const state = navigation.getState()
+  const hostState = state && focusedHostRoute(state)?.state
+  const focused = hostState?.routes[hostState.index]
+  if (
+    hostState?.key &&
+    focused?.key &&
+    focused.name === target.name &&
+    hostParamMatches(focused.params?.hostId, hostId) &&
+    hostParamMatches(focused.params?.worktreeId, target.params.worktreeId)
+  ) {
+    navigation.dispatch({
+      type: 'SET_PARAMS',
+      target: hostState.key,
+      source: focused.key,
+      payload: { params: target.params }
+    })
+    return { cancel: () => {}, isActive: () => false, retarget: () => {} }
+  }
+
   let active = true
   let hostRouteSeen = false
   let selectedTarget = target
@@ -136,7 +156,6 @@ export function navigateToHostStackRoute(
     unsubscribeState()
   }
 
-  // Why: cold Expo deep links resolve to index; target the route only after its HostStack exists.
   const onState = () => {
     if (!active) {
       return

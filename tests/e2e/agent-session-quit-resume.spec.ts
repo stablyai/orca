@@ -1,4 +1,5 @@
-import { existsSync, readFileSync, writeFileSync } from 'node:fs'
+import { mutateStoppedProfileState } from './helpers/persisted-profile-state'
+import { existsSync, readFileSync } from 'node:fs'
 import path from 'node:path'
 import type { ElectronApplication } from '@stablyai/playwright-test'
 import { test, expect } from './helpers/orca-app'
@@ -14,40 +15,35 @@ import {
 import { ensureTerminalVisible, waitForActiveWorktree, waitForSessionReady } from './helpers/store'
 import { attachRepoAndOpenTerminal, createRestartSession } from './helpers/orca-restart'
 import { PROTOCOL_VERSION } from '../../src/main/daemon/types'
-import { DEFAULT_LOCAL_ORCA_PROFILE_ID } from '../../src/shared/orca-profiles'
 
 const PROVIDER_SESSION_ID = 'e2e-quit-resume-session'
 
 function stubPersistedResumeCommand(userDataDir: string): void {
-  const dataPath = path.join(
-    userDataDir,
-    'profiles',
-    DEFAULT_LOCAL_ORCA_PROFILE_ID,
-    'orca-data.json'
-  )
-  const data = JSON.parse(readFileSync(dataPath, 'utf8')) as {
-    workspaceSession?: {
-      sleepingAgentSessionsByPaneKey?: Record<
-        string,
-        {
-          providerSession?: { id?: unknown }
-          launchConfig?: {
-            agentCommand?: string
-            agentArgs?: string
-            agentEnv?: Record<string, string>
+  return mutateStoppedProfileState(userDataDir, (state) => {
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: This test owns the persisted fixture; optional fields are checked at use sites.
+    const data = state as {
+      workspaceSession?: {
+        sleepingAgentSessionsByPaneKey?: Record<
+          string,
+          {
+            providerSession?: { id?: unknown }
+            launchConfig?: {
+              agentCommand?: string
+              agentArgs?: string
+              agentEnv?: Record<string, string>
+            }
           }
-        }
-      >
+        >
+      }
     }
-  }
-  const record = Object.values(data.workspaceSession?.sleepingAgentSessionsByPaneKey ?? {}).find(
-    (candidate) => candidate.providerSession?.id === PROVIDER_SESSION_ID
-  )
-  if (!record) {
-    throw new Error('Expected a persisted resumable agent session')
-  }
-  record.launchConfig = { agentCommand: 'echo', agentArgs: '', agentEnv: {} }
-  writeFileSync(dataPath, `${JSON.stringify(data, null, 2)}\n`, 'utf8')
+    const record = Object.values(data.workspaceSession?.sleepingAgentSessionsByPaneKey ?? {}).find(
+      (candidate) => candidate.providerSession?.id === PROVIDER_SESSION_ID
+    )
+    if (!record) {
+      throw new Error('Expected a persisted resumable agent session')
+    }
+    record.launchConfig = { agentCommand: 'echo', agentArgs: '', agentEnv: {} }
+  })
 }
 
 function readDaemonPid(userDataDir: string): number {
@@ -95,9 +91,7 @@ test('resumes an agent session after quit when its daemon PTY died while the app
     await execInTerminal(page, firstPtyId, `echo ${marker}`)
     await waitForTerminalOutput(page, marker)
 
-    // Why: a real agent run reports its provider session id over the hook
-    // server; seeding the same store entry keeps this test hermetic (no agent
-    // CLI install or auth) while exercising the identical persistence path.
+    // Seed the real hook-written resume record without requiring an installed/authenticated agent CLI.
     await page.evaluate(
       ({ paneKey, worktreeId: wtId, providerSessionId, transcriptPath }) => {
         window.__store?.getState().setAgentStatus(
@@ -129,9 +123,7 @@ test('resumes an agent session after quit when its daemon PTY died while the app
     firstApp = null
     stubPersistedResumeCommand(session.userDataDir)
 
-    // Why: simulates the daemon (and the agent CLI inside it) dying while the
-    // app is closed — reboot, crash, or update kill. SIGKILL leaves history
-    // checkpoints unclean so the relaunch takes the cold-restore path.
+    // SIGKILL models reboot/crash while closed and leaves unclean checkpoints for cold restore.
     process.kill(daemonPid, 'SIGKILL')
 
     const secondLaunch = await session.launch()

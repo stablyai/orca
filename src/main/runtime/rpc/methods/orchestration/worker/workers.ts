@@ -1,5 +1,5 @@
 import { OrchestrationError } from '../../../../orchestration/orchestration-error'
-import { defineMethod, type RpcMethod } from '../../../core'
+import { defineMethod } from '../../../core'
 import { startFederatedWorker } from '../federation/federated-worker-start'
 import { startLocalWorker } from './local-worker-start'
 import {
@@ -7,20 +7,24 @@ import {
   readWorkerStartModeSettings
 } from '../../orchestration-worker-start-mode'
 import { resolveOrchestrationCaller } from '../runs/run-scope'
-import { WorkerStartParams } from './worker-start-schema'
+import { assertHelperStartScope, resolveWorkerStartRun } from './worker-start-authority'
+import { WorkerStartParams } from '../../../../../../shared/rpc-contract/orchestration-worker-start-params'
 import {
   isWorkerStartTimeoutWithinTimerLimit,
   resolveWorkerStartReadinessTimeoutMs
 } from '../../../../../../shared/orchestration-timing-budgets'
 import { assertWorkerStartTaskSpecWithinPromptBudget } from './worker-start-prompt-budget'
+import { ORCA_SESSION_ADDRESS_PREFIX } from '../../../../../../shared/orca-session-address'
+import { ORCHESTRATION_SESSION_CALLER_ERROR_CODES as SESSION_CODES } from '../../../../../../shared/orchestration-session-caller-codes'
 
-export const ORCHESTRATION_WORKER_START_METHODS: RpcMethod[] = [
+export const ORCHESTRATION_WORKER_START_METHODS = [
   defineMethod({
     name: 'orchestration.workerStart',
+    permission: 'workspace',
     params: WorkerStartParams,
     handler: async (
       params,
-      { runtime, orchestrationMutation, orchestrationCompatibilityEvidence }
+      { runtime, orchestrationMutation, orchestrationCompatibilityEvidence, orchestrationCaller }
     ) => {
       if (!isWorkerStartTimeoutWithinTimerLimit(params.timeoutMs)) {
         throw new OrchestrationError(
@@ -30,17 +34,17 @@ export const ORCHESTRATION_WORKER_START_METHODS: RpcMethod[] = [
       }
       const readinessTimeoutMs = resolveWorkerStartReadinessTimeoutMs(params.timeoutMs)
       const db = runtime.getOrchestrationDb()
-      const coordinatorPane = resolveOrchestrationCaller(runtime, {
+      const coordinator = resolveOrchestrationCaller(runtime, {
         callerTerminalHandle: params.from,
-        callerEvidence: orchestrationCompatibilityEvidence
+        callerEvidence: orchestrationCompatibilityEvidence,
+        callerSession: orchestrationCaller
       })
-      const run = coordinatorPane ? db.getCurrentRunForPane(coordinatorPane) : undefined
-      if (!run || (params.run && params.run !== run.id)) {
-        throw new OrchestrationError(
-          'consumer_fenced',
-          'worker-start requires the coordinator terminal currently bound to the Task Run.'
-        )
-      }
+      const { run, helperCreator } = resolveWorkerStartRun(runtime, {
+        coordinator,
+        from: params.from,
+        callerSession: orchestrationCaller,
+        runId: params.run
+      })
       const existingTask = params.task ? db.getTask(params.task) : undefined
       if (params.task && (!existingTask || existingTask.run_id !== run.id)) {
         throw new OrchestrationError(
@@ -48,21 +52,32 @@ export const ORCHESTRATION_WORKER_START_METHODS: RpcMethod[] = [
           `Task ${params.task} was not found in Run ${run.id}.`
         )
       }
+      if (helperCreator) {
+        assertHelperStartScope(db, helperCreator, { task: existingTask, params })
+      }
       await assertWorkerStartTaskSpecWithinPromptBudget(params.spec ?? existingTask!.spec)
       const mode = decideWorkerStartMode({
         params,
         settings: readWorkerStartModeSettings(runtime)
       })
+      if (params.on && params.terminal?.startsWith(ORCA_SESSION_ADDRESS_PREFIX)) {
+        // Refused here, before any remote call: an Orca session ID names a chat only on its own host.
+        throw new OrchestrationError(
+          SESSION_CODES.hostBoundary,
+          `${params.terminal} names a chat by its Orca session ID, which identifies it only on the host that runs it. Run worker-start on that host. No effects were applied.`,
+          { effectsApplied: false }
+        )
+      }
       if (params.on) {
-        // A remote worker is always a terminal agent; the mode receipt rides along so the
-        // coordinator still learns why its structured default did not apply.
+        // Remote workers are terminal-only; carry the mode receipt to explain structured-preference fallback.
         const receipt = await startFederatedWorker({
           params,
           runtime,
           db,
           runId: run.id,
           task: existingTask,
-          orchestrationMutation
+          orchestrationMutation,
+          callerSession: orchestrationCaller
         })
         return receipt && typeof receipt === 'object' ? { ...receipt, mode } : receipt
       }
@@ -71,10 +86,12 @@ export const ORCHESTRATION_WORKER_START_METHODS: RpcMethod[] = [
         runtime,
         db,
         run,
-        coordinatorPane,
+        coordinator,
+        callerSession: orchestrationCaller,
         existingTask,
         orchestrationMutation,
-        mode
+        mode,
+        helperCreator
       })
     }
   })

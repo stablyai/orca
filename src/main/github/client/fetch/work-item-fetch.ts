@@ -22,11 +22,13 @@ export async function fetchIssueWorkItem(
   ownerRepo: GitHubApiRepository | null,
   number: number,
   connectionId?: string | null,
-  localGitOptions: LocalGitExecOptions = {}
+  localGitOptions: LocalGitExecOptions = {},
+  environment?: NodeJS.ProcessEnv
 ): Promise<MainWorkItem | null> {
   const ghOptions = {
     ...ghRepoExecOptions(githubRepoContext(repoPath, connectionId, localGitOptions)),
-    ...githubHostExecOptions(ownerRepo)
+    ...githubHostExecOptions(ownerRepo),
+    ...(environment ? { env: environment } : {})
   }
   if (ownerRepo) {
     const { stdout } = await ghExecFileAsync(
@@ -41,8 +43,7 @@ export async function fetchIssueWorkItem(
   }
 
   if (connectionId) {
-    // Why: SSH-backed gh has no repository cwd. A bare lookup could honor the
-    // local process GH_REPO/GH_HOST and return an unrelated repository item.
+    // SSH-backed gh has no local cwd; ambient GH_REPO/GH_HOST could identify unrelated work.
     return null
   }
 
@@ -53,7 +54,7 @@ export async function fetchIssueWorkItem(
   return mapIssueWorkItem(JSON.parse(stdout) as Record<string, unknown>)
 }
 
-// Why: REST /pulls/{n} lacks latestReviews, so pull review fields from gh so reviewer lists aren't silently empty.
+// REST pull data omits latestReviews; retain gh's reviewer fields.
 export const WORK_ITEM_PR_REVIEW_JSON_FIELDS = 'reviewRequests,latestReviews'
 
 export async function fetchPullRequestReviewFields(
@@ -115,7 +116,7 @@ export async function fetchPullRequestWorkItem(
       )
       const item = JSON.parse(stdout) as Record<string, unknown>
       const mapped = mapPullRequestWorkItem(item, ownerRepo)
-      // Why: merge-metadata GraphQL is best-effort — don't fall through to REST, which drops latestReviews and blanks bot-only reviewer lists.
+      // Best-effort merge metadata must not trigger a REST fallback that drops latestReviews.
       const baseRefName = typeof item.baseRefName === 'string' ? item.baseRefName : undefined
       try {
         const mergeMetadata = await detectRepositoryMergeMetadata(ownerRepo, baseRefName, ghOptions)
@@ -147,8 +148,7 @@ export async function fetchPullRequestWorkItem(
   }
 
   if (connectionId) {
-    // Why: connection-backed gh cannot infer a repository from cwd. Refuse a
-    // bare call so process-level GH_REPO/GH_HOST cannot redirect the lookup.
+    // Refuse unresolved connection-backed identities instead of following ambient gh repository settings.
     return null
   }
 

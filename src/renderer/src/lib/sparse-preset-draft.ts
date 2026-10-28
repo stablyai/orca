@@ -60,3 +60,25 @@ export function parseSparsePresetDirectories(value: string): SparsePresetDirecto
     error: null
   }
 }
+
+export function validateSparsePresetName(
+  name: string,
+  presets: readonly { id: string; name: string }[],
+  presetId?: string
+): string | null {
+  const trimmed = name.trim()
+  if (!trimmed) {
+    return translate('sparsePreset.nameRequired', 'Name is required.')
+  }
+  if (trimmed.length > 80) {
+    return translate('sparsePreset.nameTooLong', 'Name must be 80 characters or fewer.')
+  }
+  const collision = presets.find(
+    (preset) => preset.id !== presetId && preset.name.toLowerCase() === trimmed.toLowerCase()
+  )
+  return collision
+    ? translate('sparsePreset.nameExists', 'A preset named “{{name}}” already exists.', {
+        name: collision.name
+      })
+    : null
+}

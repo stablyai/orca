@@ -3,8 +3,7 @@ import { appendNormalizedToTailBuffer } from './terminal-tail-buffer'
 import { appendCompletedTerminalTranscript, buildPreview } from './terminal-tail-state'
 import type { RetainedTailRedrawCursor } from './terminal-tail-redraw-buffer'
 
-// Why: restore payloads can be multi-MB; the records only retain a bounded tail,
-// so cap the one-time parse on the spawn path to the suffix that can matter.
+// Multi-MB restore payloads retain only a tail; cap spawn-path parsing to the relevant suffix.
 const MAX_RESTORE_TAIL_SEED_CHARS = 256 * 1024
 
 export type RestoredTerminalTailSeed = {
@@ -63,10 +62,7 @@ export function buildRestoredTerminalTailSeed(text: string): RestoredTerminalTai
   let sliced = false
   if (bounded.length > MAX_RESTORE_TAIL_SEED_CHARS) {
     bounded = bounded.slice(-MAX_RESTORE_TAIL_SEED_CHARS)
-    // Why: an arbitrary suffix can start mid-escape; restarting after the first
-    // line break resumes at a boundary (escape params never span \n or \r —
-    // \r covers newline-free CR-redraw streams). Consume a full \r\n pair so
-    // the seed does not begin with a phantom blank line.
+    // A sliced suffix may start mid-escape; restart after CR/LF and consume CRLF together to avoid a phantom blank row.
     const anchor = bounded.search(/[\r\n]/)
     if (anchor !== -1) {
       bounded = bounded.slice(

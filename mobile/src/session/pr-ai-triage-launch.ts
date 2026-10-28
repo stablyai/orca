@@ -1,42 +1,141 @@
+import type { SourceControlLaunchActionId } from '../../../src/shared/source-control-ai-actions'
 import type { RpcClient } from '../transport/rpc-client'
 import {
-  readMobileReviewCreatedTerminal,
-  readMobileReviewTerminalSendAccepted
-} from './mobile-diff-review-rpc'
+  AGENT_LAUNCH_UPDATE_REQUIRED_MESSAGE,
+  launchAgentInExistingWorkspace,
+  supportsMobileExistingAgentLaunch
+} from './mobile-existing-agent-launch'
+import {
+  hostRefusesOtherRuntimeWorkspace,
+  loadMobileAgentLaunchContext
+} from './mobile-new-tab-agent-loader'
+import { resolveMobileSourceControlLaunchAgent } from './mobile-source-control-launch-agent'
+import { projectSourceControlActionLaunch } from '../../../src/shared/source-control-action-launch-preferences'
 
-// Pure launch path for the PR triage actions ("Fix checks with AI" / "Resolve
-// conflicts with AI"). Reuses the same two RPCs the diff-review send flow uses —
-// session.tabs.createTerminal then terminal.send — so the prompt is dropped into a
-// fresh agent terminal in the worktree. There is no higher-level agent-composer RPC
-// on mobile, so this createTerminal+send pair is the launch mechanism. Kept free of
-// react-native imports so it stays unit-testable in the node test environment.
-export async function createTerminalAndSendPrompt(
-  client: Pick<RpcClient, 'sendRequest'>,
-  worktreeId: string,
+// Have the host launch and deliver AI prompts; mobile must never type them into a shell.
+
+export type MobilePromptedAgentLaunch =
+  | { kind: 'sent'; warning?: string }
+  /** The agent started but `prompt`, the text as sent, did not reach it; the caller offers it. */
+  | { kind: 'prompt-not-sent'; prompt: string; warning?: string }
+  /** Nothing started; `message` says why. */
+  | { kind: 'not-started'; message: string }
+  /** The agent may be running; do not launch again until the user has looked. */
+  | { kind: 'unconfirmed'; message: string }
+
+export const AGENT_PROMPT_NOT_SENT_MESSAGE = "The agent started, but the prompt wasn't sent."
+
+export async function launchAgentWithPrompt(args: {
+  client: RpcClient
+  hostCapabilities: readonly string[] | null | undefined
+  worktreeId: string
+  actionId: SourceControlLaunchActionId | null
   prompt: string
-): Promise<void> {
-  const created = await client.sendRequest('session.tabs.createTerminal', {
-    worktree: `id:${worktreeId}`,
-    activate: false,
-    select: true,
-    navigation: 'caller'
+  launchSource: string
+}): Promise<MobilePromptedAgentLaunch> {
+  if (!supportsMobileExistingAgentLaunch(args.hostCapabilities)) {
+    return { kind: 'not-started', message: AGENT_LAUNCH_UPDATE_REQUIRED_MESSAGE }
+  }
+  let resolved
+  try {
+    resolved = resolveMobileSourceControlLaunchAgent(
+      await loadMobileAgentLaunchContext({
+        client: args.client,
+        worktreeId: args.worktreeId,
+        hostRefusesOtherRuntime: hostRefusesOtherRuntimeWorkspace(args.hostCapabilities)
+      }),
+      args.actionId
+    )
+  } catch (error) {
+    const message = error instanceof Error ? error.message.trim() : ''
+    return { kind: 'not-started', message: message || 'Could not load the available agents.' }
+  }
+  if (resolved.kind === 'unavailable') {
+    return { kind: 'not-started', message: resolved.message }
+  }
+  const { recipe } = resolved
+  const projection = projectSourceControlActionLaunch(recipe ?? {}, resolved.agent, {
+    basePrompt: args.prompt
   })
-  if (!created.ok) {
-    throw new Error(created.error?.message || 'Failed to create terminal')
+  const text = projection.commandInput
+  if (!text) {
+    return {
+      kind: 'not-started',
+      message:
+        "This action's saved prompt is empty. Update Source Control AI settings on your computer."
+    }
   }
-  const terminalTab = readMobileReviewCreatedTerminal(created.result)
-  if (!terminalTab) {
-    throw new Error('Created terminal response was invalid')
-  }
-  const sent = await client.sendRequest('terminal.send', {
-    terminal: terminalTab.terminal,
-    text: prompt,
-    enter: true
+  const launched = await launchAgentInExistingWorkspace({
+    client: args.client,
+    hostCapabilities: args.hostCapabilities,
+    worktreeId: args.worktreeId,
+    agent: resolved.agent,
+    ...(projection.sessionOptions ? { chatOptions: projection.sessionOptions } : {}),
+    // The phone lacks the workspace shell needed to project inherited choices over raw flags.
+    agentArgs: projection.sessionOptionsYieldToAgentArgs ? undefined : projection.agentArgs,
+    surface: projection.requestedSurface,
+    prompt: { text, delivery: 'submit' },
+    launchSource: args.launchSource
   })
-  if (!sent.ok) {
-    throw new Error(sent.error?.message || 'Failed to send prompt')
+  switch (launched.kind) {
+    case 'launched': {
+      const warning = launched.result.warning?.trim()
+      const extra = warning ? { warning } : {}
+      return launched.promptDelivered
+        ? { kind: 'sent', ...extra }
+        : { kind: 'prompt-not-sent', prompt: text, ...extra }
+    }
+    case 'unsupported':
+      return { kind: 'not-started', message: AGENT_LAUNCH_UPDATE_REQUIRED_MESSAGE }
+    case 'failed':
+    case 'tab-closed':
+      return { kind: 'not-started', message: launched.message }
+    case 'unknown':
+      return { kind: 'unconfirmed', message: launched.message }
   }
-  if (!readMobileReviewTerminalSendAccepted(sent.result)) {
-    throw new Error('Terminal input is locked')
+}
+
+export function agentStartedMessage(workspaceLabel: string | null | undefined): string {
+  const label = workspaceLabel?.trim()
+  return label ? `Agent started in ${label}` : 'Agent started'
+}
+
+// Host warnings describe completed launches and must not become failure notices.
+export function promptedLaunchNotice(
+  result: MobilePromptedAgentLaunch,
+  workspaceLabel?: string | null
+): {
+  succeeded: boolean
+  success: string | null
+  error: string | null
+  warning: string | null
+  undeliveredPrompt: string | null
+} {
+  switch (result.kind) {
+    case 'sent':
+      return {
+        succeeded: true,
+        success: agentStartedMessage(workspaceLabel),
+        error: null,
+        warning: result.warning ?? null,
+        undeliveredPrompt: null
+      }
+    case 'prompt-not-sent':
+      return {
+        succeeded: false,
+        success: null,
+        error: AGENT_PROMPT_NOT_SENT_MESSAGE,
+        warning: result.warning ?? null,
+        undeliveredPrompt: result.prompt
+      }
+    case 'not-started':
+    case 'unconfirmed':
+      return {
+        succeeded: false,
+        success: null,
+        error: result.message,
+        warning: null,
+        undeliveredPrompt: null
+      }
   }
 }

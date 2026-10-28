@@ -1,0 +1,15 @@
+{
+  "capturedAt": "2026-09-28T07:56:42.619Z",
+  "platform": "darwin",
+  "command": [
+    "qodercli",
+    "--config-dir",
+    "/tmp/orca-qoder-probe/config",
+    "--cwd",
+    "/tmp/orca-qoder-probe/workspace"
+  ],
+  "cols": 100,
+  "rows": 32,
+  "note": "Qoder CLI 1.1.64; isolated configuration; no account",
+  "exitCode": 129
+}

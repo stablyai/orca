@@ -56,8 +56,7 @@ export function TokenMixBar({ overview }: { overview: UsageOverviewModel }): Rea
       className: 'bg-border'
     }
   ]
-  // Why: Codex cached input is a subset of input. The overview model normalizes
-  // that into new/cache buckets so the visual mix does not double-count it.
+  // Codex cached input is already part of input; use normalized new/cache buckets to avoid double-counting.
   const mixTotal = segments.reduce((sum, segment) => sum + segment.value, 0)
 
   return (
@@ -145,8 +144,8 @@ export function DailyIntensityGrid({
           </h4>
           <p className="text-xs text-muted-foreground">
             {translate(
-              'auto.components.stats.usage.overview.sections.f28ff1f852',
-              'Recent combined Claude, Codex, and OpenCode token activity.'
+              'auto.components.stats.usage.overview.sections.recentCombinedActivity',
+              'Recent combined Claude, Codex, OpenCode, and Muse token activity.'
             )}
           </p>
         </div>

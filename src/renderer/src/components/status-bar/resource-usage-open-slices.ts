@@ -1,5 +1,6 @@
 import type { AppState } from '../../store'
 import { getAllWorktreesFromState } from '../../store/selectors'
+import { selectFolderWorkspaces } from '@/store/workspace-record-selectors'
 
 const EMPTY_TABS_BY_WORKTREE: AppState['tabsByWorktree'] = {}
 const EMPTY_PTY_IDS_BY_TAB_ID: AppState['ptyIdsByTabId'] = {}
@@ -8,6 +9,8 @@ const EMPTY_DEFERRED_SSH_SESSION_IDS_BY_TAB_ID: AppState['deferredSshSessionIdsB
 const EMPTY_RUNTIME_PANE_TITLES_BY_TAB_ID: AppState['runtimePaneTitlesByTabId'] = {}
 const EMPTY_BROWSER_TABS_BY_WORKTREE: AppState['browserTabsByWorktree'] = {}
 const EMPTY_REPOS: AppState['repos'] = []
+const EMPTY_FOLDER_WORKSPACES: AppState['folderWorkspaces'] = []
+const EMPTY_PROJECT_GROUPS: AppState['projectGroups'] = []
 const EMPTY_WORKTREES: ReturnType<typeof getAllWorktreesFromState> = []
 
 export function getResourceUsageTabsByWorktree(
@@ -64,4 +67,18 @@ export function getResourceUsageAllWorktrees(
   open: boolean
 ): ReturnType<typeof getAllWorktreesFromState> {
   return open ? getAllWorktreesFromState(state) : EMPTY_WORKTREES
+}
+
+export function getResourceUsageFolderWorkspaces(
+  state: Pick<AppState, 'folderWorkspaces'>,
+  open: boolean
+): AppState['folderWorkspaces'] {
+  return open ? selectFolderWorkspaces(state) : EMPTY_FOLDER_WORKSPACES
+}
+
+export function getResourceUsageProjectGroups(
+  state: Pick<AppState, 'projectGroups'>,
+  open: boolean
+): AppState['projectGroups'] {
+  return open ? state.projectGroups : EMPTY_PROJECT_GROUPS
 }

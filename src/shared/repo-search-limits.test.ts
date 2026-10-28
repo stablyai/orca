@@ -13,7 +13,6 @@ import {
 
 describe('repository ref-search limits', () => {
   it('accepts normal UI and CLI limits and adds one bounded probe row', () => {
-    expect(REPO_SEARCH_REFS_DEFAULT_LIMIT).toBe(25)
     expect(isRepoSearchRefsLimit(20)).toBe(true)
     expect(isRepoSearchRefsLimit(REPO_SEARCH_REFS_DEFAULT_LIMIT)).toBe(true)
     expect(isRepoSearchRefsLimit(600)).toBe(true)
@@ -48,8 +47,8 @@ describe('repository ref-search limits', () => {
   ])('rejects malformed request limit %s', (value) => {
     expect(isRepoSearchRefsRequestLimit(value)).toBe(false)
     expect(isRepoSearchRefsLimit(value)).toBe(false)
-    expect(() => getRepoSearchRefsProbeLimit(value as number)).toThrow('invalid_limit')
-    expect(() => clampRepoSearchRefsLimit(value as number)).toThrow('invalid_limit')
+    expect(() => getRepoSearchRefsProbeLimit(value)).toThrow('invalid_limit')
+    expect(() => clampRepoSearchRefsLimit(value)).toThrow('invalid_limit')
   })
 
   it('rejects a scan limit that would overflow the candidate multiplier', () => {

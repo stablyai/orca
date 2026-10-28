@@ -61,24 +61,10 @@ describe('latestPreviousPublishedDesktopReleaseTag', () => {
   it('bounds stable notes to the previous stable release when rcs exist', () => {
     expect(
       latestPreviousPublishedDesktopReleaseTag(
-        [release('v1.4.35'), release('v1.4.36-rc.0'), release('v1.4.36')],
+        [release('v1.4.35'), release('v1.4.36-rc.0'), release('v1.4.36-rc.6'), release('v1.4.36')],
         'v1.4.36'
       )
     ).toBe('v1.4.35')
-  })
-
-  it('does not collapse a stable changelog to its rc-to-stable version bump', () => {
-    expect(
-      latestPreviousPublishedDesktopReleaseTag(
-        [
-          release('v1.4.120'),
-          release('v1.4.121-rc.0'),
-          release('v1.4.121-rc.6'),
-          release('v1.4.121')
-        ],
-        'v1.4.121'
-      )
-    ).toBe('v1.4.120')
   })
 
   it('bounds the first rc notes to the previous stable release', () => {
@@ -140,6 +126,7 @@ describe('createDraftRelease', () => {
       repo: 'stablyai/orca',
       tag: 'v1.4.36',
       token: 'token',
+      targetCommitish: 'abc123',
       fetchImpl,
       log: vi.fn()
     })
@@ -173,9 +160,11 @@ describe('createDraftRelease', () => {
     const createBody = JSON.parse(fetchImpl.mock.calls[2][1].body)
     expect(createBody).toMatchObject({
       tag_name: 'v1.4.36',
+      target_commitish: 'abc123',
       name: 'v1.4.36',
       draft: true,
-      prerelease: false
+      prerelease: false,
+      make_latest: 'false'
     })
     expect(createBody.body).toHaveLength(120_000)
     expect(createBody.body).toContain('Release notes were truncated')
@@ -192,6 +181,7 @@ describe('createDraftRelease', () => {
       repo: 'stablyai/orca',
       tag: 'v1.4.36-rc.1',
       token: 'token',
+      targetCommitish: 'abc123',
       fetchImpl,
       log: vi.fn()
     })
@@ -214,6 +204,7 @@ describe('createDraftRelease', () => {
       repo: 'stablyai/orca',
       tag: 'v1.4.36',
       token: 'token',
+      targetCommitish: 'abc123',
       fetchImpl,
       log: vi.fn()
     })
@@ -243,6 +234,7 @@ describe('createDraftRelease', () => {
       repo: 'stablyai/orca',
       tag: 'v1.4.36',
       token: 'token',
+      targetCommitish: 'abc123',
       fetchImpl,
       log: vi.fn()
     })
@@ -272,6 +264,7 @@ describe('createDraftRelease', () => {
       repo: 'stablyai/orca',
       tag: 'v1.4.36',
       token: 'token',
+      targetCommitish: 'abc123',
       fetchImpl,
       log
     })
@@ -304,6 +297,7 @@ describe('createDraftRelease', () => {
       repo: 'stablyai/orca',
       tag: 'v1.4.36',
       token: 'token',
+      targetCommitish: 'abc123',
       fetchImpl,
       log
     })
@@ -319,6 +313,7 @@ describe('createDraftRelease', () => {
       repo: 'stablyai/orca',
       tag: 'v1.4.36',
       token: 'token',
+      targetCommitish: 'abc123',
       fetchImpl,
       log: vi.fn()
     })
@@ -337,6 +332,7 @@ describe('createDraftRelease', () => {
       repo: 'stablyai/orca',
       tag: 'v1.4.36',
       token: 'token',
+      targetCommitish: 'abc123',
       fetchImpl,
       log: vi.fn()
     })
@@ -359,6 +355,7 @@ describe('createDraftRelease', () => {
       repo: 'stablyai/orca',
       tag: 'v1.4.36',
       token: 'token',
+      targetCommitish: 'abc123',
       fetchImpl,
       log: vi.fn()
     })
@@ -375,5 +372,26 @@ describe('createDraftRelease', () => {
     )
     const generateNotesBody = JSON.parse(fetchImpl.mock.calls[2][1].body)
     expect(generateNotesBody.previous_tag_name).toBe('v1.4.35')
+  })
+
+  it('refuses an untagged GitHub draft so electron-builder cannot publish latest', async () => {
+    const fetchImpl = vi
+      .fn()
+      .mockResolvedValueOnce(jsonResponse([]))
+      .mockResolvedValueOnce(jsonResponse({ name: 'v1.4.36', body: 'notes' }))
+      .mockResolvedValueOnce(
+        jsonResponse({ tag_name: 'untagged-abc', name: 'v1.4.36', draft: true })
+      )
+
+    await expect(
+      createDraftRelease({
+        repo: 'stablyai/orca',
+        tag: 'v1.4.36',
+        token: 'token',
+        targetCommitish: 'abc123',
+        fetchImpl,
+        log: vi.fn()
+      })
+    ).rejects.toThrow('GitHub created draft release untagged-abc instead of draft v1.4.36')
   })
 })

@@ -1,19 +1,23 @@
+import { ImeInput } from '@/lib/ime-text-field'
 import type React from 'react'
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react'
 import { LoaderCircle, Search } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 import { filterEntries, joinPath, parentPath, type DirEntry } from './remote-file-browser-helpers'
 import { RemoteFileBrowserBreadcrumbs } from './RemoteFileBrowserBreadcrumbs'
 import { RemoteFileBrowserEntryList } from './RemoteFileBrowserEntryList'
+import { initialRemoteFileBrowserHighlight } from './remote-file-browser-highlight'
+import type { PreviewState } from './remote-file-browser-path-preview-resolver'
 import { useRemoteFileBrowserFilterKeyCommands } from './use-remote-file-browser-filter-key-commands'
 import { useRemoteFileBrowserListing } from './use-remote-file-browser-listing'
 import { useRemoteFileBrowserPathPreview } from './use-remote-file-browser-path-preview'
 import { translate } from '@/i18n/i18n'
 import type { FilesystemPathFlavor } from '../../../../shared/filesystem-entry-types'
 
+// Both IDs select an SSH host owned and listed by the paired server.
 type RemoteFileBrowserProps = (
-  | { targetId: string; runtimeEnvironmentId?: never }
+  | { targetId: string; runtimeEnvironmentId?: string }
   | { runtimeEnvironmentId: string; targetId?: never }
 ) & {
   initialPath?: string
@@ -22,7 +26,7 @@ type RemoteFileBrowserProps = (
 }
 
 const FILE_HINT_MS = 2000
-const FILE_HINT_TEXT = "Files can't be opened as a project"
+const NO_ENTRIES: readonly DirEntry[] = []
 
 export function RemoteFileBrowser({
   targetId,
@@ -38,6 +42,15 @@ export function RemoteFileBrowser({
   const [error, setError] = useState<string | null>(null)
   const [filter, setFilter] = useState('')
   const [fileHint, setFileHint] = useState(false)
+  // Tied to the list, preview and text it was moved on, so any new listing, preview or keystroke starts
+  // from its own default (a cached listing reappears as the same array; a typed path waits on a debounce).
+  const [highlight, setHighlight] = useState<{
+    entries: readonly DirEntry[]
+    preview: PreviewState | null
+    filter: string
+    index: number
+  } | null>(null)
+  const listboxId = useId()
   const genRef = useRef(0)
   const inputRef = useRef<HTMLInputElement>(null)
   const fileHintTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -59,7 +72,8 @@ export function RemoteFileBrowser({
     handleInputPaste,
     discardPreview,
     resetPreviewForNavigation,
-    cancelPreviewWork
+    cancelPreviewWork,
+    previewMatchesInput
   } = useRemoteFileBrowserPathPreview({
     resolvedPath,
     pathFlavor,
@@ -79,7 +93,7 @@ export function RemoteFileBrowser({
       if (node !== null) {
         return
       }
-      // Why: browse generations and timers are scoped to this picker owner; clear them when it detaches.
+      // Cancel owner-scoped browse generations/timers when this picker detaches.
       invalidateBrowseRequests()
       cancelPreviewWork()
       for (const timerRef of [fileHintTimerRef, clickTimerRef]) {
@@ -105,7 +119,7 @@ export function RemoteFileBrowser({
         setResolvedPath(result.resolvedPath)
         setEntries(result.entries)
         setPathFlavor(result.pathFlavor)
-        // Only bare `~` yields the home dir itself; `~/sub` resolves elsewhere and must not overwrite the home anchor.
+        // Only bare ~ resolves the home anchor; ~/sub must not replace it.
         if (dirPath === '~') {
           homePathRef.current = result.resolvedPath
         }
@@ -124,7 +138,7 @@ export function RemoteFileBrowser({
     [fetchListing, homePathRef]
   )
 
-  // Central nav clears filter/preview/hint and bumps previewGenRef so a stale in-flight preview won't clobber committed state.
+  // Invalidate preview generations on navigation so stale reads cannot overwrite committed state.
   const navigate = useCallback(
     (dirPath: string) => {
       setFilter('')
@@ -154,6 +168,24 @@ export function RemoteFileBrowser({
   }, [resolvedPath, navigate, pathFlavor])
 
   const filteredEntries = useMemo(() => filterEntries(entries, filter), [entries, filter])
+  const previewFilteredEntries = useMemo(
+    () => (preview ? filterEntries(preview.entries, preview.filter) : null),
+    [preview]
+  )
+  // Why: while a listing loads only the spinner renders, so the prior rows can't be targeted.
+  const displayEntries = loading ? NO_ENTRIES : (previewFilteredEntries ?? filteredEntries)
+  // Why: a resolving preview keeps its prior rows on screen, but they are no longer targetable.
+  const activeIndex = preview?.loading
+    ? -1
+    : highlight?.entries === displayEntries &&
+        highlight.preview === preview &&
+        highlight.filter === filter
+      ? highlight.index
+      : initialRemoteFileBrowserHighlight(displayEntries, preview !== null && preview.filter === '')
+  const moveHighlight = useCallback(
+    (index: number) => setHighlight({ entries: displayEntries, preview, filter, index }),
+    [displayEntries, preview, filter]
+  )
 
   const triggerFileHint = useCallback(() => {
     if (fileHintTimerRef.current) {
@@ -166,17 +198,16 @@ export function RemoteFileBrowser({
     }, FILE_HINT_MS)
   }, [])
 
-  // Select always returns the committed directory; disabled during a path preview to avoid a mismatched selection.
   const handleSelect = useCallback(() => {
     onSelect(resolvedPath)
   }, [resolvedPath, onSelect])
 
-  // When a preview is active, row clicks resolve relative to the preview path, not the committed resolvedPath.
+  // Preview rows resolve against their preview path rather than the committed directory.
   const listParentPath = preview?.resolvedPath ?? resolvedPath
 
   const handleRowClick = useCallback(
     (entry: DirEntry) => {
-      // Stale rows from the prior listing may still show while a preview resolves; clicking them would navigate a mismatched path.
+      // Old rows can remain during preview resolution; ignore clicks until their parent path is known.
       if (preview?.loading) {
         return
       }
@@ -197,7 +228,6 @@ export function RemoteFileBrowser({
 
   const handleRowDoubleClick = useCallback(
     (entry: DirEntry) => {
-      // Same as handleRowClick: don't act on stale rows while the preview listing re-resolves.
       if (!entry.isDirectory || preview?.loading) {
         return
       }
@@ -211,10 +241,16 @@ export function RemoteFileBrowser({
   )
 
   const handleFilterKeyDown = useRemoteFileBrowserFilterKeyCommands({
+    loading,
     filter,
     setFilter,
     filteredEntries,
+    displayEntries,
+    activeIndex,
+    moveHighlight,
+    listParentPath,
     preview,
+    previewMatchesInput,
     discardPreview,
     resolvedPath,
     pathFlavor,
@@ -229,7 +265,7 @@ export function RemoteFileBrowser({
   const isPreviewActive = preview !== null
   const showPreviewLoading = isPreviewActive && preview!.loading
 
-  // Disable Select during a non-empty path preview so the committed dir isn't silently selected under a different-looking list.
+  // Disable Select while previewing another path so visible and selected directories cannot disagree.
   const selectDisabled = loading || (isPreviewActive && filter !== '')
 
   return (
@@ -242,12 +278,18 @@ export function RemoteFileBrowser({
         navigateUp={navigateUp}
       />
 
-      {/* Filter input */}
       <div className="relative">
         <Search className="size-3.5 text-muted-foreground absolute left-2 top-1/2 -translate-y-1/2 pointer-events-none" />
-        <input
+        <ImeInput
           ref={inputRef}
           type="text"
+          role="combobox"
+          aria-expanded
+          aria-autocomplete="list"
+          aria-label={translate(
+            'auto.components.sidebar.RemoteFileBrowser.inputLabel',
+            'Filter or path'
+          )}
           autoFocus
           value={filter}
           onChange={(e) => handleInputChange(e.target.value)}
@@ -257,6 +299,8 @@ export function RemoteFileBrowser({
             'auto.components.sidebar.RemoteFileBrowser.2300612806',
             'Type to filter or enter a path…'
           )}
+          aria-controls={listboxId}
+          aria-activedescendant={activeIndex >= 0 ? `${listboxId}-${activeIndex}` : undefined}
           aria-invalid={!!preview?.error}
           aria-describedby={preview?.error ? 'remote-file-browser-path-error' : undefined}
           className={cn(
@@ -284,7 +328,9 @@ export function RemoteFileBrowser({
         loading={loading}
         error={error}
         entries={entries}
-        filteredEntries={filteredEntries}
+        displayEntries={displayEntries}
+        activeIndex={activeIndex}
+        listboxId={listboxId}
         filter={filter}
         preview={preview}
         isPreviewActive={isPreviewActive}
@@ -293,13 +339,15 @@ export function RemoteFileBrowser({
         handleRowDoubleClick={handleRowDoubleClick}
       />
 
-      {/* Footer */}
       <p
         className="block text-[10px] text-muted-foreground truncate w-full"
         title={fileHint ? undefined : resolvedPath}
       >
         {fileHint
-          ? FILE_HINT_TEXT
+          ? translate(
+              'auto.components.sidebar.RemoteFileBrowser.fileHint',
+              "Files can't be opened as a project"
+            )
           : translate(
               'auto.components.sidebar.RemoteFileBrowser.971d85cc84',
               'Opens as a project on this host · {{value0}}',

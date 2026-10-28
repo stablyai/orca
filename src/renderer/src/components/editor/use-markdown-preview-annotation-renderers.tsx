@@ -88,7 +88,8 @@ export function useMarkdownPreviewAnnotationRenderers({
       }
 
       return (
-        <div className="markdown-annotation-controls">
+        // Mark transient review controls for both PDF scrubbing and export CSS because they render inside the document subtree.
+        <div className="markdown-annotation-controls" data-orca-export-hide="true">
           <button
             type="button"
             className="markdown-annotation-add"

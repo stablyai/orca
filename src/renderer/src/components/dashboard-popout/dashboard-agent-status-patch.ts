@@ -6,6 +6,8 @@ import {
   type DashboardSnapshot
 } from '../../../../shared/dashboard-snapshot'
 import { dashboardBucketForDotState } from '../dashboard/dashboard-card-bucket'
+import { dashboardCardDotState } from '../dashboard/dashboard-row-bucket'
+import { isAgentTurnUnacknowledged } from '@/attention/agent-attention-acknowledgement'
 
 export type DashboardAgentStatusPatchResult = {
   matched: boolean
@@ -22,11 +24,10 @@ function patchedSubagents(
   return event.subagents.map((subagent) => ({
     id: `${card.paneKey}\u0000subagent:${subagent.id}`,
     name: subagent.description || subagent.agentType || 'unknown',
-    dotState: subagent.state
+    dotState: dashboardCardDotState(subagent.state)
   }))
 }
 
-/** Applies an already bounded hook event inside the pop-out renderer. */
 export function patchDashboardSnapshotFromAgentStatus(
   snapshot: DashboardSnapshot,
   event: AgentStatusIpcPayload
@@ -47,7 +48,8 @@ export function patchDashboardSnapshotFromAgentStatus(
   }
 
   const stateChanged = event.stateStartedAt > card.stateChangedAt
-  const unseen = stateChanged ? card.startedAt !== 0 : card.unseen
+  // Why ack 0: the event is a live turn and the pop-out holds no acks; the next snapshot has them.
+  const unseen = stateChanged ? isAgentTurnUnacknowledged(0, event.stateStartedAt) : card.unseen
   const dotState = event.state
   const workingMode =
     event.state === 'working' && event.workingMode === 'monitoring' ? event.workingMode : undefined

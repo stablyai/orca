@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { POST_REPLAY_DEAD_TUI_RESET } from '../../shared/terminal-mode-reset-profiles'
+import { PROCESS_BOUNDARY_GROUND } from '../../shared/terminal-mode-reset-profiles'
 import { TerminalShellLifecycleScanner } from './terminal-shell-lifecycle-scanner'
 
 const ENTER_ALT = '\x1b[?1049h'
@@ -14,6 +14,7 @@ describe('TerminalShellLifecycleScanner', () => {
       const events = scanner.scan(chunk)
 
       expect(events.uncleanDeathTriggerEnd).toBe(chunk.indexOf('shell-marker'))
+      expect(events.uncleanDeathTriggerStart).toBe(chunk.indexOf('\x1b]133;D'))
       expect(chunk.slice(events.uncleanDeathTriggerEnd)).toBe('shell-marker')
       expect(scanner.isAlternateScreenActive).toBe(true)
       expect(scanner.owner).toBeUndefined()
@@ -45,6 +46,7 @@ describe('TerminalShellLifecycleScanner', () => {
       const events = scanner.scan('37\x07tail')
 
       expect(events.uncleanDeathTriggerEnd).toBe('37\x07'.length)
+      expect(events.uncleanDeathTriggerStart).toBe(0)
       expect('37\x07tail'.slice(events.uncleanDeathTriggerEnd)).toBe('tail')
       expect(scanner.owner).toBeUndefined()
     })
@@ -71,7 +73,6 @@ describe('TerminalShellLifecycleScanner', () => {
       const scanner = new TerminalShellLifecycleScanner()
       scanner.scan(`${ENTER_ALT}TUI\x1b]133;D;137\x07REMAINDER`)
 
-      // The remainder starts a fresh TUI that dies the same way.
       expect(scanner.scan(LEAVE_ALT)).toEqual({})
       const again = scanner.scan(`${ENTER_ALT}AGAIN\x1b]133;D;9\x07`)
 
@@ -208,7 +209,6 @@ describe('TerminalShellLifecycleScanner', () => {
 
       expect(scanner.owner).toBeUndefined()
       expect(scanner.isAlternateScreenActive).toBe(false)
-      // The cleared flag means a later D is a plain completion, not a clean exit.
       expect(scanner.scan('\x1b]133;D;0\x07')).toEqual({})
     })
 
@@ -251,7 +251,7 @@ describe('TerminalShellLifecycleScanner', () => {
       scanner.seedOwner('shell')
       const generation = scanner.generation
 
-      scanner.scan(POST_REPLAY_DEAD_TUI_RESET)
+      scanner.scan(PROCESS_BOUNDARY_GROUND)
 
       expect(scanner.owner).toBe('shell')
       expect(scanner.generation).toBe(generation)
@@ -268,18 +268,19 @@ describe('TerminalShellLifecycleScanner', () => {
 })
 
 describe('unclean trigger arming', () => {
-  it('fires once per alternate-screen occupancy and re-arms only on a fresh entry', () => {
+  it('fires at every D while the alternate screen stays up, and never once it is left', () => {
     const scanner = new TerminalShellLifecycleScanner()
+    const prompt = '\x1b]133;C\x07ls\r\n\x1b]133;D;0\x07'
 
     expect(scanner.scan('\x1b[?1049hTUI\x1b]133;D;137\x07').uncleanDeathTriggerEnd).toBeDefined()
-    // Refuted path: no reset scanned, alt still active — a later prompt's D must not re-trigger.
-    const second = scanner.scan('\x1b]133;C\x07ls\r\n\x1b]133;D;0\x07')
-    expect(second.uncleanDeathTriggerEnd).toBeUndefined()
-    expect(second.cleanExitCandidate).toBeUndefined()
+    // Retry each D after refutation: nested-shell completion may precede the TUI’s actual death.
+    for (let index = 0; index < 5; index += 1) {
+      expect(scanner.scan(prompt).uncleanDeathTriggerEnd).toBeDefined()
+    }
     expect(scanner.isAlternateScreenActive).toBe(true)
 
-    expect(
-      scanner.scan('\x1b]133;C\x07\x1b[?1049hAGAIN\x1b]133;D;9\x07').uncleanDeathTriggerEnd
-    ).toBeDefined()
+    const left = scanner.scan(`\x1b[?1049l${prompt}`)
+    expect(left.uncleanDeathTriggerEnd).toBeUndefined()
+    expect(scanner.scan(prompt).uncleanDeathTriggerEnd).toBeUndefined()
   })
 })

@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useMemo } from 'react'
 import { useShallow } from 'zustand/react/shallow'
 import { useAppStore } from '@/store'
+import { hasAwakeStructuredChat } from '@/store/slices/structured-chat-slept-at'
 import { AgentStateDot } from '@/components/AgentStateDot'
 import { StateIndicatorTooltip } from '@/components/StateIndicatorTooltip'
 import StatusIndicator from '@/components/sidebar/StatusIndicator'
@@ -8,7 +9,7 @@ import { FilledBellIcon } from '@/components/sidebar/WorktreeCardHelpers'
 import {
   buildExplicitEntriesByTabId,
   type TabPaneInputSources
-} from '@/components/sidebar/smart-attention'
+} from '../../../../shared/sidebar-list/smart-attention'
 import { isExplicitAgentStatusFresh } from '@/lib/agent-status'
 import { getLiveAgentStatusByWorktreeId } from '@/lib/worktree-activity-state'
 import {
@@ -93,8 +94,7 @@ export function PaletteLiveStatusProvider({
   const statusEpoch = useAppStore((s) => (active ? s.agentStatusEpoch : 0))
 
   const value = useMemo<PaletteLiveStatus>(() => {
-    // Why: `now` decides freshness, so both derivations must read it on the same tick — otherwise a
-    // "done" dot can outlive its window while the worktree row beside it has already decayed.
+    // Share one freshness tick so worktree state and its done dot cannot expire at different times.
     const entriesByTabId = buildExplicitEntriesByTabId(
       agentStatusByPaneKey,
       migrationUnsupportedByPtyId
@@ -193,16 +193,16 @@ function useLiveStatus(): PaletteLiveStatus | null {
   return useContext(PaletteLiveStatusContext)
 }
 
-/**
- * Live dot for a worktree row. Rendering it instead of resolving the status in the palette body is
- * what keeps an agent transition from re-rendering every row in the list.
- */
+/** Own the live status subscription here so agent transitions do not re-render the palette list. */
 export function PaletteWorktreeStatusDot({
   worktree
 }: {
   worktree: Pick<Worktree, 'id'>
 }): React.JSX.Element | null {
   const live = useLiveStatus()
+  const hasStructuredChat = useAppStore((s) =>
+    hasAwakeStructuredChat(s.unifiedTabsByWorktree[worktree.id], s.structuredChatSleptAtByPaneKey)
+  )
   if (!live) {
     return null
   }
@@ -213,6 +213,7 @@ export function PaletteWorktreeStatusDot({
     live.paneSources.runtimePaneTitlesByTabId,
     {
       liveAgentStatus: live.liveAgentStatusByWorktreeId.get(worktree.id),
+      hasStructuredChat,
       agentStatusPaneIdsByTabId: live.agentStatusPaneIdsByTabId,
       stalePaneIdsByTabId: live.stalePaneIdsByTabId,
       terminalLayoutsByTabId: live.paneSources.terminalLayoutsByTabId
@@ -226,10 +227,7 @@ export function PaletteWorktreeStatusDot({
   )
 }
 
-/**
- * Leading slot for a recent chat/terminal row: content icon + shared attention badge
- * (resolveTerminalTabAttentionBadge — same ladder as the tab strip).
- */
+/** Share the tab strip’s attention ladder for recent chat/terminal rows. */
 export function PaletteRecentTabStatusDot({
   row,
   fallback
@@ -257,8 +255,7 @@ export function PaletteRecentTabStatusDot({
   }
   const statusLabel =
     badge === 'unread'
-      ? // Why the tab-bar key: same bell, same sentence — a fresh key here would ship untranslated
-        // in every non-English locale for the sake of a namespace.
+      ? // Reuse the translated tab-bar label for the same unread signal.
         translate(
           'auto.components.tab.bar.TerminalTabLeadingIcon.7ab2964bea',
           'Unread agent completion'
@@ -282,7 +279,6 @@ export function PaletteRecentTabStatusDot({
   )
 }
 
-/** Renders the shared attention glyph — AgentStateDot for agent states, bell for unread. */
 function RecentTabAttentionBadgeGlyph({
   badge
 }: {
@@ -291,6 +287,5 @@ function RecentTabAttentionBadgeGlyph({
   if (badge === 'unread') {
     return <FilledBellIcon className="size-2.5 text-amber-500 drop-shadow-sm" />
   }
-  // Why: AgentStateDot owns working/permission/done glyphs app-wide (spinner / ? / check).
   return <AgentStateDot state={badge} size="sm" title={null} />
 }

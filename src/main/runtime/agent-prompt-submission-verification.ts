@@ -1,11 +1,10 @@
-export { AGENT_PROMPT_EFFECT_TIMEOUT_MS } from '../../shared/orchestration-timing-budgets'
 import { AGENT_PROMPT_EFFECT_TIMEOUT_MS } from '../../shared/orchestration-timing-budgets'
-import type { TuiAgent } from '../../shared/tui-agent'
+import type { TerminalAgent } from '../../shared/terminal-agent'
 
 export const AGENT_PROMPT_HOOK_EFFECT_TIMEOUT_MS = AGENT_PROMPT_EFFECT_TIMEOUT_MS
 const AGENT_PROMPT_EFFECT_POLL_MS = 50
 
-const HOOK_OBSERVED_TURN_START_AGENTS = new Set<TuiAgent>(['codex', 'kimi'])
+const HOOK_OBSERVED_TURN_START_AGENTS = new Set<TerminalAgent>(['antigravity', 'codex', 'kimi'])
 
 /** The prompt bytes are written before verification, so this only ever means "not observed". */
 export const AGENT_PROMPT_STALLED_ERROR = 'agent_prompt_stalled'
@@ -14,10 +13,9 @@ export type AgentPromptActivity = Readonly<{
   generation: number
   permissionSequence: number
   workingSequence: number
-  /** When the hook's current `working` turn began; reaches the runtime with no window and no
-   *  title coverage. Pinned across same-state pings, so a refresh alone cannot move it. */
+  /** Hook turn start, pinned across same-state pings and available without a window/title. */
   explicitWorkingStartedAt: number | null
-  /** PTY bytes seen on this pane; delivery evidence when a turn-start edge cannot be observed. */
+  /** Post-Enter pane bytes can prove delivery when no turn-start edge is observable. */
   outputSequence: number
   status: 'working' | 'permission' | 'idle' | null
 }>
@@ -44,24 +42,23 @@ type AgentPromptVerificationOptions = {
   timeoutMs?: number
 }
 
-export function resolveAgentPromptEffectTimeoutMs(agent: TuiAgent | null | undefined): number {
+export function resolveAgentPromptEffectTimeoutMs(agent: TerminalAgent | null | undefined): number {
   return agent && HOOK_OBSERVED_TURN_START_AGENTS.has(agent)
     ? AGENT_PROMPT_HOOK_EFFECT_TIMEOUT_MS
     : AGENT_PROMPT_EFFECT_TIMEOUT_MS
 }
 
-/** Only these providers expose a turn-start signal Orca can settle a prompt receipt against. */
 export function isTerminalSendSettlementAgent(
-  agent: TuiAgent | null | undefined
-): agent is 'claude' | 'codex' {
-  return agent === 'claude' || agent === 'codex'
+  agent: TerminalAgent | null | undefined
+): agent is 'antigravity' | 'claude' | 'codex' {
+  return agent === 'antigravity' || agent === 'claude' || agent === 'codex'
 }
 
 export function isAgentPromptStalledError(error: unknown): boolean {
   if (error instanceof Error && error.message === AGENT_PROMPT_STALLED_ERROR) {
     return true
   }
-  // Why: a relayed submission surfaces the same verdict as an RPC error code, not a message.
+  // Relayed submissions carry the verdict in RPC error code, not message.
   return (
     typeof error === 'object' &&
     error !== null &&
@@ -151,9 +148,7 @@ function agentPromptEffectAccepted(
   return allowOutputEvidence && observedDeliveryEvidence(baseline, current)
 }
 
-// Why: hook status reaches the runtime directly, so it survives a hidden window and headless serve —
-// the synthetic-title route that feeds workingSequence does not (#16095). Only a turn that started
-// after the baseline counts, so a same-state ping on the turn already running is not evidence.
+// Direct hooks survive hidden/headless operation; require a new stateStartedAt, never a refreshed same-state ping (#16095).
 function observedHookWorkingAfterBaseline(
   baseline: AgentPromptActivity,
   current: AgentPromptActivity
@@ -164,9 +159,7 @@ function observedHookWorkingAfterBaseline(
   )
 }
 
-// Why: a `→working` edge is unreachable for an agent that is already working, so the honest proof
-// that the prompt landed is the pane emitting bytes after Enter. An idle agent still owes a real
-// turn start, which keeps a swallowed Enter detectable.
+// Already-working agents cannot emit a new working edge; post-Enter bytes prove delivery. Idle agents still owe a turn start.
 function observedDeliveryEvidence(
   baseline: AgentPromptActivity,
   current: AgentPromptActivity

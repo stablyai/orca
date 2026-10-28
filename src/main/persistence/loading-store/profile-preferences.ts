@@ -1,8 +1,14 @@
 import type { GlobalSettings } from '../../../shared/global-settings-types'
+import { retireAtRestCommandSettings } from '../../native-chat/agent-session-wire/at-rest-command-context'
 import type { OnboardingChecklistState } from '../../../shared/onboarding-state-types'
 import type { PersistedState } from '../../../shared/persisted-state-types'
-import { getDefaultOnboardingState } from '../../../shared/constants'
+import { getDefaultOnboardingState } from '../../../shared/onboarding-defaults'
 import type { FeatureInteractionId } from '../../../shared/feature-interactions'
+import {
+  nativeChatUpgradeTipVariant,
+  parseNativeChatUpgradeTipAudience,
+  type NativeChatUpgradeTipVariant
+} from '../../../shared/native-chat/native-chat-upgrade-tip-audience'
 import {
   updateSettings as updateSettingsOperation,
   type SettingsMutationOperations
@@ -24,7 +30,9 @@ type ProfilePreferencesRuntime = Pick<
   | 'activeViewPreference'
   | 'githubCacheDirty'
   | 'githubCacheGeneration'
+  | 'githubCacheWriteListeners'
   | 'protectedSecrets'
+  | 'runDurableMutation'
   | 'settingsChangeListeners'
   | 'state'
   | 'uiChangeListeners'
@@ -74,6 +82,53 @@ export class ProfilePreferences {
     return updateSettingsOperation(getSettingsMutationOperations(this), updates, options)
   }
 
+  async updateSettingsAndFlush(
+    updates: Partial<GlobalSettings>,
+    options: { notifyListeners?: boolean; originWebContentsId?: number } = {}
+  ): Promise<GlobalSettings> {
+    const { runtime } = this[profilePreferencesContext]
+    let changedUpdates: Partial<GlobalSettings> = {}
+    await runtime.runDurableMutation(() => {
+      const previous = runtime.state.settings
+      const next = this.updateSettings(updates)
+      const previousEntries = new Map(Object.entries(previous))
+      const updateKeys = new Set(Object.keys(updates))
+      changedUpdates = Object.fromEntries(
+        Object.entries(next).filter(
+          ([key, value]) => updateKeys.has(key) && !Object.is(previousEntries.get(key), value)
+        )
+      )
+      return {
+        value: undefined,
+        rollback: () => {
+          const currentEntries = new Map(Object.entries(runtime.state.settings))
+          const nextEntries = new Map(Object.entries(next))
+          const restoredUpdates = Object.fromEntries(
+            Object.entries(previous).filter(
+              ([key]) =>
+                updateKeys.has(key) && Object.is(currentEntries.get(key), nextEntries.get(key))
+            )
+          )
+          const restoredSettings = { ...runtime.state.settings, ...restoredUpdates }
+          for (const key of updateKeys) {
+            if (
+              !previousEntries.has(key) &&
+              Object.is(currentEntries.get(key), nextEntries.get(key))
+            ) {
+              Reflect.deleteProperty(restoredSettings, key)
+            }
+          }
+          runtime.state.settings = restoredSettings
+          retireAtRestCommandSettings(updateKeys)
+        }
+      }
+    })
+    if (options.notifyListeners && Object.keys(changedUpdates).length > 0) {
+      notifySettingsChanged(this, changedUpdates, options.originWebContentsId)
+    }
+    return this.getSettings()
+  }
+
   getUI(): PersistedState['ui'] {
     return getPersistedUI(
       this[profilePreferencesContext].runtime.state,
@@ -119,15 +174,33 @@ export class ProfilePreferences {
     return this.getOnboarding()
   }
 
+  getNativeChatUpgradeTipVariant(): NativeChatUpgradeTipVariant {
+    return nativeChatUpgradeTipVariant(
+      parseNativeChatUpgradeTipAudience(
+        this[profilePreferencesContext].runtime.state.nativeChatUpgradeTipAudience
+      )
+    )
+  }
+
   getGitHubCache(): PersistedState['githubCache'] {
     return this[profilePreferencesContext].runtime.state.githubCache
   }
 
   setGitHubCache(cache: PersistedState['githubCache']): void {
-    // Why no scheduleSave: cache is memory-only and snapshotted to a sidecar at flush; persisting here rewrote the whole state file every poll cycle.
+    // Cache polls write a sidecar at flush; scheduling a full profile save here amplifies every poll.
     this[profilePreferencesContext].runtime.state.githubCache = cache
     this[profilePreferencesContext].runtime.githubCacheDirty = true
     this[profilePreferencesContext].runtime.githubCacheGeneration += 1
+    for (const listener of this[profilePreferencesContext].runtime.githubCacheWriteListeners) {
+      listener()
+    }
+  }
+
+  onGitHubCacheWritten(listener: () => void): () => void {
+    this[profilePreferencesContext].runtime.githubCacheWriteListeners.add(listener)
+    return () => {
+      this[profilePreferencesContext].runtime.githubCacheWriteListeners.delete(listener)
+    }
   }
 }
 
@@ -147,7 +220,12 @@ export function notifyUIChanged(owner: ProfilePreferences): void {
   }
   const ui = owner.getUI()
   for (const listener of owner[profilePreferencesContext].runtime.uiChangeListeners) {
-    listener(ui)
+    // State is already applied; a broadcast failure must not fail the update (e.g. the shutdown checkpoint).
+    try {
+      listener(ui)
+    } catch (error) {
+      console.error('[preferences] UI change listener failed:', error)
+    }
   }
 }
 
@@ -159,7 +237,7 @@ export function getSettingsMutationOperations(
     bumpLocalWorktreeScanGeneration,
     removeRetainedBlob: (slot) =>
       owner[profilePreferencesContext].runtime.protectedSecrets.removeRetainedBlob(slot),
-    scheduleSave: () => scheduleSave(owner[profilePreferencesContext].scheduling),
+    scheduleSave: () => scheduleSave(owner[profilePreferencesContext].scheduling, ['settings']),
     notifySettingsChanged: (updates, originWebContentsId) =>
       notifySettingsChanged(owner, updates, originWebContentsId)
   }
@@ -183,14 +261,8 @@ export function getFeatureInteractionOperations(
 ): FeatureInteractionOperations {
   return {
     state: owner[profilePreferencesContext].runtime.state,
-    scheduleSave: () => scheduleSave(owner[profilePreferencesContext].scheduling),
+    scheduleSave: (domains) => scheduleSave(owner[profilePreferencesContext].scheduling, domains),
     notifyUIChanged: () => notifyUIChanged(owner),
     getUI: () => owner.getUI()
   }
-}
-
-export function installProfilePreferencesContext(target: object, source: ProfilePreferences): void {
-  Object.defineProperty(target, profilePreferencesContext, {
-    value: source[profilePreferencesContext]
-  })
 }

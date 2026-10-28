@@ -15,6 +15,7 @@ import {
   type MonacoMarkdownSelectionAnnotationTarget
 } from './monaco-markdown-selection-annotation'
 import { handleMonacoLargeTextPaste } from './monaco-large-text-paste'
+import { beginEditorLargePaste } from './editor-large-paste-in-flight'
 import type { MarkdownCommentPopoverState } from './use-monaco-markdown-annotations'
 import type { MonacoEditorPropsRef } from './monaco-editor-mount-params'
 
@@ -34,7 +35,7 @@ type MonacoEditorInputBindingsParams = {
   >
 }
 
-// Why: save/find/review-note chords, the context-menu action, and the large-paste capture share one teardown so onDidDispose keeps their original order.
+// Share teardown so editor disposal preserves shortcut and paste cleanup order.
 export function installMonacoEditorInputBindings(params: MonacoEditorInputBindingsParams): {
   disposeInputBindings: () => void
 } {
@@ -58,16 +59,15 @@ export function installMonacoEditorInputBindings(params: MonacoEditorInputBindin
     propsRef.current.onSave(value)
   })
   const cleanupFindShortcut = installMonacoEditorFindShortcut(editorInstance)
-  // Opens the same composer as the selection "+" button.
   const cleanupAddReviewNoteShortcut = installEditorAddReviewNoteShortcut(editorDomNode, () => {
-    // Why: keep an open draft instead of remounting, to avoid same-tick chord races before the composer guard runs.
+    // Preserve open drafts during same-tick chords before the composer guard mounts.
     if (commentPopoverRef.current) {
       return true
     }
     if (!shouldShowMarkdownAnnotationsRef.current) {
       return false
     }
-    // Why: the rendered target ref lags selection by a render, so read Monaco's live selection to avoid opening on a stale one.
+    // Read the live selection because the rendered annotation target lags by one render.
     const target = getMonacoMarkdownSelectionAnnotationTarget(
       editorInstance,
       editorInstance.getSelection(),
@@ -103,13 +103,17 @@ export function installMonacoEditorInputBindings(params: MonacoEditorInputBindin
     }
   })
   const onLargeTextPaste = (event: ClipboardEvent): void => {
+    let endSaveDeferral: (() => void) | null = null
     handleMonacoLargeTextPaste(editorInstance, event, {
       readOnly: readOnlyRef.current,
       onPasteStart: () => {
         isApplyingLargePasteRef.current = true
+        const modelUri = editorInstance.getModel()?.uri.toString()
+        endSaveDeferral = modelUri ? beginEditorLargePaste(modelUri) : null
       },
       onPasteResult: (result) => {
         isApplyingLargePasteRef.current = false
+        endSaveDeferral?.()
         if (result.status === 'pasted' || result.status === 'cancelled') {
           const value = editorInstance.getValue()
           lastSyncedContentRef.current = value

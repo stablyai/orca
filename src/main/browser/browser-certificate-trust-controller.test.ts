@@ -272,15 +272,12 @@ describe('BrowserCertificateTrustController', () => {
   })
 
   it('rejects proceed for a second tab whose pending leaf conflicts with an accepted identity', () => {
-    // Both tabs observe different leaves before either is approved.
     certificateEvent({ controller, guest })
     certificateEvent({ controller, guest: otherGuest, certificate: SECOND_CERTIFICATE })
     expect(controller.getFailure('page-1')?.challengeId).toBe('challenge-1')
     expect(controller.getFailure('page-2')?.challengeId).toBe('challenge-2')
 
     expect(controller.proceed('page-1', 'challenge-1')).toEqual({ ok: true })
-    // First proceed pins the session identity; the sibling's conflicting leaf
-    // must not report success (Chromium cannot honor a second bad leaf).
     expect(controller.proceed('page-2', 'challenge-2')).toEqual({
       ok: false,
       reason: 'ineligible'

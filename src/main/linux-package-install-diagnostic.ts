@@ -62,7 +62,7 @@ export function redactLinuxPackageInstallText(
   if (homeDir) {
     text = replaceAllLiteral(text, homeDir, '<home>')
   }
-  // Why: privilege tools can name the user without including their home directory.
+  // Privilege tools can name the user without including their home directory.
   const userName = readUserName()
   if (userName && userName.length >= MIN_REDACTED_USERNAME_LENGTH) {
     text = replaceAllLiteral(text, userName, '<user>')

@@ -67,7 +67,7 @@ export const ORCHESTRATION_WORKER_TERMINAL_HANDLERS: Record<string, CommandHandl
       'orchestration.workerRelease',
       { dispatch: getRequiredStringFlag(flags, 'dispatch') }
     )
-    // Why: only an unprovable close is a failure; retained/pending/already-released are settled answers.
+    // Retained, pending, and already-released are settled outcomes; only release_unknown fails.
     if (result.result.state === 'release_unknown') {
       process.exitCode = 1
     }
@@ -126,6 +126,7 @@ export const ORCHESTRATION_WORKER_TERMINAL_HANDLERS: Record<string, CommandHandl
       counts: Record<string, number>
       scope?: WorkerListRunScope
       page?: { hasMore: boolean; nextCursor: string | null; total: number }
+      warnings?: string[]
       partialHostErrors?: {
         environmentId: string
         name: string
@@ -163,7 +164,6 @@ export const ORCHESTRATION_WORKER_TERMINAL_HANDLERS: Record<string, CommandHandl
                 const details = projection
                   ? `/${stage}] attention=${attention} liveness=${liveness} provider=${provider} host=${projection.host.id} workspace=${workspace}`
                   : `]`
-                // Why: the enumerating command owes the literal argv the guides tell callers to run.
                 const next = projection
                   ? ` next=${projection.nextAction.argv.join(' ') || 'none'}`
                   : ''
@@ -177,10 +177,13 @@ export const ORCHESTRATION_WORKER_TERMINAL_HANDLERS: Record<string, CommandHandl
         value.page?.hasMore && value.page.nextCursor
           ? `\nMore: --cursor ${value.page.nextCursor}`
           : ''
-      const warnings = (value.partialHostErrors ?? []).map(
-        (error) =>
-          `Warning: worker observations from ${error.name} (${error.environmentId}) are incomplete: ${error.code}; dispatches=${error.dispatchIds.join(',') || 'none'}`
-      )
+      const warnings = [
+        ...(value.warnings ?? []),
+        ...(value.partialHostErrors ?? []).map(
+          (error) =>
+            `worker observations from ${error.name} (${error.environmentId}) are incomplete: ${error.code}; dispatches=${error.dispatchIds.join(',') || 'none'}`
+        )
+      ].map((warning) => `Warning: ${warning}`)
       const warningBlock = warnings.length ? `\n${warnings.join('\n')}` : ''
       const scopeLine = `\n${formatWorkerListScope(value.scope ?? scope)}`
       return `${counts ? `${rows}\nTerminals: ${counts}` : rows}${scopeLine}${pagination}${warningBlock}`

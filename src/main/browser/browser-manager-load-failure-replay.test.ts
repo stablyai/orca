@@ -39,6 +39,13 @@ vi.mock('./popup-origin-bar-window', () => ({
   openPopupWithOriginBar: browserMocks.openPopupWithOriginBarMock
 }))
 
+vi.mock('./browser-process-user-agent', () => ({
+  getBrowserProcessUserAgentIdentity: () => ({
+    mode: 'clean',
+    userAgent: 'Mozilla/5.0 (Test) Chrome/140.0.0.0'
+  })
+}))
+
 import { browserManager } from './browser-manager'
 import {
   guestUaMethods,
@@ -73,6 +80,7 @@ describe('browserManager', () => {
       isDestroyed: vi.fn(() => false),
       getType: vi.fn(() => 'window'),
       setBackgroundThrottling: vi.fn(),
+      isCurrentlyAudible: vi.fn(() => false),
       setWindowOpenHandler: vi.fn(),
       on: vi.fn(),
       off: vi.fn(),
@@ -112,6 +120,7 @@ describe('browserManager', () => {
       isDestroyed: vi.fn(() => false),
       getType: vi.fn(() => 'webview'),
       setBackgroundThrottling: guestSetBackgroundThrottlingMock,
+      isCurrentlyAudible: vi.fn(() => false),
       setWindowOpenHandler: guestSetWindowOpenHandlerMock,
       on: guestOnMock,
       off: guestOffMock,
@@ -158,7 +167,9 @@ describe('browserManager', () => {
       rendererWebContentsId
     })
 
-    expect(rendererSendMock).toHaveBeenCalledTimes(1)
+    expect(
+      rendererSendMock.mock.calls.filter(([channel]) => channel === 'browser:guest-load-failed')
+    ).toHaveLength(1)
     expect(rendererSendMock).toHaveBeenCalledWith('browser:guest-load-failed', {
       browserPageId: 'browser-1',
       loadError: {
@@ -189,6 +200,7 @@ describe('browserManager', () => {
       isDestroyed: vi.fn(() => false),
       getType: vi.fn(() => 'webview'),
       setBackgroundThrottling: guestSetBackgroundThrottlingMock,
+      isCurrentlyAudible: vi.fn(() => false),
       setWindowOpenHandler: guestSetWindowOpenHandlerMock,
       on: guestOnMock,
       off: guestOffMock,
@@ -241,6 +253,7 @@ describe('browserManager', () => {
       isDestroyed: vi.fn(() => false),
       getType: vi.fn(() => 'webview'),
       setBackgroundThrottling: guestSetBackgroundThrottlingMock,
+      isCurrentlyAudible: vi.fn(() => false),
       setWindowOpenHandler: guestSetWindowOpenHandlerMock,
       on: guestOnMock,
       off: guestOffMock,
@@ -284,6 +297,7 @@ describe('browserManager', () => {
       isDestroyed: vi.fn(() => false),
       getType: vi.fn(() => 'webview'),
       setBackgroundThrottling: guestSetBackgroundThrottlingMock,
+      isCurrentlyAudible: vi.fn(() => false),
       setWindowOpenHandler: guestSetWindowOpenHandlerMock,
       on: guestOnMock,
       off: guestOffMock,
@@ -314,17 +328,14 @@ describe('browserManager', () => {
       rendererWebContentsId
     })
     didFailLoad(null, -202, 'Certificate authority invalid', 'https://localhost:3443/', true)
-    // Retry: the new navigation starts (overlay optimistically cleared)...
     didStartNavigation(null, 'https://localhost:3443/', false, true)
     expect(browserManager.getBrowserPageLoadError('browser-retry-abort-page')).toBeNull()
-    // ...then aborts (ERR_ABORTED) before committing, so the error is restored.
     didFailLoad(null, -3, 'Aborted', 'https://localhost:3443/', true)
     expect(browserManager.getBrowserPageLoadError('browser-retry-abort-page')?.code).toBe(-202)
 
-    // A fresh navigation from a non-errored state drops the stash, so a later
-    // abort cannot resurrect the old error.
-    didStartNavigation(null, 'https://localhost:3443/', false, true) // stashes -202, clears active
-    didStartNavigation(null, 'https://example.com/', false, true) // active empty -> drops stash
+    // A fresh navigation must discard the stash so a later abort cannot resurrect stale errors.
+    didStartNavigation(null, 'https://localhost:3443/', false, true)
+    didStartNavigation(null, 'https://example.com/', false, true)
     didFailLoad(null, -3, 'Aborted', 'https://example.com/', true)
     expect(browserManager.getBrowserPageLoadError('browser-retry-abort-page')).toBeNull()
   })

@@ -42,29 +42,56 @@ function formatSummary(report: CrashReportRecord): string {
 
 function getDialogTitle(report: CrashReportRecord | null): string {
   if (!report) {
-    return 'Report a crash'
+    return translate(
+      'auto.components.crash.report.CrashReportDialogSurface.reportTitle',
+      'Report a crash'
+    )
   }
   return report && isReactErrorBoundaryReport(report)
-    ? 'Orca hit a recoverable UI error'
-    : 'Orca closed unexpectedly'
+    ? translate(
+        'auto.components.crash.report.CrashReportDialogSurface.uiErrorTitle',
+        'Orca hit a recoverable UI error'
+      )
+    : translate(
+        'auto.components.crash.report.CrashReportDialogSurface.closedTitle',
+        'Orca closed unexpectedly'
+      )
 }
 
 function getDialogDescription(report: CrashReportRecord | null): string {
   if (!report) {
-    return 'Send a privacy-safe crash report. Recent redacted diagnostic logs are included when available.'
+    return translate(
+      'auto.components.crash.report.CrashReportDialogSurface.reportDescription',
+      'Send a privacy-safe crash report. Recent redacted diagnostic logs are included when available.'
+    )
   }
   return report && isReactErrorBoundaryReport(report)
-    ? 'Send a privacy-safe diagnostic report to help us understand the failed UI surface.'
-    : 'Send a privacy-safe diagnostic report to help us understand what happened.'
+    ? translate(
+        'auto.components.crash.report.CrashReportDialogSurface.uiErrorDescription',
+        'Send a privacy-safe diagnostic report to help us understand the failed UI surface.'
+      )
+    : translate(
+        'auto.components.crash.report.CrashReportDialogSurface.closedDescription',
+        'Send a privacy-safe diagnostic report to help us understand what happened.'
+      )
 }
 
 function getNotesPlaceholder(report: CrashReportRecord | null): string {
   if (!report) {
-    return 'Optional: what happened?'
+    return translate(
+      'auto.components.crash.report.CrashReportDialogSurface.reportNotesPlaceholder',
+      'Optional: what happened?'
+    )
   }
   return report && isReactErrorBoundaryReport(report)
-    ? 'Optional: what were you doing before this UI error?'
-    : 'Optional: what were you doing before Orca closed?'
+    ? translate(
+        'auto.components.crash.report.CrashReportDialogSurface.uiErrorNotesPlaceholder',
+        'Optional: what were you doing before this UI error?'
+      )
+    : translate(
+        'auto.components.crash.report.CrashReportDialogSurface.closedNotesPlaceholder',
+        'Optional: what were you doing before Orca closed?'
+      )
 }
 
 type CrashReportDialogSurfaceProps = {
@@ -87,13 +114,11 @@ export function CrashReportDialogSurface({
   const [includeDiagnosticLogs, setIncludeDiagnosticLogs] = useState(true)
   const [submitting, setSubmitting] = useState(false)
   const [viewer, setViewer] = useState<GitHubViewer | null>(null)
-  // Why: account lookup can resolve after the dialog closes or reopens.
-  // Sequence the request so a stale viewer is never used for submission.
+  // Sequence viewer lookups so late close/reopen results cannot supply a stale submission identity.
   const viewerRequestIdRef = useRef(0)
   const deferredNotes = useDeferredValue(notes)
   const diagnosticText = useMemo(
-    // Why: formatting applies redaction and truncation over the full crash
-    // payload. Keep that preview update out of the textarea keystroke path.
+    // Defer full-payload redaction/truncation so notes typing stays responsive.
     () => (report ? formatCrashReportText(report, deferredNotes) : ''),
     [deferredNotes, report]
   )
@@ -175,8 +200,7 @@ export function CrashReportDialogSurface({
         ...(report ? { reportId: report.id } : {}),
         notes,
         includeDiagnosticLogs,
-        // Why: crash reporting must degrade to anonymous if gh is unavailable;
-        // identity lookup is best-effort and never blocks report creation.
+        // Identity lookup is best-effort; allow anonymous reports when gh is unavailable.
         submitAnonymously: !viewer,
         githubLogin: viewer?.login ?? null,
         githubEmail: null
@@ -248,7 +272,7 @@ export function CrashReportDialogSurface({
               <div className="rounded-md border border-border/70 bg-muted/30 p-3 text-xs">
                 <div className="font-medium text-foreground">{formatSummary(report)}</div>
                 <div className="mt-1 text-muted-foreground">
-                  {new Date(report.createdAt).toLocaleString()} · {report.platform} {report.arch} ·
+                  {new Date(report.createdAt).toLocaleString()} · {report.platform} {report.arch} ·{' '}
                   {translate('auto.components.crash.report.CrashReportDialog.835037edc9', 'Orca')}{' '}
                   {report.appVersion}
                 </div>

@@ -14,8 +14,10 @@ import {
   normalizePluginConsents,
   normalizePluginIdList
 } from '../../shared/plugins/plugin-consent-state'
+import { projectPluginAgentStatusChangedPayload } from '../plugins/plugin-agent-status-event'
 import { setMainPluginLanguagePacks, setMainUiLanguage } from '../i18n/main-i18n'
 import { rebuildAppMenu } from '../menu/register-app-menu'
+import { rebuildSystemTrayMenu } from '../tray/system-tray'
 import { logStartupMilestone } from './startup-diagnostics'
 import { agentHookServer } from '../agent-hooks/server'
 import { emitPluginWorktreeLifecycle } from './main-process-pty-startup'
@@ -56,8 +58,7 @@ export async function initializeMainProcessPlugins(runtime: OrcaRuntimeService):
   state.pluginService = new PluginService({
     userDataPath: app.getPath('userData'),
     hostVersion: app.getVersion(),
-    // Feature flag: with the setting off, discovery returns nothing and no
-    // plugin code path runs at all.
+    // Disabled discovery must run no plugin code.
     isPluginSystemEnabled: () => state.store?.getSettings().pluginSystemEnabled === true,
     getDisabledPlugins: () => normalizePluginIdList(state.store?.getSettings().disabledPlugins),
     getPluginConsents: () => normalizePluginConsents(state.store?.getSettings().pluginConsents),
@@ -108,17 +109,14 @@ export async function initializeMainProcessPlugins(runtime: OrcaRuntimeService):
         )
     }
   })
-  // Why: headless `orca serve` clients reach plugins through the runtime RPC
-  // methods, which resolve the service via this module-level setter. Consent
-  // over RPC uses the same hash-keyed write path as the desktop dialog.
+  // Headless RPC resolves this service too; consent shares the desktop hash-keyed write path.
   setPluginServiceForRpc(state.pluginService, {
     applyConsent: (request) =>
       applyPluginConsent({ store, pluginService: state.pluginService!, ...request }),
     applyEnablement: (pluginKey, enabled) =>
       applyPluginEnablement({ store, pluginService: state.pluginService!, pluginKey, enabled })
   })
-  // Lazy kernel: initialize() only discovers manifests — no worker forks, no
-  // panel reads. Zero plugin code runs before an explicit trigger.
+  // Initialization discovers manifests only; workers/panel reads wait for explicit triggers.
   void state.pluginService
     .initialize()
     .then(() => {
@@ -140,7 +138,10 @@ export async function initializeMainProcessPlugins(runtime: OrcaRuntimeService):
       event.contentPacksChanged &&
       setMainPluginLanguagePacks(state.pluginService?.contentPacks.languagePacks.list() ?? [])
     ) {
-      void setMainUiLanguage(store.getSettings().uiLanguage).then(() => rebuildAppMenu())
+      void setMainUiLanguage(store.getSettings().uiLanguage).then(() => {
+        rebuildAppMenu()
+        rebuildSystemTrayMenu()
+      })
     }
     for (const window of BrowserWindow.getAllWindows()) {
       if (!window.isDestroyed()) {
@@ -150,19 +151,12 @@ export async function initializeMainProcessPlugins(runtime: OrcaRuntimeService):
   })
   requestBundledPluginBootstrap()
   requestOfficialMarketplaceSeed()
-  // v0 plugin event seams: agent status (hook pipeline tap) + worktree
-  // lifecycle (runtime tap). Server-side filtered per plugin subscription.
+  // Filter hook/worktree events server-side by each plugin subscription.
   agentHookServer.subscribeEnrichedStatus((enriched) => {
-    // Why: plugins may automate on `working`; restored rows are historical claims, not fresh activity.
-    if (enriched.restoredUnconfirmed) {
-      return
+    const payload = projectPluginAgentStatusChangedPayload(enriched)
+    if (payload) {
+      state.pluginService?.emitEvent('agent.status.changed', payload)
     }
-    state.pluginService?.emitEvent('agent.status.changed', {
-      worktreeId: enriched.worktreeId ?? null,
-      paneKey: enriched.paneKey,
-      state: enriched.payload.state,
-      receivedAt: enriched.receivedAt
-    })
   })
   runtime.onWorktreeLifecycle(emitPluginWorktreeLifecycle)
 }

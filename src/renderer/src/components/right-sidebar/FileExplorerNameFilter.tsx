@@ -5,6 +5,7 @@ import { translate } from '@/i18n/i18n'
 
 type FileExplorerNameFilterProps = {
   query: string
+  scopeLabel?: string
   loading?: boolean
   onQueryChange: (value: string) => void
   onClear: () => void
@@ -12,27 +13,33 @@ type FileExplorerNameFilterProps = {
 
 export function FileExplorerNameFilter({
   query,
+  scopeLabel,
   loading = false,
   onQueryChange,
   onClear
 }: FileExplorerNameFilterProps): React.JSX.Element {
   return (
     <div
-      className="flex h-7 items-center gap-1 rounded-sm border border-border bg-input/50 px-1.5 focus-within:border-ring"
+      className="flex h-8 items-center gap-1 rounded-md border border-border bg-input/50 px-2 focus-within:border-ring focus-within:ring-1 focus-within:ring-ring"
       data-ignore-file-explorer-keys="true"
     >
       <ListFilter className="size-3.5 shrink-0 text-muted-foreground" />
       <input
         type="text"
-        className="min-w-0 flex-1 bg-transparent py-1 text-xs text-foreground outline-none placeholder:text-muted-foreground/50"
+        data-explorer-query-input="files"
+        className="min-w-0 flex-1 bg-transparent py-1 text-xs text-foreground outline-none placeholder:text-muted-foreground/60"
         aria-label={translate(
           'auto.components.right.sidebar.FileExplorerNameFilter.26fb73c6e3',
           'Find files'
         )}
-        placeholder={translate(
-          'auto.components.right.sidebar.FileExplorerNameFilter.26fb73c6e3',
-          'Find files'
-        )}
+        placeholder={
+          scopeLabel
+            ? translate('fileExplorer.root.findInFolder', 'Find in {{path}}', { path: scopeLabel })
+            : translate(
+                'auto.components.right.sidebar.FileExplorerNameFilter.26fb73c6e3',
+                'Find files'
+              )
+        }
         value={query}
         onChange={(event) => onQueryChange(event.currentTarget.value)}
         spellCheck={false}

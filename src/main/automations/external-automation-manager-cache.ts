@@ -1,10 +1,4 @@
-/**
- * Per-`{owner, provider}` manager and error state.
- *
- * Deliberately holds no reference to Orca automation storage: a provider that is
- * missing, wedged, or returning garbage is a fact about that manager only, and
- * must never be able to mark the host's Orca store unavailable.
- */
+// Provider failures affect only their owner/provider cache entry, never Orca storage health.
 
 import type { ExternalAutomationManager } from '../../shared/automations-types'
 import { isExternalAutomationProbeCancelled } from './external-automation-probe-scheduler'
@@ -15,7 +9,7 @@ export type ExternalAutomationManagerCacheKey = {
 }
 
 export type ExternalAutomationManagerCacheEntry = {
-  /** Null once a probe succeeded and found no manager configured for this scope. */
+  /** Null when no manager is configured or the probe failed; inspect error. */
   manager: ExternalAutomationManager | null
   error: string | null
   updatedAt: number
@@ -23,12 +17,9 @@ export type ExternalAutomationManagerCacheEntry = {
 
 const DEFAULT_CACHE_TTL_MS = 30_000
 const MAX_CACHED_ERROR_LENGTH = 300
+export const MAX_EXTERNAL_AUTOMATION_MANAGER_CACHE_ENTRIES = 512
 
-/**
- * Bounded, provider-agnostic failure text. Provider payloads can carry prompts,
- * job bodies, and run output, so only an `Error.message` is ever kept and it is
- * truncated; anything else is reduced to a fixed string.
- */
+/** Keep bounded error messages, without retaining arbitrary provider payloads. */
 export function describeExternalManagerFailure(error: unknown): string {
   const message = error instanceof Error ? error.message.trim() : ''
   if (!message) {
@@ -40,7 +31,7 @@ export function describeExternalManagerFailure(error: unknown): string {
 }
 
 export function externalAutomationManagerCacheKey(key: ExternalAutomationManagerCacheKey): string {
-  // Why: ownerKey is already separator-escaped, so appending the provider stays unambiguous.
+  // ownerKey already escapes separators.
   return `${key.ownerKey}|${key.provider}`
 }
 
@@ -58,7 +49,6 @@ export class ExternalAutomationManagerCache {
     return this.entries.size
   }
 
-  /** Fresh entry for this scope, or null when absent or past its TTL. */
   read(key: ExternalAutomationManagerCacheKey): ExternalAutomationManagerCacheEntry | null {
     this.pruneExpired()
     const entry = this.entries.get(externalAutomationManagerCacheKey(key))
@@ -90,7 +80,6 @@ export class ExternalAutomationManagerCache {
     this.entries.delete(externalAutomationManagerCacheKey(key))
   }
 
-  /** Drops every provider entry for one host, e.g. after a mutation on it. */
   invalidateOwner(ownerKey: string): void {
     for (const key of this.entries.keys()) {
       if (key.startsWith(`${ownerKey}|`)) {
@@ -103,10 +92,7 @@ export class ExternalAutomationManagerCache {
     this.entries.clear()
   }
 
-  /**
-   * Returns a fresh entry or loads one. A cancelled probe propagates and leaves
-   * any existing entry untouched, so leaving a scope never records a failure.
-   */
+  /** Cancellation propagates without replacing the previous cache entry. */
   async resolve(
     key: ExternalAutomationManagerCacheKey,
     load: () => Promise<ExternalAutomationManager | null>,
@@ -133,7 +119,16 @@ export class ExternalAutomationManagerCache {
     entry: ExternalAutomationManagerCacheEntry
   ): ExternalAutomationManagerCacheEntry {
     this.pruneExpired()
-    this.entries.set(externalAutomationManagerCacheKey(key), entry)
+    const cacheKey = externalAutomationManagerCacheKey(key)
+    this.entries.delete(cacheKey)
+    this.entries.set(cacheKey, entry)
+    while (this.entries.size > MAX_EXTERNAL_AUTOMATION_MANAGER_CACHE_ENTRIES) {
+      const oldest = this.entries.keys().next()
+      if (oldest.done || oldest.value === cacheKey) {
+        break
+      }
+      this.entries.delete(oldest.value)
+    }
     return entry
   }
 

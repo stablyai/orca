@@ -42,7 +42,6 @@ type UseFileExplorerNodeCommandsParams = {
   requestDeleteAll: (nodes: TreeNode[]) => void
   refreshDir: (dirPath: string) => Promise<void>
   handleClick: (node: TreeNode, dirToggle?: DirToggleTiming) => void
-  cancelPendingDirToggle: () => void
   toggleDir: (worktreeId: string, dirPath: string) => void
   scrollToIndex: (index: number) => void
 }
@@ -58,7 +57,6 @@ type UseFileExplorerNodeCommandsResult = {
   handleOpenInTerminal: (node: TreeNode) => void
 }
 
-/** Command layer over a TreeNode, plus the keyboard binding of those same commands. */
 export function useFileExplorerNodeCommands({
   activeWorktreeId,
   worktreePath,
@@ -76,7 +74,6 @@ export function useFileExplorerNodeCommands({
   requestDeleteAll,
   refreshDir,
   handleClick,
-  cancelPendingDirToggle,
   toggleDir,
   scrollToIndex
 }: UseFileExplorerNodeCommandsParams): UseFileExplorerNodeCommandsResult {
@@ -89,25 +86,13 @@ export function useFileExplorerNodeCommands({
     [rowProjection, selectedPaths]
   )
 
-  // Why: pass a stable activator so arrow-key navigation can hand the same
-  // activate-toggles-folder / open-file-preview behavior the click handler
-  // already uses, without the keyboard path re-implementing symlink handling.
+  // Share click activation with keyboard navigation, including symlink handling.
   const activateNode = useCallback(
     (node: TreeNode) => {
       void handleClick(node)
     },
     [handleClick]
   )
-  // Why: a rename can start while a name click is still holding back its
-  // directory toggle; drop it so the tree doesn't shift under the input.
-  const handleStartRename = useCallback(
-    (node: TreeNode) => {
-      cancelPendingDirToggle()
-      startRename(node)
-    },
-    [cancelPendingDirToggle, startRename]
-  )
-
   useFileExplorerKeys({
     containerRef,
     rowProjection,
@@ -119,16 +104,14 @@ export function useFileExplorerNodeCommands({
     activateNode,
     moveSelection,
     toggleDir,
-    startRename: handleStartRename,
+    startRename,
     requestDelete,
     requestDeleteAll,
     scrollToIndex,
     activeWorktreeId
   })
 
-  // Why: context-menu Delete should respect the multi-selection — if the
-  // right-clicked node is already part of a multi-selection, delete the whole
-  // set; otherwise fall through to single-node delete.
+  // Delete the multi-selection only when the context-menu target belongs to it.
   const handleContextMenuDelete = useCallback(
     (node: TreeNode) => {
       if (selectedPaths.has(node.path) && selectedNodes.length > 1) {
@@ -195,7 +178,7 @@ export function useFileExplorerNodeCommands({
   )
 
   return {
-    handleStartRename,
+    handleStartRename: startRename,
     handleContextMenuDelete,
     handleDuplicate,
     handleRowClick,

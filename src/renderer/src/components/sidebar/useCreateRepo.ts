@@ -1,45 +1,50 @@
-// Create-project flow hook for AddRepoDialog (orca#763), split from
-// AddRepoCreateStep so the create-state machine stays scoped and testable.
 import { useCallback, useRef, useState } from 'react'
 import { toast } from 'sonner'
 import { useAppStore } from '@/store'
 import { useMountedRef } from '@/hooks/useMountedRef'
 import { activateAndRevealWorktree } from '@/lib/worktree-activation'
 import { markOnboardingProjectAdded } from '@/lib/onboarding-project-checklist'
-import { callRuntimeRpc, getActiveRuntimeTarget } from '@/runtime/runtime-rpc-client'
+import { callRuntimeRpc } from '@/runtime/runtime-rpc-client'
 import { isGitRepoKind } from '../../../../shared/repo-kind'
 import type { Repo } from '../../../../shared/repo-types'
 import { translate } from '@/i18n/i18n'
 import { extractIpcErrorMessage } from '@/lib/ipc-error'
 import { upsertAddedRepoWithProjectHostSetup } from './add-repo-store-upsert'
-import { worktreeRefreshOptions } from './add-repo-runtime-owner'
+import { selectWorktreesByRepo } from '@/store/workspace-record-selectors'
+import { resolveAddRepoRuntimeTarget, worktreeRefreshOptions } from './add-repo-runtime-owner'
 import type { ExecutionHostId } from '../../../../shared/execution-host'
+import {
+  readWslHostWindowsDriveRefusal,
+  type WslHostWindowsDriveRefusal
+} from '../../../../shared/wsl-host-windows-drive-refusal'
 
 export function useCreateRepo(
   fetchWorktrees: (
     repoId: string,
-    options?: { requireAuthoritative?: boolean; executionHostId?: ExecutionHostId }
+    options?: {
+      requireAuthoritative?: boolean
+      executionHostId?: ExecutionHostId
+    }
   ) => Promise<boolean>,
   closeModal: () => void,
   onGitRepoReady?: (repoId: string, executionHostId?: ExecutionHostId) => void | Promise<void>,
   options: {
     hostId?: string | null
     runtimeEnvironmentId?: string | null
-    sshTargetId?: string | null
+    onWindowsDriveRefusal?: (refusal: WslHostWindowsDriveRefusal) => void
   } = {}
 ) {
+  const { onWindowsDriveRefusal } = options
   const [createName, setCreateName] = useState('')
   const [createParent, setCreateParent] = useState('')
   const [createError, setCreateError] = useState<string | null>(null)
   const [isCreating, setIsCreating] = useState(false)
   const mountedRef = useMountedRef()
-  const hostToken = options.hostId ?? options.sshTargetId ?? ''
+  const hostToken = options.hostId ?? ''
   const hostTokenRef = useRef(hostToken)
   hostTokenRef.current = hostToken
 
-  // Why: monotonic ID so stale create callbacks can detect they were superseded
-  // when the user clicks Back or closes the dialog mid-create. Mirrors the
-  // cloneGenRef pattern in AddRepoDialog.
+  // Invalidate callbacks when Back or close supersedes the create flow.
   const createGenRef = useRef(0)
 
   const resetCreateState = useCallback(() => {
@@ -51,20 +56,8 @@ export function useCreateRepo(
   }, [])
 
   const handlePickParent = useCallback(async (): Promise<string | null> => {
-    if (options.sshTargetId) {
-      // Why: the native picker can only browse the client machine. SSH create
-      // uses a host path typed by the user until remote folder picking exists.
-      toast.error(
-        translate(
-          'auto.components.sidebar.AddRepoCreateStep.ssh_parent_manual',
-          'Enter an SSH parent path.'
-        )
-      )
-      return null
-    }
     if (options.runtimeEnvironmentId?.trim()) {
-      // Why: the native folder picker returns a client-local path. Runtime
-      // project creation needs an explicit host parent path.
+      // Native pickers return client-local paths; remote creation requires an explicit host parent path.
       toast.error(
         translate(
           'auto.components.sidebar.AddRepoCreateStep.875dda0995',
@@ -81,37 +74,29 @@ export function useCreateRepo(
       return dir
     }
     return null
-  }, [mountedRef, options.runtimeEnvironmentId, options.sshTargetId])
+  }, [mountedRef, options.runtimeEnvironmentId])
 
   const handleCreate = useCallback(async () => {
     const name = createName.trim()
     const parentPath = createParent.trim()
-    if (!name || !parentPath) {
+    // Block unresolved hosts so creation cannot silently fall back to this computer.
+    if (!name || !parentPath || options.hostId === null) {
       return
     }
     const requestHostToken = hostTokenRef.current
     const gen = ++createGenRef.current
+    const isCurrent = (): boolean =>
+      gen === createGenRef.current &&
+      requestHostToken === hostTokenRef.current &&
+      mountedRef.current
     setIsCreating(true)
     setCreateError(null)
     try {
-      const target = options.runtimeEnvironmentId?.trim()
-        ? { kind: 'environment' as const, environmentId: options.runtimeEnvironmentId.trim() }
-        : getActiveRuntimeTarget({
-            ...useAppStore.getState().settings,
-            activeRuntimeEnvironmentId: null
-          })
-      // Why: Create Project is intentionally Git-only; non-Git folders use the
-      // existing add-folder flows instead of this path.
+      const target = resolveAddRepoRuntimeTarget(options.runtimeEnvironmentId)
       const createKind = 'git' as const
-      const result = options.sshTargetId
-        ? await window.api.repos.createRemote({
-            connectionId: options.sshTargetId,
-            parentPath,
-            name,
-            kind: createKind
-          })
-        : target.kind === 'environment'
-          ? await callRuntimeRpc<{ repo: Repo } | { error: string }>(
+      const result =
+        target.kind === 'environment'
+          ? await callRuntimeRpc<{ repo: Repo } | { error: string; windowsDriveRefusal?: unknown }>(
               target,
               'repo.create',
               {
@@ -126,30 +111,28 @@ export function useCreateRepo(
               name,
               kind: createKind
             })
-      // Why: if the user closed the dialog or clicked Back mid-create,
-      // createGenRef was bumped by resetCreateState. Ignore stale results.
-      if (
-        gen !== createGenRef.current ||
-        requestHostToken !== hostTokenRef.current ||
-        !mountedRef.current
-      ) {
+      if (!isCurrent()) {
         return
       }
       if ('error' in result) {
-        setCreateError(result.error)
+        const refusal =
+          'windowsDriveRefusal' in result
+            ? readWslHostWindowsDriveRefusal(result.windowsDriveRefusal)
+            : null
+        if (refusal && onWindowsDriveRefusal) {
+          onWindowsDriveRefusal(refusal)
+        } else {
+          setCreateError(result.error)
+        }
         return
       }
       const { alreadyPresent: wasDeduped, repo } = upsertAddedRepoWithProjectHostSetup(
         result.repo,
         {
-          runtimeEnvironmentId: options.runtimeEnvironmentId,
-          sshConnectionId: options.sshTargetId
+          runtimeEnvironmentId: options.runtimeEnvironmentId
         }
       )
-      // Why: the IPC handler dedupes by path (see repos:create) and returns
-      // the existing repo unchanged. If its host identity is already in our store, the
-      // handler took the dedup path — no new project was created, so don't
-      // claim one was.
+      // Existing host-qualified store identity indicates path deduplication; do not claim a new project was created.
       if (wasDeduped) {
         toast.info(
           translate(
@@ -168,49 +151,29 @@ export function useCreateRepo(
           }
         )
       }
+      const ownerOptions = worktreeRefreshOptions(options.runtimeEnvironmentId)
       if (isGitRepoKind(repo)) {
-        // Why: Git repos use the shared default-checkout completion path.
-        // Why: if refresh is temporarily non-authoritative, the shared opener
-        // still reveals the project so the user is not left in a completed add flow.
-        const ownerOptions = worktreeRefreshOptions(
-          options.runtimeEnvironmentId,
-          options.sshTargetId
-        )
+        // Reveal persisted projects even after transient non-authoritative refreshes.
         await fetchWorktrees(repo.id, ownerOptions)
-        if (
-          gen !== createGenRef.current ||
-          requestHostToken !== hostTokenRef.current ||
-          !mountedRef.current
-        ) {
+        if (!isCurrent()) {
           return
         }
-        await (ownerOptions.executionHostId
-          ? onGitRepoReady?.(repo.id, ownerOptions.executionHostId)
-          : onGitRepoReady?.(repo.id))
+        await onGitRepoReady?.(repo.id, ownerOptions.executionHostId)
       } else {
-        // Why: folder repos skip the Git default-checkout handoff, so activate the synthetic
-        // root workspace before closing. Matches addNonGitFolder's behavior.
-        const ownerOptions = worktreeRefreshOptions(
-          options.runtimeEnvironmentId,
-          options.sshTargetId
-        )
+        // Folder projects activate their synthetic root before close, matching the add-folder path.
         await (ownerOptions.executionHostId
-          ? fetchWorktrees(repo.id, { executionHostId: ownerOptions.executionHostId })
+          ? fetchWorktrees(repo.id, {
+              executionHostId: ownerOptions.executionHostId
+            })
           : fetchWorktrees(repo.id))
-        if (
-          gen !== createGenRef.current ||
-          requestHostToken !== hostTokenRef.current ||
-          !mountedRef.current
-        ) {
+        if (!isCurrent()) {
           return
         }
-        const folderWorktree = useAppStore
-          .getState()
-          .worktreesByRepo[repo.id]?.find(
-            (worktree) =>
-              ownerOptions.executionHostId === undefined ||
-              worktree.hostId === ownerOptions.executionHostId
-          )
+        const folderWorktree = selectWorktreesByRepo(useAppStore.getState())[repo.id]?.find(
+          (worktree) =>
+            ownerOptions.executionHostId === undefined ||
+            worktree.hostId === ownerOptions.executionHostId
+        )
         if (folderWorktree) {
           activateAndRevealWorktree(folderWorktree.id, {
             sidebarRevealBehavior: 'auto',
@@ -223,22 +186,13 @@ export function useCreateRepo(
         closeModal()
       }
     } catch (err) {
-      if (
-        gen !== createGenRef.current ||
-        requestHostToken !== hostTokenRef.current ||
-        !mountedRef.current
-      ) {
+      if (!isCurrent()) {
         return
       }
       setCreateError(extractIpcErrorMessage(err, String(err)))
     } finally {
-      // Why: only clear the loading state if this invocation is still current;
-      // a superseded create must not flip the flag back off for a new flow.
-      if (
-        gen === createGenRef.current &&
-        requestHostToken === hostTokenRef.current &&
-        mountedRef.current
-      ) {
+      // Only the current invocation may clear loading; stale results must not hide a newer create flow.
+      if (isCurrent()) {
         setIsCreating(false)
       }
     }
@@ -249,8 +203,9 @@ export function useCreateRepo(
     mountedRef,
     closeModal,
     onGitRepoReady,
-    options.runtimeEnvironmentId,
-    options.sshTargetId
+    onWindowsDriveRefusal,
+    options.hostId,
+    options.runtimeEnvironmentId
   ])
 
   return {

@@ -1,14 +1,18 @@
+import {
+  isRemoteRuntimePtyId,
+  parseRemoteRuntimePtyId
+} from '../../../../shared/remote-runtime/remote-runtime-pty-id'
 import type { SleepingAgentSessionRecord } from '../../../../shared/agent-session-resume'
 import type { AppState } from '../types'
+import type { WorktreeRuntimeOwnerState } from '@/lib/worktree-runtime-owner-state'
 import {
-  getRuntimeEnvironmentIdForWorktree,
-  type WorktreeRuntimeOwnerState
-} from '@/lib/worktree-runtime-owner'
-import { parseRemoteRuntimePtyId } from '@/runtime/runtime-terminal-stream'
-import { resolveTerminalHostOwnership } from '@/lib/terminal-worktree-route'
+  resolveTerminalHostOwnership,
+  resolveTerminalPtyOwner
+} from '@/lib/terminal-worktree-route'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../shared/constants'
 import { isEphemeralSetupTerminalWorktreeId } from '../../../../shared/ephemeral-setup-terminal-worktree-id'
 import { parseWorkspaceKey } from '../../../../shared/workspace-scope'
+import { locateTerminalTab } from '../terminals/terminal-tab-location'
 
 export type TerminalTabCloseReason = 'user' | 'cleanup' | 'pty-exit'
 
@@ -54,14 +58,21 @@ export function getTerminalPtyOwnershipIdentity(
   if (!remote?.handle) {
     return `pty:${ptyId}`
   }
-  // Why: hydrated legacy runtime IDs omit their owner, but still refer to the
-  // same provider terminal as a scoped ID in the owning worktree.
-  const environmentId =
-    remote.environmentId?.trim() || getRuntimeEnvironmentIdForWorktree(state, worktreeId) || ''
+  const scopedEnvironmentId = remote.environmentId?.trim()
+  if (scopedEnvironmentId) {
+    return JSON.stringify(['runtime', scopedEnvironmentId, remote.handle])
+  }
+  // Resolve legacy/scoped PTY aliases on the owner used by spawn/close so identity and retirement agree.
+  const owner = resolveTerminalPtyOwner(state, worktreeId, 'spawn')
+  // Why: a twin's legacy id can't be pinned to either host, so it matches only its own exact id.
+  if (owner.kind === 'ambiguous') {
+    return `pty:${ptyId}`
+  }
+  const environmentId = owner.kind === 'runtime' ? owner.environmentId : ''
   return JSON.stringify(['runtime', environmentId, remote.handle])
 }
 
-function collectPtyIdsForTab(
+export function collectPtyIdsForTab(
   state: TerminalTabRetirementState,
   tabId: string,
   rowPtyId: string | null | undefined
@@ -131,7 +142,31 @@ export function isTerminalTabPresent(
   state: Pick<AppState, 'tabsByWorktree'>,
   tabId: string
 ): boolean {
-  return Object.values(state.tabsByWorktree).some((tabs) => tabs.some((tab) => tab.id === tabId))
+  return locateTerminalTab(state.tabsByWorktree, tabId) !== null
+}
+
+export function hasTerminalPtyOwnerOutsidePane(
+  state: TerminalTabRetirementState,
+  identity: string,
+  tabId: string,
+  excludedLeafId?: string
+): boolean {
+  for (const [ownerTabId, owner] of collectLiveTerminalTabs(state)) {
+    const ids =
+      ownerTabId === tabId
+        ? Object.entries(state.terminalLayoutsByTabId[tabId]?.ptyIdsByLeafId ?? {})
+            .filter(([leafId]) => leafId !== excludedLeafId)
+            .map(([, ptyId]) => ptyId)
+        : collectPtyIdsForTab(state, ownerTabId, owner.rowPtyId)
+    if (
+      ids.some(
+        (ptyId) => getTerminalPtyOwnershipIdentity(state, ptyId, owner.worktreeId) === identity
+      )
+    ) {
+      return true
+    }
+  }
+  return false
 }
 
 export function buildTerminalTabRetirementPlan(
@@ -203,7 +238,7 @@ export function buildTerminalTabRetirementPlans(
           environmentId: remote.environmentId?.trim() || null,
           handle: remote.handle
         })
-      } else if (ptyId.startsWith('remote:')) {
+      } else if (isRemoteRuntimePtyId(ptyId)) {
         unroutablePtyIds.push(ptyId)
       } else if (providerOwnership.kind !== 'local-or-ssh') {
         // Why: HUB-native wake hints are not paired-client PTY ids; wait for pane resolution instead of killing the same-looking local id.

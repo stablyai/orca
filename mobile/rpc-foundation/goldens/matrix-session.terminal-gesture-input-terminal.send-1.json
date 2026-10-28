@@ -1,0 +1,1377 @@
+{
+  "goldenFormatVersion": 6,
+  "operation": "session.terminal-gesture-input",
+  "family": "session.terminal-gesture-input",
+  "namedDeltas": [],
+  "values": {
+    "038694606b99": {
+      "name": "terminal.send#1",
+      "ordinal": 1,
+      "args": [
+        {
+          "name": "method",
+          "value": "terminal.send"
+        },
+        {
+          "name": "params",
+          "value": {
+            "client": {
+              "id": "device-token-1",
+              "type": "mobile"
+            },
+            "enter": false,
+            "terminal": "terminal-1",
+            "text": "\u001b[<64;10;5M"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "failWhenDisconnected": true
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 16,
+        "value": {
+          "id": "frame-1",
+          "ok": true
+        }
+      }
+    },
+    "0cc3e25ebff5": {
+      "bucketTokens": 63,
+      "crash": {
+        "$rpc": "null"
+      },
+      "inFlight": false,
+      "queuedBytes": {
+        "$rpc": "null"
+      },
+      "queuedSequences": {
+        "$rpc": "null"
+      }
+    },
+    "165d659fda65": {
+      "name": "terminal.clearBuffer#1",
+      "ordinal": 3,
+      "args": [
+        {
+          "name": "method",
+          "value": "terminal.clearBuffer"
+        },
+        {
+          "name": "params",
+          "value": {
+            "terminal": "terminal-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 16,
+        "settledAt": 16,
+        "value": {
+          "id": "frame-2",
+          "ok": true,
+          "result": {
+            "cleared": true
+          }
+        }
+      }
+    },
+    "18ae72c963d5": {
+      "name": "terminal.send#1",
+      "ordinal": 1,
+      "args": [
+        {
+          "name": "method",
+          "value": "terminal.send"
+        },
+        {
+          "name": "params",
+          "value": {
+            "client": {
+              "id": "device-token-1",
+              "type": "mobile"
+            },
+            "enter": false,
+            "terminal": "terminal-1",
+            "text": "\u001b[<64;10;5M"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "failWhenDisconnected": true
+          }
+        }
+      ],
+      "settlement": {
+        "status": "rejected",
+        "startedAt": 0,
+        "settledAt": 16,
+        "error": {
+          "category": "Error",
+          "message": "transport failure",
+          "isRpcDeliveryUnknown": true
+        }
+      }
+    },
+    "204da356c8b7": {
+      "status": "fulfilled",
+      "startedAt": 16,
+      "settledAt": 16,
+      "value": {
+        "$rpc": "undefined"
+      }
+    },
+    "2198adee8c06": {
+      "name": "terminal.send#1",
+      "ordinal": 1,
+      "args": [
+        {
+          "name": "method",
+          "value": "terminal.send"
+        },
+        {
+          "name": "params",
+          "value": {
+            "client": {
+              "id": "device-token-1",
+              "type": "mobile"
+            },
+            "enter": false,
+            "terminal": "terminal-1",
+            "text": "\u001b[<64;10;5M"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "failWhenDisconnected": true
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 16,
+        "value": {
+          "id": "frame-1",
+          "ok": true,
+          "result": {
+            "error": {
+              "message": "inner refused"
+            },
+            "ok": false
+          }
+        }
+      }
+    },
+    "3a2f96d25da8": {
+      "name": "terminal.send#1",
+      "ordinal": 1,
+      "args": [
+        {
+          "name": "method",
+          "value": "terminal.send"
+        },
+        {
+          "name": "params",
+          "value": {
+            "client": {
+              "id": "device-token-1",
+              "type": "mobile"
+            },
+            "enter": false,
+            "terminal": "terminal-1",
+            "text": "\u001b[<64;10;5M"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "failWhenDisconnected": true
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 16,
+        "value": {
+          "id": "frame-1",
+          "ok": true,
+          "result": {
+            "$rpc": "null"
+          }
+        }
+      }
+    },
+    "3ac9be406587": {
+      "name": "terminal.send#1",
+      "ordinal": 1,
+      "args": [
+        {
+          "name": "method",
+          "value": "terminal.send"
+        },
+        {
+          "name": "params",
+          "value": {
+            "client": {
+              "id": "device-token-1",
+              "type": "mobile"
+            },
+            "enter": false,
+            "terminal": "terminal-1",
+            "text": "\u001b[<64;10;5M"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "failWhenDisconnected": true
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 16,
+        "value": {
+          "id": "frame-1",
+          "ok": true,
+          "result": {
+            "error": "inner refused",
+            "ok": false
+          }
+        }
+      }
+    },
+    "3dc7f55dee2a": {
+      "name": "toast",
+      "ordinal": 7,
+      "value": {
+        "durationMs": {
+          "$rpc": "null"
+        },
+        "message": "Terminal cleared"
+      }
+    },
+    "47c387a75ffc": {
+      "name": "terminal.send#1",
+      "ordinal": 1,
+      "args": [
+        {
+          "name": "method",
+          "value": "terminal.send"
+        },
+        {
+          "name": "params",
+          "value": {
+            "client": {
+              "id": "device-token-1",
+              "type": "mobile"
+            },
+            "enter": false,
+            "terminal": "terminal-1",
+            "text": "\u001b[<64;10;5M"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "failWhenDisconnected": true
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 16,
+        "value": {
+          "id": "frame-1",
+          "ok": true,
+          "result": {
+            "send": {
+              "accepted": true
+            }
+          }
+        }
+      }
+    },
+    "5ec72f058605": {
+      "name": "terminal.clearBuffer#1",
+      "ordinal": 3,
+      "args": [
+        {
+          "name": "method",
+          "value": "terminal.clearBuffer"
+        },
+        {
+          "name": "params",
+          "value": {
+            "terminal": "terminal-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "pending",
+        "startedAt": 16
+      }
+    },
+    "77d8a44e0dcc": {
+      "name": "orchestration.workerTerminalUserInput#1",
+      "ordinal": 3,
+      "args": [
+        {
+          "name": "method",
+          "value": "orchestration.workerTerminalUserInput"
+        },
+        {
+          "name": "params",
+          "value": {
+            "terminal": "terminal-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "budgetSpansConnect": true,
+            "failWhenDisconnected": true,
+            "timeoutMs": 5000
+          }
+        }
+      ],
+      "settlement": {
+        "status": "pending",
+        "startedAt": 16
+      }
+    },
+    "8224ccdb2cd8": {
+      "name": "terminal.send#1",
+      "ordinal": 2,
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"terminal.send\",\"params\":{\"terminal\":\"terminal-1\",\"text\":\"\\u001b[<64;10;5M\",\"enter\":false,\"client\":{\"id\":\"device-token-1\",\"type\":\"mobile\"}}}"
+    },
+    "839dec95ae1c": {
+      "status": "pending",
+      "startedAt": 16
+    },
+    "85a38010bc83": {
+      "name": "orchestration.workerTerminalUserInput#1",
+      "ordinal": 4,
+      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"orchestration.workerTerminalUserInput\",\"params\":{\"terminal\":\"terminal-1\"}}"
+    },
+    "8716af94ca80": {
+      "name": "terminal.clearBuffer#1",
+      "ordinal": 6,
+      "json": "{\"id\":\"frame-3\",\"deviceToken\":\"recording-device\",\"method\":\"terminal.clearBuffer\",\"params\":{\"terminal\":\"terminal-1\"}}"
+    },
+    "8cc2f30cc0d2": {
+      "name": "terminal.send#1",
+      "ordinal": 1,
+      "args": [
+        {
+          "name": "method",
+          "value": "terminal.send"
+        },
+        {
+          "name": "params",
+          "value": {
+            "client": {
+              "id": "device-token-1",
+              "type": "mobile"
+            },
+            "enter": false,
+            "terminal": "terminal-1",
+            "text": "\u001b[<64;10;5M"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "failWhenDisconnected": true
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 16,
+        "value": {
+          "id": "frame-1",
+          "ok": true,
+          "result": {
+            "error": "refused"
+          }
+        }
+      }
+    },
+    "8d84d72cf6d5": {
+      "name": "terminal.send#1",
+      "ordinal": 1,
+      "args": [
+        {
+          "name": "method",
+          "value": "terminal.send"
+        },
+        {
+          "name": "params",
+          "value": {
+            "client": {
+              "id": "device-token-1",
+              "type": "mobile"
+            },
+            "enter": false,
+            "terminal": "terminal-1",
+            "text": "\u001b[<64;10;5M"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "failWhenDisconnected": true
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 16,
+        "value": {
+          "error": {
+            "code": "refused",
+            "message": "outer refused"
+          },
+          "id": "frame-1",
+          "ok": false
+        }
+      }
+    },
+    "94ce15ec36dc": {
+      "name": "orchestration.workerTerminalUserInput#1",
+      "ordinal": 3,
+      "args": [
+        {
+          "name": "method",
+          "value": "orchestration.workerTerminalUserInput"
+        },
+        {
+          "name": "params",
+          "value": {
+            "terminal": "terminal-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "budgetSpansConnect": true,
+            "failWhenDisconnected": true,
+            "timeoutMs": 5000
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 16,
+        "settledAt": 16,
+        "value": {
+          "id": "frame-2",
+          "ok": true,
+          "result": {
+            "reported": true
+          }
+        }
+      }
+    },
+    "94fa272beafb": {
+      "name": "terminal.send#1",
+      "ordinal": 1,
+      "args": [
+        {
+          "name": "method",
+          "value": "terminal.send"
+        },
+        {
+          "name": "params",
+          "value": {
+            "client": {
+              "id": "device-token-1",
+              "type": "mobile"
+            },
+            "enter": false,
+            "terminal": "terminal-1",
+            "text": "\u001b[<64;10;5M"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "failWhenDisconnected": true
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 16,
+        "value": {
+          "error": {
+            "code": "refused",
+            "message": ""
+          },
+          "id": "frame-1",
+          "ok": false
+        }
+      }
+    },
+    "9fa6cd0b7fa0": {
+      "name": "terminal.send#1",
+      "ordinal": 1,
+      "args": [
+        {
+          "name": "method",
+          "value": "terminal.send"
+        },
+        {
+          "name": "params",
+          "value": {
+            "client": {
+              "id": "device-token-1",
+              "type": "mobile"
+            },
+            "enter": false,
+            "terminal": "terminal-1",
+            "text": "\u001b[<64;10;5M"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "failWhenDisconnected": true
+          }
+        }
+      ],
+      "settlement": {
+        "status": "pending",
+        "startedAt": 0
+      }
+    },
+    "a1ae5051ed70": {
+      "name": "toast",
+      "ordinal": 5,
+      "value": {
+        "durationMs": {
+          "$rpc": "null"
+        },
+        "message": "Terminal cleared"
+      }
+    },
+    "afb61324f54a": {
+      "name": "terminal.clearBuffer#1",
+      "ordinal": 5,
+      "args": [
+        {
+          "name": "method",
+          "value": "terminal.clearBuffer"
+        },
+        {
+          "name": "params",
+          "value": {
+            "terminal": "terminal-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "pending",
+        "startedAt": 16
+      }
+    },
+    "caa6ece1bdab": {
+      "bucketTokens": 63,
+      "crash": {
+        "$rpc": "null"
+      },
+      "inFlight": true,
+      "queuedBytes": {
+        "$rpc": "null"
+      },
+      "queuedSequences": {
+        "$rpc": "null"
+      }
+    },
+    "d9c52be2f839": {
+      "name": "terminal.clearBuffer#1",
+      "ordinal": 4,
+      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"terminal.clearBuffer\",\"params\":{\"terminal\":\"terminal-1\"}}"
+    },
+    "e1076775e5c2": {
+      "name": "terminal.send#1",
+      "ordinal": 1,
+      "args": [
+        {
+          "name": "method",
+          "value": "terminal.send"
+        },
+        {
+          "name": "params",
+          "value": {
+            "client": {
+              "id": "device-token-1",
+              "type": "mobile"
+            },
+            "enter": false,
+            "terminal": "terminal-1",
+            "text": "\u001b[<64;10;5M"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "failWhenDisconnected": true
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 16,
+        "value": {
+          "error": {
+            "code": "method_not_found",
+            "message": "Unknown method"
+          },
+          "id": "frame-1",
+          "ok": false
+        }
+      }
+    },
+    "eb79a9b3682a": {
+      "status": "fulfilled",
+      "startedAt": 0,
+      "settledAt": 0,
+      "value": {
+        "$rpc": "undefined"
+      }
+    },
+    "ebaa6b64425b": {
+      "name": "terminal.clearBuffer#1",
+      "ordinal": 5,
+      "args": [
+        {
+          "name": "method",
+          "value": "terminal.clearBuffer"
+        },
+        {
+          "name": "params",
+          "value": {
+            "terminal": "terminal-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 16,
+        "settledAt": 16,
+        "value": {
+          "id": "frame-3",
+          "ok": true,
+          "result": {
+            "cleared": true
+          }
+        }
+      }
+    },
+    "eecb4c1a0308": {
+      "name": "terminal.send#1",
+      "ordinal": 1,
+      "args": [
+        {
+          "name": "method",
+          "value": "terminal.send"
+        },
+        {
+          "name": "params",
+          "value": {
+            "client": {
+              "id": "device-token-1",
+              "type": "mobile"
+            },
+            "enter": false,
+            "terminal": "terminal-1",
+            "text": "\u001b[<64;10;5M"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "failWhenDisconnected": true
+          }
+        }
+      ],
+      "settlement": {
+        "status": "rejected",
+        "startedAt": 0,
+        "settledAt": 16,
+        "error": {
+          "category": "Error",
+          "message": "",
+          "isRpcDeliveryUnknown": true
+        }
+      }
+    }
+  },
+  "recording": {
+    "scenario": "matrix-session.terminal-gesture-input-terminal.send-1",
+    "checkpoints": [
+      {
+        "id": "terminal-gesture-flush-and-clear.prelude:queued",
+        "observation": {
+          "sender": ["9fa6cd0b7fa0"],
+          "payloads": ["8224ccdb2cd8"],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "gesture": "eb79a9b3682a"
+          },
+          "state": "caa6ece1bdab",
+          "effects": []
+        }
+      },
+      {
+        "id": "terminal-gesture-flush-and-clear.prelude:flushing",
+        "observation": {
+          "sender": ["9fa6cd0b7fa0"],
+          "payloads": ["8224ccdb2cd8"],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "gesture": "eb79a9b3682a"
+          },
+          "state": "caa6ece1bdab",
+          "effects": []
+        }
+      },
+      {
+        "id": "terminal-gesture-flush-and-clear.normal:sent",
+        "observation": {
+          "sender": ["47c387a75ffc", "77d8a44e0dcc"],
+          "payloads": ["8224ccdb2cd8", "85a38010bc83"],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "gesture": "eb79a9b3682a"
+          },
+          "state": "0cc3e25ebff5",
+          "effects": []
+        }
+      },
+      {
+        "id": "terminal-gesture-flush-and-clear.normal:reported",
+        "observation": {
+          "sender": ["47c387a75ffc", "94ce15ec36dc"],
+          "payloads": ["8224ccdb2cd8", "85a38010bc83"],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "gesture": "eb79a9b3682a"
+          },
+          "state": "0cc3e25ebff5",
+          "effects": []
+        }
+      },
+      {
+        "id": "terminal-gesture-flush-and-clear.normal:clearing",
+        "observation": {
+          "sender": ["47c387a75ffc", "94ce15ec36dc", "afb61324f54a"],
+          "payloads": ["8224ccdb2cd8", "85a38010bc83", "8716af94ca80"],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "gesture": "eb79a9b3682a",
+            "clear": "839dec95ae1c"
+          },
+          "state": "0cc3e25ebff5",
+          "effects": []
+        }
+      },
+      {
+        "id": "terminal-gesture-flush-and-clear.normal:cleared",
+        "observation": {
+          "sender": ["47c387a75ffc", "94ce15ec36dc", "ebaa6b64425b"],
+          "payloads": ["8224ccdb2cd8", "85a38010bc83", "8716af94ca80"],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "gesture": "eb79a9b3682a",
+            "clear": "204da356c8b7"
+          },
+          "state": "0cc3e25ebff5",
+          "effects": ["3dc7f55dee2a"]
+        }
+      },
+      {
+        "id": "terminal-gesture-flush-and-clear.result-absent:sent",
+        "observation": {
+          "sender": ["038694606b99"],
+          "payloads": ["8224ccdb2cd8"],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "gesture": "eb79a9b3682a"
+          },
+          "state": "0cc3e25ebff5",
+          "effects": []
+        }
+      },
+      {
+        "id": "terminal-gesture-flush-and-clear.result-absent:reported",
+        "observation": {
+          "sender": ["038694606b99"],
+          "payloads": ["8224ccdb2cd8"],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "gesture": "eb79a9b3682a"
+          },
+          "state": "0cc3e25ebff5",
+          "effects": []
+        }
+      },
+      {
+        "id": "terminal-gesture-flush-and-clear.result-absent:clearing",
+        "observation": {
+          "sender": ["038694606b99", "5ec72f058605"],
+          "payloads": ["8224ccdb2cd8", "d9c52be2f839"],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "gesture": "eb79a9b3682a",
+            "clear": "839dec95ae1c"
+          },
+          "state": "0cc3e25ebff5",
+          "effects": []
+        }
+      },
+      {
+        "id": "terminal-gesture-flush-and-clear.result-absent:cleared",
+        "observation": {
+          "sender": ["038694606b99", "165d659fda65"],
+          "payloads": ["8224ccdb2cd8", "d9c52be2f839"],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "gesture": "eb79a9b3682a",
+            "clear": "204da356c8b7"
+          },
+          "state": "0cc3e25ebff5",
+          "effects": ["a1ae5051ed70"]
+        }
+      },
+      {
+        "id": "terminal-gesture-flush-and-clear.result-null:sent",
+        "observation": {
+          "sender": ["3a2f96d25da8"],
+          "payloads": ["8224ccdb2cd8"],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "gesture": "eb79a9b3682a"
+          },
+          "state": "0cc3e25ebff5",
+          "effects": []
+        }
+      },
+      {
+        "id": "terminal-gesture-flush-and-clear.result-null:reported",
+        "observation": {
+          "sender": ["3a2f96d25da8"],
+          "payloads": ["8224ccdb2cd8"],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "gesture": "eb79a9b3682a"
+          },
+          "state": "0cc3e25ebff5",
+          "effects": []
+        }
+      },
+      {
+        "id": "terminal-gesture-flush-and-clear.result-null:clearing",
+        "observation": {
+          "sender": ["3a2f96d25da8", "5ec72f058605"],
+          "payloads": ["8224ccdb2cd8", "d9c52be2f839"],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "gesture": "eb79a9b3682a",
+            "clear": "839dec95ae1c"
+          },
+          "state": "0cc3e25ebff5",
+          "effects": []
+        }
+      },
+      {
+        "id": "terminal-gesture-flush-and-clear.result-null:cleared",
+        "observation": {
+          "sender": ["3a2f96d25da8", "165d659fda65"],
+          "payloads": ["8224ccdb2cd8", "d9c52be2f839"],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "gesture": "eb79a9b3682a",
+            "clear": "204da356c8b7"
+          },
+          "state": "0cc3e25ebff5",
+          "effects": ["a1ae5051ed70"]
+        }
+      },
+      {
+        "id": "terminal-gesture-flush-and-clear.inner-ok-missing:sent",
+        "observation": {
+          "sender": ["8cc2f30cc0d2"],
+          "payloads": ["8224ccdb2cd8"],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "gesture": "eb79a9b3682a"
+          },
+          "state": "0cc3e25ebff5",
+          "effects": []
+        }
+      },
+      {
+        "id": "terminal-gesture-flush-and-clear.inner-ok-missing:reported",
+        "observation": {
+          "sender": ["8cc2f30cc0d2"],
+          "payloads": ["8224ccdb2cd8"],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "gesture": "eb79a9b3682a"
+          },
+          "state": "0cc3e25ebff5",
+          "effects": []
+        }
+      },
+      {
+        "id": "terminal-gesture-flush-and-clear.inner-ok-missing:clearing",
+        "observation": {
+          "sender": ["8cc2f30cc0d2", "5ec72f058605"],
+          "payloads": ["8224ccdb2cd8", "d9c52be2f839"],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "gesture": "eb79a9b3682a",
+            "clear": "839dec95ae1c"
+          },
+          "state": "0cc3e25ebff5",
+          "effects": []
+        }
+      },
+      {
+        "id": "terminal-gesture-flush-and-clear.inner-ok-missing:cleared",
+        "observation": {
+          "sender": ["8cc2f30cc0d2", "165d659fda65"],
+          "payloads": ["8224ccdb2cd8", "d9c52be2f839"],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "gesture": "eb79a9b3682a",
+            "clear": "204da356c8b7"
+          },
+          "state": "0cc3e25ebff5",
+          "effects": ["a1ae5051ed70"]
+        }
+      },
+      {
+        "id": "terminal-gesture-flush-and-clear.inner-false-string-error:sent",
+        "observation": {
+          "sender": ["3ac9be406587"],
+          "payloads": ["8224ccdb2cd8"],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "gesture": "eb79a9b3682a"
+          },
+          "state": "0cc3e25ebff5",
+          "effects": []
+        }
+      },
+      {
+        "id": "terminal-gesture-flush-and-clear.inner-false-string-error:reported",
+        "observation": {
+          "sender": ["3ac9be406587"],
+          "payloads": ["8224ccdb2cd8"],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "gesture": "eb79a9b3682a"
+          },
+          "state": "0cc3e25ebff5",
+          "effects": []
+        }
+      },
+      {
+        "id": "terminal-gesture-flush-and-clear.inner-false-string-error:clearing",
+        "observation": {
+          "sender": ["3ac9be406587", "5ec72f058605"],
+          "payloads": ["8224ccdb2cd8", "d9c52be2f839"],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "gesture": "eb79a9b3682a",
+            "clear": "839dec95ae1c"
+          },
+          "state": "0cc3e25ebff5",
+          "effects": []
+        }
+      },
+      {
+        "id": "terminal-gesture-flush-and-clear.inner-false-string-error:cleared",
+        "observation": {
+          "sender": ["3ac9be406587", "165d659fda65"],
+          "payloads": ["8224ccdb2cd8", "d9c52be2f839"],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "gesture": "eb79a9b3682a",
+            "clear": "204da356c8b7"
+          },
+          "state": "0cc3e25ebff5",
+          "effects": ["a1ae5051ed70"]
+        }
+      },
+      {
+        "id": "terminal-gesture-flush-and-clear.inner-false-object-error:sent",
+        "observation": {
+          "sender": ["2198adee8c06"],
+          "payloads": ["8224ccdb2cd8"],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "gesture": "eb79a9b3682a"
+          },
+          "state": "0cc3e25ebff5",
+          "effects": []
+        }
+      },
+      {
+        "id": "terminal-gesture-flush-and-clear.inner-false-object-error:reported",
+        "observation": {
+          "sender": ["2198adee8c06"],
+          "payloads": ["8224ccdb2cd8"],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "gesture": "eb79a9b3682a"
+          },
+          "state": "0cc3e25ebff5",
+          "effects": []
+        }
+      },
+      {
+        "id": "terminal-gesture-flush-and-clear.inner-false-object-error:clearing",
+        "observation": {
+          "sender": ["2198adee8c06", "5ec72f058605"],
+          "payloads": ["8224ccdb2cd8", "d9c52be2f839"],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "gesture": "eb79a9b3682a",
+            "clear": "839dec95ae1c"
+          },
+          "state": "0cc3e25ebff5",
+          "effects": []
+        }
+      },
+      {
+        "id": "terminal-gesture-flush-and-clear.inner-false-object-error:cleared",
+        "observation": {
+          "sender": ["2198adee8c06", "165d659fda65"],
+          "payloads": ["8224ccdb2cd8", "d9c52be2f839"],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "gesture": "eb79a9b3682a",
+            "clear": "204da356c8b7"
+          },
+          "state": "0cc3e25ebff5",
+          "effects": ["a1ae5051ed70"]
+        }
+      },
+      {
+        "id": "terminal-gesture-flush-and-clear.outer-refused:sent",
+        "observation": {
+          "sender": ["8d84d72cf6d5"],
+          "payloads": ["8224ccdb2cd8"],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "gesture": "eb79a9b3682a"
+          },
+          "state": "0cc3e25ebff5",
+          "effects": []
+        }
+      },
+      {
+        "id": "terminal-gesture-flush-and-clear.outer-refused:reported",
+        "observation": {
+          "sender": ["8d84d72cf6d5"],
+          "payloads": ["8224ccdb2cd8"],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "gesture": "eb79a9b3682a"
+          },
+          "state": "0cc3e25ebff5",
+          "effects": []
+        }
+      },
+      {
+        "id": "terminal-gesture-flush-and-clear.outer-refused:clearing",
+        "observation": {
+          "sender": ["8d84d72cf6d5", "5ec72f058605"],
+          "payloads": ["8224ccdb2cd8", "d9c52be2f839"],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "gesture": "eb79a9b3682a",
+            "clear": "839dec95ae1c"
+          },
+          "state": "0cc3e25ebff5",
+          "effects": []
+        }
+      },
+      {
+        "id": "terminal-gesture-flush-and-clear.outer-refused:cleared",
+        "observation": {
+          "sender": ["8d84d72cf6d5", "165d659fda65"],
+          "payloads": ["8224ccdb2cd8", "d9c52be2f839"],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "gesture": "eb79a9b3682a",
+            "clear": "204da356c8b7"
+          },
+          "state": "0cc3e25ebff5",
+          "effects": ["a1ae5051ed70"]
+        }
+      },
+      {
+        "id": "terminal-gesture-flush-and-clear.outer-refused-no-message:sent",
+        "observation": {
+          "sender": ["94fa272beafb"],
+          "payloads": ["8224ccdb2cd8"],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "gesture": "eb79a9b3682a"
+          },
+          "state": "0cc3e25ebff5",
+          "effects": []
+        }
+      },
+      {
+        "id": "terminal-gesture-flush-and-clear.outer-refused-no-message:reported",
+        "observation": {
+          "sender": ["94fa272beafb"],
+          "payloads": ["8224ccdb2cd8"],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "gesture": "eb79a9b3682a"
+          },
+          "state": "0cc3e25ebff5",
+          "effects": []
+        }
+      },
+      {
+        "id": "terminal-gesture-flush-and-clear.outer-refused-no-message:clearing",
+        "observation": {
+          "sender": ["94fa272beafb", "5ec72f058605"],
+          "payloads": ["8224ccdb2cd8", "d9c52be2f839"],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "gesture": "eb79a9b3682a",
+            "clear": "839dec95ae1c"
+          },
+          "state": "0cc3e25ebff5",
+          "effects": []
+        }
+      },
+      {
+        "id": "terminal-gesture-flush-and-clear.outer-refused-no-message:cleared",
+        "observation": {
+          "sender": ["94fa272beafb", "165d659fda65"],
+          "payloads": ["8224ccdb2cd8", "d9c52be2f839"],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "gesture": "eb79a9b3682a",
+            "clear": "204da356c8b7"
+          },
+          "state": "0cc3e25ebff5",
+          "effects": ["a1ae5051ed70"]
+        }
+      },
+      {
+        "id": "terminal-gesture-flush-and-clear.method-not-found:sent",
+        "observation": {
+          "sender": ["e1076775e5c2"],
+          "payloads": ["8224ccdb2cd8"],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "gesture": "eb79a9b3682a"
+          },
+          "state": "0cc3e25ebff5",
+          "effects": []
+        }
+      },
+      {
+        "id": "terminal-gesture-flush-and-clear.method-not-found:reported",
+        "observation": {
+          "sender": ["e1076775e5c2"],
+          "payloads": ["8224ccdb2cd8"],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "gesture": "eb79a9b3682a"
+          },
+          "state": "0cc3e25ebff5",
+          "effects": []
+        }
+      },
+      {
+        "id": "terminal-gesture-flush-and-clear.method-not-found:clearing",
+        "observation": {
+          "sender": ["e1076775e5c2", "5ec72f058605"],
+          "payloads": ["8224ccdb2cd8", "d9c52be2f839"],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "gesture": "eb79a9b3682a",
+            "clear": "839dec95ae1c"
+          },
+          "state": "0cc3e25ebff5",
+          "effects": []
+        }
+      },
+      {
+        "id": "terminal-gesture-flush-and-clear.method-not-found:cleared",
+        "observation": {
+          "sender": ["e1076775e5c2", "165d659fda65"],
+          "payloads": ["8224ccdb2cd8", "d9c52be2f839"],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "gesture": "eb79a9b3682a",
+            "clear": "204da356c8b7"
+          },
+          "state": "0cc3e25ebff5",
+          "effects": ["a1ae5051ed70"]
+        }
+      },
+      {
+        "id": "terminal-gesture-flush-and-clear.transport-rejection:sent",
+        "observation": {
+          "sender": ["18ae72c963d5"],
+          "payloads": ["8224ccdb2cd8"],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "gesture": "eb79a9b3682a"
+          },
+          "state": "0cc3e25ebff5",
+          "effects": []
+        }
+      },
+      {
+        "id": "terminal-gesture-flush-and-clear.transport-rejection:reported",
+        "observation": {
+          "sender": ["18ae72c963d5"],
+          "payloads": ["8224ccdb2cd8"],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "gesture": "eb79a9b3682a"
+          },
+          "state": "0cc3e25ebff5",
+          "effects": []
+        }
+      },
+      {
+        "id": "terminal-gesture-flush-and-clear.transport-rejection:clearing",
+        "observation": {
+          "sender": ["18ae72c963d5", "5ec72f058605"],
+          "payloads": ["8224ccdb2cd8", "d9c52be2f839"],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "gesture": "eb79a9b3682a",
+            "clear": "839dec95ae1c"
+          },
+          "state": "0cc3e25ebff5",
+          "effects": []
+        }
+      },
+      {
+        "id": "terminal-gesture-flush-and-clear.transport-rejection:cleared",
+        "observation": {
+          "sender": ["18ae72c963d5", "165d659fda65"],
+          "payloads": ["8224ccdb2cd8", "d9c52be2f839"],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "gesture": "eb79a9b3682a",
+            "clear": "204da356c8b7"
+          },
+          "state": "0cc3e25ebff5",
+          "effects": ["a1ae5051ed70"]
+        }
+      },
+      {
+        "id": "terminal-gesture-flush-and-clear.transport-rejection-no-message:sent",
+        "observation": {
+          "sender": ["eecb4c1a0308"],
+          "payloads": ["8224ccdb2cd8"],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "gesture": "eb79a9b3682a"
+          },
+          "state": "0cc3e25ebff5",
+          "effects": []
+        }
+      },
+      {
+        "id": "terminal-gesture-flush-and-clear.transport-rejection-no-message:reported",
+        "observation": {
+          "sender": ["eecb4c1a0308"],
+          "payloads": ["8224ccdb2cd8"],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "gesture": "eb79a9b3682a"
+          },
+          "state": "0cc3e25ebff5",
+          "effects": []
+        }
+      },
+      {
+        "id": "terminal-gesture-flush-and-clear.transport-rejection-no-message:clearing",
+        "observation": {
+          "sender": ["eecb4c1a0308", "5ec72f058605"],
+          "payloads": ["8224ccdb2cd8", "d9c52be2f839"],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "gesture": "eb79a9b3682a",
+            "clear": "839dec95ae1c"
+          },
+          "state": "0cc3e25ebff5",
+          "effects": []
+        }
+      },
+      {
+        "id": "terminal-gesture-flush-and-clear.transport-rejection-no-message:cleared",
+        "observation": {
+          "sender": ["eecb4c1a0308", "165d659fda65"],
+          "payloads": ["8224ccdb2cd8", "d9c52be2f839"],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "gesture": "eb79a9b3682a",
+            "clear": "204da356c8b7"
+          },
+          "state": "0cc3e25ebff5",
+          "effects": ["a1ae5051ed70"]
+        }
+      }
+    ]
+  }
+}

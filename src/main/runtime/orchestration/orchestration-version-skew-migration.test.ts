@@ -6,6 +6,7 @@ import Database from '../../sqlite/sync-database'
 import { LEGACY_CONTRACT_VERSION, LEGACY_RUN_ID, OrchestrationDb } from './db'
 import { resolveOrchestrationMigrationStartVersion } from './orchestration-schema-version-skew'
 import { createRootDispatch } from './db/root-dispatch-test-fixture'
+import { dropDerivedDeliverySchema } from './db/schema/derived-delivery-test-fixture'
 import { SCHEMA_VERSION } from './db/contract-constants'
 
 describe('OrchestrationDb version-skew migration', () => {
@@ -231,8 +232,7 @@ describe('OrchestrationDb version-skew migration', () => {
     ).toBeDefined()
   })
 
-  // The two v32 recovery columns were listed as unversioned, so every shipped database below v32
-  // read as v6 and replayed the whole chain, re-running the v23 resource backfill over live rows.
+  // Unversioned v32 probes replayed from v6, applying resource backfill over live rows.
   it('starts a genuine pre-v32 database at its own version, not the v6 floor', () => {
     tempDir = mkdtempSync(join(tmpdir(), 'orca-db-version-skew-v31-'))
     const dbPath = join(tempDir, 'orchestration.db')
@@ -267,6 +267,7 @@ describe('OrchestrationDb version-skew migration', () => {
     db = undefined
 
     const raw = new Database(dbPath)
+    dropDerivedDeliverySchema(raw)
     raw.exec(`
       DROP INDEX idx_deliveries_one_outstanding;
       ALTER TABLE deliveries DROP COLUMN mailbox_handle;
@@ -303,6 +304,7 @@ describe('OrchestrationDb version-skew migration', () => {
     db = undefined
 
     const raw = new Database(dbPath)
+    dropDerivedDeliverySchema(raw)
     raw.exec(`
       DROP INDEX idx_deliveries_one_outstanding;
       ALTER TABLE deliveries DROP COLUMN mailbox_handle;
@@ -374,15 +376,7 @@ describe('OrchestrationDb version-skew migration', () => {
     expect(deliveryIndexes.map(({ name }) => name)).toEqual(
       expect.arrayContaining(['idx_deliveries_one_outstanding', 'idx_deliveries_run_created'])
     )
-    expect(() =>
-      db!.db
-        .prepare(
-          `INSERT INTO deliveries (
-             id, run_id, mailbox_handle, consumer_generation, message_ids
-           ) VALUES (?, ?, ?, ?, '[]')`
-        )
-        .run('delivery_v34_duplicate', run.id, `run:${run.id}`, run.consumer_generation)
-    ).toThrow(/UNIQUE constraint failed/)
+    expect(db.hasOutstandingRunDelivery(run.id)).toBe(false)
   })
 
   it('cleans additive lifecycle rows when a v30 writer resets tasks before re-upgrade', () => {
@@ -475,12 +469,10 @@ describe('OrchestrationDb version-skew migration', () => {
     }
 
     expect(() => insertLegacyDelivery('delivery_old_binary')).not.toThrow()
-    // A second outstanding legacy row must not collide on the empty mailbox handle either.
     expect(() => insertLegacyDelivery('delivery_old_binary_2')).not.toThrow()
   })
 
-  // Why: v34 early-returns at >= 34 and every index probe uses IF NOT EXISTS, so a DB the pre-fix
-  // build already stamped v34 kept the old shape until v35 repaired it against the stored SQL.
+  // A stamped v34 can retain old delivery shape; v35 must repair stored SQL rather than trust the stamp.
   it('repairs deliveries a pre-fix build already stamped v34', () => {
     tempDir = mkdtempSync(join(tmpdir(), 'orca-db-v34-already-stamped-'))
     const dbPath = join(tempDir, 'orchestration.db')
@@ -489,6 +481,7 @@ describe('OrchestrationDb version-skew migration', () => {
     db = undefined
 
     const raw = new Database(dbPath)
+    dropDerivedDeliverySchema(raw)
     raw.exec(`
       DROP TABLE deliveries;
       CREATE TABLE deliveries (
@@ -567,6 +560,7 @@ describe('OrchestrationDb version-skew migration', () => {
     db = undefined
 
     const raw = new Database(dbPath)
+    dropDerivedDeliverySchema(raw)
     raw.exec(`
       DROP INDEX IF EXISTS idx_deliveries_one_outstanding;
       CREATE UNIQUE INDEX idx_deliveries_one_outstanding

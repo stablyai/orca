@@ -6,12 +6,12 @@ import {
   toError
 } from './mobile-endpoint-supervisor-support'
 import { persistResumeConfirmation } from './mobile-relay-credential-rotation'
+import { relayFailureAllowsGraceRetry } from './relay-credential-eligibility'
 import type { MobileRelayCredentialBundle } from './mobile-relay-credential-bundle'
 import type { RelayReconnectController } from './mobile-relay-reconnect-controller'
 import type { StableLogicalRpcClient } from './stable-logical-rpc-client'
 import type { MobileRelayEndpoint } from '../../../src/shared/mobile-relay-credential-contract'
 import { RELAY_HOST_CLOSE_REASON } from '../../../src/shared/relay-host-close-reason'
-import type { HostProfile } from './types'
 
 type EstablishResult = { ok: true } | { ok: false; error: Error }
 
@@ -19,11 +19,10 @@ function directWon(logical: StableLogicalRpcClient): boolean {
   return logical.getActivePath() !== 'relay' && logical.getState() === 'connected'
 }
 
-// Turns one relay credential into the active runtime session: resolve the cell
-// assignment if the director rejects the cached one, open the cell socket,
-// migrate the logical client onto it, then persist the resume confirmation and
-// re-arm the supervisor's timers.
+// Own candidate relays through cell resolution, logical migration and best-effort resume bookkeeping.
 export class MobileRelaySessionEstablisher {
+  private relay: MobileRelayEndpoint
+
   constructor(
     private readonly args: {
       logical: StableLogicalRpcClient
@@ -33,12 +32,13 @@ export class MobileRelaySessionEstablisher {
       writeBundle: (bundle: MobileRelayCredentialBundle) => Promise<void>
       isActive: () => boolean
       isForeground: () => boolean
-      relay: () => HostProfile['relay']
+      isStopped: () => boolean
+      hostId: string
+      relay: MobileRelayEndpoint
       resolveRelay: MobileEndpointSupervisorDependencies['resolveRelay']
-      persistResolvedRelay: (resolved: MobileRelayEndpoint) => Promise<void>
+      setRelayRouting: MobileEndpointSupervisorDependencies['setRelayRouting']
       bundle: () => MobileRelayCredentialBundle | null
       adoptBundle: (bundle: MobileRelayCredentialBundle) => void
-      // Hysteresis stamp + rotation-pending clear + recovery log line.
       recordMigration: () => void
       // Owns the stopped/disconnected guard so late bookkeeping cannot arm a stale timer.
       scheduleLease: (expiry: number | null) => void
@@ -46,10 +46,20 @@ export class MobileRelaySessionEstablisher {
       onBookkeepingError: (error: Error) => void
       onDialFailure: (error: Error) => void
     }
-  ) {}
+  ) {
+    this.relay = args.relay
+  }
 
-  // Tries each eligible credential until one establishes. Only a grace-repairable
-  // failure (BAD_OUTER_CREDENTIAL) moves on to the next credential.
+  async adoptRelay(relay: MobileRelayEndpoint): Promise<void> {
+    // A stopped supervisor’s successor owns routing after removal/re-pairing.
+    if (this.args.isStopped()) {
+      return
+    }
+    await this.args.setRelayRouting(this.args.hostId, relay)
+    this.relay = relay
+  }
+
+  // Try only grace-repairable BAD_OUTER_CREDENTIAL failures with another eligible credential.
   async dialEligible(
     credentials: { token: string; version: number }[]
   ): Promise<
@@ -66,7 +76,7 @@ export class MobileRelaySessionEstablisher {
       }
       lastError = result.error
       this.args.onDialFailure(result.error)
-      if (!this.args.controller.shouldTryGraceAfterRelayFailure(result.error)) {
+      if (!relayFailureAllowsGraceRetry(result.error)) {
         break
       }
       // Why: a rejected version stays invalid; retry only the grace credential.
@@ -75,15 +85,13 @@ export class MobileRelaySessionEstablisher {
     return { outcome: 'failed', error: lastError }
   }
 
-  // One credential attempt: a director-class failure re-resolves the cell
-  // assignment, persists it, and dials once more against the authoritative target.
   dial(credential: { token: string; version: number }): Promise<EstablishResult> {
     return dialRelayThroughDirectorFallback({
       resumeToken: credential.token,
-      relay: this.args.relay,
+      relay: () => this.relay,
       dial: () => this.establish(credential),
       resolveRelay: this.args.resolveRelay,
-      persistResolvedRelay: this.args.persistResolvedRelay
+      persistResolvedRelay: (resolved) => this.adoptRelay(resolved)
     })
   }
 
@@ -92,23 +100,19 @@ export class MobileRelaySessionEstablisher {
     version: number
   }): Promise<EstablishResult> {
     const { args } = this
-    const relay = args.relay()
     const bundle = args.bundle()
     // Why: director resolution and grace fallback can finish after background/stop.
-    if (!args.isActive() || !relay || !bundle) {
+    if (!args.isActive() || !bundle) {
       return { ok: false, error: new RelayDialAbortedError() }
     }
     const session = args.openRelay(
-      relay,
+      this.relay,
       credential,
       `confirm-${encodeBase64Url(args.randomBytes(16))}`,
-      // Latched on the logical client, not on the dial result: the close that
-      // carries the reason can land after this dial has already reported its
-      // failure. Clearing is clearAfterConnected's job, so any path that
-      // reaches connected retires it.
+      // Read the controller latch because close reasons can arrive after the dial failed; only connection clears it.
       (reason) => {
         if (reason === RELAY_HOST_CLOSE_REASON.SIGNED_OUT) {
-          args.logical.setHostSignedOut(true)
+          args.controller.assertHostReachability('signed-out')
         }
       }
     )
@@ -141,8 +145,7 @@ export class MobileRelaySessionEstablisher {
       args.adoptBundle(applied.bundle)
       args.scheduleLease(applied.leaseExpiry)
     } catch (error) {
-      // Why: the session is live and registered — reporting bookkeeping as a dial
-      // failure would book backoff against it and can suspend the healthy session.
+      // Report post-migration bookkeeping separately; counting it as dial failure could suspend the healthy session.
       args.onBookkeepingError(toError(error))
     }
     args.scheduleDirectProbe()

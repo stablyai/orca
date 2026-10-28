@@ -1,16 +1,12 @@
-/**
- * Shell-ready launch configuration for local PTYs.
- *
- * Why: startup commands must wait until the shell has fully initialized. Picks the args/env
- * that point each shell at its Orca wrapper (which emits the OSC 777 marker the scanner detects).
- */
 import { basename, win32 as pathWin32 } from 'node:path'
 import {
   encodePowerShellCommand,
   getPowerShellOsc133Bootstrap,
   isPowerShellExecutableName
 } from '../powershell-osc133-bootstrap'
-import { getFishCodexShellLaunchPreflight } from '../pty/codex-shell-launch-preflight'
+import { getFishCodexShellLaunchPreflight } from '../../shared/codex-shell-function'
+import { getFishClaudeShellFunction } from '../../shared/claude-shell-function'
+import { getFishXdgDataDirsLaunchEnv } from '../fish-xdg-data-dirs-handoff'
 import { POSIX_SHELL_STARTUP_COMMAND_ENV } from '../pty/posix-shell-startup-command'
 import { getFishShellReadyInitCommand } from '../shell-templates'
 import {
@@ -45,27 +41,26 @@ const UNWRAPPED: ShellReadyLaunchConfig = {
   supportsReadyMarker: false
 }
 
-/** True when the wrapper tree is complete on disk right now. */
 function wrapperTreeUsable(): boolean {
   const ensured = ensureShellReadyWrappers()
   return ensured && shellReadyWrappersExist()
 }
 
-/** Args that point bash at Orca's rcfile, or null when it is not usable. */
 export function getBashWrapperLaunchArgs(): string[] | null {
   return shellReadyWrappersExist()
     ? ['--rcfile', `${getShellReadyWrapperRoot()}/bash/rcfile`]
     : null
 }
 
-/**
- * The one launch-config entry point: args + env for a shell that should start
- * with exactly `features` enabled. An empty selection is never wrapped.
- */
+/** Empty feature selections stay unwrapped. */
 export function getShellLaunchConfig(
   shellPath: string,
   features: readonly ShellStartupFeature[],
-  startupCommand?: string
+  startupCommand?: string,
+  fishLaunch?: {
+    inheritedXdgDataDirs: string | undefined
+    shellArgs?: readonly string[]
+  }
 ): ShellReadyLaunchConfig {
   const shellName = pathWin32.basename(basename(shellPath)).toLowerCase()
   const wrapperFeatures =
@@ -78,8 +73,7 @@ export function getShellLaunchConfig(
       return UNWRAPPED
     }
     if (!wrapperTreeUsable()) {
-      // Why plain login zsh: ZDOTDIR pointed at an incomplete wrapper dir makes
-      // zsh skip the user's whole config. Losing Orca's features is recoverable.
+      // Incomplete ZDOTDIR wrappers skip user configuration; prefer losing Orca features to breaking the shell.
       return { args: ['-l'], env: {}, supportsReadyMarker: false }
     }
     return {
@@ -131,8 +125,7 @@ export function getShellLaunchConfig(
     }
   }
 
-  // Why: mirrors daemon/shell-ready.ts; markerless fish stays unwrapped. The
-  // selection is baked into the init command, so fish needs no feature env var.
+  // Ready/startup fish needs -C initialization; plain fish uses only the env handoff below.
   if (shellName === 'fish' && (features.includes('ready') || startupCommand !== undefined)) {
     return {
       args: [
@@ -142,11 +135,24 @@ export function getShellLaunchConfig(
           SHELL_READY_MARKER_ESCAPED,
           features.includes('ready'),
           startupCommand !== undefined
-        )}\n${getFishCodexShellLaunchPreflight()}`
+        )}\n${getFishCodexShellLaunchPreflight() + getFishClaudeShellFunction()}`
       ],
       env:
         startupCommand !== undefined ? { [POSIX_SHELL_STARTUP_COMMAND_ENV]: startupCommand } : {},
       supportsReadyMarker: features.includes('ready')
+    }
+  }
+
+  // Plain fish keeps its argv; vendor_conf.d installs wrappers then reverses the temporary env handoff.
+  if (shellName === 'fish' && wrapperTreeUsable()) {
+    return {
+      args: null,
+      env: getFishXdgDataDirsLaunchEnv(
+        getShellReadyWrapperRoot(),
+        fishLaunch?.inheritedXdgDataDirs,
+        fishLaunch?.shellArgs
+      ),
+      supportsReadyMarker: false
     }
   }
 

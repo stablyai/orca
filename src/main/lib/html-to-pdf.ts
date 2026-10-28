@@ -12,10 +12,7 @@ export class ExportTimeoutError extends Error {
 
 const EXPORT_TIMEOUT_MS = 60_000
 
-// Why: injected into the hidden export window so printToPDF does not fire while
-// <img> elements are still fetching. printToPDF renders whatever is painted at
-// the moment it runs; without this gate, remote images and Mermaid SVGs loaded
-// via <img> can be missing from the output.
+// Printing captures the current paint; wait for remote images and image-backed diagrams to load.
 const WAIT_FOR_IMAGES_SCRIPT = `
 new Promise((resolve) => {
   const imgs = Array.from(document.images || [])
@@ -33,66 +30,84 @@ new Promise((resolve) => {
 export async function htmlToPdf(html: string): Promise<Buffer> {
   const tempDir = app.getPath('temp')
   const tempPath = path.join(tempDir, `orca-export-${randomUUID()}.html`)
-  await writeFile(tempPath, html, 'utf-8')
 
-  const win = new BrowserWindow({
-    show: false,
-    webPreferences: {
-      sandbox: true,
-      contextIsolation: true,
-      nodeIntegration: false,
-      // Why: image-wait needs to run a short script inside the export page, and
-      // the exported renderer DOM may already embed scripts/SVGs (e.g. Mermaid)
-      // that need JS to paint correctly. The window stays sandboxed and
-      // isolated so this is safe.
-      javascript: true
+  // Exclusive creation prevents writing through pre-seated symlinks; EEXIST paths belong to someone else.
+  try {
+    await writeFile(tempPath, html, { encoding: 'utf-8', flag: 'wx' })
+  } catch (error) {
+    if (isAlreadyExists(error)) {
+      throw error
     }
-  })
-
-  let timer: NodeJS.Timeout | undefined
+    await removeOwnTempDocument(tempPath)
+    throw error
+  }
 
   try {
-    const loadPromise = new Promise<void>((resolve, reject) => {
-      win.webContents.once('did-finish-load', () => resolve())
-      win.webContents.once('did-fail-load', (_event, errorCode, errorDescription) => {
-        reject(new Error(`Failed to load export document: ${errorDescription} (${errorCode})`))
-      })
+    const win = new BrowserWindow({
+      show: false,
+      webPreferences: {
+        sandbox: true,
+        contextIsolation: true,
+        nodeIntegration: false,
+        // Image readiness probes and exported scripts/SVGs need JavaScript within the sandboxed, isolated renderer.
+        javascript: true
+      }
     })
 
-    await win.loadFile(tempPath)
-    await loadPromise
+    let timer: NodeJS.Timeout | undefined
 
-    const renderAndPrint = (async (): Promise<Buffer> => {
-      await win.webContents.executeJavaScript(WAIT_FOR_IMAGES_SCRIPT, true)
-      return win.webContents.printToPDF({
-        printBackground: true,
-        pageSize: 'A4',
-        margins: {
-          top: 0.75,
-          bottom: 0.75,
-          left: 0.75,
-          right: 0.75
-        }
-      })
-    })()
-
-    const timeoutPromise = new Promise<never>((_resolve, reject) => {
-      timer = setTimeout(() => reject(new ExportTimeoutError()), EXPORT_TIMEOUT_MS)
-    })
-
-    return await Promise.race([renderAndPrint, timeoutPromise])
-  } finally {
-    if (timer) {
-      clearTimeout(timer)
-    }
-    if (!win.isDestroyed()) {
-      win.destroy()
-    }
     try {
-      await unlink(tempPath)
-    } catch {
-      // Why: best-effort cleanup — losing the temp file should not surface
-      // as a user-facing export failure.
+      // Bound loading too: a non-yielding document script never fires load completion or failure.
+      const timeoutPromise = new Promise<never>((_resolve, reject) => {
+        timer = setTimeout(() => reject(new ExportTimeoutError()), EXPORT_TIMEOUT_MS)
+      })
+
+      const loadAndPrint = (async (): Promise<Buffer> => {
+        const loadPromise = new Promise<void>((resolve, reject) => {
+          win.webContents.once('did-finish-load', () => resolve())
+          win.webContents.once('did-fail-load', (_event, errorCode, errorDescription) => {
+            reject(new Error(`Failed to load export document: ${errorDescription} (${errorCode})`))
+          })
+        })
+
+        await win.loadFile(tempPath)
+        await loadPromise
+        await win.webContents.executeJavaScript(WAIT_FOR_IMAGES_SCRIPT, true)
+        return win.webContents.printToPDF({
+          printBackground: true,
+          pageSize: 'A4',
+          margins: {
+            top: 0.75,
+            bottom: 0.75,
+            left: 0.75,
+            right: 0.75
+          }
+        })
+      })()
+
+      return await Promise.race([loadAndPrint, timeoutPromise])
+    } finally {
+      if (timer) {
+        clearTimeout(timer)
+      }
+      if (!win.isDestroyed()) {
+        win.destroy()
+      }
     }
+  } finally {
+    await removeOwnTempDocument(tempPath)
+  }
+}
+
+function isAlreadyExists(error: unknown): boolean {
+  return error instanceof Error && 'code' in error && error.code === 'EEXIST'
+}
+
+// unlink removes the entry without following a symlink swapped in by another process.
+async function removeOwnTempDocument(tempPath: string): Promise<void> {
+  try {
+    await unlink(tempPath)
+  } catch {
+    // Best-effort temp cleanup must not turn successful export into failure.
   }
 }

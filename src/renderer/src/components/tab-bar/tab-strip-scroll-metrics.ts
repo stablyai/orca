@@ -1,11 +1,9 @@
-export type TabStripScrollMetrics = {
+import type { ActiveTabDockSide } from './tab-strip-slot-geometry'
+
+export type TabStripOverflowState = {
   hasOverflow: boolean
   canScrollStart: boolean
   canScrollEnd: boolean
-  /** Portion of total tab width currently visible in the strip viewport. */
-  thumbSizeFraction: number
-  /** 0 = scrolled to start, 1 = scrolled to end. */
-  thumbOffsetFraction: number
 }
 
 export type TabStripThumbLayout = {
@@ -13,71 +11,72 @@ export type TabStripThumbLayout = {
   leftPx: number
 }
 
+type TabStripScrollBox = Pick<HTMLElement, 'scrollWidth' | 'clientWidth' | 'scrollLeft'>
+
 export const TAB_STRIP_THUMB_MIN_WIDTH_PX = 18
 
 const OVERFLOW_EPSILON_PX = 1
 
-export function computeTabStripScrollMetrics(
-  el: Pick<HTMLElement, 'scrollWidth' | 'clientWidth' | 'scrollLeft'>
-): TabStripScrollMetrics {
+export function computeTabStripOverflowState(el: TabStripScrollBox): TabStripOverflowState {
   const maxScrollLeft = Math.max(0, el.scrollWidth - el.clientWidth)
   const hasOverflow = maxScrollLeft > OVERFLOW_EPSILON_PX
-  const thumbSizeFraction = el.scrollWidth > 0 ? Math.min(1, el.clientWidth / el.scrollWidth) : 1
-  const thumbOffsetFraction = hasOverflow && maxScrollLeft > 0 ? el.scrollLeft / maxScrollLeft : 0
 
   return {
     hasOverflow,
     canScrollStart: hasOverflow && el.scrollLeft > OVERFLOW_EPSILON_PX,
-    canScrollEnd: hasOverflow && el.scrollLeft < maxScrollLeft - OVERFLOW_EPSILON_PX,
-    thumbSizeFraction,
-    thumbOffsetFraction
+    canScrollEnd: hasOverflow && el.scrollLeft < maxScrollLeft - OVERFLOW_EPSILON_PX
   }
 }
 
 export function computeTabStripThumbLayout(
   trackWidthPx: number,
-  metrics: Pick<TabStripScrollMetrics, 'thumbSizeFraction' | 'thumbOffsetFraction'>
+  el: TabStripScrollBox
 ): TabStripThumbLayout {
   if (trackWidthPx <= 0) {
     return { widthPx: 0, leftPx: 0 }
   }
 
-  const rawWidthPx = metrics.thumbSizeFraction * trackWidthPx
-  const widthPx = Math.min(trackWidthPx, Math.max(TAB_STRIP_THUMB_MIN_WIDTH_PX, rawWidthPx))
+  const maxScrollLeft = Math.max(0, el.scrollWidth - el.clientWidth)
+  const sizeFraction = el.scrollWidth > 0 ? Math.min(1, el.clientWidth / el.scrollWidth) : 1
+  const offsetFraction = maxScrollLeft > OVERFLOW_EPSILON_PX ? el.scrollLeft / maxScrollLeft : 0
+  const widthPx = Math.min(
+    trackWidthPx,
+    Math.max(TAB_STRIP_THUMB_MIN_WIDTH_PX, sizeFraction * trackWidthPx)
+  )
   const maxLeftPx = Math.max(0, trackWidthPx - widthPx)
 
   return {
     widthPx,
-    leftPx: metrics.thumbOffsetFraction * maxLeftPx
+    leftPx: offsetFraction * maxLeftPx
   }
 }
 
+/** `dockedSide` skips that edge's fade, which would otherwise wash out the active tab docked there. */
 export function getTabStripScrollMaskClassName(
-  metrics: Pick<TabStripScrollMetrics, 'canScrollStart' | 'canScrollEnd' | 'hasOverflow'>
+  metrics: TabStripOverflowState,
+  dockedSide: ActiveTabDockSide | null = null
 ): string {
   if (!metrics.hasOverflow) {
     return ''
   }
 
   const classes: string[] = []
-  if (metrics.canScrollStart) {
+  if (metrics.canScrollStart && dockedSide !== 'start') {
     classes.push('terminal-tab-strip--fade-start')
   }
-  if (metrics.canScrollEnd) {
+  if (metrics.canScrollEnd && dockedSide !== 'end') {
     classes.push('terminal-tab-strip--fade-end')
   }
   return classes.join(' ')
 }
 
-export function sameTabStripScrollMetrics(
-  left: TabStripScrollMetrics,
-  right: TabStripScrollMetrics
+export function sameTabStripOverflowState(
+  left: TabStripOverflowState,
+  right: TabStripOverflowState
 ): boolean {
   return (
     left.hasOverflow === right.hasOverflow &&
     left.canScrollStart === right.canScrollStart &&
-    left.canScrollEnd === right.canScrollEnd &&
-    Math.abs(left.thumbSizeFraction - right.thumbSizeFraction) < 0.002 &&
-    Math.abs(left.thumbOffsetFraction - right.thumbOffsetFraction) < 0.002
+    left.canScrollEnd === right.canScrollEnd
   )
 }

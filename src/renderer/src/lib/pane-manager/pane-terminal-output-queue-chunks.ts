@@ -1,4 +1,5 @@
 import { flattenRetainedSlice } from '@/lib/flatten-retained-slice'
+import { resolveSynchronizedOutputSafeSplit } from '../../../../shared/terminal-synchronized-output-scan'
 import type {
   QueueEntry,
   QueuedWrite,
@@ -90,7 +91,9 @@ export function takeQueuedChunk(entry: QueueEntry, limit: number): QueuedWrite |
       continue
     }
 
-    const prefix = chunk.data.slice(0, remaining)
+    // Never split inside DEC 2026 or its residual close marker leaves painting frozen until drain/1000ms timeout. remaining > 0 guarantees a positive cut, so the loop cannot stall.
+    const splitAt = resolveSynchronizedOutputSafeSplit(chunk.data, remaining)
+    const prefix = chunk.data.slice(0, splitAt)
     if (dataParts) {
       dataParts.push(prefix)
     } else if (dataLength === 0) {
@@ -100,7 +103,7 @@ export function takeQueuedChunk(entry: QueueEntry, limit: number): QueuedWrite |
       data = ''
     }
     dataLength += prefix.length
-    const residual = chunk.data.slice(remaining)
+    const residual = chunk.data.slice(splitAt)
     // Geometric flattening bounds retained parents while keeping total copy work linear.
     const flatten = residual.length * 2 <= chunk.retainedChars
     entry.chunks[entry.chunkIndex] = {
@@ -108,7 +111,7 @@ export function takeQueuedChunk(entry: QueueEntry, limit: number): QueuedWrite |
       data: flatten ? flattenRetainedSlice(residual) : residual,
       retainedChars: flatten ? residual.length : chunk.retainedChars
     }
-    entry.queuedChars -= remaining
+    entry.queuedChars -= prefix.length
     remaining = 0
   }
 

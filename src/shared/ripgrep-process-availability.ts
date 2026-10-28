@@ -1,9 +1,8 @@
 import { constants } from 'node:fs'
 import { access, stat } from 'node:fs/promises'
-import { spawn, type ChildProcess } from 'node:child_process'
+import type { ChildProcessHandle } from '@orca/process-host/process-spec'
 
 const RIPGREP_CWD_CHECK_TIMEOUT_MS = 1000
-const RIPGREP_FAILURE_PROBE_TIMEOUT_MS = 5000
 
 export class RipgrepUnavailableError extends Error {
   constructor() {
@@ -36,7 +35,7 @@ export function isTransientRipgrepSpawnError(error: unknown): boolean {
 
 function ignoreRipgrepSpawnError(): void {}
 
-export function killSpawnedRipgrepProcess(child: ChildProcess): boolean {
+export function killSpawnedRipgrepProcess(child: ChildProcessHandle): boolean {
   // Why: killing a failed-spawn handle can signal the relay's own process group.
   if (Object.hasOwn(child, 'pid') && child.pid === undefined) {
     return false
@@ -45,7 +44,7 @@ export function killSpawnedRipgrepProcess(child: ChildProcess): boolean {
 }
 
 export function absorbPendingRipgrepSpawnError(
-  child: ChildProcess,
+  child: ChildProcessHandle,
   state: { errorObserved: boolean; unavailableExitObserved: boolean }
 ): void {
   if (
@@ -77,61 +76,38 @@ export async function isRipgrepSpawnCwdUsable(cwd: string): Promise<boolean> {
   }
 }
 
-function checkRipgrepAvailableWithoutCwd(): Promise<boolean> {
-  return new Promise((resolve) => {
-    let child: ChildProcess
-    try {
-      child = spawn('rg', ['--version'], { stdio: 'ignore' })
-    } catch {
-      resolve(false)
-      return
-    }
-    let settled = false
-    let errorObserved = false
-    let unavailableExitObserved = false
-    let timeout: ReturnType<typeof setTimeout> | null = null
-    const settle = (available: boolean, kill = false): void => {
-      if (settled) {
-        return
-      }
-      settled = true
-      if (timeout) {
-        clearTimeout(timeout)
-      }
-      child.off('error', onError)
-      child.off('close', onClose)
-      if (kill) {
-        child.once('error', ignoreRipgrepSpawnError)
-        killSpawnedRipgrepProcess(child)
-      } else {
-        absorbPendingRipgrepSpawnError(child, { errorObserved, unavailableExitObserved })
-      }
-      resolve(available)
-    }
-    const onError = (): void => {
-      errorObserved = true
-      settle(false)
-    }
-    const onClose = (code: number | null): void => {
-      unavailableExitObserved = code !== null && code < 0
-      settle(code === 0)
-    }
-    child.once('error', onError)
-    child.once('close', onClose)
-    timeout = setTimeout(() => settle(false, true), RIPGREP_FAILURE_PROBE_TIMEOUT_MS)
-    timeout.unref?.()
-  })
+/** WSL cwd failures must differ from rg’s “no matches” (1); 97 also avoids shell error/signal ranges. */
+export const RIPGREP_MISSING_CWD_EXIT_CODE = 97
+
+export function isRipgrepMissingCwdExit(code: number | null): boolean {
+  return code === RIPGREP_MISSING_CWD_EXIT_CODE
 }
 
-export async function isRipgrepUnavailableAfterLaunchFailure(cwd: string): Promise<boolean> {
-  if (await isRipgrepSpawnCwdUsable(cwd)) {
-    return true
+export function ripgrepMissingCwdError(cwd: string): Error {
+  return new Error(`Search root is not reachable: ${cwd}`)
+}
+
+// ENOTDIR and some resource failures throw before a ChildProcess can emit an error.
+export async function classifySynchronousRipgrepSpawnFailure(
+  error: unknown,
+  cwd: string
+): Promise<Error> {
+  // Preserve caller diagnoses; cwd probing only interprets raw spawn errnos.
+  if (error instanceof RipgrepUnavailableError || error instanceof RipgrepLaunchFailureError) {
+    return error
   }
-  return !(await checkRipgrepAvailableWithoutCwd())
+  if (isTransientRipgrepSpawnError(error)) {
+    const code = error instanceof Error && 'code' in error ? String(error.code) : 'unknown'
+    return new RipgrepLaunchFailureError(`rg failed to start (${code})`)
+  }
+  if (!(await isRipgrepSpawnCwdUsable(cwd))) {
+    return ripgrepMissingCwdError(cwd)
+  }
+  return error instanceof Error ? error : new Error(String(error))
 }
 
 export function isRipgrepUnavailableExit(
-  child: ChildProcess,
+  child: ChildProcessHandle,
   code: number | null,
   signal: NodeJS.Signals | null,
   options: { classifyNativeLauncherExit?: boolean } = {}

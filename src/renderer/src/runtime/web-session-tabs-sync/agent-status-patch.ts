@@ -1,10 +1,12 @@
-import {
-  agentStatusAuthorityObservedAt,
-  type AgentStatusEntry
-} from '../../../../shared/agent-status-types'
+import type { AgentStatusEntry } from '../../../../shared/agent-status-types'
+import { withMirroredEvidenceReceipt } from '../../../../shared/agent-status-freshness'
 import { agentEntryCompletionAt } from '../../../../shared/agent-completion-time'
+import { agentMainAgentVerdict } from '../../../../shared/agent-main-agent-verdict'
 import { normalizeCompatibleAgentStatusEntryForOwner } from '../../../../shared/agent-title-owner'
-import { isWebTerminalSurfaceTabId, toWebTerminalSurfaceTabId } from '../web-runtime-session'
+import {
+  isWebTerminalSurfaceTabId,
+  toWebTerminalSurfaceTabId
+} from '../../../../shared/terminal-surface-id'
 import type { TerminalTab } from '../../../../shared/terminal-tab-types'
 import type {
   MirroredTerminalTab,
@@ -14,6 +16,7 @@ import type {
 } from './state'
 import {
   isClientOwnedAgentStatus,
+  isMirroredAgentStatusOwnedBy,
   isFencedClientAgentStatus,
   hostAgentStatusPiercesClientAuthority,
   isMirroredAgentPaneKeyForTabs,
@@ -28,38 +31,14 @@ import {
   writableWebSessionTabsRecord
 } from './state-equality-core'
 
-/**
- * Stamp this replica's own receipt clock on a row mirrored from another host.
- *
- * The host's `updatedAt` / `evidenceObservedAt` are its wall clock, so decaying a mirrored row
- * against `rendererNow - hostClock` is off by the two machines' skew: a host running fast keeps
- * every remote row permanently fresh, a host running slow decays them on arrival. Both sides of
- * the subtraction have to come from one machine, and the receipt is the only clock the replica
- * owns. See THE DECAY RULE in shared/agent-status-observation.ts.
- *
- * A snapshot that repeats an observation already seen is a repaint, not new evidence, so the
- * first receipt is carried forward — otherwise the window would restart on every publish and
- * a quiet pane would never decay. Only a row this renderer stamped itself is comparable, so
- * the carry-forward requires a previous stamp rather than trusting a cross-machine timestamp.
- */
-function withMirroredEvidenceReceipt(
-  entry: AgentStatusEntry,
-  existing: AgentStatusEntry | undefined,
-  now: number
-): AgentStatusEntry {
-  const receivedAt =
-    existing?.mirroredEvidenceReceivedAt !== undefined &&
-    agentStatusAuthorityObservedAt(existing) === agentStatusAuthorityObservedAt(entry)
-      ? existing.mirroredEvidenceReceivedAt
-      : now
-  return { ...entry, mirroredEvidenceReceivedAt: receivedAt }
-}
-
 export function buildMirroredAgentStatusPatch(
   state: WebSessionTabsSyncState,
   currentTerminalTabs: readonly TerminalTab[],
   terminalSurfaceTabs: readonly TerminalSurface[],
   mirroredTerminalTabs: readonly MirroredTerminalTab[],
+  environmentId: string,
+  worktreeId: string,
+  retractedTabIds: ReadonlySet<string>,
   now: number,
   batchContext?: WebSessionTabsBatchContext
 ): Pick<WebSessionTabsSyncState, 'agentStatusByPaneKey' | 'agentStatusEpoch' | 'sortEpoch'> | null {
@@ -100,17 +79,20 @@ export function buildMirroredAgentStatusPatch(
     }
     const existing =
       nextByPaneKey.get(hostEntry.paneKey) ?? state.agentStatusByPaneKey[hostEntry.paneKey]
-    const entry = withMirroredEvidenceReceipt(hostEntry, existing, now)
-    // Why: keep fresher OSC state while taking remapped ownership metadata from the authoritative host snapshot.
+    const entry = withMirroredEvidenceReceipt(
+      hostEntry.connectionId === undefined
+        ? { ...hostEntry, connectionId: environmentId }
+        : hostEntry,
+      existing,
+      now
+    )
+    // Retain fresher OSC state while remapping authoritative host identity.
     const hostIdentityPredatesCurrentTurn =
       existing !== undefined &&
       entry.state === 'done' &&
       existing.state !== 'done' &&
       existing.stateStartedAt > entry.stateStartedAt
-    // Why: cross-machine wall clocks are not comparable, so the host frame could
-    // outrank live client status forever; a proven client writer keeps its own
-    // state (still adopting the host's identity fields below) unless the host
-    // carries a state class the client's bytes can never see.
+    // Cross-machine clocks cannot arbitrate live byte ownership; keep client state except host-only classes, adopting host identity below.
     const clientOwnsEntry =
       isFencedClientAgentStatus(entry.paneKey, existing, now) &&
       !hostAgentStatusPiercesClientAuthority(entry)
@@ -127,9 +109,7 @@ export function buildMirroredAgentStatusPatch(
             providerSession:
               existing.providerSession ??
               (hostIdentityPredatesCurrentTurn ? undefined : entry.providerSession),
-            // Why: hook-only content the byte pipeline can never see, and every OSC
-            // write blanks it, so a fenced pane's message line stayed empty forever
-            // (#12906). Host-first unlike providerSession: only the host can mint one.
+            // Only hooks mint message content and OSC blanks it; take host-first even behind the client fence (#12906), unlike providerSession.
             lastAssistantMessage:
               (hostIdentityPredatesCurrentTurn ? undefined : entry.lastAssistantMessage) ??
               existing.lastAssistantMessage,
@@ -139,7 +119,10 @@ export function buildMirroredAgentStatusPatch(
                 : entry.lastAssistantMessageIsToolOutput
           }
         : entry
-    nextByPaneKey.set(entry.paneKey, nextEntry)
+    nextByPaneKey.set(
+      entry.paneKey,
+      nextEntry === entry ? entry : withHostProgramStatus(nextEntry, entry.programStatus)
+    )
   }
 
   let nextAgentStatusByPaneKey = state.agentStatusByPaneKey
@@ -151,16 +134,19 @@ export function buildMirroredAgentStatusPatch(
     if (!isMirroredAgentPaneKeyForTabs(paneKey, mirroredTabIds)) {
       continue
     }
+    if (
+      !isMirroredAgentStatusOwnedBy(state.agentStatusByPaneKey[paneKey], environmentId, worktreeId)
+    ) {
+      continue
+    }
+    // The retirement sweep must see the live row to suppress ghost retention.
+    if (isMirroredAgentPaneKeyForTabs(paneKey, retractedTabIds)) {
+      continue
+    }
     if (nextByPaneKey.has(paneKey)) {
       continue
     }
-    // Why: the host surface carrying no status is not proof the agent stopped —
-    // hook-only hosts publish nothing for OSC-driven panes. Keep a live entry
-    // this renderer owns; it decays through the normal freshness boundary.
-    // Ownership, not freshness, is the gate here: with no competing host value
-    // there is nothing to arbitrate, and a client asleep past the stale
-    // boundary would otherwise erase every pane it owns on the first snapshot
-    // after wake (STA-3107) instead of decaying it like a local pane.
+    // Host omission cannot prove OSC-driven exit. Retain owned rows through staleness so wake decays them like local panes instead of erasing them (STA-3107).
     if (isClientOwnedAgentStatus(paneKey, state.agentStatusByPaneKey[paneKey])) {
       continue
     }
@@ -202,6 +188,9 @@ export function buildMirroredAgentStatusPatch(
       entry.state === 'done' &&
       agentEntryCompletionAt(existing) !== agentEntryCompletionAt(entry)
     const workingModeChanged = existing?.workingMode !== entry.workingMode
+    // A verdict moves no clock, including a main agent failing while its subagents keep the row working.
+    const verdictChanged =
+      !!existing && agentMainAgentVerdict(existing) !== agentMainAgentVerdict(entry)
     const entrySortRelevantChange =
       !existing ||
       existing.state !== entry.state ||
@@ -211,7 +200,7 @@ export function buildMirroredAgentStatusPatch(
       doneAttentionChanged ||
       isMirroredCommandCodeTurnBump(existing, entry)
     aggregateRelevantChange =
-      aggregateRelevantChange || entrySortRelevantChange || workingModeChanged
+      aggregateRelevantChange || entrySortRelevantChange || workingModeChanged || verdictChanged
     sortRelevantChange = sortRelevantChange || entrySortRelevantChange
   }
 
@@ -224,4 +213,13 @@ export function buildMirroredAgentStatusPatch(
     agentStatusEpoch: aggregateRelevantChange ? state.agentStatusEpoch + 1 : state.agentStatusEpoch,
     sortEpoch: sortRelevantChange ? state.sortEpoch + 1 : state.sortEpoch
   }
+}
+
+// Why host-only: client OSC writes have no facet channel, so the host's facet is the current one.
+function withHostProgramStatus(
+  entry: AgentStatusEntry,
+  programStatus: AgentStatusEntry['programStatus']
+): AgentStatusEntry {
+  const { programStatus: _clientFacet, ...rest } = entry
+  return programStatus ? { ...rest, programStatus } : rest
 }

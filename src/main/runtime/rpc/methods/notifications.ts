@@ -1,50 +1,52 @@
-import { z } from 'zod'
-import { defineStreamingMethod, defineMethod, type RpcAnyMethod } from '../core'
+import { createNotificationStreamFilter } from './notification-stream-policy'
+import { defineStreamingMethod, defineMethod, type RpcContext } from '../core'
+import type { OrcaRuntimeService } from '../../orca-runtime'
+import {
+  NotificationGetMissedSinceParams,
+  NotificationRegisterPushParams,
+  NotificationReportDesktopPresenceParams,
+  NotificationUnsubscribeParams,
+  NotificationsSubscribeParams
+} from '../../../../shared/rpc-contract/notifications-params'
 
-// Why: monotonically increasing per-process counter eliminates the
-// Date.now() collision that could fire when two near-simultaneous
-// notifications.subscribe calls landed on the same millisecond.
+// Use a per-process counter so same-millisecond subscriptions cannot collide.
 let notificationsSubscriptionSeq = 0
 
-const NotificationUnsubscribeParams = z.object({
-  subscriptionId: z
-    .unknown()
-    .transform((value) => (typeof value === 'string' && value.length > 0 ? value : ''))
-    .pipe(z.string().min(1, 'Missing subscriptionId'))
-})
+type DesktopPresenceReportContext = Pick<RpcContext, 'clientKind' | 'connectionId' | 'signal'> & {
+  runtime: Pick<OrcaRuntimeService, 'reportDesktopClientPresence' | 'registerSubscriptionCleanup'>
+}
 
-// Why: notifications.getMissedSince is the catch-up RPC for mobile reconnect
-// (#8129). The client passes the highest seq it has already delivered; the
-// runtime returns only notifications dispatched after that seq. Because the
-// desktop assigns a monotonic seq to every dispatched notification, the cut is
-// exact and idempotent — re-requesting with the same watermark can never
-// return an already-delivered event, so reconnects never duplicate local
-// pushes (the adversarial-review gate for #8129).
-// `epoch` names the counter lifetime lastSeenSeq came from (#8591). The desktop's
-// seq restarts at 0 on every launch while the client's watermark is persisted, so
-// without it a post-restart watermark silently cuts away everything. Optional: a
-// client that predates the field keeps the seq-only cut.
-const NotificationGetMissedSinceParams = z.object({
-  lastSeenSeq: z.number().int().min(0, 'lastSeenSeq must be a non-negative integer'),
-  epoch: z.string().optional()
-})
+/** Only a paired desktop's own socket speaks for a desktop; the report lives as long as it. */
+export function reportDesktopPresence(
+  params: { away: boolean },
+  { runtime, clientKind, connectionId, signal }: DesktopPresenceReportContext
+): { recorded: boolean } {
+  // A closed socket already ran its cleanups, so a late report would never be forgotten.
+  if (clientKind !== 'runtime' || !connectionId || signal?.aborted) {
+    return { recorded: false }
+  }
+  runtime.reportDesktopClientPresence(connectionId, params.away, (forget) =>
+    runtime.registerSubscriptionCleanup(`desktop-presence-${connectionId}`, forget, connectionId)
+  )
+  return { recorded: true }
+}
 
-// Why: notifications.subscribe streams desktop notification events to mobile
-// clients over WebSocket. The mobile client shows a local push notification
-// for each event. This avoids requiring Firebase/APNs — the existing
-// persistent WebSocket connection doubles as the push channel.
-export const NOTIFICATION_METHODS: readonly RpcAnyMethod[] = [
+// Legacy callers retain filtered socket alerts; push clients opt into the full event stream.
+export const NOTIFICATION_METHODS = [
   defineStreamingMethod({
     name: 'notifications.subscribe',
-    params: null,
-    handler: async (_params, { runtime, connectionId }, emit) => {
+    permission: 'workspace',
+    params: NotificationsSubscribeParams,
+    handler: async (params, { runtime, connectionId }, emit) => {
+      const shouldEmit = createNotificationStreamFilter(params?.includeDesktopSuppressed)
       await new Promise<void>((resolve) => {
         const unsubscribe = runtime.onNotificationDispatched((event) => {
-          emit(event)
+          if (shouldEmit(event)) {
+            emit(event)
+          }
         })
 
-        // Why: scope by per-ws connectionId + per-process counter so
-        // concurrent subscribes never collide on the cleanup map.
+        // Key cleanup by socket plus sequence so concurrent subscriptions cannot evict each other.
         const seq = ++notificationsSubscriptionSeq
         const subscriptionId = `notifications-${connectionId ?? 'inproc'}-${seq}`
         runtime.registerSubscriptionCleanup(
@@ -57,14 +59,14 @@ export const NOTIFICATION_METHODS: readonly RpcAnyMethod[] = [
           connectionId
         )
 
-        // Why: the epoch rides the ready frame so a reconnecting client learns the
-        // counter lifetime BEFORE it sends its watermark to getMissedSince (#8591).
+        // Send epoch before the reconnect watermark so getMissedSince knows the counter lifetime (#8591).
         emit({ type: 'ready', subscriptionId, epoch: runtime.getMobileNotificationEpoch() })
       })
     }
   }),
   defineMethod({
     name: 'notifications.unsubscribe',
+    permission: 'workspace',
     params: NotificationUnsubscribeParams,
     handler: async (params, { runtime }) => {
       runtime.cleanupSubscription(params.subscriptionId)
@@ -73,13 +75,62 @@ export const NOTIFICATION_METHODS: readonly RpcAnyMethod[] = [
   }),
   defineMethod({
     name: 'notifications.getMissedSince',
+    permission: 'workspace',
     params: NotificationGetMissedSinceParams,
-    // Why: returns only notifications with seq > lastSeenSeq. The runtime owns
-    // the monotonic seq, so this is the single source of truth for what the
-    // client missed while its socket was reaped.
+    // Runtime sequence/epoch is authoritative for notifications missed while the socket was reaped.
     handler: async (params, { runtime }) => {
       const missed = runtime.getMissedNotificationsSince(params.lastSeenSeq, params.epoch)
-      return { notifications: missed, epoch: runtime.getMobileNotificationEpoch() }
+      return {
+        notifications: missed.filter(
+          createNotificationStreamFilter(params.includeDesktopSuppressed)
+        ),
+        epoch: runtime.getMobileNotificationEpoch(),
+        ...(params.deliveredPushes
+          ? { dismissedPushes: runtime.reconcileDismissedPushes(params.deliveredPushes) }
+          : {})
+      }
+    }
+  }),
+  defineMethod({
+    name: 'notifications.reportDesktopPresence',
+    permission: 'workspace',
+    params: NotificationReportDesktopPresenceParams,
+    handler: async (params, context) => reportDesktopPresence(params, context)
+  }),
+  defineMethod({
+    name: 'notifications.registerPush',
+    permission: 'pairing-admin',
+    params: NotificationRegisterPushParams,
+    // Register only the transport-proven revocable mobile device; CLI/in-process callers have no device identity.
+    handler: async (params, { runtime, clientKind, pairedDeviceId }) => {
+      if (clientKind !== 'mobile' || !pairedDeviceId) {
+        return { registered: false, reason: 'not_mobile' }
+      }
+      // The paired identity is spread last so no parameter can ever override it.
+      return await runtime.registerMobilePushDevice({ ...params, deviceId: pairedDeviceId })
+    }
+  }),
+  defineMethod({
+    name: 'notifications.testPush',
+    permission: 'pairing-admin',
+    params: null,
+    handler: async (_params, { runtime, clientKind, pairedDeviceId }) => {
+      if (clientKind !== 'mobile' || !pairedDeviceId) {
+        return { accepted: false, reason: 'not_registered' }
+      }
+      return await runtime.testMobilePushDevice(pairedDeviceId)
+    }
+  }),
+  defineMethod({
+    name: 'notifications.unregisterPush',
+    permission: 'pairing-admin',
+    params: null,
+    // Durable gateway deletion lets unregister succeed even while the gateway is offline.
+    handler: async (_params, { runtime, clientKind, pairedDeviceId }) => {
+      if (clientKind !== 'mobile' || !pairedDeviceId) {
+        return { unregistered: false }
+      }
+      return await runtime.unregisterMobilePushDevice(pairedDeviceId)
     }
   })
 ]

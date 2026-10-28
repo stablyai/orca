@@ -33,8 +33,7 @@ const deniedMicrophonePermission: PermissionResponse = {
 const noop = () => undefined
 
 const ExpoTwoWayAudioModule: ExpoTwoWayAudioWebModule = {
-  // Why: the mobile app can be run on web for QA, but dictation depends on
-  // native audio engines that are only available in the iOS/Android builds.
+  // QA browser has no shell microphone; page dictation uses platform/dictation-capture.web.ts native.audio.start|read|stop instead.
   initialize: async () => false,
   playPCMData: noop,
   bypassVoiceProcessing: noop,

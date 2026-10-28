@@ -1,0 +1,126 @@
+/** Model/effort must seed structured workers like saved chat selections instead of forcing PTY mode. */
+
+import { describe, expect, it, vi } from 'vitest'
+import type { AgentSessionModelCatalogResult } from '../../../../../../shared/agent-session-wire'
+import { structuredLaunchSeedOnSavedListing } from '../../../../session-tabs/structured-launch-seed-listing'
+
+const createStructuredWorkerSession = vi.fn(async (_args: Record<string, unknown>) => ({
+  identity: { handle: 'structworker_1', sessionId: 'sess_1' },
+  host: {}
+}))
+
+vi.mock('../../orchestration-structured-worker-session', () => ({
+  createStructuredWorkerSession: (args: never) => createStructuredWorkerSession(args)
+}))
+
+const { createStructuredWorkerSessionForWorktree } = await import('./worker-topology')
+const { prepareStructuredAgentSessionCreateForWorktree } =
+  await import('../../structured-agent-session-create')
+
+async function createWith(launchPreferences?: Record<string, string>) {
+  createStructuredWorkerSession.mockClear()
+  await createStructuredWorkerSessionForWorktree({
+    runtime: {} as never,
+    worktreeId: 'repo::wt',
+    agent: 'codex',
+    dispatchId: 'ctx_1',
+    ...(launchPreferences ? { launchPreferences } : {}),
+    effects: []
+  })
+  return createStructuredWorkerSession.mock.calls[0]?.[0] ?? {}
+}
+
+describe('a structured worker seeds the dispatch launch preferences', () => {
+  it('carries --model and --effort into the session create', async () => {
+    expect(await createWith({ model: 'gpt-5.6-sol', effort: 'high' })).toMatchObject({
+      options: { model: 'gpt-5.6-sol', effort: 'high' }
+    })
+  })
+
+  it('carries only the model when no --effort was asked for', async () => {
+    expect((await createWith({ model: 'gpt-5.6-sol' })).options).toEqual({ model: 'gpt-5.6-sol' })
+  })
+
+  it.each([
+    ['no preferences at all', undefined],
+    ['an option set that narrows to nothing', { model: '  ' }]
+  ])('omits options entirely for %s, never sending {}', async (_name, preferences) => {
+    // Omit empty options: {} fails the durable string guard without a fallback; absence seeds the saved selection.
+    expect(await createWith(preferences)).not.toHaveProperty('options')
+  })
+})
+
+describe('the create the seed options land in', () => {
+  const settingsResolved = {
+    location: { executionHostId: 'local', wslDistro: null, workspaceId: 'repo::wt' },
+    provider: 'codex',
+    agent: 'codex',
+    accountHome: { variable: 'CODEX_HOME', path: '/host/.codex' },
+    runtimeKind: 'native',
+    options: { model: 'saved-model', effort: 'low' }
+  }
+
+  async function prepare(options?: Record<string, string>) {
+    const prepared = await prepareStructuredAgentSessionCreateForWorktree({
+      runtime: {
+        resolveStructuredAgentSessionCreateIntent: async () => settingsResolved
+      } as never,
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: this prepare path touches only host.deps.modelCatalog, absent here, so options pass through unchecked.
+      ensureHost: async () => ({ deps: {} }) as never,
+      envelope: {
+        sessionId: 'sess_1',
+        clientOperationId: 'op_1',
+        expectedRuntimeFence: null,
+        payloadFingerprint: ''
+      },
+      worktree: 'id:repo::wt',
+      agent: 'codex',
+      caller: { callerKey: 'orchestration:dispatch:ctx_1' },
+      ...(options ? { options } : {})
+    })
+    return prepared.attachParams
+  }
+
+  it("replaces the saved selection the host resolved with the dispatch's own", async () => {
+    expect((await prepare({ model: 'gpt-5.6-sol', effort: 'high' })).options).toEqual({
+      model: 'gpt-5.6-sol',
+      effort: 'high'
+    })
+  })
+
+  it('keeps the saved selection when the dispatch named none', async () => {
+    expect((await prepare()).options).toEqual({ model: 'saved-model', effort: 'low' })
+  })
+
+  it('does not let the seed options move the attach fingerprint', async () => {
+    // Options are the session's initial state, not its identity: a retry re-resolves them and must
+    // replay rather than conflict.
+    const [seeded, unseeded] = await Promise.all([prepare({ model: 'gpt-5.6-sol' }), prepare()])
+    expect(seeded.envelope.payloadFingerprint).toBe(unseeded.envelope.payloadFingerprint)
+  })
+})
+
+describe('a new Claude chat seeded from a remembered model the saved listing no longer names', () => {
+  it("starts on the listing's default, effort moved to the nearest level, as on main", async () => {
+    const levels = ['low', 'high'].map((value) => ({ value, label: value }))
+    const read = vi.fn(async (): Promise<AgentSessionModelCatalogResult> => ({
+      origin: 'probe',
+      fetchedAt: 1,
+      models: [{ id: 'opus', label: 'Opus', isDefault: true, efforts: levels }]
+    }))
+    const host = { deps: { modelCatalog: { read } } }
+    const seeded = await structuredLaunchSeedOnSavedListing(
+      host,
+      'claude',
+      { model: 'claude-gone', effort: 'max' },
+      async () => '/repo/wt'
+    )
+    expect(seeded).toEqual({ model: 'opus', effort: 'high' })
+    expect(read).toHaveBeenCalledWith({
+      agent: 'claude',
+      workspacePath: '/repo/wt',
+      savedOnly: true,
+      verifiedOnly: true
+    })
+  })
+})

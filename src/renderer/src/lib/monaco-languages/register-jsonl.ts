@@ -21,10 +21,7 @@ export const jsonlLanguageConfiguration: Monaco.languages.LanguageConfiguration 
   ]
 }
 
-// Why: JSONL is one JSON value per line, so we reuse JSON-style Monarch tokens
-// for color but must NOT attach Monaco's JSON language service — whole-document
-// validation would flag every record after line one as unexpected trailing
-// content. This provider is presentation-only: no schema/record validation.
+// Reuse JSON colors without its whole-document language service, which would reject independent JSONL records after the first; no validation is intended.
 export const jsonlMonarchLanguage: Monaco.languages.IMonarchLanguage = {
   defaultToken: '',
   tokenPostfix: '.jsonl',
@@ -34,7 +31,9 @@ export const jsonlMonarchLanguage: Monaco.languages.IMonarchLanguage = {
       { include: '@whitespace' },
       // Property key vs string value are both quoted; color keys distinctly.
       [/"(?:[^"\\]|\\.)*"(?=\s*:)/, 'type.identifier'],
-      [/"/, 'string', '@string'],
+      // Enter escape-aware string state only with a same-line closing quote; otherwise truncated records would color every later line as one string.
+      [/"(?=(?:[^"\\]|\\.)*")/, 'string', '@string'],
+      [/"(?:[^"\\]|\\.)*\\?$/, 'string.invalid'],
       [/[{}[\]]/, '@brackets'],
       [/-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?/, 'number'],
       [/\b(?:true|false)\b/, 'keyword'],

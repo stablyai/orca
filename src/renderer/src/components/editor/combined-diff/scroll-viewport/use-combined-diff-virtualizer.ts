@@ -2,8 +2,10 @@ import { useLayoutEffect } from 'react'
 import type React from 'react'
 import { elementScroll, useVirtualizer, type Virtualizer } from '@tanstack/react-virtual'
 import type { ProgrammaticScrollMarks } from '@/hooks/programmatic-scroll-marks'
+import { measureVirtualRowRetainingHiddenSize } from '@/hooks/virtualized-hidden-row-measurement'
 import type { DiffSection } from '../../diff-section-types'
 import { getDiffSectionRowEstimatedHeight } from '../../diff-section-layout'
+import { getCombinedDiffRenderRange } from './combined-diff-render-range'
 
 const COMBINED_DIFF_OVERSCAN = 5
 
@@ -28,41 +30,46 @@ export function useCombinedDiffVirtualizer({
   sections: DiffSection[]
   sideBySide: boolean
 }): Virtualizer<HTMLDivElement, Element> {
+  const estimateSize = (index: number): number => {
+    const section = sections[index]
+    return section ? getDiffSectionRowEstimatedHeight(section, sectionHeights[index]) : 88
+  }
   const virtualizer = useVirtualizer({
     count: sections.length,
     getScrollElement: () => scrollContainerRef.current,
-    estimateSize: (index) => {
-      const section = sections[index]
-      if (!section) {
-        return 88
-      }
-
-      return getDiffSectionRowEstimatedHeight(section, sectionHeights[index])
-    },
+    estimateSize,
+    // Retain visible heights while hidden rows measure zero so anchors survive reopening.
+    measureElement: measureVirtualRowRetainingHiddenSize,
+    // Offscreen Monaco sections render their full height; bound that work by pixels, too.
+    rangeExtractor: (range) =>
+      getCombinedDiffRenderRange(
+        range,
+        estimateSize,
+        scrollContainerRef.current?.clientHeight ?? 0
+      ),
     overscan: COMBINED_DIFF_OVERSCAN,
     initialOffset: () => scrollOffsetRef.current,
-    // Why: mark every virtualizer-issued scroll so events are attributed to the user only when this code didn't cause them.
+    // Mark virtualizer scrolls so their events cannot be mistaken for user intent.
     scrollToFn: (offset, options, instance) => {
       const target = offset + (options.adjustments ?? 0)
-      // Why: writing the current position emits no scroll event; a mark here would go stale and claim a later user scroll.
+      // Writing the current position emits no event; an unused mark could later claim a real user scroll.
       if (instance.scrollElement?.scrollTop !== target) {
         programmaticScrollMarks.mark(target)
       }
       elementScroll(offset, options, instance)
     },
-    // Why: TanStack re-runs getItemKey for every index on each measurement pass, so the key is
-    // pre-built once per section change instead of a template string per index per pass.
+    // Prebuild keys per section change because TanStack requests every key on each measurement pass.
     getItemKey: (index) => rowKeys[index] ?? `${index}:${generation}`
   })
 
-  // Why: keep render pure (React Doctor); retrySection still needs the on-screen set without the virtualizer as a dep.
+  // Publish onscreen indices after commit so retry can read them without making render impure or depending on the virtualizer.
   const virtualItems = virtualizer.getVirtualItems()
   useLayoutEffect(() => {
     renderedIndicesRef.current = new Set(virtualItems.map((item) => item.index))
   }, [renderedIndicesRef, virtualItems])
 
   useLayoutEffect(() => {
-    // Why: inline vs side-by-side changes Monaco row heights; re-measure on the mode flip, not on every section load.
+    // Layout mode changes Monaco row heights; measure on mode changes rather than every section load.
     virtualizer.measure()
   }, [sideBySide, virtualizer])
 

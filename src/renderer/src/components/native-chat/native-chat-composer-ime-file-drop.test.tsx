@@ -1,0 +1,408 @@
+// @vitest-environment happy-dom
+
+import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
+import { useRef, useState } from 'react'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import type { ExecutionHostId } from '../../../../shared/execution-host'
+import type * as AttachmentUploadModule from './native-chat-attachment-upload'
+import type { PreparedDroppedPaths } from '../../../../shared/native-file-drop-preparation'
+import type { NativeChatStructuredComposerTransport } from './native-chat-composer-types'
+import { useNativeChatStructuredComposerSend } from './use-native-chat-structured-composer-send'
+import type { NativeChatComposerInput } from './native-chat-composer-input'
+import { NativeChatComposerField } from './NativeChatComposerField'
+import { useNativeChatComposerAttachments } from './use-native-chat-composer-attachments'
+import { useNativeChatComposerNotice } from './use-native-chat-composer-notice'
+import { useNativeChatFileDrops } from './use-native-chat-file-drops'
+import { NativeChatPaneFileDropSurface } from './NativeChatPaneFileDropSurface'
+import { useNativeChatDraft } from './use-native-chat-draft'
+import { clearNativeChatDraftCacheForTests } from './native-chat-draft-cache'
+import { readNativeChatComposerDraft } from './native-chat-composer-draft-store'
+import { changePrompt, promptEditor, promptValue } from './native-chat-prompt-editor.test-support'
+import { useImeEnterGestureOwnership } from '@/lib/ime-composition-keyboard-event'
+import type * as RemoteRuntimePtyIdModule from '../../../../shared/remote-runtime/remote-runtime-pty-id'
+
+const testState: {
+  executionHostId: ExecutionHostId
+  ownerKind: 'local' | 'not-ready' | 'remote'
+  targetIsRemoteRuntime: boolean
+  store: { tabsByWorktree: Record<string, { id: string }[]> }
+} = vi.hoisted(() => ({
+  executionHostId: 'local',
+  ownerKind: 'local',
+  targetIsRemoteRuntime: false,
+  store: {
+    tabsByWorktree: {
+      'worktree-1': [{ id: 'terminal-tab-1' }]
+    }
+  }
+}))
+
+vi.mock('@/lib/native-chat-telemetry', () => ({ emitNativeChatMessageSent: vi.fn() }))
+vi.mock('@/lib/worker-terminal-takeover-report', () => ({
+  reportStructuredSessionUserInput: vi.fn()
+}))
+
+vi.mock('@/store', () => {
+  const useAppStore = (selector: (state: typeof testState.store) => unknown) =>
+    selector(testState.store)
+  useAppStore.getState = () => testState.store
+  return { useAppStore }
+})
+vi.mock('@/lib/worktree-runtime-owner', () => ({
+  getExecutionHostIdForWorktree: () => testState.executionHostId
+}))
+// Retain production notices and exports so mocks cannot hide stale wording or new behavior.
+vi.mock('./native-chat-attachment-upload', async (importOriginal) => ({
+  ...(await importOriginal<typeof AttachmentUploadModule>()),
+  resolveNativeChatAttachmentHost: () => testState.executionHostId,
+  resolveNativeChatAttachmentOwnerForWorktree: () => ({ kind: testState.ownerKind })
+}))
+vi.mock('@/i18n/i18n', () => ({
+  i18n: { language: 'en' },
+  translate: (_key: string, fallback: string, values?: Record<string, unknown>) =>
+    fallback.replace(/\{\{(\w+)\}\}/g, (_match, name: string) => String(values?.[name]))
+}))
+vi.mock('../../../../shared/remote-runtime/remote-runtime-pty-id', async (importOriginal) => ({
+  ...(await importOriginal<typeof RemoteRuntimePtyIdModule>()),
+  isRemoteRuntimePtyId: () => testState.targetIsRemoteRuntime
+}))
+vi.mock('./NativeChatComposerActions', () => ({
+  NativeChatComposerActions: () => <div data-testid="composer-actions" />
+}))
+vi.mock('./NativeChatAutocompleteMenus', () => ({
+  NativeChatMentionMenu: () => null,
+  NativeChatPickerMenu: () => null
+}))
+vi.mock('./NativeChatImageAttachmentPreview', () => ({
+  NativeChatImageAttachmentPreview: ({
+    attachment
+  }: {
+    attachment: { connectionId?: string; path: string }
+  }) => (
+    <output data-image-attachment data-connection-id={attachment.connectionId}>
+      {attachment.path}
+    </output>
+  )
+}))
+
+type ProbeProps = {
+  disabled?: boolean
+  initialDraft?: string
+  structured?: boolean
+  /** Overrides only the structured target, leaving the pane's scope key alone. */
+  structuredWorkspaceId?: string
+  workspaceId?: string
+  transport?: NativeChatStructuredComposerTransport
+}
+
+const bubbledDrop = vi.fn()
+
+function ComposerProbe({
+  disabled = false,
+  initialDraft = '',
+  structured = true,
+  structuredWorkspaceId,
+  workspaceId = 'worktree-1',
+  transport
+}: ProbeProps): React.JSX.Element {
+  const [caret, setCaret] = useState(initialDraft.length)
+  const { notices, setNotice } = useNativeChatComposerNotice()
+  const inputRef = useRef<NativeChatComposerInput>(null)
+  const imeEnterGesture = useImeEnterGestureOwnership()
+  const { draft, setDraft, flushDraftAppends } = useNativeChatDraft(
+    `pane:${workspaceId}`,
+    imeEnterGesture.isComposing
+  )
+  const attachments = useNativeChatComposerAttachments({
+    attachmentScopeKey: `pane:${workspaceId}`,
+    allowWithoutTarget: structured,
+    imageReferences: structured,
+    caret,
+    disabled,
+    isComposing: imeEnterGesture.isComposing,
+    resolveTarget: () =>
+      structured ? null : { ptyId: 'pty-1', settings: { activeRuntimeEnvironmentId: null } },
+    textareaRef: inputRef,
+    setCaret,
+    setDraft,
+    setNotice
+  })
+  const { pickAttachments } = useNativeChatFileDrops({
+    paneKey: `pane:${workspaceId}`,
+    draftScopeKey: `pane:${workspaceId}`,
+    targetPtyId: 'pty-1',
+    terminalTabId: 'terminal-tab-1',
+    structuredWorktreeId: structured ? (structuredWorkspaceId ?? workspaceId) : undefined,
+    disabled,
+    attachResolvedPaths: attachments.attachResolvedPaths,
+    pendingChips: attachments.pendingChips,
+    setNotice
+  })
+
+  const send = useNativeChatStructuredComposerSend({
+    agent: 'codex',
+    draftScopeKey: `pane:${workspaceId}`,
+    imageAttachments: attachments.imageAttachments,
+    structuredTransport: transport,
+    isComposing: imeEnterGesture.isComposing,
+    clearSkillOrigin: () => {},
+    setDraft,
+    setCaret
+  })
+
+  return (
+    <div onDrop={bubbledDrop}>
+      <div>
+        <NativeChatComposerField
+          draftScopeKey={`pane:${workspaceId}`}
+          textareaRef={inputRef}
+          draft={draft}
+          disabled={disabled}
+          hasPty
+          canSend={!disabled}
+          autocomplete={{ mode: 'none' }}
+          activeSuggestion={0}
+          notices={notices}
+          imageAttachments={attachments.imageAttachments}
+          sendButtonDisabled={false}
+          isWorking={false}
+          attachDisabled={disabled}
+          dictationDisabled
+          isDictating={false}
+          isDictationHoldMode={false}
+          imeEnterGesture={imeEnterGesture}
+          onDraftChange={(value, input) => {
+            setDraft(value)
+            setCaret(input.selectionStart ?? value.length)
+          }}
+          onTextareaSelect={(input) => setCaret(input.selectionStart ?? input.value.length)}
+          onKeyDown={(event) => {
+            if (event.key === 'Enter') {
+              event.preventDefault()
+              void send(draft)
+            }
+          }}
+          onImeSettled={(input) => {
+            setDraft(input.value)
+            flushDraftAppends()
+            attachments.flushPendingAttachments()
+          }}
+          onPaste={() => {}}
+          pickerListboxId="picker"
+          onChoosePickerItem={() => {}}
+          onRetrySkills={() => {}}
+          onChooseMentionFile={() => {}}
+          mentionFiles={{ files: [], loading: false, failed: false }}
+          onRemoveImageAttachment={attachments.removeImageAttachment}
+          onAttach={() => {}}
+          onDictationToggle={() => {}}
+          onDictationHoldStart={() => {}}
+          onDictationHoldEnd={() => {}}
+          onSend={() => void send(draft)}
+          sessionOptionsSurface={null}
+          sessionOptionsSnapshot={[]}
+        />
+      </div>
+      <button onClick={pickAttachments}>Attach</button>
+      <output data-testid="draft">{draft}</output>
+    </div>
+  )
+}
+
+const prepare = vi.fn(async ({ paths }: { paths: string[] }): Promise<PreparedDroppedPaths> => ({
+  paths,
+  failures: []
+}))
+beforeEach(() => {
+  vi.clearAllMocks()
+  clearNativeChatDraftCacheForTests()
+  vi.stubGlobal('api', {
+    fs: {
+      getPathForFile: (file: File) => `/drop/${file.name}`,
+      prepareDroppedPaths: prepare,
+      stat: vi.fn(async () => ({ isDirectory: false }))
+    },
+    shell: { pickAttachments: vi.fn(async () => ['/picked/browser issues.md']) }
+  })
+})
+afterEach(() => {
+  cleanup()
+  clearNativeChatDraftCacheForTests()
+  vi.unstubAllGlobals()
+})
+
+async function osDrop(target: HTMLElement, names = ['notes.txt']) {
+  const event = new Event('drop', { bubbles: true, cancelable: true, composed: true })
+  Object.defineProperty(event, 'isTrusted', { value: true })
+  Object.defineProperty(event, 'dataTransfer', {
+    value: {
+      types: ['Files'],
+      files: names.map((name) => new File(['file'], name))
+    }
+  })
+  await act(async () => target.dispatchEvent(event))
+}
+
+describe('OS file drops through the real composing chat field', () => {
+  it.each(['commit', 'double commit', 'cancel', 'blur', 'blur then commit', 'restart'])(
+    'settles one drop exactly once on %s and never replays it in a later composition',
+    async (ending) => {
+      render(
+        <NativeChatPaneFileDropSurface className="chat">
+          <ComposerProbe />
+        </NativeChatPaneFileDropSurface>
+      )
+      const editor = screen.getByRole('textbox')
+      fireEvent.compositionStart(editor)
+      changePrompt(editor, 'ni')
+      await osDrop(editor)
+      expect(promptValue(editor)).toBe('ni')
+      if (ending === 'cancel') {
+        changePrompt(editor, '')
+      }
+      if (ending === 'blur' || ending === 'blur then commit') {
+        fireEvent.blur(editor)
+      }
+      if (ending === 'restart') {
+        fireEvent.compositionStart(editor)
+      } else if (ending !== 'blur') {
+        fireEvent.compositionEnd(editor, { data: ending === 'cancel' ? '' : 'ni' })
+      }
+      if (ending === 'double commit') {
+        fireEvent.compositionEnd(editor, { data: 'ni' })
+      }
+      expect(promptValue(editor).match(/@\/drop\/notes.txt/g)).toHaveLength(1)
+      expect(prepare).toHaveBeenCalledOnce()
+      fireEvent.compositionStart(editor)
+      fireEvent.compositionEnd(editor, { data: 'later' })
+      expect(promptValue(editor).match(/@\/drop\/notes.txt/g)).toHaveLength(1)
+    }
+  )
+
+  it('numbers images dropped together 1, 2, 3, each with its chip in the prompt', async () => {
+    render(
+      <NativeChatPaneFileDropSurface className="chat">
+        <ComposerProbe />
+      </NativeChatPaneFileDropSurface>
+    )
+    const editor = screen.getByRole('textbox')
+    await osDrop(editor, ['a.png', 'b.png', 'c.png'])
+    expect(
+      [...editor.querySelectorAll('[data-native-chat-image-reference]')].map(
+        (chip) => chip.textContent
+      )
+    ).toEqual(['Image #1', 'Image #2', 'Image #3'])
+  })
+
+  it('preserves a mixed drop and subsequent question through accepted send', async () => {
+    const send = vi.fn<NativeChatStructuredComposerTransport['send']>(() => true)
+    const transport: NativeChatStructuredComposerTransport = {
+      capturePresentation: () => () => true,
+      send,
+      dispatchCommand: vi.fn(async () => ({ handled: false, accepted: false, error: null })),
+      optionsSurface: {
+        getSnapshot: () => [],
+        setOption: vi.fn(),
+        invokeAction: vi.fn(),
+        subscribe: () => () => {}
+      },
+      optionSnapshot: [],
+      onError: vi.fn(),
+      runtime: 'local',
+      sessionId: 'mixed-drop-session',
+      runtimeEnvironmentId: null
+    }
+    prepare.mockImplementationOnce(async ({ paths }) => {
+      return {
+        paths: paths.filter((path) => !path.endsWith('/missing.png')),
+        failures: [
+          {
+            target: 'rejected',
+            reason: 'temp-copy-failed',
+            commonReason: 'missing',
+            pathCount: 2,
+            byteLength: 0
+          }
+        ]
+      }
+    })
+    render(
+      <NativeChatPaneFileDropSurface className="chat">
+        <ComposerProbe transport={transport} />
+      </NativeChatPaneFileDropSurface>
+    )
+    const editor = screen.getByRole('textbox')
+    const names = ['notes.txt', 'b.png', 'a.png', 'b.png', 'missing.png', 'missing.png']
+    await osDrop(editor, names)
+    expect(prepare.mock.calls[0]?.[0].paths).toEqual(names.map((name) => `/drop/${name}`))
+    const assertDraftMatchesDocument = () => {
+      const saved = readNativeChatComposerDraft('pane:worktree-1')
+      expect(saved.text).toBe(promptValue(editor))
+      expect(saved.document).toEqual(promptEditor(editor).getJSON())
+      expect(screen.getByTestId('draft').textContent).toBe(saved.text)
+      expect(
+        [...editor.querySelectorAll('[data-native-chat-file-reference]')].map(
+          (pill) => pill.textContent
+        )
+      ).toEqual(['notes.txt'])
+      expect(
+        [...editor.querySelectorAll('[data-native-chat-image-reference]')].map(
+          (pill) => pill.textContent
+        )
+      ).toEqual(['Image #1', 'Image #2', 'Image #3'])
+    }
+    assertDraftMatchesDocument()
+    // Browser-native End movement is exercised in Electron; here selection uses real editor commands.
+    act(() => {
+      promptEditor(editor).commands.selectTextblockEnd()
+    })
+    act(() => {
+      promptEditor(editor).commands.setTextSelection(
+        promptEditor(editor).state.doc.content.size - 1
+      )
+    })
+    const question = ' What does notes.txt say, and what is shown in the three images?'
+    for (const character of question) {
+      act(() => {
+        promptEditor(editor).commands.insertContent(character)
+      })
+    }
+    expect(editor.textContent).toContain(question)
+    assertDraftMatchesDocument()
+    const submitted = readNativeChatComposerDraft('pane:worktree-1')
+    expect(submitted.text).toContain('@/drop/notes.txt')
+    expect(submitted.text).toContain(question)
+    await act(async () => fireEvent.keyDown(editor, { key: 'Enter' }))
+    expect(send).toHaveBeenCalledOnce()
+    expect(send).toHaveBeenCalledWith(
+      expect.stringContaining('@/drop/notes.txt'),
+      expect.arrayContaining([expect.objectContaining({ path: '/drop/b.png' })])
+    )
+    const [text, images] = send.mock.calls[0] ?? []
+    expect(text).toContain(question)
+    expect(text?.match(/\[Image #\d+\]/g)).toEqual(['[Image #1]', '[Image #2]', '[Image #3]'])
+    expect(images?.map(({ path }) => path)).toEqual(['/drop/b.png', '/drop/a.png', '/drop/b.png'])
+    expect(promptValue(editor)).toBe('')
+    expect(readNativeChatComposerDraft('pane:worktree-1').text).toBe('')
+    expect(readNativeChatComposerDraft('pane:worktree-1').images).toEqual([])
+  })
+
+  it('shows a dropped file and a file picked with the attach button as the same filename pill', async () => {
+    render(
+      <NativeChatPaneFileDropSurface className="chat">
+        <ComposerProbe />
+      </NativeChatPaneFileDropSurface>
+    )
+    const editor = screen.getByRole('textbox')
+    await osDrop(editor)
+    await act(async () => fireEvent.click(screen.getByText('Attach')))
+    expect(
+      [...editor.querySelectorAll('[data-native-chat-file-reference]')].map(
+        (pill) => pill.textContent
+      )
+    ).toEqual(['notes.txt', 'browser issues.md'])
+    expect(screen.getByTestId('draft').textContent).toBe(
+      '@/drop/notes.txt @"/picked/browser issues.md" '
+    )
+  })
+})

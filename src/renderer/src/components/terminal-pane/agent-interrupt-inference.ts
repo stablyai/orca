@@ -4,6 +4,9 @@ import {
 } from '../../../../shared/agent-status-types'
 import {
   AGENT_INTERRUPT_SETTLE_MS,
+  isNavigationEscapeIntent,
+  requiresDoubleEscapeInterrupt,
+  shouldIgnoreInterruptIntent,
   type AgentInterruptInferenceRequest,
   type AgentInterruptInputIntent
 } from '../../../../shared/agent-interrupt-intent'
@@ -38,28 +41,22 @@ type CapturedInterruptBaseline = {
   inputCount?: number
 }
 
-function requiresDoubleEscapeForAgent(
-  agentType: AgentStatusEntry['agentType'],
-  intent: AgentInterruptInputIntent
-): boolean {
-  return (agentType === 'opencode' || agentType === 'copilot') && intent === 'plain-escape'
-}
-
 function shouldFlushInterruptImmediately(
   baseline: Pick<CapturedInterruptBaseline, 'agentType' | 'intent'>
 ): boolean {
   return (
-    requiresDoubleEscapeForAgent(baseline.agentType, baseline.intent) ||
-    baseline.agentType === 'gemini' ||
-    (baseline.agentType === 'codex' && baseline.intent === 'plain-escape')
+    requiresDoubleEscapeInterrupt(baseline.agentType, baseline.intent) ||
+    baseline.agentType === 'gemini'
   )
 }
 
-function shouldIgnoreInterruptIntent(
+/** Skip working-state navigation Escape requests main would refuse; waiting AskUserQuestion dismissal still reaches answer inference. */
+function isIgnorableNavigationEscape(
   agentType: AgentStatusEntry['agentType'],
-  intent: AgentInterruptInputIntent
+  intent: AgentInterruptInputIntent,
+  state: AgentStatusEntry['state']
 ): boolean {
-  return agentType === 'droid' && intent === 'ctrl-c'
+  return state === 'working' && isNavigationEscapeIntent(agentType, intent)
 }
 
 function canInferInterrupt(entry: AgentStatusEntry, intent: AgentInterruptInputIntent): boolean {
@@ -238,7 +235,11 @@ export function createAgentInterruptInference({
         clearPending()
         return
       }
-      if (requiresDoubleEscapeForAgent(baseline.agentType, intent)) {
+      // Navigation Escape proves no interrupt but must not revoke a prior Ctrl+C awaiting settlement.
+      if (isIgnorableNavigationEscape(baseline.agentType, intent, entry.state)) {
+        return
+      }
+      if (requiresDoubleEscapeInterrupt(baseline.agentType, intent)) {
         const isSecondEscape =
           doubleEscapeBaseline !== null && isSameTurnBaseline(doubleEscapeBaseline, baseline)
         doubleEscapeBaseline = baseline
@@ -247,14 +248,12 @@ export function createAgentInterruptInference({
           if (doubleEscapeTimer !== null) {
             clearTimer(doubleEscapeTimer)
           }
-          // Why: some TUIs use the first Escape as an editor/menu cancel. Do
-          // not let that arm a later single Escape indefinitely.
+          // Expire first-Escape intent so an editor/menu cancel cannot arm an interrupt indefinitely.
           doubleEscapeTimer = setTimer(clearDoubleEscapeBaseline, AGENT_INTERRUPT_SETTLE_MS)
           return
         }
         clearDoubleEscapeBaseline()
-        // Why: these agents use the first Escape as a TUI/editor cancel. The
-        // second Escape on the same turn is the actual running-turn interrupt.
+        // Require a second Escape on the same turn because the first cancels TUI/editor navigation.
         baseline = { ...baseline, inputCount: 2 }
       } else {
         clearDoubleEscapeBaseline()
@@ -262,8 +261,7 @@ export function createAgentInterruptInference({
       }
       pendingBaseline = baseline
       if (shouldFlushInterruptImmediately(baseline)) {
-        // Why: these interrupts can emit an idle/done hook before the settle timer,
-        // overwriting the working baseline and losing the interrupted outcome.
+        // Flush before idle/done hooks overwrite the working baseline and erase the interrupted outcome.
         return flushPending()
       }
       pendingTimer = setTimer(flushPendingFromTimer, AGENT_INTERRUPT_SETTLE_MS)

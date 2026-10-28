@@ -2,8 +2,11 @@ import { describe, expect, it } from 'vitest'
 import type { ProjectGroup } from '../../../../shared/project-group-types'
 import type { Repo } from '../../../../shared/repo-types'
 import type { Worktree } from '../../../../shared/worktree/types'
-import type { Row } from './worktree-list/grouping/row-types'
-import { addHostSectionRows, type HostSectionOption } from './host-section-rows'
+import type { Row } from '../../../../shared/sidebar-list/row-types'
+import {
+  addHostSectionRows,
+  type HostSectionOption
+} from '../../../../shared/sidebar-list/host-section-rows'
 
 const LOCAL_REPO: Repo = {
   id: 'local-repo',
@@ -46,7 +49,6 @@ const LOCAL_ROW: Extract<Row, { type: 'item' }> = {
   repo: LOCAL_REPO,
   depth: 0,
   groupDepth: 0,
-  lineageTrail: [],
   isLastLineageChild: true,
   lineageChildCount: 0
 }
@@ -94,7 +96,8 @@ function hostCounts(rows: readonly Row[]) {
     rows,
     hostOptions: HOSTS,
     workspaceHostScope: 'all',
-    defaultHostId: 'local'
+    defaultHostId: 'local',
+    localHostLabel: 'Local Mac'
   })
     .filter((row) => row.type === 'host-header')
     .map(({ hostId, count }) => ({ hostId, count }))
@@ -114,7 +117,7 @@ describe('folder workspace host counts', () => {
       key: 'workspace-status:in-progress',
       label: 'In progress',
       count: 1,
-      tone: 'text-foreground',
+      icon: { kind: 'workspace-status', status: 'in-progress' },
       hostWorktreeCounts: new Map([['ssh:builder', 1]]),
       hostWorktreeIds: new Map([['ssh:builder', []]])
     }

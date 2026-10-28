@@ -31,6 +31,7 @@ async function readOneTitle(
     if (!stats.isFile() || signal?.aborted) {
       return null
     }
+    // Raw lstat matches scanner keys only for providers without content dependencies: Claude and Codex.
     const session = await parseAgentSessionFileCached(
       {
         agent: request.agent,

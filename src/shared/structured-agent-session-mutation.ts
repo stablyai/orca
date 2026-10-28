@@ -1,4 +1,9 @@
 import { sha256 } from './sha256'
+import type {
+  StructuredAgentSessionFirstMessage,
+  StructuredAgentSessionResumeSource
+} from './structured-agent-session-create'
+import type { StructuredAgentId } from './agent-session-provider-handle'
 
 function canonicalize(value: unknown): string {
   if (value === null || typeof value !== 'object') {
@@ -26,11 +31,27 @@ export function structuredAgentSessionPayloadFingerprint(input: {
   return Array.from(bytes, (byte) => byte.toString(16).padStart(2, '0')).join('')
 }
 
+export function structuredAgentSessionDomainFingerprint(input: {
+  domain: string
+  sessionId: string
+  fields: Record<string, unknown>
+}): string {
+  return structuredAgentSessionPayloadFingerprint({
+    method: input.domain,
+    sessionId: input.sessionId,
+    fields: input.fields
+  })
+}
+
 export function structuredAgentSessionCreateFingerprint(input: {
   sessionId: string
   worktree: string
-  agent: 'claude' | 'codex'
-  resumeFrom?: { providerSessionId: string }
+  agent: StructuredAgentId
+  resumeFrom?: StructuredAgentSessionResumeSource
+  tabId?: string
+  firstMessage?: StructuredAgentSessionFirstMessage
+  optionsMode?: 'replace-model-selection'
+  options?: Readonly<Record<string, string>>
 }): string {
   return structuredAgentSessionPayloadFingerprint({
     method: 'agentSession.create',
@@ -38,23 +59,15 @@ export function structuredAgentSessionCreateFingerprint(input: {
     fields: {
       worktree: input.worktree,
       agent: input.agent,
-      // `canonicalize` drops undefined, so a plain create keeps the digest it has always had.
-      // Adopting a conversation is a different intent and must not replay as a blank create.
-      resumeFrom: input.resumeFrom
+      // Dropping undefined preserves blank-create digests; resume intent must not replay as blank create.
+      resumeFrom: input.resumeFrom,
+      // Include tabId in the host digest; retries replay its recorded host-owned ID.
+      tabId: input.tabId,
+      firstMessage: input.firstMessage,
+      optionsMode: input.optionsMode,
+      options: input.options
     }
   })
-}
-
-export function showStructuredAgentSessionChoice(input: {
-  hostCapability: boolean
-  workspaceSupport: boolean
-  agent: string
-}): boolean {
-  return (
-    input.hostCapability &&
-    input.workspaceSupport &&
-    (input.agent === 'claude' || input.agent === 'codex')
-  )
 }
 
 export function createStructuredAgentSessionOperationId(

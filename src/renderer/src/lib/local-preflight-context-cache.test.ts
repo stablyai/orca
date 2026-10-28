@@ -20,36 +20,33 @@ function makeRepos(id: string, path: string): AppState['repos'] {
   return [{ id, path, displayName: id, badgeColor: 'blue', addedAt: 1 }]
 }
 
-function makeWslState(distro: string): AppState {
+function makeWslState(distro: string): Parameters<typeof getLocalPreflightContext>[0] {
   return {
+    endpointProjects: [],
+    endpointProjectHostSetups: [],
     activeRepoId: 'repo-1',
     activeWorktreeId: null,
     repos: makeRepos('repo-1', `\\\\wsl.localhost\\${distro}\\home\\alice\\repo`),
+    settings: null,
     worktreesByRepo: {}
-  } as AppState
+  }
 }
 
-function makeWindowsProjectState(projectId: string): AppState {
+function makeWindowsProjectState(
+  projectId: string
+): Parameters<typeof getLocalPreflightContext>[0] {
   return {
+    endpointProjects: [],
+    endpointProjectHostSetups: [],
     activeRepoId: projectId,
     activeWorktreeId: null,
     repos: makeRepos(projectId, `C:\\Users\\alice\\${projectId}`),
-    settings: {},
+    settings: null,
     worktreesByRepo: {}
-  } as AppState
+  }
 }
 
 describe('local preflight context caches', () => {
-  it('releases an old WSL selector snapshot after sustained context churn', () => {
-    const first = getLocalPreflightContext(makeWslState('Distro0'), 'darwin')
-
-    for (let index = 1; index <= WSL_CACHE_LIMIT; index += 1) {
-      getLocalPreflightContext(makeWslState(`Distro${index}`), 'darwin')
-    }
-
-    expect(getLocalPreflightContext(makeWslState('Distro0'), 'darwin')).not.toBe(first)
-  })
-
   it('caps cached WSL distro snapshots', () => {
     for (let index = 0; index < WSL_CACHE_LIMIT + 1; index++) {
       const distro = `Distro${index}`

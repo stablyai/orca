@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import type { RetainedAgentEntry } from '@/store/slices/agent-status'
+import type { RetainedAgentEntry } from '@/store/slices/agent-status/agent-status-contract'
 import type {
   AgentStatusEntry,
   AgentStatusOrchestrationContext
@@ -289,8 +289,7 @@ describe('selectRuntimeAgentOrchestrationBatch', () => {
     expect(getBatchRecord(replacedBatch, 'wt-2')).toBe(firstWt2)
   })
 
-  // Why this matters now that the batch is a view of the shared index: an empty dashboard must
-  // not drop a cache that every mounted sidebar card is still reading through.
+  // An empty dashboard must not evict the shared index still used by sidebar cards.
   it('leaves the shared index intact for an empty request and rebuilds after an empty runtime', () => {
     let tabIdReads = 0
     const state = {
@@ -319,7 +318,6 @@ describe('selectRuntimeAgentOrchestrationBatch', () => {
     expect(tabIdReads).toBe(1)
     expect(afterEmptyRequest).toBe(first)
 
-    // An emptied orchestration map is a real change of the index's own domain, so it does drop.
     selectRuntimeAgentOrchestrationBatch({ ...state, runtimeAgentOrchestrationByPaneKey: {} }, [
       'target'
     ])
@@ -364,6 +362,7 @@ describe('selectRuntimeAgentOrchestrationBatch', () => {
           if (typeof key === 'string' && Object.hasOwn(target, key)) {
             runtimeValueReads += 1
           }
+          // oxlint-disable-next-line anti-slop/no-reflect-get -- Proxy `get` trap: only Reflect.get forwards a raw string|symbol key with the proxy receiver.
           return Reflect.get(target, key, receiver)
         }
       })
@@ -410,8 +409,7 @@ describe('selectRuntimeAgentOrchestrationBatch', () => {
     )
 
     expect(Object.keys(actual)).toEqual(Object.keys(expected))
-    // Why identical: the batch is the shared index, which walks every worktree's tabs once per
-    // tabs-slice identity — not once per request — so a one-worktree request costs the same.
+    // All tabs are indexed once per slice identity regardless of the requested worktree count.
     const singleWorktreeCounts = {
       runtimeEnumerations: 1,
       runtimeValueReads: contextCount,
@@ -456,6 +454,7 @@ describe('selectRuntimeAgentOrchestrationBatch', () => {
           if (typeof key === 'string' && Object.hasOwn(target, key)) {
             runtimeValueReads += 1
           }
+          // oxlint-disable-next-line anti-slop/no-reflect-get -- Proxy `get` trap: only Reflect.get forwards a raw string|symbol key with the proxy receiver.
           return Reflect.get(target, key, receiver)
         }
       })
@@ -487,8 +486,7 @@ describe('selectRuntimeAgentOrchestrationBatch', () => {
     }
     selectRuntimeAgentOrchestrationBatch(batched.state, requested)
 
-    // One enumeration for worktreeCount calls: the first builds the shared
-    // index, the rest are Map lookups. This used to scale with mounted cards.
+    // One build serves every card through Map lookups.
     expect(reference.counts()).toEqual({
       runtimeEnumerations: 1,
       runtimeValueReads: contextCount,
@@ -523,8 +521,7 @@ describe('selectRuntimeAgentOrchestrationBatch', () => {
         requested
       )
     }
-    // The batch reads nothing but each orchestrated pane's worktreeId out of the live
-    // map, so publications that leave those alone never revisit a context at all.
+    // Unchanged per-pane worktree attribution must avoid revisiting orchestration contexts.
     expect(batched.counts()).toEqual({
       runtimeEnumerations: 1,
       runtimeValueReads: contextCount,
@@ -532,9 +529,7 @@ describe('selectRuntimeAgentOrchestrationBatch', () => {
       tabIdReads: worktreeCount
     })
 
-    // Publications that change nothing the index reads cost nothing, however
-    // many cards call in. The warm-up pass is the cost of the batch loop above having left the
-    // one cache slot on a different fixture store; production has a single store.
+    // Warm the shared cache after interleaved fixture stores before measuring unchanged publications.
     selectRuntimeAgentOrchestrationForWorktree(reference.state, requested[0])
     const referenceBefore = reference.counts()
     for (let publication = 0; publication < publicationCount; publication += 1) {
@@ -544,9 +539,7 @@ describe('selectRuntimeAgentOrchestrationBatch', () => {
     }
     expect(reference.counts()).toEqual(referenceBefore)
 
-    // A real live-status ping replaces agentStatusByPaneKey wholesale. The index is keyed on
-    // what it reads out of that map, not on its identity, so an unrelated pane's ping costs
-    // nothing: no rebuild, no context revisit, however many cards call in.
+    // Unrelated live-map churn must not rebuild the index or revisit contexts.
     const churn = makeCountedState()
     for (const worktreeId of requested) {
       selectRuntimeAgentOrchestrationForWorktree(churn.state, worktreeId)
@@ -600,32 +593,7 @@ describe('selectRuntimeAgentOrchestrationBatch live-map churn', () => {
     return _getWorktreeAgentOrchestrationIndexBuildCountForTest()
   }
 
-  it('rebuilds once across repeated agentStatus:set identity churn on unrelated panes', () => {
-    releaseWorktreeAgentOrchestrationIndexCache()
-    const first = selectRuntimeAgentOrchestrationBatch(
-      makeChurnState({ [CHILD_KEY]: makeEntry(CHILD_KEY, 'wt-1') }),
-      requested
-    )
-    const buildsAfterFirst = builds()
-
-    for (let index = 0; index < 25; index += 1) {
-      // A fresh live map on every tick, exactly as `agentStatus:set` replaces the slice.
-      const churned = selectRuntimeAgentOrchestrationBatch(
-        makeChurnState({
-          [CHILD_KEY]: makeEntry(CHILD_KEY, 'wt-1'),
-          [`unrelated-${index}`]: makeEntry(`unrelated-${index}`, 'wt-9')
-        }),
-        requested
-      )
-      expect(churned).toBe(first)
-    }
-    expect(builds()).toBe(buildsAfterFirst)
-    expect(getBatchRecord(first, 'wt-1')[CHILD_KEY]).toBe(ORCHESTRATED_CONTEXT)
-  })
-
-  // Why this is a structural guard: the cache key is the projection, so anything the build
-  // reads straight out of the live/retained maps is unkeyed and can go stale. The build no
-  // longer receives those maps at all, which shows up here as exactly one read per pane.
+  // Count reads to detect unkeyed live/retained access outside the cached attribution projection.
   it('reads each orchestrated pane out of the live and retained maps once per build', () => {
     releaseWorktreeAgentOrchestrationIndexCache()
     const liveReads: string[] = []
@@ -636,6 +604,7 @@ describe('selectRuntimeAgentOrchestrationBatch live-map churn', () => {
           if (typeof key === 'string') {
             reads.push(key)
           }
+          // oxlint-disable-next-line anti-slop/no-reflect-get -- Proxy `get` trap: only Reflect.get forwards a raw string|symbol key with the proxy receiver.
           return Reflect.get(source, key, receiver)
         }
       })

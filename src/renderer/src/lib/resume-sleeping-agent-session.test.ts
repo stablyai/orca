@@ -5,6 +5,13 @@ import { parseWorkspaceSession } from '../../../shared/workspace-session-schema'
 import { useAppStore } from '@/store'
 import { resumeSleepingAgentSessionsForWorktree } from './resume-sleeping-agent-session'
 
+// Main's answer to the window's layout commands, as a switch-on build sends them.
+vi.mock('@/runtime/runtime-rpc-client', async (importOriginal) =>
+  (
+    await import('@/runtime/layout-apply-test-transport.test-fixture')
+  ).runtimeRpcClientWithLayoutApply(await importOriginal())
+)
+
 const initialAppStoreState = useAppStore.getState()
 const LEAF_ID = '11111111-1111-4111-8111-111111111111'
 const OTHER_LEAF_ID = '22222222-2222-4222-8222-222222222222'
@@ -196,11 +203,7 @@ describe('resumeSleepingAgentSessionsForWorktree', () => {
     expect(state.sleepingAgentSessionsByPaneKey[record.paneKey]).toBe(record)
   })
 
-  // Why: keep-alive mounts every tab of the active worktree and pane connect is
-  // not visibility-gated, so a hidden restorable pane cold-restores in place.
-  // Appending a resume tab here (the pre-keep-alive contract from #6800) forked
-  // a second surface onto the same provider session and stranded the hidden
-  // pane as a bare shell.
+  // Keep-alive mounts hidden active-worktree tabs for in-place cold restore; appending resume tabs forks the session and strands originals as bare shells (#6800).
   it('leaves a hidden restorable stable-pane record for in-place cold restore during activation', () => {
     const paneKey = makePaneKey('tab-1', LEAF_ID)
     const record = makeRecord({ paneKey, origin: 'worktree-sleep' })
@@ -230,7 +233,7 @@ describe('resumeSleepingAgentSessionsForWorktree', () => {
     const initiallyUnowned = makeRecord({
       paneKey: initiallyUnownedPaneKey,
       tabId: 'missing-tab',
-      origin: 'worktree-sleep',
+      origin: 'quit',
       providerSession: { key: 'session_id', id: 'sess-first' },
       capturedAt: 1,
       updatedAt: 1
@@ -238,7 +241,7 @@ describe('resumeSleepingAgentSessionsForWorktree', () => {
     const initiallyOwned = makeRecord({
       paneKey: initiallyOwnedPaneKey,
       tabId: 'tab-active',
-      origin: 'worktree-sleep',
+      origin: 'quit',
       providerSession: { key: 'session_id', id: 'sess-second' },
       capturedAt: 2,
       updatedAt: 2
@@ -347,7 +350,7 @@ describe('resumeSleepingAgentSessionsForWorktree', () => {
 
   it('resumes active worktree-sleep stable-pane records when the preserved leaf has no PTY to cold-restore', () => {
     const paneKey = makePaneKey('tab-1', LEAF_ID)
-    const record = makeRecord({ paneKey, origin: 'worktree-sleep' })
+    const record = makeRecord({ paneKey, origin: 'quit' })
     useAppStore.setState({
       ...makeActiveTerminalState('tab-1'),
       tabsByWorktree: { 'wt-1': [makeTerminalTab('tab-1', 'wt-1')] },
@@ -466,12 +469,12 @@ describe('resumeSleepingAgentSessionsForWorktree', () => {
   it('does not let mixed legacy provider sessions claim the whole preserved tab', () => {
     const first = makeRecord({
       paneKey: 'tab-1:0',
-      origin: 'worktree-sleep',
+      origin: 'quit',
       providerSession: { key: 'session_id', id: 'sess-1' }
     })
     const second = makeRecord({
       paneKey: 'tab-1:1',
-      origin: 'worktree-sleep',
+      origin: 'quit',
       providerSession: { key: 'session_id', id: 'sess-2' },
       capturedAt: 2,
       updatedAt: 2
@@ -495,28 +498,23 @@ describe('resumeSleepingAgentSessionsForWorktree', () => {
     expect(state.sleepingAgentSessionsByPaneKey[second.paneKey]).toBeUndefined()
   })
 
-  it('resumes worktree-sleep records into a fresh tab', () => {
+  it("leaves a workspace sleep's records to main while their tab remains", () => {
     const record = makeRecord({ origin: 'worktree-sleep' })
     useAppStore.setState({
-      tabsByWorktree: { 'wt-1': [] },
+      tabsByWorktree: { 'wt-1': [makeTerminalTab('tab-1', 'wt-1')] },
       sleepingAgentSessionsByPaneKey: { [record.paneKey]: record }
     } as never)
 
-    const launched = resumeSleepingAgentSessionsForWorktree('wt-1')
-
-    expect(launched).toBe(1)
+    expect(resumeSleepingAgentSessionsForWorktree('wt-1')).toBe(0)
     const state = useAppStore.getState()
-    const tabs = state.tabsByWorktree['wt-1'] ?? []
-    expect(tabs).toHaveLength(1)
-    expect(tabs[0]?.launchAgent).toBe('claude')
-    expect(state.pendingStartupByTabId[tabs[0]!.id]?.showSessionRestoredBanner).toBe(true)
-    expect(state.sleepingAgentSessionsByPaneKey[record.paneKey]).toBeUndefined()
+    expect(state.tabsByWorktree['wt-1']).toHaveLength(1)
+    expect(state.sleepingAgentSessionsByPaneKey[record.paneKey]).toBe(record)
   })
 
   it('uses captured launch config instead of changed settings when resuming worktree sleep', () => {
     const record = makeRecord({
       agent: 'codex',
-      origin: 'worktree-sleep',
+      origin: 'quit',
       launchConfig: {
         agentCommand: "codex --profile captured '--model' 'gpt-5' '--reasoning-effort' 'high'",
         agentArgs: '--model gpt-5 --reasoning-effort high',
@@ -585,11 +583,11 @@ describe('resumeSleepingAgentSessionsForWorktree', () => {
   it('lets a preserved pane claim its provider session and clears only stale duplicates', () => {
     const ownedPaneKey = makePaneKey('tab-1', LEAF_ID)
     const stalePaneKey = makePaneKey('missing-tab', OTHER_LEAF_ID)
-    const owned = makeRecord({ paneKey: ownedPaneKey, origin: 'worktree-sleep' })
+    const owned = makeRecord({ paneKey: ownedPaneKey, origin: 'quit' })
     const stale = makeRecord({
       paneKey: stalePaneKey,
       tabId: 'missing-tab',
-      origin: 'worktree-sleep',
+      origin: 'quit',
       capturedAt: 2,
       updatedAt: 2
     })
@@ -619,7 +617,7 @@ describe('resumeSleepingAgentSessionsForWorktree', () => {
     const stale = makeRecord({
       paneKey: stalePaneKey,
       tabId: 'missing-tab',
-      origin: 'worktree-sleep',
+      origin: 'quit',
       capturedAt: 2,
       updatedAt: 2
     })
@@ -648,7 +646,7 @@ describe('resumeSleepingAgentSessionsForWorktree', () => {
     const completed = makeRecord({
       paneKey: completedPaneKey,
       tabId: 'tab-completed',
-      origin: 'worktree-sleep',
+      origin: 'quit',
       state: 'done',
       capturedAt: 1,
       updatedAt: 1,
@@ -657,7 +655,7 @@ describe('resumeSleepingAgentSessionsForWorktree', () => {
     const active = makeRecord({
       paneKey: activePaneKey,
       tabId: 'tab-active',
-      origin: 'worktree-sleep',
+      origin: 'quit',
       capturedAt: 2,
       updatedAt: 2,
       launchConfig: { agentArgs: '--active', agentEnv: {} }
@@ -704,7 +702,7 @@ describe('resumeSleepingAgentSessionsForWorktree', () => {
     const valid = makeRecord({
       paneKey: validPaneKey,
       tabId: 'missing-tab',
-      origin: 'worktree-sleep',
+      origin: 'quit',
       capturedAt: 3_000_001,
       updatedAt: 3_000_001
     })
@@ -729,7 +727,7 @@ describe('resumeSleepingAgentSessionsForWorktree', () => {
 
   it('fresh-resumes when explicit tabId disagrees with the stable pane-key tab id', () => {
     const paneKey = makePaneKey('parsed-tab', LEAF_ID)
-    const record = makeRecord({ paneKey, tabId: 'explicit-tab', origin: 'worktree-sleep' })
+    const record = makeRecord({ paneKey, tabId: 'explicit-tab', origin: 'quit' })
     useAppStore.setState({
       tabsByWorktree: {
         'wt-1': [makeTerminalTab('explicit-tab', 'wt-1'), makeTerminalTab('parsed-tab', 'wt-1')]
@@ -783,7 +781,7 @@ describe('resumeSleepingAgentSessionsForWorktree', () => {
   })
 
   it('resumes interrupted manual records that no preserved pane can own', () => {
-    const record = makeRecord({ origin: 'worktree-sleep', interrupted: true })
+    const record = makeRecord({ origin: 'quit', interrupted: true })
     useAppStore.setState({
       tabsByWorktree: { 'wt-1': [] },
       sleepingAgentSessionsByPaneKey: { [record.paneKey]: record }
@@ -846,7 +844,7 @@ describe('resumeSleepingAgentSessionsForWorktree', () => {
   it('uses WSL resume quoting for Windows-path projects forced to WSL', () => {
     const record = makeRecord({
       providerSession: { key: 'session_id', id: "sess-1's" },
-      origin: 'worktree-sleep'
+      origin: 'quit'
     })
     useAppStore.setState({
       activeRepoId: 'repo-1',

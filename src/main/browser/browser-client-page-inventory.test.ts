@@ -3,6 +3,12 @@ import type { BrowserClientHostedPageInventory } from '../../shared/browser-clie
 import { prepareBrowserClientPageInventoryForAttach } from './browser-client-page-inventory'
 
 describe('browser client page inventory', () => {
+  it('keeps URLs and duplicate-page validation when the inventory fits', () => {
+    const page = { ...inventoryPage('page-a'), currentUrl: 'https://example.test/' }
+    expect(prepareBrowserClientPageInventoryForAttach([page])).toEqual([page])
+    expect(prepareBrowserClientPageInventoryForAttach([page, page])).toBeUndefined()
+  })
+
   it('uses codepoint order to break equal URL-compaction ties across input order', () => {
     const pageIds = [
       'ä-page',

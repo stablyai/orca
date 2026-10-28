@@ -1,8 +1,8 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
-const { execFileMock } = vi.hoisted(() => ({ execFileMock: vi.fn() }))
+const { runProcessMock } = vi.hoisted(() => ({ runProcessMock: vi.fn() }))
 
-vi.mock('node:child_process', () => ({ execFile: execFileMock }))
+vi.mock('@orca/process-host', () => ({ runProcess: runProcessMock }))
 
 import { tryDeleteWslUncPath } from './wsl-unc-delete'
 
@@ -37,25 +37,29 @@ describe('WSL vault intermediate-symlink reproduction', () => {
       `${OUTSIDE_ROOT}/session/inside`,
       SENTINEL
     ])
-    execFileMock.mockReset()
-    execFileMock.mockImplementation((_binary, args: string[], _options, callback) => {
+    runProcessMock.mockReset()
+    runProcessMock.mockImplementation(async ({ args }: { args: string[] }) => {
       const separator = args.findIndex((arg) => arg === '--' || arg === '--exec')
       const command = args.slice(separator + 1)
       if (command[0] === 'rm') {
         removalReached = true
-        callback(null, '', '')
-        return
+        return { code: 0, signal: null, stdout: '', stderr: '', timedOut: false }
       }
 
-      const error = Object.assign(new Error('Command failed'), { code: 65 })
-      callback(error, '', 'Refusing WSL delete: symbolic-link path component')
+      return {
+        code: 65,
+        signal: null,
+        stdout: '',
+        stderr: 'Refusing WSL delete: symbolic-link path component',
+        timedOut: false
+      }
     })
   })
 
   it.each([
     ['file-shaped', `${FIXTURE_ROOT}/linked-project/session.json`, false],
     ['directory-shaped', `${FIXTURE_ROOT}/linked-project/session`, true]
-  ])('rejects a %s target before removal', async (_shape, target, recursive) => {
+  ])('rejects a %s target before removal', async (_targetKind, target, recursive) => {
     const options = { recursive, approvedRoots: [unc(FIXTURE_ROOT)] }
     let rejection: unknown
 

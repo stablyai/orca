@@ -57,24 +57,56 @@ export function readLegacyTerminalScrollbackSettings(
 }
 
 type RetiredGlobalSettings = {
+  agentNativeChatPermissionModes?: unknown
+  setupScriptLaunchMode?: unknown
   terminalScrollbackBytes?: unknown
   enableGitHubAttribution?: unknown
   showAgentsSidebar?: unknown
+  // Older builds interpret an absent managed-server switch as off.
+  experimentalManagedServers?: unknown
+  // Remove legacy settings secrets now owned by the main-process credential store.
+  opencodeGoApiKey?: unknown
+  experimentalStructuredNativeChat?: unknown
+  openAgentTabsInChatByDefault?: unknown
 }
 
 export function stripRetiredGlobalSettings(
   settings: Partial<GlobalSettings> | undefined
 ): Partial<GlobalSettings> {
   const {
+    agentNativeChatPermissionModes: _retiredChatPermissionCopies,
+    setupScriptLaunchMode: _legacySetupScriptLaunchMode,
     terminalScrollbackBytes: _legacyScrollbackBytes,
     enableGitHubAttribution: _legacyGitHubAttribution,
     showAgentsSidebar: _legacyShowAgentsSidebar,
+    experimentalManagedServers: _retiredManagedServersExperiment,
+    opencodeGoApiKey: _legacyOpenCodeGoApiKey,
+    experimentalStructuredNativeChat: _legacyStructuredNativeChat,
+    openAgentTabsInChatByDefault: _legacyChatDefaultView,
     ...rest
   } = (settings ?? {}) as Partial<GlobalSettings> & RetiredGlobalSettings
+  void _retiredChatPermissionCopies
+  void _legacySetupScriptLaunchMode
   void _legacyScrollbackBytes
   void _legacyGitHubAttribution
   void _legacyShowAgentsSidebar
+  void _retiredManagedServersExperiment
+  void _legacyOpenCodeGoApiKey
+  void _legacyStructuredNativeChat
+  void _legacyChatDefaultView
   return rest
+}
+
+/** Preserve terminal-first behavior for pre-retirement profiles whose Chat UI was enabled. */
+export function savedChatUiWithTerminalDefaultView(settings: unknown): boolean {
+  return (
+    typeof settings === 'object' &&
+    settings !== null &&
+    'experimentalNativeChat' in settings &&
+    settings.experimentalNativeChat === true &&
+    'openAgentTabsInChatByDefault' in settings &&
+    settings.openAgentTabsInChatByDefault !== true
+  )
 }
 
 export function migrateTerminalScrollbackRows(settings: unknown): {
@@ -126,9 +158,11 @@ export function migrateAgentYoloDefaults(
 ): Pick<GlobalSettings, 'agentDefaultArgs' | 'agentDefaultEnv' | 'agentYoloDefaultsMigrated'> {
   const existingArgs = normalizeTuiAgentArgsRecord(settings?.agentDefaultArgs)
   const existingEnv = normalizeTuiAgentEnvRecord(settings?.agentDefaultEnv)
+  if (existingArgs.devin === '--permission-mode bypass') {
+    existingArgs.devin = DEFAULT_TUI_AGENT_ARGS.devin
+  }
   if (settings?.agentYoloDefaultsMigrated === true) {
-    // Keep newly added agents manual for profiles migrated by an older build.
-    // Missing keys otherwise fall through to the current (possibly yolo) defaults.
+    // Pin newly added agents to manual; missing keys otherwise inherit current yolo defaults.
     for (const agent of Object.keys(DEFAULT_TUI_AGENT_ARGS)) {
       if (!(agent in existingArgs)) {
         existingArgs[agent as keyof typeof DEFAULT_TUI_AGENT_ARGS] = ''
@@ -172,7 +206,7 @@ export function migrateAgentYoloDefaults(
   }
 
   return {
-    // Why: legacy users could only customize launch defaults via command overrides, so those agents count as already user-owned.
+    // Legacy command overrides establish user ownership of launch defaults.
     agentDefaultArgs: migratedArgs,
     agentDefaultEnv: migratedEnv,
     agentYoloDefaultsMigrated: true

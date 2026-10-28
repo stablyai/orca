@@ -1,6 +1,7 @@
 import { ActivityIndicator, Pressable, Text, View } from 'react-native'
 import { X } from 'lucide-react-native'
 import { colors } from '../theme/mobile-theme'
+import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import { BottomDrawer } from '../components/BottomDrawer'
 import { MobileSyntaxSegments } from '../components/MobileSyntaxSegments'
 import { mobileDiffLineNumber, mobileDiffLinePrefix } from './mobile-diff-format'
@@ -13,6 +14,7 @@ type Props = {
 }
 
 export function MobileBranchDiffPreviewDrawer({ branchDiffPreview, onClose }: Props) {
+  useMobileColorScheme()
   if (!branchDiffPreview) {
     return null
   }

@@ -1,3 +1,4 @@
+import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../shared/agent-session-journal-types'
 import { describe, expect, it } from 'vitest'
 import {
   agentJournalItemKey,
@@ -5,8 +6,12 @@ import {
   boundJournalKeyComponent,
   MAX_JOURNAL_KEY_COMPONENT_CHARS
 } from '../../../shared/agent-session-journal-item-key'
-import type { AgentJournalMessageItem } from '../../../shared/agent-session-journal-types'
+import type {
+  AgentJournalItemIdentity,
+  AgentJournalMessageItem
+} from '../../../shared/agent-session-journal-types'
 import { structuredAgentSessionPayloadFingerprint } from '../../../shared/structured-agent-session-mutation'
+import { agentSessionSendBodyFingerprint } from '../../../shared/structured-agent-session-send-mutation'
 import {
   applyJournalRow,
   createJournalReducerState,
@@ -14,6 +19,7 @@ import {
   renderJournalState,
   type JournalReducerState
 } from './journal-reducer'
+import { buildJournalItemRow, buildJournalTombstoneRow } from './journal-row-builders'
 import type { JournalRow } from './journal-row-schema'
 
 const EPOCH = 'epoch-1'
@@ -101,13 +107,43 @@ describe('ordering', () => {
   })
 
   it('orders by sequence regardless of the order rows are applied in', () => {
-    // Live append and replay must render the same list, so the fold cannot lean
-    // on the order it happens to be handed rows in.
     const state = fold([
       { kind: 'item', itemId: 'later', revision: 1, body: text('later'), ...base(9) },
       { kind: 'item', itemId: 'earlier', revision: 1, body: text('earlier'), ...base(3) }
     ])
     expect(renderJournalState(state).items.map((item) => item.itemId)).toEqual(['earlier', 'later'])
+  })
+
+  it("places a batch's writes by their order in it, and keeps that place on revision", () => {
+    const state = fold([
+      {
+        kind: 'lifecycle-batch',
+        settlementId: 'ask',
+        mutations: [
+          { kind: 'item', itemId: 'scope', revision: 1, body: text('first') },
+          { kind: 'item', itemId: 'priority', revision: 1, body: text('second') },
+          { kind: 'item', itemId: 'deadline', revision: 1, body: text('third') }
+        ],
+        ...base(1)
+      },
+      {
+        kind: 'lifecycle-batch',
+        settlementId: 'answer',
+        mutations: [{ kind: 'item', itemId: 'deadline', revision: 2, body: text('answered') }],
+        ...base(2)
+      }
+    ])
+    expect(
+      renderJournalState(state).items.map(({ itemId, sequence, sequenceIndex }) => ({
+        itemId,
+        sequence,
+        sequenceIndex
+      }))
+    ).toEqual([
+      { itemId: 'scope', sequence: 1, sequenceIndex: undefined },
+      { itemId: 'priority', sequence: 1, sequenceIndex: 1 },
+      { itemId: 'deadline', sequence: 1, sequenceIndex: 2 }
+    ])
   })
 
   it('orders by sequence even when the observed timestamp runs backwards', () => {
@@ -129,9 +165,7 @@ describe('ordering', () => {
   })
 
   it('pins observedAt to creation so a revision cannot relocate the row', () => {
-    // Clients sort the timeline by observedAt. The provider echoing a send revises
-    // the submission row; if that advanced the timestamp the user's own bubble
-    // would sort below rows that landed while the turn was in flight.
+    // Provider echo revisions must not move optimistic sends below later timeline entries.
     const state = fold([
       { kind: 'item', itemId: 'send', revision: 0, body: userText('ok thanks'), ...base(1) },
       { kind: 'item', itemId: 'frame', revision: 1, body: text('warning'), ...base(2) },
@@ -140,7 +174,6 @@ describe('ordering', () => {
     const items = renderJournalState(state).items
     expect(items.map((item) => item.itemId)).toEqual(['send', 'frame'])
     expect(items.map((item) => item.observedAt)).toEqual([base(1).ts, base(2).ts])
-    // The revision still lands — only its ordering keys are ignored.
     expect(items[0]?.revision).toBe(1)
   })
 
@@ -207,9 +240,139 @@ describe('submission and dispatch state machine', () => {
     const items = renderJournalState(state).items
     expect(items).toHaveLength(1)
     expect(items[0]?.itemId).toBe(agentJournalSubmissionKey('cm_1'))
-    // The echo advances the revision; the submitted bubble keeps its original slot.
     expect(items[0]?.sequence).toBe(1)
     expect(items[0]?.revision).toBe(1)
+  })
+
+  it('durably accepts a pending submission from the provider echo row itself', () => {
+    const body = userText('hi')
+    const state = fold([
+      { ...submission, payloadFingerprint: sendFingerprint(body) },
+      {
+        kind: 'item',
+        itemId: 'claude:session-1:user-1',
+        revision: 1,
+        body,
+        ...base(2)
+      }
+    ])
+
+    expect(state.submissions.get('cm_1')).toMatchObject({
+      dispatchState: 'accepted',
+      providerItemId: 'claude:session-1:user-1',
+      resolvedAt: 1_002
+    })
+    expect(state.receipts.get('cm_1')).toMatchObject({
+      providerItemId: 'claude:session-1:user-1',
+      cursor: { epoch: EPOCH, sequence: 2 }
+    })
+  })
+
+  it('does not give a newer identical echo to an older proven-undelivered submission', () => {
+    const body = userText('same message')
+    const state = fold([
+      {
+        ...submission,
+        body,
+        payloadFingerprint: sendFingerprint(body)
+      },
+      {
+        kind: 'dispatch',
+        clientMessageId: 'cm_1',
+        state: 'rejected',
+        providerItemId: null,
+        reason: 'provider_write_failed: closed before enqueue',
+        ...base(2)
+      },
+      {
+        ...submission,
+        clientMessageId: 'cm_2',
+        body,
+        payloadFingerprint: sendFingerprint(body),
+        ...base(3)
+      },
+      {
+        kind: 'item',
+        itemId: 'claude:session-1:user-1',
+        revision: 1,
+        body,
+        ...base(4)
+      }
+    ])
+
+    expect(state.submissions.get('cm_1')?.dispatchState).toBe('rejected')
+    expect(state.submissions.get('cm_2')).toMatchObject({
+      dispatchState: 'accepted',
+      providerItemId: 'claude:session-1:user-1'
+    })
+    expect(state.receipts.has('cm_1')).toBe(false)
+    expect(state.receipts.get('cm_2')?.providerItemId).toBe('claude:session-1:user-1')
+  })
+
+  it('does not give a newer identical echo to a legacy unknown write failure', () => {
+    const body = userText('same message')
+    const state = fold([
+      { ...submission, body, payloadFingerprint: sendFingerprint(body) },
+      {
+        kind: 'dispatch',
+        clientMessageId: 'cm_1',
+        state: 'unknown',
+        providerItemId: null,
+        reason: 'provider_write_failed: closed before enqueue',
+        ...base(2)
+      },
+      {
+        ...submission,
+        clientMessageId: 'cm_2',
+        body,
+        payloadFingerprint: sendFingerprint(body),
+        ...base(3)
+      },
+      { kind: 'item', itemId: 'claude:session-1:user-1', revision: 1, body, ...base(4) }
+    ])
+
+    // Legacy unknown transport failures prove non-delivery and cannot claim later genuine resend echoes.
+    expect(state.submissions.get('cm_1')?.dispatchState).toBe('unknown')
+    expect(state.submissions.get('cm_2')).toMatchObject({
+      dispatchState: 'accepted',
+      providerItemId: 'claude:session-1:user-1'
+    })
+    expect(state.receipts.has('cm_1')).toBe(false)
+  })
+
+  it('does not accept a submission from a stale provider item behind its tombstone', () => {
+    const body = userText('hi')
+    const providerItemId = 'claude:session-1:user-1'
+    const state = fold([
+      { ...submission, payloadFingerprint: sendFingerprint(body) },
+      { kind: 'tombstone', itemId: providerItemId, revision: 2, ...base(2) },
+      { kind: 'item', itemId: providerItemId, revision: 1, body, ...base(3) }
+    ])
+
+    expect(state.submissions.get('cm_1')?.dispatchState).toBe('pending')
+    expect(state.receipts.has('cm_1')).toBe(false)
+    expect(state.aliases.has(providerItemId)).toBe(false)
+  })
+
+  it('does not accept a submission from a stale lifecycle item behind its tombstone', () => {
+    const body = userText('hi')
+    const providerItemId = 'claude:session-1:user-1'
+    const state = fold([
+      { ...submission, payloadFingerprint: sendFingerprint(body) },
+      {
+        kind: 'lifecycle-batch',
+        settlementId: 'settlement-1',
+        mutations: [
+          { kind: 'tombstone', itemId: providerItemId, revision: 2 },
+          { kind: 'item', itemId: providerItemId, revision: 1, body }
+        ],
+        ...base(2)
+      }
+    ])
+
+    expect(state.submissions.get('cm_1')?.dispatchState).toBe('pending')
+    expect(state.receipts.has('cm_1')).toBe(false)
+    expect(state.aliases.has(providerItemId)).toBe(false)
   })
 
   it.each(['codex:thread-1:turn-1:0', 'claude:session-1:user-1'])(
@@ -277,6 +440,34 @@ describe('submission and dispatch state machine', () => {
 
     expect(renderJournalState(state).items).toMatchObject([
       { itemId: agentJournalSubmissionKey('early-client'), revision: 1, sequence: 1 }
+    ])
+  })
+
+  it("folds the echo of another agent's message into its bubble, which keeps the sender", () => {
+    const echoed = userText('You have 1 orchestration message.')
+    const from = {
+      kind: 'agent' as const,
+      senders: [
+        {
+          party: { address: 'term_a', terminalHandle: 'term_a', orcaSessionId: null },
+          name: 'Coder'
+        }
+      ],
+      orchestration: null
+    }
+    const state = fold([
+      {
+        kind: 'submission',
+        clientMessageId: 'agent-send',
+        payloadFingerprint: agentSessionSendBodyFingerprint('session-1', { ...echoed, from }),
+        providerHandle: { kind: 'codex', threadId: 'thread-1' },
+        body: { ...echoed, from },
+        ...base(1)
+      },
+      { kind: 'item', itemId: 'codex:thread-1:turn-1:0', revision: 1, body: echoed, ...base(2) }
+    ])
+    expect(renderJournalState(state).items).toMatchObject([
+      { itemId: agentJournalSubmissionKey('agent-send'), body: { from } }
     ])
   })
 
@@ -380,6 +571,36 @@ describe('submission and dispatch state machine', () => {
     expect(state.receipts.get('cm_1')).toBeTruthy()
   })
 
+  it('keeps a refused write rejected, at its rejection, whatever comes after', () => {
+    const state = fold([
+      submission,
+      {
+        kind: 'dispatch',
+        clientMessageId: 'cm_1',
+        state: 'rejected',
+        providerItemId: null,
+        reason: 'provider_write_failed: closed before enqueue',
+        ...base(2)
+      },
+      {
+        kind: 'dispatch',
+        clientMessageId: 'cm_1',
+        state: 'pending',
+        providerItemId: null,
+        reason: null,
+        ...base(3)
+      }
+    ])
+
+    // Rejected IDs stay spent; user Retry must create a new message ID.
+    expect(state.submissions.get('cm_1')).toMatchObject({
+      dispatchState: 'rejected',
+      submittedAt: submission.ts,
+      reason: 'provider_write_failed: closed before enqueue'
+    })
+    expect(renderJournalState(state).items[0]?.sequence).toBe(2)
+  })
+
   it('ignores a dispatch for a submission this epoch never saw', () => {
     const state = fold([
       {
@@ -415,8 +636,6 @@ describe('lifecycle settlement deduplication', () => {
 
 describe('malformed persisted item keys', () => {
   it('degrades a malformed-percent item id to an opaque key instead of throwing', () => {
-    // A user-message body drives identity resolution through the key parser;
-    // pre-fix `parseAgentJournalItemKey('%')` threw `URIError: URI malformed`.
     const state = fold([
       { kind: 'item', itemId: '%', revision: 1, body: userText('hi'), ...base(1) }
     ])
@@ -442,5 +661,77 @@ describe('bounded item-key collisions', () => {
       oversizedKey,
       mimicKey
     ])
+  })
+})
+
+describe('re-adding a tombstoned row', () => {
+  it('builds the rebuilt row above the tombstone that removed it', () => {
+    const identity: AgentJournalItemIdentity = { provider: 'orca', clientMessageId: 'roster' }
+    const itemId = agentJournalItemKey(identity)
+    const state = createJournalReducerState('session-1', EPOCH)
+    applyJournalRow(
+      state,
+      buildJournalItemRow({
+        state,
+        identity,
+        body: text('first'),
+        seq: 1,
+        fence: 1,
+        ts: 1_001,
+        turnScope: AGENT_JOURNAL_THREAD_SCOPE
+      })
+    )
+    applyJournalRow(state, buildJournalTombstoneRow({ state, itemId, seq: 2, fence: 1, ts: 1_002 }))
+    expect(renderJournalState(state).items).toEqual([])
+
+    // Recreated items must outrank retained tombstones instead of restarting revision at 1.
+    applyJournalRow(
+      state,
+      buildJournalItemRow({
+        state,
+        identity,
+        body: text('second'),
+        seq: 3,
+        fence: 1,
+        ts: 1_003,
+        turnScope: AGENT_JOURNAL_THREAD_SCOPE
+      })
+    )
+    expect(renderJournalState(state).items.map((item) => item.body)).toEqual([text('second')])
+  })
+
+  it('removes the row again after it was re-added', () => {
+    const identity: AgentJournalItemIdentity = { provider: 'orca', clientMessageId: 'roster' }
+    const itemId = agentJournalItemKey(identity)
+    const state = createJournalReducerState('session-1', EPOCH)
+    applyJournalRow(
+      state,
+      buildJournalItemRow({
+        state,
+        identity,
+        body: text('first'),
+        seq: 1,
+        fence: 1,
+        ts: 1_001,
+        turnScope: AGENT_JOURNAL_THREAD_SCOPE
+      })
+    )
+    applyJournalRow(state, buildJournalTombstoneRow({ state, itemId, seq: 2, fence: 1, ts: 1_002 }))
+    applyJournalRow(
+      state,
+      buildJournalItemRow({
+        state,
+        identity,
+        body: text('second'),
+        seq: 3,
+        fence: 1,
+        ts: 1_003,
+        turnScope: AGENT_JOURNAL_THREAD_SCOPE
+      })
+    )
+    expect(state.tombstones.get(itemId)).toBeUndefined()
+
+    applyJournalRow(state, buildJournalTombstoneRow({ state, itemId, seq: 4, fence: 1, ts: 1_004 }))
+    expect(renderJournalState(state).items).toEqual([])
   })
 })

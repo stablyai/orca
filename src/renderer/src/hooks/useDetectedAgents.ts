@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useRef } from 'react'
 import { useAppStore } from '@/store'
+import { runtimeHostContactForEntry } from '../../../shared/runtime-host-contact'
 import type { TuiAgent } from '../../../shared/tui-agent'
+import { getRuntimeAgentInventoryKey } from '@/store/slices/runtime-agent-inventory-key'
 
 export type UseDetectedAgentsResult = {
   /** Null while detection is in flight on first load. */
@@ -9,17 +11,17 @@ export type UseDetectedAgentsResult = {
   /** True when the first probe for this mounted remote target finished without a result. */
   detectionFailed: boolean
   isRefreshing: boolean
-  /** Forces a re-detect on the target host (`preflight.refreshAgents` for
-   *  local/runtime targets, a fresh probe for SSH) and updates every
-   *  subscribed surface in the same tick. Idempotent while in flight:
-   *  concurrent callers receive the same pending promise. */
+  /** True when the runtime host is too old to list this workspace's agents. */
+  needsServerUpdate: boolean
+  /** Refresh the list’s owner host and publish to all surfaces; concurrent refreshes share the pending promise. */
   refresh: () => Promise<TuiAgent[]>
 }
 
 export type AgentDetectionTarget =
   | { kind: 'local'; worktreeId?: string | null; contextKey?: string }
   | { kind: 'ssh'; connectionId: string }
-  | { kind: 'runtime'; environmentId: string }
+  // worktreeId: the host resolves that workspace's runtime; absent means the host default.
+  | { kind: 'runtime'; environmentId: string; worktreeId?: string | null }
 
 function normalizeAgentDetectionTarget(
   target: AgentDetectionTarget | string | null | undefined
@@ -36,27 +38,13 @@ function normalizeAgentDetectionTarget(
   return target
 }
 
-/**
- * Single source of truth for detected agent IDs across the renderer.
- *
- * Why: previously AgentsPane, NewWorkspaceComposerCard, and
- * `detect-agents-cached.ts` each ran their own detection. A tab-bar button
- * that doesn't refresh when Settings → Agents refreshes would feel broken;
- * centralizing the state eliminates multi-owner drift.
- *
- * @param connectionId — Pass a string for legacy SSH callers, or an
- * AgentDetectionTarget for local/SSH/runtime hosts. Pass null for local
- * detection. Pass undefined when the connection context is not yet known
- * (store not hydrated) — returns loading state.
- */
+/** One detected-agent inventory keeps launch surfaces synchronized. Accept legacy SSH IDs or host targets; null means local, undefined means unresolved/loading. */
 export function useDetectedAgents(
   connectionId: AgentDetectionTarget | string | null | undefined
 ): UseDetectedAgentsResult {
   const target = normalizeAgentDetectionTarget(connectionId)
   const observedRemoteTargetKeysRef = useRef<Set<string>>(new Set())
-  // Why: undefined means "store not yet hydrated" — we don't know if the
-  // worktree is local or remote yet. This prevents flashing local agents for
-  // remote worktrees during hydration.
+  // Undefined ownership stays loading so remote hydration cannot flash local agents.
   const isUnknown = target === undefined
   const targetKind = target?.kind
   const targetId =
@@ -66,13 +54,42 @@ export function useDetectedAgents(
         ? target.environmentId
         : null
   const localWorktreeId = target?.kind === 'local' ? target.worktreeId : undefined
+  const runtimeWorktreeId = target?.kind === 'runtime' ? target.worktreeId : undefined
+  // Records for a runtime host are per workspace; ssh/local records keep their own keys.
+  const recordKey =
+    targetKind === 'runtime' && targetId
+      ? getRuntimeAgentInventoryKey(targetId, runtimeWorktreeId)
+      : targetId
   const localContextKey = target?.kind === 'local' ? target.contextKey : undefined
   const remoteTargetKey =
     targetKind === 'ssh' && targetId
       ? `ssh:${targetId}`
-      : targetKind === 'runtime' && targetId
-        ? `runtime:${targetId}`
+      : targetKind === 'runtime' && recordKey
+        ? `runtime:${recordKey}`
         : null
+  // Why: a re-pair clears the record; re-running the effect re-probes for a surface still waiting.
+  const pairingRevision = useAppStore((s) => {
+    if (targetKind !== 'runtime' || !targetId) {
+      return undefined
+    }
+    const environment = s.runtimeEnvironments.find((entry) => entry.id === targetId)
+    return environment ? (environment.pairingRevision ?? environment.createdAt) : undefined
+  })
+
+  // Why: a probe that failed while the host was down must re-run once contact returns, and only then.
+  // 'down' only when the host's status says so; a never-asked host is still probed as before.
+  const runtimeContactEpoch = useAppStore((s) => {
+    if (targetKind !== 'runtime' || !targetId) {
+      return null
+    }
+    const entry = s.runtimeStatusByEnvironmentId.get(targetId)
+    if (!entry) {
+      return null
+    }
+    return runtimeHostContactForEntry(entry).verdict === 'live'
+      ? `${entry.connectionGeneration ?? 0}:${entry.hostContactEpoch ?? 0}`
+      : 'down'
+  })
 
   const detectedIds = useAppStore((s) => {
     if (isUnknown) {
@@ -81,8 +98,8 @@ export function useDetectedAgents(
     if (targetKind === 'ssh' && targetId) {
       return s.remoteDetectedAgentIds[targetId] ?? null
     }
-    if (targetKind === 'runtime' && targetId) {
-      return s.runtimeDetectedAgentIds[targetId] ?? null
+    if (targetKind === 'runtime' && recordKey) {
+      return s.runtimeDetectedAgentIds[recordKey] ?? null
     }
     return localContextKey
       ? (s.localDetectedAgentIdsByContext[localContextKey] ?? null)
@@ -95,16 +112,16 @@ export function useDetectedAgents(
     if (targetKind === 'ssh' && targetId) {
       return s.isDetectingRemoteAgents[targetId] ?? false
     }
-    if (targetKind === 'runtime' && targetId) {
-      return s.isDetectingRuntimeAgents[targetId] ?? false
+    if (targetKind === 'runtime' && recordKey) {
+      return s.isDetectingRuntimeAgents[recordKey] ?? false
     }
     return localContextKey
       ? (s.isDetectingLocalAgentsByContext[localContextKey] ?? false)
       : s.isDetectingAgents
   })
   const isRefreshing = useAppStore((s) => {
-    if (targetKind === 'runtime' && targetId) {
-      return s.isRefreshingRuntimeAgents[targetId] ?? false
+    if (targetKind === 'runtime' && recordKey) {
+      return s.isRefreshingRuntimeAgents[recordKey] ?? false
     }
     if (targetKind === 'ssh' && targetId) {
       return s.isDetectingRemoteAgents[targetId] ?? false
@@ -116,29 +133,33 @@ export function useDetectedAgents(
       ? (s.isRefreshingLocalAgentsByContext[localContextKey] ?? false)
       : s.isRefreshingAgents
   })
+  const needsServerUpdate = useAppStore((s) =>
+    targetKind === 'runtime' && recordKey
+      ? s.runtimeAgentDetectionNeedsServerUpdate[recordKey] === true
+      : false
+  )
   const detectionFailed =
     detectedIds === null &&
     !isLoading &&
     !isRefreshing &&
     remoteTargetKey !== null &&
     observedRemoteTargetKeysRef.current.has(remoteTargetKey)
-  // Why: refresh must hit the same host the list came from — refreshing the
-  // local PATH while showing a remote server's agents is a silent no-op.
+  const localProbePending = targetKind === 'local' && (isLoading || isRefreshing)
+  // Refresh the inventory’s host; refreshing local PATH while showing remote agents would silently do nothing.
   const refresh = useCallback((): Promise<TuiAgent[]> => {
     if (isUnknown) {
       return Promise.resolve([])
     }
-    // Why: retained tab bars stay mounted; imperative action reads avoid six
-    // no-op Zustand subscriptions per hook during unrelated store churn.
+    // Imperative action reads avoid six inert subscriptions per retained tab bar.
     const state = useAppStore.getState()
     if (targetKind === 'runtime' && targetId) {
-      return state.refreshRuntimeDetectedAgents(targetId)
+      return state.refreshRuntimeDetectedAgents(targetId, runtimeWorktreeId)
     }
     if (targetKind === 'ssh' && targetId) {
       return state.refreshRemoteDetectedAgents(targetId)
     }
     return state.refreshDetectedAgents(localWorktreeId)
-  }, [isUnknown, localWorktreeId, targetKind, targetId])
+  }, [isUnknown, localWorktreeId, runtimeWorktreeId, targetKind, targetId])
 
   useEffect(() => {
     if (isUnknown) {
@@ -146,8 +167,7 @@ export function useDetectedAgents(
     }
     const isNewRemoteTarget =
       remoteTargetKey !== null && !observedRemoteTargetKeysRef.current.has(remoteTargetKey)
-    // Why: switching A → B → A is still one mounted surface; remember every
-    // target so empty hosts don't respawn all detection subprocesses on each switch.
+    // Remember every target seen by this mount so A → B → A does not repeatedly spawn probes for empty hosts.
     if (remoteTargetKey !== null) {
       observedRemoteTargetKeysRef.current.add(remoteTargetKey)
     }
@@ -155,21 +175,31 @@ export function useDetectedAgents(
     if (targetKind === 'ssh' && targetId) {
       if (detectedIds === null) {
         void state.ensureRemoteDetectedAgents(targetId)
-      } else if (detectedIds.length === 0 && isNewRemoteTarget) {
-        // Why: a newly opened remote launch surface should get one fresh probe
-        // after a prior empty result, but must not spin while the host has no agents.
+      } else if (isNewRemoteTarget && detectedIds.length > 0) {
+        // Refresh once when a new launch surface observes a host; cached inventory may predate installs.
+        void state.refreshRemoteDetectedAgents(targetId)
+      } else if (isNewRemoteTarget) {
+        // Empty results are intentionally retryable through the normal probe.
         void state.ensureRemoteDetectedAgents(targetId)
       }
     } else if (targetKind === 'runtime' && targetId) {
+      const failedWhileOffline =
+        runtimeContactEpoch === 'down' &&
+        recordKey !== null &&
+        state.runtimeAgentInventoryOutcome(recordKey) === 'failed'
       if (detectedIds === null) {
-        void state.ensureRuntimeDetectedAgents(targetId)
-      } else if (detectedIds.length === 0 && isNewRemoteTarget) {
-        // Why: remote `orca serve` users can install/fix PATH without reconnecting;
-        // retry once per mounted surface so the menu can pick that up.
-        void state.ensureRuntimeDetectedAgents(targetId)
+        if (!failedWhileOffline) {
+          void state.ensureRuntimeDetectedAgents(targetId, runtimeWorktreeId)
+        }
+      } else if (isNewRemoteTarget && detectedIds.length > 0) {
+        // Refresh once when a new launch surface observes a host; cached inventory may predate installs.
+        void state.refreshRuntimeDetectedAgents(targetId, runtimeWorktreeId)
+      } else if (isNewRemoteTarget) {
+        // Empty results are intentionally retryable through the normal probe.
+        void state.ensureRuntimeDetectedAgents(targetId, runtimeWorktreeId)
       }
     } else {
-      if (detectedIds === null) {
+      if (detectedIds === null && !localProbePending) {
         void state.ensureDetectedAgents(localWorktreeId)
       }
     }
@@ -178,10 +208,15 @@ export function useDetectedAgents(
     targetKind,
     targetId,
     remoteTargetKey,
+    recordKey,
+    pairingRevision,
+    runtimeContactEpoch,
     detectedIds,
+    localProbePending,
     localWorktreeId,
+    runtimeWorktreeId,
     localContextKey
   ])
 
-  return { detectedIds, isLoading, detectionFailed, isRefreshing, refresh }
+  return { detectedIds, isLoading, detectionFailed, isRefreshing, needsServerUpdate, refresh }
 }

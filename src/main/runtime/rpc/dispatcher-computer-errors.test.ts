@@ -1,3 +1,4 @@
+import './unused-default-rpc-methods.test-fixture'
 import { describe, expect, it, vi } from 'vitest'
 import { z } from 'zod'
 import { RpcDispatcher } from './dispatcher'
@@ -17,22 +18,26 @@ function makeRuntime(): OrcaRuntimeService {
 const METHODS = [
   defineMethod({
     name: 'computer.click',
+    permission: 'desktop-control',
     params: z.object({ app: z.string().min(1, 'Missing app') }),
     handler: () => ({ ok: true })
   }),
   defineMethod({
     name: 'browser.click',
+    permission: 'workspace',
     params: z.object({ page: z.string().min(1, 'Missing page') }),
     handler: () => ({ ok: true })
   }),
   defineMethod({
     name: 'orchestration.throwZod',
+    permission: 'workspace',
     params: z.object({}),
     handler: () =>
       z.object({ title: z.string().min(1, 'Handler title missing') }).parse({ title: '' })
   }),
   defineMethod({
     name: 'orchestration.invalidArgument',
+    permission: 'workspace',
     params: z.object({}),
     handler: () => {
       throw new InvalidArgumentError('Async validation rejected payload')
@@ -40,6 +45,7 @@ const METHODS = [
   }),
   defineMethod({
     name: 'orchestration.inspectCaller',
+    permission: 'workspace',
     params: z.object({}),
     handler: (_params, { authenticatedCallerFingerprint }) => ({
       authenticatedCallerFingerprint
@@ -47,6 +53,7 @@ const METHODS = [
   }),
   defineMethod({
     name: 'orchestration.federationInspectCaller',
+    permission: 'workspace',
     params: z.object({}),
     handler: (_params, { authenticatedCallerFingerprint }) => ({
       authenticatedCallerFingerprint

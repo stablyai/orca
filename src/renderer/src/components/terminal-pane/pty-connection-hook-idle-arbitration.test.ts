@@ -85,7 +85,7 @@ vi.mock('@/lib/codex-stale-pane-sweep', () => ({
   notifyCodexPaneBoundForStaleSweep
 }))
 
-// Why: the working→idle test invokes the real useNotificationDispatch hook outside React, so useCallback must pass through (safe suite-wide: no test here renders React).
+// Pass useCallback through because this suite invokes notification hooks without rendering React.
 vi.mock('react', async (importOriginal) => {
   const actual = await importOriginal<typeof React>()
   return {
@@ -118,7 +118,7 @@ vi.mock('./remote-runtime-pty-transport', () => ({
   )
 }))
 
-// Why: stub only getEagerPtyBufferHandle so tests can simulate a live eager buffer (adopt path) without standing up the real IPC dispatcher.
+// Stub eager-buffer lookup to exercise live adoption without the IPC dispatcher.
 vi.mock('./pty-dispatcher', async (importOriginal) => {
   const actual = await importOriginal<Record<string, unknown>>()
   return {
@@ -134,14 +134,14 @@ function createDeps(overrides: Record<string, unknown> = {}) {
 // Why: activeRuntimeEnvironmentId exercises the remote-runtime path where the renderer still owns OSC 9999 status.
 
 describe('connectPanePty', () => {
-  beforeEach(() => {
+  beforeEach(async () => {
     vi.resetModules()
     vi.clearAllMocks()
     transportFactoryQueue = []
     createdTransportOptions = []
     storeSubscribers = []
     mockStoreState = createInitialStoreState(() => mockStoreState)
-    installTerminalTestGlobals()
+    await installTerminalTestGlobals()
   })
 
   afterEach(async () => {
@@ -156,7 +156,7 @@ describe('connectPanePty', () => {
     const transport = createMockTransport()
     transportFactoryQueue.push(transport)
 
-    // Why: invoke useNotificationDispatch's body directly (useCallback is pure memo); relies on the file-level vi.mock('react') useCallback pass-through.
+    // Invoke notification dispatch directly through the mocked useCallback; no React mount is needed.
     const realDispatchNotification = useNotificationDispatch('wt-1')
     const dispatchNotification = vi.fn((event) => realDispatchNotification(event))
     const paneKey = makePaneKey('tab-1', LEAF_1)
@@ -165,7 +165,7 @@ describe('connectPanePty', () => {
       prompt: 'Fix notification payloads',
       updatedAt: Date.now(),
       stateStartedAt: Date.now(),
-      // Why: snapshot agent must match the live completion title ('* Claude done') to be reused; a mismatch is dropped as stale — see use-notification-dispatch.test.ts.
+      // Snapshot identity must match the live completion title or notification dispatch treats it as stale.
       agentType: 'claude',
       paneKey,
       terminalTitle: '* Claude done',
@@ -197,8 +197,7 @@ describe('connectPanePty', () => {
     vi.useFakeTimers()
     idleHandler('* Claude done')
 
-    expect(mockStoreState.markWorktreeUnread).not.toHaveBeenCalled()
-    expect(mockStoreState.markTerminalTabUnread).not.toHaveBeenCalled()
+    expect(mockStoreState.markAgentAttentionUnread).not.toHaveBeenCalled()
     expect(dispatchNotification).not.toHaveBeenCalled()
 
     vi.advanceTimersByTime(AGENT_TASK_COMPLETE_NOTIFICATION_MAX_WAIT_MS)
@@ -207,18 +206,21 @@ describe('connectPanePty', () => {
     expect(dispatchNotification).toHaveBeenCalledWith({
       source: 'agent-task-complete',
       terminalTitle: '* Claude done',
+      ptyId: 'tab-pty',
       paneKey
     })
-    expect(mockStoreState.markWorktreeUnread).toHaveBeenCalledWith('wt-1')
-    expect(mockStoreState.markTerminalTabUnread).toHaveBeenCalledWith('tab-1')
-    expect(mockStoreState.markTerminalPaneUnread).toHaveBeenCalledWith(paneKey)
+    expect(mockStoreState.markAgentAttentionUnread).toHaveBeenCalledWith({
+      workspaceId: 'wt-1',
+      subjectKey: paneKey,
+      groupId: 'tab-1',
+      reason: 'agent-completion'
+    })
     expect(window.api.notifications.dispatch).toHaveBeenCalledWith(
       expect.objectContaining({
         source: 'agent-task-complete',
         worktreeId: 'wt-1',
         repoLabel: 'orca',
         worktreeLabel: 'feat/notis',
-        hasMultipleActiveRepos: true,
         terminalTitle: '* Claude done',
         agentType: 'claude',
         agentState: 'done',
@@ -226,7 +228,7 @@ describe('connectPanePty', () => {
         agentToolName: 'Edit',
         agentToolInput: 'src/main/ipc/notifications.ts',
         agentLastAssistantMessage: 'Implemented the formatter.',
-        agentInterrupted: false
+        agentTurnOutcome: undefined
       })
     )
   })
@@ -304,6 +306,7 @@ describe('connectPanePty', () => {
     expect(deps.dispatchNotification).toHaveBeenCalledWith({
       source: 'agent-task-complete',
       terminalTitle: '* Claude cross-agent done',
+      ptyId: 'tab-pty',
       paneKey
     })
     expect(pane.terminal.write).toHaveBeenCalledWith(

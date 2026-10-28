@@ -3,7 +3,11 @@ import type { AgentStatusEntry } from '../../../../shared/agent-status-types'
 import { makePaneKey } from '../../../../shared/stable-pane-id'
 import type { TerminalTab } from '../../../../shared/terminal-tab-types'
 import type { Worktree } from '../../../../shared/worktree/types'
-import { buildDashboardSnapshot, type DashboardSnapshotState } from './build-dashboard-snapshot'
+import type { RetainedAgentEntry } from '@/store/slices/agent-status/agent-status-contract'
+import {
+  buildDashboardSnapshot,
+  type DashboardSnapshotInput as DashboardSnapshotState
+} from './build-dashboard-snapshot'
 import { createWorktreeAgentRowsCache } from './worktree-agent-rows-cache'
 
 const NOW = 1_000_000_000
@@ -63,6 +67,7 @@ function entry(paneKey: string, tabId: string, worktreeId: string): AgentStatusE
 
 function baseState(): DashboardSnapshotState {
   return {
+    chatNames: new Map(),
     repos: [{ id: 'r1', path: '/r1', displayName: 'Repo One', badgeColor: '#000', addedAt: 1 }],
     worktreesByRepo: { r1: [worktree('w1'), worktree('w2')] },
     tabsByWorktree: { w1: [tab('tab1', 'w1')], w2: [tab('tab2', 'w2')] },
@@ -114,6 +119,30 @@ describe('buildDashboardSnapshot rows cache', () => {
     expect(cached).toEqual(buildDashboardSnapshot(titleWrite, NOW + 500))
   })
 
+  it('recomputes only the worktree whose pane foreground process changed', () => {
+    const cache = createWorktreeAgentRowsCache()
+    const state: DashboardSnapshotState = {
+      ...baseState(),
+      agentStatusByPaneKey: { [PANE_1]: entry(PANE_1, 'tab1', 'w1') },
+      runtimePaneTitlesByTabId: { tab1: { 0: 'shell' }, tab2: { 0: 'demo-repo' } }
+    }
+    buildDashboardSnapshot(state, NOW, { rowsCache: cache, rowsGeneration: 1 })
+
+    const codexStarted: DashboardSnapshotState = {
+      ...state,
+      paneForegroundAgentByPaneKey: {
+        [PANE_2]: { agent: 'codex', agentEvidence: 'process-read', shellForeground: false }
+      }
+    }
+    const cached = buildDashboardSnapshot(codexStarted, NOW + 500, {
+      rowsCache: cache,
+      rowsGeneration: 1
+    })
+    expect(cache.lastComputedWorktreeIds).toEqual(['w2'])
+    expect(cached.cards.find((card) => card.paneKey === PANE_2)?.agentType).toBe('codex')
+    expect(cached).toEqual(buildDashboardSnapshot(codexStarted, NOW + 500))
+  })
+
   it('keeps card-level fields fresh (acks, workspace statuses) without recomputing rows', () => {
     const cache = createWorktreeAgentRowsCache()
     const state = baseState()
@@ -125,8 +154,7 @@ describe('buildDashboardSnapshot rows cache', () => {
       acknowledgedAgentsByPaneKey: { [PANE_1]: NOW }
     }
     const after = buildDashboardSnapshot(acked, NOW + 500, { rowsCache: cache, rowsGeneration: 1 })
-    // Why asserted: acks and statuses are card-assembly inputs the rows cache deliberately
-    // does not key — they must still flow into every rebuild.
+    // Acknowledgments/status affect fresh card assembly even when the row cache hits.
     expect(cache.lastComputedWorktreeIds).toEqual([])
     expect(after.cards.find((card) => card.paneKey === PANE_1)?.unseen).toBe(false)
     expect(after).toEqual(buildDashboardSnapshot(acked, NOW + 500))
@@ -138,5 +166,53 @@ describe('buildDashboardSnapshot rows cache', () => {
     buildDashboardSnapshot(state, NOW, { rowsCache: cache, rowsGeneration: 1 })
     buildDashboardSnapshot(state, NOW + 60_000, { rowsCache: cache, rowsGeneration: 2 })
     expect(cache.lastComputedWorktreeIds.sort()).toEqual(['w1', 'w2'])
+  })
+
+  it('refreshes a retained row from a provider title published to its current tab', () => {
+    const cache = createWorktreeAgentRowsCache()
+    const retainedTab = { ...tab('tab1', 'w1'), title: 'Claude ready' }
+    const retained: RetainedAgentEntry = {
+      entry: {
+        ...entry(PANE_1, 'tab1', 'w1'),
+        providerSession: { key: 'session_id', id: 'session-a' }
+      },
+      worktreeId: 'w1',
+      tab: retainedTab,
+      agentType: 'claude',
+      startedAt: NOW - 10_000
+    }
+    const initial: DashboardSnapshotState = {
+      ...baseState(),
+      tabsByWorktree: { w1: [retainedTab], w2: [tab('tab2', 'w2')] },
+      agentStatusByPaneKey: { [PANE_2]: entry(PANE_2, 'tab2', 'w2') },
+      retainedAgentsByPaneKey: { [PANE_1]: retained }
+    }
+    expect(
+      buildDashboardSnapshot(initial, NOW, { rowsCache: cache, rowsGeneration: 1 }).cards.find(
+        (card) => card.paneKey === PANE_1
+      )?.conversationName
+    ).toBeUndefined()
+
+    const titled: DashboardSnapshotState = {
+      ...initial,
+      tabsByWorktree: {
+        ...initial.tabsByWorktree,
+        w1: [
+          {
+            ...retainedTab,
+            aiVaultTitle: { agent: 'claude', sessionId: 'session-a', title: 'Provider title' }
+          }
+        ]
+      }
+    }
+    const refreshed = buildDashboardSnapshot(titled, NOW, {
+      rowsCache: cache,
+      rowsGeneration: 1
+    })
+
+    expect(cache.lastComputedWorktreeIds).toEqual(['w1'])
+    expect(refreshed.cards.find((card) => card.paneKey === PANE_1)?.conversationName).toBe(
+      'Provider title'
+    )
   })
 })

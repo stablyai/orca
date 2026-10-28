@@ -1,0 +1,15 @@
+{
+  "id": "evt_0cc73181e001bHisuGqUktfd0F",
+  "created": 1790136490014,
+  "type": "form.replied",
+  "location": {
+    "directory": "/private/tmp/oc2-evidence"
+  },
+  "data": {
+    "id": "frm_0cc7238ae001iZeN97tf8v3xTs",
+    "sessionID": "ses_f33905de7ffeBFKvVC2HupLfJq",
+    "answer": {
+      "q0": "Red"
+    }
+  }
+}

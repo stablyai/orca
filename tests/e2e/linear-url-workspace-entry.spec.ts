@@ -3,6 +3,7 @@ import type { ElectronApplication, Page } from '@stablyai/playwright-test'
 import { test, expect } from './helpers/orca-app'
 import { waitForActiveWorktree, waitForSessionReady } from './helpers/store'
 import type { LinearIssue } from '../../src/shared/linear/issue-types'
+import type { LinearConnectionStatus } from '../../src/shared/linear/workspace-types'
 
 const LINEAR_URL =
   'https://linear.app/stably/issue/STA-4084/restore-osc-133-shell-integration-when-an-exec-in-user-rc-files-strips'
@@ -25,6 +26,39 @@ const LINEAR_ISSUE: LinearIssue = {
   updatedAt: '2026-08-12T00:00:00.000Z'
 }
 
+const LINEAR_STATUS: LinearConnectionStatus = {
+  connected: true,
+  viewer: null,
+  activeWorkspaceId: 'workspace-other',
+  selectedWorkspaceId: 'workspace-other',
+  workspaces: [
+    {
+      id: 'workspace-other',
+      displayName: 'Other User',
+      email: null,
+      organizationId: 'organization-other',
+      organizationName: 'Other',
+      organizationUrlKey: 'other'
+    },
+    {
+      id: 'workspace-1',
+      displayName: 'Stably User',
+      email: null,
+      organizationId: 'organization-stably',
+      organizationName: 'Stably',
+      organizationUrlKey: 'stably'
+    }
+  ]
+}
+
+declare global {
+  // oxlint-disable-next-line typescript-eslint/consistent-type-definitions -- declaration merging requires interface
+  interface Window {
+    // Set by the fixture below while a Linear lookup is deliberately held open.
+    __orcaTestReleaseLinearLookup?: () => void
+  }
+}
+
 function pasteChord(): string {
   return process.platform === 'darwin' ? 'Meta+V' : 'Control+V'
 }
@@ -35,37 +69,14 @@ async function installLinearFixture(
   lookupDelayMs: number | null = 150
 ): Promise<void> {
   await page.evaluate(
-    ({ resolvedIssue, lookupDelayMs }) => {
+    ({ resolvedIssue, lookupDelayMs, status }) => {
       Reflect.deleteProperty(window, '__orcaTestReleaseLinearLookup')
       const store = window.__store
       if (!store) {
         throw new Error('window.__store is not available')
       }
       store.setState({
-        linearStatus: {
-          connected: true,
-          viewer: null,
-          activeWorkspaceId: 'workspace-other',
-          selectedWorkspaceId: 'workspace-other',
-          workspaces: [
-            {
-              id: 'workspace-other',
-              displayName: 'Other User',
-              email: null,
-              organizationId: 'organization-other',
-              organizationName: 'Other',
-              organizationUrlKey: 'other'
-            },
-            {
-              id: 'workspace-1',
-              displayName: 'Stably User',
-              email: null,
-              organizationId: 'organization-stably',
-              organizationName: 'Stably',
-              organizationUrlKey: 'stably'
-            }
-          ]
-        },
+        linearStatus: status,
         linearStatusChecked: true,
         checkLinearConnection: async () => {},
         searchLinearIssues: async () => [],
@@ -80,13 +91,13 @@ async function installLinearFixture(
         }
       })
     },
-    { resolvedIssue: issue, lookupDelayMs }
+    { resolvedIssue: issue, lookupDelayMs, status: LINEAR_STATUS }
   )
 }
 
 async function releaseHeldLinearLookup(page: Page): Promise<void> {
   await page.evaluate(() => {
-    const release = Reflect.get(window, '__orcaTestReleaseLinearLookup')
+    const release = window.__orcaTestReleaseLinearLookup
     if (typeof release !== 'function') {
       throw new Error('Linear lookup is not held')
     }
@@ -97,6 +108,10 @@ async function releaseHeldLinearLookup(page: Page): Promise<void> {
 
 async function pasteLinearUrl(page: Page, input: ReturnType<Page['locator']>): Promise<void> {
   await page.evaluate((text) => window.api.ui.writeClipboardText(text), LINEAR_URL)
+  // X selection ownership is async; pasting before it lands delivers stale text.
+  await expect
+    .poll(() => page.evaluate(() => window.api.ui.readClipboardText()), { timeout: 5_000 })
+    .toBe(LINEAR_URL)
   await input.focus()
   await page.keyboard.press(pasteChord())
 }
@@ -109,9 +124,14 @@ async function openJumpPalette(electronApp: ElectronApplication): Promise<void> 
 }
 
 test.describe('Linear URL workspace entry', () => {
-  test.beforeEach(async ({ orcaPage }) => {
+  test.beforeEach(async ({ electronApp, orcaPage }) => {
     await waitForSessionReady(orcaPage)
     await waitForActiveWorktree(orcaPage)
+    // Why: Create worktree reads Linear status from its repo's host, not the store.
+    await electronApp.evaluate(({ ipcMain }, status) => {
+      ipcMain.removeHandler('linear:status')
+      ipcMain.handle('linear:status', () => status)
+    }, LINEAR_STATUS)
     await installLinearFixture(orcaPage)
   })
 
@@ -127,9 +147,7 @@ test.describe('Linear URL workspace entry', () => {
     await pasteLinearUrl(orcaPage, input)
     await expect
       .poll(() =>
-        orcaPage.evaluate(
-          () => typeof Reflect.get(window, '__orcaTestReleaseLinearLookup') === 'function'
-        )
+        orcaPage.evaluate(() => typeof window.__orcaTestReleaseLinearLookup === 'function')
       )
       .toBe(true)
     await input.press('Enter')
@@ -200,7 +218,7 @@ test.describe('Linear URL workspace entry', () => {
     await openJumpPalette(electronApp)
     const palette = orcaPage.getByRole('dialog', { name: 'Jump to...' })
     const input = palette.getByPlaceholder(
-      'Search chats, terminals, worktrees, settings, and actions...'
+      'Search chats, terminals, workspaces, tasks, settings, and actions...'
     )
     await expect(input).toBeVisible()
 

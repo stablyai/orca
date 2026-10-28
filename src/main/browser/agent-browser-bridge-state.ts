@@ -10,24 +10,21 @@ import type {
 } from './agent-browser-bridge-types'
 
 export abstract class AgentBrowserBridgeState {
-  // Why: per-worktree active tab so one worktree's tab switch can't affect another's command targeting.
+  // Isolate each worktree's tab selection.
   protected readonly activeWebContentsPerWorktree = new Map<string, number>()
   protected activeWebContentsId: number | null = null
   protected readonly sessions = new Map<string, SessionState>()
   protected readonly commandQueues = new Map<string, QueuedCommand[]>()
   protected readonly processingQueues = new Set<string>()
-  // Why: screenshot prep mutates shared paintability across tabs; serialize globally so concurrent captures don't blank each other.
-  protected screenshotTurn: Promise<void> = Promise.resolve()
   protected readonly agentBrowserBin: string
   protected readonly agentBrowserEnv: NodeJS.ProcessEnv
   protected readonly ownsAgentBrowserSocketDirectory: boolean
-  // Why: null when nothing bounds the daemon, so the bridge never guesses that one was replaced.
+  // Null disables idle-replacement detection when daemon lifetime is unbounded.
   protected readonly agentBrowserIdleTimeoutMs: number | null
-  // Why: stash intercept patterns from a swap-destroyed session, keyed by name, so the next session restores them.
+  // Restore routes after a process swap destroys the session.
   protected readonly pendingInterceptRestore = new Map<string, string[]>()
-  // Why: promise-lock so two concurrent ensureSession calls don't both create the session entry.
   protected readonly pendingSessionCreation = new Map<string, Promise<void>>()
-  // Why: `agent-browser close` is async, keyed by session name — recreating before it finishes lets the old teardown close the new session.
+  // Await the old close before reusing its session name, or it can close the replacement.
   protected readonly pendingSessionDestruction = new Map<string, Promise<void>>()
   protected readonly cancelledProcesses = new WeakSet<ChildProcess>()
   protected shutdownStarted = false

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useEffectEvent, useMemo, useRef, useState } from 'react'
 import { AlertTriangle, ExternalLink, FolderPlus, GitBranchPlus, Star, X } from 'lucide-react'
 import { cn } from '../lib/utils'
 import { useAppStore } from '../store'
@@ -67,7 +67,7 @@ function GitHubStarButton({
     if (state !== 'not-starred') {
       return
     }
-    setState('starred') // optimistic
+    setState('starred')
     const ok = await window.api.gh.starOrca('landing')
     if (!ok) {
       if (mountedRef.current) {
@@ -75,13 +75,10 @@ function GitHubStarButton({
       }
       return
     }
-    // Why: starring from any entry point mutes the threshold-based nag.
-    // Without this the background notification could still fire on the next
-    // threshold crossing, which would feel like a bug to the user.
+    // Starring anywhere must complete the nag so later thresholds cannot prompt again.
     await window.api.starNag.complete()
   }
 
-  // Hide once the user has already starred and added a repo.
   if (state === 'hidden' || (state === 'starred' && hasRepos)) {
     return null
   }
@@ -98,6 +95,12 @@ function GitHubStarButton({
             'cursor-pointer border-amber-500/50 bg-amber-400/10 text-amber-700 dark:border-amber-400/25 dark:bg-amber-400/[0.06] dark:text-amber-400/60'
         )}
         onClick={handleClick}
+        onContextMenu={(event) => {
+          if (state === 'starred') {
+            event.preventDefault()
+            setMenuOpen(true)
+          }
+        }}
         disabled={state === 'loading'}
       >
         {state === 'web-fallback' ? (
@@ -119,7 +122,7 @@ function GitHubStarButton({
             : translate('auto.components.Landing.0d0ace8861', 'Star on GitHub')}
       </button>
       {state === 'starred' && menuOpen && (
-        <div className="absolute right-0 top-[calc(100%+4px)] z-10 min-w-[100px] rounded-md border border-border bg-popover py-1 shadow-md">
+        <div className="absolute right-0 bottom-[calc(100%+4px)] z-10 min-w-[100px] rounded-md border border-border bg-popover py-1 shadow-floating">
           <button
             className="w-full px-3 py-1.5 text-left text-[13px] text-foreground hover:bg-muted"
             onClick={() => {
@@ -135,6 +138,14 @@ function GitHubStarButton({
   )
 }
 
+function dismissedPreflightIssueIds(issues: PreflightIssue[], repos: readonly Repo[]): Set<string> {
+  return new Set(
+    issues
+      .filter((issue) => issue.dismissible && isPreflightIssueDismissed(issue.id, repos))
+      .map((issue) => issue.id)
+  )
+}
+
 function PreflightBanner({
   issues,
   repos
@@ -142,30 +153,18 @@ function PreflightBanner({
   issues: PreflightIssue[]
   repos: readonly Repo[]
 }): React.JSX.Element | null {
-  // Why: keying the seed on the current GitHub project set means adding a new
-  // GitHub project (which changes the key) re-evaluates dismissals, so a lapsed
-  // dismissal re-surfaces the nudge without a manual reset.
+  // Recheck dismissals when the GitHub project set changes so expired nudges can reappear.
   const githubKey = githubProjectKeys(repos).join('|')
-  const [dismissed, setDismissed] = useState<Set<string>>(
-    () =>
-      new Set(
-        issues
-          .filter((issue) => issue.dismissible && isPreflightIssueDismissed(issue.id, repos))
-          .map((issue) => issue.id)
-      )
+  const [dismissed, setDismissed] = useState<Set<string>>(() =>
+    dismissedPreflightIssueIds(issues, repos)
   )
 
+  // Reseed only when GitHub projects change; issues identity is stable and would reset transient dismissals each render.
+  const reseedDismissed = useEffectEvent(() =>
+    setDismissed(dismissedPreflightIssueIds(issues, repos))
+  )
   useEffect(() => {
-    setDismissed(
-      new Set(
-        issues
-          .filter((issue) => issue.dismissible && isPreflightIssueDismissed(issue.id, repos))
-          .map((issue) => issue.id)
-      )
-    )
-    // Why: re-seed only when the GitHub project set changes; issues identity is
-    // stable per render and would otherwise reset transient dismiss state.
-    // oxlint-disable-next-line react-hooks/exhaustive-deps
+    reseedDismissed()
   }, [githubKey])
 
   const visibleIssues = issues.filter((issue) => !dismissed.has(issue.id))
@@ -179,10 +178,7 @@ function PreflightBanner({
   }
 
   return (
-    // Why: cap width below the max-w-lg column so the card reads as part of the
-    // centered content stack instead of stretching edge-to-edge. The styleguide
-    // reserves color for true error state — these are soft setup nudges, so use
-    // the quiet muted/border surface, not an amber frame.
+    // Keep setup nudges narrow and muted; the styleguide reserves warning/error framing for actual problems.
     <div className="w-full max-w-sm space-y-1.5 rounded-lg border border-border bg-muted/40 p-3">
       {visibleIssues.map((issue) => (
         <div
@@ -226,7 +222,7 @@ export default function Landing(): React.JSX.Element {
   const hasGitHubProject = useMemo(() => hasGitHubBackedProject(repos), [repos])
   const showGitHubSupportFooter = repos.length === 0 || hasGitHubProject
 
-  // Why: the runtime-aware slice probes the active remote host instead of the renderer host.
+  // Probe the active execution host, including remote runtimes.
   const { preflightIssues } = useLandingPreflightRuntime()
   const [starState, setStarState] = useLandingOrcaStarState()
 

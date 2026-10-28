@@ -1,7 +1,6 @@
 import { AsyncLocalStorage } from 'node:async_hooks'
 
-// Why: list scans must not carry full first-prompt bodies (up to 500 sessions
-// per refresh). On-demand copy re-parses one transcript under `full` mode.
+// Capture full bodies only on demand; list scans must not retain them for every session.
 export type FirstUserPromptCaptureMode = 'none' | 'full'
 
 const firstUserPromptCaptureStorage = new AsyncLocalStorage<FirstUserPromptCaptureMode>()

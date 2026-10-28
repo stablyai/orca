@@ -10,12 +10,12 @@ import {
   type TabGroupPanelGeometrySnapshot
 } from './tab-group-panel-split-target'
 import { isPaneDropData, isTabDragData, type TabDragItemData } from './tab-drag-data'
+import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
+import { dropTabThroughLayoutOwner } from './tab-group-layout-owner-commands'
 
 type AppState = ReturnType<typeof useAppStore.getState>
 
-/** Turns a finished tab drag into store mutations: pane-column split,
- *  same-group reorder, cross-group move, or pane-body drop — each mirrored to
- *  the web runtime — then hands the snapshot-restore decision to finishDrag. */
+/** Commit splits/reorders/moves through the layout owner or window path, then finish or restore the drag snapshot. */
 export function commitTabDragDrop({
   event,
   worktreeId,
@@ -50,6 +50,19 @@ export function commitTabDragDrop({
     geometry: dragGeometryRef.current
   })
   if (paneColumnSplit) {
+    // End the drag now; main’s answer draws the requested pane placement.
+    if (
+      ORCA_LAYOUT_OWNER_IS_MAIN &&
+      dropTabThroughLayoutOwner(worktreeId, {
+        kind: 'split',
+        tabId: activeData.unifiedTabId,
+        groupId: paneColumnSplit.groupId,
+        direction: paneColumnSplit.zone
+      })
+    ) {
+      finishDrag(true)
+      return
+    }
     const moved = dropUnifiedTab(activeData.unifiedTabId, {
       groupId: paneColumnSplit.groupId,
       splitDirection: paneColumnSplit.zone
@@ -93,10 +106,7 @@ export function commitTabDragDrop({
       return
     }
 
-    // Why: dnd-kit's `over` is the hovered tab, but the drop's true
-    // insertion point depends on which side of that tab the cursor sits.
-    // Using the bar's computed side (re-derived here to avoid stale
-    // closures) means the drop always lands where the blue bar was drawn.
+    // Recompute insertion side at drop so the destination matches the drawn bar without stale closure state.
     const insertion = resolveTabInsertion(event, isTabDragData, getDragPointer)
     if (!insertion) {
       finishDrag(true)
@@ -108,13 +118,23 @@ export function commitTabDragDrop({
 
     if (activeData.groupId === overData.groupId) {
       const oldIndex = targetGroup.tabOrder.indexOf(activeData.unifiedTabId)
-      // Why: splicing out the dragged tab before inserting would shift the
-      // intended target slot left by one when moving forward. Adjust the
-      // insertion index to match the post-removal order.
+      // Adjust forward insertion after removing the source tab so the target slot does not shift left.
       const nextIndex = oldIndex < rawInsertIndex ? rawInsertIndex - 1 : rawInsertIndex
       if (oldIndex !== -1 && oldIndex !== nextIndex) {
         const nextOrder = targetGroup.tabOrder.filter((id) => id !== activeData.unifiedTabId)
         nextOrder.splice(nextIndex, 0, activeData.unifiedTabId)
+        if (
+          ORCA_LAYOUT_OWNER_IS_MAIN &&
+          dropTabThroughLayoutOwner(worktreeId, {
+            kind: 'reorder',
+            tabId: activeData.unifiedTabId,
+            groupId: overData.groupId,
+            tabOrder: nextOrder
+          })
+        ) {
+          finishDrag(true)
+          return
+        }
         reorderUnifiedTabs(overData.groupId, nextOrder)
         mirrorWebRuntimeTabMove({
           kind: 'reorder',
@@ -126,6 +146,18 @@ export function commitTabDragDrop({
       }
     } else {
       const index = overIndex === -1 ? targetGroup.tabOrder.length : rawInsertIndex
+      if (
+        ORCA_LAYOUT_OWNER_IS_MAIN &&
+        dropTabThroughLayoutOwner(worktreeId, {
+          kind: 'move',
+          tabId: activeData.unifiedTabId,
+          groupId: overData.groupId,
+          index
+        })
+      ) {
+        finishDrag(true)
+        return
+      }
       const moved = dropUnifiedTab(activeData.unifiedTabId, {
         groupId: overData.groupId,
         index
@@ -151,6 +183,17 @@ export function commitTabDragDrop({
 
   if (isPaneDropData(overData)) {
     if (activeData.groupId !== overData.groupId) {
+      if (
+        ORCA_LAYOUT_OWNER_IS_MAIN &&
+        dropTabThroughLayoutOwner(worktreeId, {
+          kind: 'move',
+          tabId: activeData.unifiedTabId,
+          groupId: overData.groupId
+        })
+      ) {
+        finishDrag(true)
+        return
+      }
       const moved = dropUnifiedTab(activeData.unifiedTabId, {
         groupId: overData.groupId
       })

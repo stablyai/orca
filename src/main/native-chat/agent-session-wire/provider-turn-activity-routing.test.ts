@@ -249,9 +249,9 @@ describe('provider turn activity routing', () => {
     )
     expect(state.rows).toHaveLength(turnRows)
     expect(state.activities.slice(-3)).toEqual([
-      { turnId: TURN_ID, text: 'Checking the renderer state' },
+      null,
       { turnId: TURN_ID, text: 'Compacting the conversation' },
-      { turnId: TURN_ID, text: 'Exploring a side question' }
+      null
     ])
 
     translator.handle(claudeMessage({ type: 'tool_progress', tool_name: 'SecretReader' }))
@@ -262,6 +262,7 @@ describe('provider turn activity routing', () => {
       claudeMessage({ type: 'result', subtype: 'success', is_error: false, result: 'Done' })
     )
     expect(state.activities.at(-1)).toBeNull()
-    expect(state.tombstones).toHaveLength(1)
+    expect(state.tombstones).toHaveLength(0)
+    expect(state.rows.at(-1)).toMatchObject({ kind: 'turn', turnId: TURN_ID, state: 'completed' })
   })
 })

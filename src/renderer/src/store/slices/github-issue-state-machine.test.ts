@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { persistGitHubCacheChanges } from '../github/cache-persistence'
 import type { IssueInfo } from '../../../../shared/github/pull-request-types'
 import { getTaskSourceCacheScope } from '../../../../shared/task-source-context'
 import { issueCacheKey } from '../github/cache-identity'
@@ -57,6 +58,7 @@ describe('createGitHubSlice.fetchIssue state machine', () => {
     const sourceContext = githubSourceContext('local', 'source-repo')
     const cacheKey = `${getTaskSourceCacheScope(sourceContext)}::repo-1::42`
     mockApi.gh.issue.mockRejectedValueOnce(new Error('offline'))
+    persistGitHubCacheChanges(store)
 
     await expect(
       store.getState().fetchIssue('/repo/one', 42, { repoId: 'repo-1', sourceContext })

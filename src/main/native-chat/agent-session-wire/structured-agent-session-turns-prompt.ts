@@ -1,133 +1,222 @@
+import { agentSessionFailureFact } from '../../../shared/agent-session-failure'
+import { agentSessionFailureWords } from '../../../shared/agent-session-failure-words'
 import { parseAgentJournalItemKey } from '../../../shared/agent-session-journal-item-key'
 import {
-  decodeAgentSessionQuestionAnswers,
-  isValidAgentSessionQuestionAnswers
+  agentSessionPromptQuestions,
+  isValidAgentSessionQuestionAnswers,
+  legacyAgentSessionQuestionAnswers,
+  legacyAgentSessionSelectedOptionId,
+  type AgentSessionPromptResponse,
+  type AgentSessionQuestionAnswer
 } from '../../../shared/agent-session-question-answer'
 import type {
-  AgentJournalItemBody,
-  AgentJournalQuestion,
+  AgentJournalApprovalItem,
+  AgentJournalQuestionItem,
   AgentJournalResolution
 } from '../../../shared/agent-session-journal-types'
-import type { AgentSessionPromptResult } from '../../../shared/agent-session-wire'
-import { decodeCodexQuestionOptionId } from '../../codex/codex-structured-prompt-replies'
+import {
+  refuse,
+  type AgentSessionPromptResult,
+  type AgentSessionRefusalReason
+} from '../../../shared/agent-session-wire'
+import {
+  AgentSessionPromptAnswerRejectedError,
+  AgentSessionPromptUnavailableError
+} from './structured-agent-session-adapter'
+import type { CommandReceiptResult } from '../agent-session-journal/command-receipt-schema'
+import type { JournalRow } from '../agent-session-journal/journal-row-schema'
+import { settledPrompt, validatePendingPrompt } from './structured-agent-session-prompt-state'
+import { contextStructuredAgentSessionCurrentWork } from './structured-agent-session-current-work'
 import type { AgentSessionTurnContext, TurnOutcome } from './structured-agent-session-turns'
 
-function invalid(message: string): TurnOutcome<never> {
-  return { ok: false, refusal: { code: 'agent_session_operation_invalid', message } }
+export type AgentSessionPromptRequest = {
+  itemId: string
+  expectedRevision: number
+  kind: 'approval' | 'question'
+  /** Legacy clients pack question answers into optionId. */
+  optionId?: string
+  answers?: AgentSessionQuestionAnswer[]
 }
 
-function promptBodyOf(body: AgentJournalItemBody): {
-  options: readonly { id: string }[]
-  freeTextQuestionId?: string
-  questions?: AgentJournalQuestion[]
-  resolution: AgentJournalResolution
-} | null {
-  return body.kind === 'approval' || body.kind === 'question' ? body : null
+function invalid(
+  reason: AgentSessionRefusalReason<'agent_session_operation_invalid'>,
+  message: string
+): TurnOutcome<never> {
+  return { ok: false, refusal: refuse('agent_session_operation_invalid', { reason }, message) }
+}
+
+function readPromptChoice(
+  prompt: AgentJournalApprovalItem | AgentJournalQuestionItem,
+  input: AgentSessionPromptRequest
+): { response: AgentSessionPromptResponse; selectedOptionId: string } | null {
+  if (prompt.kind === 'approval') {
+    const optionId = input.optionId
+    return optionId !== undefined && prompt.options.some((option) => option.id === optionId)
+      ? { response: { kind: 'option', optionId }, selectedOptionId: optionId }
+      : null
+  }
+  const answers =
+    input.answers ??
+    (input.optionId === undefined
+      ? null
+      : legacyAgentSessionQuestionAnswers(prompt, input.optionId))
+  if (
+    !answers ||
+    !isValidAgentSessionQuestionAnswers(agentSessionPromptQuestions(prompt), answers)
+  ) {
+    return null
+  }
+  const selectedOptionId = legacyAgentSessionSelectedOptionId(prompt, answers)
+  return selectedOptionId === null
+    ? null
+    : { response: { kind: 'answers', answers }, selectedOptionId }
+}
+
+function resolvedWithSameChoice(
+  ctx: AgentSessionTurnContext,
+  input: AgentSessionPromptRequest
+): AgentSessionPromptResult | null {
+  const settled = settledPrompt(ctx, input.itemId)
+  if (settled?.prompt.kind !== input.kind || settled.prompt.resolution.state !== 'resolved') {
+    return null
+  }
+  const { item, prompt } = settled
+  const choice = readPromptChoice(prompt, input)
+  return choice?.selectedOptionId === prompt.resolution.selectedOptionId
+    ? { itemId: item.itemId, revision: item.revision, resolution: prompt.resolution }
+    : null
 }
 
 export async function performPrompt(
   ctx: AgentSessionTurnContext,
-  input: {
-    itemId: string
-    expectedRevision: number
-    optionId: string
-    kind: 'approval' | 'question'
-  }
+  input: AgentSessionPromptRequest
 ): Promise<TurnOutcome<AgentSessionPromptResult>> {
-  const item = ctx.journal.snapshot().items.find((entry) => entry.itemId === input.itemId)
-  if (!item) {
-    return invalid(`No item ${input.itemId} in session ${ctx.sessionId}.`)
+  const validated = validatePendingPrompt(ctx, input)
+  if (!validated.ok) {
+    // A retry after a lost reply has a new operation ID; resolved prompt state proves acceptance.
+    const held = resolvedWithSameChoice(ctx, input)
+    return held ? { ok: true, value: held } : validated
   }
-  const prompt = promptBodyOf(item.body)
-  if (!prompt || item.body.kind !== input.kind) {
-    return invalid(`Item ${input.itemId} is not a pending ${input.kind}.`)
+  const { prompt } = validated
+  const work = contextStructuredAgentSessionCurrentWork(ctx)
+  if (!work.isCurrentItem(input.itemId)) {
+    // Never deliver an old agent’s prompt answer to its replacement.
+    return invalid(
+      'promptOwnerEnded',
+      `Item ${input.itemId} was raised by an agent that has ended.`
+    )
   }
-  if (item.revision !== input.expectedRevision) {
-    return {
-      ok: false,
-      refusal: {
-        code: 'agent_session_item_revision_stale',
-        message: `Item ${input.itemId} has moved on.`,
-        currentRevision: item.revision,
-        resolution: prompt.resolution
-      }
-    }
+  const choice = readPromptChoice(prompt, input)
+  if (!choice) {
+    return invalid(
+      'optionRejected',
+      input.optionId !== undefined
+        ? `Option ${input.optionId} is not offered by item ${input.itemId}.`
+        : `The answers do not match the questions on item ${input.itemId}.`
+    )
   }
-  if (prompt.resolution.state !== 'pending') {
-    return {
-      ok: false,
-      refusal: {
-        code: 'agent_session_already_resolved',
-        message: `Item ${input.itemId} was already ${prompt.resolution.state}.`,
-        currentRevision: item.revision,
-        resolution: prompt.resolution
-      }
-    }
-  }
-  const freeText = decodeCodexQuestionOptionId(input.optionId)
-  const acceptsFreeText =
-    item.body.kind === 'question' &&
-    prompt.freeTextQuestionId !== undefined &&
-    freeText?.questionId === prompt.freeTextQuestionId &&
-    freeText.answer.trim().length > 0
-  const grouped =
-    item.body.kind === 'question' && prompt.questions
-      ? decodeAgentSessionQuestionAnswers(input.optionId)
-      : null
-  const acceptsGrouped =
-    grouped !== null &&
-    prompt.questions !== undefined &&
-    isValidAgentSessionQuestionAnswers(prompt.questions, grouped)
-  if (
-    !acceptsFreeText &&
-    !acceptsGrouped &&
-    !prompt.options.some((option) => option.id === input.optionId)
-  ) {
-    return invalid(`Option ${input.optionId} is not offered by item ${input.itemId}.`)
-  }
+  const { response } = choice
   const identity = parseAgentJournalItemKey(input.itemId)
   if (!identity) {
-    return invalid(`Item id ${input.itemId} is not a well-formed item key.`)
+    return invalid('requestMalformed', `Item id ${input.itemId} is not a well-formed item key.`)
   }
 
   const resolution: AgentJournalResolution = {
     state: 'resolved',
-    selectedOptionId: input.optionId,
+    selectedOptionId: choice.selectedOptionId,
+    ...(response.kind === 'answers' ? { answers: response.answers } : {}),
     resolvedBy: ctx.resolvedBy,
     resolvedAt: ctx.now()
   }
-  const appended = await ctx.journal.appendItem(
-    identity,
-    { ...item.body, resolution },
-    {
-      fence: ctx.fence
-    }
-  )
-  ctx.publish()
-
+  const committed: { item?: Awaited<ReturnType<typeof ctx.journal.appendItem>> } = {}
   try {
     await ctx.adapter.answerPrompt({
       sessionId: ctx.sessionId,
       itemId: input.itemId,
       kind: input.kind,
-      optionId: input.optionId,
-      fence: ctx.fence
+      response,
+      fence: ctx.fence,
+      commit: async () => {
+        committed.item = await ctx.journal.appendItem(
+          identity,
+          { ...prompt, resolution },
+          { fence: ctx.fence, turnScope: work.turnScope() },
+          // Commit answer identity before telling the provider.
+          ctx.operationReceipt
+        )
+      }
     })
   } catch (error) {
+    if (!committed.item && error instanceof AgentSessionPromptUnavailableError) {
+      return invalid('promptGone', error.message)
+    }
+    if (!committed.item && error instanceof AgentSessionPromptAnswerRejectedError) {
+      return invalid('optionRejected', error.message)
+    }
+    if (!committed.item) {
+      throw error
+    }
     await ctx.journal.appendItem(
       { provider: 'orca', clientMessageId: `${input.itemId}#delivery` },
       {
         kind: 'status',
-        text: `Your answer was recorded but the agent did not confirm it: ${
-          error instanceof Error ? error.message : String(error)
-        }`
+        ...agentSessionFailureWords(agentSessionFailureFact('answerUnconfirmed'), {
+          surface: 'row'
+        })
       },
-      { fence: ctx.fence }
+      { fence: ctx.fence, turnScope: contextStructuredAgentSessionCurrentWork(ctx).turnScope() }
     )
-    ctx.publish()
+  }
+  const appended = committed.item
+  if (!appended) {
+    throw new Error(`Provider adapter did not commit prompt ${input.itemId}.`)
   }
   return {
     ok: true,
     value: { itemId: appended.itemId, revision: appended.revision, resolution }
   }
+}
+
+export function promptRowAnswer(row: JournalRow | undefined): AgentSessionPromptResult {
+  const body = row?.kind === 'item' ? row.body : undefined
+  if (row?.kind !== 'item' || (body?.kind !== 'approval' && body?.kind !== 'question')) {
+    throw new Error('an accepted prompt answer requires its prompt row')
+  }
+  return { itemId: row.itemId, revision: row.revision, resolution: body.resolution }
+}
+
+/** Capture replay data now so later revisions or rewind cannot change an accepted answer. */
+export function promptAnswerReceipt(answer: AgentSessionPromptResult): CommandReceiptResult {
+  const { state, selectedOptionId, answers, resolvedBy, resolvedAt } = answer.resolution
+  if (state !== 'resolved') {
+    throw new Error('an accepted prompt answer is resolved')
+  }
+  return {
+    kind: 'prompt-answer',
+    itemId: answer.itemId,
+    revision: answer.revision,
+    resolution: {
+      state,
+      selectedOptionId,
+      ...(answers
+        ? {
+            answers: answers.map(({ questionId, optionIds, other }) => ({
+              questionId,
+              optionIds,
+              ...(other === undefined ? {} : { other })
+            }))
+          }
+        : {}),
+      resolvedBy,
+      resolvedAt
+    }
+  }
+}
+
+export function acceptedPromptAnswer(
+  receipt: CommandReceiptResult | undefined
+): AgentSessionPromptResult | null {
+  return receipt?.kind === 'prompt-answer'
+    ? { itemId: receipt.itemId, revision: receipt.revision, resolution: receipt.resolution }
+    : null
 }

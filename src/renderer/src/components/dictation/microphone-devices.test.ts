@@ -6,7 +6,6 @@ import {
   isMicrophoneDeviceConstraintError,
   listVoiceMicrophoneDevices,
   microphoneDeviceIdFromSelectValue,
-  microphoneSelectValueFromDeviceId,
   normalizeMicrophoneDeviceId,
   openMicrophoneCaptureStream,
   resolveMicrophoneDevice,
@@ -288,7 +287,6 @@ describe('listVoiceMicrophoneDevices', () => {
 
 describe('microphone select values', () => {
   it('round-trips system default and concrete device ids', () => {
-    expect(microphoneSelectValueFromDeviceId(null)).toBe(SYSTEM_DEFAULT_MICROPHONE_SELECT_VALUE)
     expect(microphoneDeviceIdFromSelectValue(SYSTEM_DEFAULT_MICROPHONE_SELECT_VALUE)).toBeNull()
     expect(microphoneDeviceIdFromSelectValue('usb-1')).toBe('usb-1')
   })

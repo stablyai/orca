@@ -3,7 +3,7 @@ import type {
   BrowserClientHostCommandEvent,
   BrowserClientHostCommandResult
 } from '../../shared/browser-client-host-protocol'
-import { BrowserHostLeaseRegistry } from './browser-host-lease-registry'
+import { BrowserHostLeaseRegistry } from './browser-host/browser-host-lease-registry'
 import { routeRuntimeBrowserClientAutomation } from './runtime-browser-client-automation'
 import { RuntimeBrowserPageRegistry } from './runtime-browser-page-registry'
 

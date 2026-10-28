@@ -1,4 +1,3 @@
-import { readFileSync } from 'node:fs'
 import { describe, expect, it, vi } from 'vitest'
 import { mobileAccountsRouteTarget } from './mobile-accounts-route'
 import {
@@ -6,12 +5,6 @@ import {
   navigateToHostStackRoute,
   type HostStackNavigationState
 } from '../navigation/host-stack-navigation'
-
-const homeSource = readFileSync(new URL('../home/MobileHomeScreen.tsx', import.meta.url), 'utf8')
-const accountCardsSource = readFileSync(
-  new URL('../home/MobileHomeAccountUsageCards.tsx', import.meta.url),
-  'utf8'
-)
 
 function navigationHarness(initialState: HostStackNavigationState) {
   const stateListeners = new Set<() => void>()
@@ -84,11 +77,5 @@ describe('mobile accounts route', () => {
       source: 'host-index',
       payload: mobileAccountsRouteTarget('host/one')
     })
-  })
-
-  it('opens the home account-usage card through the cold-navigator-safe transition', () => {
-    expect(homeSource).toContain('onOpenAccounts={openMobileAccounts}')
-    expect(accountCardsSource).toContain('props.onOpen(host.id)')
-    expect(accountCardsSource).not.toContain('/accounts`')
   })
 })

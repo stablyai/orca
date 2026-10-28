@@ -9,8 +9,7 @@ export type ComposerProviderRuntimeSyncInput = Pick<
   | 'selectedRepoHookContextKey'
   | 'selectedRepoIsGit'
   | 'selectedRepoPath'
-  | 'selectedRepoSettings'
-  | 'selectedRepoSettingsRef'
+  | 'selectedRepoTarget'
   | 'setCheckedHooksContextKey'
   | 'setSelectedRepoSlug'
   | 'setSetupAgentStartupPolicy'
@@ -28,7 +27,7 @@ import { isGitRepoKind } from '../../../../shared/repo-kind'
 import { toast } from 'sonner'
 import { translate } from '@/i18n/i18n'
 import { type HookCheckResult, checkRuntimeHooks } from '@/runtime/runtime-hooks-client'
-import { getActiveRuntimeTarget, callRuntimeRpc } from '@/runtime/runtime-rpc-client'
+import { callRuntimeRpc } from '@/runtime/runtime-rpc-client'
 import type { GitHubRepositoryIdentity } from '../../../../shared/github/pull-request-types'
 import {
   getRepoSetupAgentStartupPolicy,
@@ -44,8 +43,7 @@ export function useComposerProviderRuntimeSync(input: ComposerProviderRuntimeSyn
     selectedRepoHookContextKey,
     selectedRepoIsGit,
     selectedRepoPath,
-    selectedRepoSettings,
-    selectedRepoSettingsRef,
+    selectedRepoTarget,
     setCheckedHooksContextKey,
     setSelectedRepoSlug,
     setSetupAgentStartupPolicy,
@@ -56,9 +54,7 @@ export function useComposerProviderRuntimeSync(input: ComposerProviderRuntimeSyn
     updateRepo
   } = input
 
-  // Why: depend on the persisted policy *value*, not the selectedRepo object. Background repo
-  // refetches (git polling) hand back a new repo reference with the same hookSettings; keying on
-  // the object would re-run this and briefly flip the toggle back to the stale value — the glitch.
+  // Depend on persisted hook-policy value; refetched repo identities must not replay stale toggles.
   const persistedSetupAgentStartupPolicy = getRepoSetupAgentStartupPolicy(selectedRepo)
 
   useEffect(() => {
@@ -195,12 +191,11 @@ export function useComposerProviderRuntimeSync(input: ComposerProviderRuntimeSyn
       if (existing?.key === key) {
         return existing.promise
       }
-      // Why: drop the cache entry on failure so a transient IPC error doesn't pin every later
-      // check for this repo/host to the same rejection.
-      const promise: Promise<HookCheckResult> = checkRuntimeHooks(
-        selectedRepoSettingsRef.current,
-        targetRepoId,
-        selectedRepoExecutionHostId ?? undefined
+      // Evict rejected checks so transient errors can retry; inspect only the repo’s known host.
+      const promise: Promise<HookCheckResult> = (
+        selectedRepoExecutionHostId
+          ? checkRuntimeHooks(selectedRepoExecutionHostId, targetRepoId)
+          : Promise.reject(new Error('The project host is unknown.'))
       ).catch((error: unknown) => {
         if (hookCheckRef.current?.promise === promise) {
           hookCheckRef.current = null
@@ -210,7 +205,7 @@ export function useComposerProviderRuntimeSync(input: ComposerProviderRuntimeSyn
       hookCheckRef.current = { key, promise }
       return promise
     },
-    [selectedRepoExecutionHostId, selectedRepoSettingsRef]
+    [selectedRepoExecutionHostId]
   )
 
   const commitHookCheckIfCurrent = useCallback(
@@ -231,7 +226,11 @@ export function useComposerProviderRuntimeSync(input: ComposerProviderRuntimeSyn
       return
     }
     let cancelled = false
-    const target = getActiveRuntimeTarget(selectedRepoSettings)
+    const target = selectedRepoTarget
+    if (!target) {
+      setSelectedRepoSlug(null)
+      return
+    }
     const slugRequest =
       target.kind === 'environment'
         ? callRuntimeRpc<GitHubRepositoryIdentity | null>(
@@ -264,7 +263,7 @@ export function useComposerProviderRuntimeSync(input: ComposerProviderRuntimeSyn
     selectedRepo,
     selectedRepoIsGit,
     selectedRepoPath,
-    selectedRepoSettings,
+    selectedRepoTarget,
     setSelectedRepoSlug
   ])
 

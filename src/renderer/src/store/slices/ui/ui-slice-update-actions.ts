@@ -4,11 +4,12 @@ import {
   normalizeBrowserPageZoomLevel
 } from '../../../../../shared/browser-page-zoom'
 import { normalizeKagiSessionLink } from '../../../../../shared/browser-url'
+import { DEFAULT_BROWSER_DEVTOOLS_DOCK_LAYOUT } from '../../../../../shared/browser-devtools-dock'
 export function createUiUpdateActions(set: UISliceSet, get: UISliceGet): Partial<UISlice> {
   return {
     updateStatus: { state: 'idle' },
     setUpdateStatus: (status) => {
-      const prevState = get().updateStatus.state
+      const { updateStatus: previousStatus, updateUserInitiatedCycle } = get()
       const update: Partial<
         Pick<
           UISlice,
@@ -34,15 +35,40 @@ export function createUiUpdateActions(set: UISliceSet, get: UISliceGet): Partial
         update.updateChangelog = null
       }
       // 'downloading'/'downloaded'/'error': leave updateChangelog untouched to keep the original 'available' content.
-      if (status.state !== prevState) {
-        // Why: re-surface the card on each phase transition so a collapsed `downloading` doesn't bury `downloaded`/`error`.
-        update.updateCardCollapsed = false
+      const errorBecameActionable =
+        status.state === 'error' &&
+        previousStatus.state === 'error' &&
+        ((status.userInitiated === true && !previousStatus.userInitiated) ||
+          (status.version !== undefined && previousStatus.version === undefined) ||
+          (status.recovery?.kind === 'linux-package-install' &&
+            previousStatus.recovery?.kind !== 'linux-package-install'))
+      if (status.state !== previousStatus.state || errorBecameActionable) {
+        // Quiet check failures start collapsed so the status bar can still disclose them.
+        update.updateCardCollapsed =
+          status.state === 'error' &&
+          !status.userInitiated &&
+          !updateUserInitiatedCycle &&
+          status.version === undefined &&
+          status.recovery?.kind !== 'linux-package-install' &&
+          !('version' in previousStatus && previousStatus.version !== undefined)
       }
       set(update)
     },
     updateChangelog: null,
     updateUserInitiatedCycle: false,
     dismissedUpdateVersion: null,
+    dismissedUnexpectedSignoutVersion: null,
+    unexpectedSignoutDismissedVersions: [],
+    dismissUnexpectedSignoutCard: (version) => {
+      if (get().unexpectedSignoutDismissedVersions.includes(version)) {
+        return
+      }
+      set({
+        dismissedUnexpectedSignoutVersion: version,
+        unexpectedSignoutDismissedVersions: [...get().unexpectedSignoutDismissedVersions, version]
+      })
+      void window.api.ui.set({ dismissedUnexpectedSignoutVersion: version }).catch(console.error)
+    },
     clearDismissedUpdateVersion: () => {
       set({ dismissedUpdateVersion: null })
     },
@@ -77,8 +103,7 @@ export function createUiUpdateActions(set: UISliceSet, get: UISliceGet): Partial
     },
     osc52ClipboardDefaultOnNoticePending: false,
     clearOsc52ClipboardDefaultOnNotice: () => {
-      // Why clear locally first: a failed persist must not re-toast this session. It will
-      // re-arm on the next launch, which is the safe direction for a one-shot notice.
+      // Clear locally before persisting to prevent repeat toasts on failure; next launch may re-arm the notice.
       set({ osc52ClipboardDefaultOnNoticePending: false })
       void window.api.ui.set({ osc52ClipboardDefaultOnNoticePending: false }).catch(console.error)
     },
@@ -105,6 +130,11 @@ export function createUiUpdateActions(set: UISliceSet, get: UISliceGet): Partial
       const normalized = link ? normalizeKagiSessionLink(link) : null
       void window.api.ui.set({ browserKagiSessionLink: normalized }).catch(console.error)
       set({ browserKagiSessionLink: normalized })
+    },
+    browserDevToolsDock: DEFAULT_BROWSER_DEVTOOLS_DOCK_LAYOUT,
+    setBrowserDevToolsDock: (layout) => {
+      void window.api.ui.set({ browserDevToolsDock: layout }).catch(console.error)
+      set({ browserDevToolsDock: layout })
     }
   }
 }

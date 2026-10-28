@@ -3,6 +3,7 @@ import { basename } from 'node:path'
 import type * as pty from 'node-pty'
 import { readPtsName } from '../pty/node-pty-pts-name'
 import { signalPosixPtyForegroundGroup } from '../pty/posix-pty-foreground-group'
+import { ptyShellProcessId } from '../windows/windows-pty-job'
 import { isWslAvailableAsync } from '../wsl'
 import { resolveGitBashPath } from '../git-bash'
 import { resolveProcessCwd } from './process-cwd'
@@ -12,7 +13,7 @@ import {
   ptyIncarnations,
   ptyInitialCwd,
   ptyProcesses,
-  ptyShellName,
+  getPtyShellName,
   ptyTerminalHandle,
   ptyWorktreeId,
   ptyWslDistroById,
@@ -21,11 +22,10 @@ import {
   type ExitCallback
 } from './local-pty-provider-state'
 import type { LocalPtyProviderOptions } from './local-pty-provider-types'
-import type { PtyProcessInfo } from './types'
+import type { PtyProcessInfo } from './pty-provider-contract'
 
 export function writeLocalPty(id: string, data: string): boolean {
-  // Cooked PTYs echo private DSR/OSC replies; CPR/DA stay immediate unless one of
-  // those is still held, which they must not overtake (#13137, #7329, #15559).
+  // Hold private DSR/OSC replies through cooked-mode echo; CPR/DA cannot overtake held replies (#13137, #7329, #15559).
   if (startupIngressByPty.get(id)?.answerLiveQueryReply(data)) {
     return true
   }
@@ -41,7 +41,7 @@ export function resizeLocalPty(id: string, cols: number, rows: number): void {
   ptyProcesses.get(id)?.resize(cols, rows)
 }
 
-// Why: node-pty pause() stops reading the master fd, so a flooding child blocks on write — true producer backpressure.
+// Pausing master reads blocks flooding children on kernel writes instead of growing main-process buffers.
 export function pauseLocalPtyProducer(id: string): void {
   try {
     ptyProcesses.get(id)?.pause()
@@ -58,7 +58,7 @@ export function resumeLocalPtyProducer(id: string): void {
   }
 }
 
-// Why: proc.cols/rows are node-pty's authoritative applied size (post-clamp/no-op), used by the renderer drift-check.
+// node-pty cols/rows reflect applied clamping/no-ops; renderer drift checks need this readback.
 export async function getLocalPtyAppliedSize(
   id: string
 ): Promise<{ cols: number; rows: number } | null> {
@@ -74,6 +74,10 @@ export async function sendLocalPtySignal(id: string, signal: string): Promise<vo
   if (!proc) {
     return
   }
+  if ('signalProcess' in proc && typeof proc.signalProcess === 'function') {
+    proc.signalProcess(signal)
+    return
+  }
   const signalRootPid = (): void => {
     try {
       process.kill(proc.pid, signal)
@@ -81,8 +85,7 @@ export async function sendLocalPtySignal(id: string, signal: string): Promise<vo
       /* Process may already be dead */
     }
   }
-  // Why only SIGWINCH: see posix-pty-foreground-group — a real resize reaches the
-  // tty's foreground group, which proc.pid is never a member of.
+  // Real SIGWINCH reaches the tty foreground group, which excludes proc.pid (posix-pty-foreground-group).
   if (signal === 'SIGWINCH') {
     signalPosixPtyForegroundGroup(proc.pid, readPtsName(proc), signal, signalRootPid)
     return
@@ -92,17 +95,18 @@ export async function sendLocalPtySignal(id: string, signal: string): Promise<vo
 
 export async function getLocalPtyCwd(id: string): Promise<string> {
   const proc = ptyProcesses.get(id)
-  // Why: '' not throw on unknown id — renderer reads empty as "try next fallback"; throwing is noisy for a normal case.
+  // Empty cwd lets the renderer try its next fallback for a missing PTY.
   if (!proc) {
     return ''
   }
-  // Why: let resolveProcessCwd's '' surface for the renderer fallback chain; a fabricated cwd would short-circuit it.
-  return resolveProcessCwd(proc.pid)
+  // Preserve unknown cwd as empty; a fabricated path would suppress renderer fallbacks.
+  const shellPid = ptyShellProcessId(proc)
+  return shellPid === undefined ? '' : resolveProcessCwd(shellPid)
 }
 
 export async function clearLocalPtyBuffer(id: string): Promise<void> {
-  // Why: ConPTY keeps its own screen buffer, so xterm clear() alone leaves a stale-cursor gap on the next prompt; POSIX no-op.
-  // No PSReadLine form-feed nudge here (unlike the daemon): safe only at an empty prompt, which this provider can't detect.
+  // ConPTY retains a screen buffer beyond xterm.clear(); clear it to prevent stale cursor gaps.
+  // Omit the daemon PSReadLine nudge: this provider cannot prove the prompt is empty.
   try {
     startupIngressByPty.get(id)?.snapshotBarrier()
     ptyProcesses.get(id)?.clear()
@@ -119,8 +123,9 @@ export async function listLocalPtyProcesses(): Promise<PtyProcessInfo[]> {
   return Array.from(ptyProcesses.entries()).map(([id, proc]) => ({
     id,
     ...(ptyIncarnations.get(id) ? { incarnationId: ptyIncarnations.get(id) } : {}),
+    ...(proc.pid > 0 ? { rootProcessId: proc.pid } : {}),
     cwd: ptyInitialCwd.get(id) ?? '',
-    title: proc.process || ptyShellName.get(id) || 'shell',
+    title: proc.process || getPtyShellName(id) || 'shell',
     ...(ptyWorktreeId.get(id) ? { worktreeId: ptyWorktreeId.get(id) } : {}),
     ...(ptyTerminalHandle.get(id) ? { terminalHandle: ptyTerminalHandle.get(id) } : {}),
     ...(ptyWslDistroById.has(id) ? { wslDistro: ptyWslDistroById.get(id) ?? null } : {})
@@ -133,7 +138,7 @@ export async function getDefaultLocalPtyShell(
   if (process.platform === 'win32') {
     return getOptions().getWindowsShell?.() || process.env.COMSPEC || 'powershell.exe'
   }
-  return process.env.SHELL || '/bin/zsh'
+  return process.env.SHELL?.trim() || '/bin/zsh'
 }
 
 export async function getLocalPtyProfiles(): Promise<{ name: string; path: string }[]> {

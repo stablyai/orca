@@ -1,4 +1,7 @@
+import type { StructuredAttentionRead, StructuredAttentionOrigin } from './agent-session-attention'
 import type { AgentStatusState, AgentType } from './agent-status-types'
+import type { AgentTurnOutcome } from './agent-turn-outcome'
+import type { NotificationSourceId } from './notification-source'
 
 export type NotificationSettings = {
   enabled: boolean
@@ -19,9 +22,17 @@ export type NotificationSettings = {
     | 'custom'
   customSoundPath: string | null
   customSoundVolume: number
+  /** Desktop opt-outs stored only on this client, per configured source and work reached through it; new sources notify. */
+  mutedNotificationSourceIds: NotificationSourceId[]
+  /** Off silences every notification from a workspace the sidebar's Filters switches hide. Local only. */
+  notifyHiddenWorkspaces: boolean
 }
 
 export type NotificationEventSource = 'agent-task-complete' | 'terminal-bell' | 'test'
+
+export type StructuredNotificationRead = StructuredAttentionRead & {
+  paneKey: string
+}
 
 export type NotificationDispatchRequest = {
   source: NotificationEventSource
@@ -29,10 +40,15 @@ export type NotificationDispatchRequest = {
   /** Why: useful for fast native failures, but macOS can still drop notifications after 'show'. */
   requireDisplayConfirmation?: boolean
   worktreeId?: string
+  /** Configured notification source; independent of physical execution location. */
+  notificationSourceId?: NotificationSourceId
+  /** The server the workspace runs on, so a paired phone opens it there; absent for this desktop's own work. */
+  executionHost?: `runtime:${string}`
   /** Stable `${tabId}:${leafId}` terminal pane key for click-to-focus routing. */
   paneKey?: string
   repoLabel?: string
   worktreeLabel?: string
+  /** Legacy senders may still provide this; project labels are now always shown. */
   hasMultipleActiveRepos?: boolean
   terminalTitle?: string
   isActiveWorktree?: boolean
@@ -42,7 +58,15 @@ export type NotificationDispatchRequest = {
   agentToolName?: string
   agentToolInput?: string
   agentLastAssistantMessage?: string
-  agentInterrupted?: boolean
+  /** The verdict on the turn this notification reports, which picks its wording. */
+  agentTurnOutcome?: AgentTurnOutcome
+  /** Click-routing lane; absence means terminal, preserving pre-structured-chat senders. */
+  surface?: 'terminal' | 'agent-session'
+  /** Producer-owned once-only news identity bypasses workspace burst dedupe so distinct events survive. */
+  attentionKey?: string
+  structuredOrigin?: StructuredAttentionOrigin
+  /** The execution host already pushed this to its paired phones, so main must not fan it out again. */
+  mobileDeliveredByHost?: boolean
 }
 
 export type NotificationDispatchResult = {
@@ -51,6 +75,7 @@ export type NotificationDispatchResult = {
   reason?:
     | 'disabled'
     | 'source-disabled'
+    | 'host-muted'
     | 'suppressed-focus'
     | 'cooldown'
     | 'not-supported'
@@ -97,8 +122,7 @@ export type NotificationPermissionStatusResult = {
   requested: boolean
 }
 
-/** macOS notification permission outcome: authoritative native UNUserNotificationCenter readout, else a weaker
- *  delivery-probe fallback; 'awaiting-decision' = permission dialog unanswered. */
+/** macOS permission from authoritative native UNUserNotificationCenter, otherwise weaker delivery probing; awaiting-decision means unanswered dialog. */
 export type NotificationDeliveryProbeResult = {
   state: 'delivered' | 'blocked' | 'awaiting-decision' | 'unsupported'
   /** True when the state comes from the native authorization readout (vs. the delivery-probe fallback). */

@@ -1,7 +1,22 @@
 import type { CommandSpec } from '../args'
 import { GLOBAL_FLAGS } from '../args'
+import { withBrowserPageTarget } from './browser-page-target'
+import { BROWSER_WAIT_DEFAULT_TIMEOUT_MS } from '../../shared/browser-wait-timeout'
 
-export const BROWSER_BASIC_COMMAND_SPECS: CommandSpec[] = [
+export const BROWSER_BASIC_COMMAND_SPECS: CommandSpec[] = withBrowserPageTarget([
+  {
+    path: ['browser', 'identity', 'get'],
+    summary: 'Show the browser identity configured on this Orca host',
+    usage: 'orca browser identity get [--json]',
+    aliases: [['browser', 'identity', 'show']],
+    allowedFlags: [...GLOBAL_FLAGS]
+  },
+  {
+    path: ['browser', 'identity', 'set'],
+    summary: 'Choose the browser identity for every page on this Orca host',
+    usage: 'orca browser identity set --mode <clean|native> [--reset] [--json]',
+    allowedFlags: [...GLOBAL_FLAGS, 'mode', 'reset']
+  },
   {
     path: ['open-url'],
     summary: 'Open a URL on the paired client that hosts this terminal',
@@ -89,6 +104,9 @@ export const BROWSER_BASIC_COMMAND_SPECS: CommandSpec[] = [
       'fn',
       'state',
       'worktree'
+    ],
+    notes: [
+      `With a condition, --timeout is how long to wait for it (default ${BROWSER_WAIT_DEFAULT_TIMEOUT_MS} ms). Without one, --timeout is a plain pause.`
     ]
   },
   {
@@ -196,9 +214,8 @@ export const BROWSER_BASIC_COMMAND_SPECS: CommandSpec[] = [
   {
     path: ['tab', 'profile', 'create'],
     summary: 'Create a browser session profile for browser tabs',
-    usage:
-      'orca tab profile create --label <name> [--scope <isolated|imported>] [--no-ua-spoof] [--json]',
-    allowedFlags: [...GLOBAL_FLAGS, 'label', 'scope', 'no-ua-spoof']
+    usage: 'orca tab profile create --label <name> [--scope <isolated|imported>] [--json]',
+    allowedFlags: [...GLOBAL_FLAGS, 'label', 'scope']
   },
   {
     path: ['tab', 'profile', 'delete'],
@@ -233,6 +250,7 @@ export const BROWSER_BASIC_COMMAND_SPECS: CommandSpec[] = [
   },
   {
     path: ['tab', 'close'],
+    destructive: true,
     summary: 'Close a browser tab',
     usage: 'orca tab close [--index <n>] [--worktree <selector>] [--json]',
     allowedFlags: [...GLOBAL_FLAGS, 'index', 'worktree']
@@ -243,4 +261,4 @@ export const BROWSER_BASIC_COMMAND_SPECS: CommandSpec[] = [
     usage: 'orca exec --command "<agent-browser command>" [--worktree <selector>] [--json]',
     allowedFlags: [...GLOBAL_FLAGS, 'command', 'worktree']
   }
-]
+])

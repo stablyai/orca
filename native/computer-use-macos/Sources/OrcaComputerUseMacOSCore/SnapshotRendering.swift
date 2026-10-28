@@ -109,8 +109,8 @@ public enum SnapshotRenderHeuristics {
                 return action != "AXCancel" && action != "AXPick"
             }
             if role == "AXScrollArea",
-               (rawActions.contains("AXScrollUpByPage") || rawActions.contains("AXScrollDownByPage")),
-               action == "AXScrollLeftByPage" || action == "AXScrollRightByPage" {
+               action == "AXScrollLeftByPage" || action == "AXScrollRightByPage",
+               (rawActions.contains("AXScrollUpByPage") || rawActions.contains("AXScrollDownByPage")) {
                 return false
             }
             return true
@@ -238,11 +238,10 @@ public enum SnapshotRenderHeuristics {
         if roleText == "heading", Int(value) != nil {
             return nil
         }
-        let clean = sanitize(value)
         if roleText == "text" || roleText == "text entry area" || roleText == "scroll bar" || roleText == "value indicator" {
-            return " \(clean)"
+            return " \(value)"
         }
-        return ", Value: \(clean)"
+        return ", Value: \(value)"
     }
 
     private static func markdownEscaped(_ value: String) -> String {

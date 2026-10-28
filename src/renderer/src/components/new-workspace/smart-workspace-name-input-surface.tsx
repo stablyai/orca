@@ -4,7 +4,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { isImeCompositionKeyDown } from '@/lib/ime-composition-keyboard-event'
-import { isBlockingJiraUrlIntent } from './smart-workspace-source-results'
+import { isBlockingJiraUrlIntent } from '../../../../shared/new-workspace/smart-workspace-source-results'
 import { isBlockingLinearUrlIntent } from '../../../../shared/new-workspace/smart-workspace-linear-intent'
 import { isComposerFieldToFieldFocus } from './smart-workspace-source-popover-focus'
 import { replaceCompletedWorkspaceEmojiShortcode } from '@/lib/workspace-emoji-shortcodes'
@@ -58,7 +58,6 @@ export function renderSmartWorkspaceNameInput(
 
   if (selectedSource) {
     return (
-      // Why: min-w-0 + w-full let long source titles shrink inside the dialog.
       <div
         ref={setSelectedSourceNode}
         data-workspace-source-pill="true"
@@ -192,6 +191,8 @@ export function renderSmartWorkspaceNameInput(
             applyEmojiReplacement(completedEmoji)
             return
           }
+          // A pending emoji caret frame would otherwise yank the caret back mid-typing.
+          cancelLocalInputFocusFrame()
           onValueChange(nextValue)
           setEmojiCursor(nextCursor)
           if (!disabled && mode !== 'text') {
@@ -200,7 +201,7 @@ export function renderSmartWorkspaceNameInput(
           }
         }}
         onPaste={(event) => {
-          // Why: a pasted issue URL is the whole intent, not a name fragment.
+          // Pasted issue URLs replace naming intent instead of extending a name fragment.
           const pasted = event.clipboardData.getData('text')
           if (
             !pasted ||
@@ -216,7 +217,7 @@ export function renderSmartWorkspaceNameInput(
           }
         }}
         onFocus={(event) => {
-          // Why: dialog autofocus stays suppressed; only field-to-field focus opens results.
+          // Open results only for field-to-field moves; keep dialog autofocus suppressed.
           if (!isComposerFieldToFieldFocus(event)) {
             setEmojiCursor(event.currentTarget.selectionStart)
             return
@@ -299,7 +300,6 @@ export function renderSmartWorkspaceNameInput(
         aria-describedby={
           jiraSource.intent ? jiraStatusId : unresolvedLinearUrlIntent ? linearStatusId : undefined
         }
-        // Why: match adjacent comboboxes' solid background in light mode.
         className="h-9 bg-background pl-8 text-sm"
       />
     </>

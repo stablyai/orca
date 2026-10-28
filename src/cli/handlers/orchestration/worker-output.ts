@@ -22,8 +22,7 @@ export type WorkerStartReceipt = {
 
 export function formatWorkerStart(value: WorkerStartReceipt): string {
   const lines = [`Worker ${value.dispatchId} [${value.state}] for ${value.taskId}`]
-  // Settings-driven rather than requested, so the human line always names the mode that ran: a
-  // fallback from the user's structured default is never silent.
+  // Show the mode that actually ran so a fallback from the user's default is visible.
   if (value.mode) {
     lines.push(value.mode.detail)
   }
@@ -74,12 +73,11 @@ function formatWorkerReadDetails(value: OrchestrationWorkerReadResult): string {
       ? `Source: transcript (provider=${value.provider})`
       : 'Source: terminal'
   const lines = [source]
-  // A released archive read otherwise prints identically to a live one.
   if (value.status?.worker) {
     lines.push(`Worker: ${value.status.worker}`)
   }
   lines.push(`Archived: ${value.archived === true}`)
-  // Two different verdicts: status.liveness is the PTY's, the fleet projection is the agent's.
+  // PTY liveness and agent liveness are separate verdicts.
   if (value.status?.liveness) {
     lines.push(`Terminal liveness: ${value.status.liveness}`)
   }

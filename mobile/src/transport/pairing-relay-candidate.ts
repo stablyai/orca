@@ -1,4 +1,5 @@
 import type { PairingRelay } from '../../../src/shared/mobile-relay-pairing-offer'
+import { hostStatusProbe } from './host-status-probe-operations'
 import type { MobileRelayPairingJournal } from './mobile-relay-pairing-journal'
 import { RelayOuterError, type PairingCandidateClient } from './mobile-relay-physical-client'
 import { RelayDirectorMoveNotNewerError } from './mobile-relay-invite-director'
@@ -28,7 +29,7 @@ export function createRecoveringPairingRelayCandidate(args: {
         return await client.sendRequest(method, params)
       } catch (error) {
         if (
-          method !== 'status.get' ||
+          method !== hostStatusProbe.operation.method ||
           closed ||
           relay.inviteExpiresAt <= args.now() ||
           !isDirectorRecoverable(error)
@@ -71,8 +72,7 @@ export function createRecoveringPairingRelayCandidate(args: {
       )
       try {
         const moved = await args.resolveDirector(relay)
-        // Why: the authenticated newer assignment must be durable before a
-        // target dial so a crash cannot revert to the known-stale cell.
+        // Persist authenticated newer assignments before dialing so a crash cannot revert to the stale cell.
         await args.persistMove(moved)
         log(
           'info',
@@ -90,10 +90,7 @@ export function createRecoveringPairingRelayCandidate(args: {
       } catch (error) {
         lastError = error
         if (error instanceof RelayDirectorMoveNotNewerError) {
-          // Why: the director has no "assignment unchanged" verb — a non-newer
-          // move IS that answer. The stored assignment stays authoritative (the
-          // move is never adopted or persisted), so the only correct action is
-          // to re-dial it with a real pause, not to abandon the relay path.
+          // A non-newer director move confirms the stored assignment; retain it and redial after a real pause.
           log(
             'info',
             directorEchoedCurrentAssignment(error, relay)
@@ -136,8 +133,7 @@ export function createRecoveringPairingRelayCandidate(args: {
   }
 }
 
-// Redialing the assignment the director just confirmed needs a real pause, not
-// the near-zero full jitter that would hammer the cell that refused the dial.
+// Floor confirmed-assignment retries so near-zero jitter cannot hammer the refusing cell.
 const NOT_NEWER_RETRY_FLOOR_MS = 250
 
 function directorEchoedCurrentAssignment(error: unknown, relay: PairingRelay): boolean {
@@ -161,10 +157,6 @@ function isDirectorRecoverable(error: unknown): boolean {
   if (!(error instanceof RelayOuterError)) {
     return true
   }
-  // 4429 stays out: the cell rejects it after reserving the invite credential,
-  // so each retry burns an attempt toward cooldown/invalidation — and a
-  // director hop cannot relieve cell load anyway. The retained codes are
-  // rejected before reservation (4409/4503) or never reach the cell (1006),
-  // so their re-dials burn nothing.
+  // Retry only failures before invite reservation (4409/4503) or cell arrival (1006); 4429 consumes attempts and must not redial.
   return error.code === 4409 || error.code === 4503 || error.code === 1006
 }

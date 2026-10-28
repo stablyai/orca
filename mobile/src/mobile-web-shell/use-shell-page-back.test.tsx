@@ -1,0 +1,143 @@
+import { createElement } from 'react'
+import { act, create, type ReactTestRenderer } from 'react-test-renderer'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+
+const native = vi.hoisted(() => {
+  const platform: { os: 'ios' | 'android' } = { os: 'android' }
+  const remove = vi.fn()
+  return {
+    platform,
+    remove,
+    addEventListener: vi.fn((_event: string, _handler: () => boolean) => ({ remove }))
+  }
+})
+
+vi.mock('react-native', () => ({
+  BackHandler: {
+    addEventListener: (event: string, handler: () => boolean) =>
+      native.addEventListener(event, handler)
+  },
+  get Platform() {
+    return { OS: native.platform.os }
+  }
+}))
+
+import { useShellPageBack } from './use-shell-page-back'
+
+function Screen(props: {
+  claimed: boolean
+  sendBack: () => boolean
+  setOptions: (options: { gestureEnabled: boolean }) => void
+}): null {
+  useShellPageBack(props)
+  return null
+}
+
+const mountedTrees: ReturnType<typeof create>[] = []
+
+function createTracked(element: Parameters<typeof create>[0]): ReturnType<typeof create> {
+  const tree = create(element)
+  mountedTrees.push(tree)
+  return tree
+}
+
+afterEach(() => {
+  act(() => {
+    for (const tree of mountedTrees.splice(0)) {
+      tree.unmount()
+    }
+  })
+})
+
+function render(props: {
+  claimed: boolean
+  sendBack: () => boolean
+  setOptions: (options: { gestureEnabled: boolean }) => void
+}): ReactTestRenderer {
+  let tree!: ReactTestRenderer
+  act(() => {
+    tree = createTracked(createElement(Screen, props))
+  })
+  return tree
+}
+
+beforeEach(() => {
+  native.platform.os = 'android'
+  native.addEventListener.mockClear()
+  native.remove.mockClear()
+})
+
+// Register only for live claims; faults, old pages and between-document gaps must leave Back to navigation.
+describe('the shell taking the device Back key for a page that claimed it', () => {
+  it('registers nothing while the page holds nothing', () => {
+    render({ claimed: false, sendBack: () => true, setOptions: vi.fn() })
+    expect(native.addEventListener).not.toHaveBeenCalled()
+  })
+
+  it('intercepts the hardware key on Android while the claim is live', () => {
+    const sendBack = vi.fn(() => true)
+    render({ claimed: true, sendBack, setOptions: vi.fn() })
+    expect(native.addEventListener).toHaveBeenCalledTimes(1)
+    expect(native.addEventListener.mock.calls[0]?.[0]).toBe('hardwareBackPress')
+    expect(native.addEventListener.mock.calls[0]?.[1]?.()).toBe(true)
+    expect(sendBack).toHaveBeenCalledTimes(1)
+  })
+
+  // Undeliverable presses fall through rather than become dead keys.
+  it('lets a press it could not deliver fall through to the navigator', () => {
+    render({ claimed: true, sendBack: () => false, setOptions: vi.fn() })
+    expect(native.addEventListener.mock.calls[0]?.[1]?.()).toBe(false)
+  })
+
+  it('gives the key back when the claim drops', () => {
+    const tree = render({ claimed: true, sendBack: () => true, setOptions: vi.fn() })
+    expect(native.remove).not.toHaveBeenCalled()
+    act(() => {
+      tree.update(
+        createElement(Screen, { claimed: false, sendBack: () => true, setOptions: vi.fn() })
+      )
+    })
+    expect(native.remove).toHaveBeenCalledTimes(1)
+  })
+
+  it('registers once across a rebuilt sender and calls the current sender', () => {
+    const first = vi.fn(() => false)
+    const second = vi.fn(() => true)
+    const tree = render({ claimed: true, sendBack: first, setOptions: vi.fn() })
+    const listener = native.addEventListener.mock.calls[0]?.[1]
+    expect(listener?.()).toBe(false)
+    expect(first).toHaveBeenCalledTimes(1)
+    act(() => {
+      tree.update(createElement(Screen, { claimed: true, sendBack: second, setOptions: vi.fn() }))
+    })
+    expect(native.addEventListener).toHaveBeenCalledTimes(1)
+    expect(native.remove).not.toHaveBeenCalled()
+    expect(listener?.()).toBe(true)
+    expect(first).toHaveBeenCalledTimes(1)
+    expect(second).toHaveBeenCalledTimes(1)
+  })
+
+  it('reaches for no hardware key on iOS, which has none', () => {
+    native.platform.os = 'ios'
+    render({ claimed: true, sendBack: () => true, setOptions: vi.fn() })
+    expect(native.addEventListener).not.toHaveBeenCalled()
+  })
+
+  // On iOS, disable swipe-back while a sheet claims Back so swiping cannot leave the sheet’s screen.
+  it('takes the stack swipe away on iOS while the claim is live, and restores it after', () => {
+    native.platform.os = 'ios'
+    const setOptions = vi.fn()
+    const tree = render({ claimed: true, sendBack: () => true, setOptions })
+    expect(setOptions).toHaveBeenCalledWith({ gestureEnabled: false })
+    act(() => {
+      tree.update(createElement(Screen, { claimed: false, sendBack: () => true, setOptions }))
+    })
+    expect(setOptions).toHaveBeenLastCalledWith({ gestureEnabled: true })
+  })
+
+  it('writes no gesture option on Android, where the stack has no swipe to take', () => {
+    const setOptions = vi.fn()
+    render({ claimed: true, sendBack: () => true, setOptions })
+    expect(setOptions).not.toHaveBeenCalled()
+  })
+})

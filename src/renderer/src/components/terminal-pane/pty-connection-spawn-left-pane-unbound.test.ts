@@ -14,6 +14,7 @@ import {
   installTerminalTestGlobals,
   restoreTerminalTestGlobals
 } from './pty-connection-test-environment'
+import { mockPanePtyArgs } from './pty-connection-test-connect-mock-pane'
 
 const {
   resetAndRefreshAllTerminalWebglAtlases,
@@ -120,14 +121,14 @@ vi.mock('./pty-dispatcher', async (importOriginal) => {
 })
 
 describe('fresh spawn leaves a local pane unbound', () => {
-  beforeEach(() => {
+  beforeEach(async () => {
     vi.resetModules()
     vi.clearAllMocks()
     transportFactoryQueue = []
     createdTransportOptions = []
     storeSubscribers = []
     mockStoreState = createInitialStoreState(() => mockStoreState)
-    installTerminalTestGlobals()
+    await installTerminalTestGlobals()
   })
 
   afterEach(async () => {
@@ -138,7 +139,7 @@ describe('fresh spawn leaves a local pane unbound', () => {
     return buildPaneConnectionDeps(() => mockStoreState, overrides)
   }
 
-  it('remounts the pane when the spawn resolves without a PTY id', async () => {
+  it('requests pane recovery when the spawn resolves without a PTY id', async () => {
     const { connectPanePty } = await import('./pty-connection')
     const transport = createMockTransport()
     // A spawn that produced nothing: no id returned and nothing bound after it.
@@ -146,9 +147,11 @@ describe('fresh spawn leaves a local pane unbound', () => {
     transportFactoryQueue.push(transport)
 
     connectPanePty(
-      createPane(1) as never,
-      createManager(1) as never,
-      createDeps({ tabId: 'tab-unbound-spawn' }) as never
+      ...mockPanePtyArgs(
+        createPane(1),
+        createManager(1),
+        createDeps({ tabId: 'tab-unbound-spawn' })
+      )
     )
     await flushAsyncTicks(40)
 
@@ -162,46 +165,19 @@ describe('fresh spawn leaves a local pane unbound', () => {
     )
   })
 
-  // The direct-SSH ledger runs its own retry; a second remount would race it.
-  it('leaves recovery to the direct SSH retry ledger', async () => {
+  // #21195: connect() resolves empty while the remote transport still holds an armed retry.
+  it('leaves recovery to a transport that owns its own retry', async () => {
     const { connectPanePty } = await import('./pty-connection')
-    const transport = createMockTransport()
-    transport.connect.mockResolvedValueOnce(null)
+    const transport = Object.assign(createMockTransport(), { ownsRecovery: vi.fn(() => true) })
+    transport.connect.mockImplementation(async () => undefined)
     transportFactoryQueue.push(transport)
-    const settleDirectSshPaneRetry = vi.fn()
-    const pendingRetry = {
-      attemptId: 'attempt-1',
-      authority: { targetId: 'target-a', providerEpoch: 'epoch-1', connectionGeneration: 3 },
-      tabGeneration: 7,
-      startedAt: 1
-    }
-    mockStoreState = {
-      ...mockStoreState,
-      tabsByWorktree: { 'wt-1': [{ id: 'tab-1', ptyId: null, generation: 7 }] },
-      ptyIdsByTabId: { 'tab-1': [] },
-      repos: [{ id: 'repo1', connectionId: 'target-a', displayName: 'orca' }],
-      sshConnectionStates: new Map([
-        [
-          'target-a',
-          {
-            targetId: 'target-a',
-            status: 'connected',
-            providerEpoch: 'epoch-1',
-            connectionGeneration: 3
-          }
-        ]
-      ]),
-      directSshPaneRetryByTabId: { 'tab-1': pendingRetry },
-      settleDirectSshPaneRetry
-    } as StoreState
 
-    connectPanePty(createPane(1) as never, createManager(1) as never, createDeps() as never)
+    const deps = createDeps({ tabId: 'tab-transport-retry' })
+    connectPanePty(...mockPanePtyArgs(createPane(1), createManager(1), deps))
     await flushAsyncTicks(40)
 
-    // The lease settled, so the unbound branch ran and deliberately skipped recovery.
-    expect(settleDirectSshPaneRetry).toHaveBeenCalledWith(
-      expect.objectContaining({ status: 'failed', attemptId: 'attempt-1' })
-    )
+    expect(transport.connect).toHaveBeenCalled()
+    expect(transport.ownsRecovery).toHaveBeenCalled()
     expect(requestTerminalPaneRecovery).not.toHaveBeenCalledWith(
       expect.objectContaining({ reason: 'spawn-left-pane-unbound' })
     )
@@ -213,14 +189,52 @@ describe('fresh spawn leaves a local pane unbound', () => {
     transportFactoryQueue.push(transport)
 
     connectPanePty(
-      createPane(1) as never,
-      createManager(1) as never,
-      createDeps({ tabId: 'tab-bound-spawn' }) as never
+      ...mockPanePtyArgs(createPane(1), createManager(1), createDeps({ tabId: 'tab-bound-spawn' }))
     )
     await flushAsyncTicks(40)
 
     expect(requestTerminalPaneRecovery).not.toHaveBeenCalledWith(
       expect.objectContaining({ reason: 'spawn-left-pane-unbound' })
+    )
+  })
+
+  // Fresh-spawn recovery never reaches reattach settlement; report binding so healed attempts cannot remain pending and block later recovery.
+  it('settles the tab recovery attempt as a success when the spawn binds a PTY', async () => {
+    const { connectPanePty } = await import('./pty-connection')
+    const settleTerminalTabRecovery = vi.fn()
+    mockStoreState = { ...mockStoreState, settleTerminalTabRecovery } as StoreState
+    const transport = createMockTransport('pty-bound')
+    transportFactoryQueue.push(transport)
+
+    connectPanePty(
+      ...mockPanePtyArgs(createPane(1), createManager(1), createDeps({ tabId: 'tab-bound-spawn' }))
+    )
+    await flushAsyncTicks(40)
+
+    expect(settleTerminalTabRecovery).toHaveBeenCalledWith('tab-bound-spawn', 0, 'success')
+  })
+
+  // Report failure before remount so repeated failure settles rather than retrying on cooldown.
+  it('settles the attempt as failed before asking for the remount', async () => {
+    const { connectPanePty } = await import('./pty-connection')
+    const settleTerminalTabRecovery = vi.fn()
+    mockStoreState = { ...mockStoreState, settleTerminalTabRecovery } as StoreState
+    const transport = createMockTransport()
+    transport.connect.mockImplementation(async () => null)
+    transportFactoryQueue.push(transport)
+
+    connectPanePty(
+      ...mockPanePtyArgs(
+        createPane(1),
+        createManager(1),
+        createDeps({ tabId: 'tab-unbound-spawn' })
+      )
+    )
+    await flushAsyncTicks(40)
+
+    expect(settleTerminalTabRecovery).toHaveBeenCalledWith('tab-unbound-spawn', 0, 'failed')
+    expect(settleTerminalTabRecovery.mock.invocationCallOrder[0]).toBeLessThan(
+      requestTerminalPaneRecovery.mock.invocationCallOrder[0]
     )
   })
 })

@@ -1,0 +1,15 @@
+{
+  "capturedAt": "2026-09-29T01:32:55.701Z",
+  "platform": "darwin",
+  "command": [
+    "codex",
+    "--no-daemon",
+    "-c",
+    "check_for_update_on_startup=false",
+    "--dangerously-bypass-approvals-and-sandbox"
+  ],
+  "cols": 120,
+  "rows": 40,
+  "note": "codex-cli 0.158.0: launch in an untrusted folder; the recording ends on the unanswered trust dialog. STA-8834.",
+  "exitCode": 0
+}

@@ -451,4 +451,86 @@ describe('gitlab client — MR operations', () => {
       )
     })
   })
+  // mr subcommands reject --hostname; route self-hosted instances through GITLAB_HOST.
+  describe('mr subcommands against a self-hosted SSH host', () => {
+    const projectRef = { host: 'gitlab.example.internal', path: 'g/p' }
+
+    it('merges without --hostname and passes the host through GITLAB_HOST', async () => {
+      glabExecFileAsyncMock.mockResolvedValueOnce({ stdout: '', stderr: '' })
+
+      await expect(mergeMR('/repo', 6, 'merge', undefined, 'conn-1', projectRef)).resolves.toEqual({
+        ok: true
+      })
+
+      const [args, options] = glabExecFileAsyncMock.mock.calls[0]
+      expect(args).toEqual(['mr', 'merge', '6', '-R', 'g/p', '--yes'])
+      expect(options.env?.GITLAB_HOST).toBe('gitlab.example.internal')
+    })
+
+    it('keeps the squash flag while routing the host through the environment', async () => {
+      glabExecFileAsyncMock.mockResolvedValueOnce({ stdout: '', stderr: '' })
+
+      await expect(mergeMR('/repo', 6, 'squash', undefined, 'conn-1', projectRef)).resolves.toEqual(
+        { ok: true }
+      )
+
+      const [args, options] = glabExecFileAsyncMock.mock.calls[0]
+      expect(args).toEqual(['mr', 'merge', '6', '-R', 'g/p', '--yes', '--squash'])
+      expect(options.env?.GITLAB_HOST).toBe('gitlab.example.internal')
+    })
+
+    it('closes without --hostname and passes the host through GITLAB_HOST', async () => {
+      glabExecFileAsyncMock.mockResolvedValueOnce({ stdout: '', stderr: '' })
+
+      await expect(closeMR('/repo', 6, undefined, 'conn-1', projectRef)).resolves.toEqual({
+        ok: true
+      })
+
+      const [args, options] = glabExecFileAsyncMock.mock.calls[0]
+      expect(args).toEqual(['mr', 'close', '6', '-R', 'g/p'])
+      expect(options.env?.GITLAB_HOST).toBe('gitlab.example.internal')
+    })
+
+    it('reopens without --hostname and passes the host through GITLAB_HOST', async () => {
+      glabExecFileAsyncMock.mockResolvedValueOnce({ stdout: '', stderr: '' })
+
+      await expect(reopenMR('/repo', 6, undefined, 'conn-1', projectRef)).resolves.toEqual({
+        ok: true
+      })
+
+      const [args, options] = glabExecFileAsyncMock.mock.calls[0]
+      expect(args).toEqual(['mr', 'reopen', '6', '-R', 'g/p'])
+      expect(options.env?.GITLAB_HOST).toBe('gitlab.example.internal')
+    })
+
+    it('leaves the environment untouched for a local workspace', async () => {
+      glabExecFileAsyncMock.mockResolvedValueOnce({ stdout: '', stderr: '' })
+
+      await expect(mergeMR('/repo', 6, 'merge', undefined, null, projectRef)).resolves.toEqual({
+        ok: true
+      })
+
+      const [args, options] = glabExecFileAsyncMock.mock.calls[0]
+      expect(args).toEqual(['mr', 'merge', '6', '-R', 'g/p', '--yes'])
+      expect(options.env).toBeUndefined()
+    })
+  })
+
+  describe('glab state-change refusals', () => {
+    const projectRef = { host: 'gitlab.com', path: 'g/p' }
+    const mutations = { close: closeMR, reopen: reopenMR }
+
+    it.each([
+      ['close', 'this merge request has been closed', true],
+      ['reopen', 'this merge request is already open.', true],
+      ['close', 'this merge request has already been merged', false],
+      ['reopen', 'this merge request has already been merged', false]
+    ] as const)('%s refused with "%s" reports ok=%s', async (action, message, ok) => {
+      glabExecFileAsyncMock.mockRejectedValueOnce(new Error(message))
+
+      await expect(mutations[action]('/repo', 6, undefined, null, projectRef)).resolves.toEqual(
+        ok ? { ok: true } : { ok: false, error: message }
+      )
+    })
+  })
 })

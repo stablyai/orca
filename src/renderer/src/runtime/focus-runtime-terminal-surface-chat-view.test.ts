@@ -1,0 +1,85 @@
+// @vitest-environment happy-dom
+import { afterEach, describe, expect, it, vi } from 'vitest'
+import {
+  focusRuntimeTerminalSurface,
+  registerRuntimeTerminalTab
+} from './mounted-terminal-tab-registry'
+
+const TAB_ID = 'chat-view-tab'
+const WORKTREE_ID = 'chat-view-worktree'
+const LEAF_ID = 'cccccccc-cccc-4ccc-8ccc-cccccccccccc'
+const PANE_ID = 1
+
+const unregisterCallbacks: (() => void)[] = []
+
+/** The cover class TerminalPaneNativeChatPortal renders over the still-mounted xterm. */
+function makePaneContainer(covered: boolean, leafId = LEAF_ID): HTMLElement {
+  const container = document.createElement('div')
+  container.setAttribute('data-leaf-id', leafId)
+  if (covered) {
+    const shell = document.createElement('div')
+    shell.className = 'native-chat-pane-shell absolute inset-0 z-10 flex'
+    container.append(shell)
+  }
+  return container
+}
+
+function registerChatViewTab(covered: boolean): {
+  focus: ReturnType<typeof vi.fn>
+  setActivePane: ReturnType<typeof vi.fn>
+} {
+  const textarea = document.createElement('textarea')
+  document.body.append(textarea)
+  const focus = vi.fn(() => textarea.focus())
+  const setActivePane = vi.fn()
+  const pane = {
+    id: PANE_ID,
+    leafId: LEAF_ID,
+    container: makePaneContainer(covered),
+    terminal: { focus, textarea }
+  }
+  const manager = {
+    getPanes: () => [pane],
+    getActivePane: () => pane,
+    getLeafId: (paneId: number) => (paneId === pane.id ? pane.leafId : null),
+    getNumericIdForLeaf: (candidateLeafId: string) =>
+      candidateLeafId === pane.leafId ? pane.id : null,
+    setActivePane
+  }
+  unregisterCallbacks.push(
+    registerRuntimeTerminalTab({
+      tabId: TAB_ID,
+      worktreeId: WORKTREE_ID,
+      getManager: () => manager as never,
+      getContainer: () => null,
+      getPtyIdForPane: () => null,
+      getTabWideAgentHintLeafId: () => null
+    })
+  )
+  return { focus, setActivePane }
+}
+
+// Legacy chat keeps xterm mounted under its portal; focusing it steals the composer caret (#9939 twin).
+describe('focusRuntimeTerminalSurface on a chat-view pane', () => {
+  afterEach(() => {
+    document.body.replaceChildren()
+    while (unregisterCallbacks.length > 0) {
+      unregisterCallbacks.pop()?.()
+    }
+  })
+
+  it('claims focus without touching the covered xterm', () => {
+    const { focus } = registerChatViewTab(true)
+
+    // Return true or DOM fallback finds no structured tab and focuses unrelated xterm.
+    expect(focusRuntimeTerminalSurface(TAB_ID, null, WORKTREE_ID)).toBe(true)
+    expect(focus).not.toHaveBeenCalled()
+  })
+
+  it('focuses the active xterm when no chat portal covers it', () => {
+    const { focus } = registerChatViewTab(false)
+
+    expect(focusRuntimeTerminalSurface(TAB_ID, null, WORKTREE_ID)).toBe(true)
+    expect(focus).toHaveBeenCalledOnce()
+  })
+})

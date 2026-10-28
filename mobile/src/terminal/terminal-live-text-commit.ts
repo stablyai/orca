@@ -1,4 +1,5 @@
 import { getTerminalLiveSpecialKeyBytes } from './terminal-live-input'
+import { readUtf8CodePointAt } from '../../../src/shared/utf8-byte-limits'
 
 export type TerminalLiveSpecialKeyDecision =
   | { readonly kind: 'ignore' }
@@ -36,8 +37,7 @@ export function getTerminalLiveSpecialKeyDecision({
     return { kind: 'ignore' }
   }
 
-  // Why: native field edits fire onChangeText and the mirror diff emits the
-  // matching PTY erase; sending raw DEL here as well would double-erase.
+  // Native edits already emit mirror-diff erase bytes; raw DEL here would erase twice.
   if ((key === 'Backspace' || key === 'Delete') && (heldText.length > 0 || sentText.length > 0)) {
     return { kind: 'local-edit' }
   }
@@ -47,6 +47,12 @@ export function getTerminalLiveSpecialKeyDecision({
   }
 
   return { kind: 'send-now', bytes }
+}
+
+// An ending Return gives echoed text to the terminal and resets the field mirror.
+// Use endsWith because custom keys can contain command plus Return; an internal Return does not end this payload.
+export function terminalLiveAccessoryInputEndsLine(bytes: string): boolean {
+  return bytes.endsWith('\r')
 }
 
 export function getTerminalLiveAccessoryBytesDecision({
@@ -74,10 +80,11 @@ export function getTerminalLiveAccessoryLocalEditText({
   readonly fieldText: string
 }): string {
   if (localEdit === 'delete') {
-    // Why: accessory Delete mirrors forward-delete at the hidden input's end;
-    // it stays local but does not remove the field text.
+    // Accessory Delete forwards deletion beyond the hidden input’s end; preserve its local text.
     return fieldText
   }
 
-  return Array.from(fieldText).slice(0, -1).join('')
+  const end = fieldText.length
+  const width = end > 1 && readUtf8CodePointAt(fieldText, end - 2) > 0xffff ? 2 : 1
+  return fieldText.slice(0, -width)
 }

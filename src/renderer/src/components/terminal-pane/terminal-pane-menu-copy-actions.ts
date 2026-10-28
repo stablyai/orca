@@ -4,18 +4,16 @@ import { makePaneKey } from '../../../../shared/stable-pane-id'
 import { translate } from '@/i18n/i18n'
 import { copyTerminalHandleForPane } from './terminal-handle-copy'
 import { runTerminalCopy, runTerminalIdentityCopy } from './terminal-copy-rejection-guards'
+import { readTerminalClipboardSelection } from './terminal-clipboard-selection-text'
 
 export const copyTerminalPaneMenuSelection = async (pane: ManagedPane | null): Promise<void> => {
   if (!pane) {
     return
   }
   await runTerminalCopy({
-    selection: pane.terminal.getSelection(),
+    selection: readTerminalClipboardSelection(pane.terminal),
     writeClipboardText: window.api.ui.writeTerminalClipboardText,
-    // Why: Radix returns focus to the menu trigger (the pane container) on
-    // close, but xterm.js only accepts input when its own helper textarea is
-    // focused. Without this, the user has to click the pane again before
-    // typing works (see #592).
+    // Radix restores the container, but xterm needs its textarea focused for typing (#592).
     focus: () => pane.terminal.focus()
   })
 }
@@ -28,8 +26,7 @@ export const copyTerminalPaneMenuPaneId = async (
     return
   }
   await runTerminalIdentityCopy({
-    // Why: orchestration targets use ORCA_PANE_KEY, which survives renderer
-    // remounts; the numeric PaneManager id is only a local runtime handle.
+    // ORCA_PANE_KEY survives remounts; numeric PaneManager IDs are local handles.
     text: makePaneKey(tabId, pane.leafId),
     writeClipboardText: window.api.ui.writeTerminalClipboardText,
     onSuccess: () =>
@@ -39,8 +36,7 @@ export const copyTerminalPaneMenuPaneId = async (
           'Pane ID copied'
         )
       ),
-    // Why: claiming success after a failed write is the exact silent lie this
-    // fallback exists to remove, so report it the way Copy Terminal ID does.
+    // Report clipboard rejection rather than falsely toasting success, matching Copy Terminal ID.
     onError: () =>
       toast.error(
         translate(
@@ -54,7 +50,8 @@ export const copyTerminalPaneMenuPaneId = async (
 
 export const copyTerminalPaneMenuTerminalId = async (
   pane: ManagedPane | null,
-  tabId: string
+  tabId: string,
+  ptyId: string | null
 ): Promise<void> => {
   if (!pane) {
     return
@@ -63,6 +60,7 @@ export const copyTerminalPaneMenuTerminalId = async (
     await copyTerminalHandleForPane({
       tabId,
       leafId: pane.leafId,
+      ptyId,
       callRuntime: window.api.runtime.call,
       writeClipboardText: window.api.ui.writeTerminalClipboardText
     })

@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useLayoutEffect } from 'react'
 import { useAppStore } from '../../store'
-import { makePaneKey } from '../../../../shared/stable-pane-id'
 import {
   applyTerminalPaneAttentionToManager,
   subscribeTerminalPaneAttention
@@ -15,27 +14,26 @@ import {
   clearPaneTitleOverlayRects
 } from './pane-title-overlay-rects'
 import type { PaneTitleOverlayRect } from './TerminalPaneHeaderOverlay'
-import { shutdownBufferCaptures } from './shutdown-buffer-captures'
+import {
+  shutdownBufferCaptures,
+  type ShutdownBufferCaptureOptions
+} from './shutdown-buffer-captures'
 import { captureTerminalShutdownLayout } from './terminal-shutdown-layout-capture'
+import { resolveLeafScrollbackBuffers } from './leaf-scrollback-resolution'
 import { shouldPreserveTerminalScrollbackBuffers } from '../../../../shared/workspace-session-terminal-buffers'
 import type { TerminalPaneCloseController } from './use-terminal-pane-close-actions'
 
 export function useTerminalPaneTitleEffects(controller: TerminalPaneCloseController): void {
   const {
-    clearTerminalPaneUnread,
-    clearTerminalTabUnread,
-    clearWorktreeUnread,
     clearedScrollbackLeafIdsRef,
     containerRef,
     expandedPaneId,
-    expandedPaneIdRef,
     isolatedPaneKey,
     isVisible,
     managerRef,
     paneCount,
     paneLayoutRevision,
     paneTitles,
-    paneTitlesRef,
     paneTransportsRef,
     renamingPaneId,
     renameInputRef,
@@ -44,38 +42,18 @@ export function useTerminalPaneTitleEffects(controller: TerminalPaneCloseControl
     setPaneTitleOverlayRects,
     setSessionRestoredBannerPaneIds,
     setTabLayout,
+    setTabLocalOnlyScrollback,
     shouldMeasureHiddenStartup,
     tabId,
     worktreeId
   } = controller
-
-  useEffect(() => {
-    const container = containerRef.current
-    if (!container) {
-      return
-    }
-    const onPointerDown = (event: PointerEvent): void => {
-      clearTerminalTabUnread(tabId)
-      clearWorktreeUnread(worktreeId)
-      const paneElement =
-        event.target instanceof Element ? event.target.closest('.pane[data-leaf-id]') : null
-      const leafId = paneElement?.getAttribute('data-leaf-id')
-      if (leafId) {
-        clearTerminalPaneUnread(makePaneKey(tabId, leafId))
-      }
-    }
-    container.addEventListener('pointerdown', onPointerDown, { capture: true })
-    return () => container.removeEventListener('pointerdown', onPointerDown, { capture: true })
-    // oxlint-disable-next-line react-hooks/exhaustive-deps -- Preserve the pre-split dependency contract.
-  }, [tabId, worktreeId, clearTerminalTabUnread, clearTerminalPaneUnread, clearWorktreeUnread])
 
   const applyTerminalPaneAttention = useCallback(() => {
     const manager = managerRef.current
     if (manager) {
       applyTerminalPaneAttentionToManager(manager, tabId)
     }
-    // oxlint-disable-next-line react-hooks/exhaustive-deps -- Preserve the pre-split dependency contract.
-  }, [tabId])
+  }, [tabId, managerRef])
   useLayoutEffect(() => {
     applyTerminalPaneAttention()
     return subscribeTerminalPaneAttention(tabId, applyTerminalPaneAttention)
@@ -95,7 +73,6 @@ export function useTerminalPaneTitleEffects(controller: TerminalPaneCloseControl
     if (needsFit && (isVisible || shouldMeasureHiddenStartup)) {
       fitPanes(manager)
     }
-    // oxlint-disable-next-line react-hooks/exhaustive-deps -- Preserve the pre-split dependency contract.
   }, [
     paneCount,
     paneLayoutRevision,
@@ -103,7 +80,8 @@ export function useTerminalPaneTitleEffects(controller: TerminalPaneCloseControl
     renamingPaneId,
     sessionRestoredBannerPaneIds,
     isVisible,
-    shouldMeasureHiddenStartup
+    shouldMeasureHiddenStartup,
+    managerRef
   ])
 
   const syncPaneTitleOverlayRects = useCallback((): void => {
@@ -129,8 +107,7 @@ export function useTerminalPaneTitleEffects(controller: TerminalPaneCloseControl
     setPaneTitleOverlayRects((previous) =>
       arePaneTitleOverlayRectsEqual(previous, nextRects) ? previous : nextRects
     )
-    // oxlint-disable-next-line react-hooks/exhaustive-deps -- Preserve the pre-split dependency contract.
-  }, [])
+  }, [containerRef, managerRef, setPaneTitleOverlayRects])
 
   useLayoutEffect(() => {
     const manager = managerRef.current
@@ -161,7 +138,6 @@ export function useTerminalPaneTitleEffects(controller: TerminalPaneCloseControl
         cancelAnimationFrame(frame)
       }
     }
-    // oxlint-disable-next-line react-hooks/exhaustive-deps -- Preserve the pre-split dependency contract.
   }, [
     expandedPaneId,
     isolatedPaneKey,
@@ -171,7 +147,10 @@ export function useTerminalPaneTitleEffects(controller: TerminalPaneCloseControl
     paneTitles,
     renamingPaneId,
     sessionRestoredBannerPaneIds,
-    syncPaneTitleOverlayRects
+    syncPaneTitleOverlayRects,
+    containerRef,
+    managerRef,
+    setPaneTitleOverlayRects
   ])
 
   useEffect(() => {
@@ -183,37 +162,47 @@ export function useTerminalPaneTitleEffects(controller: TerminalPaneCloseControl
       const next = pruneSessionRestoredBannerPaneIds(previous, manager.getPanes())
       return next === previous ? previous : next
     })
-    // oxlint-disable-next-line react-hooks/exhaustive-deps -- Preserve the pre-split dependency contract.
-  }, [paneCount])
+  }, [paneCount, managerRef, setSessionRestoredBannerPaneIds])
 
   useEffect(() => {
-    const captureBuffers = (options?: { includeLocalBuffers?: boolean }): void => {
+    const captureBuffers = (options?: ShutdownBufferCaptureOptions): void => {
       const manager = managerRef.current
-      const container = containerRef.current
-      if (!manager || !container) {
+      const state = useAppStore.getState()
+      const existing = state.terminalLayoutsByTabId[tabId]
+      // Mounting stores the layout; only closing the tab or its workspace removes it.
+      if (!manager || !existing) {
         return
       }
       const panes = manager.getPanes()
       if (panes.length === 0) {
         return
       }
-      const state = useAppStore.getState()
-      const existing = state.terminalLayoutsByTabId[tabId]
       const includeLocalBuffers = options?.includeLocalBuffers ?? true
       const shouldCaptureScrollbackBuffers = includeLocalBuffers
         ? true
         : shouldPreserveTerminalScrollbackBuffers(worktreeId, state.repos)
       const layout = captureTerminalShutdownLayout({
         manager,
-        container,
-        expandedPaneId: expandedPaneIdRef.current,
         paneTransports: paneTransportsRef.current,
-        paneTitlesByPaneId: paneTitlesRef.current,
         existingLayout: existing,
+        // Empty mid-replay captures must fall back to the last good shared or local buffer.
+        priorBuffersByLeafId: resolveLeafScrollbackBuffers({
+          shared: existing,
+          localOnly: state.localOnlyScrollbackByTabId[tabId]
+        }),
         captureBuffers: shouldCaptureScrollbackBuffers,
         clearedScrollbackLeafIds: clearedScrollbackLeafIdsRef.current
       })
-      setTabLayout(tabId, layout)
+      if (options?.localOnly && layout.buffersByLeafId) {
+        // Cold parks are frequent: keep layout structure shared but buffer bytes in the local-only field excluded from remote export.
+        const { buffersByLeafId, ...structureOnly } = layout
+        setTabLayout(tabId, structureOnly)
+        setTabLocalOnlyScrollback(tabId, buffersByLeafId)
+      } else {
+        setTabLayout(tabId, layout)
+        // A shared capture supersedes whatever the last park left behind, so the local copy goes.
+        setTabLocalOnlyScrollback(tabId, null)
+      }
       for (const pane of panes) {
         clearedScrollbackLeafIdsRef.current.delete(pane.leafId)
       }
@@ -224,8 +213,15 @@ export function useTerminalPaneTitleEffects(controller: TerminalPaneCloseControl
         shutdownBufferCaptures.delete(tabId)
       }
     }
-    // oxlint-disable-next-line react-hooks/exhaustive-deps -- Preserve the pre-split dependency contract.
-  }, [tabId, worktreeId, setTabLayout])
+  }, [
+    tabId,
+    worktreeId,
+    setTabLayout,
+    setTabLocalOnlyScrollback,
+    clearedScrollbackLeafIdsRef,
+    managerRef,
+    paneTransportsRef
+  ])
 
   useEffect(() => {
     if (renamingPaneId === null) {
@@ -250,6 +246,5 @@ export function useTerminalPaneTitleEffects(controller: TerminalPaneCloseControl
       document.removeEventListener('pointerdown', markPointerBlurIntent, true)
       document.removeEventListener('keydown', markKeyboardBlurIntent, true)
     }
-    // oxlint-disable-next-line react-hooks/exhaustive-deps -- Preserve the pre-split dependency contract.
-  }, [renamingPaneId])
+  }, [renamingPaneId, renameInputRef, renameUserRequestedBlurCommitRef])
 }

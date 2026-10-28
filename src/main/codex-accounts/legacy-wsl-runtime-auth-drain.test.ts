@@ -304,4 +304,20 @@ describe('legacy WSL runtime auth drain', () => {
       })
     )
   })
+
+  it('bounds completed distro state during distro churn', async () => {
+    runWslProcessMock.mockResolvedValue(result(20))
+    for (let index = 0; index < 132; index += 1) {
+      await startLegacyWslRuntimeAuthDrain({
+        distro: `Distro-${index}`,
+        guestHomeLinuxPath: '/home/alice',
+        legacyPanePresent: false,
+        resolveDestination: () => null
+      })
+    }
+    expect(_internals.drainDistroStateCountsForTests()).toEqual({
+      completed: 128,
+      pendingRoutes: 0
+    })
+  })
 })

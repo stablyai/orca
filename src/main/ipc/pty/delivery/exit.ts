@@ -1,3 +1,5 @@
+import { ptyIncarnationById } from '../provider/ownership-state'
+import { resolvePtyExecutionHost } from '../provider/registry'
 import {
   interactiveOutputCharsByPty,
   lastInputAtByPty,
@@ -9,17 +11,21 @@ import { getRendererInFlightCharsForPty } from './accounting'
 import { clearFlushTimerIfIdle } from './flush'
 import type { PtyIpcSession } from '../session'
 
-export function rememberSyntheticKillExit(session: PtyIpcSession, id: string): void {
+export function rememberSyntheticKillExit(
+  session: PtyIpcSession,
+  id: string,
+  incarnationId?: string
+): void {
   const existing = session.syntheticKillExitPtyIds.get(id)
   if (existing) {
-    clearTimeout(existing)
+    clearTimeout(existing.cleanupTimer)
   }
-  // Why a timed window: providers may report the real exit after kill completes; skip only that late duplicate, not a future reused id forever.
+  // Only the same incarnation's late exit duplicates the synthetic renderer notification.
   const cleanupTimer = setTimeout(() => {
     session.syntheticKillExitPtyIds.delete(id)
   }, SYNTHETIC_KILL_EXIT_DUPLICATE_WINDOW_MS)
   cleanupTimer.unref?.()
-  session.syntheticKillExitPtyIds.set(id, cleanupTimer)
+  session.syntheticKillExitPtyIds.set(id, { cleanupTimer, incarnationId })
 }
 
 export function rememberRetiredRejectedPty(session: PtyIpcSession, id: string): void {
@@ -34,22 +40,25 @@ export function rememberRetiredRejectedPty(session: PtyIpcSession, id: string): 
   session.retiredRejectedPtyIds.set(id, cleanupTimer)
 }
 
-export function consumeSyntheticKillExit(session: PtyIpcSession, id: string): boolean {
-  const cleanupTimer = session.syntheticKillExitPtyIds.get(id)
-  if (!cleanupTimer) {
+export function consumeSyntheticKillExit(
+  session: PtyIpcSession,
+  id: string,
+  incarnationId?: string
+): boolean {
+  const pending = session.syntheticKillExitPtyIds.get(id)
+  if (!pending || pending.incarnationId !== incarnationId) {
     return false
   }
-  clearTimeout(cleanupTimer)
+  clearTimeout(pending.cleanupTimer)
   session.syntheticKillExitPtyIds.delete(id)
   return true
 }
 
-export function preparePtyExitForRenderer(
+function preparePtyExitForRenderer(
   session: PtyIpcSession,
   payload: { id: string; code: number; incarnationId?: string }
 ): (() => void) | null {
-  if (session.mainWindow.isDestroyed()) {
-    session.sshOutputIntake?.transferPtyProjections(payload.id, 'renderer-destroyed')
+  if (!session.mainWindow || session.mainWindow.isDestroyed()) {
     return () => {}
   }
   if (session.rendererExitingPtyIds.has(payload.id)) {
@@ -71,22 +80,17 @@ export function preparePtyExitForRenderer(
         getRendererInFlightCharsForPty(session, payload.id) > 0
       )
     }
-    // Why flush before exit: the renderer tears down the terminal on pty:exit, so any batched output not yet flushed would be silently lost.
+    // Flush before pty:exit tears down the renderer terminal and loses remaining output.
     const remaining = session.pendingData.delete(payload.id)
     clearFlushTimerIfIdle(session)
     if (remaining) {
       if (remaining.droppedOutput === true) {
-        // Sentinel entry: only salvaged query bytes remain; keep the flag so the renderer knows the span was dropped.
-        sendPtyDataToRenderer(
-          session,
-          payload.id,
-          {
-            id: payload.id,
-            data: remaining.data,
-            droppedOutput: true
-          },
-          remaining.projectionAdmissionIds
-        )
+        // Preserve the drop flag even when only salvaged query bytes remain.
+        sendPtyDataToRenderer(session, payload.id, {
+          id: payload.id,
+          data: remaining.data,
+          droppedOutput: true
+        })
       } else {
         sendPtyDataToRenderer(
           session,
@@ -97,9 +101,9 @@ export function preparePtyExitForRenderer(
             remaining.startSeq,
             remaining.containsBackgroundOutput,
             remaining.rawLength,
-            remaining.transformed
-          ),
-          remaining.projectionAdmissionIds
+            remaining.transformed,
+            remaining.gapEscapeState
+          )
         )
       }
     }
@@ -110,11 +114,11 @@ export function preparePtyExitForRenderer(
   }
 }
 
-export function finalizePtyExitForRenderer(
+function finalizePtyExitForRenderer(
   session: PtyIpcSession,
   payload: { id: string; code: number; incarnationId?: string }
 ): void {
-  if (session.mainWindow.isDestroyed()) {
+  if (!session.mainWindow || session.mainWindow.isDestroyed()) {
     session.rendererCreditBeforeExitByPty.delete(payload.id)
     return
   }
@@ -122,9 +126,8 @@ export function finalizePtyExitForRenderer(
     session.rendererCreditBeforeExitByPty.get(payload.id) ??
     getRendererInFlightCharsForPty(session, payload.id) > 0
   session.rendererCreditBeforeExitByPty.delete(payload.id)
-  // Why resume a dead PTY (no-op): avoid leaving a stale paused mark behind for a reused id.
+  // Release pause bookkeeping so reused IDs cannot inherit it.
   session.producerFlowControl.release(payload.id)
-  session.sourceCreditPendingPtys.delete(payload.id)
   session.pendingOverflowMarkedPtys.delete(payload.id)
   session.rendererDeliveryRestoreNeededPtys.delete(payload.id)
   lastInputAtByPty.delete(payload.id)
@@ -134,22 +137,24 @@ export function finalizePtyExitForRenderer(
     0,
     session.rendererInFlightTotalChars - releasedRendererCredit
   )
-  // Why: the renderer also drops its cumulative total on pty:exit, so a reused id restarts aligned at zero on both sides.
+  // Renderer resets cumulative ACKs on exit; reused IDs must restart aligned at zero.
   session.rendererDeliveryAccountingByPty.delete(payload.id)
   if (hadReleasableRendererCredit) {
     if (session.pendingDataFlushActive) {
-      // Why: let the open round coalesce this wake into its one post-round continuation.
+      // Coalesce credit-release wakeups into this round's single continuation.
       const reactivatedBlocked = session.pendingData.reactivateBlocked()
       session.pendingDataCreditReleasedDuringFlush ||= reactivatedBlocked
     } else {
       session.schedulePendingDataAfterCreditReport(true)
     }
   }
+  const intentionalStops =
+    session.runtime?.intentionalPtyStops?.claimExit(payload.id, payload.incarnationId) ?? []
   session.mainWindow.webContents.send('pty:exit', {
     ...payload,
-    ...(session.reversibleStopOwnersByPtyId.has(payload.id)
-      ? { preserveRendererBinding: true }
-      : {})
+    hostId: resolvePtyExecutionHost(payload.id),
+    ...(intentionalStops.includes('reversible') ? { preserveRendererBinding: true } : {}),
+    ...(intentionalStops.includes('replaced') ? { replacedByRestart: true } : {})
   })
 }
 
@@ -163,7 +168,6 @@ export function sendPtyExitToRenderer(
     return
   }
   try {
-    session.sshOutputIntake?.transferPtyProjections(payload.id, 'legacy-pty-exit')
     finalizePtyExitForRenderer(session, payload)
   } finally {
     release()
@@ -171,7 +175,11 @@ export function sendPtyExitToRenderer(
 }
 
 export function sendPtySpawnedToRenderer(session: PtyIpcSession, id: string): void {
-  if (!session.mainWindow.isDestroyed()) {
-    session.mainWindow.webContents.send('pty:spawned', { id })
+  if (session.mainWindow && !session.mainWindow.isDestroyed()) {
+    session.mainWindow.webContents.send('pty:spawned', {
+      id,
+      incarnationId: ptyIncarnationById.get(id),
+      hostId: resolvePtyExecutionHost(id)
+    })
   }
 }

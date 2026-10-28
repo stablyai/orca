@@ -33,6 +33,7 @@ import type { AutomationHostTarget } from './automation-host-client'
 import type { AutomationAuthorityChangeReason } from './automation-host-invalidation'
 import type { AutomationSaveContext } from './automation-save-context'
 import { automationAuthorityCatalogKey } from './automation-host-catalog-types'
+import { createBrowserUuid } from '@/lib/browser-uuid'
 
 export type AutomationMoveOperationContext = {
   automationDispatchContext: AutomationDispatchContext
@@ -99,7 +100,7 @@ export function resolveAutomationEditDestination(
       ok: false,
       notice: {
         message: translate(
-          'auto.components.automations.createDestination.stale',
+          'auto.components.automations.createDestination.projectStale',
           '{host} changed while this form was open. Choose the project again before saving.'
         ).replace('{host}', revalidated.entry.label),
         recovery: 'retry',
@@ -132,7 +133,7 @@ export function resolveAutomationEditDestination(
 function unavailableDestinationNotice(): AutomationActionNotice {
   return {
     message: translate(
-      'auto.components.automations.createDestination.unavailable',
+      'auto.components.automations.createDestination.projectUnavailable',
       'Choose an available project on this host before saving.'
     ),
     recovery: 'retry',
@@ -165,7 +166,7 @@ export async function moveAutomationToDestination(
   }
 
   const operationKey = `${source.id}:${target.entry.stableKey}`
-  const creationKey = context.moveCreationKeysRef.current.get(operationKey) ?? crypto.randomUUID()
+  const creationKey = context.moveCreationKeysRef.current.get(operationKey) ?? createBrowserUuid()
   context.moveCreationKeysRef.current.set(operationKey, creationKey)
   const created = toDispatchResult(
     await createAutomationAtDestination(

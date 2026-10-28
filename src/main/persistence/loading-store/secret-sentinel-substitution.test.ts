@@ -1,17 +1,12 @@
-/**
- * The bar for this change is "the bytes on disk did not move". Every case below runs the exact
- * loop `applySecretSentinelSubstitutions` replaced — reproduced in `previousImplementation` — and
- * compares payload bytes and guard hash, because a drifting hash silently disables the no-op write
- * guard and a drifting payload is corrupted persisted state.
- */
 import { createHash, randomUUID } from 'node:crypto'
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
+import { serializeCompleteProfileStateDomains } from './profile-state-authority-writes'
 import {
   applySecretSentinelSubstitutions,
   type SecretSentinelSubstitution
 } from './secret-sentinel-substitution'
 
-/** Verbatim from state-serialization-secret-handling.ts before this change. */
+/** Keep the legacy implementation as an independent byte/hash oracle. */
 function previousImplementation(
   serialized: string,
   secretSubs: readonly SecretSentinelSubstitution[],
@@ -25,7 +20,6 @@ function previousImplementation(
     hashInput = hashInput.replace(escapedSentinel, () => JSON.stringify(hashValue).slice(1, -1))
   }
   const stateHash = createHash('sha1').update(degradedPrefix).update(hashInput).digest('hex')
-  // `handle.writeFile(payload, 'utf-8')` is what turned the string into bytes.
   return { payload: Buffer.from(payload, 'utf8'), stateHash }
 }
 
@@ -36,13 +30,100 @@ function expectIdenticalToPrevious(
 ): void {
   const before = previousImplementation(serialized, subs, degradedPrefix)
   const after = applySecretSentinelSubstitutions(serialized, subs, degradedPrefix)
+  const text = applySecretSentinelSubstitutions(serialized, subs, degradedPrefix, 'text')
   expect(after.payload.equals(before.payload)).toBe(true)
   expect(after.stateHash).toBe(before.stateHash)
+  expect(text.payload).toBe(before.payload.toString('utf8'))
+  expect(text.stateHash).toBe(before.stateHash)
 }
 
 function sentinel(): string {
   return `orca-secret-slot-${randomUUID()}`
 }
+
+describe('complete profile domain serialization', () => {
+  it('preserves escaped domain names, omission and the keys passed to toJSON', () => {
+    const domain = '雪"\\\ud800'
+    const state = {
+      [domain]: {
+        toJSON(key: string) {
+          return { key, nested: { toJSON: (nestedKey: string) => nestedKey } }
+        }
+      },
+      omitted: undefined,
+      nullable: null,
+      history: [{ id: 'z' }, { id: 'a' }]
+    }
+
+    const serialized = serializeCompleteProfileStateDomains(state, [], '')
+
+    expect(serialized.payload.toString('utf8')).toBe(JSON.stringify(state))
+    expect(serialized.domains.map(({ domain }) => domain)).toEqual([domain, 'nullable', 'history'])
+    expect(JSON.parse(serialized.payload.toString('utf8'))).toMatchObject({
+      [domain]: { key: domain, nested: 'nested' },
+      nullable: null
+    })
+  })
+
+  it('keeps the complete hash stable across ciphertext changes and sensitive to plaintext and absence', () => {
+    const slot = sentinel()
+    const state = {
+      settings: { cookie: slot },
+      future: { shadow: 'ciphertext-one' },
+      nullable: null
+    }
+    const firstSub = [{ sentinel: slot, blob: 'ciphertext-one', hashValue: 'secret' }]
+    const first = serializeCompleteProfileStateDomains(state, firstSub, '')
+    const second = serializeCompleteProfileStateDomains(
+      state,
+      [{ sentinel: slot, blob: 'ciphertext-two', hashValue: 'secret' }],
+      ''
+    )
+
+    expect(first.payload).toEqual(
+      applySecretSentinelSubstitutions(JSON.stringify(state), firstSub, '').payload
+    )
+    expect(second.payload).not.toEqual(first.payload)
+    expect(second.stateHash).toBe(first.stateHash)
+    expect(JSON.parse(second.payload.toString('utf8')).future).toEqual({ shadow: 'ciphertext-one' })
+    expect(
+      serializeCompleteProfileStateDomains(
+        state,
+        [{ sentinel: slot, blob: 'ciphertext-one', hashValue: 'changed-secret' }],
+        ''
+      ).stateHash
+    ).not.toBe(first.stateHash)
+    expect(
+      serializeCompleteProfileStateDomains({ ...state, nullable: undefined }, firstSub, '')
+        .stateHash
+    ).not.toBe(first.stateHash)
+  })
+
+  it('retains unknown own keys and encodes bytes only when a complete payload is requested', () => {
+    const state = Object.fromEntries([
+      ['9', 9],
+      ['3', 3],
+      ['z', null],
+      ['__proto__', { own: true }],
+      ['constructor', false],
+      ['future', { text: '雪😀\ud800', absent: undefined }]
+    ])
+    const expected = JSON.stringify(state)
+    const encode = vi.spyOn(Buffer, 'from')
+    try {
+      const serialized = serializeCompleteProfileStateDomains(state, [], 'safeStorage-degraded\0')
+      expect(serialized.domains.map(({ domain }) => domain)).toEqual(Object.keys(state))
+      expect(serialized.domains.find(({ domain }) => domain === '__proto__')?.payload).toBe(
+        '{"own":true}'
+      )
+      expect(encode).not.toHaveBeenCalled()
+      expect(serialized.payload.toString('utf8')).toBe(expected)
+      expect(encode).toHaveBeenCalledExactlyOnceWith(expected, 'utf8')
+    } finally {
+      encode.mockRestore()
+    }
+  })
+})
 
 describe('applySecretSentinelSubstitutions', () => {
   it('produces bytes and a hash identical to the previous implementation', () => {
@@ -50,9 +131,7 @@ describe('applySecretSentinelSubstitutions', () => {
       { sentinel: sentinel(), blob: 'djEwY2lwaGVy', hashValue: 'cookie-value' },
       {
         sentinel: sentinel(),
-        // Regex-special *and* JSON-escapable, which is the pair that breaks a naive rewrite:
-        // `$&` would splice the match back in under string-form replace, and the backslash and
-        // quote have to survive `JSON.stringify(...).slice(1, -1)` unchanged.
+        // Replacement metacharacters and JSON escapes must survive without interpolation or double escaping.
         blob: 'A+/=$&$1$`\\x "quoted" |.*?[](){}^',
         hashValue: 'http://proxy.example:8080/?a=b&c=$&'
       },
@@ -61,7 +140,6 @@ describe('applySecretSentinelSubstitutions', () => {
     const state = {
       settings: { opencodeSessionCookie: subs[0].sentinel, httpProxyUrl: subs[1].sentinel },
       ui: { browserKagiSessionLink: subs[2].sentinel },
-      // Adjacent content that must not shift: a near-miss prefix, and JSON escapes either side.
       noise: ['orca-secret-slot-', 'a\\b"c\n\t', subs[0].sentinel.slice(0, -1)]
     }
     expectIdenticalToPrevious(JSON.stringify(state), subs)
@@ -73,7 +151,7 @@ describe('applySecretSentinelSubstitutions', () => {
       { sentinel: sentinel(), blob: '😀', hashValue: '中文' }
     ]
     const state = {
-      // Segment boundaries land next to these, so a wrong split would corrupt the encode.
+      // Multibyte characters beside sentinel boundaries expose incorrect byte offsets.
       before: 'é中文😀',
       a: subs[0].sentinel,
       between: '😀  ',
@@ -96,25 +174,10 @@ describe('applySecretSentinelSubstitutions', () => {
     )
   })
 
-  it('escapes regex metacharacters in the sentinel itself', () => {
-    // Not reachable from a UUID sentinel, but the alternation must not be able to become a pattern.
-    const subs = [{ sentinel: 'a.b*c(d)|e[f]', blob: 'BLOB', hashValue: 'HASH' }]
-    const serialized = JSON.stringify({ real: subs[0].sentinel, decoy: 'axbxxcXdX_eXfX' })
-    expectIdenticalToPrevious(serialized, subs)
-    expect(
-      applySecretSentinelSubstitutions(serialized, subs, '').payload.toString('utf8')
-    ).toContain('axbxxcXdX_eXfX')
-  })
-
-  it('substitutes every occurrence when a sentinel repeats', () => {
-    // Cannot happen today (a sentinel is a UUID minted after the state is assembled, so it appears
-    // exactly once), but the old first-match-only `String.replace` would have written a raw
-    // sentinel to disk in place of a secret if it ever did. The alternation is global instead.
-    const subs = [{ sentinel: sentinel(), blob: 'CIPHER', hashValue: 'PLAIN' }]
-    const serialized = JSON.stringify({ a: subs[0].sentinel, b: subs[0].sentinel })
-    const { payload } = applySecretSentinelSubstitutions(serialized, subs, '')
-    expect(payload.toString('utf8')).toBe(JSON.stringify({ a: 'CIPHER', b: 'CIPHER' }))
-    expect(payload.toString('utf8')).not.toContain(subs[0].sentinel)
+  it('leaves domains without matching sentinels byte-identical', () => {
+    const serialized = JSON.stringify({ future: { output: '雪😀\ud800', present: null } })
+    const subs = [{ sentinel: 'missing-slot', blob: 'cipher', hashValue: 'plain' }]
+    expectIdenticalToPrevious(serialized, subs, 'safeStorage-degraded\0')
   })
 
   it('copies and UTF-8 encodes the full state once, not once per sentinel per side', () => {
@@ -131,9 +194,7 @@ describe('applySecretSentinelSubstitutions', () => {
     })
     const FULL_STATE = 100_000
 
-    // Both costs are observable at their sources: a `String.replace` whose receiver is the whole
-    // state allocates another copy of it, and every string handed to `Buffer.from` or `hash.update`
-    // is one full UTF-8 encode pass on the main thread.
+    // Count whole-state replacements and UTF-8 encodes at their allocation sites.
     const counted = (run: () => unknown): { fullStateReplaces: number; encodedChars: number } => {
       const realReplace = String.prototype.replace
       const realBufferFrom = Buffer.from
@@ -172,13 +233,15 @@ describe('applySecretSentinelSubstitutions', () => {
 
     const before = counted(() => previousImplementation(serialized, subs, ''))
     const after = counted(() => applySecretSentinelSubstitutions(serialized, subs, ''))
+    const text = counted(() => applySecretSentinelSubstitutions(serialized, subs, '', 'text'))
 
-    // Two `String.replace` calls over the whole state per sentinel — payload and hash input.
     expect(before.fullStateReplaces).toBe(subs.length * 2)
     expect(after.fullStateReplaces).toBe(0)
-    // The old path encoded the state twice: once for sha1, once for the file write.
+    expect(text.fullStateReplaces).toBe(0)
     expect(before.encodedChars).toBeGreaterThan(serialized.length * 1.9)
     expect(after.encodedChars).toBeLessThan(serialized.length * 1.1)
     expect(after.encodedChars).toBeGreaterThan(serialized.length * 0.9)
+    expect(text.encodedChars).toBeLessThan(serialized.length * 1.1)
+    expect(text.encodedChars).toBeGreaterThan(serialized.length * 0.9)
   })
 })

@@ -12,20 +12,16 @@ export function createTerminalCommandLifecycle(options: TerminalCommandLifecycle
   attachXtermConsumer: (terminal: Terminal) => IDisposable
   dispose: () => void
 } {
-  // Why: the byte parsing lives in shared so main's side-effect tracker emits
-  // identical command-finished facts for local/SSH PTYs; this renderer wrapper
-  // remains the byte path for remote-runtime PTYs and the kill-switch-off mode.
-  const scanner = createOsc133CommandFinishedScanner(
-    options.onCommandFinished,
-    options.onCommandStarted
+  // Shared parsing keeps local/SSH main-side facts identical; renderer parsing still serves remote-runtime and kill-switch-off PTYs.
+  const scanner = createOsc133CommandFinishedScanner(options.onCommandFinished, () =>
+    options.onCommandStarted?.()
   )
   const disposables: IDisposable[] = []
 
   return {
     handlePtyData: scanner.scan,
     attachXtermConsumer(terminal) {
-      // Why: swallow OSC 133 so shell-integration markers never paint —
-      // rendering hygiene that applies regardless of side-effect authority.
+      // Consume OSC 133 even without side-effect authority so integration markers never paint.
       const disposable = terminal.parser.registerOscHandler(133, () => true)
       disposables.push(disposable)
       return disposable

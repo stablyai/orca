@@ -1,5 +1,5 @@
 import type { OrcaRuntimeService } from '../orca-runtime'
-import type { RpcAnyMethod } from '../rpc/core'
+import type { RpcAnyMethodDeclaration } from '../rpc/core'
 import type { DeviceRegistry } from '../device-registry'
 import type { E2EEKeypair } from '../e2ee-keypair'
 import type { MobileSocketTransportMetadata } from '../rpc/mobile-socket-wiring'
@@ -12,17 +12,18 @@ import type {
   PairingGetEndpointsResult,
   PairingProvisionRelayParams
 } from '../../../shared/mobile-relay-credential-contract'
-import type { RelayDeviceBinding, RelayRevokeOutboxItem } from '../relay/relay-revoke-outbox'
+import type {
+  RelayDeviceBinding,
+  RelayRevokeOutboxItem
+} from '../mobile-cloud-relay/relay-revoke-outbox'
 
 export const DEFAULT_WS_PORT = 6768
 
-// Why: STA-2370 — the WS listener defaults to loopback so a desktop with no paired device is not
-// reachable from the LAN; it widens to all interfaces only on explicit pairing (or `orca serve`).
+// Unpaired desktop starts on loopback; explicit network pairing or serve may expose interfaces (STA-2370).
 export const WS_BIND_HOST_LOOPBACK = '127.0.0.1'
 export const WS_BIND_HOST_ALL_INTERFACES = '0.0.0.0'
 
-// Why brackets: `ws://::1:6768` is not a URL, and every consumer of this endpoint parses it
-// with `new URL`. An IPv6 bind address would otherwise publish an unparseable endpoint.
+// Bracket IPv6 or new URL cannot parse the advertised endpoint.
 export function formatWsEndpoint(host: string, port: number): string {
   return `ws://${host.includes(':') ? `[${host}]` : host}:${port}`
 }
@@ -34,29 +35,22 @@ export type OrcaRuntimeRpcServerOptions = {
   platform?: NodeJS.Platform
   enableWebSocket?: boolean
   wsPort?: number
-  // Why: true when the caller pinned a port (`orca serve --port`) so bind order prefers it over a stale STA-1511 fallback (#8535).
+  // Explicit serve pins precede persisted fallback ports (#8535).
   preferPinnedWsPort?: boolean
-  // Why: STA-2370 — bind the WS listener to all interfaces at startup instead of loopback-until-paired.
-  // Only `orca serve` (explicit remote opt-in) and E2E set this; the desktop app widens lazily on pairing.
+  // Strict port pins refuse occupied ports instead of silently moving (#26603).
+  requirePinnedWsPort?: boolean
+  // Only explicit serve opt-in and E2E expose at startup; desktop widens when network pairing requires it (STA-2370).
   exposeNetworkByDefault?: boolean
-  /**
-   * Pin the WS listener to exactly this address for the process's whole life.
-   *
-   * Why a pin and not another default: the two paths below both widen on their own —
-   * `exposeNetworkByDefault` at startup, and a device that has connected once at every
-   * later startup. An unattended host (orcad) whose operator asked for loopback must
-   * still be on loopback after a client pairs and the service restarts, so the answer
-   * has to outrank both, and `ensureNetworkExposure()` has to refuse rather than widen.
-   */
+  /** Explicit address pins govern the whole process: override startup exposure and reconnect defaults, and refuse pairing-time widening. Loopback must survive pairing and restart. */
   pinnedBindHost?: string
   webClientRoot?: string
-  // Why: test-only overrides for the two constants below; production must not pass these (defaults set by §3.1).
+  // Test-only timing overrides; production keeps design §3.1 defaults.
   keepaliveIntervalMs?: number
   longPollCap?: number
   // Why: test-only override for the ownership reclaim cadence.
   metadataOwnershipPollMs?: number
   // Why: tests may inject inert protocol stages before production authorization registers them.
-  methods?: readonly RpcAnyMethod[]
+  methods?: readonly RpcAnyMethodDeclaration[]
 }
 
 export type PairingOfferUnavailableReason =
@@ -125,14 +119,14 @@ export type MobilePairingConnectionContext = Readonly<{
   transport: MobileSocketTransportMetadata
 }>
 
-// Why: keepalive frames count as socket activity, resetting both idle timers so long-polls outlive the 30s/60s idle caps. See §3.1.
+// Keepalive counts as traffic at both ends so long polls survive 30s/60s idle limits (design §3.1).
 
 export function createWebClientUrl(endpoint: string, pairingUrl: string): string {
   const url = new URL(endpoint)
   url.protocol = url.protocol === 'wss:' ? 'https:' : 'http:'
   url.pathname = webClientPathForEndpoint(url.pathname)
   url.search = ''
-  // Why: pairing URLs carry full credentials; the fragment keeps them out of proxy logs and Referer headers.
+  // Credential-bearing pairing fragments stay out of proxy logs and Referer headers.
   url.hash = `pairing=${encodeURIComponent(pairingUrl)}`
   return url.toString()
 }

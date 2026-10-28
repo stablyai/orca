@@ -30,8 +30,7 @@ export type FeatureWallSetupProgress = {
 }
 
 function countAvailableNonMainWorktrees(worktreesByRepo: Record<string, Worktree[]>): number {
-  // Why: imported git worktrees count as real parallel-work capacity, but
-  // partially hydrated placeholders can appear before a worktree path is known.
+  // Count imported worktrees, but exclude unhydrated placeholders without paths.
   return Object.values(worktreesByRepo).reduce(
     (sum, worktrees) =>
       sum +
@@ -42,14 +41,31 @@ function countAvailableNonMainWorktrees(worktreesByRepo: Record<string, Worktree
   )
 }
 
+export type AgentCapabilitiesState = {
+  browserUseSkillInstalled: boolean
+  computerUseSkillInstalled: boolean
+  computerUseReady: boolean
+  computerUseUnavailable: boolean
+  orchestrationSkillInstalled: boolean
+}
+
+export function isAgentCapabilitiesDone(state: AgentCapabilitiesState): boolean {
+  return (
+    state.browserUseSkillInstalled &&
+    state.computerUseSkillInstalled &&
+    (state.computerUseReady || state.computerUseUnavailable) &&
+    state.orchestrationSkillInstalled
+  )
+}
+
 export function getFeatureWallSetupProgress(
   input: FeatureWallSetupProgressInput
 ): FeatureWallSetupProgress {
-  const agentCapabilitiesDone =
-    input.browserUseSkillInstalled &&
-    input.computerUseSkillInstalled &&
-    (input.computerUsePermissionsReady || input.computerUseUnavailable === true) &&
-    input.orchestrationSkillInstalled
+  const agentCapabilitiesDone = isAgentCapabilitiesDone({
+    ...input,
+    computerUseReady: input.computerUsePermissionsReady,
+    computerUseUnavailable: input.computerUseUnavailable === true
+  })
   const stepDone: Record<FeatureWallSetupStepId, boolean> = {
     'default-agent':
       Boolean(input.settings?.defaultTuiAgent) && input.settings?.defaultTuiAgent !== 'blank',
@@ -58,8 +74,6 @@ export function getFeatureWallSetupProgress(
       input.settings?.notifications.enabled === true &&
       input.settings.notifications.agentTaskComplete === true,
     'two-worktrees': countAvailableNonMainWorktrees(input.worktreesByRepo) >= 1,
-    // Why: the 'browser' interaction fires when a non-blank page is viewed, so
-    // opening any real page in Orca's browser durably completes this milestone.
     browser: hasFeatureInteraction(input.featureInteractions, 'browser'),
     'task-sources': input.hasConnectedTaskSource,
     'agent-capabilities': agentCapabilitiesDone,

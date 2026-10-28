@@ -1,45 +1,106 @@
+import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs'
 import { createRequire } from 'node:module'
+import { tmpdir } from 'node:os'
+import { dirname, join } from 'node:path'
 import { describe, expect, it, vi } from 'vitest'
+import { peImage } from './windows-pe-image-fixture.mjs'
 
 const require = createRequire(import.meta.url)
 const {
-  verifyPackagedNodePtyJobOwnership
+  packagedConptyCandidates,
+  verifyPackagedConptyBreakawayMarker,
+  verifyPackagedNodePtyJobOwnership,
+  verifyPackagedWindowsNodePty
 } = require('./verify-packaged-node-pty-job-ownership.cjs')
+const { CYGWIN_BREAKAWAY_MARKER, NATIVE_HOST_JOB_MARKER } = require('./node-pty-job-ownership.cjs')
+
+const fixtureDir = mkdtempSync(join(tmpdir(), 'packaged-node-pty-job-'))
+
+/** A real enough addon: a machine field the arch check reads, and the marker. */
+function conptyImage({
+  arch = 'x64',
+  cygwinBreakawayDenied = true,
+  nativeHostJobOwned = true
+} = {}) {
+  return Buffer.concat([
+    peImage({ arch }),
+    cygwinBreakawayDenied ? CYGWIN_BREAKAWAY_MARKER : Buffer.alloc(0),
+    nativeHostJobOwned ? NATIVE_HOST_JOB_MARKER : Buffer.alloc(0)
+  ])
+}
+
+function writeAddon(name, options) {
+  const path = join(fixtureDir, name)
+  writeFileSync(path, conptyImage(options))
+  return path
+}
+
+/** A packaged resources tree carrying exactly the conpty.node files named. */
+function packagedResources(addons) {
+  const resourcesDir = mkdtempSync(join(fixtureDir, 'resources-'))
+  const nodePtyDir = join(resourcesDir, 'node_modules', 'node-pty')
+  for (const [relativePath, options] of Object.entries(addons)) {
+    const addonPath = join(nodePtyDir, ...relativePath.split('/'))
+    mkdirSync(dirname(addonPath), { recursive: true })
+    writeFileSync(addonPath, conptyImage(options))
+  }
+  return resourcesDir
+}
+
+const CURRENT_ADDON = writeAddon('current.node', { cygwinBreakawayDenied: true })
+const PRE_MSYS_ADDON = writeAddon('pre-msys.node', { cygwinBreakawayDenied: false })
 
 const PATCHED = {
   dir: '../build/Release/',
   module: {
     listJobProcessIds: () => [],
     terminateJob: () => true,
-    assignCurrentProcessToJob: () => true
+    assignCurrentProcessToJob: () => true,
+    assignCurrentProcessToStrictJob: () => true
   }
 }
 
+const packaged = (native, addonPath = CURRENT_ADDON) => ({
+  platform: 'win32',
+  loadNative: () => ({ native, addonPath })
+})
+
+it('rejects a cross-host package whose addon predates strict native-host ownership', () => {
+  const resourcesDir = packagedResources({
+    'build/Release/conpty.node': { nativeHostJobOwned: false }
+  })
+  expect(() =>
+    verifyPackagedWindowsNodePty(resourcesDir, 'x64', { hostPlatform: 'darwin' })
+  ).toThrow(/lacks strict native-host process ownership/)
+})
+
 describe('verifyPackagedNodePtyJobOwnership', () => {
   it('accepts the packaged patched ConPTY binding', () => {
-    expect(() =>
-      verifyPackagedNodePtyJobOwnership('resources', {
-        platform: 'win32',
-        loadNative: () => PATCHED
-      })
-    ).not.toThrow()
+    expect(() => verifyPackagedNodePtyJobOwnership('resources', packaged(PATCHED))).not.toThrow()
   })
 
   it('rejects a packaged upstream prebuild', () => {
     expect(() =>
-      verifyPackagedNodePtyJobOwnership('resources', {
-        platform: 'win32',
-        loadNative: () => ({ dir: '../prebuilds/win32-x64/', module: {} })
-      })
+      verifyPackagedNodePtyJobOwnership(
+        'resources',
+        packaged({ dir: '../prebuilds/win32-x64/', module: {} })
+      )
     ).toThrow(/missing listJobProcessIds, terminateJob, assignCurrentProcessToJob/)
+  })
+
+  // Stale native cache can export all job functions while leaking MSYS children; packaging must inspect marker bytes.
+  it('rejects a packaged build that predates the Cygwin/MSYS breakaway denial', () => {
+    expect(() =>
+      verifyPackagedNodePtyJobOwnership('resources', packaged(PATCHED, PRE_MSYS_ADDON))
+    ).toThrow(/predates the Cygwin\/MSYS job-breakaway denial/)
   })
 
   it('requires the patched source-build directory', () => {
     expect(() =>
-      verifyPackagedNodePtyJobOwnership('resources', {
-        platform: 'win32',
-        loadNative: () => ({ ...PATCHED, dir: '../prebuilds/win32-x64/' })
-      })
+      verifyPackagedNodePtyJobOwnership(
+        'resources',
+        packaged({ ...PATCHED, dir: '../prebuilds/win32-x64/' })
+      )
     ).toThrow(/expected patched build\/Release/)
   })
 
@@ -47,5 +108,250 @@ describe('verifyPackagedNodePtyJobOwnership', () => {
     const loadNative = vi.fn()
     verifyPackagedNodePtyJobOwnership('resources', { platform: 'linux', loadNative })
     expect(loadNative).not.toHaveBeenCalled()
+  })
+})
+
+describe('packagedConptyCandidates', () => {
+  // Pin loader order: wrong order could bless binary app never reaches.
+  it('walks the paths node-pty tries, in node-pty order', () => {
+    expect(packagedConptyCandidates('RES', 'arm64').map((candidate) => candidate.path)).toEqual([
+      join('RES', 'node_modules', 'node-pty', 'build', 'Release', 'conpty.node'),
+      join('RES', 'node_modules', 'node-pty', 'lib', 'build', 'Release', 'conpty.node'),
+      join('RES', 'node_modules', 'node-pty', 'build', 'Debug', 'conpty.node'),
+      join('RES', 'node_modules', 'node-pty', 'lib', 'build', 'Debug', 'conpty.node'),
+      join('RES', 'node_modules', 'node-pty', 'prebuilds', 'win32-arm64', 'conpty.node'),
+      join('RES', 'node_modules', 'node-pty', 'lib', 'prebuilds', 'win32-arm64', 'conpty.node')
+    ])
+  })
+
+  // Only the published prebuild gets the "no rebuild here can fix this" advice.
+  it('knows which of them node-pty publishes prebuilt', () => {
+    expect(packagedConptyCandidates('RES', 'x64').map((candidate) => candidate.prebuilt)).toEqual([
+      false,
+      false,
+      false,
+      false,
+      true,
+      true
+    ])
+  })
+})
+
+describe('verifyPackagedConptyBreakawayMarker', () => {
+  // Normal same-arch source rebuild replaces prebuild, which pruning already removed.
+  it('passes a package whose only ConPTY load path carries the denial', () => {
+    const resourcesDir = packagedResources({ 'build/Release/conpty.node': {} })
+    expect(() => verifyPackagedConptyBreakawayMarker(resourcesDir, 'x64')).not.toThrow()
+  })
+
+  // Cross-host package may have only upstream prebuild because non-Windows cannot compile conpty; this is the MSYS-leaking candidate gate must reject.
+  it('rejects an unpatched published prebuild and explains both host remedies', () => {
+    const resourcesDir = packagedResources({
+      'prebuilds/win32-x64/conpty.node': { cygwinBreakawayDenied: false }
+    })
+    const verify = () => verifyPackagedConptyBreakawayMarker(resourcesDir, 'x64')
+    expect(verify).toThrow(/predates the Cygwin\/MSYS job-breakaway denial/)
+    expect(verify).toThrow(
+      /this package holds no node-pty source build at all[\s\S]*Otherwise package this Windows slice on a host that can/
+    )
+    expect(verify).toThrow(/If this IS a Windows x64 host, the rebuild did not leave one/)
+  })
+
+  // Correct target-arch source build wins even if unused prebuild survives; blaming host would reject valid package.
+  it('passes a cross-arch package whose build/Release really is the target arch', () => {
+    const resourcesDir = packagedResources({
+      'build/Release/conpty.node': { arch: 'arm64' },
+      'prebuilds/win32-arm64/conpty.node': { arch: 'arm64', cygwinBreakawayDenied: false }
+    })
+    expect(() => verifyPackagedConptyBreakawayMarker(resourcesDir, 'arm64')).not.toThrow()
+  })
+
+  // Wrong-arch source rebuild falls through to unpatched target prebuild.
+  it('rejects a wrong-arch source build with the target rebuild command', () => {
+    const resourcesDir = packagedResources({
+      'build/Release/conpty.node': { arch: 'x64' },
+      'prebuilds/win32-arm64/conpty.node': { arch: 'arm64', cygwinBreakawayDenied: false }
+    })
+    const verify = () => verifyPackagedConptyBreakawayMarker(resourcesDir, 'arm64')
+    expect(verify).toThrow(/prebuilds[\\/]win32-arm64/)
+    expect(verify).toThrow(
+      /the source build beside it is the wrong architecture[\s\S]*machine 0x8664/
+    )
+    expect(verify).toThrow(/rebuild-native-deps\.mjs --platform=win32 --arch=arm64/)
+    expect(verify).toThrow(/^(?![\s\S]*Package this Windows slice on such a host)[\s\S]*$/)
+  })
+
+  it('rejects unloadable architectures and reports their machine values', () => {
+    const resourcesDir = packagedResources({ 'build/Release/conpty.node': { arch: 'x64' } })
+    const verify = () => verifyPackagedConptyBreakawayMarker(resourcesDir, 'arm64')
+    expect(verify).toThrow(/the app can load none of them/)
+    expect(verify).toThrow(/machine 0x8664[\s\S]*0xaa64/)
+  })
+
+  it('calls a candidate that is not a PE image what it is', () => {
+    const resourcesDir = packagedResources({})
+    const addonPath = join(
+      resourcesDir,
+      'node_modules',
+      'node-pty',
+      'build',
+      'Release',
+      'conpty.node'
+    )
+    mkdirSync(dirname(addonPath), { recursive: true })
+    writeFileSync(addonPath, Buffer.alloc(0x200))
+    expect(() => verifyPackagedConptyBreakawayMarker(resourcesDir, 'x64')).toThrow(/not a PE image/)
+  })
+
+  // Truncated/quarantined image resembles cross-arch build but re-running --arch is wrong remedy.
+  it('does not blame --arch for a source build that is not a PE image', () => {
+    const resourcesDir = packagedResources({
+      'prebuilds/win32-x64/conpty.node': { cygwinBreakawayDenied: false }
+    })
+    const addonPath = join(
+      resourcesDir,
+      'node_modules',
+      'node-pty',
+      'build',
+      'Release',
+      'conpty.node'
+    )
+    mkdirSync(dirname(addonPath), { recursive: true })
+    writeFileSync(addonPath, Buffer.alloc(0x200))
+    expect(() => verifyPackagedConptyBreakawayMarker(resourcesDir, 'x64')).toThrow(
+      /is not a PE image at all[\s\S]*truncated, empty or quarantined/
+    )
+  })
+
+  it('ignores a prebuild for an arch this slice will never load', () => {
+    const resourcesDir = packagedResources({
+      'build/Release/conpty.node': {},
+      'prebuilds/win32-arm64/conpty.node': { arch: 'arm64', cygwinBreakawayDenied: false }
+    })
+    expect(() => verifyPackagedConptyBreakawayMarker(resourcesDir, 'x64')).not.toThrow()
+  })
+
+  // Debug wins after unloadable Release and before prebuild; it is never pruned.
+  it('resolves past a Release build the target cannot load', () => {
+    const resourcesDir = packagedResources({
+      'build/Release/conpty.node': { arch: 'x64' },
+      'build/Debug/conpty.node': { arch: 'arm64', cygwinBreakawayDenied: false }
+    })
+    expect(() => verifyPackagedConptyBreakawayMarker(resourcesDir, 'arm64')).toThrow(
+      /build[\\/]Debug/
+    )
+  })
+
+  // Stale source output needs local rebuild advice, distinct from cross-host upstream prebuild.
+  it('tells a stale source build to rebuild, not to change hosts', () => {
+    const resourcesDir = packagedResources({
+      'build/Release/conpty.node': { cygwinBreakawayDenied: false }
+    })
+    expect(() => verifyPackagedConptyBreakawayMarker(resourcesDir, 'x64')).toThrow(
+      /Rebuild node-pty from source/
+    )
+  })
+
+  // No loadable candidate means package has no ConPTY backend; gate must fail.
+  it('rejects a package with no ConPTY backend and lists the searched paths', () => {
+    const resourcesDir = packagedResources({})
+    const verify = () => verifyPackagedConptyBreakawayMarker(resourcesDir, 'x64')
+    expect(verify).toThrow(/no conpty\.node on any path its loader tries/)
+    expect(verify).toThrow(/build[\\/]Release[\s\S]*build[\\/]Debug[\s\S]*prebuilds[\\/]win32-x64/)
+  })
+
+  // Unreadable candidate used to pass; propagate read error instead of warning.
+  it('fails rather than pass a candidate it cannot read', () => {
+    const resourcesDir = packagedResources({})
+    mkdirSync(join(resourcesDir, 'node_modules', 'node-pty', 'build', 'Release', 'conpty.node'), {
+      recursive: true
+    })
+    expect(() => verifyPackagedConptyBreakawayMarker(resourcesDir, 'x64')).toThrow()
+  })
+
+  it('accepts the electron-builder Arch enum the afterPack hook passes', () => {
+    const resourcesDir = packagedResources({
+      'prebuilds/win32-arm64/conpty.node': { arch: 'arm64' }
+    })
+    expect(() => verifyPackagedConptyBreakawayMarker(resourcesDir, 3)).not.toThrow()
+  })
+
+  it('refuses a target arch no Windows slice ships', () => {
+    const resourcesDir = packagedResources({ 'build/Release/conpty.node': {} })
+    expect(() => verifyPackagedConptyBreakawayMarker(resourcesDir, 'ia32')).toThrow(
+      /Unsupported packaged node-pty Windows architecture/
+    )
+  })
+
+  it('looks where electron-builder actually lands the addon', () => {
+    const exists = vi.fn().mockReturnValue(false)
+    expect(() =>
+      verifyPackagedConptyBreakawayMarker(join('out', 'win-unpacked', 'resources'), 'x64', {
+        exists
+      })
+    ).toThrow()
+    expect(exists).toHaveBeenCalledWith(
+      join(
+        'out',
+        'win-unpacked',
+        'resources',
+        'node_modules',
+        'node-pty',
+        'build',
+        'Release',
+        'conpty.node'
+      )
+    )
+  })
+})
+
+describe('verifyPackagedWindowsNodePty', () => {
+  const spies = () => ({ verifyMarker: vi.fn(), verifyExports: vi.fn() })
+
+  // Marker check must survive host gate: old else nesting skipped the very cross-host packages it protects.
+  it.each([
+    ['a cross-platform host', { hostPlatform: 'darwin', canExecuteTargetArch: true }],
+    ['a cross-arch slice', { hostPlatform: 'win32', canExecuteTargetArch: false }],
+    ['both', { hostPlatform: 'linux', canExecuteTargetArch: false }],
+    ['neither', { hostPlatform: 'win32', canExecuteTargetArch: true }]
+  ])('checks the marker on %s', (_case, host) => {
+    const { verifyMarker, verifyExports } = spies()
+    verifyPackagedWindowsNodePty('resources', 'x64', { ...host, verifyMarker, verifyExports })
+    expect(verifyMarker).toHaveBeenCalledWith('resources', 'x64')
+  })
+
+  it('loads the addon for the export check only where that can work', () => {
+    const { verifyMarker, verifyExports } = spies()
+    verifyPackagedWindowsNodePty('resources', 'x64', {
+      hostPlatform: 'win32',
+      canExecuteTargetArch: true,
+      verifyMarker,
+      verifyExports
+    })
+    expect(verifyExports).toHaveBeenCalledWith('resources')
+  })
+
+  it.each([
+    ['a cross-platform host', { hostPlatform: 'darwin', canExecuteTargetArch: true }],
+    ['a cross-arch slice', { hostPlatform: 'win32', canExecuteTargetArch: false }]
+  ])('skips the export check on %s', (_case, host) => {
+    const { verifyMarker, verifyExports } = spies()
+    verifyPackagedWindowsNodePty('resources', 'x64', { ...host, verifyMarker, verifyExports })
+    expect(verifyExports).not.toHaveBeenCalled()
+  })
+
+  // Propagate marker verdict; swallowing it leaves gate running without enforcing anything.
+  it('lets the marker verdict fail the package', () => {
+    const verifyMarker = vi.fn(() => {
+      throw new Error('predates the Cygwin/MSYS job-breakaway denial')
+    })
+    expect(() =>
+      verifyPackagedWindowsNodePty('resources', 'x64', {
+        hostPlatform: 'win32',
+        canExecuteTargetArch: true,
+        verifyMarker,
+        verifyExports: vi.fn()
+      })
+    ).toThrow(/predates the Cygwin\/MSYS job-breakaway denial/)
   })
 })

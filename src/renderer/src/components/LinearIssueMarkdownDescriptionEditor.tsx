@@ -6,6 +6,7 @@ import Placeholder from '@tiptap/extension-placeholder'
 import { LoaderCircle } from 'lucide-react'
 
 import { createRichMarkdownExtensions } from '@/components/editor/rich-markdown-extensions'
+import { setRichMarkdownImageResolverContext } from '@/components/editor/rich-markdown-image-context'
 import { encodeRawMarkdownHtmlForRichEditor } from '@/components/editor/raw-markdown-html'
 import {
   createRichMarkdownEditorCodec,
@@ -24,6 +25,7 @@ import {
 
 type LinearIssueMarkdownDescriptionEditorProps = {
   value: string
+  imageUrls?: Record<string, string>
   onChange: (value: string) => void
   onSave: (value: string) => void
   density: 'page' | 'drawer'
@@ -46,6 +48,7 @@ function createLinearIssueMarkdownExtensions(codec: RichMarkdownEditorCodec) {
 
 export function LinearIssueMarkdownDescriptionEditor({
   value,
+  imageUrls,
   onChange,
   onSave,
   density,
@@ -60,15 +63,13 @@ export function LinearIssueMarkdownDescriptionEditor({
   const richMarkdownSpellcheckEnabled = useAppStore(
     (s) => s.settings?.richMarkdownSpellcheckEnabled ?? true
   )
-  // Why: changing language recreates Tiptap and re-registers tokenizers, so it
-  // must also receive a fresh private Marked registry instead of growing one.
+  // Recreate the private Marked registry with Tiptap on language changes to avoid accumulating tokenizers.
   const codec = useMemo(() => {
     void language
     return createRichMarkdownEditorCodec()
   }, [language])
   const linearIssueMarkdownExtensions = useMemo(() => {
-    // Why: Tiptap freezes extension options when the editor is created; the
-    // language value is the recreation key for translated extension options.
+    // Language keys editor recreation because Tiptap freezes translated extension options.
     void language
     return createLinearIssueMarkdownExtensions(codec)
   }, [codec, language])
@@ -116,6 +117,12 @@ export function LinearIssueMarkdownDescriptionEditor({
   useRichMarkdownSpellcheckAttribute(editor, richMarkdownSpellcheckEnabled)
 
   useEffect(() => {
+    if (editor) {
+      setRichMarkdownImageResolverContext(editor, { filePath: '', imageUrls })
+    }
+  }, [editor, imageUrls])
+
+  useEffect(() => {
     editorRef.current = editor
   }, [editor])
 
@@ -134,8 +141,7 @@ export function LinearIssueMarkdownDescriptionEditor({
       return
     }
 
-    // Why: Linear remains the source of truth when the selected issue changes
-    // or an optimistic save is reverted; keep the rich view aligned with it.
+    // Follow Linear’s value on issue changes and optimistic rollback.
     editor.commands.setContent(encodeRawMarkdownHtmlForRichEditor(value, codec), {
       contentType: 'markdown',
       emitUpdate: false

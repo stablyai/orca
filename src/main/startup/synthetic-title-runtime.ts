@@ -1,4 +1,4 @@
-import { registerPaneKeyTeardownListener, getPtyIdForPaneKey } from '../ipc/pty'
+import { registerPaneKeyTeardownListener, getPtyIdForPaneKey } from '../ipc/pty/pane/key-state'
 import { agentHookServer } from '../agent-hooks/server'
 import type { AgentStatusState } from '../../shared/agent-status-types'
 import {
@@ -13,11 +13,9 @@ import {
 } from '../synthetic-title-spinner'
 import { shouldSendSyntheticTitleFrame } from '../synthetic-title-visibility'
 import { shouldCopySyntheticTitleFrameToPtyData } from '../synthetic-title-frame-routing'
-import { resolveTuiAgentPermissionMode } from '../../shared/tui-agent-permissions'
 import { mainProcessState as state } from './main-process-state'
 
-// Why: cursor-agent re-emits its own OSC title on every redraw, overwriting a one-shot frame — so re-assert a working frame on an interval.
-// 80ms matches Pi's cadence (smooth but under the IPC budget). opencode needs only one frame but reuses this for consistent animated UX.
+// Cursor redraws overwrite one-shot OSC titles; reassert at Pi's 80ms cadence and share the animation with OpenCode.
 const SPINNER_FRAMES = ['⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧', '⠇', '⠏']
 const SPINNER_INTERVAL_MS = 80
 const syntheticTitleSpinnerByPaneKey = new Map<
@@ -31,23 +29,27 @@ function isSyntheticTitleWindowVisible(): boolean {
   return window !== null && !window.isDestroyed() && window.isVisible() && !window.isMinimized()
 }
 
-function sendSyntheticTitle(ptyId: string, data: string, options: { force?: boolean } = {}): void {
-  const window = state.mainWindow
-  if (!window || window.isDestroyed()) {
+function sendSyntheticTitle(
+  ptyId: string,
+  data: string,
+  options: { force?: boolean; semantic?: boolean } = {}
+): void {
+  // Throttle decorative frames; force final/permission frames because they drive BEL.
+  const deliverToWindow = shouldSendSyntheticTitleFrame({
+    force: options.force === true,
+    windowVisible: isSyntheticTitleWindowVisible()
+  })
+  // Semantic updates must reach unseen/headless trackers or readiness retains stale ready titles.
+  if (!deliverToWindow && options.semantic !== true) {
     return
   }
-  // Why: throttle decorative spinner frames (up to 80ms/agent); final/permission frames are forced because they drive BEL.
-  if (
-    !shouldSendSyntheticTitleFrame({
-      force: options.force === true,
-      windowVisible: isSyntheticTitleWindowVisible()
-    })
-  ) {
-    return
-  }
-  // Why: feed the per-PTY tracker directly, never onPtyData — emulator/tails/transcripts/stats must not see fabricated bytes.
+  // Feed the tracker before checking for windows; fabricated bytes must never enter emulator/tails/transcripts/stats.
   state.runtime?.ingestSyntheticTitleFrame(ptyId, data)
-  // Why: only the kill-switch-off renderer byte-parses synthetic frames; under main authority the copy mints phantom ACKs (see synthetic-title-frame-routing.ts).
+  const window = state.mainWindow
+  if (!deliverToWindow || !window || window.isDestroyed()) {
+    return
+  }
+  // Only legacy renderer authority parses these bytes; main authority would mint phantom ACKs (synthetic-title-frame-routing.ts).
   if (shouldCopySyntheticTitleFrameToPtyData(state.store?.getSettings())) {
     window.webContents.send('pty:data', { id: ptyId, data })
   }
@@ -64,11 +66,6 @@ export function stopSyntheticTitleSpinner(paneKey: string): void {
   if (syntheticTitleSpinnerByPaneKey.delete(paneKey)) {
     stopSyntheticTitleSpinnerTimerIfIdle()
   }
-}
-
-export function stopAllSyntheticTitleSpinners(): void {
-  syntheticTitleSpinnerByPaneKey.clear()
-  stopSyntheticTitleSpinnerTimer()
 }
 
 export function stopSyntheticTitleSpinnerTimer(): void {
@@ -111,7 +108,7 @@ function ensureSyntheticTitleSpinnerTimer(): void {
   ) {
     return
   }
-  // Why: one shared timer for all spinners — per-pane intervals multiplied idle wakeups when several agents were working.
+  // Share one timer to avoid multiplying idle wakeups per working pane.
   syntheticTitleSpinnerTimer = setInterval(tickSyntheticTitleSpinners, SPINNER_INTERVAL_MS)
 }
 
@@ -129,12 +126,14 @@ export function driveSyntheticTitleFromHook(
     return
   }
   if (agentState === 'working') {
-    // Why: emit the first frame immediately so the spinner is visible now, not up to 80ms later at the next interval tick.
+    // Emit immediately so visible startup does not wait for the next 80ms tick.
     const existing = syntheticTitleSpinnerByPaneKey.get(paneKey)
     const frame = existing ? existing.frame : 0
-    sendSyntheticTitle(ptyId, `\x1b]0;${SPINNER_FRAMES[frame]} ${profile.workingLabel}\x07`)
+    sendSyntheticTitle(ptyId, `\x1b]0;${SPINNER_FRAMES[frame]} ${profile.workingLabel}\x07`, {
+      semantic: true
+    })
     if (existing) {
-      // Why: refresh the profile so a mid-pane agent-type change lands on the right idle/permission labels at terminal state.
+      // Refresh profile after mid-pane agent changes so final idle/permission labels stay correct.
       existing.profile = profile
       return
     }
@@ -142,44 +141,17 @@ export function driveSyntheticTitleFromHook(
     ensureSyntheticTitleSpinnerTimer()
     return
   }
-  // Why: stop the spinner first so the next tick can't race the state back to "working", then inject the terminal frame.
-  // Permission frames add a trailing BEL to light up user-input states; done frames omit it (completion notifications own that attention).
+  // Stop before the next tick can restore working; only permission frames ring BEL, completion owns its own notifications.
   stopSyntheticTitleSpinner(paneKey)
   const needsUserInput = agentState === 'blocked' || agentState === 'waiting'
   const label = needsUserInput ? profile.permissionLabel : profile.idleLabel
   sendSyntheticTitle(ptyId, `\x1b]0;${label}\x07${needsUserInput ? '\x07' : ''}`, { force: true })
 }
 
-export function shouldSuppressCodexAutoApprovalSyntheticTitleFromHook(args: {
-  agentType: string | null | undefined
-  state: AgentStatusState
-  launchConfig:
-    | { agentArgs?: string | null; agentEnv?: Record<string, string> | null }
-    | null
-    | undefined
-}): boolean {
-  if (args.agentType !== 'codex' || (args.state !== 'waiting' && args.state !== 'blocked')) {
-    return false
-  }
-  if (!args.launchConfig) {
-    return false
-  }
-  return (
-    resolveTuiAgentPermissionMode({
-      agent: 'codex',
-      agentArgs: args.launchConfig.agentArgs,
-      agentEnv: args.launchConfig.agentEnv
-    }) === 'yolo'
-  )
-}
-
 export function initializeSyntheticTitleRuntime(): void {
-  // Why: on PTY teardown drop the spinner entry explicitly, else the shared timer keeps ticking with sendSyntheticTitle no-oping forever.
+  // Drop torn-down PTYs explicitly or the shared timer loops forever on no-op sends.
   registerPaneKeyTeardownListener((paneKey) => stopSyntheticTitleSpinner(paneKey))
-  // Why: the spinner is a stand-in for a live hook status, so it must retire with the row it
-  // stands in for — otherwise a pane whose status was cleared or dismissed keeps rotating a
-  // working title long after the agent finished (#13890). Both paths are covered: the
-  // pane-scoped clear fan-out, and user dismissal, which never routes through it.
+  // Retire spinners on both pane-status clear and user dismissal; either can otherwise leave finished agents looking active (#13890).
   agentHookServer.subscribePaneStatusClear((clear) => {
     const paneKey = getSyntheticTitleSpinnerPaneKeyToStop(clear)
     if (paneKey) {
@@ -187,15 +159,26 @@ export function initializeSyntheticTitleRuntime(): void {
     }
   })
   agentHookServer.subscribeStatusDrop(stopSyntheticTitleSpinner)
+  // Process-scope subscription covers headless readiness without any window listener.
+  agentHookServer.subscribeEnrichedStatus(driveSyntheticTitleFromHookStatus)
 }
 
-export function driveSyntheticTitleForAgentStatus(
-  paneKey: string,
-  agentType: string | null | undefined,
-  agentState: AgentStatusState
-): void {
-  const profile = getSyntheticAgentTitleProfile(agentType)
-  if (profile && shouldDriveSyntheticAgentTitleFromHook(agentType, agentState)) {
-    driveSyntheticTitleFromHook(paneKey, agentState, profile)
+export function driveSyntheticTitleFromHookStatus(event: {
+  paneKey: string
+  payload: { state: AgentStatusState; agentType?: string }
+  providerSessionOnly?: boolean
+  structuredHost?: unknown
+}): void {
+  // Identity refreshes have no turn state; structured rows have no PTY title.
+  if (event.providerSessionOnly || event.structuredHost) {
+    return
+  }
+  // Inject hook-derived idle/permission frames that native OSC titles can omit.
+  const profile = getSyntheticAgentTitleProfile(event.payload.agentType)
+  if (
+    profile &&
+    shouldDriveSyntheticAgentTitleFromHook(event.payload.agentType, event.payload.state)
+  ) {
+    driveSyntheticTitleFromHook(event.paneKey, event.payload.state, profile)
   }
 }

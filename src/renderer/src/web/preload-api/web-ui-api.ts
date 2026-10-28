@@ -1,3 +1,9 @@
+import { subscribeWebWorkspaceSleep } from './web-workspace-sleep-notices'
+import type { AgentSessionAttachmentClipboardTarget } from '../../../../shared/agent-session-attachments'
+import { saveClipboardImageAsWebAgentSessionAttachment } from './web-agent-session-attachment-upload'
+import { savePastedTextAsWebAgentSessionAttachment } from './web-pasted-text-upload'
+import { createWebExplorerRootSync } from './web-explorer-root-sync'
+import { createWebJiraFilterStateApi } from './web-jira-filter-state-api'
 import type { PreloadApi } from '../../../../preload/api-types'
 import { assertClipboardTextWithinLimitWithYield } from '../../../../shared/clipboard-text'
 import type { ReadClipboardTextOptions } from '../../../../shared/clipboard-text'
@@ -6,6 +12,7 @@ import type { FeatureInteractionId } from '../../../../shared/feature-interactio
 import { omitPairingLocalUiFields } from '../../../../shared/pairing-local-ui-fields'
 import type { PairedUiState } from '../../../../shared/pairing-local-ui-fields'
 import {
+  clipboardHasImage,
   readClipboardImagePngBase64,
   readClipboardImageThumbnail,
   saveClipboardImageAsTempFileInRuntime,
@@ -23,12 +30,31 @@ import { callRuntimeResult } from './web-runtime-calls'
 import { requireActiveEnvironmentOrNull } from './web-runtime-session'
 import { UI_STORAGE_KEY, noopUnsubscribe, writeJson } from './web-storage'
 
+/** Combines browser-local preferences with host persistence; acknowledged writes remain distinct from best-effort writes. */
 export function createWebUiApi(): NonNullable<Partial<PreloadApi>['ui']> {
+  const explorerRoots = createWebExplorerRootSync()
+  /** Captures the target host and strips browser-local or unsupported fields before sending a UI update. */
+  const prepareHostUpdates = (updates: Parameters<PreloadApi['ui']['set']>[0]) => {
+    const environmentId = requireActiveEnvironmentOrNull()?.id
+    const hostUpdates = omitPairingLocalUiFields(updates)
+    explorerRoots.prepare(environmentId, hostUpdates)
+    return { environmentId, hostUpdates }
+  }
   let zoomLevel = readLocalWebUIState().uiZoomLevel
   return {
+    ...createWebJiraFilterStateApi(),
+    /** Hydrates from the active host after replaying pending roots, falling back to local state on failure or host changes. */
     get: async () => {
       try {
+        const environmentId = requireActiveEnvironmentOrNull()?.id
         const result = await callRuntimeResult<{ ui: PairedUiState }>('ui.get', undefined, 15_000)
+        if (environmentId !== requireActiveEnvironmentOrNull()?.id) {
+          return readLocalWebUIState()
+        }
+        await explorerRoots.read(environmentId, result.ui)
+        if (environmentId !== requireActiveEnvironmentOrNull()?.id) {
+          return readLocalWebUIState()
+        }
         const local = readLocalWebUIState()
         const next = {
           ...mergeHostWebUIState(local, result.ui),
@@ -49,28 +75,34 @@ export function createWebUiApi(): NonNullable<Partial<PreloadApi>['ui']> {
         return readLocalWebUIState()
       }
     },
+    /** Persists locally first and attempts the host write without propagating offline failures to fire-and-forget callers. */
     set: async (updates) => {
       const next = mergeWebUIState(readLocalWebUIState(), updates)
       writeJson(UI_STORAGE_KEY, next)
       zoomLevel = next.uiZoomLevel
-      // Why strip here too when the host also strips: an old host predating that strip would
-      // otherwise persist this browser's runtime:web-* keys over the desktop profile's order.
-      const hostUpdates = omitPairingLocalUiFields(updates)
+      // Older hosts lack stripping; sending browser runtime:web-* keys would overwrite desktop order.
+      const { environmentId, hostUpdates } = prepareHostUpdates(updates)
       try {
         await callRuntimeResult('ui.set', hostUpdates, 15_000)
+        explorerRoots.acknowledge(environmentId, hostUpdates)
       } catch {
         // Why: unpaired/offline web clients still need local UI persistence.
       }
     },
-    // Why a separate entry point: set must stay best-effort for its many fire-and-forget
-    // callers, but the diff writer must NOT fold a patch the host never received into its
-    // baseline — that write would silently never be retried (STA-5781).
+    /** Rejects failed or stripped host updates so the diff writer cannot acknowledge preferences the host never received. */
     setWithAck: async (updates) => {
       const next = mergeWebUIState(readLocalWebUIState(), updates)
       writeJson(UI_STORAGE_KEY, next)
       zoomLevel = next.uiZoomLevel
-      const hostUpdates = omitPairingLocalUiFields(updates)
+      const { environmentId, hostUpdates } = prepareHostUpdates(updates)
       await callRuntimeResult('ui.set', hostUpdates, 15_000)
+      explorerRoots.acknowledge(environmentId, hostUpdates)
+      if (
+        updates.explorerDisplayRootByWorktree !== undefined &&
+        hostUpdates.explorerDisplayRootByWorktree === undefined
+      ) {
+        throw new Error('Explorer root preference is pending host support')
+      }
     },
     recordFeatureInteraction: async (id: FeatureInteractionId) => {
       const current = readLocalWebUIState()
@@ -122,6 +154,7 @@ export function createWebUiApi(): NonNullable<Partial<PreloadApi>['ui']> {
     saveClipboardImageAsTempFile: async (args?: {
       connectionId?: string | null
       runtimeEnvironmentId?: string | null
+      agentSessionAttachment?: AgentSessionAttachmentClipboardTarget
     }) => {
       if (!requireActiveEnvironmentOrNull()) {
         return null
@@ -130,8 +163,24 @@ export function createWebUiApi(): NonNullable<Partial<PreloadApi>['ui']> {
       if (!contentBase64) {
         return null
       }
+      if (args?.agentSessionAttachment) {
+        if (!args.runtimeEnvironmentId) {
+          throw new Error('A chat attachment needs the server the chat runs on.')
+        }
+        return saveClipboardImageAsWebAgentSessionAttachment(contentBase64, {
+          ...args.agentSessionAttachment,
+          environmentId: args.runtimeEnvironmentId
+        })
+      }
       return saveClipboardImageAsTempFileInRuntime(contentBase64, args)
     },
+    savePastedTextAsFile: savePastedTextAsWebAgentSessionAttachment,
+    clipboardHasImage,
+    // Browsers expose copied files only inside a paste event.
+    readClipboardFilePaths: async () => [],
+    // Why empty: a browser has no local paste folder, so restored pastes stay to attach again.
+    restoreNativeChatPastes: async () => [],
+    onAgentSessionUploadRemoved: () => noopUnsubscribe,
     readClipboardImageThumbnail: () => readClipboardImageThumbnail().catch(() => null),
     writeClipboardText: writeWebClipboardText,
     writeTerminalClipboardText: writeWebClipboardText,
@@ -155,8 +204,10 @@ export function createWebUiApi(): NonNullable<Partial<PreloadApi>['ui']> {
     },
     isMaximized: () => Promise.resolve(false),
     onOpenSettings: () => noopUnsubscribe,
-    // Why: the web client has no native tray/menu bar, so there's never a queued open-settings intent to consume.
+    // Why: the web client has no native tray/menu bar, so it never queues an open-settings or quit request.
     consumePendingOpenSettings: () => Promise.resolve(false),
+    onQuitAndStopAllSessions: () => noopUnsubscribe,
+    consumePendingQuitAndStopAllSessions: () => Promise.resolve(false),
     onOpenSkillShare: () => noopUnsubscribe,
     consumePendingSkillShare: () => Promise.resolve(null),
     // Why: the web client has no OS shell handing it files, so there is never a queued open.
@@ -182,29 +233,28 @@ export function createWebUiApi(): NonNullable<Partial<PreloadApi>['ui']> {
     onJumpToWorktreeIndex: () => noopUnsubscribe,
     onJumpToTabIndex: () => noopUnsubscribe,
     onWorktreeHistoryNavigate: () => noopUnsubscribe,
-    onNewBrowserTab: () => noopUnsubscribe,
-    onNewMarkdownTab: () => noopUnsubscribe,
-    onNewSimulatorTab: () => noopUnsubscribe,
     onRequestTabCreate: () => noopUnsubscribe,
     replyTabCreate: () => {},
+    browserTabRequestsReady: () => {},
+    onRequestRemoteCliBrowserScope: () => noopUnsubscribe,
+    replyRemoteCliBrowserScope: () => {},
     onRequestTabSetProfile: () => noopUnsubscribe,
     replyTabSetProfile: () => {},
     onRequestTabClose: () => noopUnsubscribe,
     replyTabClose: () => {},
-    onNewTerminalTab: () => noopUnsubscribe,
+    onBrowserPageTabShortcut: () => noopUnsubscribe,
     onFocusBrowserAddressBar: () => noopUnsubscribe,
+    onShowBrowserHistory: () => noopUnsubscribe,
     onFindInBrowserPage: () => noopUnsubscribe,
     onReloadBrowserPage: () => noopUnsubscribe,
     onBrowserHistoryNavigate: () => noopUnsubscribe,
+    onBrowserPagePointerDown: () => noopUnsubscribe,
     onZoomBrowserPage: () => noopUnsubscribe,
     onHardReloadBrowserPage: () => noopUnsubscribe,
     onCloseActiveTab: () => noopUnsubscribe,
     onCloseFloatingItem: () => noopUnsubscribe,
     onSelectFloatingIndex: () => noopUnsubscribe,
-    onSwitchTab: () => noopUnsubscribe,
-    onSwitchTabAcrossAllTypes: () => noopUnsubscribe,
     onSwitchRecentTab: () => noopUnsubscribe,
-    onSwitchTerminalTab: () => noopUnsubscribe,
     onCtrlTabKeyDown: () => noopUnsubscribe,
     onCtrlTabKeyUp: () => noopUnsubscribe,
     onToggleStatusBar: () => noopUnsubscribe,
@@ -214,8 +264,15 @@ export function createWebUiApi(): NonNullable<Partial<PreloadApi>['ui']> {
     onRequestTerminalCreate: () => noopUnsubscribe,
     onRequestTerminalTabMount: () => noopUnsubscribe,
     replyTerminalCreate: () => {},
+    onPublishAgentLaunchTab: () => noopUnsubscribe,
+    onAgentLaunchPaneVerdict: () => noopUnsubscribe,
+    onLaunchRecipe: () => noopUnsubscribe,
+    replyAgentLaunchTabPublish: () => {},
+    onRevealTerminalPane: () => noopUnsubscribe,
+    replyTerminalPaneReveal: () => {},
     onSplitTerminal: () => noopUnsubscribe,
     onRenameTerminal: () => noopUnsubscribe,
+    onSetPaneTitle: () => noopUnsubscribe,
     onFocusTerminal: () => noopUnsubscribe,
     onFocusEditorTab: () => noopUnsubscribe,
     onCloseSessionTab: () => noopUnsubscribe,
@@ -223,22 +280,21 @@ export function createWebUiApi(): NonNullable<Partial<PreloadApi>['ui']> {
     respondSessionTabClose: () => {},
     onMoveSessionTab: () => noopUnsubscribe,
     onOpenFileFromMobile: () => noopUnsubscribe,
+    onRevealEditorTabFromRuntime: () => noopUnsubscribe,
     onOpenDiffFromMobile: () => noopUnsubscribe,
-    onMobileMarkdownRequest: () => noopUnsubscribe,
-    respondMobileMarkdownRequest: () => {},
     onCloseTerminal: () => noopUnsubscribe,
     onTerminalTabCloseRequest: () => noopUnsubscribe,
     respondTerminalTabClose: () => {},
-    onSleepWorktree: () => noopUnsubscribe,
+    onWorkspaceSleep: subscribeWebWorkspaceSleep,
     // Why: paired web is a full renderer that wakes on activation; mobile wake is desktop-host-scoped and never reaches web.
     onResumeSleepingAgents: () => noopUnsubscribe,
     onTerminalZoom: () => noopUnsubscribe,
     // Why: a paired web client has no OS sleep signal; occlusion-driven visibilitychange already covers wake recovery.
     onSystemResumed: () => noopUnsubscribe,
-    onFileDrop: () => noopUnsubscribe,
     syncTrafficLights: () => {},
     setMarkdownEditorFocused: () => {},
     setRichMarkdownContextMenuTarget: () => {},
+    markPlainTextContextMenuTarget: () => {},
     setTerminalInputFocused: () => {},
     setFloatingFocus: () => {},
     setShortcutRecorderFocused: () => {},

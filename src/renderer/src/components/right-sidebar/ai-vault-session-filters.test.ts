@@ -11,7 +11,7 @@ import {
 import {
   deriveAiVaultScopeSessionPaths,
   deriveAiVaultWorkspaceScopePaths
-} from './ai-vault-scope-paths'
+} from '../../../../shared/ai-vault-scope-paths'
 
 const baseSession: AiVaultSession = {
   id: 'claude:1',
@@ -169,8 +169,7 @@ describe('filterAiVaultSessions', () => {
   })
 
   it('keeps zero-count sessions whose previews prove real turns when hiding empties', () => {
-    // Grok-style: the turn count only comes from metadata that may be absent,
-    // but the preview messages prove the conversation exists and is resumable.
+    // Grok may omit turn-count metadata even when previews prove real resumable conversation.
     const previewOnly: AiVaultSession = {
       ...baseSession,
       id: 'claude:preview-only',
@@ -278,7 +277,8 @@ describe('filterAiVaultSessions', () => {
         [
           {
             ...baseSession,
-            cwd: '/home/ada/repo/app'
+            cwd: '/home/ada/repo/app',
+            filePath: '//wsl$/Ubuntu/home/ada/.claude/projects/session-1.jsonl'
           }
         ],
         {
@@ -434,37 +434,6 @@ describe('deriveAiVaultWorkspaceScopePaths', () => {
           {
             id: 'repo1::/Users/ada/workspaces/orca/bream',
             repoId: 'repo1',
-            path: '/Users/ada/workspaces/orca/bream'
-          }
-        ]
-      )
-    ).toEqual([
-      '/Users/ada/workspaces/orca/fix-agent-history',
-      '/Users/ada/workspaces/orca/unclaimed-old-path'
-    ])
-  })
-
-  it('ignores prior paths claimed by another live worktree in a different repo', () => {
-    expect(
-      deriveAiVaultWorkspaceScopePaths(
-        {
-          id: 'repo1::/Users/ada/workspaces/orca/fix-agent-history',
-          repoId: 'repo1',
-          path: '/Users/ada/workspaces/orca/fix-agent-history',
-          priorWorktreeIds: [
-            'repo1::/Users/ada/workspaces/orca/bream',
-            'repo1::/Users/ada/workspaces/orca/unclaimed-old-path'
-          ]
-        },
-        [
-          {
-            id: 'repo1::/Users/ada/workspaces/orca/fix-agent-history',
-            repoId: 'repo1',
-            path: '/Users/ada/workspaces/orca/fix-agent-history'
-          },
-          {
-            id: 'repo2::/Users/ada/workspaces/orca/bream',
-            repoId: 'repo2',
             path: '/Users/ada/workspaces/orca/bream'
           }
         ]

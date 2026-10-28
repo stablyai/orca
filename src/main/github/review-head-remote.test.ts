@@ -28,8 +28,7 @@ describe('resolveGitHubReviewHeadRemote', () => {
   })
 
   it('prefers upstream on a contributor clone whose origin is a fork', async () => {
-    // Why: PR work-item resolution probes upstream first; refs/pull/<N>/head for
-    // an upstream PR does not exist on the fork origin.
+    // Upstream PR head refs are unavailable on the fork's origin.
     getGitHubApiRepositoryForRemoteMock.mockImplementation(async (_path, remote) =>
       remote === 'upstream'
         ? { owner: 'org', repo: 'project' }
@@ -98,7 +97,7 @@ describe('resolveGitHubReviewHeadRemote', () => {
 
     expect(remote).toBe('origin')
     expect(getGitHubApiRepositoryForRemoteMock).not.toHaveBeenCalled()
-    expect(getDefaultRemoteMock).toHaveBeenCalledWith('/repo', { wslDistro: 'Ubuntu' })
+    expect(getDefaultRemoteMock).toHaveBeenCalledWith('/repo', { wslDistro: 'Ubuntu' }, ['origin'])
   })
 
   it('prefers origin over other remotes on SSH repos when no identity resolves', async () => {
@@ -120,12 +119,16 @@ describe('resolveGitHubReviewHeadRemote', () => {
     await resolveGitHubReviewHeadRemote({
       repoPath: '/repo',
       connectionId: 'ssh-1',
-      localGitOptions: { wslDistro: 'Ubuntu' },
+      localGitOptions: {
+        wslDistro: 'Ubuntu',
+        ghAccount: { host: 'github.acme.com', user: 'alice' }
+      },
       gitExec: gitExecWithRemotes(['origin', 'upstream'])
     })
 
     expect(getGitHubApiRepositoryForRemoteMock).toHaveBeenCalledWith('/repo', 'upstream', 'ssh-1', {
-      wslDistro: 'Ubuntu'
+      wslDistro: 'Ubuntu',
+      ghAccount: { host: 'github.acme.com', user: 'alice' }
     })
   })
 })

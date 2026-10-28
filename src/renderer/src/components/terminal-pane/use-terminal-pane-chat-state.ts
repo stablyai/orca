@@ -1,15 +1,14 @@
 import { useCallback, useEffect, useMemo, useRef } from 'react'
 import { useShallow } from 'zustand/react/shallow'
-import type { TuiAgent } from '../../../../shared/tui-agent'
 import { useAppStore } from '../../store'
 import { getCachedTerminalTabForWorktree } from './terminal-tab-lookup'
 import { selectTerminalTabAgentTypesByLeaf } from './terminal-tab-agent-type-index'
 import { collectLeafIdsInOrder, EMPTY_LAYOUT } from './layout-serialization'
-import { sanitizeTerminalLayoutPaneTitles } from '@/lib/terminal-pane-title-sanitization'
+import { sanitizeTerminalLayoutPaneTitles } from '../../../../shared/terminal-pane-title-sanitization'
 import { resolveNativeChatLeafTitleAgent } from './native-chat-leaf-title-agent'
 import { useTerminalPaneStoreActions } from './use-terminal-pane-store-actions'
-import { selectUnifiedTerminalTabChatFields } from './terminal-unified-tab-lookup'
-import { canToggleNativeChat } from '../native-chat/native-chat-availability'
+import { selectUnifiedTerminalTabFields } from './terminal-unified-tab-lookup'
+import { canToggleNativeChat } from '../../../../shared/native-chat-availability'
 import {
   nativeChatLaunchAgentForLeaf,
   resolveNativeChatLeafRoute,
@@ -32,29 +31,21 @@ export function useTerminalPaneChatState(controller: TerminalPaneTitleController
   } = controller
   const {
     clearCodexRestartNotice,
-    consumePendingCodexPaneRestart,
+    consumePendingPaneAccountRestart,
     setTabCanExpandPane,
+    setTabLayout,
     setTabPaneExpanded,
     setTabViewMode,
     suppressPtyExit,
     toggleTabViewMode
   } = useTerminalPaneStoreActions()
-  const pendingCodexPaneRestartIds = useAppStore((store) => store.pendingCodexPaneRestartIds)
-  // Why one selector: five separate subscriptions each re-read the same unified
-  // tab, so one publication paid the lookup five times per mounted tab.
-  const {
-    unifiedTabId,
-    structuredSessionAgent,
-    isChatViewMode,
-    structuredSessionId,
-    unifiedTabLabel
-  } = useAppStore(
+  // Bundle unified-tab reads to reduce lookups and subscriptions per mounted tab.
+  const { unifiedTabId, isChatViewMode, unifiedTabLabel, isTabPinned } = useAppStore(
     useShallow((store) =>
-      selectUnifiedTerminalTabChatFields(store.unifiedTabsByWorktree, worktreeId, tabId)
+      selectUnifiedTerminalTabFields(store.unifiedTabsByWorktree, worktreeId, tabId)
     )
   )
-  const nativeChatEnabled = useAppStore((store) => store.settings?.experimentalNativeChat === true)
-  const effectiveChatViewMode = nativeChatEnabled && isChatViewMode
+  const effectiveChatViewMode = isChatViewMode
   const runtimePaneTitlesByPaneId = useAppStore(
     useShallow((store) => store.runtimePaneTitlesByTabId[tabId] ?? {})
   )
@@ -80,8 +71,7 @@ export function useTerminalPaneChatState(controller: TerminalPaneTitleController
   const getNativeChatLeafIds = useCallback((): string[] => {
     const mountedLeafIds = managerRef.current?.getPanes().map((pane) => pane.leafId) ?? []
     return [...new Set([...expectedLayoutLeafIds, ...mountedLeafIds])]
-    // oxlint-disable-next-line react-hooks/exhaustive-deps -- Preserve the pre-split dependency contract.
-  }, [expectedLayoutLeafIds])
+  }, [expectedLayoutLeafIds, managerRef])
   const getTabWideAgentHintLeafId = useCallback((): string | null => {
     if (tabWideAgentHintLeafId !== undefined) {
       return tabWideAgentHintLeafId
@@ -102,8 +92,7 @@ export function useTerminalPaneChatState(controller: TerminalPaneTitleController
       return
     }
     setTabWideAgentHintLeafId(leafIds.length === 1 ? leafIds[0] : null)
-    // oxlint-disable-next-line react-hooks/exhaustive-deps -- Preserve the pre-split dependency contract.
-  }, [getNativeChatLeafIds, paneCount, tabWideAgentHintLeafId])
+  }, [getNativeChatLeafIds, paneCount, tabWideAgentHintLeafId, setTabWideAgentHintLeafId])
   const resolveTitleAgentForLeaf = useCallback(
     (leafId: string | null) => {
       const hasSingleKnownLeaf =
@@ -116,13 +105,13 @@ export function useTerminalPaneChatState(controller: TerminalPaneTitleController
         terminalTitle: hasSingleKnownLeaf ? terminalTab?.title : null
       })
     },
-    // oxlint-disable-next-line react-hooks/exhaustive-deps -- Preserve the pre-split dependency contract.
     [
       getNativeChatLeafIds,
       getTabWideAgentHintLeafId,
       runtimePaneTitlesByPaneId,
       terminalTab?.title,
-      unifiedTabLabel
+      unifiedTabLabel,
+      managerRef
     ]
   )
   const isChatEligibleForLeaf = useCallback(
@@ -135,22 +124,15 @@ export function useTerminalPaneChatState(controller: TerminalPaneTitleController
         leafIds: getNativeChatLeafIds()
       })
       return canToggleNativeChat({
-        experimentalNativeChatEnabled: nativeChatEnabled,
         contentType: 'terminal',
         launchAgent: detectedAgent ? null : launchAgent,
         detectedAgent,
-        // A structured handoff keeps the durable provider identity even when the
-        // foreground hook has not republished agent status after returning to TUI.
-        resolvedAgent: detectedAgent
-          ? null
-          : ((structuredSessionAgent as TuiAgent | null) ?? resolveTitleAgentForLeaf(leafId)),
+        resolvedAgent: detectedAgent ? null : resolveTitleAgentForLeaf(leafId),
         nativeChatTranscriptIsLocalReadable
       })
     },
     [
       tabAgentTypeByLeaf,
-      nativeChatEnabled,
-      structuredSessionAgent,
       nativeChatTranscriptIsLocalReadable,
       terminalTab?.launchAgent,
       getNativeChatLeafIds,
@@ -160,15 +142,43 @@ export function useTerminalPaneChatState(controller: TerminalPaneTitleController
   )
   const applyNativeChatLeafRoute = useCallback(
     (route: NativeChatLeafRoute): void => {
+      const state = useAppStore.getState()
+      const currentMode = selectUnifiedTerminalTabFields(
+        state.unifiedTabsByWorktree,
+        worktreeId,
+        tabId
+      ).isChatViewMode
+      if (!isChatViewMode && currentMode && chatLeafId && route.chatLeafId === null) {
+        // Keep the owner through the batched toggle that turns chat mode on.
+        return
+      }
       if (route.chatLeafId !== chatLeafId) {
         setChatLeafId(route.chatLeafId)
+      }
+      const existingLayout = useAppStore.getState().terminalLayoutsByTabId[tabId]
+      if (existingLayout && existingLayout.chatLeafId !== (route.chatLeafId ?? undefined)) {
+        if (route.chatLeafId) {
+          setTabLayout(tabId, { ...existingLayout, chatLeafId: route.chatLeafId })
+        } else if (existingLayout?.chatLeafId) {
+          const nextLayout = { ...existingLayout }
+          delete nextLayout.chatLeafId
+          setTabLayout(tabId, nextLayout)
+        }
       }
       if (route.exitChat && unifiedTabId) {
         setTabViewMode(unifiedTabId, 'terminal')
       }
     },
-    // oxlint-disable-next-line react-hooks/exhaustive-deps -- Preserve the pre-split dependency contract.
-    [chatLeafId, setTabViewMode, unifiedTabId]
+    [
+      chatLeafId,
+      isChatViewMode,
+      setTabLayout,
+      setTabViewMode,
+      tabId,
+      unifiedTabId,
+      worktreeId,
+      setChatLeafId
+    ]
   )
   const handleConfirmedAgentExit = useCallback(
     (leafId: string): void => {
@@ -184,42 +194,22 @@ export function useTerminalPaneChatState(controller: TerminalPaneTitleController
           activeLeafId,
           chatLeafStillMounted: panes.some((pane) => pane.leafId === chatLeafId),
           activeLeafIsEligible: isChatEligibleForLeaf(activeLeafId),
-          chatLeafHasConfirmedAgentExit: true,
-          structuredSessionId
+          chatLeafHasConfirmedAgentExit: true
         })
       )
     },
-    // oxlint-disable-next-line react-hooks/exhaustive-deps -- Preserve the pre-split dependency contract.
-    [
-      applyNativeChatLeafRoute,
-      chatLeafId,
-      isChatEligibleForLeaf,
-      isChatViewMode,
-      structuredSessionId
-    ]
+    [applyNativeChatLeafRoute, chatLeafId, isChatEligibleForLeaf, isChatViewMode, managerRef]
   )
   useEffect(() => {
     onAgentExitedRef.current = handleConfirmedAgentExit
-    // oxlint-disable-next-line react-hooks/exhaustive-deps -- Preserve the pre-split dependency contract.
-  }, [handleConfirmedAgentExit])
+  }, [handleConfirmedAgentExit, onAgentExitedRef])
   const canToggleChatForLeaf = useCallback(
     (leafId: string | null): boolean => {
-      // A structured session renders its own transcript with no TUI beneath it,
-      // so the switcher stays off for it while bridge chat keeps it.
-      if (structuredSessionId) {
-        return false
-      }
       // Scope the "always allow toggling back" rule to the leaf showing chat; must not make an unsupported sibling look eligible.
       const isChatViewForLeaf = effectiveChatViewMode && leafId !== null && chatLeafId === leafId
-      return (nativeChatEnabled && isChatViewForLeaf) || isChatEligibleForLeaf(leafId)
+      return isChatViewForLeaf || isChatEligibleForLeaf(leafId)
     },
-    [
-      chatLeafId,
-      effectiveChatViewMode,
-      isChatEligibleForLeaf,
-      nativeChatEnabled,
-      structuredSessionId
-    ]
+    [chatLeafId, effectiveChatViewMode, isChatEligibleForLeaf]
   )
   const toggleNativeChatForLeaf = useCallback(
     (leafId: string) => {
@@ -244,8 +234,7 @@ export function useTerminalPaneChatState(controller: TerminalPaneTitleController
       return
     }
     toggleNativeChatForLeaf(activeLeafId)
-    // oxlint-disable-next-line react-hooks/exhaustive-deps -- managerRef is a stable ref container.
-  }, [toggleNativeChatForLeaf])
+  }, [toggleNativeChatForLeaf, managerRef])
   const switchNativeChatToTerminal = useCallback(() => {
     if (chatLeafId && unifiedTabId) {
       setChatLeafId(null)
@@ -258,23 +247,19 @@ export function useTerminalPaneChatState(controller: TerminalPaneTitleController
     }
     const pane = managerRef.current?.getPanes().find((candidate) => candidate.leafId === chatLeafId)
     return pane?.serializeAddon.serialize({ scrollback: 0 }) ?? null
-    // oxlint-disable-next-line react-hooks/exhaustive-deps -- managerRef is a stable ref container.
-  }, [chatLeafId])
+  }, [chatLeafId, managerRef])
 
   return {
     setTabPaneExpanded,
     setTabCanExpandPane,
     suppressPtyExit,
-    pendingCodexPaneRestartIds,
-    consumePendingCodexPaneRestart,
+    consumePendingPaneAccountRestart,
     clearCodexRestartNotice,
     unifiedTabId,
-    structuredSessionAgent,
     isChatViewMode,
-    structuredSessionId,
-    nativeChatEnabled,
     effectiveChatViewMode,
     unifiedTabLabel,
+    isTabPinned,
     runtimePaneTitlesByPaneId,
     tabAgentTypeByLeaf,
     setTabViewMode,

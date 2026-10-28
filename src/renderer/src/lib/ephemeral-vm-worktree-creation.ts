@@ -6,18 +6,28 @@ import { getProjectIdentityKey } from '../../../shared/project-host-setup-projec
 import type { Repo } from '../../../shared/repo-types'
 import { translate } from '@/i18n/i18n'
 import { cleanupFailedEphemeralVmWorkspace } from '@/lib/ephemeral-vm-failed-create-cleanup'
-
-const MAX_PROVISIONING_LOG_CHARS = 12_000
+import {
+  appendProvisioningLog,
+  appendProvisioningWarnings
+} from '@/lib/pending-creation-provisioning-log'
 
 export async function prepareRequestForCreate(
   creationId: string,
   request: WorktreeCreationRequest
 ): Promise<WorktreeCreationRequest | null> {
-  if (!request.ephemeralVmRecipe || request.ephemeralVmRuntimeId) {
-    return request
+  if (request.ephemeralVmRecipe && !request.ephemeralVmRuntimeId) {
+    return prepareEphemeralVmRecipeRequest(creationId, request, request.ephemeralVmRecipe)
   }
+  return request
+}
+
+async function prepareEphemeralVmRecipeRequest(
+  creationId: string,
+  request: WorktreeCreationRequest,
+  recipe: NonNullable<WorktreeCreationRequest['ephemeralVmRecipe']>
+): Promise<WorktreeCreationRequest | null> {
   const store = useAppStore.getState()
-  if (request.ephemeralVmRecipe.checkoutMode === 'provisioned-root' && request.sparseCheckout) {
+  if (recipe.checkoutMode === 'provisioned-root' && request.sparseCheckout) {
     store.updatePendingWorktreeCreation(creationId, {
       status: 'error',
       error: getProvisionedRootSparseCheckoutError()
@@ -36,16 +46,13 @@ export async function prepareRequestForCreate(
   })
   let preparedTarget: Awaited<ReturnType<typeof prepareEphemeralVmWorkspaceTarget>>
   try {
-    const sourceRepo = store.repos.find(
-      (repo) => repo.id === request.ephemeralVmRecipe?.sourceRepoId
-    )
+    const sourceRepo = store.repos.find((repo) => repo.id === recipe.sourceRepoId)
     preparedTarget = await prepareEphemeralVmWorkspaceTarget({
-      repoId: request.ephemeralVmRecipe.sourceRepoId,
-      recipeId: request.ephemeralVmRecipe.recipeId,
-      projectId:
-        resolvePortableEphemeralVmProjectId(sourceRepo) ?? request.ephemeralVmRecipe.projectId,
+      repoId: recipe.sourceRepoId,
+      recipeId: recipe.recipeId,
+      projectId: resolvePortableEphemeralVmProjectId(sourceRepo) ?? recipe.projectId,
       workspaceName: request.name,
-      ...(request.ephemeralVmRecipe.checkoutMode === 'provisioned-root'
+      ...(recipe.checkoutMode === 'provisioned-root'
         ? {
             branch: request.branchNameOverride ?? request.name,
             ...(request.baseBranch ? { ref: request.baseBranch } : {})
@@ -71,6 +78,14 @@ export async function prepareRequestForCreate(
     return null
   }
   appendProvisioningWarnings(creationId, preparedTarget.warnings)
+  if (preparedTarget.environmentId) {
+    // Why: the VM's first connect may have just deployed this server; host badges and removal read it.
+    try {
+      useAppStore.getState().setRuntimeEnvironments(await window.api.runtimeEnvironments.list())
+    } catch {
+      // A stale catalog only delays host badges; removal re-reads it.
+    }
+  }
   const preparedRequest: WorktreeCreationRequest = {
     ...request,
     repoId: preparedTarget.setup.repo.id,
@@ -123,40 +138,8 @@ function getEphemeralVmPortableBaseSelection(
       ...(request.compareBaseRef ? { compareBaseRef: request.compareBaseRef } : {})
     }
   }
-  // Why: VM recipes switch from the source checkout to a freshly provisioned
-  // checkout. Source-repo default/pinned local branches may not exist there, so
-  // let the remote repo resolve its own default unless the user selected a
-  // provider-backed start point above.
+  // A fresh VM checkout may lack source local/pinned branches; use its default unless the user chose a provider-backed start point.
   return { baseBranch: undefined, compareBaseRef: undefined }
-}
-
-function appendProvisioningWarnings(
-  creationId: string,
-  warnings: readonly { message: string; remediation?: string }[]
-): void {
-  if (warnings.length === 0) {
-    return
-  }
-  const text = warnings
-    .map((warning) =>
-      warning.remediation
-        ? `Warning: ${warning.message}\n${warning.remediation}\n`
-        : `Warning: ${warning.message}\n`
-    )
-    .join('')
-  appendProvisioningLog(creationId, text)
-}
-
-function appendProvisioningLog(creationId: string, chunk: string): void {
-  const store = useAppStore.getState()
-  const entry = store.pendingWorktreeCreations[creationId]
-  if (!entry) {
-    return
-  }
-  // Why: recipe stdout contains the structured result with pairing credentials;
-  // only stderr is displayed, and the in-memory tail is bounded.
-  const nextLog = `${entry.provisioningLog ?? ''}${chunk}`.slice(-MAX_PROVISIONING_LOG_CHARS)
-  store.updatePendingWorktreeCreation(creationId, { provisioningLog: nextLog })
 }
 
 export async function attachEphemeralVmRuntimeToWorkspace(
@@ -185,10 +168,7 @@ function resolvePortableEphemeralVmProjectId(repo: Repo | undefined): string | n
   if (!repo) {
     return null
   }
-  // Why: reuse the shared GitHub-identity projection so the portable project id
-  // can't drift from the canonical `github:<owner>/<repo>` key. Gate on the
-  // `github:` prefix to preserve the previous null-for-non-GitHub behavior
-  // (the shared key also returns `git:`/`repo:` fallbacks we don't want here).
+  // Reuse canonical github: identity but reject git:/repo: fallbacks to retain non-GitHub null behavior.
   const key = getProjectIdentityKey(repo)
   return key.startsWith('github:') ? key : null
 }
@@ -197,7 +177,8 @@ export async function cleanupEphemeralVmRuntimeForFailedCreate(
   request: WorktreeCreationRequest
 ): Promise<void> {
   await cleanupFailedEphemeralVmWorkspace(request, {
-    deleteProjectHostSetup: (setupId) => useAppStore.getState().deleteProjectHostSetup({ setupId }),
+    deleteProjectHostSetup: (setupId, hostId) =>
+      useAppStore.getState().deleteProjectHostSetup({ setupId, hostId }),
     cleanupRuntime: (runtimeId) => window.api.ephemeralVm.cleanup({ runtimeId }),
     reportSetupError: (error) =>
       console.error('Failed to remove provisioned-root project setup:', error),

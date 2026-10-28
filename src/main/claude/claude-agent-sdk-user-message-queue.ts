@@ -2,28 +2,52 @@ import type { SDKUserMessage } from '@anthropic-ai/claude-agent-sdk'
 
 type QueuedMessage = {
   message: SDKUserMessage
+  beforeDispatch?: () => Promise<void>
   resolve: () => void
   reject: (error: Error) => void
+}
+
+type ClaudeUserMessageFailureDisposition = 'unwritten' | 'write-outcome-unknown'
+
+class ClaudeUserMessageFailure extends Error {
+  readonly disposition: ClaudeUserMessageFailureDisposition
+
+  constructor(disposition: ClaudeUserMessageFailureDisposition, cause: Error) {
+    super(cause.message, { cause })
+    this.name = 'ClaudeUserMessageFailure'
+    this.disposition = disposition
+  }
+}
+
+export function claudeUnwrittenUserMessageError(cause: Error): Error {
+  return new ClaudeUserMessageFailure('unwritten', cause)
+}
+
+export function claudeUserMessageWasProvablyUnwritten(error: unknown): boolean {
+  return error instanceof ClaudeUserMessageFailure && error.disposition === 'unwritten'
+}
+
+function claudeAmbiguousUserMessageError(cause: Error): Error {
+  return new ClaudeUserMessageFailure('write-outcome-unknown', cause)
 }
 
 export type ClaudeUserMessageQueue = {
   /** The SDK's streaming-input prompt; it stays open until `end`. */
   messages: AsyncIterable<SDKUserMessage>
   /** Resolves once the SDK has finished writing the frame to the child. */
-  push: (message: SDKUserMessage) => Promise<void>
-  /** Reject every unwritten frame, in-flight included; a caller waiting on a send must not hang past the exit. */
+  push: (message: SDKUserMessage, beforeDispatch?: () => Promise<void>) => Promise<void>
+  /** Reject every unsettled frame; an in-flight frame carries an ambiguous write outcome. */
   fail: (error: Error) => void
   end: () => void
 }
 
-/** The rejection an abandoned frame carries when nothing else has named a cause yet. */
-const UNWRITTEN_FRAME_MESSAGE = 'claude stream-json input ended before the frame was written'
+const UNCONFIRMED_FRAME_MESSAGE = 'claude stream-json input ended before confirming the frame write'
 
 export function createClaudeUserMessageQueue(): ClaudeUserMessageQueue {
   const queued: QueuedMessage[] = []
-  // The frame the SDK has taken but not yet acknowledged. It is out of `queued`,
-  // so it is unreachable from anywhere else and would otherwise never settle.
+  // Retain the frame removed from queued so failures can settle it.
   let inFlight: QueuedMessage | null = null
+  let handedOff = false
   let wake: (() => void) | null = null
   let ended = false
   let failure: Error | null = null
@@ -42,22 +66,36 @@ export function createClaudeUserMessageQueue(): ClaudeUserMessageQueue {
       const next = queued.shift()
       if (next) {
         inFlight = next
+        handedOff = false
+        if (next.beforeDispatch) {
+          try {
+            await next.beforeDispatch()
+          } catch (error) {
+            inFlight = null
+            next.reject(error instanceof Error ? error : new Error('claude dispatch refused'))
+            continue
+          }
+          if (failure) {
+            inFlight = null
+            next.reject(claudeUnwrittenUserMessageError(failure))
+            continue
+          }
+        }
         let written = false
         try {
+          handedOff = true
           yield next.message
           written = true
         } finally {
-          // The SDK's input pump abandons this iterator when its
-          // `await transport.write(...)` rejects or the query aborts, and the code
-          // after a `yield` never runs on that path. Settling here is the only
-          // place a frame it already took can be reached.
+          // The SDK may abandon the iterator on write failure; finally must settle the yielded frame.
           if (written) {
             inFlight = null
-            // Resumed only after the SDK's `await transport.write(...)` settled, so this
-            // is the same "the frame reached the child" proof the hand-rolled write gave.
+            // The SDK resumes only after transport.write completes.
             next.resolve()
           } else {
-            rejectInFlight(failure ?? new Error(UNWRITTEN_FRAME_MESSAGE))
+            rejectInFlight(
+              claudeAmbiguousUserMessageError(failure ?? new Error(UNCONFIRMED_FRAME_MESSAGE))
+            )
           }
         }
         continue
@@ -73,23 +111,24 @@ export function createClaudeUserMessageQueue(): ClaudeUserMessageQueue {
 
   return {
     messages: drain(),
-    push: (message) =>
+    push: (message, beforeDispatch) =>
       new Promise<void>((resolve, reject) => {
         if (failure) {
-          reject(failure)
+          reject(claudeUnwrittenUserMessageError(failure))
           return
         }
-        queued.push({ message, resolve, reject })
+        queued.push({ message, beforeDispatch, resolve, reject })
         notify()
       }),
     fail: (error) => {
       failure ??= error
       for (const entry of queued.splice(0)) {
-        entry.reject(error)
+        entry.reject(claudeUnwrittenUserMessageError(error))
       }
-      // A pump that never resumes cannot run the generator's cleanup, so the
-      // exit path has to reach the in-flight frame itself.
-      rejectInFlight(error)
+      // Reject handed-off frames even if the pump stalls; pending authorization must unwind first.
+      if (handedOff) {
+        rejectInFlight(claudeAmbiguousUserMessageError(error))
+      }
       notify()
     },
     end: () => {

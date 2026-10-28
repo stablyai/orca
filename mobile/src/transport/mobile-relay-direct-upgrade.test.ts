@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 import type { MobileRelayEndpoint } from '../../../src/shared/mobile-relay-credential-contract'
-import { MobileRelayUpgradeHostRemovedError } from './host-store'
+import { RelayRoutingHostRemovedError } from './host-store'
 import {
   createMobileRelayDirectUpgradeJournal,
   type MobileRelayDirectUpgradeJournal
@@ -64,7 +64,7 @@ function dependencies(journal: MobileRelayDirectUpgradeJournal | null = null) {
     }),
     writeBundle: vi.fn(async () => {}),
     deleteBundle: vi.fn(async () => {}),
-    saveHost: vi.fn(async () => {}),
+    setRelayRouting: vi.fn(async () => {}),
     randomBytes: (length: number) => new Uint8Array(length).fill(7)
   }
 }
@@ -72,10 +72,6 @@ function dependencies(journal: MobileRelayDirectUpgradeJournal | null = null) {
 describe('existing direct pairing relay upgrade', () => {
   it('persists pending material before install and publishes only after committed status', async () => {
     const deps = dependencies()
-    let journal: MobileRelayDirectUpgradeJournal | null = null
-    deps.writeJournal.mockImplementation(async (next) => {
-      journal = next
-    })
     const client = clientWith([
       success({ v: 1, relay }),
       success({
@@ -105,16 +101,38 @@ describe('existing direct pairing relay upgrade', () => {
 
     const result = await upgradeDirectMobileRelay({ client, host, dependencies: deps })
 
-    expect(journal).not.toBeNull()
+    expect(deps.writeJournal).toHaveBeenCalledOnce()
+    const journal = deps.writeJournal.mock.calls[0]?.[0]
+    if (!journal) {
+      throw new Error('Upgrade did not persist pending material')
+    }
+    expect(client.sendRequest).toHaveBeenNthCalledWith(1, 'pairing.getEndpoints', {
+      installReqId: journal.reqId
+    })
+    expect(client.sendRequest).toHaveBeenNthCalledWith(3, 'pairing.getEndpoints', {
+      installReqId: journal.reqId
+    })
+    expect(deps.writeBundle).toHaveBeenCalledWith({
+      v: 1,
+      hostId: host.id,
+      deviceToken: host.deviceToken,
+      current: {
+        token: journal.pendingResumeToken,
+        hash: journal.pendingResumeTokenHash,
+        version: 1,
+        expiresAt: 9_999_999
+      }
+    })
     expect(deps.writeJournal.mock.invocationCallOrder[0]).toBeLessThan(
-      client.sendRequest.mock.invocationCallOrder[0]!
+      vi.mocked(client.sendRequest).mock.invocationCallOrder[0]!
     )
     expect(client.sendRequest).toHaveBeenNthCalledWith(2, 'pairing.provisionRelay', {
-      reqId: journal!.reqId,
-      newResumeTokenHash: journal!.pendingResumeTokenHash
+      reqId: journal.reqId,
+      newResumeTokenHash: journal.pendingResumeTokenHash
     })
-    expect(deps.writeBundle).toHaveBeenCalledBefore(deps.saveHost)
-    expect(result?.host.relay).toEqual(relay)
+    expect(deps.writeBundle).toHaveBeenCalledBefore(deps.setRelayRouting)
+    expect(deps.setRelayRouting).toHaveBeenCalledWith(host.id, relay)
+    expect(result?.relay).toEqual(relay)
     expect(deps.clearJournal).toHaveBeenCalledWith(host.id)
   })
 
@@ -153,7 +171,25 @@ describe('existing direct pairing relay upgrade', () => {
     await expect(upgradeDirectMobileRelay({ client, host, dependencies: deps })).resolves.toBeNull()
     expect(deps.clearJournal).toHaveBeenCalledWith(host.id)
     expect(deps.writeBundle).not.toHaveBeenCalled()
-    expect(deps.saveHost).not.toHaveBeenCalled()
+    expect(deps.setRelayRouting).not.toHaveBeenCalled()
+  })
+
+  // Old hosts refuse pairing.getEndpoints at the mobile allowlist before dispatch; handle forbidden too so pending install secrets can retire.
+  it('cleans pending state and leaves direct access unchanged for a scope-refusing old desktop', async () => {
+    const deps = dependencies()
+    const client = clientWith([
+      {
+        id: 'rpc',
+        ok: false,
+        error: { code: 'forbidden', message: "Method 'pairing.getEndpoints' is not available" },
+        _meta: { runtimeId: 'runtime' }
+      }
+    ])
+
+    await expect(upgradeDirectMobileRelay({ client, host, dependencies: deps })).resolves.toBeNull()
+    expect(deps.clearJournal).toHaveBeenCalledWith(host.id)
+    expect(deps.writeBundle).not.toHaveBeenCalled()
+    expect(deps.setRelayRouting).not.toHaveBeenCalled()
   })
 
   it('retains the durable journal when relay registration is temporarily unavailable', async () => {
@@ -173,8 +209,8 @@ describe('existing direct pairing relay upgrade', () => {
     )
     const committed = installed(journal)
     const deps = dependencies(journal)
-    deps.saveHost.mockRejectedValue(
-      new MobileRelayUpgradeHostRemovedError('mobile relay upgrade host was removed')
+    deps.setRelayRouting.mockRejectedValue(
+      new RelayRoutingHostRemovedError('mobile relay upgrade host was removed')
     )
     const client = clientWith([
       success({
@@ -186,7 +222,7 @@ describe('existing direct pairing relay upgrade', () => {
 
     await expect(
       upgradeDirectMobileRelay({ client, host, dependencies: deps })
-    ).rejects.toBeInstanceOf(MobileRelayUpgradeHostRemovedError)
+    ).rejects.toBeInstanceOf(RelayRoutingHostRemovedError)
     expect(deps.deleteBundle).toHaveBeenCalledWith(host.id)
     expect(deps.clearJournal).toHaveBeenCalledWith(host.id)
   })

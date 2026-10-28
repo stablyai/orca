@@ -1,15 +1,11 @@
-// Where a relay dial is waiting, so a bound can tell "the cell never answered the
-// upgrade" from "the cell took the dial and is slow" — the two look identical from
-// ConnectionState, which stays 'connecting' until relay-hello arrives.
+import type { RpcClient } from './rpc-client'
+
+// Separate cell assignment from upgrade because ConnectionState remains connecting through both.
 export type RelayDialStage =
-  // WebSocket upgrade not yet open.
   | 'opening'
-  // Socket open and relay-auth sent; the cell is resolving/reserving and asking the
-  // desktop to attach before it can answer with relay-hello.
+  // The cell resolves/reserves and waits for desktop attach after relay-auth.
   | 'awaiting-hello'
-  // relay-hello accepted; E2EE handshake with the desktop in flight.
   | 'handshaking'
-  // E2EE authenticated; waiting on the desktop's resume confirmation.
   | 'confirming'
 
 export type RelayDialStageSource = {
@@ -17,12 +13,20 @@ export type RelayDialStageSource = {
   onDialStageChange(listener: (stage: RelayDialStage) => void): () => void
 }
 
-export function relayDialStageSource(session: object): RelayDialStageSource | null {
-  const candidate = session as Partial<RelayDialStageSource>
-  return typeof candidate.getDialStage === 'function' &&
-    typeof candidate.onDialStageChange === 'function'
-    ? (candidate as RelayDialStageSource)
-    : null
+export type MaybeRelayDialStageSource = RpcClient & Partial<RelayDialStageSource>
+
+function reportsDialStages(
+  session: MaybeRelayDialStageSource
+): session is MaybeRelayDialStageSource & RelayDialStageSource {
+  return (
+    typeof session.getDialStage === 'function' && typeof session.onDialStageChange === 'function'
+  )
+}
+
+export function relayDialStageSource(
+  session: MaybeRelayDialStageSource
+): RelayDialStageSource | null {
+  return reportsDialStages(session) ? session : null
 }
 
 export class RelayDialStageTracker implements RelayDialStageSource {
@@ -49,10 +53,7 @@ export class RelayDialStageTracker implements RelayDialStageSource {
   }
 }
 
-// Budget per stage once the cell holds the dial. awaiting-hello covers the cell's
-// assignment/reservation transactions (observed 14–16s under lock contention) plus its
-// 10s host-attach deadline; handshaking is two E2EE round trips; confirming is bounded
-// by the session's own 30s resume-confirmation request, with slack so that error wins.
+// Budget cell assignment plus attach, then E2EE round trips; leave confirmation slack so its own request deadline wins.
 const RELAY_DIAL_STAGE_BUDGET_MS: Record<Exclude<RelayDialStage, 'opening'>, number> = {
   'awaiting-hello': 30_000,
   handshaking: 12_000,

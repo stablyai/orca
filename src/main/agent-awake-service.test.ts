@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { AgentAwakeService, AGENT_AWAKE_STATUS_STALE_AFTER_MS } from './agent-awake-service'
 import type { AgentAwakeStatus } from './agent-awake-service'
 
@@ -16,6 +16,7 @@ vi.mock('electron', () => ({
 
 function workingStatus(overrides: Partial<AgentAwakeStatus> = {}): AgentAwakeStatus {
   return {
+    paneKey: 'pane-1',
     state: 'working',
     receivedAt: 1_000,
     observedInCurrentRuntime: true,
@@ -73,6 +74,16 @@ function createPowerMonitor() {
   }
 }
 
+const services = new Set<AgentAwakeService>()
+
+afterEach(() => {
+  for (const service of services) {
+    service.dispose()
+  }
+  services.clear()
+  vi.useRealTimers()
+})
+
 function createService(
   now: () => number,
   blocker = createBlocker(),
@@ -80,7 +91,7 @@ function createService(
   linuxAssertion = createLinuxAssertion(),
   powerMonitor: ReturnType<typeof createPowerMonitor> | null = null
 ): AgentAwakeService {
-  return new AgentAwakeService({
+  const service = new AgentAwakeService({
     blocker,
     linuxAssertion,
     macosAssertion,
@@ -92,6 +103,8 @@ function createService(
       warn: vi.fn()
     }
   })
+  services.add(service)
+  return service
 }
 
 describe('AgentAwakeService', () => {
@@ -279,6 +292,35 @@ describe('AgentAwakeService', () => {
     service.dispose()
   })
 
+  it('renews a working lease across two hours without semantic status churn', () => {
+    vi.useFakeTimers()
+    vi.setSystemTime(1_000)
+    const blocker = createBlocker()
+    const service = createService(() => Date.now(), blocker)
+    const listener = vi.fn()
+    service.subscribe(listener)
+    service.setMode('auto')
+    service.setStatuses([workingStatus()])
+
+    for (let index = 0; index < 5; index += 1) {
+      vi.advanceTimersByTime(30 * 60 * 1000)
+      service.observeStatusFreshness(
+        workingStatus({ receivedAt: Date.now(), observedInCurrentRuntime: true })
+      )
+    }
+
+    expect(Date.now()).toBeGreaterThan(1_000 + AGENT_AWAKE_STATUS_STALE_AFTER_MS)
+    expect(service.getStatus()).toEqual({ mode: 'auto', active: true })
+    expect(blocker.stop).not.toHaveBeenCalled()
+    expect(listener).toHaveBeenCalledTimes(2)
+
+    vi.advanceTimersByTime(AGENT_AWAKE_STATUS_STALE_AFTER_MS)
+    expect(service.getStatus()).toEqual({ mode: 'auto', active: true })
+    vi.advanceTimersByTime(1)
+    expect(service.getStatus()).toEqual({ mode: 'auto', active: false })
+    service.dispose()
+  })
+
   it('keeps the blocker id when stop fails and Electron reports it is still started', () => {
     const blocker = createBlocker()
     blocker.stop.mockImplementation(() => {
@@ -337,9 +379,17 @@ describe('AgentAwakeService', () => {
     const monitor = createPowerMonitor()
     const service = createService(() => 1_000, blocker, macosAssertion, linuxAssertion, monitor)
 
+    service.setEnabled(true)
+    service.setStatuses([workingStatus()])
+    expect(blocker.start).toHaveBeenCalledTimes(1)
     service.dispose()
+    monitor.emitResume()
+    expect(blocker.start).toHaveBeenCalledTimes(1)
+    expect(macosAssertion.start).toHaveBeenCalledTimes(1)
+    expect(linuxAssertion.start).toHaveBeenCalledTimes(1)
 
     expect(monitor.on).toHaveBeenCalledTimes(1)
     expect(monitor.off).toHaveBeenCalledTimes(1)
+    expect(monitor.off.mock.calls[0]).toEqual(monitor.on.mock.calls[0])
   })
 })

@@ -12,6 +12,7 @@ function createSnapshot(
     tabsByWorktree: {},
     ptyIdsByTabId: {},
     terminalLayoutsByTabId: {},
+    localOnlyScrollbackByTabId: {},
     activeTabIdByWorktree: {},
     openFiles: [],
     editorDrafts: {},
@@ -34,7 +35,6 @@ function createSnapshot(
     lastKnownRelayPtyIdByTabId: {},
     lastVisitedAtByWorktreeId: {},
     defaultTerminalTabsAppliedByWorktreeId: {},
-    closedTerminalTabTombstonesByTabId: {},
     ...overrides
   }
 }
@@ -110,9 +110,7 @@ describe('workspace session live PTY persistence', () => {
         },
         ptyIdsByTabId: { 'tab-ssh': [] },
         lastKnownRelayPtyIdByTabId: { 'tab-ssh': 'ssh:conn-1@@pty-42' },
-        // Why 'reconnecting': an involuntary transport drop always lands in
-        // 'reconnecting' / 'reconnection-failed' / 'error' — never
-        // 'disconnected', which only an explicit user disconnect produces.
+        // Involuntary drops use reconnecting/reconnection-failed/error; disconnected means explicit user action.
         sshConnectionStates: new Map([['conn-1', { status: 'reconnecting' } as never]]),
         repos: [
           {
@@ -151,9 +149,7 @@ describe('workspace session live PTY persistence', () => {
         },
         ptyIdsByTabId: { 'tab-ssh': [] },
         lastKnownRelayPtyIdByTabId: { 'tab-ssh': 'ssh:conn-1@@pty-42' },
-        // 'disconnected' = the user chose to take this host offline. The
-        // session id must still persist (restore-on-focus), but startup must
-        // not auto-dial the host against the user's intent.
+        // Keep disconnected session IDs for focus restore, but never auto-dial hosts the user deliberately left offline.
         sshConnectionStates: new Map([['conn-1', { status: 'disconnected' } as never]]),
         repos: [
           {
@@ -192,12 +188,7 @@ describe('workspace session live PTY persistence', () => {
         },
         ptyIdsByTabId: { 'tab-vm': [] },
         lastKnownRelayPtyIdByTabId: { 'tab-vm': 'ssh:runtime-ssh-vm1@@pty-7' },
-        // Why a status entry: without one the status gate already excludes the
-        // target and the runtime-owned check would be untested dead weight.
-        // A pane-driven optimistic write CAN stamp runtime-owned states
-        // (TerminalSshReconnectOverlay), so pin the exclusion independently —
-        // on both the session-id union path ('reconnecting') and the live
-        // connected-states path ('connected').
+        // Seed optimistic runtime-owned status so exclusion is independently tested on both session-ID union and connected-state paths; missing status would already gate it out.
         sshConnectionStates: new Map([
           ['runtime-ssh-vm1', { status: 'reconnecting' } as never],
           ['runtime-ssh-vm2', { status: 'connected' } as never]
@@ -218,10 +209,7 @@ describe('workspace session live PTY persistence', () => {
       })
     )
 
-    // Why: the renderer must never drive startup ssh.connect for runtime-owned
-    // (ephemeral-VM) targets — their lifecycle belongs to the runtime layer,
-    // and ssh.listTargets() hides them so the connect would target a host the
-    // user cannot see or manage.
+    // Runtime owns ephemeral-VM target lifecycle; renderer startup connect would touch hidden/unmanageable hosts.
     expect(payload.remoteSessionIdsByTabId).toEqual({
       'tab-vm': 'ssh:runtime-ssh-vm1@@pty-7'
     })

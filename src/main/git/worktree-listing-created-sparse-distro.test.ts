@@ -23,7 +23,7 @@ vi.mock('node:fs/promises', () => ({
   realpath: realpathMock,
   stat: statMock
 }))
-// Only Git is stubbed; the sparse probe below runs for real so the distro has somewhere to matter.
+// Keep the sparse probe real so namespace routing is exercised.
 vi.mock('./worktree-list-reader', () => ({
   readCheckedOutBranchRef: readCheckedOutBranchRefMock,
   readRepoCommonDirFromGit: readRepoCommonDirFromGitMock,
@@ -38,10 +38,7 @@ import { describeCreatedWorktree } from './worktree-listing'
 const slashed = (value: unknown): string => String(value).replaceAll('\\', '/')
 const missing = () => Object.assign(new Error('ENOENT'), { code: 'ENOENT' })
 
-// The layout that needs the caller's distro: the repo lives in the distro, its worktrees on the
-// Windows drive. `git worktree list` reports `/mnt/c/wt/x`, which translates to a drive letter that
-// no longer names a distro, and the gitfile beside it points at a guest path with no drive to
-// derive — so only the distro the create ran under can resolve it.
+// A drive-spelled checkout loses the distro needed to resolve its non-drvfs gitdir pointer.
 const REPO = '\\\\wsl.localhost\\Ubuntu\\home\\me\\repo'
 const GUEST_WORKTREE = '/mnt/c/wt/x'
 const HOST_WORKTREE = 'C:/wt/x'
@@ -70,8 +67,7 @@ describe('describeCreatedWorktree on a drvfs-spelled WSL worktree', () => {
       if (value === `${HOST_WORKTREE}/.git`) {
         return `gitdir: ${GUEST_GIT_DIR}\n`
       }
-      // No `commondir`, so the gitdir is its own common dir and the config read stays in one
-      // namespace — the pointer resolve is the only thing under test.
+      // Omit commondir to isolate pointer resolution from common-dir traversal.
       if (value === `${HOST_GIT_DIR}/config`) {
         return '[core]\n\tsparseCheckout = true\n'
       }
@@ -98,6 +94,29 @@ describe('describeCreatedWorktree on a drvfs-spelled WSL worktree', () => {
       expect(statMock.mock.calls.map(([target]) => slashed(target))).toContain(
         `${HOST_GIT_DIR}/info/sparse-checkout`
       )
+    } finally {
+      platformSpy.mockRestore()
+    }
+  })
+
+  it('uses the repo disk witness in the WSL execution namespace', async () => {
+    const platformSpy = vi.spyOn(process, 'platform', 'get').mockReturnValue('win32')
+    readRepoCommonDirFromGitMock.mockResolvedValue('/other/.git')
+    statMock.mockImplementation(async (target: string) => {
+      const value = slashed(target)
+      if (value === `${slashed(REPO)}/.git`) {
+        return { isDirectory: () => true }
+      }
+      if (value === `${HOST_GIT_DIR}/info/sparse-checkout`) {
+        return { isFile: () => true, size: 12 }
+      }
+      throw missing()
+    })
+
+    try {
+      await expect(
+        describeCreatedWorktree(REPO, 'C:\\wt\\x', 'feature', { wslDistro: 'Ubuntu' })
+      ).resolves.toMatchObject({ branch: 'refs/heads/feature' })
     } finally {
       platformSpy.mockRestore()
     }

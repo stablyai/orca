@@ -1,4 +1,5 @@
 import { useAppStore } from '@/store'
+import { resolveActiveTabOwnerWorktreeId } from '@/store/slices/active-tab-owner-worktree'
 import { FOCUS_TERMINAL_PANE_EVENT, type FocusTerminalPaneDetail } from '@/constants/terminal'
 
 let pendingFocusPaneFrameId: number | null = null
@@ -19,17 +20,19 @@ export function activateTabAndFocusPane(
     scrollToBottomIfOutputSinceLastView?: boolean
   }
 ): void {
-  const { setActiveTab, setActiveTabType } = useAppStore.getState()
-  // Why: selecting a terminal tab is independent from the visible surface;
-  // force Terminal first so tab-only activation reveals the full log.
-  setActiveTabType('terminal')
+  const { setActiveTab, setActiveTabType, tabsByWorktree, activeWorktreeId } =
+    useAppStore.getState()
+  // Reveal Terminal for tab-only activation, scoped to its owner so a late reveal cannot change another workspace’s surface.
+  setActiveTabType(
+    'terminal',
+    resolveActiveTabOwnerWorktreeId(tabsByWorktree, activeWorktreeId, tabId) ?? activeWorktreeId
+  )
   setActiveTab(tabId)
   cancelPendingFocusPaneFrame()
   if (leafId === null) {
     return
   }
-  // Why: defer one frame so the new TerminalPane has mounted its
-  // FOCUS_TERMINAL_PANE_EVENT listener before we dispatch.
+  // Wait one frame for the new TerminalPane’s focus-event listener to mount.
   pendingFocusPaneFrameId = requestAnimationFrame(() => {
     pendingFocusPaneFrameId = null
     const detail: FocusTerminalPaneDetail = {

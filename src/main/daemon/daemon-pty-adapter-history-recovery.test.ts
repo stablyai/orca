@@ -1,4 +1,4 @@
-/* History recovery / quarantine / reconcile regressions for DaemonPtyAdapter. */
+import './mock-descendant-sweep'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
@@ -39,7 +39,7 @@ const { getMacDaemonSystemResolverHealthMock } = vi.hoisted(() => ({
   getMacDaemonSystemResolverHealthMock: vi.fn(async () => 'unknown')
 }))
 
-// Why not just posix: mode 0o500 does not block writes for uid 0, so root CI containers would never hit the failure.
+// Root bypasses 0o500 write restrictions, so permission-failure tests require an unprivileged user.
 const itOnUnprivilegedPosix = it.skipIf(process.platform === 'win32' || process.getuid?.() === 0)
 
 vi.mock('./daemon-health', async (importOriginal) => {
@@ -235,15 +235,19 @@ describe('DaemonPtyAdapter history recovery', () => {
           ).id
       )
     )
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: `checkpointSessions` and `runExclusiveCheckpoint` are `protected` on the checkpoint scheduler, so they are absent from the adapter's public type; the shape below mirrors their declarations and this suite only spies on them.
     const internals = historyAdapter as unknown as {
       checkpointSessions(
         sessionIds: Iterable<string>,
         opts?: { final?: boolean; teardown?: boolean }
       ): Promise<Set<string>>
-      runExclusiveCheckpoint(operation: () => Promise<void>, options?: object): Promise<void>
+      runExclusiveCheckpoint(
+        operation: () => Promise<void>,
+        options?: { rescheduleDirty?: boolean; callerDeadlineMs?: number }
+      ): Promise<void>
     }
     const originalCheckpointSessions = internals.checkpointSessions.bind(historyAdapter)
-    // Call-through spy: entering the exclusive gate is the observable "queued behind the in-flight checkpoint" moment.
+    // Observe gate entry without bypassing checkpoint serialization.
     const exclusiveEntries = vi.spyOn(internals, 'runExclusiveCheckpoint')
     let activeCheckpoints = 0
     let maxActiveCheckpoints = 0
@@ -281,8 +285,8 @@ describe('DaemonPtyAdapter history recovery', () => {
       historyAdapter.shutdown(sessionIds[2], { immediate: true, keepHistory: true }),
       historyAdapter.disconnectOnly()
     ]
-    // Why not a fixed sleep: releasing before both queued shutdowns enter the gate makes maxActiveCheckpoints===1 vacuous.
-    // (disconnectOnly's own entry lands after it drains the keepHistory shutdowns, so it can't be waited on here.)
+    // Queue both shutdowns before release; otherwise maxActiveCheckpoints === 1 could pass vacuously.
+    // disconnectOnly enters after draining those shutdowns, so waiting for its entry would deadlock.
     await waitFor(() => exclusiveEntries.mock.calls.length >= 3)
     releaseFirstCheckpoint()
     await Promise.all([firstShutdown, ...queuedOperations])
@@ -556,7 +560,7 @@ describe('DaemonPtyAdapter history recovery', () => {
           quarantineUnreadableRecovery: true
         })
       } finally {
-        // Why finally: a leaked 0o500 dir turns teardown into a confusing EACCES instead of the real assertion failure.
+        // Restore permissions even on failure so teardown cannot mask the assertion with EACCES.
         chmodSync(sessionDir, 0o700)
       }
       expect(failedManager.isSessionDisabled(sessionId)).toBe(true)
@@ -683,7 +687,7 @@ describe('DaemonPtyAdapter history recovery', () => {
       expect(manager.hasWriter(sessionId)).toBe(true)
       expect(internals.sessionsNeedingFullCheckpoint.has(sessionId)).toBe(true)
 
-      // Why both: the spy fires inside takeSnapshotAndCheckpoint; the set clears only after that await returns.
+      // The spy fires before the awaited checkpoint clears the pending flag.
       await waitFor(
         () =>
           checkpointSpy.mock.calls.some(([id]) => id === sessionId) &&
@@ -721,7 +725,7 @@ describe('DaemonPtyAdapter history recovery', () => {
     const reader = (historyAdapter as unknown as { historyReader: HistoryReader }).historyReader
     let releaseDetection!: () => void
     let detectCalls = 0
-    // Why only the first call blocks: a second never-resolving promise would hang the test instead of failing it.
+    // Block only the first call so an unexpected retry fails instead of hanging.
     vi.spyOn(reader, 'detectColdRestoreState').mockImplementation(() => {
       if (detectCalls++ > 0) {
         return Promise.resolve({ status: 'none' })

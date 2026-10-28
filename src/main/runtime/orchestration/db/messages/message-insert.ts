@@ -3,8 +3,7 @@ import { generateId } from '../generated-id'
 import { exposeMessageTimestamps } from '../utc-timestamp'
 import type { OrchestrationDb } from '../orchestration-db'
 import { runLifecycleWriteTransaction } from '../lifecycle-write-transaction-runner'
-
-// ── Messages ──
+import { UNBOUND_RUN_ID } from '../contract-constants'
 
 const MESSAGE_INSERT_SAVEPOINT = 'message_insert_batch'
 const WORKER_DONE_MESSAGE_SAVEPOINT = 'worker_done_message_commit'
@@ -25,9 +24,15 @@ export type MessageInsert = {
 }
 
 export function insertMessage(this: OrchestrationDb, msg: MessageInsert): MessageRow {
-  const runId = msg.runId
-  if (!runId) {
-    throw new Error('Run is required')
+  // Unbound senders get a lazily created unbound Run; the legacy Run denotes pre-Runs data to skew probes.
+  const runId = msg.runId ?? UNBOUND_RUN_ID
+  if (msg.runId == null) {
+    this.db
+      .prepare(
+        `INSERT OR IGNORE INTO runs (id, objective, home_database, consumer_generation, legacy)
+         VALUES (?, 'Mail from terminals in no Run', 'this_database', 0, 0)`
+      )
+      .run(UNBOUND_RUN_ID)
   }
   const deliveryContract = msg.deliveryContract ?? 'current_delivery'
   this.requireRun(runId)

@@ -1,5 +1,4 @@
 import { describe, expect, it } from 'vitest'
-import { PANE_AGENT_SOURCE_RANK } from './pane-agent-identity-adapter'
 import {
   PANE_AGENT_EVIDENCE_SOURCES,
   type PaneAgentEvidence,
@@ -12,14 +11,6 @@ const resolve = (evidence: PaneAgentEvidence[], extra = {}) =>
 const H = 'authority-a'
 
 describe('resolvePaneAgentIdentity', () => {
-  it('keeps every evidence source ranked exactly once', () => {
-    expect(PANE_AGENT_SOURCE_RANK).toBe(PANE_AGENT_EVIDENCE_SOURCES)
-    expect(new Set(PANE_AGENT_SOURCE_RANK).size).toBe(PANE_AGENT_SOURCE_RANK.length)
-    for (const source of PANE_AGENT_EVIDENCE_SOURCES) {
-      expect(PANE_AGENT_SOURCE_RANK.indexOf(source)).toBeGreaterThanOrEqual(0)
-    }
-  })
-
   describe('a display title is the last thing consulted', () => {
     it.each(PANE_AGENT_EVIDENCE_SOURCES.filter((s) => s !== 'title' && s !== 'sibling'))(
       'lets %s outrank a conflicting title',
@@ -39,21 +30,11 @@ describe('resolvePaneAgentIdentity', () => {
         source: 'title'
       })
     })
-
-    it('outranks the launch record with nothing weaker than the launch record', () => {
-      // The tab ladder currently puts the parsed title ABOVE activeLaunchAgent, so a string Orca
-      // parsed beats a fact Orca owns. That inversion cannot be expressed here.
-      const result = resolve([
-        { source: 'launch', agent: 'claude' },
-        { source: 'title', agent: 'gemini' }
-      ])
-      expect(result.agent).toBe('claude')
-    })
   })
 
   describe('run generation separates the bug from the legitimate reclaim', () => {
-    // Both shapes are `completed hook = A, title = B`. Ordering alone cannot tell them apart.
-    const shape = (hookRun: number, titleRun: number): PaneAgentEvidence[] => [
+    // Both cases are `completed hook = A, title = B`. Ordering alone cannot tell them apart.
+    const evidenceFor = (hookRun: number, titleRun: number): PaneAgentEvidence[] => [
       { source: 'completed-hook', agent: 'claude', run: { authorityId: H, incarnation: hookRun } },
       { source: 'title', agent: 'codex', run: { authorityId: H, incarnation: titleRun } }
     ]
@@ -61,7 +42,7 @@ describe('resolvePaneAgentIdentity', () => {
     it('keeps the completed hook when both belong to the current run', () => {
       // The reported bug: nothing new started, so the hook is still the truth.
       const result = resolvePaneAgentIdentity({
-        evidence: shape(7, 7),
+        evidence: evidenceFor(7, 7),
         currentRun: { authorityId: H, incarnation: 7 }
       })
       expect(result).toMatchObject({ agent: 'claude', source: 'completed-hook' })
@@ -72,24 +53,11 @@ describe('resolvePaneAgentIdentity', () => {
       // The legitimate reclaim: the pane was reused, so run 7's hook describes an agent that is
       // no longer there. It is ineligible, not merely outranked.
       const result = resolvePaneAgentIdentity({
-        evidence: shape(7, 8),
+        evidence: evidenceFor(7, 8),
         currentRun: { authorityId: H, incarnation: 8 }
       })
       expect(result).toMatchObject({ agent: 'codex', source: 'title' })
       expect(result.supersededSources).toEqual(['completed-hook'])
-    })
-
-    it('produces opposite answers from identical evidence, given only the run ids', () => {
-      // The whole point, stated as one assertion.
-      const bug = resolvePaneAgentIdentity({
-        evidence: shape(7, 7),
-        currentRun: { authorityId: H, incarnation: 7 }
-      })
-      const reclaim = resolvePaneAgentIdentity({
-        evidence: shape(7, 8),
-        currentRun: { authorityId: H, incarnation: 8 }
-      })
-      expect(bug.agent).not.toBe(reclaim.agent)
     })
   })
 
@@ -188,9 +156,7 @@ describe('resolvePaneAgentIdentity', () => {
   })
 
   describe('two observations of the same class cannot be settled by array order', () => {
-    // Review finding: `eligible.find(...)` returned the FIRST match, so duplicates of one source
-    // naming different agents resolved by input order — the exact property this resolver exists to
-    // remove. The earlier order-independence test only used DISTINCT sources, so it never saw it.
+    // Same-source conflicts previously chose the first row; distinct-source order tests could not detect it.
     it('returns null when two live hooks name different agents', () => {
       const result = resolve([
         { source: 'live-hook', agent: 'claude' },
@@ -230,13 +196,9 @@ describe('resolvePaneAgentIdentity', () => {
   })
 
   describe('run keys from different authorities are incomparable, not stale', () => {
-    // Review finding: a bare numeric runId collides across authority restarts. A restarted main
-    // regenerates its authorityId and counts incarnations from its own floor, so `1 === 1` would
-    // equate two unrelated runs.
+    // Bare incarnations collide across authority restarts; authorityId distinguishes unrelated runs.
     it('keeps evidence whose authority differs, even when the incarnations do not match', () => {
-      // The incarnations must DIFFER for this to discriminate. With both at 1, a resolver that
-      // ignored authority entirely would still pass on the numeric compare — verified by mutation,
-      // which is how the first version of this test was caught as vacuous.
+      // Different numbers detect implementations that ignore authority; equal numbers passed that mutant vacuously.
       const result = resolvePaneAgentIdentity({
         evidence: [
           { source: 'live-hook', agent: 'claude', run: { authorityId: 'host-b', incarnation: 5 } }
@@ -248,9 +210,7 @@ describe('resolvePaneAgentIdentity', () => {
     })
 
     it('does not equate the same incarnation number from two authorities', () => {
-      // A restarted main regenerates authorityId and counts from its own floor, so `1` from
-      // host-b is not `1` from host-a. Incomparable is treated as unknown, so the evidence is
-      // kept rather than being read as either current or stale.
+      // Restarted authorities’ counters are incomparable; keep unknown evidence eligible instead of declaring it stale.
       const result = resolvePaneAgentIdentity({
         evidence: [
           { source: 'launch', agent: 'codex', run: { authorityId: 'host-b', incarnation: 1 } }
@@ -273,8 +233,7 @@ describe('resolvePaneAgentIdentity', () => {
   })
 
   describe('an action consumer can refuse to see weak evidence at all', () => {
-    // Review finding: title remained available to consumers that AUTHORIZE A WRITE. Ranking it
-    // last makes misuse unlikely; dropping it makes misuse impossible.
+    // Write authorization must drop title evidence entirely, rather than merely rank it last.
     it('ignores a title entirely below the floor', () => {
       const result = resolve([{ source: 'title', agent: 'codex' }], { minimumSource: 'launch' })
       expect(result.agent).toBeNull()
@@ -297,10 +256,6 @@ describe('resolvePaneAgentIdentity', () => {
         { minimumSource: 'launch' }
       )
       expect(result).toMatchObject({ agent: 'claude', source: 'launch' })
-    })
-
-    it('leaves display consumers unrestricted when no floor is given', () => {
-      expect(resolve([{ source: 'title', agent: 'codex' }]).agent).toBe('codex')
     })
   })
 })

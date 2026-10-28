@@ -1,75 +1,82 @@
-import { isTailscaleEndpoint } from '../../../src/shared/remote-runtime-tailscale-hint'
+import { isTailscaleEndpoint } from '../../../src/shared/remote-runtime/remote-runtime-tailscale-hint'
+import type { RelayHostReachability } from './relay-host-reachability'
 import type { MobileConnectionPath } from './stable-logical-rpc-client'
 import type { ConnectionState } from './types'
 
-// Why: thresholds for escalating connection UX from neutral
-// "Reconnecting…" to alarming "host appears unreachable, re-pair?".
-//
-// - WARNING_ATTEMPTS: 3 → label flips to "Can't connect" (existing
-//   behavior). Calibrated to absorb a normal laptop wake / brief
-//   network blip without alarming the user.
-// - UNREACHABLE_ATTEMPTS: 12 → with the tiered 0.5s→60s backoff this
-//   is ≈ 6 minutes of continuous failure (the last four attempts all
-//   reuse the 60s cap). Combined with the never-connected /
-//   stale-since-last-connect heuristic below, this is the trigger to
-//   surface a "re-pair?" affordance. MUST stay aligned with
-//   rpc-client.ts GIVE_UP_AFTER_ATTEMPTS (past which the loop slows
-//   to a 90s trickle instead of parking).
-// - STALE_SINCE_LAST_CONNECT_MS: 60s → if we WERE connected this
-//   session but haven't been for ≥ 1 minute despite the retry loop
-//   spinning, treat the same as never-connected. Catches the case
-//   where the desktop's IP changed mid-session.
+// Absorb brief wake/network failures before warning; keep unreachable aligned with the retry loop’s GIVE_UP_AFTER_ATTEMPTS.
+// After a prior success, stale time distinguishes a changed/unreachable host from a transient drop.
 const WARNING_ATTEMPTS = 3
 const UNREACHABLE_ATTEMPTS = 12
 const STALE_SINCE_LAST_CONNECT_MS = 60_000
 
-// Why: a repeatedly-unreachable 100.x/*.ts.net endpoint almost always means
-// the phone's Tailscale tunnel is down or wedged (a known iOS failure mode
-// that only a manual toggle fixes) — not that the desktop moved. Say so
-// instead of leaving the user staring at a generic "Can't connect".
+// Repeated Tailscale endpoint failures can require a phone tunnel reset; show that remedy rather than assuming the host moved.
 const TAILSCALE_HINT = 'check Tailscale'
 
-// No hint field: the remedy is the label, and appending "— check Tailscale" to
-// it would be wrong advice for a desktop that is reachable but signed out.
-const SIGNED_OUT_LABEL = 'Desktop signed out — sign in to Orca on your desktop to reconnect'
+// Relay verdicts describe the desktop directly; Tailscale advice would misdiagnose offline/signed-out hosts.
+const RELAY_HOST_COPY: Record<
+  Exclude<RelayHostReachability, 'connecting'>,
+  { kind: 'warning' | 'unreachable'; label: (host: string) => string; detail: string }
+> = {
+  'signed-out': {
+    kind: 'unreachable',
+    label: (host) => `Sign-in required on ${host}`,
+    detail: 'Sign in to Orca on your desktop to reconnect'
+  },
+  'host-offline': {
+    kind: 'unreachable',
+    label: (host) => `${host} is offline`,
+    detail: "Check it's awake, Orca is running, and you're signed in"
+  },
+  // Re-pairing repairs refused credentials even when direct rotation is unavailable.
+  'credential-refused': {
+    kind: 'unreachable',
+    label: (host) => `Relay access expired for ${host}`,
+    detail: 'Re-pair with your desktop'
+  },
+  // Cell reachability failure says nothing about desktop health, so keep it amber.
+  unreachable: {
+    kind: 'warning',
+    label: () => "Can't reach Relay",
+    detail: 'Check your connection'
+  }
+}
 
 export type ConnectionVerdict =
   | { kind: 'normal'; label: string }
-  | { kind: 'warning'; label: string; hint?: string } // "Can't connect"
+  | { kind: 'warning'; label: string; hint?: string; detail?: string }
   | {
       kind: 'unreachable'
       label: string
       reason: 'never-connected' | 'stale'
       hint?: string
+      // A second line the row renders under the label; the label alone must still stand.
+      detail?: string
     }
   | { kind: 'auth-failed'; label: string }
 
-// Why: the rpc-client's lastConnectedAt is a one-shot timestamp; we have
-// to recompute "are we currently stale" against now() each render.
-// Centralized so home + host-detail show identical verdicts.
+// Recompute staleness against now; lastConnectedAt itself is a fixed timestamp.
 export function classifyConnection(args: {
   state: ConnectionState
   reconnectAttempts: number
   lastConnectedAt: number | null
-  // Optional pinned host endpoint — enables the Tailscale hint on
-  // warning/unreachable verdicts. Callers without it get plain labels.
+  // A pinned endpoint enables Tailscale-specific hints.
   endpoint?: string | null
   pendingPath?: MobileConnectionPath | null
-  // The desktop has repeatedly refused this device's relay credential — retrying
-  // cannot fix it, so it outranks any "still connecting" reading (STA-4681).
+  // Credential refusal needs re-pairing and outranks connecting state.
   pairingRejected?: boolean
-  // The relay says the desktop's last control close named its own Orca Cloud
-  // sign-out. Retrying is still correct and still happens on the same cadence,
-  // but only the desktop's owner can end it, so the label has to say so.
-  hostSignedOut?: boolean
+  // Explicit relay evidence outranks retry-count inference; connecting means no verdict yet.
+  relayHostReachability?: RelayHostReachability
+  // Include host identity because header labels can appear without a row title.
+  hostName?: string
   nowMs?: number
 }): ConnectionVerdict {
   const { state, reconnectAttempts, lastConnectedAt } = args
   const now = args.nowMs ?? Date.now()
   const hint = isTailscaleEndpoint(args.endpoint) ? TAILSCALE_HINT : undefined
+  const host = args.hostName?.trim() || 'Host'
+  const staleReason = lastConnectedAt == null ? 'never-connected' : 'stale'
 
-  // Why: auth-failed means the desktop no longer recognizes this pairing (e.g. it
-  // lost its device registry) — retrying can't fix it, only re-pairing can, so say so.
+  // An unrecognized pairing needs re-pairing, not more retries.
   if (state === 'auth-failed' || (args.pairingRejected && state !== 'connected')) {
     return { kind: 'auth-failed', label: 'Pairing invalid — re-pair with your desktop' }
   }
@@ -78,20 +85,16 @@ export function classifyConnection(args: {
     return { kind: 'normal', label: 'Connected' }
   }
 
-  // Ahead of the attempt thresholds: this is evidence, not an inference from a
-  // failure streak, and waiting twelve dials to show it wastes the whole point.
-  // Below auth-failed because a revoked pairing cannot be fixed by signing in.
-  if (args.hostSignedOut) {
-    return {
-      kind: 'unreachable',
-      label: SIGNED_OUT_LABEL,
-      reason: lastConnectedAt == null ? 'never-connected' : 'stale'
-    }
+  // Revoked pairing outranks sign-in advice; explicit relay verdicts must survive a cleared pending path.
+  const reachability = args.relayHostReachability ?? 'connecting'
+  if (reachability !== 'connecting') {
+    const copy = RELAY_HOST_COPY[reachability]
+    return copy.kind === 'warning'
+      ? { kind: 'warning', label: copy.label(host), detail: copy.detail }
+      : { kind: 'unreachable', label: copy.label(host), reason: staleReason, detail: copy.detail }
   }
 
-  // A disconnected pending path can survive a cleared retry timer during a
-  // lifecycle race. Only narrate Relay while dialing or after a retry has
-  // recorded progress; otherwise the idle transport must read Disconnected.
+  // A stale pending path can outlive its retry timer; narrate relay only during dialing or recorded retry progress.
   if (args.pendingPath === 'relay' && (state !== 'disconnected' || reconnectAttempts > 0)) {
     if (reconnectAttempts >= UNREACHABLE_ATTEMPTS) {
       if (lastConnectedAt == null) {
@@ -108,10 +111,7 @@ export function classifyConnection(args: {
     return { kind: 'normal', label: 'Disconnected' }
   }
 
-  // connecting / handshaking / reconnecting from here. The gates apply to all
-  // three: every redial re-enters 'connecting', and letting that revert an
-  // escalated verdict to "Connecting…" hid the failure loop behind a reassuring
-  // label for most of each cycle (issue #10119).
+  // Apply escalation through every redial state so failures cannot revert to Connecting during each attempt.
   if (reconnectAttempts >= UNREACHABLE_ATTEMPTS) {
     if (lastConnectedAt == null) {
       return {
@@ -138,10 +138,20 @@ export function classifyConnection(args: {
   return { kind: 'normal', label: state === 'reconnecting' ? 'Reconnecting…' : 'Connecting…' }
 }
 
-// Why: single place that turns a verdict into display text so every screen
-// renders the Tailscale hint the same way.
+// Retries the user should hear about; auth-failed has its own re-pair remedy.
+export function isConnectionOutage(
+  verdict: ConnectionVerdict
+): verdict is Extract<ConnectionVerdict, { kind: 'warning' | 'unreachable' }> {
+  return verdict.kind === 'warning' || verdict.kind === 'unreachable'
+}
+
+// A normal label ending in an ellipsis is a dial still in progress.
+export function isConnectionDialing(verdict: ConnectionVerdict): boolean {
+  return verdict.kind === 'normal' && verdict.label.endsWith('…')
+}
+
 export function verdictDisplayLabel(verdict: ConnectionVerdict): string {
-  if ((verdict.kind === 'warning' || verdict.kind === 'unreachable') && verdict.hint) {
+  if (isConnectionOutage(verdict) && verdict.hint) {
     return `${verdict.label} — ${verdict.hint}`
   }
   return verdict.label

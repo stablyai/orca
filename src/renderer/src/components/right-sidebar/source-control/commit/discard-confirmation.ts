@@ -1,6 +1,6 @@
 import { basename } from '@/lib/path'
 import type { GitStatusEntry } from '../../../../../../shared/git-status-types'
-import type { DiscardAllArea } from './discard-all-sequence'
+import type { DiscardAllArea } from '../../../../../../shared/source-control-discard-all-sequence'
 import { translate } from '@/i18n/i18n'
 
 export type DiscardConfirmationCopy = {
@@ -9,14 +9,17 @@ export type DiscardConfirmationCopy = {
   confirmLabel: string
 }
 
+/** Discard deletes untracked files; staged additions retain their index version. */
+export function discardDeletesEntryFile(entry: Pick<GitStatusEntry, 'area' | 'status'>): boolean {
+  return entry.area === 'untracked' || entry.status === 'untracked'
+}
+
 export function getDiscardEntryConfirmationCopy(
   entry: Pick<GitStatusEntry, 'area' | 'path' | 'status'>
 ): DiscardConfirmationCopy {
   const name = basename(entry.path)
 
-  // Why: untracked and newly-added paths have no HEAD version to restore.
-  // Orca's discard path removes the working-tree file in those cases.
-  if (entry.area === 'untracked' || entry.status === 'untracked' || entry.status === 'added') {
+  if (discardDeletesEntryFile(entry)) {
     return {
       title: translate(
         'auto.components.right.sidebar.source.control.discard.confirmation.96c772bee9',
@@ -39,8 +42,8 @@ export function getDiscardEntryConfirmationCopy(
         { value0: name }
       ),
       description: translate(
-        'auto.components.right.sidebar.source.control.discard.confirmation.40e9357b2a',
-        'This will restore the file from HEAD and discard the deletion. This cannot be undone.'
+        'sourceControl.discard.restoreStagedVersionDescription',
+        'This will restore the last staged version and discard the deletion. This cannot be undone.'
       ),
       confirmLabel: 'Restore'
     }
@@ -53,8 +56,8 @@ export function getDiscardEntryConfirmationCopy(
       { value0: name }
     ),
     description: translate(
-      'auto.components.right.sidebar.source.control.discard.confirmation.1426c2efff',
-      'This will revert all changes to this file. This cannot be undone.'
+      'sourceControl.discard.unstagedChangesDescription',
+      'This will revert the unstaged changes to this file. This cannot be undone.'
     ),
     confirmLabel: 'Discard'
   }
@@ -70,8 +73,15 @@ export function getDiscardAreaConfirmationCopy(
         title: count === 1 ? 'Delete 1 untracked file?' : `Delete ${count} untracked files?`,
         description:
           count === 1
-            ? 'This will permanently delete this untracked file. This cannot be undone.'
-            : `This will permanently delete these ${count} untracked files. This cannot be undone.`,
+            ? translate(
+                'sourceControl.discard.deleteUntrackedFileDescription',
+                'This will permanently delete this untracked file. This cannot be undone.'
+              )
+            : translate(
+                'sourceControl.discard.deleteUntrackedFilesDescription',
+                'This will permanently delete these {{count}} untracked files. This cannot be undone.',
+                { count }
+              ),
         confirmLabel: count === 1 ? 'Delete' : `Delete ${count}`
       }
     case 'staged':
@@ -94,8 +104,15 @@ export function getDiscardAreaConfirmationCopy(
         ),
         description:
           count === 1
-            ? 'This will revert the unstaged changes in 1 file. This cannot be undone.'
-            : `This will revert unstaged changes in ${count} files. This cannot be undone.`,
+            ? translate(
+                'sourceControl.discard.unstagedSelectionIncludingUntrackedDescription',
+                'This will revert unstaged changes and permanently delete any untracked files in this selection. This cannot be undone.'
+              )
+            : translate(
+                'sourceControl.discard.unstagedFilesIncludingUntrackedDescription',
+                'This will revert unstaged changes and permanently delete any untracked files among these {{count}} files. This cannot be undone.',
+                { count }
+              ),
         confirmLabel: 'Discard all'
       }
   }

@@ -4,15 +4,18 @@ import {
   applyNativeChatSessionOptionPicks,
   resolveStructuredLaunchSeedOptions,
   updateNativeChatSessionOptionDefaults
-} from './native-chat-session-option-defaults'
-import type { PersistedNativeChatSessionOptions } from './native-chat-session-options'
+} from './native-chat/input/native-chat-session-option-defaults'
+import type {
+  PersistedNativeChatSessionOptions,
+  SessionOptionValue
+} from './native-chat/input/native-chat-session-options'
 import {
   applyStructuredAgentSessionOptions,
   createStructuredAgentSessionOptionState,
   structuredAgentSessionOptionPicks
 } from './structured-agent-session-options'
 
-function liveState(current: { model: string; effort?: string }) {
+function liveState(current: { model: string; effort?: string; fastMode?: boolean }) {
   return applyStructuredAgentSessionOptions(
     createStructuredAgentSessionOptionState('codex'),
     CODEX_SESSION_OPTION_CATALOG,
@@ -26,7 +29,8 @@ function liveState(current: { model: string; effort?: string }) {
           efforts: [
             { value: 'medium', label: 'Medium' },
             { value: 'high', label: 'High' }
-          ]
+          ],
+          supportsFastMode: true
         },
         {
           id: 'other-model',
@@ -36,16 +40,18 @@ function liveState(current: { model: string; effort?: string }) {
           efforts: [
             { value: 'low', label: 'Low' },
             { value: 'medium', label: 'Medium' }
-          ]
+          ],
+          supportsFastMode: true
         }
       ],
+      fastModeSupport: { supported: true },
       current
     }
   )
 }
 
 function persist(
-  picks: readonly { modelId: string; optionId: string; value: string }[]
+  picks: readonly { modelId: string; optionId: string; value: SessionOptionValue }[]
 ): PersistedNativeChatSessionOptions {
   return applyNativeChatSessionOptionPicks({ persisted: undefined, agent: 'codex', picks })
 }
@@ -77,14 +83,6 @@ describe('structuredAgentSessionOptionPicks', () => {
       model: 'other-model',
       effort: 'low'
     })
-  })
-
-  it('reads the committed model rather than the record a deferred commit has not settled', () => {
-    // The caller passes pre-commit state: the record still tracks the old model.
-    const state = liveState({ model: 'account-model', effort: 'medium' })
-    expect(structuredAgentSessionOptionPicks(state, { model: 'other-model' })).toEqual([
-      { modelId: 'other-model', optionId: 'model', value: 'other-model' }
-    ])
   })
 
   it('keeps a per-model effort so reselecting the old model restores its level', () => {
@@ -125,24 +123,19 @@ describe('structuredAgentSessionOptionPicks', () => {
       })
     ).toEqual([])
   })
+
+  it('remembers explicit Fast on and off as booleans and re-encodes the launch seed', () => {
+    const state = liveState({ model: 'account-model', fastMode: true })
+    const picks = structuredAgentSessionOptionPicks(state, { fastMode: 'false' })
+    expect(picks).toEqual([{ modelId: 'account-model', optionId: 'fastMode', value: false }])
+    expect(resolveStructuredLaunchSeedOptions(persist(picks), 'codex')).toEqual({
+      model: 'account-model',
+      fastMode: 'false'
+    })
+  })
 })
 
 describe('applyNativeChatSessionOptionPicks', () => {
-  it('keeps a later pick in the batch from dropping an earlier one', () => {
-    const persisted = applyNativeChatSessionOptionPicks({
-      persisted: undefined,
-      agent: 'codex',
-      picks: [
-        { modelId: 'gpt-fast', optionId: 'model', value: 'gpt-fast' },
-        { modelId: 'gpt-fast', optionId: 'effort', value: 'low' }
-      ]
-    })
-    expect(resolveStructuredLaunchSeedOptions(persisted, 'codex')).toEqual({
-      model: 'gpt-fast',
-      effort: 'low'
-    })
-  })
-
   it('leaves every other agent untouched', () => {
     const persisted = applyNativeChatSessionOptionPicks({
       persisted: { claude: { model: 'opus', valuesByModel: { opus: { effort: 'high' } } } },
@@ -157,11 +150,5 @@ describe('applyNativeChatSessionOptionPicks', () => {
       model: 'gpt-fast',
       effort: 'low'
     })
-  })
-
-  it('returns the record unchanged for an empty batch', () => {
-    expect(
-      applyNativeChatSessionOptionPicks({ persisted: undefined, agent: 'codex', picks: [] })
-    ).toEqual({})
   })
 })

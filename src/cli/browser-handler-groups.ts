@@ -1,128 +1,50 @@
+import { ORCA_BROWSER_CLI_COMMAND_KEYS } from '../shared/orca-browser-cli-commands'
 import type { HandlerGroup } from './handler-group-manifest'
 
-// Why split out: the browser command surface is a third of the CLI's groups and
-// changes as a unit, so it keeps handler-group-manifest.ts readable at a glance.
 export const BROWSER_HANDLER_GROUPS: readonly HandlerGroup[] = [
   {
+    name: 'browser-identity',
+    keys: ORCA_BROWSER_CLI_COMMAND_KEYS['browser-identity'],
+    load: async () => (await import('./handlers/browser-identity.js')).BROWSER_IDENTITY_HANDLERS
+  },
+  {
     name: 'browser-nav',
-    keys: [
-      'snapshot',
-      'screenshot',
-      'goto',
-      'back',
-      'reload',
-      'forward',
-      'eval',
-      'scroll',
-      'wait',
-      'pdf',
-      'full-screenshot'
-    ],
+    keys: ORCA_BROWSER_CLI_COMMAND_KEYS['browser-nav'],
     load: async () => (await import('./handlers/browser-nav.js')).BROWSER_NAV_HANDLERS
   },
   {
     name: 'browser-interact',
-    keys: [
-      'click',
-      'dblclick',
-      'fill',
-      'type',
-      'select',
-      'check',
-      'uncheck',
-      'focus',
-      'clear',
-      'select-all',
-      'keypress',
-      'hover',
-      'drag',
-      'upload',
-      'scrollintoview',
-      'get',
-      'is',
-      'inserttext',
-      'mouse move',
-      'mouse down',
-      'mouse up',
-      'mouse wheel',
-      'find',
-      'download',
-      'highlight'
-    ],
+    keys: ORCA_BROWSER_CLI_COMMAND_KEYS['browser-interact'],
     load: async () => (await import('./handlers/browser-interact.js')).BROWSER_INTERACT_HANDLERS
   },
   {
     name: 'browser-tab',
-    keys: [
-      'open-url',
-      'tab list',
-      'tab show',
-      'tab current',
-      'tab switch',
-      'tab create',
-      'tab close',
-      'exec'
-    ],
+    keys: ORCA_BROWSER_CLI_COMMAND_KEYS['browser-tab'],
     load: async () => (await import('./handlers/browser-tab.js')).BROWSER_TAB_HANDLERS
   },
   {
     name: 'browser-profile',
-    keys: [
-      'tab profile list',
-      'tab profile create',
-      'tab profile delete',
-      'tab profile set',
-      'tab profile show',
-      'tab profile use-default',
-      'tab profile clone'
-    ],
+    keys: ORCA_BROWSER_CLI_COMMAND_KEYS['browser-profile'],
     load: async () => (await import('./handlers/browser-profile.js')).BROWSER_PROFILE_HANDLERS
   },
   {
     name: 'browser-cookie',
-    keys: ['cookie get', 'cookie set', 'cookie delete'],
+    keys: ORCA_BROWSER_CLI_COMMAND_KEYS['browser-cookie'],
     load: async () => (await import('./handlers/browser-cookie.js')).BROWSER_COOKIE_HANDLERS
   },
   {
     name: 'browser-capture',
-    keys: [
-      'intercept enable',
-      'intercept disable',
-      'intercept list',
-      'capture start',
-      'capture stop',
-      'console',
-      'network'
-    ],
+    keys: ORCA_BROWSER_CLI_COMMAND_KEYS['browser-capture'],
     load: async () => (await import('./handlers/browser-capture.js')).BROWSER_CAPTURE_HANDLERS
   },
   {
     name: 'browser-env',
-    keys: [
-      'viewport',
-      'geolocation',
-      'set device',
-      'set offline',
-      'set headers',
-      'set credentials',
-      'set media',
-      'clipboard read',
-      'clipboard write',
-      'dialog accept',
-      'dialog dismiss'
-    ],
+    keys: ORCA_BROWSER_CLI_COMMAND_KEYS['browser-env'],
     load: async () => (await import('./handlers/browser-env.js')).BROWSER_ENV_HANDLERS
   },
   {
     name: 'browser-storage',
-    keys: [
-      'storage local get',
-      'storage local set',
-      'storage local clear',
-      'storage session get',
-      'storage session set',
-      'storage session clear'
-    ],
+    keys: ORCA_BROWSER_CLI_COMMAND_KEYS['browser-storage'],
     load: async () => (await import('./handlers/browser-storage.js')).BROWSER_STORAGE_HANDLERS
   }
 ]

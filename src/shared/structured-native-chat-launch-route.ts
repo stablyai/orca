@@ -1,36 +1,34 @@
-/**
- * The one place that answers "should this launch be a structured native chat session?".
- *
- * Both launch surfaces call it. The renderer asks when a user opens an agent tab
- * (`resolveAgentLaunchRoute`); orchestration asks when it dispatches a worker, because the mode is
- * the user's own default rather than a per-call flag. Keeping the two halves — the settings default
- * and the per-launch feasibility — here is what stops the second caller from growing a copy that
- * drifts.
- */
+/** Share settings defaults and per-launch feasibility between renderer tab launches and orchestration workers to prevent drift. */
 
 import { isAgentSessionHandleProvider } from './agent-session-provider-handle'
+import { parseExecutionHostId } from './execution-host'
 import type { GlobalSettings } from './global-settings-types'
+import type { NativeChatProviderSettings } from './native-chat/native-chat-providers'
 import type { ProjectExecutionRuntimeResolution } from './project-execution-runtime'
-import { STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY } from './protocol-version'
+import {
+  STRUCTURED_AGENT_SESSION_CLIENT_LAUNCH_MODE_CAPABILITY,
+  STRUCTURED_AGENT_SESSION_REGISTERED_AGENTS_RUNTIME_CAPABILITY,
+  STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY
+} from './protocol-version'
 import type { TuiAgent } from './tui-agent'
+import type { WorkspaceLaunchKind } from './workspace-launch-kind'
 
-export type NativeChatDefaultSettings = Pick<
-  GlobalSettings,
-  'experimentalNativeChat' | 'experimentalStructuredNativeChat' | 'openAgentTabsInChatByDefault'
->
+export type NativeChatDefaultSettings = Pick<GlobalSettings, 'experimentalNativeChat'> &
+  Partial<NativeChatProviderSettings>
 
 /** Why a launch that the user's default asked to be structured cannot be. */
 export type StructuredNativeChatBlocker =
+  | 'reused-terminal'
   | 'agent-without-structured-session'
-  | 'draft-prompt'
-  | 'floating-workspace'
-  | 'tui-launch-customization'
+  /** Only PTYs apply a start directory outside the workspace; configured command/arguments do not choose the surface. */
+  | 'custom-start-directory'
   | 'remote-execution-host'
   | 'project-runtime'
   | 'runtime-capability'
-  /** The owning host has not answered yet. Distinct from `runtime-capability`, which is the
-   *  host saying no: an unestablished answer must not read as a refusal. */
+  /** Unestablished host support is unknown, distinct from an explicit capability refusal. */
   | 'runtime-capability-unknown'
+  /** This client does not tell a paired host it can read and launch structured sessions. */
+  | 'client-capability'
 
 export type StructuredNativeChatSupport =
   | { supported: true }
@@ -39,50 +37,63 @@ export type StructuredNativeChatSupport =
 export type StructuredNativeChatSupportInput = {
   agent: TuiAgent
   executionHostId: string
-  /** Capabilities of the host this launch would run on. `null` = not yet established. */
+  /** Owning host’s capabilities, including paired servers; null means unestablished. */
   hostCapabilities: readonly string[] | null
-  workspaceKind?: 'git-worktree' | 'folder' | 'floating'
+  /** What this client advertises to a paired host; read only for `runtime:` hosts. */
+  clientCapabilities?: readonly string[]
+  /** Host-derived. Absent means the kind was never established, which is not evidence of any kind. */
+  workspaceKind?: WorkspaceLaunchKind
+  projectExecutionKind?: 'host' | 'ssh'
   projectRuntime?: ProjectExecutionRuntimeResolution | null
-  /** A draft stays terminal-backed: the composer, not a turn, owns unsent text. */
-  isDraftPrompt?: boolean
-  requiresTuiLaunchCustomization?: boolean
+  startsOutsideWorkspaceRoot?: boolean
+  /** An existing PTY agent keeps its execution transport. */
+  reusesTerminal?: boolean
+  /** Without host inventory, offer only Claude/Codex, which every structured host supports. */
+  hostStructuredAgents?: readonly string[]
 }
 
-/** The user's default for a new agent tab: native chat rather than the raw TUI. */
-export function agentTabsDefaultToNativeChat(
+/** The single Chat UI switch selects structured chat for supported new launches. */
+export function isNativeChatEnabled(
   settings: Partial<NativeChatDefaultSettings> | null | undefined
 ): boolean {
-  return (
-    settings?.experimentalNativeChat === true && settings?.openAgentTabsInChatByDefault === true
-  )
+  return settings?.experimentalNativeChat === true
 }
 
-/** ...and specifically a structured native chat session rather than a terminal rendered as chat. */
-export function prefersStructuredNativeChatByDefault(
-  settings: Partial<NativeChatDefaultSettings> | null | undefined
+/** Unchosen agents retain the chat default, independently of installation inventory. */
+export function isNativeChatDefaultFor(
+  settings: Partial<NativeChatDefaultSettings> | null | undefined,
+  agent: TuiAgent
 ): boolean {
+  return isNativeChatEnabled(settings) && (settings?.nativeChatProviders?.[agent] ?? true)
+}
+
+function clientChoosesStructuredLaunches(capabilities: readonly string[] | undefined): boolean {
   return (
-    agentTabsDefaultToNativeChat(settings) && settings?.experimentalStructuredNativeChat === true
+    capabilities?.includes(STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY) === true &&
+    capabilities.includes(STRUCTURED_AGENT_SESSION_CLIENT_LAUNCH_MODE_CAPABILITY)
   )
 }
 
 export function resolveStructuredNativeChatSupport(
   input: StructuredNativeChatSupportInput
 ): StructuredNativeChatSupport {
-  if (!isAgentSessionHandleProvider(input.agent)) {
+  // Paired runtimes execute structured sessions themselves; relay SSH hosts cannot.
+  const host = parseExecutionHostId(input.executionHostId)
+  if (
+    input.projectExecutionKind === 'ssh' ||
+    (host?.kind !== 'local' && host?.kind !== 'runtime')
+  ) {
+    return { supported: false, blocker: 'remote-execution-host' }
+  }
+  if (input.reusesTerminal === true) {
+    return { supported: false, blocker: 'reused-terminal' }
+  }
+  const builtInAgent = isAgentSessionHandleProvider(input.agent)
+  if (!builtInAgent && !input.hostStructuredAgents?.includes(input.agent)) {
     return { supported: false, blocker: 'agent-without-structured-session' }
   }
-  if (input.isDraftPrompt === true) {
-    return { supported: false, blocker: 'draft-prompt' }
-  }
-  if (input.workspaceKind === 'floating') {
-    return { supported: false, blocker: 'floating-workspace' }
-  }
-  if (input.requiresTuiLaunchCustomization === true) {
-    return { supported: false, blocker: 'tui-launch-customization' }
-  }
-  if (input.executionHostId !== 'local') {
-    return { supported: false, blocker: 'remote-execution-host' }
+  if (input.startsOutsideWorkspaceRoot === true) {
+    return { supported: false, blocker: 'custom-start-directory' }
   }
   const projectRuntime = input.projectRuntime
   if (projectRuntime?.status === 'repair-required' || projectRuntime?.runtime.kind === 'wsl') {
@@ -91,8 +102,25 @@ export function resolveStructuredNativeChatSupport(
   if (input.hostCapabilities === null) {
     return { supported: false, blocker: 'runtime-capability-unknown' }
   }
-  if (!input.hostCapabilities.includes(STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY)) {
+  if (
+    !input.hostCapabilities.includes(STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY) ||
+    // A host that does not advertise its registered agents accepts only Claude and Codex.
+    (!builtInAgent &&
+      !input.hostCapabilities.includes(
+        STRUCTURED_AGENT_SESSION_REGISTERED_AGENTS_RUNTIME_CAPABILITY
+      ))
+  ) {
     return { supported: false, blocker: 'runtime-capability' }
+  }
+  if (host.kind === 'runtime') {
+    // Older paired hosts gate on their own chat setting, so retain terminal launches without client-launch-mode support.
+    if (!input.hostCapabilities.includes(STRUCTURED_AGENT_SESSION_CLIENT_LAUNCH_MODE_CAPABILITY)) {
+      return { supported: false, blocker: 'runtime-capability' }
+    }
+    // Hosts refuse unadvertised client support; retain terminals for those clients.
+    if (!clientChoosesStructuredLaunches(input.clientCapabilities)) {
+      return { supported: false, blocker: 'client-capability' }
+    }
   }
   return { supported: true }
 }

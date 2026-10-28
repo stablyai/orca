@@ -5,7 +5,6 @@ import type { ReplayingPanesRef } from './replay-guard'
 import type { installTerminalLinkPointerGesture } from './terminal-link-pointer-gesture'
 import type { installHttpLinkClickFallback } from './terminal-url-link-hit-testing'
 
-/** Mutable registries owned by one mounted pane surface. */
 export function useTerminalPaneLifecycleRefs() {
   return {
     systemPrefersDarkRef: useRef(false),
@@ -21,6 +20,7 @@ export function useTerminalPaneLifecycleRefs() {
       new Map<number, ReturnType<typeof installHttpLinkClickFallback>>()
     ),
     selectionDisposablesRef: useRef(new Map<number, IDisposable>()),
+    nativeCopyDisposablesRef: useRef(new Map<number, IDisposable>()),
     selectionCaptureTimersRef: useRef(new Map<number, number>()),
     osc52DisposablesRef: useRef(new Map<number, IDisposable>()),
     osc7DisposablesRef: useRef(new Map<number, IDisposable>()),

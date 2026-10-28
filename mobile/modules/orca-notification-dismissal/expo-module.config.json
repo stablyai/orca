@@ -1,0 +1,7 @@
+{
+  "platforms": ["apple"],
+  "apple": {
+    "modules": ["OrcaNotificationDismissalModule"],
+    "appDelegateSubscribers": ["OrcaNotificationDismissalSubscriber"]
+  }
+}

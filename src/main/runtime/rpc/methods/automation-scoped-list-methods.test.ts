@@ -1,17 +1,14 @@
-/**
- * The runtime end of the list contract: an old client that sends no params must
- * keep receiving the authority's complete list through the legacy field while
- * current callers also receive owner metadata.
- */
+import '../unused-default-rpc-methods.test-fixture'
+/** Legacy parameterless clients keep the complete authority list; current clients also receive owner metadata. */
 import { describe, expect, it, vi } from 'vitest'
-import type { RpcContext, RpcRequest } from '../core'
+import { eraseRpcMethods, type RpcContext, type RpcRequest } from '../core'
 import { RpcDispatcher } from '../dispatcher'
 import type { OrcaRuntimeService } from '../../orca-runtime'
 import { AUTOMATION_METHODS } from './automations'
 import { AUTOMATION_OWNER_FENCING_RUNTIME_CAPABILITY } from '../../../../shared/protocol-version'
 
 function method(name: string) {
-  const found = AUTOMATION_METHODS.find((entry) => entry.name === name)
+  const found = eraseRpcMethods(AUTOMATION_METHODS).find((entry) => entry.name === name)
   if (!found?.params) {
     throw new Error(`missing method ${name}`)
   }
@@ -99,12 +96,7 @@ describe('automation.list', () => {
   })
 })
 
-/**
- * The other two cases go through `invoke`, which normalizes params itself — so
- * literal `null` has to be proved through the real dispatcher instead. An old
- * client that serializes an absent params field as `null` is the case the
- * legacy fallback rests on, and only the dispatcher decides what it becomes.
- */
+/** Use real dispatch to prove legacy literal null params normalize before parsing; the test invoke helper would mask that boundary. */
 describe('automation.list from a client that sends literal null params', () => {
   it('answers with the complete authority list, not an invalid-argument error', async () => {
     const runtime = runtimeStub()
@@ -139,8 +131,7 @@ describe('owner preconditions', () => {
     expect(runtime.runAutomationNow).toHaveBeenCalledWith('a1', SSH_OWNER)
   })
 
-  // Why: a client with no SSH target registry of its own — the CLI — can only satisfy
-  // the fence by echoing back an owner the authority projected for it.
+  // The CLI has no SSH registry; it must echo the owner projected by the authority.
   it('returns the projected owner beside the automation on show', async () => {
     const runtime = runtimeStub()
     expect(await invoke('automation.show', { id: 'a1' }, runtime)).toEqual({

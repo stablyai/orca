@@ -34,9 +34,7 @@ function escapeRegExp(value: string): string {
 }
 
 async function createGitRepo(prefix: string, name: string): Promise<string> {
-  // Why: macOS os.tmpdir() (/var/...) symlinks to /private/var/..., and the app
-  // canonicalizes repo.path via `git rev-parse --show-toplevel` on add. Resolve
-  // the symlink here so the path the test asserts on matches what the store holds.
+  // Resolve macOS /var symlinks like git does when registering repo.path.
   const rootPath = realpathSync(await mkdtemp(path.join(os.tmpdir(), prefix)))
   tempRoots.push(rootPath)
   const repoPath = path.join(rootPath, name)
@@ -98,7 +96,7 @@ async function continueOnboarding(page: Page): Promise<void> {
 }
 
 async function selectCodexAgent(page: Page): Promise<void> {
-  const codexButton = page.getByRole('button', { name: /^Codex\s/ })
+  const codexButton = page.getByRole('button', { name: 'Codex', exact: true })
   const codexVisible = await codexButton
     .first()
     .waitFor({ state: 'visible', timeout: 1_000 })
@@ -298,11 +296,15 @@ async function renderedTabIds(page: Page): Promise<string[]> {
 }
 
 async function expectTerminalSurface(page: Page): Promise<void> {
-  await expect
-    .poll(() => page.locator('[data-terminal-tab-id]').count(), { timeout: 30_000 })
-    .toBeGreaterThan(0)
-  const terminalSurface = page.locator('[data-terminal-tab-id]').first()
-  await expect(terminalSurface).toHaveAttribute('data-native-file-drop-target', 'terminal')
+  const terminalSurface = page
+    .locator('[data-terminal-tab-id][data-terminal-layout-leaf-ids]:visible')
+    .first()
+  await expect(terminalSurface).toBeVisible({ timeout: 30_000 })
+  await expect(terminalSurface).not.toHaveAttribute('data-os-file-drop-owner')
+  await expect(terminalSurface.locator('.pane[data-leaf-id]').first()).toHaveAttribute(
+    'data-os-file-drop-owner',
+    ''
+  )
 }
 
 async function waitForTerminalPaneManager(page: Page): Promise<void> {
@@ -372,9 +374,7 @@ async function requestAgentSessionsTour(page: Page): Promise<void> {
 async function completeWorkspaceCreationTour(page: Page, workspaceName: string): Promise<void> {
   const pickProjectStep = page.getByRole('dialog', { name: /Pick a project/i })
   await expect(pickProjectStep).toBeVisible()
-  // Why: the project picker can leave its command popover open after the tour
-  // starts. Keyboard-activate the step button so the golden verifies the tour
-  // transition instead of pointer geometry around that popover.
+  // Keyboard-activate Next so a lingering project popover cannot obscure the tour transition.
   await pickProjectStep.getByRole('button', { name: /^Next$/ }).focus()
   await page.keyboard.press('Enter')
   const nameStep = page.getByRole('dialog', { name: /Name it, or start from existing work/i })
@@ -471,12 +471,11 @@ test.describe('New-user golden core flow', () => {
       .locator('[data-contextual-tour-target="workspace-create-control"]')
       .first()
     await expect(createControl).toBeVisible()
-    await expect(createControl).toHaveAttribute('aria-label', 'Create')
+    await expect(createControl).toHaveAttribute('aria-label', 'New workspace')
     const createControlBox = await createControl.boundingBox()
     expect(createControlBox?.width ?? 0).toBeGreaterThan(0)
     expect(createControlBox?.height ?? 0).toBeGreaterThan(0)
     await createControl.click()
-    await orcaPage.getByRole('menuitem', { name: /^New workspace/ }).click()
 
     const workspaceName = `golden-new-${Date.now()}`
     await completeWorkspaceCreationTour(orcaPage, workspaceName)

@@ -32,16 +32,7 @@ export {
   readPluginLockfile
 } from './plugin-install-lockfile-store'
 
-/**
- * Plugin installer, v0 sources: local path + git URL `#ref`. Git operations
- * shell out to SYSTEM git (execFile, argv arrays — never a shell string, and
- * never a vendored checkout: private repos must work with the user's
- * existing credential helpers and SSH remotes). No script execution during
- * install, ever — the installer copies files, nothing more.
- *
- * Installs land in immutable hash-addressed dirs behind an atomic pointer
- * swap; the previous version dir is kept for one-step rollback.
- */
+// Use system Git credentials without install scripts; publish immutable trees atomically and retain one rollback.
 
 const pluginMutationChains = new Map<string, Promise<void>>()
 
@@ -193,9 +184,7 @@ export async function installPluginFromMarketplace(input: {
   })
 }
 
-/** Restores the single retained immutable predecessor. The old consent
- * fingerprint becomes current again, so enablement still fails closed until
- * the user has approved those exact bytes. */
+/** Rollback restores prior content identity; enablement still requires consent for those exact bytes. */
 export async function rollbackInstalledPlugin(input: {
   pluginsDir: string
   pluginKey: string
@@ -268,7 +257,6 @@ export async function rollbackInstalledPlugin(input: {
   })
 }
 
-/** Removes the install dir, the plugin's data dir, and the lock entry. */
 export async function removeInstalledPlugin(input: {
   pluginsDir: string
   pluginsDataDir: string
@@ -277,6 +265,10 @@ export async function removeInstalledPlugin(input: {
   await serializePluginMutation(input.pluginsDir, async () => {
     if (!isQualifiedPluginKey(input.pluginKey)) {
       throw new Error(`invalid qualified plugin key: ${input.pluginKey}`)
+    }
+    const lock = await readPluginLockfile(input.pluginsDir)
+    if (lock.plugins[input.pluginKey]?.source.kind === 'bundled') {
+      throw new Error(`cannot remove protected plugin ${input.pluginKey}`)
     }
     await removeResolvedPluginDirectory(input.pluginsDir, input.pluginKey)
     await removeResolvedPluginDirectory(input.pluginsDataDir, input.pluginKey)

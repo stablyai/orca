@@ -5,18 +5,14 @@ import { afterEach, describe, expect, it } from 'vitest'
 import SyncDatabase from './sync-database'
 import { classifySqliteReadFailure, isTransientSqliteContention } from './sqlite-read-failure'
 
-// Error codes here are the ones a real node:sqlite open produces: a contended
-// database reports errcode 5 ("database is locked"), while a read-only WAL open
-// with no usable -shm reports errcode 14 ("unable to open database file"). The
-// two need opposite responses, so the classifier must never conflate them.
+// Real node:sqlite codes distinguish transient contention (5) from missing read-only WAL companions (14); they require opposite recovery.
 
-let tempDirs: string[] = []
+const tempDirs: string[] = []
 
 afterEach(() => {
-  for (const dir of tempDirs) {
+  for (const dir of tempDirs.splice(0)) {
     rmSync(dir, { recursive: true, force: true })
   }
-  tempDirs = []
 })
 
 function contendedDatabase(): { path: string; release: () => void } {
@@ -40,18 +36,22 @@ function contendedDatabase(): { path: string; release: () => void } {
 describe('isTransientSqliteContention', () => {
   it('recognizes a real SQLITE_BUSY thrown by a read-only open', () => {
     const contended = contendedDatabase()
+    let reader: SyncDatabase | undefined
     let thrown: unknown
     try {
-      new SyncDatabase(contended.path, { readonly: true, timeout: 0 })
-        .prepare('SELECT id FROM session')
-        .all()
+      reader = new SyncDatabase(contended.path, { readonly: true, timeout: 0 })
+      reader.prepare('SELECT id FROM session').all()
     } catch (error) {
       thrown = error
     } finally {
-      contended.release()
+      try {
+        reader?.close()
+      } finally {
+        contended.release()
+      }
     }
 
-    expect((thrown as { errcode?: number }).errcode).toBe(5)
+    expect(thrown).toMatchObject({ errcode: 5 })
     expect(isTransientSqliteContention(thrown)).toBe(true)
   })
 
@@ -63,7 +63,6 @@ describe('isTransientSqliteContention', () => {
   })
 
   it('reads extended result codes through their primary code', () => {
-    // SQLITE_BUSY_SNAPSHOT (517) and SQLITE_BUSY_RECOVERY (261) both pack 5.
     expect(isTransientSqliteContention({ errcode: 517, message: 'busy snapshot' })).toBe(true)
     expect(isTransientSqliteContention({ errcode: 261, message: 'recovery' })).toBe(true)
   })

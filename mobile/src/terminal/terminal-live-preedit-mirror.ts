@@ -1,6 +1,4 @@
-// Why: an unreported preedit that pauses should still reach the PTY quickly;
-// corrections make a premature commit safe. Only armed when the platform
-// reports nothing — a reported preedit is not text yet and must never time out.
+// Unreported preedit may settle on timeout and be corrected later; explicitly reported composition must never time out.
 export const TERMINAL_LIVE_HELD_PREEDIT_COMMIT_DELAY_MS = 300
 
 const TERMINAL_DEL_BYTE = '\x7f'
@@ -13,18 +11,8 @@ export type TerminalLiveMirrorStep = {
   readonly heldText: string
 }
 
-/**
- * How much of the field the text system can still rewrite, in code points.
- *
- * Preedit is a fact about the field, never about the script — Chinese pinyin
- * preedit is plain ASCII — so the marked-text range decides and no code point is
- * ever classified. That is what makes this hold for input methods nobody tested.
- *
- * `composing` is undefined only where the platform reports no range at all —
- * today React Native Android. The fallback holds the trailing non-ASCII run: a
- * conversion IME always leaves one and ASCII keeps its zero-latency echo. It
- * enumerates nothing, and it cannot see an ASCII preedit — only a report can.
- */
+// Reported marked-text ranges define preedit, including ASCII; never infer reported composition from script.
+// Platforms without ranges hold trailing non-ASCII runs, preserving immediate ASCII echo but unable to detect ASCII preedit.
 function heldPreeditLength(
   fieldCodePoints: readonly string[],
   stableLength: number,
@@ -41,10 +29,7 @@ function heldPreeditLength(
   ) {
     held += 1
   }
-  // Why the bound: the run can reach back over code points already delivered to the pty, and
-  // holding those makes the caller erase them with DEL and retype them. The reported branch above
-  // subtracts `stableLength` for the same reason; without it a settle-timer commit followed by
-  // another keystroke costs a DEL per already-sent character.
+  // Bound holds by stableLength so later keystrokes cannot erase and retype text already delivered by a settle commit.
   return Math.min(held, fieldCodePoints.length - stableLength)
 }
 

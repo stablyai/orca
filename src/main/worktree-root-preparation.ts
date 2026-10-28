@@ -7,9 +7,7 @@ import { computeWorkspaceRootAsync, getWorktreePathSettings } from './ipc/worktr
 import { getWorktreeMirrorDistro } from './project-runtime-git-options'
 import type { ProjectRuntimeResolutionStore } from './local-project-runtime-resolution'
 
-// `localWindowsRuntimeDefault` is listed because the mirror distro is resolved
-// from it plus the project catalog: a store that omits it prepares a different
-// root than the create path uses.
+// Match create's mirror-distro resolution so root preparation cannot target a different directory.
 type WorktreeRootPreparationSettings = Pick<GlobalSettings, 'workspaceDir' | 'nestWorkspaces'> &
   Partial<Pick<GlobalSettings, 'localWindowsRuntimeDefault'>>
 type WorktreeRootPreparationStore = {
@@ -31,8 +29,7 @@ export async function prepareLocalWorktreeRootForRepo(
       repo.path,
       getWorktreePathSettings(repo, store.getSettings(), getWorktreeMirrorDistro(store, repo))
     )
-    // Why: mkdir touches the current root to preflight macOS TCC, while
-    // access remains scoped by recomputed settings instead of a permanent grant.
+    // Touch the current root to preflight macOS TCC; recomputed settings still scope access.
     await mkdir(root, { recursive: true })
   } catch (error) {
     console.warn(`[worktree-root] failed to prepare worktree root for ${repo.path}:`, error)

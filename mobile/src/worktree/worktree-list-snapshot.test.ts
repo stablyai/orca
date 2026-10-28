@@ -11,6 +11,8 @@ function agent(overrides: Partial<RuntimeWorktreeAgentRow> = {}): RuntimeWorktre
     state: 'working',
     agentType: 'codex',
     prompt: 'fix mobile lag',
+    taskTitle: null,
+    displayName: null,
     lastAssistantMessage: null,
     toolName: null,
     toolInput: null,
@@ -19,6 +21,13 @@ function agent(overrides: Partial<RuntimeWorktreeAgentRow> = {}): RuntimeWorktre
     updatedAt: 200,
     ...overrides
   }
+}
+
+function done(
+  outcome: 'success' | 'failure',
+  stateStartedAt = 1
+): NonNullable<RuntimeWorktreeAgentRow['mainAgent']> {
+  return { state: 'done', outcome, stateStartedAt }
 }
 
 function worktree(overrides: Partial<Worktree> = {}): Worktree {
@@ -33,7 +42,6 @@ function worktree(overrides: Partial<Worktree> = {}): Worktree {
     path: worktreePath,
     liveTerminalCount: 1,
     hasAttachedPty: true,
-    preview: '$ codex',
     unread: false,
     lastOutputAt: 1234,
     isPinned: false,
@@ -160,6 +168,48 @@ describe('areWorktreeListsEqual', () => {
     expect(areWorktreeListsEqual(first, second)).toBe(false)
   })
 
+  it('detects a verdict change that leaves the interrupted flag as it was', () => {
+    const first = [worktree({ agents: [agent({ state: 'done', mainAgent: done('success') })] })]
+    const second = [worktree({ agents: [agent({ state: 'done', mainAgent: done('failure') })] })]
+
+    expect(areWorktreeListsEqual(first, second)).toBe(false)
+  })
+
+  it('detects a main agent failing while its subagents keep the row working', () => {
+    const first = [worktree({ agents: [agent({ state: 'working' })] })]
+    const second = [worktree({ agents: [agent({ state: 'working', mainAgent: done('failure') })] })]
+
+    expect(areWorktreeListsEqual(first, second)).toBe(false)
+  })
+
+  it('detects the main agent clock moving, which dates a failure', () => {
+    const at = (stateStartedAt: number) => [
+      worktree({
+        agents: [agent({ state: 'working', mainAgent: done('failure', stateStartedAt) })]
+      })
+    ]
+
+    expect(areWorktreeListsEqual(at(1), at(2))).toBe(false)
+    expect(areWorktreeListsEqual(at(1), at(1))).toBe(true)
+  })
+
+  // Stopping may change without advancing any row clock.
+  it("detects the host's Stopping coming and going with nothing else moved", () => {
+    const stopping = (value: boolean) => [
+      worktree({
+        agents: [
+          agent({
+            mainAgent: { state: 'working', stateStartedAt: 1, ...(value ? { stopping: true } : {}) }
+          })
+        ]
+      })
+    ]
+
+    expect(areWorktreeListsEqual(stopping(false), stopping(true))).toBe(false)
+    expect(areWorktreeListsEqual(stopping(true), stopping(false))).toBe(false)
+    expect(areWorktreeListsEqual(stopping(true), stopping(true))).toBe(true)
+  })
+
   it('detects monitoring mode changes within working', () => {
     const first = [worktree({ agents: [agent({ state: 'working' })] })]
     const second = [worktree({ agents: [agent({ state: 'working', workingMode: 'monitoring' })] })]
@@ -172,12 +222,5 @@ describe('areWorktreeListsEqual', () => {
     const second = [worktree({ status: 'working', workingMode: 'monitoring' })]
 
     expect(areWorktreeListsEqual(first, second)).toBe(false)
-  })
-
-  it('treats missing and empty agent arrays as equivalent for rendering', () => {
-    const first = [worktree({ agents: undefined })]
-    const second = [worktree({ agents: [] })]
-
-    expect(areWorktreeListsEqual(first, second)).toBe(true)
   })
 })

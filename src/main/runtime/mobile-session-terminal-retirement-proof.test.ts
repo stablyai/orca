@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
+import { appendRetiredTerminalSurfaceProofs } from '../../shared/terminal-retirement-proof-ledger'
 import {
-  appendRetiredTerminalSurfaceProofs,
+  attachRetirementProofsToSnapshot,
   preserveTerminalRetirementProofs
 } from './mobile-session-terminal-retirement-proof'
 import type { RuntimeMobileSessionTabsSnapshot } from '../../shared/runtime-types'
@@ -39,8 +40,7 @@ describe('mobile session terminal retirement proofs', () => {
     }
   )
 
-  // Why: host-authored writes never carry worktreeInstanceId. Without inheritance the stored
-  // entry forgets the occupant and renderer(A) -> host write -> renderer(B) launders A's proofs.
+  // Identity-less host writes must inherit the occupant, preventing renderer(A) -> host -> renderer(B) proof laundering.
   it('does not launder proofs across occupants through an identity-less host write', () => {
     const occupantA = snapshot({
       worktreeInstanceId: 'instance-a',
@@ -121,6 +121,24 @@ describe('mobile session terminal retirement proofs', () => {
       terminal: 'term-new',
       incarnationId: 'inc-new'
     })
+  })
+
+  it('does not bump the version when a re-delivered proof only changes position', () => {
+    // Re-supplying A reorders [A,B] to [B,A]; position-based equality would emit a no-op version bump.
+    const a = { ...retired, parentTabId: 'tab-a', leafId: 'leaf-a', ptyId: 'pty-a' }
+    const b = { ...retired, parentTabId: 'tab-b', leafId: 'leaf-b', ptyId: 'pty-b' }
+    const stored = snapshot({ retiredTerminalSurfaces: [a, b] })
+
+    expect(attachRetirementProofsToSnapshot(stored, [a])).toBeNull()
+  })
+
+  it('still bumps the version when a re-delivered proof names a new incarnation', () => {
+    const a = { ...retired, parentTabId: 'tab-a', leafId: 'leaf-a', ptyId: 'pty-a' }
+    const stored = snapshot({ retiredTerminalSurfaces: [a] })
+
+    expect(
+      attachRetirementProofsToSnapshot(stored, [{ ...a, incarnationId: 'inc-next' }])
+    ).toMatchObject({ snapshotVersion: stored.snapshotVersion + 1 })
   })
 
   it('preserves each retired leaf identity independently', () => {

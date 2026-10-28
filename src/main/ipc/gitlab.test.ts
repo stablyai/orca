@@ -214,32 +214,40 @@ describe('GitLab IPC handlers', () => {
   })
 
   it('forwards the typed search query into listMRs and listWorkItems', async () => {
-    listMergeRequestsMock.mockResolvedValueOnce({ items: [] })
-    listWorkItemsMock.mockResolvedValueOnce({ items: [] })
+    const result = {
+      items: [{ id: 'mr-7', type: 'mr', number: 7 }],
+      page: 3,
+      perPage: 1,
+      totalCount: 0,
+      totalPages: 4
+    }
+    listMergeRequestsMock.mockResolvedValueOnce(result)
+    listWorkItemsMock.mockResolvedValueOnce(result)
     registerGitLabHandlers(storeWithRepos([repo()]) as Store)
 
-    await ipcHandlers.get('gitlab:listMRs')?.(null, {
+    const mergeRequests = await ipcHandlers.get('gitlab:listMRs')?.(null, {
       repoPath: '/local/orca',
       state: 'opened',
-      page: 1,
-      perPage: 20,
+      page: 3,
+      perPage: 1,
       query: '  fix login  '
     })
-    await ipcHandlers.get('gitlab:listWorkItems')?.(null, {
+    const workItems = await ipcHandlers.get('gitlab:listWorkItems')?.(null, {
       repoPath: '/local/orca',
       state: 'opened',
-      page: 1,
-      perPage: 20,
+      page: 3,
+      perPage: 1,
       query: 'fix login'
     })
 
-    // Why (#6263): the trimmed query must land in the 6th positional arg —
-    // previously the slot was hardcoded to `undefined`, so search never worked.
+    expect(mergeRequests).toEqual(result)
+    expect(workItems).toEqual(result)
+    // Preserve the query's sixth argument slot; omitting it silently disables search (#6263).
     expect(listMergeRequestsMock).toHaveBeenCalledWith(
       '/local/orca',
       'opened',
+      3,
       1,
-      20,
       undefined,
       'fix login',
       null
@@ -247,8 +255,8 @@ describe('GitLab IPC handlers', () => {
     expect(listWorkItemsMock).toHaveBeenCalledWith(
       '/local/orca',
       'opened',
+      3,
       1,
-      20,
       undefined,
       'fix login',
       null
@@ -580,7 +588,24 @@ describe('GitLab IPC handlers', () => {
       undefined,
       null,
       undefined,
-      localGitOptions
+      localGitOptions,
+      { includeReviewDetails: undefined }
+    )
+    await ipcHandlers.get('gitlab:workItemDetails')?.(null, {
+      repoPath: '/local/orca',
+      iid: 8,
+      type: 'mr',
+      includeReviewDetails: false
+    })
+    expect(getWorkItemDetailsMock).toHaveBeenLastCalledWith(
+      '/local/orca',
+      8,
+      'mr',
+      undefined,
+      null,
+      undefined,
+      localGitOptions,
+      { includeReviewDetails: false }
     )
     expect(closeMRMock).toHaveBeenCalledWith(
       '/local/orca',
@@ -679,8 +704,7 @@ describe('GitLab IPC handlers', () => {
     )
   })
 
-  // Regression for #7732: raw CI traces routinely exceed the 1 MB runtime transport
-  // frame cap, so the Checks panel opts into a main-side excerpt.
+  // Bound raw CI traces before they exceed the runtime frame cap (#7732).
   it('bounds the job trace in main when the caller asks for a log excerpt', async () => {
     const noisyTrace = [
       'section_start:1699000000:build\r\u001b[0K$ pnpm build',

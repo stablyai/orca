@@ -4,8 +4,6 @@
  * input sources on the same device do run, non-Hangul scripts, desktop
  * platforms, and anything else that writes to the PTY.
  */
-import { readFileSync } from 'node:fs'
-import { resolve } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { writeTerminalPastePtyInput } from './terminal-pty-paste-writer'
 import {
@@ -108,11 +106,7 @@ describe('the iPadOS Hangul path alongside everything else', () => {
   })
 
   it('composes Hangul after a composition that never ended, then a blur', async () => {
-    // Why this case: a `composing` flag latched on compositionstart and cleared
-    // only on compositionend stays true forever when the session is abandoned —
-    // blur mid-composition, pane teardown, a cancelled IME — and silently kills
-    // every claimed key for the rest of the pane's life. The state is derived
-    // from the composition tracker instead, which a blur clears.
+    // Derive expiring composition state: a latched flag survives missing end/blur and can disable input forever.
     pretendIosWeb()
     const rig = openIosTerminal()
     dispatchComposition(rig, 'compositionstart', '')
@@ -136,8 +130,7 @@ describe('the iPadOS Hangul path alongside everything else', () => {
   })
 
   it('leaves a Hanja lookup to the session that owns its preedit', async () => {
-    // Why: ibus-hangul indexes its Hanja table by digit, but only over a live
-    // composition — which xterm's CompositionHelper already commits.
+    // Only live Hanja compositions own candidate digits; xterm already commits those sessions.
     pretendIosWeb()
     const rig = openIosTerminal()
     await typePinyin(rig, 'han', '韓')
@@ -185,32 +178,14 @@ describe('the iPadOS Hangul path alongside everything else', () => {
         expect(rig.emitted).toEqual(['ㅎ'])
       }
     })
-
-    it('reads the platform once, so no second gate can drift from it', () => {
-      const lifecycle = readFileSync(
-        resolve(
-          process.cwd(),
-          'src/renderer/src/components/terminal-pane/terminal-pane-pane-input.ts'
-        ),
-        'utf8'
-      )
-      expect(lifecycle.match(/const isIosWeb =/g)).toHaveLength(1)
-      expect(lifecycle.match(/isCurrentPlatformIosWeb\(/g)).toHaveLength(1)
-      // And that the one gate is what installs the controller.
-      expect(lifecycle).toMatch(
-        /const iosHangulPreedit = isIosWeb\s*\?\s*installTerminalIosHangulPreedit\(/
-      )
-    })
   })
 
   it('composes Hangul after a paste written straight to the transport', async () => {
-    // Why: `writeTerminalPastePtyInput` bypasses xterm entirely, so it fires no
-    // `onData` a mirror could resync on. A hold reads the field only when it
-    // opens, so there is no state for the paste to make stale.
+    // Paste bypasses xterm.onData; holds read the field on opening, so no mirrored state can become stale.
     pretendIosWeb()
     const rig = openIosTerminal()
     const sent: string[] = []
-    writeTerminalPastePtyInput({ sendInput: (data) => (sent.push(data), true) }, 'echo ')
+    writeTerminalPastePtyInput({ sendInput: (data) => (sent.push(data), true) }, 'echo ', 'driving')
     expect(sent).toEqual(['echo '])
 
     await typeHangeul(rig)
@@ -220,9 +195,7 @@ describe('the iPadOS Hangul path alongside everything else', () => {
   })
 
   it('leaves non-Hangul scripts on the same device reaching the PTY', async () => {
-    // Why: the bypass claims a key that nothing downstream re-sends, so it must
-    // claim only jamo. A Cyrillic or kana key would otherwise lose its keydown,
-    // its keypress and its `input` alike and arrive as nothing.
+    // Claim only jamo; other scripts have no downstream resend and would disappear.
     pretendIosWeb()
     const rig = openIosTerminal()
     for (const key of ['п', 'р', 'α', 'ω', 'あ', 'カ', 'é', 'ü', '€']) {

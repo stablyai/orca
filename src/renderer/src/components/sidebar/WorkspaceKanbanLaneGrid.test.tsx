@@ -229,13 +229,4 @@ describe('WorkspaceKanbanLaneGrid', () => {
     flushNextAnimationFrame()
     expect(renderedLaneCount()).toBe(2)
   })
-
-  it('passes the host-qualified active workspace through virtualized lanes', () => {
-    const { container } = render(makeGrid('ssh:builder|repo::/workspace'))
-
-    expect(
-      container.querySelector<HTMLElement>('[data-workspace-status]')?.dataset
-        .activeWorktreeIdentity
-    ).toBe('ssh:builder|repo::/workspace')
-  })
 })

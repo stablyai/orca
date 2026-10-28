@@ -1,0 +1,206 @@
+{
+  "goldenFormatVersion": 6,
+  "operation": "session.create-terminal",
+  "family": "session.create-terminal",
+  "namedDeltas": [],
+  "values": {
+    "4e536fd51d5d": {
+      "name": "agent.launchReplay#1",
+      "ordinal": 2,
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"agent.launchReplay\",\"params\":{\"agent\":\"claude\",\"operationId\":\"1767225600000-00000000000040008000000000000004\",\"target\":{\"kind\":\"existing\",\"worktree\":\"id:wt-1\"},\"paneKey\":\"00000000-0000-4000-8000-000000000001:00000000-0000-4000-8000-000000000002\",\"sessionId\":\"claude_00000000_0000_4000_8000_000000000003\"}}"
+    },
+    "5bc4a173d7eb": {
+      "activeHandle": "terminal-0",
+      "activeSessionTabId": "tab-0",
+      "createError": "",
+      "creating": false,
+      "initializedHandles": ["terminal-0"],
+      "pendingSelection": {
+        "kind": "launched",
+        "lock": "mobile-create:mjuohs00-8ig2hens",
+        "snapshotsLeft": 5,
+        "surface": {
+          "handle": "terminal-1",
+          "pane": {
+            "leafId": "00000000-0000-4000-8000-000000000002",
+            "tabId": "00000000-0000-4000-8000-000000000001"
+          },
+          "sessionId": "claude_00000000_0000_4000_8000_000000000003"
+        }
+      },
+      "sessionTabs": [],
+      "terminals": []
+    },
+    "6248a3dd0710": {
+      "name": "fetch-session-tabs",
+      "ordinal": 3,
+      "value": {}
+    },
+    "9270aeb7d9c6": {
+      "status": "pending",
+      "startedAt": 0
+    },
+    "b686ad3ebac0": {
+      "name": "agent.launchReplay#1",
+      "ordinal": 1,
+      "args": [
+        {
+          "name": "method",
+          "value": "agent.launchReplay"
+        },
+        {
+          "name": "params",
+          "value": {
+            "agent": "claude",
+            "operationId": "1767225600000-00000000000040008000000000000004",
+            "paneKey": "00000000-0000-4000-8000-000000000001:00000000-0000-4000-8000-000000000002",
+            "sessionId": "claude_00000000_0000_4000_8000_000000000003",
+            "target": {
+              "kind": "existing",
+              "worktree": "id:wt-1"
+            }
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "undefined"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-1",
+          "ok": true,
+          "result": {
+            "outcome": {
+              "handle": "terminal-1",
+              "kind": "terminal"
+            },
+            "receipt": {
+              "detail": "Started a terminal agent.",
+              "mode": "terminal",
+              "preferred": "terminal",
+              "reason": "user_default"
+            },
+            "worktreeId": "wt-1"
+          }
+        }
+      }
+    },
+    "c7778ace6ed5": {
+      "name": "agent.launchReplay#1",
+      "ordinal": 1,
+      "args": [
+        {
+          "name": "method",
+          "value": "agent.launchReplay"
+        },
+        {
+          "name": "params",
+          "value": {
+            "agent": "claude",
+            "operationId": "1767225600000-00000000000040008000000000000004",
+            "paneKey": "00000000-0000-4000-8000-000000000001:00000000-0000-4000-8000-000000000002",
+            "sessionId": "claude_00000000_0000_4000_8000_000000000003",
+            "target": {
+              "kind": "existing",
+              "worktree": "id:wt-1"
+            }
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "undefined"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "pending",
+        "startedAt": 0
+      }
+    },
+    "eb79a9b3682a": {
+      "status": "fulfilled",
+      "startedAt": 0,
+      "settledAt": 0,
+      "value": {
+        "$rpc": "undefined"
+      }
+    },
+    "f6051f871c2d": {
+      "activeHandle": "terminal-0",
+      "activeSessionTabId": "tab-0",
+      "createError": "",
+      "creating": true,
+      "initializedHandles": ["terminal-0"],
+      "pendingSelection": {
+        "kind": "launched",
+        "lock": "mobile-create:mjuohs00-8ig2hens",
+        "snapshotsLeft": {
+          "$rpc": "null"
+        },
+        "surface": {
+          "handle": {
+            "$rpc": "null"
+          },
+          "pane": {
+            "leafId": "00000000-0000-4000-8000-000000000002",
+            "tabId": "00000000-0000-4000-8000-000000000001"
+          },
+          "sessionId": "claude_00000000_0000_4000_8000_000000000003"
+        }
+      },
+      "sessionTabs": [],
+      "terminals": []
+    }
+  },
+  "recording": {
+    "scenario": "session-create-terminal-agent-launched",
+    "checkpoints": [
+      {
+        "id": "creating",
+        "observation": {
+          "sender": ["c7778ace6ed5"],
+          "payloads": ["4e536fd51d5d"],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "create": "9270aeb7d9c6"
+          },
+          "state": "f6051f871c2d",
+          "effects": []
+        }
+      },
+      {
+        "id": "launched",
+        "observation": {
+          "sender": ["b686ad3ebac0"],
+          "payloads": ["4e536fd51d5d"],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "create": "eb79a9b3682a"
+          },
+          "state": "5bc4a173d7eb",
+          "effects": ["6248a3dd0710"]
+        }
+      },
+      {
+        "id": "tabs-refreshed",
+        "observation": {
+          "sender": ["b686ad3ebac0"],
+          "payloads": ["4e536fd51d5d"],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "create": "eb79a9b3682a"
+          },
+          "state": "5bc4a173d7eb",
+          "effects": ["6248a3dd0710"]
+        }
+      }
+    ]
+  }
+}

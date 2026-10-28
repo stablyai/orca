@@ -1,9 +1,11 @@
-import { joinPath, normalizeRelativePath } from '@/lib/path'
+import { useAppStore } from '@/store'
+import { getRelativePathInsideRoot, joinPath } from '@/lib/path'
 import type { DirEntry } from '../../../../shared/filesystem-entry-types'
 import { sortDirEntries } from '../../../../shared/file-name-sort'
-import { readRuntimeDirectory } from '@/runtime/runtime-file-client'
-import type { FileExplorerOperationOwner, TreeNode } from './file-explorer-types'
+import { readRuntimeDirectory } from '@/runtime/runtime-file-mutation-client'
+import type { DirCache, FileExplorerOperationOwner, TreeNode } from './file-explorer-types'
 import { shouldIncludeFileExplorerEntry } from './file-explorer-entries'
+import { parentDirForWatchPath, resolveCachedDirPath } from './file-explorer-watch-path'
 import {
   getFileExplorerOperationOwner,
   getFileExplorerOwnerUnresolvedMessage,
@@ -27,9 +29,7 @@ export function fileExplorerEntriesToTreeNodes(
     return {
       name: entry.name,
       path,
-      relativePath: worktreePath
-        ? normalizeRelativePath(path.slice(worktreePath.length + 1))
-        : entry.name,
+      relativePath: getRelativePathInsideRoot(path, worktreePath) ?? entry.name,
       isDirectory: entry.isDirectory,
       isSymlink: entry.isSymlink,
       depth: depth + 1,
@@ -38,10 +38,66 @@ export function fileExplorerEntriesToTreeNodes(
   })
 }
 
+// Without followSymlinks, re-reading a parent lists opened folder links as files (#29069).
+export function keepOpenedDirectoryLinks(
+  previousChildren: readonly TreeNode[] | undefined,
+  nextChildren: TreeNode[],
+  dirCache: Readonly<Record<string, DirCache>>
+): TreeNode[] {
+  const openedLinks = new Map<string, string>()
+  for (const child of previousChildren ?? []) {
+    const cachedLink = dirCache[child.path]
+    // Failed/pending reads and other-host listings do not prove a folder link was opened.
+    if (
+      child.isSymlink &&
+      child.isDirectory &&
+      child.operationOwner &&
+      child.operationOwner.kind !== 'unresolved' &&
+      cachedLink?.operationOwner &&
+      cachedLink.error === undefined &&
+      JSON.stringify(child.operationOwner) === JSON.stringify(cachedLink.operationOwner)
+    ) {
+      openedLinks.set(child.path, JSON.stringify(child.operationOwner))
+    }
+  }
+  if (openedLinks.size === 0) {
+    return nextChildren
+  }
+  return nextChildren.map((child) =>
+    child.isSymlink &&
+    !child.isDirectory &&
+    child.operationOwner !== undefined &&
+    openedLinks.get(child.path) === JSON.stringify(child.operationOwner)
+      ? { ...child, isDirectory: true, isDirectoryFromOpenedLink: true }
+      : child
+  )
+}
+
+export function clearFailedOpenedDirectoryLink(
+  cache: Record<string, DirCache>,
+  linkPath: string
+): Record<string, DirCache> {
+  const parentPath = resolveCachedDirPath(cache, parentDirForWatchPath(linkPath))
+  if (!parentPath) {
+    return cache
+  }
+  const parent = cache[parentPath]
+  let changed = false
+  const children = parent.children.map((child) => {
+    if (child.path !== linkPath || !child.isSymlink || !child.isDirectoryFromOpenedLink) {
+      return child
+    }
+    changed = true
+    return { ...child, isDirectory: false, isDirectoryFromOpenedLink: false }
+  })
+  return changed ? { ...cache, [parentPath]: { ...parent, children } } : cache
+}
+
 export async function readFileExplorerDirectory(
   activeWorktreeId: string | null | undefined,
   worktreePath: string | null,
-  dirPath: string
+  dirPath: string,
+  options: { wakeWslDistro?: boolean } = {}
 ): Promise<FileExplorerDirectoryListing> {
   const operationOwner = getFileExplorerOperationOwner(activeWorktreeId)
   const route = getFileExplorerOperationRoute(operationOwner)
@@ -50,15 +106,22 @@ export async function readFileExplorerDirectory(
   }
   const entries = await readRuntimeDirectory(
     {
-      settings: route.settings,
+      target: route.target,
       worktreeId: activeWorktreeId,
       worktreePath,
       connectionId: route.connectionId
     },
-    dirPath
+    dirPath,
+    {
+      ...(useAppStore.getState().settings?.followSymlinkedDirectories
+        ? { followSymlinks: true }
+        : {}),
+      ...options
+    }
   )
-  // Why: remote-runtime and paired-web routes return the host's order verbatim,
-  // and an older host may still sort lexicographically; re-sorting an already
-  // sorted local listing is near-free (adaptive sort).
-  return { entries: sortDirEntries(entries), operationOwner }
+  // Older remote hosts may return lexical order; adaptive sorting keeps already-sorted local listings cheap.
+  return {
+    entries: sortDirEntries(entries),
+    operationOwner
+  }
 }

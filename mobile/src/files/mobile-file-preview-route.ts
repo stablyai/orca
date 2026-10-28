@@ -107,6 +107,16 @@ export function normalizeMobileFilePreviewRouteParams(
   }
 }
 
+// Bridge params are strings; omit absent values so URLSearchParams preserves the native screen’s missing-versus-empty semantics.
+export function mobileFilePreviewShellParams(
+  params: MobileFilePreviewRouteParams
+): Record<string, string> {
+  const { hostId: _hostId, worktreeId: _worktreeId, ...rest } = params
+  return Object.fromEntries(
+    Object.entries(rest).flatMap(([key, value]) => (value === undefined ? [] : [[key, value]]))
+  )
+}
+
 export function createMobileFilePreviewHref(
   params: MobileFilePreviewRouteParams
 ): MobileFilePreviewHref {

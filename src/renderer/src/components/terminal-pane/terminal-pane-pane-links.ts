@@ -18,6 +18,8 @@ import { installTerminalLinkPointerGesture } from './terminal-link-pointer-gestu
 import { installHttpLinkClickFallback } from './terminal-url-link-hit-testing'
 import { handleOscLink } from './terminal-osc-link-routing'
 import { copyTerminalSelection } from './terminal-selection-copy'
+import { readTerminalClipboardSelection } from './terminal-clipboard-selection-text'
+import { installTerminalNativeCopyGutterTrim } from './terminal-native-copy-gutter'
 import { installMouseHideWhileTyping } from './mouse-hide-while-typing'
 import { isPrimarySelectionEnabled, setPrimarySelectionText } from '@/lib/primary-selection'
 import {
@@ -39,6 +41,7 @@ type PaneLinkContext = {
     | 'fileLinkClickFallbackDisposablesRef'
     | 'httpLinkClickFallbackDisposablesRef'
     | 'selectionDisposablesRef'
+    | 'nativeCopyDisposablesRef'
     | 'selectionCaptureTimersRef'
     | 'mouseHideDisposablesRef'
   >
@@ -54,7 +57,6 @@ type PaneLinkContext = {
   ptyStartup: Parameters<typeof seedStartupSessionRestoredBanner>[0]
 }
 
-/** Installs path/URL links, selection capture, and pointer behavior for a pane. */
 export function installTerminalPaneLinkHandling(context: PaneLinkContext): void {
   const {
     pane,
@@ -113,6 +115,10 @@ export function installTerminalPaneLinkHandling(context: PaneLinkContext): void 
   )
   seedStartupSessionRestoredBanner(ptyStartup, pane.id, onShowSessionRestoredBanner)
 
+  refs.nativeCopyDisposablesRef.current.set(
+    pane.id,
+    installTerminalNativeCopyGutterTrim(pane.terminal)
+  )
   refs.selectionDisposablesRef.current.set(
     pane.id,
     pane.terminal.onSelectionChange(() => {
@@ -144,7 +150,7 @@ export function installTerminalPaneLinkHandling(context: PaneLinkContext): void 
           if (terminalSelectionExceedsPrimaryLimit(pane.terminal)) {
             return
           }
-          const selection = pane.terminal.getSelection()
+          const selection = readTerminalClipboardSelection(pane.terminal)
           if (selection) {
             setPrimarySelectionText(selection)
           }

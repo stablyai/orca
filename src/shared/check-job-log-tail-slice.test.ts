@@ -6,6 +6,31 @@ import {
 } from './check-job-log-tail-slice'
 
 describe('sliceCheckLogTail', () => {
+  it.each([1, 2, 3, 5, 7, 11, 31, 100])(
+    'preserves the newest 30 earlier context lines with errors every %i lines',
+    (spacing) => {
+      const lines = Array.from({ length: 500 }, (_, index) =>
+        index % spacing === 0 ? `error: failure ${index}` : `line ${index}`
+      )
+      const selected = new Set<number>()
+      for (let error = 0; error < 400; error += spacing) {
+        for (let offset = -2; offset <= 2; offset++) {
+          if (error + offset >= 0 && error + offset < 400) {
+            selected.add(error + offset)
+          }
+        }
+      }
+      const context = [...selected].sort((a, b) => a - b).slice(-30)
+      expect(sliceCheckLogTail(lines.join('\n'))).toBe(
+        [
+          ...context.map((index) => lines[index]),
+          PR_CHECK_LOG_TAIL_EARLIER_SEPARATOR,
+          ...lines.slice(400)
+        ].join('\n')
+      )
+    }
+  )
+
   it('keeps the recent tail when no earlier error markers are present', () => {
     const logLines = Array.from({ length: 210 }, (_, index) => `line ${index}`)
     const sliced = sliceCheckLogTail(logLines.join('\n'))
@@ -28,7 +53,7 @@ describe('sliceCheckLogTail', () => {
     expect(Buffer.from(sliced, 'utf8').byteLength).toBeLessThanOrEqual(PR_CHECK_LOG_TAIL_BYTES)
   })
 
-  it('still applies the byte cap after combining earlier errors with the recent tail', () => {
+  it('caps a large multiline recent tail', () => {
     const logLines = Array.from({ length: 220 }, (_, index) => `line ${index} ${'x'.repeat(120)}`)
     const sliced = sliceCheckLogTail(logLines.join('\n'))
 

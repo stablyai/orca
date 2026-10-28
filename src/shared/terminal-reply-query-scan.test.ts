@@ -58,10 +58,7 @@ describe('terminal reply query scan', () => {
   })
 })
 
-// A late-attaching remote/mobile client is handed these sequences because the scrollback
-// snapshot it also receives carries no control bytes. Carrying the 2031 arm without its
-// withdraw made the client register a subscription the TUI had already retired, and the
-// remote renderer then pushed CSI ?997;Nn into the shell on the next theme flip (#9993).
+// Snapshots omit control bytes. Replay both 2031 toggles or remote clients retain a retired subscription and push replies into the shell (#9993).
 describe('replayed DECSET 2031 state matches the TUI final state (#9993)', () => {
   it('carries the withdraw alongside the arm', () => {
     const result = scanTerminalReplyQuerySequences(

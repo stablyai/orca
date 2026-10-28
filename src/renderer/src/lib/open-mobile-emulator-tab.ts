@@ -85,8 +85,7 @@ export async function openMobileEmulatorTab(
   }
   beginManualSimulatorLaunch(worktreeId)
   try {
-    // Why: this scope owns the guard from before tab creation through attach;
-    // every early return or error must release it so a retry can proceed.
+    // Own the guard through create/attach; release on every error/early return so retries remain possible.
     const tabId = ensureSimulatorTab(worktreeId, {
       placement: options.placement ?? 'rightSplit',
       targetGroupId,
@@ -98,8 +97,7 @@ export async function openMobileEmulatorTab(
     }
     dispatchManualSimulatorLaunchStarted(worktreeId)
     try {
-      // Why: the pane is visible but inert while serve-sim settles; the actual
-      // stream is handed to it only after attach returns ready info.
+      // Keep the pane inert during serve-sim startup; expose its stream only after attach confirms readiness.
       const result = await callRuntimeRpc<EmulatorAttachResult>(
         { kind: 'local' },
         'emulator.attach',
@@ -111,8 +109,7 @@ export async function openMobileEmulatorTab(
       if (!result.attached || !result.info) {
         throw new Error('Could not start the emulator.')
       }
-      // Why: users can close the tab while serve-sim is still starting; after
-      // attach registers the managed session, clean it up if no pane remains.
+      // If users close during startup, clean the managed session once attach registers it.
       if (await shutdownManagedSimulatorIfNoPane(worktreeId, tabId)) {
         return tabId
       }

@@ -37,6 +37,7 @@ function createPane(options: { webglAddon?: FakeWebglAddon | null } = {}): Manag
     hasComplexScriptOutput: false,
     webglAddon: (options.webglAddon ?? null) as never,
     ligaturesAddon: null,
+    imageAddon: null,
     fitResizeObserver: null,
     pendingObservedFitRafId: null,
     pendingWebglRefreshRafId: null,
@@ -124,8 +125,7 @@ describe('schedulePaneRevealRepaint', () => {
     registerPaneManager(() => [pane])
     schedulePaneRevealRepaint(() => [pane])
 
-    // First frame: reveal layout may still be in flight; redraw requests fired
-    // here can be dropped by the renderer without retry.
+    // First-frame reveal layout can cause redraw requests to be dropped without retry.
     flushFrame()
     expect(webglAddon.clearTextureAtlas).not.toHaveBeenCalled()
     expect(pane.terminal.refresh).not.toHaveBeenCalled()
@@ -254,8 +254,7 @@ describe('schedulePaneRevealRepaint', () => {
 
   describe('schedulePaneRevealPresent', () => {
     it('presents the settled buffer without wiping the shared glyph atlas', () => {
-      // The plain-refocus path must NOT clear the atlas — the clear is a
-      // same-config shared wipe that re-arms the mid-stream page-merge race.
+      // Refocus must preserve the shared atlas; clearing re-arms the mid-stream page-merge race.
       const webglAddon = { clearTextureAtlas: vi.fn() }
       const pane = createPane({ webglAddon })
       schedulePaneRevealPresent(() => [pane])

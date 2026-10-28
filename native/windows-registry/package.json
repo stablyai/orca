@@ -1,0 +1,21 @@
+{
+  "name": "@orca/windows-registry",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Read-only Windows registry value enumeration for Orca",
+  "license": "MIT",
+  "files": [
+    "index.js",
+    "index.d.ts",
+    "binding.gyp",
+    "src"
+  ],
+  "os": [
+    "win32"
+  ],
+  "main": "index.js",
+  "types": "index.d.ts",
+  "dependencies": {
+    "node-addon-api": "^8.5.0"
+  }
+}

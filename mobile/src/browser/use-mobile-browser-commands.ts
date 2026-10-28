@@ -1,8 +1,21 @@
 import { useCallback, useRef, type Dispatch, type SetStateAction } from 'react'
 import type { RpcClient } from '../transport/rpc-client'
+import { isRpcDeliveryUnknown } from '../transport/rpc-delivery-ambiguity'
 import type { BrowserScreencastFrameMetadata } from '../transport/browser-screencast-protocol'
-import { assertRpcOk } from './mobile-browser-frame-state'
 import {
+  browserDialogAccept,
+  browserDialogDismiss,
+  browserInsertText,
+  browserKeypress,
+  browserPointerClick,
+  browserPointerDown,
+  browserPointerMove,
+  browserPointerUp,
+  browserPointerWheel
+} from './mobile-browser-command-operations'
+import type { BrowserPageCommandSend, BrowserPageParams } from './use-mobile-browser-request'
+import {
+  browserWheelDeltaFromScreen,
   computeBrowserFrameGeometry,
   computeBrowserTouchClickRadiusCss,
   mapScreenToBrowserPoint,
@@ -11,9 +24,9 @@ import {
   type BrowserZoomState
 } from './browser-touch-geometry'
 import type { BrowserPointerModifier } from './MobileBrowserPointerModifiers'
+import type { BrowserDialogState } from './mobile-browser-stream-events'
 
 const TOUCH_CLICK_RADIUS_DIP = 14
-type BrowserPageParams = { worktree: string; page: string }
 type PendingWheelCommand = {
   base: BrowserPageParams
   point: BrowserPoint
@@ -22,8 +35,7 @@ type PendingWheelCommand = {
   dy: number
 }
 type SendBrowserRequest = (
-  method: string,
-  params?: Record<string, unknown>,
+  send: BrowserPageCommandSend,
   options?: { showBusy?: boolean; suppressError?: boolean; timeoutMs?: number }
 ) => Promise<unknown | null>
 
@@ -36,7 +48,7 @@ type MobileBrowserCommandArgs = {
   pageParams: () => BrowserPageParams | null
   pointerModifiers: BrowserPointerModifier[]
   sendBrowserRequest: SendBrowserRequest
-  setDialog: Dispatch<SetStateAction<{ dialogType: string; message: string } | null>>
+  setDialog: Dispatch<SetStateAction<BrowserDialogState | null>>
   setError: Dispatch<SetStateAction<string | null>>
   setKeyboardValue: Dispatch<SetStateAction<string>>
   setPointerModifiers: Dispatch<SetStateAction<BrowserPointerModifier[]>>
@@ -61,6 +73,7 @@ export function useMobileBrowserCommands(args: MobileBrowserCommandArgs) {
   } = args
 
   const pendingWheelCommandRef = useRef<PendingWheelCommand | null>(null)
+  const dialogAnswerTokenRef = useRef(0)
 
   const wheelCommandInFlightRef = useRef(false)
 
@@ -76,26 +89,21 @@ export function useMobileBrowserCommands(args: MobileBrowserCommandArgs) {
     wheelCommandInFlightRef.current = true
     void (async () => {
       try {
-        assertRpcOk(
-          await client.sendRequest('browser.mouseMove', {
-            ...pending.base,
-            x: pending.point.x,
-            y: pending.point.y
-          }),
-          'Browser pointer move failed'
-        )
-        assertRpcOk(
-          await client.sendRequest('browser.mouseWheel', {
-            ...pending.base,
-            dx: pending.dx,
-            dy: pending.dy
-          }),
-          'Browser scroll failed'
-        )
+        const moveReply = await browserPointerMove.request(client, {
+          ...pending.base,
+          x: pending.point.x,
+          y: pending.point.y
+        })
+        browserPointerMove.interpret(moveReply)
+        const wheelReply = await browserPointerWheel.request(client, {
+          ...pending.base,
+          dx: pending.dx,
+          dy: pending.dy
+        })
+        browserPointerWheel.interpret(wheelReply)
         setError(null)
       } catch {
-        // Scroll bursts commonly race page reload/navigation. Avoid replacing
-        // the live browser with transient command errors like selector_not_found.
+        // Scroll bursts race navigation; keep usable stream instead of replacing it with transient selector errors.
       } finally {
         wheelCommandInFlightRef.current = false
         flushPendingWheelCommand()
@@ -109,49 +117,55 @@ export function useMobileBrowserCommands(args: MobileBrowserCommandArgs) {
       if (!client || !base) {
         return
       }
-      const clickResult = await sendBrowserRequest(
-        'browser.mouseClick',
-        {
-          x: point.x,
-          y: point.y,
-          button,
-          modifiers: pointerModifiers,
-          ...(button === 'left'
-            ? {
-                radius: computeBrowserTouchClickRadiusCss(
-                  layoutRef.current,
-                  frameMetadataRef.current,
-                  zoomRef.current,
-                  TOUCH_CLICK_RADIUS_DIP
-                )
-              }
-            : {})
-        },
-        { suppressError: true, timeoutMs: 5_000 }
-      )
-      if (clickResult !== null || pointerModifiers.length > 0) {
-        return
-      }
       try {
-        assertRpcOk(
-          await client.sendRequest('browser.mouseMove', { ...base, x: point.x, y: point.y }),
-          'Browser pointer move failed'
-        )
-        assertRpcOk(
-          await client.sendRequest('browser.mouseDown', { ...base, button }),
-          'Browser pointer down failed'
-        )
-        assertRpcOk(
-          await client.sendRequest('browser.mouseUp', { ...base, button }),
-          'Browser pointer up failed'
+        browserPointerClick.interpret(
+          await browserPointerClick.request(
+            client,
+            {
+              ...base,
+              x: point.x,
+              y: point.y,
+              button,
+              modifiers: pointerModifiers,
+              ...(button === 'left'
+                ? {
+                    radius: computeBrowserTouchClickRadiusCss(
+                      layoutRef.current,
+                      frameMetadataRef.current,
+                      zoomRef.current,
+                      TOUCH_CLICK_RADIUS_DIP
+                    )
+                  }
+                : {})
+            },
+            { timeoutMs: 5_000 }
+          )
         )
         setError(null)
+        return
+      } catch (error) {
+        // Why: a timed-out click may still run on the host, and the move/down/up replay drops modifiers.
+        if (isRpcDeliveryUnknown(error) || pointerModifiers.length > 0) {
+          return
+        }
+      }
+      try {
+        const moveReply = await browserPointerMove.request(client, {
+          ...base,
+          x: point.x,
+          y: point.y
+        })
+        browserPointerMove.interpret(moveReply)
+        const downReply = await browserPointerDown.request(client, { ...base, button })
+        browserPointerDown.interpret(downReply)
+        const upReply = await browserPointerUp.request(client, { ...base, button })
+        browserPointerUp.interpret(upReply)
+        setError(null)
       } catch {
-        // Pointer commands can race page navigation. Keep the stream visible;
-        // actionable failures still surface through navigation/stream errors.
+        // Pointer sends race navigation; keep stream and surface actionable failures through navigation/stream paths.
       }
     },
-    [client, pageParams, pointerModifiers, sendBrowserRequest]
+    [client, pageParams, pointerModifiers]
   )
 
   const togglePointerModifier = useCallback((modifier: BrowserPointerModifier) => {
@@ -168,13 +182,8 @@ export function useMobileBrowserCommands(args: MobileBrowserCommandArgs) {
       if (!client || !base) {
         return
       }
-      const currentLayout = layoutRef.current
-      const geometry = computeBrowserFrameGeometry(currentLayout, frameMetadataRef.current)
-      const localZoom = zoomRef.current.scale
-      const scale = (geometry?.scale ?? 1) * localZoom
-      const cssDx = screenDx / scale
-      const cssDy = screenDy / scale
-      const delta = { dx: Math.round(-cssDx), dy: Math.round(-cssDy) }
+      const geometry = computeBrowserFrameGeometry(layoutRef.current, frameMetadataRef.current)
+      const delta = browserWheelDeltaFromScreen(screenDx, screenDy, geometry, zoomRef.current.scale)
       if (Math.abs(delta.dx) < 1 && Math.abs(delta.dy) < 1) {
         return
       }
@@ -211,8 +220,10 @@ export function useMobileBrowserCommands(args: MobileBrowserCommandArgs) {
     }
     setKeyboardValue('')
     const result = await sendBrowserRequest(
-      'browser.keyboardInsertText',
-      { text },
+      async (rpc, page, options) =>
+        browserInsertText.interpret(
+          await browserInsertText.request(rpc, { ...page, text }, options)
+        ),
       { suppressError: true }
     )
     if (result !== null) {
@@ -224,15 +235,38 @@ export function useMobileBrowserCommands(args: MobileBrowserCommandArgs) {
 
   const sendKeypress = useCallback(
     async (key: string) => {
-      await sendBrowserRequest('browser.keypress', { key }, { suppressError: true })
+      await sendBrowserRequest(
+        async (rpc, page, options) =>
+          browserKeypress.interpret(await browserKeypress.request(rpc, { ...page, key }, options)),
+        { suppressError: true }
+      )
     },
     [sendBrowserRequest]
   )
 
+  // Card represents page’s actual block; only host dialogClosed proves answer applied, not button press.
   const sendDialogCommand = useCallback(
     async (method: 'browser.dialogAccept' | 'browser.dialogDismiss') => {
-      setDialog(null)
-      await sendBrowserRequest(method, {}, { suppressError: true, timeoutMs: 5_000 })
+      const command = method === 'browser.dialogAccept' ? browserDialogAccept : browserDialogDismiss
+      // Token binds answer to current dialog and disables duplicate taps; stale replies cannot mutate next card.
+      const token = (dialogAnswerTokenRef.current += 1)
+      setDialog((current) =>
+        current === null ? null : { ...current, error: undefined, pending: token }
+      )
+      const result = await sendBrowserRequest(
+        async (rpc, page, options) => command.interpret(await command.request(rpc, page, options)),
+        { suppressError: true, timeoutMs: 5_000 }
+      )
+      // Refusal/timeout leaves page blocked, so retain card with error explanation.
+      setDialog((current) =>
+        current === null || current.pending !== token
+          ? current
+          : {
+              ...current,
+              pending: undefined,
+              ...(result === null ? { error: 'That answer did not reach the page.' } : {})
+            }
+      )
     },
     [sendBrowserRequest]
   )

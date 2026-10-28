@@ -1,8 +1,6 @@
-// Cohort discriminator for onboarding-wizard telemetry. See docs/onboarding-telemetry-extensions.md §2.
-// Known limitation: upgrade_backfill's "completed" shape (persistence.ts:362-369) is also written by live completion, so an existing live-completer flips fresh_install→upgrade_backfill; dashboards forward-fill cohort from _started. TODO: a wasBackfilledByMigration sentinel would disambiguate.
-// Never throws: returns { cohort: undefined } on any read/uninit error, which the schema's .optional() cohort still validates. Mirrors sibling getCohortAtEmit's never-crash contract.
+// Known limitation: live completion shares upgrade-backfill shape, so dashboards forward-fill cohort from _started (onboarding-telemetry-extensions.md §2). TODO: add a migration sentinel. Failed/uninitialized reads omit the optional cohort rather than break telemetry.
 
-import { ONBOARDING_FINAL_STEP } from '../../shared/constants'
+import { ONBOARDING_FINAL_STEP } from '../../shared/onboarding-defaults'
 import type { OnboardingCohort } from '../../shared/telemetry-events'
 import type { Store } from '../persistence'
 
@@ -21,14 +19,14 @@ export function getOnboardingCohortAtEmit(): { cohort: OnboardingCohort | undefi
     return { cohort: undefined }
   }
   try {
-    // Why: read settings first so a failing getOnboarding() can't demote a fresh_install user to undefined.
+    // Read settings first so onboarding failure cannot hide a proven fresh-install cohort.
     const settings = storeRef.getSettings()
     const existedBefore = settings.telemetry?.existedBeforeTelemetryRelease
     if (existedBefore === false) {
       return { cohort: 'fresh_install' }
     }
     if (existedBefore === true) {
-      // Why: this canonical completed shape is written by both migration backfill and live completion, so it's ambiguous (see top-of-file "Known limitation").
+      // Backfill and live completion share this canonical shape; classification is therefore ambiguous.
       const onboarding = storeRef.getOnboarding()
       if (
         onboarding.outcome === 'completed' &&

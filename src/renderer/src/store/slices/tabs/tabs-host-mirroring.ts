@@ -1,62 +1,58 @@
 import type { AppState } from '../../types'
 import type { TerminalTab } from '../../../../../shared/terminal-tab-types'
 import { findTabAndWorktree } from '../tab-group-state'
-import { getRuntimeEnvironmentIdForWorktree } from '@/lib/worktree-runtime-owner'
+import { runtimeEnvironmentIdOrLocalUnlessTwin } from '@/lib/worktree-runtime-owner'
+import { locateTerminalTab } from '../../terminals/terminal-tab-location'
 
-export function patchTerminalTabPinned(
+/** Mirror host-tracked fields onto terminal rows: reconciliation derives unified fields there and recovery reads row ownership, so unified-only writes revert or remount hidden chat. */
+export function patchTerminalTabRow(
   tabsByWorktree: Record<string, TerminalTab[]>,
-  worktreeId: string,
   tabId: string,
-  isPinned: boolean
+  patch: Partial<Pick<TerminalTab, 'isPinned' | 'viewMode'>>
 ): Partial<Pick<AppState, 'tabsByWorktree'>> {
-  const tabs = tabsByWorktree[worktreeId]
-  if (!tabs?.some((tab) => tab.id === tabId)) {
+  const location = locateTerminalTab(tabsByWorktree, tabId)
+  if (!location) {
     return {}
   }
-  return {
-    tabsByWorktree: {
-      ...tabsByWorktree,
-      [worktreeId]: tabs.map((tab) => (tab.id === tabId ? { ...tab, isPinned } : tab))
-    }
-  }
+  const nextTabs = tabsByWorktree[location.worktreeId].slice()
+  nextTabs[location.index] = { ...location.tab, ...patch }
+  return { tabsByWorktree: { ...tabsByWorktree, [location.worktreeId]: nextTabs } }
 }
 
-// Why: pin is host-authoritative for remote-server tabs, so mirror it (like setTabColor) or it's lost on reconnect/other clients.
-// Dynamic import keeps this store slice off the runtime layer.
+// Mirror terminal pins so reconnect/peers retain them; dynamic import avoids a static store-to-runtime dependency.
 export function mirrorTabPinnedToHost(state: AppState, tabId: string, isPinned: boolean): void {
   const found = findTabAndWorktree(state.unifiedTabsByWorktree, tabId)
   // Why: only terminal tab pins are persisted host-side today (browser/editor in #5729); skip the RPC for other types.
   if (
     !found ||
     found.tab.contentType !== 'terminal' ||
-    !getRuntimeEnvironmentIdForWorktree(state, found.worktreeId)
+    !runtimeEnvironmentIdOrLocalUnlessTwin(state, found.worktreeId)
   ) {
     return
   }
   const worktreeId = found.worktreeId
-  void import('@/runtime/web-runtime-session').then(({ setWebRuntimeTabProps }) =>
+  void import('@/runtime/web-runtime-terminal-actions').then(({ setWebRuntimeTabProps }) =>
     setWebRuntimeTabProps({ worktreeId, tabId, isPinned })
   )
 }
 
-// Why: viewMode is host-tracked like color/pin, so mirror local sets or they're lost on reconnect and to paired clients.
-// Only the action path mirrors (never reconcile applying a host value), so the echoed snapshot can't re-trigger an outbound RPC.
+// Mirror only action-originated viewMode changes; applying host snapshots must not echo RPCs.
 export function mirrorTabViewModeToHost(
   state: AppState,
   tabId: string,
   viewMode: 'terminal' | 'chat'
 ): void {
   const found = findTabAndWorktree(state.unifiedTabsByWorktree, tabId)
-  // Why: only terminal tab viewMode is persisted host-side; skip the RPC for other types instead of a no-op round trip.
+  // Only terminal viewMode persists host-side; other kinds need no RPC.
   if (
     !found ||
     found.tab.contentType !== 'terminal' ||
-    !getRuntimeEnvironmentIdForWorktree(state, found.worktreeId)
+    !runtimeEnvironmentIdOrLocalUnlessTwin(state, found.worktreeId)
   ) {
     return
   }
   const worktreeId = found.worktreeId
-  void import('@/runtime/web-runtime-session').then(({ setWebRuntimeTabProps }) =>
+  void import('@/runtime/web-runtime-terminal-actions').then(({ setWebRuntimeTabProps }) =>
     setWebRuntimeTabProps({ worktreeId, tabId, viewMode })
   )
 }

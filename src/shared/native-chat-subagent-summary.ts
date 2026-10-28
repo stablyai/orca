@@ -1,11 +1,5 @@
-// One spawn group's roster → the numbers a single flat row needs.
-//
-// Shared because the producer and the desktop transcript must agree on what
-// "N working" means: the producer uses the same terminal predicate the renderer
-// does, so a state that reads terminal here latches terminal there. Mobile has
-// no roster renderer — it shows only the write-time-frozen fallback sentence,
-// which is why that sentence is built from this same summary, and why the
-// sentence itself may claim nothing that a later reader cannot still verify.
+// Share terminal-state and group summary rules with producers/desktop/mobile.
+// Frozen fallback text must retain only write-time facts valid after the writer exits; live claims belong to revisable blocks.
 
 import {
   isSubagentGroupBlock,
@@ -15,9 +9,7 @@ import {
   type NativeChatSubagentState
 } from './native-chat-types'
 
-/** Every state a child cannot leave. `working` is the only in-flight state:
- *  providers report several (started/interacted, pending/running/paused) and the
- *  producer collapses them before the roster is written. */
+/** Only working is in flight; producers collapse started/interacted/pending/running/paused before writing the roster. */
 const TERMINAL_SUBAGENT_STATES: ReadonlySet<string> = new Set([
   'idle',
   'completed',
@@ -30,8 +22,7 @@ const TERMINAL_SUBAGENT_STATES: ReadonlySet<string> = new Set([
  *  outcome wins, and `completed` only shows when nothing else is left. */
 const SETTLED_PRECEDENCE = ['failed', 'stopped', 'unverifiable', 'idle', 'completed'] as const
 
-/** Outcomes that must be visible immediately, not held back until the last
- *  sibling stops working: a fan-out with a dead child is not a neutral row. */
+/** Report adverse outcomes before all siblings settle so failures remain visible during fan-out. */
 const ADVERSE_PRECEDENCE = ['failed', 'stopped', 'unverifiable'] as const
 
 /** A state this build does not know reads as `unverifiable`, never as working:
@@ -43,24 +34,14 @@ export function normalizeSubagentState(state: string): NativeChatSubagentState {
   return TERMINAL_SUBAGENT_STATES.has(state) ? (state as NativeChatSubagentState) : 'unverifiable'
 }
 
-/** Bound on the per-child provider strings a roster row carries — `id` and
- *  `label`. One constant because the producer writes a durable row and both
- *  readers clip it again: a larger producer bound is bytes every consumer throws
- *  away, replayed on every reconnect.
- *
- *  `groupId` is deliberately NOT bounded by the producer: the row's durable
- *  identity is `codex-subagents:${groupId}` and cannot be clipped without
- *  changing which row a replay finds, so bounding only the block field would
- *  save nothing and make the two disagree. Both readers still clip it. */
+/** Shared durable/read bound for id, label and groupId; larger writes waste replay bytes every consumer clips anyway. */
 export const MAX_SUBAGENT_FIELD_CHARS = 512
 
 export function isTerminalSubagentState(state: string): boolean {
   return normalizeSubagentState(state) !== 'working'
 }
 
-/** The child's own verdict about itself. `unverifiable` is deliberately absent:
- *  it records that we stopped being able to see the child, not what it did, so
- *  a later authoritative report must still be able to correct it. */
+/** Latch the child’s verdict, not lost visibility: later authoritative outcomes may replace unverifiable. */
 const LATCHED_SUBAGENT_STATES: ReadonlySet<string> = new Set([
   'idle',
   'completed',
@@ -68,14 +49,7 @@ const LATCHED_SUBAGENT_STATES: ReadonlySet<string> = new Set([
   'stopped'
 ])
 
-/** Whether `next` may replace `current`.
- *
- *  A child that reported its own outcome keeps it. A child we merely lost sight
- *  of may still settle: the session sweep marks live children `unverifiable`,
- *  and contact can return before the row is read — latching the sweep would
- *  report a child that finished as one we never saw finish.
- *  The reverse is refused: nothing returns to `working` once we have given up on
- *  it, so a straggler progress tick cannot re-light a settled row. */
+/** Preserve reported outcomes. Allow unverifiable to settle when contact returns, but never return settled/lost children to working from stale progress ticks. */
 export function canReplaceSubagentState(current: string, next: string): boolean {
   const from = normalizeSubagentState(current)
   if (from === 'working') {
@@ -100,12 +74,10 @@ export type NativeChatSubagentSummary = {
   adverseState: NativeChatSubagentState | null
   /** How many children hold `adverseState`. */
   adverseCount: number
-  /** Sum of the latest per-child totals. Null when no child reported one.
-   *  Children's counters are disjoint from the parent's, so this never
-   *  double-counts — and the parent's own usage is deliberately excluded. */
+  /** Sum latest child totals only; child counters are disjoint from the deliberately excluded parent usage. */
   tokens: number | null
-  /** Earliest child start, for the live elapsed clock. */
-  startedAt: number | null
+  /** Synthetic elapsed-clock anchor covering latest runs: count overlaps once and omit idle gaps. Null if no run is measurable. */
+  clockStartedAt: number | null
   /** Latest terminal timestamp, once the group has settled. */
   settledAt: number | null
 }
@@ -116,7 +88,6 @@ export function summarizeSubagentGroup(
   const counts = new Map<NativeChatSubagentState, number>()
   let working = 0
   let tokens: number | null = null
-  let startedAt: number | null = null
   let settledAt: number | null = null
   for (const agent of agents) {
     const state = normalizeSubagentState(agent.state)
@@ -127,9 +98,6 @@ export function summarizeSubagentGroup(
     }
     if (typeof agent.tokens === 'number' && Number.isFinite(agent.tokens)) {
       tokens = (tokens ?? 0) + agent.tokens
-    }
-    if (typeof agent.startedAt === 'number') {
-      startedAt = startedAt === null ? agent.startedAt : Math.min(startedAt, agent.startedAt)
     }
     if (typeof agent.settledAt === 'number') {
       settledAt = settledAt === null ? agent.settledAt : Math.max(settledAt, agent.settledAt)
@@ -146,15 +114,43 @@ export function summarizeSubagentGroup(
     adverseState,
     adverseCount: adverseState === null ? 0 : (counts.get(adverseState) ?? 0),
     tokens,
-    startedAt,
+    clockStartedAt: subagentClockStart(agents, working > 0 ? null : settledAt),
     settledAt: working > 0 ? null : settledAt
   }
 }
 
-/** A childless group draws nothing: `NativeChatSubagentRun` renders null for one,
- *  so no caller may count it as renderable. The block schema admits `agents: []`
- *  though no producer writes it, and a row that passes a renderable check while
- *  drawing nothing still costs the transcript a gap slot. */
+/** Every working run ends at now, so together they cover one span from the
+ *  earliest of them; only settled time before that span adds to it. */
+function subagentClockStart(
+  agents: readonly NativeChatSubagentEntry[],
+  settledAt: number | null
+): number | null {
+  const runs: [number, number][] = []
+  let liveFrom: number | null = null
+  for (const agent of agents) {
+    if (typeof agent.startedAt !== 'number') {
+      continue
+    }
+    if (normalizeSubagentState(agent.state) === 'working') {
+      liveFrom = liveFrom === null ? agent.startedAt : Math.min(liveFrom, agent.startedAt)
+    } else if (typeof agent.settledAt === 'number') {
+      runs.push([agent.startedAt, Math.max(agent.startedAt, agent.settledAt)])
+    }
+  }
+  const cutoff = liveFrom ?? Infinity
+  let covered = 0
+  let reach = -Infinity
+  for (const [start, end] of runs.sort((a, b) => a[0] - b[0])) {
+    covered += Math.max(0, Math.min(end, cutoff) - Math.max(start, reach))
+    reach = Math.max(reach, end)
+  }
+  if (liveFrom !== null) {
+    return liveFrom - covered
+  }
+  return settledAt === null || runs.length === 0 ? null : settledAt - covered
+}
+
+/** Empty rosters draw no row despite schema acceptance; counting them as renderable reserves a blank transcript gap. */
 export function isRenderableSubagentGroup(block: NativeChatSubagentGroupBlock): boolean {
   return block.agents.length > 0
 }
@@ -169,26 +165,20 @@ export function subagentGroupBlocks(
   )
 }
 
-/** Plain-text stand-in for the roster, frozen into the journal at write time for
- *  clients without the block type.
- *
- *  It states only what stays true once the writing process is gone: the group was
- *  spawned, and whatever outcome had already latched. It deliberately carries NO
- *  live count. The row is durable and replayed on every reconnect, and the
- *  clients that read this sentence instead of the block reconcile nothing and
- *  cannot re-check the children — so a frozen `N working` would go on asserting
- *  a liveness only the dead process could have observed. That is the collapse
- *  `docs/reference/ssh-execution-boundary.md` forbids: loss of contact is not
- *  evidence of a live state. Liveness stays with the structured block, which the
- *  writing host revises in place for as long as it can see the children.
- *
- *  `Kicked off` vs `Ran` is kept, and is not a liveness claim: it reports
- *  whether an outcome had been recorded when the row was written. Saying `Ran`
- *  while children were in flight would assert they exited, which is the same
- *  error in the other direction.
- *
- *  The adverse count stays: a reader that only ever sees this sentence must not
- *  be told a failing fan-out is fine. */
+/** Only rendered rosters replace their frozen twin; preserve genuine adjacent prose. */
+export function isReplacedSubagentGroupTwin(block: NativeChatBlock, drawsGroup: boolean): boolean {
+  return drawsGroup && block.type === 'text' && isSubagentGroupFallbackText(block.text)
+}
+
+/** The row's blocks less any roster twin a drawn group replaces. */
+export function withoutSubagentGroupTwins(blocks: readonly NativeChatBlock[]): NativeChatBlock[] {
+  const drawsGroup = subagentGroupBlocks(blocks).length > 0
+  return blocks.filter((block) => !isReplacedSubagentGroupTwin(block, drawsGroup))
+}
+
+/** Frozen fallback for clients without roster blocks: claim spawn/recorded outcomes only, never current live counts
+ * (docs/reference/ssh-execution-boundary.md). Kicked off versus Ran states whether an outcome existed at write time;
+ * Ran while in flight would falsely claim exit. Keep adverse counts so plain-text readers still see failures. Hosts revise structured blocks for liveness. */
 export function subagentGroupFallbackText(agents: readonly NativeChatSubagentEntry[]): string {
   const { total, working, adverseState, adverseCount } = summarizeSubagentGroup(agents)
   const noun = total === 1 ? 'subagent' : 'subagents'
@@ -196,20 +186,10 @@ export function subagentGroupFallbackText(agents: readonly NativeChatSubagentEnt
   return `${working > 0 ? 'Kicked off' : 'Ran'} ${total} ${noun}${adverse}`
 }
 
-/** Whether `text` is a roster block's frozen twin rather than ordinary prose.
- *  Shape-matched, not recomputed: a roster written by a newer build can hold a
- *  state this build normalizes to `unverifiable`, so its twin never equals the
- *  sentence recomputed here — and a byte compare would then print the roster
- *  twice.
- *
- *  The `— N working` clause is LEGACY. The twin carried a live count only while
- *  this feature was unreleased, so the rows holding one are dev journals of this
- *  branch rather than anything shipped — but those replay forever too, and each
- *  would print twice without this branch. It costs no false-positive surface the
- *  bare shape does not already carry, so it stays until such journals no longer
- *  matter. Keep in sync with `subagentGroupFallbackText`. */
+/** Match frozen twin shape, not recomputed bytes: newer states normalize differently and would duplicate the roster.
+ * Keep legacy — N working clauses for unreleased dev journals that replay forever; no extra false-positive surface. Sync with subagentGroupFallbackText. */
 const SUBAGENT_GROUP_FALLBACK_PATTERN =
-  /^(?:Kicked off \d+ subagents?(?: — \d+ working)?|Ran \d+ subagents?)(?: \(\d+ [a-z][a-z-]*\))?$/
+  /^(?:Kicked off \d+ subagents?(?: \u2014 \d+ working)?|Ran \d+ subagents?)(?: \(\d+ [a-z][a-z-]*\))?$/
 
 export function isSubagentGroupFallbackText(text: string): boolean {
   return SUBAGENT_GROUP_FALLBACK_PATTERN.test(text)

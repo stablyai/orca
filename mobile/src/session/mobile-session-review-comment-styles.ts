@@ -1,8 +1,9 @@
 import { StyleSheet } from 'react-native'
 
 import { colors, spacing, radii, typography } from '../theme/mobile-theme'
+import { themedStyleSheet } from '../theme/themed-styles'
 
-export const mobileSessionReviewCommentStyles = StyleSheet.create({
+export const mobileSessionReviewCommentStyles = themedStyleSheet(() => ({
   diffCommentAddButton: {
     width: 26,
     height: 22,
@@ -100,25 +101,8 @@ export const mobileSessionReviewCommentStyles = StyleSheet.create({
     fontSize: typography.metaSize,
     fontWeight: '700'
   },
-  markdownRefreshButton: {
-    alignSelf: 'flex-start',
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.xs,
-    backgroundColor: colors.bgRaised,
-    borderWidth: 1,
-    borderColor: colors.borderSubtle,
-    borderRadius: radii.button,
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.xs
-  },
   markdownButtonDisabled: {
     opacity: 0.45
-  },
-  markdownRefreshText: {
-    color: colors.textPrimary,
-    fontSize: 13,
-    fontWeight: '600'
   },
   markdownFloatingBar: {
     position: 'absolute',
@@ -159,6 +143,10 @@ export const mobileSessionReviewCommentStyles = StyleSheet.create({
     paddingHorizontal: spacing.md,
     paddingVertical: spacing.xs
   },
+  markdownCopyButton: {
+    backgroundColor: colors.bgRaised,
+    borderWidth: 0
+  },
   markdownKeyboardDismissButton: {
     width: 34,
     justifyContent: 'center',
@@ -191,4 +179,4 @@ export const mobileSessionReviewCommentStyles = StyleSheet.create({
     borderRadius: radii.button,
     overflow: 'hidden'
   }
-})
+}))

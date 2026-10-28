@@ -9,8 +9,9 @@ import { useState } from 'react'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select'
 import { Button } from '../ui/button'
 import { SettingsRow, SettingsSegmentedControl } from './SettingsFormControls'
-import type { ProjectRuntimeSessionSummary } from './repository-runtime-session-summary'
+import type { ProjectRuntimeSessionSummary } from './repository/execution/repository-runtime-session-summary'
 import { translate } from '@/i18n/i18n'
+import { projectRuntimeRepairSentence } from '../../../../shared/project-runtime-repair-message'
 
 type ProjectRuntimeSegment = LocalWindowsRuntimePreference['kind']
 
@@ -331,23 +332,7 @@ function getProjectRuntimeDescription(
   resolution: ReturnType<typeof resolveProjectExecutionRuntime>
 ): string {
   if (resolution.status === 'repair-required') {
-    if (resolution.repair.reason === 'wsl-unavailable') {
-      return translate(
-        'auto.components.settings.ProjectWindowsRuntimeSetting.wslUnavailable',
-        'WSL is not available. Switch this project to Windows or repair WSL.'
-      )
-    }
-    if (resolution.repair.reason === 'wsl-distro-missing') {
-      return translate(
-        'auto.components.settings.ProjectWindowsRuntimeSetting.distroMissing',
-        '{{value0}} is not installed in WSL. Choose an installed distro or switch this project to Windows.',
-        { value0: resolution.repair.preferredRuntime.distro ?? 'WSL' }
-      )
-    }
-    return translate(
-      'auto.components.settings.ProjectWindowsRuntimeSetting.distroRequired',
-      'Choose a WSL distro or switch this project to Windows.'
-    )
+    return projectRuntimeRepairSentence(resolution.repair, translate)
   }
 
   if (resolution.runtime.kind === 'wsl') {

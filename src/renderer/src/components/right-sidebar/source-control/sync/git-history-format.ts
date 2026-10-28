@@ -1,6 +1,7 @@
+// Include the zone to distinguish repeated times when clocks fall back.
 const gitHistoryTimestampFormatter = new Intl.DateTimeFormat(undefined, {
-  month: 'short',
-  day: 'numeric'
+  dateStyle: 'medium',
+  timeStyle: 'long'
 })
 
 export function formatGitHistoryTimestamp(timestamp: number | undefined): string {

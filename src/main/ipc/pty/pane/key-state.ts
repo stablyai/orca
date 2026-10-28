@@ -1,15 +1,15 @@
 import { parsePaneKey } from '../../../../shared/stable-pane-id'
 
-// Why: track spawn-time paneKey so teardown can clear the agent-hooks server's per-paneKey cache, which otherwise grows unbounded as panes come and go.
+// Retain spawn-time pane keys so teardown can release agent-hook caches.
 export const ptyPaneKey = new Map<string, string>()
-// Why: reverse of ptyPaneKey — callers with a paneKey from outside the PTY lifecycle (e.g. agent-hook status routing) need the ptyId; kept in lock-step via the same sites.
+// External pane-key consumers need reverse PTY lookup; update both maps together.
 export const paneKeyPtyId = new Map<string, string>()
 
 export function getPtyIdForPaneKey(paneKey: string): string | undefined {
   return paneKeyPtyId.get(paneKey)
 }
 
-// Why: let consumers tear down paneKey-scoped state on PTY exit so their timers can't leak; a callback registry keeps the cross-module dependency narrow.
+// Teardown listeners release pane-key timers without a direct dependency on each consumer.
 export type PaneKeyTeardownListener = (paneKey: string) => void
 export const paneKeyTeardownListeners = new Set<PaneKeyTeardownListener>()
 
@@ -29,12 +29,17 @@ export function isValidPaneKey(paneKey: unknown): paneKey is string {
   return parseValidPaneKey(paneKey) !== null
 }
 
-export function rememberPaneKeyForPty(ptyId: string, paneKey: unknown): string | null {
+export function normalizeValidPaneKey(paneKey: unknown): string | null {
   const normalizedPaneKey = typeof paneKey === 'string' ? paneKey.trim() : ''
-  if (!isValidPaneKey(normalizedPaneKey)) {
+  return isValidPaneKey(normalizedPaneKey) ? normalizedPaneKey : null
+}
+
+export function rememberPaneKeyForPty(ptyId: string, paneKey: unknown): string | null {
+  const normalizedPaneKey = normalizeValidPaneKey(paneKey)
+  if (normalizedPaneKey === null) {
     return null
   }
-  // Why: a re-registered ptyId would otherwise leave its old paneKey pointing here.
+  // Re-registering a PTY must remove stale reverse lookup for its previous pane key.
   const previousPaneKey = ptyPaneKey.get(ptyId)
   if (previousPaneKey && previousPaneKey !== normalizedPaneKey) {
     if (paneKeyPtyId.get(previousPaneKey) === ptyId) {

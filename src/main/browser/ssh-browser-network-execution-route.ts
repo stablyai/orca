@@ -1,11 +1,11 @@
 import type { DirectSshAuthority, SshProviderEpoch } from '../../shared/ssh-types'
-import type { SshConnection } from '../ssh/ssh-connection'
-import type { SshConnectionManager } from '../ssh/ssh-connection-manager'
+import type { SshConnection } from '../ssh/connection/ssh-connection'
+import type { SshConnectionManager } from '../ssh/connection/ssh-connection-manager'
 import type { Client as SshClient } from 'ssh2'
 import {
   startSystemSshDynamicForwardProcess,
   type SystemSshDynamicForwardProcess
-} from '../ssh/system-ssh-dynamic-forward-process'
+} from '../ssh/system-transport/system-ssh-dynamic-forward-process'
 import { BrowserNetworkDeferredSocket } from './browser-network-deferred-socket'
 import {
   browserNetworkExecutionHostKey,

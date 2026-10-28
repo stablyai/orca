@@ -1,21 +1,30 @@
-import { WorkspaceDetailPlaceholder } from '../../../src/components/WorkspaceDetailPlaceholder'
-import { HostScreenView } from '../../../src/host-screen/host-screen-view'
-import {
-  type HostScreenProps,
-  useHostScreenController
-} from '../../../src/host-screen/use-host-screen-controller'
-import { useResponsiveLayout } from '../../../src/layout/responsive-layout'
+import { useLocalSearchParams } from 'expo-router'
+import { firstParam } from '../../../src/navigation/route-param-reader'
+import { MobileWebShellScreen } from '../../../src/mobile-web-shell/MobileWebShellScreen'
+import { shellScreenRoute } from '../../../src/mobile-web-shell/shell-screen-route'
+import { PageRouteUnavailableScreen } from '../../../src/mobile-web-shell/PageRouteUnavailableScreen'
 
-export function HostScreen(props: HostScreenProps = {}) {
-  const controller = useHostScreenController(props)
-  return <HostScreenView controller={controller} />
-}
+// Encode decoded hostId so ?, # and whitespace cannot form a pathname the page refuses; shell gates unsupported bundles.
+function HostListScreen() {
+  // Use firstParam: encoding String(array) creates a valid segment naming a nonexistent host; an empty array is truthy and otherwise builds /h/.
+  const params = useLocalSearchParams<{ hostId?: string | string[] }>()
+  const hostId = firstParam(params.hostId)
 
-// On wide layouts the sidebar hosts the list, so this route is just the empty detail pane.
-export default function HostWorktreeRoute() {
-  const { isWideLayout } = useResponsiveLayout()
-  if (isWideLayout) {
-    return <WorkspaceDetailPlaceholder />
+  // Validate through bridge schema: encoding cannot make dot/dot-dot host ids valid.
+  const route =
+    hostId === '' ? null : shellScreenRoute({ pathname: `/h/${encodeURIComponent(hostId)}` })
+  if (route === null) {
+    return <PageRouteUnavailableScreen hostId={hostId} />
   }
-  return <HostScreen />
+  return (
+    <MobileWebShellScreen
+      // Remount on host change to discard the old session’s grants.
+      key={hostId}
+      hostId={hostId}
+      route={route}
+    />
+  )
 }
+
+// Wide: the session owns the whole host area when the page declares `canOwnHostArea`.
+export default HostListScreen

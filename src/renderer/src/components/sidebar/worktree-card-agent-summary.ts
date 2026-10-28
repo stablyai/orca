@@ -1,7 +1,7 @@
 import type { AgentDotState } from '@/components/AgentStateDot'
 import type { DashboardAgentRow as DashboardAgentRowData } from '@/components/dashboard/useDashboardData'
 import { formatAgentTypeLabel } from '@/lib/agent-status'
-import { agentRowDotState } from '@/lib/agent-row-dot-state'
+import { agentRowDisplayDotState } from '@/lib/agent-row-dot-state'
 
 export type SummaryAgentGroup = {
   state: AgentDotState
@@ -11,20 +11,21 @@ export type SummaryAgentGroup = {
 const SUMMARY_STATE_ORDER: AgentDotState[] = [
   'waiting',
   'blocked',
+  // Failures outrank live work, but pending questions come first.
+  'failed',
   'working',
   'monitoring',
+  'unconfirmed',
+  // A user stop is neither new work nor clean completion.
   'interrupted',
   'done',
-  // Why: below every reporting state, above true idle — the pane is still held.
+  // A held but silent pane ranks above idle and below every reporting state.
   'unverifiable',
   'idle'
 ]
 
 export function getAgentDotState(agent: DashboardAgentRowData): AgentDotState {
-  if (agent.entry.interrupted === true) {
-    return 'interrupted'
-  }
-  return agentRowDotState(agent.state, agent.entry.workingMode)
+  return agentRowDisplayDotState(agent)
 }
 
 export function formatSummaryStateLabel(state: AgentDotState): string {
@@ -47,6 +48,8 @@ export function formatSummaryStateLabel(state: AgentDotState): string {
       return 'idle'
     case 'unverifiable':
       return 'not reporting'
+    case 'unconfirmed':
+      return 'unconfirmed'
     case 'permission':
       return 'needs attention'
   }

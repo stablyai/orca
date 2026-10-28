@@ -1,15 +1,23 @@
 // @vitest-environment happy-dom
-import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
+import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type {
   BrowserCertificateFailure,
-  BrowserLoadError,
   BrowserPage
 } from '../../../../shared/browser-workspace-types'
 import type {
   BrowserContextMenuRequestedEvent,
   BrowserPermissionDeniedEvent
 } from '../../../../shared/browser-guest-events'
+import type {
+  BrowserHistoryNavigateCommand,
+  BrowserPageCommandTarget
+} from '../../../../shared/browser-page-command-target'
+import type { BrowserPageSiteDisplay } from '../../../../shared/browser-site-display'
+import {
+  normalizeBrowserPageZoomLevel,
+  type BrowserPageZoomCommand
+} from '../../../../shared/browser-page-zoom'
 
 const toastMocks = vi.hoisted(() => ({
   loading: vi.fn(),
@@ -36,19 +44,20 @@ const PLACEMENT = {
   pageHostGeneration: 7
 }
 
-// Why: the chords are Cmd on macOS and Ctrl everywhere else, so the platform cannot be left to
-// whatever the test runner reports.
+// Pin macOS so shortcut tests do not depend on the runner platform.
 const MAC_USER_AGENT = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7)'
 
 let contextMenu = paneChannel<BrowserContextMenuRequestedEvent>()
 let contextMenuDismissed = paneChannel<{ browserPageId: string }>()
 let permissionDenied = paneChannel<BrowserPermissionDeniedEvent>()
 let findRequests = paneChannel<void>()
-let historyNavigate = paneChannel<'back' | 'forward'>()
-let reloadRequests = paneChannel<void>()
-let hardReloadRequests = paneChannel<void>()
-let zoomRequests = paneChannel<'in' | 'out' | 'reset'>()
+let historyNavigate = paneChannel<BrowserHistoryNavigateCommand>()
+let reloadRequests = paneChannel<BrowserPageCommandTarget>()
+let hardReloadRequests = paneChannel<BrowserPageCommandTarget>()
+let zoomRequests = paneChannel<BrowserPageZoomCommand>()
 let openDevTools = vi.fn(async () => true)
+let copyImageAt = vi.fn(async () => true)
+let zoomPage = vi.fn(async (): Promise<BrowserPageSiteDisplay | null> => null)
 let proceedCertificate = vi.fn(async () => ({ ok: true as const }))
 let openUrl = vi.fn(async () => {})
 let writeClipboardText = vi.fn(async () => {})
@@ -64,6 +73,13 @@ beforeEach(() => {
   hardReloadRequests = paneChannel()
   zoomRequests = paneChannel()
   openDevTools = vi.fn(async () => true)
+  copyImageAt = vi.fn(async () => true)
+  zoomPage = vi.fn(async () => ({
+    site: 'example.com',
+    zoomLevel: normalizeBrowserPageZoomLevel(1),
+    siteHasZoom: true,
+    colorScheme: null
+  }))
   proceedCertificate = vi.fn(async () => ({ ok: true as const }))
   openUrl = vi.fn(async () => {})
   writeClipboardText = vi.fn(async () => {})
@@ -73,14 +89,16 @@ beforeEach(() => {
       onContextMenuDismissed: contextMenuDismissed.subscribe,
       onPermissionDenied: permissionDenied.subscribe,
       openDevTools,
-      proceedCertificate
+      copyImageAt,
+      proceedCertificate,
+      zoomPage
     },
     ui: {
       onFindInBrowserPage: (_source: unknown, callback: () => void) =>
         findRequests.subscribe(callback),
       onBrowserHistoryNavigate: historyNavigate.subscribe,
-      onReloadBrowserPage: (callback: () => void) => reloadRequests.subscribe(callback),
-      onHardReloadBrowserPage: (callback: () => void) => hardReloadRequests.subscribe(callback),
+      onReloadBrowserPage: reloadRequests.subscribe,
+      onHardReloadBrowserPage: hardReloadRequests.subscribe,
       onZoomBrowserPage: zoomRequests.subscribe,
       writeClipboardText
     },
@@ -108,12 +126,54 @@ describe('ClientHostedBrowserPagePane chrome parity', () => {
     expect(webview.goBack).toHaveBeenCalledTimes(1)
 
     act(() => contextMenu.emit(contextMenuEvent()))
-    act(() => screen.getByRole('menuitem', { name: 'Inspect Page' }).click())
-    expect(openDevTools).toHaveBeenCalledWith({ browserPageId: 'page-a' })
+    act(() => screen.getByRole('menuitem', { name: 'Inspect' }).click())
+    expect(openDevTools).toHaveBeenCalledWith({
+      browserPageId: 'page-a',
+      inspectAt: { x: 10, y: 10 }
+    })
 
     act(() => contextMenu.emit(contextMenuEvent()))
     act(() => screen.getByRole('menuitem', { name: 'Copy Page URL' }).click())
     expect(writeClipboardText).toHaveBeenCalledWith('https://example.internal/app')
+  })
+
+  it('shows what was clicked instead of page actions, and runs edits on the guest', () => {
+    const { webview } = renderPane()
+    const editable = {
+      canUndo: false,
+      canRedo: false,
+      canCut: false,
+      canCopy: false,
+      canPaste: true,
+      canSelectAll: true,
+      spelling: { suggestions: ['quick'], misspelledWord: 'quikc' }
+    }
+    const menuLabels = (): (string | null)[] =>
+      screen.getAllByRole('menuitem').map((item) => item.textContent)
+
+    act(() => contextMenu.emit(contextMenuEvent({ x: 30, y: 40, editable })))
+    expect(menuLabels()).not.toContain('Back')
+    expect(screen.getByRole('menuitem', { name: 'Cut' })).toHaveProperty('disabled', true)
+    act(() => screen.getByRole('menuitem', { name: 'quick' }).click())
+    expect(webview.replaceMisspelling).toHaveBeenCalledWith('quick')
+
+    act(() => contextMenu.emit(contextMenuEvent({ editable })))
+    act(() => screen.getByRole('menuitem', { name: 'Paste' }).click())
+    expect(webview.paste).toHaveBeenCalledTimes(1)
+
+    act(() =>
+      contextMenu.emit(
+        contextMenuEvent({
+          x: 30,
+          y: 40,
+          image: { url: 'data:image/png;base64,AA', canCopy: true }
+        })
+      )
+    )
+    // Why: a data: image has no URL a tab can load on its own.
+    expect(menuLabels()).not.toContain('Open Image in New Tab')
+    act(() => screen.getByRole('menuitem', { name: 'Copy Image' }).click())
+    expect(copyImageAt).toHaveBeenCalledWith({ browserPageId: 'page-a', point: { x: 30, y: 40 } })
   })
 
   it('opens Find from the chord in chrome and from the chord forwarded out of the guest', () => {
@@ -137,36 +197,45 @@ describe('ClientHostedBrowserPagePane chrome parity', () => {
   it('reloads and hard-reloads the retained guest from the forwarded chords', () => {
     const { webview } = renderPane()
 
-    act(() => reloadRequests.emit(undefined))
+    // A split sibling's chord must not reach this pane.
+    act(() => reloadRequests.emit({ browserPageId: 'page-b' }))
+    act(() => hardReloadRequests.emit({ browserPageId: 'page-b' }))
+    expect(webview.reload).not.toHaveBeenCalled()
+    expect(webview.reloadIgnoringCache).not.toHaveBeenCalled()
+
+    act(() => reloadRequests.emit({ browserPageId: 'page-a' }))
     expect(webview.reload).toHaveBeenCalledTimes(1)
     expect(webview.reloadIgnoringCache).not.toHaveBeenCalled()
 
-    act(() => hardReloadRequests.emit(undefined))
+    act(() => hardReloadRequests.emit({ browserPageId: 'page-a' }))
     expect(webview.reloadIgnoringCache).toHaveBeenCalledTimes(1)
   })
 
   it('walks history from the forwarded chords', () => {
     const { webview } = renderPane()
 
-    act(() => historyNavigate.emit('back'))
-    act(() => historyNavigate.emit('forward'))
+    act(() => historyNavigate.emit({ browserPageId: 'page-b', direction: 'back' }))
+    expect(webview.goBack).not.toHaveBeenCalled()
+
+    act(() => historyNavigate.emit({ browserPageId: 'page-a', direction: 'back' }))
+    act(() => historyNavigate.emit({ browserPageId: 'page-a', direction: 'forward' }))
 
     expect(webview.goBack).toHaveBeenCalledTimes(1)
     expect(webview.goForward).toHaveBeenCalledTimes(1)
   })
 
-  it('zooms the retained guest and shows the level while the chord lands', () => {
-    const { webview } = renderPane()
+  it('zooms its own page and shows the level main settled on', async () => {
+    renderPane()
     // The HUD is aria-hidden until a zoom lands, so it has to be queried past that gate.
     const indicator = screen.getByRole('status', { hidden: true })
     expect(indicator.getAttribute('aria-hidden')).toBe('true')
 
-    act(() => zoomRequests.emit('in'))
+    act(() => zoomRequests.emit({ browserPageId: 'page-b', direction: 'in' }))
+    act(() => zoomRequests.emit({ browserPageId: 'page-a', direction: 'in' }))
 
-    expect(webview.setZoomLevel).toHaveBeenCalledTimes(1)
-    expect(webview.setZoomLevel.mock.calls[0]![0]).toBeGreaterThan(0)
-    expect(indicator.getAttribute('aria-hidden')).toBe('false')
-    expect(indicator.textContent).not.toBe('100%')
+    expect(zoomPage.mock.calls).toEqual([[{ browserPageId: 'page-a', direction: 'in' }]])
+    await waitFor(() => expect(indicator.getAttribute('aria-hidden')).toBe('false'))
+    expect(indicator.textContent).toBe('125%')
   })
 
   it('offers Proceed Anyway on a certificate failure and sends it to the local session', () => {
@@ -199,34 +268,6 @@ describe('ClientHostedBrowserPagePane chrome parity', () => {
     expect(failed.webview.style.display).toBe('none')
   })
 
-  // Why: the overlay is about the navigation that failed. Naming browserTab.url instead pointed
-  // every action at the page still loaded and offered it an HTTPS retry it never needed.
-  it('names the URL that failed, not the page that is still loaded', () => {
-    const loaded = 'http://localhost:3000/app'
-    const { onUpdatePageState } = renderPane({ url: loaded })
-
-    const addressBar = screen.getByRole('combobox')
-    act(() => {
-      fireEvent.change(addressBar, { target: { value: 'javascript:alert(1)' } })
-    })
-    act(() => {
-      fireEvent.submit(addressBar.closest('form') ?? addressBar)
-    })
-
-    const loadError = onUpdatePageState.mock.calls.at(-1)?.[1]?.loadError as
-      | BrowserLoadError
-      | undefined
-    expect(loadError?.validatedUrl).toBe('javascript:alert(1)')
-
-    cleanup()
-    renderPane({ loadError, url: loaded })
-
-    act(() => screen.getByRole('button', { name: 'Copy Address' }).click())
-    expect(writeClipboardText).toHaveBeenCalledWith('javascript:alert(1)')
-    // The loaded page is a localhost http URL, so keying off it would offer an HTTPS retry here.
-    expect(screen.queryByRole('button', { name: 'Try HTTPS' })).toBeNull()
-  })
-
   it('drives the guest from the find bar rather than only rendering it', () => {
     const { webview } = renderPane()
 
@@ -246,8 +287,7 @@ describe('ClientHostedBrowserPagePane chrome parity', () => {
     )
   })
 
-  // Why: the toolbar button is Stop mid-load; passing the plain 'reload' trigger would restart the
-  // navigation the user is trying to cancel.
+  // Toolbar reload means Stop during a load; a plain reload would restart the cancelled navigation.
   it('stops an in-flight load from the toolbar button', () => {
     const { webview } = renderPane({ loading: true })
 
@@ -274,8 +314,7 @@ describe('ClientHostedBrowserPagePane chrome parity', () => {
     )
   })
 
-  // Why: a Kagi private-session link carries an account bearer token, and the store and address bar
-  // are both persisted surfaces.
+  // Kagi links contain bearer tokens; persisted pages and the address bar must redact them.
   it('keeps a Kagi session token out of the stored page and the address bar', () => {
     const { onUpdatePageState, webview } = renderPane()
 
@@ -298,8 +337,7 @@ describe('ClientHostedBrowserPagePane chrome parity', () => {
     )
   })
 
-  // Why: an unattached pane has no guest to reload, so the load-failure overlay's actions would be
-  // dead buttons stacked on the notice that actually explains the situation.
+  // An unattached guest cannot reload; only its availability notice offers a usable recovery action.
   it('shows only the unavailable notice when the guest never attached', () => {
     renderPane(
       {
@@ -309,8 +347,7 @@ describe('ClientHostedBrowserPagePane chrome parity', () => {
     )
 
     expect(screen.getByText('Client-hosted browser unavailable')).not.toBeNull()
-    // 'Copy Address' belongs to the load-failure overlay alone; the toolbar's own button reads
-    // 'Retry' whenever a loadError stands, attached or not.
+    // Copy Address distinguishes the failure overlay from the toolbar’s Retry button.
     expect(screen.queryByRole('button', { name: 'Copy Address' })).toBeNull()
   })
 
@@ -371,8 +408,10 @@ function contextMenuEvent(
     selectionText: '',
     canGoBack: true,
     canGoForward: false,
+    editable: null,
+    image: null,
     ...overrides
-  } as BrowserContextMenuRequestedEvent
+  }
 }
 
 function renderPane(
@@ -441,6 +480,8 @@ function createWebview(): Electron.WebviewTag & { setZoomLevel: ReturnType<typeo
     blur: vi.fn(),
     goBack: vi.fn(),
     goForward: vi.fn(),
+    paste: vi.fn(),
+    replaceMisspelling: vi.fn(),
     reload: vi.fn(),
     reloadIgnoringCache: vi.fn(),
     stop: vi.fn(),

@@ -1,5 +1,4 @@
-// Ordered slices of one registry: `definitions.ts` concatenates core-1..4 in order and that order
-// is the palette order, so the boundaries follow line count, not theme — do not regroup thematically.
+// definitions.ts concatenates core-1..4 in palette order; slices follow line limits, so thematic regrouping would reorder commands.
 import type { KeybindingDefinition } from './types'
 import { platformBindings } from './definitions-support'
 
@@ -18,7 +17,8 @@ export const KEYBINDING_DEFINITION_CORE_1: readonly KeybindingDefinition[] = [
     group: 'Global',
     scope: 'global',
     searchKeywords: ['shortcut', 'settings', 'preferences'],
-    defaultBindings: platformBindings(['Mod+Comma']),
+    // Leave Cmd/Ctrl+, to terminal apps such as Codex unless the user opts in.
+    defaultBindings: platformBindings([]),
     conflictGroup: 'menu'
   },
   {
@@ -48,7 +48,9 @@ export const KEYBINDING_DEFINITION_CORE_1: readonly KeybindingDefinition[] = [
     group: 'Global',
     scope: 'global',
     searchKeywords: ['shortcut', 'global', 'worktree', 'previous', 'up'],
-    defaultBindings: platformBindings(['Mod+Shift+ArrowUp'])
+    defaultBindings: platformBindings(['Mod+Shift+ArrowUp']),
+    // Why: default Mod+Shift+Up is the field's select-to-start.
+    allowInTextField: 'non-default-chords'
   },
   {
     id: 'worktree.navigateDown',
@@ -56,7 +58,9 @@ export const KEYBINDING_DEFINITION_CORE_1: readonly KeybindingDefinition[] = [
     group: 'Global',
     scope: 'global',
     searchKeywords: ['shortcut', 'global', 'worktree', 'next', 'down'],
-    defaultBindings: platformBindings(['Mod+Shift+ArrowDown'])
+    defaultBindings: platformBindings(['Mod+Shift+ArrowDown']),
+    // Why: default Mod+Shift+Down is the field's select-to-end.
+    allowInTextField: 'non-default-chords'
   },
   {
     id: 'workspace.create',
@@ -136,8 +140,7 @@ export const KEYBINDING_DEFINITION_CORE_1: readonly KeybindingDefinition[] = [
       'open',
       'close'
     ],
-    // Why: configurable but unbound by default, matching workspace.openBoard — an
-    // experimental surface must not claim a global chord from terminal users.
+    // Experimental surfaces stay unbound rather than claim terminal users’ global chords, matching workspace.openBoard.
     defaultBindings: platformBindings([]),
     allowInTerminal: true
   },

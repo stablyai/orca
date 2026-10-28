@@ -9,6 +9,14 @@ import {
   type AgentGenerationFailureOutput
 } from './agent-failure-output'
 import type { InternalTextGenerationResult } from './source-control-text-generation-types'
+import { parseOpenCodeGenerationOutput } from '../../shared/opencode-generation-output'
+import { parseAntigravityGenerationOutput } from '../../shared/antigravity-generation-stream'
+import {
+  findKimiGenerationFailure,
+  parseKimiGenerationOutput
+} from '../../shared/kimi-generation-output'
+import { formatKimiGenerationFailure } from './kimi-generation-failure'
+import type { CommitMessagePlan } from '../../shared/commit-message-plan'
 
 export function formatAgentCliFailureMessage(
   label: string,
@@ -34,7 +42,7 @@ export function formatAgentCliFailureMessage(
 }
 
 export function userFacingUnsafeWindowsBatchArgs(label: string): string {
-  return `${label} cannot be run as a Windows batch command with the prompt in argv. Remove {prompt} so Orca sends the prompt on stdin.`
+  return `${label} runs through a Windows batch script that cannot take the multi-line prompt as an argument. Point Settings at the agent's executable, or use a custom command without {prompt} so Orca sends the prompt on stdin.`
 }
 
 export function finalizeFromAgentOutput(args: {
@@ -45,17 +53,50 @@ export function finalizeFromAgentOutput(args: {
   emptyResultName: string
   includeLocalMacDnsHint?: boolean
   includeStdoutDetail?: boolean
+  outputFormat?: CommitMessagePlan['outputFormat']
 }): InternalTextGenerationResult {
   const { code, stdout, stderr, label, emptyResultName } = args
+  const parsed =
+    args.outputFormat === 'opencode-json'
+      ? parseOpenCodeGenerationOutput(stdout)
+      : args.outputFormat === 'antigravity-stream-json'
+        ? parseAntigravityGenerationOutput(stdout)
+        : args.outputFormat === 'kimi-stream-json' && code === 0
+          ? parseKimiGenerationOutput(stdout)
+          : null
   if (code !== 0) {
     console.error('[commit-message] Generator failed:', { label, exitCode: code, stdout, stderr })
     return {
       success: false,
-      error: formatAgentCliFailureMessage(label, stdout, stderr, code, args),
+      error:
+        args.outputFormat === 'kimi-stream-json'
+          ? formatKimiGenerationFailure(findKimiGenerationFailure(stdout), stderr, code, args)
+          : formatAgentCliFailureMessage(
+              label,
+              stdout,
+              parsed &&
+                !parsed.ok &&
+                (args.outputFormat === 'opencode-json'
+                  ? parsed.error !== 'OpenCode returned invalid JSON events.'
+                  : parsed.error !== 'Antigravity returned invalid JSON events.' &&
+                    parsed.error !== 'Antigravity returned an invalid result.' &&
+                    parsed.error !== 'Antigravity returned no final result.')
+                ? parsed.error
+                : stderr,
+              code,
+              args
+            ),
       failureOutput: captureFailureOutput(label, code, stdout, stderr)
     }
   }
-  const cleaned = cleanGeneratedCommitMessage(stdout)
+  if (parsed && !parsed.ok) {
+    return {
+      success: false,
+      error: sanitizeAgentFailureDetail(parsed.error) ?? `${label} reported an error.`,
+      failureOutput: captureFailureOutput(label, code, stdout, stderr)
+    }
+  }
+  const cleaned = cleanGeneratedCommitMessage(parsed?.ok ? parsed.text : stdout)
   if (cleaned) {
     return { success: true, rawOutput: cleaned, agentLabel: label }
   }
@@ -70,9 +111,10 @@ export function finalizeFromAgentOutput(args: {
   }
   return {
     success: false,
-    error: detail
-      ? `${label} returned an empty ${emptyResultName}. CLI output: ${detail}`
-      : `${label} returned an empty ${emptyResultName}.`,
+    error:
+      detail && args.outputFormat !== 'kimi-stream-json'
+        ? `${label} returned an empty ${emptyResultName}. CLI output: ${detail}`
+        : `${label} returned an empty ${emptyResultName}.`,
     failureOutput: captureFailureOutput(label, code, stdout, stderr)
   }
 }

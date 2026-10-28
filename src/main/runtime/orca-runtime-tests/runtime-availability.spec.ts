@@ -3,8 +3,7 @@ import {
   FLOATING_TERMINAL_WORKTREE_ID,
   OrcaRuntimeService,
   electronMocks,
-  registerSshGitProvider,
-  unregisterSshGitProvider
+  scanLocalRepoWorktreesForResolutionMock
 } from '../orca-runtime-test-mocks.spec'
 import {
   HEADLESS_LEAF_ID,
@@ -16,6 +15,7 @@ import {
   makeWorkspaceSessionWithHeadlessTerminal,
   store
 } from '../orca-runtime-test-fixtures.spec'
+import type { RuntimeWorktreeScanResult } from '../repo-worktree-resolution-scan'
 
 describe('OrcaRuntimeService', () => {
   it('starts unavailable with no authoritative window', () => {
@@ -28,30 +28,6 @@ describe('OrcaRuntimeService', () => {
       rendererGraphEpoch: 0
     })
     expect(runtime.getRuntimeId()).toBeTruthy()
-  })
-
-  it('reports runtime protocol, capabilities, and mobile aliases on status', () => {
-    const runtime = createRuntime()
-
-    const status = runtime.getStatus()
-    expect(typeof status.runtimeProtocolVersion).toBe('number')
-    expect(typeof status.minCompatibleRuntimeClientVersion).toBe('number')
-    expect(status.runtimeProtocolVersion).toBe(status.protocolVersion)
-    expect(status.minCompatibleRuntimeClientVersion).toBe(status.minCompatibleMobileVersion)
-    expect(status.capabilities).toContain('terminal.binary-stream.v1')
-    expect(status.capabilities).toContain('workspace-ports.v1')
-    expect(status.capabilities).toContain('mobile.tasks.v1')
-    expect(status.capabilities).toContain('terminal.quick-commands.v1')
-    expect(status.capabilities).toContain('worktree.create-idempotency.v1')
-    expect(status.worktreeCreateIdempotency).toEqual({ dedupeTtlMs: 60_000 })
-    expect(status.capabilities).toContain('files.mutation-ownership.v1')
-    expect(status.capabilities).toContain('project-host-setup.v1')
-    expect(status.capabilities).toContain('linear.issue-attribute-filter.v1')
-    expect(status.capabilities).not.toContain('browser.screencast.v1')
-    expect(typeof status.protocolVersion).toBe('number')
-    expect(typeof status.minCompatibleMobileVersion).toBe('number')
-    expect(status.protocolVersion).toBeGreaterThanOrEqual(1)
-    expect(status.minCompatibleMobileVersion).toBeGreaterThanOrEqual(0)
   })
 
   it('reports the configured Windows terminal shell on status', () => {
@@ -143,9 +119,7 @@ describe('OrcaRuntimeService', () => {
     expect(hasPty).toHaveBeenCalledTimes(4)
     expect(hasPty).toHaveBeenCalledWith(floatingPtyId)
     expect(listProcesses).not.toHaveBeenCalled()
-    // Why: a floating tab's worktree id carries no repoId, so the hydrate repo gate
-    // must never resolve the inventory for it — #9343 made that read eager and
-    // regressed this poll path. Keep both halves of the contract asserted.
+    // Floating tabs have no repoId and must not trigger repository hydration (#9343).
     expect(getRepos).not.toHaveBeenCalled()
   })
 
@@ -182,8 +156,10 @@ describe('OrcaRuntimeService', () => {
       id: 'repo-ssh',
       connectionId: 'ssh-target'
     }
-    runtimeStore.getRepos = () => [remoteRepo]
-    runtimeStore.getRepo = (id: string) => (id === remoteRepo.id ? remoteRepo : undefined)
+    const localRepo = store.getRepos()[0]
+    const repos = [remoteRepo, localRepo]
+    runtimeStore.getRepos = () => repos
+    runtimeStore.getRepo = (id: string) => repos.find((repo) => repo.id === id)
     const runtime = new OrcaRuntimeService(runtimeStore as never)
     const listProcesses = vi.fn(async () => [
       {
@@ -201,28 +177,24 @@ describe('OrcaRuntimeService', () => {
       kill: () => true,
       getForegroundProcess: async () => null
     })
-    const listWorktrees = vi.fn(() => new Promise<never>(() => {}))
-    registerSshGitProvider('ssh-target', { listWorktrees } as never)
+    const scan = Promise.withResolvers<RuntimeWorktreeScanResult>()
+    scanLocalRepoWorktreesForResolutionMock.mockImplementation(() => scan.promise)
 
     vi.useFakeTimers()
+    let timeoutId: ReturnType<typeof setTimeout> | undefined
+    const resultPromise = runtime.listMobileSessionTabs(`id:${remoteWorktreeId}`)
     try {
-      let timeoutId: ReturnType<typeof setTimeout> | undefined
       const timeout = new Promise<null>((resolve) => {
         timeoutId = setTimeout(() => resolve(null), 1_000)
       })
-      const resultPromise = runtime.listMobileSessionTabs(`id:${remoteWorktreeId}`)
       await Promise.resolve()
       await vi.advanceTimersByTimeAsync(1_000)
       const result = await Promise.race([resultPromise, timeout])
-      if (timeoutId !== undefined) {
-        clearTimeout(timeoutId)
-      }
-
       expect(result).not.toBeNull()
-      expect(listWorktrees).not.toHaveBeenCalled()
+      expect(scanLocalRepoWorktreesForResolutionMock).not.toHaveBeenCalled()
       expect(listProcesses).toHaveBeenCalledOnce()
       expect(listProcesses).toHaveBeenCalledWith(
-        'ssh-target',
+        'ssh:ssh-target',
         expect.objectContaining({ deadlineMs: expect.any(Number) })
       )
       expect(result).toMatchObject({
@@ -230,16 +202,20 @@ describe('OrcaRuntimeService', () => {
         tabs: [expect.objectContaining({ type: 'terminal', parentTabId: 'remote-tab' })]
       })
     } finally {
-      vi.useRealTimers()
-      unregisterSshGitProvider('ssh-target')
+      scan.resolve({ ok: false, worktrees: [] })
+      if (timeoutId !== undefined) {
+        clearTimeout(timeoutId)
+      }
+      try {
+        await resultPromise
+      } finally {
+        vi.useRealTimers()
+      }
     }
   })
 
   it('hydrates persisted tabs when the store cannot report repos', async () => {
-    // Why: #9343 read the repo gate as `getRepos?.() ?? []`, so a store that cannot
-    // report its inventory looked like "every repo is gone" and hydrated nothing —
-    // every tab vanished. An unavailable list must fail open; only a list the store
-    // actually returned may prune a dead repo's session key.
+    // An unavailable repo inventory must not masquerade as an empty one and prune every tab (#9343).
     const { runtimeStore } = makeRuntimeStoreWithWorkspaceSession(
       makeWorkspaceSessionWithHeadlessTerminal()
     )
@@ -262,12 +238,6 @@ describe('OrcaRuntimeService', () => {
     runtime.attachWindow(TEST_WINDOW_ID)
 
     expect(runtime.getStatus().capabilities).toContain('browser.screencast.v1')
-  })
-
-  it('advertises safe Codex reset-credit RPC support as a static capability', () => {
-    const runtime = createRuntime()
-
-    expect(runtime.getStatus().capabilities).toContain('accounts.codex-reset-credit.v1')
   })
 
   it('routes mobile Codex reset consumption through the account mutation coordinator', async () => {

@@ -3,30 +3,52 @@ import {
   toSecureCertificateEndpoint
 } from '../../shared/browser-url'
 import { isChromiumInternalErrorUrl } from './browser-manager-types'
-import { BrowserManagerGuestPopupPolicy } from './browser-manager-guest-popup-policy'
+import { watchDecisionBlockedMainFrames } from './browser-session-request-decisions'
+import {
+  BrowserManagerGuestPopupPolicy,
+  isLocalFileLinkFromLocalPage
+} from './browser-manager-guest-popup-policy'
+import { allowPageUnload } from './browser-guest-unload-policy'
+import { initiatingFrameUrl } from './browser-external-app-launch'
+import { isSameExtensionNavigation } from '../../shared/browser-extension-url'
 
 export abstract class BrowserManagerGuestNavigationPolicy extends BrowserManagerGuestPopupPolicy {
   protected installGuestNavigationPolicy(guest: Electron.WebContents): () => void {
-    const navigationGuard = (event: Electron.Event, url: string): boolean => {
-      // Why: Turnstile loads challenge resources via blob:; blocking them trips error 600010. Allow only http(s) blobs, not opaque ones.
+    const navigationGuard = (
+      event: Electron.Event<{ initiator?: Electron.WebFrameMain | null }>,
+      url: string
+    ): boolean => {
+      // Challenge resources use HTTP(S) blobs; opaque blobs remain blocked.
       if (url.startsWith('blob:https://') || url.startsWith('blob:http://')) {
         return true
       }
-      // Why: initial file:// attach is allowed for user-opened previews, but block later file:// redirects so remote pages can't probe the FS.
+      // Initial file previews are allowed; web navigations and redirects must not reach local files.
       if (url.startsWith('file:')) {
         event.preventDefault()
         return false
       }
+      // Why: an extension page (admitted at attach) may move between its own pages, nowhere else.
+      if (url.startsWith('chrome-extension:') && isSameExtensionNavigation(guest.getURL(), url)) {
+        return true
+      }
       if (!normalizeBrowserNavigationUrl(url)) {
-        // Why: will-attach-webview only validates the initial src; keep enforcing the allowlist on later navs.
+        // Initial-src validation does not cover later navigations.
         event.preventDefault()
+        this.requestExternalAppLaunch(guest, url, () => initiatingFrameUrl(event.initiator))
         return false
       }
       return true
     }
 
+    const willNavigateHandler = (event: Electron.Event, url: string): void => {
+      if (isLocalFileLinkFromLocalPage(guest, url)) {
+        return
+      }
+      navigationGuard(event, url)
+    }
+
     const willRedirectHandler = (
-      event: Electron.Event,
+      event: Electron.Event<Electron.WebContentsWillRedirectEventParams>,
       url: string,
       _isInPlace: boolean,
       isMainFrame: boolean
@@ -35,7 +57,7 @@ export abstract class BrowserManagerGuestNavigationPolicy extends BrowserManager
         return
       }
       this.updatePendingNavigationForRedirect(guest.id, url)
-      this.applyGoogleAuthUserAgent(guest, url, { duringRedirect: true })
+      void this.retargetTabIdentity(guest, url)
     }
 
     const didFailLoadHandler = (
@@ -48,11 +70,10 @@ export abstract class BrowserManagerGuestNavigationPolicy extends BrowserManager
       if (!isMainFrame) {
         return
       }
-      // Why: a nav that never committed must not leave its target standing as the tab's host.
+      // A failed navigation must not leave its target as the current host.
       const failedNavigationWasCurrent = this.failPendingNavigation(guest.id, validatedURL)
       if (failedNavigationWasCurrent) {
-        // The attempted host never committed, so restore every UA layer to the document that remains.
-        this.applyGoogleAuthUserAgent(guest, guest.getURL())
+        void this.retargetTabIdentity(guest, guest.getURL())
       }
       const browserPageId = this.tabIdByWebContentsId.get(guest.id)
       const certificateFailure = browserPageId
@@ -63,11 +84,11 @@ export abstract class BrowserManagerGuestNavigationPolicy extends BrowserManager
         toSecureCertificateEndpoint(validatedURL || guest.getURL()) ===
           toSecureCertificateEndpoint(certificateFailure.origin)
       ) {
-        // Why: this cancellation carries the existing cert warning; don't overwrite it with ERR_ABORTED copy.
+        // Preserve the certificate warning instead of replacing it with ERR_ABORTED.
         return
       }
       if (errorCode === -3) {
-        // Why: an aborted nav never committed; restore the error did-start-navigation cleared so it isn't lost.
+        // An abort must restore the error hidden when navigation started.
         const clearedError = this.clearedLoadErrorsByGuestId.get(guest.id)
         if (clearedError !== undefined) {
           this.clearedLoadErrorsByGuestId.delete(guest.id)
@@ -91,22 +112,21 @@ export abstract class BrowserManagerGuestNavigationPolicy extends BrowserManager
     const didStartNavigationHandler = (
       _event: Electron.Event,
       url: string,
-      _isInPlace: boolean,
+      isInPlace: boolean,
       isMainFrame: boolean
     ): void => {
       if (!isMainFrame || isChromiumInternalErrorUrl(url)) {
         return
       }
-      // Why: getURL() still reports the previous committed URL until this navigation commits, so
-      // every UA writer must read the in-flight target or they disagree about the tab's host.
+      // getURL() still names the committed document; UA writers need the in-flight target.
       this.startPendingNavigation(guest.id, url)
-      this.applyGoogleAuthUserAgent(guest, url)
+      void this.presentTabIdentityAtNavigationStart(guest, url, isInPlace)
       this.certificateTrustController?.onMainFrameNavigationStarted(guest.id)
-      // Why: a pre-registration failure belongs only to its own nav; a replacement nav must not replay it.
+      // Replacement navigation must not replay a previous pre-registration failure.
       this.pendingLoadFailuresByGuestId.delete(guest.id)
       const activeError = this.loadErrorsByGuestId.get(guest.id)
       if (activeError === undefined) {
-        // Why: no error to hide; drop any stale stash so a later abort can't resurrect an old failure.
+        // Discard stale errors so a later abort cannot resurrect them.
         this.clearedLoadErrorsByGuestId.delete(guest.id)
         return
       }
@@ -116,36 +136,52 @@ export abstract class BrowserManagerGuestNavigationPolicy extends BrowserManager
     }
 
     const didNavigateHandler = (_event: Electron.Event, url: string): void => {
-      // Why: once committed, getURL() reports this url, so the pending target is redundant.
       this.pendingNavigationByGuestId.delete(guest.id)
-      // Why: a committed nav makes the did-start-navigation stash obsolete; drop it so a later ERR_ABORTED can't restore an error over it.
+      // Committing makes the hidden error obsolete; a later abort must not restore it.
       this.clearedLoadErrorsByGuestId.delete(guest.id)
       this.certificateTrustController?.onMainFrameNavigationCommitted(guest.id, url)
+      this.siteDisplayController?.onMainFrameNavigationCommitted(guest.id)
+      // Offscreen pages have no renderer to publish their committed URL.
+      this.notifyBrowserGuestStateChanged(guest.id)
     }
 
-    guest.on('will-navigate', navigationGuard)
+    guest.on('will-navigate', willNavigateHandler)
     guest.on('will-redirect', willRedirectHandler)
     guest.on('did-start-navigation', didStartNavigationHandler)
     guest.on('did-navigate', didNavigateHandler)
     guest.on('did-fail-load', didFailLoadHandler)
+    // Why emit: an extension-blocked guest main frame commits no error page, so Electron reports
+    // nothing; every did-fail-load reader (this policy, the pane, webNavigation) needs the failure.
+    const stopWatchingBlockedMainFrames = watchDecisionBlockedMainFrames(guest.id, (url) => {
+      const { processId, routingId } = guest.mainFrame
+      guest.emit('did-fail-load', {}, -20, 'ERR_BLOCKED_BY_CLIENT', url, true, processId, routingId)
+    })
+    guest.on('will-prevent-unload', allowPageUnload)
     const handleDestroyed = (): void => {
-      // Why: guests can die before renderer registration, else attach-time closures leak until shutdown.
+      const browserTabId = this.tabIdByWebContentsId.get(guest.id)
+      // Primary guests also own per-page callbacks that capture their WebContents.
+      if (browserTabId && this.webContentsIdByTabId.get(browserTabId) === guest.id) {
+        this.unregisterGuest(browserTabId, 'guest-destroyed')
+        return
+      }
       this.cleanupGuestPolicyAttachment(guest.id)
     }
     guest.on('destroyed', handleDestroyed)
 
     return () => {
+      stopWatchingBlockedMainFrames()
       try {
         guest.off('destroyed', handleDestroyed)
       } catch {
         // guest may already be destroyed
       }
       if (!guest.isDestroyed()) {
-        guest.off('will-navigate', navigationGuard)
+        guest.off('will-navigate', willNavigateHandler)
         guest.off('will-redirect', willRedirectHandler)
         guest.off('did-start-navigation', didStartNavigationHandler)
         guest.off('did-navigate', didNavigateHandler)
         guest.off('did-fail-load', didFailLoadHandler)
+        guest.off('will-prevent-unload', allowPageUnload)
       }
     }
   }

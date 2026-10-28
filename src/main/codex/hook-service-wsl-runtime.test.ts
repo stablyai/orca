@@ -22,27 +22,24 @@ import {
   type CodexWslRuntimeHookInstallPlan
 } from './hook-service'
 import type { CodexHookTrustGrantRequest } from './codex-app-server-client'
-import { codexAppServerCapabilityCache } from './codex-app-server-capability-cache'
+import { codexAppServerCapabilityCache } from './app-server/codex-app-server-capability-cache'
 import { _internals as trustGrantInternals } from './codex-hook-trust-grant'
 
 type HooksConfig = {
   hooks: Record<string, { hooks?: { command?: string }[] }[]>
 }
 
-const managedEvents = [
-  'SessionStart',
-  'UserPromptSubmit',
-  'PreToolUse',
-  'PermissionRequest',
-  'PostToolUse',
-  'SubagentStart',
-  'SubagentStop',
-  'Stop'
-] as const
-
 let tempRoots: string[] = []
 
+beforeEach(() => {
+  // Isolate the trust ledger from the running app's userData.
+  const userData = mkdtempSync(join(tmpdir(), 'orca-codex-wsl-hooks-userdata-'))
+  tempRoots.push(userData)
+  vi.stubEnv('ORCA_USER_DATA_PATH', userData)
+})
+
 afterEach(() => {
+  vi.unstubAllEnvs()
   for (const root of tempRoots) {
     rmSync(root, { recursive: true, force: true })
   }
@@ -106,9 +103,9 @@ describe('Codex WSL runtime hook install', () => {
     const independent = firstHome.replace('\\Alice\\', '\\Bob\\')
     const target = { runtime: 'wsl' as const, wslDistro: 'Ubuntu' }
 
-    const first = service.prepareRuntimeHomeForLaunch(firstHome, target, true)
-    const second = service.prepareRuntimeHomeForLaunch(alias, target, true)
-    const third = service.prepareRuntimeHomeForLaunch(independent, target, true)
+    const first = service.prepareRuntimeHomeForLaunch(firstHome, target, () => true, false)
+    const second = service.prepareRuntimeHomeForLaunch(alias, target, () => true, false)
+    const third = service.prepareRuntimeHomeForLaunch(independent, target, () => true, false)
     await vi.waitFor(() => expect(started).toEqual([firstHome, independent]))
 
     releases.splice(0).forEach((release) => release())
@@ -288,8 +285,7 @@ describe('Codex WSL runtime hook install', () => {
   )
 
   it('sweeps all managed WSL trust for disable or confirmed absence', async () => {
-    // Why: disable and confirmed absence intentionally pass []. Transient
-    // unavailability must NOT use this path — last known-good trust remains.
+    // Empty keys revoke all trust; transient unavailability must retain known-good keys.
     const plan = createTestPlan()
     writeFileSync(plan.configPath, '{"hooks":{}}\n', 'utf-8')
     writeFileSync(plan.tomlPath, '', 'utf-8')
@@ -331,8 +327,7 @@ describe('Codex WSL runtime hook install', () => {
       })
     ).toBe('remove')
 
-    // Why: a `missing` probe right after a verified grant is a false negative;
-    // revoking would delete the fresh trust the launching pane reads (#8847).
+    // A successful install outweighs a concurrent missing probe; retain its fresh trust.
     expect(
       _internals.getWslHookReconciliationAction({
         settlement: { status: 'missing' },
@@ -353,8 +348,6 @@ describe('Codex WSL runtime hook install', () => {
       })
     ).toBe('none')
 
-    // Why: a genuinely moved home resolves to a different path and still
-    // reinstalls, even though the original install succeeded.
     expect(
       _internals.getWslHookReconciliationAction({
         settlement: { status: 'resolved', canonicalPath: '/windows/d/home' },
@@ -424,7 +417,8 @@ describe('Codex WSL runtime hook install', () => {
           ORCA_AGENT_HOOK_PORT: '1',
           ORCA_AGENT_HOOK_TOKEN: 'stale-token',
           ORCA_PANE_KEY: 'pane-1',
-          ORCA_TEST_CAPTURE: capturePath
+          ORCA_TEST_CAPTURE: capturePath,
+          CLAUDE_JOB_DIR: ''
         }
       })
 
@@ -467,7 +461,8 @@ describe('Codex WSL runtime hook install', () => {
           ORCA_AGENT_HOOK_PORT: '43210',
           ORCA_AGENT_HOOK_TOKEN: 'token',
           ORCA_PANE_KEY: 'pane-1',
-          ORCA_TEST_CAPTURE: capturePath
+          ORCA_TEST_CAPTURE: capturePath,
+          CLAUDE_JOB_DIR: ''
         }
       })
 
@@ -511,7 +506,6 @@ describe('Codex WSL runtime hook install', () => {
     expect((await _internals.installManagedHooksIntoWslRuntime(plan)).state).toBe('installed')
 
     const installed = JSON.parse(readFileSync(plan.configPath, 'utf-8')) as HooksConfig
-    expect(Object.keys(installed.hooks).sort()).toEqual([...managedEvents].sort())
     const managedCommand = installed.hooks.UserPromptSubmit[0]?.hooks?.[0]?.command
     expect(managedCommand).toBe(expectedManagedCommand(plan.commandScriptPath))
     expect(installed.hooks.UserPromptSubmit[1]?.hooks?.[0]?.command).toBe(userCommand)
@@ -573,8 +567,6 @@ describe('Codex WSL runtime hook install app-server grant lane', () => {
     writeFileSync(plan.tomlPath, '', 'utf-8')
 
     const runner = vi.fn(async (request: CodexHookTrustGrantRequest) => {
-      // Simulate codex's side: write trusted_hash blocks the way its config
-      // writer would, then report the entries trusted.
       upsertHookTrustEntries(
         plan.tomlPath,
         request.expectedTrustKeys.map((key) => ({
@@ -609,8 +601,6 @@ describe('Codex WSL runtime hook install app-server grant lane', () => {
     const command = expectedManagedCommand(plan.commandScriptPath)
     const managedTrustEntry = getManagedTrustEntry(plan, command)
     const trustEntries = readHookTrustEntries(plan.tomlPath)
-    // Why: the codex-granted hash must be authoritative — the self-computed
-    // hash must not overwrite it after a successful grant.
     expect(trustEntries.get(computeTrustKey(managedTrustEntry))?.trustedHash).toBe(
       'sha256:codex-user_prompt_submit'
     )

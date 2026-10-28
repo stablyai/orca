@@ -1,33 +1,10 @@
-/**
- * Layer-discriminating input probes for frozen-terminal repro specs.
- *
- * The field failure (Discord #performance / GitHub #2836 family) is a pane
- * that shows content while keystrokes silently vanish. Both drop layers are
- * silent today:
- *   - renderer: transport.sendInput returns false when `!connected || !ptyId`
- *     (pty-transport.ts)
- *   - main: pty:write drops when `ptyOwnership` misses the id or the provider
- *     lookup fails (src/main/ipc/pty.ts writePtyInput)
- *
- * Direct `window.api.pty.write` bypasses the renderer transport, so:
- *   direct dead                 → MAIN-side drop (ownership/provider routing)
- *   direct alive, renderer dead → RENDERER input path (replay, focus, binding)
- * The ownership-rebuild probe invokes pty:listSessions, which repopulates
- * `ptyOwnership` as a side effect — input reviving after it is a smoking gun
- * for the missing-ownership drop path.
- *
- * Two probe families:
- *   - Page-based (Playwright CDP): for specs whose renderer never crashes.
- *   - Main-process-based (webContents.executeJavaScript): for post-crash
- *     phases — a crashed target severs Playwright's CDP session even though
- *     the app recovers, so the harness must drive the renderer from main.
- */
+// Discriminate frozen input layers (#2836): direct pty.write failure points to main ownership/provider routing; direct success with keyboard failure points to renderer input.
+// pty:listSessions rebuilds ownership, so revival after that probe identifies missing ownership.
+// Use Page probes with healthy CDP; after a renderer crash, execute through main because CDP is severed.
 
 import { expect, type ElectronApplication, type Page } from '@stablyai/playwright-test'
 import { sendToTerminal, waitForTerminalOutput } from './terminal'
 import { buildSettledShellProbeInputSequence } from '../terminal-probe-input-sequence'
-
-// ─── Page-based probes (healthy CDP session) ────────────────────────
 
 export async function probeDirectWrite(
   page: Page,
@@ -56,8 +33,7 @@ export async function probeKeyboardType(
   await page.keyboard.type(`echo ${marker}`, { delay: 20 })
   await page.keyboard.press('Enter')
   try {
-    // Any appearance of the marker proves the roundtrip: xterm does not local-
-    // echo, so typed characters only render after the PTY echoes them back.
+    // xterm has no local echo: a rendered marker proves the PTY roundtrip.
     await waitForTerminalOutput(page, marker, timeoutMs)
     return true
   } catch {
@@ -86,8 +62,6 @@ export async function getStorePtyIds(page: Page): Promise<string[]> {
   })
 }
 
-// ─── Main-process-based probes (post-renderer-crash) ────────────────
-
 async function mainRendererEval<T>(
   electronApp: ElectronApplication,
   expression: string
@@ -108,8 +82,7 @@ export async function mainRendererStoreReady(electronApp: ElectronApplication): 
       `Boolean(window.__store && window.__store.getState().workspaceSessionReady === true)`
     )
   } catch {
-    // executeJavaScript rejects while the document is loading or the window
-    // is mid-recovery; callers poll, so a false here is just "not yet".
+    // Loading/recovery may reject executeJavaScript; callers poll until it succeeds.
     return false
   }
 }
@@ -197,13 +170,8 @@ async function mainWaitForMarker(
   }
 }
 
-/**
- * Full-chain probe without CDP: xterm's input() feeds terminal.onData →
- * transport.sendInput → pty:write, the identical path keystrokes take past
- * the DOM keyboard layer (which the pre-crash Playwright baseline covers).
- * Why input() and not paste(): bracketed paste mode would wrap the payload
- * and make the shell insert the control chars literally instead of executing.
- */
+// input() covers onData → sendInput → pty:write without CDP; the baseline covers DOM keyboard delivery.
+// paste() adds bracketed-paste control bytes that can prevent shell execution.
 export async function mainProbeTransportPaste(
   electronApp: ElectronApplication,
   marker: string,
@@ -247,7 +215,7 @@ export async function mainProbeDirectWrite(
     const inputs = buildSettledShellProbeInputSequence(`echo ${marker}\r`)
     await mainRendererEval<void>(
       electronApp,
-      `for (const input of ${JSON.stringify(inputs)}) { window.api.pty.write(${JSON.stringify(ptyId)}, input) }`
+      `for (const input of ${JSON.stringify(inputs)}) { window.api.pty.write(${JSON.stringify(ptyId)}, input, "driving") }`
     )
   } catch {
     return false
@@ -268,12 +236,6 @@ export async function mainProbeOwnershipRebuildRevival(
   return mainProbeDirectWrite(electronApp, ptyId, marker)
 }
 
-// ─── Failure report ─────────────────────────────────────────────────
-
-/**
- * Assemble the failure report for a reproduced frozen pane. Kept in one place
- * so every repro spec reports the same layer discrimination.
- */
 export function buildFrozenPaneReport(
   context: string,
   probes: {

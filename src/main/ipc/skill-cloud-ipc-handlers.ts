@@ -20,7 +20,7 @@ import {
   supportsSkillRuntimeCancellation,
   supportsSkillRuntimeInstall
 } from '../skills/skill-runtime-capability'
-import { callRuntimeEnvironment } from './runtime-environment-transport-routing'
+import { callRuntimeEnvironment } from './runtime-environments/runtime-environment-transport-routing'
 import { registerSkillInstallManagementIpcHandlers } from './skill-install-management-ipc-handlers'
 import { handleMainWindowSkillIpc } from './skill-ipc-main-window'
 import { sendBundleInstallProgress, sendSkillInstallProgress } from './skill-install-progress-ipc'
@@ -36,13 +36,6 @@ import {
   skillSharePublishIpcSchema
 } from './skill-share-publishing-ipc-schemas'
 
-const packageVersionSchema = z
-  .object({
-    packageId: z.string().min(1).max(128),
-    versionId: z.string().min(1).max(128)
-  })
-  .strict()
-
 function registerSharingHandlers(
   runtime: OrcaRuntimeService,
   discover: (target?: z.infer<typeof SkillDiscoveryTargetSchema>) => Promise<SkillDiscoveryResult>
@@ -50,6 +43,7 @@ function registerSharingHandlers(
   const preparations = new SkillSharePreparationService(
     join(app.getPath('userData'), 'skill-share-preparations'),
     {
+      findOwnedPackageId: (name, request) => runtime.findOwnedSkillPackageId(name, request),
       publishVersion: (request) => runtime.publishSkillPackageVersion(request),
       createShare: (packageId, request) => runtime.createSkillPackageShare(packageId, request)
     },
@@ -278,10 +272,6 @@ function registerCloudInstallHandlers(runtime: OrcaRuntimeService): void {
   handleMainWindowSkillIpc('skills:revokeShare', (_event, shareId: unknown) =>
     runtime.revokeSkillShare(z.string().min(1).max(128).parse(shareId), {})
   )
-  handleMainWindowSkillIpc('skills:deletePackageVersion', (_event, value: unknown) => {
-    const input = packageVersionSchema.parse(value)
-    return runtime.deleteSkillPackageVersion(input.packageId, input.versionId, {})
-  })
   handleMainWindowSkillIpc('skills:deletePackage', (_event, packageId: unknown) =>
     runtime.deleteSkillPackage(z.string().min(1).max(128).parse(packageId), {})
   )

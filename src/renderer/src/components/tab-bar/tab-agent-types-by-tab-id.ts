@@ -27,12 +27,6 @@ const EMPTY_AGENT_STATUS_BY_PANE_KEY: Record<string, AgentStatusEntry> = Object.
 const EMPTY_TERMINAL_LAYOUTS_BY_TAB_ID: Record<string, TerminalLayoutSnapshot> = Object.freeze({})
 const EMPTY_TAB_AGENT_TYPES_BY_TAB_ID: Record<string, AgentType> = Object.freeze({})
 const EMPTY_UNSAFE_TABS_BY_ID: Record<string, true> = Object.freeze({})
-const DISABLED_TAB_BAR_AGENT_PROJECTIONS: TabBarAgentProjections = Object.freeze({
-  nativeChatEnabled: false,
-  tabAgentTypesByTabId: EMPTY_TAB_AGENT_TYPES_BY_TAB_ID,
-  nativeChatTabWideFallbackUnsafeTabsById: EMPTY_UNSAFE_TABS_BY_ID
-})
-
 function reuseRecordIfEqual<T>(
   previous: Record<string, T> | undefined,
   next: Record<string, T>
@@ -101,23 +95,7 @@ function projectNativeChatTabWideFallbackUnsafeTabsById(
   return unsafeTabs
 }
 
-/**
- * Project `agentStatusByPaneKey` down to the stable `{ terminalTabId: agentType }`
- * the tab strip actually reads (to gate the native-chat view-mode toggle).
- *
- * Why: agent-status pane keys are `${terminalTab.id}:${leafId}` and the tab strip
- * only needs each tab's agent *identity* — which is fixed for the life of the
- * agent. The full `agentStatusByPaneKey` map, however, gets a new top-level
- * identity on every working↔idle status transition app-wide, so subscribing to it
- * whole re-rendered every mounted tab strip on unrelated status churn. Selecting
- * this projection under `useShallow` keeps the result referentially equal across
- * those transitions, so the strip re-renders only when a tab actually gains, loses,
- * or changes its agent.
- *
- * The active layout leaf wins when available because that is where a tab-level
- * chat action opens. Before layout hydration, the first matching pane preserves
- * the legacy lookup behavior (tab ids are colon-free by construction).
- */
+/** Project stable agent identity to avoid status-driven strip rerenders; active leaves win, with first-pane fallback before layout hydration. */
 export function selectTabAgentTypesByTabId(
   agentStatusByPaneKey: Record<string, AgentStatusEntry>,
   terminalLayoutsByTabId: Record<string, TerminalLayoutSnapshot> = {}
@@ -142,18 +120,7 @@ export function createTabBarAgentProjectionSelector(
   let cachedEnabledResult: TabBarAgentProjections | null = null
 
   return (state) => {
-    if (state.settings?.experimentalNativeChat !== true) {
-      if (cachedEnabledResult) {
-        cachedAgentStatusByPaneKey = null
-        cachedAgentTypeLayoutsByTabId = null
-        cachedAgentTypesByTabId = EMPTY_TAB_AGENT_TYPES_BY_TAB_ID
-        cachedUnsafeLayoutsByTabId = null
-        cachedUnsafeTabsById = EMPTY_UNSAFE_TABS_BY_ID
-        cachedEnabledResult = null
-      }
-      return DISABLED_TAB_BAR_AGENT_PROJECTIONS
-    }
-
+    const nativeChatEnabled = state.settings?.experimentalNativeChat === true
     const statuses = state.agentStatusByPaneKey ?? EMPTY_AGENT_STATUS_BY_PANE_KEY
     const layouts = state.terminalLayoutsByTabId ?? EMPTY_TERMINAL_LAYOUTS_BY_TAB_ID
     if (statuses !== cachedAgentStatusByPaneKey || layouts !== cachedAgentTypeLayoutsByTabId) {
@@ -172,13 +139,14 @@ export function createTabBarAgentProjectionSelector(
       cachedUnsafeLayoutsByTabId = layouts
     }
     if (
-      cachedEnabledResult?.tabAgentTypesByTabId === cachedAgentTypesByTabId &&
+      cachedEnabledResult?.nativeChatEnabled === nativeChatEnabled &&
+      cachedEnabledResult.tabAgentTypesByTabId === cachedAgentTypesByTabId &&
       cachedEnabledResult.nativeChatTabWideFallbackUnsafeTabsById === cachedUnsafeTabsById
     ) {
       return cachedEnabledResult
     }
     cachedEnabledResult = {
-      nativeChatEnabled: true,
+      nativeChatEnabled,
       tabAgentTypesByTabId: cachedAgentTypesByTabId,
       nativeChatTabWideFallbackUnsafeTabsById: cachedUnsafeTabsById
     }

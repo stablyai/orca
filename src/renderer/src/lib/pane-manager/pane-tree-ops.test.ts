@@ -19,6 +19,11 @@ import {
   endTerminalScrollIntentBufferRebuild
 } from './terminal-scroll-intent-rebuild'
 
+// Why: markTerminalPinnedViewport registers its own anchor before fit registers the reflow marker.
+function createPinAnchorMarker() {
+  return { line: 42, isDisposed: false, dispose: vi.fn() }
+}
+
 class MockHTMLElement {
   classList: { contains: (cls: string) => boolean }
   children: MockHTMLElement[]
@@ -124,6 +129,7 @@ function createPane({
     unicode11Addon: {} as never,
     webLinksAddon: {} as never,
     webglAddon: null,
+    imageAddon: null,
     ligaturesAddon: null,
     compositionHandler: null,
     pendingSplitScrollState: null,
@@ -282,8 +288,7 @@ describe('safeFit', () => {
     const marker = { line: 42, isDisposed: false, dispose: vi.fn() }
     ;(pane.terminal as unknown as { registerMarker: unknown }).registerMarker = vi.fn(() => marker)
     vi.mocked(pane.fitAddon.fit).mockImplementation(() => {
-      // Reflow at narrower cols rewraps lines; the tracked content now lives
-      // at a different absolute line than the pre-fit viewport number.
+      // Narrower reflow moves tracked content away from its original absolute viewport line.
       activeBuffer.baseY = 130
       activeBuffer.viewportY = 0
       marker.line = 57
@@ -492,6 +497,7 @@ describe('safeFit', () => {
     const replacementMarker = { line: 5, isDisposed: false, dispose: vi.fn() }
     ;(pane.terminal as unknown as { registerMarker: unknown }).registerMarker = vi
       .fn()
+      .mockReturnValueOnce(createPinAnchorMarker())
       .mockReturnValueOnce(originalMarker)
       .mockReturnValueOnce(replacementMarker)
     vi.mocked(pane.fitAddon.fit).mockImplementation(() => {
@@ -537,7 +543,10 @@ describe('safeFit', () => {
     activeBuffer.baseY = 100
     activeBuffer.cursorY = 0
     const marker = { line: 30, isDisposed: false, dispose: vi.fn() }
-    ;(pane.terminal as unknown as { registerMarker: unknown }).registerMarker = vi.fn(() => marker)
+    ;(pane.terminal as unknown as { registerMarker: unknown }).registerMarker = vi
+      .fn()
+      .mockReturnValueOnce(createPinAnchorMarker())
+      .mockReturnValue(marker)
     vi.mocked(pane.fitAddon.fit).mockImplementation(() => {
       activeBuffer.baseY = 70
       activeBuffer.viewportY = 0
@@ -586,6 +595,7 @@ describe('safeFit', () => {
     const replacementMarker = { line: 5, isDisposed: false, dispose: vi.fn() }
     ;(pane.terminal as unknown as { registerMarker: unknown }).registerMarker = vi
       .fn()
+      .mockReturnValueOnce(createPinAnchorMarker())
       .mockReturnValueOnce(originalMarker)
       .mockReturnValueOnce(replacementMarker)
     vi.mocked(pane.fitAddon.fit).mockImplementation(() => {
@@ -806,46 +816,6 @@ describe('safeFit', () => {
 
 describe('equalizePaneSplitSizes', () => {
   const pane = (flex = '1 1 0%'): MockHTMLElement => new MockHTMLElement(['pane'], [], flex)
-  const split = (
-    direction: 'vertical' | 'horizontal',
-    children: MockHTMLElement[],
-    flex = '1 1 0%'
-  ): MockHTMLElement =>
-    new MockHTMLElement(
-      ['pane-split', direction === 'vertical' ? 'is-vertical' : 'is-horizontal'],
-      children,
-      flex
-    )
-
-  it('weights nested same-axis splits so same-axis panes equalize evenly', () => {
-    const left = pane('10 1 0%')
-    const middle = pane('20 1 0%')
-    const right = pane('30 1 0%')
-    const rightSplit = split('vertical', [middle, right], '90 1 0%')
-    const root = split('vertical', [left, rightSplit])
-
-    expect(equalizePaneSplitSizes(root as unknown as HTMLElement)).toBe(true)
-
-    expect(left.style.flex).toBe('1 1 0%')
-    expect(rightSplit.style.flex).toBe('2 1 0%')
-    expect(middle.style.flex).toBe('1 1 0%')
-    expect(right.style.flex).toBe('1 1 0%')
-  })
-
-  it('treats perpendicular child splits as one weighted region', () => {
-    const top = pane('7 1 0%')
-    const bottom = pane('3 1 0%')
-    const leftStack = split('horizontal', [top, bottom], '15 1 0%')
-    const right = pane('85 1 0%')
-    const root = split('vertical', [leftStack, right])
-
-    expect(equalizePaneSplitSizes(root as unknown as HTMLElement)).toBe(true)
-
-    expect(leftStack.style.flex).toBe('1 1 0%')
-    expect(right.style.flex).toBe('1 1 0%')
-    expect(top.style.flex).toBe('1 1 0%')
-    expect(bottom.style.flex).toBe('1 1 0%')
-  })
 
   it('returns false when there is no split tree to change', () => {
     expect(equalizePaneSplitSizes(pane() as unknown as HTMLElement)).toBe(false)

@@ -1,5 +1,6 @@
-// @ts-nocheck -- mechanically split from OrcaRuntimeService; behavior is covered by AST equivalence and characterization tests.
-import { OrcaRuntimeWithGetAgentSessionExecutionNamespace } from './orca-runtime-get-agent-session-execution-namespace'
+import type { BrowserWindow } from 'electron'
+import type { TerminalWorkspaceLaunchScope } from './runtime-legacy-worker-terminal-recovery-types'
+import { OrcaRuntimeWithGetAgentSessionExecutionNamespace } from './session-construction/agent-session/get-agent-session-execution-namespace'
 import type {
   RuntimeAgentSessionRpcCaller,
   RuntimeCreateAgentSessionRequest,
@@ -11,17 +12,7 @@ import {
   parseAgentSessionOperationTimestamp
 } from '../../shared/agent-session-host-authority'
 import { createHash } from 'node:crypto'
-import {
-  AGENT_SESSION_OPERATION_GLOBAL_LIMIT,
-  AGENT_SESSION_OPERATION_PER_CLIENT_LIMIT
-} from './orca-runtime-core'
 import { isTuiAgentEnabled } from '../../shared/tui-agent-selection'
-import { resolveLocalWindowsAgentStartupShell } from '../../shared/windows-terminal-shell'
-import {
-  resolveTuiAgentLaunchArgs,
-  resolveTuiAgentLaunchEnv
-} from '../../shared/tui-agent-launch-defaults'
-import { buildAgentDraftLaunchPlan, buildAgentStartupPlan } from '../../shared/tui-agent-startup'
 import type { RuntimeTerminalCreate } from '../../shared/runtime-types'
 import type {
   AgentSessionCreateOperation,
@@ -31,8 +22,30 @@ import {
   deterministicAgentSessionUuid,
   isAgentSessionOperationOutcomeUnknown
 } from './runtime-agent-launch-resolution'
+import { AgentLaunchUnbuildableError } from './runtime-agent-terminal-startup'
 
-export class OrcaRuntimeWithCreateAgentSession extends OrcaRuntimeWithGetAgentSessionExecutionNamespace {
+export abstract class OrcaRuntimeWithCreateAgentSession extends OrcaRuntimeWithGetAgentSessionExecutionNamespace {
+  abstract resolveWorkspaceTerminalStartupCwd(
+    workspace: Pick<TerminalWorkspaceLaunchScope, 'path'>,
+    requestedCwd?: string | null
+  ): string | undefined
+
+  protected abstract buildTerminalWorkspaceEnv(
+    scope: TerminalWorkspaceLaunchScope,
+    baseEnv: Record<string, string>,
+    agentTeamsEnv?: Record<string, string>
+  ): Record<string, string>
+
+  abstract getAuthoritativeWindow(missingWindowMessage?: string): BrowserWindow
+
+  abstract waitForTerminalHandle(tabId: string, timeoutMs?: number): Promise<string>
+
+  protected abstract reconcileRemoteTerminalCreate(
+    worktreeId: string,
+    terminalHandle: string,
+    connectionId?: string | null
+  ): Promise<RuntimeTerminalCreate | null>
+
   async createAgentSession(
     request: RuntimeCreateAgentSessionRequest,
     caller: RuntimeAgentSessionRpcCaller = {}
@@ -66,7 +79,8 @@ export class OrcaRuntimeWithCreateAgentSession extends OrcaRuntimeWithGetAgentSe
           request.presentation ?? null,
           request.placement?.tabId ?? null,
           request.placement?.leafId ?? null,
-          request.viewMode ?? null
+          request.viewMode ?? null,
+          ...(request.terminalKittyKeyboardProtocol === true ? ['kitty-keyboard'] : [])
         ])
       )
       .digest('base64url')
@@ -88,30 +102,13 @@ export class OrcaRuntimeWithCreateAgentSession extends OrcaRuntimeWithGetAgentSe
       return { ...replayed, disposition: 'replayed' }
     }
     if (now - operationTimestamp > AGENT_SESSION_MAX_NEW_OPERATION_AGE_MS) {
-      // Why: once a tombstone could have expired, an unseen replay must never
-      // be reinterpreted as permission to start another fresh agent.
+      // Expired tombstones must never turn unseen retries into fresh-spawn permission.
       throw new Error('agent_session_operation_expired')
-    }
-    let callerOperationCount = 0
-    const callerPrefix = `${callerKey}\0`
-    for (const key of this.agentSessionCreateOperations.keys()) {
-      if (key.startsWith(callerPrefix)) {
-        callerOperationCount += 1
-      }
-    }
-    if (
-      callerOperationCount >= AGENT_SESSION_OPERATION_PER_CLIENT_LIMIT ||
-      this.agentSessionCreateOperations.size >= AGENT_SESSION_OPERATION_GLOBAL_LIMIT
-    ) {
-      // Why: tombstones cannot be evicted early without making an old replay
-      // capable of spawning again; reject new IDs until retained entries age out.
-      throw new Error('agent_session_operation_capacity')
     }
     let retainReplayFence = false
     const reclaim: AgentSessionCreateOperation['reclaim'] = {}
     const operation = (async (): Promise<RuntimeCreateAgentSessionResult> => {
-      // Why: reserve the client operation before any async preflight so concurrent retries cannot
-      // both observe an empty ledger and reach the execution owner independently.
+      // Reserve before async preflight so racing retries cannot independently dispatch.
       const workspace = await this.resolveTerminalWorkspaceLaunchScope(request.worktree)
       if (
         !(await this.executionOwnerSupportsAgentSessionOperation(
@@ -120,12 +117,11 @@ export class OrcaRuntimeWithCreateAgentSession extends OrcaRuntimeWithGetAgentSe
           caller.signal
         ))
       ) {
-        // Why: the exact legacy launch remains client-owned until this pre-spawn check succeeds.
+        // Legacy launch remains client-owned until this pre-spawn check passes.
         throw new Error('agent_session_legacy_required')
       }
       const startupCwd = this.resolveWorkspaceTerminalStartupCwd(workspace, request.startupCwd)
-      // Why: aliases and object property order are client syntax, not authority;
-      // fingerprint the host-resolved fields in one fixed order.
+      // Fingerprint resolved authority in fixed order; aliases/property order are only client syntax.
       const resolvedFingerprint = createHash('sha256')
         .update(
           JSON.stringify([
@@ -142,50 +138,14 @@ export class OrcaRuntimeWithCreateAgentSession extends OrcaRuntimeWithGetAgentSe
             request.presentation ?? null,
             request.placement?.tabId ?? null,
             request.placement?.leafId ?? null,
-            request.viewMode ?? null
+            request.viewMode ?? null,
+            ...(request.terminalKittyKeyboardProtocol === true ? ['kitty-keyboard'] : [])
           ])
         )
         .digest('base64url')
       const settings = this.store!.getSettings()
       if (!isTuiAgentEnabled(request.agent, settings.disabledTuiAgents)) {
         throw new Error('Selected agent is disabled. Choose an enabled agent before creating.')
-      }
-      const platform = this.getAgentLaunchPlatformForWorkspace(workspace)
-      // Why: `workspace.repo` is display metadata and may be a row from another host; the launch
-      // shape must match the PTY route this scope already resolved.
-      const isRemote = Boolean(workspace.connectionId)
-      const shell = resolveLocalWindowsAgentStartupShell({
-        platform,
-        isRemote,
-        terminalWindowsShell: settings.terminalWindowsShell
-      })
-      const startupArgs = {
-        agent: request.agent,
-        cmdOverrides: settings.agentCmdOverrides ?? {},
-        agentArgs:
-          request.agentArgs !== undefined
-            ? request.agentArgs
-            : resolveTuiAgentLaunchArgs(request.agent, settings.agentDefaultArgs),
-        agentEnv: resolveTuiAgentLaunchEnv(request.agent, settings.agentDefaultEnv),
-        sessionOptions: this.toAgentSessionOptions(request.launchPreferences),
-        platform,
-        shell,
-        isRemote
-      }
-      const startup =
-        request.promptDelivery === 'draft'
-          ? buildAgentDraftLaunchPlan({ ...startupArgs, draft: request.prompt ?? '' })
-          : buildAgentStartupPlan({
-              ...startupArgs,
-              prompt: request.prompt ?? '',
-              allowEmptyPromptLaunch: true
-            })
-      if (!startup) {
-        throw new Error('agent_session_identity_required')
-      }
-      await this.markWorkspaceTrustedForAgent(request.agent, workspace.connectionId, workspace.path)
-      if (caller.signal?.aborted) {
-        throw new Error('client_disconnected')
       }
       let terminal: RuntimeTerminalCreate
       const executionOperationId = createHash('sha256')
@@ -200,8 +160,7 @@ export class OrcaRuntimeWithCreateAgentSession extends OrcaRuntimeWithGetAgentSe
       const operationLeafId =
         request.placement?.leafId ?? deterministicAgentSessionUuid(`${executionOperationId}:leaf`)
       const operationHandle = `term_${deterministicAgentSessionUuid(`${executionOperationId}:handle`)}`
-      // Why: recorded before dispatch — this handle is exported into the PTY as
-      // ORCA_TERMINAL_HANDLE, so it is the only name a lost spawn can be re-found by.
+      // Record before dispatch: ORCA_TERMINAL_HANDLE is the only identity recoverable after a lost spawn.
       reclaim.identity = {
         worktreeId: workspace.id,
         connectionId: workspace.connectionId ?? null,
@@ -209,11 +168,18 @@ export class OrcaRuntimeWithCreateAgentSession extends OrcaRuntimeWithGetAgentSe
       }
       try {
         terminal = await this.createTerminal(`id:${workspace.id}`, {
-          command: startup.launchCommand,
-          env: startup.env,
-          launchConfig: startup.launchConfig,
-          launchAgent: request.agent,
-          startupCommandDelivery: startup.startupCommandDelivery,
+          // No requested surface: the host-planned launch uses unknown.
+          startupAgent: request.agent,
+          ...(request.prompt ? { startupPrompt: request.prompt } : {}),
+          startupPromptDelivery: request.promptDelivery,
+          // TEMPORARY: see `startupPromptCarry`.
+          startupPromptCarry: 'force-line',
+          ...(request.agentArgs !== undefined ? { agentArgs: request.agentArgs } : {}),
+          launchPreferences: request.launchPreferences,
+          // Account env is re-prepared per attempt; exclude from fingerprints and let first spawn win.
+          accountEnv: request.accountEnv,
+          terminalImageViewerSupported: caller.terminalImageViewerSupported,
+          terminalKittyKeyboardProtocol: request.terminalKittyKeyboardProtocol,
           cwd: startupCwd,
           presentation: request.presentation ?? 'background',
           tabId: operationTabId,
@@ -227,6 +193,9 @@ export class OrcaRuntimeWithCreateAgentSession extends OrcaRuntimeWithGetAgentSe
           }
         })
       } catch (error) {
+        if (error instanceof AgentLaunchUnbuildableError) {
+          throw new Error('agent_session_identity_required')
+        }
         if (isAgentSessionOperationOutcomeUnknown(error)) {
           retainReplayFence = true
         }
@@ -257,8 +226,7 @@ export class OrcaRuntimeWithCreateAgentSession extends OrcaRuntimeWithGetAgentSe
       return result
     } catch (error) {
       if (retainReplayFence) {
-        // Why: the first PTY may still be alive; replay the same failure until
-        // expiry instead of interpreting a lost outcome as a fresh spawn grant.
+        // Unknown outcome may hide a live PTY; replay failure until expiry, never grant another spawn.
         expireOperation()
       } else if (this.agentSessionCreateOperations.get(operationKey)?.promise === operation) {
         this.agentSessionCreateOperations.delete(operationKey)
@@ -267,9 +235,7 @@ export class OrcaRuntimeWithCreateAgentSession extends OrcaRuntimeWithGetAgentSe
     }
   }
 
-  // Why: the host may still hold the PTY this operation launched. Adoption-only —
-  // this never spawns and never kills, so an unreachable or silent host just replays
-  // the original failure instead of authorising anything.
+  // Adoption only: never spawn/kill during recovery; unreachable or ambiguous hosts replay the original failure.
   private async reclaimFencedAgentSessionSpawn(
     identity: AgentSessionCreateReclaimIdentity | undefined
   ): Promise<RuntimeTerminalCreate | null> {

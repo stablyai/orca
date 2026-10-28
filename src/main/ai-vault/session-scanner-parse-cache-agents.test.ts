@@ -64,20 +64,16 @@ describe.each(allIncrementalAgentFixtures())('incremental parse parity: $agent',
     expect(stats.fullParses).toBe(1)
     expect(seeded).toEqual(await parseAgentSessionFile(seedCandidate, process.platform))
 
-    // Unchanged rescan returns the identical cached object.
     const reused = await parseAgentSessionFileCached(seedCandidate, process.platform, stats)
     expect(reused).toBe(seeded)
     expect(stats.reused).toBe(1)
 
-    // Appended lines resume from the stored byte offset and must equal a
-    // cold parse of the grown file.
     await appendFile(path, `${fixture.appendLines.join('\n')}\n`)
     const grownCandidate = await candidateFor(fixture.agent, path)
     const incremental = await parseAgentSessionFileCached(grownCandidate, process.platform, stats)
     expect(stats.incremental).toBe(1)
     expect(incremental).toEqual(await parseAgentSessionFile(grownCandidate, process.platform))
 
-    // A truncated rewrite falls back to a full parse.
     await writeFile(path, `${fixture.truncatedLines.join('\n')}\n`)
     const truncatedCandidate = await candidateFor(fixture.agent, path)
     const reparsed = await parseAgentSessionFileCached(truncatedCandidate, process.platform, stats)
@@ -109,7 +105,6 @@ describe.each(allIncrementalAgentFixtures())('incremental parse parity: $agent',
     const root = await makeTempDir()
     const path = join(root, fixture.fileName)
     await mkdir(dirname(path), { recursive: true })
-    // A writer caught mid-record: the trailing line is invalid JSON.
     await writeFile(path, `${fixture.seedLines.join('\n')}\n{"type":"user","mess`)
 
     const shown = await parseAgentSessionFileCached(
@@ -120,8 +115,7 @@ describe.each(allIncrementalAgentFixtures())('incremental parse parity: $agent',
       await parseAgentSessionFile(await candidateFor(fixture.agent, path), process.platform)
     )
 
-    // The writer "finishes" the interrupted record as unparseable junk (both
-    // the fold and a cold parse must skip it identically) and appends more.
+    // Finish the partial record as invalid JSON; incremental and cold parsing must skip the same bytes.
     await appendFile(path, `age": }\n${fixture.appendLines.join('\n')}\n`)
     const stats = createSessionParseStats()
     const completed = await parseAgentSessionFileCached(
@@ -163,8 +157,6 @@ describe('codex-specific resume behavior', () => {
       process.platform,
       stats
     )
-    // The append is dismissed without a read, so it is an early stop rather
-    // than an incremental parse.
     expect(stats).toMatchObject({ earlyStopped: 1, incremental: 0 })
     expect(grown).toBeNull()
   })
@@ -178,14 +170,13 @@ describe('codex-specific resume behavior', () => {
     const path = join(sessionsDir, fixture.fileName)
     await writeFile(path, `${fixture.seedLines.join('\n')}\n`)
 
-    // No index yet: the title falls back to the first user prompt.
     const seeded = await parseAgentSessionFileCached(
       await candidateFor('codex', path, codexHome),
       process.platform
     )
     expect(seeded?.title).toBe('codex seed question')
 
-    // Codex names the thread lazily; an unchanged transcript must still adopt it.
+    // Index titles arrive independently of transcript writes.
     await writeFile(
       join(codexHome, 'session_index.jsonl'),
       `${JSON.stringify({ id: CODEX_FIXTURE_SESSION_ID, thread_name: 'Indexed thread title' })}\n`
@@ -205,6 +196,60 @@ describe('codex-specific resume behavior', () => {
 })
 
 describe('non-resumable formats keep reuse-only caching', () => {
+  it('re-parses cline when only its messages sidecar changed', async () => {
+    const root = await makeTempDir()
+    const sessionDir = join(root, 'cline-1')
+    await mkdir(sessionDir, { recursive: true })
+    const metadataPath = join(sessionDir, 'cline-1.json')
+    const messagesPath = join(sessionDir, 'cline-1.messages.json')
+    await writeFile(
+      metadataPath,
+      JSON.stringify({
+        session_id: 'cline-1',
+        cwd: '/tmp/cline',
+        started_at: '2026-05-01T10:00:00Z'
+      })
+    )
+    const writeMessages = (text: string): Promise<void> =>
+      writeFile(
+        messagesPath,
+        JSON.stringify({
+          updated_at: '2026-05-01T10:00:01Z',
+          messages: [{ role: 'user', content: [{ type: 'text', text }] }]
+        })
+      )
+    await writeMessages('first ask')
+
+    // Cline folds message sidecars during parsing, so sidecar changes require a full reparse.
+    const candidate = async (): Promise<SessionFileCandidate> => {
+      const base = await candidateFor('cline', metadataPath)
+      const sidecarStat = await stat(messagesPath)
+      return {
+        ...base,
+        file: {
+          ...base.file,
+          sidecar: {
+            path: messagesPath,
+            mtimeMs: sidecarStat.mtimeMs,
+            sizeBytes: sidecarStat.size
+          }
+        }
+      }
+    }
+
+    const stats = createSessionParseStats()
+    const seeded = await parseAgentSessionFileCached(await candidate(), process.platform, stats)
+    expect(seeded?.title).toBe('first ask')
+    await parseAgentSessionFileCached(await candidate(), process.platform, stats)
+    expect(stats).toMatchObject({ fullParses: 1, reused: 1 })
+
+    await writeMessages('second ask, rather longer than the first')
+    const rewritten = await parseAgentSessionFileCached(await candidate(), process.platform, stats)
+
+    expect(rewritten?.title).toBe('second ask, rather longer than the first')
+    expect(stats).toMatchObject({ fullParses: 2, reused: 1 })
+  })
+
   it('re-parses a changed grok summary fully and reuses it when unchanged', async () => {
     const root = await makeTempDir()
     const sessionDir = join(root, 'session-1')

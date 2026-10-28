@@ -1,13 +1,19 @@
 import { app } from 'electron'
-import { is } from '@electron-toolkit/utils'
+import { isMacInstallRequested } from '../updater-mac-install'
 import type { UpdateCheckOptions } from '../../shared/update-status-types'
 import type { ReleaseChannel } from '../../shared/release-channel'
 import { UpdaterScheduling } from './updater-scheduling'
 
-/** Handles checks initiated from the desktop menu and modifier-key variants. */
 export abstract class UpdaterMenuChecks extends UpdaterScheduling {
   protected checkForUpdatesFromMenu(options?: UpdateCheckOptions): void {
-    if (!app.isPackaged || is.dev) {
+    if (
+      this.pendingQuitAndInstallTimer ||
+      this.quitAndInstallInProgress ||
+      isMacInstallRequested()
+    ) {
+      return
+    }
+    if (!app.isPackaged) {
       this.sendStatus({ state: 'not-available', userInitiated: true })
       return
     }
@@ -36,22 +42,22 @@ export abstract class UpdaterMenuChecks extends UpdaterScheduling {
       this.enableIncludePrerelease()
     } else if (checkVariant === 'perf') {
       this.clearPrereleaseFallbackContext()
-      // Why: perf checks need prerelease manifests now, but must not opt future default/background checks into the RC channel.
+      // Perf checks need prerelease manifests without changing future default/background channels.
       this.enablePrereleaseManifestChecks()
     }
 
     const checkAlreadyInFlight =
       this.backgroundCheckLaunchPending || this.currentStatus.state === 'checking'
     this.userInitiatedCheck = true
-    // Why: manual checks are nudge-independent; clear the marker so a later dismiss can't consume the campaign by accident.
+    // Manual checks are campaign-independent; clear the marker so dismiss cannot consume a nudge.
     this.activeUpdateNudgeId = null
-    // Why: respond visibly before feed pinning/updater events; duplicate broadcasts are suppressed by status equality below.
+    // Acknowledge before feed pinning/events; status equality dedupes broadcasts.
     this.sendStatus({ state: 'checking', userInitiated: true })
     if (checkAlreadyInFlight) {
       this.backgroundCheckPromotedToUserInitiated = true
       this.rearmActiveUpdateCheckStallTimer()
       if (checkVariant !== 'default') {
-        // Why: in-flight check may have pinned the stable feed; queue a fresh modifier check to avoid a stale-channel result.
+        // The active check may pin stable; queue a fresh modifier check for the requested channel.
         this.pendingUserInitiatedCheckAfterInFlight = checkVariant
       }
       return
@@ -60,6 +66,13 @@ export abstract class UpdaterMenuChecks extends UpdaterScheduling {
     const attemptId = this.beginUpdateCheckAttempt()
     const autoUpdater = this.getAutoUpdater()
     const launch = (): Promise<unknown> | undefined => {
+      if (
+        this.pendingQuitAndInstallTimer ||
+        this.quitAndInstallInProgress ||
+        isMacInstallRequested()
+      ) {
+        return undefined
+      }
       if (!this.isActiveUpdateCheckAttempt(attemptId)) {
         return undefined
       }

@@ -24,8 +24,8 @@ export type TerminalComposerDraft = {
 
 type TerminalComposerMatch = TerminalComposerDraft & { placeholder: boolean }
 
-const COMPOSER_FRAME_LINE = /^[─━-]{8,}\s*$/
-const CODEX_FOOTER_LINE = /^\s*(?:gpt-\S+|o\d\S*)\s+[·•]\s+\S.*$/i
+const COMPOSER_FRAME_LINE = /^[\u2500\u2501-]{8,}\s*$/
+const CODEX_FOOTER_LINE = /^\s*(?:gpt-\S+|o\d\S*)\s+[\u00B7\u2022]\s+\S.*$/i
 
 function composerContinuationRows(
   context: TerminalCursorContext,
@@ -66,24 +66,55 @@ function composerContinuationRows(
   return continuation
 }
 
-function findCodexFooterIndex(context: TerminalCursorContext): number {
-  for (let index = context.rowsBelow.length - 1; index >= 0; index -= 1) {
-    const row = context.rowsBelow[index] ?? ''
-    if (!row.trim()) {
-      continue
-    }
-    const undimmed = context.typedRowsBelow[index] ?? ''
-    const hasFooterGap = index > 0 && !(context.rowsBelow[index - 1] ?? '').trim()
-    const isDimmedFooter =
-      hasFooterGap && !undimmed.trim() && context.rowsBelowWrapped?.[index] === false
-    const isColoredFooter =
-      hasFooterGap &&
-      context.rowsBelowCustomForeground?.[index] === true &&
-      context.rowsBelowWrapped?.[index] === false
-    return isDimmedFooter || isColoredFooter || CODEX_FOOTER_LINE.test(row) ? index : -1
-  }
-  return -1
+function hasFooterGap(context: TerminalCursorContext, index: number): boolean {
+  return index > 0 && !(context.rowsBelow[index - 1] ?? '').trim()
 }
+
+function isCodexFooterRow(context: TerminalCursorContext, index: number): boolean {
+  const row = context.rowsBelow[index] ?? ''
+  const undimmed = context.typedRowsBelow[index] ?? ''
+  const gap = hasFooterGap(context, index)
+  const isDimmedFooter = gap && !undimmed.trim() && context.rowsBelowWrapped?.[index] === false
+  const isColoredFooter =
+    gap &&
+    context.rowsBelowCustomForeground?.[index] === true &&
+    context.rowsBelowWrapped?.[index] === false
+  return isDimmedFooter || isColoredFooter || CODEX_FOOTER_LINE.test(row)
+}
+
+function findCodexFooterIndex(context: TerminalCursorContext): number {
+  const last = context.rowsBelow.findLastIndex((row) => row.trim())
+  if (last === -1 || isCodexFooterRow(context, last)) {
+    return last
+  }
+  // Why: Codex's separate status line keeps its hint row (`? for shortcuts`) directly below it.
+  const status = last - 1
+  if (
+    COMPOSER_FRAME_LINE.test(context.rowsBelow[last] ?? '') ||
+    !(context.rowsBelow[status] ?? '').trim() ||
+    !hasFooterGap(context, status)
+  ) {
+    return -1
+  }
+  return isCodexFooterRow(context, status) ? status : -1
+}
+
+// Codex before 0.152 rotated these (codex-rs/tui/src/chatwidget.rs PLACEHOLDERS, SIDE_PLACEHOLDERS).
+const STOCK_PLACEHOLDERS: ReadonlySet<string> = new Set([
+  'Ask Codex to do anything',
+  'Ask a follow-up question',
+  'Explain this codebase',
+  'Summarize recent commits',
+  'Implement {feature}',
+  'Find and fix a bug in @filename',
+  'Write tests for @filename',
+  'Improve documentation in @filename',
+  'Run /review on my current changes',
+  'Use /skills to list available skills',
+  'Check recently modified functions for compatibility',
+  'How many files have been modified?',
+  'Will this algorithm scale well?'
+])
 
 function isStockPlaceholder(
   afterCursor: string,
@@ -93,11 +124,7 @@ function isStockPlaceholder(
     .join(' ')
     .replace(/\s+/g, ' ')
     .trim()
-  return (
-    /^Try\s+["“]/.test(text) ||
-    text === 'Ask Codex to do anything' ||
-    text === 'Ask a follow-up question'
-  )
+  return /^Try\s+["\u201C]/.test(text) || STOCK_PLACEHOLDERS.has(text)
 }
 
 function detectTerminalComposer(
@@ -118,7 +145,8 @@ function detectTerminalComposer(
   const cursorText = `${context.beforeCursor}${afterCursor}`
   for (let index = cursorIndex; index >= 0; index -= 1) {
     const row = context.rows[index] ?? ''
-    const glyph = row.match(/^\s*([❯›»])/)?.[1] as '❯' | '›' | '»' | undefined
+    const matched = row.match(/^\s*([\u276F\u203A\u00BB])/)?.[1]
+    const glyph = (['❯', '›', '»'] as const).find((candidate) => candidate === matched)
     if (glyph) {
       if (glyph === '❯' && !COMPOSER_FRAME_LINE.test(context.rows[index - 1] ?? '')) {
         return null
@@ -131,10 +159,13 @@ function detectTerminalComposer(
       }
       const lines: { text: string; wrapped: boolean }[] =
         index === cursorIndex
-          ? [{ text: cursorText.replace(/^\s*[❯›»]\s?/, ''), wrapped: false }, ...continuationRows]
+          ? [
+              { text: cursorText.replace(/^\s*[\u276F\u203A\u00BB]\s?/, ''), wrapped: false },
+              ...continuationRows
+            ]
           : [
               {
-                text: (context.typedRows[index] ?? row).replace(/^\s*[❯›»]\s?/, ''),
+                text: (context.typedRows[index] ?? row).replace(/^\s*[\u276F\u203A\u00BB]\s?/, ''),
                 wrapped: false
               },
               ...context.typedRows.slice(index + 1, cursorIndex).map((text, offset) => ({
@@ -178,9 +209,38 @@ function detectTerminalComposer(
   return null
 }
 
+// Why: dsh-tui 0.17 boxes its single-line launchpad composer (`│ ❯ draft │`) under a `╭─╮` top.
+// Why String.raw: the orcad bundle must stay ASCII, and the formatter unescapes regex literals.
+const BOXED_COMPOSER_TOP = new RegExp(String.raw`^\s*\u256D\u2500{8,}\u256E\s*$`)
+const BOXED_COMPOSER_ROW = new RegExp(String.raw`^\s*\u2502 \u276F `)
+const BOXED_COMPOSER_RIGHT_EDGE = new RegExp(String.raw`\u2502\s*$`)
+
+function detectBoxedComposerDraft(context: TerminalCursorContext): TerminalComposerDraft | null {
+  const cursorIndex = context.rows.length - 1
+  if (
+    context.cursorHidden ||
+    !BOXED_COMPOSER_ROW.test(context.rows[cursorIndex] ?? '') ||
+    !BOXED_COMPOSER_TOP.test(context.rows[cursorIndex - 1] ?? '')
+  ) {
+    return null
+  }
+  // Why left of the cursor: the empty launchpad paints its placeholder, undimmed, right of it.
+  const typed = context.beforeCursor.replace(BOXED_COMPOSER_ROW, '')
+  if (!typed.trim()) {
+    return null
+  }
+  const text = `${typed}${context.afterCursor.replace(BOXED_COMPOSER_RIGHT_EDGE, '')}`.trim()
+  const row = context.cursorViewportRow
+  return { text, promptRow: row, cursorRow: row, endRow: row, promptGlyph: '❯' }
+}
+
 export function detectTerminalComposerDraft(
   context: TerminalCursorContext | null | undefined
 ): TerminalComposerDraft | null {
+  const boxed = context ? detectBoxedComposerDraft(context) : null
+  if (boxed) {
+    return boxed
+  }
   const match = detectTerminalComposer(context)
   if (!match || match.placeholder) {
     return null

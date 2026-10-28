@@ -1,3 +1,4 @@
+import type { ExecutionHostId } from '../../../src/shared/execution-host'
 import type {
   ProviderCheckSummary,
   GitHubOwnerRepo,
@@ -13,8 +14,8 @@ export type RepoSummary = {
   badgeColor?: string
   kind?: 'git' | 'folder'
   connectionId?: string | null
+  executionHostId?: ExecutionHostId | null
   issueSourcePreference?: IssueSourcePreference
-  /** Fork parent resolved by the host; drives upstream Project row matching. */
   upstream?: { owner: string; repo: string; host?: string } | null
 }
 
@@ -104,17 +105,18 @@ export type GitLabWorkItem = {
   repoName: string
 }
 
+// Require only unguarded reader fields; optional host fields retain consumer fallbacks.
 export type GitLabTodo = {
   id: number
   actionName: string
-  targetType: string
-  targetIid: number | null
-  targetTitle: string
+  targetType?: string
+  targetIid?: number | null
+  targetTitle?: string
   targetUrl: string
   projectPath: string
-  authorUsername: string
+  authorUsername?: string
   updatedAt: string
-  state: 'pending' | 'done'
+  state?: 'pending' | 'done'
 }
 
 export type GitPushTarget = {
@@ -177,16 +179,9 @@ export type DetailComment = {
   body: string
   createdAt?: string
   url?: string
+  // Preserve provider tokens: GitHub sends +1/-1/etc.; GitLab may omit content. The legacy emoji map is not the wire vocabulary.
   reactions?: Array<{
-    content:
-      | 'thumbs_up'
-      | 'thumbs_down'
-      | 'laugh'
-      | 'confused'
-      | 'heart'
-      | 'hooray'
-      | 'rocket'
-      | 'eyes'
+    content?: string
     count: number
   }>
   path?: string
@@ -196,6 +191,7 @@ export type DetailComment = {
   isResolved?: boolean
 }
 
+// Unknown viewed states must reach equality checks unchanged; status stays closed because it round-trips to host validation.
 export type GitHubDetailFile = {
   path: string
   oldPath?: string
@@ -203,7 +199,7 @@ export type GitHubDetailFile = {
   additions?: number
   deletions?: number
   isBinary?: boolean
-  viewerViewedState?: 'DISMISSED' | 'VIEWED' | 'UNVIEWED'
+  viewerViewedState?: string
 }
 
 export type GitHubDetailCheck = {
@@ -213,11 +209,14 @@ export type GitHubDetailCheck = {
   url?: string | null
 }
 
+// Consumers guard every field; too-large flags are absent when a side was not skipped.
 export type GitHubPRFileContents = {
-  original: string
-  modified: string
-  originalIsBinary: boolean
-  modifiedIsBinary: boolean
+  original?: string
+  modified?: string
+  originalIsBinary?: boolean
+  modifiedIsBinary?: boolean
+  originalTooLarge?: boolean
+  modifiedTooLarge?: boolean
 }
 
 export type DetailPayload =
@@ -260,3 +259,19 @@ export type DetailPayload =
       project?: LinearProject
       children: LinearIssueChild[]
     }
+  | {
+      provider: 'jira'
+      description: string
+      comments: DetailComment[]
+      labels: string[]
+      assignee?: string
+      projectName: string
+      issueTypeName: string
+      priorityName?: string
+    }
+
+export function detailPayloadBody(payload: DetailPayload): string {
+  return payload.provider === 'linear' || payload.provider === 'jira'
+    ? payload.description
+    : payload.body
+}

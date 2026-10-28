@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import { UiUpdate } from './client-ui-schemas'
-import { WorkspaceCleanup } from './workspace-cleanup-ui-schema'
+import { UiUpdate } from '../../../../shared/rpc-contract/client-ui-params'
+import { WorkspaceCleanup } from '../../../../shared/rpc-contract/workspace-cleanup-ui-params'
 import { createDefaultWorkspaceCleanupBrowseState } from '../../../../shared/workspace-cleanup-browse-state'
 
 const DISMISSAL = {

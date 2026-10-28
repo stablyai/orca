@@ -35,11 +35,14 @@ export const createRepoSlice: StateCreator<AppState, [], [], RepoSlice> = (set, 
   const repoOrdering = createRepoOrderingActions(set, get)
   return {
     repos: [],
-    projects: [],
-    projectHostSetups: [],
+    endpointProjects: [],
+    endpointProjectHostSetups: [],
     projectGroups: [],
     folderWorkspaces: [],
     folderWorkspacePathStatuses: {},
+    floatingWorkspacePath: null,
+    setFloatingWorkspacePath: (path) =>
+      set((s) => (s.floatingWorkspacePath === path ? s : { floatingWorkspacePath: path })),
     activeRepoId: null,
     reposFetchGeneration: 0,
     pendingSshRepoReadoptions: [],

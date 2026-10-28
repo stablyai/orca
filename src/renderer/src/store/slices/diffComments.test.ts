@@ -7,7 +7,6 @@ import {
 } from '../../runtime/runtime-compatibility-test-fixture'
 import { clearRuntimeCompatibilityCacheForTests } from '../../runtime/runtime-rpc-client'
 
-// Mock sonner (imported transitively by other slices)
 vi.mock('sonner', () => ({ toast: { info: vi.fn(), success: vi.fn(), error: vi.fn() } }))
 vi.mock('@/lib/agent-status', async (importOriginal) => {
   const actual = await importOriginal<Record<string, unknown>>()
@@ -31,7 +30,6 @@ const mockApi = {
     set: vi.fn().mockResolvedValue(undefined)
   },
   worktrees: {
-    list: vi.fn().mockResolvedValue([]),
     create: vi.fn().mockResolvedValue({}),
     remove: vi.fn().mockResolvedValue(undefined),
     updateMeta
@@ -150,6 +148,7 @@ function seed(
   worktreeOverrides: Partial<Worktree> = {}
 ): void {
   store.setState({
+    repos: [{ id: REPO, path: '/path/repo', displayName: 'repo', badgeColor: '#000', addedAt: 0 }],
     worktreesByRepo: { [REPO]: [{ ...makeWorktree(comments), ...worktreeOverrides }] }
   })
 }
@@ -245,7 +244,6 @@ describe('updateDiffComment', () => {
     expect(ok).toBe(true)
     const saved = store.getState().getDiffComments(WT)[0]
     expect(saved.body).toBe('new body')
-    // identity-preserving fields untouched
     expect(saved.id).toBe('c1')
     expect(saved.lineNumber).toBe(10)
     expect(saved.createdAt).toBe(1000)
@@ -580,6 +578,43 @@ describe('bulk clear diff comments', () => {
     })
   })
 
+  it('keeps markdown notes when asked, so a hidden markdown note survives a clear', async () => {
+    const store = createTestStore()
+    seed(store, [
+      makeComment({ id: 'diff', filePath: 'README.md' }),
+      makeComment({ id: 'md', filePath: 'README.md', source: 'markdown' }),
+      makeComment({ id: 'other', filePath: 'src/foo.ts' })
+    ])
+
+    await store.getState().clearDiffCommentsForFile(WT, 'README.md', { keepMarkdownNotes: true })
+    expect(
+      store
+        .getState()
+        .getDiffComments(WT)
+        .map((c) => c.id)
+    ).toEqual(['md', 'other'])
+
+    await store.getState().clearDiffComments(WT, { keepMarkdownNotes: true })
+    expect(
+      store
+        .getState()
+        .getDiffComments(WT)
+        .map((c) => c.id)
+    ).toEqual(['md'])
+  })
+
+  it('does not persist a keep-markdown clear that removes nothing', async () => {
+    const store = createTestStore()
+    const comments = [makeComment({ id: 'md', filePath: 'README.md', source: 'markdown' })]
+    seed(store, comments)
+
+    const ok = await store.getState().clearDiffComments(WT, { keepMarkdownNotes: true })
+
+    expect(ok).toBe(true)
+    expect(store.getState().getDiffComments(WT)).toBe(comments)
+    expect(updateMeta).not.toHaveBeenCalled()
+  })
+
   it('returns success without persisting when no file notes match', async () => {
     const store = createTestStore()
     const comments = [makeComment({ id: 'c1', filePath: 'src/foo.ts' })]
@@ -720,7 +755,7 @@ describe('worktree diff comment rollback convergence', () => {
     const removed = store.getState().deleteDiffComment(WT, 'c1')
     const marked = store.getState().markDiffCommentsSent(WT, ['c2'], 3000)
 
-    // Why: deleteDiffComment has no boolean contract, so its absent return must not hide the failure.
+    // deleteDiffComment returns no boolean; absent return must not hide write failures.
     await expect(removed).resolves.toBeUndefined()
     await expect(marked).resolves.toBe(false)
     expect(store.getState().getDiffComments(WT)).toBe(comments)

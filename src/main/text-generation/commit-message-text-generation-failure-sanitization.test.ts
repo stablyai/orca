@@ -327,7 +327,7 @@ describe('generateCommitMessageFromContext', () => {
       '401: {"message":"slot 1:/Users/name/alt failed"}',
       'Pi CLI command failed with code 1: 401: {"message":"slot 1:[path] failed"}'
     ]
-  ])('redacts a %s in provider bodies', async (_shape, stderr, expected) => {
+  ])('redacts a %s in provider bodies', async (_variant, stderr, expected) => {
     const result = await generateCommitMessageFromContext(
       {
         branch: 'main',
@@ -386,7 +386,6 @@ describe('generateCommitMessageFromContext', () => {
     expect(result.error.startsWith('Pi CLI command failed with code 1: 400 {"type":"error"')).toBe(
       true
     )
-    // The bare domain link survives path redaction so the remedy stays usable.
     expect(result.error).toContain('claude.ai/settings/usage')
     expect(result.error.length).toBeLessThanOrEqual(300)
   })

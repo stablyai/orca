@@ -1,0 +1,129 @@
+{
+  "version": 1,
+  "records": [
+    {
+      "file": "src/shared/agent-session-rewind.ts",
+      "inputs": [],
+      "emptyEnv": [],
+      "sourceClosureSha256": "08558478f5a5a6c0aa2e4e4d92d609ff55c11564d04a957f999f2302c478ae80",
+      "reason": "Reviewed data/URL parsing only; no indirect repository input. Imported source dependencies remain graph edges.",
+      "contextSha256": "747ec5af67a0b60890da900a83fa255d3b96e2fa17d9199f8e483ef5051b213c"
+    },
+    {
+      "file": "src/shared/git-fork-sync.ts",
+      "inputs": [],
+      "emptyEnv": [],
+      "sourceClosureSha256": "3e8caddb2b392603cdb3732f1b06c2f97749da0abcac10bce592b30fff4e6ac2",
+      "reason": "Reviewed data/URL parsing only; no indirect repository input. Imported source dependencies remain graph edges.",
+      "contextSha256": "747ec5af67a0b60890da900a83fa255d3b96e2fa17d9199f8e483ef5051b213c"
+    },
+    {
+      "file": "src/shared/git-remote-identity.ts",
+      "inputs": [],
+      "emptyEnv": [],
+      "sourceClosureSha256": "cc60ace7dc539e3a52f35a6195ac5712cee358a76d11cbb9486ea90de058b05c",
+      "reason": "Reviewed data/URL parsing only; no indirect repository input. Imported source dependencies remain graph edges.",
+      "contextSha256": "747ec5af67a0b60890da900a83fa255d3b96e2fa17d9199f8e483ef5051b213c"
+    },
+    {
+      "file": "src/shared/mobile-relay-pairing-offer.ts",
+      "inputs": [],
+      "emptyEnv": [],
+      "sourceClosureSha256": "9be737460d5743aa41ee4ca84ce46b94c0b5d3d83cc54cd52db601aac12eff68",
+      "reason": "Reviewed data/URL parsing only; no indirect repository input. Imported source dependencies remain graph edges.",
+      "contextSha256": "747ec5af67a0b60890da900a83fa255d3b96e2fa17d9199f8e483ef5051b213c"
+    },
+    {
+      "file": "src/shared/native-chat/tools/native-chat-tool-identity.ts",
+      "inputs": [],
+      "emptyEnv": [],
+      "sourceClosureSha256": "1e813201b2fb133e5166c14223d6d04bca99c2946c8dca5db155420a2b41d36c",
+      "reason": "Reviewed data/URL parsing only; no indirect repository input. Imported source dependencies remain graph edges.",
+      "contextSha256": "030c2dd077f6b9d453554d2bb85b9a3362ef3d7c8f3f5def5c3821112f6c0632"
+    },
+    {
+      "file": "src/shared/pairing.ts",
+      "inputs": [],
+      "emptyEnv": [],
+      "sourceClosureSha256": "bf95796827ba841b769ba19c681f5988763aedb1b83b0ba2d8d9d497507809a1",
+      "reason": "Reviewed data/URL parsing only; no indirect repository input. Imported source dependencies remain graph edges.",
+      "contextSha256": "747ec5af67a0b60890da900a83fa255d3b96e2fa17d9199f8e483ef5051b213c"
+    },
+    {
+      "file": "src/shared/remote-pairing-address.ts",
+      "inputs": [],
+      "emptyEnv": [],
+      "sourceClosureSha256": "c5cfd48bbde10cc7d62643fec5fbf5a8a7342b36e84199b11cc839f9b5a930e1",
+      "reason": "Reviewed data/URL parsing only; no indirect repository input. Imported source dependencies remain graph edges.",
+      "contextSha256": "747ec5af67a0b60890da900a83fa255d3b96e2fa17d9199f8e483ef5051b213c"
+    },
+    {
+      "file": "src/shared/repo-icon.ts",
+      "inputs": [],
+      "emptyEnv": [],
+      "sourceClosureSha256": "9ed9b45d83816f7da3d92dc71e66fdf52b60eeda4e19e5652817adfbd4f7090e",
+      "reason": "Reviewed data/URL parsing only; no indirect repository input. Imported source dependencies remain graph edges.",
+      "contextSha256": "747ec5af67a0b60890da900a83fa255d3b96e2fa17d9199f8e483ef5051b213c"
+    },
+    {
+      "file": "src/shared/runtime-environments.ts",
+      "inputs": [],
+      "emptyEnv": [],
+      "sourceClosureSha256": "8d76abb09eda86da2b9132b3add2147b7fe32ca5eed2a8ebf33c2670d68095dc",
+      "reason": "Reviewed data/URL parsing only; no indirect repository input. Imported source dependencies remain graph edges.",
+      "contextSha256": "747ec5af67a0b60890da900a83fa255d3b96e2fa17d9199f8e483ef5051b213c"
+    },
+    {
+      "file": "src/shared/doc-preview-scheme.ts",
+      "inputs": [],
+      "emptyEnv": [],
+      "reason": "Reviewed URL/data projection only; no indirect repository reads. The entire local source closure and dependency/runtime context are fingerprinted.",
+      "contextSha256": "747ec5af67a0b60890da900a83fa255d3b96e2fa17d9199f8e483ef5051b213c",
+      "sourceClosureSha256": "4a3a0dab2fc5b009d4e4e0d6bb5ba49dae08726f3d94fa83c54283f21f8df097"
+    },
+    {
+      "file": "src/shared/node-dist-mirror.ts",
+      "inputs": [],
+      "emptyEnv": [],
+      "reason": "Reviewed URL/data projection only; no indirect repository reads. The entire local source closure and dependency/runtime context are fingerprinted.",
+      "contextSha256": "747ec5af67a0b60890da900a83fa255d3b96e2fa17d9199f8e483ef5051b213c",
+      "sourceClosureSha256": "89a62d9b524eaffb56788bacb0fcee64948d012df5240333293b5be70b77601f"
+    },
+    {
+      "file": "src/shared/project-host-setup-projection.ts",
+      "inputs": [],
+      "emptyEnv": [],
+      "reason": "Reviewed URL/data projection only; no indirect repository reads. The entire local source closure and dependency/runtime context are fingerprinted.",
+      "contextSha256": "747ec5af67a0b60890da900a83fa255d3b96e2fa17d9199f8e483ef5051b213c",
+      "sourceClosureSha256": "08558478f5a5a6c0aa2e4e4d92d609ff55c11564d04a957f999f2302c478ae80"
+    },
+    {
+      "file": "src/shared/workspace-session-browser-history.ts",
+      "inputs": [],
+      "emptyEnv": [],
+      "reason": "Reviewed URL/data projection only; no indirect repository reads. The entire local source closure and dependency/runtime context are fingerprinted.",
+      "contextSha256": "747ec5af67a0b60890da900a83fa255d3b96e2fa17d9199f8e483ef5051b213c",
+      "sourceClosureSha256": "08558478f5a5a6c0aa2e4e4d92d609ff55c11564d04a957f999f2302c478ae80"
+    },
+    {
+      "file": "src/shared/browser-url.ts",
+      "inputs": [],
+      "emptyEnv": [],
+      "reason": "Reviewed URL/data projection only; no indirect repository reads. The entire local source closure and dependency/runtime context are fingerprinted.",
+      "contextSha256": "747ec5af67a0b60890da900a83fa255d3b96e2fa17d9199f8e483ef5051b213c",
+      "sourceClosureSha256": "08558478f5a5a6c0aa2e4e4d92d609ff55c11564d04a957f999f2302c478ae80"
+    },
+    {
+      "file": "src/main/daemon/serialize-grid-transcript-replay.test.ts",
+      "inputs": ["src/main/runtime/__fixtures__/", "src/main/daemon/__fixtures__/"],
+      "emptyEnv": [
+        "SERIALIZE_TRANSCRIPT_DIR",
+        "ORCA_OLD_SERIALIZE_ADDON",
+        "ORCA_NEW_SERIALIZE_ADDON"
+      ],
+      "reason": "Captured transcript replay reads these fixture directories. Optional external capture/addon paths must be unset; package dependencies and the entire local source closure are fingerprinted.",
+      "contextSha256": "747ec5af67a0b60890da900a83fa255d3b96e2fa17d9199f8e483ef5051b213c",
+      "sourceClosureSha256": "34f58dd735cddb41300e48a9c774612f5faef171b4630a9dfd0d64b727062101"
+    }
+  ]
+}

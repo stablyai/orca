@@ -1,18 +1,14 @@
 import type { StateCreator } from 'zustand'
-import type { GlobalSettings } from '../../../../shared/global-settings-types'
 import type { AppState } from '../types'
-
-export type CommitMessageGenerationRuntimeTargetSettings = Pick<
-  GlobalSettings,
-  'activeRuntimeEnvironmentId'
->
+import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
 
 export type CommitMessageGenerationContext = {
   worktreeId: string
   worktreePath: string
   connectionId?: string
   requestId: number
-  runtimeTargetSettings?: CommitMessageGenerationRuntimeTargetSettings | null
+  /** The worktree owner's transport, captured when the request started. */
+  runtimeTarget: RuntimeClientTarget
 }
 
 export type CommitMessageGenerationStatus = 'idle' | 'running' | 'canceled' | 'failed' | 'succeeded'
@@ -160,7 +156,7 @@ export const createCommitMessageGenerationSlice: StateCreator<
     set((state) => {
       const nextRecord = updater(state.commitMessageGenerationRecords[key] ?? null)
       if (!nextRecord) {
-        return {}
+        return state
       }
       return {
         commitMessageGenerationRecords: {
@@ -184,6 +180,6 @@ export const createCommitMessageGenerationSlice: StateCreator<
           changed = true
         }
       }
-      return changed ? { commitMessageGenerationRecords: nextRecords } : {}
+      return changed ? { commitMessageGenerationRecords: nextRecords } : state
     })
 })

@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   createRemoteRuntimeTransportMocks,
   type MultiplexSubscriptionCallbacks
@@ -7,6 +7,18 @@ import {
   REMOTE_RUNTIME_AUTO_RECOVERY_TIMEOUT_MS,
   REMOTE_RUNTIME_RECOVERY_ATTEMPT_BUDGET_MS
 } from './remote-runtime-pty-recovery-state'
+
+const appStore = vi.hoisted(() => ({
+  getState: vi.fn(() => {
+    throw new Error('These transport fixtures must not read app-store ownership')
+  })
+}))
+
+vi.mock('@/store', () => ({ useAppStore: { getState: appStore.getState } }))
+
+afterEach(() => {
+  expect(appStore.getState).not.toHaveBeenCalled()
+})
 
 let subscriptionCallbacks: MultiplexSubscriptionCallbacks = null
 let resolvedPaneHandle = 'terminal-1'
@@ -22,8 +34,7 @@ const { runtimeCall, resetRemoteRuntimeTransport } = createRemoteRuntimeTranspor
   }
 })
 
-// #12684: connect() classified these failures as recoverable and then latched 'disconnected' with
-// nothing armed — no backoff timer, no parked retry, and a Reconnect button that returned false.
+// Recoverable connect errors must retain backoff or parked retry so online/resume and Reconnect can revive the pane (#12684).
 describe('recoverable connect failures on a remote runtime pane', () => {
   let resolvePaneCalls = 0
 
@@ -39,9 +50,7 @@ describe('recoverable connect failures on a remote runtime pane', () => {
     })
   }
 
-  // Why: installUnreachableRuntime() rejects synchronously, so every failure lands during a backoff
-  // wait. A silently dropped link instead burns the whole RPC budget, so the rejection arrives while
-  // the attempt is still in flight — including after the auto-recovery deadline has already latched.
+  // Delay failure through the real RPC budget to cover rejection after the recovery deadline, unlike immediate mock rejection.
   function installSilentlyDroppedRuntime(): void {
     resolvePaneCalls = 0
     runtimeCall.mockImplementation(async (args: { method: string }) => {
@@ -98,8 +107,7 @@ describe('recoverable connect failures on a remote runtime pane', () => {
     try {
       installUnreachableRuntime()
       const { createRemoteRuntimePtyTransport } = await import('./remote-runtime-pty-transport')
-      // Why dynamic: resetRemoteRuntimeTransport() re-registers the module graph, and the retry
-      // registry only sees panes from the same instance the transport was loaded from.
+      // Import dynamically after module reset so transport and retry registry share one instance.
       const { retryAllRemoteRuntimePtyRecoveriesNow } =
         await import('./remote-runtime-pty-recovery-state')
       const transport = createRemoteRuntimePtyTransport('env-1', {

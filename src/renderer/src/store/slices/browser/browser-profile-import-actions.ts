@@ -110,8 +110,7 @@ export function createBrowserProfileImportActions(
       if (runtimeEnvironmentId) {
         const hostLabel = selectExecutionHostDisplayLabel(get(), hostId)
         try {
-          // Why: the import runs on whichever machine hosts the pages, so the picker must offer that
-          // machine's browsers -- client-hosted means this desktop, not the (usually headless) remote.
+          // Import reads the page-hosting machine’s browsers: client-hosted means desktop, not headless remote.
           const clientHostBrowsers = await window.api.browser.sessionDetectBrowsersForClientHost({
             environmentId: runtimeEnvironmentId
           })
@@ -133,13 +132,13 @@ export function createBrowserProfileImportActions(
           set((s) =>
             getBrowserSettingsHostId(s) === hostId
               ? { detectedBrowsers: browsers, detectedBrowsersLoaded: true, detectedBrowsersHost }
-              : {}
+              : s
           )
         } catch {
           set((s) =>
             getBrowserSettingsHostId(s) === hostId
               ? { detectedBrowsers: [], detectedBrowsersLoaded: true, detectedBrowsersHost: null }
-              : {}
+              : s
           )
         }
         return
@@ -161,11 +160,11 @@ export function createBrowserProfileImportActions(
                 detectedBrowsersLoaded: true,
                 detectedBrowsersHost: null
               }
-            : {}
+            : s
         )
       } catch {
         /* best-effort — empty list is acceptable fallback */
-        set((s) => (getBrowserSettingsHostId(s) === hostId ? { detectedBrowsersLoaded: true } : {}))
+        set((s) => (getBrowserSettingsHostId(s) === hostId ? { detectedBrowsersLoaded: true } : s))
       }
     }
   }

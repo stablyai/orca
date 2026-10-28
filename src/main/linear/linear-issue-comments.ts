@@ -2,7 +2,7 @@ import type { LinearClient } from '@linear/sdk'
 import type { LinearComment } from '../../shared/linear/issue-types'
 import { acquire, release } from './linear-request-concurrency'
 import { clearToken } from './linear-token-store'
-import { getClients, isAuthError } from './client'
+import { getClients, getPublicFileUrlClient, isAuthError } from './client'
 import {
   ATTACHMENT_BY_UUID_QUERY,
   COMMENT_BY_UUID_QUERY,
@@ -104,6 +104,60 @@ export async function addIssueCommentForAgent(
   })
 }
 
+export async function updateIssueCommentForAgent(
+  commentId: string,
+  body: string,
+  workspaceId: string,
+  options: { signal?: AbortSignal; beforeInvoke?: () => void } = {}
+): Promise<LinearCommentWriteRecord> {
+  const entry = getClients(workspaceId)[0]
+  if (!entry) {
+    throw new LinearWriteFailure('failed', 'Not connected to Linear')
+  }
+
+  return runLinearWrite(
+    entry,
+    options.signal,
+    async (client) => {
+      const result = await client.updateComment(commentId, { body })
+      if (!result.success) {
+        throw new LinearWriteFailure('failed', 'Failed to edit comment')
+      }
+      const record = await confirmLinearWrite('Comment was edited but could not be retrieved', () =>
+        readCommentWriteRecord(client, commentId)
+      )
+      if (!record) {
+        throw new LinearWriteFailure('unconfirmed', 'Comment was edited but could not be retrieved')
+      }
+      return record
+    },
+    options.beforeInvoke
+  )
+}
+
+export async function deleteIssueCommentForAgent(
+  commentId: string,
+  workspaceId: string,
+  options: { signal?: AbortSignal; beforeInvoke?: () => void } = {}
+): Promise<void> {
+  const entry = getClients(workspaceId)[0]
+  if (!entry) {
+    throw new LinearWriteFailure('failed', 'Not connected to Linear')
+  }
+
+  await runLinearWrite(
+    entry,
+    options.signal,
+    async (client) => {
+      const result = await client.deleteComment(commentId)
+      if (!result.success) {
+        throw new LinearWriteFailure('failed', 'Failed to delete comment')
+      }
+    },
+    options.beforeInvoke
+  )
+}
+
 export async function createIssueAttachment(
   issueId: string,
   input: { id: string; title: string; url: string },
@@ -184,16 +238,14 @@ export async function getIssueComments(
 
   await acquire()
   try {
-    const result = await entry.client.client.rawRequest<
+    const result = await getPublicFileUrlClient(entry).client.rawRequest<
       LinearIssueCommentsResponse,
       LinearRawVariables
     >(ISSUE_COMMENTS_QUERY, { id: issueId })
     const nodes = result.data?.issue?.comments?.nodes ?? []
-    return nodes.map((node) => ({
+    const comments = nodes.map((node) => ({
       id: node.id,
       body: node.body ?? '',
-      // Why: rawRequest returns createdAt as an ISO string already; do not
-      // re-serialize (the SDK model path used .toISOString() on a parsed Date).
       createdAt: node.createdAt ?? '',
       user: node.user
         ? {
@@ -202,6 +254,8 @@ export async function getIssueComments(
           }
         : undefined
     }))
+    // Why: Linear sends newest first; oldest-first matches linear.app and where new comments land.
+    return comments.sort((a, b) => a.createdAt.localeCompare(b.createdAt))
   } catch (error) {
     if (isAuthError(error)) {
       clearToken(entry.workspace.id)

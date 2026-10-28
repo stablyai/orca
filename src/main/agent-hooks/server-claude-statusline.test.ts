@@ -1,5 +1,3 @@
-// Why: locks the /statusline/claude loopback contract — form-encoded posts from the
-// managed statusline script must reach the listener, and junk must fail open (204).
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { AgentHookServer } from './server'
 import type { ClaudeStatusLineRateLimits } from '../../shared/claude-statusline-rate-limits'

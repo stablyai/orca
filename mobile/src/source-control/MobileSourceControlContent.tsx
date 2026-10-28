@@ -1,29 +1,25 @@
-import {
-  ActivityIndicator,
-  Pressable,
-  ScrollView,
-  SectionList,
-  Text,
-  TextInput,
-  View
-} from 'react-native'
+import { useMemo } from 'react'
+import { ActivityIndicator, Pressable, Text, TextInput, View } from 'react-native'
 import { Minus, MoreHorizontal, Plus, Sparkles } from 'lucide-react-native'
 import { colors, spacing } from '../theme/mobile-theme'
+import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import { MobileSourceControlCreatePrEntry } from './MobileSourceControlCreatePrEntry'
 import { MobileCommitFailurePanel } from './MobileCommitFailurePanel'
 import { KEYBOARD_COMMIT_BAR_CLEARANCE } from './mobile-source-control-screen-state'
-import { makeRenderFileRow, BranchCompareFooter } from './MobileSourceControlFileRows'
+import { MobileSourceControlFileList } from './MobileSourceControlFileList'
 import type { MobileSourceControlState } from './use-mobile-source-control-state'
+import type { MobileSourceControlPrimaryAction } from './mobile-source-control-primary-action'
 import { styles } from './mobile-source-control-styles'
 import { hubStyles } from './mobile-source-control-hub-styles'
 
 type Props = {
-  state: MobileSourceControlState
+  state: Omit<MobileSourceControlState, 'primaryActionArgs'>
+  // The panel builds it once it knows the branch's review.
+  primaryAction: MobileSourceControlPrimaryAction
 }
 
-// Changes tab: local file changes only — uncommitted (staged/unstaged) plus
-// committed-on-branch vs base. PR conflicts and push status live elsewhere.
-export function MobileSourceControlContent({ state }: Props) {
+export function MobileSourceControlContent({ state, primaryAction }: Props) {
+  useMobileColorScheme()
   const {
     insets,
     connState,
@@ -41,10 +37,10 @@ export function MobileSourceControlContent({ state }: Props) {
     openingBranchPath,
     sections,
     hasVisibleChanges,
+    status,
     stageablePaths,
     unstageablePaths,
     stagedCount,
-    primaryAction,
     createPrAction,
     stageAll,
     unstageAll,
@@ -55,31 +51,55 @@ export function MobileSourceControlContent({ state }: Props) {
     runGitAction
   } = state
   const ioBusy = busyAction !== null || openingPath !== null || openingBranchPath !== null
+  // A capped all-staged prefix can hide unstaged rows.
+  const canStageAll = stageablePaths.length > 0 || status?.didHitLimit === true
   const shouldShowGenerateButton = stagedCount > 0 || generatingMessage
+  // Typed text blocks regeneration; the same button cancels active generation.
+  const generateBlockedByMessage = !generatingMessage && commitMessage.trim().length > 0
+  const generateDisabled = busyAction !== null || generateBlockedByMessage
   const createPrHeroActive =
     createPrAction.visible && !createPrAction.disabled && !createPrAction.pushFirst
-  const branchCompareFooter = (
-    <BranchCompareFooter
-      state={{
-        shouldShowBranchCompareSection: state.shouldShowBranchCompareSection,
-        branchCompareSummaryText: state.branchCompareSummaryText,
-        branchEntries: state.branchEntries,
-        branchCompareState: state.branchCompareState,
-        branchCompareResult: state.branchCompareResult,
-        busyAction,
-        openBranchDiff,
-        openingBranchPath,
-        openingPath
-      }}
-    />
+  const fileList = useMemo(
+    () => (
+      <MobileSourceControlFileList
+        state={{
+          sections,
+          openFile,
+          runGitAction,
+          setDiscardTarget,
+          shouldShowBranchCompareSection: state.shouldShowBranchCompareSection,
+          branchCompareSummaryText: state.branchCompareSummaryText,
+          branchEntries: state.branchEntries,
+          branchCompareState: state.branchCompareState,
+          branchCompareResult: state.branchCompareResult,
+          busyAction,
+          openBranchDiff,
+          openingBranchPath,
+          openingPath
+        }}
+      />
+    ),
+    [
+      sections,
+      openFile,
+      runGitAction,
+      setDiscardTarget,
+      state.shouldShowBranchCompareSection,
+      state.branchCompareSummaryText,
+      state.branchEntries,
+      state.branchCompareState,
+      state.branchCompareResult,
+      busyAction,
+      openBranchDiff,
+      openingBranchPath,
+      openingPath
+    ]
   )
 
   return (
     <>
       {connState !== 'connected' ? (
-        // Why: once data has loaded the screen looks alive even when the
-        // desktop link is down, so taps appear to do nothing (STA-1511).
-        // Surface the reconnect state where the user is looking.
+        // Retained rows look actionable offline; show reconnect state beside them.
         <View style={styles.reconnectBanner}>
           <ActivityIndicator size="small" color={colors.statusAmber} />
           <Text style={styles.reconnectBannerText}>Reconnecting to desktop...</Text>
@@ -103,11 +123,11 @@ export function MobileSourceControlContent({ state }: Props) {
           <Pressable
             style={({ pressed }) => [
               styles.bulkButton,
-              (stageablePaths.length === 0 || ioBusy) && styles.bulkButtonDisabled,
+              (!canStageAll || ioBusy) && styles.bulkButtonDisabled,
               pressed && styles.bulkButtonPressed
             ]}
             onPress={() => void stageAll()}
-            disabled={ioBusy || stageablePaths.length === 0}
+            disabled={ioBusy || !canStageAll}
           >
             {busyAction === 'stage-all' ? (
               <ActivityIndicator size="small" color={colors.textPrimary} />
@@ -153,35 +173,8 @@ export function MobileSourceControlContent({ state }: Props) {
           <Text style={styles.stateTitle}>No local changes</Text>
           <Text style={styles.stateText}>Working tree is clean.</Text>
         </View>
-      ) : sections.length === 0 ? (
-        // Why: RN SectionList with empty `sections` often skips ListFooterComponent,
-        // which hid "Committed on Branch" when only branch files remain.
-        <ScrollView style={hubStyles.tabBody} contentContainerStyle={styles.listContent}>
-          {branchCompareFooter}
-        </ScrollView>
       ) : (
-        <SectionList
-          style={hubStyles.tabBody}
-          sections={sections}
-          renderItem={makeRenderFileRow({
-            busyAction,
-            openingPath,
-            openingBranchPath,
-            openFile,
-            runGitAction,
-            setDiscardTarget
-          })}
-          keyExtractor={(item) => `${item.area}:${item.path}:${item.oldPath ?? ''}`}
-          renderSectionHeader={({ section }) => (
-            <View style={styles.sectionHeader}>
-              <Text style={styles.sectionTitle}>{section.title}</Text>
-              <Text style={styles.sectionCount}>{section.data.length}</Text>
-            </View>
-          )}
-          ListFooterComponent={branchCompareFooter}
-          stickySectionHeadersEnabled={false}
-          contentContainerStyle={styles.listContent}
-        />
+        fileList
       )}
 
       <View
@@ -219,12 +212,15 @@ export function MobileSourceControlContent({ state }: Props) {
             <Pressable
               style={({ pressed }) => [
                 styles.generateButton,
-                busyAction !== null && styles.commitButtonDisabled,
+                generateDisabled && styles.commitButtonDisabled,
                 pressed && styles.commitButtonPressed
               ]}
-              // Why: commit-message AI belongs to the commit path; hiding it
-              // during Stage All keeps the quick action visually unambiguous.
-              disabled={busyAction !== null}
+              // Keep commit-message AI with commit actions so Stage All remains unambiguous.
+              disabled={generateDisabled}
+              accessibilityState={{ disabled: generateDisabled }}
+              accessibilityHint={
+                generateBlockedByMessage ? 'Clear the message to regenerate.' : undefined
+              }
               onPress={() =>
                 generatingMessage ? cancelGenerateCommitMessage() : void generateCommitMessage()
               }

@@ -7,15 +7,45 @@ import {
   listRemoteRuntimeSessionTabsDeduped
 } from './remote-runtime-session-tabs-inflight'
 import { getRuntimeEnvironmentRevision } from './runtime-environment-revision'
-import { unwrapRuntimeRpcResult } from './runtime-rpc-client'
+import { unwrapRuntimeRpcResult } from './runtime-rpc-result'
 import { toRuntimeWorktreeSelector } from './runtime-worktree-selector'
 import { captureRuntimeEnvironmentCall } from './web-runtime-session-environment'
 import { throwIfE2eWebRuntimeBrowserReconciliationFails } from './web-runtime-browser-creation-e2e-fault'
 import { getSessionTabsRuntimeIdFromResponse } from './web-session-tabs-sync/publisher-identity-fences'
-import { recoverWebSessionTerminalOrphansBeforeApply } from './web-session-terminal-orphan-recovery'
+import { WEB_SESSION_TABS_FRAME_OUTRANKED } from './web-session-tabs-sync/tracking-decisions'
+// Static import is required: receipt ordering gates this path and cannot be omitted by a caller’s module mock.
+import {
+  recordReceivedWebSessionTabsSnapshot,
+  shouldApplyRecoveredWebSessionTabsSnapshot
+} from './web-session-tabs-sync/tracking'
+import { recoverMirroredTerminalOrphansBeforeApply } from './web-session-tabs-sync/mirror-terminal-orphan-recovery'
 
 const pendingRuntimeWorktreeRecoveryRefreshes = new Map<string, symbol>()
 const RUNTIME_WORKTREE_RECOVERY_REFRESH_DELAYS_MS = [250, 500, 1_000, 2_000, 4_000] as const
+
+function importSessionTabsApplyModules() {
+  return Promise.all([
+    import('./web-session-tabs-sync/snapshot-api'),
+    import('./web-session-tabs-sync/store-patch'),
+    import('./web-session-tabs-sync/tracking-decisions'),
+    import('./web-session-tabs-sync/tracking-lifecycle')
+  ])
+}
+let sessionTabsApplyModules: ReturnType<typeof importSessionTabsApplyModules> | null = null
+
+// Concurrent refreshes share one load: vitest hands overlapping imports of a vi.mock'd module the real one.
+function loadSessionTabsApplyModules(): ReturnType<typeof importSessionTabsApplyModules> {
+  sessionTabsApplyModules ??= importSessionTabsApplyModules().catch((error: unknown) => {
+    sessionTabsApplyModules = null
+    throw error
+  })
+  return sessionTabsApplyModules
+}
+
+/** Lets a test pay this lazy load before a timed wait instead of inside it. */
+export async function loadWebRuntimeSessionTabsApplyModulesForTests(): Promise<void> {
+  await loadSessionTabsApplyModules()
+}
 
 export async function refreshWebRuntimeSessionTabsSnapshot(
   environmentId: string,
@@ -32,23 +62,27 @@ export async function refreshWebRuntimeSessionTabsSnapshot(
     errorMode?: 'warn' | 'throw'
   } = {}
 ): Promise<void> {
-  const webSessionTabsSync = await import('./web-session-tabs-sync')
+  // Await up front; list application and its receipt must not yield between them.
+  const [
+    { applyWebSessionTabsSnapshot },
+    { applyWebSessionTabsStorePatch },
+    { decideWebSessionTabsSnapshot },
+    trackingLifecycle
+  ] = await loadSessionTabsApplyModules()
   const expectedEnvironmentPairingRevision =
     options.expectedEnvironmentPairingRevision ?? getRuntimeEnvironmentRevision(environmentId)
   const expectedEnvironmentConnectionGeneration =
     getRuntimeEnvironmentConnectionGeneration(environmentId)
   const expectedTrackingGeneration =
-    webSessionTabsSync.getWebSessionTabsTrackingGeneration(environmentId)
+    trackingLifecycle.getWebSessionTabsTrackingGeneration(environmentId)
   const callEnvironment = captureRuntimeEnvironmentCall(
     environmentId,
     expectedEnvironmentPairingRevision
   )
   try {
     if (options.acceptCurrentSnapshot) {
-      const { acceptReplayedWebSessionTabsSnapshot } = await import('./web-session-tabs-sync')
-      // Why: the host snapshot may have arrived before structured create returned;
-      // re-accept its current version after the exact provisional handoff is known.
-      acceptReplayedWebSessionTabsSnapshot(environmentId, worktreeId)
+      // Publication can beat structured create; reaccept its version after the exact provisional handoff is known.
+      trackingLifecycle.acceptReplayedWebSessionTabsSnapshot(environmentId, worktreeId)
     }
     const listSessionTabs =
       options.confirmAgentSessionHandoff || options.afterCurrentInFlight
@@ -57,9 +91,7 @@ export async function refreshWebRuntimeSessionTabsSnapshot(
     if (options.afterCurrentInFlight) {
       throwIfE2eWebRuntimeBrowserReconciliationFails()
     }
-    // Why: a joined in-flight list leaves this undefined, and recovery then fences on the adoption response instead.
-    let runtimeId: string | undefined
-    const snapshot = await listSessionTabs({
+    const { snapshot, receivedFrame, runtimeId } = await listSessionTabs({
       environmentId,
       worktreeId,
       load: async () => {
@@ -70,10 +102,12 @@ export async function refreshWebRuntimeSessionTabsSnapshot(
           },
           timeoutMs: 15_000
         })
-        runtimeId = getSessionTabsRuntimeIdFromResponse(response)
-        return unwrapRuntimeRpcResult(
-          response as RuntimeRpcResponse<RuntimeMobileSessionTabsResult>
-        )
+        return {
+          snapshot: unwrapRuntimeRpcResult(
+            response as RuntimeRpcResponse<RuntimeMobileSessionTabsResult>
+          ),
+          runtimeId: getSessionTabsRuntimeIdFromResponse(response)
+        }
       }
     })
     if (options.confirmAgentSessionHandoff) {
@@ -86,15 +120,18 @@ export async function refreshWebRuntimeSessionTabsSnapshot(
         ...options.confirmAgentSessionHandoff
       })
     }
-    const {
-      applyWebSessionTabsSnapshot,
-      applyWebSessionTabsStorePatch,
-      decideWebSessionTabsSnapshot
-    } = webSessionTabsSync
+    // Reserve receipt order before ranking; a list answered before close can arrive after retraction.
+    recordReceivedWebSessionTabsSnapshot(
+      environmentId,
+      snapshot,
+      receivedFrame,
+      runtimeId,
+      'bootstrap'
+    )
     if (getRuntimeEnvironmentRevision(environmentId) !== expectedEnvironmentPairingRevision) {
       return
     }
-    const recovered = await recoverWebSessionTerminalOrphansBeforeApply(
+    const recovered = await recoverMirroredTerminalOrphansBeforeApply(
       useAppStore.getState(),
       snapshot,
       environmentId,
@@ -110,13 +147,18 @@ export async function refreshWebRuntimeSessionTabsSnapshot(
     ) {
       return
     }
-    // Why: this list is the host answering, but only the frame's own decision
-    // says whether that answer is evidence — a workspace the mirror never
-    // writes is discarded with nothing accepted behind it.
-    const decision = decideWebSessionTabsSnapshot(recovered, environmentId)
+    // Only the frame decision proves this host answer was accepted; discarded workspaces supply no evidence.
+    const decision = shouldApplyRecoveredWebSessionTabsSnapshot(
+      environmentId,
+      recovered,
+      receivedFrame,
+      runtimeId
+    )
+      ? decideWebSessionTabsSnapshot(recovered, environmentId)
+      : WEB_SESSION_TABS_FRAME_OUTRANKED
     const settleMirror = applyWebSessionTabsStorePatch(
       (state) => {
-        // Why: eager refreshes can resolve after the user switched worktrees; update tabs without stealing focus.
+        // Eager refresh can outlive workspace switches; update tabs without taking focus.
         const patch = decision.apply
           ? applyWebSessionTabsSnapshot(state, recovered, environmentId)
           : state
@@ -127,6 +169,7 @@ export async function refreshWebRuntimeSessionTabsSnapshot(
           {
             environmentId,
             worktreeId: snapshot.worktree,
+            source: recovered,
             decision,
             expectedEnvironmentConnectionGeneration,
             expectedEnvironmentPairingRevision,
@@ -141,7 +184,7 @@ export async function refreshWebRuntimeSessionTabsSnapshot(
     if (options.errorMode === 'throw') {
       throw error
     }
-    // Why: host creation already succeeded; the long-lived session.tabs subscription catches up if this eager refresh fails.
+    // Creation succeeded; the long-lived subscription catches up after eager-refresh failure.
     console.warn(
       '[web-runtime-session] failed to refresh session-tabs snapshot:',
       error instanceof Error ? error.message : String(error)

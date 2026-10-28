@@ -2,12 +2,14 @@ import type { GlobalSettings } from '../../../../shared/global-settings-types'
 import {
   SettingsRow,
   SettingsSegmentedControl,
-  SettingsSubsectionHeader
+  SettingsSubsectionHeader,
+  SettingsSwitchRow
 } from './SettingsFormControls'
 import { SearchableSetting } from './SearchableSetting'
 import { TerminalContrastSetting } from './TerminalContrastSetting'
 import { TerminalScreenReaderSetting } from './TerminalScreenReaderSetting'
 import { translate } from '@/i18n/i18n'
+import { resolveTerminalInlineImagesEnabled } from '../../../../shared/terminal-inline-images-settings'
 
 type TerminalRenderingSectionProps = {
   settings: GlobalSettings
@@ -97,6 +99,49 @@ export function TerminalRenderingSection({
         <TerminalContrastSetting settings={settings} updateSettings={updateSettings} />
 
         <TerminalScreenReaderSetting settings={settings} updateSettings={updateSettings} />
+
+        <SearchableSetting
+          title={translate(
+            'auto.components.settings.TerminalRenderingSection.6d4c55bacc',
+            'Inline Images'
+          )}
+          description={translate(
+            'auto.components.settings.TerminalRenderingSection.fffab5890b',
+            'Display images directly in the terminal using SIXEL, iTerm2 (IIP), and Kitty graphics protocols.'
+          )}
+          keywords={[
+            'terminal',
+            'image',
+            'images',
+            'inline',
+            'sixel',
+            'iterm',
+            'iip',
+            'kitty',
+            'graphics',
+            'picture'
+          ]}
+          className="py-2"
+        >
+          <SettingsSwitchRow
+            label={translate(
+              'auto.components.settings.TerminalRenderingSection.6d4c55bacc',
+              'Inline Images'
+            )}
+            description={translate(
+              'auto.components.settings.TerminalRenderingSection.fffab5890b',
+              'Display images directly in the terminal using SIXEL, iTerm2 (IIP), and Kitty graphics protocols.'
+            )}
+            checked={resolveTerminalInlineImagesEnabled(settings.terminalInlineImages)}
+            onChange={() =>
+              updateSettings({
+                terminalInlineImages: !resolveTerminalInlineImagesEnabled(
+                  settings.terminalInlineImages
+                )
+              })
+            }
+          />
+        </SearchableSetting>
       </div>
     </section>
   )

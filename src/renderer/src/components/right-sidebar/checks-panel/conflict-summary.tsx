@@ -25,18 +25,27 @@ export function ConflictingFilesSection({ pr }: { pr: ConflictReview }): React.J
   if (pr.mergeable !== 'CONFLICTING' || files.length === 0) {
     return null
   }
+  const commitsBehind = pr.conflictSummary!.commitsBehind
 
-  // Why: the resolve action lives in the triage strip above; this section is
-  // purely the informational conflict file list so the action isn't duplicated.
+  // The triage strip owns Resolve; avoid duplicating it in this file list.
   return (
     <div className="border-b border-border px-3 py-3">
       <div className="text-[11px] text-muted-foreground">
-        {pr.conflictSummary!.commitsBehind}{' '}
-        {translate('auto.components.right.sidebar.checks.panel.content.6fa7f8723f', 'commit')}
-        {pr.conflictSummary!.commitsBehind === 1 ? '' : 's'}{' '}
+        {commitsBehind === 1
+          ? translate(
+              'auto.components.right.sidebar.checks.panel.content.commitsBehind_one',
+              '{{count}} commit behind',
+              { count: commitsBehind }
+            )
+          : translate(
+              'auto.components.right.sidebar.checks.panel.content.commitsBehind_other',
+              '{{count}} commits behind',
+              { count: commitsBehind }
+            )}{' '}
+        (
         {translate(
-          'auto.components.right.sidebar.checks.panel.content.3916814392',
-          'behind (base commit:'
+          'auto.components.right.sidebar.checks.panel.content.baseCommitLabel',
+          'base commit:'
         )}{' '}
         <span className="font-mono text-[10px]">{pr.conflictSummary!.baseCommit}</span>)
       </div>
@@ -149,7 +158,7 @@ function MergeabilityRecalculationCommandBox({
         }, 1500)
       })
       .catch(() => {
-        /* best-effort */
+        /* Clipboard failure leaves copying available for retry. */
       })
   }, [clearCopiedResetTimer, commands])
 

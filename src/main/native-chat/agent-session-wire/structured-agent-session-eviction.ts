@@ -1,86 +1,50 @@
-// Releasing one structured session's resources.
-//
-// Teardown is a DATA list, not a method body, for the reason this file exists at all: the host
-// tracked which sessions were live in a map, and tore them down at three unrelated call sites
-// (app quit, handoff to a TUI, and error cleanup). Closing a chat was never wired to any of them,
-// so a provider child outlived the chat that owned it for the whole app session.
-//
-// ORDER. The provider child stops FIRST. Closing it is not silent: the codex adapter emits its
-// `ended` event and flushes coalesced text as part of shutting down, and those are the rows that
-// clear the running-turn marker. Draining or closing the sink ahead of that drops them, which
-// leaves the durable journal claiming the agent is still working — a worse outcome than the leak
-// this teardown exists to fix. So: stop the child, drain what it emitted on its way out, then let
-// the sink go.
-//
-// FAILURE. A step that fails ABORTS the rest. `closeSession` returning false means the child's
-// exit was not proven and the adapter has deliberately kept the session indexed so a retry can
-// reach it; forgetting it anyway stranded the process forever and reported success. Leaving the
-// session in place is what makes the next close a real retry instead of a no-op.
+// After proven exit, release sink/adapter routes while retaining the conversation journal.
+// Attempt every cleanup step despite failures; bookkeeping cannot gate later sends.
 
-import type { StructuredAgentSessionAdapter } from './structured-agent-session-adapter'
 import type { DeferredStructuredAgentSessionEventSink } from './structured-agent-session-event-sink'
+import { withTimeout } from '../../../shared/promise-timeout-fallback'
+import type { StructuredAgentSessionLogger } from './structured-agent-session-logger'
 
 export type StructuredAgentSessionEvictionContext = {
   sessionId: string
-  hasProviderChild?: boolean
-  eventSink: DeferredStructuredAgentSessionEventSink
-  adapter: StructuredAgentSessionAdapter
-  /** Closes the session's journal handle and drops the map entry. Async and
-   *  awaited: `close()` is ordered behind queued writes, and a delete that
-   *  returns while the close is still queued leaves nothing to retry. */
-  forget: () => Promise<void>
-  /** Drops the cached sink so a later attach mints a fresh one. */
+  eventSink: Pick<DeferredStructuredAgentSessionEventSink, 'drained' | 'unbind' | 'close'>
+  logger: StructuredAgentSessionLogger
+  /** Drop adapter routing after lease release, retaining the conversation journal. */
+  acknowledgeRelease: () => Promise<void> | void
   discardSink: () => void
-  /** Hands the lease back now that this host's child is proven gone. No-ops when the record is
-   *  not this host's to release. */
-  releaseLease: () => Promise<void>
 }
+
+/** Advisory resume snapshots must not block child shutdown. */
+export const SNAPSHOT_DRAIN_TIMEOUT_MS = 1_000
 
 export type StructuredAgentSessionEvictionStep = {
   name: string
   run: (context: StructuredAgentSessionEvictionContext) => Promise<void> | void
 }
 
+/** Capture already-delivered output before shutdown; snapshot failures are log-only. */
+export async function snapshotBeforeStructuredAgentSessionStop(
+  context: Pick<StructuredAgentSessionEvictionContext, 'sessionId' | 'eventSink' | 'logger'>,
+  snapshot: () => void
+): Promise<void> {
+  await withTimeout<unknown>(context.eventSink.drained(), SNAPSHOT_DRAIN_TIMEOUT_MS, null)
+  try {
+    snapshot()
+  } catch {
+    context.logger.warn('capturing a recovery witness before a stop failed', {
+      scope: 'recovery-witness',
+      sessionId: context.sessionId
+    })
+  }
+}
+
 export const STRUCTURED_AGENT_SESSION_EVICTION_STEPS: readonly StructuredAgentSessionEvictionStep[] =
   [
-    {
-      name: 'stop-provider-child',
-      run: async (context) => {
-        if (context.hasProviderChild === false) {
-          return
-        }
-        // An adapter with no close has nothing to stop; anything else must PROVE the exit.
-        const stop = context.adapter.disposeSession ?? context.adapter.closeSession
-        if (stop) {
-          const stopped = await stop.call(context.adapter, context.sessionId)
-          if (stopped !== true) {
-            throw new Error('provider child exit was not proven')
-          }
-        }
-      }
-    },
-    {
-      name: 'drain-published',
-      run: async (context) => {
-        const barrier = await context.eventSink.drained()
-        if (!barrier.ok) {
-          throw barrier.error
-        }
-      }
-    },
     { name: 'stop-publishing', run: (context) => context.eventSink.unbind() },
     { name: 'close-sink', run: (context) => context.eventSink.close() },
-    // Why: the runtime caches one sink per session id and hands the SAME instance to the next
-    // attach. Closing without discarding leaves a reopened chat bound to a closed sink, which
-    // accepts every provider event and publishes none. Attach's own failure path already pairs
-    // these two; eviction has to as well.
+    // Discard closed cached sinks or reopened chats would inherit a permanently closed writer.
     { name: 'discard-sink', run: (context) => context.discardSink() },
-    // Why here and not last: the durable lease still names a process this host just stopped, and a
-    // record left claiming a live owner is one nothing can resume — the next surface to open the
-    // chat would find a session it may not acquire. Placed BEFORE forget so a release that cannot
-    // be written aborts while the session is still indexed, which is what makes the retry real.
-    { name: 'release-lease', run: (context) => context.releaseLease() },
-    { name: 'forget-session', run: (context) => context.forget() }
+    { name: 'acknowledge-release', run: (context) => context.acknowledgeRelease() }
   ]
 
 export class StructuredAgentSessionEvictionError extends Error {
@@ -94,11 +58,7 @@ export class StructuredAgentSessionEvictionError extends Error {
   }
 }
 
-/**
- * Runs the eviction steps in order, stopping at the first failure. The step name travels with the
- * error because the caller's only useful response is to retry, and a retry is only safe when the
- * session is still indexed — which is exactly what aborting preserves.
- */
+/** Report each failed step and continue cleanup. */
 export async function evictStructuredAgentSession(
   context: StructuredAgentSessionEvictionContext,
   steps: readonly StructuredAgentSessionEvictionStep[] = STRUCTURED_AGENT_SESSION_EVICTION_STEPS
@@ -107,7 +67,11 @@ export async function evictStructuredAgentSession(
     try {
       await step.run(context)
     } catch (error) {
-      throw new StructuredAgentSessionEvictionError(step.name, context.sessionId, error)
+      context.logger.warn('a wind-down step after the agent exited failed', {
+        scope: 'exit-wind-down',
+        sessionId: context.sessionId,
+        error: new StructuredAgentSessionEvictionError(step.name, context.sessionId, error)
+      })
     }
   }
 }

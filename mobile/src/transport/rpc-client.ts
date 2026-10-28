@@ -1,32 +1,21 @@
 import type { BrowserScreencastFrame } from './browser-screencast-protocol'
 import { DirectRpcClient } from './direct-rpc-client'
-import type {
-  ConnectionLogSink,
-  ConnectionState,
-  ForegroundNudgeReason,
-  RpcResponse
-} from './types'
+import type { RpcEnvelopeFields } from './rpc-envelope-fields'
+import type { ConnectionLogSink, ConnectionState, ForegroundNudgeReason } from './types'
+import type { UnvalidatedRpcRequestPort } from './unvalidated-rpc-request-port'
 
-export type SendRequestOptions = {
-  timeoutMs?: number
-  /** Include the connect wait in the caller's timeout budget. */
-  budgetSpansConnect?: boolean
-  /** Reject instead of replaying the request after reconnect. */
-  failWhenDisconnected?: boolean
-}
+export type { SendRequestOptions } from './unvalidated-rpc-request-port'
 
 type SubscribeOptions = {
   onBinaryFrame?: (frame: BrowserScreencastFrame) => void
+  // Repeat these top-level fields on subscription replay and unsubscribe.
+  envelope?: RpcEnvelopeFields
 }
 
 type StreamingListener = (result: unknown) => void
 
-export type RpcClient = {
-  sendRequest: (
-    method: string,
-    params?: unknown,
-    options?: SendRequestOptions
-  ) => Promise<RpcResponse>
+// Holding a client also exposes the raw port, so the boundary inventory must cover client holders.
+export type RpcClient = UnvalidatedRpcRequestPort & {
   subscribe: (
     method: string,
     params: unknown,
@@ -41,8 +30,14 @@ export type RpcClient = {
   getReconnectAttempt: () => number
   getLastConnectedAt: () => number | null
   getLastInboundAt?: () => number | null
+  // Optional logical authority epoch for scoping cached work across migrateTo; physical clients need no counter.
+  getGeneration?: () => number
+  /** False when this transport would refuse an `envelope`; absent means it carries one. */
+  carriesRpcEnvelope?: () => boolean
   onStateChange: (listener: (state: ConnectionState) => void) => () => void
   notifyForeground: (reason?: ForegroundNudgeReason) => void
+  // Settle every pending request before returning; only the physical sender knows which reached the wire.
+  // Reject written requests with markRpcDeliveryUnknown: the host may already have executed them.
   close: () => void
 }
 

@@ -1,18 +1,17 @@
 import { scheduleHostCredentialCleanup } from './host-credential-cleanup'
-import { removeMobileRelayHostOverlay } from './mobile-relay-host-overlay-store'
+import { removeMobileRelayHostRouting } from './mobile-relay-host-overlay-store'
 
 export async function scheduleOrphanedMobileRelayCleanup(args: {
   hostIds: string[]
   deleteCredential: (hostId: string) => Promise<void>
   scheduleCleanup?: typeof scheduleHostCredentialCleanup
-  removeOverlay?: typeof removeMobileRelayHostOverlay
+  removeOverlay?: typeof removeMobileRelayHostRouting
 }): Promise<void> {
   const scheduleCleanup = args.scheduleCleanup ?? scheduleHostCredentialCleanup
-  const removeOverlay = args.removeOverlay ?? removeMobileRelayHostOverlay
+  const removeOverlay = args.removeOverlay ?? removeMobileRelayHostRouting
   for (const hostId of new Set(args.hostIds)) {
     try {
-      // Why: an older build may remove the legacy host while retaining the v2
-      // namespace; persist keychain cleanup intent before dropping that pointer.
+      // Persist keychain cleanup intent before removing an overlay orphaned by an older build’s host removal.
       await scheduleCleanup(hostId, args.deleteCredential)
       await removeOverlay(hostId)
     } catch {

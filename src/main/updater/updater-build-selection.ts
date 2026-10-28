@@ -1,5 +1,4 @@
 import { app } from 'electron'
-import { is } from '@electron-toolkit/utils'
 import {
   DEV_CHANNEL_PLATFORM_LABEL,
   getVersionChannel,
@@ -11,11 +10,16 @@ import {
   type ReleaseChannel
 } from '../../shared/release-channel'
 import { compareVersions } from '../updater-fallback'
+import { profileStateBuildCompatibilityError } from '../../shared/profile-state-build-compatibility'
 import { listReleaseBuilds, resolveTargetBuild } from '../updater-release-builds'
+import { ReleaseBuildListCache, type ReleaseBuildListOptions } from '../updater-release-build-cache'
 import { UpdaterMenuChecks } from './updater-menu-checks'
 
-/** Handles local-build selection and exact release-channel/tag jumps. */
 export abstract class UpdaterBuildSelection extends UpdaterMenuChecks {
+  private readonly releaseBuildCache = new ReleaseBuildListCache((channel) =>
+    listReleaseBuilds(channel)
+  )
+
   protected async checkForLocalBuildFromMenu(): Promise<void> {
     if (process.platform !== 'darwin') {
       this.sendLocalBuildErrorAndRestore(
@@ -39,6 +43,14 @@ export abstract class UpdaterBuildSelection extends UpdaterMenuChecks {
       const candidate = await chooseLocalBuild(this.mainWindowRef)
       if (!candidate) {
         return
+      }
+      const compatibilityError = profileStateBuildCompatibilityError(
+        app.getVersion(),
+        candidate.version
+      )
+      if (compatibilityError) {
+        await candidate.close()
+        throw new Error(compatibilityError)
       }
       this.closeLocalBuildFeed()
       const feed = await startLocalBuildFeed(candidate)
@@ -67,17 +79,20 @@ export abstract class UpdaterBuildSelection extends UpdaterMenuChecks {
     }
   }
 
-  protected async listAvailableReleaseBuilds(channel: ReleaseChannel): Promise<ReleaseBuild[]> {
-    return listReleaseBuilds(channel)
+  protected async listAvailableReleaseBuilds(
+    channel: ReleaseChannel,
+    options?: ReleaseBuildListOptions
+  ): Promise<ReleaseBuild[]> {
+    return this.releaseBuildCache.list(channel, options)
   }
 
-  /** Pins the updater at one exact release tag and checks it, so a dev can move to any published build on any channel — including an older one. */
+  /** Pin any published channel/tag, including deliberate downgrades. */
   protected async checkForPinnedBuild(channel: ReleaseChannel, tag: string): Promise<void> {
-    if (!app.isPackaged || is.dev) {
+    if (!app.isPackaged) {
       this.sendStatus({ state: 'not-available', userInitiated: true })
       return
     }
-    // Why here as well as in the picker: the renderer disables the option, but IPC is reachable regardless, and there is no artifact to install on a platform the dev workflows do not build for.
+    // Enforce platform artifact availability in main; renderer-disabled options do not protect IPC.
     if (!isChannelSupportedOnPlatform(channel, process.platform)) {
       this.sendStatus({
         state: 'error',
@@ -86,7 +101,7 @@ export abstract class UpdaterBuildSelection extends UpdaterMenuChecks {
       })
       return
     }
-    // Why: electron-updater would otherwise take this all the way to a download and fail it with a raw ERR_UPDATER_INVALID_SIGNATURE. Say what to do instead — the installer is run by hand once, and in-app updates work from there on.
+    // Cross-signature dev-channel jumps need one manual install; explain before an opaque INVALID_SIGNATURE download failure.
     if (
       requiresManualDevChannelInstall({
         platform: process.platform,
@@ -110,6 +125,13 @@ export abstract class UpdaterBuildSelection extends UpdaterMenuChecks {
     this.pinnedBuildSelectionInProgress = true
     try {
       const target = resolveTargetBuild(channel, tag)
+      const compatibilityError = profileStateBuildCompatibilityError(
+        app.getVersion(),
+        target.version
+      )
+      if (compatibilityError) {
+        throw new Error(compatibilityError)
+      }
       if (compareVersions(target.version, app.getVersion()) === 0) {
         this.sendSettledCheckStatus({ state: 'not-available', userInitiated: true })
         return
@@ -125,7 +147,7 @@ export abstract class UpdaterBuildSelection extends UpdaterMenuChecks {
       this.sendStatus({ state: 'checking', userInitiated: true })
 
       const updater = this.getAutoUpdater()
-      // Why: an intentional jump to an older tag must not be filtered out as "not newer".
+      // Explicit older-tag jumps must bypass newer-only filtering.
       updater.allowDowngrade = true
       updater.disableDifferentialDownload = true
       updater.allowPrerelease = true

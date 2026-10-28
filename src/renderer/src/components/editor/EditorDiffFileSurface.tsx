@@ -4,6 +4,7 @@ import type { GitDiffResult } from '../../../../shared/git-diff-compare-types'
 import { getDiffContentSignature } from './diff-content-signature'
 import { DiffViewer, ImageDiffViewer, MarkdownPreview } from './editor-lazy-views'
 import { ExternalFileChangeBanner } from './ExternalFileChangeBanner'
+import { MarkdownPreviewSizeGate } from './MarkdownPreviewSizeGate'
 import type { useMarkdownDocuments } from './useMarkdownDocuments'
 
 type MarkdownDocumentsController = ReturnType<typeof useMarkdownDocuments>
@@ -110,26 +111,28 @@ export function EditorDiffFileSurface({
       <div className="flex h-full min-h-0 flex-col">
         {externalChangeBanner}
         <div className="border-b border-border/60 bg-muted/40 px-3 py-2 text-xs text-muted-foreground">
-          {/* Why: markdown preview can't show additions and deletions at once, so it shows only the modified side. */}
+          {/* Markdown previews show the modified side because they cannot represent both additions and deletions. */}
           {translate(
             'auto.components.editor.EditorContent.9640d1d3db',
             'Previewing the modified version of this diff. Switch to source mode to inspect changes.'
           )}
         </div>
         <div className="min-h-0 flex-1">
-          <MarkdownPreview
-            key={viewStateScopeId}
-            content={modifiedDiffContent}
-            filePath={activeFile.filePath}
-            sourceFileId={activeFile.id}
-            sourceWorktreeId={activeFile.worktreeId}
-            sourceRuntimeEnvironmentId={activeFile.runtimeEnvironmentId}
-            scrollCacheKey={`${diffViewStateKey}:preview`}
-            showTableOfContents={showMarkdownTableOfContents}
-            onCloseTableOfContents={onCloseMarkdownTableOfContents}
-            markdownAnnotationsEnabled={markdownAnnotationsEnabled}
-            {...markdownDocuments.previewProps}
-          />
+          <MarkdownPreviewSizeGate content={modifiedDiffContent} isDiff>
+            <MarkdownPreview
+              key={`${viewStateScopeId}:${diffViewStateKey}`}
+              content={modifiedDiffContent}
+              filePath={activeFile.filePath}
+              sourceFileId={activeFile.id}
+              sourceWorktreeId={activeFile.worktreeId}
+              sourceRuntimeEnvironmentId={activeFile.runtimeEnvironmentId}
+              scrollCacheKey={`${diffViewStateKey}:preview`}
+              showTableOfContents={showMarkdownTableOfContents}
+              onCloseTableOfContents={onCloseMarkdownTableOfContents}
+              markdownAnnotationsEnabled={markdownAnnotationsEnabled}
+              {...markdownDocuments.previewProps}
+            />
+          </MarkdownPreviewSizeGate>
         </div>
       </div>
     )
@@ -140,7 +143,7 @@ export function EditorDiffFileSurface({
   const modifiedModelKey = `${diffViewStateKey}:modified:${getDiffContentSignature(diffContent.modifiedContent)}:${diffReloadNonce}`
   const diffViewer = (
     <DiffViewer
-      // Why: content refreshes via modifiedModelKey; keying off content too would remount Monaco and flash on every save.
+      // Refresh through modifiedModelKey; keying the widget by content would remount and flash on save.
       key={`${viewStateScopeId}:${diffReloadNonce}`}
       modelKey={diffViewStateKey}
       originalModelKey={originalModelKey}
@@ -163,7 +166,7 @@ export function EditorDiffFileSurface({
     return diffViewer
   }
   return (
-    // Why: parent isn't a flex container, so flex-1 collapses to 0px — use h-full here and a flex column inside.
+    // The parent is not flex; h-full prevents zero-height collapse.
     <div className="flex h-full min-h-0 flex-col">
       {externalChangeBanner}
       <div className="flex min-h-0 flex-1 flex-col">{diffViewer}</div>

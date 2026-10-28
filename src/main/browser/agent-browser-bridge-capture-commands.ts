@@ -3,8 +3,10 @@ import type { BrowserScreenshotResult, BrowserEvalResult } from '../../shared/ru
 import { BrowserError } from './cdp-bridge'
 import { captureFullPageScreenshot } from './cdp-screenshot'
 import { acquireElectronDebugger } from './electron-debugger-lease'
+import { sendGuestCdpCommand } from './guest-cdp-command'
 import { AgentBrowserBridgeUtilityCommands } from './agent-browser-bridge-utility-commands'
 import { ORCA_TAB_SESSION_PREFIX } from './agent-browser-orphan-sweep'
+import { captureRemoteCliBrowserWorkBound } from '../runtime/desktop-browser-bridge/remote-cli-browser-scope'
 
 export abstract class AgentBrowserBridgeCaptureCommands extends AgentBrowserBridgeUtilityCommands {
   async screenshot(
@@ -12,15 +14,17 @@ export abstract class AgentBrowserBridgeCaptureCommands extends AgentBrowserBrid
     worktreeId?: string,
     browserPageId?: string
   ): Promise<BrowserScreenshotResult> {
-    // Why: agent-browser writes the screenshot to a temp file and returns its path; read it and return base64.
-    return this.enqueueTargetedCommand(
-      worktreeId,
-      browserPageId,
-      async (sessionName) => {
-        return this.captureScreenshotCommand(sessionName, ['screenshot'], 300, format)
-      },
-      { ensureVisible: false }
-    )
+    const screenshotFormat = format === 'jpeg' ? 'jpeg' : 'png'
+    return this.enqueueTargetedCommand(worktreeId, browserPageId, async (sessionName) => {
+      return this.readScreenshotFromResult(
+        await this.execAgentBrowser(
+          sessionName,
+          ['screenshot', '--screenshot-format', screenshotFormat],
+          { cliArgv: true }
+        ),
+        screenshotFormat
+      )
+    })
   }
 
   async fullPageScreenshot(
@@ -28,19 +32,16 @@ export abstract class AgentBrowserBridgeCaptureCommands extends AgentBrowserBrid
     worktreeId?: string,
     browserPageId?: string
   ): Promise<BrowserScreenshotResult> {
-    return this.enqueueTargetedCommand(
-      worktreeId,
-      browserPageId,
-      async (sessionName, target) => {
-        return this.captureFullPageScreenshotCommand(
-          sessionName,
-          target.webContentsId,
-          500,
-          format === 'jpeg' ? 'jpeg' : 'png'
+    return this.enqueueTargetedCommand(worktreeId, browserPageId, async (_sessionName, target) => {
+      const wc = this.requireTargetWebContents(target)
+      try {
+        return await captureFullPageScreenshot(wc, format === 'jpeg' ? 'jpeg' : 'png', () =>
+          this.browserManager.holdPaintForCapture(target.webContentsId)
         )
-      },
-      { ensureVisible: false }
-    )
+      } catch (error) {
+        throw new BrowserError('browser_error', (error as Error).message)
+      }
+    })
   }
 
   private readScreenshotFromResult(raw: unknown, format?: string): BrowserScreenshotResult {
@@ -55,74 +56,13 @@ export abstract class AgentBrowserBridgeCaptureCommands extends AgentBrowserBrid
     return { data, format: format === 'jpeg' ? 'jpeg' : 'png' } as BrowserScreenshotResult
   }
 
-  private async captureScreenshotCommand(
-    sessionName: string,
-    commandArgs: string[],
-    settleMs: number,
-    format?: string
-  ): Promise<BrowserScreenshotResult> {
-    return this.withSerializedScreenshotAccess(async () => {
-      const session = this.sessions.get(sessionName)
-      const restore = session
-        ? await this.browserManager.acquireAutomationVisibility(session.webContentsId)
-        : () => {}
-      try {
-        // Why: let the compositor settle to a painted frame after the lease, inside the screenshot lock so another tab can't change lease state first.
-        await new Promise((r) => setTimeout(r, settleMs))
-        const raw = await this.execAgentBrowser(sessionName, commandArgs)
-        return this.readScreenshotFromResult(raw, format)
-      } finally {
-        restore()
-      }
-    })
-  }
-
-  private async captureFullPageScreenshotCommand(
-    sessionName: string,
-    webContentsId: number,
-    settleMs: number,
-    format: 'png' | 'jpeg'
-  ): Promise<BrowserScreenshotResult> {
-    return this.withSerializedScreenshotAccess(async () => {
-      const session = this.sessions.get(sessionName)
-      const restore = session
-        ? await this.browserManager.acquireAutomationVisibility(session.webContentsId)
-        : () => {}
-      try {
-        // Why: the guest compositor needs a beat to paint a fresh frame after becoming paintable, or CDP captures a stale surface.
-        await new Promise((r) => setTimeout(r, settleMs))
-        const wc = this.getWebContents(webContentsId)
-        if (!wc) {
-          throw new BrowserError('browser_tab_not_found', 'Tab is no longer available')
-        }
-        return await captureFullPageScreenshot(wc, format)
-      } catch (error) {
-        throw new BrowserError('browser_error', (error as Error).message)
-      } finally {
-        restore()
-      }
-    })
-  }
-
-  private async withSerializedScreenshotAccess<T>(execute: () => Promise<T>): Promise<T> {
-    const previousTurn = this.screenshotTurn.catch(() => {})
-    let releaseTurn!: () => void
-    this.screenshotTurn = new Promise<void>((resolve) => {
-      releaseTurn = resolve
-    })
-    await previousTurn
-    try {
-      return await execute()
-    } finally {
-      releaseTurn()
-    }
-  }
-
   async evaluate(
     expression: string,
     worktreeId?: string,
     browserPageId?: string
   ): Promise<BrowserEvalResult> {
+    // Capture the host's scope before the queue can run this command elsewhere.
+    const bound = captureRemoteCliBrowserWorkBound()
     return this.enqueueTargetedCommand(
       worktreeId,
       browserPageId,
@@ -131,11 +71,15 @@ export abstract class AgentBrowserBridgeCaptureCommands extends AgentBrowserBrid
         let releaseDebugger = (): void => {}
         try {
           releaseDebugger = acquireElectronDebugger(wc).release
-          const { result, exceptionDetails } = (await wc.debugger.sendCommand('Runtime.evaluate', {
-            expression,
-            returnByValue: true,
-            awaitPromise: true
-          })) as {
+          // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Runtime.evaluate with returnByValue always answers this CDP shape; unchanged from before the bound.
+          const { result, exceptionDetails } = (await bound(
+            sendGuestCdpCommand(wc, 'Runtime.evaluate', {
+              expression,
+              returnByValue: true,
+              awaitPromise: true
+            }),
+            () => void wc.debugger.sendCommand('Runtime.terminateExecution').catch(() => {})
+          )) as {
             result: { value?: unknown; description?: string }
             exceptionDetails?: { text: string; exception?: { description?: string } }
           }

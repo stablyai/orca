@@ -3,7 +3,7 @@ import { useShallow } from 'zustand/react/shallow'
 import { useAppStore } from '@/store'
 import { isExplicitAgentStatusFresh } from '@/lib/agent-status'
 import type { DashboardAgentRow } from './useDashboardData'
-import type { RetainedAgentEntry } from '@/store/slices/agent-status'
+import type { RetainedAgentEntry } from '@/store/slices/agent-status/agent-status-contract'
 import type { FolderWorkspace } from '../../../../shared/folder-workspace-types'
 import type { Repo } from '../../../../shared/repo-types'
 import type { TerminalTab } from '../../../../shared/terminal-tab-types'
@@ -15,16 +15,15 @@ import {
   type AgentStatusEntry
 } from '../../../../shared/agent-status-types'
 import { parsePaneKey } from '../../../../shared/stable-pane-id'
+import { agentTurnEndedOnPurpose } from '../../../../shared/agent-main-agent-verdict'
 
 import {
   createWorktreeTabBucketProjection,
   type WorktreeTabBucketProjection
 } from '@/lib/worktree-tab-bucket-projection'
-// Why: when an agent finishes or its terminal closes, the store cleans up the
-// explicit status entry and the agent vanishes from the live status set.
-// Retaining the last-known "done" snapshot in the store lets the inline
-// per-card agents list render the done row until the user dismisses it, rather
-// than having the row wink out the moment the terminal process exits.
+import { selectFolderWorkspaces, selectWorktreesByRepo } from '@/store/workspace-record-selectors'
+
+// Keep finished snapshots after live status cleanup so closed terminals’ rows remain until user dismissal.
 
 type RetainedAgentSnapshot = Map<string, { row: DashboardAgentRow; worktreeId: string }>
 
@@ -149,8 +148,8 @@ export function useRetainedAgentsSync(): void {
       (s) =>
         [
           s.repos,
-          s.worktreesByRepo,
-          s.folderWorkspaces,
+          selectWorktreesByRepo(s),
+          selectFolderWorkspaces(s),
           tabTopologyProjectionRef.current!.project(s.tabsByWorktree),
           s.agentStatusEpoch
         ] as const
@@ -162,18 +161,14 @@ export function useRetainedAgentsSync(): void {
     const state = useAppStore.getState()
     const { currentAgents, existingWorktreeIds, tabIndex } = buildRetainedAgentsSyncSnapshot({
       repos: state.repos,
-      worktreesByRepo: state.worktreesByRepo,
-      folderWorkspaces: state.folderWorkspaces,
+      worktreesByRepo: selectWorktreesByRepo(state),
+      folderWorkspaces: selectFolderWorkspaces(state),
       tabsByWorktree: state.tabsByWorktree,
       agentStatusByPaneKey: state.agentStatusByPaneKey,
       now: Date.now()
     })
 
-    // Why: read retention state via getState() after the cheap topology/epoch
-    // gate fires. Building the full retention snapshot scans all agents, so
-    // display-title-only publications must not enter this effect. The fresh
-    // store read still supplies current tab objects whenever a real topology
-    // or agent transition does run.
+    // Read current retention only after topology/epoch invalidation; title-only writes must not trigger a full agent scan.
     const { retainedAgentsByPaneKey: retainedNow, retentionSuppressedPaneKeys } = state
     const { toRetain, consumedSuppressedPaneKeys } = collectRetainedAgentsOnDisappear({
       previousAgents: prevAgentsRef.current,
@@ -184,11 +179,7 @@ export function useRetainedAgentsSync(): void {
       recentlyRetiredAgentStatusPaneKeys: state.recentlyRetiredAgentStatusPaneKeys,
       tabIndex
     })
-    // Why: batch retention into a single store mutation. Looping retainAgent
-    // would trigger N set(...) calls and N subscriber notifications when
-    // several agents vanish in the same frame (e.g. tab close, worktree
-    // teardown), exposing intermediate maps to consumers mid-loop. A single
-    // atomic update keeps the inline agents list visually stable.
+    // Retain vanished agents atomically so subscribers cannot observe intermediate maps or receive N updates per teardown.
     retainAgents(toRetain)
 
     prevAgentsRef.current = currentAgents
@@ -212,16 +203,13 @@ function sameAgentRun(
   previous: { row: DashboardAgentRow },
   current: { row: DashboardAgentRow }
 ): boolean {
-  // Why: resume identity arrives on its own IPC event, so one side can be stamped
-  // while the other is not. Only a session present on BOTH sides is decisive.
+  // Resume identity arrives independently; compare sessions only when both sides have one.
   const previousSession = previous.row.entry.providerSession
   const currentSession = current.row.entry.providerSession
   if (previousSession && currentSession) {
     return previousSession.key === currentSession.key && previousSession.id === currentSession.id
   }
-  // Why: terminalHandle identifies the TERMINAL, not the run — a later agent started
-  // in the same pty inherits it, so it only corroborates a matching run identity.
-  // It is absent for ordinary local PTY agents, so it cannot be required.
+  // Terminal handles can span runs and are absent locally; use them only to corroborate run identity.
   const previousHandle = previous.row.entry.terminalHandle
   const currentHandle = current.row.entry.terminalHandle
   if (previousHandle && currentHandle && previousHandle !== currentHandle) {
@@ -239,7 +227,7 @@ export function collectRetainedAgentsOnDisappear(args: {
   retainedAgentsByPaneKey: Record<string, RetainedAgentEntry>
   retentionSuppressedPaneKeys: Record<string, true>
   recentlyClosedAgentStatusTabIds: Record<string, true>
-  recentlyRetiredAgentStatusPaneKeys: Record<string, true>
+  recentlyRetiredAgentStatusPaneKeys: Record<string, true | string>
   /** Live tabs by id; supplies the real destination tab when a pane key transferred. */
   tabIndex?: Map<string, { tab: TerminalTab }>
 }): {
@@ -259,8 +247,7 @@ export function collectRetainedAgentsOnDisappear(args: {
     if (migrated && sameAgentRun(prev, migrated)) {
       continue
     }
-    // Why: a different run already occupies the transferred key, so this row keeps
-    // its own key rather than colliding with the live one.
+    // A different live run owns the transferred key; retain this row under its own key instead.
     const ownerPaneKey = migrated ? paneKey : transferredPaneKey
     if (
       args.recentlyRetiredAgentStatusPaneKeys[paneKey] ||
@@ -268,10 +255,7 @@ export function collectRetainedAgentsOnDisappear(args: {
     ) {
       continue
     }
-    // Why: skip only when the retained snapshot is for the SAME (or newer) run.
-    // A reused paneKey (same tab+pane, fresh agent start after a prior run was
-    // retained) produces a newer startedAt — we must overwrite so stale
-    // completion data doesn't linger forever for the reused pane.
+    // Skip only same/newer retained runs; reused pane keys must replace older completion snapshots.
     const alreadyRetained = args.retainedAgentsByPaneKey[ownerPaneKey]
     if (alreadyRetained && alreadyRetained.startedAt >= prev.row.startedAt) {
       continue
@@ -285,12 +269,9 @@ export function collectRetainedAgentsOnDisappear(args: {
       consumedSuppressedPaneKeys.push(suppressedPaneKey)
       continue
     }
-    // Why: the row must land on the surface that owns the pane now — a detach
-    // followed by a PTY exit before the next sync would otherwise retain it
-    // under the abandoned source tab.
+    // Retain under the current owner after pane transfer, including PTY exits before the next sync.
     const ownerTabId = paneKeyTabId(ownerPaneKey) ?? prev.row.tab.id
-    // Why: prefer the real destination tab — reusing the source tab's title and
-    // launchAgent under a different id would mislabel the retained row.
+    // Use the real destination tab’s title/launch identity rather than relabeling the source tab.
     const ownerTab =
       args.tabIndex?.get(ownerTabId)?.tab ??
       (ownerTabId === prev.row.tab.id ? prev.row.tab : { ...prev.row.tab, id: ownerTabId })
@@ -299,13 +280,9 @@ export function collectRetainedAgentsOnDisappear(args: {
     if (args.recentlyClosedAgentStatusTabIds[ownerTabId]) {
       continue
     }
-    // Why: only keep a sticky snapshot when the agent finished cleanly
-    // (state === 'done' and not interrupted). Explicit teardown paths mark
-    // pane keys as suppression candidates, so a close/quit/crash cannot
-    // resurrect a stale `done` row on the next sync.
+    // Retain finished/failed outcomes unless deliberately stopped; explicit teardown suppressors prevent stale done rows from resurfacing.
     const lastState = prev.row.state
-    const wasInterrupted = prev.row.entry.interrupted === true
-    if (lastState !== 'done' || wasInterrupted) {
+    if (lastState !== 'done' || agentTurnEndedOnPurpose(prev.row.entry)) {
       continue
     }
     toRetain.push({

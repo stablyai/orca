@@ -1,9 +1,4 @@
-/**
- * Attachment-leak regression: an attachment that outlives its transport leaves the session looking
- * viewed forever — producer pause/resume and any attachment-gated behavior then act on a client that
- * no longer exists. A dropped client transport must release exactly that client's attachments, and
- * protocol detach must really detach (it was previously logging-only).
- */
+import './mock-descendant-sweep'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -82,14 +77,13 @@ describe('transport-drop attachment release', () => {
     expect(session).toBeDefined()
     expect(session!.hasAttachedClients).toBe(true)
 
-    // Drop the transport without any protocol detach — the crash/abrupt-exit case.
+    // Simulate abrupt transport loss without a protocol detach.
     const client = (adapter as unknown as { client: { disconnect(): void } }).client
     client.disconnect()
 
     await vi.waitFor(() => {
       expect(session!.hasAttachedClients).toBe(false)
     })
-    // The session itself must survive the disconnect — only the attachment is released.
     expect(session!.isAlive).toBe(true)
   })
 })

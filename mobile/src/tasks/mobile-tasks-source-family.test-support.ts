@@ -1,13 +1,12 @@
 import { readFileSync, readdirSync } from 'node:fs'
 import { join } from 'node:path'
-import ts from 'typescript'
+import ts from 'typescript-api'
 
 const TASKS_DIRECTORY = __dirname
-const TASKS_ROUTE = '../../app/h/[hostId]/tasks.tsx'
 const SOURCE_PATTERN = /^(?:MobileTasks.*\.tsx|mobile-tasks-.*\.tsx?|use-mobile-tasks-.*\.tsx?)$/
 
+// Audit the extracted Tasks screen via the pattern; its shell-flag route has no hooks and belongs to the flag census.
 export const MOBILE_TASKS_SOURCE_FILES = [
-  TASKS_ROUTE,
   ...readdirSync(TASKS_DIRECTORY)
     .filter(
       (name) =>

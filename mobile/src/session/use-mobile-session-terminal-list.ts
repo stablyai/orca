@@ -1,12 +1,12 @@
 import { useRef, useCallback, useEffect, useMemo } from 'react'
-import type { RpcSuccess } from '../transport/types'
+import { sessionTerminalListRead } from './mobile-session-read-operations'
+import type { Terminal } from './mobile-session-route-types'
 import { mergeTerminalListWithKnownRecords, terminalRecordsEqual } from './mobile-terminal-records'
 import {
   createTerminalPrunePredicate,
   pruneTerminalKeyboardMetrics,
   resolveRetainedTerminalHandles
 } from './mobile-terminal-prune-decision'
-import type { Terminal } from './mobile-session-route-types'
 import type { MobileSessionTerminalStreamDisplayModel } from './use-mobile-session-terminal-stream-display'
 import { MobileTerminalInventoryRequest } from './mobile-terminal-inventory-request'
 import type { MobileTerminalInventoryRefreshOptions } from './use-mobile-terminal-inventory-recovery'
@@ -25,7 +25,6 @@ export function useMobileSessionTerminalList(scope: MobileSessionTerminalStreamD
     setTerminalKeyboardMetrics,
     terminalRefs,
     terminalUnsubsRef,
-    initializedHandlesRef,
     viewportResubscribeBudgetRef,
     activeHandleRef,
     showNativeChatRef,
@@ -54,18 +53,21 @@ export function useMobileSessionTerminalList(scope: MobileSessionTerminalStreamD
         allowEmptyLoaded,
         async (allowsEmpty, isCurrent) => {
           try {
-            const response = await client.sendRequest('terminal.list', {
-              worktree: `id:${worktreeId}`,
-              includeVisualLayouts: false
-            })
-            if (!isCurrent() || !response.ok) {
+            const response = sessionTerminalListRead.interpret(
+              await sessionTerminalListRead.request(client, {
+                worktree: `id:${worktreeId}`,
+                includeVisualLayouts: false
+              })
+            )
+            if (!isCurrent() || !response.accepted) {
               return false
             }
-            const result = (response as RpcSuccess).result as { terminals: Terminal[] }
+            // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the reader checked the array and each row's handle; the rest of a row is the host's terminal record, which this module reads but does not re-declare.
+            const result = response.value as { terminals: Terminal[] }
             if (result.terminals.length === 0 && !allowsEmpty()) {
               return true
             }
-            // Why: require two consecutive empties before trusting 0, so transient empty responses don't flash the UI empty.
+            // Require consecutive empty inventories so transient omissions cannot flash the screen empty.
             if (result.terminals.length === 0 && lastKnownTerminalCountRef.current > 0) {
               lastKnownTerminalCountRef.current = 0
               return true
@@ -77,10 +79,7 @@ export function useMobileSessionTerminalList(scope: MobileSessionTerminalStreamD
               showNativeChat: showNativeChatRef.current,
               activeHandle: activeHandleRef.current
             }
-            // Why: terminal.list is the lifetime signal; lagging tab snapshots must not erase a user's buffered-mode opt-out.
-            // Sweep against the retained set, not the raw list: a chat-covered handle
-            // keeps its subscription across a graph reload, so erasing its live-input
-            // preference on the same refresh is the erasure this guard exists to stop.
+            // Sweep preferences against retained subscriptions, not transient list omissions, so chat leases keep their live-input opt-out.
             const retainedHandles = resolveRetainedTerminalHandles(pruneContext)
             pruneTerminalHandlesFromLiveInput(retainedHandles)
             bufferedTerminalDraftState.pruneDrafts(retainedHandles)
@@ -92,19 +91,16 @@ export function useMobileSessionTerminalList(scope: MobileSessionTerminalStreamD
               }
               unsubscribeTerminal(handle)
               terminalRefs.current.delete(handle)
-              initializedHandlesRef.current.delete(handle)
               viewportResubscribeBudgetRef.current.forget(handle)
               clearTerminalLiveInputDefault(handle)
             }
             setTerminalKeyboardMetrics((prev) => pruneTerminalKeyboardMetrics(prev, shouldPrune))
-            // Why: a chat-covered handle the host reports again refills its rearm budget,
-            // so an exhausted rearm can't lock the composer until leave-chat.
+            // Reappearing handles may have live PTYs and earn a fresh chat rearm budget.
             nativeChatStream.notifyListedHandles(liveHandles)
-            // Why: same absence-gated refill for the viewport-fit budget — a handle that
-            // left the list and returned may converge now, so it earns fresh attempts.
+            // Refill viewport attempts only after real handle absence and return.
             viewportResubscribeBudgetRef.current.notifyListedHandles(liveHandles)
             lastKnownTerminalCountRef.current = result.terminals.length
-            // Why: dedupe duplicate handles (rename/split race) to avoid a React duplicate-key throw; keep first for tab-strip order.
+            // Dedupe handles from rename/split races before React sees duplicate keys; preserve first-seen strip order.
             const seen = new Set<string>()
             const deduped = result.terminals.filter((t) => {
               if (seen.has(t.handle)) {
@@ -124,7 +120,7 @@ export function useMobileSessionTerminalList(scope: MobileSessionTerminalStreamD
             )
             terminalsRef.current = mergedTerminals
 
-            // Session tabs are the UI authority; terminal.list only refreshes per-handle metadata for existing terminal surfaces.
+            // Session tabs own surfaces; inventory refreshes only existing terminals’ metadata.
             return true
           } catch {
             // Failed to list terminals

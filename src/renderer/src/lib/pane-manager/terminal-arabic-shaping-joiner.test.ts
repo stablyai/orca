@@ -4,28 +4,8 @@ import {
   configureLazyArabicShapingJoiner,
   ensureArabicShapingJoinerForText,
   findRtlJoinRanges,
-  isStrongRtlCodePoint,
   registerArabicShapingJoiner
 } from './terminal-arabic-shaping-joiner'
-
-describe('isStrongRtlCodePoint', () => {
-  it('classifies Arabic and Hebrew letters as strong RTL', () => {
-    expect(isStrongRtlCodePoint('م'.codePointAt(0)!)).toBe(true)
-    expect(isStrongRtlCodePoint('ش'.codePointAt(0)!)).toBe(true)
-    expect(isStrongRtlCodePoint('א'.codePointAt(0)!)).toBe(true)
-    // Arabic presentation forms (legacy shaped codepoints).
-    expect(isStrongRtlCodePoint(0xfe8d)).toBe(true)
-    // Adlam (supplementary plane).
-    expect(isStrongRtlCodePoint(0x1e900)).toBe(true)
-  })
-
-  it('does not classify Latin, box drawing, CJK, or emoji as RTL', () => {
-    expect(isStrongRtlCodePoint('a'.codePointAt(0)!)).toBe(false)
-    expect(isStrongRtlCodePoint('│'.codePointAt(0)!)).toBe(false)
-    expect(isStrongRtlCodePoint('漢'.codePointAt(0)!)).toBe(false)
-    expect(isStrongRtlCodePoint(0x1f600)).toBe(false)
-  })
-})
 
 describe('findRtlJoinRanges', () => {
   it('returns no ranges for plain ASCII text', () => {
@@ -129,8 +109,7 @@ describe('findRtlJoinRanges', () => {
   const LRM = '\u200e'
 
   it('tunnels through ZWNJ inside a Persian word without splitting the run', () => {
-    // می‌خواهم — splitting at the ZWNJ would render the word halves in
-    // swapped visual order.
+    // Splitting at ZWNJ in می‌خواهم would swap the word halves visually.
     const text = `می${ZWNJ}خواهم`
     expect(findRtlJoinRanges(text)).toEqual([[0, text.length]])
   })
@@ -169,8 +148,7 @@ describe('findRtlJoinRanges', () => {
   })
 
   it('does not open a run at orphan combining marks after an LTR base', () => {
-    // Marks render inside their base's cell; a run opened mid-cell maps to an
-    // empty joined cell range that blanks the following glyph in WebGL.
+    // Combining marks share their base cell; starting a run there yields an empty joined range that blanks the next WebGL glyph.
     expect(findRtlJoinRanges('a\u064b\u0651b')).toEqual([])
     expect(findRtlJoinRanges('x\u05b0\u05b1y')).toEqual([])
   })
@@ -181,9 +159,7 @@ describe('findRtlJoinRanges', () => {
   })
 
   it('does not open a run at zero-width Cf controls after an LTR base', () => {
-    // BOM/ZWNBSP and Arabic number signs are width-0 in xterm, so like
-    // combining marks a run opened there maps to an empty joined cell range
-    // that blanks the following glyph in WebGL.
+    // BOM/ZWNBSP and Arabic number signs have width zero; opening there also creates an empty joined range that blanks the next glyph.
     const BOM = '\ufeff'
     expect(findRtlJoinRanges(`a${BOM}${BOM}b`)).toEqual([])
     expect(findRtlJoinRanges('x\u0600\u0602y')).toEqual([])
@@ -249,6 +225,18 @@ describe('registerArabicShapingJoiner', () => {
     webglLive = true
     expect(handler('مرحبا')).toEqual([[0, 5]])
   })
+
+  it('returns RTL runs and Indic clusters from one handler in start order', () => {
+    const host = createJoinerHost()
+    registerArabicShapingJoiner(host.terminal, () => true)
+
+    expect(host.getRegistered()!('বাংলা مرحبا কি')).toEqual([
+      [0, 3],
+      [3, 5],
+      [6, 11],
+      [12, 14]
+    ])
+  })
 })
 
 describe('configureLazyArabicShapingJoiner', () => {
@@ -277,6 +265,60 @@ describe('configureLazyArabicShapingJoiner', () => {
     expect(host.events).toEqual([])
     expect(host.getHandler()).toBeNull()
     cleanup()
+    expect(host.events).toEqual([])
+  })
+
+  it('registers before the first Bengali write and shapes its clusters', () => {
+    const host = createLazyHost()
+    configureLazyArabicShapingJoiner(host.terminal, () => true)
+
+    ensureArabicShapingJoinerForText(host.terminal, 'আমি দেখি')
+
+    expect(host.events).toEqual(['register'])
+    expect(host.getHandler()!('আমি দেখি')).toEqual([
+      [1, 3],
+      [4, 6],
+      [6, 8]
+    ])
+  })
+
+  it('does not register for Indic text that needs no joining', () => {
+    const host = createLazyHost()
+    configureLazyArabicShapingJoiner(host.terminal, () => true)
+
+    ensureArabicShapingJoinerForText(host.terminal, '১২৩ কু ।')
+
+    expect(host.events).toEqual([])
+  })
+
+  it('registers when a Bengali spacing vowel sign arrives in the next write', () => {
+    const host = createLazyHost()
+    configureLazyArabicShapingJoiner(host.terminal, () => true)
+
+    ensureArabicShapingJoinerForText(host.terminal, 'ক')
+    expect(host.events).toEqual([])
+    ensureArabicShapingJoinerForText(host.terminal, 'ি')
+
+    expect(host.events).toEqual(['register'])
+  })
+
+  it('registers when a conjunct is split after the virama', () => {
+    const host = createLazyHost()
+    configureLazyArabicShapingJoiner(host.terminal, () => true)
+
+    ensureArabicShapingJoinerForText(host.terminal, 'ক্')
+    ensureArabicShapingJoinerForText(host.terminal, 'ষ')
+
+    expect(host.events).toEqual(['register'])
+  })
+
+  it('does not carry an Indic tail across an ASCII write', () => {
+    const host = createLazyHost()
+    configureLazyArabicShapingJoiner(host.terminal, () => true)
+
+    ensureArabicShapingJoinerForText(host.terminal, 'ক')
+    ensureArabicShapingJoinerForText(host.terminal, ' ি')
+
     expect(host.events).toEqual([])
   })
 

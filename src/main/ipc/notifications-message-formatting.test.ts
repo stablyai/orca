@@ -26,12 +26,6 @@ vi.mock('../tray/system-tray', async () =>
 import { registerNotificationHandlers } from './notifications'
 
 describe('registerNotificationHandlers', () => {
-  function expectedNativeNotificationOptions<T extends Record<string, unknown>>(
-    options: T
-  ): T & { sound?: string } {
-    return process.platform === 'darwin' ? { ...options, sound: 'default' } : options
-  }
-
   beforeEach(() => {
     vi.useFakeTimers()
     vi.setSystemTime(new Date('2026-03-28T16:00:00Z'))
@@ -57,12 +51,10 @@ describe('registerNotificationHandlers', () => {
         { source: 'agent-task-complete', repoLabel: 'orca', worktreeLabel: 'feat/notis' }
       )
     ).toEqual({ delivered: true })
-    expect(notificationCtorMock).toHaveBeenCalledWith(
-      expectedNativeNotificationOptions({
-        title: 'Task complete in feat/notis',
-        body: 'orca'
-      })
-    )
+    expect(notificationCtorMock).toHaveBeenCalledWith({
+      title: 'Task complete in feat/notis',
+      body: 'orca'
+    })
     expect(notificationShowMock).toHaveBeenCalledTimes(1)
   })
 
@@ -96,50 +88,49 @@ describe('registerNotificationHandlers', () => {
       )
     ).toEqual({ delivered: true })
 
-    expect(notificationCtorMock).toHaveBeenCalledWith(
-      expectedNativeNotificationOptions({
-        title: 'feat/notis - Codex finished',
-        body: 'Updated the notification body.'
-      })
-    )
+    expect(notificationCtorMock).toHaveBeenCalledWith({
+      title: 'orca / feat/notis - Codex finished',
+      body: 'Updated the notification body.'
+    })
   })
 
-  it('includes the repo name when multiple repos are active', async () => {
-    registerNotificationHandlers({
-      getSettings: () => ({
-        notifications: {
-          enabled: true,
-          agentTaskComplete: true,
-          terminalBell: false,
-          suppressWhenFocused: true
-        }
-      })
-    } as never)
+  it.each([true, false, undefined])(
+    'includes the repo name regardless of the legacy multiple-repo flag (%s)',
+    async (hasMultipleActiveRepos) => {
+      registerNotificationHandlers({
+        getSettings: () => ({
+          notifications: {
+            enabled: true,
+            agentTaskComplete: true,
+            terminalBell: false,
+            suppressWhenFocused: true
+          }
+        })
+      } as never)
 
-    const handler = getDispatchHandler()
-    expect(
-      await handler(
-        {},
-        {
-          source: 'agent-task-complete',
-          worktreeId: 'repo::wt1',
-          worktreeLabel: 'feat/notis',
-          repoLabel: 'orca',
-          hasMultipleActiveRepos: true,
-          agentType: 'codex',
-          agentState: 'done',
-          agentLastAssistantMessage: 'Updated the notification body.'
-        }
-      )
-    ).toEqual({ delivered: true })
+      const handler = getDispatchHandler()
+      expect(
+        await handler(
+          {},
+          {
+            source: 'agent-task-complete',
+            worktreeId: 'repo::wt1',
+            worktreeLabel: 'feat/notis',
+            repoLabel: 'orca',
+            hasMultipleActiveRepos,
+            agentType: 'codex',
+            agentState: 'done',
+            agentLastAssistantMessage: 'Updated the notification body.'
+          }
+        )
+      ).toEqual({ delivered: true })
 
-    expect(notificationCtorMock).toHaveBeenCalledWith(
-      expectedNativeNotificationOptions({
+      expect(notificationCtorMock).toHaveBeenCalledWith({
         title: 'orca / feat/notis - Codex finished',
         body: 'Updated the notification body.'
       })
-    )
-  })
+    }
+  )
 
   it('keeps a readable body when no assistant response was captured', async () => {
     registerNotificationHandlers({
@@ -170,12 +161,42 @@ describe('registerNotificationHandlers', () => {
       )
     ).toEqual({ delivered: true })
 
-    expect(notificationCtorMock).toHaveBeenCalledWith(
-      expectedNativeNotificationOptions({
-        title: 'jinjing-work / main - Claude finished',
-        body: 'Claude finished.'
+    expect(notificationCtorMock).toHaveBeenCalledWith({
+      title: 'jinjing-work / main - Claude finished',
+      body: 'Claude finished.'
+    })
+  })
+
+  it.each([
+    { agentType: 'opencode2', label: 'OpenCode 2' },
+    { agentType: 'copilot', label: 'GitHub Copilot' }
+  ])('names $agentType the way the app does', async ({ agentType, label }) => {
+    registerNotificationHandlers({
+      getSettings: () => ({
+        notifications: {
+          enabled: true,
+          agentTaskComplete: true,
+          terminalBell: false,
+          suppressWhenFocused: true
+        }
       })
+    } as never)
+
+    await getDispatchHandler()(
+      {},
+      {
+        source: 'agent-task-complete',
+        worktreeId: 'repo::wt1',
+        worktreeLabel: 'feat/notis',
+        agentType,
+        agentState: 'done'
+      }
     )
+
+    expect(notificationCtorMock).toHaveBeenCalledWith({
+      title: `feat/notis - ${label} finished`,
+      body: `${label} finished.`
+    })
   })
 
   it('formats blocked and interrupted agent snapshots distinctly', async () => {
@@ -214,26 +235,20 @@ describe('registerNotificationHandlers', () => {
           worktreeLabel: 'feat/notis',
           agentType: 'claude',
           agentState: 'done',
-          agentInterrupted: true,
+          agentTurnOutcome: 'cancellation',
           agentLastAssistantMessage: 'Stopped by user.'
         }
       )
     ).toEqual({ delivered: true })
 
-    expect(notificationCtorMock).toHaveBeenNthCalledWith(
-      1,
-      expectedNativeNotificationOptions({
-        title: 'feat/notis - Claude needs input',
-        body: 'Please approve the command.'
-      })
-    )
-    expect(notificationCtorMock).toHaveBeenNthCalledWith(
-      2,
-      expectedNativeNotificationOptions({
-        title: 'feat/notis - Claude stopped',
-        body: 'Stopped by user.'
-      })
-    )
+    expect(notificationCtorMock).toHaveBeenNthCalledWith(1, {
+      title: 'feat/notis - Claude needs input',
+      body: 'Please approve the command.'
+    })
+    expect(notificationCtorMock).toHaveBeenNthCalledWith(2, {
+      title: 'feat/notis - Claude stopped',
+      body: 'Stopped by user.'
+    })
   })
 
   it('normalizes custom agent labels and re-bounds multiline assistant previews', async () => {
@@ -278,6 +293,105 @@ describe('registerNotificationHandlers', () => {
     expect(options.body.length).toBeLessThanOrEqual(180)
   })
 
+  it.each([
+    { agentState: 'working', expected: 'feat/notis - Claude working' },
+    { agentState: 'blocked', expected: 'feat/notis - Claude needs input' },
+    { agentState: 'waiting', expected: 'feat/notis - Claude needs input' },
+    { agentState: 'done', expected: 'feat/notis - Claude finished' },
+    { agentState: undefined, expected: 'feat/notis - Claude finished' }
+  ])('titles agentState $agentState without claiming a false finish', async (scenario) => {
+    registerNotificationHandlers({
+      getSettings: () => ({
+        notifications: {
+          enabled: true,
+          agentTaskComplete: true,
+          terminalBell: false,
+          suppressWhenFocused: true
+        }
+      })
+    } as never)
+
+    const handler = getDispatchHandler()
+    await handler(
+      {},
+      {
+        source: 'agent-task-complete',
+        worktreeLabel: 'feat/notis',
+        agentType: 'claude',
+        ...(scenario.agentState ? { agentState: scenario.agentState } : {}),
+        agentLastAssistantMessage: 'Ran the suite.'
+      }
+    )
+
+    expect(notificationCtorMock).toHaveBeenCalledWith({
+      title: scenario.expected,
+      body: 'Ran the suite.'
+    })
+  })
+
+  it.each([
+    { agentTurnOutcome: 'cancellation', word: 'stopped' },
+    { agentTurnOutcome: 'failure', word: 'failed' },
+    // A turn cut short by anything but the user is a fault, worded as one.
+    { agentTurnOutcome: 'interruption', word: 'failed' },
+    { agentTurnOutcome: 'unconfirmed', word: 'stopped' },
+    { agentTurnOutcome: 'superseded', word: 'stopped' },
+    { agentTurnOutcome: 'success', word: 'finished' },
+    { agentTurnOutcome: undefined, word: 'finished' }
+  ] as const)('words a $agentTurnOutcome finish as $word', async ({ agentTurnOutcome, word }) => {
+    registerNotificationHandlers({
+      getSettings: () => ({
+        notifications: {
+          enabled: true,
+          agentTaskComplete: true,
+          terminalBell: false,
+          suppressWhenFocused: true
+        }
+      })
+    } as never)
+
+    const handler = getDispatchHandler()
+    await handler(
+      {},
+      {
+        source: 'agent-task-complete',
+        worktreeLabel: 'feat/notis',
+        agentType: 'claude',
+        agentState: 'done',
+        ...(agentTurnOutcome ? { agentTurnOutcome } : {})
+      }
+    )
+
+    expect(notificationCtorMock).toHaveBeenCalledWith({
+      title: `feat/notis - Claude ${word}`,
+      body: `Claude ${word}.`
+    })
+  })
+
+  it('counts a success verdict alone as an agent snapshot', async () => {
+    registerNotificationHandlers({
+      getSettings: () => ({
+        notifications: {
+          enabled: true,
+          agentTaskComplete: true,
+          terminalBell: false,
+          suppressWhenFocused: true
+        }
+      })
+    } as never)
+
+    const handler = getDispatchHandler()
+    await handler(
+      {},
+      { source: 'agent-task-complete', worktreeLabel: 'feat/notis', agentTurnOutcome: 'success' }
+    )
+
+    expect(notificationCtorMock).toHaveBeenCalledWith({
+      title: 'feat/notis - Agent finished',
+      body: 'Agent finished.'
+    })
+  })
+
   it('uses tool context before falling back when no prompt or assistant preview exists', async () => {
     registerNotificationHandlers({
       getSettings: () => ({
@@ -306,11 +420,9 @@ describe('registerNotificationHandlers', () => {
       )
     ).toEqual({ delivered: true })
 
-    expect(notificationCtorMock).toHaveBeenCalledWith(
-      expectedNativeNotificationOptions({
-        title: 'feat/notis - Agent finished',
-        body: 'Using Bash: pnpm test'
-      })
-    )
+    expect(notificationCtorMock).toHaveBeenCalledWith({
+      title: 'feat/notis - Agent working',
+      body: 'Using Bash: pnpm test'
+    })
   })
 })

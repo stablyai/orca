@@ -1,4 +1,8 @@
+import { requestSessionSearchRoots } from './session-scanner-service-root-request'
+import { aiVaultScanWork, trackAiVaultScanProgress } from './ai-vault-scan-progress'
+import type { AiVaultScanWork } from '../../shared/ai-vault-scan-progress'
 import type { AiVaultSessionTitle } from '../../shared/ai-vault-session-title'
+import type { AiVaultListResult } from '../../shared/ai-vault-types'
 import { readAiVaultFirstUserPrompt } from './session-first-user-prompt-read'
 import {
   flushSessionParseCachePersist,
@@ -6,6 +10,7 @@ import {
 } from './session-parse-cache-persistence'
 import { scanAiVaultSessions } from './session-scanner'
 import { invalidateSessionParseCacheEntry } from './session-scanner-parse-cache'
+import { SessionScannerServiceSearch } from './session-scanner-service-search'
 import {
   AI_VAULT_SERVICE_PROTOCOL_VERSION,
   aiVaultServiceLane,
@@ -29,6 +34,7 @@ const cancelled = new Set<number>()
 const pending = new Set<number>()
 const titleIndex = new Map<string, AiVaultSessionTitle>()
 const invalidatedPaths = new Set<string>()
+const sessionSearch = new SessionScannerServiceSearch(requestSessionSearchRoots)
 let initialized = false
 let shuttingDown = false
 let cacheLane = Promise.resolve()
@@ -42,7 +48,30 @@ function titleKey(request: { agent: string; sessionId: string }): string {
   return `${request.agent}\0${request.sessionId}`
 }
 
+async function scanReportingProgress(
+  request: Extract<AiVaultServiceRequest, { operation: 'scan' }>,
+  signal: AbortSignal
+): Promise<{ result: AiVaultListResult; work: AiVaultScanWork | null }> {
+  const stopProgress = trackAiVaultScanProgress(signal, (work) =>
+    send({ type: 'progress', id: request.id, work })
+  )
+  try {
+    const result = await scanAiVaultSessions({ ...request.options, signal })
+    return { result, work: aiVaultScanWork(signal) }
+  } finally {
+    stopProgress()
+  }
+}
+
 async function executeRequest(request: AiVaultServiceRequest): Promise<AiVaultServiceResultValue> {
+  if (sessionSearch.handles(request)) {
+    try {
+      return await sessionSearch.execute(request)
+    } finally {
+      // Search has no controller to consume cancellation; discard its id here.
+      cancelled.delete(request.id)
+    }
+  }
   const controller = new AbortController()
   controllers.set(request.id, controller)
   try {
@@ -78,7 +107,7 @@ async function executeRequest(request: AiVaultServiceRequest): Promise<AiVaultSe
       }
     }
     const startedAt = performance.now()
-    const result = await scanAiVaultSessions({ ...request.options, signal: controller.signal })
+    const { result, work } = await scanReportingProgress(request, controller.signal)
     for (const session of result.sessions) {
       if ((session.agent === 'claude' || session.agent === 'codex') && session.title.trim()) {
         cacheServiceTitle(titleIndex, {
@@ -90,7 +119,7 @@ async function executeRequest(request: AiVaultServiceRequest): Promise<AiVaultSe
     }
     return {
       operation: 'scan',
-      value: { result, durationMs: performance.now() - startedAt }
+      value: { result, durationMs: performance.now() - startedAt, work }
     }
   } finally {
     controllers.delete(request.id)
@@ -98,9 +127,7 @@ async function executeRequest(request: AiVaultServiceRequest): Promise<AiVaultSe
     for (const path of invalidatedPaths) {
       invalidateSessionParseCacheEntry(path)
     }
-    // Why: the re-apply only protects reads that overlapped the invalidation.
-    // Once nothing else is executing it has done its job, and holding the paths
-    // would re-evict them on every later request for the life of the process.
+    // Stop re-evicting paths once every read that could overlap the invalidation has finished.
     if (controllers.size === 0) {
       invalidatedPaths.clear()
     }
@@ -149,6 +176,7 @@ async function shutdown(): Promise<void> {
   for (const controller of controllers.values()) {
     controller.abort()
   }
+  sessionSearch.close()
   await Promise.allSettled([cacheLane, interactiveLane])
   await flushSessionParseCachePersist()
   process.disconnect?.()
@@ -164,13 +192,23 @@ process.on('message', (raw: AiVaultServiceParentMessage) => {
     if (raw.sessionParseCache) {
       initSessionParseCachePersistence(raw.sessionParseCache)
     }
-    send({ type: 'ready', protocol: AI_VAULT_SERVICE_PROTOCOL_VERSION, pid: process.pid })
+    if (raw.sessionSearch) {
+      sessionSearch.apply(raw.sessionSearch)
+    }
+    send({
+      type: 'ready',
+      protocol: AI_VAULT_SERVICE_PROTOCOL_VERSION,
+      pid: process.pid
+    })
     return
   }
   if (!initialized || shuttingDown) {
     return
   }
   if (raw?.type === 'cancel') {
+    if (!pending.has(raw.id)) {
+      return
+    }
     cancelled.add(raw.id)
     controllers.get(raw.id)?.abort()
     return
@@ -190,6 +228,10 @@ process.on('message', (raw: AiVaultServiceParentMessage) => {
     }
     titleIndex.clear()
     send({ type: 'invalidated', generation: raw.generation })
+    return
+  }
+  if (raw?.type === 'sessionSearch') {
+    sessionSearch.apply(raw.init)
     return
   }
   if (raw?.type === 'shutdown') {

@@ -1,9 +1,10 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
+import { AGENT_PROMPT_EFFECT_TIMEOUT_MS } from '../../shared/orchestration-timing-budgets'
 import {
-  AGENT_PROMPT_EFFECT_TIMEOUT_MS,
   AGENT_PROMPT_HOOK_EFFECT_TIMEOUT_MS,
   type AgentPromptActivity,
   isAgentPromptStalledError,
+  isTerminalSendSettlementAgent,
   readAgentPromptWaitText,
   resolveAgentPromptEffectTimeoutMs,
   verifyAgentPromptSubmission
@@ -169,7 +170,7 @@ describe('agent prompt submission verification', () => {
       allowOutputEvidence: false
     })
 
-    // No workingSequence edge: the window-gated synthetic title never ran (hidden window/headless).
+    // Hidden/headless paths skip synthetic titles, so no workingSequence edge exists.
     current = activity({ explicitWorkingStartedAt: 2_000, status: 'working' })
     await vi.advanceTimersByTimeAsync(50)
 
@@ -213,8 +214,7 @@ describe('agent prompt submission verification', () => {
     await rejected
   })
 
-  // Why: same-state hook pings refresh the row without starting a turn, so only the pinned
-  // stateStartedAt may satisfy the check — a refreshed row must stay unproven.
+  // Refreshed hook rows cannot prove a new turn without stateStartedAt advancing.
   it('does not accept a refreshed hook row whose working turn did not restart', async () => {
     vi.useFakeTimers()
     let current = activity({ explicitWorkingStartedAt: 2_000 })
@@ -292,10 +292,18 @@ describe('agent prompt submission verification', () => {
   })
 
   it('gives hook-observed agents the longer effect window', () => {
+    expect(resolveAgentPromptEffectTimeoutMs('antigravity')).toBe(
+      AGENT_PROMPT_HOOK_EFFECT_TIMEOUT_MS
+    )
     expect(resolveAgentPromptEffectTimeoutMs('codex')).toBe(AGENT_PROMPT_HOOK_EFFECT_TIMEOUT_MS)
     expect(resolveAgentPromptEffectTimeoutMs('kimi')).toBe(AGENT_PROMPT_HOOK_EFFECT_TIMEOUT_MS)
     expect(resolveAgentPromptEffectTimeoutMs('claude')).toBe(AGENT_PROMPT_EFFECT_TIMEOUT_MS)
     expect(resolveAgentPromptEffectTimeoutMs(null)).toBe(AGENT_PROMPT_EFFECT_TIMEOUT_MS)
+  })
+
+  it('uses Antigravity PreInvocation hooks to settle prompt receipts', () => {
+    expect(isTerminalSendSettlementAgent('antigravity')).toBe(true)
+    expect(isTerminalSendSettlementAgent('gemini')).toBe(false)
   })
 
   it('recognizes a stalled verdict from a message or a relayed error code', () => {

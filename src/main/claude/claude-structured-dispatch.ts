@@ -1,285 +1,233 @@
 import { randomUUID } from 'node:crypto'
-import type {
-  AgentJournalItemIdentity,
-  AgentJournalMessageItem
-} from '../../shared/agent-session-journal-types'
-import type { AgentSessionDispatchOutcome } from '../native-chat/agent-session-wire/structured-agent-session-adapter'
+import { agentJournalSubmissionKey } from '../../shared/agent-session-journal-item-key'
+import { claudePromptUuidForSubmission } from './structured/claude-structured-session-id'
+import { isAbortSignalReason } from '../../shared/abort-signal-reason'
 import {
-  claudeHasReplayContent,
-  readClaudeMessageEnvelope
-} from './claude-structured-item-translation'
-import type { ClaudeDispatchWaiter, ClaudeSession } from './claude-structured-session-state'
-import { readClaudeFrameString } from './claude-structured-init-proof'
+  forgetRetiredWaiter,
+  forgetWaiter,
+  retireWaiter,
+  waitForReplay
+} from './claude-structured-dispatch-waiters'
+import type { AgentJournalMessageItem } from '../../shared/agent-session-journal-types'
+import type { AgentSessionDispatchOutcome } from '../native-chat/agent-session-wire/structured-agent-session-adapter'
+import type {
+  ClaudeDispatchWaiter,
+  ClaudeSession
+} from './structured/claude-structured-session-state'
+import type { ClaudeLateDispatchSettlement } from './claude-replay-turn-resolution'
 import {
   claudeDispatchContentKey,
-  claudeDispatchMessageContent
+  claudeDispatchContentRejection,
+  claudeDispatchInvokesSlashCommand,
+  claudeDispatchMessageContent,
+  claudeDispatchRejection
 } from './claude-structured-dispatch-content'
+import { dispatchWriteOutcomeUnknownReason } from '../native-chat/agent-session-journal/journal-dispatch-doubt-reasons'
+import { DISPATCH_REJECTED_QUEUE_FULL } from '../../shared/structured-agent-session-dispatch-rejection'
+import {
+  agentSessionFailureFact,
+  providerDiagnostic,
+  type SubmissionRejectionFact
+} from '../../shared/agent-session-failure'
+import type { AgentJournalDispatchRejection } from '../../shared/agent-session-failure-words'
+import {
+  claudeUnwrittenUserMessageError,
+  claudeUserMessageWasProvablyUnwritten
+} from './claude-agent-sdk-user-message-queue'
+import { AgentSessionPreDispatchError } from '../native-chat/agent-session-wire/structured-agent-session-operation-settlement'
+import { isAgentSessionOptionRejectedError } from '../native-chat/agent-session-wire/structured-agent-session-option-error'
+import { ClaudeControlRequestError } from './claude-stream-json-connection'
 
-const MAX_RETIRED_DISPATCH_WAITERS = 64
+const MAX_ACTIVE_DISPATCH_WAITERS = 64
 
-/** A dispatch whose ack window expired, proven delivered by this replay. */
-export type ClaudeLateDispatchSettlement = (input: {
-  clientMessageId: string
-  providerIdentity: AgentJournalItemIdentity
-}) => void
-
-export function resolveClaudeReplayWaiter(
+export function settleCancelledClaudeDispatchWaiters(
   session: ClaudeSession,
-  message: Record<string, unknown>,
+  cancelledUuids: readonly string[],
   onSettledLate?: ClaudeLateDispatchSettlement
-): boolean {
-  const envelope = readClaudeMessageEnvelope(message)
-  const isUserReplay =
-    envelope?.role === 'user' &&
-    message.parent_tool_use_id === null &&
-    claudeHasReplayContent(envelope)
-  const isCompletedCommand = message.type === 'result'
-  if (
-    (!isUserReplay && !isCompletedCommand) ||
-    readClaudeFrameString(message, 'session_id') !== session.providerSessionId
-  ) {
-    return false
-  }
-  const uuid = readClaudeFrameString(message, 'uuid')
-  if (!uuid) {
-    return false
-  }
-
-  // Newer SDK frames carry the client uuid that caused a turn. A correlation
-  // value is authoritative: never fall back to queue order or content, since
-  // identical prompts may be in flight across a timeout boundary.
-  const userMessageUuid = readClaudeFrameString(message, 'user_message_uuid')
-  if (userMessageUuid) {
-    const exact = session.dispatchWaiters.find(
-      (candidate) => candidate.sentUuid === userMessageUuid
-    )
-    if (exact) {
-      settleWaiter(session, exact, uuid)
-      return isUserReplay && exact.dispatchSequence === session.dispatchSequence
-    }
-    const retired = session.retiredDispatchWaiters.find(
-      (candidate) => candidate.sentUuid === userMessageUuid
-    )
-    if (retired) {
-      forgetRetiredWaiter(session, retired)
-      return recoverLateIdentity(session, retired, uuid, isUserReplay, onSettledLate)
-    }
-    return false
-  }
-
-  const exact = session.dispatchWaiters.find((candidate) => candidate.sentUuid === uuid)
-  if (exact) {
-    settleWaiter(session, exact, uuid)
-    return isUserReplay && exact.dispatchSequence === session.dispatchSequence
-  }
-  const retired = session.retiredDispatchWaiters.find((candidate) => candidate.sentUuid === uuid)
-  if (retired) {
-    forgetRetiredWaiter(session, retired)
-    return recoverLateIdentity(session, retired, uuid, isUserReplay, onSettledLate)
-  }
-
-  if (isUserReplay) {
-    // Compatibility CLIs may mint a new replay uuid instead of echoing the
-    // client uuid. Content is an acceptable join only when it is the sole
-    // candidate on one side of the timeout boundary; with active and retired
-    // candidates present, identical prompts are intentionally left unknown.
-    const replayContentKey = claudeDispatchContentKey(envelope.content)
-    if (!session.replayContentFallbackBlocked && session.retiredDispatchWaiters.length === 0) {
-      const compatible = session.dispatchWaiters.filter(
-        (candidate) => candidate.replayContentKey === replayContentKey
-      )
-      if (compatible.length === 1) {
-        settleWaiter(session, compatible[0]!, uuid)
-        return compatible[0]!.dispatchSequence === session.dispatchSequence
-      }
-    } else if (!session.replayContentFallbackBlocked && session.dispatchWaiters.length === 0) {
-      const lateCompatible = session.retiredDispatchWaiters.filter(
-        (candidate) => candidate.replayContentKey === replayContentKey
-      )
-      if (lateCompatible.length === 1) {
-        const [candidate] = lateCompatible
-        forgetRetiredWaiter(session, candidate!)
-        return recoverLateIdentity(session, candidate!, uuid, true, onSettledLate)
-      }
-    }
-    return false
-  }
-  const current = session.dispatchWaiters[0]
-  if (isCompletedCommand && !current?.acceptsResult) {
-    return false
-  }
-  // A legacy result has no dispatch correlation. Any retired waiter makes queue order ambiguous,
-  // even when the retired dispatch was an ordinary turn rather than a slash command.
-  if (isCompletedCommand && session.retiredDispatchWaiters.length > 0) {
-    return false
-  }
-  // Once an eviction occurred, a fresh result uuid cannot be joined to a waiter by queue order.
-  if (isCompletedCommand && session.replayContentFallbackBlocked) {
-    return false
-  }
-  const waiter = uuid ? session.dispatchWaiters.shift() : undefined
-  if (waiter && uuid) {
-    clearTimeout(waiter.timer)
-    waiter.settledUuid = uuid
-    waiter.resolve(uuid)
-    return isUserReplay
-  }
-  return false
+): void {
+  rejectClaudeDispatchWaiters(
+    session,
+    cancelledUuids,
+    agentSessionFailureFact('cancelled'),
+    onSettledLate
+  )
 }
 
-function settleWaiter(session: ClaudeSession, waiter: ClaudeDispatchWaiter, uuid: string): void {
-  const index = session.dispatchWaiters.indexOf(waiter)
-  if (index !== -1) {
-    session.dispatchWaiters.splice(index, 1)
-  }
-  clearTimeout(waiter.timer)
-  waiter.settledUuid = uuid
-  waiter.resolve(uuid)
-}
-
-function forgetRetiredWaiter(session: ClaudeSession, waiter: ClaudeDispatchWaiter): void {
-  const index = session.retiredDispatchWaiters.indexOf(waiter)
-  if (index !== -1) {
-    session.retiredDispatchWaiters.splice(index, 1)
-  }
-}
-
-function recoverLateIdentity(
+export function rejectClaudeDispatchWaiters(
   session: ClaudeSession,
-  waiter: ClaudeDispatchWaiter,
-  uuid: string,
-  isUserReplay: boolean,
+  uuids: readonly string[],
+  fact: SubmissionRejectionFact,
   onSettledLate?: ClaudeLateDispatchSettlement
-): boolean {
-  if (!isUserReplay && !waiter.acceptsResult) {
-    return false
+): void {
+  const named = new Set(uuids)
+  const activeWaiters = session.dispatchWaiters.filter((waiter) => named.has(waiter.sentUuid))
+  const retiredWaiters = session.retiredDispatchWaiters.filter((waiter) =>
+    named.has(waiter.sentUuid)
+  )
+  // Release and report each waiter together to preserve host ownership.
+  const report = (waiter: ClaudeDispatchWaiter): void => {
+    if (waiter.clientMessageId) {
+      onSettledLate?.({
+        clientMessageId: waiter.clientMessageId,
+        state: 'rejected',
+        unrun: true,
+        ...claudeDispatchRejection(fact)
+      })
+    }
   }
-  // The provider acted on this dispatch, so the send it came from is delivered.
-  // Unfenced on purpose: the dispatch-sequence check below only decides which
-  // turn owns the identity, while delivery is settled for good either way.
-  onSettledLate?.({
-    clientMessageId: waiter.clientMessageId,
-    providerIdentity: { provider: 'claude', sessionId: session.providerSessionId, uuid }
-  })
-  if (waiter.dispatchSequence === session.dispatchSequence) {
-    session.activeTurnId = uuid
-    session.activeTurnSequence = waiter.dispatchSequence
+  for (const waiter of activeWaiters) {
+    forgetWaiter(session, waiter)
+    waiter.resolve(null)
+    report(waiter)
   }
-  return isUserReplay && waiter.dispatchSequence === session.dispatchSequence
+  for (const waiter of retiredWaiters) {
+    forgetRetiredWaiter(session, waiter)
+    report(waiter)
+  }
 }
 
-function waitForReplay(
+/** Retain uncertain sends for late replay; never resend messages that may already have run. */
+export function releaseClaudeDispatchWaitersInDoubt(
   session: ClaudeSession,
-  timeoutMs: number,
-  acceptsResult: boolean,
-  sentUuid: string,
-  replayContentKey: string,
-  clientMessageId: string
-): { waiter: ClaudeDispatchWaiter; promise: Promise<string | null> } {
-  let waiter!: ClaudeDispatchWaiter
-  const promise = new Promise<string | null>((resolve) => {
-    waiter = {
-      acceptsResult,
-      clientMessageId,
-      sentUuid,
-      dispatchSequence: session.dispatchSequence,
-      replayContentKey,
-      resolve,
-      timer: setTimeout(() => {
-        const index = session.dispatchWaiters.indexOf(waiter)
-        if (index !== -1) {
-          session.dispatchWaiters.splice(index, 1)
-        }
-        retireWaiter(session, waiter)
-        resolve(null)
-      }, timeoutMs)
+  waiters: readonly ClaudeDispatchWaiter[],
+  reason: string,
+  onSettledLate?: ClaudeLateDispatchSettlement
+): void {
+  for (const waiter of waiters) {
+    retireWaiter(session, waiter)
+    waiter.resolve(null)
+    if (waiter.clientMessageId) {
+      onSettledLate?.({ clientMessageId: waiter.clientMessageId, state: 'unknown', reason })
     }
-    waiter.timer.unref?.()
-    session.dispatchWaiters.push(waiter)
-  })
-  return { waiter, promise }
+  }
 }
 
-function retireWaiter(session: ClaudeSession, waiter: ClaudeDispatchWaiter): void {
-  const index = session.dispatchWaiters.indexOf(waiter)
-  if (index !== -1) {
-    session.dispatchWaiters.splice(index, 1)
+/** Retain bounded waiter identities after exit so late replay can still settle delivery. */
+export function retireClaudeDispatchWaiters(session: ClaudeSession): void {
+  for (const waiter of session.dispatchWaiters.splice(0)) {
+    retireWaiter(session, waiter)
+    waiter.resolve(null)
   }
-  clearTimeout(waiter.timer)
-  if (!waiter.retired) {
-    waiter.retired = true
-    session.retiredDispatchWaiters.push(waiter)
-    if (session.retiredDispatchWaiters.length > MAX_RETIRED_DISPATCH_WAITERS) {
-      session.replayContentFallbackBlocked = true
-      session.retiredDispatchWaiters.splice(
-        0,
-        session.retiredDispatchWaiters.length - MAX_RETIRED_DISPATCH_WAITERS
-      )
-    }
-  }
+}
+
+function claudeWriteFailureRejection(error: unknown): AgentJournalDispatchRejection {
+  console.warn('[claude-dispatch] message could not be handed to Claude:', error)
+  return claudeDispatchRejection(agentSessionFailureFact('writeFailed'))
 }
 
 export async function dispatchClaudeTurn(
   session: ClaudeSession,
-  input: { clientMessageId: string; body: AgentJournalMessageItem },
-  timeoutMs: number
+  input: {
+    sessionId?: string
+    clientMessageId?: string
+    body: AgentJournalMessageItem
+    requestedAt?: number
+    sentUuid?: string
+    signal?: AbortSignal
+  },
+  beforeDispatch?: () => Promise<void>
 ): Promise<AgentSessionDispatchOutcome> {
   let content: unknown[]
   try {
     content = await claudeDispatchMessageContent(input.body)
   } catch (error) {
-    return { state: 'rejected', reason: (error as Error).message }
+    return { state: 'rejected', ...claudeDispatchContentRejection(error) }
   }
-  const dispatchSequence = ++session.dispatchSequence
-  const acceptsResult = input.body.blocks.some(
-    (block) => block.type === 'text' && block.text.trimStart().startsWith('/')
-  )
-  const sentUuid = randomUUID()
-  const replay = waitForReplay(
-    session,
-    timeoutMs,
-    acceptsResult,
-    sentUuid,
-    claudeDispatchContentKey(content),
-    input.clientMessageId
-  )
-  const replayed = replay.promise
+  if (session.dispatchWaiters.length >= MAX_ACTIVE_DISPATCH_WAITERS) {
+    return { state: 'rejected', ...claudeDispatchRejection(agentSessionFailureFact('queueFull')) }
+  }
+  // Classify the mapped trailing prompt so command detection matches what Claude receives.
+  const acceptsResult = claudeDispatchInvokesSlashCommand(content)
+  const sentUuid =
+    input.sentUuid ??
+    (input.sessionId && input.clientMessageId
+      ? claudePromptUuidForSubmission(
+          input.sessionId,
+          agentJournalSubmissionKey(input.clientMessageId)
+        )
+      : randomUUID())
+  const arm = () => {
+    ++session.dispatchSequence
+    // Invalidate context reports requested before this send.
+    session.translator?.markContextActivity()
+    return waitForReplay(
+      session,
+      acceptsResult,
+      sentUuid,
+      claudeDispatchContentKey(content),
+      input.clientMessageId ?? null,
+      input.requestedAt ?? null
+    )
+  }
+  const message = {
+    type: 'user',
+    uuid: sentUuid,
+    message: { role: 'user', content },
+    parent_tool_use_id: null,
+    session_id: session.providerSessionId
+  }
+  const pending = { replay: beforeDispatch ? undefined : arm() }
+  const authorize = beforeDispatch
+    ? async () => {
+        await beforeDispatch()
+        if (session.dispatchWaiters.length >= MAX_ACTIVE_DISPATCH_WAITERS) {
+          throw claudeUnwrittenUserMessageError(new Error(DISPATCH_REJECTED_QUEUE_FULL))
+        }
+        pending.replay = arm()
+      }
+    : undefined
   try {
-    await session.connection.send({
-      type: 'user',
-      uuid: sentUuid,
-      message: { role: 'user', content },
-      parent_tool_use_id: null,
-      session_id: session.providerSessionId
-    })
+    await (authorize
+      ? session.connection.send(message, authorize)
+      : session.connection.send(message))
   } catch (error) {
+    const replay = pending.replay
+    if (!replay) {
+      // Preserve pre-dispatch aborts for the host's Stop settlement.
+      if (
+        error instanceof AgentSessionPreDispatchError ||
+        isAbortSignalReason(input.signal, error)
+      ) {
+        throw error
+      }
+      if (isAgentSessionOptionRejectedError(error)) {
+        return {
+          state: 'rejected',
+          ...claudeDispatchRejection(
+            agentSessionFailureFact(
+              'providerRejected',
+              error.cause instanceof ClaudeControlRequestError
+                ? { detail: providerDiagnostic(error.message, 'person') }
+                : {}
+            )
+          )
+        }
+      }
+      return { state: 'rejected', ...claudeWriteFailureRejection(error) }
+    }
     const waiter = replay.waiter
     if (waiter.settledUuid) {
-      const uuid = await replayed
+      const uuid = await replay.promise
       if (uuid) {
-        session.activeTurnId = uuid
-        session.activeTurnSequence = dispatchSequence
         return {
           state: 'accepted',
           providerIdentity: { provider: 'claude', sessionId: session.providerSessionId, uuid }
         }
       }
     }
+    if (claudeUserMessageWasProvablyUnwritten(error)) {
+      forgetWaiter(session, waiter)
+      forgetRetiredWaiter(session, waiter)
+      waiter.resolve(null)
+      // Proven unwritten frames are rejected; ambiguous writes remain unknown.
+      return { state: 'rejected', ...claudeWriteFailureRejection(error) }
+    }
     if (!waiter.retired) {
       retireWaiter(session, waiter)
       waiter.resolve(null)
     }
-    return { state: 'unknown', reason: (error as Error).message }
+    return { state: 'unknown', reason: dispatchWriteOutcomeUnknownReason(error) }
   }
-  const uuid = await replayed
-  if (uuid) {
-    session.activeTurnId = uuid
-    session.activeTurnSequence = dispatchSequence
-  }
-  return uuid
-    ? {
-        state: 'accepted',
-        providerIdentity: { provider: 'claude', sessionId: session.providerSessionId, uuid }
-      }
-    : { state: 'unknown', reason: 'claude accepted a message but did not replay its uuid in time' }
+  // Admit on write: an echo may wait for the current turn; replay settles delivery later.
+  return { state: 'admitted' }
 }

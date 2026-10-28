@@ -6,13 +6,11 @@ import {
   useCallback,
   useEffect
 } from './mobile-tasks-dependencies'
+import { getTaskPresetQuery, scopeGitHubTaskSearch } from './mobile-tasks-legacy-foundation'
 import {
-  type LinearState,
-  type LinearTeam,
-  getTaskPresetQuery,
-  isSuccess,
-  scopeGitHubTaskSearch
-} from './mobile-tasks-legacy-foundation'
+  linearComposerTeamListRead,
+  linearTeamStateListRead
+} from './mobile-task-item-detail-operations'
 
 export function useMobileTasksListAndDetailEffects(model: ProjectLoadingActionsModel) {
   const {
@@ -30,6 +28,8 @@ export function useMobileTasksListAndDetailEffects(model: ProjectLoadingActionsM
     hostedRepos,
     linearConnected,
     linearFilter,
+    jiraFilter,
+    refreshJiraConnection,
     linearMetadataItem,
     loadGitHubProjectTable,
     loadGitHubProjects,
@@ -122,6 +122,32 @@ export function useMobileTasksListAndDetailEffects(model: ProjectLoadingActionsM
   }, [appliedQuery, linearFilter, persistTaskResumeState, provider, taskUiReady])
 
   useEffect(() => {
+    if (!taskUiReady || provider !== 'jira') {
+      return
+    }
+    persistTaskResumeState({
+      jiraPreset: jiraFilter,
+      jiraQuery: appliedQuery.trim()
+    })
+  }, [appliedQuery, jiraFilter, persistTaskResumeState, provider, taskUiReady])
+
+  // Pick up desktop connection changes when entering the Jira tab.
+  useEffect(() => {
+    if (!taskStateHydrated || provider !== 'jira') {
+      return
+    }
+    let stale = false
+    void refreshJiraConnection().catch((err) => {
+      if (!stale) {
+        setError(err instanceof Error ? err.message : 'Failed to read Jira status')
+      }
+    })
+    return () => {
+      stale = true
+    }
+  }, [provider, refreshJiraConnection, taskStateHydrated])
+
+  useEffect(() => {
     if (connState !== 'connected' || !taskStateHydrated) {
       return
     }
@@ -191,14 +217,15 @@ export function useMobileTasksListAndDetailEffects(model: ProjectLoadingActionsM
     }
     let stale = false
     setCreateTeamId(null)
-    void client
-      .sendRequest('linear.listTeams')
+    void linearComposerTeamListRead
+      .request(client)
       .then((response) => {
         if (stale) {
           return
         }
-        if (isSuccess(response)) {
-          const teams = response.result as LinearTeam[]
+        const accepted = linearComposerTeamListRead.interpret(response)
+        if (accepted.accepted) {
+          const teams = accepted.value
           setLinearTeams(teams)
           setCreateTeamId((current) => current ?? teams[0]?.id ?? null)
         } else {
@@ -232,17 +259,14 @@ export function useMobileTasksListAndDetailEffects(model: ProjectLoadingActionsM
       teamId: linearMetadataItem.source.team.id,
       workspaceId: linearMetadataItem.source.workspaceId
     }
-    void client
-      .sendRequest('linear.teamStates', baseParams)
+    void linearTeamStateListRead
+      .request(client, baseParams)
       .then((statesResponse) => {
         if (stale) {
           return
         }
-        if (isSuccess(statesResponse)) {
-          setLinearStates(statesResponse.result as LinearState[])
-        } else {
-          setLinearStates([])
-        }
+        const accepted = linearTeamStateListRead.interpret(statesResponse)
+        setLinearStates(accepted.accepted ? accepted.value : [])
       })
       .catch(() => {
         if (!stale) {

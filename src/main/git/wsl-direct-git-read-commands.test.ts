@@ -20,16 +20,16 @@ describe('isWslDirectGitReadCommand', () => {
     [['worktree', 'list', '--porcelain']],
     [['branch', '--list']],
     [['branch', '--show-current']],
-    // Global options precede the subcommand.
     [['-c', 'core.quotepath=off', 'log', '--oneline']],
     [['-C', '/repo', 'rev-parse', 'HEAD']],
-    [['--git-dir=/repo/.git', 'ls-tree', 'HEAD']]
+    [['--git-dir=/repo/.git', 'ls-tree', 'HEAD']],
+    [['--git-dir', '/repo/.git', 'log']],
+    [['--work-tree', '/repo', 'status']]
   ])('routes %j without a shell', (args) => {
     expect(isWslDirectGitReadCommand(args)).toBe(true)
   })
 
-  // Why these matter most: a write misrouted to the shell-free path loses the
-  // credential helpers and ssh-agent the user's login shell sets up.
+  // Writes need credential helpers and ssh-agent from the login shell.
   it.each([
     [['commit', '-m', 'msg']],
     [['push', 'origin', 'main']],
@@ -40,7 +40,6 @@ describe('isWslDirectGitReadCommand', () => {
     [['add', '--', 'file.ts']],
     [['worktree', 'add', '/tmp/wt']],
     [['submodule', 'update', '--init']],
-    // Same subcommands as above, in their writing form.
     [['config', 'user.email', 'me@example.com']],
     [['config', '--unset', 'core.sshCommand']],
     [['remote', 'add', 'origin', 'https://example.com/r.git']],
@@ -57,9 +56,7 @@ describe('isWslDirectGitReadCommand', () => {
     expect(isWslDirectGitReadCommand(args)).toBe(false)
   })
 
-  // Why positional: these read markers are matched as the action, not anywhere in
-  // argv. Matching loosely routed a write shell-free whenever a positional
-  // happened to share a read marker's name.
+  // Read markers count only in the action position; positional arguments can have the same names.
   it.each([[['worktree', 'remove', 'list']], [['submodule', 'foreach', 'status']]])(
     'keeps %j on the login shell despite a read-shaped positional',
     (args) => {
@@ -74,18 +71,14 @@ describe('isWslDirectGitReadCommand', () => {
     }
   )
 
-  // Why: a write hidden behind global options must never reach the shell-free
-  // route, and an unparsed global form must fall back to the login shell rather
-  // than guess. Both directions fail safe.
+  // Unparsed global options must fall back to the login shell rather than risk misrouting a write.
   it.each([
     [['-c', 'k=v', 'push', 'origin', 'main']],
     [['-C', '/repo', 'commit', '-m', 'x']],
     [['-c', 'k=v', 'fetch', '--all']],
     [['--git-dir=/x', 'push']],
-    // Space-separated global values are not parsed; the value reads as the
-    // subcommand, which is in no read set, so it stays on the login shell.
-    [['--git-dir', '/x', 'log']],
-    [['--work-tree', '/x', 'status']],
+    [['--git-dir', '/x', 'push']],
+    [['--work-tree', '/x', 'commit', '-m', 'x']],
     [['-c', 'k=v']]
   ])('keeps %j on the login shell behind global options', (args) => {
     expect(isWslDirectGitReadCommand(args)).toBe(false)
@@ -119,9 +112,9 @@ describe('classifyGitCommand', () => {
     [['checkout', 'main'], 'other'],
     [['made-up-command'], 'other'],
     [[], 'other'],
-    // Unparsed space-separated global values remain fail-safe.
-    [['--git-dir', '/repo/.git', 'log'], 'other'],
-    [['--work-tree', '/repo', 'status'], 'other'],
+    [['--git-dir', '/repo/.git', 'log'], 'read'],
+    [['--work-tree', '/repo', 'status'], 'read'],
+    [['--git-dir', '/repo/.git', 'fetch', 'origin'], 'network'],
     [['-c', 'key=value'], 'other']
   ] as const)('classifies %j as %s', (args, expected) => {
     expect(classifyGitCommand(args)).toBe(expected)

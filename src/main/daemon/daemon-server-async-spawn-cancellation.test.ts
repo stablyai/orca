@@ -1,3 +1,4 @@
+import './mock-descendant-sweep'
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -139,7 +140,6 @@ describe('daemon async spawn cancellation', () => {
       cols: 80,
       rows: 24
     })
-    // Only queues behind the create once that create is actually in flight.
     await spawnStarted
     const abort = new AbortController()
     const attach = client.request(
@@ -149,8 +149,7 @@ describe('daemon async spawn cancellation', () => {
       abort.signal
     )
     const daemon = server as unknown as DaemonServerInternals
-    // Attach-only used to register nothing, so the daemon could not match the
-    // cancel and the client dropped its only timeout.
+    // Attach-only preparations must remain registered so cancellation can find them.
     await vi.waitFor(() => expect(daemon.preparations.pending.get('shared-session')?.size).toBe(2))
 
     abort.abort()

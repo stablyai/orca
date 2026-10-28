@@ -1,20 +1,26 @@
 import { app, session } from 'electron'
-import { electronApp, is } from '@electron-toolkit/utils'
 import { applyBackgroundActivationPolicy } from '../window/foreground-activation-policy'
 import { applyElectronProxySettings } from '../network/proxy-settings'
 import { installElectronProxyRequestGuard } from '../network/electron-proxy-request-guard'
 import { handleElectronProxyLogin } from '../network/electron-proxy-credentials'
+import { setNodeDistMirrorSettingReader } from '../node-runtime/node-dist-mirror-setting'
+import { handleBrowserGuestLogin } from '../browser/browser-http-auth-prompt'
 import { installMainThreadHangWatchdog } from '../hang-watchdog/main-thread-hang-watchdog'
-import {
-  consumeHangDetectionMarker,
-  hangDetectionMarkerPath
-} from '../hang-watchdog/hang-detection-marker'
-import { browserCertificateTrustController } from '../browser/browser-manager'
+import { preservePreviousHangDetection } from '../hang-watchdog/previous-hang-detection'
+import { browserCertificateTrustController, browserManager } from '../browser/browser-manager'
+import { browserSiteDisplayController } from '../browser/browser-site-display-controller'
 import { ensureActiveOrcaProfile } from '../orca-profiles/profile-index-store'
-import { Store, getCanonicalUserDataPath } from '../persistence'
+import { getCanonicalUserDataPath } from '../persistence'
+import { getAppEnvironment } from '../../shared/app-environment'
+import { loadWslMoveFence } from '../persistence/moving-wsl-projects/wsl-move-scope-guard'
+import { runGatedWslMoveDesktopRewritePass } from '../persistence/moving-wsl-projects/wsl-move-desktop-rewrite'
+import { createProfileStateStoreForStartup } from '../persistence/profile-state/profile-state-startup-authority'
+import { getProfileUserDataPath } from '../orca-profiles/profile-storage-paths'
 import { initializeBrowserClientHostId } from '../browser/browser-client-host-id'
 import { scheduleSecretProtectionGapReport } from '../host/deferred-secret-protection-report'
+import { withholdUnreachableKeychainForServe } from '../host/serve-keychain-guard'
 import { initSshHostKeyStoreFile } from '../ssh/ssh-host-key-store'
+import { initOrcadHeldFenceTokenFile } from '../ssh/orcad-held-fence-tokens'
 import { neutralizeLegacyTerminalShimDir } from '../pty/legacy-terminal-shim-dir'
 import { createWindowsShellPathHydration } from './windows-shell-path-hydration'
 import {
@@ -22,11 +28,6 @@ import {
   setDefaultWslDistroOverride
 } from '../git/runner'
 import { wslHookRelayManager } from '../agent-hooks/wsl-hook-relay-manager'
-import {
-  attachClaudeLivePtyPersistence,
-  onLiveClaudePtysDrained,
-  seedLiveClaudePtysFromPersistence
-} from '../claude-accounts/live-pty-gate'
 import { applyAppIcon } from '../app-icon'
 import {
   shouldSuppressDevEducation,
@@ -37,23 +38,38 @@ import {
   setBrowserNetworkProxySettingsResolver
 } from '../browser/browser-session-proxy'
 import { installDocPreviewProtocolHandler } from '../browser/doc-preview-protocol'
+import { installMediaPreviewProtocolHandler } from '../media/media-preview-protocol'
+import { installJiraImageProtocolHandler } from '../jira/attachments/image-protocol'
 import { registerDocPreviewGrantHandlers } from '../ipc/doc-preview-grant-ipc'
 import { initializeBrowserSessionsForApp } from '../browser/browser-session-startup'
+import {
+  initializeBrowserExtensionSupport,
+  switchBrowserExtensionSupport
+} from '../browser/extensions/browser-extension-startup'
+import { whenBrowserExtensionSessionsLoaded } from '../browser/extensions/browser-extension-session-loader'
 import { browserSessionRegistry } from '../browser/browser-session-registry'
 import { logStartupMilestone } from './startup-diagnostics'
 import { writeHttp1CompatibilityMarker } from './http1-compatibility-marker'
 import { mainProcessState as state } from './main-process-state'
-import { recordDurableCrashBreadcrumb } from '../crash-reporting/durable-crash-breadcrumb'
 import { syncMacMenuBarIcon } from './main-window-actions'
 import { updateGpuAccelerationAboutPanel } from './gpu-lifecycle'
-import { reconcileManagedWslCliRegistrations } from '../cli/wsl-cli-registration-reconciliation'
+import {
+  logWslCliReconciliationResults,
+  reconcileManagedWslCliRegistrations
+} from '../cli/wsl-cli-registration-reconciliation'
 import { createWslCliReconciliationStartupBarrier } from './wsl-cli-reconciliation-startup-barrier'
+import { agentHookServer } from '../agent-hooks/server'
 import { isAgentStatusHooksEnabled } from '../agent-hooks/managed-agent-hook-controls'
+import { reportProfileStateWriteFailure } from './profile-state-write-failure'
+import { reportProfileStateSaveDelay } from './profile-state-save-delay'
 
 export async function initializeReadyFoundation(): Promise<void> {
   logStartupMilestone('app-ready')
-  // Why: a headless automated run must not claim a macOS Dock tile or the menu bar.
-  applyBackgroundActivationPolicy({ warn: console.warn })
+  // Background automation and a windowless serve must not claim the macOS Dock/menu bar.
+  applyBackgroundActivationPolicy({
+    serveWithoutDesktopWindow: state.isServeMode,
+    warn: console.warn
+  })
   installElectronProxyRequestGuard(session.defaultSession)
   app.on('login', (event, webContents, details, authInfo, callback) => {
     handleElectronProxyLogin(
@@ -64,18 +80,12 @@ export async function initializeReadyFoundation(): Promise<void> {
       callback,
       session.defaultSession
     )
+    handleBrowserGuestLogin(event, webContents, details, authInfo, callback)
   })
   const canonicalUserDataPath = getCanonicalUserDataPath()
+  preservePreviousHangDetection(canonicalUserDataPath)
   installMainThreadHangWatchdog({ userDataPath: canonicalUserDataPath })
-  state.hangDetection = consumeHangDetectionMarker(hangDetectionMarkerPath(canonicalUserDataPath))
-  if (state.hangDetection) {
-    recordDurableCrashBreadcrumb('main_thread_hang_detected', {
-      unresponsiveMs: state.hangDetection.unresponsiveMs,
-      previousPid: state.hangDetection.parentPid,
-      selfRecovered: state.hangDetection.selfRecovered
-    })
-  }
-  // Why: install certificate decisions before any webview or headless window issues its first TLS request.
+  // Install certificate decisions before any webview/headless window can issue TLS.
   app.on(
     'certificate-error',
     (event, webContents, url, error, certificate, callback, isMainFrame) => {
@@ -94,13 +104,19 @@ export async function initializeReadyFoundation(): Promise<void> {
   if (!identity) {
     throw new Error('Development identity is unavailable')
   }
-  electronApp.setAppUserModelId(identity.appUserModelId)
-  // Why: names the app menu/About panel. Dev already applied this pre-ready (see the
-  // safeStorage note above); this call stays unconditional so packaged builds keep their
-  // existing post-ready rename, which lands after the Keychain name is already resolved.
+  if (process.platform === 'win32') {
+    app.setAppUserModelId(app.isPackaged ? identity.appUserModelId : process.execPath)
+  }
+  // Post-ready naming preserves packaged Keychain identity; dev already renamed before ready.
   app.setName(identity.appName)
   updateGpuAccelerationAboutPanel()
-  // Why: managed WSL launchers live outside the Windows app bundle, so keep their launcher/bridge contract synced across app updates.
+  if (state.isServeMode) {
+    // Profile loading can decrypt and hang; fence unreachable keychains first.
+    await withholdUnreachableKeychainForServe({
+      usesMockKeychain: app.commandLine.hasSwitch('use-mock-keychain')
+    })
+  }
+  // Managed WSL launchers live outside the bundle; reconcile launcher/bridge compatibility after app updates.
   state.managedWslCliReconciliationStatus = 'pending'
   state.managedWslCliReconciliationReady = reconcileManagedWslCliRegistrations({
     isPackaged: app.isPackaged,
@@ -108,15 +124,7 @@ export async function initializeReadyFoundation(): Promise<void> {
     appVersion: app.getVersion()
   })
     .then((results) => {
-      for (const result of results) {
-        if (result.outcome === 'failed') {
-          console.warn(
-            `[wsl-cli] ${result.distro} managed registration reconciliation failed: ${result.error}`
-          )
-        } else if (result.outcome === 'repaired') {
-          console.log(`[wsl-cli] Repaired managed registration in ${result.distro}.`)
-        }
-      }
+      logWslCliReconciliationResults(results)
       state.managedWslCliReconciliationStatus = 'settled'
     })
     .catch((error) => {
@@ -131,24 +139,35 @@ export async function initializeReadyFoundation(): Promise<void> {
   )
   const profile = ensureActiveOrcaProfile()
   state.activeOrcaProfile = profile
-  // Why this early: the first window stamps the hosting id into its renderer's argv, so the durable
-  // read has to have happened by then or the renderer and the browser-host lease disagree.
+  // Read durable browser hosting ID before window argv stamps it or renderer and lease ownership diverge.
   initializeBrowserClientHostId(profile.profileDirectory)
-  const store = new Store({
+  const profileState = await createProfileStateStoreForStartup({
+    userDataPath: getProfileUserDataPath(),
     dataFile: profile.dataFile,
-    storageAuthority: state.isServeMode ? 'runtime' : 'desktop'
+    databaseFile: profile.stateDatabaseFile,
+    profileId: profile.profile.id,
+    runtime: 'desktop',
+    storageAuthority: state.isServeMode ? 'runtime' : 'desktop',
+    onPersistenceFailure: reportProfileStateWriteFailure,
+    onPersistenceSaveDelayChanged: reportProfileStateSaveDelay
   })
+  state.profileStateStartup = {
+    backend: profileState.backend,
+    classification: profileState.classification,
+    runtime: 'desktop',
+    migrated: profileState.migrated
+  }
+  const store = profileState.store
   state.store = store
-  // Why: create pending readiness before the guard can observe the default session.
-  // Why parked on state instead of awaited here: Dock/Launchpad launches don't inherit shell
-  // proxy env vars, so the persisted proxy must land before any app-owned network fetcher runs —
-  // but the guard below already holds every default-session request until this settles, so
-  // awaiting it inline only delayed window creation. Runtime launch awaits it before the first
-  // fetcher (the desktop relay / headless serve).
+  setNodeDistMirrorSettingReader(() => store.getSettings().nodeDistMirrorUrl)
+  // Fence WSL moves before handlers/runtime can create terminals in moving projects.
+  loadWslMoveFence(getAppEnvironment().getPath('userData'))
+  void runGatedWslMoveDesktopRewritePass({ userDataPath: getAppEnvironment().getPath('userData') })
+  // Publish proxy readiness before guarding default-session requests; network awaits it, while window creation can proceed.
   state.initialProxyApplicationReady = applyElectronProxySettings(store.getSettings()).then(
     (result) => {
       if (result.source === 'invalid-settings') {
-        // Why (STA-3442): a silent DIRECT fallback made a dead configured proxy undiagnosable.
+        // STA-3442: log invalid configured proxies so DIRECT fallback is diagnosable.
         console.warn('[proxy] persisted proxy settings are invalid; using direct networking')
       }
     },
@@ -157,21 +176,17 @@ export async function initializeReadyFoundation(): Promise<void> {
     }
   )
   installElectronProxyRequestGuard(session.defaultSession)
-  // Why armed here and not at install time: the report remembers what it last said, and
-  // that state lives beside the profile data file, which does not exist until now.
-  // Why scheduled and not called: the report probes the OS keyring, which blocks on Linux
-  // and must not gate the first window (STA-5765).
+  // Wait for profile-sidecar location, then defer potentially blocking OS-keyring probes past first paint (STA-5765).
   scheduleSecretProtectionGapReport({
     dataFile: profile.dataFile,
     force: process.env.ORCA_ALWAYS_REPORT_SECRET_PROTECTION === '1',
     deferUntilFirstWindow: !state.isServeMode,
-    skipInDevelopment: is.dev
+    skipInDevelopment: !app.isPackaged
   })
-  // Why here: the host key store is a sidecar of the same profile, and every SSH connect consults
-  // it. Left unbound it reports nothing trusted, which is safe but silently discards our own
-  // accept records on every launch.
+  // Bind the profile host-key sidecar before connects or accepted trust records silently vanish each launch.
   initSshHostKeyStoreFile(profile.dataFile)
-  // Why: must precede PTY handler registration and run in headless serve too, which returns before openMainWindow.
+  initOrcadHeldFenceTokenFile(profile.dataFile)
+  // Neutralize legacy shims before PTY handlers, including headless serve which never opens a main window.
   neutralizeLegacyTerminalShimDir(app.getPath('userData'))
   const windowsShellPathHydration = createWindowsShellPathHydration()
   state.windowsShellPathHydration = windowsShellPathHydration
@@ -194,22 +209,22 @@ export async function initializeReadyFoundation(): Promise<void> {
   }
   wslHookRelayManager.setManagedHookSettingsResolver(() => state.store?.getSettings() ?? null)
   logStartupMilestone('store-loaded')
-  // Why: pre-`ready` startup reads this flag from a marker so it never has to parse orca-data.json.
+  // Refresh the tiny pre-ready marker so next launch avoids reparsing settings.
   writeHttp1CompatibilityMarker(
     canonicalUserDataPath,
-    store.getSettings().electronHttp1CompatibilityMode === true
+    store.getSettings().electronHttp1CompatibilityMode === true,
+    profile.profile.id
   )
-  // Why: apply initial fallback WSL distro from store settings for global git/CLI calls.
   setDefaultWslDistroOverride(store.getSettings().terminalWindowsWslDistro ?? null)
   store.onSettingsChanged((updates, settings) => {
     if ('electronHttp1CompatibilityMode' in updates) {
       writeHttp1CompatibilityMarker(
         canonicalUserDataPath,
-        settings.electronHttp1CompatibilityMode === true
+        settings.electronHttp1CompatibilityMode === true,
+        profile.profile.id
       )
     }
     if ('terminalWindowsWslDistro' in updates) {
-      // Why: synchronize fallback WSL distro updates to runner.
       setDefaultWslDistroOverride(settings.terminalWindowsWslDistro ?? null)
     }
     if (
@@ -228,14 +243,16 @@ export async function initializeReadyFoundation(): Promise<void> {
         )
       }
     }
+    if ('experimentalBrowserExtensions' in updates) {
+      void switchBrowserExtensionSupport(settings.experimentalBrowserExtensions === true)
+    }
     if ('showMenuBarIcon' in updates) {
-      // Why: Store is the mutation authority for all settings writes, so every macOS toggle updates the native item live.
+      // Store owns settings mutations; sync every menu-bar toggle through this listener.
       syncMacMenuBarIcon(settings.showMenuBarIcon !== false)
     }
     if ('agentStatusHooksEnabled' in updates) {
-      // Why both directions: the ensure gate only blocks NEW relays, so off must stop the running
-      // guest process and timers, and on must restart them — otherwise open WSL panes report no
-      // status until their next spawn.
+      agentHookServer.setStatusHooksEnabled(isAgentStatusHooksEnabled(settings))
+      // The ensure gate blocks only new relays; stop live guests/timers on disable and resume on enable for existing panes.
       if (isAgentStatusHooksEnabled(settings)) {
         wslHookRelayManager.resumeStoppedRelays()
       } else {
@@ -243,49 +260,44 @@ export async function initializeReadyFoundation(): Promise<void> {
       }
     }
   })
-  // Why: run before ClaudeRuntimeAuthService's constructor sync — a surviving daemon Claude CLI holds the single-use refresh token; early refresh rotates it out mid-session.
-  attachClaudeLivePtyPersistence(store)
-  // Why: while a live claude defers the managed OAuth refresh, usage shows
-  // "Waiting for Claude session"; refetch when the last live PTY exits so the
-  // error clears immediately instead of after the failure backoff.
-  onLiveClaudePtysDrained(() => {
-    void state.rateLimits?.refreshAfterClaudeLivePtysDrained()
-  })
-  const persistedClaudePtyIds = store.getClaudeLivePtySessionIds()
-  seedLiveClaudePtysFromPersistence(persistedClaudePtyIds)
-  if (persistedClaudePtyIds.length > 0) {
-    console.log(
-      `[claude-live-pty] Seeded ${persistedClaudePtyIds.length} persisted Claude session id(s) into the refresh gate`
-    )
-  }
   applyAppIcon(store.getSettings().appIcon)
-  if (shouldSuppressDevEducation({ isDev: is.dev })) {
+  if (shouldSuppressDevEducation({ isDev: !app.isPackaged })) {
     suppressDevEducationForStore(store)
   }
-  // Why: the partition installer reads the proxy through this resolver, so register it before sessions materialize.
+  // Install the proxy resolver before partitions materialize.
   setBrowserNetworkProxySettingsResolver(() => state.store!.getSettings())
-  // Why: the preview session is protocol-scoped, so the handler must exist before any preview webview attaches.
+  // Protocol-scoped preview handlers must exist before webview attachment.
+  installMediaPreviewProtocolHandler()
+  installJiraImageProtocolHandler()
   installDocPreviewProtocolHandler()
   registerDocPreviewGrantHandlers()
-  // Why: browser sessions serve desktop webviews and runtime profile commands, so init at app startup rather than via a renderer IPC path.
+  // Session setup needs the extension support decision before loading profiles.
+  initializeBrowserExtensionSupport({
+    enabled: store.getSettings().experimentalBrowserExtensions === true,
+    savedBrowserTabs: store
+  })
+  // Desktop webviews and runtime commands share sessions; initialize without waiting for renderer IPC.
   initializeBrowserSessionsForApp({
     orcaProfileId: profile.profile.id,
     profileDirectory: profile.profileDirectory,
-    // Why: local direct-SSH partitions are scoped to targets, and the orphan
-    // sweep must see the live target list or it would clear their cookie jars.
+    // Sweep against current SSH targets or live target cookie jars look orphaned.
     listLocalSshTargetIds: () => {
       const currentStore = state.store
       if (!currentStore) {
-        // Why: an empty list would read as "every SSH jar is an orphan"; throwing skips the sweep.
+        // An empty list would delete every SSH jar; throw to skip sweeping when the store is unavailable.
         throw new Error('ssh target store unavailable at partition sweep')
       }
       return currentStore.getSshTargets().map((target) => target.id)
     }
   })
+  browserSiteDisplayController.followZoomSettings(store)
+  browserManager.setSiteDisplayController(browserSiteDisplayController)
   try {
-    // Why: awaited here so the first guest navigation cannot race the installer's fire-and-forget write.
+    // Await proxy writes so first guest navigation cannot race them.
     await applyBrowserSessionProxies(browserSessionRegistry.listProfiles(), store.getSettings())
   } catch {
     console.warn('[proxy] Failed to apply network proxy settings to browser sessions')
   }
+  // Why bounded: restored tabs should get content scripts, but a slow extension never blocks launch.
+  await whenBrowserExtensionSessionsLoaded(3_000)
 }

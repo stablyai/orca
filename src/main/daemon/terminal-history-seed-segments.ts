@@ -1,38 +1,42 @@
 import type { ColdRestoreInfo } from './terminal-history-cold-restore-info'
 import {
-  COLD_RESTORE_SEED_MODE_RESET,
+  PROCESS_BOUNDARY_GROUND,
   RESET_GRAPHIC_RENDITION
 } from '../../shared/terminal-mode-reset-profiles'
+import { buildFreshShellViewportBlankingSequence } from '../../shared/terminal-fresh-shell-viewport'
 
-// Why the reset belongs in the seed and not only at replay: the recovered stream
-// re-arms mouse reporting from two independent sources (rehydrateSequences AND
-// SerializeAddon's own mode trailer inside snapshotAnsi), and the seed is what
-// feeds the daemon's emulator — so without it every downstream consumer that
-// re-serializes from that emulator, including mobile, inherits the dead TUI's
-// modes no matter which profile the desktop renderer applies. See
-// COLD_RESTORE_SEED_MODE_RESET for the precondition and the choice of bits.
+// Reset modes after seeding the daemon too, or downstream snapshots (including mobile) re-arm dead TUI state.
 
 export function getRecoveredHistorySeedSegments(restoreInfo: ColdRestoreInfo): readonly string[] {
   if (restoreInfo.modes.alternateScreen) {
     const normalBuffer = restoreInfo.scrollbackAnsi || restoreInfo.snapshotAnsi
     return normalBuffer
-      ? [`${RESET_GRAPHIC_RENDITION}${normalBuffer}`, COLD_RESTORE_SEED_MODE_RESET]
+      ? [
+          `${RESET_GRAPHIC_RENDITION}${normalBuffer}`,
+          PROCESS_BOUNDARY_GROUND,
+          freshShellViewport(restoreInfo)
+        ]
       : []
   }
   const recovered = [restoreInfo.rehydrateSequences, restoreInfo.snapshotAnsi].filter(
     (segment) => segment.length > 0
   )
-  const escapeTail = restoreInfo.pendingEscapeTailAnsi
-  // Why: an empty list is daemon-pty-adapter's "nothing to recover" sentinel (it gates
-  // the probe-race respawn and the history re-anchor), so the reset must never pad it.
-  if (recovered.length === 0 && !escapeTail) {
+  // Preserve the empty sentinel used to gate respawn and history re-anchoring.
+  if (recovered.length === 0) {
     return []
   }
-  // Why after the snapshot: it must undo the snapshot's own mode trailer, and
-  // pendingEscapeTailAnsi is a torn escape that has to stay at the very end.
+  // A new process must not complete an escape sequence left by its predecessor.
   const [firstRecovered, ...remainingRecovered] = recovered
-  const groundedRecovered = firstRecovered
-    ? [`${RESET_GRAPHIC_RENDITION}${firstRecovered}`, ...remainingRecovered]
-    : []
-  return [...groundedRecovered, COLD_RESTORE_SEED_MODE_RESET, ...(escapeTail ? [escapeTail] : [])]
+  return [
+    `${RESET_GRAPHIC_RENDITION}${firstRecovered}`,
+    ...remainingRecovered,
+    PROCESS_BOUNDARY_GROUND,
+    freshShellViewport(restoreInfo)
+  ]
+}
+
+// Why: the window blanks its viewport after painting a restore, but the daemon's seeded screen
+// did not, so a reattach showed the new shell's prompt beside the old one (`$ $`).
+function freshShellViewport(restoreInfo: ColdRestoreInfo): string {
+  return buildFreshShellViewportBlankingSequence(restoreInfo.rows)
 }

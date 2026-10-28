@@ -8,18 +8,12 @@ import type {
   AgentSessionDeathEvidence,
   AgentSessionRecord
 } from '../../shared/agent-session-record'
-import { assertFence, withLease } from './agent-session-lease-transitions'
-import type { AgentSessionStoreState } from './agent-session-record-store-file'
+import { assertFence, withLease } from './agent-session/ownership/agent-session-lease-transitions'
+import type { AgentSessionStoreState } from './agent-session-store-state'
 
-/**
- * How the failed attempt's provider process was accounted for.
- * - `exit-proven`: cleanup observed the whole tree gone.
- * - `root-exit-observed`: the owner root's exit was observed first-hand, so the
- *   identity this lease is keyed on is dead, but its descendants could not be
- *   verified. Releases the lease and says exactly that, claiming nothing more.
- * - `processless`: the attempt failed before a process existed.
- * - `unproven`: nothing about the process was observed; the reservation latches.
- */
+/** Cleanup evidence: exit-proven follows provider tree-close proof (Windows may use stdin EOF/root exit or taskkill /T).
+ * root-exit-observed proves only the lease root died; processless means no process existed.
+ * unproven sends recorded owners to recovery; ownerless reservations release after adapter stdio cleanup. */
 export type AgentSessionAcquisitionExitProof =
   | 'exit-proven'
   | 'root-exit-observed'
@@ -40,7 +34,7 @@ export type AgentSessionFailedAcquisitionSettlement = {
 export type AgentSessionFailedPostAcquisitionAttachmentSettlement =
   AgentSessionFailedAcquisitionSettlement
 
-/** Liveness invariant: a settled attach never leaves its reservation in new-owner-proving. */
+/** Settled attaches must not strand reservations in new-owner-proving. */
 export function settleFailedAgentSessionAcquisition(
   state: AgentSessionStoreState,
   args: AgentSessionFailedAcquisitionSettlement
@@ -59,7 +53,7 @@ export function settleFailedAgentSessionAcquisition(
   return next
 }
 
-/** A proved native owner still is not publishable until its journal attaches. */
+/** Native-owner proof still needs journal attachment before publication. */
 export function settleFailedAgentSessionPostAcquisitionAttachment(
   state: AgentSessionStoreState,
   args: AgentSessionFailedPostAcquisitionAttachmentSettlement
@@ -74,45 +68,41 @@ export function settleFailedAgentSessionPostAcquisitionAttachment(
   }
   assertFence(record.lease, args.fence)
   if (
-    record.lease.runtimeKind !== 'native' ||
     record.lease.claimStatus !== 'live' ||
     record.lease.handoffStage !== null ||
     record.lease.ownerProcess?.spawnToken !== args.spawnToken ||
-    record.lease.reservedSpawnToken !== args.spawnToken ||
-    record.lease.provenHandleLinkId === null
+    record.lease.reservedSpawnToken !== args.spawnToken
   ) {
     throw new Error('agent_session_ownership_unknown')
   }
   const next =
     args.exitProof === 'unproven'
-      ? withLease(record, {
-          ...record.lease,
-          handoffStage: 'recovering',
-          handoffOperationId: null,
-          lastRenewedAt: args.now
-        })
+      ? {
+          ...withLease(record, {
+            ...record.lease,
+            handoffStage: 'recovering',
+            handoffOperationId: null
+          }),
+          updatedAt: args.now
+        }
       : withLease(record, {
           ...record.lease,
           runtimeFence: nextAgentSessionFence(record.lease),
           handoffStage: null,
           ownerProcess: null,
           reservedSpawnToken: null,
-          processlessAt: null,
           claimStatus: 'released',
           lastRenewedAt: args.now,
           handoffOperationId: null,
-          deathEvidence:
-            args.exitProof === 'root-exit-observed'
-              ? {
-                  kind: 'exit-observed',
-                  detail: 'the provider process exited; its descendants were not verifiable',
-                  observedAt: args.now
-                }
-              : {
-                  kind: 'exit-observed',
-                  detail: 'post-acquisition cleanup proved no provider child remains',
-                  observedAt: args.now
-                }
+          deathEvidence: {
+            kind: 'exit-observed',
+            detail:
+              args.exitProof === 'root-exit-observed'
+                ? 'the provider process exited; its descendants were not proven gone'
+                : 'post-acquisition cleanup proved no provider child remains',
+            observedAt: args.now,
+            ownerFence: record.lease.runtimeFence
+          }
         })
   state.records.set(args.sessionId, next)
   state.operations = settleAgentSessionOperation(state.operations, args)
@@ -132,15 +122,17 @@ function settleFailedLease(
   ) {
     throw new Error('agent_session_ownership_unknown')
   }
-  if (args.exitProof === 'unproven') {
-    return withLease(record, {
-      ...record.lease,
-      handoffStage: record.lease.ownerProcess ? 'recovering' : 'manual-recovery',
-      // The operation is durably settled failed below; a lease still naming it would
-      // read as an in-flight transfer to every consumer that keys on the stage + id pair.
-      handoffOperationId: null,
-      lastRenewedAt: args.now
-    })
+  if (args.exitProof === 'unproven' && record.lease.ownerProcess) {
+    // Recovery is not liveness proof; retain the spawn's last renewal.
+    return {
+      ...withLease(record, {
+        ...record.lease,
+        handoffStage: 'recovering',
+        // Settlement ends the operation; clear its id so stage/id readers cannot mistake it for an in-flight transfer.
+        handoffOperationId: null
+      }),
+      updatedAt: args.now
+    }
   }
   return withLease(record, {
     ...record.lease,
@@ -148,33 +140,37 @@ function settleFailedLease(
     handoffStage: null,
     ownerProcess: null,
     reservedSpawnToken: null,
-    processlessAt: null,
     claimStatus: 'released',
     lastRenewedAt: args.now,
     handoffOperationId: null,
-    deathEvidence: acquisitionDeathEvidence(args.exitProof, args.now)
+    deathEvidence: acquisitionDeathEvidence(args.exitProof, args.now, record.lease.runtimeFence)
   })
 }
 
-/** Records only what was observed: never a tree claim the cleanup did not make. */
+/** Record only cleanup evidence actually observed; never upgrade root exit into tree death. */
 function acquisitionDeathEvidence(
   exitProof: AgentSessionAcquisitionExitProof,
-  observedAt: number
-): AgentSessionDeathEvidence {
+  observedAt: number,
+  ownerFence: number
+): AgentSessionDeathEvidence | null {
+  if (exitProof === 'unproven') {
+    return null
+  }
+  const proof = { observedAt, ownerFence }
   if (exitProof === 'processless') {
-    return { kind: 'pid-absent', detail: 'reservation failed before spawn', observedAt }
+    return { kind: 'pid-absent', detail: 'reservation failed before spawn', ...proof }
   }
   if (exitProof === 'root-exit-observed') {
     return {
       kind: 'exit-observed',
-      detail: 'the provider process exited; its descendants were not verifiable',
-      observedAt
+      detail: 'the provider process exited; its descendants were not proven gone',
+      ...proof
     }
   }
-  // Cleanup proved no child of this attempt remains; it may never have spawned.
+  // Cleanup proved no attempt child remains, including attempts that never spawned.
   return {
     kind: 'exit-observed',
     detail: 'acquisition cleanup proved no provider child remains',
-    observedAt
+    ...proof
   }
 }

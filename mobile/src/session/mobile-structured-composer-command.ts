@@ -1,15 +1,31 @@
-import type { AgentSessionConversationCommandResult } from '../../../src/shared/agent-session-conversation-command'
+import type {
+  AgentSessionConversationCommand,
+  AgentSessionConversationCommandResult
+} from '../../../src/shared/agent-session/agent-session-conversation-command'
+import type { AgentSessionFailureFact } from '../../../src/shared/agent-session-failure'
 import {
   dispatchStructuredAgentSessionComposerCommand,
   isStructuredAgentSessionComposerCommand,
+  type StructuredAgentSessionCommandRefusalCause,
   type StructuredAgentSessionComposerOptions
 } from '../../../src/shared/structured-agent-session-composer'
-import type { RpcClient } from '../transport/rpc-client'
-import type { MobileNativeChatSendOutcome } from './mobile-native-chat-send'
 import {
-  requestStructuredAgentSessionMutation,
-  retainStructuredSessionOperationId
-} from './mobile-structured-agent-session-rpc'
+  conversationCommandReply,
+  heldConversationCommandParts,
+  structuredConversationCommandHold
+} from '../../../src/shared/structured-conversation-command-hold'
+import { agentSessionWriteNoticeEnglish } from '../../../src/shared/agent-session-refusal-notice'
+import type { RpcClient } from '../transport/rpc-client'
+import type { MobileNativeChatSendOutcome } from './native-chat/mobile-native-chat-send'
+import { requestStructuredAgentSessionMutation } from './mobile-structured-agent-session-rpc'
+import type { MobileNativeChatSendErrorReporter } from './native-chat/use-mobile-native-chat-send-error'
+
+/** What the phone shows at keypress that holds a command; `background` also counts the strip mid-turn. */
+export type MobileStructuredCommandHolds = Readonly<
+  Record<Exclude<StructuredAgentSessionCommandRefusalCause, 'retry'>, boolean> & {
+    backgroundTasksRunning: boolean
+  }
+>
 
 export async function dispatchMobileStructuredCommand(input: {
   text: string
@@ -17,19 +33,26 @@ export async function dispatchMobileStructuredCommand(input: {
   client: RpcClient
   sessionId: string
   fence: number
-  sessionKey: string
   pending: { current: boolean }
-  operationIds: Map<string, string>
   controller: StructuredAgentSessionComposerOptions
-  canRun: () => boolean
-  onError: (message: string) => void
+  agentName?: string
+  holds: () => MobileStructuredCommandHolds
+  /** What the chat's loaded start-failure rows state, read when the reply lands. */
+  startFailures: () => readonly AgentSessionFailureFact[]
+  // Queued commands are held by the host; client work must not refuse them first.
+  waitsInLine: (command: AgentSessionConversationCommand) => boolean
+  /** `refusedWhile`: what the phone showed the refused command waiting on. */
+  onError: MobileNativeChatSendErrorReporter
   timeoutMs: number
 }): Promise<MobileNativeChatSendOutcome | null> {
-  if (input.pending.current) {
-    return 'rejected'
-  }
-  if (!isStructuredAgentSessionComposerCommand(input.text, input.controller.agent)) {
-    return null
+  if (
+    !isStructuredAgentSessionComposerCommand(
+      input.text,
+      input.controller.agent,
+      input.controller.sessionCommands
+    )
+  ) {
+    return input.pending.current ? 'rejected' : null
   }
   if (input.hasAttachments) {
     input.onError('Remove attachments before using a chat-session command.')
@@ -39,19 +62,33 @@ export async function dispatchMobileStructuredCommand(input: {
   const outcome = await dispatchStructuredAgentSessionComposerCommand(input.text, {
     ...input.controller,
     runConversationCommand: async (command) => {
-      if (!input.canRun()) {
+      const held = (hold: Parameters<typeof heldConversationCommandParts>[1]) =>
+        agentSessionWriteNoticeEnglish(heldConversationCommandParts(command, hold))
+      // A command on its way is the agent's work in flight.
+      if (input.pending.current) {
+        return { accepted: false, error: held('working') }
+      }
+      const shown = input.holds()
+      const waitsInLine = input.waitsInLine(command)
+      const hold = structuredConversationCommandHold({
+        waitsInLine,
+        agentWorking: shown.working,
+        promptPending: shown.prompt,
+        backgroundTasksRunning: shown.backgroundTasksRunning,
+        sendPending: shown.sending
+      })
+      // The message ahead is still sending; nothing is armed.
+      if (hold === 'ahead') {
+        return { accepted: false, error: null }
+      }
+      if (hold !== null) {
         return {
           accepted: false,
-          error: 'Wait for pending work to finish before using this command.'
+          error: held(hold),
+          ...(shown[hold] ? { refusedWhile: hold } : {})
         }
       }
       input.pending.current = true
-      const key = `${input.sessionKey}:agentSession.conversationCommand:${command}`
-      const clientOperationId = retainStructuredSessionOperationId(
-        input.operationIds,
-        key,
-        input.operationIds.get(key)
-      )
       try {
         const result =
           await requestStructuredAgentSessionMutation<AgentSessionConversationCommandResult>({
@@ -60,8 +97,7 @@ export async function dispatchMobileStructuredCommand(input: {
             expectedRuntimeFence: input.fence,
             method: 'agentSession.conversationCommand',
             fingerprintMethod: 'agentSession.conversationCommand',
-            fields: { command },
-            clientOperationId,
+            fields: waitsInLine ? { command, delivery: 'queue-if-active' } : { command },
             timeoutMs: Math.max(input.timeoutMs, 195_000)
           })
         if (
@@ -71,20 +107,37 @@ export async function dispatchMobileStructuredCommand(input: {
           unknown = true
           return {
             accepted: false,
-            error: 'Conversation operation is unconfirmed; retry checks the same operation.'
+            error: 'Conversation operation was not confirmed.'
           }
         }
-        input.operationIds.delete(key)
-        return result.status === 'accepted'
-          ? { accepted: !result.value.error, error: result.value.error ?? null }
-          : { accepted: false, error: result.message }
+        if (result.status !== 'accepted') {
+          return { accepted: false, error: result.message }
+        }
+        const reply = conversationCommandReply(result.value, {
+          agentName: input.agentName,
+          startFailures: input.startFailures()
+        })
+        // A refusal names its cause only when the phone showed it, as on desktop.
+        return {
+          accepted: reply.accepted,
+          error: reply.error,
+          ...(reply.error &&
+          reply.cause !== undefined &&
+          reply.cause !== 'retry' &&
+          shown[reply.cause]
+            ? { refusedWhile: reply.cause }
+            : {})
+        }
       } finally {
         input.pending.current = false
       }
     }
   })
   if (outcome.error) {
-    input.onError(outcome.error)
+    input.onError(
+      outcome.error,
+      outcome.refusedWhile ? { refusedWhile: outcome.refusedWhile } : undefined
+    )
   }
   return unknown ? 'unknown' : outcome.accepted ? 'accepted' : 'rejected'
 }

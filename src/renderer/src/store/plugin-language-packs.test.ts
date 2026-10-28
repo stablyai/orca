@@ -8,7 +8,7 @@ import { usePluginLanguagePackStore } from './plugin-language-packs'
 afterEach(() => {
   vi.restoreAllMocks()
   setRendererPluginLanguagePacks([])
-  usePluginLanguagePackStore.setState({ packs: [], loaded: false })
+  usePluginLanguagePackStore.setState({ entries: [], loaded: false })
   vi.unstubAllGlobals()
 })
 
@@ -22,12 +22,12 @@ describe('plugin language pack loading', () => {
       }
     })
 
-    await usePluginLanguagePackStore.getState().fetchPacks()
+    await usePluginLanguagePackStore.getState().fetchEntries()
 
     const state = usePluginLanguagePackStore.getState()
     expect(state.loaded).toBe(true)
-    expect(state.packs).toEqual([])
-    expect(() => state.packs.find(() => true)).not.toThrow()
+    expect(state.entries).toEqual([])
+    expect(() => state.entries.find(() => true)).not.toThrow()
   })
 
   it('filters malformed language-pack array members without changing valid order', async () => {
@@ -55,9 +55,9 @@ describe('plugin language pack loading', () => {
       }
     })
 
-    await usePluginLanguagePackStore.getState().fetchPacks()
+    await usePluginLanguagePackStore.getState().fetchEntries()
 
-    expect(usePluginLanguagePackStore.getState().packs).toEqual([first, second])
+    expect(usePluginLanguagePackStore.getState().entries).toEqual([first, second])
   })
 
   it.each([
@@ -81,9 +81,9 @@ describe('plugin language pack loading', () => {
       }
     })
 
-    await usePluginLanguagePackStore.getState().fetchPacks()
+    await usePluginLanguagePackStore.getState().fetchEntries()
 
-    expect(usePluginLanguagePackStore.getState().packs).toEqual([])
+    expect(usePluginLanguagePackStore.getState().entries).toEqual([])
   })
 
   it('rejects a structured-cloned cyclic catalog before i18next resource installation', async () => {
@@ -103,8 +103,8 @@ describe('plugin language pack loading', () => {
       api: { plugins: { listLanguagePacks: vi.fn().mockResolvedValue(response) } }
     })
 
-    await usePluginLanguagePackStore.getState().fetchPacks()
-    const packs = usePluginLanguagePackStore.getState().packs
+    await usePluginLanguagePackStore.getState().fetchEntries()
+    const packs = usePluginLanguagePackStore.getState().entries
 
     expect(() => setRendererPluginLanguagePacks(packs)).not.toThrow()
     expect(packs).toEqual([])
@@ -127,8 +127,8 @@ describe('plugin language pack loading', () => {
       }
     })
 
-    await usePluginLanguagePackStore.getState().fetchPacks()
-    setRendererPluginLanguagePacks(usePluginLanguagePackStore.getState().packs)
+    await usePluginLanguagePackStore.getState().fetchEntries()
+    setRendererPluginLanguagePacks(usePluginLanguagePackStore.getState().entries)
     const removeResourceBundle = vi
       .spyOn(i18n, 'removeResourceBundle')
       .mockImplementation((language) => {
@@ -156,8 +156,8 @@ describe('plugin language pack loading', () => {
       }
     })
 
-    await usePluginLanguagePackStore.getState().fetchPacks()
-    const packs = usePluginLanguagePackStore.getState().packs
+    await usePluginLanguagePackStore.getState().fetchEntries()
+    const packs = usePluginLanguagePackStore.getState().entries
 
     expect(() => setRendererPluginLanguagePacks(packs)).not.toThrow()
     expect(packs).toEqual([])
@@ -193,11 +193,11 @@ describe('plugin language pack loading', () => {
       }
     })
 
-    const olderFetch = usePluginLanguagePackStore.getState().fetchPacks()
-    await usePluginLanguagePackStore.getState().fetchPacks()
+    const olderFetch = usePluginLanguagePackStore.getState().fetchEntries()
+    await usePluginLanguagePackStore.getState().fetchEntries()
     resolveOlder([older])
     await olderFetch
 
-    expect(usePluginLanguagePackStore.getState().packs).toEqual([latest])
+    expect(usePluginLanguagePackStore.getState().entries).toEqual([latest])
   })
 })

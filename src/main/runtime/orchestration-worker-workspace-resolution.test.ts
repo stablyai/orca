@@ -21,23 +21,13 @@ vi.mock('electron', () => electronMocks)
 const scanLocalRepoWorktreesForResolution = vi.hoisted(() => vi.fn())
 vi.mock('./repo-worktree-resolution-scan', () => ({ scanLocalRepoWorktreesForResolution }))
 
-const getSshGitProvider = vi.hoisted(() => vi.fn())
-vi.mock('../providers/ssh-git-dispatch', () => ({
-  getSshGitProvider,
-  getSshGitProviderGeneration: vi.fn(() => 0),
-  requireSshGitProvider: (connectionId: string) => getSshGitProvider(connectionId)
-}))
-
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../shared/constants'
 import type { FolderWorkspace } from '../../shared/folder-workspace-types'
 import type { ProjectGroup } from '../../shared/project-group-types'
 import type { Repo } from '../../shared/repo-types'
 import type { WorktreeMeta } from '../../shared/worktree/meta-types'
-import {
-  registerSshFilesystemProvider,
-  unregisterSshFilesystemProvider
-} from '../providers/ssh-filesystem-dispatch'
 import { OrcaRuntimeService } from './orca-runtime'
+import type { HostWorktreeTarget } from '../../shared/worktree/host-qualified-identity'
 
 const REPO_ID = 'repo-1'
 const REPO_PATH = '/repo'
@@ -85,7 +75,7 @@ function makeStore(
     getRepos: () => repos,
     getAllWorktreeMeta: () => meta,
     getWorktreeMeta: (id: string) => meta[id],
-    setWorktreeMeta: (id: string, patch: Partial<WorktreeMeta>) => {
+    setWorktreeMeta: ({ id }: HostWorktreeTarget, patch: Partial<WorktreeMeta>) => {
       meta[id] = { ...(meta[id] ?? makeMeta('')), ...patch }
       return meta[id]
     },
@@ -124,7 +114,6 @@ describe('orchestration worker workspace resolution', () => {
         }
       ]
     })
-    getSshGitProvider.mockReset()
   })
 
   afterEach(async () => {
@@ -208,17 +197,6 @@ describe('orchestration worker workspace resolution', () => {
       addedAt: 1,
       connectionId: 'ssh-1'
     } satisfies Repo
-    getSshGitProvider.mockReturnValue({
-      listWorktrees: vi.fn().mockResolvedValue([
-        {
-          path: WORKTREE_PATH,
-          head: 'remote',
-          branch: 'remote-feature',
-          isBare: false,
-          isMainWorktree: false
-        }
-      ])
-    })
     const runtime = new OrcaRuntimeService(
       makeStore({
         repos: [makeStore().getRepos()[0], remoteRepo],
@@ -234,7 +212,7 @@ describe('orchestration worker workspace resolution', () => {
     )
   })
 
-  it('resolves local and SSH folder workspaces without a Git catalog scan', async () => {
+  it('resolves a local folder workspace and refuses an SSH one without a Git catalog scan', async () => {
     const localPath = await mkdtemp(join(tmpdir(), 'orca-worker-local-folder-'))
     tempPaths.push(localPath)
     const group = { id: 'group-1', name: 'Group', parentPath: localPath } as ProjectGroup
@@ -251,30 +229,24 @@ describe('orchestration worker workspace resolution', () => {
       folderPath: '/srv/app',
       connectionId: 'ssh-folder'
     }
-    registerSshFilesystemProvider('ssh-folder', {
-      stat: vi.fn().mockResolvedValue({ type: 'directory', size: 0, mtime: 1 })
-    } as never)
-    try {
-      const runtime = new OrcaRuntimeService(
-        makeStore({
-          folderWorkspaces: [localFolder, remoteFolder],
-          projectGroups: [group]
-        }) as never
-      )
+    const runtime = new OrcaRuntimeService(
+      makeStore({
+        folderWorkspaces: [localFolder, remoteFolder],
+        projectGroups: [group]
+      }) as never
+    )
 
-      await expect(
-        runtime.showManagedTerminalWorkspace('folder:local-folder')
-      ).resolves.toMatchObject({
-        id: 'folder:local-folder',
-        path: localPath,
-        hostId: 'local'
-      })
-      await expect(
-        runtime.showManagedTerminalWorkspace('id:folder:remote-folder')
-      ).resolves.toMatchObject({ id: 'folder:remote-folder', hostId: 'ssh:ssh-folder' })
-    } finally {
-      unregisterSshFilesystemProvider('ssh-folder')
-    }
+    await expect(
+      runtime.showManagedTerminalWorkspace('folder:local-folder')
+    ).resolves.toMatchObject({
+      id: 'folder:local-folder',
+      path: localPath,
+      hostId: 'local'
+    })
+    // No SSH filesystem provider is installed, so the remote folder is unavailable.
+    await expect(runtime.showManagedTerminalWorkspace('id:folder:remote-folder')).rejects.toThrow(
+      'folder_workspace_path_unavailable:/srv/app'
+    )
     expect(scanLocalRepoWorktreesForResolution).not.toHaveBeenCalled()
   })
 

@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto'
-import { runProcess } from '../../src/shared/child-process/run-process'
+import { runProcess } from '@orca/process-host'
 import type { ElectronApplication, Page } from '@stablyai/playwright-test'
 import { test, expect } from './helpers/orca-app'
 import { waitForSessionReady } from './helpers/store'
@@ -33,8 +33,7 @@ async function openSettings(page: Page): Promise<void> {
 }
 
 async function dismissTransientAnnouncement(page: Page): Promise<void> {
-  // Why: first-run announcements are independent of this setting and can cover
-  // the settings pane on fresh CI profiles before the search input is used.
+  // Dismiss independent first-run announcements before they cover Settings search.
   const maybeLaterButton = page.getByRole('button', { name: 'Maybe Later' })
   const visible = await maybeLaterButton
     .isVisible({

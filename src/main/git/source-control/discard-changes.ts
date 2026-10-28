@@ -3,15 +3,17 @@ import {
   removeSafeUntrackedDiscardTarget,
   removeSafeUntrackedDiscardTargets
 } from '../../../shared/git-discard-path-safety'
+import { partitionTrackedPathSpecs } from '../../../shared/git-tracked-pathspecs'
 import type { GitRuntimeOptions } from '../git-runtime-options'
 import { gitOptionsForWorktree } from '../git-runtime-options'
 import { gitExecFileAsync } from '../runner'
 import { invalidateGitReadCaches } from './git-read-cache-invalidation'
-import { bulkPathspecCommands, isTrackedPathSpec, literalPathspec } from './git-pathspec'
+import { bulkPathspecCommands, literalPathspec } from './git-pathspec'
+import { encodeGitPathspecs } from '../../../shared/git-pathspec-stdin'
+import { redoWriteForDriveCheckoutSuspects } from './drive-checkout-suspect-writes'
 
-/**
- * Discard working tree changes for a file.
- */
+const DISCARD_WRITE = ['restore', '--worktree'] as const
+
 export async function discardChanges(
   worktreePath: string,
   filePath: string,
@@ -28,23 +30,22 @@ export async function discardChanges(
     let tracked = false
     try {
       await gitExecFileAsync(
-        ['ls-files', '--error-unmatch', '--', literalPathspec(filePath, options)],
+        ['ls-files', '--error-unmatch', '--', literalPathspec(filePath, worktreePath, options)],
         {
           ...gitOptionsForWorktree(worktreePath, options)
         }
       )
       tracked = true
-    } catch {
-      // File is not tracked by git
-    }
+    } catch {}
 
     if (tracked) {
       await gitExecFileAsync(
-        ['restore', '--worktree', '--source=HEAD', '--', literalPathspec(filePath, options)],
+        ['restore', '--worktree', '--', literalPathspec(filePath, worktreePath, options)],
         {
           ...gitOptionsForWorktree(worktreePath, options)
         }
       )
+      await redoWriteForDriveCheckoutSuspects(worktreePath, [filePath], DISCARD_WRITE, options)
       return
     }
 
@@ -66,12 +67,10 @@ async function listTrackedPathSpecs(
   for (const args of commands) {
     const { stdout } = await gitExecFileAsync(args, {
       ...gitOptionsForWorktree(worktreePath, options),
-      // Why: this buffers rather than streams, so it must fence -- an unfenced WSL
-      // login shell glues its rc banner onto the first NUL record, and a tracked
-      // path that fails to match is silently reclassified as untracked.
+      // Fence WSL rc banners: a corrupted first NUL record could misclassify a tracked path as untracked.
       captureWslLoginShellOutput: true
     })
-    // Why: a tracked directory can hold enough paths to exceed the JS argument limit.
+    // Iterate instead of spreading: tracked directories can exceed the JS argument limit.
     for (const trackedPath of stdout.split('\0')) {
       if (trackedPath) {
         trackedPaths.push(trackedPath)
@@ -86,17 +85,13 @@ async function cleanUntrackedPaths(
   filePaths: readonly string[],
   options: GitRuntimeOptions = {}
 ): Promise<void> {
-  // Why: Git pathspec cleanup avoids raw recursive deletion through symlinked parents.
-  // A pathspec-free `clean -ffdx` would sweep the whole worktree; the chunker emits no empty chunk.
+  // Git pathspecs avoid recursive deletion through symlinked parents; empty chunks must never invoke clean.
   const commands = bulkPathspecCommands(['clean', '-ffdx', '--'], filePaths, worktreePath, options)
   for (const args of commands) {
     await gitExecFileAsync(args, { ...gitOptionsForWorktree(worktreePath, options) })
   }
 }
 
-/**
- * Discard working tree changes for many paths in a small number of subprocesses.
- */
 export async function bulkDiscardChanges(
   worktreePath: string,
   filePaths: string[],
@@ -117,26 +112,25 @@ export async function bulkDiscardChanges(
     }
 
     const trackedPathSpecs = await listTrackedPathSpecs(worktreePath, filePaths, options)
-    const trackedPaths = filePaths.filter((filePath) =>
-      isTrackedPathSpec(filePath, trackedPathSpecs)
-    )
-    const untrackedPaths = filePaths.filter(
-      (filePath) => !isTrackedPathSpec(filePath, trackedPathSpecs)
-    )
+    const { trackedPaths, untrackedPaths } = partitionTrackedPathSpecs(filePaths, trackedPathSpecs)
     await removeSafeUntrackedDiscardTargets(
       worktreePath,
       untrackedPaths,
       (targetPaths) => cleanUntrackedPaths(worktreePath, targetPaths, options),
       async () => {
-        const commands = bulkPathspecCommands(
-          ['restore', '--worktree', '--source=HEAD', '--'],
-          trackedPaths,
-          worktreePath,
-          options
-        )
-        for (const args of commands) {
-          await gitExecFileAsync(args, { ...gitOptionsForWorktree(worktreePath, options) })
+        if (trackedPaths.length === 0) {
+          return
         }
+        await gitExecFileAsync(
+          ['restore', '--worktree', '--pathspec-from-file=-', '--pathspec-file-nul'],
+          {
+            ...gitOptionsForWorktree(worktreePath, options),
+            stdin: encodeGitPathspecs(
+              trackedPaths.map((filePath) => literalPathspec(filePath, worktreePath, options))
+            )
+          }
+        )
+        await redoWriteForDriveCheckoutSuspects(worktreePath, trackedPaths, DISCARD_WRITE, options)
       }
     )
   } finally {

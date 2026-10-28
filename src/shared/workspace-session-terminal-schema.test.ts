@@ -2,6 +2,28 @@ import { describe, expect, it } from 'vitest'
 import { parseWorkspaceSession } from './workspace-session-schema'
 
 describe('parseWorkspaceSession terminal fields', () => {
+  it('preserves the native chat owner leaf in a terminal layout', () => {
+    const result = parseWorkspaceSession({
+      activeRepoId: null,
+      activeWorktreeId: 'wt',
+      activeTabId: 'tab1',
+      tabsByWorktree: {},
+      terminalLayoutsByTabId: {
+        tab1: {
+          root: { type: 'leaf', leafId: 'leaf-chat' },
+          activeLeafId: 'leaf-chat',
+          expandedLeafId: null,
+          chatLeafId: 'leaf-chat'
+        }
+      }
+    })
+
+    expect(result.ok).toBe(true)
+    if (result.ok) {
+      expect(result.value.terminalLayoutsByTabId.tab1?.chatLeafId).toBe('leaf-chat')
+    }
+  })
+
   it('preserves terminal startup cwd while accepting older omitted fields', () => {
     const result = parseWorkspaceSession({
       activeRepoId: null,
@@ -71,5 +93,50 @@ describe('parseWorkspaceSession terminal fields', () => {
     if (result.ok) {
       expect(result.value.tabsByWorktree.wt).toEqual([])
     }
+  })
+
+  // Recovery reads the terminal row’s viewMode; losing it on load remounts chat-owned hidden surfaces (#19745).
+  describe('terminal row viewMode', () => {
+    function parseRow(row: Record<string, unknown>): Record<string, unknown> | undefined {
+      const result = parseWorkspaceSession({
+        activeRepoId: null,
+        activeWorktreeId: 'wt',
+        activeTabId: 'tab1',
+        tabsByWorktree: {
+          wt: [
+            {
+              id: 'tab1',
+              ptyId: null,
+              worktreeId: 'wt',
+              title: 'Terminal 1',
+              customTitle: null,
+              color: null,
+              sortOrder: 0,
+              createdAt: 0,
+              ...row
+            }
+          ]
+        },
+        terminalLayoutsByTabId: {}
+      })
+      expect(result.ok).toBe(true)
+      return result.ok ? result.value.tabsByWorktree.wt[0] : undefined
+    }
+
+    it('survives the load boundary so a restored row still reads chat-owned', () => {
+      expect(parseRow({ viewMode: 'chat' })?.viewMode).toBe('chat')
+    })
+
+    it('keeps an explicit terminal mode', () => {
+      expect(parseRow({ viewMode: 'terminal' })?.viewMode).toBe('terminal')
+    })
+
+    it('leaves a row persisted by an older build undefined rather than failing', () => {
+      expect(parseRow({})?.viewMode).toBeUndefined()
+    })
+
+    it('degrades an unknown mode from a newer build instead of dropping the tab', () => {
+      expect(parseRow({ viewMode: 'holographic' })?.viewMode).toBe('terminal')
+    })
   })
 })

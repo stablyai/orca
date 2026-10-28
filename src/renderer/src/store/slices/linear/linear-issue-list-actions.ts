@@ -8,7 +8,10 @@ import type {
   LinearSliceSet
 } from './linear-slice-contract'
 import { clampLinearIssueListLimit } from '../../../../../shared/linear/issue-read-limits'
-import { isIntegrationCredentialDecryptionError } from '../../../../../shared/integration-credential-errors'
+import {
+  credentialDecryptionMessage,
+  isIntegrationCredentialDecryptionError
+} from '../../../../../shared/integration-credential-errors'
 import {
   isLinearIssueAttributeFilterUnsupportedError,
   linearListIssues,
@@ -47,7 +50,7 @@ export function createLinearIssueListActions(
     searchLinearIssues: async (query: string, limit = 20, options?: LinearFetchOptions) => {
       const scope = getLinearReadScope(get().settings, options?.sourceContext)
       const { contextKey } = scope
-      const workspaceId = getSelectedWorkspaceId(get().linearStatus)
+      const workspaceId = getSelectedWorkspaceId(get().linearStatus, options)
       const cacheKey = scopedLinearCacheKey(scope, linearSearchCacheKey(workspaceId, query, limit))
       const cached = get().linearSearchCache[cacheKey]
       if (!options?.force && isFresh(cached)) {
@@ -91,8 +94,10 @@ export function createLinearIssueListActions(
         })
         .catch((error) => {
           console.warn('[linear] searchLinearIssues failed:', error)
+          const credentialError = isIntegrationCredentialDecryptionError(error)
           if (
-            (isIntegrationCredentialDecryptionError(error) || looksLikeAuthError(error)) &&
+            !(scope.explicitSource && options?.workspaceId !== undefined) &&
+            (credentialError || looksLikeAuthError(error)) &&
             canWriteLinearReadResult(
               contextKey,
               requestCacheGeneration,
@@ -104,7 +109,13 @@ export function createLinearIssueListActions(
             if (!shouldRefreshStatusAfterRead(workspaceId, get().linearStatus)) {
               void get().checkLinearConnection(true)
             }
-            return []
+            if (!credentialError) {
+              return []
+            }
+          }
+          // Why: [] would read as "no matches"; the caller shows this read's own error.
+          if (credentialError) {
+            throw new Error(credentialDecryptionMessage('Linear'))
           }
           return get().linearSearchCache[cacheKey]?.data ?? []
         })
@@ -113,6 +124,7 @@ export function createLinearIssueListActions(
             inflightSearchRequests.delete(cacheKey)
           }
           if (
+            !(scope.explicitSource && options?.workspaceId !== undefined) &&
             shouldRefreshStatusAfterRead(workspaceId, get().linearStatus) &&
             canWriteLinearReadResult(
               contextKey,
@@ -140,7 +152,7 @@ export function createLinearIssueListActions(
     listLinearIssues: async (args: LinearIssueListReadArgs, options?: LinearFetchOptions) => {
       const scope = getLinearReadScope(get().settings, options?.sourceContext)
       const { contextKey } = scope
-      const workspaceId = getSelectedWorkspaceId(get().linearStatus)
+      const workspaceId = getSelectedWorkspaceId(get().linearStatus, options)
       const filter = args.filter ?? 'assigned'
       const effectiveLimit = clampLinearIssueListLimit(args.limit)
       const attributeFilter = normalizeListAttributeFilter(args.attributeFilter)
@@ -196,13 +208,14 @@ export function createLinearIssueListActions(
         })
         .catch((error) => {
           console.warn('[linear] listLinearIssues failed:', error)
-          // Why: capability mismatch is actionable (update remote runtime). Swallowing
-          // it as [] would look like "no issues match filters" and hide the fix.
+          // Surface capability mismatch as actionable runtime update, never misleading empty filter matches.
           if (isLinearIssueAttributeFilterUnsupportedError(error)) {
             throw error
           }
+          const credentialError = isIntegrationCredentialDecryptionError(error)
           if (
-            (isIntegrationCredentialDecryptionError(error) || looksLikeAuthError(error)) &&
+            !(scope.explicitSource && options?.workspaceId !== undefined) &&
+            (credentialError || looksLikeAuthError(error)) &&
             canWriteLinearReadResult(
               contextKey,
               requestCacheGeneration,
@@ -214,7 +227,12 @@ export function createLinearIssueListActions(
             if (!shouldRefreshStatusAfterRead(workspaceId, get().linearStatus)) {
               void get().checkLinearConnection(true)
             }
-            return emptyLinearCollection<LinearIssue>()
+            if (!credentialError) {
+              return emptyLinearCollection<LinearIssue>()
+            }
+          }
+          if (credentialError) {
+            throw new Error(credentialDecryptionMessage('Linear'))
           }
           return get().linearListCache[cacheKey]?.data ?? emptyLinearCollection<LinearIssue>()
         })
@@ -223,6 +241,7 @@ export function createLinearIssueListActions(
             inflightListRequests.delete(cacheKey)
           }
           if (
+            !(scope.explicitSource && options?.workspaceId !== undefined) &&
             shouldRefreshStatusAfterRead(workspaceId, get().linearStatus) &&
             canWriteLinearReadResult(
               contextKey,

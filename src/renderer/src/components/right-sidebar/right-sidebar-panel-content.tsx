@@ -7,7 +7,7 @@ const FileExplorer = lazy(() => import('./FileExplorer'))
 const SourceControl = lazy(() => import('./SourceControl'))
 const ChecksPanel = lazy(() => import('./ChecksPanel'))
 const PortsPanel = lazy(() => import('./PortsPanel'))
-const AiVaultPanel = lazy(() => import('./AiVaultPanel'))
+const AiVaultSidebarPanel = lazy(() => import('./AiVaultSidebarPanel'))
 const FolderWorkspaceWorktreesPanel = lazy(() => import('./FolderWorkspaceWorktreesPanel'))
 const FolderWorkspacePrChecksPanel = lazy(() => import('./FolderWorkspacePrChecksPanel'))
 const PluginPanel = lazy(() => import('./PluginPanel'))
@@ -27,24 +27,18 @@ export function RightSidebarPanelContent({
         {effectiveTab === 'explorer' && <FileExplorer />}
         {effectiveTab === 'source-control' && <SourceControl />}
         {effectiveTab === 'checks' && <ChecksPanel />}
-        {/* Why: SSH port forwarding still depends on the raw ports.detect data,
-            which the workspace-scoped status bar popover intentionally does not
-            expose. Keep this panel reachable only for SSH worktrees. */}
+        {/* SSH forwarding needs raw ports.detect data absent from the workspace-scoped status popover. */}
         {effectiveTab === 'ports' && (
           <PortsPanel isVisible={rightSidebarOpen && effectiveTab === 'ports'} />
         )}
-        {effectiveTab === 'vault' && <AiVaultPanel />}
+        {effectiveTab === 'vault' && <AiVaultSidebarPanel />}
         {effectiveTab === 'workspaces' && <FolderWorkspaceWorktreesPanel />}
         {effectiveTab === 'pr-checks' && (
           <FolderWorkspacePrChecksPanel
             isVisible={rightSidebarOpen && effectiveTab === 'pr-checks'}
           />
         )}
-        {/* Plugin-contributed tabs route by key prefix; the panel itself
-            handles plugins that have since been uninstalled or disabled.
-            Why key: switching plugin tabs must remount the sandboxed iframe —
-            a reused frame could keep posting messages while the bridge is
-            rebound under the next plugin's identity. */}
+        {/* Remount on plugin changes so an old iframe cannot post through the next plugin's rebound bridge. */}
         {isPluginPanelTabKey(effectiveTab) && (
           <PluginPanel key={effectiveTab} tabKey={effectiveTab} />
         )}

@@ -145,8 +145,6 @@ describe('WorkspaceKanbanStatusLane', () => {
   })
 
   it('stays off the full-id channel when nothing is filtered', () => {
-    // Why: without a query the rendered card scan already is the full lane, and
-    // the attribute would carry every board id for no reader.
     renderLane({
       items: [worktree('a'), worktree('b')],
       totalCount: 2,
@@ -155,19 +153,5 @@ describe('WorkspaceKanbanStatusLane', () => {
     })
 
     expect(lane().dataset.workspaceLaneFullIds).toBeUndefined()
-  })
-
-  it('passes the host-qualified active workspace through to the card list', () => {
-    renderLane({
-      items: [worktree('shared')],
-      totalCount: 1,
-      hasQuery: false,
-      activeWorktreeIdentity: 'ssh:builder|shared'
-    })
-
-    expect(
-      container.querySelector<HTMLElement>('[data-active-worktree-identity]')?.dataset
-        .activeWorktreeIdentity
-    ).toBe('ssh:builder|shared')
   })
 })

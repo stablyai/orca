@@ -1,7 +1,6 @@
-/* oxlint-disable react-doctor/no-adjust-state-on-prop-change -- Why: selection annotations are synchronized from Monaco editor selection and layout APIs, not derived React props. */
 import React, { useRef, useEffect, useLayoutEffect, useMemo, useState } from 'react'
 import Editor from '@monaco-editor/react'
-import type { editor } from 'monaco-editor'
+import type { editor, IRange } from 'monaco-editor'
 import type { MarkdownDocument } from '../../../../shared/filesystem-entry-types'
 import { useAppStore } from '@/store'
 import '@/lib/monaco-setup'
@@ -10,7 +9,10 @@ import { computeEditorFontSize, resolveEditorFontFamily } from '@/lib/editor-fon
 import { useContextualCopySetup } from './useContextualCopySetup'
 import { MonacoGutterContextMenu } from './MonacoGutterContextMenu'
 import { isLinuxUserAgent } from '../terminal-pane/pane-helpers'
+import { MAX_TOKENIZATION_LINE_LENGTH } from '@/lib/monaco-languages/monarch-embed-entry-budget'
 import { buildFileEditorWordWrapOptions } from './file-editor-word-wrap-options'
+import { toEditorModelUri } from './editor-model-uri'
+import { getEditorModelOwnerKey } from './editor-model-owner'
 import { getMonacoAutoHeightForContent, isMonacoAutoHeightCapped } from './monaco-auto-height'
 import { monacoFindOptions } from './monaco-find-options'
 import { useMonacoRevealScheduler } from './use-monaco-reveal-scheduler'
@@ -19,8 +21,10 @@ import { useMonacoContentSyncBridge } from './use-monaco-content-sync-bridge'
 import { useMonacoMarkdownAnnotations } from './use-monaco-markdown-annotations'
 import { useMonacoEditorDecorations } from './use-monaco-editor-decorations'
 import { useMonacoEditorMount } from './use-monaco-editor-mount'
+import { useDocumentDarkTheme } from '@/hooks/use-document-dark-theme'
 import { snapshotMonacoViewState } from './monaco-view-state-persistence'
 import { MonacoMarkdownAnnotationOverlay } from './MonacoMarkdownAnnotationOverlay'
+import { useEditorModelRekeyCarry } from './editor-model-rekey-carry'
 
 type MonacoEditorProps = {
   fileId: string
@@ -41,6 +45,8 @@ type MonacoEditorProps = {
   markdownAnnotationsEnabled?: boolean
   conflictDecorationsEnabled?: boolean
   readOnly?: boolean
+  // Why: shows another tab's record read-only; never moves its cursor line or takes its reveals.
+  passiveMirror?: boolean
   liveTail?: boolean
   autoHeight?: boolean
 }
@@ -63,6 +69,7 @@ export default function MonacoEditor({
   markdownAnnotationsEnabled = false,
   conflictDecorationsEnabled = false,
   readOnly = false,
+  passiveMirror = false,
   liveTail = false,
   autoHeight = false
 }: MonacoEditorProps): React.JSX.Element {
@@ -74,10 +81,10 @@ export default function MonacoEditor({
   languageRef.current = language
   const unregisterFileSearchSelectionRef = useRef<(() => void) | null>(null)
   const { setupCopy, toastNode } = useContextualCopySetup()
-  // Why: hold the throttle timer in a ref so unmount cleanup can cancel a pending write before snapshotting the final scroll position.
+  // Cancel pending throttled writes before snapshotting final scroll on unmount.
   const scrollThrottleTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const propsRef = useRef({ relativePath, language, onSave, onContentChange })
-  // Why: assign during render so the ref is current before any handler reads it (a useEffect would leave a one-render stale window).
+  // Refresh during render so event handlers cannot read one-render-stale props.
   propsRef.current = { relativePath, language, onSave, onContentChange }
   const readOnlyRef = useRef(readOnly)
   readOnlyRef.current = readOnly
@@ -94,6 +101,17 @@ export default function MonacoEditor({
   )
   const editorFontFamily = resolveEditorFontFamily(settings)
   const editorWordWrap = settings?.editorWordWrap
+  const modelOwnerKey = useAppStore((state) => {
+    const file = state.openFiles?.find((entry) => entry.id === fileId)
+    return file
+      ? getEditorModelOwnerKey(file, state)
+      : JSON.stringify([null, `unresolved:${fileId}`])
+  })
+  const modelUri = useMemo(
+    () => toEditorModelUri(filePath, modelOwnerKey),
+    [filePath, modelOwnerKey]
+  )
+  useEditorModelRekeyCarry(fileId, modelUri)
   const estimatedAutoHeight = useMemo(() => {
     if (!autoHeight) {
       return null
@@ -106,17 +124,14 @@ export default function MonacoEditor({
   const autoHeightLineHeight = Math.ceil(editorFontSize * 1.45)
   const autoHeightUsesInternalScroll =
     autoHeight && isMonacoAutoHeightCapped(renderedEditorHeight, autoHeightLineHeight)
-  // Why: @monaco-editor/react skips its value→model sync on the first post-remount render, so retained models need an explicit sync or they show stale text.
-  // Invariant: the mount path must read `contentRef.current` (guaranteed latest), never `lastSyncedContentRef.current` (may be stale pre-mount).
+  // The React wrapper skips first post-remount value sync; reconcile retained models from live contentRef, never the possibly stale lastSyncedContentRef.
   const contentRef = useRef(content)
   contentRef.current = content
-  // Gutter context menu state
   const [gutterMenuOpen, setGutterMenuOpen] = useState(false)
   const [gutterMenuPoint, setGutterMenuPoint] = useState({ x: 0, y: 0 })
   const [gutterMenuLine, setGutterMenuLine] = useState(1)
-  const isDark =
-    settings?.theme === 'dark' ||
-    (settings?.theme === 'system' && window.matchMedia('(prefers-color-scheme: dark)').matches)
+  const [gutterMenuSelection, setGutterMenuSelection] = useState<IRange | null>(null)
+  const isDark = useDocumentDarkTheme()
 
   const { queueReveal, cancelScheduledReveal, clearTransientRevealHighlight } =
     useMonacoRevealScheduler()
@@ -125,7 +140,8 @@ export default function MonacoEditor({
     content,
     contentRef,
     contentSyncModeRef,
-    filePath,
+    modelKey: modelUri,
+    fileId,
     onContentChange
   })
   const annotations = useMonacoMarkdownAnnotations({
@@ -138,10 +154,10 @@ export default function MonacoEditor({
     markdownAnnotationsEnabled
   })
 
-  // Why useLayoutEffect: cleanup runs before @monaco-editor/react disposes the editor, so getScrollTop() still reads valid state on unmount.
+  // Layout cleanup precedes the wrapper’s editor disposal, keeping final scroll readable.
   useLayoutEffect(() => {
     return () => {
-      // Why: cancel the pending throttled write so it can't fire after this snapshot and overwrite the final position with a stale value.
+      // Cancel throttled writes so stale positions cannot overwrite the final snapshot.
       if (scrollThrottleTimerRef.current !== null) {
         clearTimeout(scrollThrottleTimerRef.current)
         scrollThrottleTimerRef.current = null
@@ -152,9 +168,8 @@ export default function MonacoEditor({
       unregisterFileSearchSelectionRef.current?.()
       unregisterFileSearchSelectionRef.current = null
     }
-  }, [cancelScheduledReveal, clearTransientRevealHighlight, viewStateKey])
+  }, [cancelScheduledReveal, clearTransientRevealHighlight, modelUri, viewStateKey])
 
-  // Update editor options when settings change
   useEffect(() => {
     if (!editorRef.current) {
       return
@@ -162,9 +177,10 @@ export default function MonacoEditor({
     editorRef.current.updateOptions({
       fontSize: editorFontSize,
       fontFamily: editorFontFamily,
-      ...buildFileEditorWordWrapOptions(editorWordWrap)
+      ...buildFileEditorWordWrapOptions(editorWordWrap),
+      readOnly
     })
-  }, [editorFontFamily, editorFontSize, editorWordWrap])
+  }, [editorFontFamily, editorFontSize, editorWordWrap, readOnly])
 
   const decorations = useMonacoEditorDecorations({
     editorRef,
@@ -178,8 +194,10 @@ export default function MonacoEditor({
   const handleMount = useMonacoEditorMount({
     fileId,
     filePath,
+    modelOwnerKey,
     viewStateKey,
     viewStateId,
+    passiveMirror,
     worktreeId,
     autoHeight,
     autoHeightLineHeight,
@@ -198,19 +216,48 @@ export default function MonacoEditor({
     contentSync,
     decorations,
     annotations,
-    gutterMenu: { setGutterMenuOpen, setGutterMenuPoint, setGutterMenuLine }
+    gutterMenu: {
+      setGutterMenuOpen,
+      setGutterMenuPoint,
+      setGutterMenuLine,
+      setGutterMenuSelection
+    }
   })
 
-  // Navigate to line and highlight match when requested (for already-mounted editor)
   useEffect(() => {
     if (!revealLine || !editorRef.current) {
       return
     }
-    queueReveal(editorRef.current, revealLine, revealColumn ?? 1, revealMatchLength ?? 0, () => {
-      // Why: clear the pending payload only after the queued reveal runs, so navigation isn't lost if the editor unmounts first.
-      setPendingEditorReveal(null)
-    })
-  }, [queueReveal, revealLine, revealColumn, revealMatchLength, setPendingEditorReveal])
+    const reveal = useAppStore.getState().pendingEditorReveal
+    if (reveal?.viewStateId && (reveal.fileId !== fileId || reveal.viewStateId !== viewStateId)) {
+      return
+    }
+    queueReveal(
+      editorRef.current,
+      revealLine,
+      revealColumn ?? 1,
+      revealMatchLength ?? 0,
+      () => {
+        reveal?.onApplied?.()
+        // Why: a newer request may arrive during the editor-owned reveal frames.
+        if (useAppStore.getState().pendingEditorReveal === reveal) {
+          setPendingEditorReveal(null)
+        }
+      },
+      reveal?.canApply
+        ? () =>
+            useAppStore.getState().pendingEditorReveal === reveal && reveal.canApply?.() !== false
+        : undefined
+    )
+  }, [
+    queueReveal,
+    revealLine,
+    revealColumn,
+    revealMatchLength,
+    setPendingEditorReveal,
+    fileId,
+    viewStateId
+  ])
 
   return (
     <div
@@ -227,15 +274,19 @@ export default function MonacoEditor({
         onSubmitMarkdownComment={annotations.handleSubmitMarkdownComment}
       />
       <Editor
+        key={modelUri}
         height={renderedEditorHeight === null ? '100%' : `${renderedEditorHeight}px`}
         language={language}
-        // Why: defaultValue, not controlled value — Orca owns post-mount content sync; a controlled path would double setValue.
+        // Use defaultValue because Orca owns later content sync; controlled values would duplicate setValue.
         defaultValue={content}
         theme={isDark ? 'vs-dark' : 'vs'}
         onChange={contentSync.handleChange}
         onMount={handleMount}
         options={{
-          // Why: only the file editor honors this; Monaco 0.55 DiffEditor hard-overrides minimap.enabled=false on sub-editors (see diffEditorEditors._adjustOptionsForSubEditor).
+          dropIntoEditor: { enabled: false },
+          // This global option also affects diff and Peek; it is defense in depth, not protection from Monarch embedding recursion below the cap.
+          maxTokenizationLineLength: MAX_TOKENIZATION_LINE_LENGTH,
+          // Monaco 0.55 forcibly disables diff sub-editor minimaps; only file editors honor this setting.
           minimap: { enabled: settings?.editorMinimapEnabled ?? false },
           scrollBeyondLastLine: false,
           ...buildFileEditorWordWrapOptions(editorWordWrap),
@@ -256,11 +307,12 @@ export default function MonacoEditor({
           cursorSmoothCaretAnimation: 'off',
           padding: { top: 0 },
           find: monacoFindOptions,
-          // Why: Monaco owns its rendered line surface, so align its selection-clipboard with the app opt-out (the global DOM hook can't).
+          // Monaco owns rendered lines, so its selection clipboard must enforce the app opt-out independently of the global DOM hook.
           selectionClipboard: settings?.primarySelectionMiddleClickPaste ?? isLinuxUserAgent()
         }}
-        path={filePath}
-        // Why: Orca owns cursor/scroll restoration, so disable @monaco-editor/react's competing view-state Map.
+        // Build a model URI because the React wrapper’s Uri.parse treats Windows drive letters as schemes.
+        path={modelUri}
+        // Orca owns cursor/scroll restoration; disable the wrapper’s competing view-state map.
         saveViewState={false}
         keepCurrentModel
       />
@@ -271,6 +323,7 @@ export default function MonacoEditor({
         onOpenChange={setGutterMenuOpen}
         point={gutterMenuPoint}
         line={gutterMenuLine}
+        selection={gutterMenuSelection}
         filePath={filePath}
         relativePath={relativePath}
       />

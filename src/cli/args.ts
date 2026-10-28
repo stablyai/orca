@@ -19,23 +19,54 @@ export type ParsedArgs = {
 
 export const GLOBAL_FLAGS = CLI_GLOBAL_FLAGS
 const GLOBAL_VALUE_FLAGS = new Set(CLI_GLOBAL_VALUE_FLAGS)
+/** Global flags a local-only command offers; it still accepts the remote selectors, only to refuse them. */
+export const LOCAL_COMMAND_FLAGS = GLOBAL_FLAGS.filter((flag) => !GLOBAL_VALUE_FLAGS.has(flag))
 export const BOOLEAN_FLAGS = CLI_BOOLEAN_FLAGS
 
 export const REPEATED_FLAG_SEPARATOR = '\u0000'
 const REPEATABLE_STRING_FLAGS = new Set(['label', 'skill'])
 
-function setFlagValue(flags: Map<string, string | boolean>, name: string, value: string): void {
+function setFlagValue(
+  flags: Map<string, string | boolean>,
+  name: string,
+  value: string,
+  repeatable: ReadonlySet<string>
+): void {
   const existing = flags.get(name)
-  if (typeof existing === 'string' && REPEATABLE_STRING_FLAGS.has(name)) {
+  if (typeof existing === 'string' && repeatable.has(name)) {
     flags.set(name, `${existing}${REPEATED_FLAG_SEPARATOR}${value}`)
     return
   }
   flags.set(name, value)
 }
 
-export function parseArgs(argv: string[], commandPaths?: readonly string[][]): ParsedArgs {
+// Prefer the longest path so command groups cannot shadow leaf commands.
+function specForPathPrefix(
+  specs: readonly CommandSpec[],
+  path: readonly string[]
+): CommandSpec | undefined {
+  let best: { spec: CommandSpec; length: number } | undefined
+  for (const spec of specs) {
+    for (const candidate of specPaths(spec)) {
+      if (
+        candidate.length <= path.length &&
+        candidate.every((part, index) => part === path[index]) &&
+        (!best || candidate.length > best.length)
+      ) {
+        best = { spec, length: candidate.length }
+      }
+    }
+  }
+  return best?.spec
+}
+
+export function parseArgs(
+  argv: string[],
+  commandPaths?: readonly string[][],
+  specs: readonly CommandSpec[] = []
+): ParsedArgs {
   const commandPath: string[] = []
-  const flags = new Map<string, string | boolean>()
+  const flagEntries: [string, string | boolean][] = []
   const commandIndex = findCliCommandIndex(argv, commandPaths ?? [])
 
   for (let i = 0; i < argv.length; i += 1) {
@@ -46,35 +77,45 @@ export function parseArgs(argv: string[], commandPaths?: readonly string[][]): P
     }
 
     const assignment = token.slice(2)
-    // Why: `--flag=value` is the only unambiguous way to pass a value that
-    // itself starts with `--` (e.g. `--text=--help`); the space-separated form
-    // treats a `--`-leading next token as a new flag, so it can't express one.
+    // --flag=value permits values starting with -- without treating them as another flag.
     const equalsIndex = assignment.indexOf('=')
     if (equalsIndex !== -1) {
-      setFlagValue(flags, assignment.slice(0, equalsIndex), assignment.slice(equalsIndex + 1))
+      flagEntries.push([assignment.slice(0, equalsIndex), assignment.slice(equalsIndex + 1)])
       continue
     }
 
     const flag = assignment
     if (BOOLEAN_FLAGS.has(flag)) {
-      flags.set(flag, true)
+      flagEntries.push([flag, true])
       continue
     }
-    // Why: a pre-command flag must not consume a registry-resolvable command path.
+    // Pre-command flags must not consume a registered command path.
     if (commandPath.length === 0 && i + 1 === commandIndex) {
-      flags.set(flag, true)
+      flagEntries.push([flag, true])
       continue
     }
     const hasNext = i + 1 < argv.length
     const next = argv[i + 1]
     if (!hasNext || next.startsWith('--')) {
-      flags.set(flag, true)
+      flagEntries.push([flag, true])
       continue
     }
-    setFlagValue(flags, flag, next)
+    flagEntries.push([flag, next])
     i += 1
   }
 
+  const declared = specForPathPrefix(specs, commandPath)?.repeatableFlags
+  const repeatable = declared
+    ? new Set([...REPEATABLE_STRING_FLAGS, ...declared])
+    : REPEATABLE_STRING_FLAGS
+  const flags = new Map<string, string | boolean>()
+  for (const [name, value] of flagEntries) {
+    if (typeof value === 'string') {
+      setFlagValue(flags, name, value, repeatable)
+    } else {
+      flags.set(name, value)
+    }
+  }
   return { commandPath, flags }
 }
 
@@ -94,44 +135,10 @@ export function matches(actual: string[], expected: string[]): boolean {
   )
 }
 
-export function supportsBrowserPageFlag(commandPath: string[]): boolean {
-  const joined = commandPath.join(' ')
-  if (['open', 'status'].includes(commandPath[0])) {
-    return false
-  }
-  if (
-    [
-      'account',
-      'artifacts',
-      'automations',
-      'project',
-      'repo',
-      'worktree',
-      'terminal',
-      'file',
-      'orchestration',
-      'computer',
-      'emulator',
-      'note',
-      'diagnostics',
-      'linear',
-      'skills',
-      'agent-context'
-    ].includes(commandPath[0])
-  ) {
-    return false
-  }
-  return ![
-    'tab list',
-    'tab create',
-    'tab current',
-    'tab profile list',
-    'tab profile create',
-    'tab profile delete'
-  ].includes(joined)
+export function supportsBrowserPageFlag(spec: Pick<CommandSpec, 'browserPageTarget'>): boolean {
+  return spec.browserPageTarget === true
 }
 
-// Why: validation and agent discovery must expose the same effective flag set.
 export function effectiveAllowedFlags(spec: CommandSpec): string[] {
   if (spec.argumentMode === 'passthrough') {
     return []
@@ -140,63 +147,40 @@ export function effectiveAllowedFlags(spec: CommandSpec): string[] {
     ...new Set([
       ...GLOBAL_FLAGS,
       ...spec.allowedFlags,
-      ...(supportsBrowserPageFlag(spec.path) ? ['page'] : [])
+      ...(supportsBrowserPageFlag(spec) ? ['page'] : [])
     ])
   ]
 }
 
-export function isCommandGroup(commandPath: string[]): boolean {
-  return (
-    (commandPath.length === 1 &&
-      [
-        'account',
-        'artifacts',
-        'automations',
-        'project',
-        'host',
-        'repo',
-        'worktree',
-        'terminal',
-        'file',
-        'tab',
-        'cookie',
-        'intercept',
-        'capture',
-        'mouse',
-        'set',
-        'clipboard',
-        'dialog',
-        'storage',
-        'orchestration',
-        'computer',
-        'emulator',
-        'agent',
-        'environment',
-        'diagnostics',
-        'linear',
-        'skills',
-        'vm'
-      ].includes(commandPath[0])) ||
-    (commandPath.length === 2 && commandPath[0] === 'agent' && commandPath[1] === 'hooks') ||
-    (commandPath.length === 2 &&
-      commandPath[0] === 'storage' &&
-      ['local', 'session'].includes(commandPath[1]))
+export function isCommandGroup(specs: CommandSpec[], commandPath: string[]): boolean {
+  if (commandPath.length === 0) {
+    return false
+  }
+  return specs.some(
+    (spec) =>
+      spec.hidden !== true &&
+      specPaths(spec).some(
+        (candidate) =>
+          candidate.length > commandPath.length &&
+          matches(candidate.slice(0, commandPath.length), commandPath)
+      )
   )
 }
 
 export function normalizeCommandPositionals(specs: CommandSpec[], parsed: ParsedArgs): ParsedArgs {
   for (const spec of specs) {
     const positionalArgs = spec.positionalArgs ?? []
-    // Why: aliased paths still need canonicalization when there are no positionals.
+    // Alias-only paths still need canonicalization without positional arguments.
     if (positionalArgs.length === 0 && !spec.aliases) {
       continue
     }
-    // Why: canonicalize aliases before validation and dispatch so both use one key.
     for (const base of specPaths(spec)) {
-      // Why: `< 0` (not `<= 0`) so an exact base match with zero positionals
-      // still canonicalizes an aliased path; upper bound guards over-consumption.
+      // Zero positionals still permit an exact alias match.
       const positionalCount = parsed.commandPath.length - base.length
-      if (positionalCount < 0 || positionalCount > positionalArgs.length) {
+      if (
+        positionalCount < 0 ||
+        (!spec.variadicPositional && positionalCount > positionalArgs.length)
+      ) {
         continue
       }
       if (!matches(parsed.commandPath.slice(0, base.length), base)) {
@@ -204,14 +188,15 @@ export function normalizeCommandPositionals(specs: CommandSpec[], parsed: Parsed
       }
       const flags = new Map(parsed.flags)
       const values = parsed.commandPath.slice(base.length)
-      // Why: validation runs inside main's error-reporting path, so normalization
-      // records ambiguity instead of throwing before CLI errors can be formatted.
-      const providedPositionals = values.map((_, index) => positionalArgs[index])
+      // Record ambiguity here; validation reports it through the CLI error formatter.
+      const providedPositionals = values.map(
+        (_, index) => positionalArgs[Math.min(index, positionalArgs.length - 1)]
+      )
       const positionalFlagConflicts = providedPositionals.filter((name) => flags.has(name))
       values.forEach((value, index) => {
-        const name = positionalArgs[index]
-        if (!flags.has(name)) {
-          flags.set(name, value)
+        const name = providedPositionals[index]
+        if (!parsed.flags.has(name)) {
+          setFlagValue(flags, name, value, new Set(spec.repeatableFlags ?? []))
         }
       })
       return { commandPath: spec.path, flags, positionalFlagConflicts }
@@ -246,7 +231,7 @@ export function validateCommandAndFlags(specs: CommandSpec[], parsed: ParsedArgs
     )
   }
 
-  const pageAllowed = supportsBrowserPageFlag(spec.path)
+  const pageAllowed = supportsBrowserPageFlag(spec)
   for (const [flag, value] of parsed.flags) {
     const isGlobalFlag = GLOBAL_FLAGS.includes(flag)
     if (GLOBAL_VALUE_FLAGS.has(flag) && (typeof value !== 'string' || value.length === 0)) {

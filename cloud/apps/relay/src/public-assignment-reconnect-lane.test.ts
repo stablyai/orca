@@ -1,6 +1,11 @@
-import { describe, expect, it, vi } from 'vitest'
-import type { RelayAssignment } from './assignment-store.js'
+import { afterEach, describe, expect, it, vi } from 'vitest'
+import { RelayAssignmentRowBusyError, type RelayAssignment } from './assignment-store.js'
 import type { RelayConfig } from './config.js'
+import type { StickySlotSample } from './sticky-slot-statements.js'
+import {
+  ScriptedPoolClient,
+  scriptedPostgresDatabase
+} from './test-fixtures/scripted-postgres-pool.js'
 
 const fakes = vi.hoisted(() => ({
   verifyRelayToken: vi.fn(async (token: string) => ({
@@ -17,6 +22,11 @@ vi.mock('./relay-token-verifier.js', () => ({
 import { createRelayApp } from './app.js'
 
 describe('public assignment reconnect lane', () => {
+  afterEach(() => {
+    vi.useRealTimers()
+    vi.restoreAllMocks()
+  })
+
   it('admits a verified reconnect past a saturated placement queue', async () => {
     const reconnecting = 'rrrrrrrrrrrrrrrr'
     const newcomerA = 'aaaaaaaaaaaaaaaa'
@@ -54,8 +64,17 @@ describe('public assignment reconnect lane', () => {
     )
 
     expect(reconnected.status).toBe(200)
-    expect(resolve).toHaveBeenCalledWith({ userId: 'user-1', relayHostId: reconnecting })
-    expect(assign).toHaveBeenCalledWith({ userId: 'user-1', relayHostId: reconnecting })
+    expect(resolve).toHaveBeenCalledWith(
+      { userId: 'user-1', relayHostId: reconnecting },
+      { classifyHomeRollIsolation: true }
+    )
+    expect(assign).toHaveBeenCalledWith(
+      { userId: 'user-1', relayHostId: reconnecting },
+      undefined,
+      undefined,
+      undefined,
+      { hostRequested: true }
+    )
     expect(outcomes).toContain('sticky')
 
     pending.get(newcomerA)?.resolve(assignment('cell-a', newcomerA))
@@ -126,19 +145,132 @@ describe('public assignment reconnect lane', () => {
     expect(assign).not.toHaveBeenCalled()
   })
 
-  it('never probes for unhinted requests', async () => {
-    const host = 'uuuuuuuuuuuuuuuu'
-    const assign = vi.fn(async () => assignment('cell-u', host))
-    const resolve = vi.fn()
+  it('refuses a dial whose assignment row is busy at once, and frees the fast lane', async () => {
+    const busy = 'bbbbbbbbbbbbbbbb'
+    const next = 'nnnnnnnnnnnnnnnn'
+    const assign = vi.fn(async ({ relayHostId }: { relayHostId: string }) => {
+      if (relayHostId === busy) throw new RelayAssignmentRowBusyError()
+      return assignment('cell-n', next)
+    })
+    const resolve = vi.fn(async ({ relayHostId }: { relayHostId: string }) =>
+      assignment('cell-r', relayHostId)
+    )
     const app = createRelayApp(config(), {
       store: {} as never,
       assignments: { assign, resolve } as never,
       drain: vi.fn(),
       ready: vi.fn(async () => true)
     })
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
 
-    expect((await app.request('/v1/assign', assignmentRequest(host))).status).toBe(200)
-    expect(resolve).not.toHaveBeenCalled()
+    const refused = await app.request('/v1/assign', assignmentRequest(busy, { reconnect: true }))
+
+    expect(refused.status).toBe(503)
+    expect(refused.headers.get('retry-after')).toBe('1')
+    expect(await refused.json()).toEqual({ error: 'assignment_row_busy' })
+    expect(warn.mock.calls.flat().join('\n')).toContain('reason=relay_assignment_row_busy')
+    // The single fast-lane slot went back with the refusal.
+    expect(
+      (await app.request('/v1/assign', assignmentRequest(next, { reconnect: true }))).status
+    ).toBe(200)
+    warn.mockRestore()
+  })
+
+  it('asks a busy resume to retry in a second', async () => {
+    const host = 'rrrrrrrrrrrrrrrr'
+    const app = createRelayApp(config(), {
+      store: {
+        resolveResume: vi.fn(async () => ({ userId: 'user-1', relayDeviceId: 'device-1' }))
+      } as never,
+      assignments: {
+        assign: vi.fn(async () => {
+          throw new RelayAssignmentRowBusyError()
+        }),
+        resolve: vi.fn(async () => null)
+      } as never,
+      drain: vi.fn(),
+      ready: vi.fn(async () => true)
+    })
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+
+    const response = await app.request('/v1/resolve', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        v: 1,
+        relayHostId: host,
+        resumeToken: Buffer.alloc(32, 1).toString('base64url')
+      })
+    })
+
+    expect(response.status).toBe(503)
+    expect(response.headers.get('retry-after')).toBe('1')
+    expect(await response.json()).toEqual({ error: 'relay_assignment_row_busy' })
+    warn.mockRestore()
+  })
+
+  it('reports what each sticky slot spent its hold on', async () => {
+    vi.useFakeTimers({ toFake: ['performance'] })
+    const first = 'ffffffffffffffff'
+    const queued = 'qqqqqqqqqqqqqqqq'
+    const newcomer = 'nnnnnnnnnnnnnnnn'
+    const firstHost = new ScriptedPoolClient()
+    const queuedHost = new ScriptedPoolClient()
+    // first: verify, assign; newcomer: assign; queued: verify, assign.
+    const database = scriptedPostgresDatabase([
+      firstHost,
+      firstHost,
+      new ScriptedPoolClient(),
+      queuedHost,
+      queuedHost
+    ])
+    const firstAssign = deferred<RelayAssignment>()
+    const firstReady = deferred<void>()
+    const resolve = vi.fn(async ({ relayHostId }: { relayHostId: string }) => {
+      await database.query('SELECT verify')
+      return assignment('cell-r', relayHostId)
+    })
+    const assign = vi.fn(async ({ relayHostId }: { relayHostId: string }) => {
+      await database.transaction(async (transaction) => {
+        await transaction.query('SELECT pin')
+        await transaction.query('UPDATE lease')
+      })
+      if (relayHostId === first) {
+        firstReady.resolve()
+        return await firstAssign.promise
+      }
+      return assignment('cell-r', relayHostId)
+    })
+    const samples: StickySlotSample[] = []
+    const app = createRelayApp(config(), {
+      store: {} as never,
+      assignments: { assign, resolve } as never,
+      drain: vi.fn(),
+      ready: vi.fn(async () => true),
+      recordStickySlot: (sample) => samples.push(sample)
+    })
+
+    const holding = app.request('/v1/assign', assignmentRequest(first, { reconnect: true }))
+    await firstReady.promise
+    expect(firstHost.statements).toHaveLength(5)
+    const waiting = app.request('/v1/assign', assignmentRequest(queued, { reconnect: true }))
+    // A placement request's statements are its own, even while a sticky slot is held.
+    expect((await app.request('/v1/assign', assignmentRequest(newcomer))).status).toBe(200)
+    await vi.advanceTimersByTimeAsync(60)
+    firstAssign.resolve(assignment('cell-r', first))
+    expect((await holding).status).toBe(200)
+    expect((await waiting).status).toBe(200)
+
+    // Verify, then BEGIN, two statements and COMMIT, each on that host's own connection.
+    const roundTrips = (sample: StickySlotSample | undefined) =>
+      [...(sample?.statementMsByConnection ?? [])].map(([id, ms]) => [id, ms.length])
+    expect(samples).toHaveLength(2)
+    expect(samples[0]).toMatchObject({ statements: 5 })
+    expect(roundTrips(samples[0])).toEqual([[1, 5]])
+    expect(samples[0]?.queueWaitMs).toBe(0)
+    expect(samples[1]).toMatchObject({ statements: 5 })
+    expect(roundTrips(samples[1])).toEqual([[3, 5]])
+    expect(samples[1]?.queueWaitMs).toBe(60)
   })
 })
 

@@ -5,6 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { LinuxPackageInstallRecovery, UpdateStatus } from '../../../shared/update-status-types'
 import { useAppStore } from '../store'
 import { UpdateCard } from './UpdateCard'
+import { NotificationCardStack } from './NotificationCardStack'
 
 const openUrl = vi.fn()
 const download = vi.fn()
@@ -31,7 +32,11 @@ function renderWithInitialStatus(updateStatus: UpdateStatus): RenderResult {
     updateCardCollapsed: false,
     updateReassuranceSeen: true
   })
-  return render(<UpdateCard />)
+  return render(
+    <NotificationCardStack>
+      <UpdateCard />
+    </NotificationCardStack>
+  )
 }
 
 function renderAfterAvailableStatus(): RenderResult {
@@ -51,13 +56,13 @@ function mockReducedMotion(matches: boolean): void {
 
 beforeEach(() => {
   useAppStore.setState(useAppStore.getInitialState(), true)
-  openUrl.mockReset()
-  download.mockReset()
-  check.mockReset()
+  openUrl.mockReset().mockResolvedValue(undefined)
+  download.mockReset().mockResolvedValue(undefined)
+  check.mockReset().mockResolvedValue(undefined)
   quitAndInstall.mockReset().mockResolvedValue(undefined)
   showLinuxPackage.mockReset().mockResolvedValue(undefined)
   writeClipboardText.mockReset().mockResolvedValue(undefined)
-  relaunch.mockReset()
+  relaunch.mockReset().mockResolvedValue(undefined)
   setSettings.mockReset().mockResolvedValue(undefined)
   getInstructions.mockReset().mockResolvedValue({
     ok: true,
@@ -88,6 +93,86 @@ beforeEach(() => {
 afterEach(() => {
   cleanup()
   useAppStore.setState(useAppStore.getInitialState(), true)
+})
+
+describe('UpdateCard staged install recovery', () => {
+  it('explains background blockers and retries installation without a manual download', async () => {
+    renderWithInitialStatus({
+      state: 'error',
+      version: '1.4.200',
+      message: 'Diagnostic process IDs: 12345',
+      retryAction: 'install',
+      installBlock: { reason: 'running-instances', instances: [{ pid: 12345, kind: 'browser' }] }
+    })
+    expect(screen.getByText('Your update is ready')).toBeTruthy()
+    expect(screen.getByText('Background browser')).toBeTruthy()
+    expect(screen.getByText('PID 12345')).toBeTruthy()
+    expect(screen.getByText(/its server keeps running without a browser/)).toBeTruthy()
+    expect(screen.queryByText('Diagnostic process IDs: 12345')).toBeNull()
+    expect(screen.queryByRole('button', { name: 'Download Manually' })).toBeNull()
+    fireEvent.click(screen.getByRole('button', { name: 'Show details' }))
+    expect(screen.getByText('Diagnostic process IDs: 12345')).toBeTruthy()
+    fireEvent.click(screen.getByRole('button', { name: 'Retry installation' }))
+    expect(quitAndInstall).toHaveBeenCalledOnce()
+    expect(download).not.toHaveBeenCalled()
+    fireEvent.click(screen.getByRole('button', { name: 'Later' }))
+    await act(() => new Promise((resolve) => setTimeout(resolve, 200)))
+    expect(useAppStore.getState().updateCardCollapsed).toBe(true)
+    expect(useAppStore.getState().updateStatus.state).toBe('error')
+  })
+
+  it.each([
+    ['busy', 'Another Orca is updating', /Wait a moment/],
+    ['unresponsive', 'Waiting for background servers', /Stop it from the terminal/]
+  ] as const)('gives a specific next step for %s', (reason, title, guidance) => {
+    renderWithInitialStatus({
+      state: 'error',
+      version: '1.4.200',
+      message: 'Raw diagnostic',
+      retryAction: 'install',
+      installBlock: { reason, instances: [{ pid: 12345, kind: 'server' }] }
+    })
+    expect(screen.getByText(title)).toBeTruthy()
+    expect(screen.getByText(guidance)).toBeTruthy()
+    expect(screen.queryByRole('button', { name: 'Download Manually' })).toBeNull()
+  })
+
+  it('shows preparation feedback without another install button while recovery runs', () => {
+    renderWithInitialStatus({ state: 'downloaded', version: '1.4.200', installing: true })
+    expect(screen.getByText('Preparing your update')).toBeTruthy()
+    expect(screen.getByText(/Checking running Orca instances/)).toBeTruthy()
+    expect(screen.queryByRole('button', { name: 'Restart to Update' })).toBeNull()
+    expect(quitAndInstall).not.toHaveBeenCalled()
+  })
+
+  it.each([undefined, 'local'] as const)(
+    'retries a blocked staged install without downloading again (source %s)',
+    (source) => {
+      renderWithInitialStatus({
+        state: 'error',
+        version: '1.4.200',
+        message:
+          'Close the other Orca instances (process IDs: 12345) before installing this update.',
+        retryAction: 'install',
+        ...(source ? { source } : {})
+      })
+
+      expect(screen.getByText(/process IDs: 12345/)).toBeTruthy()
+      fireEvent.click(screen.getByRole('button', { name: 'Try Again' }))
+      expect(quitAndInstall).toHaveBeenCalledTimes(1)
+      expect(download).not.toHaveBeenCalled()
+      expect(screen.queryByRole('button', { name: 'Retry Download' })).toBeNull()
+      expect(screen.queryByRole('button', { name: 'Choose Another Build' })).toBeNull()
+    }
+  )
+
+  it('keeps the download retry for errors from older hosts without an install action', () => {
+    renderWithInitialStatus({ state: 'error', version: '1.4.200', message: 'Download failed' })
+
+    fireEvent.click(screen.getByRole('button', { name: 'Retry Download' }))
+    expect(download).toHaveBeenCalledTimes(1)
+    expect(quitAndInstall).not.toHaveBeenCalled()
+  })
 })
 
 describe('UpdateCard Windows signature failures', () => {
@@ -129,7 +214,7 @@ describe('UpdateCard Windows signature failures', () => {
   })
 
   // An install failure now carries the updater's own text, so it can reach these branches too.
-  it('routes a signature verdict raised during install to the security-stop card', () => {
+  it('omits generic restart advice for a signature verdict', () => {
     const message =
       'New version 1.4.200 is not signed by the application owner: publisherNames: Orca'
     renderAfterAvailableStatus()
@@ -199,8 +284,6 @@ describe('UpdateCard local builds', () => {
   })
 })
 
-// ── Linux package-install recovery routing ───────────────────────────
-
 async function flushActions(): Promise<void> {
   await act(async () => {
     for (let i = 0; i < 8; i += 1) {
@@ -268,7 +351,7 @@ describe('UpdateCard Linux package-install recovery', () => {
     expect(screen.getByRole('button', { name: 'Show Package' })).toBeTruthy()
   })
 
-  it('drives the copy action through the real preload surface', async () => {
+  it('copies the install command returned by the updater API', async () => {
     renderAfterAvailableStatus()
     showPackageRecovery()
 
@@ -382,8 +465,7 @@ describe('UpdateCard Linux package-install recovery', () => {
         .setUpdateStatus({ state: 'error', message: 'net::ERR_HTTP2_PROTOCOL_ERROR' })
     )
 
-    // Why: the shared card marks the pending action aria-disabled, so the second click still
-    // reaches the handler and only its own guard can stop a double relaunch.
+    // aria-disabled still dispatches clicks; the handler guard must prevent duplicate relaunch.
     const enable = screen.getByRole('button', { name: 'Enable & Restart' })
     fireEvent.click(enable)
 

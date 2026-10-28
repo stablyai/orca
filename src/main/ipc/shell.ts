@@ -1,3 +1,4 @@
+import { validatePathExistenceBatch } from '../../shared/path-existence-batch'
 import { ipcMain, shell, dialog } from 'electron'
 import { constants, copyFile, readFile, stat } from 'node:fs/promises'
 import { basename, extname, isAbsolute, normalize, posix, win32 } from 'node:path'
@@ -12,10 +13,21 @@ import type { Store } from '../persistence'
 import {
   EXTERNAL_EDITOR_CLI_COMMAND,
   launchExternalEditor,
-  resolveExternalEditorLaunchSpec,
-  resolveVsCodeRemoteSshLaunchSpec
+  resolveExternalEditorLaunchSpec
 } from '../external-editor-launch'
-import { resolveVsCodeSshAuthority } from '../ssh/vscode-ssh-authority'
+import { resolveRemoteSshEditorLaunchSpec } from '../remote-ssh-editor-launch'
+import { toSshExecutionHostId } from '../../shared/execution-host'
+import {
+  isEditorSshHostForOwner,
+  listAppRuntimeEnvironments,
+  type ListRuntimeEnvironments
+} from './shell-editor-ssh-host'
+import {
+  isLocallyOwned,
+  pathExists,
+  resolveOwnedPathTarget,
+  validateLocalPathTarget
+} from './shell-owned-path-target'
 
 export { EXTERNAL_EDITOR_CLI_COMMAND }
 
@@ -23,46 +35,15 @@ const REPO_ICON_IMAGE_MIME_TYPES: Record<string, string> = {
   '.png': 'image/png'
 }
 
-async function pathExists(pathValue: string): Promise<boolean> {
-  try {
-    await stat(pathValue)
-    return true
-  } catch {
-    return false
-  }
-}
-
-async function validateLocalPathTarget(
-  pathValue: string
-): Promise<{ ok: true; path: string } | { ok: false; reason: 'not-absolute' | 'not-found' }> {
-  const normalizedPath = normalize(pathValue)
-  if (!isAbsolute(normalizedPath)) {
-    return { ok: false, reason: 'not-absolute' }
-  }
-  if (!(await pathExists(normalizedPath))) {
-    return { ok: false, reason: 'not-found' }
-  }
-  return { ok: true, path: normalizedPath }
-}
-
-function hasActiveRuntime(store: Store): boolean {
-  return Boolean(store.getSettings().activeRuntimeEnvironmentId?.trim())
-}
-
 async function openInFileManager(
-  store: Store,
-  pathValue: string
+  pathValue: string,
+  ownerHostId: unknown
 ): Promise<ShellOpenLocalPathResult> {
-  if (hasActiveRuntime(store)) {
-    return { ok: false, reason: 'remote-runtime-unsupported' }
-  }
-  const target = await validateLocalPathTarget(pathValue)
+  const target = await resolveOwnedPathTarget(pathValue, ownerHostId)
   if (!target.ok) {
     return target
   }
   try {
-    // Why: the file-manager action uses reveal semantics, matching the
-    // previous sidebar behavior while still validating the path per click.
     shell.showItemInFolder(target.path)
     return { ok: true }
   } catch {
@@ -71,18 +52,20 @@ async function openInFileManager(
 }
 
 async function openInExternalEditor(
-  store: Store,
-  request: ShellOpenExternalEditorRequest
+  store: Pick<Store, 'getSshTarget'>,
+  request: ShellOpenExternalEditorRequest,
+  listRuntimeEnvironments: ListRuntimeEnvironments
 ): Promise<ShellOpenExternalEditorResult> {
-  if (hasActiveRuntime(store)) {
-    return { ok: false, reason: 'remote-runtime-unsupported' }
-  }
-
   const connectionId = request.connectionId?.trim()
   if (connectionId) {
     const sshTarget = store.getSshTarget(connectionId)
     if (!sshTarget) {
-      return { ok: false, reason: 'ssh-target-not-found' }
+      return request.ownerHostId === toSshExecutionHostId(connectionId)
+        ? { ok: false, reason: 'ssh-target-not-found' }
+        : { ok: false, reason: 'remote-runtime-unsupported' }
+    }
+    if (!isEditorSshHostForOwner(sshTarget, request.ownerHostId, listRuntimeEnvironments)) {
+      return { ok: false, reason: 'remote-runtime-unsupported' }
     }
     if (sshTarget.owner?.type === 'on-demand-runtime') {
       return { ok: false, reason: 'remote-runtime-unsupported' }
@@ -90,31 +73,24 @@ async function openInExternalEditor(
     if (!posix.isAbsolute(request.path) && !win32.isAbsolute(request.path)) {
       return { ok: false, reason: 'not-absolute' }
     }
-    const authority = resolveVsCodeSshAuthority(sshTarget)
-    if (!authority.ok) {
-      return authority
-    }
-    const launchSpec = resolveVsCodeRemoteSshLaunchSpec(
-      request.command,
-      request.path,
-      authority.authority
-    )
-    if (!launchSpec) {
-      return { ok: false, reason: 'remote-editor-unsupported' }
+    const remoteLaunch = resolveRemoteSshEditorLaunchSpec(request.command, request.path, sshTarget)
+    if (!remoteLaunch.ok) {
+      return remoteLaunch
     }
     try {
-      await launchExternalEditor(launchSpec)
+      await launchExternalEditor(remoteLaunch.launchSpec)
       return { ok: true }
     } catch {
       return { ok: false, reason: 'launch-failed' }
     }
   }
 
-  const target = await validateLocalPathTarget(request.path)
+  const target = await resolveOwnedPathTarget(request.path, request.ownerHostId)
   if (!target.ok) {
     return target
   }
   try {
+    // VS Code and Cursor derive --remote wsl+<distro> from UNC paths.
     await launchExternalEditor(resolveExternalEditorLaunchSpec(request.command, target.path))
     return { ok: true }
   } catch {
@@ -122,7 +98,10 @@ async function openInExternalEditor(
   }
 }
 
-async function openWithSystemDefault(pathValue: string): Promise<boolean> {
+async function openWithSystemDefault(pathValue: string, ownerHostId: unknown): Promise<boolean> {
+  if (!isLocallyOwned(ownerHostId)) {
+    return false
+  }
   const target = await validateLocalPathTarget(pathValue)
   if (!target.ok) {
     return false
@@ -135,22 +114,28 @@ async function openWithSystemDefault(pathValue: string): Promise<boolean> {
   }
 }
 
-export function registerShellHandlers(store: Store): void {
-  ipcMain.handle('shell:openPath', async (_event, path: string): Promise<void> => {
-    // Why: keep the legacy fire-and-forget renderer contract while reusing the
-    // same absolute/existing path validation as the explicit file-manager API.
-    void (await openInFileManager(store, path))
-  })
+export function registerShellHandlers(
+  store: Pick<Store, 'getSshTarget'>,
+  listRuntimeEnvironments: ListRuntimeEnvironments = listAppRuntimeEnvironments
+): void {
+  ipcMain.handle(
+    'shell:openPath',
+    async (_event, path: string, ownerHostId: unknown): Promise<void> => {
+      // Preserve the legacy fire-and-forget contract while applying the common path validation.
+      void (await openInFileManager(path, ownerHostId))
+    }
+  )
 
   ipcMain.handle(
     'shell:openInFileManager',
-    (_event, path: string): Promise<ShellOpenLocalPathResult> => openInFileManager(store, path)
+    (_event, path: string, ownerHostId: unknown): Promise<ShellOpenLocalPathResult> =>
+      openInFileManager(path, ownerHostId)
   )
 
   ipcMain.handle(
     'shell:openInExternalEditor',
     (_event, request: ShellOpenExternalEditorRequest): Promise<ShellOpenExternalEditorResult> =>
-      openInExternalEditor(store, request)
+      openInExternalEditor(store, request, listRuntimeEnvironments)
   )
 
   ipcMain.handle('shell:openUrl', (_event, rawUrl: string) => {
@@ -168,11 +153,16 @@ export function registerShellHandlers(store: Store): void {
     return shell.openExternal(parsed.toString())
   })
 
-  ipcMain.handle('shell:openFilePath', async (_event, filePath: string): Promise<boolean> => {
-    return openWithSystemDefault(filePath)
-  })
+  ipcMain.handle(
+    'shell:openFilePath',
+    async (_event, filePath: string, ownerHostId: unknown): Promise<boolean> =>
+      openWithSystemDefault(filePath, ownerHostId)
+  )
 
-  ipcMain.handle('shell:openFileUri', async (_event, rawUri: string) => {
+  ipcMain.handle('shell:openFileUri', async (_event, rawUri: string, ownerHostId: unknown) => {
+    if (!isLocallyOwned(ownerHostId)) {
+      return
+    }
     let parsed: URL
     try {
       parsed = new URL(rawUri)
@@ -184,7 +174,6 @@ export function registerShellHandlers(store: Store): void {
       return
     }
 
-    // Only local files are supported. Remote hosts are intentionally rejected.
     if (parsed.hostname && parsed.hostname !== 'localhost') {
       return
     }
@@ -201,7 +190,12 @@ export function registerShellHandlers(store: Store): void {
       return
     }
 
-    await openWithSystemDefault(target.path)
+    await openWithSystemDefault(target.path, ownerHostId)
+  })
+
+  ipcMain.handle('shell:pathsExist', async (_event, paths: string[]): Promise<boolean[]> => {
+    validatePathExistenceBatch(paths)
+    return Promise.all(paths.map(pathExists))
   })
 
   ipcMain.handle('shell:pathExists', async (_event, filePath: string): Promise<boolean> => {
@@ -213,8 +207,7 @@ export function registerShellHandlers(store: Store): void {
     async (_event, args: { defaultPath?: string }): Promise<string | null> => {
       const result = await dialog.showOpenDialog({
         defaultPath: args.defaultPath,
-        // Why: callers only need an existing folder grant; enabling native
-        // creation can leave typed prefix directories behind on macOS.
+        // macOS creation-enabled pickers can create typed prefixes; this picker grants existing folders only.
         properties: ['openDirectory']
       })
       if (result.canceled || result.filePaths.length === 0) {
@@ -224,8 +217,7 @@ export function registerShellHandlers(store: Store): void {
     }
   )
 
-  // Why: window.prompt() and <input type="file"> are unreliable in Electron,
-  // so we use the native OS dialog to let the user pick any attachment file.
+  // Native dialogs avoid Electron prompt/file-input reliability issues.
   ipcMain.handle('shell:pickAttachment', async (): Promise<string | null> => {
     const result = await dialog.showOpenDialog({
       properties: ['openFile']
@@ -236,8 +228,14 @@ export function registerShellHandlers(store: Store): void {
     return result.filePaths[0]
   })
 
-  // Why: window.prompt() and <input type="file"> are unreliable in Electron,
-  // so we use the native OS dialog to let the user pick an image file.
+  // Keep single-file callers, including interpreter selection, on pickAttachment.
+  ipcMain.handle('shell:pickAttachments', async (): Promise<string[]> => {
+    const result = await dialog.showOpenDialog({
+      properties: ['openFile', 'multiSelections']
+    })
+    return result.canceled ? [] : result.filePaths
+  })
+
   ipcMain.handle('shell:pickImage', async (): Promise<string | null> => {
     const result = await dialog.showOpenDialog({
       properties: ['openFile'],
@@ -293,9 +291,7 @@ export function registerShellHandlers(store: Store): void {
     return result.filePaths[0]
   })
 
-  // Why: copying a picked image next to the markdown file lets us insert a
-  // relative path (e.g. `![](image.png)`) instead of embedding base64,
-  // keeping markdown files small and portable.
+  // Relative image links keep Markdown small and portable.
   ipcMain.handle(
     'shell:copyFile',
     async (_event, args: { srcPath: string; destPath: string }): Promise<void> => {
@@ -304,10 +300,7 @@ export function registerShellHandlers(store: Store): void {
       if (!isAbsolute(src) || !isAbsolute(dest)) {
         throw new Error('Both source and destination must be absolute paths')
       }
-      // Why: COPYFILE_EXCL prevents silently overwriting an existing file.
-      // The renderer-side deconfliction loop already picks a unique name, so
-      // the dest should never exist — if it does, something is wrong and we
-      // should fail loudly rather than clobber data.
+      // Reject name collisions even if renderer deconfliction missed one; never overwrite existing data.
       await copyFile(src, dest, constants.COPYFILE_EXCL)
     }
   )

@@ -1,4 +1,5 @@
 import AsyncStorage from '@react-native-async-storage/async-storage'
+import { persistMirrored } from '../storage/mirrored-storage-keys'
 
 import { TERMINAL_ACCESSORY_KEYS, type TerminalAccessoryKey } from './terminal-accessory-keys'
 
@@ -45,8 +46,7 @@ function dedupeKnownIds(ids: string[], builtInSet: Set<string>): string[] {
   return out
 }
 
-// Why: built-ins added after the user saved a custom order should land next
-// to their canonical neighbors, not dangle at the end of the bar.
+// Place newly added built-ins beside canonical neighbors in saved custom layouts.
 function insertMissingBuiltInIds(
   ordered: string[],
   currentBuiltInIds: string[]
@@ -134,7 +134,7 @@ export function normalizeTerminalAccessoryLayoutPreference(
         visibleSet.add(id)
       }
     }
-    // Why: v1 layouts never had a custom order, so migrate to canonical order.
+    // Version-one layouts had no custom order; migrate them to canonical order.
     return {
       version: 2,
       orderedBuiltInIds: [...currentBuiltInIds],
@@ -226,5 +226,6 @@ export async function loadTerminalAccessoryLayout(): Promise<TerminalAccessoryLa
 
 export async function saveTerminalAccessoryLayout(layout: TerminalAccessoryLayout): Promise<void> {
   const preference = createTerminalAccessoryLayoutPreference(layout)
-  await AsyncStorage.setItem(TERMINAL_ACCESSORY_LAYOUT_STORAGE_KEY, JSON.stringify(preference))
+  const value = JSON.stringify(preference)
+  await persistMirrored(TERMINAL_ACCESSORY_LAYOUT_STORAGE_KEY, value)
 }

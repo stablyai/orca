@@ -1,4 +1,6 @@
+import { CODEBUDDY_SESSION_OPTION_CATALOG } from './agent-session-option-catalog-codebuddy'
 import type { AgentType } from './agent-status-types'
+import { ANTIGRAVITY_SESSION_OPTION_CATALOG } from './agent-session-option-catalog-antigravity'
 import {
   CLAUDE_SESSION_OPTION_CATALOG,
   CODEX_SESSION_OPTION_CATALOG,
@@ -9,13 +11,15 @@ import {
   GEMINI_SESSION_OPTION_CATALOG
 } from './agent-session-option-catalog-gemini-cursor'
 import { GROK_SESSION_OPTION_CATALOG } from './agent-session-option-catalog-grok'
+import { MUSE_SESSION_OPTION_CATALOG } from './agent-session-option-catalog-muse'
+import { OMP_SESSION_OPTION_CATALOG } from './agent-session-option-catalog-omp'
 import type {
   AgentSessionOptionCatalog,
   AgentSessionOptionCatalogMap,
   CatalogModel,
   CatalogOption
 } from './agent-session-option-catalog-types'
-import type { SessionOptionValue } from './native-chat-session-options'
+import type { SessionOptionValue } from './native-chat/input/native-chat-session-options'
 
 export type {
   AgentSessionOptionCatalog,
@@ -29,11 +33,15 @@ export type {
 export { createClaudeCatalogOptions }
 
 const CATALOGS: AgentSessionOptionCatalogMap = {
+  antigravity: ANTIGRAVITY_SESSION_OPTION_CATALOG,
   claude: CLAUDE_SESSION_OPTION_CATALOG,
+  codebuddy: CODEBUDDY_SESSION_OPTION_CATALOG,
   codex: CODEX_SESSION_OPTION_CATALOG,
   gemini: GEMINI_SESSION_OPTION_CATALOG,
   cursor: CURSOR_SESSION_OPTION_CATALOG,
-  grok: GROK_SESSION_OPTION_CATALOG
+  grok: GROK_SESSION_OPTION_CATALOG,
+  muse: MUSE_SESSION_OPTION_CATALOG,
+  omp: OMP_SESSION_OPTION_CATALOG
 }
 
 export function getAgentSessionOptionCatalog(agent: AgentType): AgentSessionOptionCatalog | null {
@@ -71,9 +79,7 @@ export function mergeCatalogModels(
   return [...merged, ...discoveredById.values()]
 }
 
-/** Discovery decides membership; the seed keeps its option menus, which discovery never carries.
- *  Why: an unseeded model inherits the default seed's options because these catalogs' options are
- *  global CLI flags, not per-model capabilities — dropping them would hide the picker entirely. */
+/** Discovery controls membership; retain seed option menus. Unseeded models inherit default-seed global CLI flags so their picker stays available. */
 export function mergeDiscoveredAuthoritativeModels(
   seed: readonly CatalogModel[],
   discovered: readonly CatalogModel[]
@@ -84,8 +90,7 @@ export function mergeDiscoveredAuthoritativeModels(
     const { isDefault: _seeded, ...merged } = seedMatch
       ? { ...seedMatch, ...disc, options: seedMatch.options }
       : { ...disc, options: inheritedOptions }
-    // Why: the probe reports which id the CLI defaults to today; a seed flag frozen at
-    // release would keep naming the old one after the account's default moves.
+    // Use the probe's current CLI default; a release-frozen seed mislabels changed account defaults.
     return disc.isDefault ? { ...merged, isDefault: true } : merged
   })
 }

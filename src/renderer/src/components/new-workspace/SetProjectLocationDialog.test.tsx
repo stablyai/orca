@@ -105,7 +105,7 @@ describe('SetProjectLocationDialog', () => {
       kind: 'git',
       displayName: 'orca'
     })
-    expect(onReady).toHaveBeenCalledWith('setup-openclaw')
+    expect(onReady).toHaveBeenCalledWith(JSON.stringify(['setup-openclaw', 'ssh:openclaw']))
     expect(onClose).not.toHaveBeenCalled()
   })
 
@@ -125,7 +125,7 @@ describe('SetProjectLocationDialog', () => {
       destination: '/remote/orca',
       displayName: 'orca'
     })
-    expect(onReady).toHaveBeenCalledWith('setup-openclaw-clone')
+    expect(onReady).toHaveBeenCalledWith(JSON.stringify(['setup-openclaw-clone', 'ssh:openclaw']))
   })
 
   it('hides clone for folder projects', () => {
@@ -161,7 +161,6 @@ describe('SetProjectLocationDialog', () => {
     expect(screen.queryByTestId('remote-file-browser')).toBeNull()
     expect(screen.getByRole('button', { name: 'Set location' })).toBeTruthy()
 
-    // A second Escape, now back on the form, dismisses the dialog as usual.
     await user.keyboard('{Escape}')
     expect(onClose).toHaveBeenCalled()
   })
@@ -192,7 +191,6 @@ describe('SetProjectLocationDialog', () => {
     await user.type(screen.getByPlaceholderText('/destination/on/host'), '/remote/orca')
     await user.click(screen.getByRole('button', { name: 'Clone' }))
 
-    // The user backs out and points the composer somewhere else.
     rerender(
       <SetProjectLocationDialog
         option={null}
@@ -230,7 +228,7 @@ describe('SetProjectLocationDialog', () => {
     await user.type(screen.getByPlaceholderText('/path/to/project/on/host'), '/remote/orca')
     await user.click(screen.getByRole('button', { name: 'Set location' }))
 
-    expect(onReady).toHaveBeenCalledWith('setup-openclaw')
+    expect(onReady).toHaveBeenCalledWith(JSON.stringify(['setup-openclaw', 'ssh:openclaw']))
   })
 
   it('notifies the parent when dismissed', async () => {

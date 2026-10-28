@@ -1,3 +1,4 @@
+import '../unused-default-rpc-methods.test-fixture'
 import { describe, expect, it, vi } from 'vitest'
 import { RpcDispatcher } from '../dispatcher'
 import type { RpcRequest } from '../core'
@@ -11,7 +12,13 @@ import {
 import { BROWSER_CORE_METHODS } from './browser-core'
 import { BROWSER_EXTRA_METHODS } from './browser-extras'
 import { BROWSER_SCREENCAST_METHODS } from './browser-screencast'
-import { ClipboardWrite, Fill, KeyboardInsert, ProfileCreate, Type } from './browser-schemas'
+import {
+  ClipboardWrite,
+  Fill,
+  KeyboardInsert,
+  Type
+} from '../../../../shared/rpc-contract/browser-params'
+import { ProfileCreate } from '../../../../shared/rpc-contract/browser-identity-params'
 
 function makeRequest(method: string, params?: unknown): RpcRequest {
   return { id: 'req-1', authToken: 'tok', method, params }
@@ -68,16 +75,34 @@ describe('browser RPC methods', () => {
     })
   })
 
-  it('validates profile user-agent modes', () => {
-    expect(
-      ProfileCreate.safeParse({ label: 'Google', scope: 'isolated', userAgentMode: 'native' })
-        .success
-    ).toBe(true)
-    expect(ProfileCreate.safeParse({ label: 'Work', scope: 'isolated' }).success).toBe(true)
-    expect(
-      ProfileCreate.safeParse({ label: 'Bad', scope: 'isolated', userAgentMode: 'rotating' })
-        .success
-    ).toBe(false)
+  it('rejects the retired profile user-agent field with changed-semantics guidance', () => {
+    expect(() =>
+      ProfileCreate.parse({ label: 'Google', scope: 'isolated', userAgentMode: 'native' })
+    ).toThrow('browser_profile_user_agent_mode_is_now_app_wide')
+  })
+
+  // Prove retired fields are refused over the wire, not accepted after silent stripping.
+  it('rejects the retired profile user-agent field through the dispatcher', async () => {
+    const browserProfileCreate = vi.fn().mockResolvedValue({ id: 'profile-1' })
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the dispatcher reads only getRuntimeId and the single browser method stubbed here.
+    const runtime = {
+      getRuntimeId: () => 'test-runtime',
+      browserProfileCreate
+    } as unknown as OrcaRuntimeService
+    const dispatcher = new RpcDispatcher({ runtime, methods: BROWSER_CORE_METHODS })
+
+    const response = await dispatcher.dispatch(
+      makeRequest('browser.profileCreate', {
+        label: 'Google',
+        scope: 'isolated',
+        userAgentMode: 'native'
+      })
+    )
+
+    // A working runtime stub ensures refusal comes from validation, not a missing method.
+    expect(response).toMatchObject({ ok: false })
+    expect(JSON.stringify(response)).toContain('browser_profile_user_agent_mode_is_now_app_wide')
+    expect(browserProfileCreate).not.toHaveBeenCalled()
   })
 
   it('routes core browser automation commands to the runtime server', async () => {

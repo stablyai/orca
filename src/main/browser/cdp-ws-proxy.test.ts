@@ -7,6 +7,7 @@ import {
   getSendCommandCalls,
   getSendCommandMethods,
   sendAndReceive,
+  mockAsWebContents,
   type MockWebContents
 } from './cdp-ws-proxy-test-harness'
 
@@ -21,8 +22,7 @@ describe('CdpWsProxy', () => {
 
   beforeEach(async () => {
     mock = createMockWebContents()
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    proxy = new CdpWsProxy(mock.webContents as any)
+    proxy = new CdpWsProxy(mockAsWebContents(mock), () => () => {})
     endpoint = await proxy.start()
   })
 
@@ -55,8 +55,6 @@ describe('CdpWsProxy', () => {
   it('attaches debugger on start', () => {
     expect(mock.webContents.debugger.attach).toHaveBeenCalledWith('1.3')
   })
-
-  // ── CDP message ID correlation ──
 
   it('correlates CDP request/response IDs', async () => {
     mock.webContents.debugger.sendCommand.mockResolvedValueOnce({ tree: 'nodes' })
@@ -254,8 +252,6 @@ describe('CdpWsProxy', () => {
     client.close()
   })
 
-  // ── Concurrent requests get correct responses ──
-
   it('handles concurrent requests with correct correlation', async () => {
     let resolveFirst: (v: unknown) => void
     const firstPromise = new Promise((r) => {
@@ -325,8 +321,6 @@ describe('CdpWsProxy', () => {
     secondClient.close()
   })
 
-  // ── sessionId envelope translation ──
-
   it('forwards sessionId to sendCommand for OOPIF support', async () => {
     mock.webContents.debugger.sendCommand.mockResolvedValueOnce({})
 
@@ -345,8 +339,6 @@ describe('CdpWsProxy', () => {
     )
     client.close()
   })
-
-  // ── Event forwarding ──
 
   it('forwards CDP events from debugger to client', async () => {
     const client = await connect(endpoint)
@@ -387,6 +379,117 @@ describe('CdpWsProxy', () => {
     })
 
     expect(mock.webContents.focus).not.toHaveBeenCalled()
+    client.close()
+  })
+
+  it.each(['Page.bringToFront', 'Target.activateTarget'])(
+    'answers %s without focusing or forwarding it',
+    async (method) => {
+      const client = await connect(endpoint)
+
+      const response = await sendAndReceive(client, { id: 9, method, params: {} })
+
+      expect(response.result).toEqual({})
+      expect(mock.webContents.focus).not.toHaveBeenCalled()
+      expect(getSendCommandMethods(mock)).toEqual(['Page.enable'])
+      client.close()
+    }
+  )
+
+  it('types root-session keys and text into an embedded guest without focusing it', async () => {
+    mock.webContents.getType.mockReturnValue('webview')
+    const client = await connect(endpoint)
+
+    await sendAndReceive(client, { id: 11, method: 'DOM.focus', params: { backendNodeId: 5 } })
+    const insert = await sendAndReceive(client, {
+      id: 12,
+      method: 'Input.insertText',
+      params: { text: 'hi' }
+    })
+    const key = await sendAndReceive(client, {
+      id: 13,
+      method: 'Input.dispatchKeyEvent',
+      params: { type: 'keyDown', key: 'Enter', text: '\r' }
+    })
+
+    expect(insert.result).toEqual({})
+    expect(key.result).toEqual({})
+    expect(mock.webContents.focus).not.toHaveBeenCalled()
+    // Each delivery probes focus, then waits for page input handling.
+    expect(getSendCommandMethods(mock)).toEqual([
+      'Page.enable',
+      'DOM.focus',
+      'Runtime.evaluate',
+      'DOM.focus',
+      'Runtime.evaluate',
+      'Runtime.evaluate',
+      'Runtime.evaluate'
+    ])
+    expect(mock.webContents.sendInputEvent.mock.calls.map(([event]) => event)).toEqual([
+      { type: 'char', keyCode: 'h', modifiers: [], skipIfUnhandled: true },
+      { type: 'char', keyCode: 'i', modifiers: [], skipIfUnhandled: true },
+      { type: 'keyDown', keyCode: 'Enter', modifiers: [], skipIfUnhandled: true },
+      { type: 'char', keyCode: '\r', modifiers: [], skipIfUnhandled: true }
+    ])
+    client.close()
+  })
+
+  it('keeps pipelined root-session keys in order', async () => {
+    mock.webContents.getType.mockReturnValue('webview')
+    const client = await connect(endpoint)
+    const replies: unknown[] = []
+    const allReplied = new Promise<void>((resolve) => {
+      client.on('message', (data) => {
+        replies.push(JSON.parse(data.toString()).id)
+        if (replies.length === 3) {
+          resolve()
+        }
+      })
+    })
+
+    for (const [id, type] of [
+      [21, 'rawKeyDown'],
+      [22, 'keyUp'],
+      [23, 'rawKeyDown']
+    ] as const) {
+      client.send(
+        JSON.stringify({ id, method: 'Input.dispatchKeyEvent', params: { type, key: 'Tab' } })
+      )
+    }
+    await allReplied
+
+    expect(replies).toEqual([21, 22, 23])
+    expect(mock.webContents.sendInputEvent.mock.calls.map(([event]) => event.type)).toEqual([
+      'keyDown',
+      'keyUp',
+      'keyDown'
+    ])
+    client.close()
+  })
+
+  it('forwards child-frame session input unchanged and without focusing', async () => {
+    mock.webContents.getType.mockReturnValue('webview')
+    const client = await connect(endpoint)
+
+    await sendAndReceive(client, {
+      id: 31,
+      method: 'Input.dispatchKeyEvent',
+      params: { type: 'keyDown', key: 'a', text: 'a' },
+      sessionId: 'oopif-session'
+    })
+    await sendAndReceive(client, {
+      id: 32,
+      method: 'Input.insertText',
+      params: { text: 'a' },
+      sessionId: 'oopif-session'
+    })
+
+    expect(mock.webContents.focus).not.toHaveBeenCalled()
+    expect(mock.webContents.sendInputEvent).not.toHaveBeenCalled()
+    expect(getSendCommandCalls(mock).slice(1)).toEqual([
+      ['Input.dispatchKeyEvent', { type: 'keyDown', key: 'a', text: 'a' }, 'oopif-session'],
+      ['Input.insertText', { text: 'a' }, 'oopif-session']
+    ])
     client.close()
   })
 
@@ -726,7 +829,6 @@ describe('CdpWsProxy', () => {
     client.close()
     await new Promise((resolve) => setTimeout(resolve, 10))
 
-    // Print resolves only after the client is gone: no stream must be created.
     resolvePrint(Buffer.from('%PDF-late'))
     await new Promise((resolve) => setTimeout(resolve, 10))
 
@@ -763,16 +865,12 @@ describe('CdpWsProxy', () => {
     client.close()
   })
 
-  // ── Page.frameNavigated interception ──
-
-  // ── Cleanup ──
-
   it('detaches debugger and closes server on stop', async () => {
     const client = await connect(endpoint)
     await proxy.stop()
 
     expect(mock.webContents.debugger.detach).toHaveBeenCalled()
-    expect(proxy.getPort()).toBeGreaterThan(0) // port stays set but server is closed
+    expect(proxy.getPort()).toBeGreaterThan(0)
 
     await new Promise<void>((resolve) => {
       client.on('close', () => resolve())
@@ -802,24 +900,5 @@ describe('CdpWsProxy', () => {
     const removedEvents = offSpy.mock.calls.map(([event]) => event)
     expect(removedEvents).toEqual(expect.arrayContaining(['message', 'close']))
     offSpy.mockRestore()
-  })
-
-  it('rejects inflight requests on stop', async () => {
-    let resolveCommand: (v: unknown) => void
-    mock.webContents.debugger.sendCommand.mockImplementation(
-      () =>
-        new Promise((r) => {
-          resolveCommand = r as (v: unknown) => void
-        })
-    )
-
-    const client = await connect(endpoint)
-    client.send(JSON.stringify({ id: 1, method: 'Page.enable', params: {} }))
-
-    await new Promise((r) => setTimeout(r, 10))
-    await proxy.stop()
-
-    resolveCommand!({})
-    client.close()
   })
 })

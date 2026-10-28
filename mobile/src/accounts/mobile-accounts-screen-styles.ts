@@ -1,7 +1,8 @@
 import { StyleSheet } from 'react-native'
 import { colors, spacing, typography, radii } from '../theme/mobile-theme'
+import { themedStyleSheet } from '../theme/themed-styles'
 
-export const styles = StyleSheet.create({
+export const styles = themedStyleSheet(() => ({
   container: {
     flex: 1,
     backgroundColor: colors.bgBase
@@ -79,10 +80,7 @@ export const styles = StyleSheet.create({
     flex: 1,
     gap: 4
   },
-  // Why: fixed-width trailing slot so the usage bars in `rowMain` keep the
-  // same width whether or not the row is currently selected (otherwise the
-  // checkmark on the active account squeezes the bars narrower than the
-  // inactive rows above/below it).
+  // Reserve trailing width so selected checkmark cannot squeeze active usage bars relative to other rows.
   rowTrailing: {
     width: 24,
     alignItems: 'flex-end',
@@ -134,4 +132,4 @@ export const styles = StyleSheet.create({
     color: colors.textMuted,
     lineHeight: 18
   }
-})
+}))

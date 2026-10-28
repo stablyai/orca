@@ -141,6 +141,28 @@ export function revertWorkerTerminalReleaseToRetained(
   return this.getWorkerTerminalResource(resourceId) as WorkerTerminalResourceRow
 }
 
+/** Caller owns the transaction; retain must preserve committed release state and its output archive. */
+export function retainTerminalResourceInTransaction(
+  database: OrchestrationDb,
+  resourceId: string,
+  dispatchId: string
+): boolean {
+  const { changes } = database.db
+    .prepare(
+      `UPDATE worker_terminal_resources
+       SET release_state = 'retained', retained_reason = 'user_requested',
+           updated_at = datetime('now')
+       WHERE id = ? AND release_state IN ('not_requested', 'retained', 'requested')`
+    )
+    .run(resourceId)
+  if (changes > 0) {
+    database.db
+      .prepare('DELETE FROM worker_terminal_archives WHERE dispatch_id = ?')
+      .run(dispatchId)
+  }
+  return changes > 0
+}
+
 export function retainWorkerTerminalResource(
   this: OrchestrationDb,
   dispatchId: string
@@ -171,20 +193,12 @@ export function retainWorkerTerminalResource(
       this.db.exec('COMMIT')
       return { disposition: 'already_released', resource }
     }
-    this.db
-      .prepare(
-        `UPDATE worker_terminal_resources
-         SET release_state = 'retained', retained_reason = 'user_requested',
-             updated_at = datetime('now')
-         WHERE id = ? AND release_state IN ('not_requested', 'retained', 'requested')`
-      )
-      .run(resource.id)
+    const retained = retainTerminalResourceInTransaction(this, resource.id, dispatchId)
     const updated = this.getWorkerTerminalResource(resource.id) as WorkerTerminalResourceRow
-    if (updated.release_state !== 'retained') {
+    if (!retained) {
       this.db.exec('COMMIT')
       return { disposition: 'release_committed', resource: updated }
     }
-    this.db.prepare('DELETE FROM worker_terminal_archives WHERE dispatch_id = ?').run(dispatchId)
     this.db.exec('COMMIT')
     return { disposition: 'retained', resource: updated }
   } catch (error) {

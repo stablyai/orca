@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type * as MacosTccLoginShell from './macos-tcc-login-shell'
+import type { ShellSpawnParams } from './local-pty-utils'
 
 const {
   existsSyncMock,
@@ -13,7 +14,7 @@ const {
   readWindowsPtyJobProcessIdsMock,
   killWithDescendantSweepMock,
   isWslAvailableAsyncMock,
-  wslUncDirectoryExistsMock,
+  wslUncDirectoryExistsAsyncMock,
   createShellPromptReadinessProbeMock
 } = vi.hoisted(() => ({
   existsSyncMock: vi.fn(),
@@ -27,7 +28,7 @@ const {
   readWindowsPtyJobProcessIdsMock: vi.fn(),
   killWithDescendantSweepMock: vi.fn(),
   isWslAvailableAsyncMock: vi.fn(),
-  wslUncDirectoryExistsMock: vi.fn(),
+  wslUncDirectoryExistsAsyncMock: vi.fn(),
   createShellPromptReadinessProbeMock: vi.fn()
 }))
 
@@ -53,6 +54,15 @@ vi.mock('node-pty', () => ({
   spawn: spawnMock
 }))
 
+// Concurrent first imports can race Vitest mocks and load the real node-pty addon under a mocked platform.
+vi.mock('./local-pty-runtime-spawn', async () => {
+  const { spawnShellWithFallback } = await import('./local-pty-utils')
+  return {
+    loadLocalPtyRuntimeSpawn: async () => (params: Omit<ShellSpawnParams, 'ptySpawn'>) =>
+      spawnShellWithFallback({ ...params, ptySpawn: spawnMock })
+  }
+})
+
 vi.mock('./macos-tcc-login-shell', async (importOriginal) => ({
   ...(await importOriginal<typeof MacosTccLoginShell>()),
   prepareMacosTccLoginShell: prepareMacosTccLoginShellMock
@@ -62,10 +72,7 @@ vi.mock('../pty-descendant-termination', () => ({
   killWithDescendantSweep: killWithDescendantSweepMock
 }))
 
-// Resolve PowerShell family names to deterministic absolute paths (the fs mock
-// above otherwise makes every probe miss). The real resolver — which skips the
-// Store App Execution Alias stub — is covered in
-// windows-powershell-executable.test.ts.
+// The fs mock misses executable probes; pin paths here and leave Store-alias coverage to the resolver tests.
 const WINDOWS_POWERSHELL_ABS = 'C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe'
 const PWSH7_ABS = 'C:\\Program Files\\PowerShell\\7\\pwsh.exe'
 const CMD_ABS = 'C:\\Windows\\System32\\cmd.exe'
@@ -105,9 +112,8 @@ vi.mock('../wsl', () => ({
     `\\\\wsl.localhost\\${distro}${path.replace(/\//g, '\\')}`,
   getDefaultWslDistro: () => 'Ubuntu',
   isWslAvailableAsync: () => isWslAvailableAsyncMock(),
-  // Why: WSL worktree validation now asks the distro; these tests use WSL UNC
-  // cwds that are meant to exist, so report them present without spawning wsl.exe.
-  wslUncDirectoryExists: (...args: unknown[]) => wslUncDirectoryExistsMock(...args)
+  // Fixture WSL UNC directories exist; avoid launching wsl.exe to validate them.
+  wslUncDirectoryExistsAsync: (...args: unknown[]) => wslUncDirectoryExistsAsyncMock(...args)
 }))
 
 vi.mock('../shell-prompt-readiness-probe', () => ({
@@ -115,6 +121,13 @@ vi.mock('../shell-prompt-readiness-probe', () => ({
 }))
 
 import { LocalPtyProvider } from './local-pty-provider'
+import {
+  pendingLocalPtySpawns,
+  ptyDisposables,
+  ptyExitDisposables,
+  ptyPhysicalExits,
+  startupIngressByPty
+} from './local-pty-provider-state'
 import {
   applyLocalPtyProviderMockDefaults,
   createLocalPtyMockProcess,
@@ -141,7 +154,7 @@ describe('LocalPtyProvider', () => {
       readWindowsPtyJobProcessIdsMock,
       killWithDescendantSweepMock,
       isWslAvailableAsyncMock,
-      wslUncDirectoryExistsMock,
+      wslUncDirectoryExistsAsyncMock,
       createShellPromptReadinessProbeMock
     })
 
@@ -158,10 +171,40 @@ describe('LocalPtyProvider', () => {
   })
 
   describe('spawn', () => {
-    it('returns a unique PTY id', async () => {
-      const result = await provider.spawn({ cols: 80, rows: 24 })
-      expect(result.id).toBeTruthy()
-      expect(typeof result.id).toBe('string')
+    it('retires buffered output and synchronous Bun exit before replying to spawn', async () => {
+      const disposeData = vi.fn()
+      const disposeExit = vi.fn()
+      const onExit = vi.fn()
+      provider.configure({ onExit })
+      mockProc.onData.mockImplementation((listener: (data: string) => void) => {
+        listener('last output')
+        return { dispose: disposeData }
+      })
+      mockProc.onExit.mockImplementation((listener: (event: { exitCode: number }) => void) => {
+        listener({ exitCode: 17 })
+        return { dispose: disposeExit }
+      })
+      const result = await provider.spawn({
+        cols: 80,
+        rows: 24,
+        sessionId: 'already-exited-bun-shell',
+        command: 'must-not-run'
+      })
+      expect(result.exitedBeforeSpawnReply).toBe(true)
+      expect(provider.getPtyProcess(result.id)).toBeUndefined()
+      for (const map of [
+        ptyDisposables,
+        ptyExitDisposables,
+        ptyPhysicalExits,
+        startupIngressByPty
+      ]) {
+        expect(map.has(result.id)).toBe(false)
+      }
+      expect(disposeData).toHaveBeenCalledOnce()
+      expect(disposeExit).toHaveBeenCalledOnce()
+      expect(onExit).toHaveBeenCalledOnce()
+      await Promise.resolve()
+      expect(mockProc.write).not.toHaveBeenCalled()
     })
 
     it('reattaches to an existing caller-supplied session id without spawning', async () => {
@@ -175,8 +218,7 @@ describe('LocalPtyProvider', () => {
         incarnationId: first.incarnationId,
         pid: 12345,
         isReattach: true,
-        // Why published: this attach really moved the PTY, unlike daemon/relay attach, so main
-        // must record 120x40 rather than preserving the size it held for the session.
+        // This local reattach resized the PTY; publish the new grid unlike daemon/relay attachments.
         attachedGrid: { cols: 120, rows: 40 }
       })
       expect(mockProc.resize).toHaveBeenCalledWith(120, 40)
@@ -339,9 +381,7 @@ describe('LocalPtyProvider', () => {
       expect(spawnMock).not.toHaveBeenCalled()
     })
 
-    // Why (#16441): the Codex hook install and trust grant moved into
-    // buildSpawnEnv, so the env build is now the long await before node-pty
-    // exists — shutdown must be able to cancel the session id during it.
+    // Hook/trust setup makes env build a long pre-spawn await; shutdown must cancel during it (#16441).
     it('does not spawn after shutdown cancels a pending spawn during the env build', async () => {
       spawnMock.mockClear()
       let finishEnvBuild!: (env: Record<string, string>) => void
@@ -363,48 +403,160 @@ describe('LocalPtyProvider', () => {
       expect(spawnMock).not.toHaveBeenCalled()
     })
 
-    it('registers post-build preflight before a nested-microtask shutdown', async () => {
-      spawnMock.mockClear()
-      let finishEnvBuild!: () => void
-      const envProvider = new LocalPtyProvider({
-        buildSpawnEnv: (_id, baseEnv) =>
-          new Promise<Record<string, string>>((resolve) => {
-            finishEnvBuild = () => resolve(baseEnv)
-          })
-      })
-      const spawn = envProvider.spawn({
-        cols: 80,
-        rows: 24,
-        sessionId: 'resolved-env-build-session'
-      })
-      const canceledSpawn = expect(spawn).rejects.toThrow(
-        'PTY spawn canceled: resolved-env-build-session'
-      )
-      await vi.waitFor(() => expect(finishEnvBuild).toBeTypeOf('function'))
+    it.each([1, 2])(
+      'keeps cancellation registered across %i environment-resume microtasks',
+      async (microtasks) => {
+        spawnMock.mockClear()
+        let finishEnvBuild!: () => void
+        const envProvider = new LocalPtyProvider({
+          buildSpawnEnv: (_id, baseEnv) =>
+            new Promise<Record<string, string>>((resolve) => {
+              finishEnvBuild = () => resolve(baseEnv)
+            })
+        })
+        const spawn = envProvider.spawn({
+          cols: 80,
+          rows: 24,
+          sessionId: 'resolved-env-build-session'
+        })
+        const canceledSpawn = expect(spawn).rejects.toThrow(
+          'PTY spawn canceled: resolved-env-build-session'
+        )
+        await vi.waitFor(() => expect(finishEnvBuild).toBeTypeOf('function'))
 
-      finishEnvBuild()
-      const shutdown = new Promise<void>((resolve, reject) => {
-        queueMicrotask(() => {
-          queueMicrotask(() => {
+        finishEnvBuild()
+        const shutdown = new Promise<void>((resolve, reject) => {
+          const shutdown = () => {
             envProvider
               .shutdown('resolved-env-build-session', { immediate: true })
               .then(resolve, reject)
-          })
+          }
+          queueMicrotask(() => (microtasks === 1 ? shutdown() : queueMicrotask(shutdown)))
         })
-      })
 
-      await shutdown
-      await canceledSpawn
-      expect(spawnMock).not.toHaveBeenCalled()
+        await shutdown
+        await canceledSpawn
+        expect(spawnMock).not.toHaveBeenCalled()
+      }
+    )
+
+    it.each([1, 2])(
+      'settles final-preflight shutdown without a late PTY (%i microtasks)',
+      async (microtasks) => {
+        spawnMock.mockClear()
+        let finishPreparation!: () => void
+        prepareMacosTccLoginShellMock.mockImplementationOnce(
+          () =>
+            new Promise<void>((resolve) => {
+              finishPreparation = resolve
+            })
+        )
+        const id = 'preflight-resume-session'
+        const kill = mockProc.kill
+        let committed = false
+        const outcome = provider
+          .spawn({
+            cols: 80,
+            rows: 24,
+            sessionId: id,
+            onPtySpawnCommitted: () => {
+              committed = true
+            }
+          })
+          .then(
+            (result) => ({ ok: true as const, result }),
+            (error: unknown) => ({ ok: false as const, error })
+          )
+        await import('node-pty')
+        await vi.waitFor(() => expect(finishPreparation).toBeTypeOf('function'))
+        finishPreparation()
+        let committedAtShutdown = false
+        await new Promise<void>((resolve, reject) => {
+          const shutdown = () => {
+            committedAtShutdown = committed
+            provider.shutdown(id, { immediate: true }).then(resolve, reject)
+          }
+          queueMicrotask(() => (microtasks === 1 ? shutdown() : queueMicrotask(shutdown)))
+        })
+        const settled = await outcome
+        if (committedAtShutdown) {
+          expect(settled.ok).toBe(true)
+          expect(kill).toHaveBeenCalled()
+        } else {
+          expect(settled).toEqual({ ok: false, error: new Error(`PTY spawn canceled: ${id}`) })
+          expect(spawnMock.mock.calls.length).toBe(0)
+        }
+        expect(provider.getPtyProcess(id)).toBeUndefined()
+        expect(pendingLocalPtySpawns.has(id)).toBe(false)
+      }
+    )
+
+    it('cancels deferred shell availability before finalizing a launch plan', async () => {
+      spawnMock.mockClear()
+      Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
+      let finishAvailability!: (available: boolean) => void
+      const buildSpawnEnv = vi.fn((_id: string, env: Record<string, string>) => env)
+      provider.configure({
+        getWindowsShell: () => 'powershell.exe',
+        getWindowsPowerShellImplementation: () => 'auto',
+        pwshAvailable: () =>
+          new Promise<boolean>((resolve) => {
+            finishAvailability = resolve
+          }),
+        buildSpawnEnv
+      })
+      const id = 'deferred-availability-session'
+      const spawn = provider.spawn({ cols: 80, rows: 24, sessionId: id })
+      const rejected = expect(spawn).rejects.toThrow(`PTY spawn canceled: ${id}`)
+      await provider.shutdown(id, { immediate: true })
+      finishAvailability(true)
+      await rejected
+      expect(buildSpawnEnv).not.toHaveBeenCalled()
+      expect(spawnMock.mock.calls.length).toBe(0)
+      expect(pendingLocalPtySpawns.has(id)).toBe(false)
     })
+
+    it.each(['synchronous environment', 'async environment', 'preflight'])(
+      'releases cancellation state after failed %s and allows a fresh retry',
+      async (phase) => {
+        spawnMock.mockClear()
+        const id = 'failed-preparation-session'
+        let fail = true
+        provider.configure({
+          buildSpawnEnv: (_id, env) => {
+            if (fail && phase === 'synchronous environment') {
+              throw new Error('preparation failed')
+            }
+            if (fail && phase === 'async environment') {
+              return Promise.reject(new Error('preparation failed'))
+            }
+            return env
+          }
+        })
+        if (phase === 'preflight') {
+          prepareMacosTccLoginShellMock.mockRejectedValueOnce(new Error('preparation failed'))
+        }
+        await expect(provider.spawn({ cols: 80, rows: 24, sessionId: id })).rejects.toThrow(
+          'preparation failed'
+        )
+        expect(pendingLocalPtySpawns.has(id)).toBe(false)
+        expect(spawnMock.mock.calls.length).toBe(0)
+        await provider.shutdown(id, { immediate: true })
+        fail = false
+        await expect(provider.spawn({ cols: 80, rows: 24, sessionId: id })).resolves.toMatchObject({
+          id
+        })
+        expect(spawnMock.mock.calls.length).toBe(1)
+        expect(pendingLocalPtySpawns.has(id)).toBe(false)
+      }
+    )
 
     it('coalesces a concurrent same-session-id spawn before launching a redundant shell (F3)', async () => {
       spawnMock.mockClear()
       const procA = { ...mockProc, pid: 1001 }
       spawnMock.mockReturnValueOnce(procA)
 
-      // Hold both spawns past the existence check and inside the preflight so they
-      // race to register the same id; release only after both are parked.
+      // Park both spawns past the existence check to race same-id registration.
       let releasePreflight!: () => void
       prepareMacosTccLoginShellMock.mockReturnValue(
         new Promise<void>((resolve) => {
@@ -418,7 +570,6 @@ describe('LocalPtyProvider', () => {
       releasePreflight()
 
       const [a, b] = await Promise.all([spawnA, spawnB])
-      // The winner owns the tracked PTY; the loser attaches to it, not a second one.
       expect(a.isReattach).toBeUndefined()
       expect(b.isReattach).toBe(true)
       expect(b.pid).toBe(procA.pid)

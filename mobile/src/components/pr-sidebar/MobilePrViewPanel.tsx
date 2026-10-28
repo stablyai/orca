@@ -1,6 +1,8 @@
-import { StyleSheet, View } from 'react-native'
+import { View } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { colors } from '../../theme/mobile-theme'
+import { themedStyleSheet } from '../../theme/themed-styles'
+import { useMobileColorScheme } from '../../theme/use-mobile-color-scheme'
 import type { ConnectionState } from '../../transport/types'
 import type { RpcClient } from '../../transport/rpc-client'
 import type { MobileGitStatusResult } from '../../source-control/mobile-git-status'
@@ -17,11 +19,10 @@ type Props = {
   isGithubRepo?: boolean
   branchContextLoaded?: boolean
   controller: MobilePrSidebarController
+  workspaceLabel: string | null
 }
 
-// Chromeless PR sidebar body for the source-control hub's Pull Request segment.
-// The hub owns the header, segmented control, load triggers, and the shared
-// controller (one fetch feeds both the branch-card chip and this body).
+// Hub owns PR header/segments/load/controller; one fetch feeds branch chip and chromeless sidebar body.
 export function MobilePrViewPanelBody({
   client,
   connState,
@@ -31,8 +32,10 @@ export function MobilePrViewPanelBody({
   gitStatus,
   isGithubRepo = true,
   branchContextLoaded = true,
-  controller
+  controller,
+  workspaceLabel
 }: Props) {
+  useMobileColorScheme()
   const insets = useSafeAreaInsets()
 
   const sidebarState = !branchContextLoaded
@@ -64,14 +67,15 @@ export function MobilePrViewPanelBody({
         bottomInset={insets.bottom}
         // Hub header already hosts open-on-web while this segment is active.
         showOpenOnWeb={false}
+        workspaceLabel={workspaceLabel}
       />
     </View>
   )
 }
 
-const styles = StyleSheet.create({
+const styles = themedStyleSheet(() => ({
   container: {
     flex: 1,
     backgroundColor: colors.bgBase
   }
-})
+}))

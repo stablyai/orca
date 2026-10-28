@@ -5,13 +5,15 @@ import type {
   BrowserProfileDeleteResult,
   BrowserProfileListResult
 } from '../../../../../shared/runtime-types'
+import { parseExecutionHostId, type ExecutionHostId } from '../../../../../shared/execution-host'
 import { callRuntimeRpc } from '@/runtime/runtime-rpc-client'
 import {
   getBrowserProfilesForHost,
   getBrowserSettingsHostId,
   getBrowserSettingsRuntimeEnvironmentId,
   profileListByHostUpdate,
-  getDefaultBrowserProfileForHost
+  getDefaultBrowserProfileForHost,
+  listedProfilesByHostUpdate
 } from './browser-host-state'
 
 export function createBrowserProfileListActions(
@@ -21,10 +23,18 @@ export function createBrowserProfileListActions(
   BrowserSlice,
   'fetchBrowserSessionProfiles' | 'createBrowserSessionProfile' | 'deleteBrowserSessionProfile'
 > {
+  // Why: change events can overlap fetches; only the latest listing per host may land, or an older one restores a deleted profile.
+  const latestListingByHost = new Map<ExecutionHostId, number>()
+  let listingCount = 0
   return {
-    fetchBrowserSessionProfiles: async () => {
-      const hostId = getBrowserSettingsHostId(get())
-      const runtimeEnvironmentId = getBrowserSettingsRuntimeEnvironmentId(get())
+    fetchBrowserSessionProfiles: async (requestedHostId) => {
+      const hostId = requestedHostId ?? getBrowserSettingsHostId(get())
+      const listing = ++listingCount
+      latestListingByHost.set(hostId, listing)
+      const isLatest = (): boolean => latestListingByHost.get(hostId) === listing
+      const parsedHostId = parseExecutionHostId(hostId)
+      const runtimeEnvironmentId =
+        parsedHostId?.kind === 'runtime' ? parsedHostId.environmentId : null
       if (runtimeEnvironmentId) {
         try {
           const result = await callRuntimeRpc<BrowserProfileListResult>(
@@ -33,9 +43,7 @@ export function createBrowserProfileListActions(
             undefined,
             { timeoutMs: 15_000 }
           )
-          // Why: client-hosted imports never touch the server, so the server's
-          // records can't carry the "imported from Chrome" badge — this desktop
-          // remembers what it imported into each environment's jar and overlays it.
+          // Server never observes client imports; overlay desktop-tracked import badges onto each environment’s jar.
           const clientImportSources = await window.api.browser
             .sessionClientRouteImportSources?.({ environmentId: runtimeEnvironmentId })
             .catch(() => ({}))
@@ -44,21 +52,27 @@ export function createBrowserProfileListActions(
               ? { ...profile, source: clientImportSources[profile.id] }
               : profile
           )
-          set((s) => profileListByHostUpdate(s, profiles, hostId))
+          if (isLatest()) {
+            set((s) => listedProfilesByHostUpdate(s, profiles, hostId))
+          }
         } catch {
-          set((s) => profileListByHostUpdate(s, [], hostId))
+          if (isLatest()) {
+            set((s) => profileListByHostUpdate(s, [], hostId))
+          }
         }
         return
       }
       try {
         const profiles = (await window.api.browser.sessionListProfiles()) as BrowserSessionProfile[]
-        set((s) => profileListByHostUpdate(s, profiles, hostId))
+        if (isLatest()) {
+          set((s) => listedProfilesByHostUpdate(s, profiles, hostId))
+        }
       } catch {
         /* best-effort — stale profile list is preferable to a crash */
       }
     },
 
-    createBrowserSessionProfile: async (scope, label, options) => {
+    createBrowserSessionProfile: async (scope, label) => {
       const hostId = getBrowserSettingsHostId(get())
       const runtimeEnvironmentId = getBrowserSettingsRuntimeEnvironmentId(get())
       if (runtimeEnvironmentId) {
@@ -66,7 +80,7 @@ export function createBrowserProfileListActions(
           const result = await callRuntimeRpc<BrowserProfileCreateResult>(
             { kind: 'environment', environmentId: runtimeEnvironmentId },
             'browser.profileCreate',
-            { scope, label, ...options },
+            { scope, label },
             { timeoutMs: 15_000 }
           )
           const profile = result.profile
@@ -85,11 +99,10 @@ export function createBrowserProfileListActions(
         }
       }
       try {
-        const profile = (await window.api.browser.sessionCreateProfile({
+        const profile = await window.api.browser.sessionCreateProfile({
           scope,
-          label,
-          ...options
-        })) as BrowserSessionProfile | null
+          label
+        })
         if (profile) {
           set((s) => ({
             ...profileListByHostUpdate(

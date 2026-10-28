@@ -1,8 +1,9 @@
 import { describe, expect, it, vi } from 'vitest'
+import { bindPaneFirst } from '../bind-first-pane.test-fixture'
+import { makeAgentStatusStoreWiring } from '../agent-status-store-wiring.test-fixture'
 import {
   OrcaRuntimeService,
   getDefaultWorkspaceSession,
-  registerSshGitProvider,
   setPlatform,
   win32,
   worktreePathComparison
@@ -15,21 +16,42 @@ import {
   makeWorktreeMeta,
   store
 } from '../orca-runtime-test-fixtures.spec'
+import type { HostWorktreeTarget } from '../../../shared/worktree/host-qualified-identity'
+
+// No SSH Git provider is installed, so these fixtures use stored rows.
+function storedWorktreeMeta(
+  repoId: string,
+  worktrees: readonly { path: string }[]
+): Record<string, WorktreeMeta> {
+  return Object.fromEntries(
+    worktrees.map((worktree) => [`${repoId}::${worktree.path}`, makeWorktreeMeta()])
+  )
+}
 
 describe('OrcaRuntimeService', () => {
-  it('keeps a retained OSC row from an SSH pane after its PTY disconnects', async () => {
-    // Why: OSC snapshots must carry the pane transport; hardcoding local would
-    // strip the SSH exemption off rows whose freshest update arrived via OSC.
+  it('keeps an OSC row from an SSH pane after its PTY disconnects', async () => {
+    // OSC snapshots must retain SSH transport provenance for the remote-row exemption.
     const { runtimeStore } = makeRuntimeStoreWithWorkspaceSession({
       ...getDefaultWorkspaceSession(),
       tabsByWorktree: {}
     })
-    const runtime = new OrcaRuntimeService(runtimeStore as never)
+    const runtime = new OrcaRuntimeService(
+      runtimeStore as never,
+      undefined,
+      makeAgentStatusStoreWiring().deps
+    )
+    bindPaneFirst(runtime, {
+      worktreeId: TEST_WORKTREE_ID,
+      tabId: 'ssh-tab',
+      leafId: 'cccccccc-cccc-4ccc-8ccc-cccccccccccc',
+      ptyId: 'ssh-osc-pty'
+    })
     runtime['recordPtyWorktree']('ssh-osc-pty', TEST_WORKTREE_ID, {
       connected: true,
       connectionId: 'ssh-osc-1',
       tabId: 'ssh-tab',
-      paneKey: 'ssh-tab:cccccccc-cccc-4ccc-8ccc-cccccccccccc'
+      paneKey: 'ssh-tab:cccccccc-cccc-4ccc-8ccc-cccccccccccc',
+      surfaceRecordedAtGraphSequence: runtime['graphSequence']
     })
     runtime.onPtyData(
       'ssh-osc-pty',
@@ -45,7 +67,7 @@ describe('OrcaRuntimeService', () => {
   })
 
   it('keeps a hook row with an unresolvable pane key', async () => {
-    // Why: no tabId means staleness is unprovable; the filter must pass it.
+    // Without tabId, local staleness is unprovable.
     const { runtimeStore } = makeRuntimeStoreWithWorkspaceSession({
       ...getDefaultWorkspaceSession(),
       tabsByWorktree: {}
@@ -73,8 +95,7 @@ describe('OrcaRuntimeService', () => {
   })
 
   it('keeps a WSL hook row while its tab is still in the session', async () => {
-    // Guards the WSL clause against over-filtering: local-tab evidence must
-    // rescue WSL rows exactly like null-connection rows.
+    // Local-tab evidence must also rescue WSL rows.
     const { runtimeStore } = makeRuntimeStoreWithWorkspaceSession({
       ...getDefaultWorkspaceSession(),
       tabsByWorktree: {
@@ -116,7 +137,7 @@ describe('OrcaRuntimeService', () => {
   })
 
   it('drops a hydrated WSL hook row after its local tab is closed', async () => {
-    // Why: WSL relay ids are transport provenance; the pane remains local.
+    // A WSL relay id names the transport, not a remote pane.
     const { runtimeStore } = makeRuntimeStoreWithWorkspaceSession({
       ...getDefaultWorkspaceSession(),
       tabsByWorktree: {}
@@ -145,8 +166,7 @@ describe('OrcaRuntimeService', () => {
   })
 
   it('keeps remote hook rows whose tabs are only tracked on the remote host', async () => {
-    // Why: the local session partition for an SSH host can be empty while the
-    // remote host owns the terminals; absence there is not proof of a close.
+    // An empty local session partition does not prove an SSH host's pane closed.
     const remoteRepo = {
       id: 'repo-ssh-6072',
       path: '/home/me/project',
@@ -174,9 +194,6 @@ describe('OrcaRuntimeService', () => {
       getWorktreeMeta: (worktreeId: string) => metaById[worktreeId],
       getWorkspaceSession: () => getDefaultWorkspaceSession()
     }
-    registerSshGitProvider('ssh-6072', {
-      listWorktrees: vi.fn().mockResolvedValue([remoteWorktree])
-    } as never)
     const now = Date.now()
     const runtime = new OrcaRuntimeService(runtimeStore as never, undefined, {
       getAgentStatusSnapshot: () => [
@@ -242,14 +259,11 @@ describe('OrcaRuntimeService', () => {
       getRepo,
       getAllWorktreeMeta: () => metaById,
       getWorktreeMeta: (worktreeId: string) => metaById[worktreeId],
-      setWorktreeMeta: (worktreeId: string, meta: Partial<WorktreeMeta>) => {
+      setWorktreeMeta: ({ id: worktreeId }: HostWorktreeTarget, meta: Partial<WorktreeMeta>) => {
         metaById[worktreeId] = { ...(metaById[worktreeId] ?? makeWorktreeMeta()), ...meta }
         return metaById[worktreeId]
       }
     }
-    registerSshGitProvider('ssh-1', {
-      listWorktrees: vi.fn().mockResolvedValue([remoteWorktree])
-    } as never)
 
     const now = Date.now()
     const runtime = new OrcaRuntimeService(runtimeStore as never, undefined, {
@@ -268,7 +282,6 @@ describe('OrcaRuntimeService', () => {
     })
     const summaries = await runtime.getWorktreePs()
 
-    // Why: equal keys prove polled worktree.ps rows can share the per-request index instead of repeating path scans.
     expect(worktreePathComparison.worktreePathComparisonKey(remoteWorktree.path, 'linux')).toBe(
       worktreePathComparison.worktreePathComparisonKey(`${remoteWorktree.path}/`, 'linux')
     )
@@ -329,20 +342,17 @@ describe('OrcaRuntimeService', () => {
         path: slashPath,
         branch: 'refs/heads/slash'
       }
+      const storedMeta = storedWorktreeMeta(
+        remoteRepo.id,
+        includeSlashWorktree ? [backslashWorktree, slashWorktree] : [backslashWorktree]
+      )
       const runtimeStore = {
         ...store,
         getRepos: () => [remoteRepo],
         getRepo: (id: string) => (id === remoteRepo.id ? remoteRepo : undefined),
-        getAllWorktreeMeta: () => ({}),
+        getAllWorktreeMeta: () => storedMeta,
         getWorktreeMeta: () => undefined
       }
-      registerSshGitProvider('ssh-relative', {
-        listWorktrees: vi
-          .fn()
-          .mockResolvedValue(
-            includeSlashWorktree ? [backslashWorktree, slashWorktree] : [backslashWorktree]
-          )
-      } as never)
 
       const now = Date.now()
       const runtime = new OrcaRuntimeService(runtimeStore as never, undefined, {
@@ -407,16 +417,14 @@ describe('OrcaRuntimeService', () => {
         isMainWorktree: false
       }
     })
+    const storedMeta = storedWorktreeMeta(remoteRepo.id, remoteWorktrees)
     const runtimeStore = {
       ...store,
       getRepos: () => [remoteRepo],
       getRepo: (id: string) => (id === remoteRepo.id ? remoteRepo : undefined),
-      getAllWorktreeMeta: () => ({}),
+      getAllWorktreeMeta: () => storedMeta,
       getWorktreeMeta: () => undefined
     }
-    registerSshGitProvider('ssh-pair-aware-scale', {
-      listWorktrees: vi.fn().mockResolvedValue(remoteWorktrees)
-    } as never)
     const now = Date.now()
     const runtime = new OrcaRuntimeService(runtimeStore as never, undefined, {
       getAgentStatusSnapshot: () =>
@@ -437,7 +445,7 @@ describe('OrcaRuntimeService', () => {
 
     expect(summaries.worktrees).toHaveLength(100)
     expect(summaries.worktrees.every((worktree) => worktree.agents?.length === 1)).toBe(true)
-    // Why: property reads make the scaling assertion mutation-sensitive without a flaky wall-clock threshold.
+    // Count property reads to catch scaling regressions without wall-clock flakiness.
     expect(pathReadCount).toBeLessThan(2_000)
   })
 
@@ -465,16 +473,14 @@ describe('OrcaRuntimeService', () => {
       }
     })
     const getRepo = vi.fn((id: string) => (id === remoteRepo.id ? remoteRepo : undefined))
+    const storedMeta = storedWorktreeMeta(remoteRepo.id, remoteWorktrees)
     const runtimeStore = {
       ...store,
       getRepos: () => [remoteRepo],
       getRepo,
-      getAllWorktreeMeta: () => ({}),
+      getAllWorktreeMeta: () => storedMeta,
       getWorktreeMeta: () => undefined
     }
-    registerSshGitProvider('ssh-malformed-scale', {
-      listWorktrees: vi.fn().mockResolvedValue(remoteWorktrees)
-    } as never)
     const now = Date.now()
     const runtime = new OrcaRuntimeService(runtimeStore as never, undefined, {
       getAgentStatusSnapshot: () =>
@@ -496,7 +502,7 @@ describe('OrcaRuntimeService', () => {
     expect(summaries).toMatchObject({ totalCount: 2_000, truncated: true })
     expect(summaries.worktrees.every((worktree) => worktree.agents?.length === 0)).toBe(true)
     expect(getRepo).toHaveBeenCalledTimes(remoteWorktrees.length)
-    // Why: the prior fallback read every worktree path per distinct miss, exceeding the 3s worktree.ps poll interval at this scale.
+    // The prior per-miss path scan exceeded the 3s poll interval at this scale.
     expect(pathReadCount).toBeLessThan(40_000)
   })
 
@@ -516,16 +522,14 @@ describe('OrcaRuntimeService', () => {
       isBare: false,
       isMainWorktree: false
     }
+    const storedMeta = storedWorktreeMeta(remoteRepo.id, [remoteWorktree])
     const runtimeStore = {
       ...store,
       getRepos: () => [remoteRepo],
       getRepo: (id: string) => (id === remoteRepo.id ? remoteRepo : undefined),
-      getAllWorktreeMeta: () => ({}),
+      getAllWorktreeMeta: () => storedMeta,
       getWorktreeMeta: () => undefined
     }
-    registerSshGitProvider('ssh-repeated-miss', {
-      listWorktrees: vi.fn().mockResolvedValue([remoteWorktree])
-    } as never)
     const now = Date.now()
     const runtime = new OrcaRuntimeService(runtimeStore as never, undefined, {
       getAgentStatusSnapshot: () =>
@@ -547,7 +551,7 @@ describe('OrcaRuntimeService', () => {
       const summaries = await runtime.getWorktreePs()
 
       expect(summaries.worktrees[0]?.agents).toEqual([])
-      // Why: resolving a relative comparison key consults cwd; a raw miss must do that once per poll, not per agent row.
+      // Relative-key resolution may consult cwd once per poll, not once per agent row.
       expect(cwdSpy.mock.calls.length).toBeLessThan(50)
     } finally {
       cwdSpy.mockRestore()
@@ -580,16 +584,14 @@ describe('OrcaRuntimeService', () => {
         isMainWorktree: false
       }
     ]
+    const storedMeta = storedWorktreeMeta(remoteRepo.id, remoteWorktrees)
     const runtimeStore = {
       ...store,
       getRepos: () => [remoteRepo],
       getRepo: (id: string) => (id === remoteRepo.id ? remoteRepo : undefined),
-      getAllWorktreeMeta: () => ({}),
+      getAllWorktreeMeta: () => storedMeta,
       getWorktreeMeta: () => undefined
     }
-    registerSshGitProvider('ssh-truncated', {
-      listWorktrees: vi.fn().mockResolvedValue(remoteWorktrees)
-    } as never)
     const now = Date.now()
     const runtime = new OrcaRuntimeService(runtimeStore as never, undefined, {
       getAgentStatusSnapshot: () => [

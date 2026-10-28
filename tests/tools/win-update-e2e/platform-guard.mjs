@@ -1,9 +1,4 @@
-// Windows-only guards for the packaged-update E2E harness.
-//
-// This tool drives real NSIS installers, named-pipe daemons, and Win32 window
-// enumeration, none of which exist off Windows. Every entry point calls
-// assertWin32() so a macOS/Linux invocation fails loudly with a useful message
-// instead of throwing an opaque "powershell: command not found" later.
+// Refuse off-Windows entry points before NSIS/named-pipe/Win32 probes can produce opaque PowerShell errors.
 
 import { runCommandSync } from './powershell-runner.mjs'
 
@@ -18,18 +13,12 @@ export function assertWin32(context = 'win-update-e2e') {
   }
 }
 
-/**
- * True when this process is running elevated. Non-elevated is the expected,
- * supported mode (per-user oneClick NSIS needs no elevation); this is only used
- * to print an informational warning during preflight.
- */
+// Detect elevation for informational preflight warning; per-user oneClick’s supported mode is non-elevated.
 export function isElevated() {
   if (process.platform !== 'win32') {
     return false
   }
-  // Use the WindowsPrincipal role check via PowerShell rather than `whoami`,
-  // which under a Git Bash / MSYS PATH can resolve to a Unix whoami that
-  // rejects the /groups flag.
+  // Use WindowsPrincipal instead of whoami, which MSYS PATH can resolve to Unix whoami lacking /groups.
   const { stdout } = runCommandSync(
     `[bool]([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()` +
       `).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)`

@@ -36,7 +36,6 @@ vi.mock('./usePetUrl', () => ({
       fps: 8,
       defaultAnimation: 'idle',
       animations: {
-        // Codex ambient idle pacing: 6.6s cycle with long bookend holds.
         idle: { row: 0, frames: 6, frameDurationsMs: [1680, 660, 660, 840, 840, 1920] }
       }
     },

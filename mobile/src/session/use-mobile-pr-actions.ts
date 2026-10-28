@@ -2,6 +2,7 @@ import { useCallback, useEffect, useReducer, useRef } from 'react'
 import type { ConnectionState } from '../transport/types'
 import type { RpcClient } from '../transport/rpc-client'
 import {
+  fetchMarkPRReadyForReview,
   fetchMergePR,
   fetchRemovePRReviewers,
   fetchRequestPRReviewers,
@@ -10,6 +11,7 @@ import {
   fetchUpdatePRState
 } from './github-pr-mutations'
 import type { GitHubPrRepoSlug } from './github-pr-rpc'
+import type { RpcOperationSender } from '../transport/rpc-operation-sender'
 import { PrActionsEngine, type PrActionMutations, type PrActionBusyKey } from './pr-actions-engine'
 
 export type { PrActionBusyKey, PrActionMutations } from './pr-actions-engine'
@@ -22,32 +24,25 @@ export type PrActionsInput = {
   headSha?: string | null
   prRepo?: GitHubPrRepoSlug | null
   refetch: () => void | Promise<void>
-  // Test seam: inject fake mutations; defaults to the real github.* wrappers.
   mutations?: PrActionMutations
 }
 
-function realMutations(
-  client: Pick<RpcClient, 'sendRequest'>,
-  worktreeId: string
-): PrActionMutations {
+function realMutations(client: RpcOperationSender, worktreeId: string): PrActionMutations {
   return {
     mergePR: (args) => fetchMergePR(client, worktreeId, args),
     setPRAutoMerge: (args) => fetchSetPRAutoMerge(client, worktreeId, args),
     updatePRState: (args) => fetchUpdatePRState(client, worktreeId, args),
+    markReadyForReview: (args) => fetchMarkPRReadyForReview(client, worktreeId, args),
     requestReviewers: (args) => fetchRequestPRReviewers(client, worktreeId, args),
     removeReviewers: (args) => fetchRemovePRReviewers(client, worktreeId, args),
     rerunChecks: (args) => fetchRerunPRChecks(client, worktreeId, args)
   }
 }
 
-// Thin React adapter over the pure PrActionsEngine. The engine owns optimistic
-// + busy/error/blocked state; the hook just forces re-renders on change and
-// keeps the engine's config in sync with props.
 export function useMobilePrActions(input: PrActionsInput) {
   const { client, connState, worktreeId, prNumber, headSha, prRepo, refetch } = input
   const [, forceRender] = useReducer((n: number) => n + 1, 0)
 
-  // A no-op refetch until props provide one; lets the engine exist before ready.
   const engineRef = useRef<PrActionsEngine | null>(null)
   if (engineRef.current === null) {
     engineRef.current = new PrActionsEngine({
@@ -61,7 +56,6 @@ export function useMobilePrActions(input: PrActionsInput) {
   }
   const engine = engineRef.current
 
-  // Keep engine config in sync without recreating it (preserves in-flight guards).
   useEffect(() => {
     engine.updateConfig({
       mutations: input.mutations ?? (client ? realMutations(client, worktreeId) : noopMutations()),
@@ -106,6 +100,11 @@ export function useMobilePrActions(input: PrActionsInput) {
       },
       [engine, ready]
     ),
+    markReadyForReview: useCallback(() => {
+      if (ready) {
+        void engine.markReadyForReview()
+      }
+    }, [engine, ready]),
     requestReviewer: useCallback(
       (login: string) => {
         if (ready) {
@@ -144,14 +143,14 @@ export function useMobilePrActions(input: PrActionsInput) {
   }
 }
 
-// Stand-in mutations used before a client exists; they never fire (the hook gates
-// on `ready`) but keep the engine constructable.
+// Keep inert mutations until a client exists; the ready gate prevents sending them.
 function noopMutations(): PrActionMutations {
   const fail = async () => ({ ok: false as const, error: 'Not connected' })
   return {
     mergePR: fail,
     setPRAutoMerge: fail,
     updatePRState: fail,
+    markReadyForReview: fail,
     requestReviewers: fail,
     removeReviewers: fail,
     rerunChecks: fail

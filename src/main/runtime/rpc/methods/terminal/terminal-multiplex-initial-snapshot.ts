@@ -1,11 +1,14 @@
 import {
+  isTerminalSnapshotForcedUnavailable,
   sendSnapshotFrames,
   serializeBudgetedMobileSnapshot
 } from './terminal-snapshot-publication'
 import { getOutputAfterSnapshotSeq } from './terminal-stream-replay'
-import type {
-  MultiplexSubscribeRequest,
-  TerminalMultiplexConnection
+import { getTerminalInputSequenceLedger } from './terminal-input-sequence-ledger'
+import {
+  isMultiplexStreamAttached,
+  type MultiplexSubscribeRequest,
+  type TerminalMultiplexConnection
 } from './terminal-multiplex-connection'
 import type { TerminalMultiplexStream } from './terminal-stream-types'
 
@@ -18,16 +21,17 @@ export type MultiplexPublishedInitialState = {
 export async function publishMultiplexInitialSnapshot(
   state: TerminalMultiplexConnection,
   request: MultiplexSubscribeRequest,
-  stream: TerminalMultiplexStream
+  stream: TerminalMultiplexStream,
+  incarnationId = state.runtime.getPtyExecutionHostMetadata(stream.ptyId).incarnationId
 ): Promise<MultiplexPublishedInitialState | null> {
-  const { runtime, streams, emit } = state
+  const { runtime, emit } = state
   const { ptyId } = stream
   const isMobile = stream.isMobile
   const forcedInitialSnapshotTruncated =
     process.env.ORCA_E2E_FORCE_REMOTE_TERMINAL_INITIAL_SNAPSHOT_TRUNCATED === '1'
   let read = await runtime.readTerminal(request.terminal)
-  let serialized = await serializeBudgetedMobileSnapshot(runtime, ptyId, isMobile)
-  if (state.closed || streams.get(request.streamId) !== stream) {
+  let serialized = await serializeBudgetedMobileSnapshot(runtime, ptyId)
+  if (!isMultiplexStreamAttached(state, stream)) {
     return null
   }
   let initialOutputOverflowed = forcedInitialSnapshotTruncated
@@ -36,8 +40,8 @@ export async function publishMultiplexInitialSnapshot(
     stream.pendingOutputBytes = 0
     stream.pendingOutputOverflowed = false
     read = await runtime.readTerminal(request.terminal)
-    serialized = await serializeBudgetedMobileSnapshot(runtime, ptyId, isMobile)
-    if (state.closed || streams.get(request.streamId) !== stream) {
+    serialized = await serializeBudgetedMobileSnapshot(runtime, ptyId)
+    if (!isMultiplexStreamAttached(state, stream)) {
       return null
     }
     if (stream.pendingOutputOverflowed) {
@@ -52,7 +56,23 @@ export async function publishMultiplexInitialSnapshot(
   const layoutSeq = runtime.getLayout(ptyId)?.seq
   // Why: layout versions and output offsets are different sequence domains.
   const snapshotOutputSeq = serialized?.seq
+  // Snapshot awaits may outlive the handle binding or the physical shell.
+  if (
+    runtime.resolveLiveLeafForHandle(request.terminal)?.ptyId !== ptyId ||
+    runtime.getPtyExecutionHostMetadata(ptyId).incarnationId !== incarnationId
+  ) {
+    throw new Error('terminal_handle_stale')
+  }
+  let launchResult: ReturnType<typeof runtime.getTerminalLaunchResult>
+  try {
+    launchResult = runtime.getTerminalLaunchResult(ptyId)
+  } catch (error) {
+    console.warn('Terminal launch result unavailable', error)
+  }
   emit({
+    ...(incarnationId && launchResult
+      ? { launchResult: { ...launchResult, ptyId, incarnationId } }
+      : {}),
     type: 'subscribed',
     streamId: request.streamId,
     terminal: request.terminal,
@@ -60,69 +80,43 @@ export async function publishMultiplexInitialSnapshot(
     rows: serialized?.rows ?? size?.rows,
     displayMode,
     seq: layoutSeq,
-    ...((stream.ackOutputSourceRanges || stream.supportsOutputPause) && {
+    ...((stream.supportsOutputPause || stream.inputSessionId !== null) && {
       capabilities: {
-        ...(stream.ackOutputSourceRanges ? { ackOutputSourceRanges: 1 as const } : {}),
-        ...(stream.supportsOutputPause ? { outputPause: 1 as const } : {})
+        ...(stream.supportsOutputPause ? { outputPause: 1 as const } : {}),
+        ...(stream.supportsOutputPauseDropNotice ? { outputPauseDropNotice: 1 as const } : {}),
+        ...(stream.inputSessionId !== null ? { inputAck: 1 as const } : {})
       }
     }),
-    ...(stream.ackOutputSourceRanges ? { streamGeneration: stream.streamGeneration } : {}),
-    // Why: retained-tail truncation loses history, not the authoritative latest-screen fallback.
+    ...(stream.inputSessionId !== null
+      ? { inputLedgerId: getTerminalInputSequenceLedger(runtime).id }
+      : {}),
+    // Truncated retained history does not invalidate the authoritative latest-screen fallback.
     truncated: initialOutputOverflowed
   })
-  stream.sourceRangeReplacement =
-    stream.ackOutputSourceRanges &&
-    serialized?.source !== undefined &&
-    typeof serialized.seq === 'number'
-      ? runtime.reserveRemoteTerminalSourceRangeReplacement(
-          {
-            ptyId,
-            consumerId: stream.remoteDesktopSubscriptionKey,
-            streamGeneration: stream.streamGeneration
-          },
-          serialized.seq,
-          'initial-snapshot'
-        )
-      : null
-  const snapshotPublication = sendSnapshotFrames(
-    (opcode, payload) => state.sendFrame(request.streamId, opcode, payload),
-    {
-      kind: 'scrollback',
-      cols: serialized?.cols ?? size?.cols ?? 80,
-      rows: serialized?.rows ?? size?.rows ?? 24,
-      displayMode,
-      seq: snapshotOutputSeq,
-      cwd: serialized?.cwd,
-      truncated: initialOutputOverflowed,
-      truncatedByByteBudget: serialized?.truncatedByByteBudget,
-      source: serialized?.source,
-      kittyKeyboardFlags: serialized?.kittyKeyboardFlags,
-      alternateScreen: serialized?.alternateScreen,
-      terminalOwner: serialized?.terminalOwner,
-      oscLinks: serialized?.oscLinks,
-      pendingEscapeTailAnsi: serialized?.pendingEscapeTailAnsi,
-      data: serialized?.data ?? (read.tail.length > 0 ? `${read.tail.join('\r\n')}\r\n` : '')
-    }
-  )
-  const replacement = stream.sourceRangeReplacement
-  stream.sourceRangeReplacement = null
-  if (replacement) {
-    const committed =
-      snapshotPublication.published &&
-      serialized?.source !== undefined &&
-      typeof serialized.seq === 'number' &&
-      runtime.commitRemoteTerminalSourceRangeReplacement(replacement, {
-        source: serialized.source,
-        seq: serialized.seq
-      })
-    if (!committed) {
-      runtime.rollbackRemoteTerminalSourceRangeReplacement(
-        replacement,
-        'initial-snapshot-unpublished'
-      )
-    }
-  }
-  // Why: baseline for resize re-stream gating; the client already rewrapped to these cols via the initial snapshot replay.
+  sendSnapshotFrames((opcode, payload) => state.sendFrame(request.streamId, opcode, payload), {
+    kind: 'scrollback',
+    cols: serialized?.cols ?? size?.cols ?? 80,
+    rows: serialized?.rows ?? size?.rows ?? 24,
+    displayMode,
+    seq: snapshotOutputSeq,
+    cwd: serialized?.cwd,
+    truncated: initialOutputOverflowed,
+    truncatedByByteBudget: serialized?.truncatedByByteBudget,
+    scrollbackRows: serialized?.scrollbackRows,
+    source: serialized?.source,
+    kittyKeyboardFlags: serialized?.kittyKeyboardFlags,
+    alternateScreen: serialized?.alternateScreen,
+    terminalOwner: serialized?.terminalOwner,
+    oscLinks: serialized?.oscLinks,
+    pendingEscapeTailAnsi: serialized?.pendingEscapeTailAnsi,
+    // E2E: a forced-unavailable host retains nothing, so it has no tail to fall back on either.
+    data:
+      serialized?.data ??
+      (read.tail.length > 0 && !isTerminalSnapshotForcedUnavailable()
+        ? `${read.tail.join('\r\n')}\r\n`
+        : '')
+  })
+  // Seed resize re-stream columns from the initial snapshot the client already rewrapped.
   stream.lastResizeCols = serialized?.cols ?? size?.cols
   stream.buffering = false
   const pendingOutput = stream.pendingOutput.splice(0)

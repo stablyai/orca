@@ -1,20 +1,12 @@
-// Validates a PTY working directory before spawn, so node-pty cannot fail with
-// an opaque ENOENT. Split from local-pty-utils to keep that file under its line
-// cap; the async path carries the cancellation contract described below.
-
 import { existsSync, statSync } from 'node:fs'
 import { stat } from 'node:fs/promises'
 import { release } from 'node:os'
-import { isWslUncPath, parseWslUncPath } from '../../shared/wsl-paths'
-import { wslUncDirectoryExists, wslUncDirectoryExistsAsync } from '../wsl'
+import { isWslUncPath, uncRouteKey } from '../../shared/wsl-paths'
+import { wslUncDirectoryExistsAsync } from '../wsl'
 import { PrioritySemaphore } from '../../shared/priority-semaphore'
 
 const pendingWorkingDirectoryValidations = new Map<string, Promise<void>>()
-// Why: a dead UNC share answers `stat` in ~21s on Windows and holds one of
-// libuv's 4 default fs threads the whole time, so a handful of distinct paths on
-// one unreachable server would starve every other async fs read in the daemon —
-// moving the head-of-line stall off the event loop and into the thread pool.
-// Matches the per-distro lane in rate-limits/auth-filesystem-operation.ts.
+// Per-route limits keep dead UNC shares from consuming the default four-thread libuv fs pool.
 const MAX_CONCURRENT_UNC_VALIDATIONS = 2
 
 type UncRouteLane = {
@@ -24,22 +16,7 @@ type UncRouteLane = {
 
 const uncRouteLanes = new Map<string, UncRouteLane>()
 
-/**
- * Groups paths by the host that must answer for them, so many dead
- * subdirectories of one share share a lane. Returns null for local-disk paths,
- * which never block long enough to be worth queueing.
- */
-export function uncRouteKey(cwd: string): string | null {
-  if (!cwd.startsWith('\\\\')) {
-    return null
-  }
-  const wslInfo = parseWslUncPath(cwd)
-  if (wslInfo) {
-    return `wsl:${wslInfo.distro.trim().toLowerCase()}`
-  }
-  const server = cwd.slice(2).split(/[\\/]/, 1)[0]
-  return `unc:${server.toLowerCase()}`
-}
+export { uncRouteKey } from '../../shared/wsl-paths'
 
 async function withUncRouteLane<T>(cwd: string, run: () => Promise<T>): Promise<T> {
   const key = uncRouteKey(cwd)
@@ -73,7 +50,6 @@ export class WorkingDirectoryValidationAbortedError extends Error {
   }
 }
 
-/** Test seam: both maps are module-level, so an unsettled probe would leak across tests. */
 export function _resetWorkingDirectoryValidationStateForTest(): void {
   pendingWorkingDirectoryValidations.clear()
   uncRouteLanes.clear()
@@ -94,6 +70,15 @@ export function formatLocalPtyEnvironmentDiag(extra: Record<string, string> = {}
     .join(', ')
 }
 
+/** A spawn refused because its folder is gone, as the daemon reports it back across its wire. */
+export function isMissingWorkingDirectoryError(error: unknown): boolean {
+  const message = error instanceof Error ? error.message : ''
+  return (
+    message.startsWith('Working directory "') &&
+    (message.includes('" does not exist.') || message.endsWith('" is not a directory.'))
+  )
+}
+
 function throwMissingWorkingDirectory(cwd: string): never {
   throw new Error(
     `Working directory "${cwd}" does not exist. ` +
@@ -102,22 +87,10 @@ function throwMissingWorkingDirectory(cwd: string): never {
   )
 }
 
-/**
- * Validate that a working directory exists and is a directory.
- * Throws a descriptive Error if not.
- */
-export function validateWorkingDirectory(cwd: string): void {
-  // Why: Win32 fs.statSync against the WSL 9P share (\\wsl.localhost\...) can
-  // falsely report ENOENT for directories that exist on the Linux side. Ask the
-  // distro itself; only fall back to the fs check when wsl.exe is inconclusive.
+export async function validateWorkingDirectory(cwd: string, signal?: AbortSignal): Promise<void> {
+  // Distro probes spawn wsl.exe; never run them synchronously on main.
   if (isWslUncPath(cwd)) {
-    const existsInDistro = wslUncDirectoryExists(cwd)
-    if (existsInDistro === false) {
-      throwMissingWorkingDirectory(cwd)
-    }
-    if (existsInDistro === true) {
-      return
-    }
+    return validateWorkingDirectoryAsync(cwd, { signal })
   }
 
   if (!existsSync(cwd)) {
@@ -128,14 +101,7 @@ export function validateWorkingDirectory(cwd: string): void {
   }
 }
 
-/**
- * Validate a cwd without blocking the daemon's shared event loop.
- *
- * `fs.stat` takes no AbortSignal and a dead SMB/NFS mount can hang it for
- * minutes, so an aborted caller abandons the shared probe rather than
- * interrupting it: the probe stays shared for whoever is still waiting, and the
- * caller stops holding a create in flight.
- */
+/** Cancellation abandons the caller, not the shared uninterruptible filesystem probe. */
 export function validateWorkingDirectoryAsync(
   cwd: string,
   options: { signal?: AbortSignal } = {}
@@ -146,11 +112,7 @@ export function validateWorkingDirectoryAsync(
     validation = validateWorkingDirectoryUncached(cwd)
     pendingWorkingDirectoryValidations.set(key, validation)
     const started = validation
-    // Why: dropped only on settle. `fs.stat` is uninterruptible, so retiring a
-    // still-running probe on a timer frees no libuv thread — it only lets the
-    // next caller pin a second one. Callers escape through `signal` instead, so
-    // sharing one hung probe no longer strands them, and the route lane below
-    // caps how many distinct paths on one dead host can block at once.
+    // Retain until settlement: expiring a hung stat frees no thread and lets retries pin more.
     const forget = (): void => {
       if (pendingWorkingDirectoryValidations.get(key) === started) {
         pendingWorkingDirectoryValidations.delete(key)
@@ -162,18 +124,7 @@ export function validateWorkingDirectoryAsync(
   if (!signal) {
     return validation
   }
-  const shared = validation
-  // The shared probe outlives this caller; keep it from surfacing as unhandled.
-  void shared.catch(() => {})
-  return new Promise<void>((resolve, reject) => {
-    const onAbort = (): void => reject(new WorkingDirectoryValidationAbortedError(cwd))
-    if (signal.aborted) {
-      onAbort()
-      return
-    }
-    signal.addEventListener('abort', onAbort, { once: true })
-    shared.then(resolve, reject).finally(() => signal.removeEventListener('abort', onAbort))
-  })
+  return waitForWorkingDirectoryValidation(validation, cwd, signal)
 }
 
 function validateWorkingDirectoryUncached(cwd: string): Promise<void> {
@@ -181,6 +132,7 @@ function validateWorkingDirectoryUncached(cwd: string): Promise<void> {
 }
 
 async function probeWorkingDirectory(cwd: string): Promise<void> {
+  // WSL 9P stat can falsely report ENOENT; ask the distro first, then fall back only if inconclusive.
   if (isWslUncPath(cwd)) {
     const existsInDistro = await wslUncDirectoryExistsAsync(cwd)
     if (existsInDistro === false) {
@@ -201,4 +153,53 @@ async function probeWorkingDirectory(cwd: string): Promise<void> {
   if (!stats.isDirectory()) {
     throw new Error(`Working directory "${cwd}" is not a directory.`)
   }
+}
+
+type WorkingDirectoryWaiterHolder = {
+  waiter: {
+    signal: AbortSignal
+    onAbort: () => void
+    resolve: () => void
+    reject: (error: unknown) => void
+  } | null
+}
+
+function takeWorkingDirectoryWaiter(
+  holder: WorkingDirectoryWaiterHolder
+): WorkingDirectoryWaiterHolder['waiter'] {
+  const waiter = holder.waiter
+  holder.waiter = null
+  waiter?.signal.removeEventListener('abort', waiter.onAbort)
+  return waiter
+}
+
+// Keep reaction order while an abandoned caller's signal and resolver become collectible.
+function observeWorkingDirectoryValidation(
+  promise: Promise<void>,
+  holder: WorkingDirectoryWaiterHolder
+): void {
+  void promise.then(
+    () => takeWorkingDirectoryWaiter(holder)?.resolve(),
+    (error: unknown) => takeWorkingDirectoryWaiter(holder)?.reject(error)
+  )
+}
+
+function waitForWorkingDirectoryValidation(
+  shared: Promise<void>,
+  cwd: string,
+  signal: AbortSignal
+): Promise<void> {
+  return new Promise<void>((resolve, reject) => {
+    const holder: WorkingDirectoryWaiterHolder = { waiter: null }
+    const onAbort = (): void => {
+      takeWorkingDirectoryWaiter(holder)?.reject(new WorkingDirectoryValidationAbortedError(cwd))
+    }
+    holder.waiter = { signal, onAbort, resolve, reject }
+    if (signal.aborted) {
+      onAbort()
+      return
+    }
+    signal.addEventListener('abort', onAbort, { once: true })
+    observeWorkingDirectoryValidation(shared, holder)
+  })
 }

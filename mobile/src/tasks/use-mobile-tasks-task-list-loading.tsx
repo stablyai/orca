@@ -1,25 +1,27 @@
 import type { ProviderLoadActionsModel } from './use-mobile-tasks-provider-load-actions'
-import {
-  extractLinearIssueReadItems,
-  isHostedTaskRepo,
-  useCallback
-} from './mobile-tasks-dependencies'
+import { fetchJiraTaskIssues } from './mobile-jira-task-source'
+import { isHostedTaskRepo, useCallback, useEffect, useRef } from './mobile-tasks-dependencies'
 import {
   GITHUB_REPO_CONCURRENCY,
   GITLAB_PER_PAGE,
-  type GitLabTodo,
   type GitLabWorkItem,
   LINEAR_LIMIT,
   type TaskItem,
   buildPartialRepositoryNotice,
-  compareLinearIssues,
+  sortLinearIssues,
   createGitLabTask,
   createGitLabTodoTask,
+  createJiraTask,
   createLinearTask,
-  isSuccess,
   mapWithConcurrency,
   taskTime
 } from './mobile-tasks-legacy-foundation'
+import { gitlabTodoListRead } from './mobile-task-list-operations'
+import {
+  gitlabWorkItemSearchRead,
+  linearAssignedIssueListRead,
+  linearIssueSearchRead
+} from './mobile-task-source-search-operations'
 
 export function useMobileTasksTaskListLoading(model: ProviderLoadActionsModel) {
   const {
@@ -27,12 +29,14 @@ export function useMobileTasksTaskListLoading(model: ProviderLoadActionsModel) {
     client,
     clientRef,
     connState,
-    countGitHubItems,
+    countGitHubItemPages,
     fetchGitHubItemsPage,
     githubMode,
     gitlabFilter,
     gitlabView,
     linearConnected,
+    jiraConnection,
+    jiraFilter,
     linearFilter,
     linearOrderBy,
     loadGenerationRef,
@@ -41,14 +45,15 @@ export function useMobileTasksTaskListLoading(model: ProviderLoadActionsModel) {
     resetGitHubItemsState,
     selectedLinearTeamIds,
     selectedLinearWorkspaceId,
-    selectedRepoIds,
+    effectiveRepoIds,
+    serverRepoList,
     setError,
     setGithubCurrentPage,
     setGithubPages,
     setGithubRepoSources,
     setGithubSourceErrors,
     setGithubSourceFallbacks,
-    setGithubTotalCount,
+    setGithubCountedTotalPages,
     setItems,
     setLoading,
     setRefreshing,
@@ -79,16 +84,29 @@ export function useMobileTasksTaskListLoading(model: ProviderLoadActionsModel) {
           setItems([])
           return
         }
-        // Why: Linear issues do not need the repo list, only the composer does, so
-        // start the fetch either way but never make Linear wait on it.
+        // Jira/Linear need repos only for workspace creation, not issue reads.
         const repoListRequest = repoListEnsureLoaded()
         void repoListRequest.catch(() => {})
+        if (provider === 'jira') {
+          if (!jiraConnection.connected) {
+            setItems([])
+            return
+          }
+          const issues = await fetchJiraTaskIssues(requestClient, {
+            jql: appliedQuery,
+            filter: jiraFilter,
+            siteId: jiraConnection.selection
+          })
+          if (isCurrent()) {
+            setItems(issues.map(createJiraTask))
+          }
+          return
+        }
         const currentRepos = provider === 'linear' ? [] : await repoListRequest
         if (!isCurrent()) {
           return
         }
-        // Why: project mode fetches no work items, but its rows are matched against
-        // the repo list, so it must not return before loadRepos() has run.
+        // Project rows match against repos even without fetching work items; load repos before returning.
         if (provider === 'github' && githubMode === 'project') {
           setItems([])
           return
@@ -96,9 +114,9 @@ export function useMobileTasksTaskListLoading(model: ProviderLoadActionsModel) {
         if (provider === 'github' || provider === 'gitlab') {
           const supportedRepos = currentRepos.filter(isHostedTaskRepo)
           const queriedRepos =
-            selectedRepoIds.size === 0
+            effectiveRepoIds.size === 0
               ? supportedRepos
-              : supportedRepos.filter((repo) => selectedRepoIds.has(repo.id))
+              : supportedRepos.filter((repo) => effectiveRepoIds.has(repo.id))
           if (queriedRepos.length === 0) {
             if (!isCurrent()) {
               return
@@ -121,16 +139,15 @@ export function useMobileTasksTaskListLoading(model: ProviderLoadActionsModel) {
             setGithubPages([page.items])
             setGithubCurrentPage(0)
             setItems(page.items)
-            if (selectedRepoIds.size > 0) {
-              void countGitHubItems(requestClient, queriedRepos).then((count) => {
+            if (effectiveRepoIds.size > 0) {
+              void countGitHubItemPages(requestClient, queriedRepos).then((totalPages) => {
                 if (isCurrent()) {
-                  setGithubTotalCount(count)
+                  setGithubCountedTotalPages(totalPages)
                 }
               })
             } else {
-              // Why: the default all-repos view must not spend GitHub Search
-              // quota on totals before the user narrows the repository scope.
-              setGithubTotalCount(null)
+              // Do not spend GitHub Search quota on all-repo totals before the user narrows scope.
+              setGithubCountedTotalPages(null)
             }
             if (page.failedCount > 0) {
               setError(buildPartialRepositoryNotice(page.failedCount, queriedRepos.length))
@@ -140,17 +157,15 @@ export function useMobileTasksTaskListLoading(model: ProviderLoadActionsModel) {
             return
           }
           if (provider === 'gitlab' && gitlabView === 'todos') {
-            const response = await requestClient.sendRequest('gitlab.todos', {
+            const reply = await gitlabTodoListRead.request(requestClient, {
               repo: `id:${queriedRepos[0]!.id}`
             })
-            if (!isSuccess(response)) {
-              throw new Error(response.error.message)
-            }
+            const todos = gitlabTodoListRead.interpret(reply)
             if (!isCurrent()) {
               return
             }
             setItems(
-              ((response.result as GitLabTodo[]) ?? [])
+              (todos ?? [])
                 .map(createGitLabTodoTask)
                 .sort((a, b) => taskTime(b.updatedAt) - taskTime(a.updatedAt))
             )
@@ -161,17 +176,15 @@ export function useMobileTasksTaskListLoading(model: ProviderLoadActionsModel) {
             GITHUB_REPO_CONCURRENCY,
             async (repo) => {
               try {
-                const response = await requestClient.sendRequest('gitlab.listWorkItems', {
+                const reply = await gitlabWorkItemSearchRead.request(requestClient, {
                   repo: `id:${repo.id}`,
                   state: gitlabFilter,
                   page: 1,
                   perPage: GITLAB_PER_PAGE,
                   query: appliedQuery.trim() || undefined
                 })
-                if (!isSuccess(response)) {
-                  throw new Error(response.error.message)
-                }
-                const envelope = response.result as {
+                // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the schema requires `items` and types each row at `GitLabWorkItem`'s own member types, requiring the ones a consumer reads unguarded; the row builder's own reads are unchanged.
+                const envelope = gitlabWorkItemSearchRead.interpret(reply) as {
                   items: Array<Omit<GitLabWorkItem, 'repoId' | 'repoName'>>
                   error?: { type?: string; message: string }
                 }
@@ -209,26 +222,27 @@ export function useMobileTasksTaskListLoading(model: ProviderLoadActionsModel) {
           }
         } else {
           const normalizedQuery = appliedQuery.trim()
-          const response = normalizedQuery
-            ? await requestClient.sendRequest('linear.searchIssues', {
-                query: normalizedQuery,
-                limit: LINEAR_LIMIT,
-                workspaceId: selectedLinearWorkspaceId ?? undefined
-              })
-            : await requestClient.sendRequest('linear.listIssues', {
-                filter: linearFilter,
-                limit: LINEAR_LIMIT,
-                workspaceId: selectedLinearWorkspaceId ?? undefined
-              })
-          if (!isSuccess(response)) {
-            throw new Error(response.error.message)
-          }
-          const issues = extractLinearIssueReadItems(response.result)
+          const found = normalizedQuery
+            ? linearIssueSearchRead.interpret(
+                await linearIssueSearchRead.request(requestClient, {
+                  query: normalizedQuery,
+                  limit: LINEAR_LIMIT,
+                  workspaceId: selectedLinearWorkspaceId ?? undefined
+                })
+              )
+            : linearAssignedIssueListRead.interpret(
+                await linearAssignedIssueListRead.request(requestClient, {
+                  filter: linearFilter,
+                  limit: LINEAR_LIMIT,
+                  workspaceId: selectedLinearWorkspaceId ?? undefined
+                })
+              )
+          const issues = found
           const filtered =
             selectedLinearTeamIds.size > 0
               ? issues.filter((issue) => selectedLinearTeamIds.has(issue.team.id))
               : issues
-          const sorted = [...filtered].sort((a, b) => compareLinearIssues(a, b, linearOrderBy))
+          const sorted = sortLinearIssues(filtered, linearOrderBy)
           if (!isCurrent()) {
             return
           }
@@ -252,25 +266,41 @@ export function useMobileTasksTaskListLoading(model: ProviderLoadActionsModel) {
       appliedQuery,
       client,
       connState,
-      countGitHubItems,
+      countGitHubItemPages,
       fetchGitHubItemsPage,
       gitlabFilter,
       gitlabView,
       githubMode,
+      jiraConnection,
+      jiraFilter,
       linearConnected,
       linearFilter,
       linearOrderBy,
-      // resetGitHubItemsState is useCallback([]), so its identity never changes
-      // and listing it here would only cost a line against the max-lines budget.
       repoListEnsureLoaded,
       provider,
       selectedLinearTeamIds,
       selectedLinearWorkspaceId,
-      selectedRepoIds,
+      effectiveRepoIds,
       taskStateHydrated,
       tasksSupported
     ]
   )
+  // Server-repo changes quietly reload unfiltered lists; a changed loadTasks already owns filter reloads, while Jira/Linear read independently.
+  const listedServerReposRef = useRef({ serverRepoList, loadTasks })
+  useEffect(() => {
+    const prev = listedServerReposRef.current
+    listedServerReposRef.current = { serverRepoList, loadTasks }
+    if (
+      prev.serverRepoList !== serverRepoList &&
+      prev.loadTasks === loadTasks &&
+      effectiveRepoIds.size === 0 &&
+      (provider === 'github' || provider === 'gitlab') &&
+      connState === 'connected' &&
+      taskStateHydrated
+    ) {
+      void loadTasks({ silent: true })
+    }
+  }, [serverRepoList, loadTasks, effectiveRepoIds.size, provider, connState, taskStateHydrated])
   return Object.assign(model, { loadTasks })
 }
 

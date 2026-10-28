@@ -1,8 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
-import type { TerminalLayoutSnapshot, TerminalTab } from '../../../shared/terminal-tab-types'
+
 import type { AgentStatusObservation } from '../../../shared/agent-status-observation'
-import { buildWorktreeAgentRows } from '@/components/sidebar/worktree-agent-rows'
-import { TITLE_DERIVED_AGENT_ROW_AUTHORITY_ID } from '@/components/sidebar/worktree-title-derived-agent-rows'
 
 const { setAgentStatusMock } = vi.hoisted(() => ({ setAgentStatusMock: vi.fn() }))
 
@@ -13,67 +11,7 @@ vi.mock('./agent-status-connection-ownership', () => ({
   resolveLiveAgentStatusConnectionRouting: () => ({ connectionId: null })
 }))
 
-const LEAF_ID = '77777777-7777-4777-8777-777777777777'
-
-function makeTab(id: string): TerminalTab {
-  return {
-    id,
-    worktreeId: 'wt-1',
-    ptyId: null,
-    title: 'Claude',
-    customTitle: null,
-    color: null,
-    sortOrder: 0,
-    createdAt: 0
-  }
-}
-
-function makeSingleLayout(): TerminalLayoutSnapshot {
-  return {
-    root: { type: 'leaf', leafId: LEAF_ID },
-    activeLeafId: LEAF_ID,
-    expandedLeafId: null
-  }
-}
-
-function titleRowObservation(now: number): AgentStatusObservation {
-  const rows = buildWorktreeAgentRows({
-    tabs: [makeTab('tab-1')],
-    entries: [],
-    retained: [],
-    runtimePaneTitlesByTabId: { 'tab-1': { 1: '⠋ Codex' } },
-    ptyIdsByTabId: { 'tab-1': ['pty-1'] },
-    terminalLayoutsByTabId: { 'tab-1': makeSingleLayout() },
-    now
-  })
-  const observation = rows[0]?.entry.observation
-  if (!observation) {
-    throw new Error('expected a title-derived row carrying an observation')
-  }
-  return observation
-}
-
 describe('renderer-side observation origins', () => {
-  it('tags a title-derived row as title-origin, not as a hook row', () => {
-    // Why: this is the tag that makes the row's own contradiction findable — the entry it
-    // fabricates reports `working` for a pane whose row state is idle.
-    expect(titleRowObservation(2_000)).toEqual({
-      origin: 'title',
-      authorityId: TITLE_DERIVED_AGENT_ROW_AUTHORITY_ID,
-      incarnation: 0,
-      revision: 2_000,
-      observedAt: 2_000,
-      kind: 'snapshot'
-    })
-  })
-
-  it('keeps the title-row stamp deterministic in `now` so re-deriving it does not churn', () => {
-    // Why: these rows are recomputed every render; a counter here would mint a new revision
-    // per frame and invalidate memoization that compares rows.
-    expect(titleRowObservation(2_000)).toEqual(titleRowObservation(2_000))
-    expect(titleRowObservation(3_000).revision).toBeGreaterThan(titleRowObservation(2_000).revision)
-  })
-
   it('tags renderer-parsed OSC 9999 rows as osc-origin under the renderer authority', async () => {
     setAgentStatusMock.mockReset()
     const { createBackgroundAgentStatusConsumer } =

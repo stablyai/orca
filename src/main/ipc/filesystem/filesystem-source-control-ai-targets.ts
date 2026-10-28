@@ -1,12 +1,14 @@
 import type { Repo } from '../../../shared/repo-types'
 import type { Store } from '../../persistence'
-import type { LocalProjectWorktreeGitOptions } from '../../project-runtime-git-options'
+import {
+  getLocalProjectWorktreeGitOptions,
+  type LocalProjectWorktreeGitOptions
+} from '../../project-runtime-git-options'
 import type { CommitMessageAgentRuntimeTarget } from '../../text-generation/commit-message-agent-environment'
 import type { CommitMessageGenerationTarget } from '../../text-generation/commit-message-text-generation'
 import { resolve } from 'node:path'
-import { getSshGitProvider } from '../../providers/ssh-git-dispatch'
 import { listRepoWorktreeGraph } from '../../repo-worktrees'
-import { resolveAuthorizedPath } from '../filesystem-auth'
+import { resolveAuthorizedPath } from './filesystem-auth'
 import { resolveRegisteredWorktreePath } from '../registered-worktree-roots-cache'
 import { splitWorktreeId } from '../../../shared/worktree/id'
 
@@ -77,35 +79,22 @@ async function localRepoOwnsWorktree(
     return true
   }
   try {
-    const worktrees = await listRepoWorktreeGraph(repo)
+    // WSL Git names drive-backed worktrees differently from host Git.
+    const worktrees = await listRepoWorktreeGraph(
+      repo,
+      getLocalProjectWorktreeGitOptions(store, repo)
+    )
     return worktrees.some((worktree) => candidatePaths.has(comparableLocalPath(worktree.path)))
   } catch {
     return false
   }
 }
 
-async function remoteRepoOwnsWorktree(
-  store: Store,
-  repo: Repo,
-  worktreePath: string,
-  connectionId: string
-): Promise<boolean> {
-  const comparableWorktreePath = comparableRemotePath(worktreePath)
-  if (comparableRemotePath(repo.path) === comparableWorktreePath) {
-    return true
-  }
-  const provider = getSshGitProvider(connectionId)
-  if (!provider) {
-    return hasRegisteredRemoteWorktreeMetaForRepo(store, repo.id, worktreePath)
-  }
-  try {
-    const worktrees = await provider.listWorktrees(repo.path)
-    return worktrees.some(
-      (worktree) => comparableRemotePath(worktree.path) === comparableWorktreePath
-    )
-  } catch {
-    return false
-  }
+function remoteRepoOwnsWorktree(store: Store, repo: Repo, worktreePath: string): boolean {
+  return (
+    comparableRemotePath(repo.path) === comparableRemotePath(worktreePath) ||
+    hasRegisteredRemoteWorktreeMetaForRepo(store, repo.id, worktreePath)
+  )
 }
 
 export async function getRepoForSourceControlAi(
@@ -123,15 +112,13 @@ export async function getRepoForSourceControlAi(
     if (repo.connectionId !== args.connectionId) {
       return null
     }
-    // Why: one SSH connection can host several repos; repo-scoped AI overrides apply only when the worktree belongs to that repo.
-    return (await remoteRepoOwnsWorktree(store, repo, args.worktreePath, args.connectionId))
-      ? repo
-      : null
+    // Shared SSH connections can host several repos; apply overrides only to the verified owner.
+    return remoteRepoOwnsWorktree(store, repo, args.worktreePath) ? repo : null
   }
   if (repo.connectionId) {
     return null
   }
-  // Why: renderer-supplied repoId is advisory; apply repo overrides only when the local worktree belongs to that repo.
+  // Renderer repoId is advisory until local worktree ownership is verified.
   return (await localRepoOwnsWorktree(store, repo, args.worktreePath)) ? repo : null
 }
 

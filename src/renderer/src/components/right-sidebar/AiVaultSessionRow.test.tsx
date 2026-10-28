@@ -1,11 +1,14 @@
 // @vitest-environment happy-dom
 
-import { cleanup, render, screen, within } from '@testing-library/react'
+import { act, cleanup, fireEvent, render, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { TooltipProvider } from '@/components/ui/tooltip'
 import type { AiVaultSession } from '../../../../shared/ai-vault-types'
 import type { AiVaultSessionWorktreeInfo } from './ai-vault-session-worktree'
+import { searchHit } from '../../../../shared/ai-vault-search-test-fixture'
+import type { AiVaultSearchHit } from '../../../../shared/ai-vault-search-types'
+import type { AiVaultSubagentResumeActions } from './AiVaultSessionSubagents'
 import { VaultSessionRow } from './AiVaultSessionRow'
 
 const session = {
@@ -38,8 +41,7 @@ const worktreeInfo: AiVaultSessionWorktreeInfo = {
 }
 
 beforeEach(() => {
-  // The expanded details panel reads these while rendering (first-prompt card)
-  // and on mount (subagent list), so the row cannot expand without them.
+  // Expanded details read first-prompt/subagent APIs during render/mount.
   ;(window as unknown as { api: unknown }).api = {
     aiVault: {
       getFirstUserPrompt: vi.fn().mockResolvedValue({ prompt: null }),
@@ -49,8 +51,7 @@ beforeEach(() => {
 })
 
 afterEach(() => {
-  // No `globals: true`, so Testing Library's auto-cleanup never runs and rows
-  // from earlier tests would stay in the document and duplicate every query.
+  // Without Vitest globals, Testing Library cannot auto-clean up; retained rows would duplicate queries.
   cleanup()
   vi.clearAllMocks()
   delete (window as unknown as { api?: unknown }).api
@@ -58,16 +59,25 @@ afterEach(() => {
 
 function renderRow(
   overrides: {
+    searchHit?: AiVaultSearchHit
+    session?: AiVaultSession
+    subagentResume?: AiVaultSubagentResumeActions
     detailsExpanded?: boolean
     worktreeInfo?: AiVaultSessionWorktreeInfo | null
     onToggleDetails?: () => void
+    onJumpToOriginalPane?: () => void
+    onResume?: () => void
+    resumeHidden?: boolean
     onRequestDelete?: () => void
+    onPick?: () => void
   } = {}
 ) {
   return render(
     <TooltipProvider>
       <VaultSessionRow
-        session={session}
+        session={overrides.session ?? session}
+        searchHit={overrides.searchHit}
+        subagentResume={overrides.subagentResume}
         liveState={null}
         resumeStartup={{ command: 'gemini --resume sess-1' }}
         realHomeResumeStartup={{ command: 'gemini --resume sess-1' }}
@@ -75,9 +85,11 @@ function renderRow(
         vaultScope="all"
         detailsExpanded={overrides.detailsExpanded ?? false}
         resumeDisabled={false}
+        resumeHidden={overrides.resumeHidden}
         onToggleDetails={overrides.onToggleDetails ?? vi.fn()}
+        onJumpToOriginalPane={overrides.onJumpToOriginalPane}
         showJumpToWorktree={false}
-        onResume={vi.fn()}
+        onResume={overrides.onResume ?? vi.fn()}
         resumeLabel="Resume in New Tab"
         resumeActions={{
           worktree: { worktreeId: null, disabled: true },
@@ -88,6 +100,7 @@ function renderRow(
         onCopyId={vi.fn()}
         onCopyPath={vi.fn()}
         onRequestDelete={overrides.onRequestDelete ?? vi.fn()}
+        onPick={overrides.onPick}
       />
     </TooltipProvider>
   )
@@ -95,7 +108,6 @@ function renderRow(
 
 function expectAgentIdentity(): void {
   const metadata = screen.getByTestId('ai-vault-session-metadata')
-  // AgentIcon is an <svg> for the hand-drawn agents and an <img> for the rest.
   expect(metadata.querySelector('svg, img')).toBeTruthy()
   expect(within(metadata).getByText('Gemini')).toBeTruthy()
   expect(within(metadata).getByText('2 msgs')).toBeTruthy()
@@ -103,9 +115,7 @@ function expectAgentIdentity(): void {
 
 describe('VaultSessionRow details toggle', () => {
   it('does not expand the row when a menu action is chosen', async () => {
-    // Radix portals the menu out of the row's DOM, but React bubbles its
-    // clicks back through the component tree. Expanding here would leave the
-    // row open behind the confirm dialog, and still open after cancelling.
+    // Portaled menu clicks still bubble through React; Delete must not expand the row behind its dialog.
     const onToggleDetails = vi.fn()
     const onRequestDelete = vi.fn()
     renderRow({ onToggleDetails, onRequestDelete })
@@ -123,14 +133,88 @@ describe('VaultSessionRow details toggle', () => {
     const { container } = renderRow({ onToggleDetails })
     const user = userEvent.setup()
 
-    // The session title: inside the row body, so its click reaches the row's
-    // own handler — the path a user takes to expand a row. Queried first-match
-    // because Radix's asChild trigger repeats the subtree.
+    // Pick the first title because Radix asChild repeats the subtree; its click must reach the row body.
     const title = container.querySelector('[title="Drag to resume in a new tab"]')
     expect(title).not.toBeNull()
     await user.click(title as Element)
 
     expect(onToggleDetails).toHaveBeenCalledTimes(1)
+  })
+})
+
+describe('VaultSessionRow in the /resume picker', () => {
+  it('only resumes on click: no menus, drag or action buttons, and the chevron still shows details', async () => {
+    const onPick = vi.fn()
+    const onToggleDetails = vi.fn()
+    const subagent = {
+      ...session,
+      id: 'sub',
+      title: 'Sub task',
+      filePath: '/home/a/.gemini/sub.json'
+    }
+    Object.defineProperty(window, 'api', {
+      configurable: true,
+      value: {
+        aiVault: {
+          getFirstUserPrompt: vi.fn().mockResolvedValue({ prompt: null }),
+          listSubagentSessions: vi.fn().mockResolvedValue({ sessions: [subagent], issues: [] })
+        }
+      }
+    })
+    const { container } = renderRow({
+      session: { ...session, subagentTranscriptCount: 1 },
+      onPick,
+      onToggleDetails,
+      detailsExpanded: true
+    })
+    const user = userEvent.setup()
+
+    expect(await screen.findByText('Sub task')).toBeTruthy()
+    expect(screen.queryByTitle('View Log')).toBeNull()
+    expect(screen.queryByRole('button', { name: /^Copy/ })).toBeNull()
+    expect(screen.queryByTestId('ai-vault-session-more-actions')).toBeNull()
+    expect(screen.queryByRole('button', { name: 'Resume in New Tab' })).toBeNull()
+    expect(container.querySelector('[draggable="true"]')).toBeNull()
+    const title = screen.getAllByText('A session')[0]
+    fireEvent.contextMenu(title)
+    expect(screen.queryByRole('menuitem')).toBeNull()
+
+    await user.click(title)
+    await user.click(screen.getByTestId('ai-vault-session-toggle-details'))
+    expect(onPick).toHaveBeenCalledOnce()
+    expect(onToggleDetails).toHaveBeenCalledOnce()
+  })
+})
+
+describe('VaultSessionRow native session actions', () => {
+  it('shows the jump action instead of Resume for an open structured session', async () => {
+    const onJumpToOriginalPane = vi.fn()
+    const onResume = vi.fn()
+    renderRow({ resumeHidden: true, onJumpToOriginalPane, onResume })
+
+    expect(screen.queryByTestId('ai-vault-session-resume')).toBeNull()
+    fireEvent.click(screen.getByTestId('ai-vault-session-jump-original-pane'))
+
+    expect(onJumpToOriginalPane).toHaveBeenCalledOnce()
+    expect(onResume).not.toHaveBeenCalled()
+
+    const user = userEvent.setup()
+    await user.click(screen.getByTestId('ai-vault-session-more-actions'))
+    expect(await screen.findByRole('menuitem', { name: 'Jump to Original Pane' })).toBeTruthy()
+    expect(screen.queryByRole('menuitem', { name: 'Resume in New Tab' })).toBeNull()
+  })
+
+  it('hides Delete for structured native sessions', async () => {
+    const nativeSession = {
+      ...session,
+      structuredSession: { sessionId: 'native-1', workspaceId: 'workspace-1' }
+    }
+
+    renderRow({ session: nativeSession })
+    const user = userEvent.setup()
+    await user.click(screen.getByTestId('ai-vault-session-more-actions'))
+
+    expect(screen.queryByRole('menuitem', { name: 'Delete' })).toBeNull()
   })
 })
 
@@ -146,16 +230,56 @@ describe('VaultSessionRow agent metadata line', () => {
     renderRow({ detailsExpanded: true })
 
     expectAgentIdentity()
-    // The details panel replaces the one-line preview with the full turns.
     expect(screen.getByText('Latest turns')).toBeTruthy()
     expect(screen.queryByText(': Ready when you are')).toBeNull()
   })
 
   it('renders the worktree badge once when expanded', () => {
-    // The metadata grid already carries the worktree badge, so the row body must
-    // not add a second copy of its own above the details panel.
     const { container } = renderRow({ detailsExpanded: true, worktreeInfo })
 
     expect(container.querySelectorAll(`[title="${worktreeInfo.label}"]`)).toHaveLength(1)
   })
+})
+
+it('keeps matching evidence visible in expanded search rows', () => {
+  const { container } = renderRow({ detailsExpanded: true, searchHit: searchHit() })
+  expect(container.querySelector('mark')?.textContent).toBe('needle')
+})
+
+it('threads child resume through expanded parent details without resuming the parent', async () => {
+  const child: AiVaultSession = {
+    ...session,
+    agent: 'omp',
+    sessionId: 'child',
+    filePath: '/tmp/parent/worker.jsonl',
+    title: 'OMP worker',
+    subagent: { parentSessionId: 'parent', agentType: 'worker', status: 'completed' }
+  }
+  vi.mocked(window.api.aiVault.listSubagentSessions).mockResolvedValue({
+    sessions: [child],
+    issues: []
+  })
+  const resume = {
+    getState: vi.fn(() => ({
+      blocked: false,
+      worktreeId: 'folder:target',
+      usesSessionWorktree: false
+    })),
+    onResume: vi.fn()
+  }
+  renderRow({
+    session: {
+      ...session,
+      agent: 'omp',
+      sessionId: 'parent',
+      messageCount: 0,
+      previewMessages: [],
+      subagentTranscriptCount: 1
+    },
+    detailsExpanded: true,
+    subagentResume: resume
+  })
+  await act(async () => {})
+  fireEvent.click(screen.getByTitle('Resume in New Tab'))
+  expect(resume.onResume).toHaveBeenCalledExactlyOnceWith(child, 'folder:target')
 })

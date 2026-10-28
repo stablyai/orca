@@ -1,12 +1,13 @@
 import { describe, expect, it } from 'vitest'
 import {
   projectHostSetupProjectionFromRepos,
-  getProjectHostSetupsForProject,
-  isGitHubBackedRepo,
   getProjectIdForProviderIdentity,
   isProjectRemoteIdentityPending
 } from './project-host-setup-projection'
-import { getProjectHostSetupWorktreeMeta } from './project-host-setup-lookup'
+import {
+  getProjectHostSetupsForProject,
+  getProjectHostSetupWorktreeMeta
+} from './project-host-setup-lookup'
 import type { Repo } from './repo-types'
 
 function repo(overrides: Partial<Repo> & Pick<Repo, 'id' | 'path' | 'displayName'>): Repo {
@@ -19,6 +20,53 @@ function repo(overrides: Partial<Repo> & Pick<Repo, 'id' | 'path' | 'displayName
 }
 
 describe('project host setup projection', () => {
+  it('lets a shared remote join checkouts across hosts but not two checkouts on one host', () => {
+    const upstream = { owner: 'stablyai', repo: 'orca' }
+    const firstLocal = repo({ id: 'local-a', path: '/a', displayName: 'a', addedAt: 100, upstream })
+    const secondLocal = repo({
+      id: 'local-b',
+      path: '/b',
+      displayName: 'b',
+      addedAt: 200,
+      upstream
+    })
+    const remoteCopy = repo({
+      id: 'remote-a',
+      path: '/home/a',
+      displayName: 'a',
+      addedAt: 300,
+      connectionId: 'gpu-vm',
+      upstream
+    })
+
+    const projection = projectHostSetupProjectionFromRepos([secondLocal, remoteCopy, firstLocal])
+    expect(projection.setups.map((setup) => [setup.repoId, setup.projectId])).toEqual([
+      ['local-b', 'repo:local-b'],
+      ['remote-a', 'github:stablyai/orca'],
+      ['local-a', 'github:stablyai/orca']
+    ])
+
+    // A WSL checkout is another surface of the same machine, so it joins the project too.
+    const wslCopy = repo({
+      id: 'local-wsl',
+      path: '\\\\wsl.localhost\\Ubuntu\\home\\a\\orca',
+      displayName: 'a',
+      addedAt: 400,
+      upstream
+    })
+    expect(
+      projectHostSetupProjectionFromRepos([firstLocal, wslCopy]).projects.map(
+        (p) => p.sourceRepoIds
+      )
+    ).toEqual([['local-a', 'local-wsl']])
+
+    // Removing the claimant hands the shared id to the next checkout on that host.
+    const handedOff = projectHostSetupProjectionFromRepos([secondLocal, remoteCopy])
+    expect(handedOff.projects.map((project) => [project.id, project.sourceRepoIds])).toEqual([
+      ['github:stablyai/orca', ['local-b', 'remote-a']]
+    ])
+  })
+
   it('keeps timestamps stable when addedAt is 0 across different now values', () => {
     const target = repo({
       id: 'repo-1',
@@ -38,8 +86,7 @@ describe('project host setup projection', () => {
     expect(second.setups[0]?.updatedAt).toBe(first.setups[0]?.updatedAt)
   })
 
-  // Why both orders: repo order comes from disk/host enumeration, so it must not decide the
-  // project's timestamps. The accumulator carries 0 when the *first* sibling is the unknown one.
+  // Unknown timestamps may occur first in host/disk order; neither order may erase known sibling times.
   const timestampedSibling = repo({
     id: 'local-repo',
     path: '/Users/alice/orca',
@@ -302,8 +349,9 @@ describe('project host setup projection', () => {
       }),
       repo({
         id: 'old-branch-checkout',
-        path: '/Users/alice/orca/workspaces/orca/re-enable-webgl-for-remote-runtime-terminals',
+        path: '/home/alice/orca/workspaces/orca/re-enable-webgl-for-remote-runtime-terminals',
         displayName: 're-enable-webgl-for-remote-runtime-terminals',
+        connectionId: 'gpu-vm',
         repoIcon: {
           type: 'image',
           src: 'https://github.com/stablyai.png?size=64',
@@ -450,32 +498,6 @@ describe('project host setup projection', () => {
     ).toHaveLength(3)
   })
 
-  it('keeps same-named cross-host records separate when there is no shared repo identity', () => {
-    const projection = projectHostSetupProjectionFromRepos([
-      repo({
-        id: 'local-sample-app',
-        path: '/Users/alice/work/sample-app',
-        displayName: 'sample-app'
-      }),
-      repo({
-        id: 'ssh-sample-app',
-        path: '/srv/unrelated/sample-app',
-        displayName: 'sample-app',
-        connectionId: 'staging server'
-      }),
-      repo({
-        id: 'runtime-sample-app',
-        path: '/workspace/sample-app',
-        displayName: 'sample-app',
-        executionHostId: 'runtime:preview'
-      })
-    ])
-
-    // Why: display names are labels, not identity. A future fix needs a
-    // normalized git remote identity or an explicit user link before merging.
-    expect(projection.projects).toHaveLength(3)
-  })
-
   it('does not collapse case-distinct remote paths for self-hosted git remotes', () => {
     const projection = projectHostSetupProjectionFromRepos([
       repo({
@@ -539,47 +561,6 @@ describe('project host setup projection', () => {
   })
 })
 
-describe('isGitHubBackedRepo', () => {
-  it('is true when an explicit upstream owner/repo is present', () => {
-    const target = repo({
-      id: 'r',
-      path: '/r',
-      displayName: 'r',
-      upstream: { owner: 'stablyai', repo: 'orca' }
-    })
-    expect(isGitHubBackedRepo(target)).toBe(true)
-  })
-
-  it('is true when a GitHub-sourced avatar icon encodes the slug', () => {
-    const target = repo({
-      id: 'r',
-      path: '/r',
-      displayName: 'r',
-      repoIcon: {
-        type: 'image',
-        src: 'https://github.com/stablyai.png?size=64',
-        source: 'github',
-        label: 'stablyai/orca'
-      }
-    })
-    expect(isGitHubBackedRepo(target)).toBe(true)
-  })
-
-  it('is false for a non-GitHub icon and no upstream (GitLab/folder)', () => {
-    const target = repo({
-      id: 'r',
-      path: '/r',
-      displayName: 'r',
-      repoIcon: { type: 'lucide', name: 'gitlab' }
-    })
-    expect(isGitHubBackedRepo(target)).toBe(false)
-  })
-
-  it('is false for a plain local repo with no provider signal', () => {
-    expect(isGitHubBackedRepo(repo({ id: 'r', path: '/r', displayName: 'r' }))).toBe(false)
-  })
-})
-
 describe('getProjectIdForProviderIdentity', () => {
   it('uses the same normalized identity key as project projection', () => {
     expect(
@@ -632,8 +613,7 @@ describe('isProjectRemoteIdentityPending', () => {
 describe('derived project identity stability', () => {
   const base = { id: 'r', path: '/r', displayName: 'r' } as const
 
-  // Why pinned: this id is the persisted Project primary key, so folding a host alias here would
-  // silently re-key existing projects on upgrade and drop their runtime preference.
+  // Persisted Project keys cannot fold host aliases on upgrade without dropping runtime preferences.
   it('keeps a www. remote provider-neutral instead of folding it onto github.com', () => {
     const projection = projectHostSetupProjectionFromRepos([
       repo({
@@ -683,4 +663,35 @@ describe('getProjectHostSetupWorktreeMeta host selection', () => {
 
     expect(getProjectHostSetupWorktreeMeta(setups, sshRepo).hostId).toBe('ssh:build-box')
   })
+})
+
+it('appends project source IDs without repeatedly copying an accumulating array', () => {
+  const repos = Array.from({ length: 2000 }, (_, i) =>
+    repo({
+      id: `source-${i}`,
+      path: `/repos/${i}`,
+      displayName: `Repo ${i}`,
+      connectionId: `host-${i}`,
+      upstream: { owner: 'acme', repo: 'project' }
+    })
+  )
+  let copied = 0
+  const iterator = Array.prototype[Symbol.iterator]
+  Array.prototype[Symbol.iterator] = function (this: unknown[]) {
+    if (this[0] === 'source-0') {
+      copied += this.length
+    }
+    return iterator.call(this)
+  }
+  let result: ReturnType<typeof projectHostSetupProjectionFromRepos>
+  try {
+    result = projectHostSetupProjectionFromRepos([...repos, repos[0]])
+  } finally {
+    Array.prototype[Symbol.iterator] = iterator
+  }
+  expect(copied).toBeLessThan(10_000)
+  expect(result.projects).toHaveLength(1)
+  expect(result.projects[0].sourceRepoIds).toEqual(repos.map((repo) => repo.id))
+  expect(result.setups).toHaveLength(2001)
+  expect(repos[0].displayName).toBe('Repo 0')
 })

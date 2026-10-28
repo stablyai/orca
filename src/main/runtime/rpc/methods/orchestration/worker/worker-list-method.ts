@@ -4,7 +4,7 @@ import type { OrchestrationDb } from '../../../../orchestration/db'
 import { WORKER_LIST_CURSOR_EXPIRED_MESSAGE } from '../../../../orchestration/db/worker-terminal/worker-terminal-listing'
 import { OrchestrationError } from '../../../../orchestration/orchestration-error'
 import type { OrcaRuntimeService } from '../../../../orca-runtime'
-import { defineMethod, type RpcMethod } from '../../../core'
+import { defineMethod } from '../../../core'
 import {
   applyFederatedFleetObservations,
   readFederatedFleetSnapshots
@@ -21,11 +21,22 @@ import {
   readWorkerListSnapshot
 } from './worker-list-snapshot-store'
 import { projectWorkerFleet, type WorkerListPageParams } from './worker-list-projection'
-import { exposeWorkerTerminalResource } from './worker-release-completion'
-import { WORKER_TERMINAL_LIST_STATES, WorkerListParams } from './worker-release-schemas'
+import { chatAssigneeObserver } from './session-worker-observation'
+import { exposeWorkerTerminalResource } from './worker-terminal-resource-presentation'
+import {
+  WORKER_TERMINAL_LIST_STATES,
+  WorkerListParams
+} from '../../../../../../shared/rpc-contract/orchestration-worker-release-schemas-params'
 
-export const ORCHESTRATION_WORKER_LIST_METHOD: RpcMethod = defineMethod({
+const emptyWorkerListPage = (limit: number) => ({
+  workers: [],
+  counts: {},
+  page: { limit, total: 0, hasMore: false, nextCursor: null }
+})
+
+export const ORCHESTRATION_WORKER_LIST_METHOD = defineMethod({
   name: 'orchestration.workerList',
+  permission: 'workspace',
   params: WorkerListParams,
   handler: async (params, { runtime }) => {
     const db = runtime.getOrchestrationDb()
@@ -66,11 +77,7 @@ export const ORCHESTRATION_WORKER_LIST_METHOD: RpcMethod = defineMethod({
       }
       const snapshot = db.getWorkerTerminalListingSnapshot(params.run)
       if (!snapshot) {
-        return {
-          workers: [],
-          counts: {},
-          page: { limit, total: 0, hasMore: false, nextCursor: null }
-        }
+        return emptyWorkerListPage(limit)
       }
       cursor = { version: 2, snapshot, after: legacyKey }
     }
@@ -85,11 +92,7 @@ export const ORCHESTRATION_WORKER_LIST_METHOD: RpcMethod = defineMethod({
     }
     const snapshot = cursor?.snapshot ?? db.getWorkerTerminalListingSnapshot(params.run)
     if (!snapshot) {
-      return {
-        workers: [],
-        counts: {},
-        page: { limit, total: 0, hasMore: false, nextCursor: null }
-      }
+      return emptyWorkerListPage(limit)
     }
     const rows = db.listWorkerTerminalResources({
       runId: params.run,
@@ -158,7 +161,7 @@ function readSnapshotRows(
   return rows
 }
 
-async function projectWorkerListPage(args: {
+type WorkerListPageArgs = {
   runtime: OrcaRuntimeService
   params: WorkerListPageParams
   limit: number
@@ -166,7 +169,9 @@ async function projectWorkerListPage(args: {
   snapshotCursor: WorkerListCursor | null
   snapshot?: Exclude<WorkerListCursor, { version: 3 }>['snapshot']
   completeProjection?: boolean
-}) {
+}
+
+async function projectWorkerListPage(args: WorkerListPageArgs) {
   const pinnedSnapshot =
     args.snapshotCursor?.version === 3
       ? pinWorkerListSnapshot(args.runtime, args.snapshotCursor.snapshot.id, {
@@ -182,15 +187,7 @@ async function projectWorkerListPage(args: {
 }
 
 async function projectWorkerListPageWithFilteredSnapshot(
-  args: {
-    runtime: OrcaRuntimeService
-    params: WorkerListPageParams
-    limit: number
-    rows: ReturnType<OrchestrationDb['listWorkerTerminalResources']>
-    snapshotCursor: WorkerListCursor | null
-    snapshot?: Exclude<WorkerListCursor, { version: 3 }>['snapshot']
-    completeProjection?: boolean
-  },
+  args: WorkerListPageArgs,
   filteredSnapshot: ReturnType<typeof readWorkerListSnapshot> | null
 ) {
   const { runtime, params, limit, rows, snapshotCursor } = args
@@ -209,7 +206,8 @@ async function projectWorkerListPageWithFilteredSnapshot(
     statuses,
     limit,
     now: authorityNow,
-    completeProjection: args.completeProjection
+    completeProjection: args.completeProjection,
+    observeChat: await chatAssigneeObserver(runtime, db, pageRows)
   })
   const federated = params.includeRemote
     ? await readFederatedFleetSnapshots({
@@ -221,9 +219,7 @@ async function projectWorkerListPageWithFilteredSnapshot(
   if (federated) {
     applyFederatedFleetObservations(fleet, federated, fleet.durable)
   }
-  // Total and counts must come out of one row set. A pinned filtered cursor's row set is its
-  // membership; deriving the total from that and the counts from a live scan of the extent
-  // reported a total no count could reach once a pinned row left the filter.
+  // Derive totals and counts from the same pinned membership; live filter scans can count rows the cursor cannot reach.
   const pinnedCount = filteredSnapshot?.dispatchIds.length
   const inventory =
     pinnedCount !== undefined && params.terminalState
@@ -280,8 +276,7 @@ async function projectWorkerListPageWithFilteredSnapshot(
       agentTerminalHandle: row.agentTerminalHandle,
       terminalState: row.terminalState,
       resource: row.resource ? exposeWorkerTerminalResource(row.resource) : null,
-      // Why: `projection.resource` restated id/ownerDispatchId/releaseState/terminalState
-      // that the row already carries; only the derived ownership classification is new.
+      // Emit only derived ownership; resource identity/release fields already live on the row.
       projection: {
         ...projection,
         resource:
@@ -300,6 +295,14 @@ async function projectWorkerListPageWithFilteredSnapshot(
     workers,
     counts,
     page: fleet.page,
+    // Mark truncation explicitly; hasMore alone can look complete to row-scanning clients.
+    ...(hasMore
+      ? {
+          warnings: [
+            `Showing ${pageRows.length} of ${inventory.total} Dispatches, newest first; more are on later pages. Follow page.nextCursor with --cursor.`
+          ]
+        }
+      : {}),
     ...(federated?.errors.length ? { partialHostErrors: federated.errors } : {})
   }
 }

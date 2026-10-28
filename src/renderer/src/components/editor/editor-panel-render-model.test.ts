@@ -133,13 +133,11 @@ describe('getEditorPanelRenderModel read-only raw rendering (AI Vault View Log)'
   it('renders a read-only markdown log as raw source with no markdown viewer or chrome', () => {
     const model = renderModel({ activeFile: markdownFile({ readOnly: true }) })
 
-    // Raw text renderer, not the rich/preview markdown surface.
     expect(model.isMarkdown).toBe(false)
     expect(model.hasViewModeToggle).toBe(false)
     expect(model.canShowMarkdownPreview).toBe(false)
     expect(model.canExportMarkdownToPdf).toBe(false)
     expect(model.canShowMarkdownTableOfContents).toBe(false)
-    // Real language is preserved so Monaco still tokenizes the read-only source.
     expect(model.resolvedLanguage).toBe('markdown')
   })
 
@@ -165,7 +163,8 @@ describe('getEditorPanelRenderModel markdown export affordance', () => {
       editorDrafts: { '/repo/README.md': '[example]: https://example.com' }
     })
 
-    expect(model.canExportMarkdownToPdf).toBe(false)
+    expect(model.inlineMarkdownRenderState?.renderMode).toBe('preview')
+    expect(model.canExportMarkdownToPdf).toBe(true)
   })
 
   it('disables rich export when a multibyte character crosses the byte limit', () => {
@@ -247,5 +246,27 @@ describe('getEditorPanelRenderModel markdown export affordance', () => {
         fileContents: { [preview.id]: textContent({ isBinary: true }) }
       }).canExportMarkdownToPdf
     ).toBe(false)
+  })
+})
+
+describe('virtual Markdown preview PDF export', () => {
+  it('disables export for large previews, including unsaved drafts', () => {
+    for (const useDraft of [false, true]) {
+      const content = 'x'.repeat(RICH_MARKDOWN_MAX_SIZE_BYTES + 1)
+      expect(
+        renderModel({
+          activeFile: markdownFile({
+            id: 'preview:/repo/README.md',
+            mode: 'markdown-preview',
+            markdownPreviewSourceFileId: '/repo/README.md'
+          }),
+          fileContents: {
+            'preview:/repo/README.md': textContent({ content: useDraft ? '# Small' : content })
+          },
+          editorDrafts: useDraft ? { '/repo/README.md': content } : {},
+          markdownRichModeSizeOverridden: true
+        }).canExportMarkdownToPdf
+      ).toBe(false)
+    }
   })
 })

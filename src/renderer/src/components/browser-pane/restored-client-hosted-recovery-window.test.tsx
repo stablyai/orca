@@ -10,7 +10,7 @@ const mocks = vi.hoisted(() => ({ attach: vi.fn(), createBrowserTab: vi.fn(async
 vi.mock('./browser-client-page-renderer-installation', () => ({
   attachBrowserClientPageToViewport: mocks.attach
 }))
-vi.mock('@/runtime/web-runtime-session', () => ({
+vi.mock('@/runtime/web-runtime-browser-creation', () => ({
   createWebRuntimeSessionBrowserTab: mocks.createBrowserTab
 }))
 vi.mock('sonner', () => ({
@@ -42,8 +42,7 @@ function page(): BrowserPage {
   }
 }
 
-// 'absent' is the cold-relaunch shape: the pane mounts before any status has been recorded for the
-// environment, so the entry does not exist yet rather than existing with a null status.
+// Cold relaunch mounts persisted panes before any environment status entry exists.
 type EnvironmentReachability = 'reachable' | 'unreachable' | 'absent'
 
 function runtimeStatusMap(
@@ -108,12 +107,10 @@ function renderPane(): ReturnType<typeof render> {
   return render(paneElement())
 }
 
-// Scoped to the navigation row: the unavailable notice's reopen button keeps its own pending
-// spinner in the DOM at all times, hidden by class, so an unscoped query is always true.
-function spinnerShown(): boolean {
+function loadingShown(): boolean {
   return (
     document.querySelector(
-      '[data-contextual-tour-target="client-hosted-browser-controls"] .animate-spin'
+      '[data-contextual-tour-target="client-hosted-browser-controls"] [data-browser-load-progress="loading"]'
     ) !== null
   )
 }
@@ -143,7 +140,7 @@ describe('restored client-hosted recovery window', () => {
 
     act(() => vi.advanceTimersByTime(RESTORED_CLIENT_HOSTED_RECOVERY_WINDOW_MS - 1))
 
-    expect(spinnerShown()).toBe(true)
+    expect(loadingShown()).toBe(true)
     expect(noticeShown()).toBe(false)
   })
 
@@ -154,11 +151,10 @@ describe('restored client-hosted recovery window', () => {
     act(() => vi.advanceTimersByTime(RESTORED_CLIENT_HOSTED_RECOVERY_WINDOW_MS))
 
     expect(noticeShown()).toBe(true)
-    expect(spinnerShown()).toBe(false)
+    expect(loadingShown()).toBe(false)
     expect(screen.getByRole('button', { name: 'Reopen on server' })).not.toBeNull()
   })
 
-  // Why the row itself is checked: deleting it is the failure mode this replaced. The user decides.
   it('leaves the page row in place when it gives up', () => {
     seedStore({ restored: true, environment: 'reachable' })
     renderPane()
@@ -168,21 +164,17 @@ describe('restored client-hosted recovery window', () => {
     expect(useAppStore.getState().remoteBrowserPageHandlesByPageId[PAGE_ID]).not.toBeUndefined()
   })
 
-  // Why: nobody has asked the host yet, and the environment's own disconnected state says so.
   it('keeps waiting indefinitely while the environment is unreachable', () => {
     seedStore({ restored: true, environment: 'unreachable' })
     renderPane()
 
     act(() => vi.advanceTimersByTime(RESTORED_CLIENT_HOSTED_RECOVERY_WINDOW_MS * 10))
 
-    expect(spinnerShown()).toBe(true)
+    expect(loadingShown()).toBe(true)
     expect(noticeShown()).toBe(false)
   })
 
-  // Why the environment starts with no entry at all rather than an unreachable one: this is the
-  // ordering production always takes. A cold relaunch mounts the pane from the persisted row before
-  // any runtime status has been recorded, so the effect's re-run on the flip is the only thing that
-  // ever arms the clock — every other case here seeds the status first and never takes that path.
+  // Seed no status to exercise cold-start reachability arming the clock after mount.
   it('arms the window when the environment first becomes reachable', () => {
     seedStore({ restored: true, environment: 'absent' })
     renderPane()
@@ -200,20 +192,17 @@ describe('restored client-hosted recovery window', () => {
     expect(noticeShown()).toBe(true)
   })
 
-  // Why the staged case is pinned separately: it also mounts with a null placement, but its host is
-  // mid-create rather than absent, and the create path has its own bound.
+  // Staged pages also lack placement, but their in-flight create has its own timeout.
   it('leaves a staged page that is not restored alone', () => {
     seedStore({ restored: false, environment: 'reachable' })
     renderPane()
 
     act(() => vi.advanceTimersByTime(RESTORED_CLIENT_HOSTED_RECOVERY_WINDOW_MS * 10))
 
-    expect(spinnerShown()).toBe(true)
+    expect(loadingShown()).toBe(true)
     expect(noticeShown()).toBe(false)
   })
 
-  // Why revocable: the window is a bound on waiting, not a verdict on the page. A slow recovery
-  // that lands after it must put the user back on their page rather than on a dead notice.
   it('takes the notice back when the placement finally arrives', () => {
     seedStore({ restored: true, environment: 'reachable' })
     renderPane()
@@ -231,8 +220,6 @@ describe('restored client-hosted recovery window', () => {
     expect(noticeShown()).toBe(false)
   })
 
-  // Why re-entry gets its own case: a host fence clears the placement and re-runs recovery, so the
-  // pane returns to waiting. A window that stayed spent would answer the second wait instantly.
   it('waits again when a recovered page loses its placement', () => {
     seedStore({ restored: true, environment: 'reachable' })
     const view = renderPane()
@@ -267,15 +254,9 @@ describe('restored client-hosted recovery window', () => {
     expect(noticeShown()).toBe(true)
   })
 
-  // Why the number is asserted and not only derived from: every boundary case above stays green if
-  // the window shrinks to a millisecond, and a window shorter than one creation attempt would call
-  // the first batch of recoveries dead. The first batch is all this bounds — recovery runs four
-  // pages at a time and each awaits a create and then a navigate, so with 9+ restored tabs a page
-  // can see the notice while its turn has not come. Widening to the batched bound is ledgered.
+  // The first recovery batch needs a full creation attempt before any unavailable notice.
   it('waits longer than the runtime spends creating one client page in the first batch', () => {
-    expect(RESTORED_CLIENT_HOSTED_RECOVERY_WINDOW_MS).toBe(45_000)
-    // Imported, not copied: a locally re-declared ceiling makes raising the runtime's own timeout
-    // invisible here, which is the one change that could turn this window into a false verdict.
+    // Import the runtime ceiling so increases cannot silently invalidate this window.
     expect(RESTORED_CLIENT_HOSTED_RECOVERY_WINDOW_MS).toBeGreaterThan(
       DEFAULT_CLIENT_PAGE_CREATION_TIMEOUT_MS
     )

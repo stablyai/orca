@@ -1,7 +1,4 @@
-// Why: happy-dom stores each MutationObserver's internal callback in a WeakRef, so any GC pause
-// under parallel test load silently and permanently stops a still-connected observer. Browsers
-// keep that callback reachable for as long as the observer observes; mirror that lifetime here so
-// DOM-driven tests never lose mutation records mid-run.
+// Pin happy-dom’s WeakRef-held observer callbacks while observing, matching browser lifetime; GC under parallel load otherwise silently stops mutation delivery.
 
 type HappyDomMutationListener = {
   callback?: { deref: () => unknown }
@@ -48,12 +45,12 @@ export function installHappyDomMutationObserverRetention(): boolean {
   const disconnect = prototype.disconnect
 
   prototype.observe = function patchedObserve(
-    this: object,
+    this: PatchableMutationObserver,
     target: Node,
     options?: MutationObserverInit
   ): void {
     const existing = new Set(readMutationListeners(target))
-    observe.call(this as unknown as PatchableMutationObserver, target, options)
+    observe.call(this, target, options)
     const pinned = retainedCallbacks.get(this) ?? new Set<unknown>()
     for (const listener of readMutationListeners(target)) {
       if (existing.has(listener)) {
@@ -69,8 +66,8 @@ export function installHappyDomMutationObserverRetention(): boolean {
     }
   }
 
-  prototype.disconnect = function patchedDisconnect(this: object): void {
-    disconnect.call(this as unknown as PatchableMutationObserver)
+  prototype.disconnect = function patchedDisconnect(this: PatchableMutationObserver): void {
+    disconnect.call(this)
     retainedCallbacks.delete(this)
   }
 

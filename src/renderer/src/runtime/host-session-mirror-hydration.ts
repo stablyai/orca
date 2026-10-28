@@ -1,28 +1,19 @@
 import { getRuntimeEnvironmentConnectionGeneration } from '@/store/slices/runtime-status'
 
-/**
- * Tells "the host reported no PTY" apart from "the host has not answered yet"
- * for mirrored `web-terminal-*` panes, whose PTY handle lands a round trip
- * after the tab. Reading that gap as pane death relaunched agents the host was
- * still running (codex `-32600 already has an active writer`).
- *
- * The two granularities are NOT interchangeable: a full inventory speaks for
- * every worktree because absence from it is itself a verdict, while a
- * single-worktree frame says nothing about a background workspace.
- */
+// Mirrored handles arrive after tabs; unknown is not dead or recovery duplicates host agents (codex active-writer errors). Full inventory speaks for all worktrees by omission; scoped frames never answer for background workspaces.
 
 type ParkedMirrorWaiter = { environmentId: string; worktreeId: string; run: () => void }
 
 const hydratedGenerationByEnvironment = new Map<string, number>()
 const hydratedGenerationByWorktree = new Map<string, number>()
 const parkedWaitersByWorktree = new Map<string, ParkedMirrorWaiter>()
+export const MAX_PARKED_HOST_SESSION_MIRROR_WAITERS = 512
 
 function worktreeKey(environmentId: string, worktreeId: string): string {
   return `${environmentId}\0${worktreeId}`
 }
 
-/** Why: a host restart bumps the connection generation, so a verdict from the
- *  previous connection says nothing about the PTYs of the new one. */
+/** Host restart advances generation; previous PTY verdicts no longer apply. */
 function isCurrentGeneration(environmentId: string, generation: number | undefined): boolean {
   return (
     generation !== undefined &&
@@ -47,23 +38,22 @@ function drainParkedWaiters(matches: (waiter: ParkedMirrorWaiter) => boolean): v
       dueKeys.push(key)
     }
   }
-  // Why: drain from a snapshot — a replay can re-park itself, and that new
-  // waiter belongs to the next hydration, not this one.
+  // Drain a snapshot: re-parked waiters belong to the next hydration.
   for (const key of dueKeys) {
     const waiter = parkedWaitersByWorktree.get(key)
     if (waiter) {
       parkedWaitersByWorktree.delete(key)
-      waiter.run()
+      try {
+        waiter.run()
+      } catch (error) {
+        // Unrelated waiters run inside frame apply; contain one replay’s throw so it cannot strand siblings or escape into apply.
+        console.warn('[host-session-mirror-hydration] parked replay failed:', error)
+      }
     }
   }
 }
 
-/**
- * Settles the whole environment. Call only for a full inventory ALREADY applied
- * to the store — never for a failure, which is `unverifiable` and no evidence a
- * host-owned PTY exited. Waiters drain synchronously, so settling before the
- * patch lands re-runs recovery against state the frame has not written yet.
- */
+/** Settle all only after full inventory commits. Waiters drain synchronously, so earlier settlement reads stale state; failures are unverifiable and prove no exit. */
 export function markHostSessionMirrorHydrated(environmentId: string): void {
   hydratedGenerationByEnvironment.set(
     environmentId,
@@ -72,8 +62,7 @@ export function markHostSessionMirrorHydrated(environmentId: string): void {
   drainParkedWaiters((waiter) => waiter.environmentId === environmentId)
 }
 
-/** Settles one worktree, for a single-worktree frame already applied to the
- *  store. Never releases panes parked on this environment's other worktrees. */
+/** Settle only this worktree after its scoped frame commits; other worktree waiters stay parked. */
 export function markHostSessionMirrorWorktreeHydrated(
   environmentId: string,
   worktreeId: string
@@ -87,10 +76,7 @@ export function markHostSessionMirrorWorktreeHydrated(
   )
 }
 
-/** Why: waiters survive this reset — a re-pair or effect restart replaces the
- *  verdict, it does not cancel the recovery the client still owes. A permanently
- *  removed environment therefore keeps its waiters: bounded at one per worktree,
- *  and inert, because nothing can settle an environment that never returns. */
+/** Reset verdicts, not owed recovery. Re-pair/effect restarts preserve waiters; removed environments retain at most one inert waiter/worktree because they never settle again. */
 export function clearHostSessionMirrorHydration(environmentId: string): void {
   hydratedGenerationByEnvironment.delete(environmentId)
   const prefix = `${environmentId}\0`
@@ -106,11 +92,24 @@ export function parkUntilHostSessionMirrorHydrates(
   worktreeId: string,
   run: () => void
 ): void {
-  parkedWaitersByWorktree.set(worktreeKey(environmentId, worktreeId), {
+  const key = worktreeKey(environmentId, worktreeId)
+  parkedWaitersByWorktree.delete(key)
+  parkedWaitersByWorktree.set(key, {
     environmentId,
     worktreeId,
     run
   })
+  while (parkedWaitersByWorktree.size > MAX_PARKED_HOST_SESSION_MIRROR_WAITERS) {
+    const oldest = parkedWaitersByWorktree.keys().next()
+    if (oldest.done || oldest.value === key) {
+      break
+    }
+    parkedWaitersByWorktree.delete(oldest.value)
+  }
+}
+
+export function getParkedHostSessionMirrorWaiterCountForTests(): number {
+  return parkedWaitersByWorktree.size
 }
 
 export function resetHostSessionMirrorHydrationForTests(): void {

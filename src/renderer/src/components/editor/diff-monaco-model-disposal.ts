@@ -12,7 +12,7 @@ type DiffViewerModelPathPrefixes = {
   modifiedModelPathPrefix: string
 }
 
-type DisposableMonacoModel = Pick<editor.ITextModel, 'dispose' | 'isAttachedToEditor'> & {
+export type DisposableMonacoModel = Pick<editor.ITextModel, 'dispose' | 'isAttachedToEditor'> & {
   uri: { toString(skipEncoding?: boolean): string }
 }
 
@@ -79,16 +79,12 @@ export function disposeUnattachedMonacoModelPaths(
   }
 }
 
-/**
- * Sweeps every owned prefix in a single scan of the global model registry.
- *
- * Why batched: `getModels()` returns every retained model in the app, so closing N diff tabs one
- * prefix at a time costs N full scans and 2xN `uri.toString()` allocations per model. Closing 100
- * tabs against 700 retained models is ~140k throwaway strings inside one synchronous effect.
- */
+/** Sweep owned prefixes in one registry pass; per-prefix scans multiply retained-model enumeration and URI allocations. */
 export function disposeUnattachedMonacoModelsByPathPrefixes(
   monacoRegistry: MonacoModelRegistry,
-  modelPathPrefixes: readonly string[]
+  modelPathPrefixes: readonly string[],
+  onAttachedModel?: (model: DisposableMonacoModel, prefix: string) => void,
+  isStillOwned: (prefix: string) => boolean = () => true
 ): void {
   if (modelPathPrefixes.length === 0) {
     return
@@ -104,28 +100,28 @@ export function disposeUnattachedMonacoModelsByPathPrefixes(
 
   const bounds = { shortestPrefixLength, longestPrefixLength }
   for (const model of monacoRegistry.editor.getModels()) {
-    // Why both forms: model URIs are built via `Uri.parse`, so a prefix can match the decoded or
-    // the percent-encoded rendering depending on what characters the tab id carries.
-    if (
-      isOwnedByPathPrefix(model.uri.toString(true), ownedPrefixes, bounds) ||
-      isOwnedByPathPrefix(model.uri.toString(), ownedPrefixes, bounds)
-    ) {
-      disposeUnattachedMonacoModel(model)
+    // Uri.parse can expose decoded or encoded tab IDs; match both renderings.
+    const prefix =
+      findOwnedPathPrefix(model.uri.toString(true), ownedPrefixes, bounds) ??
+      findOwnedPathPrefix(model.uri.toString(), ownedPrefixes, bounds)
+    if (prefix !== undefined && isStillOwned(prefix)) {
+      if (model.isAttachedToEditor()) {
+        onAttachedModel?.(model, prefix)
+      } else {
+        model.dispose()
+      }
     }
   }
 }
 
-/**
- * Equivalent to `uri === prefix || uri.startsWith(`${prefix}:`)` for any prefix in the set, but
- * probes the URI's own `:` boundaries instead of testing every prefix — O(segments) not O(prefixes).
- */
-function isOwnedByPathPrefix(
+/** Probe URI colon boundaries for exact/prefix ownership, making work depend on segments rather than owned-prefix count. */
+function findOwnedPathPrefix(
   uriString: string,
   ownedPrefixes: ReadonlySet<string>,
   bounds: { shortestPrefixLength: number; longestPrefixLength: number }
-): boolean {
+): string | undefined {
   if (ownedPrefixes.has(uriString)) {
-    return true
+    return uriString
   }
 
   for (
@@ -137,11 +133,11 @@ function isOwnedByPathPrefix(
       boundary >= bounds.shortestPrefixLength &&
       ownedPrefixes.has(uriString.slice(0, boundary))
     ) {
-      return true
+      return uriString.slice(0, boundary)
     }
   }
 
-  return false
+  return undefined
 }
 
 function disposeUnattachedMonacoModel(model: DisposableMonacoModel | null): void {

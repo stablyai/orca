@@ -1,29 +1,18 @@
-// Worktree scan sharing: in-flight coalescing and mutation-generation retirement.
+import { worktreeCreateGit } from './worktree-create-git-executor'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-const {
-  gitExecFileAsyncMock,
-  gitExecFileSyncMock,
-  translateWslOutputPathsMock,
-  moveWorktreeDirectoryToTrashMock
-} = vi.hoisted(() => ({
-  gitExecFileAsyncMock: vi.fn(),
-  gitExecFileSyncMock: vi.fn(),
-  translateWslOutputPathsMock: vi.fn((output: string) => output),
-  moveWorktreeDirectoryToTrashMock: vi.fn()
-}))
+const { gitExecFileAsyncMock, gitExecFileSyncMock, translateWslOutputPathsMock } = vi.hoisted(
+  () => ({
+    gitExecFileAsyncMock: vi.fn(),
+    gitExecFileSyncMock: vi.fn(),
+    translateWslOutputPathsMock: vi.fn((output: string) => output)
+  })
+)
 
 vi.mock('./runner', () => ({
   gitExecFileAsync: gitExecFileAsyncMock,
   gitExecFileSync: gitExecFileSyncMock,
   translateWslOutputPaths: translateWslOutputPathsMock
-}))
-
-// Default: the checkout cannot be renamed aside, so removal deletes it in place.
-vi.mock('../worktree-trash', () => ({
-  moveWorktreeDirectoryToTrash: moveWorktreeDirectoryToTrashMock.mockResolvedValue(undefined),
-  restoreWorktreeDirectoryFromTrash: vi.fn().mockResolvedValue(true),
-  scheduleWorktreeTrashDeletion: vi.fn()
 }))
 
 import {
@@ -46,14 +35,12 @@ describe('listWorktrees in-flight sharing', () => {
   beforeEach(async () => {
     gitExecFileAsyncMock.mockReset()
     _resetWorktreeScanCacheForTests()
-    // Why: capability discovery serializes same-host callers; warming it lets
-    // these tests isolate the scan-generation overlap they are exercising.
+    // Warm capability discovery so its serialization cannot hide scan overlap.
     gitExecFileAsyncMock.mockResolvedValue({ stdout: '' })
     await listWorktrees('/capability-warmup')
     gitExecFileAsyncMock.mockReset()
   })
 
-  // Later describes in this file assume a pristine mock (no global reset).
   afterEach(() => {
     gitExecFileAsyncMock.mockReset()
   })
@@ -98,8 +85,6 @@ describe('listWorktrees in-flight sharing', () => {
     expect(gitExecFileAsyncMock).toHaveBeenCalledTimes(1)
   })
 
-  // The annotated scan is the graph scan plus a sparse probe, so the two share one `git worktree
-  // list` and only the annotated caller pays the probe. They ran Git twice before.
   it('runs one git listing for concurrent graph and annotated scans', async () => {
     const resolvers: ((value: { stdout: string }) => void)[] = []
     gitExecFileAsyncMock.mockImplementation(
@@ -120,7 +105,27 @@ describe('listWorktrees in-flight sharing', () => {
     expect(gitExecFileAsyncMock).toHaveBeenCalledTimes(1)
   })
 
-  // Order must not matter: whichever runs first owns the listing and the other joins it.
+  // Joining a queued status scan would defeat the create listing's interactive priority.
+  it('does not let an interactive listing join a scan queued at another tier', async () => {
+    const resolvers: ((value: { stdout: string }) => void)[] = []
+    gitExecFileAsyncMock.mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          resolvers.push(resolve)
+        })
+    )
+
+    const statusScan = listWorktreeGraph('/repo', { admissionTier: 'status' })
+    const interactiveScan = worktreeCreateGit.run(() => listWorktreeGraph('/repo'))
+    expect(resolvers).toHaveLength(2)
+
+    for (const resolve of resolvers) {
+      resolve({ stdout: 'worktree /repo\nHEAD abc123\nbranch refs/heads/main\n' })
+    }
+    await Promise.all([statusScan, interactiveScan])
+    expect(gitExecFileAsyncMock).toHaveBeenCalledTimes(2)
+  })
+
   it('runs one git listing when the annotated scan starts first', async () => {
     const resolvers: ((value: { stdout: string }) => void)[] = []
     gitExecFileAsyncMock.mockImplementation(
@@ -199,9 +204,6 @@ describe('listWorktrees in-flight sharing', () => {
     expect(_getWorktreeScanCacheSizesForTests()).toEqual({ inFlight: 0, generations: 0 })
   })
 
-  // Why (#16520): create verification moved off the fail-soft listing so a Git failure stops being
-  // hidden behind "created but not found in listing". That must not cost the in-flight coalescing,
-  // and sharing must never hand a strict caller a softened result.
   it('coalesces concurrent strict scans for the same repo into one git call', async () => {
     let resolveScan!: () => void
     const scanOutput = 'worktree /repo\0HEAD abc123\0branch refs/heads/main\0\0'
@@ -236,13 +238,11 @@ describe('listWorktrees in-flight sharing', () => {
     const settled = Promise.allSettled([first, second])
     rejectScan(new Error('git timed out.'))
 
-    // A joiner silently receiving [] would be #16520 re-entering through the dedup path.
     expect((await settled).map((r) => r.status)).toEqual(['rejected', 'rejected'])
     expect(gitExecFileAsyncMock).toHaveBeenCalledTimes(1)
   })
 
   it('never lets a strict caller join a fail-soft scan', async () => {
-    // Both variants reject; only the lenient one is allowed to soften that into [].
     gitExecFileAsyncMock.mockRejectedValue(new Error('git timed out.'))
 
     const lenient = listWorktrees('/repo')
@@ -253,9 +253,7 @@ describe('listWorktrees in-flight sharing', () => {
   })
 
   it('keeps listWorktreesStrict unshared for post-mutation verification', async () => {
-    // Why: a raw `git worktree prune` never bumps the scan generation, so a
-    // coalesced strict read could return the pre-prune row and report a
-    // successful removal as a stale registration.
+    // Raw prune does not bump generations; post-mutation verification needs a fresh subprocess.
     const scanOutput = 'worktree /repo\nHEAD abc123\nbranch refs/heads/main\n'
     const resolvers: (() => void)[] = []
     gitExecFileAsyncMock.mockImplementation(
@@ -472,8 +470,7 @@ describe('listWorktrees in-flight sharing', () => {
     gitExecFileAsyncMock.mockResolvedValue({ stdout: scanOutput })
     const controller = new AbortController()
 
-    // Why: an aborted shared scan would reject for every caller, so signal
-    // callers must keep a private scan.
+    // An aborted shared scan would reject every joiner; signal callers require isolation.
     await Promise.all([
       listWorktrees('/repo'),
       listWorktrees('/repo', { signal: controller.signal })

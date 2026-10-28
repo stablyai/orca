@@ -1,6 +1,13 @@
-import { StyleSheet, colors, radii, spacing, typography } from './mobile-tasks-dependencies'
+import {
+  StyleSheet,
+  themedStyleSheet,
+  colors,
+  radii,
+  spacing,
+  typography
+} from './mobile-tasks-dependencies'
 
-export const mobileTasksChromeStyles = StyleSheet.create({
+export const mobileTasksChromeStyles = themedStyleSheet(() => ({
   container: {
     flex: 1,
     backgroundColor: colors.bgBase
@@ -26,8 +33,12 @@ export const mobileTasksChromeStyles = StyleSheet.create({
   },
   titleWrap: {
     flex: 1,
+    minWidth: 0
+  },
+  titleLine: {
     flexDirection: 'row',
     alignItems: 'center',
+    gap: spacing.sm,
     minWidth: 0
   },
   title: {
@@ -94,6 +105,9 @@ export const mobileTasksChromeStyles = StyleSheet.create({
   segmentSecondaryText: {
     fontSize: 12,
     color: colors.textSecondary
+  },
+  segmentDisabledText: {
+    color: colors.textMuted
   },
   searchBar: {
     paddingHorizontal: spacing.md,
@@ -216,4 +230,4 @@ export const mobileTasksChromeStyles = StyleSheet.create({
     marginLeft: spacing.lg + 26,
     marginRight: spacing.lg
   }
-})
+}))

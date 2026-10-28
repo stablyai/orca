@@ -1,11 +1,5 @@
-/**
- * GitHub API rate-limit buckets surfaced in the TaskPage header so users can
- * see remaining budget before they hit the wall. `core` = REST (5000/hr),
- * `search` = Search API (30/min — hit by countWorkItems), `graphql` =
- * GraphQL (5000 points/hr — hit by project-view + discovery). All three are
- * the buckets this app actually stresses; other buckets (e.g. code_search)
- * are not surfaced because we don't touch them.
- */
+/** Task header quota snapshots cover REST core, work-item search and Project GraphQL usage so users can see remaining budget.
+ * Other buckets such as code_search are unused and omitted; actual limits come from each bucket. */
 export type GitHubRateLimitBucket = {
   remaining: number
   limit: number

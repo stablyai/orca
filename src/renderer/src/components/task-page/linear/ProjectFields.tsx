@@ -1,8 +1,10 @@
-import type { TaskPageComposerActionsModel } from '../../use-task-page-composer-actions'
+import { ImeInput } from '@/lib/ime-text-field'
+import type { TaskPageComposerActionsModel } from '../use-task-page-composer-actions'
 import { translate } from '@/i18n/i18n'
+import { linearLabelCountLabel, linearMemberCountLabel } from './linear-attribute-count-labels'
 import { Popover, PopoverTrigger, PopoverContent } from '@/components/ui/popover'
 import { LinearPriorityIcon } from '@/components/linear-priority-icon'
-import { getLinearPriorityLabel } from '@/components/task-page-localized-options'
+import { getLinearPriorityLabel } from '@/components/task-page/task-page-localized-options'
 import { ChevronDown, Check, UserRound, LoaderCircle, Users, Tag, Clock3 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 export function TaskPageLinearProjectFields({
@@ -37,7 +39,7 @@ export function TaskPageLinearProjectFields({
   } = model
   return (
     <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto px-6 py-5 scrollbar-sleek">
-      <input
+      <ImeInput
         autoFocus
         value={newLinearProjectName}
         onChange={(event) => setNewLinearProjectName(event.target.value)}
@@ -116,16 +118,16 @@ export function TaskPageLinearProjectFields({
               <ChevronDown className="size-3 text-muted-foreground/70" />
             </button>
           </PopoverTrigger>
-          <PopoverContent align="start" className="w-64 p-1">
-            <div className="px-2 py-1 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+          <PopoverContent align="start" className="w-64" wheelScroll>
+            <div className="mx-1 mt-1 px-2 py-1 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
               {translate('auto.components.TaskPage.34da8ac06c', 'Lead')}
             </div>
             {newLinearProjectMembers.loading ? (
-              <div className="flex items-center justify-center p-4">
+              <div className="mx-1 mb-1 flex items-center justify-center p-4">
                 <LoaderCircle className="size-4 animate-spin text-muted-foreground" />
               </div>
             ) : (
-              <div className="max-h-64 overflow-y-auto scrollbar-sleek">
+              <div className="mx-1 mb-1 max-h-64 overflow-y-auto scrollbar-sleek">
                 <button
                   type="button"
                   onClick={() => setNewLinearProjectLeadId(null)}
@@ -187,28 +189,21 @@ export function TaskPageLinearProjectFields({
               <span>
                 {newLinearProjectMemberIds.length === 0
                   ? translate('auto.components.TaskPage.d6cda23ef1', 'Members')
-                  : translate(
-                      'auto.components.TaskPage.7719d8daa9',
-                      '{{value0}} member{{value1}}',
-                      {
-                        value0: newLinearProjectMemberIds.length,
-                        value1: newLinearProjectMemberIds.length > 1 ? 's' : ''
-                      }
-                    )}
+                  : linearMemberCountLabel(newLinearProjectMemberIds.length)}
               </span>
               <ChevronDown className="size-3 text-muted-foreground/70" />
             </button>
           </PopoverTrigger>
-          <PopoverContent align="start" className="w-64 p-1">
-            <div className="px-2 py-1 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+          <PopoverContent align="start" className="w-64" wheelScroll>
+            <div className="mx-1 mt-1 px-2 py-1 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
               {translate('auto.components.TaskPage.d6cda23ef1', 'Members')}
             </div>
             {newLinearProjectMembers.loading ? (
-              <div className="flex items-center justify-center p-4">
+              <div className="mx-1 mb-1 flex items-center justify-center p-4">
                 <LoaderCircle className="size-4 animate-spin text-muted-foreground" />
               </div>
             ) : (
-              <div className="max-h-64 overflow-y-auto scrollbar-sleek">
+              <div className="mx-1 mb-1 max-h-64 overflow-y-auto scrollbar-sleek">
                 {newLinearProjectMembers.data.map((member) => {
                   const selected = newLinearProjectMemberIds.includes(member.id)
                   return (
@@ -259,24 +254,21 @@ export function TaskPageLinearProjectFields({
               <span>
                 {newLinearProjectLabelIds.length === 0
                   ? translate('auto.components.TaskPage.d0ca4aa1d0', 'Labels')
-                  : translate('auto.components.TaskPage.eff9800d4b', '{{value0}} label{{value1}}', {
-                      value0: newLinearProjectLabelIds.length,
-                      value1: newLinearProjectLabelIds.length > 1 ? 's' : ''
-                    })}
+                  : linearLabelCountLabel(newLinearProjectLabelIds.length)}
               </span>
               <ChevronDown className="size-3 text-muted-foreground/70" />
             </button>
           </PopoverTrigger>
-          <PopoverContent align="start" className="w-64 p-1">
-            <div className="px-2 py-1 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+          <PopoverContent align="start" className="w-64" wheelScroll>
+            <div className="mx-1 mt-1 px-2 py-1 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
               {translate('auto.components.TaskPage.d0ca4aa1d0', 'Labels')}
             </div>
             {newLinearProjectLabels.loading ? (
-              <div className="flex items-center justify-center p-4">
+              <div className="mx-1 mb-1 flex items-center justify-center p-4">
                 <LoaderCircle className="size-4 animate-spin text-muted-foreground" />
               </div>
             ) : (
-              <div className="max-h-64 overflow-y-auto scrollbar-sleek">
+              <div className="mx-1 mb-1 max-h-64 overflow-y-auto scrollbar-sleek">
                 {newLinearProjectLabels.data.length === 0 ? (
                   <div className="px-2 py-2 text-xs text-muted-foreground">
                     {translate('auto.components.TaskPage.af9e877f30', 'No labels')}

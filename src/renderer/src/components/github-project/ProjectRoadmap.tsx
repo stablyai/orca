@@ -3,10 +3,11 @@ import { CalendarClock } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { usePrefersReducedMotion } from '@/hooks/usePrefersReducedMotion'
 import { cn } from '@/lib/utils'
-import { i18n, translate } from '@/i18n/i18n'
+import { getIntlLocale, translate } from '@/i18n/i18n'
 import ProjectGroupHeader from './ProjectGroupHeader'
 import ProjectRoadmapBar from './ProjectRoadmapBar'
 import { ProjectTitleCell } from './ProjectCellIdentity'
+import { ProjectItemsEmptyState } from './ProjectViewStates'
 import { formatRoadmapTick } from './roadmap-tick-format'
 import { loadRoadmapZoom, saveRoadmapZoom } from './roadmap-zoom-preference'
 import { groupRows, sortRows } from '../../../../shared/github/project-group-sort'
@@ -47,13 +48,10 @@ export default function ProjectRoadmap({
 }: Props): React.JSX.Element {
   const view = table.selectedView
   const prefersReducedMotion = usePrefersReducedMotion()
-  const locale = i18n.resolvedLanguage ?? i18n.language
-  // Why: the grid lives on UTC calendar days (parseRoadmapDate), so "today"
-  // must be the viewer's LOCAL calendar date mapped to UTC midnight — the raw
-  // instant would shift the marker into the wrong day off UTC.
+  const locale = getIntlLocale()
+  // Map the viewer’s local calendar date to UTC midnight to match the grid’s UTC-day coordinates.
   const [todayMs, setTodayMs] = useState(localTodayAsUtcMidnightMs)
-  // Why: a pane left open across midnight would otherwise keep yesterday's
-  // marker; re-arm after each fire so multi-day sessions stay honest.
+  // Refresh at each local midnight so long-lived panes keep today’s marker current.
   useEffect(() => {
     const now = new Date()
     const nextLocalMidnight = new Date(
@@ -61,8 +59,7 @@ export default function ProjectRoadmap({
       now.getMonth(),
       now.getDate() + 1
     ).getTime()
-    // Why: the +1s pad absorbs timer drift so the callback lands after the
-    // date change, not just before it.
+    // Pad past midnight so timer drift cannot retain yesterday’s date.
     const timer = setTimeout(
       () => setTodayMs(localTodayAsUtcMidnightMs()),
       nextLocalMidnight - now.getTime() + 1000
@@ -98,8 +95,6 @@ export default function ProjectRoadmap({
   const todayPx = roadmapOffsetPx(todayMs, ticks, tickWidth)
   const hasTimeline = source !== null && table.rows.length > 0
 
-  // Why: the interesting part of a roadmap is around now — open there instead
-  // of at the padded left edge, and re-centre when the zoom changes scale.
   const scrollToToday = useCallback(() => {
     const scroller = scrollRef.current
     if (!scroller) {
@@ -145,14 +140,7 @@ export default function ProjectRoadmap({
   }
 
   if (table.rows.length === 0) {
-    return (
-      <div className="flex min-h-[120px] items-center justify-center p-6 text-sm text-muted-foreground">
-        {translate(
-          'auto.components.github.project.ProjectViewList.4f57d2e0b1',
-          "No items match this view's filter."
-        )}
-      </div>
-    )
+    return <ProjectItemsEmptyState filter={view.filter} />
   }
 
   const undatedCount = table.rows.length - spans.size

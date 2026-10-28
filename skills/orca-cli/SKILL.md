@@ -1,14 +1,13 @@
 ---
 name: orca-cli
 description: >-
-  Operate Orca-managed worktrees, folder contexts, terminals, repos, automations, artifacts,
-  skill sharing, worktree comments, and Orca's embedded browser through the `orca` CLI. Use
-  when the user says "$orca-cli", "Orca worktree", "child worktree", "spawn codex/claude in a
-  worktree", "read/wait/send Orca terminal", "handoff" / "handover" / "give this to another
-  agent", "Orca browser", "orca artifacts", or "share skills". Prefer it over raw git
-  worktree, ad hoc PTYs, or Computer Use when Orca state is involved. Use Computer Use only
-  for external windows or desktop UI that needs OS-level control, and Playwright or CDP for
-  external pages.
+  Operate Orca-managed worktrees, folder contexts, terminals, repos, automations, worktree
+  comments, and Orca's embedded browser through the `orca` CLI. Use when the user says
+  "$orca-cli", "Orca worktree", "child worktree", "spawn codex/claude in a worktree",
+  "read/wait/send Orca terminal", "handoff" / "handover" / "give this to another agent", or
+  "Orca browser". Prefer it over raw git worktree, ad hoc PTYs, or Computer Use when Orca
+  state is involved. Use Computer Use only when a visible window needs GUI control that a
+  CLI, filesystem, or API cannot do.
 ---
 
 # Orca CLI
@@ -42,5 +41,7 @@ ORCA skills get orca-cli
 
 Prefer `--json`. Use the selected executable's `--help` for commands or flags the guide does
 not cover. If a command reports that Orca is not running, start it with `ORCA open --json`
-and retry. If `skills get` is unknown, explain that updating Orca restores the guide; use
-`--help` for read-only discovery and do not guess unsupported commands.
+and retry. If it fails with `runtime_access_denied`, your sandbox blocked the connection:
+re-run it with escalated permissions, and do not run `ORCA open` or restart Orca. If
+`skills get` is unknown, explain that updating Orca restores the guide; use `--help` for
+read-only discovery and do not guess unsupported commands.

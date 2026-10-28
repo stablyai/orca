@@ -1,5 +1,7 @@
-import { describe, expect, it, vi } from 'vitest'
+import { describe, expect, it, vi, beforeEach } from 'vitest'
+import { installFakeAppEnvironment } from '../../../config/scripts/vitest-host-ports-setup'
 import { existsSync } from 'node:fs'
+import type * as NodeFs from 'node:fs'
 import {
   createManagedHome,
   createRateLimits,
@@ -15,9 +17,10 @@ vi.mock('electron', () => ({
     getPath: () => testState.userDataDir
   }
 }))
+beforeEach(() => installFakeAppEnvironment({ getPath: () => testState.userDataDir }))
 
-vi.mock('node:os', async () => {
-  const actual = await vi.importActual<typeof import('node:os')>('node:os') // eslint-disable-line @typescript-eslint/consistent-type-imports -- vi.importActual requires inline import()
+vi.mock(import('node:os'), async (importOriginal) => {
+  const actual = await importOriginal()
   return {
     ...actual,
     homedir: () => testState.fakeHomeDir
@@ -29,13 +32,12 @@ describe('CodexAccountService config sync', () => {
 
   it('removes managed homes with bounded rm retries for transient Windows locks', async () => {
     vi.resetModules()
-    const actualFs = await vi.importActual<typeof import('node:fs')>('node:fs') // eslint-disable-line @typescript-eslint/consistent-type-imports -- vi.importActual requires inline import()
+    const actualFs = await vi.importActual<typeof NodeFs>('node:fs')
     const rmSyncSpy = vi.fn(actualFs.rmSync)
     vi.doMock('node:fs', () => ({ ...actualFs, rmSync: rmSyncSpy }))
 
     try {
-      // Why realpath: assertManagedHomePath canonicalizes before rmSync, so the
-      // spy sees /private/var-style paths on macOS.
+      // Match ownership canonicalization, including /private/var paths on macOS.
       const managedHomePath = actualFs.realpathSync(
         createManagedHome(testState.userDataDir, 'account-1')
       )
@@ -70,7 +72,7 @@ describe('CodexAccountService config sync', () => {
 
   it('does not throw when managed home removal keeps failing on a held handle', async () => {
     vi.resetModules()
-    const actualFs = await vi.importActual<typeof import('node:fs')>('node:fs') // eslint-disable-line @typescript-eslint/consistent-type-imports -- vi.importActual requires inline import()
+    const actualFs = await vi.importActual<typeof NodeFs>('node:fs')
     let managedHomePath = ''
     const lockedError = Object.assign(new Error('ENOTEMPTY: directory not empty'), {
       code: 'ENOTEMPTY'

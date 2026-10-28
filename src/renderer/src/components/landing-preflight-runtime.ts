@@ -2,6 +2,10 @@ import { useEffect, useMemo } from 'react'
 import { useAppStore } from '../store'
 import { installWindowVisibilityInterval } from '@/lib/window-visibility-interval'
 import {
+  isConnectedRuntimeHostState,
+  runtimeHostConnectionStateForEntry
+} from '@/runtime/runtime-host-connection-state'
+import {
   getLandingPreflightIssues,
   hasGitHubBackedProject,
   type PreflightIssue
@@ -18,10 +22,11 @@ export function useLandingPreflightRuntime(): { preflightIssues: PreflightIssue[
       return 'local'
     }
     const runtimeStatus = s.runtimeStatusByEnvironmentId.get(environmentId)
+    // Use transport reachability: an unverifiable probe nulls status without disconnecting the host.
     const reachability = runtimeStatus
-      ? runtimeStatus.status === null
-        ? 'unreachable'
-        : 'reachable'
+      ? isConnectedRuntimeHostState(runtimeHostConnectionStateForEntry(runtimeStatus))
+        ? 'reachable'
+        : 'unreachable'
       : 'unknown'
     return `${environmentId}:${runtimeStatus?.connectionGeneration ?? 0}:${reachability}`
   })
@@ -61,9 +66,7 @@ export function useLandingPreflightRuntime(): { preflightIssues: PreflightIssue[
     if (preflightIssues.length === 0) {
       return
     }
-    // Why gated: the effect above already force-refreshes on visibilitychange
-    // and focus, so a revealed window has fresh data without this poll firing
-    // while hidden — hence the no-op `runOnVisible`.
+    // Suspend hidden-window polling; visibility/focus handlers already force-refresh on reveal.
     return installWindowVisibilityInterval({
       run: () => {
         void refreshPreflightStatus({ force: true })

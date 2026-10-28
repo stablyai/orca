@@ -1,56 +1,77 @@
-import type { AgentSessionHandleProvider } from './agent-session-provider-handle'
+import type { StructuredAgentId } from './agent-session-provider-handle'
 import type { AgentSessionMutationEnvelope } from './agent-session-wire'
+import type { z } from 'zod'
+import type { SendBody } from './rpc-contract/structured-agent-session-message-params'
 import {
   createStructuredAgentSessionOperationId,
   structuredAgentSessionCreateFingerprint
 } from './structured-agent-session-mutation'
 
-/**
- * The conversation a create adopts instead of starting a fresh one.
- *
- * Deliberately carries an identity and nothing else. The transcript file and the account home it
- * lives under are derived by the executing host, never sent: `agentSession.create` is reachable by
- * paired mobile clients, and a client-supplied path would let one choose which file the host reads
- * into a journal and which credential directory the provider child launches against.
- */
+/** Send conversation identity only; the executing host derives transcript/account paths so paired clients cannot choose files or credentials. */
 export type StructuredAgentSessionResumeSource = {
   /** claude: the session id. codex: the thread id. */
   providerSessionId: string
+  /** Host-owned pane evidence; send only with the CLI-source create capability. */
+  cliSource?: { workspaceId: string; paneKey: string }
 }
 
 export type StructuredAgentSessionCreateParams = {
   envelope: AgentSessionMutationEnvelope
   worktree: string
-  agent: AgentSessionHandleProvider
+  agent: StructuredAgentId
   resumeFrom?: StructuredAgentSessionResumeSource
+  /** Sent only to a host advertising `AGENT_SESSION_CREATE_TAB_ID_RUNTIME_CAPABILITY`. */
+  tabId?: string
+  /** Sent only to a host advertising `AGENT_SESSION_CREATE_MESSAGE_RUNTIME_CAPABILITY`. */
+  firstMessage?: StructuredAgentSessionFirstMessage
+  optionsMode?: 'replace-model-selection'
+  options?: Readonly<Record<string, string>>
+  /** Sent only to a host advertising `AGENT_SESSION_CREATE_TAB_PLACEMENT_RUNTIME_CAPABILITY`. */
+  tabPlacement?: { groupId?: string; afterTabId?: string }
 }
 
-/** Provider-prefixed so a session id names its lane on sight, and underscore-only
- *  so the id stays a single token everywhere it is embedded (tab ids, log keys). */
+export type StructuredAgentSessionFirstMessage = {
+  clientMessageId: string
+  body: z.infer<typeof SendBody>
+}
+
+/** Provider-prefixed IDs use underscore-only suffix tokens for embedding in tab IDs/log keys. */
 export function createStructuredAgentSessionId(
-  agent: AgentSessionHandleProvider,
+  agent: StructuredAgentId,
   randomUuid: () => string
 ): string {
   return `${agent}_${randomUuid().replaceAll('-', '_')}`
 }
 
-/**
- * The durable `agentSession.create` envelope every client replays on an ambiguous
- * transport failure. The fingerprint must be computed over the same fields the host
- * recomputes, so both clients build it here rather than each assembling their own.
- */
+/** Validate only the generated suffix token so hyphenated agent names remain wire-compatible. */
+export function isStructuredAgentSessionIdFor(agent: string, sessionId: string): boolean {
+  const prefix = `${agent}_`
+  return sessionId.startsWith(prefix) && /^[A-Za-z0-9_]+$/.test(sessionId.slice(prefix.length))
+}
+
+/** Share create fingerprints across clients and host recomputation; ambiguous transport failures replay this durable envelope. */
 export function structuredAgentSessionCreateParams(args: {
   sessionId: string
   worktree: string
-  agent: AgentSessionHandleProvider
+  agent: StructuredAgentId
   resumeFrom?: StructuredAgentSessionResumeSource
+  tabId?: string
+  firstMessage?: StructuredAgentSessionFirstMessage
+  optionsMode?: 'replace-model-selection'
+  options?: Readonly<Record<string, string>>
+  /** A display hint, outside the fingerprint: a retry may name a place that moved. */
+  tabPlacement?: StructuredAgentSessionCreateParams['tabPlacement']
   randomUuid: () => string
   now?: number
 }): StructuredAgentSessionCreateParams {
   const fields = {
     worktree: args.worktree,
     agent: args.agent,
-    ...(args.resumeFrom ? { resumeFrom: args.resumeFrom } : {})
+    ...(args.resumeFrom ? { resumeFrom: args.resumeFrom } : {}),
+    ...(args.tabId ? { tabId: args.tabId } : {}),
+    ...(args.firstMessage ? { firstMessage: args.firstMessage } : {}),
+    ...(args.optionsMode ? { optionsMode: args.optionsMode } : {}),
+    ...(args.options ? { options: args.options } : {})
   }
   return {
     envelope: {
@@ -62,6 +83,7 @@ export function structuredAgentSessionCreateParams(args: {
         ...fields
       })
     },
-    ...fields
+    ...fields,
+    ...(args.tabPlacement ? { tabPlacement: args.tabPlacement } : {})
   }
 }

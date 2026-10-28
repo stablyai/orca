@@ -1,35 +1,126 @@
 import type { Session } from 'electron'
+import type { BrowserTabIdentity, UserAgentMetadata } from './browser-tab-identity'
+export { cleanElectronUserAgent } from './browser-process-user-agent'
+import { getBrowserProcessUserAgentIdentity } from './browser-process-user-agent'
+import { decideBrowserSessionRequestHeaders } from './browser-session-request-decisions'
+import { reportBrowserSessionWebRequest } from './browser-session-web-request-observer'
 
 import {
   currentUserAgent,
   googleAuthUserAgent,
-  isGoogleAuthUrl,
   setUserAgentHeader,
+  shouldUseGoogleAuthIdentity,
   stripClientHints
 } from './browser-google-auth-ua'
 
-// Why: the session keeps Electron's stock UA. Stripping the Electron/app tokens to look like
-// plain Chrome is what Cloudflare Turnstile rejects (error 600010): a Chrome UA that ships no
-// client hints reads as a spoof, while a declared Electron client clears the same challenge.
-// This handler only owns the Google auth-host Firefox switch, which is a proven, host-scoped
-// exception that must stay consistent across the header and every cross-host subresource.
-export function setupGoogleAuthUserAgentOverride(sess: Session): void {
-  const firefoxUa = googleAuthUserAgent()
+export type BrowserSessionRequestUserAgentResolver = (args: {
+  session: Session
+  url: string
+  referrer?: string
+  resourceType?: string
+  webContentsId?: number
+  currentUserAgent?: string
+  effectiveUserAgent?: string
+}) => BrowserTabIdentity | undefined
 
-  sess.webRequest.onBeforeSendHeaders({ urls: ['https://*/*'] }, (details, callback) => {
+function quoteClientHint(value: string): string {
+  return `"${value.replace(/["\\]/g, '\\$&')}"`
+}
+
+function formatClientHintBrands(brands: { brand: string; version: string }[]): string {
+  return brands
+    .map(({ brand, version }) => `${quoteClientHint(brand)};v=${quoteClientHint(version)}`)
+    .join(', ')
+}
+
+function applyUserAgentMetadataHeaders(
+  headers: Record<string, string>,
+  metadata: UserAgentMetadata
+): void {
+  const values: Record<string, string> = {
+    'sec-ch-ua': formatClientHintBrands(metadata.brands),
+    'sec-ch-ua-full-version-list': formatClientHintBrands(metadata.fullVersionList),
+    'sec-ch-ua-full-version': quoteClientHint(metadata.fullVersion),
+    'sec-ch-ua-platform': quoteClientHint(metadata.platform),
+    'sec-ch-ua-platform-version': quoteClientHint(metadata.platformVersion),
+    'sec-ch-ua-arch': quoteClientHint(metadata.architecture),
+    'sec-ch-ua-model': quoteClientHint(metadata.model),
+    'sec-ch-ua-mobile': metadata.mobile ? '?1' : '?0'
+  }
+  for (const key of Object.keys(headers)) {
+    const lowerKey = key.toLowerCase()
+    if (!lowerKey.startsWith('sec-ch-ua')) {
+      continue
+    }
+    const value = values[lowerKey]
+    if (value === undefined) {
+      delete headers[key]
+    } else {
+      headers[key] = value
+    }
+  }
+}
+
+// Rewrite only hints Chromium emitted; desktop hints remain browser-owned.
+export function installBrowserSessionUserAgentPolicy(
+  sess: Session,
+  resolveRequestUserAgent?: BrowserSessionRequestUserAgentResolver
+): () => void {
+  const firefoxUa = googleAuthUserAgent()
+  const applyUserAgentPolicy = (details: Electron.OnBeforeSendHeadersListenerDetails): void => {
     const headers = details.requestHeaders
-    if (isGoogleAuthUrl(details.url)) {
-      // Why: present a Firefox identity on Google's sign-in hosts so the user logs
-      // in inside the app and Google issues self-refreshing bound cookies. Strip
-      // sec-ch-ua* because real Firefox sends none.
+    const requestUserAgent = currentUserAgent(headers)
+    let effectiveUserAgent: string | undefined
+    try {
+      effectiveUserAgent = details.webContents?.getUserAgent()
+    } catch {
+      // The request can race guest teardown; the header and manager state still provide a fallback.
+    }
+    // Native mode must keep its process identity on auth requests.
+    if (
+      getBrowserProcessUserAgentIdentity().mode === 'clean' &&
+      shouldUseGoogleAuthIdentity(details.url, details.referrer ?? '', details.resourceType ?? '')
+    ) {
       setUserAgentHeader(headers, firefoxUa)
       stripClientHints(headers)
-    } else if (currentUserAgent(headers) === firefoxUa) {
-      // Why: while the auth document is on screen the WebContents UA is Firefox, so its
-      // cross-host subresource/XHR requests carry the Firefox UA yet still bear Chromium
-      // client hints — a sharper cross-host identity tell than either alone.
-      stripClientHints(headers)
+      return
     }
-    callback({ requestHeaders: headers })
-  })
+    const identity = resolveRequestUserAgent?.({
+      session: sess,
+      url: details.url,
+      referrer: details.referrer,
+      resourceType: details.resourceType,
+      webContentsId: details.webContentsId,
+      currentUserAgent: requestUserAgent,
+      effectiveUserAgent
+    })
+    if (!identity) {
+      return
+    }
+    setUserAgentHeader(headers, identity.userAgent)
+    if (identity.kind === 'google-auth') {
+      stripClientHints(headers)
+    } else if (identity.kind === 'mobile') {
+      applyUserAgentMetadataHeaders(headers, identity.userAgentMetadata)
+    }
+  }
+  sess.webRequest.onBeforeSendHeaders(
+    { urls: ['http://*/*', 'https://*/*', 'ws://*/*', 'wss://*/*'] },
+    (details, callback) => {
+      reportBrowserSessionWebRequest(sess, 'onBeforeSendHeaders', details)
+      applyUserAgentPolicy(details)
+      // Why after the policy: Chrome sets its own user agent before extensions modify headers.
+      callback({
+        requestHeaders: decideBrowserSessionRequestHeaders(sess, details, details.requestHeaders)
+      })
+    }
+  )
+  let disposed = false
+  return (): void => {
+    if (disposed) {
+      return
+    }
+    disposed = true
+    sess.webRequest.onBeforeSendHeaders(null)
+  }
 }

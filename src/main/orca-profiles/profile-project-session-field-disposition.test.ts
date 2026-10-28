@@ -50,7 +50,6 @@ describe('client-hosted rows in the repo-removal and transfer paths', () => {
     expect(result.clientHostedBrowserPagesByWorktree).toEqual({
       [RETAINED_WORKTREE_ID]: [clientHostedRow(RETAINED_WORKTREE_ID)]
     })
-    // The sibling map is the control: whatever removal does to it, it must do here too.
     expect(result.activeTabTypeByWorktree).toEqual({ [RETAINED_WORKTREE_ID]: 'browser' })
   })
 
@@ -62,8 +61,121 @@ describe('client-hosted rows in the repo-removal and transfer paths', () => {
     )
 
     expect(result.activeTabTypeByWorktree).toEqual({ 'repo-3::/tmp/worktree-a': 'browser' })
-    // Not an omission: the rows name a paired device and browser profile the payload cannot carry.
     expect(result.clientHostedBrowserPagesByWorktree).toBeUndefined()
+  })
+
+  it('rekeys markdown frontmatter visibility with the open file identity', () => {
+    const session: WorkspaceSessionState = {
+      ...getDefaultWorkspaceSession(),
+      openFilesByWorktree: {
+        [REMOVED_WORKTREE_ID]: [
+          {
+            filePath: '/tmp/worktree-a/README.md',
+            relativePath: 'README.md',
+            worktreeId: REMOVED_WORKTREE_ID,
+            language: 'markdown'
+          }
+        ]
+      },
+      markdownFrontmatterVisible: {
+        '/tmp/worktree-a/README.md': false
+      }
+    }
+
+    const result = extractSessionForTransfer(session, REMOVED_REPO_ID, TRANSFER_TARGET_REPO_ID)
+
+    expect(result.markdownFrontmatterVisible).toEqual({ '/tmp/worktree-a/README.md': false })
+  })
+
+  it('omits stale markdown visibility entries that no longer name an open file', () => {
+    const session: WorkspaceSessionState = {
+      ...getDefaultWorkspaceSession(),
+      openFilesByWorktree: {
+        [REMOVED_WORKTREE_ID]: [
+          {
+            filePath: '/tmp/worktree-a/README.md',
+            relativePath: 'README.md',
+            worktreeId: REMOVED_WORKTREE_ID,
+            language: 'markdown'
+          }
+        ]
+      },
+      markdownFrontmatterVisible: {
+        '/tmp/worktree-a/README.md': false,
+        '/tmp/worktree-a/closed.md': false
+      }
+    }
+
+    const result = extractSessionForTransfer(session, REMOVED_REPO_ID, TRANSFER_TARGET_REPO_ID)
+
+    expect(result.markdownFrontmatterVisible).toEqual({ '/tmp/worktree-a/README.md': false })
+  })
+
+  it('prunes markdown visibility for files in a removed repo', () => {
+    const session = {
+      ...getDefaultWorkspaceSession(),
+      openFilesByWorktree: {
+        [REMOVED_WORKTREE_ID]: [
+          {
+            filePath: '/tmp/worktree-a/README.md',
+            relativePath: 'README.md',
+            worktreeId: REMOVED_WORKTREE_ID,
+            language: 'markdown'
+          }
+        ],
+        [RETAINED_WORKTREE_ID]: [
+          {
+            filePath: '/tmp/worktree-b/README.md',
+            relativePath: 'README.md',
+            worktreeId: RETAINED_WORKTREE_ID,
+            language: 'markdown'
+          }
+        ]
+      },
+      markdownFrontmatterVisible: {
+        '/tmp/worktree-a/README.md': false,
+        '/tmp/worktree-b/README.md': false
+      }
+    }
+
+    const result = removeRepoFromWorkspaceSession(session, REMOVED_REPO_ID)
+
+    expect(result.markdownFrontmatterVisible).toEqual({ '/tmp/worktree-b/README.md': false })
+  })
+
+  it('keeps a unified-only terminal layout attached during transfer', () => {
+    const session = {
+      ...getDefaultWorkspaceSession(),
+      tabsByWorktree: {},
+      unifiedTabs: {
+        [REMOVED_WORKTREE_ID]: [
+          {
+            id: 'terminal-tab-1',
+            entityId: 'terminal-tab-1',
+            groupId: 'group-1',
+            worktreeId: REMOVED_WORKTREE_ID,
+            contentType: 'terminal' as const,
+            label: 'Terminal',
+            customLabel: null,
+            color: null,
+            sortOrder: 0,
+            createdAt: 1
+          }
+        ]
+      },
+      terminalLayoutsByTabId: {
+        'terminal-tab-1': {
+          root: { type: 'leaf' as const, leafId: 'leaf-1' },
+          activeLeafId: 'leaf-1',
+          expandedLeafId: null,
+          titlesByLeafId: { 'leaf-1': 'shell' }
+        }
+      }
+    }
+
+    const result = extractSessionForTransfer(session, REMOVED_REPO_ID, TRANSFER_TARGET_REPO_ID)
+
+    expect(result.terminalLayoutsByTabId).toEqual(session.terminalLayoutsByTabId)
   })
 
   it('removes the transferred repo rows from the source it left', () => {
@@ -77,8 +189,7 @@ describe('client-hosted rows in the repo-removal and transfer paths', () => {
 })
 
 describe('workspace session field disposition census', () => {
-  // Only the field under test is seeded: the owner-keyed paths care about keys, and a shared seed
-  // would hand a bespoke field a value of the wrong shape.
+  // Seed fields separately: bespoke fields may not accept the owner-keyed test shape.
   const ownerKeyedSeed = (field: keyof WorkspaceSessionState): WorkspaceSessionState => {
     const session = { ...getDefaultWorkspaceSession() } as Record<string, unknown>
     session[field] = {
@@ -130,9 +241,7 @@ describe('workspace session field disposition census', () => {
     expect(result[field]).toEqual((getDefaultWorkspaceSession() as Record<string, unknown>)[field])
   })
 
-  // Why spelled out rather than derived: every other test here iterates these lists, so a field
-  // quietly reclassified loses its pruning and its test case together and the suite stays green.
-  // Reclassifying now means editing this array, which is a reviewed change.
+  // Explicit expectations prevent a reclassified field from losing both pruning and its test.
   it('prunes exactly these fields by owner key on repo removal', () => {
     expect(SESSION_FIELDS_PRUNED_BY_OWNER_KEY).toEqual([
       'openFilesByWorktree',

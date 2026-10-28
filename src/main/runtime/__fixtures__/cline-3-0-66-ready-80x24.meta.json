@@ -1,0 +1,9 @@
+{
+  "capturedAt": "2026-09-30T19:27:58.447Z",
+  "platform": "darwin",
+  "command": ["cline", "--config", "<scratch>/cline-or", "--data-dir", "<scratch>/cline-or/data"],
+  "cols": 80,
+  "rows": 24,
+  "note": "cline 3.0.66, macOS, OpenRouter free router, isolated --config/--data-dir, 80x24, settled empty composer",
+  "exitCode": 0
+}

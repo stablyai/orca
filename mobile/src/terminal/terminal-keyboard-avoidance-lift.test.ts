@@ -103,9 +103,15 @@ describe('computeActiveTerminalKeyboardLift', () => {
       terminalFrameHeight: FRAME_HEIGHT
     })
     expect(lift).toBeLessThanOrEqual(KEYBOARD_LIFT)
+    const taller = computeActiveTerminalKeyboardLift({
+      keyboardLift: KEYBOARD_LIFT,
+      metrics: metrics({ rows: 60, rowPitch: 18, cursorY: 59, contentBottomRow: 59 }),
+      terminalFrameHeight: FRAME_HEIGHT
+    })
+    expect(taller).toBe(KEYBOARD_LIFT)
   })
 
-  it('uses the platform-adjusted lift proportionally on iOS and Android', () => {
+  it('applies the supplied keyboard coverage to the lift', () => {
     const tuiMetrics = metrics({ cursorY: 30, contentBottomRow: 34 })
     const android = computeActiveTerminalKeyboardLift({
       keyboardLift: 300,
@@ -118,5 +124,43 @@ describe('computeActiveTerminalKeyboardLift', () => {
       terminalFrameHeight: FRAME_HEIGHT
     })
     expect({ android, ios }).toEqual({ android: 220, ios: 186 })
+  })
+
+  describe('a keyboard that covers the frame', () => {
+    const lift = (keyboardLift: number, m: TerminalKeyboardAvoidanceMetrics, frame = 713.7) =>
+      computeActiveTerminalKeyboardLift({
+        keyboardLift,
+        metrics: m,
+        terminalFrameHeight: frame
+      })
+
+    it('keeps base in phone mode, where the fit fills the frame to within a row', () => {
+      const phone = metrics({ rows: 47, rowPitch: 15, cursorY: 46, contentBottomRow: 46 })
+      expect(lift(312, phone)).toBe(312)
+    })
+
+    it('lifts a desktop-mode grid only by what the keyboard hides of it', () => {
+      const drawn270 = metrics({ rows: 40, rowPitch: 6.75, cursorY: 39, contentBottomRow: 39 })
+      expect(lift(312, drawn270)).toBe(0)
+      expect(lift(312, { ...drawn270, altScreen: true })).toBe(0)
+      const drawn425 = metrics({ rows: 50, rowPitch: 8.5, cursorY: 49, contentBottomRow: 49 })
+      expect(lift(312, drawn425)).toBeCloseTo(23.3, 5)
+      expect(lift(312, { ...drawn425, altScreen: true })).toBeCloseTo(23.3, 5)
+      expect(lift(312, { ...drawn425, cursorY: 46, contentBottomRow: 46 })).toBeCloseTo(6.3, 5)
+      expect(lift(312, { ...drawn425, cursorY: 45, contentBottomRow: 45 })).toBe(0)
+    })
+
+    it('lifts nothing for a keyboard that is open and covers nothing', () => {
+      expect(lift(0, metrics({ rows: 50, rowPitch: 17, cursorY: 49, contentBottomRow: 49 }))).toBe(
+        0
+      )
+    })
+
+    it('stays under the strip while stale rows outlast a rotation or a text-size change', () => {
+      const rotated = metrics({ rows: 47, rowPitch: 15, cursorY: 46, contentBottomRow: 46 })
+      expect(lift(150, rotated, 300)).toBe(150)
+      const resized = metrics({ rows: 47, rowPitch: 18, cursorY: 46, contentBottomRow: 46 })
+      expect(lift(312, resized)).toBe(312)
+    })
   })
 })

@@ -13,6 +13,7 @@ type AddRepoServerPathStartStepProps = {
   isAddingServerPath: boolean
   addProjectBusyLabel: string | null
   hostSelector?: ReactNode
+  notice?: ReactNode
   initialBrowsing?: boolean
   onServerPathChange: (path: string) => void
   onAddServerPath: (kind: 'git' | 'folder') => void
@@ -26,6 +27,7 @@ export function AddRepoServerPathStartStep({
   isAddingServerPath,
   addProjectBusyLabel,
   hostSelector,
+  notice,
   initialBrowsing = false,
   onServerPathChange,
   onAddServerPath,
@@ -33,7 +35,8 @@ export function AddRepoServerPathStartStep({
   onOpenCreateStep
 }: AddRepoServerPathStartStepProps): React.JSX.Element {
   const [browsing, setBrowsing] = useState(initialBrowsing)
-  const [pathEntryOpen, setPathEntryOpen] = useState(initialBrowsing)
+  // Windows picks/Explorer drops arrive prefilled; expose their path immediately.
+  const [pathEntryOpen, setPathEntryOpen] = useState(initialBrowsing || serverPath.trim() !== '')
 
   if (browsing && runtimeEnvironmentId) {
     return (
@@ -88,6 +91,7 @@ export function AddRepoServerPathStartStep({
 
         <div className="space-y-3 pt-2">
           {hostSelector}
+          {notice}
           <div className="grid grid-cols-3 gap-2">
             <AddRepoServerStartAction
               icon={FolderOpen}
@@ -177,6 +181,7 @@ export function AddRepoServerPathStartStep({
 
       <div className="space-y-3 pt-2">
         {hostSelector}
+        {notice}
         <div className="space-y-1">
           <label
             htmlFor="server-project-path"

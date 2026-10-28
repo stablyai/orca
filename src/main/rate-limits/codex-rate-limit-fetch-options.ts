@@ -1,5 +1,7 @@
+import type { NetworkProxySettings } from '../../shared/network-proxy'
+
 export type CodexRateLimitFetchOptions = {
   codexHomePath?: string | null
-  allowPtyFallback?: boolean
+  networkProxySettings?: NetworkProxySettings
   signal?: AbortSignal
 }

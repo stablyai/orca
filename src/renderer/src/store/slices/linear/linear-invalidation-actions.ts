@@ -30,9 +30,7 @@ export function createLinearInvalidationActions(
       const nextToken = { scope: tokenScope, version: nextVersion }
       setLinearListInvalidationToken(nextToken)
 
-      // Why: drop only attribute-filtered plain list entries in this source scope
-      // so the next TaskPage read is forced current without wiping search/unrelated
-      // collections.
+      // Invalidate only scoped attribute-filtered lists so TaskPage refetches without wiping searches/unrelated collections.
       set((s) => {
         const nextListCache = { ...s.linearListCache }
         let changed = false
@@ -80,8 +78,7 @@ export function createLinearInvalidationActions(
           if (!canPatchCacheKey(key) || issueEntry?.data?.id !== issueId) {
             continue
           }
-          // Why: set fetchedAt to 0 so the next fetchLinearIssue call
-          // actually hits IPC instead of returning the stale optimistic data.
+          // Zero fetchedAt forces next issue read through IPC instead of stale optimistic cache.
           nextIssueCache[key] = {
             ...issueEntry,
             data: { ...issueEntry.data, ...patch },
@@ -148,7 +145,7 @@ export function createLinearInvalidationActions(
                 ? nextCustomViewIssueCache.cache
                 : s.linearCustomViewIssueCache
             }
-          : {}
+          : s
       })
     }
   }

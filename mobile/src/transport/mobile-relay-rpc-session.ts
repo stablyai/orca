@@ -7,6 +7,11 @@ import { MobileRelayE2eeLink } from './mobile-relay-e2ee-link'
 import { MobileRelayRpcStreams } from './mobile-relay-rpc-streams'
 import { MobileE2EEAuthenticationError } from './mobile-e2ee-v2-physical-channel'
 import { markRpcDeliveryUnknown } from './rpc-delivery-ambiguity'
+import {
+  withRpcEnvelopeFields,
+  type RpcEnvelopeFields,
+  type RpcRequestFrame
+} from './rpc-envelope-fields'
 import { openRpcRequestBudget, resolvePostConnectRequestTimeout } from './rpc-request-budget'
 import { isRpcResponse } from './rpc-response-shape'
 import { RelayDialStageTracker, type RelayDialStageSource } from './relay-dial-stage'
@@ -20,16 +25,19 @@ import type { ConnectionLogSink, ConnectionState, RpcResponse } from './types'
 const RELAY_PROBE_TIMEOUT_MS = 4_000
 const RELAY_MISSED_PROBE_LIMIT = 2
 const RELAY_FOREGROUND_PROBE_MIN_INTERVAL_MS = 10_000
+// Use one decisive post-background probe, allowing radio wake/TCP retransmit latency before redial.
+const RELAY_RESUME_PROBE_MS = 4_000
 let relayRpcSessionSequence = 0
 
 export type MobileRelayRpcSession = RpcClient &
   RelayDialStageSource & {
-    // The cell's attach-reservation deadline (~10s). Diagnostics only — never
-    // schedule anything from it; rotation keys off getResumeExpiresAt().
+    // Attach reservation is diagnostics only; rotate against getResumeExpiresAt instead.
     getAttachDeadlineAt(): number | null
     getResumeExpiresAt(): number | null
     getResumeConfirmation(): DeviceResumeConfirmed | null
     getFailure(): Error | null
+    // One decisive probe for a relay retained through a real background stay.
+    probeAfterBackground(): void
   }
 
 export function connectMobileRelayRpcSession(args: {
@@ -102,7 +110,8 @@ export function connectMobileRelayRpcSession(args: {
     async sendRequest(method, params, options) {
       const budget = openRpcRequestBudget(options)
       await waitForConnected(budget.timeoutMs)
-      return sendRpc(method, params, resolvePostConnectRequestTimeout(budget, requestTimeoutMs))
+      const timeoutMs = resolvePostConnectRequestTimeout(budget, requestTimeoutMs)
+      return sendRpc(method, params, timeoutMs, false, options?.envelope)
     },
 
     subscribe(method, params, listener, options) {
@@ -144,7 +153,9 @@ export function connectMobileRelayRpcSession(args: {
     getAttachDeadlineAt: () => attachDeadlineAt,
     getResumeExpiresAt: () => resumeExpiresAt,
     getResumeConfirmation: () => resumeConfirmation,
-    getFailure: () => failure
+    getFailure: () => failure,
+    probeAfterBackground: () =>
+      state === 'connected' && livenessWatchdog.probeNow(livenessIdentity, RELAY_RESUME_PROBE_MS)
   }
   const livenessWatchdog = new RpcSessionLivenessWatchdog({
     transport: 'relay',
@@ -204,7 +215,8 @@ export function connectMobileRelayRpcSession(args: {
     method: string,
     params: unknown,
     timeoutMs = requestTimeoutMs,
-    beforeConnected = false
+    beforeConnected = false,
+    envelope?: RpcEnvelopeFields
   ): Promise<RpcResponse> {
     if (closed || (!beforeConnected && state !== 'connected')) {
       return Promise.reject(new Error('relay session not connected'))
@@ -213,20 +225,23 @@ export function connectMobileRelayRpcSession(args: {
     return new Promise((resolve, reject) => {
       const timer = setTimeout(() => {
         pending.drop(id)
-        // Why: the frame was written long ago — the desktop may have processed it.
+        // Written requests may already have committed; timeout remains delivery-unknown.
         reject(markRpcDeliveryUnknown(new Error(`relay RPC timed out: ${method}`)))
       }, timeoutMs)
-      pending.track(id, { resolve, reject, timer })
-      if (!sendFrame({ id, method, params })) {
+      pending.track(id, { resolve, reject, timer, written: false })
+      if (!sendFrame({ id, method, params, envelope })) {
         clearTimeout(timer)
         pending.drop(id)
         reject(new Error('relay E2EE channel not ready'))
+        return
       }
+      pending.markWritten(id)
     })
   }
 
-  function sendFrame(request: { id: string; method: string; params?: unknown }): boolean {
-    return link.sendText(JSON.stringify({ ...request, deviceToken: args.deviceToken }))
+  function sendFrame({ envelope, ...request }: RpcRequestFrame): boolean {
+    const wire = withRpcEnvelopeFields({ ...request, deviceToken: args.deviceToken }, envelope)
+    return link.sendText(JSON.stringify(wire))
   }
 
   function handleText(plaintext: string): void {

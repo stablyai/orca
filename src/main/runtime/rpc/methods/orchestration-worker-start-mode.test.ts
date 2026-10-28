@@ -1,10 +1,4 @@
-/**
- * The worker mode is the user's own setting, not a flag, and the fallback is never silent.
- *
- * Every case here is one a coordinator can hit on a routine `worker-start`. Before this became
- * settings-driven each of them was a REFUSAL, which was right for an explicit `--structured` and
- * wrong for a preference: a dispatch that cannot be a structured session must still start.
- */
+/** Launch mode follows settings, with explicit fallback reasons; unsupported preference must not refuse ordinary worker-start. */
 
 import { describe, expect, it } from 'vitest'
 import {
@@ -14,9 +8,7 @@ import {
 } from './orchestration-worker-start-mode'
 
 const STRUCTURED_DEFAULT = {
-  experimentalNativeChat: true,
-  openAgentTabsInChatByDefault: true,
-  experimentalStructuredNativeChat: true
+  experimentalNativeChat: true
 }
 
 function decide(
@@ -42,8 +34,8 @@ describe('worker start mode from the user default', () => {
 
   it.each([
     ['native chat off', { ...STRUCTURED_DEFAULT, experimentalNativeChat: false }],
-    ['chat-by-default off', { ...STRUCTURED_DEFAULT, openAgentTabsInChatByDefault: false }],
-    ['structured off', { ...STRUCTURED_DEFAULT, experimentalStructuredNativeChat: false }],
+    ['chat-by-default off', { ...STRUCTURED_DEFAULT, experimentalNativeChat: false }],
+    ['structured off', { ...STRUCTURED_DEFAULT, experimentalNativeChat: false }],
     ['no settings at all', null]
   ])('starts a terminal worker when %s', (_name, settings) => {
     expect(decide({ settings })).toMatchObject({
@@ -52,21 +44,12 @@ describe('worker start mode from the user default', () => {
       reason: 'user_default'
     })
   })
-
-  it('says which mode ran even when the default was honoured', () => {
-    expect(decide().detail).toContain('structured chat session')
-    expect(decide({ settings: null }).detail).toContain('terminal agent')
-  })
 })
 
 describe('a structured default this dispatch cannot honour', () => {
   it.each([
     ['a remote --on', { on: 'server-1' }, 'remote_execution_host'],
     ['an existing --terminal', { terminal: 'term_1' }, 'reused_terminal'],
-    ['a new-child worktree', { worktree: 'new-child' }, 'worktree_creation'],
-    ['a new-top-level worktree', { worktree: 'new-top-level' }, 'worktree_creation'],
-    ['--model', { model: 'opus' }, 'launch_preferences'],
-    ['--effort', { effort: 'high' }, 'launch_preferences'],
     ['a non-structured agent', { agent: 'cursor' }, 'agent_without_structured_session'],
     ['no agent at all', { agent: undefined }, 'agent_without_structured_session']
   ])('falls back to a terminal worker for %s', (_name, params, reason) => {
@@ -76,22 +59,36 @@ describe('a structured default this dispatch cannot honour', () => {
     expect(receipt.detail).toContain('Your default is a structured chat session')
   })
 
+  it.each([
+    ['a new-child worktree', { worktree: 'new-child' }],
+    ['a new-top-level worktree', { worktree: 'new-top-level' }],
+    ['--model', { model: 'opus' }],
+    ['--effort with its model', { model: 'opus', effort: 'high' }],
+    ['both at once', { worktree: 'new-child', model: 'opus', effort: 'high' }]
+  ])('no longer downgrades for %s, which is what made structured unreachable', (_name, params) => {
+    // Both routine dispatch flags previously forced PTY mode.
+    expect(decide({ params: { agent: 'claude', ...params } })).toMatchObject({
+      mode: 'structured',
+      preferred: 'structured',
+      reason: 'user_default'
+    })
+  })
+
   it('keeps the current worktree structured, which is the ordinary dispatch', () => {
     expect(decide({ params: { agent: 'codex', worktree: 'current' } }).mode).toBe('structured')
   })
 
-  it('falls back rather than dropping a custom TUI launch the session cannot apply', () => {
-    expect(
-      decide({
-        settings: { ...STRUCTURED_DEFAULT, agentCmdOverrides: { claude: 'claude-wrapper' } }
-      })
-    ).toMatchObject({ mode: 'terminal', reason: 'tui_launch_customization' })
-  })
-
-  // Neither provider is refused here on the client's platform: only the executing host knows
-  // whether it can read a provider child's start time, and it answers at create time.
-  it.each(['claude', 'codex'] as const)('leaves a Windows %s worker to the host', (agent) => {
-    expect(decide({ params: { agent } }).mode).toBe('structured')
+  // A custom launch command never decides the surface; native chat runs it as the program.
+  it.each([
+    ['claude', 'claude-wrapper'],
+    ['codex', 'codex-nightly']
+  ] as const)('keeps a %s worker structured with launch command %s', (agent, command) => {
+    const settings = { ...STRUCTURED_DEFAULT, agentCmdOverrides: { [agent]: command } }
+    expect(decide({ params: { agent }, settings })).toMatchObject({
+      mode: 'structured',
+      preferred: 'structured',
+      reason: 'user_default'
+    })
   })
 })
 

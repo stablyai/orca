@@ -15,7 +15,7 @@ import { handleTerminalHttpLink } from './terminal-url-link-hit-testing'
 const openUrl = vi.fn()
 const createBrowserTab = vi.fn()
 const setActiveWorktree = vi.fn()
-const openRuntimeBrowserTab = vi.fn(() => Promise.resolve())
+const openRuntimeBrowserTab = vi.fn((): Promise<string | null> => Promise.resolve(null))
 
 function plainEvent(): MouseEvent {
   return {
@@ -28,6 +28,12 @@ function plainEvent(): MouseEvent {
     clientY: 60,
     preventDefault: vi.fn()
   } as unknown as MouseEvent
+}
+
+function middleEvent(): MouseEvent {
+  const event = plainEvent()
+  Object.defineProperty(event, 'button', { value: 1 })
+  return event
 }
 
 function actionContext(request = vi.fn()): TerminalLinkActionContext {
@@ -44,6 +50,9 @@ beforeEach(() => {
   vi.stubGlobal('navigator', { userAgent: 'Macintosh' })
   vi.stubGlobal('window', { api: { shell: { openUrl } } })
   registerHttpLinkStoreAccessor(() => ({
+    repos: [],
+    endpointProjects: [],
+    endpointProjectHostSetups: [],
     settings: { openLinksInApp: false },
     setActiveWorktree,
     createBrowserTab
@@ -83,6 +92,72 @@ describe('terminal link action routing', () => {
     expect(claimPtyMouse.mock.invocationCallOrder[0]).toBeLessThan(
       request.mock.invocationCallOrder[0]
     )
+  })
+
+  it('opens the primary destination directly when plain-click mode is enabled', () => {
+    const request = vi.fn()
+    const run = vi.fn()
+    const context = actionContext(request)
+    context.plainClickBehavior = 'open'
+
+    expect(
+      requestTerminalLinkAction(plainEvent(), context, {
+        destination: 'https://example.com',
+        kind: 'url',
+        primary: { label: 'Open', run }
+      })
+    ).toBe(true)
+    expect(run).toHaveBeenCalledOnce()
+    expect(request).not.toHaveBeenCalled()
+  })
+
+  it('opens a URL on middle click when configured', () => {
+    const run = vi.fn()
+    const context = actionContext()
+    context.middleClickBehavior = 'open'
+    expect(
+      requestTerminalLinkAction(middleEvent(), context, {
+        destination: 'https://example.com',
+        kind: 'url',
+        primary: { label: 'Open', run }
+      })
+    ).toBe(true)
+    expect(run).toHaveBeenCalledOnce()
+  })
+
+  it('leaves disabled plain clicks with the terminal while middle click remains enabled', () => {
+    const context = actionContext()
+    context.plainClickBehavior = 'none'
+    context.middleClickBehavior = 'open'
+    const event = plainEvent()
+    const run = vi.fn()
+
+    expect(
+      requestTerminalLinkAction(event, context, {
+        destination: 'https://example.com',
+        kind: 'url',
+        primary: { label: 'Open', run }
+      })
+    ).toBe(false)
+    expect(context.claimPtyMouse).not.toHaveBeenCalled()
+    expect(event.preventDefault).not.toHaveBeenCalled()
+    expect(context.request).not.toHaveBeenCalled()
+    expect(run).not.toHaveBeenCalled()
+  })
+
+  it('keeps middle click available when plain clicks stay with the terminal', () => {
+    const run = vi.fn()
+    const context = actionContext()
+    context.plainClickBehavior = 'none'
+    context.middleClickBehavior = 'open'
+    expect(
+      requestTerminalLinkAction(middleEvent(), context, {
+        destination: 'https://example.com',
+        kind: 'url',
+        primary: { label: 'Open', run }
+      })
+    ).toBe(true)
+    expect(run).toHaveBeenCalledOnce()
   })
 
   it('leaves PTY mouse ownership with an ineligible pointer gesture', () => {
@@ -144,8 +219,11 @@ describe('terminal link action routing', () => {
     expect(openUrl).toHaveBeenCalledWith('https://example.com/path')
 
     request.mock.calls[0][0].alternate.run()
-    expect(createBrowserTab).toHaveBeenCalledWith('wt-1', 'https://example.com/path', {
-      activate: true
+    expect(openRuntimeBrowserTab).toHaveBeenCalledWith({
+      workspaceId: 'wt-1',
+      url: 'https://example.com/path',
+      intent: { kind: 'url' },
+      linkContext: { linkIntent: null, canReveal: expect.any(Function) }
     })
   })
 
@@ -164,8 +242,11 @@ describe('terminal link action routing', () => {
     expect(request.mock.calls[0][0].alternate.external).toBe(true)
 
     request.mock.calls[0][0].primary.run()
-    expect(createBrowserTab).toHaveBeenCalledWith('wt-1', 'https://example.com/path', {
-      activate: true
+    expect(openRuntimeBrowserTab).toHaveBeenCalledWith({
+      workspaceId: 'wt-1',
+      url: 'https://example.com/path',
+      intent: { kind: 'url' },
+      linkContext: { linkIntent: null, canReveal: expect.any(Function) }
     })
 
     request.mock.calls[0][0].alternate.run()
@@ -204,6 +285,7 @@ describe('terminal link action routing', () => {
       workspaceId: 'wt-1',
       url: 'https://example.com/path',
       intent: { kind: 'url' },
+      linkContext: { linkIntent: null, canReveal: expect.any(Function) },
       expectedRuntimeEnvironmentId: 'env-1'
     })
     expect(createBrowserTab).not.toHaveBeenCalled()
@@ -225,6 +307,7 @@ describe('terminal link action routing', () => {
       workspaceId: 'wt-1',
       url,
       intent: { kind: 'url' },
+      linkContext: { linkIntent: null, canReveal: expect.any(Function) },
       expectedSshConnectionId: 'ssh-1'
     })
     expect(createBrowserTab).not.toHaveBeenCalled()
@@ -239,8 +322,11 @@ describe('terminal link action routing', () => {
       actionDestinations: { primary: 'system', alternate: 'orca' }
     })
 
-    expect(createBrowserTab).toHaveBeenCalledWith('wt-1', 'https://example.com/path', {
-      activate: true
+    expect(openRuntimeBrowserTab).toHaveBeenCalledWith({
+      workspaceId: 'wt-1',
+      url: 'https://example.com/path',
+      intent: { kind: 'url' },
+      linkContext: { linkIntent: null, canReveal: expect.any(Function) }
     })
     expect(openUrl).not.toHaveBeenCalled()
   })

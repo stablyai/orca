@@ -11,17 +11,14 @@ import {
 } from './session-scanner-parse-cache'
 import type { FileWithMtime, SessionFileCandidate } from './session-scanner-types'
 
-// Codex serializes `RolloutLine` as `timestamp` + the adjacently tagged
-// `RolloutItem`; payload enums (`ResponseItem`, `EventMsg`) are internally
-// tagged, so their own `type` leads. Every fixture below matches that spelling.
+// Match serde field ordering: timestamp/type/payload, with payload type first.
 const PAD = 'x'.repeat(2048)
 
 function record(type: string, payload: Record<string, unknown>, timestamp: string): string {
   return JSON.stringify({ timestamp, type, payload })
 }
 
-// Padded past the fast path's prefix limit: an undersized record is parsed
-// exactly either way, so only oversized fixtures exercise the prefix match.
+// Only oversized records exercise prefix matching; small records always use the full parser.
 function paddedPayload(payloadType: string, extra: Record<string, unknown> = {}) {
   return { type: payloadType, ...extra, pad: PAD }
 }
@@ -54,9 +51,7 @@ afterEach(async () => {
 })
 
 describe('readCodexTimelineOnlyRecord', () => {
-  // The fast path is the complement of what `consumeCodexRecordLine` reads, so
-  // every record that feeds a visible field must fail the prefix match even
-  // when it is large — a >1KiB opening prompt is ordinary, and it is the title.
+  // Every record that affects visible fields must bypass the timeline-only fast path.
   it.each([
     ['session_meta', record('session_meta', { id: 'a', pad: PAD }, '2026-08-20T10:00:00.000Z')],
     [
@@ -124,7 +119,6 @@ describe('readCodexTimelineOnlyRecord', () => {
     expect(readCodexTimelineOnlyRecord(Buffer.from(small))).toBeNull()
     const reordered = `${JSON.stringify({ type: 'compacted', timestamp: '2026-08-20T10:00:00.000Z', payload: { message: PAD } })}`
     expect(readCodexTimelineOnlyRecord(Buffer.from(reordered))).toBeNull()
-    // `type` pushed past the bounded prefix leaves the payload unidentified.
     const lateType = `{"timestamp":"2026-08-20T10:00:00.000Z","type":"response_item","payload":{"pad":"${PAD}","type":"reasoning"}}`
     expect(readCodexTimelineOnlyRecord(Buffer.from(lateType))).toBeNull()
   })
@@ -132,8 +126,6 @@ describe('readCodexTimelineOnlyRecord', () => {
 
 describe('Codex resumable parser fast path', () => {
   it('matches the one-shot parser without JSON-parsing proven irrelevant large records', async () => {
-    // Distinct fillers so the assertion can name which large records the fast
-    // path skipped and which correctly fell back to the full parser.
     const skippedFiller = `skipped-${'x'.repeat(2 * 1024 * 1024)}`
     const fallbackFiller = `fallback-${'x'.repeat(2 * 1024 * 1024)}`
     const file = await writeTranscript(
@@ -143,7 +135,6 @@ describe('Codex resumable parser fast path', () => {
           { id: 'fast-path-session', cwd: '/repo/app' },
           '2026-08-20T10:00:00.000Z'
         ),
-        // A long opening prompt is the session title; it must survive the size gate.
         record(
           'response_item',
           {
@@ -173,7 +164,6 @@ describe('Codex resumable parser fast path', () => {
           },
           '2026-08-20T10:00:05.000Z'
         ),
-        // A nested `payload.type` must not be mistaken for the record's own.
         record(
           'event_msg',
           {
@@ -184,7 +174,6 @@ describe('Codex resumable parser fast path', () => {
           '2026-08-20T10:00:06.000Z'
         ),
         record('event_msg', { type: 'future_event', value: 1 }, '2026-08-20T10:00:07.000Z'),
-        // Reordered envelopes take the compatibility fallback.
         JSON.stringify({
           type: 'future_record',
           timestamp: '2026-08-20T10:00:08.000Z',
@@ -210,7 +199,6 @@ describe('Codex resumable parser fast path', () => {
       .map(([input]) => input)
       .filter((input): input is string => typeof input === 'string')
     expect(parsedInputs.some((input) => input.includes('skipped-xxx'))).toBe(false)
-    // A reordered envelope is not proven irrelevant, so it still parses whole.
     expect(parsedInputs.some((input) => input.includes('fallback-xxx'))).toBe(true)
   })
 
@@ -262,8 +250,7 @@ describe('Codex resumable parser fast path', () => {
 
     expect(session).toBeNull()
     expect(grown.bytesRead).toBe(0)
-    // Reported apart from `incremental` so the scan span shows a dismissal, not
-    // an incremental parse that happened to read nothing.
+    // Early dismissal has its own counter so scan spans do not report a zero-byte incremental parse.
     expect(grown).toMatchObject({ earlyStopped: 1, incremental: 0, fullParses: 0 })
   })
 })

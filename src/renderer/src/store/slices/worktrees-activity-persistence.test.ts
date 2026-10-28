@@ -39,7 +39,12 @@ describe('worktree remote runtime mutations', () => {
   it('does not surface remote selector misses while persisting activity timestamps', async () => {
     const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
     const store = createTestStore()
-    const wt = makeWorktree({ id: 'repo1::/path/wt1', repoId: 'repo1', path: '/path/wt1' })
+    const wt = makeWorktree({
+      id: 'repo1::/path/wt1',
+      repoId: 'repo1',
+      path: '/path/wt1',
+      hostId: 'runtime:env-1'
+    })
     runtimeEnvironmentCall.mockResolvedValue({
       id: 'rpc-set',
       ok: false,
@@ -105,9 +110,14 @@ describe('worktree remote runtime mutations', () => {
         store.getState().updateWorktreesMeta([{ worktreeId, updates: { isUnread: true } }])
     ],
     [
-      'markWorktreeUnread',
+      'markAgentAttentionUnread',
       async (store: ReturnType<typeof createTestStore>, worktreeId: string) => {
-        store.getState().markWorktreeUnread(worktreeId)
+        store.getState().markAgentAttentionUnread({
+          workspaceId: worktreeId,
+          subjectKey: null,
+          groupId: null,
+          reason: 'agent-completion'
+        })
         await new Promise((resolve) => setTimeout(resolve, 0))
       }
     ]
@@ -194,17 +204,23 @@ describe('worktree remote runtime mutations', () => {
     const store = createTestStore()
     const folderWorkspace = makeFolderWorkspace({ id: 'folder-unread', isUnread: true })
     const folderKey = folderWorkspaceKey(folderWorkspace.id)
-    store.setState({ folderWorkspaces: [folderWorkspace] } as Partial<AppState>)
+    store.setState({ folderWorkspaces: [folderWorkspace], projectGroups: [] })
 
-    store.getState().clearWorktreeUnread(folderKey)
-    store.getState().clearWorktreeUnread(folderKey)
+    store
+      .getState()
+      .readOnScreenAttention({ workspaceIds: [folderKey], targets: [] }, { screenArrived: true })
+    store
+      .getState()
+      .readOnScreenAttention({ workspaceIds: [folderKey], targets: [] }, { screenArrived: true })
     await new Promise((resolve) => setTimeout(resolve, 0))
 
     expect(store.getState().folderWorkspaces[0]?.isUnread).toBe(false)
     expect(store.getState().updateFolderWorkspace).toHaveBeenCalledTimes(1)
-    expect(store.getState().updateFolderWorkspace).toHaveBeenCalledWith(folderWorkspace.id, {
-      isUnread: false
-    })
+    expect(store.getState().updateFolderWorkspace).toHaveBeenCalledWith(
+      folderWorkspace.id,
+      { isUnread: false },
+      { executionHostId: 'local' }
+    )
     expect(mockApi.worktrees.updateMeta).not.toHaveBeenCalled()
   })
 
@@ -212,9 +228,14 @@ describe('worktree remote runtime mutations', () => {
     const store = createTestStore()
     const folderWorkspace = makeFolderWorkspace({ id: 'folder-read' })
     const folderKey = folderWorkspaceKey(folderWorkspace.id)
-    store.setState({ folderWorkspaces: [folderWorkspace] } as Partial<AppState>)
+    store.setState({ folderWorkspaces: [folderWorkspace], projectGroups: [] })
 
-    store.getState().markWorktreeUnread(folderKey)
+    store.getState().markAgentAttentionUnread({
+      workspaceId: folderKey,
+      subjectKey: null,
+      groupId: null,
+      reason: 'agent-completion'
+    })
     expect(store.getState().folderWorkspaces[0]).toEqual(
       expect.objectContaining({ isUnread: true, lastActivityAt: expect.any(Number) })
     )
@@ -222,7 +243,8 @@ describe('worktree remote runtime mutations', () => {
 
     expect(store.getState().updateFolderWorkspace).toHaveBeenCalledWith(
       folderWorkspace.id,
-      expect.objectContaining({ isUnread: true, lastActivityAt: expect.any(Number) })
+      expect.objectContaining({ isUnread: true, lastActivityAt: expect.any(Number) }),
+      { executionHostId: 'local' }
     )
     expect(mockApi.worktrees.updateMeta).not.toHaveBeenCalled()
   })
@@ -231,20 +253,31 @@ describe('worktree remote runtime mutations', () => {
     const store = createTestStore()
     const folderWorkspace = makeFolderWorkspace({ id: 'folder-racing-unread' })
     const folderKey = folderWorkspaceKey(folderWorkspace.id)
-    store.setState({ folderWorkspaces: [folderWorkspace] } as Partial<AppState>)
+    store.setState({ folderWorkspaces: [folderWorkspace], projectGroups: [] })
 
-    store.getState().markWorktreeUnread(folderKey)
-    store.getState().clearWorktreeUnread(folderKey)
+    store.getState().markAgentAttentionUnread({
+      workspaceId: folderKey,
+      subjectKey: null,
+      groupId: null,
+      reason: 'agent-completion'
+    })
+    store
+      .getState()
+      .readOnScreenAttention({ workspaceIds: [folderKey], targets: [] }, { screenArrived: true })
 
     expect(store.getState().folderWorkspaces[0]?.isUnread).toBe(false)
     expect(store.getState().updateFolderWorkspace).toHaveBeenNthCalledWith(
       1,
       folderWorkspace.id,
-      expect.objectContaining({ isUnread: true })
+      expect.objectContaining({ isUnread: true }),
+      { executionHostId: 'local' }
     )
-    expect(store.getState().updateFolderWorkspace).toHaveBeenNthCalledWith(2, folderWorkspace.id, {
-      isUnread: false
-    })
+    expect(store.getState().updateFolderWorkspace).toHaveBeenNthCalledWith(
+      2,
+      folderWorkspace.id,
+      { isUnread: false },
+      { executionHostId: 'local' }
+    )
   })
 
   // A rejected folder update reconciles the optimistic write away, so reporting
@@ -252,7 +285,7 @@ describe('worktree remote runtime mutations', () => {
   it('reports a rejected folder workspace update to the caller', async () => {
     const store = createTestStore()
     const folderWorkspace = makeFolderWorkspace({ id: 'folder-rejected' })
-    store.setState({ folderWorkspaces: [folderWorkspace] } as Partial<AppState>)
+    store.setState({ folderWorkspaces: [folderWorkspace], projectGroups: [] })
     const updateFolderWorkspace = vi.fn().mockResolvedValue(false)
     store.setState({ updateFolderWorkspace } as Partial<AppState>)
 
@@ -267,7 +300,7 @@ describe('worktree remote runtime mutations', () => {
   it('reports a thrown folder workspace update instead of rejecting', async () => {
     const store = createTestStore()
     const folderWorkspace = makeFolderWorkspace({ id: 'folder-throwing' })
-    store.setState({ folderWorkspaces: [folderWorkspace] } as Partial<AppState>)
+    store.setState({ folderWorkspaces: [folderWorkspace], projectGroups: [] })
     const updateFolderWorkspace = vi.fn().mockRejectedValue(new Error('Runtime is offline'))
     store.setState({ updateFolderWorkspace } as Partial<AppState>)
 

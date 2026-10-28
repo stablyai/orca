@@ -1,11 +1,18 @@
-import { fork, type ChildProcess } from 'node:child_process'
-import { getAppEnvironment } from '../../shared/app-environment'
+import type { ChildProcess } from 'node:child_process'
+import { randomUUID } from 'node:crypto'
+import { isDurableDaemonScopeSupported } from './daemon-cgroup-scope'
 import { DAEMON_EXIT_ENDPOINT_OCCUPIED } from './daemon-endpoint-ownership'
 import type { DaemonEndpointIdentity } from './daemon-hello-protocol'
-import { daemonLogArgs } from './daemon-launch-paths'
+import {
+  spawnDaemonChildProcess,
+  type DaemonChildSpawnOptions
+} from './daemon-launched-child-spawn'
 import { parseDaemonReadyIdentity } from './daemon-ready-identity'
 import { unlinkOwnedDaemonPidFile } from './daemon-spawner'
+import { childProcessHasExited } from '@orca/process-host/process-tree-termination'
 
+/** Default readiness IPC budget; callers may allow longer. */
+export const DAEMON_CHILD_STARTUP_TIMEOUT_MS = 10_000
 const DAEMON_CHILD_TERMINATION_GRACE_MS = 5_000
 const DAEMON_CHILD_FORCE_EXIT_WAIT_MS = 1_000
 const STARTUP_STDERR_MAX_BYTES = 8192
@@ -19,76 +26,85 @@ export class DaemonEndpointUnavailableError extends Error {
   }
 }
 
+/** Startup cleanup failed; the child may still be alive. */
+class DaemonStartupCleanupError extends AggregateError {}
+
 export type LaunchedDaemonChild = {
   child: ChildProcess
   identity: DaemonEndpointIdentity
 }
 
-type LaunchDaemonChildOptions = {
-  entryPath: string
-  forkEntryPath: string
-  relocatedExecPath?: string
-  userDataPath: string
-  socketPath: string
-  tokenPath: string
-  pidPath: string
-  launchNonce: string
-  macosLoginSessionWatch: boolean
+export async function launchDaemonChild(
+  options: DaemonChildSpawnOptions
+): Promise<LaunchedDaemonChild> {
+  // Probe once: the synchronous systemd-run spawn need not repeat for AppImage fallbacks.
+  const scopeSupported = isDurableDaemonScopeSupported()
+  const appImageRungs = [
+    ...(options.extractedGeneration
+      ? [{ from: 'the extracted AppImage copy', options: { ...options, appImage: undefined } }]
+      : []),
+    ...(options.appImage
+      ? [{ from: 'the AppImage', options: { ...options, extractedGeneration: undefined } }]
+      : [])
+  ]
+  for (const rung of appImageRungs) {
+    try {
+      // A fresh scope nonce avoids colliding with a failed attempt's lingering FUSE server.
+      return await launchDaemonChildAttempt(
+        { ...rung.options, launchNonce: randomUUID() },
+        scopeSupported
+      )
+    } catch (error) {
+      if (
+        error instanceof DaemonEndpointUnavailableError ||
+        error instanceof DaemonStartupCleanupError
+      ) {
+        throw error
+      }
+      // Try the next launch source; the current mount remains available while this window lives.
+      console.warn(
+        `[daemon] Launch from ${rung.from} failed, ${rung === appImageRungs.at(-1) ? 'retrying from the current mount' : 'falling back'}:`,
+        error instanceof Error ? error.message : String(error)
+      )
+    }
+  }
+  return launchDaemonChildInEitherScope(
+    { ...options, appImage: undefined, extractedGeneration: undefined },
+    scopeSupported
+  )
 }
 
-export async function launchDaemonChild(
-  options: LaunchDaemonChildOptions
+/** Scope setup can fail after its capability probe; retry unscoped unless another daemon owns the endpoint. */
+async function launchDaemonChildInEitherScope(
+  options: DaemonChildSpawnOptions,
+  scopeSupported: boolean
 ): Promise<LaunchedDaemonChild> {
-  const {
-    entryPath,
-    forkEntryPath,
-    relocatedExecPath,
-    userDataPath,
-    socketPath,
-    tokenPath,
-    pidPath,
-    launchNonce,
-    macosLoginSessionWatch
-  } = options
-  const child = fork(
-    forkEntryPath,
-    [
-      '--socket',
-      socketPath,
-      '--token',
-      tokenPath,
-      '--pid-record',
-      pidPath,
-      '--launch-nonce',
-      launchNonce,
-      '--entry-path',
-      entryPath,
-      '--app-version',
-      getAppEnvironment().getVersion(),
-      '--spawner-exec-path',
-      process.execPath,
-      ...(macosLoginSessionWatch ? ['--login-session-watch'] : []),
-      ...daemonLogArgs()
-    ],
-    {
-      // Why: detached daemons outlive dev worktrees; userData keeps process.cwd() valid after a repo/worktree is deleted.
-      cwd: userDataPath,
-      // Why: detached+unref outlives Electron; stdout 'ignore' (else blocks exit), stderr 'pipe' captures startup crashes lost in v1.4.129-rc.1.
-      detached: true,
-      stdio: ['ignore', 'ignore', 'pipe', 'ipc'],
-      // Why: run the byte-identical relocated Orca.exe so the image path sits outside the updater's kill zone.
-      ...(relocatedExecPath ? { execPath: relocatedExecPath } : {}),
-      // Why: run the fork as plain Node so Electron's GPU/display init can't interfere with node-pty's posix_spawn of the spawn-helper.
-      env: {
-        ...process.env,
-        ELECTRON_RUN_AS_NODE: '1',
-        // Why: the detached plain-Node daemon has no AppEnvironment, but shell rcfiles must live outside swept tmp.
-        ORCA_USER_DATA_PATH: userDataPath
-      }
+  if (!scopeSupported) {
+    return launchDaemonChildAttempt(options, false)
+  }
+  try {
+    return await launchDaemonChildAttempt(options, true)
+  } catch (error) {
+    if (error instanceof DaemonEndpointUnavailableError) {
+      // Let the caller adopt the winner instead of launching another child into the same race.
+      throw error
     }
-  )
+    console.warn(
+      '[daemon] durable cgroup-scope launch failed, retrying without cgroup isolation:',
+      error instanceof Error ? error.message : String(error)
+    )
+    return launchDaemonChildAttempt(options, false)
+  }
+}
 
-  // Why: keep only the startup-window stderr tail so a crash cause is visible without unbounded memory.
+async function launchDaemonChildAttempt(
+  options: DaemonChildSpawnOptions,
+  useDurableScope: boolean
+): Promise<LaunchedDaemonChild> {
+  const { pidPath, launchNonce } = options
+  const child = spawnDaemonChildProcess(options, useDurableScope)
+
+  // Bound startup stderr while retaining the crash tail.
   let startupStderr = ''
   let collectingStderr = true
   const onStartupStderr = (chunk: Buffer): void => {
@@ -101,16 +117,15 @@ export async function launchDaemonChild(
     }
   }
   child.stderr?.on('data', onStartupStderr)
-  // Why: release the detached daemon's stderr once up/failed — a live piped stream refs the parent loop and blocks Electron exit.
+  // A live stderr pipe retains the parent event loop and blocks Electron exit.
   const releaseStderr = (): void => {
     collectingStderr = false
     child.stderr?.off('data', onStartupStderr)
     child.stderr?.destroy()
   }
 
-  // Wait for the daemon to signal readiness via IPC
   let launchedIdentity: DaemonEndpointIdentity | null = null
-  let endpointUnavailableReason: string | null = null
+  let endpointOccupied = false
   const startupSignal = new Promise<void>((resolve, reject) => {
     let timer: ReturnType<typeof setTimeout> | undefined
     let settled = false
@@ -128,7 +143,6 @@ export async function launchDaemonChild(
       }
       settled = true
       cleanupStartupListeners()
-      // Why: attach the captured stderr tail to the thrown error and log it so a startup crash isn't just "exited with code 1".
       const stderrTail = startupStderr.trim()
       if (stderrTail) {
         console.warn(`[daemon] startup failed; captured stderr tail:\n${stderrTail}`)
@@ -141,48 +155,50 @@ export async function launchDaemonChild(
         await terminateLaunchedDaemonChild(child)
       } catch (cleanupError) {
         reject(
-          new AggregateError(
+          new DaemonStartupCleanupError(
             [startupError, cleanupError],
             'Daemon startup and child cleanup both failed'
           )
         )
         return
       }
-      if (Number.isSafeInteger(child.pid) && (child.pid as number) > 0) {
-        unlinkOwnedDaemonPidFile(pidPath, child.pid as number, launchNonce)
+      // Before self-report, child.pid is all we have; PID and nonce must both match before unlinking.
+      const childPid = child.pid
+      if (childPid !== undefined && childPid > 0) {
+        unlinkOwnedDaemonPidFile(pidPath, childPid, launchNonce)
       }
       reject(startupError)
     }
     function onReadyMessage(msg: unknown): void {
-      if (
-        msg &&
-        typeof msg === 'object' &&
-        (msg as { type?: string }).type === 'endpoint-unavailable'
-      ) {
-        // Why: the child lost the endpoint race rather than crashing. Record it so the
-        // launcher can adopt the winner instead of reporting a generic startup failure.
-        endpointUnavailableReason = (msg as { reason?: string }).reason ?? 'occupied'
-        void fail(new Error(`Daemon could not take the endpoint: ${endpointUnavailableReason}`))
+      if (!msg || typeof msg !== 'object') {
         return
       }
-      if (msg && typeof msg === 'object' && (msg as { type?: string }).type === 'ready') {
+      const type = 'type' in msg ? msg.type : undefined
+      if (type === 'endpoint-unavailable') {
+        // Preserve the endpoint-race outcome so the launcher can adopt the winner.
+        const reason = 'reason' in msg && typeof msg.reason === 'string' ? msg.reason : 'occupied'
+        endpointOccupied = reason === 'occupied'
+        void fail(new Error(`Daemon could not take the endpoint: ${reason}`))
+        return
+      }
+      if (type === 'ready') {
         if (settled) {
           return
         }
+        // Match hello against the daemon's own identity; child.pid may still identify a wrapper.
         const readyIdentity = parseDaemonReadyIdentity(msg)
-        if (!Number.isSafeInteger(child.pid) || (child.pid as number) <= 0 || !readyIdentity) {
+        if (!readyIdentity) {
           void fail(new Error('Daemon readiness identity is incomplete'))
           return
         }
         launchedIdentity = {
-          pid: child.pid as number,
           ...readyIdentity,
           launchNonce
         }
         settled = true
-        // Why: daemon is detached after readiness; detach startup listeners so the launch promise closure isn't retained.
+        // Release listeners so they do not retain the launch closure.
         cleanupStartupListeners()
-        // Why: release IPC/stderr and unref so Electron can exit without waiting; the daemon keeps running detached.
+        // Release parent event-loop references while the detached daemon keeps running.
         releaseStderr()
         child.disconnect()
         child.unref()
@@ -196,16 +212,15 @@ export async function launchDaemonChild(
 
     function onStartupExit(code: number | null): void {
       if (code === DAEMON_EXIT_ENDPOINT_OCCUPIED) {
-        // Why here and not only on the IPC message: the exit is the event this wait settles
-        // on, so keying off it cannot lose to a notification still in the channel.
-        endpointUnavailableReason = 'occupied'
+        // Exit may settle this wait before the occupied-endpoint IPC notification arrives.
+        endpointOccupied = true
       }
       void fail(new Error(`Daemon exited during startup with code ${code}`))
     }
 
     timer = setTimeout(() => {
       void fail(new Error('Daemon startup timed out'))
-    }, 10000)
+    }, options.startupTimeoutMs ?? DAEMON_CHILD_STARTUP_TIMEOUT_MS)
 
     child.on('message', onReadyMessage)
     child.on('error', onStartupError)
@@ -215,7 +230,7 @@ export async function launchDaemonChild(
   try {
     await startupSignal
   } catch (error) {
-    if (endpointUnavailableReason === 'occupied') {
+    if (endpointOccupied) {
       throw new DaemonEndpointUnavailableError('occupied', { cause: error })
     }
     throw error
@@ -226,12 +241,10 @@ export async function launchDaemonChild(
   return { child, identity: launchedIdentity }
 }
 
+/** On failure, signal child.pid: systemd-run --scope execs the daemon in place, without an intermediate child. */
 export async function terminateLaunchedDaemonChild(child: ChildProcess): Promise<void> {
   try {
-    if (
-      (child.exitCode !== null && child.exitCode !== undefined) ||
-      (child.signalCode !== null && child.signalCode !== undefined)
-    ) {
+    if (childProcessHasExited(child)) {
       return
     }
     await new Promise<void>((resolve, reject) => {

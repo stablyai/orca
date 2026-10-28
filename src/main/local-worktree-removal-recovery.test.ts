@@ -1,12 +1,13 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import type * as LocalWorktreeFilesystem from './local-worktree-filesystem'
 
-const { gitExecFileAsyncMock, listWorktreesStrictMock, removeLocalWorktreePathMock } = vi.hoisted(
-  () => ({
+const { gitExecFileAsyncMock, listWorktreesStrictMock, removeLocalWorktreePathMock, hostRmMock } =
+  vi.hoisted(() => ({
     gitExecFileAsyncMock: vi.fn(),
     listWorktreesStrictMock: vi.fn(),
-    removeLocalWorktreePathMock: vi.fn()
-  })
-)
+    removeLocalWorktreePathMock: vi.fn(),
+    hostRmMock: vi.fn()
+  }))
 
 vi.mock('./git/runner', () => ({
   gitExecFileAsync: gitExecFileAsyncMock
@@ -16,13 +17,15 @@ vi.mock('./local-worktree-filesystem', () => ({
   removeLocalWorktreePath: removeLocalWorktreePathMock
 }))
 
+vi.mock('./asar-transparent-fs', () => ({ rm: hostRmMock }))
+
 vi.mock('./git/worktree', () => ({
   listWorktreesStrict: listWorktreesStrictMock
 }))
 
 import {
   recoverLocalWindowsWorktreeRemoval,
-  removeStaleLocalWorktreeRegistrationAfterFilesystemRemoval
+  removeStaleLocalWorktreeRegistration
 } from './local-worktree-removal-recovery'
 
 async function withPlatform<T>(platform: NodeJS.Platform, fn: () => Promise<T>): Promise<T> {
@@ -68,7 +71,8 @@ describe('recoverLocalWindowsWorktreeRemoval', () => {
 
       expect(removeLocalWorktreePathMock).toHaveBeenCalledWith(
         'C:/repo/worktree/delete-e2e-held-cwd',
-        {}
+        {},
+        undefined
       )
       expect(gitExecFileAsyncMock).toHaveBeenCalledWith(['worktree', 'prune'], {
         cwd: 'C:/repo'
@@ -102,7 +106,8 @@ describe('recoverLocalWindowsWorktreeRemoval', () => {
 
       expect(removeLocalWorktreePathMock).toHaveBeenCalledWith(
         'C:/repo/worktree/delete-e2e-held-cwd',
-        {}
+        {},
+        undefined
       )
       expect(gitExecFileAsyncMock).toHaveBeenCalledWith(['worktree', 'prune'], {
         cwd: 'C:/repo'
@@ -113,6 +118,42 @@ describe('recoverLocalWindowsWorktreeRemoval', () => {
           head: 'abc123'
         }
       })
+    })
+  })
+
+  it('rejects native recovery without pruning or another pass when deletion is cancelled', async () => {
+    const native = await vi.importActual<typeof LocalWorktreeFilesystem>(
+      './local-worktree-filesystem'
+    )
+    removeLocalWorktreePathMock.mockImplementationOnce(native.removeLocalWorktreePath)
+    const controller = new AbortController()
+    const closeWatcher = vi.fn().mockResolvedValue(undefined)
+    hostRmMock.mockImplementationOnce(async () => {
+      controller.abort()
+      throw Object.assign(new Error('file held open'), { code: 'EBUSY' })
+    })
+    await withPlatform('win32', async () => {
+      await expect(
+        recoverLocalWindowsWorktreeRemoval({
+          error: new Error('Git deregistered but left the checkout'),
+          force: true,
+          canonicalWorktreePath: 'C:/repo/worktree/feature',
+          repoPath: 'C:/repo',
+          localWorktreeGitOptions: {},
+          registeredWorktree: { branch: 'refs/heads/feature', head: 'abc123' },
+          deleteBranch: false,
+          closeWatcher,
+          signal: controller.signal
+        })
+      ).rejects.toThrow(/aborted/i)
+      expect(removeLocalWorktreePathMock).toHaveBeenCalledWith(
+        'C:/repo/worktree/feature',
+        {},
+        controller.signal
+      )
+      expect(closeWatcher).toHaveBeenCalledOnce()
+      expect(hostRmMock).toHaveBeenCalledOnce()
+      expect(gitExecFileAsyncMock).not.toHaveBeenCalled()
     })
   })
 
@@ -153,7 +194,11 @@ describe('recoverLocalWindowsWorktreeRemoval', () => {
         closeWatcher: vi.fn().mockResolvedValue(undefined)
       })
 
-      expect(removeLocalWorktreePathMock).toHaveBeenCalledWith('C:/repo/worktree/feature', {})
+      expect(removeLocalWorktreePathMock).toHaveBeenCalledWith(
+        'C:/repo/worktree/feature',
+        {},
+        undefined
+      )
       expect(result).toEqual({})
     })
   })
@@ -306,7 +351,7 @@ describe('recoverLocalWindowsWorktreeRemoval', () => {
   })
 })
 
-describe('removeStaleLocalWorktreeRegistrationAfterFilesystemRemoval', () => {
+describe('removeStaleLocalWorktreeRegistration', () => {
   beforeEach(() => {
     gitExecFileAsyncMock.mockReset()
     listWorktreesStrictMock.mockReset()
@@ -314,9 +359,27 @@ describe('removeStaleLocalWorktreeRegistrationAfterFilesystemRemoval', () => {
     listWorktreesStrictMock.mockResolvedValue([])
   })
 
+  it('prunes and strictly verifies on the selected WSL host without deleting files or branches', async () => {
+    const options = { wslDistro: 'Ubuntu' }
+    const result = await removeStaleLocalWorktreeRegistration({
+      canonicalWorktreePath: '/home/dev/feature/.git',
+      repoPath: '/home/dev/repo',
+      localWorktreeGitOptions: options,
+      registeredWorktree: { branch: 'refs/heads/feature', head: 'abc123' },
+      deleteBranch: true
+    })
+    expect(result).toEqual({ preservedBranch: { branchName: 'feature', head: 'abc123' } })
+    expect(gitExecFileAsyncMock).toHaveBeenCalledExactlyOnceWith(['worktree', 'prune'], {
+      cwd: '/home/dev/repo',
+      wslDistro: 'Ubuntu'
+    })
+    expect(listWorktreesStrictMock).toHaveBeenCalledExactlyOnceWith('/home/dev/repo', options)
+    expect(removeLocalWorktreePathMock).not.toHaveBeenCalled()
+  })
+
   it('does not override a locked missing registration', async () => {
     await expect(
-      removeStaleLocalWorktreeRegistrationAfterFilesystemRemoval({
+      removeStaleLocalWorktreeRegistration({
         canonicalWorktreePath: 'C:/workspaces/feature',
         repoPath: 'C:/repo',
         localWorktreeGitOptions: {},
@@ -345,7 +408,7 @@ describe('removeStaleLocalWorktreeRegistrationAfterFilesystemRemoval', () => {
     ])
 
     await expect(
-      removeStaleLocalWorktreeRegistrationAfterFilesystemRemoval({
+      removeStaleLocalWorktreeRegistration({
         canonicalWorktreePath: 'C:/workspaces/feature',
         repoPath: 'C:/repo',
         localWorktreeGitOptions: {},

@@ -41,6 +41,17 @@ vi.mock('node:fs/promises', async (importOriginal) => {
   }
 })
 
+// Isolate userData so session backfill cannot resolve the live managed home.
+let userDataRoot: string
+beforeEach(() => {
+  userDataRoot = mkdtempSync(join(tmpdir(), 'orca-codex-resume-user-data-'))
+  vi.stubEnv('ORCA_USER_DATA_PATH', userDataRoot)
+})
+afterEach(() => {
+  vi.unstubAllEnvs()
+  rmSync(userDataRoot, { recursive: true, force: true })
+})
+
 describe('prepareLegacySharedCodexSessionResume', () => {
   let root: string
   let legacyHome: string
@@ -135,18 +146,15 @@ describe('prepareLegacySharedCodexSessionResume', () => {
     }
   )
 
-  it.each(['managed account', 'custom CODEX_HOME'])(
-    'preserves the legacy home while the %s lane is selected',
-    async () => {
-      const result = await prepareLegacySharedCodexSessionResume(legacyArgs(), {
-        ...options(),
-        isHostSystemDefaultRealHome: () => false
-      })
+  it('preserves the legacy home while a non-default Codex home lane is selected', async () => {
+    const result = await prepareLegacySharedCodexSessionResume(legacyArgs(), {
+      ...options(),
+      isHostSystemDefaultRealHomeSelected: () => false
+    })
 
-      expect(result).toEqual({ useRealCodexHome: false })
-      expect(existsSync(targetRolloutPath())).toBe(false)
-    }
-  )
+    expect(result).toEqual({ useRealCodexHome: false })
+    expect(existsSync(targetRolloutPath())).toBe(false)
+  })
 
   it('still materializes a legacy resume when an account selection exists', async () => {
     const result = await prepareLegacySharedCodexSessionResume(legacyArgs(), {
@@ -172,7 +180,7 @@ describe('prepareLegacySharedCodexSessionResume', () => {
 
   function options() {
     return {
-      isHostSystemDefaultRealHome: () => true,
+      isHostSystemDefaultRealHomeSelected: () => true,
       legacyCodexHomePath: legacyHome,
       systemCodexHomePath: systemHome
     }
@@ -183,12 +191,10 @@ describe('prepareLegacySharedCodexSessionResume', () => {
   }
 })
 
-// Why: the session bridge hardlinks each rollout into every per-account home
-// and vault dedup keeps the lexicographically-smallest alias, so a session
-// recorded by the selected account can surface under a peer account's home.
+// Vault dedup's smallest bridge alias may name a peer account instead of the selected one.
 describe('per-account resume repin', () => {
   let root: string
-  // Deliberately ordered so the SELECTED account loses the path tie-break.
+  // Make the selected account lose the path tie-break.
   let peerHome: string
   let selectedHome: string
   let recordedRolloutPath: string
@@ -228,7 +234,6 @@ describe('per-account resume repin', () => {
         rolloutCandidateAccessors
       )
 
-      // The dedup pick is order-independent: the peer's alias wins the tie-break.
       expect(survivors).toEqual([bridged])
 
       const result = await prepareLegacySharedCodexSessionResume(
@@ -365,7 +370,7 @@ describe('per-account resume repin', () => {
 
   function repinOptions() {
     return {
-      isHostSystemDefaultRealHome: () => false,
+      isHostSystemDefaultRealHomeSelected: () => false,
       getSelectedHostAccountCodexHomePath: () => selectedHome
     }
   }

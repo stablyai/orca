@@ -2,6 +2,8 @@ import { useState } from 'react'
 import { ActivityIndicator, Pressable, Text, View } from 'react-native'
 import { ChevronDown, ChevronRight, Sparkles } from 'lucide-react-native'
 import { colors } from '../theme/mobile-theme'
+import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
+import { AgentLaunchNotice } from '../components/AgentLaunchNotice'
 import type { MobileCommitFailureRecovery } from './mobile-commit-failure-recovery'
 import type { MobileCommitFailureRecoveryAction } from './use-mobile-commit-failure-recovery'
 import { styles } from './mobile-source-control-styles'
@@ -12,6 +14,7 @@ type Props = {
 }
 
 export function MobileCommitFailurePanel({ failure, action }: Props) {
+  useMobileColorScheme()
   const [expanded, setExpanded] = useState(false)
   const Chevron = expanded ? ChevronDown : ChevronRight
   const detailsText = failure.error.trim()
@@ -28,11 +31,12 @@ export function MobileCommitFailurePanel({ failure, action }: Props) {
         <Pressable
           style={({ pressed }) => [
             styles.commitFailureFixButton,
-            action.launching && styles.commitFailureFixButtonDisabled,
+            (action.launching || action.availability !== 'available') &&
+              styles.commitFailureFixButtonDisabled,
             pressed && styles.commitFailureFixButtonPressed
           ]}
           onPress={() => void action.launch()}
-          disabled={action.launching}
+          disabled={action.launching || action.availability !== 'available'}
           accessibilityRole="button"
           accessibilityLabel="Fix commit failure with AI"
         >
@@ -65,9 +69,14 @@ export function MobileCommitFailurePanel({ failure, action }: Props) {
           {expanded ? <Text style={styles.commitFailureDetailsText}>{detailsText}</Text> : null}
         </>
       ) : null}
-      {action.launchError ? (
-        <Text style={styles.commitFailureLaunchError}>{action.launchError}</Text>
-      ) : null}
+      <AgentLaunchNotice
+        availability={action.availability}
+        success={action.launchSuccess}
+        error={action.launchError}
+        warning={action.launchWarning}
+        undeliveredPrompt={action.undeliveredPrompt}
+        errorStyle={styles.commitFailureLaunchError}
+      />
     </View>
   )
 }

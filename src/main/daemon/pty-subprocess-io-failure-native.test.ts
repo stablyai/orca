@@ -1,12 +1,18 @@
 import { fstatSync } from 'node:fs'
-import * as pty from 'node-pty'
-import { describe, expect, it, vi } from 'vitest'
+import type * as pty from 'node-pty'
+import { beforeAll, describe, expect, it, vi } from 'vitest'
+import { loadNodePtyForTests } from '../orcad/orcad-node-slot-fixture'
 import { createDaemonPtySubprocessHandle } from './pty-subprocess/subprocess-handle'
 import { TerminalHost } from './terminal-host'
 
 const describePosix = process.platform === 'win32' ? describe.skip : describe
 
 describePosix('failed-I/O teardown with a real native PTY', () => {
+  let nodePty: typeof pty
+  beforeAll(async () => {
+    nodePty = await loadNodePtyForTests()
+  })
+
   it.each([
     ['write', false],
     ['write', true],
@@ -16,7 +22,7 @@ describePosix('failed-I/O teardown with a real native PTY', () => {
     'reaps real shells and master fds after %s failure (immediate=%s)',
     async (operation, immediate) => {
       for (let cycle = 0; cycle < 4; cycle++) {
-        const native = pty.spawn(
+        const native = nodePty.spawn(
           '/bin/sh',
           [
             '-c',

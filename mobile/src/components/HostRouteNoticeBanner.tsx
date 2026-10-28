@@ -1,18 +1,27 @@
-import { Pressable, StyleSheet, Text, View } from 'react-native'
+import { Pressable, Text, View } from 'react-native'
 import { X } from 'lucide-react-native'
 import { colors, spacing } from '../theme/mobile-theme'
+import { themedStyleSheet } from '../theme/themed-styles'
+import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 
-// Informational, not an error: the host is healthy and the user's target simply went away,
-// so this stays monochrome rather than borrowing the auth-failed red.
+// Monochrome notice reports vanished target; failure uses one red rule for action refusal without taking screen.
+// Announce inserted banners: failure uses alert/assertive, notice uses polite live region (RN has no status role).
 export function HostRouteNoticeBanner({
   message,
+  tone = 'notice',
   onDismiss
 }: {
   message: string
+  tone?: 'notice' | 'failure'
   onDismiss: () => void
 }) {
+  useMobileColorScheme()
   return (
-    <View style={styles.banner}>
+    <View
+      style={[styles.banner, tone === 'failure' && styles.failure]}
+      accessibilityRole={tone === 'failure' ? 'alert' : undefined}
+      accessibilityLiveRegion={tone === 'failure' ? 'assertive' : 'polite'}
+    >
       <Text style={styles.text}>{message}</Text>
       <Pressable
         onPress={onDismiss}
@@ -27,7 +36,7 @@ export function HostRouteNoticeBanner({
   )
 }
 
-const styles = StyleSheet.create({
+const styles = themedStyleSheet(() => ({
   banner: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -38,6 +47,7 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: colors.borderSubtle
   },
+  failure: { borderBottomColor: colors.statusRed },
   text: { flex: 1, color: colors.textSecondary, fontSize: 13 },
   dismiss: { padding: spacing.xs }
-})
+}))

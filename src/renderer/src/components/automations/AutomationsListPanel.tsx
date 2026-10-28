@@ -11,7 +11,7 @@ import type { SshConnectionState } from '../../../../shared/ssh-types'
 import type { ProjectHostSetup } from '../../../../shared/project-types'
 import type { Repo } from '../../../../shared/repo-types'
 import type { Worktree } from '../../../../shared/worktree/types'
-import type { RuntimeStatus } from '../../../../shared/runtime-types'
+import type { RuntimeEnvironmentStatus } from '../../../../shared/runtime-host-status'
 import type { TaskSourceHostAvailability } from '../task-source-context-summary'
 import type { AutomationRowAction } from './automation-captured-owner'
 import type { AutomationHostTarget } from './automation-host-client'
@@ -53,7 +53,7 @@ import { AutomationListToolbar } from './AutomationListToolbar'
 const TEMPLATE_EMPTY_STATES: ReadonlySet<string> = new Set(['host-empty', 'all-hosts-empty'])
 const EMPTY_AUTOMATION_RUNS: ReadonlyMap<string, AutomationRun> = new Map()
 
-type AutomationsListPanelProps = {
+export type AutomationsListPanelProps = {
   hasListItems: boolean
   hasFilteredListItems: boolean
   listSearchQuery: string
@@ -83,10 +83,7 @@ type AutomationsListPanelProps = {
   worktreeForRow?: (row: AutomationListRow, repo: Repo | undefined) => Worktree | undefined
   projectHostSetups: readonly ProjectHostSetup[]
   sshConnectionStates: ReadonlyMap<string, Pick<SshConnectionState, 'status'>>
-  runtimeStatusByEnvironmentId: ReadonlyMap<
-    string,
-    { status: RuntimeStatus | null; checkedAt: number }
-  >
+  runtimeStatusByEnvironmentId: ReadonlyMap<string, RuntimeEnvironmentStatus>
   hostTargetFor: (row: AutomationListRow) => AutomationHostTarget | null
   automationSourceHostAvailabilityByRowKey: ReadonlyMap<string, TaskSourceHostAvailability[]>
   hostLabelById?: ReadonlyMap<string, string>
@@ -103,11 +100,6 @@ type AutomationsListPanelProps = {
     manager: ExternalAutomationManager,
     job: ExternalAutomationJob,
     action: ExternalAutomationAction,
-    scope: ExternalAutomationScope
-  ) => void
-  openEditExternalDialog: (
-    manager: ExternalAutomationManager,
-    job: ExternalAutomationJob,
     scope: ExternalAutomationScope
   ) => void
   openCreateDialog: (template?: AutomationTemplate) => void
@@ -158,7 +150,6 @@ export function AutomationsListPanel(props: AutomationsListPanelProps): React.JS
     toggleAutomation,
     requestDeleteAutomation,
     requestExternalAction,
-    openEditExternalDialog,
     openCreateDialog,
     canCreateAutomation,
     onOpenDetail,
@@ -167,7 +158,7 @@ export function AutomationsListPanel(props: AutomationsListPanelProps): React.JS
     onOpenRuns
   } = props
   const listRef = useRef<HTMLDivElement>(null)
-  // Hosts moved into the Filters menu, so its toolbar row is the focus fallback now.
+  // Use the Filters toolbar as focus fallback now that it owns host controls.
   const toolbarRef = useRef<HTMLDivElement>(null)
   const pendingKeyboardScrollRef = useRef(false)
   // Why: keyboard traversal and focus recovery read render order, which the sort owns.
@@ -362,7 +353,6 @@ export function AutomationsListPanel(props: AutomationsListPanelProps): React.JS
                       onOpenDetail()
                     }}
                     onRequestAction={requestExternalAction}
-                    onEdit={openEditExternalDialog}
                   />
                 )
               )}

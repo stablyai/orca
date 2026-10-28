@@ -7,9 +7,13 @@ import type { RpcTransport } from '../rpc/transport'
 import type { WebSocket } from 'ws'
 import type { DeviceRegistry } from '../device-registry'
 import type { E2EEKeypair } from '../e2ee-keypair'
+import type { RuntimeHostDescriptor } from '../../../shared/runtime-host-descriptor'
 import type { UnpairedDeviceAuthThrottle } from '../rpc/unpaired-device-auth-throttle'
 import type { MobileSocketWiring } from '../rpc/mobile-socket-wiring'
-import { RelayRevokeOutbox } from '../relay/relay-revoke-outbox'
+import type { MobileDesktopRelay } from '../mobile-desktop-relay/mobile-desktop-relay'
+import type { MobileRelayHostCatalog } from '../mobile-desktop-relay/mobile-relay-host-catalog'
+import { RelayRevokeOutbox } from '../mobile-cloud-relay/relay-revoke-outbox'
+import { PushUnregisterOutbox } from '../push/push-unregister-outbox'
 import { RuntimeBinaryMessageRouter } from '../runtime-binary-message-router'
 import type { RuntimeMetadataOwnershipWatch } from '../runtime-metadata-ownership-watch'
 import { RUNTIME_METADATA_OWNERSHIP_POLL_MS } from '../runtime-metadata-ownership-watch'
@@ -37,15 +41,15 @@ export class RuntimeRpcState {
   protected readonly enableWebSocket: boolean
   protected readonly wsPort: number
   protected readonly preferPinnedWsPort: boolean
+  protected readonly requirePinnedWsPort: boolean
   protected readonly exposeNetworkByDefault: boolean
   protected readonly pinnedBindHost: string | null
   protected readonly webClientRoot: string | undefined
-  // Why: STA-2370 — the host the WS listener is currently bound to, so pairing can widen loopback→all-interfaces once.
+  // Track actual WS bind host for pairing exposure transitions (STA-2370).
   protected wsBoundHost: string | null = null
-  // Why: STA-2370 — in-flight widen so concurrent pairing requests share a single rebind.
+  // Share one pending rebind across concurrent pairing offers (STA-2370).
   protected networkExposurePromise: Promise<void> | null = null
-  // Why: STA-2370 — set by stop() so a racing pairing widen can't recreate a live wide listener into the
-  // cleared transport arrays after shutdown; stop() also awaits any in-flight widen before snapshotting.
+  // Stop fences new exposure and waits pending rebind before taking transport snapshots (STA-2370).
   protected stopping = false
   protected readonly authToken = randomBytes(24).toString('hex')
   protected readonly keepaliveIntervalMs: number
@@ -56,18 +60,24 @@ export class RuntimeRpcState {
   protected readonly browserHostLongPollCapPerDevice: number
   protected readonly specializedLongPollCap: number
   protected readonly relayRevokeOutbox: RelayRevokeOutbox
+  protected readonly pushUnregisterOutbox: PushUnregisterOutbox
   protected deviceRegistry: DeviceRegistry | null = null
   protected e2eeKeypair: E2EEKeypair | null = null
+  protected hostDescriptor: RuntimeHostDescriptor | null = null
   protected pairingInitializationFailure: PairingOfferUnavailable | null = null
-  protected tlsFingerprint: string | null = null
   protected activeTransports: RpcTransport[] = []
   protected transports: RuntimeTransportMetadata[] = []
   protected metadataOwnershipWatch: RuntimeMetadataOwnershipWatch | null = null
   protected mobileSocketWiring: MobileSocketWiring | null = null
-  // Why: detaches the current WebSocketTransport from the session wiring so a pairing rebind can swap
-  // transports under the SAME wiring (see ensureMobileSocketWiring) instead of orphaning relay sockets.
+  // Rebind swaps transports inside session wiring so captured relay sockets remain attached.
   protected detachWebSocketWiring: (() => void) | null = null
   protected mobileRelayPairingProvider: MobileRelayPairingProvider | null = null
+  // Why nullable: launch sets both for every runtime process; in-process test servers may not.
+  protected mobileDesktopRelay: MobileDesktopRelay | null = null
+  protected mobileRelayHostCatalog: MobileRelayHostCatalog | null = null
+  protected detachPairedServerRows: (() => void) | null = null
+  // Why: lets an automatic mint install a provider whose launch-time construction failed.
+  protected mobileRelayPairingProviderInstaller: (() => Promise<unknown>) | null = null
   protected mobileRelayPairingOfferQueue: Promise<void> = Promise.resolve()
   protected mobileRelayPairingOfferInFlight: {
     generation: number
@@ -83,12 +93,14 @@ export class RuntimeRpcState {
     WebSocket,
     { controllers: Set<AbortController>; abortOnClose: () => void }
   >()
-  // Why: separate from server.maxConnections — count only long-running dispatches, not short RPCs. See §3.1 + §7 risk #2.
+  // Count long-running dispatches separately from socket maxConnections (design §§3.1, 7).
   protected activeLongPolls = 0
   // Why: subset of activeLongPolls held by orchestration.ask, fenced by askLongPollCap.
   protected activeAskLongPolls = 0
   protected activeBrowserHostLongPolls = 0
   protected readonly activeBrowserHostLongPollsByDevice = new Map<string, number>()
+  protected clientRequestsInFlight = 0
+  protected lastClientRequestAt = Date.now()
 
   constructor({
     runtime,
@@ -98,6 +110,7 @@ export class RuntimeRpcState {
     enableWebSocket = false,
     wsPort = DEFAULT_WS_PORT,
     preferPinnedWsPort = false,
+    requirePinnedWsPort = false,
     exposeNetworkByDefault = false,
     pinnedBindHost,
     webClientRoot,
@@ -114,13 +127,14 @@ export class RuntimeRpcState {
     this.enableWebSocket = enableWebSocket
     this.wsPort = wsPort
     this.preferPinnedWsPort = preferPinnedWsPort
+    this.requirePinnedWsPort = requirePinnedWsPort
     this.exposeNetworkByDefault = exposeNetworkByDefault
     this.pinnedBindHost = pinnedBindHost ?? null
     this.webClientRoot = webClientRoot
     this.keepaliveIntervalMs = keepaliveIntervalMs
     this.longPollCap = longPollCap
     this.metadataOwnershipPollMs = metadataOwnershipPollMs
-    // Why: derived, not configurable — the reservation must hold for whatever cap a caller picks.
+    // Derive reservation from any caller-selected cap; do not make it independently configurable.
     this.askLongPollCap = Math.max(1, Math.floor(longPollCap * ASK_LONG_POLL_SHARE))
     this.browserHostLongPollCap = Math.max(
       1,
@@ -129,5 +143,17 @@ export class RuntimeRpcState {
     this.browserHostLongPollCapPerDevice = Math.max(1, Math.floor(this.browserHostLongPollCap / 2))
     this.specializedLongPollCap = Math.max(1, Math.floor(longPollCap * SPECIALIZED_LONG_POLL_SHARE))
     this.relayRevokeOutbox = new RelayRevokeOutbox(userDataPath)
+    this.pushUnregisterOutbox = new PushUnregisterOutbox(userDataPath)
+    this.runtime.configureNotificationDismissalStore(userDataPath)
+  }
+
+  /** Counts a client message for idle exit, from receipt until its dispatch settles. */
+  protected trackClientRequest<T>(work: () => Promise<T>): Promise<T> {
+    this.clientRequestsInFlight += 1
+    this.lastClientRequestAt = Date.now()
+    return work().finally(() => {
+      this.clientRequestsInFlight -= 1
+      this.lastClientRequestAt = Date.now()
+    })
   }
 }

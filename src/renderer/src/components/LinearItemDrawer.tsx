@@ -1,4 +1,3 @@
-/* oxlint-disable react-doctor/no-adjust-state-on-prop-change -- Why: Linear drawer state hydrates full issue details and comments from provider IPC for the selected issue. */
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
 import { findLinearIssueWorkspaceAttachment } from '@/lib/linear-issue-workspace-attachment'
@@ -16,6 +15,8 @@ import {
   type LinearLocalComment
 } from '@/components/linear-item-drawer-types'
 import { renderLinearItemDrawerSheet } from '@/components/linear-item-drawer-sheet'
+import { selectFolderWorkspaces } from '@/store/workspace-record-selectors'
+import { defaultScopeSource } from '@/lib/default-creation-host'
 
 export { LinearIssueEditSection } from '@/components/linear-item-drawer-edit-section'
 export { LinearIssueCommentFooter } from '@/components/linear-item-drawer-comment-footer'
@@ -37,9 +38,9 @@ export default function LinearItemDrawer({
   const hasEditedRef = useRef(false)
   const optimisticCommentsRef = useRef<LinearComment[]>([])
   const settings = useAppStore((s) => s.settings)
-  const providerSettings = sourceContext ?? settings
+  const providerSettings = sourceContext ?? defaultScopeSource(settings)
   const allWorktrees = useAllWorktrees()
-  const folderWorkspaces = useAppStore((s) => s.folderWorkspaces)
+  const folderWorkspaces = useAppStore((s) => selectFolderWorkspaces(s))
   const attachmentWorkspaces = useMemo(
     () => [...allWorktrees, ...folderWorkspaces.map(folderWorkspaceToWorktree)],
     [allWorktrees, folderWorkspaces]
@@ -59,8 +60,8 @@ export default function LinearItemDrawer({
     []
   )
 
-  // Why: the list view may not include the full description. Re-fetch
-  // the issue by ID and its comments to populate the drawer.
+  // List rows may omit descriptions; fetch full issue and comments for the drawer.
+  // oxlint-disable-next-line react-doctor/no-derived-state-effect -- Why: resets drafts as it starts the fenced IPC fetch for a new issue id.
   useEffect(() => {
     if (!issue) {
       setFullIssue(null)
@@ -78,8 +79,7 @@ export default function LinearItemDrawer({
     const requestId = requestIdRef.current
     setFullIssue(issue)
 
-    // Why: fetch issue and comments independently so a transient comments
-    // failure doesn't discard the successfully-fetched issue data.
+    // Fetch independently so comments failure cannot discard the issue.
     linearGetIssue(providerSettings, issue.id, issue.workspaceId)
       .then((issueResult) => {
         if (requestId !== requestIdRef.current) {
@@ -88,8 +88,7 @@ export default function LinearItemDrawer({
         if (issueResult) {
           const fetched = issueResult as LinearIssue
           setFullIssue(fetched)
-          // Why: skip if the user already made optimistic edits — the fetch
-          // carries pre-edit data that would clobber in-flight changes.
+          // Preserve optimistic edits made after the fetch began.
           if (!hasEditedRef.current) {
             setEditState(initLinearIssueEditState(fetched))
           }
@@ -102,8 +101,7 @@ export default function LinearItemDrawer({
         if (requestId !== requestIdRef.current) {
           return
         }
-        // Why: merge any comments the user posted optimistically while the
-        // fetch was in-flight, using id to avoid duplicates.
+        // Merge optimistic comments posted during fetch, deduplicating by id.
         let fetched = commentsResult as LinearComment[]
         const opt = optimisticCommentsRef.current
         if (opt.length > 0) {
@@ -124,9 +122,7 @@ export default function LinearItemDrawer({
     // oxlint-disable-next-line react-hooks/exhaustive-deps
   }, [issue?.id, issue?.workspaceId, providerSettings])
 
-  // Why: same pointer-events fix as GitHubItemDialog — Radix may leave
-  // pointer-events: none on body when overlays transition.
-  // oxlint-disable-next-line react-hooks/exhaustive-deps
+  // Clear Radix’s stale body pointer-events after overlay transitions, as GitHubItemDialog does.
   useEffect(() => {
     if (!issue?.id) {
       return
