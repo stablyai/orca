@@ -154,10 +154,11 @@ describe('startup device attributes query filter', () => {
   })
 
   it('removes a cursor position query split at every chunk boundary', () => {
+    const query = '\x1b[6n'
     for (let split = 1; split < 4; split++) {
       const filter = new StartupDeviceAttributesQueryFilter()
-      expect(filter.accept(`before\x1b[6n`.slice(0, 6 + split))).toBe('before')
-      expect(filter.accept(`\x1b[6n`.slice(split) + 'after')).toBe('after')
+      expect(filter.accept(`before${query}`.slice(0, 6 + split))).toBe('before')
+      expect(filter.accept(`${query.slice(split)}after`)).toBe('after')
       expect(filter.release()).toBe('')
     }
   })
