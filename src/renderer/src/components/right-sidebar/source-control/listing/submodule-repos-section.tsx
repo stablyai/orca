@@ -24,12 +24,10 @@ export function submoduleRepoActionsEnabled(
 
 function SubmoduleRepoRow({
   repo,
-  busyAction,
   anyBusy,
   onAction
 }: {
   repo: GitSubmoduleRepo
-  busyAction: SubmoduleRepoAction | null
   anyBusy: boolean
   onAction: (action: SubmoduleRepoAction) => void
 }): React.JSX.Element {
@@ -98,7 +96,6 @@ function SubmoduleRepoRow({
         disabled={anyBusy || !enabled.push}
         onClick={() => onAction('push')}
       />
-      {busyAction ? <span className="sr-only">{busyAction}</span> : null}
     </div>
   )
 }
@@ -129,7 +126,6 @@ export function SourceControlSubmoduleReposSection({
           <SubmoduleRepoRow
             key={repo.path}
             repo={repo}
-            busyAction={busy?.path === repo.path ? busy.action : null}
             anyBusy={busy !== null}
             onAction={(action) => void runAction(repo.path, action)}
           />
