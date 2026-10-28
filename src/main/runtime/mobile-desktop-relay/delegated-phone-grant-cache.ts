@@ -35,8 +35,12 @@ export class DelegatedPhoneGrantCache {
   get(host: MobileDesktopRelayHost, phoneKey: string | null): Promise<DelegatedPhoneGrants> {
     const cached = this.entries.get(host.environmentId)
     if (cached && !cached.settled) {
+      // A device enrolled mid-sync is missing from that sync's list, so it must re-sync.
       return cached.promise.then((grants) =>
-        grants.fence === host.fence ? grants : this.get(host, phoneKey)
+        grants.fence !== host.fence ||
+        (grants.kind === 'ready' && phoneKey !== null && !grants.asked.has(phoneKey))
+          ? this.get(host, phoneKey)
+          : grants
       )
     }
     const answered =
