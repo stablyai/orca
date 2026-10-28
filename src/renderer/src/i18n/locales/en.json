@@ -25847,6 +25847,7 @@
       "worktreeNavigateDown": "Next worktree",
       "workspaceCreate": "Create worktree",
       "workspaceRename": "Rename worktree",
+      "workspaceOpenUrl": "Open Workspace Link",
       "voiceDictation": "Dictation",
       "sidebarExplorerToggle": "Show Explorer",
       "sidebarFocusWorktreeList": "Focus worktree list",
