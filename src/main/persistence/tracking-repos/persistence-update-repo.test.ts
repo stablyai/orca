@@ -291,6 +291,26 @@ describe('Store', () => {
     ])
   })
 
+  it('saves a project default with independent setup creation', async () => {
+    const store = await createStore()
+    store.addRepo({
+      ...makeRepo({ id: 'r1', displayName: 'Cloud Project' }),
+      upstream: { owner: 'stablyai', repo: 'cloud-project' }
+    })
+
+    const result = store.createProjectHostSetup({
+      projectId: 'github:stablyai/cloud-project',
+      hostId: 'runtime:gpu-vm',
+      defaultTuiAgent: 'codex'
+    })
+
+    expect(result?.project.defaultTuiAgent).toBe('codex')
+    expect(
+      store.getProjects().find((project) => project.id === result?.project.id)?.defaultTuiAgent
+    ).toBe('codex')
+    expect(store.getProjectHostSetups()).toContainEqual(result?.setup)
+  })
+
   it('rejects duplicate project host setup creation for the same host', async () => {
     const store = await createStore()
     store.addRepo({

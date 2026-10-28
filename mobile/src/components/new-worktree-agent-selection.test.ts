@@ -24,6 +24,31 @@ describe('new worktree agent selection', () => {
     })
   })
 
+  it('uses the target project result instead of the global default and keeps an explicit override', () => {
+    const input = {
+      visible: true,
+      selectedAgent: newWorktreeAgentOptionFor('claude'),
+      runtimeSettings: { defaultTuiAgent: 'claude' as const },
+      detectedAgentIds: new Set(['claude', 'codex']),
+      resolvedDefaultAgent: 'codex' as const
+    }
+    expect(resolveNewWorktreeAgentSelection({ ...input, agentOverridden: false })).toEqual({
+      selectedAgent: newWorktreeAgentOptionFor('codex'),
+      agentOverridden: false
+    })
+    expect(resolveNewWorktreeAgentSelection({ ...input, agentOverridden: true })).toEqual({
+      selectedAgent: newWorktreeAgentOptionFor('claude'),
+      agentOverridden: true
+    })
+    expect(
+      resolveNewWorktreeAgentSelection({
+        ...input,
+        agentOverridden: false,
+        resolvedDefaultAgent: null
+      }).selectedAgent
+    ).toBe(NEW_WORKTREE_BLANK_AGENT)
+  })
+
   it('keeps an available user override', () => {
     const selected = newWorktreeAgentOptionFor('codex')
     const resolved = resolveNewWorktreeAgentSelection({

@@ -14,8 +14,9 @@ export function federatedUnknownReceipt(
   worker: { dispatch_id: string; state: string; stage: string; last_error: string | null },
   taskId: string,
   serverName: string,
-  launch: OrchestrationWorkerLaunchReceipt
-): unknown {
+  launch: OrchestrationWorkerLaunchReceipt,
+  agentSelection?: { agent: string; source: string; projectId?: string; projectName?: string }
+) {
   return {
     taskId,
     dispatchId: worker.dispatch_id,
@@ -23,6 +24,7 @@ export function federatedUnknownReceipt(
     stage: worker.stage,
     server: { name: serverName },
     launch,
+    ...(agentSelection ? { agentSelection } : {}),
     failedStage: worker.stage,
     lastError: worker.last_error,
     effects: [],

@@ -16,7 +16,6 @@ import type { Repo } from '../../shared/repo-types'
 import {
   getRepoExecutionHostId,
   getSshTargetIdForExecutionHost,
-  parseExecutionHostId,
   type ExecutionHostId
 } from '../../shared/execution-host'
 import { getProjectHostSetupForRepo } from '../../shared/project-host-setup-lookup'
@@ -27,6 +26,11 @@ import { runWorktreeChangeInvalidators } from '../ipc/worktree-change-invalidato
 import { prepareLocalWorktreeRootForRepo } from '../worktree-root-preparation'
 import { updateProjectHostSetupWithProvenKind } from '../folder-repo-git-conversion'
 import type { RuntimeStore } from './runtime-store-contract'
+import {
+  assertProjectSetupDefault,
+  saveProjectSetupDefault
+} from './project-host-setup-default-agent'
+import { assertCloneHostIsSupported } from './project-host-setup-clone-host'
 import { readAllWorktreeMetaForRepo } from '../persistence/host-qualified-worktree-meta'
 import { readCurrentGitRemoteIdentity } from '../repo-git-remote-identity'
 import {
@@ -54,16 +58,6 @@ type RuntimeProjectHostSetupDependencies = {
   invalidateWorktreeScan: (repoId: string) => void
   notifyReposChanged: () => void
   countLiveTerminalsForRepo: (repo: Repo) => number
-}
-
-// cloneRepo runs locally; accepting SSH would register the client's checkout as a remote repo.
-function assertCloneHostIsSupported(hostId: ExecutionHostId | null | undefined): void {
-  if (parseExecutionHostId(hostId)?.kind !== 'ssh') {
-    return
-  }
-  throw new Error(
-    'Cloning onto an SSH host is not supported. Clone the repository on the host, then set the project up from that existing folder.'
-  )
 }
 
 function sshTargetNotServedError(connectionId: string): SshHostNotServedError {
@@ -122,6 +116,7 @@ export class RuntimeProjectHostSetupController {
     if (!this.deps.getStore()) {
       throw new Error('runtime_unavailable')
     }
+    assertProjectSetupDefault(args.defaultTuiAgent)
     const kind = args.kind === 'folder' ? 'folder' : 'git'
     const knownRepoIds = new Set(this.deps.listRepos().map((repo) => repo.id))
     const sshTargetId = getSshTargetIdForExecutionHost(args.hostId)
@@ -148,6 +143,7 @@ export class RuntimeProjectHostSetupController {
 
   async setupClone(args: ProjectHostSetupCloneArgs): Promise<ProjectHostSetupResult> {
     assertCloneHostIsSupported(args.hostId)
+    assertProjectSetupDefault(args.defaultTuiAgent)
     const knownRepoIds = new Set(this.deps.listRepos().map((repo) => repo.id))
     const repo = await this.deps.cloneRepo(args.url, args.destination, args.hostId)
     return this.completeSetup(
@@ -260,7 +256,15 @@ export class RuntimeProjectHostSetupController {
     folderRemote: Pick<Repo, 'gitRemoteIdentity'>
   ): ProjectHostSetupResult {
     try {
-      return this.linkRepo(args, initialRepo, folderRemote)
+      const result = saveProjectSetupDefault(
+        this.deps.getStore(),
+        this.linkRepo(args, initialRepo, folderRemote),
+        args.defaultTuiAgent
+      )
+      if (args.defaultTuiAgent !== undefined) {
+        this.deps.notifyReposChanged()
+      }
+      return result
     } catch (error) {
       if (repoWasCreated) {
         // Rollback must remove only this host's row, never a same-id sibling.

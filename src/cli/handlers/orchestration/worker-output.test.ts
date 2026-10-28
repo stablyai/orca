@@ -42,6 +42,21 @@ function fleetProjection(verdict: 'live' | 'unverifiable' | 'exited'): Orchestra
 }
 
 describe('worker-start plain formatting', () => {
+  it('names the resolved target project and agent source', () => {
+    expect(
+      formatWorkerStart({
+        taskId: 'task_b',
+        dispatchId: 'dispatch_b',
+        state: 'ready',
+        agentSelection: {
+          agent: 'codex',
+          source: 'project',
+          projectId: 'project-b',
+          projectName: 'Project B'
+        }
+      })
+    ).toContain('Agent: codex (project, target project Project B)')
+  })
   it('renders partial effects, residual resources, and exact recovery commands for unknown starts', () => {
     const nextCommands = [
       'orca orchestration worker-show --dispatch ctx_unknown --json',

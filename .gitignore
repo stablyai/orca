@@ -95,6 +95,7 @@ docs/**
 !docs/bug-reproductions/
 !docs/bug-reproductions/**
 !docs/STYLEGUIDE.md
+!docs/project-default-agent-spec.md
 !docs/styleguide/
 !docs/styleguide/**
 !docs/agents-md-refs/

@@ -39,6 +39,7 @@ export type NewWorkspaceComposerCardProps = {
   onComposerNodeChange?: (node: HTMLDivElement | null) => void
   nameInputRef?: React.RefObject<HTMLInputElement | null>
   quickAgent: TuiAgent | null
+  effectiveDefaultAgent?: TuiAgent | 'blank' | null
   agentSurfaceRows?: AgentComboboxSurfaceRows
   onQuickAgentChange: (
     agent: TuiAgent | null,

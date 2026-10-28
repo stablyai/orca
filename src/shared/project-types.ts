@@ -6,6 +6,7 @@ import type { RepoHookSettings } from './orca-yaml-hook-types'
 import type { RepoSourceControlAiOverrides } from './source-control-ai-types'
 import type { Repo, RepoKind } from './repo-types'
 import type { ProjectHostSetupTarget } from './project-host-setup-target'
+import type { TuiAgent } from './tui-agent'
 
 export type ProjectProviderIdentity = {
   provider: 'github'
@@ -24,6 +25,8 @@ export type Project = {
   gitRemoteIdentity?: GitRemoteIdentity
   /** Local Windows projects inherit the global runtime default unless this override is set. */
   localWindowsRuntimePreference?: LocalWindowsRuntimePreference
+  /** Missing or null inherits the execution host's global default. */
+  defaultTuiAgent?: TuiAgent | 'blank' | null
   sourceRepoIds: string[]
   createdAt: number
   updatedAt: number
@@ -31,7 +34,7 @@ export type Project = {
 
 export type ProjectUpdateArgs = {
   projectId: string
-  updates: Partial<Pick<Project, 'localWindowsRuntimePreference'>>
+  updates: Partial<Pick<Project, 'localWindowsRuntimePreference' | 'defaultTuiAgent'>>
 }
 
 export type ProjectHostSetupState = 'ready' | 'not-set-up' | 'setting-up' | 'error' | 'unsupported'
@@ -69,6 +72,7 @@ export type ProjectHostSetup = {
 
 export type ProjectHostSetupExistingFolderArgs = {
   projectId: string
+  defaultTuiAgent?: Project['defaultTuiAgent']
   projectProviderIdentity?: ProjectProviderIdentity
   hostId: ExecutionHostId
   path: string
@@ -79,6 +83,7 @@ export type ProjectHostSetupExistingFolderArgs = {
 
 export type ProjectHostSetupCreateArgs = {
   projectId: string
+  defaultTuiAgent?: Project['defaultTuiAgent']
   hostId: ExecutionHostId
   setupId?: string
   path?: string
@@ -92,6 +97,7 @@ export type ProjectHostSetupCreateArgs = {
 
 export type ProjectHostSetupCloneArgs = {
   projectId: string
+  defaultTuiAgent?: Project['defaultTuiAgent']
   projectProviderIdentity?: ProjectProviderIdentity
   hostId: ExecutionHostId
   url: string

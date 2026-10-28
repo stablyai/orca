@@ -18,6 +18,7 @@ export type ReposIpcMocks = {
     | 'removeProjectForHost'
     | 'getRepo'
     | 'getProjects'
+    | 'updateProject'
     | 'getProjectHostSetups'
     | 'updateProjectHostSetup'
     | 'getProjectGroups'
@@ -50,6 +51,7 @@ export function createReposIpcMocks(): ReposIpcMocks {
       getRepo: vi.fn(),
       updateRepo: vi.fn(),
       getProjects: vi.fn().mockReturnValue([]),
+      updateProject: vi.fn(),
       getProjectHostSetups: vi.fn().mockReturnValue([]),
       updateProjectHostSetup: vi.fn(),
       getProjectGroups: vi.fn().mockReturnValue([]),
@@ -165,6 +167,7 @@ export function resetProjectGroupMocks(
   mocks.mockStore.moveProjectToGroup.mockReset()
   mocks.mockStore.addRepo.mockReset()
   mocks.mockStore.getProjects.mockReset().mockReturnValue([])
+  mocks.mockStore.updateProject.mockReset()
   mocks.mockStore.getProjectHostSetups.mockReset().mockReturnValue([])
   mocks.mockStore.updateProjectHostSetup.mockReset()
   mocks.mockStore.getRepos.mockReset()
@@ -184,6 +187,7 @@ export function resetLocalRepoMocks(mocks: ReposIpcMocks): void {
   mocks.mockStore.addRepo.mockReset()
   mocks.mockStore.updateRepo.mockReset()
   mocks.mockStore.getProjects.mockReset().mockReturnValue([])
+  mocks.mockStore.updateProject.mockReset()
   mocks.mockStore.getProjectHostSetups.mockReset().mockReturnValue([])
   mocks.mockStore.updateProjectHostSetup.mockReset()
   mocks.gitSpawnMock.mockReset()

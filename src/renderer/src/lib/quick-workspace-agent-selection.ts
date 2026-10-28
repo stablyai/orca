@@ -75,7 +75,7 @@ export function resolveQuickWorkspaceAgentSelection({
   ) {
     return { quickAgent: quickAgentOverride, quickAgentOverride }
   }
-  return { quickAgent: preferredQuickAgent, quickAgentOverride: preferredQuickAgent }
+  return { quickAgent: preferredQuickAgent, quickAgentOverride: undefined }
 }
 
 /** The workspace a composer's create would launch its agent in, before it exists. */

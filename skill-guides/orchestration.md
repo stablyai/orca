@@ -47,6 +47,8 @@ open a chat or a terminal per the user's Chat UI setting, as `worker-start` does
 Never substitute a non-Orca subagent tool when Orca orchestration provenance was
 requested.
 
+When the user requests a new worker without naming its agent, pass `--agent default` to `worker-start`. Orca resolves the project of the selected workspace or the target repository on the worker's execution host, including remote hosts. The coordinator's project, agent, and parent lineage do not choose the worker's agent. If the user explicitly names an agent, pass that ID instead; it does not change the target project's saved default. A host that cannot resolve `default`, an unavailable configured agent, or a `Blank Terminal` default must fail before a worker or workspace is created. `worker-start` still requires `--agent` or `--terminal`.
+
 ## Authority and safety floor
 
 - A Run is a durable namespace and coordinator inbox; it does not schedule or
@@ -108,8 +110,8 @@ waiting. `worker-start --spec` creates the Task and its attempt in one call:
 ```text
 ORCA status --json
 ORCA orchestration run-create --objective "<objective>" --json
-ORCA orchestration worker-start --spec "<worker A task>" --worktree current --agent codex --json
-ORCA orchestration worker-start --spec "<worker B task>" --worktree current --agent claude --json
+ORCA orchestration worker-start --spec "<worker A task>" --worktree current --agent default --json
+ORCA orchestration worker-start --spec "<worker B task>" --worktree current --agent default --json
 ORCA orchestration check --wait --types "worker_done,escalation,question" --timeout-ms 900000 --json
 ```
 

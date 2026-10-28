@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { Project, ProjectHostSetup } from '../../../../shared/project-types'
 import type { Repo } from '../../../../shared/repo-types'
 import {
+  createCompatibleRuntimeStatusResponse,
   createCompatibleRuntimeStatusResponseIfNeeded,
   type RuntimeEnvironmentCallRequest
 } from '../../runtime/runtime-compatibility-test-fixture'
@@ -101,6 +102,121 @@ export function registerReposProjectHostLifecycleTests(): void {
         setupState: 'setting-up',
         setupMethod: 'provisioned'
       })
+    })
+
+    it('copies a configured project agent default to a newly added host setup', async () => {
+      const sourceProject = { ...project, defaultTuiAgent: 'codex' as const }
+      const store = createTestStore()
+      store.setState({
+        endpointProjects: [sourceProject],
+        endpointProjectHostSetups: [
+          { ...runtimeSetup, id: 'local-setup', hostId: 'local', repoId: 'local-repo' }
+        ]
+      })
+      runtimeEnvironmentCall.mockImplementation(async (args: RuntimeEnvironmentCallRequest) => {
+        if (args.method === 'projectHostSetup.create') {
+          return {
+            id: 'create',
+            ok: true,
+            result: { result: { project: sourceProject, setup: runtimeSetup } }
+          }
+        }
+        throw new Error(`Unexpected method ${args.method}`)
+      })
+
+      const result = await store
+        .getState()
+        .createProjectHostSetup({ projectId: project.id, hostId: 'runtime:env-1' })
+      expect(result?.project.defaultTuiAgent).toBe('codex')
+      expect(runtimeEnvironmentCall).toHaveBeenCalledWith(
+        expect.objectContaining({
+          selector: 'env-1',
+          method: 'projectHostSetup.create',
+          params: { projectId: project.id, hostId: 'runtime:env-1', defaultTuiAgent: 'codex' }
+        })
+      )
+      expect(runtimeEnvironmentCall).toHaveBeenCalledTimes(1)
+    })
+
+    it('does not adopt a setup when the host omits the requested default in its response', async () => {
+      const store = createTestStore()
+      store.setState({ endpointProjects: [{ ...project, defaultTuiAgent: 'codex' }] })
+      runtimeEnvironmentCall.mockResolvedValue({
+        id: 'create',
+        ok: true,
+        result: { result: { project, setup: runtimeSetup } }
+      })
+
+      await expect(
+        store.getState().createProjectHostSetup({ projectId: project.id, hostId: 'runtime:env-1' })
+      ).resolves.toBeNull()
+      expect(store.getState().endpointProjectHostSetups).toEqual([])
+      expect(runtimeEnvironmentCall).toHaveBeenCalledTimes(1)
+    })
+
+    it('does not retry a timed-out setup create request with a project default', async () => {
+      const store = createTestStore()
+      store.setState({ endpointProjects: [{ ...project, defaultTuiAgent: 'codex' }] })
+      runtimeEnvironmentCall.mockRejectedValue(new Error('request timed out'))
+
+      await expect(
+        store.getState().createProjectHostSetup({ projectId: project.id, hostId: 'runtime:env-1' })
+      ).resolves.toBeNull()
+      expect(runtimeEnvironmentCall).toHaveBeenCalledTimes(1)
+      expect(store.getState().endpointProjectHostSetups).toEqual([])
+    })
+
+    it('rejects an old target host before creating a setup with a configured project default', async () => {
+      const sourceProject = { ...project, defaultTuiAgent: 'codex' as const }
+      const store = createTestStore()
+      store.setState({
+        endpointProjects: [sourceProject],
+        endpointProjectHostSetups: [
+          { ...runtimeSetup, id: 'local-setup', hostId: 'local', repoId: 'local-repo' }
+        ]
+      })
+      const status = createCompatibleRuntimeStatusResponse()
+      if (!status.ok) {
+        throw new Error('Invalid test status')
+      }
+      const oldStatus = { ...status, result: { ...status.result, capabilities: [] } }
+      runtimeEnvironmentTransportCall.mockImplementation((args: RuntimeEnvironmentCallRequest) =>
+        args.method === 'status.get' ? oldStatus : runtimeEnvironmentCall(args)
+      )
+
+      await expect(
+        store.getState().createProjectHostSetup({ projectId: project.id, hostId: 'runtime:env-1' })
+      ).resolves.toBeNull()
+      expect(runtimeEnvironmentCall).not.toHaveBeenCalled()
+      expect(projectsCreateHostSetup).not.toHaveBeenCalled()
+    })
+
+    it('rejects an old target host before cloning a configured project', async () => {
+      const store = createTestStore()
+      store.setState({
+        endpointProjects: [{ ...project, defaultTuiAgent: 'codex' }],
+        endpointProjectHostSetups: [
+          { ...runtimeSetup, id: 'local-setup', hostId: 'local', repoId: 'local-repo' }
+        ]
+      })
+      const status = createCompatibleRuntimeStatusResponse()
+      if (!status.ok) {
+        throw new Error('Invalid test status')
+      }
+      const oldStatus = { ...status, result: { ...status.result, capabilities: [] } }
+      runtimeEnvironmentTransportCall.mockImplementation((args: RuntimeEnvironmentCallRequest) =>
+        args.method === 'status.get' ? oldStatus : runtimeEnvironmentCall(args)
+      )
+
+      await expect(
+        store.getState().setupProjectClone({
+          projectId: project.id,
+          hostId: 'runtime:env-1',
+          url: 'https://example.test/repo.git',
+          destination: '/remote/repo'
+        })
+      ).resolves.toBeNull()
+      expect(runtimeEnvironmentCall).not.toHaveBeenCalled()
     })
 
     it('updates runtime-owned project host setups through their owning runtime', async () => {

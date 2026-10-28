@@ -16,6 +16,7 @@ import { okFixture } from '../test-fixtures'
 import { RuntimeClient } from '../runtime-client'
 import { ORCHESTRATION_WORKER_COMMAND_SPECS } from '../specs/orchestration-worker-specs'
 import { ORCHESTRATION_WORKER_LAUNCH_PREFERENCES_RUNTIME_CAPABILITY } from '../../shared/protocol-version'
+import { PROJECT_DEFAULT_AGENT_RUNTIME_CAPABILITY } from '../../shared/agent-launch-runtime-capability'
 
 const client = new RuntimeClient('/tmp/orca-worker-cli', 60_000, null, null)
 
@@ -196,6 +197,45 @@ describe('orchestration worker-start CLI contract', () => {
     ).rejects.toMatchObject({ code: 'incompatible_runtime' })
 
     expect(callMock).toHaveBeenCalledTimes(1)
+  })
+
+  it('rejects --agent default before mutation on an older runtime', async () => {
+    callMock.mockResolvedValueOnce({ result: { capabilities: [] } })
+
+    await expect(
+      invokeWorkerStart(
+        new Map<string, string | boolean>([
+          ['task', 'task_1'],
+          ['agent', 'default'],
+          ['from', 'term_coord']
+        ])
+      )
+    ).rejects.toMatchObject({ code: 'incompatible_runtime' })
+    expect(callMock).toHaveBeenCalledTimes(1)
+  })
+
+  it('forwards --agent default to a capable execution runtime', async () => {
+    callMock
+      .mockResolvedValueOnce({
+        result: { capabilities: [PROJECT_DEFAULT_AGENT_RUNTIME_CAPABILITY] }
+      })
+      .mockResolvedValueOnce({
+        result: { runId: 'run_1', taskId: 'task_1', dispatchId: 'ctx_1', state: 'ready' }
+      })
+
+    await invokeWorkerStart(
+      new Map<string, string | boolean>([
+        ['task', 'task_1'],
+        ['agent', 'default'],
+        ['from', 'term_coord']
+      ])
+    )
+
+    expect(callMock).toHaveBeenNthCalledWith(
+      2,
+      'orchestration.workerStart',
+      expect.objectContaining({ agent: 'default' })
+    )
   })
 
   it('sets an unsuccessful exit code for an unknown receipt', async () => {
