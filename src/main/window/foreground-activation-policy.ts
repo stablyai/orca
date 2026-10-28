@@ -7,7 +7,7 @@ type ActivationPolicyApp = {
   setActivationPolicy: (policy: 'accessory' | 'prohibited' | 'regular') => void
 }
 
-type PolicyEnv = Readonly<Record<string, string | undefined>>
+export type PolicyEnv = Readonly<Record<string, string | undefined>>
 
 /** orcad's headless browser provider: a serve process on a throwaway profile that no user drives. */
 export function isOrcadSidecarLaunch(env: PolicyEnv = process.env): boolean {

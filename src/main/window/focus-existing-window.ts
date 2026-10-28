@@ -2,7 +2,8 @@ import type { App, BrowserWindow } from 'electron'
 import {
   isBackgroundLaunch,
   isWindowlessLaunch,
-  showWindowWithoutStealingFocus
+  showWindowWithoutStealingFocus,
+  type PolicyEnv
 } from './foreground-activation-policy'
 
 type FocusTimer = (callback: () => void, ms: number) => unknown
@@ -20,9 +21,9 @@ export type FocusExistingMainWindowOptions = {
   warn?: (message: string, error?: unknown) => void
 }
 
-function safelyFocusApp(app: Pick<App, 'focus'>): void {
+export function safelyFocusApp(app: Pick<App, 'focus'>, env: PolicyEnv = process.env): void {
   // Real second-instance reopen may claim foreground; automated launches must never do so.
-  if (isBackgroundLaunch()) {
+  if (isBackgroundLaunch(env)) {
     return
   }
   try {
