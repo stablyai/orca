@@ -207,6 +207,11 @@ describe('the document host seams, once the page sets them', () => {
     const unicodeAddon = { dispose() {} }
     const webglAddon = { dispose() {} }
     const posted: Record<string, unknown>[] = []
+    // A laid-out engine's box, which is what a pong must carry when it stands in for a dropped
+    // web-ready: without it the recovered subscribe goes out unmeasured.
+    Object.assign(terminal, {
+      _core: { _renderService: { dimensions: { css: { cell: { width: 8, height: 16 } } } } }
+    })
     const scope = startedScope({
       createTerminal: (created) => {
         options.push(created)
@@ -223,7 +228,12 @@ describe('the document host seams, once the page sets them', () => {
     expect(terminal.loaded).toContain(unicodeAddon)
     expect(terminal.unicode.activeVersion).toBe('11')
     handleMsg(scope, { type: 'ping', id: 3 })
-    expect(posted).toContainEqual({ type: 'pong', pingId: 3 })
+    expect(posted).toContainEqual({
+      type: 'pong',
+      pingId: 3,
+      terminalAvailable: true,
+      cellBox: { fontScale: 1, cellWidth: 8, cellHeight: 16 }
+    })
   })
 
   it('reports no webgl addon as a DOM-renderer fallback rather than as a failure', () => {

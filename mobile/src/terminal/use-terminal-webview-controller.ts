@@ -51,6 +51,7 @@ export function useTerminalWebViewController(
   } = props
   const { pingsOnForegroundRecovery, post } = transport
   const isWebReadyRef = useRef(false)
+  const webReadyNotifiedRef = useRef(false)
   const pendingMessages = useMemo(() => createTerminalWebViewPendingMessages(), [])
   const messageIdRef = useRef(0)
   const pendingPingIdRef = useRef<number | null>(null)
@@ -109,6 +110,7 @@ export function useTerminalWebViewController(
       clearWebReadyWatchdog()
       clearEngineError()
       if (notifyParent) {
+        webReadyNotifiedRef.current = true
         onWebReady?.()
       }
       // Reload drops commands; readiness must restore the selected theme even if its React value did not change.
@@ -124,6 +126,13 @@ export function useTerminalWebViewController(
       terminalTheme
     ]
   )
+
+  const probeWebReady = useCallback(() => {
+    if (isWebReadyRef.current || pendingPingIdRef.current !== null) {
+      return
+    }
+    pendingPingIdRef.current = sendToDocument({ type: 'ping' })
+  }, [sendToDocument])
 
   const receive = useCallback(
     (msg: Record<string, unknown>) => {
@@ -142,9 +151,15 @@ export function useTerminalWebViewController(
       } else if (
         msg.type === 'pong' &&
         typeof msg.pingId === 'number' &&
+        // A document whose engine script failed still answers pings; it is not ready.
+        msg.terminalAvailable === true &&
         msg.pingId === pendingPingIdRef.current
       ) {
-        confirmWebReady(false)
+        // Why: a pong announces only a document whose web-ready was dropped; a foreground-recovery
+        // pong must not re-announce a document the parent already subscribed to. Its cell box is
+        // what sizes that recovered subscribe's viewport.
+        cellBoxRef.current = readTerminalCellBox(msg)
+        confirmWebReady(!webReadyNotifiedRef.current)
       } else if (msg.type === 'ready') {
         promises.resolveReady()
       } else if (msg.type === 'cell-box') {
@@ -195,6 +210,7 @@ export function useTerminalWebViewController(
   // Drop the old generation’s queue; its pre-snapshot chunks would corrupt the replacement buffer.
   const resetReadiness = useCallback(() => {
     isWebReadyRef.current = false
+    webReadyNotifiedRef.current = false
     pendingPingIdRef.current = null
     pendingMessages.clear()
     writeCoalescer.clear()
@@ -297,6 +313,7 @@ export function useTerminalWebViewController(
     confirmWebReady,
     engineError,
     handle,
+    probeWebReady,
     receive,
     reportNativeEngineError,
     resetReadiness
