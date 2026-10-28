@@ -9,5 +9,7 @@ describe('PR refresh account isolation', () => {
       refreshKey({ ...candidate, localGitOptions: { ghAccount: { host, user } } })
     expect(new Set([key('Alice'), key('Bob'), refreshKey(candidate)]).size).toBe(3)
     expect(key(' Alice ', ' GitHub.COM ')).toBe(key('Alice'))
+    expect(key('alice')).not.toBe(key('Alice'))
+    expect(key('Alice', 'github.example.com')).not.toBe(key('Alice'))
   })
 })
