@@ -97,7 +97,11 @@ it('retains the accepted route and resolves project task drafts for either launc
         )
       })
       useAppStore.setState({
-        settings: { ...settings, experimentalNativeChat: route === 'terminal-tui' }
+        settings: {
+          ...settings,
+          experimentalNativeChat: route === 'terminal-tui',
+          linkedWorkItemPromptTemplate: '{{url}} /skill'
+        }
       })
       await act(async () => {
         deferred.resolve(prepared)

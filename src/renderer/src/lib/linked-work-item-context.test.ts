@@ -290,6 +290,13 @@ describe('resolveQuickCreateLinkedWorkItemPrompt', () => {
         '  use this note  '
       )
     ).toEqual({ prompt: 'use this note', draftPrompt: null })
+    expect(
+      resolveQuickCreateLinkedWorkItemPrompt(
+        { provider: 'linear', number: 0, url: '' },
+        '  use this note  ',
+        '{{url}} /skill'
+      )
+    ).toEqual({ prompt: 'use this note', draftPrompt: null })
   })
 
   it('drafts the note above a labeled Linear URL when the identifier is missing', () => {
