@@ -77,3 +77,13 @@ export async function buildPaneProcessFingerprint(
   members.sort()
   return `${rootPid}@${rootStart}#${root.tpgid}:${jobControlState(root.stat)}|${members.join(',')}`
 }
+
+/** The foreground process group the pane's tty had when the fingerprint was taken. */
+export function paneFingerprintForegroundGroup(fingerprint: string): number | null {
+  const match = /#(\d+):/.exec(fingerprint.slice(0, fingerprint.indexOf('|')))
+  if (!match) {
+    return null
+  }
+  const group = Number(match[1])
+  return Number.isSafeInteger(group) && group > 0 ? group : null
+}

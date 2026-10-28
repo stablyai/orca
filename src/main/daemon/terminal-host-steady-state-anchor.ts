@@ -1,12 +1,15 @@
 import { recognizeAgentProcess } from '../../shared/agent-process-recognition'
 import type { RemoteForegroundEvidence } from '../../shared/foreground-process-evidence'
 import { buildPaneProcessFingerprint } from '../providers/posix-pane-foreground-fingerprint'
+import {
+  markPaneFingerprintVerified,
+  type RevalidatedPaneFingerprint
+} from '../providers/pane-fingerprint-revalidation'
 import type { Session } from './session'
 
-/** Full-capture identity may be reused only while its pane fingerprint and raw foreground name match. */
-export type SteadyStateAnchor = {
+/** Full-capture identity may be reused only while its raw foreground name matches and its pane fingerprint still holds. */
+export type SteadyStateAnchor = RevalidatedPaneFingerprint & {
   agentName: string
-  fingerprint: string
   rawFallback: string | null
 }
 
@@ -41,9 +44,11 @@ export async function rememberSteadyStateAnchor(
     anchors.delete(session)
     return
   }
-  anchors.set(session, {
+  const anchor: SteadyStateAnchor = {
     agentName: evidence.processName,
     fingerprint,
     rawFallback: session.getForegroundProcess({ rawFallback: true })
-  })
+  }
+  markPaneFingerprintVerified(anchor)
+  anchors.set(session, anchor)
 }

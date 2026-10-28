@@ -1,6 +1,5 @@
 import type { PtyChildProcessVerdict } from '../../shared/terminal-process-inspection'
 import { recognizeAgentProcessFromCommandLine } from '../../shared/agent-process-recognition'
-import { getCheapProcessTableSnapshot } from '../../shared/cheap-process-table-snapshot-reader'
 import {
   getProcessTableSnapshot,
   getStrictProcessTableSnapshotWithAge
@@ -16,6 +15,11 @@ import {
   inspectSpawnFileWindowsChildProcesses
 } from '../daemon/pty-subprocess/spawn-file-child-processes'
 import { buildPaneProcessFingerprint } from './posix-pane-foreground-fingerprint'
+import {
+  markPaneFingerprintVerified,
+  paneFingerprintStillMatches,
+  type RevalidatedPaneFingerprint
+} from './pane-fingerprint-revalidation'
 import { isRetiredPtyMaster } from '../pty/node-pty-master-fd-retirement'
 import { ptyShellProcessId } from '../windows/windows-pty-job'
 import { resolveForegroundFallbackProcess } from './local-pty-launch-helpers'
@@ -87,7 +91,7 @@ async function revalidateCachedPosixAgent(
   proc: { pid: number },
   cachedEntry: {
     name: string
-    steady?: { fingerprint: string; fallbackProcess: string | null } | null
+    steady?: (RevalidatedPaneFingerprint & { fallbackProcess: string | null }) | null
   },
   fallbackProcess: string | null
 ): Promise<boolean> {
@@ -96,11 +100,7 @@ async function revalidateCachedPosixAgent(
     return false
   }
   try {
-    const observed = await buildPaneProcessFingerprint(
-      await getCheapProcessTableSnapshot(),
-      proc.pid
-    )
-    return observed !== null && observed === steady.fingerprint
+    return await paneFingerprintStillMatches(steady, fallbackProcess, proc.pid)
   } catch {
     return false
   }
@@ -229,13 +229,18 @@ export async function getLocalPtyForegroundProcess(id: string): Promise<string |
 async function readPosixSteadyState(
   shellPid: number,
   fallbackProcess: string | null
-): Promise<{ fingerprint: string; fallbackProcess: string | null } | null> {
+): Promise<(RevalidatedPaneFingerprint & { fallbackProcess: string | null }) | null> {
   if (process.platform === 'win32') {
     return null
   }
   try {
     const fingerprint = await buildPaneProcessFingerprint(await getProcessTableSnapshot(), shellPid)
-    return fingerprint === null ? null : { fingerprint, fallbackProcess }
+    if (fingerprint === null) {
+      return null
+    }
+    const steady = { fingerprint, fallbackProcess }
+    markPaneFingerprintVerified(steady)
+    return steady
   } catch {
     return null
   }

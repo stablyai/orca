@@ -4,10 +4,9 @@ import { isShellProcess } from '../../shared/agent-detection'
 import { recognizeAgentProcess } from '../../shared/agent-process-recognition'
 import type { PtyChildProcessVerdict } from '../../shared/terminal-process-inspection'
 import type { RemoteForegroundEvidence } from '../../shared/foreground-process-evidence'
-import { getCheapProcessTableSnapshot } from '../../shared/cheap-process-table-snapshot-reader'
 import { getStrictProcessTableSnapshotWithAge } from '../../shared/process-table-snapshot-reader'
 import { resolveRemoteForegroundEvidence } from '../providers/agent-foreground-process'
-import { buildPaneProcessFingerprint } from '../providers/posix-pane-foreground-fingerprint'
+import { paneFingerprintStillMatches } from '../providers/pane-fingerprint-revalidation'
 import type { Session } from './session'
 import { resolveSpawnFileForegroundFromRows } from './pty-subprocess/spawn-file-foreground-process'
 import { inspectSpawnFileChildProcessesFromRows } from './pty-subprocess/spawn-file-child-processes'
@@ -166,11 +165,9 @@ async function readAnchoredForeground(session: Session): Promise<string | null> 
     return null
   }
   try {
-    const observed = await buildPaneProcessFingerprint(
-      await getCheapProcessTableSnapshot(),
-      session.pid
-    )
-    return observed !== null && observed === anchor.fingerprint ? anchor.agentName : null
+    return (await paneFingerprintStillMatches(anchor, anchor.rawFallback, session.pid))
+      ? anchor.agentName
+      : null
   } catch {
     return null
   }

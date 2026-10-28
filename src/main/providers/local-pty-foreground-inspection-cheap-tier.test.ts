@@ -135,4 +135,28 @@ describe('local POSIX provider cheap-tier revalidation', () => {
     expect(await getLocalPtyForegroundProcess(ID)).toBe('claude')
     expect(resolveMock).toHaveBeenCalledTimes(2)
   })
+
+  it('an agent leading its own group is re-proved without a cheap capture until the next window', async () => {
+    vi.useFakeTimers({ toFake: ['Date'] })
+    vi.setSystemTime(1_000_000)
+    const kill = vi.spyOn(process, 'kill').mockImplementation(() => true)
+    try {
+      proc.process = 'claude'
+      expect(await getLocalPtyForegroundProcess(ID)).toBe('claude')
+      for (let i = 0; i < 3; i += 1) {
+        vi.setSystemTime(Date.now() + 2_000)
+        expect(await getLocalPtyForegroundProcess(ID)).toBe('claude')
+      }
+      expect(cheapSnapshotMock).not.toHaveBeenCalled()
+      expect(kill).toHaveBeenCalledWith(AGENT_PID, 0)
+
+      vi.setSystemTime(1_010_000)
+      expect(await getLocalPtyForegroundProcess(ID)).toBe('claude')
+      expect(cheapSnapshotMock).toHaveBeenCalledTimes(1)
+      expect(resolveMock).toHaveBeenCalledTimes(1)
+    } finally {
+      kill.mockRestore()
+      vi.useRealTimers()
+    }
+  })
 })

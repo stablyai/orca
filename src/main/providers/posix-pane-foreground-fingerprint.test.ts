@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   buildPaneProcessFingerprint,
+  paneFingerprintForegroundGroup,
   type PaneFingerprintRow
 } from './posix-pane-foreground-fingerprint'
 
@@ -176,5 +177,28 @@ describe('buildPaneProcessFingerprint', () => {
       expect(before).toBeNull()
       expect(after).toBeNull()
     })
+  })
+})
+
+describe('paneFingerprintForegroundGroup', () => {
+  it.each(['darwin', 'linux'] as const)(
+    'reads the foreground group the fingerprint was taken with (%s start markers)',
+    async (platform) => {
+      const fingerprint = await buildPaneProcessFingerprint(
+        [shell({ startTime: 'Thu Sep  3 16:02:01 2026' }), agent()],
+        SHELL,
+        { platform, readLinuxStartTime: async (pid) => `${pid}0` }
+      )
+
+      expect(fingerprint).not.toBeNull()
+      expect(paneFingerprintForegroundGroup(fingerprint ?? '')).toBe(AGENT)
+    }
+  )
+
+  it('returns null for a malformed or non-positive group, so callers read the table instead', () => {
+    expect(paneFingerprintForegroundGroup('')).toBeNull()
+    expect(paneFingerprintForegroundGroup('4242@x#0:|')).toBeNull()
+    expect(paneFingerprintForegroundGroup('4242@x#-1:|')).toBeNull()
+    expect(paneFingerprintForegroundGroup('4242@x:|4300@y:4300:+#77:')).toBeNull()
   })
 })

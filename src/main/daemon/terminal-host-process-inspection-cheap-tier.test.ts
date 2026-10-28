@@ -376,4 +376,83 @@ describe.each(['darwin', 'linux'])('daemon cheap-tier process inspection (%s)', 
     expect((await inspect(session, { steadyState: true })).tier).toBe('full')
     expect(forks.cheap).toBe(cheapBefore)
   })
+
+  describe('an agent that leads its own foreground group', () => {
+    let alive: Set<number>
+    let kill: ReturnType<typeof vi.spyOn>
+
+    beforeEach(() => {
+      alive = new Set([SHELL_PID, AGENT_PID])
+      kill = vi
+        .spyOn(process, 'kill')
+        .mockImplementation((pid: number, signal?: string | number) => {
+          if (signal === 0 && alive.has(pid)) {
+            return true
+          }
+          throw Object.assign(new Error('no such process'), { code: 'ESRCH' })
+        })
+    })
+
+    afterEach(() => {
+      kill.mockRestore()
+    })
+
+    async function leaderSession(): Promise<Session> {
+      const session = createSession(() => 'claude')
+      expect((await inspect(session, { steadyState: true })).tier).toBe('full')
+      await settle()
+      expect(anchorModule.getSteadyStateAnchor(session)?.agentName).toBe('claude')
+      return session
+    }
+
+    it('is served without forking ps until the next shared window, then with one cheap fork', async () => {
+      const session = await leaderSession()
+      const fullBefore = forks.full
+      for (let tick = 0; tick < 4; tick += 1) {
+        await advance(2_000)
+        const { tier, result } = await inspect(session, { steadyState: true })
+        expect(tier).toBe('cheap')
+        expect(result).toEqual({ foregroundProcess: 'claude', hasChildProcesses: true })
+      }
+      expect(forks.cheap).toBe(0)
+      await advance(2_000)
+      expect((await inspect(session, { steadyState: true })).tier).toBe('cheap')
+      expect(forks.cheap).toBe(1)
+      expect(forks.full).toBe(fullBefore)
+      expect(kill).toHaveBeenCalledWith(AGENT_PID, 0)
+    })
+
+    it('escalates at the next poll when the leader exits, without waiting for the window', async () => {
+      const session = await leaderSession()
+      await advance(1_000)
+      expect((await inspect(session, { steadyState: true })).tier).toBe('cheap')
+      alive.delete(AGENT_PID)
+      table = { agent: 'gone' }
+      await advance(1_000)
+      const { tier, result } = await inspect(session, { steadyState: true })
+      expect(tier).toBe('full')
+      expect(result.foregroundProcessEvidence).toMatchObject({ verdict: 'live', processName: null })
+    })
+
+    it('escalates at once when node-pty names another foreground, with no fork', async () => {
+      let name = 'claude'
+      const session = createSession(() => name)
+      await inspect(session, { steadyState: true })
+      await settle()
+      name = 'zsh'
+      table = { agent: 'stopped' }
+      await advance(1_000)
+      expect((await inspect(session, { steadyState: true })).tier).toBe('full')
+      expect(forks.cheap).toBe(0)
+    })
+
+    it('catches a change the kernel checks cannot see at the next window', async () => {
+      const session = await leaderSession()
+      table = { agent: 'claude', children: 1 }
+      await advance(2_000)
+      expect((await inspect(session, { steadyState: true })).tier).toBe('cheap')
+      await advance(8_000)
+      expect((await inspect(session, { steadyState: true })).tier).toBe('full')
+    })
+  })
 })
