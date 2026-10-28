@@ -102,6 +102,7 @@ docs/**
 !docs/bug-reproductions/**
 !docs/STYLEGUIDE.md
 !docs/development.md
+!docs/shared-server-github-account-spec.md
 !docs/styleguide/
 !docs/styleguide/**
 !docs/agents-md-refs/

@@ -1,3 +1,4 @@
+import type { GhAccountBinding } from '../../accounts/account-binding'
 import type { RepoKind } from '../../../repository/repo-types'
 import type { CheckStatus, PRInfo, PRMergeableState, PRState } from '../pull-request-types'
 
@@ -89,6 +90,7 @@ export type GitHubPRRefreshCandidate = GitHubPRRefreshAlias & {
   cachedMergeStateStatus?: string | null
   localGitOptions?: {
     wslDistro?: string
+    ghAccount?: GhAccountBinding
   }
 }
 

@@ -108,6 +108,10 @@ export async function prepareStructuredAgentSessionCreateForWorktree(args: {
     fields: attachFingerprintFields({ ...resolved, envelope: args.envelope })
   })
   host ??= await args.ensureHost()
+  await args.runtime.bindStructuredSessionGitHubParticipant?.(
+    args.worktree,
+    args.envelope.sessionId
+  )
   const priorOperation =
     args.atRest === undefined
       ? null

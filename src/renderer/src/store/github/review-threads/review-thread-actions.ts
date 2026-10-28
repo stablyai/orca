@@ -1,3 +1,4 @@
+import { trackGitHubMutationCacheWrite } from '../requests/request-coordination'
 import type { StateCreator } from 'zustand'
 import type { AppState } from '../../types'
 import type { GitHubSlice } from '../github-slice-contract'
@@ -50,6 +51,7 @@ export const createReviewThreadActions = (
         return true
       }
       set((s) => withReviewThreadInFlight(s, inFlightKey, threadId))
+      const cacheWrite = trackGitHubMutationCacheWrite(cacheKey)
       try {
         const previousThreadComments =
           get().commentsCache[cacheKey]?.data?.filter((comment) => comment.threadId === threadId) ??
@@ -107,7 +109,7 @@ export const createReviewThreadActions = (
           console.error('Failed to update review thread:', err)
           ok = false
         }
-        if (!ok && previousThreadComments.length > 0) {
+        if (!ok && previousThreadComments.length > 0 && cacheWrite.isCurrent()) {
           set((s) => {
             const entry = s.commentsCache[cacheKey]
             if (!entry?.data) {
@@ -126,6 +128,7 @@ export const createReviewThreadActions = (
         }
         return ok
       } finally {
+        cacheWrite.dispose()
         set((s) => withReviewThreadInFlight(s, inFlightKey, null))
       }
     } catch {

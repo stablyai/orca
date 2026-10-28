@@ -1,3 +1,5 @@
+import type { GitHubParticipantRegistry } from '../../github-participant-registry'
+import { getRuntimeGitHubExecutionOptionArgs } from '../../runtime-github-execution-options'
 import type { GitHubPrStartPoint } from '../../../../shared/worktree/types'
 import type { Repo } from '../../../../shared/repository/repo-types'
 import {
@@ -8,10 +10,7 @@ import { resolveGitHubPrStartPoint } from '../../../github/pull-requests/start-p
 import { resolvePrStartPointUnlessWslStopped } from '../../../github/pull-requests/start-points/pr-start-point-wsl-gate'
 import { resolveGitHubReviewHeadRemote } from '../../../github/pull-requests/start-points/review-head-remote'
 import { gitExecFileAsync } from '../../../git/command-runner/git-exec-file'
-import {
-  getLocalProjectGitExecOptions,
-  getLocalProjectGhExecOptions
-} from '../../../workspaces/execution-host/project-runtime-git-options'
+import { getLocalProjectGitExecOptions } from '../../../workspaces/execution-host/project-runtime-git-options'
 import { isFolderRepo } from '../../../../shared/repository/repo-kind'
 import { requireRepoLocalGitRoute } from '../../../workspaces/execution-host/repo-execution-host'
 import type { ProjectRuntimeResolutionStore } from '../../../workspaces/execution-host/local-project-runtime-resolution'
@@ -31,6 +30,7 @@ export async function resolveRuntimeGitHubWorktreeBase(
   args: RuntimeGitHubWorktreeBaseArgs,
   deps: {
     store: ProjectRuntimeResolutionStore | null
+    participantRegistry?: GitHubParticipantRegistry
     resolveRepo: (selector: string) => Promise<Repo>
   }
 ): Promise<GitHubPrStartPoint | { error: string }> {
@@ -49,7 +49,11 @@ export async function resolveRuntimeGitHubWorktreeBase(
   // Use shared host gating: executionHostId may be a row's only SSH marker.
   requireRepoLocalGitRoute(repo)
   const localGitExecOptions = getLocalProjectGitExecOptions(deps.store, repo)
-  const localGhOptions = getLocalProjectGhExecOptions(deps.store, repo)
+  const localGhOptions = getRuntimeGitHubExecutionOptionArgs(
+    deps.store,
+    deps.participantRegistry,
+    repo
+  )[0]
   const gitExec = (gitArgs: string[]) => gitExecFileAsync(gitArgs, localGitExecOptions)
   const resolveRemote = (): Promise<string> =>
     resolveGitHubReviewHeadRemote({

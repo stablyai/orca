@@ -1,3 +1,7 @@
+import {
+  captureGitHubExecutionIdentity,
+  runWithGitHubExecutionIdentity
+} from '../../github-participant-execution'
 import { assertOpenCodeModelLaunchPreferencesAbsent } from '../../../opencode/model-launch/opencode-model-startup-plan'
 import {
   formatAmbiguousCwdParentMessage,
@@ -69,18 +73,29 @@ export abstract class OrcaRuntimeWithCreateManagedWorktree extends OrcaRuntimeWi
     )
 
     const repo = await this.resolveRepoSelector(args.repoSelector)
-    return withProjectWorktreeCreate(repo, async () => {
-      const request = await applyWorkspaceCreatePluginHook(args, repo)
-      // Listed from here: a create refused before its project resolved has nothing to show.
-      const creation = this.workspaceLifecycle?.openCreate({
-        creationId: request.creationId,
-        repoId: repo.id,
-        keyOf: (worktreeId) => workspaceLifecycleKey(getRepoExecutionHostId(repo), worktreeId)
+    const identity = captureGitHubExecutionIdentity(this.getGitHubParticipantRegistry(), repo.id)
+    return runWithGitHubExecutionIdentity(identity, () =>
+      withProjectWorktreeCreate(repo, async () => {
+        const request = await applyWorkspaceCreatePluginHook(args, repo)
+        // Listed from here: a create refused before its project resolved has nothing to show.
+        const creation = this.workspaceLifecycle?.openCreate({
+          creationId: request.creationId,
+          repoId: repo.id,
+          keyOf: (worktreeId) => workspaceLifecycleKey(getRepoExecutionHostId(repo), worktreeId)
+        })
+        try {
+          return await this.createInResolvedProject(
+            { ...request, githubExecutionIdentity: identity },
+            repo,
+            creation,
+            rearm,
+            events
+          )
+        } finally {
+          creation?.close()
+        }
       })
-      return this.createInResolvedProject(request, repo, creation, rearm, events).finally(() =>
-        creation?.close()
-      )
-    })
+    )
   }
 
   private async createInResolvedProject(

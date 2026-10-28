@@ -1,3 +1,5 @@
+import { getStoreGitHubParticipants } from '../../runtime/github-participant-store'
+import { hostedReviewOptionArgs } from '../../github/pull-requests/refresh/pr-refresh-candidate-policy'
 import { ipcMain } from 'electron'
 import { resolve } from 'node:path'
 import type {
@@ -9,6 +11,7 @@ import type {
 import type { Repo } from '../../../shared/repository/repo-types'
 import type { OrcaRuntimeService } from '../../runtime/orca-runtime'
 import { getPRForBranch } from '../../github/client/lookup/get-pr-for-branch'
+import { getPRForBranchOutcome } from '../../github/client/lookup/pr-for-branch-outcome'
 import type { GitHubPRBranchLookupOptions } from '../../github/client/lookup/pull-request-lookup-data'
 import {
   clearVisiblePRRefreshWindow,
@@ -16,6 +19,7 @@ import {
   refreshPRNow,
   reportVisiblePRRefreshCandidates,
   addPRRefreshOutcomeObserver,
+  setPRRefreshEventFilter,
   setPRRefreshRegistrationCheck
 } from '../../github/pull-requests/refresh/pr-refresh-coordinator'
 import { setPRRefreshRendererPort } from '../../github/pull-requests/refresh/pr-refresh-renderer-port'
@@ -55,6 +59,13 @@ export function registerGitHubPRRefreshHandlers(
     }
   }
 
+  setPRRefreshEventFilter((alias) => {
+    const registry = getStoreGitHubParticipants(store)
+    return (
+      !registry?.hasEnabledRepos() || Boolean(alias.repoId && !registry.isRepoEnabled(alias.repoId))
+    )
+  })
+
   addPRRefreshOutcomeObserver((candidate, outcome) => {
     const repo =
       store.getRepos().find((entry) => entry.id === candidate.repoId) ??
@@ -64,11 +75,27 @@ export function registerGitHubPRRefreshHandlers(
     }
   })
   // Only the desktop drives the coordinator; serve and orcad have no publisher, so phones keep polling there.
-  addPRRefreshOutcomeObserver(
-    pullRequestChangeObserver((change) => runtime.notifyPullRequestChangedForRemoteClients(change))
+  const observeChange = pullRequestChangeObserver((change) =>
+    runtime.notifyPullRequestChangedForRemoteClients(change)
   )
-  setPRRefreshRegistrationCheck((candidate) =>
-    isPRRefreshCandidateRegistered(candidate, store.getRepos())
+  addPRRefreshOutcomeObserver((candidate, outcome, aliases) => {
+    const registry = getStoreGitHubParticipants(store)
+    if (!registry?.isRepoEnabled(candidate.repoId)) {
+      observeChange(
+        candidate,
+        outcome,
+        aliases.filter(
+          (alias) =>
+            !registry?.hasEnabledRepos() ||
+            Boolean(alias.repoId && !registry.isRepoEnabled(alias.repoId))
+        )
+      )
+    }
+  })
+  setPRRefreshRegistrationCheck(
+    (candidate) =>
+      !getStoreGitHubParticipants(store)?.isRepoEnabled(candidate.repoId) &&
+      isPRRefreshCandidateRegistered(candidate, store.getRepos())
   )
 
   ipcMain.handle(
@@ -158,11 +185,24 @@ export function registerGitHubPRRefreshHandlers(
       }
     ) => {
       const repo = assertRegisteredPRRefreshCandidateRepo(args.candidate, store)
-      const outcome = await refreshPRNow(
-        applyRegisteredRepoToPRRefreshCandidate(store, repo, args.candidate),
-        args.reason,
-        ...(args.userRefresh === true ? ([{ userRefresh: true }] as const) : [])
-      )
+      const candidate = applyRegisteredRepoToPRRefreshCandidate(store, repo, args.candidate)
+      const outcome = getStoreGitHubParticipants(store)?.isRepoEnabled(repo.id)
+        ? await getPRForBranchOutcome(
+            candidate.repoPath,
+            candidate.branch,
+            candidate.linkedPRNumber ?? null,
+            candidate.connectionId ?? null,
+            candidate.linkedPRNumber == null ? (candidate.fallbackPRNumber ?? null) : null,
+            {
+              ...hostedReviewOptionArgs(candidate, args.reason ?? 'manual')[0],
+              ...(args.userRefresh === true ? { userRefresh: true } : {})
+            }
+          )
+        : await refreshPRNow(
+            candidate,
+            args.reason,
+            ...(args.userRefresh === true ? ([{ userRefresh: true }] as const) : [])
+          )
       recordPRIfNeeded(repo, outcome)
       return outcome
     }

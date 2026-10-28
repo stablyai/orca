@@ -1,3 +1,4 @@
+import { getStoreGitHubParticipants } from '../../runtime/github-participant-store'
 import { resolve } from 'node:path'
 import { getRepoExecutionHostId } from '../../../shared/execution-host/execution-host'
 import type {
@@ -222,6 +223,9 @@ export function validateAutomaticPRRefreshCandidate(
       reason: result.reason
     })
     return { kind: 'skipped', result: { kind: 'skipped', skippedReason } }
+  }
+  if (getStoreGitHubParticipants(store)?.isRepoEnabled(result.repo.id)) {
+    return { kind: 'skipped', result: { kind: 'skipped', skippedReason: 'validation-denied' } }
   }
   return {
     kind: 'ok',

@@ -4,8 +4,10 @@ import { GITHUB_PROJECT_METHODS } from './github-project-methods'
 import { GITHUB_PULL_REQUEST_METHODS } from './github-pull-request-methods'
 import { GITHUB_PULL_REQUEST_UPDATE_METHODS } from './github-pull-request-update-methods'
 import { GITHUB_REPO_WORK_ITEM_METHODS } from './github-repo-work-item-methods'
+import { GITHUB_PARTICIPANT_METHODS } from './github-participant-methods'
 
 export const GITHUB_METHODS = [
+  ...GITHUB_PARTICIPANT_METHODS,
   ...GITHUB_REPO_WORK_ITEM_METHODS,
   ...GITHUB_ACCOUNT_BINDING_METHODS,
   ...GITHUB_ISSUE_METHODS,

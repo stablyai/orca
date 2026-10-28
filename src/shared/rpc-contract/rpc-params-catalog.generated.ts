@@ -439,6 +439,13 @@ import { BindableAccounts, ValidateAccountBinding } from './github/github-accoun
 import { UploadGitHubAttachment } from './github/github-attachment-params'
 import { CreateIssue, Issue, IssueComment, UpdateIssue } from './github/github-issue-params'
 import {
+  GitHubParticipantMode,
+  GitHubParticipantRemove,
+  GitHubParticipantSave,
+  GitHubParticipantSelect,
+  GitHubParticipantStatus
+} from './github-participant-params'
+import {
   ClearProjectItemField,
   GithubProjectListAccessibleParams,
   ProjectItemField,
@@ -1648,6 +1655,11 @@ export const RPC_PARAMS_BY_METHOD = {
   'github.markPRDraft': MarkPrDraft,
   'github.markPRReadyForReview': MarkPrReadyForReview,
   'github.mergePR': MergePr,
+  'github.participants.remove': GitHubParticipantRemove,
+  'github.participants.save': GitHubParticipantSave,
+  'github.participants.select': GitHubParticipantSelect,
+  'github.participants.setEnabled': GitHubParticipantMode,
+  'github.participants.status': GitHubParticipantStatus,
   'github.prCheckDetails': PullRequestCheckDetails,
   'github.prChecks': PullRequestChecks,
   'github.prComments': PullRequest,

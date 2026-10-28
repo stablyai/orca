@@ -1,3 +1,4 @@
+import { getGitHubParticipantAccountRevision } from '@/runtime/github-participant-read-fencing'
 import { getTaskPageRepoSourceContext } from '../task-repo-source-context'
 
 import type { Repo } from '../../../../../shared/repository/repo-types'
@@ -14,16 +15,23 @@ import { getRepoExecutionHostId } from '../../../../../shared/execution-host/exe
 
 import { parseHostAuthorityKey } from '../../../../../shared/execution-host/host-authority'
 
-import { hostRouteForAuthority } from '@/runtime/rpc/targets/runtime-client-target'
+import {
+  hostRouteForAuthority,
+  runtimeRpcTargetForAuthorityKey
+} from '@/runtime/rpc/targets/runtime-client-target'
 
 import { captureHostIdentityFence } from '@/runtime/rpc/environment-revisions/host-identity-fence'
 
 export function githubTaskBinding(repo: Repo): string {
+  const target = runtimeRpcTargetForAuthorityKey(getRepoExecutionHostId(repo)) ?? {
+    kind: 'local' as const
+  }
   return JSON.stringify([
     repo.id,
     repo.path,
     repo.connectionId,
     repo.executionHostId,
+    getGitHubParticipantAccountRevision(target),
     repo.ghAccount?.host.trim().toLowerCase(),
     repo.ghAccount?.user.trim().toLowerCase(),
     repo.projectHostSetupMethod,

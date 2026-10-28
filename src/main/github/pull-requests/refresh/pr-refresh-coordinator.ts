@@ -69,6 +69,12 @@ setPRBranchReadCompletion((outcome, producer, prepared, request) =>
   drainer.scheduler.reconcileCompletion(outcome, prepared, request, producer)
 )
 
+export function setPRRefreshEventFilter(
+  filter: ((alias: GitHubPRRefreshAlias) => boolean) | null
+): void {
+  events.setAliasFilter(filter)
+}
+
 export function addPRRefreshOutcomeObserver(observer: PRRefreshOutcomeObserver): () => void {
   return events.addOutcomeObserver(observer)
 }

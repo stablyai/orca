@@ -1,3 +1,4 @@
+import { trackGitHubParticipantRead } from '../../github-participant-read-fencing'
 import { waitForPromiseWithSignal } from '../../../../../shared/concurrency/abort-signal-reason'
 import type {
   RuntimeRpcResponse,
@@ -71,23 +72,29 @@ export async function callRuntimeRpcResponse<TResult>(
     ? withBrowserPaneUiRuntimeRpcSource(selectedParams)
     : selectedParams
   options.beforeSend?.()
-  const response =
-    target.kind === 'local'
-      ? await window.api.runtime.call({ method, params: nextParams })
-      : await callRuntimeEnvironmentWithRevision({
-          environmentId: target.environmentId,
-          method,
-          params: nextParams,
-          timeoutMs: options.timeoutMs,
-          signal: options.signal,
-          expectedEnvironmentPairingRevision,
-          expectedEnvironmentRuntimeId:
-            options.expectedEnvironmentRuntimeId ??
-            (options.paramsForStatus ? compatibilityStatus?.runtimeId : undefined)
-        })
-  const envelope = response as RuntimeRpcResponse<TResult>
-  if (!envelope.ok) {
-    throw new RuntimeRpcCallError(envelope, target)
+  const identity = trackGitHubParticipantRead(target, method, selectedParams)
+  try {
+    const response =
+      target.kind === 'local'
+        ? await window.api.runtime.call({ method, params: nextParams })
+        : await callRuntimeEnvironmentWithRevision({
+            environmentId: target.environmentId,
+            method,
+            params: nextParams,
+            timeoutMs: options.timeoutMs,
+            signal: options.signal,
+            expectedEnvironmentPairingRevision,
+            expectedEnvironmentRuntimeId:
+              options.expectedEnvironmentRuntimeId ??
+              (options.paramsForStatus ? compatibilityStatus?.runtimeId : undefined)
+          })
+    identity.assertCurrent()
+    const envelope = response as RuntimeRpcResponse<TResult>
+    if (!envelope.ok) {
+      throw new RuntimeRpcCallError(envelope, target)
+    }
+    return envelope
+  } finally {
+    identity.dispose()
   }
-  return envelope
 }

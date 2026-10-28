@@ -1,4 +1,4 @@
-import { RuntimeAgentStatusSources } from './runtime-agent-status-sources'
+import { OrcaRuntimeWithGitHubParticipants } from './runtime-github-participant-services'
 import type { ClaudeAccountSelectedHandler } from '../../../shared/agent-accounts/managed-account-types'
 
 import type * as Calls from './runtime-host-service-calls'
@@ -47,7 +47,7 @@ import { ClaudeAgentTeamsService } from '../terminal/agent-teams/claude-agent-te
 import { teardownFolderWorkspacePtys } from '../workspaces/removal/folder-workspace-pty-teardown'
 import { countRepoTerminalsNotKnownExited } from '../workspaces/removal/project-removal-impact'
 
-export abstract class OrcaRuntimeWithPreservedBranchCleanup extends RuntimeAgentStatusSources {
+export abstract class OrcaRuntimeWithPreservedBranchCleanup extends OrcaRuntimeWithGitHubParticipants {
   protected abstract finishGroupFolderCreation: Calls.FinishGroupFolderCreation
   declare acquireFileWatcherRemoval: Calls.AcquireFileWatcherRemoval
   protected abstract tryGetWorkspaceSessionHostIdForWorktree(

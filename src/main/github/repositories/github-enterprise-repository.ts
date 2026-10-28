@@ -3,6 +3,7 @@ import { ghExecFileAsync } from '../../git/command-runner/hosted-cli/gh-exec-fil
 import type { GitHubRepositoryIdentity as GitHubOwnerRepo } from '../../../shared/github/repositories/repository-identity'
 import {
   getHostedReviewLocalGitOptions,
+  resolveHostedReviewGitHubOptions,
   type HostedReviewExecutionOptions
 } from '../../source-control/hosted-review-git-options'
 import { parseAuthStatus } from '../accounts/auth-diagnose'
@@ -137,6 +138,7 @@ async function resolveAuthenticatedGitHubHost(
   if (owner && owner !== 'github') {
     return null
   }
+  localGitOptions = resolveHostedReviewGitHubOptions({ localGitExecOptions: localGitOptions })
   const normalizedHost = normalizeGitHubHost(host)?.authority ?? host.trim().toLowerCase()
   const execOptions = ghRepoExecOptions(githubRepoContext(repoPath, connectionId, localGitOptions))
   const cacheKey = `${runtimeCacheKey(repoPath, connectionId, localGitOptions.wslDistro)}\0${normalizedHost}\0${githubReadExecutionScope(execOptions)}`

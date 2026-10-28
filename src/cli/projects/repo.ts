@@ -12,6 +12,7 @@ import {
   getOptionalStringFlag,
   getRequiredStringFlag
 } from '../arguments/flags'
+import { REPO_GITHUB_MEMBER_HANDLERS } from './repo-github-members'
 import { resolveRepoPathArgument } from './repo-path-arguments'
 import { RuntimeClientError } from '../runtime/connection/types'
 import { attachCliErrorData } from '../workspaces/worktree-setup-decision-recovery'
@@ -49,6 +50,7 @@ async function setRepoHidden(
 }
 
 export const REPO_HANDLERS: Record<string, CommandHandler> = {
+  ...REPO_GITHUB_MEMBER_HANDLERS,
   'repo list': async ({ client, json }) => {
     const result = await client.call<RuntimeRepoList>('repo.list')
     printResult(result, json, formatRepoList)

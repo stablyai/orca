@@ -1,3 +1,5 @@
+import { normalizeGhAccountBinding } from '../../../../shared/github/accounts/account-binding'
+import { codeHostReadExecutionScope as githubReadExecutionScope } from '../../../source-control/code-host-read-execution-scope'
 import { shouldAcceptMergedFallbackPR } from '../../../../shared/github/pull-requests/refresh/pr-branch-fallback-rule'
 import {
   settledForegroundAgeMs,
@@ -101,12 +103,19 @@ export function refreshKey(candidate: PRBranchReadRequest): string {
   const runtimeScope = candidate.connectionId
     ? 'remote'
     : `runtime:${candidate.localGitOptions?.wslDistro ? `wsl:${candidate.localGitOptions.wslDistro}` : 'host'}`
+  const binding = candidate.localGitOptions?.ghAccount
+  const accountScope = binding
+    ? `::account:${githubReadExecutionScope(
+        { ghAccount: normalizeGhAccountBinding(binding) ?? binding },
+        {}
+      )}`
+    : ''
   if (typeof candidate.linkedPRNumber === 'number') {
     // The same number names different PRs in a fork and its parent.
     const url = candidate.linkedPRUrl ? `::${candidate.linkedPRUrl}` : ''
-    return `${connectionScope}::${runtimeScope}::${candidate.repoPath}::pr::${candidate.linkedPRNumber}${url}`
+    return `${connectionScope}::${runtimeScope}${accountScope}::${candidate.repoPath}::pr::${candidate.linkedPRNumber}${url}`
   }
-  return `${connectionScope}::${runtimeScope}::${candidate.repoPath}::branch::${candidate.branch}`
+  return `${connectionScope}::${runtimeScope}${accountScope}::${candidate.repoPath}::branch::${candidate.branch}`
 }
 
 export function validateCandidate(

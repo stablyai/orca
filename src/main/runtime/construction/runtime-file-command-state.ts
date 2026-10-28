@@ -1,3 +1,4 @@
+import { getRuntimeGitHubExecutionOptionArgs } from '../runtime-github-execution-options'
 import {
   LOCAL_EXECUTION_HOST_ID,
   type ExecutionHostId
@@ -76,6 +77,14 @@ export abstract class OrcaRuntimeWithFileCommands extends OrcaRuntimeWithPreserv
       }
     | undefined
   protected abstract getLocalGitExecutionOptionArgs(repo: Repo): [] | [LocalProjectGhExecOptions]
+
+  protected getLocalGitHubExecutionOptionArgs(repo: Repo): [] | [LocalProjectGhExecOptions] {
+    return getRuntimeGitHubExecutionOptionArgs(
+      this.requireStore(),
+      this.getGitHubParticipantRegistry(),
+      repo
+    )
+  }
 
   abstract requireStore(): RuntimeStore
 

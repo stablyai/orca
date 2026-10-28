@@ -1,7 +1,8 @@
+import { applyGitHubParticipantAccountsChanged } from '@/runtime/github-participant-account-changes'
 import { applyLocalWorktreeMetadataSet } from './worktree-metadata-set-events'
 import { applyWorktreeHeadIdentities } from '../../../store/slices/worktrees/listing/worktree-head-identity-apply'
 import type { WorktreeChangeRefreshQueue } from './worktree-change-refresh-queue'
-import { useAppStore } from '../../../store/index'
+import { useAppStore } from '../../../store'
 import { adoptFromEndpoint } from '../../../store/host-catalog/endpoint-catalog-adoption'
 import { selectWorktreesByRepo } from '@/store/workspaces/catalog/workspace-record-fields'
 import { refreshBotHost } from '@/lib/bot-catalog'
@@ -16,6 +17,7 @@ export function registerProjectCatalogIpcBridge(
 ): void {
   unsubs.push(
     window.api.repos.onChanged(() => {
+      applyGitHubParticipantAccountsChanged({ kind: 'local' })
       // This app's own catalog changed, so only its own bots re-read, whichever runtime is active.
       void refreshBotHost(LOCAL_EXECUTION_HOST_ID)
       const state = useAppStore.getState()

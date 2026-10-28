@@ -11,6 +11,7 @@ import {
 import {
   CALLER_IDENTITY_ENV,
   ORCA_AGENT_SESSION_ID_ENV,
+  ORCA_AGENT_SESSION_PROOF_ENV,
   ORCA_AGENT_SESSION_SPAWN_TOKEN_ENV
 } from '../../../../shared/agent-session/lifecycle/launch/agent-session-caller-env'
 import {
@@ -41,7 +42,7 @@ export type SealedStructuredSessionChild = {
   env: Record<string, string>
   /** Removed from what the child inherits, after `env` is laid over it. */
   envToDelete: string[]
-  /** Reapply session identity when agents rebuild command env. Exclude the child-only spawn token and PATH, which would freeze login-shell restoration; Codex core already inherits PATH. */
+  /** Reapply session identity and scrub-safe proof when agents rebuild command env. Omit PATH to preserve login-shell restoration. */
   commandEnv: Record<string, string>
 }
 
@@ -58,6 +59,8 @@ export function sealStructuredSessionChild(input: {
     ? withCliRuntimeOnPath(input.cliRuntimeCommand, input.env, { platform: process.platform })
     : input.env
   const identity = childIdentity(input.sessionId, paired)
+  identity.env[ORCA_AGENT_SESSION_PROOF_ENV] = input.spawnToken
+  identity.commandEnv[ORCA_AGENT_SESSION_PROOF_ENV] = input.spawnToken
   const named = new Set([...Object.keys(identity.commandEnv), ORCA_AGENT_SESSION_SPAWN_TOKEN_ENV])
   return {
     env: { ...identity.env, [ORCA_AGENT_SESSION_SPAWN_TOKEN_ENV]: input.spawnToken },

@@ -19,6 +19,10 @@ export function ignoresRemoteSelection(commandPath: readonly string[]): boolean 
     (commandPath[0] === 'plugin' &&
       ['create', 'validate', 'inspect'].includes(commandPath[1] ?? '')) ||
     // Skill installs write this machine's agent folders; the handler refuses explicit remote flags.
-    (commandPath[0] === 'skills' && ['install', 'update'].includes(commandPath[1] ?? ''))
+    (commandPath[0] === 'skills' && ['install', 'update'].includes(commandPath[1] ?? '')) ||
+    (commandPath[0] === 'repo' &&
+      ['github-member-save', 'github-member-remove', 'github-members-mode'].includes(
+        commandPath[1]
+      ))
   )
 }
