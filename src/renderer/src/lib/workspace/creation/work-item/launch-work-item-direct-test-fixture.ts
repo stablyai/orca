@@ -243,7 +243,7 @@ beforeEach(() => {
     activeWorktreeId: null,
     projects: [
       {
-        id: 'repo-1',
+        id: 'repo:repo-1',
         displayName: 'Repo',
         badgeColor: '#000000',
         sourceRepoIds: ['repo-1'],
@@ -254,7 +254,7 @@ beforeEach(() => {
     projectHostSetups: [
       {
         id: 'repo-1',
-        projectId: 'repo-1',
+        projectId: 'repo:repo-1',
         repoId: 'repo-1',
         hostId: 'local',
         path: '/repo',
