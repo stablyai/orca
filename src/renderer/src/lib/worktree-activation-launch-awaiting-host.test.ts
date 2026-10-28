@@ -51,7 +51,7 @@ it('does not seed a shell when the workspace is re-activated while its chat wait
     executionHostId: LOCAL_EXECUTION_HOST_ID,
     target: { kind: 'local' },
     openAdmitted,
-    onHostDeclined: () => ({ opened: true })
+    onHostDeclined: () => ({ opened: true, surface: 'agent' })
   })
 
   activateAndRevealWorktree(worktree.id, { notifyHostRuntime: false })

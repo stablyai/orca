@@ -104,6 +104,39 @@ describe('RuntimeRepositoryRegistrationController.add through a symlink alias', 
     expect(repos).toHaveLength(1)
   })
 
+  it('does not let an SSH main checkout claim a local linked worktree', async () => {
+    const main = join(root, 'main')
+    const topic = join(root, 'topic')
+    gitInit(main)
+    runGit([
+      '-C',
+      main,
+      '-c',
+      'user.name=Test',
+      '-c',
+      'user.email=test@example.invalid',
+      'commit',
+      '--allow-empty',
+      '-m',
+      'initial'
+    ])
+    runGit(['-C', main, 'worktree', 'add', '-b', 'topic', topic])
+    const { controller, repos } = createController()
+    repos.push({
+      id: 'ssh-main',
+      path: main,
+      displayName: 'remote',
+      badgeColor: '',
+      addedAt: 1,
+      connectionId: 'other'
+    })
+    const added = await controller.add(topic)
+    expect(added.id).not.toBe('ssh-main')
+    expect(normalizeRuntimePathForComparison(added.path)).toBe(
+      normalizeRuntimePathForComparison(topic)
+    )
+  })
+
   it('keeps two different checkouts of the same repository as two projects', async () => {
     const repoPath = join(root, 'repo')
     await mkdir(repoPath)

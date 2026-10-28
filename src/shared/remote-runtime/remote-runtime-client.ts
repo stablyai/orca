@@ -35,7 +35,8 @@ export function sendRemoteRuntimeRequest<TResult>(
   timeoutMs: number,
   envelope?: RuntimeOrchestrationEnvelope,
   signal?: AbortSignal,
-  clientCapabilities: readonly RuntimeCapability[] = []
+  clientCapabilities: readonly RuntimeCapability[] = [],
+  beforeSend?: () => void
 ): Promise<RuntimeRpcResponse<TResult>> {
   return sendRemoteRuntimeRequestOnSocket(
     connection,
@@ -45,7 +46,8 @@ export function sendRemoteRuntimeRequest<TResult>(
     envelope,
     undefined,
     signal,
-    clientCapabilities
+    clientCapabilities,
+    beforeSend
   )
 }
 
@@ -57,7 +59,8 @@ export function sendRemoteRuntimeRequestWithStatusPreflight<TResult>(
   validateStatus: (response: RuntimeRpcResponse<RuntimeStatus>) => void,
   envelope?: RuntimeOrchestrationEnvelope,
   clientCapabilities: readonly RuntimeCapability[] = [],
-  signal?: AbortSignal
+  signal?: AbortSignal,
+  beforeSend?: () => void
 ): Promise<RuntimeRpcResponse<TResult>> {
   return sendRemoteRuntimeRequestOnSocket(
     connection,
@@ -67,7 +70,8 @@ export function sendRemoteRuntimeRequestWithStatusPreflight<TResult>(
     envelope,
     validateStatus,
     signal,
-    clientCapabilities
+    clientCapabilities,
+    beforeSend
   )
 }
 

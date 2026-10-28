@@ -1,11 +1,16 @@
 import { describe, expect, it, vi } from 'vitest'
+import { toast } from 'sonner'
+import { createGlobalSettingsFixture } from '../../../../shared/global-settings-test-fixture'
+import { createEnvironmentFromPairingOffer } from '../../../../shared/runtime-environments'
 import type { Repo } from '../../../../shared/repo-types'
 import { createTestStore } from './store-test-helpers'
 import {
   installReposRuntimeRoutingHarness,
   localRepo,
   reposAdd,
-  reposList
+  reposList,
+  runtimeEnvironmentsList,
+  runtimeEnvironmentCall
 } from './repos-runtime-routing-fixture'
 
 vi.mock('sonner', () => ({
@@ -20,6 +25,61 @@ vi.mock('sonner', () => ({
 installReposRuntimeRoutingHarness()
 
 describe('repo add/catalog races', () => {
+  it.each(['\\\\wsl$', '\\\\?\\UNC\\wsl.localhost'])(
+    'refreshes and adopts an incomplete owner registration for %s with useful copy',
+    async (share) => {
+      const environment = createEnvironmentFromPairingOffer({
+        id: 'wsl:ubuntu',
+        name: 'Ubuntu',
+        now: 1,
+        offer: {
+          v: 2,
+          endpoint: 'ws://127.0.0.1:42000',
+          deviceToken: 'fixture',
+          publicKeyB64: 'fixture'
+        }
+      })
+      runtimeEnvironmentsList.mockResolvedValue([
+        {
+          ...environment,
+          orcadDeployment: { kind: 'wsl', distro: 'Ubuntu', localPort: 42000, remotePort: 6768 }
+        }
+      ])
+      Object.assign(window.api.runtimeEnvironments, {
+        wslHosts: {},
+        getStatusSnapshots: vi.fn(async () => [])
+      })
+      const incomplete =
+        'The project was added on WSL, but its setup could not be completed. Open the project on its WSL host to finish setup.'
+      reposAdd.mockRejectedValue(
+        new Error(`Error invoking remote method 'repos:add': Error: ${incomplete}`)
+      )
+      runtimeEnvironmentCall.mockImplementation(async ({ method }) => ({
+        id: method,
+        ok: true,
+        result: method === 'repo.list' ? { repos: [{ ...localRepo, path: '/home/me/App' }] } : {},
+        _meta: { runtimeId: 'owner-runtime' }
+      }))
+      const store = createTestStore()
+      store.setState({ settings: createGlobalSettingsFixture({ experimentalWslHosts: true }) })
+      const fetch = vi.spyOn(store.getState(), 'fetchRepos')
+      await expect(
+        store.getState().addRepoPath(`${share}\\Ubuntu\\home\\me\\App`)
+      ).resolves.toBeNull()
+      expect(runtimeEnvironmentsList).toHaveBeenCalledOnce()
+      expect(fetch).toHaveBeenCalledWith({ runtimeEnvironmentId: environment.id })
+      expect(store.getState().repos).toContainEqual({
+        ...localRepo,
+        path: '/home/me/App',
+        executionHostId: 'runtime:wsl%3Aubuntu'
+      })
+      expect(toast.error).toHaveBeenCalledWith('Failed to add project', {
+        description: incomplete,
+        duration: expect.any(Number)
+      })
+    }
+  )
+
   it('does not append a same-host duplicate returned by add', async () => {
     reposAdd.mockResolvedValue({ repo: localRepo })
     const existing = { ...localRepo, executionHostId: 'local' as const }

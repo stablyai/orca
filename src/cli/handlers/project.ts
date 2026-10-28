@@ -11,6 +11,7 @@ import type {
   ProjectHostSetupUpdateResult
 } from '../../shared/project-types'
 import { getSshTargetIdForExecutionHost, type ExecutionHostId } from '../../shared/execution-host'
+import { wslRegistrationCallOptions } from '../wsl-registration-timeout'
 import type { RepoKind } from '../../shared/repo-types'
 import type { RuntimeStatus } from '../../shared/runtime-types'
 import { PROJECT_HOST_SETUP_HOST_TARGET_RUNTIME_CAPABILITY } from '../../shared/worktree-runtime-capabilities'
@@ -37,13 +38,16 @@ import { RuntimeClientError, type RuntimeRpcSuccess } from '../runtime-client'
 async function callProjectHostSetup<TResult>(
   client: HandlerContext['client'],
   method: string,
-  params?: unknown
+  params?: unknown,
+  options?: { timeoutMs: number }
 ): Promise<RuntimeRpcSuccess<TResult>> {
   try {
     // Preserve absent params; explicitly passing undefined changes the request shape.
     return params === undefined
       ? await client.call<TResult>(method)
-      : await client.call<TResult>(method, params)
+      : options
+        ? await client.call<TResult>(method, params, options)
+        : await client.call<TResult>(method, params)
   } catch (error) {
     if (error instanceof RuntimeClientError && error.code === 'method_not_found') {
       throw new RuntimeClientError(
@@ -153,7 +157,8 @@ export const PROJECT_HANDLERS: Record<string, CommandHandler> = {
     const result = await callProjectHostSetup<{ result: ProjectHostSetupResult }>(
       client,
       'projectHostSetup.setupExistingFolder',
-      args
+      args,
+      wslRegistrationCallOptions(args.path, !pathIsOffClient && hostId === 'local')
     )
     printResult(result, json, formatProjectHostSetupResult)
   },

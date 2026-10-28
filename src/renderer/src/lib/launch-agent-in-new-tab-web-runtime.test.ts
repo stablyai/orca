@@ -1,10 +1,18 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import type * as StructuredAgentSessionClientModule from '@/runtime/structured-agent-session-client'
+
+vi.mock('@/runtime/structured-agent-session-client', async (importOriginal) => ({
+  ...(await importOriginal<typeof StructuredAgentSessionClientModule>()),
+  callStructuredAgentSession: vi.fn(async () => ({ supported: false }))
+}))
 
 const mocks = vi.hoisted(() => ({
   createTab: vi.fn(),
   closeTab: vi.fn(),
   createWebRuntimeSessionTerminal: vi.fn(),
+  deliverLaunchPromptToAgentTab: vi.fn(),
   setActiveTabType: vi.fn(),
+  toastInfo: vi.fn(),
   toastError: vi.fn()
 }))
 
@@ -42,6 +50,9 @@ const store = {
   sshConnectionStates: new Map(),
   sshStateByEnvironment: new Map(),
   runtimeStatusByEnvironmentId: new Map([['web-runtime', { status: { hostPlatform: 'linux' } }]]),
+  runtimeDetectedAgentIds: {},
+  runtimeAgentDetectionNeedsServerUpdate: {},
+  runtimeAgentInventoryOutcome: () => 'pending' as const,
   transientClearedAgentStatusConnectionIds: {},
   allWorktrees: vi.fn(() => store.worktreesByRepo['repo-1']),
   createTab: mocks.createTab,
@@ -55,7 +66,9 @@ const store = {
 }
 
 vi.mock('@/store', () => ({ useAppStore: { getState: () => store } }))
-vi.mock('sonner', () => ({ toast: { message: vi.fn(), error: mocks.toastError } }))
+vi.mock('sonner', () => ({
+  toast: { message: vi.fn(), error: mocks.toastError, info: mocks.toastInfo }
+}))
 vi.mock('@/components/tab-bar/reconcile-order', () => ({ reconcileTabOrder: vi.fn(() => []) }))
 vi.mock('@/lib/agent-paste-draft', () => ({ pasteDraftWhenAgentReady: vi.fn() }))
 vi.mock('@/lib/telemetry', () => ({
@@ -64,6 +77,10 @@ vi.mock('@/lib/telemetry', () => ({
 }))
 vi.mock('@/runtime/web-runtime-terminal-create-operation', () => ({
   createWebRuntimeSessionTerminalResult: mocks.createWebRuntimeSessionTerminal
+}))
+vi.mock('@/lib/agent-launch-prompt-delivery', () => ({
+  deliverLaunchPromptToAgentTab: mocks.deliverLaunchPromptToAgentTab,
+  seedNativeChatLaunchDraftForAgentTab: vi.fn()
 }))
 vi.mock('@/runtime/web-runtime-session-environment', () => ({
   isWebRuntimeSessionActive: vi.fn(() => true)
@@ -79,6 +96,7 @@ describe('launchAgentInNewTab paired web runtime', () => {
       activeRuntimeEnvironmentId: 'web-runtime'
     }
     store.tabsByWorktree = { 'wt-1': [{ id: 'tab-1' }] }
+    mocks.deliverLaunchPromptToAgentTab.mockResolvedValue(true)
     mocks.createWebRuntimeSessionTerminal.mockResolvedValue({
       outcome: { status: 'created' },
       hostTabId: 'host-tab::leaf-1'
@@ -104,7 +122,8 @@ describe('launchAgentInNewTab paired web runtime', () => {
       activate,
       agent: 'claude',
       worktreeId: 'wt-1',
-      groupId: 'group-1'
+      groupId: 'group-1',
+      initialCwd: '/repo/worktree/packages/app'
     })
 
     expect(result).toEqual(
@@ -122,6 +141,7 @@ describe('launchAgentInNewTab paired web runtime', () => {
       worktreeId: 'wt-1',
       environmentId: 'web-runtime',
       targetGroupId: 'group-1',
+      cwd: '/repo/worktree/packages/app',
       activate,
       ...(activate ? {} : { selectWorktree: false }),
       agentSessionKind: 'fresh',
@@ -188,4 +208,74 @@ describe('launchAgentInNewTab paired web runtime', () => {
     })
     expect(mocks.createTab).not.toHaveBeenCalled()
   })
+
+  it('delivers submit-after-ready prompts on the paired host instead of creating a local tab', async () => {
+    const { launchAgentInNewTab } = await import('./launch-agent-in-new-tab')
+
+    const result = launchAgentInNewTab({
+      requestId: 'submit-after-ready',
+      agent: 'claude',
+      worktreeId: 'wt-1',
+      prompt: 'continue the unfinished task',
+      promptDelivery: 'submit-after-ready'
+    })
+
+    expect(mocks.createWebRuntimeSessionTerminal).toHaveBeenCalledWith(
+      expect.objectContaining({
+        worktreeId: 'wt-1',
+        environmentId: 'web-runtime',
+        agent: 'claude',
+        promptAfterReady: 'continue the unfinished task',
+        submitPrompt: true,
+        forcePromptPaste: true
+      })
+    )
+    expect(mocks.createTab).not.toHaveBeenCalled()
+    await expect(result?.promptDeliveryResult).resolves.toEqual({
+      delivered: true,
+      failureNotified: false,
+      outcome: { status: 'created' }
+    })
+    expect(mocks.deliverLaunchPromptToAgentTab).toHaveBeenCalledExactlyOnceWith({
+      tabId: 'web-terminal-host-tab%3A%3Aleaf-1',
+      content: 'continue the unfinished task',
+      agent: 'claude',
+      submit: true,
+      forcePaste: true
+    })
+  })
+
+  it.each(['created', 'failed'] as const)(
+    'settles declined new-tab launch after %s receipt',
+    async (status) => {
+      const { adoptAgentSessionLaunchVerdict } = await import('./agent-session-launch-plan')
+      const { launchStructuredAgentFromNewTab } =
+        await import('./launch-agent-in-new-tab-structured-route')
+      const { launchAgentInNewTab } = await import('./launch-agent-in-new-tab')
+      let finish!: (created: { outcome: { status: string; message: string } }) => void
+      mocks.createWebRuntimeSessionTerminal.mockReturnValue(
+        new Promise((resolve) => (finish = resolve))
+      )
+      const result = launchStructuredAgentFromNewTab({
+        plan: adoptAgentSessionLaunchVerdict({
+          requestId: 'declined-receipt',
+          route: 'structured-native-chat',
+          agent: 'claude',
+          executionHostId: 'runtime:web-runtime',
+          worktreeId: 'wt-1'
+        }),
+        worktreeId: 'wt-1',
+        openTerminal: (agentSessionLaunchPlan) =>
+          launchAgentInNewTab({ agent: 'claude', worktreeId: 'wt-1', agentSessionLaunchPlan })
+      })
+      await vi.waitFor(() => expect(mocks.createWebRuntimeSessionTerminal).toHaveBeenCalledOnce())
+      expect(mocks.toastInfo).not.toHaveBeenCalled()
+      finish({ outcome: { status, message: 'Could not create terminal' } })
+      await expect(result?.structuredSettlement).resolves.toEqual(
+        status === 'created' ? { kind: 'terminal' } : { kind: 'cancelled', sessionId: null }
+      )
+      expect(mocks.toastInfo).toHaveBeenCalledTimes(status === 'created' ? 1 : 0)
+      expect(mocks.closeTab).not.toHaveBeenCalled()
+    }
+  )
 })

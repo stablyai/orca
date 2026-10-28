@@ -2,6 +2,7 @@ import type { ProjectLaunchContext } from '../../../shared/rpc-contract/prefligh
 import {
   LOCAL_EXECUTION_HOST_ID,
   parseExecutionHostId,
+  parseRoutableExecutionHostId,
   toRuntimeExecutionHostId
 } from '../../../shared/execution-host'
 import type { AppState } from '@/store/types'
@@ -22,6 +23,7 @@ import {
 import type { NativeChatLaunchPromptDelivery } from '@/lib/native-chat-launch-prompt-delivery'
 import { isNativeChatTranscriptLocalReadable } from '@/lib/native-chat-transcript-readability'
 import { getExecutionHostIdForWorktree } from '@/lib/worktree-runtime-owner'
+import { runtimeEnvironmentIdForWorkspaceOwner } from '@/lib/resolve-owner'
 import { readLocalRuntimeCapabilitiesOrUnknown } from '@/runtime/local-runtime-capabilities'
 import { resolveStructuredAgentSessionOwner } from '@/runtime/structured-agent-session-owner'
 import { pairedHostClientCapabilities } from '@/runtime/paired-host-client-capabilities'
@@ -205,11 +207,26 @@ export function buildAgentLaunchRouteInput(
   args: AgentLaunchRouteArgs
 ): AgentLaunchRoutingInput {
   const { agent, workspace, tuiCustomization } = args
-  const { executionHostId, hostCapabilities } = resolveAgentLaunchHost(store, workspace)
+  const { owner, executionHostId, hostCapabilities } = resolveAgentLaunchHost(store, workspace)
+  const parsedOwner = owner ? parseRoutableExecutionHostId(owner) : null
+  const explicitOwner =
+    parsedOwner?.kind === 'runtime' && workspace.worktreeId
+      ? runtimeEnvironmentIdForWorkspaceOwner(store, { workspaceId: workspace.worktreeId })
+      : null
+  const admissionHostId =
+    parsedOwner?.kind === 'runtime'
+      ? explicitOwner?.kind === 'resolved' &&
+        explicitOwner.environmentId === parsedOwner.environmentId
+        ? parsedOwner.id
+        : undefined
+      : owner && parsedOwner?.kind === 'local'
+        ? owner
+        : undefined
   return {
     agent,
     settings: store.settings,
     executionHostId,
+    ...(admissionHostId ? { admissionHostId } : {}),
     hostCapabilities,
     ...(parseExecutionHostId(executionHostId)?.kind === 'runtime'
       ? { clientCapabilities: pairedHostClientCapabilities() }

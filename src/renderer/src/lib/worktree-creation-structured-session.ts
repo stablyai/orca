@@ -30,21 +30,21 @@ type LaunchStructuredWorktreeSessionArgs = {
 }
 
 /** Host-declined chats keep background creates in place without navigation (#23974); still-visible creates use normal agent-tab fallback. */
-function openBackgroundDeclinedTerminal(
+async function openBackgroundDeclinedTerminal(
   args: LaunchStructuredWorktreeSessionArgs,
   host: RuntimeClientTarget
-): StructuredLaunchTerminal {
+): Promise<StructuredLaunchTerminal> {
   const startup = buildWorktreeCreationStartupOpt(args.request, false)
   if (host.kind === 'environment') {
-    ensureWebRuntimeWorktreeTerminalAfterWake(args.worktreeId, {
+    const opened = await ensureWebRuntimeWorktreeTerminalAfterWake(args.worktreeId, {
       startup,
       agent: args.request.agent,
       activate: false
     })
-    return { opened: true }
+    return { opened, surface: opened ? 'agent' : 'none' }
   }
   if (!startup) {
-    return { opened: false }
+    return { opened: false, surface: 'none' }
   }
   // This machine seeds the agent terminal itself; a background workspace mounts it without showing it.
   const tabId = ensureWorktreeHasInitialTerminal(
@@ -57,7 +57,7 @@ function openBackgroundDeclinedTerminal(
     { activateCreatedTabs: false, createNewTerminalForStartup: true }
   )
   mountCreatedWorktreeStartupTabsInBackground(args.worktreeId)
-  return { opened: tabId !== null }
+  return { opened: tabId !== null, surface: tabId !== null ? 'agent' : 'none' }
 }
 
 export async function launchStructuredWorktreeSession(

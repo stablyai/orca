@@ -14,7 +14,9 @@ const mocks = vi.hoisted(() => ({
   callRuntimeRpc: vi.fn()
 }))
 
-vi.mock('@/lib/worktree-runtime-owner', () => ({ getExecutionHostIdForWorktree: vi.fn() }))
+vi.mock('@/lib/worktree-runtime-owner', () => ({
+  getExecutionHostIdForWorktree: vi.fn()
+}))
 vi.mock('@/lib/local-preflight-context', () => ({
   getLocalProjectExecutionRuntimeContext: vi.fn(),
   getLocalRepoProjectExecutionRuntimeContext: vi.fn()

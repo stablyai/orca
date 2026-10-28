@@ -62,6 +62,7 @@ export type RuntimeRepositoryCommandSurface = {
   listSparsePresets: RuntimeRepositorySparsePresets['list']
   saveSparsePreset: RuntimeRepositorySparsePresets['save']
   addRepo: RuntimeRepositoryRegistrationController['add']
+  addPlacedRepo: RuntimeRepositoryRegistrationController['addPlaced']
   createRepo: RuntimeRepositoryRegistrationController['create']
   cloneRepo: RuntimeRepositoryCloneController['clone']
   showRepo: RuntimeRepositorySettingsController['show']
@@ -140,6 +141,7 @@ export function installRuntimeRepositoryCommandSurface(
     listSparsePresets: sparse.list.bind(sparse),
     saveSparsePreset: sparse.save.bind(sparse),
     addRepo: registrations.add.bind(registrations),
+    addPlacedRepo: registrations.addPlaced.bind(registrations),
     createRepo: registrations.create.bind(registrations),
     cloneRepo: clones.clone.bind(clones),
     showRepo: settings.show.bind(settings),

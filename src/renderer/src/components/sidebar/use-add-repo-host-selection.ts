@@ -1,3 +1,5 @@
+import { parseWslUncPath } from '../../../../shared/wsl-paths'
+import { useWslHostsEnabled } from './use-wsl-hosts-enabled'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useAppStore } from '@/store'
 import { toast } from 'sonner'
@@ -24,12 +26,16 @@ import { isWebClientLocation } from '@/lib/web-client-location'
 export function useAddRepoHostSelection({
   isOpen,
   setStep,
-  preferredHostId = null
+  preferredHostId: requestedPreferredHostId = null,
+  pinLocalHost: requestedPinLocalHost = false,
+  droppedLocalPath = ''
 }: {
   isOpen: boolean
   setStep: (step: AddRepoDialogStep) => void
   /** The host the dialog was opened for (a dropped folder's owner); wins over the focused host. */
   preferredHostId?: ExecutionHostId | null
+  pinLocalHost?: boolean
+  droppedLocalPath?: string
 }): {
   hostOptions: ReturnType<typeof useSidebarHostScopeOptions>['hostOptions']
   selectedHostId: ExecutionHostId | null
@@ -42,6 +48,12 @@ export function useAddRepoHostSelection({
   handleSelectAddProjectHost: (hostId: ExecutionHostId) => Promise<boolean>
   handleConnectAddProjectHost: (hostId: ExecutionHostId) => Promise<void>
 } {
+  const wslRoutingEnabled = useWslHostsEnabled()
+  const pinDroppedLocalHost = Boolean(
+    isOpen && droppedLocalPath && wslRoutingEnabled && parseWslUncPath(droppedLocalPath)
+  )
+  const pinLocalHost = requestedPinLocalHost || pinDroppedLocalHost
+  const preferredHostId = pinDroppedLocalHost ? LOCAL_EXECUTION_HOST_ID : requestedPreferredHostId
   const settings = useAppStore((s) => s.settings)
   const setSshConnectionState = useAppStore((s) => s.setSshConnectionState)
   const sshConnectionStates = useAppStore((s) => s.sshConnectionStates)
@@ -97,9 +109,14 @@ export function useAddRepoHostSelection({
           (host) => host.id === LOCAL_EXECUTION_HOST_ID && canSelectAddRepoHost(host)
         ) ??
         selectableHostOptions.find((host) => canSelectAddRepoHost(host)))
-  const selectedHostId =
-    selectedHost?.id ?? (isWebClient || requestedHostPending ? null : LOCAL_EXECUTION_HOST_ID)
-  const displayedHostId = requestedHostPending ? (requestedHost?.id ?? null) : selectedHostId
+  const selectedHostId = pinLocalHost
+    ? LOCAL_EXECUTION_HOST_ID
+    : (selectedHost?.id ?? (isWebClient || requestedHostPending ? null : LOCAL_EXECUTION_HOST_ID))
+  const displayedHostId = pinLocalHost
+    ? LOCAL_EXECUTION_HOST_ID
+    : requestedHostPending
+      ? (requestedHost?.id ?? null)
+      : selectedHostId
   const selectedParsedHost = parseExecutionHostId(selectedHostId)
 
   useEffect(() => {

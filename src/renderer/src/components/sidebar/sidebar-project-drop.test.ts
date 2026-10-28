@@ -95,6 +95,15 @@ describe('routeSidebarProjectDrop', () => {
     })
   })
 
+  it('keeps gated desktop UNC drive drops on the original local admission path', () => {
+    const path = '\\\\wsl.localhost\\Ubuntu\\mnt\\c\\proj'
+    for (const focusedRuntimeId of [null, 'wsl:Ubuntu', 'paired-server']) {
+      expect(
+        routeSidebarProjectDrop({ path, focusedRuntimeId, wslHosts, wslRoutingEnabled: true })
+      ).toEqual({ kind: 'local', path })
+    }
+  })
+
   it('keeps refusing other drops while a server is focused', () => {
     expect(
       routeSidebarProjectDrop({ path: 'C:\\src', focusedRuntimeId: 'paired-server', wslHosts })

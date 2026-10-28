@@ -16,6 +16,7 @@ import {
 import { translate } from '@/i18n/i18n'
 import { userNamedFileAccess } from '@/lib/local-file-access'
 import { listWslHostWindowsPathAccess } from '@/lib/windows-path-access'
+import { wslHostsAvailable, useWslHostsEnabled } from './use-wsl-hosts-enabled'
 import { addOnThisComputerLabel } from '@/lib/wsl-host-windows-drive-refusal-toast'
 import type { AppState } from '@/store/types'
 
@@ -89,8 +90,10 @@ export function useSidebarProjectDrop(): {
     () => getWslDropHosts({ runtimeEnvironments, settings }),
     [runtimeEnvironments, settings]
   )
+  const wslRoutingEnabled = useWslHostsEnabled()
   const focusedRuntimeId = getFocusedDropRuntimeId(settings)
-  const remoteRuntimeActive = isSidebarProjectDropRefusedByFocus(focusedRuntimeId, wslDropHosts)
+  const remoteRuntimeActive =
+    !wslRoutingEnabled && isSidebarProjectDropRefusedByFocus(focusedRuntimeId, wslDropHosts)
   const mountedRef = useMountedRef()
 
   const clearDragState = useCallback(() => {
@@ -127,7 +130,8 @@ export function useSidebarProjectDrop(): {
       const route = routeSidebarProjectDrop({
         path: pathResolution.path,
         focusedRuntimeId: getFocusedDropRuntimeId(state.settings),
-        wslHosts: getWslDropHosts(state)
+        wslHosts: getWslDropHosts(state),
+        wslRoutingEnabled: state.settings?.experimentalWslHosts === true && wslHostsAvailable()
       })
       if (refuseSidebarProjectDrop(route)) {
         return

@@ -12,7 +12,7 @@ import {
 import { translate } from '@/i18n/i18n'
 import { extractIpcErrorMessage } from '@/lib/ipc-error'
 import { upsertAddedRepoWithProjectHostSetup } from './add-repo-store-upsert'
-import { worktreeRefreshOptions } from './add-repo-runtime-owner'
+import { addedRepoRefreshOptions } from './add-repo-runtime-owner'
 import type { ExecutionHostId } from '../../../../shared/execution-host'
 
 export function useRemoteRepo(
@@ -128,7 +128,7 @@ export function useRemoteRepo(
         connectionId: selectedTargetId,
         remotePath: trimmedRemotePath
       })
-      const { alreadyPresent, repo } = upsertAddedRepoWithProjectHostSetup(addedRepo, {
+      const { alreadyPresent, repo } = await upsertAddedRepoWithProjectHostSetup(addedRepo, {
         runtimeEnvironmentId: serverEnvironmentId
       })
 
@@ -144,7 +144,7 @@ export function useRemoteRepo(
         { description: repo.displayName }
       )
       // The repo is persisted; a non-authoritative SSH refresh must not strand the dialog.
-      const ownerOptions = worktreeRefreshOptions(serverEnvironmentId)
+      const ownerOptions = addedRepoRefreshOptions(repo)
       await fetchWorktrees(repo.id, ownerOptions)
       if (!mountedRef.current || gen !== remoteGenRef.current) {
         return

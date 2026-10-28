@@ -3,6 +3,7 @@ import { toast } from 'sonner'
 import type { AppState } from '../types'
 import type { Repo } from '../../../../shared/repo-types'
 import { isGitRepoKind } from '../../../../shared/repo-kind'
+import { isDrvfsLinuxPath } from '../../../../shared/wsl-paths'
 import { getRepoHostIdentity } from '../slices/repo-host-identity'
 import { callRuntimeRpc } from '../../runtime/runtime-rpc-client'
 import { runtimeTargetForOwnerEnvironment } from '../../runtime/runtime-client-target'
@@ -11,8 +12,8 @@ import { markOnboardingProjectAdded } from '@/lib/onboarding-project-checklist'
 import { translate } from '@/i18n/i18n'
 import {
   getRepoExecutionHostId,
-  LOCAL_EXECUTION_HOST_ID,
-  toRuntimeExecutionHostId
+  getWorktreeExecutionHostId,
+  parseExecutionHostId
 } from '../../../../shared/execution-host'
 import type { RepoSlice } from './repo-state'
 import { ERROR_TOAST_DURATION } from './repo-state'
@@ -21,7 +22,13 @@ import { adoptFromEndpoint } from '../adopt-from-endpoint'
 import { mergeProjectCompatibilityForHostRepoChange } from './repo-catalog-identity'
 import { warnIfProjectKnownInAnotherProfile } from '../projects/project-profile-presence'
 import { warnIfProjectCrossesWslFilesystemBoundary } from '../projects/project-wsl-filesystem-boundary-advisory'
+import {
+  awaitRepoOwnerHostKnown,
+  refreshWslRegistrationAfterFailure,
+  registeredWslSelection
+} from './repo-owner-host-readiness'
 import { selectWorktreesByRepo } from '../workspace-record-selectors'
+import { extractIpcErrorMessage } from '@/lib/ipc-error'
 import {
   clearPendingRuntimeRepoRemoval,
   runExclusiveForRuntimeEnvironment
@@ -46,15 +53,33 @@ export function createRepoAddActions(
         let repo: Repo
         try {
           if (target.kind === 'local') {
-            const result = await window.api.repos.add({
-              path,
-              kind,
-              ...(displayName ? { displayName } : {})
-            })
-            if ('error' in result) {
-              throw new Error(result.error)
+            const selection = registeredWslSelection(get(), path)
+            const environment =
+              selection && !isDrvfsLinuxPath(selection.linuxPath)
+                ? selection.environment
+                : undefined
+            const add = async () => {
+              const result = await window.api.repos.add({
+                path,
+                kind,
+                ...(displayName ? { displayName } : {})
+              })
+              if ('error' in result) {
+                throw new Error(result.error)
+              }
+              const owner = parseExecutionHostId(getRepoExecutionHostId(result.repo))
+              if (
+                environment &&
+                owner?.kind === 'runtime' &&
+                owner.environmentId === environment.id
+              ) {
+                clearPendingRuntimeRepoRemoval(environment.id, result.repo.id)
+              }
+              return result.repo
             }
-            repo = result.repo
+            repo = environment
+              ? await runExclusiveForRuntimeEnvironment(environment.id, add)
+              : await add()
           } else {
             const environmentId = target.environmentId
             // Queued behind any replayed removal, so a re-add of the same project is never undone.
@@ -128,6 +153,7 @@ export function createRepoAddActions(
             folderWorkspacePathStatuses: {}
           }
         })
+        await awaitRepoOwnerHostKnown(get, repo)
         if (alreadyAdded) {
           toast.info(translate('auto.store.slices.repos.a8e4b3af5b', 'Project already added'), {
             description: repo.displayName
@@ -148,6 +174,7 @@ export function createRepoAddActions(
         }
         return repo
       } catch (err) {
+        await refreshWslRegistrationAfterFailure(get, path)
         console.error('Failed to add project:', err)
         const driveRefusal =
           err instanceof RuntimeRpcCallError
@@ -161,7 +188,10 @@ export function createRepoAddActions(
           }
           return null
         }
-        const message = err instanceof Error ? err.message : String(err)
+        const message = extractIpcErrorMessage(
+          err,
+          err instanceof Error ? err.message : String(err)
+        )
         const duration = ERROR_TOAST_DURATION
         toast.error(translate('auto.store.slices.repos.c6e022ddfc', 'Failed to add project'), {
           description: message,
@@ -200,15 +230,11 @@ export function createRepoAddActions(
         }
         const onboardingBeforeAdd = await markOnboardingProjectAdded('addedFolder')
         // Why: focus the new folder so the add is visible; lazy-import worktree-activation to avoid a circular module load (it imports the store root).
-        const executionHostId =
-          options?.runtimeEnvironmentId === undefined
-            ? undefined
-            : options.runtimeEnvironmentId
-              ? toRuntimeExecutionHostId(options.runtimeEnvironmentId)
-              : LOCAL_EXECUTION_HOST_ID
-        await get().fetchWorktrees(repo.id, executionHostId ? { executionHostId } : undefined)
+        // The returned row names its owner; a WSL path's is its distro's server, not the picked host.
+        const executionHostId = getRepoExecutionHostId(repo)
+        await get().fetchWorktrees(repo.id, { executionHostId })
         const folderWorktree = selectWorktreesByRepo(get())[repo.id]?.find(
-          (worktree) => executionHostId === undefined || worktree.hostId === executionHostId
+          (worktree) => getWorktreeExecutionHostId(worktree, repo) === executionHostId
         )
         if (folderWorktree) {
           // Why: lazy-import to avoid a circular module load (the launch graph imports the store root).
@@ -222,7 +248,7 @@ export function createRepoAddActions(
             store: get(),
             onboarding: onboardingBeforeAdd,
             hasExistingProject: hadProjectBeforeAdd,
-            executionHostId: executionHostId ?? LOCAL_EXECUTION_HOST_ID
+            executionHostId
           })
           await revealOnboardingFolderWithAgentLaunch({
             worktreeId: folderWorktree.id,

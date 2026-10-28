@@ -240,7 +240,9 @@ describe('repo RPC methods', () => {
       })
     )
 
-    expect(runtime.createRepo).toHaveBeenCalledWith('/srv/projects', 'new-app', 'git')
+    expect(runtime.createRepo).toHaveBeenCalledWith('/srv/projects', 'new-app', 'git', {
+      fromPairedClient: false
+    })
     expect(response).toMatchObject({
       ok: true,
       result: { repo: { id: 'repo-1', path: '/srv/projects/new-app' } }
@@ -791,12 +793,15 @@ describe('repo RPC methods', () => {
       })
     )
 
-    expect(runtime.importNestedRepos).toHaveBeenCalledWith({
-      parentPath: '/srv/platform',
-      groupName: '',
-      projectPaths: ['/srv/platform/api'],
-      mode: 'separate'
-    })
+    expect(runtime.importNestedRepos).toHaveBeenCalledWith(
+      {
+        parentPath: '/srv/platform',
+        groupName: '',
+        projectPaths: ['/srv/platform/api'],
+        mode: 'separate'
+      },
+      { fromPairedClient: false }
+    )
     expect(response).toMatchObject({
       ok: true,
       result: { importedCount: 1, failedCount: 0 }
@@ -824,12 +829,15 @@ describe('repo RPC methods', () => {
       })
     )
 
-    expect(runtime.importNestedRepos).toHaveBeenCalledWith({
-      parentPath: '/srv/platform',
-      groupName: '',
-      projectPaths: ['/srv/platform/api'],
-      mode: 'group'
-    })
+    expect(runtime.importNestedRepos).toHaveBeenCalledWith(
+      {
+        parentPath: '/srv/platform',
+        groupName: '',
+        projectPaths: ['/srv/platform/api'],
+        mode: 'group'
+      },
+      { fromPairedClient: false }
+    )
     expect(response).toMatchObject({
       ok: true,
       result: { importedCount: 1, failedCount: 0 }

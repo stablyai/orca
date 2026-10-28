@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { toast } from 'sonner'
 import { translate } from '@/i18n/i18n'
 import { useAppStore } from '@/store'
+import { readRuntimeHostCatalog } from '@/store/repos/repo-owner-host-readiness'
 import { AddWslHostFormPanel, canAddWslDistro } from './AddWslHostFormPanel'
 import { useWslDistroList } from './use-wsl-distro-list'
 import { useWslHostServerFilesMissing } from './use-wsl-hosts-enabled'
@@ -24,8 +25,6 @@ export function AddWslHostDialogBody({
   const distros = list.distros
   const [chosenDistro, setChosenDistro] = useState('')
   const [error, setError] = useState<string | null>(null)
-  const setRuntimeEnvironments = useAppStore((s) => s.setRuntimeEnvironments)
-  const readRuntimeHostStatusSnapshots = useAppStore((s) => s.readRuntimeHostStatusSnapshots)
   // Keep an addable pick or the sole addable distro; never silently choose among several.
   const addable = distros.filter(canAddWslDistro)
   const selectedDistro = addable.some((distro) => distro.name === chosenDistro)
@@ -56,8 +55,7 @@ export function AddWslHostDialogBody({
         }
         return
       }
-      setRuntimeEnvironments(await window.api.runtimeEnvironments.list())
-      await readRuntimeHostStatusSnapshots()
+      await readRuntimeHostCatalog(useAppStore.getState())
       toast.success(
         translate('auto.components.sidebar.AddWslHostDialogBody.added', '{{value0}} added.', {
           value0: selected.name

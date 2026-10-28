@@ -100,6 +100,19 @@ describe('launchAgentInNewTab terminal tab activation', () => {
     mockCreateTab.mockReturnValue({ id: 'tab-1' })
   })
 
+  it('queues the original cwd before a local Agent session starts', async () => {
+    const { launchAgentInNewTab } = await import('./launch-agent-in-new-tab')
+
+    launchAgentInNewTab({
+      requestId: 'original-cwd',
+      agent: 'claude',
+      worktreeId: 'wt-1',
+      initialCwd: '/repo/worktree/packages/app'
+    })
+
+    expect(store.queueTabInitialCwd).toHaveBeenCalledWith('tab-1', '/repo/worktree/packages/app')
+  })
+
   it('ignores hidden malformed arguments for chat and rejects them before any terminal creation', async () => {
     const { launchAgentInNewTab } = await import('./launch-agent-in-new-tab')
     const args = { agent: 'codex' as const, worktreeId: 'wt-1', agentArgs: '--model "unfinished' }

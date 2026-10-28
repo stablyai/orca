@@ -108,7 +108,11 @@ describe('agent launch caller routing', () => {
       settlement: new Promise(() => undefined),
       cancel: vi.fn()
     })
-    mockLaunchAgentInWebHostTab.mockResolvedValue({ delivered: true, failureNotified: false })
+    mockLaunchAgentInWebHostTab.mockResolvedValue({
+      delivered: true,
+      failureNotified: false,
+      outcome: { status: 'created' }
+    })
   })
 
   it.each(cases)('routes %s to a local terminal under default settings', async (_id, profile) => {
@@ -225,7 +229,8 @@ describe('agent launch caller routing', () => {
     await expect(result?.structuredSettlement).resolves.toEqual({ kind: 'terminal' })
     await expect(result?.promptDeliveryResult).resolves.toEqual({
       delivered: true,
-      failureNotified: false
+      failureNotified: false,
+      outcome: { status: 'created' }
     })
     expect(mockLaunchAgentInWebHostTab).toHaveBeenCalledOnce()
     expect(mockLaunchAgentInWebHostTab).toHaveBeenCalledWith(
@@ -280,7 +285,7 @@ describe('agent launch caller routing', () => {
     store.settings = { ...store.settings, ...CHAT_DEFAULT_SETTINGS }
     await useActualAdmission()
     mockCreateSupport.mockResolvedValue({ supported: false })
-    const onStructuredHostDeclined = vi.fn(() => ({ opened: true }))
+    const onStructuredHostDeclined = vi.fn(() => ({ opened: true, surface: 'shell' as const }))
     const { launchAgentInNewTab } = await import('./launch-agent-in-new-tab')
 
     const result = launchAgentInNewTab({

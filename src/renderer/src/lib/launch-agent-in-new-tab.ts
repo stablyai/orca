@@ -68,26 +68,6 @@ export function launchAgentInNewTabWithOutcome(
     activate
   } = args
   const store = useAppStore.getState()
-  const executionContext = resolveAgentLaunchExecutionContext(store, { worktreeId, launchPlatform })
-  if (!executionContext) {
-    args.focusIntent?.cancel()
-    return null
-  }
-  const { resolvedLaunchPlatform, isRemote, queuedShell } = executionContext
-  const permissionSettings = agentLaunchPermissionSettings(
-    agent,
-    store.settings ?? {},
-    sessionOptions
-  )
-  const effectiveAgentArgs =
-    agentArgs !== undefined
-      ? agentArgs
-      : resolveTuiAgentLaunchArgs(
-          agent,
-          permissionSettings,
-          readLaunchPermissionChoice(sessionOptions) ? 'own' : undefined
-        )
-  const agentEnv = resolveTuiAgentLaunchEnv(agent, permissionSettings, resolvedLaunchPlatform)
   const trimmedPrompt = prompt?.trim() ?? ''
   const hasPrompt = trimmedPrompt.length > 0
   const isFollowupPath = TUI_AGENT_CONFIG[agent].promptInjectionMode === 'stdin-after-start'
@@ -135,6 +115,27 @@ export function launchAgentInNewTabWithOutcome(
     }
     return structured
   }
+
+  const executionContext = resolveAgentLaunchExecutionContext(store, { worktreeId, launchPlatform })
+  if (!executionContext) {
+    args.focusIntent?.cancel()
+    return null
+  }
+  const { resolvedLaunchPlatform, isRemote, queuedShell } = executionContext
+  const permissionSettings = agentLaunchPermissionSettings(
+    agent,
+    store.settings ?? {},
+    sessionOptions
+  )
+  const effectiveAgentArgs =
+    agentArgs !== undefined
+      ? agentArgs
+      : resolveTuiAgentLaunchArgs(
+          agent,
+          permissionSettings,
+          readLaunchPermissionChoice(sessionOptions) ? 'own' : undefined
+        )
+  const agentEnv = resolveTuiAgentLaunchEnv(agent, permissionSettings, resolvedLaunchPlatform)
 
   const terminalShell = queuedShell ?? (resolvedLaunchPlatform === 'win32' ? 'powershell' : 'posix')
   if (!validateActionTerminalArgs(agent, agentArgs, terminalShell, notifyFailure)) {
@@ -200,6 +201,9 @@ export function launchAgentInNewTabWithOutcome(
       terminalCompletion: webHostDelivery,
       startupPlan,
       pasteDraftAfterLaunch: pasteDraftAfterLaunch !== null,
+      surfaceReady: webHostDelivery.then((result) =>
+        result.outcome.status === 'created' ? 'agent' : 'none'
+      ),
       ...(pasteDraftAfterLaunch !== null && promptDelivery === 'submit-after-ready'
         ? { promptDeliveryResult: webHostDelivery }
         : {})

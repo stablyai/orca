@@ -85,6 +85,7 @@ describe('repo slice skipped-onboarding folder startup', () => {
       'folder-1::/folder',
       {
         sidebarRevealBehavior: 'auto',
+        executionHostId: 'local',
         startup: {
           command: "codex '--dangerously-bypass-approvals-and-sandbox'",
           env: {},
@@ -106,7 +107,7 @@ describe('repo slice skipped-onboarding folder startup', () => {
     expect(worktreeActivation.activateAndRevealWorktree).toHaveBeenNthCalledWith(
       2,
       'folder-2::/folder',
-      { sidebarRevealBehavior: 'auto' }
+      { sidebarRevealBehavior: 'auto', executionHostId: 'local' }
     )
   })
 })

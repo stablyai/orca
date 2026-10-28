@@ -54,7 +54,9 @@ const store = {
   ]),
   transientClearedAgentStatusConnectionIds: {} as Record<string, true>,
   sshStateByEnvironment: new Map(),
-  runtimeStatusByEnvironmentId: new Map([['web-runtime', { status: { hostPlatform: 'linux' } }]]),
+  runtimeStatusByEnvironmentId: new Map([
+    ['web-runtime', { status: { hostPlatform: 'linux', capabilities: [] } }]
+  ]),
   worktreesByRepo: {
     'repo-1': [
       {

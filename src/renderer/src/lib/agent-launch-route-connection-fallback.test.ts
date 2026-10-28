@@ -10,14 +10,17 @@ const WORKSPACE = { kind: 'git-worktree', worktreeId: WORKTREE_ID, repoId: 'repo
 
 /** Same-ID workspaces on rival hosts must leave ownership unresolved rather than authorize reading a remote path locally. */
 function storeWithAmbiguousWorktreeRows(
-  repoConnectionId: string | null
+  repoConnectionId: string | null,
+  otherHostId = 'ssh:other-box',
+  settings: Record<string, unknown> = NATIVE_CHAT_SETTINGS
 ): AgentLaunchRouteStore & { repos: unknown[] } {
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: only the slices owner resolution reads are staged.
   return {
-    settings: NATIVE_CHAT_SETTINGS,
+    settings,
     repos: [{ id: 'repo-1', path: '/repo', connectionId: repoConnectionId }],
     worktreesByRepo: {
       'repo-1': [{ id: WORKTREE_ID, repoId: 'repo-1', hostId: null }],
-      'repo-2': [{ id: WORKTREE_ID, repoId: 'repo-1', hostId: 'ssh:other-box' }]
+      'repo-2': [{ id: WORKTREE_ID, repoId: 'repo-1', hostId: otherHostId }]
     }
   } as unknown as AgentLaunchRouteStore & { repos: unknown[] }
 }
@@ -76,3 +79,27 @@ describe('launch route transcript readability', () => {
     ).toBe('terminal-tui')
   })
 })
+
+it.each(['duplicate', 'sentinel', 'focused', 'owned'] as const)(
+  'admits missing-status native chat only with explicit ownership: %s',
+  (kind) => {
+    const store = storeWithAmbiguousWorktreeRows(null, 'runtime:server-1', {
+      ...NATIVE_CHAT_SETTINGS,
+      activeRuntimeEnvironmentId: 'server-1'
+    })
+    if (kind !== 'duplicate') {
+      delete store.worktreesByRepo![kind === 'focused' ? 'repo-2' : 'repo-1']
+    }
+    if (kind === 'sentinel') {
+      store.activeWorktreeId = WORKTREE_ID
+      store.activeWorkspaceExecutionHostId = 'runtime:unresolved-owner'
+    }
+    const plan = planAgentSessionLaunch(store, {
+      requestId: 'owner-admission',
+      agent: 'claude',
+      workspace: WORKSPACE
+    })
+    expect(plan.route).toBe(kind === 'owned' ? 'structured-native-chat' : 'terminal-tui')
+    expect(plan.executionHostId).toBe(kind === 'owned' ? 'runtime:server-1' : undefined)
+  }
+)

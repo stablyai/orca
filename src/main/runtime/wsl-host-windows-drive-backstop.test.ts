@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 import { WslHostWindowsDriveRefusalError } from '../../shared/wsl-host-windows-drive-refusal'
 import type { Repo } from '../../shared/repo-types'
+import { RuntimeProjectHostSetupController } from './runtime-project-host-setup-controller'
 import { RuntimeProjectGroupController } from './runtime-project-group-controller'
 import { RuntimeRepositoryCloneController } from './runtime-repository-clone-controller'
 import { RuntimeRepositoryRegistrationController } from './runtime-repository-registration-controller'
@@ -56,6 +57,38 @@ describe('WSL host backstop for Windows drive projects', () => {
     ).rejects.toBeInstanceOf(WslHostWindowsDriveRefusalError)
     expect(addRepo).not.toHaveBeenCalled()
   })
+
+  it.each(['git', 'folder'] as const)(
+    'refuses Add and setup of a drive %s before probing or storing it',
+    async (kind) => {
+      const addRepo = vi.fn()
+      const store = storeWith({ addRepo })
+      const registration = new RuntimeRepositoryRegistrationController({
+        ...deps,
+        getStore: () => store
+      })
+      const setup = new RuntimeProjectHostSetupController({
+        ...deps,
+        getStore: () => store,
+        listRepos: () => [],
+        addRepo,
+        cloneRepo: unused,
+        countLiveTerminalsForRepo: unused
+      })
+      await expect(registration.add('/mnt/c/src/app', kind)).rejects.toBeInstanceOf(
+        WslHostWindowsDriveRefusalError
+      )
+      await expect(
+        setup.setupExistingFolder({
+          projectId: 'project-1',
+          hostId: 'runtime:env',
+          path: '/mnt/c/src/app',
+          kind
+        })
+      ).rejects.toBeInstanceOf(WslHostWindowsDriveRefusalError)
+      expect(addRepo).not.toHaveBeenCalled()
+    }
+  )
 
   it('returns a create refusal with its typed detail, so the dialog can offer this computer', async () => {
     const controller = new RuntimeRepositoryRegistrationController({

@@ -21,7 +21,7 @@ import type {
   StructuredAgentLaunchSettlement
 } from '@/lib/structured-agent-launch-settlement'
 import type { StructuredPromptDeliveryResult } from '@/lib/structured-agent-session-launch-prompt'
-import type { LaunchAgentInNewTabArgs } from '@/lib/launch-agent-in-new-tab'
+import type { DeclinedStructuredLaunchTerminalOptions } from '@/lib/launch-agent-in-new-tab-args'
 import type { RuntimeClientTarget } from '../../../shared/runtime-client-target'
 import { toRuntimeWorktreeSelector } from '@/runtime/runtime-worktree-selector'
 import { readStructuredChatHostPermissionVerdict } from '@/runtime/structured-chat-host-permission'
@@ -38,6 +38,8 @@ export type AgentTerminalLaunchCompletion = {
 /** What a host's "no" opens instead: the terminal the launch would have opened had it known. */
 export type StructuredLaunchTerminal = {
   opened: boolean
+  /** A scheduled host publication is not proof that an agent terminal opened. */
+  surface?: 'agent' | 'shell' | 'none' | 'scheduled'
   tabId?: string
   completion?: Promise<AgentTerminalLaunchCompletion>
   promptDeliveryResult?: Promise<StructuredPromptDeliveryResult>
@@ -117,16 +119,7 @@ function notifyHostUnreachable(agent: TuiAgent, executionHostId: ExecutionHostId
   )
 }
 
-/** What the caller's own terminal launch would have carried beyond the plan's agent and prompt. */
-export type DeclinedStructuredLaunchTerminalOptions = Pick<
-  LaunchAgentInNewTabArgs,
-  | 'agentArgs'
-  | 'sessionOptionsYieldToAgentArgs'
-  | 'launchPlatform'
-  | 'launchSource'
-  | 'initialCwd'
-  | 'activate'
->
+export type { DeclinedStructuredLaunchTerminalOptions } from '@/lib/launch-agent-in-new-tab-args'
 
 /** A caller with no terminal path of its own gets the one a new agent tab would open. */
 export async function openDeclinedStructuredLaunchTerminal(args: {
@@ -158,8 +151,15 @@ export async function openDeclinedStructuredLaunchTerminal(args: {
   if (result && 'refused' in result) {
     return { opened: false, promptDeliveryResult: Promise.resolve(result.refused) }
   }
+  const surface =
+    result === null
+      ? 'none'
+      : result.surface.kind === 'host-published'
+        ? await (result.surfaceReady ?? Promise.resolve<'none'>('none'))
+        : 'agent'
   return {
-    opened: result !== null,
+    opened: surface === 'agent',
+    surface,
     ...(result?.surface.kind === 'local-terminal' ? { tabId: result.surface.tabId } : {}),
     ...(result?.terminalCompletion ? { completion: result.terminalCompletion } : {}),
     ...(result?.promptDeliveryResult ? { promptDeliveryResult: result.promptDeliveryResult } : {})
@@ -276,7 +276,7 @@ export function beginHostAdmittedStructuredLaunch(args: {
           )
         }
         const terminal = await args.onHostDeclined(args.target)
-        if (paired && terminal.opened) {
+        if (paired && terminal.opened && terminal.surface === 'agent') {
           notifyHostDeclined(plan.agent)
         }
         void (

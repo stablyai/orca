@@ -30,9 +30,12 @@ export type AgentLaunchSurface =
 
 export type LaunchAgentInNewTabResult = {
   surface: AgentLaunchSurface
+  /** Present only when this client planned a terminal command. */
   startupPlan?: AgentStartupPlan
   pasteDraftAfterLaunch: boolean
   promptDeliveryResult?: Promise<{ delivered: boolean; failureNotified: boolean }>
+  /** Resolves after a host terminal creation receipt, when this was host-published. */
+  surfaceReady?: Promise<'agent' | 'none'>
   /** Structured route only: what the launch did once it settled. The call stays synchronous. */
   terminalCompletion?: StructuredLaunchTerminal['completion']
   structuredSettlement?: Promise<StructuredAgentLaunchSettlement>

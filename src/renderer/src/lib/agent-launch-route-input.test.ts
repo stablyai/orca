@@ -6,9 +6,11 @@ import {
 } from '../../../shared/protocol-version'
 import type { ProjectExecutionRuntimeResolution } from '../../../shared/project-execution-runtime'
 import type * as ConnectionOwnerResolutionModule from './connection-owner-resolution'
+import type * as ResolveOwnerModule from './resolve-owner'
 
 const mocks = vi.hoisted(() => ({
   getExecutionHostIdForWorktree: vi.fn(),
+  runtimeEnvironmentIdForWorkspaceOwner: vi.fn(),
   getConnectionIdFromState: vi.fn(),
   getLocalProjectExecutionRuntimeContext: vi.fn(),
   getLocalRepoProjectExecutionRuntimeContext: vi.fn(),
@@ -18,6 +20,10 @@ const mocks = vi.hoisted(() => ({
 
 vi.mock('@/lib/worktree-runtime-owner', () => ({
   getExecutionHostIdForWorktree: mocks.getExecutionHostIdForWorktree
+}))
+vi.mock('@/lib/resolve-owner', async (importOriginal) => ({
+  ...(await importOriginal<typeof ResolveOwnerModule>()),
+  runtimeEnvironmentIdForWorkspaceOwner: mocks.runtimeEnvironmentIdForWorkspaceOwner
 }))
 // Stage only workspace ownership; repo fallback must use the real resolver.
 vi.mock('@/lib/connection-owner-resolution', async (importOriginal) => ({
@@ -81,6 +87,10 @@ function store(settings: Record<string, unknown> = STRUCTURED_SETTINGS): AgentLa
 function stageLocalStructuredHost(): void {
   vi.clearAllMocks()
   mocks.getExecutionHostIdForWorktree.mockReturnValue('local')
+  mocks.runtimeEnvironmentIdForWorkspaceOwner.mockReturnValue({
+    kind: 'resolved',
+    environmentId: null
+  })
   mocks.getConnectionIdFromState.mockReturnValue(null)
   mocks.getLocalProjectExecutionRuntimeContext.mockReturnValue(undefined)
   mocks.getLocalRepoProjectExecutionRuntimeContext.mockReturnValue(undefined)
@@ -105,6 +115,7 @@ describe('buildAgentLaunchRouteInput', () => {
       agent: 'codex',
       settings: STRUCTURED_SETTINGS,
       executionHostId: 'local',
+      admissionHostId: 'local',
       hostCapabilities: [STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY],
       workspaceKind: 'git-worktree',
       projectRuntime: WSL_RUNTIME,
@@ -368,6 +379,10 @@ describe('buildAgentLaunchRouteInput', () => {
 
     beforeEach(() => {
       mocks.getExecutionHostIdForWorktree.mockReturnValue('runtime:server-1')
+      mocks.runtimeEnvironmentIdForWorkspaceOwner.mockReturnValue({
+        kind: 'resolved',
+        environmentId: 'server-1'
+      })
       mocks.readLocalRuntimeCapabilitiesOrUnknown.mockReturnValue([])
     })
 
@@ -378,9 +393,9 @@ describe('buildAgentLaunchRouteInput', () => {
       expect(routeFor(pairedStore(CURRENT_SERVER), args)).toBe('structured-native-chat')
     })
 
-    it('treats a server that has not reported its status as unknown', () => {
+    it('leaves an unanswered server unknown and routes its launch through host admission', () => {
       expect(buildAgentLaunchRouteInput(store(), args).hostCapabilities).toBeNull()
-      expect(routeFor(store(), args)).toBe('terminal-tui')
+      expect(routeFor(store(), args)).toBe('structured-native-chat')
     })
 
     // Older servers require their own chat setting to admit structured sessions despite advertising capability.

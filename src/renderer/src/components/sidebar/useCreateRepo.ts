@@ -11,8 +11,9 @@ import { translate } from '@/i18n/i18n'
 import { extractIpcErrorMessage } from '@/lib/ipc-error'
 import { upsertAddedRepoWithProjectHostSetup } from './add-repo-store-upsert'
 import { selectWorktreesByRepo } from '@/store/workspace-record-selectors'
-import { resolveAddRepoRuntimeTarget, worktreeRefreshOptions } from './add-repo-runtime-owner'
-import type { ExecutionHostId } from '../../../../shared/execution-host'
+import { addedRepoRefreshOptions, resolveAddRepoRuntimeTarget } from './add-repo-runtime-owner'
+import { refreshWslRegistrationAfterFailure } from '@/store/repos/repo-owner-host-readiness'
+import { getWorktreeExecutionHostId, type ExecutionHostId } from '../../../../shared/execution-host'
 import {
   readWslHostWindowsDriveRefusal,
   type WslHostWindowsDriveRefusal
@@ -126,7 +127,7 @@ export function useCreateRepo(
         }
         return
       }
-      const { alreadyPresent: wasDeduped, repo } = upsertAddedRepoWithProjectHostSetup(
+      const { alreadyPresent: wasDeduped, repo } = await upsertAddedRepoWithProjectHostSetup(
         result.repo,
         {
           runtimeEnvironmentId: options.runtimeEnvironmentId
@@ -151,7 +152,7 @@ export function useCreateRepo(
           }
         )
       }
-      const ownerOptions = worktreeRefreshOptions(options.runtimeEnvironmentId)
+      const ownerOptions = addedRepoRefreshOptions(repo)
       if (isGitRepoKind(repo)) {
         // Reveal persisted projects even after transient non-authoritative refreshes.
         await fetchWorktrees(repo.id, ownerOptions)
@@ -161,31 +162,24 @@ export function useCreateRepo(
         await onGitRepoReady?.(repo.id, ownerOptions.executionHostId)
       } else {
         // Folder projects activate their synthetic root before close, matching the add-folder path.
-        await (ownerOptions.executionHostId
-          ? fetchWorktrees(repo.id, {
-              executionHostId: ownerOptions.executionHostId
-            })
-          : fetchWorktrees(repo.id))
+        await fetchWorktrees(repo.id, { executionHostId: ownerOptions.executionHostId })
         if (!isCurrent()) {
           return
         }
         const folderWorktree = selectWorktreesByRepo(useAppStore.getState())[repo.id]?.find(
-          (worktree) =>
-            ownerOptions.executionHostId === undefined ||
-            worktree.hostId === ownerOptions.executionHostId
+          (worktree) => getWorktreeExecutionHostId(worktree, repo) === ownerOptions.executionHostId
         )
         if (folderWorktree) {
           activateAndRevealWorktree(folderWorktree.id, {
             sidebarRevealBehavior: 'auto',
-            ...(ownerOptions.executionHostId
-              ? { executionHostId: ownerOptions.executionHostId }
-              : {})
+            executionHostId: ownerOptions.executionHostId
           })
         }
         await markOnboardingProjectAdded('addedFolder')
         closeModal()
       }
     } catch (err) {
+      await refreshWslRegistrationAfterFailure(useAppStore.getState, createParent)
       if (!isCurrent()) {
         return
       }

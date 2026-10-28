@@ -3,6 +3,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { toast } from 'sonner'
 import { createTestStore, makeWorktree } from './store-test-helpers'
 import type { Repo } from '../../../../shared/repo-types'
+import { createGlobalSettingsFixture } from '../../../../shared/global-settings-test-fixture'
+import { createEnvironmentFromPairingOffer } from '../../../../shared/runtime-environments'
 import {
   createCompatibleRuntimeStatusResponseIfNeeded,
   type RuntimeEnvironmentCallRequest
@@ -89,6 +91,28 @@ function readySnapshot(): RuntimeHostStatusSnapshot {
     status: null,
     verification: 'verified',
     transport: 'ready'
+  }
+}
+
+function wslEnvironment() {
+  return {
+    ...createEnvironmentFromPairingOffer({
+      id: 'wsl:ubuntu',
+      name: 'Ubuntu',
+      now: 1,
+      offer: {
+        v: 2,
+        endpoint: 'ws://127.0.0.1:42000',
+        deviceToken: 'fixture',
+        publicKeyB64: 'fixture'
+      }
+    }),
+    orcadDeployment: {
+      kind: 'wsl' as const,
+      distro: 'Ubuntu',
+      localPort: 42000,
+      remotePort: 6768
+    }
   }
 }
 
@@ -290,4 +314,141 @@ describe('removing a project while its paired server is unreachable', () => {
     ])
     expect(store.getState().repos.map((repo) => repo.id)).toEqual(['app'])
   })
+
+  it.each([true, false])(
+    'keeps a local-selected UNC re-add registered (removal first: %s)',
+    async (removalFirst) => {
+      const environment = wslEnvironment()
+      const ownerRepo: Repo = {
+        ...remoteRepo,
+        path: '/home/me/App',
+        executionHostId: 'runtime:wsl%3Aubuntu'
+      }
+      let guestRepos = [ownerRepo]
+      const removal = Promise.withResolvers<void>()
+      answerRepoRm = async () => {
+        // The guest stops terminals before deleting its still-readable registration.
+        await removal.promise
+        guestRepos = []
+        return { removed: true }
+      }
+      const localAdd = vi.fn(async () => {
+        const existing = guestRepos.find((repo) => repo.path === ownerRepo.path)
+        if (!existing) {
+          guestRepos.push(ownerRepo)
+        }
+        return { repo: existing ?? ownerRepo, alreadyExisted: Boolean(existing) }
+      })
+      Object.assign(window.api.repos, { add: localAdd })
+      Object.assign(window.api.runtimeEnvironments, {
+        wslHosts: {},
+        list: vi.fn(async () => [environment]),
+        getStatusSnapshots: vi.fn(async () => [])
+      })
+      vi.mocked(toast.success).mockClear()
+      const store = createTestStore()
+      store.setState({
+        settings: createGlobalSettingsFixture({ experimentalWslHosts: true }),
+        runtimeEnvironments: [environment]
+      })
+      seedPendingRuntimeRepoRemovals([
+        { environmentId: environment.id, repoId: ownerRepo.id, requestedAt: 1 }
+      ])
+      reachable = true
+      const replay = () =>
+        observeRuntimeHostStatusForPendingRemovals({
+          ...readySnapshot(),
+          environmentId: environment.id
+        })
+      if (removalFirst) {
+        replay()
+        await vi.waitFor(() => expect(hostCalls).toContain('repo.rm'), { timeout: 20_000 })
+      }
+
+      const unc = removalFirst
+        ? '\\\\wsl.localhost\\Ubuntu\\home\\me\\App'
+        : '\\\\?\\UNC\\wsl$\\Ubuntu\\home\\me\\App'
+      const added = store.getState().addRepoPath(unc, 'git', { runtimeEnvironmentId: null })
+      await new Promise((resolve) => setTimeout(resolve, 0))
+      if (!removalFirst) {
+        await added
+        replay()
+      }
+      removal.resolve()
+      const result = await added
+      await vi.waitFor(() => expect(listPendingRuntimeRepoRemovals(environment.id)).toEqual([]))
+
+      expect(localAdd).toHaveBeenCalledWith({ path: unc, kind: 'git' })
+      expect(result).toEqual(ownerRepo)
+      expect(store.getState().repos).toContainEqual(ownerRepo)
+      expect(toast.success).toHaveBeenCalledWith('Project added', {
+        description: ownerRepo.displayName
+      })
+      expect(guestRepos).toContainEqual(ownerRepo)
+    }
+  )
+
+  it.each([
+    { path: '\\\\wsl.localhost\\Ubuntu\\mnt\\c\\App', owner: 'local' as const, drive: true },
+    {
+      path: '\\\\?\\UNC\\wsl.localhost\\Ubuntu\\home\\me\\App',
+      owner: 'runtime:other' as const,
+      drive: false
+    }
+  ])(
+    'preserves another owner removal when local Add returns $owner',
+    async ({ path, owner, drive }) => {
+      const environment = wslEnvironment()
+      const returned: Repo = {
+        ...remoteRepo,
+        path: drive ? path : remoteRepo.path,
+        executionHostId: owner
+      }
+      const localAdd = vi.fn(async () => ({ repo: returned }))
+      Object.assign(window.api.repos, { add: localAdd })
+      Object.assign(window.api.runtimeEnvironments, {
+        wslHosts: {},
+        list: vi.fn(async () => [environment]),
+        getStatusSnapshots: vi.fn(async () => [])
+      })
+      const store = createTestStore()
+      store.setState({
+        settings: createGlobalSettingsFixture({ experimentalWslHosts: true }),
+        runtimeEnvironments: [environment]
+      })
+      seedPendingRuntimeRepoRemovals([
+        { environmentId: environment.id, repoId: returned.id, requestedAt: 1 }
+      ])
+      const removal = Promise.withResolvers<void>()
+      if (drive) {
+        reachable = true
+        answerRepoRm = async () => {
+          await removal.promise
+          return { removed: true }
+        }
+        observeRuntimeHostStatusForPendingRemovals({
+          ...readySnapshot(),
+          environmentId: environment.id
+        })
+        await vi.waitFor(() => expect(hostCalls).toContain('repo.rm'))
+      }
+      const added = store.getState().addRepoPath(path, 'git', { runtimeEnvironmentId: null })
+      try {
+        await vi.waitFor(() => expect(localAdd).toHaveBeenCalledWith({ path, kind: 'git' }))
+        expect(listPendingRuntimeRepoRemovals(environment.id)).toMatchObject([
+          { repoId: returned.id }
+        ])
+      } finally {
+        removal.resolve()
+      }
+      await expect(added).resolves.toEqual(returned)
+      if (drive) {
+        await vi.waitFor(() => expect(listPendingRuntimeRepoRemovals(environment.id)).toEqual([]))
+      } else {
+        expect(listPendingRuntimeRepoRemovals(environment.id)).toMatchObject([
+          { repoId: returned.id }
+        ])
+      }
+    }
+  )
 })

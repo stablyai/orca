@@ -17,9 +17,10 @@ export function sendRemoteRuntimeRequestAbortable(
   timeoutMs: number,
   envelope?: RuntimeOrchestrationEnvelope,
   signal?: AbortSignal,
-  clientCapabilities: readonly RuntimeCapability[] = []
+  clientCapabilities: readonly RuntimeCapability[] = [],
+  beforeSend?: () => void
 ): Promise<RuntimeRpcResponse<unknown>> {
-  if (signal || clientCapabilities.length > 0) {
+  if (signal || clientCapabilities.length > 0 || beforeSend) {
     return sendRemoteRuntimeRequest(
       connection,
       method,
@@ -27,7 +28,8 @@ export function sendRemoteRuntimeRequestAbortable(
       timeoutMs,
       envelope,
       signal,
-      clientCapabilities
+      clientCapabilities,
+      beforeSend
     )
   }
   return envelope
@@ -62,9 +64,10 @@ export function sendRemoteRuntimeSharedControlRequestAbortable(
   params: unknown,
   timeoutMs: number,
   envelope?: RuntimeOrchestrationEnvelope,
-  signal?: AbortSignal
+  signal?: AbortSignal,
+  beforeSend?: () => void
 ): Promise<RuntimeRpcResponse<unknown>> {
-  if (signal) {
+  if (signal || beforeSend) {
     return sendRemoteRuntimeSharedControlRequest(
       environmentId,
       connection,
@@ -72,7 +75,8 @@ export function sendRemoteRuntimeSharedControlRequestAbortable(
       params,
       timeoutMs,
       envelope,
-      signal
+      signal,
+      beforeSend
     )
   }
   return envelope

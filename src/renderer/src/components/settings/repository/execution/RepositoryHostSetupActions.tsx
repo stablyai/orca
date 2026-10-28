@@ -107,7 +107,8 @@ export function RepositoryHostSetupActions({
       })
       if (result) {
         resetFlow()
-        onSetupReady(setupTargetHostId)
+        // Why the result's host: a WSL folder is set up on its distro's server, not the picked host.
+        onSetupReady(result.setup.hostId)
       }
     } finally {
       setIsSettingUp(false)

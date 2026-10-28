@@ -86,6 +86,29 @@ describe('WslHostService', () => {
     ])
   })
 
+  it('ensures one registered host for concurrent project actions and starts only that distro', async () => {
+    const connector = makeConnector([
+      { ...UBUNTU, state: 'stopped' },
+      { ...UBUNTU, id: UBUNTU_ID.replace('0e', '2e'), name: 'Debian', state: 'stopped' }
+    ])
+    const service = makeService(connector)
+    await expect(
+      Promise.all([service.ensure('Ubuntu'), service.ensure('ubuntu')])
+    ).resolves.toEqual(['wsl:ubuntu', 'wsl:ubuntu'])
+    expect(connector.connect.mock.calls).toEqual([['Ubuntu']])
+    await service.ensure('Ubuntu')
+    expect(listEnvironments(userDataPath)).toHaveLength(1)
+    expect(connector.readOrcadPublicKey.mock.calls).toEqual([['Ubuntu']])
+
+    // Reusing a distro's name after unregister/import must not reuse its old project owner.
+    connector.listDistros.mockResolvedValue([{ ...UBUNTU, id: UBUNTU_ID.replace('0e', '3e') }])
+    const connects = connector.connect.mock.calls.length
+    await expect(service.ensure('Ubuntu')).rejects.toThrow(
+      'reconnecting it will not repair the registration'
+    )
+    expect(connector.connect).toHaveBeenCalledTimes(connects)
+  })
+
   it('adds a distro over a server list a crash left NUL-filled (#18766)', async () => {
     vi.spyOn(console, 'warn').mockImplementation(() => {})
     writeFileSync(getEnvironmentStorePath(userDataPath), Buffer.alloc(640))

@@ -13,3 +13,13 @@ export function focusReachability(
     ? connector.reachability(record.distro, record.environmentId)
     : Promise.resolve('unreachable')
 }
+
+/** Whether a registered host answers, without starting its distro. */
+export async function isWslHostConnected(
+  connector: Pick<WslHostConnector, 'reachability'> | null,
+  record: { distro: string; environmentId: string } | null
+): Promise<boolean> {
+  return record && connector
+    ? (await connector.reachability(record.distro, record.environmentId)) === 'available'
+    : false
+}

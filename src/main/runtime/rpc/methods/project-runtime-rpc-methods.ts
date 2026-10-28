@@ -1,4 +1,5 @@
 import { defineMethod } from '../core'
+import { isPairedWslRoutingCaller } from '../../../wsl/wsl-project-registration'
 import { projectRepoResultVisibilityForClient } from '../repo-visibility-projection'
 import {
   ProjectHostSetupClone,
@@ -50,7 +51,9 @@ export const PROJECT_RUNTIME_METHODS = [
     params: ProjectHostSetupExistingFolder,
     handler: async (params, context) => ({
       result: projectRepoResultVisibilityForClient(
-        await context.runtime.setupProjectExistingFolder(params),
+        await context.runtime.setupProjectExistingFolder(params, {
+          fromPairedClient: isPairedWslRoutingCaller(context.caller)
+        }),
         context
       )
     })

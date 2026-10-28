@@ -86,6 +86,7 @@ export function executeSupportRoutedCall(args: {
   expectedRuntimeId?: string
   envelope?: RuntimeOrchestrationEnvelope
   signal?: AbortSignal
+  beforeSend?: () => void
 }): Promise<RuntimeRpcResponse<unknown>> {
   return routeRuntimeEnvironmentCallBySupport({
     userDataPath: args.userDataPath,
@@ -105,7 +106,8 @@ export function executeSupportRoutedCall(args: {
             args.params,
             args.timeoutMs,
             args.envelope,
-            args.signal
+            args.signal,
+            args.beforeSend
           ),
     unsupported: (route) =>
       args.expectedRuntimeId !== undefined
@@ -117,7 +119,8 @@ export function executeSupportRoutedCall(args: {
             args.timeoutMs,
             args.envelope,
             args.signal,
-            ELECTRON_REMOTE_RUNTIME_CLIENT_CAPABILITIES
+            ELECTRON_REMOTE_RUNTIME_CLIENT_CAPABILITIES,
+            args.beforeSend
           ),
     markUsed: (environmentId, response) => {
       if (response.ok) {

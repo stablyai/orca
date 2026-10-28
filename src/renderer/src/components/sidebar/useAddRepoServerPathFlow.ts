@@ -12,7 +12,7 @@ import type { NestedRepoScanResult } from '../../../../shared/project-group-type
 import type { Repo } from '../../../../shared/repo-types'
 import type { WorktreeFetchOptions } from '@/store/slices/worktree-helpers'
 import { createNestedRepoScanId } from './add-repo-dialog-types'
-import { worktreeRefreshOptions } from './add-repo-runtime-owner'
+import { addedRepoRefreshOptions } from './add-repo-runtime-owner'
 import { toRuntimeExecutionHostId, type ExecutionHostId } from '../../../../shared/execution-host'
 import {
   wslHostWindowsDriveRefusalForLinuxPath,
@@ -193,7 +193,7 @@ export function useAddRepoServerPathFlow({
         }
         if (repo && isGitRepoKind(repo)) {
           // A persisted repo should still reveal after a transient non-authoritative refresh.
-          const ownerOptions = worktreeRefreshOptions(activeRuntimeEnvironmentId ?? null)
+          const ownerOptions = addedRepoRefreshOptions(repo)
           await fetchWorktrees(repo.id, ownerOptions)
           if (gen !== serverAddGenRef.current) {
             return

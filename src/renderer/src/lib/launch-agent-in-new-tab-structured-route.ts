@@ -41,7 +41,7 @@ export function launchStructuredAgentFromNewTab(args: {
     target: { worktreeId: args.worktreeId },
     ...(args.groupId ? { targetGroupId: args.groupId } : {}),
     ...(args.onHostDeclined ? { declinedOpensCallerSurface: true as const } : {}),
-    onHostDeclined: (_target, activate) => {
+    onHostDeclined: async (_target, activate) => {
       if (args.onHostDeclined) {
         return args.onHostDeclined()
       }
@@ -57,8 +57,15 @@ export function launchStructuredAgentFromNewTab(args: {
       if (terminal && 'refused' in terminal) {
         return { opened: false, promptDeliveryResult: Promise.resolve(terminal.refused) }
       }
+      const surface =
+        terminal === null
+          ? 'none'
+          : terminal.surface.kind === 'host-published'
+            ? await (terminal.surfaceReady ?? Promise.resolve<'none'>('none'))
+            : 'agent'
       return {
-        opened: terminal !== null,
+        opened: surface === 'agent',
+        surface,
         ...(terminal?.surface.kind === 'local-terminal' ? { tabId: terminal.surface.tabId } : {}),
         ...(terminal?.terminalCompletion ? { completion: terminal.terminalCompletion } : {}),
         ...(terminal?.promptDeliveryResult

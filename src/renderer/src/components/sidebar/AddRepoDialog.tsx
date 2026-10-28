@@ -50,7 +50,8 @@ export default React.memo(function AddRepoDialog({
   const hostSelection = useAddRepoHostSelection({
     isOpen,
     setStep,
-    preferredHostId: modalPaths.preferredHostId
+    preferredHostId: modalPaths.preferredHostId,
+    droppedLocalPath: modalPaths.droppedLocalPath
   })
   const selectedRuntimeEnvironmentId =
     hostSelection.selectedParsedHost?.kind === 'runtime'
@@ -163,7 +164,6 @@ export default React.memo(function AddRepoDialog({
     onGitRepoReady: completeGitRepoAdd
   })
 
-  const isRuntimeEnvironmentActive = Boolean(selectedRuntimeEnvironmentId)
   const { handleBrowse, resetLocalFolderFlow, handleAddLocalPath } = useAddRepoLocalFolderFlow({
     isOpen,
     droppedLocalPath: modalPaths.droppedLocalPath,
@@ -299,7 +299,7 @@ export default React.memo(function AddRepoDialog({
     >
       <AddRepoDialogStepContent
         step={step}
-        isRuntimeEnvironmentActive={isRuntimeEnvironmentActive}
+        isRuntimeEnvironmentActive={Boolean(selectedRuntimeEnvironmentId)}
         activeRuntimeEnvironmentId={selectedRuntimeEnvironmentId}
         repoCount={repos.length}
         isAdding={isAdding}
@@ -338,7 +338,7 @@ export default React.memo(function AddRepoDialog({
         createGitAvailability={createGitAvailability}
         createRuntimeParentStatus={createRuntimeParentStatus}
         createParentDefaultPending={createParentDefaultPending}
-        manualCreateParentEntry={isRuntimeEnvironmentActive}
+        manualCreateParentEntry={Boolean(selectedRuntimeEnvironmentId)}
         onBrowse={() =>
           routeAddRepoBrowse(hostSelection.selectedParsedHost, {
             browseLocal: () => void handleBrowse(),

@@ -14,7 +14,7 @@ import { useAppStore } from '@/store'
 import { isGitRepoKind } from '../../../../shared/repo-kind'
 import { finishProjectAddWithDefaultCheckout } from './project-added-default-checkout'
 import { translate } from '@/i18n/i18n'
-import { worktreeRefreshOptions } from './add-repo-runtime-owner'
+import { addedRepoRefreshOptions } from './add-repo-runtime-owner'
 
 const NON_GIT_REPO_ERROR = 'Not a valid git repository'
 
@@ -80,7 +80,7 @@ const AddProjectFromFolderDialog = React.memo(function AddProjectFromFolderDialo
         return
       }
       // The repo is already persisted; a non-authoritative refresh must not strand the add dialog.
-      const ownerOptions = worktreeRefreshOptions(runtimeEnvironmentId)
+      const ownerOptions = addedRepoRefreshOptions(repo)
       await fetchWorktrees(repo.id, ownerOptions)
       if (!mountedRef.current || gen !== addGenRef.current) {
         return

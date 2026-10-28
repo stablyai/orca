@@ -59,8 +59,6 @@ const args: LaunchAgentInNewTabArgs = {
   agent: 'opencode',
   worktreeId: 'wt-1'
 }
-// oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the wait path only hands the startup plan back to its caller; nothing here reads its fields.
-const startupPlan = { launchCommand: 'opencode' } as never
 
 function storeWithSettings(settings: Record<string, unknown>) {
   mocks.state.current = {
@@ -77,7 +75,6 @@ function storeWithSettings(settings: Record<string, unknown>) {
 function fakeRelaunch() {
   return vi.fn((relaunched: LaunchAgentInNewTabArgs) => ({
     surface: { kind: 'host-published' as const },
-    startupPlan,
     pasteDraftAfterLaunch: false,
     structuredSettlement: Promise.resolve(
       relaunched.agentSessionLaunchPlan?.route === 'structured-native-chat'

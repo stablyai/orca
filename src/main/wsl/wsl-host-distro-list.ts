@@ -1,4 +1,6 @@
 /** List user distros from Lxss (including WSL version), then probe running state without booting any. Exclude Docker internals. */
+import type { WslHostDeploymentRecord } from '../../shared/wsl-host-deployment-store'
+import { sameWslDistro } from './wsl-host-add-admission'
 import type { WslHostDistro } from '../../shared/wsl-host-types'
 import { filterUserWslDistros } from '../wsl-distro-list-output'
 import { listConfirmedRunningWslDistros } from '../wsl-background-distro-gate'
@@ -32,4 +34,15 @@ export async function listWslHostDistros(
       state: runningKeys.has(distro.toLowerCase()) ? ('running' as const) : ('stopped' as const)
     }))
     .sort((a, b) => a.name.localeCompare(b.name))
+}
+
+export function toWslHostDistroList(
+  candidates: readonly WslHostDistroCandidate[],
+  records: readonly WslHostDeploymentRecord[]
+): WslHostDistro[] {
+  return candidates.map(({ id: _id, ...distro }) => ({
+    ...distro,
+    environmentId:
+      records.find((record) => sameWslDistro(record.distro, distro.name))?.environmentId ?? null
+  }))
 }

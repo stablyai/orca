@@ -135,7 +135,8 @@ describe('useCreateRepo default-checkout handoff', () => {
       kind: 'git'
     })
     expect(mocks.fetchWorktrees).toHaveBeenCalledWith(repo.id, {
-      requireAuthoritative: true
+      requireAuthoritative: true,
+      executionHostId: 'local'
     })
     expect(mocks.storeState.projects).toEqual(
       expect.arrayContaining([expect.objectContaining({ sourceRepoIds: [repo.id] })])
@@ -143,7 +144,7 @@ describe('useCreateRepo default-checkout handoff', () => {
     expect(mocks.storeState.projectHostSetups).toEqual(
       expect.arrayContaining([expect.objectContaining({ repoId: repo.id, path: repo.path })])
     )
-    expect(mocks.onGitRepoReady).toHaveBeenCalledWith(repo.id, undefined)
+    expect(mocks.onGitRepoReady).toHaveBeenCalledWith(repo.id, 'local')
   })
 
   it('returns the selected parent directory after the local picker applies it', async () => {
@@ -179,9 +180,10 @@ describe('useCreateRepo default-checkout handoff', () => {
     await result.handleCreate()
 
     expect(mocks.fetchWorktrees).toHaveBeenCalledWith(repo.id, {
-      requireAuthoritative: true
+      requireAuthoritative: true,
+      executionHostId: 'local'
     })
-    expect(mocks.onGitRepoReady).toHaveBeenCalledWith(repo.id, undefined)
+    expect(mocks.onGitRepoReady).toHaveBeenCalledWith(repo.id, 'local')
     expect(mocks.stateSetters[STATE_ERROR_MESSAGE]).not.toHaveBeenCalledWith(
       'Could not refresh project worktrees. Try again.'
     )
@@ -189,7 +191,7 @@ describe('useCreateRepo default-checkout handoff', () => {
 
   it('opens an existing folder project returned by create dedupe', async () => {
     const repo = makeRepo({ kind: 'folder' })
-    const worktree = { id: `${repo.id}::/projects/created` }
+    const worktree = { id: `${repo.id}::/projects/created`, hostId: 'local' }
     const closeModal = vi.fn()
     mocks.createRepo.mockResolvedValue({ repo })
     mocks.fetchWorktrees.mockImplementation(async (repoId: string) => {
@@ -206,9 +208,10 @@ describe('useCreateRepo default-checkout handoff', () => {
       name: 'created',
       kind: 'git'
     })
-    expect(mocks.fetchWorktrees).toHaveBeenCalledWith(repo.id)
+    expect(mocks.fetchWorktrees).toHaveBeenCalledWith(repo.id, { executionHostId: 'local' })
     expect(mocks.activateAndRevealWorktree).toHaveBeenCalledWith(worktree.id, {
-      sidebarRevealBehavior: 'auto'
+      sidebarRevealBehavior: 'auto',
+      executionHostId: 'local'
     })
     expect(mocks.markOnboardingProjectAdded).toHaveBeenCalledWith('addedFolder')
     expect(closeModal).toHaveBeenCalled()

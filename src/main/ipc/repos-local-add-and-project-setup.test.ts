@@ -180,12 +180,12 @@ describe('repos:add + repos:clone', () => {
     expect(mockStore.addRepo).not.toHaveBeenCalled()
   })
 
-  it('prepares the aligned worktree root when project setup uses an existing local git repo', async () => {
+  it.each(['git', 'folder'])('reuses a saved local %s setup', async (kind) => {
     const existing = {
       id: 'repo-setup-existing-git',
-      path: '/tmp/from-setup-existing-git',
+      path: kind === 'folder' ? '.' : '/tmp/from-setup-existing-git',
       displayName: 'from-setup-existing-git',
-      kind: 'git',
+      kind,
       badgeColor: '#22c55e'
     }
     const aligned = { ...existing, projectHostSetupMethod: 'imported-existing-folder' }
@@ -209,7 +209,7 @@ describe('repos:add + repos:clone', () => {
       projectId: project.id,
       hostId: 'local',
       path: existing.path,
-      kind: 'git',
+      kind,
       setupMethod: 'imported-existing-folder'
     })
 

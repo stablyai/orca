@@ -3,17 +3,16 @@
  * Add/Connect, or when the user switches to one of its workspaces. After a confirmed stop the host is
  * parked: polls and visible work keep it down until the user acts or the distro runs again.
  */
-import { focusReachability } from './wsl-host-focus-reachability'
+import { focusReachability, isWslHostConnected } from './wsl-host-focus-reachability'
 import { rethrowRetryable, settlingConnectFailure } from './wsl-host-connect-failure'
 import type { WslHostDeploymentRecord } from '../../shared/wsl-host-deployment-store'
 import type {
   WslHostAddResult,
-  WslHostConnectIntent,
   WslHostDistro,
   WslHostServerStop,
   WslHostStatus
 } from '../../shared/wsl-host-types'
-import type { WslHostConnector, WslHostServiceDependencies } from './wsl-host-connector-contract'
+import type { WslHostConnector } from './wsl-host-connector-contract'
 import { wslDistroHolderKey } from './wsl-distro-holder-record'
 import {
   saveWslHostConnection,
@@ -38,17 +37,15 @@ import {
   removeWslHostServer
 } from './wsl-host-removal'
 import type { WslOrcadConnectionStatus } from './wsl-orcad-connection-status'
+import { createWslProjectEnsurer, createWslProjectCaller } from './wsl-project-host-ensurer'
 import {
   forgetWslHostToWake,
   forgetWslHostsToWake,
   rememberWslHostsToWake
 } from './wsl-host-early-wake'
 
-export type {
-  WslHostConnector,
-  WslHostReachability,
-  WslHostServiceDependencies
-} from './wsl-host-connector-contract'
+import type { WslHostServiceDependencies, WslHostConnectOptions } from './wsl-host-service-contract'
+export type * from './wsl-host-service-contract'
 
 export class WslHostService {
   private connector: WslHostConnector | null = null
@@ -106,7 +103,8 @@ export class WslHostService {
   }
 
   async listDistros(): Promise<WslHostDistro[]> {
-    return withWslHostIds(await this.wsl.listDistros(), this.records())
+    const records = this.records()
+    return withWslHostIds(await this.wsl.listDistros(), records)
   }
 
   add(args: { distro: string; startIfStopped?: boolean }): Promise<WslHostAddResult> {
@@ -139,6 +137,19 @@ export class WslHostService {
     this.adding.set(key, operation)
     return operation
   }
+
+  isEnabled(): boolean {
+    return this.deps.isEnabled()
+  }
+
+  /** Explicit project actions may start their distro, and wait for its paired server. */
+  ensure = createWslProjectEnsurer(
+    () => this.deps,
+    () => this.wsl,
+    this
+  )
+
+  callProject = createWslProjectCaller(() => this.deps)
 
   async remove(environmentId: string): Promise<WslHostServerStop> {
     const record = this.recordForEnvironment(environmentId)
@@ -189,13 +200,8 @@ export class WslHostService {
    * The user asked for this host: may boot its distro. An intent retries or forces an update.
    * Only the user's own Connect or Add withdraws an unfinished Remove; any other caller is refused.
    */
-  async connect(
-    environmentId: string,
-    {
-      withdrawPendingRemoval = false,
-      ...options
-    }: { intent?: WslHostConnectIntent; withdrawPendingRemoval?: boolean } = {}
-  ): Promise<void> {
+  async connect(environmentId: string, options: WslHostConnectOptions = {}): Promise<void> {
+    const { withdrawPendingRemoval = false, ...connectOptions } = options
     const record = this.recordForEnvironment(environmentId)
     if (!record) {
       throw new Error('This server is not a WSL host.')
@@ -207,7 +213,7 @@ export class WslHostService {
     admitConnectToPendingHost(this.deps.userDataPath(), record, withdrawPendingRemoval)
     this.wsl.forgetPairingFailures?.(environmentId)
     this.parked.delete(environmentId)
-    await this.wsl.connect(record.distro, options)
+    await this.wsl.connect(record.distro, connectOptions)
   }
 
   /**
@@ -292,10 +298,7 @@ export class WslHostService {
 
   /** Whether the host's server answers through this process now; never starts a stopped distro. */
   async isConnected(environmentId: string): Promise<boolean> {
-    const record = this.recordForEnvironment(environmentId)
-    return record && this.connector
-      ? (await this.connector.reachability(record.distro, environmentId)) === 'available'
-      : false
+    return isWslHostConnected(this.connector, this.recordForEnvironment(environmentId))
   }
 
   /** Re-saves the live connection's pairing and ports, which the deployment link overlays onto. */

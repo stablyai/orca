@@ -1,9 +1,9 @@
 import { realpath } from 'node:fs/promises'
 import { normalizeRuntimePathForComparison } from '../shared/cross-platform-path'
 
-async function realpathKey(path: string): Promise<string | null> {
+async function realpathKey(path: string, key: (path: string) => string): Promise<string | null> {
   try {
-    return normalizeRuntimePathForComparison(await realpath(path))
+    return key(await realpath(path))
   } catch {
     return null
   }
@@ -12,16 +12,17 @@ async function realpathKey(path: string): Promise<string | null> {
 /** Resolve symlink aliases so the same checkout cannot be registered twice. */
 export async function findProjectAtSameRealPath<T extends { path: string }>(
   projects: readonly T[],
-  path: string
+  path: string,
+  key: (path: string) => string = normalizeRuntimePathForComparison
 ): Promise<T | null> {
   if (projects.length === 0) {
     return null
   }
-  const target = await realpathKey(path)
+  const target = await realpathKey(path, key)
   if (!target) {
     return null
   }
-  const keys = await Promise.all(projects.map((project) => realpathKey(project.path)))
+  const keys = await Promise.all(projects.map((project) => realpathKey(project.path, key)))
   const index = keys.indexOf(target)
   return index === -1 ? null : projects[index]
 }

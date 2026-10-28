@@ -1,4 +1,5 @@
 import { expect, it, vi } from 'vitest'
+import { toast } from 'sonner'
 import type { Project, ProjectHostSetup } from '../../../../shared/project-types'
 import { createTestStore } from './store-test-helpers'
 import {
@@ -156,6 +157,30 @@ it('prefers an authoritative paired-runtime setup over its repo-derived fallback
       connectionId: null
     }
   ])
+})
+
+it('shows a mixed-owner import refusal without the Electron wrapper', async () => {
+  const message =
+    'Some of these projects are already saved on Windows. Import them separately instead of as a group.'
+  const importNested = vi
+    .fn()
+    .mockRejectedValueOnce(
+      new Error(`Error invoking remote method 'projectGroups:importNested': Error: ${message}`)
+    )
+  vi.stubGlobal('window', { api: { projectGroups: { importNested } } })
+  const parentPath = String.raw`\\wsl.localhost\Ubuntu\home\dev\platform`
+  await createTestStore()
+    .getState()
+    .importNestedRepos({
+      parentPath,
+      groupName: 'Platform',
+      projectPaths: [`${parentPath}\\api`, `${parentPath}\\web`],
+      mode: 'group',
+      runtimeEnvironmentId: null
+    })
+  expect(toast.error).toHaveBeenCalledWith('Failed to import repositories', {
+    description: message
+  })
 })
 
 // The catalog these tests read is the one the focused host would have shown.

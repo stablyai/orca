@@ -3,7 +3,7 @@ import { ipcMain } from 'electron'
 import { randomUUID } from 'node:crypto'
 import { access, mkdir, readdir, rm } from 'node:fs/promises'
 import { homedir } from 'node:os'
-import { isAbsolute, join } from 'node:path'
+import { isAbsolute, join, posix } from 'node:path'
 import type { Store } from '../../persistence'
 import type { Repo } from '../../../shared/repo-types'
 import { DEFAULT_REPO_BADGE_COLOR, getDefaultWorkspaceDir } from '../../../shared/constants'
@@ -18,6 +18,10 @@ import { invalidateAuthorizedRootsCache } from '../registered-worktree-roots-cac
 import { emitRepoAdded } from './repo-added-telemetry'
 import { notifyReposChanged } from './repos-changed-notification'
 import { addLocalRepoFromPath } from './local-repo-registration'
+import { placeProject } from '../../wsl/project-placement'
+import { requireSavedProject } from '../../repository-checkout-admission'
+import { registerOnWslOwner } from '../../wsl/wsl-project-registration'
+import { windowsFsPath } from '../../wsl/wsl-unc-drive-fs-path'
 
 const GIT_AVAILABILITY_TIMEOUT_MS = 1500
 
@@ -102,19 +106,38 @@ export function registerRepoCreationHandlers(mainWindow: BrowserWindow, store: S
       const targetPath = join(parentPath, name)
 
       // Repeated Create requests must share one registration.
-      const existing = store.getRepos().find((r) => r.path === targetPath)
-      if (existing) {
+      const placement = await placeProject(store, {
+        operation: 'create',
+        parentPath,
+        name,
+        domain: LOCAL_EXECUTION_HOST_ID,
+        fromPairedClient: false,
+        sameTarget: (repo) => repo.path === targetPath
+      })
+      if (placement.kind === 'saved') {
         emitRepoAdded('folder_picker', true, repoKind === 'git')
-        return { repo: existing }
+        return { repo: requireSavedProject(store, placement.repo) }
       }
+      if (placement.kind === 'wsl') {
+        const result = await registerOnWslOwner(placement.authority, {
+          kind: 'create',
+          path: posix.dirname(placement.linuxPath),
+          name,
+          repoKind
+        })
+        notifyReposChanged(mainWindow)
+        return { repo: result.repo }
+      }
+
+      const targetFsPath = windowsFsPath(targetPath)
 
       // Accept empty preexisting folders without overwriting user files.
       let createdDir = false
       let targetExists = false
       try {
         // Fresh installs may lack the default project parent.
-        await mkdir(parentPath, { recursive: true })
-        await access(targetPath)
+        await mkdir(windowsFsPath(parentPath), { recursive: true })
+        await access(targetFsPath)
         targetExists = true
       } catch (err) {
         // Only ENOENT proves the target is free; uncoded errors retain message-based compatibility.
@@ -133,7 +156,7 @@ export function registerRepoCreationHandlers(mainWindow: BrowserWindow, store: S
 
       if (targetExists) {
         try {
-          const entries = await readdir(targetPath)
+          const entries = await readdir(targetFsPath)
           if (entries.length > 0) {
             return {
               error: `"${name}" already exists at this location and is not empty.`
@@ -145,7 +168,7 @@ export function registerRepoCreationHandlers(mainWindow: BrowserWindow, store: S
         }
       } else {
         try {
-          await mkdir(targetPath, { recursive: false })
+          await mkdir(targetFsPath, { recursive: false })
           createdDir = true
         } catch (err) {
           // A concurrent create may win mkdir; reuse its registration on EEXIST.
@@ -155,7 +178,7 @@ export function registerRepoCreationHandlers(mainWindow: BrowserWindow, store: S
               : undefined
           const isEexist = code === 'EEXIST' || (err instanceof Error && /EEXIST/.test(err.message))
           if (isEexist) {
-            const raceWinner = store.getRepos().find((r) => r.path === targetPath)
+            const raceWinner = placement.admission.findSaved()
             if (raceWinner) {
               return { repo: raceWinner }
             }
@@ -177,9 +200,9 @@ export function registerRepoCreationHandlers(mainWindow: BrowserWindow, store: S
         } catch (err) {
           // Rollback may remove only what this request created; preserve preexisting folders.
           if (createdDir) {
-            await rm(targetPath, { recursive: true, force: true }).catch(() => {})
+            await rm(targetFsPath, { recursive: true, force: true }).catch(() => {})
           } else if (step === 'commit') {
-            await rm(join(targetPath, '.git'), { recursive: true, force: true }).catch(() => {})
+            await rm(join(targetFsPath, '.git'), { recursive: true, force: true }).catch(() => {})
           }
           const message = err instanceof Error ? err.message : String(err)
           if (
@@ -200,7 +223,7 @@ export function registerRepoCreationHandlers(mainWindow: BrowserWindow, store: S
       }
 
       // IPC calls interleave while awaiting filesystem and Git work; recheck before registration.
-      const raceWinner = store.getRepos().find((r) => r.path === targetPath)
+      const raceWinner = placement.admission.findSaved()
       if (raceWinner) {
         // A concurrent winner owns the directory even if this request created it.
         emitRepoAdded('folder_picker', true, repoKind === 'git')
