@@ -1,9 +1,10 @@
 import { FakeAcpChild } from './acp-scripted-connection.test-fixture'
 export { FakeAcpChild, PID } from './acp-scripted-connection.test-fixture'
 
+import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { vi } from 'vitest'
+import { onTestFinished, vi } from 'vitest'
 import { z } from 'zod'
 import type { AgentJournalMessageItem } from '../../shared/agent-session-journal-types'
 import type { AgentChatPermissionChoice } from '../../shared/agent-chat-permission-mode'
@@ -90,6 +91,14 @@ export async function openAcpAdapterRig(
   let opened: StructuredAgentSessionProviderOpenResult | null = null
   const startListeners = new Set<() => void>()
   const spec = options.spec ?? GROK
+  const dataDirectory =
+    options.deps?.dataDirectory ??
+    (spec.privateTempDirectory
+      ? await mkdtemp(process.platform === 'win32' ? join(tmpdir(), 'orca-acp-') : '/tmp/o')
+      : join(tmpdir(), 'orca-acp-adapter-rig'))
+  if (spec.privateTempDirectory && !options.deps?.dataDirectory) {
+    onTestFinished(() => rm(dataDirectory, { recursive: true, force: true }))
+  }
   // Use a scratch account folder for agents that prepare one.
   const { prepare, resolve, environment } = spec.account
   const scratch = { launchEnv: {}, stateDirectory: tmpdir() }
@@ -150,7 +159,7 @@ export async function openAcpAdapterRig(
       return child
     },
     readProcessStartTime: async () => 1_700_000_000_000,
-    dataDirectory: join(tmpdir(), 'orca-acp-adapter-rig'),
+    dataDirectory,
     onDispatchSettledLate: (settlement) => settled.push(settlement),
     mintGeneration: () => 'gen-acp',
     now: () => 5_000,

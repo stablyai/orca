@@ -3,7 +3,7 @@ import { agentSessionRefusalError } from '../../shared/agent-session-wire-refusa
 
 import { chmod, mkdir, mkdtemp, realpath, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
-import { join } from 'node:path'
+import { dirname, join } from 'node:path'
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { GlobalSettings } from '../../shared/global-settings-types'
 import type * as ProcessHostModule from '@orca/process-host'
@@ -520,7 +520,9 @@ function postureOf(launch: unknown): Record<string, unknown> {
 
 /** Paths under the run's temp root and this process's own binary read the same on every run. */
 function normalized(value: string): string {
+  // Why: a data root too long for a socket moves to /tmp/oacp-<uid>/<hash>; only Antigravity uses one.
   return value
+    .replace(/\/tmp\/oacp-\d+\/\w+\/run-\w+/, '<root>/state/acp-temp/antigravity/run-<random>')
     .split(root)
     .join('<root>')
     .split(process.execPath)
@@ -745,6 +747,10 @@ describe.skipIf(process.platform === 'win32')('native-chat launch parity', () =>
       } finally {
         structuredWorkerIdentities.forget(workerHandle)
         await adapter.closeAll().catch(() => {})
+        const temp = capture.spawns[0]?.spec.env?.TMPDIR
+        if (temp?.startsWith(`/tmp/oacp-${process.getuid?.()}/`)) {
+          await rm(dirname(temp), { recursive: true, force: true })
+        }
       }
     }
   )

@@ -41,7 +41,7 @@ export function ensureOwnedPrivateDir(dir: string, uid: number): void {
   }
   const entry = lstatSync(dir)
   if (!entry.isDirectory() || entry.uid !== uid || (entry.mode & 0o077) !== 0) {
-    throw new Error(`Daemon socket directory ${dir} is not a private directory owned by this user`)
+    throw new Error(`${dir} is not a private directory owned by this user`)
   }
 }
 
