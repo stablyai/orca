@@ -1,11 +1,15 @@
-import type { BrowserCookieImportResult } from '../../shared/browser-workspace-types'
+import { browserRouteSessionRegistry } from './browser-route-session-runtime'
+import type {
+  BrowserSessionProfileSource,
+  BrowserCookieImportResult
+} from '../../shared/browser-workspace-types'
 import {
   detectInstalledBrowsers,
   importCookiesFromBrowser,
+  importCookiesFromFile,
   selectBrowserProfile
 } from './cookies/browser-cookie-import'
 import type { DetectedBrowser } from './cookies/sources/browser-cookie-detection-types'
-
 import { recordClientRouteCookieImportSource } from './client-route-cookie-import-source-store'
 import { currentBrowserRoutePartitionBindingStore } from './browser-route-partition-binding-runtime'
 import { resolveBrowserRoutePartitionBinding } from './browser-route-partition-migration'
@@ -23,17 +27,64 @@ export type ClientRouteCookieImportRequest = {
 export async function importCookiesIntoClientRoutePartition(
   request: ClientRouteCookieImportRequest
 ): Promise<BrowserCookieImportResult | null> {
+  return runClientRouteCookieImport(request, () => {
+    const browser = resolveImportSource(request)
+    if ('reason' in browser) {
+      return browser
+    }
+    return {
+      importIntoPartition: (partition: string) =>
+        importCookiesFromBrowser(browser.source, partition),
+      source: {
+        browserFamily: browser.source.family,
+        profileName: importedProfileName(browser.source)
+      }
+    }
+  })
+}
+
+type ClientRouteImportTarget = Pick<
+  ClientRouteCookieImportRequest,
+  'environmentId' | 'browserProfileId'
+>
+type ClientRouteImportSource = {
+  importIntoPartition: (partition: string) => Promise<BrowserCookieImportResult>
+  source: Omit<BrowserSessionProfileSource, 'importedAt'>
+}
+
+export async function importCookieFileIntoClientRoutePartition(
+  request: ClientRouteImportTarget,
+  chooseFile: () => Promise<string | null>
+): Promise<BrowserCookieImportResult | null> {
+  return runClientRouteCookieImport(request, () => ({
+    importIntoPartition: async (partition) => {
+      const filePath = await chooseFile()
+      if (!filePath) {
+        return { ok: false, reason: 'canceled' }
+      }
+      if (settledRoutePartition(request) !== partition) {
+        return {
+          ok: false,
+          reason: 'The browser connection changed while choosing a cookie file. Try again.'
+        }
+      }
+      return importCookiesFromFile(filePath, partition)
+    },
+    source: { browserFamily: 'manual' }
+  }))
+}
+
+async function runClientRouteCookieImport(
+  request: ClientRouteImportTarget,
+  resolveSource: () => ClientRouteImportSource | { ok: false; reason: string }
+): Promise<BrowserCookieImportResult | null> {
   const routeIdentity = getPairedRuntimeBrowserClientRouteIdentity(request.environmentId)
   if (!routeIdentity) {
     return null
   }
-  const profile = browserSessionRegistry.getProfile(request.browserProfileId)
-  if (!profile) {
-    return { ok: false, reason: 'Session profile not found.' }
-  }
-  const browser = resolveImportSource(request)
-  if ('reason' in browser) {
-    return browser
+  const source = resolveSource()
+  if ('reason' in source) {
+    return source
   }
   let partition: string
   try {
@@ -41,8 +92,12 @@ export async function importCookiesIntoClientRoutePartition(
   } catch (error) {
     return { ok: false, reason: error instanceof Error ? error.message : String(error) }
   }
-  const result = await importCookiesFromBrowser(browser.source, partition)
-  // Re-pairing during import can change the destination; reject a stale success.
+  const result = await source.importIntoPartition(partition)
+  if (!result.ok && result.reason === 'canceled') {
+    return result
+  }
+  // Why: the import runs for seconds. A host replacement inside that window retargets the
+  // route, so reporting success here would badge a partition no page will ever read from.
   const settled = settledRoutePartition(request)
   if (settled !== partition) {
     return {
@@ -61,15 +116,15 @@ export async function importCookiesIntoClientRoutePartition(
     environmentId: request.environmentId,
     profileId: request.browserProfileId,
     source: {
-      browserFamily: browser.source.family,
-      profileName: importedProfileName(browser.source),
+      ...source.source,
       importedAt: Date.now()
     }
   })
   return { ...result, profileId: request.browserProfileId }
 }
 
-function settledRoutePartition(request: ClientRouteCookieImportRequest): string | null {
+/** Partition the route resolves to now, or null when the host no longer serves this environment. */
+function settledRoutePartition(request: ClientRouteImportTarget): string | null {
   const routeIdentity = getPairedRuntimeBrowserClientRouteIdentity(request.environmentId)
   if (!routeIdentity) {
     return null
@@ -85,7 +140,6 @@ function bindRoutePartition(
   routeIdentity: NonNullable<ReturnType<typeof getPairedRuntimeBrowserClientRouteIdentity>>,
   browserProfileId: string
 ): string {
-  browserSessionRegistry.requireRouteBrowserProfile(browserProfileId)
   const bindings = currentBrowserRoutePartitionBindingStore()
   const derived = resolveBrowserRoutePartitionBinding({
     bindings,
@@ -109,6 +163,13 @@ function bindRoutePartition(
     },
     storageScope: routeIdentity.storageScope
   })
+  // An active route already validated the host-owned profile when its guest was prepared.
+  if (!browserRouteSessionRegistry.isAllowedPartition(derived.partition)) {
+    browserSessionRegistry.requireRouteBrowserProfile(browserProfileId)
+    if (!browserSessionRegistry.getProfile(browserProfileId)) {
+      throw new Error('Session profile not found.')
+    }
+  }
   const persisted = bindings.get(derived.partition)
   if (persisted === null) {
     bindings.set(
