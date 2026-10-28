@@ -18,6 +18,7 @@ import {
 import type { CreateMainWindowOptions, MainWindowLoadObserver } from './main-window-contracts'
 import { mainWindowLoadErrorCode } from './main-window-load-error-code'
 import { installMainWindowFocusLifecycle } from './main-window-focus-lifecycle'
+import { installMainWindowAccessibilitySupport } from './main-window-accessibility-support'
 import { installMainWindowShortcutRouting } from './main-window-shortcut-routing'
 import { installMainWindowStateLifecycle } from './main-window-state-lifecycle'
 import { stopHiddenWindowFramePumpOnShow } from './hidden-window-frame-pump'
@@ -192,6 +193,7 @@ export function createMainWindow(
     store
   })
   installMainWindowWebviewSecurity(mainWindow)
+  const accessibilitySupport = installMainWindowAccessibilitySupport({ mainWindow })
   if (pumpHiddenFrames) {
     stopHiddenWindowFramePumpOnShow(mainWindow)
   }
@@ -219,6 +221,7 @@ export function createMainWindow(
     closeWorkspaceSpaceWindow()
     state.clearInitialRevealFallbackTimer()
     closeLifecycle.dispose()
+    accessibilitySupport.dispose()
     focus.dispose()
     browserManager.setDictationShortcutForwardingPredicate(null)
     powerMonitor.removeListener('resume', onSystemResume)

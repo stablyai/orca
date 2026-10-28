@@ -24,8 +24,6 @@
 These are merge-readiness tasks. Device/package/platform and production rollout
 requirements remain explicit gaps until independently evidenced.
 
-
-
 Current transport disposition: **the replacement idle-only transport suite is green
 (3 tests), but the PRs are not ready**. Local cloud/desktop verification, final implementation audit, SSH/folder evidence
 and reliability docs are complete. PR updates, fresh CI and release evidence remain.

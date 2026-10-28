@@ -73,6 +73,9 @@ export function buildDefaultSettings(args: {
     terminalGpuAcceleration: 'auto',
     // Why 'auto': enable ligatures only for known ligature fonts, never forced. Resolver in shared/terminal-ligatures.ts.
     terminalLigatures: 'auto',
+    // Why 'auto': follow the OS accessibility-support flag, so the per-row DOM exists for the
+    // sessions that read it and nowhere else. Resolver in lib/pane-manager/pane-screen-reader-mode.ts.
+    terminalScreenReaderMode: 'auto',
     // Lazy image addon stays off the critical path and creates canvas layers only on first image; decoder setup still has overhead.
     terminalInlineImages: true,
     terminalCursorStyle: 'block',
