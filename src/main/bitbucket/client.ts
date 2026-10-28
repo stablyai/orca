@@ -63,7 +63,7 @@ function apiUrl(
   return url.toString()
 }
 
-async function requestJson<T>(
+export async function requestJson<T>(
   path: string,
   options: RequestOptions = {},
   // Creation preflight must distinguish lookup failure from an absent PR.
@@ -110,7 +110,7 @@ function encodedRepoPath(repo: BitbucketRepoRef): string {
   return `${encodeURIComponent(repo.workspace)}/${encodeURIComponent(repo.repoSlug)}`
 }
 
-function escapeBitbucketQueryString(value: string): string {
+export function escapeBitbucketQueryString(value: string): string {
   return value.replace(/\\/g, '\\\\').replace(/"/g, '\\"')
 }
 

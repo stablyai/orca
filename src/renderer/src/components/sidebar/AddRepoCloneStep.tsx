@@ -5,6 +5,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { translate } from '@/i18n/i18n'
 import { RemoteFileBrowser } from './RemoteFileBrowser'
+import { BitbucketRepositoryPicker } from './bitbucket-repository-picker'
 
 type CloneStepProps = {
   cloneUrl: string
@@ -99,9 +100,12 @@ export function CloneStep({
 
       <div className="space-y-3 pt-1">
         <div className="space-y-1">
-          <label className="text-[11px] font-medium text-muted-foreground">
-            {translate('auto.components.sidebar.AddRepoSteps.3d4acbe693', 'Git URL')}
-          </label>
+          <div className="flex items-center justify-between gap-2">
+            <label className="text-[11px] font-medium text-muted-foreground">
+              {translate('auto.components.sidebar.AddRepoSteps.3d4acbe693', 'Git URL')}
+            </label>
+            <BitbucketRepositoryPicker disabled={isCloning} onSelect={onUrlChange} />
+          </div>
           <Input
             value={cloneUrl}
             onChange={(e) => onUrlChange(e.target.value)}

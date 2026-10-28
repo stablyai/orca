@@ -8,6 +8,8 @@ import {
   type BitbucketConnectionStatus
 } from '../bitbucket/credential-connection'
 import { _resetPreflightCache } from '../preflight/agent-detection'
+import { listBitbucketRepositories } from '../bitbucket/repository-list'
+import type { BitbucketRepositoryListResult } from '../../shared/bitbucket-repositories'
 
 function optionalString(value: unknown): string | null {
   return typeof value === 'string' ? value : null
@@ -55,4 +57,15 @@ export function registerBitbucketHandlers(): void {
   ipcMain.handle('bitbucket:status', async (): Promise<BitbucketConnectionStatus> => {
     return getBitbucketConnectionStatus()
   })
+
+  ipcMain.handle(
+    'bitbucket:listRepositories',
+    async (_event, args: unknown): Promise<BitbucketRepositoryListResult> => {
+      const search =
+        args && typeof args === 'object' && 'search' in args && typeof args.search === 'string'
+          ? args.search
+          : ''
+      return listBitbucketRepositories(search)
+    }
+  )
 }

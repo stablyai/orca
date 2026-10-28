@@ -18963,6 +18963,15 @@
       "stepDownload": "Télécharger",
       "stepUnpack": "Décompresser",
       "stepCheck": "Vérifier"
+    },
+    "sidebar": {
+      "bitbucketRepositoryPicker": {
+        "trigger": "Parcourir Bitbucket",
+        "search": "Rechercher des dépôts Bitbucket",
+        "loading": "Chargement…",
+        "error": "Impossible de charger les dépôts. Vérifiez votre connexion Bitbucket dans les Paramètres.",
+        "empty": "Aucun dépôt trouvé."
+      }
     }
   },
   "dashboardPopout": {

@@ -19104,6 +19104,15 @@
       "stepDownload": "Download",
       "stepUnpack": "Unpack",
       "stepCheck": "Check"
+    },
+    "sidebar": {
+      "bitbucketRepositoryPicker": {
+        "trigger": "Browse Bitbucket",
+        "search": "Search Bitbucket repositories",
+        "loading": "Loading…",
+        "error": "Could not load repositories. Check your Bitbucket connection in Settings.",
+        "empty": "No repositories found."
+      }
     }
   },
   "dashboardPopout": {
