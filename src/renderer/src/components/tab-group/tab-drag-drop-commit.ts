@@ -141,20 +141,26 @@ export function commitTabDragDrop({
     readLeafRects: leafJoin.readLeafRects
   })
   // Join only the shown target: a layout change after drawing can move the pointer onto another pane.
-  if (leafTarget && isSameJoinTarget(leafTarget, leafJoin.getShownLeafTarget())) {
-    commitLeafEdgeDrop({ leafJoin, leafTarget, activeData, finishDrag })
+  const shownLeafTarget = leafJoin.getShownLeafTarget()
+  if (leafTarget && shownLeafTarget && isSameJoinTarget(leafTarget, shownLeafTarget)) {
+    // An overlay that showed a refusal keeps it, even if the blocking move ended before the drop.
+    commitLeafEdgeDrop({
+      leafJoin,
+      leafTarget: shownLeafTarget.refusal ? shownLeafTarget : leafTarget,
+      activeData,
+      finishDrag
+    })
     return
   }
 
   // A shown join that lost eligibility before the drop is a refusal, never a plain drop.
-  const shownTarget = leafJoin.getShownLeafTarget()
   if (
     !leafTarget &&
-    shownTarget &&
+    shownLeafTarget &&
     !resolveTerminalTabIntoPaneEligibility(state, {
       sourceTabId: activeData.visibleTabId,
-      targetTabId: shownTarget.targetTabId,
-      targetLeafId: shownTarget.leafId
+      targetTabId: shownLeafTarget.targetTabId,
+      targetLeafId: shownLeafTarget.leafId
     }).ok
   ) {
     finishDrag(false)

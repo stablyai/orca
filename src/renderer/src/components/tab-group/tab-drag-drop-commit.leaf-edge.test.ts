@@ -232,6 +232,19 @@ describe('commitTabDragDrop: a drop on the edge of a pane inside another tab', (
     expect(h.moveTabIntoPane).not.toHaveBeenCalled()
   })
 
+  it('does not join when the overlay showed a refusal, even if the blocking move ended before the drop', () => {
+    const h = setup()
+    const shown = shownLeafTargetAt({ x: 790, y: 316 })
+    expect(shown?.refusal).toBeNull()
+    h.layout.shownTargetOverride = shown && { ...shown, refusal: 'move_in_flight' }
+
+    h.commit(dropAt({ x: 790, y: 316 }, { overGroupId: GROUP }))
+
+    expect(h.moveTabIntoPane).not.toHaveBeenCalled()
+    expect(h.dropUnifiedTab).not.toHaveBeenCalled()
+    expect(h.finishDrag).toHaveBeenCalledWith(false)
+  })
+
   it('leaves the shown tab alone when the outcome is unknown: main may have moved it', async () => {
     const h = setup('unknown')
 
