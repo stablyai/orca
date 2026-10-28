@@ -1,6 +1,6 @@
 import type { GlobalSettings } from '../../shared/global-settings-types'
 
-// History source overrides do not select auth, config or hook homes.
+// Host overrides select the store for new conversations; login and resource homes stay independent.
 
 export function resolveHostCodexSessionSourceHome(
   settings: Pick<GlobalSettings, 'codexSessionSourceHome'>

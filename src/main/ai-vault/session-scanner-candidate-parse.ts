@@ -1,3 +1,4 @@
+import { withCodexSessionIndexHomes } from './session-scanner-codex-title-index'
 import { yieldToEventLoop } from '../../shared/event-loop-yield'
 import { isConversationNameRequestSession } from './conversation-name-request-sessions'
 import { candidateFileTime } from './antigravity-transcript-candidates'
@@ -39,6 +40,12 @@ export async function parseSessionCandidates(args: {
   listed?: boolean
   settled?: (candidate: SessionFileCandidate, parsed: boolean) => void
 }): Promise<AiVaultSession[]> {
+  return withCodexSessionIndexHomes(() => parseSessionCandidatesInScope(args))
+}
+
+async function parseSessionCandidatesInScope(
+  args: Parameters<typeof parseSessionCandidates>[0]
+): Promise<AiVaultSession[]> {
   const sessions = new ScannedSessionCollection()
   let nextYieldIndex = 256
   let nextCutoffIndex = 0

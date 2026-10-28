@@ -1,5 +1,5 @@
 import { readFileSync } from 'node:fs'
-import { join } from 'node:path'
+import { basename, dirname, join } from 'node:path'
 
 import { normalizeRuntimePathForComparison } from '../../shared/cross-platform-path'
 import type { GlobalSettings } from '../../shared/global-settings-types'
@@ -75,7 +75,11 @@ function isManagedHostCodexHome(
   codexHomePath: string,
   settings: GlobalSettings | undefined
 ): boolean {
-  const expected = normalizeRuntimePathForComparison(codexHomePath)
+  const expected = normalizeRuntimePathForComparison(
+    basename(dirname(codexHomePath)) === 'overlays'
+      ? join(dirname(dirname(codexHomePath)), 'home')
+      : codexHomePath
+  )
   return (
     settings?.codexManagedAccounts?.some(
       (account) =>

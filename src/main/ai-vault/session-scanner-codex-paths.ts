@@ -1,3 +1,4 @@
+import { realpathSync } from 'node:fs'
 import { dirname, resolve } from 'node:path'
 
 export function codexHomeForSessionsDir(
@@ -16,7 +17,12 @@ export function uniqueCodexSessionsDirs(paths: readonly string[]): string[] {
     if (!trimmed) {
       continue
     }
-    const key = resolve(trimmed)
+    let key = resolve(trimmed)
+    try {
+      key = realpathSync(trimmed)
+    } catch {
+      /* Missing roots remain discoverable on a later scan. */
+    }
     if (seen.has(key)) {
       continue
     }

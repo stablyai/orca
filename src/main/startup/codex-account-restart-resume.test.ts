@@ -1,7 +1,18 @@
 import { dirname, join } from 'node:path'
-import { linkSync, readFileSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import {
+  existsSync,
+  readFileSync,
+  mkdirSync,
+  mkdtempSync,
+  realpathSync,
+  rmSync,
+  unlinkSync,
+  writeFileSync
+} from 'node:fs'
 import { tmpdir } from 'node:os'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
+import { prepareCodexLaunchHome } from '../codex/codex-legacy-session-resume'
+import { codexConversationStore } from '../codex/codex-launch-home'
 
 const homes = vi.hoisted(() => ({ original: '', selected: '', system: '' }))
 vi.mock('electron', () => ({ app: { getPath: () => homes.system } }))
@@ -9,25 +20,38 @@ vi.mock('./main-process-state', () => ({
   mainProcessState: {
     codexRuntimeHome: {
       isHostSystemDefaultRealHomeSelected: () => false,
-      getHostCodexHomePathsForSessionDiscovery: () => [homes.original, homes.selected],
-      resolveSelectedHostAccountCodexHomePathForResume: () => homes.selected || null
+      getHostCodexHomePathsForSessionDiscovery: () => [homes.original],
+      resolveSelectedHostAccountCodexHomePathForResume: () => homes.selected || null,
+      prepareForCodexLaunchAsync: async (
+        _target: unknown,
+        _env: unknown,
+        options: { conversationHome: string; transcriptPath: string }
+      ) =>
+        (await prepareCodexLaunchHome({
+          selectedAccount: homes.selected ? { homePath: homes.selected } : null,
+          conversationHome: options.conversationHome,
+          transcriptPath: options.transcriptPath,
+          systemHome: homes.system,
+          accountsRoot: join(homes.system, 'codex-accounts')
+        })) ?? null
     },
     store: { getSettings: () => ({}) }
   }
 }))
 vi.mock('../codex/hook-service', () => ({
-  codexHookService: {
-    installForLaunchPrep: vi.fn(),
-    refreshRuntimeUserHooksForLaunchPrep: vi.fn()
-  }
+  codexHookService: { installForLaunchPrep: vi.fn(), refreshRuntimeUserHooksForLaunchPrep: vi.fn() }
 }))
 vi.mock('../codex/codex-hook-reconcile', () => ({ reconcileCodexHooksForLaunch: vi.fn() }))
-vi.mock('../codex/codex-home-paths', () => ({
+vi.mock('../codex/codex-home-paths', async (importOriginal) => ({
+  ...(await importOriginal<object>()),
   getCodexSessionBackfillStateDirPath: () => join(homes.system, 'backfill'),
   getSystemCodexHomePath: () => homes.system,
   getOrcaManagedCodexHomePath: () => join(homes.system, 'legacy')
 }))
-vi.mock('../codex/codex-config-mirror', () => ({ ensureCodexDaemonSocketGuard: vi.fn() }))
+vi.mock('../codex/codex-config-mirror', () => ({
+  ensureCodexDaemonSocketGuard: vi.fn(),
+  syncSystemConfigIntoManagedCodexHome: vi.fn()
+}))
 
 import { prepareCodexSessionResumeForLaunch } from './codex-session-resume-launch'
 
@@ -35,72 +59,58 @@ let root: string
 let transcriptPath: string
 const sessionId = 'abcdef00-1234-4321-9999-cafecafecafe'
 beforeEach(() => {
-  root = mkdtempSync(join(tmpdir(), 'orca-account-restart-'))
+  root = realpathSync(mkdtempSync(join(tmpdir(), 'orca-account-restart-')))
   homes.original = join(root, 'codex-accounts', 'old', 'home')
   homes.selected = join(root, 'codex-accounts', 'new', 'home')
   homes.system = join(root, 'system')
-  const relativePath = join('sessions', '2026', '10', '05', `rollout-${sessionId}.jsonl`)
-  transcriptPath = join(homes.original, relativePath)
-  const bridged = join(homes.selected, relativePath)
+  transcriptPath = join(
+    homes.original,
+    'sessions',
+    '2026',
+    '10',
+    '05',
+    `rollout-${sessionId}.jsonl`
+  )
   mkdirSync(dirname(transcriptPath), { recursive: true })
-  mkdirSync(dirname(bridged), { recursive: true })
+  mkdirSync(homes.selected, { recursive: true })
+  mkdirSync(homes.system, { recursive: true })
+  writeFileSync(join(homes.selected, 'auth.json'), '{"selected":true}')
+  writeFileSync(join(homes.system, 'auth.json'), '{"system":true}')
   writeFileSync(transcriptPath, '{"type":"session_meta"}\n')
-  linkSync(transcriptPath, bridged)
 })
 afterEach(() => rmSync(root, { recursive: true, force: true }))
 
-it('resumes an explicit account restart in the selected home using the bridged transcript', async () => {
-  const result = await prepareCodexSessionResumeForLaunch({
-    providerSession: { key: 'session_id', id: sessionId, transcriptPath },
-    target: { runtime: 'host' },
-    useSelectedAccount: true
-  })
-  expect(result).toMatchObject({ outcome: 'resume', codexHomePath: homes.selected })
-})
-
-it('keeps ordinary automatic restores pinned to their original account', async () => {
-  const result = await prepareCodexSessionResumeForLaunch({
-    providerSession: { key: 'session_id', id: sessionId, transcriptPath },
-    target: { runtime: 'host' }
-  })
-  expect(result).toMatchObject({ outcome: 'resume', codexHomePath: homes.original })
-})
-
-it('materializes a rollout when the account bridge has not caught up', async () => {
-  rmSync(join(homes.selected, 'sessions'), { recursive: true })
-  const result = await prepareCodexSessionResumeForLaunch({
-    providerSession: { key: 'session_id', id: sessionId, transcriptPath },
-    target: { runtime: 'host' },
-    useSelectedAccount: true
-  })
-  expect(result).toMatchObject({ codexHomePath: homes.selected })
-  expect(readFileSync(transcriptPath.replace(homes.original, homes.selected), 'utf8')).toBe(
-    readFileSync(transcriptPath, 'utf8')
-  )
-})
-
-it('refuses a conflicting target rollout instead of restarting the old account', async () => {
-  const target = transcriptPath.replace(homes.original, homes.selected)
-  rmSync(target)
-  writeFileSync(target, 'another session')
-  await expect(
-    prepareCodexSessionResumeForLaunch({
+it.each([true, false])(
+  'resumes in the original store with the selected login (explicit restart: %s)',
+  async (useSelectedAccount) => {
+    const result = await prepareCodexSessionResumeForLaunch({
       providerSession: { key: 'session_id', id: sessionId, transcriptPath },
       target: { runtime: 'host' },
-      useSelectedAccount: true
+      useSelectedAccount
     })
-  ).rejects.toThrow('different rollout')
-  expect(readFileSync(target, 'utf8')).toBe('another session')
-})
+    expect(result?.outcome).toBe('resume')
+    if (result?.outcome !== 'resume') {
+      throw new Error('Expected a resume')
+    }
+    expect(codexConversationStore(result.codexHomePath)).toBe(homes.original)
+    expect(readFileSync(join(result.codexHomePath, 'auth.json'), 'utf8')).toBe('{"selected":true}')
+    expect(existsSync(join(homes.selected, 'sessions'))).toBe(false)
+    expect(readFileSync(transcriptPath, 'utf8')).toBe('{"type":"session_meta"}\n')
+  }
+)
 
-it('uses the system home when an explicit restart follows deselection', async () => {
+it('uses the system login over the original store after deselection', async () => {
   homes.selected = ''
   const result = await prepareCodexSessionResumeForLaunch({
     providerSession: { key: 'session_id', id: sessionId, transcriptPath },
     target: { runtime: 'host' },
     useSelectedAccount: true
   })
-  expect(result).toMatchObject({ codexHomePath: homes.system })
+  if (result?.outcome !== 'resume') {
+    throw new Error('Expected a resume')
+  }
+  expect(codexConversationStore(result.codexHomePath)).toBe(homes.original)
+  expect(readFileSync(join(result.codexHomePath, 'auth.json'), 'utf8')).toBe('{"system":true}')
 })
 
 it('leaves WSL preparation on the execution host', async () => {
@@ -111,4 +121,25 @@ it('leaves WSL preparation on the execution host', async () => {
       useSelectedAccount: true
     })
   ).toBeNull()
+})
+
+it('returns terminal System-default inputs only after the no-file rollout is ready', async () => {
+  homes.selected = ''
+  unlinkSync(join(homes.system, 'auth.json'))
+  const result = await prepareCodexSessionResumeForLaunch({
+    providerSession: { key: 'session_id', id: sessionId, transcriptPath },
+    target: { runtime: 'host' }
+  })
+  expect(result).toMatchObject({ outcome: 'resume', codexHomePath: homes.system })
+  const copied = join(homes.system, 'sessions', '2026', '10', '05', `rollout-${sessionId}.jsonl`)
+  expect(readFileSync(copied, 'utf8')).toBe(readFileSync(transcriptPath, 'utf8'))
+  unlinkSync(copied)
+  writeFileSync(copied, 'conflict')
+  await expect(
+    prepareCodexSessionResumeForLaunch({
+      providerSession: { key: 'session_id', id: sessionId, transcriptPath },
+      target: { runtime: 'host' }
+    })
+  ).rejects.toThrow('Retry resume')
+  expect(readFileSync(copied, 'utf8')).toBe('conflict')
 })

@@ -8,14 +8,25 @@ export const prepareCodexRuntimeHomeForLaunch = createCodexRuntimeHomeLaunchPrep
 
 /** Launch preparation and side-effect-free catalog reads must resolve one account-home key. */
 export const codexStructuredLaunchHomeResolvers = {
-  prepareCodexStructuredLaunch: ({ launchEnv }: { launchEnv: NodeJS.ProcessEnv }) =>
-    prepareCodexRuntimeHomeForLaunch(undefined, launchEnv),
+  prepareCodexStructuredLaunch: ({
+    launchEnv,
+    conversationHome
+  }: {
+    launchEnv: NodeJS.ProcessEnv
+    conversationHome?: string
+  }) => prepareCodexRuntimeHomeForLaunch(undefined, launchEnv, { conversationHome }),
   // Throw like preparation: null would silently key the catalog to the system home instead of the account.
-  resolveCodexStructuredLaunchHome: ({ launchEnv }: { launchEnv: NodeJS.ProcessEnv }) => {
+  resolveCodexStructuredLaunchHome: ({
+    launchEnv,
+    conversationHome
+  }: {
+    launchEnv: NodeJS.ProcessEnv
+    conversationHome?: string
+  }) => {
     const runtimeHome = state.codexRuntimeHome
     if (!runtimeHome) {
       throw new Error('Codex runtime home service is not initialized')
     }
-    return runtimeHome.resolveHostCodexHomePathForLaunchReadOnly(launchEnv)
+    return runtimeHome.resolveHostCodexHomePathForLaunchReadOnly(launchEnv, conversationHome)
   }
 }

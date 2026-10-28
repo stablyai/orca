@@ -92,7 +92,7 @@ export function attachMainWindowCoreServices(
       prepareAiVaultSessionResume: (args) =>
         prepareCodexAiVaultSessionResume(args, {
           runtimeHome: codexRuntimeHome,
-          systemCodexHomePath: resolveHostCodexSessionSourceHome(store.getSettings()),
+          storeHomePath: resolveHostCodexSessionSourceHome(store.getSettings()),
           preparePinnedLaunchHome: (home) => prepareCodexPinnedLaunchHome(home)
         }),
       onBeforeRelaunch: async () => {

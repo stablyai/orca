@@ -8,6 +8,7 @@ import {
 } from './wsl-orcad-account-env'
 import type { WslOrcadHostCapabilityVerdict } from './wsl-orcad-host-environments'
 import { AGENT_SESSION_ACCOUNT_ENV_RUNTIME_CAPABILITY } from '../../shared/agent-session-create-capabilities'
+import { CODEX_STORE_OVERLAY_RUNTIME_CAPABILITY } from '../../shared/account-runtime-capabilities'
 
 const POINTER = '~/.orca-claude-profile-pointer-test'
 const CLAUDE_HOME = '/home/u/.orca/claude-accounts/acct-a/config'
@@ -153,6 +154,25 @@ describe('withWslOrcadAccountEnv', () => {
     })
     const reused = { ...launch, reuseTerminal: { handle: 'term_1' } }
     await expect(run('agent.launchReplay', reused)).resolves.toEqual({ ok: true, params: reused })
+  })
+
+  it('sends overlays only to hosts that advertise store routing', async () => {
+    const account = '/home/u/.local/share/orca/codex-accounts/account-a'
+    const overlay = `${account}/overlays/${'a'.repeat(32)}`
+    const deps = dependencies({ prepareCodexHome: async () => overlay })
+    for (const capability of ['supported', 'unsupported', 'unknown'] as const) {
+      const supports = vi.fn(async () => capability)
+      await expect(
+        run('terminal.create', { worktree: 'id:wt' }, deps, 'wsl:ubuntu', supports)
+      ).resolves.toMatchObject({
+        params: {
+          env: {
+            CODEX_HOME: capability === 'supported' ? overlay : `${account}/home`
+          }
+        }
+      })
+      expect(supports).toHaveBeenCalledWith(CODEX_STORE_OVERLAY_RUNTIME_CAPABILITY)
+    }
   })
 
   it('refuses the call when the account cannot be prepared', async () => {

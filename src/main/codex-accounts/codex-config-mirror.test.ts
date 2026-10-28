@@ -56,13 +56,10 @@ describe('CodexConfigMirror without ~/.codex/config.toml', () => {
     rmSync(root, { recursive: true, force: true })
   })
 
-  it('still guards every managed home against the daemon socket limit', () => {
+  it('does not rewrite old account homes during overlay config synchronization', () => {
     mirror.safeSyncToManagedHomes()
 
-    expect(readFileSync(join(managedHomePath, 'config.toml'), 'utf-8')).toBe(
-      `[features]\n${OVERRIDE_LINE}\n`
-    )
-    expect(existsSync(join(testState.fakeHomeDir, '.codex'))).toBe(false)
+    expect(existsSync(join(managedHomePath, 'config.toml'))).toBe(false)
   })
 
   it('leaves a WSL home to launch prep instead of running its blocking ownership check', () => {

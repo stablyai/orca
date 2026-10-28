@@ -1,4 +1,6 @@
 import type * as ProcessTableReader from '../../shared/process-table-snapshot-reader'
+import { agentSessionRecordFixture } from '../../shared/agent-session-record.test-fixture'
+import { codexProviderHandle } from '../../shared/agent-session-provider-handle-encoding'
 import { hostSleepKey } from './terminal/stop/worktree-terminal-sleep-key'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { AgentStatusIpcPayload } from '../../shared/agent-status-types'
@@ -97,6 +99,33 @@ function writerLayoutStore(): RuntimeStore {
 
 beforeEach(() => vi.clearAllMocks())
 describe('execution-host conversation writer inspection', () => {
+  it('refuses a chat while the same Codex thread has a live terminal writer in another store', async () => {
+    const runtime = new OrcaRuntimeService(undefined, undefined, {
+      getAgentProviderSessionSnapshot: () => [
+        {
+          ...row,
+          providerSession: {
+            key: 'session_id',
+            id: 'conversation',
+            transcriptPath: '/legacy-store/sessions/rollout-conversation.jsonl'
+          }
+        }
+      ],
+      readHookCliWriterObservation: () => ({
+        current: () => true,
+        topology: 'pane-owned',
+        presence: async () => 'live'
+      })
+    })
+    const record = agentSessionRecordFixture()
+    record.provider = 'codex'
+    record.accountHome = { variable: 'CODEX_HOME', path: '/another-store' }
+    record.providerHandleChain[0].handle = codexProviderHandle('conversation')
+    await expect(runtime['assertStructuredChatAcquireAdmissible'](record)).rejects.toMatchObject(
+      refusal
+    )
+  })
+
   it('looks through the macOS login wrapper to the shell it started', async () => {
     // Captured from a real macOS pane: login(1) stays as the shell's parent.
     const wrapped = [

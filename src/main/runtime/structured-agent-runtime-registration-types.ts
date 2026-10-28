@@ -41,6 +41,7 @@ export type StructuredAgentRuntimeAdapter = StructuredAgentSessionAdapter & {
 
 /** Which account home a chat of an agent pins, asked on the host that runs it. */
 export type StructuredAgentAccountHomeRequest = {
+  conversationHome?: string
   launchEnv: NodeJS.ProcessEnv
   /** Where the chat runs; null for a read with no workspace (the model catalog). */
   location: AgentSessionExecutionLocation | null

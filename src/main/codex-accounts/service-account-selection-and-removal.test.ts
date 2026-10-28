@@ -1,6 +1,7 @@
+import { resolveCodexLaunchHome } from '../codex/codex-launch-home'
 import { describe, expect, it, vi, beforeEach } from 'vitest'
 import { installFakeAppEnvironment } from '../../../config/scripts/vitest-host-ports-setup'
-import { existsSync, readFileSync } from 'node:fs'
+import { readFileSync, writeFileSync, existsSync } from 'node:fs'
 import { join } from 'node:path'
 import {
   createCodexAuthJson,
@@ -259,11 +260,25 @@ describe('CodexAccountService config sync', () => {
         runtimeHome as never
       )
 
+      const systemHome = join(testState.fakeHomeDir, '.codex')
+      const overlay = resolveCodexLaunchHome({
+        selectedAccount: { homePath: managedHomePath },
+        systemHome
+      })!
+      writeFileSync(join(overlay, 'session_index.jsonl'), 'retained title\n')
+      writeFileSync(join(managedHomePath, 'legacy-conversation'), 'retained conversation')
       const result = await service.removeAccount('account-1')
 
       expect(result.accounts).toHaveLength(0)
       expect(result.activeAccountId).toBe(null)
-      expect(existsSync(managedHomePath)).toBe(false)
+      expect(existsSync(managedHomePath)).toBe(true)
+      expect(existsSync(join(managedHomePath, 'auth.json'))).toBe(false)
+      expect(readFileSync(join(managedHomePath, 'legacy-conversation'), 'utf8')).toBe(
+        'retained conversation'
+      )
+      expect(readFileSync(join(overlay, 'session_index.jsonl'), 'utf8')).toBe('retained title\n')
+      expect(existsSync(join(overlay, 'sessions'))).toBe(true)
+      expect(existsSync(join(overlay, 'auth.json'))).toBe(false)
       expect(runtimeHome.syncForCurrentSelection).toHaveBeenCalled()
       expect(rateLimits.evictInactiveCodexCache).toHaveBeenCalledWith('account-1')
       if (ledger === 'unreadable') {

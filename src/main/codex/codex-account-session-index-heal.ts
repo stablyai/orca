@@ -9,7 +9,6 @@ import {
   type CodexSessionIndexHealOptions,
   type CodexThreadReadPassOutcome
 } from './codex-session-index-heal'
-import { readIndexedCodexThreadIds } from './codex-state-db'
 
 // thread/read lazily indexes bridged history so /resume's indexed-only "All" view can show it.
 export type CodexAccountSessionIndexHealSummary = {
@@ -17,10 +16,6 @@ export type CodexAccountSessionIndexHealSummary = {
   healedThreads: number
   missingThreads: number
   failedThreads: number
-}
-
-export type CodexAccountSessionIndexHealOptions = CodexSessionIndexHealOptions & {
-  readIndexedThreadIds?: (codexHomePath: string) => Set<string> | null
 }
 
 // app-server finishes state DB startup before answering initialize.
@@ -50,24 +45,6 @@ export async function createCodexAccountStateDb(
     console.warn('[codex-account-session-index-heal] Failed to create Codex state DB:', error)
     return false
   }
-}
-
-/** Diff against the state DB each pass so interrupted indexing resumes on the next launch. */
-export async function healCodexAccountSessionIndex(
-  codexHomePath: string,
-  bridgedThreads: ReadonlyMap<string, string>,
-  options: CodexAccountSessionIndexHealOptions = {}
-): Promise<CodexAccountSessionIndexHealSummary> {
-  if (bridgedThreads.size === 0) {
-    return upToDateSummary()
-  }
-  // No local DB means an older CLI or sqlite_home owns indexing elsewhere.
-  const indexed = (options.readIndexedThreadIds ?? readIndexedCodexThreadIds)(codexHomePath)
-  if (!indexed) {
-    return { ...upToDateSummary(), outcome: 'no-index' }
-  }
-  const unindexed = new Map([...bridgedThreads].filter(([threadId]) => !indexed.has(threadId)))
-  return healPendingCodexAccountThreads(codexHomePath, unindexed, options)
 }
 
 /**

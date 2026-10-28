@@ -1,4 +1,10 @@
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import type * as ScanFs from 'node:fs/promises'
+import type * as ScanSyncFs from 'node:fs'
+import { DatabaseSync } from 'node:sqlite'
+import SyncDatabase from '../sqlite/sync-database'
+import { opendir } from 'node:fs/promises'
+import { prepareCodexSessionResume } from './codex-session-resume-preparation'
+import { lstatSync, mkdirSync, mkdtempSync, rmSync, writeFileSync, symlinkSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
@@ -10,6 +16,16 @@ import {
   resolveTrustedCodexSessionResumeHome
 } from './codex-session-resume-home'
 
+vi.mock('node:fs', async (importOriginal) => {
+  const actual = await importOriginal<typeof ScanSyncFs>()
+  return { ...actual, lstatSync: vi.fn(actual.lstatSync) }
+})
+
+vi.mock('node:fs/promises', async (importOriginal) => {
+  const actual = await importOriginal<typeof ScanFs>()
+  return { ...actual, opendir: vi.fn(actual.opendir) }
+})
+
 const tempRoots: string[] = []
 
 const withoutHomeRanking = {
@@ -19,12 +35,100 @@ const withoutHomeRanking = {
 }
 
 afterEach(() => {
+  vi.restoreAllMocks()
   for (const root of tempRoots.splice(0)) {
     rmSync(root, { recursive: true, force: true })
   }
 })
 
 describe('resolveTrustedCodexSessionResumeHome', () => {
+  it.each([2, 20])(
+    'shares fallback walks across %i aliases/pages while preserving each store SQL selection',
+    async (count) => {
+      const root = mkdtempSync(join(tmpdir(), 'orca-resume-selection-'))
+      tempRoots.push(root)
+      const first = join(root, 'first')
+      const second = join(root, 'second')
+      const dated = join(first, 'sessions', '2026', '10', '28')
+      mkdirSync(dated, { recursive: true })
+      mkdirSync(second)
+      symlinkSync(
+        join(first, 'sessions'),
+        join(second, 'sessions'),
+        process.platform === 'win32' ? 'junction' : 'dir'
+      )
+      const sessionId = '019f81b9-19a9-7651-a8d1-352d9420bd11'
+      const paths: string[] = []
+      for (let index = 0; index < count; index++) {
+        const path = join(
+          dated,
+          `rollout-${String(index).padStart(4, '0')}-${sessionId}.jsonl${index % 2 ? '.zst' : ''}`
+        )
+        writeFileSync(path, '{"type":"session_meta"}\n')
+        paths.push(path)
+      }
+      const homes = [first, second]
+      for (let index = 0; index < count; index++) {
+        const overlay = join(root, `account-${index}`, 'overlays', 'a'.repeat(32))
+        mkdirSync(overlay, { recursive: true })
+        symlinkSync(
+          join(first, 'sessions'),
+          join(overlay, 'sessions'),
+          process.platform === 'win32' ? 'junction' : 'dir'
+        )
+        homes.push(overlay)
+      }
+      for (const [home, selected] of [
+        [first, paths[0]],
+        [second, paths[count - 1]]
+      ]) {
+        const db = new DatabaseSync(join(home, 'state_5.sqlite'))
+        db.exec('CREATE TABLE threads (id TEXT PRIMARY KEY, rollout_path TEXT)')
+        db.prepare('INSERT INTO threads VALUES (?, ?)').run(sessionId, selected)
+        db.close()
+      }
+      const query = vi.spyOn(SyncDatabase.prototype, 'prepare')
+      const args = {
+        sessionId,
+        transcriptPath: undefined,
+        trustedCodexHomes: homes,
+        ...withoutHomeRanking
+      }
+      for (let pass = 0; pass < 2; pass++) {
+        vi.mocked(opendir).mockClear()
+        query.mockClear()
+        vi.mocked(lstatSync).mockClear()
+        let preparedSource: string | undefined
+        const result = await prepareCodexSessionResume({
+          ...args,
+          resolveVerifiedResumeHome: async (source) => {
+            preparedSource = source.transcriptPath
+            return source.homePath
+          }
+        })
+        expect(result).toMatchObject({ outcome: 'resume', codexHomePath: second })
+        expect(preparedSource).toBe(
+          join(second, 'sessions', '2026', '10', '28', paths[count - 1].split(/[\\/]/).at(-1)!)
+        )
+        expect(vi.mocked(opendir).mock.calls).toHaveLength(4)
+        expect(vi.mocked(lstatSync)).not.toHaveBeenCalled()
+        expect(
+          query.mock.calls.filter(([sql]) => sql.startsWith('SELECT rollout_path'))
+        ).toHaveLength(2)
+      }
+      vi.mocked(opendir).mockClear()
+      query.mockClear()
+      await expect(
+        findTrustedCodexSessionResume({ ...args, transcriptPath: paths[0] })
+      ).resolves.toEqual({
+        homePath: first,
+        transcriptPath: paths[0]
+      })
+      expect(vi.mocked(opendir)).not.toHaveBeenCalled()
+      expect(query).not.toHaveBeenCalled()
+    }
+  )
+
   it('returns the trusted home containing a persisted rollout', () => {
     expect(
       resolveTrustedCodexSessionResumeHome({

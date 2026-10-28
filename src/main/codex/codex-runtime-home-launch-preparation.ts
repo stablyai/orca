@@ -7,6 +7,8 @@ import { getDefaultWslDistro } from '../wsl'
 import { isAgentStatusHooksEnabledForAgent } from '../agent-hooks/managed-agent-hook-controls'
 import { reconcileCodexHooksForLaunch } from './codex-hook-reconcile'
 import { grantCodexSandboxReadOnManagedHome } from './codex-windows-sandbox-read-grant'
+import { getSystemCodexHomePath } from './codex-home-paths'
+import { normalizeRuntimePathForComparison } from '../../shared/cross-platform-path'
 
 export function createCodexRuntimeHomeLaunchPreparation(deps: {
   getRuntimeHome: () => Pick<CodexRuntimeHomeService, 'prepareForCodexLaunchAsync'> | null
@@ -23,15 +25,21 @@ export function createCodexRuntimeHomeLaunchPreparation(deps: {
     }
     // Propagate home failures: null selects the system account, which could launch the wrong identity (STA-4422).
     const runtimeHomePath = await runtimeHome.prepareForCodexLaunchAsync(target, launchEnv, {
+      conversationHome: launchContext?.conversationHome,
       unavailableManagedHomePath: launchContext?.unavailableManagedHomePath
     })
     const launchesCodex = launchContext?.launchesCodex === true
-    if (runtimeHomePath === null && target?.runtime !== 'wsl') {
+    if (
+      target?.runtime !== 'wsl' &&
+      (runtimeHomePath === null ||
+        normalizeRuntimePathForComparison(runtimeHomePath) ===
+          normalizeRuntimePathForComparison(getSystemCodexHomePath()))
+    ) {
       // Only terminal Codex launches wait for the scheduled hook reconciliation.
       if (launchesCodex) {
         await reconcileCodexHooksForLaunch()
       }
-      return null
+      return runtimeHomePath
     }
     if (runtimeHomePath !== null && target?.runtime !== 'wsl') {
       await grantCodexSandboxReadOnManagedHome(runtimeHomePath)

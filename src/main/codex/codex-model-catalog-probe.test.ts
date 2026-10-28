@@ -1,3 +1,5 @@
+import { resolveStructuredCodexAccountKind } from '../runtime/structured-agent-account-home'
+import { agentSessionSignInCopyId } from '../../shared/agent-session-availability'
 import { AgentModelCatalogUnavailableError } from '../native-chat/agent-model-catalog/agent-model-catalog-unavailable'
 import { describe, expect, it, vi } from 'vitest'
 import { createCodexModelCatalogProbe } from './codex-model-catalog-probe'
@@ -160,6 +162,50 @@ describe('codex model catalog probe', () => {
 })
 
 describe('Codex catalog availability', () => {
+  it('turns a managed overlay account/read sign-out into managed recovery copy', async () => {
+    const probe = createCodexModelCatalogProbe({
+      resolveEnvironment: async () => ({}),
+      resolveCommand: () => 'codex',
+      resolveAccountKind: (home) =>
+        resolveStructuredCodexAccountKind(home, {
+          activeCodexManagedAccountId: null,
+          codexManagedAccounts: [
+            {
+              id: 'a',
+              email: 'fixture@example.test',
+              managedHomePath: '/accounts/a/home',
+              managedHomeRuntime: 'host',
+              createdAt: 0,
+              updatedAt: 0,
+              lastAuthenticatedAt: 0
+            }
+          ]
+        }),
+      runSession: async (_invocation, body) =>
+        body({
+          request: async (method) =>
+            method === 'account/read'
+              ? { requiresOpenaiAuth: true, account: null }
+              : { data: [], nextCursor: null },
+          notify: () => {}
+        })
+    })
+    const error = await probe({
+      variable: 'CODEX_HOME',
+      path: `/accounts/a/overlays/${'a'.repeat(32)}`
+    }).catch((failure: unknown) => failure)
+    expect(error).toBeInstanceOf(AgentModelCatalogUnavailableError)
+    if (!(error instanceof AgentModelCatalogUnavailableError)) {
+      throw new Error('Expected unavailable catalog')
+    }
+    expect(
+      agentSessionSignInCopyId(
+        'codex',
+        error.unavailable.reason === 'notSignedIn' ? error.unavailable.account : undefined
+      )
+    ).toBe('codexManagedNotSignedIn')
+  })
+
   function withAccount(account: unknown) {
     return createCodexModelCatalogProbe({
       resolveEnvironment: async () => ({}),

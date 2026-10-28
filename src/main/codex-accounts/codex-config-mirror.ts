@@ -1,6 +1,7 @@
 import { existsSync, readFileSync } from 'node:fs'
 import { homedir } from 'node:os'
-import { join } from 'node:path'
+import { dirname, join } from 'node:path'
+import { codexAccountOverlayHomes } from '../codex/codex-launch-home'
 import { parseWslUncPath } from '../../shared/wsl-paths'
 import {
   ensureCodexDaemonSocketGuard,
@@ -94,7 +95,17 @@ export class CodexConfigMirror {
   private syncToManagedHomes(): void {
     for (const account of this.store.getSettings().codexManagedAccounts) {
       try {
-        this.syncIntoManagedHome(account.managedHomePath, undefined, account.id)
+        const trusted = this.assertManagedHomePath(account.managedHomePath, account.id)
+        if (parseWslUncPath(trusted)) {
+          this.syncIntoManagedHome(trusted, undefined, account.id)
+          continue
+        }
+        for (const overlay of codexAccountOverlayHomes(dirname(trusted))) {
+          syncSystemConfigIntoManagedCodexHome({
+            runtimeHomePath: overlay,
+            systemHomePath: join(homedir(), '.codex')
+          })
+        }
       } catch (error) {
         console.warn('[codex-accounts] Failed to sync managed config:', error)
       }

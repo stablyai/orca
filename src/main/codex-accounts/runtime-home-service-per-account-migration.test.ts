@@ -2,12 +2,11 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { installFakeAppEnvironment } from '../../../config/scripts/vitest-host-ports-setup'
 import { existsSync, mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { join } from 'node:path'
+import { dirname, join } from 'node:path'
 import type { GlobalSettings } from '../../shared/global-settings-types'
 import type { CodexManagedAccount } from '../../shared/managed-account-types'
 import type * as NodeOs from 'node:os'
 import { readHookTrustEntries } from '../codex/config-toml-trust'
-import { writeCodexStateDbBackfillStatus } from '../codex/codex-state-db-test-fixture'
 
 const testState = { userData: '', home: '' }
 const previousEnv: Record<string, string | undefined> = {}
@@ -109,23 +108,20 @@ describe('CodexRuntimeHomeService per-account takeover composition', () => {
     for (const account of [accountOne, accountTwo]) {
       selectManagedAccount(settings, account.id)
       service.syncForCurrentSelection()
-      expect(service.prepareForCodexLaunch()).toBe(account.managedHomePath)
-      expect(
-        readFileSync(join(account.managedHomePath, 'skills', 'fixture-skill', 'SKILL.md'), 'utf8')
-      ).toBe('fixture skill\n')
-      expect(readFileSync(join(account.managedHomePath, 'hooks', 'user-hook.sh'), 'utf8')).toBe(
-        '#!/bin/sh\n'
+      const launchHome = service.prepareForCodexLaunch()!
+      expect(launchHome).toContain(join(dirname(account.managedHomePath), 'overlays'))
+      expect(readFileSync(join(launchHome, 'skills', 'fixture-skill', 'SKILL.md'), 'utf8')).toBe(
+        'fixture skill\n'
       )
-      const config = readFileSync(join(account.managedHomePath, 'config.toml'), 'utf8')
+      expect(readFileSync(join(launchHome, 'hooks', 'user-hook.sh'), 'utf8')).toBe('#!/bin/sh\n')
+      const config = readFileSync(join(launchHome, 'config.toml'), 'utf8')
       expect(config).toContain('model = "fixture-model"')
       expect(config).not.toContain('[hooks.state')
-      expect((await hookService.install(account.managedHomePath)).state).toBe('installed')
-      expect(readFileSync(join(account.managedHomePath, 'hooks.json'), 'utf8')).toContain(
+      expect((await hookService.install(launchHome)).state).toBe('installed')
+      expect(readFileSync(join(launchHome, 'hooks.json'), 'utf8')).toContain(
         process.platform === 'win32' ? 'codex-hook.cmd' : 'codex-hook.sh'
       )
-      expect(
-        readHookTrustEntries(join(account.managedHomePath, 'config.toml')).size
-      ).toBeGreaterThan(0)
+      expect(readHookTrustEntries(join(launchHome, 'config.toml')).size).toBeGreaterThan(0)
     }
 
     const discoveryHomes = service.getHostCodexHomePathsForSessionDiscovery()
@@ -141,7 +137,9 @@ describe('CodexRuntimeHomeService per-account takeover composition', () => {
     expect(readFileSync(sharedSession, 'utf8')).toBe('{"session":"legacy-shared"}\n')
 
     writeFileSync(sharedAuthPath(), createAuth('two@example.com', 'acct-2', 'later-shared', 4_000))
-    expect(service.prepareForCodexLaunch()).toBe(accountTwo.managedHomePath)
+    expect(service.prepareForCodexLaunch()).toContain(
+      join(dirname(accountTwo.managedHomePath), 'overlays')
+    )
     expect(readFileSync(join(accountTwo.managedHomePath, 'auth.json'), 'utf8')).toBe(accountTwoAuth)
   })
 
@@ -158,13 +156,17 @@ describe('CodexRuntimeHomeService per-account takeover composition', () => {
     const service = new CodexRuntimeHomeService(store as never)
 
     expect(readFileSync(join(account.managedHomePath, 'auth.json'), 'utf-8')).toBe(migrated)
-    expect(service.prepareForCodexLaunch()).toBe(account.managedHomePath)
+    expect(service.prepareForCodexLaunch()).toContain(
+      join(dirname(account.managedHomePath), 'overlays')
+    )
     writeFileSync(sharedAuthPath(), laterShared, 'utf-8')
     expect(service.prepareForRateLimitFetch()).toEqual({
       kind: 'ready',
       codexHomePath: account.managedHomePath
     })
-    expect(service.prepareForCodexLaunch()).toBe(account.managedHomePath)
+    expect(service.prepareForCodexLaunch()).toContain(
+      join(dirname(account.managedHomePath), 'overlays')
+    )
     expect(readFileSync(join(account.managedHomePath, 'auth.json'), 'utf-8')).toBe(migrated)
     expect(readFileSync(systemAuthPath(), 'utf-8')).toBe('system auth sentinel\n')
     expect(settings.activeCodexManagedAccountId).toBe(account.id)
@@ -209,7 +211,9 @@ describe('CodexRuntimeHomeService per-account takeover composition', () => {
     rmSync(accountAuthPath)
     writeFileSync(sharedAuthPath(), laterShared, 'utf-8')
 
-    expect(service.prepareForCodexLaunch()).toBe(account.managedHomePath)
+    expect(service.prepareForCodexLaunch()).toContain(
+      join(dirname(account.managedHomePath), 'overlays')
+    )
     expect(service.prepareForRateLimitFetch()).toEqual({
       kind: 'ready',
       codexHomePath: account.managedHomePath
@@ -220,7 +224,7 @@ describe('CodexRuntimeHomeService per-account takeover composition', () => {
     expect(readFileSync(systemAuthPath(), 'utf-8')).toBe('system auth sentinel\n')
   })
 
-  it('bridges real-home and sibling-account history into the launched account home', async () => {
+  it('keeps sibling-account history in its original store', async () => {
     const accountOne = createManagedAccount(
       'account-1',
       'acct-1',
@@ -237,26 +241,26 @@ describe('CodexRuntimeHomeService per-account takeover composition', () => {
     writeRollout(systemHome(), systemRollout, '{"session":"real-home"}\n')
     writeRollout(accountOne.managedHomePath, siblingRollout, '{"session":"account-one"}\n')
     // History bridging requires the new home to be indexed first (#20669).
-    writeCodexStateDbBackfillStatus(accountTwo.managedHomePath, 'complete')
     const { settings, store } = createStore([accountOne, accountTwo], accountOne.id)
     const { CodexRuntimeHomeService } = await import('./runtime-home-service')
-    const bridge = await import('../codex/codex-account-session-bridge')
     const service = new CodexRuntimeHomeService(store as never)
 
     selectManagedAccount(settings, accountTwo.id)
     service.syncForCurrentSelection()
-    expect(service.prepareForCodexLaunch()).toBe(accountTwo.managedHomePath)
-    await bridge.startCodexAccountSessionBridgeInBackground({
-      targetCodexHomePath: accountTwo.managedHomePath,
-      sourceCodexHomePaths: [systemHome(), accountOne.managedHomePath]
-    })
-
-    expect(readFileSync(join(accountTwo.managedHomePath, 'sessions', systemRollout), 'utf-8')).toBe(
+    expect(service.prepareForCodexLaunch()).toContain(
+      join(dirname(accountTwo.managedHomePath), 'overlays')
+    )
+    const launchHome = service.prepareForCodexLaunch()!
+    expect(readFileSync(join(launchHome, 'sessions', systemRollout), 'utf8')).toBe(
       '{"session":"real-home"}\n'
     )
-    expect(
-      readFileSync(join(accountTwo.managedHomePath, 'sessions', siblingRollout), 'utf-8')
-    ).toBe('{"session":"account-one"}\n')
+    expect(existsSync(join(launchHome, 'sessions', siblingRollout))).toBe(false)
+    const resumed = service.prepareForCodexLaunch(undefined, undefined, {
+      conversationHome: accountOne.managedHomePath
+    })!
+    expect(readFileSync(join(resumed, 'sessions', siblingRollout), 'utf8')).toBe(
+      '{"session":"account-one"}\n'
+    )
     expect(existsSync(join(systemHome(), 'sessions', siblingRollout))).toBe(false)
   })
 

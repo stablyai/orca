@@ -1,3 +1,4 @@
+import { applyCodexSharedStoreConfig } from './codex-shared-store-config'
 import { readMcpServerTomlOwnership } from './config-toml-mcp-servers'
 import { dirname, join } from 'node:path'
 import { observeAgentStateFile } from './codex-path-observation'
@@ -35,10 +36,9 @@ export function syncSystemConfigIntoManagedCodexHome(
     systemHomePath: getSystemCodexHomePath()
   }
 ): void {
-  if (!mirrorSystemConfigIntoManagedCodexHome(homes)) {
-    // Apply the daemon guard even on mirror stalls so long home paths can still launch Codex.
-    ensureCodexDaemonSocketGuard(homes.runtimeHomePath)
-  }
+  mirrorSystemConfigIntoManagedCodexHome(homes)
+  // Empty source configs still need the overlay's store and login policy.
+  ensureCodexDaemonSocketGuard(homes.runtimeHomePath)
 }
 
 /** Returns false when no mirror pass ran, so the caller still owes the daemon guard. */
@@ -106,7 +106,7 @@ export function ensureCodexDaemonSocketGuard(runtimeHomePath: string): void {
 }
 
 function writeCodexDaemonSocketGuard(runtimeHomePath: string, runtimeConfig: string | null): void {
-  const guarded = applyCodexDaemonSocketGuard(runtimeConfig ?? '', runtimeHomePath)
+  const guarded = applyCodexOverlayConfig(runtimeConfig ?? '', runtimeHomePath)
   if (guarded !== (runtimeConfig ?? '')) {
     writeFileAtomicallyIfUnchanged(
       join(runtimeHomePath, 'config.toml'),
@@ -161,10 +161,7 @@ export function syncSystemConfigIntoLegacySharedCodexHome(
             homes.runtimeHomePath
           )
   }
-  const nextRuntimeConfig = applyCodexDaemonSocketGuard(
-    mirroredRuntimeConfig,
-    homes.runtimeHomePath
-  )
+  const nextRuntimeConfig = applyCodexOverlayConfig(mirroredRuntimeConfig, homes.runtimeHomePath)
   if ((runtimeConfigBeforeMirror ?? '') === nextRuntimeConfig) {
     return
   }
@@ -236,7 +233,7 @@ function syncSystemConfigIntoManagedCodexHomeUnsafe(
 
   const sourceConfigDir = resolveCodexConfigMirrorSourceDirectory(systemHomePath, systemConfigDir)
   if (!runtimeConfigExists) {
-    const freshRuntimeConfig = applyCodexDaemonSocketGuard(
+    const freshRuntimeConfig = applyCodexOverlayConfig(
       prepareSystemConfigForFreshRuntimeMirror(rawSystemConfig, sourceConfigDir, runtimeHomePath),
       runtimeHomePath
     )
@@ -269,7 +266,7 @@ function syncSystemConfigIntoManagedCodexHomeUnsafe(
     ),
     promotionPlan.runtimeValuesToPreserve
   )
-  const nextRuntimeConfig = applyCodexDaemonSocketGuard(preserved.content, runtimeHomePath)
+  const nextRuntimeConfig = applyCodexOverlayConfig(preserved.content, runtimeHomePath)
   if (nextRuntimeConfig !== runtimeConfig) {
     writeFileAtomically(runtimeConfigPath, nextRuntimeConfig, RUNTIME_CONFIG_WRITE)
   }
@@ -319,4 +316,8 @@ export function prepareSystemConfigForFreshRuntimeMirror(
     new Set(),
     { systemHomeDir: systemConfigDir, runtimeHookTrustKeys: new Set() }
   )
+}
+
+function applyCodexOverlayConfig(config: string, home: string): string {
+  return applyCodexDaemonSocketGuard(applyCodexSharedStoreConfig(config, home), home)
 }

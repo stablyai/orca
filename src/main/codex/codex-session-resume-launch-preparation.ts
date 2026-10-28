@@ -5,11 +5,6 @@ import {
   type CodexSessionResumePreparation
 } from './codex-session-resume-home'
 import { prepareCodexSessionResume } from './codex-session-resume-preparation'
-import {
-  prepareCodexAccountRestartResume,
-  prepareLegacySharedCodexSessionResume
-} from './codex-legacy-session-resume'
-import { ManagedCodexHomeTemporarilyUnavailableError } from '../codex-accounts/host-codex-managed-home-ownership'
 import { codexHookService } from './hook-service'
 import { reconcileCodexHooksForLaunch } from './codex-hook-reconcile'
 import { ensureCodexDaemonSocketGuard } from './codex-config-mirror'
@@ -72,42 +67,11 @@ export function createCodexSessionResumeLaunchPreparation(deps: {
       systemCodexHomePath: systemHomePath,
       sharedRuntimeCodexHomePath: getOrcaManagedCodexHomePath(),
       resolveVerifiedResumeHome: async (sessionSource) => {
-        let migrated = { useRealCodexHome: false }
-        try {
-          migrated = await prepareLegacySharedCodexSessionResume(
-            {
-              agent: 'codex',
-              executionHostId: 'local',
-              filePath: sessionSource.transcriptPath,
-              codexHome: sessionSource.homePath
-            },
-            {
-              isHostSystemDefaultRealHomeSelected: () =>
-                runtimeHome.isHostSystemDefaultRealHomeSelected(),
-              systemCodexHomePath: systemHomePath
-            }
-          )
-        } catch (error) {
-          // A credential-read refusal must never fall back to the old account.
-          if (error instanceof ManagedCodexHomeTemporarilyUnavailableError) {
-            throw error
-          }
-          // Failed migration can still resume from the verified origin home.
-          console.warn(
-            '[codex-session-resume] Legacy rollout migration failed; using origin home:',
-            error
-          )
-        }
-        const resumeHome = args.useSelectedAccount
-          ? await prepareCodexAccountRestartResume({
-              sourceHome: sessionSource.homePath,
-              transcriptPath: sessionSource.transcriptPath,
-              targetHome: selectedAccountCodexHome ?? systemHomePath,
-              systemCodexHomePath: systemHomePath
-            })
-          : migrated.useRealCodexHome
-            ? systemHomePath
-            : sessionSource.homePath
+        const resumeHome =
+          (await runtimeHome.prepareForCodexLaunchAsync(undefined, args.launchEnv, {
+            conversationHome: sessionSource.homePath,
+            transcriptPath: sessionSource.transcriptPath
+          })) ?? systemHomePath
         await prepareCodexPinnedLaunchHome(resumeHome, systemHomePath)
         return resumeHome
       }

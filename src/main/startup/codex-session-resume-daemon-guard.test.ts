@@ -16,7 +16,7 @@ const mocks = vi.hoisted(() => ({
   refreshRuntimeUserHooksForLaunchPrep: vi.fn(),
   reconcileCodexHooksForLaunch: vi.fn(async () => {}),
   prepareCodexSessionResume: vi.fn(),
-  prepareLegacySharedCodexSessionResume: vi.fn()
+  prepareForCodexLaunchAsync: vi.fn()
 }))
 
 vi.mock('electron', () => ({ app: { getPath: vi.fn(() => '/tmp/orca-user-data') } }))
@@ -40,12 +40,10 @@ vi.mock('../codex/codex-home-paths', async (importOriginal) => ({
 vi.mock('../codex/codex-session-resume-preparation', () => ({
   prepareCodexSessionResume: mocks.prepareCodexSessionResume
 }))
-vi.mock('../codex/codex-legacy-session-resume', () => ({
-  prepareLegacySharedCodexSessionResume: mocks.prepareLegacySharedCodexSessionResume
-}))
 vi.mock('./main-process-state', () => ({
   mainProcessState: {
     codexRuntimeHome: {
+      prepareForCodexLaunchAsync: mocks.prepareForCodexLaunchAsync,
       isHostSystemDefaultRealHomeSelected: () => false,
       getHostCodexHomePathsForSessionDiscovery: () => [],
       resolveSelectedHostAccountCodexHomePathForResume: () => null
@@ -74,7 +72,7 @@ describe('Codex session resume daemon socket guard', () => {
       mkdirSync(home, { recursive: true })
     }
     mocks.hooksEnabled = false
-    mocks.prepareLegacySharedCodexSessionResume.mockResolvedValue({ useRealCodexHome: false })
+    mocks.prepareForCodexLaunchAsync.mockResolvedValue(accountHome)
     mocks.prepareCodexSessionResume.mockImplementation(
       async (args: {
         resolveVerifiedResumeHome: (source: VerifiedCodexResumeSource) => Promise<string>
@@ -130,9 +128,9 @@ describe('Codex session resume daemon socket guard', () => {
     )
   })
 
-  it('never writes the guard into the real Codex home a migrated resume runs in', async () => {
+  it('never writes the guard when the resolved launch uses the real Codex home', async () => {
     expect(codexDaemonSocketPathExceedsLimit(mocks.systemHomePath)).toBe(true)
-    mocks.prepareLegacySharedCodexSessionResume.mockResolvedValue({ useRealCodexHome: true })
+    mocks.prepareForCodexLaunchAsync.mockResolvedValue(null)
     mocks.hooksEnabled = true
 
     const preparation = await resume()

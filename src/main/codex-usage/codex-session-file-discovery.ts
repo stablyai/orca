@@ -79,7 +79,13 @@ function hasLegacyCopiedSessionBridgeMarkers(): boolean {
 
 export async function listCodexSessionFiles(): Promise<string[]> {
   const files: string[] = []
+  const seenRoots = new Set<string>()
   for (const dirPath of getCodexSessionDirectories()) {
+    const identity = await canonicalizePath(dirPath)
+    if (seenRoots.has(identity)) {
+      continue
+    }
+    seenRoots.add(identity)
     appendDiscoveredFiles(files, await walkJsonlFiles(dirPath))
   }
   return dedupeCodexSessionFileAliases(files, hasLegacyCopiedSessionBridgeMarkers())

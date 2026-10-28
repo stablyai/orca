@@ -275,64 +275,49 @@ it('checks canonical provider metadata during the existing import, including Cod
   })
 })
 
-it('materializes legacy Codex into the system home and pins a verified selected account alias', async () => {
+it('adopts a legacy Codex conversation through an overlay of the same recognized store', async () => {
   const legacy = codexHomes.getOrcaManagedCodexHomePath()
   const system = join(root, 'system')
-  const historyOnly = join(root, 'history-only')
   const selected = join(root, 'codex-accounts', 'selected', 'home')
   const suffix = join('sessions', '2026', '10', '15', `rollout-stamp-${id}.jsonl`)
   const transcriptPath = await file(join(legacy, suffix), [
     { type: 'session_meta', payload: { id } }
   ])
+  await mkdir(selected, { recursive: true })
+  await writeFile(join(selected, 'auth.json'), '{"selected":true}')
   vi.spyOn(codexHomes, 'getSystemCodexHomePath').mockReturnValue(system)
   const source = { accountHome: { variable: 'CODEX_HOME' as const, path: legacy }, transcriptPath }
   const prepare = codexAiVaultSessionResumePreparation(() => ({
     runtimeHome: {
-      isHostSystemDefaultRealHomeSelected: () => true,
-      resolveSelectedHostAccountCodexHomePathForResume: () => null,
+      isHostSystemDefaultRealHomeSelected: () => false,
+      resolveSelectedHostAccountCodexHomePathForResume: () => selected,
       getHostCodexHomePathsForSessionDiscovery: () => [legacy]
     },
-    systemCodexHomePath: historyOnly,
+    storeHomePath: system,
     preparePinnedLaunchHome: async () => {}
   }))
-  const migrated = await prepareCodexAdoption(source, id, prepare, [source.accountHome])
-  expect(migrated).toEqual({
-    accountHome: { variable: 'CODEX_HOME', path: system },
-    transcriptPath: join(system, suffix)
+  const adopted = await prepareCodexAdoption(source, id, prepare, [source.accountHome])
+  expect(adopted.accountHome).toMatchObject({
+    variable: 'CODEX_HOME',
+    path: expect.stringContaining('overlays')
   })
+  expect(await realpath(adopted.transcriptPath!)).toBe(await realpath(transcriptPath))
   await expect(
     prepareLegacyTranscriptImport({
       agent: 'codex',
       sessionId: id,
-      options: { filePath: join(historyOnly, suffix) }
+      options: { filePath: join(system, suffix) }
     })
   ).resolves.toMatchObject({ ok: false })
-  await prepare({
-    agent: 'codex',
-    sessionId: id,
-    filePath: transcriptPath,
-    codexHome: legacy,
-    executionHostId: 'local'
-  })
-  expect(
-    await prepareLegacyTranscriptImport({
-      agent: 'codex',
-      sessionId: id,
-      options: { filePath: join(historyOnly, suffix) }
-    })
-  ).toMatchObject({ ok: true })
   await file(join(selected, suffix), [{ type: 'session_meta', payload: { id } }])
-  expect(
-    await prepareCodexAdoption(
-      migrated,
+  await expect(
+    prepareCodexAdoption(
+      source,
       id,
       async () => ({ useRealCodexHome: false, substituteCodexHome: selected }),
-      [{ variable: 'CODEX_HOME', path: selected }]
+      [source.accountHome]
     )
-  ).toEqual({
-    accountHome: { variable: 'CODEX_HOME', path: selected },
-    transcriptPath: join(selected, suffix)
-  })
+  ).rejects.toThrow('not recognized')
   await expect(
     prepareCodexAdoption(
       source,

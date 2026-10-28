@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { installFakeAppEnvironment } from '../../../config/scripts/vitest-host-ports-setup'
 import { existsSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
-import { join } from 'node:path'
+import { dirname, join } from 'node:path'
 import { createSettings } from './runtime-home-settings-test-fixtures'
 import {
   createCodexAuthJson,
@@ -9,6 +9,7 @@ import {
   createStore,
   getRuntimeCodexAuthPath,
   getSystemCodexAuthPath,
+  getSystemCodexHomePath,
   setupRuntimeHomeTest,
   teardownRuntimeHomeTest,
   testState
@@ -38,6 +39,7 @@ vi.mock(import('node:os'), async (importOriginal) => {
 describe('CodexRuntimeHomeService', () => {
   beforeEach(() => {
     setupRuntimeHomeTest()
+    writeFileSync(join(getSystemCodexHomePath(), 'config.toml'), 'model = "test"\n')
   })
 
   afterEach(() => {
@@ -96,21 +98,21 @@ describe('CodexRuntimeHomeService', () => {
     writeFileSync(runtimeAuthPath, account1Refreshed, 'utf-8')
 
     rmSync(join(managedHomePath1, 'auth.json'), { force: true })
-    expect(service.prepareForCodexLaunch()).toBe(managedHomePath1)
+    expect(service.prepareForCodexLaunch()).toContain(join(dirname(managedHomePath1), 'overlays'))
 
     expect(existsSync(join(managedHomePath1, 'auth.json'))).toBe(false)
     expect(readFileSync(getSystemCodexAuthPath(), 'utf-8')).toBe(systemAuth)
     expect(readFileSync(runtimeAuthPath, 'utf-8')).toBe(account1Refreshed)
     expect(store.getSettings().activeCodexManagedAccountId).toBe('account-1')
     expect(store.updateSettings).not.toHaveBeenCalled()
-    expect(warnSpy).not.toHaveBeenCalled()
+    expect(warnSpy).not.toHaveBeenCalledWith(expect.stringContaining('clearing selection'))
 
     expect(service.isHostSystemDefaultRealHomeSelected()).toBe(false)
     expect(service.prepareForRateLimitFetch()).toEqual({
       kind: 'ready',
       codexHomePath: managedHomePath1
     })
-    expect(service.prepareForCodexLaunch()).toBe(managedHomePath1)
+    expect(service.prepareForCodexLaunch()).toContain(join(dirname(managedHomePath1), 'overlays'))
     expect(existsSync(join(managedHomePath1, 'auth.json'))).toBe(false)
 
     writeFileSync(join(managedHomePath1, 'auth.json'), account1Auth, 'utf-8')
@@ -118,7 +120,7 @@ describe('CodexRuntimeHomeService', () => {
       service.prepareForCodexLaunch(undefined, undefined, {
         unavailableManagedHomePath: managedHomePath1
       })
-    ).toBe(managedHomePath1)
+    ).toContain(join(dirname(managedHomePath1), 'overlays'))
     expect(store.updateSettings).not.toHaveBeenCalled()
 
     rmSync(join(managedHomePath1, 'auth.json'), { force: true })
@@ -128,7 +130,7 @@ describe('CodexRuntimeHomeService', () => {
       service.prepareForCodexLaunch(undefined, undefined, {
         unavailableManagedHomePath: managedHomePath1
       })
-    ).toBe(managedHomePath1)
+    ).toContain(join(dirname(managedHomePath1), 'overlays'))
     expect(store.updateSettings).not.toHaveBeenCalled()
 
     const nowSpy = vi.spyOn(Date, 'now').mockImplementation(() => absenceObservedAt + 6_000)
@@ -189,7 +191,7 @@ describe('CodexRuntimeHomeService', () => {
       service.prepareForCodexLaunch(undefined, undefined, {
         unavailableManagedHomePath: managedHomePath
       })
-    ).toBe(managedHomePath)
+    ).toContain(join(dirname(managedHomePath), 'overlays'))
     expect(store.getSettings().activeCodexManagedAccountId).toBe('account-1')
     expect(store.updateSettings).not.toHaveBeenCalled()
 
@@ -201,7 +203,7 @@ describe('CodexRuntimeHomeService', () => {
         service.prepareForCodexLaunch(undefined, undefined, {
           unavailableManagedHomePath: managedHomePath
         })
-      ).toBe(managedHomePath)
+      ).toContain(join(dirname(managedHomePath), 'overlays'))
     } finally {
       nowSpy.mockRestore()
     }
@@ -244,13 +246,13 @@ describe('CodexRuntimeHomeService', () => {
 
     writeFileSync(runtimeAuthPath, mismatchedAuth, 'utf-8')
     rmSync(join(managedHomePath, 'auth.json'), { force: true })
-    expect(service.prepareForCodexLaunch()).toBe(managedHomePath)
+    expect(service.prepareForCodexLaunch()).toContain(join(dirname(managedHomePath), 'overlays'))
 
     expect(existsSync(join(managedHomePath, 'auth.json'))).toBe(false)
     expect(readFileSync(getSystemCodexAuthPath(), 'utf-8')).toBe(systemAuth)
     expect(readFileSync(runtimeAuthPath, 'utf-8')).toBe(mismatchedAuth)
     expect(store.getSettings().activeCodexManagedAccountId).toBe('account-1')
-    expect(warnSpy).not.toHaveBeenCalled()
+    expect(warnSpy).not.toHaveBeenCalledWith(expect.stringContaining('clearing selection'))
   })
 
   it('ignores shared auth on an explicit managed-to-real-home deselect', async () => {

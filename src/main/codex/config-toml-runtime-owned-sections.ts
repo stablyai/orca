@@ -1,3 +1,4 @@
+import { stripCodexSharedStoreConfig } from './codex-shared-store-config'
 import { stripCodexDaemonOverride } from './codex-daemon-socket-path-guard'
 import {
   createTomlLineScanState,
@@ -33,6 +34,7 @@ export function stripRuntimeOwnedTomlSections(
   runtimeProjectHeaders = new Set<string>(),
   sharedHookTrust?: SharedHookTrustCarry
 ): string {
+  config = stripCodexSharedStoreConfig(config)
   const lines = config.split('\n')
   const sourceSections = getTomlSections(config)
   const sections = deduplicateProjectTomlSections(sourceSections)

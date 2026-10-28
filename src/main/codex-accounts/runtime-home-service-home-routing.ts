@@ -1,3 +1,9 @@
+import {
+  codexLoginHome,
+  prepareCodexCatalogHome,
+  discoverCodexStoreHomes
+} from '../codex/codex-launch-home'
+import { resolveHostCodexSessionSourceHome } from '../codex/codex-session-source-home'
 import { posix as pathPosix } from 'node:path'
 import { parseWslUncPath, toLinuxPath, toWindowsWslUncPath } from '../../shared/wsl-paths'
 import { normalizeRuntimePathForComparison } from '../../shared/cross-platform-path'
@@ -29,7 +35,14 @@ import { CodexRuntimeHomeManagedHome } from './runtime-home-service-managed-home
 export abstract class CodexRuntimeHomeRouting extends CodexRuntimeHomeManagedHome {
   getHostCodexHomePathsForSessionDiscovery(): string[] {
     // Transcript polling must resolve the mirror path without creating it.
-    const homes = [resolveOrcaManagedCodexHomePath()]
+    const homes = [
+      resolveOrcaManagedCodexHomePath(),
+      ...discoverCodexStoreHomes(this.getManagedAccountsRoot())
+    ]
+    const source = resolveHostCodexSessionSourceHome(this.store.getSettings())
+    if (source) {
+      homes.push(source)
+    }
     if (this.isHostSystemDefaultRealHomeSelected() || this.getSelfContainedManagedHostAccount()) {
       // Include real-home history even when nested Orca inherits a managed CODEX_HOME.
       homes.push(getSystemCodexHomePath())
@@ -275,6 +288,20 @@ export abstract class CodexRuntimeHomeRouting extends CodexRuntimeHomeManagedHom
 
   /** Sync shared-mirror credentials for catalog probes; per-account homes already own their auth. */
   prepareHostCodexHomeForReadOnlyAppServer(homePath: string, launchEnv?: NodeJS.ProcessEnv): void {
+    const account = this.store
+      .getSettings()
+      .codexManagedAccounts.find(
+        (candidate) =>
+          normalizeRuntimePathForComparison(candidate.managedHomePath) ===
+          normalizeRuntimePathForComparison(codexLoginHome(homePath))
+      )
+    const loginHome = account ? this.getTrustedSelfContainedManagedHomePath(account) : null
+    const options = {
+      selectedAccount: loginHome ? { homePath: loginHome } : null,
+      accountsRoot: this.getManagedAccountsRoot(),
+      storeHome: resolveHostCodexSessionSourceHome(this.store.getSettings())
+    }
+    prepareCodexCatalogHome(homePath, options, this.getHostCodexHomePathsForSessionDiscovery())
     if (
       this.getSelfContainedManagedHostAccount() ||
       normalizeRuntimePathForComparison(homePath) !==

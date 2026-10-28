@@ -1,4 +1,6 @@
-import { mkdirSync, readFileSync, realpathSync, rmSync, writeFileSync } from 'node:fs'
+import { CODEX_STORE_DIRECTORIES, codexAccountOverlayHomes } from '../codex/codex-launch-home'
+import { safeRemoveTree } from '../pty/overlay-mirror'
+import { mkdirSync, readdirSync, readFileSync, realpathSync, rmSync, writeFileSync } from 'node:fs'
 import { dirname, join, resolve, sep } from 'node:path'
 import { isDefinitiveAbsence } from '../../shared/definitive-filesystem-absence'
 import {
@@ -77,7 +79,12 @@ export class CodexManagedHomeLifecycle {
     if (error instanceof ManagedCodexHomeTemporarilyUnavailableError) {
       return
     }
-    this.safeRemove(managedHomePath, accountId)
+    // This attempt created the unregistered home; rollback has no retained conversation store.
+    try {
+      safeRemoveTree(dirname(this.paths.assert(managedHomePath, accountId)))
+    } catch (cleanupError) {
+      console.warn('[codex-accounts] Failed to roll back the new managed home:', cleanupError)
+    }
   }
 
   safeRemove(candidatePath: string, expectedAccountId: string): void {
@@ -89,10 +96,26 @@ export class CodexManagedHomeLifecycle {
       return
     }
 
+    if (!parseWslUncPath(managedHomePath)) {
+      // Database rows retain overlay paths after the login is removed.
+      for (const overlay of codexAccountOverlayHomes(dirname(managedHomePath))) {
+        for (const entry of readdirSync(overlay)) {
+          if (
+            CODEX_STORE_DIRECTORIES.some((name) => name === entry) ||
+            entry === 'session_index.jsonl'
+          ) {
+            continue
+          }
+          safeRemoveTree(join(overlay, entry))
+        }
+      }
+      safeRemoveTree(join(managedHomePath, 'auth.json'))
+      safeRemoveTree(join(managedHomePath, 'auth.lock'))
+      return
+    }
     try {
       removeManagedHomeTreeSync(managedHomePath)
     } catch (error) {
-      // Cleanup failures must not mask the original error.
       console.warn('[codex-accounts] Failed to remove managed home:', error)
       return
     }

@@ -1,9 +1,11 @@
+import { codexConversationStore } from '../codex/codex-launch-home'
 import {
   chatAgentsShareConversations,
   CLI_CONVERSATION_ADOPTING_AGENTS
 } from '../../shared/structured-agent-cli-conversation-adoption'
 import {
   agentSessionAccountHomesEqual,
+  isLegacyAgentSessionAccountHome,
   type AgentSessionAccountHome
 } from '../../shared/agent-session-account-home'
 import type { AgentSessionProviderHandleLink } from '../../shared/agent-session-provider-handle'
@@ -35,7 +37,10 @@ export function recordConversationKey(
     ? {
         family: conversationFamily(record.provider),
         id: history.rowSessionId(link),
-        home: record.accountHome
+        home:
+          record.provider === 'codex' && isLegacyAgentSessionAccountHome(record.accountHome)
+            ? { ...record.accountHome, path: codexConversationStore(record.accountHome.path) }
+            : record.accountHome
       }
     : null
 }

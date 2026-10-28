@@ -1,3 +1,4 @@
+import { withCodexSessionIndexHomes } from './session-scanner-codex-title-index'
 import type {
   AiVaultListResult,
   AiVaultScanIssue,
@@ -33,7 +34,9 @@ const SESSION_PARSE_CANDIDATE_MULTIPLIER = 2
 export async function scanAiVaultSessions(
   options: AiVaultScanOptions = {}
 ): Promise<AiVaultListResult> {
-  return withOpenCodeSqliteScanScope(() => scanAiVaultSessionStores(options))
+  return withCodexSessionIndexHomes(() =>
+    withOpenCodeSqliteScanScope(() => scanAiVaultSessionStores(options))
+  )
 }
 
 async function scanAiVaultSessionStores(options: AiVaultScanOptions): Promise<AiVaultListResult> {

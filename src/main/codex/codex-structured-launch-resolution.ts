@@ -1,3 +1,6 @@
+import { prepareCodexLaunchHome } from './codex-legacy-session-resume'
+import { codexLoginHome } from './codex-launch-home'
+import { getSystemCodexHomePath } from './codex-home-paths'
 import { delimiter, isAbsolute, resolve } from 'node:path'
 import { waitForPromiseWithSignal } from '../../shared/abort-signal-reason'
 import { requireLegacyAgentSessionAccountHome } from '../../shared/agent-session-account-home'
@@ -84,6 +87,15 @@ export function codexStructuredLaunchPart(
   return async (basis) => {
     const { record } = basis
     const accountHome = requireLegacyAgentSessionAccountHome(record.accountHome)
+    const loginHome = codexLoginHome(accountHome.path)
+    const head = agentSessionProviderHandleChainHead(record.providerHandleChain)
+    const resumeThreadId = head?.handle.nativeId ?? null
+    const codexHome =
+      (await prepareCodexLaunchHome({
+        selectedAccount: loginHome === getSystemCodexHomePath() ? null : { homePath: loginHome },
+        conversationHome: accountHome.path,
+        ...(resumeThreadId ? { sessionId: resumeThreadId } : {})
+      })) ?? getSystemCodexHomePath()
     const { command } = await resolveCodexStructuredInvocation({
       ...(deps.resolveCommand ? { resolveCommand: deps.resolveCommand } : {}),
       refreshEnvironmentAfterMiss: basis.refreshAfterMissingProgram,
@@ -92,8 +104,6 @@ export function codexStructuredLaunchPart(
     })
     const environment = await basis.environment()
     const args = codexStructuredLaunchArgs(await deps.resolveLaunchArgs())
-    const head = agentSessionProviderHandleChainHead(record.providerHandleChain)
-    const resumeThreadId = head?.handle.nativeId ?? null
     // Match the first turn's model to avoid duplicate prompt injection on a model switch.
     const model = record.options?.model
     const visuals = await basis.visuals()
@@ -102,7 +112,7 @@ export function codexStructuredLaunchPart(
       launch: {
         command,
         args: [...args, 'app-server'],
-        codexHome: accountHome.path,
+        codexHome,
         resumeThreadId,
         // Only created threads may be unsaved; resumed, forked and adopted threads were persisted.
         ...(resumeThreadId && head?.origin === 'created' ? { supersedeIfUnsaved: true } : {}),
@@ -113,10 +123,7 @@ export function codexStructuredLaunchPart(
         ...(model ? { model } : {}),
         ...(visuals ? { visuals } : {})
       },
-      env: withNativeChatVisualsEnv(
-        { ...environment, ...(accountHome.path ? { CODEX_HOME: accountHome.path } : {}) },
-        visuals
-      ),
+      env: withNativeChatVisualsEnv({ ...environment, CODEX_HOME: codexHome }, visuals),
       // Clear inherited scratch paths that may belong to another chat.
       inheritedEnvToDelete: [
         ...(visuals ? [] : [NATIVE_CHAT_SCRATCH_DIR_ENV]),

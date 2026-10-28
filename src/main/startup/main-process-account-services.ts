@@ -1,9 +1,6 @@
 import { app } from 'electron'
 import { KeybindingService } from '../keybindings/keybinding-service'
 import { createProviderAccountServices } from '../provider-account-services'
-import { createCodexSessionMigrationScheduler } from '../codex/codex-session-migration-scheduler'
-import { startCodexSessionBackfillInBackground } from '../codex/codex-session-backfill'
-import { startCodexSessionIndexHealInBackground } from '../codex/codex-session-index-heal'
 import { startCodexStateDbBackfillRecoveryInBackground } from '../codex/codex-state-db-backfill-recovery'
 import { getOrcaManagedCodexHomePath } from '../codex/codex-home-paths'
 import {
@@ -12,7 +9,6 @@ import {
   saveOpenCodeGoApiKey
 } from '../opencode/opencode-go-api-key-store'
 import { agentHookServer } from '../agent-hooks/server'
-import { resolveHostCodexSessionSourceHome } from '../codex/codex-session-source-home'
 import { browserManager } from '../browser/browser-manager'
 import { prewarmStructuredAgentModelCatalogs } from '../runtime/structured-agent-model-catalog-wiring'
 import { agentModelCatalogStore } from '../native-chat/agent-model-catalog/agent-model-catalog-store'
@@ -42,20 +38,7 @@ export function initializeMainProcessAccountServices(): void {
   ) {
     throw new Error('Usage stores must be initialized before account services')
   }
-  state.codexSessionMigration = createCodexSessionMigrationScheduler({
-    isEligible: () =>
-      state.codexRuntimeHome?.isHostSystemDefaultSessionMigrationEligible() === true,
-    isQuitting: () => state.isQuitting,
-    resolveSystemCodexHomePathOverride: () =>
-      resolveHostCodexSessionSourceHome(store.getSettings()),
-    prepareScheduledRun: (scanDates) =>
-      state.codexRuntimeHome?.prepareHostSystemDefaultSessionMigrationPass(scanDates),
-    finishScheduledRun: () => state.codexRuntimeHome?.finishHostSystemDefaultSessionMigrationPass(),
-    startBackfill: startCodexSessionBackfillInBackground,
-    startIndexHeal: startCodexSessionIndexHealInBackground
-  })
   const services = createProviderAccountServices(store, {
-    codexAccountLifecycle: { onHostSystemDefaultSelected: state.codexSessionMigration.requestRun },
     setClaudeStatusLineListener: (listener) => agentHookServer.setClaudeStatusLineListener(listener)
   })
   state.rateLimits = services.rateLimits
@@ -64,8 +47,6 @@ export function initializeMainProcessAccountServices(): void {
   state.claudeRuntimeAuth = services.claudeRuntimeAuth
   state.claudeAccounts = services.claudeAccounts
   void startCodexStateDbBackfillRecoveryInBackground(getOrcaManagedCodexHomePath())
-  // Defer shared-home migration; compatibility launches re-arm non-destructive scans for new rollouts (#4444, #8612, #12480).
-  state.codexSessionMigration.scheduleInitialRun()
   const expireModelCatalogs = createAgentModelCatalogSettingsExpiry(
     agentModelCatalogStore,
     store.getSettings()

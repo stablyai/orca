@@ -1,6 +1,36 @@
 import { readdirSync } from 'node:fs'
 import { opendir } from 'node:fs/promises'
 import { join } from 'node:path'
+import { relativePathInsideRoot } from '../../shared/cross-platform-path'
+
+const TRUSTED_CODEX_ROLLOUT_TAIL = String.raw`\d{4}/\d{2}/\d{2}/rollout-[^/:]+\.jsonl(?:\.zst)?`
+const ROLLOUT_RELATIVE_PATH = new RegExp(`^${TRUSTED_CODEX_ROLLOUT_TAIL}$`)
+
+// Only fold extended drive paths; reject device namespaces and extended UNC paths.
+function toCodexTrustedPathComparisonCopy(filePath: string): string | null {
+  if (filePath.startsWith('\\\\.\\')) {
+    return null
+  }
+  if (!filePath.startsWith('\\\\?\\')) {
+    return filePath
+  }
+  return filePath.match(/^\\\\\?\\([A-Za-z]:[\\/][\s\S]*)$/)?.[1] ?? null
+}
+
+/** Returns the `YYYY/MM/DD/rollout-*.jsonl` tail, or null outside the dated layout. */
+export function codexDatedRolloutRelativePath(
+  sessionsRoot: string,
+  filePath: string
+): string | null {
+  const comparisonSessionsRoot = toCodexTrustedPathComparisonCopy(sessionsRoot)
+  const comparisonFilePath = toCodexTrustedPathComparisonCopy(filePath)
+  if (!comparisonSessionsRoot || !comparisonFilePath) {
+    return null
+  }
+  // Windows-syntax suffixes come back with `/` separators; POSIX keeps `\` as a name byte.
+  const relativePath = relativePathInsideRoot(comparisonSessionsRoot, comparisonFilePath)
+  return relativePath && ROLLOUT_RELATIVE_PATH.test(relativePath) ? relativePath : null
+}
 
 export type CodexSessionBridgeIncrementalOptions = {
   /** Directory entries to process before yielding back to the event loop. */

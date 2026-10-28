@@ -47,7 +47,7 @@ async function createService(settings: GlobalSettings): Promise<CodexRuntimeHome
 
 async function launchOnMirror(): Promise<void> {
   const service = await createService(createSettings())
-  expect(service.prepareForCodexLaunch()).not.toBeNull()
+  service.syncForCurrentSelection()
 }
 
 async function launchOnRealHome(platform: NodeJS.Platform = 'win32'): Promise<void> {

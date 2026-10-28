@@ -5,6 +5,7 @@ import { getClaudeProfileRouter } from '../claude-accounts/claude-profile-instal
 import { normalizeCodexRuntimeSelection } from '../codex-accounts/runtime-selection'
 import { resolveOrcaManagedCodexHomePath, getSystemCodexHomePath } from '../codex/codex-home-paths'
 import { resolveAbsoluteDirOverride } from '../../shared/absolute-dir-override'
+import { codexLoginHome } from '../codex/codex-launch-home'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
 
@@ -39,9 +40,13 @@ export function resolveStructuredClaudeAccountHomePath(
 
 export type StructuredCodexAccountHomeDeps = {
   launchEnv: NodeJS.ProcessEnv
+  conversationHome?: string
   /** Resolve create-prepared or side-effect-free read homes identically; null selects env/system defaults. Reads must not sync homes or clear selections. */
   resolveLaunchHome:
-    | ((input: { launchEnv: NodeJS.ProcessEnv }) => string | null | Promise<string | null>)
+    | ((input: {
+        launchEnv: NodeJS.ProcessEnv
+        conversationHome?: string
+      }) => string | null | Promise<string | null>)
     | null
 }
 
@@ -49,7 +54,10 @@ export async function resolveStructuredCodexAccountHomePath(
   deps: StructuredCodexAccountHomeDeps
 ): Promise<string> {
   // A create has no process yet, so the current selection is what it must follow.
-  const resolvedHome = await deps.resolveLaunchHome?.({ launchEnv: deps.launchEnv })
+  const resolvedHome = await deps.resolveLaunchHome?.({
+    launchEnv: deps.launchEnv,
+    conversationHome: deps.conversationHome
+  })
   const configuredHome = deps.launchEnv.CODEX_HOME
   return (
     resolvedHome?.trim() ||
@@ -69,8 +77,9 @@ export function resolveStructuredCodexAccountKind(
     >
   >
 ): AgentSessionAccountKind | undefined {
+  const loginHome = codexLoginHome(home)
   const same = (other: string): boolean =>
-    normalizeRuntimePathForComparison(home) === normalizeRuntimePathForComparison(other)
+    normalizeRuntimePathForComparison(loginHome) === normalizeRuntimePathForComparison(other)
   if (
     (settings.codexManagedAccounts ?? []).some(
       (account) => account.managedHomeRuntime !== 'wsl' && same(account.managedHomePath)

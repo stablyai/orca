@@ -1,13 +1,7 @@
 import { statSync } from 'node:fs'
 import { join } from 'node:path'
 import { isDefinitiveAbsence } from '../../shared/definitive-filesystem-absence'
-import {
-  syncSystemCodexResourcesIntoManagedHome,
-  getSystemCodexHomePath,
-  resolveOrcaManagedCodexHomePath
-} from '../codex/codex-home-paths'
-import { syncSystemConfigIntoManagedCodexHome } from '../codex/codex-config-mirror'
-import { startCodexAccountSessionBridgeInBackground } from '../codex/codex-account-session-bridge'
+import { getSystemCodexHomePath } from '../codex/codex-home-paths'
 import {
   resolveHostCodexSessionSourceHome,
   resolveWslCodexSessionSourceHome
@@ -124,31 +118,7 @@ export abstract class CodexRuntimeHomeManagedHome extends CodexRuntimeHomeSync {
     this.lastHostAccountUsedSelfContainedHome = true
     this.sharedAuthRefreshBlockedByManagedTransition = true
     this.markSharedRuntimeAuthManaged(account.id)
-    syncSystemCodexResourcesIntoManagedHome(perAccountHome)
-    syncSystemConfigIntoManagedCodexHome({
-      runtimeHomePath: perAccountHome,
-      systemHomePath: getSystemCodexHomePath()
-    })
-    this.startSelfContainedSessionBridgeForLaunch(perAccountHome)
     return perAccountHome
-  }
-
-  // Bridge history in the background: /resume only sees launch-home rollouts, and scans can be large.
-  protected startSelfContainedSessionBridgeForLaunch(perAccountHome: string): void {
-    void startCodexAccountSessionBridgeInBackground({
-      targetCodexHomePath: perAccountHome,
-      sourceCodexHomePaths: this.getSelfContainedSessionBridgeSourceHomes()
-    })
-  }
-
-  protected getSelfContainedSessionBridgeSourceHomes(): string[] {
-    return [
-      // Honor custom history sources without changing credential routing.
-      resolveHostCodexSessionSourceHome(this.store.getSettings()) ?? getSystemCodexHomePath(),
-      // Resolve the mirror path without creating it for per-account launches.
-      resolveOrcaManagedCodexHomePath(),
-      ...this.getManagedHostAccountHomesForSessionDiscovery()
-    ]
   }
 
   // Per-account homes own auth refreshes in place; selection needs no shared-mirror read-back.
@@ -164,8 +134,6 @@ export abstract class CodexRuntimeHomeManagedHome extends CodexRuntimeHomeSync {
       this.lastHostAccountUsedSelfContainedHome = true
       this.sharedAuthRefreshBlockedByManagedTransition = true
       this.markSharedRuntimeAuthManaged(account.id)
-      // Start history bridging at selection so /resume is ready before the next launch.
-      this.startSelfContainedSessionBridgeForLaunch(perAccountHome)
       return
     }
     this.clearSelfContainedManagedSelection(account)

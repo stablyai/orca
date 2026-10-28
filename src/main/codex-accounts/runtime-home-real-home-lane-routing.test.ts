@@ -73,8 +73,11 @@ describe('CodexRuntimeHomeService', () => {
       false
     )
     expect(service.prepareForCodexLaunch(undefined, { CODEX_HOME: perSpawnCustomHome })).toBe(
-      getRuntimeCodexHomePath()
+      getSystemCodexHomePath()
     )
+    expect(
+      service.resolveHostCodexHomePathForLaunchReadOnly({ CODEX_HOME: perSpawnCustomHome })
+    ).toBe(getSystemCodexHomePath())
     expect(existsSync(markerPath)).toBe(true)
     expect(
       service.beginHostSystemDefaultSessionMigrationLaunch(getRuntimeCodexHomePath(), {
@@ -92,7 +95,10 @@ describe('CodexRuntimeHomeService', () => {
       const shellLaunchEnv = { HOME: testState.fakeHomeDir, SHELL: '/bin/zsh' }
       expect(service.isHostSystemDefaultRealHomeSelected(shellLaunchEnv)).toBe(false)
       expect(service.prepareForCodexLaunch(undefined, shellLaunchEnv)).toBe(
-        getRuntimeCodexHomePath()
+        getSystemCodexHomePath()
+      )
+      expect(service.resolveHostCodexHomePathForLaunchReadOnly(shellLaunchEnv)).toBe(
+        getSystemCodexHomePath()
       )
     }
     const previousCodexHome = process.env.CODEX_HOME
@@ -137,9 +143,7 @@ describe('CodexRuntimeHomeService', () => {
     const service = new CodexRuntimeHomeService(store as never)
     const customHome = join(testState.fakeHomeDir, 'pane-custom-codex-home')
 
-    expect(service.prepareForCodexLaunch(undefined, { CODEX_HOME: customHome })).toBe(
-      getRuntimeCodexHomePath()
-    )
+    service.syncForCurrentSelection(undefined, { CODEX_HOME: customHome })
     expect(readFileSync(getRuntimeCodexAuthPath(), 'utf-8')).toBe(systemAuth)
   })
 

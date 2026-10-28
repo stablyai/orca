@@ -467,7 +467,7 @@ describe('CodexAccountService config sync', () => {
 
     await expect(service.removeAccount('account-1')).resolves.toMatchObject({ accounts: [] })
     expect(store.getSettings().codexManagedAccounts).toEqual([])
-    expect(existsSync(managedHomePath)).toBe(false)
+    expect(existsSync(managedHomePath)).toBe(true)
     expect(warning).toHaveBeenCalledWith(
       '[codex-accounts] Removed account, but credit ledger cleanup failed:',
       failure

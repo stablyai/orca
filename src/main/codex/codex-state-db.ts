@@ -1,3 +1,4 @@
+import { resolveEffectiveCodexSqliteHome } from './codex-sqlite-home'
 import { readdirSync } from 'node:fs'
 import { join } from 'node:path'
 import SyncDatabase from '../sqlite/sync-database'
@@ -153,4 +154,22 @@ export function readCodexStateDbBackfillPendingState(
 
 export function isCodexStateDbBackfillPending(codexHomePath: string): boolean {
   return readCodexStateDbBackfillPendingState(codexHomePath) === 'pending'
+}
+
+/** Read only the provider's authoritative selection; no index repair or rollout publication. */
+export function readCodexSelectedRollout(home: string, threadId: string): string | null {
+  const file = findNewestCodexStateDbPath(resolveEffectiveCodexSqliteHome(home))
+  if (!file) {
+    return null
+  }
+  let db: SyncDatabase | null = null
+  try {
+    db = new SyncDatabase(file, { readonly: true, fileMustExist: true })
+    const row = db.prepare('SELECT rollout_path FROM threads WHERE id = ?').get(threadId)
+    return typeof row?.rollout_path === 'string' ? row.rollout_path : null
+  } catch {
+    return null
+  } finally {
+    db?.close()
+  }
 }

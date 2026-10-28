@@ -121,7 +121,7 @@ export function initializeMainProcessRuntime(): OrcaRuntimeService {
       state.codexRuntimeHome?.getHostCodexHomePathsForSessionDiscovery() ?? [],
     prepareAiVaultSessionResume: codexAiVaultSessionResumePreparation(() => ({
       runtimeHome: state.codexRuntimeHome,
-      systemCodexHomePath: resolveHostCodexSessionSourceHome(store.getSettings()),
+      storeHomePath: resolveHostCodexSessionSourceHome(store.getSettings()),
       preparePinnedLaunchHome: (home) => prepareCodexPinnedLaunchHome(home)
     })),
     ...codexStructuredLaunchHomeResolvers,

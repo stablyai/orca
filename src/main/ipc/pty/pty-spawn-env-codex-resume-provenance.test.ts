@@ -10,7 +10,12 @@ import { setLocalPtyProvider } from './provider/registry'
 import type { PrepareCodexSessionResume } from './host-env/types'
 
 vi.mock('electron', () => import('./pty-ipc-mock-registry').then((m) => m.electronModuleMock()))
-vi.mock('fs', () => import('./pty-ipc-mock-registry').then((m) => m.fsModuleMock()))
+vi.mock('fs', () =>
+  import('./pty-ipc-mock-registry').then((m) => ({
+    ...m.fsModuleMock(),
+    realpathSync: (path: string) => path
+  }))
+)
 vi.mock('node-pty', () => import('./pty-ipc-mock-registry').then((m) => m.nodePtyModuleMock()))
 vi.mock('node:child_process', async (importOriginal) =>
   (await import('./pty-ipc-mock-registry')).childProcessModuleMock(await importOriginal())
@@ -83,6 +88,8 @@ describe('registerPtyHandlers', () => {
             systemCodexHomePath: null,
             sharedRuntimeCodexHomePath: null,
             fileIsRegular: () => true,
+            // These fake homes have no discoverable ID-only rollout.
+            listSessionFiles: async function* () {},
             resolveVerifiedResumeHome: async (source) => source.homePath
           })
 

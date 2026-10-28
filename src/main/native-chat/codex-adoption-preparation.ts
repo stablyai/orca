@@ -6,6 +6,7 @@ import {
 } from '../../shared/agent-session-account-home'
 import type { NativeCodexResumePreparation } from '../codex/codex-ai-vault-session-resume'
 import { getSystemCodexHomePath } from '../codex/codex-home-paths'
+import { codexConversationStore } from '../codex/codex-launch-home'
 import type { StructuredAgentSessionAdoption } from './structured-agent-session-history-adoption'
 import { admitTranscriptPath } from './transcript-path-admission'
 import { normalizeRuntimePathForComparison } from '../../shared/cross-platform-path'
@@ -43,8 +44,8 @@ export async function prepareCodexAdoption(
     !recognizedHomes.some(
       (candidate) =>
         isLegacyAgentSessionAccountHome(candidate) &&
-        normalizeRuntimePathForComparison(candidate.path) ===
-          normalizeRuntimePathForComparison(home)
+        normalizeRuntimePathForComparison(codexConversationStore(candidate.path)) ===
+          normalizeRuntimePathForComparison(codexConversationStore(home))
     )
   ) {
     throw new Error('The prepared conversation account is not recognized on this host.')

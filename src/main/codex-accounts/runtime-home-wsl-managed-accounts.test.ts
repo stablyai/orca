@@ -12,6 +12,7 @@ import {
   createManagedAuth,
   createStore,
   getRuntimeCodexHomePath,
+  getSystemCodexHomePath,
   setupRuntimeHomeTest,
   teardownRuntimeHomeTest,
   testState
@@ -56,6 +57,7 @@ describe('CodexRuntimeHomeService', () => {
       '{"account":"wsl"}\n'
     )
     const settings = createSettings({
+      realHomeRoutable: false,
       codexManagedAccounts: [
         {
           id: 'account-1',
@@ -90,7 +92,7 @@ describe('CodexRuntimeHomeService', () => {
       )
 
       expect(readFileSync(runtimeAuthPath, 'utf-8')).toBe('{"account":"host-system"}\n')
-      expect(service.prepareForCodexLaunch()).toBe(getRuntimeCodexHomePath())
+      expect(service.prepareForCodexLaunch()).toBe(getSystemCodexHomePath())
       expect(service.prepareForCodexLaunch({ runtime: 'wsl', wslDistro: 'Ubuntu' })).toBe(
         wslManagedHomePath
       )
@@ -103,6 +105,7 @@ describe('CodexRuntimeHomeService', () => {
         kind: 'ready',
         codexHomePath: wslManagedHomePath
       })
+      expect(readFileSync(runtimeAuthPath, 'utf-8')).toBe('{"account":"host-system"}\n')
     } finally {
       if (originalPlatform) {
         Object.defineProperty(process, 'platform', originalPlatform)

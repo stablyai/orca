@@ -1,3 +1,4 @@
+import { CODEX_STORE_OVERLAY_RUNTIME_CAPABILITY } from '../../shared/account-runtime-capabilities'
 /** D10: desktop prepares distro-local account homes for orcad. Patch caller-built launches/plain shells, agent.launch accountEnv, and capability-advertised agent-session creates; leave bare-command Settings defaults untouched. */
 import { errorMessage } from '../../shared/error-message'
 import { posix } from 'node:path'
@@ -200,6 +201,14 @@ export async function withWslOrcadAccountEnv(
   } catch (error) {
     // Preparation failure must refuse launch or it would silently use another account.
     return { ok: false, message: errorMessage(error) }
+  }
+  // Older servers retain the account-home route and never receive an overlay path.
+  if (
+    env.CODEX_HOME &&
+    posix.basename(posix.dirname(env.CODEX_HOME)) === 'overlays' &&
+    (await call.hostSupports(CODEX_STORE_OVERLAY_RUNTIME_CAPABILITY)) !== 'supported'
+  ) {
+    env.CODEX_HOME = posix.join(posix.dirname(posix.dirname(env.CODEX_HOME)), 'home')
   }
   if (Object.keys(env).length === 0) {
     return { ok: true, params }

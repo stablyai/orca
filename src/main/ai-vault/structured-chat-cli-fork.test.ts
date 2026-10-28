@@ -68,6 +68,8 @@ it('locates the current Codex rollout in its recorded home and materializes the 
   vi.stubEnv('ORCA_USER_DATA_PATH', root)
   const home = join(root, 'codex-runtime-home', 'home')
   const system = join(root, 'system')
+  await mkdir(system, { recursive: true })
+  await writeFile(join(system, 'auth.json'), '{"system":true}')
   const record = agentSessionRecordFixture()
   record.provider = 'codex'
   record.accountHome = { variable: 'CODEX_HOME', path: home }
@@ -95,13 +97,13 @@ it('locates the current Codex rollout in its recorded home and materializes the 
       legacyCodexHomePath: home,
       systemCodexHomePath: system
     })
-    // Production uses its system home; this fixture selects the same materialized home explicitly.
-    return { ...prepared, useRealCodexHome: false, substituteCodexHome: system }
+    return prepared
   })
+  expect(result.substituteCodexHome).toContain('overlays')
   expect(result.cliForkSource).toMatchObject({
     sessionId: 'current-conversation',
-    codexHome: system,
-    filePath: join(system, 'sessions', relative),
+    codexHome: result.substituteCodexHome,
+    filePath: join(result.substituteCodexHome ?? '', 'sessions', relative),
     cwd: root
   })
 })
@@ -113,6 +115,8 @@ it.runIf(process.platform === 'win32')(
     vi.stubEnv('ORCA_USER_DATA_PATH', root)
     const home = join(root, 'codex-runtime-home', 'home')
     const system = join(root, 'system')
+    await mkdir(system, { recursive: true })
+    await writeFile(join(system, 'auth.json'), '{"system":true}')
     const record = agentSessionRecordFixture()
     record.provider = 'codex'
     record.accountHome = { variable: 'CODEX_HOME', path: home }
@@ -130,16 +134,16 @@ it.runIf(process.platform === 'win32')(
       'findTranscript'
     ).mockResolvedValueOnce(`\\\\?\\${join(home, 'sessions', relative)}`)
     install(record)
-    const result = await prepareStructuredChatCliFork(request, async (args) => ({
-      ...(await prepareLegacySharedCodexSessionResume(args, {
+    const result = await prepareStructuredChatCliFork(request, async (args) =>
+      prepareLegacySharedCodexSessionResume(args, {
         isHostSystemDefaultRealHomeSelected: () => true,
         legacyCodexHomePath: home,
         systemCodexHomePath: system
-      })),
-      useRealCodexHome: false,
-      substituteCodexHome: system
-    }))
-    expect(result.cliForkSource?.filePath).toBe(join(system, 'sessions', relative))
+      })
+    )
+    expect(result.cliForkSource?.filePath).toBe(
+      join(result.substituteCodexHome ?? '', 'sessions', relative)
+    )
   }
 )
 

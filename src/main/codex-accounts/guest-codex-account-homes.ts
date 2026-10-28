@@ -1,6 +1,6 @@
-import { readdirSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { basename, dirname, join, resolve } from 'node:path'
+import { codexConversationStore, discoverCodexStoreHomes } from '../codex/codex-launch-home'
 import { getSystemCodexHomePath } from '../codex/codex-home-paths'
 import { resolveHostCodexManagedHomeVerdict } from './host-codex-managed-home-ownership'
 
@@ -19,35 +19,37 @@ export function resolveGuestCodexAccountHome(
   if (!raw?.startsWith('/')) {
     return null
   }
-  const path = resolve(raw)
+  const candidatePath = resolve(raw)
+  const overlay = basename(dirname(candidatePath)) === 'overlays'
+  const path = overlay ? join(dirname(dirname(candidatePath)), 'home') : candidatePath
   const root = guestCodexAccountsRoot(home)
-  // Reject foreign wire paths lexically before a stat can block on a stalled mount.
   if (basename(path) !== 'home' || dirname(dirname(path)) !== resolve(root)) {
     return null
   }
+  if (overlay && !/^[a-f0-9]{32}$/.test(basename(candidatePath))) {
+    return null
+  }
+
   const verdict = resolveHostCodexManagedHomeVerdict({
     candidatePath: path,
     managedAccountsRoot: root,
     systemCodexHomePath: getSystemCodexHomePath(),
     expectedAccountId: basename(dirname(path))
   })
-  return verdict.kind === 'owned' ? verdict.homePath : null
+  if (verdict.kind !== 'owned') {
+    return null
+  }
+  if (overlay) {
+    try {
+      codexConversationStore(candidatePath)
+    } catch {
+      return null
+    }
+  }
+  return candidatePath
 }
 
 export function listGuestCodexAccountHomes(home: string = homedir()): string[] {
   const root = guestCodexAccountsRoot(home)
-  let accountIds: string[]
-  try {
-    accountIds = readdirSync(root)
-  } catch {
-    return []
-  }
-  const homes: string[] = []
-  for (const accountId of accountIds) {
-    const accountHome = resolveGuestCodexAccountHome(join(root, accountId, 'home'), home)
-    if (accountHome) {
-      homes.push(accountHome)
-    }
-  }
-  return homes
+  return discoverCodexStoreHomes(root)
 }

@@ -1,15 +1,20 @@
-import { createHash } from 'node:crypto'
-import { createReadStream } from 'node:fs'
-import { link, lstat, mkdir } from 'node:fs/promises'
-import { dirname, join, resolve } from 'node:path'
 import type {
   AiVaultPrepareSessionResumeArgs,
   AiVaultPrepareSessionResumeResult
 } from '../../shared/ai-vault-resume-preparation'
-import { isPerAccountManagedCodexHome } from '../../shared/ai-vault-resume-preparation'
 import { LOCAL_EXECUTION_HOST_ID } from '../../shared/execution-host'
-import { normalizeRuntimePathForComparison } from '../../shared/cross-platform-path'
 import { parseWslUncPath } from '../../shared/wsl-paths'
+import { getSystemCodexHomePath } from './codex-home-paths'
+import { resolveCodexLaunchHome, type CodexLaunchHomeOptions } from './codex-launch-home'
+import {
+  codexDatedRolloutRelativePath,
+  findTrustedCodexSessionResume
+} from './codex-session-resume-home'
+import { normalizeRuntimePathForComparison } from '../../shared/cross-platform-path'
+import { createHash } from 'node:crypto'
+import { createReadStream } from 'node:fs'
+import { link, lstat, mkdir } from 'node:fs/promises'
+import { dirname, join, resolve } from 'node:path'
 import {
   appendCodexSessionHealAuditRecord,
   createCodexSessionBackfillAuditWriter
@@ -19,14 +24,11 @@ import {
   isAtomicNoReplaceUnsupportedError
 } from './codex-session-backfill-copy'
 import { resolveCodexSessionBackfillPaths } from './codex-session-backfill'
-import { codexDatedRolloutRelativePath } from './codex-session-resume-home'
-import { ManagedCodexHomeTemporarilyUnavailableError } from '../codex-accounts/host-codex-managed-home-ownership'
 
 const RETRYABLE_RESUME_ERROR =
   'Orca could not safely move this legacy Codex session into your system Codex home. Retry resume; if it still fails, check that both Codex session folders are readable and writable.'
 
-const materializations = new Map<string, Promise<void>>()
-
+/** File logins retain the original store; no-file System default follows terminal resume. */
 export async function prepareLegacySharedCodexSessionResume(
   args: AiVaultPrepareSessionResumeArgs,
   options: {
@@ -34,58 +36,70 @@ export async function prepareLegacySharedCodexSessionResume(
     getSelectedHostAccountCodexHomePath?: () => string | null
     legacyCodexHomePath?: string
     systemCodexHomePath?: string
+    storeHomePath?: string
   }
 ): Promise<AiVaultPrepareSessionResumeResult> {
-  const substituteCodexHome = await resolveSelectedAccountCodexHomeForResume(args, options)
-  if (substituteCodexHome) {
-    return { useRealCodexHome: false, substituteCodexHome }
-  }
-  const paths = resolveCodexSessionBackfillPaths(options.systemCodexHomePath)
-  const legacyCodexHomePath = options.legacyCodexHomePath ?? dirname(paths.managedSessionsRoot)
-  const managedSessionsRoot = join(legacyCodexHomePath, 'sessions')
   if (
     args.agent !== 'codex' ||
     args.executionHostId !== LOCAL_EXECUTION_HOST_ID ||
-    !args.codexHome ||
-    !sameRuntimePath(args.codexHome, legacyCodexHomePath) ||
-    !options.isHostSystemDefaultRealHomeSelected()
+    (args.codexHome && parseWslUncPath(args.codexHome))
   ) {
     return { useRealCodexHome: false }
   }
+  const systemHome = options.systemCodexHomePath ?? getSystemCodexHomePath()
+  const selectedHome = options.getSelectedHostAccountCodexHomePath?.()
+  const home = await prepareCodexLaunchHome({
+    selectedAccount: selectedHome ? { homePath: selectedHome } : null,
+    conversationHome: args.codexHome ?? options.storeHomePath ?? systemHome,
+    systemHome,
+    transcriptPath: args.filePath,
+    sessionId: args.sessionId
+  })
+  return home ? { useRealCodexHome: false, substituteCodexHome: home } : { useRealCodexHome: true }
+}
 
-  const sourcePath = resolve(args.filePath)
-  // Codex canonicalizes CODEX_HOME, so Windows transcripts can carry a \\?\ prefix (#27200).
-  const relativePath = codexDatedRolloutRelativePath(managedSessionsRoot, sourcePath)
-  if (!relativePath) {
-    throw new Error(RETRYABLE_RESUME_ERROR)
+/** Read-only routing never copies; an actual no-file System-default continuation awaits main's materializer. */
+export async function prepareCodexLaunchHome(
+  options: CodexLaunchHomeOptions & { transcriptPath?: string; sessionId?: string }
+): Promise<string | undefined> {
+  const home = resolveCodexLaunchHome(options)
+  const sourceHome = options.conversationHome
+  const systemHome = options.systemHome ?? getSystemCodexHomePath()
+  if (
+    options.readOnly ||
+    home ||
+    options.selectedAccount ||
+    !sourceHome ||
+    sameRuntimePath(sourceHome, systemHome) ||
+    (!options.transcriptPath && !options.sessionId)
+  ) {
+    return home
   }
-  const targetPath = join(paths.systemSessionsRoot, relativePath)
-  const key = `${normalizeRuntimePathForComparison(sourcePath)}\0${normalizeRuntimePathForComparison(targetPath)}`
-  let task = materializations.get(key)
-  if (!task) {
-    task = materializeLegacyRollout(sourcePath, targetPath, paths.auditLogPath)
-    materializations.set(key, task)
-    void task.then(
-      () => {
-        if (materializations.get(key) === task) {
-          materializations.delete(key)
-        }
-      },
-      () => {
-        if (materializations.get(key) === task) {
-          materializations.delete(key)
-        }
-      }
-    )
+  const source = options.transcriptPath
+    ? { homePath: sourceHome, transcriptPath: options.transcriptPath }
+    : await findTrustedCodexSessionResume({
+        sessionId: options.sessionId ?? '',
+        transcriptPath: options.transcriptPath,
+        trustedCodexHomes: [sourceHome],
+        getSelectedAccountCodexHome: () => null,
+        systemCodexHomePath: systemHome,
+        sharedRuntimeCodexHomePath: null
+      })
+  if (!source) {
+    // The provider owns missing-rollout errors and replacement of its own unsaved thread.
+    return home
   }
-
   try {
-    await task
+    await prepareCodexAccountRestartResume({
+      sourceHome: source.homePath,
+      transcriptPath: source.transcriptPath,
+      targetHome: systemHome,
+      systemCodexHomePath: systemHome
+    })
   } catch (error) {
-    console.warn('[codex-legacy-session-resume] Targeted session migration failed:', error)
     throw new Error(RETRYABLE_RESUME_ERROR, { cause: error })
   }
-  return { useRealCodexHome: true }
+  return home
 }
 
 /** Explicit account restarts must move the verified rollout before changing credentials. */
@@ -112,49 +126,6 @@ export async function prepareCodexAccountRestartResume(args: {
     paths.auditLogPath
   )
   return args.targetHome
-}
-
-/**
- * Vault dedup may choose any account's bridge alias; prefer selected credentials when its rollout exists.
- * Return null for unbridged/unsupported layouts; transient read failures must not switch credentials.
- */
-async function resolveSelectedAccountCodexHomeForResume(
-  args: AiVaultPrepareSessionResumeArgs,
-  options: { getSelectedHostAccountCodexHomePath?: () => string | null }
-): Promise<string | null> {
-  if (
-    args.agent !== 'codex' ||
-    args.executionHostId !== LOCAL_EXECUTION_HOST_ID ||
-    !args.codexHome ||
-    parseWslUncPath(args.codexHome) !== null ||
-    !isPerAccountManagedCodexHome(args.codexHome)
-  ) {
-    return null
-  }
-  const selectedCodexHome = options.getSelectedHostAccountCodexHomePath?.() ?? null
-  if (!selectedCodexHome || sameRuntimePath(selectedCodexHome, args.codexHome)) {
-    return null
-  }
-  const relativePath = codexDatedRolloutRelativePath(
-    join(args.codexHome, 'sessions'),
-    resolve(args.filePath)
-  )
-  if (!relativePath) {
-    return null
-  }
-  const candidatePath = join(selectedCodexHome, 'sessions', relativePath)
-  try {
-    const candidateStat = await lstat(candidatePath)
-    // The async bridge may not have populated this account yet.
-    return candidateStat.isFile() && !candidateStat.isSymbolicLink() ? selectedCodexHome : null
-  } catch (error) {
-    const code = (error as NodeJS.ErrnoException | null)?.code
-    if (code === 'ENOENT' || code === 'ENOTDIR') {
-      return null
-    }
-    // STA-4607: only definitive absence permits fallback; transient errors must not switch accounts.
-    throw new ManagedCodexHomeTemporarilyUnavailableError(undefined, { cause: error })
-  }
 }
 
 async function materializeLegacyRollout(
@@ -226,7 +197,10 @@ async function assertMatchingExistingTarget(sourcePath: string, targetPath: stri
 async function fileDigest(filePath: string): Promise<string> {
   const hash = createHash('sha256')
   for await (const chunk of createReadStream(filePath)) {
-    hash.update(chunk as Buffer)
+    if (typeof chunk !== 'string' && !Buffer.isBuffer(chunk)) {
+      throw new Error('Unexpected rollout stream chunk.')
+    }
+    hash.update(chunk)
   }
   return hash.digest('hex')
 }
@@ -236,5 +210,5 @@ function sameRuntimePath(left: string, right: string): boolean {
 }
 
 function isExistsError(error: unknown): boolean {
-  return (error as NodeJS.ErrnoException | null)?.code === 'EEXIST'
+  return error instanceof Error && 'code' in error && error.code === 'EEXIST'
 }

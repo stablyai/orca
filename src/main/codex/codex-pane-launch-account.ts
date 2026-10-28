@@ -1,3 +1,4 @@
+import { basename, dirname, join } from 'node:path'
 import type { GlobalSettings } from '../../shared/global-settings-types'
 import { normalizeRuntimePathForComparison } from '../../shared/cross-platform-path'
 import { parseWslUncPath } from '../../shared/wsl-paths'
@@ -102,7 +103,11 @@ function accountOwnsCodexHome(
   }
   if (
     normalizeRuntimePathForComparison(account.managedHomePath) ===
-    normalizeRuntimePathForComparison(launchHomePath)
+    normalizeRuntimePathForComparison(
+      basename(dirname(launchHomePath)) === 'overlays'
+        ? join(dirname(dirname(launchHomePath)), 'home')
+        : launchHomePath
+    )
   ) {
     return true
   }

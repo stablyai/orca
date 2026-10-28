@@ -1,12 +1,14 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { linkSync, mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from 'node:fs'
 import type { PathLike } from 'node:fs'
+import { readdir } from 'node:fs/promises'
 import type * as FsPromises from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
 const fixture = vi.hoisted(() => ({
   root: '',
+  sessionDirectories: new Array<string>(),
   identities: new Map<string, { dev: bigint; ino: bigint }>(),
   statErrors: new Set<string>(),
   realpathErrors: new Set<string>()
@@ -16,6 +18,7 @@ vi.mock('node:fs/promises', async () => {
   const actual = await vi.importActual<typeof FsPromises>('node:fs/promises')
   return {
     ...actual,
+    readdir: vi.fn(actual.readdir),
     stat: async (filePath: PathLike, options?: { bigint?: boolean }) => {
       const path = String(filePath)
       if (fixture.statErrors.has(path)) {
@@ -62,7 +65,7 @@ vi.mock('../codex/codex-home-paths', () => ({
 }))
 
 vi.mock('../codex/codex-account-home-discovery', () => ({
-  getCodexAccountHomeSessionDirectories: () => []
+  getCodexAccountHomeSessionDirectories: () => fixture.sessionDirectories
 }))
 
 vi.mock('../codex/codex-session-bridge', () => ({
@@ -95,6 +98,7 @@ function writeSession(name: string, tokens = 10): string {
 beforeEach(() => {
   fixture.root = mkdtempSync(join(tmpdir(), 'orca-codex-file-identity-'))
   mkdirSync(join(fixture.root, 'runtime', 'sessions'), { recursive: true })
+  fixture.sessionDirectories = []
   fixture.identities.clear()
   fixture.statErrors.clear()
   fixture.realpathErrors.clear()
@@ -105,6 +109,30 @@ afterEach(() => {
 })
 
 describe('Codex session physical file identity', () => {
+  it.each([2, 20])(
+    'walks one physical tree for %i aliases, including warm usage refresh',
+    async (count) => {
+      for (let index = 0; index < count; index++) {
+        writeSession(`session-${index}`, index + 10)
+        const alias = join(fixture.root, `alias-${index}`)
+        symlinkSync(
+          join(fixture.root, 'runtime', 'sessions'),
+          alias,
+          process.platform === 'win32' ? 'junction' : 'dir'
+        )
+        fixture.sessionDirectories.push(alias)
+      }
+      vi.mocked(readdir).mockClear()
+      const first = await scanCodexUsageFiles([], [])
+      expect(first.sessions).toHaveLength(count)
+      expect(vi.mocked(readdir).mock.calls).toHaveLength(2)
+      vi.mocked(readdir).mockClear()
+      const warm = await scanCodexUsageFiles([], first.processedFiles)
+      expect(warm.dailyAggregates).toEqual(first.dailyAggregates)
+      expect(vi.mocked(readdir).mock.calls).toHaveLength(2)
+    }
+  )
+
   it('keeps adjacent large inode IDs distinct when numeric stats would round them together', async () => {
     const first = writeSession('first')
     const second = writeSession('second')

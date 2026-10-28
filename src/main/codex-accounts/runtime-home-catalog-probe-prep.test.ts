@@ -60,7 +60,7 @@ describe("the catalog probe's home prep on the mirror route", () => {
 
   it('brings a login made in ~/.codex into the mirror before the probe reads it', async () => {
     const service = await mirrorRouteService()
-    expect(service.prepareForCodexLaunch()).toBe(getRuntimeCodexHomePath())
+    service.syncForCurrentSelection()
     expect(existsSync(getRuntimeCodexAuthPath())).toBe(false)
     loginInSystemHome()
 

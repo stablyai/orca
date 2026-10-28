@@ -95,6 +95,7 @@ function readsSetting(enabled: boolean): { asymmetricMatch: (reader: unknown) =>
 }
 
 function resumeFrom(homePath: string): Promise<unknown> {
+  mocks.prepareForCodexLaunchAsync.mockResolvedValue(homePath === SYSTEM_HOME ? null : homePath)
   mocks.prepareCodexSessionResume.mockImplementation(
     async (args: {
       resolveVerifiedResumeHome: (source: VerifiedCodexResumeSource) => Promise<string>

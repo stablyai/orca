@@ -1,3 +1,6 @@
+import { parseWslUncPath } from '../../shared/wsl-paths'
+import { AsyncLocalStorage } from 'node:async_hooks'
+import { codexConversationStore, discoverCodexStoreHomes } from '../codex/codex-launch-home'
 import { basename, dirname, join } from 'node:path'
 import { createInterface } from 'node:readline'
 import { InFlightPromiseDedupe, stableInFlightKey } from '../../shared/in-flight-promise-dedupe'
@@ -11,13 +14,15 @@ const CODEX_SESSION_INDEX_FILE = 'session_index.jsonl'
 // Bound full title maps retained for custom and WSL homes across a long-lived process.
 const CODEX_SESSION_INDEX_TITLE_CACHE_MAX = 64
 
+type IndexedTitle = { title: string; updatedAt: bigint | null }
+
 type CodexSessionIndexTitleCacheEntry = {
   signature: string
-  titles: Map<string, string>
+  titles: Map<string, IndexedTitle>
 }
 
 const codexSessionIndexTitleCache = new Map<string, Promise<CodexSessionIndexTitleCacheEntry>>()
-const inFlightTitleReads = new InFlightPromiseDedupe<Map<string, string>>(
+const inFlightTitleReads = new InFlightPromiseDedupe<Map<string, IndexedTitle>>(
   0,
   CODEX_SESSION_INDEX_TITLE_CACHE_MAX
 )
@@ -42,7 +47,10 @@ export function _storeCodexSessionIndexTitleCacheEntryForTest(
 ): void {
   storeCodexSessionIndexTitleCacheEntry(
     codexHome,
-    titles.then((resolvedTitles) => ({ signature, titles: resolvedTitles }))
+    titles.then((resolvedTitles) => ({
+      signature,
+      titles: new Map([...resolvedTitles].map(([id, title]) => [id, { title, updatedAt: null }]))
+    }))
   )
 }
 
@@ -50,7 +58,9 @@ export function _readCachedCodexSessionIndexTitlesForTest(
   codexHome: string,
   signature: string
 ): Promise<Map<string, string> | undefined> {
-  return readCachedCodexSessionIndexTitles(codexHome, signature)
+  return readCachedCodexSessionIndexTitles(codexHome, signature).then((titles) =>
+    titles ? new Map([...titles].map(([id, value]) => [id, value.title])) : undefined
+  )
 }
 
 export async function readCodexSessionIndexTitle(
@@ -62,8 +72,70 @@ export async function readCodexSessionIndexTitle(
   if (!resolvedCodexHome) {
     return null
   }
-  const titleBySessionId = await readCodexSessionIndexTitles(resolvedCodexHome)
-  return titleBySessionId.get(sessionId) ?? null
+  if (parseWslUncPath(resolvedCodexHome)) {
+    return (await readCodexSessionIndexTitles(resolvedCodexHome)).get(sessionId)?.title ?? null
+  }
+  const scope = storeTitleReads.getStore() ?? createTitleReadScope()
+  const store = scope.stores.get(resolvedCodexHome) ?? codexConversationStore(resolvedCodexHome)
+  scope.stores.set(resolvedCodexHome, store)
+  let titles = scope.titles.get(store)
+  if (!titles) {
+    titles = readStoreTitles(resolvedCodexHome, store, scope)
+    scope.titles.set(store, titles)
+  }
+  return (await titles).get(sessionId)?.title ?? null
+}
+
+type TitleReadScope = {
+  titles: Map<string, Promise<Map<string, IndexedTitle>>>
+  stores: Map<string, string>
+  aliases?: Map<string, string[]>
+}
+
+const storeTitleReads = new AsyncLocalStorage<TitleReadScope>()
+function createTitleReadScope(): TitleReadScope {
+  return { titles: new Map(), stores: new Map() }
+}
+export function withCodexSessionIndexHomes<T>(run: () => Promise<T>): Promise<T> {
+  return storeTitleReads.getStore() ? run() : storeTitleReads.run(createTitleReadScope(), run)
+}
+
+async function readStoreTitles(
+  home: string,
+  store: string,
+  scope: TitleReadScope
+): Promise<Map<string, IndexedTitle>> {
+  if (!scope.aliases) {
+    scope.aliases = new Map()
+    for (const candidate of discoverCodexStoreHomes()) {
+      const owner = scope.stores.get(candidate) ?? codexConversationStore(candidate)
+      scope.stores.set(candidate, owner)
+      const aliases = scope.aliases.get(owner) ?? []
+      aliases.push(candidate)
+      scope.aliases.set(owner, aliases)
+    }
+  }
+  const indexes = await Promise.all(
+    [...new Set([home, ...(scope.aliases.get(store) ?? [])])]
+      .sort()
+      .map(readCodexSessionIndexTitles)
+  )
+  const titles = new Map<string, IndexedTitle>()
+  for (const index of indexes) {
+    for (const [id, value] of index) {
+      const previous = titles.get(id)
+      // Unknown/equal timestamps retain deterministic alias order; known row dates win.
+      if (
+        !previous ||
+        (value.updatedAt !== null &&
+          (previous.updatedAt === null || value.updatedAt >= previous.updatedAt)) ||
+        (value.updatedAt === null && previous.updatedAt === null)
+      ) {
+        titles.set(id, value)
+      }
+    }
+  }
+  return titles
 }
 
 function codexHomeFromSessionFilePath(sessionFilePath: string): string | null {
@@ -77,7 +149,7 @@ function codexHomeFromSessionFilePath(sessionFilePath: string): string | null {
   return null
 }
 
-async function readCodexSessionIndexTitles(codexHome: string): Promise<Map<string, string>> {
+async function readCodexSessionIndexTitles(codexHome: string): Promise<Map<string, IndexedTitle>> {
   const indexPath = join(codexHome, CODEX_SESSION_INDEX_FILE)
   let signature: string
   try {
@@ -102,7 +174,7 @@ async function loadCodexSessionIndexTitles(
   codexHome: string,
   indexPath: string,
   signature: string
-): Promise<Map<string, string>> {
+): Promise<Map<string, IndexedTitle>> {
   const cachedTitles = await readCachedCodexSessionIndexTitles(codexHome, signature)
   if (cachedTitles) {
     return cachedTitles
@@ -122,7 +194,7 @@ async function loadCodexSessionIndexTitles(
 async function readCachedCodexSessionIndexTitles(
   codexHome: string,
   signature: string
-): Promise<Map<string, string> | undefined> {
+): Promise<Map<string, IndexedTitle> | undefined> {
   const cached = codexSessionIndexTitleCache.get(codexHome)
   if (!cached) {
     return undefined
@@ -155,8 +227,8 @@ function storeCodexSessionIndexTitleCacheEntry(
 
 async function readCodexSessionIndexTitlesFromDisk(
   indexPath: string
-): Promise<{ titles: Map<string, string>; refused: boolean }> {
-  const titleBySessionId = new Map<string, string>()
+): Promise<{ titles: Map<string, IndexedTitle>; refused: boolean }> {
+  const titleBySessionId = new Map<string, IndexedTitle>()
   try {
     const lines = createInterface({
       input: openTranscriptReadStream(indexPath, { encoding: 'utf-8' }, 'scan'),
@@ -170,7 +242,7 @@ async function readCodexSessionIndexTitlesFromDisk(
       const sessionId = extractString(record.id)
       const title = normalizeTitleText(extractString(record.thread_name) ?? '')
       if (sessionId && title) {
-        titleBySessionId.set(sessionId, title)
+        titleBySessionId.set(sessionId, { title, updatedAt: titleTimestamp(record.updated_at) })
       }
     }
   } catch (error) {
@@ -178,4 +250,19 @@ async function readCodexSessionIndexTitlesFromDisk(
     return { titles: titleBySessionId, refused: error instanceof WslTranscriptFsError }
   }
   return { titles: titleBySessionId, refused: false }
+}
+
+function titleTimestamp(value: unknown): bigint | null {
+  if (typeof value !== 'string') {
+    return null
+  }
+  const milliseconds = Date.parse(value)
+  if (!Number.isFinite(milliseconds)) {
+    return null
+  }
+  const fraction = /\.(\d+)(?:Z|[+-]\d{2}:\d{2})$/.exec(value)?.[1] ?? ''
+  return (
+    BigInt(Math.floor(milliseconds / 1000)) * 1_000_000_000n +
+    BigInt(fraction.padEnd(9, '0').slice(0, 9))
+  )
 }
