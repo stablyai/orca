@@ -32,9 +32,10 @@ export function pair(
 export async function connectPhone(
   desktop: OrcaRuntimeRpcServer,
   name: string,
-  cleanups: (() => Promise<void> | void)[]
+  cleanups: (() => Promise<void> | void)[],
+  scope: 'mobile' | 'runtime' = 'mobile'
 ) {
-  const pairing = pair(desktop, 'mobile', name)
+  const pairing = pair(desktop, scope, name)
   const keys = generateKeyPair()
   const sharedKey = deriveSharedKey(keys.secretKey, publicKeyFromBase64(pairing.publicKeyB64))
   const ws = new WebSocket(pairing.endpoint)

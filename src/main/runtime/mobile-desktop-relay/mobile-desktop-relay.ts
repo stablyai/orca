@@ -32,7 +32,7 @@ const RELAY_CONNECT_TIMEOUT_MS = PHONE_RELAY_CONNECT_BUDGET_MS
 
 /** One socket per (phone connection, configured server), authenticated with memory-only delegated phone grants.
  * Forward execution-host methods only; old servers require an update, and revocation lasts until the next sync.
- * Replies stay opaque except stream-id renumbering; replace every upstream desktop-token occurrence. */
+ * Replies stay opaque except stream-id renumbering and swapping the server token back to the caller's. */
 export class MobileDesktopRelay {
   private readonly links = new Map<string, RelayLink>()
   private readonly grants: DelegatedPhoneGrantCache
@@ -41,7 +41,8 @@ export class MobileDesktopRelay {
   constructor(
     private readonly options: {
       hosts: MobileDesktopRelayHosts
-      listPhones: () => DelegatedMobileDeviceSyncParams['phones']
+      /** The callers to keep delegated devices for on that server. */
+      listPhones: (environmentId: string) => DelegatedMobileDeviceSyncParams['phones']
       allocateStreamId: () => number
       /** Whether this desktop's settings open `agent` as a chat. */
       nativeChatDefault: (agent: string) => boolean
@@ -271,12 +272,7 @@ export class MobileDesktopRelay {
         },
         relayedPhoneCapabilities(phone.clientCapabilities()),
         {
-          onText: (plaintext) => {
-            const frame = link.replies.text(plaintext)
-            if (frame !== null) {
-              phone.reply(frame)
-            }
-          },
+          onText: (plaintext) => link.deliverText(plaintext, grant.token),
           onBinary: (bytes) => {
             const frame = link.replies.binary(bytes)
             if (frame) {
