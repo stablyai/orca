@@ -20,6 +20,11 @@ function getDesktopPlatform(): NodeJS.Platform | null {
   return navigator.userAgent.includes('Windows') ? 'win32' : null
 }
 
+/** A Windows desktop can add a Windows drive folder as a project on this computer. */
+export function isWindowsDesktopClient(): boolean {
+  return getDesktopPlatform() === 'win32'
+}
+
 /** {@link windowsPathAccess} for the owner host, from the WSL hosts the renderer knows. */
 export function getWindowsPathAccess(
   ownerHostId: string | null | undefined,

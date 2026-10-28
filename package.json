@@ -273,6 +273,7 @@
     "@tiptap/pm": "3.31.3",
     "@tiptap/react": "3.31.3",
     "@tiptap/starter-kit": "3.31.3",
+    "@types/chrome": "0.0.287",
     "@types/hast": "^3.0.4",
     "@types/mdast": "^4.0.4",
     "@types/node": "^24.19.2",
@@ -400,7 +401,7 @@
         {
           "files": [
             "src/renderer/src/components/task-page/github/use-task-page-github-issue-draft.ts",
-            "src/renderer/src/components/use-task-page-jira-creation-state.ts"
+            "src/renderer/src/components/task-page/jira/use-task-page-jira-creation-state.ts"
           ],
           "rules": [
             "react-doctor/no-adjust-state-on-prop-change"

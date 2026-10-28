@@ -29,6 +29,12 @@ vi.mock('electron', () => ({
   }
 }))
 
+// Extension loading and cleanup have their own tests (browser-extension-session-loader.test.ts).
+vi.mock('./extensions/browser-extension-session-loader', () => ({
+  attachBrowserExtensionsToProfileSession: () => {},
+  detachBrowserExtensionsFromProfileSession: async () => {}
+}))
+
 vi.mock('./browser-process-user-agent', () => ({
   getBrowserProcessUserAgentIdentity: () => ({
     mode: processUserAgentMode.value,

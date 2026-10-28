@@ -124,6 +124,8 @@ ${indentBlock(getZshShellReadyMarkerRegistrationBlock(spec.readyMarkerEscaped, t
   return `__orca_deferred_init() {
   # Reset user options: NO_UNSET can abort hooks and KSH_ARRAYS breaks the feature lookup.
   builtin emulate -L zsh
+  # Startup files can invoke prompt hooks or nested editors before initialization ends.
+  [[ ":$ZSH_EVAL_CONTEXT:" == *:file:* ]] && return 0
   (( $+_orca_deferred_init_done )) && return 0
   builtin typeset -g _orca_deferred_init_done=1
   builtin typeset -g precmd_functions

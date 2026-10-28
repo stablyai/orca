@@ -20,14 +20,19 @@ export async function writeChatFixtureFile(
   )
 }
 
-/** Install the existing SDK wire fixture with the guest's packaged runtime, never a Windows CLI. */
+/** Guest dir the lane's login profile puts first on PATH, before WSL's appended Windows entries. */
+export const WSL_CHAT_GUEST_BIN = 'orca-lane-chat-bin'
+
+/** Install the SDK wire fixture as `claude` on the guest's login PATH, run by the guest's packaged runtime. */
 export async function installWslChatFixture(lane: WslChatHost) {
   const home = (await lane.guest('printf %s "$HOME"')).trim()
   const root = `${home}/wsl chat fixture`
-  await lane.guest(`mkdir -p ${quotePosixShell(root)}`)
+  await lane.guest(
+    `mkdir -p ${quotePosixShell(root)} ${quotePosixShell(`${home}/${WSL_CHAT_GUEST_BIN}`)}`
+  )
   const runtime = (await lane.guest(`readlink -f /proc/${lane.runtimePid}/exe`)).trim()
   const script = `${root}/scripted.mjs`
-  const cli = `${root}/claude`
+  const cli = `${home}/${WSL_CHAT_GUEST_BIN}/claude`
   await writeChatFixtureFile(
     lane,
     script,
@@ -36,14 +41,10 @@ export async function installWslChatFixture(lane: WslChatHost) {
   await writeChatFixtureFile(
     lane,
     cli,
-    `#!/bin/sh\nexec ${quotePosixShell(runtime)} ${quotePosixShell(script)} "$@"\n`
+    `#!/bin/sh\nexport ORCA_LANE_CLAUDE_WRAPPER="$0"\nexec ${quotePosixShell(runtime)} ${quotePosixShell(script)} "$@"\n`
   )
   await lane.guest(`chmod 700 ${quotePosixShell(cli)}`)
-  await lane.rpc('settings.mutateAgentLaunch', {
-    type: 'command',
-    agent: 'claude',
-    value: quotePosixShell(cli)
-  })
+  // No Command setting: orcad must find `claude` the way a user's install is found.
   await lane.rpc('settings.update', {
     nativeChatPermissionMode: 'ask',
     agentDefaultEnv: {
@@ -64,7 +65,14 @@ export async function installWslChatFixture(lane: WslChatHost) {
     folderPath,
     name: 'WSL folder chat'
   })
-  return { home, root, folderPath, folderWorktree: folderWorkspaceKey(folder.folderWorkspace.id) }
+  return {
+    home,
+    root,
+    script,
+    cli,
+    folderPath,
+    folderWorktree: folderWorkspaceKey(folder.folderWorkspace.id)
+  }
 }
 
 export const WslChatProviderReport = z.object({

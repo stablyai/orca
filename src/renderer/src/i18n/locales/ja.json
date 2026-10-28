@@ -350,7 +350,9 @@
     "help": "ヘルプ",
     "paste": "貼り付け",
     "copy": "コピー",
-    "selectAll": "すべて選択"
+    "selectAll": "すべて選択",
+    "quitAndStopAllSessions": "完全に終了…",
+    "quitAndStopAllSessionsTooltip": "実行中の Agent を含む、すべてのターミナルセッションも停止します。通常の終了ではセッションは実行されたままになり、次回起動時に Orca が再接続します。"
   },
   "tray": {
     "openOrca": "Orca を開く",
@@ -3330,6 +3332,7 @@
             "78b79d854d": "ターミナルを閉じますか?",
             "stop_agent_title": "この Agent を停止しますか?",
             "stop_command_title": "実行中のコマンドを停止しますか?",
+            "stop_chat_description": "このチャットを閉じると、Agent の現在の作業が停止します。",
             "stop_agent_description": "このターミナルを閉じると、Agent の現在の作業が停止します。",
             "stop_command_description": "このターミナルを閉じると、その中で実行中のコマンドが停止します。",
             "dont_ask_again": "実行中のターミナルでは今後確認しない",
@@ -5054,15 +5057,15 @@
           "fab8fce842": "ファイル",
           "8f9833d509": "不変バージョン",
           "66270286ac": "・安全にリトライできる。",
-          "1b6ad2ca5c": "チェックされました。",
-          "3fc62a61eb": "配置",
           "157de228b4": "スキルを検査する",
           "69236de8d6": "確認中…",
           "27672470d9": "リンクを開いても何もインストールされません。まず不変バージョンを確認してください。",
           "66cff7a804": "https://app.orca.dev/skills/share/…",
           "93eb0fe8c7": "Orca のスキルリンク",
           "releaseNotes": "リリースノート:",
-          "targetHeader": "インストール対象"
+          "targetHeader": "インストール対象",
+          "placementsChecked_one": "{{count}} 件の配置先を確認しました。",
+          "placementsChecked_other": "{{count}} 件の配置先を確認しました。"
         },
         "SkillInstallTargetFields": {
           "8e6a972229": "このマシンにはワークスペースがありません。",
@@ -5498,12 +5501,15 @@
           "loadedPathsNotice": "読み込まれたパスは不完全な場合や古い場合があります。",
           "loadedChangedPaths": "読み込まれた変更済みパス",
           "unresolvedConflict": "未解決の競合",
-          "moreLoadedPaths": "ほかに読み込まれたパスが{{value0}}件"
+          "moreLoadedPaths": "ほかに読み込まれたパスが{{value0}}件",
+          "changeCount_one": "未コミットまたは未追跡の変更: 1 件",
+          "changeCount_other": "未コミットまたは未追跡の変更: {{count}} 件",
+          "changes": "未コミットまたは未追跡の変更があります"
         },
         "DeleteWorktreeLineageNotice": {
           "ad407c2d55": "件以上",
           "a940f3c96e": "子ワークスペースは削除されます",
-          "29b98bf9cd": "このワークスペースを削除すると、{{value0}} 子ワークスペースも削除されます。",
+          "29b98bf9cd": "このワークスペースを削除すると、子ワークスペース {{value0}} 個も削除されます。",
           "66798cc6a2": "このワークスペースを削除すると、子ワークスペースも 1 つ削除されます。"
         },
         "DeleteWorktreeSkipConfirmOption": {
@@ -5521,9 +5527,18 @@
           "b2bc47c080": "さらに多くの場所",
           "b47ba1a9d2": "{{value0}} プレビュー",
           "2251d41ebb": "非表示のワークツリーグループ",
-          "f54f2bec5d": "{{value0}} {{value1}} の非表示ワークツリー",
           "5a9688802a": "{{value0}} をもっと見る",
-          "294de4aeb2": "表示数を減らす"
+          "294de4aeb2": "表示数を減らす",
+          "collapseAriaLabel": "{{repo}} の非表示のワークツリー一覧を折りたたむ",
+          "expandAriaLabel": "{{repo}} の非表示のワークツリー一覧を展開",
+          "hiding_one": "1 件のワークツリーを非表示中",
+          "hiding_other": "{{count}} 件のワークツリーを非表示中",
+          "hidingInRepo_one": "{{repo}} の 1 件のワークツリーを非表示中",
+          "hidingInRepo_other": "{{repo}} の {{count}} 件のワークツリーを非表示中",
+          "keepHiddenAriaLabel_one": "{{repo}} で検出されたワークツリー 1 件を非表示のままにする（プロジェクトメニューから再表示できます）",
+          "keepHiddenAriaLabel_other": "{{repo}} で検出されたワークツリー {{count}} 件を非表示のままにする（プロジェクトメニューから再表示できます）",
+          "keepHiddenTooltip": "非表示のままにする（プロジェクトメニューから再表示できます）",
+          "repoOnHost": "{{repo}}（{{host}}）"
         },
         "NonGitFolderDialog": {
           "e52454b7f6": "フォルダーとして開く",
@@ -5552,7 +5567,8 @@
         "PendingWorktreeRow": {
           "af21e953d1": "ワークツリーの作成をキャンセルする",
           "188f6922a0": "キャンセル",
-          "creatingWorkspace": "ワークスペースを作成中…"
+          "creatingWorkspace": "ワークスペースを作成中…",
+          "creationFailed": "作成に失敗しました"
         },
         "ProjectGroupDeleteDialog": {
           "ca65b78f78": "キャンセル",
@@ -5583,7 +5599,8 @@
           "00c4235c10": "「{{value0}}」に一致するものはありません",
           "largeInputNoMatches": "この長い入力に一致するものはありません",
           "entriesLabel": "フォルダーの項目",
-          "inputLabel": "フィルターまたはパス"
+          "inputLabel": "フィルターまたはパス",
+          "fileHint": "ファイルはプロジェクトとして開けません"
         },
         "SleepTwinWorkspaceDialog": {
           "title": "Sleep Workspace",
@@ -5615,7 +5632,10 @@
           "a49196d538": "Orca が新規ワークツリーを作成するときに実行されます。",
           "d9f2db2738": "プロジェクトの設定",
           "a5bb8c5135": "これに保存されました",
-          "dcaa645da5": "わかりました"
+          "dcaa645da5": "わかりました",
+          "savedSetupCommand": "セットアップコマンドを保存しました。",
+          "savedWithSkippedFields_one": "未対応の項目を 1 件スキップしました。セットアップコマンドを保存しました。",
+          "savedWithSkippedFields_other": "未対応の項目を {{count}} 件スキップしました。セットアップコマンドを保存しました。"
         },
         "SetupScriptPromptCardViews": {
           "96a7f4198c": "ローカル設定を保存する",
@@ -5847,7 +5867,8 @@
         "WorkspaceKanbanStatusLane": {
           "8ad104642b": "空の",
           "3611d1ae7f": "ワークスペースボードの列のサイズを変更する",
-          "2df01a03ff": "一致なし"
+          "2df01a03ff": "一致なし",
+          "newWorkspaceIn": "「{{status}}」に新しいワークスペースを作成"
         },
         "WorkspaceStatusAppearancePopover": {
           "514be2f569": "{{value0}} の色を {{value1}} に設定します",
@@ -5887,7 +5908,8 @@
           "ef18787206": "削除待ち"
         },
         "WorktreeCardAgents": {
-          "1b0a156717": "Agent"
+          "1b0a156717": "Agent",
+          "agentUnavailable": "Agent を利用できません"
         },
         "WorktreeCardReviewDetailSection": {
           "reviewHeader": "{{value0}} #{{value1}}",
@@ -5954,7 +5976,8 @@
           "5d1a5d51bb": "{{value0}} でプロセスを停止しました",
           "c89f290e25": "{{value0}} をコピーしました",
           "d1113f4660": "ブラウザを開けませんでした",
-          "fed49903c9": "{{value0}} ライブ {{value1}}"
+          "fed49903c9": "{{value0}} ライブ {{value1}}",
+          "unknownProcess": "不明なプロセス"
         },
         "WorktreeContextMenu": {
           "c39c37676a": "グループを作成し、このプロジェクトをそのグループに移動します。",
@@ -5985,9 +6008,9 @@
           "workspaceSection": "ワークスペース",
           "primaryDeleteDisabled": "プライマリワークツリーは削除できません。代わりにプロジェクトを削除してください。",
           "deleteWorktree": "ワークツリーを削除",
-          "sleepWithDescendants": "子孫と一緒に寝る ({{value0}})",
-          "sleepWithDescendantsDescription": "このワークスペースとすべてのネストされた子孫のアクティブなパネルを閉じて、メモリと CPU を解放します。",
-          "deleteWithDescendants": "子孫と一緒に削除…"
+          "sleepWithDescendants": "配下のワークスペースも含めてスリープ ({{value0}})",
+          "sleepWithDescendantsDescription": "このワークスペースと配下のすべてのワークスペースのアクティブなパネルを閉じて、メモリと CPU の使用量を減らします。",
+          "deleteWithDescendants": "配下のワークスペースも含めて削除…"
         },
         "WorktreeList": {
           "d880ea0744": "グループを作成し、このプロジェクトをそのグループに移動します。",
@@ -6345,11 +6368,17 @@
           }
         },
         "CacheTimer": {
-          "07729cc155": "期限切れ"
+          "07729cc155": "期限切れ",
+          "expiredTooltip": "次のメッセージでは、コンテキスト全体がキャッシュされていないトークンとして再送信されます",
+          "expiresIn": "プロンプトキャッシュはあと {{time}} で期限切れになります"
         },
         "DeleteWorktreeDialogFooter": {
           "c0e972d726": "キャンセル",
-          "cf95e3b5bb": "閉じる"
+          "cf95e3b5bb": "閉じる",
+          "deleteWorkspace": "ワークスペースを削除",
+          "deleting": "削除中…",
+          "forceDelete": "強制削除",
+          "forceDeleting": "強制削除中…"
         },
         "index": {
           "b826a98b6f": "忙しい"
@@ -6510,7 +6539,9 @@
         },
         "WorktreeCardStatusSlot": {
           "branchIdentity": "ブランチ",
-          "sleeping": "眠っている"
+          "sleeping": "スリープ中",
+          "markAsRead": "既読にする",
+          "markAsUnread": "未読にする"
         },
         "NewExternalWorktreesInboxLine": {
           "9f2d4c8b17": "{{value0}} の外部ワークツリーを完全に非表示にする",
@@ -6793,6 +6824,41 @@
           "outsideDistro": "{{value0}} 内のフォルダーを選択してください。",
           "underDistro": "このホストで追加できるのは \\\\wsl.localhost\\{{value0}} 以下のフォルダーのみです。",
           "windowsDrive": "Windows ドライブ上のフォルダーはこのコンピュータに残ります。追加するにはホストとしてこのコンピュータを選択してください。"
+        },
+        "RemoteFileBrowserEntryList": {
+          "pathEmpty": "{{path}} は空です"
+        },
+        "importedWorktreesCardActions": {
+          "keepHiddenError": "検出されたワークツリーを非表示のままにできませんでした。もう一度お試しください。",
+          "showError": "検出されたワークツリーを表示できませんでした。もう一度お試しください。"
+        },
+        "repoHeaderProjectActions": {
+          "hideNonOrcaWorktrees": "Orca 以外のワークツリーを非表示にする",
+          "showHiddenWorktrees": "非表示のワークツリーを表示する"
+        },
+        "useWorktreeCardLinkedDetails": {
+          "issueUnavailable": "Issue の詳細を表示できません",
+          "linearIssueUnavailable": "Linear Issue の詳細を表示できません",
+          "loadingIssue": "Issue を読み込み中…",
+          "loadingLinearIssue": "Linear Issue を読み込み中…"
+        },
+        "useWorktreeCardWorkspaceActions": {
+          "markRead": "既読にする",
+          "markUnread": "未読にする"
+        },
+        "workspaceBatchActionLabels": {
+          "deleteCount_one": "1 件のワークスペースを削除",
+          "deleteCount_other": "{{count}} 件のワークスペースを削除",
+          "deleteSelected": "選択した項目を削除",
+          "sleep": "スリープ",
+          "sleepCount_one": "1 件のワークスペースをスリープ",
+          "sleepCount_other": "{{count}} 件のワークスペースをスリープ"
+        },
+        "addRepoBusyLabels": {
+          "scanningRepositories": "リポジトリをスキャンしています…",
+          "openingProject": "プロジェクトを開いています…",
+          "openingFolder": "フォルダーを開いています…",
+          "chooseFolder": "フォルダーを選択中…"
         }
       },
       "shared": {
@@ -7101,7 +7167,6 @@
           "c9b33eb5c0": "更新中…",
           "13647f9f80": "シェルの PATH を再読み取り、インストールされている Agent を再検出します",
           "db9e9e5887": "カスタマイズコマンド",
-          "959b67385b": "デフォルトを設定する",
           "24e032fa34": "デフォルト",
           "5f986a9b92": "デフォルトとして設定",
           "cfb3f35775": "引数",
@@ -7652,6 +7717,8 @@
           "projectRuntimeDescription": "個別に指定していないローカル Windows プロジェクトの既定のランタイム。",
           "editor_preview_tabs": "ファイルを参照するときにプレビュータブを再利用する",
           "editor_preview_tabs_description": "エクスプローラーでファイルをシングルクリックするか、Markdown ソースのリンクをたどると、新規タブを開くのではなく、グループごとに 1 つの斜体のプレビュータブが再利用されます。編集、ダブルクリック、または固定すると、そのタブは開いたままになります。これをオフにすると、すべてのファイルに独自のタブが与えられます。",
+          "confirm_running_work_close": "実行中のチャットやターミナルを閉じる前に確認する",
+          "confirm_running_work_close_description": "チャットやターミナルを閉じる際、実行中の Agent やコマンドを停止する前に確認します。",
           "confirm_running_terminal_close": "実行中のターミナルを閉じる前に確認してください",
           "confirm_running_terminal_close_description": "ターミナルを閉じるときに、実行中の Agent またはコマンドを停止する前に確認してください。"
         },
@@ -7962,8 +8029,6 @@
         "McpConfigSection": {
           "4d16a0d9ac": "チェック済み",
           "b900cd6282": "MCP 構成が見つかりません。このリポジトリで独自の MCP サーバーを定義する場合は、空のワークスペース構成を追加します。",
-          "3b224167ff": "サーバー",
-          "251b96564a": "検出された・",
           "f34c152dc0": "MCP 構成を更新する",
           "6bac9ddfc6": "SSH リポジトリは、リモートファイルシステムを通じて読み取られます。スターターの作成は、ワークスペースのルート構成に限定されます。",
           "96f5609b04": "Agent がこのリポジトリでの作業中に使用できる MCP サーバー定義を検査します。",
@@ -7971,7 +8036,9 @@
           "9ee215caf6": ".mcp.json",
           "1f3665e35a": "MCP 構成が作成されました",
           "82436439eb": "MCP 構成の追加",
-          "0a5c1ead54": "空の構成を作成する"
+          "0a5c1ead54": "空の構成を作成する",
+          "detectedServers_one": "{{detected}} 件検出 · サーバー {{count}} 件",
+          "detectedServers_other": "{{detected}} 件検出 · サーバー {{count}} 件"
         },
         "MobileEmulatorAgentControlRow": {
           "1861982430": "CLI ステータスの読み込みに失敗しました。",
@@ -8734,8 +8801,6 @@
           "ad6c529693": "AI プロバイダーアカウント",
           "ec1ba547f7": "AI Agent を管理し、デフォルトを設定し、コマンドをカスタマイズします。",
           "8afa676615": "Agent",
-          "add3b97ee6": "」",
-          "3c88ec55d6": "検索条件に一致する設定が見つかりませんでした:「",
           "c7ad095d96": "設定を読み込んでいます…",
           "acc7bbdefd": "もう一度 ESC を押して設定を終了します",
           "43b68e10f0": "未保存の AI 設定があります。離れると破棄されます。",
@@ -8754,7 +8819,8 @@
           "linearTitle": "Linear",
           "linearDescription": "Orca での Linear の仕組み、セットアップチェックリスト、Agent スキル、プロンプト例。",
           "tasksDescription": "プロバイダーを接続し、Linear スキルをインストールして、タスクに表示する項目を選択します。",
-          "remoteServersDescription": "別のマシンで Orca を実行し、ここから作業します。"
+          "remoteServersDescription": "別のマシンで Orca を実行し、ここから作業します。",
+          "noSettingsFoundForQuery": "検索条件に一致する設定が見つかりませんでした:「{{value0}}」"
         },
         "SettingsFormControls": {
           "42a4d15a30": "一致するフォントがありません。",
@@ -8792,7 +8858,10 @@
           "df8466f3fc": "ショートカット検索のクリア",
           "f733c4b89f": "コマンドまたはキーを検索する",
           "02dc7d4251": "ショートカットを検索",
-          "1d5634ba31": "{{value0}} のショートカット"
+          "1d5634ba31": "{{value0}} のショートカット",
+          "filterAll": "すべて",
+          "filterUnassigned": "未割り当て",
+          "filterConflicts": "競合"
         },
         "ShortcutRowsList": {
           "4ce3cd24d9": "これらのフィルターに一致するショートカットはありません。"
@@ -10872,7 +10941,8 @@
           }
         },
         "shortcutDefinitionCatalog": {
-          "missionControlConflict": "Mission Control によってブロックされています。ここで再割り当てするか、システム設定で変更してください。"
+          "missionControlConflict": "Mission Control によってブロックされています。ここで再割り当てするか、システム設定で変更してください。",
+          "bindingConflict": "{{binding}} は {{actions}} と競合しています。"
         },
         "shortcuts": {
           "search": {
@@ -11066,7 +11136,7 @@
             "d2a366c7f9": "ダブルクリック",
             "4ed3e239a8": "境界",
             "d4aeafac10": "セパレーター",
-            "7286cd2566": "言葉",
+            "7286cd2566": "単語",
             "3ab64c47d8": "文字はダブルクリック選択の単語境界として扱われます。",
             "957a0203fc": "単語の区切り文字",
             "56fff3d113": "メモリ",
@@ -11246,11 +11316,11 @@
               "7640ed9848": "声",
               "56defcd6c3": "ディクテーションに使用するローカルまたはクラウドの音声テキスト変換モデルを選択します。",
               "7e62cd7c41": "音声モデル",
-              "931b1a9e53": "押して話をする",
-              "064a9bd94a": "所有",
+              "931b1a9e53": "プッシュトゥトーク",
+              "064a9bd94a": "長押し",
               "6fa48bcd41": "トグル",
               "d86f5600da": "モード",
-              "089d31a45b": "口述筆記",
+              "089d31a45b": "音声入力",
               "748b33e531": "ディクテーション動作を切り替えたり、押し続けたりします。",
               "6a3abb4338": "ディクテーションモード",
               "e360027a65": "マイクロフォン",
@@ -12401,7 +12471,7 @@
           "unavailable": "利用不可",
           "label": "マイクロフォン",
           "description": "音声ディクテーションに使用される入力デバイス。システムのデフォルトは OS のマイク設定に従います。",
-          "accessHint": "リスト入力デバイスへのマイクのアクセスを許可します。",
+          "accessHint": "入力デバイスの一覧を表示するには、マイクへのアクセスを許可してください。",
           "allowAccess": "アクセスを許可する",
           "noMicrophoneFound": "マイクが見つかりませんでした。 1 つ接続してから、再試行してください。",
           "openFailedDetail": "マイクを開けませんでした。 {{value0}}",
@@ -13435,12 +13505,14 @@
           "Search": {
             "1abfb25a66": "ファイル内を検索するために入力します",
             "d56d140747": "Enterを押して検索します",
-            "0b8104eaf2": "ファイル",
-            "4107975b3a": "で",
-            "6aeda362ed": "結果",
             "98c8435e36": "検索するワークスペースを選択",
             "1ec640c9c7": "マッチ",
-            "dcc294f28d": "(結果は切り捨てられています)"
+            "dcc294f28d": "(結果は切り捨てられています)",
+            "resultsInFiles": "{{files}}に {{results}}",
+            "resultCount_one": "{{count}} 件の結果",
+            "resultCount_other": "{{count}} 件の結果",
+            "fileCount_one": "{{count}} 個のファイル",
+            "fileCount_other": "{{count}} 個のファイル"
           },
           "SearchFilters": {
             "01e4671ccf": "除外するファイル (例: *.min.js、dist/**)",
@@ -13470,7 +13542,6 @@
             "conflictsSection": "競合",
             "cc05b2d088": "ファイルエクスプローラーで開く",
             "03194cfff4": "ここで開いた競合から派生したローカルセッション状態。",
-            "413a3ba113": "競合",
             "27a50fe970": "競合をレビューする",
             "f6cb48b6fe": "AIで解決する",
             "3eeccbb221": "解決されたファイルは、ライブ競合状態を抜けた後、通常の変更に戻ります。",
@@ -13697,7 +13768,9 @@
             "entryDiscardFailed": "「{{value0}}」を破棄できませんでした",
             "entryDeleteFailed": "「{{value0}}」を削除できませんでした",
             "entryFailedInWorkspace": "{{value0}} の {{value1}}",
-            "diffCommentNotesCopyFailed": "メモのコピーに失敗しました"
+            "diffCommentNotesCopyFailed": "メモのコピーに失敗しました",
+            "conflictCount_one": "競合 {{count}} 件",
+            "conflictCount_other": "競合 {{count}} 件"
           },
           "SourceControlAgentActionDialog": {
             "8e856842d1": "選択した Agent を開始できませんでした。",
@@ -13755,7 +13828,6 @@
           "checks": {
             "panel": {
               "content": {
-                "3916814392": "遅れ (ベースコミット:",
                 "755be805f6": "コメントはありません",
                 "751f7c6e5c": "ソースごとに最初の 100 件のコメントを表示",
                 "94557d68e2": "コメント",
@@ -13802,13 +13874,10 @@
                 "c16762ac8c": "以下のチェックとコメントは、現在取得されているコンテキストを示しています。",
                 "9d0e7bcefc": "PR 操作をブロックしない",
                 "5856874b59": "Orca は、このパネルが開いている間、チェックを更新します。",
-                "5341023167": "チェック",
                 "b45db92d0e": "修正",
                 "5d4ebf9391": "詳細を検査するか、AI 修正パスを開始します。",
-                "b652f38caf": "チェックに失敗しました",
                 "87cd07c69a": "このブランチには解決する必要のある競合があります",
                 "0975eeaaef": "競合するファイル",
-                "6fa7f8723f": "commit",
                 "2b2be92919": "コメントを追加",
                 "7440d09d2c": "会話を開始する",
                 "b37ebdc51c": "コメントはできません。",
@@ -13848,7 +13917,16 @@
                 "e45324fbed": "チェック詳細の読み込みに失敗しました。",
                 "checksUnresolvedChip": "未解決",
                 "checksUnresolvedStripHint": "これらのチェックは、合格または不合格の判定なしで終了しました。",
-                "dcb3c546fe": "再試行"
+                "dcb3c546fe": "再試行",
+                "commitsBehind_one": "{{count}} コミット遅れ",
+                "commitsBehind_other": "{{count}} コミット遅れ",
+                "baseCommitLabel": "ベースコミット:",
+                "failingChecks_one": "失敗したチェック {{count}} 件",
+                "failingChecks_other": "失敗したチェック {{count}} 件",
+                "pendingChecks_one": "保留中のチェック {{count}} 件",
+                "pendingChecks_other": "保留中のチェック {{count}} 件",
+                "unresolvedChecks_one": "未解決のチェック {{count}} 件",
+                "unresolvedChecks_other": "未解決のチェック {{count}} 件"
               },
               "empty": {
                 "state": {
@@ -14156,7 +14234,67 @@
                   "226b85a3a7": "フェッチ",
                   "323bb614aa": "コミットと同期",
                   "2b8e6595fd": "Commit",
-                  "04d709801d": "マージせずにリモートから取得"
+                  "04d709801d": "マージせずにリモートから取得",
+                  "titleCheckOutBranchToPush": "コミットをプッシュする前にブランチをチェックアウトしてください",
+                  "titleLinkedReviewTargetUnavailable": "リンクされたレビューブランチのターゲットを利用できません",
+                  "titlePublishBranchFirstToPush": "コミットをプッシュするには、先にブランチを公開してください",
+                  "titleCommitAndForcePush": "ステージ済みの変更をコミットし、lease 付きで強制プッシュ",
+                  "titleCommitAndTryPush": "ステージ済みの変更をコミットし、プッシュを試行",
+                  "titleCommitAndPush": "ステージ済みの変更をコミットしてプッシュ",
+                  "commitForcePush": "コミットとフォースプッシュ",
+                  "commitPush": "コミットとプッシュ",
+                  "titleOperationInProgress": "操作が進行中です…",
+                  "titleAbortRebaseInProgress": "進行中のリベースを中止",
+                  "titleAbortMergeInProgress": "進行中のマージを中止",
+                  "titleNothingToPushTo": "{{upstreamName}} にプッシュするものはありません",
+                  "titleNothingToPush": "プッシュするものはありません",
+                  "titleNothingToForcePushTo": "{{upstreamName}} に強制プッシュするものはありません",
+                  "titleNothingToForcePush": "強制プッシュするものはありません",
+                  "titlePushAndSetUpstream": "このブランチをプッシュし、必要に応じてアップストリームを設定",
+                  "titleTryRegularPush": "通常のプッシュを試行します。git が強制プッシュを要求する場合があります",
+                  "titlePushMayNeedSync": "ローカルのコミットをプッシュします。git が先に同期を要求する場合があります",
+                  "titleCheckOutBranchToForcePush": "コミットを強制プッシュする前にブランチをチェックアウトしてください",
+                  "titleCheckOutBranchToPull": "コミットをプルする前にブランチをチェックアウトしてください",
+                  "titlePublishBranchFirstToPull": "コミットをプルするには、先にブランチを公開してください",
+                  "titleNothingNewToPull": "プルする新しいものはありません — リモートにはローカルコミットの古いコピーしかありません",
+                  "titleNothingToPull": "プルするものはありません",
+                  "fastForward": "Fast-forward",
+                  "titleCheckOutBranchToFastForward": "fast-forward する前にブランチをチェックアウトしてください",
+                  "titlePublishBranchFirstToFastForward": "fast-forward するには、先にブランチを公開してください",
+                  "titleNothingNewToFastForward": "fast-forward する新しいものはありません — リモートにはローカルコミットの古いコピーしかありません",
+                  "titleNothingToFastForward": "fast-forward するものはありません",
+                  "titleTryFastForwardPull": "fast-forward プルを試行します。git がローカルコミットを拒否する場合があります",
+                  "titleUseForcePushToSync": "強制プッシュを使用してください — リモートにはローカルコミットの古いコピーしかありません",
+                  "titleBranchUpToDate": "ブランチは最新です",
+                  "publishPrStatus": "PR ステータス",
+                  "publishLinkedReview": "リンク済みレビュー",
+                  "publishNoBranch": "ブランチなし",
+                  "titleLinkedReviewBranchExists": "リンクされたレビューブランチは既に存在します",
+                  "titleCheckOutBranchToPublish": "コミットを公開する前にブランチをチェックアウトしてください",
+                  "titleBranchAlreadyPublished": "ブランチは既に公開されています",
+                  "titleCreateReviewForBranch": "このブランチの {{reviewLabel}} を作成します",
+                  "forcePushBeforeReview": "強制プッシュしてから {{shortLabel}} を作成",
+                  "pushBeforeReview": "プッシュしてから {{shortLabel}} を作成",
+                  "titleForcePushBeforeCreatingReview": "{{reviewLabel}} を作成する前に lease 付きで強制プッシュ",
+                  "titlePushBeforeCreatingReview": "{{reviewLabel}} を作成する前にローカルのコミットをプッシュ",
+                  "pushCount_one": "{{count}} 件のコミットをプッシュ",
+                  "pushCount_other": "{{count}} 件のコミットをプッシュ",
+                  "pullCount_one": "{{count}} 件のコミットをプル",
+                  "pullCount_other": "{{count}} 件のコミットをプル",
+                  "fastForwardCount_one": "{{count}} 件のコミットを fast-forward",
+                  "fastForwardCount_other": "{{count}} 件のコミットを fast-forward",
+                  "syncCounts": "{{behind}} 件をプル、{{ahead}} 件をプッシュ",
+                  "remoteBranchFallback": "リモートブランチ",
+                  "titleForcePushOlderCopiesBranch": "リモートにはローカルコミットの古いコピーしかありません。このブランチを lease 付きで強制プッシュして {{upstreamName}} を更新します。",
+                  "titleForcePushOlderCopiesCount_one": "リモートにはローカルコミットの古いコピーしかありません。{{count}} 件のブランチコミットを lease 付きで強制プッシュして {{upstreamName}} を更新します。",
+                  "titleForcePushOlderCopiesCount_other": "リモートにはローカルコミットの古いコピーしかありません。{{count}} 件のブランチコミットを lease 付きで強制プッシュして {{upstreamName}} を更新します。",
+                  "titleManualForcePush_one": "{{count}} 件のローカルコミットを lease 付きで強制プッシュして {{upstreamName}} を更新します。",
+                  "titleManualForcePush_other": "{{count}} 件のローカルコミットを lease 付きで強制プッシュして {{upstreamName}} を更新します。",
+                  "titleManualForcePushReplaceRemote_one": "{{count}} 件のローカルコミットを lease 付きで強制プッシュして {{upstreamName}} を更新し、リモートにのみあるコミットを置き換えます。",
+                  "titleManualForcePushReplaceRemote_other": "{{count}} 件のローカルコミットを lease 付きで強制プッシュして {{upstreamName}} を更新し、リモートにのみあるコミットを置き換えます。",
+                  "titleUnpublishedForcePushBranch": "このブランチを lease 付きで強制プッシュし、必要に応じてアップストリームを設定します。",
+                  "titleUnpublishedForcePushCount_one": "{{count}} 件のブランチコミットを lease 付きで強制プッシュし、必要に応じてアップストリームを設定します。",
+                  "titleUnpublishedForcePushCount_other": "{{count}} 件のブランチコミットを lease 付きで強制プッシュし、必要に応じてアップストリームを設定します。"
                 }
               },
               "primary": {
@@ -15956,7 +16094,6 @@
           "f338288514": "競合するコンテンツを読み込んでいます…",
           "90d576adb2": "更新",
           "a1ce36f77d": "スナップショットがキャプチャされた場所",
-          "4be41eaafc": "未解決の競合",
           "c8ca989aea": "ファイルツリーを表示",
           "58ad5ad431": "閉じる",
           "28e7db4a90": "ソース管理",
@@ -15967,7 +16104,9 @@
           "9c2901ef8a": "次の競合",
           "41d9af2e7a": "前の競合",
           "55d61a0ccd": "競合 ·",
-          "da539359b6": "この競合に対して編集できる作業ツリーファイルはありません。"
+          "da539359b6": "この競合に対して編集できる作業ツリーファイルはありません。",
+          "unresolvedConflicts_one": "未解決の競合 {{count}} 件",
+          "unresolvedConflicts_other": "未解決の競合 {{count}} 件"
         },
         "ConflictReviewFileTree": {
           "3449521a8c": "このスナップショットには競合はありません。",
@@ -17297,7 +17436,7 @@
           "a7c312430d": "最後の実行",
           "2df8970cd5": "Agent",
           "e353ab9516": "事前チェック",
-          "620b22145e": "グレース",
+          "620b22145e": "猶予時間",
           "15ea446b93": "セッション",
           "5405a09b1f": "実行場所",
           "2f8baf5360": "から作成",
@@ -17353,9 +17492,9 @@
           "521f77cd58": "1時間",
           "e5ad263ae5": "30分",
           "529dc6c0b7": "猶予なし",
-          "3d70c185c8": "Orca または実行ホストがスケジュールされた時刻に利用できなかった場合、Orca はこのウィンドウ内で利用可能になったときに、欠落したオカレンスを 1 つ実行します。失敗した古い実行はスキップされます。",
+          "3d70c185c8": "予定の時刻に Orca または実行ホストが利用できなかった場合、この猶予時間内に利用できるようになれば、実行できなかった分のうち直近の 1 回を実行します。それより前の分はスキップされます。",
           "3df53d554a": "実行漏れの猶予時間のヘルプ",
-          "fc089e5fde": "グレース"
+          "fc089e5fde": "猶予時間"
         },
         "AutomationPrecheckFields": {
           "d2a2ac89ac": "10分",
@@ -18994,7 +19133,8 @@
         "clearAfterRetry": "以前のメッセージを再試行してから、/clear を実行してください。",
         "compactAfterRetry": "以前のメッセージを再試行してから、/compact を実行してください。",
         "clearAfterSending": "以前のメッセージはまだ送信中です。送信が終わったら /clear を実行してください。",
-        "compactAfterSending": "以前のメッセージはまだ送信中です。送信が終わったら /compact を実行してください。"
+        "compactAfterSending": "以前のメッセージはまだ送信中です。送信が終わったら /compact を実行してください。",
+        "pendingWork": "このコマンドを使用する前に、保留中の作業とメッセージが完了するまで待ってください。"
       },
       "composer": {
         "imageUnsupported": "この Agent では画像の貼り付けはサポートされていません。",
@@ -19436,9 +19576,6 @@
         "ranN": "{{value0}} 個のサブ Agent を実行しました",
         "tokens": "{{value0}} トークン",
         "unnamed": "サブ Agent"
-      },
-      "conversationCommand": {
-        "pendingWork": "このコマンドを使用する前に、保留中の作業とメッセージが完了するまで待ってください。"
       },
       "drop": {
         "messageTitle": "ドロップしてこのメッセージに添付",
@@ -19915,6 +20052,7 @@
       }
     },
     "agentSessionContinuation": {
+      "preparingContext": "保存されたチャットのコンテキストを準備中…",
       "handOffToAnotherAgent": "別の Agent に引き継ぐ",
       "dialogTitle": "別の Agent に引き継ぐ",
       "dialogDescription": "この時点から新しい Agent セッションを開始します。元のセッションは変更されません。",
@@ -19928,6 +20066,8 @@
       "context": "コンテキスト",
       "modeFocused": "要点を引き継ぐ（推奨）",
       "modeFocusedDescription": "最新の状態と現在のワークスペースを使い、必要な場合だけ過去の詳細を読みます。",
+      "modeLoadedDescription": "このチャットに読み込まれている最近のメッセージと現在のワークスペースを使います。",
+      "modeCapturedDescription": "キャプチャしたテキストと現在のワークスペースを使います。",
       "modeFull": "セッション全文",
       "modeFullDescription": "続行前に、保存されたセッション全体を新規 Agent に読ませます。時間がかかり、多くのコンテキスト、プラン使用量、またはAPIクレジットを消費する可能性があります。",
       "startsIn": "開始場所:",
@@ -20260,16 +20400,16 @@
       },
       "popupBlocked": "ポップアップがブロックされました: {{origin}}",
       "hostPaneOfflineTitle": "そのデバイスはもう接続されていません",
-      "hostPaneNamedTitle": "{{device}} で上映中",
-      "hostPaneTitle": "別のデバイスで表示する",
+      "hostPaneNamedTitle": "{{device}} で表示中",
+      "hostPaneTitle": "別のデバイスで表示中",
       "hostPaneOfflineDescription": "このページは表示されたままになるため、ここから閉じることができます。デバイスが再接続すると元に戻ります。",
       "hostPaneDescription": "このページは、それを開いたペアリングされたデスクトップ上に表示されます。",
       "hostRowClose": "ホストされているページを閉じる",
       "hostRowCloseFailed": "このページを閉じることができませんでした。ホストしているデバイスがビジー状態である可能性があります。もう一度試してください。",
-      "hostRowOfflineNamed": "オフライン — {{device}} にホストされました",
+      "hostRowOfflineNamed": "オフライン — {{device}} で開かれていました",
       "hostRowOffline": "オフライン — ホストしているデバイスが終了しました",
-      "hostRowNamed": "{{device}} で開催",
-      "hostRow": "別のデバイスでホストされている"
+      "hostRowNamed": "{{device}} で開いています",
+      "hostRow": "別のデバイスで開いています"
     },
     "navigation": {
       "back": "戻る",
@@ -20345,6 +20485,28 @@
     },
     "managedProfile": {
       "createFailed": "このワークスペースのブラウザプロファイルを作成できませんでした。このタブを閉じて、新規タブを開いてもう一度試してください。"
+    },
+    "history": {
+      "clear": "閲覧履歴を消去",
+      "clearAllTime": "すべての期間",
+      "clearLastHour": "過去 1 時間",
+      "clearRange": "次の期間から履歴を消去",
+      "clearToday": "今日",
+      "cleared": "閲覧履歴を消去しました",
+      "close": "閉じる",
+      "description": "閲覧履歴を検索・管理します",
+      "empty": "アクセスしたページがここに表示されます",
+      "enterKey": "Enter",
+      "escKey": "Esc",
+      "menuItem": "履歴",
+      "noMatches": "検索に一致するページはありません",
+      "open": "オープン",
+      "remove": "履歴から削除",
+      "removeShort": "削除",
+      "search": "履歴を検索",
+      "title": "履歴",
+      "today": "今日",
+      "yesterday": "昨日"
     }
   },
   "runtimeRpc": {
@@ -20426,7 +20588,8 @@
       "openAnyway": "とにかく開ける"
     },
     "fileLoad": {
-      "hostUnresolved": "ホストはこのファイルのワークスペースを見つけることができませんでした。削除されたか、ホストがまだそれを認識していない可能性があります。再試行するか、タブストリップからこのタブを閉じてください。"
+      "hostUnresolved": "ホストはこのファイルのワークスペースを見つけることができませんでした。削除されたか、ホストがまだそれを認識していない可能性があります。再試行するか、タブストリップからこのタブを閉じてください。",
+      "remoteTooLarge": "このファイルは大きすぎるため、ホストから開けません。"
     },
     "markdownPreview": {
       "tooLarge": "ファイルがプレビュー上限の {{limit}} を超えています。ソースを表示するにはファイルを開いてください。",
@@ -20536,6 +20699,36 @@
       "unstagedChangesDescription": "これにより、このファイルに対するステージングされていない変更が元に戻ります。これを元に戻すことはできません。",
       "unstagedSelectionIncludingUntrackedDescription": "ステージングされていない変更を元に戻し、この選択内の未追跡ファイルを完全に削除します。この操作は元に戻せません。",
       "unstagedFilesIncludingUntrackedDescription": "ステージングされていない変更を元に戻し、これらの {{count}} 個のファイルに含まれる未追跡ファイルを完全に削除します。この操作は元に戻せません。"
+    },
+    "createReviewFailure": {
+      "authRequiredCommand": "{{providerName}} が認証されていません。次の手順: この環境で {{command}} を実行してください。",
+      "authRequiredVariable": "{{providerName}} が認証されていません。次の手順: この環境で {{variable}} を設定してください。",
+      "authRequiredBitbucket": "Bitbucket が認証されていません。次の手順: 設定 > 連携 で Bitbucket を接続するか、この環境で ORCA_BITBUCKET_* を設定してください。",
+      "signInHintCommand": "この環境で {{command}} を実行してください",
+      "signInHintVariable": "この環境で {{variable}} を設定してください",
+      "signInHintBitbucket": "設定 > 連携 で Bitbucket を接続してください",
+      "dirty": "{{reviewLabel}} を作成する前に、ローカルの変更をコミットするか破棄してください。",
+      "detachedHead": "{{reviewLabel}} を作成する前に、ブランチに切り替えてください。",
+      "defaultBranch": "{{reviewLabel}} を作成する前に、フィーチャーブランチを選んでください。",
+      "noUpstream": "{{reviewLabel}} を作成する前に、このブランチを公開してください。",
+      "needsPush": "{{reviewLabel}} を作成する前に、このブランチをプッシュしてください。",
+      "needsSync": "{{reviewLabel}} を作成する前に、このブランチを同期してください。",
+      "refreshStatus": "ソース管理の状態を更新して、もう一度お試しください。",
+      "namedBaseNotOnRemote": "ベースブランチ「{{base}}」がリモートにプッシュされていません。プッシュ済みのベースを選ぶか、先にプッシュしてください。",
+      "baseNotOnRemote": "ベースブランチがリモートにプッシュされていません。プッシュ済みのベースを選ぶか、先にプッシュしてください。",
+      "branchChanged": "{{reviewLabel}} を作成する前に、選択したブランチに切り替え直してください。",
+      "branchStatusUnverified": "ブランチの状態を確認できませんでした。ソース管理を更新して、もう一度お試しください。",
+      "reviewLookupUnavailable": "このブランチに {{reviewLabel}} がすでにあるかどうかを Orca が確認できませんでした。{{providerName}} での確認が成功してから再試行してください。",
+      "sameBaseBranch": "{{reviewLabel}} を作成する前に、別のベースブランチを選んでください。",
+      "rejected": "{{providerName}} が {{reviewLabel}} を拒否しました。ベースブランチとブランチの状態を確認してから、もう一度お試しください。",
+      "repositoryNotFound": "{{providerName}} がリポジトリを見つけられませんでした。認証情報にリポジトリへの書き込み権限があることを確認してください。",
+      "createFailed": "{{providerName}} が {{reviewLabel}} を作成できませんでした。しばらくしてから、もう一度お試しください。",
+      "unsupportedProvider": "{{reviewLabel}} を作成するには、{{providerName}} でホストされているリモートが必要です。",
+      "providerNotSupported": "このプロバイダーでのレビューの作成には、まだ対応していません。",
+      "existingReview": "このブランチの {{reviewLabel}} はすでに存在します。",
+      "creationUnconfirmed": "{{shortLabel}} の作成は完了している可能性があります。ブランチのレビュー状態を更新しています…",
+      "withDetail": "{{shortLabel}} の作成に失敗しました: {{detail}}",
+      "pushFailed": "プッシュに失敗しました。プッシュのエラーを解決してから、もう一度お試しください。"
     }
   },
   "rendererRecovery": {
@@ -20793,6 +20986,8 @@
       "added": "アカウントを追加しました。次に起動する Claude で使用するには、これを選択してください。",
       "nextLaunch": "{{value0}} → {{value1}}。次に起動する Claude はこれを使用します。実行中のセッションはそれぞれのアカウントを維持します。",
       "profileSwitching": "切り替えは、任意のタブで次に起動する Claude に適用されます。実行中のセッションはそれぞれのアカウントを維持します。",
+      "systemDefault": "システムのデフォルト",
+      "unnamedAccount": "Claude アカウント",
       "systemDefaultNamed": "システムのデフォルト: {{value0}}",
       "systemDefaultIsSaved": "システムのデフォルトは {{value0}} としてサインインしており、これは保存済みのアカウントでもあります。以前のバージョンの Orca がそのログインをここにコピーした可能性があります。自分のログインでない場合は、システムのデフォルトを選択して claude /login を実行してください。",
       "systemDefaultIsSavedDismiss": "閉じる",
@@ -21024,7 +21219,8 @@
       "deleting": "削除中…",
       "confirm": "一覧表示されたすべてのワークツリーを削除",
       "preservedBranches": "一部のネストされたワークツリーブランチは保持されました"
-    }
+    },
+    "setupTerminalTitle": "セットアップ"
   },
   "mediaPreview": {
     "unavailable": "このメディアファイルを再生できません。ファイルが利用できないか、コーデックが対応していない可能性があります。",
@@ -21041,11 +21237,71 @@
   },
   "projectViews": {
     "layout": {
-      "board": "ボード"
+      "board": "ボード",
+      "roadmap": "ロードマップ",
+      "table": "テーブル"
     },
     "unsupported": {
       "switchLayout": "Orca でこのプロジェクトを操作するには、テーブル、ボード、またはロードマップビューに切り替えます。",
-      "description": "Orca はテーブル、ボード、ロードマップのプロジェクトビューをレンダリングします。このビューは、まだレンダリングできないレイアウトを使用しています。"
+      "description": "Orca はテーブル、ボード、ロードマップのプロジェクトビューをレンダリングします。このビューは、まだレンダリングできないレイアウトを使用しています。",
+      "layoutNotSupported": "Orca は{{layout}}のプロジェクトビューにはまだ対応していません。"
+    },
+    "authHelp": {
+      "hostSignedOut": "`gh` は {{host}} にサインインしていません。",
+      "hostSignedOutDetail": "GitHub Enterprise ホストには github.com とは別に `gh` のログインが必要です。ターミナルでログインコマンドを実行し、{{host}} でブラウザーのフローを完了してから再読み込みしてください。",
+      "ghMissing": "GitHub CLI（`gh`）がインストールされていないか、PATH にありません。",
+      "ghMissingDetail": "Orca は `gh` を使って GitHub Projects と通信します。cli.github.com からインストールしてサインインしてください。",
+      "envTokenKeyringFallback": "キーリングにはすでに `gh` のログインがあり、環境変数を削除するとそちらが使われます。",
+      "envTokenLoginAfterUnset": "削除したら `gh auth login` を実行して通常どおりサインインし、もう一度お試しください。",
+      "envTokenRemoveWindows": "`{{varName}}` が設定されている場所（システムまたはユーザーの環境変数、あるいは PowerShell プロファイル）を見つけて削除し、新しい環境を読み込むために Orca を再起動してください。",
+      "envTokenRemovePosix": "`{{varName}}` を export している場所（一般的には `~/.zshrc`、`~/.zshenv`、`~/.bashrc`、`~/.profile`、またはシェルのシークレットマネージャー）を見つけて削除し、新しい環境を読み込むために Orca を再起動してください。",
+      "envTokenActive": "環境に `{{varName}}` が設定されているため、`gh` はキーリングのログインではなくそのトークンを使っています。`gh auth refresh` は環境変数で渡されたトークンを変更できないため、実行しても効果がありませんでした。",
+      "envTokenInherited": "Orca はシェルから `{{varName}}` を引き継いでおり、`gh` はそのトークンを使っています。`gh auth refresh` は環境変数で渡されたトークンには適用されません。",
+      "envTokenInheritedDetailWindows": "Orca を起動するシェル（またはユーザー環境変数）で `{{varName}}` を削除してから、Orca を再起動してください。",
+      "envTokenInheritedDetailPosix": "Orca を起動するシェル（またはシェルの rc ファイル）で `{{varName}}` を削除してから、Orca を再起動してください。",
+      "signedOut": "`gh` で GitHub にサインインしていません。",
+      "missingScopes": "`gh` トークンに GitHub Projects に必要なスコープがありません: {{scopes}}。",
+      "missingScopesDetail": "ターミナルで refresh コマンドを実行してください。ブラウザーが開いて新しいスコープを承認できます。完了したらここに戻って再読み込みしてください。",
+      "accessDeniedDetail": "トークンには必要なスコープがありますが、GitHub がアクセスを拒否しました。プロジェクトが SAML SSO を使う組織にある場合は、Settings → Developer settings → Personal access tokens → Configure SSO でこのトークンをその組織に対して承認する必要があります。"
+    },
+    "picker": {
+      "pasteUnparseable": "プロジェクトの URL または owner/number を入力してください",
+      "ownerLoadFailed": "{{owner}} のプロジェクトを読み込めませんでした。",
+      "organizationsLoadFailed": "一部の組織を読み込めませんでした（{{failureCount}}）。"
+    },
+    "error": {
+      "notFoundState": "このプロジェクトまたはビューが見つかりませんでした。",
+      "schemaDrift": "このプロジェクトビューを読み取れませんでした。",
+      "projectOrViewNotFound": "プロジェクトまたはビューが見つかりません。",
+      "projectNotFound": "プロジェクトが見つかりません。",
+      "viewNotFound": "選択したビューが見つかりませんでした。",
+      "ownerNotFound": "所有者が見つかりません。",
+      "itemNotFound": "アイテムが見つかりません。",
+      "issueNotFound": "Issue が見つかりません。",
+      "inputRequired": "入力が必要です。",
+      "inputTooLarge": "プロジェクトの参照が長すぎるため解決できません。",
+      "inputUnparseable": "入力を解析できませんでした。GitHub プロジェクトの URL または `owner/number` を入力してください。",
+      "invalidSlug": "{{field}} が無効です: \"{{value}}\" は有効な GitHub のスラッグではありません。",
+      "invalidPositiveInteger": "{{field}} が無効です: 正の整数を指定してください。",
+      "invalidOwnerType": "所有者の種類が無効です。",
+      "invalidItemType": "アイテムの種類が無効です。",
+      "missingIds": "ID がありません。",
+      "updatesRequired": "更新内容が必要です。",
+      "commentBodyRequired": "コメント本文が必要です。",
+      "duplicateTargetNotAllowed": "重複先は、重複としてクローズする場合にのみ指定できます。",
+      "duplicateTargetRequired": "重複先の Issue 番号が必要です。",
+      "requestInvalid": "無効なリクエスト — {{detail}}",
+      "requestFailedDetail": "GitHub へのリクエストが失敗しました: {{detail}}",
+      "requestFailed": "GitHub へのリクエストが失敗しました。",
+      "unexpectedRestResponse": "予期しない REST レスポンス: {{detail}}",
+      "authRequired": "プロジェクトのタスクを読み込むには GitHub にサインインしてください。`{{command}}` を実行します。",
+      "scopeMissing": "GitHub プロジェクトへのアクセスには追加のスコープが必要です。`{{command}}` を実行します。",
+      "rateLimitNearlyExhausted": "GitHub のレート制限がまもなく上限に達します（残り {{remaining}}/{{limit}}）。約 {{minutes}} 分後にリセットされます。",
+      "rateLimited": "GitHub のレート制限に達しました。数分後にもう一度お試しください。",
+      "network": "ネットワークエラー — 接続を確認してください。",
+      "tooLargeUnknownCount": "このビューはアイテムが多すぎて Orca で表示できません。GitHub でビューのフィルターを絞り込んでください。",
+      "tooLarge": "このビューには {{itemCount}} 件のアイテムがあり、Orca で表示するには多すぎます。GitHub でビューのフィルターを絞り込んでください。",
+      "schemaDriftDetail": "このプロジェクトビューを読み取れませんでした: {{detail}}。"
     }
   },
   "projectField": {
@@ -21418,5 +21674,128 @@
   },
   "browserTab": {
     "agentDriving": "Agent がこのページを使用中です"
+  },
+  "quitAndStopAllSessions": {
+    "title": "完全に終了",
+    "message": "すべてのターミナルセッションを停止して Orca を終了しますか?",
+    "detail": "Orca はすべてのターミナルタブを閉じ、ターミナルで実行中の Agent を含むセッションを停止してから終了します。通常の終了ではセッションは実行されたままになり、次回起動時に Orca が再接続します。リモートホスト上のターミナルセッションは、リモート側で動き続けることがあります。保存されていないターミナル作業は失われ、閉じたタブは次回の起動時に復元されません。この操作は取り消せません。",
+    "confirm": "セッションを停止して終了",
+    "cancel": "キャンセル",
+    "failed": "ターミナルセッションをすべて停止できなかったため、Orca は終了しませんでした。",
+    "stopping": "ターミナルセッションを停止してから終了しています…",
+    "ok": "OK",
+    "unavailableMessage": "Orca は現在、すべてのターミナルセッションを停止できません。",
+    "unavailableDetail": "何も停止していません。ターミナルが開いてから、もう一度お試しください。新規バージョンの Orca で開かれたと表示されているターミナルがある場合は、先に再度開いてください。ターミナルがすでに開いている場合は、Orca を終了して起動し直してから、もう一度お試しください。"
+  },
+  "keybindings": {
+    "title": {
+      "worktreeQuickOpen": "ファイルに移動",
+      "appSettings": "設定を開く",
+      "appForceReload": "強制リロード",
+      "worktreePalette": "ワークツリーを切り替え",
+      "worktreeNavigateUp": "前のワークツリー",
+      "worktreeNavigateDown": "次のワークツリー",
+      "workspaceCreate": "ワークツリーを作成",
+      "workspaceRename": "ワークツリー名を変更",
+      "workspaceDelete": "ワークスペースを削除",
+      "workspaceOpenBoard": "ワークスペースボードの切り替え",
+      "dashboardToggle": "Agent ダッシュボードの切り替え",
+      "workspaceSelectByIndex": "ワークスペース 1–9 を選択",
+      "voiceDictation": "ディクテーション",
+      "viewTasks": "タスクを開く",
+      "sidebarLeftToggle": "サイドバーの切り替え",
+      "sidebarRightToggle": "右サイドバーの切り替え",
+      "sidebarExplorerToggle": "エクスプローラを表示",
+      "sidebarSearchToggle": "検索を表示",
+      "sidebarSourceControlToggle": "ソース管理を表示",
+      "sidebarChecksToggle": "チェックを表示",
+      "sidebarPortsToggle": "ポートを表示",
+      "sidebarSleepingWorkspacesToggle": "スリープ中のワークスペースの切り替え",
+      "sidebarFocusWorktreeList": "ワークツリーリストにフォーカス",
+      "floatingTerminalToggle": "フローティングターミナルの切り替え",
+      "floatingWorkspaceMaximize": "フローティングワークスペースパネルを最大化",
+      "floatingWorkspaceMinimize": "フローティングワークスペースパネルを最小化",
+      "zoomIn": "ズームイン",
+      "zoomOut": "ズームアウト",
+      "zoomReset": "サイズをリセット",
+      "worktreeHistoryBack": "ワークツリー履歴を戻る",
+      "worktreeHistoryForward": "ワークツリー履歴を進む",
+      "tabNewTerminal": "新規ターミナルタブ",
+      "tabNewAgent": "新規 Agent タブ（デフォルト Agent）",
+      "tabNewBrowser": "新規ブラウザタブ",
+      "tabNewSimulator": "新規モバイルエミュレータタブ",
+      "tabNewMarkdown": "新規 Markdown タブ",
+      "tabOpenMarkdown": "Markdown タブを開く",
+      "tabClose": "アクティブなタブを閉じる",
+      "tabCloseAll": "すべてのエディタータブを閉じる",
+      "tabRename": "アクティブなタブの名前を変更",
+      "tabReopenClosed": "閉じたタブを再度開く",
+      "tabNextSameType": "次のタブ（同じ種類）",
+      "tabPreviousSameType": "前のタブ（同じ種類）",
+      "tabNextAllTypes": "次のタブ（すべての種類）",
+      "tabPreviousAllTypes": "前のタブ（すべての種類）",
+      "tabPreviousRecent": "直前に使用したタブ",
+      "tabNextTerminal": "次のターミナルタブ",
+      "tabPreviousTerminal": "前のターミナルタブ",
+      "tabSelectByIndex": "タブ 1–9 を選択",
+      "tabOpenQuickCommandsMenu": "クイックコマンドメニューの切り替え",
+      "browserFind": "ブラウザ内を検索",
+      "browserBack": "ブラウザで戻る",
+      "browserForward": "ブラウザで進む",
+      "browserShowHistory": "ブラウザ履歴を表示",
+      "browserReload": "ブラウザページをリロード",
+      "browserHardReload": "ブラウザページをハードリロード",
+      "browserFocusAddressBar": "ブラウザのアドレスバーにフォーカス",
+      "browserGrabElement": "ページ要素を取得",
+      "browserAnnotateElement": "ページ要素に注釈を付ける",
+      "editorFind": "エディター内を検索",
+      "editorReplace": "エディター内で置換",
+      "editorSave": "ファイルを保存",
+      "editorMarkdownPreview": "Markdown プレビューを表示",
+      "editorToggleWordWrap": "ワードラップの切り替え",
+      "editorCopyContext": "コンテキストをコピー",
+      "editorPreviousChange": "前の変更に移動",
+      "editorNextChange": "次の変更に移動",
+      "editorAddReviewNote": "レビューノートを追加",
+      "sourceControlSendReviewNotes": "レビューノートを Agent に送信",
+      "fileExplorerUndo": "ファイル操作を元に戻す",
+      "fileExplorerRedo": "ファイル操作をやり直す",
+      "fileExplorerCopyPath": "ファイルパスをコピー",
+      "fileExplorerCopyRelativePath": "ファイルの相対パスをコピー",
+      "fileExplorerDelete": "ファイルを削除",
+      "settingsSearch": "設定を検索",
+      "terminalCopySelection": "ターミナルの選択範囲をコピー",
+      "terminalSelectAll": "ターミナルのテキストをすべて選択",
+      "terminalPaste": "ターミナルに貼り付け",
+      "terminalSearch": "アクティブなペインを検索",
+      "terminalClear": "アクティブなペインをクリア",
+      "terminalFocusNextPane": "次のペインにフォーカス",
+      "terminalFocusPreviousPane": "前のペインにフォーカス",
+      "terminalEqualizePaneSizes": "ペインのサイズを均等にする",
+      "terminalExpandPane": "ペインを展開 / 折りたたむ",
+      "terminalSetTitle": "タイトルを設定…",
+      "chatFind": "チャット内を検索",
+      "terminalToggleNativeChat": "チャット UI とターミナルを切り替え",
+      "sidebarChildWorkspacesToggle": "子ワークスペースの切り替え",
+      "terminalClearPaneTitle": "ペインのタイトルをクリア",
+      "terminalClosePane": "アクティブなペインを閉じる",
+      "terminalSplitRight": "ターミナルを右に分割",
+      "terminalSplitDown": "ターミナルを下に分割",
+      "terminalSwitchInputSource": "入力ソース / 言語を切り替え（ネイティブ）",
+      "newAgentTab": "新規 {{agent}} タブ"
+    },
+    "group": {
+      "global": "グローバル",
+      "tabs": "タブ",
+      "tabNavigation": "タブナビゲーション",
+      "quickCommands": "クイックコマンド",
+      "browser": "ブラウザ",
+      "editors": "エディター",
+      "fileExplorer": "ファイルエクスプローラー",
+      "settings": "設定",
+      "terminalPanes": "ターミナルペイン",
+      "chat": "チャット",
+      "agents": "Agent"
+    }
   }
 }

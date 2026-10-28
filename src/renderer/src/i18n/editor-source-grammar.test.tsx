@@ -6,15 +6,14 @@ import { renderToStaticMarkup } from 'react-dom/server'
 import { PRTriageStrip } from '@/components/right-sidebar/checks-panel/triage-strip'
 import { ConflictingFilesSection } from '@/components/right-sidebar/checks-panel/conflict-summary'
 import {
-  describePushCount,
-  describePullCount,
-  describeFastForwardCount,
-  describeSyncCounts,
-  formatForcePushTitle,
-  formatManualForcePushTitle,
-  formatUnpublishedForcePushTitle
-} from '@/components/right-sidebar/source-control-dropdown-labels'
-import { describeForcePushWithLease } from '@/components/right-sidebar/source-control-primary-action-titles'
+  localizedPushCount as describePushCount,
+  localizedPullCount as describePullCount,
+  localizedFastForwardCount as describeFastForwardCount,
+  localizedSyncCounts as describeSyncCounts,
+  localizedForcePushWithLease as formatForcePushTitle,
+  localizedManualForcePush as formatManualForcePushTitle,
+  localizedUnpublishedForcePush as formatUnpublishedForcePushTitle
+} from '@/components/right-sidebar/source-control-count-localized-copy'
 import {
   DiffNotesPreviewPopover,
   ClearDiffNotesDialog
@@ -52,7 +51,6 @@ describe('editor and source-control source grammar', () => {
       const title = formatForcePushTitle(count, upstream)
       expect(title).toContain(count ? `${count} ${noun} ветки` : 'эту ветку')
       expect(title).toContain(upstream)
-      expect(describeForcePushWithLease(count, upstream)).toBe(title)
       expect(formatManualForcePushTitle(count, 2, upstream)).toContain(
         'и заменить коммиты, которые есть только на удалённой ветке.'
       )

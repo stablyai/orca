@@ -1,8 +1,9 @@
 import { StyleSheet } from 'react-native'
 import { TEXT_INPUT_FONT_SIZE } from '../platform/text-input-font-size'
 import { colors, radii, spacing, typography } from '../theme/mobile-theme'
+import { themedStyleSheet } from '../theme/themed-styles'
 
-export const mobileBrowserPaneStyles = StyleSheet.create({
+export const mobileBrowserPaneStyles = themedStyleSheet(() => ({
   root: {
     flex: 1,
     minHeight: 0,
@@ -179,4 +180,4 @@ export const mobileBrowserPaneStyles = StyleSheet.create({
   disabledText: {
     color: colors.textMuted
   }
-})
+}))

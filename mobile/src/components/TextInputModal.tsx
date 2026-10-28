@@ -1,14 +1,8 @@
 import { useState } from 'react'
-import {
-  View,
-  Text,
-  TextInput,
-  Pressable,
-  StyleSheet,
-  Platform,
-  type KeyboardTypeOptions
-} from 'react-native'
+import { View, Text, TextInput, Pressable, Platform, type KeyboardTypeOptions } from 'react-native'
 import { colors, spacing, radii, typography } from '../theme/mobile-theme'
+import { themedStyleSheet } from '../theme/themed-styles'
+import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import { TEXT_INPUT_FONT_SIZE } from '../platform/text-input-font-size'
 import { BottomDrawer } from './BottomDrawer'
 
@@ -42,6 +36,7 @@ export function TextInputModal({
   onCancel,
   onAfterClose
 }: Props) {
+  useMobileColorScheme()
   const [value, setValue] = useState(defaultValue)
   const [previousVisible, setPreviousVisible] = useState(visible)
   const [previousDefaultValue, setPreviousDefaultValue] = useState(defaultValue)
@@ -111,7 +106,7 @@ export function TextInputModal({
   )
 }
 
-const styles = StyleSheet.create({
+const styles = themedStyleSheet(() => ({
   header: {
     paddingHorizontal: spacing.xs,
     paddingBottom: spacing.sm
@@ -170,4 +165,4 @@ const styles = StyleSheet.create({
     fontSize: typography.bodySize,
     fontWeight: '600'
   }
-})
+}))

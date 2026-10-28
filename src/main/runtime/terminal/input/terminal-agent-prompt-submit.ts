@@ -1,3 +1,4 @@
+import { agentPromptObservationSignal } from './agent-prompt-signals'
 import type { RuntimeAgentPromptWriteOptions } from '../../runtime-terminal-contracts'
 import type { RuntimeTerminalSend } from '../../../../shared/runtime-types'
 import type { AgentTransitionDetector } from '../../../agent-hooks/agent-transition-detector'
@@ -74,7 +75,7 @@ export abstract class OrcaRuntimeWithSubmitTerminalAgentPrompt extends OrcaRunti
           }
         : {}),
       subscribeExit: (exited) => this.subscribeToPtyExit(ptyId, exited),
-      signal: options.signal
+      signal: agentPromptObservationSignal(options)
     })
   }
 }

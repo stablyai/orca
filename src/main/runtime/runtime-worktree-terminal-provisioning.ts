@@ -28,6 +28,8 @@ export type WorktreeTerminalProvisioningHost = {
   // Resolve tab from the terminal handle so callers cannot omit ownership; title belongs to the tab, not its pane.
   setTabTitle: (handle: string, title: string) => Promise<void>
   setTabColor: (handle: string, color: string) => Promise<void>
+  // Desktop hosts inject localized copy; Node hosts retain the English fallback.
+  getSetupTerminalTitle?: () => string
   /** The tabs main made; none when the workspace already had them; null when main refused. */
   applyDefaultTabs?: (
     worktreeId: string,
@@ -230,7 +232,7 @@ export async function provisionWorktreeTerminals(
         )
       const env = { ...args.setup.envVars, ...observed?.env }
       const setupTerminal = await host.createTerminal(args.worktreeSelector, {
-        title: 'Setup',
+        title: host.getSetupTerminalTitle?.() ?? 'Setup',
         command,
         env,
         // Keep failed setup in its pane to show the failure.

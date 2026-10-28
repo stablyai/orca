@@ -2,6 +2,8 @@ import { useRef } from 'react'
 import { ScrollView, StyleSheet, Text, View } from 'react-native'
 import type { ConnectionLogEntry } from '../transport/types'
 import { colors, radii, spacing, typography } from '../theme/mobile-theme'
+import { themedStyleSheet } from '../theme/themed-styles'
+import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 
 type Props = {
   entries: ConnectionLogEntry[]
@@ -10,12 +12,12 @@ type Props = {
   fillAvailableHeight?: boolean
 }
 
-const LEVEL_COLOR: Record<ConnectionLogEntry['level'], string> = {
+const levelColor = (): Record<ConnectionLogEntry['level'], string> => ({
   info: colors.textSecondary,
   success: colors.statusGreen,
   warn: colors.statusAmber,
   error: colors.statusRed
-}
+})
 
 const LEVEL_GLYPH: Record<ConnectionLogEntry['level'], string> = {
   info: '•',
@@ -37,6 +39,7 @@ function formatTime(ts: number, baseTs: number): string {
 }
 
 export function ConnectionLog({ entries, title, fillAvailableHeight = false }: Props) {
+  useMobileColorScheme()
   const scrollRef = useRef<ScrollView | null>(null)
 
   if (entries.length === 0) {
@@ -44,6 +47,7 @@ export function ConnectionLog({ entries, title, fillAvailableHeight = false }: P
   }
   const baseTs = entries[0]!.ts
   const keyOccurrences = new Map<string, number>()
+  const levelColors = levelColor()
 
   return (
     <View
@@ -67,11 +71,11 @@ export function ConnectionLog({ entries, title, fillAvailableHeight = false }: P
           return (
             <View key={renderKey} style={styles.row}>
               <Text style={styles.timestamp}>{formatTime(entry.ts, baseTs)}</Text>
-              <Text style={[styles.glyph, { color: LEVEL_COLOR[entry.level] }]}>
+              <Text style={[styles.glyph, { color: levelColors[entry.level] }]}>
                 {LEVEL_GLYPH[entry.level]}
               </Text>
               <View style={styles.rowText}>
-                <Text style={[styles.message, { color: LEVEL_COLOR[entry.level] }]}>
+                <Text style={[styles.message, { color: levelColors[entry.level] }]}>
                   {entry.message}
                 </Text>
                 {entry.detail && (
@@ -88,7 +92,7 @@ export function ConnectionLog({ entries, title, fillAvailableHeight = false }: P
   )
 }
 
-const styles = StyleSheet.create({
+const styles = themedStyleSheet(() => ({
   container: {
     width: '100%',
     backgroundColor: colors.bgPanel,
@@ -155,4 +159,4 @@ const styles = StyleSheet.create({
     lineHeight: 14,
     marginTop: 1
   }
-})
+}))

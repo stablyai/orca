@@ -105,7 +105,7 @@ jobs:
     name: Mobile verify
     if: github.event_name == 'pull_request' && github.event.pull_request.draft != true
     # Use ARM for pure Vitest; no x86 native toolchain is needed and Gemfile.lock’s ruby platform supports frozen install.
-    runs-on: blacksmith-4vcpu-ubuntu-2404-arm
+    runs-on: ubuntu-24.04-arm
 
     env:
       # Freeze bundler to reject Gemfile drift before release jobs resolve different fastlane versions.
@@ -240,7 +240,7 @@ jobs:
   native-fingerprint:
     name: Mobile native fingerprint
     if: github.event_name == 'pull_request' && github.event.pull_request.draft != true
-    runs-on: blacksmith-2vcpu-ubuntu-2404
+    runs-on: ubuntu-24.04
     timeout-minutes: 15
     continue-on-error: true
 
@@ -285,7 +285,7 @@ jobs:
       ORCA_MOBILE_TYPECHECK_COMPILER: 'bun'
     if: github.event_name == 'push'
     # Why ARM: the same pure-Node Vitest run `verify` makes on a pull request.
-    runs-on: blacksmith-4vcpu-ubuntu-2404-arm
+    runs-on: ubuntu-24.04-arm
 
     defaults:
       run:

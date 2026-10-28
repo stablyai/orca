@@ -8,7 +8,8 @@ export const AGENT_PROMPT_TEST_WORKTREE_ID = 'repo-1::/tmp/worktree-a'
 
 export async function createAgentPromptSubmissionRuntime(
   onWrite: (runtime: OrcaRuntimeService, data: string, writeIndex: number) => void,
-  launchAgent: TuiAgent = 'aider'
+  launchAgent: TuiAgent = 'aider',
+  write?: (runtime: OrcaRuntimeService, ptyId: string, data: string) => boolean
 ): Promise<{ runtime: OrcaRuntimeService; handle: string; writes: string[] }> {
   const runtime = new OrcaRuntimeService(makeStore() as never)
   const writes: string[] = []
@@ -17,10 +18,10 @@ export async function createAgentPromptSubmissionRuntime(
     write: (_ptyId, data) => {
       writes.push(data)
       onWrite(runtime, data, writes.length)
-      return true
+      return write?.(runtime, _ptyId, data) ?? true
     },
     kill: () => true,
-    getForegroundProcess: async () => null
+    getForegroundProcess: async () => (write ? launchAgent : null)
   })
   const terminal = await runtime.createTerminal(`path:${AGENT_PROMPT_TEST_WORKTREE_PATH}`, {
     launchAgent

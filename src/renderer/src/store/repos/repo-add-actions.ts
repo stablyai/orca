@@ -27,6 +27,9 @@ import {
   clearPendingRuntimeRepoRemoval,
   runExclusiveForRuntimeEnvironment
 } from './pending-runtime-repo-removals'
+import { RuntimeRpcCallError } from '../../runtime/runtime-rpc-result'
+import { readWslHostWindowsDriveRefusal } from '../../../../shared/wsl-host-windows-drive-refusal'
+import { showWslHostWindowsDriveRefusal } from '@/lib/wsl-host-windows-drive-refusal-toast'
 
 export function createRepoAddActions(
   set: Parameters<StateCreator<AppState>>[0],
@@ -154,6 +157,18 @@ export function createRepoAddActions(
         return repo
       } catch (err) {
         console.error('Failed to add project:', err)
+        const driveRefusal =
+          err instanceof RuntimeRpcCallError
+            ? readWslHostWindowsDriveRefusal(err.response.error.data)
+            : null
+        if (driveRefusal) {
+          if (options?.onWindowsDriveRefusal) {
+            options.onWindowsDriveRefusal(driveRefusal)
+          } else {
+            showWslHostWindowsDriveRefusal(driveRefusal)
+          }
+          return null
+        }
         const message = err instanceof Error ? err.message : String(err)
         const duration = ERROR_TOAST_DURATION
         toast.error(translate('auto.store.slices.repos.c6e022ddfc', 'Failed to add project'), {

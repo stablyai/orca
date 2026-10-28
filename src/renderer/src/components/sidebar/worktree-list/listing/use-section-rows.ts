@@ -1,13 +1,10 @@
 import { useCallback, useMemo, useState } from 'react'
+import { shallow } from 'zustand/shallow'
+import { persistedUIValuesEqual } from '../../../../../../shared/persisted-ui-equality'
 import { useShallow } from 'zustand/react/shallow'
 import { useAppStore } from '@/store'
 import type { AppState } from '@/store/types'
-import type { FolderWorkspace } from '../../../../../../shared/folder-workspace-types'
-import type { ProjectGroup } from '../../../../../../shared/project-group-types'
-import type { ProjectOrderBy } from '../../../../../../shared/ui-chrome-types'
 import type { Repo } from '../../../../../../shared/repo-types'
-import type { WorkspaceStatusDefinition, Worktree } from '../../../../../../shared/worktree/types'
-import type { WorktreeLineage } from '../../../../../../shared/worktree/lineage-types'
 import {
   getLocalExecutionHostLabel,
   type ExecutionHostId
@@ -16,14 +13,8 @@ import { getHostDisplayLabelOverrides } from '../../../../../../shared/host-sett
 import { planSidebarRows } from '../../../../../../shared/sidebar-list/sidebar-row-plan'
 import { createSidebarPRGroupReader } from '../grouping/pr-group-key'
 import { useEffectiveCollapsedGroups } from './use-collapsed-groups'
-import type { ProjectGroupingModel } from '../../../../../../shared/project-section-grouping'
-import type {
-  ImportedWorktreesCardCandidate,
-  NewExternalWorktreesInboxCandidate,
-  PinnedWorktreeDisplayPolicy,
-  Row,
-  WorktreeGroupBy
-} from '../../../../../../shared/sidebar-list/row-types'
+import type { Row } from '../../../../../../shared/sidebar-list/row-types'
+import type { SectionRowsArgs } from './sidebar-list-model'
 import { getLogicalRepoOrderRankById } from '../../../../../../shared/project-section-order'
 import { getEmptyProjectPlaceholderRepoIds } from '../../../../../../shared/sidebar-list/empty-project-placeholder-repos'
 import {
@@ -37,45 +28,62 @@ import {
   orderHostSectionOptions
 } from '../../../../../../shared/sidebar-list/host-section-order'
 import type { ExecutionHostRegistryEntry } from '../../../../../../shared/execution-host-registry'
-import { buildSidebarHostOptions } from '../../sidebar-host-options'
+import {
+  type SidebarHostOption,
+  buildSidebarHostOptions,
+  sidebarHostSemantics,
+  createSidebarHostLabelsSelector
+} from '../../sidebar-host-options'
 import { selectPendingWorktreeCreationKeys } from './pending-worktree-creation-keys'
 import { selectWorktreesByRepo } from '@/store/workspace-record-selectors'
 
-type SectionRowsArgs = {
-  agentSendTargetWorktreeId?: string | null
-  groupBy: WorktreeGroupBy
-  projectOrderBy: ProjectOrderBy
-  pinnedDisplayPolicy: PinnedWorktreeDisplayPolicy
-  defaultHostId: ExecutionHostId
-  worktrees: Worktree[]
-  repos: readonly Repo[]
-  repoMap: Map<string, Repo>
-  worktreeMap: Map<string, Worktree>
-  worktreeLineageById: Record<string, WorktreeLineage>
-  prCache: AppState['prCache'] | null
-  settings: AppState['settings']
-  workspaceStatuses: readonly WorkspaceStatusDefinition[]
-  effectiveCollapsedGroups: Set<string>
-  projectGrouping: ProjectGroupingModel
-  visibleReposForRows: readonly Repo[]
-  visibleProjectGroupsForRows: readonly ProjectGroup[]
-  visibleFolderWorkspacesForRows: readonly FolderWorkspace[]
-  importedWorktreesByRepo: ReadonlyMap<string, ImportedWorktreesCardCandidate>
-  newExternalWorktreesInboxByRepo: ReadonlyMap<string, NewExternalWorktreesInboxCandidate>
-  filterRepoIds: readonly string[]
-  visibleWorkspaceHostIds: readonly ExecutionHostId[] | null
-  workspaceHostScope: AppState['workspaceHostScope']
+function createSidebarHostOptionsSelector() {
+  let inputs: readonly unknown[] = []
+  let result: SidebarHostOption[] = []
+  return (
+    state: AppState,
+    repos: readonly Repo[],
+    settings: AppState['settings'],
+    hostLabelOverrides: Parameters<typeof buildSidebarHostOptions>[0]['hostLabelOverrides']
+  ): SidebarHostOption[] => {
+    const nextInputs = [
+      repos,
+      state.sshTargetLabels,
+      state.sshConnectionStates,
+      settings,
+      state.runtimeStatusByEnvironmentId,
+      state.runtimeEnvironments,
+      hostLabelOverrides,
+      state.wslHostStatuses,
+      settings?.experimentalWslHosts === true,
+      state.wslHostServerFiles === 'missing'
+    ]
+    if (shallow(inputs, nextInputs)) {
+      return result
+    }
+    inputs = nextInputs
+    const next = buildSidebarHostOptions({
+      repos,
+      sshTargetLabels: state.sshTargetLabels,
+      sshConnectionStates: state.sshConnectionStates,
+      settings,
+      runtimeEnvironments: state.runtimeEnvironments,
+      runtimeStatusByEnvironmentId: state.runtimeStatusByEnvironmentId,
+      hostLabelOverrides,
+      wslHostStatuses: state.wslHostStatuses,
+      wslHostsEnabled: settings?.experimentalWslHosts === true,
+      wslHostServerFilesMissing: state.wslHostServerFiles === 'missing'
+    })
+    if (!persistedUIValuesEqual(result.map(sidebarHostSemantics), next.map(sidebarHostSemantics))) {
+      result = next
+    }
+    return result
+  }
 }
 
 export function useSidebarSectionRows(args: SectionRowsArgs) {
   const { repos, worktrees, repoMap, defaultHostId } = args
   const worktreesByRepo = useAppStore((s) => selectWorktreesByRepo(s))
-  const sshTargetLabels = useAppStore((s) => s.sshTargetLabels)
-  const sshConnectionStates = useAppStore((s) => s.sshConnectionStates)
-  const runtimeEnvironments = useAppStore((s) => s.runtimeEnvironments)
-  const runtimeStatusByEnvironmentId = useAppStore((s) => s.runtimeStatusByEnvironmentId)
-  const wslHostStatuses = useAppStore((s) => s.wslHostStatuses)
-  const wslHostServerFilesMissing = useAppStore((s) => s.wslHostServerFiles === 'missing')
   const workspaceHostOrder = useAppStore((s) => s.workspaceHostOrder)
   const setWorkspaceHostOrder = useAppStore((s) => s.setWorkspaceHostOrder)
 
@@ -116,35 +124,14 @@ export function useSidebarSectionRows(args: SectionRowsArgs) {
     () => getHostDisplayLabelOverrides(args.settings),
     [args.settings]
   )
-  const hostOptions = useMemo(
-    () =>
-      buildSidebarHostOptions({
-        repos,
-        sshTargetLabels,
-        sshConnectionStates,
-        settings: args.settings,
-        runtimeEnvironments,
-        runtimeStatusByEnvironmentId,
-        hostLabelOverrides,
-        wslHostStatuses,
-        wslHostsEnabled: args.settings?.experimentalWslHosts === true,
-        wslHostServerFilesMissing
-      }),
-    [
-      repos,
-      sshTargetLabels,
-      sshConnectionStates,
-      args.settings,
-      runtimeEnvironments,
-      runtimeStatusByEnvironmentId,
-      hostLabelOverrides,
-      wslHostStatuses,
-      wslHostServerFilesMissing
-    ]
+  const selectHostOptions = useMemo(() => createSidebarHostOptionsSelector(), [])
+  const selectHostLabels = useMemo(() => createSidebarHostLabelsSelector(), [])
+  const hostOptions = useAppStore((state) =>
+    selectHostOptions(state, repos, args.settings, hostLabelOverrides)
   )
   const hostLabelById = useMemo(
-    () => new Map(hostOptions.map((host) => [host.id, host.label])),
-    [hostOptions]
+    () => selectHostLabels(hostOptions),
+    [hostOptions, selectHostLabels]
   )
 
   const hostScopedGroups =

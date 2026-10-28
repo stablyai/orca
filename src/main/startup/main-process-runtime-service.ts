@@ -6,6 +6,7 @@ import { LOCAL_EXECUTION_HOST_ID } from '../../shared/execution-host'
 import { sessionSearchScopeCatalogFromStore } from '../ai-vault-search/session-search-store-scope-catalog'
 import { getCanonicalUserDataPath } from '../persistence/loading-store/user-data-path'
 import { app } from 'electron'
+import { translateMain } from '../i18n/main-i18n'
 import { OrcaRuntimeService } from '../runtime/orca-runtime'
 import { getLocalPtyProvider } from '../ipc/pty/provider/registry'
 import { clearProviderPtyState } from '../ipc/pty/provider/state-cleanup'
@@ -87,6 +88,7 @@ export function initializeMainProcessRuntime(): OrcaRuntimeService {
   // Process-scope subscription covers desktop, headless serve and fleet status.
   const observedPaneIdentities = new AgentStatusObservedPaneIdentities()
   const runtime = new OrcaRuntimeService(store, stats, {
+    getSetupTerminalTitle: () => translateMain('worktree.setupTerminalTitle', 'Setup'),
     ...agentHookRuntimeDeps(agentHookServer, observedPaneIdentities, () =>
       state.store?.getSettings()
     ),

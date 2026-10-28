@@ -7,7 +7,7 @@ import {
   STRUCTURED_LAUNCH_OPTION_IDS,
   structuredLaunchCompatibleOptions,
   structuredLaunchRequestedOptions
-} from '../../../shared/native-chat-session-option-defaults'
+} from '../../../shared/native-chat/input/native-chat-session-option-defaults'
 import {
   createStructuredAgentSessionOperationId,
   structuredAgentSessionPayloadFingerprint

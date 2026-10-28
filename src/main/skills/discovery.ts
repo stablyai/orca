@@ -1,3 +1,4 @@
+import { waitForPromiseWithSignal } from '../../shared/abort-signal-reason'
 import { open, realpath, stat } from 'node:fs/promises'
 import { homedir } from 'node:os'
 import { basename, dirname, relative, sep } from 'node:path'
@@ -217,6 +218,7 @@ function mergeScannedSkill(seen: Map<string, DiscoveredSkill>, skill: ScannedSki
 }
 
 export async function discoverSkills(args: {
+  signal?: AbortSignal
   repos?: Repo[]
   homeDir?: string
   cwd?: string
@@ -226,6 +228,7 @@ export async function discoverSkills(args: {
   names?: string[]
   sourceKinds?: SkillSourceKind[]
 }): Promise<SkillDiscoveryResult> {
+  args.signal?.throwIfAborted()
   const startedAt = Date.now()
   const homeDir = args.homeDir ?? homedir()
   const refresh = args.refresh === true
@@ -235,10 +238,17 @@ export async function discoverSkills(args: {
     ...(args.cwd &&
     args.includeCwd !== false &&
     (!args.sourceKinds?.length || args.sourceKinds.includes('plugin'))
-      ? await discoverClaudePluginSkillSources({ homeDir, cwd: args.cwd })
+      ? await waitForPromiseWithSignal(
+          discoverClaudePluginSkillSources({ homeDir, cwd: args.cwd, signal: args.signal }),
+          args.signal
+        )
       : [])
   ].filter((root) => rootMayContainSourceKind(root, args.sourceKinds))
-  const scans = await Promise.all(roots.map((root) => scanRootShared(root, refresh)))
+  args.signal?.throwIfAborted()
+  const scans = await waitForPromiseWithSignal(
+    Promise.all(roots.map((root) => scanRootShared(root, refresh))),
+    args.signal
+  )
   const sources: SkillDiscoverySource[] = [
     ...roots.map((root, index): SkillDiscoverySource => ({
       ...root,

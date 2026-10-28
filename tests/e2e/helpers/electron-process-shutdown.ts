@@ -31,7 +31,7 @@ function releaseExitedProcessPipes(proc: ChildProcess): void {
   }
 }
 
-function waitForExit(proc: ChildProcess, timeoutMs: number): Promise<boolean> {
+export function waitForExit(proc: ChildProcess, timeoutMs: number): Promise<boolean> {
   if (hasExited(proc)) {
     return Promise.resolve(true)
   }

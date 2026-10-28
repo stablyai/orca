@@ -334,10 +334,11 @@ export function ConflictReviewPanel({
             )}
             <div className="flex min-w-0 flex-wrap items-baseline gap-x-1.5">
               <span className="text-sm font-medium text-foreground">
-                {translate('editorConflicts.unresolvedCount', '{{count}} unresolved conflicts', {
-                  count: unresolvedCount,
-                  defaultValue_one: '{{count}} unresolved conflict'
-                })}
+                {translate(
+                  'auto.components.editor.ConflictComponents.unresolvedConflicts',
+                  '{{count}} unresolved conflicts',
+                  { count: unresolvedCount, defaultValue_one: '{{count}} unresolved conflict' }
+                )}
               </span>
               <span className="text-muted-foreground/50">·</span>
               <span className="text-xs text-muted-foreground">

@@ -15,7 +15,14 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        runner: [blacksmith-4vcpu-ubuntu-2404-arm, blacksmith-8vcpu-ubuntu-2404]
+        # Separate cache stores per pool; native keys are image-scoped, and ci-cache-warmup.yml warms hosted 24.04 x64.
+        runner:
+          [
+            blacksmith-4vcpu-ubuntu-2404-arm,
+            blacksmith-8vcpu-ubuntu-2404,
+            ubuntu-24.04-arm,
+            ubuntu-22.04
+          ]
     runs-on: ${{ matrix.runner }}
     timeout-minutes: 10
     env:
@@ -28,8 +35,37 @@ jobs:
         with:
           native-runtime: node
           node-version: '24'
-          cache-electron-package: 'true'
+          # Hosted consumers of these images restore neither the Electron archive nor the root store.
+          cache-electron-package: ${{ startsWith(matrix.runner, 'blacksmith-') }}
+          cache-pnpm-store: ${{ startsWith(matrix.runner, 'blacksmith-') }}
           cache-pnpm-store-lookup-only: 'true'
+      - name: Populate shared Electron archive
+        if: startsWith(matrix.runner, 'blacksmith-')
+        run: node config/scripts/install-electron-package-binary.mjs
+      - name: Verify native cache is usable
+        run: node config/scripts/ensure-native-runtime.mjs --check-only
+
+  # node-server's hosted macOS lane needs nothing; this serves hosted macOS PR contracts and updater tests.
+  warm-macos-runtime:
+    if: github.event_name != 'pull_request'
+    concurrency:
+      group: ci-cache-warmup-macos-runtime-${{ github.event.pull_request.number || github.ref }}
+      cancel-in-progress: ${{ github.event_name != 'schedule' }}
+    runs-on: macos-15
+    timeout-minutes: 15
+    env:
+      ORCA_BACKGROUND_LAUNCH: '1'
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+      - uses: ./.github/actions/install-node-dependencies
+        with:
+          native-runtime: node
+          node-version: '24'
+          # A main-scoped archive stops each macOS PR from saving its own copy.
+          cache-electron-package: 'true'
+          cache-pnpm-store: 'false'
       - name: Populate shared Electron archive
         run: node config/scripts/install-electron-package-binary.mjs
       - name: Verify native cache is usable
@@ -93,9 +129,13 @@ jobs:
   warm-linux-package-fixtures:
     if: github.event_name != 'pull_request'
     concurrency:
-      group: ci-cache-warmup-linux-package-fixtures-${{ github.event.pull_request.number || github.ref }}
+      group: ci-cache-warmup-linux-package-fixtures-${{ matrix.runner }}-${{ github.event.pull_request.number || github.ref }}
       cancel-in-progress: ${{ github.event_name != 'schedule' }}
-    runs-on: blacksmith-4vcpu-ubuntu-2404
+    strategy:
+      fail-fast: false
+      matrix:
+        runner: [blacksmith-4vcpu-ubuntu-2404, ubuntu-24.04]
+    runs-on: ${{ matrix.runner }}
     timeout-minutes: 10
     env:
       ORCA_BACKGROUND_LAUNCH: '1'

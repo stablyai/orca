@@ -1,5 +1,5 @@
 /** Poll inside WSL so distro shutdown kills the watcher instead of Windows UNC polling repeatedly waking it. */
-import { spawn, type ChildProcessWithoutNullStreams } from 'node:child_process'
+import type { PipedChildProcess } from '@orca/process-host/process-spec'
 import { StringDecoder } from 'node:string_decoder'
 import type { WebContents } from 'electron'
 import type { Event as WatcherEvent } from '@parcel/watcher'
@@ -8,7 +8,7 @@ import { parseWslUncPath } from '../../../../shared/wsl-paths'
 import { createWslWatcherProcessExit, createWslWatcherStartup } from './wsl-watcher-process-exit'
 import * as watcherChildRegistry from '../watcher-process/parcel-watcher-child-registry'
 import { createDebouncedBatch, type DebouncedBatch } from './filesystem-watcher-batch-control'
-import { resolveWslInteropSpawnCwd } from '../../../wsl-interop-spawn-directory'
+import { spawnWslWatcherProcess } from './wsl-watcher-spawn'
 
 export type WatcherSubscription = {
   unsubscribe(): Promise<void>
@@ -232,18 +232,13 @@ export async function createWslWatcher(
     }
   }
 
-  let child: ChildProcessWithoutNullStreams
+  let child: PipedChildProcess
   const releaseChildReservation = watcherChildRegistry.reserveWatcherChild()
   if (!releaseChildReservation) {
     throw new watcherChildRegistry.WatcherChildCapacityError()
   }
   try {
-    child = spawn('wsl.exe', ['-d', distro, '--exec', 'sh', '-s', '--', linuxPath], {
-      stdio: ['pipe', 'pipe', 'pipe'],
-      windowsHide: true,
-      // Inherited cwd may be a deleted worktree, causing spawn wsl.exe ENOENT (#16463).
-      cwd: resolveWslInteropSpawnCwd()
-    })
+    child = spawnWslWatcherProcess(distro, linuxPath)
   } catch (error) {
     releaseChildReservation()
     throw error instanceof Error ? error : new Error(String(error))

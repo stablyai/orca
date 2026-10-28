@@ -3,7 +3,7 @@ import {
   resetNativeChatAppearanceSettings,
   resolveNativeChatAppearanceSettings,
   type NativeChatAppearanceSettings
-} from '../../../../shared/native-chat-appearance-settings'
+} from '../../../../shared/native-chat/native-chat-appearance-settings'
 import { useAppStore } from '../../store'
 import { formatPrimaryShortcutLabel } from '@/hooks/useShortcutLabel'
 import { translate } from '@/i18n/i18n'

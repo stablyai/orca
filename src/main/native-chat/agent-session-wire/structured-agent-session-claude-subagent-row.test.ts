@@ -13,11 +13,11 @@ import { RESUMED_BY_MESSAGE } from '../../claude/claude-captured-task-frames.tes
 import { WAKES_AFTER_ITS_SHELL } from '../../claude/claude-captured-wake-frames.test-fixture'
 import { ClaudeStructuredSessionAdapter } from '../../claude/claude-structured-session-adapter'
 import {
-  claudeStartupSettled,
   fakeClaude,
   PROVIDER_SESSION_ID,
   type FakeConnection
 } from '../../claude/claude-structured-session-test-support'
+import { claudeStartupSettled } from '../../claude/claude-structured-startup-settled-test-support'
 import type { AgentSessionRecordStore } from '../../runtime/agent-session-record-store'
 import { openTestAgentSessionRecordStore } from '../../runtime/agent-session-record-store-test-harness'
 import { structuredClaudeLifecycleEvent } from '../../runtime/structured-claude-runtime-adapter'

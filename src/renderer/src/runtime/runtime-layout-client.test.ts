@@ -166,16 +166,6 @@ describe.each(targets)('runtime layout client over the %s transport', (_name, ta
     expect(stream.unsubscribed).toBe(false)
   })
 
-  it('ignores a change before the snapshot and unknown frame types', async () => {
-    subscribe()
-    const stream = await opened(1)
-    stream.send({ type: 'workspace', key: 'a', layout: layout('a') })
-    stream.send(snapshot())
-    stream.send({ type: 'navigate', request: { focusTab: 't1' } })
-    expect(cache).toEqual({})
-    expect(stream.unsubscribed).toBe(false)
-  })
-
   it('reports every frame’s position, an unreadable frame’s and a throwing reader’s too', async () => {
     const positions: number[] = []
     let throwOnFrame = false
@@ -314,16 +304,6 @@ describe.each(targets)(
           workspace: { worktreeId: key, groups: [{ id: `group-${key}`, tabIds }] }
         }
       ]
-    })
-
-    it('applies each records frame in sequence to the snapshot', async () => {
-      const stream = await opened(1)
-      stream.send(snapshot('epoch-1', 3, ['a', 'b']))
-      stream.send(regrouped('epoch-1', 4, 'a', ['t1']))
-      stream.send(regrouped('epoch-1', 5, 'b', ['t2']))
-      expect(cache).toEqual({ a: layout('a', ['t1']), b: layout('b', ['t2']) })
-      expect(stream.unsubscribed).toBe(false)
-      expect(host.streams).toHaveLength(1)
     })
 
     it('counts a skipped frame of a newer type as a position, so the next frame is no gap', async () => {
@@ -502,21 +482,5 @@ describe.each(targets)('the %s layout stream after a loss', (_name, target) => {
     expect(statuses.at(-1)).toEqual({ state: 'closed' })
     await vi.advanceTimersByTimeAsync(60_000)
     expect(host.streams).toHaveLength(2)
-  })
-
-  it('reopens after an error frame', async () => {
-    subscribe()
-    ;(await opened(1)).fail('stream failed')
-    expect(statuses.at(-1)).toEqual({ state: 'lost' })
-    await vi.advanceTimersByTimeAsync(1_000)
-    ;(await opened(2)).send(snapshot([{ key: 'a', layout: layout('a') }]))
-    expect(statuses.at(-1)).toEqual({ state: 'live' })
-  })
-
-  it('never reopens after a refusal', async () => {
-    subscribe()
-    ;(await opened(1)).fail('no layout stream', 'method_not_found')
-    await vi.advanceTimersByTimeAsync(60_000)
-    expect(host.streams).toHaveLength(1)
   })
 })

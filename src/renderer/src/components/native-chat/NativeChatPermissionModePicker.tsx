@@ -19,7 +19,7 @@ import {
 import type {
   SessionOptionDescriptor,
   SessionOptionsSurface
-} from '../../../../shared/native-chat-session-options'
+} from '../../../../shared/native-chat/input/native-chat-session-options'
 import {
   NATIVE_CHAT_PERMISSION_MODE_ICONS,
   nativeChatPermissionModeDescription,

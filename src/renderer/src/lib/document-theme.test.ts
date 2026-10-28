@@ -1,9 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import {
-  applyDocumentTheme,
-  resolveDocumentTheme,
-  THEME_TRANSITION_DISABLED_CLASS
-} from './document-theme'
+import { applyDocumentTheme, THEME_TRANSITION_DISABLED_CLASS } from './document-theme'
 
 class FakeClassList {
   private readonly tokens = new Set<string>()
@@ -76,37 +72,6 @@ function createFrameQueue(): {
 }
 
 describe('document theme', () => {
-  it('resolves explicit theme preferences', () => {
-    expect(resolveDocumentTheme('dark')).toBe(true)
-    expect(resolveDocumentTheme('light')).toBe(false)
-  })
-
-  it('resolves system from matchMedia', () => {
-    expect(resolveDocumentTheme('system', () => ({ matches: true }))).toBe(true)
-    expect(resolveDocumentTheme('system', () => ({ matches: false }))).toBe(false)
-  })
-
-  it('applies dark and light root classes', () => {
-    const root = createThemeRoot()
-
-    applyDocumentTheme('dark', { root, disableTransitions: false })
-    expect(root.classList.contains('dark')).toBe(true)
-
-    applyDocumentTheme('light', { root, disableTransitions: false })
-    expect(root.classList.contains('dark')).toBe(false)
-  })
-
-  it('applies system root class from matchMedia', () => {
-    const root = createThemeRoot()
-
-    applyDocumentTheme('system', {
-      root,
-      matchMedia: () => ({ matches: true }),
-      disableTransitions: false
-    })
-    expect(root.classList.contains('dark')).toBe(true)
-  })
-
   it('removes the transition suppression class after two animation frames', () => {
     const root = createThemeRoot()
     const frames = createFrameQueue()

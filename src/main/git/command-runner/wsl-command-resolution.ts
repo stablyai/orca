@@ -1,3 +1,4 @@
+import { assertWslDistroAllowed } from '@orca/process-host/wsl-distro-allowlist'
 import { getDefaultWslDistro, parseWslPath, type WslPathInfo } from '../../wsl'
 import {
   buildWslCapturedLoginShellCommand,
@@ -96,6 +97,8 @@ export function resolveCommand(
   if (!wsl) {
     return { binary: command, args, cwd, wsl: null, wslMode: null }
   }
+  // Every Git/gh/glab path into a distro resolves here, whichever spawn API then runs it.
+  assertWslDistroAllowed('wsl.exe', ['-d', wsl.distro])
   // Every WSL Git/CLI run is about to start the distro; gated polls stop trusting a 'stopped' read.
   noteWslDistroLaunched(wsl.distro)
 

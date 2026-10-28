@@ -1,3 +1,4 @@
+import type { WslHostWindowsDriveRefusal } from '../../../../shared/wsl-host-windows-drive-refusal'
 import type { WorkspaceAttachmentMutation } from '../../../../shared/workspace-attachment-mutation'
 import type { GhAccountBinding } from '../../../../shared/github/account-binding'
 import type { SshRepoReadoption } from '../../../../shared/ssh-types'
@@ -150,6 +151,8 @@ export type AddRepoPathOptions = {
   runtimeEnvironmentId?: string | null
   /** Overrides the host's basename naming for the new project. */
   displayName?: string
+  /** The Add Project dialog shows a WSL host's Windows drive refusal inline; toasts above a modal cannot take clicks. */
+  onWindowsDriveRefusal?: (refusal: WslHostWindowsDriveRefusal) => void
 }
 
 export type RuntimeCatalogFetchOptions = {

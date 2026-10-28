@@ -1,8 +1,10 @@
 import { useWallAppUpdate } from '../app-update/use-wall-app-update'
 import { openExternalLink } from '../platform/external-link'
 import { useRouteHandoff } from '../navigation/route-handoff'
-import { Platform, Pressable, StyleSheet, Text, View } from 'react-native'
+import { Platform, Pressable, Text, View } from 'react-native'
 import { colors, radii, spacing, typography } from '../theme/mobile-theme'
+import { themedStyleSheet } from '../theme/themed-styles'
+import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import type { CompatVerdict } from '../transport/protocol-compat'
 import type { MobileWebBundleCompatVerdict } from '../transport/mobile-web-bundle-compat'
 import type { PageRouteRefusalVerdict } from '../mobile-web-shell/page-route-policy'
@@ -66,6 +68,7 @@ function blockBody(verdict: BlockedVerdict, remedy: BlockRemedy, storeName: stri
 }
 
 export function ProtocolBlockScreen({ verdict }: Props) {
+  useMobileColorScheme()
   const router = useRouteHandoff()
   const mobileUpdate = useWallAppUpdate()
   const remedy = blockRemedy(verdict)
@@ -123,7 +126,7 @@ export function ProtocolBlockScreen({ verdict }: Props) {
   )
 }
 
-const styles = StyleSheet.create({
+const styles = themedStyleSheet(() => ({
   container: {
     flex: 1,
     backgroundColor: colors.bgBase,
@@ -181,4 +184,4 @@ const styles = StyleSheet.create({
   pressed: {
     opacity: 0.7
   }
-})
+}))

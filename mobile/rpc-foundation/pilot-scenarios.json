@@ -17965,7 +17965,7 @@
           "checkpoint": "first-accepted"
         },
         {
-          "advance": 120
+          "advance": 1000
         },
         {
           "complete": "terminal.send#2",
@@ -18023,7 +18023,7 @@
           }
         },
         {
-          "advance": 120
+          "advance": 1000
         },
         {
           "complete": "terminal.send#2",
@@ -18077,7 +18077,7 @@
           }
         },
         {
-          "advance": 120
+          "advance": 1000
         },
         {
           "complete": "terminal.send#2",

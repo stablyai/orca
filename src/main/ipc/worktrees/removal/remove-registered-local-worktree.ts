@@ -1,4 +1,9 @@
+import { assertRegisteredLocalWorktreePreflight } from './registered-local-worktree-preflight'
 import type { Repo } from '../../../../shared/repo-types'
+import {
+  nativeWindowsMarkerMissing,
+  usesNativeWindowsRemoval
+} from '../../../git/windows-worktree-removal'
 import { pruneGitWorktrees } from '../../../git/worktree-prune-guard'
 import type { ExecutionHostId } from '../../../../shared/execution-host'
 import type { RemoveWorktreeResult } from '../../../../shared/worktree/create-types'
@@ -6,7 +11,6 @@ import type { GitPushTarget, GitWorktreeInfo } from '../../../../shared/worktree
 import { assertWorktreeUnlockedForRemoval } from '../../../../shared/worktree/removal'
 import type { LocalProjectWorktreeGitOptions } from '../../../project-runtime-git-options'
 import {
-  assertWorktreeCleanForRemoval,
   listWorktreesStrict as listGitWorktreesStrict,
   removeWorktree
 } from '../../../git/worktree'
@@ -24,11 +28,7 @@ import {
 } from '../../worktree-symlinks'
 import { invalidateAuthorizedRootsCacheForRepo } from '../../registered-worktree-roots-scoped-invalidation'
 import { runWorktreeChangeInvalidators } from '../../worktree-change-invalidators'
-import {
-  formatWorktreeRemovalError,
-  isOrphanCompatiblePreflightError,
-  isOrphanedWorktreeError
-} from '../../worktree-logic'
+import { formatWorktreeRemovalError, isOrphanedWorktreeError } from '../../worktree-logic'
 import type { RemoveWorktreeArgs } from '../ipc-context-schemas'
 import type { WorktreeIpcContext } from '../worktree-ipc-context'
 import {
@@ -88,23 +88,20 @@ export async function removeRegisteredLocalWorktree(
   const ignoredLinkedPaths = args.force
     ? []
     : await findExistingWorktreeSymlinkPaths(canonicalWorktreePath, linkedPaths)
-  try {
-    await (hasLocalWorktreeGitOptions
-      ? assertWorktreeCleanForRemoval(canonicalWorktreePath, args.force ?? false, {
-          ...localWorktreeGitOptions,
-          ...(ignoredLinkedPaths.length > 0 ? { ignoredUntrackedPaths: ignoredLinkedPaths } : {})
-        })
-      : ignoredLinkedPaths.length > 0
-        ? assertWorktreeCleanForRemoval(canonicalWorktreePath, args.force ?? false, {
-            ignoredUntrackedPaths: ignoredLinkedPaths
-          })
-        : assertWorktreeCleanForRemoval(canonicalWorktreePath, args.force ?? false))
-  } catch (error) {
-    if (!isOrphanCompatiblePreflightError(error)) {
-      throw new Error(formatWorktreeRemovalError(error, canonicalWorktreePath, args.force ?? false))
-    }
-    // Git may discover orphaning after preflight; recursive fallback still requires strict PTY teardown.
-  }
+  const markerMissing = await nativeWindowsMarkerMissing(
+    canonicalWorktreePath,
+    localWorktreeGitOptions
+  )
+  await assertRegisteredLocalWorktreePreflight(
+    repo.path,
+    canonicalWorktreePath,
+    refreshedRegisteredWorktree,
+    args.force ?? false,
+    localWorktreeGitOptions,
+    hasLocalWorktreeGitOptions,
+    ignoredLinkedPaths,
+    markerMissing
+  )
 
   const removalGate = await withWorktreeRemoveStageSpan('watcher_gate', 'local', async () =>
     runtime.acquireFileWatcherRemoval(canonicalWorktreePath)
@@ -118,7 +115,7 @@ export async function removeRegisteredLocalWorktree(
       })
     })
 
-    if (linkedPaths.length > 0) {
+    if (!markerMissing && linkedPaths.length > 0) {
       await removeWorktreeLinkedPaths(canonicalWorktreePath, linkedPaths)
     }
     accepted = true
@@ -233,6 +230,9 @@ async function finishLocalWorktreeRemoval({
         refreshedRegisteredWorktree.head
       )
     } catch (error) {
+      if (usesNativeWindowsRemoval(canonicalWorktreePath, localWorktreeGitOptions)) {
+        throw error
+      }
       // Git for Windows may deregister before recursive filesystem deletion fails.
       const recoveredRemovalResult = await recoverLocalWindowsWorktreeRemoval({
         error,

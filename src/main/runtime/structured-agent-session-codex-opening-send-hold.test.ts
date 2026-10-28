@@ -8,7 +8,7 @@ import { agentJournalSubmissionKey } from '../../shared/agent-session-journal-it
 import { CODEX_TURN_OPEN_WAIT_MS } from '../codex/codex-structured-turn-open-wait'
 import { projectStructuredAgentSessionMessages } from '../../shared/structured-agent-session-message-projection'
 import { projectNativeChatTranscriptMessages } from '../../shared/native-chat-transcript-projection'
-import { nativeChatRowsInDrawOrder } from '../../shared/native-chat-turn-grouping'
+import { nativeChatRowsInDrawOrder } from '../../shared/native-chat/transcript/native-chat-turn-grouping'
 import { nativeChatTurnMembership } from '../../shared/native-chat-turn-membership'
 import { CodexAppServerRequestError } from '../codex/app-server/codex-app-server-request-error'
 import type {

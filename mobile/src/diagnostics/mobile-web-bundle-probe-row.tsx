@@ -3,6 +3,7 @@ import { View, Text, Pressable, ActivityIndicator } from 'react-native'
 import { Package } from 'lucide-react-native'
 import { loadHosts } from '../transport/host-store'
 import { colors } from '../theme/mobile-theme'
+import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import { troubleshootScreenStyles as styles } from './troubleshoot-screen-styles'
 import {
   useMobileWebBundleProbe,
@@ -18,6 +19,7 @@ function buttonLabel(state: MobileWebBundleProbeState, awaitingHost: boolean): s
 }
 
 function ProbeLine({ label, detail, failed }: { label: string; detail: string; failed?: boolean }) {
+  useMobileColorScheme()
   return (
     <View style={styles.checkRow}>
       <Text style={styles.checkLabel}>{label}</Text>
@@ -27,6 +29,7 @@ function ProbeLine({ label, detail, failed }: { label: string; detail: string; f
 }
 
 function ProbeResult({ state, hostName }: { state: MobileWebBundleProbeState; hostName: string }) {
+  useMobileColorScheme()
   if (state.status === 'idle' || state.status === 'running') {
     return null
   }
@@ -55,6 +58,7 @@ function ProbeResult({ state, hostName }: { state: MobileWebBundleProbeState; ho
 // Dev-only end-to-end bundle fetch; troubleshoot.tsx gates this behind __DEV__. It neither caches nor renders the bundle.
 // Troubleshoot has no selected host, so probe the first paired host and name it explicitly.
 export function MobileWebBundleProbeRow() {
+  useMobileColorScheme()
   const [hosts, setHosts] = useState<readonly HostProfile[]>([])
   useEffect(() => {
     let stale = false

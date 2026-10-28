@@ -1,25 +1,27 @@
 // Electron treats .asar files as directories; unpatched fs prevents recursive rm failures.
 // Avoid process.noAsar: other main-process work may load app.asar during a long removal.
 
-import { rm as nodeRm } from 'node:fs/promises'
+import * as nodeFs from 'node:fs/promises'
 import { createRequire } from 'node:module'
 
-type Rm = typeof nodeRm
+let resolvedFs: typeof nodeFs | undefined
 
-let resolvedRm: Rm | undefined
-
-function resolveRm(): Rm {
-  try {
-    // Resolve lazily: original-fs exists only in Electron; plain Node’s fs is already unpatched.
-    const originalFs = createRequire(__filename)('original-fs') as { promises?: { rm?: Rm } }
-    return typeof originalFs.promises?.rm === 'function' ? originalFs.promises.rm : nodeRm
-  } catch {
-    return nodeRm
+function nativeFs(): typeof nodeFs {
+  if (!resolvedFs) {
+    try {
+      // Resolve lazily: original-fs exists only in Electron; plain Node's fs is already unpatched.
+      const originalFs: { promises?: typeof nodeFs } = createRequire(__filename)('original-fs')
+      resolvedFs = originalFs.promises ?? nodeFs
+    } catch {
+      resolvedFs = nodeFs
+    }
   }
+  return resolvedFs
 }
 
 /** `fs.promises.rm` that sees a `*.asar` as the file it is rather than as a directory. */
-export const rm: Rm = (path, options) => {
-  resolvedRm ??= resolveRm()
-  return resolvedRm(path, options)
-}
+export const rm: typeof nodeFs.rm = (path, options) => nativeFs().rm(path, options)
+export const readdir = (path: string): Promise<string[]> => nativeFs().readdir(path)
+export const unlink = (path: string): Promise<void> => nativeFs().unlink(path)
+export const rmdir = (path: string): Promise<void> => nativeFs().rmdir(path)
+export const lstat = (path: string) => nativeFs().lstat(path)

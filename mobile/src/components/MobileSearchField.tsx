@@ -3,13 +3,14 @@ import {
   InteractionManager,
   Platform,
   Pressable,
-  StyleSheet,
   TextInput,
   View,
   type TextInputProps
 } from 'react-native'
 import { Search, X } from 'lucide-react-native'
 import { colors, radii, spacing } from '../theme/mobile-theme'
+import { themedStyleSheet } from '../theme/themed-styles'
+import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import { TEXT_INPUT_FONT_SIZE } from '../platform/text-input-font-size'
 
 // Delay focus until opening chrome settles; native autoFocus alone often shows caret without iOS/Android keyboard.
@@ -49,6 +50,7 @@ export function MobileSearchField({
   editable = true,
   accessibilityLabel
 }: MobileSearchFieldProps) {
+  useMobileColorScheme()
   const inputRef = useRef<TextInput>(null)
   const [focused, setFocused] = useState(false)
   const clearVisible = showClear ?? value.length > 0
@@ -136,7 +138,7 @@ export function MobileSearchField({
   )
 }
 
-const styles = StyleSheet.create({
+const styles = themedStyleSheet(() => ({
   shell: {
     minHeight: 42,
     flexDirection: 'row',
@@ -187,4 +189,4 @@ const styles = StyleSheet.create({
     // textMuted makes solid clear chip on bgRaised; borderSubtle looked decorative.
     backgroundColor: colors.textMuted
   }
-})
+}))

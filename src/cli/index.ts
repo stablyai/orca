@@ -21,26 +21,12 @@ import type { RuntimeClient } from './runtime-client'
 import { COMMAND_SPECS } from './specs'
 import { resolveOrchestrationCliExecutable } from './runtime/orchestration-recovery-command'
 import { refuseConflictingSessionCallerFlags } from './session-caller-flags'
+import { ignoresRemoteSelection } from './remote-selection-scope'
 
 export { COMMAND_SPECS } from './specs'
 export { buildCurrentWorktreeSelector, normalizeWorktreeSelector } from './selectors'
 
 const COMMAND_PATHS = COMMAND_SPECS.flatMap((spec) => specPaths(spec))
-
-function shouldIgnoreRemoteSelection(commandPath: string[]): boolean {
-  return (
-    commandPath[0] === 'account' ||
-    commandPath[0] === 'artifacts' ||
-    commandPath[0] === 'environment' ||
-    // Paired servers come from the local store; routing SSH lookup would mix two machines in one list.
-    commandPath.join(' ') === 'host list' ||
-    commandPath[0] === 'serve' ||
-    (commandPath[0] === 'agent' && commandPath[1] !== 'launch') ||
-    commandPath[0] === 'vm' ||
-    commandPath[0] === 'agent-context' ||
-    commandPath[0] === 'profile'
-  )
-}
 
 // Defer the runtime graph until after help and validation; await it to keep ctx.client synchronous.
 async function loadRuntimeClientClass(): Promise<typeof RuntimeClient> {
@@ -104,7 +90,7 @@ export async function main(
     const commandSpec = findCommandSpec(COMMAND_SPECS, parsed.commandPath)
     refuseConflictingSessionCallerFlags(commandSpec, parsed.flags)
     const RuntimeClientClass = await loadRuntimeClientClass()
-    const ignoreRemoteSelection = shouldIgnoreRemoteSelection(parsed.commandPath)
+    const ignoreRemoteSelection = ignoresRemoteSelection(parsed.commandPath)
     const pairingCode = ignoreRemoteSelection ? null : parsed.flags.get('pairing-code')
     const environmentSelector = ignoreRemoteSelection ? null : parsed.flags.get('environment')
     // Eagerly resolve explicit --environment; stale ambient config must not break local-only commands.

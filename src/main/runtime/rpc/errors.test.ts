@@ -21,6 +21,7 @@ import {
   refuseUnclassified
 } from '../../../shared/agent-session-wire-refusals'
 import { readAgentSessionErrorRefusal } from '../../../shared/agent-session-write-failure'
+import { WslHostWindowsDriveRefusalError } from '../../../shared/wsl-host-windows-drive-refusal'
 
 class LineageError extends Error {
   code = 'LINEAGE_PARENT_NOT_FOUND'
@@ -30,6 +31,18 @@ class LineageError extends Error {
 }
 
 describe('mapRuntimeError', () => {
+  it('keeps runtime_error and a readable message for a WSL host Windows drive refusal', () => {
+    const error = new WslHostWindowsDriveRefusalError('C:\\src\\app')
+    expect(mapRuntimeError('req_1', { runtimeId: 'runtime-1' }, error)).toMatchObject({
+      ok: false,
+      error: {
+        code: 'runtime_error',
+        message: expect.stringContaining('This folder is on a Windows drive (C:\\src\\app).'),
+        data: { kind: 'wsl_host_windows_drive_path', windowsPath: 'C:\\src\\app' }
+      }
+    })
+  })
+
   it('names a deferred fork with its own code and reason', () => {
     expect(
       mapRuntimeError(

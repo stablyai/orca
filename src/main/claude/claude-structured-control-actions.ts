@@ -5,7 +5,7 @@ import { ClaudeControlRequestError } from './claude-stream-json-connection'
 import { ClaudeControlRequestTimeoutError } from './claude-agent-sdk-control-requests'
 import { settleCancelledClaudeDispatchWaiters } from './claude-structured-dispatch'
 import type { ClaudeLateDispatchSettlement } from './claude-replay-turn-resolution'
-import type { ClaudeSession } from './claude-structured-session-state'
+import type { ClaudeSession } from './structured/claude-structured-session-state'
 import { CLAUDE_STOP_GRACE_MS } from './claude-request-end-wait'
 
 const INTERRUPT_CANCEL_QUEUED_CAPABILITY = 'interrupt_cancel_queued_v1'

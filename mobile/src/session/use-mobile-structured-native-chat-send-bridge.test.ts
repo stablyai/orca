@@ -5,15 +5,17 @@ import type { StructuredAgentId } from '../../../src/shared/agent-session-provid
 import type { MobileNativeChatSendOutcome } from './native-chat/mobile-native-chat-send'
 import type { MobileNativeChatSendOrigin } from './native-chat/mobile-native-chat-pending-echo'
 import { useMobileStructuredNativeChatSendBridge } from './use-mobile-structured-native-chat-send-bridge'
+import {
+  recordMobileNativeChatSkillPick,
+  resetMobileNativeChatDraftStoreForTests
+} from './native-chat/composer/mobile-native-chat-draft-store'
 
 const ORIGIN: MobileNativeChatSendOrigin = {
   draftKey: 'draft',
   draftEditGeneration: 0,
   pendingKey: 'pending',
   normalizedText: 'command',
-  baselineOccurrences: 0,
-  baselineTailMessageId: null,
-  baselineResolved: true,
+  boundary: { afterMessageId: null },
   sentAt: 0
 }
 
@@ -51,6 +53,20 @@ describe('useMobileStructuredNativeChatSendBridge', () => {
   afterEach(() => {
     act(() => renderer?.unmount())
     renderer = null
+    resetMobileNativeChatDraftStoreForTests()
+  })
+
+  it('sends the skills picked into the draft', async () => {
+    const review = { name: 'review', path: '/skills/review/SKILL.md' }
+    recordMobileNativeChatSkillPick(ORIGIN.draftKey, { token: '$review', path: review.path })
+    sendStructured.mockResolvedValue('accepted')
+    mount('codex')
+
+    await sendWithOutcome('$review this')
+
+    expect(sendStructured).toHaveBeenCalledWith('$review this', undefined, undefined, undefined, [
+      review
+    ])
   })
 
   // Accepted messages remain host-owned; keep the composer cleared.
@@ -62,7 +78,7 @@ describe('useMobileStructuredNativeChatSendBridge', () => {
 
       await expect(sendWithOutcome('/review')).resolves.toBe(outcome)
 
-      expect(sendStructured).toHaveBeenCalledWith('/review')
+      expect(sendStructured).toHaveBeenCalledWith('/review', undefined, undefined, undefined, [])
       expect(clearDraftForSend).toHaveBeenCalledExactlyOnceWith(ORIGIN, '/review')
       expect(restoreRejectedDraft).not.toHaveBeenCalled()
     }

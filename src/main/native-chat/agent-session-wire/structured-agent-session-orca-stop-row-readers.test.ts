@@ -5,7 +5,7 @@ import { agentJournalItemKey } from '../../../shared/agent-session-journal-item-
 import type { AgentJournalRenderItem } from '../../../shared/agent-session-journal-types'
 import { withNativeChatCutTurnNotices } from '../../../shared/native-chat-cut-turn-notice'
 import { latestNativeChatOrcaStopCut } from '../../../shared/native-chat/native-chat-orca-stop-cut'
-import { nativeChatTurnFold } from '../../../shared/native-chat-turn-fold'
+import { nativeChatTurnFold } from '../../../shared/native-chat/transcript/native-chat-turn-fold'
 import { orcaStopRowBody } from './structured-agent-session-orca-stop-row'
 
 const LEGACY_TEXT =

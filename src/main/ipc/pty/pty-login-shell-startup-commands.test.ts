@@ -3,9 +3,9 @@ import {
   loginPreflightExecFileMock,
   spawnMock,
   openCodeBuildPtyEnvMock
-} from '../pty-ipc-mock-registry'
-import { posixOnlyIt } from '../pty-ipc-test-constants'
-import { setupPtyIpcSuite } from '../pty-ipc-test-harness'
+} from './pty-ipc-mock-registry'
+import { posixOnlyIt } from './pty-ipc-test-constants'
+import { setupPtyIpcSuite } from './pty-ipc-test-harness'
 import { userInfo } from 'node:os'
 import { resetMacosLoginShellPreflightForTests } from '../../providers/macos-tcc-login-shell'
 import { registerPtyHandlers } from './register-handlers'
@@ -14,48 +14,48 @@ import { POSIX_SHELL_STARTUP_COMMAND_ENV } from '../../pty/posix-shell-startup-c
 // Wrapper roots are content-addressed.
 import { getShellReadyWrapperRoot } from '../../providers/local-pty-shell-ready-wrapper-root'
 
-vi.mock('electron', () => import('../pty-ipc-mock-registry').then((m) => m.electronModuleMock()))
-vi.mock('fs', () => import('../pty-ipc-mock-registry').then((m) => m.fsModuleMock()))
-vi.mock('node-pty', () => import('../pty-ipc-mock-registry').then((m) => m.nodePtyModuleMock()))
+vi.mock('electron', () => import('./pty-ipc-mock-registry').then((m) => m.electronModuleMock()))
+vi.mock('fs', () => import('./pty-ipc-mock-registry').then((m) => m.fsModuleMock()))
+vi.mock('node-pty', () => import('./pty-ipc-mock-registry').then((m) => m.nodePtyModuleMock()))
 vi.mock('node:child_process', async (importOriginal) =>
-  (await import('../pty-ipc-mock-registry')).childProcessModuleMock(await importOriginal())
+  (await import('./pty-ipc-mock-registry')).childProcessModuleMock(await importOriginal())
 )
 vi.mock('../../opencode/hook-service', () =>
-  import('../pty-ipc-mock-registry').then((m) => m.openCodeHookServiceModuleMock())
+  import('./pty-ipc-mock-registry').then((m) => m.openCodeHookServiceModuleMock())
 )
 vi.mock('../../mimo/hook-service', () =>
-  import('../pty-ipc-mock-registry').then((m) => m.mimoHookServiceModuleMock())
+  import('./pty-ipc-mock-registry').then((m) => m.mimoHookServiceModuleMock())
 )
 vi.mock('../../agent-hooks/server', () =>
-  import('../pty-ipc-mock-registry').then((m) => m.agentHookServerModuleMock())
+  import('./pty-ipc-mock-registry').then((m) => m.agentHookServerModuleMock())
 )
 vi.mock('../../pi/titlebar-extension-service', () =>
-  import('../pty-ipc-mock-registry').then((m) => m.piTitlebarExtensionModuleMock())
+  import('./pty-ipc-mock-registry').then((m) => m.piTitlebarExtensionModuleMock())
 )
-vi.mock('../../pwsh', () => import('../pty-ipc-mock-registry').then((m) => m.pwshModuleMock()))
+vi.mock('../../pwsh', () => import('./pty-ipc-mock-registry').then((m) => m.pwshModuleMock()))
 vi.mock('../../wsl', async (importOriginal) =>
-  (await import('../pty-ipc-mock-registry')).wslModuleMock(await importOriginal())
+  (await import('./pty-ipc-mock-registry')).wslModuleMock(await importOriginal())
 )
 vi.mock('../../telemetry/client', () =>
-  import('../pty-ipc-mock-registry').then((m) => m.telemetryClientModuleMock())
+  import('./pty-ipc-mock-registry').then((m) => m.telemetryClientModuleMock())
 )
 vi.mock('../../telemetry/classify-error', () =>
-  import('../pty-ipc-mock-registry').then((m) => m.classifyErrorModuleMock())
+  import('./pty-ipc-mock-registry').then((m) => m.classifyErrorModuleMock())
 )
 vi.mock('../../cli/linux-terminal-orca-cli-shim', () =>
-  import('../pty-ipc-mock-registry').then((m) => m.linuxCliShimModuleMock())
+  import('./pty-ipc-mock-registry').then((m) => m.linuxCliShimModuleMock())
 )
 vi.mock('../../memory/pty-registry', () =>
-  import('../pty-ipc-mock-registry').then((m) => m.ptyRegistryModuleMock())
+  import('./pty-ipc-mock-registry').then((m) => m.ptyRegistryModuleMock())
 )
 vi.mock('../../agent-hooks/migration-unsupported-pty-state', () =>
-  import('../pty-ipc-mock-registry').then((m) => m.migrationUnsupportedPtyModuleMock())
+  import('./pty-ipc-mock-registry').then((m) => m.migrationUnsupportedPtyModuleMock())
 )
 vi.mock('../../codex/codex-pane-account-registry', () =>
-  import('../pty-ipc-mock-registry').then((m) => m.codexPaneAccountRegistryModuleMock())
+  import('./pty-ipc-mock-registry').then((m) => m.codexPaneAccountRegistryModuleMock())
 )
 vi.mock('../../codex/codex-state-db-backfill-recovery', () =>
-  import('../pty-ipc-mock-registry').then((m) => m.codexBackfillRecoveryModuleMock())
+  import('./pty-ipc-mock-registry').then((m) => m.codexBackfillRecoveryModuleMock())
 )
 
 describe('registerPtyHandlers', () => {

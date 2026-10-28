@@ -4,6 +4,7 @@ import { cn } from '@/lib/utils'
 import { translate } from '@/i18n/i18n'
 import {
   diffNativeChatTaskLists,
+  nativeChatCompletedTaskCount,
   nativeChatTaskChangeWords,
   nativeChatTaskLabel,
   type NativeChatTask,
@@ -89,7 +90,7 @@ export function NativeChatTaskList({
   previous?: TaskList
   presentation?: 'inline' | 'composer'
 }): React.JSX.Element {
-  const completed = list.tasks.filter((task) => task.status === 'completed').length
+  const completed = nativeChatCompletedTaskCount(list)
   if (presentation === 'composer') {
     return (
       <Collapsible className="rounded-md border border-border bg-muted/30">

@@ -1,3 +1,4 @@
+import { assertWslDistroAllowed } from '@orca/process-host/wsl-distro-allowlist'
 import type * as pty from 'node-pty'
 import {
   hostReportsChildExitStatus,
@@ -44,6 +45,7 @@ export async function spawnNativeDaemonPty(args: {
     cwd: string
   ): Promise<pty.IPty> => {
     args.signal?.throwIfAborted()
+    assertWslDistroAllowed(shellPath, shellArgs)
     const tcc = wrapShellSpawnForMacosTccAttribution(shellPath, shellArgs, args.env)
     const wrapped = wrapPtySpawnInTerminalScope(tcc.file, tcc.args, args.env)
     const nodePty = await loadNodePty()

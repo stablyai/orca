@@ -1,6 +1,13 @@
 import { describe, expect, it, vi } from 'vitest'
-import { agentSessionRecordFixture } from '../../shared/agent-session-record.test-fixture'
+import {
+  agentSessionLeaseFixture,
+  agentSessionRecordFixture
+} from '../../shared/agent-session-record.test-fixture'
 import { ClaudeAtRestCommandCatalog } from './claude-at-rest-commands'
+import {
+  bindAtRestCommandContexts,
+  retireAtRestCommandSettings
+} from '../native-chat/agent-session-wire/at-rest-command-context'
 import {
   adapterFor,
   fakeClaude,
@@ -118,7 +125,7 @@ it('keeps a buffered stream catalog newer than the initialization response', asy
 it("answers a resting chat's `/` menu only for chats this host runs", async () => {
   const listed = [{ name: 'review-pr', kind: 'skill' as const }]
   const catalog = new ClaudeAtRestCommandCatalog({
-    resolveWorkspacePath: async () => '/work',
+    resolveWorkspacePath: async () => process.cwd(),
     probe: async () => listed
   })
   const local = agentSessionRecordFixture()
@@ -128,4 +135,37 @@ it("answers a resting chat's `/` menu only for chats this host runs", async () =
   // Same workspace and account on another host: only that host can read its folders.
   const remote = { ...local, location: { ...local.location, executionHostId: 'ssh:box' as const } }
   expect(catalog.read(remote)).toBeUndefined()
+})
+
+it("lists a resting chat's `/` menu from the account it would start on, following a switch", async () => {
+  let selected = '/accounts/b'
+  const probed: string[] = []
+  const catalog = new ClaudeAtRestCommandCatalog({
+    resolveWorkspacePath: async () => process.cwd(),
+    resolveAccountHome: async () => ({ variable: 'CLAUDE_CONFIG_DIR', path: selected }),
+    probe: async ({ accountHomePath }) => {
+      probed.push(accountHomePath)
+      return [{ name: accountHomePath, kind: 'skill' }]
+    }
+  })
+  const release = bindAtRestCommandContexts([catalog])
+  try {
+    // Created on /home/user/.claude, but its next start uses the selected account.
+    const chat = agentSessionRecordFixture()
+    expect(await catalog.settled(chat, 1000)).toEqual([{ name: '/accounts/b', kind: 'skill' }])
+    const createdOnB = {
+      ...agentSessionRecordFixture(agentSessionLeaseFixture({ sessionId: 'created-on-b' })),
+      accountHome: { variable: 'CLAUDE_CONFIG_DIR', path: '/accounts/b' }
+    }
+    expect(await catalog.settled(createdOnB, 1000)).toEqual([
+      { name: '/accounts/b', kind: 'skill' }
+    ])
+    expect(probed).toEqual(['/accounts/b'])
+
+    selected = '/accounts/a'
+    retireAtRestCommandSettings(['activeClaudeManagedAccountId'])
+    expect(await catalog.settled(chat, 1000)).toEqual([{ name: '/accounts/a', kind: 'skill' }])
+  } finally {
+    release()
+  }
 })

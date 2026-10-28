@@ -9,12 +9,19 @@ const MAX_SCAN_DEPTH = 24
 const MAX_SCAN_ENTRIES = 1_000
 const MAX_COMMAND_FILE_BYTES = 256 * 1024
 
-type ScanBudget = { remainingEntries: number }
+type ScanBudget = { remainingEntries: number; signal?: AbortSignal }
 
 async function readEntries(path: string, budget: ScanBudget): Promise<Dirent[]> {
   try {
     const entries: Dirent[] = []
-    for await (const entry of await opendir(path)) {
+    budget.signal?.throwIfAborted()
+    const directory = await opendir(path)
+    if (budget.signal?.aborted) {
+      await directory.close()
+      budget.signal.throwIfAborted()
+    }
+    for await (const entry of directory) {
+      budget.signal?.throwIfAborted()
       if (budget.remainingEntries === 0) {
         break
       }
@@ -23,6 +30,7 @@ async function readEntries(path: string, budget: ScanBudget): Promise<Dirent[]> 
     }
     return entries.sort((left, right) => left.name.localeCompare(right.name))
   } catch {
+    budget.signal?.throwIfAborted()
     return []
   }
 }
@@ -37,6 +45,7 @@ async function walkMarkdown(
     return
   }
   for (const entry of await readEntries(path, budget)) {
+    budget.signal?.throwIfAborted()
     // Do not follow links outside the command tree.
     if (entry.isSymbolicLink()) {
       continue
@@ -50,32 +59,36 @@ async function walkMarkdown(
   }
 }
 
-async function describe(filePath: string): Promise<string | undefined> {
+async function describe(filePath: string, signal?: AbortSignal): Promise<string | undefined> {
   try {
-    const markdown = await readFile(filePath, 'utf8')
+    const markdown = await readFile(filePath, { encoding: 'utf8', signal })
     return (
       summarizeSkillMarkdown(markdown.slice(0, MAX_COMMAND_FILE_BYTES)).description ?? undefined
     )
   } catch {
+    signal?.throwIfAborted()
     return undefined
   }
 }
 
 /** Map nested paths to colon-separated commands; earlier roots win name collisions. */
 export async function scanClaudeCommandFolders(
-  roots: readonly string[]
+  roots: readonly string[],
+  signal?: AbortSignal
 ): Promise<AgentSessionSlashCommand[]> {
-  const budget = { remainingEntries: MAX_SCAN_ENTRIES }
+  const budget = { remainingEntries: MAX_SCAN_ENTRIES, signal }
   const commands = new Map<string, AgentSessionSlashCommand>()
   for (const root of roots) {
     const files: string[] = []
+    signal?.throwIfAborted()
     await walkMarkdown(root, 0, budget, files)
     for (const file of files) {
       const name = relative(root, file).slice(0, -MARKDOWN_EXTENSION.length).split(sep).join(':')
       if (commands.has(name)) {
         continue
       }
-      const description = await describe(file)
+      signal?.throwIfAborted()
+      const description = await describe(file, signal)
       commands.set(name, { name, kind: 'command', ...(description ? { description } : {}) })
     }
   }

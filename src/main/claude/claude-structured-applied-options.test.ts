@@ -1,13 +1,13 @@
 import { describe, expect, it } from 'vitest'
-import type { ClaudeStructuredSessionEvent } from './claude-structured-session-adapter'
+import type { ClaudeStructuredSessionEvent } from './structured/claude-structured-session-state'
 import {
   PROVIDER_SESSION_ID,
   acquired,
   adapterFor,
   fakeClaude,
-  identityFor,
-  claudeOpened
+  identityFor
 } from './claude-structured-session-test-support'
+import { claudeOpened } from './claude-structured-startup-settled-test-support'
 
 /** Claude Code 2.1.280 list_models fixture; default and opus[1m] resolve to the same model. */
 const CATALOG = [

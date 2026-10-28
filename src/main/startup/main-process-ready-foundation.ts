@@ -42,6 +42,11 @@ import { installMediaPreviewProtocolHandler } from '../media/media-preview-proto
 import { installJiraImageProtocolHandler } from '../jira/attachments/image-protocol'
 import { registerDocPreviewGrantHandlers } from '../ipc/doc-preview-grant-ipc'
 import { initializeBrowserSessionsForApp } from '../browser/browser-session-startup'
+import {
+  initializeBrowserExtensionSupport,
+  switchBrowserExtensionSupport
+} from '../browser/extensions/browser-extension-startup'
+import { whenBrowserExtensionSessionsLoaded } from '../browser/extensions/browser-extension-session-loader'
 import { browserSessionRegistry } from '../browser/browser-session-registry'
 import { logStartupMilestone } from './startup-diagnostics'
 import { writeHttp1CompatibilityMarker } from './http1-compatibility-marker'
@@ -238,6 +243,9 @@ export async function initializeReadyFoundation(): Promise<void> {
         )
       }
     }
+    if ('experimentalBrowserExtensions' in updates) {
+      void switchBrowserExtensionSupport(settings.experimentalBrowserExtensions === true)
+    }
     if ('showMenuBarIcon' in updates) {
       // Store owns settings mutations; sync every menu-bar toggle through this listener.
       syncMacMenuBarIcon(settings.showMenuBarIcon !== false)
@@ -263,6 +271,11 @@ export async function initializeReadyFoundation(): Promise<void> {
   installJiraImageProtocolHandler()
   installDocPreviewProtocolHandler()
   registerDocPreviewGrantHandlers()
+  // Session setup needs the extension support decision before loading profiles.
+  initializeBrowserExtensionSupport({
+    enabled: store.getSettings().experimentalBrowserExtensions === true,
+    savedBrowserTabs: store
+  })
   // Desktop webviews and runtime commands share sessions; initialize without waiting for renderer IPC.
   initializeBrowserSessionsForApp({
     orcaProfileId: profile.profile.id,
@@ -285,4 +298,6 @@ export async function initializeReadyFoundation(): Promise<void> {
   } catch {
     console.warn('[proxy] Failed to apply network proxy settings to browser sessions')
   }
+  // Why bounded: restored tabs should get content scripts, but a slow extension never blocks launch.
+  await whenBrowserExtensionSessionsLoaded(3_000)
 }

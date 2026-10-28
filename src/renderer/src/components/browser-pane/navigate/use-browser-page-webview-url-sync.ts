@@ -5,6 +5,7 @@ import {
   redactKagiSessionToken
 } from '../../../../../shared/browser-url'
 import { ORCA_BROWSER_BLANK_URL } from '../../../../../shared/constants'
+import { normalizeBrowserGuestSrc } from '../../../../../shared/browser-extension-url'
 import {
   applyBrowserPageViewportLayout,
   syncBrowserPageChromeInset
@@ -74,7 +75,7 @@ export function useBrowserPageWebviewUrlSync({
     if (!webview) {
       return
     }
-    const normalizedUrl = normalizeBrowserNavigationUrl(browserTabUrl)
+    const normalizedUrl = normalizeBrowserGuestSrc(browserTabUrl)
     if (!normalizedUrl) {
       return
     }

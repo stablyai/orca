@@ -1,8 +1,8 @@
-import { StyleSheet } from 'react-native'
 import { colors, spacing } from '../theme/mobile-theme'
+import { themedStyleSheet } from '../theme/themed-styles'
 
 /** Shared with `AuthFailedBannerActions`, a sibling file so that the page can offer Re-pair alone. */
-export const authFailedBannerStyles = StyleSheet.create({
+export const authFailedBannerStyles = themedStyleSheet(() => ({
   banner: {
     backgroundColor: colors.bgPanel,
     paddingVertical: spacing.sm,
@@ -34,4 +34,4 @@ export const authFailedBannerStyles = StyleSheet.create({
     color: colors.textSecondary,
     fontSize: 13
   }
-})
+}))

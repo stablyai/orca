@@ -1,7 +1,9 @@
-import { View, Text, Pressable, StyleSheet, Platform } from 'react-native'
+import { View, Text, Pressable, Platform } from 'react-native'
 import { ChevronDown } from 'lucide-react-native'
 import { HostKindIcon } from './HostKindIcon'
 import { colors, radii, spacing, typography } from '../theme/mobile-theme'
+import { themedStyleSheet } from '../theme/themed-styles'
+import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 
 type Selection = { label: string; detail?: string }
 
@@ -18,6 +20,7 @@ export function NewWorktreeProjectTargetFields({
   onOpenProject: () => void
   onOpenRunTarget: () => void
 }) {
+  useMobileColorScheme()
   return (
     <>
       <View style={styles.field}>
@@ -50,6 +53,7 @@ function SelectionCopy({
   selection: Selection | null
   placeholder: string
 }) {
+  useMobileColorScheme()
   return (
     <View style={styles.fieldButtonCopy}>
       <Text
@@ -67,7 +71,7 @@ function SelectionCopy({
   )
 }
 
-const styles = StyleSheet.create({
+const styles = themedStyleSheet(() => ({
   field: {
     marginBottom: spacing.md
   },
@@ -109,4 +113,4 @@ const styles = StyleSheet.create({
   fieldButtonPlaceholder: {
     color: colors.textMuted
   }
-})
+}))

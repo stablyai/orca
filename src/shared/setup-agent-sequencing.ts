@@ -90,9 +90,10 @@ function buildPosixSetupCommand(setupCommand: string, markerPath: string, nonce:
   const tmp = quotePosixShellUnlessPlainNoAt(`${markerPath}.tmp`)
   const nonceValue = quotePosixShellUnlessPlainNoAt(nonce)
 
+  // Why no `( … )`: this is typed into the user's line editor, where autopair widgets corrupt it (#18059).
   const script = [
     `rm -f ${marker} ${tmp} 2>/dev/null`,
-    `( ${setupCommand} )`,
+    setupCommand,
     'status=$?',
     `printf '%s:%s\\n' ${nonceValue} "$status" > ${tmp}`,
     `mv -f ${tmp} ${marker}`,

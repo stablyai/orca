@@ -140,6 +140,33 @@ describe('buildMobileSourceControlPrimaryAction', () => {
     ])
   })
 
+  it('leaves a force push to desktop when the review has its own push target', () => {
+    const h = handlers()
+    const action = buildMobileSourceControlPrimaryAction(
+      args({
+        status: status({
+          upstreamStatus: {
+            hasUpstream: true,
+            ahead: 2,
+            behind: 2,
+            behindCommitsArePatchEquivalent: true
+          }
+        }),
+        review: {
+          prState: 'open',
+          isPRStateLoading: false,
+          reviewNumber: 7,
+          pushTarget: { remoteName: 'fork', branchName: 'feature' }
+        },
+        handlers: h
+      })
+    )
+    expect(action.requiresForceWithLease).toBe(true)
+    expect(action.disabled).toBe(true)
+    action.onPress()
+    expect(h.runActionSheetGitSequence).not.toHaveBeenCalled()
+  })
+
   it('disables the button for unresolved entries even during a conflict operation', () => {
     const action = buildMobileSourceControlPrimaryAction(
       args({

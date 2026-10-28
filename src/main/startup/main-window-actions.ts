@@ -1,6 +1,17 @@
-import { app, clipboard, dialog, type BrowserWindow, type Tray, type WebContents } from 'electron'
+import {
+  app,
+  clipboard,
+  dialog,
+  type BrowserWindow,
+  type MessageBoxOptions,
+  type MessageBoxReturnValue,
+  type Tray,
+  type WebContents
+} from 'electron'
 import { isNativeBrowserPopupWindow } from '../browser/native-browser-popup-windows'
 import type { UpdateCheckOptions } from '../../shared/update-status-types'
+import type { AppMenuQuitHandlers } from '../menu/app-menu-quit-item'
+import type { createWebContentsTimedFlag } from './web-contents-timed-flag'
 import { recordCrashBreadcrumb } from '../crash-reporting/crash-breadcrumb-store'
 import { recordDurableCrashBreadcrumb } from '../crash-reporting/durable-crash-breadcrumb'
 import { checkForUpdatesFromMenu, isQuittingForUpdate } from '../updater'
@@ -24,6 +35,13 @@ import {
   type RendererRecoveryPromptFailure
 } from '../window/renderer-recovery-prompt'
 import { probeRendererLaunchCapacity } from '../window/renderer-launch-failure-probe'
+import {
+  confirmQuitAndStopAllSessions,
+  explainStopAllSessionsUnavailable
+} from './quit-and-stop-all-sessions-prompt'
+import { isHoldingForNewerProtocolDaemon } from '../daemon/daemon-newer-protocol-hold'
+import { getDaemonProvider } from '../daemon/daemon-provider-state'
+import { confirmNoDaemonSessionsRemain } from '../ipc/pty/pty-management'
 
 // Inject the opener to avoid an actions/lifecycle import cycle.
 let openWindow: (options?: { revealOnDidFinishLoad?: boolean }) => BrowserWindow
@@ -54,15 +72,28 @@ export function showMainWindowFromTray(): void {
   }
 }
 
-export function openSettingsFromSystemMenu(): void {
+/** Shows the main window and sends it a one-shot intent, also queued for a renderer that mounts later. */
+function sendOneShotToMainWindow(
+  channel: string,
+  pending: ReturnType<typeof createWebContentsTimedFlag>,
+  durationMs: number
+): boolean {
   showMainWindowFromTray()
   const targetWindow = state.mainWindow && !state.mainWindow.isDestroyed() ? state.mainWindow : null
   if (!targetWindow) {
-    return
+    return false
   }
-  recordCrashBreadcrumb('settings_opened')
-  targetWindow.webContents.send('ui:openSettings')
-  state.pendingOpenSettings.mark(targetWindow.webContents.id, Number.POSITIVE_INFINITY)
+  pending.mark(targetWindow.webContents.id, durationMs)
+  targetWindow.webContents.send(channel)
+  return true
+}
+
+export function openSettingsFromSystemMenu(): void {
+  if (
+    sendOneShotToMainWindow('ui:openSettings', state.pendingOpenSettings, Number.POSITIVE_INFINITY)
+  ) {
+    recordCrashBreadcrumb('settings_opened')
+  }
 }
 
 /** On serve, user Quit closes desktop windows while paired clients keep the server (#15537); signals/supervisor/updates still quit the process. */
@@ -90,6 +121,85 @@ export function quitFromSystemTray(): void {
   quitFromUserCommand()
 }
 
+// Why bounded: a renderer that never pulls the request must not stop sessions on a later reload.
+const QUIT_AND_STOP_ALL_SESSIONS_REQUEST_TTL_MS = 30_000
+let quitAndStopAllSessionsConfirming = false
+// The renderer that consumed the request; only it may then ask main to quit.
+let stoppingAllSessionsWebContentsId: number | null = null
+
+function showMessageBoxOnMainWindow(options: MessageBoxOptions): Promise<MessageBoxReturnValue> {
+  const window = state.mainWindow && !state.mainWindow.isDestroyed() ? state.mainWindow : undefined
+  return window ? dialog.showMessageBox(window, options) : dialog.showMessageBox(options)
+}
+
+/**
+ * Quit Completely (app menu, tray): after confirmation the renderer runs Settings'
+ * Kill all sessions, then asks main to quit. The renderer does the work because Kill all also
+ * retires the tabs, so nothing reopens or resumes them on next launch.
+ */
+export function quitAndStopAllSessionsFromUserCommand(): void {
+  // Why: under orca serve a user Quit only closes the windows (#15537), so this would never quit.
+  if (state.isServeMode || quitAndStopAllSessionsConfirming) {
+    return
+  }
+  quitAndStopAllSessionsConfirming = true
+  // Why reveal first: the dialog is a sheet on this window, invisible while it is minimized or hidden.
+  if (state.mainWindow && !state.mainWindow.isDestroyed()) {
+    showMainWindowFromTray()
+  }
+  // Why before asking: without a daemon provider (starting or failed) or with a newer version's daemon held,
+  // Kill all can't list every session, so it would close every tab and then refuse.
+  const ask: typeof confirmQuitAndStopAllSessions =
+    getDaemonProvider() && !isHoldingForNewerProtocolDaemon()
+      ? confirmQuitAndStopAllSessions
+      : explainStopAllSessionsUnavailable
+  void ask(showMessageBoxOnMainWindow)
+    .then((confirmed) => {
+      if (
+        confirmed &&
+        !sendOneShotToMainWindow(
+          'ui:quitAndStopAllSessions',
+          state.pendingQuitAndStopAllSessions,
+          QUIT_AND_STOP_ALL_SESSIONS_REQUEST_TTL_MS
+        )
+      ) {
+        console.warn('[quit] Quit Completely confirmed, but no main window could take the request')
+      }
+    })
+    .catch((error) => console.error('[quit] Quit Completely failed:', error))
+    .finally(() => {
+      quitAndStopAllSessionsConfirming = false
+    })
+}
+
+/** One-shot: true only for the renderer the confirmed request was sent to, before it expires. */
+export function consumeQuitAndStopAllSessionsRequest(senderWebContentsId: number): boolean {
+  const requested = state.pendingQuitAndStopAllSessions.matches(senderWebContentsId, {
+    consume: true
+  })
+  if (requested) {
+    stoppingAllSessionsWebContentsId = senderWebContentsId
+  }
+  return requested
+}
+
+/** The renderer that consumed the request stopped every session; quit unless the daemon still lists one. */
+export async function quitAfterRendererStoppedAllSessions(
+  senderWebContentsId: number
+): Promise<boolean> {
+  if (stoppingAllSessionsWebContentsId !== senderWebContentsId) {
+    return false
+  }
+  stoppingAllSessionsWebContentsId = null
+  if (!(await confirmNoDaemonSessionsRemain())) {
+    console.warn('[quit] A terminal session is still listed after Kill all; staying open')
+    return false
+  }
+  // Why reveal: the window may have been hidden while Kill all ran, and a quit-time save prompt must show.
+  quitFromSystemTray()
+  return true
+}
+
 export function runUserInitiatedUpdateCheck(options?: UpdateCheckOptions): void {
   ensureAutoUpdaterConfigured()
   checkForUpdatesFromMenu(options)
@@ -110,8 +220,17 @@ export function getSystemTrayOptions(): SystemTrayOptions | null {
       showMainWindowFromTray()
       runUserInitiatedUpdateCheck()
     },
-    onQuit: quitFromSystemTray
+    onQuit: quitFromSystemTray,
+    ...(state.isServeMode
+      ? {}
+      : { onQuitAndStopAllSessions: quitAndStopAllSessionsFromUserCommand })
   }
+}
+
+export function getAppMenuQuitHandlers(): AppMenuQuitHandlers {
+  return state.isServeMode
+    ? { onQuit: quitFromUserCommand }
+    : { onQuitAndStopAllSessions: quitAndStopAllSessionsFromUserCommand }
 }
 
 export function syncMacMenuBarIcon(showMenuBarIcon: boolean): Tray | null {
@@ -178,11 +297,7 @@ export async function showRendererRecoveryPrompt(
     isQuitting: () => state.isQuitting,
     diagnose: describeInstallDirAclPoison,
     probeLaunchCapacity: () => probeRendererLaunchCapacity(),
-    showMessageBox: (options) => {
-      const window =
-        state.mainWindow && !state.mainWindow.isDestroyed() ? state.mainWindow : undefined
-      return window ? dialog.showMessageBox(window, options) : dialog.showMessageBox(options)
-    },
+    showMessageBox: showMessageBoxOnMainWindow,
     copyToClipboard: (text) => clipboard.writeText(text),
     reload: () => {
       if (!state.mainWindow || state.mainWindow.isDestroyed()) {

@@ -51,9 +51,8 @@ export function createClaudeTranscriptImportPlan(input: {
   check: () => void
 }) {
   const mutations = new Map<string, ReturnType<typeof journalLifecycleItemMutation>>()
-  const { saved, scopeOf, promptScope, dependencies } = createClaudeTranscriptItemReader(
-    input.journal
-  )
+  const { saved, localPrompt, scopeOf, promptScope, dependencies } =
+    createClaudeTranscriptItemReader(input.journal, input.sessionId)
   const aliases = new Map<string, AgentJournalItemIdentity>()
   let historicalScope: AgentJournalTurnScope | null = null
   let sourceObservedAt: number | undefined
@@ -232,7 +231,7 @@ export function createClaudeTranscriptImportPlan(input: {
         sessionId: input.providerSessionId,
         uuid: sourceUuid ?? decoded.id
       }
-      const existing = saved(agentJournalItemKey(identity))
+      const existing = saved(agentJournalItemKey(identity)) ?? localPrompt(identity.uuid)
       if (existing) {
         historicalScope = promptScope(existing, queued) ?? historicalScope
         return

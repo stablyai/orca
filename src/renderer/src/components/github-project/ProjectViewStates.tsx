@@ -5,6 +5,7 @@ import { HoverCard, HoverCardContent, HoverCardTrigger } from '@/components/ui/h
 import { cn } from '@/lib/utils'
 import { translate } from '@/i18n/i18n'
 import { GhAuthErrorHelp } from './GhAuthErrorHelp'
+import { projectViewErrorMessage } from './project-view-error-copy'
 import { isRenderableProjectViewLayout } from '../../../../shared/github/project-types'
 import type { GitHubProjectViewSummary } from '../../../../shared/github/project-types'
 import type { GitHubProjectViewError } from '../../../../shared/github/project-result-types'
@@ -89,7 +90,7 @@ function ProjectViewTab({
     return tab
   }
   const message = translate(
-    'projectViews.unsupported.layoutMessage',
+    'projectViews.unsupported.layoutNotSupported',
     "Orca doesn't support {{layout}} project views yet.",
     { layout: layoutLabel }
   )
@@ -158,32 +159,11 @@ export function ProjectViewErrorState({
     )
   }
   const copy =
-    error.type === 'too_large'
-      ? totalCount === undefined
-        ? translate(
-            'projectViews.error.tooManyItems',
-            "This view has too many items to render in Orca. Narrow the view's filter on GitHub."
-          )
-        : translate(
-            'projectViews.error.itemCountTooLarge',
-            "This view has {{count}} items — too large to render in Orca. Narrow the view's filter on GitHub.",
-            {
-              count: totalCount,
-              defaultValue_one:
-                "This view has {{count}} item — too large to render in Orca. Narrow the view's filter on GitHub."
-            }
-          )
-      : error.type === 'unsupported_layout'
-        ? // Older hosts may still reject roadmaps; keep the explanation independent of the requested layout.
-          translate(
-            'projectViews.unsupported.description',
-            'Orca renders table, board, and roadmap project views. This view uses a layout it cannot render yet.'
-          )
-        : error.type === 'not_found'
-          ? translate('projectViews.error.notFound', 'Could not find this project or view.')
-          : error.type === 'schema_drift'
-            ? translate('projectViews.error.schemaDrift', 'Could not read this project view.')
-            : error.message
+    error.type === 'not_found'
+      ? translate('projectViews.error.notFoundState', 'Could not find this project or view.')
+      : error.type === 'schema_drift'
+        ? translate('projectViews.error.schemaDrift', 'Could not read this project view.')
+        : projectViewErrorMessage(error, { host, totalCount })
   return (
     <div className="flex flex-1 flex-col items-start gap-3 p-6 text-sm">
       <div className="text-muted-foreground">{copy}</div>

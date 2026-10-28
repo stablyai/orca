@@ -151,7 +151,23 @@ const BROWSER_PAGE_CHANNELS = [
   'browser:identity:set',
   // Remembered site answers for a browser profile, never a viewed guest.
   'browser:sitePermissions:list',
-  'browser:sitePermissions:set'
+  'browser:sitePermissions:set',
+  // Extension management and the toolbar's extension buttons: browser-page tabs only.
+  'browserExtensions:list',
+  'browserExtensions:setEnabled',
+  'browserExtensions:remove',
+  'browserExtensions:loadUnpacked',
+  'browserExtensions:reload',
+  'browserExtensions:openOptions',
+  'browserExtensions:reviewUpdate',
+  'browserExtensions:installFromWebStore',
+  'browserExtensions:respondInstallPrompt',
+  'browserExtensions:contextMenuClick',
+  'browserExtensions:actionContextMenu',
+  'browserExtensions:toolbarState',
+  'browserExtensions:setPinned',
+  'browserExtensions:activateAction',
+  'browserExtensions:pageIcon'
 ]
 
 type Handler = (event: { sender: Electron.WebContents }, args: unknown) => unknown

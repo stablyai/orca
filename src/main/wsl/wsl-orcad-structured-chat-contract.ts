@@ -13,10 +13,15 @@ import {
   subscribeRemoteRuntimeRequest,
   type RemoteRuntimeSubscription
 } from '../../shared/remote-runtime/remote-runtime-client'
-import { claudeSessionIdForOrcaSession } from '../claude/claude-structured-session-id'
+import { claudeSessionIdForOrcaSession } from '../claude/structured/claude-structured-session-id'
 import { packagedClaudeChatScenario } from '../orcad/orcad-structured-chat-scenario'
 import { quotePosixShell } from '../../shared/shell-argument-quoting'
 import { wslClaudeChatScenario } from './wsl-orcad-chat-scenario'
+import {
+  expectWindowsDecoyReachable,
+  expectWindowsDecoyUnrun,
+  probeWindowsDecoy
+} from './wsl-orcad-chat-windows-decoy'
 import {
   installWslChatFixture,
   WslChatProviderReport,
@@ -24,7 +29,7 @@ import {
   type WslChatHost
 } from './wsl-orcad-chat-provider-fixture'
 
-type ChatLane = WslChatHost & {
+export type ChatLane = WslChatHost & {
   pairing(): PairedRuntimeConnection
   reconnect(whileDisconnected: () => Promise<void>): Promise<void>
 }
@@ -49,7 +54,14 @@ function assistantText(row: AgentJournalRenderItem): string {
     : ''
 }
 
-async function exerciseChat(lane: ChatLane, root: string, worktree: string, cwd: string) {
+export type ChatInstall = { home: string; root: string; script: string; cli: string }
+
+async function exerciseChat(
+  lane: ChatLane,
+  { root, script, cli }: ChatInstall,
+  worktree: string,
+  cwd: string
+) {
   const sessionId = randomUUID()
   const providerId = claudeSessionIdForOrcaSession(sessionId)
   const ackPath = `${root}/partial-observed`
@@ -190,6 +202,9 @@ async function exerciseChat(lane: ChatLane, root: string, worktree: string, cwd:
     )
     expect(report.cwd).toBe(cwd)
     expect(report.execPath).toMatch(/^\//u)
+    // Found on the guest's login PATH, not through a Command setting.
+    expect(report.argv[0]).toBe(script)
+    expect(report.env.ORCA_LANE_CLAUDE_WRAPPER).toBe(cli)
     expect(report.env).toMatchObject({
       ORCA_AGENT_SESSION_ID: sessionId,
       ORCA_STRUCTURED_SESSION: '1'
@@ -279,14 +294,14 @@ async function exerciseChat(lane: ChatLane, root: string, worktree: string, cwd:
 
 /** Same cross-process contract for git and folder projects, in each imported distro. */
 export async function proveWslStructuredChat(lane: ChatLane) {
-  const { home, root, folderPath, folderWorktree } = await installWslChatFixture(lane)
-  return {
-    git: await exerciseChat(
-      lane,
-      root,
-      `path:${home}/wsl-orcad-lane-repo`,
-      `${home}/wsl-orcad-lane-repo`
-    ),
-    folder: await exerciseChat(lane, root, folderWorktree, folderPath)
-  }
+  const install = await installWslChatFixture(lane)
+  const { home, folderWorktree, folderPath } = install
+  const gitWorktree = `path:${home}/wsl-orcad-lane-repo`
+  const git = await exerciseChat(lane, install, gitWorktree, `${home}/wsl-orcad-lane-repo`)
+  const folder = await exerciseChat(lane, install, folderWorktree, folderPath)
+  const decoy = await expectWindowsDecoyReachable(lane)
+  await expectWindowsDecoyUnrun(lane, home)
+  // Recorded, not asserted: whether a Windows-only install is picked up is the open question.
+  const windowsOnly = await probeWindowsDecoy(lane, install, gitWorktree)
+  return { git, folder, decoy, windowsOnly }
 }

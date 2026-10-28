@@ -344,6 +344,9 @@ export function registerPtyConnectionHibernationWakeTests(): void {
 
       expect(transport.connect).toHaveBeenCalledTimes(2)
       expect(transport.connect.mock.calls[1]?.[0]).not.toHaveProperty('claimReplacedPtyId')
+      expect(transport.connect.mock.calls[1]?.[0]).toMatchObject({
+        resumeSpawnIntent: 'automatic-restore'
+      })
       binding.dispose()
       await flushAsyncTicks()
       expect(window.api.pty.kill).not.toHaveBeenCalledWith('pty-replaced')

@@ -63,16 +63,28 @@ function encodeWslLoginShellScript(command: string): string {
   return btoa(binary)
 }
 
+const NPX_SKILLS_ADD_COMMAND = /^npx\s+skills(?:@[\w.-]+)?\s+add\b/i
+
 export function buildSkillCommandForRuntime(
   command: string,
   runtime?: LocalAgentRuntime,
   currentPlatform = getSkillCommandPlatform()
 ): string {
   const resolvedRuntime = runtime ?? LOCAL_HOST_AGENT_RUNTIME
-  if (resolvedRuntime.runtime !== 'wsl') {
+  if (resolvedRuntime.runtime === 'wsl') {
+    return forceEnglishGitMessages(command)
+  }
+  if (currentPlatform === 'win32') {
     return wrapWindowsSkillCommandWithNpxPrerequisite(command, currentPlatform, 'copied-command')
   }
-  return command
+  // A focused remote runtime may be a Windows host where `env` does not exist.
+  return isRemoteRuntimeEnvironmentFocused() ? command : forceEnglishGitMessages(command)
+}
+
+/** skills@1.7.2 falls back to fetching a pinned commit only on English git errors (#28914); `env` also works in fish/csh. */
+function forceEnglishGitMessages(command: string): string {
+  const trimmedCommand = command.trim()
+  return NPX_SKILLS_ADD_COMMAND.test(trimmedCommand) ? `env LC_ALL=C ${trimmedCommand}` : command
 }
 
 type SkillCommandTarget = 'copied-command' | 'orca-setup-terminal'
@@ -163,7 +175,7 @@ function wrapWindowsSkillCommandWithNpxPrerequisite(
     isRemoteRuntimeEnvironmentFocused() ||
     // MSYS rewrites cmd.exe switches as paths; keep copied commands out of that boundary for POSIX-family shells.
     (target === 'copied-command' && isPosixFamilyWindowsShellConfigured()) ||
-    !/^npx\s+skills(?:@[\w.-]+)?\s+add\b/i.test(trimmedCommand)
+    !NPX_SKILLS_ADD_COMMAND.test(trimmedCommand)
   ) {
     return command
   }

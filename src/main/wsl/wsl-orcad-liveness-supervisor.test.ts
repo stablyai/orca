@@ -169,6 +169,7 @@ function harness(options: { visible?: boolean } = {}) {
     jumpClock: (ms: number) => {
       clock += ms
     },
+    clock: () => clock,
     lastWatch: () => watches.at(-1)!
   }
 }
@@ -401,6 +402,17 @@ describe('WslOrcadLivenessSupervisor', () => {
     h.state.running = { status: 'confirmed', distros: ['Ubuntu'] }
     await h.advance(30_000)
     expect(h.statuses.at(-1)).toEqual({ state: 'ready', census: null })
+  })
+
+  it('re-reads after the settle only from a probe started once the exit has settled', async () => {
+    const h = harness()
+    await h.supervisor.connect('Ubuntu')
+    h.jumpClock(1_000)
+    const exitedAt = h.clock()
+    h.lastWatch().exit(1)
+    await h.advance(EXIT_SETTLE_MS)
+    // A list probe begun inside the window may still show the stopping distro; it must not answer.
+    expect(h.readRunning).toHaveBeenNthCalledWith(2, { distro: 'Ubuntu', exitedAt })
   })
 
   it('waits for a still-listed distro to settle after a failed exit before probing inside it', async () => {

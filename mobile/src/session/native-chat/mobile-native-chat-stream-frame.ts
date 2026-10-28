@@ -1,6 +1,9 @@
 import { applyAppend, replaceList } from '../../../../src/shared/native-chat-merge'
 import type { NativeChatMerger } from '../../../../src/shared/native-chat-merge'
-import type { NativeChatMessage } from '../../../../src/shared/native-chat-types'
+import type {
+  NativeChatMessage,
+  NativeChatTurnLifecycle
+} from '../../../../src/shared/native-chat-types'
 
 export type MobileNativeChatStreamFrame = {
   type?: string
@@ -11,6 +14,8 @@ export type MobileNativeChatStreamFrame = {
   pending?: boolean
   error?: string
   message?: string
+  // Provider turn boundary; hosts before #9121 omit it.
+  lifecycle?: NativeChatTurnLifecycle
 }
 
 export type AppliedMobileNativeChatFrame =

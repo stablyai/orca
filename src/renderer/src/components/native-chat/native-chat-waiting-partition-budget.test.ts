@@ -3,7 +3,7 @@ import type { AgentJournalRenderItem } from '../../../../shared/agent-session-jo
 import type { NativeChatMessage } from '../../../../shared/native-chat-types'
 import { projectNativeChatTranscript } from '../../../../shared/native-chat-transcript-projection'
 import { nativeChatTurnMembership } from '../../../../shared/native-chat-turn-membership'
-import { nativeChatRowsInDrawOrder } from '../../../../shared/native-chat-turn-grouping'
+import { nativeChatRowsInDrawOrder } from '../../../../shared/native-chat/transcript/native-chat-turn-grouping'
 import { nativeChatSubagentSections } from './native-chat-subagent-sections'
 import {
   buildNativeChatTranscriptSlots,

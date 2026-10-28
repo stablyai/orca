@@ -12,9 +12,9 @@ import {
   rejectClaudeDispatchWaiters,
   releaseClaudeDispatchWaitersInDoubt
 } from './claude-structured-dispatch'
-import { readClaudeFrameString } from './claude-structured-init-proof'
+import { readClaudeFrameString } from './structured/claude-structured-init-proof'
 import type { ClaudeLateDispatchSettlement } from './claude-replay-turn-resolution'
-import type { ClaudeSession, ClaudeStartedSend } from './claude-structured-session-state'
+import type { ClaudeSession, ClaudeStartedSend } from './structured/claude-structured-session-state'
 
 const UNSTARTED_VERDICT = {
   cancelled: 'cancelled',

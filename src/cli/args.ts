@@ -19,6 +19,8 @@ export type ParsedArgs = {
 
 export const GLOBAL_FLAGS = CLI_GLOBAL_FLAGS
 const GLOBAL_VALUE_FLAGS = new Set(CLI_GLOBAL_VALUE_FLAGS)
+/** Global flags a local-only command offers; it still accepts the remote selectors, only to refuse them. */
+export const LOCAL_COMMAND_FLAGS = GLOBAL_FLAGS.filter((flag) => !GLOBAL_VALUE_FLAGS.has(flag))
 export const BOOLEAN_FLAGS = CLI_BOOLEAN_FLAGS
 
 export const REPEATED_FLAG_SEPARATOR = '\u0000'
@@ -133,46 +135,8 @@ export function matches(actual: string[], expected: string[]): boolean {
   )
 }
 
-export function supportsBrowserPageFlag(commandPath: string[]): boolean {
-  const joined = commandPath.join(' ')
-  if (['open', 'status'].includes(commandPath[0])) {
-    return false
-  }
-  if (
-    [
-      'account',
-      'artifacts',
-      'automations',
-      'project',
-      'repo',
-      'reference',
-      'worktree',
-      'terminal',
-      'file',
-      'orchestration',
-      'computer',
-      'emulator',
-      'note',
-      'diagnostics',
-      'speech',
-      'jira',
-      'linear',
-      'skills',
-      'search',
-      'ports',
-      'agent-context'
-    ].includes(commandPath[0])
-  ) {
-    return false
-  }
-  return ![
-    'tab list',
-    'tab create',
-    'tab current',
-    'tab profile list',
-    'tab profile create',
-    'tab profile delete'
-  ].includes(joined)
+export function supportsBrowserPageFlag(spec: Pick<CommandSpec, 'browserPageTarget'>): boolean {
+  return spec.browserPageTarget === true
 }
 
 export function effectiveAllowedFlags(spec: CommandSpec): string[] {
@@ -183,7 +147,7 @@ export function effectiveAllowedFlags(spec: CommandSpec): string[] {
     ...new Set([
       ...GLOBAL_FLAGS,
       ...spec.allowedFlags,
-      ...(supportsBrowserPageFlag(spec.path) ? ['page'] : [])
+      ...(supportsBrowserPageFlag(spec) ? ['page'] : [])
     ])
   ]
 }
@@ -267,7 +231,7 @@ export function validateCommandAndFlags(specs: CommandSpec[], parsed: ParsedArgs
     )
   }
 
-  const pageAllowed = supportsBrowserPageFlag(spec.path)
+  const pageAllowed = supportsBrowserPageFlag(spec)
   for (const [flag, value] of parsed.flags) {
     const isGlobalFlag = GLOBAL_FLAGS.includes(flag)
     if (GLOBAL_VALUE_FLAGS.has(flag) && (typeof value !== 'string' || value.length === 0)) {

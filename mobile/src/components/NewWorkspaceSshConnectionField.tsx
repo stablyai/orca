@@ -2,6 +2,7 @@ import { Pressable, Text, View } from 'react-native'
 import type { WorkspaceSshGate } from '../tasks/workspace-ssh-gate'
 import { workspaceSshStatusLabel } from '../tasks/workspace-ssh-gate'
 import { newWorktreeFormStyles as styles } from './new-worktree-form-styles'
+import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 
 export function NewWorkspaceSshConnectionField({
   repoName,
@@ -12,6 +13,7 @@ export function NewWorkspaceSshConnectionField({
   sshGate: WorkspaceSshGate
   onConnect: () => void
 }) {
+  useMobileColorScheme()
   return (
     <View style={styles.field}>
       <Text style={styles.label}>SSH Connection</Text>

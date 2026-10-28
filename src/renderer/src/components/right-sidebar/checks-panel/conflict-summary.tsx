@@ -26,6 +26,7 @@ export function ConflictingFilesSection({ pr }: { pr: ConflictReview }): React.J
   if (pr.mergeable !== 'CONFLICTING' || files.length === 0) {
     return null
   }
+  const commitsBehind = pr.conflictSummary!.commitsBehind
 
   // The triage strip owns Resolve; avoid duplicating it in this file list.
   return (
@@ -37,7 +38,7 @@ export function ConflictingFilesSection({ pr }: { pr: ConflictReview }): React.J
             'checks.conflicts.behindBase',
             '{{count}} commits behind (base commit: <commit>{{commit}}</commit>)',
             {
-              count: pr.conflictSummary!.commitsBehind,
+              count: commitsBehind,
               defaultValue_one: '{{count}} commit behind (base commit: <commit>{{commit}}</commit>)'
             }
           )}

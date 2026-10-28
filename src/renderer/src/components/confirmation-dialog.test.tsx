@@ -118,6 +118,12 @@ describe('ConfirmationDialogProvider', () => {
     await waitFor(() => expect(screen.getByRole('button', { name: 'Cancel' })).toHaveFocus())
   })
 
+  it('renders on the security surface when asked', async () => {
+    renderDialog({ title: 'Remove extension?', surface: 'security' })
+    await userEvent.click(screen.getByRole('button', { name: 'ask' }))
+    expect(await screen.findByRole('dialog')).toHaveClass('plugin-security-chrome')
+  })
+
   it('omits the checkbox unless the caller opts in', async () => {
     renderDialog({ title: 'Delete artifact?' })
 

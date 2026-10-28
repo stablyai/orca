@@ -8,7 +8,7 @@ import { NativeChatApprovalCard } from '@/components/native-chat/NativeChatAppro
 import { NativeChatEmptyState } from '@/components/native-chat/NativeChatEmptyState'
 import { NativeChatQueuedMessageCard } from '@/components/native-chat/NativeChatQueuedMessageCard'
 import { NativeChatSessionOptionPickers } from '@/components/native-chat/NativeChatSessionOptionPickers'
-import type { SessionOptionDescriptor } from '../../../shared/native-chat-session-options'
+import type { SessionOptionDescriptor } from '../../../shared/native-chat/input/native-chat-session-options'
 import { getIntlLocale, setRendererUiLanguage } from './i18n'
 import { getUiWeekdayNames } from './weekday-names'
 import { formatUiRelativeTime } from './relative-time-format'

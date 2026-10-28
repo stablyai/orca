@@ -1,3 +1,4 @@
+import { agentPromptObservationSignal } from './agent-prompt-signals'
 import type { RuntimeTerminalWriteOptions } from '../../runtime-terminal-writer'
 import type { WriteSettlement } from '../../../../shared/pty-write-settlement'
 import type { RuntimeLeafRecord } from '../../runtime-terminal-state-records'
@@ -226,7 +227,7 @@ export abstract class OrcaRuntimeWithControllerKnowsPtyIsLive extends OrcaRuntim
     }
     // Switch point: a saved pane main holds with no terminal yet starts first (once, shared).
     const starting = ORCA_LAYOUT_OWNER_IS_MAIN
-      ? this.startRestoredHandlePane(handle, { signal: options.signal })
+      ? this.startRestoredHandlePane(handle, { signal: agentPromptObservationSignal(options) })
       : null
     if (starting) {
       const target = await starting

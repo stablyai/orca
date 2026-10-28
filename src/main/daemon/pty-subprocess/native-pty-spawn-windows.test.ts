@@ -86,6 +86,41 @@ describe('Windows shell fallback over node-pty ConPTY', () => {
     vi.restoreAllMocks()
   })
 
+  it('keeps a WSL pane out of a distro the internal allowlist excludes, falling back past it', async () => {
+    vi.stubEnv('ORCA_INTERNAL_WSL_DISTRO_ALLOWLIST', 'orca-test-a')
+    try {
+      const wslAttempts = ['Ubuntu', 'orca-test-a'].map((distro) => ({
+        ...attempts[0]!,
+        shellPath: 'C:\\Windows\\System32\\wsl.exe',
+        shellArgs: ['-d', distro, '--cd', '~']
+      }))
+      nodePty.spawn.mockReturnValue(healthyPane(4242))
+      const result = await spawnNativeDaemonPty({
+        ...args,
+        shellPath: wslAttempts[0]!.shellPath,
+        shellArgs: wslAttempts[0]!.shellArgs,
+        windowsFallbackAttempts: wslAttempts
+      })
+      expect(nodePty.spawn.mock.calls.map(([, argv]) => argv)).toEqual([
+        ['-d', 'orca-test-a', '--cd', '~']
+      ])
+      expect(result.shellPath).toBe(wslAttempts[1]!.shellPath)
+
+      nodePty.spawn.mockClear()
+      await expect(
+        spawnNativeDaemonPty({
+          ...args,
+          shellPath: wslAttempts[0]!.shellPath,
+          shellArgs: wslAttempts[0]!.shellArgs,
+          windowsFallbackAttempts: [wslAttempts[0]!]
+        })
+      ).rejects.toMatchObject({ code: 'ORCA_WSL_DISTRO_NOT_ALLOWLISTED' })
+      expect(nodePty.spawn).not.toHaveBeenCalled()
+    } finally {
+      vi.unstubAllEnvs()
+    }
+  })
+
   it('walks both fallback shells when ConPTY rejects the primary ones', async () => {
     const proc = fakePane(9876, [CONPTY_PRELUDE])
     nodePty.spawn.mockImplementation((file: string) => {

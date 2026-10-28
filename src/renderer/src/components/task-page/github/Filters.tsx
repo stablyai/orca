@@ -16,6 +16,7 @@ import IssueSourceIndicator from '@/components/github/IssueSourceIndicator'
 import IssueSourceSelector, { issueSourceChipClass } from '@/components/github/IssueSourceSelector'
 import RepoBadgeLabel from '@/components/repo/RepoBadgeLabel'
 import { repoMatchesHostIdentity } from '@/store/slices/repo-host-identity'
+import { deriveGitHubTaskPreset } from './task-page-preset-highlight'
 export function TaskPageGitHubFilters({
   model
 }: {
@@ -30,7 +31,6 @@ export function TaskPageGitHubFilters({
     appliedTaskSearch,
     setAppliedTaskSearch,
     taskSearchInputRef,
-    activeTaskPreset,
     setActiveTaskPreset,
     setTaskRefreshNonce,
     perRepoSourceState,
@@ -53,6 +53,7 @@ export function TaskPageGitHubFilters({
     handleTaskSearchKeyDown,
     githubTasksBusy
   } = model
+  const highlightedPreset = deriveGitHubTaskPreset(activeGithubTaskKind, appliedTaskQuery)
   // Why: filter metadata for the primary slug is read from the host that owns the repo it came from.
   const primaryGithubFilterSource = perRepoSourceState.find((state) =>
     activeGithubTaskKind === 'prs' ? state.sources?.prs : state.sources?.issues
@@ -73,7 +74,7 @@ export function TaskPageGitHubFilters({
     >
       <div className="flex flex-wrap gap-1.5">
         {getGitHubTaskKindPresets(activeGithubTaskKind).map((option) => {
-          const active = activeTaskPreset === option.id
+          const active = highlightedPreset === option.id
           return (
             <button
               key={option.id}

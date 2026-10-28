@@ -15,19 +15,10 @@ import {
 } from '../../../../shared/native-chat-types'
 import { isRenderableSubagentGroup } from '../../../../shared/native-chat-subagent-summary'
 import type { NativeChatDiffReveal } from './native-chat-turn-diffs'
-import { countToolCalls } from '../../../../shared/native-chat/tools/native-chat-tool-summary'
 import { nativeChatToolRunSentence } from './native-chat-tool-run-label'
-import {
-  describeLatestToolCall,
-  NATIVE_CHAT_TOOL_ACTIVITY_COPY,
-  selectActiveToolCall
-} from '../../../../shared/native-chat/tools/native-chat-tool-activity'
-import { nativeChatToolRunIconName } from '../../../../shared/native-chat/tools/native-chat-tool-icon'
-import { nativeChatToolRunOutcome } from '../../../../shared/native-chat/tools/native-chat-tool-run-outcome'
-import {
-  nativeChatAskRunBlocks,
-  nativeChatAskRunSubject
-} from '../../../../shared/native-chat/input/native-chat-ask-row'
+import { NATIVE_CHAT_TOOL_ACTIVITY_COPY } from '../../../../shared/native-chat/tools/native-chat-tool-activity'
+import { nativeChatToolRunHeader } from '../../../../shared/native-chat/tools/native-chat-tool-run-header'
+import { nativeChatAskRunSubject } from '../../../../shared/native-chat/input/native-chat-ask-row'
 import { NativeChatAwaitingInputRow } from './NativeChatAwaitingInputRow'
 import { NativeChatBackgroundTaskRun } from './NativeChatBackgroundTaskRun'
 import { NativeChatSubagentRun } from './NativeChatSubagentRun'
@@ -137,29 +128,25 @@ export function NativeChatToolRun({
   ]
   const {
     asks,
-    unansweredAsks,
-    work: headerBlocks
-  } = useMemo(() => nativeChatAskRunBlocks(blocks), [blocks])
-  const hasAskCall = asks.length > 0
-  const askSubject = hasAskCall ? nativeChatAskRunSubject(asks) : null
-  const callCount = countToolCalls(headerBlocks)
-  const showsHeader = !hasAskCall || callCount > 0
-  const askIsActive = selectActiveToolCall(unansweredAsks, { activeTurnIsWorking }) !== null
-  // Keep the trailing run live between calls; without a running unblocked turn, fall back to call state.
-  const live =
-    activeTurnIsWorking === true && !askIsActive
-      ? trailing !== false
-      : selectActiveToolCall(headerBlocks, { activeTurnIsWorking }) !== null
-  // A single command is more recognizable than its category summary.
-  const runSentence = nativeChatToolRunSentence(headerBlocks, { live })
-  // Keep the latest call named between calls, even if it finished within one frame.
-  const latestCall = live ? headerBlocks.findLast(isToolCallBlock) : undefined
-  const latestCallLabel = latestCall ? describeLatestToolCall(latestCall) : null
-  const {
+    work: headerBlocks,
+    askIsActive,
+    live,
+    callCount,
+    fallbackLabel: fallbackKey,
+    latestCallLabel,
+    iconName: settledHeaderIcon,
     succeeded: runSucceeded,
     failedCallCount,
     interruptedCallCount
-  } = nativeChatToolRunOutcome(headerBlocks, { activeTurnIsWorking })
+  } = useMemo(
+    () => nativeChatToolRunHeader(blocks, { activeTurnIsWorking, trailing }),
+    [activeTurnIsWorking, blocks, trailing]
+  )
+  const hasAskCall = asks.length > 0
+  const askSubject = hasAskCall ? nativeChatAskRunSubject(asks) : null
+  const showsHeader = !hasAskCall || callCount > 0
+  // A single command is more recognizable than its category summary.
+  const runSentence = nativeChatToolRunSentence(headerBlocks, { live })
   // The card sits inside the run's own scroll box, so that box has to move too.
   const revealDiff = useMemo(
     () =>
@@ -168,12 +155,10 @@ export function NativeChatToolRun({
         : undefined,
     [onRevealDiff]
   )
-  // Choose a whole-run category; fixed leading identity leaves completion state to the trailing mark.
-  const settledHeaderIcon = nativeChatToolRunIconName(headerBlocks.filter(isToolCallBlock))
   const fallbackLabel =
-    callCount === 0
-      ? translate('components.native-chat.tool.result', 'Result')
-      : callCount === 1
+    fallbackKey === 'result'
+      ? translate('components.native-chat.tool.result', NATIVE_CHAT_TOOL_ACTIVITY_COPY.result)
+      : fallbackKey === 'countOne'
         ? translate('components.native-chat.tool.countOne', NATIVE_CHAT_TOOL_ACTIVITY_COPY.countOne)
         : translate('components.native-chat.tool.countN', NATIVE_CHAT_TOOL_ACTIVITY_COPY.countN, {
             value0: callCount

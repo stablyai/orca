@@ -4,17 +4,9 @@ import { act, render, cleanup, fireEvent } from '@testing-library/react'
 import '../../__fixtures__/settings-persistence-test-fixture'
 import React from 'react'
 import type { TuiAgent } from '../../../../../../shared/tui-agent'
-import { renderToStaticMarkup } from 'react-dom/server'
 import { normalizeRepoSourceControlAiOverrides } from '../../../../../../shared/source-control-ai-repo-settings'
-import type {
-  RepoSourceControlAiOverrides,
-  SourceControlAiSettings
-} from '../../../../../../shared/source-control-ai-types'
-import {
-  SOURCE_CONTROL_ACTION_IDS,
-  setSourceControlActionAgentDefault,
-  type SourceControlActionId
-} from '../../../../../../shared/source-control-ai-actions'
+import type { RepoSourceControlAiOverrides } from '../../../../../../shared/source-control-ai-types'
+import { setSourceControlActionAgentDefault } from '../../../../../../shared/source-control-ai-actions'
 import {
   computeActionDirtyById,
   dropRepoLegacyInstructionForAction,
@@ -29,7 +21,6 @@ import {
 import { sourceControlActionRecipeMatchesTarget } from '../../../right-sidebar/source-control-action-recipe-match'
 import { SourceControlActionAgentPicker } from '../../SourceControlActionAgentPicker'
 import { RepositorySourceControlAiActionRows } from './RepositorySourceControlAiActionRows'
-import { RepositorySourceControlAiEnablement } from './RepositorySourceControlAiEnablement'
 import { SourceControlAiActionRecipeDefaults } from '../../SourceControlAiActionRecipeDefaults'
 import { useAppStore } from '../../../../store/index'
 import { TooltipProvider } from '../../../ui/tooltip'
@@ -100,24 +91,6 @@ describe('saved chat-or-CLI pick', () => {
         repo: { sourceControlAi: savedRepoAi ?? undefined }
       })
     expect([matches('terminal'), matches('chat')]).toEqual([true, false])
-  })
-})
-
-describe('RepositorySourceControlAiEnablement', () => {
-  it('describes repo enablement as Source Control AI action visibility', () => {
-    const markup = renderToStaticMarkup(
-      React.createElement(RepositorySourceControlAiEnablement, {
-        value: false,
-        source: { enabled: true } as SourceControlAiSettings,
-        onChange: () => {}
-      })
-    )
-
-    expect(markup).toContain('Show Source Control AI actions')
-    expect(markup).toContain('Controls whether Source Control AI buttons are shown')
-    expect(markup).toContain('separate features follows those features&#x27; settings')
-    expect(markup).toContain('Show')
-    expect(markup).not.toContain('Source Control AI enabled')
   })
 })
 
@@ -270,67 +243,6 @@ describe('RepositorySourceControlAiActionRows', () => {
       expect(onEdit).not.toHaveBeenCalled()
     }
   )
-
-  it.each([undefined, null, '', '--repo'])(
-    'renders save controls and argument ownership for %s',
-    (repoAgentArgs) => {
-      const actionDirtyById = Object.fromEntries(
-        SOURCE_CONTROL_ACTION_IDS.map((actionId) => [actionId, actionId === 'fixCommitFailure'])
-      ) as Record<SourceControlActionId, boolean>
-      const source: SourceControlAiSettings = {
-        enabled: true,
-        agentId: null,
-        selectedModelByAgent: {},
-        selectedThinkingByModel: {},
-        customAgentCommand: '',
-        instructionsByOperation: {},
-        actions: { fixCommitFailure: { agentId: null, agentArgs: '--global' } }
-      }
-
-      const rows = React.createElement(RepositorySourceControlAiActionRows, {
-        repoId: 'repo-1',
-        repoAi: {
-          actionOverrides: {
-            fixCommitFailure: {
-              agentId: null,
-              commandInputTemplate: '{basePrompt}\n\nrepo',
-              ...(repoAgentArgs !== undefined ? { agentArgs: repoAgentArgs } : {})
-            }
-          }
-        },
-        source,
-        defaultTuiAgent: 'codex',
-        savingActionIds: {},
-        actionDirtyById,
-        onActionModeChange: () => {},
-        onActionAgentChange: () => {},
-        onActionLaunchPreferencesChange: () => {},
-        onActionTemplateChange: () => {},
-        onActionAgentArgsChange: () => {},
-        onAppendVariable: () => {},
-        onActionDiscard: () => {},
-        onActionSave: () => {}
-      })
-      const markup = renderToStaticMarkup(React.createElement(TooltipProvider, null, rows))
-
-      expect(markup).toContain('Commit failure fixes')
-      expect(markup).toContain('Push failure fixes')
-      expect(markup).toContain('Unsaved changes')
-      expect(markup).toContain('Discard')
-      expect(markup).toContain('Save')
-      expect(markup).toContain('repo-repo-1-source-control-ai-fixCommitFailure')
-      const card = new DOMParser()
-        .parseFromString(markup, 'text/html')
-        .getElementById('repo-repo-1-source-control-ai-fixCommitFailure')
-      expect(card?.textContent).toContain(
-        repoAgentArgs === undefined
-          ? 'Global custom args'
-          : repoAgentArgs
-            ? 'Repository custom args'
-            : 'No args'
-      )
-    }
-  )
 })
 
 describe('dropRepoLegacyInstructionForAction', () => {
@@ -352,17 +264,6 @@ describe('dropRepoLegacyInstructionForAction', () => {
     expect(normalized?.actionOverrides?.pullRequest).toEqual({
       commandInputTemplate: '{basePrompt}\n\nUse PR style.'
     })
-  })
-
-  it('leaves launch action recipes alone because they have no legacy instruction key', () => {
-    const value = {
-      instructionsByOperation: { commitMessage: 'Use repo style.' },
-      actionOverrides: {
-        fixChecks: { commandInputTemplate: '{basePrompt}' }
-      }
-    }
-
-    expect(dropRepoLegacyInstructionForAction(value, 'fixChecks')).toBe(value)
   })
 })
 

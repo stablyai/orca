@@ -2,6 +2,7 @@ import { useCallback, useRef, useState } from 'react'
 import { useFocusEffect } from 'expo-router'
 import { ActivityIndicator, Text, View } from 'react-native'
 import { colors } from '../theme/mobile-theme'
+import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import { usePdfOpener } from '../platform/pdf-opener'
 import { PdfOpenRefusedError } from '../platform/pdf-opener-contract'
 import type { MobileFileMedia } from './mobile-file-media'
@@ -15,6 +16,7 @@ type State =
 
 // The shell downloads the PDF and shows it in Quick Look (iOS) or the system viewer (Android).
 export function MobilePdfPreview({ media }: { media: MobileFileMedia }) {
+  useMobileColorScheme()
   const opener = usePdfOpener()
   const [state, setState] = useState<State>({ status: 'idle' })
   const stopPending = useRef<(() => void) | null>(null)

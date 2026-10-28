@@ -5,7 +5,6 @@ import {
   Keyboard,
   Platform,
   Pressable,
-  StyleSheet,
   Text,
   View
 } from 'react-native'
@@ -20,19 +19,22 @@ import {
   type LucideIcon
 } from 'lucide-react-native'
 import { BottomDrawer } from '../../../components/BottomDrawer'
-import { colors, radii, spacing, typography } from '../../../theme/mobile-theme'
+import { colors } from '../../../theme/mobile-theme'
+import { useMobileColorScheme } from '../../../theme/use-mobile-color-scheme'
 import {
   isReadOnlySessionOptionValue,
   sessionOptionDispatchUnconfirmed,
   type SessionOptionDescriptor,
   type SessionOptionValue
-} from '../../../../../src/shared/native-chat-session-options'
+} from '../../../../../src/shared/native-chat/input/native-chat-session-options'
 import {
-  mobileModelPillLabel,
-  mobileOptionsPillLabel,
-  mobileSessionOptionSummaryValue,
-  mobileSessionOptionDisabledReason
-} from './mobile-native-chat-session-option-labels'
+  nativeChatModelPillLabel,
+  nativeChatOptionValuesLabel,
+  nativeChatSessionOptionDisabledReason,
+  nativeChatSessionOptionLabel,
+  sayNativeChatSessionOptionEnglish as say
+} from '../../../../../src/shared/native-chat-session-option-labels'
+import { mobileSessionOptionSummaryValue } from './mobile-native-chat-session-option-labels'
 import {
   DescriptorRows,
   ModelPill,
@@ -43,13 +45,14 @@ import {
   SessionOptionSegments,
   showsSessionOptionAsSegments
 } from './MobileNativeChatSessionOptionSegments'
-import { sortNativeChatSessionOptions } from '../../../../../src/shared/native-chat-session-option-snapshot'
+import { sortNativeChatSessionOptions } from '../../../../../src/shared/native-chat/input/native-chat-session-option-snapshot'
 import {
   AGENT_CHAT_PERMISSION_MODE_ICON_NAMES,
   AGENT_CHAT_PERMISSION_MODE_OPTION_ID,
   isAgentChatPermissionMode
 } from '../../../../../src/shared/agent-chat-permission-mode'
 import type { MobileNativeChatSessionOptionsController } from './use-mobile-native-chat-session-options'
+import { sessionOptionPickerStyles as styles } from './mobile-native-chat-session-option-picker-styles'
 
 export type MobileNativeChatPickerPresentation = { page: string | null; refocus: boolean }
 
@@ -103,6 +106,7 @@ export function MobileNativeChatSessionOptionPickers({
   onDrawerOpen,
   onDrawerAfterClose
 }: MobileNativeChatSessionOptionPickersProps & PresentationProps): React.JSX.Element | null {
+  useMobileColorScheme()
   const open = presentation?.page != null
   const wasOpen = useRef(false)
   useEffect(() => {
@@ -143,7 +147,7 @@ export function MobileNativeChatSessionOptionPickers({
   const busy = pendingId !== null || sendInFlight
   // Permission mode affects the next send, so a working turn must not lock it.
   const locked = isWorking || busy
-  const reason = mobileSessionOptionDisabledReason(activeDescriptor?.disabledReason)
+  const reason = nativeChatSessionOptionDisabledReason(activeDescriptor?.disabledReason, say)
   const permissionChoice = selectedChoice(permission)
   const permissionColor = permissionChoiceColor(permissionChoice?.value)
   const permissionIcon =
@@ -151,11 +155,9 @@ export function MobileNativeChatSessionOptionPickers({
   const segmentOptions = options.filter(showsSessionOptionAsSegments)
   const rowOptions = options.filter((descriptor) => !segmentOptions.includes(descriptor))
   const primary = model
-    ? mobileModelPillLabel(model)
-    : permission
-      ? mobileSessionOptionSummaryValue(permission)
-      : 'Permissions'
-  const secondary = model && options.length > 0 ? mobileOptionsPillLabel(options) : null
+    ? nativeChatModelPillLabel(model, say)
+    : mobileSessionOptionSummaryValue(home)
+  const secondary = (model && nativeChatOptionValuesLabel(options, say)) || null
 
   const closePicker = (): void => onNavigate(null)
   const applyOption = (descriptor: SessionOptionDescriptor, value: SessionOptionValue): void => {
@@ -225,7 +227,9 @@ export function MobileNativeChatSessionOptionPickers({
                   <ChevronLeft size={18} color={colors.textSecondary} strokeWidth={2.2} />
                 )}
               </Pressable>
-              <Text style={styles.sheetTitle}>{activeDescriptor.label}</Text>
+              <Text style={styles.sheetTitle}>
+                {nativeChatSessionOptionLabel(activeDescriptor, say)}
+              </Text>
               <View style={styles.sheetHeaderSide}>
                 {pendingId !== null ? (
                   <ActivityIndicator size="small" color={colors.textSecondary} />
@@ -302,6 +306,7 @@ function OptionRows({
   onNavigate: (page: string) => void
   onSetOption: (descriptor: SessionOptionDescriptor, value: SessionOptionValue) => void
 }): React.JSX.Element | null {
+  useMobileColorScheme()
   if (descriptors.length === 0) {
     return null
   }
@@ -327,7 +332,7 @@ function OptionRows({
         return (
           <SessionOptionSummaryRow
             key={descriptor.id}
-            label={isPermission ? 'Permissions' : descriptor.label}
+            label={isPermission ? 'Permissions' : nativeChatSessionOptionLabel(descriptor, say)}
             value={value}
             valueColor={isPermission ? permissionColor : undefined}
             disabled={disabled}
@@ -341,77 +346,3 @@ function OptionRows({
     </View>
   )
 }
-
-const styles = StyleSheet.create({
-  // The action row's only shrinkable item: a long label truncates before it pushes Send off.
-  pillSlot: {
-    flexShrink: 1,
-    minWidth: 0
-  },
-  sheet: {
-    paddingBottom: spacing.xs
-  },
-  sheetHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingBottom: spacing.lg
-  },
-  sheetTitle: {
-    flex: 1,
-    color: colors.textPrimary,
-    fontSize: typography.titleSize,
-    fontWeight: '700',
-    textAlign: 'center'
-  },
-  sheetNav: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: colors.bgRaised,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: colors.borderSubtle
-  },
-  sheetHeaderSide: {
-    width: 36,
-    height: 36,
-    alignItems: 'center',
-    justifyContent: 'center'
-  },
-  lockNotice: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.sm,
-    paddingHorizontal: spacing.md,
-    paddingBottom: spacing.lg
-  },
-  lockNoticeBody: {
-    flex: 1,
-    gap: spacing.xs
-  },
-  lockNoticeTitle: {
-    color: colors.textPrimary,
-    fontSize: typography.bodySize,
-    fontWeight: '600'
-  },
-  lockNoticeDescription: {
-    color: colors.textSecondary,
-    fontSize: typography.metaSize
-  },
-  group: {
-    overflow: 'hidden',
-    borderRadius: radii.card,
-    backgroundColor: colors.bgRaised
-  },
-  groupSpaced: {
-    marginTop: spacing.md
-  },
-  divided: {
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: colors.composerBorder
-  },
-  pressed: {
-    opacity: 0.7
-  }
-})

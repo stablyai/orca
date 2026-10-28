@@ -17,7 +17,6 @@ import {
 } from '@/runtime/host-structured-agents'
 import { TooltipProvider } from '../ui/tooltip'
 import { SourceControlActionRecipeRow } from './SourceControlActionRecipeRow'
-import { shouldShowSourceControlActionArguments } from './source-control-action-arguments-visibility'
 
 vi.mock('@/runtime/runtime-rpc-client', () => ({
   callRuntimeRpc: vi.fn(async () => ({ agents: [{ agent: 'grok', capabilities: {} }] }))
@@ -67,27 +66,6 @@ beforeEach(() => {
 })
 afterEach(resetHostStructuredAgentsForTests)
 
-it.each([
-  ['chat on', 'claude', true, undefined, false],
-  ['chat off', 'claude', false, undefined, true],
-  ['provider off', 'claude', true, { claude: false }, true],
-  ['no chat support', 'goose', true, undefined, true]
-] as const)('%s: shows Arguments only for the CLI', (_name, agent, chat, providers, visible) => {
-  configure({ experimentalNativeChat: chat, nativeChatProviders: providers })
-  render(<Row agent={agent} />)
-  expect(Boolean(screen.queryByRole('textbox', { name: 'Arguments' }))).toBe(visible)
-  expect(screen.getByText('Command template')).toBeDefined()
-})
-
-it('hides an unresolved launch even with chat off, but always shows text action Arguments', () => {
-  configure({ experimentalNativeChat: false })
-  useAppStore.setState({ localDetectedAgentIdsByContext: {} })
-  const view = render(<Row />)
-  expect(screen.queryByRole('textbox', { name: 'Arguments' })).toBeNull()
-  view.rerender(<Row actionId="commitMessage" />)
-  expect(screen.getByDisplayValue('--saved')).toBeDefined()
-})
-
 it('keeps the draft and chip while Model/Effort controls stay hidden', () => {
   configure({ experimentalNativeChat: false })
   render(<Row />)
@@ -123,23 +101,4 @@ it('reacts to the real host registry when another agent gains chat support', asy
     )
   )
   expect(screen.queryByRole('textbox', { name: 'Arguments' })).toBeNull()
-})
-
-it('honors an explicit future surface only after an agent resolves', () => {
-  const input = {
-    agent: 'claude',
-    settings: { experimentalNativeChat: true },
-    chatAgents: ['claude']
-  } as const
-  expect(shouldShowSourceControlActionArguments({ ...input, launchKind: 'terminal' })).toBe(true)
-  expect(
-    shouldShowSourceControlActionArguments({
-      ...input,
-      settings: { experimentalNativeChat: false },
-      launchKind: 'chat'
-    })
-  ).toBe(false)
-  expect(
-    shouldShowSourceControlActionArguments({ ...input, agent: null, launchKind: 'terminal' })
-  ).toBe(false)
 })

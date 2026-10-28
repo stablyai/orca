@@ -10,7 +10,7 @@ import {
 } from './claude-structured-session-test-support'
 import { captureStructuredExecutionOptions } from '../native-chat/agent-session-wire/structured-agent-session-execution-options'
 import { claudeAndCodexAgents } from '../native-chat/agent-session-wire/structured-agent-session-adapter-router-test-support'
-import type { ClaudeStructuredSessionEvent } from './claude-structured-session-state'
+import type { ClaudeStructuredSessionEvent } from './structured/claude-structured-session-state'
 import * as dispatchContent from './claude-structured-dispatch-content'
 import { ClaudeControlRequestError } from './claude-stream-json-connection'
 

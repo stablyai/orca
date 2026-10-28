@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 import type { StructuredAgentSessionEventSink } from '../native-chat/agent-session-wire/structured-agent-session-event-sink'
-import type { ClaudeStructuredSessionEvent } from './claude-structured-session-adapter'
+import type { ClaudeStructuredSessionEvent } from './structured/claude-structured-session-state'
 import {
   adapterFor,
   fakeClaude,
@@ -46,7 +46,9 @@ describe('what a started Claude session says ended it', () => {
     const refusal =
       '--dangerously-skip-permissions cannot be used with root/sudo privileges for security reasons'
 
-    connection.handlers.onExit?.(claudeStreamJsonExitError(refusal, { code: 1, signal: null }))
+    connection.handlers.onExit?.(
+      claudeStreamJsonExitError(refusal, { code: 1, signal: null, processless: false })
+    )
 
     expect(await ended()).toMatchObject({
       cause: 'unexpected-exit',

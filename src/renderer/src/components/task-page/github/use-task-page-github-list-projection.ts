@@ -1,4 +1,4 @@
-import type { TaskPageJiraCreationMetadataModel } from '../../use-task-page-jira-creation-metadata'
+import type { TaskPageJiraCreationMetadataModel } from '../jira/use-task-page-jira-creation-metadata'
 import { getWorkItemRepo } from '@/lib/work-item-repo-row'
 import { useCallback, useMemo, useEffect } from 'react'
 import type { GitHubWorkItem } from '../../../../../shared/github/work-item-types'

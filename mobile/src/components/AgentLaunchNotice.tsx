@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Pressable, StyleSheet, Text, View, type StyleProp, type TextStyle } from 'react-native'
+import { Pressable, Text, View, type StyleProp, type TextStyle } from 'react-native'
 import { useClipboardWriter } from '../platform/clipboard'
 import {
   AGENT_LAUNCH_STATUS_UNREADABLE_MESSAGE,
@@ -7,6 +7,8 @@ import {
 } from '../session/mobile-existing-agent-launch'
 import type { MobileAgentLaunchAvailability } from '../session/mobile-agent-launch-availability'
 import { colors, spacing, typography } from '../theme/mobile-theme'
+import { themedStyleSheet } from '../theme/themed-styles'
+import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 
 type Props = {
   availability: MobileAgentLaunchAvailability
@@ -29,6 +31,7 @@ export function AgentLaunchNotice({
   undeliveredPrompt,
   errorStyle
 }: Props) {
+  useMobileColorScheme()
   const clipboard = useClipboardWriter()
   const [copyState, setCopyState] = useState<{ prompt: string; label: string } | null>(null)
   const availabilityMessage =
@@ -69,7 +72,7 @@ export function AgentLaunchNotice({
   )
 }
 
-const styles = StyleSheet.create({
+const styles = themedStyleSheet(() => ({
   notice: {
     gap: spacing.xs
   },
@@ -86,4 +89,4 @@ const styles = StyleSheet.create({
     fontSize: typography.metaSize,
     fontWeight: '600'
   }
-})
+}))

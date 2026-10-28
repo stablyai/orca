@@ -150,7 +150,7 @@ jobs:
           export ORCA_SHARD_SOURCE_SHA
           node config/scripts/run-vitest.mjs run --config config/vitest.config.ts \
             --shard=${{ matrix.shard.index }}/${{ matrix.shard.count }} \
-            ${{ inputs.runner == 'blacksmith-8vcpu-ubuntu-2404' && '--maxWorkers=8' || (runner.arch == 'ARM64' || inputs.runner == 'blacksmith-4vcpu-ubuntu-2404') && '--maxWorkers=4' || '' }}
+            ${{ inputs.runner == 'blacksmith-8vcpu-ubuntu-2404' && '--maxWorkers=8' || (runner.arch == 'ARM64' || inputs.runner == 'blacksmith-4vcpu-ubuntu-2404' || inputs.runner == 'ubuntu-24.04') && '--maxWorkers=4' || '' }}
 
       - name: Seal unit module cache
         id: module-cache-seal

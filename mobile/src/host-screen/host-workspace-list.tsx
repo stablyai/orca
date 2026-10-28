@@ -17,6 +17,7 @@ import { MobileSearchField } from '../components/MobileSearchField'
 import { NewWorkspaceFab, FAB_SIZE } from '../components/NewWorkspaceFab'
 import { WorktreeListRow } from '../components/WorktreeListRow'
 import { colors, spacing } from '../theme/mobile-theme'
+import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import { getWorktreeRowIdentity } from '../worktree/worktree-host-row-identity'
 import {
   HostWorkspaceListReopen,
@@ -33,6 +34,7 @@ import { projectGroupHeaderIndent } from '../worktree/project-group-indent'
 import type { HostScreenController } from './use-host-screen-controller'
 
 export function HostWorkspaceList({ controller }: { controller: HostScreenController }) {
+  const colorScheme = useMobileColorScheme()
   const {
     actions,
     activeWorktreeScroll,
@@ -154,6 +156,7 @@ export function HostWorkspaceList({ controller }: { controller: HostScreenContro
         <SectionList
           ref={activeWorktreeScroll.sectionListRef}
           sections={sections}
+          extraData={colorScheme}
           keyExtractor={(w) => w.sectionListKey ?? getWorktreeRowIdentity(w)}
           stickySectionHeadersEnabled={false}
           // Why: keep the search IME up while tapping clear.
@@ -276,5 +279,6 @@ export function HostWorkspaceList({ controller }: { controller: HostScreenContro
 }
 
 function ListSeparator() {
+  useMobileColorScheme()
   return <View style={styles.separator} />
 }

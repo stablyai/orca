@@ -50,7 +50,8 @@ export const WINDOWS_PREBUILD_CACHE_INPUTS = [
   'src/packages/process-host/src/windows-command-line.ts',
   'src/packages/process-host/src/windows-cmd-shim-resolution.ts',
   'src/packages/process-host/src/windows-system-binary.ts',
-  'src/packages/process-host/src/windows-tree-kill.ts'
+  'src/packages/process-host/src/windows-tree-kill.ts',
+  'src/packages/process-host/src/wsl-distro-allowlist.ts'
 ]
 
 function windowsSlot(platform, arch) {
@@ -174,6 +175,7 @@ export function validateWindowsPrebuildCache({
   const addon = join(slotDir, 'conpty.node')
   ownership.assertRebuiltConptyMatchesArch(addon, arch)
   ownership.assertCygwinBreakawayDenied(addon, { dir: slotDir })
+  ownership.assertNativeHostJobOwnership(addon)
   return slot
 }
 

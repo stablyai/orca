@@ -12,6 +12,7 @@ import {
   resolveMobileTerminalTabAgentId
 } from './mobile-terminal-tab-agent'
 import { colors } from '../theme/mobile-theme'
+import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import { MobileSessionHeaderIconButton } from './MobileSessionHeaderIconButton'
 import { QuickCommandsTabButton } from './QuickCommandsTabButton'
 import {
@@ -33,6 +34,7 @@ export function MobileSessionTabStrip({
   controller: MobileSessionController
   inTopBar: boolean
 }) {
+  useMobileColorScheme()
   const {
     connState,
     activeSessionTabId,

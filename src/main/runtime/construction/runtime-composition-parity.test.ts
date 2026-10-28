@@ -46,6 +46,11 @@ const DECLARED_HOST_DIFFERENCES: readonly DeclaredDifference[] = [
     reason: 'Offscreen WebContents need Electron.'
   },
   {
+    wiring: 'ctor:getSetupTerminalTitle',
+    missingOn: 'orcad',
+    reason: 'orcad has no UI language and serves clients in any locale, so Setup tabs stay English.'
+  },
+  {
     wiring: 'ctor:prepareClaudeAuth',
     missingOn: 'orcad',
     reason: 'orcad passes it to registerHeadlessPtyRuntime instead, and only off WSL.'

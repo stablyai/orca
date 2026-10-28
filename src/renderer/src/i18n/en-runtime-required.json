@@ -396,8 +396,9 @@
           "skippedConflictsExcluded_other": "{{count}} unresolved conflicts were excluded from this diff view."
         },
         "ConflictComponents": {
-          "4be41eaafc": "unresolved conflict",
-          "55d61a0ccd": "conflict ·"
+          "55d61a0ccd": "conflict ·",
+          "unresolvedConflicts_one": "{{count}} unresolved conflict",
+          "unresolvedConflicts_other": "{{count}} unresolved conflicts"
         },
         "DiffSectionBody": {
           "bdbf02d5df": "binary"
@@ -864,10 +865,11 @@
             "c57eda6822": "edit"
           },
           "Search": {
-            "0b8104eaf2": "file",
             "1ec640c9c7": "match",
-            "4107975b3a": "in",
-            "6aeda362ed": "result"
+            "fileCount_one": "{{count}} file",
+            "fileCount_other": "{{count}} files",
+            "resultCount_one": "{{count}} result",
+            "resultCount_other": "{{count}} results"
           },
           "SourceControl": {
             "03d238218c": "Details",
@@ -880,7 +882,6 @@
             "3636d0f686": "ready",
             "383cf92c73": "tree",
             "3a231c845b": "unknown",
-            "413a3ba113": "conflict",
             "424ee0e5bf": "error",
             "48a003c1b1": "Staged Changes",
             "522f44dce5": "Untracked Files",
@@ -895,6 +896,8 @@
             "9febd8ab5f": "create_pr",
             "a0cc0e6b4e": "loading",
             "c105a61960": "merge",
+            "conflictCount_one": "{{count}} conflict",
+            "conflictCount_other": "{{count}} conflicts",
             "conflictsSection": "Conflicts",
             "createPrIntentConfigureAi": "Add a commit message or configure Source Control AI settings.",
             "createPrIntentGenerateFailed": "Could not generate a commit message. Add one and retry.",
@@ -923,20 +926,25 @@
           "checks": {
             "panel": {
               "content": {
-                "3916814392": "behind (base commit:",
                 "07eccfa397": "No details are available for this check.",
                 "0fc6f743b3": "by",
                 "49ea0937e4": "Add comment to resolve list",
-                "5341023167": "check",
-                "6fa7f8723f": "commit",
                 "7c1f0a2b11": "Open",
                 "90206b6353": "comment",
                 "95ad090b01": "thread",
                 "9fecebb29d": "Add",
                 "a916648574": "Open details",
                 "actionRequiredHint": "This check needs a manual action on GitHub (for example, approving the workflow run) before merging is unblocked.",
-                "b652f38caf": "failing check",
-                "d098e5529a": "Output"
+                "baseCommitLabel": "base commit:",
+                "commitsBehind_one": "{{count}} commit behind",
+                "commitsBehind_other": "{{count}} commits behind",
+                "d098e5529a": "Output",
+                "failingChecks_one": "{{count}} failing check",
+                "failingChecks_other": "{{count}} failing checks",
+                "pendingChecks_one": "{{count}} check pending",
+                "pendingChecks_other": "{{count}} checks pending",
+                "unresolvedChecks_one": "{{count}} check unresolved",
+                "unresolvedChecks_other": "{{count}} checks unresolved"
               },
               "empty": {
                 "state": {
@@ -1102,6 +1110,24 @@
                   "48c5ef95d9": "area",
                   "6de99d162b": "entry",
                   "e7611dca35": "file"
+                }
+              },
+              "dropdown": {
+                "items": {
+                  "fastForwardCount_one": "Fast-forward {{count}} commit",
+                  "fastForwardCount_other": "Fast-forward {{count}} commits",
+                  "pullCount_one": "Pull {{count}} commit",
+                  "pullCount_other": "Pull {{count}} commits",
+                  "pushCount_one": "Push {{count}} commit",
+                  "pushCount_other": "Push {{count}} commits",
+                  "titleForcePushOlderCopiesCount_one": "Remote only has older copies of local commits. Force push {{count}} branch commit with lease to update {{upstreamName}}.",
+                  "titleForcePushOlderCopiesCount_other": "Remote only has older copies of local commits. Force push {{count}} branch commits with lease to update {{upstreamName}}.",
+                  "titleManualForcePushReplaceRemote_one": "Force push {{count}} local commit with lease to update {{upstreamName}} and replace remote-only commits.",
+                  "titleManualForcePushReplaceRemote_other": "Force push {{count}} local commits with lease to update {{upstreamName}} and replace remote-only commits.",
+                  "titleManualForcePush_one": "Force push {{count}} local commit with lease to update {{upstreamName}}.",
+                  "titleManualForcePush_other": "Force push {{count}} local commits with lease to update {{upstreamName}}.",
+                  "titleUnpublishedForcePushCount_one": "Force push {{count}} branch commit with lease and set an upstream if needed.",
+                  "titleUnpublishedForcePushCount_other": "Force push {{count}} branch commits with lease and set an upstream if needed."
                 }
               },
               "primary": {
@@ -1289,6 +1315,10 @@
             "copy": "Preview updated worktree-card layout, metadata placement, card-display menu options, and status presentation."
           }
         },
+        "GeneralPane": {
+          "confirm_running_terminal_close": "Confirm before closing running terminals",
+          "confirm_running_terminal_close_description": "Ask before stopping a running agent or command when closing a terminal."
+        },
         "GeneralRemoteServerUpdates": {
           "reviewUpdateOne": "1 update available",
           "reviewUpdates": "{{value0}} updates available"
@@ -1405,6 +1435,10 @@
         },
         "McpConfigFileRow": {
           "845ae248e8": "valid"
+        },
+        "McpConfigSection": {
+          "detectedServers_one": "{{detected}} detected · {{count}} server",
+          "detectedServers_other": "{{detected}} detected · {{count}} servers"
         },
         "MobileEmulatorAgentControlRow": {
           "1861982430": "Failed to load CLI status.",
@@ -2159,7 +2193,9 @@
           "07729cc155": "expired"
         },
         "DeleteWorktreeDirtyChangeHint": {
-          "8e2994ce28": "Deleting this workspace permanently removes these changes from disk."
+          "8e2994ce28": "Deleting this workspace permanently removes these changes from disk.",
+          "changeCount_one": "1 uncommitted or untracked change",
+          "changeCount_other": "{{count}} uncommitted or untracked changes"
         },
         "FolderWorkspaceComposerDialog": {
           "chooseSourceProject": "Choose task source",
@@ -2173,7 +2209,16 @@
         },
         "ImportedWorktreesVisibilityLine": {
           "b2bc47c080": "more locations",
-          "f54f2bec5d": "{{value0}} hidden worktrees for {{value1}}"
+          "collapseAriaLabel": "Collapse hidden worktrees for {{repo}}",
+          "expandAriaLabel": "Expand hidden worktrees for {{repo}}",
+          "hidingInRepo_one": "Hiding 1 discovered worktree in {{repo}}",
+          "hidingInRepo_other": "Hiding {{count}} discovered worktrees in {{repo}}",
+          "hiding_one": "Hiding 1 discovered worktree",
+          "hiding_other": "Hiding {{count}} discovered worktrees",
+          "keepHiddenAriaLabel_one": "Keep 1 discovered worktree hidden for {{repo}}; recover from the project menu",
+          "keepHiddenAriaLabel_other": "Keep {{count}} discovered worktrees hidden for {{repo}}; recover from the project menu",
+          "keepHiddenTooltip": "Keep hidden - recover from the project menu",
+          "repoOnHost": "{{repo}} on {{host}}"
         },
         "LinearAgentSkillSetupPrompt": {
           "missingBoth": "Orca CLI and Linear agent skill are missing.",
@@ -2212,7 +2257,9 @@
           "e8c1f4a2b9": "in workspace options."
         },
         "SetupScriptPromptCard": {
-          "dcaa645da5": "ok"
+          "dcaa645da5": "ok",
+          "savedWithSkippedFields_one": "1 unsupported field skipped. Saved the setup command.",
+          "savedWithSkippedFields_other": "{{count}} unsupported fields skipped. Saved the setup command."
         },
         "SidebarHeader": {
           "49f62c5665": "Workspace board",
@@ -2271,7 +2318,8 @@
         "WorktreeCardPorts": {
           "34f733dda2": "Go to Worktree",
           "3e5f66564e": "Workspace unavailable",
-          "fed49903c9": "{{value0}} live {{value1}}"
+          "fed49903c9": "{{value0}} live {{value1}}",
+          "unknownProcess": "Unknown process"
         },
         "WorktreeCardReviewDetailSection": {
           "copyLink": "Copy link",
@@ -2344,6 +2392,9 @@
             }
           }
         },
+        "addRepoWslHostFolderPicker": {
+          "windowsDrive": "Folders on a Windows drive stay on this computer. Choose this computer as the host to add one."
+        },
         "index": {
           "b826a98b6f": "busy"
         },
@@ -2376,6 +2427,12 @@
               }
             }
           }
+        },
+        "workspaceBatchActionLabels": {
+          "deleteCount_one": "Delete 1 Workspace",
+          "deleteCount_other": "Delete {{count}} Workspaces",
+          "sleepCount_one": "Sleep 1 Workspace",
+          "sleepCount_other": "Sleep {{count}} Workspaces"
         },
         "worktree": {
           "card": {
@@ -2465,15 +2522,15 @@
           "installAnotherMachine": "Install on another machine"
         },
         "SkillInstallReviewContent": {
-          "1b6ad2ca5c": "checked.",
           "27672470d9": "Opening the link does not install anything. Review the immutable version first.",
           "3d8421ca2f": "executable",
-          "3fc62a61eb": "placement",
           "87137bcb8d": "scripts",
           "8f9833d509": "Immutable version",
           "98ed90e523": "A skill contains instructions and may include scripts. Treat it as code from its author.",
           "f72ee4022a": "SHA-256",
-          "fab8fce842": "files"
+          "fab8fce842": "files",
+          "placementsChecked_one": "{{count}} placement checked.",
+          "placementsChecked_other": "{{count}} placements checked."
         },
         "SkillManagedInstallList": {
           "86c76cb262": "{{count}} skill bundle"
@@ -3146,6 +3203,8 @@
       "popupBlocked": "Popup blocked: {{origin}}"
     },
     "loadFailure": {
+      "blockedDescription": "An extension blocked this page. To open it, allow this site in the extension, then retry.",
+      "blockedTitle": "{{host}} is blocked",
       "cantLoadPage": "Can't load this page",
       "dnsDescription": "Check the address for typos.",
       "dnsTitle": "Couldn't find {{host}}",
@@ -3177,13 +3236,19 @@
       "behindBase_other": "{{count}} commits behind (base commit: <commit>{{commit}}</commit>)"
     },
     "triage": {
+      "failingCount": "{{count}} failing checks",
       "failingCount_one": "{{count}} failing check",
       "failingCount_other": "{{count}} failing checks",
+      "pendingCount": "{{count}} checks pending",
       "pendingCount_one": "{{count}} check pending",
       "pendingCount_other": "{{count}} checks pending",
+      "unresolvedCount": "{{count}} checks unresolved",
       "unresolvedCount_one": "{{count}} check unresolved",
       "unresolvedCount_other": "{{count}} checks unresolved"
     }
+  },
+  "codeSearch": {
+    "resultSummary": "Results: {{results}} · files: {{files}}"
   },
   "components": {
     "native-chat": {
@@ -3249,8 +3314,11 @@
       },
       "composer": {
         "defaultModel": "Default",
-        "effort": "Effort",
         "imageUnsupported": "Image paste is not supported for this agent.",
+        "optionValueShort": {
+          "max": "Max",
+          "ultra": "Ultra"
+        },
         "placeholder": "Ask anything, @ to mention files, / for commands"
       },
       "failureWords": {
@@ -3374,13 +3442,26 @@
         "continuedOutsideRewound": "Continued outside this chat. Earlier replies above are no longer in this conversation's history.",
         "historyItemTooLarge": "This part of the chat was too large to show.",
         "historyRepaired": "Part of this chat's history couldn't be loaded.",
+        "orcaStopCanContinue": "You can continue in this conversation.",
+        "orcaStopCrash": "Orca on {{machine}} stopped unexpectedly while this response was in progress.",
+        "orcaStopQuit": "Orca on {{machine}} was closed while this response was in progress.",
+        "orcaStopRemote": "Orca on {{machine}} stopped while this response was in progress.",
+        "orcaStopUnnamedServer": "the remote server",
+        "orcaStopUpdate": "Orca on {{machine}} restarted for an update while this response was in progress.",
         "orchestrationMail": "Orchestration mail",
-        "plan": "Plan"
+        "plan": "Plan",
+        "stoppedBeforeStart": "Stopped manually"
       },
       "question": {
         "other": "Other…"
       },
       "queuedMessages": {
+        "editChanged": "This message changed while you were editing. Your edit is in the chat box.",
+        "editChangedNotSaved": "This message changed while you were editing. Your edit wasn't saved.",
+        "editChangedPrompt": "This message changed while you were editing. Your edit will be in the chat box after you answer the agent.",
+        "editFailed": "This message can't be edited.",
+        "editGone": "This message was already sent or removed. Your edit is in the chat box.",
+        "editGonePrompt": "This message was already sent or removed. Your edit will be in the chat box after you answer the agent.",
         "imageCount_one": "{{count}} image",
         "imageCount_other": "{{count}} images"
       },
@@ -3448,6 +3529,7 @@
         "countOne": "1 tool call",
         "failedCallsLabel": "Failed tool calls: {{value0}}",
         "failedCount": "{{value0}} failed",
+        "fullOutputPartial": "Showing {{shown}} of {{total}}.",
         "interruptedCallsLabel": "Interrupted tool calls: {{value0}}",
         "interruptedCount": "{{value0}} interrupted",
         "moreCalls": "+{{value0}} more",
@@ -3455,6 +3537,7 @@
         "ranCommandOneToolSummary": "Ran {{commandCount}} command and used {{toolCount}} tool",
         "ranCommandsManyToolsSummary": "Ran {{commandCount}} commands and used {{toolCount}} tools",
         "ranCommandsOneToolSummary": "Ran {{commandCount}} commands and used {{toolCount}} tool",
+        "result": "Result",
         "running": "Running…",
         "runningCommand": "Running command",
         "runningNamed": "Running {{toolName}}",
@@ -3508,6 +3591,7 @@
         "optionRejected": "The agent didn't accept this setting.",
         "outcomeUnknown": "Orca couldn't confirm what happened. Check the chat.",
         "ownerUnproven": "The previous agent in this chat may still be running.",
+        "pendingWork": "Wait for pending work and messages to finish before using this command.",
         "promptPending": "The agent is waiting for an answer to a question or approval.",
         "questionChanged": "This question was already answered or has changed.",
         "queueTooLarge": "Too much text is waiting in the queue.",
@@ -3632,6 +3716,7 @@
     "moreInSourceControl_other": "{{count}} more notes in Source Control"
   },
   "editorConflicts": {
+    "unresolvedCount": "{{count}} unresolved conflicts",
     "unresolvedCount_one": "{{count}} unresolved conflict",
     "unresolvedCount_other": "{{count}} unresolved conflicts"
   },
@@ -3676,8 +3761,14 @@
   },
   "projectViews": {
     "error": {
+      "itemCountTooLarge": "This view has {{count}} items — too large to render in Orca. Narrow the view's filter on GitHub.",
       "itemCountTooLarge_one": "This view has {{count}} item — too large to render in Orca. Narrow the view's filter on GitHub.",
-      "itemCountTooLarge_other": "This view has {{count}} items — too large to render in Orca. Narrow the view's filter on GitHub."
+      "itemCountTooLarge_other": "This view has {{count}} items — too large to render in Orca. Narrow the view's filter on GitHub.",
+      "notFound": "Could not find this project or view.",
+      "tooManyItems": "This view has too many items to render in Orca. Narrow the view's filter on GitHub."
+    },
+    "unsupported": {
+      "layoutMessage": "Orca doesn't support {{layout}} project views yet."
     }
   },
   "resourceManager": {
@@ -3728,20 +3819,36 @@
       }
     }
   },
+  "skills": {
+    "install": {
+      "checkedPlacements": "Checked installation locations: {{count}}."
+    }
+  },
   "sourceControl": {
     "actions": {
+      "fastForwardCount": "Fast-forward {{count}} commits",
       "fastForwardCount_one": "Fast-forward {{count}} commit",
       "fastForwardCount_other": "Fast-forward {{count}} commits",
+      "forcePushBranch": "Remote only has older copies of local commits. Force push this branch with lease to update {{upstream}}.",
+      "forcePushCount": "Remote only has older copies of local commits. Force push {{count}} branch commits with lease to update {{upstream}}.",
       "forcePushCount_one": "Remote only has older copies of local commits. Force push {{count}} branch commit with lease to update {{upstream}}.",
       "forcePushCount_other": "Remote only has older copies of local commits. Force push {{count}} branch commits with lease to update {{upstream}}.",
+      "manualForcePush": "Force push {{count}} local commits with lease to update {{upstream}}.",
+      "manualForcePushReplace": "Force push {{count}} local commits with lease to update {{upstream}} and replace remote-only commits.",
       "manualForcePushReplace_one": "Force push {{count}} local commit with lease to update {{upstream}} and replace remote-only commits.",
       "manualForcePushReplace_other": "Force push {{count}} local commits with lease to update {{upstream}} and replace remote-only commits.",
       "manualForcePush_one": "Force push {{count}} local commit with lease to update {{upstream}}.",
       "manualForcePush_other": "Force push {{count}} local commits with lease to update {{upstream}}.",
+      "pullCount": "Pull {{count}} commits",
       "pullCount_one": "Pull {{count}} commit",
       "pullCount_other": "Pull {{count}} commits",
+      "pushCount": "Push {{count}} commits",
       "pushCount_one": "Push {{count}} commit",
       "pushCount_other": "Push {{count}} commits",
+      "remoteBranch": "the remote branch",
+      "syncCounts": "Pull {{behind}}, push {{ahead}}",
+      "unpublishedForcePushBranch": "Force push this branch with lease and set an upstream if needed.",
+      "unpublishedForcePushCount": "Force push {{count}} branch commits with lease and set an upstream if needed.",
       "unpublishedForcePushCount_one": "Force push {{count}} branch commit with lease and set an upstream if needed.",
       "unpublishedForcePushCount_other": "Force push {{count}} branch commits with lease and set an upstream if needed."
     },
@@ -3749,6 +3856,7 @@
       "commitsAhead_one": "{{count}} commit ahead of {{baseRef}}",
       "commitsAhead_other": "{{count}} commits ahead of {{baseRef}}"
     },
+    "conflictCount": "{{count}} conflicts",
     "conflictCount_one": "{{count}} conflict",
     "conflictCount_other": "{{count}} conflicts",
     "discard": {

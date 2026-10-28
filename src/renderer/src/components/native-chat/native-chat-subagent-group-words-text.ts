@@ -5,7 +5,7 @@ import {
   NATIVE_CHAT_SUBAGENT_GROUP_COPY as COPY,
   type NativeChatSubagentGroupCopyId,
   type NativeChatSubagentGroupSay
-} from '../../../../shared/native-chat-subagent-group-header'
+} from '../../../../shared/native-chat/transcript/native-chat-subagent-group-header'
 
 const PIECES: Record<
   NativeChatSubagentGroupCopyId,

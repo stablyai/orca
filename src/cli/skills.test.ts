@@ -21,15 +21,15 @@ vi.mock('./bundled-skill-guides.js', () => {
         name: 'zeta',
         description: 'Use when zeta work\nspans lines.',
         markdown: '# Zeta\n',
-        fullMarkdown: '# Zeta\n\n## References\n\nZeta reference.\n',
-        aliases: []
+        aliases: [],
+        references: []
       },
       {
         name: 'alpha',
         description: 'Use when alpha work is needed.',
         markdown: '# Alpha\n\nShort.\n',
-        fullMarkdown: '# Alpha\n\nShort.\n\n## References\n\nFull.\n',
-        aliases: ['legacy-alpha']
+        aliases: ['legacy-alpha'],
+        references: [{ name: 'deep', markdown: '# Deep\n\nFull.\n' }]
       },
       {
         name: 'gamma',
@@ -37,8 +37,8 @@ vi.mock('./bundled-skill-guides.js', () => {
           'Use when gamma work spans several sentences describing exactly how a ' +
           'coding agent should decide whether gamma applies to the current task at hand.',
         markdown: '# Gamma\n',
-        fullMarkdown: '# Gamma\n\n## References\n\nGamma reference.\n',
-        aliases: []
+        aliases: [],
+        references: []
       }
     ]
   }
@@ -121,7 +121,9 @@ describe('orca skills CLI', () => {
 
     await main(['skills', 'get', 'alpha', '--full'], '/tmp/repo')
 
-    expect(stdoutText(stdoutSpy)).toBe('# Alpha\n\nShort.\n\n## References\n\nFull.\n')
+    expect(stdoutText(stdoutSpy)).toBe(
+      '# Alpha\n\nShort.\n\n---\n\n# Bundled references\n\nThese references belong to the version-matched guide above. Read only the documents named by its action gates.\n\n<!-- bundled-reference: references/deep.md -->\n\n# Deep\n\nFull.\n'
+    )
   })
 
   it('supports the canonical single-item show verb as an alias', async () => {
@@ -167,7 +169,8 @@ describe('orca skills CLI', () => {
         {
           name: 'alpha',
           full: true,
-          markdown: '# Alpha\n\nShort.\n\n## References\n\nFull.\n'
+          markdown:
+            '# Alpha\n\nShort.\n\n---\n\n# Bundled references\n\nThese references belong to the version-matched guide above. Read only the documents named by its action gates.\n\n<!-- bundled-reference: references/deep.md -->\n\n# Deep\n\nFull.\n'
         },
         null,
         2

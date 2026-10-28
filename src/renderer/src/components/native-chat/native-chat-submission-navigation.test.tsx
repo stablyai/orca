@@ -3,7 +3,7 @@ import { act, cleanup, fireEvent, render, renderHook } from '@testing-library/re
 import { afterEach, expect, it, vi } from 'vitest'
 import { useRef } from 'react'
 import type { NativeChatStructuredComposerTransport } from './native-chat-composer-types'
-import type { SessionOptionDescriptor } from '../../../../shared/native-chat-session-options'
+import type { SessionOptionDescriptor } from '../../../../shared/native-chat/input/native-chat-session-options'
 import { dispatchStructuredAgentSessionComposerCommand } from '../../../../shared/structured-agent-session-composer'
 import { useNativeChatStructuredComposerSend } from './use-native-chat-structured-composer-send'
 import { useNativeChatComposerSubmit } from './use-native-chat-composer-submit'

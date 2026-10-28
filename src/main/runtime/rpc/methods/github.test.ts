@@ -4,6 +4,7 @@ import { RpcDispatcher } from '../dispatcher'
 import type { RpcRequest } from '../core'
 import type { OrcaRuntimeService } from '../../orca-runtime'
 import { GITHUB_METHODS } from './github'
+import { projectRelationsTableFixture } from '../../../../shared/github/project-relations.test-fixture'
 
 function makeRequest(method: string, params?: unknown): RpcRequest {
   return { id: 'req-1', authToken: 'tok', method, params }
@@ -766,6 +767,8 @@ describe('github RPC methods', () => {
       getRuntimeId: () => 'test-runtime',
       getGitHubProjectViewTable: vi.fn().mockResolvedValue({ ok: true, data: { rows: [] } })
     } as unknown as OrcaRuntimeService
+    const table = projectRelationsTableFixture()
+    vi.mocked(runtime.getGitHubProjectViewTable).mockResolvedValueOnce({ ok: true, data: table })
     const dispatcher = new RpcDispatcher({ runtime, methods: GITHUB_METHODS })
 
     const response = await dispatcher.dispatch(
@@ -787,7 +790,10 @@ describe('github RPC methods', () => {
       viewName: undefined,
       queryOverride: 'is:open'
     })
-    expect(response).toMatchObject({ ok: true, result: { ok: true, data: { rows: [] } } })
+    if (!response.ok) {
+      throw new Error('Expected successful RPC response')
+    }
+    expect(response.result).toEqual({ ok: true, data: projectRelationsTableFixture() })
   })
 
   it('fetches GitHub project work item details by slug on the runtime server', async () => {

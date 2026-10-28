@@ -35,7 +35,7 @@ const GUIDE_REFERENCES = {
     'recovery-and-cleanup.md',
     'worker-contract.md'
   ],
-  'orca-cli': ['automations.md', 'browser.md', 'publishing.md'],
+  'orca-cli': ['artifacts.md', 'automations.md', 'browser.md', 'skill-sharing.md'],
   'orca-per-workspace-env': [
     'docker-ssh.md',
     'failure-modes.md',
@@ -191,7 +191,6 @@ describe('bundled skill guide generator', () => {
       expect(guide.aliases).toEqual(GUIDE_ALIASES[guide.name])
       const references = GUIDE_REFERENCES[guide.name]
       if (!references) {
-        expect(guide.fullMarkdown).toBe(source)
         expect(guide.references).toEqual([])
         continue
       }
@@ -210,21 +209,6 @@ describe('bundled skill guide generator', () => {
                 'references',
                 `${reference.name}.md`
               ),
-              'utf8'
-            )
-          )
-        )
-      }
-      expect(guide.fullMarkdown).not.toBe(guide.markdown)
-      expect(guide.fullMarkdown.length).toBeGreaterThan(guide.markdown.length)
-      expect(guide.fullMarkdown.startsWith(source.trimEnd())).toBe(true)
-      for (const reference of references) {
-        const marker = `<!-- bundled-reference: references/${reference} -->`
-        expect(guide.fullMarkdown.split(marker)).toHaveLength(2)
-        expect(guide.fullMarkdown).toContain(
-          normalizeMarkdown(
-            await readFile(
-              path.join(projectDir, 'skill-guides', guide.name, 'references', reference),
               'utf8'
             )
           )

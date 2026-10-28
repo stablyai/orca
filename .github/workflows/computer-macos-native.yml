@@ -1,6 +1,6 @@
 name: Computer-use macOS native
 
-# Split from computer-e2e.yml so CLI/daemon-only PRs skip the paid macOS runner: this job builds the
+# Split from computer-e2e.yml so CLI/daemon-only PRs skip the macOS runner: this job builds the
 # Swift helper and forks out/main/computer-sidecar.js, whose imports never reach src/cli or src/main/daemon.
 on:
   pull_request:
@@ -37,7 +37,7 @@ jobs:
   # grants. Keep the real native build/owner-loss checks on every matching trigger instead.
   mac-native-owner-smoke:
     if: github.event_name != 'pull_request' || github.event.pull_request.draft != true
-    runs-on: blacksmith-6vcpu-macos-15
+    runs-on: macos-15
     permissions:
       contents: read
     steps:

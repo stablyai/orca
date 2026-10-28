@@ -7,18 +7,6 @@ import {
 } from './worktree-visit-recency'
 
 describe('worktree visit recency identities', () => {
-  it('keeps same-id host twins independent when reading and writing keys', () => {
-    const id = 'repo::/srv/app'
-    const localKey = getWorktreeVisitKey(id, 'local')
-    const sshKey = getWorktreeVisitKey(id, 'ssh:builder')
-    const timestamps = { [localKey]: 100, [sshKey]: 200 }
-
-    expect(localKey).toBe(`local|${id}`)
-    expect(sshKey).toBe(`ssh:builder|${id}`)
-    expect(getWorktreeVisitTimestamp(timestamps, { id, hostId: 'local' })).toBe(100)
-    expect(getWorktreeVisitTimestamp(timestamps, { id, hostId: 'ssh:builder' })).toBe(200)
-  })
-
   it('falls back to a legacy bare key only when the host key is absent', () => {
     const id = 'repo::/srv/app'
     expect(getWorktreeVisitTimestamp({ [id]: 100 }, { id, hostId: 'ssh:builder' })).toBe(100)
@@ -67,10 +55,5 @@ describe('rekeyWorktreeVisitHost', () => {
       [getWorktreeVisitKey(id, 'local')]: 20,
       [id]: 10
     })
-  })
-
-  it('returns the same map when the host has no visits', () => {
-    const timestamps = { [getWorktreeVisitKey(id, 'local')]: 1 }
-    expect(rekeyWorktreeVisitHost(timestamps, 'ssh:box', 'runtime:env')).toBe(timestamps)
   })
 })

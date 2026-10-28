@@ -1,6 +1,12 @@
 import type { ExecutionHostId } from '../execution-host'
 import type { GitWorktreeInfo, Worktree } from './types'
 
+export function unregisteredFolderRefusal(worktreePath: string): Error {
+  return new Error(
+    `${worktreePath} is no longer a Git worktree, so its folder was left on disk. Delete the folder yourself to finish removing this workspace.`
+  )
+}
+
 export const LOCKED_WORKTREE_REMOVAL_PREFIX = 'Worktree is locked by Git.'
 
 export const UNSTOPPED_PTY_REMOVAL_PREFIX = 'Failed to physically stop every PTY for worktree:'

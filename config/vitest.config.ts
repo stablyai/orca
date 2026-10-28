@@ -1,3 +1,4 @@
+import { readFileSync } from 'node:fs'
 import { createRequire } from 'node:module'
 import { resolve } from 'node:path'
 import { normalizePath, transformWithOxc, type Plugin } from 'vite'
@@ -46,15 +47,12 @@ const transforms = {
     } satisfies Plugin,
     {
       // Unit tests have no asset server; retain real catalog parsing through fetch(data:).
-      // Read in the worker: inlining six ~1.5 MB catalogs shipped and parsed 11 MB per importing file.
       name: 'locale-catalog-test-assets',
       enforce: 'pre' as const,
       load(id: string) {
         if (/\/i18n\/locales\/[a-z]+\.json\?url$/.test(id)) {
-          return [
-            "import { readFileSync } from 'node:fs'",
-            `export default 'data:application/json;base64,' + readFileSync(${JSON.stringify(id.slice(0, -4))}).toString('base64')`
-          ].join('\n')
+          const catalog = readFileSync(id.slice(0, -4)).toString('base64')
+          return `export default ${JSON.stringify(`data:application/json;base64,${catalog}`)}`
         }
         return null
       }

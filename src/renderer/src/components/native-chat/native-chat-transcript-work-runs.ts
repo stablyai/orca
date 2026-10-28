@@ -5,7 +5,7 @@ import {
   nativeChatWorkRunMember,
   nativeChatWorkRunSpans,
   type NativeChatWorkRunRow
-} from '../../../../shared/native-chat-work-run'
+} from '../../../../shared/native-chat/native-chat-work-run'
 import {
   type NativeChatRowTypography,
   estimateNativeChatRowHeight,

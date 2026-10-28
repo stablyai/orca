@@ -24,7 +24,7 @@ afterEach(() => {
   expect(unusedChatLeaves.inlineVisual).not.toHaveBeenCalled()
   expect(unusedChatLeaves.openSender).not.toHaveBeenCalled()
 })
-import type * as NativeChatWorkRunModule from '../../../../shared/native-chat-work-run'
+import type * as NativeChatWorkRunModule from '../../../../shared/native-chat/native-chat-work-run'
 import type * as NativeChatProseModule from '../../../../shared/native-chat-prose'
 import type { NativeChatMessage } from '../../../../shared/native-chat-types'
 import { projectStructuredAgentSessionMessages } from '../../../../shared/structured-agent-session-message-projection'
@@ -67,7 +67,7 @@ vi.mock(
 
 // Count work-run derivations because rebuilt member arrays can defeat row memoization.
 const entriesCalls = vi.hoisted(() => ({ count: 0 }))
-vi.mock('../../../../shared/native-chat-work-run', async (importOriginal) => {
+vi.mock('../../../../shared/native-chat/native-chat-work-run', async (importOriginal) => {
   const actual = await importOriginal<typeof NativeChatWorkRunModule>()
   return {
     ...actual,

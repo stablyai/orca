@@ -147,52 +147,56 @@ it.each([10, 100])(
   }
 )
 
-it('does not rerender local or other-host consumers when an unrelated host status changes', () => {
-  const unrelated = createCompatibleRuntimeStatusResponse('other')
-  const own = createCompatibleRuntimeStatusResponse('host')
-  if (!unrelated.ok || !own.ok) {
-    throw new Error('expected successful fixture')
-  }
-  const statuses = (otherStatus: typeof unrelated.result | null) =>
-    new Map<string, RuntimeEnvironmentStatus>([
-      ['host', { status: own.result, checkedAt: 1 }],
-      ['other', { status: otherStatus, checkedAt: 1 }]
-    ])
-  useAppStore.setState({ runtimeStatusByEnvironmentId: statuses(null) })
-  let renders = 0
-  const targets = [{ kind: 'local' }, { kind: 'environment', environmentId: 'host' }] as const
-  const views = targets.map((target) =>
-    renderHook(() => {
-      renders += 1
-      return useStructuredAgentSessionOwnPermissionState(target)
-    })
-  )
-  const before = renders
-  for (let flip = 0; flip < 10; flip += 1) {
-    act(() =>
-      useAppStore.setState({
-        runtimeStatusByEnvironmentId: statuses(flip % 2 === 0 ? unrelated.result : null)
+it.each([10, 100])(
+  'does not rerender %s local and other-host consumers for unrelated status changes',
+  (count) => {
+    const unrelated = createCompatibleRuntimeStatusResponse('other')
+    const own = createCompatibleRuntimeStatusResponse('host')
+    if (!unrelated.ok || !own.ok) {
+      throw new Error('expected successful fixture')
+    }
+    const statuses = (otherStatus: typeof unrelated.result | null) =>
+      new Map<string, RuntimeEnvironmentStatus>([
+        ['host', { status: own.result, checkedAt: 1 }],
+        ['other', { status: otherStatus, checkedAt: 1 }]
+      ])
+    useAppStore.setState({ runtimeStatusByEnvironmentId: statuses(null) })
+    let renders = 0
+    const targets = [{ kind: 'local' }, { kind: 'environment', environmentId: 'host' }] as const
+    const views = Array.from({ length: count }, (_, index) =>
+      renderHook(() => {
+        const target = targets[index % targets.length]
+        renders += 1
+        return useStructuredAgentSessionOwnPermissionState(target)
       })
     )
+    const before = renders
+    for (let flip = 0; flip < 10; flip += 1) {
+      act(() =>
+        useAppStore.setState({
+          runtimeStatusByEnvironmentId: statuses(flip % 2 === 0 ? unrelated.result : null)
+        })
+      )
+    }
+    expect(renders - before).toBe(0)
+    const hostState = views[1].result.current
+    act(() =>
+      useAppStore.setState({
+        runtimeStatusByEnvironmentId: new Map<string, RuntimeEnvironmentStatus>([
+          [
+            'host',
+            {
+              status: {
+                ...own.result,
+                capabilities:
+                  hostState === 'supported' ? [] : [AGENT_SESSION_PERMISSION_OWN_RUNTIME_CAPABILITY]
+              },
+              checkedAt: 2
+            }
+          ]
+        ])
+      })
+    )
+    expect(views[1].result.current).toBe(hostState === 'supported' ? 'unsupported' : 'supported')
   }
-  expect(renders - before).toBe(0)
-  const hostState = views[1].result.current
-  act(() =>
-    useAppStore.setState({
-      runtimeStatusByEnvironmentId: new Map<string, RuntimeEnvironmentStatus>([
-        [
-          'host',
-          {
-            status: {
-              ...own.result,
-              capabilities:
-                hostState === 'supported' ? [] : [AGENT_SESSION_PERMISSION_OWN_RUNTIME_CAPABILITY]
-            },
-            checkedAt: 2
-          }
-        ]
-      ])
-    })
-  )
-  expect(views[1].result.current).toBe(hostState === 'supported' ? 'unsupported' : 'supported')
-})
+)

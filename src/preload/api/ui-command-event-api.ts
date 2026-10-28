@@ -81,6 +81,12 @@ export type UiCommandEventApi = {
   onStateChanged: (callback: (ui: PersistedUIState) => void) => () => void
   onOpenSettings: (callback: () => void) => () => void
   consumePendingOpenSettings: () => Promise<boolean>
+  /** Main confirmed Quit Completely; consume the request before acting. */
+  onQuitAndStopAllSessions: (callback: () => void) => () => void
+  /** Consumes the one-shot Quit Completely request; true at most once per request. */
+  consumePendingQuitAndStopAllSessions: () => Promise<boolean>
+  /** Tells main every session stopped; false when main still lists one and stays open. The web client never gets a request. */
+  quitAfterStoppingAllSessions?: () => Promise<boolean>
   onOpenSkillShare: (callback: (shareId: string) => void) => () => void
   consumePendingSkillShare: () => Promise<string | null>
   /** OS "Open With" Markdown/CSV/TSV documents; the local IPC name is retained. */
@@ -115,9 +121,12 @@ export type UiCommandEventApi = {
       sessionProfileId?: string | null
       sessionPartition?: string
       activate?: boolean
+      fallbackWorktreeId?: string
     }) => void
   ) => () => void
   replyTabCreate: (reply: { requestId: string; browserPageId?: string; error?: string }) => void
+  /** Tells main this window can take browser tab requests: listening, with its workspaces restored. */
+  browserTabRequestsReady: () => void
   /** Main asks whether a paired environment owns a workspace before running that host's CLI command. */
   onRequestRemoteCliBrowserScope: (
     callback: (data: RemoteCliBrowserScopeQuery) => void

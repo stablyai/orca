@@ -4,14 +4,16 @@ import {
   getAgentSessionOptionCatalog,
   type CatalogModel
 } from '../../../../shared/agent-session-option-catalog'
-import { matchNativeChatCatalogModelId } from '../../../../shared/native-chat-session-option-state'
-import type { SessionOptionDescriptor } from '../../../../shared/native-chat-session-options'
+import { matchNativeChatCatalogModelId } from '../../../../shared/native-chat/input/native-chat-session-option-state'
+import { retireMissingModelMutation } from '../../../../shared/native-chat-discovered-catalog-models'
+import type { SessionOptionDescriptor } from '../../../../shared/native-chat/input/native-chat-session-options'
 import { useAppStore } from '../../store'
+import { sayNativeChatSessionOptionTranslated } from './native-chat-session-option-labels-text'
 import {
   createNativeChatPtySessionOptions,
   type NativeChatPtySessionOptionsSurface
-} from './native-chat-pty-session-options'
-import type { NativeChatSessionOptionDispatchCommand } from './native-chat-session-option-command-dispatch'
+} from '../../../../shared/native-chat-pty-session-options'
+import type { NativeChatSessionOptionDispatchCommand } from '../../../../shared/native-chat-session-option-dispatch'
 import {
   ensureNativeChatModelEnrichment,
   readNativeChatEnrichedModels,
@@ -31,23 +33,14 @@ const getEmptySnapshot = (): SessionOptionDescriptor[] => EMPTY_SNAPSHOT
 
 const CLIENT_SETTINGS_TARGET = { kind: 'local' } as const
 
-/** Retire authoritative missing model defaults too: launch sites without a picker still turn persisted IDs into -m arguments. */
 export async function retirePersistedModelMissingFromDiscovery(
   agent: AgentType,
   models: readonly CatalogModel[]
 ): Promise<void> {
-  if (!getAgentSessionOptionCatalog(agent)?.discoveredModelsAreAuthoritative) {
-    return
+  const mutation = retireMissingModelMutation(agent, models)
+  if (mutation) {
+    await enqueueSessionOptionSettingsWrite(CLIENT_SETTINGS_TARGET, mutation)
   }
-  // An empty list means the probe failed, not that the account has no models.
-  if (models.length === 0) {
-    return
-  }
-  await enqueueSessionOptionSettingsWrite(CLIENT_SETTINGS_TARGET, {
-    type: 'clear-model-if-missing',
-    agent,
-    availableModelIds: models.map((model) => model.id)
-  })
 }
 
 export function useNativeChatSessionOptions(args: {
@@ -109,6 +102,7 @@ export function useNativeChatSessionOptions(args: {
       // Version-neutral family seeds keep the picker available while host discovery runs or fails.
       ...(discoveryContext ? { initialModels: discoveredModels ?? undefined } : {}),
       mode: targetPtyId ? 'live' : 'draft',
+      modelLabel: sayNativeChatSessionOptionTranslated('model'),
       reportedValues,
       dispatchCommand,
       canSwitchOmpModel,

@@ -658,4 +658,33 @@ describe('registerAppMenu', () => {
       expect(onQuit).toHaveBeenCalledOnce()
     }
   )
+
+  it.each(['darwin', 'linux', 'win32'] as const)(
+    'offers Quit Completely directly above Quit only when a handler is supplied (%s)',
+    (platform) => {
+      vi.spyOn(process, 'platform', 'get').mockReturnValue(platform)
+      const quitMenu = platform === 'darwin' ? 'Orca' : 'File'
+      const label = 'Quit Completely...'
+
+      registerAppMenu(buildMenuOptions())
+      expect(getSubmenu(getTemplate(), quitMenu).some((item) => item.label === label)).toBe(false)
+
+      buildFromTemplateMock.mockClear()
+      const onQuitAndStopAllSessions = vi.fn()
+      registerAppMenu({ ...buildMenuOptions(), onQuitAndStopAllSessions })
+      const submenu = getSubmenu(getTemplate(), quitMenu)
+      const stopAll = submenu.at(-2)
+      expect(stopAll?.label).toBe(label)
+      expect(stopAll?.id).toBe('quit-and-stop-all-sessions')
+      expect(stopAll?.toolTip).toContain('running agents')
+      expect(stopAll?.accelerator).toBeUndefined()
+      expect(submenu.at(-1)?.role).toBe('quit')
+      // Why untyped: the handler ignores its Electron arguments.
+      const click: unknown = stopAll?.click
+      if (typeof click === 'function') {
+        click()
+      }
+      expect(onQuitAndStopAllSessions).toHaveBeenCalledOnce()
+    }
+  )
 })

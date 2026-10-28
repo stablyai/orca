@@ -6,6 +6,8 @@ import type { ProjectGroupingModel } from '../../../../../../shared/project-sect
 import type { Repo } from '../../../../../../shared/repo-types'
 import type { ProjectOrderBy } from '../../../../../../shared/ui-chrome-types'
 import type {
+  ImportedWorktreesCardCandidate,
+  NewExternalWorktreesInboxCandidate,
   PinnedWorktreeDisplayPolicy,
   WorktreeGroupBy
 } from '../../../../../../shared/sidebar-list/row-types'
@@ -45,4 +47,30 @@ export type SidebarListModel = {
   visibleScope: ReturnType<typeof useSidebarHostVisibleScope>
   externalWorktreeCards: ReturnType<typeof useSidebarExternalWorktreeCards>
   rowModel: ReturnType<typeof useSidebarSectionRows>
+}
+
+export type SectionRowsArgs = {
+  agentSendTargetWorktreeId?: string | null
+  groupBy: WorktreeGroupBy
+  projectOrderBy: ProjectOrderBy
+  pinnedDisplayPolicy: PinnedWorktreeDisplayPolicy
+  defaultHostId: ExecutionHostId
+  worktrees: Worktree[]
+  repos: readonly Repo[]
+  repoMap: Map<string, Repo>
+  worktreeMap: Map<string, Worktree>
+  worktreeLineageById: Record<string, WorktreeLineage>
+  prCache: AppState['prCache'] | null
+  settings: AppState['settings']
+  workspaceStatuses: readonly WorkspaceStatusDefinition[]
+  effectiveCollapsedGroups: Set<string>
+  projectGrouping: ProjectGroupingModel
+  visibleReposForRows: readonly Repo[]
+  visibleProjectGroupsForRows: readonly ProjectGroup[]
+  visibleFolderWorkspacesForRows: readonly FolderWorkspace[]
+  importedWorktreesByRepo: ReadonlyMap<string, ImportedWorktreesCardCandidate>
+  newExternalWorktreesInboxByRepo: ReadonlyMap<string, NewExternalWorktreesInboxCandidate>
+  filterRepoIds: readonly string[]
+  visibleWorkspaceHostIds: readonly ExecutionHostId[] | null
+  workspaceHostScope: AppState['workspaceHostScope']
 }

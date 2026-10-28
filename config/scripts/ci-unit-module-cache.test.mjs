@@ -188,7 +188,7 @@ it('uses an optional exact restore after install and saves successful scoped pro
   expect(workflow.on.workflow_call.inputs.run_relay_integration.default).toBe(true)
 })
 
-it('retains four workers on ARM and the four-core Blacksmith unit runner', () => {
+it('retains four workers on ARM and the four-core x64 unit runners', () => {
   const workflow = parse(readFileSync('.github/workflows/unit-tests.yml', 'utf8'))
   const step = workflow.jobs.test.steps.find((step) => step.name === 'Test shard')
   const expression = [...step.run.matchAll(/\$\{\{(.+?)\}\}/g)].find((match) =>
@@ -197,7 +197,8 @@ it('retains four workers on ARM and the four-core Blacksmith unit runner', () =>
   for (const [arch, runner] of [
     ['ARM64', 'ubuntu-24.04-arm'],
     ['ARM64', 'blacksmith-4vcpu-ubuntu-2404-arm'],
-    ['X64', 'blacksmith-4vcpu-ubuntu-2404']
+    ['X64', 'blacksmith-4vcpu-ubuntu-2404'],
+    ['X64', 'ubuntu-24.04']
   ]) {
     expect(runInNewContext(expression, { runner: { arch }, inputs: { runner } })).toBe(
       '--maxWorkers=4'

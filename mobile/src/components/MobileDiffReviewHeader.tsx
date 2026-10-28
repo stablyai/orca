@@ -1,6 +1,7 @@
 import { FlatList, Pressable, Text, View } from 'react-native'
 import { ChevronLeft, ListChecks, MoreHorizontal } from 'lucide-react-native'
 import { colors } from '../theme/mobile-theme'
+import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import type { MobileDiffReviewQueueFilter } from '../session/mobile-diff-review-queue'
 import { REVIEW_FILTERS, mobileReviewCountLabel } from '../session/mobile-diff-review-screen-model'
 import { shouldShowTrigger } from './mobile-pr-sidebar-presentation'
@@ -35,6 +36,7 @@ export function MobileDiffReviewHeader({
   onOpenPRSidebar,
   onSelectFilter
 }: Props) {
+  const colorScheme = useMobileColorScheme()
   // Show PR icon on narrow/overlay GitHub repos; wide docked sidebar needs no trigger.
   const showPRTrigger = shouldShowTrigger({
     isGithubRepo: prSidebarIsGithubRepo,
@@ -92,6 +94,7 @@ export function MobileDiffReviewHeader({
         horizontal
         showsHorizontalScrollIndicator={false}
         keyExtractor={(item) => item}
+        extraData={colorScheme}
         contentContainerStyle={styles.filterRow}
         renderItem={({ item }) => (
           <Pressable

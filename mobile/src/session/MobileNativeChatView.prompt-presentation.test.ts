@@ -62,8 +62,12 @@ vi.mock('lucide-react-native', () =>
     ].map((x) => [x, x])
   )
 )
-vi.mock('./MobileNativeChatMessage', () => ({ MobileNativeChatMessage: 'ChatMessage' }))
-vi.mock('./MobileNativeChatLiveLine', () => ({ MobileNativeChatLiveLine: 'LiveStatus' }))
+vi.mock('./native-chat/transcript/MobileNativeChatMessage', () => ({
+  MobileNativeChatMessage: 'ChatMessage'
+}))
+vi.mock('./native-chat/transcript/MobileNativeChatLiveLine', () => ({
+  MobileNativeChatLiveLine: 'LiveStatus'
+}))
 vi.mock('./native-chat/input/MobileNativeChatAsk', () => ({ MobileNativeChatAsk: 'ChatAsk' }))
 vi.mock('./native-chat/input/MobileNativeChatQuestion', () => ({
   MobileNativeChatQuestion: 'ChatQuestion'
@@ -72,8 +76,7 @@ vi.mock('./native-chat/input/MobileNativeChatSessionOptionPickers', () => ({
   MobileNativeChatSessionOptionPickers: 'SessionOptions'
 }))
 vi.mock('./native-chat/composer/MobileNativeChatComposerMenu', () => ({
-  MobileNativeChatComposerMenu: 'Suggestions',
-  composerMenuInsertText: () => ''
+  MobileNativeChatComposerMenu: 'Suggestions'
 }))
 vi.mock('../components/ActionSheetModal', () => ({ ActionSheetModal: 'ActionSheetModal' }))
 vi.mock('../components/MobileMarkdown', () => ({ MobileMarkdown: 'Markdown' }))

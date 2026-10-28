@@ -65,7 +65,6 @@ src/main/ipc/filesystem/watcher-process/parcel-watcher-process-supervisor.ts
 src/main/ipc/filesystem/watcher-process/parcel-watcher-supervisor-disposal.ts
 src/main/ipc/filesystem/watcher-process/parcel-watcher-supervisor-message.ts
 src/main/ipc/filesystem/watcher-process/parcel-watcher-supervisor-subscribe.ts
-src/main/ipc/filesystem/watchers/filesystem-watcher-wsl.ts
 src/main/ipc/filesystem/watchers/wsl-watcher-process-exit.ts
 src/main/ipc/local-network-connection-test.ts
 src/main/ipc/macos-keyboard-input-source.ts

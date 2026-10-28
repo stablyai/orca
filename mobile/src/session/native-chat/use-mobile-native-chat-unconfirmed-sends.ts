@@ -47,7 +47,7 @@ export function useMobileNativeChatUnconfirmedSends(args: {
         pendingKey: origin.pendingKey,
         text,
         normalizedText: origin.normalizedText,
-        baselineTailMessageId: origin.baselineTailMessageId,
+        baselineTailMessageId: origin.boundary.afterMessageId ?? null,
         deadline: null
       }
       // The confirming transcript event can arrive before the lost-ack RPC settles.

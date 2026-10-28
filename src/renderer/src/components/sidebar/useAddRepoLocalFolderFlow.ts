@@ -16,6 +16,7 @@ import { createNestedRepoScanId } from './add-repo-dialog-types'
 import { translate } from '@/i18n/i18n'
 import { worktreeRefreshOptions } from './add-repo-runtime-owner'
 import type { ExecutionHostId } from '../../../../shared/execution-host'
+import { addRepoBusyLabels } from './add-repo-busy-labels'
 
 type ShowNestedRepoReview = (args: {
   scan: NestedRepoScanResult
@@ -69,6 +70,7 @@ export function useAddRepoLocalFolderFlow({
 }): {
   handleBrowse: () => Promise<void>
   resetLocalFolderFlow: () => void
+  handleAddLocalPath: (path: string, source: AddRepoExistingWorkspaceSource) => Promise<unknown>
 } {
   const localAddGenRef = useRef(0)
   const droppedLocalPathHandledRef = useRef<string | null>(null)
@@ -100,7 +102,7 @@ export function useAddRepoLocalFolderFlow({
         closeModal()
         return { status: 'paused' }
       }
-      setAddProjectBusyLabel('Scanning for repositories...')
+      setAddProjectBusyLabel(addRepoBusyLabels.scanningRepositories())
       try {
         const attemptId = createNestedRepoTelemetryAttemptId()
         const scanId = createNestedRepoScanId()
@@ -160,7 +162,7 @@ export function useAddRepoLocalFolderFlow({
           })
           return { status: 'paused' }
         }
-        setAddProjectBusyLabel('Opening project...')
+        setAddProjectBusyLabel(addRepoBusyLabels.openingProject())
         const repo = await addRepoPath(path, undefined, {
           runtimeEnvironmentId: activeRuntimeEnvironmentId ?? null
         })
@@ -293,7 +295,7 @@ export function useAddRepoLocalFolderFlow({
   const handleBrowse = useCallback(async (): Promise<void> => {
     const gen = ++localAddGenRef.current
     setIsAdding(true)
-    setAddProjectBusyLabel('Choose a folder...')
+    setAddProjectBusyLabel(addRepoBusyLabels.chooseFolder())
     try {
       const paths = await window.api.repos.pickFolders()
       if (paths.length === 0 || gen !== localAddGenRef.current) {
@@ -309,5 +311,5 @@ export function useAddRepoLocalFolderFlow({
     }
   }, [clearNestedScanState, handleAddLocalPaths, setAddProjectBusyLabel, setIsAdding])
 
-  return { handleBrowse, resetLocalFolderFlow }
+  return { handleBrowse, resetLocalFolderFlow, handleAddLocalPath }
 }

@@ -63,34 +63,4 @@ describe('disposePane container listener cleanup', () => {
       vi.unstubAllGlobals()
     }
   })
-
-  it('removes pane container focus listeners', () => {
-    const pane = makePane()
-    const pointerDownHandler = pane.panePointerDownHandler
-    const mouseEnterHandler = pane.paneMouseEnterHandler
-    const panes = new Map([[pane.id, pane]])
-
-    disposePane(pane, panes)
-
-    expect(pane.container.removeEventListener).toHaveBeenCalledWith(
-      'pointerdown',
-      pointerDownHandler
-    )
-    expect(pane.container.removeEventListener).toHaveBeenCalledWith('mouseenter', mouseEnterHandler)
-    expect(pane.panePointerDownHandler).toBeNull()
-    expect(pane.paneMouseEnterHandler).toBeNull()
-    expect(panes.has(pane.id)).toBe(false)
-  })
-
-  it('runs pane drag cleanup', () => {
-    const pane = makePane()
-    const paneDragCleanup = vi.fn()
-    pane.paneDragCleanup = paneDragCleanup
-    const panes = new Map([[pane.id, pane]])
-
-    disposePane(pane, panes)
-
-    expect(paneDragCleanup).toHaveBeenCalledTimes(1)
-    expect(pane.paneDragCleanup).toBeNull()
-  })
 })

@@ -10,7 +10,7 @@ import {
   useStructuredAgentSessionQueuedEdit,
   type QueuedMessageInlineEditor
 } from './use-structured-agent-session-queued-edit'
-import { projectQueuedMessageCards } from './structured-agent-session-queued-cards'
+import { projectQueuedMessageCards } from '../../../../shared/structured-agent-session-queued-cards'
 import type { AgentSessionQueuedMessage } from '../../../../shared/agent-session-wire'
 import type { StructuredAgentSessionWrite } from './use-structured-agent-session-mutate'
 import type * as NativeChatAttachmentUpload from './native-chat-attachment-upload'

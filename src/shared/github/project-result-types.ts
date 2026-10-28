@@ -22,9 +22,42 @@ export type GitHubProjectViewErrorType =
   | 'rate_limited'
   | 'unknown'
 
+/** Distinguishes Orca-authored sentences that share one `type`; renderers fall back to `message` for unknown or missing reasons. */
+export type GitHubProjectViewErrorReason =
+  | 'project_or_view_not_found'
+  | 'project_not_found'
+  | 'view_not_found'
+  | 'owner_not_found'
+  | 'item_not_found'
+  | 'issue_not_found'
+  | 'input_required'
+  | 'input_too_large'
+  | 'input_unparseable'
+  | 'invalid_slug'
+  | 'invalid_positive_integer'
+  | 'invalid_owner_type'
+  | 'invalid_item_type'
+  | 'missing_ids'
+  | 'updates_required'
+  | 'comment_body_required'
+  | 'duplicate_target_not_allowed'
+  | 'duplicate_target_required'
+  | 'request_invalid'
+  | 'request_failed'
+  | 'unexpected_rest_response'
+
 export type GitHubProjectViewError = {
   type: GitHubProjectViewErrorType
+  /** English copy kept for mobile, older clients and logs. */
   message: string
+  reason?: GitHubProjectViewErrorReason
+  /** GitHub host for sign-in commands. */
+  host?: string
+  rateLimit?: { remaining: number; limit: number; resetMinutes: number }
+  /** Untranslated diagnostic or field name that follows Orca's own prefix. */
+  detail?: string
+  /** Rejected slug value for `invalid_slug`. */
+  value?: string
   /** Classified GraphQL details only; never include tokens or full command stdout. */
   details?: { path?: (string | number)[]; code?: string }
 }

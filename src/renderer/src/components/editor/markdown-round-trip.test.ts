@@ -245,6 +245,14 @@ describe('rich markdown round trip', () => {
     expect(roundTripMarkdown(input)).toBe(input.trimEnd())
   })
 
+  it.each([
+    'Text with `<details>` inline and a `<summary>` mention.',
+    '`<details><summary>A</summary>B</details>` starts this paragraph.',
+    'First line\n`<details>` on the next line.'
+  ])('keeps details tags inside inline code as prose: %j', (input) => {
+    expect(roundTripMarkdown(input)).toBe(input)
+  })
+
   it('reopens nested toggles as editable details blocks', () => {
     expect(
       roundTripMarkdown(

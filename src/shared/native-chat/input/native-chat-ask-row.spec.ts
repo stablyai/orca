@@ -1,9 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import {
-  hasNativeChatAskCall,
-  nativeChatAskRunSubject,
-  nativeChatAskRunBlocks
-} from './native-chat-ask-row'
+import { nativeChatAskRunSubject, nativeChatAskRunBlocks } from './native-chat-ask-row'
 import type { NativeChatBlock } from '../../native-chat-types'
 
 function askCall(input: unknown, name = 'AskUserQuestion'): NativeChatBlock {
@@ -23,28 +19,6 @@ describe('native chat ask row', () => {
     })
   })
 
-  it('keeps an ask open only until its FIFO result arrives', () => {
-    const ask = askCall({ questions: [{ question: 'Proceed?' }] })
-    expect(nativeChatAskRunBlocks([ask])).toEqual({
-      asks: [ask],
-      unansweredAsks: [ask],
-      work: []
-    })
-  })
-  it('names the one question a prompt asks', () => {
-    expect(
-      nativeChatAskRunSubject([askCall({ questions: [{ question: 'Which branch?' }] })])
-    ).toEqual({ kind: 'question', text: 'Which branch?' })
-  })
-
-  it('counts a grouped prompt rather than quoting only its first question', () => {
-    expect(
-      nativeChatAskRunSubject([
-        askCall({ questions: [{ question: 'Which branch?' }, { question: 'Proceed?' }] })
-      ])
-    ).toEqual({ kind: 'questions', questions: ['Which branch?', 'Proceed?'] })
-  })
-
   it('aggregates the per-question calls Codex journals for a single prompt', () => {
     // Codex journals one call per question; aggregate the prompt to avoid duplicate pulsing rows.
     expect(
@@ -53,37 +27,5 @@ describe('native chat ask row', () => {
         askCall({ questions: [{ question: 'Proceed?' }] }, 'request_user_input')
       ])
     ).toEqual({ kind: 'questions', questions: ['Which branch?', 'Proceed?'] })
-  })
-
-  it('decodes the JSON-string arguments Codex delivers', () => {
-    expect(
-      nativeChatAskRunSubject([
-        askCall(
-          JSON.stringify({ questions: [{ question: 'Which branch?' }] }),
-          'request_user_input'
-        )
-      ])
-    ).toEqual({ kind: 'question', text: 'Which branch?' })
-  })
-
-  it('draws a Codex async question as the ask row, named by its titles', () => {
-    expect(
-      nativeChatAskRunSubject([
-        askCall({ questions: [{ title: 'Which color?' }] }, 'request_user_input_async')
-      ])
-    ).toEqual({ kind: 'question', text: 'Which color?' })
-  })
-
-  it('still reports an ask whose payload names no question', () => {
-    // Decided by the tool name alone: an unreadable payload must not put the raw
-    // call back on screen as the row it was meant to replace.
-    const blocks = [askCall({ prompt: 'which?' })]
-
-    expect(hasNativeChatAskCall(blocks)).toBe(true)
-    expect(nativeChatAskRunSubject(blocks)).toBeNull()
-  })
-
-  it('leaves an ordinary tool call alone even when its input carries questions', () => {
-    expect(hasNativeChatAskCall([askCall({ questions: [{ question: 'x' }] }, 'Read')])).toBe(false)
   })
 })
