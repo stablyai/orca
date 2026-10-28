@@ -14,6 +14,7 @@ import type { SidebarInputsChangedEvent } from './sidebar-list/sidebar-inputs-fe
 export type RuntimeClientEvent =
   | { type: 'reposChanged' }
   | { type: 'nativeChatQueueFollowUpsChanged'; queueFollowUps: boolean }
+  | { type: 'githubParticipantAccountsChanged' }
   /** The Workspace options UI state changed; a mirroring phone re-reads it. */
   | { type: 'workspaceViewChanged' }
   | {

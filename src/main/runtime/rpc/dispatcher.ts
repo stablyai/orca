@@ -1,3 +1,4 @@
+import { runWithGitHubParticipantJobContext } from './github-participant-job-context'
 import {
   buildRegistry,
   isStreamingMethod,
@@ -43,6 +44,7 @@ export type DispatcherOptions = {
 }
 
 type AdmittedUnaryCall = {
+  sourceRequest?: RpcRequest
   request: RpcRequest
   method: RpcMethod
   params: unknown
@@ -92,7 +94,11 @@ export class RpcDispatcher {
         await featureWait
       }
       options?.beforeInvoke?.()
-      return successResponse(request.id, meta, await this.invokeUnary(admission, options))
+      return successResponse(
+        request.id,
+        meta,
+        await this.invokeUnary({ ...admission, sourceRequest: request }, options)
+      )
     } catch (error) {
       if (probeEmulator) {
         emulatorProbeError(`rpc ${request.method}`, error, {
@@ -137,7 +143,10 @@ export class RpcDispatcher {
 
     if (!isStreamingMethod(method)) {
       try {
-        const result = await this.invokeUnary({ method, request, params, caller }, options)
+        const result = await this.invokeUnary(
+          { method, request, params, caller, sourceRequest: rawRequest },
+          options
+        )
         reply(JSON.stringify(successResponse(request.id, meta, result)))
       } catch (error) {
         reply(JSON.stringify(mapDispatcherError(request, meta, error)))
@@ -152,10 +161,11 @@ export class RpcDispatcher {
       reply
     )
     try {
-      const result = await method.handler(
-        params,
-        rpcContextFromTransport(this.runtime, request, options, caller, params),
-        emit
+      const context = rpcContextFromTransport(this.runtime, request, options, caller, params)
+      const result = await runWithActiveRpcCaller(context.caller, () =>
+        runWithGitHubParticipantJobContext(this.runtime, rawRequest, context.caller, () =>
+          method.handler(params, context, emit)
+        )
       )
       recordRuntimeFeatureInteraction(
         this.runtime,
@@ -189,7 +199,7 @@ export class RpcDispatcher {
   }
 
   private async invokeUnary(
-    { request, method, params, caller }: AdmittedUnaryCall,
+    { request, method, params, caller, sourceRequest = request }: AdmittedUnaryCall,
     options: RpcDispatchStreamingOptions | undefined
   ): Promise<unknown> {
     const { runtime, orchestrationMutations, legacyOrchestration } = this
@@ -240,21 +250,24 @@ export class RpcDispatcher {
     const invoke = (mutation?: DurableMutationInvocation) => {
       const legacyCoordinatorRunId = legacyCoordinator?.revalidate()
       return runWithActiveRpcCaller(context.caller, () =>
-        method.handler(effectiveParams, {
-          ...context,
-          authenticatedCallerFingerprint: mutation?.identity.callerFingerprint ?? callerFingerprint,
-          recordMutationReceipt: mutation?.recordReceipt,
-          markWorkerDoneMutationEffectFree: mutation?.markWorkerDoneEffectFree,
-          markMutationEffectPossible: mutation?.markEffectPossible,
-          orchestrationMutation: mutation?.identity,
-          replayedMutationReceipt: mutation?.replayedReceipt,
-          legacyCoordinatorRunId,
-          legacyCoordinatorAuthority: legacyCoordinator?.authority,
-          revalidateLegacyCoordinator: legacyCoordinator?.revalidate,
-          orchestrationCompatibilityCallerAuthority:
-            compatibility.orchestrationCompatibilityCallerAuthority,
-          orchestrationCompatibilityEvidence: request.orchestrationCompatibilityEvidence
-        })
+        runWithGitHubParticipantJobContext(runtime, sourceRequest, context.caller, () =>
+          method.handler(effectiveParams, {
+            ...context,
+            authenticatedCallerFingerprint:
+              mutation?.identity.callerFingerprint ?? callerFingerprint,
+            recordMutationReceipt: mutation?.recordReceipt,
+            markWorkerDoneMutationEffectFree: mutation?.markWorkerDoneEffectFree,
+            markMutationEffectPossible: mutation?.markEffectPossible,
+            orchestrationMutation: mutation?.identity,
+            replayedMutationReceipt: mutation?.replayedReceipt,
+            legacyCoordinatorRunId,
+            legacyCoordinatorAuthority: legacyCoordinator?.authority,
+            revalidateLegacyCoordinator: legacyCoordinator?.revalidate,
+            orchestrationCompatibilityCallerAuthority:
+              compatibility.orchestrationCompatibilityCallerAuthority,
+            orchestrationCompatibilityEvidence: request.orchestrationCompatibilityEvidence
+          })
+        )
       )
     }
     const result = await orchestrationMutations.run(

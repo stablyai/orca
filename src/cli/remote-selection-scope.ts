@@ -13,6 +13,10 @@ export function ignoresRemoteSelection(commandPath: readonly string[]): boolean 
     commandPath[0] === 'profile' ||
     // Authoring works on local files; the handler refuses explicit remote flags.
     (commandPath[0] === 'plugin' &&
-      ['create', 'validate', 'inspect'].includes(commandPath[1] ?? ''))
+      ['create', 'validate', 'inspect'].includes(commandPath[1] ?? '')) ||
+    (commandPath[0] === 'repo' &&
+      ['github-member-save', 'github-member-remove', 'github-members-mode'].includes(
+        commandPath[1]
+      ))
   )
 }

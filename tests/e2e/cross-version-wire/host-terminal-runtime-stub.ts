@@ -108,6 +108,7 @@ export function createHostTerminalRuntimeStub(
 
   const runtime: Record<string, unknown> = {
     getRuntimeId: () => 'cross-version-host',
+    getGitHubParticipantRegistry: () => undefined,
     getPtyExecutionHostMetadata: () => ({ incarnationId: 'test-incarnation' }),
     getTerminalLaunchResult: () => undefined,
     resolveLiveLeafForHandle: (handle: string) => (handle === terminalHandle ? { ptyId } : null),

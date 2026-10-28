@@ -1,8 +1,8 @@
+import { registerGitHubCacheHandlers } from './github-cache-handlers'
 import { getClaudeAgentViewService } from '../claude/agent-view/agent-view-service'
 import { app, BrowserWindow, ipcMain, nativeTheme } from 'electron'
 import type { Store } from '../persistence/loading-store/store'
 import type { GlobalSettings } from '../../shared/global-settings-types'
-import type { PersistedState } from '../../shared/persisted-state-types'
 import { listSystemFontFamilies } from '../window/desktop-integration/system-fonts'
 import { registerSettingsImportHandlers } from './settings-import-handlers'
 import { setMainUiLanguage } from '../i18n/main-i18n'
@@ -309,11 +309,5 @@ export function registerSettingsHandlers(
 
   registerSettingsImportHandlers(store)
 
-  ipcMain.handle('cache:getGitHub', () => {
-    return store.getGitHubCache()
-  })
-
-  ipcMain.handle('cache:setGitHub', (_event, args: { cache: PersistedState['githubCache'] }) => {
-    store.setGitHubCache(args.cache)
-  })
+  registerGitHubCacheHandlers(store)
 }

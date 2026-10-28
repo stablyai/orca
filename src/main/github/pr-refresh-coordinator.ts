@@ -1,4 +1,5 @@
 import type {
+  GitHubPRRefreshAlias,
   GitHubPRRefreshCandidate,
   GitHubPRRefreshReason,
   PRRefreshOutcome
@@ -31,6 +32,12 @@ const pacing = new PRRefreshPacing()
 const visibility = new PRRefreshVisibility()
 const events = new PRRefreshEventPublisher()
 const drainer = new PRRefreshQueueDrainer(queue, pacing, visibility, retry, events)
+
+export function setPRRefreshEventFilter(
+  filter: ((alias: GitHubPRRefreshAlias) => boolean) | null
+): void {
+  events.setAliasFilter(filter)
+}
 
 export function setPRRefreshOutcomeObserver(observer: PRRefreshOutcomeObserver | null): void {
   events.setOutcomeObserver(observer)

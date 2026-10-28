@@ -1,4 +1,5 @@
 import { waitForPromiseWithSignal } from '../../../shared/abort-signal-reason'
+import { trackGitHubParticipantRead } from './github-participant-read-fencing'
 import type { RuntimeRpcResponse } from '../../../shared/runtime-rpc-envelope'
 import type { RuntimeStatus } from '../../../shared/runtime-types'
 import type { RuntimeCapability } from '../../../shared/protocol-version'
@@ -73,21 +74,27 @@ export async function callRuntimeRpc<TResult>(
     ? withBrowserPaneUiRuntimeRpcSource(selectedParams)
     : selectedParams
   options.beforeSend?.()
-  const response =
-    target.kind === 'local'
-      ? await window.api.runtime.call({ method, params: nextParams })
-      : await callRuntimeEnvironmentWithRevision({
-          environmentId: target.environmentId,
-          method,
-          params: nextParams,
-          timeoutMs: options.timeoutMs,
-          signal: options.signal,
-          expectedEnvironmentPairingRevision,
-          expectedEnvironmentRuntimeId:
-            options.expectedEnvironmentRuntimeId ??
-            (options.paramsForStatus ? compatibilityStatus?.runtimeId : undefined)
-        })
-  return unwrapRuntimeRpcResult<TResult>(response as RuntimeRpcResponse<TResult>)
+  const identity = trackGitHubParticipantRead(target, method, selectedParams)
+  try {
+    const response =
+      target.kind === 'local'
+        ? await window.api.runtime.call({ method, params: nextParams })
+        : await callRuntimeEnvironmentWithRevision({
+            environmentId: target.environmentId,
+            method,
+            params: nextParams,
+            timeoutMs: options.timeoutMs,
+            signal: options.signal,
+            expectedEnvironmentPairingRevision,
+            expectedEnvironmentRuntimeId:
+              options.expectedEnvironmentRuntimeId ??
+              (options.paramsForStatus ? compatibilityStatus?.runtimeId : undefined)
+          })
+    identity.assertCurrent()
+    return unwrapRuntimeRpcResult<TResult>(response as RuntimeRpcResponse<TResult>)
+  } finally {
+    identity.dispose()
+  }
 }
 
 export async function ensureRuntimeEnvironmentCompatible(

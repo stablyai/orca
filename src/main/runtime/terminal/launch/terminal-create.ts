@@ -76,6 +76,7 @@ export abstract class OrcaRuntimeWithCreateTerminal extends OrcaRuntimeWithTermi
       let effectiveLaunchConfig = launchOpts.launchConfig
       let result!: Awaited<ReturnType<NonNullable<dependencies.RuntimePtyController['spawn']>>>
       const spawnFresh = async (operation: PaneSpawnOperation) => {
+        dependencies.bindParticipantLaunch(this.store, workspace, paneKey, launchToken)
         const baseEnv = withAgentLaunchToken(launchOpts.env, launchToken)
         const agentTeams = await teamAllocation
           .prepare(

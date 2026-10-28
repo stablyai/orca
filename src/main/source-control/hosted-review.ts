@@ -1,4 +1,8 @@
-import { githubRepoContext, withGitHubRepoExecution } from '../github/github-repository-identity'
+import {
+  ghRepoExecOptions,
+  githubRepoContext,
+  withGitHubRepoExecution
+} from '../github/github-repository-identity'
 import type { ExecutionHostId } from '../../shared/execution-host'
 import {
   cachedHostedReviewOutcome,
@@ -12,6 +16,7 @@ import { hostedReviewSshConnectionId } from './hosted-review-execution-host'
 import { readHostedReviewBranchCache } from './hosted-review-branch-cache'
 import {
   getHostedReviewLocalGitOptions,
+  resolveHostedReviewGitHubOptions,
   type HostedReviewExecutionOptions
 } from './hosted-review-git-options'
 
@@ -74,6 +79,12 @@ export async function readHostedReviewForBranch(
     return cachedHostedReviewOutcome(null)
   }
 
+  const participantProvider = input.localGitExecOptions?.resolveGitHubAccount
+    ? await getForgeProviderForRepository({ ...input })
+    : undefined
+  if (participantProvider?.id === 'github') {
+    input = { ...input, localGitExecOptions: resolveHostedReviewGitHubOptions(input) }
+  }
   const connectionId = hostedReviewSshConnectionId(input.executionHostId)
   return withGitHubRepoExecution(
     input.repoPath,
@@ -89,7 +100,10 @@ export async function readHostedReviewForBranch(
         ...input,
         localGitExecOptions: {
           ...getHostedReviewLocalGitOptions(input),
-          ghAccount: context.ghAccount
+          ghAccount:
+            participantProvider?.id === 'github'
+              ? ghRepoExecOptions(context).ghAccount
+              : context.ghAccount
         }
       })
     }
@@ -107,11 +121,13 @@ export async function readHostedReviewForBranch(
         ...(input.userRefresh === true ? { userRefresh: true } : {})
       },
       async () => {
-        const provider = await getForgeProviderForRepository({
-          repoPath: input.repoPath,
-          executionHostId: input.executionHostId,
-          ...(input.localGitExecOptions ? { localGitExecOptions: input.localGitExecOptions } : {})
-        })
+        const provider =
+          participantProvider ??
+          (await getForgeProviderForRepository({
+            repoPath: input.repoPath,
+            executionHostId: input.executionHostId,
+            ...(input.localGitExecOptions ? { localGitExecOptions: input.localGitExecOptions } : {})
+          }))
         if (!provider) {
           // Detection swallows errors; probe reachability first so timeouts/relay loss cannot cache definitive no-review (P1-D).
           await assertRemoteUrlReadable({

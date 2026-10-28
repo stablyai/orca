@@ -23,6 +23,7 @@ export type LocalProjectWorktreeGitOptions = {
 
 export type LocalProjectGhExecOptions = LocalProjectWorktreeGitOptions & {
   ghAccount?: Repo['ghAccount']
+  canStart?: () => boolean
 }
 
 export function getLocalProjectGitExecOptions(

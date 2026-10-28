@@ -1,3 +1,4 @@
+import { applyGitHubParticipantAccountsChanged } from '@/runtime/github-participant-account-changes'
 import { applyWorktreeHeadIdentities } from '../worktree-head-identity-apply'
 import type { WorktreeChangeRefreshQueue } from '../worktree-change-refresh-queue'
 import { useAppStore } from '../../store'
@@ -12,6 +13,7 @@ export function registerProjectCatalogIpcBridge(
 ): void {
   unsubs.push(
     window.api.repos.onChanged(() => {
+      applyGitHubParticipantAccountsChanged({ kind: 'local' })
       const state = useAppStore.getState()
       if (isRuntimeEnvironmentActive()) {
         // Why: the all-host sidebar shows local repos even under a runtime; refresh the local slice, keep runtime slices.

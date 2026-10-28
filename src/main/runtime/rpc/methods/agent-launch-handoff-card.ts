@@ -26,9 +26,11 @@ function prepareHandoffRecord(
   context: RpcContext
 ): (result: AgentLaunchResult) => void {
   // Only the orca CLI on this host names its chat; windows, phones and remote CLIs launch for a person.
-  const callerSessionId = context.orchestrationCompatibilityEvidence?.agentSessionId
+  const evidence = context.orchestrationCompatibilityEvidence
+  const callerSessionId = evidence?.agentSessionId
   if (
     !isAgentRpcCaller(context.caller) ||
+    evidence?.host !== undefined ||
     callerSessionId === undefined ||
     !isOrcaSessionId(callerSessionId)
   ) {
