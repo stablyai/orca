@@ -116,6 +116,16 @@ describe('task start prompt templates', () => {
     expect(getLaunchableWorkItemDraftContent({ url }, '   ')).toBe(url)
     expect(getLaunchableWorkItemDraftContent({ url }, '/work')).toBe('/work')
   })
+
+  it('keeps a typed-only Linear note immediate when a template exists', () => {
+    expect(
+      resolveQuickCreateLinkedWorkItemPrompt(
+        { provider: 'linear', number: 0, url: '' },
+        '  use this note  ',
+        '{{url}} /skill'
+      )
+    ).toEqual({ prompt: 'use this note', draftPrompt: null })
+  })
 })
 
 describe('contained linked context block', () => {
