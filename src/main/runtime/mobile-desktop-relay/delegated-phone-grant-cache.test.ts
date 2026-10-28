@@ -43,7 +43,11 @@ const unusedHosts: MobileDesktopRelayHosts = {
   resolve: async () => null,
   call: async () => {
     throw new Error('sync is mocked')
-  }
+  },
+  hostsBrowserPage: () => false,
+  onEnvironmentRetired: () => () => {},
+  onStatusChanged: () => () => {},
+  watchChanges: () => ({ close: () => {}, current: () => true })
 }
 
 describe('DelegatedPhoneGrantCache', () => {
