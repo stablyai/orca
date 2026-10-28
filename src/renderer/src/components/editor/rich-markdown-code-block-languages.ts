@@ -21,6 +21,7 @@ const LANGUAGE_ENTRIES: readonly LanguageEntry[] = [
   ['kotlin', 'auto.components.editor.RichMarkdownCodeBlock.bcb236e2d8', 'Kotlin'],
   ['markdown', 'auto.components.editor.RichMarkdownCodeBlock.983b9576b4', 'Markdown'],
   ['mermaid', 'auto.components.editor.RichMarkdownCodeBlock.89d6cc14fb', 'Mermaid'],
+  ['plantuml', 'auto.components.editor.RichMarkdownCodeBlock.plantuml', 'PlantUML'],
   ['python', 'auto.components.editor.RichMarkdownCodeBlock.2391f9cda9', 'Python'],
   ['ruby', 'auto.components.editor.RichMarkdownCodeBlock.96182a2f64', 'Ruby'],
   ['rust', 'auto.components.editor.RichMarkdownCodeBlock.e72e6b03f4', 'Rust'],
