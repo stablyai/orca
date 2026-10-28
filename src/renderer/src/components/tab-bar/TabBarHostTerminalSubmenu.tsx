@@ -9,7 +9,6 @@ import {
   DropdownMenuSubTrigger
 } from '@/components/ui/dropdown-menu'
 import { getComposerEligibleRepos } from '@/lib/new-workspace-composer-repo'
-import { getResolvedExecutionHostIdForWorktree } from '@/lib/resolved-worktree-execution-host'
 import { parseExecutionHostId } from '../../../../shared/execution-host'
 import { buildExecutionHostRegistry } from '../../../../shared/execution-host-registry'
 import { getHostDisplayLabelOverrides } from '../../../../shared/host-setting-overrides'
@@ -20,7 +19,11 @@ import {
   buildProjectHostSetupOptions,
   type ReadyProjectHostSetupOption
 } from '@/lib/project-host-setup-options'
-import { getWorktreeProjectId, isWorktreeOwnHost } from './tab-bar-host-terminal-targets'
+import {
+  getWorktreeProjectId,
+  isWorktreeOwnHost,
+  isLocalHostTerminalSource
+} from './tab-bar-host-terminal-targets'
 
 export function useHostTerminalRows(worktreeId: string) {
   const worktree = useAppStore(
@@ -36,9 +39,7 @@ export function useHostTerminalRows(worktreeId: string) {
         : null
     })
   )
-  const sourceIsLocal = useAppStore(
-    (state) => getResolvedExecutionHostIdForWorktree(state, worktreeId) === 'local'
-  )
+  const sourceIsLocal = useAppStore((state) => isLocalHostTerminalSource(state, worktreeId))
   const repos = useAppStore((state) => state.repos)
   const projection = useAppStore(getProjectHostSetupProjectionFromState)
   const settings = useAppStore((state) => state.settings)

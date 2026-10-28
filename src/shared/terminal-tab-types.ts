@@ -1,3 +1,4 @@
+import type { TerminalHostAlias } from './terminal-host-alias'
 import type { AiVaultSessionTitle } from './ai-vault-session-title'
 import type { TuiAgent } from './tui-agent'
 import type { AgentLaunchPaneOutcome } from './agent-launch-pane-verdict'
@@ -41,6 +42,9 @@ export type TerminalTabRecoveryLedger = {
 }
 
 export type TerminalTab = {
+  hostTerminalAlias?: TerminalHostAlias
+  /** Host snapshot absence; never inferred from a disconnect or persisted. */
+  hostTerminalAliasGone?: boolean
   id: string
   ptyId: string | null
   worktreeId: string

@@ -41,6 +41,7 @@ export function createTerminalTabCreationActions(
 ): Pick<TerminalSlice, 'createTab'> {
   return {
     createTab: (worktreeId, targetGroupId, shellOverride, options) => {
+      const hostTerminalAlias = options?.hostTerminalAlias
       let tab!: TerminalTab
       const split = options?.split
       const splitGroupId = split ? createBrowserUuid() : undefined
@@ -74,7 +75,10 @@ export function createTerminalTabCreationActions(
         if (
           hintedId !== undefined &&
           Object.values(s.tabsByWorktree).some((tabs) =>
-            tabs.some((entry) => entry.id === hintedId)
+            tabs.some(
+              (entry) =>
+                entry.id === hintedId && (!hostTerminalAlias || entry.worktreeId === worktreeId)
+            )
           )
         ) {
           throw new Error(`Terminal tab ${hintedId} already exists`)
@@ -101,6 +105,7 @@ export function createTerminalTabCreationActions(
         )
         tab = {
           id,
+          ...(hostTerminalAlias ? { hostTerminalAlias } : {}),
           // Why: CLI-created background sessions already own a PTY, so reveal attaches instead of spawning a duplicate.
           ptyId: options?.initialPtyId ?? null,
           worktreeId,
@@ -187,7 +192,12 @@ export function createTerminalTabCreationActions(
           groupId: group.id,
           worktreeId,
           contentType: 'terminal' as const,
-          ...(facts || folder ? { executionHostId: facts?.hostId ?? folder?.hostId } : {}),
+          // Why: an explicit host alias is the user's selected owner and wins over creation facts.
+          ...(hostTerminalAlias
+            ? { hostTerminalAlias, executionHostId: hostTerminalAlias.executionHostId }
+            : facts || folder
+              ? { executionHostId: facts?.hostId ?? folder?.hostId }
+              : {}),
           label: tab.title,
           ...(tab.quickCommandLabel?.trim()
             ? { quickCommandLabel: tab.quickCommandLabel.trim() }

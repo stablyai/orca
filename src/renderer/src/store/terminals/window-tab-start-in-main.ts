@@ -39,6 +39,7 @@ export function startupNeedsWindowSpawn(startup: TabStartup | undefined): boolea
 /** Whether main starts this tab's first terminal: a local, plain tab with no terminal yet. */
 export function windowTabStartsInMain(state: AppState, tab: TerminalTab): boolean {
   return (
+    !tab.hostTerminalAlias &&
     !tab.ptyId &&
     !tab.forceHostRuntime &&
     // SSH and WSL starts keep the window's spawn and its prompts until L252.
