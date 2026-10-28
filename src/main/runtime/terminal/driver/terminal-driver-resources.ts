@@ -37,7 +37,7 @@ import { RuntimeRemoteFetchController } from '../../runtime-remote-fetch-control
 import { RuntimeWorktreeBaseReconciliation } from '../../runtime-worktree-base-reconciliation'
 import { RuntimeWorktreeRemovalInFlight } from '../../runtime-worktree-removal-in-flight'
 import { ServeBrowserTabs } from '../../serve-browser-tabs'
-import { readBrowserTabBar } from '../../browser-tab-listing'
+import { readBrowserTabBar } from '../../browser/browser-tab-listing'
 import type { ServeBrowserPageState } from '../../serve-browser-tab-layout'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
 import type { LayoutCommand } from '../../../../shared/workspace-layout/workspace-layout-command-types'

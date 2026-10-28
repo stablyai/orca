@@ -1,7 +1,7 @@
 import type { RuntimeBrowserClientPage } from '../runtime-browser-page-registry'
 import type { BrowserTabListResult } from '../../../shared/runtime-types'
 import { browserSessionRegistry } from '../../browser/browser-session-registry'
-import { mergeBrowserTabListing } from '../browser-tab-listing'
+import { mergeBrowserTabListing } from './browser-tab-listing'
 import { BrowserError } from '../../browser/browser-error'
 import { browserManager } from '../../browser/browser-manager'
 import type {
@@ -17,7 +17,6 @@ export class RuntimeBrowserTabCatalog {
       | 'getAgentBrowserBridge'
       | 'resolveBrowserWorkspace'
       | 'getRuntimeBrowserPageRegistry'
-      | 'getAvailableAuthoritativeWindow'
       | 'readBrowserTabBar'
     >,
     private readonly targets: Pick<RuntimeBrowserCommandTargets, 'requireAgentBrowserBridge'>
@@ -53,7 +52,7 @@ export class RuntimeBrowserTabCatalog {
         profileLabel: profile.label
       }
     })
-    // Why no window check: headless snapshots hold only live pages, which the merge dedupes.
+    // Why no window check: headless snapshots list saved pages not yet started, which load on switch too.
     const tabBar = bridge ? (this.host.readBrowserTabBar?.(worktreeId) ?? []) : []
     return mergeBrowserTabListing({ tabBar, liveTabs, clientTabs })
   }

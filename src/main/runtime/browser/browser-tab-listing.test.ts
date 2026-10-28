@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import type { BrowserTabInfo } from '../../shared/runtime-browser-contracts'
-import type { RuntimeMobileSessionTabsSnapshot } from '../../shared/runtime-types'
+import type { BrowserTabInfo } from '../../../shared/runtime-browser-contracts'
+import type { RuntimeMobileSessionTabsSnapshot } from '../../../shared/runtime-types'
 import {
   mergeBrowserTabListing,
   readBrowserTabBar,
