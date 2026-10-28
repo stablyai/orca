@@ -96,7 +96,7 @@ describe('handleOscLink', () => {
     openDetectedFilePath('/tmp/report.html', null, null, deps)
     await flushAsyncWork()
 
-    expect(openFilePathMock).toHaveBeenCalledWith('/tmp/report.html', 'local')
+    expect(openFilePathMock).toHaveBeenCalledWith('/tmp/report.html', 'local', undefined)
     expect(createBrowserTabMock).not.toHaveBeenCalled()
 
     // Shift takes the other destination, as it does for http links.
@@ -265,7 +265,10 @@ describe('handleOscLink', () => {
     })
     await flushAsyncWork()
 
-    expect(openFilePathMock).toHaveBeenCalledWith('/tmp/src/main.ts', 'local')
+    expect(openFilePathMock).toHaveBeenCalledWith('/tmp/src/main.ts', 'local', {
+      line: 42,
+      column: 7
+    })
     expect(openFileMock).not.toHaveBeenCalled()
     expect(setPendingEditorRevealMock).not.toHaveBeenCalled()
   })
@@ -281,7 +284,10 @@ describe('handleOscLink', () => {
     await flushAsyncWork()
     await flushDoubleRaf()
 
-    expect(openFilePathMock).toHaveBeenCalledWith('/tmp/src/main.ts', 'local')
+    expect(openFilePathMock).toHaveBeenCalledWith('/tmp/src/main.ts', 'local', {
+      line: 42,
+      column: 7
+    })
     expect(openFileMock).toHaveBeenCalledWith(
       expect.objectContaining({ filePath: '/tmp/src/main.ts' }),
       { forceContentReload: true }

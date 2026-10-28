@@ -204,14 +204,13 @@ export function openDetectedFilePath(
         ? (deps.browserDestination ??
           httpLinkDirectClickDestination(localHtmlFileDestinations(), openWithSystemDefault))
         : null
-    const opensWithSystemDefault = pageDestination
-      ? pageDestination === 'system'
-      : openWithSystemDefault
-    if (opensWithSystemDefault && canOpenWithSystemDefault) {
+    const systemDefault = pageDestination ? pageDestination === 'system' : openWithSystemDefault
+    if (systemDefault && canOpenWithSystemDefault) {
       // Shift+Cmd/Ctrl follows URL-link behavior and OS file associations without new editor settings.
       const openedWithSystemDefault = await window.api.shell.openFilePath(
         mappedFilePath,
-        LOCAL_EXECUTION_HOST_ID
+        LOCAL_EXECUTION_HOST_ID,
+        line && !statResult.isDirectory ? { line, column: column ?? undefined } : undefined
       )
       if (openedWithSystemDefault || statResult.isDirectory) {
         return

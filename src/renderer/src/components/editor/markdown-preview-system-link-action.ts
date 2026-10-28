@@ -7,6 +7,7 @@ import { getLinkSourceLocalOpenOwner } from '@/lib/link-source-local-open-owner'
 import { useAppStore } from '@/store'
 import { absolutePathToFileUri, resolveMarkdownLinkTarget } from './markdown-internal-links'
 import type { MarkdownPreviewLinkContext } from './markdown-preview-link-actions'
+import type { ShellFileLocation } from '../../../../shared/shell-open-types'
 import {
   getMarkdownPreviewLinkTarget,
   isMarkdownPreviewSystemBrowserModifier,
@@ -77,7 +78,14 @@ export function handleMarkdownPreviewSystemLinkClick({
         )
         return
       }
-      void window.api.shell.openFileUri(cleanUri, LOCAL_EXECUTION_HOST_ID)
+      const location: ShellFileLocation | undefined =
+        classified.line !== undefined
+          ? {
+              line: classified.line,
+              ...(classified.column !== undefined ? { column: classified.column } : {})
+            }
+          : undefined
+      void window.api.shell.openFileUri(cleanUri, LOCAL_EXECUTION_HOST_ID, location)
     })
     return true
   }

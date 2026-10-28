@@ -197,6 +197,31 @@ describe('MarkdownPreview http link routing (Cmd vs Cmd+Shift click)', () => {
     expect(createBrowserTabMock).not.toHaveBeenCalled()
   })
 
+  it.each(['src/main.ts:551:7', 'src/main.ts#L551C7'])(
+    'preserves the location when opening %s in the default app',
+    async (href) => {
+      const worktree = { id: 'wt-1', path: '/repo', hostId: 'local', diffComments: [] }
+      worktreeLookup.value = [worktree]
+      storeState.worktreesByRepo = { repo: [worktree] }
+      const anchor = render(`[source](${href})`, href)
+      await act(async () => {
+        anchor.dispatchEvent(
+          new window.MouseEvent('click', {
+            bubbles: true,
+            cancelable: true,
+            metaKey: true,
+            shiftKey: true
+          })
+        )
+      })
+
+      expect(openFileUriMock).toHaveBeenCalledWith('file:///repo/docs/src/main.ts', 'local', {
+        line: 551,
+        column: 7
+      })
+    }
+  )
+
   it('keeps system-browser HTTP and file links inert while ownership is unknown', () => {
     connectionOwner.value = undefined
     const httpAnchor = render()
