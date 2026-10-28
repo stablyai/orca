@@ -1,3 +1,6 @@
+import { toast } from 'sonner'
+import { TabBarHostTerminalSubmenu } from './TabBarHostTerminalSubmenu'
+import { createTerminalTabOnHost } from './tab-bar-host-terminal-create'
 import React from 'react'
 import { FilePlus, FileText, Globe, Smartphone, TerminalSquare } from 'lucide-react'
 import { translate } from '@/i18n/i18n'
@@ -106,6 +109,29 @@ export function TabBarStaticCreateMenu({
         <DropdownMenuShortcut>{newTerminalShortcut}</DropdownMenuShortcut>
       </DropdownMenuItem>
     )
+  const hostTerminalSubmenu = (
+    <TabBarHostTerminalSubmenu
+      worktreeId={props.worktreeId}
+      onNewTerminalTab={onNewTerminalTab}
+      onNewHostTerminal={(option) => {
+        void createTerminalTabOnHost({
+          worktreeId: props.worktreeId,
+          groupId: props.groupId,
+          executionHostId: option.hostId,
+          projectHostSetupId: option.id
+        }).catch((error: unknown) => {
+          toast.error(
+            translate(
+              'auto.lib.launch.agent.in.new.tab.11cce5cc77',
+              'Could not launch {{value0}} in a new terminal.',
+              { value0: option.label }
+            ),
+            { description: error instanceof Error ? error.message : String(error) }
+          )
+        })
+      }}
+    />
+  )
   const newBrowserMenuItem =
     !terminalOnly && managedBrowserCreationEnabled ? (
       <DropdownMenuItem
@@ -209,6 +235,7 @@ export function TabBarStaticCreateMenu({
       {pluginNewFileMenuItems}
       {openMarkdownMenuItem}
       {defaultTerminalMenuItems}
+      {hostTerminalSubmenu}
       {newBrowserMenuItem}
       {newSimulatorMenuItem}
       {mobileEmulatorIntroMenuBlock}
@@ -216,6 +243,7 @@ export function TabBarStaticCreateMenu({
   ) : (
     <>
       {defaultTerminalMenuItems}
+      {hostTerminalSubmenu}
       {newBrowserMenuItem}
       {newMarkdownMenuItem}
       {pluginNewFileMenuItems}

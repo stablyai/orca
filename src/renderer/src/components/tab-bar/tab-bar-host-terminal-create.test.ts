@@ -1,3 +1,7 @@
+import { isUnifiedTabOwnedByWorktree } from '@/lib/unified-tab-host-ownership'
+vi.mock('@/runtime/web-runtime-session-snapshot', () => ({
+  refreshWebRuntimeSessionTabsSnapshot: vi.fn().mockResolvedValue(undefined)
+}))
 import { beforeEach, expect, it, vi } from 'vitest'
 import {
   createTestStore,
@@ -20,6 +24,7 @@ vi.mock('../../store', () => ({
   }
 }))
 vi.mock('@/runtime/runtime-rpc-client', () => ({ callRuntimeRpc: mocks.call }))
+vi.mock('@/lib/focus-terminal-tab-surface', () => ({ focusTerminalTabSurface: vi.fn() }))
 createStoreCascadesMockApi()
 const LOCAL = 'repo1::/local'
 const HOST = 'remote::/host'
@@ -112,8 +117,29 @@ it('creates a real host tab with native caller navigation and refuses missing ho
     },
     { timeoutMs: 15_000 }
   )
-  expect(store.getState().tabsByWorktree[LOCAL] ?? []).toEqual([])
+  expect(store.getState().tabsByWorktree[LOCAL]).toMatchObject([
+    {
+      id: 'web-terminal-host-tab',
+      ptyId: null,
+      hostTerminalAlias: {
+        tabId: 'host-tab',
+        leafId,
+        executionHostId: 'runtime:env-1',
+        worktreeId: HOST
+      }
+    }
+  ])
   store.setState({ worktreesByRepo: { repo1: store.getState().worktreesByRepo.repo1 } })
   await expect(createTerminalTabOnHost(REQUEST)).rejects.toThrow('selector_not_found')
+  expect(mocks.call).toHaveBeenCalledTimes(1)
+  const source = store.getState().worktreesByRepo.repo1![0]!
+  const aliasEntry = store.getState().unifiedTabsByWorktree[LOCAL]![0]!
+  expect(isUnifiedTabOwnedByWorktree(aliasEntry, source, new Set())).toBe(true)
+  store.setState({
+    worktreesByRepo: {
+      repo1: [{ ...source, hostId: 'local', runtimeOwnerEnvironmentId: 'other-runtime' }]
+    }
+  })
+  await expect(createTerminalTabOnHost(REQUEST)).rejects.toThrow('source_worktree_not_local')
   expect(mocks.call).toHaveBeenCalledTimes(1)
 })

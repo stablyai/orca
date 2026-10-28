@@ -1,3 +1,4 @@
+import { reconcileTerminalHostAliases } from '../terminal-host-alias-snapshot'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../shared/constants'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
 import type { RuntimeMobileSessionTabsResult } from '../../../../shared/runtime-types'
@@ -39,6 +40,15 @@ export function applyWebSessionTabsSnapshotWithContext(
     return state
   }
   const worktreeId = rawSnapshot.worktree
+  if (
+    state.tabsByWorktree[worktreeId]?.some(
+      (tab) =>
+        tab.hostTerminalAlias?.executionHostId === `runtime:${environmentId}` &&
+        tab.hostTerminalAlias.worktreeId === worktreeId
+    )
+  ) {
+    return reconcileTerminalHostAliases(state, state, rawSnapshot, environmentId)
+  }
   // Switch point: ORCA_LAYOUT_OWNER_IS_MAIN && — every mirror write (single, batch, operations) passes here.
   const previousSnapshotTabIds =
     ORCA_LAYOUT_OWNER_IS_MAIN && options?.contentScope !== 'agent-session'
@@ -50,14 +60,19 @@ export function applyWebSessionTabsSnapshotWithContext(
       : null
   if (frameDrawnPreviousTabIds) {
     // Server frames own tabs/IDs/focus and writes use server IDs; skip mirror intent ledgers for these workspaces.
-    return buildFrameDrawnWorkspaceStatusPatch(
+    return reconcileTerminalHostAliases(
       state,
+      buildFrameDrawnWorkspaceStatusPatch(
+        state,
+        rawSnapshot,
+        environmentId,
+        worktreeId,
+        frameDrawnPreviousTabIds,
+        now,
+        batchContext
+      ),
       rawSnapshot,
-      environmentId,
-      worktreeId,
-      frameDrawnPreviousTabIds,
-      now,
-      batchContext
+      environmentId
     )
   }
   // Interim (ledger L240): from here on only for a server without `layout.intents.v1`, until the
@@ -78,5 +93,10 @@ export function applyWebSessionTabsSnapshotWithContext(
   const browserRecords = applyBrowserRecordUpdates(terminalRecords)
   const worktreeRecords = applyWorktreeRecordUpdates(browserRecords)
   const activeState = applyActiveStateUpdates(worktreeRecords)
-  return buildWebSessionTabsFinalPatch(activeState)
+  return reconcileTerminalHostAliases(
+    state,
+    buildWebSessionTabsFinalPatch(activeState),
+    rawSnapshot,
+    environmentId
+  )
 }

@@ -51,14 +51,14 @@ export type PublishedTerminal = {
   defaultTitle?: string
 } & Pick<
   LayoutTerminalCreation,
-  'shellOverride' | 'forceHostRuntime' | 'startupCwd' | 'launchAgent'
+  'shellOverride' | 'forceHostRuntime' | 'startupCwd' | 'launchAgent' | 'hostTerminalAlias'
 >
 
 export type PublishedTab = {
   id: string
   kind: TabContentType
   entityId: string
-  /** The host that runs the tab's content: an editor tab's file owner, else the partition. */
+  /** The host that runs the tab's content: an editor file or terminal alias owner, else the partition. */
   executionHostId: ExecutionHostId
   createdAt: number
   customTitle: string | null
@@ -172,7 +172,8 @@ function publishTab(
         'shellOverride',
         'forceHostRuntime',
         'startupCwd',
-        'launchAgent'
+        'launchAgent',
+        'hostTerminalAlias'
       ])
     }
   }

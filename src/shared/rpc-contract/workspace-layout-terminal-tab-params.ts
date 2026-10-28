@@ -1,3 +1,4 @@
+import { terminalHostAliasSchema, terminalHostAliasMatchesTab } from '../terminal-host-alias'
 import { z } from 'zod'
 import { isTerminalLeafId } from '../stable-pane-id'
 import { isValidHostTerminalTabId } from '../terminal-tab-id'
@@ -16,6 +17,7 @@ export const NewGroupSplit = z
   .optional()
 
 const TerminalCreation = z.object({
+  hostTerminalAlias: terminalHostAliasSchema.optional(),
   defaultTitle: z.string().min(1).optional(),
   shellOverride: z.string().min(1).optional(),
   startupCwd: z.string().min(1).optional(),
@@ -26,20 +28,27 @@ const TerminalCreation = z.object({
 })
 
 /** Preserve window-created tab/pane IDs for immediate callers; refuse collisions and replay creates idempotently. */
-export const CreateTerminalTabCommand = z.object({
-  type: z.literal('createTerminalTab'),
-  workspace,
-  tabId: z.string().refine(isValidHostTerminalTabId),
-  leafId: z.string().refine(isTerminalLeafId),
-  groupId: z.string().min(1).optional(),
-  viewMode: z.enum(['terminal', 'chat']).optional(),
-  createdAt: z.number().int().nonnegative().optional(),
-  quickCommandLabel: z.string().trim().min(1).optional(),
-  creation: TerminalCreation.optional(),
-  /** Only into a workspace with no tab in main's copy; otherwise nothing is created. */
-  initial: z.literal('activation').optional(),
-  split: NewGroupSplit
-})
+export const CreateTerminalTabCommand = z
+  .object({
+    type: z.literal('createTerminalTab'),
+    workspace,
+    tabId: z.string().min(1),
+    leafId: z.string().refine(isTerminalLeafId),
+    groupId: z.string().min(1).optional(),
+    viewMode: z.enum(['terminal', 'chat']).optional(),
+    createdAt: z.number().int().nonnegative().optional(),
+    quickCommandLabel: z.string().trim().min(1).optional(),
+    creation: TerminalCreation.optional(),
+    /** Only into a workspace with no tab in main's copy; otherwise nothing is created. */
+    initial: z.literal('activation').optional(),
+    split: NewGroupSplit
+  })
+  .refine((command) => {
+    const alias = command.creation?.hostTerminalAlias
+    return alias
+      ? terminalHostAliasMatchesTab(alias, command.tabId) && alias.leafId === command.leafId
+      : isValidHostTerminalTabId(command.tabId)
+  }, 'Terminal tab identity must match its owner')
 
 /** Apply ordered defaults under window-proposed IDs only before the workspace is marked; reject collisions. */
 export const ApplyDefaultTabsCommand = z.object({
@@ -51,7 +60,7 @@ export const ApplyDefaultTabsCommand = z.object({
       leafId: z.string().refine(isTerminalLeafId),
       title: z.string().trim().min(1).optional(),
       color: z.string().min(1).optional(),
-      creation: TerminalCreation.optional()
+      creation: TerminalCreation.omit({ hostTerminalAlias: true }).optional()
     })
   )
 })

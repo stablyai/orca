@@ -1,3 +1,8 @@
+import { translate } from '@/i18n/i18n'
+import {
+  isDisconnectedRuntimeHostState,
+  runtimeHostConnectionStateForEntry
+} from '@/runtime/runtime-host-connection-state'
 import { selectExecutionHostDisplayLabel } from '@/lib/execution-host-display-label'
 import { selectKnownWorktreeById } from '@/store/selectors'
 import type { AppState } from '../../store/types'
@@ -14,7 +19,27 @@ export function selectTerminalTabHostBadgeLabel(
     return null
   }
   const repo = state.repos.find((candidate) => candidate.id === worktree.repoId)
-  return isWorktreeOwnHost(tab.executionHostId, worktree, repo)
-    ? null
-    : selectExecutionHostDisplayLabel(state, tab.executionHostId)
+  if (isWorktreeOwnHost(tab.executionHostId, worktree, repo)) {
+    return null
+  }
+  const label = selectExecutionHostDisplayLabel(state, tab.executionHostId)
+  const alias = tab.hostTerminalAlias
+  if (!alias) {
+    return label
+  }
+  const entry = state.runtimeStatusByEnvironmentId.get(
+    alias.executionHostId.slice('runtime:'.length)
+  )
+  const gone = state.tabsByWorktree[worktreeId]?.find(
+    (row) => row.id === tab.entityId
+  )?.hostTerminalAliasGone
+  const status = isDisconnectedRuntimeHostState(runtimeHostConnectionStateForEntry(entry))
+    ? translate('auto.components.settings.RepositoryPane.hostStateDisconnected', 'Disconnected')
+    : gone
+      ? translate(
+          'auto.components.terminal.pane.TerminalErrorToast.remoteTerminalClosed',
+          'Remote terminal was closed.'
+        )
+      : null
+  return status ? `${label ?? ''} · ${status}` : label
 }

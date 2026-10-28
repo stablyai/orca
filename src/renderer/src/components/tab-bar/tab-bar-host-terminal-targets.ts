@@ -1,3 +1,6 @@
+import type { AppState } from '@/store/types'
+import { getResolvedExecutionHostIdForWorktree } from '@/lib/resolved-worktree-execution-host'
+import { selectKnownWorktreeById } from '@/store/selectors'
 import { getWorktreeExecutionHostId, type ExecutionHostId } from '../../../../shared/execution-host'
 import type { ProjectHostSetup } from '../../../../shared/project-types'
 import type { Repo } from '../../../../shared/repo-types'
@@ -26,4 +29,13 @@ export function getWorktreeProjectId(
     return worktree.projectId
   }
   return repo ? getProjectHostSetupForRepo(projectHostSetups, repo).projectId : null
+}
+
+export function isLocalHostTerminalSource(state: AppState, worktreeId: string): boolean {
+  const source = selectKnownWorktreeById(state, worktreeId)
+  return Boolean(
+    source &&
+    !source.runtimeOwnerEnvironmentId?.trim() &&
+    getResolvedExecutionHostIdForWorktree(state, worktreeId) === 'local'
+  )
 }
