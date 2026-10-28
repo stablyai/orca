@@ -115,6 +115,20 @@ GET https://example.com`)
     expect(tokenTypeAt(lines[3], 0)).toBe('keyword')
   })
 
+  it('tokenizes a request line without a method as a URL, not a header or body', () => {
+    const lines = tokenizeHttp(`https://example.com/health
+Accept: text/plain
+
+### Next
+{{host}}/status`)
+
+    expect(tokenTypeAt(lines[0], 0)).toBe('string')
+    expect(tokenTypeAt(lines[0], 20)).toBe('string')
+    expect(tokenTypeAt(lines[1], 0)).toBe('attribute.name')
+    expect(tokenTypeAt(lines[4], 0)).toBe('variable')
+    expect(tokenTypeAt(lines[4], 8)).toBe('string')
+  })
+
   it('ends a variable definition at its line even when it ends in a {{variable}}', () => {
     const lines = tokenizeHttp(`@url = {{base}}/api/{{version}}
 GET {{url}}/health`)

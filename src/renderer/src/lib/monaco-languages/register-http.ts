@@ -46,7 +46,9 @@ export const httpMonarchLanguage: Monaco.languages.IMonarchLanguage = {
       [/^(\s*)(@[\w.-]+)(\s*=)/, ['', 'variable', { token: 'delimiter', next: '@variableValue' }]],
       [/^(\s*)(import|run)(\s+)(\S.*)$/, ['', 'keyword', '', 'string']],
       [REQUEST_METHOD, { token: 'keyword', switchTo: '@requestTarget' }],
-      [/^(?=\s*(?:https?:\/\/|\{\{))/, { token: '@rematch', switchTo: '@requestTarget' }]
+      // A method-less request line; consume its start so `requestTarget` is entered mid-line.
+      [/^(\s*)(https?:\/\/[^\s{]*)/, ['', { token: 'string', switchTo: '@requestTarget' }]],
+      [/^(\s*)(\{\{[^{}]*\}\})/, ['', { token: 'variable', switchTo: '@requestTarget' }]]
     ],
 
     // A request ends at the next `###`; JetBrains `< {% %}` / `> {% %}` scripts embed JavaScript.
