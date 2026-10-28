@@ -255,7 +255,6 @@ export function createAppCommandHandlers(
           if (showWorkspaceListThen(useAppStore, toggleBoard)) {
             return
           }
-          useAppStore.getState().setSidebarOpen(true)
           toggleBoard()
         })
       }

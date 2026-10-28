@@ -1,4 +1,3 @@
-import { Fragment } from 'react'
 import type React from 'react'
 import type { AppChromeLayout } from './use-app-chrome-layout'
 
@@ -13,15 +12,9 @@ type LeftColumnLayout = Pick<
 >
 
 /**
- * The left titlebar, the optional app rail and the workspace list.
- * Why one keyed slot with the rail on: the list (its focus, local state, and dialogs such as Workspace details with an
- * unsaved draft, plus the Workspace Board) must survive view changes, so with the rail on it always sits in the
- * column's keyed viewport. An active workspace, a rail page or the header mounting must never move it, because moving
- * it would remount it. On a rail page the viewport collapses to zero width.
- * With the rail off the DOM is exactly the plain sidebar layout (the column viewport when the header mounts, else
- * direct). A rail flag flip therefore keeps the list only while the header is mounted; with no header it remounts
- * once. That is accepted: the in-app toggle lives on Settings, where the list is not mounted, and at startup the
- * header is mounted because the list defaults open.
+ * The left titlebar, optional app rail and workspace list. Keep the list in one keyed slot while its view is visible:
+ * it owns local state and surfaces such as the Workspace Board that must survive a sidebar collapse. Rail pages
+ * collapse the list viewport to zero width while preserving the same slot.
  */
 export function AppShellLeftColumn({
   layout,
@@ -36,8 +29,7 @@ export function AppShellLeftColumn({
 }): React.JSX.Element {
   const railOn = layout.appRailVisible
   const { shouldMount, isFloating } = layout.leftTitlebarChromeLayout
-  const listInColumn = layout.showSidebar && (railOn || shouldMount)
-  const listDirect = layout.showSidebar && !railOn && !shouldMount
+  const listInColumn = layout.showSidebar
   // The header follows the chrome layout, not the list's slot: with the rail on the list is always in the column.
   const header =
     listInColumn && shouldMount ? (
@@ -74,7 +66,7 @@ export function AppShellLeftColumn({
       </div>
     ) : null
   const column =
-    railOn || listInColumn ? (
+    railOn || layout.showSidebar ? (
       // Remove the collapsed header from flex layout so panes reclaim the left edge.
       <div
         key="left-column"
@@ -110,7 +102,7 @@ export function AppShellLeftColumn({
                         ? ' w-0 overflow-hidden'
                         : ' w-0'
                   }`
-                : 'flex min-h-0 flex-1'
+                : `flex min-h-0 ${layout.sidebarOpen ? 'flex-1' : 'w-0 overflow-hidden'}`
             }
           >
             {list}
@@ -118,10 +110,5 @@ export function AppShellLeftColumn({
         ) : null}
       </div>
     ) : null
-  return (
-    <>
-      {column}
-      {listDirect ? <Fragment key="worktree-list-direct">{list}</Fragment> : null}
-    </>
-  )
+  return <>{column}</>
 }
