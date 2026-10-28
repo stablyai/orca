@@ -43,6 +43,7 @@ jobs:
       - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
         with:
           bun-version-file: config/.bun-version
+          no-cache: true
       - name: Compare compiler diagnostics and project file lists
         run: node config/scripts/benchmark-preflight-compilers.mjs --parity-only
       - uses: actions/upload-artifact@v7

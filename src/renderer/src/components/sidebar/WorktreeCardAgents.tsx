@@ -30,6 +30,7 @@ import { translate } from '@/i18n/i18n'
 import { activateStructuredAgentSessionTab } from '@/lib/agent-session/structured-agent-session-tab-activation'
 import { selectAgentRowsUnread } from './worktree-card-agent-ack-inputs'
 import { formatSummaryAgentCount } from './worktree-card-agent-summary'
+import { stablePaneHasLivePty } from '@/lib/sleeping-agent-pane-ownership'
 
 export const SUPPRESS_WORKTREE_LIST_SCROLL_ADJUSTMENT_EVENT =
   'orca-suppress-worktree-list-scroll-adjustment'
@@ -186,9 +187,26 @@ const WorktreeCardAgentsBody = React.memo(function WorktreeCardAgentsBody({
     },
     [worktreeId]
   )
-  const handleActivateRetainedAgent = useCallback(() => {
-    // Retained rows are completion evidence; activation would resume sleeping sessions, so keep them inert.
-  }, [])
+  const handleActivateRetainedAgent = useCallback(
+    (tabId: string, paneKey: string) => {
+      const parsed = parsePaneKey(paneKey)
+      const state = useAppStore.getState()
+      // Retained rows are completion evidence; only open a still-live pane so a sleeping target pane is never resumed.
+      if (
+        parsed?.tabId === tabId &&
+        state.tabsByWorktree[worktreeId]?.some((tab) => tab.id === tabId) &&
+        stablePaneHasLivePty(
+          tabId,
+          parsed.leafId,
+          state.ptyIdsByTabId,
+          state.terminalLayoutsByTabId[tabId]
+        )
+      ) {
+        handleActivateAgentTab(tabId, paneKey)
+      }
+    },
+    [handleActivateAgentTab, worktreeId]
+  )
 
   const now = useNow(30_000)
   const { rootRows: rootAgents, childrenByParentPaneKey } = useMemo(

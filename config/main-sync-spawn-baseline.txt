@@ -36,8 +36,7 @@
 2 src/main/persistence/profile-state/profile-state-access-identity.ts
 1 src/main/persistence/profile-state/profile-state-recovery-copy.ts
 1 src/main/plugins/plugin-private-marketplace-ssh-shim.cjs
-1 src/main/pty/posix-pty-foreground-group.ts
-1 src/main/pty/posix-pty-process-groups.ts
+1 src/main/pty/posix-pty-process-table.ts
 1 src/main/pwsh.ts
 1 src/main/runtime/runtime-skill-install-authority.ts
 2 src/main/startup/cli-launch-redirect.ts

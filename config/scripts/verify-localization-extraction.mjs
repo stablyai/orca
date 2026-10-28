@@ -53,6 +53,7 @@ export function compareExtraction(extractedCatalog, englishCatalog) {
 
   return {
     extracted,
+    english,
     dynamicDefaults,
     missingFromEnglish,
     orphans,
@@ -68,6 +69,21 @@ function printKeys(label, keys) {
   console.error(`${label}:`)
   for (const key of keys.slice(0, 20)) {
     console.error(`  ${key}`)
+  }
+  if (keys.length > 20) {
+    console.error(`  ...and ${keys.length - 20} more`)
+  }
+}
+
+function printFallbackDrift(keys, extracted, english) {
+  console.error(
+    'Inline defaults differ from en.json. The catalog value is what renders, so editing a fallback alone changes nothing.\n' +
+      'Set the en.json value to the new copy and update every locale catalog to match, or move the new copy to a new key.'
+  )
+  for (const key of keys.slice(0, 20)) {
+    console.error(`  ${key}`)
+    console.error(`    en.json: ${JSON.stringify(english.get(key))}`)
+    console.error(`    source:  ${JSON.stringify(extracted.get(key))}`)
   }
   if (keys.length > 20) {
     console.error(`  ...and ${keys.length - 20} more`)
@@ -114,16 +130,21 @@ export async function main(root = process.cwd()) {
     const result = compareExtraction(extractedCatalog, englishCatalog)
 
     console.log(
-      `Extracted ${result.extracted.size} keys; ${result.dynamicDefaults.length} dynamic defaults are report-only, ${result.orphans.length} existing English entries are not statically referenced, and ${result.fallbackDrift.length} inline defaults differ.`
+      `Extracted ${result.extracted.size} keys; ${result.dynamicDefaults.length} dynamic defaults are report-only, ${result.orphans.length} existing English entries are not statically referenced, and ${result.fallbackDrift.length} inline defaults differ from en.json.`
     )
 
+    let failed = false
     if (result.missingFromEnglish.length > 0 || result.placeholderMismatches.length > 0) {
       printKeys('Extracted keys missing from en.json', result.missingFromEnglish)
       printKeys('Extracted defaults with incompatible placeholders', result.placeholderMismatches)
-      return 1
+      failed = true
+    }
+    if (result.fallbackDrift.length > 0) {
+      printFallbackDrift(result.fallbackDrift, result.extracted, result.english)
+      failed = true
     }
 
-    return 0
+    return failed ? 1 : 0
   } finally {
     await fs.rm(tempDir, { recursive: true, force: true })
   }

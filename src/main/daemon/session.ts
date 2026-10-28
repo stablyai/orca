@@ -289,9 +289,7 @@ export class Session {
     const wasTerminating = this.termination.isTerminating && this._state !== 'exited'
     const clientsToNotify = wasTerminating ? this.output.snapshotClients() : []
     if (wasTerminating) {
-      try {
-        this.subprocess.forceKill()
-      } catch {}
+      this.termination.forceKillDuringDispose().catch(() => {})
       this._exitCode = -1
       this.termination.clearTerminating()
     }

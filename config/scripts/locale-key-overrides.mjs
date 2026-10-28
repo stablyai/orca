@@ -39,8 +39,6 @@ const BASE_LOCALE_KEY_OVERRIDES = {
   'menu.exploreOrca': { ko: 'Orca 둘러보기', zh: '探索 Orca', ja: 'Orca を探索' },
   'worktreeJumpPalette.matchLabel.issue': { ko: '이슈', zh: '议题', ja: 'Issue' },
   'worktreeJumpPalette.matchLabel.comment': { ko: '댓글', zh: '评论', ja: 'コメント' },
-  // Bare "Run" is an automation run, not jogging; MT renders the sports sense (zh 跑步).
-  'worktreeJumpPalette.matchLabel.automation': { ko: '실행', zh: '运行', ja: '実行' },
   'auto.hooks.useSettingsNavigationMetadata.13241992bd': {
     ko: '일반',
     zh: '通用',

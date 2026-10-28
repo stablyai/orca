@@ -1,0 +1,13 @@
+# Event-loop-blocking calls in the terminal daemon, PTY and orcad runtime code, per file:
+# execFileSync/spawnSync/execSync, runProcessSync, appendFileSync and writeSync.
+# This is a RATCHET: counts may only go DOWN.
+# Prune after removing calls: pnpm check:daemon-blocking-call-ratchet --prune
+2 src/main/daemon/daemon-cgroup-scope.ts
+1 src/main/daemon/daemon-file-log.ts
+1 src/main/daemon/daemon-process-identity-query.ts
+1 src/main/daemon/daemon-process-start-time.ts
+2 src/main/daemon/daemon-stream-backlog-probe.ts
+1 src/main/daemon/daemon-user-manager-lifetime.ts
+1 src/main/daemon/terminal-scopes.ts
+2 src/main/orcad/node-pty-precondition.ts
+1 src/main/pty/posix-pty-process-table.ts

@@ -46,7 +46,9 @@ export function createMockSubprocess(dataOnSubscribe?: string): SubprocessHandle
     resume: vi.fn<() => void>(),
     kill: vi.fn(() => setTimeout(() => onExitCb?.(0), 5)),
     terminateOwnedTree: () => 'unavailable' as const,
-    forceKill: vi.fn(() => setTimeout(() => onExitCb?.(137), 5)),
+    forceKill: vi.fn(() => {
+      setTimeout(() => onExitCb?.(137), 5)
+    }),
     signal: vi.fn(),
     onData(cb) {
       onDataCb = cb

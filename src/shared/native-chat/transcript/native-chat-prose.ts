@@ -1,4 +1,4 @@
-import { isTextBlock, type NativeChatBlock } from './native-chat-types'
+import { isTextBlock, type NativeChatBlock } from '../../native-chat-types'
 
 export function nativeChatProseToMarkdown(blocks: NativeChatBlock[]): string {
   return blocks

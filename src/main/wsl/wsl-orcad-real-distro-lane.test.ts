@@ -27,7 +27,11 @@ import { resolveWslInteropSpawnCwd } from '../wsl-interop-spawn-directory'
 import { createWslDistroHolder, type WslDistroHolder } from './wsl-distro-holder'
 import { proveWslStructuredChat } from './wsl-orcad-structured-chat-contract'
 import { WSL_CHAT_GUEST_BIN } from './wsl-orcad-chat-provider-fixture'
-import { WSL_CHAT_WINDOWS_DECOY, WSL_CHAT_WINDOWS_DECOY_DIR } from './wsl-orcad-chat-windows-decoy'
+import {
+  WSL_CHAT_WINDOWS_DECOY,
+  WSL_CHAT_WINDOWS_DECOY_AGENTS,
+  WSL_CHAT_WINDOWS_DECOY_DIR
+} from './wsl-orcad-chat-windows-decoy'
 import { WSL_DISTRO_HOLDER_MARKER } from './wsl-distro-holder-command'
 import { resolveWslExecutablePath } from './wsl-executable-path'
 import { wslDistroHolderKey } from './wsl-distro-holder-record'
@@ -463,7 +467,7 @@ async function launchPhase(distro: string, systemd: boolean): Promise<Receipt> {
       `if [ -f "$f" ]; then rc="$f"; break; fi; done; ` +
       `grep -q ${LOGIN_ENV_TAG} "$rc" 2>/dev/null || ` +
       `printf 'export SSH_AUTH_SOCK=${LOGIN_ENV_SOCK} # ${LOGIN_ENV_TAG}\\n' >> "$rc"; ` +
-      // The chat fixture's `claude` goes here, ahead of the Windows PATH WSL appends.
+      // The chat fixtures' agent CLIs go here, ahead of the Windows PATH WSL appends.
       `grep -q ${CHAT_PATH_TAG} "$rc" 2>/dev/null || ` +
       `printf 'export PATH="$HOME/${WSL_CHAT_GUEST_BIN}:$PATH" # ${CHAT_PATH_TAG}\\n' >> "$rc"`
   )
@@ -613,10 +617,12 @@ describe.runIf(RUN && process.platform === 'win32')('WSL orcad on real WSL2 dist
   beforeAll(async () => {
     mkdirSync(USER_DATA, { recursive: true })
     mkdirSync(RECEIPT_DIR, { recursive: true })
-    // A Windows-side `claude` on this process's PATH reaches orcad through WSL's appended PATH.
+    // Windows-side agents on this process's PATH reach orcad through WSL's appended PATH.
     const decoyDir = join(WORK_DIR, WSL_CHAT_WINDOWS_DECOY_DIR)
     mkdirSync(decoyDir, { recursive: true })
-    writeFileSync(join(decoyDir, 'claude'), WSL_CHAT_WINDOWS_DECOY)
+    for (const agent of WSL_CHAT_WINDOWS_DECOY_AGENTS) {
+      writeFileSync(join(decoyDir, agent), WSL_CHAT_WINDOWS_DECOY)
+    }
     process.env.PATH = `${decoyDir}${delimiter}${process.env.PATH ?? ''}`
     installLaneAppEnvironment()
     createLaneManager()

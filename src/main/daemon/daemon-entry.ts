@@ -160,7 +160,7 @@ async function main(): Promise<void> {
   let daemon: DaemonHandle | null = null
   let deathWatch: MacosLoginSessionDeathWatch | null = null
   let shuttingDown = false
-  const shutdownDeadline = createDaemonShutdownDeadline(daemonLog, () => process.exit(0))
+  const shutdownDeadline = createDaemonShutdownDeadline(daemonLog, () => daemon)
   const beginShutdown = (): void => {
     shuttingDown = true
     shutdownDeadline.start()

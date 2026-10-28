@@ -53,6 +53,7 @@
     "check:path-literal-ratchet": "node config/scripts/check-path-literal-ratchet.mjs",
     "check:legacy-relay-fence-ratchet": "node config/scripts/check-legacy-relay-fence-ratchet.mjs",
     "check:unproven-pty-retirement-ratchet": "node config/scripts/check-unproven-pty-retirement-ratchet.mjs",
+    "check:daemon-blocking-call-ratchet": "node config/scripts/check-daemon-blocking-call-ratchet.mjs",
     "check:id-only-store-write-ratchet": "node config/scripts/check-id-only-store-write-ratchet.mjs",
     "check:repo-host-read-ratchet": "node config/scripts/check-repo-host-read-ratchet.mjs",
     "check:workspace-record-read-ratchet": "node config/scripts/check-workspace-record-read-ratchet.mjs",

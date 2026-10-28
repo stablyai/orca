@@ -43,6 +43,8 @@ export class ProfileStateWriterReopenPolicy {
 
   recordSuccess(): void {
     this.failure = undefined
+    // A bypass granted during a backoff must not carry over to a later, unrelated one.
+    this.bypassOnce = false
   }
 
   /** Logs and returns the delay before a retry, or null when the failure is terminal (a revision conflict). */
@@ -60,6 +62,18 @@ export class ProfileStateWriterReopenPolicy {
       error
     )
     return { retryInMs }
+  }
+}
+
+/** A throwing listener must not replace the conflict the caller is about to see. */
+export function reportTerminalReopenFailure(
+  onFailure: ((error: Error) => void) | undefined,
+  error: unknown
+): void {
+  try {
+    onFailure?.(error instanceof Error ? error : new Error(String(error)))
+  } catch (notificationError) {
+    console.error('[persistence] Could not report stopped saving:', notificationError)
   }
 }
 

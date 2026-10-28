@@ -12,7 +12,10 @@ import {
   ProfileStateWriterError,
   type ProfileStateWriterInitialization
 } from './profile-state-writer-worker-client'
-import { ProfileStateWriterReopenPolicy } from './profile-state-writer-reopen-policy'
+import {
+  ProfileStateWriterReopenPolicy,
+  reportTerminalReopenFailure
+} from './profile-state-writer-reopen-policy'
 
 export type ProfileStateWorkerAuthorityOptions = {
   workerPath?: string
@@ -251,7 +254,7 @@ export class ProfileStateWorkerAuthority implements AsyncProfileStateAuthority {
     }
     const retry = this.reopenPolicy.recordFailure(error)
     if (!retry) {
-      this.options.onFailure?.(error instanceof Error ? error : new Error(String(error)))
+      reportTerminalReopenFailure(this.options.onFailure, error)
       return
     }
     this.writer = null

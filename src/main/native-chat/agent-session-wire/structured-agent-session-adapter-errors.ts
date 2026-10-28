@@ -44,6 +44,7 @@ export type AgentSessionPreSpawnReason = Extract<
   | 'claudeAccountFolderMissing'
   | 'claudeAccountSetupFailed'
   | 'agentCommandNotRunnable'
+  | 'cliMissing'
   | 'runtimeNotInstalled'
   | 'conversationOpenInTerminal'
 >

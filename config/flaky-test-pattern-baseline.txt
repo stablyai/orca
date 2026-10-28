@@ -1343,7 +1343,7 @@
 2 test-timeout-needs-reason:src/main/providers/startup-line-typed-length.live-shell.test.ts
 7 test-timeout-needs-reason:src/main/pty/node-pty-master-fd-retirement.test.ts
 1 test-timeout-needs-reason:src/main/rate-limits/antigravity-usage-real-cli.test.ts
-3 test-timeout-needs-reason:src/main/runtime/cline-screen-readiness-transcripts.test.ts
+2 test-timeout-needs-reason:src/main/runtime/cline-screen-readiness-transcripts.test.ts
 4 test-timeout-needs-reason:src/main/runtime/codex-header-readiness-transcripts.test.ts
 1 test-timeout-needs-reason:src/main/runtime/codex-quiet-ready-screen.test.ts
 2 test-timeout-needs-reason:src/main/runtime/launched-agent-crash-guard.live-shell.test.ts

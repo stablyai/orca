@@ -12,6 +12,7 @@ import { getProjectProviderIdentity } from '../shared/project-host-setup-project
 import { getStoredRepoExecutionHostId } from './repo-execution-host'
 import { probeGitRemoteIdentity } from './repo-git-remote-identity'
 import { isWslMoveRepoBlocked } from './persistence/moving-wsl-projects/wsl-move-background-backoff'
+import { blockedWslDistroForPath, wslDistroForPath } from './wsl/wsl-unc-access-gate'
 
 const NO_IDENTITY_RETRY_TTL_MS = 5 * 60 * 1000
 // Refresh renamed/transferred projects without probing on every list call.
@@ -159,6 +160,11 @@ async function enrichRepoGitRemoteIdentity(store: RepoIdentityStore, repo: Repo)
     : NO_IDENTITY_RETRY_TTL_MS
   const controller = new AbortController()
   const promise = (async () => {
+    // E9: git on a stopped distro's repo boots it; no deadline, so the next sweep retries once it runs.
+    // Checked synchronously first so host repos keep probing without an extra await.
+    if (wslDistroForPath(repo.path) && (await blockedWslDistroForPath(repo.path))) {
+      return false
+    }
     const result = await probeGitRemoteIdentity(repo.path, hostId, {
       signal: controller.signal
     })

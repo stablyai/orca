@@ -452,9 +452,6 @@
   "auto.components.TaskPage.7698af5263": {
     "ko": "내 항목"
   },
-  "auto.components.TaskPage.7719d8daa9": {
-    "ko": "{{value0}} 멤버{{value1}}"
-  },
   "auto.components.TaskPage.7762f4b03a": {
     "ko": "/"
   },
@@ -587,7 +584,7 @@
   "auto.components.WorktreeJumpPalette.worktreesHeader": {
     "ko": "워크트리"
   },
-  "auto.components.activity.ActivityPrototypePage.770d458144": {
+  "auto.components.activity.ActivityPrototypePage.groupAgentActivityBy": {
     "ko": "agent 활동 그룹화 기준"
   },
   "auto.components.activity.ActivityPrototypePage.8de7c5beaa": {
@@ -2550,7 +2547,7 @@
     "ko": "설정 추적"
   },
   "auto.components.settings.RepositoryPane.creatingPendingSetup": {
-    "ko": "만드는 중..."
+    "ko": "추가 중..."
   },
   "auto.components.settings.RepositoryPane.existingFolder": {
     "ko": "기존 폴더"
@@ -4100,9 +4097,6 @@
   "auto.components.shared.useDaemonActions.fe2ab66d45": {
     "ko": "세션 {{value1}}개 중 {{value0}}개를 종료했습니다. {{value2}}개가 종료를 거부했습니다."
   },
-  "auto.components.sidebar.AddRemoteHostDialog.sshImportSynced": {
-    "ko": "{{value0}} 호스트{{value1}}을(를) Orca에 추가했습니다."
-  },
   "auto.components.sidebar.AddRepoCreateStep.0ae45b8238": {
     "ko": "my-project"
   },
@@ -4378,9 +4372,6 @@
   },
   "auto.components.sidebar.WorktreeList.bfbedc547b": {
     "ko": "워크트리"
-  },
-  "auto.components.sidebar.WorktreeList.f94466bc39": {
-    "ko": "그룹 삭제 후에도 {{value0}}/{{value1}} 프로젝트{{value2}}가 남아 있습니다."
   },
   "auto.components.sidebar.WorktreeList.failedUnnestWorkspace": {
     "ko": "워크스페이스 펼치기 실패"
@@ -6595,5 +6586,71 @@
   },
   "auto.components.settings.contrast.off": {
     "ko": "끔"
+  },
+  "auto.components.GitHubItemDialog.reactionCountSingular": {
+    "ko": "{{reaction}} 반응 {{count}}개"
+  },
+  "auto.components.GitHubItemDialog.reactionCountPlural": {
+    "ko": "{{reaction}} 반응 {{count}}개"
+  },
+  "auto.components.GitLabItemDialog.approvalsRemainingSingular": {
+    "ko": "승인 {{count}}개 남음"
+  },
+  "auto.components.GitLabItemDialog.approvalsRemainingPlural": {
+    "ko": "승인 {{count}}개 남음"
+  },
+  "auto.components.TaskPage.labelCountSingular": {
+    "ko": "라벨 {{count}}개"
+  },
+  "auto.components.TaskPage.labelCountPlural": {
+    "ko": "라벨 {{count}}개"
+  },
+  "auto.components.TaskPage.memberCountSingular": {
+    "ko": "멤버 {{count}}명"
+  },
+  "auto.components.TaskPage.memberCountPlural": {
+    "ko": "멤버 {{count}}명"
+  },
+  "auto.components.terminal.pane.terminal.drop.handler.skippedSymlinkSingular": {
+    "ko": "심볼릭 링크 {{count}}개를 건너뛰었습니다."
+  },
+  "auto.components.terminal.pane.terminal.drop.handler.skippedSymlinkPlural": {
+    "ko": "심볼릭 링크 {{count}}개를 건너뛰었습니다."
+  },
+  "auto.components.terminal.pane.terminal.drop.handler.uploadingFileSingular": {
+    "ko": "파일 {{count}}개를 런타임에 업로드하는 중…"
+  },
+  "auto.components.terminal.pane.terminal.drop.handler.uploadingFilePlural": {
+    "ko": "파일 {{count}}개를 런타임에 업로드하는 중…"
+  },
+  "auto.components.sidebar.WorktreeList.groupProjectsRemainedSingular": {
+    "ko": "그룹을 삭제했지만, 포함된 프로젝트 {{count}}개 중 {{remaining}}개가 남아 있습니다."
+  },
+  "auto.components.sidebar.WorktreeList.groupProjectsRemainedPlural": {
+    "ko": "그룹을 삭제했지만, 포함된 프로젝트 {{count}}개 중 {{remaining}}개가 남아 있습니다."
+  },
+  "auto.components.sidebar.AddRemoteHostDialog.sshImportSyncedSingular": {
+    "ko": "호스트 {{count}}개를 Orca에 추가했습니다."
+  },
+  "auto.components.sidebar.AddRemoteHostDialog.sshImportSyncedPlural": {
+    "ko": "호스트 {{count}}개를 Orca에 추가했습니다."
+  },
+  "auto.components.right.sidebar.SourceControl.discardFailedSingular": {
+    "ko": "파일 {{count}}개의 변경 사항을 버리지 못했습니다."
+  },
+  "auto.components.right.sidebar.SourceControl.discardFailedPlural": {
+    "ko": "파일 {{count}}개의 변경 사항을 버리지 못했습니다."
+  },
+  "auto.components.right.sidebar.SourceControl.noteCountSingular": {
+    "ko": "메모 {{count}}개"
+  },
+  "auto.components.right.sidebar.SourceControl.noteCountPlural": {
+    "ko": "메모 {{count}}개"
+  },
+  "auto.components.onboarding.IntegrationsStep.linearWorkspacesLinkedSingular": {
+    "ko": "워크스페이스 {{count}}개가 연결되었습니다. 언제든지 다른 워크스페이스를 추가하거나 접근 권한이 제한된 API 키를 교체할 수 있습니다."
+  },
+  "auto.components.onboarding.IntegrationsStep.linearWorkspacesLinkedPlural": {
+    "ko": "워크스페이스 {{count}}개가 연결되었습니다. 언제든지 다른 워크스페이스를 추가하거나 접근 권한이 제한된 API 키를 교체할 수 있습니다."
   }
 }

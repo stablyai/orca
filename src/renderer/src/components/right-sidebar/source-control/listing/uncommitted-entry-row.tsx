@@ -11,6 +11,7 @@ import { ActionButton } from './action-button'
 import { ConflictBadge } from './conflict-badge'
 import { getLocalizedConflictKindLabel } from './conflict-label'
 import { DiffLineCounts } from './diff-line-counts'
+import { reviewNoteCountTitle } from './review-note-count-title'
 import { SourceControlEntryContextMenu } from './entry-context-menu'
 import {
   canDiscardStatusEntry,
@@ -180,10 +181,7 @@ export const UncommittedEntryRow = React.memo(function UncommittedEntryRow({
         {commentCount > 0 && (
           <span
             className="flex shrink-0 items-center gap-0.5 text-[10px] text-muted-foreground"
-            title={translate('sourceControl.noteCount', '{{count}} notes', {
-              count: commentCount,
-              defaultValue_one: '{{count}} note'
-            })}
+            title={reviewNoteCountTitle(commentCount)}
           >
             <MessageSquare className="size-3" />
             <span className="tabular-nums">{commentCount}</span>

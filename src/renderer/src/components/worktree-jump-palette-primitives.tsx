@@ -329,6 +329,6 @@ export function getPaletteSupportingTextLabel(
     case 'task':
       return translate('worktreeJumpPalette.matchLabel.task', 'Task')
     case 'automation':
-      return translate('worktreeJumpPalette.matchLabel.automation', 'Automation')
+      return translate('worktreeJumpPalette.matchLabel.automationItem', 'Automation')
   }
 }

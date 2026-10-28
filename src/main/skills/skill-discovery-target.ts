@@ -12,6 +12,7 @@ import { stablePathId } from './skill-discovery-sources'
 import { skillScanSourceKinds } from './skill-discovery-source-filter'
 import { getRepoExecutionHostId } from '../../shared/execution-host'
 import { isSkillRootUnavailableError, SkillScanCoalescer } from './skill-scan-coalescer'
+import { assertWslUncPathRunning } from '../wsl/wsl-unc-access-gate'
 
 // Cache whole WSL results to amortize process boots; native roots already cache, so only coalesce concurrent targets.
 const WSL_RESULT_TTL_MS = 10_000
@@ -45,7 +46,8 @@ export type ResolvedSkillDiscoveryTarget =
     }
 
 export async function resolveSkillDiscoveryTarget(
-  target: SkillDiscoveryTarget | undefined
+  target: SkillDiscoveryTarget | undefined,
+  options: { refuseStoppedWslDistro?: boolean } = {}
 ): Promise<ResolvedSkillDiscoveryTarget> {
   const projectRuntime = target?.projectRuntime
   if (projectRuntime?.status === 'repair-required') {
@@ -76,6 +78,10 @@ export async function resolveSkillDiscoveryTarget(
   }
   if (process.platform !== 'win32') {
     throw new Error('WSL skill discovery is only available on Windows.')
+  }
+  // E9: discovery runs from passive UI; the home probe and the in-distro scan would start a stopped distro.
+  if (options.refuseStoppedWslDistro) {
+    await assertWslUncPathRunning('', wslDistro)
   }
   // Why async: a synchronous probe blocks main and, on a booting distro, kills its first boot.
   const homeDir = await getWslHomeAsync(wslDistro)
@@ -147,12 +153,19 @@ function scanKey(
 export async function discoverSkillsOnTarget(
   target: ResolvedSkillDiscoveryTarget,
   repos: readonly Repo[],
-  options: { refresh?: boolean; providerRootOverrides?: SkillProviderRootOverrides } = {}
+  options: {
+    refresh?: boolean
+    providerRootOverrides?: SkillProviderRootOverrides
+    /** False for a user act (Share), which may read a stopped distro's folders. */
+    gateStoppedWslDistros?: boolean
+  } = {}
 ): Promise<SkillDiscoveryResult> {
   const refresh = options.refresh === true
+  const gate = options.gateStoppedWslDistros === false ? { gateStoppedWslDistros: false } : {}
   try {
     const outcome = await targetScans.run(
-      scanKey(target, repos, options.providerRootOverrides),
+      // A gated and an ungated scan of one target must not answer for each other.
+      `${scanKey(target, repos, options.providerRootOverrides)}${options.gateStoppedWslDistros === false ? ':user-act' : ''}`,
       { ttlMs: target.kind === 'wsl' ? WSL_RESULT_TTL_MS : 0, refresh },
       async (): Promise<TargetScanObservation> => {
         if (target.kind === 'wsl') {
@@ -174,14 +187,16 @@ export async function discoverSkillsOnTarget(
               refresh,
               ...(target.names ? { names: target.names } : {}),
               ...(target.sourceKinds ? { sourceKinds: target.sourceKinds } : {}),
-              providerRootOverrides: options.providerRootOverrides
+              providerRootOverrides: options.providerRootOverrides,
+              ...gate
             })
           : discoverSkills({
               repos: [...repos],
               refresh,
               ...(target.names ? { names: target.names } : {}),
               ...(target.sourceKinds ? { sourceKinds: target.sourceKinds } : {}),
-              providerRootOverrides: options.providerRootOverrides
+              providerRootOverrides: options.providerRootOverrides,
+              ...gate
             }))
         return { kind: 'native', result }
       }

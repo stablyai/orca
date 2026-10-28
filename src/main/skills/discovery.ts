@@ -20,6 +20,13 @@ import {
   type SkillScanRoot
 } from './skill-discovery-sources'
 import { rootMayContainSourceKind } from './skill-discovery-source-filter'
+import {
+  isOnStoppedWslDistro,
+  splitStoppedWslDistroRoots,
+  stoppedPluginRoot,
+  unavailableSkillSource
+} from './skill-discovery-stopped-wsl-roots'
+import { wslDistroForPath } from '../wsl/wsl-unc-access-gate'
 import { buildRemoteRepoSkillSources } from './skill-remote-repo-sources'
 import { discoverClaudePluginSkillSources } from './claude-plugin-skill-sources'
 import { findSkillFiles } from './skill-root-file-walk'
@@ -227,23 +234,41 @@ export async function discoverSkills(args: {
   refresh?: boolean
   names?: string[]
   sourceKinds?: SkillSourceKind[]
+  /** False for a user act (Share): read stopped WSL distros' folders instead of reporting them unavailable. */
+  gateStoppedWslDistros?: boolean
 }): Promise<SkillDiscoveryResult> {
   args.signal?.throwIfAborted()
   const startedAt = Date.now()
   const homeDir = args.homeDir ?? homedir()
   const refresh = args.refresh === true
-  const roots = [
-    ...buildSkillDiscoverySources({ ...args, homeDir }),
-    // Plugin inventory belongs to explicit workspaces; untargeted Settings scans retain their existing scope/cost.
-    ...(args.cwd &&
+  // Plugin inventory belongs to explicit workspaces; untargeted Settings scans retain their existing scope/cost.
+  const pluginCwd =
+    args.cwd &&
     args.includeCwd !== false &&
     (!args.sourceKinds?.length || args.sourceKinds.includes('plugin'))
+      ? args.cwd
+      : undefined
+  const gateStopped = args.gateStoppedWslDistros !== false
+  const pluginCwdStopped =
+    gateStopped &&
+    pluginCwd !== undefined &&
+    wslDistroForPath(pluginCwd) !== null &&
+    (await isOnStoppedWslDistro(pluginCwd))
+  const candidateRoots = [
+    ...buildSkillDiscoverySources({ ...args, homeDir }),
+    ...(pluginCwd && !pluginCwdStopped
       ? await waitForPromiseWithSignal(
-          discoverClaudePluginSkillSources({ homeDir, cwd: args.cwd, signal: args.signal }),
+          discoverClaudePluginSkillSources({ homeDir, cwd: pluginCwd, signal: args.signal }),
           args.signal
         )
       : [])
-  ].filter((root) => rootMayContainSourceKind(root, args.sourceKinds))
+  ]
+  // Host-only root sets never await the WSL gate.
+  const { readable, unavailable } =
+    gateStopped && candidateRoots.some((root) => wslDistroForPath(root.path))
+      ? await splitStoppedWslDistroRoots(candidateRoots)
+      : { readable: candidateRoots, unavailable: [] }
+  const roots = readable.filter((root) => rootMayContainSourceKind(root, args.sourceKinds))
   args.signal?.throwIfAborted()
   const scans = await waitForPromiseWithSignal(
     Promise.all(roots.map((root) => scanRootShared(root, refresh))),
@@ -262,7 +287,10 @@ export async function discoverSkills(args: {
     })),
     ...(!args.sourceKinds?.length || args.sourceKinds.includes('repo')
       ? buildRemoteRepoSkillSources(args.repos ?? [])
-      : [])
+      : []),
+    ...[...unavailable, ...(pluginCwd && pluginCwdStopped ? [stoppedPluginRoot(pluginCwd)] : [])]
+      .filter((root) => rootMayContainSourceKind(root, args.sourceKinds))
+      .map(unavailableSkillSource)
   ]
   const normalizedNames = args.names?.map((name) => name.trim().toLowerCase()).filter(Boolean)
   const expectedNames = normalizedNames?.length ? new Set(normalizedNames) : undefined

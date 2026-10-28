@@ -246,7 +246,7 @@ export function ExperimentalPane({
               <p className="text-xs text-muted-foreground">
                 {translate(
                   'auto.components.settings.ExperimentalPane.newWorktreeCardStyle.copy',
-                  'Previews updated worktree-card layout and metadata behavior, including hover/context-menu ownership and status presentation.'
+                  'Preview updated worktree-card layout, metadata placement, card-display menu options, and status presentation.'
                 )}
               </p>
             </div>

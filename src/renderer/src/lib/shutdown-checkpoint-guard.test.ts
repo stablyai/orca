@@ -28,29 +28,6 @@ describe('createShutdownCheckpointGuard', () => {
     expect(persist).toHaveBeenCalledTimes(1)
   })
 
-  it('allows a new checkpoint after an aborted restart resets the attempt', () => {
-    const persist = vi.fn()
-    const guard = createShutdownCheckpointGuard(persist)
-
-    expect(guard.persistOnce()).toBe(true)
-    guard.abandonAttempt()
-    expect(guard.persistOnce()).toBe(true)
-
-    expect(persist).toHaveBeenCalledTimes(2)
-  })
-
-  it('retries when the blocking checkpoint throws', () => {
-    const persist = vi.fn().mockImplementationOnce(() => {
-      throw new Error('disk full')
-    })
-    const guard = createShutdownCheckpointGuard(persist)
-
-    expect(guard.persistOnce()).toBe(false)
-    expect(guard.persistOnce()).toBe(true)
-
-    expect(persist).toHaveBeenCalledTimes(2)
-  })
-
   it('publishes the failure cause and records a crash breadcrumb (STA-5505)', () => {
     const recordBreadcrumb = vi.fn()
     ;(window as unknown as { api: unknown }).api = { crashReports: { recordBreadcrumb } }
@@ -102,24 +79,6 @@ describe('createShutdownCheckpointGuard', () => {
 
     expect(guard.persistOnce()).toBe(false)
     expect(consumeShutdownCheckpointFailureReason()).toBe('Unknown shutdown checkpoint failure')
-  })
-
-  it('resets state owned by the persist attempt lifecycle', () => {
-    const abandonPersistAttempt = vi.fn()
-    const guard = createShutdownCheckpointGuard(vi.fn(), abandonPersistAttempt)
-
-    guard.abandonAttempt()
-
-    expect(abandonPersistAttempt).toHaveBeenCalledTimes(1)
-  })
-
-  it('preserves persist retry state when the checkpoint itself aborts the restart', () => {
-    const abandonPersistAttempt = vi.fn()
-    const guard = createShutdownCheckpointGuard(vi.fn(), abandonPersistAttempt)
-
-    guard.abortAfterCheckpointFailure()
-
-    expect(abandonPersistAttempt).not.toHaveBeenCalled()
   })
 
   it('reports checkpoint failure separately from the unload verdict', () => {

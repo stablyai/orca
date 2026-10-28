@@ -25,7 +25,7 @@ afterEach(() => {
   expect(unusedChatLeaves.openSender).not.toHaveBeenCalled()
 })
 import type * as NativeChatWorkRunModule from '../../../../shared/native-chat/native-chat-work-run'
-import type * as NativeChatProseModule from '../../../../shared/native-chat-prose'
+import type * as NativeChatProseModule from '../../../../shared/native-chat/transcript/native-chat-prose'
 import type { NativeChatMessage } from '../../../../shared/native-chat-types'
 import { projectStructuredAgentSessionMessages } from '../../../../shared/structured-agent-session-message-projection'
 import type { AgentJournalRenderItem } from '../../../../shared/agent-session-journal-types'
@@ -35,7 +35,7 @@ import { installNativeChatMessageListTestViewport } from './native-chat-message-
 
 // Count markdown derivations: low render counts alone can hide repeated settled-row work.
 const proseCalls = vi.hoisted(() => ({ count: 0 }))
-vi.mock('../../../../shared/native-chat-prose', async (importOriginal) => {
+vi.mock('../../../../shared/native-chat/transcript/native-chat-prose', async (importOriginal) => {
   const actual = await importOriginal<typeof NativeChatProseModule>()
   return {
     ...actual,

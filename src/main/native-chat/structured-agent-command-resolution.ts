@@ -14,7 +14,7 @@ import {
   AgentSessionPreSpawnError,
   isAgentSessionPreSpawnError
 } from './agent-session-wire/structured-agent-session-adapter'
-import { guestNativePathEnv } from '../ipc/wsl-guest-windows-drive-path'
+import { guestNativePathEnv, resolveGuestNativeProgram } from '../ipc/wsl-guest-windows-drive-path'
 
 export type StructuredAgentCommandSettings = Partial<
   Pick<GlobalSettings, 'agentCmdOverrides' | 'agentDefaultEnv'>
@@ -51,11 +51,15 @@ export function resolveStructuredAgentCommand(
 ): string {
   if (!hasExplicitTuiLaunchCommand(settings, agent)) {
     // WSL PATH may contain drive-mounted Windows shims after native entries.
-    const pathEnv = guestNativePathEnv(options.pathEnv)
-    return (stock.resolve ?? resolveCliCommand)(
-      stock.command ?? agent,
-      pathEnv === options.pathEnv ? options : { ...options, pathEnv }
-    )
+    const command = stock.command ?? agent
+    const resolved = resolveGuestNativeProgram(command, options, stock.resolve)
+    if (resolved === null) {
+      throw new AgentSessionPreSpawnError(
+        `${command} is installed only on Windows, not in WSL ${process.env.WSL_DISTRO_NAME ?? 'distro'}`,
+        { reason: 'cliMissing' }
+      )
+    }
+    return resolved
   }
   const command = resolveOverride(agent, settings, options)
   if (!command || !spawnableOn(options.platform ?? process.platform, command)) {
@@ -114,7 +118,11 @@ export async function resolveAgainAfterRefreshOnMissingProgram<T extends { comma
       return resolved
     }
   } catch (error) {
-    if (!isAgentSessionPreSpawnError(error) || error.reason !== 'agentCommandNotRunnable') {
+    // cliMissing: only a Windows copy was found; a refreshed shell may now show a WSL install.
+    if (
+      !isAgentSessionPreSpawnError(error) ||
+      (error.reason !== 'agentCommandNotRunnable' && error.reason !== 'cliMissing')
+    ) {
       throw error
     }
   }

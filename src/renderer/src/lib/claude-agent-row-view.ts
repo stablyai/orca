@@ -59,7 +59,7 @@ export async function viewClaudeAgentFromRow(agent: DashboardAgentRow): Promise<
     if (view.status === 'unsupported') {
       toast.info(
         translate(
-          'auto.lib.claudeAgentRowView.restartRequired',
+          'auto.lib.claudeAgentRowView.subagentNavigationSetup',
           'Enable Claude subagent navigation in Settings → Agents, then launch Claude 2.1.300+ in Orca. Check that keybindings.json still binds Ctrl+Alt+G, H, or V to command:orca-agent-view.'
         )
       )

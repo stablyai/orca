@@ -205,22 +205,16 @@ describe('Windows server prebuild cache validation', () => {
 })
 
 describe('Windows server prebuild cache inputs', () => {
-  const options = { platform: 'win32', arch: 'x64', imageOS: 'win22', imageVersion: '20260927.1.0' }
+  const options = { platform: 'win32', arch: 'x64', imageOS: 'win22' }
 
-  it('separates host architecture and compiler image without fallback keys', () => {
+  it('separates host architecture and image without fallback keys', () => {
     const identity = windowsPrebuildCacheIdentity(options)
-    expect(identity.key).toMatch(/^orcad-windows-prebuild-v1-win32-x64-[a-f0-9]{64}$/)
+    expect(identity.key).toMatch(/^orcad-windows-prebuild-v2-win32-x64-[a-f0-9]{64}$/)
     expect(windowsPrebuildCacheIdentity(options)).toEqual(identity)
-    for (const override of [
-      { arch: 'arm64' },
-      { imageOS: 'win11' },
-      { imageVersion: '20261001.1.0' }
-    ]) {
+    for (const override of [{ arch: 'arm64' }, { imageOS: 'win25' }]) {
       expect(windowsPrebuildCacheIdentity({ ...options, ...override }).key).not.toBe(identity.key)
     }
-    expect(() => windowsPrebuildCacheIdentity({ ...options, imageVersion: '' })).toThrow(
-      /ImageVersion/
-    )
+    expect(() => windowsPrebuildCacheIdentity({ ...options, imageOS: '' })).toThrow(/ImageOS/)
   })
 
   const compilerInputs = [
@@ -246,42 +240,70 @@ describe('Windows server prebuild cache inputs', () => {
   ]
   const cacheInputs = [...new Set([...WINDOWS_PREBUILD_CACHE_INPUTS, ...compilerInputs])]
 
-  it('reuses native binaries across app versions but invalidates every other manifest field', () => {
-    const repository = mkdtempSync(join(tmpdir(), 'orca-prebuild-version-key-'))
+  function repositoryCopy() {
+    const repository = mkdtempSync(join(tmpdir(), 'orca-prebuild-key-'))
     temporary.push(repository)
     const source = resolve(import.meta.dirname, '../..')
-    for (const relative of cacheInputs) {
+    for (const relative of [
+      ...cacheInputs,
+      'package.json',
+      'pnpm-lock.yaml',
+      'pnpm-workspace.yaml'
+    ]) {
       mkdirSync(dirname(join(repository, relative)), { recursive: true })
       cpSync(join(source, relative), join(repository, relative))
     }
-    const path = join(repository, 'package.json')
-    const manifest = JSON.parse(readFileSync(path, 'utf8'))
+    return repository
+  }
+
+  it('ignores app versions and unrelated manifest and lockfile edits but not the build scripts', () => {
+    const repository = repositoryCopy()
+    const key = () => windowsPrebuildCacheIdentity({ ...options, repository }).key
+    const before = key()
+    const manifestPath = join(repository, 'package.json')
+    const manifest = JSON.parse(readFileSync(manifestPath, 'utf8'))
+    writeFileSync(
+      manifestPath,
+      JSON.stringify({
+        ...manifest,
+        version: '999.0.0',
+        dependencies: { ...manifest.dependencies, unrelated: '1.0.0' }
+      })
+    )
+    const lockPath = join(repository, 'pnpm-lock.yaml')
+    writeFileSync(lockPath, `${readFileSync(lockPath, 'utf8')}\n  unrelated-package@1.0.0: {}\n`)
+    expect(key()).toBe(before)
+    writeFileSync(
+      manifestPath,
+      JSON.stringify({
+        ...manifest,
+        scripts: { ...manifest.scripts, 'build:orcad-prebuilds': 'changed' }
+      })
+    )
+    expect(key()).not.toBe(before)
+  })
+
+  it('invalidates a changed node-pty or node-gyp lock entry', () => {
+    const repository = repositoryCopy()
     const before = windowsPrebuildCacheIdentity({ ...options, repository }).key
-    writeFileSync(path, JSON.stringify({ ...manifest, version: '999.0.0' }))
-    expect(windowsPrebuildCacheIdentity({ ...options, repository }).key).toBe(before)
-    for (const field of Object.keys(manifest).filter((field) => field !== 'version')) {
-      writeFileSync(path, JSON.stringify({ ...manifest, [field]: 'changed' }))
+    const lockPath = join(repository, 'pnpm-lock.yaml')
+    const lock = readFileSync(lockPath, 'utf8')
+    for (const [from, to] of [
+      [/(\n {2}node-pty@[^\n]+:\n {4}dependencies:\n {6}node-addon-api: )[^\n]+/, '$17.1.0'],
+      [/(\n {2}node-gyp@[^\n]+:\n {4}dependencies:\n)/, '$1      zwitch: 2.0.4\n']
+    ]) {
+      expect(lock).toMatch(from)
+      writeFileSync(lockPath, lock.replace(from, to))
       expect(windowsPrebuildCacheIdentity({ ...options, repository }).key).not.toBe(before)
     }
   })
 
   it.each(cacheInputs)('invalidates a changed %s input', (file) => {
-    const repository = mkdtempSync(join(tmpdir(), 'orca-prebuild-key-'))
-    temporary.push(repository)
-    const source = resolve(import.meta.dirname, '../..')
-    for (const relative of cacheInputs) {
-      mkdirSync(dirname(join(repository, relative)), { recursive: true })
-      cpSync(join(source, relative), join(repository, relative))
-    }
+    const repository = repositoryCopy()
     const before = windowsPrebuildCacheIdentity({ ...options, repository }).key
     writeFileSync(
       join(repository, file),
-      file === 'package.json'
-        ? JSON.stringify({
-            ...JSON.parse(readFileSync(join(repository, file), 'utf8')),
-            engines: { node: 'changed' }
-          })
-        : `${readFileSync(join(repository, file), 'utf8')}\nchanged input`
+      `${readFileSync(join(repository, file), 'utf8')}\nchanged input`
     )
     expect(windowsPrebuildCacheIdentity({ ...options, repository }).key).not.toBe(before)
   })

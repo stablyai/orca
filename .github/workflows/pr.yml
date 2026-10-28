@@ -101,6 +101,7 @@ jobs:
         uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
         with:
           bun-version-file: config/.bun-version
+          no-cache: true
 
       - name: Check required PR context ownership
         run: bun .github/scripts/check-required-pr-context.mjs
@@ -220,6 +221,7 @@ jobs:
         uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
         with:
           bun-version-file: config/.bun-version
+          no-cache: true
 
       # Plan first: its ~10s single-threaded import-graph walk overlaps lint instead of trailing the job.
       - name: Plan unit selection
@@ -1040,11 +1042,18 @@ jobs:
         with:
           persist-credentials: false
 
+      # Electron and builder releases fix what this downloads; the lockfile churns far more often.
+      - name: Resolve electron-builder download versions
+        id: eb-versions
+        shell: bash
+        run: node -p "const d = require('./package.json').devDependencies; 'versions=electron' + d.electron + '-builder' + d['electron-builder']" >> "$GITHUB_OUTPUT"
+
+      # The platform warmup seeds this on main.
       - name: Cache electron-builder downloads
         uses: actions/cache/restore@v5
         with:
           path: ~/.cache/electron-builder
-          key: electron-builder-linux-${{ hashFiles('pnpm-lock.yaml') }}
+          key: electron-builder-linux-${{ steps.eb-versions.outputs.versions }}
           restore-keys: |
             electron-builder-linux-
 
@@ -1270,6 +1279,12 @@ jobs:
         with:
           persist-credentials: false
 
+      # Electron and builder releases fix what this downloads; the lockfile churns far more often.
+      - name: Resolve electron-builder download versions
+        id: eb-versions
+        shell: bash
+        run: node -p "const d = require('./package.json').devDependencies; 'versions=electron' + d.electron + '-builder' + d['electron-builder']" >> "$GITHUB_OUTPUT"
+
       - name: Cache electron-builder downloads
         uses: actions/cache/restore@v5
         with:
@@ -1277,7 +1292,7 @@ jobs:
             ~\AppData\Local\electron\Cache
             ~\AppData\Local\electron-builder\Cache
           # Release builds seed this exact path set; PR-local copies cannot serve other PRs.
-          key: electron-builder-win-${{ hashFiles('pnpm-lock.yaml') }}
+          key: electron-builder-win-${{ steps.eb-versions.outputs.versions }}
           restore-keys: |
             electron-builder-win-
 
@@ -1295,13 +1310,6 @@ jobs:
       # build resolves React Native and Expo from mobile/node_modules.
       - uses: ./.github/actions/install-mobile-dependencies
 
-      - name: Save compiled Node native modules
-        if: steps.deps.outputs.native-cache-hit != 'true'
-        uses: actions/cache/save@v5
-        with:
-          path: ${{ steps.deps.outputs.native-cache-path }}
-          key: ${{ steps.deps.outputs.native-cache-key }}
-
       # vitest runs here directly rather than through `pnpm test`, so the addon
       # assertions only hold once install-node-dependencies has rebuilt natives.
       - name: Test Windows installer process probe
@@ -1315,6 +1323,12 @@ jobs:
           config/scripts/nsis-process-check.test.mjs
           config/scripts/idle-cpu-process-sampling.test.mjs
 
+      - name: Resolve the Windows Rust build scope
+        id: rust-scope
+        shell: bash
+        run: node config/scripts/windows-rust-build-scope.mjs >> "$GITHUB_OUTPUT"
+
+      # Real inputs only: older restores are safe because the build re-checks each exe's fingerprint.
       - name: Cache Windows CLI launcher
         uses: actions/cache@v5
         with:
@@ -1325,7 +1339,9 @@ jobs:
             native/windows-agent-hook/.build
             native/windows-agent-hook/target
             ~/.cargo/registry
-          key: windows-cli-launcher-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('native/windows-cli-launcher/**', 'native/windows-agent-hook/**', 'config/scripts/build-windows-cli-launcher.mjs', 'config/scripts/build-windows-agent-hook.mjs', 'config/scripts/windows-rust-executable-build.mjs', 'resources/build/icon.ico', 'package.json') }}
+          key: windows-cli-launcher-v2-${{ runner.os }}-${{ runner.arch }}-${{ steps.rust-scope.outputs.toolchain }}-${{ steps.rust-scope.outputs.app-version }}-${{ hashFiles('native/windows-cli-launcher/src/**', 'native/windows-cli-launcher/build.rs', 'native/windows-cli-launcher/Cargo.toml', 'native/windows-cli-launcher/Cargo.lock', 'native/windows-cli-launcher/app.manifest', 'native/windows-cli-launcher/.cargo/**', 'native/windows-agent-hook/src/**', 'native/windows-agent-hook/build.rs', 'native/windows-agent-hook/Cargo.toml', 'native/windows-agent-hook/Cargo.lock', 'native/windows-agent-hook/app.manifest', 'native/windows-agent-hook/.cargo/**', 'config/scripts/build-windows-cli-launcher.mjs', 'config/scripts/build-windows-agent-hook.mjs', 'config/scripts/windows-rust-executable-build.mjs', 'config/scripts/windows-pe-imports.mjs', 'resources/build/icon.ico') }}
+          restore-keys: |
+            windows-cli-launcher-v2-${{ runner.os }}-${{ runner.arch }}-${{ steps.rust-scope.outputs.toolchain }}-
 
       # Require cargo early; otherwise packaged Rust launcher fails deep inside builder native hooks.
       - name: Ensure the Rust toolchain for the Windows CLI launcher
@@ -1429,6 +1445,8 @@ jobs:
       # Why the merge commit, unlike `e2e`: a gate must test what lands on main, not a stale head.
       ref: ${{ github.sha }}
       test_files: '["tests/e2e/workspace-layout-oracle-headless.spec.ts","tests/e2e/workspace-layout-oracle.spec.ts"]'
+      # Two ~3.6 min halves of the 21 window scenarios keep this gate off the PR's critical path.
+      changed_e2e_test_shards: '["1/2","2/2"]'
       run_changed_e2e: true
       needs_build: true
       artifact_suffix: -layout-oracle

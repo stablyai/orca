@@ -56,6 +56,7 @@ jobs:
       - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
         with:
           bun-version-file: config/.bun-version
+          no-cache: true
 
       # Before the template exists: packaging verifies a present template for every target.
       # Uncached: a src/**-keyed installer hit ~0.3% of runs while each 173 MB save evicted shared caches.

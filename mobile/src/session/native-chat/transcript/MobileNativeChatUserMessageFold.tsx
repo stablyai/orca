@@ -3,7 +3,7 @@ import { Pressable, Text, View } from 'react-native'
 import {
   NATIVE_CHAT_USER_MESSAGE_MAX_UNFOLDED_LINES,
   nativeChatUserMessageFolds
-} from '../../../../../src/shared/native-chat-user-message-fold'
+} from '../../../../../src/shared/native-chat/transcript/native-chat-user-message-fold'
 import { styles as markdownStyles } from '../../../components/mobile-markdown-styles'
 import { colors, spacing, typography } from '../../../theme/mobile-theme'
 import { themedStyleSheet } from '../../../theme/themed-styles'

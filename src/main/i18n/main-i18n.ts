@@ -95,6 +95,18 @@ export async function setMainUiLanguage(language: UiLanguage): Promise<string> {
   return locale
 }
 
+/** Startup failures can show dialogs before settings load; use the system language until then. */
+export async function prepareEarlyMainUiLanguage(): Promise<void> {
+  if (languageGeneration > 0) {
+    return
+  }
+  try {
+    await setMainUiLanguage(UI_LANGUAGE_SYSTEM)
+  } catch (error) {
+    console.warn('[i18n] Could not localize early startup dialogs:', error)
+  }
+}
+
 function applyMainPluginLanguagePacks(): void {
   for (const language of registeredPluginLanguages) {
     mainI18n.removeResourceBundle(language, 'translation')
@@ -121,7 +133,20 @@ export function setMainPluginLanguagePacks(
 
 export function translateMain(key: string, fallback: string, options?: TOptions): string {
   // Menu registration can precede async initialization; use the English fallback then.
-  const raw = initialized ? mainI18n.t(key, { defaultValue: fallback, ...options }) : fallback
+  const raw = initialized
+    ? mainI18n.t(key, { defaultValue: fallback, ...options })
+    : interpolateFallback(fallback, options)
   const value = typeof raw === 'string' && raw.length > 0 ? raw : fallback
   return isPseudoLocalizationLocale(mainI18n.language) ? pseudoLocalizeString(value) : value
+}
+
+// Why: startup dialogs can run before init, and their fallbacks still carry {{placeholders}}.
+function interpolateFallback(fallback: string, options: TOptions | undefined): string {
+  if (!options) {
+    return fallback
+  }
+  return fallback.replace(/\{\{\s*([\w.]+)\s*\}\}/g, (placeholder, name: string) => {
+    const value: unknown = options[name]
+    return value === undefined || value === null ? placeholder : String(value)
+  })
 }
