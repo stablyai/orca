@@ -3,13 +3,13 @@ import type { SettingsSearchEntry } from '../../search/settings-search'
 import { translateSearchKeyword } from '../../search/settings-search-keywords'
 
 export function getBrowserPasswordsTitle(): string {
-  return translate('settings.browser.passwords.managerTitle', 'Password manager')
+  return translate('settings.browser.passwords.title', 'Passwords')
 }
 
 export function getBrowserPasswordsDescription(): string {
   return translate(
-    'settings.browser.passwords.managerDescription',
-    'Add, delete, and edit saved passwords'
+    'settings.browser.passwords.description',
+    'Saved logins for Orca’s browser: add, import, edit and delete them.'
   )
 }
 

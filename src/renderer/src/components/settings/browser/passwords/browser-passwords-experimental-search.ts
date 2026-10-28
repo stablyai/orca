@@ -8,7 +8,7 @@ export const getBrowserPasswordsExperimentalSearchEntry = createLocalizedCatalog
     title: translate('settings.experimental.browserPasswords.title', 'Saved passwords'),
     description: translate(
       'settings.experimental.browserPasswords.description',
-      'Orca’s browser offers to save a login after it works and fills it from a list under the field. Manage them in Browser settings.'
+      'Orca’s browser offers to save a login after it works and fills it from a list under the field. Manage them in Settings › Browser › Passwords.'
     ),
     keywords: [
       ...translateSearchKeyword(
