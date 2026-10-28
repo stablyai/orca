@@ -19088,7 +19088,6 @@
       "subagents_other": "{{count}} alt ajan"
     },
     "terminal": {
-      "closed": "Canlı terminal yok, bu ajanın bölmesi kapandı.",
       "remotePreviewUnavailable": "Bu uzak oturum için önizleme yok, terminali görüntülemek için çalışma alanını açın.",
       "focusWorktree": "Worktree'yi aç",
       "close": "Kapat"

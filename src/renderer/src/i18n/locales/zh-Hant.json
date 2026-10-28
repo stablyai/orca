@@ -19077,7 +19077,6 @@
       "subagents_other": "{{count}} 個子代理程式"
     },
     "terminal": {
-      "closed": "沒有作用中的終端機 — 此代理程式的窗格已關閉。",
       "remotePreviewUnavailable": "無法預覽此遠端工作階段；請開啟工作區以檢視終端機。",
       "focusWorktree": "開啟工作樹",
       "close": "關閉"
