@@ -5,6 +5,7 @@ import { validateGitPushTarget } from '../../../git/push-target-validation'
 import { resolveRegisteredWorktreePath } from '../../registered-worktree-roots-cache'
 import { getLocalGitOptionsForRegisteredWorktree } from '../../local-worktree-runtime-options'
 import { ipcGitWorktreeTarget, materializeWorktreePushTargetRemote } from '../../worktree-remote'
+import { resolveGitActionPath } from './submodule-action-target'
 import type { FilesystemHandlerContext } from '../filesystem-handler-context'
 import { requireReachableGitRoute } from '../../../providers/execution-host-provider-dispatch'
 import { getConnectionExecutionHostId } from '../../../../shared/execution-host'
@@ -23,17 +24,19 @@ export function registerGitRemoteBranchMutationHandlers(context: FilesystemHandl
         forceWithLease?: boolean
         connectionId?: string
         pushTarget?: GitPushTarget
+        submodulePath?: string
       }
     ): Promise<void> => {
       // Require literal true so malformed values such as string false cannot enable --set-upstream.
       const publish = args.publish === true
       requireReachableGitRoute(getConnectionExecutionHostId(args.connectionId))
-      const worktreePath = await resolveRegisteredWorktreePath(args.worktreePath, store)
+      const registeredPath = await resolveRegisteredWorktreePath(args.worktreePath, store)
       const gitOptions = getLocalGitOptionsForRegisteredWorktree(
         store,
         args.worktreePath,
-        worktreePath
+        registeredPath
       )
+      const worktreePath = await resolveGitActionPath(args, registeredPath, gitOptions)
       const materializedPushTarget = args.pushTarget
         ? await materializeWorktreePushTargetRemote(
             worktreePath,
@@ -67,15 +70,17 @@ export function registerGitRemoteBranchMutationHandlers(context: FilesystemHandl
         worktreeId?: string
         connectionId?: string
         pushTarget?: GitPushTarget
+        submodulePath?: string
       }
     ): Promise<void> => {
       requireReachableGitRoute(getConnectionExecutionHostId(args.connectionId))
-      const worktreePath = await resolveRegisteredWorktreePath(args.worktreePath, store)
+      const registeredPath = await resolveRegisteredWorktreePath(args.worktreePath, store)
       const gitOptions = getLocalGitOptionsForRegisteredWorktree(
         store,
         args.worktreePath,
-        worktreePath
+        registeredPath
       )
+      const worktreePath = await resolveGitActionPath(args, registeredPath, gitOptions)
       const materializedPushTarget = args.pushTarget
         ? await materializeWorktreePushTargetRemote(
             worktreePath,
