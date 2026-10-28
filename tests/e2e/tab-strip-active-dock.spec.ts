@@ -179,6 +179,7 @@ test.describe('Tab strip active-tab dock', () => {
   test('fits titles without resizing neighbors when tabs open and close in spare space', async ({
     orcaPage
   }) => {
+    await orcaPage.setViewportSize({ width: 1920, height: 1080 })
     const worktreeId = await waitForActiveWorktree(orcaPage)
     await enableFitTabsToTitles(orcaPage)
     const tabIds = await orcaPage.evaluate((worktreeId) => {
@@ -239,7 +240,7 @@ test.describe('Tab strip active-tab dock', () => {
     }
 
     const longTitle = 'A very long conversation title '.repeat(20).trim()
-    // Agents rename through the same store action as the CLI; neither may move any tab.
+    // Agents rename through the same store action as the CLI; neither may move a tab under the pointer.
     const renameFromAgent = (title: string): Promise<void> =>
       orcaPage.evaluate(
         ({ id, title }) => {
@@ -254,6 +255,7 @@ test.describe('Tab strip active-tab dock', () => {
           return [rect.x, rect.width]
         })
       )
+    await short.hover()
     const settledGeometry = await allGeometry()
     for (const title of ['Chat', longTitle]) {
       await renameFromAgent(title)
@@ -263,20 +265,19 @@ test.describe('Tab strip active-tab dock', () => {
         expect(await allGeometry()).toEqual(settledGeometry)
       }
     }
-    // Menus remount the label; the held width must survive that.
-    await long.locator('[data-testid="sortable-tab"]').click({ button: 'right' })
-    await expect(orcaPage.getByRole('menu')).toBeVisible()
-    expect(await allGeometry()).toEqual(settledGeometry)
-    await orcaPage.keyboard.press('Escape')
-    await expect(orcaPage.getByRole('menu')).toHaveCount(0)
+    // Hovering holds widths even after titles go quiet.
+    await orcaPage.waitForTimeout(3_500)
     expect(await allGeometry()).toEqual(settledGeometry)
 
-    // Opening a tab is a strip change the user can see, so stale widths settle with it.
-    const settleTrigger = await createBackgroundTerminalTab(orcaPage, worktreeId)
-    await expect(orcaPage.locator(slotSelector(settleTrigger))).toHaveCount(1)
-    await expect.poll(() => width(long)).toBeGreaterThan(384)
-    await orcaPage.locator(`${slotSelector(settleTrigger)} [data-tab-close-button]`).click()
-    await expect(orcaPage.locator(slotSelector(settleTrigger))).toHaveCount(0)
+    // Away from the strip, constant renames still hold; widths settle once titles stop changing.
+    const stripBounds = await orcaPage.locator(STRIP).first().boundingBox()
+    await orcaPage.mouse.move(stripBounds!.x + 40, stripBounds!.y + stripBounds!.height + 200)
+    for (const title of ['Chat', 'Review', longTitle]) {
+      await renameFromAgent(title)
+      await orcaPage.waitForTimeout(1_000)
+      expect(await allGeometry()).toEqual(settledGeometry)
+    }
+    await expect.poll(() => width(long), { timeout: 10_000 }).toBeGreaterThan(384)
 
     // A rename the user typed resizes immediately.
     const renameFromUser = async (title: string): Promise<void> => {

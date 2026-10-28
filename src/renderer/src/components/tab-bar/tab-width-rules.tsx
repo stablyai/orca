@@ -1,4 +1,13 @@
-import { createContext, useContext, useMemo, useState } from 'react'
+import {
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type RefObject
+} from 'react'
 import { cn } from '@/lib/utils'
 import { useAppStore } from '../../store'
 
@@ -12,6 +21,9 @@ export const TAB_ROOT_WIDTH_CLASSES = 'w-full'
 
 export const TAB_LABEL_WIDTH_CLASSES = 'min-w-0 flex-1 truncate'
 
+// Agents can retitle a tab every few seconds; widths wait for the strip to go quiet so tabs move at most once.
+const TITLE_QUIET_MS = 3000
+
 type SettledTabTitle = {
   title: string
   widthKey: string
@@ -23,38 +35,87 @@ type TabTitleWidthStrip = {
   widthKey: string
   /** Lives on the strip so labels that remount (menus, rename) keep their held width. */
   settledByTabId: Map<string, SettledTabTitle>
+  noteTitleChange: () => void
 }
 
 /** Null keeps fixed-width tabs; otherwise tabs fit titles and re-settle whenever the key changes. */
 const TabTitleWidthContext = createContext<TabTitleWidthStrip | null>(null)
 
-/** Re-settle widths when tabs open, close, or move, or when the strip is shown again. */
+/** Settle widths once titles stop changing, never while the pointer is over the strip, and whenever it is shown again. */
 export function TabTitleWidthProvider({
   worktreeId,
   shown,
-  tabIds,
+  stripRef,
   children
 }: {
   worktreeId: string
   /** Strips outside the worktree switcher (floating panel) report their own visibility. */
   shown?: boolean
-  tabIds: readonly string[]
+  stripRef: RefObject<HTMLElement | null>
   children: React.ReactNode
 }): React.JSX.Element {
   const fitsTitles = useAppStore((s) => s.settings?.experimentalFitTabsToTitles === true)
   const worktreeShown = useAppStore((s) => s.activeWorktreeId === worktreeId)
+  const isShown = shown ?? worktreeShown
+  const [pointerInside, setPointerInside] = useState(false)
+  // A hidden strip never receives pointerleave, so drop the hover rather than hold widths on return.
+  if (!isShown && pointerInside) {
+    setPointerInside(false)
+  }
+  const held = pointerInside && isShown
+  const [settleCount, setSettleCount] = useState(0)
   const [settledByTabId] = useState(() => new Map<string, SettledTabTitle>())
-  const widthKey = fitsTitles
-    ? `${(shown ?? worktreeShown) ? 'shown' : 'hidden'}\n${tabIds.join('\n')}`
-    : null
+  const quietRef = useRef<{
+    pending: boolean
+    held: boolean
+    timer?: ReturnType<typeof setTimeout>
+  }>({ pending: false, held: false })
+  const scheduleSettle = useCallback(() => {
+    const quiet = quietRef.current
+    clearTimeout(quiet.timer)
+    quiet.timer = quiet.held
+      ? undefined
+      : setTimeout(() => {
+          quiet.pending = false
+          setSettleCount((count) => count + 1)
+        }, TITLE_QUIET_MS)
+  }, [])
+  const noteTitleChange = useCallback(() => {
+    quietRef.current.pending = true
+    scheduleSettle()
+  }, [scheduleSettle])
+  useEffect(() => {
+    const quiet = quietRef.current
+    quiet.held = held
+    if (quiet.pending) {
+      scheduleSettle()
+    }
+  }, [held, scheduleSettle])
+  useEffect(() => () => clearTimeout(quietRef.current.timer), [])
+  useEffect(() => {
+    const strip = stripRef.current
+    if (!fitsTitles || !strip) {
+      return
+    }
+    const enter = (): void => setPointerInside(true)
+    const leave = (): void => setPointerInside(false)
+    strip.addEventListener('pointerenter', enter)
+    strip.addEventListener('pointerleave', leave)
+    return () => {
+      strip.removeEventListener('pointerenter', enter)
+      strip.removeEventListener('pointerleave', leave)
+      setPointerInside(false)
+    }
+  }, [fitsTitles, stripRef])
+  const widthKey = fitsTitles ? `${isShown ? 'shown' : 'hidden'}:${settleCount}` : null
   const strip = useMemo(() => {
     if (widthKey === null) {
       // Forget held titles so re-enabling the setting starts from live titles.
       settledByTabId.clear()
       return null
     }
-    return { widthKey, settledByTabId }
-  }, [widthKey, settledByTabId])
+    return { widthKey, settledByTabId, noteTitleChange }
+  }, [widthKey, settledByTabId, noteTitleChange])
   return <TabTitleWidthContext.Provider value={strip}>{children}</TabTitleWidthContext.Provider>
 }
 
@@ -64,30 +125,37 @@ export function useFitsTabsToTitles(): boolean {
 
 export type TabTitleRename = { count: number; title: string | null }
 
-/** Hold the width-defining title until the strip changes or the user renames, so agent renames can't shift tabs. */
+/** Hold the width-defining title until the strip settles or the user renames, so agent renames can't keep shifting tabs. */
 function useSettledTabTitle(
   tabId: string,
   title: string,
   rename: TabTitleRename | undefined
 ): string {
   const strip = useContext(TabTitleWidthContext)
-  if (strip === null) {
-    return title
+  let settledTitle = title
+  if (strip !== null) {
+    const { widthKey, settledByTabId } = strip
+    const previous = settledByTabId.get(tabId)
+    const next = nextSettledTabTitle(previous, {
+      title,
+      widthKey,
+      renameCount: rename?.count ?? 0,
+      renamedTo: rename?.title
+    })
+    if (next !== previous) {
+      // Idempotent for a given key and title, so a discarded render cannot leave a wrong width.
+      settledByTabId.set(tabId, next)
+    }
+    settledTitle = next.title
   }
-  const { widthKey, settledByTabId } = strip
-  const renameCount = rename?.count ?? 0
-  const previous = settledByTabId.get(tabId)
-  const next = nextSettledTabTitle(previous, {
-    title,
-    widthKey,
-    renameCount,
-    renamedTo: rename?.title
-  })
-  if (next !== previous) {
-    // Idempotent for a given key and title, so a discarded render cannot leave a wrong width.
-    settledByTabId.set(tabId, next)
-  }
-  return next.title
+  const noteTitleChange = strip?.noteTitleChange
+  const pending = settledTitle !== title
+  useEffect(() => {
+    if (pending) {
+      noteTitleChange?.()
+    }
+  }, [pending, title, noteTitleChange])
+  return settledTitle
 }
 
 function nextSettledTabTitle(
