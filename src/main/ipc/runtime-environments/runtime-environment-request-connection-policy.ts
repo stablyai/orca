@@ -14,9 +14,11 @@ export function createRequestConnection(
 
 /**
  * An unused request socket to a WSL host holds its own wsl.exe bridge (about 21 MB on Windows),
- * while the shared-control socket stays open anyway; close it soon and redial on the next request.
+ * while the shared-control socket stays open anyway. It also carries terminal keystrokes, and a
+ * redial costs about 90-145 ms against 3-4 ms warm (real-WSL lane), so close it only once the
+ * host has been truly idle; a first keystroke after that pays one redial.
  */
-export const WSL_HOST_REQUEST_IDLE_CLOSE_MS = 10_000
+export const WSL_HOST_REQUEST_IDLE_CLOSE_MS = 5 * 60_000
 
 type Closable = { close(): void }
 type IdleState = { pending: number; timer: ReturnType<typeof setTimeout> | null }
