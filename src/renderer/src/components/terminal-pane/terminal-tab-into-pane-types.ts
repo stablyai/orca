@@ -31,8 +31,8 @@ export type TerminalTabIntoPaneDeps = {
   dispatchPaneTitle: (detail: SetTerminalPaneTitleDetail) => void
   scheduleGraphSync: () => void
   resyncParkedWatchers: (worktreeId: string, targetTabId: string) => void
-  /** Main's current session, for settling an IPC call whose answer never arrived. */
-  readMainSession: () => Promise<{
+  /** Main's session for the worktree's host, to settle a call whose answer never arrived. */
+  readMainSession: (worktreeId: string) => Promise<{
     terminalLayoutsByTabId?: Record<string, TerminalLayoutSnapshot>
   } | null>
   moveLeafIntoTab: (request: TerminalLeafIntoTabRequest) => Promise<TerminalLeafIntoTabResult>

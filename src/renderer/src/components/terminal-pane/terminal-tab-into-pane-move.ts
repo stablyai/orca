@@ -58,7 +58,7 @@ async function settleUnansweredMove(
   deps: TerminalTabIntoPaneDeps,
   request: TerminalLeafIntoTabRequest
 ): Promise<TerminalLeafIntoTabResult | null> {
-  const session = await deps.readMainSession().catch(() => null)
+  const session = await deps.readMainSession(request.worktreeId).catch(() => null)
   const layouts = session?.terminalLayoutsByTabId
   const inTarget = layoutContainsLeafId(
     layouts?.[request.targetTabId]?.root ?? null,

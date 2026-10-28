@@ -4,6 +4,7 @@ import {
   TOGGLE_TERMINAL_PANE_EXPAND_EVENT
 } from '@/constants/terminal'
 import type { SetTerminalPaneTitleDetail, SplitTerminalPaneDetail } from '@/constants/terminal'
+import { getResolvedExecutionHostIdForWorktree } from '@/lib/resolved-worktree-execution-host'
 import { scheduleRuntimeGraphSync } from '@/runtime/sync-runtime-graph'
 import { useAppStore } from '@/store'
 import { moveTerminalTabIntoPane } from './terminal-tab-into-pane-move'
@@ -57,7 +58,11 @@ export function createTerminalTabIntoPaneDeps(): TerminalTabIntoPaneDeps {
         })
       }
     },
-    readMainSession: () => window.api.session.get(),
+    // Why: an SSH workspace's layouts live in its host's session, not the local one.
+    readMainSession: (worktreeId) =>
+      window.api.session.get(
+        getResolvedExecutionHostIdForWorktree(useAppStore.getState(), worktreeId) ?? undefined
+      ),
     moveLeafIntoTab: (request) => window.api.pty.moveLeafIntoTab(request)
   }
 }
