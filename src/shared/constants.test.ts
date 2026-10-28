@@ -16,6 +16,10 @@ describe('getDefaultSettings', () => {
   it('asks before closing terminals with running processes by default', () => {
     expect(getDefaultSettings('/tmp').skipCloseTerminalWithRunningProcessConfirm).toBe(false)
   })
+
+  it('uses standard editor keybindings by default', () => {
+    expect(getDefaultSettings('/tmp').editorKeybindings).toBe('default')
+  })
 })
 
 describe('getDefaultPrimarySelectionMiddleClickPaste', () => {

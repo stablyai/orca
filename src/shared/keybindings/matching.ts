@@ -17,6 +17,7 @@ import {
   getEffectiveKeybindingsForAction,
   keybindingIsActiveInContext
 } from './effective'
+import { isEmacsEditorChordInput } from './editor-keymap-chords'
 
 export function keybindingMatchesInput(
   binding: string,
@@ -57,6 +58,9 @@ export function keybindingMatchesAction(
   if (!keybindingIsActiveInContext(definition, options)) {
     return false
   }
+  if (editorKeymapClaimsInput(input, platform, options)) {
+    return false
+  }
   return getEffectiveKeybindingsForAction(actionId, platform, overrides).some((binding) =>
     keybindingMatchesInput(binding, input, platform)
   )
@@ -75,6 +79,15 @@ export function keybindingRunsInTextField(
       keybindingMatchesInput(binding, input, platform)
     )
   )
+}
+
+// An Emacs editor owns its chords like a terminal-first shell owns readline keys; Orca keeps the rest.
+function editorKeymapClaimsInput(
+  input: KeybindingInput,
+  platform: NodeJS.Platform,
+  options: KeybindingMatchOptions
+): boolean {
+  return options.context === 'editor' && isEmacsEditorChordInput(input, platform)
 }
 
 export function digitFromInput(input: KeybindingInput, platform: NodeJS.Platform): string | null {
@@ -97,6 +110,9 @@ export function matchKeybindingDigitIndex(
 ): number | null {
   const definition = DEFINITIONS_BY_ID.get(actionId)
   if (!definition || !keybindingIsActiveInContext(definition, options)) {
+    return null
+  }
+  if (editorKeymapClaimsInput(input, platform, options)) {
     return null
   }
   const digit = digitFromInput(input, platform)

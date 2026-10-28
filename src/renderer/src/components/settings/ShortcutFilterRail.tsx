@@ -5,6 +5,7 @@ import { formatKeybindingList, type KeybindingDefinition } from '../../../../sha
 import { cn } from '../../lib/utils'
 import { Button } from '../ui/button'
 import { Input } from '../ui/input'
+import type { ShortcutEditorStatus } from './shortcut-editor-status'
 import type { ShortcutTerminalStatus } from './shortcut-terminal-status'
 import { matchesSettingsSearch, type SettingsSearchEntry } from './settings-search'
 import { translate } from '@/i18n/i18n'
@@ -18,6 +19,7 @@ export type ShortcutRowModel = {
   modified: boolean
   warnings: readonly string[]
   terminalStatus?: ShortcutTerminalStatus
+  editorStatus?: ShortcutEditorStatus
 }
 
 export type ShortcutRowsByGroup = {

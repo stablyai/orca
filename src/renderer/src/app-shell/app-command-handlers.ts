@@ -77,11 +77,7 @@ export function useAppShortcutActions() {
   )
 }
 
-export function getKeybindingContext(target: EventTarget | null): KeybindingContext {
-  return target instanceof HTMLElement && target.classList.contains('xterm-helper-textarea')
-    ? 'terminal'
-    : 'app'
-}
+export { getKeybindingContext } from '@/lib/keybinding-context'
 
 /** Terminal rename uses its backing entity ID; structured chat uses its unified tab ID. activeTabId stays on the last terminal, matching TabGroupPanel resolution. */
 function resolveRenameTargetTabId(activeWorktreeId: string | null): string | null {
