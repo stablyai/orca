@@ -174,6 +174,7 @@ test('the owner enrolls two devices as one member and each member selects only t
       'owner-fixture'
     )
     const sharedScreenshot = testInfo.outputPath('shared-project-account.png')
+    await mode.scrollIntoViewIfNeeded()
     await orcaPage.screenshot({ path: sharedScreenshot })
     await testInfo.attach('shared-project-account', {
       path: sharedScreenshot,
@@ -285,6 +286,7 @@ test('the owner enrolls two devices as one member and each member selects only t
       clients[0].page.getByRole('combobox', { name: 'Your GitHub account for this project' })
     ).toContainText('alice-fixture')
     const memberScreenshot = testInfo.outputPath('paired-member-personal-account.png')
+    await clients[2].page.getByText('Member: Bob', { exact: true }).scrollIntoViewIfNeeded()
     await clients[2].page.screenshot({ path: memberScreenshot })
     await testInfo.attach('paired-member-personal-account', {
       path: memberScreenshot,
