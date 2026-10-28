@@ -43,6 +43,7 @@ function fakePane(pid: number, chunks: string[], exitCode?: number) {
   const pane = {
     pid,
     kill: vi.fn(),
+    write: vi.fn(),
     onData: (listener: (data: string) => void) => {
       dataListeners.add(listener)
       return { dispose: () => dataListeners.delete(listener) }
@@ -152,9 +153,11 @@ describe('Windows shell fallback over node-pty ConPTY', () => {
     expect(nodePty.spawn.mock.calls.map(([file]) => file)).toEqual(['pwsh.exe', 'pwsh.exe'])
     expect(ptyJob.terminatePtyJob).toHaveBeenCalledWith(broken)
     expect(broken.kill).toHaveBeenCalledOnce()
+    expect(broken.write).not.toHaveBeenCalled()
     expect(result.process).toBe(healthy)
     expect(result.shellPath).toBe('pwsh.exe')
-    expect(result.claimStartupEvents?.().data).toEqual(['\x1b[1t', '\x1b[c\x1b[?1004h'])
+    expect(healthy.write).toHaveBeenCalledExactlyOnceWith('\x1b[?61;4c')
+    expect(result.claimStartupEvents?.().data).toEqual(['\x1b[1t\x1b[?1004h'])
   })
 
   it('respawns only once, then says so in the pane', async () => {
