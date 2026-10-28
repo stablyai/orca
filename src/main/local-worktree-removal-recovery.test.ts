@@ -27,6 +27,7 @@ import {
   recoverPartialLocalWorktreeRemoval,
   removeStaleLocalWorktreeRegistration
 } from './local-worktree-removal-recovery'
+import { NESTED_WORKTREE_REMOVAL_PREFIX } from '../shared/worktree/nested-removal'
 
 async function withPlatform<T>(platform: NodeJS.Platform, fn: () => Promise<T>): Promise<T> {
   const original = process.platform
@@ -315,7 +316,7 @@ describe('recoverPartialLocalWorktreeRemoval', () => {
           deleteBranch: true,
           closeWatcher
         })
-      ).resolves.toBeUndefined()
+      ).rejects.toThrow(NESTED_WORKTREE_REMOVAL_PREFIX)
       expect(closeWatcher).not.toHaveBeenCalled()
       expect(removeLocalWorktreePathMock).not.toHaveBeenCalled()
     })

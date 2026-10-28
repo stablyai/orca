@@ -157,15 +157,19 @@ async function isRecoverablePartialRemovalFailure(
     return false
   }
 
+  let worktrees: GitWorktreeInfo[]
   try {
-    const worktrees = await listWorktreesStrict(args.repoPath, args.localWorktreeGitOptions)
-    // A worktree registered inside the checkout during Git's delete must not be removed with it.
-    assertWorktreeDoesNotContainRegisteredWorktree(args.canonicalWorktreePath, worktrees)
-    // Localized error text cannot prove removal started; require the Git row to be absent.
-    return !worktrees.some((worktree) =>
-      areWorktreePathsEqual(worktree.path, args.canonicalWorktreePath)
-    )
+    worktrees = await listWorktreesStrict(args.repoPath, args.localWorktreeGitOptions)
   } catch {
     return false
   }
+  // Localized error text cannot prove removal started; require the Git row to be absent.
+  if (
+    worktrees.some((worktree) => areWorktreePathsEqual(worktree.path, args.canonicalWorktreePath))
+  ) {
+    return false
+  }
+  // A worktree registered inside the checkout during Git's delete must not be removed with it.
+  assertWorktreeDoesNotContainRegisteredWorktree(args.canonicalWorktreePath, worktrees)
+  return true
 }
