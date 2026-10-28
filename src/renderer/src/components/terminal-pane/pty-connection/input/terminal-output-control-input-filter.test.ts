@@ -15,6 +15,12 @@ describe('TerminalOutputControlInputFilter', () => {
     expect(filter.filter('2h')).toBe('')
   })
 
+  it('passes a lone escape through so unclassified Escape keypresses still reach the PTY', () => {
+    const filter = new TerminalOutputControlInputFilter()
+
+    expect(filter.filter('\x1b')).toBe('\x1b')
+  })
+
   it('keeps ordinary non-user terminal data intact', () => {
     const filter = new TerminalOutputControlInputFilter()
 

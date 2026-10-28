@@ -38,7 +38,8 @@ export class TerminalOutputControlInputFilter {
       forwarded += remaining.slice(0, escapeIndex)
       remaining = remaining.slice(escapeIndex)
       if (remaining.length === 1) {
-        this.pending = remaining
+        // A lone ESC may be an unclassified Escape keypress, not a split CSI prefix; holding it would starve interrupt inference (#34850 rebase).
+        forwarded += remaining
         return forwarded
       }
       if (remaining[1] !== '[') {

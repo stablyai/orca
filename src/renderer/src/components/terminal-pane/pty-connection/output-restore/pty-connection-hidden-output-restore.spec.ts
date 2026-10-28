@@ -24,6 +24,8 @@ import {
 } from '../test-fixtures/pty-connection-test-environment'
 import { mockPanePtyArgs } from '../test-fixtures/pty-connection-test-connect-mock-pane'
 
+type StubDocument = Pick<Document, 'visibilityState' | 'addEventListener' | 'removeEventListener'>
+
 export function registerPtyConnectionHiddenOutputRestoreTests(): void {
   let mockStoreState: StoreState
   let transportFactoryQueue: MockTransport[] = []
@@ -176,15 +178,17 @@ export function registerPtyConnectionHiddenOutputRestoreTests(): void {
 
     it('does not forward mode controls surfaced after a hidden snapshot restore', async () => {
       const visibilityChangeListeners: (() => void)[] = []
-      ;(globalThis as { document?: Document }).document = {
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the stub implements the only three document members the restore path reads.
+      ;(globalThis as { document?: StubDocument }).document = {
         visibilityState: 'visible',
         addEventListener: vi.fn((type: string, listener: EventListenerOrEventListenerObject) => {
           if (type === 'visibilitychange') {
+            // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the handler ignores its event argument; listeners are invoked bare like the sibling resize-signals spec.
             visibilityChangeListeners.push(listener as () => void)
           }
         }),
         removeEventListener: vi.fn()
-      } as unknown as Document
+      }
 
       const { connectPanePty } = await import('../connect-pane-pty')
       const agentTitleMocksHiddenRestore = await vi.importMock<PtyConnectionAgentTitleMocks>(
@@ -212,7 +216,9 @@ export function registerPtyConnectionHiddenOutputRestoreTests(): void {
       pane.terminal.cols = 80
       pane.terminal.rows = 8
       let terminalInputHandler: ((data: string) => void) | null = null
+      const snapshotWrites: string[] = []
       pane.terminal.write.mockImplementation((data: string | Uint8Array, callback?: () => void) => {
+        snapshotWrites.push(terminalWriteText(data))
         callback?.()
         if (terminalWriteText(data).includes(restoredModes)) {
           queueMicrotask(() => terminalInputHandler?.(restoredModes))
@@ -230,20 +236,23 @@ export function registerPtyConnectionHiddenOutputRestoreTests(): void {
         )
       )
       await flushAsyncTicks(6)
-      const onDataMock = pane.terminal.onData as unknown as {
-        mock: { calls: [[(data: string) => void] | []] }
+      const registeredInputHandler = pane.terminal.onData.mock.calls[0]?.[0]
+      expect(registeredInputHandler).toBeTypeOf('function')
+      if (!registeredInputHandler) {
+        throw new Error('Expected terminal input handler')
       }
-      terminalInputHandler = onDataMock.mock.calls[0]?.[0] ?? null
-      expect(terminalInputHandler).toBeTypeOf('function')
+      terminalInputHandler = vi.fn((data: string) => registeredInputHandler(data))
 
       capturedDataCallback.current?.('hidden output', { seq: 1, rawLength: 13 })
-      ;(deps.isVisibleRef as { current: boolean }).current = true
+      deps.isVisibleRef.current = true
       for (const listener of visibilityChangeListeners) {
         listener()
       }
       await flushAsyncTicks(20)
 
       expect(getMainBufferSnapshot).toHaveBeenCalled()
+      expect(snapshotWrites.join('')).toContain(restoredModes)
+      expect(terminalInputHandler).toHaveBeenCalledWith(restoredModes)
       expect(transport.sendInput).not.toHaveBeenCalled()
       binding.dispose()
     })
