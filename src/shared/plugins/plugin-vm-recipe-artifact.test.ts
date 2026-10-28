@@ -1,8 +1,27 @@
 import { describe, expect, it } from 'vitest'
 import {
   listPluginVmRecipeCommands,
-  parsePluginVmRecipeArtifact
+  parsePluginVmRecipeArtifact as parseArtifact
 } from './plugin-vm-recipe-artifact'
+import type { OrcaVmRecipe } from '../orca-yaml-hook-types'
+
+function parsePluginVmRecipeArtifact(raw: string): OrcaVmRecipe {
+  const artifact = parseArtifact(raw)
+  if (artifact.kind !== 'recipe') {
+    throw new Error('expected a lifecycle recipe')
+  }
+  return artifact.recipe
+}
+
+function machineProviderArtifact(command: unknown, extra: Record<string, unknown> = {}): string {
+  return JSON.stringify({
+    schemaVersion: 2,
+    id: 'omarchy',
+    name: 'Omarchy box',
+    machines: { command },
+    ...extra
+  })
+}
 
 describe('plugin VM recipe artifacts', () => {
   it('parses bounded lifecycle commands for verbatim consent', () => {
@@ -80,5 +99,63 @@ describe('plugin VM recipe artifacts', () => {
         )
       ).toThrow()
     }
+  })
+
+  it('parses a schemaVersion 2 machine provider as a distinct kind', () => {
+    expect(
+      parseArtifact(
+        machineProviderArtifact(['ssh', '-o', 'BatchMode=yes', 'omarchy', 'orca-sandbox'])
+      )
+    ).toEqual({
+      kind: 'machine-provider',
+      provider: {
+        id: 'omarchy',
+        name: 'Omarchy box',
+        command: ['ssh', '-o', 'BatchMode=yes', 'omarchy', 'orca-sandbox']
+      }
+    })
+    expect(
+      parseArtifact(machineProviderArtifact(['$orca-node', '$plugin/bin/provider.mjs'])).kind
+    ).toBe('machine-provider')
+    expect(parseArtifact(machineProviderArtifact(['/usr/local/bin/provider'])).kind).toBe(
+      'machine-provider'
+    )
+    expect(parseArtifact(machineProviderArtifact(['C:\\tools\\provider.exe'])).kind).toBe(
+      'machine-provider'
+    )
+  })
+
+  it('rejects machine provider argv that could resolve against the spawn cwd or escape the plugin', () => {
+    for (const command of [
+      [],
+      ['./provider'],
+      ['bin/provider'],
+      ['..\\provider.exe'],
+      ['$plugin/../outside'],
+      ['$plugin//etc/passwd'],
+      ['ssh', '$plugin/../outside'],
+      ['ssh', '$orca-node'],
+      ['bad\0arg']
+    ]) {
+      expect(
+        () => parseArtifact(machineProviderArtifact(command)),
+        JSON.stringify(command)
+      ).toThrow()
+    }
+  })
+
+  it('keeps machine providers nested-only and strict', () => {
+    // A v2 artifact never falls back to a top-level shell command.
+    expect(() =>
+      parseArtifact(JSON.stringify({ schemaVersion: 2, id: 'x', name: 'X', command: ['ssh'] }))
+    ).toThrow()
+    expect(() =>
+      parseArtifact(machineProviderArtifact(['ssh'], { create: './create.sh' }))
+    ).toThrow()
+    expect(() =>
+      parseArtifact(
+        JSON.stringify({ schemaVersion: 1, id: 'x', name: 'X', machines: { command: ['ssh'] } })
+      )
+    ).toThrow()
   })
 })

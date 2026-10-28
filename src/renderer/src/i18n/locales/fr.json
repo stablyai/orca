@@ -11332,7 +11332,10 @@
           "resume": "Reprendre",
           "destroy": "Détruire",
           "heading": "Commandes de recette de VM",
-          "commandLabel": "{{value0}} · {{value1}} commande"
+          "commandLabel": "{{value0}} · {{value1}} commande",
+          "machineProvider": "Fournisseur de machines · Orca ajoute <verb> --json [--id <machine>]",
+          "machineProviderLabel": "{{value0}} · commande du fournisseur de machines",
+          "machineProviderHeading": "Commande du fournisseur de machines"
         },
         "pluginError": {
           "installManifestMissing": "Aucun orca-plugin.json lisible trouvé. Choisissez le dossier racine du plugin.",

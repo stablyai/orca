@@ -11148,7 +11148,10 @@
           "resume": "再開",
           "destroy": "破棄",
           "heading": "VMレシピコマンド",
-          "commandLabel": "{{value0}} · {{value1}}個のコマンド"
+          "commandLabel": "{{value0}} · {{value1}}個のコマンド",
+          "machineProvider": "マシンプロバイダー · Orca が <verb> --json [--id <machine>] を付加します",
+          "machineProviderLabel": "{{value0}} · マシンプロバイダーのコマンド",
+          "machineProviderHeading": "マシンプロバイダーのコマンド"
         },
         "pluginError": {
           "installManifestMissing": "読み取り可能なorca-plugin.jsonが見つかりません。プラグインのルートフォルダーを選択してください。",

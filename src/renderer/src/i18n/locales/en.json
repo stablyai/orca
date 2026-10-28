@@ -11505,7 +11505,10 @@
           "resume": "Resume",
           "destroy": "Destroy",
           "heading": "VM recipe commands",
-          "commandLabel": "{{value0}} · {{value1}} command"
+          "commandLabel": "{{value0}} · {{value1}} command",
+          "machineProvider": "Machine provider · Orca appends <verb> --json [--id <machine>]",
+          "machineProviderLabel": "{{value0}} · machine provider command",
+          "machineProviderHeading": "Machine provider command"
         },
         "pluginError": {
           "installManifestMissing": "No readable orca-plugin.json was found. Choose the plugin's root folder.",

@@ -11148,7 +11148,10 @@
           "resume": "재개",
           "destroy": "파괴",
           "heading": "VM 레시피 명령",
-          "commandLabel": "{{value0}} · {{value1}}개 명령"
+          "commandLabel": "{{value0}} · {{value1}}개 명령",
+          "machineProvider": "머신 공급자 · Orca가 <verb> --json [--id <machine>]을(를) 덧붙입니다",
+          "machineProviderLabel": "{{value0}} · 머신 공급자 명령",
+          "machineProviderHeading": "머신 공급자 명령"
         },
         "pluginError": {
           "installManifestMissing": "읽을 수 있는 orca-plugin.json이 없습니다. 플러그인 루트 폴더를 선택하세요.",

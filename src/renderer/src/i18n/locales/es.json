@@ -11164,7 +11164,10 @@
           "resume": "Reanudar",
           "destroy": "Destruir",
           "heading": "Comandos de recetas de VM",
-          "commandLabel": "{{value0}} · comando de {{value1}}"
+          "commandLabel": "{{value0}} · comando de {{value1}}",
+          "machineProvider": "Proveedor de máquinas · Orca añade <verb> --json [--id <machine>]",
+          "machineProviderLabel": "{{value0}} · comando del proveedor de máquinas",
+          "machineProviderHeading": "Comando del proveedor de máquinas"
         },
         "pluginError": {
           "installManifestMissing": "No se encontró un orca-plugin.json legible. Elige la carpeta raíz del plugin.",

@@ -58,6 +58,8 @@ export type PluginHostListEntry = {
       phase: 'create' | 'suspend' | 'resume' | 'destroy'
       command: string
     }[]
+    /** argv prefix of a machine provider, shown verbatim; Orca appends the verb. */
+    machineProviderCommand?: string[]
   }[]
   restarts: number
   blockedByKillList?: { reason: string; advisoryUrl?: string }

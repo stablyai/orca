@@ -11148,7 +11148,10 @@
           "resume": "恢复",
           "destroy": "销毁",
           "heading": "VM 配方命令",
-          "commandLabel": "{{value0}} · {{value1}} 个命令"
+          "commandLabel": "{{value0}} · {{value1}} 个命令",
+          "machineProvider": "机器提供程序 · Orca 会追加 <verb> --json [--id <machine>]",
+          "machineProviderLabel": "{{value0}} · 机器提供程序命令",
+          "machineProviderHeading": "机器提供程序命令"
         },
         "pluginError": {
           "installManifestMissing": "未找到可读的 orca-plugin.json。请选择插件的根文件夹。",
