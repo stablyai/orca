@@ -38,6 +38,9 @@ export type CombinedDiffViewLease = {
   revoked: boolean
 }
 
+const MAX_INACTIVE_COMBINED_DIFF_BODY_CHARACTERS = 16_000_000
+
+const bodyCharactersBySections = new WeakMap<DiffSection[], number>()
 const memoryByViewKey = new Map<string, CombinedDiffViewMemory>()
 const mountedLeases = new Set<CombinedDiffViewLease>()
 
@@ -117,9 +120,10 @@ export function claimCombinedDiffView(
   return lease
 }
 
-// Release mount tracking only; the unmount snapshot still needs this lease to write.
+// The unmount snapshot still needs this lease to write after mount tracking releases.
 export function releaseCombinedDiffView(lease: CombinedDiffViewLease): void {
   mountedLeases.delete(lease)
+  trimInactiveDiffBodies()
 }
 
 export function rememberCombinedDiffView(
@@ -136,6 +140,64 @@ export function rememberCombinedDiffView(
     ...patch,
     ...(lease.succession ? { succession: lease.succession } : {})
   })
+  trimInactiveDiffBodies()
+}
+
+function reloadableBodyCharacters(section: DiffSection): number {
+  if (section.dirty || section.saveConflict || section.loading || section.loadOnDemand) {
+    return 0
+  }
+  const result = section.diffResult
+  // Text results mirror the section strings; binary bodies live only in the result.
+  return (
+    section.originalContent.length +
+    section.modifiedContent.length +
+    (result && result.originalContent !== section.originalContent
+      ? result.originalContent.length
+      : 0) +
+    (result && result.modifiedContent !== section.modifiedContent
+      ? result.modifiedContent.length
+      : 0)
+  )
+}
+
+function cachedBodyCharacters(view: CachedCombinedDiffViewState): number {
+  let characters = bodyCharactersBySections.get(view.sections)
+  if (characters === undefined) {
+    characters = view.sections.reduce(
+      (total, section) => total + reloadableBodyCharacters(section),
+      0
+    )
+    bodyCharactersBySections.set(view.sections, characters)
+  }
+  return characters
+}
+
+function trimInactiveDiffBodies(): void {
+  let retainedCharacters = 0
+  for (const [viewKey, memory] of memoryByViewKey) {
+    if (memory.view && !isMountedViewKey(viewKey)) {
+      retainedCharacters += cachedBodyCharacters(memory.view)
+    }
+  }
+  for (const [viewKey, memory] of memoryByViewKey) {
+    if (retainedCharacters <= MAX_INACTIVE_COMBINED_DIFF_BODY_CHARACTERS) {
+      break
+    }
+    if (!memory.view || isMountedViewKey(viewKey)) {
+      continue
+    }
+    const characters = cachedBodyCharacters(memory.view)
+    if (characters === 0) {
+      continue
+    }
+    const view = invalidateCleanSections(
+      memory.view,
+      (section) => reloadableBodyCharacters(section) > 0
+    )
+    memoryByViewKey.set(viewKey, { ...memory, view })
+    retainedCharacters -= characters
+  }
 }
 
 // Invalidate clean sections only; dirty cached edits survive until their guarded save or conflict action handles disk changes.
