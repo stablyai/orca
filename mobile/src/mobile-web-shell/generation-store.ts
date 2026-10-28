@@ -128,7 +128,10 @@ export function createGenerationStore(options: {
     await writeHostOrder(order.filter((key) => hosts.includes(key) && !evicted.has(key)))
   }
 
-  async function readActive(hostKey: string): Promise<ActiveGeneration | null> {
+  async function readActive(
+    hostKey: string,
+    dropAmbiguous = true
+  ): Promise<ActiveGeneration | null> {
     const generations = generationsRoot(hostKey)
     const directories = (await fs.list(generations)).filter((entry) => entry.isDirectory)
     if (directories.length === 0) {
@@ -151,8 +154,29 @@ export function createGenerationStore(options: {
         return { buildId: manifest.buildId, directory, manifest }
       }
     }
-    await dropHostTree(hostKey)
+    if (dropAmbiguous) {
+      await dropHostTree(hostKey)
+    }
     return null
+  }
+
+  // Own host first, so hosts on one build download it once; other hosts' ambiguous trees are left to their own open.
+  async function readReusableGenerations(hostKey: string): Promise<readonly ActiveGeneration[]> {
+    const actives: ActiveGeneration[] = []
+    const own = await readActive(hostKey)
+    if (own !== null) {
+      actives.push(own)
+    }
+    for (const host of await listHostDirectories()) {
+      if (host.name === hostKey) {
+        continue
+      }
+      const other = await readActive(host.name, false).catch(() => null)
+      if (other !== null) {
+        actives.push(other)
+      }
+    }
+    return actives
   }
 
   async function stage(
@@ -168,12 +192,14 @@ export function createGenerationStore(options: {
       bytes: reused.has(asset.path) ? null : requireExactBytes(result.assets.get(asset.path), asset)
     }))
     // Copy reused assets on the stage queue so sweeps and concurrent downloads cannot remove their source mid-copy.
-    const active = reused.size > 0 ? await readActive(hostKey) : null
+    const actives = reused.size > 0 ? await readReusableGenerations(hostKey) : []
     // Discard prior residue; fresh writes over a partial tree would not form a verified generation.
     await fs.delete(directory)
     try {
       for (const { asset, uri, bytes } of assets) {
-        await (bytes === null ? copyCachedAsset(fs, active, asset, uri) : fs.writeBytes(uri, bytes))
+        await (bytes === null
+          ? copyCachedAsset(fs, actives, asset, uri)
+          : fs.writeBytes(uri, bytes))
       }
       // Write the manifest last so interrupted trees cannot appear activated.
       await fs.writeText(joinUri(directory, MANIFEST_FILE_NAME), JSON.stringify(manifest))
@@ -243,7 +269,7 @@ export function createGenerationStore(options: {
   }
 
   async function openReusable(hostKey: string): Promise<MobileWebBundleReusableAssets> {
-    return reusableAssetsOf(fs, await readActive(hostKey))
+    return reusableAssetsOf(fs, await readReusableGenerations(hostKey))
   }
 
   async function sweep(): Promise<void> {
