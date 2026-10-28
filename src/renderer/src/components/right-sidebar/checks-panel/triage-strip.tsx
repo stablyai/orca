@@ -132,17 +132,11 @@ export function PRTriageStrip({
           <CircleDashed className="size-3.5 shrink-0 text-muted-foreground" />
           <div className="min-w-0 flex-1">
             <div className="truncate text-[11px] font-medium text-foreground">
-              {summary.neutral === 1
-                ? translate(
-                    'auto.components.right.sidebar.checks.panel.content.unresolvedChecks_one',
-                    '{{count}} check unresolved',
-                    { count: summary.neutral }
-                  )
-                : translate(
-                    'auto.components.right.sidebar.checks.panel.content.unresolvedChecks_other',
-                    '{{count}} checks unresolved',
-                    { count: summary.neutral }
-                  )}
+              {translate(
+                'auto.components.right.sidebar.checks.panel.content.unresolvedChecks',
+                '{{count}} checks unresolved',
+                { count: summary.neutral, defaultValue_one: '{{count}} check unresolved' }
+              )}
             </div>
             <div className="truncate text-[10px] text-muted-foreground">
               {translate(
