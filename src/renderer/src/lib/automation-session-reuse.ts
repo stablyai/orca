@@ -108,7 +108,11 @@ export function waitForIdleAutomationSession(args: {
     if (!status || !isAutomationReuseAgent(status, agentId)) {
       return 'gone'
     }
-    return isIdleAutomationReuseStatus(status, agentId) ? 'idle' : 'busy'
+    if (status.state === 'done') {
+      // Why: a session boundary is a connection, not a turn, so there is no busy turn to wait out.
+      return isIdleAutomationReuseStatus(status, agentId) ? 'idle' : 'gone'
+    }
+    return 'busy'
   }
   const initial = availability()
   if (initial !== 'busy') {

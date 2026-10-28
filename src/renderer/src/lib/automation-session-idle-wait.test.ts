@@ -111,6 +111,17 @@ describe('waitForIdleAutomationSession', () => {
     expect(listeners.size).toBe(0)
   })
 
+  it('gives up when the pane only reports a session boundary', async () => {
+    state.agentStatusByPaneKey = {
+      [SESSION.paneKey]: paneStatus({ state: 'done', agentType: 'claude', sessionBoundary: true })
+    }
+
+    await expect(
+      waitForIdleAutomationSession({ session: SESSION, agentId: 'claude' })
+    ).resolves.toBeNull()
+    expect(listeners.size).toBe(0)
+  })
+
   it('stops waiting when the busy turn outlasts the wait timeout', async () => {
     vi.useFakeTimers()
     try {
