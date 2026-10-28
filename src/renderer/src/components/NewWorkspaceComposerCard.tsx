@@ -40,6 +40,7 @@ import { useNewWorkspaceComposerFileDrop } from './new-workspace/use-new-workspa
 import { useComposerFileDragOver } from './new-workspace/use-composer-file-drag-over'
 import { buildDefaultAgentSettingsUpdate } from '../../../shared/default-agent-settings'
 import { projectWorkspaceDefault } from '@/lib/quick-workspace-project-default'
+import { selectCanonicalProjects } from '@/store/project-host-setup-selector'
 
 // Lazy-load the project-location browser outside boot; warming shares this module entry with the click.
 const loadSetProjectLocationDialog = (): Promise<typeof SetProjectLocationDialogModule> =>
@@ -97,7 +98,7 @@ export default function NewWorkspaceComposerCard(
     (state) => state.settings?.disabledTuiAgents ?? DEFAULT_DISABLED_TUI_AGENTS
   )
   const updateSettings = useAppStore((state) => state.updateSettings)
-  const projects = useAppStore((state) => state.projects)
+  const projects = useAppStore(selectCanonicalProjects)
   const defaultTuiAgent =
     props.effectiveDefaultAgent ??
     projectWorkspaceDefault(projects, selectedRepoProjectId, globalDefaultTuiAgent)

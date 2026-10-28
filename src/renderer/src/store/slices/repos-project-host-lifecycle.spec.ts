@@ -8,6 +8,8 @@ import {
 } from '../../runtime/runtime-compatibility-test-fixture'
 import { clearRuntimeCompatibilityCacheForTests } from '../../runtime/runtime-rpc-client'
 import { createTestStore } from './store-test-helpers'
+import { getProjectIdentityKey } from '../../../../shared/project-host-setup-projection'
+import { PROJECT_DEFAULT_AGENT_RUNTIME_CAPABILITY } from '../../../../shared/agent-launch-runtime-capability'
 
 export function registerReposProjectHostLifecycleTests(): void {
   const projectsCreateHostSetup = vi.fn()
@@ -103,6 +105,85 @@ export function registerReposProjectHostLifecycleTests(): void {
         setupMethod: 'provisioned'
       })
     })
+
+    it.each([true, false])(
+      'preserves a canonical project default when target support is %s',
+      async (supported) => {
+        const repo: Repo = {
+          ...runtimeRepo,
+          id: 'local-repo',
+          executionHostId: 'local',
+          upstream: { owner: 'acme', repo: 'app' }
+        }
+        const canonicalId = getProjectIdentityKey(repo)
+        const sourceProject = {
+          ...project,
+          id: 'repo:local-repo',
+          defaultTuiAgent: 'codex' as const
+        }
+        const store = createTestStore()
+        store.setState({
+          repos: [repo],
+          projects: [sourceProject],
+          projectHostSetups: [
+            {
+              ...runtimeSetup,
+              id: 'local-setup',
+              projectId: sourceProject.id,
+              hostId: 'local',
+              repoId: repo.id
+            }
+          ]
+        })
+        const status = createCompatibleRuntimeStatusResponse()
+        if (!status.ok) {
+          throw new Error('Invalid test status')
+        }
+        const capabilities = status.result.capabilities
+        if (!capabilities) {
+          throw new Error('Missing test capabilities')
+        }
+        runtimeEnvironmentTransportCall.mockImplementation((args: RuntimeEnvironmentCallRequest) =>
+          args.method === 'status.get'
+            ? {
+                ...status,
+                result: {
+                  ...status.result,
+                  capabilities: capabilities.filter(
+                    (capability) =>
+                      supported || capability !== PROJECT_DEFAULT_AGENT_RUNTIME_CAPABILITY
+                  )
+                }
+              }
+            : runtimeEnvironmentCall(args)
+        )
+        runtimeEnvironmentCall.mockResolvedValue({
+          id: 'create',
+          ok: true,
+          result: {
+            result: {
+              project: { ...sourceProject, id: canonicalId },
+              setup: { ...runtimeSetup, projectId: canonicalId }
+            }
+          }
+        })
+        const result = await store
+          .getState()
+          .createProjectHostSetup({ projectId: canonicalId, hostId: 'runtime:env-1' })
+        if (supported) {
+          expect(result?.project.defaultTuiAgent).toBe('codex')
+          expect(runtimeEnvironmentCall).toHaveBeenCalledWith(
+            expect.objectContaining({
+              method: 'projectHostSetup.create',
+              params: { projectId: canonicalId, hostId: 'runtime:env-1', defaultTuiAgent: 'codex' }
+            })
+          )
+        } else {
+          expect(result).toBeNull()
+          expect(runtimeEnvironmentCall).not.toHaveBeenCalled()
+        }
+      }
+    )
 
     it('copies a configured project agent default to a newly added host setup', async () => {
       const sourceProject = { ...project, defaultTuiAgent: 'codex' as const }

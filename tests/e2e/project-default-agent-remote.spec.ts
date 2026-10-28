@@ -71,6 +71,7 @@ function spawnedAgents(): { pid: number; cwd: string; args: string[] }[] {
 test('a paired client starts the target project default on its server and refuses blank before creation', async ({
   testRepoPath
 }, testInfo) => {
+  // The budget includes pairing two isolated runtimes and launching two terminal agents.
   test.setTimeout(180_000)
   const host = await launchHeadlessPairedRuntimeHost({
     extraEnv: {

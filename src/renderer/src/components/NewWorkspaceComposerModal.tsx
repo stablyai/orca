@@ -31,6 +31,10 @@ import { getFolderWorkspacePrimaryActionLabel } from '@/components/sidebar/folde
 import { useAgentMenuObservation } from '@/components/tab-bar/use-new-tab-agent-menu-rows'
 import { addAppKeyListener, removeAppKeyListener } from '@/lib/app-keyboard-router'
 import {
+  selectCanonicalProjects,
+  selectCanonicalProjectHostSetups
+} from '@/store/project-host-setup-selector'
+import {
   folderGroupDefaultTarget,
   projectWorkspaceDefault
 } from '@/lib/quick-workspace-project-default'
@@ -108,8 +112,8 @@ function QuickTabBody({
   active: boolean
 }): React.JSX.Element {
   const settings = useAppStore((s) => s.settings)
-  const projects = useAppStore((state) => state.projects)
-  const projectHostSetups = useAppStore((state) => state.projectHostSetups)
+  const projects = useAppStore(selectCanonicalProjects)
+  const projectHostSetups = useAppStore(selectCanonicalProjectHostSetups)
   const {
     cardProps,
     composerRef,
