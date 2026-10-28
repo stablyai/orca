@@ -84,6 +84,30 @@ describe('findNewReplies', () => {
     expect(rowOnly.newReplies).toEqual([])
   })
 
+  it("reads a new agent's first reply even when its whole turn ended between two polls", () => {
+    const { newReplies } = findNewReplies(
+      new Map([['pane-1', '']]),
+      [agent({ paneKey: 'new', lastAssistantMessage: 'Quick answer' })],
+      true
+    )
+    expect(newReplies).toEqual([{ paneKey: 'new', message: 'Quick answer' }])
+  })
+
+  it('reads the same answer again when another turn ends with it', () => {
+    const first = findNewReplies(new Map(), [
+      agent({ stateStartedAt: 1, lastAssistantMessage: 'Same' })
+    ])
+    const again = findNewReplies(first.baseline, [
+      agent({ stateStartedAt: 1, lastAssistantMessage: 'Same' })
+    ])
+    const nextTurn = findNewReplies(again.baseline, [
+      agent({ stateStartedAt: 2, lastAssistantMessage: 'Same' })
+    ])
+    expect(first.newReplies).toEqual([])
+    expect(again.newReplies).toEqual([])
+    expect(nextTurn.newReplies).toEqual([{ paneKey: 'pane-1', message: 'Same' }])
+  })
+
   it('keeps panes of different hosts apart', () => {
     const result = {
       worktrees: [{ agents: [agent({ paneKey: 'p', parentPaneKey: 'root' })] }, { agents: null }]

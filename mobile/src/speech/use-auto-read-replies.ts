@@ -35,11 +35,14 @@ export type ReplyBaseline = ReadonlyMap<string, string>
 
 export type NewReply = { paneKey: string; message: string }
 
-// Why: a first-seen pane only records its reply, so enabling auto-read or reconnecting never reads
-// old replies; subagent replies are steps of the parent's turn, not answers to the user.
+// Why: a host's first look only records its panes, so enabling auto-read or a host connecting never
+// reads old replies; later, a new pane is a new agent, even if its turn ended between two polls.
+// A reply is its text plus when its turn ended, so the same answer in a later turn is read again.
+// Subagent replies are steps of the parent's turn, not answers to the user.
 export function findNewReplies(
   baseline: ReplyBaseline,
-  agents: readonly RuntimeWorktreeAgentRow[]
+  agents: readonly RuntimeWorktreeAgentRow[],
+  hostSeenBefore = false
 ): { baseline: ReplyBaseline; newReplies: NewReply[] } {
   const next = new Map(baseline)
   const newReplies: NewReply[] = []
@@ -52,14 +55,22 @@ export function findNewReplies(
     const turnState = agent.mainAgent?.state ?? agent.state
     const finished =
       turnState === 'done' && agent.lastAssistantMessage ? agent.lastAssistantMessage : null
+    const endedAt = agent.mainAgent?.stateStartedAt ?? agent.stateStartedAt
+    const key =
+      finished === null
+        ? ''
+        : `${endedAt}
+${finished}`
     const seen = next.get(agent.paneKey)
-    if (seen === undefined) {
-      next.set(agent.paneKey, finished ?? '')
+    if (seen === undefined && !hostSeenBefore) {
+      next.set(agent.paneKey, key)
       continue
     }
-    if (finished && finished !== seen) {
-      next.set(agent.paneKey, finished)
+    if (finished !== null && key !== seen) {
+      next.set(agent.paneKey, key)
       newReplies.push({ paneKey: agent.paneKey, message: finished })
+    } else if (seen === undefined) {
+      next.set(agent.paneKey, key)
     }
   }
   return { baseline: next, newReplies }
@@ -166,6 +177,7 @@ export function useAutoReadReplies(): void {
     }
     // Why: fresh baselines, so replies and waits from while auto-read was off are not read out.
     baselineRef.current = new Map()
+    const hostsSeen = new Set<string>()
     let cancelled = false
     let inFlight = false
     let lastPollAt = 0
@@ -230,8 +242,17 @@ export function useAutoReadReplies(): void {
           ...projectByPane,
           ...agents.map((row) => [row.paneKey, row.project] as const)
         ])
-        const { baseline, newReplies } = findNewReplies(baselineRef.current, agents)
-        baselineRef.current = baseline
+        const newReplies: NewReply[] = []
+        connected.forEach(({ hostId }, index) => {
+          const hostRows = rows[index]
+          if (!hostRows) {
+            return
+          }
+          const found = findNewReplies(baselineRef.current, hostRows, hostsSeen.has(hostId))
+          baselineRef.current = found.baseline
+          hostsSeen.add(hostId)
+          newReplies.push(...found.newReplies)
+        })
         recordSpeechDiagnostics({
           lastPollAt: Date.now(),
           knownHosts: known.length,
