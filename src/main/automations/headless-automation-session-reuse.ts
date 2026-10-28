@@ -117,7 +117,9 @@ export async function createHeadlessAutomationStructuredSession(args: {
     },
     worktree: `id:${args.worktreeId}`,
     agent: args.agent,
-    ...(args.withoutPrompt ? { atRest: true as const } : {}),
+    // Why: an at-rest create is the one path whose first message reaches host.create(); without it
+    // the prompt never starts a turn and the run waits out its observation deadline.
+    ...(args.withoutPrompt || args.firstMessage ? { atRest: true as const } : {}),
     ...(args.firstMessage ? { firstMessage: args.firstMessage } : {}),
     ...(args.signal ? { signal: args.signal } : {}),
     activate: false
