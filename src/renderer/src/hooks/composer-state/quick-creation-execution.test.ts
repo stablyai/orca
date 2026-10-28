@@ -182,6 +182,43 @@ it('retains the accepted route and resolves project task drafts for either launc
         promptDelivery: 'draft'
       })
     }
+    useAppStore.setState({
+      projectHostSetups: useAppStore.getState().projectHostSetups.map((setup) => ({
+        ...setup,
+        id: 'remote-setup',
+        projectId: 'repo:repo-1',
+        hostId: 'ssh:execution-b'
+      })),
+      projects: useAppStore.getState().projects.map((project) => ({
+        ...project,
+        id: 'repo:repo-1'
+      }))
+    })
+    prepare.mockResolvedValueOnce({
+      ...prepared,
+      submitLinkedWorkItem: { provider: 'jira', type: 'issue', number: 0, title: 'Fix bug', url },
+      trimmedNote: 'Read first'
+    })
+    await act(async () => {
+      await result.current.executeQuickCreation(
+        { kind: 'none' },
+        'opencode',
+        'fix',
+        {
+          kind: 'workspace-run',
+          projectId: 'repo:repo-1',
+          hostId: 'ssh:execution-b',
+          projectHostSetupId: 'remote-setup',
+          repoId: 'repo-1',
+          path: '/repo'
+        },
+        'repo-1'
+      )
+    })
+    expect(background.mock.calls.at(-1)?.[0]).toMatchObject({
+      launchDraftPrompt: `Read first\n\n${url} /jira-engineer`,
+      promptDelivery: 'draft'
+    })
   } finally {
     useAppStore.setState({ settings: original, ...originalCatalog })
   }
