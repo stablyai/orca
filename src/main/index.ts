@@ -1,5 +1,6 @@
 import { app, clipboard, dialog, type BrowserWindow } from 'electron'
 import { parseSkillShareId } from '../shared/skill-share-link'
+import { parseTerminalDeepLink } from '../shared/terminal-deep-link'
 import { createMacAppActivationHandler } from './window/macos-app-activation'
 import { isBackgroundLaunch, isOrcadSidecarLaunch } from './window/foreground-activation-policy'
 import { createDesktopHandoff, desktopHandoffArguments } from './window/macos-desktop-handoff'
@@ -9,6 +10,7 @@ import {
 } from './startup/main-window-actions'
 import { openMainWindow as openMainWindowController } from './startup/main-window-controller'
 import { mainProcessState as state } from './startup/main-process-state'
+import { getTerminalDeepLinkHost } from './startup/terminal-deep-link-host'
 import { runMainProcessPreflight } from './startup/main-process-preflight'
 import { runWslHolderUninstallPreflight } from './startup/wsl-holder-uninstall-preflight'
 import { enableLinearRegexpFallback } from './startup/linear-regexp-fallback'
@@ -56,6 +58,7 @@ function requestDesktopActivation(argv: readonly string[] = []): void {
   state.skillShareDeepLinks.capture(argv, (shareId) => {
     state.mainWindow?.webContents.send('ui:openSkillShare', shareId)
   })
+  state.terminalDeepLinks.capture(argv, getTerminalDeepLinkHost)
   state.osOpenedDocuments.capture(argv, publishOsOpenedDocuments)
   // Duplicate serve launches must not activate a desktop on a headless server (#11935).
   if (!shouldActivateDesktopForSecondInstance(argv)) {
@@ -120,7 +123,7 @@ if (preflightReady) {
     wakeRememberedWslHosts(app.getPath('userData'))
   }
   app.on('open-url', (event, url) => {
-    if (!parseSkillShareId(url)) {
+    if (!parseSkillShareId(url) && !parseTerminalDeepLink(url)) {
       return
     }
     event.preventDefault()
@@ -138,6 +141,7 @@ if (preflightReady) {
     }
   })
   state.skillShareDeepLinks.capture(process.argv)
+  state.terminalDeepLinks.capture(process.argv, () => null)
   // The first renderer pulls on mount; nothing listens this early.
   state.osOpenedDocuments.capture(process.argv)
   registerMainProcessIpcHandlers()

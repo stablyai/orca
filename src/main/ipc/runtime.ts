@@ -26,7 +26,15 @@ function boundTerminalFitRestore(pending: Promise<boolean>): Promise<boolean> {
   return Promise.race([pending, deadline]).finally(() => clearTimeout(timer))
 }
 
-export function registerRuntimeHandlers(runtime: OrcaRuntimeService): void {
+export type RuntimeHandlerOptions = {
+  /** Fires after each accepted graph sync that leaves the runtime ready to resolve handles. */
+  onWindowGraphReady?: () => void
+}
+
+export function registerRuntimeHandlers(
+  runtime: OrcaRuntimeService,
+  options: RuntimeHandlerOptions = {}
+): void {
   const pendingTerminalFitRestores = new Map<string, Promise<boolean>>()
   const desktopSenders = new DesktopRuntimeSenderLifecycle(runtime)
   ipcMain.removeHandler('runtime:syncWindowGraph')
@@ -53,6 +61,9 @@ export function registerRuntimeHandlers(runtime: OrcaRuntimeService): void {
       // Only the authoritative window's accepted graph may publish its project catalog.
       if (graph.projectSectionCatalog) {
         publishMobileProjectSections(graph.projectSectionCatalog)
+      }
+      if (result.graphStatus === 'ready') {
+        options.onWindowGraphReady?.()
       }
       return result
     }

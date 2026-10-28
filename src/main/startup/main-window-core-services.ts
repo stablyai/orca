@@ -5,6 +5,7 @@ import { initTccPromptNotice } from '../macos-tcc-prompt-notice'
 import { resolveUpdateInstallMode } from '../updater'
 import { desktopConnectorCloud } from './main-process-connector-startup'
 import { mainProcessState as state } from './main-process-state'
+import { getTerminalDeepLinkHost } from './terminal-deep-link-host'
 import { prepareCodexAiVaultSessionResume } from '../codex/codex-ai-vault-session-resume'
 import { resolveHostCodexSessionSourceHome } from '../codex/codex-session-source-home'
 import { preserveAgentAuthBeforeRestart } from '../agent-auth-restart-preservation'
@@ -113,7 +114,8 @@ export function attachMainWindowCoreServices(
         state.desktopRelayService?.fenceAndCloseNow(RELAY_HOST_CLOSE_REASON.SIGNED_OUT)
         desktopConnectorCloud()?.signOutStarted()
       },
-      onAfterOrcaProfileSignOut: () => desktopConnectorCloud()?.signOutFinished()
+      onAfterOrcaProfileSignOut: () => desktopConnectorCloud()?.signOutFinished(),
+      onWindowGraphReady: () => void state.terminalDeepLinks.deliver(getTerminalDeepLinkHost)
     },
     state.pluginService ?? undefined,
     state.pluginMarketplaceService && state.pluginMarketplaceInstaller

@@ -206,6 +206,8 @@ close returns a failing `unverifiable` result rather than claiming the processes
   handle, run `orca terminal list --json` and reacquire the handle.
 </Callout>
 
+To switch to a terminal from outside Orca, such as a notification, a status line, or a chat message, open `orca://terminal/<handle>`. For a terminal on a paired server, add `?environment=<name or id>`; the desktop app on this machine shows it, as `terminal switch --environment` does. A link only switches tabs. It never sends input or starts a process, and Orca ignores a link whose handle is stale.
+
 `terminal list` reports each terminal's `executionHostId` when Orca can verify it, plus a result-level `hostScope` with covered and omitted host IDs. Treat a missing host identity or scope as **unverifiable**, not local. A missing terminal is evidence that it exited only when its execution host is listed in `hostScope.hostIds`.
 
 By default, `terminal read` returns the accumulated output stream with terminal escapes stripped. Programs that redraw lines can therefore appear as stacked fragments. Use `--screen` when you need the currently rendered frame; the response's `source` identifies `stream`, `screen`, or `screen-unavailable`. Screen reads have no history to page, so `--screen` and `--cursor` are mutually exclusive.
