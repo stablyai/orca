@@ -85,19 +85,19 @@ export function registerReposProjectRuntimeTests(): void {
       const { linkedWorkItemPromptTemplate: _template, ...withoutTemplate } = project
       projectsUpdate.mockResolvedValue(withoutTemplate)
       const store = createTestStore()
-      store.setState({ projects: [project] })
+      store.setState({ endpointProjects: [project] })
       expect(
         await store
           .getState()
           .updateProject(project.id, { linkedWorkItemPromptTemplate: '{url} /new' }, 'local')
       ).toBe(false)
-      expect(store.getState().projects[0]?.linkedWorkItemPromptTemplate).toBe('{url} /old')
+      expect(store.getState().endpointProjects[0]?.linkedWorkItemPromptTemplate).toBe('{url} /old')
       expect(
         await store
           .getState()
           .updateProject(project.id, { linkedWorkItemPromptTemplate: null }, 'local')
       ).toBe(true)
-      expect(store.getState().projects[0]?.linkedWorkItemPromptTemplate).toBeUndefined()
+      expect(store.getState().endpointProjects[0]?.linkedWorkItemPromptTemplate).toBeUndefined()
     })
 
     it('clears local runtime-scoped detection state when project runtime changes', async () => {

@@ -47,7 +47,11 @@ it('retains the accepted route and resolves project task drafts for either launc
   }
   const settings = { ...getDefaultSettings('/test'), experimentalNativeChat: true }
   const original = useAppStore.getState().settings
-  const originalProjects = useAppStore.getState().projects
+  const originalCatalog = {
+    repos: useAppStore.getState().repos,
+    endpointProjects: useAppStore.getState().endpointProjects,
+    endpointProjectHostSetups: useAppStore.getState().endpointProjectHostSetups
+  }
   const prepare = vi.fn<() => Promise<PreparedQuickSubmit | null>>()
   const { result } = renderHook(() =>
     useQuickCreationExecution({
@@ -128,7 +132,22 @@ it('retains the accepted route and resolves project task drafts for either launc
     const url = 'https://example.atlassian.net/browse/APP-123'
     useAppStore.setState({
       settings: { ...settings, linkedWorkItemPromptTemplate: '/global {{url}}' },
-      projects: [
+      repos: [{ id: 'repo-1', path: '/repo', displayName: 'Repo', badgeColor: '', addedAt: 1 }],
+      endpointProjectHostSetups: [
+        {
+          id: 'repo-1',
+          projectId: 'project-1',
+          repoId: 'repo-1',
+          path: '/repo',
+          displayName: 'Repo',
+          hostId: 'local',
+          setupState: 'ready',
+          setupMethod: 'legacy-repo',
+          createdAt: 1,
+          updatedAt: 1
+        }
+      ],
+      endpointProjects: [
         {
           id: 'project-1',
           displayName: 'Repo',
@@ -164,6 +183,6 @@ it('retains the accepted route and resolves project task drafts for either launc
       })
     }
   } finally {
-    useAppStore.setState({ settings: original, projects: originalProjects })
+    useAppStore.setState({ settings: original, ...originalCatalog })
   }
 })

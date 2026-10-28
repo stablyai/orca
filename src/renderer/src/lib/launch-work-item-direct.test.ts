@@ -486,7 +486,7 @@ describe('launchWorkItemDirect', () => {
     mocks.store.settings = {
       linkedWorkItemPromptTemplate: '/global-work {{url}}'
     }
-    mocks.store.projects = [
+    mocks.store.endpointProjects = [
       {
         id: 'repo-1',
         displayName: 'Repo',
