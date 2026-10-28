@@ -10,6 +10,7 @@ import koCatalogUrl from './locales/ko.json?url'
 import ptCatalogUrl from './locales/pt.json?url'
 import ruCatalogUrl from './locales/ru.json?url'
 import trCatalogUrl from './locales/tr.json?url'
+import glCatalogUrl from './locales/gl.json?url'
 import zhCatalogUrl from './locales/zh.json?url'
 import zhHantCatalogUrl from './locales/zh-Hant.json?url'
 import {
@@ -34,6 +35,7 @@ const NON_DEFAULT_LOCALE_URLS: Record<Exclude<SupportedUiLocale, 'en'>, string> 
   pt: ptCatalogUrl,
   ru: ruCatalogUrl,
   tr: trCatalogUrl,
+  gl: glCatalogUrl,
   zh: zhCatalogUrl,
   'zh-Hant': zhHantCatalogUrl
 }
