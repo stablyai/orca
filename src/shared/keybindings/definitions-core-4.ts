@@ -3,6 +3,15 @@ import { platformBindings } from './definitions-support'
 
 export const KEYBINDING_DEFINITION_CORE_4: readonly KeybindingDefinition[] = [
   {
+    id: 'editor.reloadFromDisk',
+    title: 'Reload from Disk',
+    group: 'Editors',
+    scope: 'editor',
+    searchKeywords: ['shortcut', 'editor', 'reload', 'revert', 'refresh', 'disk', 'discard'],
+    // Why unbound: Ctrl+R and Ctrl+Shift+R are already taken on Windows/Linux.
+    defaultBindings: platformBindings([])
+  },
+  {
     id: 'chat.find',
     title: 'Find in chat',
     group: 'Chat',

@@ -19,9 +19,30 @@ export const ORCA_EDITOR_FILE_SAVED_EVENT = 'orca:editor-file-saved'
 // Drop sibling content caches when their disk baseline advances without cached text.
 export const ORCA_EDITOR_FILE_CACHE_STALE_EVENT = 'orca:editor-file-cache-stale'
 
-export function notifyEditorFileCacheStale(fileId: string): void {
+export type EditorFileCacheStaleDetail = {
+  fileId: string
+  /** Reload from Disk: may wake a stopped WSL distro and refreshes the Changes diff too. */
+  userReload?: true
+}
+
+export function notifyEditorFileCacheStale(
+  fileId: string,
+  options?: Pick<EditorFileCacheStaleDetail, 'userReload'>
+): void {
   window.dispatchEvent(
-    new CustomEvent<{ fileId: string }>(ORCA_EDITOR_FILE_CACHE_STALE_EVENT, { detail: { fileId } })
+    new CustomEvent<EditorFileCacheStaleDetail>(ORCA_EDITOR_FILE_CACHE_STALE_EVENT, {
+      detail: { fileId, ...options }
+    })
+  )
+}
+// Installs Reload from Disk's accepted bytes in every panel; unlike saved, no save listeners fire.
+export const ORCA_EDITOR_FILE_RELOADED_EVENT = 'orca:editor-file-reloaded'
+
+export function notifyEditorFileReloaded(detail: EditorFileSavedDetail): void {
+  window.dispatchEvent(
+    new CustomEvent<EditorFileSavedDetail>(ORCA_EDITOR_FILE_RELOADED_EVENT, {
+      detail
+    })
   )
 }
 export const ORCA_EDITOR_REQUEST_CMD_SAVE_EVENT = 'orca:editor-request-cmd-save'

@@ -5,6 +5,7 @@ import {
   type EditorRequestCmdSaveDetail
 } from './editor/editor-autosave'
 import { getEditorCmdSaveFileId } from './editor/editor-cmd-save-target'
+import { canReloadEditorTabFromDisk, reloadEditorFileFromDisk } from './editor/editor-disk-reload'
 import { isEventTargetInsideFloatingWorkspacePanel } from '@/lib/floating-workspace-terminal-actions'
 
 type EditorShortcutContext = {
@@ -59,6 +60,20 @@ export function handleTerminalWorkspaceEditorShortcut({
         const wrapOn = state.settings?.editorWordWrap !== false
         void state.updateSettings({ editorWordWrap: !wrapOn })
       }
+      return true
+    }
+  }
+  if (!event.repeat && matchShortcut('editor.reloadFromDisk')) {
+    const state = useAppStore.getState()
+    const floatingPanelOwnsEvent =
+      isEventTargetInsideFloatingWorkspacePanel(event.target) || floatingWorkspaceFocused
+    // Why the save target: it already resolves which mounted editor owns the event.
+    const fileId = getEditorCmdSaveFileId(state, floatingPanelOwnsEvent)
+    const file = fileId ? state.openFiles.find((openFile) => openFile.id === fileId) : undefined
+    if (file && canReloadEditorTabFromDisk(file)) {
+      event.preventDefault()
+      notifyTerminalCapture('editor.reloadFromDisk')
+      void reloadEditorFileFromDisk(file.id)
       return true
     }
   }

@@ -1,6 +1,5 @@
 import React, { useState } from 'react'
 import { TriangleAlert } from 'lucide-react'
-import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { getConnectionIdForFile } from '@/lib/connection-context'
 import { editorTabFileAccess } from '@/lib/local-file-access'
@@ -23,15 +22,20 @@ import {
 } from './editor-save-disk-precondition'
 import { setModelExternalMutation } from './editor-save-rebaseline'
 import { notifyEditorFileCacheStale } from './editor-autosave'
+import { reloadEditorFileFromDisk } from './editor-disk-reload'
+import { offerReloadUndo } from './editor-disk-reload-undo'
 
 // External writes preserve unsaved drafts and mark a conflict; expose recovery before a later save can overwrite the newer disk content.
-
-const RELOAD_UNDO_TOAST_DURATION_MS = 8_000
 
 export function reloadTabContentFromDisk(
   file: OpenFile,
   reloadContent: (file: OpenFile) => void
-): void {
+): Promise<void> {
+  if (file.mode === 'edit') {
+    return reloadEditorFileFromDisk(file.id, {
+      onUndo: () => trackExternalChangeConflictAction(file, 'undo_reload')
+    })
+  }
   const state = useAppStore.getState()
   const liveTab = state.openFiles.find((openFile) => openFile.id === file.id)
   // A clean tab may share a model whose unsaved draft belongs to a sibling.
@@ -46,44 +50,18 @@ export function reloadTabContentFromDisk(
     state.setExternalMutation(tab.id, null)
     reloadContent(tab)
   }
-  if (discardedDraft === undefined) {
-    return
+  if (discardedDraft !== undefined) {
+    offerReloadUndo({
+      file,
+      draft: discardedDraft,
+      viewIds: siblings.map((tab) => tab.id),
+      baseline: discardedDiskSignature,
+      // Restored edits still differ from disk, so restore the conflict and autosave suspension too.
+      restoredMutation: 'changed',
+      onUndo: () => trackExternalChangeConflictAction(file, 'undo_reload')
+    })
   }
-  // Diff reloads destroy model undo history; retain recovery in this toast.
-  toast(
-    translate('auto.components.editor.ExternalFileChangeBanner.5c02de9b31', 'Reloaded from disk'),
-    {
-      description: file.relativePath,
-      duration: RELOAD_UNDO_TOAST_DURATION_MS,
-      action: {
-        label: translate('auto.components.editor.ExternalFileChangeBanner.d1e830fa22', 'Undo'),
-        onClick: () => {
-          const current = useAppStore.getState()
-          const liveFile = current.openFiles.find((openFile) => openFile.id === file.id)
-          // Undo only for live, clean model siblings, including tabs added since reload. isDirty proves newer work; content sync also populates drafts for clean tabs.
-          const modelTabs = liveFile ? editorModelSiblingTabs(current, liveFile) : []
-          if (!liveFile || modelTabs.some((tab) => tab.isDirty)) {
-            return
-          }
-          // Tabs that left the model now own independent text and must remain untouched.
-          const liveSiblings = modelTabs.filter((tab) =>
-            siblings.some((reloaded) => reloaded.id === tab.id)
-          )
-          if (discardedDiskSignature !== undefined) {
-            // Restore the old disk signature so restart scans preserve the conflict alongside the recovered draft.
-            setEditorDiskBaseline(current, file.id, discardedDiskSignature)
-          }
-          for (const tab of liveSiblings) {
-            current.setEditorDraft(tab.id, discardedDraft)
-            current.markFileDirty(tab.id, true)
-            // Restored edits still differ from disk, so restore the conflict and autosave suspension too.
-            current.setExternalMutation(tab.id, 'changed')
-          }
-          trackExternalChangeConflictAction(file, 'undo_reload')
-        }
-      }
-    }
-  )
+  return Promise.resolve()
 }
 
 export function keepTabEditsOverExternalChange(file: OpenFile): void {
@@ -169,7 +147,7 @@ export function ExternalFileChangeBanner({
 
   const handleReload = (): void => {
     trackExternalChangeConflictAction(file, 'reload')
-    reloadTabContentFromDisk(file, reloadContent)
+    void reloadTabContentFromDisk(file, reloadContent)
   }
   const handleKeepEdits = (): void => {
     trackExternalChangeConflictAction(file, 'keep')

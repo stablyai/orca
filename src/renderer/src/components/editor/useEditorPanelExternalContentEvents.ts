@@ -4,9 +4,6 @@ import { getConnectionIdForFile } from '@/lib/connection-context'
 import type { OpenFile } from '@/store/slices/editor'
 import {
   ORCA_EDITOR_EXTERNAL_FILE_CHANGE_EVENT,
-  ORCA_EDITOR_FILE_CACHE_STALE_EVENT,
-  ORCA_EDITOR_FILE_SAVED_EVENT,
-  type EditorFileSavedDetail,
   type EditorPathMutationTarget
 } from './editor-autosave'
 import type { DiffContent, FileContent } from './editor-panel-content-types'
@@ -15,7 +12,8 @@ import { createEditorWatcherReloadCoalescer } from './editor-watcher-reload-coal
 import { markFileChangedOnDisk } from './editor-changed-on-disk-mark'
 import { hasRecentSelfWrite } from './editor-self-write-registry'
 import { isEditorModelDirty } from './editor-save-disk-precondition'
-import { externalChangeRecordViewIds, withRecordDiskText } from './editor-buffer-adapter'
+import { externalChangeRecordViewIds } from './editor-buffer-adapter'
+import { useEditorPanelDiskTextEvents } from './useEditorPanelDiskTextEvents'
 
 type EditorViewModeByFile = ReturnType<typeof useAppStore.getState>['editorViewMode']
 
@@ -43,6 +41,7 @@ type UseEditorPanelExternalContentEventsParams = {
   editorViewModeRef: MutableRefObject<EditorViewModeByFile>
   setFileContents: Dispatch<SetStateAction<Record<string, FileContent>>>
   setDiffContents: Dispatch<SetStateAction<Record<string, DiffContent>>>
+  supersedeFileReads: (fileIds: readonly string[]) => void
 }
 
 const externalEventGenerations = new WeakMap<Event, number>()
@@ -68,7 +67,8 @@ export function useEditorPanelExternalContentEvents({
   openFilesRef,
   editorViewModeRef,
   setFileContents,
-  setDiffContents
+  setDiffContents,
+  supersedeFileReads
 }: UseEditorPanelExternalContentEventsParams): void {
   useEffect(() => {
     const reloads = createEditorWatcherReloadCoalescer()
@@ -110,7 +110,10 @@ export function useEditorPanelExternalContentEvents({
       if (target === 'stale') {
         invalidateDiffContent([fileId])
       } else if (target) {
-        await loadDiffContent(target, { force: true, externalEventGeneration: eventGeneration })
+        await loadDiffContent(target, {
+          force: true,
+          externalEventGeneration: eventGeneration
+        })
       }
     }
     const handler = (event: Event): void => {
@@ -171,96 +174,15 @@ export function useEditorPanelExternalContentEvents({
     openFilesRef
   ])
 
-  useEffect(() => {
-    const handler = (event: Event): void => {
-      const detail = (event as CustomEvent<EditorFileSavedDetail>).detail
-      if (!detail) {
-        return
-      }
-      const file = openFilesRef.current.find((openFile) => openFile.id === detail.fileId)
-      const recordViewIds = detail.recordViewIds ?? [detail.fileId]
-      updateSavedPreviewTabs(openFilesRef.current, detail, setFileContents)
-      if (!file) {
-        // Saved text still reaches record siblings after the saving view closes.
-        setFileContents((prev) =>
-          withRecordDiskText(prev, recordViewIds, detail.fileId, detail.content)
-        )
-        return
-      }
-      if (file.mode === 'edit' || file.mode === 'markdown-preview') {
-        setFileContents((prev) => ({
-          ...withRecordDiskText(prev, recordViewIds, file.id, detail.content),
-          [file.id]: { content: detail.content, isBinary: false }
-        }))
-      }
-      if (file.mode === 'edit' || file.mode === 'markdown-preview') {
-        return
-      }
-      setDiffContents((prev) => {
-        const existing = prev[file.id]
-        if (!existing || existing.kind !== 'text') {
-          return prev
-        }
-        return { ...prev, [file.id]: { ...existing, modifiedContent: detail.content } }
-      })
-    }
-    // Why evict, not mark stale: stale bytes kept for display could be mounted into the live model.
-    const onCacheStale = (event: Event): void => {
-      if (event instanceof CustomEvent && typeof event.detail?.fileId === 'string') {
-        const fileId: string = event.detail.fileId
-        setFileContents((prev) => {
-          if (!(fileId in prev)) {
-            return prev
-          }
-          const next = { ...prev }
-          delete next[fileId]
-          return next
-        })
-        // Why: the visible tab has no other trigger to reload; hidden tabs load lazily on reveal.
-        const file = openFilesRef.current.find((candidate) => candidate.id === fileId)
-        if (file && isVisibleRef.current && fileId === activeContentFileIdRef.current) {
-          void loadFileContent(file.filePath, file.id, file.worktreeId, file.relativePath, {
-            force: true
-          })
-        }
-      }
-    }
-    window.addEventListener(ORCA_EDITOR_FILE_SAVED_EVENT, handler)
-    window.addEventListener(ORCA_EDITOR_FILE_CACHE_STALE_EVENT, onCacheStale)
-    return () => {
-      window.removeEventListener(ORCA_EDITOR_FILE_SAVED_EVENT, handler)
-      window.removeEventListener(ORCA_EDITOR_FILE_CACHE_STALE_EVENT, onCacheStale)
-    }
-  }, [
+  useEditorPanelDiskTextEvents({
     activeContentFileIdRef,
+    invalidateDiffContent,
     isVisibleRef,
     loadFileContent,
     openFilesRef,
+    setFileContents,
     setDiffContents,
-    setFileContents
-  ])
-}
-
-function updateSavedPreviewTabs(
-  openFiles: OpenFile[],
-  detail: EditorFileSavedDetail,
-  setFileContents: Dispatch<SetStateAction<Record<string, FileContent>>>
-): void {
-  // Why the record's views: the saving view may have closed while its siblings' previews remain.
-  const sources = new Set<string | undefined>([detail.fileId, ...(detail.recordViewIds ?? [])])
-  const previewTabs = openFiles.filter(
-    (openFile) =>
-      openFile.mode === 'markdown-preview' && sources.has(openFile.markdownPreviewSourceFileId)
-  )
-  if (previewTabs.length === 0) {
-    return
-  }
-  setFileContents((prev) => {
-    const next = { ...prev }
-    for (const previewTab of previewTabs) {
-      next[previewTab.id] = { content: detail.content, isBinary: false }
-    }
-    return next
+    supersedeFileReads
   })
 }
 

@@ -43,6 +43,7 @@ vi.mock('./EditorPanelActionsMenu', () => ({
     fileLocationActions ?? null
 }))
 
+vi.mock('./ReloadFromDiskMenuItem', () => ({ ReloadFromDiskMenuItem: () => null }))
 vi.mock('./EditorFileLocationMenuItems', () => ({
   EditorFileLocationMenuItems: () => <span data-file-location-actions />
 }))

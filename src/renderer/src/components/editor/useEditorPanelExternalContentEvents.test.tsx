@@ -2,7 +2,7 @@
 
 import { act, useLayoutEffect, useRef, useState } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi, type Mock } from 'vitest'
 import type { OpenFile } from '@/store/slices/editor'
 import {
   ORCA_EDITOR_EXTERNAL_FILE_CHANGE_EVENT,
@@ -16,11 +16,13 @@ import { useEditorPanelExternalContentEvents } from './useEditorPanelExternalCon
 const markChangedOnDisk = vi.hoisted(() => vi.fn())
 vi.mock('./editor-changed-on-disk-mark', () => ({ markFileChangedOnDisk: markChangedOnDisk }))
 
+type HookParams = Parameters<typeof useEditorPanelExternalContentEvents>[0]
+
 type ProbeCalls = {
-  invalidate: ReturnType<typeof vi.fn>
-  invalidateDiff: ReturnType<typeof vi.fn>
-  loadDiff: ReturnType<typeof vi.fn>
-  loadFile: ReturnType<typeof vi.fn>
+  invalidate: Mock<HookParams['invalidateContent']>
+  invalidateDiff: Mock<HookParams['invalidateDiffContent']>
+  loadDiff: Mock<HookParams['loadDiffContent']>
+  loadFile: Mock<HookParams['loadFileContent']>
 }
 
 type ProbeProps = {
@@ -67,8 +69,9 @@ function ExternalContentProbe({
     loadFileContent: calls.loadFile,
     openFilesRef,
     setDiffContents,
-    setFileContents
-  } as Parameters<typeof useEditorPanelExternalContentEvents>[0])
+    setFileContents,
+    supersedeFileReads: vi.fn()
+  })
   return null
 }
 
@@ -87,10 +90,10 @@ function makeFile(id: string, overrides: Partial<OpenFile> = {}): OpenFile {
 
 function makeCalls(): ProbeCalls {
   return {
-    invalidate: vi.fn(),
-    invalidateDiff: vi.fn(),
-    loadDiff: vi.fn(async () => undefined),
-    loadFile: vi.fn(async () => undefined)
+    invalidate: vi.fn<HookParams['invalidateContent']>(),
+    invalidateDiff: vi.fn<HookParams['invalidateDiffContent']>(),
+    loadDiff: vi.fn<HookParams['loadDiffContent']>(async () => undefined),
+    loadFile: vi.fn<HookParams['loadFileContent']>(async () => undefined)
   }
 }
 
@@ -313,8 +316,8 @@ describe('useEditorPanelExternalContentEvents', () => {
     expect(calls.loadFile).toHaveBeenCalledTimes(1)
     await act(async () => settles[0]())
     expect(calls.loadFile).toHaveBeenCalledTimes(2)
-    const firstGeneration = calls.loadFile.mock.calls[0][4].externalEventGeneration
-    expect(calls.loadFile.mock.calls[1][4].externalEventGeneration).toBe(firstGeneration + 4)
+    const firstGeneration = calls.loadFile.mock.calls[0]?.[4]?.externalEventGeneration ?? 0
+    expect(calls.loadFile.mock.calls[1]?.[4]?.externalEventGeneration).toBe(firstGeneration + 4)
     await act(async () => settles[1]())
     expect(calls.loadFile).toHaveBeenCalledTimes(2)
   })

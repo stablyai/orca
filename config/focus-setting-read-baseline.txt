@@ -29,11 +29,10 @@
 1 src/renderer/src/components/editor/EditorDiffFileSurface.tsx
 1 src/renderer/src/components/editor/EditorEditFileSurface.tsx
 1 src/renderer/src/components/editor/EditorMarkdownFileSurface.tsx
+1 src/renderer/src/components/editor/editor-file-read-plan.ts
 1 src/renderer/src/components/editor/markdown-preview-link-actions.ts
 1 src/renderer/src/components/editor/markdown-preview-system-link-action.ts
 1 src/renderer/src/components/editor/restored-editor-workspace-runtime-owner.ts
-2 src/renderer/src/components/editor/useEditorPanelContentState.ts
-1 src/renderer/src/components/editor/useEditorPanelFileContentLoader.ts
 2 src/renderer/src/components/editor/useMarkdownDocuments.ts
 2 src/renderer/src/components/feature-wall/ConnectIntegrationsList.tsx
 1 src/renderer/src/components/feature-wall/FeatureWallBrowserAction.tsx

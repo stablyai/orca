@@ -43,6 +43,8 @@ const file = {
   isDirty: true,
   externalMutation: 'changed'
 } as OpenFile
+// Diff tabs keep the clear-then-refetch reload; edit tabs read first (editor-disk-reload).
+const diffFile: OpenFile = { ...file, mode: 'diff', diffSource: 'unstaged' }
 
 describe('ExternalFileChangeBanner', () => {
   const clearEditorDraft = vi.fn()
@@ -83,7 +85,7 @@ describe('ExternalFileChangeBanner', () => {
     expect(html).toContain('Keep My Edits')
   })
 
-  it('reload clears the draft, dirty flag, and mark before refetching content', () => {
+  it('diff reload clears the draft, dirty flag, and mark before refetching content', () => {
     mockStoreState({ 'file-1': 'unsaved text' })
     const calls: string[] = []
     clearEditorDraft.mockImplementation(() => calls.push('clearEditorDraft'))
@@ -91,7 +93,7 @@ describe('ExternalFileChangeBanner', () => {
     setExternalMutation.mockImplementation(() => calls.push('setExternalMutation'))
     const reloadContent = vi.fn(() => calls.push('reloadContent'))
 
-    reloadTabContentFromDisk(file, reloadContent)
+    reloadTabContentFromDisk(diffFile, reloadContent)
 
     expect(clearEditorDraft).toHaveBeenCalledWith('file-1')
     expect(markFileDirty).toHaveBeenCalledWith('file-1', false)
@@ -109,7 +111,7 @@ describe('ExternalFileChangeBanner', () => {
   it('reload offers an undo toast that restores the discarded draft and the conflict', () => {
     mockStoreState({ 'file-1': 'discarded draft' })
 
-    reloadTabContentFromDisk(file, vi.fn())
+    reloadTabContentFromDisk(diffFile, vi.fn())
 
     expect(toastMock).toHaveBeenCalledTimes(1)
     const options = toastMock.mock.calls[0][1] as {
@@ -130,7 +132,7 @@ describe('ExternalFileChangeBanner', () => {
   it('undo is a no-op when the tab closed while the toast was up', () => {
     mockStoreState({ 'file-1': 'discarded draft' })
 
-    reloadTabContentFromDisk(file, vi.fn())
+    reloadTabContentFromDisk(diffFile, vi.fn())
 
     const options = toastMock.mock.calls[0][1] as {
       action: { label: string; onClick: () => void }
@@ -148,7 +150,7 @@ describe('ExternalFileChangeBanner', () => {
   it('undo is a no-op when the user typed or saved after the reload', () => {
     mockStoreState({ 'file-1': 'discarded draft' })
 
-    reloadTabContentFromDisk(file, vi.fn())
+    reloadTabContentFromDisk(diffFile, vi.fn())
 
     const options = toastMock.mock.calls[0][1] as {
       action: { label: string; onClick: () => void }
@@ -168,7 +170,7 @@ describe('ExternalFileChangeBanner', () => {
   it('does not toast when there was no draft to restore', () => {
     mockStoreState({})
 
-    reloadTabContentFromDisk(file, vi.fn())
+    reloadTabContentFromDisk(diffFile, vi.fn())
 
     expect(toastMock).not.toHaveBeenCalled()
   })
@@ -179,7 +181,7 @@ describe('ExternalFileChangeBanner', () => {
       { ...file, lastKnownDiskSignature: 'pre-reload-signature' } as OpenFile
     ])
 
-    reloadTabContentFromDisk(file, vi.fn())
+    reloadTabContentFromDisk(diffFile, vi.fn())
 
     const options = toastMock.mock.calls[0][1] as {
       action: { label: string; onClick: () => void }

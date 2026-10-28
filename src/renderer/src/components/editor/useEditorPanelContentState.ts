@@ -69,6 +69,12 @@ export function useEditorPanelContentState({
     activeContentFileIdRef.current = activeContentFileId
   }, [activeContentFileId, diffContents, editorViewMode, isVisible, openFiles])
 
+  const supersedeFileReads = useCallback((fileIds: readonly string[]): void => {
+    for (const fileId of fileIds) {
+      fileReadGenerationRef.current[fileId] = ++fileReadGenerationCounterRef.current
+    }
+  }, [])
+
   const invalidateFileContent = useCallback((fileIds: string[]): void => {
     const uniqueIds = new Set(fileIds)
     for (const fileId of uniqueIds) {
@@ -216,7 +222,8 @@ export function useEditorPanelContentState({
     openFilesRef,
     editorViewModeRef,
     setFileContents,
-    setDiffContents
+    setDiffContents,
+    supersedeFileReads
   })
   usePruneClosedEditorContent(
     openFiles,

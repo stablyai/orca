@@ -15770,6 +15770,15 @@
         },
         "useMarkdownDocuments": {
           "listFailed": "Failed to list Markdown documents."
+        },
+        "ReloadFromDiskMenuItem": {
+          "label": "Reload from Disk"
+        },
+        "editorDiskReload": {
+          "restoring": "This tab is still being restored.",
+          "notText": "The file on disk is no longer editable text.",
+          "canceled": "Reload from Disk was canceled because the file was edited or saved while reading.",
+          "failed": "Couldn't reload {{value0}} from disk. Your unsaved edits were kept."
         }
       },
       "diff": {

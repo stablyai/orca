@@ -49,7 +49,8 @@ function PanelProbe({
     loadFileContent: calls.loadFile,
     openFilesRef,
     setDiffContents,
-    setFileContents
+    setFileContents,
+    supersedeFileReads: vi.fn()
   })
   return null
 }

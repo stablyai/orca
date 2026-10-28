@@ -3,6 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   ORCA_EDITOR_EXTERNAL_FILE_CHANGE_EVENT,
   ORCA_EDITOR_FILE_CACHE_STALE_EVENT,
+  ORCA_EDITOR_FILE_RELOADED_EVENT,
   ORCA_EDITOR_SAVE_AND_CLOSE_EVENT,
   requestEditorFileSave,
   type EditorSaveAndCloseDetail
@@ -27,10 +28,14 @@ const storeRef = vi.hoisted((): { current: ReturnType<typeof createEditorStore> 
 }))
 
 vi.mock('sonner', () => ({ toast: Object.assign(vi.fn(), { error: vi.fn() }) }))
-vi.mock('@/lib/connection-context', () => ({ getConnectionIdForFile: () => undefined }))
+vi.mock('@/lib/connection-context', () => ({
+  getConnectionIdForFile: () => undefined,
+  isWorktreeConnectionResolved: () => true
+}))
 vi.mock('@/store', () => ({ useAppStore: { getState: () => storeRef.current?.getState() } }))
 vi.mock('@/lib/file-owner-runtime-target', () => ({
-  getRuntimeTargetForFileOwner: () => ({ kind: 'local' })
+  getRuntimeTargetForFileOwner: () => ({ kind: 'local' }),
+  requireRuntimeTargetForFileOwner: () => ({ kind: 'local' })
 }))
 vi.mock('@/runtime/runtime-file-read-client', async (importOriginal) => ({
   ...(await importOriginal<object>()),
@@ -138,21 +143,32 @@ describe('two tabs sharing one model', () => {
     expect(sameBaseline(store)).toBe(true)
   })
 
-  it('Reload discards both drafts and reloads both tabs', () => {
+  it('Reload discards both drafts and installs the disk text on both tabs', async () => {
+    stubGuardedDisk({ [GUARDED_PATH]: 'A' })
     const { store, a, b, edit, tab } = openSharedTabs('A')
     edit(a.id, 'mine')
     edit(b.id, 'mine')
     for (const id of [a.id, b.id]) {
       store.getState().setExternalMutation(id, 'changed')
     }
-    const reloadContent = vi.fn()
+    mocks.readRuntimeFileContent.mockResolvedValue({ content: 'B', isBinary: false })
+    const installed: { content: string; recordViewIds?: readonly string[] }[] = []
+    const onReloaded = (event: Event): void => {
+      if (event instanceof CustomEvent) {
+        installed.push(event.detail)
+      }
+    }
+    window.addEventListener(ORCA_EDITOR_FILE_RELOADED_EVENT, onReloaded)
 
-    reloadTabContentFromDisk(store.getState().openFiles[0], reloadContent)
+    await reloadTabContentFromDisk(store.getState().openFiles[0], vi.fn())
+    window.removeEventListener(ORCA_EDITOR_FILE_RELOADED_EVENT, onReloaded)
 
-    expect(reloadContent.mock.calls.map(([file]) => file.id).sort()).toEqual([a.id, b.id].sort())
+    expect(installed.map((detail) => detail.content)).toEqual(['B'])
+    expect([...(installed[0]?.recordViewIds ?? [])].sort()).toEqual([a.id, b.id].sort())
     for (const id of [a.id, b.id]) {
       expect(store.getState().editorDrafts[id]).toBeUndefined()
       expect(tab(id)?.externalMutation).toBeUndefined()
+      expect(tab(id)?.lastKnownDiskSignature).toBe(getDiskBaselineSignature('B'))
     }
   })
 
@@ -297,15 +313,17 @@ describe('two tabs sharing one model', () => {
     }
   })
 
-  it("Reload from a clean tab offers Undo of the sibling's discarded edits", () => {
+  it("Reload from a clean tab offers Undo of the sibling's discarded edits", async () => {
+    stubGuardedDisk({ [GUARDED_PATH]: 'A' })
     const { store, a, b, edit } = openSharedTabs('A')
     edit(b.id, 'mine')
     for (const id of [a.id, b.id]) {
       store.getState().setExternalMutation(id, 'changed')
     }
+    mocks.readRuntimeFileContent.mockResolvedValue({ content: 'B', isBinary: false })
     const toastMock = vi.mocked(toast)
     toastMock.mockClear()
-    reloadTabContentFromDisk(store.getState().openFiles[0], vi.fn())
+    await reloadTabContentFromDisk(store.getState().openFiles[0], vi.fn())
     expect(store.getState().editorDrafts[b.id]).toBeUndefined()
 
     const undo: unknown = toastMock.mock.calls[0]?.[1]?.action
@@ -333,12 +351,14 @@ describe('two tabs sharing one model', () => {
   it.each([
     ['in the other workspace', false],
     ['in the other workspace while it shows the Changes view', true]
-  ])('Undo of Reload yields to typing since %s, on every view', (_name, changesView) => {
+  ])('Undo of Reload yields to typing since %s, on every view', async (_name, changesView) => {
+    stubGuardedDisk({ [GUARDED_PATH]: 'A' })
     const { store, a, b, edit, tab } = openSharedTabs('A')
     edit(a.id, 'mine')
+    mocks.readRuntimeFileContent.mockResolvedValue({ content: 'A', isBinary: false })
     const toastMock = vi.mocked(toast)
     toastMock.mockClear()
-    reloadTabContentFromDisk(store.getState().openFiles[0], vi.fn())
+    await reloadTabContentFromDisk(store.getState().openFiles[0], vi.fn())
     if (changesView) {
       // Changes uses the same record, so switching views must not change sharing.
       store.getState().setEditorViewMode(b.id, 'changes')
@@ -370,7 +390,7 @@ describe('two tabs sharing one model', () => {
     expect(tab(b.id)?.lastKnownDiskSignature).toBe(getDiskBaselineSignature('B'))
     expect(tab(b.id)?.externalMutation).toBeUndefined()
 
-    reloadTabContentFromDisk(store.getState().openFiles[0], vi.fn())
+    await reloadTabContentFromDisk(store.getState().openFiles[0], vi.fn())
     expect(store.getState().editorDrafts[b.id]).toBeUndefined()
     expect(tab(b.id)?.isDirty).toBe(false)
   })

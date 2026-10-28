@@ -12,6 +12,7 @@ import type { EditorToggleValue } from './EditorViewToggle'
 import type { EditorHeaderOpenFileState } from './editor-header'
 import { DiffNotesSendMenu } from './DiffNotesSendMenu'
 import { EditorPanelActionsMenu } from './EditorPanelActionsMenu'
+import { ReloadFromDiskMenuItem } from './ReloadFromDiskMenuItem'
 import { EditorFileLocationMenuItems } from './EditorFileLocationMenuItems'
 import { translate } from '@/i18n/i18n'
 import { EditorPanelHeaderPath } from './EditorPanelHeaderPath'
@@ -322,7 +323,10 @@ export function EditorPanelHeader({
           activeFile.mode === 'edit' ||
           activeFile.mode === 'markdown-preview' ||
           (isSingleDiff && openFileState.canOpen) ? (
-            <EditorFileLocationMenuItems file={activeFile} onCopyPath={onCopyPath} />
+            <>
+              <EditorFileLocationMenuItems file={activeFile} onCopyPath={onCopyPath} />
+              <ReloadFromDiskMenuItem file={activeFile} />
+            </>
           ) : undefined
         }
         isDiffSurface={isDiffSurface}
