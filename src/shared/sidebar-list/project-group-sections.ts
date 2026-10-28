@@ -3,6 +3,7 @@ import {
   compareFolderWorkspacesForDisplay,
   type RenderableFolderWorkspace
 } from './folder-workspace-lanes'
+import { getRepoExecutionHostId, parseRoutableExecutionHostId } from '../execution-host'
 import type { ProjectGroup } from '../project-group-types'
 import type { Repo } from '../repo-types'
 import type { ProjectOrderBy } from '../ui-chrome-types'
@@ -39,10 +40,11 @@ export function getProjectSectionMemberRepoIds(
 }
 
 /**
- * The member row that places a section in a Project Group: the first catalog row in manual order
- * that is in a known group. A project set up on several hosts is one section anchored on each
- * Orca's own row, so reading only the anchor drew a project moved on one Orca outside its group
- * on the others; reading visible rows only let pins and placeholders move it.
+ * The member row that places a section in a Project Group: a grouped row from this Orca's own
+ * catalog first, else the first grouped row in manual order. A project set up on several hosts is
+ * one section whose anchor may be any host's row, so reading only the anchor drew a project outside
+ * the group it was moved into, and ranking alone let another host's group override this Orca's;
+ * reading visible rows only let pins and placeholders move it.
  */
 export function getProjectSectionGroupRepo(
   section: Pick<WorktreeGroupEntry, 'repo'>,
@@ -53,18 +55,25 @@ export function getProjectSectionGroupRepo(
 ): Repo | undefined {
   const isGrouped = (repo: Repo | undefined): repo is Repo =>
     Boolean(repo?.projectGroupId && knownGroupIds.has(repo.projectGroupId))
-  const anchor = section.repo
   let grouped: Repo | undefined
+  let groupedHostRank = Number.POSITIVE_INFINITY
   let groupedRank = Number.POSITIVE_INFINITY
   for (const repoId of memberRepoIds) {
     const repo = repoMap.get(repoId)
+    if (!isGrouped(repo)) {
+      continue
+    }
+    // Why: groups are a local affordance; local and direct-SSH rows join this Orca's own groups.
+    const hostRank =
+      parseRoutableExecutionHostId(getRepoExecutionHostId(repo))?.kind === 'runtime' ? 1 : 0
     const rank = repoOrder?.get(repoId) ?? Number.POSITIVE_INFINITY
-    if (isGrouped(repo) && (!grouped || rank < groupedRank)) {
+    if (hostRank < groupedHostRank || (hostRank === groupedHostRank && rank < groupedRank)) {
       grouped = repo
+      groupedHostRank = hostRank
       groupedRank = rank
     }
   }
-  return grouped ?? anchor
+  return grouped ?? section.repo
 }
 
 export function appendProjectGroupSections(
@@ -219,7 +228,10 @@ export function getProjectGroupOccurrencePaths(projectGroups: readonly ProjectGr
     let parent = current ? paths.get(current.id) : undefined
     for (let index = pending.length - 1; index >= 0; index -= 1) {
       const entry = pending[index]
-      const path: OccurrenceSectionPath = { key: getProjectGroupHeaderKey(entry.id), parent }
+      const path: OccurrenceSectionPath = {
+        key: getProjectGroupHeaderKey(entry.id),
+        parent
+      }
       paths.set(entry.id, path)
       parent = path
     }

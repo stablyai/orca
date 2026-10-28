@@ -31,40 +31,52 @@ describe('a project grouped on one of its hosts', () => {
   })
 
   it('reveals the project through the group it is drawn in', () => {
-    const section = planRows({ repoOrder: THIS_ORCA_ORDER }).occurrencePlan.sections.find(
-      (entry) => entry.key === `project:${project.id}`
-    )
+    const section = planRows({
+      repoOrder: THIS_ORCA_ORDER
+    }).occurrencePlan.sections.find((entry) => entry.key === `project:${project.id}`)
 
     expect(section?.revealPath?.parent?.key).toBe('project-group:group-a')
   })
 
-  it("keeps the anchor's own group when the hosts' rows sit in different groups", () => {
-    const groupedLocal: Repo = { ...localRepo, projectGroupId: localGroup.id, projectGroupOrder: 0 }
+  it.each([
+    ['this Orca lists its own row first', THIS_ORCA_ORDER, {}],
+    ["this Orca lists the paired host's row first", PAIRED_HOST_ORDER, {}],
+    ["this Orca's own row is a direct SSH row", PAIRED_HOST_ORDER, { connectionId: 'build-box' }]
+  ])(
+    "keeps this Orca's own group when the hosts' rows sit in different groups and %s",
+    (_, repoOrder, host: Partial<Repo>) => {
+      const groupedLocal: Repo = {
+        ...localRepo,
+        ...host,
+        projectGroupId: localGroup.id,
+        projectGroupOrder: 0
+      }
 
-    expect(
-      headerKeys({
-        repoOrder: THIS_ORCA_ORDER,
+      expect(
+        headerKeys({
+          repoOrder,
+          local: groupedLocal,
+          groups: [pairedGroup, localGroup]
+        })
+      ).toEqual([
+        'project-group:group-a@0',
+        'project-group:group-local@0',
+        'project:github:stablyai/orca@1'
+      ])
+      const rows = planRows({
+        repoOrder,
         local: groupedLocal,
         groups: [pairedGroup, localGroup]
-      })
-    ).toEqual([
-      'project-group:group-a@0',
-      'project-group:group-local@0',
-      'project:github:stablyai/orca@1'
-    ])
-    const rows = planRows({
-      repoOrder: THIS_ORCA_ORDER,
-      local: groupedLocal,
-      groups: [pairedGroup, localGroup]
-    }).render(new Set())
-    const projectIndex = rows.findIndex(
-      (row) => row.type === 'header' && row.key === `project:${project.id}`
-    )
-    const localGroupIndex = rows.findIndex(
-      (row) => row.type === 'header' && row.key === 'project-group:group-local'
-    )
-    expect(projectIndex).toBeGreaterThan(localGroupIndex)
-  })
+      }).render(new Set())
+      const projectIndex = rows.findIndex(
+        (row) => row.type === 'header' && row.key === `project:${project.id}`
+      )
+      const localGroupIndex = rows.findIndex(
+        (row) => row.type === 'header' && row.key === 'project-group:group-local'
+      )
+      expect(projectIndex).toBeGreaterThan(localGroupIndex)
+    }
+  )
 
   it('stays at the root while the paired group metadata has not arrived', () => {
     expect(headerKeys({ repoOrder: THIS_ORCA_ORDER, groups: [] })).toEqual([
@@ -76,9 +88,10 @@ describe('a project grouped on one of its hosts', () => {
     const pinned = { ...pairedWorktree, isPinned: true }
 
     expect(
-      headerKeys({ repoOrder: THIS_ORCA_ORDER, worktrees: [localWorktree, pinned] }).filter(
-        (key) => !key.startsWith('pinned')
-      )
+      headerKeys({
+        repoOrder: THIS_ORCA_ORDER,
+        worktrees: [localWorktree, pinned]
+      }).filter((key) => !key.startsWith('pinned'))
     ).toEqual(['project-group:group-a@0', 'project:github:stablyai/orca@1'])
   })
 
@@ -89,7 +102,10 @@ describe('a project grouped on one of its hosts', () => {
       worktrees: [localWorktree],
       placeholderRepoIds: new Set([pairedRepo.id])
     })
-    const shortcutOrder = headerKeys({ repoOrder: THIS_ORCA_ORDER, worktrees: [localWorktree] })
+    const shortcutOrder = headerKeys({
+      repoOrder: THIS_ORCA_ORDER,
+      worktrees: [localWorktree]
+    })
 
     expect(rendered).toEqual(['project-group:group-a@0', 'project:github:stablyai/orca@1'])
     expect(shortcutOrder).toEqual(rendered)
@@ -97,14 +113,21 @@ describe('a project grouped on one of its hosts', () => {
 
   it('places competing groups the same way with or without an empty-project placeholder', () => {
     // This Orca's own row ranks first but has no workspaces yet; it sits in another group.
-    const emptyLocal: Repo = { ...localRepo, projectGroupId: localGroup.id, projectGroupOrder: 0 }
+    const emptyLocal: Repo = {
+      ...localRepo,
+      projectGroupId: localGroup.id,
+      projectGroupOrder: 0
+    }
     const args = {
       repoOrder: THIS_ORCA_ORDER,
       local: emptyLocal,
       groups: [pairedGroup, localGroup],
       worktrees: [pairedWorktree]
     }
-    const rendered = headerKeys({ ...args, placeholderRepoIds: new Set([emptyLocal.id]) })
+    const rendered = headerKeys({
+      ...args,
+      placeholderRepoIds: new Set([emptyLocal.id])
+    })
     const shortcutOrder = headerKeys(args)
 
     expect(rendered).toEqual([
