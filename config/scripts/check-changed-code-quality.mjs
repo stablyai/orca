@@ -76,7 +76,7 @@ const SUPPRESSED_REACT_DOCTOR_DIAGNOSTICS = new Map([
     'react-doctor(no-adjust-state-on-prop-change)',
     new Set([
       'src/renderer/src/components/task-page/github/use-task-page-github-issue-draft.ts',
-      'src/renderer/src/components/use-task-page-jira-creation-state.ts'
+      'src/renderer/src/components/task-page/jira/use-task-page-jira-creation-state.ts'
     ])
   ],
   [

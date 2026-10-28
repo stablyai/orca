@@ -9,12 +9,15 @@ import {
   useState,
   type ForwardedRef
 } from 'react'
-import { StyleSheet, View } from 'react-native'
+import { View } from 'react-native'
 import { colors } from '../theme/mobile-theme'
+import { themedStyleSheet } from '../theme/themed-styles'
+import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import { openExternalLink } from '../platform/external-link'
 import { MobileRichMarkdownToolbar } from './MobileRichMarkdownToolbar'
 import { TextInputModal } from './TextInputModal'
 import {
+  ensureDocumentStyle,
   mountRichMarkdownWebDocument,
   type RichMarkdownWebDocument
 } from './rich-markdown/rich-markdown-web-document-mount'
@@ -56,6 +59,7 @@ function MobileRichMarkdownEditorWebInner(
   }: MobileRichMarkdownEditorComponentProps,
   ref: ForwardedRef<MobileRichMarkdownEditorHandle>
 ) {
+  const colorScheme = useMobileColorScheme()
   const hostRef = useRef<View>(null)
   const documentRef = useRef<RichMarkdownWebDocument | null>(null)
   // Document reports ready synchronously during mount before documentRef exists; queue controller content/editable calls until handle arrives or editor stays empty.
@@ -241,6 +245,12 @@ function MobileRichMarkdownEditorWebInner(
     // Mount document once; read promptForUrl via closure because rerunning on changing callback props discards live caret/document.
   }, [])
 
+  useEffect(() => {
+    if (documentRef.current) {
+      ensureDocumentStyle()
+    }
+  }, [colorScheme])
+
   return (
     <View style={styles.container}>
       <MobileRichMarkdownToolbar editable={editable} onCommand={runCommand} />
@@ -261,7 +271,7 @@ function MobileRichMarkdownEditorWebInner(
 
 export const MobileRichMarkdownEditor = memo(forwardRef(MobileRichMarkdownEditorWebInner))
 
-const styles = StyleSheet.create({
+const styles = themedStyleSheet(() => ({
   container: { flex: 1, minHeight: 0, backgroundColor: colors.bgBase },
   host: { flex: 1, minHeight: 0, backgroundColor: colors.bgBase }
-})
+}))

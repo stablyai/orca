@@ -83,10 +83,14 @@ export function buildSecondaryCommitMessageAgentSpecs({
       binary: 'kimi',
       // kimi-code requires --prompt/-p text on argv; Claude-style --print is rejected (#11669).
       promptDelivery: 'argv',
+      singletonOptions: [['--model', '-m'], ['--output-format']],
       // Why: Kimi Code has no --quiet/--thinking/--no-thinking; -p alone is headless (#14771).
       buildArgs: ({ prompt, model }) => [
         '--prompt',
         prompt,
+        // Text mode gives hooks and assistant replies the same presentation bullet.
+        '--output-format',
+        'stream-json',
         ...(model && model !== 'default' ? ['--model', model] : [])
       ],
       modelSource: 'static',

@@ -150,7 +150,12 @@ export function useChecksPanelCreateReview(model: ChecksPanelCreateReviewInput) 
         if (shouldPushBeforeCreate) {
           const ok = await pushBeforeCreatePullRequest()
           if (!ok) {
-            showCreateError('Push failed. Resolve the push error, then try again.')
+            showCreateError(
+              translate(
+                'sourceControl.createReviewFailure.pushFailed',
+                'Push failed. Resolve the push error, then try again.'
+              )
+            )
             return
           }
           pushed = true
@@ -237,7 +242,7 @@ export function useChecksPanelCreateReview(model: ChecksPanelCreateReviewInput) 
             )
           }
         }
-        showCreateError(formatCreateError(result, pushed, hostedReviewCreateCopy.shortLabel))
+        showCreateError(formatCreateError(result, pushed, hostedReviewCreateProvider))
       } catch (error) {
         showCreateError(
           error instanceof Error
@@ -268,7 +273,6 @@ export function useChecksPanelCreateReview(model: ChecksPanelCreateReviewInput) 
       handlePullRequestCreated,
       hostedReviewCreateCopy.providerName,
       hostedReviewCreateCopy.reviewLabel,
-      hostedReviewCreateCopy.shortLabel,
       hostedReviewCreateCopy.titleLabel,
       hostedReviewCreateProvider,
       hostedReviewCreation?.blockedReason,

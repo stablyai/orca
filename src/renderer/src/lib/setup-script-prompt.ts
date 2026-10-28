@@ -82,6 +82,12 @@ export function getSetupScriptPromptDismissalKey(repoHostIdentity: string): stri
   return `${SETUP_SCRIPT_PROMPT_DISMISSAL_PREFIX}${repoHostIdentity}`
 }
 
+/** The repo of a dismissal key, host-qualified (`<host>\0<repoId>`) or legacy bare. */
+export function getSetupScriptPromptDismissalRepoId(entry: string): string {
+  const identity = entry.slice(SETUP_SCRIPT_PROMPT_DISMISSAL_PREFIX.length)
+  return identity.slice(identity.indexOf('\0') + 1)
+}
+
 export function isSetupScriptPromptDismissed(
   repoHostIdentity: string,
   dismissedEntries: readonly string[]

@@ -7,14 +7,22 @@ vi.mock('sonner', () => ({ toast: { error: toastError } }))
 import { pickWslHostFolder, readDroppedHostPath } from './add-repo-wsl-host-folder-picker'
 
 const access = wslDistroWindowsPathAccess('Ubuntu')
+const onWindowsDriveRefusal = vi.fn()
 
 describe('pickWslHostFolder', () => {
-  beforeEach(() => toastError.mockReset())
+  beforeEach(() => {
+    toastError.mockReset()
+    onWindowsDriveRefusal.mockReset()
+  })
 
   it('opens at the host home and returns the Linux path of the pick', async () => {
     const pickDirectory = vi.fn().mockResolvedValue('\\\\wsl.localhost\\ubuntu\\home\\me\\my repo')
     await expect(
-      pickWslHostFolder(access, { readHome: async () => '/home/me', pickDirectory })
+      pickWslHostFolder(access, {
+        readHome: async () => '/home/me',
+        pickDirectory,
+        onWindowsDriveRefusal
+      })
     ).resolves.toBe('/home/me/my repo')
     expect(pickDirectory).toHaveBeenCalledWith({
       defaultPath: '\\\\wsl.localhost\\Ubuntu\\home\\me'
@@ -27,7 +35,8 @@ describe('pickWslHostFolder', () => {
     await expect(
       pickWslHostFolder(access, {
         readHome: () => Promise.reject(new Error('offline')),
-        pickDirectory
+        pickDirectory,
+        onWindowsDriveRefusal
       })
     ).resolves.toBeNull()
     expect(pickDirectory).toHaveBeenCalledWith({ defaultPath: '\\\\wsl.localhost\\Ubuntu\\' })
@@ -37,28 +46,42 @@ describe('pickWslHostFolder', () => {
     await expect(
       pickWslHostFolder(access, {
         readHome: async () => '/home/me',
+        onWindowsDriveRefusal,
         pickDirectory: async () => '\\\\wsl$\\Ubuntu\\srv\\プロジェクト'
       })
     ).resolves.toBe('/srv/プロジェクト')
   })
 
-  it('refuses a drive folder and says it stays on this computer', async () => {
+  it.each([
+    ['a drive folder', 'C:\\Users\\me\\src', 'C:\\Users\\me\\src'],
+    ['its drvfs mount', '\\\\wsl.localhost\\Ubuntu\\mnt\\c\\Users\\me\\src', 'C:\\Users\\me\\src'],
+    ['another distro drvfs mount', '\\\\wsl$\\Debian\\mnt\\d\\work', 'D:\\work'],
+    [
+      'a long-path drvfs mount in another distro',
+      '\\\\?\\UNC\\wsl.localhost\\Debian\\mnt\\d\\work',
+      'D:\\work'
+    ]
+  ])('hands %s to the dialog as a Windows drive refusal', async (_name, picked, windowsPath) => {
     await expect(
       pickWslHostFolder(access, {
         readHome: async () => '/home/me',
-        pickDirectory: async () => 'C:\\Users\\me\\src'
+        onWindowsDriveRefusal,
+        pickDirectory: async () => picked
       })
     ).resolves.toBeNull()
-    expect(toastError).toHaveBeenCalledWith('Pick a folder inside Ubuntu.', {
-      description:
-        'Folders on a Windows drive stay on this computer. Choose this computer as the host to add one.'
+    expect(onWindowsDriveRefusal).toHaveBeenCalledWith({
+      kind: 'wsl_host_windows_drive_path',
+      windowsPath
     })
+    // Inline in the dialog: a toast above it could not take the click.
+    expect(toastError).not.toHaveBeenCalled()
   })
 
   it('refuses another distro by name', async () => {
     await expect(
       pickWslHostFolder(access, {
         readHome: async () => '/home/me',
+        onWindowsDriveRefusal,
         pickDirectory: async () => '\\\\wsl.localhost\\Debian\\home\\me'
       })
     ).resolves.toBeNull()

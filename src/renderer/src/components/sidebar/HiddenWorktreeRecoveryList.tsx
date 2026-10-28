@@ -33,12 +33,12 @@ export default function HiddenWorktreeRecoveryList({
   const headingId = useId()
   const listRef = useRef<HTMLDivElement>(null)
   const hidden = getHiddenImportableExternalWorktrees(detected)
-  const normalizedQuery = query.trim().toLocaleLowerCase()
+  const normalizedQuery = query.trim().toLowerCase()
   const filtered = normalizedQuery
     ? hidden.filter(
         (worktree) =>
-          worktree.displayName.toLocaleLowerCase().includes(normalizedQuery) ||
-          worktree.path.toLocaleLowerCase().includes(normalizedQuery)
+          worktree.displayName.toLowerCase().includes(normalizedQuery) ||
+          worktree.path.toLowerCase().includes(normalizedQuery)
       )
     : hidden
   const discoveredCount = hidden.length + getVisibleNonOrcaWorktrees(detected).length

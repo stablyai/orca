@@ -53,8 +53,6 @@ function makeTargetState(
     folderWorkspaces: [],
     projectGroups: [],
     repos: [],
-    endpointProjects: [],
-    endpointProjectHostSetups: [],
     worktreesByRepo: {},
     ...overrides
   }

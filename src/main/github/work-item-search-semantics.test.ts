@@ -57,18 +57,18 @@ it.each([
 it.each([
   [
     'is:draft',
-    'is:pr is:open draft:true sort:created-desc',
+    'is:open draft:true sort:created-desc',
     'repo:fixture/repo is:pull-request is:open draft:true'
   ],
   [
     'is:pr is:closed',
-    'is:pr is:closed -is:merged sort:created-desc',
+    'is:closed -is:merged sort:created-desc',
     'repo:fixture/repo is:pull-request is:closed -is:merged'
   ],
-  ['is:merged', 'is:pr is:merged sort:created-desc', 'repo:fixture/repo is:pull-request is:merged'],
+  ['is:merged', 'is:merged sort:created-desc', 'repo:fixture/repo is:pull-request is:merged'],
   [
     'review-requested:"some user" reviewed-by:someone',
-    'is:pr review-requested:"some user" reviewed-by:someone sort:created-desc',
+    'review-requested:"some user" reviewed-by:someone sort:created-desc',
     'repo:fixture/repo is:pull-request review-requested:"some user" reviewed-by:someone'
   ]
 ])('keeps rich PR lists and full count predicates for %s', async (query, prSearch, countSearch) => {

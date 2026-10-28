@@ -11,6 +11,7 @@ import {
   uploadDiagnosticBundle,
   type DiagnosticsStatus
 } from '../observability'
+import { translateMain } from '../i18n/main-i18n'
 import type { CollectedBundle } from '../observability/bundle'
 import type { UploadBundleResult } from '../observability/diagnostic-bundle-upload'
 import {
@@ -172,14 +173,29 @@ function isTicketId(value: unknown): value is string {
 async function confirmBundleUpload(bundle: CollectedBundle): Promise<boolean> {
   const result = await dialog.showMessageBox({
     type: 'question',
-    buttons: ['Send', 'Cancel'],
+    buttons: [
+      translateMain('auto.main.ipc.diagnostics.uploadConfirm.send', 'Send'),
+      translateMain('auto.main.ipc.diagnostics.uploadConfirm.cancel', 'Cancel')
+    ],
     defaultId: 1,
     cancelId: 1,
-    title: 'Send this file to support?',
-    message: 'This uploads the redacted app diagnostics file you reviewed.',
-    detail: `Diagnostic ID: ${bundle.bundleSubmissionId}\nDiagnostic records: ${bundle.spanCount}\nSize: ${Math.round(
-      bundle.bytes / 1024
-    )} KB`
+    title: translateMain(
+      'auto.main.ipc.diagnostics.uploadConfirm.title',
+      'Send this file to support?'
+    ),
+    message: translateMain(
+      'auto.main.ipc.diagnostics.uploadConfirm.message',
+      'This uploads the redacted app diagnostics file you reviewed.'
+    ),
+    detail: translateMain(
+      'auto.main.ipc.diagnostics.uploadConfirm.detail',
+      'Diagnostic ID: {{id}}\nDiagnostic records: {{records}}\nSize: {{sizeKb}} KB',
+      {
+        id: bundle.bundleSubmissionId,
+        records: bundle.spanCount,
+        sizeKb: Math.round(bundle.bytes / 1024)
+      }
+    )
   })
   return result.response === 0
 }

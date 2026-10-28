@@ -5,6 +5,7 @@ import type { MobileSyntaxSegment } from '../session/mobile-file-syntax'
 import { formatPreviewByteLength } from './mobile-file-preview-request'
 import { scrollOffsetForPreviewLine } from './mobile-file-preview-line-column'
 import { buildMobileFilePreviewSyntax } from './mobile-file-preview-syntax'
+import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import { filePreviewStyles as styles } from './mobile-file-preview-styles'
 
 export function splitSyntaxSegmentsIntoLines(
@@ -47,6 +48,7 @@ export function MobileFilePreviewSourceText({
   initialScrollRatio?: number
   onScrollRatioChange?: (ratio: number) => void
 }) {
+  useMobileColorScheme()
   const scrollRef = useRef<ScrollView>(null)
   const contentHeightRef = useRef(0)
   const layoutHeightRef = useRef(0)
@@ -192,6 +194,7 @@ export function MobileFilePreviewSourceText({
 }
 
 export function MobileFilePreviewTruncatedNote({ byteLength }: { byteLength: number }) {
+  useMobileColorScheme()
   return (
     <Text style={styles.truncatedNote}>
       Preview truncated. File size: {formatPreviewByteLength(byteLength)}.

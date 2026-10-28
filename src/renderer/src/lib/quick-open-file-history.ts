@@ -106,6 +106,42 @@ export function recordQuickOpenFileVisit(state: AppState, file: OpenFile | undef
       MAX_HISTORY_FILES
     )
   )
+  saveHistories(map)
+}
+
+/**
+ * Adds each re-keyed history beside its source, at the same recency. A full store makes room by
+ * dropping copied sources, oldest first, never another scope. Throws when storage refuses the write.
+ */
+export function copyQuickOpenHistoryScopes(copyScopeOf: (scope: string) => string | null): boolean {
+  const map = historyMap()
+  const next = new Map<string, readonly string[]>()
+  const copiedSources: string[] = []
+  for (const [scope, files] of map) {
+    next.set(scope, files)
+    const copy = copyScopeOf(scope)
+    if (copy !== null && !map.has(copy) && !next.has(copy)) {
+      next.set(copy, files)
+      copiedSources.push(scope)
+    }
+  }
+  if (copiedSources.length === 0) {
+    return false
+  }
+  for (const source of copiedSources) {
+    if (next.size <= MAX_HISTORY_SCOPES) {
+      break
+    }
+    next.delete(source)
+  }
+  histories = next
+  if (!saveHistories(next)) {
+    throw new Error('quick_open_history_not_saved')
+  }
+  return true
+}
+
+function saveHistories(map: Map<string, readonly string[]>): boolean {
   while (map.size > MAX_HISTORY_SCOPES) {
     const oldest = map.keys().next().value
     if (oldest === undefined) {
@@ -113,8 +149,12 @@ export function recordQuickOpenFileVisit(state: AppState, file: OpenFile | undef
     }
     map.delete(oldest)
   }
+  let saved = true
   try {
     localStorage.setItem(STORAGE_KEY, JSON.stringify([...map]))
-  } catch {}
+  } catch {
+    saved = false
+  }
   listeners.forEach((listener) => listener())
+  return saved
 }

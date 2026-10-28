@@ -25,11 +25,13 @@ import type { StructuredAgentSessionPendingSend } from './structured-agent-sessi
 import {
   newestSteerableQueuedMessageCard,
   projectQueuedMessageCards,
-  pendingQueueSendsOnTheirWay,
   queuedMessagesQueuePause,
-  sendingQueuedMessageCards,
   type QueuedMessageCard
-} from './structured-agent-session-queued-cards'
+} from '../../../../shared/structured-agent-session-queued-cards'
+import {
+  pendingQueueSendsOnTheirWay,
+  sendingQueuedMessageCards
+} from './structured-agent-session-sending-queued-cards'
 import type {
   AdmitStructuredAgentSessionAction,
   CaptureStructuredAgentSessionPresentation,

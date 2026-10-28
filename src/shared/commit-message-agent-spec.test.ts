@@ -45,6 +45,8 @@ describe('COMMIT_MESSAGE_AGENT_SPECS', () => {
     ).toEqual([
       '--prompt',
       'Name a branch for adding login',
+      '--output-format',
+      'stream-json',
       '--model',
       'kimi-code/kimi-for-coding'
     ])

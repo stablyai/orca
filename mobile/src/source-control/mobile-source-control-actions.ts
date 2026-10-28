@@ -1,4 +1,9 @@
-import type { MobileGitUpstreamStatus } from './mobile-git-status'
+import type { GitConflictOperation } from '../../../src/shared/git-status-types'
+import { deriveDropdownActionContext } from '../../../src/shared/source-control-dropdown-action-context'
+import { buildCommitDropdownItems } from '../../../src/shared/source-control-dropdown-commit-items'
+import type { DropdownItem } from '../../../src/shared/source-control-dropdown-item-types'
+import { buildRemoteDropdownItems } from '../../../src/shared/source-control-dropdown-remote-items'
+import type { SourceControlPrimaryActionDecisionInputs } from '../../../src/shared/source-control-primary-action-decision-types'
 
 // String identifiers keep native lucide imports out of this module.
 export type MobileSourceControlActionIcon =
@@ -24,19 +29,22 @@ export type MobileSourceControlAction = {
 }
 
 export type MobileSourceControlActionArgs = {
-  commitMessage: string
-  stagedCount: number
-  upstream: MobileGitUpstreamStatus | null
-  upstreamKnown: boolean
+  // The commit area's facts in desktop's shape, so rows enable and read exactly as desktop's menu.
+  decision: SourceControlPrimaryActionDecisionInputs
+  conflictOperation?: GitConflictOperation
+  rebaseBaseRef: string | null
   busyAction: string | null
   openingPath: string | null
   openingBranchPath: string | null
   prAvailable: boolean
+  prHint?: string
+  forcePushBlockedReason?: string
   handlers: {
     commit: () => void
-    commitPush: () => void
+    commitPush: (forceWithLease: boolean) => void
     commitSync: () => void
     push: () => void
+    forcePush: () => void
     pull: () => void
     sync: () => void
     fetch: () => void
@@ -53,78 +61,53 @@ export type MobileSourceControlActionArgs = {
 export function buildMobileSourceControlActions(
   args: MobileSourceControlActionArgs
 ): MobileSourceControlAction[] {
-  const { commitMessage, stagedCount, upstream, upstreamKnown, handlers } = args
-  const hasMessage = commitMessage.trim().length > 0
-  const hasStaged = stagedCount > 0
-  const hasUpstream = upstream?.hasUpstream === true
-  const ahead = upstream?.ahead ?? 0
-  const behind = upstream?.behind ?? 0
+  const { handlers } = args
+  const ctx = deriveDropdownActionContext({
+    ...args.decision,
+    conflictOperation: args.conflictOperation,
+    rebaseBaseRef: args.rebaseBaseRef
+  })
+  const { commit, commitPush, commitSync } = buildCommitDropdownItems(ctx)
+  const { push, forcePush, pull, fastForward, sync, rebase, fetch, publish } =
+    buildRemoteDropdownItems(ctx)
   const busy =
     args.busyAction !== null || args.openingPath !== null || args.openingBranchPath !== null
-  const commitHint = !hasStaged
-    ? 'Stage at least one file'
-    : !hasMessage
-      ? 'Enter a commit message'
-      : undefined
-  const remoteHint = !upstreamKnown
-    ? 'Checking branch status...'
-    : hasUpstream
-      ? undefined
-      : 'Publish Branch first'
-  const prHint = !upstreamKnown
-    ? 'Checking branch status...'
-    : !args.prAvailable
-      ? 'Pull requests are not available for this repo'
-      : undefined
+  const blockForce = (item: DropdownItem): DropdownItem =>
+    args.forcePushBlockedReason
+      ? { ...item, disabled: true, title: args.forcePushBlockedReason }
+      : item
+  const row = (
+    item: DropdownItem,
+    iconKey: MobileSourceControlActionIcon,
+    actionId: string,
+    onPress: () => void
+  ): MobileSourceControlAction => ({
+    label: item.label,
+    iconKey,
+    disabled: busy || item.disabled,
+    // Mobile has no tooltips: show why a row is disabled, and always what Force Push replaces.
+    hint: item.disabled || item.kind === 'force_push' ? item.title : undefined,
+    loading: args.busyAction === actionId,
+    skipAutoClose: true,
+    onPress
+  })
 
   return [
-    {
-      label: 'Commit',
-      iconKey: 'commit',
-      disabled: busy || !!commitHint,
-      hint: commitHint,
-      loading: args.busyAction === 'commit',
-      skipAutoClose: true,
-      onPress: handlers.commit
-    },
-    {
-      label: 'Commit & Push',
-      iconKey: 'push',
-      disabled: busy || !!commitHint || !upstreamKnown || !hasUpstream,
-      hint: commitHint ?? remoteHint,
-      loading: args.busyAction === 'commit-push',
-      skipAutoClose: true,
-      onPress: handlers.commitPush
-    },
-    {
-      label: 'Commit & Sync',
-      iconKey: 'sync',
-      disabled: busy || !!commitHint || !upstreamKnown || !hasUpstream || behind === 0,
-      hint:
-        commitHint ??
-        (!upstreamKnown || !hasUpstream
-          ? remoteHint
-          : behind === 0
-            ? 'Nothing to pull'
-            : undefined),
-      loading: args.busyAction === 'commit-sync',
-      skipAutoClose: true,
-      onPress: handlers.commitSync
-    },
-    {
-      label: ahead > 0 ? `Push (${ahead})` : 'Push',
-      iconKey: 'push',
-      disabled: busy || !upstreamKnown || !hasUpstream || ahead === 0,
-      hint: !hasUpstream ? remoteHint : ahead === 0 ? 'Nothing to push' : undefined,
-      loading: args.busyAction === 'push',
-      skipAutoClose: true,
-      onPress: handlers.push
-    },
+    row(commit, 'commit', 'commit', handlers.commit),
+    row(
+      ctx.shouldForcePushWithLease ? blockForce(commitPush) : commitPush,
+      'push',
+      'commit-push',
+      () => handlers.commitPush(ctx.shouldForcePushWithLease)
+    ),
+    row(commitSync, 'sync', 'commit-sync', handlers.commitSync),
+    row(push, 'push', 'push', handlers.push),
+    row(blockForce(forcePush), 'push', 'force-push', handlers.forcePush),
     {
       label: 'Create PR',
       iconKey: 'pr',
       disabled: busy || !args.prAvailable,
-      hint: prHint,
+      hint: args.prHint,
       loading: args.busyAction === 'create-pr',
       skipAutoClose: true,
       onPress: handlers.createPr
@@ -132,79 +115,18 @@ export function buildMobileSourceControlActions(
     {
       label: 'Push & Create PR',
       iconKey: 'pr',
-      disabled: busy || !upstreamKnown || !hasUpstream || ahead === 0 || !args.prAvailable,
-      hint: prHint ?? (!hasUpstream ? remoteHint : undefined),
+      disabled: busy || push.disabled || !args.prAvailable,
+      hint: args.prHint ?? (push.disabled ? push.title : undefined),
       loading: args.busyAction === 'push-create-pr',
       skipAutoClose: true,
       onPress: handlers.pushAndCreatePr
     },
-    {
-      label: behind > 0 ? `Pull (${behind})` : 'Pull',
-      iconKey: 'pull',
-      disabled: busy || !upstreamKnown || !hasUpstream || behind === 0,
-      hint: !hasUpstream ? remoteHint : behind === 0 ? 'Nothing to pull' : undefined,
-      loading: args.busyAction === 'pull',
-      skipAutoClose: true,
-      onPress: handlers.pull
-    },
-    {
-      label: ahead > 0 || behind > 0 ? `Sync (↓${behind} ↑${ahead})` : 'Sync',
-      iconKey: 'sync',
-      disabled: busy || !upstreamKnown || !hasUpstream || (ahead === 0 && behind === 0),
-      hint:
-        !upstreamKnown || !hasUpstream
-          ? remoteHint
-          : ahead === 0 && behind === 0
-            ? 'Branch is up to date'
-            : undefined,
-      loading: args.busyAction === 'sync',
-      skipAutoClose: true,
-      onPress: handlers.sync
-    },
-    {
-      label: 'Fetch',
-      iconKey: 'fetch',
-      disabled: busy,
-      loading: args.busyAction === 'fetch',
-      skipAutoClose: true,
-      onPress: handlers.fetch
-    },
-    {
-      label: 'Publish Branch',
-      iconKey: 'publish',
-      disabled: busy || !upstreamKnown || hasUpstream,
-      hint: !upstreamKnown
-        ? 'Checking branch status...'
-        : hasUpstream
-          ? 'Branch is already published'
-          : undefined,
-      loading: args.busyAction === 'publish',
-      skipAutoClose: true,
-      onPress: handlers.publish
-    },
-    {
-      label: behind > 0 ? `Fast-forward (${behind})` : 'Fast-forward',
-      iconKey: 'pull',
-      disabled: busy || !upstreamKnown || !hasUpstream || behind === 0 || ahead > 0,
-      hint: !hasUpstream
-        ? remoteHint
-        : behind === 0
-          ? 'Nothing to fast-forward'
-          : ahead > 0
-            ? 'Local commits would be lost; pull instead'
-            : undefined,
-      loading: args.busyAction === 'fast-forward',
-      skipAutoClose: true,
-      onPress: handlers.fastForward
-    },
-    {
-      label: 'Rebase onto base',
-      iconKey: 'branch',
-      disabled: busy,
-      loading: args.busyAction === 'rebase',
-      skipAutoClose: true,
-      onPress: handlers.rebase
-    },
+    row(pull, 'pull', 'pull', handlers.pull),
+    row(fastForward, 'pull', 'fast-forward', handlers.fastForward),
+    row(sync, 'sync', 'sync', handlers.sync),
+    row(rebase, 'branch', 'rebase', handlers.rebase),
+    row(fetch, 'fetch', 'fetch', handlers.fetch),
+    row(publish, 'publish', 'publish', handlers.publish),
     {
       label: 'Switch branch',
       iconKey: 'branch',

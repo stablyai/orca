@@ -1,11 +1,36 @@
 import { describe, expect, it } from 'vitest'
+import { deriveComposerAutocomplete } from '../../../../../src/shared/native-chat-composer-autocomplete'
+import type { NativeChatSkillDiscoverySnapshot } from '../../../../../src/shared/native-chat/input/native-chat-picker-items'
 import {
+  boundedMenuItems,
   draftAfterSkillEdit,
   narrowedMenuItems,
   leadingSkillToken,
+  mobileComposerCatalog,
   mobileComposerSkillTokens,
-  mobileComposerSlashItems
+  type MobileComposerStructuredCatalog
 } from './mobile-native-chat-composer-menu'
+
+function mobileComposerSlashItems(input: {
+  agent: string
+  structured: MobileComposerStructuredCatalog | undefined
+  query: string
+  discovery?: NativeChatSkillDiscoverySnapshot
+}) {
+  const catalog = mobileComposerCatalog(input)
+  const draft = `/${input.query}`
+  const result = deriveComposerAutocomplete(
+    draft,
+    draft.length,
+    catalog.commands,
+    catalog.discovery.skills,
+    catalog.profile,
+    catalog.discovery,
+    null,
+    catalog.sessionSkills
+  )
+  return result.mode === 'slash' ? boundedMenuItems(result.items) : []
+}
 
 const reported = [
   { name: 'compact', kind: 'command' as const, description: 'Compact the chat' },
@@ -30,15 +55,6 @@ describe('mobileComposerSlashItems', () => {
     ])
   })
 
-  it('narrows by the typed query across both groups', () => {
-    const items = mobileComposerSlashItems({
-      agent: 'claude',
-      structured: { reported, conversationCommands: [] },
-      query: 'rev'
-    })
-    expect(items.map((item) => item.token)).toEqual(['/review-pr'])
-  })
-
   it('names skills the way the agent invokes them', () => {
     const items = mobileComposerSlashItems({
       agent: 'codex',
@@ -58,6 +74,34 @@ describe('mobileComposerSlashItems', () => {
     expect(items.some((item) => item.kind === 'skill')).toBe(false)
   })
 
+  it("lists the host's scanned skills until the session reports its own", () => {
+    const discovery: NativeChatSkillDiscoverySnapshot = {
+      status: 'ready',
+      skills: [
+        {
+          id: 'triage',
+          name: 'triage',
+          description: 'Triage an issue',
+          providers: ['agent-skills'],
+          sourceKind: 'repo',
+          sourceLabel: 'Repo',
+          rootPath: '/repo/.agents/skills',
+          directoryPath: '/repo/.agents/skills/triage',
+          skillFilePath: '/repo/.agents/skills/triage/SKILL.md',
+          installed: true,
+          updatedAt: null
+        }
+      ]
+    }
+    const tokens = (structured: MobileComposerStructuredCatalog | undefined) =>
+      mobileComposerSlashItems({ agent: 'claude', structured, query: '', discovery })
+        .filter((item) => item.kind === 'skill')
+        .map((item) => item.token)
+    expect(tokens(undefined)).toEqual(['/triage'])
+    expect(tokens({ reported: undefined, conversationCommands: [] })).toEqual(['/triage'])
+    expect(tokens({ reported, conversationCommands: [] })).toEqual(['/research', '/review-pr'])
+  })
+
   it('keeps a terminal-backed chat on its curated commands', () => {
     const items = mobileComposerSlashItems({ agent: 'claude', structured: undefined, query: '' })
     expect(items.length).toBeGreaterThan(0)
@@ -74,7 +118,7 @@ describe('mobileComposerSkillTokens', () => {
     const structured = { reported: many, conversationCommands: [] }
     const drawn = mobileComposerSlashItems({ agent: 'claude', structured, query: '' })
     expect(drawn.filter((item) => item.kind === 'skill')).toHaveLength(10)
-    const tokens = mobileComposerSkillTokens({ agent: 'claude', structured })
+    const tokens = mobileComposerSkillTokens(mobileComposerCatalog({ agent: 'claude', structured }))
     expect(tokens.size).toBe(60)
     expect(tokens.has('/skill-59')).toBe(true)
   })

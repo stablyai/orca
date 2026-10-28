@@ -70,6 +70,15 @@ function settleDesktopActivation(): void {
   })
 }
 
+/** E2E only: a serve host with no browser of its own, as the WSL distro's server is. Never packaged. */
+function e2eHeadlessServeWithoutBrowser(): boolean {
+  return (
+    !app.isPackaged &&
+    process.env.ORCA_E2E_HEADLESS === '1' &&
+    process.env.ORCA_E2E_HEADLESS_SERVE_WITHOUT_BROWSER === '1'
+  )
+}
+
 function installRuntimeRpc(
   runtime: RuntimeService,
   serveOptions: ReturnType<typeof getServeOptions> | null
@@ -164,7 +173,7 @@ async function launchServeMode(
     await placeUnshownLiveTerminalsBestEffort(runtime)
   }
   // Headless hosts need display-backed offscreen WebContents; advertise browser capability only when usable.
-  if (state.headlessBrowserDisplayAvailable) {
+  if (state.headlessBrowserDisplayAvailable && !e2eHeadlessServeWithoutBrowser()) {
     runtime.setOffscreenBrowserBackend(
       new OffscreenBrowserBackend(browserManager, {
         getAgentBrowserBridge: () => state.agentBrowserBridge,

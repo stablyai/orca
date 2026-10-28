@@ -158,7 +158,7 @@ export function buildRemoteSettingsSections(
       : []),
     // Collapse host-specific repo rows to one project entry using the same inputs as settings panes.
     ...buildSettingsProjectList(repos, projectGrouping).map((settingsProject) => {
-      const { project, representativeRepoId, setups } = settingsProject
+      const { project, representativeRepoId, setups, checkoutLabel } = settingsProject
       const representativeRepo = reposById.get(representativeRepoId) ?? repos[0]
       const hostSummary =
         setups.length > 1
@@ -170,7 +170,7 @@ export function buildRemoteSettingsSections(
           : (setups[0]?.path ?? representativeRepo.path)
       return {
         id: `repo-${representativeRepoId}`,
-        title: project.displayName,
+        title: checkoutLabel ?? project.displayName,
         description: `${getRepoKindLabel(project)} • ${hostSummary}`,
         icon: SlidersHorizontal,
         searchEntries: getRepositoryPaneSearchEntries(representativeRepo, {

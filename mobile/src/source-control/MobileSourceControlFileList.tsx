@@ -9,6 +9,7 @@ import type {
   MobileGitStatusEntryView
 } from './mobile-source-control-screen-state'
 import type { MobileSourceControlState } from './use-mobile-source-control-state'
+import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import { styles } from './mobile-source-control-styles'
 import { hubStyles } from './mobile-source-control-hub-styles'
 
@@ -37,6 +38,7 @@ export type FileListState = Pick<
 >
 
 export function MobileSourceControlFileList({ state }: { state: FileListState }) {
+  const colorScheme = useMobileColorScheme()
   const sections: FileSection[] = state.sections.map((section) => ({
     ...section,
     key: section.id
@@ -57,6 +59,7 @@ export function MobileSourceControlFileList({ state }: { state: FileListState })
     <SectionList<FileEntry, FileSection>
       style={hubStyles.tabBody}
       sections={sections}
+      extraData={colorScheme}
       renderItem={({ item }) =>
         isWorkingTreeEntry(item) ? (
           renderFileRow({ item })

@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { Text, TextInput, View } from 'react-native'
 import type { MobileFilePreviewLineColumn } from './mobile-file-preview-line-column'
 import { textOffsetForLineColumn } from './mobile-file-preview-line-column'
+import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import { filePreviewStyles as styles } from './mobile-file-preview-styles'
 
 type Props = {
@@ -19,6 +20,7 @@ export function MobileFilePreviewEditableSource({
   saveError,
   onDraftChange
 }: Props) {
+  useMobileColorScheme()
   const selectionTargetKey = lineColumn
     ? `${title}:${lineColumn.line}:${lineColumn.column ?? ''}`
     : ''

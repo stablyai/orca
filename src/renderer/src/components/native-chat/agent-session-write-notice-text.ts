@@ -143,6 +143,7 @@ const SENTENCES: Record<AgentSessionWriteNoticeSentence, () => string> = {
     translate('components.native-chat.writeNotice.clearAfterSending', COPY.clearAfterSending),
   compactAfterSending: () =>
     translate('components.native-chat.writeNotice.compactAfterSending', COPY.compactAfterSending),
+  pendingWork: () => translate('components.native-chat.writeNotice.pendingWork', COPY.pendingWork),
   queueTooLarge: () =>
     translate('components.native-chat.writeNotice.queueTooLarge', COPY.queueTooLarge),
   shrinkQueue: () => translate('components.native-chat.writeNotice.shrinkQueue', COPY.shrinkQueue),

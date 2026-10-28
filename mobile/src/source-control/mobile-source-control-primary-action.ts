@@ -1,3 +1,4 @@
+import type { SourceControlPrimaryActionDecisionInputs } from '../../../src/shared/source-control-primary-action-decision-types'
 import {
   resolveSourceControlCommitAreaPrimaryActionDecision,
   type SourceControlCommitAreaPrimaryActionDecision,
@@ -66,6 +67,13 @@ export function resolveMobileSourceControlReviewInputs(
   return state.kind === 'loading' ? { ...NO_REVIEW, isPRStateLoading: true } : NO_REVIEW
 }
 
+// Mobile pushes without a review's saved push target, so a force push there could overwrite the wrong branch.
+export function getMobileForcePushBlockedReason(
+  review: MobileSourceControlReviewInputs | undefined
+): string | undefined {
+  return review?.pushTarget ? "Force push this pull request's branch from desktop" : undefined
+}
+
 export type MobileSourceControlPrimaryActionArgs = {
   status: MobileGitStatusResult | null
   hasUnresolvedConflicts: boolean
@@ -81,9 +89,10 @@ export type MobileSourceControlPrimaryActionArgs = {
   handlers: MobileSourceControlPrimaryActionHandlers
 }
 
-export function buildMobileSourceControlPrimaryAction(
-  args: MobileSourceControlPrimaryActionArgs
-): MobileSourceControlPrimaryAction {
+// The commit area's facts in desktop's decision shape; the primary action and the action sheet both read them.
+export function buildMobileSourceControlDecisionInputs(
+  args: Omit<MobileSourceControlPrimaryActionArgs, 'handlers'>
+): SourceControlPrimaryActionDecisionInputs {
   const review = args.review ?? NO_REVIEW
   // Mobile reads upstream status untargeted, so a review with its own push target (fork checkouts) is not gated here.
   const hasReviewLink =
@@ -97,7 +106,7 @@ export function buildMobileSourceControlPrimaryAction(
     upstreamStatus: args.status?.upstreamStatus,
     branchName: args.status?.branch?.replace(/^refs\/heads\//, '')
   })
-  const decision = resolveSourceControlCommitAreaPrimaryActionDecision({
+  return {
     stagedCount: args.stagedCount,
     hasUnstagedChanges: args.unstagedCount > 0,
     hasStageableChanges: args.stageablePaths.length > 0,
@@ -114,16 +123,27 @@ export function buildMobileSourceControlPrimaryAction(
     prState: reviewTarget.hostedReviewStateForActions,
     isPRStateLoading: review.isPRStateLoading,
     canPushLinkedReviewWithoutUpstream: reviewTarget.canUseHostedReviewPushTarget
-  })
+  }
+}
+
+export function buildMobileSourceControlPrimaryAction(
+  args: MobileSourceControlPrimaryActionArgs
+): MobileSourceControlPrimaryAction {
+  const decision = resolveSourceControlCommitAreaPrimaryActionDecision(
+    buildMobileSourceControlDecisionInputs(args)
+  )
   const ioBusy =
     args.busyAction !== null || args.openingPath !== null || args.openingBranchPath !== null
-  const disabled = decision.disabled || ioBusy
+  const forcePushBlockedReason = decision.requiresForceWithLease
+    ? getMobileForcePushBlockedReason(args.review)
+    : undefined
+  const disabled = decision.disabled || ioBusy || forcePushBlockedReason !== undefined
 
   return {
     kind: decision.kind,
     label: getMobilePrimaryActionLabel(decision),
     accessibilityLabel: getMobilePrimaryActionLabel(decision),
-    accessibilityHint: getMobilePrimaryActionHint(decision),
+    accessibilityHint: forcePushBlockedReason ?? getMobilePrimaryActionHint(decision),
     disabled,
     loading: isLoadingDecision(decision, args.busyAction),
     requiresForceWithLease: decision.requiresForceWithLease,
@@ -169,7 +189,7 @@ function getInFlightRemoteOpKind(
 }
 
 export function getMobileBranchCommitsAhead(
-  args: MobileSourceControlPrimaryActionArgs
+  args: Pick<MobileSourceControlPrimaryActionArgs, 'branchCompareResult' | 'status'>
 ): number | undefined {
   const summary = args.branchCompareResult?.summary
   if (summary?.status === 'ready' && summary.commitsAhead !== undefined) {

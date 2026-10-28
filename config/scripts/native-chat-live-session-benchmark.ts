@@ -7,7 +7,7 @@ import type { NativeChatMessage, NativeChatSession } from '../../src/shared/nati
 import { getVerifiedNativeChatCommands } from '../../src/shared/native-chat-agent-profiles'
 import { surfaceSkillInvocationUserTurns } from '../../src/shared/native-chat/native-chat-command-envelope'
 import { prepareNativeChatLiveMessages } from '../../src/renderer/src/components/native-chat/native-chat-live-message-preparation'
-import { mergeNativeChatLiveSession } from '../../src/renderer/src/components/native-chat/native-chat-live-status'
+import { mergeNativeChatLiveSession } from '../../src/shared/native-chat/native-chat-live-status'
 import { assembleNativeChatSession } from '../../src/renderer/src/components/native-chat/native-chat-session-assembler'
 
 type Operation = (index: number) => number

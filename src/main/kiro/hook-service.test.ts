@@ -141,7 +141,71 @@ describe('KiroHookService', () => {
     })
   })
 
-  it.each([{ hooks: [] }, { hooks: 'keep this' }, { hooks: { stop: { command: 'say done' } } }])(
+  // Shape `kiro-cli agent upgrade` (2.29+) writes; edits to `hooks` keep the file "universal".
+  it('converges list-form hooks in place and removes only its entries, locally and remotely', async () => {
+    const orcaHook = (trigger: string, command: string) => ({
+      name: `${trigger}-0`,
+      trigger,
+      ...(trigger === 'preToolUse' ? { matcher: '*' } : {}),
+      action: { type: 'command', command },
+      timeout: 10
+    })
+    const userHook = {
+      name: 'preToolUse-0',
+      trigger: 'preToolUse',
+      matcher: 'execute_bash',
+      action: { type: 'command', command: 'audit.sh' },
+      timeout: 10
+    }
+    const stale = `/bin/sh '${join(home, '.orca', 'agent-hooks', 'kiro-hook.sh')}'`
+    const extra = {
+      permissions: { rules: [{ capability: 'shell', effect: 'allow' }] },
+      kiroUpgrade: { notes: [] }
+    }
+    writeAgent('reviewer', {
+      name: 'reviewer',
+      hooks: [orcaHook('agentSpawn', stale), userHook, orcaHook('preToolUse', stale)],
+      ...extra
+    })
+    writeAgent('upgraded', { name: 'upgraded', permissions: extra.permissions })
+
+    const service = new KiroHookService()
+    expect(service.getStatus()).toMatchObject({ state: 'partial', managedHooksPresent: true })
+    expect(service.install().state).toBe('installed')
+    const installed = readAgent('reviewer')
+    const hooks = installed.hooks
+    if (!Array.isArray(hooks)) {
+      throw new Error('Expected hooks list')
+    }
+    expect(hooks.map((hook) => hook.trigger)).toEqual([
+      'agentSpawn',
+      'preToolUse',
+      'preToolUse',
+      'userPromptSubmit',
+      'postToolUse',
+      'stop'
+    ])
+    expect(hooks[1]).toEqual(userHook)
+    expect(hooks[2]).toMatchObject({ matcher: '*', timeout: 10, action: { type: 'command' } })
+    expect(hooks.filter((hook) => hook.action.command === stale)).toEqual([])
+    expect(installed).toMatchObject(extra)
+    expect(readAgent('upgraded').hooks).toHaveLength(KIRO_HOOK_EVENTS.length)
+
+    expect(service.remove().state).toBe('not_installed')
+    expect(readAgent('reviewer')).toEqual({ name: 'reviewer', hooks: [userHook], ...extra })
+    expect(readAgent('upgraded')).toEqual({ name: 'upgraded', permissions: extra.permissions })
+
+    expect(await service.installRemote(createManagedHookLocalFilesystem(), home)).toMatchObject({
+      state: 'installed'
+    })
+    expect(readAgent('reviewer').hooks).toHaveLength(KIRO_HOOK_EVENTS.length + 1)
+  })
+
+  it.each([
+    { hooks: ['say done'] },
+    { hooks: 'keep this' },
+    { hooks: { stop: { command: 'say done' } } }
+  ])(
     'preserves unsupported user hook structures and reports them locally and remotely: %j',
     async ({ hooks }) => {
       writeAgent('unsupported', { name: 'unsupported', hooks })

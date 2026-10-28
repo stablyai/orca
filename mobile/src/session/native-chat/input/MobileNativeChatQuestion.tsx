@@ -3,6 +3,8 @@ import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native'
 import { ArrowUp, Check, CircleHelp } from 'lucide-react-native'
 import { MobileNativeChatCardHeaderAction } from '../../MobileNativeChatCardHeaderAction'
 import { colors, radii, spacing, typography } from '../../../theme/mobile-theme'
+import { themedStyleSheet } from '../../../theme/themed-styles'
+import { useMobileColorScheme } from '../../../theme/use-mobile-color-scheme'
 import { mobileNativeChatInputStyles } from '../composer/mobile-native-chat-input-styles'
 import {
   formatQuestionAnswerByIndexes,
@@ -26,6 +28,7 @@ export function MobileNativeChatQuestion({
   onCancel,
   onCollapse
 }: Props): React.JSX.Element {
+  useMobileColorScheme()
   const [selectedOptionIndexes, setSelectedOptionIndexes] = useState<number[]>([])
   const [freeText, setFreeText] = useState(() => question.freeTextInput?.initialValue ?? '')
   const [sending, setSending] = useState(false)
@@ -209,7 +212,7 @@ export function MobileNativeChatQuestion({
   )
 }
 
-const styles = StyleSheet.create({
+const styles = themedStyleSheet(() => ({
   card: {
     marginHorizontal: spacing.lg,
     marginVertical: spacing.sm,
@@ -313,4 +316,4 @@ const styles = StyleSheet.create({
   pressed: {
     opacity: 0.7
   }
-})
+}))

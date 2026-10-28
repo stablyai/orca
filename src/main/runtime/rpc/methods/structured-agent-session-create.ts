@@ -1,4 +1,4 @@
-import { seededPermissionMode } from '../../../../shared/native-chat-session-option-defaults'
+import { seededPermissionMode } from '../../../../shared/native-chat/input/native-chat-session-option-defaults'
 // Resolve the host launch identity, then commit an at-rest create or the compatible acquired path.
 
 import { assertAgentPromptRequestActive } from '../../orca-runtime-core'

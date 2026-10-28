@@ -14,7 +14,7 @@ import {
   type PrimaryActionInputs
 } from './source-control-primary-action'
 import { resolveDropdownItems } from './source-control-dropdown-items'
-import type { DropdownActionKind } from './source-control-dropdown-item-types'
+import type { DropdownActionKind } from '../../../../shared/source-control-dropdown-item-types'
 import { TooltipProvider } from '@/components/ui/tooltip'
 import { deriveSourceControlPushRecovery } from './source-control/sync/push-recovery'
 

@@ -23,29 +23,6 @@ function grantIdOf(params: unknown): string | undefined {
 }
 
 describe('a granted host file outside every workspace', () => {
-  it('reads text through its grant', async () => {
-    runtimeEnvironmentCall.mockResolvedValue({
-      id: 'rpc-1',
-      ok: true,
-      result: {
-        worktree: 'wt-1',
-        relativePath: '/tmp/out.png',
-        content: 'log',
-        truncated: false,
-        byteLength: 3
-      },
-      _meta: { runtimeId: 'remote-runtime' }
-    })
-
-    await expect(readRuntimeFileContent(granted)).resolves.toEqual({
-      content: 'log',
-      isBinary: false
-    })
-    expect(runtimeEnvironmentCall).toHaveBeenCalledWith(
-      expect.objectContaining({ method: 'files.readTerminalArtifact', params: grantParams })
-    )
-  })
-
   it('previews a binary file through its grant', async () => {
     const preview = { content: 'iVBO', isBinary: true, isImage: true, mimeType: 'image/png' }
     runtimeEnvironmentCall.mockImplementation((args: { method: string }) =>
@@ -72,6 +49,7 @@ describe('a granted host file outside every workspace', () => {
 
   // Why: Reload, Compare and Keep My Edits read a file whose host change staled the tab's grant.
   it('renews a stale grant for the same path and reads through the new one', async () => {
+    const grantedText = { ...granted, filePath: '/tmp/out.txt', relativePath: '/tmp/out.txt' }
     const meta = { runtimeId: 'remote-runtime' }
     runtimeEnvironmentCall.mockImplementation(
       async (args: { method: string; params?: unknown }) => {
@@ -82,13 +60,13 @@ describe('a granted host file outside every workspace', () => {
             result: {
               worktree: 'wt-1',
               relativePath: null,
-              absolutePath: '/tmp/out.png',
+              absolutePath: '/tmp/out.txt',
               exists: true,
               isDirectory: false,
               openTarget: {
                 kind: 'absolute-file',
                 provider: 'local',
-                absolutePath: '/tmp/out.png',
+                absolutePath: '/tmp/out.txt',
                 grantId: 'g-2'
               }
             },
@@ -105,20 +83,26 @@ describe('a granted host file outside every workspace', () => {
           : {
               id: 'rpc',
               ok: true,
-              result: { content: 'new', truncated: false, byteLength: 3 },
+              result: {
+                worktree: 'wt-1',
+                relativePath: '/tmp/out.txt',
+                content: 'new',
+                truncated: false,
+                byteLength: 3
+              },
               _meta: meta
             }
       }
     )
 
-    await expect(readRuntimeFileContent(granted)).resolves.toEqual({
+    await expect(readRuntimeFileContent(grantedText)).resolves.toEqual({
       content: 'new',
       isBinary: false
     })
     expect(runtimeEnvironmentCall).toHaveBeenCalledWith(
       expect.objectContaining({
         method: 'files.readTerminalArtifact',
-        params: { ...grantParams, grantId: 'g-2' }
+        params: { ...grantParams, absolutePath: grantedText.filePath, grantId: 'g-2' }
       })
     )
   })

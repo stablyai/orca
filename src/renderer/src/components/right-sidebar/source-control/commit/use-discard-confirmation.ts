@@ -124,11 +124,17 @@ export function useSourceControlDiscardConfirmation({
           const sample = result.failed.slice(0, 3).join(', ')
           const more = result.failed.length > 3 ? `, +${result.failed.length - 3} more` : ''
           toast.error(
-            translate(
-              'auto.components.right.sidebar.SourceControl.8eb3782a0c',
-              'Failed to discard {{value0}} file{{value1}}',
-              { value0: result.failed.length, value1: result.failed.length === 1 ? '' : 's' }
-            ),
+            result.failed.length === 1
+              ? translate(
+                  'auto.components.right.sidebar.SourceControl.discardFailedSingular',
+                  'Failed to discard {{count}} file',
+                  { count: result.failed.length }
+                )
+              : translate(
+                  'auto.components.right.sidebar.SourceControl.discardFailedPlural',
+                  'Failed to discard {{count}} files',
+                  { count: result.failed.length }
+                ),
             {
               description: firstMsg
                 ? translate(

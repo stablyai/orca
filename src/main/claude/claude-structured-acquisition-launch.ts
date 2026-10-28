@@ -19,7 +19,7 @@ import {
   type ClaudeSession,
   type ClaudeSessionExit,
   type ClaudeStructuredSessionAdapterDeps
-} from './claude-structured-session-state'
+} from './structured/claude-structured-session-state'
 import {
   claudeAcquisitionCleanupError,
   closeClaudePublishedSessionForDeps

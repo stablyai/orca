@@ -7,6 +7,11 @@ import {
 import { buildWslExecArgs, buildWslLoginShellCommand } from '../../shared/wsl-login-shell-command'
 import { quotePosixShell } from '../../shared/shell-argument-quoting'
 import { resolveClaudeCommand } from '../codex-cli/command'
+import {
+  isSpawnEnoent,
+  isWindowsOnlyAgentCommand,
+  windowsOnlyCliMessage
+} from '../codex-cli/windows-only-agent-cli'
 import { resolveWslExecutablePath } from '../wsl/wsl-executable-path'
 import { buildWindowsCommandInvocation } from './windows-command-invocation'
 import { terminateClaudeProcess } from './claude-login-process-termination'
@@ -46,7 +51,17 @@ export function runClaudeCommandProcess(
       args[1] === 'login'
     // WSL launches never need the host binary, so resolve it lazily.
     let cachedHostClaudeCommand: string | null = null
-    const hostClaudeCommand = (): string => (cachedHostClaudeCommand ??= resolveClaudeCommand())
+    const hostClaudeCommand = (): string => {
+      if (cachedHostClaudeCommand) {
+        return cachedHostClaudeCommand
+      }
+      const resolved = resolveClaudeCommand()
+      // A Windows-only result is never kept, so a later WSL install is found by the next resolve.
+      if (!isWindowsOnlyAgentCommand(resolved)) {
+        cachedHostClaudeCommand = resolved
+      }
+      return resolved
+    }
     // The visible-console wrapper relays the login PID so termination reaches it.
     const interactiveLogin = isWindowsHostInteractiveLogin
       ? buildWindowsHostInteractiveLoginSpawn(hostClaudeCommand(), args)
@@ -143,7 +158,10 @@ export function runClaudeCommandProcess(
     }
     const onError = (error: Error): void => {
       if (!terminationPending) {
-        settle(() => rejectPromise(error))
+        const windowsOnly = isSpawnEnoent(error)
+          ? windowsOnlyCliMessage(spawnConfig.command, 'Claude')
+          : null
+        settle(() => rejectPromise(windowsOnly ? new Error(windowsOnly) : error))
       }
     }
     const onDone = (code: number | null): void => {

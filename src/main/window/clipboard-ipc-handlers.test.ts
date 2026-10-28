@@ -209,7 +209,7 @@ describe('registerClipboardHandlers', () => {
     randomUUIDMock.mockReset()
     randomUUIDMock.mockReturnValue('00000000-0000-4000-8000-000000000000')
     callRuntimeEnvironmentMock.mockReset()
-    setTrustedClipboardRendererWebContentsId(null)
+    setTrustedClipboardRendererWebContentsId(17)
   })
 
   afterEach(() => {
@@ -314,7 +314,7 @@ describe('registerClipboardHandlers', () => {
     expect(runProcessMock).not.toHaveBeenCalled()
   })
 
-  it('rejects clipboard IPC from destroyed, browser, and mismatched dev-origin senders', async () => {
+  it('rejects clipboard IPC from unpinned file://, destroyed, browser, and mismatched dev-origin senders', async () => {
     registerClipboardHandlers({} as never)
 
     const handlers = getRegisteredHandlers()
@@ -324,6 +324,12 @@ describe('registerClipboardHandlers', () => {
     await expect(
       handlers.get('clipboard:readText')?.(makeClipboardEvent({ getType: () => 'webview' }))
     ).rejects.toThrow('Unauthorized clipboard IPC sender')
+
+    setTrustedClipboardRendererWebContentsId(null)
+    vi.stubEnv('ELECTRON_RENDERER_URL', '')
+    await expect(handlers.get('clipboard:readText')?.(makeClipboardEvent())).rejects.toThrow(
+      'Unauthorized clipboard IPC sender'
+    )
 
     vi.stubEnv('ELECTRON_RENDERER_URL', 'http://localhost:5173')
 

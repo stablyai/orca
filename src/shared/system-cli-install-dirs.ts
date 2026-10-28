@@ -30,5 +30,9 @@ export function getSystemCliInstallDirectories(
     join(homePath, '.vite-plus', 'bin'),
     join(homePath, '.grok', 'bin')
   )
+  if (platform === 'darwin') {
+    // MacPorts last, matching the seed; ungated since a lookup miss costs the same stat as the seed's `port` gate.
+    directories.push('/opt/local/bin')
+  }
   return directories
 }

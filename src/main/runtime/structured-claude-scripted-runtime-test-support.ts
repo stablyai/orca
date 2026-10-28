@@ -11,7 +11,7 @@ import type {
   openClaudeStreamJsonConnection
 } from '../claude/claude-stream-json-connection'
 import { runClaudeControl } from '../claude/claude-agent-sdk-control-requests'
-import { claudeSessionIdForOrcaSession } from '../claude/claude-structured-launch-resolution'
+import { claudeSessionIdForOrcaSession } from '../claude/structured/claude-structured-session-id'
 import type { AgentSessionAttachParams } from '../native-chat/agent-session-wire/structured-agent-session-attach'
 import { hostTestAttachParams } from '../native-chat/agent-session-wire/structured-agent-session-host-test-data'
 import type { StructuredAgentSessionHost } from '../native-chat/agent-session-wire/structured-agent-session-host'

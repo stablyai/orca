@@ -1,5 +1,5 @@
 import { useCallback, useRef, useState } from 'react'
-import { View, Text, StyleSheet, Pressable, ActivityIndicator, BackHandler } from 'react-native'
+import { View, Text, Pressable, ActivityIndicator, BackHandler } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router'
 import { ChevronLeft } from 'lucide-react-native'
@@ -11,6 +11,8 @@ import {
 import type { ConnectionLogEntry } from '../src/transport/types'
 import { useRefreshHostClient } from '../src/transport/host-client-hooks'
 import { colors, spacing, radii, typography } from '../src/theme/mobile-theme'
+import { themedStyleSheet } from '../src/theme/themed-styles'
+import { useMobileColorScheme } from '../src/theme/use-mobile-color-scheme'
 import { ConnectionLog } from '../src/components/ConnectionLog'
 import {
   loadMobileOnboardingSteps,
@@ -23,6 +25,7 @@ type Status = 'awaiting-confirm' | 'connecting' | 'error'
 const PAIRING_OVERALL_TIMEOUT_MS = 25_000
 
 export default function PairConfirmScreen() {
+  useMobileColorScheme()
   const router = useRouter()
   const refreshHostClient = useRefreshHostClient()
   const insets = useSafeAreaInsets()
@@ -191,7 +194,7 @@ export default function PairConfirmScreen() {
   )
 }
 
-const styles = StyleSheet.create({
+const styles = themedStyleSheet(() => ({
   container: {
     flex: 1,
     backgroundColor: colors.bgBase,
@@ -277,4 +280,4 @@ const styles = StyleSheet.create({
     marginBottom: spacing.xl,
     lineHeight: 20
   }
-})
+}))

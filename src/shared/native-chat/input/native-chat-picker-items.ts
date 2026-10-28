@@ -244,8 +244,8 @@ function getMatchRank(
   query: string,
   matchDescriptions: boolean
 ): number | null {
-  const normalizedQuery = query.toLocaleLowerCase()
-  const name = item.name.toLocaleLowerCase()
+  const normalizedQuery = query.toLowerCase()
+  const name = item.name.toLowerCase()
   if (name === normalizedQuery) {
     return 0
   }
@@ -258,7 +258,7 @@ function getMatchRank(
   if (isSubsequence(normalizedQuery, name)) {
     return 3
   }
-  if (matchDescriptions && item.description?.toLocaleLowerCase().includes(normalizedQuery)) {
+  if (matchDescriptions && item.description?.toLowerCase().includes(normalizedQuery)) {
     return 4
   }
   return null

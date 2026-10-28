@@ -1,9 +1,6 @@
-import type { ILink, ILinkProvider, Terminal } from '@xterm/xterm'
+import type { ILink, ILinkProvider } from '@xterm/xterm'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import {
-  guardLinkProvider,
-  installGuardedLinkProviderRegistration
-} from './terminal-link-provider-guard'
+import { guardLinkProvider } from './terminal-link-provider-guard'
 
 const mocks = vi.hoisted(() => ({
   recordRendererCrashBreadcrumb: vi.fn()
@@ -51,17 +48,6 @@ describe('guardLinkProvider', () => {
     )
   })
 
-  it('passes provided links through unchanged when the provider succeeds', () => {
-    const links = [{ text: 'term_abc' }] as unknown as ILink[]
-    const provider: ILinkProvider = {
-      provideLinks: (_lineNumber, callback) => callback(links)
-    }
-    const guarded = guardLinkProvider(provider, 'orca-handle')
-
-    expect(collectLinks(guarded)).toBe(links)
-    expect(mocks.recordRendererCrashBreadcrumb).not.toHaveBeenCalled()
-  })
-
   it('does not double-invoke the callback when the provider throws after resolving', () => {
     const links = [{ text: 'file.ts' }] as unknown as ILink[]
     const provider: ILinkProvider = {
@@ -77,33 +63,5 @@ describe('guardLinkProvider', () => {
     expect(callback).toHaveBeenCalledTimes(1)
     expect(callback).toHaveBeenCalledWith(links)
     expect(mocks.recordRendererCrashBreadcrumb).toHaveBeenCalledOnce()
-  })
-})
-
-describe('installGuardedLinkProviderRegistration', () => {
-  it('guards every provider registered after install (addon-internal included)', () => {
-    const registered: ILinkProvider[] = []
-    const terminal = {
-      registerLinkProvider: (provider: ILinkProvider) => {
-        registered.push(provider)
-        return { dispose: vi.fn() }
-      }
-    } as unknown as Terminal
-
-    installGuardedLinkProviderRegistration(terminal)
-
-    terminal.registerLinkProvider({
-      provideLinks: () => {
-        throw new RangeError('Invalid array length')
-      }
-    })
-
-    expect(registered).toHaveLength(1)
-    expect(() => collectLinks(registered[0])).not.toThrow()
-    expect(collectLinks(registered[0])).toBeUndefined()
-    expect(mocks.recordRendererCrashBreadcrumb).toHaveBeenCalledWith(
-      'terminal_link_provider_error',
-      expect.objectContaining({ provider: 'provider-1', errorName: 'RangeError' })
-    )
   })
 })

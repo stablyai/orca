@@ -10,9 +10,9 @@ import { FLOATING_TERMINAL_WORKTREE_ID } from '../../shared/constants'
 import {
   CLAUDE_DEFAULT_SETTING_SOURCES,
   CLAUDE_SESSION_STATE_EVENTS_ENV,
-  CLAUDE_STRUCTURED_BASE_OPTIONS,
-  claudeSessionIdForOrcaSession
+  CLAUDE_STRUCTURED_BASE_OPTIONS
 } from './claude-structured-launch-resolution'
+import { claudeSessionIdForOrcaSession } from './structured/claude-structured-session-id'
 import { CLAUDE_THINKING_DISPLAY_FLAG, type ClaudeCliFlag } from './claude-cli-flag-support'
 import { claudeProviderHandle } from '../../shared/agent-session-provider-handle-encoding'
 

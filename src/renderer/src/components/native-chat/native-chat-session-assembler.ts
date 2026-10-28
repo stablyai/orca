@@ -16,7 +16,8 @@ import {
   isImageSourceUserTurn,
   normalizeImageTranscriptMessages
 } from '../../../../shared/native-chat-image-transcript-markers'
-import { isLaunchPromptMessageId, isPendingMessageId } from './native-chat-pending'
+import { isLaunchPromptMessageId } from './native-chat-pending'
+import { isPendingMessageId } from '../../../../shared/native-chat-pending-sends'
 
 /** For the same turn, prefer transcript over hook over scrape. */
 export type NativeChatSources = {

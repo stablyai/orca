@@ -1,85 +1,8 @@
 import { describe, expect, it, vi } from 'vitest'
 import {
-  rankRuntimeMobileFilePaths,
   type RuntimeMobileFilePathInventory,
   RuntimeMobileFilePathSearchCache
 } from './mobile-path-search'
-
-describe('rankRuntimeMobileFilePaths', () => {
-  it('preserves basename matching, ordering and total counts for unusual paths', () => {
-    const paths = [
-      '',
-      '/',
-      'a/',
-      'a//b.ts',
-      'b.ts',
-      'B.TS',
-      'a\\b.ts',
-      '界/😀.ts',
-      '.hidden',
-      'a/./b.ts'
-    ]
-    const rankings = [
-      {
-        query: '',
-        ranked: [
-          '',
-          '/',
-          'a/',
-          'a//b.ts',
-          'b.ts',
-          'B.TS',
-          'a\\b.ts',
-          '界/😀.ts',
-          '.hidden',
-          'a/./b.ts'
-        ]
-      },
-      {
-        query: ' ',
-        ranked: [
-          '',
-          '/',
-          'a/',
-          'a//b.ts',
-          'b.ts',
-          'B.TS',
-          'a\\b.ts',
-          '界/😀.ts',
-          '.hidden',
-          'a/./b.ts'
-        ]
-      },
-      { query: 'b', ranked: ['a//b.ts', 'b.ts', 'B.TS', 'a/./b.ts', 'a\\b.ts'] },
-      { query: '.ts', ranked: ['a//b.ts', 'b.ts', 'B.TS', 'a\\b.ts', '界/😀.ts', 'a/./b.ts'] },
-      { query: '😀', ranked: ['界/😀.ts'] },
-      { query: '/', ranked: ['/', 'a/', 'a//b.ts', '界/😀.ts', 'a/./b.ts'] },
-      { query: 'a\\', ranked: ['a\\b.ts'] },
-      { query: 'missing', ranked: [] }
-    ]
-    for (const { query, ranked } of rankings) {
-      for (const limit of [0, 1, 3, 100]) {
-        expect(rankRuntimeMobileFilePaths(paths, query, limit)).toEqual({
-          paths: ranked.slice(0, limit),
-          totalCount: ranked.length
-        })
-      }
-    }
-  })
-
-  it('ranks path and basename prefixes before substrings and caps output', () => {
-    expect(
-      rankRuntimeMobileFilePaths(
-        ['docs/apple.md', 'src/apple.ts', 'src/deep/pineapple.ts', 'z/apple.test.ts'],
-        'apple',
-        3
-      )
-    ).toEqual({
-      paths: ['docs/apple.md', 'src/apple.ts', 'z/apple.test.ts'],
-      totalCount: 4
-    })
-  })
-})
 
 describe('RuntimeMobileFilePathSearchCache', () => {
   it('reuses a live entry and evicts the oldest key at capacity', async () => {

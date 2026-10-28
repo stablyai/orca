@@ -2,6 +2,7 @@ import { createElement } from 'react'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { ActionSheetAction } from '../../../components/ActionSheetModal'
+import { colors } from '../../../theme/mobile-theme'
 import { MobileNativeChatQueuedMessages } from './MobileNativeChatQueuedMessages'
 import type { MobileQueuedMessageCard } from '../../mobile-structured-queued-message-cards'
 import { mobileQueuedMessageCards } from '../../mobile-structured-queued-message-cards'
@@ -56,10 +57,13 @@ vi.mock('../../../components/ActionSheetModal', () => ({ ActionSheetModal: 'Acti
 function card(
   overrides: Partial<MobileQueuedMessageCard> & { messageId: string }
 ): MobileQueuedMessageCard {
+  const text = overrides.text ?? `text of ${overrides.messageId}`
   return {
-    text: `text of ${overrides.messageId}`,
+    position: 1,
+    text,
+    line: text,
     state: 'waiting',
-    paused: false,
+    hold: overrides.state === 'returned' ? 'returned' : 'turn',
     needsAttention: false,
     caption: null,
     attribution: null,
@@ -275,7 +279,7 @@ describe('MobileNativeChatQueuedMessages', () => {
         node.props.children === 'Waiting — a message ahead needs attention'
     )
     expect(caption.props.numberOfLines).toBe(1)
-    expect(flatStyle(caption.props.style).color).not.toBe('#ef4444')
+    expect(flatStyle(caption.props.style).color).not.toBe(colors.statusRed)
   })
 
   it("lets a returned card's reason wrap whole, in the destructive color, beside an alert", async () => {
@@ -292,7 +296,7 @@ describe('MobileNativeChatQueuedMessages', () => {
       (node) => String(node.type) === 'Text' && node.props.children === reason
     )
     expect(caption.props.numberOfLines).toBeUndefined()
-    expect(flatStyle(caption.props.style).color).toBe('#ef4444')
+    expect(flatStyle(caption.props.style).color).toBe(colors.statusRed)
     const [returnedRow, waitingRow] = mounted.root.findAllByProps({ testID: 'queued-card-row' })
     expect(nodeTypes(returnedRow!)).toContain('AlertCircle')
     expect(caption.parent?.parent).toBe(returnedRow)
@@ -305,7 +309,7 @@ describe('MobileNativeChatQueuedMessages', () => {
     const headerCaption = mounted.root
       .findByProps({ testID: 'queued-header' })
       .find((node) => String(node.type) === 'Text' && node.props.children === `· ${reason}`)
-    expect(flatStyle(headerCaption.props.style).color).toBe('#ef4444')
+    expect(flatStyle(headerCaption.props.style).color).toBe(colors.statusRed)
     await act(async () => toggle().props.onPress())
     expect(texts(mounted).filter((text) => text === reason)).toHaveLength(1)
   })
@@ -315,7 +319,7 @@ describe('MobileNativeChatQueuedMessages', () => {
       cards: [
         card({
           messageId: 'failed',
-          paused: true,
+          hold: 'paused',
           needsAttention: true,
           caption: "Couldn't send — tap Send to retry"
         }),
@@ -798,7 +802,7 @@ describe('MobileNativeChatQueuedMessages', () => {
     expect(mutate).toHaveBeenCalledTimes(1)
     expect(ids()).toEqual(['c', 'a', 'b', 'd'])
     expect(list().props.canMove).toBeUndefined()
-    expect(list().props.items[0].automatic).toBe(true)
+    expect(list().props.items[0].from).toBeDefined()
     expect(
       list().props.items.every((entry: MobileQueuedMessageCard) =>
         list().props.isMoveDisabled(entry)
@@ -825,7 +829,8 @@ describe('MobileNativeChatQueuedMessages', () => {
       )
     ).toBe(true)
     act(() => expect(list().props.onMove({ movedId: 'b', afterId: 'd' })).toBe(true))
-    const published = [messages[0]!, messages[2]!, messages[3]!, messages[1]!]
+    // The host republishes the moved order with fresh positions; cards sort by position.
+    const published = [0, 2, 3, 1].map((index, position) => ({ ...messages[index]!, position }))
     await act(async () => renderer!.update(createElement(Harness, { published })))
     expect(ids()).toEqual(['a', 'c', 'd', 'b'])
     await act(async () => renderer!.unmount())

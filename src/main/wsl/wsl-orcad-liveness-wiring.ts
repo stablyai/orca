@@ -1,4 +1,8 @@
 /** C7 supplies visible demand; these production probes serve the WSL liveness supervisor. */
+import {
+  probeThenWatchWslOrcadBridges,
+  type WslOrcadBridgeActivity
+} from './wsl-orcad-bridge-activity'
 import { pairedRuntimeConnectionFromOffer } from '../../shared/paired-runtime-connection'
 import { parsePairingCode } from '../../shared/pairing'
 import {
@@ -38,6 +42,7 @@ function collectWslOrcadCensus(connection: WslOrcadConnection): Promise<OrcadTer
 
 export function createWslOrcadLivenessSupervisor(options: {
   manager: WslOrcadConnectionManager
+  bridgeActivity: WslOrcadBridgeActivity
   holder: WslDistroHolder
   hasUserVisibleWork: (distro: string) => boolean
 }): WslOrcadLivenessSupervisor {
@@ -52,9 +57,14 @@ export function createWslOrcadLivenessSupervisor(options: {
         : readConfirmedRunningWslDistros(),
     readIdentity: (distro, orcadPid) => readWslGuestIdentity(transportFor(distro), orcadPid),
     openWatch: (connection) =>
-      openWslOrcadWatch(
-        transportFor(connection.distro, connection.environmentId),
-        connection.remotePort
+      probeThenWatchWslOrcadBridges(
+        () =>
+          openWslOrcadWatch(
+            transportFor(connection.distro, connection.environmentId),
+            connection.remotePort
+          ),
+        options.bridgeActivity,
+        connection.environmentId
       ),
     collectCensus: collectWslOrcadCensus,
     hasUserVisibleWork: options.hasUserVisibleWork,

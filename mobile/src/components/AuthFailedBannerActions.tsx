@@ -1,5 +1,6 @@
 import { Pressable, Text } from 'react-native'
 import { colors } from '../theme/mobile-theme'
+import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import { authFailedBannerStyles as styles } from './auth-failed-banner-styles'
 
 // Native offers reconnect/re-pair/remove; web sibling offers only shell-routed re-pair because reconnect is null and removal refuses.
@@ -14,6 +15,7 @@ export function AuthFailedBannerActions({
   onRepair: () => void
   onRemove: () => void
 }) {
+  useMobileColorScheme()
   return (
     <>
       {canRetry && (

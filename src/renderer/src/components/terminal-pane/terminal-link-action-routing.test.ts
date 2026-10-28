@@ -50,9 +50,6 @@ beforeEach(() => {
   vi.stubGlobal('navigator', { userAgent: 'Macintosh' })
   vi.stubGlobal('window', { api: { shell: { openUrl } } })
   registerHttpLinkStoreAccessor(() => ({
-    repos: [],
-    endpointProjects: [],
-    endpointProjectHostSetups: [],
     settings: { openLinksInApp: false },
     setActiveWorktree,
     createBrowserTab

@@ -1,8 +1,9 @@
 import { StyleSheet } from 'react-native'
 
 import { colors, spacing, radii, typography } from '../theme/mobile-theme'
+import { themedStyleSheet } from '../theme/themed-styles'
 
-export const mobileSessionReviewCommentStyles = StyleSheet.create({
+export const mobileSessionReviewCommentStyles = themedStyleSheet(() => ({
   diffCommentAddButton: {
     width: 26,
     height: 22,
@@ -182,4 +183,4 @@ export const mobileSessionReviewCommentStyles = StyleSheet.create({
     borderRadius: radii.button,
     overflow: 'hidden'
   }
-})
+}))

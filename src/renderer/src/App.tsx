@@ -4,6 +4,7 @@ import { Toaster } from '@/components/ui/sonner'
 import { TooltipProvider } from '@/components/ui/tooltip'
 import { ConfirmationDialogProvider } from './components/confirmation-dialog'
 import { BrowserWebAuthnAccountDialog } from './components/browser-webauthn-account-dialog'
+import { BrowserExtensionInstallDialog } from './components/browser-extension-install-dialog'
 import { BrowserPagePrompts } from './components/browser-pane/browser-page-prompts'
 import { LinkRoutingPreferenceDialogProvider } from './components/link-routing-preference-dialog'
 import { SkillFreshnessNudge } from './components/skills/SkillFreshnessNudge'
@@ -27,6 +28,7 @@ import { useAppSessionPersistence } from './app-shell/use-app-session-persistenc
 import { useAppShellServices } from './app-shell/use-app-shell-services'
 import { useAppStartupHydration } from './app-shell/use-app-startup-hydration'
 import { startNativeChatDraftLoad } from './app-shell/native-chat-draft-startup'
+import { runWslMoveRendererStoreRewrites } from './lib/wsl-move-renderer-store-rewrites'
 import { useDocumentAppearance } from './app-shell/use-document-appearance'
 import { useFloatingWorkspacePanel } from './app-shell/use-floating-workspace-panel'
 import { useGlobalKeybindings } from './app-shell/use-global-keybindings'
@@ -47,6 +49,8 @@ function App(): React.JSX.Element {
   useAppShellServices()
   // Load drafts before the startup chain so no failed step can skip them.
   useEffect(startNativeChatDraftLoad, [])
+  // Committed WSL moves only: the list is empty otherwise, and always with the internal gate closed.
+  useEffect(() => void runWslMoveRendererStoreRewrites(), [])
   useAppStartupHydration(onboardingGate.applyStartupOnboardingState)
   useAppSessionPersistence()
   useRuntimeGraphSync()
@@ -105,6 +109,7 @@ function App(): React.JSX.Element {
               onboardingGate={onboardingGate}
             />
             <BrowserWebAuthnAccountDialog />
+            <BrowserExtensionInstallDialog />
           </LinkRoutingPreferenceDialogProvider>
         </ConfirmationDialogProvider>
         {createPortal(

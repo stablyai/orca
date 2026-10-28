@@ -17,7 +17,7 @@ import {
   sendSnapshotFrames,
   serializeBudgetedRequestedSnapshot
 } from './terminal-snapshot-publication'
-import { updateViewportForClient } from './terminal-viewport-update'
+import { chainPassiveDesktopResize, updateViewportForClient } from './terminal-viewport-update'
 import { notePausedOutputDropped } from './terminal-multiplex-paused-output-drop'
 import { answerUndeliveredYieldedQueries } from './terminal-multiplex-yielded-queries'
 import {
@@ -112,14 +112,11 @@ export function installMultiplexSlotFrames(state: TerminalMultiplexConnection): 
           return
         }
       }
-      stream.desktopClaimTail = stream.desktopClaimTail
-        .then(async (priorClaimed) => {
-          const result = await applyStreamViewport(stream, stream.client!, viewport)
-          return stream.supportsDesktopViewportClaims
-            ? priorClaimed && result.applied
-            : result.applied
-        })
-        .catch(() => false)
+      stream.desktopClaimTail = chainPassiveDesktopResize(
+        stream.desktopClaimTail,
+        stream.supportsDesktopViewportClaims,
+        () => applyStreamViewport(stream, stream.client!, viewport)
+      )
       return
     }
     if (frame.opcode === TerminalStreamOpcode.ClaimViewport && stream.client && !stream.isMobile) {

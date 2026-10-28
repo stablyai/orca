@@ -20,8 +20,6 @@ import { getRuntimeGitStatus } from '@/runtime/runtime-git-status-client'
 import { getWorktreeHostIdentity } from '../../../../shared/worktree/host-qualified-identity'
 
 const state = vi.hoisted(() => ({
-  endpointProjects: [],
-  endpointProjectHostSetups: [],
   repos: [],
   settings: null,
   activeWorktreeId: null,

@@ -36,6 +36,7 @@ export const LINT_STEPS = [
   'check:ts-nocheck-ratchet',
   'check:workspace-record-read-ratchet',
   'check:unproven-pty-retirement-ratchet',
+  'check:daemon-blocking-call-ratchet',
   'check:node-runtime-pin',
   'check:path-literal-ratchet',
   'check:host-list-render-ratchet',

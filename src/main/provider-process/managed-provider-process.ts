@@ -61,6 +61,8 @@ export type ManagedProviderProcess = {
   readonly rootExitObserved: boolean
   /** The last close that ran the ladder; the already-exited answer only when none did. */
   readonly lastCloseResult: ProviderProcessCloseResult | null
+  /** First exit observation, including processless spawn failure; null before either is observed. */
+  readonly exitStatus: ProviderProcessExit | null
   readonly exitPromise: Promise<void>
   /** Direct or supervisor-reported ENOENT for the provider executable. */
   readonly executableMissing: boolean
@@ -166,6 +168,9 @@ export function spawnManagedProviderProcess(
     child,
     supervised: spec.supervised,
     exitPromise,
+    get exitStatus() {
+      return observed
+    },
     get processless() {
       return observed?.processless ?? false
     },

@@ -13,6 +13,7 @@ import {
 } from './mobile-markdown-view-mode-state'
 import { markdownReaderStatusText } from './mobile-markdown-reader-status'
 import { colors, spacing } from '../theme/mobile-theme'
+import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import { styles } from './mobile-session-styles'
 import type { MarkdownDocState } from './mobile-session-route-types'
 import { MobileLoadErrorState } from '../components/MobileLoadErrorState'
@@ -42,6 +43,7 @@ export function MarkdownReader({
   onDiscard: () => void
   keyboardLift: number
 }) {
+  useMobileColorScheme()
   // Native Keyboard events under-report the WebView editor's covered area, so prefer the larger WebView-measured inset.
   const [webviewKeyboardInset, setWebviewKeyboardInset] = useState(0)
   const documentKey = relativePath || title || documentId

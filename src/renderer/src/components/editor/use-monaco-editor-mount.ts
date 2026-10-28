@@ -70,7 +70,7 @@ export function useMonacoEditorMount(params: MonacoEditorMountParams): OnMount {
       setCommentPopover,
       setSelectionAnnotationTarget
     },
-    gutterMenu: { setGutterMenuOpen, setGutterMenuPoint, setGutterMenuLine }
+    gutterMenu: { setGutterMenuOpen, setGutterMenuPoint, setGutterMenuLine, setGutterMenuSelection }
   } = params
   // Why: retained listeners must follow committed ownership, never an abandoned render.
   const fileIdRef = useRef(fileId)
@@ -187,6 +187,7 @@ export function useMonacoEditorMount(params: MonacoEditorMountParams): OnMount {
           e.event.preventDefault()
           e.event.stopPropagation()
           const line = e.target.position?.lineNumber ?? 1
+          setGutterMenuSelection(editorInstance.getSelection())
           editorInstance.setPosition({ lineNumber: line, column: 1 })
           setGutterMenuLine(line)
           setGutterMenuPoint({ x: e.event.posx, y: e.event.posy })
@@ -296,7 +297,8 @@ export function useMonacoEditorMount(params: MonacoEditorMountParams): OnMount {
       setSelectionAnnotationTarget,
       setGutterMenuOpen,
       setGutterMenuPoint,
-      setGutterMenuLine
+      setGutterMenuLine,
+      setGutterMenuSelection
     ]
   )
 }

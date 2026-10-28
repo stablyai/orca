@@ -75,6 +75,42 @@ describe('orca cli worktree awareness', () => {
     spawnMock
   })
 
+  it('passes --branch as the branch name, separate from the workspace name and base ref', async () => {
+    queueFixtures(
+      callMock,
+      okFixture('req_create', {
+        worktree: buildWorktree('/tmp/repo/task', 'DAT-111-fix', 'abc', 'repo-1')
+      })
+    )
+    vi.spyOn(console, 'log').mockImplementation(() => {})
+    await main(
+      [
+        'worktree',
+        'create',
+        '--repo',
+        'id:repo-1',
+        '--name',
+        'Fix login',
+        '--branch',
+        'DAT-111-fix',
+        '--base-branch',
+        'origin/main',
+        '--no-parent',
+        '--json'
+      ],
+      '/tmp/repo'
+    )
+    expect(callMock).toHaveBeenCalledWith(
+      'worktree.create',
+      expect.objectContaining({
+        name: 'Fix login',
+        displayName: 'Fix login',
+        branchNameOverride: 'DAT-111-fix',
+        baseBranch: 'origin/main'
+      })
+    )
+  })
+
   it('passes explicit activation through worktree.create', async () => {
     queueFixtures(
       callMock,

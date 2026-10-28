@@ -1,6 +1,8 @@
 import { useState } from 'react'
-import { Pressable, StyleSheet, Text, View } from 'react-native'
+import { Pressable, Text, View } from 'react-native'
 import { colors, typography } from '../theme/mobile-theme'
+import { themedStyleSheet } from '../theme/themed-styles'
+import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import { queuedMessageStyles } from './native-chat/input/mobile-native-chat-queued-message-styles'
 
 // Expand clipped queued text before Steer/Delete; use the queue’s capped scroller rather than nesting another scroll box.
@@ -13,6 +15,7 @@ export function MobileQueuedCardText({
   expanded: boolean
   onToggle: () => void
 }): React.JSX.Element {
+  useMobileColorScheme()
   const [clipped, setClipped] = useState(false)
   const measure = (
     <Text
@@ -59,7 +62,7 @@ export function MobileQueuedCardText({
   )
 }
 
-const styles = StyleSheet.create({
+const styles = themedStyleSheet(() => ({
   measure: {
     position: 'absolute',
     left: 0,
@@ -70,4 +73,4 @@ const styles = StyleSheet.create({
     color: colors.textMuted,
     fontSize: typography.metaSize
   }
-})
+}))

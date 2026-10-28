@@ -258,7 +258,7 @@ jobs:
         release-javascript,
         prepare-adhoc-mac-release
       ]
-    # Start after template qualification: overlapping ~2.5 min of preparation left both 12-vCPU Macs idle ~7 min.
+    # Start after template qualification: overlapping ~2.5 min of preparation left both Macs idle ~7 min.
     if: >-
       !cancelled() && github.repository == 'stablyai/orca' &&
       needs.orcad-template-support.result == 'success' &&
@@ -274,7 +274,8 @@ jobs:
       fail-fast: false
       matrix:
         arch: [x64, arm64]
-    runs-on: blacksmith-12vcpu-macos-15
+    # Notary waits dominate; 12 vCPUs packaged no faster than the hourly build’s 6.
+    runs-on: blacksmith-6vcpu-macos-15
     # Allow 150min for install 3×10 + publish 2×45 + ~25 setup/build/verify; outer timeout would prevent cleanup.
     timeout-minutes: 150
     env:

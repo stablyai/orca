@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { ActivityIndicator, Pressable, Text, TextInput, View } from 'react-native'
 import { Check } from 'lucide-react-native'
 import { colors } from '../../theme/mobile-theme'
+import { useMobileColorScheme } from '../../theme/use-mobile-color-scheme'
 import type { GitHubAssignableUser } from '../../../../src/shared/github/pull-request-types'
 import type { RpcClient } from '../../transport/rpc-client'
 import { fetchAssignableUsers } from '../../session/github-pr-rpc'
@@ -36,6 +37,7 @@ export function ReviewerPickerDrawer({
   isRequested,
   onToggle
 }: Props) {
+  useMobileColorScheme()
   const [load, setLoad] = useState<LoadState>({ status: 'idle' })
   const [query, setQuery] = useState('')
 

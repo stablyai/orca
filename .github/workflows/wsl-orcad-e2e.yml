@@ -34,6 +34,7 @@ on:
       - '!**/*.test.ts'
       - '!**/*.test.tsx'
       - 'src/main/wsl/wsl-orcad-real-distro-lane.test.ts'
+      - 'src/main/persistence/moving-wsl-projects/wsl-move-real-pause.test.ts'
       - 'src/main/wsl/wsl-orcad-real-distro-idle-release-lane.test.ts'
       - '.github/workflows/wsl-orcad-e2e.yml'
       - 'config/ci/wsl-lifecycle/**'
@@ -69,7 +70,7 @@ jobs:
   template:
     if: github.event_name != 'pull_request' || github.event.pull_request.draft != true
     name: Build the linux-x64-glibc orcad template
-    runs-on: blacksmith-4vcpu-ubuntu-2404
+    runs-on: ubuntu-24.04
     timeout-minutes: 20
     outputs:
       families: ${{ steps.scope.outcome == 'success' && steps.scope.outputs.families || '' }}
@@ -119,7 +120,7 @@ jobs:
   container-rootfs:
     if: github.event_name != 'pull_request' || github.event.pull_request.draft != true
     name: Export ${{ matrix.family }} rootfs
-    runs-on: blacksmith-4vcpu-ubuntu-2404
+    runs-on: ubuntu-24.04
     timeout-minutes: 10
     strategy:
       fail-fast: false
@@ -341,6 +342,18 @@ jobs:
         run: |
           node node_modules/vitest/vitest.mjs run --config config/vitest.config.ts src/main/wsl/wsl-orcad-real-distro-lane.test.ts --reporter=verbose 2>&1 | Tee-Object (Join-Path $env:ORCA_WSL_ORCAD_LANE_RECEIPTS 'survive.log')
           if ($global:LASTEXITCODE -ne 0) { throw "survive phase failed: $global:LASTEXITCODE" }
+      # The WSL move's pause on real distro shells: Sleep ends them, the daemon proves the exit,
+      # the journal keeps each pane's folder, and a new shell opens there.
+      - name: 'WSL move: pause real distro terminals'
+        if: ${{ !cancelled() && steps.import.outcome == 'success' }}
+        timeout-minutes: 10
+        env:
+          ORCA_WSL_MOVE_REAL_PAUSE_DISTRO: ${{ env.PLAIN_DISTRO }}
+        run: |
+          New-Item -ItemType Directory -Force $env:ORCA_WSL_ORCAD_LANE_RECEIPTS | Out-Null
+          node node_modules/vitest/vitest.mjs run --config config/vitest.config.ts src/main/persistence/moving-wsl-projects/wsl-move-real-pause.test.ts --reporter=verbose 2>&1 | Tee-Object (Join-Path $env:ORCA_WSL_ORCAD_LANE_RECEIPTS 'wsl-move-real-pause.log')
+          if ($global:LASTEXITCODE -ne 0) { throw "WSL move real pause failed: $global:LASTEXITCODE" }
+          wsl.exe --terminate $env:PLAIN_DISTRO
       # R40: with no terminal left, orcad idle-exits and the holder lets the distro stop on its own.
       - name: 'Phase 3: idle orcad releases the distro'
         timeout-minutes: 15

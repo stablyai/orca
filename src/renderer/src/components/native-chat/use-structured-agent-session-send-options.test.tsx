@@ -43,7 +43,7 @@ function sendOptionsFor(
       { kind: 'new', seedOptions, heldOptions: {} },
       {
         optionStateRef,
-        pendingOptionsRef: { current: pending },
+        optionPicks: { current: { pending, generation: 0 } },
         optionView: structuredAgentSessionOptionView,
         takesSendOptions
       }

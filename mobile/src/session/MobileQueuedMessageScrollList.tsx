@@ -8,6 +8,7 @@ import Animated, {
   type SharedValue
 } from 'react-native-reanimated'
 import { colors, spacing } from '../theme/mobile-theme'
+import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 
 /** Desktop's `max-h-40`: three one-line cards and part of a fourth, whose cut-off edge is the
  *  sign that the list scrolls. */
@@ -116,6 +117,7 @@ export function MobileQueuedMessageScrollList({
 
 /** Fades the cards into the box's fill at an edge more content lies past. */
 function ListEdgeFade({ edge }: { edge: 'top' | 'bottom' }): React.JSX.Element {
+  useMobileColorScheme()
   const id = `queued-list-fade-${edge}`
   const top = edge === 'top'
   return (

@@ -531,6 +531,7 @@ import {
   UpdatePaneLayout,
   WorktreeTabSelector
 } from './session-tabs-schemas-params'
+import { SessionReadTerminalScrollbackParams } from './session-terminal-scrollback-params'
 import { SidebarSessionBeginParams } from './sidebar-session-params'
 import {
   SkillsCancelInstallParams,
@@ -554,6 +555,7 @@ import {
   SshTargetUpdate
 } from './ssh-params'
 import { ContinueInterruptedParams } from './structured-agent-session-continue-params'
+import { ContinuationContextParams } from './structured-agent-session-identifiers'
 import {
   AcknowledgeAttentionParams,
   AgentsParams,
@@ -732,6 +734,7 @@ export const RPC_PARAMS_BY_METHOD = {
   'agentSession.cancel': CancelParams,
   'agentSession.close': OptionsParams,
   'agentSession.commands': OptionsParams,
+  'agentSession.continuationContext': ContinuationContextParams,
   'agentSession.continueInterrupted': ContinueInterruptedParams,
   'agentSession.conversationCommand': ConversationCommandParams,
   'agentSession.conversationOutline': OptionsParams,
@@ -1310,6 +1313,7 @@ export const RPC_PARAMS_BY_METHOD = {
   'runtime.clientCapabilities.update': ClientCapabilitiesUpdate,
   'runtime.clientEvents.subscribe': null,
   'runtime.clientEvents.unsubscribe': ClientEventsUnsubscribeParams,
+  'session.readTerminalScrollback': SessionReadTerminalScrollbackParams,
   'session.tabs.activate': ActivateTab,
   'session.tabs.close': CloseTab,
   'session.tabs.closeLifecycle': CloseLifecycleTab,

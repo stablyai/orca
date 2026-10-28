@@ -6,7 +6,7 @@ import {
   type AgentChatPermissionMode
 } from './agent-chat-permission-mode'
 import type { StructuredAgentSessionOptionRecord } from './structured-agent-session-option-state'
-import type { SessionOptionDescriptor } from './native-chat-session-options'
+import type { SessionOptionDescriptor } from './native-chat/input/native-chat-session-options'
 
 /** English names and descriptions for surfaces without a translation catalog. */
 const MODE_COPY: Readonly<Record<AgentChatPermissionMode, { label: string; description: string }>> =

@@ -6,7 +6,7 @@ import {
   launchDraftResolvedByTranscript,
   nativeChatLaunchDraftTurnBaseline,
   type NativeChatLaunchDraftTurnBaseline
-} from './native-chat-launch-draft-resolution'
+} from '../../../../shared/native-chat-launch-draft-resolution'
 
 export function useNativeChatLaunchDraftSignal(args: {
   terminalTabId: string

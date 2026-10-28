@@ -20,6 +20,7 @@ const LOCALES = 'src/renderer/src/i18n/'
 
 // Ratchets default to SOURCE_ROOTS; list narrower inputs only where a scan is clearly scoped.
 const RATCHET_INPUTS = {
+  'check-daemon-blocking-call-ratchet.mjs': ['src/main/'],
   'check-e2e-typecheck-ratchet.mjs': ['tests/', 'config/tsconfig.e2e.json'],
   'check-focus-read-ratchet.mjs': ['src/renderer/src/', 'src/shared/'],
   'check-host-list-render-ratchet.mjs': ['src/renderer/src/'],
@@ -168,6 +169,14 @@ export function selectTypecheckProjects(files) {
   ).map(({ config }) => config)
 }
 
+// Shared analysis modules select every ratchet built on them.
+const RATCHET_SHARED_MODULES = {
+  'config/scripts/gated-call-use-collector.mjs': [
+    'check-daemon-blocking-call-ratchet.mjs',
+    'check-main-sync-spawn-ratchet.mjs'
+  ]
+}
+
 function listRatchetChecks(scriptsDir) {
   const scripts = new Set(listRatchetScripts(scriptsDir))
   // `pnpm lint` runs these although CI checks them in their own steps outside run-ratchets.mjs.
@@ -177,7 +186,12 @@ function listRatchetChecks(scriptsDir) {
     name: script.replace(/^check-|\.mjs$/g, ''),
     args: [`config/scripts/${script}`],
     inputs: RATCHET_INPUTS[script] ?? SOURCE_ROOTS,
-    matches: (files) => files.some((file) => /^config\/[^/]+-baseline\.txt$/.test(file))
+    matches: (files) =>
+      files.some(
+        (file) =>
+          /^config\/[^/]+-baseline\.txt$/.test(file) ||
+          RATCHET_SHARED_MODULES[file]?.includes(script)
+      )
   }))
 }
 

@@ -7,9 +7,12 @@ import {
   nativeChatSessionOptionDescriptors,
   withTrackedNativeChatModel,
   type NativeChatShownModel
-} from './native-chat-session-option-snapshot'
-import type { SessionOptionDescriptor, SessionOptionValue } from './native-chat-session-options'
-import type { TrackedNativeChatSessionOption } from './native-chat-session-option-state'
+} from './native-chat/input/native-chat-session-option-snapshot'
+import type {
+  SessionOptionDescriptor,
+  SessionOptionValue
+} from './native-chat/input/native-chat-session-options'
+import type { TrackedNativeChatSessionOption } from './native-chat/input/native-chat-session-option-state'
 import { effectiveServiceTier } from './structured-agent-session-effective-tier'
 import { serviceTierOption } from './structured-agent-session-discovered-model'
 import {

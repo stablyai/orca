@@ -1,6 +1,9 @@
 import { Terminal } from '@xterm/headless'
 import { describe, expect, it } from 'vitest'
-import { detectTerminalComposerDraft } from '../../shared/terminal-composer-draft'
+import {
+  detectTerminalComposerDraft,
+  hasTerminalComposerPlaceholder
+} from '../../shared/terminal-composer-draft'
 import { HeadlessEmulator } from './headless-emulator'
 import { readTerminalCursorLineContext } from '../../shared/terminal-cursor-line-context'
 import { readRuntimeFixture } from '../runtime/agent-transcript-replay-test-harness'
@@ -155,6 +158,17 @@ describe('readTerminalCursorLineContext', () => {
 
     expect(context?.rawAfterCursor).toContain('Explain this codebase')
     expect(detectTerminalComposerDraft(context)).toBeNull()
+    emulator.dispose()
+  })
+
+  it("masks Codex 0.157's placeholder when shortcut help sits under the status row", async () => {
+    const emulator = new HeadlessEmulator({ cols: 120, rows: 40 })
+    await emulator.write(readRuntimeFixture('codex-0157-plain-ready'))
+
+    const context = emulator.getCursorLineContext()
+
+    expect(context?.rowsBelow.at(-1)).toContain('? for shortcuts')
+    expect(hasTerminalComposerPlaceholder(context)).toBe(true)
     emulator.dispose()
   })
 

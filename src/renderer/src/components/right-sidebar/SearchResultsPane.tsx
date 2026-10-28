@@ -23,6 +23,33 @@ type SearchResultsPaneProps = {
   onMatchClick: (fileResult: SearchFileResult, match: SearchMatch) => void
 }
 
+function formatSearchResultSummary(matchCount: number, fileCount: number): string {
+  const results =
+    matchCount === 1
+      ? translate('auto.components.right.sidebar.Search.resultCount_one', '{{count}} result', {
+          count: matchCount
+        })
+      : translate('auto.components.right.sidebar.Search.resultCount_other', '{{count}} results', {
+          count: matchCount
+        })
+  const files =
+    fileCount === 1
+      ? translate('auto.components.right.sidebar.Search.fileCount_one', '{{count}} file', {
+          count: fileCount
+        })
+      : translate('auto.components.right.sidebar.Search.fileCount_other', '{{count}} files', {
+          count: fileCount
+        })
+  return translate(
+    'auto.components.right.sidebar.Search.resultsInFiles',
+    '{{results}} in {{files}}',
+    {
+      results,
+      files
+    }
+  )
+}
+
 export function SearchResultsPane({
   results,
   hasCommittedResults,
@@ -67,13 +94,7 @@ export function SearchResultsPane({
     <>
       {!error && results && (rows.length > 0 || results.truncated) && (
         <div className="px-2 py-1 text-2xs text-muted-foreground border-b border-border">
-          {results.totalMatches}{' '}
-          {translate('auto.components.right.sidebar.Search.6aeda362ed', 'result')}
-          {results.totalMatches !== 1 ? 's' : ''}{' '}
-          {translate('auto.components.right.sidebar.Search.4107975b3a', 'in')}{' '}
-          {results.files.length}{' '}
-          {translate('auto.components.right.sidebar.Search.0b8104eaf2', 'file')}
-          {results.files.length !== 1 ? 's' : ''}
+          {formatSearchResultSummary(results.totalMatches, results.files.length)}{' '}
           {results.truncated &&
             translate('auto.components.right.sidebar.Search.dcc294f28d', '(results truncated)')}
         </div>

@@ -1,7 +1,8 @@
 import { StyleSheet } from 'react-native'
 import { colors, radii, spacing, typography } from '../theme/mobile-theme'
+import { themedStyleSheet } from '../theme/themed-styles'
 
-export const filePreviewStyles = StyleSheet.create({
+export const filePreviewStyles = themedStyleSheet(() => ({
   container: {
     flex: 1,
     backgroundColor: colors.bgBase
@@ -206,4 +207,4 @@ export const filePreviewStyles = StyleSheet.create({
     lineHeight: 19,
     padding: 0
   }
-})
+}))

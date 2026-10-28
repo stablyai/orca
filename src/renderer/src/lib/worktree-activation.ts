@@ -316,6 +316,7 @@ export function activateAndRevealWorkspace(
   workspaceId: string,
   opts?: WorktreeActivationSurfaceSelection & {
     executionHostId?: ExecutionHostId
+    sidebarRevealBehavior?: PendingSidebarWorktreeReveal['behavior']
     revealInSidebar?: boolean
     showWorkspaceList?: boolean
     /** Worktree-only: folder workspaces are never filter-hidden. */

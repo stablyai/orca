@@ -21,18 +21,18 @@ import { structuredAgentSessionSendSelection } from '../../shared/structured-age
 import { claudeAndCodexAgents } from '../native-chat/agent-session-wire/structured-agent-session-adapter-router-test-support'
 import { composeCodexSessionOptionCatalog } from '../codex/codex-structured-model-catalog'
 import { listedModels } from './claude-structured-model-catalog'
-import {
-  ClaudeStructuredSessionAdapter,
-  type ClaudeStructuredSessionEvent
-} from './claude-structured-session-adapter'
+import { ClaudeStructuredSessionAdapter } from './claude-structured-session-adapter'
+import type { ClaudeStructuredSessionEvent } from './structured/claude-structured-session-state'
 import {
   PROVIDER_SESSION_ID,
   fakeClaude,
   identityFor,
-  recordingJournalSink,
+  recordingJournalSink
+} from './claude-structured-session-test-support'
+import {
   claudeStartupSettled,
   claudeOpened
-} from './claude-structured-session-test-support'
+} from './claude-structured-startup-settled-test-support'
 
 const SESSION = 'session-1'
 const ACCOUNT_HOME = '/accounts/claude'

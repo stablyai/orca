@@ -425,3 +425,7 @@ export type AgentSessionSlashCommand = {
 
 /** Per-session provider commands; older hosts return method_not_found and clients retain their curated catalog. */
 export type AgentSessionCommandsResult = { commands?: AgentSessionSlashCommand[] }
+
+export type AgentSessionContinuationContext =
+  | { status: 'current'; capturedText?: string; transcriptPath?: string }
+  | { status: 'superseded' }

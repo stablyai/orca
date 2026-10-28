@@ -39,8 +39,6 @@ const BASE_LOCALE_KEY_OVERRIDES = {
   'menu.exploreOrca': { ko: 'Orca 둘러보기', zh: '探索 Orca', ja: 'Orca を探索' },
   'worktreeJumpPalette.matchLabel.issue': { ko: '이슈', zh: '议题', ja: 'Issue' },
   'worktreeJumpPalette.matchLabel.comment': { ko: '댓글', zh: '评论', ja: 'コメント' },
-  // Bare "Run" is an automation run, not jogging; MT renders the sports sense (zh 跑步).
-  'worktreeJumpPalette.matchLabel.automation': { ko: '실행', zh: '运行', ja: '実行' },
   'auto.hooks.useSettingsNavigationMetadata.13241992bd': {
     ko: '일반',
     zh: '通用',
@@ -207,11 +205,6 @@ const BASE_LOCALE_KEY_OVERRIDES = {
     zh: '隐藏休眠项',
     ja: 'スリープ中を非表示'
   },
-  'auto.components.status.bar.ResourceUsageStatusSegment.4bb076fa89': {
-    ko: '강제 종료',
-    zh: '强制结束',
-    ja: '強制終了'
-  },
   'auto.components.status.bar.ResourceUsageStatusSegment.41ae4fa725': {
     ko: '종료 중…',
     zh: '正在结束…',
@@ -221,11 +214,6 @@ const BASE_LOCALE_KEY_OVERRIDES = {
     ko: 'Orca 접기',
     zh: '折叠 Orca',
     ja: 'Orca を折りたたむ'
-  },
-  'auto.components.settings.ManageSessionsSection.a06ababda0': {
-    ko: '모두 강제 종료',
-    zh: '全部强制结束',
-    ja: 'すべて強制終了'
   },
   'auto.components.settings.ManageSessionKillDialog.d3dba51b15': {
     ko: '종료 중…',
@@ -262,25 +250,10 @@ const BASE_LOCALE_KEY_OVERRIDES = {
     zh: '深色',
     ja: 'ダーク'
   },
-  'auto.components.settings.BrowserUsePane.de9b2f32f3': {
-    ko: '활성화',
-    zh: '启用',
-    ja: '有効化'
-  },
-  'auto.components.settings.GeneralSupportSection.73b327e793': {
-    ko: '다시 시도',
-    zh: '重试',
-    ja: '再試行'
-  },
   'auto.components.settings.PrivacyDiagnosticBundleControls.2801d4ce22': {
     ko: '참조 ID 복사',
     zh: '复制参考 ID',
     ja: '参照 ID をコピー'
-  },
-  'auto.components.settings.ComputerUsePane.4b65070096': {
-    ko: 'darwin',
-    zh: 'darwin',
-    ja: 'darwin'
   },
   'auto.components.settings.ComputerUsePane.bf51e4a542': {
     ko: 'USB 장치',
@@ -337,9 +310,6 @@ const BASE_LOCALE_KEY_OVERRIDES = {
     zh: '立即重启',
     ja: '今すぐ再起動'
   },
-  'auto.App.9f0152563e': { ko: '모바일', zh: '移动端', ja: 'モバイル' },
-  'auto.App.ca6c6eece7': { ko: '스킬', zh: '技能', ja: 'スキル' },
-  'auto.App.62ca9895a7': { ko: '스페이스', zh: '空间', ja: 'スペース' },
   'settings.appearance.statusBar.kimiToggleDescription': {
     ko: '활성 워크스페이스의 Kimi 구독 사용량을 표시합니다.',
     zh: '显示当前工作区的 Kimi 订阅使用情况。',
@@ -390,25 +360,10 @@ const BASE_LOCALE_KEY_OVERRIDES = {
     zh: '在提交此议题之前，请从项目工作区选择一个团队。',
     ja: 'このイシューを登録する前に、プロジェクトワークスペースからチームを選択してください。'
   },
-  'auto.components.TaskPage.d079be2dc8': {
-    ko: '할당된 이슈가 없습니다. 검색해 보세요.',
-    zh: '没有分配的议题。请尝试搜索。',
-    ja: '割り当てられたイシューはありません。検索してみてください。'
-  },
   'auto.components.TaskPage.94d900518d': {
     ko: '선택한 프리셋과 일치하는 이슈가 없습니다.',
     zh: '没有与所选预设匹配的议题。',
     ja: '選択したプリセットに一致するイシューはありません。'
-  },
-  'auto.components.github.project.ProjectCell.ffeff79861': {
-    ko: 'PULL_REQUEST',
-    zh: 'PULL_REQUEST',
-    ja: 'PULL_REQUEST'
-  },
-  'auto.components.github.project.ProjectRow.c3b81ddea2': {
-    ko: 'DRAFT_ISSUE',
-    zh: 'DRAFT_ISSUE',
-    ja: 'DRAFT_ISSUE'
   },
   'auto.components.linear.project.view.surfaces.3ad562bdf4': {
     ko: '범위가 지정된 이슈',
@@ -470,20 +425,10 @@ const BASE_LOCALE_KEY_OVERRIDES = {
     zh: '隐藏应用名称',
     ja: 'アプリ名を非表示'
   },
-  'auto.components.settings.ExperimentalPane.0277901cf7': {
-    ko: '완료된 에이전트, 차단 질문, 읽지 않은 상태 및 작업 트리 생성 이벤트에 대한 스레드 작업 트리 피드가 있는 에이전트 항목을 왼쪽 사이드바에 추가합니다. 실험적 — 이벤트 모델과 UI가 변경될 수 있습니다.',
-    zh: '将智能体条目添加到左侧边栏，其中包含已完成智能体、阻塞待办、未读状态和工作树创建事件的线程工作树提要。实验性——事件模型和 UI 可能会改变。',
-    ja: '完了した Agent、ブロック中の質問、未読状態、ワークツリー作成イベントのスレッドワークツリーフィード付き Agent 項目を左サイドバーに追加します。実験的 — イベントモデルと UI は変更される場合があります。'
-  },
   'auto.lib.fix.checks.agent.launch.9f00d7df0c': {
     ko: '검사 프롬프트가 비어 있습니다. 소스 제어 AI 설정을 업데이트하세요.',
     zh: '检查提示为空。请更新源代码管理 AI 设置。',
     ja: 'チェック プロンプトが空です。ソース管理 AI 設定を更新してください。'
-  },
-  'auto.components.TaskPage.d0e3c8f933': {
-    ko: '일치하는 GitHub 작업이 없습니다',
-    zh: '没有匹配的 GitHub 工作项',
-    ja: '一致する GitHub の作業はありません'
   },
   'auto.components.TaskPage.2af3ab5c58': {
     ko: 'Linear에서 열 팀을 하나 선택하세요',
@@ -504,16 +449,6 @@ const BASE_LOCALE_KEY_OVERRIDES = {
     ko: '이 Linear 컨텍스트와 일치하는 이슈가 없습니다.',
     zh: '没有议题与此 Linear 上下文匹配。',
     ja: 'この Linear コンテキストに一致するイシューはありません。'
-  },
-  'auto.components.settings.IntegrationsPane.33ae9730a8': {
-    ko: 'Linear 액세스를 추가해 이슈를 탐색하고 연결합니다.',
-    zh: '添加 Linear 访问以浏览和链接议题。',
-    ja: 'Linear アクセスを追加して、Issue を閲覧およびリンクします。'
-  },
-  'auto.components.GitHubItemDialog.3ab6ac0fc8': {
-    ko: '선택한 GitHub 이슈 또는 PR을 미리보기하고 편집합니다.',
-    zh: '预览并编辑选定的 GitHub 议题或拉取请求。',
-    ja: '選択した GitHub イシューまたは PR をプレビュー・編集します。'
   },
   'auto.components.GitHubItemDialog.8c45901789': {
     ko: '리뷰어 요청 {{value0}}',
@@ -544,16 +479,6 @@ const BASE_LOCALE_KEY_OVERRIDES = {
     ko: '머리말',
     zh: '前言',
     ja: 'フロントマター'
-  },
-  'auto.components.settings.IntegrationsPane.c0c8575e05': {
-    ko: 'PR, 이슈 및 검사를 활성화하려면 GitHub CLI를 설치하세요.',
-    zh: '安装 GitHub CLI 以启用拉取请求、议题和检查。',
-    ja: 'GitHub CLI をインストールして PR、イシュー、チェックを有効にします。'
-  },
-  'auto.components.dashboard.DashboardAgentRow.92a7017987': {
-    ko: '전송 중',
-    zh: '发送',
-    ja: '送信中'
   },
   'auto.components.github.pr.merge.state.bf5e4c6c92': {
     ko: '차단됨',
@@ -597,9 +522,8 @@ const BASE_LOCALE_KEY_OVERRIDES = {
   },
   // Port forwarding "Forward" is 転送, not the browser-navigation 進む.
   'auto.components.right.sidebar.PortsPanel.c9d106547a': { ja: '転送' },
-  // Browser Back uses Retour, not anatomy Dos; GitLab MRs is not Mme; ssh search token stays Latin, not Chut.
+  // Browser Back uses Retour, not anatomy Dos; ssh search token stays Latin, not Chut.
   'browser.navigation.back': { fr: 'Retour' },
-  'auto.components.task.page.chrome.task.page.gitlab.filters.e157d7ce4d': { fr: 'MR' },
   'auto.components.settings.browser.search.sshWorkspaceRouting.ssh': { fr: 'ssh' },
   // Worktree badge: stand-alone 主要な leaves the adnominal な dangling — align with the Tooltip's プライマリ.
   'auto.components.sidebar.WorktreeCard.7d517f82e2': { ja: 'プライマリ' },

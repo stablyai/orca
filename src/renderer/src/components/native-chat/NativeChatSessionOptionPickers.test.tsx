@@ -9,7 +9,7 @@ import {
   createStructuredAgentSessionOptionState,
   structuredAgentSessionOptionSnapshot
 } from '../../../../shared/structured-agent-session-options'
-import type { SessionOptionDescriptor } from '../../../../shared/native-chat-session-options'
+import type { SessionOptionDescriptor } from '../../../../shared/native-chat/input/native-chat-session-options'
 import { RuntimeRpcCallError } from '@/runtime/runtime-rpc-result'
 
 const toastError = vi.hoisted(() => vi.fn())

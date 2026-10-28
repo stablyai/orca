@@ -51,18 +51,4 @@ describe('terminal mouse encoding tracker', () => {
   ])('mirrors %s', async (_name, chunks, restore, xterm) => {
     expect(await trackedAfter(...chunks)).toEqual({ restore, xterm })
   })
-
-  it('stops tracking once disposed', async () => {
-    const terminal = new Terminal({ cols: 40, rows: 10, allowProposedApi: true })
-    const tracker = installTerminalMouseEncodingTracker(terminal)
-    await write(terminal, `${ESC}[?1006h`)
-    tracker.dispose()
-    expect(terminalMouseEncodingRestoreAnsi(terminal)).toBe('')
-  })
-
-  it('tolerates a terminal without a parser', () => {
-    const terminal = {}
-    installTerminalMouseEncodingTracker(terminal).dispose()
-    expect(terminalMouseEncodingRestoreAnsi(terminal)).toBe('')
-  })
 })

@@ -1,8 +1,9 @@
 ---
 name: orchestration
 description: >-
-  Coordinate supervised Orca workers: threaded messages, blocking ask/reply,
-  task dispatch, worker_done/escalation waits, task DAGs, decision gates,
+  Coordinate supervised Orca workers, or work as a dispatched worker
+  (heartbeats, ask, worker_done): threaded messages, blocking ask/reply, task
+  dispatch, worker_done/escalation waits, task DAGs, decision gates,
   coordinator loops, and decomposing work across agents. Use `orca-cli` for full
   ownership handoffs — "hand off", "handoff", "handover", "give this to another
   agent", "another worktree" — unless asked to supervise, monitor, or coordinate
@@ -81,7 +82,8 @@ The injected preamble is authoritative. A dispatched worker must:
    coordinator question. Never open a local question TUI the coordinator cannot
    answer. Resume the same message ID after an ask timeout.
 2. Send heartbeats only at the cadence in the preamble. A heartbeat proves
-   liveness, not completion.
+   liveness, not completion. If a background loop sends them, restart it if it
+   expires mid-task, and stop it before `worker_done`.
 3. Read coordinator follow-ups at each natural checkpoint — before starting a
    new file, after a test run — and once more immediately before `worker_done`:
    `ORCA orchestration check --terminal <your_handle> --json`.

@@ -22,6 +22,7 @@ import {
   type FileExplorerRow
 } from './file-tree'
 import { colors, spacing } from '../theme/mobile-theme'
+import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import {
   beginDirectoryLoad,
   createDirectoryLoadRevisions,
@@ -45,6 +46,7 @@ export function MobileFileExplorerPanel(props: {
   onRequestClose?: () => void
   onOpenFile?: (relativePath: string) => void
 }) {
+  useMobileColorScheme()
   const { hostId, worktreeId, name, embedded, onRequestClose, onOpenFile } = props
   const router = useWorkspaceRouteHandoff()
   const executionHost = useWorkspaceExecutionHost()

@@ -2,7 +2,7 @@ import {
   removeOverriddenAgentSessionArgs,
   resolveAgentSessionOptionLaunch
 } from './agent-session-option-launch'
-import type { SessionOptionValue } from './native-chat-session-options'
+import type { SessionOptionValue } from './native-chat/input/native-chat-session-options'
 import { agentArgTerminatorIndex } from './agent-session-option-agent-args'
 import { getTuiAgentLaunchCommand, TUI_AGENT_CONFIG } from './tui-agent-config'
 import {

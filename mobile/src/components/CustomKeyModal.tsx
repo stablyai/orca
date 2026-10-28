@@ -2,6 +2,7 @@ import { useCallback, useMemo, useState } from 'react'
 import { View, Text, Pressable, TextInput, Switch } from 'react-native'
 import { ChevronLeft } from 'lucide-react-native'
 import { colors } from '../theme/mobile-theme'
+import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import { BottomDrawer } from './BottomDrawer'
 import {
   buildTerminalShortcutKey,
@@ -53,6 +54,7 @@ type Props = {
 }
 
 export function CustomKeyModal({ visible, onClose, onKeysChanged, onManageShortcuts }: Props) {
+  useMobileColorScheme()
   const [step, setStep] = useState<Step>('choose-type')
   const [shortcutKey, setShortcutKey] = useState('c')
   const [shortcutModifiers, setShortcutModifiers] = useState<TerminalShortcutModifier[]>(['ctrl'])

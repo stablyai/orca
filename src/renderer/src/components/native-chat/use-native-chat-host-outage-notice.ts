@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { toast } from 'sonner'
 import { connectRuntimeHostAndReloadProjects } from '@/components/status-bar/runtime-environment-explicit-connect'
 import { useMountedRef } from '@/hooks/useMountedRef'
 import { translate } from '@/i18n/i18n'
@@ -10,9 +11,13 @@ export function useNativeChatHostOutageNotice(
 ): NativeChatComposerNotice | null {
   const [connecting, setConnecting] = useState(false)
   const mountedRef = useMountedRef()
-  const reconnect = (environmentId: string): void => {
+  const reconnect = (environmentId: string, start: boolean): void => {
     setConnecting(true)
-    void connectRuntimeHostAndReloadProjects(environmentId).finally(() => {
+    void (
+      start
+        ? startWslHostAndReloadProjects(environmentId)
+        : connectRuntimeHostAndReloadProjects(environmentId)
+    ).finally(() => {
       if (mountedRef.current) {
         setConnecting(false)
       }
@@ -20,6 +25,21 @@ export function useNativeChatHostOutageNotice(
   }
   if (!outage) {
     return null
+  }
+  if (outage.kind === 'stopped') {
+    return {
+      key: 'host-outage',
+      kind: 'host',
+      tone: 'warning',
+      text: translate('components.native-chat.hostOutage.stopped', '{{distro}} is stopped', {
+        distro: outage.hostLabel
+      }),
+      action: {
+        label: translate('components.native-chat.hostOutage.start', 'Start'),
+        onClick: () => reconnect(outage.environmentId, true),
+        disabled: connecting
+      }
+    }
   }
   const offline = outage.kind === 'offline'
   return {
@@ -41,10 +61,25 @@ export function useNativeChatHostOutageNotice(
       ? {
           action: {
             label: translate('components.native-chat.hostOutage.reconnect', 'Reconnect'),
-            onClick: () => reconnect(outage.environmentId),
+            onClick: () => reconnect(outage.environmentId, false),
             disabled: connecting
           }
         }
       : {})
   }
+}
+
+/** Start is the user acting on the host, so it may boot the distro; then the chat reconnects. */
+async function startWslHostAndReloadProjects(environmentId: string): Promise<boolean> {
+  try {
+    // A chat's Start must not quietly cancel a Remove the user started; that refusal says so.
+    await window.api.runtimeEnvironments.wslHosts?.connect({
+      environmentId,
+      withdrawPendingRemoval: false
+    })
+  } catch (error) {
+    toast.error(error instanceof Error ? error.message : String(error))
+    return false
+  }
+  return connectRuntimeHostAndReloadProjects(environmentId)
 }

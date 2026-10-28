@@ -2,6 +2,7 @@ import { toast } from 'sonner'
 import type { AiVaultSession } from '../../../shared/ai-vault-types'
 import { translate } from '@/i18n/i18n'
 import { activateAndRevealWorktree } from './worktree-activation'
+import { activateWslMovedWorkspace } from './wsl-moved-chat-activation'
 import { activateStructuredAgentSessionById } from './agent-session/structured-agent-session-tab-activation'
 import { useAppStore } from '@/store'
 import { runtimeEnvironmentIdOrLocalUnlessTwin } from './worktree-runtime-owner'
@@ -141,7 +142,11 @@ async function activateStructuredSession(
       }
     }
   }
-  if (useAppStore.getState().activeWorktreeId !== structured.workspaceId) {
+  // A moved project's chat opens under its retained entry; the catalog does not list it.
+  if (
+    useAppStore.getState().activeWorktreeId !== structured.workspaceId &&
+    !activateWslMovedWorkspace(structured.workspaceId)
+  ) {
     activateAndRevealWorktree(structured.workspaceId)
   }
   return true

@@ -6,6 +6,7 @@ import { sanitizeRepoIcon } from '../../../shared/repo-icon'
 import { normalizeGhAccountBinding } from '../../../shared/github/account-binding'
 import { normalizeJiraProjectReference } from '../../../shared/jira/jira-project-reference'
 import { normalizeRepoSourceControlAiOverrides } from '../../../shared/source-control-ai'
+import { normalizeOrcadRetainedMarker } from '../../../shared/orcad-retained-marker'
 import {
   sanitizeForkSyncMode,
   sanitizeGitRemoteIdentity,
@@ -37,6 +38,7 @@ export function hydrateRepo(repo: Repo, gitUsernameCache: ReadonlyMap<string, st
     defaultJiraProject: rawDefaultJiraProject,
     customWorktreeVisibilitySources: rawCustomWorktreeVisibilitySources,
     worktreeVisibilitySourcePreferences: rawWorktreeVisibilitySourcePreferences,
+    orcadRetained: rawOrcadRetained,
     ...repoWithoutIcon
   } = repo
   const repoIcon = sanitizeRepoIcon(rawRepoIcon)
@@ -53,6 +55,7 @@ export function hydrateRepo(repo: Repo, gitUsernameCache: ReadonlyMap<string, st
   const worktreeVisibilitySourcePreferences = normalizeWorktreeVisibilitySourcePreferences(
     rawWorktreeVisibilitySourcePreferences
   )
+  const orcadRetained = normalizeOrcadRetainedMarker(rawOrcadRetained)
   // Hydrate cached identity only; stuck git/gh probes froze Windows startup (#7225).
   const gitUsername = isFolderRepo(repo)
     ? ''
@@ -75,6 +78,7 @@ export function hydrateRepo(repo: Repo, gitUsernameCache: ReadonlyMap<string, st
     ...(worktreeVisibilitySourcePreferences !== undefined
       ? { worktreeVisibilitySourcePreferences }
       : {}),
+    ...(orcadRetained ? { orcadRetained } : {}),
     kind: isFolderRepo(repo) ? 'folder' : 'git',
     gitUsername,
     hookSettings: {

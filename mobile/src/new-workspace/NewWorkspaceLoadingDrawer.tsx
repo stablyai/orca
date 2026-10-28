@@ -21,6 +21,8 @@ import {
 import type { ShellOverlayDownload } from '../mobile-web-shell/shell-overlay-load'
 import { SHELL_PAGE_COVER_FADE_MS } from '../mobile-web-shell/ShellWaitingFrame'
 import { colors, spacing, typography } from '../theme/mobile-theme'
+import { themedStyleSheet } from '../theme/themed-styles'
+import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 
 const CANCEL_DRAG_DISTANCE = 40
 
@@ -34,6 +36,7 @@ export function NewWorkspaceLoadingDrawer({
   download: ShellOverlayDownload | null
   onCancel: () => void
 }) {
+  useMobileColorScheme()
   const insets = useWindowSafeAreaInsets()
   const { isWideLayout, modalMaxWidth } = useResponsiveLayout()
   const { height: screenHeight } = useWindowDimensions()
@@ -122,6 +125,7 @@ export function NewWorkspaceLoadingDrawer({
 }
 
 function DownloadProgress({ download }: { download: ShellOverlayDownload }) {
+  useMobileColorScheme()
   return (
     <>
       <DownloadProgressBar
@@ -137,7 +141,7 @@ function DownloadProgress({ download }: { download: ShellOverlayDownload }) {
   )
 }
 
-const styles = StyleSheet.create({
+const styles = themedStyleSheet(() => ({
   body: {
     height: 96,
     alignItems: 'center',
@@ -149,4 +153,4 @@ const styles = StyleSheet.create({
     color: colors.textSecondary,
     fontVariant: ['tabular-nums']
   }
-})
+}))

@@ -37,6 +37,7 @@ export class PluginLanguagePackRegistry extends PluginArtifactPackRegistry<
           resourceLanguage: pluginLanguageResourceId(id),
           pluginKey: plugin.pluginKey,
           locale: contribution.locale,
+          ...(contribution.displayName ? { displayName: contribution.displayName } : {}),
           catalog: parsed.catalog
         }
       }

@@ -230,6 +230,30 @@ describe('BrowserLoadFailureOverlay', () => {
     expect(screen.getByRole('button', { name: 'Retry' })).toBeEnabled()
   })
 
+  it('says an extension blocked the page', () => {
+    render(
+      <BrowserLoadFailureOverlay
+        loadError={{
+          code: -20,
+          description: 'ERR_BLOCKED_BY_CLIENT',
+          validatedUrl: 'http://ads.example.com/'
+        }}
+        externalUrl="http://ads.example.com/"
+        sshRoutedHint
+        {...callbacks}
+      />
+    )
+
+    expect(screen.getByText('ads.example.com is blocked')).toBeInTheDocument()
+    expect(
+      screen.getByText(
+        'An extension blocked this page. To open it, allow this site in the extension, then retry.'
+      )
+    ).toBeInTheDocument()
+    expect(screen.queryByText(/SSH host/)).toBeNull()
+    expect(screen.getByRole('button', { name: 'Retry' })).toBeEnabled()
+  })
+
   it('presents guest recovery failures without network troubleshooting', () => {
     render(
       <BrowserLoadFailureOverlay

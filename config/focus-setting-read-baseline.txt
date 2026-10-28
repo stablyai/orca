@@ -138,7 +138,6 @@
 1 src/renderer/src/components/sidebar/worktree-filter-visibility.ts
 1 src/renderer/src/components/sidebar/worktree-list/listing/use-filters.ts
 1 src/renderer/src/components/sidebar/worktree-list/listing/use-section-rows.ts
-1 src/renderer/src/components/sidebar/worktree-list/listing/use-window-list-model.ts
 1 src/renderer/src/components/sidebar/worktree-list/rows/ProjectGroupDialogs.tsx
 1 src/renderer/src/components/sidebar/worktree-visibility-host-target.ts
 1 src/renderer/src/components/sidebar/WorktreeList.tsx
@@ -184,8 +183,8 @@
 4 src/renderer/src/components/terminal/terminal-tab-bulk-actions.ts
 2 src/renderer/src/components/terminal/terminal-tab-create.ts
 2 src/renderer/src/components/use-new-linear-issue-projects.ts
-4 src/renderer/src/components/use-task-page-jira-creation-metadata.ts
-4 src/renderer/src/components/use-task-page-jira-issue-creation.ts
+4 src/renderer/src/components/task-page/jira/use-task-page-jira-creation-metadata.ts
+4 src/renderer/src/components/task-page/jira/use-task-page-jira-issue-creation.ts
 1 src/renderer/src/components/use-task-page-jira-list-effects.ts
 2 src/renderer/src/components/task-page/use-task-page-provider-metadata.ts
 2 src/renderer/src/components/task-page/use-task-page-store-bindings.ts

@@ -92,11 +92,15 @@ function replayEvent(textarea: HTMLTextAreaElement, recorded: RecordedEvent): vo
 
 type PreeditSample = { data: string; shown: boolean }
 
-async function replayTrace(
-  trace: RecordedTrace
-): Promise<{ stream: string; preedits: PreeditSample[]; inputSignals: TypingInputSignal[] }> {
+async function replayTrace(trace: RecordedTrace): Promise<{
+  stream: string
+  preedits: PreeditSample[]
+  highlights: string[]
+  inputSignals: TypingInputSignal[]
+}> {
   const { emitted, terminal, textarea } = openTerminal()
   const preedits: PreeditSample[] = []
+  const highlights: string[] = []
   const inputSignals: TypingInputSignal[] = []
   const detachInputEvents = installTypingLatencyInputEvents(window, (signal) => {
     inputSignals.push(signal)
@@ -108,6 +112,9 @@ async function replayTrace(
         await nextEventLoop()
       }
       replayEvent(textarea, recorded)
+      if (terminal.element?.querySelector('.xterm-composition-preedit-selected')) {
+        highlights.push(recorded.type)
+      }
       if (recorded.type === 'compositionupdate' && recorded.data) {
         const view = terminal.element?.querySelector('.composition-view')
         preedits.push({ data: recorded.data, shown: view?.classList.contains('active') === true })
@@ -116,7 +123,7 @@ async function replayTrace(
     // Two turns: the commit's deferred send, then the late-native-commit window it opens.
     await nextEventLoop()
     await nextEventLoop()
-    return { stream: emitted.join(''), preedits, inputSignals }
+    return { stream: emitted.join(''), preedits, highlights, inputSignals }
   } finally {
     detachInputEvents()
     terminal.dispose()
@@ -179,5 +186,11 @@ describe.each([
     const { preedits } = await replayTrace(trace)
     expect(preedits.length).toBeGreaterThan(0)
     expect(preedits.filter((sample) => !sample.shown)).toEqual([])
+  })
+
+  // Why: Hangul IMEs keep the syllable they are replacing selected until the input event collapses
+  // it, so reading the selection any earlier flashes every syllable as a converted clause.
+  it('does not highlight the syllable the IME is replacing', async () => {
+    expect((await replayTrace(trace)).highlights).toEqual([])
   })
 })

@@ -1,14 +1,11 @@
 import { useMemo } from 'react'
 import type { AgentType } from '../../../../shared/agent-status-types'
-import {
-  getNativeChatAgentProfile,
-  getVerifiedNativeChatCommands
-} from '../../../../shared/native-chat-agent-profiles'
-import {
-  sessionReportedSkills,
-  type NativeChatSessionSkill,
-  type SlashCommandSuggestion
+import { getVerifiedNativeChatCommands } from '../../../../shared/native-chat-agent-profiles'
+import type {
+  NativeChatSessionSkill,
+  SlashCommandSuggestion
 } from '../../../../shared/native-chat/input/native-chat-slash-commands'
+import { nativeChatSessionSkills } from '../../../../shared/native-chat-skill-visibility'
 import { structuredSessionSlashCommands } from '../../../../shared/structured-agent-session-composer'
 import { withNativeChatResumeCommand } from './use-native-chat-resume-command'
 import type { NativeChatStructuredComposerTransport } from './native-chat-composer-types'
@@ -26,7 +23,6 @@ export function useNativeChatComposerCatalog(
   const structured = Boolean(structuredTransport)
   const reported = structuredTransport?.sessionCommands
   const conversationCommands = structuredTransport?.conversationCommands
-  const keepsScannedSkills = getNativeChatAgentProfile(agent)?.keepsScannedSkills === true
   const agentCommands = useMemo(
     () =>
       structured
@@ -36,10 +32,6 @@ export function useNativeChatComposerCatalog(
         : getVerifiedNativeChatCommands(agent),
     [agent, conversationCommands, reported, structured]
   )
-  const sessionSkills = useMemo(
-    () =>
-      reported !== undefined && !keepsScannedSkills ? sessionReportedSkills(reported) : undefined,
-    [keepsScannedSkills, reported]
-  )
+  const sessionSkills = useMemo(() => nativeChatSessionSkills(agent, reported), [agent, reported])
   return { agentCommands, sessionSkills }
 }

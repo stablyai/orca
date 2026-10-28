@@ -12,17 +12,21 @@ import frCatalogUrl from './locales/fr.json?url'
 import jaCatalogUrl from './locales/ja.json?url'
 import koCatalogUrl from './locales/ko.json?url'
 import ptCatalogUrl from './locales/pt.json?url'
+import ruCatalogUrl from './locales/ru.json?url'
+import trCatalogUrl from './locales/tr.json?url'
 import zhCatalogUrl from './locales/zh.json?url'
+import zhHantCatalogUrl from './locales/zh-Hant.json?url'
 import { isPseudoLocalizationLocale, pseudoLocalizeString } from './pseudo-localization'
 import { advanceTranslationResourceVersion } from './translation-resource-version'
 import { DEFAULT_LOCALE, resolveUiLocale } from './supported-languages'
 import type { SupportedUiLocale } from '../../../shared/ui-locale'
 import { isPluginUiLanguage, type UiLanguage } from '../../../shared/ui-language'
-import {
-  isCatalogObject,
-  type PluginLanguagePackRegistration
-} from '../../../shared/plugins/plugin-language-pack-artifact'
+import type { PluginLanguagePackRegistration } from '../../../shared/plugins/plugin-language-pack-artifact'
 import { withTimeout } from '../../../shared/promise-timeout-fallback'
+import {
+  resolvePluralFamilyKey,
+  withPluralCategoriesFromOther
+} from '../../../shared/i18n-plural-family'
 
 export const i18n: I18nInstance = i18next.createInstance()
 
@@ -33,19 +37,23 @@ const NON_DEFAULT_LOCALE_URLS: Record<Exclude<SupportedUiLocale, 'en'>, string> 
   ja: jaCatalogUrl,
   ko: koCatalogUrl,
   pt: ptCatalogUrl,
-  zh: zhCatalogUrl
+  ru: ruCatalogUrl,
+  tr: trCatalogUrl,
+  zh: zhCatalogUrl,
+  'zh-Hant': zhHantCatalogUrl
 }
 
 function localeCatalogUrl(language: string): string | undefined {
   return Object.entries(NON_DEFAULT_LOCALE_URLS).find(([name]) => name === language)?.[1]
 }
 
-async function loadLocaleCatalog(url: string): Promise<Record<string, unknown>> {
+async function loadLocaleCatalog(language: string, url: string): Promise<Record<string, unknown>> {
   const response = await fetch(url, { cache: 'no-cache' })
   if (!response.ok) {
     throw new Error(`Language catalog request failed: ${response.status}`)
   }
-  return response.json()
+  const categories = new Intl.PluralRules(language).resolvedOptions().pluralCategories
+  return withPluralCategoriesFromOther(await response.json(), categories)
 }
 
 const lazyLocaleBackend: BackendModule = {
@@ -58,7 +66,7 @@ const lazyLocaleBackend: BackendModule = {
       callback(null, false)
       return
     }
-    loadLocaleCatalog(url).then(
+    loadLocaleCatalog(language, url).then(
       (catalog) => callback(null, catalog),
       (error) => callback(error instanceof Error ? error : new Error(String(error)), false)
     )
@@ -71,6 +79,8 @@ void i18n
   .init({
     fallbackLng: DEFAULT_LOCALE,
     lng: DEFAULT_LOCALE,
+    // Default 'all' expands zh-Hant to [zh-Hant, zh, en], so missing keys would render Simplified.
+    load: 'currentOnly',
     // Serve eager English from resources while the backend lazily supplies other languages.
     partialBundledLanguages: true,
     resources: {
@@ -99,7 +109,7 @@ pluralResolver.getRule = (code: string, options?: { ordinal?: boolean }) =>
   getPluralRule(pluralLocaleByResourceLanguage.get(code) ?? code, options)
 
 export function translate(key: string, fallback: string, options?: TOptions): string {
-  const value = i18n.t(key, { defaultValue: fallback, ...options })
+  const value = i18n.t(resolvePluralFamilyKey(key, options), { defaultValue: fallback, ...options })
   return isPseudoLocalizationLocale(i18n.language) ? pseudoLocalizeString(value) : value
 }
 
@@ -112,7 +122,7 @@ export async function loadRendererUiLanguage(language: UiLanguage): Promise<stri
       : resourceLanguage
   const url = localeCatalogUrl(locale)
   if (url && !i18n.hasResourceBundle(locale, 'translation')) {
-    const catalog = await withTimeout(loadLocaleCatalog(url), 5000, null)
+    const catalog = await withTimeout(loadLocaleCatalog(locale, url), 5000, null)
     if (catalog === null) {
       throw new Error('Language catalog unavailable')
     }
@@ -152,24 +162,6 @@ function supportedIntlLocale(
 
 export function resolveRendererResourceLanguage(language: string): string {
   return pluginLanguagePacks.find((pack) => pack.id === language)?.resourceLanguage ?? language
-}
-
-// Packs translated from English often ship only _one/_other; reuse _other so few/many stay in-language.
-function withPluralCategoriesFromOther(
-  catalog: Record<string, unknown>,
-  categories: readonly string[]
-): Record<string, unknown> {
-  const filled: Record<string, unknown> = {}
-  for (const [key, value] of Object.entries(catalog)) {
-    filled[key] = isCatalogObject(value) ? withPluralCategoriesFromOther(value, categories) : value
-    if (typeof value === 'string' && key.endsWith('_other')) {
-      const base = key.slice(0, -'_other'.length)
-      for (const category of categories) {
-        filled[`${base}_${category}`] ??= value
-      }
-    }
-  }
-  return filled
 }
 
 export function setRendererPluginLanguagePacks(

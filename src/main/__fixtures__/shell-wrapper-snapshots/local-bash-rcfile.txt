@@ -127,6 +127,9 @@ if [[ -n "${__orca_codex_binary:-}" && -x "${__orca_codex_binary}" ]]; then
   function codex {
     # Why local: zsh's warn_create_global warns for each global a function creates.
     local __orca_codex_arg __orca_codex_isolate="${ORCA_CODEX_ISOLATE:-1}" __orca_codex_identity="${ORCA_CODEX_ISOLATE:-1}"
+    if [[ "${ORCA_REMOTE_VIEWER_CLIPBOARD:-}" == 1 && -z "${SSH_CONNECTION+x}" && -z "${SSH_TTY+x}" ]]; then
+      local -x SSH_CONNECTION='127.0.0.1 0 127.0.0.1 0'
+    fi
     if [[ -n "${ORCA_CODEX_LAUNCH_PREFLIGHT:-}" && -x "${ORCA_CODEX_LAUNCH_PREFLIGHT}" ]]; then
       "${ORCA_CODEX_LAUNCH_PREFLIGHT}" agent hooks prepare-codex >/dev/null 2>&1 || :
     fi

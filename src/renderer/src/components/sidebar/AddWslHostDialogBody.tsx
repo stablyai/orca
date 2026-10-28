@@ -49,6 +49,10 @@ export function AddWslHostDialogBody({
       })
       if (!result.ok) {
         setError(result.message)
+        if (result.kind === 'distro-stopped') {
+          // It stopped after the list was read; the fresh state turns the button into Start and add.
+          list.refresh()
+        }
         return
       }
       setRuntimeEnvironments(await window.api.runtimeEnvironments.list())

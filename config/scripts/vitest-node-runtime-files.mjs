@@ -94,6 +94,10 @@ const NODE_RUNTIME_INCLUDE = [
   'src/**/*.node-pty.test.ts',
   'src/**/node-pty-*.test.ts',
   'src/**/*.live-shell.test.ts',
+  // These drive live zsh through node-pty and rely on Node's native PTY stream delivery.
+  'src/main/shell-startup-feature-channel.test.ts',
+  'src/main/daemon/shell-ready.test.ts',
+  'src/main/daemon/repro-13767-shell-ready-marker-lost-to-exec.test.ts',
   'src/**/*real-pty*.test.ts',
   'src/**/*-native.test.ts',
   'src/**/*retention*.test.ts',
@@ -164,7 +168,6 @@ const NODE_RUNTIME_INCLUDE = [
   'src/main/native-chat/agent-session-wire/structured-agent-session-permission-mode.test.ts',
   'src/main/native-chat/agent-session-wire/structured-agent-session-queued-legacy-import.test.ts',
   'src/main/runtime/agent-session-conversation-name-store.test.ts',
-  'src/main/runtime/structured-session-mail-redrive-wiring.test.ts',
   'src/main/runtime/rpc/ws-transport.test.ts',
   'src/main/runtime/rpc/dispatcher-transport-parity.test.ts',
   'src/main/runtime/rpc/methods/structured-agent-session-visual.test.ts',

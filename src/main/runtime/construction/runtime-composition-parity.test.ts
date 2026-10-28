@@ -46,6 +46,11 @@ const DECLARED_HOST_DIFFERENCES: readonly DeclaredDifference[] = [
     reason: 'Offscreen WebContents need Electron.'
   },
   {
+    wiring: 'ctor:getSetupTerminalTitle',
+    missingOn: 'orcad',
+    reason: 'orcad has no UI language and serves clients in any locale, so Setup tabs stay English.'
+  },
+  {
     wiring: 'ctor:prepareClaudeAuth',
     missingOn: 'orcad',
     reason: 'orcad passes it to registerHeadlessPtyRuntime instead, and only off WSL.'
@@ -192,10 +197,6 @@ const HOST_PORT_SOURCES: Record<Root, readonly string[]> = {
 const NOT_HOST_PORTS = new Set(['setTimeout', 'setInterval', 'setImmediate'])
 
 const SPREAD_SOURCES: Record<string, { file: string; anchor: string }> = {
-  'orcadAiVaultSessionSources(': {
-    file: 'src/main/orcad/orcad-session-search.ts',
-    anchor: 'return {'
-  },
   'agentHookRuntimeDeps(': {
     file: 'src/main/agent-hooks/agent-hook-runtime-deps.ts',
     anchor: 'return {'

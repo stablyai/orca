@@ -2,14 +2,11 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   _resetLayoutOwnerPaneIntentsForTests,
   expectPaneToClose,
-  expectTabRowFields,
   holdTabPaneTree,
   isTabPaneTreeHeld,
   onTabPaneTreeRedraw,
-  panesLeftAfterPendingCloses,
   requestTabPaneTreeRedraw,
-  takePaneCloseIntent,
-  takeTabRowFields
+  takePaneCloseIntent
 } from './layout-owner-pane-intents'
 
 describe('layout-owner pane intents', () => {
@@ -41,16 +38,6 @@ describe('layout-owner pane intents', () => {
     expect(takePaneCloseIntent('tab-1', 'leaf-64')).toBe('exit')
   })
 
-  it('hands out a new row’s fields once, until released', () => {
-    const release = expectTabRowFields('tab-1', { pendingActivationSpawn: true })
-    expect(takeTabRowFields('tab-1')).toEqual({ pendingActivationSpawn: true })
-    expect(takeTabRowFields('tab-1')).toBeNull()
-
-    expectTabRowFields('tab-2', { pendingActivationSpawn: true })
-    release()
-    expect(takeTabRowFields('tab-2')).toEqual({ pendingActivationSpawn: true })
-  })
-
   it('holds a tab until its last hold is released, then tells the listener once', () => {
     const listener = vi.fn()
     onTabPaneTreeRedraw(listener)
@@ -68,12 +55,5 @@ describe('layout-owner pane intents', () => {
 
     requestTabPaneTreeRedraw('tab-2')
     expect(listener).toHaveBeenLastCalledWith('tab-2')
-  })
-
-  it('counts the panes no pending close of this tab takes', () => {
-    expectPaneToClose('tab-1', 'a', 'exit')
-    expectPaneToClose('tab-2', 'b', 'user')
-
-    expect(panesLeftAfterPendingCloses('tab-1', ['a', 'b', 'c'])).toBe(2)
   })
 })

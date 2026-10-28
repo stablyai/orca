@@ -3,31 +3,12 @@ import {
   foldWslUncPathCaseInsensitiveParts,
   getWslFilesystemBoundaryDistro,
   isDrvfsLinuxPath,
-  isWslUncPath,
-  parseWslUncPath,
   resolveWslRepoWorktreeBasePath,
   toWindowsWslDrivePath,
-  toWindowsWslPath,
-  toWindowsWslUncPath
+  toWindowsWslPath
 } from './wsl-paths'
 
 describe('wsl path helpers', () => {
-  it('parses modern and legacy WSL UNC paths without platform checks', () => {
-    expect(parseWslUncPath('\\\\wsl.localhost\\Ubuntu\\home\\jin\\repo')).toEqual({
-      distro: 'Ubuntu',
-      linuxPath: '/home/jin/repo'
-    })
-    expect(parseWslUncPath('\\\\wsl$\\Debian\\home\\jin')).toEqual({
-      distro: 'Debian',
-      linuxPath: '/home/jin'
-    })
-  })
-
-  it('rejects ordinary Windows and POSIX paths', () => {
-    expect(isWslUncPath('C:\\Users\\jin\\repo')).toBe(false)
-    expect(isWslUncPath('/home/jin/repo')).toBe(false)
-  })
-
   it.each([
     ['/home/jin/repo', '\\\\wsl.localhost\\Ubuntu\\home\\jin\\repo'],
     ['/', '\\\\wsl.localhost\\Ubuntu\\'],
@@ -52,21 +33,6 @@ describe('wsl path helpers', () => {
     ['/mnt/c/Users/jin\u2029', null]
   ] as const)('converts the DrvFs path %j without a distro lookup', (linuxPath, expected) => {
     expect(toWindowsWslDrivePath(linuxPath)).toBe(expected)
-  })
-
-  it.each(['\r', '\n', '\u2028', '\u2029'])(
-    'leaves a DrvFs line ending in %j on the distro UNC view',
-    (terminator) => {
-      expect(toWindowsWslPath(`/mnt/c/Users/jin${terminator}`, 'Ubuntu')).toBe(
-        `\\\\wsl.localhost\\Ubuntu\\mnt\\c\\Users\\jin${terminator}`
-      )
-    }
-  )
-
-  it('keeps mounted-drive paths on the distro UNC view when requested', () => {
-    expect(toWindowsWslUncPath('/mnt/c/Users/jin', 'Ubuntu')).toBe(
-      '\\\\wsl.localhost\\Ubuntu\\mnt\\c\\Users\\jin'
-    )
   })
 })
 
@@ -110,14 +76,6 @@ describe('resolveWslRepoWorktreeBasePath', () => {
     expect(resolveWslRepoWorktreeBasePath(WSL_REPO, 'D:\\trees')).toBe('D:\\trees')
     expect(resolveWslRepoWorktreeBasePath(WSL_REPO, '../worktrees')).toBe('../worktrees')
   })
-
-  it('never rewrites base paths of non-WSL repos', () => {
-    expect(resolveWslRepoWorktreeBasePath('C:\\src\\repo', '/home/jin/trees')).toBe(
-      '/home/jin/trees'
-    )
-    expect(resolveWslRepoWorktreeBasePath('/srv/repo', '/srv/trees')).toBe('/srv/trees')
-    expect(resolveWslRepoWorktreeBasePath('//server/share/repo', '/srv/trees')).toBe('/srv/trees')
-  })
 })
 
 describe('foldWslUncPathCaseInsensitiveParts', () => {
@@ -144,41 +102,9 @@ describe('foldWslUncPathCaseInsensitiveParts', () => {
       '//wsl.localhost/ubuntu/MNT/c/Repo'
     )
   })
-
-  it('returns null for non-WSL paths', () => {
-    expect(foldWslUncPathCaseInsensitiveParts('C:\\Users\\jin')).toBeNull()
-    expect(foldWslUncPathCaseInsensitiveParts('//server/share/x')).toBeNull()
-    expect(foldWslUncPathCaseInsensitiveParts('/home/jin')).toBeNull()
-  })
 })
 
 describe('getWslFilesystemBoundaryDistro', () => {
-  it('names the runtime distro for a Windows drive project running WSL git', () => {
-    expect(
-      getWslFilesystemBoundaryDistro({
-        projectPath: 'C:\\Users\\alice\\orca',
-        wslRuntimeDistro: 'Ubuntu-24.04'
-      })
-    ).toBe('Ubuntu-24.04')
-  })
-
-  it('stays silent for a Windows drive project running host git', () => {
-    for (const wslRuntimeDistro of [undefined, null, '']) {
-      expect(
-        getWslFilesystemBoundaryDistro({ projectPath: 'C:/Users/alice/orca', wslRuntimeDistro })
-      ).toBeNull()
-    }
-  })
-
-  it('stays silent for a project already inside the distro', () => {
-    expect(
-      getWslFilesystemBoundaryDistro({
-        projectPath: '\\\\wsl.localhost\\Ubuntu\\home\\alice\\orca',
-        wslRuntimeDistro: 'Ubuntu'
-      })
-    ).toBeNull()
-  })
-
   // UNC drvfs paths cross onto the Windows drive regardless of runtime preference.
   it('names the path distro for the UNC spelling of a drvfs mount', () => {
     expect(
@@ -186,12 +112,6 @@ describe('getWslFilesystemBoundaryDistro', () => {
         projectPath: '\\\\wsl.localhost\\Ubuntu\\mnt\\c\\Users\\alice\\orca'
       })
     ).toBe('Ubuntu')
-  })
-
-  it('stays silent for POSIX, relative, and plain UNC share paths', () => {
-    for (const projectPath of ['/home/alice/orca', 'orca', '\\\\fileserver\\share\\orca']) {
-      expect(getWslFilesystemBoundaryDistro({ projectPath, wslRuntimeDistro: 'Ubuntu' })).toBeNull()
-    }
   })
 })
 

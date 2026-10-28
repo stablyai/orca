@@ -38,7 +38,8 @@ export function useAddRepoHostSelection({
   selectedParsedHost: ReturnType<typeof parseExecutionHostId>
   hostSelectorOpen: boolean
   setHostSelectorOpen: (open: boolean) => void
-  handleSelectAddProjectHost: (hostId: ExecutionHostId) => Promise<void>
+  /** False when the host cannot be selected, so the selection did not change. */
+  handleSelectAddProjectHost: (hostId: ExecutionHostId) => Promise<boolean>
   handleConnectAddProjectHost: (hostId: ExecutionHostId) => Promise<void>
 } {
   const settings = useAppStore((s) => s.settings)
@@ -134,13 +135,14 @@ export function useAddRepoHostSelection({
   ])
 
   const handleSelectAddProjectHost = useCallback(
-    async (hostId: ExecutionHostId): Promise<void> => {
+    async (hostId: ExecutionHostId): Promise<boolean> => {
       const host = selectableHostOptions.find((candidate) => candidate.id === hostId)
       if (!host || !canSelectAddRepoHost(host)) {
-        return
+        return false
       }
       setSelectedAddProjectHostId(hostId)
       setStep('add')
+      return true
     },
     [selectableHostOptions, setStep]
   )

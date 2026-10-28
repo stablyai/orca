@@ -3,11 +3,7 @@ import type { OrcadMigrationCatalogPayload } from '../../shared/orcad-migration/
 import { isRecord } from '../../shared/orcad-migration/orcad-migration-manifest-fields'
 import { PTY_SESSION_ID_SEPARATOR } from '../../shared/pty-session-id-format'
 import { parseWorkspaceKey } from '../../shared/workspace-scope'
-import {
-  FOLDER_WORKSPACE_INSTANCE_SEPARATOR,
-  splitWorktreeId,
-  WORKTREE_ID_SEPARATOR
-} from '../../shared/worktree/id'
+import { rewriteWorktreeIdPath } from '../../shared/worktree/id'
 import {
   ORCAD_MIGRATION_PATH_FIELDS,
   type OrcadMigrationPathFieldKind,
@@ -137,19 +133,7 @@ export function rewriteOrcadMigrationWorktreeId(
   value: string,
   rewriter: OrcadMigrationPathRewriter
 ): string {
-  const parsed = splitWorktreeId(value)
-  if (!parsed || !parsed.repoId || !parsed.worktreePath) {
-    return value
-  }
-  const suffixAt = parsed.worktreePath.lastIndexOf(FOLDER_WORKSPACE_INSTANCE_SEPARATOR)
-  const instanceId = parsed.worktreePath.slice(
-    suffixAt + FOLDER_WORKSPACE_INSTANCE_SEPARATOR.length
-  )
-  const suffix =
-    suffixAt > 0 && /^[0-9a-f-]{36}$/.test(instanceId) ? parsed.worktreePath.slice(suffixAt) : ''
-  const path = parsed.worktreePath.slice(0, parsed.worktreePath.length - suffix.length)
-  const mapped = rewriter.path(path, 'absolute')
-  return mapped === path ? value : `${parsed.repoId}${WORKTREE_ID_SEPARATOR}${mapped}${suffix}`
+  return rewriteWorktreeIdPath(value, (path) => rewriter.path(path, 'absolute'))
 }
 
 function rewriteOwnerKey(value: string, rewriter: OrcadMigrationPathRewriter): string {

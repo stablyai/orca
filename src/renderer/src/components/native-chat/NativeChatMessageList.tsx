@@ -17,7 +17,7 @@ import { NativeChatDockedTaskList } from './NativeChatDockedTaskList'
 import { useNativeChatTurnStatus } from './use-native-chat-turn-status'
 import { NativeChatAwaitingInputRow } from './NativeChatAwaitingInputRow'
 import type { RuntimeFileOperationArgs } from '@/runtime/runtime-file-client-types'
-import type { NativeChatTurnActivity } from '../../../../shared/native-chat-turn-activity'
+import type { NativeChatTurnActivity } from '../../../../shared/native-chat/transcript/native-chat-turn-activity'
 import { NativeChatTurnActivityLine } from './NativeChatTurnActivityLine'
 import {
   NativeChatDisclosureContext,
@@ -64,9 +64,7 @@ import type { NativeChatSettledTurns } from '../../../../shared/native-chat-turn
 import type { NativeChatDiffReveal, NativeChatDiffTarget } from './native-chat-turn-diffs'
 import { useNativeChatTurnDiffs } from './use-native-chat-turn-diffs'
 import { transcriptTailRow } from './native-chat-transcript-tail-row'
-
-/** shown prompts have a card in this pane; unshown prompts require input in the agent’s terminal. */
-export type NativeChatAwaitingInput = 'shown' | 'unshown'
+import type { NativeChatAwaitingInput } from '../../../../shared/native-chat/native-chat-terminal-turn'
 
 type NavigationRequest =
   | { kind: 'diff'; target: NativeChatDiffReveal }

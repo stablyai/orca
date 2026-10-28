@@ -8,7 +8,7 @@ import {
   nativeChatUpgradeTipVariant,
   parseNativeChatUpgradeTipAudience,
   type NativeChatUpgradeTipVariant
-} from '../../../shared/native-chat-upgrade-tip-audience'
+} from '../../../shared/native-chat/native-chat-upgrade-tip-audience'
 import {
   updateSettings as updateSettingsOperation,
   type SettingsMutationOperations

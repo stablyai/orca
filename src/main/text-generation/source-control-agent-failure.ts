@@ -11,6 +11,11 @@ import {
 import type { InternalTextGenerationResult } from './source-control-text-generation-types'
 import { parseOpenCodeGenerationOutput } from '../../shared/opencode-generation-output'
 import { parseAntigravityGenerationOutput } from '../../shared/antigravity-generation-stream'
+import {
+  findKimiGenerationFailure,
+  parseKimiGenerationOutput
+} from '../../shared/kimi-generation-output'
+import { formatKimiGenerationFailure } from './kimi-generation-failure'
 import type { CommitMessagePlan } from '../../shared/commit-message-plan'
 
 export function formatAgentCliFailureMessage(
@@ -56,26 +61,31 @@ export function finalizeFromAgentOutput(args: {
       ? parseOpenCodeGenerationOutput(stdout)
       : args.outputFormat === 'antigravity-stream-json'
         ? parseAntigravityGenerationOutput(stdout)
-        : null
+        : args.outputFormat === 'kimi-stream-json' && code === 0
+          ? parseKimiGenerationOutput(stdout)
+          : null
   if (code !== 0) {
     console.error('[commit-message] Generator failed:', { label, exitCode: code, stdout, stderr })
     return {
       success: false,
-      error: formatAgentCliFailureMessage(
-        label,
-        stdout,
-        parsed &&
-          !parsed.ok &&
-          (args.outputFormat === 'opencode-json'
-            ? parsed.error !== 'OpenCode returned invalid JSON events.'
-            : parsed.error !== 'Antigravity returned invalid JSON events.' &&
-              parsed.error !== 'Antigravity returned an invalid result.' &&
-              parsed.error !== 'Antigravity returned no final result.')
-          ? parsed.error
-          : stderr,
-        code,
-        args
-      ),
+      error:
+        args.outputFormat === 'kimi-stream-json'
+          ? formatKimiGenerationFailure(findKimiGenerationFailure(stdout), stderr, code, args)
+          : formatAgentCliFailureMessage(
+              label,
+              stdout,
+              parsed &&
+                !parsed.ok &&
+                (args.outputFormat === 'opencode-json'
+                  ? parsed.error !== 'OpenCode returned invalid JSON events.'
+                  : parsed.error !== 'Antigravity returned invalid JSON events.' &&
+                    parsed.error !== 'Antigravity returned an invalid result.' &&
+                    parsed.error !== 'Antigravity returned no final result.')
+                ? parsed.error
+                : stderr,
+              code,
+              args
+            ),
       failureOutput: captureFailureOutput(label, code, stdout, stderr)
     }
   }
@@ -101,9 +111,10 @@ export function finalizeFromAgentOutput(args: {
   }
   return {
     success: false,
-    error: detail
-      ? `${label} returned an empty ${emptyResultName}. CLI output: ${detail}`
-      : `${label} returned an empty ${emptyResultName}.`,
+    error:
+      detail && args.outputFormat !== 'kimi-stream-json'
+        ? `${label} returned an empty ${emptyResultName}. CLI output: ${detail}`
+        : `${label} returned an empty ${emptyResultName}.`,
     failureOutput: captureFailureOutput(label, code, stdout, stderr)
   }
 }

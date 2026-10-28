@@ -3,6 +3,8 @@ import { ActivityIndicator, StyleSheet, View } from 'react-native'
 import { useHostClient } from '../transport/host-client-hooks'
 import { useHostStatusGates } from '../transport/host-status-gates'
 import { colors } from '../theme/mobile-theme'
+import { themedStyleSheet } from '../theme/themed-styles'
+import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import { HostStatusGatesContext } from './host-protocol-gates-context'
 import { ProtocolBlockScreen } from './ProtocolBlockScreen'
 
@@ -22,6 +24,7 @@ export function HostProtocolGate({
   transparentWhilePending = false,
   blocked: blockedView
 }: Props) {
+  useMobileColorScheme()
   const { client, state } = useHostClient(hostId)
   const gates = useHostStatusGates({ hostId, client, connState: state })
   const { compatVerdict, statusPending } = gates
@@ -95,7 +98,7 @@ export function HostProtocolGate({
   )
 }
 
-const styles = StyleSheet.create({
+const styles = themedStyleSheet(() => ({
   pending: {
     flex: 1,
     alignItems: 'center',
@@ -114,4 +117,4 @@ const styles = StyleSheet.create({
     zIndex: 1000,
     elevation: 1000
   }
-})
+}))

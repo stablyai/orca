@@ -123,12 +123,13 @@ export function ComputerUsePane(): React.JSX.Element {
         : missingCount === 1
           ? translate(
               'auto.components.settings.computerUseSummary.permissionsRequired_one',
-              '1 permission required before agents can operate app windows.'
+              '{{value0}} permission required before agents can operate app windows.',
+              { value0: missingCount, count: missingCount }
             )
           : translate(
               'auto.components.settings.computerUseSummary.permissionsRequired_other',
               '{{value0}} permissions required before agents can operate app windows.',
-              { value0: missingCount }
+              { value0: missingCount, count: missingCount }
             )
 
   useEffect(() => {

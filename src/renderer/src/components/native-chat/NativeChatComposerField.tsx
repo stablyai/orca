@@ -5,8 +5,10 @@ import { useCallback, useLayoutEffect, useMemo, useRef } from 'react'
 import { flushSync } from 'react-dom'
 import type { useImeEnterGestureOwnership } from '@/lib/ime-composition-keyboard-event'
 import { cn } from '@/lib/utils'
-import type { ComposerAutocomplete } from './native-chat-composer-state'
-import type { NativeChatPickerItem } from '../../../../shared/native-chat/input/native-chat-picker-items'
+import type {
+  ComposerAutocomplete,
+  NativeChatPickerItem
+} from '../../../../shared/native-chat-composer-autocomplete'
 import { NativeChatMentionMenu, NativeChatPickerMenu } from './NativeChatAutocompleteMenus'
 import type { NativeChatMentionFiles } from './use-native-chat-mention-files'
 import { NativeChatComposerActions } from './NativeChatComposerActions'
@@ -20,7 +22,7 @@ import {
 import type {
   SessionOptionDescriptor,
   SessionOptionsSurface
-} from '../../../../shared/native-chat-session-options'
+} from '../../../../shared/native-chat/input/native-chat-session-options'
 import type { NativeChatOptionPickerRequest } from './native-chat-composer-types'
 import { NativeChatImageAttachmentPreview } from './NativeChatImageAttachmentPreview'
 import type { NativeChatComposerGoalMode } from './use-native-chat-composer-submit'

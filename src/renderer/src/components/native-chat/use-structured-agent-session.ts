@@ -15,7 +15,7 @@ import {
   useStructuredAgentSessionHostEditsQueuedImages,
   useStructuredAgentSessionHostQueuesMessagesState
 } from '@/runtime/structured-agent-session-host-capability'
-import { structuredAgentSessionStopControl } from './structured-agent-session-stop-control'
+import { structuredAgentSessionStopControl } from '../../../../shared/structured-agent-session-stop-control'
 import type { AgentSessionPromptResponse } from '../../../../shared/agent-session-question-answer'
 import {
   respondToStructuredAgentSessionPrompt,
@@ -35,12 +35,9 @@ import { useStructuredAgentSessionContextUsage } from './use-structured-agent-se
 import { useStructuredAgentSessionRailOutline } from './use-structured-agent-session-rail-outline'
 import { useStructuredAgentSessionQueuedMessages } from './use-structured-agent-session-queued-messages'
 import { structuredConversationCommandRunner } from './structured-conversation-command-send'
-import {
-  commandCardWaiting,
-  pendingSendsOutsideQueuedCards
-} from './structured-agent-session-queued-cards'
+import { structuredAgentSessionQueueEnabled } from '../../../../shared/structured-agent-session-queued-cards'
+import { pendingSendsOutsideQueuedCards } from './structured-agent-session-sending-queued-cards'
 import { hostStatesTurnScopes } from '../../../../shared/native-chat-turn-membership'
-import { pendingPromptsAllUnanswerableHere } from '../../../../shared/agent-session-approval-subject'
 import { withNativeChatCutTurnNotices } from '../../../../shared/native-chat-cut-turn-notice'
 import { useNativeChatContextClearFloor } from './use-native-chat-context-clear-floor'
 import { useStructuredAgentSessionRewind } from './use-structured-agent-session-rewind'
@@ -119,10 +116,8 @@ export function useStructuredAgentSession(args: StructuredAgentSessionViewArgs) 
   const stopControlInput = { sessionId, target, transportState, hostStopping, mutate }
   const stopControl = useStructuredAgentSessionStop(stopControlInput)
   const prompts = pendingStructuredSessionPrompts(transportState)
-  const promptsUnanswerableHere = pendingPromptsAllUnanswerableHere(prompts)
-  // Queue after waiting commands even with follow-ups off, unless unanswerable prompts would strand the queue; immediate sends enable prompt cancellation.
-  const commandWaiting = commandCardWaiting(transportState.queuedMessages)
-  const queueEnabled = (queueFollowUps || commandWaiting) && !promptsUnanswerableHere
+  // Immediate sends enable prompt cancellation.
+  const queueEnabled = structuredAgentSessionQueueEnabled(queueFollowUps, transportState, prompts)
   const queue = useMemo(
     () => ({ capability: queueCapability, enabled: queueEnabled }),
     [queueCapability, queueEnabled]

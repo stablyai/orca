@@ -16,8 +16,9 @@ describe('native language snapshot', () => {
   it('reads preferences once after app readiness and shares the ordered result', async () => {
     const { getSystemLanguageDetection } = await import('./system-language')
     isReady.mockReturnValue(false)
-    expect(getSystemLanguageDetection()).toBeNull()
-    expect(getPreferredSystemLanguages).not.toHaveBeenCalled()
+    getPreferredSystemLanguages.mockReturnValueOnce(['ja-JP'])
+    // Pre-ready reads serve startup-failure dialogs without pinning the post-ready snapshot.
+    expect(getSystemLanguageDetection()?.locale).toBe('ja')
     isReady.mockReturnValue(true)
     expect(getSystemLanguageDetection()).toMatchObject({
       detectedTag: 'fr-FR',
@@ -26,7 +27,7 @@ describe('native language snapshot', () => {
     })
     getPreferredSystemLanguages.mockReturnValue(['en-US'])
     expect(getSystemLanguageDetection()?.locale).toBe('fr')
-    expect(getPreferredSystemLanguages).toHaveBeenCalledTimes(1)
+    expect(getPreferredSystemLanguages).toHaveBeenCalledTimes(2)
   })
 
   it('keeps a C-only native result unknown so Chromium cannot override it', async () => {

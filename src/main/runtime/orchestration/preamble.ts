@@ -67,7 +67,8 @@ export function buildDispatchPreamble(params: PreambleParams): string {
   # while actively working on the task. The coordinator uses this to
   # distinguish "still thinking" from "hung / crashed." Skip heartbeats only
   # while blocked inside \`check --wait\` or \`ask\` — those calls are
-  # themselves liveness signals.
+  # themselves liveness signals. If a background loop sends them, restart
+  # it if it expires mid-task, and stop it before you send worker_done.
   #
   # Include BOTH taskId and dispatchId in the payload: the coordinator
   # attributes the heartbeat to the specific dispatch context, not just

@@ -7,10 +7,8 @@ import {
 } from '../native-chat/agent-session-wire/structured-agent-session-adapter'
 import type { ClaudeStreamJsonConnection } from './claude-stream-json-connection'
 import { ORCA_AGENT_SESSION_SPAWN_TOKEN_ENV as SPAWN_TOKEN_ENV } from '../../shared/agent-session-caller-env'
-import type {
-  ClaudeStructuredSessionAdapter,
-  ClaudeStructuredSessionEvent
-} from './claude-structured-session-adapter'
+import type { ClaudeStructuredSessionAdapter } from './claude-structured-session-adapter'
+import type { ClaudeStructuredSessionEvent } from './structured/claude-structured-session-state'
 import {
   acquired,
   adapterFor,
@@ -20,9 +18,9 @@ import {
   PROVIDER_SESSION_ID,
   tick,
   USER_MESSAGE,
-  type FakeConnection,
-  claudeOpened
+  type FakeConnection
 } from './claude-structured-session-test-support'
+import { claudeOpened } from './claude-structured-startup-settled-test-support'
 import { invokeCanUseTool } from './claude-can-use-tool-test-support'
 import { claudeProviderHandle } from '../../shared/agent-session-provider-handle-encoding'
 import { providerRequestTimeoutOf } from '../provider-process/provider-request-timeout'

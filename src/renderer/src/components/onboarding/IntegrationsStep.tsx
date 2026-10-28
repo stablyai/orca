@@ -169,11 +169,17 @@ export function LinearRow(props: { compact?: boolean } = {}): React.JSX.Element 
               </div>
               <p className="mt-1 text-[13px] leading-relaxed text-muted-foreground">
                 {linearStatus.connected
-                  ? translate(
-                      'auto.components.onboarding.IntegrationsStep.b08a6ac93c',
-                      '{{value0}} workspace{{value1}} linked. Add another workspace or replace a restricted key any time.',
-                      { value0: workspaceCount, value1: workspaceCount === 1 ? '' : 's' }
-                    )
+                  ? workspaceCount === 1
+                    ? translate(
+                        'auto.components.onboarding.IntegrationsStep.linearWorkspacesLinkedSingular',
+                        '{{count}} workspace linked. Add another workspace or replace a restricted key any time.',
+                        { count: workspaceCount }
+                      )
+                    : translate(
+                        'auto.components.onboarding.IntegrationsStep.linearWorkspacesLinkedPlural',
+                        '{{count}} workspaces linked. Add another workspace or replace a restricted key any time.',
+                        { count: workspaceCount }
+                      )
                   : translate(
                       'auto.components.onboarding.IntegrationsStep.4983ae7433',
                       'Add Linear access with a Personal API key. Full-access keys can show every team the key owner can access.'

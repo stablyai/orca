@@ -1,4 +1,4 @@
-import { resolveMobileNativeChatRowProps } from './use-mobile-native-chat-row-props'
+import { resolveMobileNativeChatRowProps } from './native-chat/transcript/use-mobile-native-chat-row-props'
 import { createElement, type ReactElement } from 'react'
 import { act, create, type ReactTestInstance, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, beforeEach, expect, vi } from 'vitest'

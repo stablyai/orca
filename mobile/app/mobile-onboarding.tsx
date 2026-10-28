@@ -11,6 +11,7 @@ import {
 } from '../src/onboarding/MobileOnboardingPage'
 import { parseMobileOnboardingSteps } from '../src/onboarding/mobile-onboarding-plan'
 import { useReducedMotionEnabled } from '../src/platform/use-reduced-motion'
+import { useMobileColorScheme } from '../src/theme/use-mobile-color-scheme'
 import { mobileOnboardingStyles as styles } from '../src/onboarding/mobile-onboarding-styles'
 import {
   saveDefaultSessionView,
@@ -44,6 +45,7 @@ function MobileOnboardingFlow({
   hostId: string | undefined
   rawSteps: string | undefined
 }) {
+  useMobileColorScheme()
   const router = useRouter()
   const steps = useMemo(() => parseMobileOnboardingSteps(rawSteps), [rawSteps])
   // Measure pager viewport: iPad sheet is narrower than window; null waits for first layout.

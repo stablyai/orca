@@ -22,7 +22,8 @@ import {
 import {
   applyJcodeManagedHooks,
   parseJcodeHooksTable,
-  removeJcodeManagedHooks
+  removeJcodeManagedHooks,
+  type JcodeHooksTable
 } from './hook-config'
 import {
   getJcodeConfigPath,
@@ -115,14 +116,17 @@ export class JcodeHookService {
     let managedCount = 0
     for (const event of JCODE_HOOK_EVENTS) {
       const value = table[event]
-      if (value === managedCommand) {
+      const commands = typeof value === 'string' ? [value] : (value ?? [])
+      // A stale duplicate beside the current command still runs, so only a lone current entry counts.
+      if (commands.includes(managedCommand) && commands.filter(isManaged).length === 1) {
         managedCount += 1
-      } else if (isManaged(value)) {
+      } else if (commands.some(isManaged)) {
         outdated.push(event)
-      } else if (value === undefined) {
-        missing.push(event)
-      } else {
+      } else if (typeof value === 'string') {
         userOwned.push(event)
+      } else {
+        // Install appends Orca to user arrays, so they count as missing rather than user-owned.
+        missing.push(event)
       }
     }
     const hasManagedEntries = managedCount > 0 || outdated.length > 0
@@ -246,7 +250,7 @@ export class JcodeHookService {
 
 export const jcodeHookService = new JcodeHookService()
 
-function readJcodeHooksTable(configPath: string): Record<string, string> | null {
+function readJcodeHooksTable(configPath: string): JcodeHooksTable | null {
   if (!existsSync(configPath)) {
     return {}
   }

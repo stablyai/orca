@@ -278,7 +278,6 @@
 1 test-no-real-time-wait:src/main/claude/claude-subagent-permission-request.test.ts
 1 test-no-real-time-wait:src/main/claude/claude-supervised-stop-real-cli.test.ts
 1 test-no-real-time-wait:src/main/claude/claude-supervised-stop.integration.test.ts
-3 test-no-real-time-wait:src/main/cli/appimage-serve-preparation.test.ts
 3 test-no-real-time-wait:src/main/cli/packaged-cli-assets.test.ts
 1 test-no-real-time-wait:src/main/codex-usage/scanner-file-generation.test.ts
 1 test-no-real-time-wait:src/main/codex/codex-hook-hash-lookup.test.ts
@@ -366,7 +365,7 @@
 1 test-no-real-time-wait:src/main/managed-server/lifecycle/orcad-managed-tunnel-local-port.test.ts
 1 test-no-real-time-wait:src/main/managed-server/lifecycle/orcad-stdio-bridge-provider.test.ts
 1 test-no-real-time-wait:src/main/native-chat/agent-session-wire/structured-agent-session-accept-then-deliver.test.ts
-4 test-no-real-time-wait:src/main/native-chat/agent-session-wire/structured-agent-session-at-rest-commands.test.ts
+3 test-no-real-time-wait:src/main/native-chat/agent-session-wire/structured-agent-session-at-rest-commands.test.ts
 1 test-no-real-time-wait:src/main/native-chat/agent-session-wire/structured-agent-session-claude-echo-working.test.ts
 2 test-no-real-time-wait:src/main/native-chat/agent-session-wire/structured-agent-session-claude-subagent-row.test.ts
 1 test-no-real-time-wait:src/main/native-chat/agent-session-wire/structured-agent-session-owed-work-release.test.ts
@@ -528,12 +527,9 @@
 1 test-no-real-time-wait:src/renderer/src/lib/agent-hibernation-coordinator.test.ts
 1 test-no-real-time-wait:src/renderer/src/lib/agent-paste-draft-readiness-budget.test.ts
 3 test-no-real-time-wait:src/renderer/src/lib/execute-open-editor-path-move.test.ts
-1 test-no-real-time-wait:src/renderer/src/lib/monaco-delayer-cancellation-guard.test.ts
 1 test-no-real-time-wait:src/renderer/src/lib/native-chat-cli-fork-preparation.test.ts
 1 test-no-real-time-wait:src/renderer/src/lib/orca-yaml-trust-prompt-slot-eviction.test.ts
-1 test-no-real-time-wait:src/renderer/src/lib/pane-manager/pane-terminal-output-scheduler-throughput.bench.test.ts
 1 test-no-real-time-wait:src/renderer/src/lib/pane-manager/xterm-user-scrolling-contract.test.ts
-1 test-no-real-time-wait:src/renderer/src/lib/worktree-sort-order-persistence.test.ts
 3 test-no-real-time-wait:src/renderer/src/runtime/remote-runtime-terminal-parse-backpressure.test.ts
 1 test-no-real-time-wait:src/renderer/src/runtime/runtime-host-account-sign-in-client.test.ts
 1 test-no-real-time-wait:src/renderer/src/store/slices/github-pr-checks-fetch.test.ts
@@ -761,10 +757,9 @@
 1 test-no-wall-clock:mobile/src/components/MobileHostCard-truthful-status.test.tsx
 1 test-no-wall-clock:mobile/src/components/MobileHostCard.test.ts
 1 test-no-wall-clock:mobile/src/components/pr-sidebar/pr-comment-card-web-avatar.test.tsx
-1 test-no-wall-clock:mobile/src/session/native-chat/mobile-native-chat-pending-echo.test.ts
 1 test-no-wall-clock:mobile/src/session/mobile-structured-send-new-action.test.ts
 2 test-no-wall-clock:mobile/src/session/native-chat/composer/use-mobile-native-chat-message-send-draft-lifetime.test.ts
-1 test-no-wall-clock:mobile/src/session/use-mobile-native-chat-message-send.test.ts
+1 test-no-wall-clock:mobile/src/session/native-chat/transcript/use-mobile-native-chat-message-send.test.ts
 1 test-no-wall-clock:mobile/src/source-control/MobileGitHistoryList.test.tsx
 1 test-no-wall-clock:mobile/src/tasks/worktree-create-launch-operation.test.ts
 1 test-no-wall-clock:mobile/src/transport/host-store.test.ts
@@ -825,7 +820,6 @@
 5 test-no-wall-clock:src/main/claude/claude-supervised-stop-real-cli.test.ts
 6 test-no-wall-clock:src/main/claude/claude-supervised-stop.integration.test.ts
 1 test-no-wall-clock:src/main/cli/appimage-generation-lease.test.ts
-2 test-no-wall-clock:src/main/cli/appimage-serve-preparation.test.ts
 6 test-no-wall-clock:src/main/cli/packaged-cli-assets.test.ts
 1 test-no-wall-clock:src/main/cli/wsl-cli-registration-registry.test.ts
 1 test-no-wall-clock:src/main/codex-accounts/legacy-wsl-runtime-auth-drain-rollback-script.test.ts
@@ -1120,7 +1114,6 @@
 1 test-no-wall-clock:src/renderer/src/components/sidebar/SidebarToolbar.test.tsx
 5 test-no-wall-clock:src/renderer/src/components/sidebar/use-workspace-reference-details.test.tsx
 3 test-no-wall-clock:src/renderer/src/components/sidebar/worktree-agent-rows-subscriptions.bench.test.tsx
-1 test-no-wall-clock:src/renderer/src/components/sidebar/worktree-card-agent-summary.test.ts
 4 test-no-wall-clock:src/renderer/src/components/sidebar/WorktreeCard.compact-hover.test.tsx
 13 test-no-wall-clock:src/renderer/src/components/sidebar/WorktreeCard.pr-display.test.tsx
 2 test-no-wall-clock:src/renderer/src/components/sidebar/WorktreeCard.single-reference-details.test.tsx
@@ -1163,7 +1156,6 @@
 3 test-no-wall-clock:src/renderer/src/hooks/useIpcEvents-close-routing-browser-pages.test.ts
 1 test-no-wall-clock:src/renderer/src/hooks/useIpcEvents-ssh-disconnect-cleanup.test.ts
 2 test-no-wall-clock:src/renderer/src/hooks/useIpcEvents-updater-status.test.ts
-1 test-no-wall-clock:src/renderer/src/lib/browser-history-match.performance.test.ts
 1 test-no-wall-clock:src/renderer/src/lib/paired-runtime-closed-tab-resume.test.ts
 2 test-no-wall-clock:src/renderer/src/lib/settled-worker-wake-policy.test.ts
 2 test-no-wall-clock:src/renderer/src/lib/agent-session/launch/structured-agent-session-launch-persistence.test.ts
@@ -1174,7 +1166,7 @@
 1 test-no-wall-clock:src/renderer/src/lib/workspace-terminal-host-authority.test.ts
 1 test-no-wall-clock:src/renderer/src/lib/worktree-activation-default-tabs.test.ts
 1 test-no-wall-clock:src/renderer/src/lib/worktree-activation-emptied-workspace-reseed.test.ts
-4 test-no-wall-clock:src/renderer/src/lib/worktree-initial-terminal-close-records.test.ts
+2 test-no-wall-clock:src/renderer/src/lib/worktree-initial-terminal-close-records.test.ts
 4 test-no-wall-clock:src/renderer/src/runtime/close-mirrored-editor-tab.test.ts
 2 test-no-wall-clock:src/renderer/src/runtime/structured-agent-session-tab-retirement.test.ts
 1 test-no-wall-clock:src/renderer/src/runtime/web-runtime-session-frame-drawn-writes.test.ts
@@ -1214,7 +1206,7 @@
 1 test-no-wall-clock:src/shared/mobile-push-contract.test.ts
 1 test-no-wall-clock:src/shared/plugins/plugin-kill-list.test.ts
 2 test-no-wall-clock:src/shared/pty-reply-echo-shapes.node-pty.test.ts
-5 test-no-wall-clock:src/shared/sidebar-list/smart-sort.test.ts
+4 test-no-wall-clock:src/shared/sidebar-list/smart-sort.test.ts
 2 test-no-wall-clock:src/shared/startup-command-staging.node-pty.test.ts
 1 test-no-wall-clock:src/shared/startup-command-staging.test.ts
 14 test-no-wall-clock:src/wsl-guest/agent-hook-integration.test.ts
@@ -1351,7 +1343,7 @@
 2 test-timeout-needs-reason:src/main/providers/startup-line-typed-length.live-shell.test.ts
 7 test-timeout-needs-reason:src/main/pty/node-pty-master-fd-retirement.test.ts
 1 test-timeout-needs-reason:src/main/rate-limits/antigravity-usage-real-cli.test.ts
-3 test-timeout-needs-reason:src/main/runtime/cline-screen-readiness-transcripts.test.ts
+2 test-timeout-needs-reason:src/main/runtime/cline-screen-readiness-transcripts.test.ts
 4 test-timeout-needs-reason:src/main/runtime/codex-header-readiness-transcripts.test.ts
 1 test-timeout-needs-reason:src/main/runtime/codex-quiet-ready-screen.test.ts
 2 test-timeout-needs-reason:src/main/runtime/launched-agent-crash-guard.live-shell.test.ts
@@ -1411,9 +1403,8 @@
 1 test-timeout-needs-reason:src/shared/check-job-log-text-performance.test.ts
 1 test-timeout-needs-reason:src/shared/dsh-real-cli.test.ts
 1 test-timeout-needs-reason:src/shared/setup-agent-sequencing.windows.test.ts
-1 test-timeout-needs-reason:src/shared/terminal-links.test.ts
 2 test-timeout-needs-reason:src/shared/workspace-space-entry-traversal.test.ts
-2 test-timeout-needs-reason:src/shared/wsl-login-shell-command.test.ts
+1 test-timeout-needs-reason:src/shared/wsl-login-shell-command.test.ts
 1 test-timeout-needs-reason:src/wsl-guest/agent-hook-server.test.ts
 1 test-timeout-needs-reason:tests/e2e/active-view-restart-restore.spec.ts
 1 test-timeout-needs-reason:tests/e2e/agent-send-picker-reveal.spec.ts

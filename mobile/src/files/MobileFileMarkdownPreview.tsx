@@ -4,6 +4,7 @@ import { useState } from 'react'
 import { ScrollView, View } from 'react-native'
 import { MobileMarkdown } from '../components/MobileMarkdown'
 import { MobileFileAddressToolbar } from '../components/MobileFileAddressToolbar'
+import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import {
   MobileFilePreviewSourceText,
   MobileFilePreviewTruncatedNote
@@ -35,6 +36,7 @@ export function MobileFileMarkdownPreview({
   worktreeId,
   onOpenFile
 }: Props) {
+  useMobileColorScheme()
   const [mode, setMode] = useState<'preview' | 'source'>(() => (initialLine ? 'source' : 'preview'))
   const [previousRelativePath, setPreviousRelativePath] = useState(relativePath)
   const [previousInitialLine, setPreviousInitialLine] = useState(initialLine)

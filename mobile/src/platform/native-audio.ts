@@ -85,17 +85,27 @@ export type NativeAudioCapture = {
   readonly dispose: () => void
 }
 
+type AudioDeviceOwner = {
+  queue: Promise<void>
+  stop: (() => boolean) | null
+}
+
+const audioDeviceOwners = new WeakMap<NativeAudioEngine, AudioDeviceOwner>()
+
 export function createNativeAudioCapture(engine: NativeAudioEngine): NativeAudioCapture {
   const screen = engine.screenLock
+  const device: AudioDeviceOwner = audioDeviceOwners.get(engine) ?? {
+    queue: Promise.resolve(),
+    stop: null
+  }
+  audioDeviceOwners.set(engine, device)
   let capture: Capture | null = null
   let disposed = false
-  // Serialize starts/stops so overlapping opens cannot orphan listeners and a stop cannot run before its start finishes. Reads remain immediate and refuse without capture.
-  let queue: Promise<unknown> = Promise.resolve()
 
   function enqueue<Value>(action: () => Promise<Value>): Promise<Value> {
-    // A failed start must not block later stops.
-    const run = queue.then(action, action)
-    queue = run.then(
+    // The microphone is shared across page sessions, including starts still awaiting native open.
+    const run = device.queue.then(action, action)
+    device.queue = run.then(
       () => undefined,
       () => undefined
     )
@@ -108,6 +118,9 @@ export function createNativeAudioCapture(engine: NativeAudioEngine): NativeAudio
     }
     capture.stopListening()
     capture = null
+    if (device.stop === end) {
+      device.stop = null
+    }
     screen.release()
     engine.end()
     return true
@@ -141,10 +154,13 @@ export function createNativeAudioCapture(engine: NativeAudioEngine): NativeAudio
 
   async function start(params: unknown): Promise<unknown> {
     const { sampleRate } = audioStartParamsSchema.parse(params)
+    if (disposed) {
+      return { started: false, sampleRate, permission: 'undetermined' }
+    }
     // Replace prior capture because its page may have navigated or disappeared without stopping it.
-    end()
+    device.stop?.()
     const permission = await engine.requestPermission()
-    if (permission !== 'granted') {
+    if (disposed || permission !== 'granted') {
       return { started: false, sampleRate, permission }
     }
     const opened = await engine.open(sampleRate)
@@ -157,6 +173,7 @@ export function createNativeAudioCapture(engine: NativeAudioEngine): NativeAudio
       return { started: false, sampleRate: opened.sampleRate, permission }
     }
     capture = listen()
+    device.stop = end
     // Hold only after opening; every subsequent failure must release through end().
     screen.hold()
     try {

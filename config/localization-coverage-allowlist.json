@@ -16,6 +16,13 @@
   {
     "filePath": "src/renderer/src/components/settings/appearance-search.ts",
     "kind": "object-property:keywords",
+    "text": "Dil",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/settings/appearance-search.ts",
+    "kind": "object-property:keywords",
     "text": "언어",
     "dynamic": false,
     "count": 1
