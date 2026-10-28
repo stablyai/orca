@@ -2,15 +2,26 @@ import { execFileSync } from 'node:child_process'
 import * as pty from 'node-pty'
 import { expect, it } from 'vitest'
 import { forceKillPosixPtyProcessGroups } from './posix-pty-process-groups'
+import { readPtsName } from './node-pty-pts-name'
 
 type TaggedProcess = { pid: number; pgid: number }
 
 const itOnPosix = process.platform === 'win32' ? it.skip : it
 
-function findTaggedProcesses(token: string): TaggedProcess[] {
-  const output = execFileSync('ps', ['-axo', 'pid=,pgid=,state=,command='], {
-    encoding: 'utf8'
-  })
+// Select processes by terminal or pid: a whole-host listing with command lines overflows the buffer on busy machines.
+function findTaggedProcesses(selection: string[], token: string): TaggedProcess[] {
+  let output: string
+  try {
+    output = execFileSync('ps', [...selection, '-o', 'pid=,pgid=,state=,command='], {
+      encoding: 'utf8'
+    })
+  } catch (error) {
+    // ps exits 1 when nothing matches the selection.
+    if (error instanceof Error && 'status' in error && error.status === 1) {
+      return []
+    }
+    throw error
+  }
   const matches: TaggedProcess[] = []
   for (const line of output.split(/\r?\n/)) {
     if (!line.includes(token)) {
@@ -22,6 +33,14 @@ function findTaggedProcesses(token: string): TaggedProcess[] {
     }
   }
   return matches
+}
+
+// Survivors lose the hung-up terminal, so recheck them by pid; the token rejects reused pids.
+function findSurvivors(tagged: TaggedProcess[], token: string): TaggedProcess[] {
+  if (tagged.length === 0) {
+    return []
+  }
+  return findTaggedProcesses(['-p', tagged.map((process) => process.pid).join(',')], token)
 }
 
 async function waitFor(
@@ -38,8 +57,10 @@ async function waitFor(
   }
 }
 
-function cleanupTaggedProcesses(token: string): void {
-  for (const pgid of new Set(findTaggedProcesses(token).map((process) => process.pgid))) {
+// Runs before the leader is killed, so a job discovery never captured is still on the terminal.
+function cleanupTaggedProcesses(tty: string, tagged: TaggedProcess[], token: string): void {
+  const remaining = [...findTaggedProcesses(['-t', tty], token), ...findSurvivors(tagged, token)]
+  for (const pgid of new Set(remaining.map((process) => process.pgid))) {
     try {
       process.kill(-pgid, 'SIGKILL')
     } catch {
@@ -64,12 +85,17 @@ itOnPosix(
       env: process.env as Record<string, string>
     })
     const exited = new Promise<void>((resolve) => proc.onExit(() => resolve()))
+    const tty = readPtsName(proc)?.replace(/^\/dev\//, '')
+    if (!tty) {
+      throw new Error('node-pty did not expose the PTY slave name')
+    }
 
+    let tagged: TaggedProcess[] = []
     try {
       proc.write(`/bin/sh -lc 'trap "" HUP TERM; while :; do sleep 60; done' ${token}\n`)
-      await waitFor(() => findTaggedProcesses(token).length > 0)
+      await waitFor(() => findTaggedProcesses(['-t', tty], token).length > 0)
 
-      const tagged = findTaggedProcesses(token)
+      tagged = findTaggedProcesses(['-t', tty], token)
       const rootProcessGroup = readProcessGroup(proc.pid)
       expect(tagged.some((process) => process.pgid !== rootProcessGroup)).toBe(true)
 
@@ -80,13 +106,16 @@ itOnPosix(
           setTimeout(() => reject(new Error('PTY leader did not exit')), 5_000)
         )
       ])
-      await waitFor(() => findTaggedProcesses(token).length === 0)
+      await waitFor(() => findSurvivors(tagged, token).length === 0)
     } finally {
-      cleanupTaggedProcesses(token)
       try {
-        proc.kill('SIGKILL')
-      } catch {
-        // node-pty may already have reaped and disposed the leader.
+        cleanupTaggedProcesses(tty, tagged, token)
+      } finally {
+        try {
+          proc.kill('SIGKILL')
+        } catch {
+          // node-pty may already have reaped and disposed the leader.
+        }
       }
     }
   },

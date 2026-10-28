@@ -35,7 +35,8 @@ import { ProfileStateRecoveryRequiredError } from './persistence/profile-state/p
 import { getProfileUserDataPath } from './orca-profiles/profile-storage-paths'
 import { leaseAppImageGenerationForCurrentProcess } from './cli/appimage-generation-lease'
 import { wakeRememberedWslHosts } from './wsl/wsl-host-early-wake'
-import { wslHostsGateOpen } from './wsl/wsl-host-gate'
+import { wslHostsServing } from './wsl/wsl-host-gate'
+import { configureWslHostsGateFromDisk } from './wsl/wsl-host-gate-startup'
 
 function openMainWindow(options: { revealOnDidFinishLoad?: boolean } = {}): BrowserWindow {
   return openMainWindowController(options)
@@ -112,8 +113,10 @@ const preflightReady =
 if (preflightReady) {
   enableLinearRegexpFallback()
   void leaseAppImageGenerationForCurrentProcess()
+  // Before any gate check: saved WSL work keeps a closed gate serving it.
+  configureWslHostsGateFromDisk(app.getPath('userData'))
   // Why this early: a cold distro takes seconds to boot; starting now overlaps it with app startup.
-  if (process.platform === 'win32' && wslHostsGateOpen()) {
+  if (process.platform === 'win32' && wslHostsServing()) {
     wakeRememberedWslHosts(app.getPath('userData'))
   }
   app.on('open-url', (event, url) => {

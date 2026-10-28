@@ -102,18 +102,29 @@ export function useMobileWebShellSession(args: {
     ((epoch: number, flow: number, effect: MobileWebShellSessionEffect) => void) | null
   >(null)
 
+  const cancelPending = useCallback((): void => {
+    downloadsRef.current.forEach((controller) => controller.abort())
+    downloadsRef.current.clear()
+    timersRef.current.forEach((cancel) => cancel())
+    timersRef.current.clear()
+  }, [])
+
   const dispatch = useCallback(
     (epoch: number, event: MobileWebShellSessionEvent): void => {
       if (epoch !== epochRef.current) {
         return
       }
-      const stepped = reduceMobileWebShellSession(sessionRef.current, event)
-      const trace = traceShellStep(logTraceRef.current, sessionRef.current, event, stepped.session)
+      const previous = sessionRef.current
+      const stepped = reduceMobileWebShellSession(previous, event)
+      const trace = traceShellStep(logTraceRef.current, previous, event, stepped.session)
       logTraceRef.current = trace
-      for (const line of shellSessionStepLines(sessionRef.current, event, stepped.session, trace)) {
+      for (const line of shellSessionStepLines(previous, event, stepped.session, trace)) {
         recordShellLifecycleLine(hostIdRef.current, line)
       }
       sessionRef.current = stepped.session
+      if (stepped.session.flow !== previous.flow) {
+        cancelPending()
+      }
       const next = stepped.session.state
       if (next.kind === 'fetching') {
         downloadProgress.publish(downloadFraction(next.receivedBytes, next.totalBytes))
@@ -127,20 +138,13 @@ export function useMobileWebShellSession(args: {
         runEffectRef.current?.(epoch, stepped.session.flow, effect)
       }
     },
-    [downloadProgress]
+    [cancelPending, downloadProgress]
   )
 
   const invalidate = useCallback((): void => {
     epochRef.current += 1
-    for (const controller of downloadsRef.current) {
-      controller.abort()
-    }
-    downloadsRef.current.clear()
-    for (const cancel of timersRef.current) {
-      cancel()
-    }
-    timersRef.current.clear()
-  }, [])
+    cancelPending()
+  }, [cancelPending])
 
   const runEffect = useCallback(
     async (epoch: number, flow: number, effect: MobileWebShellSessionEffect): Promise<void> => {

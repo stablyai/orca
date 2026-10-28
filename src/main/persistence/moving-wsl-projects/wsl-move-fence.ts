@@ -2,6 +2,8 @@
 import type { WslMoveCutover, WslMoveCutoverPhase } from '../../../shared/wsl-move/wsl-move-cutover'
 import { WSL_MOVE_CUTOVER_PHASES } from '../../../shared/wsl-move/wsl-move-cutover'
 import { scanWslMoveCutovers } from './wsl-move-cutover-journal'
+import { comparableWslPath } from './wsl-move-comparable-path'
+import { wslMoveScopeRootPaths } from './wsl-move-scope-roots'
 
 export type WslMoveScopeIds = {
   repoIds: ReadonlySet<string>
@@ -15,7 +17,16 @@ export type WslMoveFenceState = {
   hidden: WslMoveScopeIds
   /** Preserve quiesced sessions through commit. */
   sessionFrozen: WslMoveScopeIds
+  /** The fenced moves' folders, per distro and comparable, for a spawn that names no workspace. */
+  fencedRoots: readonly WslMoveFencedRoots[]
+  /** The distro whose host owns each hidden row, for the retained entry's label. */
+  hostDistro: {
+    repoIds: ReadonlyMap<string, string>
+    folderWorkspaceIds: ReadonlyMap<string, string>
+  }
 }
+
+export type WslMoveFencedRoots = { distro: string; roots: readonly string[] }
 
 const phaseIndex = (phase: WslMoveCutoverPhase): number => WSL_MOVE_CUTOVER_PHASES.indexOf(phase)
 const FENCED_FROM = phaseIndex('source-fenced')
@@ -34,6 +45,11 @@ export function wslMoveFenceFromCutovers(
   const fenced = { repoIds: new Set<string>(), folderWorkspaceIds: new Set<string>() }
   const hidden = { repoIds: new Set<string>(), folderWorkspaceIds: new Set<string>() }
   const sessionFrozen = { repoIds: new Set<string>(), folderWorkspaceIds: new Set<string>() }
+  const hostDistro = {
+    repoIds: new Map<string, string>(),
+    folderWorkspaceIds: new Map<string, string>()
+  }
+  const fencedRoots: WslMoveFencedRoots[] = []
   for (const cutover of cutovers) {
     const index = phaseIndex(cutover.phase)
     const target = index >= HIDDEN_FROM ? hidden : index >= FENCED_FROM ? fenced : null
@@ -41,12 +57,28 @@ export function wslMoveFenceFromCutovers(
       continue
     }
     addScope(target, cutover)
+    if (target === fenced) {
+      fencedRoots.push(fencedRootsOf(cutover))
+    }
+    if (target === hidden) {
+      const { distro, scopeRepoIds, scopeFolderWorkspaceIds } = cutover.manifest.source
+      scopeRepoIds.forEach((id) => hostDistro.repoIds.set(id, distro))
+      scopeFolderWorkspaceIds.forEach((id) => hostDistro.folderWorkspaceIds.set(id, distro))
+    }
     // Keep retained sessions frozen even after the destination commits.
     if (index >= SESSION_FROZEN_FROM) {
       addScope(sessionFrozen, cutover)
     }
   }
-  return { fenced, hidden, sessionFrozen }
+  return { fenced, hidden, sessionFrozen, hostDistro, fencedRoots }
+}
+
+function fencedRootsOf(cutover: Readonly<WslMoveCutover>): WslMoveFencedRoots {
+  const { distro } = cutover.manifest.source
+  const roots = wslMoveScopeRootPaths(cutover.manifest).flatMap(
+    (root) => comparableWslPath(root, distro) ?? []
+  )
+  return { distro, roots }
 }
 
 function addScope(

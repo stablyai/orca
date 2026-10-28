@@ -9,7 +9,6 @@ import {
   getSshTargetIdForExecutionHost,
   parseExecutionHostId
 } from '../../shared/execution-host'
-import { getProjectHostSetupLookup } from '../../shared/project-host-setup-lookup'
 import { findFolderWorkspaceCandidateRepos } from '../../shared/folder-workspace-execution-host'
 import { resolveLocalWorkspaceRuntime } from '../local-project-runtime-resolution'
 import { detectAgentsOnHost, type AgentDetectionHost } from '../preflight/workspace-agent-detection'
@@ -54,14 +53,15 @@ function projectForRepo(
 ): Project | undefined {
   const projects = store.getProjects?.() ?? []
   const setups = store.getProjectHostSetups?.() ?? []
-  const setup = getProjectHostSetupLookup(setups).forWorkspace({
-    repoId: repo.id,
-    hostId: getRepoExecutionHostId(repo)
-  })
-  if (setup) {
-    return projects.find((project) => project.id === setup.projectId)
-  }
-  const matches = projects.filter((project) => project.sourceRepoIds.includes(repo.id))
+  const hostId = getRepoExecutionHostId(repo)
+  const ownerIds = new Set(
+    setups
+      .filter((setup) => setup.repoId === repo.id && setup.hostId === hostId)
+      .map((setup) => setup.projectId)
+  )
+  const matches = projects.filter((project) =>
+    ownerIds.size ? ownerIds.has(project.id) : project.sourceRepoIds.includes(repo.id)
+  )
   if (matches.length > 1) {
     throw new Error(
       `Target project is ambiguous for repository ${repo.displayName}. Select a host-qualified repository.`

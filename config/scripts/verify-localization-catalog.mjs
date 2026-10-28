@@ -284,19 +284,40 @@ function setCatalogEntry(catalog, key, value) {
   cursor[parts.at(-1)] = value
 }
 
-function collectLocaleParityIssues(enCatalog, localeCatalog) {
+// Locales with more CLDR plural categories than English (ru few/many) source those forms from `_other`.
+function resolveLocaleSourceKey(enEntries, localeName, key) {
+  if (enEntries.has(key)) {
+    return key
+  }
+  const plural = /^(.*)_(zero|one|two|few|many|other)$/.exec(key)
+  if (!plural || !localeName || !enEntries.has(`${plural[1]}_other`)) {
+    return undefined
+  }
+  try {
+    return new Intl.PluralRules(localeName).resolvedOptions().pluralCategories.includes(plural[2])
+      ? `${plural[1]}_other`
+      : undefined
+  } catch {
+    return undefined
+  }
+}
+
+function collectLocaleParityIssues(enCatalog, localeCatalog, localeName) {
   const enEntries = flattenCatalogEntries(enCatalog)
   const localeEntries = flattenCatalogEntries(localeCatalog)
   const missingInLocale = [...enEntries.keys()].filter((key) => !localeEntries.has(key))
-  const extraInLocale = [...localeEntries.keys()].filter((key) => !enEntries.has(key))
+  const extraInLocale = [...localeEntries.keys()].filter(
+    (key) => !resolveLocaleSourceKey(enEntries, localeName, key)
+  )
   const interpolationMismatches = []
 
-  for (const key of enEntries.keys()) {
-    if (!localeEntries.has(key)) {
+  for (const [key, localeValue] of localeEntries) {
+    const sourceKey = resolveLocaleSourceKey(enEntries, localeName, key)
+    if (!sourceKey) {
       continue
     }
-    const enVariables = collectInterpolationVariables(enEntries.get(key))
-    const localeVariables = collectInterpolationVariables(localeEntries.get(key))
+    const enVariables = collectInterpolationVariables(enEntries.get(sourceKey))
+    const localeVariables = collectInterpolationVariables(localeValue)
     if (enVariables.join('|') !== localeVariables.join('|')) {
       interpolationMismatches.push(key)
     }
@@ -422,7 +443,7 @@ async function readCatalogFile(catalogPath) {
 
 function verifyLocaleCatalog(enCatalog, localeName, localeCatalog) {
   const { enEntries, localeEntries, missingInLocale, extraInLocale, interpolationMismatches } =
-    collectLocaleParityIssues(enCatalog, localeCatalog)
+    collectLocaleParityIssues(enCatalog, localeCatalog, localeName)
   const genericTermRegressions = collectGenericTermRegressions(enEntries, localeEntries, localeName)
 
   // Feature PRs own English declarations; missing target translations use i18next fallback until localization supplies them.

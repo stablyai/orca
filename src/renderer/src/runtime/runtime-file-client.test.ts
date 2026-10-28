@@ -168,6 +168,56 @@ describe('runtime file client', () => {
     })
   })
 
+  it('shows a binary the host refused as binary, fetching no preview when it has none', async () => {
+    runtimeEnvironmentCall.mockImplementation(() =>
+      Promise.resolve({
+        id: 'rpc-read',
+        ok: false,
+        error: { code: 'runtime_error', message: 'binary_file' },
+        _meta: { runtimeId: 'remote-runtime' }
+      })
+    )
+
+    await expect(
+      readRuntimeFileContent({
+        target: { kind: 'environment' as const, environmentId: 'env-1' },
+        filePath: '/remote/repo/libfoo.so',
+        relativePath: 'libfoo.so',
+        worktreeId: 'wt-1',
+        pageOversizedBinary: true
+      })
+    ).resolves.toEqual({ content: '', isBinary: true })
+    expect(runtimeEnvironmentCall).toHaveBeenCalledTimes(1)
+  })
+
+  it('shows an unlisted binary an older host sent as text as binary, fetching nothing more', async () => {
+    runtimeEnvironmentCall.mockImplementation((args: { method: string }) =>
+      Promise.resolve(
+        args.method === 'files.read'
+          ? {
+              id: 'rpc-read',
+              ok: true,
+              result: { content: '\u007fELF\u0002\u0000\u0001', truncated: true, byteLength: 7 },
+              _meta: { runtimeId: 'remote-runtime' }
+            }
+          : { id: 'rpc-other', ok: false, error: { code: 'runtime_error', message: 'unexpected' } }
+      )
+    )
+
+    await expect(
+      readRuntimeFileContent({
+        target: { kind: 'environment' as const, environmentId: 'env-1' },
+        filePath: '/remote/repo/libfoo.so',
+        relativePath: 'libfoo.so',
+        worktreeId: 'wt-1'
+      })
+    ).resolves.toEqual({ content: '', isBinary: true })
+    // Nothing more is fetched: not paged in chunks though truncated, and no preview to show.
+    for (const method of ['files.readChunk', 'files.readPreview']) {
+      expect(runtimeEnvironmentCall).not.toHaveBeenCalledWith(expect.objectContaining({ method }))
+    }
+  })
+
   it('does not fall back to files.readPreview for non-binary remote read errors', async () => {
     runtimeEnvironmentCall.mockImplementation((args: { method: string }) => {
       if (args.method === 'files.read') {

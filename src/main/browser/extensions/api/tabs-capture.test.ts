@@ -4,8 +4,19 @@ import type { BrowserExtensionCaller } from '../browser-extension-namespace-regi
 const mocks = vi.hoisted(() => {
   const tabs: { windowId: number; active: boolean; contents: unknown }[] = []
   const hostPatterns: string[] = []
-  return { tabs, windows: new Set<number>(), hostPatterns, activeTabGrants: new Set<number>() }
+  return {
+    tabs,
+    windows: new Set<number>(),
+    hostPatterns,
+    activeTabGrants: new Set<number>(),
+    releasePaint: vi.fn(),
+    holdPaint: vi.fn()
+  }
 })
+
+vi.mock('../../browser-manager', () => ({
+  browserManager: { holdPaintForCapture: mocks.holdPaint }
+}))
 
 vi.mock('../browser-extension-tab-model', () => ({
   listBrowserExtensionTabs: () => mocks.tabs,
@@ -61,6 +72,8 @@ beforeEach(() => {
   mocks.windows = new Set([1, 2])
   mocks.hostPatterns = []
   mocks.activeTabGrants = new Set()
+  mocks.holdPaint.mockClear().mockReturnValue(mocks.releasePaint)
+  mocks.releasePaint.mockClear()
 })
 
 describe('tabs.captureVisibleTab', () => {
@@ -106,5 +119,17 @@ describe('tabs.captureVisibleTab', () => {
     await expect(capture()).rejects.toThrow('Internal error while trying to capture')
     mocks.tabs = []
     await expect(capture()).rejects.toThrow('No active web contents to capture')
+  })
+
+  it('releases hidden-page paint when capture fails', async () => {
+    mocks.hostPatterns = ['<all_urls>']
+    const active = tab(7, 'https://site.test/')
+    active.contents.capturePage.mockRejectedValueOnce(new Error('capture failed'))
+    mocks.tabs = [active]
+
+    await expect(capture()).rejects.toThrow('capture failed')
+
+    expect(mocks.holdPaint).toHaveBeenCalledWith(7)
+    expect(mocks.releasePaint).toHaveBeenCalledTimes(1)
   })
 })

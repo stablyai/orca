@@ -38,6 +38,9 @@ export type WslHostConnectIntent = 'update' | 'force'
 /** A host a newer Orca runs refused this build: only Force (or updating Orca) changes that. */
 export const ORCAD_HOST_NEWER_DEFERRAL_CODE = 'orcad_host_newer'
 
+/** A project move to the host runs on this desktop; the update waits for it to finish. */
+export const ORCAD_UPDATE_WSL_MOVE_RUNNING_CODE = 'orcad_update_wsl_move_running'
+
 export type WslHostDeferredUpdate = {
   candidateVersion: string
   /** The update planner's deferral code, as Managed servers reports it. */
@@ -50,6 +53,8 @@ export type WslHostDeferredUpdate = {
 export type WslHostCapability = {
   /** False when the packaged orcad template is missing, so no WSL host can deploy or connect. */
   serverFiles: boolean
+  /** False in serve-only: saved hosts work, but no host is added and no project moved. Absent from older mains. */
+  acceptsNewWork?: boolean
 }
 
 /**

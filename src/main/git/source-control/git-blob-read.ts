@@ -15,6 +15,15 @@ export type GitBlobReadResult = {
   exists: boolean
   /** Unknown presence: never cache a diff whose empty side came from an incomplete read. */
   failed?: boolean
+  /** Past MAX_GIT_SHOW_BYTES: left unread and reported binary, so older diff readers stay safe. */
+  tooLarge?: boolean
+}
+
+const TOO_LARGE_BLOB: GitBlobReadResult = {
+  content: '',
+  isBinary: true,
+  exists: true,
+  tooLarge: true
 }
 
 export async function readUnstagedLeftBlob(
@@ -46,7 +55,7 @@ export async function readGitBlobAtIndexPath(
     return { ...bufferToBlob(stdout, filePath), exists: true }
   } catch (error) {
     if (isMaxBufferOverflowError(error)) {
-      return { content: '', isBinary: true, exists: true }
+      return TOO_LARGE_BLOB
     }
     return {
       content: '',
@@ -77,7 +86,7 @@ export async function readGitBlobAtOidPath(
     return { ...bufferToBlob(stdout, filePath), exists: true }
   } catch (error) {
     if (isMaxBufferOverflowError(error)) {
-      return { content: '', isBinary: true, exists: true }
+      return TOO_LARGE_BLOB
     }
     return {
       content: '',
@@ -102,7 +111,7 @@ export async function readWorkingTreeFile(filePath: string): Promise<GitBlobRead
   }
   if (fileStat.size > MAX_GIT_SHOW_BYTES) {
     // Mirror the Git buffer cap so filesystem reads cannot load huge assets.
-    return { content: '', isBinary: true, exists: true }
+    return TOO_LARGE_BLOB
   }
   try {
     const buffer = await readFile(filePath)

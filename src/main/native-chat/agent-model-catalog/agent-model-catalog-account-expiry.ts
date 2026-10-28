@@ -36,7 +36,7 @@ function launchKeys(settings: AgentLaunchSettings): Map<string, string> {
   )
   const keys = new Map<string, string>()
   for (const agent of new Set([...commands.keys(), ...envs.keys()])) {
-    const env = Object.entries(envs.get(agent) ?? {}).sort(([a], [b]) => a.localeCompare(b))
+    const env = Object.entries(envs.get(agent) ?? {}).sort(([a], [b]) => a.localeCompare(b, 'en'))
     keys.set(agent, JSON.stringify([commands.get(agent) ?? null, env]))
   }
   return keys

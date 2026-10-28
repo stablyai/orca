@@ -1,4 +1,5 @@
 import { BrowserWindow, ipcMain } from 'electron'
+import { noteWslHostUserAction } from '../wsl/wsl-host-user-actions'
 import {
   WSL_HOST_STATUS_CHANNEL,
   type WslHostAddResult,
@@ -17,7 +18,11 @@ import { WslHostService } from '../wsl/wsl-host-service'
 import { WslHostVisibleWorkByWindow } from './wsl-host-visible-work-windows'
 import type { WslHostAutomationWake } from '../wsl/wsl-host-automation-wake'
 import { createWslHostAutomationWake } from './wsl-host-automation-wake-wiring'
-import { wslHostsGateOpen } from '../wsl/wsl-host-gate'
+import {
+  WSL_HOSTS_NEW_WORK_PAUSED_MESSAGE,
+  wslHostsGateOpen,
+  wslHostsServing
+} from '../wsl/wsl-host-gate'
 import { getWslHostService, setWslHostService } from '../wsl/wsl-host-service-instance'
 import { retireRemovedRuntimeEnvironment } from './runtime-environments/runtime-environment-removal-cleanup'
 import { getRuntimeEnvironmentStatus } from './runtime-environments/runtime-environment-status-probe'
@@ -32,6 +37,7 @@ import {
   pushWslOrcadHostAccountEnv
 } from '../wsl/wsl-orcad-host-account-push'
 import { wslOrcadHostSupports } from '../wsl/wsl-orcad-host-environments'
+import { wslHostConnectOptions } from '../wsl/wsl-host-connect-request'
 
 export const WSL_HOST_HANDLER_CHANNELS = [
   'wslHosts:listDistros',
@@ -106,8 +112,8 @@ type WslHostHandlerArgs = {
 }
 
 function createService(args: WslHostHandlerArgs): WslHostService | null {
-  // A closed gate must prevent service adoption, WSL spawns and reconnects.
-  if (!wslHostsGateOpen()) {
+  // A closed gate must prevent service adoption, WSL spawns and reconnects; serve-only keeps saved hosts.
+  if (!wslHostsServing()) {
     return null
   }
   const fake = readFakeWslHostsConfig()
@@ -218,8 +224,20 @@ export function registerWslHostHandlers(args: WslHostHandlerArgs): void {
   ipcMain.handle('wslHosts:listDistros', () => wsl.listDistros())
   ipcMain.handle(
     'wslHosts:add',
-    (_event, request: { distro: string; startIfStopped?: boolean }): Promise<WslHostAddResult> =>
-      wsl.add(request)
+    async (
+      _event,
+      request: { distro: string; startIfStopped?: boolean }
+    ): Promise<WslHostAddResult> => {
+      // Serve-only keeps saved hosts working but admits none.
+      if (!wslHostsGateOpen()) {
+        return { ok: false, kind: 'disabled', message: WSL_HOSTS_NEW_WORK_PAUSED_MESSAGE }
+      }
+      const result = await wsl.add(request)
+      if (result.ok) {
+        noteWslHostUserAction({ kind: 'added', distro: request.distro })
+      }
+      return result
+    }
   )
   ipcMain.handle('wslHosts:remove', async (_event, request: { environmentId: string }) => {
     if (args.store.getSettings().activeRuntimeEnvironmentId === request.environmentId) {
@@ -231,17 +249,14 @@ export function registerWslHostHandlers(args: WslHostHandlerArgs): void {
   })
   ipcMain.handle(
     'wslHosts:connect',
-    (_event, request: { environmentId: string; intent?: unknown }) =>
-      // The Settings Connect is the user's own: it keeps a host whose Remove didn't finish.
-      wsl.connect(request.environmentId, {
-        withdrawPendingRemoval: true,
-        ...(request.intent === 'update' || request.intent === 'force'
-          ? { intent: request.intent }
-          : {})
-      })
+    (
+      _event,
+      request: { environmentId: string; intent?: unknown; withdrawPendingRemoval?: unknown }
+    ) => wsl.connect(request.environmentId, wslHostConnectOptions(request))
   )
   ipcMain.handle('wslHosts:getCapability', (): WslHostCapability => ({
-    serverFiles: wsl.hasServerFiles()
+    serverFiles: wsl.hasServerFiles(),
+    acceptsNewWork: wslHostsGateOpen()
   }))
   ipcMain.handle('wslHosts:getStatuses', () => wsl.getStatuses())
   const visibleWork = new WslHostVisibleWorkByWindow()

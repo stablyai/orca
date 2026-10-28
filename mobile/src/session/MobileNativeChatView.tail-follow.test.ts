@@ -382,3 +382,7 @@ describe('MobileNativeChatView: tail-follow', () => {
     }
   })
 })
+
+vi.mock('./MobileQueuedMessageComposer', () => ({
+  MobileQueuedMessageComposer: 'QueuedMessageComposer'
+}))

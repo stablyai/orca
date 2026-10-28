@@ -15,7 +15,7 @@ import { peekConfirmedRunningWslDistros } from '../wsl-running-distro-cache'
 import { loadWindowsNativeRegistry, WINDOWS_REG_SZ } from '../windows-native-registry'
 import { readWslDistroRegistrations } from '../wsl/wsl-distro-registry-id'
 import { listWslHostDistros } from '../wsl/wsl-host-distro-list'
-import { wslHostsGateOpen } from '../wsl/wsl-host-gate'
+import { wslHostsGateOpen, wslHostsGateState } from '../wsl/wsl-host-gate'
 import { isForeignLink, readWorktreeLinks } from '../git/worktree-prune-guard'
 import { isTelemetryEnabled, track } from './client'
 import {
@@ -161,7 +161,8 @@ export async function gatherWslUsageSnapshotInput(
       getCachedWslDistros()?.[0] ?? null
     ),
     windowsDriveReposWithWslWorktrees: await countWindowsDriveReposWithWslWorktrees(store),
-    wslHostsGateOpen: gateOpen
+    wslHostsGateOpen: gateOpen,
+    wslHostsGateState: wslHostsGateState()
   }
 }
 

@@ -4,13 +4,16 @@ import { randomUUID } from 'node:crypto'
 import { envelope } from './wsl-orcad-chat-envelope'
 import type { ChatInstall, ChatLane } from './wsl-orcad-structured-chat-contract'
 
-/** Guest file the Windows-side `claude` decoy appends to each time anything runs it. */
+/** Guest file every Windows-side agent decoy appends to each time anything runs it. */
 export const WSL_CHAT_DECOY_MARKER = 'orca-lane-claude-decoy-ran'
 
 /** Windows dir (under the lane's work dir) the lane puts on its own PATH, which WSL appends to orcad's. */
 export const WSL_CHAT_WINDOWS_DECOY_DIR = 'windows-claude-install'
 
-/** A Windows install as WSL interop exposes it: an npm-style `claude` sh shim on the Windows PATH. */
+/** Windows-side installs of each agent the lane chats with; a guest install must shadow every one. */
+export const WSL_CHAT_WINDOWS_DECOY_AGENTS = ['claude', 'codex', 'grok'] as const
+
+/** A Windows install as WSL interop exposes it: an npm-style sh shim on the Windows PATH. */
 export const WSL_CHAT_WINDOWS_DECOY = [
   '#!/bin/sh',
   `printf '%s\\n' "$0 $*" >> "$HOME/${WSL_CHAT_DECOY_MARKER}"`,

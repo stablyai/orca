@@ -1,6 +1,5 @@
 import type { Project, ProjectHostSetup } from '../../../shared/project-types'
 import type { TuiAgent } from '../../../shared/tui-agent'
-import { getProjectHostSetupLookup } from '../../../shared/project-host-setup-lookup'
 
 /** The selected target project owns the workspace; a missing or inherited value uses global. */
 export function projectWorkspaceDefault(
@@ -21,13 +20,19 @@ export function folderGroupDefaultTarget(
   if (!repoIds.length || !hostId) {
     return null
   }
-  const lookup = getProjectHostSetupLookup(setups)
   let projectId: string | undefined
   for (const repoId of repoIds) {
     const sourceOwners = projects.filter((project) => project.sourceRepoIds.includes(repoId))
+    const ownerIds = new Set(
+      setups
+        .filter((setup) => setup.repoId === repoId && setup.hostId === hostId)
+        .map((setup) => setup.projectId)
+    )
+    if (ownerIds.size > 1) {
+      return null
+    }
     const owner =
-      lookup.forWorkspace({ repoId, hostId })?.projectId ??
-      (sourceOwners.length === 1 ? sourceOwners[0].id : undefined)
+      ownerIds.values().next().value ?? (sourceOwners.length === 1 ? sourceOwners[0].id : undefined)
     if (!owner || (projectId && owner !== projectId)) {
       return null
     }

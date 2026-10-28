@@ -8,21 +8,26 @@ export function buildDiffResult(
   modifiedContent: string,
   originalIsBinary: boolean,
   modifiedIsBinary: boolean,
-  filePath?: string
+  filePath?: string,
+  /** A side was over the read cap rather than proven binary. */
+  tooLarge = false
 ): GitDiffResult {
   if (originalIsBinary || modifiedIsBinary) {
     const mimeType = filePath
       ? PREVIEWABLE_BINARY_MIME_TYPES[path.extname(filePath).toLowerCase()]
       : undefined
+    const sides = originalIsBinary
+      ? { originalIsBinary: true as const, modifiedIsBinary }
+      : { originalIsBinary: false, modifiedIsBinary: true as const }
     return {
       kind: 'binary',
       originalContent,
       modifiedContent,
-      originalIsBinary,
-      modifiedIsBinary,
+      ...sides,
       // Why: renderer still checks legacy `isImage` before previewing, so set it for PDFs too until the contract is renamed.
-      ...(mimeType ? { isImage: true, mimeType } : {})
-    } as GitDiffResult
+      ...(mimeType ? { isImage: true, mimeType } : {}),
+      ...(tooLarge ? { tooLarge: true } : {})
+    }
   }
 
   // Why: over the render limit, return metadata instead of huge text so the renderer can show fallback UI.

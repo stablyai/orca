@@ -132,9 +132,11 @@ export function getRuntimeMobileSessionSyncKey(
         ? previousKey.browserProjection
         : buildRuntimeMobileBrowserProjection(state),
     editorDraftsProjection:
-      canReusePrevious && state.editorDrafts === previousState.editorDrafts
+      canReusePrevious &&
+      state.editorDrafts === previousState.editorDrafts &&
+      state.openFiles === previousState.openFiles
         ? previousKey.editorDraftsProjection
-        : buildRuntimeMobileEditorDraftsProjection(state.editorDrafts)
+        : buildRuntimeMobileEditorDraftsProjection(state.editorDrafts, state.openFiles)
   }
 }
 

@@ -3,19 +3,25 @@
 Default to free GitHub-hosted standard runners: the repository is public and the
 Enterprise plan allows 500 concurrent jobs (50 macOS). Use Blacksmith only for:
 
-- PR critical-path jobs: unit test shards, preflight and typecheck, and `e2e.yml`.
-- Adhoc builds (a developer is waiting) and release packaging, including
-  `release-mac-build.yml`.
-- Hardware-sensitive performance benchmarks.
+- PR critical-path jobs: unit test shards, preflight and typecheck, and the layout
+  oracle gate (`e2e.yml` with `fast_runners: true`). Advisory e2e lanes run hosted.
+- `pr.yml` Git compatibility: its parallel real-Git lanes, two through Docker,
+  exceed test timeouts on 4-vCPU hosted runners.
+- macOS packaging: adhoc, hourly, daily and `release-mac-build.yml`. Hosted
+  `macos-15` cannot boot the packaged x64 terminal host that `afterPack` verifies.
+- The adhoc Windows build (a developer is waiting).
+- Hardware-sensitive performance benchmarks. Operation-count contracts
+  (`performance-contracts.yml`) are not, and run hosted.
 
-Everything else, including hourly and daily dev builds and node-server lanes, runs
-on hosted `ubuntu-*`, `macos-15` and `windows-2022` images. Do not use paid GitHub
+Everything else, including the hourly and daily Windows builds, template
+qualification and node-server lanes, runs on hosted `ubuntu-*`, `macos-15` and
+`windows-2022` images. Do not use paid GitHub
 larger runners: they cost more than Blacksmith at every size and Enterprise
 included minutes do not cover them.
 
 On Blacksmith, small routing and reporting jobs use 2 vCPUs; most test jobs use
 4; compilation and shared JavaScript builds use 8. Mac checks use the 6-vCPU
-Apple Silicon runners. Adhoc Mac packaging uses 12 vCPUs.
+Apple Silicon runners, including adhoc and release Mac packaging.
 
 Keep matrix platform keys separate from runner labels: platform keys select
 native slots, architectures, cache identities, and upload conditions.

@@ -31,11 +31,11 @@ type PluginSettingsOverviewProps = {
 }
 
 function matchesInstalledPlugin(plugin: PluginHostListEntry, search: string): boolean {
-  const query = search.trim().toLocaleLowerCase()
+  const query = search.trim().toLowerCase()
   return (
     !query ||
     [plugin.name, plugin.pluginKey, plugin.publisher, plugin.description ?? ''].some((value) =>
-      value.toLocaleLowerCase().includes(query)
+      value.toLowerCase().includes(query)
     )
   )
 }

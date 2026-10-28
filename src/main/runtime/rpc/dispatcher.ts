@@ -12,6 +12,7 @@ import {
 
 import { successResponse } from './errors'
 import { ALL_RPC_METHODS } from './methods'
+import { withoutMethodsThisHostDoesNotServe } from './methods/session-terminal-scrollback'
 import { emulatorProbe, emulatorProbeError } from '../../emulator/emulator-probe'
 import type { OrcaRuntimeService } from '../orca-runtime'
 import { isDurableMutation } from '../../../shared/orchestration-rpc-contract'
@@ -57,7 +58,7 @@ export class RpcDispatcher {
   constructor({ runtime, methods = ALL_RPC_METHODS, callerScope }: DispatcherOptions) {
     this.runtime = runtime
     this.pinnedCallerScope = callerScope
-    this.registry = buildRegistry(methods)
+    this.registry = buildRegistry(withoutMethodsThisHostDoesNotServe(methods))
     this.orchestrationMutations = getOrchestrationMutationExecutor(runtime)
     this.legacyOrchestration = new OrchestrationLegacyCompatibility(runtime)
   }

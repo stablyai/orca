@@ -26,6 +26,7 @@ import {
   ResolveTerminalPath,
   ServerDirectoryBrowse
 } from '../../../../shared/rpc-contract/files-params'
+import { limitSearchResultToContentBudget } from '../../../../shared/search-result-transport-budget'
 
 let filesWatchSubscriptionSeq = 0
 
@@ -174,19 +175,22 @@ export const FILE_METHODS = [
     name: 'files.search',
     permission: 'workspace',
     params: FileSearch,
-    handler: async (params, { runtime, signal }) =>
-      runtime.searchRuntimeFiles(
-        params.worktree,
-        {
-          query: params.query,
-          caseSensitive: params.caseSensitive,
-          wholeWord: params.wholeWord,
-          useRegex: params.useRegex,
-          includePattern: params.includePattern,
-          excludePattern: params.excludePattern,
-          maxResults: params.maxResults
-        },
-        { signal }
+    handler: async (params, { runtime, clientKind, requestId, signal }) =>
+      limitSearchResultToContentBudget(
+        await runtime.searchRuntimeFiles(
+          params.worktree,
+          {
+            query: params.query,
+            caseSensitive: params.caseSensitive,
+            wholeWord: params.wholeWord,
+            useRegex: params.useRegex,
+            includePattern: params.includePattern,
+            excludePattern: params.excludePattern,
+            maxResults: params.maxResults
+          },
+          { signal }
+        ),
+        remoteFileContentBudget(clientKind, requestId)
       )
   }),
   defineMethod({

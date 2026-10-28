@@ -291,6 +291,49 @@ describe('D7 daemon protocol crossing', () => {
     })
   })
 
+  const mixed = (daemonProtocolVersions: number[]) => ({
+    liveSessions: 80,
+    startedSinceActivation: 0,
+    daemonProtocolVersion: null,
+    daemonProtocolVersions
+  })
+
+  it('forces an update past mixed daemon generations only when the candidate attaches each', () => {
+    const plan = (daemonProtocolVersions: number[]) =>
+      planOrcadUpdate({
+        record: record(),
+        candidateVersion: '0.3.0+cc01',
+        candidateDaemonProtocol: PROTOCOL,
+        census: mixed(daemonProtocolVersions),
+        force: true
+      })
+    expect(plan([2, 3])).toMatchObject({ action: 'proceed', preservesLiveDaemon: true })
+    expect(plan([3, 4])).toMatchObject({
+      action: 'defer',
+      code: 'orcad_update_strands_live_terminals'
+    })
+    expect(plan([])).toMatchObject({
+      action: 'defer',
+      code: 'orcad_update_daemon_protocol_unverifiable'
+    })
+  })
+
+  it('rolls back over mixed daemon generations only when the target attaches each', () => {
+    const rollback = (daemonProtocolVersions: number[]) =>
+      assessOrcadRollback({
+        record: record(),
+        snapshotPresent: true,
+        census: mixed(daemonProtocolVersions),
+        targetDaemonProtocol: PROTOCOL,
+        stateWritesSinceActivation: false
+      })
+    expect(rollback([1, 3])).toMatchObject({ safety: 'clean' })
+    expect(rollback([2, 4])).toMatchObject({
+      safety: 'unsafe',
+      code: 'orcad_rollback_strands_live_terminals'
+    })
+  })
+
   it('needs no protocol answer when no terminals are running', () => {
     const plan = planOrcadUpdate({
       record: record(),

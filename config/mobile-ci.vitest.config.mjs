@@ -17,7 +17,9 @@ const nodeFiles = [
   'src/terminal/document/native-document-bundle.test.ts',
   'src/transport/settings-read-operations.test.ts',
   'src/transport/mobile-e2ee-v2-client-session.test.ts',
+  'src/transport/mobile-e2ee-v2-physical-channel.test.ts',
   'src/transport/pairing-relay-served-recovery.test.ts',
+  'src/transport/mobile-relay-rpc-stream-cancellation.test.ts',
   'src/test-support/rpc-recording/subscription-recording.test.ts',
   'src/test-support/rpc-recording/family-recordings.test.ts'
 ]

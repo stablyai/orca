@@ -10,8 +10,8 @@ import { notifyInstalledAgentSkillsChanged } from '@/hooks/installed-agent-skill
 import type { RepoSlice } from '../repos/repo-state'
 import { getProjectSetupRuntimeTarget } from './project-host-routing'
 import { mergeUpdatedProjectCompatibilityProject } from '../../../../shared/project-compatibility-merge'
-import { getProjectHostSetupProjectionFromState } from '../project-host-setup-selector'
 import { normalizeProjectRow } from '../../../../shared/project-catalog-row-normalization'
+import { getProjectHostSetupProjectionFromState } from '../project-host-setup-selector'
 import type { ExecutionHostId } from '../../../../shared/execution-host'
 
 export function createProjectUpdateActions(
@@ -61,7 +61,7 @@ export function createProjectUpdateActions(
         )) {
           const owner = owners.find((setup) => setup.hostId === id)
           const targetProjectId =
-            state.endpointProjectHostSetups.find(
+            state.projectHostSetups.find(
               (setup) => owner && setup.id === owner.id && setup.hostId === owner.hostId
             )?.projectId ?? projectId
           const targetUpdates =
@@ -96,7 +96,7 @@ export function createProjectUpdateActions(
         }
         const runtimePreferenceChanged = 'localWindowsRuntimePreference' in updates
         set((state) => ({
-          endpointProjects: state.endpointProjects.map((project) => {
+          projects: state.projects.map((project) => {
             const updated = acknowledged.get(project.id)
             return updated
               ? mergeUpdatedProjectCompatibilityProject(project, updated, updates)

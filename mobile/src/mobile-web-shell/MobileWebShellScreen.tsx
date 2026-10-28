@@ -226,6 +226,7 @@ export function MobileWebShellScreen({
   // Use navigation screen options to disable this stack entry’s gesture; the router has no such option.
   useShellPageBack({
     claimed: backClaimed,
+    isFocused: () => navigation.isFocused(),
     sendBack: bridge.sendBack,
     setOptions: navigation.setOptions
   })

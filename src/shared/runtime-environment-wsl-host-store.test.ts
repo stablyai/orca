@@ -183,4 +183,29 @@ describe('WSL host environment store', () => {
     expect(listEnvironments(userDataPath)).toEqual([])
     expect(findWslHostDeployment(userDataPath, 'wsl:ubuntu')).toBeNull()
   })
+
+  // A golden image with a baked-in orcad key: each distro is its own host, with its own grant.
+  it('keeps two distros that carry the same orcad key as two hosts', () => {
+    addWslHostEnvironment(userDataPath, {
+      id: 'wsl:ubuntu',
+      name: 'Ubuntu (WSL)',
+      pairingCode: code(42000, 'token-ubuntu'),
+      record
+    })
+    addWslHostEnvironment(userDataPath, {
+      id: 'wsl:ubuntu-2',
+      name: 'Ubuntu-2 (WSL)',
+      pairingCode: code(42001, 'token-ubuntu-2'),
+      record: { ...record, distro: 'Ubuntu-2', localPort: 42001 }
+    })
+    const environments = listEnvironments(userDataPath)
+    expect(environments.map((environment) => environment.id)).toEqual([
+      'wsl:ubuntu',
+      'wsl:ubuntu-2'
+    ])
+    expect(environments.map((environment) => getPreferredPairingOffer(environment))).toEqual([
+      expect.objectContaining({ publicKeyB64, deviceToken: 'token-ubuntu' }),
+      expect.objectContaining({ publicKeyB64, deviceToken: 'token-ubuntu-2' })
+    ])
+  })
 })

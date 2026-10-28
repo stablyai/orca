@@ -1,8 +1,7 @@
 import { app } from 'electron'
-import { LOCAL_EXECUTION_HOST_ID } from '../../../shared/execution-host'
-import { sessionSearchScopeCatalogFromStore } from '../../ai-vault-search/session-search-store-scope-catalog'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../shared/layout-owner-switch'
 import { registerAppHandlers } from '../app'
+import { registerWslMoveWiring } from '../wsl-move-driver-wiring'
 import { registerCliHandlers } from '../cli'
 import { registerPreflightHandlers } from '../preflight'
 import type { Store } from '../../persistence/loading-store/store'
@@ -31,7 +30,6 @@ import {
   registerRuntimeEnvironmentHandlers
 } from '../runtime-environments/runtime-environments'
 import { registerWslHostHandlers } from '../wsl-host-handlers'
-import { registerWslMoveHandlers } from '../wsl-move-handlers'
 import { registerEphemeralVmHandlers } from '../ephemeral-vm'
 import { registerAiVaultHandlers } from '../ai-vault'
 import { registerAiVaultSearchHandlers } from '../ai-vault-search'
@@ -104,10 +102,7 @@ import {
   resolveRuntimeAiVaultSessionTitles,
   scanRuntimeAiVaultSessions
 } from '../../ai-vault/runtime-session-scanner'
-import {
-  callRuntimeSessionSearch,
-  bindRuntimeSessionSearch
-} from '../../ai-vault/runtime-session-search-call'
+import { callRuntimeSessionSearch } from '../../ai-vault/runtime-session-search-call'
 import { configureRuntimeAiVaultSessionDelete } from '../ai-vault-delete'
 import { ensureStructuredAgentSessionHostUnlessRefused } from '../../runtime/structured-agent-session-host-refusal'
 import { getAgentSessionAttachmentStore } from '../../native-chat/agent-session-attachments/agent-session-attachment-store-registry'
@@ -267,7 +262,7 @@ export function registerCoreHandlers(
     getUserDataPath: () => app.getPath('userData'),
     invalidateTransport: invalidateRuntimeEnvironmentTransport
   })
-  registerWslMoveHandlers(() => app.getPath('userData'))
+  registerWslMoveWiring(store, runtime)
   registerEphemeralVmHandlers(store, pluginService)
   // Session history and terminal resume are not chats; a refused host leaves nothing to check.
   const ensureStructuredSessionOwnership = () =>
@@ -275,15 +270,11 @@ export function registerCoreHandlers(
   registerAiVaultSearchHandlers({
     callRuntimeSearch: (environmentId, method, params) =>
       callRuntimeSessionSearch(app.getPath('userData'), environmentId, method, params),
-    bindRuntimeSearch: (environmentId) =>
-      bindRuntimeSessionSearch(app.getPath('userData'), environmentId),
     ensureStructuredSessionOwnership
   })
   registerAiVaultHandlers({
     getUserDataPath: () => app.getPath('userData'),
     ensureStructuredSessionOwnership,
-    getProjectOwnershipCatalog: () =>
-      sessionSearchScopeCatalogFromStore(store, LOCAL_EXECUTION_HOST_ID),
     getAdditionalCodexHomePaths: lifecycleOptions.getAdditionalAiVaultCodexHomePaths,
     prepareSessionResume: lifecycleOptions.prepareAiVaultSessionResume,
     getActiveRuntimeAiVaultHostInfos: () =>
@@ -301,7 +292,9 @@ export function registerCoreHandlers(
   registerNativeChatHandlers()
   registerClipboardHandlers(store, {
     localChatAttachmentStore: async () => {
-      await ensureStructuredSessionOwnership()
+      await ensureStructuredAgentSessionHostUnlessRefused(() =>
+        runtime.ensureStructuredAgentSessionHost()
+      )
       return getAgentSessionAttachmentStore()
     }
   })

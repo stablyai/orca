@@ -92,7 +92,7 @@ export class RuntimeBrowserScreencasts {
       // Hidden host compositors stop producing guest frames when throttled.
       const win = this.host.getAvailableAuthoritativeWindow()
       const releaseThrottle = win ? rendererPublicationThrottle.acquire(win.webContents) : () => {}
-      // Active-tab covers hide the guest widget too; its attach-time unthrottle may predate them.
+      // Active-tab covers hide the guest widget independently of the host.
       const releaseGuestThrottle = rendererPublicationThrottle.acquire(guest)
       const started = startBrowserScreencast(guest, {
         format: params.format,

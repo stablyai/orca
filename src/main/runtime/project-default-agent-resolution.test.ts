@@ -78,6 +78,45 @@ function runtime(
 }
 
 describe('resolveProjectDefaultAgent', () => {
+  it('selects the exact host owner when another host has the same repository ID', async () => {
+    vi.mocked(detectAgentsOnHost).mockResolvedValue(['codex', 'claude'])
+    const host = runtime('codex')
+    const store = host.requireStore()
+    const other = { ...store.getProjects()[0], id: 'other', defaultTuiAgent: 'claude' as const }
+    const target = {
+      ...host,
+      requireStore: () => ({
+        ...store,
+        getProjects: () => [other, ...store.getProjects()],
+        getProjectHostSetups: () => [
+          { ...store.getProjectHostSetups()[0], projectId: other.id, hostId: 'ssh:other' as const },
+          ...store.getProjectHostSetups()
+        ]
+      })
+    }
+    await expect(resolveProjectDefaultAgent(target, { repo })).resolves.toMatchObject({
+      agent: 'codex',
+      projectId: 'project-b'
+    })
+  })
+
+  it('refuses conflicting project owners on the same execution host', async () => {
+    const host = runtime('codex')
+    const store = host.requireStore()
+    const target = {
+      ...host,
+      requireStore: () => ({
+        ...store,
+        getProjects: () => [...store.getProjects(), { ...store.getProjects()[0], id: 'other' }],
+        getProjectHostSetups: () => [
+          ...store.getProjectHostSetups(),
+          { ...store.getProjectHostSetups()[0], id: 'other-setup', projectId: 'other' }
+        ]
+      })
+    }
+    await expect(resolveProjectDefaultAgent(target, { repo })).rejects.toThrow(/ambiguous/i)
+  })
+
   it('uses the target project, including for an existing workspace', async () => {
     vi.mocked(detectAgentsOnHost).mockResolvedValue(['codex', 'claude'])
     const host = runtime('codex')

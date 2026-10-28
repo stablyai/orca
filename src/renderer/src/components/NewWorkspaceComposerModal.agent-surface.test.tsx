@@ -229,7 +229,7 @@ it('resolves a single folder group project on the target host before creating', 
   mocks.folderRepos = ['repo-b']
   mocks.repoId = 'repo-b'
   useAppStore.setState({
-    endpointProjects: [
+    projects: [
       {
         id: 'B',
         displayName: 'B',

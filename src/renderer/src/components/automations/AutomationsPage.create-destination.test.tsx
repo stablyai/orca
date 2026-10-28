@@ -63,21 +63,9 @@ function addSshProject(): void {
   }
   mocks.state.repos = [...(mocks.state.repos as Repo[]), repo]
   mocks.repoMap.set(SSH_REPO_ID, repo)
-  // Without a ready setup on that host the project has no run context, and a
-  // save against it is refused before any destination is stated.
-  mocks.state.endpointProjects = [
-    ...mocks.state.endpointProjects,
-    {
-      id: 'project-ssh',
-      displayName: 'orca',
-      badgeColor: '#222222',
-      sourceRepoIds: [SSH_REPO_ID],
-      createdAt: 1,
-      updatedAt: 1
-    }
-  ]
-  mocks.state.endpointProjectHostSetups = [
-    ...mocks.state.endpointProjectHostSetups,
+  // The host needs a ready setup or save refuses the project before choosing a destination.
+  mocks.state.projectHostSetups = [
+    ...mocks.state.projectHostSetups,
     {
       id: 'setup-ssh',
       projectId: 'project-ssh',
@@ -105,19 +93,8 @@ function addCollidingRuntimeProject(): void {
     executionHostId: `runtime:${RUNTIME_ID}`
   }
   mocks.state.repos = [...(mocks.state.repos as Repo[]), repo]
-  mocks.state.endpointProjects = [
-    ...mocks.state.endpointProjects,
-    {
-      id: 'project-runtime-collision',
-      displayName: 'orca on m4-air',
-      badgeColor: '#111111',
-      sourceRepoIds: [REPO_ID],
-      createdAt: 1,
-      updatedAt: 1
-    }
-  ]
-  mocks.state.endpointProjectHostSetups = [
-    ...mocks.state.endpointProjectHostSetups,
+  mocks.state.projectHostSetups = [
+    ...mocks.state.projectHostSetups,
     {
       id: 'setup-runtime-collision',
       projectId: 'project-runtime-collision',

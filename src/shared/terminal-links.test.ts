@@ -3,32 +3,41 @@ import {
   TERMINAL_FILE_LINK_TAP_CONFORMANCE_CASES,
   columnForTerminalFileLinkTap
 } from './terminal-file-link-conformance'
+import { classifyTerminalOscLinkTarget } from './terminal-osc-link-target'
 import {
+  extractTerminalFileLinkReadings,
   extractTerminalFileLinks,
-  findExactTerminalFileLink,
   isPathInsideWorktree,
   resolveTerminalFileLink,
   toWorktreeRelativePath
 } from './terminal-links'
 
-function extractTerminalFileLinkAtColumn(lineText: string, column: number) {
-  return (
-    extractTerminalFileLinks(lineText).find(
-      (link) => column >= link.startIndex && column < link.endIndex
-    ) ?? null
-  )
+// Every reading a host that checks files is offered.
+function allReadings(lineText: string) {
+  const { links, guesses } = extractTerminalFileLinkReadings(lineText)
+  return [...links, ...guesses]
+}
+
+function readingsAt(lineText: string, column: number) {
+  return allReadings(lineText)
+    .filter((link) => column >= link.startIndex && column < link.endIndex)
+    .map(({ pathText, line, column }) => ({ pathText, line, column }))
+}
+
+function pathTexts(lineText: string): string[] {
+  return allReadings(lineText).map((link) => link.pathText)
 }
 
 describe('terminal path helpers', () => {
   describe('shared terminal file-link tap conformance', () => {
+    // Desktop offers every reading at the tap and lets the host's existence check choose.
     it.each(TERMINAL_FILE_LINK_TAP_CONFORMANCE_CASES)('$name', (testCase) => {
-      const link = extractTerminalFileLinkAtColumn(
-        testCase.lineText,
-        columnForTerminalFileLinkTap(testCase)
-      )
-      expect(
-        link ? { pathText: link.pathText, line: link.line, column: link.column } : null
-      ).toEqual(testCase.expected)
+      const readings = readingsAt(testCase.lineText, columnForTerminalFileLinkTap(testCase))
+      if (testCase.expected) {
+        expect(readings).toContainEqual(testCase.expected)
+      } else {
+        expect(readings).toEqual([])
+      }
     })
   })
 
@@ -58,8 +67,9 @@ describe('terminal path helpers', () => {
     })
 
     it('does not double-link bare tokens that are part of an already-matched path', () => {
-      const links = extractTerminalFileLinks('./src/file.ts is the entry point')
-      expect(links.map((link) => link.displayText)).toEqual(['./src/file.ts'])
+      const paths = pathTexts('./src/file.ts is the entry point')
+      expect(paths).toContain('./src/file.ts')
+      expect(paths).not.toContain('file.ts')
     })
   })
 
@@ -73,18 +83,14 @@ describe('terminal path helpers', () => {
       ).toEqual(['docs/café/report.pdf'])
     })
 
-    it('detects an extensionless absolute path ending in a spaced segment', () => {
-      const links = extractTerminalFileLinks('/Users/alice/My Folder')
-      expect(links).toHaveLength(1)
-      expect(links[0]).toMatchObject({
-        pathText: '/Users/alice/My Folder',
-        displayText: '/Users/alice/My Folder'
-      })
+    it('offers absolute paths with spaces before the filename', () => {
+      expect(pathTexts('/Users/Path/FolderName with Space/content.js')).toContain(
+        '/Users/Path/FolderName with Space/content.js'
+      )
     })
 
-    it('does not treat mid-line command arguments as line-ending spaced paths', () => {
-      const links = extractTerminalFileLinks('run /usr/bin/env node, then continue')
-      expect(links.map((link) => link.pathText)).not.toContain('/usr/bin/env node')
+    it('offers an extensionless absolute path ending in a spaced segment', () => {
+      expect(pathTexts('/Users/alice/My Folder')).toContain('/Users/alice/My Folder')
     })
 
     it('does not linkify root-only or relative trailing separator tokens', () => {
@@ -94,6 +100,44 @@ describe('terminal path helpers', () => {
       expect(extractTerminalFileLinks('../')).toEqual([])
       expect(extractTerminalFileLinks('~/')).toEqual([])
       expect(extractTerminalFileLinks('C:\\')).toEqual([])
+    })
+
+    it('offers an extensionless relative path ending in a spaced segment', () => {
+      expect(pathTexts('./My Folder')).toContain('./My Folder')
+    })
+
+    // A spaced guess must never hide the plain path; the host keeps whichever exists.
+    it.each([
+      [
+        '~/orca-lanes/webhooks-research/bots/bots-ux-outline.md. It covers setup and/or teardown.',
+        '~/orca-lanes/webhooks-research/bots/bots-ux-outline.md'
+      ],
+      ['Wrote ~/notes/plan.md. Next: src/foo.ts', '~/notes/plan.md'],
+      ['Wrote ~/notes/plan.md and src/foo.ts covers the rest', '~/notes/plan.md'],
+      ['See /Users/me/a/b.md. Then C:\\Users\\me\\x.md.', '/Users/me/a/b.md'],
+      ['See /home/me/x.md. Then the pane/tab work.', '/home/me/x.md'],
+      ['See C:\\Users\\me\\x.md. Then the pane/tab work.', 'C:\\Users\\me\\x.md']
+    ])('offers the plain path in %j', (line, path) => {
+      expect(pathTexts(line)).toContain(path)
+    })
+
+    it.each([
+      '/Users/a/C# Projects/x.cs',
+      '/Users/a/Tom & Jerry/x.ts',
+      '/Users/a/Notes - Draft/x.md',
+      'C:\\Users\\Me\\Q&A Docs\\x.txt',
+      '/tmp/Foo.bar Docs/report.md',
+      '/tmp/My File.123',
+      'docs/My Archive.7z',
+      'docs/My 檔案.文件'
+    ])('offers spaced folder names with symbols: %s', (path) => {
+      expect(pathTexts(`open ${path}, then continue`)).toContain(path)
+    })
+
+    it('still offers the spaced reading so an existing spaced path can win', () => {
+      expect(pathTexts('Saved /Users/me/My Docs/plan.md. Next: src/foo.ts')).toEqual(
+        expect.arrayContaining(['/Users/me/My', '/Users/me/My Docs/plan.md'])
+      )
     })
 
     it('detects framework route paths with bracket and paren segments', () => {
@@ -107,6 +151,20 @@ describe('terminal path helpers', () => {
         column: 7,
         displayText: 'app/(shop)/products/[productId]/page.tsx:42:7'
       })
+    })
+
+    it('handles large spaced path lists in linear time', () => {
+      const line = Array.from({ length: 20_000 }, () => '/tmp/Foo Bar/file').join(', ')
+
+      const paths = pathTexts(line)
+
+      expect(paths.filter((path) => path === '/tmp/Foo Bar/file')).toHaveLength(20_000)
+    })
+
+    it('grows a spaced reading over a bounded number of words', () => {
+      const paths = pathTexts(`/tmp/root ${'part/x '.repeat(20_000)}`)
+
+      expect(paths.filter((path) => path.startsWith('/tmp/root'))).toHaveLength(11)
     })
   })
 
@@ -131,16 +189,32 @@ describe('terminal path helpers', () => {
     })
   })
 
-  it('keeps line and column suffixes from exact OSC hyperlink text', () => {
-    expect(findExactTerminalFileLink('docs/README.md:12:3')).toMatchObject({
-      pathText: 'docs/README.md',
-      line: 12,
-      column: 3
-    })
+  it('keeps a path spanning prose apart from the paths written in it', () => {
+    const { links, guesses } = extractTerminalFileLinkReadings(
+      '● Wrote ~/x/notes.md. It covers setup and/or teardown.'
+    )
+    expect(links.map((link) => link.pathText)).toEqual(['~/x/notes.md', 'and/or'])
+    expect(guesses.map((link) => link.pathText)).toContain('~/x/notes.md. It covers setup')
   })
 
-  it('does not take partial text as an OSC hyperlink target', () => {
-    expect(findExactTerminalFileLink('open docs/README.md')).toBeNull()
+  it.each([
+    ['docs/README.md:12:3', 'docs/README.md', 12],
+    ['/Users/a/My  Folder/file.ts:3', '/Users/a/My  Folder/file.ts', 3],
+    ['docs/My  Folder/file.ts', 'docs/My  Folder/file.ts', null]
+  ])('takes OSC hyperlink target %s as written', (target, pathText, line) => {
+    const osc = classifyTerminalOscLinkTarget(target, {
+      windowsPathsFirst: false,
+      allowUncHost: false
+    })
+    expect(osc).toMatchObject({ kind: 'path', link: { pathText, line } })
+  })
+
+  it('does not read a malformed URL OSC hyperlink target as a path', () => {
+    const osc = classifyTerminalOscLinkTarget('https://exa mple.com', {
+      windowsPathsFirst: false,
+      allowUncHost: false
+    })
+    expect(osc).toBeNull()
   })
 
   describe('plain-text file:// URIs', () => {

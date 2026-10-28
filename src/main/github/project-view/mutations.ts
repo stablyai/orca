@@ -107,7 +107,7 @@ async function updateIssueState(args: UpdateIssueBySlugArgs): Promise<GitHubProj
   if (state === undefined) {
     return { ok: true }
   }
-  const guard = repositoryRateLimitGuard(args, 'core')
+  const guard = repositoryRateLimitGuard(args, 'graphql')
   if (guard.blocked) {
     return { ok: false, error: rateLimitedError(guard) }
   }
@@ -125,7 +125,7 @@ async function updateIssueState(args: UpdateIssueBySlugArgs): Promise<GitHubProj
     }
   }
   await acquire()
-  noteRepositoryRateLimitSpend(args, 'core')
+  noteRepositoryRateLimitSpend(args, 'graphql')
   try {
     await ghExecFileAsync(stateArgs, {
       encoding: 'utf-8',

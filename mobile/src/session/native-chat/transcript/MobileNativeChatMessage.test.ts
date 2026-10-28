@@ -17,6 +17,7 @@ vi.mock('react-native', async () => {
   const Text = ({ children, ...props }: { children?: ReactNode }): unknown =>
     React.createElement('Text', props, children)
   return {
+    AppState: { currentState: 'active', addEventListener: () => ({ remove: () => {} }) },
     ActivityIndicator: 'ActivityIndicator',
     Animated: {
       Text,

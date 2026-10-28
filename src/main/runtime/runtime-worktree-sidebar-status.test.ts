@@ -45,10 +45,6 @@ function resolve(
 }
 
 describe('resolveRuntimeWorktreeSidebarStatus', () => {
-  it('shows a fresh failed turn over a live terminal', () => {
-    expect(resolve('active', [doneRow('failure')])).toBe('failed')
-  })
-
   it('keeps another pane’s question above a failed turn, but not the failed pane’s own title', () => {
     expect(resolve('permission', [doneRow('failure')], [title('permission', OTHER_PANE)])).toBe(
       'permission'

@@ -1,3 +1,4 @@
+import { captureMobileNativeChatTextDestination } from './native-chat/composer/mobile-native-chat-draft-inputs'
 import { useEffect, useCallback, useRef } from 'react'
 import { AppState } from 'react-native'
 import { useFocusEffect } from 'expo-router'
@@ -81,6 +82,7 @@ export function useMobileSessionNativeChatDictation(
     connState,
     agentSessionHostSupport,
     onSendError: nativeChatSendError.show,
+    onQueuedEditNotice: showToast,
     onSendResolved: nativeChatSendError.clear
   })
   const { toggleTabChatView, showNativeChat, showNativeChatRef } = nativeChatController
@@ -114,16 +116,25 @@ export function useMobileSessionNativeChatDictation(
     [setShowDictationSetup, showToast]
   )
 
+  const chatDictationDestination = useRef<((text: string) => boolean | void) | undefined>(undefined)
   const dictationTargetReady = showNativeChat ? connState === 'connected' : canSend
   const dictation = useMobileDictation({
     client,
     enabled: dictationTargetReady && dictationEnabled,
     onTranscript: (text) => {
       // Route dictation to the visible chat composer locally; terminal mode retains live-input routing.
-      if (showNativeChatRef.current) {
-        nativeChatController.setChatComposerText((current) =>
-          appendBufferedDictation(current, text)
-        )
+      if (showNativeChatRef.current || chatDictationDestination.current) {
+        const insert = chatDictationDestination.current
+        chatDictationDestination.current = undefined
+        if (insert) {
+          if (insert(text) === false) {
+            return
+          }
+        } else {
+          nativeChatController.setChatComposerText((current) =>
+            appendBufferedDictation(current, text)
+          )
+        }
         showToast('Dictation inserted')
         return
       }
@@ -160,6 +171,7 @@ export function useMobileSessionNativeChatDictation(
   })
 
   const startDictation = useCallback(() => {
+    chatDictationDestination.current = captureMobileNativeChatTextDestination()
     const routeContext = activeHandle
       ? { handle: activeHandle, liveInputEnabled: liveInputTerminalHandles.has(activeHandle) }
       : null

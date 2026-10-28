@@ -39,10 +39,10 @@ export function notifyTerminalSurfaceTap(
       notify(scope, { type: 'open-url', url })
       return
     }
-    const candidates = uniqueFileTapCandidates(
-      findTerminalFileLinksAtBufferPosition(buffer, position, term.cols)
-    )
-    if (candidates.length > 0) {
+    const { links, guesses } = findTerminalFileLinksAtBufferPosition(buffer, position, term.cols)
+    // Why: a tap decides now, so only a path as written makes it a file tap; the host checks the guesses.
+    if (links.length > 0) {
+      const candidates = uniqueFileTapCandidates([...links, ...guesses])
       notify(scope, { type: 'terminal-file-tap', candidates })
       return
     }

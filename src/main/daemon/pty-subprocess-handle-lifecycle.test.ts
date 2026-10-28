@@ -78,11 +78,7 @@ vi.mock('../providers/windows-pty-job-membership', () => ({
 }))
 
 import { createPtySubprocess } from './pty-subprocess'
-import {
-  mockConptyStartupOutput,
-  mockPtyProcess,
-  useDaemonPtySubprocessEnv
-} from './pty-subprocess-test-harness'
+import { mockPtyProcess, useDaemonPtySubprocessEnv } from './pty-subprocess-test-harness'
 import { __setConptyJobNativeForTests } from '../windows/windows-pty-job'
 
 describe('createPtySubprocess', () => {
@@ -230,7 +226,7 @@ describe('createPtySubprocess', () => {
     handle.onData((d) => data.push(d))
 
     proc._simulateData('hello')
-    expect(data).toEqual([...mockConptyStartupOutput(), 'hello'])
+    expect(data).toEqual(['hello'])
   })
 
   it('replays data emitted before the Session registers onData', async () => {
@@ -242,7 +238,7 @@ describe('createPtySubprocess', () => {
     const data: string[] = []
     handle.onData((d) => data.push(d))
 
-    expect(data).toEqual([...mockConptyStartupOutput(), 'early setup output\r\n'])
+    expect(data).toEqual(['early setup output\r\n'])
   })
 
   it('routes onExit events', async () => {
@@ -269,7 +265,7 @@ describe('createPtySubprocess', () => {
     handle.onData((d) => data.push(d))
     handle.onExit((code) => codes.push(code))
 
-    expect(data).toEqual([...mockConptyStartupOutput(), 'last output\r\n'])
+    expect(data).toEqual(['last output\r\n'])
     expect(codes).toEqual([7])
   })
 
@@ -284,11 +280,7 @@ describe('createPtySubprocess', () => {
     handle.onExit((code) => events.push(`exit:${code}`))
     handle.onData((data) => events.push(`data:${data}`))
 
-    expect(events).toEqual([
-      'exit:7',
-      ...mockConptyStartupOutput().map((data) => `data:${data}`),
-      'data:last output\r\n'
-    ])
+    expect(events).toEqual(['exit:7', 'data:last output\r\n'])
   })
 
   it('sends signal via process.kill', async () => {

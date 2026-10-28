@@ -14,6 +14,7 @@ import {
 } from './editor/editor-autosave'
 import { handleTerminalWorkspaceKeyDown } from './terminal-workspace-keydown'
 import type { TerminalActivationController } from './use-terminal-activation-actions'
+import type { TerminalAgentTabShortcut } from './terminal-agent-tab-shortcut'
 import { useTerminalBulkCloseActions } from './use-terminal-bulk-close-actions'
 import { makeOpenFile, makeUnifiedTab } from '../store/slices/store-session-test-harness'
 
@@ -30,7 +31,11 @@ const mocks = vi.hoisted(() => ({
   cancelStructuredAgentLaunch: vi.fn(),
   structuredSessionBusy: vi.fn<() => boolean>(),
   floatingFocused: false,
-  targetInsideFloatingPanel: false
+  targetInsideFloatingPanel: false,
+  resolveAgentShortcut: vi.fn<(args: { activeWorktreeId: string }) => TerminalAgentTabShortcut>(
+    () => ({ actionId: null, agent: null })
+  ),
+  launchAgentInNewTab: vi.fn()
 }))
 
 vi.mock('@/lib/agent-session/structured-agent-session-busy', async () => ({
@@ -59,8 +64,9 @@ vi.mock('@/lib/terminal-shortcut-capture-notification', () => ({
   showTerminalShortcutCaptureNotification: vi.fn()
 }))
 vi.mock('./terminal-agent-tab-shortcut', () => ({
-  resolveTerminalAgentTabShortcut: () => ({ actionId: null, agent: null })
+  resolveTerminalAgentTabShortcut: mocks.resolveAgentShortcut
 }))
+vi.mock('@/lib/launch-agent-in-new-tab', () => ({ launchAgentInNewTab: mocks.launchAgentInNewTab }))
 
 vi.mock('./terminal/terminal-tab-actions', () => ({ closeTerminalTab: mocks.closeTerminalTab }))
 vi.mock('@/runtime/structured-agent-session-close', () => ({
@@ -83,7 +89,6 @@ const controller = {
   handleCloseAllFiles: vi.fn(),
   handleCloseBrowserTab: vi.fn(),
   handleCloseFile: vi.fn(),
-  handleNewAgentTab: vi.fn(),
   handleNewBrowserTab: vi.fn(),
   handleNewFile: vi.fn(),
   handleNewSimulatorTab: vi.fn(),
@@ -494,5 +499,53 @@ describe('tab.closeAll confirmation', () => {
     })
     expect(queueEditorCloseRequests).not.toHaveBeenCalled()
     expect(closeFile).not.toHaveBeenCalled()
+  })
+})
+
+describe('agent tab shortcuts', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    mocks.floatingFocused = false
+    mocks.state = {
+      activeGroupIdByWorktree: { [FLOATING_TERMINAL_WORKTREE_ID]: 'floating-group' },
+      groupsByWorktree: {}
+    }
+    mocks.resolveAgentShortcut.mockReturnValueOnce({
+      actionId: 'tab.newAgent.claude',
+      agent: 'claude'
+    })
+  })
+
+  function pressAgentShortcut(): void {
+    handleTerminalWorkspaceKeyDown(
+      new KeyboardEvent('keydown', { key: '1', ctrlKey: true, cancelable: true }),
+      controller,
+      'darwin'
+    )
+  }
+
+  it('opens the agent in the active worktree when the floating panel is not focused', () => {
+    pressAgentShortcut()
+
+    expect(mocks.launchAgentInNewTab).toHaveBeenCalledExactlyOnceWith(
+      expect.objectContaining({ agent: 'claude', worktreeId: controller.activeWorktreeId })
+    )
+  })
+
+  it('opens the agent in the floating workspace when its panel owns focus', () => {
+    mocks.floatingFocused = true
+
+    pressAgentShortcut()
+
+    expect(mocks.resolveAgentShortcut).toHaveBeenCalledWith(
+      expect.objectContaining({ activeWorktreeId: FLOATING_TERMINAL_WORKTREE_ID })
+    )
+    expect(mocks.launchAgentInNewTab).toHaveBeenCalledExactlyOnceWith(
+      expect.objectContaining({
+        agent: 'claude',
+        worktreeId: FLOATING_TERMINAL_WORKTREE_ID,
+        groupId: 'floating-group'
+      })
+    )
   })
 })

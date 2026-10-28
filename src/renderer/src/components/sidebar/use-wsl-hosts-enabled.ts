@@ -16,6 +16,12 @@ export function useWslHostsEnabled(): boolean {
   return enabled && wslHostsAvailable()
 }
 
+/** Enabled, and not serve-only: the entry points that add a host or move a project. */
+export function useWslHostsAcceptNewWork(): boolean {
+  const accepts = useAppStore((s) => s.wslHostsAcceptNewWork)
+  return useWslHostsEnabled() && accepts
+}
+
 export function openWslHostsExperimentalSetting(): void {
   const { openSettingsPage, openSettingsTarget } = useAppStore.getState()
   openSettingsPage()

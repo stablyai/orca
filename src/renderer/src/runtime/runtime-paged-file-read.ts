@@ -103,6 +103,16 @@ export async function readFileInChunks(reader: ChunkedFileReader): Promise<Paged
   return { kind: 'ok', bytes }
 }
 
+/** A binary the host refused as text: only images and PDFs preview, so no other is fetched. */
+export async function readRemoteBinaryFile(
+  address: RuntimeRemoteFileAddress,
+  options: { pageOversized: boolean }
+): Promise<RuntimeFilePreviewResult> {
+  return previewableBinaryMimeType(address.relativePath)
+    ? readRemoteFilePreview(address, options)
+    : { content: '', isBinary: true }
+}
+
 /** `files.readPreview`, falling back to a chunked read when the file is too large for one reply. */
 export async function readRemoteFilePreview(
   address: RuntimeRemoteFileAddress,

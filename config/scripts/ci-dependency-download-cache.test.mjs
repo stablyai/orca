@@ -32,6 +32,24 @@ describe('CI dependency download caches', () => {
     ])
   })
 
+  it('restores the fastlane bundle on pull requests from the key only the warmup saves', () => {
+    const verify = workflow('mobile').jobs.verify.steps
+    const warm = workflow('ci-cache-warmup-platform-jobs').jobs['warm-mobile-bundle']
+    const key = (steps) => steps.find((step) => step.name === 'Resolve fastlane bundle cache')
+    expect(key(warm.steps).run).toBe(key(verify).run)
+    expect(key(warm.steps).env).toEqual(key(verify).env)
+    const restore = verify.find((step) => step.name === 'Restore fastlane bundle')
+    const seed = warm.steps.find((step) => step.name === 'Seed fastlane bundle')
+    expect(restore.uses).toBe('actions/cache/restore@v5')
+    expect(restore.with).toEqual({ path: seed.with.path, key: seed.with.key })
+    expect(warm['runs-on']).toBe(workflow('mobile').jobs.verify['runs-on'])
+    for (const step of [...verify, ...warm.steps].filter((step) =>
+      step.uses?.startsWith('ruby/')
+    )) {
+      expect(step.with['bundler-cache']).toBeUndefined()
+    }
+  })
+
   it('builds internal packages before native preparation after a script-free install', () => {
     const steps = action.runs.steps
     const buildIndex = steps.findIndex((step) => step.name === 'Build internal packages')
@@ -509,6 +527,16 @@ describe('CI dependency download caches', () => {
     expect(release.steps.indexOf(writer)).toBeGreaterThan(release.steps.indexOf(combined))
     expect(consumer.uses).toBe('actions/cache/restore@v5')
     expect(consumer.with['restore-keys'].trim()).toBe('electron-builder-linux-')
+    // Hosted PRs read GitHub's store, which the release alone leaves empty between cuts.
+    const warm = workflow('ci-cache-warmup-platform-jobs').jobs['warm-linux-electron']
+    const seed = warm.steps.find((step) => step.name === 'Seed shared Linux packaging downloads')
+    expect(warm['runs-on']).toBe(packaging['runs-on'])
+    expect(seed.with).toEqual(writer.with)
+    for (const steps of [packaging.steps, release.steps, warm.steps]) {
+      expect(steps.find((step) => step.id === 'eb-versions').run).toBe(
+        packaging.steps.find((step) => step.id === 'eb-versions').run
+      )
+    }
     expect(combined.uses).toBe('actions/cache@v5')
     expect(linux.eb_cache_path.trim().split('\n')).toEqual([
       '~/.cache/electron',

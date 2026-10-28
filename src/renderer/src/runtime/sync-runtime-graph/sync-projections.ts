@@ -2,6 +2,8 @@ import type { AppState } from '@/store/types'
 import { resolveTerminalTabTitle } from '../../../../shared/tab-title-resolution'
 import { stableHashString } from './editor-draft-hash'
 import type { TerminalTab } from '../../../../shared/terminal-tab-types'
+import { getOpenFileIndexes } from './mobile-session-inputs'
+import { getMobileMarkdownSourceFile, isMobilePublishableOpenFile } from './mobile-session-surfaces'
 import {
   EMPTY_BROWSER_PAGES_BY_WORKSPACE,
   EMPTY_BROWSER_TABS_BY_WORKTREE,
@@ -219,17 +221,40 @@ export function buildRuntimeMobileBrowserProjection(state: AppState): string {
 }
 
 // Monaco re-spreads drafts per keystroke; memoize each file’s unchanged string so typing does not rehash all dirty files.
-function getEditorDraftHashCache(editorDrafts: AppState['editorDrafts']): EditorDraftHashCache {
+function getEditorDraftHashCache(
+  editorDrafts: AppState['editorDrafts'],
+  openFiles: AppState['openFiles']
+): EditorDraftHashCache {
   const cached = graphState.cachedEditorDraftHashes
-  if (cached?.source === editorDrafts) {
+  if (cached?.source === editorDrafts && cached.openFiles === openFiles) {
     return cached
+  }
+
+  let sourceFileIds = cached?.openFiles === openFiles ? cached.sourceFileIds : undefined
+  if (!sourceFileIds) {
+    const indexes = getOpenFileIndexes(openFiles)
+    const ids = new Set<string>()
+    for (const file of openFiles) {
+      if (!isMobilePublishableOpenFile(file)) {
+        continue
+      }
+      const source = getMobileMarkdownSourceFile(file, indexes.byWorktreeAndId.get(file.worktreeId))
+      if (source) {
+        ids.add(source.id)
+      }
+    }
+    sourceFileIds = ids
   }
 
   const previousEntries = cached?.entries
   const entries = new Map<string, EditorDraftHashCacheEntry>()
   const hashByFileId = new Map<string, string>()
   const parts: string[] = []
-  for (const [fileId, content] of Object.entries(editorDrafts)) {
+  for (const fileId of sourceFileIds) {
+    const content = editorDrafts[fileId]
+    if (content === undefined) {
+      continue
+    }
     const previous = previousEntries?.get(fileId)
     let entry: EditorDraftHashCacheEntry
     if (previous?.content === content) {
@@ -245,6 +270,8 @@ function getEditorDraftHashCache(editorDrafts: AppState['editorDrafts']): Editor
   }
   const next: EditorDraftHashCache = {
     source: editorDrafts,
+    openFiles,
+    sourceFileIds,
     entries,
     hashByFileId,
     projection: `{${parts.join(',')}}`
@@ -254,16 +281,18 @@ function getEditorDraftHashCache(editorDrafts: AppState['editorDrafts']): Editor
 }
 
 export function buildRuntimeMobileEditorDraftsProjection(
-  editorDrafts: AppState['editorDrafts']
+  editorDrafts: AppState['editorDrafts'],
+  openFiles: AppState['openFiles']
 ): string {
-  return getEditorDraftHashCache(editorDrafts).projection
+  return getEditorDraftHashCache(editorDrafts, openFiles).projection
 }
 
 /** Per-file draft version stamps for the mobile session snapshot; shares the keystroke memo. */
 export function getEditorDraftVersionByFileId(
-  editorDrafts: AppState['editorDrafts']
+  editorDrafts: AppState['editorDrafts'],
+  openFiles: AppState['openFiles']
 ): ReadonlyMap<string, string> {
-  return getEditorDraftHashCache(editorDrafts).hashByFileId
+  return getEditorDraftHashCache(editorDrafts, openFiles).hashByFileId
 }
 
 export function resetRuntimeMobileSyncProjectionCachesForTests(): void {

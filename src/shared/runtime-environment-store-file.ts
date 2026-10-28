@@ -27,7 +27,7 @@ import {
   readWslHostDeployments,
   WslHostDeploymentStoreInvalidError
 } from './wsl-host-deployment-store'
-import { isWslHostsInternalGateOpen } from './wsl-host-internal-gate'
+import { isWslHostsServing } from './wsl-host-internal-gate'
 
 export {
   getEnvironmentStorePath,
@@ -53,11 +53,11 @@ export function readPersistedEnvironmentStore(
   }
 }
 
-/** Unreadable WSL state fails closed only when its internal gate is enabled; otherwise it cannot hide SSH/paired servers. */
+/** Unreadable WSL state fails closed only while WSL hosts are served; otherwise it cannot hide SSH/paired servers. */
 function readWslHostDeploymentsForRegistry(
   userDataPath: string
 ): ReturnType<typeof readWslHostDeployments> {
-  const gateOpen = isWslHostsInternalGateOpen(process.env)
+  const gateOpen = isWslHostsServing(process.env)
   try {
     const read = readWslHostDeployments(userDataPath)
     return gateOpen ? read : { deployments: read.deployments, unreadableEnvironmentIds: new Set() }

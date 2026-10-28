@@ -20,14 +20,6 @@ export const CROSS_LOCALE_KEY_OVERRIDES = {
     zh: 'Jira',
     ja: 'Jira'
   },
-  'auto.components.github.PRFilterDropdowns.19bb6f115f': {
-    zh: 'reviewed-by',
-    ja: 'reviewed-by'
-  },
-  'auto.components.onboarding.OnboardingFlow.a5e5da02f7': {
-    zh: '集成',
-    ja: '連携'
-  },
   // Search-match fragment concatenated flush after the visible theme count; MT dropped the
   // en leading space that separates it from the count.
   'auto.components.settings.SettingsFormControls.c822571b2e': {
@@ -109,10 +101,6 @@ export const CROSS_LOCALE_KEY_OVERRIDES = {
     zh: 'GitHub 集成',
     ja: 'GitHub 連携'
   },
-  'auto.components.settings.jira.integration.card.09742875cd': {
-    zh: 'Jira',
-    ja: 'Jira'
-  },
   'auto.components.sidebar.workspace.status.409528031f': {
     zh: '评审',
     ja: 'レビュー'
@@ -130,14 +118,6 @@ export const CROSS_LOCALE_KEY_OVERRIDES = {
     ja: 'レビュー中'
   },
   'auto.components.status.bar.WorkspaceSpaceCompactPanel.c361440dc0': {
-    zh: '测试版',
-    ja: 'ベータ'
-  },
-  'auto.components.workspace.cleanup.WorkspaceCleanupDialog.1b18868569': {
-    zh: '待评审',
-    ja: 'レビュー待ち'
-  },
-  'auto.components.workspace.space.WorkspaceSpacePage.e8d6ba11ab': {
     zh: '测试版',
     ja: 'ベータ'
   },

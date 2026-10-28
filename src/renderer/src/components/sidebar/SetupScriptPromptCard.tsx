@@ -270,7 +270,7 @@ function SetupScriptPromptCard(): React.JSX.Element | null {
                 ? skippedCount === 1
                   ? translate(
                       'auto.components.sidebar.SetupScriptPromptCard.savedWithSkippedFields_one',
-                      '1 unsupported field skipped. Saved the setup command.',
+                      '{{count}} unsupported field skipped. Saved the setup command.',
                       { count: skippedCount }
                     )
                   : translate(

@@ -197,10 +197,6 @@ const HOST_PORT_SOURCES: Record<Root, readonly string[]> = {
 const NOT_HOST_PORTS = new Set(['setTimeout', 'setInterval', 'setImmediate'])
 
 const SPREAD_SOURCES: Record<string, { file: string; anchor: string }> = {
-  'orcadAiVaultSessionSources(': {
-    file: 'src/main/orcad/orcad-session-search.ts',
-    anchor: 'return {'
-  },
   'agentHookRuntimeDeps(': {
     file: 'src/main/agent-hooks/agent-hook-runtime-deps.ts',
     anchor: 'return {'

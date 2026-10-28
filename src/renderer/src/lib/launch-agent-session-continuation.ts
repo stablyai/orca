@@ -20,6 +20,9 @@ import {
 import type { AgentLaunchChoice } from '@/lib/agent-menu-selection'
 import type { AgentLaunchRoute } from '@/lib/agent-launch-routing'
 import { translate } from '@/i18n/i18n'
+import { resolveWorktreeDisplayName } from '@/lib/worktree-default-display-name'
+import { getResolvedExecutionHostIdForWorktree } from '@/lib/resolved-worktree-execution-host'
+import { workspaceNavigationToastAction } from '@/lib/workspace-navigation-toast-action'
 
 type LaunchAgentSessionContinuationArgs = {
   agent: TuiAgent
@@ -124,7 +127,16 @@ export async function launchAgentSessionContinuation({
           'components.agentSessionContinuation.sent',
           'Session context sent to {{agent}} in a new session.',
           { agent: label }
-        )
+        ),
+        {
+          description: workspaceName,
+          duration: Infinity,
+          dismissible: true,
+          action: workspaceNavigationToastAction({
+            workspaceId: worktreeId,
+            executionHostId
+          })
+        }
       )
     }
   }
@@ -141,6 +153,12 @@ export async function launchAgentSessionContinuation({
   if (!(await ensureAgentAvailable(agent, worktreeId, plan.route, signal))) {
     return false
   }
+  const state = useAppStore.getState()
+  const executionHostId =
+    plan.executionHostId ?? getResolvedExecutionHostIdForWorktree(state, worktreeId) ?? undefined
+  const workspace = state.getKnownWorktreeById(worktreeId, executionHostId)
+  const workspaceName =
+    (workspace && resolveWorktreeDisplayName(workspace)) || initialCwd || worktreeId
   const result = launchAgentInNewTab({ ...delivery, agentSessionLaunchPlan: plan })
   if (!result) {
     notifyLaunchFailed(label)

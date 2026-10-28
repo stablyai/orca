@@ -1,3 +1,4 @@
+import { prepareQueuedMessageEditText } from '../../../../../src/shared/queued-message-edit-command'
 import { useEffect, useMemo, useState } from 'react'
 import {
   applyMentionSuggestion,
@@ -37,6 +38,8 @@ export function useMobileNativeChatComposerMenu(input: {
   onSlashMenuOpen?: () => void
   /** A picked skill; a send carries its file while its token stays, and treats a leading one as chat. */
   onPickSkill?: (skill: { token: string; path?: string }) => void
+  editing?: boolean
+  refuseCommand?: (text: string) => boolean
   focusField: () => void
 }) {
   const { value, onChangeText, agent, structuredCatalog, filePaths, skillDiscovery } = input
@@ -46,6 +49,15 @@ export function useMobileNativeChatComposerMenu(input: {
   const [pendingSelection, setPendingSelection] = useState<Selection | null>(null)
   const [menuKind, setMenuKind] = useState<MenuKind | null>(null)
 
+  const reported = structuredCatalog?.reported
+  const acceptsText = useMemo(
+    () => prepareQueuedMessageEditText(agent ?? 'codex', reported),
+    [agent, reported]
+  )
+  const commandAvailable = useMemo(
+    () => (input.editing ? (name: string) => acceptsText(`/${name}`) : undefined),
+    [input.editing, acceptsText]
+  )
   const catalog = useMemo(
     () =>
       mobileComposerCatalog({ agent, structured: structuredCatalog, discovery: skillDiscovery }),
@@ -79,9 +91,10 @@ export function useMobileNativeChatComposerMenu(input: {
         catalog.profile,
         catalog.discovery,
         null,
-        catalog.sessionSkills
+        catalog.sessionSkills,
+        commandAvailable
       ),
-    [beforeCaret, catalog]
+    [beforeCaret, catalog, commandAvailable]
   )
   const rows = useMemo<ComposerMenuRow[]>(() => {
     if (autocomplete.mode === 'mention') {
@@ -125,6 +138,9 @@ export function useMobileNativeChatComposerMenu(input: {
 
   const pick = (row: ComposerMenuRow): void => {
     if (autocomplete.mode === 'none') {
+      return
+    }
+    if (row.kind === 'command' && input.refuseCommand?.(row.token)) {
       return
     }
     setMenuKind(null)

@@ -125,7 +125,7 @@ async function focusProject(page: Page, repoPath: string): Promise<string | null
 test.describe('native chat on a WSL host', () => {
   test.skip(!SUPPORTED, 'the Claude stub wrapper is POSIX-only')
 
-  test('admits, streams, refuses while the distro is stopped, and continues after focus boots it', async ({
+  test('admits, streams, offers Start for a stopped distro, and continues after Start or a focus boot', async ({
     orcaPage: hub,
     claudeStub
   }, testInfo) => {
@@ -209,19 +209,39 @@ test.describe('native chat on a WSL host', () => {
       await page.screenshot({ path: testInfo.outputPath('wsl-host-chat-streamed.png') })
 
       // The distro stops: a chat call is a runtime call, so it refuses rather than boot it.
-      const connectsBeforeStop = fakeWslConnects(connectLogFile).length
-      writeDistros(distrosFile, STOPPED)
-      await expect
-        .poll(
-          () =>
-            askSupport().then(
-              () => 'answered',
-              (error: unknown) => String(error)
-            ),
-          { timeout: 30_000 }
-        )
-        .toContain('Ubuntu was stopped')
+      const stopDistro = async (): Promise<number> => {
+        const connects = fakeWslConnects(connectLogFile).length
+        writeDistros(distrosFile, STOPPED)
+        await expect
+          .poll(
+            () =>
+              askSupport().then(
+                () => 'answered',
+                (error: unknown) => String(error)
+              ),
+            { timeout: 30_000 }
+          )
+          .toContain('Ubuntu was stopped')
+        return connects
+      }
+      const stoppedNotice = chat.getByText('Ubuntu is stopped', { exact: true })
+      const start = chat.getByRole('button', { name: 'Start', exact: true })
+      const connectsBeforeStart = await stopDistro()
+      // The chat names the stopped distro and offers Start instead of a raw error.
+      await expect(stoppedNotice).toBeVisible({ timeout: 30_000 })
       await page.screenshot({ path: testInfo.outputPath('wsl-host-chat-stopped.png') })
+      expect(fakeWslConnects(connectLogFile)).toHaveLength(connectsBeforeStart)
+      await start.click()
+      await expect
+        .poll(() => fakeWslConnects(connectLogFile).length, { timeout: 60_000 })
+        .toBeGreaterThan(connectsBeforeStart)
+      await expect(stoppedNotice).toBeHidden({ timeout: 60_000 })
+      await send('after Start')
+      await expectReplyAfter('after Start')
+      await page.screenshot({ path: testInfo.outputPath('wsl-host-chat-after-start.png') })
+
+      const connectsBeforeStop = await stopDistro()
+      await expect(stoppedNotice).toBeVisible({ timeout: 30_000 })
 
       // Switching away and back is the user acting on the host: that boots it and the chat goes on.
       await page.evaluate(() => window.__store?.getState().setActiveWorktree(null))

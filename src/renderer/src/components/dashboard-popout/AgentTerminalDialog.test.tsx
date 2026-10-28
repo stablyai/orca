@@ -102,7 +102,7 @@ describe('AgentTerminalDialog', () => {
     expect(screen.queryByText(/pane has closed/)).not.toBeInTheDocument()
   })
 
-  it('still reports a closed pane for a local card with no live pty', () => {
+  it('keeps a local agent openable without claiming its missing preview means closure', () => {
     render(
       <AgentTerminalDialog
         card={card({ ptyId: null, hostKind: 'local' })}
@@ -111,7 +111,9 @@ describe('AgentTerminalDialog', () => {
       />
     )
 
-    expect(screen.getByText(/pane has closed/)).toBeInTheDocument()
+    expect(screen.getByText(/No preview available/)).toBeInTheDocument()
+    expect(screen.queryByText(/pane has closed/)).not.toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Open worktree' })).toBeEnabled()
   })
 
   it('labels acknowledged completions idle without review or pin controls', () => {

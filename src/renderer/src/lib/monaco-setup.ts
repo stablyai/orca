@@ -9,6 +9,9 @@ import cssWorker from 'monaco-editor/esm/vs/language/css/css.worker?worker'
 import htmlWorker from 'monaco-editor/esm/vs/language/html/html.worker?worker'
 import tsWorker from 'monaco-editor/esm/vs/language/typescript/ts.worker?worker'
 import { registerAstroLanguage } from './monaco-languages/register-astro'
+import { registerCudaLanguage } from './monaco-languages/register-cuda'
+import { registerGlimmerLanguages } from './monaco-languages/register-glimmer'
+import { registerGroovyLanguage } from './monaco-languages/register-groovy'
 import { registerJsonlLanguage } from './monaco-languages/register-jsonl'
 import { registerLeanLanguage } from './monaco-languages/register-lean'
 import { registerMarkdownLanguage } from './monaco-languages/register-markdown'
@@ -71,10 +74,13 @@ runMonacoSetupSteps([
   ['Vue language registration', () => registerVueLanguage(monaco)],
   ['Svelte language registration', () => registerSvelteLanguage(monaco)],
   ['Astro language registration', () => registerAstroLanguage(monaco)],
+  ['Glimmer language registration', () => registerGlimmerLanguages(monaco)],
+  ['CUDA language registration', () => registerCudaLanguage(monaco)],
   ['Nim language registration', () => registerNimLanguage(monaco)],
   ['Lean language registration', () => registerLeanLanguage(monaco)],
   ['Typst language registration', () => registerTypstLanguage(monaco)],
   ['Zig language registration', () => registerZigLanguage(monaco)],
+  ['Groovy language registration', () => registerGroovyLanguage(monaco)],
   ['JSONL language registration', () => registerJsonlLanguage(monaco)],
   ['Quarto language registration', () => registerQuartoLanguage(monaco)],
   ['Markdown language registration', () => registerMarkdownLanguage(monaco)],

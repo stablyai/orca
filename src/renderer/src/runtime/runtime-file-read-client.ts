@@ -1,10 +1,7 @@
-import type {
-  RuntimeFilePreviewResult,
-  RuntimeFileReadChunkResult,
-  RuntimeFileReadResult
-} from '../../../shared/runtime-types'
+import type { RuntimeFilePreviewResult, RuntimeFileReadResult } from '../../../shared/runtime-types'
 import { callRuntimeRpc } from './runtime-rpc-client'
 import { RuntimeRpcCallError } from './runtime-rpc-result'
+import { BINARY_PROBE_BYTES } from '../../../shared/binary-buffer'
 import type {
   RuntimeFileDownloadResult,
   RuntimeFileOperationArgs,
@@ -15,7 +12,8 @@ import {
   assertExternalSshReadOwnership,
   canReadRelativeRuntimeFile,
   getRemoteFileArgs,
-  hasRemoteRuntimeOwner
+  hasRemoteRuntimeOwner,
+  localAccess
 } from './runtime-file-routing'
 import { toRuntimeWorktreeSelector } from './runtime-worktree-selector'
 import { chatScratchFileAddress } from './runtime-chat-scratch-file-address'
@@ -23,28 +21,23 @@ import { isAgentSessionAttachmentStorePath } from '../../../shared/agent-session
 import type { LocalFileAccess } from '../../../shared/local-file-access'
 import {
   isHostFileOutsideWorkspaces,
+  readHostFilePreview,
   readHostFileOutsideWorkspaces
 } from './runtime-terminal-artifact-read'
 import {
   pagedTextFileResult,
   pinRemoteFileAddress,
+  readRemoteBinaryFile,
   readRemoteFileInChunks,
   readRemoteFilePreview
 } from './runtime-paged-file-read'
+import {
+  downloadRemoteFileViaPreview,
+  readRemoteDownloadChunk,
+  remoteChunkedDownloadAvailable
+} from './runtime-remote-file-download'
 
-const REMOTE_DOWNLOAD_CHUNK_BYTES = 384 * 1024
-const REMOTE_DOWNLOAD_UPDATE_REQUIRED_MESSAGE =
-  'Remote file download requires a newer Orca server. Update the headless server and try again.'
-
-type RemoteFileDownloadArgs = NonNullable<ReturnType<typeof getRemoteFileArgs>>
-
-// Why local only: an SSH read is the remote host's to check, and its relay never sees this field.
-export function localAccess(
-  connectionId: string | undefined,
-  access: LocalFileAccess | undefined
-): { access?: LocalFileAccess } {
-  return access && !connectionId ? { access } : {}
-}
+export { localAccess } from './runtime-file-routing'
 
 export async function readRuntimeFileContent({
   target,
@@ -108,9 +101,13 @@ export async function readRuntimeFileContent({
     // Typed binary_file refusal permits base64 preview for PDFs/images; unrelated errors cannot spoof this fallback.
     if (err instanceof RuntimeRpcCallError && err.message === 'binary_file') {
       // Why: baseline checks call this too and discard binary content, so paging is opt-in.
-      return readRemoteFilePreview(remote, { pageOversized: pageOversizedBinary === true })
+      return readRemoteBinaryFile(remote, { pageOversized: pageOversizedBinary === true })
     }
     throw err
+  }
+  // Hosts before content sniffing send an unlisted binary as text; NUL is git's binary signal.
+  if (result.content.slice(0, BINARY_PROBE_BYTES).includes('\0')) {
+    return { content: '', isBinary: true }
   }
   if (result.truncated) {
     // files.read caps replies at 512KiB; page the whole file or later editable saves truncate it.
@@ -138,7 +135,7 @@ export async function readRuntimeFilePreview(
     context.expectedExternalSshTargetId
   )
   const remoteArgs = getRemoteFileArgs(context, filePath)
-  const runtimeTarget = context.target
+  const { target: runtimeTarget, worktreeId } = context
   // Paired-server chat attachments live outside worktrees; owning server reads them. Older method_not_found keeps preview fallback.
   if (
     !remoteArgs &&
@@ -153,6 +150,13 @@ export async function readRuntimeFilePreview(
     )
   }
   if (!remoteArgs) {
+    if (access?.kind === 'chat-image' && runtimeTarget.kind === 'environment' && worktreeId) {
+      return readHostFilePreview({
+        target: runtimeTarget,
+        worktreeId,
+        absolutePath: filePath
+      })
+    }
     if (hasRemoteRuntimeOwner(context)) {
       throw new Error('Remote file is outside the owning runtime worktree')
     }
@@ -234,85 +238,4 @@ export async function downloadRuntimeFile(
       await window.api.fs.cancelDownloadedFile({ transferId: download.transferId }).catch(() => {})
     }
   }
-}
-
-async function remoteChunkedDownloadAvailable(
-  remoteArgs: RemoteFileDownloadArgs
-): Promise<boolean> {
-  try {
-    await callRuntimeRpc<RuntimeFileReadChunkResult>(
-      remoteArgs.target,
-      'files.readChunk',
-      {
-        worktree: remoteArgs.worktreeSelector,
-        relativePath: remoteArgs.relativePath,
-        offset: 0,
-        length: 1
-      },
-      { timeoutMs: 60_000 }
-    )
-    return true
-  } catch (error) {
-    // Older hosts may lack chunk downloads but still satisfy preview-sized reads.
-    if (error instanceof RuntimeRpcCallError && error.code === 'method_not_found') {
-      return false
-    }
-    throw error
-  }
-}
-
-async function readRemoteDownloadChunk(
-  remoteArgs: RemoteFileDownloadArgs,
-  offset: number
-): Promise<RuntimeFileReadChunkResult> {
-  return callRuntimeRpc<RuntimeFileReadChunkResult>(
-    remoteArgs.target,
-    'files.readChunk',
-    {
-      worktree: remoteArgs.worktreeSelector,
-      relativePath: remoteArgs.relativePath,
-      offset,
-      length: REMOTE_DOWNLOAD_CHUNK_BYTES
-    },
-    { timeoutMs: 60_000 }
-  )
-}
-
-async function downloadRemoteFileViaPreview(
-  remoteArgs: RemoteFileDownloadArgs,
-  suggestedName: string
-): Promise<RuntimeFileDownloadResult> {
-  try {
-    const result = await callRuntimeRpc<RuntimeFilePreviewResult>(
-      remoteArgs.target,
-      'files.readPreview',
-      { worktree: remoteArgs.worktreeSelector, relativePath: remoteArgs.relativePath },
-      { timeoutMs: 15_000 }
-    )
-    // Legacy empty metadata-free binary means unsupported; recognized zero-byte previews remain valid.
-    if (result.isBinary && !result.content && !result.isImage && !result.mimeType) {
-      throw new Error(REMOTE_DOWNLOAD_UPDATE_REQUIRED_MESSAGE)
-    }
-    return window.api.fs.saveDownloadedFile({
-      suggestedName,
-      content: result.content,
-      encoding: result.isBinary ? 'base64' : 'utf8'
-    })
-  } catch (error) {
-    if (isUnsupportedRemotePreviewDownload(error)) {
-      throw new Error(REMOTE_DOWNLOAD_UPDATE_REQUIRED_MESSAGE)
-    }
-    throw error
-  }
-}
-
-function isUnsupportedRemotePreviewDownload(error: unknown): boolean {
-  if (!(error instanceof RuntimeRpcCallError)) {
-    return false
-  }
-  return (
-    error.code === 'method_not_found' ||
-    (error.code === 'runtime_error' &&
-      (error.message === 'file_too_large' || error.message === 'binary_file'))
-  )
 }

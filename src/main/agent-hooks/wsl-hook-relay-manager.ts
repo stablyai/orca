@@ -229,6 +229,7 @@ export class WslHookRelayManager {
       child,
       distro: state.distro,
       ingest: this.deps.ingest,
+      beginSession: this.deps.beginRelaySession,
       receiveClaudeAgentView: (body) =>
         isWslHookRelayAllowed(this.deps) ? (this.deps.receiveClaudeAgentView?.(body) ?? {}) : {},
       warn: this.deps.warn,

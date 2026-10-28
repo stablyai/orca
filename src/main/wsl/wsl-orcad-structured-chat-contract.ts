@@ -2,6 +2,7 @@ import { randomUUID } from 'node:crypto'
 import { expect, vi } from 'vitest'
 import { z } from 'zod'
 import type { AgentJournalRenderItem } from '../../shared/agent-session-journal-types'
+import { assistantText } from './wsl-orcad-chat-assistant-text'
 import type {
   AgentSessionHistoryResult,
   AgentSessionSubscribeEvent
@@ -17,6 +18,7 @@ import { packagedClaudeChatScenario } from '../orcad/orcad-structured-chat-scena
 import { quotePosixShell } from '../../shared/shell-argument-quoting'
 import { wslClaudeChatScenario } from './wsl-orcad-chat-scenario'
 import { envelope } from './wsl-orcad-chat-envelope'
+import { exerciseScriptedProviderChat } from './wsl-orcad-scripted-provider-chat'
 import {
   expectWindowsDecoyReachable,
   expectWindowsDecoyUnrun,
@@ -33,12 +35,6 @@ import {
 export type ChatLane = WslChatHost & {
   pairing(): PairedRuntimeConnection
   reconnect(whileDisconnected: () => Promise<void>): Promise<void>
-}
-
-function assistantText(row: AgentJournalRenderItem): string {
-  return row.body?.kind === 'message' && row.body.role === 'assistant'
-    ? row.body.blocks.map((block) => (block.type === 'text' ? block.text : '')).join('')
-    : ''
 }
 
 export type ChatInstall = { home: string; root: string; script: string; cli: string }
@@ -191,7 +187,7 @@ async function exerciseChat(
     expect(report.execPath).toMatch(/^\//u)
     // Found on the guest's login PATH, not through a Command setting.
     expect(report.argv[0]).toBe(script)
-    expect(report.env.ORCA_LANE_CLAUDE_WRAPPER).toBe(cli)
+    expect(report.env.ORCA_LANE_CLI_WRAPPER).toBe(cli)
     expect(report.env).toMatchObject({
       ORCA_AGENT_SESSION_ID: sessionId,
       ORCA_STRUCTURED_SESSION: '1'
@@ -286,11 +282,19 @@ export async function proveWslStructuredChat(lane: ChatLane) {
   const gitWorktree = `path:${home}/wsl-orcad-lane-repo`
   const git = await exerciseChat(lane, install, gitWorktree, `${home}/wsl-orcad-lane-repo`)
   const folder = await exerciseChat(lane, install, folderWorktree, folderPath)
+  // One workspace kind each keeps the lane short; Claude already covers both.
+  const codex = await exerciseScriptedProviderChat(
+    lane,
+    install.codex,
+    gitWorktree,
+    `${home}/wsl-orcad-lane-repo`
+  )
+  const grok = await exerciseScriptedProviderChat(lane, install.grok, folderWorktree, folderPath)
   const decoy = await expectWindowsDecoyReachable(lane)
   await expectWindowsDecoyUnrun(lane, home)
   const windowsOnly = await probeWindowsDecoy(lane, install, gitWorktree)
   expect(windowsOnly.errors, JSON.stringify(windowsOnly)).toEqual([])
   const windowsOnlyChat = await expectWindowsOnlyChatRefused(lane, gitWorktree)
   await expectWindowsDecoyUnrun(lane, home)
-  return { git, folder, decoy, windowsOnly, windowsOnlyChat }
+  return { git, folder, codex, grok, decoy, windowsOnly, windowsOnlyChat }
 }

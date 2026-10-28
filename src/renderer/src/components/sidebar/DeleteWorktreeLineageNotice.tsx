@@ -1,7 +1,3 @@
-import {
-  selectCanonicalProjects,
-  selectCanonicalProjectHostSetups
-} from '@/store/project-host-setup-selector'
 import { Workflow } from 'lucide-react'
 import { useMemo, type JSX } from 'react'
 import type { Repo } from '../../../../shared/repo-types'
@@ -36,8 +32,8 @@ export function DeleteWorktreeLineageNotice({
   dirtyChangePreviewsByWorktreeId,
   changeCheckStatesByWorktreeId
 }: DeleteWorktreeLineageNoticeProps): JSX.Element | null {
-  const projects = useAppStore((s) => selectCanonicalProjects(s))
-  const projectHostSetups = useAppStore((s) => selectCanonicalProjectHostSetups(s))
+  const projects = useAppStore((s) => s.projects)
+  const projectHostSetups = useAppStore((s) => s.projectHostSetups)
   const projectIndex = useMemo(
     () =>
       buildProjectGroupingIndex({

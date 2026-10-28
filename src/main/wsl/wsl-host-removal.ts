@@ -13,6 +13,7 @@ import type { WslHostAddResult, WslHostServerStop } from '../../shared/wsl-host-
 import { admitWslHostDistro, wslHostRemovalPendingMessage } from './wsl-host-add-admission'
 import type { WslHostDistroCandidate } from './wsl-host-distro-list'
 import type { WslHostConnector } from './wsl-host-service'
+import { noteWslHostUserAction } from './wsl-host-user-actions'
 
 export type WslHostRemoval = { serverStop: WslHostServerStop; removed: boolean }
 
@@ -44,6 +45,9 @@ export async function removeWslHostServer(
   }
   if (serverStop.stopped) {
     removeWslHostEnvironment(userDataPath, record.environmentId)
+    // Every Remove (sidebar or Settings) is the user's: the move orchestrator never removes a
+    // host. Only on the proven stop, and before the service's cleanup await can fail.
+    noteWslHostUserAction({ kind: 'removed', distro: record.distro })
     return { serverStop, removed: true }
   }
   setWslHostPendingStop(userDataPath, record.environmentId, {

@@ -151,10 +151,23 @@ describe('CI native cache ownership', () => {
     expect(install.with['persist-native-cache']).toBe('false')
     expect(save).toBeUndefined()
     const saving = native.runs.steps.find((step) => step.id === 'native-cache-restore')
-    expect(saving.if).toContain("!(github.event_name == 'pull_request' && runner.os == 'Windows')")
+    expect(saving.if).toContain(
+      "!(github.event_name == 'pull_request' && (runner.os == 'Windows' || " +
+        "runner.os == 'Linux' && inputs.native-runtime == 'electron' && runner.environment == 'github-hosted'))"
+    )
     const warm = parse(readFileSync('.github/workflows/ci-cache-warmup-platform-jobs.yml', 'utf8'))
     expect(warm.jobs['warm-windows'].strategy.matrix.os).toContain(job['runs-on'])
     expect(warm.jobs['warm-windows-electron']['runs-on']).toBe(job['runs-on'])
+    const linuxPackage = parse(readFileSync('.github/workflows/pr.yml', 'utf8')).jobs.package
+    const linuxWarm = warm.jobs['warm-linux-electron']
+    expect(linuxWarm['runs-on']).toBe(linuxPackage['runs-on'])
+    for (const consumer of [linuxPackage, linuxWarm]) {
+      const install = consumer.steps.find((step) =>
+        step.uses?.includes('install-node-dependencies')
+      )
+      expect(install.with['native-runtime']).toBe('electron')
+      expect(install.with['node-version']).toBeUndefined()
+    }
     expect(job.steps.indexOf(build)).toBeLessThan(job.steps.indexOf(electron))
     expect(electron.uses).toBe('./.github/actions/prepare-native-runtime')
     expect(electron.with).toEqual({

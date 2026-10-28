@@ -135,8 +135,8 @@ describe('RepositoryHostSetupsSection', () => {
     })
     useAppStore.setState({
       repos: [localRepo, remoteRepo],
-      endpointProjects: [makeProject({ id: 'github:stablyai/orca' })],
-      endpointProjectHostSetups: [
+      projects: [makeProject({ id: 'github:stablyai/orca' })],
+      projectHostSetups: [
         makeSetup({
           id: 'local-repo',
           projectId: 'github:stablyai/orca',
@@ -178,8 +178,8 @@ describe('RepositoryHostSetupsSection', () => {
     })
     useAppStore.setState({
       repos: [localRepo, remoteRepo],
-      endpointProjects: [makeProject({ id: 'github:stablyai/orca' })],
-      endpointProjectHostSetups: [
+      projects: [makeProject({ id: 'github:stablyai/orca' })],
+      projectHostSetups: [
         makeSetup({
           id: 'local-repo',
           projectId: 'github:stablyai/orca',
@@ -230,10 +230,8 @@ describe('RepositoryHostSetupsSection', () => {
     })
     useAppStore.setState({
       repos: [remoteRepo],
-      endpointProjects: [
-        makeProject({ id: 'github:stablyai/orca', sourceRepoIds: ['remote-repo'] })
-      ],
-      endpointProjectHostSetups: [
+      projects: [makeProject({ id: 'github:stablyai/orca', sourceRepoIds: ['remote-repo'] })],
+      projectHostSetups: [
         makeSetup({
           id: 'direct-setup',
           projectId: 'github:stablyai/orca',
@@ -332,10 +330,8 @@ describe('RepositoryHostSetupsSection', () => {
     })
     useAppStore.setState({
       repos: [remoteRepo],
-      endpointProjects: [
-        makeProject({ id: 'github:stablyai/orca', sourceRepoIds: ['remote-repo'] })
-      ],
-      endpointProjectHostSetups: [
+      projects: [makeProject({ id: 'github:stablyai/orca', sourceRepoIds: ['remote-repo'] })],
+      projectHostSetups: [
         makeSetup({
           id: 'hub-local-setup',
           projectId: 'github:stablyai/orca',
@@ -375,8 +371,8 @@ describe('RepositoryHostSetupsSection', () => {
     })
     useAppStore.setState({
       repos: [localRepo],
-      endpointProjects: [makeProject({ id: 'github:stablyai/orca' })],
-      endpointProjectHostSetups: [
+      projects: [makeProject({ id: 'github:stablyai/orca' })],
+      projectHostSetups: [
         makeSetup({
           id: 'local-repo',
           projectId: 'github:stablyai/orca',
@@ -446,8 +442,8 @@ describe('RepositoryHostSetupsSection', () => {
     })
     useAppStore.setState({
       repos: [localRepo],
-      endpointProjects: [makeProject({ id: 'github:stablyai/orca' })],
-      endpointProjectHostSetups: [
+      projects: [makeProject({ id: 'github:stablyai/orca' })],
+      projectHostSetups: [
         makeSetup({
           id: 'local-repo',
           projectId: 'github:stablyai/orca',
@@ -523,8 +519,8 @@ describe('RepositoryHostSetupsSection', () => {
     })
     useAppStore.setState({
       repos: [localRepo],
-      endpointProjects: [makeProject({ id: 'github:stablyai/orca' })],
-      endpointProjectHostSetups: [
+      projects: [makeProject({ id: 'github:stablyai/orca' })],
+      projectHostSetups: [
         makeSetup({
           id: 'local-repo',
           projectId: 'github:stablyai/orca',
@@ -586,8 +582,8 @@ describe('RepositoryHostSetupsSection', () => {
     })
     useAppStore.setState({
       repos: [localRepo],
-      endpointProjects: [makeProject({ id: 'github:stablyai/orca' })],
-      endpointProjectHostSetups: [
+      projects: [makeProject({ id: 'github:stablyai/orca' })],
+      projectHostSetups: [
         makeSetup({
           id: 'local-repo',
           projectId: 'github:stablyai/orca',
@@ -637,8 +633,8 @@ describe('RepositoryHostSetupsSection', () => {
     })
     useAppStore.setState({
       repos: [localRepo],
-      endpointProjects: [makeProject({ id: 'github:stablyai/orca' })],
-      endpointProjectHostSetups: [
+      projects: [makeProject({ id: 'github:stablyai/orca' })],
+      projectHostSetups: [
         makeSetup({
           id: 'local-repo',
           projectId: 'github:stablyai/orca',
@@ -706,8 +702,8 @@ describe('RepositoryHostSetupsSection', () => {
     })
     useAppStore.setState({
       repos: [localRepo],
-      endpointProjects: [makeProject({ id: 'github:stablyai/orca' })],
-      endpointProjectHostSetups: [
+      projects: [makeProject({ id: 'github:stablyai/orca' })],
+      projectHostSetups: [
         makeSetup({
           id: 'local-repo',
           projectId: 'github:stablyai/orca',
@@ -780,8 +776,8 @@ describe('RepositoryHostSetupsSection', () => {
     })
     useAppStore.setState({
       repos: [localRepo],
-      endpointProjects: [makeProject({ id: 'github:stablyai/orca' })],
-      endpointProjectHostSetups: [
+      projects: [makeProject({ id: 'github:stablyai/orca' })],
+      projectHostSetups: [
         makeSetup({
           id: 'local-repo',
           projectId: 'github:stablyai/orca',

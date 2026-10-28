@@ -1,6 +1,6 @@
 // Pre-handoff gate: runs the checks a change's paths need, in parallel, printing only failures.
 import { execFileSync, spawnSync } from 'node:child_process'
-import { existsSync, globSync, readFileSync, readdirSync } from 'node:fs'
+import { existsSync, readdirSync } from 'node:fs'
 import { availableParallelism } from 'node:os'
 import path from 'node:path'
 import process from 'node:process'
@@ -18,7 +18,6 @@ import { resolvePnpmCliInvocation } from './pnpm-cli-invocation.mjs'
 const OUTPUT_TAIL_LINES = 200
 // Windows caps a command line near 32K characters; past this, lint the whole tree instead.
 const MAX_PATH_ARGUMENT_CHARS = 24_000
-const VITEST_RECORD_COVERAGE = 0.95
 const LINTABLE = /\.[cm]?[jt]sx?$/
 const ANTI_SLOP_ROOTS = ['src/', 'config/', 'tests/', 'mobile/']
 
@@ -99,28 +98,7 @@ function buildWorkspacePackages(root, env) {
   }
 }
 
-// Vitest runs every test without a record, so records count only once they cover the suite.
-async function hasWarmVitestRecords(root) {
-  const recorded = new Set()
-  for (const file of globSync('node_modules/.vite/vitest/*/dependencies.json', { cwd: root })) {
-    try {
-      const { projects = {} } = JSON.parse(readFileSync(path.join(root, file), 'utf8'))
-      for (const project of Object.values(projects)) {
-        Object.keys(project?.files ?? {}).forEach((test) => recorded.add(test))
-      }
-    } catch {
-      continue
-    }
-  }
-  if (recorded.size === 0) {
-    return false
-  }
-  const { discoverUnitFiles } = await import('./ci-unit-files.mjs')
-  const tests = discoverUnitFiles(root)
-  return tests.filter((test) => recorded.has(test)).length >= tests.length * VITEST_RECORD_COVERAGE
-}
-
-function buildTasks(root, plan, { files, mergeBase, maxWorkers, bun, warmRecords }) {
+function buildTasks(root, plan, { files, mergeBase, maxWorkers, bun }) {
   const node = process.execPath
   const oxlint = resolveOxcCliInvocation('oxlint', 'oxlint', root)
   const oxfmt = resolveOxcCliInvocation('oxfmt', 'oxfmt', root)
@@ -151,9 +129,7 @@ function buildTasks(root, plan, { files, mergeBase, maxWorkers, bun, warmRecords
         '--config',
         'config/vitest.config.ts',
         '--passWithNoTests',
-        ...(maxWorkers ? [`--maxWorkers=${maxWorkers}`] : []),
-        // Why: a cold record cache would run the whole suite; the static graph stays selective.
-        ...(warmRecords ? [] : ['--experimental.recordDependencies=false'])
+        ...(maxWorkers ? [`--maxWorkers=${maxWorkers}`] : [])
       ])
     tasks.push({
       name: 'unit tests',
@@ -310,8 +286,7 @@ export async function main(root, argv) {
     files,
     mergeBase,
     maxWorkers: options.maxWorkers,
-    bun,
-    warmRecords: await hasWarmVitestRecords(root)
+    bun
   })
   console.log(
     `check:changed: ${files.length} changed file(s) since ${ref} (${mergeBase.slice(0, 10)}); running ${tasks.length} check(s).`

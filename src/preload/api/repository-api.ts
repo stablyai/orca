@@ -20,9 +20,12 @@ import type {
   ProjectUpdateArgs
 } from '../../shared/project-types'
 import type { BaseRefDefaultResult, BaseRefSearchResult, Repo } from '../../shared/repo-types'
+import type { WslMovedProject } from '../../shared/wsl-move/wsl-moved-project'
 
 export type RepositoryApi = {
   list: () => Promise<Repo[]>
+  /** Local projects a WSL host now owns: read-only, listed only for their existing chats. */
+  listWslMoved: () => Promise<WslMovedProject[]>
   add: (args: {
     path: string
     kind?: 'git' | 'folder'

@@ -30,6 +30,7 @@ import { OrcadActiveReadinessError } from '../ssh/orcad-active-readiness'
 import { WslDistroNotRunningError } from './wsl-orcad-connection-errors'
 import { resolveOrcadRemoteContext } from '../managed-server/install/orcad-remote-context'
 import { deployOrcad } from '../ssh/orcad-remote-deploy'
+import { isWslMoveUnderwayOnHost } from '../persistence/moving-wsl-projects/wsl-move-running-moves'
 import { ORCAD_PID_FILENAME } from '../managed-server/install/orcad-remote-host-support'
 import { quotePosixShell } from '../../shared/shell-argument-quoting'
 import { execCommand } from '../ssh/remote-exec/remote-exec-command'
@@ -171,7 +172,15 @@ async function launchOverTransport(
   const intent = options.intent ?? 'connect'
   const admit = (record: OrcadActivationRecord, admitIntent: OrcadUpdateIntent) =>
     admitWslOrcadLaunch(
-      { slot, record, candidateVersion, appVersion, host: failureHost, intent: admitIntent },
+      {
+        slot,
+        record,
+        candidateVersion,
+        appVersion,
+        host: failureHost,
+        intent: admitIntent,
+        moveRunning: isWslMoveUnderwayOnHost(userDataPath(), name)
+      },
       name,
       readyLaunch
     )

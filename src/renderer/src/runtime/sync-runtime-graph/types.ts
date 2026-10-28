@@ -88,6 +88,8 @@ export type EditorDraftHashCacheEntry = {
 }
 export type EditorDraftHashCache = {
   source: AppState['editorDrafts']
+  openFiles: AppState['openFiles']
+  sourceFileIds: ReadonlySet<string>
   entries: Map<string, EditorDraftHashCacheEntry>
   hashByFileId: Map<string, string>
   projection: string

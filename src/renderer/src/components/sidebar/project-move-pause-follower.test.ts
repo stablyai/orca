@@ -164,6 +164,46 @@ describe('project move renderer completion', () => {
     expect(mocks.persist).not.toHaveBeenCalled()
   })
 
+  // One workspace of a two-project move failed in main, and its rollback's
+  // error failed the whole pause, so the move's retry never ran; a fresh pause re-sleeps it.
+  it('persists the slept workspaces of a partly failed pause, and a new pause re-sleeps the rest', async () => {
+    const f = fixture()
+    mocks.state.shutdownWorktreeTerminals.mockImplementation(async (_id, options) => {
+      if ((await options?.hostStop)?.failed) {
+        throw new Error('host_terminal_stop_failed')
+      }
+    })
+    await f.prepare(['a', 'b'])
+    f.notice('started', 'a')
+    f.notice('started', 'b')
+    f.notice('ended', 'a')
+    f.follower.follow({
+      phase: 'ended',
+      worktreeId: 'b',
+      projectMovePauseId: 'move-1',
+      slept: false,
+      stoppedPtyIds: [],
+      records: null
+    })
+    await f.persist(['a'])
+    expect(f.responses.at(-1)).toMatchObject({ phase: 'persist' })
+    await f.follower.request({ requestId: 'move-1', protocol: 1, phase: 'release' })
+
+    const retry = { requestId: 'move-2', protocol: 1 } as const
+    await f.follower.request({ ...retry, phase: 'prepare', worktreeIds: ['b'] })
+    f.follower.follow({ phase: 'started', worktreeId: 'b', projectMovePauseId: 'move-2' })
+    f.follower.follow({
+      phase: 'ended',
+      worktreeId: 'b',
+      projectMovePauseId: 'move-2',
+      slept: true,
+      stoppedPtyIds: ['pty'],
+      records: []
+    })
+    await f.follower.request({ ...retry, phase: 'persist', successfulWorktreeIds: ['b'] })
+    expect(f.responses.at(-1)).toMatchObject({ requestId: 'move-2', phase: 'persist' })
+  })
+
   it('reports durable write failure after teardown', async () => {
     const f = fixture()
     mocks.persist.mockRejectedValue(new Error('disk full'))

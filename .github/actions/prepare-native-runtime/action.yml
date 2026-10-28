@@ -77,12 +77,13 @@ runs:
         ORCA_NATIVE_BUILD_DIRECTORIES
         ORCA_NATIVE_CACHE_PATHS
 
-    # The warmers seed every Windows image and runtime on main; PR copies were single-use 8-14 MB uploads.
+    # The warmers seed every Windows image and runtime, and hosted Linux Electron, on main; PR copies were single-use uploads.
     - name: Restore compiled native modules
       id: native-cache-restore
       if: >-
         inputs.native-runtime != 'none' && inputs.persist-native-cache != 'false' &&
-        !(github.event_name == 'pull_request' && runner.os == 'Windows')
+        !(github.event_name == 'pull_request' && (runner.os == 'Windows' ||
+        runner.os == 'Linux' && inputs.native-runtime == 'electron' && runner.environment == 'github-hosted'))
       uses: actions/cache@v5
       with:
         # Post-job saving cannot resolve nested composite step outputs.
@@ -97,7 +98,8 @@ runs:
       id: native-cache-restore-only
       if: >-
         inputs.native-runtime != 'none' && (inputs.persist-native-cache == 'false' ||
-        github.event_name == 'pull_request' && runner.os == 'Windows')
+        github.event_name == 'pull_request' && (runner.os == 'Windows' ||
+        runner.os == 'Linux' && inputs.native-runtime == 'electron' && runner.environment == 'github-hosted'))
       uses: actions/cache/restore@v5
       with:
         path: |

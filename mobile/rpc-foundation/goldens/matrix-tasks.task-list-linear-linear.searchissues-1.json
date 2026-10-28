@@ -72,6 +72,11 @@
       "loading": false,
       "refreshing": false
     },
+    "44679ef67a40": {
+      "name": "loading",
+      "ordinal": 12,
+      "value": false
+    },
     "5b1f238d80cf": {
       "name": "loading",
       "ordinal": 9,
@@ -133,11 +138,6 @@
       "name": "loading",
       "ordinal": 6,
       "value": false
-    },
-    "7560584e376a": {
-      "name": "error",
-      "ordinal": 13,
-      "value": "Connection closed"
     },
     "7b6df16c2cf0": {
       "name": "linear.listIssues#1",
@@ -631,6 +631,11 @@
         }
       }
     },
+    "cf9696e63483": {
+      "name": "refreshing",
+      "ordinal": 13,
+      "value": false
+    },
     "d0a895d46972": {
       "name": "refreshing",
       "ordinal": 15,
@@ -886,10 +891,8 @@
             "88d78bf42794",
             "104bf14d3af8",
             "5b1f238d80cf",
-            "126a1c470845",
-            "7560584e376a",
-            "83e72fb8e8cd",
-            "d0a895d46972"
+            "44679ef67a40",
+            "cf9696e63483"
           ]
         }
       },

@@ -114,7 +114,7 @@ function repoDigest(repos: readonly Repo[]): string {
     repos
       // Execution host changes which repos are locally scannable even when their paths match.
       .map((repo) => `${getRepoExecutionHostId(repo)}\0${repo.path}`)
-      .sort((left, right) => left.localeCompare(right))
+      .sort((left, right) => left.localeCompare(right, 'en'))
       // NUL cannot occur in paths, preventing ambiguous joined repo lists.
       .join('\0')
   )

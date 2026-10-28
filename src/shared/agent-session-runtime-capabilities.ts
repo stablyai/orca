@@ -48,9 +48,13 @@ export const AGENT_SESSION_QUEUED_MESSAGES_RUNTIME_CAPABILITY =
 // Advertise in-place update/edit holds separately from mid-turn queueing: kept/mail cards remain editable while queueing is off. Never fall back to copy/delete.
 export const AGENT_SESSION_QUEUED_MESSAGE_EDIT_RUNTIME_CAPABILITY =
   'agent-session.queued-message-edit.v1' as const
+// Strict update params accept skills only when advertised; omission keeps legacy editing.
+export const AGENT_SESSION_QUEUED_MESSAGE_SKILLS_EDIT_RUNTIME_CAPABILITY =
+  'agent-session.queued-message-skills-edit.v1' as const
+
 export const AGENT_SESSION_QUEUED_MESSAGE_REORDER_RUNTIME_CAPABILITY =
   'agent-session.queued-message-reorder.v1' as const
-// Update params are strict: send images only when advertised; otherwise Save edits text alone.
+// Strict update params accept images only when advertised; otherwise Save edits text alone.
 export const AGENT_SESSION_QUEUED_MESSAGE_IMAGE_EDIT_RUNTIME_CAPABILITY =
   'agent-session.queued-message-image-edit.v1' as const
 // Publish image cards only to capable readers that preserve images on edit; older copy/delete editing would lose them.
@@ -112,6 +116,7 @@ export const AGENT_SESSION_RUNTIME_CAPABILITIES = [
   AGENT_SESSION_QUEUED_MESSAGE_EDIT_RUNTIME_CAPABILITY,
   AGENT_SESSION_QUEUED_MESSAGE_REORDER_RUNTIME_CAPABILITY,
   AGENT_SESSION_QUEUED_MESSAGE_IMAGE_EDIT_RUNTIME_CAPABILITY,
+  AGENT_SESSION_QUEUED_MESSAGE_SKILLS_EDIT_RUNTIME_CAPABILITY,
   AGENT_SESSION_CONTINUE_INTERRUPTED_RUNTIME_CAPABILITY,
   AGENT_SESSION_PERMISSION_MODES_RUNTIME_CAPABILITY,
   ...STRUCTURED_AGENT_SESSION_SURFACE_RUNTIME_CAPABILITIES,

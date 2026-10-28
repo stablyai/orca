@@ -180,6 +180,91 @@ jobs:
           native-runtime: electron
           cache-pnpm-store: 'false'
 
+  # Hosted Linux packaging and packaged-browser E2E restore these; PRs no longer save their own copies.
+  warm-linux-electron:
+    concurrency:
+      group: ci-cache-warmup-linux-electron-${{ github.event.pull_request.number || github.ref }}
+      cancel-in-progress: ${{ github.event_name != 'schedule' }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    env:
+      ORCA_BACKGROUND_LAUNCH: '1'
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+      - uses: ./.github/actions/install-node-dependencies
+        with:
+          native-runtime: electron
+          cache-pnpm-store: 'false'
+
+      - name: Resolve electron-builder download versions
+        id: eb-versions
+        if: github.event_name != 'pull_request'
+        shell: bash
+        run: node -p "const d = require('./package.json').devDependencies; 'versions=electron' + d.electron + '-builder' + d['electron-builder']" >> "$GITHUB_OUTPUT"
+      # pr.yml package restores this exact path and key.
+      - name: Seed shared Linux packaging downloads
+        id: eb-cache
+        if: github.event_name != 'pull_request'
+        uses: actions/cache@v5
+        with:
+          path: ~/.cache/electron-builder
+          key: electron-builder-linux-${{ steps.eb-versions.outputs.versions }}
+          lookup-only: true
+      # The same toolsets electron-builder fetches for AppImage, deb and rpm.
+      - name: Download Linux packaging tools
+        if: github.event_name != 'pull_request' && steps.eb-cache.outputs.cache-hit != 'true'
+        run: >-
+          node -e "const linux = require('app-builder-lib/out/toolsets/linux.js');
+          const { getIconsToolsetPath } = require('app-builder-lib/out/toolsets/icons.js');
+          const { Arch } = require('builder-util');
+          const { toolsets } = require('./config/electron-builder-pr-linux.config.cjs');
+          (async () => { await getIconsToolsetPath(); await linux.getFpmPath();
+          await linux.getAppImageTools(toolsets.appimage, Arch.x64) })().catch((error) => { console.error(error); process.exit(1) })"
+
+  # Mobile verify restores this bundle on pull requests without saving.
+  warm-mobile-bundle:
+    if: github.event_name != 'pull_request'
+    concurrency:
+      group: ci-cache-warmup-mobile-bundle-${{ github.event.pull_request.number || github.ref }}
+      cancel-in-progress: ${{ github.event_name != 'schedule' }}
+    runs-on: ubuntu-24.04-arm
+    timeout-minutes: 15
+    env:
+      BUNDLE_FROZEN: 'true'
+    defaults:
+      run:
+        working-directory: mobile
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+      - uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: '3.3'
+          working-directory: mobile
+      - name: Resolve fastlane bundle cache
+        id: ruby-bundle
+        env:
+          GEMFILE_HASH: ${{ hashFiles('mobile/Gemfile', 'mobile/Gemfile.lock') }}
+        run: |
+          . /etc/os-release
+          printf 'key=mobile-bundle-v1-%s-%s-%s-%s\n' "$ID-$VERSION_ID" "$(ruby -e 'print RUBY_PLATFORM')" "$(ruby -e 'print RbConfig::CONFIG["ruby_version"]')" "$GEMFILE_HASH" >> "$GITHUB_OUTPUT"
+      - name: Seed fastlane bundle
+        id: ruby-bundle-cache
+        uses: actions/cache@v5
+        with:
+          path: mobile/vendor/bundle
+          key: ${{ steps.ruby-bundle.outputs.key }}
+          lookup-only: true
+      - name: Install fastlane
+        if: steps.ruby-bundle-cache.outputs.cache-hit != 'true'
+        run: |
+          bundle config set --local path "$PWD/vendor/bundle"
+          bundle config set --local deployment true
+          bundle install --jobs 4
+
   warm-linux-package-fixtures:
     if: github.event_name != 'pull_request'
     concurrency:
