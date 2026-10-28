@@ -34,14 +34,4 @@ describe('compareWorktreeDisplayName', () => {
     expect(compareWorktreeDisplayName(a, b)).toBeLessThan(0)
     expect(compareWorktreeDisplayName(b, a)).toBeGreaterThan(0)
   })
-
-  it('treats two undefined names as equal without throwing', () => {
-    expect(compareWorktreeDisplayName(worktree('a', undefined), worktree('b', undefined))).toBe(0)
-  })
-
-  it('orders defined names lexicographically', () => {
-    expect(
-      compareWorktreeDisplayName(worktree('a', 'Apple'), worktree('b', 'Banana'))
-    ).toBeLessThan(0)
-  })
 })

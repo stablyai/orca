@@ -30,6 +30,7 @@ export {
   TASK_WORKTREE_CARD_PROPERTIES,
   getWorktreeCardModeProperties,
   getWorktreeCardModeUpdates,
+  isCurrentCompactWorktreeCardProperties,
   isDefaultedCompactWorktreeCardProperties,
   normalizeWorktreeCardProperties
 } from './worktree/card-properties'
@@ -54,6 +55,7 @@ export const BROWSER_FAMILY_LABELS: Record<string, string> = {
   chromium: 'Chromium',
   comet: 'Comet',
   helium: 'Helium',
+  vivaldi: 'Vivaldi',
   arc: 'Arc',
   edge: 'Microsoft Edge',
   brave: 'Brave',
@@ -78,18 +80,7 @@ export const ORPHAN_WORKTREE_ID = '__orphan__'
 // Why: synthetic local workspace; persistence pruning must classify it without the repo catalog.
 export const FLOATING_TERMINAL_WORKTREE_ID = 'global-floating-terminal'
 
-export const REPO_COLORS = [
-  '#737373', // neutral
-  '#ef4444', // red
-  '#f97316', // orange
-  '#eab308', // yellow
-  '#22c55e', // green
-  '#14b8a6', // teal
-  '#8b5cf6', // purple
-  '#ec4899' // pink
-] as const
-
-export const DEFAULT_REPO_BADGE_COLOR = REPO_COLORS[0]
+export { DEFAULT_REPO_BADGE_COLOR, REPO_COLORS } from './repo-badge-color'
 
 /** Expose the stock root so callers can distinguish an untouched default from a user-selected directory. */
 export function getDefaultWorkspaceDir(homeDir: string): string {

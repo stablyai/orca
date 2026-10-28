@@ -4,7 +4,11 @@ import { CheckJobLogTail } from '@/components/right-sidebar/check-job-log-tail'
 import { translate } from '@/i18n/i18n'
 import { cn } from '@/lib/utils'
 import type { PRCheckJob, PRCheckStep } from '../../../../shared/github/check-types'
-import { resolveStepOutcome, summarizeJobSteps, type StepOutcome } from './check-job-step-status'
+import {
+  resolveStepOutcome,
+  summarizeJobSteps,
+  type StepOutcome
+} from '../../../../shared/pr-check-step-status'
 import { formatJobsForClipboard } from './check-run-clipboard-text'
 import { CheckRunCopyButton } from './CheckRunCopyButton'
 import { Badge } from '@/components/ui/badge'

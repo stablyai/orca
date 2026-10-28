@@ -2,7 +2,11 @@ import {
   adoptAgentSessionLaunchVerdict,
   type AgentSessionLaunchPlan
 } from '@/lib/agent-session-launch-plan'
-import type { AgentLaunchSurface, LaunchAgentInNewTabArgs } from '@/lib/launch-agent-in-new-tab'
+import type { LaunchAgentInNewTabArgs } from '@/lib/launch-agent-in-new-tab'
+import type {
+  AgentLaunchSurface,
+  AgentTabLaunchOutcome
+} from '@/lib/launch-agent-in-new-tab-host-agents'
 import type { StructuredAgentLaunchSettlement } from '@/lib/structured-agent-launch-settlement'
 import type { StructuredPromptDeliveryResult } from '@/lib/structured-agent-session-launch-prompt'
 import type { StructuredLaunchTerminal } from '@/lib/structured-agent-session-launch-admission'
@@ -24,14 +28,7 @@ export function launchStructuredAgentFromNewTab(args: {
   focusIntent?: NativeChatComposerFocusIntent
   beforeSurfaceOpen?: LaunchAgentInNewTabArgs['beforeSurfaceOpen']
   onHostDeclined?: () => StructuredLaunchTerminal
-  openTerminal: (
-    terminalPlan: AgentSessionLaunchPlan,
-    activate?: false
-  ) => {
-    surface: AgentLaunchSurface
-    terminalCompletion?: StructuredLaunchTerminal['completion']
-    promptDeliveryResult?: Promise<StructuredPromptDeliveryResult>
-  } | null
+  openTerminal: (terminalPlan: AgentSessionLaunchPlan, activate?: false) => AgentTabLaunchOutcome
 }): StructuredFromNewTab | null {
   const { plan, beforeSurfaceOpen } = args
   if (beforeSurfaceOpen?.({ kind: 'host-published' }) === false) {
@@ -57,6 +54,9 @@ export function launchStructuredAgentFromNewTab(args: {
         }),
         activate
       )
+      if (terminal && 'refused' in terminal) {
+        return { opened: false, promptDeliveryResult: Promise.resolve(terminal.refused) }
+      }
       return {
         opened: terminal !== null,
         ...(terminal?.surface.kind === 'local-terminal' ? { tabId: terminal.surface.tabId } : {}),

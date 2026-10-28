@@ -50,7 +50,7 @@ function linearWorkspaceError(
   error: unknown
 ): LinearWorkspaceError {
   const message = error instanceof Error ? error.message : String(error)
-  const lower = message.toLocaleLowerCase()
+  const lower = message.toLowerCase()
   const type: LinearWorkspaceError['type'] = isAuthError(error)
     ? 'auth'
     : lower.includes('rate limit') || lower.includes('429')

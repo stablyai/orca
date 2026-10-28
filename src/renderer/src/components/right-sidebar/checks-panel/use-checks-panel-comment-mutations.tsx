@@ -14,7 +14,7 @@ import type { ChecksPanelCommentResolutionState } from './use-checks-panel-comme
 import type { ChecksPanelComposerState } from './use-checks-panel-composer-state'
 import type { ChecksPanelContextState } from './use-checks-panel-context-state'
 import { checksPanelAsyncResultKey } from '../checks-panel-async-result-key'
-import { isMutablePRConversationComment } from './comment-controls'
+import { isMutablePRConversationComment } from '../../../../../shared/github/pr-comment-mutability'
 import type { GitHubReactionContent, PRComment } from '../../../../../shared/github/comment-types'
 import { translate } from '@/i18n/i18n'
 

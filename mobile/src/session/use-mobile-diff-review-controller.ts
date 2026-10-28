@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from 'react'
+import { useMobileSourceControlSettings } from '../source-control/mobile-source-control-settings'
 import type { FlatList } from 'react-native'
 import type { DiffComment } from '../../../src/shared/diff-comment-types'
 import type { ConnectionState } from '../transport/types'
@@ -76,6 +77,7 @@ export function useMobileDiffReviewController(input: ControllerInput) {
   const [actionError, setActionError] = useState<string | null>(null)
   const [busyAction, setBusyAction] = useState<string | null>(null)
   const worktreeLabel = getWorktreeLabel(name, worktreeId)
+  const { compareAgainstUpstream } = useMobileSourceControlSettings(client, connState).settings
 
   const loadReviewData = useCallback(async () => {
     const generation = loadGenerationRef.current + 1
@@ -94,7 +96,11 @@ export function useMobileDiffReviewController(input: ControllerInput) {
     }
     setScreenState(keepReady({ kind: 'loading' }))
     try {
-      const nextState = await loadMobileDiffReviewSnapshot(client, worktreeId)
+      const nextState = await loadMobileDiffReviewSnapshot(
+        client,
+        worktreeId,
+        compareAgainstUpstream
+      )
       if (!isCurrent()) {
         return
       }
@@ -111,7 +117,7 @@ export function useMobileDiffReviewController(input: ControllerInput) {
         )
       }
     }
-  }, [client, connState, worktreeId])
+  }, [client, compareAgainstUpstream, connState, worktreeId])
 
   useEffect(() => {
     void loadReviewData()

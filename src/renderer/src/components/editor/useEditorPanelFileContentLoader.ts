@@ -25,6 +25,8 @@ import { findRestoredEditorWorkspaceRuntimeOwner } from './restored-editor-works
 import type { RuntimeWorkspaceFileRoute } from '@/lib/runtime-workspace-file-route'
 import { editorTabFileAccess, isClientLocalReadOnlyTab } from '@/lib/local-file-access'
 import { isFloatingWorkspaceId } from '../../../../shared/floating-workspace-worktree'
+import { grantRestoredHostFile } from './restored-host-file-grant'
+import { captureRuntimeEnvironmentRequestRevision } from '@/runtime/runtime-environment-revision'
 import { chatScratchFileAddress } from '@/runtime/runtime-chat-scratch-file-address'
 import { stampCleanTabDiskBaseline } from './editor-clean-tab-disk-baseline'
 import { applyEditorFileLoadFailure } from './editor-deleted-file-reload'
@@ -95,6 +97,8 @@ export function useEditorPanelFileContentLoader({
           readTarget.kind === 'environment' ? readTarget.environmentId : undefined
         readConnectionId = connectionId
         let readWorktreeId = worktreeId
+        let readGrantId = restoredOpenFile?.terminalArtifactGrantId
+        let readGrantPairing: number | undefined
         let readRelativePath = restoredOpenFile?.relativePath ?? relativePath
         // Re-owning re-keys the tab, which starts a fresh load under the new owner.
         const reownRestoredFile = async (
@@ -166,10 +170,24 @@ export function useEditorPanelFileContentLoader({
             if (
               runtimeEnvironmentId &&
               !route &&
-              !restoredOpenFile.terminalArtifactGrantId &&
+              !readGrantId &&
               !chatScratchFileAddress(filePath)
             ) {
-              throw new Error('External local files are not available for remote workspaces.')
+              readGrantPairing =
+                readTarget.kind === 'environment'
+                  ? captureRuntimeEnvironmentRequestRevision(readTarget.environmentId)
+                  : undefined
+              const restored = await grantRestoredHostFile(
+                readTarget,
+                readWorktreeId,
+                filePath,
+                readGrantPairing
+              )
+              readGrantId = restored.grantId
+              // Why: a read-only grant stays off the tab, so its save asks the host again and is refused.
+              if (!restored.readOnly) {
+                useAppStore.getState().setTerminalArtifactGrant(id, readGrantId)
+              }
             }
             if (!externalSshOwnerId) {
               // Client-local external tabs must stay off the workspace’s SSH host.
@@ -185,7 +203,8 @@ export function useEditorPanelFileContentLoader({
           !restoredOpenFile?.isDirty &&
           (!/\.(csv|tsv)$/i.test(filePath) || useAppStore.getState().editorDrafts[id] === undefined)
         // Keep file authorization and editable drafts isolated between concurrent reads.
-        const key = `${inFlightReadKey(readScope, filePath)}::${access?.kind ?? ''}${allowPagedPreview ? '' : '::editable'}`
+        // A background read refused for a stopped distro must not answer a user's waking read.
+        const key = `${inFlightReadKey(readScope, filePath)}::${access?.kind ?? ''}${allowPagedPreview ? '' : '::editable'}${options?.wakeWslDistro ? '::wake' : ''}`
         const registeredRead = inFlightFileReads.get(key)
         if (
           options?.force &&
@@ -207,8 +226,10 @@ export function useEditorPanelFileContentLoader({
               expectedExternalSshTargetId: restoredOpenFile?.externalSshTargetId,
               includeLocalLogMetadata: isLiveTailLogTab,
               access,
-              terminalArtifactGrantId: restoredOpenFile?.terminalArtifactGrantId,
-              pageOversizedBinary: true
+              terminalArtifactGrantId: readGrantId,
+              expectedEnvironmentPairingRevision: readGrantPairing,
+              pageOversizedBinary: true,
+              ...(options?.wakeWslDistro ? { wakeWslDistro: true } : {})
             },
             allowPagedPreview
           )

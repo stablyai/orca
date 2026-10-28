@@ -1,6 +1,8 @@
 import { CalendarClock, CircleDot, GitMerge, SquareTerminal, StickyNote } from 'lucide-react-native'
-import { StyleSheet, Text, View } from 'react-native'
+import { Text, View } from 'react-native'
 import { colors } from '../theme/mobile-theme'
+import { themedStyleSheet } from '../theme/themed-styles'
+import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import { TaskProviderLogo } from './TaskProviderLogo'
 import type { WorktreeMetaGlyphPresence } from '../worktree/worktree-meta-glyph-presence'
 import { prStateToken } from './pr-state-token'
@@ -13,6 +15,7 @@ export function prStateColor(state: string): string {
 
 // Match desktop metadata order; mobile glyphs show presence, with full details reserved for sheet.
 export function WorktreeMetaGlyphs({ presence }: { presence: WorktreeMetaGlyphPresence }) {
+  useMobileColorScheme()
   if (!Object.values(presence).some(Boolean)) {
     return null
   }
@@ -29,7 +32,7 @@ export function WorktreeMetaGlyphs({ presence }: { presence: WorktreeMetaGlyphPr
   )
 }
 
-const styles = StyleSheet.create({
+const styles = themedStyleSheet(() => ({
   metaGlyphs: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -41,4 +44,4 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: colors.textMuted
   }
-})
+}))

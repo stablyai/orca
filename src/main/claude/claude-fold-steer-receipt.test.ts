@@ -12,14 +12,14 @@ import { ClaudeStructuredSessionAdapter } from './claude-structured-session-adap
 import type {
   ClaudeStructuredSessionAdapterDeps,
   ClaudeStructuredSessionEvent
-} from './claude-structured-session-state'
+} from './structured/claude-structured-session-state'
 import type { ClaudeStructuredLaunch } from './claude-structured-launch-resolution'
 import {
   fakeClaude,
   identityFor,
-  PROVIDER_SESSION_ID,
-  claudeStartupSettled
+  PROVIDER_SESSION_ID
 } from './claude-structured-session-test-support'
+import { claudeStartupSettled } from './claude-structured-startup-settled-test-support'
 import {
   assistantText,
   initFrame,

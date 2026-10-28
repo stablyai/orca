@@ -4,6 +4,7 @@ import type { TerminalOscLinkRange } from '../../../src/shared/terminal-osc-link
 export type TerminalFrame = { width: number; height: number }
 
 export type TerminalWebViewCommand =
+  | { type: 'set-interaction-active'; active: boolean }
   | { type: 'ping'; id?: number }
   | { type: 'write'; id?: number; data: string }
   | {
@@ -13,6 +14,7 @@ export type TerminalWebViewCommand =
       rows: number
       initialData?: string
       oscLinks?: TerminalOscLinkRange[]
+      kittyKeyboardFlags?: number
       terminalTheme?: RuntimeMobileTerminalTheme
       fontScale?: number
       // Width-reflow replay contains the same rewrapped content; preserve reader position instead of jumping to bottom.

@@ -2,6 +2,7 @@ import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { CONNECTOR_REPLY_UNAVAILABLE } from '../../../shared/rpc-contract/connector-params'
 import { toAppSshPtyId } from '../../../shared/ssh-pty-id'
 import { isRemoteCliControlAllowed } from '../../../shared/ssh-remote-cli-control'
 import { OrcaRuntimeService } from '../../runtime/orca-runtime'
@@ -156,6 +157,9 @@ describe('the relay-era orca CLI on the desktop runtime', () => {
     await expect(run(['worktree', 'list'])).rejects.toThrow(LEGACY_RELAY_CLI_UNSUPPORTED)
     await expect(run(['terminal', 'send', '--terminal', COORDINATOR])).rejects.toThrow(
       LEGACY_RELAY_CLI_UNSUPPORTED
+    )
+    await expect(run(['connector', 'reply', '--text', 'done'])).rejects.toThrow(
+      CONNECTOR_REPLY_UNAVAILABLE
     )
   })
 

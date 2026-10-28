@@ -10,8 +10,10 @@ import {
 import { setNotificationDeliveryPreferences } from '../notifications/push-registration'
 import { useRemotePushCapableHosts } from '../notifications/use-remote-push-capable-hosts'
 import { colors, spacing, typography } from '../theme/mobile-theme'
+import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 
 export function NativeNotificationDeliverySettings({ enabled }: { enabled: boolean }) {
+  useMobileColorScheme()
   const [delivery, setDelivery] = useState(DEFAULT_NOTIFICATION_DELIVERY)
   const [loaded, setLoaded] = useState(false)
   const [saving, setSaving] = useState(false)

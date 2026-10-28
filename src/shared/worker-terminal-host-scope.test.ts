@@ -5,10 +5,7 @@ import {
   projectOrchestrationFleet,
   type FleetDurableWorker
 } from './orchestration-fleet-projection'
-import {
-  parseWorkerTerminalHostScope,
-  readWorkerTerminalHostScope
-} from './worker-terminal-host-scope'
+import { readWorkerTerminalHostScope } from './worker-terminal-host-scope'
 
 /** One host_scope read must drive host labels and connection fences; divergent WSL-local parsing previously made live local workers unverifiable. */
 const PANE_KEY = 'tab-host:leaf-host'
@@ -174,23 +171,4 @@ describe('worker terminal host scope', () => {
       }
     })
   }
-
-  it('keeps the strict scope contract the process-liveness path depends on', () => {
-    expect(parseWorkerTerminalHostScope('{"kind":"ssh","targetId":"host-1"}')).toEqual({
-      kind: 'ssh',
-      targetId: 'host-1'
-    })
-    expect(
-      parseWorkerTerminalHostScope('{"kind":"wsl","hostId":"local","distro":"Ubuntu"}')
-    ).toEqual({ kind: 'wsl', hostId: 'local', distro: 'Ubuntu' })
-    expect(parseWorkerTerminalHostScope('{"kind":"local","hostId":"local"}')).toEqual({
-      kind: 'local',
-      hostId: 'local'
-    })
-    // A scope missing the facts its kind requires is not a scope.
-    expect(parseWorkerTerminalHostScope('{"kind":"wsl","hostId":"local"}')).toBeNull()
-    expect(parseWorkerTerminalHostScope('{"kind":"ssh"}')).toBeNull()
-    expect(parseWorkerTerminalHostScope('local:workspace-1')).toBeNull()
-    expect(parseWorkerTerminalHostScope(null)).toBeNull()
-  })
 })

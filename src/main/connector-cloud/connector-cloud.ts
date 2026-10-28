@@ -96,6 +96,13 @@ export class ConnectorCloud {
     }
   }
 
+  /** Null while no client runs: signed out, connectors off, or Orca quitting. */
+  reply(
+    body: Parameters<ConnectorPollClient['reply']>[0]
+  ): ReturnType<ConnectorPollClient['reply']> | null {
+    return this.client?.reply(body) ?? null
+  }
+
   private stopClient(): void {
     this.client?.stop()
     this.client = null

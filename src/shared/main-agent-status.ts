@@ -14,6 +14,14 @@ export type AgentMainAgentStatus = {
   stateStartedAt: number
 }
 
+/** The main agent's own state where the row carries one; older rows only have the combined state. */
+export function mainAgentState(row: {
+  state: AgentStatusState
+  mainAgent?: AgentMainAgentStatus
+}): AgentStatusState {
+  return row.mainAgent?.state ?? row.state
+}
+
 export function mainAgentStatusEqual(
   a: AgentMainAgentStatus | undefined,
   b: AgentMainAgentStatus | undefined

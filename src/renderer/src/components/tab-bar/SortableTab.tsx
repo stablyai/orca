@@ -223,12 +223,8 @@ export default function SortableTab({
           dragListeners?.onPointerDown as ((event: React.PointerEvent<Element>) => void) | undefined
         )
       }}
-      onMouseDown={(e) => {
-        // Why: block middle-click auto-scroll; don't close here — removing the element pre-mouseup triggers a Linux X11 paste.
-        if (e.button === 1) {
-          e.preventDefault()
-        }
-      }}
+      // Why: block middle-click auto-scroll; don't close here — removing the element pre-mouseup triggers a Linux X11 paste.
+      onMouseDown={preventMiddleButtonDefault}
       onMouseUp={preventMiddleButtonDefault}
       onAuxClick={(e) => {
         if (isEditing) {
@@ -390,7 +386,11 @@ export default function SortableTab({
                 progress={programProgress}
               />
             }
-            alert={naming ? <NativeChatNamingErrorBlock naming={naming} /> : undefined}
+            alert={
+              naming
+                ? (dismiss) => <NativeChatNamingErrorBlock naming={naming} onDismiss={dismiss} />
+                : undefined
+            }
           >
             {tabRoot}
           </TabHoverCard>

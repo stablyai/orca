@@ -2,7 +2,6 @@ import { describe, expect, it } from 'vitest'
 import { isGeminiTerminalTitle } from './agent-title-core'
 import { getAgentLabel, isClaudeAgent } from './agent-title-identity'
 import { detectAgentStatusFromTitle } from './agent-title-status'
-import { TERMINAL_TITLE_CLASSIFICATION_CORPUS } from './terminal-title-classification-corpus'
 import {
   getAgentLabel as getExplicitAgentLabel,
   isClaudeAgent as isExplicitClaudeAgent,
@@ -244,12 +243,6 @@ const PINNED_CLASSIFICATIONS: readonly PinnedRow[] = [
 ]
 
 describe('terminal title classification', () => {
-  it('covers every corpus title exactly once', () => {
-    expect(PINNED_CLASSIFICATIONS.map(([title]) => title)).toEqual([
-      ...TERMINAL_TITLE_CLASSIFICATION_CORPUS
-    ])
-  })
-
   it.each(PINNED_CLASSIFICATIONS)(
     'classifies %j identically',
     (

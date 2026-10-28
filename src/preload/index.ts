@@ -1,4 +1,6 @@
 import { contextBridge, ipcRenderer } from 'electron'
+import { HIDDEN_WINDOW_FRAME_PUMP_STOP_CHANNEL } from '../shared/hidden-window-frame-pump'
+import { installHiddenWindowFramePump } from './hidden-window-frame-pump'
 import type { PreloadApi } from './api-types'
 import { installBrowserFindListener } from './preload-runtime-support'
 import { appApi } from './api/app-bridge'
@@ -197,3 +199,16 @@ if (process.contextIsolated) {
 } else {
   window.api = api
 }
+
+installHiddenWindowFramePump(
+  process.argv,
+  (stop) => ipcRenderer.once(HIDDEN_WINDOW_FRAME_PUMP_STOP_CHANNEL, stop),
+  {
+    rootStyle: () => document.documentElement?.style ?? null,
+    requestAnimationFrame: (callback) => window.requestAnimationFrame(callback),
+    every: (callback, ms) => {
+      const handle = window.setInterval(callback, ms)
+      return () => window.clearInterval(handle)
+    }
+  }
+)

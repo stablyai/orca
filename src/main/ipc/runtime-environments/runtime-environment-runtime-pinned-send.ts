@@ -1,5 +1,5 @@
 import type { PairedRuntimeConnection } from '../../../shared/paired-runtime-connection'
-import { sendRemoteRuntimeRequestWithStatusPreflight } from '../../../shared/remote-runtime-client'
+import { sendRemoteRuntimeRequestWithStatusPreflight } from '../../../shared/remote-runtime/remote-runtime-client'
 import type {
   RuntimeOrchestrationEnvelope,
   RuntimeRpcResponse

@@ -2,7 +2,7 @@ import type { WebContents } from 'electron'
 import { sendGuestCdpCommand } from './guest-cdp-command'
 import { assertRemoteCliPageAccess, readRemoteCliAdmittedPage } from './remote-cli-page-admission'
 
-/** Draws a hidden guest for the duration of a capture; returns its release. */
+/** Draws a hidden guest while a capture or agent input needs its frames; returns its release. */
 export type CapturePaintHold = () => () => void
 
 const SCREENSHOT_TIMEOUT_MS = 8000

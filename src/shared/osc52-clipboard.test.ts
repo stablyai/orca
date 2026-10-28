@@ -184,7 +184,7 @@ describe('createOsc52OscHandler', () => {
       settingEnabled?: boolean | null
       replaying?: boolean
       writeClipboardText?: ReturnType<typeof vi.fn<(text: string) => Promise<void>>>
-      showWriteFailedToast?: ReturnType<typeof vi.fn<() => void>>
+      showWriteFailedToast?: ReturnType<typeof vi.fn<(text: string) => void>>
     } = {}
   ) {
     const settingEnabled = 'settingEnabled' in overrides ? overrides.settingEnabled : true
@@ -308,6 +308,22 @@ describe('createOsc52OscHandler', () => {
     expect(written).toEqual(['copy me'])
     expect(unhandled).toEqual([])
     expect(showWriteFailedToast).toHaveBeenCalledTimes(1)
+  })
+
+  // #33937: a web client retries the refused text from a click, so the failure must carry it.
+  it('hands the refused text to the failed write toast', async () => {
+    const { handler, showWriteFailedToast } = setup({
+      writeClipboardText: vi
+        .fn<(text: string) => Promise<void>>()
+        .mockRejectedValue(new Error('NotAllowedError'))
+    })
+
+    expect(handler(`c;${b64('first')}`)).toBe(true)
+    expect(handler(`c;${b64('copy me')}`)).toBe(true)
+    await new Promise((resolve) => setTimeout(resolve, 0))
+
+    expect(showWriteFailedToast).toHaveBeenCalledTimes(1)
+    expect(showWriteFailedToast).toHaveBeenCalledWith('copy me')
   })
 
   it('surfaces a synchronous clipboard bridge throw as a failed write toast', async () => {

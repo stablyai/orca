@@ -20,7 +20,7 @@ function removeCodexAgentArgs(
     'codex',
     removeAgentArgOption('codex', tokens, flags),
     ['-c', '--config'],
-    (value) => value?.startsWith(`${configKey}=`) === true
+    (value) => new RegExp(`^\\s*${configKey}\\s*=`).test(value ?? '')
   )
 }
 

@@ -11,7 +11,7 @@ import {
   getDiscardAllPaths,
   runDiscardAllForArea,
   type DiscardAllArea
-} from './discard-all-sequence'
+} from '../../../../../../shared/source-control-discard-all-sequence'
 import { discardDeletesEntryFile } from './discard-confirmation'
 import { readIpcErrorMessage } from '@/lib/ipc-error'
 import {
@@ -19,7 +19,7 @@ import {
   showSourceControlEntryFailureToast
 } from './source-control-entry-failure-toast'
 import type { PendingDiscardConfirmation } from './discard-dialog'
-import type { SourceControlEntryGroups } from '../listing/section-order'
+import type { SourceControlEntryGroups } from '../../../../../../shared/source-control-section-order'
 
 export function useSourceControlDiscardConfirmation({
   activeRepoTarget,
@@ -124,11 +124,17 @@ export function useSourceControlDiscardConfirmation({
           const sample = result.failed.slice(0, 3).join(', ')
           const more = result.failed.length > 3 ? `, +${result.failed.length - 3} more` : ''
           toast.error(
-            translate(
-              'auto.components.right.sidebar.SourceControl.8eb3782a0c',
-              'Failed to discard {{value0}} file{{value1}}',
-              { value0: result.failed.length, value1: result.failed.length === 1 ? '' : 's' }
-            ),
+            result.failed.length === 1
+              ? translate(
+                  'auto.components.right.sidebar.SourceControl.discardFailedSingular',
+                  'Failed to discard {{count}} file',
+                  { count: result.failed.length }
+                )
+              : translate(
+                  'auto.components.right.sidebar.SourceControl.discardFailedPlural',
+                  'Failed to discard {{count}} files',
+                  { count: result.failed.length }
+                ),
             {
               description: firstMsg
                 ? translate(

@@ -1,4 +1,5 @@
 import type { MobileHostedReviewEligibilityReply } from './hosted-review-reply-schema'
+import { getRepoIdFromWorktreeId } from '../../../src/shared/worktree/id'
 import type { RpcSendParams } from '../transport/rpc-params-contract'
 import { refusedRpcMessageOrFallback } from '../transport/rpc-refusal-message'
 import { hostedReviewCopy } from './hosted-review-copy'
@@ -13,9 +14,7 @@ import type { RpcOperationSender } from '../transport/rpc-operation-sender'
 
 // Mobile ids combine repo::path; hosted-review RPCs need separate selectors.
 export function mobileRepoSelectorFromWorktreeId(worktreeId: string): string {
-  const separatorIdx = worktreeId.indexOf('::')
-  const repoId = separatorIdx === -1 ? worktreeId : worktreeId.slice(0, separatorIdx)
-  return `id:${repoId}`
+  return `id:${getRepoIdFromWorktreeId(worktreeId)}`
 }
 
 export type MobileHostedReviewEligibilityInput = {

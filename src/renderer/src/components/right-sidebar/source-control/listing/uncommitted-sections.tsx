@@ -9,7 +9,7 @@ import {
   getUnstageAllPaths,
   isStageableStatusEntry,
   type DiscardAllArea
-} from '../commit/discard-all-sequence'
+} from '../../../../../../shared/source-control-discard-all-sequence'
 import { ActionButton } from './action-button'
 import { SectionHeader } from './section-header'
 import { SourceControlSectionFileList } from './section-file-list'
@@ -19,7 +19,7 @@ import {
   type SourceControlDisplaySectionId,
   type SourceControlDisplaySectionArea,
   type SourceControlSectionViewAction
-} from './section-order'
+} from '../../../../../../shared/source-control-section-order'
 import type {
   RenderableSourceControlNode,
   RenderableSubmoduleListItem

@@ -75,7 +75,13 @@ describe('getNativeChatSessionTransport — selection', () => {
     expect(runtimeEnvironmentsCall).toHaveBeenCalledWith({
       selector: ENV,
       method: 'nativeChat.readSession',
-      params: { agent: 'claude', sessionId: 'sess-1', limit: 40, transcriptPath: '/t/path' },
+      params: {
+        agent: 'claude',
+        sessionId: 'sess-1',
+        limit: 40,
+        transcriptPath: '/t/path',
+        capabilities: { transcriptSourceOrder: 1 }
+      },
       timeoutMs: 15_000
     })
     expect(nativeChatReadSession).not.toHaveBeenCalled()
@@ -181,7 +187,9 @@ describe('runtime subscribe', () => {
 
     expect(runtimeEnvironmentsSubscribe).toHaveBeenCalledWith(
       expect.objectContaining({
-        params: expect.objectContaining({ capabilities: { transcriptPending: 1 } })
+        params: expect.objectContaining({
+          capabilities: { transcriptPending: 1, transcriptSourceOrder: 1 }
+        })
       }),
       expect.any(Object)
     )

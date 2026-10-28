@@ -9,12 +9,15 @@ const pluginPath = path.resolve('config/oxlint-plugins/anti-slop-prefilter.mjs')
 // Each source must still reach its rule through the text prefilter.
 const violations = [
   ['no-module-mocking', "import { vi } from 'vitest'; vi.doMock('module');"],
+  ['no-module-mocking', String.raw`import { vi } from 'vitest'; vi['m\x6fck']('module');`],
   ['no-object-parameters', 'export function read(value: object): void {}'],
   ['no-reduce-accumulator-copy', 'export const all = [[1]].reduce((acc, x) => acc.concat(x), []);'],
+  [
+    'no-reduce-accumulator-copy',
+    String.raw`export const all = [[1]]['r\x65duce']((acc, x) => acc.concat(x), []);`
+  ],
   ['no-reflect-apply', 'export const r = Reflect.apply(Math.max, null, [1]);'],
   ['no-reflect-get', 'export const r = Reflect.get({ a: 1 }, "a");'],
-  ['no-shape-in-symbol-names', 'export const rowShape = 1;'],
-  ['no-shape-in-symbol-names', 'export const row\\u0053hape = 1;'],
   ['no-unknown-type-aliases', 'export type Payload = unknown;'],
   [
     'no-widen-then-assert',

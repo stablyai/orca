@@ -184,7 +184,7 @@ export abstract class OrcaRuntimeWithSerializeMainTerminalBuffer extends OrcaRun
     const seededSequence = this.getPtyOutputSequence(ptyId)
     this.headlessTerminals.set(ptyId, state)
     this.recordOsc7MetadataForPty(ptyId, data)
-    this.recordRecentPtyOutputForPathProvenance(ptyId, data)
+    this.recordRecentPtyOutput(ptyId, data)
     state.writeChain = state.writeChain
       .then(async () => {
         if (this.headlessTerminals.get(ptyId) !== state) {

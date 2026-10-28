@@ -42,6 +42,7 @@
     "react/jsx-no-useless-fragment": ["error", { "allowExpressions": true }],
     "react/jsx-pascal-case": "error",
     "react/no-object-type-as-default-prop": "error",
+    "react/no-unstable-nested-components": ["warn", { "allowAsProps": true }],
     "react/self-closing-comp": "error",
     "react-hooks/rules-of-hooks": "error",
     "react-hooks/exhaustive-deps": "warn",
@@ -211,6 +212,7 @@
   "ignorePatterns": [
     "src/main/acp/generated/acp-protocol.generated.ts",
     "src/shared/rpc-contract/rpc-params-catalog.generated.ts",
+    "src/cli/bundled-skill-guides.ts",
     "**/node_modules",
     "**/dist",
     "**/out",

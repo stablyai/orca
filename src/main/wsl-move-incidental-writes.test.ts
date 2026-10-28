@@ -134,7 +134,7 @@ describe('Linear workspace backfill under a WSL move', () => {
       showTerminal: async () => {
         throw new Error('unused')
       },
-      resolveWorktreeSelector: async () => row,
+      resolveWorkspaceSelector: async () => row,
       listResolvedWorktrees: async () => [row],
       setWorktreeMeta,
       emitClientEvent: () => {}

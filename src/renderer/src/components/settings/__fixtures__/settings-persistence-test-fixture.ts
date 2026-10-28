@@ -58,7 +58,8 @@ beforeEach(() => {
     configurable: true,
     value: {
       settings: { set: persist, get: vi.fn(async () => useAppStore.getState().settings) },
-      runtime: { call: runtimeCall }
+      runtime: { call: runtimeCall },
+      preflight: { detectAgents: async () => [] }
     }
   })
 })

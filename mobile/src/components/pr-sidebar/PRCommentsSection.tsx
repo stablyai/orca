@@ -5,6 +5,7 @@ import type { PRState } from '../../../../src/shared/github/pull-request-types'
 import type { GitHubWorkItemDetails } from '../../../../src/shared/github/work-item-types'
 import type { GitHubPrRepoSlug } from '../../session/github-pr-rpc'
 import { colors } from '../../theme/mobile-theme'
+import { useMobileColorScheme } from '../../theme/use-mobile-color-scheme'
 import { canAddRootComment } from '../../session/pr-comment-actions'
 import { isPrSidebarDetailsPlaceholder } from '../../session/mobile-pr-sidebar-state'
 import type { MobilePrCommentActions } from '../../session/use-mobile-pr-comment-actions'
@@ -56,6 +57,7 @@ export function PRCommentsSection({
   actions,
   botAuthorOverrides
 }: Props) {
+  useMobileColorScheme()
   // Null details means phase 2 loading; synthetic placeholder means failure, never empty success.
   const loadingDetails = details === null
   const detailsFailed = details != null && isPrSidebarDetailsPlaceholder(details)
@@ -228,6 +230,7 @@ function CommentGroupView({
   actions?: PRCommentCardActions
   now: number
 }) {
+  useMobileColorScheme()
   const [expanded, setExpanded] = useState(false)
   const cards =
     group.kind === 'thread'

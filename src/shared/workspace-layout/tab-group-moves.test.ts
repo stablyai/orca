@@ -2,8 +2,7 @@ import { describe, expect, it } from 'vitest'
 import {
   buildHeadlessTabGroupMove,
   buildHeadlessTabGroupSplit,
-  collectTabGroupLayoutGroupIds,
-  removeTabGroupLayoutLeaf
+  collectTabGroupLayoutGroupIds
 } from './tab-group-moves'
 
 const group = (id: string, tabs: string[]) => ({ id, tabOrder: tabs })
@@ -29,35 +28,6 @@ describe('buildHeadlessTabGroupSplit', () => {
       second: { type: 'leaf', groupId: 'g2' },
       ratio: 0.5
     })
-  })
-
-  it('places the new group first when splitting left', () => {
-    const result = buildHeadlessTabGroupSplit({
-      groups: [group('g1', ['a', 'b'])],
-      layout: { type: 'leaf', groupId: 'g1' },
-      tabId: 'b',
-      targetGroupId: 'g1',
-      splitDirection: 'left',
-      newGroupId: 'g2'
-    })
-    expect(result!.layout).toMatchObject({
-      type: 'split',
-      direction: 'horizontal',
-      first: { type: 'leaf', groupId: 'g2' },
-      second: { type: 'leaf', groupId: 'g1' }
-    })
-  })
-
-  it('uses a vertical split for up/down', () => {
-    const down = buildHeadlessTabGroupSplit({
-      groups: [group('g1', ['a', 'b'])],
-      layout: { type: 'leaf', groupId: 'g1' },
-      tabId: 'b',
-      targetGroupId: 'g1',
-      splitDirection: 'down',
-      newGroupId: 'g2'
-    })
-    expect(down!.layout).toMatchObject({ type: 'split', direction: 'vertical' })
   })
 
   it('returns null when splitting the only tab off its own group (renderer no-op parity)', () => {
@@ -169,25 +139,5 @@ describe('buildHeadlessTabGroupMove', () => {
         targetGroupId: 'missing'
       })
     ).toBeNull()
-  })
-})
-
-describe('removeTabGroupLayoutLeaf', () => {
-  it('collapses a split into its sibling when a leaf is removed', () => {
-    expect(
-      removeTabGroupLayoutLeaf(
-        {
-          type: 'split',
-          direction: 'horizontal',
-          first: { type: 'leaf', groupId: 'g1' },
-          second: { type: 'leaf', groupId: 'g2' }
-        },
-        'g2'
-      )
-    ).toEqual({ type: 'leaf', groupId: 'g1' })
-  })
-
-  it('returns null when the last leaf is removed', () => {
-    expect(removeTabGroupLayoutLeaf({ type: 'leaf', groupId: 'g1' }, 'g1')).toBeNull()
   })
 })

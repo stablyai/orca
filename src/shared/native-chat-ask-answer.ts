@@ -1,6 +1,6 @@
 // Deliver answers as pasted messages or Claude/Codex selector keystrokes.
 
-import type { AskPrompt, AskQuestion } from './native-chat-ask-types'
+import type { AskPrompt, AskQuestion } from './native-chat/input/native-chat-ask-types'
 
 /** Option indices in display order plus free text; selectors address stable numbers rather than labels. */
 export type AskAnswerSelection = { indices: number[]; other?: string }

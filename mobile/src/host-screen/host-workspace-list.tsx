@@ -17,13 +17,14 @@ import { MobileSearchField } from '../components/MobileSearchField'
 import { NewWorkspaceFab, FAB_SIZE } from '../components/NewWorkspaceFab'
 import { WorktreeListRow } from '../components/WorktreeListRow'
 import { colors, spacing } from '../theme/mobile-theme'
+import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import { getWorktreeRowIdentity } from '../worktree/worktree-host-row-identity'
 import {
   HostWorkspaceListReopen,
   HostWorkspaceListStates
 } from '../worktree/host-workspace-list-states'
-import { getWorktreeStatus } from '../worktree/workspace-list-sections'
-import { repoColor } from '../worktree/repo-color'
+import { getWorktreeDotStatus } from '../worktree/workspace-list-ordering'
+import { DEFAULT_REPO_BADGE_COLOR } from '../../../src/shared/repo-badge-color'
 import { getWorktreeCardDetails } from '../../../src/shared/worktree/card-properties'
 import { hostScreenStyles as styles } from './host-screen-styles'
 import { buildRepoLookById } from './host-repo-looks'
@@ -33,6 +34,7 @@ import { projectGroupHeaderIndent } from '../worktree/project-group-indent'
 import type { HostScreenController } from './use-host-screen-controller'
 
 export function HostWorkspaceList({ controller }: { controller: HostScreenController }) {
+  const colorScheme = useMobileColorScheme()
   const {
     actions,
     activeWorktreeScroll,
@@ -154,6 +156,7 @@ export function HostWorkspaceList({ controller }: { controller: HostScreenContro
         <SectionList
           ref={activeWorktreeScroll.sectionListRef}
           sections={sections}
+          extraData={colorScheme}
           keyExtractor={(w) => w.sectionListKey ?? getWorktreeRowIdentity(w)}
           stickySectionHeadersEnabled={false}
           // Why: keep the search IME up while tapping clear.
@@ -247,8 +250,8 @@ export function HostWorkspaceList({ controller }: { controller: HostScreenContro
               item={item}
               isReadOnly={isReadOnly}
               now={now}
-              status={getWorktreeStatus(item)}
-              repoColor={repoLookById.get(item.repoId)?.color ?? repoColor(item.repo)}
+              status={getWorktreeDotStatus(item)}
+              repoColor={repoLookById.get(item.repoId)?.color ?? DEFAULT_REPO_BADGE_COLOR}
               repoIcon={repoLookById.get(item.repoId)?.icon ?? null}
               hideRepo={state.view.groupBy === 'repo' && !item.showProjectName}
               cardDetails={cardDetails}
@@ -276,5 +279,6 @@ export function HostWorkspaceList({ controller }: { controller: HostScreenContro
 }
 
 function ListSeparator() {
+  useMobileColorScheme()
   return <View style={styles.separator} />
 }

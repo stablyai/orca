@@ -2,6 +2,7 @@ import { useCallback, useEffect, useReducer, useRef } from 'react'
 import type { ConnectionState } from '../transport/types'
 import type { RpcClient } from '../transport/rpc-client'
 import {
+  fetchMarkPRReadyForReview,
   fetchMergePR,
   fetchRemovePRReviewers,
   fetchRequestPRReviewers,
@@ -31,6 +32,7 @@ function realMutations(client: RpcOperationSender, worktreeId: string): PrAction
     mergePR: (args) => fetchMergePR(client, worktreeId, args),
     setPRAutoMerge: (args) => fetchSetPRAutoMerge(client, worktreeId, args),
     updatePRState: (args) => fetchUpdatePRState(client, worktreeId, args),
+    markReadyForReview: (args) => fetchMarkPRReadyForReview(client, worktreeId, args),
     requestReviewers: (args) => fetchRequestPRReviewers(client, worktreeId, args),
     removeReviewers: (args) => fetchRemovePRReviewers(client, worktreeId, args),
     rerunChecks: (args) => fetchRerunPRChecks(client, worktreeId, args)
@@ -98,6 +100,11 @@ export function useMobilePrActions(input: PrActionsInput) {
       },
       [engine, ready]
     ),
+    markReadyForReview: useCallback(() => {
+      if (ready) {
+        void engine.markReadyForReview()
+      }
+    }, [engine, ready]),
     requestReviewer: useCallback(
       (login: string) => {
         if (ready) {
@@ -143,6 +150,7 @@ function noopMutations(): PrActionMutations {
     mergePR: fail,
     setPRAutoMerge: fail,
     updatePRState: fail,
+    markReadyForReview: fail,
     requestReviewers: fail,
     removeReviewers: fail,
     rerunChecks: fail

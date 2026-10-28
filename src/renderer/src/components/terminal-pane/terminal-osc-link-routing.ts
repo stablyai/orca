@@ -1,7 +1,7 @@
-import { resolveTerminalFileLinkText } from '@/lib/terminal-links'
+import { resolveTerminalFileLink } from '../../../../shared/terminal-links'
 import { isWindowsAbsolutePathLike } from '../../../../shared/cross-platform-path'
 import type { LinkHandlerDeps } from './terminal-link-handlers'
-import { resolveTerminalFileUrlTarget } from '../../../../shared/terminal-file-url-target'
+import { classifyTerminalOscLinkTarget } from '../../../../shared/terminal-osc-link-target'
 import {
   isTerminalLinkActionActivation,
   isTerminalLinkDirectActivation
@@ -67,47 +67,20 @@ export function handleOscLink(
     return handled
   }
 
-  const openDetectedPathLink = (): boolean => {
-    const resolved = resolveTerminalFileLinkText(
-      rawText,
-      deps.startupCwd || deps.worktreePath,
-      deps.terminalHomePath
-    )
-    if (!resolved) {
-      return false
-    }
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the link handlers read only the MouseEvent fields TerminalLinkEvent picks.
+  const mouseEvent = event as MouseEvent
+  const cwd = deps.startupCwd || deps.worktreePath
+  const target = classifyTerminalOscLinkTarget(rawText, {
+    windowsPathsFirst: isWindowsAbsolutePathLike(cwd),
+    // Reject foreign file hosts except standard Windows UNC file://server/share paths.
+    allowUncHost:
+      navigator.userAgent.includes('Windows') &&
+      isWindowsAbsolutePathLike(deps.worktreePath) &&
+      !deps.runtimeEnvironmentId
+  })
+  if (target?.kind === 'url') {
     return finish(
-      handleTerminalFileLink(
-        resolved.absolutePath,
-        resolved.line,
-        resolved.column,
-        event as MouseEvent,
-        deps,
-        deps.linkActionContext,
-        rawText
-      )
-    )
-  }
-
-  if (
-    isWindowsAbsolutePathLike(rawText) &&
-    isWindowsAbsolutePathLike(deps.startupCwd || deps.worktreePath) &&
-    openDetectedPathLink()
-  ) {
-    // Parse Windows file paths before URL: URL accepts drive letters as schemes.
-    return true
-  }
-
-  let parsed: URL
-  try {
-    parsed = new URL(rawText)
-  } catch {
-    return openDetectedPathLink()
-  }
-
-  if (parsed.protocol === 'http:' || parsed.protocol === 'https:') {
-    return finish(
-      handleTerminalHttpLink(parsed.toString(), event as MouseEvent, {
+      handleTerminalHttpLink(target.url, mouseEvent, {
         worktreeId: deps.worktreeId,
         sourceTabId: deps.sourceTabId,
         sourceOwner:
@@ -122,28 +95,28 @@ export function handleOscLink(
       })
     )
   }
-
-  if (parsed.protocol === 'file:') {
-    // Route file URIs through Orca’s file opener; reject foreign hosts except standard Windows UNC file://server/share paths.
-    const allowUncHost =
-      navigator.userAgent.includes('Windows') &&
-      isWindowsAbsolutePathLike(deps.worktreePath) &&
-      !deps.runtimeEnvironmentId
-    const resolved = resolveTerminalFileUrlTarget(parsed, { allowUncHost })
-    if (!resolved) {
-      return false
-    }
-    return finish(
-      handleTerminalFileLink(
-        resolved.filePath,
-        resolved.line,
-        resolved.column,
-        event as MouseEvent,
-        deps,
-        deps.linkActionContext,
-        rawText
-      )
-    )
+  const file =
+    target?.kind === 'file-url'
+      ? {
+          absolutePath: target.target.filePath,
+          line: target.target.line,
+          column: target.target.column
+        }
+      : target?.kind === 'path'
+        ? resolveTerminalFileLink(target.link, cwd, deps.terminalHomePath)
+        : null
+  if (!file) {
+    return false
   }
-  return false
+  return finish(
+    handleTerminalFileLink(
+      file.absolutePath,
+      file.line,
+      file.column,
+      mouseEvent,
+      deps,
+      deps.linkActionContext,
+      rawText
+    )
+  )
 }

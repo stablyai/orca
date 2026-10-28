@@ -390,8 +390,10 @@ describe('orchestration worker-start prompt contract', () => {
     expect(persisted.getWorkerDispatch(dispatchId)).toMatchObject({
       state: 'start_unknown',
       stage: 'turn_start_unobserved',
-      last_error: expect.stringContaining('turn start could not be verified')
+      last_error: expect.stringContaining('turn start was not observed')
     })
+    // A swallowed Enter leaves the prompt in the composer, so the receipt must not claim submission.
+    expect(persisted.getWorkerDispatch(dispatchId)?.last_error).not.toMatch(/submitted/i)
     const persistedEffects = JSON.parse(
       persisted.getWorkerDispatch(dispatchId)?.effects ?? '[]'
     ) as { kind?: string; state?: string }[]

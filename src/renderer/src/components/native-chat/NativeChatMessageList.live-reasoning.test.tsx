@@ -2,7 +2,8 @@
 
 import '@testing-library/jest-dom/vitest'
 
-import { cleanup, fireEvent, render, screen, within } from '@testing-library/react'
+import { cleanup, fireEvent, screen, within } from '@testing-library/react'
+import { render } from './native-chat-tooltip-test-harness'
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest'
 import type {
   AgentJournalItemBody,
@@ -13,7 +14,7 @@ import type { NativeChatMessage } from '../../../../shared/native-chat-types'
 import { projectStructuredItemToNativeChat } from '../../../../shared/structured-agent-session-projection'
 import { NativeChatMessageList } from './NativeChatMessageList'
 import { installNativeChatMessageListTestViewport } from './native-chat-message-list-test-viewport'
-import { projectNativeChatTaskListFrames } from '../../../../shared/native-chat-task-list-frames'
+import { projectNativeChatTaskListFrames } from '../../../../shared/native-chat/input/native-chat-task-list-frames'
 import { openToolRunMembers } from './native-chat-tool-run-members-test-support'
 import { projectStructuredQuestionMessages } from '../../../../shared/structured-agent-question-projection'
 import type { NativeChatLiveSession } from './use-native-chat-live-session'

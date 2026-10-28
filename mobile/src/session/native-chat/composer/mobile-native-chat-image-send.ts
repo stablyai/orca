@@ -1,5 +1,6 @@
 import { agentImagePasteWrites } from '../../../../../src/shared/agent-image-paste'
-import { buildMobileImagePastePayload } from '../../mobile-clipboard-image'
+import { agentImagePastePath } from '../../../../../src/shared/agent-image-paste-path'
+import { buildNativeChatImagePasteBytes } from '../../../../../src/shared/native-chat-paste-bytes'
 import {
   MOBILE_NATIVE_CHAT_MIN_WRITE_TIMEOUT_MS,
   openMobileNativeChatSendBudget
@@ -49,7 +50,7 @@ export async function pasteMobileNativeChatImagePaths({
     clearInput ?? MOBILE_NATIVE_CHAT_CLEAR_UNSUBMITTED_INPUT,
     ...agentImagePasteWrites(
       agent,
-      imagePaths.map((path) => buildMobileImagePastePayload(path, agent)),
+      imagePaths.map((path) => buildNativeChatImagePasteBytes(agentImagePastePath(agent, path))),
       followedByText
     )
   ]) {

@@ -13,6 +13,7 @@ import { deriveRemoteRuntimeTerminalCreateHandle } from '../../remote-runtime-te
 import { parsePaneKey } from '../../../../shared/stable-pane-id'
 import { placeCreatedSessionTab } from '../../../../shared/session-tab-placement'
 import { insertTabIdIntoOrder } from '../../../../shared/workspace-layout/tab-order'
+import type { OrcaRuntimeWithBuildPtyTerminalSummary as PtyTerminalSummaryMethods } from '../query/pty-terminal-summary'
 import {
   buildHeadlessMobileSessionTabGroups,
   buildMaterializedHeadlessParentLayout,
@@ -22,6 +23,10 @@ import {
 const OWNED_MOBILE_DISPATCH_RECIPE_TTL_MS = 15 * 60_000
 
 export abstract class OrcaRuntimeWithCreateRuntimeOwnedMobileSessionTerminal extends OrcaRuntimeWithResolveMobileSessionTerminalCommand {
+  protected abstract getPtyManualTitle(
+    ...args: Parameters<PtyTerminalSummaryMethods['getPtyManualTitle']>
+  ): ReturnType<PtyTerminalSummaryMethods['getPtyManualTitle']>
+
   private readonly ownedMobileDispatchRecipes = new Map<
     string,
     {
@@ -191,6 +196,11 @@ export abstract class OrcaRuntimeWithCreateRuntimeOwnedMobileSessionTerminal ext
       livePty.pty.ptyId,
       existingSurface?.parentLayout
     )
+    // A terminal restarted for a saved tab keeps the tab's saved name; a row's null stays cleared.
+    const customTitle =
+      existingSurface?.customTitle !== undefined
+        ? existingSurface.customTitle
+        : this.getPtyManualTitle(livePty.pty, false) || undefined
     const tab: RuntimeMobileSessionTerminalTab = {
       type: 'terminal',
       id: `${parentTabId}::${leafId}`,
@@ -199,6 +209,7 @@ export abstract class OrcaRuntimeWithCreateRuntimeOwnedMobileSessionTerminal ext
       ptyId: livePty.pty.ptyId,
       incarnationId: livePty.pty.incarnationId,
       title: terminal.title ?? livePty.pty.title ?? 'Terminal',
+      ...(customTitle !== undefined ? { customTitle } : {}),
       // Omit only a proven root correction; an unverifiable fallback keeps its saved request.
       ...((terminal.savedStartupCwd ?? cwd) && (terminal.savedStartupCwd ?? cwd) !== workspace.path
         ? { startupCwd: terminal.savedStartupCwd ?? cwd }

@@ -23,6 +23,7 @@ export function shadowedKeybindingTitles(
   platform: NodeJS.Platform,
   overrides?: KeybindingOverrides
 ): string[] {
+  // English registry titles: language packs must not relabel actions on this consent surface.
   return findKeybindingActionsForBinding(binding, platform, overrides).map(
     (actionId) => getKeybindingDefinition(actionId)?.title ?? actionId
   )

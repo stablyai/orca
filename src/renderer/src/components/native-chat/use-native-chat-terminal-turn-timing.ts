@@ -6,9 +6,10 @@ import {
   nativeChatHookLatestTurnWorkedSeconds,
   nativeChatHookTurnStartedAt,
   nativeChatLatestTurnId,
+  nativeChatTerminalSettledTurns,
   nativeChatTranscriptSettledTurns
-} from './native-chat-terminal-turn'
-import { resolveNativeChatHookState } from './use-native-chat-hook-status'
+} from '../../../../shared/native-chat/native-chat-terminal-turn'
+import { resolveNativeChatHookState } from '../../../../shared/native-chat/native-chat-live-status'
 
 /** Keep host live/latest-turn timing and historical transcript durations across pane remounts. */
 export function useNativeChatTerminalTurnTiming(
@@ -28,16 +29,16 @@ export function useNativeChatTerminalTurnTiming(
   })
   const transcriptSettled = useMemo(() => nativeChatTranscriptSettledTurns(messages), [messages])
   const latestTurnId = useMemo(() => nativeChatLatestTurnId(messages), [messages])
-  const settledTurns = useMemo(() => {
-    if (turnActive || latestWorkedSeconds === undefined || latestTurnId === null) {
-      return transcriptSettled
-    }
-    return new Map(transcriptSettled).set(
-      latestTurnId,
-      latestWorkedSeconds === null || turnStartedAt === null
-        ? null
-        : { startedAt: turnStartedAt, workedSeconds: latestWorkedSeconds }
-    )
-  }, [latestTurnId, latestWorkedSeconds, transcriptSettled, turnActive, turnStartedAt])
+  const settledTurns = useMemo(
+    () =>
+      nativeChatTerminalSettledTurns({
+        transcriptSettled,
+        latestTurnId,
+        latestWorkedSeconds,
+        turnStartedAt,
+        turnActive
+      }),
+    [latestTurnId, latestWorkedSeconds, transcriptSettled, turnActive, turnStartedAt]
+  )
   return { workingStartedAt: turnActive ? turnStartedAt : null, settledTurns }
 }

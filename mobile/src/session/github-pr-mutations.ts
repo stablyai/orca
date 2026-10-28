@@ -6,6 +6,7 @@ import {
   githubPrIssueCommentDelete,
   githubPrIssueCommentEdit,
   githubPrMergeRun,
+  githubPrReadyForReviewMark,
   githubPrReviewCommentReplyAdd,
   githubPrReviewersRemove,
   githubPrReviewersRequest,
@@ -101,6 +102,24 @@ export function fetchUpdatePRState(
         githubPrStateSet.operation.method,
         worktreeId,
         { prNumber: args.prNumber, updates: { state: args.state } },
+        { prRepo: args.prRepo }
+      )
+    )
+  )
+}
+
+export function fetchMarkPRReadyForReview(
+  client: RpcOperationSender,
+  worktreeId: string,
+  args: { prNumber: number; prRepo?: GitHubPrRepoSlug | null }
+): Promise<GitHubPrMutationOutcome> {
+  return settleGithubPrMutation(githubPrReadyForReviewMark, () =>
+    githubPrReadyForReviewMark.request(
+      client,
+      githubPrRequestParams(
+        githubPrReadyForReviewMark.operation.method,
+        worktreeId,
+        { prNumber: args.prNumber },
         { prRepo: args.prRepo }
       )
     )

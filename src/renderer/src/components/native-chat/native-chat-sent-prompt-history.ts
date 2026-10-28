@@ -5,7 +5,7 @@ import { stripSentImagePromptMarkers } from '../../../../shared/native-chat-imag
 import { projectNativeChatTranscriptMessages } from '../../../../shared/native-chat-transcript-projection'
 import type { NativeChatMessage } from '../../../../shared/native-chat-types'
 import type { NativeChatCommandMarker } from './native-chat-command-marker'
-import { compareMessages } from './native-chat-session-assembler'
+import { compareMessages, orderMessages } from './native-chat-session-assembler'
 
 export type NativeChatRecallSource = {
   messages: readonly NativeChatMessage[]
@@ -55,7 +55,11 @@ export function nativeChatSentPrompts(source: NativeChatRecallSource): NativeCha
   const commands = source.commands ?? []
   let nextCommand = 0
   // Use projected rows so harness turns and subagent prompts never enter user recall.
-  for (const message of projectNativeChatTranscriptMessages(source.messages, compareMessages)) {
+  for (const message of projectNativeChatTranscriptMessages(
+    source.messages,
+    compareMessages,
+    orderMessages
+  )) {
     // `from` marks a prompt another agent sent; it was never typed here.
     if (message.role !== 'user' || message.from) {
       continue

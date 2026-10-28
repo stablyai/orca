@@ -4,7 +4,10 @@ import {
   type AntigravityCredentialBackend
 } from './native-account-service'
 import type { AntigravityAccountStore, AntigravityAccountVault } from './native-account-store'
-import { parseAntigravityNativeCredential } from './native-credential-codec'
+import {
+  parseAntigravityNativeCredential,
+  type AntigravityCredentialIdentity
+} from './native-credential-codec'
 
 export function credential(subject: string, generation = 1, email = `${subject}@example.invalid`) {
   const claims = {
@@ -57,10 +60,16 @@ export function harness(initial: string | null = credential('a')) {
       native = contents
     })
   }
+  const lookupIdentity = vi.fn<(accessToken: string) => Promise<AntigravityCredentialIdentity>>(
+    async () => {
+      throw new Error('Google did not confirm')
+    }
+  )
   return {
     store,
     backend,
-    service: new AntigravityAccountService(store, backend),
+    lookupIdentity,
+    service: new AntigravityAccountService(store, backend, Date.now, lookupIdentity),
     setNative: (contents: string | null) => {
       native = contents
     },

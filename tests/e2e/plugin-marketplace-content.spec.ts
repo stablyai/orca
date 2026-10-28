@@ -3,14 +3,26 @@
 import { execFile } from 'node:child_process'
 import { cp, mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
-import { join, sep } from 'node:path'
-import { pathToFileURL } from 'node:url'
+import { join } from 'node:path'
 import { promisify } from 'node:util'
 import type { Page, TestInfo } from '@stablyai/playwright-test'
 import { expect, test } from '@stablyai/playwright-test'
 import { createRestartSession } from './helpers/orca-restart'
 
 const execFileAsync = promisify(execFile)
+const SSH_SHIM = join(
+  process.cwd(),
+  'src',
+  'main',
+  'plugins',
+  'plugin-private-marketplace-ssh-shim.cjs'
+)
+const FIXTURE_REPOSITORIES = [
+  'orca-plugins',
+  'orca-portuguese',
+  'orca-multipass-recipes',
+  'orca-navigation-shortcuts'
+]
 
 type MarketplaceFixture = {
   root: string
@@ -82,10 +94,17 @@ async function configureFixtureGit(
     GIT_CONFIG_NOSYSTEM: '1',
     GIT_TERMINAL_PROMPT: '0'
   }
-  const repositoryBaseUrl = pathToFileURL(`${repositories}${sep}`).href
+  // Why SSH: plugin downloads refuse the file transport even behind an insteadOf rewrite, so the
+  // fixture repositories are served through the same GIT_SSH_COMMAND shim the unit tests use.
+  gitEnvironment.GIT_SSH_COMMAND = `"${process.execPath.replaceAll('\\', '/')}" "${SSH_SHIM.replaceAll('\\', '/')}"`
+  gitEnvironment.GIT_SSH_VARIANT = 'ssh'
+  gitEnvironment.ORCA_TEST_SSH_REPOSITORIES = JSON.stringify(
+    Object.fromEntries(
+      FIXTURE_REPOSITORIES.map((name) => [`/${name}.git`, join(repositories, `${name}.git`)])
+    )
+  )
   const entries = [
-    [`url.${repositoryBaseUrl}.insteadOf`, 'https://github.com/stablyai/'],
-    ['protocol.file.allow', 'always'],
+    ['url.ssh://git@fixtures.invalid/.insteadOf', 'https://github.com/stablyai/'],
     ['commit.gpgSign', 'false'],
     ['tag.gpgSign', 'false'],
     ['core.hooksPath', hooksDirectory]

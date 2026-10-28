@@ -1,6 +1,7 @@
 /** Keep source authority until durable destination commit. Verify the fenced export before stage/commit; resolve lost replies by catalog reads and persist journal transitions before returning. Never release a committed destination. */
 import type {
   OrcadMigrationCatalogAbortResult,
+  OrcadMigrationCatalogReference,
   OrcadMigrationCatalogReferenceAbortResult,
   OrcadMigrationCatalogState,
   OrcadMigrationManifest
@@ -36,7 +37,7 @@ export type OrcadMigrationDestinationCatalog = {
   abort: (manifest: OrcadMigrationManifest) => Promise<OrcadMigrationCatalogAbortResult>
   /** Use identity-only abort when the journal's full manifest cannot fit a request. */
   abortByReference: (
-    manifest: OrcadMigrationManifest
+    manifest: OrcadMigrationCatalogReference
   ) => Promise<OrcadMigrationCatalogReferenceAbortResult>
   stageChunk: (
     request: OrcadMigrationSnapshotChunkRequest
@@ -163,7 +164,7 @@ export async function abortOrcadMigrationCutover(
 }
 
 /** Committed reads may be unflushed memory; require the idempotent commit acknowledgement to prove durability. */
-async function confirmDurableCommit(
+export async function confirmDurableCommit(
   destination: OrcadMigrationDestinationCatalog,
   manifest: OrcadMigrationManifest
 ): Promise<OrcadMigrationCatalogState> {
@@ -221,7 +222,8 @@ function recordObservedState(
   return next
 }
 
-async function abortWithRecovery(
+/** Aborts staging; a failed abort is decided by a re-read, never assumed. */
+export async function abortWithRecovery(
   destination: OrcadMigrationDestinationCatalog,
   manifest: OrcadMigrationManifest
 ): Promise<OrcadMigrationCatalogState> {

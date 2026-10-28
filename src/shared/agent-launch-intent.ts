@@ -40,6 +40,7 @@ export type AgentLaunchIntent = {
   prompt?: AgentLaunchPrompt
   /** Structured create options also supply terminal model/effort/mode preferences. */
   sessionOptions?: Readonly<Record<string, unknown>>
+  chatOptions?: Readonly<Record<string, string>>
   reuseTerminal?: AgentLaunchReusedTerminal
   /** Tri-state arguments: absent uses defaults, null explicitly clears them. Overrides remain terminal-only; structured chat uses host settings and reports a warning. */
   agentArgs?: string | null

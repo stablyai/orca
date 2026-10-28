@@ -56,7 +56,8 @@ export type CodexStructuredItemStreams = {
     params: unknown
   ) => CodexStructuredItemStreamHandleResult
   forget: (threadId: string, itemId: string) => void
-  flush: () => boolean
+  /** Force-saves streamed text before a row; a thread limits that to its own streams, the only text its row follows. */
+  flush: (threadId?: string) => boolean
   dispose: () => void
   snapshot: (
     threadId: string,

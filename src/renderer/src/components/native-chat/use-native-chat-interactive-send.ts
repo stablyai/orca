@@ -5,6 +5,7 @@ import { sendRuntimePtyInputVerified } from '@/runtime/runtime-terminal-verified
 import type { AgentType } from '../../../../shared/native-chat-types'
 import {
   nativeChatAskRequiresTerminal,
+  nativeChatStopSendsSecondEscape,
   resolveNativeChatTranscriptAgent,
   shouldStepNativeChatAskAnswer
 } from '../../../../shared/native-chat-agent-support'
@@ -13,9 +14,9 @@ import {
   buildCodexAskAnswerKeys,
   formatAskAnswer,
   hasAskAnswer,
-  type AskAnswerSelection,
-  type AskPrompt
-} from './native-chat-interactive-prompt'
+  type AskAnswerSelection
+} from '../../../../shared/native-chat-ask-answer'
+import type { AskPrompt } from '../../../../shared/native-chat/input/native-chat-ask-types'
 import {
   sendNativeChatAskAnswer,
   sendNativeChatMessage,
@@ -151,8 +152,8 @@ export function useNativeChatInteractiveSend(
 
   const cancel = useCallback(() => {
     cancelInFlight()
-    if (resolveNativeChatTranscriptAgent(agent) === 'opencode' && targetPtyId) {
-      // OpenCode confirms interruption with a second Escape; pace writes like mobile Stop.
+    if (nativeChatStopSendsSecondEscape(agent) && targetPtyId) {
+      // Pace the second Escape like an answer step so the TUI renders its confirm first.
       inFlightRef.current = sendNativeChatAskAnswer(targetPtyId, [{ raw: ESC }, { raw: ESC }])
       return
     }

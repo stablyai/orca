@@ -1,3 +1,4 @@
+import { getRepoIdFromWorktreeId } from '../../../src/shared/worktree/id'
 import {
   PREFLIGHT_OTHER_RUNTIME_REFUSAL_RUNTIME_CAPABILITY,
   WORKSPACE_ON_OTHER_RUNTIME
@@ -24,7 +25,6 @@ import { isMobileMethodUnavailableError } from '../transport/mobile-method-unava
 import type { RpcClient } from '../transport/rpc-client'
 import type { RpcResponse } from '../transport/types'
 import { isFloatingWorkspaceWorktreeId } from './floating-workspace'
-import { getRepoIdFromMobileWorktreeId } from './mobile-session-route-helpers'
 import {
   buildMobileNewTabAgentOptions,
   type MobileNewTabAgentOption,
@@ -128,7 +128,7 @@ async function loadDetectedAgents(
   }
   const repoResponse = await newTabRepoListRead.request(client)
   const repos: MobileRuntimeRepoSummary[] = newTabRepoListRead.interpret(repoResponse)
-  const repoId = getRepoIdFromMobileWorktreeId(worktreeId)
+  const repoId = getRepoIdFromWorktreeId(worktreeId)
   const repo = repos.find((candidate) => candidate.id === repoId)
   if (!repo) {
     throw new Error('worktree_repo_not_found')

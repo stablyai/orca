@@ -34,6 +34,10 @@ export type RuntimeClientSettings = Pick<
   | 'agentSkillSharingEnabled'
   | 'machineName'
   | 'nativeChatPermissionMode'
+  | 'nativeChatQueueFollowUps'
+  | 'sourceControlGroupOrder'
+  | 'sourceControlCompareAgainstUpstream'
+  | 'diffShowWhitespace'
 > & {
   /** Older clients still read these; neither is persisted or accepted as an update. */
   openAgentTabsInChatByDefault?: boolean

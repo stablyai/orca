@@ -1,5 +1,6 @@
 import type { MobileHostedReviewEligibilityReply } from './hosted-review-reply-schema'
 import { supportsHostedReviewCreation } from '../../../src/shared/hosted-review-creation-providers'
+import { resolveCreateReviewIntentEligibility } from '../../../src/shared/source-control-create-review-intent'
 import { hostedReviewCopy } from './hosted-review-copy'
 import { getMobilePrCreateBlockMessage } from './mobile-pr-create'
 
@@ -19,10 +20,17 @@ export type MobileCreatePrAction = {
   onPress: () => void
 }
 
+export type MobileCreatePrPrepareInputs = Omit<
+  Parameters<typeof resolveCreateReviewIntentEligibility>[0],
+  'hostedReviewCreation'
+>
+
 export type BuildMobileCreatePrActionArgs = {
   branch: string | null | undefined
   eligibilityState: MobileCreatePrEligibilityState
   busyAction: string | null
+  // What desktop's intent rule needs to know the branch can be prepared (commit, publish, sync).
+  prepareInputs?: MobileCreatePrPrepareInputs
   onCreatePr: (pushFirst: boolean) => void
 }
 
@@ -43,6 +51,7 @@ export function buildMobileCreatePrAction({
   branch,
   eligibilityState,
   busyAction,
+  prepareInputs,
   onCreatePr
 }: BuildMobileCreatePrActionArgs): MobileCreatePrAction {
   const noop = () => {}
@@ -90,7 +99,12 @@ export function buildMobileCreatePrAction({
   const stale = eligibilityState.kind === 'loading'
   const pushFirst = eligibility.blockedReason === 'needs_push'
 
-  if (eligibility.canCreate || pushFirst) {
+  // Desktop's intent rule: a branch Create PR can commit, publish or sync is enterable; the gate rechecks before create.
+  const preparable =
+    prepareInputs !== undefined &&
+    resolveCreateReviewIntentEligibility({ ...prepareInputs, hostedReviewCreation: eligibility })
+      .eligible
+  if (eligibility.canCreate || pushFirst || preparable) {
     const disabled = busy || stale
     return {
       visible: true,
@@ -111,7 +125,8 @@ export function buildMobileCreatePrAction({
       body: eligibility.body || '',
       canCreate: false,
       blockedReason: eligibility.blockedReason,
-      nextAction: eligibility.nextAction
+      nextAction: eligibility.nextAction,
+      reviewLookupOutcome: eligibility.reviewLookupOutcome
     }) ?? `This branch is not ready for a ${copy.reviewLabel} yet.`
 
   return {

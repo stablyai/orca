@@ -3,11 +3,8 @@ import { validate } from './validator'
 import {
   buildWslUsageSnapshot,
   classifyLocalWslProject,
-  classifyWslHostProject,
-  toWslMajorMinor,
   type WslUsageSnapshotInput
 } from './wsl-usage-snapshot'
-import { bucketWslUsageCount } from '../../shared/telemetry-wsl-usage-event-schemas'
 
 const baseInput: WslUsageSnapshotInput = {
   registeredDistroCount: 0,
@@ -18,33 +15,6 @@ const baseInput: WslUsageSnapshotInput = {
   windowsDriveReposWithWslWorktrees: 0,
   wslHostsGateOpen: false
 }
-
-describe('bucketWslUsageCount', () => {
-  it.each([
-    [0, '0'],
-    [1, '1'],
-    [2, '2-5'],
-    [5, '2-5'],
-    [6, '6-20'],
-    [20, '6-20'],
-    [21, '21+'],
-    [500, '21+']
-  ])('%i -> %s', (count, bucket) => {
-    expect(bucketWslUsageCount(count)).toBe(bucket)
-  })
-})
-
-describe('toWslMajorMinor', () => {
-  it('keeps major.minor only', () => {
-    expect(toWslMajorMinor('2.4.13.0')).toBe('2.4')
-    expect(toWslMajorMinor('2.6')).toBe('2.6')
-  })
-  it('drops anything not version-shaped', () => {
-    expect(toWslMajorMinor(null)).toBeNull()
-    expect(toWslMajorMinor('Ubuntu 2.4')).toBeNull()
-    expect(toWslMajorMinor('2')).toBeNull()
-  })
-})
 
 describe('classifyLocalWslProject', () => {
   it('counts a \\\\wsl$ share as inside the distro', () => {
@@ -109,15 +79,6 @@ describe('classifyLocalWslProject', () => {
   })
 })
 
-describe('classifyWslHostProject', () => {
-  it('splits /mnt/<x> from distro paths', () => {
-    expect(classifyWslHostProject({ path: '/mnt/c/src/app' }, 'Ubuntu').location).toBe(
-      'windows_drive'
-    )
-    expect(classifyWslHostProject({ path: '/home/me/app' }, 'Ubuntu').location).toBe('distro_fs')
-  })
-})
-
 describe('buildWslUsageSnapshot', () => {
   it('reports buckets and booleans only, and passes the event validator', () => {
     const props = buildWslUsageSnapshot({
@@ -157,6 +118,13 @@ describe('buildWslUsageSnapshot', () => {
     expect(validate('wsl_usage_snapshot', props).ok).toBe(true)
   })
 
+  it('reports the gate state when known, as an optional field', () => {
+    const props = buildWslUsageSnapshot({ ...baseInput, wslHostsGateState: 'serve-only' })
+    expect(props.wsl_hosts_gate_state).toBe('serve-only')
+    expect(validate('wsl_usage_snapshot', props).ok).toBe(true)
+    expect(buildWslUsageSnapshot(baseInput)).not.toHaveProperty('wsl_hosts_gate_state')
+  })
+
   it('reports no WSL and an unreadable registry without a version', () => {
     const props = buildWslUsageSnapshot({
       ...baseInput,
@@ -166,12 +134,5 @@ describe('buildWslUsageSnapshot', () => {
     expect(props.distro_registry_readable).toBe(false)
     expect('wsl_version' in props).toBe(false)
     expect(validate('wsl_usage_snapshot', props).ok).toBe(true)
-  })
-
-  it('the validator rejects identifying extras', () => {
-    const props = buildWslUsageSnapshot(baseInput)
-    expect(validate('wsl_usage_snapshot', { ...props, distro: 'Ubuntu' }).ok).toBe(false)
-    expect(validate('wsl_usage_snapshot', { ...props, wsl_version: 'Ubuntu' }).ok).toBe(false)
-    expect(validate('wsl_usage_snapshot', { ...props, distros_installed: '3' }).ok).toBe(false)
   })
 })

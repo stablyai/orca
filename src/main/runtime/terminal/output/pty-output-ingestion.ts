@@ -30,7 +30,7 @@ export abstract class OrcaRuntimeWithOnPtyData extends OrcaRuntimeWithPreparePty
     ptyId: string,
     data: string
   ): ProcessedAgentStatusChunk
-  protected abstract recordRecentPtyOutputForPathProvenance(ptyId: string, data: string): void
+  protected abstract recordRecentPtyOutput(ptyId: string, data: string): void
   protected abstract shouldAnswerQueriesForLiveChunk(ptyId: string): boolean
   abstract maybeHydrateHeadlessFromRenderer(ptyId: string): Promise<boolean> | null
   protected abstract trackHeadlessTerminalData(
@@ -105,7 +105,7 @@ export abstract class OrcaRuntimeWithOnPtyData extends OrcaRuntimeWithPreparePty
     const cwd = osc7Metadata.cwd
     const cwdChanged = osc7Metadata.cwdChanged
     const agentStatusChunk = this.processAgentStatusOscForPty(ptyId, data)
-    this.recordRecentPtyOutputForPathProvenance(ptyId, data)
+    this.recordRecentPtyOutput(ptyId, data)
     // Use advertised dev-server URLs for workspace ports instead of kernel bind addresses.
     advertisedUrlWatcher.ingest(ptyId, data, at)
     // Capture query ownership in the ingestion/drop tick; queued writes must not reinterpret later subscriber/settings changes.

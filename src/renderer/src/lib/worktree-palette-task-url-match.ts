@@ -22,7 +22,7 @@ import {
   worktreeMatchesGitLabUrl,
   type GitLabIssueOrMRLink
 } from './worktree-palette-gitlab-url-match'
-import { isWorktreePaletteQueryTooLarge } from './worktree-palette-query-bounds'
+import { isWorktreePaletteQueryTooLarge } from '../../../shared/palette-match/worktree-palette-query-bounds'
 import { buildWorktreePaletteTaskUrlResult } from './worktree-palette-task-url-result'
 import type { PaletteSearchResult } from './worktree-palette-search'
 import { getPaletteWorktreeExecutionHostId } from './palette-repo-resolution'

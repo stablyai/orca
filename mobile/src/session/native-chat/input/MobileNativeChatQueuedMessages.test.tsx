@@ -1,0 +1,850 @@
+import {
+  mobileQueuedMessageCards,
+  type MobileQueuedMessageCard
+} from '../../mobile-structured-queued-message-cards'
+import { queuedDraft } from '../../use-mobile-structured-agent-session-queued.test-fixture'
+import { createElement } from 'react'
+import { findByHostType } from '../../../test-support/react-test-renderer-host-nodes'
+import { FakeSession } from '../../../transport/mobile-endpoint-supervisor-test-fakes'
+import type { MobileQueuedMessageInlineEditor } from '../../mobile-queued-message-edit-draft'
+import { act, create, type ReactTestRenderer } from 'react-test-renderer'
+import { afterEach, describe, expect, it, vi } from 'vitest'
+import type { ActionSheetAction } from '../../../components/ActionSheetModal'
+import { colors } from '../../../theme/mobile-theme'
+import { MobileNativeChatQueuedMessages } from './MobileNativeChatQueuedMessages'
+import { useMobileQueuedMessageComposerActions } from '../../use-mobile-queued-message-composer-actions'
+import type { MobileStructuredAgentMutate } from '../../use-mobile-structured-agent-mutation'
+import type {
+  AgentSessionQueuedMessage,
+  AgentSessionQueuedMessageMoveResult
+} from '../../../../../src/shared/agent-session-wire'
+import type { StructuredAgentSessionMutationResult } from '../../mobile-structured-agent-session-rpc'
+
+let fontScale = 1
+vi.mock('../../../components/DragReorderList', () => ({ DragReorderList: 'DragReorderList' }))
+vi.mock('react-native-reanimated', async () => {
+  const { useRef } = await import('react')
+  return {
+    default: { ScrollView: 'ScrollView' },
+    useAnimatedRef: () => useRef(null),
+    useSharedValue: (value: unknown) => useRef({ value }).current
+  }
+})
+
+vi.mock('react-native', () => ({
+  useWindowDimensions: () => ({ fontScale }),
+  ActivityIndicator: 'ActivityIndicator',
+  Platform: { OS: 'ios' },
+  Pressable: 'Pressable',
+  ScrollView: 'ScrollView',
+  StyleSheet: { create: (styles: unknown) => styles, hairlineWidth: 1 },
+  Text: 'Text',
+  TextInput: 'TextInput',
+  View: 'View'
+}))
+
+vi.mock('lucide-react-native', () => ({
+  Image: 'Image',
+  AlertCircle: 'AlertCircle',
+  Check: 'Check',
+  ChevronDown: 'ChevronDown',
+  ChevronRight: 'ChevronRight',
+  CornerDownRight: 'CornerDownRight',
+  ListEnd: 'ListEnd',
+  MoreHorizontal: 'MoreHorizontal',
+  Pencil: 'Pencil',
+  Play: 'Play',
+  Send: 'Send',
+  Trash2: 'Trash2',
+  X: 'X'
+}))
+
+vi.mock('../../../components/ActionSheetModal', () => ({ ActionSheetModal: 'ActionSheetModal' }))
+
+vi.mock('../../MobileQueuedMessageComposer', () => ({
+  MobileQueuedMessageComposer: 'QueuedMessageComposer'
+}))
+
+function inlineEditor(
+  fields: Partial<MobileQueuedMessageInlineEditor> & { messageId: string }
+): MobileQueuedMessageInlineEditor {
+  return {
+    scopeKey: 'edit-scope',
+    sessionId: 'session',
+    client: new FakeSession('connected'),
+    imagesCapable: true,
+    text: 'edited text',
+    saving: false,
+    canSave: true,
+    change: vi.fn(),
+    save: vi.fn(async () => true),
+    removeImage: vi.fn(),
+    cancel: vi.fn(),
+    ...fields
+  }
+}
+
+function card(
+  overrides: Partial<MobileQueuedMessageCard> & { messageId: string }
+): MobileQueuedMessageCard {
+  const text = overrides.text ?? `text of ${overrides.messageId}`
+  return {
+    position: 1,
+    text,
+    line: text,
+    state: 'waiting',
+    hold: overrides.state === 'returned' ? 'returned' : 'turn',
+    needsAttention: false,
+    caption: null,
+    attribution: null,
+    ...overrides
+  }
+}
+
+describe('MobileNativeChatQueuedMessages', () => {
+  let renderer: ReactTestRenderer | null = null
+
+  afterEach(() => {
+    vi.restoreAllMocks()
+    act(() => renderer?.unmount())
+    renderer = null
+  })
+
+  async function mount(
+    props: Parameters<typeof MobileNativeChatQueuedMessages>[0]
+  ): Promise<ReactTestRenderer> {
+    const mounted = create(createElement('View'))
+    renderer = mounted
+    await act(async () => {
+      mounted.update(createElement(MobileNativeChatQueuedMessages, props))
+    })
+    return mounted
+  }
+
+  function texts(mounted: ReactTestRenderer): unknown[] {
+    return mounted.root
+      .findAll((node) => String(node.type) === 'Text' && !node.props.accessibilityElementsHidden)
+      .map((node) => node.props.children)
+  }
+
+  function nodeTypes(root: ReactTestRenderer['root']): string[] {
+    return root.findAll((node) => typeof node.type === 'string').map((node) => String(node.type))
+  }
+
+  function flatStyle(style: unknown): Record<string, unknown> {
+    return Object.assign({}, ...[style].flat())
+  }
+
+  function control(mounted: ReactTestRenderer, label: string, index = 0) {
+    return mounted.root.findAll(
+      (node) => typeof node.type === 'string' && node.props.accessibilityLabel === label
+    )[index]!
+  }
+
+  function sheet(mounted: ReactTestRenderer) {
+    return mounted.root.find((node) => String(node.type) === 'ActionSheetModal')
+  }
+
+  it('mounts the real composer boundary in the edited row and leaves other cards visible', async () => {
+    const editor = inlineEditor({ messageId: 'a' })
+    const mounted = await mount({
+      cards: [card({ messageId: 'a', attribution: 'From Alex' }), card({ messageId: 'b' })],
+      editor
+    })
+    const child = findByHostType(mounted.root, 'QueuedMessageComposer')
+    expect(child.props.editor).toBe(editor)
+    expect(child.props.attribution).toBe('From Alex')
+    expect(mounted.root.findAllByProps({ testID: 'queued-card-row' })).toHaveLength(2)
+    expect(control(mounted, 'More actions').props.disabled).toBe(true)
+  })
+
+  it('projects image-only and mixed queue blocks into the ordinary card line and edit boundary', async () => {
+    const image = { type: 'image-ref' as const, path: '/host/photo.png', alt: 'Diagram' }
+    const rows = [
+      queuedDraft({
+        messageId: 'image-only',
+        body: { kind: 'message', role: 'user', blocks: [image] }
+      }),
+      queuedDraft({
+        messageId: 'mixed',
+        body: { kind: 'message', role: 'user', blocks: [{ type: 'text', text: 'See this' }, image] }
+      })
+    ]
+    const cards = mobileQueuedMessageCards(rows, [])
+    const mounted = await mount({ cards, onSend: vi.fn(async () => true) })
+    expect(texts(mounted)).toContain('Diagram')
+    expect(texts(mounted)).toContain('See this')
+    expect(cards.map((card) => card.images)).toEqual([[image], [image]])
+    const editor = inlineEditor({ messageId: 'image-only', text: '' })
+    await act(async () =>
+      mounted.update(createElement(MobileNativeChatQueuedMessages, { cards, editor }))
+    )
+    expect(findByHostType(mounted.root, 'QueuedMessageComposer').props.editor).toBe(editor)
+    expect(texts(mounted)).toContain('See this')
+  })
+
+  it('draws a plain waiting card as one compact row with no caption', async () => {
+    const mounted = await mount({ cards: [card({ messageId: 'w', text: 'next' })] })
+    const rows = mounted.root.findAllByProps({ testID: 'queued-card-row' })
+    expect(rows).toHaveLength(1)
+    expect(texts(mounted)).toEqual(['Queued', 1, 'next', 'Steer'])
+    expect(
+      mounted.root.find(
+        (node) =>
+          String(node.type) === 'Text' &&
+          node.props.children === 'next' &&
+          !node.props.accessibilityElementsHidden
+      ).props.numberOfLines
+    ).toBe(2)
+    expect(nodeTypes(rows[0]!)).toContain('ListEnd')
+    expect(nodeTypes(rows[0]!)).not.toContain('AlertCircle')
+  })
+
+  async function layOut(mounted: ReactTestRenderer, text: string, lines: number): Promise<void> {
+    const measure = mounted.root.find(
+      (node) =>
+        String(node.type) === 'Text' &&
+        node.props.children === text &&
+        typeof node.props.onTextLayout === 'function'
+    )
+    await act(async () =>
+      measure.props.onTextLayout({ nativeEvent: { lines: Array.from({ length: lines }) } })
+    )
+  }
+
+  it('a clipped card opens to the whole message on tap, line breaks kept, and a second tap folds it', async () => {
+    const text = Array.from({ length: 100 }, (_, index) => `Line ${index + 1}`).join('\n')
+    const mounted = await mount({
+      cards: [card({ messageId: 'mail', text })],
+      onSend: vi.fn(async () => true),
+      onDelete: vi.fn(async () => true),
+      onEdit: vi.fn(async () => true)
+    })
+    await layOut(mounted, text, 5)
+    const body = () =>
+      mounted.root.find(
+        (node) =>
+          String(node.type) === 'Text' &&
+          node.props.children === text &&
+          node.props.onTextLayout === undefined
+      )
+    const toggle = () => mounted.root.findByProps({ testID: 'queued-card-text' })
+    expect(body().props.numberOfLines).toBe(2)
+    expect(toggle().props.accessibilityState).toEqual({ expanded: false })
+    expect(texts(mounted)).toContain('Show more')
+    await act(async () => toggle().props.onPress())
+    expect(body().props.numberOfLines).toBeUndefined()
+    expect(toggle().props.accessibilityState).toEqual({ expanded: true })
+    expect(texts(mounted)).toContain('Show less')
+    const row = mounted.root.findByProps({ testID: 'queued-card-row' })
+    const controlLine = row.findByProps({ accessibilityLabel: 'More actions' }).parent?.parent
+    expect(controlLine?.findAll((node) => node === body())).toHaveLength(0)
+    expect(body().parent?.parent?.parent).toBe(row)
+    expect(row.children.indexOf(controlLine!)).toBeLessThan(
+      row.children.indexOf(body().parent!.parent!)
+    )
+    const scrolls = mounted.root.findAll((node) => String(node.type) === 'ScrollView')
+    expect(scrolls).toHaveLength(1)
+    expect(flatStyle(scrolls[0]!.props.style).maxHeight).toBe(160)
+    await act(async () => body().parent?.props.onPress())
+    expect(body().props.numberOfLines).toBe(2)
+    await act(async () => toggle().props.onPress())
+    await act(async () => toggle().props.onPress())
+    expect(body().props.numberOfLines).toBe(2)
+  })
+
+  it('a card whose text fits its two lines is plain text, not a button', async () => {
+    const mounted = await mount({ cards: [card({ messageId: 'short', text: 'ok' })] })
+    await layOut(mounted, 'ok', 1)
+    expect(mounted.root.findAllByProps({ testID: 'queued-card-text' })).toHaveLength(0)
+    expect(texts(mounted)).not.toContain('Show more')
+  })
+
+  it('divides rows with hairlines inside one box, the header undivided', async () => {
+    const mounted = await mount({ cards: [card({ messageId: 'a' }), card({ messageId: 'b' })] })
+    const rows = [
+      mounted.root.findByProps({ testID: 'queued-header' }),
+      ...mounted.root.findAllByProps({ testID: 'queued-card-row' })
+    ]
+    expect(rows.map((row) => Boolean(flatStyle(row.props.style).borderTopWidth))).toEqual([
+      false,
+      true,
+      true
+    ])
+  })
+
+  it('captions a hold under the text on one muted line', async () => {
+    const mounted = await mount({
+      cards: [card({ messageId: 'b', caption: 'Waiting — a message ahead needs attention' })]
+    })
+    const caption = mounted.root.find(
+      (node) =>
+        String(node.type) === 'Text' &&
+        node.props.children === 'Waiting — a message ahead needs attention'
+    )
+    expect(caption.props.numberOfLines).toBe(1)
+    expect(flatStyle(caption.props.style).color).not.toBe(colors.statusRed)
+  })
+
+  it("lets a returned card's reason wrap whole, in the destructive color, beside an alert", async () => {
+    const reason = Array.from({ length: 100 }, (_, index) => `Rejection line ${index + 1}`).join(
+      '\n'
+    )
+    const mounted = await mount({
+      cards: [
+        card({ messageId: 'r', state: 'returned', needsAttention: true, caption: reason }),
+        card({ messageId: 'w' })
+      ]
+    })
+    const caption = mounted.root.find(
+      (node) => String(node.type) === 'Text' && node.props.children === reason
+    )
+    expect(caption.props.numberOfLines).toBeUndefined()
+    expect(flatStyle(caption.props.style).color).toBe(colors.statusRed)
+    const [returnedRow, waitingRow] = mounted.root.findAllByProps({ testID: 'queued-card-row' })
+    expect(nodeTypes(returnedRow!)).toContain('AlertCircle')
+    expect(caption.parent?.parent).toBe(returnedRow)
+    expect(returnedRow!.children.indexOf(caption.parent!)).toBe(1)
+    expect(nodeTypes(waitingRow!)).not.toContain('AlertCircle')
+    const toggle = () => control(mounted, 'Queued messages')
+    await act(async () => toggle().props.onPress())
+    expect(mounted.root.findAllByProps({ testID: 'queued-card-row' })).toHaveLength(0)
+    expect(texts(mounted)).toContain(`· ${reason}`)
+    const headerCaption = mounted.root
+      .findByProps({ testID: 'queued-header' })
+      .find((node) => String(node.type) === 'Text' && node.props.children === `· ${reason}`)
+    expect(flatStyle(headerCaption.props.style).color).toBe(colors.statusRed)
+    await act(async () => toggle().props.onPress())
+    expect(texts(mounted).filter((text) => text === reason)).toHaveLength(1)
+  })
+
+  it('reads Steer on a waiting card and plain Send on a returned one or one whose own send failed', async () => {
+    const mounted = await mount({
+      cards: [
+        card({
+          messageId: 'failed',
+          hold: 'paused',
+          needsAttention: true,
+          caption: "Couldn't send — tap Send to retry"
+        }),
+        card({ messageId: 'waiting' }),
+        card({ messageId: 'returned', state: 'returned', needsAttention: true })
+      ],
+      onSend: vi.fn(async () => true)
+    })
+    expect(control(mounted, 'Send this message')).toBeTruthy()
+    expect(control(mounted, 'Submit without interrupting the model')).toBeTruthy()
+    expect(control(mounted, 'Send this message again')).toBeTruthy()
+    expect(texts(mounted).filter((text) => text === 'Send' || text === 'Steer')).toEqual([
+      'Send',
+      'Steer',
+      'Send'
+    ])
+    const rows = mounted.root.findAllByProps({ testID: 'queued-card-row' })
+    expect(nodeTypes(rows[0]!)).toContain('Send')
+    expect(nodeTypes(rows[1]!)).toContain('CornerDownRight')
+    const toggle = () => control(mounted, 'Queued messages')
+    await act(async () => toggle().props.onPress())
+    expect(texts(mounted)).toContain("· Couldn't send — tap Send to retry")
+    await act(async () => toggle().props.onPress())
+    expect(
+      texts(mounted).filter((text) => text === "Couldn't send — tap Send to retry")
+    ).toHaveLength(1)
+  })
+
+  it('a command card never steers: Send only while the agent is idle, and no menu', async () => {
+    const onSend = vi.fn(async () => true)
+    const mounted = await mount({
+      cards: [
+        card({ messageId: 'working', text: '/compact', command: true, waitsForAgent: true }),
+        card({ messageId: 'idle', text: '/compact', command: true })
+      ],
+      onSend
+    })
+    expect(texts(mounted).filter((text) => text === 'Send' || text === 'Steer')).toEqual(['Send'])
+    await act(async () => control(mounted, 'Send this message').props.onPress())
+    expect(onSend).toHaveBeenCalledWith('idle')
+    expect(mounted.root.findAllByProps({ accessibilityLabel: 'More actions' })).toHaveLength(0)
+    expect(
+      mounted.root.findAllByProps({ accessibilityLabel: 'Delete this queued message' })
+    ).toHaveLength(2)
+  })
+
+  it("a paused command card's ways out are Delete and the queue's Resume", async () => {
+    const onResume = vi.fn(async () => true)
+    const onDelete = vi.fn(async () => true)
+    const mounted = await mount({
+      cards: [card({ messageId: 'compact', text: '/compact', command: true })],
+      pause: { reason: 'stopped' },
+      onResume,
+      onDelete
+    })
+    await act(async () => control(mounted, 'Resume sending the queued messages').props.onPress())
+    expect(onResume).toHaveBeenCalledOnce()
+    await act(async () => control(mounted, 'Delete this queued message').props.onPress())
+    expect(onDelete).toHaveBeenCalledWith('compact')
+  })
+
+  it("holds Steer while a person's Stop ends the turn; Delete still works", async () => {
+    const onSend = vi.fn(async () => true)
+    const onDelete = vi.fn(async () => true)
+    const mounted = await mount({
+      cards: [card({ messageId: 'w' })],
+      onSend,
+      onDelete,
+      steerHeld: true
+    })
+    const steer = control(mounted, 'Submit without interrupting the model')
+    expect(steer.props.disabled).toBe(true)
+    expect(steer.props.accessibilityState).toEqual({ disabled: true })
+    const trash = control(mounted, 'Delete this queued message')
+    await act(async () => trash.props.onPress())
+    expect(onDelete).toHaveBeenCalledWith('w')
+  })
+
+  it('deletes a card from its trash button', async () => {
+    const onDelete = vi.fn(async () => true)
+    const mounted = await mount({ cards: [card({ messageId: 'w' })], onDelete })
+    const trash = mounted.root.find(
+      (node) =>
+        typeof node.type === 'string' &&
+        node.props.accessibilityLabel === 'Delete this queued message'
+    )
+    expect(nodeTypes(trash)).toContain('Trash2')
+    await act(async () => trash.props.onPress())
+    expect(onDelete).toHaveBeenCalledWith('w')
+  })
+
+  it('opens the card menu from "…", whose Edit message edits that card once the sheet is gone', async () => {
+    const onEdit = vi.fn(async () => true)
+    const mounted = await mount({
+      cards: [card({ messageId: 'a' }), card({ messageId: 'b', text: 'fix me' })],
+      onEdit
+    })
+    expect(sheet(mounted).props.visible).toBe(false)
+    const more = mounted.root.findAllByProps({ accessibilityLabel: 'More actions' })
+    expect(more).toHaveLength(2)
+    await act(async () => more[1]!.props.onPress())
+    expect(sheet(mounted).props.visible).toBe(true)
+    expect(sheet(mounted).props.title).toBe('fix me')
+    const actions: ActionSheetAction[] = sheet(mounted).props.actions
+    expect(actions.map((action) => action.label)).toEqual(['Edit message'])
+    // Focus can only move to the composer once iOS has dismissed the sheet's Modal.
+    expect(actions[0]!.closeBeforePress).toBe(true)
+    await act(async () => actions[0]!.onPress())
+    expect(onEdit).toHaveBeenCalledWith('b')
+    await act(async () => sheet(mounted).props.onClose())
+    expect(sheet(mounted).props.visible).toBe(false)
+  })
+
+  it('offers the card menu on a returned card, so a refused message can be fixed rather than retyped', async () => {
+    const onEdit = vi.fn(async () => true)
+    const mounted = await mount({
+      cards: [card({ messageId: 'returned-1', state: 'returned', needsAttention: true })],
+      onEdit
+    })
+    await act(async () => control(mounted, 'More actions').props.onPress())
+    const actions: ActionSheetAction[] = sheet(mounted).props.actions
+    await act(async () => actions[0]!.onPress())
+    expect(onEdit).toHaveBeenCalledWith('returned-1')
+  })
+
+  it("closes a card's menu for good once the card leaves, even if it comes back", async () => {
+    const mounted = await mount({ cards: [card({ messageId: 'a' }), card({ messageId: 'b' })] })
+    await act(async () =>
+      mounted.root.findAllByProps({ accessibilityLabel: 'More actions' })[0]!.props.onPress()
+    )
+    expect(sheet(mounted).props.visible).toBe(true)
+    await act(async () => {
+      mounted.update(
+        createElement(MobileNativeChatQueuedMessages, { cards: [card({ messageId: 'b' })] })
+      )
+    })
+    expect(sheet(mounted).props.visible).toBe(false)
+    await act(async () => {
+      mounted.update(
+        createElement(MobileNativeChatQueuedMessages, {
+          cards: [card({ messageId: 'a' }), card({ messageId: 'b' })]
+        })
+      )
+    })
+    expect(sheet(mounted).props.visible).toBe(false)
+  })
+
+  it('runs one action per card at a time, however fast its controls are tapped', async () => {
+    let answer: (done: boolean) => void = () => undefined
+    const onSend = vi.fn(() => new Promise<boolean>((resolve) => (answer = resolve)))
+    const onDelete = vi.fn(async () => true)
+    const mounted = await mount({ cards: [card({ messageId: 'w' })], onSend, onDelete })
+    // Tap all actions before disabled state renders to expose same-frame duplication.
+    await act(async () => {
+      control(mounted, 'Submit without interrupting the model').props.onPress()
+      control(mounted, 'Submit without interrupting the model').props.onPress()
+      control(mounted, 'Delete this queued message').props.onPress()
+    })
+    expect(onSend).toHaveBeenCalledTimes(1)
+    expect(onDelete).not.toHaveBeenCalled()
+    expect(control(mounted, 'More actions').props.disabled).toBe(true)
+    await act(async () => answer(true))
+    expect(control(mounted, 'Submit without interrupting the model').props.disabled).toBe(false)
+  })
+
+  describe('a paused queue', () => {
+    const waiting = card({ messageId: 'waiting-1', text: 'next' })
+
+    async function mountPaused(
+      props: Partial<Parameters<typeof MobileNativeChatQueuedMessages>[0]>
+    ): Promise<ReactTestRenderer> {
+      return mount({
+        cards: [waiting],
+        onSend: vi.fn(async () => true),
+        onClearAll: vi.fn(async () => true),
+        ...props
+      })
+    }
+
+    it('heads the box with Paused, the count, Clear all and Resume; unpaused, Queued and the count', async () => {
+      const header = (mounted: ReactTestRenderer) =>
+        mounted.root.findByProps({ testID: 'queued-header' })
+      const paused = await mountPaused({ pause: { reason: 'stopped' } })
+      expect(texts(paused).slice(0, 4)).toEqual(['Paused', 1, 'Clear all', 'Resume'])
+      expect(nodeTypes(header(paused))).toEqual(expect.arrayContaining(['Trash2', 'Play']))
+      const scroll = header(paused).parent!.find((node) => String(node.type) === 'ScrollView')
+      const rowIds = [header(paused), ...scroll.findAllByProps({ testID: 'queued-card-row' })].map(
+        (row) => row.props.testID
+      )
+      expect(rowIds).toEqual(['queued-header', 'queued-card-row'])
+      const [cardRow] = paused.root.findAllByProps({ testID: 'queued-card-row' })
+      expect(flatStyle(cardRow!.props.style).borderTopWidth).toBe(1)
+      const unpaused = await mountPaused({ pause: null })
+      expect(texts(unpaused).slice(0, 2)).toEqual(['Queued', 1])
+      expect(texts(unpaused)).not.toContain('Resume')
+      const empty = await mountPaused({ cards: [], pause: { reason: 'stopped' } })
+      expect(empty.toJSON()).toBeNull()
+    })
+
+    it.each([100, 1000])('keeps pending work linear at %i cards', async (size) => {
+      let counting = false
+      let reads = 0
+      let memberships = 0
+      const ids = Array.from({ length: size }, (_, index) => `perf-card-${index}`)
+      const cards = ids.map((messageId) =>
+        Object.defineProperty(card({ messageId }), 'messageId', {
+          get: () => {
+            reads += Number(counting)
+            return messageId
+          }
+        })
+      )
+      const has = Set.prototype.has
+      const membership = vi.spyOn(Set.prototype, 'has')
+      membership.mockImplementation(function (this: Set<unknown>, key: unknown) {
+        if (counting && typeof key === 'string' && key.startsWith('perf-card-')) {
+          memberships++
+        }
+        return has.call(this, key)
+      })
+      const send = Promise.withResolvers<boolean>()
+      const clear = Promise.withResolvers<boolean>()
+      const onClearAll = vi.fn(() => clear.promise)
+      const onResume = vi.fn(async () => true)
+      const onSend = vi.fn(() => send.promise)
+      const mounted = await mountPaused({
+        cards,
+        pause: { reason: 'stopped' },
+        onClearAll,
+        onResume,
+        onSend
+      })
+      const labels = ['Delete every queued message', 'Resume sending the queued messages']
+      const steer = 'Submit without interrupting the model'
+      const trigger = async (action: () => void) => {
+        counting = true
+        await act(async () => action())
+        counting = false
+      }
+      // The last card forces the complete conflict scan; admission and settlement each rerender.
+      await trigger(() => control(mounted, steer, size - 1).props.onPress())
+      expect(onSend).toHaveBeenCalledExactlyOnceWith(ids.at(-1))
+      expect(control(mounted, labels[0]!).props.disabled).toBe(true)
+      await trigger(() => send.resolve(false))
+      // Same frame, before disabled state renders: the shared admission check refuses the rest.
+      await trigger(() => {
+        control(mounted, labels[0]!).props.onPress()
+        control(mounted, labels[1]!).props.onPress()
+        control(mounted, steer).props.onPress()
+      })
+      expect(onClearAll).toHaveBeenCalledExactlyOnceWith(ids)
+      expect([onResume.mock.calls.length, onSend.mock.calls.length]).toEqual([0, 1])
+      const greyed = () => [...labels, steer].map((label) => control(mounted, label).props.disabled)
+      expect(greyed()).toEqual([true, true, true])
+      await trigger(() => clear.resolve(false))
+      expect(greyed()).toEqual([false, false, false])
+      // Four pending/settled renders plus admission: fixed linear budgets, independent of N.
+      expect(reads).toBeGreaterThanOrEqual(4 * size)
+      expect(reads).toBeLessThanOrEqual(36 * size)
+      expect(memberships).toBeGreaterThanOrEqual(size)
+      expect(memberships).toBeLessThanOrEqual(18 * size)
+      console.info('queue operation counts', { cards: size, reads, memberships })
+    })
+
+    it('the chevron folds only the cards; the header and its actions stay', async () => {
+      const mounted = await mountPaused({ pause: { reason: 'stopped' } })
+      const toggle = () => control(mounted, 'Queued messages')
+      expect(toggle().props.accessibilityState).toEqual({ expanded: true })
+      await act(async () => toggle().props.onPress())
+      expect(toggle().props.accessibilityState).toEqual({ expanded: false })
+      expect(mounted.root.findAllByProps({ testID: 'queued-card-row' })).toHaveLength(0)
+      expect(texts(mounted)).toEqual(['Paused', 1, 'Clear all', 'Resume'])
+    })
+
+    function resumeButton(mounted: ReactTestRenderer) {
+      return control(mounted, 'Resume sending the queued messages')
+    }
+
+    it('Resume admits one press at a time and releases a lost answer for retry', async () => {
+      let answer: (resumed: boolean) => void = () => undefined
+      const onResume = vi.fn(() => new Promise<boolean>((resolve) => (answer = resolve)))
+      const mounted = await mountPaused({ pause: { reason: 'stopped' }, onResume })
+      await act(async () => {
+        resumeButton(mounted).props.onPress()
+        resumeButton(mounted).props.onPress()
+      })
+      expect(onResume).toHaveBeenCalledOnce()
+      expect(resumeButton(mounted).props.disabled).toBe(true)
+      await act(async () => answer(false))
+      expect(resumeButton(mounted).props.disabled).toBe(false)
+      await act(async () => resumeButton(mounted).props.onPress())
+      expect(onResume).toHaveBeenCalledTimes(2)
+    })
+
+    it('keeps every target inside its row, and announces the header', async () => {
+      const mounted = await mountPaused({ pause: { reason: 'stopped' } })
+      const row = mounted.root.findByProps({ testID: 'queued-header' })
+      expect(row.props.accessibilityLiveRegion).toBe('polite')
+      // Android ignores touches outside the parent; keep buttons inside and tuck the box with noninteractive padding.
+      const styled = mounted.root
+        .findByProps({ testID: 'queued-box' })
+        .findAll((node) => typeof node.type === 'string' && node.props.style !== undefined)
+      expect(styled.length).toBeGreaterThan(0)
+      for (const node of styled) {
+        const style = flatStyle(
+          typeof node.props.style === 'function'
+            ? node.props.style({ pressed: false })
+            : node.props.style
+        )
+        const margins = Object.entries(style).filter(([key]) => key.startsWith('margin'))
+        expect(margins.filter(([, value]) => typeof value === 'number' && value < 0)).toEqual([])
+      }
+    })
+
+    it('at large text keeps Clear all and Resume on their own line while a card is edited', async () => {
+      fontScale = 2
+      try {
+        const mounted = await mountPaused({
+          pause: { reason: 'stopped' },
+          editor: inlineEditor({
+            messageId: 'waiting-1',
+            text: 'next',
+            saving: false,
+            canSave: true,
+            change: vi.fn(),
+            save: vi.fn(async () => true),
+            cancel: vi.fn()
+          })
+        })
+        const header = mounted.root.findByProps({ testID: 'queued-header' })
+        for (const label of ['Delete every queued message', 'Resume sending the queued messages']) {
+          const button = control(mounted, label)
+          expect(header.findAll((node) => node === button)).toHaveLength(0)
+        }
+      } finally {
+        fontScale = 1
+      }
+    })
+
+    it('keeps Steer on its cards: one card can still go beside the paused rest', async () => {
+      const onSend = vi.fn(async () => true)
+      const mounted = await mountPaused({ pause: { reason: 'stopped' }, onSend })
+      const steer = control(mounted, 'Submit without interrupting the model')
+      expect(texts(mounted)).toContain('Steer')
+      expect(texts(mounted)).not.toContain('Send')
+      await act(async () => steer.props.onPress())
+      expect(onSend).toHaveBeenCalledWith('waiting-1')
+    })
+  })
+
+  it('gives every card action a 44pt-tall target in a 44pt row, under a 32pt header', async () => {
+    const mounted = await mount({
+      cards: [card({ messageId: 'waiting-1' })],
+      pause: { reason: 'stopped' },
+      onSend: vi.fn(async () => true),
+      onDelete: vi.fn(async () => true),
+      onClearAll: vi.fn(async () => true),
+      onEdit: vi.fn(async () => true)
+    })
+    const buttons = mounted.root.findAll(
+      (node) =>
+        typeof node.type === 'string' &&
+        node.props.accessibilityRole === 'button' &&
+        node.props.testID !== 'queued-card-text'
+    )
+    const style = (button: (typeof buttons)[number]) =>
+      flatStyle(button.props.style({ pressed: false }))
+    expect(buttons.map((button) => button.props.accessibilityLabel)).toEqual([
+      'Queued messages',
+      'Delete every queued message',
+      'Resume sending the queued messages',
+      'Submit without interrupting the model',
+      'Delete this queued message',
+      'More actions'
+    ])
+    const header = mounted.root.findByProps({ testID: 'queued-header' })
+    expect(flatStyle(header.props.style).minHeight).toBe(32)
+    expect(style(buttons[0]!)).toMatchObject({ position: 'absolute', top: 0, bottom: 0 })
+    for (const button of buttons.slice(1, 3)) {
+      expect(style(button).minHeight).toBe(32)
+      expect(style(button).height).toBeUndefined()
+      expect(style(button).minWidth).toBeGreaterThanOrEqual(44)
+    }
+    const cardActions = buttons.slice(3).map(style)
+    for (const action of cardActions) {
+      expect(action.minHeight).toBeGreaterThanOrEqual(44)
+    }
+    expect(cardActions[0]!.minWidth).toBe(44)
+    expect(cardActions.map((action) => action.width)).toEqual([undefined, 40, 44])
+    for (const row of mounted.root.findAllByProps({ testID: 'queued-card-row' })) {
+      expect(flatStyle(row.props.style).minHeight).toBeGreaterThanOrEqual(44)
+    }
+  })
+
+  it('caps a long queue in a scrolling list and shows a card the person just queued', async () => {
+    const scrollToEnd = vi.fn()
+    const mounted = create(createElement('View'), {
+      createNodeMock: (element) =>
+        element.type === 'ScrollView' ? { scrollToEnd, flashScrollIndicators: vi.fn() } : null
+    })
+    renderer = mounted
+    const ids = ['a', 'b', 'c', 'd', 'e']
+    const show = async (cards: MobileQueuedMessageCard[]) => {
+      await act(async () => {
+        mounted.update(createElement(MobileNativeChatQueuedMessages, { cards }))
+      })
+      return mounted.root.find((node) => String(node.type) === 'ScrollView')
+    }
+    const scroll = await show(ids.map((messageId) => card({ messageId })))
+    expect(flatStyle(scroll.props.style).maxHeight).toBe(160)
+    expect(scroll.findAllByProps({ testID: 'queued-header' })).toHaveLength(0)
+    expect(scroll.findAllByProps({ testID: 'queued-card-row' })).toHaveLength(5)
+    await act(async () => scroll.props.onContentSizeChange(0, ids.length * 44))
+    expect(scrollToEnd).not.toHaveBeenCalled()
+    await show([...ids, 'f'].map((messageId) => card({ messageId, attribution: 'From Alex' })))
+    expect(scrollToEnd).not.toHaveBeenCalled()
+    await show([...ids, 'f', 'g'].map((messageId) => card({ messageId })))
+    expect(scrollToEnd).toHaveBeenCalledExactlyOnceWith({ animated: false })
+    scrollToEnd.mockClear()
+    await show(['b', 'c', 'd', 'e', 'f', 'g', 'h'].map((messageId) => card({ messageId })))
+    expect(scrollToEnd).toHaveBeenCalledExactlyOnceWith({ animated: false })
+    scrollToEnd.mockClear()
+    await act(async () => scroll.props.onContentSizeChange(0, 2400))
+    await show(
+      ['b', 'c', 'd', 'e', 'f', 'g', 'h', 'i'].map((messageId) =>
+        card({ messageId, attribution: 'From Alex' })
+      )
+    )
+    await act(async () => scroll.props.onContentSizeChange(0, 2444))
+    expect(scrollToEnd).not.toHaveBeenCalled()
+  })
+
+  it('admits one queue move synchronously, preserves unrelated actions and releases after settlement', async () => {
+    const messages: AgentSessionQueuedMessage[] = ['a', 'b', 'c', 'd'].map(
+      (messageId, position) => ({
+        messageId,
+        position,
+        state: 'waiting',
+        body: { kind: 'message', role: 'user', blocks: [{ type: 'text', text: messageId }] }
+      })
+    )
+    messages[2]!.body.from = { kind: 'agent', senders: [], orchestration: null }
+    type MoveReply = StructuredAgentSessionMutationResult<AgentSessionQueuedMessageMoveResult>
+    const first = Promise.withResolvers<MoveReply>()
+    const second = Promise.withResolvers<MoveReply>()
+    const mutate = vi
+      .fn<(...args: Parameters<MobileStructuredAgentMutate>) => Promise<MoveReply>>()
+      .mockReturnValueOnce(first.promise)
+      .mockReturnValueOnce(second.promise)
+    const send = vi.fn(async () => true)
+    function Harness({ published = messages }: { published?: AgentSessionQueuedMessage[] }) {
+      const queue = useMobileQueuedMessageComposerActions({
+        messages: published,
+        sessionId: 's',
+        sessionKey: 's',
+        reorderCapable: true,
+        enabled: true,
+        // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Vitest erases the generic result signature; this hook only requests queuedMessageMove, and both deferred replies are checked as MoveReply.
+        mutate: mutate as MobileStructuredAgentMutate,
+        onSendError: () => {}
+      })
+      return createElement(MobileNativeChatQueuedMessages, {
+        cards: mobileQueuedMessageCards(queue.messages, []),
+        onMove: queue.move,
+        onSend: send
+      })
+    }
+    await act(async () => {
+      renderer = create(createElement(Harness))
+    })
+    const list = () => renderer!.root.find((node) => String(node.type) === 'DragReorderList')
+    const ids = () => list().props.items.map((entry: MobileQueuedMessageCard) => entry.messageId)
+    const queuedMove = list().props.onMove
+    act(() => {
+      expect(queuedMove({ movedId: 'c', beforeId: 'a' })).toBe(true)
+      expect(queuedMove({ movedId: 'b', afterId: 'd' })).toBe(false)
+    })
+    expect(mutate).toHaveBeenCalledTimes(1)
+    expect(ids()).toEqual(['c', 'a', 'b', 'd'])
+    expect(list().props.canMove).toBeUndefined()
+    expect(list().props.items[0].from).toBeDefined()
+    expect(
+      list().props.items.every((entry: MobileQueuedMessageCard) =>
+        list().props.isMoveDisabled(entry)
+      )
+    ).toBe(true)
+    const movedRow = list().props.renderRow(list().props.items[0])
+    act(() => movedRow.props.onSend())
+    expect(send).not.toHaveBeenCalled()
+    const otherRow = list().props.renderRow(list().props.items[1])
+    await act(async () => otherRow.props.onSend())
+    expect(send).toHaveBeenCalledExactlyOnceWith('a')
+    await act(async () => {
+      first.resolve({
+        status: 'accepted',
+        value: { messageId: 'c', status: 'stale' },
+        sameFence: true
+      })
+      await first.promise
+    })
+    expect(ids()).toEqual(['a', 'b', 'c', 'd'])
+    expect(
+      list().props.items.every(
+        (entry: MobileQueuedMessageCard) => !list().props.isMoveDisabled(entry)
+      )
+    ).toBe(true)
+    act(() => expect(list().props.onMove({ movedId: 'b', afterId: 'd' })).toBe(true))
+    // The host republishes the moved order with fresh positions; cards sort by position.
+    const published = [0, 2, 3, 1].map((index, position) => ({ ...messages[index]!, position }))
+    await act(async () => renderer!.update(createElement(Harness, { published })))
+    expect(ids()).toEqual(['a', 'c', 'd', 'b'])
+    await act(async () => renderer!.unmount())
+    renderer = null
+    await act(async () => {
+      second.resolve({
+        status: 'accepted',
+        value: { messageId: 'b', status: 'moved' },
+        sameFence: true
+      })
+      await second.promise
+    })
+    expect(mutate).toHaveBeenCalledTimes(2)
+  })
+})

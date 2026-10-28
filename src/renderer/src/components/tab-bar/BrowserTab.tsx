@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useSortable } from '@dnd-kit/sortable'
-import { X, ExternalLink, Copy, CopyX, Pin, PinOff, Volume2, VolumeX } from 'lucide-react'
+import { X, Pin, PinOff, Volume2, VolumeX } from 'lucide-react'
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -292,8 +292,7 @@ export default function BrowserTab({
           />
           {onDuplicate ? (
             <>
-              <DropdownMenuItem onSelect={onDuplicate}>
-                <Copy className="size-3.5" />
+              <DropdownMenuItem inset onSelect={onDuplicate}>
                 {translate('auto.components.tab.bar.BrowserTab.5d6e89891f', 'Duplicate Tab')}
               </DropdownMenuItem>
               <DropdownMenuSeparator />
@@ -306,8 +305,7 @@ export default function BrowserTab({
               : translate('auto.components.tab.bar.BrowserTab.911542656f', 'Pin Tab')}
           </DropdownMenuItem>
           {showAudioControl ? (
-            <DropdownMenuItem onSelect={() => setBrowserTabAudioMuted(tab.id, !audioMuted)}>
-              {audioMuted ? <Volume2 className="size-3.5" /> : <VolumeX className="size-3.5" />}
+            <DropdownMenuItem inset onSelect={() => setBrowserTabAudioMuted(tab.id, !audioMuted)}>
               {toggleAudioMutedLabel}
             </DropdownMenuItem>
           ) : null}
@@ -317,16 +315,15 @@ export default function BrowserTab({
             <X className="size-3.5" />
             {translate('auto.components.tab.bar.BrowserTab.1611a1324b', 'Close')}
           </DropdownMenuItem>
-          <DropdownMenuItem onSelect={onCloseOthers} disabled={tabCount <= 1}>
-            <CopyX className="size-3.5" />
+          <DropdownMenuItem inset onSelect={onCloseOthers} disabled={tabCount <= 1}>
             {translate('components.tab.bar.BrowserTab.closeOthers', 'Close Others')}
           </DropdownMenuItem>
           <CloseSplitPaneMenuItem onCloseSplitPane={onCloseSplitPane} />
           <DropdownMenuItem
+            inset
             onSelect={() => void window.api.shell.openUrl(openInBrowserUrl)}
             disabled={!isHttpUrl}
           >
-            <ExternalLink className="size-3.5" />
             {translate('auto.components.tab.bar.BrowserTab.6e0bc8f3a8', 'Open In Browser')}
           </DropdownMenuItem>
         </DropdownMenuContent>

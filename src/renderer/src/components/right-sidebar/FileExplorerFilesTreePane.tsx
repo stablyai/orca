@@ -169,7 +169,11 @@ export function FileExplorerFilesTreePane({
         !wslHostsTurnedOff && (
           <div className="px-2 py-1 text-xs text-muted-foreground" role="status">
             {showTree && <p>{treeError}</p>}
-            <Button variant="ghost" size="xs" onClick={() => void tree.refreshDir(displayRootPath)}>
+            <Button
+              variant="ghost"
+              size="xs"
+              onClick={() => void tree.refreshDir(displayRootPath, { wakeWslDistro: true })}
+            >
               {translate('fileExplorer.root.retry', 'Retry')}
             </Button>
           </div>

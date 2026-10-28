@@ -25,9 +25,11 @@ describe('web native chat preload API', () => {
       timestamp: 42,
       source: 'transcript' as const
     }
+    let readCall: { method: string; params: unknown } | undefined
     vi.doMock('./web-runtime-client', () => ({
       WebRuntimeClient: class {
-        call(): Promise<RuntimeRpcResponse<unknown>> {
+        call(method: string, params: unknown): Promise<RuntimeRpcResponse<unknown>> {
+          readCall = { method, params }
           return Promise.resolve({
             id: 'read-1',
             ok: true,
@@ -70,6 +72,10 @@ describe('web native chat preload API', () => {
         lifecycle
       }
     )
+    expect(readCall).toMatchObject({
+      method: 'nativeChat.readSession',
+      params: { capabilities: { transcriptSourceOrder: 1 } }
+    })
     const frames: unknown[] = []
     globals.window.api.nativeChat.subscribe(
       { subscriptionId: 'sub-1', agent: 'claude', sessionId: 'session-1' },
@@ -130,7 +136,9 @@ describe('web native chat preload API', () => {
     )
     await Promise.resolve()
 
-    expect(subscribeParams).toMatchObject({ capabilities: { transcriptPending: 1 } })
+    expect(subscribeParams).toMatchObject({
+      capabilities: { transcriptPending: 1, transcriptSourceOrder: 1 }
+    })
 
     // The host's unflushed-transcript frame, then the flush that follows it.
     deliver({ type: 'snapshot', messages: [], hasMore: false, pending: true })

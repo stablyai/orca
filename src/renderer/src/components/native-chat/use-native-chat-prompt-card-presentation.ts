@@ -1,11 +1,16 @@
 import { useCallback, useLayoutEffect, useMemo, useRef, useSyncExternalStore } from 'react'
 import { useAppStore } from '../../store'
-import { nativeChatCardDismissKey } from './native-chat-dismiss-key'
+import {
+  nativeChatCardDismissKey,
+  nativeChatPromptDismissalMatches,
+  nativeChatPromptOccurrenceKey,
+  nativeChatPromptWaitStartedAt
+} from '../../../../shared/native-chat-prompt-dismiss-key'
 import {
   nativeChatPromptDismissals as dismissals,
   type NativeChatPromptDismissal
 } from './native-chat-prompt-dismissals'
-import type { InteractivePromptCard } from './native-chat-interactive-prompt'
+import type { InteractivePromptCard } from '../../../../shared/native-chat-interactive-prompt'
 
 export type NativeChatPromptCardPresentation = {
   /** The card that owns the input region now; null leaves it to the composer. */
@@ -36,14 +41,11 @@ export function useNativeChatPromptCardPresentation({
   /** While the transcript loads, an absent transcript card is unknown, not cleared. */
   transcriptSettled?: boolean
 }): NativeChatPromptCardPresentation {
-  // Identical prompt text may belong to separate wait occurrences.
-  const startedAt = useAppStore((s) => {
-    const entry = s.agentStatusByPaneKey[paneKey]
-    return card && entry?.interactivePrompt ? (entry.stateStartedAt ?? null) : null
-  })
+  const startedAt = useAppStore((s) =>
+    nativeChatPromptWaitStartedAt(card, s.agentStatusByPaneKey[paneKey])
+  )
   const content = nativeChatCardDismissKey(card)
-  const promptKey =
-    content === null || card?.kind !== 'approval' ? content : `${content}@${startedAt}`
+  const promptKey = nativeChatPromptOccurrenceKey(card, content, startedAt)
   const scopeKey = JSON.stringify([paneKey, targetPtyId])
   const occurrenceKey = promptKey === null ? null : `${scopeKey}:${promptKey}`
   const occurrence = useMemo(() => ({ occurrenceKey, canSend }), [occurrenceKey, canSend])
@@ -55,11 +57,7 @@ export function useNativeChatPromptCardPresentation({
     }
   }, [occurrence])
   const dismissal = useSyncExternalStore(dismissals.subscribe, () => dismissals.read(paneKey))
-  // A transcript-only card matches its status-backed record across the post-answer handoff.
-  const matches =
-    dismissal !== undefined &&
-    dismissal.content === content &&
-    (startedAt === null || dismissal.startedAt === startedAt)
+  const matches = nativeChatPromptDismissalMatches(dismissal, content, startedAt)
   // Retire cleared/changed dismissals so later identical prompts can appear.
   useLayoutEffect(() => {
     if (dismissal !== undefined && !matches && (content !== null || transcriptSettled)) {

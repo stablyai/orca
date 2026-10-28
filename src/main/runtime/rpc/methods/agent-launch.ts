@@ -5,7 +5,7 @@
 import { AGENT_LAUNCH_RUNTIME_CAPABILITY } from '../../../../shared/agent-launch-runtime-capability'
 import { AgentLaunchTabClosedError } from '../../../../shared/agent-launch-tab-closed'
 import { computeAgentLaunchFingerprint } from '../../../../shared/agent-launch-operation'
-import type { AgentLaunchIntent, AgentLaunchResult } from '../../../../shared/agent-launch-intent'
+import type { AgentLaunchResult } from '../../../../shared/agent-launch-intent'
 import { agentSessionOperationKey } from '../../../../shared/agent-session-operation-ledger'
 import {
   WorktreeCreateCollisionError,
@@ -39,11 +39,11 @@ import {
 } from './agent-launch-failure-code'
 import {
   agentLaunchCallerNavigationId,
+  callerRendersLaunchedChat,
   selectAgentLaunchTabForCaller
 } from './agent-launch-caller-selection'
 import { agentLaunchWorkspaceFactory } from './agent-launch-worktree-creation'
 import { assertAgentLaunchTargetAuthorized } from './agent-launch-target-authorization'
-import { clientRendersStructuredAgent } from './structured-agent-session-policy'
 import { resolveUnlaunchedIntent } from './agent-launch-intent-resolution'
 import {
   publishEarlyTab,
@@ -61,19 +61,6 @@ export function supportsAgentLaunch(
   )
 }
 
-/** v2 covers Claude/Codex chats; other agents require the same explicit rendering capability used by tabs and restart offers, else use terminal. */
-function callerRendersLaunchedChat(
-  context: Pick<RpcContext, 'clientKind' | 'clientCapabilities'>,
-  agent: string
-): boolean {
-  return (
-    context.clientKind === undefined ||
-    agent === 'claude' ||
-    agent === 'codex' ||
-    clientRendersStructuredAgent(context.clientCapabilities, agent)
-  )
-}
-
 /** What a launch admitted under an operation id carries into its execution. */
 type ReplaySafeLaunch = {
   attachOperationId: string
@@ -84,7 +71,7 @@ type ReplaySafeLaunch = {
 }
 
 async function runAgentLaunch(
-  intent: AgentLaunchIntent,
+  { intent, decidedMode }: Awaited<ReturnType<typeof resolveUnlaunchedIntent>>,
   context: RpcContext,
   view: AgentLaunchView,
   replaySafe?: ReplaySafeLaunch
@@ -93,6 +80,7 @@ async function runAgentLaunch(
   const result = await executeAgentLaunch({
     runtime: context.runtime,
     intent,
+    decidedMode,
     surfaces: agentLaunchSurfaceFactory(
       context,
       replaySafe?.attachOperationId,
@@ -102,7 +90,6 @@ async function runAgentLaunch(
       view
     ),
     workspaces: agentLaunchWorkspaceFactory(context, intent.agent),
-    ...(callerRendersLaunchedChat(context, intent.agent) ? {} : { callerRendersStructured: false }),
     // The tab is shown as it is published, not after a prompt that can take a minute to land.
     onSurfacePublished: (surface) => {
       view.early?.surfacePublished(surface)
@@ -123,10 +110,16 @@ function runLegacyAgentLaunch(
 ): Promise<AgentLaunchResult> {
   // No early tab, as before: only a replay-safe launch shows its tab before its agent exists.
   const execute = async () =>
-    runAgentLaunch(await resolveUnlaunchedIntent(params, context.runtime, null), context, {
-      early: null,
-      presentation: params.presentation
-    })
+    runAgentLaunch(
+      await resolveUnlaunchedIntent(params, context.runtime, null, {
+        callerRendersStructured: callerRendersLaunchedChat(context, params.agent)
+      }),
+      context,
+      {
+        early: null,
+        presentation: params.presentation
+      }
+    )
   if (params.target.kind === 'create-worktree' && params.target.create.clientMutationId) {
     const { repo, repoHostId } = params.target.create
     return context.runtime.dedupeWorktreeCreate(
@@ -202,17 +195,19 @@ async function executeAdmittedAgentLaunch(
   >,
   view: AgentLaunchView
 ): Promise<AgentLaunchResult> {
-  let intent: AgentLaunchIntent
+  let resolved: Awaited<ReturnType<typeof resolveUnlaunchedIntent>>
   try {
-    intent = await resolveUnlaunchedIntent(params, context.runtime, view.early)
+    resolved = await resolveUnlaunchedIntent(params, context.runtime, view.early, {
+      callerRendersStructured: callerRendersLaunchedChat(context, params.agent)
+    })
   } catch (error) {
-    await settleQuietly(admission.fail(agentLaunchFailureCode(error)))
+    await settleQuietly(admission.fail(agentLaunchFailureCode(error), error))
     throw error
   }
   const terminalSpawn = trackTerminalSpawnDispatch()
   let result: AgentLaunchResult
   try {
-    result = await runAgentLaunch(intent, context, view, {
+    result = await runAgentLaunch(resolved, context, view, {
       attachOperationId: admission.attachOperationId,
       callerKey: admission.callerKey,
       terminalSpawn,
@@ -224,7 +219,7 @@ async function executeAdmittedAgentLaunch(
     }
     const failedWithoutEffects = launchFailureWithoutEffectsCode(
       error,
-      intent.target.kind,
+      resolved.intent.target.kind,
       terminalSpawn
     )
     if (failedWithoutEffects) {

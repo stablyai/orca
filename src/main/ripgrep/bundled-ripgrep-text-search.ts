@@ -28,6 +28,8 @@ import { stopBundledRipgrep } from './bundled-ripgrep-stop'
 // NTFS permits POSIX-created names/types Windows rg cannot open (1/2/1920); skip them without truncating the search.
 const WINDOWS_UNOPENABLE_PATH_OS_ERRORS: ReadonlySet<number> = new Set([1, 2, 1920])
 
+function ignoreCompletedSearchTerminationError(): void {}
+
 export function runBundledRipgrepTextSearch({
   options,
   rootPath,
@@ -110,10 +112,7 @@ export function runBundledRipgrepTextSearch({
     }
     const rejectUnavailable = (): void => finish(Promise.reject(bundledRipgrepUnavailableError()))
     const processLine = (line: string): void => {
-      const verdict = ingestRgJsonLine(line, resultRootPath, acc, maxResults, transformAbsPath)
-      if (verdict === 'stop' && child) {
-        stopBundledRipgrep(child, Boolean(wslDistroForOutput))
-      }
+      ingestRgJsonLine(line, resultRootPath, acc, maxResults, transformAbsPath)
     }
 
     let nextChild: ReturnType<typeof spawnBundledRipgrep>
@@ -135,12 +134,14 @@ export function runBundledRipgrepTextSearch({
     releaseChild = onSpawn(nextChild)
 
     const handleStdoutData = (chunk: string): void => {
-      if (!lines.push(chunk, processLine)) {
+      const withinLineLimit = lines.push(chunk, processLine)
+      if (!withinLineLimit || acc.totalMatches >= maxResults) {
         acc.truncated = true
+        child?.once('error', ignoreCompletedSearchTerminationError)
+        resolveOnce()
         if (child) {
           stopBundledRipgrep(child, Boolean(wslDistroForOutput))
         }
-        resolveOnce()
       }
     }
     const handleStderrData = (chunk: Buffer): void => {

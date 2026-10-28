@@ -1,19 +1,15 @@
 import type {
   PRCheckAnnotation,
   PRCheckJob,
-  PRCheckRunDetails,
-  PRCheckStep
+  PRCheckRunDetails
 } from '../../../../src/shared/github/check-types'
+import { resolveStepOutcome, summarizeJobSteps } from '../../../../src/shared/pr-check-step-status'
 
 // Map check payload to desktop-equivalent summary/annotations/failed jobs without React/RN imports for Node tests.
 
 // Desktop caps the inline lists so a noisy check can't break the layout; match it.
 const MAX_ANNOTATIONS = 20
 const MAX_JOBS = 100
-
-function isFailureState(state: string | null | undefined): boolean {
-  return state === 'failure' || state === 'failed' || state === 'cancelled' || state === 'timed_out'
-}
 
 export type CheckDetailAnnotation = {
   locator: string
@@ -55,9 +51,10 @@ function mapAnnotation(annotation: PRCheckAnnotation): CheckDetailAnnotation {
 }
 
 function mapJob(job: PRCheckJob): CheckDetailJob {
-  const failedSteps = job.steps
-    .filter((step: PRCheckStep) => isFailureState(step.conclusion ?? step.status))
-    .map((step) => ({ name: step.name, state: step.conclusion ?? step.status ?? 'unknown' }))
+  const failedSteps = summarizeJobSteps(job).failed.map((step) => ({
+    name: step.name,
+    state: step.conclusion ?? step.status ?? 'unknown'
+  }))
   return {
     name: job.name,
     state: job.conclusion ?? job.status ?? 'unknown',
@@ -74,7 +71,7 @@ export function presentCheckDetail(details: PRCheckRunDetails): CheckDetailConte
   ].filter((line): line is string => typeof line === 'string' && line.trim().length > 0)
 
   // Prefer actionable failed jobs; show all only when none fail, matching desktop.
-  const failedJobs = details.jobs.filter((job) => isFailureState(job.conclusion ?? job.status))
+  const failedJobs = details.jobs.filter((job) => resolveStepOutcome(job) === 'failure')
   const visibleJobs = failedJobs.length > 0 ? failedJobs : details.jobs
 
   return {

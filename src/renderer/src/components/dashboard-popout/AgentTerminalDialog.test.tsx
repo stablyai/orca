@@ -82,6 +82,16 @@ describe('AgentTerminalDialog', () => {
     )
   })
 
+  it.each([
+    ['interrupted', 'Interrupted'],
+    ['failed', 'Failed'],
+    ['unconfirmed', 'Couldn’t confirm']
+  ] as const)('keeps an acknowledged %s verdict in the terminal header', (verdict, label) => {
+    const statusCard = { ...card({ dotState: 'done', bucket: 'idle', unseen: false }), verdict }
+    render(<AgentTerminalPanel card={statusCard} onOpenChange={() => {}} onReveal={() => {}} />)
+    expect(screen.getByText(new RegExp(label))).toBeInTheDocument()
+  })
+
   it('passes null when the card carries no profile, so the preview routes by client OS', () => {
     render(<AgentTerminalDialog card={card()} onOpenChange={() => {}} onReveal={() => {}} />)
 
@@ -102,7 +112,7 @@ describe('AgentTerminalDialog', () => {
     expect(screen.queryByText(/pane has closed/)).not.toBeInTheDocument()
   })
 
-  it('still reports a closed pane for a local card with no live pty', () => {
+  it('keeps a local agent openable without claiming its missing preview means closure', () => {
     render(
       <AgentTerminalDialog
         card={card({ ptyId: null, hostKind: 'local' })}
@@ -111,7 +121,9 @@ describe('AgentTerminalDialog', () => {
       />
     )
 
-    expect(screen.getByText(/pane has closed/)).toBeInTheDocument()
+    expect(screen.getByText(/No preview available/)).toBeInTheDocument()
+    expect(screen.queryByText(/pane has closed/)).not.toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Open worktree' })).toBeEnabled()
   })
 
   it('labels acknowledged completions idle without review or pin controls', () => {

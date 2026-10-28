@@ -73,6 +73,7 @@ function buildScope(session: Session): MobileSessionTerminalWebviewModel {
     connStateRef: { current: 'connected' },
     liveInputRef: { current: null },
     commandInputRef: { current: null },
+    ptyModesRef: { current: new Map() },
     liveInputFocusTimerRef: { current: null },
     sendLiveTerminalInputRef: { current: async () => true },
     sessionTabActionSheetKeyboardHideSubRef: { current: null },

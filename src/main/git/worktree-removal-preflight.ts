@@ -1,5 +1,6 @@
 import { stat } from 'node:fs/promises'
 import { join } from 'node:path'
+import { isWorktreePathMissing } from '../worktree-removal-safety'
 import { SUBMODULE_DIRTY_REMOVAL_DETAIL } from '../../shared/worktree/removal'
 import { gitExecFileAsync } from './runner'
 import type { WorktreeRemovalPreflightOptions } from './worktree-operation-options'
@@ -8,13 +9,38 @@ import { WORKTREE_REMOVAL_PREFLIGHT_TIMEOUT_MS, gitExecOptions } from './worktre
 export async function assertWorktreeCleanForRemoval(
   worktreePath: string,
   force = false,
-  options: WorktreeRemovalPreflightOptions = {}
+  options: WorktreeRemovalPreflightOptions = {},
+  adminDirectory?: string
 ): Promise<void> {
   if (force) {
     return
   }
 
   const { ignoredUntrackedPaths = [], ...gitOptions } = options
+  const bound = adminDirectory
+    ? { env: { ...process.env, GIT_DIR: join(worktreePath, '.git'), GIT_WORK_TREE: worktreePath } }
+    : {}
+  const execution = {
+    ...gitExecOptions(worktreePath, gitOptions),
+    ...bound,
+    timeout: gitOptions.timeout ?? WORKTREE_REMOVAL_PREFLIGHT_TIMEOUT_MS
+  }
+  if (adminDirectory) {
+    const { stdout: index } = await gitExecFileAsync(['ls-files', '--stage', '-z'], execution)
+    if (!(await isWorktreePathMissing(join(adminDirectory, 'modules')))) {
+      throw new Error(SUBMODULE_DIRTY_REMOVAL_DETAIL)
+    }
+    for (const entry of index.split('\0')) {
+      if (
+        entry.startsWith('160000 ') &&
+        !(await isWorktreePathMissing(
+          join(worktreePath, entry.slice(entry.indexOf('\t') + 1), '.git')
+        ))
+      ) {
+        throw new Error(SUBMODULE_DIRTY_REMOVAL_DETAIL)
+      }
+    }
+  }
   const useNullTerminatedStatus = ignoredUntrackedPaths.length > 0
   const { stdout } = await gitExecFileAsync(
     [
@@ -25,10 +51,7 @@ export async function assertWorktreeCleanForRemoval(
       // User ignore-submodules config must not hide edits from the dirty check.
       '--ignore-submodules=none'
     ],
-    {
-      ...gitExecOptions(worktreePath, gitOptions),
-      timeout: gitOptions.timeout ?? WORKTREE_REMOVAL_PREFLIGHT_TIMEOUT_MS
-    }
+    execution
   )
   // Use the same entries for the verdict and the error message.
   const blockingEntries = useNullTerminatedStatus

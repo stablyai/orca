@@ -144,6 +144,49 @@ describe('mobile structured queued messages', () => {
     unmountSession()
   })
 
+  it('reverts an optimistic relative move when the host reports a changed queue', async () => {
+    const mail = queuedDraft({
+      messageId: 'mail',
+      body: {
+        kind: 'message',
+        role: 'user',
+        blocks: [],
+        from: { kind: 'agent', senders: [], orchestration: null }
+      }
+    })
+    const messages = [mail, queuedDraft({ messageId: 'b', position: 2 })]
+    await mountSession(CAPABLE, snapshotEvent({ queuedMessages: messages }))
+    expect(hook!.queued.move).toBeUndefined()
+    expect(calls('agentSession.queuedMessageMove')).toHaveLength(0)
+    unmountSession()
+    await mountSession(
+      { ...CAPABLE, queuedMessageReorder: true },
+      snapshotEvent({ queuedMessages: messages })
+    )
+    let finish: (response: RpcResponse) => void = () => {}
+    sendRequest.mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          finish = resolve
+        })
+    )
+    let moving!: Promise<boolean>
+    await act(async () => {
+      moving = hook!.queued.move!({ movedId: 'mail', afterId: 'b' })
+    })
+    expect(hook!.queued.cards.map((card) => card.messageId)).toEqual(['b', 'mail'])
+    expect(hook!.queued.cards[1]?.from).toBeDefined()
+    expect(requestOf('agentSession.queuedMessageMove').params).toMatchObject({
+      messageId: 'mail',
+      afterMessageId: 'b'
+    })
+    await act(async () => {
+      finish(mutationOk({ messageId: 'mail', status: 'stale' }))
+      expect(await moving).toBe(false)
+    })
+    expect(hook!.queued.cards.map((card) => card.messageId)).toEqual(['mail', 'b'])
+  })
+
   describe('capability-gated delivery', () => {
     it('scans failure facts only when a returned card needs them', async () => {
       await mountSession(CAPABLE)
@@ -189,6 +232,30 @@ describe('mobile structured queued messages', () => {
         })
       )
       expect(asyncStorage.setItem).not.toHaveBeenCalled()
+    })
+
+    it("sends straight into the turn when the host's Queue follow-ups is off, as the desktop does", async () => {
+      sendRequest.mockImplementation(async (method) => {
+        if (method === 'settings.get') {
+          return ok({ settings: { nativeChatQueueFollowUps: false } })
+        }
+        if (method === 'agentSession.send') {
+          return mutationOk({
+            clientMessageId: 'client-1',
+            submission: acceptedSubmission('client-1')
+          })
+        }
+        return method === 'agentSession.options' ? ok({ models: [], current: {} }) : ok({})
+      })
+      await mountSession(CAPABLE)
+      await vi.waitFor(() =>
+        expect(sendRequest.mock.calls.map(([method]) => method)).toContain('settings.get')
+      )
+      await act(async () => {})
+      await act(async () => {
+        await hook!.sendWithOutcome('steer me')
+      })
+      expect('delivery' in requestOf('agentSession.send').params).toBe(false)
     })
 
     it('keeps today’s request exactly against an incapable host', async () => {
@@ -291,9 +358,11 @@ describe('mobile structured queued messages', () => {
       expect(hook!.queued.cards).toEqual([
         {
           messageId: 'draft-1',
+          position: 1,
           text: 'text of draft-1',
+          line: 'text of draft-1',
           state: 'waiting',
-          paused: false,
+          hold: 'turn',
           needsAttention: false,
           caption: null,
           attribution: null
@@ -579,7 +648,7 @@ describe('mobile structured queued messages', () => {
       expect(hook!.queued.pause).toEqual({ reason: 'stopped' })
       expect(hook!.queued.cards[0]).toMatchObject({
         messageId: 'draft-1',
-        paused: false,
+        hold: 'queue-paused',
         caption: null
       })
       act(() => listener?.(batchEvent()))

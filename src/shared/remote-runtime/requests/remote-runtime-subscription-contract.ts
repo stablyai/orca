@@ -1,7 +1,7 @@
-import type { RemoteRuntimeClientError } from '../../remote-runtime-client-error'
+import type { RemoteRuntimeClientError } from '../remote-runtime-client-error'
 import type { RuntimeCapability } from '../../protocol-version'
 import type { RuntimeRpcResponse } from '../../runtime-rpc-envelope'
-import type { RemoteRuntimeSocketLivenessOptions } from '../../remote-runtime-socket-liveness'
+import type { RemoteRuntimeSocketLivenessOptions } from '../remote-runtime-socket-liveness'
 import type {
   RemoteRuntimeOutboundMemoryBudget,
   RemoteRuntimeOutboundQueueOptions

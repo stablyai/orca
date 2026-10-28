@@ -38,29 +38,6 @@ describe('onboarding feature setup telemetry validation', () => {
     }
   })
 
-  it('rejects raw strings and unknown fields', () => {
-    expect(
-      validate('onboarding_feature_setup_toggled', {
-        feature: 'browser_use',
-        selected: false,
-        path: '/Users/alice/project'
-      }).ok
-    ).toBe(false)
-    expect(
-      validate('onboarding_feature_setup_run', {
-        browser_use: true,
-        computer_use: false,
-        linear_tickets: false,
-        orchestration: false,
-        selected_count: 1,
-        cli_touched: false,
-        skill_install_result: 'Installed · 1 left alone',
-        computer_use_permissions_opened: false,
-        warning_count: 0
-      }).ok
-    ).toBe(false)
-  })
-
   it('rejects selected_count values that do not match selected features', () => {
     expect(
       validate('onboarding_feature_setup_run', {

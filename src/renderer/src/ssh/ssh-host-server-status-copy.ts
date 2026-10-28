@@ -9,6 +9,7 @@ import { useAppStore } from '@/store'
 import { compactIpcErrorMessage, extractIpcErrorMessage } from '@/lib/ipc-error'
 import { isWebClientLocation } from '@/lib/web-client-location'
 import { launchSessionEndedLine } from './ssh-host-launch-session-copy'
+import { automationsLeftDisabledLine } from './ssh-host-moved-automations-copy'
 import { bridgedTerminalsLine } from './ssh-host-bridged-terminals-copy'
 import { managedUpdateLine, withDetail } from './ssh-host-server-update-copy'
 import { blockedNodeDownload, nodeDownloadBlockedText } from './ssh-host-node-download-copy'
@@ -52,6 +53,9 @@ export function sshHostServerStatusLine(
   }
   if (status?.kind === 'managed' && status.linked?.length) {
     return linkedProjectsLine(status.linked)
+  }
+  if (status?.kind === 'managed' && status.automationsLeftDisabled) {
+    return automationsLeftDisabledLine(status.automationsLeftDisabled)
   }
   // A healthy managed server is the default; the card stays quiet unless something needs attention.
   if (status?.kind === 'managed' || (!status && target.orcadFence)) {

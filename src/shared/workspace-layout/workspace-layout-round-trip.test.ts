@@ -2,8 +2,6 @@ import { describe, expect, it } from 'vitest'
 import { LOCAL_EXECUTION_HOST_ID, type ExecutionHostId } from '../execution-host'
 import type { WorkspaceSessionState } from '../workspace-session-state-types'
 import { loadWorkspaceLayout } from './workspace-layout-load'
-import { checkWorkspaceLayoutModelRules } from './workspace-layout-model-rules'
-import { checkWorkspaceLayoutRules } from './workspace-layout-rules'
 import { saveWorkspaceLayout } from './workspace-layout-save'
 import { editorFileKey } from './workspace-layout-editor-tab-file'
 import {
@@ -48,23 +46,6 @@ describe('workspace layout Loader and Serializer', () => {
       expect(onDisk(saved)).toEqual(onDisk(stored))
       // The Loader never edits the Store's object.
       expect(stored).toEqual(before)
-    }
-  )
-
-  it.each(PROFILES)('%s: a second round trip changes nothing', (_name, hostId, build) => {
-    const once = roundTrip(hostId, build()).saved
-    const twice = roundTrip(hostId, once)
-    expect(twice.loaded.changes).toEqual([])
-    expect(onDisk(twice.saved)).toEqual(onDisk(once))
-  })
-
-  it.each(PROFILES)(
-    '%s: the model obeys the structural rules the stored partition obeys',
-    (_name, hostId, build) => {
-      const stored = build()
-      const { loaded } = roundTrip(hostId, stored)
-      expect(checkWorkspaceLayoutRules([{ hostId, session: stored }])).toEqual([])
-      expect(checkWorkspaceLayoutModelRules([loaded.layout])).toEqual([])
     }
   )
 

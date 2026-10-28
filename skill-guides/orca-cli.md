@@ -1,13 +1,13 @@
 ---
 name: orca-cli
 description: >-
-  Operate Orca-managed worktrees, folder contexts, terminals, repos, automations, artifacts,
-  skill sharing, worktree comments, and Orca's embedded browser through the `orca` CLI. Use
-  when the user says "$orca-cli", "Orca worktree", "child worktree", "spawn codex/claude in a
-  worktree", "read/wait/send Orca terminal", "handoff" / "handover" / "give this to another
-  agent", "Orca browser", "orca artifacts", or "share skills". Prefer it over raw git
-  worktree, ad hoc PTYs, or Computer Use when Orca state is involved. Use Computer Use only
-  when a visible window needs GUI control that a CLI, filesystem, or API cannot do.
+  Operate Orca-managed worktrees, folder contexts, terminals, repos, automations, worktree
+  comments, and Orca's embedded browser through the `orca` CLI. Use when the user says
+  "$orca-cli", "Orca worktree", "child worktree", "spawn codex/claude in a worktree",
+  "read/wait/send Orca terminal", "handoff" / "handover" / "give this to another agent", or
+  "Orca browser". Prefer it over raw git worktree, ad hoc PTYs, or Computer Use when Orca
+  state is involved. Use Computer Use only when a visible window needs GUI control that a
+  CLI, filesystem, or API cannot do.
 ---
 
 # Orca CLI
@@ -81,6 +81,7 @@ ORCA repo set-base-ref --repo id:<repoId> --ref origin/main --json
 ORCA repo search-refs --repo id:<repoId> --query main --limit 10 --json
 ORCA worktree list --repo id:<repoId> --json
 ORCA worktree ps --json
+ORCA worktree ps --agent-wait --json
 ORCA worktree current --json
 ORCA worktree show --worktree <selector> --json
 ORCA worktree create --repo id:<repoId> --name related-task --json
@@ -222,6 +223,8 @@ Terminal rules:
 - A bulk close fails when the execution host cannot confirm every PTY stopped. Treat that as `unverifiable`; do not report the processes as exited or retry against another host.
 - Use workspace Sleep, not close, when the terminals and agent sessions should resume later. `terminal stop` is legacy compatibility plumbing and should not be used in new agent workflows.
 - `terminal list --json` omits `visualLayouts` to keep the common agent payload bounded. Add `--include-visual-layouts` only when tab and pane topology is required.
+- `terminal create --title` and `terminal rename` set the tab title, which `terminal list` reports under `visualLayouts`. `terminal set-pane-title` sets one pane's title, reported as `terminals[].paneTitle`. `terminals[].title` may be the tab title or the running program's own title, which agents repaint constantly, so never match on it to re-find a terminal.
+- `terminals[].agentIdentity`, when present, is only the agent type (e.g. `codex`), not a session identity, so two Codex panes share it. To find a specific agent's terminal, join `worktree ps --json` `agents[].paneKey` (`<tabId>:<leafId>`) to the `tabId` and `leafId` of a `terminal list` row to get its handle.
 - A paired server has no window. `terminal switch --environment <name>` moves the desktop app on this machine to that server's terminal, and reports `navigated: false` when no desktop here shows that server.
 - Use `terminal read` before `terminal send` unless the next input is obvious.
 - `terminal read` returns accumulated output with escape sequences stripped, not the rendered screen, so anything that repaints (shells, progress bars, TUIs) reads as stacked fragments. Use `--screen` whenever the answer depends on what the terminal actually shows.
@@ -239,26 +242,41 @@ Terminal rules:
 - For long output, use cursor reads. After a limited tail preview, page from `oldestCursor`; after a cursor read, continue with `nextCursor` while `limited` is true and `nextCursor !== latestCursor`.
 - `--direction vertical` splits left/right. `--direction horizontal` splits top/bottom.
 
+<!-- host-capability: artifact-publishing -->
+
 ## Artifacts
 
-Artifacts publish HTML or Markdown files through the signed-in Orca account. Anyone can view
-the share URL; creating, listing, updating, and deleting need the active profile signed in.
+Artifacts publish HTML or Markdown files as public links through the signed-in Orca account.
+Use them only when the user explicitly asks to publish through Orca. A generic request for a
+public link, page, or URL does not select Orca, and a provider the user names always wins.
 
-**Publishing is off by default and only a human can turn it on.** `share` and `update` need a
-device-wide capability the user grants in the desktop app under Settings → Artifacts ("Allow
-publishing public artifact links"). It applies to every caller on the device, agent or human.
-There is no CLI or RPC way to grant it. `list`, `unshare`, and `delete` are never gated, so old
-links stay auditable and revocable.
+**Only a human can turn publishing on or off.** `share` and `update` need the device-wide
+setting under Settings → Artifacts ("Allow publishing public artifact links"); there is no
+CLI or RPC way to grant it. `list`, `unshare`, and `delete` are never gated, so old links
+stay auditable and revocable.
 
-A denied share fails with `artifact_sharing_disabled` before any upload. Do not retry; the
-answer will not change until a human acts. Tell the user to turn the setting on and re-run, or
-deliver the file locally if they decline.
+A denied share fails with `artifact_sharing_disabled` before any upload. Do not retry. Tell
+the user publishing is off; mention the setting only if they asked for Orca by name, and
+otherwise deliver the file locally or through the provider they chose.
 
-On a headless Orca server, artifact and skill-sharing commands fail with
-`sharing_unavailable_on_host`: no Orca cloud sign-in exists there. Do not retry or ask the
-user to change settings; tell them to share from the Orca desktop app instead.
+On a headless Orca server, artifact commands fail with `sharing_unavailable_on_host`: no
+Orca cloud sign-in exists there. Do not retry or ask the user to change settings; tell them
+to share from the Orca desktop app instead.
 
-The `artifacts` commands, and the separate default-off permission for publishing installed skills, are in `references/publishing.md`. Load it before publishing either kind of link; a skill folder can hold scripts, configuration, or credentials.
+The `artifacts` commands are in `references/artifacts.md`. Load it before publishing.
+
+<!-- /host-capability -->
+
+<!-- host-capability: skill-publishing -->
+
+## Skill Sharing
+
+Publish installed skills only when the user explicitly asks to share skills through Orca,
+and only the skills they named: a skill folder can hold scripts, configuration, or
+credentials. The commands and their permission are in `references/skill-sharing.md`. Load
+it before publishing.
+
+<!-- /host-capability -->
 
 ## Built-In Browser
 
@@ -298,11 +316,10 @@ Search rules:
 
 ## Conditional references
 
-This guide covers worktrees, terminals, and handoffs on its own. At a gate below, run `ORCA skills get orca-cli --reference references/<file>.md` and read only that document; `--references` lists the names. If the CLI rejects `--reference`, run `ORCA skills get orca-cli --full` once instead: it returns this guide plus every reference from the same CLI build, so read only the named one. If `--full` is rejected too, the CLI predates bundled references: use `ORCA <command> --help`, keep the rules above, and do not guess flags.
+This guide covers worktrees, terminals, and handoffs on its own. At a gate below, run `ORCA skills get orca-cli --reference references/<file>.md` and read only that document; `--references` lists the names. If the CLI rejects `--reference`, run `ORCA skills get orca-cli --full` once instead: it returns this guide plus every reference this CLI build serves on this host, so read only the named one. If `--full` is rejected too, the CLI predates bundled references: use `ORCA <command> --help`, keep the rules above, and do not guess flags.
 
 | Action gate                                                                                                     | Reference                        |
 | --------------------------------------------------------------------------------------------------------------- | -------------------------------- |
 | Driving Orca's embedded browser: navigation, snapshots, refs, tabs, concurrent pages, or `browser_*` recoveries | `references/browser.md`          |
 | Creating, editing, running, or inspecting scheduled automations                                                 | `references/automations.md`      |
-| Publishing or revoking an artifact link, or publishing installed skills                                         | `references/publishing.md`       |
 | Mobile emulator taps, gestures, typing, buttons, camera, or permissions                                         | invoke the `orca-emulator` skill |

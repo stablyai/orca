@@ -3,7 +3,6 @@ import type { GitBranchChangeEntry } from '../../../../../../shared/git-diff-com
 import type { GitStatusEntry } from '../../../../../../shared/git-status-types'
 import type { SourceControlViewMode } from '../../../../../../shared/ui-chrome-types'
 import { compareFileNames } from '../../../../../../shared/file-name-sort'
-import { compareGitStatusEntries } from '../../source-control-status-sort'
 import {
   filterSourceControlPathEntries,
   getSourceControlFileFilterState,
@@ -20,12 +19,12 @@ import {
 } from '../../source-control-tree'
 import {
   buildSourceControlDisplaySections,
-  SOURCE_CONTROL_AREAS,
+  groupSourceControlEntries,
   type SourceControlDisplaySection,
   type SourceControlDisplaySectionId,
   type SourceControlEntryGroups,
   type SourceControlDisplaySectionArea
-} from './section-order'
+} from '../../../../../../shared/source-control-section-order'
 import {
   collectListSelectionEntries,
   injectExpandedSubmoduleEntries,
@@ -99,20 +98,7 @@ export function useSourceControlFileProjection({
   sourceControlViewMode: SourceControlViewMode
   collapsedSections: Set<string>
 }): SourceControlFileProjection {
-  const grouped = useMemo(() => {
-    const groups: SourceControlEntryGroups = {
-      staged: [],
-      unstaged: [],
-      untracked: []
-    }
-    for (const entry of entries) {
-      groups[entry.area].push(entry)
-    }
-    for (const area of SOURCE_CONTROL_AREAS) {
-      groups[area].sort(compareGitStatusEntries)
-    }
-    return groups
-  }, [entries])
+  const grouped = useMemo(() => groupSourceControlEntries(entries), [entries])
 
   const fileFilterState = useMemo(() => getSourceControlFileFilterState(filterQuery), [filterQuery])
   const normalizedFilter = fileFilterState.normalizedFilter

@@ -23,7 +23,7 @@ import type { CodexBackgroundTaskTracker } from './codex-background-task-tracker
 import type { CodexSkillReport } from './codex-structured-skill-report'
 import type { CodexJournalTranslator } from './codex-structured-journal-translation'
 import type { StructuredAgentSessionLifecycleEvent } from '../native-chat/agent-session-wire/structured-agent-session-adapter'
-import type { CodexStructuredPermissionPolicy } from './codex-structured-permission-policy'
+import type { CodexStructuredPermissionPolicy } from '../../shared/codex-permission-policy'
 import type { StructuredLaunchRequest } from '../runtime/structured-agent-launch-composition'
 import type {
   AgentModelCatalogSessionAccess,

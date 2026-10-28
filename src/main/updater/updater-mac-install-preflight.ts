@@ -25,7 +25,7 @@ export abstract class UpdaterMacInstallPreflight extends UpdaterPackageRecovery 
       blockers = await recoverMacBrowserSidecars(process.execPath, blockers)
     } catch {
       this.resetQuitForUpdateState()
-      this.mainWindowRef?.webContents.send('updater:quitAndInstallAborted')
+      this.sendToMainWindow('updater:quitAndInstallAborted')
       this.sendInstallFailureStatus({
         state: 'error',
         version: pendingVersion,
@@ -47,7 +47,7 @@ export abstract class UpdaterMacInstallPreflight extends UpdaterPackageRecovery 
     if (park && park.kind === 'refused') {
       const instances = await describeMacUpdateBlockers(process.execPath, park.pids)
       this.resetQuitForUpdateState()
-      this.mainWindowRef?.webContents.send('updater:quitAndInstallAborted')
+      this.sendToMainWindow('updater:quitAndInstallAborted')
       this.sendInstallFailureStatus({
         state: 'error',
         version: pendingVersion,

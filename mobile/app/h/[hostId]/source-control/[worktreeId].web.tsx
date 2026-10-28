@@ -3,6 +3,7 @@ import { useLocalSearchParams } from 'expo-router'
 import { MobileSourceControlPanel } from '../../../../src/source-control/MobileSourceControlPanel'
 import { firstParam } from '../../../../src/navigation/route-param-reader'
 import { parseSourceControlHubTab } from '../../../../src/source-control/mobile-source-control-hub-tab'
+import { useSessionScreenHandlers } from '../../../../src/session/session-screen-handlers'
 
 // Render screen directly: native sibling imports a shell module that throws in browsers, and manifest imports every route.
 export default withWorkspaceRoute(function MobileSourceControlScreen() {
@@ -14,14 +15,21 @@ export default withWorkspaceRoute(function MobileSourceControlScreen() {
     origin?: string | string[]
     tab?: string | string[]
   }>()
+  const hostId = firstParam(params.hostId)
+  const worktreeId = firstParam(params.worktreeId)
+  const origin = firstParam(params.origin)
+  const session = useSessionScreenHandlers(hostId, worktreeId)
   return (
     <MobileSourceControlPanel
-      hostId={firstParam(params.hostId)}
-      worktreeId={firstParam(params.worktreeId)}
+      hostId={hostId}
+      worktreeId={worktreeId}
       name={firstParam(params.name)}
-      origin={firstParam(params.origin)}
+      origin={origin}
       initialTab={parseSourceControlHubTab(firstParam(params.tab))}
       embedded={false}
+      {...(origin === 'session' && session
+        ? { onFileOpenStart: session.onFileOpenStart, onOpenedFileDiff: session.onOpenedFileDiff }
+        : undefined)}
     />
   )
 })

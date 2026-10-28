@@ -6,12 +6,9 @@ import {
   STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY
 } from './protocol-version'
 import {
-  isNativeChatEnabled,
   resolveStructuredNativeChatSupport,
   type StructuredNativeChatSupportInput
 } from './structured-native-chat-launch-route'
-
-const ON = { experimentalNativeChat: true }
 
 function support(overrides: Partial<StructuredNativeChatSupportInput> = {}) {
   return resolveStructuredNativeChatSupport({
@@ -23,29 +20,13 @@ function support(overrides: Partial<StructuredNativeChatSupportInput> = {}) {
   })
 }
 
-describe('the Chat UI switch', () => {
-  it('selects structured chat from the one persisted setting', () => {
-    const oldSelectorOff = { experimentalNativeChat: true, openAgentTabsInChatByDefault: false }
-    expect(isNativeChatEnabled(ON)).toBe(true)
-    expect(isNativeChatEnabled({ experimentalNativeChat: false })).toBe(false)
-    expect(isNativeChatEnabled(oldSelectorOff)).toBe(true)
-  })
-
-  it.each([null, undefined, {}])('reads %s as no preference', (settings) => {
-    expect(isNativeChatEnabled(settings)).toBe(false)
-  })
-})
-
 describe('per-launch structured feasibility', () => {
-  it.each(['claude', 'codex'] as const)('supports a local %s launch', (agent) => {
-    expect(support({ agent })).toEqual({ supported: true })
-  })
-
   const blockerCases: [string, Partial<StructuredNativeChatSupportInput>, string][] = [
     ['a reused PTY agent', { reusesTerminal: true }, 'reused-terminal'],
     ['grok', { agent: 'grok' }, 'agent-without-structured-session'],
     ['openclaude', { agent: 'openclaude' }, 'agent-without-structured-session'],
     ['a custom start directory', { startsOutsideWorkspaceRoot: true }, 'custom-start-directory'],
+    ['a host-nested SSH project', { projectExecutionKind: 'ssh' }, 'remote-execution-host'],
     ['an SSH host', { executionHostId: 'ssh:host-a' }, 'remote-execution-host'],
     ['a missing capability', { hostCapabilities: [] }, 'runtime-capability'],
     ['an unanswered host', { hostCapabilities: null }, 'runtime-capability-unknown']

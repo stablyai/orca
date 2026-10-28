@@ -31,6 +31,8 @@ import {
 import { HistoryReader } from './history-reader'
 import type { PtyBackgroundStreamEvent } from '../providers/pty-provider-contract'
 import type { DaemonPtyRouterDataEvent, DaemonPtyRouterExitEvent } from './daemon-pty-router-events'
+import type { ReadRunningWslDistros } from './daemon-wsl-bridge-exit'
+import { WslBridgeBootIdentity } from './daemon-wsl-bridge-boot-identity'
 
 export type PendingDaemonSpawnOperation = {
   exitsBySessionId: Map<string, { code: number; incarnationId?: string }[]>
@@ -59,6 +61,10 @@ export type DaemonPtyAdapterOptions = {
   runtimeDir?: string
   packagedAppVersion?: string | null
   respawn?: (reason: DaemonRespawnReason) => Promise<void | (() => void)>
+  /** Test seam; production reads the shared, coalesced `wsl --list --running`. */
+  readRunningWslDistros?: ReadRunningWslDistros
+  /** Test seam; production reads each distro's boot id through the background-work gate. */
+  wslBridgeBootIdentity?: WslBridgeBootIdentity
 }
 
 export type DaemonRespawnReason =
@@ -79,6 +85,8 @@ export type DaemonIdleRetirementResult =
   | { state: 'unverifiable' }
 
 export abstract class DaemonPtyRuntimeState {
+  protected readonly readRunningWslDistros: ReadRunningWslDistros | undefined
+  protected readonly wslBridgeBootIdentity: WslBridgeBootIdentity
   readonly protocolVersion: number
   protected socketPath: string
   protected tokenPath: string
@@ -113,10 +121,14 @@ export abstract class DaemonPtyRuntimeState {
   protected removeEventListener: (() => void) | null = null
   protected initialCwds = new Map<string, string>()
   protected wslDistrosBySessionId = new Map<string, string>()
+  /** Bridge sessions this adapter turned into host loss; only their later close may find them gone. */
+  protected readonly hostLossSessionIds = new Set<string>()
   /** ORCA_PANE_KEY a WSL session was spawned with; its shell's folder is read by it at Sleep. */
   protected wslPaneKeysBySessionId = new Map<string, string>()
-  /** A sleeping WSL pane's shell folder, read before its final checkpoint; the checkpoint keeps it. */
-  protected sleepShellCwds = new Map<string, string>()
+  /** A WSL bridge shell's folder read before a final checkpoint (Sleep or quit); that checkpoint keeps it. */
+  protected probedShellCwds = new Map<string, string>()
+  /** Quit's whole wait for bridge shell folders; a slow distro must not hold up quitting. */
+  protected quitWslCwdBudgetMs = 1_000
   protected killedSessionTombstones = new Map<string, number>()
   protected sleepRestoreSessionIds = new Set<string>()
   protected coldRestoreCache = new ColdRestorePayloadCache(undefined, (sessionId) => {
@@ -170,7 +182,9 @@ export abstract class DaemonPtyRuntimeState {
   protected clearExitedSessionState(
     sessionId: string,
     exitCode: number,
-    expectedIncarnationId?: string
+    expectedIncarnationId?: string,
+    // Host loss leaves history unended, so the pane can still cold-restore (as after a crash).
+    { closeHistory = true }: { closeHistory?: boolean } = {}
   ): void {
     const currentIncarnationId = this.sessionIncarnations.get(sessionId)
     if (currentIncarnationId !== undefined && expectedIncarnationId !== currentIncarnationId) {
@@ -194,13 +208,14 @@ export abstract class DaemonPtyRuntimeState {
     this.nonFinalAdmissionDeniedSessionIds.delete(sessionId)
     this.lastFullCheckpointAt.delete(sessionId)
     this.stopCheckpointTimerIfIdle()
-    if (this.historyManager) {
+    if (this.historyManager && closeHistory) {
       void this.historyManager
         .closeSession(sessionId, exitCode)
         .catch((error) => console.warn('[history] closeSession failed:', sessionId, error))
     }
     this.initialCwds.delete(sessionId)
     this.wslDistrosBySessionId.delete(sessionId)
+    this.wslBridgeBootIdentity.forget(sessionId)
     this.wslPaneKeysBySessionId.delete(sessionId)
     this.sessionIncarnations.delete(sessionId)
   }
@@ -224,9 +239,14 @@ export abstract class DaemonPtyRuntimeState {
       tokenPath: opts.tokenPath,
       protocolVersion: opts.protocolVersion
     })
-    this.historyManager = opts.historyPath ? new HistoryManager(opts.historyPath) : null
+    const client = this.client
+    this.historyManager = opts.historyPath
+      ? new HistoryManager(opts.historyPath, { resizeModel: () => client.getDaemonResizeModel() })
+      : null
     this.historyReader = opts.historyPath ? new HistoryReader(opts.historyPath) : null
     this.respawnFn = opts.respawn ?? null
+    this.readRunningWslDistros = opts.readRunningWslDistros
+    this.wslBridgeBootIdentity = opts.wslBridgeBootIdentity ?? new WslBridgeBootIdentity()
     this.runtimeDir = opts.runtimeDir ?? opts.profileScope ?? null
     this.packagedAppVersion = opts.packagedAppVersion ?? null
     this.supportsCheckpoints = this.protocolVersion >= 4

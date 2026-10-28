@@ -3,7 +3,7 @@ import { terminalImageViewerSupported } from '../../terminal-image-viewer-env'
  * The executor selects surface and prompt delivery; this factory supplies the wire-shaped runtime calls. */
 
 import { randomUUID } from 'node:crypto'
-import { narrowStructuredLaunchSeedOptions } from '../../../../shared/native-chat-session-option-defaults'
+import { narrowStructuredLaunchSeedOptions } from '../../../../shared/native-chat/input/native-chat-session-option-defaults'
 import { createStructuredAgentSessionOperationId } from '../../../../shared/structured-agent-session-mutation'
 import { structuredAgentSessionTabId } from '../../../../shared/structured-agent-session-projection'
 import {
@@ -52,6 +52,7 @@ export function agentLaunchSurfaceFactory(
       worktreeId,
       agent,
       options,
+      chatOptions,
       sessionId: requested,
       tabId,
       withoutPrompt,
@@ -65,7 +66,7 @@ export function agentLaunchSurfaceFactory(
           definition?.restingOptions.acceptsKey(key)
         )
       )
-      const seeded = Object.keys(supported).length > 0 ? supported : undefined
+      const seeded = chatOptions ?? (Object.keys(supported).length > 0 ? supported : undefined)
       // A client that creates chats without starting them starts this one on its first message.
       const atRest =
         firstMessage !== undefined ||
@@ -91,6 +92,7 @@ export function agentLaunchSurfaceFactory(
         },
         worktree: `id:${worktreeId}`,
         agent,
+        ...(chatOptions?.model ? { optionsMode: 'replace-model-selection' as const } : {}),
         ...(seeded ? { options: seeded } : {}),
         ...(tabId ? { tabId } : {}),
         ...(atRest ? { atRest: true as const } : {}),
@@ -130,7 +132,7 @@ export function agentLaunchSurfaceFactory(
       viewMode,
       accountEnv
     }) => {
-      const launchPreferences = toAgentLaunchPreferences(options)
+      const launchPreferences = toAgentLaunchPreferences(options, agent)
       let promptRodeLaunchCommand = false
       const hasEarlyTab = earlyTab !== null
       if (earlyTab?.closedByUser()) {

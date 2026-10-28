@@ -1,7 +1,7 @@
 import type { PtySpawnResult } from '../../providers/pty-provider-contract'
 import { ptyIncarnationById } from './provider/ownership-state'
 import { ensureWslHookRelayForReattach } from '../../agent-hooks/wsl-hook-relay-reattach'
-import { noteWslDistrosRunning } from '../../wsl-background-distro-gate'
+import { noteWslDistroWoken, noteWslDistrosRunning } from '../../wsl-background-distro-gate'
 import {
   agentSessionOwners,
   assertSpawnReplyWasLive,
@@ -25,6 +25,8 @@ import { failPtySpawnExecute } from './spawn-execute-failure'
 import type { PtySpawnOperationState, PtySpawnExecutionFacts } from './spawn-operation-state'
 import { excludeReplacedPaneOwner } from './pane/replaced-pane-owner'
 import { attachViewWithoutOwner } from './pane/attach-only-view'
+import { wslBridgePtyPresence } from '../../agent-hooks/wsl-bridge-pty-presence'
+import { isWslTerminalSpawn } from './wsl-terminal-spawn'
 
 export async function executePtySpawn(
   ctx: PtySpawnOperationState,
@@ -246,7 +248,15 @@ export async function executePtySpawn(
       ctx.result.wslDistro === undefined ? ctx.expectedWslDistro : ctx.result.wslDistro
     if (spawnedWslDistro && !args.connectionId) {
       // A local WSL terminal is user-initiated, so background work held for this distro may run.
+      noteWslDistroWoken(spawnedWslDistro)
       noteWslDistrosRunning([spawnedWslDistro])
+      wslBridgePtyPresence.noteLive(ctx.result.id, spawnedWslDistro)
+    } else if (
+      !args.connectionId &&
+      isWslTerminalSpawn(ctx.spawnOptions.shellOverride, ctx.spawnOptions.cwd)
+    ) {
+      // A WSL shell whose distro the spawn didn't report runs in the default distro.
+      wslBridgePtyPresence.noteLive(ctx.result.id, null)
     }
     ctx.deps.runtime?.preparePtyExecutionContext?.(ctx.result.id, spawnedWslDistro)
     ctx.spawnTiming?.mark('provider_spawn')

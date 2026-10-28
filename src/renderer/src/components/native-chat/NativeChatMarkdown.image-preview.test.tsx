@@ -12,9 +12,17 @@ import {
 } from '@/components/editor/useLocalImageSrc'
 import { useAppStore } from '@/store'
 import { NativeChatMarkdown } from './NativeChatMarkdown'
-import { NativeChatMarkdownImageOwnerContext } from './native-chat-markdown-image-owner'
+import {
+  NativeChatMarkdownImageOwnerContext,
+  NativeChatMarkdownImageOwnerProvider
+} from './native-chat-markdown-image-owner'
 import { useNativeChatLinkActions } from './use-native-chat-link-actions'
-import { repoFixture, worktreeFixture } from './native-chat-workspace-test-fixtures'
+import {
+  nativeChatFanoutFixture,
+  nativeChatFanoutWorkspace,
+  repoFixture,
+  worktreeFixture
+} from './native-chat-workspace-test-fixtures'
 import type * as TerminalFileOpenRouting from '@/components/terminal-pane/terminal-file-open-routing'
 import type * as HttpLinkRouting from '@/lib/http-link-routing'
 import { getDefaultSettings } from '../../../../shared/constants'
@@ -156,6 +164,108 @@ afterEach(() => {
 })
 
 describe('native chat Markdown image preview', () => {
+  it('routes image reads and actions through the selected owner provider across owner changes and removal', async () => {
+    const original = useAppStore.getState()
+    const fixture = nativeChatFanoutFixture(1, 1, 0)
+    const workspaceId = nativeChatFanoutWorkspace(0)
+    const folders = (owner: string, path: string) =>
+      fixture.folderWorkspaces.map((folder) => ({
+        ...folder,
+        executionHostId: `runtime:${owner}` as const,
+        folderPath: path
+      }))
+    useAppStore.setState({
+      ...useAppStore.getInitialState(),
+      ...fixture,
+      folderWorkspaces: folders('markdown-first', '/remote/first'),
+      activeWorktreeId: null,
+      activeWorkspaceExecutionHostId: null,
+      runtimeEnvironmentCatalogHydrated: true
+    })
+    const view = render(
+      <TooltipProvider>
+        <NativeChatMarkdownImageOwnerProvider tabId="chat-0" isVisible sessionId="session-0">
+          <NativeChatMarkdown content="![Chart](chart.png)" variant="document" allowFileUriLinks />
+        </NativeChatMarkdownImageOwnerProvider>
+      </TooltipProvider>
+    )
+    try {
+      await screen.findByRole('img', { name: 'Chart' })
+      expect(mocks.readRuntimeFilePreview).toHaveBeenCalledExactlyOnceWith(
+        expect.objectContaining({
+          target: { kind: 'environment', environmentId: 'markdown-first' },
+          worktreeId: workspaceId,
+          worktreePath: '/remote/first'
+        }),
+        '/remote/first/chart.png',
+        { kind: 'chat-image' }
+      )
+      fireEvent.click(screen.getByRole('button', { name: 'View image: Chart' }), {
+        ctrlKey: true,
+        metaKey: true
+      })
+      expect(mocks.openDetectedFilePath).toHaveBeenLastCalledWith(
+        '/remote/first/chart.png',
+        null,
+        null,
+        expect.objectContaining({ worktreeId: workspaceId, runtimeEnvironmentId: 'markdown-first' })
+      )
+
+      act(() =>
+        useAppStore.setState({ folderWorkspaces: folders('markdown-next', '/remote/next') })
+      )
+      await waitFor(() =>
+        expect(screen.getByRole('img', { name: 'Chart' })).toHaveAttribute('src', 'blob:image-2')
+      )
+      expect(mocks.readRuntimeFilePreview).toHaveBeenLastCalledWith(
+        expect.objectContaining({
+          target: { kind: 'environment', environmentId: 'markdown-next' },
+          worktreePath: '/remote/next'
+        }),
+        '/remote/next/chart.png',
+        { kind: 'chat-image' }
+      )
+      fireEvent.click(screen.getByRole('button', { name: 'View image: Chart' }), {
+        ctrlKey: true,
+        metaKey: true
+      })
+      expect(mocks.openDetectedFilePath).toHaveBeenLastCalledWith(
+        '/remote/next/chart.png',
+        null,
+        null,
+        expect.objectContaining({
+          worktreeId: workspaceId,
+          worktreePath: '/remote/next',
+          runtimeEnvironmentId: 'markdown-next'
+        })
+      )
+      mocks.openDetectedFilePath.mockClear()
+      await act(async () => useAppStore.setState({ unifiedTabsByWorktree: {} }))
+      expect(screen.queryByRole('img', { name: 'Chart' })).toBeNull()
+      const unavailableTrigger = screen.getByRole('button', { name: 'View image: Chart' })
+      expect(unavailableTrigger).toHaveTextContent('Chart')
+      expect(screen.queryByRole('dialog')).toBeNull()
+      expect(mocks.readRuntimeFilePreview).toHaveBeenCalledTimes(2)
+      fireEvent.click(unavailableTrigger, {
+        ctrlKey: true,
+        metaKey: true
+      })
+      expect(screen.queryByRole('dialog')).toBeNull()
+      expect(mocks.openDetectedFilePath).not.toHaveBeenCalled()
+      expect(mocks.readRuntimeFilePreview).toHaveBeenCalledTimes(2)
+      fireEvent.click(unavailableTrigger)
+      const unavailableDialog = screen.getByRole('dialog', { name: 'Chart' })
+      expect(within(unavailableDialog).getByRole('status')).toHaveTextContent('Preview unavailable')
+      expect(within(unavailableDialog).queryByRole('img')).toBeNull()
+      expect(within(unavailableDialog).queryByRole('button', { name: 'File actions' })).toBeNull()
+      expect(mocks.openDetectedFilePath).not.toHaveBeenCalled()
+      expect(mocks.readRuntimeFilePreview).toHaveBeenCalledTimes(2)
+    } finally {
+      view.unmount()
+      useAppStore.setState(original, true)
+    }
+  })
+
   it.each([
     ['chart%23v2.png', '/repo/worktree/chart#v2.png'],
     ['chart%3Fv2.png', '/repo/worktree/chart?v2.png'],
@@ -613,6 +723,87 @@ describe('native chat Markdown image preview', () => {
     expect(mocks.readRuntimeFilePreview).toHaveBeenCalledOnce()
   })
 
+  it.each(['inline', 'reference'])(
+    'loads %s file: images and links on the chat host with literal paths and line locations (#30774)',
+    async (syntax) => {
+      useAppStore.setState({
+        settings: { ...getDefaultSettings('/tmp'), terminalLinkClickBehavior: 'open' }
+      })
+      const owner: ImageOwner = {
+        ...localOwner,
+        runtimeContext: {
+          ...localOwner.runtimeContext,
+          target: { kind: 'environment', environmentId: 'remote-a' }
+        },
+        fileLinkContext: {
+          ...localOwner.fileLinkContext,
+          runtimeEnvironmentId: 'remote-a'
+        }
+      }
+      render(
+        <Transcript
+          owner={owner}
+          content={
+            syntax === 'inline'
+              ? [
+                  '![Chart](file:///srv/out/report.png%3A7)',
+                  '[**![Thumb](file:///srv/out/thumb.png)**](https://example.com/full)',
+                  '[Image source](file:///srv/out/report.png%3A7)',
+                  '[Download PDF](file:///srv/out/report.pdf#L9)'
+                ].join('\n\n')
+              : [
+                  '![Chart][chart]',
+                  '[**![Thumb][thumb]**](https://example.com/full)',
+                  '[Image source][chart]',
+                  '[Download PDF][report]',
+                  '[chart]: file:///srv/out/report.png%3A7',
+                  '[thumb]: file:///srv/out/thumb.png',
+                  '[report]: file:///srv/out/report.pdf#L9'
+                ].join('\n\n')
+          }
+        />
+      )
+
+      expect(
+        screen
+          .getByRole('button', { name: 'View image: Thumb' })
+          .closest('[data-native-chat-link-href]')
+      ).toHaveAttribute('data-native-chat-link-href', 'https://example.com/full')
+      fireEvent.click(screen.getByRole('button', { name: 'View image: Chart' }))
+      expect(
+        await within(screen.getByRole('dialog', { name: 'Chart' })).findByRole('img', {
+          name: 'Chart'
+        })
+      ).toHaveAttribute('src', expect.stringMatching(/^blob:/))
+      for (const path of ['/srv/out/report.png:7', '/srv/out/thumb.png']) {
+        expect(mocks.readRuntimeFilePreview).toHaveBeenCalledWith(
+          expect.objectContaining({
+            target: { kind: 'environment', environmentId: 'remote-a' }
+          }),
+          path,
+          { kind: 'chat-image' }
+        )
+      }
+      fireEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Close' }))
+      fireEvent.click(screen.getByRole('link', { name: 'Image source' }))
+      expect(mocks.openDetectedFilePath).toHaveBeenCalledWith(
+        '/srv/out/report.png',
+        7,
+        null,
+        expect.objectContaining({ runtimeEnvironmentId: 'remote-a', sourceTabId: 'tab-1' })
+      )
+      fireEvent.click(screen.getByRole('link', { name: 'Download PDF' }))
+      expect(mocks.openDetectedFilePath).toHaveBeenCalledWith(
+        '/srv/out/report.pdf',
+        9,
+        null,
+        expect.objectContaining({
+          runtimeEnvironmentId: 'remote-a'
+        })
+      )
+    }
+  )
+
   it('closes the preview when the owning chat becomes hidden', () => {
     const { rerender } = render(<Transcript />)
     fireEvent.click(screen.getByRole('button', { name: 'View image: Chart' }))
@@ -628,6 +819,12 @@ describe('native chat Markdown image preview', () => {
     )
     expect(screen.queryByRole('img')).toBeNull()
     expect(screen.getByRole('link', { name: 'Chart' })).toBeInTheDocument()
+    rerender(<Transcript variant="compact" content="![Chart](file:///srv/out/chart.png)" />)
+    expect(screen.queryByRole('img')).toBeNull()
+    expect(screen.getByRole('link', { name: 'Chart' })).toHaveAttribute(
+      'href',
+      '#orca-native-chat-file-path=%2Fsrv%2Fout%2Fchart.png'
+    )
     rerender(
       <Transcript content="![Attachment](https://github.com/user-attachments/assets/secret)" />
     )

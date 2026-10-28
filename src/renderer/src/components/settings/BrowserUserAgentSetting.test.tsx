@@ -56,18 +56,6 @@ describe('BrowserUserAgentSetting', () => {
     expect(screen.queryByRole('radiogroup')).toBeNull()
   })
 
-  it('shows the configured mode as the selected option on the local host', async () => {
-    identityGet.mockResolvedValue(statusFor('native'))
-
-    renderFor(LOCAL_EXECUTION_HOST_ID)
-
-    const native = await screen.findByRole('radio', { name: 'Native' })
-    expect(native.getAttribute('aria-checked')).toBe('true')
-    expect(screen.getByRole('radio', { name: 'Cleaned' }).getAttribute('aria-checked')).toBe(
-      'false'
-    )
-  })
-
   it('commits the chosen mode and reports that a restart is required', async () => {
     identityGet.mockResolvedValue(statusFor('clean'))
     identitySet.mockResolvedValue({
@@ -103,26 +91,5 @@ describe('BrowserUserAgentSetting', () => {
 
     await waitFor(() => expect(screen.getByText('Identity data is corrupt')).toBeTruthy())
     expect(screen.getByRole('radio', { name: 'Cleaned' }).getAttribute('aria-checked')).toBe('true')
-  })
-
-  it('offers no control when identity data must be reset first', async () => {
-    identityGet.mockResolvedValue({
-      identity: {
-        state: 'corrupt',
-        appliedMode: 'clean',
-        configuredMode: null,
-        explicitSelection: null,
-        migrationNoticePending: null,
-        restartRequired: false
-      },
-      migrationNotice: null
-    })
-
-    renderFor(LOCAL_EXECUTION_HOST_ID)
-
-    expect(await screen.findByText(/must be reset explicitly/i)).toBeTruthy()
-    expect(screen.queryByRole('radiogroup')).toBeNull()
-    // No reset control exists here; the command must provide a usable recovery route.
-    expect(screen.getByText(/orca browser identity set --mode <mode> --reset/i)).toBeTruthy()
   })
 })

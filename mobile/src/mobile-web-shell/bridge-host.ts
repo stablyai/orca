@@ -10,6 +10,7 @@ import {
   BRIDGE_RPC_ENVELOPE_GRANT,
   readBridgeClientMessage,
   type BridgeClientMessage,
+  type BridgeColorScheme,
   type BridgeConnectionSnapshot,
   type BridgeInitRoute
 } from './bridge/bridge-envelope'
@@ -31,6 +32,7 @@ export type BridgeHost = {
   publishRoute: (next: BridgeInitRoute) => void
   publishSafeAreaInsets: (next: BridgeSafeAreaInsets) => void
   publishKeyboardInset: (next: number) => void
+  publishColorScheme: (next: BridgeColorScheme) => void
   // False leaves Back to native navigation, including pages predating this frame.
   sendBack: () => boolean
   // Transfer the session’s Back state on client-driven host rebuild; the mounted page never reclaims it. Ending sessions simply discard it.
@@ -63,7 +65,8 @@ export function createBridgeHost(options: BridgeHostOptions): BridgeHost {
     },
     onRefused: (issue) => options.onDiagnostic?.({ kind: 'route-update-refused', issue }),
     ...(options.safeAreaInsets === undefined ? {} : { safeAreaInsets: options.safeAreaInsets }),
-    ...(options.keyboardInset === undefined ? {} : { keyboardInset: options.keyboardInset })
+    ...(options.keyboardInset === undefined ? {} : { keyboardInset: options.keyboardInset }),
+    ...(options.colorScheme === undefined ? {} : { colorScheme: options.colorScheme })
   })
   let closed = false
   // Close ends document service until the next ready. Native delivery preserves frame order, so stragglers remain between those markers without an epoch.
@@ -119,6 +122,7 @@ export function createBridgeHost(options: BridgeHostOptions): BridgeHost {
           route,
           safeAreaInsets: routes.safeAreaInsets(),
           keyboardInset: routes.keyboardInset(),
+          colorScheme: routes.colorScheme(),
           pageRoutes,
           ...(parsedRouteGrants?.success === true
             ? { pageRouteGrants: parsedRouteGrants.data }
@@ -279,6 +283,9 @@ export function createBridgeHost(options: BridgeHostOptions): BridgeHost {
     },
     publishKeyboardInset: (next) => {
       routes.publishKeyboardInset(next, deliverable())
+    },
+    publishColorScheme: (next) => {
+      routes.publishColorScheme(next, deliverable())
     },
     sendBack: back.send,
     readSessionBack: back.read,

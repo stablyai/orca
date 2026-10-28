@@ -114,7 +114,7 @@ const onLocalLogTailChanged = vi.fn(() => () => {})
 const fsApi = { onLocalLogTailChanged }
 let latestFileContents: Record<string, FileContent> = {}
 let latestDiffContents: Record<string, DiffContent> = {}
-let latestReloadContent: (file: OpenFile) => void = () => {}
+let latestReloadContent: (file: OpenFile, options?: { wakeWslDistro?: boolean }) => void = () => {}
 const EMPTY_GIT_STATUS_BY_WORKTREE: Record<string, GitStatusEntry[]> = {}
 
 function HookProbe({
@@ -182,6 +182,30 @@ describe('useEditorPanelContentState', () => {
     container?.remove()
     container = null
     root = null
+  })
+
+  it('lets the active tab load and its Retry start a stopped WSL distro, but not other reloads', async () => {
+    const activeFile = createOpenFile()
+    mocks.readRuntimeFileContent.mockResolvedValue({ content: 'text', isBinary: false })
+    container = document.createElement('div')
+    document.body.appendChild(container)
+    root = createRoot(container)
+    await act(async () => {
+      root?.render(<HookProbe activeFile={activeFile} openFiles={[activeFile]} />)
+    })
+    await vi.waitFor(() => expect(latestFileContents[activeFile.id]?.content).toBe('text'))
+    expect(mocks.readRuntimeFileContent).toHaveBeenLastCalledWith(
+      expect.objectContaining({ wakeWslDistro: true })
+    )
+
+    await act(async () => latestReloadContent(activeFile))
+    expect(mocks.readRuntimeFileContent).toHaveBeenLastCalledWith(
+      expect.not.objectContaining({ wakeWslDistro: true })
+    )
+    await act(async () => latestReloadContent(activeFile, { wakeWslDistro: true }))
+    expect(mocks.readRuntimeFileContent).toHaveBeenLastCalledWith(
+      expect.objectContaining({ wakeWslDistro: true })
+    )
   })
 
   it('loads folder workspace files through the path-specific SSH connection', async () => {
@@ -306,37 +330,6 @@ describe('useEditorPanelContentState', () => {
         access: { kind: 'user-file' }
       })
     )
-  })
-
-  it('rejects an unstamped external tab in a remote runtime workspace', async () => {
-    const activeFile = createOpenFile({
-      id: '/work/reports/audit.md',
-      filePath: '/work/reports/audit.md',
-      relativePath: '/work/reports/audit.md',
-      worktreeId: 'repo-runtime::/work/demo-project'
-    })
-    mocks.getConnectionIdForFile.mockReturnValue(undefined)
-    mocks.getState.mockReturnValue({
-      ...createTestStore().getState(),
-      settings: { activeRuntimeEnvironmentId: 'runtime-1' },
-      openFiles: [],
-      setLastKnownDiskSignature: vi.fn()
-    })
-
-    container = document.createElement('div')
-    document.body.appendChild(container)
-    root = createRoot(container)
-
-    await act(async () => {
-      root?.render(<HookProbe activeFile={activeFile} openFiles={[activeFile]} />)
-    })
-
-    await vi.waitFor(() =>
-      expect(latestFileContents[activeFile.id]?.loadError).toBe(
-        'External local files are not available for remote workspaces.'
-      )
-    )
-    expect(mocks.readRuntimeFileContent).not.toHaveBeenCalled()
   })
 
   it('rejects an external SSH-host tab after its target owner changes', async () => {

@@ -15,7 +15,7 @@ function stagedMediaFile(extension: string): FsFile {
   return new FsFile(Paths.cache, `orca-media-${Date.now()}-${Math.random()}.${extension}`)
 }
 
-function discardUnreturnedMediaFile(file: FsFile): void {
+export function discardUnreturnedMediaFile(file: FsFile): void {
   try {
     file.delete()
   } catch {

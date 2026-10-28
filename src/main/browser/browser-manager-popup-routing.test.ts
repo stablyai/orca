@@ -83,7 +83,8 @@ describe('browserManager', () => {
       on: guestOnMock,
       prependListener: vi.fn(),
       off: guestOffMock,
-      openDevTools: guestOpenDevToolsMock
+      openDevTools: guestOpenDevToolsMock,
+      getURL: vi.fn(() => 'https://example.com')
     }
     webContentsFromIdMock.mockReturnValue(guest)
 
@@ -651,7 +652,7 @@ describe('browserManager', () => {
     expect(returned).toBe(popupContents)
     // Custom-created children skip did-create-window, so attach their guest policies directly.
     expect(popupContents.setWindowOpenHandler).toHaveBeenCalledTimes(1)
-    expect(popupContents.setBackgroundThrottling).toHaveBeenCalledWith(false)
+    expect(popupContents.setBackgroundThrottling).not.toHaveBeenCalled()
     expect(popupContents.on.mock.calls.some(([event]) => event === 'dom-ready')).toBe(false)
     expect(rendererSendMock).toHaveBeenCalledWith('browser:popup', {
       browserPageId: 'browser-1',
@@ -689,7 +690,8 @@ describe('browserManager', () => {
       on: guestOnMock,
       prependListener: vi.fn(),
       off: guestOffMock,
-      openDevTools: guestOpenDevToolsMock
+      openDevTools: guestOpenDevToolsMock,
+      getURL: vi.fn(() => 'https://example.com')
     }
     webContentsFromIdMock.mockImplementation((id: number) => {
       if (id === guest.id) {

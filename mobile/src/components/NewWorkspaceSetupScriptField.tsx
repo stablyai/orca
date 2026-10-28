@@ -1,6 +1,7 @@
 import { Pressable, Switch, Text, View } from 'react-native'
 import type { WorkspaceCreateSetupDecision } from '../tasks/workspace-create-params'
 import { colors } from '../theme/mobile-theme'
+import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import { newWorktreeFormStyles as styles } from './new-worktree-form-styles'
 import type { SetupRunPolicy } from './new-worktree-modal-types'
 
@@ -21,6 +22,7 @@ export function NewWorkspaceSetupScriptField({
   onDecisionChange: (decision: Exclude<WorkspaceCreateSetupDecision, 'inherit'>) => void
   onRunSetupChange: (run: boolean) => void
 }) {
+  useMobileColorScheme()
   return (
     <View style={styles.field}>
       <View style={styles.setupHeader}>

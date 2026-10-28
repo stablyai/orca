@@ -5,6 +5,7 @@ import { interruptedLocalWorktreeRemovalJob } from '../../../runtime/runtime-int
 import { invalidateAuthorizedRootsCacheForRepo } from '../../registered-worktree-roots-scoped-invalidation'
 import type { RemoveWorktreeArgs } from '../ipc-context-schemas'
 import type { WorktreeIpcContext } from '../worktree-ipc-context'
+import type { WorktreeRemovalRecord } from '../../../worktree-removal-records'
 import {
   preserveBranchHeadFallback,
   rememberPreservedBranchCleanupTarget
@@ -21,7 +22,7 @@ export function retryFailedLocalWorktreeRemoval(
   removalHostId: ExecutionHostId
 ): Promise<RemoveWorktreeResult> | undefined {
   const { store, runtime, options } = context
-  return retryFailedWorktreeRemoval(args.worktreeId, removalHostId, (record) =>
+  const jobFor = (record: WorktreeRemovalRecord) =>
     interruptedLocalWorktreeRemovalJob(record, {
       store,
       acquireWatcherRemoval: (path) => runtime.acquireFileWatcherRemoval(path),
@@ -55,5 +56,5 @@ export function retryFailedLocalWorktreeRemoval(
         options?.onWorktreeLifecycle?.({ kind: 'removed', worktreeId, path: worktreePath }),
       publish: (repoId) => runtime.publishWorktreeRemovalChange(repoId)
     })
-  )
+  return retryFailedWorktreeRemoval(args.worktreeId, removalHostId, jobFor, args.force ?? false)
 }

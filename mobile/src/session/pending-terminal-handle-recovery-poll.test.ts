@@ -328,6 +328,16 @@ describe('bounded pending-handle reconciliation cadence', () => {
     expect(harness.requestTimes).toHaveLength(PENDING_TERMINAL_HANDLE_RECOVERY_ATTEMPTS + 7)
   })
 
+  it('parks the pending-terminal budget even when another recovery need is active from the start', async () => {
+    const harness = makeHarness()
+    harness.setOtherRecoveryNeeded(true)
+    await mount(harness)
+
+    await advance(12_000)
+
+    expect(harness.parkedContexts).toContain('terminal-a')
+  })
+
   it('resets after foregrounding, reconnecting, and explicit retry', async () => {
     const harness = makeHarness()
     await mount(harness)

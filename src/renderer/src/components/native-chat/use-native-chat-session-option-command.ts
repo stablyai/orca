@@ -11,7 +11,7 @@ import {
   createClaudeModelSwitchConfirmationObserver,
   type ClaudeModelSwitchConfirmationObserver
 } from './claude-model-switch-confirmation'
-import type { NativeChatSessionOptionDispatchCommand } from './native-chat-session-option-command-dispatch'
+import type { NativeChatSessionOptionDispatchCommand } from '../../../../shared/native-chat-session-option-dispatch'
 
 export function useNativeChatSessionOptionCommand(args: {
   agent: AgentType

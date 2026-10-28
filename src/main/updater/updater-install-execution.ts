@@ -16,6 +16,10 @@ import { requestServeUpdateHandoff, failServeUpdateHandoff } from '../serve-upda
 import { UpdaterMacInstallPreflight } from './updater-mac-install-preflight'
 import { prepareThisProcessShipItStaging } from './shipit-leftover-recovery'
 import { MAC_DEFERRED_STAGING_TIMEOUT_MS } from './updater-state'
+import { isAnyWslMoveRunning } from '../persistence/moving-wsl-projects/wsl-move-running-moves'
+
+export const WSL_MOVE_INSTALL_HELD_MESSAGE =
+  'A project is moving to its WSL host. Install the update once the move finishes.'
 
 export abstract class UpdaterInstallExecution extends UpdaterMacInstallPreflight {
   protected async performQuitAndInstall(): Promise<void> {
@@ -40,7 +44,7 @@ export abstract class UpdaterInstallExecution extends UpdaterMacInstallPreflight
         version: pendingVersion || null
       })
       // The preload prepares renderer state before invoking; explicitly release it when main refuses.
-      this.mainWindowRef?.webContents.send('updater:quitAndInstallAborted')
+      this.sendToMainWindow('updater:quitAndInstallAborted')
       return
     }
     if (linuxPackageType === 'unusable') {
@@ -50,10 +54,24 @@ export abstract class UpdaterInstallExecution extends UpdaterMacInstallPreflight
         { level: 'warn', message: 'Linux package marker is unusable; native install blocked' }
       )
       // The preload prepares renderer state before invoking; release it when the marker is unknown.
-      this.mainWindowRef?.webContents.send('updater:quitAndInstallAborted')
+      this.sendToMainWindow('updater:quitAndInstallAborted')
       this.sendInstallFailureStatus({
         state: 'error',
         message: LINUX_PACKAGE_MARKER_UNUSABLE_MESSAGE,
+        ...(pendingVersion ? { version: pendingVersion } : {})
+      })
+      return
+    }
+    if (isAnyWslMoveRunning()) {
+      // Quitting would interrupt the move; it recovers, but the projects stay read-only until then.
+      recordUpdaterLifecycle('quit_and_install_held_for_wsl_move', {
+        version: pendingVersion || null
+      })
+      this.sendToMainWindow('updater:quitAndInstallAborted')
+      this.sendInstallFailureStatus({
+        state: 'error',
+        message: WSL_MOVE_INSTALL_HELD_MESSAGE,
+        retryAction: 'install',
         ...(pendingVersion ? { version: pendingVersion } : {})
       })
       return

@@ -77,10 +77,11 @@ function popupContents(opener: Pick<Electron.WebFrameMain, 'frameTreeNodeId'> | 
 const guestSession = { marker: 'synthetic-opener-session' }
 const rendererSendMock = vi.fn()
 
-function attachClickedGuest(): WindowOpenHandler {
+function attachClickedGuest(pageUrl = 'https://app.example.com/'): WindowOpenHandler {
   const guest = {
     id: 2200,
     session: guestSession,
+    getURL: vi.fn(() => pageUrl),
     isDestroyed: vi.fn(() => false),
     isCurrentlyAudible: vi.fn(() => false),
     getType: vi.fn(() => 'webview'),
@@ -230,6 +231,40 @@ describe('tab-shaped OAuth opens without an opener', () => {
     expect(rendererSendMock).toHaveBeenCalledWith('browser:popup', {
       browserPageId: 'browser-1',
       origin: 'https://app.example.com',
+      action: 'blocked'
+    })
+  })
+})
+
+describe('target=_blank links to local files', () => {
+  const link = { frameName: '', features: '', disposition: 'foreground-tab' }
+
+  beforeEach(() => {
+    resetBrowserManagerMocks(browserMocks)
+    resetBrowserManagerState()
+    rendererSendMock.mockReset()
+  })
+
+  it('opens them in an Orca tab from a local page', () => {
+    const handler = attachClickedGuest('file:///tmp/site/index.html')
+
+    expect(handler({ url: 'file:///tmp/site/detail.html#pain', ...link })).toEqual({
+      action: 'deny'
+    })
+    expect(routedTabs()).toEqual([
+      { browserPageId: 'browser-1', url: 'file:///tmp/site/detail.html#pain' }
+    ])
+  })
+
+  it('keeps web pages out of the filesystem', () => {
+    const handler = attachClickedGuest('https://example.com/')
+
+    expect(handler({ url: 'file:///etc/passwd', ...link })).toEqual({ action: 'deny' })
+    expect(routedTabs()).toEqual([])
+    expect(openPopupWithOriginBarMock).not.toHaveBeenCalled()
+    expect(rendererSendMock).toHaveBeenCalledWith('browser:popup', {
+      browserPageId: 'browser-1',
+      origin: 'null',
       action: 'blocked'
     })
   })

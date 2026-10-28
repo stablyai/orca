@@ -14,7 +14,6 @@ import type { OrcaRuntimeService } from '../runtime/orca-runtime'
 import type { RateLimitService } from '../rate-limits/service'
 import type { OrcaRuntimeRpcServer } from '../runtime/runtime-rpc'
 import type { DesktopRelayService } from '../runtime/mobile-cloud-relay/desktop-relay-service'
-import type { ConnectorCloud } from '../connector-cloud/connector-cloud'
 import type { DesktopRelayServiceInstaller } from '../runtime/mobile-cloud-relay/desktop-relay-service-installer'
 import type { DesktopPushService } from '../runtime/push/desktop-push-service'
 import type { StarNagService } from '../star-nag/service'
@@ -68,6 +67,8 @@ function createInitialProfileStateAdmission(): ProfileStateRuntimeAdmission | un
 /** Mutable composition-root state shared by startup, window, serve, and quit phases. */
 export const mainProcessState = {
   mainWindow: null as BrowserWindow | null,
+  // Never cleared: closing the last main window still quits on Windows/Linux.
+  hasOpenedMainWindow: false,
   /** User quit bypasses running-process confirmation during close. */
   isQuitting: false,
   store: null as Store | null,
@@ -92,8 +93,6 @@ export const mainProcessState = {
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: widens the null slot to the installer assigned by main-process-relay-startup.
   desktopRelayInstaller: null as DesktopRelayServiceInstaller | null,
   desktopPushService: null as DesktopPushService | null,
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: widens the null slot to the connector assigned by main-process-connector-startup.
-  connectorCloud: null as ConnectorCloud | null,
   desktopRelayStatus: 'offline' as RelayBrokerStatus,
   desktopRelayCellUrl: undefined as string | undefined,
   pendingUnpairedDeviceAuthFailure: false,
@@ -121,6 +120,8 @@ export const mainProcessState = {
   recoveryReloadInFlight: createWebContentsTimedFlag(),
   // Retain Settings clicks until the renderer pulls after listener mount.
   pendingOpenSettings: createWebContentsTimedFlag(),
+  // Why: a confirmed Quit Completely can open the window; its renderer pulls this one-shot on mount.
+  pendingQuitAndStopAllSessions: createWebContentsTimedFlag(),
   skillShareDeepLinks: new SkillShareDeepLinkState(),
   // Buffer OS Open With before any renderer listener exists.
   osOpenedDocuments: new OsOpenedDocumentState(),
@@ -129,6 +130,9 @@ export const mainProcessState = {
   firstWindowStartupServicesReady: Promise.resolve(),
   // Publish proxy readiness for fetchers; window creation can proceed behind the request guard.
   initialProxyApplicationReady: Promise.resolve(),
+  // Why awaited before runtime services: the first window's session and UI reads must see a
+  // committed WSL move's rewrite. Bounded, never rejects, and resolved at once with the gate off.
+  wslMoveStartupRewriteReady: Promise.resolve(),
   // Parallel i18n gates the translated failure dialog only; phase failures are handled by readiness composition.
   mainProcessI18nReady: Promise.resolve(),
   managedWslCliReconciliationReady: Promise.resolve(),

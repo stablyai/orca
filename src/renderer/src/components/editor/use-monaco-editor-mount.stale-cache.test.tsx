@@ -94,7 +94,8 @@ function setupMount() {
     gutterMenu: {
       setGutterMenuOpen: vi.fn(),
       setGutterMenuPoint: vi.fn(),
-      setGutterMenuLine: vi.fn()
+      setGutterMenuLine: vi.fn(),
+      setGutterMenuSelection: vi.fn()
     }
   }
   const modelText = { value: 'B' }

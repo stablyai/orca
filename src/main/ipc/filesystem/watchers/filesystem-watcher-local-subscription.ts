@@ -180,8 +180,14 @@ async function subscribeWhileRemovalAllowed(
     rootPath,
     worktreePath,
     cancelToken,
-    (listeners) =>
-      scheduleLocalCapacityRetry(rootKey, worktreePath, listeners, subscribeLocalWatcher)
+    (listeners, waitForRetry) =>
+      scheduleLocalCapacityRetry(
+        rootKey,
+        worktreePath,
+        listeners,
+        subscribeLocalWatcher,
+        waitForRetry
+      )
   )
   watcherLifecycleState.pendingLocalInstallPromises.set(rootKey, installPromise)
   try {

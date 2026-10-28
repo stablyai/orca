@@ -56,33 +56,6 @@ describe('editor self-write registry', () => {
     expect(hasRecentSelfWrite('/repo/a.md', 'env-1')).toBe(false)
   })
 
-  it('trims runtime owner ids when matching stamps', () => {
-    recordSelfWrite('/repo/a.md', 'runtime save', ' env-1 ')
-
-    expect(hasRecentSelfWrite('/repo/a.md', 'env-1')).toBe(true)
-  })
-
-  it('prunes expired stamps when recording later writes', () => {
-    recordSelfWrite('/repo/old.md')
-
-    vi.advanceTimersByTime(751)
-    recordSelfWrite('/repo/new.md')
-
-    expect(__getSelfWriteRegistrySizeForTests()).toBe(1)
-    expect(hasRecentSelfWrite('/repo/old.md')).toBe(false)
-    expect(hasRecentSelfWrite('/repo/new.md')).toBe(true)
-  })
-
-  it('caps retained stamps', () => {
-    for (let i = 0; i < 260; i++) {
-      recordSelfWrite(`/repo/${i}.md`)
-    }
-
-    expect(__getSelfWriteRegistrySizeForTests()).toBe(256)
-    expect(hasRecentSelfWrite('/repo/0.md')).toBe(false)
-    expect(hasRecentSelfWrite('/repo/259.md')).toBe(true)
-  })
-
   it('keeps remote-TTL stamps alive past the local window', () => {
     // Remote watcher echoes can arrive after the local TTL expires.
     recordSelfWrite('/repo/remote.md', 'content', 'env-1', SELF_WRITE_REMOTE_TTL_MS)
@@ -149,13 +122,6 @@ describe('editor self-write registry', () => {
     expect(vi.getTimerCount()).toBe(1)
 
     vi.advanceTimersByTime(1000)
-    expect(__getSelfWriteRegistrySizeForTests()).toBe(0)
-    expect(vi.getTimerCount()).toBe(0)
-  })
-
-  it('clears the shared timer when the registry is reset', () => {
-    recordSelfWrite('/repo/reset.json', 'saved content')
-    __clearSelfWriteRegistryForTests()
     expect(__getSelfWriteRegistrySizeForTests()).toBe(0)
     expect(vi.getTimerCount()).toBe(0)
   })

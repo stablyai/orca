@@ -171,6 +171,9 @@ describe('importCookiesFromBrowser — undecryptable cookies', () => {
   }
 
   it('does not attempt v11 CBC decryption without a keyring, even with valid wrong-key padding', async () => {
+    runProcessSyncMock.mockImplementation(() => {
+      throw Object.assign(new Error('spawn secret-tool failed'), { code: 'ENOENT' })
+    })
     const sourceCookiesPath = seedProfile(
       encryptLinuxChromiumCookie('wrong-key-garbage', 'peanuts', 'v11')
     )
@@ -186,13 +189,14 @@ describe('importCookiesFromBrowser — undecryptable cookies', () => {
     expect(result.summary.warning).toEqual({
       code: 'cookies-undecryptable',
       failedCookies: 1,
-      reason: 'linux-keyring-unavailable'
+      reason: 'linux-keyring-unavailable',
+      keyringFailure: { cause: 'secret-tool-missing', browser: 'Google Chrome' }
     })
     expect(cookiesSetMock).not.toHaveBeenCalled()
   })
 
   it.each([0, 1])(
-    'preserves an unreadable family with %i unrelated cookies imported',
+    'imports readable siblings alongside %i unrelated cookies despite an unreadable row',
     async (unrelatedCount) => {
       const sourceCookiesPath = join(tmpDir, 'Chrome', 'Default', 'Network', 'Cookies')
       const sourceDb = createChromiumCookieTestDatabase(sourceCookiesPath, [
@@ -236,21 +240,21 @@ describe('importCookiesFromBrowser — undecryptable cookies', () => {
       expect(clearDataMock).not.toHaveBeenCalled()
       expect(cookiesRemoveMock).not.toHaveBeenCalledWith(expect.any(String), 'live-session')
       expect(targetJar).toEqual([expect.objectContaining({ name: 'live-session' })])
-      expect(writeCookieIdentityMock).toHaveBeenCalledTimes(unrelatedCount)
+      expect(writeCookieIdentityMock).toHaveBeenCalledTimes(unrelatedCount + 1)
       if (unrelatedCount) {
         expect(writeCookieIdentityMock).toHaveBeenCalledWith(
           expect.objectContaining({ name: 'plain', value: 'plain-value' })
         )
       }
-      expect(writeCookieIdentityMock).not.toHaveBeenCalledWith(
+      expect(writeCookieIdentityMock).toHaveBeenCalledWith(
         expect.objectContaining({ name: 'readable-sibling' })
       )
       expect(result.summary).toMatchObject({
         totalCookies: 2 + unrelatedCount,
-        importedCookies: unrelatedCount,
-        skippedCookies: 2,
-        partitionSkippedCookies: 2,
-        partitionSkipBreakdown: { unreadableCookies: 1, preservedRelatedCookies: 1 },
+        importedCookies: unrelatedCount + 1,
+        skippedCookies: 1,
+        partitionSkippedCookies: 1,
+        partitionSkipBreakdown: { unreadableCookies: 1, preservedRelatedCookies: 0 },
         warning: {
           code: 'cookies-undecryptable',
           failedCookies: 1,

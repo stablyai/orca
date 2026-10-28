@@ -17,10 +17,16 @@ const { order, profileProbe, reserveStdout } = vi.hoisted(() => {
 vi.mock('../server/serve-stdout-boundary', () => ({
   reserveServeStdoutForReadiness: reserveStdout
 }))
-vi.mock('./orcad-bundled-runtime', () => ({ assertOrcadServerRuntime: () => {} }))
+vi.mock('./orcad-bundled-runtime', () => ({
+  assertOrcadServerRuntime: () => {},
+  OrcadBundledRuntimeError: class extends Error {}
+}))
 vi.mock('./orcad-profile-preflight', () => ({
   preflightBundledOrcadStartup: async () => {
     order.push('profile-admission')
+  },
+  confirmBundledOrcadStartupQualified: async () => {
+    order.push('qualified')
   },
   runOrcadProfilePreflight: profileProbe
 }))
@@ -75,9 +81,9 @@ describe('orcad entry', () => {
   ])('keeps startup probes when help is consumed as a value: %j', async (...argv) => {
     vi.spyOn(process, 'argv', 'get').mockReturnValue(['runtime', 'orcad.js', ...argv])
     await import('./main')
-    await vi.waitFor(() => expect(order).toContain('main'))
+    await vi.waitFor(() => expect(order).toContain('qualified'))
 
-    expect(order).toEqual(['profile-admission', 'preflight', 'main'])
+    expect(order).toEqual(['profile-admission', 'preflight', 'main', 'qualified'])
     expect(reserveStdout).toHaveBeenCalledOnce()
   })
 
@@ -97,11 +103,23 @@ describe('orcad entry', () => {
     }
   )
 
-  it('runs the native preflight before starting the runtime', async () => {
+  it('runs the native preflight before starting the runtime, and records qualification after it', async () => {
     await import('./main')
-    await vi.waitFor(() => expect(order).toContain('main'))
+    await vi.waitFor(() => expect(order).toContain('qualified'))
 
-    expect(order).toEqual(['profile-admission', 'preflight', 'main'])
+    expect(order).toEqual(['profile-admission', 'preflight', 'main', 'qualified'])
+  })
+
+  it('records no qualification when startup fails before readiness', async () => {
+    const { main } = await import('./orcad-entry')
+    vi.mocked(main).mockRejectedValueOnce(new Error('profile open failed'))
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the stub only records the call; nothing reads its never return.
+    const exit = vi.spyOn(process, 'exit').mockImplementation((() => undefined) as never)
+    vi.spyOn(console, 'error').mockImplementation(() => {})
+    await import('./main')
+    await vi.waitFor(() => expect(exit).toHaveBeenCalled())
+
+    expect(order).toEqual(['profile-admission', 'preflight'])
   })
 
   it.each([ORCAD_COMPLETE_MANAGED_STOP_FLAG, ORCAD_CANCEL_MANAGED_STOP_FLAG])(

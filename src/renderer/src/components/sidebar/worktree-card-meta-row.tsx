@@ -48,9 +48,10 @@ export function WorktreeCardMetaRow({
     <div className="flex items-center gap-1.5 min-w-0" data-worktree-card-meta-row="">
       <div className="flex min-w-0 flex-1 items-center gap-1.5 overflow-hidden">
         {showRepoBadgeInMetaRow && repo && (
-          <div className="flex items-center gap-1.5 shrink-0 px-1.5 py-0.5 rounded-[4px] bg-accent border border-border dark:bg-accent/50 dark:border-border/60">
+          // Why: keep a 6rem name floor (+1.625rem chrome) so the branch shrinks first; grow only into width the branch leaves free.
+          <div className="flex min-w-0 max-w-max shrink-0 grow basis-[7.625rem] items-center gap-1.5 px-1.5 py-0.5 rounded-[4px] bg-accent border border-border dark:bg-accent/50 dark:border-border/60">
             <RepoBadgeMark color={repo.badgeColor} />
-            <span className="text-[10px] font-semibold text-foreground truncate max-w-[6rem] leading-none lowercase">
+            <span className="min-w-0 truncate text-[10px] font-semibold text-foreground leading-none lowercase">
               {repo.displayName}
             </span>
           </div>

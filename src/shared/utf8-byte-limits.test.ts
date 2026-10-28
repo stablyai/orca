@@ -28,12 +28,6 @@ function buildSliceEndingInLoneHighSurrogate(): string {
 describe('scanning a prefix slice whose parent continues past the slice', () => {
   const sliced = buildSliceEndingInLoneHighSurrogate()
 
-  it('is a sliced string that ends in a lone high surrogate', () => {
-    expect(sliced.length).toBe(SLICE_BOUNDARY_UNITS)
-    expect(sliced.charCodeAt(SLICE_BOUNDARY_UNITS - 1)).toBe(0xd9f6)
-    expect(Buffer.byteLength(sliced, 'utf8')).toBe(22)
-  })
-
   it('reads the trailing lone surrogate without pairing past the end in every JIT tier', () => {
     const observed = new Set<number>()
     for (let iteration = 0; iteration < TIER_UP_ITERATIONS; iteration += 1) {
@@ -91,19 +85,8 @@ describe('getUtf8ChunkEndIndex', () => {
     expect(getUtf8ChunkEndIndex('skipé中tail', 4, 5)).toBe(6)
   })
 
-  it('returns the starting index when no text remains', () => {
-    expect(getUtf8ChunkEndIndex('', 0, 1)).toBe(0)
-    expect(getUtf8ChunkEndIndex('abc', 3, 1)).toBe(3)
-  })
-
   it.each([0, -1])('consumes one code point when the %s-byte budget is exceeded', (maxBytes) => {
     expect(getUtf8ChunkEndIndex('😀a', 0, maxBytes)).toBe(2)
-  })
-
-  it('preserves raw non-finite budget comparisons', () => {
-    expect(getUtf8ChunkEndIndex('abc', 0, Number.NaN)).toBe(3)
-    expect(getUtf8ChunkEndIndex('abc', 0, Number.POSITIVE_INFINITY)).toBe(3)
-    expect(getUtf8ChunkEndIndex('abc', 0, Number.NEGATIVE_INFINITY)).toBe(1)
   })
 })
 

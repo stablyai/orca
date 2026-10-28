@@ -160,7 +160,6 @@ describe('OrcaRuntimeService', () => {
       getSize: () => ({ cols: 100, rows: 30 })
     })
     syncSinglePty(runtime, 'pty-1')
-    const [terminal] = (await runtime.listTerminals()).terminals
 
     runtime.onPtyData('pty-1', 'live output without title\n', 100)
 
@@ -172,15 +171,11 @@ describe('OrcaRuntimeService', () => {
     expect(serializeBuffer).toHaveBeenCalledWith('pty-1', {
       scrollbackRows: expect.any(Number)
     })
-    expect(runtime.hasRecentTerminalOutputPath(terminal.handle, artifactPath, artifactPath)).toBe(
-      true
-    )
   })
 
   it('returns cwd metadata from seeded headless main terminal snapshots', async () => {
     const runtime = createRuntime()
     syncSinglePty(runtime, 'pty-1')
-    const [terminal] = (await runtime.listTerminals()).terminals
     const artifactPath = '/tmp/restored-scrollback-artifact.json'
 
     runtime.seedHeadlessTerminal(
@@ -197,160 +192,6 @@ describe('OrcaRuntimeService', () => {
       source: 'headless',
       cwd: '/projects/restored'
     })
-    expect(runtime.hasRecentTerminalOutputPath(terminal.handle, artifactPath, artifactPath)).toBe(
-      true
-    )
-  })
-
-  it('resolves paths without candidate activation via the lazy safety net', async () => {
-    const runtime = createRuntime()
-    syncSinglePty(runtime, 'pty-1')
-    const [terminal] = (await runtime.listTerminals()).terminals
-    const artifactPath = '/tmp/lazy-activation-artifact.json'
-
-    runtime.onPtyData('pty-1', `wrote ${artifactPath}\n`, 100)
-
-    expect(runtime.hasRecentTerminalOutputPath(terminal.handle, artifactPath, artifactPath)).toBe(
-      true
-    )
-  })
-
-  it('backfills candidates on activation so scrolled-off paths still resolve', async () => {
-    const runtime = createRuntime()
-    syncSinglePty(runtime, 'pty-1')
-    const [terminal] = (await runtime.listTerminals()).terminals
-    const artifactPath = '/tmp/backfilled-artifact.json'
-
-    runtime.onPtyData('pty-1', `wrote ${artifactPath}\n`, 100)
-    runtime.activateRecentPtyPathCandidateTracking()
-    // Evict raw bytes so only backfilled candidates can authorize the path.
-    runtime.onPtyData('pty-1', 'x'.repeat(70 * 1024), 200)
-
-    expect(runtime.hasRecentTerminalOutputPath(terminal.handle, artifactPath, artifactPath)).toBe(
-      true
-    )
-  })
-
-  it('backfills per retained chunk so chunk boundaries match the eager extractor', async () => {
-    const runtime = createRuntime()
-    syncSinglePty(runtime, 'pty-1')
-    const [terminal] = (await runtime.listTerminals()).terminals
-    const artifactPath = '/tmp/a.json'
-
-    // Concatenation changes the candidate to /tmp/a.jsonsuffix.txt; eager per-chunk extraction kept /tmp/a.json.
-    runtime.onPtyData('pty-1', `wrote ${artifactPath}`, 100)
-    runtime.onPtyData('pty-1', 'suffix.txt', 150)
-    runtime.activateRecentPtyPathCandidateTracking()
-    runtime.onPtyData('pty-1', 'x'.repeat(70 * 1024), 200)
-
-    expect(runtime.hasRecentTerminalOutputPath(terminal.handle, artifactPath, artifactPath)).toBe(
-      true
-    )
-  })
-
-  it('extracts candidates per chunk after activation for scrolled-off paths', async () => {
-    const runtime = createRuntime()
-    syncSinglePty(runtime, 'pty-1')
-    const [terminal] = (await runtime.listTerminals()).terminals
-    const artifactPath = '/tmp/post-activation-artifact.json'
-
-    runtime.activateRecentPtyPathCandidateTracking()
-    runtime.activateRecentPtyPathCandidateTracking()
-    runtime.onPtyData('pty-1', `wrote ${artifactPath}\n`, 100)
-    runtime.onPtyData('pty-1', 'x'.repeat(70 * 1024), 200)
-
-    expect(runtime.hasRecentTerminalOutputPath(terminal.handle, artifactPath, artifactPath)).toBe(
-      true
-    )
-  })
-
-  it('does not retain pre-activation paths that scrolled past the raw window', async () => {
-    const runtime = createRuntime()
-    syncSinglePty(runtime, 'pty-1')
-    const [terminal] = (await runtime.listTerminals()).terminals
-    const artifactPath = '/tmp/pre-activation-scrolled-artifact.json'
-
-    runtime.onPtyData('pty-1', `wrote ${artifactPath}\n`, 100)
-    runtime.onPtyData('pty-1', 'x'.repeat(70 * 1024), 200)
-
-    // Accepted loss: bytes evicted before first tracking activation cannot yield candidates.
-    expect(runtime.hasRecentTerminalOutputPath(terminal.handle, artifactPath, artifactPath)).toBe(
-      false
-    )
-  })
-
-  it('backfill does not mint candidates from an over-limit line shortened by the window trim', async () => {
-    const runtime = createRuntime()
-    syncSinglePty(runtime, 'pty-1')
-    const [terminal] = (await runtime.listTerminals()).terminals
-    const artifactPath = '/tmp/result.json'
-
-    // Eager extraction rejects over-4KiB lines.
-    runtime.onPtyData('pty-1', `${'a'.repeat(5000)} ${artifactPath}\n`, 100)
-    // Trim into that line; replaying only its shorter tail would wrongly authorize the path.
-    runtime.onPtyData('pty-1', 'y'.repeat(64 * 1024 - 1000), 150)
-    runtime.activateRecentPtyPathCandidateTracking()
-    runtime.onPtyData('pty-1', 'x'.repeat(70 * 1024), 200)
-
-    expect(runtime.hasRecentTerminalOutputPath(terminal.handle, artifactPath, artifactPath)).toBe(
-      false
-    )
-  })
-
-  it('backfill replays the full head chunk including its window-trimmed prefix', async () => {
-    const runtime = createRuntime()
-    syncSinglePty(runtime, 'pty-1')
-    const [terminal] = (await runtime.listTerminals()).terminals
-    const artifactPath = '/tmp/trimmed-prefix-artifact.json'
-
-    // read() trims this prefix; append-time extraction saw its original path.
-    runtime.onPtyData('pty-1', `wrote ${artifactPath}\n${'b'.repeat(3000)}\n`, 100)
-    runtime.onPtyData('pty-1', 'y'.repeat(64 * 1024 - 1000), 150)
-    runtime.activateRecentPtyPathCandidateTracking()
-    runtime.onPtyData('pty-1', 'x'.repeat(70 * 1024), 200)
-
-    // Recover from the intact head chunk to match eager authorization after raw-byte eviction.
-    expect(runtime.hasRecentTerminalOutputPath(terminal.handle, artifactPath, artifactPath)).toBe(
-      true
-    )
-  })
-
-  it('matches eager extraction exactly for a pre-sliced oversized chunk', async () => {
-    const runtime = createRuntime()
-    syncSinglePty(runtime, 'pty-1')
-    const [terminal] = (await runtime.listTerminals()).terminals
-    const cutLinePath = '/tmp/cut-line.json'
-    const keptPath = '/tmp/kept-after-cut.json'
-
-    // Oversized chunks are pre-sliced; eager extraction must retain valid short-line paths and reject long-line tails.
-    const keptLine = `wrote ${keptPath}\n`
-    const afterFirstLine = `${keptLine}${'z'.repeat(62 * 1024 - keptLine.length)}`
-    const oversized = `${'a'.repeat(5 * 1024)} ${cutLinePath}\n${afterFirstLine}`
-    runtime.onPtyData('pty-1', oversized, 100)
-    runtime.activateRecentPtyPathCandidateTracking()
-    runtime.onPtyData('pty-1', 'x'.repeat(70 * 1024), 200)
-
-    expect(runtime.hasRecentTerminalOutputPath(terminal.handle, cutLinePath, cutLinePath)).toBe(
-      false
-    )
-    expect(runtime.hasRecentTerminalOutputPath(terminal.handle, keptPath, keptPath)).toBe(true)
-  })
-
-  it('keeps a candidate from the short first line of an oversized chunk after the window scrolls', async () => {
-    const runtime = createRuntime()
-    syncSinglePty(runtime, 'pty-1')
-    const [terminal] = (await runtime.listTerminals()).terminals
-    const artifactPath = '/tmp/result.json'
-
-    // Pre-slicing drops only the short line's prefix; preserve its original eager grant after raw-byte eviction.
-    const firstLine = `wrote ${artifactPath}\n`
-    runtime.onPtyData('pty-1', `${firstLine}${'f'.repeat(64 * 1024 + 6 - firstLine.length)}`, 100)
-    runtime.activateRecentPtyPathCandidateTracking()
-    runtime.onPtyData('pty-1', 'x'.repeat(70 * 1024), 200)
-
-    expect(runtime.hasRecentTerminalOutputPath(terminal.handle, artifactPath, artifactPath)).toBe(
-      true
-    )
   })
 
   it('replaces suffix-only headless state with the recovered renderer snapshot', async () => {

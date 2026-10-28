@@ -60,7 +60,10 @@ describe('prepareMobileAiVaultSessionResume', () => {
       .mockResolvedValueOnce({ ok: true, result: { send: { accepted: true } } })
 
     const prepared = await prepareMobileAiVaultSessionResume({ sendRequest }, legacy)
-    const launch = buildMobileAiVaultResumeLaunch({ session: prepared, hostPlatform: 'darwin' })
+    const launch = buildMobileAiVaultResumeLaunch({
+      session: prepared,
+      workspacePlatform: 'darwin'
+    })
     await resumeAiVaultSessionInTerminal({ sendRequest }, 'worktree-1', launch)
 
     expect(prepared).toBe(legacy)
@@ -70,7 +73,7 @@ describe('prepareMobileAiVaultSessionResume', () => {
       'terminal.send',
       {
         terminal: 'pty-1',
-        text: `cd '/Users/ada/repo' && CODEX_HOME='${LEGACY_CODEX_HOME}' codex 'resume' 'legacy-1'`,
+        text: `cd '/Users/ada/repo' && CODEX_HOME='${LEGACY_CODEX_HOME}' codex '-c' 'tui.resume_cwd=current' 'resume' 'legacy-1'`,
         enter: true
       },
       { timeoutMs: RESUME_RPC_TIMEOUT_MS }
@@ -85,7 +88,10 @@ describe('prepareMobileAiVaultSessionResume', () => {
     })
 
     const prepared = await prepareMobileAiVaultSessionResume({ sendRequest }, legacy)
-    const launch = buildMobileAiVaultResumeLaunch({ session: prepared, hostPlatform: 'darwin' })
+    const launch = buildMobileAiVaultResumeLaunch({
+      session: prepared,
+      workspacePlatform: 'darwin'
+    })
 
     expect(sendRequest).toHaveBeenCalledWith(
       'aiVault.prepareSessionResume',
@@ -98,7 +104,9 @@ describe('prepareMobileAiVaultSessionResume', () => {
       { timeoutMs: RESUME_RPC_TIMEOUT_MS }
     )
     expect(prepared).toEqual({ ...legacy, codexHome: null })
-    expect(launch.command).toBe("cd '/Users/ada/repo' && codex 'resume' 'legacy-1'")
+    expect(launch.command).toBe(
+      "cd '/Users/ada/repo' && codex '-c' 'tui.resume_cwd=current' 'resume' 'legacy-1'"
+    )
     expect(launch.envToDelete).toEqual(['CODEX_HOME', 'ORCA_CODEX_HOME'])
   })
 
@@ -110,7 +118,10 @@ describe('prepareMobileAiVaultSessionResume', () => {
     })
 
     const prepared = await prepareMobileAiVaultSessionResume({ sendRequest }, legacy)
-    const launch = buildMobileAiVaultResumeLaunch({ session: prepared, hostPlatform: 'darwin' })
+    const launch = buildMobileAiVaultResumeLaunch({
+      session: prepared,
+      workspacePlatform: 'darwin'
+    })
 
     expect(prepared).toBe(legacy)
     expect(launch.command).toContain(`CODEX_HOME='${LEGACY_CODEX_HOME}'`)
@@ -143,7 +154,10 @@ describe('prepareMobileAiVaultSessionResume', () => {
     })
 
     const prepared = await prepareMobileAiVaultSessionResume({ sendRequest }, current)
-    const launch = buildMobileAiVaultResumeLaunch({ session: prepared, hostPlatform: 'darwin' })
+    const launch = buildMobileAiVaultResumeLaunch({
+      session: prepared,
+      workspacePlatform: 'darwin'
+    })
 
     expect(sendRequest).toHaveBeenCalledWith(
       'aiVault.prepareSessionResume',

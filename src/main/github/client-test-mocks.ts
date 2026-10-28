@@ -84,9 +84,25 @@ export type GhUtilsModuleMock = {
 }
 
 export function ghUtilsModuleMock(mocks: GitHubClientMocks): GhUtilsModuleMock {
+  const ghExecFileAsync = vi.fn(async (...args: unknown[]) => {
+    const result = await mocks.ghExecFileAsyncMock(...args)
+    const argv = args[0]
+    // Domain fixtures supply JSON bodies; --include also emits the CLI's HTTP framing.
+    if (
+      Array.isArray(argv) &&
+      argv.includes('--include') &&
+      typeof argv[1] === 'string' &&
+      /^repos\/[^/]+\/[^/]+\/pulls(?:\?head=|\/\d+$)/.test(argv[1]) &&
+      typeof result?.stdout === 'string' &&
+      !result.stdout.startsWith('HTTP/')
+    ) {
+      return { ...result, stdout: `HTTP/2.0 200 OK\n\n${result.stdout}` }
+    }
+    return result
+  })
   return {
     execFileAsync: mocks.execFileAsyncMock,
-    ghExecFileAsync: mocks.ghExecFileAsyncMock,
+    ghExecFileAsync,
     getOwnerRepo: mocks.getOwnerRepoMock,
     getIssueOwnerRepo: mocks.getIssueOwnerRepoMock,
     getOwnerRepoForRemote: mocks.getOwnerRepoForRemoteMock,

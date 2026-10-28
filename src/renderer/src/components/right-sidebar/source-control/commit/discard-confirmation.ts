@@ -1,6 +1,6 @@
 import { basename } from '@/lib/path'
 import type { GitStatusEntry } from '../../../../../../shared/git-status-types'
-import type { DiscardAllArea } from './discard-all-sequence'
+import type { DiscardAllArea } from '../../../../../../shared/source-control-discard-all-sequence'
 import { translate } from '@/i18n/i18n'
 
 export type DiscardConfirmationCopy = {

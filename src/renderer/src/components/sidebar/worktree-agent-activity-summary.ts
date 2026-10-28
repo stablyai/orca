@@ -11,7 +11,7 @@ import {
   type AgentStatusOrchestrationContext
 } from '../../../../shared/agent-status-types'
 import { agentVerdictDisplayMark } from '../../../../shared/agent-main-agent-verdict'
-import { applyAgentPaneActivityFlags } from '@/lib/agent-pane-activity-flags'
+import { applyAgentPaneActivityFlags } from '../../../../shared/worktree-status-rollup'
 
 export type WorktreeAgentActivitySummary = {
   hasPermission: boolean

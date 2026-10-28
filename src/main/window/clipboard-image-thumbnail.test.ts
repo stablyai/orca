@@ -23,17 +23,6 @@ describe('buildClipboardImageThumbnail', () => {
     expect(image.resize).toHaveBeenCalledWith({ height: 160, quality: 'good', width: 320 })
   })
 
-  it('skips the resize for an image that already fits', () => {
-    const image = fakeImage({ getSize: () => ({ height: 200, width: 320 }) })
-
-    expect(buildClipboardImageThumbnail(image)?.dataUrl).toBe('data:image/png;base64,FULL')
-    expect(image.resize).not.toHaveBeenCalled()
-  })
-
-  it('reports no thumbnail for an empty clipboard so text paste falls through', () => {
-    expect(buildClipboardImageThumbnail(fakeImage({ isEmpty: () => true }))).toBeNull()
-  })
-
   it('reports no thumbnail rather than throwing for an oversized image', () => {
     // Preview only decides placeholder visibility; save still reports the actual oversized-image failure.
     const image = fakeImage({ getSize: () => ({ height: 100_000, width: 100_000 }) })

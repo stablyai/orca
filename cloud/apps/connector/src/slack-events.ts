@@ -1,4 +1,6 @@
 import { z } from 'zod'
+import type { InboundMessage } from './connector-adapter.js'
+import type { SlackInstall } from './slack-installs.js'
 
 const UrlVerificationSchema = z.object({
   type: z.literal('url_verification'),
@@ -7,6 +9,7 @@ const UrlVerificationSchema = z.object({
 
 const EventCallbackSchema = z.object({
   type: z.literal('event_callback'),
+  api_app_id: z.string().min(1),
   team_id: z.string().min(1),
   // Slack Connect: a channel shared with another company.
   is_ext_shared_channel: z.boolean().optional(),
@@ -30,6 +33,8 @@ export const PERSON_SUBTYPES = new Set(['thread_broadcast', 'file_share'])
 
 // One person's post, the same whether Slack sent it as message or app_mention.
 export type SlackMessage = {
+  // The app Slack delivered it for; must be the app whose URL received it.
+  appId: string
   teamId: string
   channelId: string
   userId: string
@@ -67,6 +72,7 @@ export function readSlackEnvelope(payload: unknown): SlackEnvelope {
   return {
     kind: 'message',
     message: {
+      appId: callback.data.api_app_id,
       teamId: callback.data.team_id,
       channelId: event.data.channel,
       userId: user,
@@ -95,4 +101,26 @@ export function promptText(text: string, botUserId: string): string {
     .replaceAll('&gt;', '>')
     .replaceAll('&amp;', '&')
     .trim()
+}
+
+// The core's view of a post: the bot's mention dropped, paused by the cloud or the workspace.
+export function inboundSlackMessage(
+  message: SlackMessage,
+  install: SlackInstall,
+  cloudPaused: boolean
+): InboundMessage {
+  return {
+    source: 'slack',
+    place: {
+      workspaceId: message.teamId,
+      containerId: message.channelId,
+      threadId: message.threadTs
+    },
+    messageId: message.ts,
+    authorId: message.userId,
+    text: promptText(message.text, install.botUserId),
+    mentioned: message.direct || mentionsBot(message.text, install.botUserId),
+    direct: message.direct,
+    paused: cloudPaused || install.paused
+  }
 }

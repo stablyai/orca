@@ -118,6 +118,26 @@ describe('ConfirmationDialogProvider', () => {
     await waitFor(() => expect(screen.getByRole('button', { name: 'Cancel' })).toHaveFocus())
   })
 
+  it('shows only the confirm button for a notice', async () => {
+    const { onSettled } = renderDialog({
+      title: "Can't use p1 here yet",
+      confirmLabel: 'OK',
+      acknowledgeOnly: true,
+      initialFocus: 'confirm'
+    })
+    await userEvent.click(screen.getByRole('button', { name: 'ask' }))
+    await waitFor(() => expect(screen.getByRole('button', { name: 'OK' })).toHaveFocus())
+    expect(screen.queryByRole('button', { name: 'Cancel' })).not.toBeInTheDocument()
+    await userEvent.keyboard('{Enter}')
+    await waitFor(() => expect(onSettled).toHaveBeenCalledWith(true))
+  })
+
+  it('renders on the security surface when asked', async () => {
+    renderDialog({ title: 'Remove extension?', surface: 'security' })
+    await userEvent.click(screen.getByRole('button', { name: 'ask' }))
+    expect(await screen.findByRole('dialog')).toHaveClass('plugin-security-chrome')
+  })
+
   it('omits the checkbox unless the caller opts in', async () => {
     renderDialog({ title: 'Delete artifact?' })
 

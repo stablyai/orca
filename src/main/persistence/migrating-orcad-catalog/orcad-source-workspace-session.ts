@@ -11,7 +11,7 @@ import {
 } from '../../orca-profiles/profile-session-owner-transfer'
 import type { TerminalScrollbackSnapshotStorage } from '../../terminal-scrollback-snapshots'
 import {
-  createOrcadMigrationSourceScope,
+  createOrcadMigrationExportScope,
   orcadMigrationOwnerMatchesScope,
   orcadMigrationPartitionScope,
   unqualifyOrcadMigrationOwnerKey
@@ -63,11 +63,19 @@ export function collectOrcadMigrationSourceWorkspaceSession(
   source: OrcadMigrationManifestSource,
   catalog: OrcadMigrationCatalogPayload,
   storage?: TerminalScrollbackSnapshotStorage,
-  leaveBehind = false
+  leaveBehind = false,
+  daemonHistoryLeaf?: (tabId: string, leafId: string) => boolean
 ): OrcadMigrationSourceWorkspaceSessionInspection {
   let collected: OrcadMigrationSourceWorkspaceSessionInspection
   try {
-    collected = collectWorkspaceSession(state, source, catalog, storage, leaveBehind)
+    collected = collectWorkspaceSession(
+      state,
+      source,
+      catalog,
+      storage,
+      leaveBehind,
+      daemonHistoryLeaf
+    )
   } catch (error) {
     console.warn('[migration] Unreadable workspace session blocks the move:', error)
     collected = {
@@ -97,9 +105,10 @@ function collectWorkspaceSession(
   source: OrcadMigrationManifestSource,
   catalog: OrcadMigrationCatalogPayload,
   storage: TerminalScrollbackSnapshotStorage | undefined,
-  leaveBehind: boolean
+  leaveBehind: boolean,
+  daemonHistoryLeaf: ((tabId: string, leafId: string) => boolean) | undefined
 ): OrcadMigrationSourceWorkspaceSessionInspection {
-  const sourceScope = createOrcadMigrationSourceScope({ source, catalog, repos: state.repos })
+  const sourceScope = createOrcadMigrationExportScope({ source, catalog, repos: state.repos })
   const fragments: SessionFragment[] = []
   const blockedItems: string[] = []
   const leftBehindItems: string[] = []
@@ -175,7 +184,8 @@ function collectWorkspaceSession(
       const projected = projectOrcadMigrationSessionScrollback(
         projectSessionToDestination(fragment, scope),
         storage,
-        leaveBehind
+        leaveBehind,
+        daemonHistoryLeaf
       )
       blockedItems.push(...projected.blockedItems)
       leftBehindItems.push(...projected.leftBehindItems)

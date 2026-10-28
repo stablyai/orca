@@ -11,7 +11,10 @@ import {
   runClaudeControl
 } from './claude-agent-sdk-control-requests'
 import { buildClaudePromptReply, ClaudePromptRegistry } from './claude-structured-prompt-replies'
-import type { ClaudeDispatchWaiter, ClaudeSession } from './claude-structured-session-state'
+import type {
+  ClaudeDispatchWaiter,
+  ClaudeSession
+} from './structured/claude-structured-session-state'
 import { ClaudeChildWorkDecoder } from './claude-child-work-decoder'
 import { sessionFor, userMessage } from './claude-structured-dispatch-test-support'
 
@@ -287,6 +290,7 @@ describe('answerClaudePrompt', () => {
     session.translator = {
       handle: vi.fn(),
       openTurnInLiveProviderCycle: false,
+      openTurnHasInputWork: false,
       journalPrompts: {
         resolve: resolvePrompt,
         handOver: () => () => {},

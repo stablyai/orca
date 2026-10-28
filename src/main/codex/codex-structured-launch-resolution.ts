@@ -1,10 +1,12 @@
+import { delimiter, isAbsolute, resolve } from 'node:path'
+import { waitForPromiseWithSignal } from '../../shared/abort-signal-reason'
 import { requireLegacyAgentSessionAccountHome } from '../../shared/agent-session-account-home'
 import { agentSessionProviderHandleChainHead } from '../../shared/agent-session-provider-handle'
 import { resolveCodexCommand } from '../codex-cli/command'
 import { resolveAgainAfterRefreshOnMissingProgram } from '../native-chat/structured-agent-command-resolution'
 import type { StructuredAgentLaunchPartResolver } from '../runtime/structured-agent-launch-composition'
 import type { CodexStructuredLaunch } from './codex-structured-session-adapter'
-import { codexStructuredPermissionPolicy } from './codex-structured-permission-policy'
+import { codexStructuredPermissionPolicy } from '../../shared/codex-permission-policy'
 import { codexStructuredLaunchArgs } from './codex-structured-launch-args'
 import {
   LEGACY_NATIVE_CHAT_VISUALS_DIR_ENV,
@@ -21,6 +23,7 @@ export type CodexStructuredInvocationDeps = Pick<
   CodexStructuredLaunchPartDeps,
   'resolveCommand'
 > & {
+  signal?: AbortSignal
   /** Fresh spawn environment, never persisted in the session record. */
   resolveEnvironment?: () => Promise<NodeJS.ProcessEnv>
   /** Refresh after a missing binary; absence disables retry. */
@@ -41,15 +44,31 @@ export function resolveCodexStructuredInvocation(
   return resolveAgainAfterRefreshOnMissingProgram(
     () => readCodexStructuredInvocation(deps),
     deps.refreshEnvironmentAfterMiss,
-    { env: ({ environment }) => environment, cwd: deps.resolveWorkingDirectory }
+    {
+      env: ({ environment }) => environment,
+      cwd: deps.resolveWorkingDirectory,
+      signal: deps.signal
+    }
   )
 }
 
 async function readCodexStructuredInvocation(
   deps: CodexStructuredInvocationDeps
 ): Promise<CodexStructuredInvocation> {
-  const environment = await deps.resolveEnvironment?.()
-  const pathEnv = environment?.PATH ?? environment?.Path ?? null
+  const environment = await waitForPromiseWithSignal(
+    Promise.resolve(deps.resolveEnvironment?.()),
+    deps.signal
+  )
+  const cwd = await waitForPromiseWithSignal(
+    Promise.resolve(deps.resolveWorkingDirectory?.()),
+    deps.signal
+  )
+  deps.signal?.throwIfAborted()
+  const pathEnv =
+    (environment?.PATH ?? environment?.Path)
+      ?.split(delimiter)
+      .map((entry) => (entry && !isAbsolute(entry) ? resolve(cwd ?? process.cwd(), entry) : entry))
+      .join(delimiter) ?? null
   const homePath = environment?.HOME ?? environment?.USERPROFILE
   const command = (deps.resolveCommand ?? resolveCodexCommand)({
     pathEnv,

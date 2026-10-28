@@ -9,6 +9,6 @@ const { ipcRenderer } = require('electron') as {
 }
 
 // Keep the reporter in the isolated world so the document cannot call it through contextBridge.
-installDocPreviewLinkInterception((url) => {
-  ipcRenderer.send(PRELOAD_DOC_PREVIEW_LINK_CLICK_CHANNEL, url)
+installDocPreviewLinkInterception((url, modifiers) => {
+  ipcRenderer.send(PRELOAD_DOC_PREVIEW_LINK_CLICK_CHANNEL, url, modifiers)
 })

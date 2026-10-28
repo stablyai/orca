@@ -1,45 +1,41 @@
 import type { PRCheckDetail, PRCheckRunDetails } from './github/check-types'
+import { getCheckStatusLabel } from './pr-check-status-label'
 
 export const PROMPT_LOG_TAIL_LINES = 150
 export const PROMPT_LOG_TAIL_SCAN_CODE_UNITS = 256 * 1024
 
-function getCheckConclusion(check: PRCheckDetail): NonNullable<PRCheckDetail['conclusion']> {
-  return check.conclusion ?? 'pending'
-}
-
-function getCheckStatusLabel(check: PRCheckDetail): string {
-  const conclusion = getCheckConclusion(check)
-  if (conclusion === 'success') {
-    return 'Successful'
-  }
-  if (conclusion === 'failure') {
-    return 'Failed'
-  }
-  if (conclusion === 'cancelled') {
-    return 'Cancelled'
-  }
-  if (conclusion === 'timed_out') {
-    return 'Timed out'
-  }
-  if (conclusion === 'neutral') {
-    return 'Neutral'
-  }
-  if (conclusion === 'skipped') {
-    return 'Skipped'
-  }
-  if (check.status === 'queued') {
-    return 'Queued'
-  }
-  if (check.status === 'in_progress') {
-    return 'In progress'
-  }
-  return 'Pending'
+// Matches the checks the host reruns as failed.
+export function isBrokenCheck(check: { conclusion?: string | null }): boolean {
+  return ['failure', 'cancelled', 'timed_out'].includes(check.conclusion ?? 'pending')
 }
 
 export function getBrokenChecks(checks: PRCheckDetail[]): PRCheckDetail[] {
-  return checks.filter((check) =>
-    ['failure', 'cancelled', 'timed_out'].includes(getCheckConclusion(check))
+  return checks.filter(isBrokenCheck)
+}
+
+export function hasGitHubCheckHandle(check: PRCheckDetail): boolean {
+  return Boolean(check.checkRunId || check.workflowRunId || check.url)
+}
+
+const PROMPT_DETAIL_CHECK_LIMIT = 5
+
+/** Failed-step logs for the first broken checks; a check whose details fail to load is left out. */
+export async function collectFixChecksPromptDetails(
+  checks: PRCheckDetail[],
+  loadDetails: (check: PRCheckDetail) => Promise<PRCheckRunDetails | null>
+): Promise<Record<string, PRCheckRunDetails>> {
+  const detailsByKey: Record<string, PRCheckRunDetails> = {}
+  await Promise.all(
+    getBrokenChecks(checks)
+      .slice(0, PROMPT_DETAIL_CHECK_LIMIT)
+      .map(async (check, index) => {
+        const details = await loadDetails(check).catch(() => null)
+        if (details) {
+          detailsByKey[getCheckDetailsPromptKey(check, index)] = details
+        }
+      })
   )
+  return detailsByKey
 }
 
 export function truncateLogTailForPrompt(logTail: string): string {

@@ -34,21 +34,6 @@ export function checkOutcome(check: PRCheckDetail): CheckOutcome {
   return OUTCOME_BY_SHARED[classifyCheckOutcome(check)]
 }
 
-// Stable failure→pending→success/neutral buckets retain upstream order within each.
-const OUTCOME_RANK: Record<CheckOutcome, number> = {
-  failure: 0,
-  pending: 1,
-  neutral: 2,
-  success: 3
-}
-
-export function sortPRChecks(checks: readonly PRCheckDetail[]): PRCheckDetail[] {
-  return checks
-    .map((check, index) => ({ check, index, rank: OUTCOME_RANK[checkOutcome(check)] }))
-    .sort((a, b) => a.rank - b.rank || a.index - b.index)
-    .map((entry) => entry.check)
-}
-
 export type PRChecksSummary = {
   total: number
   passed: number
@@ -101,30 +86,6 @@ export function prChecksSummaryLabel(summary: PRChecksSummary, checksError: stri
   return checksError === null ? summary.label : 'Checks unavailable'
 }
 
-export function checkStatusLabel(check: PRCheckDetail): string {
-  if (check.status !== 'completed') {
-    return check.status === 'in_progress' ? 'In progress' : 'Pending'
-  }
-  switch (check.conclusion) {
-    case 'success':
-      return 'Successful'
-    case 'failure':
-      return 'Failed'
-    case 'cancelled':
-      return 'Cancelled'
-    case 'timed_out':
-      return 'Timed out'
-    case 'action_required':
-      return 'Action required'
-    case 'neutral':
-      return 'Neutral'
-    case 'skipped':
-      return 'Skipped'
-    default:
-      return 'Pending'
-  }
-}
-
 export function checkOutcomeToken(outcome: CheckOutcome | 'none'): MobileStatusToken {
   switch (outcome) {
     case 'success':
@@ -174,74 +135,4 @@ const PR_STATE_LABELS: Record<PRState, string> = {
 // Use shared prStateToken so sidebar and workspace badge agree on merged/open/closed/draft colors.
 export function prStateBadge(state: PRState): PRStateBadge {
   return { label: PR_STATE_LABELS[state] ?? state, token: prStateToken(state) }
-}
-
-export type ReviewerRow = {
-  login: string
-  name: string | null
-  avatarUrl: string
-  stateLabel: string
-  token: MobileStatusToken
-}
-
-function reviewStateLabel(state: string | null | undefined): {
-  label: string
-  token: MobileStatusToken
-} {
-  switch (state) {
-    case 'APPROVED':
-      return { label: 'Approved', token: 'statusGreen' }
-    case 'CHANGES_REQUESTED':
-      return { label: 'Changes requested', token: 'statusRed' }
-    case 'COMMENTED':
-      return { label: 'Commented', token: 'textSecondary' }
-    case 'DISMISSED':
-      return { label: 'Dismissed', token: 'textSecondary' }
-    case 'PENDING':
-      return { label: 'Pending', token: 'statusAmber' }
-    case null:
-    case undefined:
-      return { label: 'Reviewed', token: 'textSecondary' }
-    default:
-      return { label: 'Reviewed', token: 'textSecondary' }
-  }
-}
-
-type ReviewDisplayItem = {
-  reviewRequests?: { login: string; name: string | null; avatarUrl: string }[]
-  latestReviews?: { login: string; state?: string | null; avatarUrl?: string | null }[]
-}
-
-// Match desktop reviewer rows: requested first, then latest review authors, deduplicated by login.
-export function getPRReviewerRows(item: ReviewDisplayItem): ReviewerRow[] {
-  const byLogin = new Map<string, ReviewerRow>()
-  for (const user of item.reviewRequests ?? []) {
-    const login = user.login.trim()
-    if (!login) {
-      continue
-    }
-    byLogin.set(login.toLowerCase(), {
-      login,
-      name: user.name,
-      avatarUrl: user.avatarUrl,
-      stateLabel: 'Requested',
-      token: 'statusAmber'
-    })
-  }
-  for (const review of item.latestReviews ?? []) {
-    const login = review.login.trim()
-    const key = login.toLowerCase()
-    if (!login || byLogin.has(key)) {
-      continue
-    }
-    const { label, token } = reviewStateLabel(review.state)
-    byLogin.set(key, {
-      login,
-      name: null,
-      avatarUrl: review.avatarUrl ?? '',
-      stateLabel: label,
-      token
-    })
-  }
-  return Array.from(byLogin.values())
 }

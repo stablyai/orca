@@ -3,7 +3,7 @@ import type { IDisposable, ILink } from '@xterm/xterm'
 import { describe, expect, it, vi } from 'vitest'
 import type { PaneManager } from '@/lib/pane-manager/pane-manager'
 import { createFilePathLinkProvider, getTerminalFileOpenHint } from './terminal-link-handlers'
-import { buildWrappedLogicalLine } from './wrapped-terminal-link-ranges'
+import { buildWrappedLogicalLine } from '../../../../shared/wrapped-terminal-link-ranges'
 
 vi.mock('@/store', () => ({
   useAppStore: {

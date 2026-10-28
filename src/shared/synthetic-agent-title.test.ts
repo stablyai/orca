@@ -28,11 +28,14 @@ describe('synthetic agent titles', () => {
     expect(shouldDriveSyntheticAgentTitleFromHook('codex', 'done')).toBe(true)
   })
 
-  it('does not synthesize OpenCode titles over native session titles', () => {
-    expect(getSyntheticAgentTerminalTitle('opencode', 'done')).toBeNull()
-    expect(getSyntheticAgentTerminalTitle('opencode', 'waiting')).toBeNull()
-    expect(shouldDriveSyntheticAgentTitleFromHook('opencode', 'working')).toBe(false)
-    expect(shouldDriveSyntheticAgentTitleFromHook('opencode', 'done')).toBe(false)
-    expect(shouldDriveSyntheticAgentTitleFromHook('opencode', 'waiting')).toBe(false)
-  })
+  it.each(['opencode', 'omp'] as const)(
+    'does not synthesize %s titles over its own session titles',
+    (agent) => {
+      expect(getSyntheticAgentTerminalTitle(agent, 'done')).toBeNull()
+      expect(getSyntheticAgentTerminalTitle(agent, 'waiting')).toBeNull()
+      expect(shouldDriveSyntheticAgentTitleFromHook(agent, 'working')).toBe(false)
+      expect(shouldDriveSyntheticAgentTitleFromHook(agent, 'done')).toBe(false)
+      expect(shouldDriveSyntheticAgentTitleFromHook(agent, 'waiting')).toBe(false)
+    }
+  )
 })

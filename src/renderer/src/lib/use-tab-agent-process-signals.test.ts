@@ -11,7 +11,7 @@ import type { TerminalAgent } from '../../../shared/terminal-agent'
 import {
   resolveLaunchedAgentExitEvidence,
   resolveTabAgentFromSignals
-} from './tab-agent-from-signals'
+} from '../../../shared/tab-agent-from-signals'
 import { useTabAgent } from './use-tab-agent'
 
 const initialAppState = useAppStore.getInitialState()

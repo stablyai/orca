@@ -69,11 +69,15 @@ function installApp(isPackaged: boolean): void {
 function runtime(prompts: string[]): OrcaRuntimeService {
   const fake: Pick<
     OrcaRuntimeService,
-    'getNestedWorkerMaxDepth' | 'getTerminalOrchestrationCliCommand' | 'sendTerminalAgentPrompt'
+    | 'getNestedWorkerMaxDepth'
+    | 'getOrchestrationHeartbeatMinutes'
+    | 'getTerminalOrchestrationCliCommand'
+    | 'sendTerminalAgentPrompt'
   > & { orchestrationSenderNames: Pick<OrcaRuntimeService['orchestrationSenderNames'], 'nameOf'> } =
     {
       orchestrationSenderNames: { nameOf: () => null },
       getNestedWorkerMaxDepth: () => 2,
+      getOrchestrationHeartbeatMinutes: () => 5,
       getTerminalOrchestrationCliCommand: () => 'orca',
       sendTerminalAgentPrompt: async (handle, text) => {
         prompts.push(text)
@@ -221,7 +225,8 @@ describe('agent-read text about an Orca session ID', () => {
               dispatchId: 'ctx_1',
               taskSpec: 'do it',
               coordinatorHandle,
-              workerHandle
+              workerHandle,
+              heartbeatIntervalMinutes: 5
             })
           )
         )

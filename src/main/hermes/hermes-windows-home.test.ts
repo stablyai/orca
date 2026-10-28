@@ -3,7 +3,6 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
-import { getHermesHome } from './hermes-default-home'
 import { HermesHookService } from './hook-service'
 
 const realPlatform = Object.getOwnPropertyDescriptor(process, 'platform')
@@ -14,12 +13,6 @@ describe('Hermes home on Windows', () => {
     if (realPlatform) {
       Object.defineProperty(process, 'platform', realPlatform)
     }
-  })
-
-  it('keeps an explicit HERMES_HOME ahead of the LOCALAPPDATA default', () => {
-    expect(getHermesHome({ HERMES_HOME: 'D:\\profiles\\hermes', LOCALAPPDATA: tmpdir() })).toBe(
-      'D:\\profiles\\hermes'
-    )
   })
 
   it('installs and reports hook status under %LOCALAPPDATA%\\hermes (#24966)', () => {

@@ -11,7 +11,7 @@ import {
   isPlanApprovalSubject
 } from '../../../../shared/agent-session-approval-subject'
 import { NativeChatCodeBlock } from './NativeChatCodeBlock'
-import type { ChatApproval } from './native-chat-interactive-prompt'
+import type { ChatApproval } from '../../../../shared/native-chat-interactive-prompt'
 import { NativeChatPromptCollapseToggle } from './NativeChatPromptCollapse'
 import { useNativeChatPromptCardFocus } from './use-native-chat-prompt-card-focus'
 

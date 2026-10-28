@@ -191,7 +191,7 @@ const MOBILE_WEB_APP_PREFIXES = [
   'mobile/pnpm-lock.yaml',
   'mobile/modules/orca-mobile-web-shell/',
   // Chat visuals on both mobile surfaces are built from it; their in-page links check runs here.
-  'src/shared/native-chat-visual-shell'
+  'src/shared/native-chat/native-chat-visual-shell'
 ]
 
 function changesMobileWebApp(changedFiles) {
@@ -273,7 +273,7 @@ const CROSS_VERSION_WIRE_PREFIXES = [
   'src/renderer/src/lib/agent-launch-routing.ts',
   'src/renderer/src/runtime/paired-host-client-capabilities.ts',
   'src/shared/electron-remote-runtime-client-capabilities.ts',
-  'src/shared/remote-runtime-client-capabilities.ts',
+  'src/shared/remote-runtime/remote-runtime-client-capabilities.ts',
   // An older app opening a newer orchestration database (orchestration-delivery-downgrade).
   'src/main/runtime/orchestration/db.ts',
   'src/main/runtime/orchestration/db/',
@@ -328,15 +328,15 @@ const NATIVE_CACHE_FILES = new Set([
   'config/scripts/electron-platform-path.mjs',
   'config/scripts/zip-extractor-command.mjs',
   'src/shared/zip-extractor-command.ts',
-  'config/scripts/shared-electron-dist-cache.mjs',
-  'config/scripts/shared-tree-publish.mjs',
   'config/scripts/space-sharing-copy.mjs',
-  'config/scripts/native-build-entry.cjs',
-  'config/scripts/native-build-entry-probe.cjs',
-  'config/scripts/shared-native-build.mjs'
+  'config/scripts/native-dependency-lock-digest.mjs',
+  'config/scripts/orcad-prebuild-node-gyp.mjs',
+  'config/scripts/msbuild-file-tracking.mjs'
 ])
 
 const NATIVE_CACHE_PREFIXES = [
+  'config/scripts/native-build-entry',
+  'config/scripts/shared-',
   'config/patches/node-pty@',
   'config/patches/@vscode__windows-process-tree',
   // The vendored addons' sources: build/ and bin/ beside them are ignored, so nothing else lands here.

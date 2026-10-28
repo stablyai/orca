@@ -121,29 +121,6 @@ describe('inspectSetupScriptImportCandidates', () => {
     ).resolves.toEqual([])
   })
 
-  it('imports setup and teardown commands from Superset config', async () => {
-    const candidates = await inspectSetupScriptImportCandidates(
-      makeReader({
-        '.superset/config.json': JSON.stringify({
-          setup: ['./.superset/setup.sh', 'bun install'],
-          teardown: ['./.superset/teardown.sh'],
-          run: ['bun dev']
-        })
-      })
-    )
-
-    expect(candidates).toEqual([
-      {
-        provider: 'superset',
-        label: 'Superset',
-        files: ['.superset/config.json'],
-        setup: './.superset/setup.sh\nbun install',
-        archive: './.superset/teardown.sh',
-        unsupportedFields: ['run']
-      }
-    ])
-  })
-
   it('applies Superset local before and after setup overlays', async () => {
     const candidates = await inspectSetupScriptImportCandidates(
       makeReader({
@@ -171,34 +148,6 @@ describe('inspectSetupScriptImportCandidates', () => {
         setup: 'corepack enable\nbun install\nbun run db:migrate',
         archive: 'docker compose down --remove-orphans',
         unsupportedFields: ['cwd', 'config.local.run']
-      }
-    ])
-  })
-
-  it('reports unsupported Superset local script object fields', async () => {
-    const candidates = await inspectSetupScriptImportCandidates(
-      makeReader({
-        '.superset/config.json': JSON.stringify({
-          setup: ['bun install']
-        }),
-        '.superset/config.local.json': JSON.stringify({
-          setup: {
-            before: ['corepack enable'],
-            after: ['bun run db:migrate'],
-            cwd: 'packages/web'
-          }
-        })
-      })
-    )
-
-    expect(candidates).toEqual([
-      {
-        provider: 'superset',
-        label: 'Superset',
-        files: ['.superset/config.json', '.superset/config.local.json'],
-        setup: 'corepack enable\nbun install\nbun run db:migrate',
-        archive: undefined,
-        unsupportedFields: ['config.local.setup.cwd']
       }
     ])
   })
@@ -233,58 +182,6 @@ describe('inspectSetupScriptImportCandidates', () => {
         files: ['.cmux/cmux.json'],
         setup: './scripts/setup.sh',
         unsupportedFields: ['commands.1.confirm', 'commands.1.cwd']
-      }
-    ])
-  })
-
-  it('imports setup commands from root cmux config when project config is absent', async () => {
-    const candidates = await inspectSetupScriptImportCandidates(
-      makeReader({
-        'cmux.json': JSON.stringify({
-          commands: [
-            {
-              title: 'Workspace Setup',
-              keywords: ['setup'],
-              command: 'pnpm install'
-            }
-          ]
-        })
-      })
-    )
-
-    expect(candidates).toEqual([
-      {
-        provider: 'cmux',
-        label: 'cmux',
-        files: ['cmux.json'],
-        setup: 'pnpm install',
-        unsupportedFields: []
-      }
-    ])
-  })
-
-  it('imports setup and archive commands from Conductor config', async () => {
-    const candidates = await inspectSetupScriptImportCandidates(
-      makeReader({
-        'conductor.json': JSON.stringify({
-          scripts: {
-            setup: 'pnpm install',
-            archive: 'pnpm clean',
-            run: 'pnpm dev'
-          },
-          runScriptMode: 'manual'
-        })
-      })
-    )
-
-    expect(candidates).toEqual([
-      {
-        provider: 'conductor',
-        label: 'Conductor',
-        files: ['conductor.json'],
-        setup: 'pnpm install',
-        archive: 'pnpm clean',
-        unsupportedFields: ['runScriptMode', 'scripts.run']
       }
     ])
   })

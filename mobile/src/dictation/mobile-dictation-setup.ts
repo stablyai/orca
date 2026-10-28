@@ -1,3 +1,4 @@
+import { hostDictationErrorMessage } from '../../../src/shared/host-dictation-error-messages'
 import type { RpcOperationSender } from '../transport/rpc-operation-sender'
 import type { RpcResponse } from '../transport/types'
 import { interpretOrThrowRefusalMessage } from '../transport/rpc-refusal-message'
@@ -33,10 +34,17 @@ function isLegacyDesktopSpeechSetupReply(reply: RpcResponse): boolean {
 }
 
 // Headless servers lacked speech from 1.4.229 until #31174; name the required fix.
-export const SPEECHLESS_SERVER_MESSAGE = 'Update Orca on this server to use voice dictation.'
+const SPEECHLESS_SERVER_MESSAGE = 'Update Orca on this server to use voice dictation.'
 
-export function isSpeechlessServerError(message: string): boolean {
+function isSpeechlessServerError(message: string): boolean {
   return message.startsWith('speech_unavailable')
+}
+
+export function dictationFailureMessage(message: string): string {
+  if (isSpeechlessServerError(message)) {
+    return SPEECHLESS_SERVER_MESSAGE
+  }
+  return hostDictationErrorMessage(message) ?? message
 }
 
 function isSpeechlessServerReply(reply: RpcResponse): boolean {
@@ -110,12 +118,18 @@ export function isModelInFlight(model: MobileSpeechModel): boolean {
   return model.status === 'downloading' || model.status === 'extracting'
 }
 
-export function isDictationReady(setup: MobileSpeechSetup): boolean {
-  if (!setup.enabled || !setup.selectedModelId) {
-    return false
+// Hide the mic only when dictation was turned off with a model chosen; with none chosen a tap explains setup.
+export function dictationMicHidden(setup: MobileSpeechSetup): boolean {
+  return setup.enabled === false && setup.selectedModelId !== ''
+}
+
+// Mirror the host's start refusals on what it reported; absent fields or an uncatalogued (user) model stay the host's call.
+export function dictationNeedsSetup(setup: MobileSpeechSetup): boolean {
+  if (setup.enabled === false || setup.selectedModelId === '') {
+    return true
   }
-  const selected = setup.models.find((m) => m.id === setup.selectedModelId)
-  return selected?.status === 'ready'
+  const status = setup.models.find((m) => m.id === setup.selectedModelId)?.status
+  return status !== undefined && status !== 'ready'
 }
 
 // Keep copy short and host-neutral: the paired computer may be a headless server.

@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Plus, TerminalSquare, Trash2 } from 'lucide-react'
+import { FolderInput, Plus, TerminalSquare, Trash2 } from 'lucide-react'
 import {
   ORCAD_HOST_NEWER_DEFERRAL_CODE,
   type WslHostConnectIntent,
@@ -18,6 +18,8 @@ import { AddRemoteHostDialog, type AddRemoteHostMode } from '../sidebar/AddRemot
 import { HostRemoveDialog } from '../sidebar/HostRemoveDialog'
 import {
   openWslHostsExperimentalSetting,
+  useWslHostsAcceptNewWork,
+  useWslHostsPaused,
   useWslHostsEnabled,
   useWslHostServerFilesMissing,
   wslHostsAvailable
@@ -26,6 +28,7 @@ import {
   getWslHostRowDetail,
   getWslHostStatusLabel,
   getWslHostServerFilesMissingLabel,
+  getWslHostsPausedLabel,
   getWslHostsTurnedOffLabel
 } from '../sidebar/wsl-host-row-status'
 import { Badge } from '../ui/badge'
@@ -33,6 +36,15 @@ import { Button } from '../ui/button'
 import { DropdownMenuItem } from '../ui/dropdown-menu'
 import { managedServerOutcomeLabel } from './managed-server-copy'
 import { ServerListRow, ServerRowChip, type ServerRowStatus } from './runtime-server-list-row'
+import { WslMoveOrchestratorStatusLine } from '../wsl-move/WslMoveOrchestratorStatusLine'
+import { wslMoveOrchestratorLine } from '../wsl-move/wsl-move-orchestrator-copy'
+import {
+  useWslMoveOrchestratorStatus,
+  wslMoveOrchestratorRecordFor
+} from '../wsl-move/wsl-move-orchestrator-status'
+import { openWslMoveDialogFor } from '../wsl-move/wsl-move-entry'
+import { WslMoveUnfinishedNotice } from '../wsl-move/WslMoveUnfinishedNotice'
+import { readIpcErrorDetail } from '@/lib/ipc-error'
 
 function getWslHostRowStatus(
   status: WslHostStatus | undefined,
@@ -76,6 +88,8 @@ export function WslHostsSection({
   // Read WSL hosts directly because the remote-server catalog excludes them.
   const environments = useAppStore((s) => s.runtimeEnvironments)
   const enabled = useWslHostsEnabled()
+  const acceptsNewWork = useWslHostsAcceptNewWork()
+  const paused = useWslHostsPaused()
   const serverFilesMissing = useWslHostServerFilesMissing()
   // Share unavailable reasons across every listing of the host.
   const unavailableLabel = serverFilesMissing
@@ -84,6 +98,7 @@ export function WslHostsSection({
       ? null
       : getWslHostsTurnedOffLabel()
   const statuses = useAppStore((s) => s.wslHostStatuses)
+  const moveRecords = useWslMoveOrchestratorStatus((s) => s.records)
   const [dialogMode, setDialogMode] = useState<AddRemoteHostMode | null>(null)
   const [connectingId, setConnectingId] = useState<string | null>(null)
   const [removing, setRemoving] = useState<PublicKnownRuntimeEnvironment | null>(null)
@@ -104,7 +119,8 @@ export function WslHostsSection({
       await api.connect({ environmentId, ...(intent ? { intent } : {}) })
       onChanged()
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : String(error))
+      // The main process's message is for the user; Electron's wrapper and the class name aren't.
+      toast.error(readIpcErrorDetail(error) ?? String(error))
     } finally {
       setConnectingId(null)
     }
@@ -122,13 +138,15 @@ export function WslHostsSection({
           </div>
           <p className="text-xs text-muted-foreground">
             {unavailableLabel ??
-              translate(
-                'auto.components.settings.wslHosts.description',
-                'Orca runs a server inside each distro. A stopped distro starts only when you open one of its projects or connect it here.'
-              )}
+              (paused
+                ? getWslHostsPausedLabel()
+                : translate(
+                    'auto.components.settings.wslHosts.description',
+                    'Orca runs a server inside each distro. A stopped distro starts only when you open one of its projects or connect it here.'
+                  ))}
           </p>
         </div>
-        {enabled ? (
+        {enabled && !acceptsNewWork ? null : enabled ? (
           <Button
             type="button"
             variant="outline"
@@ -158,6 +176,10 @@ export function WslHostsSection({
             const deferred = unavailableLabel ? null : status?.deferredUpdate
             const connectDisabled =
               unavailableLabel !== null || connectingId !== null || status?.state === 'connecting'
+            const distro = environment.orcadDeployment.distro
+            const moveLine = unavailableLabel
+              ? null
+              : wslMoveOrchestratorLine(wslMoveOrchestratorRecordFor(moveRecords, distro))
             return (
               <ServerListRow
                 key={environment.id}
@@ -183,6 +205,7 @@ export function WslHostsSection({
                   </span>
                 }
                 status={getWslHostRowStatus(status, unavailableLabel !== null)}
+                footer={moveLine ? <WslMoveOrchestratorStatusLine distro={distro} /> : undefined}
                 primaryAction={
                   // A newer Orca's host refuses Update; Force stays in the menu.
                   deferred && deferred.code !== ORCAD_HOST_NEWER_DEFERRAL_CODE ? (
@@ -230,6 +253,14 @@ export function WslHostsSection({
                         {translate('auto.components.settings.wslHosts.connect', 'Connect')}
                       </DropdownMenuItem>
                     ) : null}
+                    {unavailableLabel || !acceptsNewWork ? null : (
+                      <DropdownMenuItem
+                        onSelect={() => openWslMoveDialogFor(environment.orcadDeployment.distro)}
+                      >
+                        <FolderInput />
+                        {translate('wslMove.entry.hostRow', 'Move projects from this distro…')}
+                      </DropdownMenuItem>
+                    )}
                     <DropdownMenuItem
                       variant="destructive"
                       disabled={connectingId !== null}
@@ -245,6 +276,7 @@ export function WslHostsSection({
           })}
         </div>
       ) : null}
+      {enabled && !serverFilesMissing ? <WslMoveUnfinishedNotice /> : null}
       {removing ? (
         <HostRemoveDialog
           open

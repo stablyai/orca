@@ -29,6 +29,8 @@ export type GitInspectionApi = {
     /** Merge-base OID to measure the branch line total against; omit to skip the work. */
     branchLineTotalMergeBase?: string
     requestToken?: string
+    /** The active workspace's first status: a user act that may start its WSL distro. */
+    wakeWslDistro?: boolean
   }) => Promise<GitStatusResult>
   cancelStatus: (args: { requestToken: string }) => Promise<void>
   setStatusUpstreamRefWatch: (args: {
@@ -123,6 +125,7 @@ export type GitInspectionApi = {
     worktreePath: string
     relativePath: string
     line: number
+    endLine?: number
     connectionId?: string
   }) => Promise<string | null>
   remoteCommitUrl: (args: {

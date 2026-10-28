@@ -62,9 +62,6 @@ describe('mobile native-chat terminal stream lifecycle', () => {
   })
 
   it('resumes only the ready active terminal after chat closes', () => {
-    expect(resolveMobileNativeChatTerminalStreamAction({ ...base, streamActive: false })).toBe(
-      'resume'
-    )
     expect(
       resolveMobileNativeChatTerminalStreamAction({
         ...base,

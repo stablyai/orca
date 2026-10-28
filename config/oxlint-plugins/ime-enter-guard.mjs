@@ -89,7 +89,7 @@ function testsEnter(text) {
 }
 
 function createImeEnterGuardRule(context) {
-  // Reports need an Enter test somewhere in the file; returning no visitors skips AST transfer.
+  // Reports need an Enter test; empty visitors avoid JS AST deserialization.
   if (!testsEnter(context.sourceCode.text)) {
     return {}
   }

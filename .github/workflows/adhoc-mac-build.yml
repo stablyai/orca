@@ -250,11 +250,19 @@ jobs:
           echo "tag=$TAG" >>"$GITHUB_OUTPUT"
 
   build-adhoc-mac-arch:
-    needs: [resolve-ref, orcad-template-support, release-javascript, prepare-adhoc-mac-release]
-    # Template qualification gates packaging after desktop preparation.
+    needs:
+      [
+        resolve-ref,
+        orcad-template-support,
+        orcad-template,
+        release-javascript,
+        prepare-adhoc-mac-release
+      ]
+    # Start after template qualification: overlapping ~2.5 min of preparation left both Macs idle ~7 min.
     if: >-
       !cancelled() && github.repository == 'stablyai/orca' &&
       needs.orcad-template-support.result == 'success' &&
+      (needs.orcad-template.result == 'success' || needs.orcad-template-support.outputs.ships != 'true') &&
       needs.release-javascript.result == 'success' &&
       needs.prepare-adhoc-mac-release.result == 'success'
     # Signing environment must restrict deployments to main after MAC_CERTS/password, APPLE_ID/app password/team and hourly App secrets move there; referencing it alone enforces nothing.
@@ -266,7 +274,8 @@ jobs:
       fail-fast: false
       matrix:
         arch: [x64, arm64]
-    runs-on: blacksmith-12vcpu-macos-15
+    # Notary waits dominate; 12 vCPUs packaged no faster than the hourly build’s 6.
+    runs-on: blacksmith-6vcpu-macos-15
     # Allow 150min for install 3×10 + publish 2×45 + ~25 setup/build/verify; outer timeout would prevent cleanup.
     timeout-minutes: 150
     env:
@@ -373,30 +382,6 @@ jobs:
           NODE_OPTIONS: --max-old-space-size=4096
           # Leave build identity unset: telemetry accepts only official stable/rc, so branch artifacts stay silent.
           ORCA_DIAGNOSTICS_TOKEN_URL: https://www.onorca.dev/diagnostics/token
-
-      - name: Wait for the qualified orcad template
-        if: needs.orcad-template-support.outputs.ships == 'true'
-        uses: actions/github-script@v8
-        with:
-          script: |
-            const deadline = Date.now() + 30 * 60_000
-            while (Date.now() < deadline) {
-              const jobs = await github.paginate(github.rest.actions.listJobsForWorkflowRun, {
-                ...context.repo, run_id: context.runId, filter: 'latest', per_page: 100
-              })
-              const lanes = jobs.filter(job => job.name.startsWith('orcad-template / '))
-              const failed = lanes.find(job => job.status === 'completed' &&
-                ['failure', 'cancelled', 'timed_out', 'action_required', 'startup_failure'].includes(job.conclusion))
-              if (failed) throw new Error(`Template qualification failed: ${failed.name}`)
-              const artifacts = await github.paginate(github.rest.actions.listWorkflowRunArtifacts, {
-                ...context.repo, run_id: context.runId, per_page: 100
-              })
-              const ready = artifacts.some(artifact => artifact.name === 'orcad-template' && !artifact.expired)
-              const completed = lanes.length > 0 && lanes.every(job => job.status === 'completed')
-              if (ready && (process.env.WAIT_FOR_TEMPLATE_COMPLETION !== '1' || completed)) return
-              await new Promise(resolve => setTimeout(resolve, 15_000))
-            }
-            throw new Error('Timed out waiting for the qualified orcad template')
 
       # After the app build so nothing that cleans out/ can drop it; electron-builder ships it.
       - name: Download the orcad deployment template

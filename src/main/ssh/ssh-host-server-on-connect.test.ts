@@ -32,6 +32,18 @@ describe('which server an SSH host runs on connect', () => {
     expect(d.convert).not.toHaveBeenCalled()
   })
 
+  it("says when a converted host's server kept moved automations off", async () => {
+    const d = deps({
+      managedEnvironmentId: () => 'env-9',
+      retainCommittedSource: vi.fn(async () => 2)
+    })
+    await expect(resolveHostServerOnConnect(target, d)).resolves.toEqual({
+      route: 'managed',
+      environmentId: 'env-9',
+      automationsLeftDisabled: 2
+    })
+  })
+
   it('checks the server behind the tunnel on every connect to a converted host', async () => {
     const d = deps({ managedEnvironmentId: () => 'env-9' })
     await resolveHostServerOnConnect(target, d)

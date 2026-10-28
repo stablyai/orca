@@ -15,6 +15,7 @@ export type StructuredAgentSessionLaunchView = {
   kind: 'new' | 'resume'
   /** The encoded selection the launch seeded, shown until the host names the model. */
   seedOptions?: Readonly<Record<string, string>>
+  explicitOptions?: Readonly<Record<string, string>>
   /** Picks the launch holds and applies before it publishes. */
   heldOptions: Readonly<Record<string, string>>
   /** Where the chat runs; its own config may replace the listed default. */
@@ -79,10 +80,11 @@ function useLaunchView(
             ...(selection?.seed ? { seedOptions: selection.seed } : {}),
             ...(seedPending ? { seedPending: true as const } : {}),
             heldOptions: held,
+            ...(selection?.explicit ? { explicitOptions: selection.explicit } : {}),
             ...(worktreeId ? { worktree: toRuntimeWorktreeSelector(worktreeId) } : {})
           }
         : undefined,
-    [held, intent.kind, selection?.seed, seedPending, worktreeId]
+    [held, intent.kind, selection?.seed, selection?.explicit, seedPending, worktreeId]
   )
 }
 

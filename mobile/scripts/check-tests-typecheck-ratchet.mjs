@@ -14,6 +14,10 @@ const ERROR_LINE = /^(\S.*?)\(\d+,\d+\): error TS\d+:/
 // Require every on-disk test in program except these explicit exclusions: error-only diff cannot see excluded/shadowed tests.
 export const TESTS_OUTSIDE_PROGRAM = new Map([
   [
+    'src/session/mobile-native-command-discovery.test.tsx',
+    'Node-side: imports the desktop ACP command discovery source, checked against @types/node rather than RN libs'
+  ],
+  [
     'src/tasks/agent-launch-mobile-replay.test.ts',
     'Node-side: imports the desktop main process, checked against @types/node rather than RN libs'
   ],
@@ -149,6 +153,7 @@ export function collectTypecheckPass(root = process.cwd()) {
   const output = `${result.stdout ?? ''}${result.stderr ?? ''}`
   return {
     failing: parseFailingFiles(output),
+    diagnostics: output.split('\n').filter((line) => ERROR_LINE.test(line)),
     programTestFiles: parseProgramTestFiles(output, fs.realpathSync(root))
   }
 }
@@ -273,6 +278,9 @@ export function main(root = process.cwd()) {
 
   if (added.length > 0) {
     printAddedFailure(added)
+    for (const diagnostic of pass.diagnostics) {
+      console.error(diagnostic)
+    }
     if (stale.length > 0) {
       printStaleFailure(stale)
     }

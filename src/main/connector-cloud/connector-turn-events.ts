@@ -2,7 +2,12 @@
 import { readFileSync, rmSync } from 'node:fs'
 import { join } from 'node:path'
 import { z } from 'zod'
-import { CONNECTOR_CLIENT_LIMITS, type ConnectorEvent } from '../../shared/connector-cloud-contract'
+import {
+  cloudConversation,
+  CONNECTOR_CLIENT_LIMITS,
+  ConnectorConversation,
+  type ConnectorEvent
+} from '../../shared/connector-cloud-contract'
 import { writeSecureJsonFile } from '../../shared/secure-file'
 import type {
   ConversationEvent,
@@ -10,7 +15,7 @@ import type {
 } from '../external-conversations/external-conversation-events'
 import { isMissingFileError } from '../runtime/device-registry-corruption'
 import { ConnectorOutbox, type ConnectorOutboxHead, type ConnectorStamp } from './connector-outbox'
-import { connectorSnapshot, jsonBytes, slackConversation, unsupported } from './connector-snapshot'
+import { connectorSnapshot, jsonBytes, unsupported } from './connector-snapshot'
 
 const TURN_OUTBOX_FILE = 'connector-turn-outbox.json'
 const MAX_TURN_ENDS = 200
@@ -27,7 +32,7 @@ const StoredOutbox = z.object({
   turnEnds: z.array(
     z.object({
       kind: z.literal('turn-ended'),
-      conversation: z.object({ source: z.literal('slack'), externalId: z.string().min(1) }),
+      conversation: ConnectorConversation,
       paneKey: z.string().min(1),
       turnId: z.number(),
       at: z.number(),
@@ -75,7 +80,7 @@ function promptEvent(event: Extract<ConnectorEvent, { kind: 'prompt' }>): Connec
 }
 
 export function toConnectorEvent(event: ConversationEvent): ConnectorEvent | null {
-  const conversation = slackConversation(event.conversation)
+  const conversation = cloudConversation(event.conversation)
   if (!conversation) {
     return null
   }

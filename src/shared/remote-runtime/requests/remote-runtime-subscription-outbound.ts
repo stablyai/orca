@@ -1,5 +1,5 @@
 import WebSocket from 'ws'
-import { RemoteRuntimeClientError } from '../../remote-runtime-client-error'
+import { RemoteRuntimeClientError } from '../remote-runtime-client-error'
 import { createWsOutboundBackpressureQueue } from '../../ws-outbound-backpressure-queue'
 
 export type RemoteRuntimeOutboundSocketMemory = {

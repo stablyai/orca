@@ -21,3 +21,8 @@ export function mobilePickedFileFallbackName(mime: string, index: number): strin
   const extension = known ?? (/^[a-z0-9]{1,8}$/.test(subtype) ? subtype : '')
   return extension ? `attachment-${index}.${extension}` : `attachment-${index}`
 }
+
+// Images keep the host's orca-paste-*.png name, which transcript readers recognize as a pasted image.
+export function isPickedImageMime(mime: string | null | undefined): boolean {
+  return mime?.trim().toLowerCase().startsWith('image/') ?? false
+}

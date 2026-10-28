@@ -1,6 +1,6 @@
 import { useAppStore } from '@/store'
 import type { Worktree } from '../../../../shared/worktree/types'
-import { normalizeAbsolutePath } from '@/lib/terminal-path-normalization'
+import { normalizeAbsolutePath } from '../../../../shared/terminal-path-normalization'
 import { resolveExactWorktreeRoute } from '@/lib/worktree-owner-route'
 import {
   getFloatingWorkspaceOperationRoute,

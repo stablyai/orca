@@ -3,9 +3,9 @@ import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { NativeChatMessage } from '../../../src/shared/native-chat-types'
 import { MobileNativeChatOverlay } from './MobileNativeChatOverlay'
-import type { MobileNativeChatController } from './use-mobile-native-chat-controller'
+import type { MobileNativeChatController } from './mobile-native-chat-controller-contract'
 import type { MobileImageSource } from '../platform/media-picker-contract'
-import { findAllByHostType, findByHostType } from '../test-support/react-test-renderer-host-nodes'
+import { findByHostType } from '../test-support/react-test-renderer-host-nodes'
 
 vi.mock('react-native', () => ({
   StyleSheet: { create: (styles: unknown) => styles, absoluteFillObject: {} },
@@ -14,25 +14,22 @@ vi.mock('react-native', () => ({
 
 vi.mock('./MobileNativeChatView', () => ({ MobileNativeChatView: 'ChatView' }))
 vi.mock('../platform/use-reduced-motion', () => ({ useReducedMotionEnabled: () => null }))
-vi.mock('./MobileNativeChatQueuedMessages', () => ({ MobileNativeChatQueuedMessages: 'Queued' }))
-vi.mock('./MobileNativeChatBackgroundTasks', () => ({
+vi.mock('./native-chat/input/MobileNativeChatQueuedMessages', () => ({
+  MobileNativeChatQueuedMessages: 'Queued'
+}))
+vi.mock('./native-chat/input/MobileNativeChatBackgroundTasks', () => ({
   MobileNativeChatBackgroundTasks: 'BackgroundTasks'
 }))
-vi.mock('./MobileNativeChatVisual', () => ({ useMobileNativeChatVisualRenderer: () => null }))
-vi.mock('./MobileNativeChatRowOverlaysHost', () => ({
+vi.mock('./native-chat/visual/MobileNativeChatVisual', () => ({
+  useMobileNativeChatVisualRenderer: () => null
+}))
+vi.mock('./native-chat/transcript/MobileNativeChatRowOverlaysHost', () => ({
   MobileNativeChatRowOverlaysHost: 'View'
 }))
-
-function assistantTurn(id: string, text: string): NativeChatMessage {
-  return { id, role: 'assistant', blocks: [{ type: 'text', text }], timestamp: 0, source: 'hook' }
-}
 
 type Tick = {
   show?: boolean
   messages?: NativeChatMessage[]
-  streamingText?: string
-  streamLive?: boolean
-  identity?: string
   stopping?: boolean
   acceptsImages?: boolean
   agent?: string
@@ -51,18 +48,14 @@ function overlayElement(tick: Tick): ReturnType<typeof createElement> {
     nativeChatStructured: tick.structured ?? false,
     setTabView: tick.setTabView ?? vi.fn(),
     nativeChatAcceptsImages: tick.acceptsImages ?? true,
-    nativeChatAgentWorking: tick.streamLive ?? false,
     nativeChatTurnIndicator: {
       thinking: false,
       activityText: null,
       stopping: tick.stopping ?? false
     },
-    nativeChatStreamingText: tick.streamingText,
-    nativeChatStreamLive: tick.streamLive ?? false,
-    nativeChatStreamScopeKey: tick.identity ?? 'tab-a',
     chatPending: [],
     chatImagePreviewsByMessageId: {},
-    chatComposerText: '',
+    chatDraftKey: null,
     setChatComposerText: vi.fn(),
     nativeChatQueued: {
       cards: [],
@@ -93,122 +86,13 @@ function overlayElement(tick: Tick): ReturnType<typeof createElement> {
     inputLockReason: null,
     sendErrorMessage: null,
     onClearSendError: vi.fn(),
-    sendSurfaceId: tick.identity ?? 'tab-a',
+    sendSurfaceId: 'tab-a',
     sessionId: null,
     getSendCompletionGeneration: () => 0,
-    keyboardInset: 0
+    keyboardInset: 0,
+    hostName: null
   })
 }
-
-describe('MobileNativeChatOverlay streaming gate', () => {
-  let renderer: ReactTestRenderer | null = null
-
-  afterEach(() => {
-    act(() => renderer?.unmount())
-    renderer = null
-  })
-
-  async function render(tick: Tick): Promise<void> {
-    await act(async () => {
-      renderer = create(overlayElement(tick))
-    })
-  }
-
-  async function update(tick: Tick): Promise<void> {
-    await act(async () => {
-      renderer?.update(overlayElement(tick))
-    })
-  }
-
-  function streaming(): string | null | 'hidden' {
-    const views = findAllByHostType(renderer!.root, 'ChatView')
-    return views.length === 0 ? 'hidden' : (views[0].props.streaming as string | null)
-  }
-
-  it('keeps streaming a reply that repeats the previous turn as a prefix', async () => {
-    const prior = [assistantTurn('a1', 'The tests pass.')]
-    await render({ messages: prior })
-    expect(streaming()).toBeNull()
-
-    await update({ messages: prior, streamingText: 'The tests', streamLive: true })
-
-    expect(streaming()).toBe('The tests')
-  })
-
-  it('drops the streaming bubble once the reply lands as its own turn', async () => {
-    const prior = [assistantTurn('a1', 'Done.')]
-    await render({ messages: prior })
-    await update({ messages: prior, streamingText: 'Done.', streamLive: true })
-    expect(streaming()).toBe('Done.')
-
-    await update({
-      messages: [...prior, assistantTurn('a2', 'Done.')],
-      streamingText: 'Done.',
-      streamLive: true
-    })
-
-    expect(streaming()).toBeNull()
-  })
-
-  it('keeps the bubble across a peek at the terminal view', async () => {
-    // Keep the baseline above chat-list unmounts so repeated-prefix replies still stream after terminal toggles.
-    const prior = [assistantTurn('a1', 'Done.')]
-    await render({ messages: prior })
-    await update({ messages: prior, streamingText: 'Done.', streamLive: true })
-    expect(streaming()).toBe('Done.')
-
-    await update({ show: false, messages: [], streamLive: true })
-    expect(streaming()).toBe('hidden')
-    // Status streaming returns before the transcript refresh; that round-trip gap must remain visible.
-    await update({ messages: [], streamLive: true })
-    await update({ messages: [], streamingText: 'Done.', streamLive: true })
-    await update({ messages: prior, streamingText: 'Done.', streamLive: true })
-
-    expect(streaming()).toBe('Done.')
-  })
-
-  it('keeps the bubble across a peek at the terminal taken between turns', async () => {
-    // An idle toggle must not replace the baseline with an empty withheld transcript.
-    const prior = [assistantTurn('a1', 'Done.')]
-    await render({ messages: prior })
-
-    await update({ show: false, messages: [] })
-    await update({ show: false, messages: [], streamLive: true })
-    await update({ messages: [], streamLive: true })
-    await update({ messages: [], streamingText: 'Done.', streamLive: true })
-    await update({ messages: prior, streamingText: 'Done.', streamLive: true })
-
-    expect(streaming()).toBe('Done.')
-  })
-
-  it('hides a repeated part whose own turn landed during a mid-turn gap', async () => {
-    // Textless tool ticks must not adopt the just-finished part as history and draw it twice.
-    const prior = [assistantTurn('a1', 'Done.')]
-    await render({ messages: prior })
-    await update({ messages: prior, streamingText: 'Done.', streamLive: true })
-    expect(streaming()).toBe('Done.')
-
-    const landed = [...prior, assistantTurn('a2', 'Done.')]
-    await update({ messages: landed, streamLive: true })
-    await update({ messages: landed, streamingText: 'Done.', streamLive: true })
-
-    expect(streaming()).toBeNull()
-  })
-
-  it("does not carry one chat's baseline into another stream identity", async () => {
-    const prior = [assistantTurn('a1', 'Shared answer text')]
-    await render({ messages: prior, identity: 'tab-a' })
-
-    await update({
-      messages: prior,
-      streamingText: 'Shared answer',
-      streamLive: true,
-      identity: 'tab-b'
-    })
-
-    expect(streaming()).toBeNull()
-  })
-})
 
 describe("MobileNativeChatOverlay while a person's Stop ends the turn", () => {
   let renderer: ReactTestRenderer | null = null
@@ -227,11 +111,11 @@ describe("MobileNativeChatOverlay while a person's Stop ends the turn", () => {
   }
 
   it("holds the queued cards' Steer while the agent works and the host says Stopping", async () => {
-    expect(await steerHeld({ streamLive: true, stopping: true })).toBe(true)
+    expect(await steerHeld({ stopping: true })).toBe(true)
   })
 
   it('leaves Steer to the cards otherwise', async () => {
-    expect(await steerHeld({ streamLive: true, stopping: false })).toBe(false)
+    expect(await steerHeld({ stopping: false })).toBe(false)
   })
 })
 

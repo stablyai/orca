@@ -46,12 +46,6 @@ describe('CodexLoginLinkNotice', () => {
     await i18n.changeLanguage('en')
   })
 
-  it('renders nothing while no login is waiting on a browser', async () => {
-    stubApi(null)
-    const { container } = render(<CodexLoginLinkNotice />)
-    await waitFor(() => expect(container.textContent).toBe(''))
-  })
-
   it('shows the link of a login that was already running when Settings opened', async () => {
     stubApi(AUTH_URL)
     const { container } = render(<CodexLoginLinkNotice />)

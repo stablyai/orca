@@ -313,7 +313,7 @@ test('a phone can read a Codex chat it resumed from Session History before its f
     chmodSync(resumedCodex, 0o755)
     const launch = buildMobileAiVaultResumeLaunch({
       session: session!,
-      hostPlatform: process.platform,
+      workspacePlatform: process.platform,
       settings: { agentCmdOverrides: { codex: resumedCodex } }
     })
     const { tab } = await phone.call<{ tab: { parentTabId: string } }>(

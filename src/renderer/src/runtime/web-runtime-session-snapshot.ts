@@ -42,6 +42,11 @@ function loadSessionTabsApplyModules(): ReturnType<typeof importSessionTabsApply
   return sessionTabsApplyModules
 }
 
+/** Lets a test pay this lazy load before a timed wait instead of inside it. */
+export async function loadWebRuntimeSessionTabsApplyModulesForTests(): Promise<void> {
+  await loadSessionTabsApplyModules()
+}
+
 export async function refreshWebRuntimeSessionTabsSnapshot(
   environmentId: string,
   worktreeId: string,
@@ -152,10 +157,17 @@ export async function refreshWebRuntimeSessionTabsSnapshot(
       ? decideWebSessionTabsSnapshot(recovered, environmentId)
       : WEB_SESSION_TABS_FRAME_OUTRANKED
     const settleMirror = applyWebSessionTabsStorePatch(
-      (state) => {
+      (state, changedAgentPaneKeys) => {
         // Eager refresh can outlive workspace switches; update tabs without taking focus.
         const patch = decision.apply
-          ? applyWebSessionTabsSnapshot(state, recovered, environmentId)
+          ? applyWebSessionTabsSnapshot(
+              state,
+              recovered,
+              environmentId,
+              undefined,
+              undefined,
+              changedAgentPaneKeys
+            )
           : state
         return patch === state ? state : patch
       },

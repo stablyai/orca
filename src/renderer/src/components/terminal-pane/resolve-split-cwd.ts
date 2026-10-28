@@ -1,5 +1,5 @@
 // Prefer live OSC 7 cwd, then provider /proc/lsof lookup, then replayed OSC 7/workspace fallback; both live sources may legitimately lack evidence.
-import { isRemoteRuntimePtyId } from '../../../../shared/remote-runtime-pty-id'
+import { isRemoteRuntimePtyId } from '../../../../shared/remote-runtime/remote-runtime-pty-id'
 
 export type PaneCwdEntry = {
   cwd: string

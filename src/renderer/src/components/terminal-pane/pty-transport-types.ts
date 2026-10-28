@@ -269,6 +269,9 @@ export type IpcPtyTransportOptions = {
   cwd?: string
   /** Retain bounded user input until the pane's first PTY connection binds. */
   bufferInputUntilConnect?: boolean
+  /** A new pane with no old screen: typing before its first remote terminal exists goes to it. */
+  /** 'connect' decides once that the pane looked blank; 'bind' re-checks only what a create can't cause. */
+  keepTypeAheadForNewTerminal?: (phase: 'connect' | 'bind') => boolean
   /** Re-checked when held input would flush; false drops it (startup work appeared after the hold began). */
   releasePreconnectInput?: () => boolean
   /** Seed a fresh transport with input handed off from a remounted deferred split. */

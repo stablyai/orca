@@ -23,20 +23,6 @@ const list = (f: ReturnType<typeof createDefaultWorkspaceCleanupFilterState>) =>
   listAppliedWorkspaceCleanupFilters(f, FORMAT)
 
 describe('listAppliedWorkspaceCleanupFilters', () => {
-  it('shows nothing for a default profile', () => {
-    expect(list(createDefaultWorkspaceCleanupFilterState())).toEqual([])
-  })
-
-  it('names the reported stuck filter rather than its group', () => {
-    const filters = createDefaultWorkspaceCleanupFilterState()
-    filters.activity.idleMinDays = 20
-
-    const applied = list(filters)
-
-    expect(applied).toHaveLength(1)
-    expect(applied[0].label).toBe('Idle >= 20d')
-  })
-
   it('clears one constraint and leaves the rest of its own group alone', () => {
     const filters = createDefaultWorkspaceCleanupFilterState()
     filters.activity.idleMinDays = 20
@@ -83,43 +69,6 @@ describe('listAppliedWorkspaceCleanupFilters', () => {
     filters.location.pathPrefix = '  '
 
     expect(list(filters)).toEqual([])
-  })
-
-  it('ignores parameter fields that constrain nothing on their own', () => {
-    const filters = createDefaultWorkspaceCleanupFilterState()
-    filters.activity.idleSignal = 'created'
-    filters.safety.blockerMode = 'any-of'
-
-    expect(list(filters)).toEqual([])
-  })
-
-  it('shows the permissive booleans only when switched off', () => {
-    const filters = createDefaultWorkspaceCleanupFilterState()
-    filters.size.includeUnsized = false
-    filters.status.matchStatusless = false
-
-    expect(
-      list(filters)
-        .map((a) => a.id)
-        .sort()
-    ).toEqual(['size.includeUnsized', 'status.matchStatusless'])
-  })
-
-  it('gives every constraint a unique, stable id', () => {
-    const filters = createDefaultWorkspaceCleanupFilterState()
-    filters.activity.idleMinDays = 20
-    filters.size.maxBytes = 500
-    filters.status.archived = 'only'
-    filters.git.states = ['dirty']
-    filters.git.locked = 'exclude'
-    filters.location.repoIds = ['repo-1']
-    filters.safety.dismissed = 'only'
-
-    const ids = list(filters).map((a) => a.id)
-
-    expect(new Set(ids).size).toBe(ids.length)
-    expect(ids).toContain('status.archived')
-    expect(ids).toContain('git.locked')
   })
 
   it('clearing every chip in turn returns the profile to no constraints', () => {

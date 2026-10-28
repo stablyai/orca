@@ -1,9 +1,9 @@
+import './MobileNativeChatView.harness.test-fixture'
 import { createElement, type ReactNode } from 'react'
 import { act, create, type ReactTestInstance, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { NativeChatMessage } from '../../../src/shared/native-chat-types'
 import { MobileNativeChatView } from './MobileNativeChatView'
-import { styles } from './mobile-native-chat-view-styles'
 
 const scrollToEnd = vi.hoisted(() => vi.fn())
 const scrollToOffset = vi.hoisted(() => vi.fn())
@@ -62,29 +62,24 @@ vi.mock('lucide-react-native', () => ({
   Square: 'Square'
 }))
 
-vi.mock('./MobileNativeChatMessage', () => ({ MobileNativeChatMessage: 'ChatMessage' }))
-vi.mock('./MobileNativeChatLiveLine', () => ({ MobileNativeChatLiveLine: 'LiveStatus' }))
-vi.mock('./MobileNativeChatAsk', () => ({ MobileNativeChatAsk: 'ChatAsk' }))
-vi.mock('./MobileNativeChatPermission', () => ({ MobileNativeChatPermission: 'ChatPermission' }))
-vi.mock('./MobileNativeChatQuestion', () => ({ MobileNativeChatQuestion: 'ChatQuestion' }))
+vi.mock('./native-chat/transcript/MobileNativeChatMessage', () => ({
+  MobileNativeChatMessage: 'ChatMessage'
+}))
+vi.mock('./native-chat/transcript/MobileNativeChatLiveLine', () => ({
+  MobileNativeChatLiveLine: 'LiveStatus'
+}))
+vi.mock('./native-chat/input/MobileNativeChatAsk', () => ({ MobileNativeChatAsk: 'ChatAsk' }))
+vi.mock('./native-chat/input/MobileNativeChatPermission', () => ({
+  MobileNativeChatPermission: 'ChatPermission'
+}))
+vi.mock('./native-chat/input/MobileNativeChatQuestion', () => ({
+  MobileNativeChatQuestion: 'ChatQuestion'
+}))
 vi.mock('../components/ActionSheetModal', () => ({ ActionSheetModal: 'ActionSheetModal' }))
 
 vi.mock('./native-chat/composer/MobileNativeChatComposer', async () => {
-  const React = await import('react')
-  const { MobileNativeChatStopButton } = await import('./MobileNativeChatStopButton')
-  return {
-    MobileNativeChatComposer: (props: {
-      onSend: (text: string) => Promise<boolean>
-      disabled?: boolean
-      placeholder?: string
-      stop?: { onStop?: () => void; held: boolean } | null
-    }) =>
-      React.createElement(
-        'Composer',
-        { ...props, accessibilityLabel: 'Send message', onPress: () => props.onSend('hi') },
-        props.stop ? React.createElement(MobileNativeChatStopButton, props.stop) : null
-      )
-  }
+  const { composerStub } = await import('./MobileNativeChatView.render-stubs.test-fixture')
+  return composerStub()
 })
 
 type Overrides = {
@@ -124,7 +119,7 @@ function chatViewElement(overrides: Overrides): ReturnType<typeof createElement>
     getSendCompletionGeneration: () => 0,
     getComposerEditGeneration: () => 0,
     pending: [],
-    composerText: '',
+    draftKey: null,
     onComposerTextChange: vi.fn(),
     ...overrides
   })
@@ -319,16 +314,13 @@ describe('MobileNativeChatView', () => {
       expect(footerProps()).toMatchObject({ activityText: 'Running pnpm test' })
     })
 
-    it('gives the bridge lane the same live Working line, with no turn status', async () => {
+    it('gives the bridge lane the same turn status and live Working line', async () => {
       const folded = [userTurn('u1', 'go')]
       await render({ messages: folded, folded, agentWorking: true })
       const props = rowProps('u1')
       expect(props.structuredActivityUi).toBe(false)
-      expect(props.turnStatus).toBeNull()
-      expect(props.activeTurnIsWorking).toBe(false)
+      expect(props.turnStatus).toMatchObject({ workedSeconds: null })
       expect(footerProps()).toEqual({ thinking: false, activityText: null, stopping: false })
-      const list = renderer!.root.find((node) => String(node.type) === 'FlatList')
-      expect(list.props.contentContainerStyle).toBe(styles.listContent)
     })
 
     it('settles the finished turn to a tappable duration', async () => {
@@ -403,3 +395,7 @@ describe('MobileNativeChatView', () => {
     })
   })
 })
+
+vi.mock('./MobileQueuedMessageComposer', () => ({
+  MobileQueuedMessageComposer: 'QueuedMessageComposer'
+}))

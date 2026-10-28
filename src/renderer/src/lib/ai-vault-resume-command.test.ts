@@ -1,3 +1,5 @@
+import { getDefaultSettings } from '../../../shared/constants'
+import { TEST_REPO, makeWorktree } from '../store/slices/worktrees-slice-test-fixtures'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { AppState } from '@/store/types'
 import {
@@ -40,14 +42,20 @@ function makeState(args: {
   localWindowsRuntimePreference?: RuntimePreference
   terminalWindowsShell?: string
 }): AiVaultResumeCommandState {
+  const settings = getDefaultSettings('/tmp')
+  Reflect.deleteProperty(settings, 'agentPermissionDefault')
   return {
     activeRepoId: 'repo-1',
     activeWorktreeId: 'repo-1::worktree-1',
     folderWorkspaces: [],
     projectGroups: [],
-    repos: [{ id: 'repo-1', path: 'C:\\Users\\alice\\repo' }],
+    repos: [{ ...TEST_REPO, id: 'repo-1', path: 'C:\\Users\\alice\\repo' }],
     projects: [
       {
+        displayName: 'repo',
+        badgeColor: '',
+        createdAt: 0,
+        updatedAt: 0,
         id: 'repo-1',
         sourceRepoIds: ['repo-1'],
         ...(args.localWindowsRuntimePreference
@@ -56,6 +64,7 @@ function makeState(args: {
       }
     ],
     settings: {
+      ...settings,
       localWindowsRuntimeDefault: { kind: 'windows-host' },
       ...(args.terminalWindowsShell ? { terminalWindowsShell: args.terminalWindowsShell } : {}),
       agentDefaultArgs: { claude: '', codex: '' },
@@ -63,14 +72,14 @@ function makeState(args: {
     },
     worktreesByRepo: {
       'repo-1': [
-        {
+        makeWorktree({
           id: 'repo-1::worktree-1',
           repoId: 'repo-1',
           path: args.worktreePath
-        }
+        })
       ]
     }
-  } as unknown as AiVaultResumeCommandState
+  }
 }
 
 function buildQueuedAiVaultResumeCommand(

@@ -1,6 +1,11 @@
+import { installProgramStatusQueryResponder } from '../../../../src/shared/program-status/query-responder'
 import { enqueueWriteBoundary } from './write-queue'
 import { notify } from './host-notify'
-import type { TerminalDocumentDisposable, TerminalDocumentScope } from './document-scope'
+import type {
+  TerminalDocumentDisposable,
+  TerminalDocumentScope,
+  TerminalDocumentTerminal
+} from './document-scope'
 
 export type QueryReplyTerminal = {
   attachCustomKeyEventHandler: (handler: () => boolean) => void
@@ -59,4 +64,17 @@ export function attachTerminalQueryReplyBridge(
   } catch {}
   // Live queries may queue behind replay; grant authority at the boundary so only fresh queries receive replies.
   enqueueTerminalDataReplyBoundary(scope, gen)
+}
+
+// Answer OSC 7501 like desktop's capability replies; native drops it for hosts that cannot read reports.
+export function attachProgramStatusQueryReplies(
+  scope: TerminalDocumentScope,
+  term: TerminalDocumentTerminal
+) {
+  if (term.parser) {
+    installProgramStatusQueryResponder({
+      parser: term.parser,
+      emitReply: (reply) => forwardTerminalDataReply(scope, reply)
+    })
+  }
 }

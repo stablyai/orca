@@ -235,7 +235,8 @@ describe('conflict-review overview as a live read-only view of the record', () =
     const reloadContent = vi.fn()
     render(store, review, 'disk', { loadError: 'denied', reloadContent })
     retries.current[0]()
-    expect(reloadContent).toHaveBeenCalledWith(view)
+    // Retry is a user act that may start a stopped WSL distro.
+    expect(reloadContent).toHaveBeenCalledWith(view, { wakeWslDistro: true })
   })
 
   it("mounts as a passive mirror: the view's workspace, no cursor tracking, no reveals", () => {

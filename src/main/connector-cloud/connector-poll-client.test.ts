@@ -4,6 +4,7 @@ import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { CONNECTOR_PATHS } from '../../shared/connector-cloud-contract'
 import type { Delivery } from '../external-conversations/external-conversation-types'
+import { connectorReplyInstructions } from './connector-deliveries'
 import { connectorProjects } from './connector-places'
 import { ConnectorPollClient } from './connector-poll-client'
 import { ConnectorAccountTransport } from './connector-transport'
@@ -82,8 +83,8 @@ describe('ConnectorPollClient', () => {
       hostName: 'box',
       agents: ['claude', 'codex'],
       promptKinds: ['approval', 'question'],
-      features: ['answer', 'cancel'],
-      sources: ['slack'],
+      features: ['answer', 'cancel', 'reply'],
+      sources: ['slack', 'discord', 'linear'],
       projects: [{ placeId: project!.placeId, name: 'orca', kind: 'git' }]
     })
     expect(fake.events).toEqual([{ kind: 'snapshot', conversations: [] }])
@@ -111,7 +112,7 @@ describe('ConnectorPollClient', () => {
     await settle()
     expect(calls.start).toHaveBeenCalledWith(expect.anything(), conversation, 'd1', {
       agent: 'claude',
-      prompt: 'fix it',
+      prompt: `fix it\n\n${connectorReplyInstructions('slack')}`,
       target: expect.objectContaining({ kind: 'create-worktree' })
     })
     expect(fake.acks).toEqual([
@@ -581,6 +582,33 @@ describe('ConnectorPollClient', () => {
     })
     await settle(30_000)
     expect(fake.events).toContainEqual(expect.objectContaining({ kind: 'turn-ended', turnId: 4 }))
+    client.stop()
+  })
+
+  it('posts a reply to Orca Cloud with its turn, and a resend with the same id posts once', async () => {
+    const { client } = startClient()
+    await settle()
+    const body = { replyId: 'r1', conversation, turnId: 7, text: 'done' }
+    await expect(client.reply(body)).resolves.toEqual({
+      ok: true,
+      value: { status: 'posted', messageId: '1793.0042' }
+    })
+    await client.reply(body)
+    expect([...fake.replies.values()]).toEqual([{ v: 1, ...body }])
+    client.stop()
+  })
+
+  it('retries a busy cloud for a reply only after its Retry-After, with the same reply id', async () => {
+    const { client } = startClient()
+    await settle()
+    fake.forced.set(CONNECTOR_PATHS.replies, { status: 429, headers: { 'retry-after': '20' } })
+    const sent = client.reply({ replyId: 'r1', conversation, turnId: 7, text: 'done' })
+    await settle(19_000)
+    expect(fake.requestsTo(CONNECTOR_PATHS.replies)).toHaveLength(1)
+    fake.forced.delete(CONNECTOR_PATHS.replies)
+    await settle(2_000)
+    await expect(sent).resolves.toMatchObject({ ok: true })
+    expect([...fake.replies.keys()]).toEqual(['r1'])
     client.stop()
   })
 

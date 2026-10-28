@@ -5,7 +5,7 @@ import {
   type StructuredAgentLaunchPersistedRecord
 } from './structured-agent-session-launch-record'
 
-import { parseStructuredLaunchSeedOptions } from '../../../../../shared/native-chat-session-option-defaults'
+import { parseStructuredLaunchSeedOptions } from '../../../../../shared/native-chat/input/native-chat-session-option-defaults'
 import {
   LOCAL_EXECUTION_HOST_ID,
   parseExecutionHostId,

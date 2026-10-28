@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { ActivityIndicator, Pressable, Text, View } from 'react-native'
 import { GitPullRequestArrow, Link2, RefreshCw } from 'lucide-react-native'
 import { colors } from '../../theme/mobile-theme'
+import { useMobileColorScheme } from '../../theme/use-mobile-color-scheme'
 import type { RpcClient } from '../../transport/rpc-client'
 import type { ConnectionState } from '../../transport/types'
 import type { MobileGitStatusResult } from '../../source-control/mobile-git-status'
@@ -17,7 +18,7 @@ import {
   isMobileHostedReviewCommitFailure,
   runMobileHostedReviewCreateIntent
 } from '../../source-control/mobile-hosted-review-create-intent-runner'
-import { fetchWorktreeLinkedPR } from '../../source-control/mobile-pr-link'
+import { fetchWorktreeGitHubPRLink } from '../../source-control/mobile-pr-link'
 import { openMobilePrUrl } from '../mobile-pr-url'
 import { MobileLinkPrForm } from './MobileLinkPrForm'
 import { prCreateEmptyStateStyles as styles } from './pr-create-empty-state-styles'
@@ -46,6 +47,7 @@ export function PrSidebarCreateEmptyState({
   workspaceLabel,
   onCreated
 }: Props) {
+  useMobileColorScheme()
   const [mode, setMode] = useState<Mode>('choose')
   const [loading, setLoading] = useState(false)
   const [createWarning, setCreateWarning] = useState<string | null>(null)
@@ -73,10 +75,10 @@ export function PrSidebarCreateEmptyState({
       setOrphanLinkedPR(null)
       return
     }
-    void fetchWorktreeLinkedPR(client, worktreeId)
-      .then((n) => {
+    void fetchWorktreeGitHubPRLink(client, worktreeId)
+      .then((link) => {
         if (!cancelled) {
-          setOrphanLinkedPR(n)
+          setOrphanLinkedPR(link.linkedPR)
         }
       })
       .catch(() => {

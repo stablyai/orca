@@ -127,6 +127,36 @@ describe('terminal live input commit hook', () => {
     composingRange.hostReportsNone = false
   })
 
+  it('Given Cheonjiin jamo reported as not composing When typing pauses Then the jamo stay held', async () => {
+    vi.useFakeTimers()
+    const { handlers, sent, captures, unmount } = createTerminalLiveInputCommitHarness()
+    try {
+      changeLiveInput(handlers, '안녕하', false)
+      changeLiveInput(handlers, '안녕하ᄉᆞ', false)
+      await vi.advanceTimersByTimeAsync(3000)
+      expect(sent.join('')).toBe('안녕하')
+      expect(captures.at(-1)).toBe('안녕하ᄉᆞ')
+    } finally {
+      unmount()
+    }
+  })
+
+  it('Given held Cheonjiin jamo When submit is requested Then sends them once before carriage return', async () => {
+    vi.useFakeTimers()
+    const { handlers, sent, captures, unmount } = createTerminalLiveInputCommitHarness()
+    try {
+      changeLiveInput(handlers, '안녕하', false)
+      changeLiveInput(handlers, '안녕하ᄉᆞ', false)
+      await vi.advanceTimersByTimeAsync(0)
+      expect(sent.join('')).toBe('안녕하')
+      expect(await handlers.handleLiveInputSubmit()).toBe(true)
+      expect(sent.join('')).toBe('안녕하ᄉᆞ\r')
+      expect(captures.at(-1)).toBe('')
+    } finally {
+      unmount()
+    }
+  })
+
   it('Given Hangul composition and no marked-text report When steps arrive Then no jamo leaks', async () => {
     vi.useFakeTimers()
     const { handlers, sent } = createTerminalLiveInputCommitHarness()

@@ -39,6 +39,7 @@ export type FetchAllCyclePrepared = {
   miniMaxGeneration: number
   zcodeConfigChanged: boolean
   zcodeGeneration: number
+  antigravityGeneration: number
   claudeFetchGated: boolean
   results: [
     PromiseSettledResult<ProviderRateLimits>,
@@ -74,9 +75,10 @@ export abstract class RateLimitServiceFullCyclePreparation extends RateLimitServ
     const codexTarget = this.codexFetchTarget
     // Capture before await so a reset invalidates this cycle.
     const codexGeneration = this.codexFetchGeneration
-    const previousState = this.state
     // Gate only Codex, never siblings, when its runtime is skipped (#STA-4422).
     const codexHome = await this.resolveCodexHome(codexTarget)
+    const previousState = this.state
+    const antigravityGeneration = this.antigravityFetchGeneration
     const codexFetchGated = codexHome.skip
     const codexHomePath = codexHome.homePath
     const codexStateBeforeFetch =
@@ -296,6 +298,7 @@ export abstract class RateLimitServiceFullCyclePreparation extends RateLimitServ
       miniMaxGeneration,
       zcodeConfigChanged,
       zcodeGeneration,
+      antigravityGeneration,
       claudeFetchGated,
       results: [
         claudeResult,

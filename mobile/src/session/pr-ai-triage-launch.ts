@@ -1,5 +1,4 @@
 import type { SourceControlLaunchActionId } from '../../../src/shared/source-control-ai-actions'
-import { buildSourceControlRecoveryAgentCommandInput } from '../../../src/shared/source-control-recovery-agent-command'
 import type { RpcClient } from '../transport/rpc-client'
 import {
   AGENT_LAUNCH_UPDATE_REQUIRED_MESSAGE,
@@ -11,6 +10,7 @@ import {
   loadMobileAgentLaunchContext
 } from './mobile-new-tab-agent-loader'
 import { resolveMobileSourceControlLaunchAgent } from './mobile-source-control-launch-agent'
+import { projectSourceControlActionLaunch } from '../../../src/shared/source-control-action-launch-preferences'
 
 // Have the host launch and deliver AI prompts; mobile must never type them into a shell.
 
@@ -54,13 +54,10 @@ export async function launchAgentWithPrompt(args: {
     return { kind: 'not-started', message: resolved.message }
   }
   const { recipe } = resolved
-  const text = args.actionId
-    ? buildSourceControlRecoveryAgentCommandInput({
-        actionId: args.actionId,
-        commandInputTemplate: recipe?.commandInputTemplate,
-        basePrompt: args.prompt
-      })
-    : args.prompt
+  const projection = projectSourceControlActionLaunch(recipe ?? {}, resolved.agent, {
+    basePrompt: args.prompt
+  })
+  const text = projection.commandInput
   if (!text) {
     return {
       kind: 'not-started',
@@ -73,7 +70,10 @@ export async function launchAgentWithPrompt(args: {
     hostCapabilities: args.hostCapabilities,
     worktreeId: args.worktreeId,
     agent: resolved.agent,
-    // Leave agent arguments to host defaults because applicability depends on the host-selected route and shell.
+    ...(projection.sessionOptions ? { chatOptions: projection.sessionOptions } : {}),
+    // The phone lacks the workspace shell needed to project inherited choices over raw flags.
+    agentArgs: projection.sessionOptionsYieldToAgentArgs ? undefined : projection.agentArgs,
+    surface: projection.requestedSurface,
     prompt: { text, delivery: 'submit' },
     launchSource: args.launchSource
   })

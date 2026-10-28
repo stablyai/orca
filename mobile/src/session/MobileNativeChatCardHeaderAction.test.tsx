@@ -2,8 +2,8 @@ import { createElement } from 'react'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { describe, expect, it, vi } from 'vitest'
 import { Keyboard } from 'react-native'
-import { MobileNativeChatAsk } from './MobileNativeChatAsk'
-import { MobileNativeChatPermission } from './MobileNativeChatPermission'
+import { MobileNativeChatAsk } from './native-chat/input/MobileNativeChatAsk'
+import { MobileNativeChatPermission } from './native-chat/input/MobileNativeChatPermission'
 
 vi.mock('react-native', () => ({
   Keyboard: { dismiss: vi.fn() },

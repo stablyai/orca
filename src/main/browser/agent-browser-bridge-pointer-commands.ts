@@ -14,6 +14,7 @@ import { sendGuestCdpCommand } from './guest-cdp-command'
 import { AgentBrowserBridgeInputCommands } from './agent-browser-bridge-input-commands'
 import { isEmbeddedGuest } from './guest-direct-key-input'
 import { enablePageFocusEmulation } from './agent-input-focus-guard'
+import { waitForGuestFirstPaint } from './guest-first-paint'
 
 type CdpPointerEventParams = {
   type: 'mouseMoved' | 'mousePressed' | 'mouseReleased' | 'mouseWheel'
@@ -53,6 +54,7 @@ export abstract class AgentBrowserBridgePointerCommands extends AgentBrowserBrid
     try {
       releaseDebugger = acquireElectronDebugger(wc).release
       const { params, press, result } = build(state)
+      await this.waitForPagePaint(wc, target.webContentsId)
       await this.browserManager.showAgentPointer(wc, params)
       if (press) {
         releaseFocusGuard = await this.focusPageForPress(wc, target.webContentsId)
@@ -76,6 +78,15 @@ export abstract class AgentBrowserBridgePointerCommands extends AgentBrowserBrid
       releaseFocusGuard()
       releaseDebugger()
     }
+  }
+
+  // Bridge input skips the CDP proxy's queue, so it waits for the first paint itself.
+  protected async waitForPagePaint(wc: Electron.WebContents, webContentsId: number): Promise<void> {
+    await waitForGuestFirstPaint(
+      wc,
+      (method, params, sessionId) => sendGuestCdpCommand(wc, method, params, sessionId),
+      () => this.browserManager.holdPaintForCapture(webContentsId)
+    )
   }
 
   // Guard embedded-guest presses to restore user focus; emulation prevents page blur.

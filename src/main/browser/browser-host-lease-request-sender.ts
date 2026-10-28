@@ -1,5 +1,5 @@
-import type { RemoteRuntimeSubscription } from '../../shared/remote-runtime-client'
-import { RemoteRuntimeClientError } from '../../shared/remote-runtime-client-error'
+import type { RemoteRuntimeSubscription } from '../../shared/remote-runtime/remote-runtime-client'
+import { RemoteRuntimeClientError } from '../../shared/remote-runtime/remote-runtime-client-error'
 
 /** Page traffic must use the lease's connection; ordinary runtime calls are rejected as stale. */
 export function requireBrowserHostLeaseSendRequest(

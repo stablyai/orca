@@ -183,6 +183,17 @@ export function SourceControlTextGenerationDialogForm({
           toast.success(saveTarget.successMessage)
         }
         return true
+      } catch (error) {
+        console.error('Failed to save Source Control AI defaults', error)
+        if (options.showErrors) {
+          setGenerationError(
+            translate(
+              'sourceControl.actionSaveFailed',
+              'Could not save this action. Try saving it again in Settings.'
+            )
+          )
+        }
+        return false
       } finally {
         setSavingTargetKey(null)
       }

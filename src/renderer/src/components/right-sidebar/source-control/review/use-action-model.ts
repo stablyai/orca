@@ -1,12 +1,12 @@
 import { useMemo } from 'react'
 import { translate } from '@/i18n/i18n'
 import type { GitBranchCompareSummary } from '../../../../../../shared/git-diff-compare-types'
-import { isStageableStatusEntry } from '../commit/discard-all-sequence'
+import { isStageableStatusEntry } from '../../../../../../shared/source-control-discard-all-sequence'
 import { resolveDropdownItems } from '../../source-control-dropdown-items'
 import { resolveCommitAreaPrimaryAction } from '../../source-control-primary-action'
 import { resolveCreatePrHeaderAction } from './primary-create-pr-intent-action'
 import { resolveVisibleCreatePrHeaderAction } from './create-pr-intent-state'
-import type { SourceControlEntryGroups } from '../listing/section-order'
+import type { SourceControlEntryGroups } from '../../../../../../shared/source-control-section-order'
 
 type PrimaryInput = Parameters<typeof resolveCommitAreaPrimaryAction>[0]
 type HeaderInput = Parameters<typeof resolveCreatePrHeaderAction>[0]

@@ -66,7 +66,7 @@ export function useMobilePrAiTriage(input: Input) {
   }, [])
 
   const launch = useCallback(
-    async (key: PrAiTriageKey, buildPrompt: () => string): Promise<boolean> => {
+    async (key: PrAiTriageKey, buildPrompt: () => string | Promise<string>): Promise<boolean> => {
       if (inFlightRef.current || busyKey !== null) {
         return false
       }
@@ -79,7 +79,7 @@ export function useMobilePrAiTriage(input: Input) {
       setBusyKey(key)
       setNotice(key, NO_LAUNCH_NOTICE)
       try {
-        const prompt = buildPrompt()
+        const prompt = await buildPrompt()
         const result = await launchAgentWithPrompt({
           client,
           hostCapabilities,

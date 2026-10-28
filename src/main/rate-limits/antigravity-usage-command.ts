@@ -28,8 +28,8 @@ export const ANTIGRAVITY_VERSION_ARGS: readonly string[] = ['--version']
 // Bound version probe so wedged CLI cannot stall every quota cycle.
 export const ANTIGRAVITY_VERSION_TIMEOUT_MS = 5_000
 
-// Failed interactive sign-ins open a browser on every read (#26484).
-export const ANTIGRAVITY_SIGN_IN_PROMPT_COOLDOWN_MS = 60 * 60 * 1000
+// Each interactive sign-in read opens a browser (#26484); only a refresh or native credential change lifts this hold.
+export const ANTIGRAVITY_SIGN_IN_HOLD_RETRY_AT_MS = Number.MAX_SAFE_INTEGER
 
 /** Cap on captured output; the envelope is a single JSON line well under a kilobyte. */
 export const ANTIGRAVITY_USAGE_MAX_OUTPUT_BYTES = 512 * 1024

@@ -137,3 +137,25 @@ describe('closing a pinned terminal tab of a server workspace', () => {
     expect(mocks.closeWebRuntimeSessionTab.mock.calls[0][0]).not.toHaveProperty('force')
   })
 })
+
+describe('a pinned local tab whose background process exited', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+  })
+
+  it('asks first, then closes as a process exit, never a user close', () => {
+    mocks.isWebRuntimeSessionActive.mockReturnValue(false)
+    const state = { ...serverWorkspaceState(true), ...terminalOwnerRows(null) }
+    mocks.getState.mockReturnValue(state)
+
+    // What the parked watcher sends: the host reason only, so the pin guard still asks.
+    closeTerminalTab('local-tab-1', { hostCloseReason: 'pty-exit', captureRecentlyClosed: false })
+    expect(state.closeTab).not.toHaveBeenCalled()
+    state.requestPinnedTabCloseConfirm.mock.calls[0][0].onConfirm()
+
+    expect(state.closeTab).toHaveBeenCalledWith(
+      'local-tab-1',
+      expect.objectContaining({ reason: 'pty-exit' })
+    )
+  })
+})

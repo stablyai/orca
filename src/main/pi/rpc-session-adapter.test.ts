@@ -29,6 +29,17 @@ describe('Pi RPC session ownership and delivery', () => {
     expect(h.connections).toHaveLength(1)
   })
 
+  it('names a launch that could not be resolved on the host', async () => {
+    const h = await setup()
+    await h.adapter.closeSession(sessionId)
+    h.resolveLaunch.mockRejectedValueOnce(new Error('selector_not_found'))
+    await expect(h.adapter.acquire({ ...h.input, fence: 8 })).rejects.toMatchObject({
+      name: 'AgentSessionPreSpawnError',
+      reason: 'launchPreparationFailed'
+    })
+    expect(h.connections).toHaveLength(1)
+  })
+
   it('does not spawn a start cancelled while resolving its workspace', async () => {
     const h = await setup()
     await h.adapter.closeSession(sessionId)
@@ -39,7 +50,10 @@ describe('Pi RPC session ownership and delivery', () => {
     const started = h.adapter.acquire({ ...h.input, fence: 8, signal: controller.signal })
     await Promise.resolve()
     controller.abort(new Error('Pi closed while starting'))
-    await expect(started).rejects.toThrow('closed while starting')
+    await expect(started).rejects.toMatchObject({
+      message: 'Pi closed while starting',
+      reason: undefined
+    })
     expect(h.connections).toHaveLength(1)
     await expect(h.adapter.acquire({ ...h.input, fence: 9 })).resolves.toMatchObject({
       process: { pid: 4123 }
@@ -154,7 +168,7 @@ describe('Pi RPC session ownership and delivery', () => {
       clientMessageId: 'send-1',
       body: { kind: 'message', role: 'user', blocks: [{ type: 'text', text: 'hello' }] }
     })
-    expect(result).toEqual({ state: 'admitted' })
+    expect(result).toEqual({ state: 'admitted', ranOptions: { model: 'anthropic/model-1' } })
     expect(h.settled).not.toHaveBeenCalled()
     h.connection.receive({ type: 'agent_start' })
     expect(h.settled).toHaveBeenCalledWith({
@@ -200,7 +214,10 @@ describe('Pi RPC session ownership and delivery', () => {
       body: { kind: 'message', role: 'user', blocks: [{ type: 'text', text: 'chosen' }] },
       executionOptions: { model: 'anthropic/model-2', effort: 'low' }
     })
-    expect(result).toEqual({ state: 'admitted' })
+    expect(result).toEqual({
+      state: 'admitted',
+      ranOptions: { model: 'anthropic/model-2', effort: 'low' }
+    })
     expect(h.connection.requests.slice(-2)).toEqual(['set_model', 'set_thinking_level'])
     expect(h.connection.sent).toMatchObject([{ type: 'prompt', message: 'chosen' }])
   })
@@ -226,7 +243,7 @@ describe('Pi RPC session ownership and delivery', () => {
           },
           executionOptions: { model }
         })
-      ).resolves.toEqual({ state: 'admitted' })
+      ).resolves.toMatchObject({ state: 'admitted', ranOptions: { model } })
     }
     // Back on the opening model, its opening effort is restored; elsewhere Pi keeps its own.
     expect(h.connection.requests.filter((command) => command.startsWith('set_'))).toEqual([
@@ -293,7 +310,10 @@ describe('Pi RPC session ownership and delivery', () => {
         executionOptions: { model: 'anthropic/model-1', effort: 'low' },
         body: { kind: 'message', role: 'user', blocks: [{ type: 'text', text: 'A again' }] }
       })
-    ).resolves.toEqual({ state: 'admitted' })
+    ).resolves.toEqual({
+      state: 'admitted',
+      ranOptions: { model: 'anthropic/model-1', effort: 'low' }
+    })
     expect(h.connection.requests.filter((command) => command === 'set_model')).toHaveLength(2)
     unanswered.resolve({})
     await Promise.resolve()

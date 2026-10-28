@@ -7,12 +7,16 @@ export const LINUX_PACKAGE_TESTS = [
   'src/main/browser/browser-link-materialization.electron.test.ts',
   'src/main/browser/browser-client-page-renderer-lifecycle.electron.test.ts',
   'src/main/browser/browser-route-webrtc-egress.electron.test.ts',
-  'src/main/browser/browser-route-h3-egress.electron.test.ts',
   'src/main/persistence/profile-state/profile-state-writer-stall.electron.test.ts',
   'src/main/browser/browser-popup-compatibility.electron.test.ts',
   'src/main/browser/browser-popup-adapter-compatibility.electron.test.ts',
   'src/main/browser/browser-popup-native-compatibility.electron.test.ts',
-  'src/main/browser/browser-popup-background-compatibility.electron.test.ts'
+  'src/main/browser/browser-popup-background-compatibility.electron.test.ts',
+  'src/main/browser/extensions/browser-extension-api.electron.test.ts',
+  'src/main/browser/extensions/browser-extension-persistence.electron.test.ts',
+  'src/main/browser/extensions/browser-extension-lifecycle.electron.test.ts',
+  'src/main/browser/extensions/browser-extension-toolbar.electron.test.ts',
+  'src/main/browser/extensions/browser-extension-native-messaging.electron.test.ts'
 ]
 
 // Cloud-only code must run check-test-file-runners: cloud is neither linted nor format-checked, and any source can register tests.
@@ -43,7 +47,6 @@ export const WINDOWS_BOUNDARY_TESTS = [
   'config/scripts/electron-builder-runtime-resources.test.mjs',
   'src/main/browser/browser-client-page-renderer-lifecycle.electron.test.ts',
   'src/main/browser/browser-route-webrtc-egress.electron.test.ts',
-  'src/main/browser/browser-route-h3-egress.electron.test.ts',
   'src/main/persistence/profile-state/profile-state-writer-stall.electron.test.ts',
   'src/main/providers/windows-conpty-wide-char-duplication.node-pty.test.ts',
   'src/main/providers/pty-repaint-wide-char-buffer.node-pty.test.ts',

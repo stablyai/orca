@@ -1,15 +1,14 @@
 import type { AgentType } from '../../../../shared/agent-status-types'
 import {
   getAgentSessionOptionCatalog,
-  mergeCatalogModels,
-  mergeDiscoveredAuthoritativeModels,
   type CatalogModel
 } from '../../../../shared/agent-session-option-catalog'
-import { resolveNativeChatSessionOptionDefaults } from '../../../../shared/native-chat-session-option-defaults'
+import { mergeDiscoveredCatalogModels } from '../../../../shared/native-chat-discovered-catalog-models'
+import { resolveNativeChatSessionOptionDefaults } from '../../../../shared/native-chat/input/native-chat-session-option-defaults'
 import type {
   PersistedNativeChatSessionOptions,
   SessionOptionValue
-} from '../../../../shared/native-chat-session-options'
+} from '../../../../shared/native-chat/input/native-chat-session-options'
 
 type CatalogEnrichmentEntry = {
   agent: AgentType
@@ -116,12 +115,7 @@ export function ensureNativeChatModelEnrichment(args: {
       if (!discovered || discovered.length === 0) {
         return
       }
-      entry.models =
-        args.agent === 'claude'
-          ? [...discovered]
-          : catalog.discoveredModelsAreAuthoritative
-            ? mergeDiscoveredAuthoritativeModels(catalog.models, discovered)
-            : mergeCatalogModels(catalog.models, discovered)
+      entry.models = mergeDiscoveredCatalogModels(args.agent, catalog, discovered)
       for (const listener of entry.listeners) {
         listener([...entry.models])
       }

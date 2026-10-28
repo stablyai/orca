@@ -44,6 +44,11 @@ export const githubPrStateSet = mutationStatusOperation(
   'github.updatePRState'
 )
 
+export const githubPrReadyForReviewMark = mutationStatusOperation(
+  'github.mark-pr-ready-for-review',
+  'github.markPRReadyForReview'
+)
+
 export const githubPrReviewersRequest = mutationStatusOperation(
   'github.request-pr-reviewers',
   'github.requestPRReviewers'

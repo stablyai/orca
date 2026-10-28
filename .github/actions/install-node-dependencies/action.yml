@@ -185,9 +185,10 @@ runs:
         key: node-cache-${{ runner.os }}-${{ steps.pnpm-store.outputs.arch }}-pnpm-${{ hashFiles(inputs.cache-dependency-path) }}
 
     # Producers can refresh access and publish misses without downloading existing archives.
+    # Not on GitHub-hosted runners: nothing restores that store, and direct installs beat restoring it.
     - name: Keep pnpm download store without restoring
       id: pnpm-store-lookup
-      if: steps.pnpm-store-mode.outputs.lookup-only == 'true'
+      if: steps.pnpm-store-mode.outputs.lookup-only == 'true' && runner.environment != 'github-hosted'
       uses: actions/cache@v5
       with:
         # Twice-nested composite cleanup loses internal step outputs.
@@ -273,15 +274,16 @@ runs:
         printf 'ELECTRON_CACHE=%s\n' "$cache_root" >> "$GITHUB_ENV"
         printf 'version=%s\n' "$(node -p "require('./node_modules/electron/package.json').version")" >> "$GITHUB_OUTPUT"
 
+    # Main and the warmers own every OS's archive; PR copies duplicated it per PR.
     - name: Cache Electron package archive
-      if: (github.event_name != 'pull_request' || runner.os != 'Linux') && steps.electron-package-cache.outputs.version != ''
+      if: github.event_name != 'pull_request' && steps.electron-package-cache.outputs.version != ''
       uses: actions/cache@v5
       with:
         path: ${{ steps.electron-package-cache.outputs.cache-root }}
         key: electron-package-${{ runner.os }}-${{ runner.arch }}-${{ steps.electron-package-cache.outputs.version }}
 
     - name: Restore Electron package archive without saving
-      if: github.event_name == 'pull_request' && runner.os == 'Linux' && steps.electron-package-cache.outputs.version != ''
+      if: github.event_name == 'pull_request' && steps.electron-package-cache.outputs.version != ''
       uses: actions/cache/restore@v5
       with:
         path: ${{ steps.electron-package-cache.outputs.cache-root }}

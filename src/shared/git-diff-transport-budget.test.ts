@@ -1,7 +1,7 @@
 // JSON escaping can expand controls sixfold while NUL-only sniffing treats them as text; pin each budget branch to JSON.stringify.
 import { describe, expect, it } from 'vitest'
 import type { GitDiffResult } from './git-diff-compare-types'
-import { REMOTE_RUNTIME_MAX_OUTBOUND_JSON_BYTES } from './remote-runtime-memory-limits'
+import { REMOTE_RUNTIME_MAX_OUTBOUND_JSON_BYTES } from './remote-runtime/remote-runtime-memory-limits'
 import {
   assertGitDiffWithinTransportBudget,
   gitDiffExceedsTransportBudget

@@ -17,6 +17,7 @@ import {
 import { seedHeadlessTerminalFromSpawnResult } from './terminal-spawn-restore'
 import { admitProviderReattachLaunchIdentity } from './launch-authority'
 import { ensureWslHookRelayForReattach } from '../../../agent-hooks/wsl-hook-relay-reattach'
+import { wslBridgePtyPresence } from '../../../agent-hooks/wsl-bridge-pty-presence'
 import { provenSpawnResponse } from '../spawn-outcome'
 import { ptySizes } from '../delivery/visibility-state'
 import {
@@ -77,6 +78,9 @@ export async function completePaneAdoption(
         )
       : undefined
     ensureWslHookRelayForReattach(result, args.connectionId)
+    if (result.wslDistro && !args.connectionId) {
+      wslBridgePtyPresence.noteLive(result.id, result.wslDistro)
+    }
     runtime?.preparePtyExecutionContext?.(result.id, result.wslDistro ?? null, {
       preserveExisting: result.wslDistro === undefined
     })

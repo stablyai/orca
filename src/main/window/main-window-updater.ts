@@ -5,6 +5,7 @@ import { RELEASE_CHANNELS, type ReleaseChannel } from '../../shared/release-chan
 import { isTrustedUIRenderer } from '../ipc/ui'
 import type { Store } from '../persistence'
 import { logStartupMilestone } from '../startup/startup-diagnostics'
+import { applyProxyToElectronUpdaterSession } from '../updater/electron-updater-proxy-session'
 import {
   checkForUpdatesFromMenu,
   dismissAvailableUpdate,
@@ -68,11 +69,21 @@ function buildUpdaterSetupOptions(store: Store, options?: UpdaterSetupHooks): Up
   }
 }
 
+function setupAutoUpdaterWithAppProxy(
+  mainWindow: BrowserWindow | null,
+  store: Store,
+  options?: UpdaterSetupHooks
+): void {
+  // Starts synchronously, so the session request guard holds the first update check until it settles.
+  void applyProxyToElectronUpdaterSession(store.getSettings())
+  setupAutoUpdater(mainWindow, buildUpdaterSetupOptions(store, options))
+}
+
 /** Headless serve has no window-driven setup; defer the slow require past readiness so remote updater support becomes available (#22261). */
 export function setupHeadlessServeAutoUpdater(store: Store, options: UpdaterSetupHooks): void {
   setImmediate(() => {
     try {
-      setupAutoUpdater(null, buildUpdaterSetupOptions(store, options))
+      setupAutoUpdaterWithAppProxy(null, store, options)
       logStartupMilestone('updater-setup-done')
     } catch (error) {
       console.warn(
@@ -106,7 +117,7 @@ export function scheduleMainWindowAutoUpdaterSetup(
     }
     updaterSetupDone = true
     try {
-      setupAutoUpdater(mainWindow, buildUpdaterSetupOptions(store, options))
+      setupAutoUpdaterWithAppProxy(mainWindow, store, options)
       logStartupMilestone('updater-setup-done')
     } finally {
       clearDeferredSetup()

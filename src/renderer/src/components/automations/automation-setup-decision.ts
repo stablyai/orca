@@ -3,7 +3,7 @@ import type { OrcaHooks, SetupRunPolicy } from '../../../../shared/orca-yaml-hoo
 import type { ProjectHostSetup } from '../../../../shared/project-types'
 import type { Repo } from '../../../../shared/repo-types'
 import type { SetupDecision } from '../../../../shared/worktree/create-types'
-import { getSetupConfig } from '@/lib/new-workspace'
+import { getSetupConfig } from '../../../../shared/orca-hook-setup-config'
 
 type AutomationSetupSource = {
   setupScript: string

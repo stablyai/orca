@@ -1,4 +1,4 @@
-import { isRemoteRuntimeBinaryFrameWithinLimit } from '../../shared/remote-runtime-memory-limits'
+import { isRemoteRuntimeBinaryFrameWithinLimit } from '../../shared/remote-runtime/remote-runtime-memory-limits'
 import type { RpcBinarySender } from './rpc/rpc-binary-sender'
 
 /** 'backlogged': a live socket skipped the frame; 'refused': the transport would not take it. */

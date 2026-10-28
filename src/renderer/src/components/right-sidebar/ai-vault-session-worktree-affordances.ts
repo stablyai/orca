@@ -1,11 +1,11 @@
-import { normalizeRuntimePathSeparators } from '../../../../shared/cross-platform-path'
 import type { AiVaultScope } from '../../../../shared/ai-vault-types'
 import { translate } from '@/i18n/i18n'
 import { parseWorkspaceKey } from '../../../../shared/workspace-scope'
-import type {
-  AiVaultSessionWorktreeInfo,
-  AiVaultSessionWorktreeStatus
-} from './ai-vault-session-worktree'
+import {
+  canJumpToAiVaultSessionWorktree,
+  type AiVaultSessionWorktreeInfo,
+  type AiVaultSessionWorktreeStatus
+} from '../../../../shared/ai-vault-session-worktree'
 
 // Folder workspaces own sessions the way worktrees do, but a plain folder is never called a worktree.
 export function isAiVaultFolderWorkspaceId(workspaceId: string | null | undefined): boolean {
@@ -30,16 +30,6 @@ export function aiVaultResumeInSessionWorkspaceLabel(
         'auto.components.right.sidebar.AiVaultSessionDetails.resumeInWorktree',
         'Resume in Worktree'
       )
-}
-
-export function canJumpToAiVaultSessionWorktree(
-  worktreeInfo: AiVaultSessionWorktreeInfo | null
-): boolean {
-  return Boolean(
-    worktreeInfo?.worktreeId &&
-    worktreeInfo.status !== 'archived' &&
-    worktreeInfo.status !== 'unavailable'
-  )
 }
 
 // Hide self-jumps; the Current worktree badge already identifies the destination.
@@ -93,14 +83,6 @@ export function aiVaultWorktreeJumpTooltip(
     'auto.components.right.sidebar.AiVaultSessionWorktree.noActiveWorktreeTarget',
     'No active worktree is available.'
   )
-}
-
-export function aiVaultWorktreeCompactPath(pathValue: string): string {
-  const parts = normalizeRuntimePathSeparators(pathValue).split('/').filter(Boolean)
-  if (parts.length >= 2) {
-    return parts.slice(-2).join('/')
-  }
-  return parts[0] ?? pathValue
 }
 
 export function shouldShowAiVaultSessionWorktreeLine(

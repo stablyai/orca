@@ -17,10 +17,12 @@ import {
   describeScheduledRefusal,
   sendRendererDispatch
 } from './dispatch-refusal'
+import { isOrcadFencedAutomation, ORCAD_FENCED_AUTOMATION } from './orcad-fenced-automation'
+import { AutomationDispatchCancelledError } from './automation-dispatch-cancelled-error'
 
 export type AutomationRendererChannel = Pick<WebContents, 'isDestroyed' | 'send'>
 
-export class AutomationDispatchCancelledError extends Error {}
+export { AutomationDispatchCancelledError }
 
 type DispatchContext = Pick<
   HeadlessAutomationDispatchContext,
@@ -69,6 +71,10 @@ export async function requestAutomationDispatch(
       throw new AutomationDispatchCancelledError(
         'The automation was removed before it could launch.'
       )
+    }
+    // A refusal row would change the fenced export; restart strands the run instead.
+    if (isOrcadFencedAutomation(ctx.store, automation)) {
+      throw new AutomationDispatchCancelledError(ORCAD_FENCED_AUTOMATION)
     }
     return current
   }

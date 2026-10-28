@@ -2,7 +2,12 @@
 import { useEffect, type PropsWithChildren } from 'react'
 import { createRoot } from 'react-dom/client'
 import { ExpoRoot } from 'expo-router'
-import { colors } from '../src/theme/mobile-theme'
+import {
+  applyMobileColorScheme,
+  colors,
+  getMobileColorScheme,
+  subscribeMobileColorScheme
+} from '../src/theme/mobile-theme'
 import type { BridgeRpcClient } from '../src/mobile-web-shell/bridge/bridge-rpc-client'
 import {
   bootstrapShellPage,
@@ -80,8 +85,14 @@ if (!container) {
   throw new Error('[orca-mobile-web-app] #root missing')
 }
 const target = document.documentElement
-target.style.setProperty('--muted-foreground', colors.textMuted)
-target.style.setProperty('--foreground', colors.textPrimary)
+// Keep <html> transparent: overlay routes show the native screen through it, and the shell paints bgBase behind the rest.
+function paintDocumentScheme(): void {
+  target.style.setProperty('--muted-foreground', colors.textMuted)
+  target.style.setProperty('--foreground', colors.textPrimary)
+  target.style.colorScheme = getMobileColorScheme()
+}
+paintDocumentScheme()
+subscribeMobileColorScheme(paintDocumentScheme)
 stampPageMountState(target, 'started')
 
 bootstrapShellPage({
@@ -91,6 +102,9 @@ bootstrapShellPage({
     history.replaceState(null, '', href)
   },
   mount: (client, session) => {
+    // Apply before the first render so no component paints the default dark palette first.
+    applyMobileColorScheme(session.colorScheme)
+    client.onColorSchemeUpdate(applyMobileColorScheme)
     // Publish plain-function seams before first render because effects and initial list paint already read them.
     publishPageHostProfile(session.host)
     publishExternalLinkOpener((url) => client.notifyExternalLink(url))

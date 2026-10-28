@@ -17,7 +17,6 @@ import {
   cancelledAiVaultListResult,
   mergeAiVaultListResults
 } from '../ai-vault/session-list-results'
-import { AiVaultScanCoordinator } from '../ai-vault/ai-vault-scan-coordinator'
 import type { AiVaultDeleteSessionArgs } from '../../shared/ai-vault-session-deletion'
 import { describeAiVaultScanError } from '../../shared/ai-vault-scan-error-message'
 import {
@@ -46,6 +45,7 @@ import {
   type RuntimeAiVaultScanner
 } from './ai-vault-runtime-scan'
 import {
+  createAiVaultListScanCoordinator,
   invalidateAiVaultHostLegCache,
   resetAiVaultHostLegCacheForTests,
   scanHostLegWithCache
@@ -78,7 +78,7 @@ type AiVaultScanHostScope =
   | { scope: ExecutionHostId }
   | { scope: 'all'; runtimeHosts: AiVaultHostDiscoveryResult<RuntimeAiVaultHostInfo> }
 
-let scanCoordinator = new AiVaultScanCoordinator()
+let scanCoordinator = createAiVaultListScanCoordinator()
 let handlerOptions: AiVaultHandlerOptions = {}
 const listCancellations = createSenderScopedRequestCancellations()
 // Keep IPC and test deletion wired to this module's multi-host cache.
@@ -308,7 +308,7 @@ export function registerAiVaultHandlers(options: AiVaultHandlerOptions = {}): vo
 
 function resetAiVaultCacheForTests(): void {
   resetAiVaultHostLegCacheForTests()
-  scanCoordinator = new AiVaultScanCoordinator()
+  scanCoordinator = createAiVaultListScanCoordinator()
   handlerOptions = {}
   // Keep tests isolated from the shared local-leg cache.
   resetAiVaultSessionListCacheForTests()

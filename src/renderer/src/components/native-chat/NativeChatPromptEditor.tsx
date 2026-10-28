@@ -35,6 +35,7 @@ import {
 } from './native-chat-prompt-document'
 import type { NativeChatComposerInput } from './native-chat-composer-input'
 import { NativeChatImageRowProvider } from './NativeChatImageReferencePill'
+import { mountedEditorView } from './native-chat-mounted-editor-view'
 
 type Props = Omit<HTMLAttributes<HTMLDivElement>, 'onChange' | 'onSelect'> & {
   scopeKey?: string
@@ -244,13 +245,16 @@ export function NativeChatPromptEditor({
               return promptTextOffset(editor.state.doc, editor.state.selection.to)
             },
             focus: () => {
+              // A focus request can arrive before the view mounts (a chat opened while its
+              // workspace switches in); tiptap throws then, so wait for the next reveal instead.
+              const view = mountedEditorView(editor)
               // Focus the editor view so an inserted caret replaces the stale DOM selection.
-              editor.view.focus()
-              if (!editor.isEditable) {
-                editor.view.dom.focus()
+              view?.focus()
+              if (view && !editor.isEditable) {
+                view.dom.focus()
               }
             },
-            contains: (node) => editor.view.dom.contains(node),
+            contains: (node) => mountedEditorView(editor)?.dom.contains(node) === true,
             isCaretOnVisualEdge: (edge) => {
               const { selection, doc } = editor.state
               if (!selection.empty) {

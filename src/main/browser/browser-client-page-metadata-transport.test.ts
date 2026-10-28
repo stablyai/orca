@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { RemoteRuntimeClientError } from '../../shared/remote-runtime-client-error'
+import { RemoteRuntimeClientError } from '../../shared/remote-runtime/remote-runtime-client-error'
 import type { RuntimeRpcResponse } from '../../shared/runtime-rpc-envelope'
 import {
   BrowserClientPageMetadataTransport,

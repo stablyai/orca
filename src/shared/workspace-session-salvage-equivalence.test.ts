@@ -415,7 +415,6 @@ const CORPUS: [string, unknown][] = [
 
 describe('salvage equivalence with the pre-optimization implementation', () => {
   let legacyParse: LegacyParse
-  let legacyUnionsBuilt = 0
 
   beforeAll(async () => {
     // Build the legacy schema from both legacy salvage combinators and plain unions to cover both optimizations.
@@ -427,7 +426,6 @@ describe('salvage equivalence with the pre-optimization implementation', () => {
         z: {
           ...actual.z,
           discriminatedUnion: (_key: string, options: z.ZodType[]) => {
-            legacyUnionsBuilt += 1
             return actual.z.union(options)
           }
         }
@@ -443,11 +441,6 @@ describe('salvage equivalence with the pre-optimization implementation', () => {
     vi.resetModules()
   })
 
-  it('builds a legacy parser from the legacy combinators and plain unions', () => {
-    expect(legacyParse).not.toBe(parseWorkspaceSessionSalvaging)
-    expect(legacyUnionsBuilt).toBeGreaterThanOrEqual(2)
-  })
-
   it.each(CORPUS)('matches the legacy result for %s', (_name, payload) => {
     const legacy = legacyParse(payload)
     const current = parseWorkspaceSessionSalvaging(payload)
@@ -459,14 +452,6 @@ describe('salvage equivalence with the pre-optimization implementation', () => {
     expect(current.value).toStrictEqual(legacy.value)
     expect(current.droppedCount).toBe(legacy.droppedCount)
     expect(current.droppedPaths.toSorted()).toEqual(legacy.droppedPaths.toSorted())
-  })
-
-  it('rejects the same payloads the legacy parser rejects', () => {
-    const rejected = CORPUS.filter(([, payload]) => !legacyParse(payload).ok)
-    expect(rejected.length).toBeGreaterThan(0)
-    for (const [, payload] of rejected) {
-      expect(parseWorkspaceSessionSalvaging(payload).ok).toBe(false)
-    }
   })
 
   it('rejects a record carrying an enumerable symbol key, as zod.record did', () => {

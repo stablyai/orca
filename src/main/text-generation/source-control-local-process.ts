@@ -1,5 +1,6 @@
 import { WindowsCmdLineBreakError } from '@orca/process-host'
 import type { CommitMessagePlan } from '../../shared/commit-message-plan'
+import { commandLineLength, MAX_COMMAND_LINE_CHARS } from '../../shared/windows-command-line-budget'
 import { supervisedProviderSpawnFailure } from '../provider-process/provider-spawn-failure-report'
 import { stopSupervisedChildProcess } from '../provider-process/supervised-child-process-stop'
 import { terminateWindowsProcessTree } from '../windows-process-tree-kill'
@@ -48,32 +49,29 @@ export async function killSourceControlAgentProcess(
   }
 }
 
-// Windows has 32767 UTF-16 command-line units including quoting/separators; reserve headroom for cmd shim wrappers.
-const WINDOWS_COMMAND_LINE_UNIT_BUDGET = 30_000
-
-function exceedsWindowsCommandLineBudget(command: string, args: string[]): boolean {
-  let units = command.length + args.length
-  for (const arg of args) {
-    units += arg.length + 2
-  }
-  return units > WINDOWS_COMMAND_LINE_UNIT_BUDGET
-}
-
 // Linux caps each argv entry in bytes (128KiB on 4KiB pages), before total argv capacity; reserve headroom for single-prompt arguments.
 const LINUX_SINGLE_ARGUMENT_BYTE_BUDGET = 120 * 1024
 
-function exceedsLinuxArgumentBudget(args: string[]): boolean {
-  return args.some((arg) => Buffer.byteLength(arg, 'utf8') > LINUX_SINGLE_ARGUMENT_BYTE_BUDGET)
+/** Whether the plan's argv plus reserve fits this host's limit: UTF-16 units on Windows, bytes per argument on Linux. */
+export function fitsLocalCommandLine(plan: CommitMessagePlan, reserve = 0): boolean {
+  if (process.platform === 'win32') {
+    return commandLineLength([plan.binary, ...plan.args]) + reserve <= MAX_COMMAND_LINE_CHARS
+  }
+  if (process.platform === 'linux') {
+    return plan.args.every(
+      (arg) => Buffer.byteLength(arg, 'utf8') + reserve <= LINUX_SINGLE_ARGUMENT_BYTE_BUDGET
+    )
+  }
+  return true
 }
 
 function argumentBudgetFailure(plan: CommitMessagePlan): string | null {
-  if (process.platform === 'win32' && exceedsWindowsCommandLineBudget(plan.binary, plan.args)) {
-    return `${plan.label} prompt is too large for the Windows command line. Stage fewer changes and try again.`
+  if (fitsLocalCommandLine(plan)) {
+    return null
   }
-  if (process.platform === 'linux' && exceedsLinuxArgumentBudget(plan.args)) {
-    return `${plan.label} prompt is too large to pass as a single command-line argument. Stage fewer changes and try again.`
-  }
-  return null
+  return process.platform === 'win32'
+    ? `${plan.label} prompt is too large for the Windows command line. Stage fewer changes and try again.`
+    : `${plan.label} prompt is too large to pass as a single command-line argument. Stage fewer changes and try again.`
 }
 
 export function runLocalSourceControlPlan(input: {

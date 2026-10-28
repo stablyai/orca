@@ -71,14 +71,16 @@ export function publishManagedServerConnect(
   environmentId: string,
   update?: SshManagedServerUpdateNote,
   serving?: SshManagedServerServingNote,
-  linked?: SshManagedServerLinkedProject[]
+  linked?: SshManagedServerLinkedProject[],
+  automationsLeftDisabled?: number
 ): SshConnectionState {
   const managedServer = {
     kind: 'managed' as const,
     environmentId,
     ...(update ? { update } : {}),
     ...(serving ? { serving } : {}),
-    ...(linked ? { linked } : {})
+    ...(linked ? { linked } : {}),
+    ...(automationsLeftDisabled ? { automationsLeftDisabled } : {})
   }
   setSshHostServerStatus(targetId, managedServer)
   const state: SshConnectionState = {

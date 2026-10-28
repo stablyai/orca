@@ -91,10 +91,20 @@ describe('a sleeping bridge WSL pane keeps its shell folder', () => {
       sessionId: 'repo::/repo@@spawned'
     })
 
+    const info = vi.spyOn(console, 'info').mockImplementation(() => {})
     await adapter.shutdown(id, { immediate: true, keepHistory: true })
 
     expect(readRows).toHaveBeenCalledWith('Ubuntu', expect.any(Number), { running: true })
     expect(checkpointCwd(id)).toBe(`${WSL_CWD}\\deep\\er`)
+    const lines = info.mock.calls
+      .map(([line]) => String(line))
+      .filter((line) => line.includes('Sleep folder'))
+    // One line per Sleep, naming the branch, what the distro returned and whether a folder came back.
+    expect(lines).toHaveLength(1)
+    expect(lines[0]).toContain(`[history] Sleep folder for ${id}: wsl probe (budget `)
+    expect(lines[0]).toContain(
+      `rows 2, shells 1), distro Ubuntu, pane ${PANE_KEY}, live true, folder found in `
+    )
   })
 
   // awin verify-9: panes cd'd before a relaunch and slept before the window reopened them

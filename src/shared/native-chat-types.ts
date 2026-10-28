@@ -204,12 +204,12 @@ export type NativeChatMessage = AgentJournalProducerLinkage & {
   id: string
   role: NativeChatRole
   blocks: NativeChatBlock[]
-  /** Epoch ms; null when unavailable (e.g. scrape), sorting before timestamps. */
+  /** Epoch ms; null when unavailable (e.g. scrape). */
   timestamp: number | null
   source: NativeChatSource
   /** Optional provider row cursor; split projections share it for whole-row paging. */
   transcriptOffset?: number
-  /** Display order when the provider's sequence differs from its stable paging cursor. */
+  /** Canonical display position: JSONL record byte start or database provider sequence, independent of clocks/cursors. */
   transcriptOrder?: number
   /** Model id that produced an assistant response, as the provider API names it. */
   model?: string

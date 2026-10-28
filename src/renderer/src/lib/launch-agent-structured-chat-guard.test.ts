@@ -215,7 +215,7 @@ vi.mock('@/runtime/structured-agent-session-client', () => ({
 // No initial chat mode proves availability rejection preceded terminal-tab adoption.
 describe('structured chat adoption guard on the launch path', () => {
   beforeEach(() => {
-    vi.clearAllMocks()
+    vi.resetAllMocks()
     store.unifiedTabsByWorktree = {
       'wt-1': [
         {
@@ -277,7 +277,6 @@ describe('structured chat adoption guard on the launch path', () => {
       }
     ])
     mockCreateSupport.mockResolvedValue({ supported: true })
-    mockToastError.mockReset()
     hostCapabilities = STRUCTURED_HOST_CAPABILITIES
     store.settings.experimentalNativeChat = true
     store.settings.nativeChatSessionOptions = undefined
@@ -542,41 +541,29 @@ describe('structured chat adoption guard on the launch path', () => {
     expect(mockLaunchStructuredCodexSession).toHaveBeenCalledTimes(1)
     expect(mockCreateStructuredCodexSessionLaunchIntent).toHaveBeenCalledTimes(1)
     resolveLaunch({ sessionId: 'codex-session-1', fence: 1 })
+    await Promise.all([first?.structuredSettlement, second?.structuredSettlement])
   })
 
-  it('keeps the single-flight reservation until the published tab inventory is refreshed', async () => {
+  it('settles a successful create and opens its chat without an inventory refresh', async () => {
     store.unifiedTabsByWorktree = {}
-    let resolveRefresh!: (snapshots: unknown[]) => void
-    mockRefreshLocalStructuredSessionTabs.mockImplementationOnce(
-      () => new Promise<unknown[]>((resolve) => (resolveRefresh = resolve))
-    )
-    mockLaunchStructuredCodexSession.mockResolvedValue({
-      sessionId: 'codex-session-1',
-      fence: 1
-    })
+    mockRefreshLocalStructuredSessionTabs.mockRejectedValue(new Error('inventory unavailable'))
     const { launchAgentInNewTab } = await import('./launch-agent-in-new-tab')
 
-    launchAgentInNewTab({ requestId: 'double-click', agent: 'codex', worktreeId: 'wt-1' })
-    await vi.waitFor(() => expect(mockRefreshLocalStructuredSessionTabs).toHaveBeenCalledTimes(1))
+    const result = launchAgentInNewTab({
+      requestId: 'double-click',
+      agent: 'codex',
+      worktreeId: 'wt-1'
+    })
 
-    launchAgentInNewTab({ requestId: 'double-click', agent: 'codex', worktreeId: 'wt-1' })
-    await vi.waitFor(() => expect(mockCreateSupport).toHaveBeenCalledTimes(2))
-    await new Promise((resolve) => setTimeout(resolve, 0))
-
-    expect(mockLaunchStructuredCodexSession).toHaveBeenCalledTimes(1)
-    store.unifiedTabsByWorktree['wt-1'] = [
-      {
-        id: 'structured-agent-session-codex-session-1',
-        contentType: 'agent-session',
-        entityId: 'codex-session-1',
-        worktreeId: 'wt-1',
-        groupId: 'group-1'
-      }
-    ]
-    resolveRefresh([
-      { worktree: 'wt-1', tabs: [{ type: 'agent-session', sessionId: 'codex-session-1' }] }
-    ])
-    await vi.waitFor(() => expect(mockToastError).not.toHaveBeenCalled())
+    await expect(result?.structuredSettlement).resolves.toEqual({
+      kind: 'structured',
+      sessionId: 'codex-session-1'
+    })
+    expect(store.unifiedTabsByWorktree['wt-1']).toContainEqual(
+      expect.objectContaining({ contentType: 'agent-session', entityId: 'codex-session-1' })
+    )
+    expect(mockRefreshLocalStructuredSessionTabs).not.toHaveBeenCalled()
+    expect(mockToastError).not.toHaveBeenCalled()
   })
 
   it('re-checks a chat whose visibility proof is unknown through its own Retry, with its own intent', async () => {
@@ -587,7 +574,7 @@ describe('structured chat adoption guard on the launch path', () => {
       .mockReturnValueOnce(firstIntent)
       .mockReturnValueOnce(secondIntent)
     mockLaunchStructuredCodexSession
-      .mockResolvedValueOnce({ sessionId: firstIntent.sessionId, fence: 1 })
+      .mockRejectedValueOnce(new Error('response lost'))
       .mockRejectedValueOnce(new Error('response lost'))
       .mockResolvedValueOnce({ sessionId: secondIntent.sessionId, fence: 1 })
     mockRefreshLocalStructuredSessionTabs
@@ -607,9 +594,6 @@ describe('structured chat adoption guard on the launch path', () => {
           { worktree: 'wt-1', tabs: [{ type: 'agent-session', sessionId: firstIntent.sessionId }] }
         ])
       })
-      .mockResolvedValueOnce([
-        { worktree: 'wt-1', tabs: [{ type: 'agent-session', sessionId: 'codex-session-2' }] }
-      ])
     const { launchAgentInNewTab } = await import('./launch-agent-in-new-tab')
 
     const unknown = launchAgentInNewTab({
@@ -638,22 +622,31 @@ describe('structured chat adoption guard on the launch path', () => {
     expect(mockLaunchStructuredCodexSession).toHaveBeenCalledTimes(2)
     expect(mockLaunchStructuredCodexSession.mock.calls[0]?.[0]).toBe(firstIntent)
     expect(mockLaunchStructuredCodexSession.mock.calls[1]?.[0]).toBe(firstIntent)
+    expect(mockLaunchStructuredCodexSession.mock.calls[0]?.[2]).toBe(false)
+    expect(mockLaunchStructuredCodexSession.mock.calls[1]?.[2]).toBe(true)
+    expect(mockRetryStructuredAgentSessionLaunchIntent).not.toHaveBeenCalled()
     await new Promise((resolve) => setTimeout(resolve, 0))
+    expect(mockCallStructuredAgentSession).toHaveBeenCalledWith(
+      firstIntent.target,
+      'agentSession.history',
+      expect.objectContaining({ sessionId: firstIntent.sessionId })
+    )
 
-    store.unifiedTabsByWorktree['wt-1'] = [
-      {
-        id: `structured-agent-session-${secondIntent.sessionId}`,
-        contentType: 'agent-session',
-        entityId: secondIntent.sessionId,
-        worktreeId: 'wt-1',
-        groupId: 'group-1'
-      }
-    ]
-    launchAgentInNewTab({ requestId: 'request-15', agent: 'codex', worktreeId: 'wt-1' })
-    await vi.waitFor(() => expect(mockLaunchStructuredCodexSession).toHaveBeenCalledTimes(3))
+    const next = launchAgentInNewTab({
+      requestId: 'request-15',
+      agent: 'codex',
+      worktreeId: 'wt-1'
+    })
+    await expect(next?.structuredSettlement).resolves.toEqual({
+      kind: 'structured',
+      sessionId: secondIntent.sessionId
+    })
     expect(mockCreateStructuredCodexSessionLaunchIntent).toHaveBeenCalledTimes(2)
     expect(mockLaunchStructuredCodexSession).toHaveBeenCalledTimes(3)
     expect(mockLaunchStructuredCodexSession.mock.calls[2]?.[0]).toBe(secondIntent)
+    expect(store.unifiedTabsByWorktree['wt-1']?.map((tab) => tab.entityId)).toEqual(
+      expect.arrayContaining([firstIntent.sessionId, secondIntent.sessionId])
+    )
   })
 
   it('routes an auto-submitted Codex prompt through the structured outbox', async () => {

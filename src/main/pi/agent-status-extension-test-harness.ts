@@ -14,6 +14,7 @@ export type HookContext = {
     onTerminalInput?: (handler: (data: string) => { consume?: boolean } | undefined) => () => void
   }
   isIdle?: () => boolean
+  getAsyncJobSnapshot?: () => { running: { type: string; agentId?: string; label: string }[] }
   resolvePlanReview?: (reviewId: string, choice: string) => boolean
   model?: { provider?: unknown; id?: unknown } | null
   modelRegistry?: { getAvailable: () => { provider: string; id: string }[] }
@@ -110,6 +111,8 @@ export function createAgentStatusExtensionHarness(args: {
   curlExitCode?: number | null
   fetchImpl?: (...params: Parameters<typeof fetch>) => Promise<unknown>
   seedEventBus?: (bus: EventEmitter) => void
+  // OMP hands extensions its package exports as `pi.pi`.
+  ompModule?: unknown
   // Pi versions before 0.84 shared one event bus across registrations.
   sharedEventBus?: boolean
 }): AgentStatusExtensionHarness {
@@ -165,6 +168,7 @@ export function createAgentStatusExtensionHarness(args: {
         ) => void
         setModel: (model: unknown) => Promise<boolean>
         events?: PiEventBus
+        pi?: unknown
       }) => void
     }
   } = { exports: {} }
@@ -243,6 +247,7 @@ export function createAgentStatusExtensionHarness(args: {
       },
       setModel: setModelMock,
       events,
+      pi: args.ompModule,
       on(name: string, handler: HookHandler) {
         target[name] = handler
         ;(handlerLists[name] ??= []).push(handler)

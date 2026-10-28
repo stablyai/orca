@@ -1,7 +1,11 @@
 import { resolveAgentTypeFromTerminalTitle } from '@/components/sidebar/worktree-title-derived-agent-rows'
 import { classifyTitleActivity } from '@/lib/pane-agent-evidence'
 import { tabHasLivePty } from '../../../shared/tab-has-live-pty'
-import { resolveRuntimePaneTitleLeafIdFromRoot } from '../../../shared/runtime-pane-title-leaf-id'
+import {
+  collectRuntimePaneLeafIds,
+  isRuntimePaneTitleOrphan,
+  resolveRuntimePaneTitleLeafIdFromRoot
+} from '../../../shared/runtime-pane-title-leaf-id'
 import { containsAgentSpinnerGlyph } from '../../../shared/agent-title-core'
 import { isSyntheticAgentPermissionTitle } from '../../../shared/synthetic-agent-title'
 import type {
@@ -11,17 +15,9 @@ import type {
 } from '../../../shared/terminal-tab-types'
 import type { TuiAgent } from '../../../shared/tui-agent'
 import type { LiveAgentWorktreeStatus } from './worktree-activity-state'
+import { rankWorktreeStatus, type WorktreeStatus } from '../../../shared/worktree-status-rollup'
 
-export type WorktreeStatus =
-  | 'active'
-  | 'working'
-  | 'monitoring'
-  | 'permission'
-  | 'failed'
-  | 'interrupted'
-  | 'unconfirmed'
-  | 'done'
-  | 'inactive'
+export type { WorktreeStatus } from '../../../shared/worktree-status-rollup'
 
 type WorktreeStatusHeuristicOptions = {
   liveAgentStatus?: LiveAgentWorktreeStatus
@@ -89,12 +85,19 @@ function tabHasStatus(
     const tabLayoutRoot =
       options.terminalLayoutRootsByTabId?.[tab.id] ?? options.terminalLayoutsByTabId?.[tab.id]?.root
     const paneTitleEntries = Object.entries(paneTitles)
+    const layoutLeafIds = tabLayoutRoot ? new Set(collectRuntimePaneLeafIds(tabLayoutRoot)) : null
+    let hasCurrentPaneTitle = false
     for (const [runtimePaneId, title] of paneTitleEntries) {
       const agentStatusPaneIds =
         status === 'permission' && isSyntheticAgentPermissionTitle(title)
           ? permissionPaneIds
           : freshPaneIds
       const leafId = resolveRuntimePaneTitleLeafIdFromRoot(tabLayoutRoot, runtimePaneId)
+      // A removed pane's last title is no longer evidence for this tab.
+      if (layoutLeafIds && isRuntimePaneTitleOrphan(runtimePaneId, layoutLeafIds)) {
+        continue
+      }
+      hasCurrentPaneTitle = true
       // Why: runtime titles can precede layout hydration (SSH/replay); with one title and one agent row, prefer that row over a stale spinner.
       const hasSingleUnmappedAgentStatusPane =
         leafId === null && agentStatusPaneIds?.size === 1 && paneTitleEntries.length === 1
@@ -112,7 +115,9 @@ function tabHasStatus(
         return true
       }
     }
-    return false
+    if (hasCurrentPaneTitle) {
+      return false
+    }
   }
   // Why: a tab title can't identify its pane; once an agent row owns one, prefer the row over a completed pane's stale "working" title.
   const agentStatusPaneIds =
@@ -206,38 +211,5 @@ export function resolveWorktreeStatus(args: {
       terminalLayoutRootsByTabId: args.terminalLayoutRootsByTabId
     }
   )
-  if (args.hasPermission) {
-    return 'permission'
-  }
-  // Why: heuristic 'permission' outranks heuristic 'working' — the user-actionable signal wins when panes in one tab disagree.
-  if (heuristic === 'permission') {
-    return 'permission'
-  }
-  // Failure outranks live work, including surviving subagents; only a pending question comes first.
-  if (args.hasFailed) {
-    return 'failed'
-  }
-  // Why: restored cards get the hook snapshot before panes mount; trust the explicit working row so they stay yellow on restart.
-  if (args.hasLiveWorking || heuristic === 'working') {
-    return 'working'
-  }
-  if (args.hasLiveMonitoring || heuristic === 'monitoring') {
-    return 'monitoring'
-  }
-  // Why: a departed agent's failure has no expiry, so it must not pin the card over live work.
-  if (args.hasRetainedFailed) {
-    return 'failed'
-  }
-  // Why: an end Orca cannot prove is not a finish, and unlike a user's Stop it is news.
-  if (args.hasUnconfirmed) {
-    return 'unconfirmed'
-  }
-  // A user's Stop follows every state that is news, but must not collapse into success.
-  if (args.hasInterrupted) {
-    return 'interrupted'
-  }
-  if (args.hasLiveDone || args.hasRetainedDone) {
-    return 'done'
-  }
-  return heuristic
+  return rankWorktreeStatus(heuristic, args)
 }

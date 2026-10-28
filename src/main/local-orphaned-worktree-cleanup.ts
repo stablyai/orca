@@ -24,8 +24,7 @@ export async function cleanupLocalOrphanedWorktreeDirectory(
       runtimePath,
       toLocalWorktreeRuntimePath(repoPath, options),
       CLIENT_REMOVAL_HOME,
-      access.statPath,
-      access.readPath
+      access
     )
   ) {
     await closeWatchers(path)

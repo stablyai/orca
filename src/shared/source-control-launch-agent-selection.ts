@@ -48,7 +48,7 @@ export type SourceControlLaunchAgentScope = {
 
 export function resolveSourceControlLaunchAgentScope(input: {
   settings:
-    | Pick<GlobalSettings, 'sourceControlAi' | 'commitMessageAi' | 'defaultTuiAgent'>
+    | Partial<Pick<GlobalSettings, 'sourceControlAi' | 'commitMessageAi' | 'defaultTuiAgent'>>
     | null
     | undefined
   repo?: Pick<Repo, 'sourceControlAi'> | null
@@ -84,7 +84,12 @@ export function resolveSourceControlLaunchAgentScope(input: {
   }
 }
 
-export type SourceControlActionRecipeOverrideField = 'agent' | 'commandTemplate' | 'agentArgs'
+export type SourceControlActionRecipeOverrideField =
+  | 'agent'
+  | 'commandTemplate'
+  | 'agentArgs'
+  | 'launchPreferences'
+  | 'surface'
 
 export type SourceControlActionRecipeOverride = {
   repoId: string
@@ -123,6 +128,12 @@ function readRecipeOverrideFields(
   }
   if (Object.hasOwn(recipe ?? {}, 'agentArgs')) {
     fields.push('agentArgs')
+  }
+  if (Object.hasOwn(recipe ?? {}, 'launchPreferences')) {
+    fields.push('launchPreferences')
+  }
+  if (Object.hasOwn(recipe ?? {}, 'surface')) {
+    fields.push('surface')
   }
   return fields
 }

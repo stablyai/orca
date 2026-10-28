@@ -9,7 +9,8 @@ import {
   spacing,
   ChevronDown,
   triggerMediumImpact,
-  TaskProviderLogo
+  TaskProviderLogo,
+  type MobileColorScheme
 } from './mobile-tasks-dependencies'
 import { styles } from './mobile-tasks-legacy-styles'
 import {
@@ -20,7 +21,10 @@ import {
   projectRowStatusLabel
 } from './mobile-tasks-legacy-foundation'
 
-export function renderMobileTasksGitHubProjectList(model: ConnectionPresentationModel) {
+export function renderMobileTasksGitHubProjectList(
+  model: ConnectionPresentationModel,
+  colorScheme: MobileColorScheme
+) {
   const {
     activeGitHubProject,
     findProjectRowRepo,
@@ -73,6 +77,7 @@ export function renderMobileTasksGitHubProjectList(model: ConnectionPresentation
   ) : (
     <FlatList
       data={githubProjectListEntries}
+      extraData={colorScheme}
       keyExtractor={(entry) => (entry.type === 'group' ? `group:${entry.group.key}` : entry.row.id)}
       ItemSeparatorComponent={() => <View style={styles.separator} />}
       contentContainerStyle={[styles.list, { paddingBottom: spacing.lg + insets.bottom }]}
@@ -132,10 +137,7 @@ export function renderMobileTasksGitHubProjectList(model: ConnectionPresentation
                   style={[
                     styles.repoDot,
                     {
-                      backgroundColor: getRepoBadgeColor(
-                        repo ?? undefined,
-                        row.content.repository ?? 'project'
-                      )
+                      backgroundColor: getRepoBadgeColor(repo ?? undefined)
                     }
                   ]}
                 />

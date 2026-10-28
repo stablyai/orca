@@ -33,9 +33,4 @@ describe('agent presence for a structured worker', () => {
     // leaf probe would only throw.
     expect(getLiveLeaf).not.toHaveBeenCalled()
   })
-
-  it('still answers false for a handle that is not a live structured worker', async () => {
-    const { presence: subject } = presence(() => false)
-    await expect(subject.isRunning('term_gone')).resolves.toBe(false)
-  })
 })

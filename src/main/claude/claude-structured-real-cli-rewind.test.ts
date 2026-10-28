@@ -17,11 +17,9 @@ import {
   CLAUDE_STRUCTURED_BASE_OPTIONS,
   type ClaudeStructuredSdkOptions
 } from './claude-structured-launch-resolution'
-import {
-  ClaudeStructuredSessionAdapter,
-  type ClaudeStructuredSessionEvent
-} from './claude-structured-session-adapter'
-import { claudeStartupSettled } from './claude-structured-session-test-support'
+import { ClaudeStructuredSessionAdapter } from './claude-structured-session-adapter'
+import type { ClaudeStructuredSessionEvent } from './structured/claude-structured-session-state'
+import { claudeStartupSettled } from './claude-structured-startup-settled-test-support'
 
 const SESSION_ID = 'real-cli-rewind'
 

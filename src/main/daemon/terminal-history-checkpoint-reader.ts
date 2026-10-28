@@ -30,7 +30,7 @@ export async function readTerminalHistoryCheckpoint(
   }
 }
 
-function isTerminalCheckpointFile(value: unknown): value is TerminalCheckpointFile {
+export function isTerminalCheckpointFile(value: unknown): value is TerminalCheckpointFile {
   if (!value || typeof value !== 'object' || Array.isArray(value)) {
     return false
   }

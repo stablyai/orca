@@ -138,7 +138,16 @@ describe('resolveWindowsShiftEnterEncoding', () => {
   // OMP wraps Pi despite owner-pinned titles; preserve Pi newline encoding or Esc+CR submits instead (#16373, #9703).
   it('recovers CSI-u from an OMP title, which wraps the same Pi reader', () => {
     const state = { paneForegroundAgentByPaneKey: {}, agentLaunchConfigByPaneKey: {} }
-    for (const title of ['⠸ OMP', 'OMP ready', 'OMP', 'OMP - action required']) {
+    // Owner normalization rebrands π session titles to OMP in the stored pane title.
+    for (const title of [
+      '⠸ OMP',
+      'OMP ready',
+      'OMP',
+      'OMP - action required',
+      'OMP - fixing the sidebar - orca',
+      '⠋ OMP - fixing the sidebar - orca',
+      'OMP > fixing the sidebar'
+    ]) {
       expect(resolveWindowsShiftEnterEncodingForPane(state, 'tab:pane', title)).toBe('csi-u')
     }
   })

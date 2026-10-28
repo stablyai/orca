@@ -6,13 +6,15 @@ import { handleSwitchTabAcrossAllTypes } from '../hooks/ipc-tab-switch'
 import { switchFloatingWorkspaceTab } from '@/lib/floating-workspace-terminal-actions'
 import { dispatchWorkspaceTabCommand } from '@/lib/workspace-tab-commands'
 import type { Tab } from '../../../shared/tab-types'
-import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../shared/constants'
+import { useRunningTerminalCloseConfirmStore } from '@/store/running-terminal-close-confirm'
+import { FLOATING_TERMINAL_WORKTREE_ID, getDefaultSettings } from '../../../shared/constants'
 import {
   ORCA_EDITOR_REQUEST_CMD_SAVE_EVENT,
   type EditorRequestCmdSaveDetail
 } from './editor/editor-autosave'
 import { handleTerminalWorkspaceKeyDown } from './terminal-workspace-keydown'
 import type { TerminalActivationController } from './use-terminal-activation-actions'
+import type { TerminalAgentTabShortcut } from './terminal-agent-tab-shortcut'
 import { useTerminalBulkCloseActions } from './use-terminal-bulk-close-actions'
 import { makeOpenFile, makeUnifiedTab } from '../store/slices/store-session-test-harness'
 
@@ -27,8 +29,19 @@ const mocks = vi.hoisted(() => ({
   closeStructuredAgentSession: vi.fn(async () => 'closed'),
   callRuntimeRpc: vi.fn(async () => ({ ok: true })),
   cancelStructuredAgentLaunch: vi.fn(),
+  structuredSessionBusy: vi.fn<() => boolean>(),
   floatingFocused: false,
-  targetInsideFloatingPanel: false
+  targetInsideFloatingPanel: false,
+  resolveAgentShortcut: vi.fn<(args: { activeWorktreeId: string }) => TerminalAgentTabShortcut>(
+    () => ({ actionId: null, agent: null })
+  ),
+  launchAgentInNewTab: vi.fn()
+}))
+
+vi.mock('@/lib/agent-session/structured-agent-session-busy', async () => ({
+  admitStructuredAgentSession: (
+    await import('@/store/slices/store-session-test-harness')
+  ).admissionFromBusy(mocks.structuredSessionBusy)
 }))
 
 vi.mock('../store', () => ({ useAppStore: { getState: () => mocks.state } }))
@@ -51,8 +64,9 @@ vi.mock('@/lib/terminal-shortcut-capture-notification', () => ({
   showTerminalShortcutCaptureNotification: vi.fn()
 }))
 vi.mock('./terminal-agent-tab-shortcut', () => ({
-  resolveTerminalAgentTabShortcut: () => ({ actionId: null, agent: null })
+  resolveTerminalAgentTabShortcut: mocks.resolveAgentShortcut
 }))
+vi.mock('@/lib/launch-agent-in-new-tab', () => ({ launchAgentInNewTab: mocks.launchAgentInNewTab }))
 
 vi.mock('./terminal/terminal-tab-actions', () => ({ closeTerminalTab: mocks.closeTerminalTab }))
 vi.mock('@/runtime/structured-agent-session-close', () => ({
@@ -75,7 +89,6 @@ const controller = {
   handleCloseAllFiles: vi.fn(),
   handleCloseBrowserTab: vi.fn(),
   handleCloseFile: vi.fn(),
-  handleNewAgentTab: vi.fn(),
   handleNewBrowserTab: vi.fn(),
   handleNewFile: vi.fn(),
   handleNewSimulatorTab: vi.fn(),
@@ -144,6 +157,7 @@ describe('tab.close uses the unified active tab', () => {
 
   beforeEach(() => {
     vi.clearAllMocks()
+    mocks.structuredSessionBusy.mockReturnValue(false)
     mocks.floatingFocused = false
     mocks.targetInsideFloatingPanel = false
     tab = {
@@ -161,6 +175,7 @@ describe('tab.close uses the unified active tab', () => {
     mocks.state = {
       activeView: 'terminal',
       activeWorktreeId: worktreeId,
+      settings: getDefaultSettings('/tmp/pr-34236-keyboard'),
       // The old terminal mirror can lag behind focus in a split group.
       activeTabType: 'terminal',
       activeTabId: 'other-terminal',
@@ -181,6 +196,10 @@ describe('tab.close uses the unified active tab', () => {
     }
   })
 
+  afterEach(() => {
+    useRunningTerminalCloseConfirmStore.getState().dismissRunningTerminalClose()
+  })
+
   function close(platform: NodeJS.Platform = 'darwin', terminalFocus = false): KeyboardEvent {
     const target = document.createElement('textarea')
     if (terminalFocus) {
@@ -197,18 +216,24 @@ describe('tab.close uses the unified active tab', () => {
     return event
   }
 
-  it.each(['darwin', 'win32', 'linux'] as const)(
-    'routes native chat close from its composer through the unified tab action on %s',
-    async (platform) => {
-      expect(close(platform).defaultPrevented).toBe(true)
-      await vi.waitFor(() => expect(closeUnifiedTab).toHaveBeenCalledWith(tab.id))
-      // Why: the unified store action owns cancellation and host retirement for every close path.
-      expect(mocks.closeStructuredAgentSession).not.toHaveBeenCalled()
-      expect(mocks.callRuntimeRpc).not.toHaveBeenCalled()
-      expect(mocks.cancelStructuredAgentLaunch).not.toHaveBeenCalled()
-      expect(mocks.closeTerminalTab).not.toHaveBeenCalled()
+  it.each(
+    (['darwin', 'win32', 'linux'] as const).flatMap((platform) =>
+      [false, true].map((busy) => ({ platform, busy }))
+    )
+  )('routes native chat close on $platform with busy=$busy', async ({ platform, busy }) => {
+    mocks.structuredSessionBusy.mockReturnValue(busy)
+    expect(close(platform).defaultPrevented).toBe(true)
+    if (busy) {
+      expect(closeUnifiedTab).not.toHaveBeenCalled()
+      useRunningTerminalCloseConfirmStore.getState().confirmRunningTerminalClose()
     }
-  )
+    await vi.waitFor(() => expect(closeUnifiedTab).toHaveBeenCalledWith(tab.id))
+    // Why: the unified store action owns cancellation and host retirement for every close path.
+    expect(mocks.closeStructuredAgentSession).not.toHaveBeenCalled()
+    expect(mocks.callRuntimeRpc).not.toHaveBeenCalled()
+    expect(mocks.cancelStructuredAgentLaunch).not.toHaveBeenCalled()
+    expect(mocks.closeTerminalTab).not.toHaveBeenCalled()
+  })
 
   it.each(['editor', 'diff', 'conflict-review', 'check-details', 'browser', 'simulator'] as const)(
     'closes the focused %s tab through the same command',
@@ -239,15 +264,24 @@ describe('tab.close uses the unified active tab', () => {
     })
   })
 
-  it('waits for pinned-tab confirmation before closing', async () => {
+  it('waits for pinned-tab then active-work confirmation before closing', () => {
     tab.isPinned = true
+    mocks.structuredSessionBusy.mockReturnValue(true)
     close()
     expect(mocks.closeStructuredAgentSession).not.toHaveBeenCalled()
     expect(closeUnifiedTab).not.toHaveBeenCalled()
     const request = vi.mocked(mocks.state.requestPinnedTabCloseConfirm as ReturnType<typeof vi.fn>)
       .mock.calls[0][0]
+    expect(useRunningTerminalCloseConfirmStore.getState().runningTerminalCloseConfirm).toBeNull()
     request.onConfirm()
-    await vi.waitFor(() => expect(closeUnifiedTab).toHaveBeenCalledWith(tab.id))
+    expect(closeUnifiedTab).not.toHaveBeenCalled()
+    expect(
+      useRunningTerminalCloseConfirmStore.getState().runningTerminalCloseConfirm
+    ).toMatchObject({
+      copyKind: 'chat-agent'
+    })
+    useRunningTerminalCloseConfirmStore.getState().confirmRunningTerminalClose()
+    expect(closeUnifiedTab).toHaveBeenCalledExactlyOnceWith(tab.id)
   })
 
   it('leaves the chord to an agent terminal preview dialog over a workspace editor', () => {
@@ -465,5 +499,53 @@ describe('tab.closeAll confirmation', () => {
     })
     expect(queueEditorCloseRequests).not.toHaveBeenCalled()
     expect(closeFile).not.toHaveBeenCalled()
+  })
+})
+
+describe('agent tab shortcuts', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    mocks.floatingFocused = false
+    mocks.state = {
+      activeGroupIdByWorktree: { [FLOATING_TERMINAL_WORKTREE_ID]: 'floating-group' },
+      groupsByWorktree: {}
+    }
+    mocks.resolveAgentShortcut.mockReturnValueOnce({
+      actionId: 'tab.newAgent.claude',
+      agent: 'claude'
+    })
+  })
+
+  function pressAgentShortcut(): void {
+    handleTerminalWorkspaceKeyDown(
+      new KeyboardEvent('keydown', { key: '1', ctrlKey: true, cancelable: true }),
+      controller,
+      'darwin'
+    )
+  }
+
+  it('opens the agent in the active worktree when the floating panel is not focused', () => {
+    pressAgentShortcut()
+
+    expect(mocks.launchAgentInNewTab).toHaveBeenCalledExactlyOnceWith(
+      expect.objectContaining({ agent: 'claude', worktreeId: controller.activeWorktreeId })
+    )
+  })
+
+  it('opens the agent in the floating workspace when its panel owns focus', () => {
+    mocks.floatingFocused = true
+
+    pressAgentShortcut()
+
+    expect(mocks.resolveAgentShortcut).toHaveBeenCalledWith(
+      expect.objectContaining({ activeWorktreeId: FLOATING_TERMINAL_WORKTREE_ID })
+    )
+    expect(mocks.launchAgentInNewTab).toHaveBeenCalledExactlyOnceWith(
+      expect.objectContaining({
+        agent: 'claude',
+        worktreeId: FLOATING_TERMINAL_WORKTREE_ID,
+        groupId: 'floating-group'
+      })
+    )
   })
 })

@@ -2,20 +2,28 @@ import { selectAgentSessionCurrentRequests } from '../../../src/shared/agent-ses
 
 import { useCallback } from 'react'
 import { runningStructuredAgentSessionTurnId } from '../../../src/shared/structured-agent-session-live-turn'
+import { structuredSessionBackgroundTasksView } from '../../../src/shared/structured-session-background-tasks-view'
+import { agentSessionVisibleFailureFacts } from '../../../src/shared/agent-session-visible-failures'
+import { tuiAgentDisplayName } from '../../../src/shared/tui-agent-display-names'
 import { pendingPromptsAllUnanswerableHere } from '../../../src/shared/agent-session-approval-subject'
 import {
+  SkillRefLimitError,
   structuredAgentSessionSendBody,
   type StructuredAgentSessionAttachment
 } from '../../../src/shared/structured-agent-session-send-mutation'
+import type { AgentJournalSkillRef } from '../../../src/shared/agent-session-journal-types'
+import { MAX_SKILL_REFS } from '../../../src/shared/rpc-contract/structured-agent-session-message-params'
 import type { StructuredAgentSessionComposerOptions } from '../../../src/shared/structured-agent-session-composer'
 import type { AgentSessionSlashCommand } from '../../../src/shared/agent-session-wire'
 import type { StructuredAgentSessionState } from '../../../src/shared/structured-agent-session-reducer'
+import { structuredAgentSessionQueueEnabled } from '../../../src/shared/structured-agent-session-queued-cards'
 import type { RpcClient } from '../transport/rpc-client'
 import type { MobileNativeChatSendOutcome } from './native-chat/mobile-native-chat-send'
 import { dispatchMobileStructuredCommand } from './mobile-structured-composer-command'
 import type { MobileNativeChatSendErrorReporter } from './native-chat/use-mobile-native-chat-send-error'
 import { sendMobileStructuredAgentSessionMessage } from './mobile-structured-agent-session-send'
 import type { MobileStructuredSends } from './use-mobile-structured-sends'
+import type { MobileStructuredSendsOut } from './use-mobile-structured-stop-offer'
 import { structuredSessionOperationId } from './structured-session-operation-id'
 import { timeoutForDeadline } from './mobile-structured-agent-session-rpc'
 import { nativeChatTextWithFileReferences } from './native-chat/composer/mobile-native-chat-file-attachment'
@@ -24,13 +32,18 @@ import {
   actionableStructuredQuestion
 } from './mobile-structured-actionable-prompt'
 
-// An unsupported pending prompt would hold queued sends forever; start a turn instead.
 export function mobileStructuredSendQueues(
   queueCapable: boolean,
-  state: Pick<StructuredAgentSessionState, 'items' | 'currentRequests'>
+  queueFollowUps: boolean,
+  state: Pick<StructuredAgentSessionState, 'items' | 'currentRequests' | 'queuedMessages'>
 ): boolean {
   return (
-    queueCapable && !pendingPromptsAllUnanswerableHere(selectAgentSessionCurrentRequests(state))
+    queueCapable &&
+    structuredAgentSessionQueueEnabled(
+      queueFollowUps,
+      state,
+      selectAgentSessionCurrentRequests(state)
+    )
   )
 }
 
@@ -44,12 +57,17 @@ export function useMobileStructuredSendWithOutcome(args: {
   sessionId: string | null
   enabled: boolean
   queueCapable: boolean
+  queueFollowUps: boolean
   commandsWait: boolean
   stateRef: { readonly current: StructuredAgentSessionState }
   stopping: boolean
+  /** The host's queue sends next: commands that cannot wait in line read the chat as working. */
+  queueSendsNext: boolean
   accept: MobileStructuredSends['accept']
   hold: MobileStructuredSends['hold']
   commandPending: { current: boolean }
+  /** This chat's message sends still out, which a command waits behind as on desktop. */
+  sendsOut: MobileStructuredSendsOut
   controller: Pick<
     StructuredAgentSessionComposerOptions,
     'snapshot' | 'setOption' | 'invokeAction' | 'conversationCommands'
@@ -58,11 +76,14 @@ export function useMobileStructuredSendWithOutcome(args: {
   onSendError: MobileNativeChatSendErrorReporter
   // Older hosts accept neither per-chat model nor effort.
   sendOptions?: () => Readonly<Record<string, string>> | undefined
+  // An older host refuses a send body carrying `skills`; there the `$name` text stands alone.
+  takesSkills?: boolean
 }): (
   text: string,
   images?: string[],
   deadline?: number,
-  attachments?: readonly StructuredMobileSendAttachment[]
+  attachments?: readonly StructuredMobileSendAttachment[],
+  skills?: readonly AgentJournalSkillRef[]
 ) => Promise<MobileNativeChatSendOutcome> {
   const {
     accept,
@@ -75,18 +96,23 @@ export function useMobileStructuredSendWithOutcome(args: {
     hold,
     onSendError,
     queueCapable,
+    queueFollowUps,
+    queueSendsNext,
     sendOptions,
+    sendsOut,
     sessionCommands,
     sessionId,
     stateRef,
-    stopping
+    stopping,
+    takesSkills
   } = args
   return useCallback(
     async (
       text: string,
       images?: string[],
       deadline?: number,
-      attachments?: readonly StructuredMobileSendAttachment[]
+      attachments?: readonly StructuredMobileSendAttachment[],
+      pickedSkills?: readonly AgentJournalSkillRef[]
     ): Promise<MobileNativeChatSendOutcome> => {
       const currentFence = stateRef.current.fence
       if (!client || !sessionId || !enabled || currentFence === null) {
@@ -111,13 +137,22 @@ export function useMobileStructuredSendWithOutcome(args: {
         fence: currentFence,
         pending: commandPending,
         controller: { agent: agent ?? undefined, ...controller, sessionCommands },
-        busy: () =>
-          actionableStructuredApproval(stateRef.current) ||
-          actionableStructuredQuestion(stateRef.current)
-            ? 'prompt'
-            : runningStructuredAgentSessionTurnId(stateRef.current)
-              ? 'working'
-              : null,
+        agentName: agent ? (tuiAgentDisplayName(agent) ?? agent) : undefined,
+        holds: () => {
+          const state = stateRef.current
+          const turnId = runningStructuredAgentSessionTurnId(state)
+          const tasks = structuredSessionBackgroundTasksView(state.backgroundTasks, turnId)
+          return {
+            working: turnId !== null || queueSendsNext,
+            prompt: Boolean(
+              actionableStructuredApproval(state) || actionableStructuredQuestion(state)
+            ),
+            background: tasks.show || tasks.isMonitoring,
+            backgroundTasksRunning: tasks.isMonitoring,
+            sending: sendsOut.sending()
+          }
+        },
+        startFailures: () => agentSessionVisibleFailureFacts(stateRef.current.items),
         waitsInLine: (command) =>
           command === 'compact' &&
           commandsWait &&
@@ -138,7 +173,19 @@ export function useMobileStructuredSendWithOutcome(args: {
         }
       }
       const wireText = nativeChatTextWithFileReferences(text, files)
-      const body = structuredAgentSessionSendBody(wireText, imageAttachments)
+      const skills = takesSkills ? (pickedSkills ?? []) : []
+      let body: ReturnType<typeof structuredAgentSessionSendBody>
+      try {
+        body = structuredAgentSessionSendBody(wireText, imageAttachments, skills)
+      } catch (error) {
+        if (!(error instanceof SkillRefLimitError)) {
+          throw error
+        }
+        onSendError(
+          `Message not sent. Keep at most ${MAX_SKILL_REFS} selected skill files and try again.`
+        )
+        return 'rejected'
+      }
       if (body.blocks.length === 0) {
         return 'rejected'
       }
@@ -150,13 +197,14 @@ export function useMobileStructuredSendWithOutcome(args: {
       }
       // Wait for pending picks so the send carries this chat’s settled options.
       const options = sendOptions?.()
-      const outcome = await sendMobileStructuredAgentSessionMessage({
+      const outcome = await sendsOut.trackSend(sendMobileStructuredAgentSessionMessage)({
         client,
         sessionId,
         expectedRuntimeFence: currentFence,
         text: wireText,
         attachments: imageAttachments,
-        ...(mobileStructuredSendQueues(queueCapable, stateRef.current)
+        skills,
+        ...(mobileStructuredSendQueues(queueCapable, queueFollowUps, stateRef.current)
           ? { delivery: 'queue-if-active' as const }
           : {}),
         ...(options ? { options } : {}),
@@ -182,11 +230,15 @@ export function useMobileStructuredSendWithOutcome(args: {
       hold,
       onSendError,
       queueCapable,
+      queueFollowUps,
+      queueSendsNext,
       sendOptions,
+      sendsOut,
       sessionCommands,
       sessionId,
       stateRef,
-      stopping
+      stopping,
+      takesSkills
     ]
   )
 }

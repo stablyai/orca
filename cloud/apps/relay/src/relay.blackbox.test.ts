@@ -974,15 +974,12 @@ describe('served relay URL', () => {
       credential: resumeToken
     })
     const originalExpiry = first.hello.resumeExpiresAt
-    const firstPhoneClosed = new Promise<void>((resolveClose) =>
-      first.phone.once('close', () => resolveClose())
-    )
-    const firstDataClosed = new Promise<void>((resolveClose) =>
-      first.data.once('close', () => resolveClose())
+    // Only the relay's close of the data leg proves it saw the phone leave; a client-side close can race the confirm.
+    const firstDataClosed = new Promise<number>((resolveClose) =>
+      first.data.once('close', (code) => resolveClose(code))
     )
     first.phone.close()
-    first.data.close()
-    await Promise.all([firstPhoneClosed, firstDataClosed])
+    expect(await firstDataClosed).toBe(4408)
     const closedBasis = nextMessage(host.socket)
     host.socket.send(
       JSON.stringify({

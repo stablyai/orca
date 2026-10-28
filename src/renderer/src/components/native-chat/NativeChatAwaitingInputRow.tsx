@@ -4,7 +4,7 @@ import { translate } from '@/i18n/i18n'
 import {
   NATIVE_CHAT_ASK_ROW_COPY,
   type NativeChatAskRowSubject
-} from '../../../../shared/native-chat-ask-row'
+} from '../../../../shared/native-chat/input/native-chat-ask-row'
 import { useNativeChatDisclosure } from './native-chat-disclosure-store'
 import { NativeChatToolRunIcon } from './NativeChatToolIcon'
 import { useNativeChatClippedLine } from './use-native-chat-clipped-line'

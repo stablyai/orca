@@ -1,4 +1,4 @@
-import type { RemoteRuntimeClientError } from '../../remote-runtime-client-error'
+import type { RemoteRuntimeClientError } from '../remote-runtime-client-error'
 import { remoteRuntimeUnavailableError } from '../requests/remote-runtime-request-frames'
 import type { SharedControlSocketGeneration } from './remote-runtime-shared-control-socket-generation'
 import type { SharedControlLogicalSubscription } from './remote-runtime-shared-control-types'

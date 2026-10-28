@@ -1,6 +1,6 @@
 import type { OpenFile } from '@/store/slices/editor'
 import type { WorktreeOperationRouteState } from '@/lib/worktree-operation-route'
-import { resolveWorktreeOperationRoute } from '@/lib/worktree-operation-route'
+import { resolveEditorOwnerRoute } from '@/lib/editor-file-operation-owner'
 import {
   isDetachedEditorBufferId,
   type EditorBufferViewIndex
@@ -17,13 +17,8 @@ export function resolveEditorModelOwner(
   state: WorktreeOperationRouteState
 ): EditorModelOwner {
   const captured = file.operationProvenance?.generation.route
-  const route =
-    captured ??
-    // Use focus-independent write ownership so retained text stays keyed to the file’s actual host.
-    resolveWorktreeOperationRoute(
-      state.activeWorktreeId === file.worktreeId ? { ...state, activeWorktreeId: null } : state,
-      file.worktreeId
-    )
+  const owner = captured ? null : resolveEditorOwnerRoute(state, file.worktreeId)
+  const route = captured ?? (owner?.kind === 'resolved' ? owner.route : null)
   const environmentId = captured
     ? captured.runtimeEnvironmentId
     : file.runtimeEnvironmentId !== undefined

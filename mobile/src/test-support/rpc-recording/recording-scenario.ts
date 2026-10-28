@@ -12,7 +12,15 @@ export type Rejection = {
 // Streaming frames always route to their opening id, assert subscribe params and carry whole host responses.
 export type ScenarioStep =
   | { action: string; id: string; args?: Record<string, unknown> }
-  | { complete: string; params: unknown; reply?: unknown; reject?: Rejection; optional?: true }
+  | {
+      complete: string
+      params: unknown
+      reply?: unknown
+      reject?: Rejection
+      optional?: true
+      // Params built from two parallel replies change with whichever reply a matrix diverges.
+      paramsFollowDivergence?: true
+    }
   | { frame: string; params: unknown; reply: unknown }
   | { bind: string; request: string; params: unknown; optional?: true }
   | { advance: number }

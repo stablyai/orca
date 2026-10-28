@@ -1,4 +1,4 @@
-// #29083: a host whose move an enabled SSH automation refuses offers Move anyway on its card, and that connects it.
+// #29083: a host whose move a saved automation refuses offers Move anyway on its card, and that connects it.
 // ORCA_E2E_ORCAD_CONVERT_HOST=docker; ORCA_E2E_ORCAD_CONVERT_TEMPLATE must be built for the Docker host.
 import type { ElectronApplication } from '@stablyai/playwright-test'
 import { expect, test } from './helpers/orca-app'
@@ -28,7 +28,8 @@ test.afterEach(() => {
   host = null
 })
 
-function seedEnabledAutomation(userDataDir: string, repoId: string, targetId: string): void {
+// Pinned to an earlier registration of this host, so the server can't take it over and it stays behind.
+function seedStrandedAutomation(userDataDir: string, repoId: string, targetId: string): void {
   const now = Date.now()
   const automationId = `automation-${now}`
   mutateStoppedProfileState(userDataDir, (state: Record<string, unknown>) => {
@@ -42,6 +43,7 @@ function seedEnabledAutomation(userDataDir: string, repoId: string, targetId: st
         projectId: repoId,
         executionTargetType: 'ssh',
         executionTargetId: targetId,
+        executionTargetGeneration: 9_999,
         schedulerOwner: 'ssh_bridge',
         workspaceMode: 'new_per_run',
         workspaceId: null,
@@ -83,7 +85,7 @@ function seedEnabledAutomation(userDataDir: string, repoId: string, targetId: st
   })
 }
 
-test('a move an enabled SSH automation refuses offers Move anyway on the host card', async ({
+test('a move a saved automation refuses offers Move anyway on the host card', async ({
   testRepoPath
 }, testInfo) => {
   // Starts a Docker host and two app launches, then converts the host.
@@ -102,7 +104,7 @@ test('a move an enabled SSH automation refuses offers Move anyway on the host ca
       repoPath: host.remoteRepoPath,
       folderPath: host.remoteFolderPath
     })
-    seedEnabledAutomation(session.userDataDir, seeded.repoId, seeded.targetId)
+    seedStrandedAutomation(session.userDataDir, seeded.repoId, seeded.targetId)
     const upgraded = await session.launch()
     app = upgraded.app
     const page = upgraded.page

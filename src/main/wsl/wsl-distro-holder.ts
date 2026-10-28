@@ -59,6 +59,8 @@ export type WslDistroHolder = {
   adoptHolders(): Promise<WslDistroHolderAdoption[]>
   /** Explicit stop only; the distro then idles out on WSL's own schedule. */
   release(distro: string): Promise<WslDistroHolderState>
+  /** Every recorded holder (uninstall, hosts turned off); kills only verified holders. */
+  releaseAll(): Promise<WslDistroHolderAdoption[]>
   holderState(distro: string): Promise<WslDistroHolderState>
 }
 
@@ -214,7 +216,8 @@ export function createWslDistroHolder(dependencies: WslDistroHolderDependencies)
       try {
         await waitForDistroRunning(distro, () => observed.exit)
       } catch (error) {
-        await stopRecordedHolder(record)
+        // This process spawned it moments ago, so its pid is ours even without a start time.
+        await stopRecordedHolder(record, { spawnedHere: true })
         throw error
       }
       const { onHolderExit } = dependencies
@@ -227,9 +230,14 @@ export function createWslDistroHolder(dependencies: WslDistroHolderDependencies)
     }
   }
 
-  async function stopRecordedHolder(record: WslDistroHolderRecord): Promise<WslDistroHolderState> {
+  async function stopRecordedHolder(
+    record: WslDistroHolderRecord,
+    { spawnedHere = false } = {}
+  ): Promise<WslDistroHolderState> {
     let state = classifyWslDistroHolderProcess(record, await queryProcess(record.pid))
-    if (state === 'live') {
+    // A command line alone can't tell our holder from a reused pid running the same argv.
+    const provenOurs = spawnedHere || record.creationTimeMs !== null
+    if (state === 'live' && provenOurs) {
       try {
         // WSL 2.7.10 relaunches a same-argv child; killing the recorded parent ends both.
         killProcess(record.pid)
@@ -249,7 +257,7 @@ export function createWslDistroHolder(dependencies: WslDistroHolderDependencies)
     if (state === 'exited') {
       await removeWslDistroHolderRecord(userDataPath, record.distro)
     }
-    return state
+    return state === 'live' && !provenOurs ? 'unverifiable' : state
   }
 
   async function unverifiableTooLongWhileRunning(distro: string): Promise<boolean> {
@@ -314,22 +322,31 @@ export function createWslDistroHolder(dependencies: WslDistroHolderDependencies)
       )
     },
 
-    release(distro) {
-      return serialize(distro, async () => {
-        const read = await readWslDistroHolderRecord(userDataPath, distro)
-        if (read.status === 'unreadable') {
-          return 'unverifiable'
-        }
-        if (read.status !== 'present') {
-          await removeWslDistroHolderRecord(userDataPath, distro)
-          return 'exited'
-        }
-        return stopRecordedHolder(read.record)
-      })
+    release: (distro) => releaseRecorded(distro),
+
+    async releaseAll() {
+      const distros = await listWslDistroHolderRecordDistros(userDataPath)
+      return Promise.all(
+        distros.map(async (distro) => ({ distro, state: await releaseRecorded(distro) }))
+      )
     },
 
     holderState(distro) {
       return serialize(distro, async () => (await recordedHolderState(distro)).state)
     }
+  }
+
+  function releaseRecorded(distro: string): Promise<WslDistroHolderState> {
+    return serialize(distro, async () => {
+      const read = await readWslDistroHolderRecord(userDataPath, distro)
+      if (read.status === 'unreadable') {
+        return 'unverifiable'
+      }
+      if (read.status !== 'present') {
+        await removeWslDistroHolderRecord(userDataPath, distro)
+        return 'exited'
+      }
+      return stopRecordedHolder(read.record)
+    })
   }
 }

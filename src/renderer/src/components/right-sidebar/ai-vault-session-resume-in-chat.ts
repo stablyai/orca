@@ -1,7 +1,7 @@
 import { isAntigravityReferenceSession } from '../../../../shared/antigravity-session-origin'
 // Native resume requires provider conversation lookup, unlike terminal resume's PTY-hosting gate.
 
-import { isWslStoredAiVaultSessionFile } from '@/lib/ai-vault-resume-target'
+import { isWslStoredAiVaultSessionFile } from '../../../../shared/ai-vault-resume-target'
 import { normalizeRuntimePathForComparison } from '../../../../shared/cross-platform-path'
 import { parseRoutableExecutionHostId } from '../../../../shared/execution-host'
 import { adoptsCliConversations } from '../../../../shared/structured-agent-cli-conversation-adoption'

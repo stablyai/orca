@@ -265,8 +265,8 @@ function jsxElementReports(node) {
 
 function bindContext(createVisitors) {
   return (context) => {
-    // Every vertical scroll class and style names overflow; returning no visitors skips AST transfer.
-    if (!context.sourceCode.text.includes('overflow')) {
+    // Every vertical scroll class and style names overflow; empty visitors skip JS AST deserialization.
+    if (!context.sourceCode.text.includes('overflow') && !context.sourceCode.text.includes('\\')) {
       return {}
     }
     const visitors = createVisitors()

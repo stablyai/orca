@@ -1,3 +1,4 @@
+import type { ConnectorCloud } from '../connector-cloud/connector-cloud'
 import { createDesktopConnectorCloud } from '../connector-cloud/connector-cloud-install'
 import { getProfileUserDataPath } from '../orca-profiles/profile-storage-paths'
 import { mainProcessState as state } from './main-process-state'
@@ -8,15 +9,22 @@ export function installDesktopConnectorCloud(): void {
   if (!state.runtime || !state.store) {
     return
   }
-  state.connectorCloud = createDesktopConnectorCloud(
-    state.runtime,
-    state.store,
-    getProfileUserDataPath(),
-    () => state.isQuitting
+  state.runtime.setConnectorCloud(
+    createDesktopConnectorCloud(
+      state.runtime,
+      state.store,
+      getProfileUserDataPath(),
+      () => state.isQuitting
+    )
   )
+}
+
+/** The desktop's connector, for the startup, auth and quit hooks. */
+export function desktopConnectorCloud(): ConnectorCloud | null {
+  return state.runtime?.getConnectorCloud() ?? null
 }
 
 // Registered with the relay; like it, the first request waits for the persisted proxy.
 export function connectDesktopConnectorCloud(): void {
-  void state.initialProxyApplicationReady.then(() => state.connectorCloud?.connect())
+  void state.initialProxyApplicationReady.then(() => desktopConnectorCloud()?.connect())
 }

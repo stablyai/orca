@@ -1,6 +1,7 @@
-/** Ask after workspace creation: the host needs resolved metadata to decide chat support. */
+import { decideAgentLaunchIntentMode } from './agent-launch-intent-mode'
+/** Structured launches create the workspace without an agent, then ask its host for chat support.
+ * The host needs the created workspace to answer; a definitive refusal starts a terminal agent. */
 
-import { assertOpenCodeModelLaunchPreferencesAbsent } from '../opencode/opencode-model-startup-plan'
 import { assertAgentPromptRequestActive } from '../runtime/orca-runtime-core'
 import { parsePaneKey } from '../../shared/stable-pane-id'
 import type { AgentLaunchResult } from '../../shared/agent-launch-intent'
@@ -18,11 +19,8 @@ import {
   settledAtCreation,
   settleLaunchPromptDisposal
 } from './agent-launch-prompt-delivery'
-import { workspaceKindForLaunchTarget } from '../../shared/workspace-launch-kind'
 import { isDefinitiveAgentSessionCreateRefusal } from '../../shared/agent-session-definitive-refusal'
 import {
-  decideAgentLaunchMode,
-  readAgentLaunchModeSettings,
   resolveAgentLaunchModeOnHost,
   type AgentLaunchModeReceipt,
   type AgentLaunchModeSettlement,
@@ -37,6 +35,7 @@ import {
 } from './agent-launch-legacy-host'
 import {
   AgentLaunchStructuredSessionRefusedError,
+  assertTerminalLaunchAdmissible,
   terminalLaunchInputs,
   type AgentLaunchStructuredSurface,
   type AgentLaunchWorkspaceFactory
@@ -53,31 +52,10 @@ export async function executeAgentLaunch(
   execution: AgentLaunchExecution
 ): Promise<AgentLaunchResult> {
   const { intent, runtime } = execution
-  if (intent.reuseTerminal || intent.target.kind === 'create-worktree') {
-    assertOpenCodeModelLaunchPreferencesAbsent(intent.agent, intent.sessionOptions)
-  }
   const vocabulary = execution.vocabulary ?? DEFAULT_LAUNCH_VOCABULARY
-  const preflight =
-    execution.decidedMode ??
-    decideAgentLaunchMode({
-      placement: {
-        agent: intent.agent,
-        workspaceKind: workspaceKindForLaunchTarget(intent.target),
-        ...(intent.reuseTerminal ? { terminal: intent.reuseTerminal.handle } : {}),
-        ...(intent.cwd ? { cwd: intent.cwd } : {}),
-        ...(intent.target.kind === 'existing' && intent.target.workspacePath
-          ? { workspacePath: intent.target.workspacePath }
-          : {}),
-        ...(execution.callerRendersStructured === false ? { callerRendersStructured: false } : {})
-      },
-      settings: execution.terminalOnly
-        ? undefined
-        : readAgentLaunchModeSettings(runtime, intent.nativeChatDefault),
-      ...(execution.terminalOnly ? { terminalOnly: true } : {}),
-      ...(intent.surface ? { surface: intent.surface } : {}),
-      vocabulary
-    })
-  // Intent preparation may have outlived the request.
+  const preflight = execution.decidedMode ?? decideAgentLaunchIntentMode(execution)
+  assertTerminalLaunchAdmissible(intent, preflight.mode)
+  // A caller's own preparation (intent resolution) may have outlived its request.
   assertAgentPromptRequestActive(execution.signal)
   if (execution.promptPolicy === 'legacy-host') {
     assertLegacyHostTarget(execution)
@@ -271,6 +249,7 @@ async function createSurface(
       worktreeId: workspace.worktreeId,
       agent: intent.agent,
       ...(intent.sessionOptions ? { options: intent.sessionOptions } : {}),
+      ...(intent.chatOptions ? { chatOptions: intent.chatOptions } : {}),
       ...(intent.sessionId ? { sessionId: intent.sessionId } : {}),
       ...(reservedTabId ? { tabId: reservedTabId } : {}),
       ...launchPromptCreateInputs(intent, execution.signal),

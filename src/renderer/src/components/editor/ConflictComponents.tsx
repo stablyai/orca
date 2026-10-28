@@ -319,12 +319,17 @@ export function ConflictReviewPanel({
             )}
             <div className="flex min-w-0 flex-wrap items-baseline gap-x-1.5">
               <span className="text-sm font-medium text-foreground">
-                {unresolvedCount}{' '}
-                {translate(
-                  'auto.components.editor.ConflictComponents.4be41eaafc',
-                  'unresolved conflict'
-                )}
-                {unresolvedCount === 1 ? '' : 's'}
+                {unresolvedCount === 1
+                  ? translate(
+                      'auto.components.editor.ConflictComponents.unresolvedConflicts_one',
+                      '{{count}} unresolved conflict',
+                      { count: unresolvedCount }
+                    )
+                  : translate(
+                      'auto.components.editor.ConflictComponents.unresolvedConflicts_other',
+                      '{{count}} unresolved conflicts',
+                      { count: unresolvedCount }
+                    )}
               </span>
               <span className="text-muted-foreground/50">·</span>
               <span className="text-xs text-muted-foreground">

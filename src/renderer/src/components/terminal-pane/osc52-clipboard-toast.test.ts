@@ -142,3 +142,27 @@ describe('showOsc52ClipboardFailedToast', () => {
     expect(toastErrorMock).toHaveBeenCalledTimes(2)
   })
 })
+
+describe('showOsc52ClipboardCopyRetryToast', () => {
+  beforeEach(() => {
+    vi.resetModules()
+    toastErrorMock.mockReset()
+  })
+
+  // #33937: the Copy click is the browser gesture the original OSC 52 write lacked.
+  it('copies the refused text from the Copy click and replaces itself on every refusal', async () => {
+    const { showOsc52ClipboardCopyRetryToast } = await importToastModule()
+    const writeClipboardText = vi.fn<(text: string) => Promise<void>>().mockResolvedValue()
+
+    showOsc52ClipboardCopyRetryToast('first', writeClipboardText)
+    showOsc52ClipboardCopyRetryToast('copy me', writeClipboardText)
+
+    expect(toastErrorMock).toHaveBeenCalledTimes(2)
+    const [, first] = toastErrorMock.mock.calls[0]
+    const [, latest] = toastErrorMock.mock.calls[1]
+    expect(latest.id).toBe(first.id)
+    expect(writeClipboardText).not.toHaveBeenCalled()
+    latest.action.onClick()
+    expect(writeClipboardText).toHaveBeenCalledWith('copy me')
+  })
+})

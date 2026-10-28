@@ -80,6 +80,8 @@ export const AGENT_SESSION_FAILURE_COPY = {
     "{{agent}} isn't installed on the computer running this chat. Install it from the chat in a current version of Orca.",
   fullAccessAsRoot:
     "{{agent}} won't use Full access while it runs as root. Choose another permission for {{agent}} in Settings → Agents for the computer running this chat, then start a new chat.",
+  launchPreparationFailed:
+    "Orca couldn't prepare {{agent}} to start on the computer running this chat.",
   conversationOpenElsewhere:
     'Codex is still holding this conversation open. Try again in a moment, or close other Codex terminals.',
   conversationOpenInTerminal:

@@ -79,10 +79,7 @@ export function renderMobileTasksWorkspaceCreateDrawer(model: ConnectionPresenta
                     style={[
                       styles.pickerRepoDot,
                       {
-                        backgroundColor: getRepoBadgeColor(
-                          workspaceCreateTargetRepo,
-                          workspaceCreateTargetRepo.displayName
-                        )
+                        backgroundColor: getRepoBadgeColor(workspaceCreateTargetRepo)
                       }
                     ]}
                   />

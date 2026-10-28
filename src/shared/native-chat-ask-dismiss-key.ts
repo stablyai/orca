@@ -1,4 +1,4 @@
-import type { AskPrompt } from './native-chat-ask-types'
+import type { AskPrompt } from './native-chat/input/native-chat-ask-types'
 
 // Live/status transcripts shorten question text differently; identity uses a prefix both retain.
 const ASK_DISMISS_KEY_TEXT_PREFIX = 200

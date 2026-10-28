@@ -160,6 +160,7 @@ describe('OrcaRuntimeService', () => {
           isPinned: false,
           isActive: false,
           status: 'active',
+          sidebarStatus: 'active',
           unread: false,
           liveTerminalCount: 1,
           hasAttachedPty: true,

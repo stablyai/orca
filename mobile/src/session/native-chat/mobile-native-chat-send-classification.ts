@@ -8,17 +8,17 @@ import {
   classifyNativeChatSend,
   type NativeChatSendClassification,
   type SlashCommandSuggestion
-} from '../../../../src/shared/native-chat-slash-commands'
+} from '../../../../src/shared/native-chat/input/native-chat-slash-commands'
 
 // Terminal mobile chat lacks desktop-owned command answers and reply rows.
 export function getMobileNativeChatCommands(agent: string): readonly SlashCommandSuggestion[] {
   return getAgentAnsweredNativeChatCommands(agent)
 }
 
-// Terminal sends carry no picker-origin override that could reclassify a slash token as chat.
 export function classifyMobileNativeChatSend(
   agent: string | null,
-  text: string
+  text: string,
+  pickerSkillOriginToken: string | null = null
 ): NativeChatSendClassification {
   if (!agent) {
     return 'chat'
@@ -27,7 +27,7 @@ export function classifyMobileNativeChatSend(
   return classifyNativeChatSend(
     text,
     getMobileNativeChatCommands(agent),
-    null,
+    pickerSkillOriginToken,
     profile?.skillPrefix ?? null
   )
 }

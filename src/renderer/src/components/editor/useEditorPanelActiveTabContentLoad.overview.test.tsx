@@ -7,6 +7,9 @@ import { makeWorktree } from '@/store/slices/worktrees-slice-test-fixtures'
 import type { GitStatusEntry } from '../../../../shared/git-status-types'
 import { useEditorPanelActiveTabContentLoad } from './useEditorPanelActiveTabContentLoad'
 
+// The active tab's load is a user act that may start a stopped WSL distro.
+const WAKE = { wakeWslDistro: true }
+
 const PATH = '/repo/file.ts'
 const ENTRY: GitStatusEntry = {
   path: 'file.ts',
@@ -77,16 +80,23 @@ describe('conflict-review overview loads', () => {
         loadFileContent
       })
     )
-    expect(loadFileContent).toHaveBeenLastCalledWith(PATH, view.id, 'wt-1', 'file.ts')
+    expect(loadFileContent).toHaveBeenLastCalledWith(PATH, view.id, 'wt-1', 'file.ts', WAKE)
 
     act(() => state().closeFile(view.id))
-    expect(loadFileContent).toHaveBeenLastCalledWith(PATH, PATH, 'wt-2', 'file.ts')
+    // Re-keying under the same active tab is not a user act, so it reads without waking.
+    expect(loadFileContent).toHaveBeenLastCalledWith(PATH, PATH, 'wt-2', 'file.ts', undefined)
 
     let reopened: OpenFile | undefined
     act(() => {
       reopened = openView('wt-1')
     })
-    expect(loadFileContent).toHaveBeenLastCalledWith(PATH, reopened!.id, 'wt-1', 'file.ts')
+    expect(loadFileContent).toHaveBeenLastCalledWith(
+      PATH,
+      reopened!.id,
+      'wt-1',
+      'file.ts',
+      undefined
+    )
     expect(loadFileContent).toHaveBeenCalledTimes(3)
   })
 })

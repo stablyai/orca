@@ -58,6 +58,7 @@ function omitRendererSshTargetGeneration<
     managedServerMoveOffered?: unknown
     managedServerLeaveBehind?: unknown
     managedServerUpdateFailure?: unknown
+    managedServerRemoved?: unknown
     remoteRuntimeResolution?: unknown
   }
 >(
@@ -71,6 +72,7 @@ function omitRendererSshTargetGeneration<
   | 'managedServerMoveOffered'
   | 'managedServerLeaveBehind'
   | 'managedServerUpdateFailure'
+  | 'managedServerRemoved'
   | 'remoteRuntimeResolution'
 > {
   const {
@@ -81,6 +83,7 @@ function omitRendererSshTargetGeneration<
     managedServerMoveOffered: _managedServerMoveOffered,
     managedServerLeaveBehind: _managedServerLeaveBehind,
     managedServerUpdateFailure: _managedServerUpdateFailure,
+    managedServerRemoved: _managedServerRemoved,
     remoteRuntimeResolution: _remoteRuntimeResolution,
     ...rest
   } = value

@@ -199,7 +199,8 @@ export function closeTerminalTab(
   }
 
   closeLocalTerminalTabState(terminalTabId, {
-    reason: options?.reason,
+    // A parked tab's process exit carries only the host reason, to keep the pin guard above.
+    reason: options?.reason ?? (options?.hostCloseReason === 'pty-exit' ? 'pty-exit' : undefined),
     ...(options?.captureRecentlyClosed !== undefined
       ? { captureRecentlyClosed: options.captureRecentlyClosed }
       : {}),

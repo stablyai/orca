@@ -110,9 +110,26 @@ function fetchLoopback(url: URL, maxBytes: number): Promise<ProbeResponse | null
   })
 }
 
+// Tag scans only move forward: rescanning from every unclosed opener is quadratic on
+// a malformed page, and this parse blocks the main or runtime event loop.
 function extractHtmlTitle(html: string): string | null {
-  const match = /<title\b[^>]*>([\s\S]*?)<\/title>/i.exec(html)
-  const title = match ? decodeHtmlEntities(match[1]).replace(/\s+/g, ' ').trim() : ''
+  const open = /<title\b/gi
+  if (!open.test(html)) {
+    return null
+  }
+  const tagEnd = html.indexOf('>', open.lastIndex)
+  if (tagEnd === -1) {
+    return null
+  }
+  const close = /<\/title>/gi
+  close.lastIndex = tagEnd + 1
+  const end = close.exec(html)
+  if (!end) {
+    return null
+  }
+  const title = decodeHtmlEntities(html.slice(tagEnd + 1, end.index))
+    .replace(/\s+/g, ' ')
+    .trim()
   return title ? title.slice(0, 120) : null
 }
 
@@ -133,7 +150,14 @@ function decodeHtmlEntities(text: string): string {
 }
 
 function findIconHref(html: string): string | null {
-  for (const tag of html.match(/<link\b[^>]*>/gi) ?? []) {
+  const open = /<link\b/gi
+  while (open.test(html)) {
+    const end = html.indexOf('>', open.lastIndex)
+    if (end === -1) {
+      return null
+    }
+    const tag = html.slice(open.lastIndex, end)
+    open.lastIndex = end + 1
     const attributes = new Map<string, string>()
     for (const [, name, double, single, bare] of tag.matchAll(
       /\b(rel|href)\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s>]+))/gi

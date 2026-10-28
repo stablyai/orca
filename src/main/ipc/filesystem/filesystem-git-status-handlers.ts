@@ -36,6 +36,12 @@ import { applyGitStatusUpstreamRefWatchRequest } from '../git-status-upstream-re
 import type { FilesystemHandlerContext } from './filesystem-handler-context'
 import { requireReachableGitRoute } from '../../providers/execution-host-provider-dispatch'
 import { getConnectionExecutionHostId } from '../../../shared/execution-host'
+import {
+  assertWslUncPathRunning,
+  noteWslDistroWokenForPath,
+  runAsWslUserAct,
+  wslDistroForPath
+} from '../../wsl/wsl-unc-access-gate'
 
 export function registerFilesystemGitStatusHandlers(context: FilesystemHandlerContext): void {
   const { store, gitStatusCancellations } = context
@@ -53,6 +59,8 @@ export function registerFilesystemGitStatusHandlers(context: FilesystemHandlerCo
         reuseLineStats?: boolean
         branchLineTotalMergeBase?: string
         requestToken?: string
+        /** The active workspace's first status: a user act that may start its WSL distro. */
+        wakeWslDistro?: boolean
       }
     ): Promise<GitStatusResult> => {
       const controller = gitStatusCancellations.begin(event, args.requestToken)
@@ -71,16 +79,33 @@ export function registerFilesystemGitStatusHandlers(context: FilesystemHandlerCo
       }
       try {
         requireReachableGitRoute(getConnectionExecutionHostId(args.connectionId))
-        const worktreePath = await resolveRegisteredWorktreePath(args.worktreePath, store)
-        // Reuse one registered-worktree lookup for frequent status polls and repo metadata reads.
-        const repo = getLocalRepoForRegisteredWorktree(store, args.worktreePath, worktreePath)
-        const gitOptions = getLocalGitOptionsForRepo(store, repo)
-        const sharedLinkPaths = repo ? getWorktreeSharedLinkPaths(repo) : []
-        return await getStatus(worktreePath, {
-          ...options,
-          ...gitOptions,
-          ...(sharedLinkPaths.length > 0 ? { sharedLinkPaths } : {})
+        // The active workspace's first status is a user act: it may start its stopped WSL distro.
+        const wakeDistro = args.wakeWslDistro
+          ? wslDistroForPath(
+              args.worktreePath,
+              getLocalGitOptionsForRegisteredWorktree(store, args.worktreePath, args.worktreePath)
+                .wslDistro
+            )
+          : null
+        const status = await runAsWslUserAct(wakeDistro, async () => {
+          // Background poll: its Git or UNC read would boot a stopped WSL distro (E9).
+          await assertWslUncPathRunning(args.worktreePath)
+          const worktreePath = await resolveRegisteredWorktreePath(args.worktreePath, store)
+          // Reuse one registered-worktree lookup for frequent status polls and repo metadata reads.
+          const repo = getLocalRepoForRegisteredWorktree(store, args.worktreePath, worktreePath)
+          const gitOptions = getLocalGitOptionsForRepo(store, repo)
+          await assertWslUncPathRunning(worktreePath, gitOptions.wslDistro)
+          const sharedLinkPaths = repo ? getWorktreeSharedLinkPaths(repo) : []
+          return getStatus(worktreePath, {
+            ...options,
+            ...gitOptions,
+            ...(sharedLinkPaths.length > 0 ? { sharedLinkPaths } : {})
+          })
         })
+        if (wakeDistro) {
+          noteWslDistroWokenForPath(args.worktreePath, wakeDistro)
+        }
+        return status
       } finally {
         gitStatusCancellations.finish(event, args.requestToken, controller)
       }
@@ -188,6 +213,8 @@ export function registerFilesystemGitStatusHandlers(context: FilesystemHandlerCo
       args: { worktreePath: string; connectionId?: string }
     ): Promise<GitConflictOperation> => {
       requireReachableGitRoute(getConnectionExecutionHostId(args.connectionId))
+      // A 3 s poll for inactive worktrees: its UNC reads would boot a stopped WSL distro (E9).
+      await assertWslUncPathRunning(args.worktreePath)
       const worktreePath = await resolveRegisteredWorktreePath(args.worktreePath, store)
       const gitOptions = getLocalGitOptionsForRegisteredWorktree(
         store,

@@ -29,6 +29,10 @@ export const DICTATION_FINISH_TIMEOUT_MS = 75_000
 export const MOBILE_DICTATION_INPUT_CLOSED_ERROR_MESSAGE =
   'Voice dictation stopped because this session is no longer accepting input. Try again.'
 
+// Calls, Siri and mic dropouts end capture before anything was transcribed.
+export const MOBILE_DICTATION_INTERRUPTED_ERROR_MESSAGE =
+  'Voice dictation stopped because the microphone was interrupted. Try again.'
+
 export function bytesToBase64(bytes: Uint8Array): string {
   return Buffer.from(bytes).toString('base64')
 }

@@ -1,10 +1,14 @@
 import * as pdfjsLib from 'pdfjs-dist'
 import { buildPdfJsDocumentOptions } from './pdf-js-document-options'
+import { createOrcaMediaRangeTransport } from './pdf-orca-media-range-transport'
 
 type PdfLoadingTask = ReturnType<typeof pdfjsLib.getDocument>
 
+/** Bytes as base64, or an orca-media URL (with its size) pdf.js reads by range. */
+export type PdfDocumentSource = { base64: string } | { url: string; length?: number }
+
 export type PdfDocumentLoader = {
-  load: (content: string) => void
+  load: (source: PdfDocumentSource) => void
   dispose: () => void
 }
 
@@ -34,7 +38,7 @@ export function createPdfDocumentLoader({
   }
 
   return {
-    load: (content) => {
+    load: (source) => {
       if (disposed) {
         return
       }
@@ -53,30 +57,50 @@ export function createPdfDocumentLoader({
         }
       }
       onError(null)
-      if (!content) {
-        onError('Failed to load PDF preview')
+      // Bound to the task once it exists: a failed range tears down that load, not just its message.
+      let failRange: (error: unknown) => void = fail
+      const documentSource =
+        'url' in source
+          ? source.length
+            ? {
+                range: createOrcaMediaRangeTransport(source.url, source.length, (error) =>
+                  failRange(error)
+                )
+              }
+            : // orca-media refuses fetch, so a URL is only readable through its sized range transport.
+              'Failed to load PDF preview'
+          : decodePdfBase64(source.base64)
+      if (typeof documentSource === 'string') {
+        onError(documentSource)
         return
-      }
-      let binary: string
-      try {
-        binary = window.atob(content)
-      } catch {
-        onError('Failed to decode PDF content')
-        return
-      }
-      const bytes = new Uint8Array(binary.length)
-      for (let index = 0; index < binary.length; index += 1) {
-        bytes[index] = binary.charCodeAt(index)
       }
       let task: PdfLoadingTask
       try {
-        task = pdfjsLib.getDocument(buildPdfJsDocumentOptions(bytes, document.baseURI))
+        task = pdfjsLib.getDocument(buildPdfJsDocumentOptions(documentSource, document.baseURI))
       } catch (error) {
         fail(error)
         return
       }
       tasks.add(task)
       pending = task
+      failRange = (error) => {
+        if (disposed || !tasks.has(task)) {
+          return
+        }
+        if (pending === task) {
+          pending = null
+        }
+        const shown = displayed?.task === task ? displayed : null
+        try {
+          shown?.detach()
+        } finally {
+          if (shown) {
+            displayed = null
+          }
+          destroy(task)
+          fail(error)
+        }
+      }
       void task.promise.then(
         (doc) => {
           if (disposed || pending !== task) {
@@ -117,4 +141,21 @@ export function createPdfDocumentLoader({
       }
     }
   }
+}
+
+function decodePdfBase64(content: string): { data: Uint8Array } | string {
+  if (!content) {
+    return 'Failed to load PDF preview'
+  }
+  let binary: string
+  try {
+    binary = window.atob(content)
+  } catch {
+    return 'Failed to decode PDF content'
+  }
+  const bytes = new Uint8Array(binary.length)
+  for (let index = 0; index < binary.length; index += 1) {
+    bytes[index] = binary.charCodeAt(index)
+  }
+  return { data: bytes }
 }

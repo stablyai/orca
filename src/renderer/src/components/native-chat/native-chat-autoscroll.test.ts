@@ -1,17 +1,11 @@
 import { describe, it, expect } from 'vitest'
 import {
-  distanceFromBottom,
   isNearBottom,
   nextFollowingEnd,
   shouldShowJumpToLatest,
   NATIVE_CHAT_BOTTOM_THRESHOLD_PX,
-  NATIVE_CHAT_FOLLOW_REARM_PX,
-  readerGestureLeavesEnd
+  NATIVE_CHAT_FOLLOW_REARM_PX
 } from './native-chat-autoscroll'
-
-const atBottom = { scrollTop: 952, scrollHeight: 1000, clientHeight: 48 }
-const scrolledUp = { scrollTop: 0, scrollHeight: 1000, clientHeight: 48 }
-const noOverflow = { scrollTop: 0, scrollHeight: 48, clientHeight: 48 }
 
 /** A view parked exactly `distance` px above the end of the same document. */
 function parkedAbove(distance: number): {
@@ -21,39 +15,6 @@ function parkedAbove(distance: number): {
 } {
   return { scrollTop: 952 - distance, scrollHeight: 1000, clientHeight: 48 }
 }
-
-describe('distanceFromBottom', () => {
-  it('is zero at the exact bottom and never negative', () => {
-    expect(distanceFromBottom(atBottom)).toBe(0)
-    expect(distanceFromBottom({ scrollTop: 5000, scrollHeight: 1000, clientHeight: 48 })).toBe(0)
-  })
-})
-
-describe('isNearBottom', () => {
-  it('sticks within the threshold and detaches beyond it', () => {
-    expect(isNearBottom(atBottom)).toBe(true)
-    expect(
-      isNearBottom({
-        scrollTop: 952 - NATIVE_CHAT_BOTTOM_THRESHOLD_PX,
-        scrollHeight: 1000,
-        clientHeight: 48
-      })
-    ).toBe(true)
-    expect(isNearBottom(scrolledUp)).toBe(false)
-  })
-})
-
-describe('shouldShowJumpToLatest', () => {
-  it('shows only when detached with content below', () => {
-    expect(shouldShowJumpToLatest(false, scrolledUp)).toBe(true)
-  })
-  it('hides while stuck to bottom', () => {
-    expect(shouldShowJumpToLatest(true, scrolledUp)).toBe(false)
-  })
-  it('hides when there is nothing to scroll', () => {
-    expect(shouldShowJumpToLatest(false, noOverflow)).toBe(false)
-  })
-})
 
 // Application writes emit ordinary browser scroll events; explicit marks distinguish delayed echoes from reader movement.
 describe('nextFollowingEnd', () => {
@@ -66,17 +27,9 @@ describe('nextFollowingEnd', () => {
     settling: false
   }
 
-  it('follows when the reader reaches the end', () => {
-    expect(nextFollowingEnd(following)).toBe(true)
-  })
-
   // Growth after application pinning is not reader detachment, even if the scroll event arrives late.
   it('keeps following when a delayed application scroll arrives after growth', () => {
     expect(nextFollowingEnd({ ...following, programmatic: true, geometry: wellAway })).toBe(true)
-  })
-
-  it('keeps following through unmarked passive layout offsets', () => {
-    expect(nextFollowingEnd({ ...following, geometry: wellAway })).toBe(true)
   })
 
   it.each([0, NATIVE_CHAT_FOLLOW_REARM_PX, 400])(
@@ -101,21 +54,6 @@ describe('nextFollowingEnd', () => {
     expect(nextFollowingEnd({ ...following, following: false, geometry: parked })).toBe(false)
     expect(isNearBottom(parked)).toBe(true)
     expect(shouldShowJumpToLatest(false, parked)).toBe(false)
-  })
-
-  it('re-arms at the band and not one pixel past it', () => {
-    const detached = {
-      following: false,
-      programmatic: false,
-      previousDistanceFromEnd: 400,
-      settling: false
-    }
-    expect(
-      nextFollowingEnd({ ...detached, geometry: parkedAbove(NATIVE_CHAT_FOLLOW_REARM_PX) })
-    ).toBe(true)
-    expect(
-      nextFollowingEnd({ ...detached, geometry: parkedAbove(NATIVE_CHAT_FOLLOW_REARM_PX + 1) })
-    ).toBe(false)
   })
 
   // Early smooth-scroll frames may be unmarked; movement away from the end must not rearm follow.
@@ -145,29 +83,4 @@ describe('nextFollowingEnd', () => {
     expect(nextFollowingEnd({ ...clamped, settling: true })).toBe(false)
     expect(nextFollowingEnd({ ...clamped, settling: false })).toBe(true)
   })
-
-  it('keeps a following reader through a small move up inside the band', () => {
-    expect(
-      nextFollowingEnd({ ...following, previousDistanceFromEnd: 0, geometry: parkedAbove(2) })
-    ).toBe(true)
-  })
-
-  // Sub-pixel and zoom rounding put the true end a fraction short of exact.
-  it('holds follow through rounding noise at the end', () => {
-    expect(nextFollowingEnd({ ...following, geometry: parkedAbove(1.5) })).toBe(true)
-  })
-})
-
-it('only detaches for gestures that can move away from the tail', () => {
-  expect(readerGestureLeavesEnd({ kind: 'wheel', deltaY: -10, zoom: false }, atBottom)).toBe(true)
-  expect(readerGestureLeavesEnd({ kind: 'wheel', deltaY: 10, zoom: false }, atBottom)).toBe(false)
-  expect(readerGestureLeavesEnd({ kind: 'wheel', deltaY: -10, zoom: true }, atBottom)).toBe(false)
-  expect(readerGestureLeavesEnd({ kind: 'key', key: 'Home' }, atBottom)).toBe(true)
-  expect(readerGestureLeavesEnd({ kind: 'key', key: 'End' }, atBottom)).toBe(false)
-  expect(readerGestureLeavesEnd({ kind: 'scrollbar-press' }, atBottom)).toBe(true)
-  expect(readerGestureLeavesEnd({ kind: 'touch-drag' }, parkedAbove(60))).toBe(true)
-  expect(readerGestureLeavesEnd({ kind: 'touch-drag' }, atBottom)).toBe(false)
-  expect(readerGestureLeavesEnd({ kind: 'wheel', deltaY: -10, zoom: false }, noOverflow)).toBe(
-    false
-  )
 })

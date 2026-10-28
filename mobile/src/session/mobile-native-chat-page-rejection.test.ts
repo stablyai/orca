@@ -91,7 +91,13 @@ describe('the native chat older-history page', () => {
     })
     expect(client.sendRequest).toHaveBeenCalledExactlyOnceWith(
       'nativeChat.readSession',
-      { agent: 'claude', sessionId: 'session', limit: 60, beforeOffset: 100 },
+      {
+        agent: 'claude',
+        sessionId: 'session',
+        limit: 60,
+        beforeOffset: 100,
+        capabilities: { transcriptSourceOrder: 1 }
+      },
       { timeoutMs: expect.any(Number), budgetSpansConnect: true }
     )
     expect(state?.olderPages).toBe('failed')

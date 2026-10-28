@@ -210,6 +210,7 @@ export const ORCHESTRATION_FEDERATION_ATTACH_METHODS = [
               devMode: params.devMode,
               // Enforce the execution host's nesting cap using its own setting.
               canDispatchSubWorkers: (params.depth ?? 1) < runtime.getNestedWorkerMaxDepth(),
+              heartbeatIntervalMinutes: runtime.getOrchestrationHeartbeatMinutes(),
               subWorkersInOwnRun: true,
               cliCommand: runtime.getTerminalOrchestrationCliCommand(terminalHandle)
             })

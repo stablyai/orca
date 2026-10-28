@@ -24,7 +24,7 @@ import {
   USER_MESSAGE,
   PROVIDER_SESSION_ID
 } from '../../src/main/claude/claude-structured-session-test-support'
-import type { ClaudeStructuredSessionEvent } from '../../src/main/claude/claude-structured-session-state'
+import type { ClaudeStructuredSessionEvent } from '../../src/main/claude/structured/claude-structured-session-state'
 import { structuredClaudeLifecycleEvent } from '../../src/main/runtime/structured-claude-runtime-adapter'
 import {
   hostTestState,
@@ -121,6 +121,7 @@ function permissionConsumersFor(
         client,
         enabled: true,
         optionStamp: 'model|own',
+        turnId: null,
         hostSupport: {
           permissionModes: true,
           permissionOwn: true,
@@ -343,7 +344,8 @@ it.each([1, 10, 100])(
       await act(async () => {
         subscriptions.forEach((dispose) => dispose())
       })
-      expect(descriptions()).toEqual(Array(count * 2).fill('Permissions'))
+      // Report loss falls back to the saved mode, which the next turn applies.
+      expect(descriptions()).toEqual(Array(count * 2).fill('Full access'))
     } finally {
       cleanup()
       resetStructuredAgentSessionStatusFeedsForTests()

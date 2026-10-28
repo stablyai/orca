@@ -54,28 +54,6 @@ describe('RuntimeFileCommands', () => {
       })
     })
 
-    it('keeps in-worktree resolution unchanged when chat provenance is present', async () => {
-      const hasRecentNativeChatOutputPath = vi.fn(() => true)
-      const { commands } = createRuntimeFileCommands({
-        path: '/repo',
-        hasRecentNativeChatOutputPath
-      })
-      statAsFile()
-
-      const result = await commands.resolveTerminalPath(
-        'id:wt-1',
-        '/repo/src/index.ts',
-        null,
-        'client-a',
-        null,
-        true,
-        { tabId: 'tab-1', sessionId: 'session-1' }
-      )
-
-      expect(result).toMatchObject({ relativePath: 'src/index.ts', exists: true })
-      expect(hasRecentNativeChatOutputPath).not.toHaveBeenCalled()
-    })
-
     it('resolves an absolute path through a known sibling workspace', async () => {
       const sibling = {
         id: 'wt-2',
@@ -146,11 +124,9 @@ describe('RuntimeFileCommands', () => {
         executionHostId: 'local',
         relativePath: ''
       }))
-      const hasRecentTerminalOutputPath = vi.fn(() => true)
       const { commands } = createRuntimeFileCommands({
         path: '/repo',
-        resolveKnownWorkspaceFileTarget,
-        hasRecentTerminalOutputPath
+        resolveKnownWorkspaceFileTarget
       })
       resolveAuthorizedPathMock.mockImplementation(async (p: string) => p)
       statMock.mockResolvedValue({ isDirectory: () => true })
@@ -166,7 +142,6 @@ describe('RuntimeFileCommands', () => {
         isDirectory: true,
         openTarget: undefined
       })
-      expect(hasRecentTerminalOutputPath).not.toHaveBeenCalled()
     })
 
     it('refuses an SSH workspace path instead of stating this machine', async () => {
@@ -188,14 +163,16 @@ describe('RuntimeFileCommands', () => {
         resolveKnownWorkspaceFileTarget
       })
 
-      await commands.resolveTerminalPath(
-        'id:wt-1',
-        '/repo-b/docs/readme.md',
-        null,
-        undefined,
-        null,
-        true
-      )
+      await expect(
+        commands.resolveTerminalPath(
+          'id:wt-1',
+          '/repo-b/docs/readme.md',
+          null,
+          undefined,
+          null,
+          true
+        )
+      ).rejects.toThrow('outside an SSH workspace')
 
       expect(resolveKnownWorkspaceFileTarget).toHaveBeenCalledWith(
         '/repo-b/docs/readme.md',
@@ -361,11 +338,7 @@ describe('RuntimeFileCommands', () => {
     })
 
     it('still refuses a native-chat ~/ path on a remote worktree', async () => {
-      const hasRecentNativeChatOutputPath = vi.fn(() => true)
-      const { commands, store } = createRuntimeFileCommands({
-        path: '/repo',
-        hasRecentNativeChatOutputPath
-      })
+      const { commands, store } = createRuntimeFileCommands({ path: '/repo' })
       store.getRepo.mockReturnValue({ connectionId: 'ssh-1' })
 
       const result = await commands.resolveTerminalPath(
@@ -379,7 +352,7 @@ describe('RuntimeFileCommands', () => {
       )
 
       expect(result).toMatchObject({ relativePath: null, exists: false })
-      expect(hasRecentNativeChatOutputPath).not.toHaveBeenCalled()
+      expect(statMock).not.toHaveBeenCalled()
     })
   })
 })

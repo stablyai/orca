@@ -43,12 +43,13 @@ import { registerWorkspaceCleanupHandlers } from './workspace-cleanup'
 const NOW = 1_700_000_000_000
 
 function makeScanEvent(senderOverrides: Record<string, unknown> = {}): never {
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the handler reads only the sender members supplied here.
   return {
     sender: {
       id: 1,
       isDestroyed: () => false,
       send: vi.fn(),
-      once: vi.fn(),
+      on: vi.fn(),
       removeListener: vi.fn(),
       ...senderOverrides
     }
@@ -164,7 +165,7 @@ describe('workspace cleanup snapshot IPC', () => {
       .mocked(ipcMain.handle)
       .mock.calls.find(([channel]) => channel === 'workspaceCleanup:scan')?.[1]
     const event = makeScanEvent({
-      once: vi.fn((eventName: string, listener: () => void) => {
+      on: vi.fn((eventName: string, listener: () => void) => {
         if (eventName === 'destroyed') {
           abortListener = listener
         }

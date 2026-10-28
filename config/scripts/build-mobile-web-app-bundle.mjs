@@ -1,6 +1,7 @@
 import { readFile } from 'node:fs/promises'
 import { readRouteSnapshot } from './mobile-web-app/mobile-web-app-route-snapshot.mjs'
-import { realpathSync } from 'node:fs'
+import { MOBILE_WEB_APP_DEPENDENCY_PATH } from './mobile-web-app/mobile-web-app-bundle-dependencies.mjs'
+import { existsSync, realpathSync } from 'node:fs'
 import { basename, extname, join, resolve } from 'node:path'
 import { createRequire } from 'node:module'
 import { fileURLToPath } from 'node:url'
@@ -503,6 +504,12 @@ export async function buildMobileWebAppBundle({
 }
 
 if (isDirectInvocation(import.meta.url, process.argv[1])) {
+  if (!existsSync(MOBILE_WEB_APP_DEPENDENCY_PATH)) {
+    console.error(
+      '[build-mobile-web-app-bundle] mobile/ dependencies are not installed; run `pnpm -C mobile install --frozen-lockfile`'
+    )
+    process.exit(1)
+  }
   try {
     const { manifest, outDir, routeKeys, entryStaticBytes, chunkCount } =
       await buildMobileWebAppBundle()

@@ -1,4 +1,9 @@
 import type { PersistedTrustedOrcaHooks } from '../../../src/shared/orca-yaml-hook-types'
+import {
+  canUseRepoWideTrust,
+  withOrcaHookRepoAlwaysTrusted,
+  withOrcaHookScriptConfirmed
+} from '../../../src/shared/orca-hook-trust-entries'
 import type { RpcClient } from '../transport/rpc-client'
 import { taskUiStateWrite } from './mobile-task-runtime-operations'
 
@@ -9,11 +14,13 @@ export type SetupHookTrust = {
 
 export function isSetupHookTrusted(
   trust: PersistedTrustedOrcaHooks,
+  repos: readonly { id: string }[],
   repoId: string,
   contentHash: string
 ): boolean {
-  const repoTrust = trust[repoId]
-  return Boolean(repoTrust?.all || repoTrust?.setup?.contentHash === contentHash)
+  return (
+    canUseRepoWideTrust(trust, repos, repoId) || trust[repoId]?.setup?.contentHash === contentHash
+  )
 }
 
 export function wasSetupHookPreviouslyApproved(
@@ -23,21 +30,6 @@ export function wasSetupHookPreviouslyApproved(
   return Boolean(trust[repoId]?.setup?.contentHash)
 }
 
-export function trustedOrcaHooksWithSetupApproval(args: {
-  trust: PersistedTrustedOrcaHooks
-  repoId: string
-  contentHash: string
-  alwaysTrust: boolean
-  approvedAt?: number
-}): PersistedTrustedOrcaHooks {
-  const approvedAt = args.approvedAt ?? Date.now()
-  const existing = args.trust[args.repoId]
-  const nextRepo = args.alwaysTrust
-    ? { ...existing, all: { approvedAt } }
-    : { ...existing, setup: { contentHash: args.contentHash, approvedAt } }
-  return { ...args.trust, [args.repoId]: nextRepo }
-}
-
 export async function persistSetupHookTrustApproval(args: {
   client: RpcClient
   trust: PersistedTrustedOrcaHooks
@@ -45,7 +37,9 @@ export async function persistSetupHookTrustApproval(args: {
   contentHash: string
   alwaysTrust: boolean
 }): Promise<PersistedTrustedOrcaHooks> {
-  const next = trustedOrcaHooksWithSetupApproval(args)
+  const next = args.alwaysTrust
+    ? withOrcaHookRepoAlwaysTrusted(args.trust, args.repoId)
+    : withOrcaHookScriptConfirmed(args.trust, args.repoId, 'setup', args.contentHash)
   taskUiStateWrite.interpret(
     await taskUiStateWrite.request(args.client, { trustedOrcaHooks: next })
   )
@@ -62,4 +56,15 @@ export function normalizeSetupHookTrust(
     return null
   }
   return { ...setupTrust, contentHash, scriptContent }
+}
+
+// New hosts send setupConfig (orca.yaml setup plus defaultTabs commands); older ones only the effective setup script.
+export function readRepoHooksSetupCommand(reply: {
+  hooks?: { scripts?: { setup?: string } } | null
+  setupConfig?: { command: string } | null
+}): string | null {
+  if (reply.setupConfig !== undefined) {
+    return reply.setupConfig?.command.trim() || null
+  }
+  return reply.hooks?.scripts?.setup?.trim() || null
 }

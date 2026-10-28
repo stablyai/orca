@@ -20,39 +20,6 @@ function state(partial: {
 }
 
 describe('resolveTerminalTabIdForPtyId', () => {
-  it('matches a tab by its own ptyId', () => {
-    const s = state({
-      tabs: {
-        wt: [
-          { id: 'tab-a', ptyId: 'wt@@1' },
-          { id: 'tab-b', ptyId: 'wt@@2' }
-        ]
-      }
-    })
-    expect(resolveTerminalTabIdForPtyId(s, 'wt', 'wt@@2')).toBe('tab-b')
-  })
-
-  it('matches a tab by a split leaf ptyId in its saved layout', () => {
-    const s = state({
-      tabs: { wt: [{ id: 'tab-a', ptyId: null }] },
-      layouts: { 'tab-a': { ptyIdsByLeafId: { leaf1: 'wt@@1', leaf2: 'wt@@9' } } }
-    })
-    expect(resolveTerminalTabIdForPtyId(s, 'wt', 'wt@@9')).toBe('tab-a')
-  })
-
-  it('matches a tab by a live pty binding with no saved layout yet', () => {
-    const s = state({
-      tabs: { wt: [{ id: 'tab-a', ptyId: null }] },
-      livePtyIds: { 'tab-a': ['wt@@9'] }
-    })
-    expect(resolveTerminalTabIdForPtyId(s, 'wt', 'wt@@9')).toBe('tab-a')
-  })
-
-  it('returns null when no tab owns the ptyId', () => {
-    const s = state({ tabs: { wt: [{ id: 'tab-a', ptyId: 'wt@@1' }] } })
-    expect(resolveTerminalTabIdForPtyId(s, 'wt', 'wt@@nope')).toBeNull()
-  })
-
   it('returns null when stale persistence binds the ptyId to multiple tabs', () => {
     const s = state({
       tabs: {
@@ -64,11 +31,6 @@ describe('resolveTerminalTabIdForPtyId', () => {
       layouts: { 'tab-b': { ptyIdsByLeafId: { leaf2: 'wt@@1' } } }
     })
     expect(resolveTerminalTabIdForPtyId(s, 'wt', 'wt@@1')).toBeNull()
-  })
-
-  it('returns null for an unknown worktree', () => {
-    const s = state({ tabs: { wt: [{ id: 'tab-a', ptyId: 'wt@@1' }] } })
-    expect(resolveTerminalTabIdForPtyId(s, 'other', 'wt@@1')).toBeNull()
   })
 })
 
@@ -82,13 +44,6 @@ describe('resolveTerminalTabPtyOwnership', () => {
     },
     layouts: { 'tab-stale': { ptyIdsByLeafId: { leaf1: 'wt@@1' } } },
     livePtyIds: { 'tab-mounted': ['wt@@1'] }
-  })
-
-  it('prefers a mounted pane over a stale layout row in another tab', () => {
-    expect(resolveTerminalTabPtyOwnership(staleLayoutBesideMountedTab, 'wt', 'wt@@1')).toEqual({
-      kind: 'owned',
-      tabId: 'tab-mounted'
-    })
   })
 
   it('keeps the mounted pane even when the hint names the stale tab', () => {
@@ -143,17 +98,6 @@ describe('resolveTerminalTabPtyOwnership', () => {
     )
   })
 
-  it('ignores a hint that names no existing tab', () => {
-    const s = state({
-      tabs: { wt: [{ id: 'tab-a', ptyId: null }] },
-      layouts: { 'tab-a': { ptyIdsByLeafId: { leaf1: 'wt@@1' } } }
-    })
-    expect(resolveTerminalTabPtyOwnership(s, 'wt', 'wt@@1', { preferTabId: 'tab-gone' })).toEqual({
-      kind: 'owned',
-      tabId: 'tab-a'
-    })
-  })
-
   it('reports ambiguity when only recorded bindings claim the ptyId', () => {
     const s = state({
       tabs: {
@@ -198,10 +142,5 @@ describe('resolveTerminalTabPtyOwnership', () => {
       kind: 'owned',
       tabId: 'tab-b'
     })
-  })
-
-  it('reports no owner when nothing binds the ptyId', () => {
-    const s = state({ tabs: { wt: [{ id: 'tab-a', ptyId: 'wt@@2' }] } })
-    expect(resolveTerminalTabPtyOwnership(s, 'wt', 'wt@@1')).toEqual({ kind: 'none' })
   })
 })

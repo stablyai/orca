@@ -26,6 +26,7 @@
     "check:code-quality:changed": "node config/scripts/check-changed-code-quality.mjs",
     "lint:js-plugins": "oxlint --config config/oxlint-js-plugins.json src config tests mobile native .github",
     "lint:ast-grep": "ast-grep scan --config config/sgconfig.yml --min-severity warning src config tests mobile",
+    "lint:ast-grep-gates": "node config/scripts/ast-grep-gates.mjs",
     "lint:ast-grep:flaky-tests": "ast-grep scan --config config/sgconfig.yml --filter \"^test-\" src config tests mobile",
     "test:ast-grep": "ast-grep test --config config/sgconfig.yml --skip-snapshot-tests",
     "check:dead-classes": "oxlint --config config/oxlint-dead-classes.json src/renderer",
@@ -52,6 +53,7 @@
     "check:path-literal-ratchet": "node config/scripts/check-path-literal-ratchet.mjs",
     "check:legacy-relay-fence-ratchet": "node config/scripts/check-legacy-relay-fence-ratchet.mjs",
     "check:unproven-pty-retirement-ratchet": "node config/scripts/check-unproven-pty-retirement-ratchet.mjs",
+    "check:daemon-blocking-call-ratchet": "node config/scripts/check-daemon-blocking-call-ratchet.mjs",
     "check:id-only-store-write-ratchet": "node config/scripts/check-id-only-store-write-ratchet.mjs",
     "check:repo-host-read-ratchet": "node config/scripts/check-repo-host-read-ratchet.mjs",
     "check:workspace-record-read-ratchet": "node config/scripts/check-workspace-record-read-ratchet.mjs",
@@ -202,12 +204,13 @@
     "test:e2e:remote-bulk-open-freeze": "pnpm run ensure:electron-runtime && pnpm exec playwright test tests/e2e/remote-session-bulk-open-freeze-repro.spec.ts --config tests/playwright.config.ts --project electron-headless --workers=1",
     "repro:live-remote-bulk-open-freeze": "node config/scripts/live-remote-bulk-open-freeze-repro.mjs",
     "repro:live-remote-realistic-freeze": "node config/scripts/live-remote-realistic-freeze-repro.mjs",
-    "audit:anti-slop": "node config/scripts/sync-anti-slop-plugin.mjs && oxlint --config config/oxlint-anti-slop.json src config tests mobile --deny-warnings",
+    "audit:anti-slop": "node config/scripts/sync-anti-slop-plugin.mjs && bun --smol node_modules/oxlint/bin/oxlint --config config/oxlint-anti-slop.json src config tests mobile --deny-warnings",
     "sync:anti-slop-plugin": "node config/scripts/sync-anti-slop-plugin.mjs",
     "build:packages": "node config/scripts/build-workspace-packages.mjs",
     "check:process-host-imports": "node config/scripts/check-process-host-imports.mjs",
     "check:main-sync-spawn-ratchet": "node config/scripts/check-main-sync-spawn-ratchet.mjs",
-    "check:compat-boundary-imports": "node config/scripts/check-compat-boundary-imports.mjs"
+    "check:compat-boundary-imports": "node config/scripts/check-compat-boundary-imports.mjs",
+    "check:import-boundaries": "bun config/scripts/check-import-boundaries.mjs"
   },
   "dependencies": {
     "@anthropic-ai/claude-agent-sdk": "0.3.284",
@@ -217,7 +220,7 @@
     "@parcel/watcher": "^2.5.6",
     "@xterm/addon-serialize": "0.15.0-beta.301",
     "@xterm/headless": "6.1.0-beta.303",
-    "agent-browser": "~0.27.0",
+    "agent-browser": "~0.27.3",
     "electron-updater": "^6.8.10",
     "fflate": "0.8.3",
     "i18next": "^26.4.2",
@@ -271,6 +274,7 @@
     "@tiptap/pm": "3.31.3",
     "@tiptap/react": "3.31.3",
     "@tiptap/starter-kit": "3.31.3",
+    "@types/chrome": "0.0.287",
     "@types/hast": "^3.0.4",
     "@types/mdast": "^4.0.4",
     "@types/node": "^24.19.2",
@@ -304,7 +308,9 @@
     "emojibase-data": "17.0.0",
     "esbuild": "^0.28.2",
     "happy-dom": "^21.0.4",
+    "hast-util-from-html-isomorphic": "2.0.0",
     "hast-util-to-jsx-runtime": "2.3.6",
+    "hast-util-to-text": "4.0.2",
     "html-to-image": "^1.11.13",
     "husky": "^9.1.7",
     "i18next-cli": "1.74.2",
@@ -353,6 +359,7 @@
     "typescript": "^7.0.2",
     "typescript-api": "npm:typescript@6.0.3",
     "unified": "^11.0.5",
+    "unist-util-visit-parents": "6.0.2",
     "vite": "^8.3.5",
     "vitest": "5.0.5",
     "vscode-oniguruma": "^2.0.1",
@@ -398,7 +405,7 @@
         {
           "files": [
             "src/renderer/src/components/task-page/github/use-task-page-github-issue-draft.ts",
-            "src/renderer/src/components/use-task-page-jira-creation-state.ts"
+            "src/renderer/src/components/task-page/jira/use-task-page-jira-creation-state.ts"
           ],
           "rules": [
             "react-doctor/no-adjust-state-on-prop-change"
@@ -417,7 +424,9 @@
       ]
     },
     "rules": {
-      "react-doctor/js-combine-iterations": "off"
+      "react-doctor/js-combine-iterations": "off",
+      "react-doctor/no-initialize-state": "off",
+      "react-doctor/no-unstable-nested-components": "off"
     }
   }
 }

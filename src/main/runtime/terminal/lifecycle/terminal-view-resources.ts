@@ -76,11 +76,6 @@ export abstract class OrcaRuntimeWithFitOverrideListeners extends OrcaRuntimeWit
 
   protected nextPtyLifecycleGeneration = 1
 
-  protected recentPtyPathCandidatesById = new Map<string, string[]>()
-
-  // File-tap provenance needs regex extraction only after first mobile/remote authentication; backfill then and keep tracking active.
-  protected recentPtyPathCandidateTrackingActive = false
-
   // Coalesce tail scans without losing the final chunk in a burst.
   protected waitBlockedCheckStateByPtyId = new Map<string, WaitBlockedCheckState>()
 

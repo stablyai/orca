@@ -2,7 +2,7 @@ import { normalizeRelativePath } from '@/lib/path'
 import type { GitStagingArea, GitStatusEntry } from '../../../../shared/git-status-types'
 import { compareFileNames } from '../../../../shared/file-name-sort'
 import { splitPathSegments } from './path-tree'
-import { compareGitStatusEntries } from './source-control-status-sort'
+import { compareGitStatusEntries } from '../../../../shared/git-status-sort'
 
 export type SourceControlTreeArea = Extract<GitStagingArea, 'unstaged' | 'staged' | 'untracked'>
 // Keep entry shapes generic because committed branch rows lack uncommitted status metadata.

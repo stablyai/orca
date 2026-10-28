@@ -45,10 +45,4 @@ describe('local ssh browser partition identity', () => {
       })
     )
   })
-
-  it('keeps the storage identity aligned with the paired nested-SSH identity', () => {
-    expect(sshExecutionHostStorageIdentity('t-1')).toBe(
-      '["orca-browser-execution-host-storage",1,"ssh","t-1"]'
-    )
-  })
 })

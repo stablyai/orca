@@ -2,13 +2,16 @@ import { useCallback, useState } from 'react'
 import { ActivityIndicator, Pressable, Text, View } from 'react-native'
 import { GitMerge, Link2Off } from 'lucide-react-native'
 import { colors } from '../../theme/mobile-theme'
+import { useMobileColorScheme } from '../../theme/use-mobile-color-scheme'
 import type { GitHubPRMergeMethod, PRInfo } from '../../../../src/shared/github/pull-request-types'
 import type { RpcClient } from '../../transport/rpc-client'
 import type { MobilePrActions } from '../../session/use-mobile-pr-actions'
 import { unlinkMobilePr } from '../../source-control/mobile-pr-link'
 import { ConfirmModal } from '../ConfirmModal'
-import { canShowGitHubPRAutoMergeControl } from '../../../../src/shared/github/pull-request-auto-merge-availability'
-import { resolveMobilePrMergeMethod, resolvePrActionAvailability } from './pr-actions-state'
+import { resolveGitHubPRMergeMethods } from '../../../../src/shared/github/pull-request-merge-methods'
+import { MOBILE_GITHUB_MARK_PR_READY_RUNTIME_CAPABILITY } from '../../../../src/shared/source-control-runtime-capabilities'
+import { useRouteCapability } from '../../transport/use-workspace-client'
+import { presentPrMerge, resolvePrActionAvailability } from './pr-actions-state'
 import { prActionsStyles as styles } from './pr-actions-styles'
 
 type Props = {
@@ -18,6 +21,7 @@ type Props = {
   worktreeId: string
   // Refetch after unlinking so the view returns to the create/link empty state.
   onUnlinked: () => void
+  onRecheck: () => void
 }
 
 type Confirm =
@@ -25,27 +29,38 @@ type Confirm =
   | { kind: 'state'; state: 'open' | 'closed' }
 
 // Merge leads; Close/Reopen+Unlink share secondary row. Self-explanatory buttons need no mobile section header.
-export function PRActionsSection({ pr, actions, client, worktreeId, onUnlinked }: Props) {
+export function PRActionsSection({
+  pr,
+  actions,
+  client,
+  worktreeId,
+  onUnlinked,
+  onRecheck
+}: Props) {
+  useMobileColorScheme()
   const [confirm, setConfirm] = useState<Confirm | null>(null)
   const [unlinking, setUnlinking] = useState(false)
   // Local unlink errors — unlink is not routed through the actions engine.
   const [unlinkError, setUnlinkError] = useState<string | null>(null)
 
   // Use repo’s default merge method to keep mobile one-tap without narrow method picker.
-  const effectiveMethod = resolveMobilePrMergeMethod(pr.mergeMethodSettings)
+  const mergeMethods = resolveGitHubPRMergeMethods(pr.mergeMethodSettings ?? null)
+  const effectiveMethod = mergeMethods.defaultMethod
   const state = actions.resolveState(pr.state)
   const autoMerge = actions.resolveAutoMerge(pr.autoMergeEnabled ?? false)
   const avail = resolvePrActionAvailability(state)
+  const merge = presentPrMerge(
+    { ...pr, state, autoMergeEnabled: autoMerge || pr.autoMergeEnabled === true },
+    effectiveMethod
+  )
+  // Older hosts, or an older desktop relaying to a server, reject this method from mobile.
+  const routeCanMarkReady = useRouteCapability(MOBILE_GITHUB_MARK_PR_READY_RUNTIME_CAPABILITY)
+  const showMarkReady = avail.canMarkReady && routeCanMarkReady
   const mergeBusy = actions.isBusy({ kind: 'merge' })
   const autoMergeBusy = actions.isBusy({ kind: 'autoMerge' })
   const stateBusy = actions.isBusy({ kind: 'state' })
   const unlinkBusy = unlinking || mergeBusy || autoMergeBusy || stateBusy
-  const showAutoMerge =
-    avail.canAutoMerge &&
-    canShowGitHubPRAutoMergeControl({
-      ...pr,
-      autoMergeEnabled: autoMerge || pr.autoMergeEnabled === true
-    })
+  const showAutoMerge = merge.showAutoMerge
   const showSecondary = avail.canClose || avail.canReopen || avail.canUnlink
   const actionError = unlinkError ?? actions.error
 
@@ -56,7 +71,7 @@ export function PRActionsSection({ pr, actions, client, worktreeId, onUnlinked }
     setUnlinking(true)
     setUnlinkError(null)
     try {
-      const outcome = await unlinkMobilePr(client, worktreeId)
+      const outcome = await unlinkMobilePr(client, worktreeId, pr.number)
       if (outcome.ok) {
         onUnlinked()
       } else {
@@ -67,13 +82,13 @@ export function PRActionsSection({ pr, actions, client, worktreeId, onUnlinked }
     } finally {
       setUnlinking(false)
     }
-  }, [client, onUnlinked, unlinking, worktreeId])
+  }, [client, onUnlinked, pr.number, unlinking, worktreeId])
 
   const confirmCopy = (): { title: string; message: string; confirmLabel: string } => {
     if (confirm?.kind === 'merge') {
       return {
         title: 'Merge pull request?',
-        message: `This will merge #${pr.number} into its base branch.`,
+        message: merge.confirmMessage,
         confirmLabel: 'Merge'
       }
     }
@@ -113,24 +128,57 @@ export function PRActionsSection({ pr, actions, client, worktreeId, onUnlinked }
           style={[
             styles.actionButton,
             styles.actionButtonMerge,
-            mergeBusy && styles.actionButtonDisabled
+            (mergeBusy || !merge.enabled) && styles.actionButtonDisabled
           ]}
           onPress={() => {
             setUnlinkError(null)
             setConfirm({ kind: 'merge', method: effectiveMethod })
           }}
-          disabled={mergeBusy}
+          disabled={mergeBusy || !merge.enabled}
           accessibilityRole="button"
           accessibilityLabel="Merge pull request"
+          accessibilityHint={merge.hint ?? undefined}
         >
           {mergeBusy ? (
             <ActivityIndicator color={colors.onMergeGreen} />
           ) : (
             <GitMerge size={16} color={colors.onMergeGreen} strokeWidth={2.2} />
           )}
-          <Text style={[styles.actionButtonText, styles.actionButtonTextMerge]}>
-            Merge pull request
-          </Text>
+          <Text style={[styles.actionButtonText, styles.actionButtonTextMerge]}>{merge.label}</Text>
+        </Pressable>
+      ) : null}
+      {avail.canMerge && merge.hint ? (
+        <View style={styles.hintRow}>
+          <Text style={styles.actionHint}>{merge.hint}</Text>
+          {/* No mobile surface polls PR state, so a blocked Merge needs its own recheck. */}
+          <Pressable
+            onPress={() => onRecheck()}
+            hitSlop={8}
+            accessibilityRole="button"
+            accessibilityLabel="Recheck merge status"
+          >
+            <Text style={styles.recheckText}>Recheck</Text>
+          </Pressable>
+        </View>
+      ) : null}
+
+      {showMarkReady ? (
+        <Pressable
+          style={[
+            styles.actionButton,
+            styles.secondaryButton,
+            stateBusy && styles.actionButtonDisabled
+          ]}
+          onPress={() => {
+            setUnlinkError(null)
+            actions.markReadyForReview()
+          }}
+          disabled={stateBusy}
+          accessibilityRole="button"
+          accessibilityLabel="Mark pull request ready for review"
+        >
+          {stateBusy ? <ActivityIndicator color={colors.textSecondary} /> : null}
+          <Text style={styles.actionButtonText}>Ready for review</Text>
         </Pressable>
       ) : null}
 

@@ -28,22 +28,6 @@ afterEach(() => {
 })
 
 describe('FirstPromptCard', () => {
-  it('labels stored firstUserPrompt text as the first prompt', () => {
-    const remoteSession = {
-      ...session,
-      executionHostId: 'ssh:dev-box',
-      firstUserPrompt: 'The authoritative opening ask'
-    } as AiVaultSession
-    stubApi(vi.fn().mockResolvedValue({ prompt: null }))
-
-    render(
-      <FirstPromptCard session={remoteSession} preview={sessionPromptPreview(remoteSession)} />
-    )
-
-    expect(screen.getByText('First prompt')).toBeTruthy()
-    expect(screen.getByText('The authoritative opening ask')).toBeTruthy()
-  })
-
   it('labels a remote preview fallback as a recent prompt when no full read is available', () => {
     const getFirstUserPrompt = vi.fn().mockResolvedValue({ prompt: null })
     const remoteSession = {

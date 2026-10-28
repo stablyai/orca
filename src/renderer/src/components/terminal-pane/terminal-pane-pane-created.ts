@@ -1,10 +1,12 @@
 import type { ManagedPane } from '@/lib/pane-manager/pane-manager'
 import type { PaneSpawnHints } from '@/lib/pane-manager/pane-manager-types'
 import { useAppStore } from '@/store'
+import { isWebClientLocation } from '@/lib/web-client-location'
 import { makePaneKey } from '../../../../shared/stable-pane-id'
 import { createOsc52OscHandler } from '../../../../shared/osc52-clipboard'
 import {
   showOsc52ClipboardBlockedToast,
+  showOsc52ClipboardCopyRetryToast,
   showOsc52ClipboardFailedToast
 } from './osc52-clipboard-toast'
 import { parseOsc7 } from './parse-osc7'
@@ -81,7 +83,13 @@ export function createTerminalPaneCreatedHandler(
           getReplaying: () => isPaneReplaying(replayingPanesRef, pane.id),
           writeClipboardText: (text) => window.api.ui.writeTerminalClipboardText(text),
           showBlockedWriteToast: showOsc52ClipboardBlockedToast,
-          showWriteFailedToast: showOsc52ClipboardFailedToast
+          // Web clipboards need a recent gesture that a host round trip can outlive (#33937).
+          showWriteFailedToast: isWebClientLocation()
+            ? (text) =>
+                showOsc52ClipboardCopyRetryToast(text, (retry) =>
+                  window.api.ui.writeTerminalClipboardText(retry)
+                )
+            : showOsc52ClipboardFailedToast
         })
       )
     )

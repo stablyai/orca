@@ -3,7 +3,11 @@ import type {
   AgentSessionMutationResult,
   AgentSessionOptionResult
 } from '../../../shared/agent-session-wire'
-import { STRUCTURED_LAUNCH_OPTION_IDS } from '../../../shared/native-chat-session-option-defaults'
+import {
+  STRUCTURED_LAUNCH_OPTION_IDS,
+  structuredLaunchCompatibleOptions,
+  structuredLaunchRequestedOptions
+} from '../../../shared/native-chat/input/native-chat-session-option-defaults'
 import {
   createStructuredAgentSessionOperationId,
   structuredAgentSessionPayloadFingerprint
@@ -37,6 +41,8 @@ import {
 export type StructuredLaunchSelection = {
   /** What the host runs as far as the launch knows: the create seed, then each accepted pick. */
   seed?: Readonly<Record<string, string>>
+  /** Read-only projection of durable action input; held contains only subsequent edits. */
+  explicit?: Readonly<Record<string, string>>
   /** Encoded picks made before publish; the launch applies them before it publishes. */
   held: Readonly<Record<string, string>>
   /** A paired server has not yet said what create seeds, so nothing can be picked against it. */
@@ -48,6 +54,7 @@ export function initialStructuredLaunchSelection(
 ): StructuredLaunchSelection {
   return {
     seed: intent.seedOptions,
+    ...(intent.explicitLaunchOptions ? { explicit: intent.explicitLaunchOptions } : {}),
     held: {},
     ...(intent.target.kind !== 'local' && !intent.seedOptions ? { seedPending: true } : {})
   }
@@ -155,6 +162,7 @@ function settleHeldOption(
   // A pick made while this one was in flight superseded it and stays held for the next pass.
   const settled = current === encoded
   state.selection = {
+    explicit: state.selection.explicit,
     seed: outcome.kind === 'accepted' ? { ...seed, ...outcome.options } : seed,
     held: settled ? rest : state.selection.held
   }
@@ -165,6 +173,47 @@ function settleHeldOption(
   }
   notifyStructuredLaunchListeners()
   state.callers.onSettled()
+}
+
+/** Old hosts configure the known chat before submitting; Fast keeps saved-preference admission. */
+export async function applyStructuredLaunchExplicitOptions(
+  state: StructuredLaunchState,
+  receipt: StructuredAgentLaunchReceipt
+): Promise<StructuredAgentLaunchReceipt> {
+  const requested = structuredLaunchRequestedOptions({
+    explicit: state.selection.explicit,
+    held: state.selection.held
+  })
+  if (!requested) {
+    return applyStructuredLaunchHeldOptions(state, receipt)
+  }
+  const compatible = structuredLaunchCompatibleOptions(state.intent.agent, requested)
+  const entries = Object.entries(compatible).sort(([a], [b]) =>
+    a === 'model' ? -1 : b === 'model' ? 1 : 0
+  )
+  for (const [id, encoded] of entries) {
+    if (state.cancelled) {
+      throw new StructuredAgentSessionLaunchCancelledError()
+    }
+    if (id === 'fastMode' && state.selection.held[id] === undefined) {
+      continue
+    }
+    const outcome = await setLaunchOption(
+      state.intent.target,
+      receipt.sessionId,
+      receipt.fence,
+      id,
+      encoded
+    )
+    settleHeldOption(state, id, encoded, outcome)
+    if (outcome.kind === 'refused' && requested[id] !== undefined) {
+      for (const [key, value] of Object.entries(state.selection.held)) {
+        settleHeldOption(state, key, value, outcome)
+      }
+      return { ...receipt, configurationFailure: outcome.failure }
+    }
+  }
+  return applyStructuredLaunchHeldOptions(state, receipt)
 }
 
 const createHeld = new WeakMap<StructuredLaunchState, Readonly<Record<string, string>>>()

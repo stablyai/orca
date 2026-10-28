@@ -127,6 +127,9 @@ if [[ -n "${__orca_codex_binary:-}" && -x "${__orca_codex_binary}" ]]; then
   function codex {
     # Why local: zsh's warn_create_global warns for each global a function creates.
     local __orca_codex_arg __orca_codex_isolate="${ORCA_CODEX_ISOLATE:-1}" __orca_codex_identity="${ORCA_CODEX_ISOLATE:-1}"
+    if [[ "${ORCA_REMOTE_VIEWER_CLIPBOARD:-}" == 1 && -z "${SSH_CONNECTION+x}" && -z "${SSH_TTY+x}" ]]; then
+      local -x SSH_CONNECTION='127.0.0.1 0 127.0.0.1 0'
+    fi
     if [[ -n "${ORCA_CODEX_LAUNCH_PREFLIGHT:-}" && -x "${ORCA_CODEX_LAUNCH_PREFLIGHT}" ]]; then
       "${ORCA_CODEX_LAUNCH_PREFLIGHT}" agent hooks prepare-codex >/dev/null 2>&1 || :
     fi
@@ -365,8 +368,6 @@ __orca_finish_legacy_prompt_dispatch() {
       eval "$__orca_suffix_part"
     done
   fi
-  trap '__orca_osc133_preexec' DEBUG
-  unset __orca_in_legacy_prompt_wrapper
 }
 __orca_normalize_prompt_command() {
   [[ -z "${__orca_prompt_command_normalized:-}" ]] || return 0
@@ -388,7 +389,8 @@ __orca_normalize_prompt_command() {
     __orca_prompt_status_variable="__orca_prompt_status_$$"
     __orca_prompt_status_capture_command="$__orca_prompt_status_variable=\$?"
     __orca_prompt_status_value="\${$__orca_prompt_status_variable}"
-    PROMPT_COMMAND="$__orca_prompt_status_capture_command; __orca_prompt_status=$__orca_prompt_status_value"'; __orca_prompt_had_functrace=""; if [[ -o functrace ]]; then __orca_prompt_had_functrace=1; set +T; fi; __orca_outer_debug_trap_spec="$(trap -p DEBUG)"; [[ -z "$__orca_prompt_had_functrace" ]] || set -T; unset __orca_prompt_had_functrace; __orca_run_prompt_command_array; __orca_finish_legacy_prompt_dispatch'
+    # Why: a changed DEBUG trap misses the capture command, and bash <= 4.3 reverts traps set in functions.
+    PROMPT_COMMAND="$__orca_prompt_status_capture_command; __orca_in_legacy_prompt_wrapper=1; __orca_prompt_status=$__orca_prompt_status_value"'; __orca_prompt_had_functrace=""; if [[ -o functrace ]]; then __orca_prompt_had_functrace=1; set +T; fi; __orca_outer_debug_trap_spec="$(trap -p DEBUG)"; [[ -z "$__orca_prompt_had_functrace" ]] || set -T; unset __orca_prompt_had_functrace; __orca_run_prompt_command_array; __orca_finish_legacy_prompt_dispatch; trap __orca_osc133_preexec DEBUG; unset __orca_in_legacy_prompt_wrapper'
   fi
 }
 __orca_prepend_prompt_command() {

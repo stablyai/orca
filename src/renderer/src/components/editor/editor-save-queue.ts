@@ -36,6 +36,7 @@ import type { FileWriteResult } from '../../../../shared/file-write-disk-precond
 import {
   editorSavePrecondition,
   editorTabModelUri,
+  editorSaveGrant,
   writeEditorSave,
   type EditorSaveResult,
   type EditorSaveTrigger
@@ -178,7 +179,8 @@ export function createEditorSaveQueue(store: AppStoreApi): EditorSaveQueue {
           if (discarded()) {
             throw new EditorSaveDiscardedError()
           }
-        }
+        },
+        editorSaveGrant(liveFile, fileContext, () => store.getState())
       )
     } catch (error) {
       // Clear failed-write stamps so they cannot suppress real external changes.

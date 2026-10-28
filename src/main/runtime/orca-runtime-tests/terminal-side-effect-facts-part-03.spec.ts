@@ -126,11 +126,11 @@ describe('terminal side-effect fact channel', () => {
 })
 
 describe('terminal output runtime re-entry', () => {
-  it('writes provenance into the current runtime output map', () => {
+  it('writes recent output into the current runtime output map', () => {
     const runtime = new OrcaRuntimeService()
     const replacement = new Map(runtime['recentPtyOutputById'])
     runtime['recentPtyOutputById'] = replacement
-    runtime['recordRecentPtyOutputForPathProvenance']('pty-provenance', 'wrote artifact.txt\n')
+    runtime['recordRecentPtyOutput']('pty-provenance', 'wrote artifact.txt\n')
     expect(replacement.get('pty-provenance')?.read()).toBe('wrote artifact.txt\n')
   })
 

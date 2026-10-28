@@ -4281,7 +4281,8 @@
           "complete": "worktree.set#2",
           "params": {
             "worktree": "id:repo42::/p",
-            "linkedPR": null
+            "linkedPR": null,
+            "suppressedGitHubPR": 12
           },
           "reply": {
             "ok": true,
@@ -4695,7 +4696,12 @@
           "action": "apply",
           "id": "apply",
           "args": {
-            "blockedReason": "needs_push"
+            "blockedReason": "needs_push",
+            "upstreamStatus": {
+              "hasUpstream": true,
+              "ahead": 1,
+              "behind": 0
+            }
           }
         },
         {
@@ -4729,7 +4735,57 @@
           "action": "apply",
           "id": "apply",
           "args": {
-            "blockedReason": "no_upstream"
+            "blockedReason": "no_upstream",
+            "upstreamStatus": {
+              "hasUpstream": false,
+              "ahead": 0,
+              "behind": 0
+            }
+          }
+        },
+        {
+          "complete": "worktree.show#1",
+          "params": {
+            "worktree": "id:repo42::/p"
+          },
+          "reply": {
+            "ok": true,
+            "result": {
+              "worktree": {
+                "baseRef": "origin/main"
+              }
+            }
+          }
+        },
+        {
+          "complete": "repo.list#1",
+          "params": {
+            "$undefined": true
+          },
+          "reply": {
+            "ok": true,
+            "result": {
+              "repos": []
+            }
+          }
+        },
+        {
+          "complete": "git.branchCompare#1",
+          "params": {
+            "worktree": "id:repo42::/p",
+            "baseRef": "origin/main"
+          },
+          "reply": {
+            "ok": true,
+            "result": {
+              "summary": {
+                "baseRef": "origin/main",
+                "changedFiles": 1,
+                "status": "ready",
+                "commitsAhead": 2
+              },
+              "entries": []
+            }
           }
         },
         {
@@ -4762,7 +4818,12 @@
           "id": "apply",
           "args": {
             "blockedReason": "needs_sync",
-            "patchEquivalent": true
+            "upstreamStatus": {
+              "hasUpstream": true,
+              "ahead": 1,
+              "behind": 1,
+              "behindCommitsArePatchEquivalent": true
+            }
           }
         },
         {
@@ -5343,7 +5404,7 @@
               "defaultBaseRef": "main",
               "title": "Host title",
               "body": "Host body",
-              "canCreate": true,
+              "canCreate": false,
               "blockedReason": "needs_push",
               "nextAction": null,
               "reviewLookupOutcome": "not_found"
@@ -5619,7 +5680,7 @@
               "defaultBaseRef": "main",
               "title": "Host title",
               "body": "Host body",
-              "canCreate": true,
+              "canCreate": false,
               "blockedReason": "needs_push",
               "nextAction": null,
               "reviewLookupOutcome": "not_found"
@@ -8359,7 +8420,9 @@
           "params": {
             "repo": "id:repo-9",
             "branch": "feature",
-            "linkedPRNumber": null
+            "linkedPRNumber": null,
+            "fallbackPRNumber": null,
+            "currentHeadOid": null
           },
           "reply": {
             "ok": true,
@@ -8608,7 +8671,9 @@
           "params": {
             "repo": "id:repo-9",
             "branch": "feature",
-            "linkedPRNumber": null
+            "linkedPRNumber": null,
+            "fallbackPRNumber": null,
+            "currentHeadOid": null
           },
           "reply": {
             "ok": true,
@@ -8631,7 +8696,9 @@
           "params": {
             "repo": "id:repo-9",
             "branch": "feature",
-            "linkedPRNumber": null
+            "linkedPRNumber": null,
+            "fallbackPRNumber": null,
+            "currentHeadOid": null
           },
           "reply": {
             "ok": true,
@@ -8656,7 +8723,9 @@
           "params": {
             "repo": "id:repo-9",
             "branch": "feature",
-            "linkedPRNumber": null
+            "linkedPRNumber": null,
+            "fallbackPRNumber": null,
+            "currentHeadOid": null
           },
           "reply": {
             "ok": true,
@@ -8709,7 +8778,7 @@
             "ok": true,
             "result": {
               "worktree": {
-                "linkedPR": 12
+                "linkedPR": null
               }
             }
           }
@@ -8722,8 +8791,11 @@
           "params": {
             "repo": "id:repo-9",
             "branch": "feature",
-            "linkedPRNumber": 12
+            "linkedPRNumber": null,
+            "fallbackPRNumber": 12,
+            "currentHeadOid": null
           },
+          "paramsFollowDivergence": true,
           "reply": {
             "ok": true,
             "result": {
@@ -8808,7 +8880,7 @@
             "ok": true,
             "result": {
               "worktree": {
-                "linkedPR": 12
+                "linkedPR": null
               }
             }
           }
@@ -8821,8 +8893,11 @@
           "params": {
             "repo": "id:repo-9",
             "branch": "feature",
-            "linkedPRNumber": 12
+            "linkedPRNumber": null,
+            "fallbackPRNumber": 12,
+            "currentHeadOid": null
           },
+          "paramsFollowDivergence": true,
           "reply": {
             "ok": true,
             "result": {
@@ -11646,7 +11721,10 @@
           "complete": "gitlab.workItemDetails#1",
           "params": {
             "iid": 4,
-            "projectRef": { "host": "gitlab.com", "path": "group/project" },
+            "projectRef": {
+              "host": "gitlab.com",
+              "path": "group/project"
+            },
             "repo": "id:repo-1",
             "type": "issue"
           },
@@ -11689,7 +11767,10 @@
           "complete": "gitlab.workItemDetails#1",
           "params": {
             "iid": 4,
-            "projectRef": { "host": "gitlab.com", "path": "group/project" },
+            "projectRef": {
+              "host": "gitlab.com",
+              "path": "group/project"
+            },
             "repo": "id:repo-1",
             "type": "issue"
           },
@@ -12522,7 +12603,10 @@
           "params": {
             "body": "a comment",
             "number": 4,
-            "projectRef": { "host": "gitlab.com", "path": "group/project" },
+            "projectRef": {
+              "host": "gitlab.com",
+              "path": "group/project"
+            },
             "repo": "id:repo-1"
           },
           "reply": {
@@ -12563,7 +12647,10 @@
           "params": {
             "body": "a comment",
             "iid": 7,
-            "projectRef": { "host": "gitlab.com", "path": "group/project" },
+            "projectRef": {
+              "host": "gitlab.com",
+              "path": "group/project"
+            },
             "repo": "id:repo-1"
           },
           "reply": {
@@ -12859,7 +12946,10 @@
           "params": {
             "iid": 7,
             "method": "squash",
-            "projectRef": { "host": "gitlab.com", "path": "group/project" },
+            "projectRef": {
+              "host": "gitlab.com",
+              "path": "group/project"
+            },
             "repo": "id:repo-1"
           },
           "reply": {
@@ -12893,7 +12983,10 @@
           "complete": "gitlab.updateIssue#1",
           "params": {
             "number": 4,
-            "projectRef": { "host": "gitlab.com", "path": "group/project" },
+            "projectRef": {
+              "host": "gitlab.com",
+              "path": "group/project"
+            },
             "repo": "id:repo-1",
             "updates": {
               "state": "closed"
@@ -12955,7 +13048,10 @@
           "complete": "gitlab.updateMRState#1",
           "params": {
             "iid": 7,
-            "projectRef": { "host": "gitlab.com", "path": "group/project" },
+            "projectRef": {
+              "host": "gitlab.com",
+              "path": "group/project"
+            },
             "repo": "id:repo-1",
             "state": "closed"
           },
@@ -13027,7 +13123,10 @@
           "complete": "gitlab.updateIssue#1",
           "params": {
             "number": 4,
-            "projectRef": { "host": "gitlab.com", "path": "group/project" },
+            "projectRef": {
+              "host": "gitlab.com",
+              "path": "group/project"
+            },
             "repo": "id:repo-1",
             "updates": {
               "addLabels": ["triage"],
@@ -13065,7 +13164,10 @@
           "complete": "gitlab.updateMR#1",
           "params": {
             "iid": 7,
-            "projectRef": { "host": "gitlab.com", "path": "group/project" },
+            "projectRef": {
+              "host": "gitlab.com",
+              "path": "group/project"
+            },
             "repo": "id:repo-1",
             "updates": {
               "addLabels": ["triage"],
@@ -16656,7 +16758,9 @@
       "id": "native-chat-session-option-pick-written",
       "operation": "nativeChat.session-option-pick",
       "family": "nativeChat.session-option-pick",
-      "sites": ["mobile/src/session/mobile-native-chat-session-option-persistence.ts"],
+      "sites": [
+        "mobile/src/session/native-chat/input/mobile-native-chat-session-option-persistence.ts"
+      ],
       "schedules": [],
       "steps": [
         {
@@ -16692,7 +16796,9 @@
       "id": "native-chat-session-option-pick-refused",
       "operation": "nativeChat.session-option-pick",
       "family": "nativeChat.session-option-pick",
-      "sites": ["mobile/src/session/mobile-native-chat-session-option-persistence.ts"],
+      "sites": [
+        "mobile/src/session/native-chat/input/mobile-native-chat-session-option-persistence.ts"
+      ],
       "schedules": [],
       "steps": [
         {
@@ -16729,7 +16835,9 @@
       "id": "native-chat-session-option-pick-empty",
       "operation": "nativeChat.session-option-pick",
       "family": "nativeChat.session-option-pick",
-      "sites": ["mobile/src/session/mobile-native-chat-session-option-persistence.ts"],
+      "sites": [
+        "mobile/src/session/native-chat/input/mobile-native-chat-session-option-persistence.ts"
+      ],
       "schedules": [],
       "steps": [
         {
@@ -17857,7 +17965,7 @@
           "checkpoint": "first-accepted"
         },
         {
-          "advance": 120
+          "advance": 1000
         },
         {
           "complete": "terminal.send#2",
@@ -17915,7 +18023,7 @@
           }
         },
         {
-          "advance": 120
+          "advance": 1000
         },
         {
           "complete": "terminal.send#2",
@@ -17969,7 +18077,7 @@
           }
         },
         {
-          "advance": 120
+          "advance": 1000
         },
         {
           "complete": "terminal.send#2",
@@ -18688,7 +18796,7 @@
             },
             "prompt": {
               "delivery": "submit",
-              "text": "You are reviewing the current worktree. Address the following mobile review notes.\n\nFile: src/app.ts\nLine: 4\nUser comment: \"needs a test\"\n\nAfter applying fixes:\n1. Summarize changed files.\n2. Run relevant tests.\n3. Tell me if anything remains risky."
+              "text": "File: src/app.ts\nLine: 4\nUser comment: \"needs a test\""
             },
             "launchSource": "notes_send"
           },
@@ -21122,7 +21230,8 @@
             "limit": 40,
             "subscriptionId": "claude:session-1:00000000-0000-4000-8000-000000000001",
             "capabilities": {
-              "transcriptPending": 1
+              "transcriptPending": 1,
+              "transcriptSourceOrder": 1
             },
             "transcriptPath": "/work/feature/.claude/session-1.jsonl"
           },
@@ -21178,6 +21287,9 @@
             "agent": "claude",
             "sessionId": "session-1",
             "limit": 60,
+            "capabilities": {
+              "transcriptSourceOrder": 1
+            },
             "beforeOffset": 1200,
             "transcriptPath": "/work/feature/.claude/session-1.jsonl"
           },
@@ -21233,7 +21345,8 @@
             "limit": 40,
             "subscriptionId": "claude:session-1:00000000-0000-4000-8000-000000000001",
             "capabilities": {
-              "transcriptPending": 1
+              "transcriptPending": 1,
+              "transcriptSourceOrder": 1
             },
             "transcriptPath": "/work/feature/.claude/session-1.jsonl"
           },

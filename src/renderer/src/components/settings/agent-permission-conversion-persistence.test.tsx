@@ -106,7 +106,7 @@ function argumentsInput(label: string): HTMLTextAreaElement {
   if (expand) {
     fireEvent.click(expand)
   }
-  const input = within(row).getByPlaceholderText('No default arguments')
+  const input = within(row).getByRole('textbox', { name: 'Arguments' })
   if (!(input instanceof HTMLTextAreaElement)) {
     throw new Error('Missing Arguments input')
   }
@@ -123,6 +123,9 @@ it.each(
   savedArguments(models, 'full-access')
   render(<AgentsHarness />)
   const input = argumentsInput('Claude')
+  expect(screen.getByRole('button', { name: 'Claude permissions' }).getAttribute('data-size')).toBe(
+    'xs'
+  )
   const remove = () =>
     screen.getByRole('button', { name: /Remove .* and use Claude's own settings/ })
   fireEvent.click(remove())

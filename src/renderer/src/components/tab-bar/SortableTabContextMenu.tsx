@@ -1,4 +1,4 @@
-import { Pin, PinOff, Pencil, SquareTerminal, X, ListX } from 'lucide-react'
+import { Pencil, Pin, PinOff, SquareTerminal, X } from 'lucide-react'
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -205,8 +205,7 @@ export function SortableTabContextMenu({
           {translate('auto.components.tab.bar.SortableTabContextMenu.89359a36f7', 'Close')}
           {closeShortcut ? <DropdownMenuShortcut>{closeShortcut}</DropdownMenuShortcut> : null}
         </DropdownMenuItem>
-        <DropdownMenuItem onSelect={() => onCloseOthers(tab.id)} disabled={tabCount <= 1}>
-          <ListX className="size-3.5" />
+        <DropdownMenuItem inset onSelect={() => onCloseOthers(tab.id)} disabled={tabCount <= 1}>
           {translate('auto.components.tab.bar.SortableTabContextMenu.8d16f9cd30', 'Close Others')}
         </DropdownMenuItem>
         <CloseSplitPaneMenuItem onCloseSplitPane={onCloseSplitPane} />
@@ -216,8 +215,8 @@ export function SortableTabContextMenu({
           {translate('auto.components.tab.bar.SortableTabContextMenu.2f697b3c31', 'Change Title')}
           {renameShortcut ? <DropdownMenuShortcut>{renameShortcut}</DropdownMenuShortcut> : null}
         </DropdownMenuItem>
-        <div className="px-2 pt-1.5 pb-1">
-          <div className="text-xs font-medium text-muted-foreground mb-1.5">
+        <div className="pt-1.5 pr-2.5 pb-1.5 pl-8">
+          <div className="text-2xs font-semibold text-muted-foreground mb-1.5">
             {translate('auto.components.tab.bar.SortableTabContextMenu.35e8892fd0', 'Tab Color')}
           </div>
           <div className="flex flex-wrap gap-2">

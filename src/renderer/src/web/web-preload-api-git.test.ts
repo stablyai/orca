@@ -60,7 +60,7 @@ describe('web git preload API', () => {
               _meta: { runtimeId: 'runtime-1' }
             })
           }
-          if (method === 'git.remoteCommitUrl') {
+          if (method === 'git.remoteCommitUrl' || method === 'git.remoteFileUrl') {
             return Promise.resolve({
               id: `call-${runtimeCalls.length}`,
               ok: true,
@@ -96,6 +96,12 @@ describe('web git preload API', () => {
       { method: 'worktree.detectedList', params: { repo: 'repo-1' } },
       { method: 'git.remoteCommitUrl', params: { worktree: 'id:wt-1', sha: TEST_COMMIT_OID } }
     ])
+    const range = { relativePath: 'a.ts', line: 10, endLine: 20 }
+    await globals.window.api.git.remoteFileUrl({ worktreePath: worktree.path, ...range })
+    expect(runtimeCalls.at(-1)).toEqual({
+      method: 'git.remoteFileUrl',
+      params: { worktree: 'id:wt-1', ...range }
+    })
   })
 
   it('sends the branch line total merge base only when the chip asked for one', async () => {

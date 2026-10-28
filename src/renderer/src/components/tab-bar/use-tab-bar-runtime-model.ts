@@ -10,7 +10,7 @@ import type { AgentDetectionTarget } from '@/hooks/useDetectedAgents'
 import { useAgentDetectionTargetForWorktree } from '@/hooks/useAgentDetectionTarget'
 import { getConnectionIdFromState } from '@/lib/connection-context'
 import { getLocalProjectExecutionRuntimeContext } from '@/lib/local-preflight-context'
-import { isNativeChatTranscriptLocalReadable } from '@/lib/native-chat-transcript-readability'
+import { isNativeChatTranscriptLocalReadable } from '../../../../shared/native-chat/transcript/native-chat-transcript-readability'
 import { runtimeEnvironmentIdOrLocalUnlessTwin } from '@/lib/worktree-runtime-owner'
 import { runtimeTargetForOwnerEnvironment } from '@/runtime/runtime-client-target'
 import { useOptionalShortcutLabel, useShortcutLabel } from '@/hooks/useShortcutLabel'
@@ -121,8 +121,6 @@ export function useTabBarRuntimeModel({
   const defaultWindowsPowerShellImplementation = useAppStore((s) =>
     resolveWindowsPowerShellImplementationSetting(s.settings)
   )
-  const activeRepoId = useAppStore((s) => s.activeRepoId)
-  const activeWorktreeId = useAppStore((s) => s.activeWorktreeId)
   const settings = useAppStore((s) => s.settings)
   // Why: use the worktree's owning host so offered Windows shells match the host that actually runs the terminal.
   const activeRuntimeEnvironmentId = useAppStore((s) =>
@@ -175,6 +173,11 @@ export function useTabBarRuntimeModel({
   const repos = useAppStore((s) => (needsLocalProjectRuntime ? s.repos : EMPTY_REPOS))
   const worktreesByRepo = useAppStore((s) =>
     needsLocalProjectRuntime ? selectWorktreesByRepo(s) : EMPTY_WORKTREES_BY_REPO
+  )
+  // Gated like the maps above: every retained strip would otherwise re-render on each workspace switch.
+  const activeRepoId = useAppStore((s) => (needsLocalProjectRuntime ? s.activeRepoId : null))
+  const activeWorktreeId = useAppStore((s) =>
+    needsLocalProjectRuntime ? s.activeWorktreeId : null
   )
   const localProjectRuntime = useMemo(() => {
     if (!needsLocalProjectRuntime) {

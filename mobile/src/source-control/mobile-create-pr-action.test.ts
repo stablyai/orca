@@ -57,6 +57,26 @@ describe('buildMobileCreatePrAction', () => {
     expect(onCreatePr).toHaveBeenCalledWith(false)
   })
 
+  it('lets a dirty branch in when Create PR can commit it first, like desktop', () => {
+    const descriptor = buildMobileCreatePrAction({
+      branch: 'feature',
+      eligibilityState: {
+        kind: 'ready',
+        eligibility: eligibility({ canCreate: false, blockedReason: 'dirty' })
+      },
+      busyAction: null,
+      prepareInputs: {
+        stagedCount: 1,
+        hasStageableChanges: false,
+        hasMessage: true,
+        hasUnresolvedConflicts: false,
+        upstreamStatus: { hasUpstream: true, ahead: 0, behind: 0 }
+      },
+      onCreatePr: vi.fn()
+    })
+    expect(descriptor.disabled).toBe(false)
+  })
+
   it('uses merge-request copy for GitLab', () => {
     const { descriptor } = action({
       eligibility: eligibility({ provider: 'gitlab' })

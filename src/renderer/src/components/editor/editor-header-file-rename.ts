@@ -39,6 +39,8 @@ export function useEditorHeaderFileRename(activeFile: OpenFile): EditorHeaderFil
     !activeFile.diffSource &&
     !activeFile.conflict &&
     !activeFile.readOnly &&
+    // Why: a host grant reads and writes one path; the host has no route to rename it.
+    !activeFile.terminalArtifactGrantId &&
     !isRenaming
 
   const openRenameInput = (): void => {

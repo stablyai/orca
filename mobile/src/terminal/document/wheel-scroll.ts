@@ -1,6 +1,5 @@
 import { getCellHeight, getTotalScale } from './cell-metrics'
 import { routeScrollLines, shouldRouteScrollToTerminalInput } from './mouse-input-encoding'
-import { dispatcherShouldBlockSurface } from './tap-dispatch'
 import {
   enqueueNormalBufferScrollDelta,
   resetSmoothScrollOffset
@@ -29,15 +28,15 @@ export function attachSurfaceWheelHandler(
   targetSurface.addEventListener(
     'wheel',
     function (e) {
-      if (dispatcherShouldBlockSurface(scope)) {
-        return
-      }
-      if (!scope.term) {
+      if (scope.touchDispatch.mode === 'select-drag' || !scope.term) {
         return
       }
       // Claim wheels before xterm can emit query-gated cursor keys or scroll its hidden viewport; use the touch router instead.
       e.preventDefault()
       e.stopPropagation()
+      if (!scope.interactionActive) {
+        return
+      }
 
       // Swallow ctrl+wheel trackpad pinch so it cannot send cursor keys to the TUI.
       if (e.ctrlKey) {

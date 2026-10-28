@@ -1,7 +1,7 @@
 import type { PairedE2EEClientHandshake } from '../../paired-e2ee-client-handshake'
 import type WebSocket from 'ws'
-import { RemoteRuntimeClientError } from '../../remote-runtime-client-error'
-import { serializeRemoteRuntimePayload } from '../../remote-runtime-memory-limits'
+import { RemoteRuntimeClientError } from '../remote-runtime-client-error'
+import { serializeRemoteRuntimePayload } from '../remote-runtime-memory-limits'
 import {
   invalidRemoteRuntimeResponseError,
   parseRemoteRuntimeRpcFrame

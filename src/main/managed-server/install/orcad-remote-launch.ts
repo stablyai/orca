@@ -22,7 +22,8 @@ import {
   ORCAD_PID_MACHINE_FILENAME,
   ORCAD_READINESS_FILENAME,
   ORCAD_READINESS_MAX_BYTES,
-  posixProcessAliveShellFunction
+  posixProcessAliveShellFunction,
+  posixProcessArgsShellFunction
 } from './orcad-remote-host-support'
 import type { ServeReadiness } from '../../server/serve-readiness'
 import { selectOrcadSlotRuntimeCommand } from './orcad-remote-runtime'
@@ -157,7 +158,7 @@ function setsidLaunchTail(
     ...launchEnv,
     // Only WSL setsid launches receive this marker.
     `${ORCAD_WSL_HOST_ENV}=1`,
-    ...hostEnv.map(([name, value]) => `${assertEnvName(name)}=${quotePosixShell(value)}`),
+    ...hostEnv.map(launchEnvAssignment),
     'sh -c \'orcad_detach() { if setsid -f true >/dev/null 2>&1; then setsid -f "$@"; ' +
       'else setsid "$@" & fi; }; orcad_detach "$@"\' orcad-detach',
     `sh -c 'echo $$ > "$1" && umask "$2" && shift 2 && exec "$@"' orcad-launch ${pidFile}`,
@@ -169,6 +170,17 @@ function setsidLaunchTail(
     'do sleep 0.05; orcad_wait=$((orcad_wait + 1)); done;',
     `cat ${pidFile}`
   ]
+}
+
+function launchEnvAssignment([name, value, mode]: OrcadLaunchEnvEntry): string {
+  if (mode !== 'keep-existing') {
+    return `${assertEnvName(name)}=${quotePosixShell(value)}`
+  }
+  // Inside "${NAME:-default}" quotes are literal, so only quote-free defaults are expressible.
+  if (!/^[A-Za-z0-9._=:,/-]+$/.test(value)) {
+    throw new Error(`orcad_launch_env_default_invalid:${name}`)
+  }
+  return `${assertEnvName(name)}="\${${name}:-${value}}"`
 }
 
 function assertEnvName(name: string): string {
@@ -208,12 +220,13 @@ export function orcadLivenessProbeCommand(
   )
   return [
     posixProcessAliveShellFunction({ refuseUnverifiable: true }),
+    posixProcessArgsShellFunction(),
     // PID reuse needs argv identity; absent ps leaves conservative liveness checks to decide.
     `orcad_launcher=${launcher}; orcad_server=${server};`,
     // The probe's own shell, or the shell wrapping it, carries the slot paths in its argv; after a
     // restart either can hold the old PID. A shell elsewhere may be an older launcher's live parent.
     'orcad_reused() { { [ "$1" = "$$" ] || [ "$1" = "$PPID" ]; } && return 0; ' +
-      'args=$(ps -o args= -p "$1" 2>/dev/null) && [ -n "$args" ] && ' +
+      'args=$(orcad_args "$1") && [ -n "$args" ] && ' +
       'case "$args" in *"$orcad_launcher"* | *"$orcad_server"*) return 1;; *) return 0;; esac; };',
     `pid=$(cat ${pidFile} 2>/dev/null);`,
     'case "$pid" in',

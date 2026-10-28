@@ -1,4 +1,8 @@
+import { retireStructuredAgentSessionReadOwner } from '@/components/native-chat/structured-agent-session-read-owner-registry'
 import { useAppStore } from '@/store/index'
+import { publishStructuredAgentSessionSends } from '@/components/native-chat/structured-agent-session-pending-sends'
+import { agentSessionWriteFailureText } from '@/components/native-chat/agent-session-write-notice-text'
+import { getAgentLabel } from '@/lib/agent-catalog'
 import { removeStructuredLaunchSlot } from './structured-agent-session-launch-slot'
 import {
   materializeStructuredLaunchSurface,
@@ -36,15 +40,16 @@ export function maybeCleanupLaunchState(state: StructuredLaunchState): void {
   cleanupLaunchState(state)
 }
 
-function cleanupUnmaterializedLaunch(state: StructuredLaunchState): void {
+function cleanupUnmaterializedLaunch(state: StructuredLaunchState): boolean {
   if (state.intent.surfaceAddress && !findStructuredLaunchTab(state.intent)) {
     removeStructuredLaunchSlot(
       useAppStore.getState(),
       state.intent.worktreeId,
       state.intent.sessionId
     )
-    cleanupLaunchState(state)
+    return deleteStructuredLaunchStateIfCurrent(state)
   }
+  return false
 }
 
 function settleStructuredLaunchRefusal(state: StructuredLaunchState): void {
@@ -56,7 +61,9 @@ function settleStructuredLaunchRefusal(state: StructuredLaunchState): void {
     state.intent.sessionId
   )
   settleStructuredLaunchCallers(state.callers, 'failed')
-  cleanupUnmaterializedLaunch(state)
+  if (cleanupUnmaterializedLaunch(state)) {
+    retireStructuredAgentSessionReadOwner(state.intent.sessionId, state.intent.target)
+  }
   notifyStructuredLaunchListeners()
 }
 
@@ -65,7 +72,7 @@ export function trackLaunchSettlement(
   promise: Promise<StructuredAgentLaunchReceipt>
 ): void {
   void promise.then(
-    () => {
+    (receipt) => {
       if (state.promise !== promise) {
         return
       }
@@ -76,6 +83,11 @@ export function trackLaunchSettlement(
       if (!state.hostListed) {
         const { worktreeId, sessionId, executionHostId } = state.intent
         recordUnlistedCreatedChat(worktreeId, sessionId, executionHostId)
+      }
+      if (receipt.configurationFailure) {
+        publishStructuredAgentSessionSends(receipt.sessionId, {
+          notice: `${getAgentLabel(state.intent.agent)}: ${agentSessionWriteFailureText(receipt.configurationFailure, 'option')}`
+        })
       }
       settleStructuredLaunchCallers(state.callers, 'published')
       notifyStructuredLaunchListeners()

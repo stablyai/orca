@@ -59,7 +59,8 @@ export {
   AgentSessionPreSpawnError,
   AgentSessionPromptAnswerRejectedError,
   AgentSessionPromptUnavailableError,
-  isAgentSessionPreSpawnError
+  isAgentSessionPreSpawnError,
+  launchPreparationFailure
 } from './structured-agent-session-adapter-errors'
 export type { AgentSessionPreSpawnReason } from './structured-agent-session-adapter-errors'
 
@@ -241,6 +242,14 @@ export type StructuredAgentSessionAdapter = StructuredAgentSessionAdapterStop & 
   }): Promise<{ ok: true } | { ok: false; rejected: string }>
   /** Derive unanswered retained work from the live child; false without one. */
   holdsDispatch?(sessionId: string): boolean
+  /** The root turn the live child is running, null when idle; absent when the agent cannot say. */
+  liveTurnId?(sessionId: string): string | null | undefined
+  /** The live child opened in another approval mode than requested and this input picks another model. */
+  requiresModelTransitionRestart?(input: {
+    sessionId: string
+    fence: number
+    executionOptions?: AgentSessionExecutionOptions
+  }): boolean
   /** Captures only this input's pending answer/output in the supplied live acquisition. */
   capturePendingOutput?(input: {
     sessionId: string

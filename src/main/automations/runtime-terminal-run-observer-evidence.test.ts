@@ -257,6 +257,20 @@ describe('observing a run with agent evidence', () => {
     expect(run.settled).toHaveBeenCalledWith(expect.objectContaining({ status: 'completed' }))
   })
 
+  it("completes on the agent's own done when the screen never reads idle (#34064)", async () => {
+    // A finished pane whose title and screen lost their rest evidence, e.g. after a stream gap.
+    const pane = createPane({ idle: false, tail: ['done', '❯'] })
+    const run = observe(pane)
+    await vi.advanceTimersByTimeAsync(5_000)
+    pane.report()
+    await vi.advanceTimersByTimeAsync(20_000)
+    expect(run.settled).not.toHaveBeenCalled()
+
+    await vi.advanceTimersByTimeAsync(60_000)
+    await run.promise
+    expect(run.settled).toHaveBeenCalledWith(expect.objectContaining({ status: 'completed' }))
+  })
+
   it('stops on cancellation without recording any result', async () => {
     const pane = createPane({ idle: true, tail: ['$'] })
     const run = observe(pane)

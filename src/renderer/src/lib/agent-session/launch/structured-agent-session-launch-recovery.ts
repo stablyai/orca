@@ -1,3 +1,4 @@
+import type { AgentSessionWriteFailure } from '../../../../../shared/agent-session-write-failure'
 import type { AgentSessionHistoryResult } from '../../../../../shared/agent-session-wire'
 import type {
   AgentJournalCursor,
@@ -18,6 +19,7 @@ export type StructuredAgentLaunchReceipt = {
   fence: number
   firstMessage?: AgentJournalSubmission
   cursor?: AgentJournalCursor
+  configurationFailure?: AgentSessionWriteFailure
 }
 
 export type StructuredLaunchRecoveryState = {
@@ -105,9 +107,6 @@ async function retrySameIntent(
       () => state.cancelled
     )
     throwIfLaunchCancelled(state)
-    if (state.intent.createMessageSupport !== true) {
-      await verifyPublishedSession(state)
-    }
     return receipt
   } catch (error) {
     if (state.cancelled) {
@@ -154,18 +153,8 @@ export async function launchAndReconcile(
       return retrySameIntent(state, error)
     }
   }
-  try {
-    throwIfLaunchCancelled(state)
-    if (state.intent.createMessageSupport !== true) {
-      await verifyPublishedSession(state)
-    }
-    return receipt
-  } catch (error) {
-    if (state.cancelled) {
-      throw new StructuredAgentSessionLaunchCancelledError()
-    }
-    return retrySameIntent(state, error)
-  }
+  throwIfLaunchCancelled(state)
+  return receipt
 }
 
 export async function reconcileUnknownLaunch(

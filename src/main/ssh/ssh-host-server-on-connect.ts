@@ -42,6 +42,7 @@ export type HostServerOnConnectResult =
       update?: SshManagedServerUpdateNote
       serving?: SshManagedServerServingNote
       linked?: SshManagedServerLinkedProject[]
+      automationsLeftDisabled?: number
       /** Another desktop's update held the host; recheck until it clears. Never published. */
       fenceHeld?: true
     }
@@ -75,8 +76,8 @@ export type HostServerOnConnectDeps = {
   ensureTunnel: (environmentId: string) => Promise<void>
   /** Wake only on proven stopped activation, then verify serving behind the tunnel. */
   ensureServing: (environmentId: string) => Promise<OrcadManagedServing>
-  /** Finish retained-source bookkeeping after late commit replies without deleting source rows. */
-  retainCommittedSource: (target: SshTarget) => Promise<void>
+  /** Finish retained-source bookkeeping after late commit replies without deleting source rows; resolves how many moved automations the server kept off. */
+  retainCommittedSource: (target: SshTarget) => Promise<number>
   hasTemplate: () => boolean
   recordedUnavailable: (target: SshTarget) => string | null
   recordUnavailable: (target: SshTarget, reason: string) => void
@@ -154,8 +155,9 @@ async function decide(
     if (unserved) {
       return unserved
     }
+    let automationsLeftDisabled = 0
     try {
-      await deps.retainCommittedSource(target)
+      automationsLeftDisabled = await deps.retainCommittedSource(target)
     } catch (error) {
       console.warn('[ssh] Could not mark a finished migration retained:', error)
     }
@@ -164,7 +166,10 @@ async function decide(
     )
     trace.update = update.reason
     trace.recorded = update.recorded
-    return managedResultAfterUpdate(existing, serving, update)
+    return {
+      ...managedResultAfterUpdate(existing, serving, update),
+      ...(automationsLeftDisabled > 0 ? { automationsLeftDisabled } : {})
+    }
   }
   const recorded = deps.recordedUnavailable(target)
   if (recorded) {
@@ -255,7 +260,10 @@ async function afterConversion(
       return {
         route: 'managed',
         environmentId: result.environment.id,
-        ...(result.linkedProjects ? { linked: result.linkedProjects } : {})
+        ...(result.linkedProjects ? { linked: result.linkedProjects } : {}),
+        ...(result.automationsLeftDisabled
+          ? { automationsLeftDisabled: result.automationsLeftDisabled }
+          : {})
       }
     case 'deferred':
       return deferred(target, deps, result, false)

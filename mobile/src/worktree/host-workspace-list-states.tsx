@@ -1,5 +1,7 @@
-import { ActivityIndicator, StyleSheet, Text, View } from 'react-native'
+import { ActivityIndicator, Text, View } from 'react-native'
 import { colors, spacing, typography } from '../theme/mobile-theme'
+import { themedStyleSheet } from '../theme/themed-styles'
+import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import { isConnectionOutage, verdictDisplayLabel } from '../transport/connection-health'
 import {
   selectHostWorkspaceListState,
@@ -12,6 +14,7 @@ export function HostWorkspaceListStates(
     activeFilterCount: number
   }
 ) {
+  useMobileColorScheme()
   const state = selectHostWorkspaceListState(props)
   if (state === 'loading') {
     return (
@@ -60,6 +63,7 @@ export function HostWorkspaceListStates(
 
 /** A list this page cannot build; shown above the rows it already holds, so it never blanks. */
 export function HostWorkspaceListReopen({ aboveRows }: { aboveRows: boolean }) {
+  useMobileColorScheme()
   return (
     <View style={aboveRows ? styles.aboveRows : styles.centered}>
       <Text style={styles.emptyText}>Reopen to update</Text>
@@ -70,7 +74,7 @@ export function HostWorkspaceListReopen({ aboveRows }: { aboveRows: boolean }) {
   )
 }
 
-const styles = StyleSheet.create({
+const styles = themedStyleSheet(() => ({
   centered: {
     flex: 1,
     alignItems: 'center',
@@ -91,4 +95,4 @@ const styles = StyleSheet.create({
     fontSize: typography.metaSize,
     textAlign: 'center'
   }
-})
+}))

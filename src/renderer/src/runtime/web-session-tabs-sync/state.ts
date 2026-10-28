@@ -245,6 +245,7 @@ export type WebSessionTabsSyncState = Pick<
       | 'recentlyRetiredAgentStatusPaneKeys'
       | 'retainedAgentsByPaneKey'
       | 'retentionSuppressedPaneKeys'
+      | 'runtimePaneTitlesByTabId'
     >
   >
 
@@ -265,6 +266,7 @@ export type WebSessionTabsBatchRecordKey =
   | 'pendingStartupByTabId'
   | 'ptyIdsByTabId'
   | 'remoteBrowserPageHandlesByPageId'
+  | 'runtimePaneTitlesByTabId'
   | 'tabBarOrderByWorktree'
   | 'tabsByWorktree'
   | 'terminalLayoutsByTabId'
@@ -276,6 +278,7 @@ export type WebSessionOpenFilesIndex = {
   byWorktree: Map<string, OpenFile[]>
 }
 export type WebSessionTabsBatchContext = {
+  changedAgentPaneKeys?: Set<string>
   retractionPaneKeysByRecord?: WeakMap<object, Map<string, Set<string>>>
   agentPaneKeysByTabId: Map<string, Set<string>> | null
   changedRecords: Set<WebSessionTabsBatchRecordKey>

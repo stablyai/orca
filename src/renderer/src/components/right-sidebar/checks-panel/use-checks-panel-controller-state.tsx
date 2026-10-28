@@ -12,10 +12,8 @@ import { getWorktreeGitIdentityDisplay } from '../../../../../shared/worktree/gi
 import { resolveRepoWorktreeLaunchPlatform } from '@/lib/execution-host-facts'
 import { runtimeEnvironmentIdOrLocalUnlessTwin } from '@/lib/worktree-runtime-owner'
 import { normalizeGlobalWindowsRuntimeDefault } from '../../../../../shared/project-execution-runtime'
-import {
-  saveSourceControlActionRecipe,
-  type SourceControlAiWriteTarget
-} from '../../../../../shared/source-control-ai-recipe-save'
+import type { SourceControlAiWriteTarget } from '../../../../../shared/source-control-ai-recipe-save'
+import { saveSourceControlAiActionRecipeForTarget } from '../source-control/ai/recipe-persistence'
 import type {
   SourceControlActionRecipe,
   SourceControlLaunchActionId
@@ -50,6 +48,7 @@ export function useChecksPanelControllerState() {
     : null
   const settings = useAppStore((s) => s.settings)
   const updateSettings = useAppStore((s) => s.updateSettings)
+  const updateSettingsOrThrow = useAppStore((s) => s.updateSettingsOrThrow)
   const updateRepo = useAppStore((s) => s.updateRepo)
   const fetchPRForBranch = useAppStore((s) => s.fetchPRForBranch)
   const fetchHostedReviewForBranch = useAppStore((s) => s.fetchHostedReviewForBranch)
@@ -183,29 +182,16 @@ export function useChecksPanelControllerState() {
       actionId: SourceControlLaunchActionId,
       recipe: SourceControlActionRecipe
     ): Promise<void> => {
-      const state = useAppStore.getState()
-      const latestSettings = state.settings
-      if (!latestSettings) {
-        throw new Error('Settings are not loaded.')
-      }
-      const latestRepo =
-        target.type === 'repo'
-          ? (state.repos.find((candidate) => candidate.id === target.repoId) ?? null)
-          : null
-      const result = saveSourceControlActionRecipe({
+      await saveSourceControlAiActionRecipeForTarget({
+        getStoreState: useAppStore.getState,
+        updateSettings: updateSettingsOrThrow,
+        updateRepo,
         target,
-        settings: latestSettings,
-        repo: latestRepo,
         actionId,
         recipe
       })
-      if ('sourceControlAi' in result) {
-        await updateSettings({ sourceControlAi: result.sourceControlAi })
-        return
-      }
-      await updateRepo(result.target.repoId, result.update)
     },
-    [updateRepo, updateSettings]
+    [updateRepo, updateSettingsOrThrow]
   )
   const asyncResultKeyRef = useRef<string>('')
   const refreshRequestKeyRef = useRef<string | null>(null)

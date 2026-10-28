@@ -5,8 +5,10 @@ import type { AppState } from '@/store'
 import { useAppStore } from '@/store'
 import { singlePaneLayoutSnapshot } from '@/store/slices/terminal-helpers'
 import { hasRegisteredRuntimeTerminalTab } from '@/runtime/mounted-terminal-tab-registry'
-import { buildPaneAccountRestartStartup } from '@/lib/agent-account-restart-startup'
-import { CODEX_ACCOUNT_RESTART_STARTUP } from '@/lib/codex-session-restart'
+import {
+  buildCodexAccountRestartStartup,
+  buildPaneAccountRestartStartup
+} from '@/lib/agent-account-restart-startup'
 import { isClaudePaneMidTurn } from '@/lib/claude-session-account-move'
 import type { AccountRestartAgent } from '@/store/terminals/terminal-contracts'
 import { isForeignMachineCodexPtyId } from '@/lib/codex-pane-selection-lane'
@@ -158,11 +160,15 @@ async function executeDetachedCodexPaneRestart(
       reopenCurrentCodexRestartPrompt(located, ptyId)
       return
     }
+    const startup = buildCodexAccountRestartStartup({
+      worktreeId: located.worktreeId,
+      shellOverride: located.tab.shellOverride
+    })
     const store = useAppStore.getState()
     store.suppressPtyExit(ptyId)
     store.clearTabPtyId(located.tab.id, ptyId)
     store.consumeSuppressedPtyExit(ptyId)
-    store.queueTabStartupCommand(located.tab.id, { ...CODEX_ACCOUNT_RESTART_STARTUP })
+    store.queueTabStartupCommand(located.tab.id, startup)
     store.clearCodexRestartNotice(ptyId)
     killReplacedCodexPanePty(ptyId)
     return

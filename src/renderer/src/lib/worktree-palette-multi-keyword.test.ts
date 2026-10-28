@@ -7,7 +7,7 @@ import {
 } from './cmd-j-evaluation-fixture'
 import { searchWorktrees, type PaletteSearchResult } from './worktree-palette-search'
 import { buildWorktreePaletteDocuments } from './worktree-palette-document'
-import { preparePaletteQuery } from './palette-match/palette-query'
+import { preparePaletteQuery } from '../../../shared/palette-match/palette-query'
 import { getWorktreeHostIdentity } from '../../../shared/worktree/host-qualified-identity'
 
 function documentKey(worktreeId: string): string {

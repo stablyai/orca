@@ -1,9 +1,5 @@
 import { callRuntimeRpc } from '@/runtime/runtime-rpc-client'
-
-// Throttle one takeover/pane/window, but report continued typing again because later dispatches can reuse that pane.
-const REPORT_INTERVAL_MS = 30_000
-const REPORT_GATE_PRUNE_SIZE = 256
-const REPORT_RETRY_DELAY_MS = 250
+import { reportWorkerTakeoverOncePerWindow } from '../../../shared/worker-terminal-takeover-report-gate'
 
 const lastReportByPaneKey = new Map<string, number>()
 
@@ -27,44 +23,18 @@ function reportTakeover(
   subject: { paneKey: string } | { sessionId: string },
   runtimeEnvironmentId: string | null
 ): void {
-  const now = Date.now()
-  const gateKey = JSON.stringify([runtimeEnvironmentId, subject])
-  const last = lastReportByPaneKey.get(gateKey)
-  if (last !== undefined && now - last < REPORT_INTERVAL_MS) {
-    return
-  }
-  if (lastReportByPaneKey.size >= REPORT_GATE_PRUNE_SIZE) {
-    for (const [key, reportedAt] of lastReportByPaneKey) {
-      if (now - reportedAt >= REPORT_INTERVAL_MS) {
-        lastReportByPaneKey.delete(key)
-      }
-    }
-  }
-  lastReportByPaneKey.set(gateKey, now)
-  void sendTakeoverReport(subject, runtimeEnvironmentId).catch(() => {
-    if (lastReportByPaneKey.get(gateKey) === now) {
-      lastReportByPaneKey.delete(gateKey)
-    }
-  })
-}
-
-async function sendTakeoverReport(
-  subject: { paneKey: string } | { sessionId: string },
-  runtimeEnvironmentId: string | null
-): Promise<void> {
-  const target =
-    runtimeEnvironmentId !== null
-      ? ({ kind: 'environment', environmentId: runtimeEnvironmentId } as const)
-      : ({ kind: 'local' } as const)
-  const report = () =>
-    callRuntimeRpc(target, 'orchestration.workerTerminalUserInput', subject, {
-      suppressFeatureInteraction: true,
-      reuseRecentCompatibilityFailure: true
-    })
-  try {
-    await report()
-  } catch {
-    await new Promise<void>((resolve) => setTimeout(resolve, REPORT_RETRY_DELAY_MS))
-    await report()
-  }
+  // Gate per runtime too, so a pane rebound to another owner reports there.
+  reportWorkerTakeoverOncePerWindow(
+    lastReportByPaneKey,
+    JSON.stringify([runtimeEnvironmentId, subject]),
+    () =>
+      callRuntimeRpc(
+        runtimeEnvironmentId !== null
+          ? { kind: 'environment', environmentId: runtimeEnvironmentId }
+          : { kind: 'local' },
+        'orchestration.workerTerminalUserInput',
+        subject,
+        { suppressFeatureInteraction: true, reuseRecentCompatibilityFailure: true }
+      )
+  )
 }

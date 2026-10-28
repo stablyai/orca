@@ -101,7 +101,7 @@ export function PluginMarketplaceBrowser({
     [installedPlugins]
   )
   const visibleListings = useMemo(() => {
-    const query = search.trim().toLocaleLowerCase()
+    const query = search.trim().toLowerCase()
     if (!query) {
       return listings
     }
@@ -112,7 +112,7 @@ export function PluginMarketplaceBrowser({
         listing.marketplaceName,
         listing.marketplaceOwner,
         ...listing.categories
-      ].some((value) => value.toLocaleLowerCase().includes(query))
+      ].some((value) => value.toLowerCase().includes(query))
     )
   }, [listings, search])
 

@@ -7,13 +7,17 @@ import {
   type NativeChatSessionStatus
 } from '../../../../shared/native-chat-types'
 import { NATIVE_CHAT_STREAMING_ID } from '../../../../shared/native-chat/native-chat-streaming'
-import { compareNativeChatTranscriptMessages } from '../../../../shared/native-chat-transcript-projection'
+import {
+  compareNativeChatTranscriptMessages,
+  orderNativeChatTranscriptEntries
+} from '../../../../shared/native-chat-transcript-projection'
 import {
   hasImagePromptMarker,
   isImageSourceUserTurn,
   normalizeImageTranscriptMessages
 } from '../../../../shared/native-chat-image-transcript-markers'
-import { isLaunchPromptMessageId, isPendingMessageId } from './native-chat-pending'
+import { isLaunchPromptMessageId } from './native-chat-pending'
+import { isPendingMessageId } from '../../../../shared/native-chat-pending-sends'
 
 /** For the same turn, prefer transcript over hook over scrape. */
 export type NativeChatSources = {
@@ -95,6 +99,19 @@ export function compareMessages(a: NativeChatMessage, b: NativeChatMessage): num
   return compareNativeChatTranscriptMessages(a, b)
 }
 
+function orderEntries<T>(entries: readonly T[], messageOf: (entry: T) => NativeChatMessage): T[] {
+  return [0, 1, 2].flatMap((rank) => {
+    const tier = entries.filter((entry) => messageSortRank(messageOf(entry)) === rank)
+    return rank === 0
+      ? orderNativeChatTranscriptEntries(tier, messageOf)
+      : tier.sort((a, b) => compareMessages(messageOf(a), messageOf(b)))
+  })
+}
+
+export function orderMessages(messages: readonly NativeChatMessage[]): NativeChatMessage[] {
+  return orderEntries(messages, (message) => message)
+}
+
 export function assembleNativeChatSession(
   input: AssembleNativeChatSessionInput
 ): NativeChatSession {
@@ -114,7 +131,7 @@ export function assembleNativeChatSession(
     mergeOne(byId, byTurn, message)
   }
 
-  const messages = Array.from(byId.values()).sort(compareMessages)
+  const messages = orderMessages(Array.from(byId.values()))
 
   const derivedStatus: NativeChatSessionStatus = messages.length === 0 ? 'empty' : 'ready'
 
@@ -136,23 +153,27 @@ type ImageNormalizationUnit = {
 export function sortForImageNormalization(
   messages: readonly NativeChatMessage[]
 ): readonly NativeChatMessage[] {
+  // Restore file adjacency before supplemental rows can be inserted between image companions.
+  const sourceOrdered = messages.some((message) => message.transcriptOrder !== undefined)
+    ? Array.from(messages).sort(compareMessages)
+    : messages
   const units: ImageNormalizationUnit[] = []
-  for (let index = 0; index < messages.length; index += 1) {
-    const message = messages[index]!
+  for (let index = 0; index < sourceOrdered.length; index += 1) {
+    const message = sourceOrdered[index]!
     const companions: NativeChatMessage[] = []
     let prompt: NativeChatMessage | undefined
 
     if (isImageSourceUserTurn(message)) {
       let nextIndex = index
       while (
-        nextIndex < messages.length &&
-        messages[nextIndex]?.source === message.source &&
-        isImageSourceUserTurn(messages[nextIndex]!)
+        nextIndex < sourceOrdered.length &&
+        sourceOrdered[nextIndex]?.source === message.source &&
+        isImageSourceUserTurn(sourceOrdered[nextIndex]!)
       ) {
-        companions.push(messages[nextIndex]!)
+        companions.push(sourceOrdered[nextIndex]!)
         nextIndex += 1
       }
-      const candidate = messages[nextIndex]
+      const candidate = sourceOrdered[nextIndex]
       if (
         candidate?.role === 'user' &&
         candidate.source === message.source &&
@@ -164,7 +185,7 @@ export function sortForImageNormalization(
         companions.length = 0
       }
     } else {
-      const candidate = messages[index + 1]
+      const candidate = sourceOrdered[index + 1]
       if (
         message.role === 'user' &&
         hasImagePromptMarker(message) &&
@@ -174,12 +195,12 @@ export function sortForImageNormalization(
       ) {
         let nextIndex = index + 1
         while (
-          nextIndex < messages.length &&
-          messages[nextIndex]?.source === message.source &&
-          messages[nextIndex]?.timestamp === message.timestamp &&
-          isImageSourceUserTurn(messages[nextIndex]!)
+          nextIndex < sourceOrdered.length &&
+          sourceOrdered[nextIndex]?.source === message.source &&
+          sourceOrdered[nextIndex]?.timestamp === message.timestamp &&
+          isImageSourceUserTurn(sourceOrdered[nextIndex]!)
         ) {
-          companions.push(messages[nextIndex]!)
+          companions.push(sourceOrdered[nextIndex]!)
           nextIndex += 1
         }
         prompt = message
@@ -191,8 +212,7 @@ export function sortForImageNormalization(
     units.push({ messages: unitMessages, sortKey: prompt ?? message })
   }
 
-  units.sort((a, b) => compareMessages(a.sortKey, b.sortKey))
-  const sorted = units.flatMap((unit) => unit.messages)
+  const sorted = orderEntries(units, (unit) => unit.sortKey).flatMap((unit) => unit.messages)
   return sorted.every((message, index) => message === messages[index]) ? messages : sorted
 }
 

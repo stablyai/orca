@@ -8,7 +8,7 @@ import { useAppStore } from '@/store'
 import type { AppState } from '@/store/types'
 import { emitCmdJRowIndexJump } from '@/lib/cmd-j-row-index-jump'
 import WorktreeJumpPalette from './WorktreeJumpPalette'
-import { encodePaletteIdentity } from '@/lib/palette-match/palette-ranking'
+import { encodePaletteIdentity } from '../../../shared/palette-match/palette-ranking'
 import { makePaneKey } from '../../../shared/stable-pane-id'
 import {
   LEAF_ID,

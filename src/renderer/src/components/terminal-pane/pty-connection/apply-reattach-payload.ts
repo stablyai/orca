@@ -191,10 +191,7 @@ export function createReattachPayloadHandlers(
           `${RELEASE_SYNCHRONIZED_OUTPUT}${RESET_GRAPHIC_RENDITION}\x1b[2J\x1b[3J\x1b[H`
         )
         // Replay Kitty pushes with set semantics to avoid stack growth; fresh mirrors stay unproven for negotiations predating replay.
-        if (!session.kittyKeyboardModes.hasProvenBaseline) {
-          session.kittyKeyboardModes.resetForSnapshot()
-        }
-        session.kittyKeyboardModes.scanReplay(ctx.connectResult.replay)
+        session.kittyKeyboardModes.adoptSnapshot(ctx.connectResult.replay, undefined)
         session.writeReplayData(
           `${ctx.connectResult.coldRestore ? RESET_GRAPHIC_RENDITION : ''}${ctx.connectResult.replay}`
         )

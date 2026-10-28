@@ -9,6 +9,7 @@ import {
 } from '../../../preflight/workspace-agent-detection'
 import {
   PreflightAgentDetection,
+  PreflightProjectAgentDetection,
   PreflightCheck,
   PreflightDetectRemoteAgents,
   PreflightDetectRemoteWindowsTerminalCapabilities
@@ -24,10 +25,14 @@ export const PREFLIGHT_METHODS = [
   defineMethod({
     name: 'preflight.detectAgents',
     permission: 'workspace',
-    params: PreflightAgentDetection,
+    params: PreflightProjectAgentDetection,
     // Only the host knows the workspace's actual project runtime, including WSL.
     handler: async (params, { runtime }) =>
-      detectAgentsOnHost(await runtime.resolveAgentDetectionHost(params.worktreeId, params.repoId))
+      params.project
+        ? runtime.detectProjectLaunchContext(params.project.repo)
+        : detectAgentsOnHost(
+            await runtime.resolveAgentDetectionHost(params.worktreeId, params.repoId)
+          )
   }),
   defineMethod({
     name: 'preflight.detectRemoteAgents',

@@ -3,7 +3,7 @@ import type { StructuredAgentSessionLogger } from '../native-chat/agent-session-
 import type { CodexAppServerConnection } from './app-server/codex-app-server-connection-types'
 import { isCodexAppServerRequestError } from './app-server/codex-app-server-request-error'
 import { isCodexMethodNotFoundError } from './codex-app-server-session'
-import type { CodexStructuredPermissionPolicy } from './codex-structured-permission-policy'
+import type { CodexStructuredPermissionPolicy } from '../../shared/codex-permission-policy'
 
 /** Bound local setup requests so optional visuals do not delay the first prompt indefinitely. */
 export const CODEX_VISUALS_SETUP_BUDGET_MS = 2_000

@@ -1,6 +1,8 @@
-import { Pressable, StyleSheet, View } from 'react-native'
+import { Pressable, View } from 'react-native'
 import { Monitor, Smartphone, type LucideIcon } from 'lucide-react-native'
 import { colors, radii } from '../theme/mobile-theme'
+import { themedStyleSheet } from '../theme/themed-styles'
+import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import type { MobileBrowserViewMode } from './browser-screencast-request'
 
 type Props = {
@@ -19,6 +21,7 @@ export function MobileBrowserViewModeSwitch({
   value,
   onChange
 }: Props): React.JSX.Element {
+  useMobileColorScheme()
   return (
     <View style={styles.switch}>
       {VIEW_MODES.map((mode) => (
@@ -48,6 +51,7 @@ function ViewModeButton({
   onPress: () => void
   selected: boolean
 }) {
+  useMobileColorScheme()
   return (
     <Pressable
       style={({ pressed }) => [
@@ -67,7 +71,7 @@ function ViewModeButton({
   )
 }
 
-const styles = StyleSheet.create({
+const styles = themedStyleSheet(() => ({
   switch: {
     minHeight: 28,
     flexDirection: 'row',
@@ -92,4 +96,4 @@ const styles = StyleSheet.create({
   disabled: {
     opacity: 0.35
   }
-})
+}))

@@ -80,13 +80,7 @@ it('keeps the Bun anti-slop scan aligned with the local audit', () => {
   const manifest = JSON.parse(readFileSync('package.json', 'utf8'))
   const localCommand = manifest.scripts['audit:anti-slop'].split('&&').at(-1).trim()
   expect(audit.run.trim().split('\n')[0]).toBe('node config/scripts/sync-anti-slop-plugin.mjs')
-  expect(
-    audit.run
-      .trim()
-      .split('\n')
-      .at(-1)
-      .replace('bun --smol node_modules/oxlint/bin/oxlint', 'oxlint')
-  ).toBe(localCommand)
+  expect(audit.run.trim().split('\n').at(-1)).toBe(localCommand)
 })
 
 it('requires physical preflight success before publishing shards and admitting consumers', () => {
@@ -367,7 +361,7 @@ it('runs the unchanged Node 18 smoke after every Node 24 step and preserves its 
     expect(joined, background.id).toBeLessThan(steps.indexOf(smoke))
   }
   expect(receipt.name).toBe('managed hooks on Node 18')
-  expect(receipt['runs-on']).toBe('blacksmith-2vcpu-ubuntu-2404')
+  expect(receipt['runs-on']).toBe('ubuntu-slim')
   expect(receipt.steps).toHaveLength(1)
   expect(receipt.steps[0].uses).toBeUndefined()
   expect(receipt.steps[0].env.MANAGED_HOOK_NODE18).toBe(

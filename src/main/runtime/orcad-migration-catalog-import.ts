@@ -87,11 +87,11 @@ export async function abortStagedOrcadMigrationCatalogByReferenceDurably(args: {
 }): Promise<OrcadMigrationCatalogReferenceAbortResult> {
   // SAFETY: Returned or mutable Store slots retain their original native missing-method failure.
   const result = args.store.abortStagedOrcadMigrationCatalogByReference!(args.reference)
-  if (result.state === 'absent') {
-    await flushMigrationState(args.store, args.signal)
-    return { ...result, durableAbsent: true }
-  }
-  return result
+  await flushMigrationState(args.store, args.signal)
+  // Either answer is flushed first, so a source that cannot re-send the manifest may act on it.
+  return result.state === 'absent'
+    ? { ...result, durableAbsent: true }
+    : { ...result, durableCommitted: true }
 }
 
 export function getOrcadMigrationCatalogState(args: {

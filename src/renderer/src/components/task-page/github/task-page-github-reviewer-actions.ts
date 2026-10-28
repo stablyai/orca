@@ -7,7 +7,7 @@ import type { TaskPageGitHubMutationIntent } from '@/components/task-page/github
 import {
   normalizeGitHubReviewerLogins,
   parseGitHubReviewerInputLogins
-} from '@/components/github-pr-reviewer-display'
+} from '../../../../../shared/github/pr-reviewer-display'
 import { toast } from 'sonner'
 
 import type {

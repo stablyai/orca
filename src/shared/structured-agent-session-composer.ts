@@ -3,11 +3,14 @@ import {
   getTextDrivenNativeChatCommands
 } from './native-chat-agent-profiles'
 import type { AgentType } from './agent-status-types'
-import type { SessionOptionDescriptor, SessionOptionValue } from './native-chat-session-options'
+import type {
+  SessionOptionDescriptor,
+  SessionOptionValue
+} from './native-chat/input/native-chat-session-options'
 import {
   sessionSlashCommandSuggestions,
   type SlashCommandSuggestion
-} from './native-chat-slash-commands'
+} from './native-chat/input/native-chat-slash-commands'
 import type { AgentSessionConversationCommand } from './agent-session/agent-session-conversation-command'
 import type { AgentSessionSlashCommand } from './agent-session-wire'
 
@@ -137,6 +140,17 @@ export function isStructuredAgentSessionComposerCommand(
     command &&
     structuredRecognizedCommands(agent, reported).some((entry) => entry.name === command.name)
   )
+}
+
+export function prepareStructuredAgentSessionComposerCommand(
+  agent: AgentType,
+  reported?: readonly AgentSessionSlashCommand[]
+): (text: string) => boolean {
+  const names = new Set(structuredRecognizedCommands(agent, reported).map((entry) => entry.name))
+  return (text) => {
+    const command = commandParts(text)
+    return command !== null && names.has(command.name)
+  }
 }
 
 /** `/clear` or `/compact` alone: a conversation command with nothing after it. */

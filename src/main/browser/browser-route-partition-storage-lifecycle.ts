@@ -80,7 +80,7 @@ export function findBrowserRoutePartitionsForStorageScope(
     .map(([partition]) => partition)
 }
 
-function partitionDirectory(
+export function partitionDirectory(
   dependencies: Pick<BrowserRoutePartitionStorageDependencies, 'partitionDataRoot'>,
   partition: string
 ): string {

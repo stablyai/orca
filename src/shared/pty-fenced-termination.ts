@@ -3,6 +3,12 @@ export type PtyFencedTerminationRequest = {
   expectedIncarnationId: string
   requireNoAgentOwner: boolean
   requireUnattached: boolean
+  switchCondition?: {
+    token: string
+    remainingMs: number
+    ownedSpawn?: true
+    claimGeneration?: string
+  }
 }
 
 export type PtyFencedTerminationOutcome =

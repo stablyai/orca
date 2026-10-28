@@ -27,8 +27,7 @@ import { useHostStructuredAgentAvailability } from '@/runtime/use-host-structure
 import {
   buildNewTabAgentMenuRows,
   hostChatAnswer,
-  type HostChatAnswer,
-  type NewTabAgentMenuRow
+  type HostChatAnswer
 } from '@/lib/new-tab-agent-menu-rows'
 import {
   readLocalRuntimeCapabilityObservation,
@@ -52,7 +51,7 @@ export type NewTabAgentMenuModel =
   | { state: 'loading'; placeholderCount: number }
   | {
       state: 'settled'
-      rows: NewTabAgentMenuRow[]
+      rows: ReturnType<typeof buildNewTabAgentMenuRows>
       detection: UseDetectedAgentsResult
       /** The default these rows were ordered by, so the new-agent badge marks the same agent. */
       defaultTuiAgent?: GlobalSettings['defaultTuiAgent']
@@ -195,8 +194,7 @@ export function useAgentMenuObservation(
   ].filter(isTuiAgent)
   const inventoryFailed =
     detection.detectedIds === null && (detection.detectionFailed || detection.needsServerUpdate)
-  const localAcquiring =
-    localCapabilities.state === 'unlearned' || localCapabilities.state === 'pending'
+  const localAcquiring = ['unlearned', 'pending'].includes(localCapabilities.state)
   const capabilityPending =
     input.hostCapabilities == null && (local ? localAcquiring : facts.checking)
   const hostCatalogPending =
@@ -224,15 +222,18 @@ export function useAgentMenuObservation(
           availability?.state === 'pending' ||
           hostCatalogPending ||
           localCatalogPending)))
+  // Workspace preparation is shared by answers, while agent and published verdict stay per question.
+  let answerContext = launchCwd ? undefined : input
   const answerFor = (agent: TuiAgent): HostChatAnswer => {
     if (unresolvedTarget) {
       return 'not-yet-known'
     }
-    const route = buildAgentLaunchRouteInput(state, {
+    answerContext ??= buildAgentLaunchRouteInput(state, {
       agent,
       workspace,
       ...(launchCwd ? { tuiCustomization: { cwd: launchCwd } } : {})
     })
+    const route = { ...answerContext, agent }
     const preliminary = hostChatAnswer(roster ? { ...route, hostStructuredAgents: roster } : route)
     if (!roster || !['yes', 'not-yet-known', 'not-on-host'].includes(preliminary)) {
       return preliminary
@@ -259,8 +260,11 @@ export function useAgentMenuObservation(
         placeholderCount: Math.max(chatAgents.length, detection.detectedIds?.length ?? 0, 2)
       }
     : { state: 'settled', rows, detection, defaultTuiAgent: settings?.defaultTuiAgent }
+  const { defaultTuiAgent, disabledTuiAgents } = settings ?? {}
   return {
     model,
+    preferences: { defaultTuiAgent, disabledTuiAgents },
+    preferencesPending,
     detection,
     contextKey: JSON.stringify([workspace, launchCwd, facts]),
     selectionFor: (agent: TuiAgent | null, surface?: AgentLaunchSurface) => {

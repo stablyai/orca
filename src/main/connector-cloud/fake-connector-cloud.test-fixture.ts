@@ -36,6 +36,8 @@ export class FakeConnectorCloud {
   readonly hellos: unknown[] = []
   readonly acks: unknown[] = []
   readonly events: unknown[] = []
+  /** Replies posted, one per replyId, as the service dedupes them. */
+  readonly replies = new Map<string, unknown>()
   /** Poll answers in order; a poll with none queued is held until one is queued. */
   private readonly pollReplies: Reply[] = []
   private heldPoll: (() => void) | null = null
@@ -137,9 +139,23 @@ export class FakeConnectorCloud {
       case CONNECTOR_PATHS.acks:
       case CONNECTOR_PATHS.events:
         return this.machineCall(path, body, token, signal)
+      case CONNECTOR_PATHS.replies:
+        return this.reply(body, token)
       default:
         return { status: 404, body: { error: 'not_found' } }
     }
+  }
+
+  private reply(body: unknown, token: string | null): Reply {
+    const issued = token ? this.tokens.get(token) : undefined
+    if (!issued || issued.expiresAt <= Date.now()) {
+      return { status: 401, body: { error: 'invalid_token' } }
+    }
+    const replyId = isRecord(body) ? String(body.replyId) : ''
+    if (!this.replies.has(replyId)) {
+      this.replies.set(replyId, body)
+    }
+    return { status: 200, body: { status: 'posted', messageId: '1793.0042' } }
   }
 
   private async machineCall(

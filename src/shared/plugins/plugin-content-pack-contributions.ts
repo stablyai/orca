@@ -7,17 +7,31 @@ export const PLUGIN_KEYBINDING_LIMIT = 256
 export const PLUGIN_VM_RECIPE_LIMIT = 64
 export const PLUGIN_AGENT_PROFILE_LIMIT = 64
 
+/** True when Intl can parse the tag's grammar, not just its shape. */
+function isWellFormedLocaleId(value: string): boolean {
+  try {
+    Intl.getCanonicalLocales(value)
+    return true
+  } catch {
+    return false
+  }
+}
+
 // Locale IDs become filenames/i18next keys; a bounded BCP 47 subset excludes path syntax.
+// Intl rejects shape-valid, ill-formed tags (`en-US-US`) at install, not silently when formatting.
 export const pluginLocaleIdSchema = z
   .string()
   .min(2)
   .max(35)
   .regex(/^[A-Za-z]{2,3}(?:-[A-Za-z0-9]{2,8})*$/, 'must be a portable locale identifier')
+  .refine(isWellFormedLocaleId, 'must be a well-formed locale identifier')
 
 export const pluginLanguagePackContributionSchema = z
   .object({
     locale: pluginLocaleIdSchema,
-    path: pluginRelativePathSchema
+    path: pluginRelativePathSchema,
+    // Native-language label for the Settings picker; omitted packs show `{locale} — {pluginKey}`.
+    displayName: z.string().trim().min(1).max(80).optional()
   })
   .strict()
 

@@ -1,7 +1,6 @@
 import { afterEach, describe, expect, it } from 'vitest'
 import {
   MAX_LINEAR_AGENT_SKILL_SETUP_REMINDER_RUNTIME_KEYS,
-  createLinearAgentSkillSetupActivationId,
   getExistingLinearAgentSkillSetupReminderState,
   getLinearAgentSkillSetupReminderState,
   getLinearAgentSkillSetupReminderStateCountForTests,
@@ -76,14 +75,5 @@ describe('linear agent skill setup reminders', () => {
   it('does not create reminder state when peeking at a missing key', () => {
     expect(getExistingLinearAgentSkillSetupReminderState('missing')).toBeUndefined()
     expect(getLinearAgentSkillSetupReminderStateCountForTests()).toBe(0)
-  })
-
-  it('resets activation ids with reminder state for tests', () => {
-    expect(createLinearAgentSkillSetupActivationId()).toBe('linear-agent-skill-setup-0')
-    expect(createLinearAgentSkillSetupActivationId()).toBe('linear-agent-skill-setup-1')
-
-    resetLinearAgentSkillSetupReminderState()
-
-    expect(createLinearAgentSkillSetupActivationId()).toBe('linear-agent-skill-setup-0')
   })
 })

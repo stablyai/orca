@@ -222,7 +222,7 @@ export abstract class OrcaRuntimeWithPreservedBranchCleanup extends OrcaRuntimeW
       const scope = await this.resolveTerminalWorkspaceLaunchScope(`id:${candidate.worktreeId}`)
       const resolved = scope.folderWorkspace
         ? this.folderWorkspaceToResolvedWorktree(scope.folderWorkspace)
-        : await this.resolveWorktreeSelector(`id:${scope.id}`)
+        : await this.resolveGitWorktreeSelector(`id:${scope.id}`)
       return { scope, resolved }
     },
     refreshInventory: (worktrees, connectionId) =>
@@ -333,13 +333,11 @@ export abstract class OrcaRuntimeWithPreservedBranchCleanup extends OrcaRuntimeW
   )
 
   protected readonly repositorySettings = new RuntimeRepositorySettingsController({
-    getStore: () => this.store,
+    ...this.repositoryCatalogDeps,
     resolveRepo: (selector) => this.resolveRepoSelector(selector),
     forgetTerminalTopology: (repoId) => this.terminalTopologyRevisionByRepoId.delete(repoId),
     stopProjectTerminals: (repo, options) => this.stopTerminalsForProject(repo, options),
-    invalidateResolvedWorktrees: () => this.invalidateResolvedWorktreeCache(),
-    invalidateWorktreeScan: (repoId) => this.invalidateWorktreeScanCacheForRepo(repoId),
-    notifyReposChanged: () => this.notifyReposChanged()
+    notifyWorktreesChanged: (repoId, options) => this.notifyWorktreesChanged(repoId, options)
   })
 
   protected readonly repositorySparsePresets = new RuntimeRepositorySparsePresets({

@@ -8,7 +8,7 @@ import { PtyShellOwnershipMirror } from '../../pty-shell-ownership-mirror'
 import { PROCESS_BOUNDARY_GROUND } from '../../../../shared/terminal-mode-reset-profiles'
 import { release } from 'node:os'
 import { resolvePtyOwnerBackend, type PtyOwnerBackend } from '../../../../shared/pty-owner-backend'
-import { isRemoteRuntimePtyId } from '../../../../shared/remote-runtime-pty-id'
+import { isRemoteRuntimePtyId } from '../../../../shared/remote-runtime/remote-runtime-pty-id'
 import { parseAppSshPtyId } from '../../../../shared/ssh-pty-id'
 import { windowsPtyForOwnerBackend } from '../../../../shared/xterm-conpty-options'
 
@@ -24,6 +24,11 @@ export abstract class OrcaRuntimeWithCreatePtyHeadlessTerminalState extends Orca
       return 'posix-pty'
     }
     return resolvePtyOwnerBackend({ platform: process.platform, shellPath: undefined })
+  }
+
+  /** Headless and phone replies share the per-agent reply policy desktop applies in its renderer. */
+  shouldForwardTerminalQueryReply(ptyId: string, reply: string): boolean {
+    return shouldForwardHeadlessTerminalQueryReply(this.ptysById.get(ptyId)?.launchAgent, reply)
   }
 
   /** Create runtime emulators with query forwarding and ConPTY DA1 override for seed, hydration and live bytes; daemon emulators use another factory. */
@@ -47,12 +52,10 @@ export abstract class OrcaRuntimeWithCreatePtyHeadlessTerminalState extends Orca
       onQueryReply: (reply) => {
         // Queued links can outlive disposal; only the current state may reply to a reused PTY id.
         if (state !== null && this.headlessTerminals.get(ptyId) === state) {
-          if (
-            !shouldForwardHeadlessTerminalQueryReply(this.ptysById.get(ptyId)?.launchAgent, reply)
-          ) {
+          if (!this.shouldForwardTerminalQueryReply(ptyId, reply)) {
             return
           }
-          // Daemon writes queue until the shell-ready marker or 15s timeout, preserving spawn-time replies.
+          // Query replies reach the current PTY reader while automatic startup commands wait for readiness.
           this.ptyController?.write(ptyId, reply, 'query-reply')
         }
       }

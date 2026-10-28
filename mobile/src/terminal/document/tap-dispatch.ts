@@ -86,7 +86,7 @@ export function touchSlopExceeded(scope: TerminalDocumentScope, t: Touch) {
 
 // Suppress surface handlers while document dispatch owns a selection-handle drag.
 export function dispatcherShouldBlockSurface(scope: TerminalDocumentScope) {
-  return scope.touchDispatch.mode === 'select-drag'
+  return !scope.interactionActive || scope.touchDispatch.mode === 'select-drag'
 }
 
 // Use identical capture options for listener registration and removal.
@@ -95,7 +95,7 @@ const CAPTURE_PASSIVE = { capture: true, passive: true }
 
 // Touch targets stay at their start element, so owned drags still belong here after crossing the host edge.
 function touchIsThisDocuments(scope: TerminalDocumentScope, e: { target: EventTarget | null }) {
-  return eventTargetInRoot(scope.root, e.target)
+  return scope.interactionActive && eventTargetInRoot(scope.root, e.target)
 }
 
 function onDocumentTouchStart(scope: TerminalDocumentScope, e: TouchEvent) {

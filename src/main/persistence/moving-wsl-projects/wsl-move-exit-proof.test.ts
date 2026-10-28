@@ -73,9 +73,7 @@ describe('proveWslMoveTerminalsExited', () => {
   })
 
   it.each([
-    ['no folder', { cwd: null, wslDistro: null }],
-    ['another folder in the moving distro', { cwd: '/home/dev/other', wslDistro: 'Ubuntu' }],
-    ['a UNC folder in the moving distro', { cwd: '\\\\wsl$\\Ubuntu\\tmp', wslDistro: null }],
+    ['no folder', { cwd: null, wslDistro: 'Ubuntu' }],
     [
       'a POSIX folder from a daemon that does not report its distro',
       { cwd: '/home/dev/app', wslDistro: undefined }
@@ -90,7 +88,16 @@ describe('proveWslMoveTerminalsExited', () => {
   it.each([
     ['a native Windows folder', { cwd: 'C:\\src', wslDistro: null }],
     ['a Git Bash folder', { cwd: '/c/src', wslDistro: null }],
-    ['another distro', { cwd: '/home/dev/app', wslDistro: 'Debian' }]
+    ['another distro', { cwd: '/home/dev/app', wslDistro: 'Debian' }],
+    // Other projects in the moving distro keep their terminals through a move.
+    ['another folder in the moving distro', { cwd: '/home/dev/other', wslDistro: 'Ubuntu' }],
+    ['the moving distro’s home, above the move', { cwd: '/home/dev', wslDistro: 'Ubuntu' }],
+    ['a sibling sharing the prefix', { cwd: '/home/dev/app2', wslDistro: 'Ubuntu' }],
+    ['a UNC folder in the moving distro', { cwd: '\\\\wsl$\\Ubuntu\\tmp', wslDistro: null }],
+    [
+      'a POSIX folder outside the move from a daemon that does not report its distro',
+      { cwd: '/home/dev/other', wslDistro: undefined }
+    ]
   ])('ignores an unminted live session in %s', async (_label, facts) => {
     await expect(prove([{ sessionId: 'uuid-3', isAlive: true, ...facts }])).resolves.toEqual({
       verdict: 'exited'

@@ -1,13 +1,18 @@
+import { createHmac } from 'node:crypto'
 import { ConnectorPollResponseSchema } from '@orca-cloud/connector-contract'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { cleanupConnectorHarnesses } from './connector-server-harness.test-fixture.js'
 import { answerDeliveryId } from './owner-controls.js'
+import { SlackApps } from './slack-apps.js'
+import { SlackInstalls } from './slack-installs.js'
 import {
+  APP,
   CHANNEL,
   conversation,
   EXTERNAL_ID,
   OWNER,
   startedThread,
+  TEAM,
   TEAMMATE,
   turnEnded,
   turnStarted
@@ -42,11 +47,14 @@ async function asked(prompt: unknown = approval()) {
   await harness.pass()
   const card = async () => {
     const [row] = await harness.database.query(
-      'SELECT body, slack_ts FROM connector_slack_posts WHERE post_id = ?',
+      'SELECT body, message_ref FROM connector_posts WHERE post_id = ?',
       [CARD]
     )
     return row
-      ? { ...JSON.parse(String(row.body)), ts: row.slack_ts === null ? null : String(row.slack_ts) }
+      ? {
+          ...JSON.parse(String(row.body)),
+          ts: row.message_ref === null ? null : String(row.message_ref)
+        }
       : undefined
   }
   const deliveries = async () =>
@@ -89,7 +97,7 @@ describe('Slack prompt cards', () => {
     expect(await harness.deliveries()).toEqual([
       expect.objectContaining({
         kind: 'answer',
-        deliveryId: answerDeliveryId(EXTERNAL_ID, 'p1'),
+        deliveryId: answerDeliveryId(conversation, 'p1'),
         promptId: 'p1',
         optionId: 'reject_once'
       })
@@ -136,11 +144,11 @@ describe('Slack prompt cards', () => {
     const harness = await asked()
     await harness.click({ messageTs: (await harness.card()).ts, value: 'allow_once' })
     harness.advance(5 * 60_000 + 1)
-    await harness.runtime.inbox.expireDue(harness.edge.onExpired)
+    await harness.runtime.inbox.expireDue(harness.core.onExpired)
     expect(await harness.status()).toMatch(/^Couldn’t reach/)
     await harness.events({ ...approval(), prompt: { ...approval().prompt, promptId: 'p2' } })
     const [row] = await harness.database.query(
-      'SELECT body FROM connector_slack_posts WHERE post_id = ?',
+      'SELECT body FROM connector_posts WHERE post_id = ?',
       [`status:${EXTERNAL_ID}`]
     )
     expect(JSON.parse(String(row?.body)).text).toBe('Waiting for your answer.')
@@ -167,12 +175,59 @@ describe('Slack prompt cards', () => {
     }
   })
 
+  it('takes a press only from the app installed in the card’s workspace', async () => {
+    const harness = await asked()
+    const now = harness.now()
+    await new SlackApps(harness.tokenKey).register(
+      harness.database,
+      { appId: 'A2', clientId: '3.4', clientSecret: 'cs-2', signingSecret: 'secret-2' },
+      now
+    )
+    await new SlackInstalls(harness.tokenKey).save(
+      harness.database,
+      { teamId: 'T2', appId: 'A2', botUserId: 'UBOT2', botToken: 'xoxb-2' },
+      now
+    )
+    const { ts } = await harness.card()
+    // App 2's owners press the live card in app 1's workspace, naming either app.
+    for (const appId of ['A2', APP]) {
+      const body = new URLSearchParams({
+        payload: JSON.stringify({
+          type: 'block_actions',
+          api_app_id: appId,
+          team: { id: TEAM },
+          user: { id: OWNER },
+          channel: { id: CHANNEL },
+          container: { message_ts: ts },
+          actions: [{ action_id: 'answer:0', value: 'allow_once' }]
+        })
+      }).toString()
+      const timestamp = String(Math.floor(now / 1000))
+      const response = await harness.request('/slack/apps/A2/interactivity', {
+        method: 'POST',
+        headers: {
+          'content-type': 'application/x-www-form-urlencoded',
+          'x-slack-request-timestamp': timestamp,
+          'x-slack-signature': `v0=${createHmac('sha256', 'secret-2').update(`v0:${timestamp}:${body}`).digest('hex')}`
+        },
+        body
+      })
+      expect(response.status).toBe(200)
+    }
+    expect(await harness.deliveries()).toEqual([])
+    expect((await harness.card()).blocks).toHaveLength(2)
+
+    // App 1's own press still answers it.
+    await harness.click({ messageTs: ts, value: 'allow_once' })
+    expect(await harness.deliveries()).toEqual([expect.objectContaining({ kind: 'answer' })])
+  })
+
   it('ignores a click on a message that isn’t a card, and refuses an unsigned one', async () => {
     const harness = await asked()
     expect(
       (await harness.click({ messageTs: '1800000999.000001', value: 'allow_once' })).status
     ).toBe(200)
-    const response = await harness.request('/slack/interactivity', {
+    const response = await harness.request(`/slack/apps/${APP}/interactivity`, {
       method: 'POST',
       headers: { 'content-type': 'application/x-www-form-urlencoded' },
       body: 'payload=%7B%7D'
@@ -257,10 +312,10 @@ describe('Slack prompt cards', () => {
     const promptId = 'p'.repeat(128)
     const harness = await asked({ ...approval(), prompt: { ...approval().prompt, promptId } })
     const [card] = await harness.database.query(
-      'SELECT slack_ts FROM connector_slack_posts WHERE post_id = ?',
+      'SELECT message_ref FROM connector_posts WHERE post_id = ?',
       [`prompt:${EXTERNAL_ID}:${promptId}`]
     )
-    await harness.click({ messageTs: String(card?.slack_ts), value: 'allow_once' })
+    await harness.click({ messageTs: String(card?.message_ref), value: 'allow_once' })
     expect(await harness.deliveries()).toEqual([
       expect.objectContaining({ kind: 'answer', promptId, optionId: 'allow_once' })
     ])

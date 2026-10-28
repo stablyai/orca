@@ -6,12 +6,12 @@ import path from 'node:path'
 
 /** Tracked files under `pathspecs`, so build output and untracked scratch are never scanned. */
 export function listTrackedFiles(root, pathspecs) {
-  return execFileSync('git', ['ls-files', ...pathspecs], {
+  return execFileSync('git', ['ls-files', '-z', ...pathspecs], {
     cwd: root,
     encoding: 'utf8',
     maxBuffer: 64 * 1024 * 1024
   })
-    .split('\n')
+    .split('\0')
     .filter(Boolean)
 }
 

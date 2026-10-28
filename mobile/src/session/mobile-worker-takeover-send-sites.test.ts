@@ -160,6 +160,7 @@ function mountSendSites(client: ReturnType<typeof clientFixture>, handle = 'term
         connected: true,
         handle,
         hostSupportsQueryReplyInput: true,
+        hostSupportsProgramStatus: true,
         subscribedTerminals: new Set([handle])
       }),
     'image heal': () =>

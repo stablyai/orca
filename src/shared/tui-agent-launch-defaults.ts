@@ -5,6 +5,8 @@ import { isTuiAgent } from './tui-agent-config'
 import { YOLO_TUI_AGENT_ARGS, YOLO_TUI_AGENT_ENV } from './tui-agent-permissions'
 import {
   agentPermissionArgs,
+  readLaunchPermissionChoice,
+  type AgentPermissionChoice,
   agentPermissionEnv,
   hasTypedAgentPermission,
   PERMISSION_CHOICE_AGENTS,
@@ -32,6 +34,22 @@ export type AgentLaunchProfileSettings = Partial<
     'agentDefaultArgs' | 'agentDefaultEnv' | 'agentPermissionDefault' | 'agentPermissionOverrides'
   >
 >
+
+/** Launch intent overrides only Orca's injected permission, preserving the user's args and env. */
+export function agentLaunchPermissionSettings<T extends AgentLaunchProfileSettings>(
+  agent: TuiAgent,
+  settings: T,
+  sessionOptions: Readonly<Record<string, unknown>> | undefined
+) {
+  const choice = readLaunchPermissionChoice(sessionOptions)
+  return choice
+    ? {
+        ...settings,
+        agentPermissionDefault: settings?.agentPermissionDefault ?? 'own',
+        agentPermissionOverrides: { ...settings?.agentPermissionOverrides, [agent]: choice }
+      }
+    : settings
+}
 
 // What an untouched agent ran with before permissions were stored as a choice; legacy text only.
 export const DEFAULT_TUI_AGENT_ARGS: Partial<Record<TuiAgent, string>> &
@@ -151,18 +169,39 @@ function ownArgs(agent: string, settings: AgentLaunchProfileSettings | null | un
   return typeof value === 'string' ? value : undefined
 }
 
+/** Shared injection rule: CLI-owned permission text wins over an Orca choice. */
+export function agentPermissionArgsForLaunch(
+  agent: TuiAgent,
+  choice: AgentPermissionChoice,
+  text: string
+): string | null {
+  return choice === 'own'
+    ? ''
+    : agentArgsSetPermission(agent, text)
+      ? null
+      : agentPermissionArgs(agent, choice)
+}
+
 /** Compose stored permission flags with user arguments, letting explicit user permission text win. Older host text already includes its flags. */
 export function resolveTuiAgentLaunchArgs(
   agent: string,
-  settings: AgentLaunchProfileSettings | null | undefined
+  settings: AgentLaunchProfileSettings | null | undefined,
+  permissionChoice?: AgentPermissionChoice
 ): string {
   const own = ownArgs(agent, settings)
-  if (!hasTypedAgentPermission(settings) || !isTuiAgent(agent)) {
+  if (
+    (!hasTypedAgentPermission(settings) && permissionChoice === undefined) ||
+    !isTuiAgent(agent)
+  ) {
     return own ?? getTuiAgentDefaultArgs(agent)
   }
   const user = own?.trim() ?? ''
-  const flag = agentPermissionArgs(agent, resolveAgentPermission(agent, settings).choice)
-  if (!flag || agentArgsSetPermission(agent, user)) {
+  const flag = agentPermissionArgsForLaunch(
+    agent,
+    permissionChoice ?? resolveAgentPermission(agent, settings).choice,
+    user
+  )
+  if (!flag) {
     return user
   }
   return user ? `${flag} ${user}` : flag

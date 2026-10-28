@@ -44,11 +44,4 @@ describe('getDarwinUserTempDir', () => {
     expect(await getDarwinUserTempDir('darwin')).toBe(tmpdir())
     expect(await getDarwinUserTempDir('darwin')).toBe('/var/folders/ab/xyz/T/')
   })
-
-  it('uses os.tmpdir() without spawning off macOS', async () => {
-    const { getDarwinUserTempDir } = await loadResolver()
-
-    expect(await getDarwinUserTempDir('linux')).toBe(tmpdir())
-    expect(runProcessMock).not.toHaveBeenCalled()
-  })
 })

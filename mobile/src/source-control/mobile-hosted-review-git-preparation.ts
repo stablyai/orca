@@ -4,7 +4,12 @@ import {
   refusedRpcMessageOrFallback
 } from '../transport/rpc-refusal-message'
 import type { RpcResponse } from '../transport/types'
-import { gitBulkStageRun, gitCommitRun, gitPushRun } from './mobile-git-mutation-operations'
+import {
+  gitBulkStageRun,
+  gitCommitRun,
+  gitFastForwardRun,
+  gitPushRun
+} from './mobile-git-mutation-operations'
 import { gitStatusProjectionRead } from './mobile-git-read-operations'
 import type { MobileGitStatusResult } from './mobile-git-status'
 import type { RpcOperationSender } from '../transport/rpc-operation-sender'
@@ -67,6 +72,17 @@ export function pushMobileHostedReviewBranch(
     () => gitPushRun.request(client, params),
     (reply) => gitPushRun.interpret(reply),
     fallback
+  )
+}
+
+export function fastForwardMobileHostedReviewBranch(
+  client: RpcOperationSender,
+  worktreeId: string
+): Promise<MobileHostedReviewMutationResult> {
+  return settleMobileHostedReviewMutation(
+    () => gitFastForwardRun.request(client, { worktree: `id:${worktreeId}` }),
+    (reply) => gitFastForwardRun.interpret(reply),
+    'Could not update the remote branch. Retry Create PR.'
   )
 }
 

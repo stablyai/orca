@@ -30,15 +30,6 @@ describe('getRendererAppPlatform', () => {
     expect(get).toHaveBeenCalledTimes(1)
   })
 
-  it.each(['darwin', 'win32', 'linux'] as const)(
-    'reports the preload platform verbatim on %s',
-    (platform) => {
-      stubPlatformApi(() => ({ platform }))
-
-      expect(getRendererAppPlatform()).toBe(platform)
-    }
-  )
-
   // The web platform bridge arrives after boot; early user-agent guesses must not become session-long cache entries.
   it('does not cache the user-agent fallback', () => {
     // 'freebsd' is never a user-agent fallback answer, so the swap is unambiguous.

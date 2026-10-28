@@ -1,5 +1,5 @@
 import type { resolveEnvironment } from '../../../shared/runtime-environment-store'
-import { RemoteRuntimeClientError } from '../../../shared/remote-runtime-client-error'
+import { RemoteRuntimeClientError } from '../../../shared/remote-runtime/remote-runtime-client-error'
 import { RuntimeRpcCallQueueOverloadError } from '../../../shared/runtime-rpc-call-queue'
 import type { RuntimeRpcFailure, RuntimeRpcResponse } from '../../../shared/runtime-rpc-envelope'
 import { RUNTIME_MANUALLY_DISCONNECTED_MESSAGE } from './runtime-environment-manual-disconnect'

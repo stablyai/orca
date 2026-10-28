@@ -1,4 +1,4 @@
-import { isRemoteRuntimePtyId } from '../../../../shared/remote-runtime-pty-id'
+import { isRemoteRuntimePtyId } from '../../../../shared/remote-runtime/remote-runtime-pty-id'
 
 /** Preserve captured remote TUI frames across park; the host remains live and reattach leaves alt-screen mode when needed. */
 export function resolveParkRevealLiveTuiLeafIds(

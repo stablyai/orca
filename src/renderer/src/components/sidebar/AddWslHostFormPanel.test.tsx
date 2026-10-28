@@ -43,22 +43,16 @@ describe('AddWslHostFormPanel', () => {
     expect([ubuntu, debian, legacy, added].map(canAddWslDistro)).toEqual([true, true, false, false])
   })
 
-  it('makes starting a stopped distro an explicit action', () => {
-    const html = render({ selectedDistro: 'Debian' })
-    expect(html).toContain('Debian is stopped. Adding it starts it.')
-    expect(html).toContain('Start and add')
-    expect(render({ selectedDistro: 'Ubuntu' })).toContain('Add host')
+  it('does not promise bridge projects stay put once they can move to the host', () => {
+    // "Use it for new projects; ... keep working as they are" contradicted the mover.
+    const html = render()
+    expect(html).not.toContain('Use it for new projects')
+    expect(html).toContain('until you move them to this host')
   })
 
-  it('shows a refusal inline and the setup progress while adding', () => {
-    expect(render({ error: 'Already runs the Orca server for “dev”.' })).toContain('role="alert"')
-    const adding = render({ selectedDistro: 'Ubuntu', adding: true })
-    expect(adding).toContain('Setting up…')
-    expect(adding).toContain('The first time can take a minute.')
-  })
-
-  it('explains an empty list', () => {
-    expect(render({ distros: [] })).toContain('wsl --install')
+  it('spells out the WSL 2 conversion for a WSL 1 distro the list cannot offer', () => {
+    expect(render()).toContain('wsl --set-version Legacy 2')
+    expect(render({ distros: [ubuntu] })).not.toContain('wsl --set-version')
   })
 
   it('says this build cannot run WSL hosts and offers nothing to add', () => {
@@ -67,10 +61,5 @@ describe('AddWslHostFormPanel', () => {
     expect(html).toContain('role="alert"')
     expect(html).not.toContain('wsl --install')
     expect(html).toMatch(/<button[^>]*disabled=""[^>]*>Add host<\/button>/)
-  })
-
-  it('offers an explicit refresh, and none when nothing could be added', () => {
-    expect(render()).toContain('Refresh')
-    expect(render({ serverFilesMissing: true })).not.toContain('Refresh')
   })
 })

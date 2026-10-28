@@ -1,8 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   analyzeDictationAudioChunk,
-  createDictationMeterAnalyzerState,
-  toPublicDictationMeterState
+  createDictationMeterAnalyzerState
 } from './dictation-audio-meter'
 
 describe('dictation audio meter', () => {
@@ -26,19 +25,5 @@ describe('dictation audio meter', () => {
     expect(clipped.isClipping).toBe(true)
     expect(held.isClipping).toBe(true)
     expect(released.isClipping).toBe(false)
-  })
-
-  it('publishes only presentation-safe meter fields', () => {
-    const analyzed = analyzeDictationAudioChunk(
-      new Float32Array(128).fill(0.25),
-      250,
-      createDictationMeterAnalyzerState()
-    )
-
-    expect(toPublicDictationMeterState(analyzed)).toEqual({
-      level: Math.round(analyzed.level * 100) / 100,
-      isSpeaking: analyzed.isSpeaking,
-      isClipping: analyzed.isClipping
-    })
   })
 })

@@ -19,8 +19,8 @@ import {
   createClaudeUserMessageQueue
 } from './claude-agent-sdk-user-message-queue'
 import type { ClaudeStructuredSdkOptions } from './claude-structured-launch-resolution'
-import { withMissingProviderExecutable } from '../provider-process/provider-executable-missing'
-import { claudeStreamJsonExitError, type ClaudeExitStatus } from './claude-stream-json-exit-error'
+import { withProviderSpawnAbsence } from '../provider-process/provider-executable-missing'
+import { claudeStreamJsonExitError } from './claude-stream-json-exit-error'
 
 export { ClaudeControlRequestError }
 
@@ -125,7 +125,6 @@ export async function openClaudeStreamJsonConnection(
   if (!child || !managed) {
     throw new Error('the claude agent SDK returned without spawning a child')
   }
-  let exitStatus: ClaudeExitStatus | null = null
   let closing = false
   let terminalError: Error | null = null
   let faultReported = false
@@ -170,8 +169,8 @@ export async function openClaudeStreamJsonConnection(
   const handleUnexpectedEnd = (cause?: Error): void => {
     resumeReading()
     if (!terminalError) {
-      const error = claudeStreamJsonExitError(managed.stderrTail(), exitStatus, cause)
-      terminalError = managed.executableMissing ? withMissingProviderExecutable(error) : error
+      const error = claudeStreamJsonExitError(managed.stderrTail(), managed.exitStatus, cause)
+      terminalError = withProviderSpawnAbsence(error, managed.spawnAbsence)
     }
     inbox.fail(terminalError)
     if (!closing && !faultReported) {
@@ -216,10 +215,7 @@ export async function openClaudeStreamJsonConnection(
     }
   })()
 
-  managed.onExit((exit) => {
-    exitStatus = exit
-    handleUnexpectedEnd()
-  })
+  managed.onExit(() => handleUnexpectedEnd())
   child.on('error', (error) => {
     if (!closing && managed.rootVerdict !== 'exited') {
       void tree.reap()

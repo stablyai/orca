@@ -4,6 +4,7 @@ import {
   parseAntigravityNativeCredential,
   type AntigravityNativeCredential
 } from './native-credential-codec'
+import { fetchGoogleIdentity } from './google-userinfo-identity'
 import type {
   AntigravityAccountStore,
   AntigravityAccountVault,
@@ -36,7 +37,8 @@ export class AntigravityAccountService {
   constructor(
     private readonly store: AntigravityAccountStore,
     private readonly backend: AntigravityCredentialBackend,
-    private readonly now: () => number = Date.now
+    private readonly now: () => number = Date.now,
+    private readonly lookupIdentity = fetchGoogleIdentity
   ) {}
 
   listAccounts(): Promise<AntigravityAccountState> {
@@ -49,27 +51,30 @@ export class AntigravityAccountService {
       if (!current) {
         throw new Error('Sign in with agy on this execution host, then save the current account.')
       }
-      let account = vault.accounts.find((entry) => matches(entry, current))
-      if (!account) {
-        if (!current.identity) {
-          throw new Error(
-            'The current Antigravity credential has no stable Google identity; it cannot be saved for switching.'
-          )
-        }
+      if (vault.accounts.some((entry) => matches(entry, current))) {
+        return this.state({ vault, current })
+      }
+      const identity = current.identity ?? (await this.lookupIdentity(current.accessToken))
+      if (!current.identity && (await this.backend.read())?.contents !== current.contents) {
+        throw new Error('The native Antigravity account changed. Save the current account again.')
+      }
+      const identified = { ...current, identity }
+      const latest = this.store.read()
+      if (!latest.accounts.some((entry) => matches(entry, identified))) {
         const timestamp = this.now()
-        account = {
+        latest.accounts.push({
           id: randomUUID(),
-          email: current.identity.email,
-          subject: current.identity.subject,
+          email: identity.email,
+          subject: identity.subject,
           authMethod: current.authMethod,
           credentials: current.contents,
           createdAt: timestamp,
           updatedAt: timestamp
-        }
-        vault.accounts.push(account)
-        this.store.write(vault)
+        })
       }
-      return this.state({ vault, current })
+      this.updateSnapshot(latest, identified)
+      this.store.write(latest)
+      return this.state({ vault: latest, current: identified })
     })
   }
 

@@ -1,7 +1,7 @@
 import { applyTerminalLaunchResult } from './terminal-launch-result-policy'
 import { armPaneOwnerRetry, isPaneOwnerRefusal } from './pane-owner-recovery'
 import type { SpawnDeferralReason } from '../../../../../shared/host-spawn-admission'
-import { isRemoteRuntimePtyId } from '../../../../../shared/remote-runtime-pty-id'
+import { isRemoteRuntimePtyId } from '../../../../../shared/remote-runtime/remote-runtime-pty-id'
 import { useAppStore } from '@/store'
 import { hasWorktreeTeardownStarted } from '@/store/slices/worktree-delete-state-types'
 import { PROCESS_BOUNDARY_GROUND } from '../../../../../shared/terminal-mode-reset-profiles'
@@ -110,10 +110,10 @@ export function bindStartFreshSpawn(session: ConnectPanePtySession): void {
       ...(coldRestoreOverride ? { launchToken: coldRestoreOverride.launchToken } : {}),
       ...(coldRestoreOverride ? { launchAgent: coldRestoreOverride.agent } : {}),
       ...(session.shouldDeclareHiddenAtSpawn() ? { initiallyHidden: true } : {}),
-      resumeSpawnIntent: visibleAtSpawn ? 'user-resume' : 'automatic-restore',
-      ...(session.pendingReplacedPtyId
-        ? { claimReplacedPtyId: session.claimPendingReplacedPtyId }
-        : {}),
+      // Why: a restart swaps one live session for one, and main stops the old PTY before admission.
+      resumeSpawnIntent:
+        visibleAtSpawn || session.userRestart ? 'user-resume' : 'automatic-restore',
+      ...(session.userRestart ? { claimReplacedPtyId: session.claimPendingReplacedPtyId } : {}),
       shouldContinue: () =>
         !session.disposed &&
         (findTerminalTabForPane(useAppStore.getState(), session.deps.worktreeId, session.deps.tabId)
@@ -151,6 +151,8 @@ export function bindStartFreshSpawn(session: ConnectPanePtySession): void {
           session.enterSpawnDeferredSleep(deferral, startupOverride, options, visibleAtSpawn)
           return null
         }
+        // Only the restart's deferred retries are the user's; a later wake is automatic again.
+        session.userRestart = false
         const connectResult =
           spawnedPtyId && typeof spawnedPtyId === 'object' && 'id' in spawnedPtyId
             ? spawnedPtyId

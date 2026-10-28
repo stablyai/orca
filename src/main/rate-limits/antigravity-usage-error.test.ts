@@ -1,5 +1,8 @@
 import { describe, expect, it } from 'vitest'
-import { classifyAntigravityUsageFailure } from './antigravity-usage-error'
+import {
+  classifyAntigravityUsageFailure,
+  formatAgyErrorForDisplay
+} from './antigravity-usage-error'
 
 /** Captured verbatim from agy 1.2.11 when the account had exhausted its weekly pool. */
 const REAL_RESOURCE_EXHAUSTED =
@@ -73,4 +76,12 @@ describe('classifyAntigravityUsageFailure', () => {
   ])('returns null for %s rather than inventing a cause', (_label, output) => {
     expect(classifyAntigravityUsageFailure(output)).toBeNull()
   })
+})
+
+it('bounds a large unbroken error without blocking the main process', () => {
+  const text = `${'!'.repeat(256 * 1024)}@invalid`
+  const started = performance.now()
+
+  expect(formatAgyErrorForDisplay(text)).toBe(`${'!'.repeat(159)}…`)
+  expect(performance.now() - started).toBeLessThan(2000)
 })

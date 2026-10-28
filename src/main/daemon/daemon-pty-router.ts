@@ -35,6 +35,12 @@ export class DaemonPtyRouter implements IPtyProvider {
   constructor(opts: { current: DaemonPtyAdapter; legacy: DaemonPtyAdapter[] }) {
     this.current = opts.current
     this.legacy = opts.legacy
+    for (const adapter of this.allAdapters()) {
+      // A close that finds no session asks every daemon this router knows before ending history.
+      if (typeof adapter.shareSessionListingWith === 'function') {
+        adapter.shareSessionListingWith(() => this.allAdapters())
+      }
+    }
     this.ownerResolver = new DaemonSessionOwnerResolver(
       this.allAdapters(),
       this.sessionAdapters,

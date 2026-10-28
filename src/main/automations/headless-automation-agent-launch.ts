@@ -185,7 +185,10 @@ async function sendToReusableSession(
 }
 
 /** Reject reused pane handles whose PTY no longer belongs to this run. */
-export function runOwnHandle(runtime: OrcaRuntimeService, run: AutomationRun): string | null {
+export function runOwnHandle(
+  runtime: Pick<OrcaRuntimeService, 'getTerminalHandleForPaneKey' | 'getTerminalPtyIdForHandle'>,
+  run: AutomationRun
+): string | null {
   const handle = run.terminalPaneKey
     ? runtime.getTerminalHandleForPaneKey(run.terminalPaneKey)
     : null

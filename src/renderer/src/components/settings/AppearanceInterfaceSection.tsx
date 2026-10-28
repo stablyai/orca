@@ -138,7 +138,7 @@ export function AppearanceInterfaceSection({
                   ))}
                   {pluginLanguagePacks.map((pack) => (
                     <SelectItem key={pack.id} value={pack.id}>
-                      {pack.locale} — {pack.pluginKey}
+                      {pack.displayName ?? `${pack.locale} — ${pack.pluginKey}`}
                     </SelectItem>
                   ))}
                 </SelectContent>

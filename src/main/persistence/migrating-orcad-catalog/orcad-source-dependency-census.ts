@@ -66,10 +66,14 @@ export function collectOrcadMigrationUntransferredDependencyCensus(
   return {
     counts,
     totalCount: ORCAD_MIGRATION_DEPENDENCY_KINDS.reduce((total, kind) => total + counts[kind], 0),
-    names:
-      dormant.blockedSessionItems.length > 0
+    names: {
+      ...(dormant.blockedSessionItems.length > 0
         ? { 'workspace-session': dormant.blockedSessionItems }
-        : {}
+        : {}),
+      ...(dormant.runningAutomationItems.length > 0
+        ? { 'automation-run': dormant.runningAutomationItems }
+        : {})
+    }
   }
 }
 

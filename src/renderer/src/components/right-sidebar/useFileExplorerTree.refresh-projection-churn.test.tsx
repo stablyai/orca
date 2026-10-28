@@ -184,7 +184,8 @@ describe('file explorer directory refresh churn', () => {
       loadingDirPaths: new Set<string>()
     })
     expect(loadDir).toHaveBeenCalledTimes(1)
-    expect(loadDir).toHaveBeenCalledWith(SRC_DIR, 0, undefined)
+    // An expand is a user act, so its read may start a stopped WSL distro.
+    expect(loadDir).toHaveBeenCalledWith(SRC_DIR, 0, { wakeWslDistro: true })
   })
 
   it('renders the folder spinner from the loading dir set', () => {

@@ -233,6 +233,26 @@ export class PrActionsEngine {
     }
   }
 
+  async markReadyForReview(): Promise<void> {
+    const cfg = this.cfg
+    const identity = this.identity
+    const seq = this.stateField.begin('open')
+    this.setBusy({ kind: 'state' })
+    this.setError(null)
+    try {
+      const outcome = await cfg.mutations.markReadyForReview({
+        prNumber: cfg.prNumber,
+        prRepo: cfg.prRepo
+      })
+      await this.settle(identity, outcome, {
+        onSuccess: () => this.stateField.settleSuccess(seq),
+        onRevert: () => this.stateField.settleFailure(seq)
+      })
+    } finally {
+      this.clearBusyIfOwned(identity, { kind: 'state' })
+    }
+  }
+
   async requestReviewer(login: string): Promise<void> {
     const cfg = this.cfg
     const identity = this.identity

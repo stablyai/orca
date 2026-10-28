@@ -201,10 +201,10 @@ describe('real-store status and queue publications', () => {
           .filter((event) => event.type === 'snapshot')
           .every((event) => 'queuedMessages' in event && event.queuedMessages?.length === cards)
       ).toBe(true)
-      // Status projection, hydration and initial current-work restatement each read once.
-      expect(counts.snapshots).toBe(3 * n)
-      expect(counts.snapshotItems).toBe(3 * n * (history + sends))
-      expect(counts.snapshotSubmissions).toBe(3 * n * sends)
+      // Status projection, hydration and current-work restatement reuse one current-source render.
+      expect(counts.snapshots).toBe(n)
+      expect(counts.snapshotItems).toBe(n * (history + sends))
+      expect(counts.snapshotSubmissions).toBe(n * sends)
       expect(counts.serializations).toBe(n)
       expect(counts.serializedRows).toBe(n * cards)
       const warm = { ...counts }

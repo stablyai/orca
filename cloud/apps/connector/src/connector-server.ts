@@ -5,29 +5,28 @@ import type { JWTVerifyGetKey } from 'jose'
 import { Hono } from 'hono'
 import { bodyLimit } from 'hono/body-limit'
 import type { ConnectorConfig } from './config.js'
-import { ConnectorHosts } from './connector-hosts.js'
-import { ConnectorInbox } from './connector-inbox.js'
-import { ConnectorThreads } from './connector-threads.js'
+import { createConnectorRuntime } from './connector-runtime.js'
 import { createConnectorTokenVerifier } from './connector-token-verifier.js'
 import { registerDevEnqueueRoute } from './dev-enqueue-route.js'
 import { InboxWaker } from './inbox-waker.js'
 import { machineAuth, type MachineEnv } from './machine-auth.js'
 import { registerMachineRoutes } from './machine-routes.js'
-import { queueDelivery } from './queue-delivery.js'
 import { limitByClientIp, RateLimiter } from './rate-limiter.js'
 import { RequestDrain } from './request-drain.js'
-import { createSlackEdge } from './slack-edge.js'
-import type { QueueInTransaction } from './queue-delivery.js'
+import type { DiscordRestApi } from './discord-rest.js'
 
 const UNAUTHENTICATED_PER_MINUTE_PER_IP = 30
 const AUTHENTICATED_PER_MINUTE_PER_IP = 6_000
 const AUTHENTICATED_PER_MINUTE_PER_HOST = 600
+// Before the signature is checked; Slack sends every workspace's traffic from shared addresses.
+const SLACK_PER_MINUTE_PER_IP = 6_000
 
 export type ConnectorServerOptions = {
   now?: () => number
   // The auth service's signing keys; tests pass a local set.
   jwks?: JWTVerifyGetKey
   pollHoldMs?: number
+  discordApi?: DiscordRestApi
 }
 
 function isLoopbackOrigin(origin: string): boolean {
@@ -37,7 +36,9 @@ function isLoopbackOrigin(origin: string): boolean {
 // Local development listens on its loopback origin only, so the unauthenticated dev route can't be
 // reached from another machine; anything else listens on every interface, as Cloud Run needs.
 export function listenHostname(publicUrl: string): string | undefined {
-  return isLoopbackOrigin(publicUrl) ? new URL(publicUrl).hostname.replace(/^\[|\]$/g, '') : undefined
+  return isLoopbackOrigin(publicUrl)
+    ? new URL(publicUrl).hostname.replace(/^\[|\]$/g, '')
+    : undefined
 }
 
 export function createConnectorServer(
@@ -47,23 +48,13 @@ export function createConnectorServer(
   options: ConnectorServerOptions = {}
 ) {
   const now = options.now ?? Date.now
-  const inbox = new ConnectorInbox(database, notifications, now)
-  const hosts = new ConnectorHosts(database, inbox, now)
-  const threads = new ConnectorThreads(now)
+  const { inbox, hosts, threads, queue, core, slack, discord } = createConnectorRuntime(
+    config,
+    database,
+    notifications,
+    { now, ...(options.discordApi ? { discordApi: options.discordApi } : {}) }
+  )
   const waker = new InboxWaker(notifications)
-  const queue = (input: Parameters<typeof queueDelivery>[1]) =>
-    queueDelivery({ database, inbox, threads, hosts }, input)
-  const queueInTransaction: QueueInTransaction = (transaction, input) =>
-    queueDelivery({ database: transaction, inbox, threads, hosts }, input)
-  const slack = config.slack
-    ? createSlackEdge({
-        config: config.slack,
-        database,
-        inbox,
-        queue: queueInTransaction,
-        now
-      })
-    : undefined
   const limitUnauthenticated = limitByClientIp(
     new RateLimiter(UNAUTHENTICATED_PER_MINUTE_PER_IP, now),
     config.trustedProxyHops
@@ -122,9 +113,14 @@ export function createConnectorServer(
     now,
     holdMs: options.pollHoldMs ?? CONNECTOR_LIMITS.initialPollHoldMs,
     limitBody,
-    slack
+    core
   })
-  slack?.registerRoutes(app, limitBody)
+  slack?.registerRoutes(
+    app,
+    core,
+    limitByClientIp(new RateLimiter(SLACK_PER_MINUTE_PER_IP, now), config.trustedProxyHops)
+  )
+  discord?.registerRoutes(app, core)
   // Local development only: a stand-in for Slack ingress until it exists.
   if (isLoopbackOrigin(config.publicUrl)) {
     registerDevEnqueueRoute(app, { queue, limitBody })
@@ -137,6 +133,8 @@ export function createConnectorServer(
     inbox,
     waker,
     queueDelivery: queue,
-    slack
+    core,
+    slack,
+    discord
   }
 }

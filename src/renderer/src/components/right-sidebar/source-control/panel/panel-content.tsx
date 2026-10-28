@@ -40,6 +40,7 @@ export function SourceControlPanelContent(props: SourceControlPanelReadyProps) {
     handleUnstage,
     handleUnstagePaths,
     hasUncommittedEntries,
+    isResolvingConflictsWithAI,
     isAbortingOperation,
     isCheckingRecoveryAdmission,
     isExecutingBulk,
@@ -64,6 +65,7 @@ export function SourceControlPanelContent(props: SourceControlPanelReadyProps) {
     setBaseRefDialogOpen,
     sourceControlAiActionsVisible,
     sourceControlViewMode,
+    statusReadError,
     toggleSection,
     toggleSubmodule,
     toggleTreeDir,
@@ -78,7 +80,10 @@ export function SourceControlPanelContent(props: SourceControlPanelReadyProps) {
   const hasFilteredUncommittedEntries = displaySections.length > 0
   const hasFilteredBranchEntries = filteredBranchEntries.length > 0
   const showGenericEmptyState =
-    !hasUncommittedEntries && branchSummary?.status === 'ready' && branchEntries.length === 0
+    statusReadError === undefined &&
+    !hasUncommittedEntries &&
+    branchSummary?.status === 'ready' &&
+    branchEntries.length === 0
 
   return (
     <>
@@ -86,7 +91,7 @@ export function SourceControlPanelContent(props: SourceControlPanelReadyProps) {
         unresolvedConflictCount={unresolvedConflictReviewEntries.length}
         conflictOperation={conflictOperation}
         sourceControlAiActionsVisible={sourceControlAiActionsVisible}
-        isRecoveryBusy={isCheckingRecoveryAdmission}
+        isRecoveryBusy={isCheckingRecoveryAdmission || isResolvingConflictsWithAI}
         isAbortingOperation={isAbortingOperation}
         onAbortOperation={handleAbortOperationForConflict}
         onResolveWithAi={() => void handleResolveConflictsWithAI()}
@@ -99,6 +104,7 @@ export function SourceControlPanelContent(props: SourceControlPanelReadyProps) {
           )
         }}
         repositoryHuge={repositoryHuge}
+        statusReadError={statusReadError}
         worktreeId={currentWorktreeId}
         onRetryStatus={refreshActiveGitStatus}
         onStageAllChanges={handleStageWorktreeChanges}

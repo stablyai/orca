@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
+import type { OrcadTerminalCensus } from '../../shared/orcad-terminal-census'
 import { assessOrcadRollback, planOrcadUpdate } from './orcad-update-plan'
 import { collectOrcadTerminalCensus } from '../orcad/orcad-terminal-census'
 import type { DaemonSessionInfo } from '../daemon/types'
@@ -288,6 +289,70 @@ describe('D7 daemon protocol crossing', () => {
     expect(plan).toMatchObject({
       action: 'defer',
       code: 'orcad_update_daemon_protocol_unverifiable'
+    })
+  })
+
+  const mixed = (daemonProtocolVersions: number[]) => ({
+    liveSessions: 80,
+    startedSinceActivation: 0,
+    daemonProtocolVersion: null,
+    daemonProtocolVersions
+  })
+
+  it('forces an update past mixed daemon generations only when the candidate attaches each', () => {
+    const plan = (daemonProtocolVersions: number[]) =>
+      planOrcadUpdate({
+        record: record(),
+        candidateVersion: '0.3.0+cc01',
+        candidateDaemonProtocol: PROTOCOL,
+        census: mixed(daemonProtocolVersions),
+        force: true
+      })
+    expect(plan([2, 3])).toMatchObject({ action: 'proceed', preservesLiveDaemon: true })
+    expect(plan([3, 4])).toMatchObject({
+      action: 'defer',
+      code: 'orcad_update_strands_live_terminals'
+    })
+    expect(plan([])).toMatchObject({
+      action: 'defer',
+      code: 'orcad_update_daemon_protocol_unverifiable'
+    })
+  })
+
+  it('trusts the host daemon list only for a counted census that cannot name generations', () => {
+    const plan = (census: OrcadTerminalCensus) =>
+      planOrcadUpdate({
+        record: record(),
+        candidateVersion: '0.3.0+cc01',
+        candidateDaemonProtocol: PROTOCOL,
+        census,
+        hostDaemonProtocols: [2, 3],
+        force: true
+      })
+    expect(plan(census(null))).toMatchObject({ action: 'proceed', preservesLiveDaemon: true })
+    expect(plan(census(null, null))).toMatchObject({
+      action: 'defer',
+      code: 'orcad_update_daemon_protocol_unverifiable'
+    })
+    expect(plan(mixed([3, 4]))).toMatchObject({
+      action: 'defer',
+      code: 'orcad_update_strands_live_terminals'
+    })
+  })
+
+  it('rolls back over mixed daemon generations only when the target attaches each', () => {
+    const rollback = (daemonProtocolVersions: number[]) =>
+      assessOrcadRollback({
+        record: record(),
+        snapshotPresent: true,
+        census: mixed(daemonProtocolVersions),
+        targetDaemonProtocol: PROTOCOL,
+        stateWritesSinceActivation: false
+      })
+    expect(rollback([1, 3])).toMatchObject({ safety: 'clean' })
+    expect(rollback([2, 4])).toMatchObject({
+      safety: 'unsafe',
+      code: 'orcad_rollback_strands_live_terminals'
     })
   })
 

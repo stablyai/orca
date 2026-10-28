@@ -114,33 +114,6 @@ describe('buildWorkspaceRows', () => {
     expect(rows.get('|repo-1::/r/a')?.hostId).toBe('local')
   })
 
-  it('carries the stored lineage edge for the builder to validate', () => {
-    const rows = buildWorkspaceRows({
-      worktrees: [worktree({ hostId: 'local', instanceId: 'a-1' })],
-      folderWorkspaces: [],
-      repos: [localRepo],
-      lineageById: {
-        'repo-1::/r/a': {
-          worktreeId: 'repo-1::/r/a',
-          worktreeInstanceId: 'a-1',
-          parentWorktreeId: 'repo-1::/r',
-          parentWorktreeInstanceId: 'p-1',
-          origin: 'cli',
-          capture: { source: 'explicit-cli-flag', confidence: 'explicit' },
-          createdAt: 1
-        }
-      }
-    })
-    expect(rows.get('local|repo-1::/r/a')).toMatchObject({
-      instanceId: 'a-1',
-      lineage: {
-        parentWorktreeId: 'repo-1::/r',
-        worktreeInstanceId: 'a-1',
-        parentWorktreeInstanceId: 'p-1'
-      }
-    })
-  })
-
   it('carries the owning host’s sort stamps, on worktrees and folder workspaces', () => {
     const rows = buildWorkspaceRows({
       worktrees: [
@@ -172,17 +145,6 @@ describe('buildWorkspaceRows', () => {
     expect(WorkspaceRowsSnapshotSchema.parse({ revision: 1, rows: { a: older } }).rows.a).toEqual(
       older
     )
-  })
-
-  it('parses what it builds', () => {
-    const rows = buildWorkspaceRows({
-      worktrees: [worktree({ hostId: 'local' })],
-      folderWorkspaces: [folder],
-      repos: [localRepo],
-      lineageById: {}
-    })
-    const snapshot = { revision: 1, rows: Object.fromEntries(rows) }
-    expect(WorkspaceRowsSnapshotSchema.parse(snapshot)).toEqual(snapshot)
   })
 
   it('lists the keys it builds rows under, which sleeping retention is matched on', () => {

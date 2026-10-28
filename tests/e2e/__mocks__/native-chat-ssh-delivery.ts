@@ -4,7 +4,7 @@ import { mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
-import type { sendMobileNativeChatPermissionResponse } from '../../../mobile/src/session/mobile-native-chat-permission-send'
+import type { sendMobileNativeChatPermissionResponse } from '../../../mobile/src/session/native-chat/input/mobile-native-chat-permission-send'
 import {
   WRITE_ACCEPTED,
   writeUnverifiable,
@@ -174,7 +174,7 @@ async function bundleMobilePermissionModule(): Promise<unknown> {
     entryPoints: [
       fileURLToPath(
         new URL(
-          '../../../mobile/src/session/mobile-native-chat-permission-send.ts',
+          '../../../mobile/src/session/native-chat/input/mobile-native-chat-permission-send.ts',
           import.meta.url
         )
       )

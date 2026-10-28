@@ -250,7 +250,13 @@ export function CodexSwitcherMenu({
                             </span>
                           ) : null}
                         </div>
-                        {inactiveUsage?.isFetching && !inactiveUsage.rateLimits ? (
+                        {/* Why: rows follow this desktop's codexTarget, so a remote owner's usage could land on the wrong row. */}
+                        {target.active && !hasActiveRuntimeEnvironment ? (
+                          <InlineUsageBars
+                            limits={codex}
+                            isFetching={codex.status === 'fetching'}
+                          />
+                        ) : inactiveUsage?.isFetching && !inactiveUsage.rateLimits ? (
                           <InlineUsageSkeleton />
                         ) : showSignInAction ? (
                           <InlineUsageSignInAction

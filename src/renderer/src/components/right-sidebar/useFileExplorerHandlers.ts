@@ -37,7 +37,7 @@ type UseFileExplorerHandlersParams = {
   loadDir: (
     dirPath: string,
     depth: number,
-    options?: { force?: boolean; failOnError?: boolean }
+    options?: { force?: boolean; failOnError?: boolean; wakeWslDistro?: boolean }
   ) => Promise<boolean>
   statPath: (path: string) => Promise<{ isDirectory: boolean; escapesWorktree?: boolean }>
   markPathAsDirectory: (path: string) => void
@@ -108,9 +108,11 @@ export async function activateFileExplorerNode(args: {
       return
     }
     if (target?.isDirectory) {
+      // A user's expand may start a stopped WSL distro.
       const loadedAsDirectory = await loadDir(node.path, node.depth, {
         force: true,
-        failOnError: true
+        failOnError: true,
+        wakeWslDistro: true
       })
       if (loadedAsDirectory) {
         markPathAsDirectory(node.path)

@@ -5,25 +5,48 @@ import {
   type BrowserRoutePartitionStorageDependencies
 } from './browser-route-partition-storage-lifecycle'
 import {
+  currentBrowserRoutePartitionBindingFilePath,
   currentBrowserRoutePartitionBindingStore,
   routePartitionDataRoot
 } from './browser-route-partition-binding-runtime'
 import { browserSessionRegistry } from './browser-session-registry'
+import {
+  browserRoutePartitionPendingDeletesPath,
+  queueBrowserRoutePartitionDirectoryDelete
+} from './browser-route-partition-pending-deletes'
 
+/**
+ * `live`: this run may have loaded the session, so its data is cleared through Chromium and the
+ * folder is queued for the next start. `cold`: startup, before sessions load, so the folder goes now.
+ */
 export function browserRoutePartitionStorageDependencies(
-  isPartitionLive: (partition: string) => boolean
+  isPartitionLive: (partition: string) => boolean,
+  mode: 'live' | 'cold' = 'live'
 ): BrowserRoutePartitionStorageDependencies {
+  const partitionDataRoot = routePartitionDataRoot()
   return {
     bindings: currentBrowserRoutePartitionBindingStore(),
-    partitionDataRoot: routePartitionDataRoot(),
+    partitionDataRoot,
     isPartitionLive,
     clearPartitionStorage: async (partition) => {
-      const partitionSession = session.fromPartition(partition)
-      await partitionSession.clearStorageData()
-      await partitionSession.clearCache()
-      browserSessionRegistry.clearRoutePartitionPolicies(partition)
+      // Why not when cold: `fromPartition` would load the session and lock the folder it deletes.
+      if (mode === 'live') {
+        const partitionSession = session.fromPartition(partition)
+        await partitionSession.clearStorageData()
+        await partitionSession.clearCache()
+        browserSessionRegistry.clearRoutePartitionPolicies(partition)
+      }
     },
-    removePartitionDirectory: (directory) => rm(directory, { recursive: true, force: true })
+    removePartitionDirectory: async (directory) => {
+      if (mode === 'live') {
+        queueBrowserRoutePartitionDirectoryDelete(
+          browserRoutePartitionPendingDeletesPath(currentBrowserRoutePartitionBindingFilePath()),
+          directory
+        )
+        return
+      }
+      await rm(directory, { recursive: true, force: true })
+    }
   }
 }
 

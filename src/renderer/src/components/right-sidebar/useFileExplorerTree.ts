@@ -1,7 +1,6 @@
 import type { Dispatch, SetStateAction } from 'react'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import type { DirCache, FileExplorerTreeRefreshOutcome } from './file-explorer-types'
-import { splitPathSegments } from './path-tree'
 import { createFileExplorerDirLoadTracker } from './file-explorer-dir-load-tracker'
 import {
   getFileExplorerOperationOwner,
@@ -9,11 +8,12 @@ import {
   getFileExplorerOperationRoute
 } from './file-explorer-operation-owner'
 import {
-  fileExplorerEntriesToTreeNodes,
   keepOpenedDirectoryLinks,
   clearFailedOpenedDirectoryLink,
   readFileExplorerDirectory
 } from './file-explorer-directory-listing'
+import { fileExplorerDirDepth, fileExplorerListingToDirCache } from './file-explorer-dir-pages'
+import { useFileExplorerLoadMoreDir } from './use-file-explorer-load-more'
 import { refreshFileExplorerExpandedDirs } from './file-explorer-expanded-dirs-refresh'
 import { collectStaleDirCachePaths } from './file-explorer-stale-dir-cache'
 import { fileExplorerRefreshConcurrency } from './file-explorer-refresh-concurrency'
@@ -38,15 +38,18 @@ type UseFileExplorerTreeResult = {
   loadDir: (
     dirPath: string,
     depth: number,
-    options?: { force?: boolean; failOnError?: boolean }
+    options?: { force?: boolean; failOnError?: boolean; wakeWslDistro?: boolean }
   ) => Promise<boolean>
   statPath: (path: string) => Promise<UserOpenedPathStat>
   markPathAsDirectory: (path: string) => void
   refreshTree: () => Promise<FileExplorerTreeRefreshOutcome>
-  refreshDir: (dirPath: string) => Promise<void>
+  /** `wakeWslDistro` only for a user act: it may start a stopped WSL distro. */
+  refreshDir: (dirPath: string, options?: { wakeWslDistro?: boolean }) => Promise<void>
+  /** Reads the next page of a folder a remote server listed only in part. */
+  loadMoreDir: (dirPath: string) => Promise<void>
   /** True while a dir's cached listing predates the last full refresh that skipped it. */
   isDirStale: (dirPath: string) => boolean
-  resetAndLoad: () => void
+  resetAndLoad: (options?: { wakeWslDistro?: boolean }) => void
 }
 
 /** Owns worktree-addressed directory caches and load tokens; display scoping changes traversal rather than cache identity. */
@@ -98,7 +101,7 @@ export function useFileExplorerTree(
     async (
       dirPath: string,
       depth: number,
-      options?: { force?: boolean; failOnError?: boolean }
+      options?: { force?: boolean; failOnError?: boolean; wakeWslDistro?: boolean }
     ) => {
       const cache = dirCacheRef.current
       if (
@@ -108,13 +111,19 @@ export function useFileExplorerTree(
         return true
       }
       const loadToken = dirLoadTrackerRef.current.begin(dirPath)
+      const minEntries = cache[dirPath]?.children.length
+      const paged = cache[dirPath]?.paged
       // Reads started after stale marking can verify that listing.
       staleDirsRef.current.delete(dirPath)
       // Retain cached children while loading so projection shrinkage cannot jump the virtualizer.
       setDirCache((prev) => withPendingFileExplorerDirCacheEntries(prev, [dirPath]))
       updateLoadingDirPaths((prev) => markFileExplorerDirsLoading(prev, [dirPath]))
       try {
-        const listing = await readFileExplorerDirectory(activeWorktreeId, worktreePath, dirPath)
+        const listing = await readFileExplorerDirectory(activeWorktreeId, worktreePath, dirPath, {
+          wakeWslDistro: options?.wakeWslDistro,
+          paged,
+          minEntries
+        })
         // Only the current read may clear loading; superseded reads must preserve their replacement’s spinner.
         if (!dirLoadTrackerRef.current.isCurrent(loadToken)) {
           return false
@@ -123,18 +132,12 @@ export function useFileExplorerTree(
           setRootError(null)
           setSourceWorkspaceId(activeWorktreeId?.trim() || null)
         }
-        const children = fileExplorerEntriesToTreeNodes(
-          listing.entries,
-          dirPath,
-          depth,
-          worktreePath,
-          listing.operationOwner
-        )
+        const listed = fileExplorerListingToDirCache(listing, dirPath, depth, worktreePath)
         setDirCache((prev) => ({
           ...prev,
           [dirPath]: {
-            children: keepOpenedDirectoryLinks(prev[dirPath]?.children, children, prev),
-            operationOwner: listing.operationOwner
+            ...listed,
+            children: keepOpenedDirectoryLinks(prev[dirPath]?.children, listed.children, prev)
           }
         }))
         updateLoadingDirPaths((prev) => clearFileExplorerDirsLoading(prev, [dirPath]))
@@ -240,10 +243,7 @@ export function useFileExplorerTree(
     // Exclude the root already force-loaded above to avoid reading it twice.
     const expandedDirs = Array.from(expanded)
       .filter((dirPath) => dirPath !== worktreePath)
-      .map((dirPath) => ({
-        dirPath,
-        depth: splitPathSegments(dirPath.slice(worktreePath.length + 1)).length - 1
-      }))
+      .map((dirPath) => ({ dirPath, depth: fileExplorerDirDepth(worktreePath, dirPath) }))
     const allDirsCommitted = await refreshFileExplorerExpandedDirs({
       dirs: expandedDirs,
       worktreePath,
@@ -251,7 +251,10 @@ export function useFileExplorerTree(
       setDirCache,
       updateLoadingDirPaths,
       readDirectory: (dirPath) =>
-        readFileExplorerDirectory(activeWorktreeId, worktreePath, dirPath),
+        readFileExplorerDirectory(activeWorktreeId, worktreePath, dirPath, {
+          paged: dirCacheRef.current[dirPath]?.paged,
+          minEntries: dirCacheRef.current[dirPath]?.children.length
+        }),
       maxConcurrentReads: fileExplorerRefreshConcurrency(
         getFileExplorerOperationOwner(activeWorktreeId)
       ),
@@ -266,36 +269,48 @@ export function useFileExplorerTree(
   }, [activeWorktreeId, expanded, loadDir, updateLoadingDirPaths, worktreePath])
 
   const refreshDir = useCallback(
-    async (dirPath: string) => {
+    async (dirPath: string, options?: { wakeWslDistro?: boolean }) => {
       if (!worktreePath) {
         return
       }
-      const depth =
-        dirPath === worktreePath
-          ? -1
-          : splitPathSegments(dirPath.slice(worktreePath.length + 1)).length - 1
-      await loadDir(dirPath, depth, { force: true })
+      await loadDir(dirPath, fileExplorerDirDepth(worktreePath, dirPath), {
+        force: true,
+        wakeWslDistro: options?.wakeWslDistro
+      })
     },
     [worktreePath, loadDir]
   )
+
+  const loadMoreDir = useFileExplorerLoadMoreDir({
+    activeWorktreeId,
+    worktreePath,
+    dirCacheRef,
+    loadingDirPathsRef,
+    dirLoadTrackerRef,
+    setDirCache,
+    updateLoadingDirPaths
+  })
 
   const isDirStale = useCallback((dirPath: string) => staleDirsRef.current.has(dirPath), [])
 
   const rootCache = worktreePath ? dirCache[worktreePath] : undefined
 
-  const resetAndLoad = useCallback(() => {
-    refreshGenerationRef.current++
-    // Reset tokens so previous-worktree responses cannot repopulate the cleared tree.
-    dirLoadTrackerRef.current.reset()
-    staleDirsRef.current.clear()
-    setDirCache({})
-    setSourceWorkspaceId(null)
-    updateLoadingDirPaths(() => EMPTY_FILE_EXPLORER_LOADING_DIRS)
-    setRootError(null)
-    if (worktreePath) {
-      void loadDir(worktreePath, -1, { force: true })
-    }
-  }, [worktreePath, loadDir, updateLoadingDirPaths])
+  const resetAndLoad = useCallback(
+    (options?: { wakeWslDistro?: boolean }) => {
+      refreshGenerationRef.current++
+      // Reset tokens so previous-worktree responses cannot repopulate the cleared tree.
+      dirLoadTrackerRef.current.reset()
+      staleDirsRef.current.clear()
+      setDirCache({})
+      setSourceWorkspaceId(null)
+      updateLoadingDirPaths(() => EMPTY_FILE_EXPLORER_LOADING_DIRS)
+      setRootError(null)
+      if (worktreePath) {
+        void loadDir(worktreePath, -1, { force: true, wakeWslDistro: options?.wakeWslDistro })
+      }
+    },
+    [worktreePath, loadDir, updateLoadingDirPaths]
+  )
 
   return {
     dirCache,
@@ -309,6 +324,7 @@ export function useFileExplorerTree(
     markPathAsDirectory,
     refreshTree,
     refreshDir,
+    loadMoreDir,
     isDirStale,
     resetAndLoad
   }

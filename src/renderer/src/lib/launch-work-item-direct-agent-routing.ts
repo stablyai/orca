@@ -1,3 +1,14 @@
+import type { AgentLaunchPreferences } from '@/components/settings/use-host-agent-launch-preferences'
+import { agentLaunchCommandErrorMessage } from '@/lib/launch-work-item-direct-messages'
+import { toast } from 'sonner'
+import {
+  deliverLaunchPromptToAgentTab,
+  seedNativeChatLaunchDraftForAgentTab
+} from '@/lib/agent-launch-prompt-delivery'
+import {
+  buildDirectWorkItemAgentStartupPlan,
+  notifyDirectWorkItemAgentStartTimeout
+} from '@/lib/launch-work-item-direct-agent'
 import { acquireAgentLaunchChoices } from './host-chat-program-acquisition'
 import { useAppStore } from '@/store'
 import type { TuiAgent } from '../../../shared/tui-agent'
@@ -6,7 +17,6 @@ import { isTuiAgent } from '../../../shared/tui-agent-config'
 import { isTuiAgentEnabled, pickTuiAgent } from '../../../shared/tui-agent-selection'
 import { worktreeLaunchWorkspace } from '@/lib/agent-launch-route-input'
 import { agentChoiceMayOpenAsChat } from '@/lib/host-chat-program'
-import { buildDirectWorkItemAgentStartupPlan } from '@/lib/launch-work-item-direct-agent'
 import type { AgentSessionLaunchPlan } from '@/lib/agent-session-launch-plan'
 import {
   resolveExecutionHostAgentStartupShell,
@@ -22,6 +32,8 @@ import {
 export function buildDirectWorkItemStartup(args: {
   agent: TuiAgent | null
   agentArgs?: string | null
+  sessionOptions?: Readonly<Record<string, string>>
+  sessionOptionsYieldToAgentArgs?: true
   draftContent: string
   promptDelivery: PromptDelivery
   settings: AppState['settings']
@@ -35,6 +47,8 @@ export function buildDirectWorkItemStartup(args: {
   return buildDirectWorkItemAgentStartupPlan({
     agent: args.agent,
     agentArgs: args.agentArgs,
+    sessionOptions: args.sessionOptions,
+    sessionOptionsYieldToAgentArgs: args.sessionOptionsYieldToAgentArgs,
     draftContent: args.draftContent,
     promptDelivery: args.promptDelivery,
     settings: args.settings,
@@ -48,6 +62,7 @@ export function buildDirectWorkItemStartup(args: {
 type PromptDelivery = 'draft' | 'submit-after-ready'
 
 export async function resolveDirectWorkItemAgent(args: {
+  agentLaunchPreferences?: AgentLaunchPreferences
   agentOverride?: TuiAgent
   worktreeId: string
   repoHost: RepoHostFields
@@ -65,13 +80,16 @@ export async function resolveDirectWorkItemAgent(args: {
       ? await args.detectedAgentsPromise
       : await ensureDetectedAgentsForNewWorktree(args.latestStore, args.worktreeId, args.repoHost)
   ).filter(isTuiAgent)
-  const wanted = args.agentOverride ?? useAppStore.getState().settings?.defaultTuiAgent
+  const wanted =
+    args.agentOverride ??
+    (args.agentLaunchPreferences ?? useAppStore.getState().settings)?.defaultTuiAgent
   // Chat facts can only change the pick when the wanted agent's CLI is not detected.
   const choices =
     wanted && wanted !== 'blank' && !ids.includes(wanted)
       ? await acquireAgentLaunchChoices(workspace, async () => ids)
       : null
   const store = useAppStore.getState()
+  const preferences = args.agentLaunchPreferences ?? store.settings
   // A new workspace may not be in the store yet; its own detection answers then.
   const detected = [...(choices?.detected ?? ids)]
   // A chosen agent may open as a chat without its CLI; the automatic pick stays on detected ones.
@@ -79,16 +97,16 @@ export async function resolveDirectWorkItemAgent(args: {
     return {
       agent: args.agentOverride,
       unavailable:
-        !isTuiAgentEnabled(args.agentOverride, store.settings?.disabledTuiAgents) ||
+        !isTuiAgentEnabled(args.agentOverride, preferences?.disabledTuiAgents) ||
         (!detected.includes(args.agentOverride) &&
           !agentChoiceMayOpenAsChat(store, args.agentOverride, workspace, detected))
     }
   }
   return {
     agent: pickTuiAgent(
-      store.settings?.defaultTuiAgent,
+      preferences?.defaultTuiAgent,
       detected,
-      store.settings?.disabledTuiAgents,
+      preferences?.disabledTuiAgents,
       (chosen) => agentChoiceMayOpenAsChat(store, chosen, workspace, detected)
     ),
     unavailable: false
@@ -129,4 +147,56 @@ export function beginDirectWorkItemStructuredLaunch(args: {
     structuredLaunch: true,
     primaryTabId: launch.tab?.id ?? args.primaryTabId
   }
+}
+
+export function finishDirectWorkItemPrompt(args: {
+  primaryTabId: string | null
+  effectiveAgent: TuiAgent | null
+  promptDelivery: PromptDelivery
+  draftContent: string
+  startupPlan: ReturnType<typeof buildDirectWorkItemAgentStartupPlan>['startupPlan']
+  draftLaunchedNatively: boolean
+  startupPlanFailed: boolean
+}): boolean {
+  const {
+    primaryTabId,
+    effectiveAgent,
+    promptDelivery,
+    draftContent,
+    startupPlan,
+    draftLaunchedNatively,
+    startupPlanFailed
+  } = args
+  if (startupPlanFailed) {
+    toast.error(agentLaunchCommandErrorMessage())
+    return false
+  }
+
+  if (primaryTabId && effectiveAgent && promptDelivery === 'draft') {
+    // Why: the draft rides in on argv or the startup payload, so no paste runs
+    // below; mirror it into chat the way the new-tab launcher does.
+    seedNativeChatLaunchDraftForAgentTab({
+      tabId: primaryTabId,
+      agent: effectiveAgent,
+      text: draftContent
+    })
+  }
+  if (
+    primaryTabId &&
+    startupPlan &&
+    !draftLaunchedNatively &&
+    !(promptDelivery === 'draft' && startupPlan.draftPrompt)
+  ) {
+    const submit = promptDelivery === 'submit-after-ready'
+    const agent = startupPlan.agent
+    void deliverLaunchPromptToAgentTab({
+      tabId: primaryTabId,
+      agent,
+      content: draftContent,
+      submit,
+      forcePaste: submit,
+      onTimeout: () => notifyDirectWorkItemAgentStartTimeout(agent, submit)
+    })
+  }
+  return true
 }

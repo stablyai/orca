@@ -86,4 +86,19 @@ describe('abortWhenRendererGone', () => {
     expect(sender.listenerCount('render-process-gone')).toBe(0)
     expect(sender.listenerCount('did-navigate')).toBe(0)
   })
+
+  it('keeps one listener per event however many lifetimes overlap on a renderer', () => {
+    const sender = fakeSender()
+    const lifetimes = Array.from({ length: 25 }, () => abortWhenRendererGone(sender))
+
+    for (const event of ['destroyed', 'render-process-gone', 'did-navigate']) {
+      expect(sender.listenerCount(event)).toBe(1)
+    }
+    lifetimes[0].dispose()
+    sender.emit('did-navigate', 'file:///app', 200, 'OK')
+
+    expect(lifetimes[0].signal.aborted).toBe(false)
+    expect(lifetimes.slice(1).every(({ signal }) => signal.aborted)).toBe(true)
+    expect(sender.eventNames()).toEqual([])
+  })
 })

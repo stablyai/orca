@@ -115,3 +115,25 @@ export function Field({
     </div>
   )
 }
+
+export function AutomationRunErrorNotice({
+  label,
+  error,
+  className
+}: {
+  label: string
+  error: string
+  className?: string
+}): React.JSX.Element {
+  return (
+    <div
+      role="alert"
+      className={cn(
+        'rounded-md border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive',
+        className
+      )}
+    >
+      <span className="font-medium">{label}</span> {error}
+    </div>
+  )
+}

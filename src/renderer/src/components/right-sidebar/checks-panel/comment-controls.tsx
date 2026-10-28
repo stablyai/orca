@@ -195,16 +195,6 @@ export function CommentLocationLabel({
   )
 }
 
-export function isMutablePRConversationComment(comment: PRComment): boolean {
-  if (comment.threadId || comment.path) {
-    return false
-  }
-  if (comment.url && comment.url.includes('pullrequestreview')) {
-    return false
-  }
-  return Number.isSafeInteger(comment.id) && comment.id > 0
-}
-
 export function CommentMoreMenu({
   comment,
   botAuthorOverrides,

@@ -5,6 +5,7 @@ import { folderWorkspaceKey } from '../../../../shared/workspace-scope'
 import { FLOATING_TERMINAL_WORKTREE_ID, getDefaultSettings } from '../../../../shared/constants'
 import { createNativeChatFileHref } from '../../../../shared/native-chat-href-routing'
 import {
+  createNativeChatFileLinkContextSelector,
   findNativeChatTabOwnerWorktreeId,
   resolveNativeChatFileLink,
   resolveNativeChatFileLinkContext,
@@ -141,6 +142,21 @@ describe('resolveNativeChatFileLinkContext', () => {
       runtimeEnvironmentId: null,
       sourceTabId: folderTab.id
     })
+  })
+})
+
+describe('createNativeChatFileLinkContextSelector', () => {
+  it('reuses the context across unrelated writes and re-resolves when a route input changes', () => {
+    const select = createNativeChatFileLinkContextSelector('tab-1')
+    const base = state()
+    const first = select(base)
+    expect(select({ ...base })).toBe(first)
+
+    const moved = select({
+      ...base,
+      worktreesByRepo: { repo: [worktreeFixture('wt-1', '/repo/moved')] }
+    })
+    expect(moved?.worktreePath).toBe('/repo/moved')
   })
 })
 
@@ -298,5 +314,26 @@ describe('resolveNativeChatFileLink', () => {
 
   it('ignores http links so normal markdown navigation can handle them', () => {
     expect(resolveNativeChatFileLink('https://example.com/docs/guide.md', context)).toBeNull()
+  })
+
+  it('reads URL-style /D:/ targets as the drive only in a Windows workspace', () => {
+    const windowsContext = { ...context, worktreePath: 'D:/repo' }
+    for (const href of ['/D:/Temp/report.txt', createNativeChatFileHref('/D:/Temp/report.txt')]) {
+      expect(resolveNativeChatFileLink(href, windowsContext)?.absolutePath).toBe(
+        'D:/Temp/report.txt'
+      )
+    }
+    expect(
+      resolveNativeChatFileLink(
+        createNativeChatFileHref('/D:/Temp/report.txt', 'literal'),
+        windowsContext
+      )?.absolutePath
+    ).toBe('D:/Temp/report.txt')
+    expect(
+      resolveNativeChatFileLink('//server/share/report.txt', windowsContext)?.absolutePath
+    ).toBe('//server/share/report.txt')
+    expect(resolveNativeChatFileLink('/D:/Temp/report.txt', context)?.absolutePath).toBe(
+      '/D:/Temp/report.txt'
+    )
   })
 })

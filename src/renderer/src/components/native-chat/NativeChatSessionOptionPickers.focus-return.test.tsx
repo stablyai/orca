@@ -15,7 +15,7 @@ vi.mock('@/i18n/i18n', () => ({
 }))
 
 import { TooltipProvider } from '@/components/ui/tooltip'
-import type { SessionOptionDescriptor } from '../../../../shared/native-chat-session-options'
+import type { SessionOptionDescriptor } from '../../../../shared/native-chat/input/native-chat-session-options'
 import type { NativeChatOptionPickerRequest } from './native-chat-composer-types'
 import { NativeChatSessionOptionPickers } from './NativeChatSessionOptionPickers'
 
