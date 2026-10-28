@@ -38,6 +38,8 @@ import { RuntimeWorktreeBaseReconciliation } from '../../runtime-worktree-base-r
 import { RuntimeWorktreeRemovalInFlight } from '../../runtime-worktree-removal-in-flight'
 import { ServeBrowserTabs } from '../../serve-browser-tabs'
 import { readBrowserTabBar } from '../../browser/browser-tab-listing'
+import { parseWorkspaceKey } from '../../../../shared/workspace-scope'
+import { getRepoIdFromWorktreeId } from '../../../../shared/worktree/id'
 import type { ServeBrowserPageState } from '../../serve-browser-tab-layout'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
 import type { LayoutCommand } from '../../../../shared/workspace-layout/workspace-layout-command-types'
@@ -180,7 +182,14 @@ export abstract class OrcaRuntimeWithTerminalDrivers extends OrcaRuntimeWithFitO
       notifyHeadlessBrowserSessionTabsChanged: (worktreeId) =>
         this.notifyMobileSessionTabsChanged(worktreeId),
       readBrowserTabBar: (worktreeId) =>
-        readBrowserTabBar(this.mobileSessionTabsByWorktree, worktreeId),
+        readBrowserTabBar(this.mobileSessionTabsByWorktree, worktreeId, (id) => {
+          const scope = parseWorkspaceKey(id)
+          return scope?.type === 'folder'
+            ? (this.store?.getFolderWorkspaces?.() ?? []).some(
+                (workspace) => workspace.id === scope.folderWorkspaceId
+              )
+            : (this.store?.getRepos() ?? []).some((repo) => repo.id === getRepoIdFromWorktreeId(id))
+        }),
       retireRuntimeOwnedBrowserSessionTab: (worktreeId, browserPageId) =>
         this.retireRuntimeOwnedBrowserSessionTab(worktreeId, browserPageId),
       serveBrowserTabs: this.serveBrowserTabs

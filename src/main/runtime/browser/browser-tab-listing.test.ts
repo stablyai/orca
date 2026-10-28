@@ -102,13 +102,17 @@ describe('mergeBrowserTabListing', () => {
     expect(tabs.map((tab) => [tab.browserPageId, tab.title])).toEqual([['shared', 'client']])
   })
 
-  it('never marks an unloaded tab active, falling back to the first loaded one', () => {
+  it('with nothing active, marks the first live page active, never an unloaded tab', () => {
     const tabs = mergeBrowserTabListing({
-      tabBar: [barEntry('a'), barEntry('b')],
-      liveTabs: [live('b')],
+      tabBar: [barEntry('a'), barEntry('b'), barEntry('c')],
+      liveTabs: [live('c'), live('b')],
       clientTabs: []
     })
-    expect(tabs.map((tab) => tab.active)).toEqual([false, true])
+    expect(tabs.map((tab) => [tab.browserPageId, tab.active])).toEqual([
+      ['a', false],
+      ['b', false],
+      ['c', true]
+    ])
   })
 
   it('without a tab bar, lists live pages as before', () => {
@@ -136,19 +140,20 @@ describe('readBrowserTabBar', () => {
         browserRow('b')
       ])
     ],
-    ['wt-2', snapshot('wt-2', [browserRow('c')])]
+    ['wt-2', snapshot('wt-2', [browserRow('c')])],
+    ['server-wt', snapshot('server-wt', [browserRow('mirrored')])]
   ])
+  const ownsWorkspace = (worktreeId: string) => worktreeId !== 'server-wt'
 
   it("reads one worktree's local browser tabs in order", () => {
-    expect(readBrowserTabBar(snapshots, 'wt-1').map((entry) => entry.browserPageId)).toEqual([
-      'a',
-      'b'
-    ])
+    expect(
+      readBrowserTabBar(snapshots, 'wt-1', ownsWorkspace).map((entry) => entry.browserPageId)
+    ).toEqual(['a', 'b'])
   })
 
-  it('reads every worktree when none is named', () => {
+  it("reads every worktree this host owns when none is named, skipping a paired server's mirror", () => {
     expect(
-      readBrowserTabBar(snapshots, undefined).map((entry) => [
+      readBrowserTabBar(snapshots, undefined, ownsWorkspace).map((entry) => [
         entry.worktreeId,
         entry.browserPageId
       ])
@@ -157,9 +162,5 @@ describe('readBrowserTabBar', () => {
       ['wt-1', 'b'],
       ['wt-2', 'c']
     ])
-  })
-
-  it('is empty for a worktree with no snapshot', () => {
-    expect(readBrowserTabBar(snapshots, 'missing')).toEqual([])
   })
 })

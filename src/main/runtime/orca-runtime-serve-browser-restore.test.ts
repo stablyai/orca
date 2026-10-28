@@ -373,6 +373,20 @@ describe('a saved browser tab on a host with no window', () => {
     expect(createTab).toHaveBeenCalledWith(expect.objectContaining({ browserPageId: 'page-2' }))
   })
 
+  it('forgets an unstarted saved tab closed by its tab list index, with no worktree named', async () => {
+    const { runtime, createTab, getSession } = restartedServe()
+    await runtime.listMobileSessionTabs(`id:${TEST_WORKTREE_ID}`)
+    const listed = await runtime.browserTabList({})
+    const index = listed.tabs.findIndex((tab) => tab.browserPageId === 'page-1')
+    expect(listed.tabs[index]?.loaded).toBe(false)
+
+    await expect(runtime.browserTabClose({ index })).resolves.toEqual({ closed: true })
+
+    const saved = getSession().browserTabsByWorktree?.[TEST_WORKTREE_ID] ?? []
+    expect(saved.map((tab) => tab.id)).toEqual(['page-2'])
+    expect(createTab).not.toHaveBeenCalled()
+  })
+
   it('starts the named saved page once for a tab show after a restart', async () => {
     const { runtime, createTab } = restartedServe()
 

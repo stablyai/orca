@@ -17,27 +17,31 @@ export type BrowserTabBarEntry = {
  */
 export function readBrowserTabBar(
   snapshots: ReadonlyMap<string, RuntimeMobileSessionTabsSnapshot>,
-  worktreeId: string | undefined
+  worktreeId: string | undefined,
+  ownsWorkspace: (worktreeId: string) => boolean
 ): BrowserTabBarEntry[] {
   const selected = worktreeId
     ? [snapshots.get(worktreeId)].filter((snapshot) => snapshot !== undefined)
     : [...snapshots.values()]
-  return selected.flatMap((snapshot) =>
-    snapshot.tabs.flatMap((tab) =>
-      tab.type === 'browser' && tab.browserPageId && !tab.placement
-        ? [
-            {
-              browserPageId: tab.browserPageId,
-              worktreeId: snapshot.worktree,
-              title: tab.title,
-              url: tab.url,
-              loadError: tab.loadError ?? null,
-              certificateFailure: tab.certificateFailure ?? null
-            }
-          ]
-        : []
+  // Why: a window also publishes the tabs it mirrors from paired servers, which only they can load.
+  return selected
+    .filter((snapshot) => ownsWorkspace(snapshot.worktree))
+    .flatMap((snapshot) =>
+      snapshot.tabs.flatMap((tab) =>
+        tab.type === 'browser' && tab.browserPageId && !tab.placement
+          ? [
+              {
+                browserPageId: tab.browserPageId,
+                worktreeId: snapshot.worktree,
+                title: tab.title,
+                url: tab.url,
+                loadError: tab.loadError ?? null,
+                certificateFailure: tab.certificateFailure ?? null
+              }
+            ]
+          : []
+      )
     )
-  )
 }
 
 /**
@@ -72,22 +76,26 @@ export function mergeBrowserTabListing(input: {
             loadError: entry.loadError,
             certificateFailure: entry.certificateFailure,
             worktreeId: entry.worktreeId,
-            // Why null: the tab bar does not record a page's profile until the page loads.
+            // Why null: the profile is reported from the live guest once the page loads.
             profileId: null,
             profileLabel: null,
             loaded: false
           }
     )
   }
-  const unlisted = input.liveTabs
-    // Why clientIds: the client row stays the only entry for an id both registries hold.
-    .filter((tab) => !listed.has(tab.browserPageId) && !clientIds.has(tab.browserPageId))
+  // Why clientIds: the client row stays the only entry for an id both registries hold.
+  const serverTabs = input.liveTabs.filter((tab) => !clientIds.has(tab.browserPageId))
+  const unlisted = serverTabs
+    .filter((tab) => !listed.has(tab.browserPageId))
     .map((tab) => ({ ...tab, loaded: true }))
   const clients = input.clientTabs.map((tab) => ({ ...tab, loaded: true }))
   const tabs = [...fromBar, ...unlisted, ...clients]
-  const fallbackActive = tabs.findIndex((tab) => tab.loaded)
-  if (fallbackActive !== -1 && !tabs.some((tab) => tab.active)) {
-    tabs[fallbackActive] = { ...tabs[fallbackActive]!, active: true }
-  }
-  return tabs.map((tab, index) => ({ ...tab, index }))
+  // Why live order: with nothing active, a pageless command acts on the first live page.
+  const fallbackId = (serverTabs[0] ?? input.clientTabs[0])?.browserPageId
+  const noneActive = !tabs.some((tab) => tab.active)
+  return tabs.map((tab, index) => ({
+    ...tab,
+    index,
+    active: tab.active || (noneActive && tab.browserPageId === fallbackId)
+  }))
 }
