@@ -15,6 +15,7 @@ import { themedStyleSheet } from '../src/theme/themed-styles'
 import { useMobileColorScheme } from '../src/theme/use-mobile-color-scheme'
 import { OrcaLogo } from '../src/components/OrcaLogo'
 import { RpcClientProvider } from '../src/transport/client-context'
+import { ReplyReaderOverlay } from '../src/speech/ReplyReaderOverlay'
 import { getNotificationNavigationTarget } from '../src/notifications/notification-routing'
 import { useOpenNotificationRoute } from '../src/notifications/use-open-notification-route'
 import {
@@ -216,6 +217,7 @@ export default function RootLayout() {
             <Stack.Screen name="native-chat-settings" options={{ headerShown: false }} />
             <Stack.Screen name="browser-settings" options={{ headerShown: false }} />
             <Stack.Screen name="voice-settings" options={{ headerShown: false }} />
+            <Stack.Screen name="read-aloud-settings" options={{ headerShown: false }} />
             <Stack.Screen name="notifications" options={{ headerShown: false }} />
             <Stack.Screen name="troubleshoot" options={{ headerShown: false }} />
             <Stack.Screen name="connection-log" options={{ headerShown: false }} />
@@ -233,6 +235,7 @@ export default function RootLayout() {
             />
           </Stack>
         </SideSafeArea>
+        <ReplyReaderOverlay />
       </View>
     </RpcClientProvider>
   )

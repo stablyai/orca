@@ -76,6 +76,12 @@ export const MOBILE_WEB_PAGE_ROUTES = [
       'native.audio.stop'
     ],
     // Optional media.name preserves attachment on older shells by falling back to filename derived from type.
-    optionalGrants: ['externalNavigation', 'native.media.name', 'native.pdf.view']
+    // Optional speech.control: shells without the verb still serve the screen, without Read buttons.
+    optionalGrants: [
+      'externalNavigation',
+      'native.media.name',
+      'native.pdf.view',
+      'native.speech.control'
+    ]
   }
 ]

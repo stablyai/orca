@@ -5,6 +5,7 @@ import { createNativeAudioCapture } from './native-audio'
 import { nativeAudioDeviceEngine } from './native-audio-device'
 import { serveNativeClipboardVerb } from './native-clipboard'
 import { createNativeMediaVerbServer } from './native-media'
+import { serveNativeSpeechVerb } from './native-speech'
 import { discardStagedMedia, nativeMediaDeviceDeps } from './native-media-device'
 
 export type NativeDeviceVerb = Exclude<BridgeNativeVerb, 'native.storage.read' | 'native.pdf.view'>
@@ -25,6 +26,9 @@ export function useNativeDeviceVerbs(
     () => (verb, params) => {
       if (verb === 'native.clipboard.write' || verb === 'native.clipboard.read') {
         return serveNativeClipboardVerb(verb, params)
+      }
+      if (verb === 'native.speech.control') {
+        return serveNativeSpeechVerb(params)
       }
       return verb.startsWith('native.audio.') ? audio.serve(verb, params) : serveMedia(verb, params)
     },

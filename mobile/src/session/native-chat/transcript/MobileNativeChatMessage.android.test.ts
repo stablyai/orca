@@ -52,6 +52,7 @@ vi.mock('lucide-react-native', () => ({
   Search: 'Search',
   SquareChevronRight: 'SquareChevronRight',
   SquareTerminal: 'SquareTerminal',
+  Volume2: 'Volume2',
   Wrench: 'Wrench'
 }))
 vi.mock('../../../components/MobileMarkdown', () => ({ MobileMarkdown: 'MobileMarkdown' }))

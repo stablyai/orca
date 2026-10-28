@@ -1,0 +1,20 @@
+apply plugin: 'com.android.library'
+
+group = 'expo.modules.orcareadaloud'
+version = '0.0.1'
+
+def expoModulesCorePlugin = new File(project(':expo-modules-core').projectDir.absolutePath, 'ExpoModulesCorePlugin.gradle')
+apply from: expoModulesCorePlugin
+applyKotlinExpoModulesCorePlugin()
+useCoreDependencies()
+useExpoPublishing()
+useDefaultAndroidSdkVersions()
+
+android {
+  namespace 'expo.modules.orcareadaloud'
+}
+
+dependencies {
+  // ContextCompat; already on the app's classpath through React Native.
+  implementation 'androidx.core:core:1.13.1'
+}

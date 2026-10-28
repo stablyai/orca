@@ -19,6 +19,7 @@ import type {
   NativeChatToolCallBlock
 } from '../../../../../src/shared/native-chat-types'
 import { MobileSourceCopyButton } from '../../../components/MobileSourceCopyButton'
+import { MobileReplyReadButton } from '../../../components/MobileReplyReadButton'
 import { nativeChatMessageCopyText } from '../../../../../src/shared/native-chat-message-copy-text'
 import { deriveNativeChatRowContent } from '../../../../../src/shared/native-chat-row-content'
 import {
@@ -340,6 +341,9 @@ function MobileNativeChatMessageImpl({
                 text={copyText}
                 accessibilityLabel="Copy message"
               />
+            ) : null}
+            {message.role === 'assistant' && copyText.length > 0 && growingBlock === undefined ? (
+              <MobileReplyReadButton id={message.id} text={copyText} />
             ) : null}
             <MobileNativeChatMessageTime timestamp={message.timestamp} fontScale={fontScale} />
           </View>
