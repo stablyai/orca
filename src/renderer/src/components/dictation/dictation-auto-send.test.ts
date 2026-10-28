@@ -265,13 +265,19 @@ describe('resolveDictationAutoSendElement', () => {
     ).toBeNull()
   })
 
-  it('skips terminal panes and fields outside a chat composer', () => {
+  it('skips terminal panes, queued-message edits and fields outside a chat composer', () => {
     const input = document.createElement('input')
     document.body.appendChild(input)
     expect(
       resolveDictationAutoSendElement({
         ...eligible,
         target: { kind: 'terminal', tabId: 'tab', paneId: 1 }
+      })
+    ).toBeNull()
+    expect(
+      resolveDictationAutoSendElement({
+        ...eligible,
+        target: { kind: 'composer', insert: () => {} }
       })
     ).toBeNull()
     expect(
