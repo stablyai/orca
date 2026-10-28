@@ -54,7 +54,8 @@ describe('Project Settings prompt template host routing', () => {
             projectId: project.id,
             project,
             setups,
-            representativeRepoId: 'local-repo'
+            representativeRepoId: 'local-repo',
+            selectionKey: project.id
           }
         ],
         settingsProjectHostSelection: { project: 'runtime:remote' },
