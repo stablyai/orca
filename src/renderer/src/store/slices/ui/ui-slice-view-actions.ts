@@ -73,6 +73,43 @@ export function createUiViewActions(set: UISliceSet, get: UISliceGet): Partial<U
       }))
     },
     clearPendingSkillShare: () => set({ pendingSkillShareId: null }),
+    openWorktreeDeepLink: (link) => {
+      if (link.type === 'worktree-create') {
+        const stateWithRepos = get() as UISlice & {
+          repos?: ReadonlyArray<{ id: string; displayName?: string; path?: string }>
+        }
+        const repos = stateWithRepos.repos ?? []
+        const rawRepo = link.repo?.trim()
+        const matchedRepo = rawRepo
+          ? (repos.find((r) => r.id === rawRepo) ??
+            repos.find((r) => r.displayName?.toLowerCase() === rawRepo.toLowerCase()) ??
+            repos.find(
+              (r) =>
+                r.path
+                  ?.split(/[\\/]/)
+                  .filter(Boolean)
+                  .pop()
+                  ?.toLowerCase() === rawRepo.toLowerCase()
+            ) ??
+            null)
+          : null
+        const resolvedRepoId = matchedRepo?.id ?? (rawRepo && repos.length === 0 ? rawRepo : undefined)
+        const unmatchedProjectId =
+          rawRepo && repos.length > 0 && !matchedRepo ? rawRepo : undefined
+        if (get().activeModal === 'new-workspace-composer') {
+          get().closeModal()
+        }
+        get().openModal('new-workspace-composer', {
+          prefilledName: link.name,
+          initialRepoId: resolvedRepoId,
+          ...(unmatchedProjectId
+            ? { initialWorkspaceTarget: { projectId: unmatchedProjectId, hostId: 'local' } }
+            : {}),
+          initialBaseBranch: link.branch,
+          telemetrySource: 'unknown'
+        })
+      }
+    },
     openSkillsSharedLinks: () => {
       get().recordViewVisit('skills')
       set((state) => ({
