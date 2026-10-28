@@ -1,134 +1,286 @@
 import React from 'react'
 import {
+  Activity,
+  BarChart3,
+  Bell,
+  Blocks,
+  Book,
   Bot,
   Box,
   Braces,
   Briefcase,
+  Bug,
   Building2,
+  Calendar,
+  Camera,
+  Cloud,
   Code2,
   Cpu,
   Database,
+  FileText,
+  Flag,
   Folder,
   Gauge,
+  GitBranch,
   Globe,
+  Guitar,
+  Hammer,
+  Heart,
   Layers,
+  Lightbulb,
+  Music,
   Package,
   Palette,
+  Puzzle,
   Rocket,
   Server,
   // `Shapes` is lucide-react's own export name; exempted in config/oxlint-anti-slop.json.
   Shapes,
   Sparkles,
   SquareTerminal,
+  Star,
   Wrench,
+  Zap,
   type LucideIcon
 } from 'lucide-react'
 import type { RepoIcon } from '../../../../shared/repo-icon'
+import {
+  REPO_LUCIDE_ICON_NAMES,
+  type RepoLucideIconName
+} from '../../../../shared/repo-lucide-icon-names'
 import { cn } from '@/lib/utils'
 import { translate } from '@/i18n/i18n'
 import { createLocalizedCatalog } from '@/i18n/localized-catalog'
 
-export const getRepoLucideIconOptions = createLocalizedCatalog(() => [
-  {
-    name: 'Folder',
-    label: translate('auto.components.repo.repo.icon.bed2674f9d', 'Folder'),
-    icon: Folder
+type RepoLucideIconDefinition = {
+  icon: LucideIcon
+  labelKey: string
+  labelFallback: string
+}
+
+const REPO_LUCIDE_ICON_DEFINITIONS: Record<RepoLucideIconName, RepoLucideIconDefinition> = {
+  Folder: {
+    icon: Folder,
+    labelKey: 'auto.components.repo.repo.icon.bed2674f9d',
+    labelFallback: 'Folder'
   },
-  {
-    name: 'Code2',
-    label: translate('auto.components.repo.repo.icon.65b437c381', 'Code'),
-    icon: Code2
+  Code2: {
+    icon: Code2,
+    labelKey: 'auto.components.repo.repo.icon.65b437c381',
+    labelFallback: 'Code'
   },
-  {
-    name: 'SquareTerminal',
-    label: translate('auto.components.repo.repo.icon.3eba7387ab', 'Terminal'),
-    icon: SquareTerminal
+  SquareTerminal: {
+    icon: SquareTerminal,
+    labelKey: 'auto.components.repo.repo.icon.3eba7387ab',
+    labelFallback: 'Terminal'
   },
-  {
-    name: 'Bot',
-    label: translate('auto.components.repo.repo.icon.07012dc113', 'Agent'),
-    icon: Bot
+  Bot: {
+    icon: Bot,
+    labelKey: 'auto.components.repo.repo.icon.07012dc113',
+    labelFallback: 'Agent'
   },
-  {
-    name: 'Package',
-    label: translate('auto.components.repo.repo.icon.787490e9bd', 'Package'),
-    icon: Package
+  Package: {
+    icon: Package,
+    labelKey: 'auto.components.repo.repo.icon.787490e9bd',
+    labelFallback: 'Package'
   },
-  {
-    name: 'Database',
-    label: translate('auto.components.repo.repo.icon.477b28c948', 'Database'),
-    icon: Database
+  Database: {
+    icon: Database,
+    labelKey: 'auto.components.repo.repo.icon.477b28c948',
+    labelFallback: 'Database'
   },
-  {
-    name: 'Globe',
-    label: translate('auto.components.repo.repo.icon.3c5a593bc8', 'Web'),
-    icon: Globe
+  Globe: {
+    icon: Globe,
+    labelKey: 'auto.components.repo.repo.icon.3c5a593bc8',
+    labelFallback: 'Web'
   },
-  {
-    name: 'Server',
-    label: translate('auto.components.repo.repo.icon.d37b4e2641', 'Server'),
-    icon: Server
+  Server: {
+    icon: Server,
+    labelKey: 'auto.components.repo.repo.icon.d37b4e2641',
+    labelFallback: 'Server'
   },
-  {
-    name: 'Cpu',
-    label: translate('auto.components.repo.repo.icon.b5fac337aa', 'Compute'),
-    icon: Cpu
+  Cpu: {
+    icon: Cpu,
+    labelKey: 'auto.components.repo.repo.icon.b5fac337aa',
+    labelFallback: 'Compute'
   },
-  {
-    name: 'Layers',
-    label: translate('auto.components.repo.repo.icon.70bef15d40', 'Layers'),
-    icon: Layers
+  Layers: {
+    icon: Layers,
+    labelKey: 'auto.components.repo.repo.icon.70bef15d40',
+    labelFallback: 'Layers'
   },
-  {
-    name: 'Braces',
-    label: translate('auto.components.repo.repo.icon.31826b712e', 'API'),
-    icon: Braces
+  Braces: {
+    icon: Braces,
+    labelKey: 'auto.components.repo.repo.icon.31826b712e',
+    labelFallback: 'API'
   },
-  {
-    name: 'Rocket',
-    label: translate('auto.components.repo.repo.icon.ecf63ec3ef', 'Launch'),
-    icon: Rocket
+  Rocket: {
+    icon: Rocket,
+    labelKey: 'auto.components.repo.repo.icon.ecf63ec3ef',
+    labelFallback: 'Launch'
   },
-  {
-    name: 'Wrench',
-    label: translate('auto.components.repo.repo.icon.febfbe0cd5', 'Tools'),
-    icon: Wrench
+  Wrench: {
+    icon: Wrench,
+    labelKey: 'auto.components.repo.repo.icon.febfbe0cd5',
+    labelFallback: 'Tools'
   },
-  {
-    name: 'Briefcase',
-    label: translate('auto.components.repo.repo.icon.4ab9433660', 'Work'),
-    icon: Briefcase
+  Briefcase: {
+    icon: Briefcase,
+    labelKey: 'auto.components.repo.repo.icon.4ab9433660',
+    labelFallback: 'Work'
   },
-  {
-    name: 'Building2',
-    label: translate('auto.components.repo.repo.icon.c4fd14299d', 'Company'),
-    icon: Building2
+  Building2: {
+    icon: Building2,
+    labelKey: 'auto.components.repo.repo.icon.c4fd14299d',
+    labelFallback: 'Company'
   },
-  {
-    name: 'Palette',
-    label: translate('auto.components.repo.repo.icon.d202c659a3', 'Design'),
-    icon: Palette
+  Palette: {
+    icon: Palette,
+    labelKey: 'auto.components.repo.repo.icon.d202c659a3',
+    labelFallback: 'Design'
   },
-  {
-    name: 'Gauge',
-    label: translate('auto.components.repo.repo.icon.137bdb1856', 'Metrics'),
-    icon: Gauge
+  Gauge: {
+    icon: Gauge,
+    labelKey: 'auto.components.repo.repo.icon.137bdb1856',
+    labelFallback: 'Metrics'
   },
-  {
-    name: 'Sparkles',
-    label: translate('auto.components.repo.repo.icon.b1b8d99fc4', 'AI'),
-    icon: Sparkles
+  Sparkles: {
+    icon: Sparkles,
+    labelKey: 'auto.components.repo.repo.icon.b1b8d99fc4',
+    labelFallback: 'AI'
   },
-  {
-    name: 'Shapes',
-    label: translate('auto.components.repo.repo.icon.857977b901', 'Shapes'),
-    icon: Shapes
+  Shapes: {
+    icon: Shapes,
+    labelKey: 'auto.components.repo.repo.icon.857977b901',
+    labelFallback: 'Shapes'
   },
-  { name: 'Box', label: translate('auto.components.repo.repo.icon.0ad395d475', 'Box'), icon: Box }
-])
+  Box: {
+    icon: Box,
+    labelKey: 'auto.components.repo.repo.icon.0ad395d475',
+    labelFallback: 'Box'
+  },
+  Activity: {
+    icon: Activity,
+    labelKey: 'auto.components.repo.repo.icon.a4f2c8e901',
+    labelFallback: 'Activity'
+  },
+  BarChart3: {
+    icon: BarChart3,
+    labelKey: 'auto.components.repo.repo.icon.b7e31d4a12',
+    labelFallback: 'Charts'
+  },
+  Bell: {
+    icon: Bell,
+    labelKey: 'auto.components.repo.repo.icon.c1d92e5f33',
+    labelFallback: 'Alerts'
+  },
+  Blocks: {
+    icon: Blocks,
+    labelKey: 'auto.components.repo.repo.icon.d2ea3f6044',
+    labelFallback: 'Blocks'
+  },
+  Book: {
+    icon: Book,
+    labelKey: 'auto.components.repo.repo.icon.e3fb405155',
+    labelFallback: 'Docs'
+  },
+  Bug: {
+    icon: Bug,
+    labelKey: 'auto.components.repo.repo.icon.f4ac516266',
+    labelFallback: 'Bugs'
+  },
+  Calendar: {
+    icon: Calendar,
+    labelKey: 'auto.components.repo.repo.icon.a5bd627377',
+    labelFallback: 'Calendar'
+  },
+  Camera: {
+    icon: Camera,
+    labelKey: 'auto.components.repo.repo.icon.b6ce738488',
+    labelFallback: 'Camera'
+  },
+  Cloud: {
+    icon: Cloud,
+    labelKey: 'auto.components.repo.repo.icon.c7df849599',
+    labelFallback: 'Cloud'
+  },
+  FileText: {
+    icon: FileText,
+    labelKey: 'auto.components.repo.repo.icon.d8e095a6aa',
+    labelFallback: 'Notes'
+  },
+  Flag: {
+    icon: Flag,
+    labelKey: 'auto.components.repo.repo.icon.e9f1a6b7bb',
+    labelFallback: 'Flag'
+  },
+  GitBranch: {
+    icon: GitBranch,
+    labelKey: 'auto.components.repo.repo.icon.f0a2b7c8cc',
+    labelFallback: 'Git'
+  },
+  Guitar: {
+    icon: Guitar,
+    labelKey: 'auto.components.repo.repo.icon.a1b3c9d0dd',
+    labelFallback: 'Guitar'
+  },
+  Hammer: {
+    icon: Hammer,
+    labelKey: 'auto.components.repo.repo.icon.b2c4d0e1ee',
+    labelFallback: 'Build'
+  },
+  Heart: {
+    icon: Heart,
+    labelKey: 'auto.components.repo.repo.icon.c3d5e1f2ff',
+    labelFallback: 'Favorite'
+  },
+  Lightbulb: {
+    icon: Lightbulb,
+    labelKey: 'auto.components.repo.repo.icon.d4e6f20300',
+    labelFallback: 'Ideas'
+  },
+  Music: {
+    icon: Music,
+    labelKey: 'auto.components.repo.repo.icon.e5f7141111',
+    labelFallback: 'Music'
+  },
+  Puzzle: {
+    icon: Puzzle,
+    labelKey: 'auto.components.repo.repo.icon.f6a8252222',
+    labelFallback: 'Puzzle'
+  },
+  Star: {
+    icon: Star,
+    labelKey: 'auto.components.repo.repo.icon.a7b9363333',
+    labelFallback: 'Star'
+  },
+  Zap: {
+    icon: Zap,
+    labelKey: 'auto.components.repo.repo.icon.b8ca474444',
+    labelFallback: 'Fast'
+  }
+}
+
+export const getRepoLucideIconOptions = createLocalizedCatalog(() =>
+  REPO_LUCIDE_ICON_NAMES.map((name) => {
+    const definition = REPO_LUCIDE_ICON_DEFINITIONS[name]
+    return {
+      name,
+      label: translate(definition.labelKey, definition.labelFallback),
+      icon: definition.icon
+    }
+  })
+)
+
+function isRepoLucideIconName(name: string): name is RepoLucideIconName {
+  return Object.hasOwn(REPO_LUCIDE_ICON_DEFINITIONS, name)
+}
 
 export function getRepoLucideIcon(name: string | null | undefined): LucideIcon {
-  return getRepoLucideIconOptions().find((option) => option.name === name)?.icon ?? Folder
+  if (name && isRepoLucideIconName(name)) {
+    return REPO_LUCIDE_ICON_DEFINITIONS[name].icon
+  }
+  return Folder
 }
 
 export function RepoIconGlyph({

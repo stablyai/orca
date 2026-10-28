@@ -8001,7 +8001,9 @@
           "868c5c9b56": "Failed to import repo icon",
           "emojiTooLongForRepoIcon": "This emoji can't be used as a repo icon.",
           "currentEmojiSelection": "Current: {{value0}}",
-          "searchEmojiPlaceholder": "Search emoji"
+          "searchEmojiPlaceholder": "Search emoji",
+          "searchLucidePlaceholder": "Search icons",
+          "noLucideIconMatches": "No icons match your search."
         },
         "RepositoryPane": {
           "15a99d9b9f": "Relative paths resolve from this project root.",
@@ -13977,7 +13979,27 @@
             "07012dc113": "Agent",
             "3eba7387ab": "Terminal",
             "65b437c381": "Code",
-            "bed2674f9d": "Folder"
+            "bed2674f9d": "Folder",
+            "a4f2c8e901": "Activity",
+            "b7e31d4a12": "Charts",
+            "c1d92e5f33": "Alerts",
+            "d2ea3f6044": "Blocks",
+            "e3fb405155": "Docs",
+            "f4ac516266": "Bugs",
+            "a5bd627377": "Calendar",
+            "b6ce738488": "Camera",
+            "c7df849599": "Cloud",
+            "d8e095a6aa": "Notes",
+            "e9f1a6b7bb": "Flag",
+            "f0a2b7c8cc": "Git",
+            "a1b3c9d0dd": "Guitar",
+            "b2c4d0e1ee": "Build",
+            "c3d5e1f2ff": "Favorite",
+            "d4e6f20300": "Ideas",
+            "e5f7141111": "Music",
+            "f6a8252222": "Puzzle",
+            "a7b9363333": "Star",
+            "b8ca474444": "Fast"
           }
         }
       },

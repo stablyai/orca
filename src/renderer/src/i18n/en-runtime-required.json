@@ -110,6 +110,52 @@
         "moreHosts_one": "{{count}} more host. Search by name to find it.",
         "moreHosts_other": "{{count}} more hosts. Search by name to find one."
       },
+      "repo": {
+        "repo": {
+          "icon": {
+            "07012dc113": "Agent",
+            "0ad395d475": "Box",
+            "137bdb1856": "Metrics",
+            "31826b712e": "API",
+            "3c5a593bc8": "Web",
+            "3eba7387ab": "Terminal",
+            "477b28c948": "Database",
+            "4ab9433660": "Work",
+            "65b437c381": "Code",
+            "70bef15d40": "Layers",
+            "787490e9bd": "Package",
+            "857977b901": "Shapes",
+            "a1b3c9d0dd": "Guitar",
+            "a4f2c8e901": "Activity",
+            "a5bd627377": "Calendar",
+            "a7b9363333": "Star",
+            "b1b8d99fc4": "AI",
+            "b2c4d0e1ee": "Build",
+            "b5fac337aa": "Compute",
+            "b6ce738488": "Camera",
+            "b7e31d4a12": "Charts",
+            "b8ca474444": "Fast",
+            "bed2674f9d": "Folder",
+            "c1d92e5f33": "Alerts",
+            "c3d5e1f2ff": "Favorite",
+            "c4fd14299d": "Company",
+            "c7df849599": "Cloud",
+            "d202c659a3": "Design",
+            "d2ea3f6044": "Blocks",
+            "d37b4e2641": "Server",
+            "d4e6f20300": "Ideas",
+            "d8e095a6aa": "Notes",
+            "e3fb405155": "Docs",
+            "e5f7141111": "Music",
+            "e9f1a6b7bb": "Flag",
+            "ecf63ec3ef": "Launch",
+            "f0a2b7c8cc": "Git",
+            "f4ac516266": "Bugs",
+            "f6a8252222": "Puzzle",
+            "febfbe0cd5": "Tools"
+          }
+        }
+      },
       "right": {
         "sidebar": {
           "AiVaultScanProgressStrip": {
@@ -767,8 +813,6 @@
         "stoppedBeforeStart": "Stopped manually"
       },
       "queuedMessages": {
-        "imageCount_one": "{{count}} image",
-        "imageCount_other": "{{count}} images",
         "editChanged": "This message changed while you were editing. Your edit is in the chat box.",
         "editChangedNotSaved": "This message changed while you were editing. Your edit wasn't saved.",
         "editChangedPrompt": "This message changed while you were editing. Your edit will be in the chat box after you answer the agent.",

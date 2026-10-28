@@ -1,4 +1,5 @@
 import { Suspense, useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 import { Github, Image, Link2 } from 'lucide-react'
 import type { RepoIcon } from '../../../../../../shared/repo-icon'
@@ -7,6 +8,7 @@ import { Button } from '../../../ui/button'
 import { Input } from '../../../ui/input'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../../../ui/tabs'
 import { Tooltip, TooltipContent, TooltipTrigger } from '../../../ui/tooltip'
+import { filterRepoLucideIconOptions } from '../../../../../../shared/repo-lucide-icon-search'
 import { getRepoLucideIconOptions } from '../../../repo/repo-icon'
 import { useMountedRef } from '@/hooks/useMountedRef'
 import { translate } from '@/i18n/i18n'
@@ -37,8 +39,11 @@ export function RepositoryIconTabs({
   onSetIcon,
   onUseGitHubAvatar
 }: RepositoryIconTabsProps): React.JSX.Element {
+  useTranslation()
   const [website, setWebsite] = useState('')
+  const [iconSearch, setIconSearch] = useState('')
   const mountedRef = useMountedRef()
+  const lucideIconOptions = filterRepoLucideIconOptions(getRepoLucideIconOptions(), iconSearch)
 
   const handleUploadImage = async () => {
     try {
@@ -160,8 +165,25 @@ export function RepositoryIconTabs({
       </TabsContent>
 
       <TabsContent value="icon" className="space-y-3">
-        <div className="grid grid-cols-10 gap-1.5">
-          {getRepoLucideIconOptions().map((option) => (
+        <Input
+          value={iconSearch}
+          onChange={(event) => setIconSearch(event.target.value)}
+          placeholder={translate(
+            'auto.components.settings.RepositoryIconPicker.searchLucidePlaceholder',
+            'Search icons'
+          )}
+          className="h-9 text-sm"
+        />
+        {lucideIconOptions.length === 0 ? (
+          <p className="text-xs text-muted-foreground">
+            {translate(
+              'auto.components.settings.RepositoryIconPicker.noLucideIconMatches',
+              'No icons match your search.'
+            )}
+          </p>
+        ) : null}
+        <div className="scrollbar-sleek grid max-h-52 grid-cols-10 gap-1.5 overflow-y-auto pr-1">
+          {lucideIconOptions.map((option) => (
             <Tooltip key={option.name}>
               <TooltipTrigger asChild>
                 <Button

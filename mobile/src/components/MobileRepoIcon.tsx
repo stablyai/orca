@@ -1,29 +1,50 @@
 import {
+  Activity,
+  BarChart3,
+  Bell,
+  Blocks,
+  Book,
   Bot,
   Box,
   Braces,
   Briefcase,
+  Bug,
   Building2,
+  Calendar,
+  Camera,
+  Cloud,
   Code2,
   Cpu,
   Database,
+  FileText,
+  Flag,
   Folder,
   Gauge,
+  GitBranch,
   Globe,
+  Guitar,
+  Hammer,
+  Heart,
   Layers,
-  type LucideIcon,
+  Lightbulb,
+  Music,
   Package,
   Palette,
+  Puzzle,
   Rocket,
   Server,
   // `Shapes` is lucide's own export name; exempted in config/oxlint-anti-slop.json.
   Shapes,
   Sparkles,
   SquareTerminal,
-  Wrench
+  Star,
+  Wrench,
+  Zap,
+  type LucideIcon
 } from 'lucide-react-native'
 import { Image, StyleSheet, Text, View } from 'react-native'
 import type { MobileRenderableRepoIcon } from '../host-screen/host-screen-reply-schema'
+import { REPO_LUCIDE_ICON_NAMES } from '../../../src/shared/repo-lucide-icon-names'
 import { colors } from '../theme/mobile-theme'
 import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 
@@ -37,18 +58,44 @@ const REPO_LUCIDE_ICONS: Record<string, LucideIcon> = {
   Database,
   Globe,
   Server,
+  Cpu,
   Layers,
   Box,
   Braces,
   Briefcase,
   Building2,
-  Cpu,
-  Gauge,
   Palette,
+  Gauge,
   Rocket,
   Shapes,
   Sparkles,
-  Wrench
+  Wrench,
+  Activity,
+  BarChart3,
+  Bell,
+  Blocks,
+  Book,
+  Bug,
+  Calendar,
+  Camera,
+  Cloud,
+  FileText,
+  Flag,
+  GitBranch,
+  Guitar,
+  Hammer,
+  Heart,
+  Lightbulb,
+  Music,
+  Puzzle,
+  Star,
+  Zap
+}
+
+for (const name of REPO_LUCIDE_ICON_NAMES) {
+  if (!REPO_LUCIDE_ICONS[name]) {
+    throw new Error(`MobileRepoIcon is missing lucide icon: ${name}`)
+  }
 }
 
 type Props = {

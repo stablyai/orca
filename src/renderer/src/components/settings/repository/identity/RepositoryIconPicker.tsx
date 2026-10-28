@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 import { RotateCcw } from 'lucide-react'
 import type { Repo } from '../../../../../../shared/repo-types'
@@ -30,6 +31,7 @@ export function RepositoryIconPicker({
   repo: Repo
   updateRepo: (repoId: string, updates: Partial<Repo>) => void
 }): React.JSX.Element {
+  useTranslation()
   const [loadingGitHub, setLoadingGitHub] = useState(false)
   const [resetting, setResetting] = useState(false)
   const mountedRef = useMountedRef()
@@ -46,7 +48,7 @@ export function RepositoryIconPicker({
     [ownerEnvironmentId]
   )
 
-  const currentIconLabel = useMemo(() => {
+  const currentIconLabel = ((): string => {
     if (repo.repoIcon?.type === 'image') {
       if (repo.repoIcon.source === 'github') {
         return 'GitHub avatar'
@@ -63,7 +65,7 @@ export function RepositoryIconPicker({
       return `${label} icon with repo color`
     }
     return 'Default'
-  }, [repo.repoIcon, selectedLucideName])
+  })()
 
   const setIcon = (repoIcon: RepoIcon | null) => updateRepo(repo.id, { repoIcon })
   const setBadgeColor = (badgeColor: string) => updateRepo(repo.id, { badgeColor })
