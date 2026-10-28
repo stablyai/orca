@@ -8,6 +8,7 @@ import { cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { TooltipProvider } from '@/components/ui/tooltip'
 import type { GitSubmoduleRepo } from '../../../../../../shared/git-submodule-repo-types'
 import { SourceControlSubmoduleReposSection } from './submodule-repos-section'
+import type { UseSourceControlSubmoduleChangesResult } from './use-submodule-changes'
 
 afterEach(cleanup)
 
@@ -23,14 +24,38 @@ const UNPUBLISHED: GitSubmoduleRepo = {
   upstream: { hasUpstream: false, ahead: 0, behind: 0 }
 }
 
+function makeChanges(
+  overrides: Partial<UseSourceControlSubmoduleChangesResult> = {}
+): UseSourceControlSubmoduleChangesResult {
+  return {
+    expanded: new Set(),
+    changesByPath: {},
+    messageByPath: {},
+    busyPath: null,
+    toggle: vi.fn(),
+    setMessage: vi.fn(),
+    stage: vi.fn().mockResolvedValue(undefined),
+    unstage: vi.fn().mockResolvedValue(undefined),
+    commit: vi.fn().mockResolvedValue(undefined),
+    ...overrides
+  }
+}
+
 function renderSection(
   repos: GitSubmoduleRepo[],
-  busy: { path: string; action: 'fetch' | 'pull' | 'push' } | null = null
+  busy: { path: string; action: 'fetch' | 'pull' | 'push' } | null = null,
+  changes: UseSourceControlSubmoduleChangesResult = makeChanges()
 ) {
   const runAction = vi.fn().mockResolvedValue(undefined)
   render(
     <TooltipProvider>
-      <SourceControlSubmoduleReposSection repos={repos} busy={busy} runAction={runAction} />
+      <SourceControlSubmoduleReposSection
+        repos={repos}
+        busy={busy}
+        runAction={runAction}
+        refresh={vi.fn().mockResolvedValue(undefined)}
+        changes={changes}
+      />
     </TooltipProvider>
   )
   return runAction
@@ -91,5 +116,28 @@ describe('SourceControlSubmoduleReposSection', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Fetch tracking' }))
     fireEvent.click(screen.getByRole('button', { name: 'Push tracking' }))
     expect(runAction).not.toHaveBeenCalled()
+  })
+
+  it('opens and closes a submodule when its name is clicked', () => {
+    const changes = makeChanges()
+    renderSection([TRACKING], null, changes)
+    fireEvent.click(screen.getByRole('button', { name: /^tracking/ }))
+    expect(changes.toggle).toHaveBeenCalledWith('libs/tracking')
+  })
+
+  it('shows the changes of an open submodule and sends actions to that submodule', () => {
+    const changes = makeChanges({
+      expanded: new Set(['libs/tracking']),
+      changesByPath: {
+        'libs/tracking': {
+          status: 'ready',
+          entries: [{ path: 'a.txt', status: 'modified', area: 'unstaged' }]
+        }
+      }
+    })
+    renderSection([TRACKING, UNPUBLISHED], null, changes)
+    fireEvent.click(screen.getByRole('button', { name: 'Stage a.txt' }))
+    expect(changes.stage).toHaveBeenCalledWith('libs/tracking', ['a.txt'])
+    expect(screen.getAllByTestId('submodule-change-row')).toHaveLength(1)
   })
 })

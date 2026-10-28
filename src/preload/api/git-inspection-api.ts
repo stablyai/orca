@@ -32,6 +32,8 @@ export type GitInspectionApi = {
     requestToken?: string
     /** The active workspace's first status: a user act that may start its WSL distro. */
     wakeWslDistro?: boolean
+    /** Read this submodule of the worktree instead of the worktree itself. */
+    submodulePath?: string
   }) => Promise<GitStatusResult>
   cancelStatus: (args: { requestToken: string }) => Promise<void>
   setStatusUpstreamRefWatch: (args: {

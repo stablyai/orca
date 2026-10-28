@@ -29,6 +29,8 @@ export type UseSourceControlSubmoduleReposResult = {
   repos: GitSubmoduleRepo[]
   busy: { path: string; action: SubmoduleRepoAction } | null
   runAction: (submodulePath: string, action: SubmoduleRepoAction) => Promise<void>
+  /** Reload the list and the parent status, after something else moved a submodule branch. */
+  refresh: () => Promise<void>
 }
 
 /** Read each initialized submodule once per worktree and after every action on one. */
@@ -83,7 +85,16 @@ export function useSourceControlSubmoduleRepos(
     [load, onChanged]
   )
 
+  const refresh = useCallback(async (): Promise<void> => {
+    const path = worktreePathRef.current
+    if (path) {
+      await load(path)
+      onChanged()
+    }
+  }, [load, onChanged])
+
   return {
+    refresh,
     repos: loaded && loaded.worktreePath === worktreePath ? loaded.repos : [],
     busy,
     runAction

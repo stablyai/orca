@@ -8,6 +8,15 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { installRealWorkerThreadChildProcesses } from '../../worker-thread-child-process/worker-thread-child-process-real.test-fixtures'
 import { removeTree } from '../../../shared/windows-transient-lock-removal'
 import { gitFetch, gitPull, gitPush } from '../remote'
+import {
+  bulkStageFiles,
+  bulkUnstageFiles,
+  commitChanges,
+  getStatus,
+  stageFile,
+  unstageFile
+} from '../status'
+import { validateGitRelativeFilePath } from '../../ipc/filesystem/filesystem-path-containment'
 import { listSubmoduleRepos, resolveInitializedSubmodulePath } from './submodule-repos'
 import { clearSubmodulePathsCache } from './submodule-paths'
 
@@ -197,5 +206,54 @@ describe('remote actions on a resolved submodule path', () => {
 
     expect(await git(sub, 'rev-parse', 'HEAD')).toBe(before)
     expect(await git(sub, 'rev-parse', 'origin/main')).toBe(upstreamHead)
+  })
+})
+
+describe('index actions on a resolved submodule path', () => {
+  let sub = ''
+
+  beforeEach(async () => {
+    sub = await resolveInitializedSubmodulePath(parent, 'libs/sub')
+    await writeFile(join(sub, 'a.txt'), 'changed\n')
+    await writeFile(join(sub, 'new.txt'), 'new\n')
+  })
+
+  it('lists the submodule changes by area', async () => {
+    const { entries } = await getStatus(sub)
+    expect(entries.map(({ path, area }) => `${area}:${path}`).sort()).toEqual([
+      'unstaged:a.txt',
+      'untracked:new.txt'
+    ])
+  })
+
+  it('stages and unstages in the submodule only', async () => {
+    await stageFile(sub, 'new.txt')
+    await bulkStageFiles(sub, ['a.txt'])
+    expect(await git(sub, 'diff', '--cached', '--name-only')).toBe('a.txt\nnew.txt')
+    expect(await git(parent, 'diff', '--cached', '--name-only')).toBe('')
+
+    await unstageFile(sub, 'new.txt')
+    await bulkUnstageFiles(sub, ['a.txt'])
+    expect(await git(sub, 'diff', '--cached', '--name-only')).toBe('')
+  })
+
+  it('commits in the submodule and the parent only sees a moved pointer', async () => {
+    const parentHead = await git(parent, 'rev-parse', 'HEAD')
+    const subHead = await git(sub, 'rev-parse', 'HEAD')
+    await bulkStageFiles(sub, ['a.txt', 'new.txt'])
+
+    const result = await commitChanges(sub, 'edit in submodule')
+
+    expect(result.success).toBe(true)
+    expect(await git(sub, 'log', '-1', '--format=%s')).toBe('edit in submodule')
+    expect(await git(sub, 'rev-parse', 'HEAD')).not.toBe(subHead)
+    expect(await git(parent, 'rev-parse', 'HEAD')).toBe(parentHead)
+    expect(await git(parent, 'log', '-1', '--format=%s')).toBe('add submodules')
+    expect(await git(parent, 'status', '--porcelain')).toBe('M libs/sub')
+  })
+
+  it('refuses a file path that leaves the submodule for the parent repository', () => {
+    expect(() => validateGitRelativeFilePath(sub, '../../root.txt')).toThrow('escapes')
+    expect(validateGitRelativeFilePath(sub, 'a.txt')).toBe('a.txt')
   })
 })

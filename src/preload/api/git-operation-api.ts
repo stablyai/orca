@@ -49,6 +49,7 @@ export type GitOperationApi = {
     worktreePath: string
     message: string
     connectionId?: string
+    submodulePath?: string
   }) => Promise<{ success: boolean; error?: string }>
   generateCommitMessage: (args: {
     worktreePath: string
@@ -100,22 +101,30 @@ export type GitOperationApi = {
     worktreePath: string
     connectionId?: string
   }) => Promise<void>
-  stage: (args: { worktreePath: string; filePath: string; connectionId?: string }) => Promise<void>
+  stage: (args: {
+    worktreePath: string
+    filePath: string
+    connectionId?: string
+    submodulePath?: string
+  }) => Promise<void>
   bulkStage: (args: {
     worktreePath: string
     filePaths: string[]
     connectionId?: string
     scope?: GitStageWorktreeScope
+    submodulePath?: string
   }) => Promise<void>
   unstage: (args: {
     worktreePath: string
     filePath: string
     connectionId?: string
+    submodulePath?: string
   }) => Promise<void>
   bulkUnstage: (args: {
     worktreePath: string
     filePaths: string[]
     connectionId?: string
+    submodulePath?: string
   }) => Promise<void>
   discard: (args: {
     worktreePath: string

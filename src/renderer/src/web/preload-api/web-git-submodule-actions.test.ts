@@ -40,3 +40,70 @@ describe('web client submodule actions', () => {
     })
   })
 })
+
+describe('web client submodule reads and index actions', () => {
+  beforeEach(() => {
+    callRuntimeResult.mockReset().mockResolvedValue(undefined)
+  })
+
+  const SUBMODULE_CALLS: [string, () => Promise<unknown>][] = [
+    ['status', () => createGitApi().status!({ worktreePath: '/repo', submodulePath: 'libs/sub' })],
+    [
+      'commit',
+      () =>
+        createGitApi().commit!({ worktreePath: '/repo', message: 'msg', submodulePath: 'libs/sub' })
+    ],
+    [
+      'stage',
+      () =>
+        createGitApi().stage!({
+          worktreePath: '/repo',
+          filePath: 'a.txt',
+          submodulePath: 'libs/sub'
+        })
+    ],
+    [
+      'unstage',
+      () =>
+        createGitApi().unstage!({
+          worktreePath: '/repo',
+          filePath: 'a.txt',
+          submodulePath: 'libs/sub'
+        })
+    ],
+    [
+      'bulkStage',
+      () =>
+        createGitApi().bulkStage!({
+          worktreePath: '/repo',
+          filePaths: ['a.txt'],
+          submodulePath: 'libs/sub'
+        })
+    ],
+    [
+      'bulkUnstage',
+      () =>
+        createGitApi().bulkUnstage!({
+          worktreePath: '/repo',
+          filePaths: ['a.txt'],
+          submodulePath: 'libs/sub'
+        })
+    ]
+  ]
+
+  it.each(SUBMODULE_CALLS)(
+    '%s refuses a submodule instead of acting on the parent',
+    async (_name, call) => {
+      await expect(call()).rejects.toThrow('not available on this host')
+      expect(callRuntimeResult).not.toHaveBeenCalled()
+    }
+  )
+
+  it('still commits to the runtime when no submodule is named', async () => {
+    await createGitApi().commit!({ worktreePath: '/repo', message: 'msg' })
+    expect(callRuntimeResult).toHaveBeenCalledWith('git.commit', {
+      worktree: 'id:wt-1',
+      message: 'msg'
+    })
+  })
+})

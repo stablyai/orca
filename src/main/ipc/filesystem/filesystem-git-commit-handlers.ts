@@ -2,6 +2,7 @@ import { ipcMain } from 'electron'
 import { commitChanges } from '../../git/status'
 import { resolveRegisteredWorktreePath } from '../registered-worktree-roots-cache'
 import { getLocalGitOptionsForRegisteredWorktree } from '../local-worktree-runtime-options'
+import { resolveGitActionPath } from './git-remote/submodule-action-target'
 import type { FilesystemHandlerContext } from './filesystem-handler-context'
 import { requireReachableGitRoute } from '../../providers/execution-host-provider-dispatch'
 import { getConnectionExecutionHostId } from '../../../shared/execution-host'
@@ -12,19 +13,20 @@ export function registerFilesystemGitCommitHandlers(context: FilesystemHandlerCo
     'git:commit',
     async (
       _event,
-      args: { worktreePath: string; message: string; connectionId?: string }
+      args: { worktreePath: string; message: string; connectionId?: string; submodulePath?: string }
     ): Promise<{ success: boolean; error?: string }> => {
       // Validate at IPC so users receive a clear error before process launch.
       if (typeof args.message !== 'string' || args.message.trim().length === 0) {
         throw new Error('Commit message is required')
       }
       requireReachableGitRoute(getConnectionExecutionHostId(args.connectionId))
-      const worktreePath = await resolveRegisteredWorktreePath(args.worktreePath, store)
+      const registeredPath = await resolveRegisteredWorktreePath(args.worktreePath, store)
       const gitOptions = getLocalGitOptionsForRegisteredWorktree(
         store,
         args.worktreePath,
-        worktreePath
+        registeredPath
       )
+      const worktreePath = await resolveGitActionPath(args, registeredPath, gitOptions)
       return commitChanges(worktreePath, args.message, {
         ...gitOptions,
         admissionTier: 'interactive'

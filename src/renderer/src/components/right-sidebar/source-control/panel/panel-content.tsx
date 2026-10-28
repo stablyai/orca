@@ -5,6 +5,7 @@ import { SourceControlBranchSection } from '../listing/branch-section'
 import { SourceControlContentStatus } from '../listing/content-status'
 import { SourceControlUncommittedSections } from '../listing/uncommitted-sections'
 import { SourceControlSubmoduleReposSection } from '../listing/submodule-repos-section'
+import { useSourceControlSubmoduleChanges } from '../listing/use-submodule-changes'
 import {
   submoduleReposWorktreePath,
   useSourceControlSubmoduleRepos
@@ -84,14 +85,19 @@ export function SourceControlPanelContent(props: SourceControlPanelReadyProps) {
   } = model
 
   // Remote hosts are not served yet: the main process only resolves submodules of this machine's worktrees.
+  const submoduleWorktreePath = submoduleReposWorktreePath({
+    worktreePath,
+    isFolder,
+    activeRepoTarget,
+    activeConnectionId
+  })
   const submoduleRepos = useSourceControlSubmoduleRepos({
-    worktreePath: submoduleReposWorktreePath({
-      worktreePath,
-      isFolder,
-      activeRepoTarget,
-      activeConnectionId
-    }),
+    worktreePath: submoduleWorktreePath,
     onChanged: refreshActiveGitStatus
+  })
+  const submoduleChanges = useSourceControlSubmoduleChanges({
+    worktreePath: submoduleWorktreePath,
+    onCommitted: () => void submoduleRepos.refresh()
   })
   const hasFilteredUncommittedEntries = displaySections.length > 0
   const hasFilteredBranchEntries = filteredBranchEntries.length > 0
@@ -192,7 +198,7 @@ export function SourceControlPanelContent(props: SourceControlPanelReadyProps) {
         />
       )}
 
-      <SourceControlSubmoduleReposSection {...submoduleRepos} />
+      <SourceControlSubmoduleReposSection {...submoduleRepos} changes={submoduleChanges} />
 
       {shouldShowSourceControlCompareUnavailableCard(
         branchSummary,
