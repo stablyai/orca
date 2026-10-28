@@ -5,7 +5,7 @@ import type { RuntimeRpcFailure, RuntimeRpcResponse } from '../../../shared/runt
 import { RUNTIME_MANUALLY_DISCONNECTED_MESSAGE } from './runtime-environment-manual-disconnect'
 
 export function manuallyDisconnectedResponse(
-  environment: ReturnType<typeof resolveEnvironment>
+  environment: Pick<ReturnType<typeof resolveEnvironment>, 'runtimeId'>
 ): RuntimeRpcResponse<never> {
   return {
     id: 'runtime.manualDisconnect',

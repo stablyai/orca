@@ -18,15 +18,24 @@ import type { PairingOffer } from '../../mobile-relay-pairing-offer'
 export type SharedControlTestServer = {
   pairing: PairedRuntimeConnection
   offer: PairingOffer
-  requests: { id: string; method: string; params?: unknown }[]
+  requests: SharedControlTestRequest[]
   auths: unknown[]
   connectionCount: () => number
   flushDelayedResponses: () => void
   closeClients: () => void
 }
 
+export type SharedControlTestRequest = {
+  id: string
+  method: string
+  params?: unknown
+  executionHost?: unknown
+}
+
 type ServerOptions = {
-  resultForRequest?: (method: string) => unknown
+  resultForRequest?: (method: string, request: SharedControlTestRequest) => unknown
+  /** Answers ok:false with this error instead of a result. */
+  errorForRequest?: (request: SharedControlTestRequest) => { code: string; message: string } | null
   delaySubscriptionReady?: boolean
   sendKeepaliveBeforeResponse?: boolean
   keepaliveDelayMs?: number
@@ -166,7 +175,7 @@ function handleRequest(
   ws: WebSocket,
   sharedKey: Uint8Array,
   requests: SharedControlTestServer['requests'],
-  request: { id: string; method: string; params?: unknown },
+  request: SharedControlTestRequest,
   options: ServerOptions & { closeAfterStreamingResponse?: () => boolean },
   delayedResponses: (() => void)[]
 ): void {
@@ -188,8 +197,18 @@ function handleRequest(
   const streaming = isStreamingMethod(request.method)
   const result = streaming
     ? { type: 'ready', subscriptionId: `${request.method}:subscription` }
-    : (options.resultForRequest?.(request.method) ?? { method: request.method })
+    : (options.resultForRequest?.(request.method, request) ?? { method: request.method })
+  const error = options.errorForRequest?.(request) ?? null
   const sendResponse = (): void => {
+    if (error) {
+      sendEncrypted(ws, sharedKey, {
+        id: request.id,
+        ok: false,
+        error,
+        _meta: { runtimeId: 'runtime-test' }
+      })
+      return
+    }
     if (options.sendUnknownResponseBeforeResponse) {
       sendEncrypted(ws, sharedKey, {
         id: 'unknown-response-id',

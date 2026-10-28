@@ -1,3 +1,5 @@
+import { parseRelayedRuntimeEnvironmentId } from '../../../shared/relayed-runtime-environment'
+
 const revisionByEnvironmentId = new Map<string, number>()
 // Pairings proven to continue the same machine: old revision → the revision that replaced it.
 const continuedRevisionsByEnvironmentId = new Map<string, Map<number, number>>()
@@ -82,7 +84,14 @@ export function onRuntimeEnvironmentRevisionsChanged(
 }
 
 export function getRuntimeEnvironmentRevision(environmentId: string): number | undefined {
-  return revisionByEnvironmentId.get(environmentId)
+  const relayed = parseRelayedRuntimeEnvironmentId(environmentId)
+  if (!relayed) {
+    return revisionByEnvironmentId.get(environmentId)
+  }
+  // A relayed server lives on its relaying server's pairing; once that moves, the id is stale.
+  return revisionByEnvironmentId.get(relayed.ownerEnvironmentId) === relayed.ownerPairingRevision
+    ? relayed.ownerPairingRevision
+    : undefined
 }
 
 /** Selected catalog projection also changes when a pending host key is proved at the same revision. */

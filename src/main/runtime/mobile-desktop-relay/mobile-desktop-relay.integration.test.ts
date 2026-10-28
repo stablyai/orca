@@ -45,6 +45,18 @@ import { sendRequest } from '../runtime-rpc-test-harness'
 import { makeStore } from '../runtime-rpc-worktree-store-fixtures'
 import type { MobileDesktopRelayHosts } from './mobile-desktop-relay-hosts'
 import type * as PassthroughSocketModule from '../../../shared/remote-runtime/remote-runtime-passthrough-socket'
+import { toRelayedRuntimeEnvironmentId } from '../../../shared/relayed-runtime-environment'
+import {
+  addEnvironmentFromPairingCode,
+  resolveEnvironment
+} from '../../../shared/runtime-environment-store'
+import {
+  callRelayedRuntimeEnvironment,
+  getRelayedRuntimeEnvironmentStatus
+} from '../../ipc/runtime-environments/runtime-environment-relayed-transport'
+import { closeRemoteRuntimeRequestConnection } from '../../ipc/runtime-environments/runtime-environment-request-connections'
+
+vi.mock('electron', () => ({ BrowserWindow: { getAllWindows: () => [] } }))
 
 const passthroughOpens = vi.hoisted(() => {
   const hostReplies: string[] = []
@@ -837,6 +849,42 @@ describe('mobile desktop relay: phone -> desktop -> server', () => {
     client.send('list', 'terminal.list', {})
     expect(isOk(await client.next('list'))).toBe(true)
     expect(passthroughOpens.count).toBe(opensBefore)
+  })
+
+  it("reads a server through this computer's own relayed-environment path, never as the relaying desktop", async () => {
+    const { host, desktop, handle } = await startTopology()
+    const laptopData = mkdtempSync(join(tmpdir(), 'orca-relay-laptop-'))
+    const offer = desktop.server.createPairingOffer({
+      address: '127.0.0.1',
+      name: 'Laptop',
+      scope: 'runtime'
+    })
+    if (!offer.available) {
+      throw new Error('pairing unavailable')
+    }
+    const paired = addEnvironmentFromPairingCode(laptopData, {
+      name: 'Desktop',
+      pairingCode: offer.pairingUrl
+    })
+    cleanups.push(() => closeRemoteRuntimeRequestConnection(paired.id))
+    const selector = toRelayedRuntimeEnvironmentId({
+      ownerEnvironmentId: paired.id,
+      ownerPairingRevision: paired.pairingRevision ?? paired.createdAt,
+      executionHost: TARGET
+    })
+
+    const status = await getRelayedRuntimeEnvironmentStatus(laptopData, selector)
+    const agent = await callRelayedRuntimeEnvironment(laptopData, {
+      selector,
+      method: 'terminal.agentStatus',
+      params: { terminal: handle }
+    })
+
+    expect(status).toMatchObject({ ok: true, result: { runtimeId: host.runtime.getRuntimeId() } })
+    expect(agent).toMatchObject({ ok: true, _meta: { runtimeId: host.runtime.getRuntimeId() } })
+    expect(resolveEnvironment(laptopData, paired.id).runtimeId).not.toBe(
+      host.runtime.getRuntimeId()
+    )
   })
 
   it("revokes a desktop client's server device when the desktop revokes the client, leaving its phones", async () => {
