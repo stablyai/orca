@@ -4,14 +4,13 @@ import { act, createElement } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, describe, expect, it } from 'vitest'
 import { TEST_REPO, makeWorktree } from '@/store/slices/worktrees-slice-test-fixtures'
-import type { ExecutionHostId } from '../../../../shared/execution-host'
 import type { AiVaultSessionResumeTargetState } from './ai-vault-session-resume'
 import {
   buildAiVaultHostScopeOptions,
   buildRuntimeAiVaultHostScopeOptions,
   useAiVaultExecutionHostScope
 } from './ai-vault-host-scope'
-import type { ExecutionHostScope } from '../../../../shared/execution-host'
+import type { ExecutionHostId, ExecutionHostScope } from '../../../../shared/execution-host'
 
 type HostScopeResult = ReturnType<typeof useAiVaultExecutionHostScope>
 
