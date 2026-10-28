@@ -16,9 +16,7 @@ function countOccurrences(haystack: string, needle: string): number {
   return haystack.split(needle).length - 1
 }
 
-// Why: Playwright's keyboard dispatches straight into the renderer and never reaches Electron's
-// before-input-event, where Orca resolves app shortcuts such as quick open. A native input event
-// walks the whole path: main-process allowlist → renderer handlers → Monaco.
+// Playwright keys skip Electron's before-input-event, where Orca resolves app shortcuts; native input does not.
 async function pressNativeControlChord(app: ElectronApplication, keyCode: string): Promise<void> {
   await app.evaluate(({ BrowserWindow }, code) => {
     const target = BrowserWindow.getAllWindows()[0]
@@ -27,12 +25,7 @@ async function pressNativeControlChord(app: ElectronApplication, keyCode: string
   }, keyCode)
 }
 
-// Exercises the real monaco-emacs adapter against the live Monaco file editor: line movement,
-// the kill ring (C-k / C-y), mark + region copy (C-SPC / M-w), the C-x prefix echo, and C-g.
-// It also proves the editor keybinding context: an Orca chord that collides with an Emacs chord
-// (Ctrl+P, bound to quick open here the way it is by default on Linux/Windows) reaches the editor
-// while it has focus and still opens quick open everywhere else. Autosave stays off: every write
-// below goes through `C-x C-s`, since with the Emacs preset Ctrl+S is incremental search.
+// Autosave stays off so every write goes through `C-x C-s`.
 test('@golden emacs keybindings drive the Monaco file editor', async ({
   electronApp,
   orcaPage,
@@ -46,14 +39,13 @@ test('@golden emacs keybindings drive the Monaco file editor', async ({
 
   await waitForSessionReady(orcaPage)
 
-  // Enable the Emacs preset before the editor mounts.
   await orcaPage.evaluate(() =>
     window.__store?.getState().updateSettings({ editorKeybindings: 'emacs', editorAutoSave: false })
   )
   await expect
     .poll(() => orcaPage.evaluate(() => window.__store?.getState().settings?.editorKeybindings))
     .toBe('emacs')
-  // Why: macOS binds quick open to Cmd+P, so the Ctrl+P collision only exists after this override.
+  // macOS binds quick open to Cmd+P, so force the Linux/Windows Ctrl+P collision.
   await orcaPage.evaluate(() =>
     window.__store?.getState().setKeybindingOverride('worktree.quickOpen', ['Ctrl+P'])
   )
@@ -68,23 +60,20 @@ test('@golden emacs keybindings drive the Monaco file editor', async ({
   const opened = await clickFileInExplorer(orcaPage, [GOLDEN_CHANGED_PATH])
   expect(opened).toBe(GOLDEN_CHANGED_PATH)
 
-  // Scope to the real file editor; the app mounts other (empty) Monaco instances whose
-  // `.view-lines` would shadow a bare `.monaco-editor` selector.
+  // Other empty Monaco instances would shadow a bare `.monaco-editor` selector.
   const fileEditor = orcaPage.locator('[data-orca-file-editor]').first()
   const monaco = fileEditor.locator('.monaco-editor').first()
   await expect(monaco).toBeVisible({ timeout: 25_000 })
   const viewLines = monaco.locator('.view-lines')
   await expect(viewLines).toContainText('export const hello', { timeout: 20_000 })
 
-  // The status row renders for Emacs, without the Vim cheatsheet. The echo node itself is empty
-  // (so zero-height) until a prefix key or the mark gives it something to say.
+  // The echo node stays empty, and zero-height, until a prefix or the mark fills it.
   const statusBar = fileEditor.locator('[data-orca-emacs-statusbar]')
   await expect(statusBar).toBeAttached()
   await expect(fileEditor.locator('[data-orca-vim-statusbar]')).toHaveCount(0)
   await expect(fileEditor.getByRole('button', { name: 'Vim commands' })).toHaveCount(0)
 
-  // monaco-emacs switches the caret to a block on start, which is the cheapest proof the lazy
-  // import resolved and the extension attached to this editor.
+  // The block caret proves the lazy import resolved and attached.
   await expect(monaco.locator('.cursors-layer.cursor-block-style')).toBeAttached({
     timeout: 10_000
   })
@@ -92,18 +81,12 @@ test('@golden emacs keybindings drive the Monaco file editor', async ({
   await monaco.click()
   const kb = orcaPage.keyboard
 
-  // Prefix echo: a pending C-x shows in the status row and C-g cancels it without editing.
   await kb.press('Control+x')
   await expect(statusBar).toContainText('C-x', { timeout: 5_000 })
   await kb.press('Control+g')
   await expect(statusBar).toHaveText('', { timeout: 5_000 })
 
-  // Mark + region copy, then yank: C-SPC sets the mark (echoed in the status row), C-e extends the
-  // region to end of line, M-w copies it and deactivates the mark, C-y pastes it on a new line.
-  // The click lands on the trailing empty line, so C-p first moves onto the only line of text.
-  // Ctrl+P is also Orca's quick-open chord: with the editor focused it must stay an Emacs key, so
-  // it is sent natively to pass through the main-process router. If Orca consumed it, no line would
-  // be copied below and the yank count would stay at 1.
+  // The click lands on the trailing empty line; native C-p must reach Emacs, not quick open.
   await pressNativeControlChord(electronApp, 'p')
   await kb.press('Control+a')
   await kb.press('Control+Space')
@@ -119,7 +102,6 @@ test('@golden emacs keybindings drive the Monaco file editor', async ({
   await expect(viewLines).toContainText('export const hello = "world"export const hello', {
     timeout: 5_000
   })
-  // Nothing is on disk until C-x C-s routes through Orca's save.
   expect(countOccurrences(readFileSync(indexPath, 'utf8'), 'export const hello = "world"')).toBe(1)
   const saveWithEmacs = async (): Promise<void> => {
     await kb.press('Control+x')
@@ -133,8 +115,6 @@ test('@golden emacs keybindings drive the Monaco file editor', async ({
     })
     .toBe(2)
 
-  // Incremental search: C-s opens the find widget seeded by the current word; inside the widget
-  // C-s / C-r step through matches and C-g closes it, handing focus back to the editor.
   const findWidget = monaco.locator('.find-widget.visible')
   const matchesCount = findWidget.locator('.matchesCount')
   await kb.press('Control+a')
@@ -161,7 +141,6 @@ test('@golden emacs keybindings drive the Monaco file editor', async ({
     )
     .toBe(true)
 
-  // Kill ring: C-a then C-k kills the current line's text; C-y brings it back.
   await kb.press('Control+a')
   await kb.press('Control+k')
   await saveWithEmacs()
@@ -178,7 +157,7 @@ test('@golden emacs keybindings drive the Monaco file editor', async ({
     })
     .toBe(2)
 
-  // Plain Tab indents instead of running formatDocument (monaco-emacs's upstream default).
+  // Upstream binds Tab to formatDocument.
   await kb.press('Control+a')
   await kb.press('Tab')
   await saveWithEmacs()
@@ -186,8 +165,6 @@ test('@golden emacs keybindings drive the Monaco file editor', async ({
     .poll(() => readFileSync(indexPath, 'utf8'), { timeout: 10_000 })
     .toMatch(/^\s+export const hello = "world"/m)
 
-  // Emacs windows are Orca split groups: `C-x 3` shows the file in a second group and moves point
-  // there, `C-x o` walks between them, `C-x 0` closes that view and leaves the first one.
   const editorViewIds = (): Promise<(string | null)[]> =>
     orcaPage.evaluate(() =>
       [...document.querySelectorAll('[data-orca-file-editor][data-orca-editor-view]')].map((el) =>
@@ -201,7 +178,6 @@ test('@golden emacs keybindings drive the Monaco file editor', async ({
           ?.closest('[data-orca-editor-view]')
           ?.getAttribute('data-orca-editor-view') ?? null
     )
-  // Each view has its own echo area; the prefix shows in whichever view holds point.
   const pendingPrefix = orcaPage.locator('[data-orca-emacs-statusbar]').filter({ hasText: 'C-x' })
   const pressWindowCommand = async (key: string): Promise<void> => {
     await kb.press('Control+x')
@@ -225,7 +201,6 @@ test('@golden emacs keybindings drive the Monaco file editor', async ({
   await orcaPage.locator('[data-orca-file-editor] .view-lines').click()
   await expect.poll(focusedViewId, { timeout: 5_000 }).toBe(firstView)
 
-  // Outside the editor the same chord is Orca's again: quick open opens from app focus.
   await orcaPage.evaluate(() => {
     const active = document.activeElement
     if (active instanceof HTMLElement) {

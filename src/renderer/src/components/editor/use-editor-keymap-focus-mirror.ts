@@ -3,11 +3,7 @@ import { useEffect, type RefObject } from 'react'
 // Why: split views mount several mirrors; only the container that reported focus may clear it.
 let focusOwner: HTMLElement | null = null
 
-/**
- * Mirrors "an editor-first keymap has keyboard focus" to the main process, which resolves app
- * shortcuts in before-input-event before any renderer handler runs. Covers the whole editor
- * container, so Monaco's find widget counts as editor focus too.
- */
+/** Main resolves app shortcuts in before-input-event, before any renderer handler can yield them. */
 export function useEditorKeymapFocusMirror(
   containerRef: RefObject<HTMLElement | null>,
   enabled: boolean
@@ -26,7 +22,7 @@ export function useEditorKeymapFocusMirror(
     }
     const onFocusIn = (): void => report(true)
     const onFocusOut = (event: FocusEvent): void => {
-      // Focus moving between nodes inside the container (editor → find widget) is not a loss.
+      // Moving into the find widget keeps editor focus.
       if (event.relatedTarget instanceof Node && container.contains(event.relatedTarget)) {
         return
       }

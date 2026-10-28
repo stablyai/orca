@@ -6,11 +6,8 @@ import { collectLayoutLeafGroupIds } from '../../../../shared/workspace-layout/t
 import { isEditorTabContentType } from '@/store/slices/editor/tabs/editor-tab-content-type'
 import type { EmacsEditorHooks, EmacsWindowSplitDirection } from './monaco-emacs-mode'
 
-// Emacs windows map onto Orca's split groups: a group is a window, the tab it shows is the buffer
-// in it. `C-x 2`/`C-x 3` open the same file in a new group, `C-x o` walks the layout, `C-x 0`
-// closes this view and leaves the file open in its other windows.
+// Emacs windows map onto Orca split groups; the tab a group shows is its buffer.
 
-/** The editor view an Emacs window command acts on. */
 export type EmacsWindowView = { worktreeId: string; fileId: string; viewStateId: string }
 
 export const EDITOR_VIEW_ATTRIBUTE = 'data-orca-editor-view'
@@ -26,7 +23,7 @@ export type EmacsWindowState = ActivateWorkspaceTabStore &
     | 'unifiedTabsByWorktree'
   >
 
-/** Read through `getState` so every step after a store action sees the updated tabs and groups. */
+/** Reads `getState` so each step after a store action sees the updated tabs and groups. */
 export type EmacsWindowStore = { getState: () => EmacsWindowState }
 
 function viewTab(state: EmacsWindowState, view: EmacsWindowView) {
@@ -51,7 +48,6 @@ function editorViewInput(viewStateId: string): HTMLElement | null {
   return input instanceof HTMLElement ? input : null
 }
 
-/** Moves keyboard focus into a mounted editor view; one that is not on screen is left alone. */
 function focusEditorView(viewStateId: string): void {
   editorViewInput(viewStateId)?.focus()
 }
@@ -59,11 +55,10 @@ function focusEditorView(viewStateId: string): void {
 // Bumped by every window command so a pending focus hold never fights the next one.
 let focusHoldGeneration = 0
 
-// Why: inserting a split re-parents the source group, so its editor remounts a few frames later and
-// its mount focus would win; keep the new view focused until the layout has settled.
+// Splitting remounts the source editor a few frames later, and its mount focus would steal the new view's.
 function holdFocusOnEditorView(viewStateId: string): void {
   const generation = ++focusHoldGeneration
-  // A click elsewhere is the user's choice of focus, not a remount stealing it.
+  // A click elsewhere is the user's focus choice, not a remount.
   const cancelOnPointer = (): void => {
     if (generation === focusHoldGeneration) {
       focusHoldGeneration += 1
@@ -108,7 +103,6 @@ export function splitEmacsWindow(
     return false
   }
   const { id: _id, isDirty: _isDirty, ...input } = file
-  // Why: a second view of the open file, not a reopen.
   state.openFile(input, { targetGroupId: groupId })
   const created = (store.getState().unifiedTabsByWorktree[view.worktreeId] ?? []).find(
     (entry) => entry.entityId === view.fileId && entry.groupId === groupId
@@ -143,7 +137,7 @@ export function focusOtherEmacsWindow(store: EmacsWindowStore, view: EmacsWindow
     return true
   }
   const activated = activateWorkspaceTab(state, target)
-  // Why: activation selects an editor tab without taking the keyboard; a terminal focuses itself.
+  // Activation selects an editor tab without focusing it; a terminal focuses itself.
   if (activated && isEditorTabContentType(target.contentType)) {
     focusEditorView(target.id)
   }
@@ -152,7 +146,7 @@ export function focusOtherEmacsWindow(store: EmacsWindowStore, view: EmacsWindow
 
 export function deleteEmacsWindow(store: EmacsWindowStore, view: EmacsWindowView): boolean {
   const state = store.getState()
-  // Why: Emacs refuses to delete the sole window; with one group the tab is the whole editor.
+  // Emacs refuses to delete the sole window.
   if (!viewTab(state, view) || windowGroupIds(state, view.worktreeId).length < 2) {
     return false
   }
@@ -162,7 +156,7 @@ export function deleteEmacsWindow(store: EmacsWindowStore, view: EmacsWindowView
   })
 }
 
-/** Hooks for `installMonacoEmacsMode`; `view` is read per key so a remount never binds stale ids. */
+/** `view` is read per key so a remount never binds stale ids. */
 export function createEmacsEditorHooks(
   view: () => EmacsWindowView | null,
   onSave: () => void

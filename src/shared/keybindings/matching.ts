@@ -81,8 +81,7 @@ export function keybindingRunsInTextField(
   )
 }
 
-// Why: an Emacs editor owns its Ctrl/Alt chords the way a terminal-first shell owns readline keys;
-// Orca keeps every chord the preset does not bind.
+// An Emacs editor owns its chords like a terminal-first shell owns readline keys; Orca keeps the rest.
 function editorKeymapClaimsInput(
   input: KeybindingInput,
   platform: NodeJS.Platform,

@@ -8,12 +8,7 @@ import { parseKeybinding } from './parser'
 import { keyMatches, modifierStateMatches, platformModifiers } from './matching-key'
 import { getEffectiveKeybindingsForAction } from './effective'
 
-/**
- * Chords the Emacs editor preset owns: every modified key monaco-emacs binds plus Orca's additions
- * (`C-x h`, `C-?`, `C-M-_`, `S-C-z`). `Ctrl` is the physical Control key on every platform (never `Mod`), because
- * Emacs chords are Control chords on macOS too. While an Emacs editor has focus, Orca yields these
- * to the editor instead of running app shortcuts such as Ctrl+P, Ctrl+W or Ctrl+B on Linux/Windows.
- */
+// Every modified key monaco-emacs binds plus Orca's additions; `Ctrl` (not `Mod`) because Emacs uses Control on macOS too.
 export const EMACS_EDITOR_CHORDS: readonly string[] = [
   ...[...'ABDEFGHKLMNOPQRSTUVWXYZ'].map((letter) => `Ctrl+${letter}`),
   'Ctrl+Space',
@@ -54,7 +49,6 @@ function chordIdentity(parsed: ParsedKeybinding, platform: NodeJS.Platform): str
   ].join('+')
 }
 
-/** True when the pressed key is a chord the Emacs editor preset owns. */
 export function isEmacsEditorChordInput(
   input: KeybindingInput,
   platform: NodeJS.Platform
@@ -69,7 +63,6 @@ export function isEmacsEditorChordInput(
   )
 }
 
-/** True when a binding string resolves, on this platform, to a chord the Emacs editor preset owns. */
 export function isEmacsEditorChordBinding(binding: string, platform: NodeJS.Platform): boolean {
   const parsed = parseKeybinding(binding)
   if (!parsed || parsed.doubleTapModifier) {
@@ -79,7 +72,6 @@ export function isEmacsEditorChordBinding(binding: string, platform: NodeJS.Plat
   return PARSED_EMACS_EDITOR_CHORDS.some((chord) => chordIdentity(chord, platform) === identity)
 }
 
-/** True when any effective binding of the action is yielded while an Emacs editor has focus. */
 export function keybindingYieldsToEmacsEditor(
   actionId: KeybindingActionId,
   platform: NodeJS.Platform,

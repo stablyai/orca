@@ -33,7 +33,7 @@ import { isEditorKeybindingsPreset } from '../../../../shared/editor-keybindings
 import { useEditorKeymapFocusMirror } from './use-editor-keymap-focus-mirror'
 import { EDITOR_KEYMAP_ATTRIBUTE } from '@/lib/keybinding-context'
 
-/** Reserved height (px) for the keymap status bar row; keep in sync with the render class. */
+// Keep in sync with the status bar row's render class.
 const KEYMAP_STATUS_BAR_HEIGHT = 22
 
 type MonacoEditorProps = {
@@ -85,8 +85,6 @@ export default function MonacoEditor({
 }: MonacoEditorProps): React.JSX.Element {
   const editorRef = useRef<editor.IStandaloneCodeEditor | null>(null)
   const editorContainerRef = useRef<HTMLDivElement | null>(null)
-  // Why: the editor + overlays live in their own flex child so the keymap status bar can occupy a
-  // real row below the editor instead of overlapping it.
   const editorBodyRef = useRef<HTMLDivElement | null>(null)
   const keymapStatusBarRef = useRef<HTMLDivElement | null>(null)
   const [mountedEditor, setMountedEditor] = useState<editor.IStandaloneCodeEditor | null>(null)
@@ -137,8 +135,7 @@ export default function MonacoEditor({
     [filePath, modelOwnerKey]
   )
   useEditorModelRekeyCarry(fileId, modelUri)
-  // Why: keymap presets and their status bar only apply to the editable, full-height file editor —
-  // not read-only diffs or the auto-height inline editors used for previews.
+  // Presets apply only to the editable full-height file editor, not read-only diffs or inline previews.
   const editorKeybindings =
     !readOnly && !autoHeight && isEditorKeybindingsPreset(settings?.editorKeybindings)
       ? settings.editorKeybindings
@@ -216,9 +213,7 @@ export default function MonacoEditor({
     })
   }, [editorFontFamily, editorFontSize, editorWordWrap, readOnly])
 
-  // Why: install Vim keybindings on the mounted editor and tear them down when the setting flips
-  // or the editor unmounts, so toggling never leaks a stale adapter. monaco-vim loads lazily, so
-  // guard against the editor unmounting before the import settles.
+  // monaco-vim loads lazily, so guard against the editor unmounting before the import settles.
   useEffect(() => {
     const ed = mountedEditor
     const statusNode = keymapStatusBarRef.current
@@ -340,9 +335,7 @@ export default function MonacoEditor({
         [EDITOR_KEYMAP_ATTRIBUTE]: emacsModeEnabled ? 'emacs' : undefined,
         [EDITOR_VIEW_ATTRIBUTE]: viewStateId
       }}
-      // Why: a flex column lets the keymap status bar occupy a real row below the editor instead of
-      // overlaying it. autoHeight editors are content-sized (and never show the bar), so they keep
-      // the plain block layout.
+      // A flex column gives the keymap status bar its own row; autoHeight editors never show it.
       className={autoHeight ? 'relative' : 'flex h-full flex-col'}
       style={renderedEditorHeight === null ? undefined : { height: renderedEditorHeight }}
     >
@@ -413,8 +406,7 @@ export default function MonacoEditor({
 
       {editorKeybindings !== 'default' ? (
         <div
-          // Why: the keymap adapters own the status node's text, so the cheatsheet hint lives as a
-          // sibling in this row rather than inside the node React and the adapter would both mutate.
+          // The keymap adapter owns the status node's text, so React's cheatsheet hint stays a sibling.
           className="flex shrink-0 items-center gap-2 border-t border-border bg-editor-surface px-2"
           style={{ height: KEYMAP_STATUS_BAR_HEIGHT }}
         >

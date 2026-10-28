@@ -48,8 +48,7 @@ function mountWindow() {
       loadURL: vi.fn(() => Promise.resolve())
     }
   })
-  // Why: Ctrl+P is the Emacs line-up chord on every platform; binding quick open to it keeps the
-  // test platform-independent (the Linux/Windows default is Mod+P, which already is Ctrl+P).
+  // Ctrl+P is an Emacs chord on every platform, so this keeps the test platform-independent.
   createMainWindow(null, { getKeybindings: () => ({ 'worktree.quickOpen': ['Ctrl+P'] }) })
   const registered = vi
     .mocked(ipcMain.on)

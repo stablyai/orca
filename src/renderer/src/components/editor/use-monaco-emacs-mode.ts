@@ -3,7 +3,6 @@ import type { editor as monacoEditor } from 'monaco-editor'
 import { createEmacsEditorHooks } from './emacs-window-commands'
 import { installMonacoEmacsMode } from './monaco-emacs-mode'
 
-/** The MonacoEditor props the Emacs table reads per key; held in a ref so handlers never go stale. */
 export type MonacoEmacsModeProps = {
   fileId: string
   worktreeId?: string
@@ -11,11 +10,7 @@ export type MonacoEmacsModeProps = {
   onSave: (content: string) => void
 }
 
-/**
- * Same lifecycle as the Vim effect in MonacoEditor: attach on mount or when the preset flips on,
- * dispose on the way out, and guard the lazy import against an editor that unmounted meanwhile.
- * `C-x C-s` routes to Orca's save like `:w` does; the window commands read the live view ids.
- */
+/** Mirrors the Vim effect's lifecycle, including the guard for an editor that unmounts during the lazy import. */
 export function useMonacoEmacsMode(args: {
   editor: monacoEditor.IStandaloneCodeEditor | null
   enabled: boolean

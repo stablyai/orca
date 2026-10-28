@@ -10,7 +10,6 @@ type EditorKeybindingsSettingProps = {
   updateSettings: (updates: Partial<GlobalSettings>) => void
 }
 
-/** Settings control that selects the file editor's keybinding preset (Default, Vim or Emacs). */
 export function EditorKeybindingsSetting({
   settings,
   updateSettings

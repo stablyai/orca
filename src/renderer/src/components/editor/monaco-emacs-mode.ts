@@ -1,12 +1,7 @@
 import { KeyCode, KeyMod, editor as monacoEditor } from 'monaco-editor'
 import type * as MonacoEmacs from 'monaco-emacs'
 
-// monaco-emacs is a keymap layer over Monaco commands, not an Emacs engine. Verified against the
-// monaco-editor 0.55.1 Orca ships: movement, mark (`C-SPC`), kill ring (`C-k`/`C-w`/`M-w`/`C-y`/
-// `M-y`), undo and the `C-x`/`M-g` prefixes. `C-u` numeric arguments do not work upstream (it
-// expects digit keys named `4`, Monaco names them `Digit4`). Its `C-s`/`C-r` open Monaco's find
-// widget; the isearch-style keys inside the widget, `C-g` closing it, `C-x C-s` and the window
-// commands are Orca's.
+// monaco-emacs maps keys onto Monaco commands; `C-u` arguments don't work upstream (it expects `4`, Monaco sends `Digit4`).
 export type EmacsModeController = { dispose: () => void }
 
 export type EmacsWindowSplitDirection = 'right' | 'down'
@@ -19,9 +14,7 @@ export type EmacsEditorHooks = {
   onDeleteWindow: () => void
 }
 
-// Window commands have no Monaco equivalent; Orca answers them with its split groups.
-// Why `Digit2`: monaco-emacs names keys after Monaco's KeyCode and only strips the `Key` prefix,
-// so the chord Emacs calls `C-x 2` reaches the table as `C-x Digit2`.
+// monaco-emacs keeps Monaco's `Digit` key names, so Emacs `C-x 2` arrives as `C-x Digit2`.
 const WINDOW_COMMANDS: readonly [string, string, (hooks: EmacsEditorHooks) => void][] = [
   ['C-x Digit2', 'Split window below', (hooks) => hooks.onSplitWindow('down')],
   ['C-x Digit3', 'Split window right', (hooks) => hooks.onSplitWindow('right')],
@@ -36,11 +29,9 @@ const SOURCE = 'orca.emacs'
 const EMACS_KEYMAP_CONTEXT_KEY = 'orcaEmacsKeymap'
 const IN_FIND_WIDGET = `${EMACS_KEYMAP_CONTEXT_KEY} && findWidgetVisible`
 
-// Why: monaco-emacs keeps one process-global command table, so `C-x C-s` must find the hooks of
-// whichever editor the key landed in.
+// The command table is process-global, so commands look up the hooks of the editor that got the key.
 const hooksByEditor = new WeakMap<monacoEditor.IStandaloneCodeEditor, EmacsEditorHooks>()
 
-// Why: monaco-emacs keeps one process-global command table, so adjust it once, not per editor.
 let commandTableAdjusted = false
 
 function ensureCommandTable(mod: MonacoEmacsModule): void {
@@ -48,11 +39,9 @@ function ensureCommandTable(mod: MonacoEmacsModule): void {
     return
   }
   commandTableAdjusted = true
-  // Why: upstream binds plain Tab to formatDocument, which rewrites the whole file on the key every
-  // editor user presses to indent. Emacs TAB indents, so hand the key back to Monaco.
+  // Upstream binds Tab to formatDocument; Emacs TAB indents.
   mod.unregisterKey('Tab')
-  // Emacs select-all and redo are missing upstream; redo takes Emacs 28's `undo-redo` keys
-  // (`C-?`, `C-M-_`) plus `S-C-z` for editor habit.
+  // Upstream lacks select-all and redo; redo uses Emacs 28 `undo-redo` keys plus `S-C-z`.
   mod.registerGlobalCommand('C-x h', {
     description: 'Select all',
     action: 'editor.action.selectAll'
@@ -76,18 +65,16 @@ function ensureCommandTable(mod: MonacoEmacsModule): void {
       }
     })
   }
-  // Why: keyboard-quit ends an isearch in Emacs; upstream leaves the find widget open.
+  // Emacs keyboard-quit ends isearch; upstream leaves the find widget open.
   const keyboardQuit = new mod.Actions.KeyBoardQuit()
   mod.registerGlobalCommand('C-g', {
     description: 'Keyboard quit',
     run: (editorInstance, extension, repeat, repeatedTrigger) => {
       keyboardQuit.run(editorInstance, extension, repeat, repeatedTrigger)
-      // No-op unless the widget is visible: the command's precondition gates it.
       editorInstance.trigger(SOURCE, 'closeFindWidget', null)
     }
   })
-  // Why: keys typed into the find widget never reach monaco-emacs's editor listener, so the isearch
-  // keys there are Monaco keybinding rules instead. WinCtrl is the physical Control key everywhere.
+  // Find-widget keys bypass monaco-emacs's editor listener; WinCtrl is physical Control on every platform.
   monacoEditor.addKeybindingRules([
     {
       keybinding: KeyMod.WinCtrl | KeyCode.KeyS,
@@ -103,11 +90,7 @@ function ensureCommandTable(mod: MonacoEmacsModule): void {
   ])
 }
 
-/**
- * Enable Emacs keybindings on a Monaco editor, mirroring the echo area into `statusBarNode`: the
- * pending prefix and whether the mark is active. monaco-emacs is imported
- * lazily so loading the editor on the default keymap never pulls in the adapter.
- */
+/** Mirrors the pending prefix and mark into `statusBarNode`; imported lazily to keep the default keymap light. */
 export async function installMonacoEmacsMode(
   editorInstance: monacoEditor.IStandaloneCodeEditor,
   statusBarNode: HTMLElement,
@@ -115,7 +98,7 @@ export async function installMonacoEmacsMode(
   isCancelled: () => boolean = () => false
 ): Promise<EmacsModeController> {
   const mod = await import('monaco-emacs')
-  // Why: a newer install on this editor may already own its hooks; a late dispose would remove them.
+  // A newer install may own this editor's hooks; disposing late would remove them.
   if (isCancelled()) {
     return { dispose: () => {} }
   }
@@ -135,8 +118,7 @@ export async function installMonacoEmacsMode(
   const keySub = extension.onDidChangeKey((state) => {
     keyState = state
     render()
-    // Why: upstream echoes before it runs the command and never fires after the reset, so a finished
-    // `C-x …` would stay on screen; re-read once its keydown handler has returned.
+    // Upstream echoes before running the command and never after the reset, so re-read once keydown returns.
     queueMicrotask(() => {
       if (!disposed) {
         keyState = extension.state.getReadableState()

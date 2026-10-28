@@ -6,8 +6,7 @@ import {
 import type { EditorKeybindingsPreset } from '../../../../shared/editor-keybindings-preset'
 import { translate } from '@/i18n/i18n'
 
-// Badge for shortcuts the Emacs editor preset takes over while the file editor has focus. Only
-// shown once the preset is on, so Default / Vim users see no change in Settings → Shortcuts.
+// Shown only with the Emacs preset on, so Default and Vim users see no change.
 export type ShortcutEditorStatus = {
   label: string
   description: string
