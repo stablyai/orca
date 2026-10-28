@@ -268,6 +268,9 @@ describe('pr-e2e-layout-oracle-routing', () => {
       // Two calls of the reusable workflow in one run must not share artifact names.
       expect(prWorkflow.jobs.layout_oracle.with.artifact_suffix).toBeTruthy()
       expect(prWorkflow.jobs.e2e.with.artifact_suffix).toBeUndefined()
+      // The merge gate keeps Blacksmith speed; the advisory lane runs free.
+      expect(prWorkflow.jobs.layout_oracle.with.fast_runners).toBe(true)
+      expect(prWorkflow.jobs.e2e.with.fast_runners).toBeUndefined()
     })
   })
 })
@@ -284,7 +287,9 @@ describe('ssh-browser-e2e-routing', () => {
     const run = job.steps.find(
       (step) => step.name === 'Run Docker SSH browser network route journeys'
     )
-    expect(job['runs-on']).toBe('blacksmith-4vcpu-ubuntu-2404')
+    expect(job['runs-on']).toBe(
+      "${{ inputs.fast_runners && 'blacksmith-4vcpu-ubuntu-2404' || 'ubuntu-24.04' }}"
+    )
     expect(job.if).toContain("inputs.test_files == ''")
     expect(job.if).toContain(spec)
     expect(install.with['native-runtime']).toBe('node')

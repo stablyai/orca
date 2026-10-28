@@ -3,7 +3,8 @@
 Default to free GitHub-hosted standard runners: the repository is public and the
 Enterprise plan allows 500 concurrent jobs (50 macOS). Use Blacksmith only for:
 
-- PR critical-path jobs: unit test shards, preflight and typecheck, and `e2e.yml`.
+- PR critical-path jobs: unit test shards, preflight and typecheck, and the layout
+  oracle gate (`e2e.yml` with `fast_runners: true`). Advisory e2e lanes run hosted.
 - `pr.yml` Git compatibility: its parallel real-Git lanes, two through Docker,
   exceed test timeouts on 4-vCPU hosted runners.
 - macOS packaging: adhoc, hourly, daily and `release-mac-build.yml`. Hosted

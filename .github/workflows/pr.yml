@@ -1452,6 +1452,7 @@ jobs:
       run_changed_e2e: true
       needs_build: true
       artifact_suffix: -layout-oracle
+      fast_runners: true
 
   # Keep native IME advisory while PR reliability is established (nightly 20/20, 2026-08-09..29, p50 3m25s); do not hide red via continue-on-error. To gate, add verify.needs, TERMINAL_IME_NATIVE env and separate success-or-skipped validation.
   terminal_ime_native:
