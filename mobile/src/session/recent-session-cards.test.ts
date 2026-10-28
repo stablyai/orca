@@ -661,6 +661,54 @@ describe('buildRecentSessionCardFromTab', () => {
       })
     ).toEqual([expect.objectContaining({ tabId: 'tab-other::leaf-1', agentState: 'working' })])
 
+    setCatalogWorktreesForTabStatus(
+      [
+        {
+          worktreeId: 'wt-2',
+          agents: [
+            {
+              paneKey: 'tab-other:leaf-1',
+              state: 'waiting',
+              updatedAt: 150,
+              stateStartedAt: 150
+            }
+          ]
+        }
+      ],
+      200
+    )
+    const completedTabAfterQuestion = {
+      ...liveShellMaskedTab,
+      agentStatus: {
+        state: 'done' as const,
+        prompt: '',
+        paneKey: 'tab-other:leaf-1',
+        stateHistory: [],
+        updatedAt: 80,
+        stateStartedAt: 80,
+        lastAssistantMessage: 'Completed response'
+      }
+    }
+    expect(
+      resolveMobileSessionTabDotState(completedTabAfterQuestion, 210, { isActiveOnScreen: true })
+    ).toBe('done')
+
+    setCatalogWorktreesForTabStatus(worktrees, 200)
+    const completedConptyTab = {
+      ...liveShellMaskedTab,
+      agentStatus: {
+        state: 'done' as const,
+        prompt: '',
+        paneKey: 'tab-other:leaf-1',
+        stateHistory: [],
+        updatedAt: 80,
+        stateStartedAt: 205
+      }
+    }
+    expect(
+      resolveMobileSessionTabDotState(completedConptyTab, 210, { isActiveOnScreen: true })
+    ).toBe('done')
+
     const hugeTitle = 'x'.repeat(800)
     for (let i = 0; i < 30; i += 1) {
       recordRecentSessionCardVisit(

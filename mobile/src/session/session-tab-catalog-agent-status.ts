@@ -197,16 +197,37 @@ export function reconcileTerminalAgentStatusWithCatalog(
         rawObj && typeof rawObj.updatedAt === 'number' ? rawObj.updatedAt : -Infinity
       const rawStateStartedAt =
         rawObj && typeof rawObj.stateStartedAt === 'number' ? rawObj.stateStartedAt : undefined
+      const rawEffectiveUpdatedAt = Math.max(rawUpdatedAt, rawStateStartedAt ?? -Infinity)
       const catalogStateStartedAt =
         typeof catalogRow.stateStartedAt === 'number' ? catalogRow.stateStartedAt : undefined
       const predatesStart =
         rawStateStartedAt !== undefined &&
         catalogRow.updatedAt < rawStateStartedAt &&
         (catalogStateStartedAt === undefined || catalogStateStartedAt < rawStateStartedAt)
+      const hasCompletedTurnEvidence =
+        rawObj?.state === 'done' &&
+        (typeof rawObj.lastAssistantMessage === 'string' || rawObj.interrupted === true)
+      const catalogStartsNewerTurn =
+        catalogStateStartedAt !== undefined &&
+        rawStateStartedAt !== undefined &&
+        catalogStateStartedAt > rawStateStartedAt &&
+        catalogRow.updatedAt > rawEffectiveUpdatedAt
+      const staleLiveQuestionOrPermission =
+        rawObj?.state === 'done' &&
+        !options?.worktrees &&
+        (catalogRow.state === 'waiting' || catalogRow.state === 'blocked')
+      const isShellMaskedWorkingTurn =
+        rawObj?.state === 'done' &&
+        !hasCompletedTurnEvidence &&
+        catalogRow.state === 'working' &&
+        rawStateStartedAt !== undefined &&
+        catalogStateStartedAt === rawStateStartedAt &&
+        rawUpdatedAt > rawStateStartedAt
       if (
         !predatesStart &&
-        (catalogRow.updatedAt >= rawUpdatedAt ||
-          (rawObj?.state === 'done' && catalogRow.state !== 'done'))
+        !staleLiveQuestionOrPermission &&
+        (!hasCompletedTurnEvidence || catalogStartsNewerTurn) &&
+        (catalogRow.updatedAt >= rawEffectiveUpdatedAt || isShellMaskedWorkingTurn)
       ) {
         const merged = rawObj ? { ...rawObj, ...catalogRow } : catalogRow
         return toReconciledStatus(merged, options?.now ?? (catalogReceivedAt || Date.now()))
