@@ -108,6 +108,8 @@ export function buildDefaultSettings(args: {
     minimizeToTrayOnClose: false,
     // Why: default-on everywhere so it round-trips across platforms; only darwin acts on it.
     showMenuBarIcon: true,
+    // Why default-on: the indicator only helps if it is already there when an agent blocks.
+    showNotchStatus: true,
     terminalClipboardOnSelect: false,
     // Trim only the shared leading-space gutter, preserving relative indentation.
     terminalCopyTrimsGutter: true,

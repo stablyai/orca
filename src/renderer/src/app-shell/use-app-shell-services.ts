@@ -28,6 +28,7 @@ import { useCodexSharedSettingsNotice } from '../components/terminal-pane/codex-
 import { useVisibleReviewRefreshReporting } from './use-visible-review-refresh-reporting'
 import { useVisibleHostedReviewRefresh } from './use-visible-hosted-review-refresh'
 import { useProfileStateSaveDelayNotice } from './use-profile-state-save-delay-notice'
+import { useNotchRevealBridge } from '../components/notch/useNotchRevealBridge'
 
 /** Keep subscriptions above surfaces that unmount or never appear on Landing. */
 export function useAppShellServices(): void {
@@ -55,6 +56,7 @@ export function useAppShellServices(): void {
   useGitStatusPolling({ enabled: workspaceSessionReady })
   // Watch files above Explorer so editor changes still arrive on Source Control/Checks.
   useEditorExternalWatch()
+  useNotchRevealBridge()
   useReadOnScreenAttention()
   useAppMenuPaste()
   useAppMenuSelectionActions()

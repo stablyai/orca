@@ -24,6 +24,7 @@ import {
   isDevBundleInUse,
   selectStaleDevBundleDirs
 } from './dev-electron-bundle-cache.mjs'
+import { buildDevScreenGeometryHelper } from './dev-screen-geometry-helper.mjs'
 import { startDevStorageReclaim } from './dev-storage-reclaim.mjs'
 import {
   announceDevInstance,
@@ -277,6 +278,12 @@ function prepareMacDevElectronApp() {
       requiredResourcePaths.every((resourcePath) => existsSync(resourcePath))
     )
   }
+
+  // Why before the early return: this helper's output lives in the repo's .build/release, not
+  // in the copied bundle, so copiedAppIsUsable() never observes it. Called from inside the
+  // cached branch it would only build on the first dev launch — a deleted binary or an edited
+  // main.swift would then silently leave the notch on its pill fallback.
+  buildDevScreenGeometryHelper(repoRoot)
 
   if (copiedAppIsUsable()) {
     pruneStaleDevBundles(distDir)

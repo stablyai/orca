@@ -52,6 +52,7 @@ import { logStartupMilestone } from './startup-diagnostics'
 import { writeHttp1CompatibilityMarker } from './http1-compatibility-marker'
 import { mainProcessState as state } from './main-process-state'
 import { syncMacMenuBarIcon } from './main-window-actions'
+import { syncNotchStatus } from './notch-status-wiring'
 import { updateGpuAccelerationAboutPanel } from './gpu-lifecycle'
 import {
   logWslCliReconciliationResults,
@@ -249,6 +250,9 @@ export async function initializeReadyFoundation(): Promise<void> {
     if ('showMenuBarIcon' in updates) {
       // Store owns settings mutations; sync every menu-bar toggle through this listener.
       syncMacMenuBarIcon(settings.showMenuBarIcon !== false)
+    }
+    if ('showNotchStatus' in updates) {
+      syncNotchStatus(settings.showNotchStatus === true)
     }
     if ('agentStatusHooksEnabled' in updates) {
       agentHookServer.setStatusHooksEnabled(isAgentStatusHooksEnabled(settings))

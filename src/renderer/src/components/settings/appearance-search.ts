@@ -7,10 +7,15 @@ import { translateSearchKeyword } from './settings-search-keywords'
 import { SHOW_UI_LANGUAGE_SETTING } from '@/i18n/supported-languages'
 import { getStatusBarToggles } from './appearance-status-bar-search'
 import { getUsagePercentageDisplayEntry } from './appearance-usage-percentage-search'
-import { getMenuBarIconEntries, getSystemTrayEntries } from './appearance-system-presence-search'
+import {
+  getMenuBarIconEntries,
+  getNotchStatusEntries,
+  getSystemTrayEntries
+} from './appearance-system-presence-search'
 
 export {
   getMenuBarIconEntries,
+  getNotchStatusEntries,
   getStatusBarToggles,
   getSystemTrayEntries,
   getUsagePercentageDisplayEntry
@@ -255,6 +260,7 @@ type AppearancePaneSearchOptions = {
   showDesktopThemeImports?: boolean
   showSystemTray?: boolean
   showMenuBarIcon?: boolean
+  showNotchStatus?: boolean
 }
 
 export function getAppearancePaneSearchEntries(
@@ -273,6 +279,7 @@ export function getAppearancePaneSearchEntries(
     ...getSidebarEntries(),
     ...getAppIconEntries(),
     ...getSystemTrayEntries(options),
-    ...getMenuBarIconEntries(options)
+    ...getMenuBarIconEntries(options),
+    ...getNotchStatusEntries(options)
   ]
 }
