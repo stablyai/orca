@@ -210,6 +210,12 @@ const NODE_RUNTIME_INCLUDE = [
 ]
 
 /** `filters` limits the SQLite import scan to the tests a filtered CLI run can select. */
+// Emits and sends process messages, a channel node-runtime workers reserve for Vitest's own IPC.
+const PROCESS_MESSAGE_TESTS = new Set(['src/main/ai-vault/session-scanner-service-search.test.ts'])
+
 export function getNodeRuntimeInclude({ filters } = {}) {
-  return [...NODE_RUNTIME_INCLUDE, ...findSqliteRuntimeTests({ filters })]
+  return [
+    ...NODE_RUNTIME_INCLUDE,
+    ...findSqliteRuntimeTests({ filters }).filter((file) => !PROCESS_MESSAGE_TESTS.has(file))
+  ]
 }
