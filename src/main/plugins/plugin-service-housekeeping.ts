@@ -1,3 +1,4 @@
+import { PLUGIN_WORKER_REAP_INTERVAL_MS } from '../../shared/plugins/plugin-host-protocol'
 import { PluginDevWatcher } from './plugin-dev-watcher'
 
 export class PluginServiceHousekeeping {
@@ -22,7 +23,7 @@ export class PluginServiceHousekeeping {
       this.reapTimer = setInterval(() => {
         options.reapIdle()
         this.checkBindings()
-      }, 60_000)
+      }, PLUGIN_WORKER_REAP_INTERVAL_MS)
       this.reapTimer.unref?.()
     }
     const pathsKey = JSON.stringify(options.devPaths)
