@@ -1,6 +1,6 @@
 import { createHeadlessAutomationOutputSnapshotBuffer } from './headless-dispatch'
 import type { AutomationRunCompletionObservation } from './run-completion-watcher'
-import type { AutomationRunOutputSnapshot } from '../../shared/automations-types'
+import type { AutomationRun, AutomationRunOutputSnapshot } from '../../shared/automations-types'
 import { getStructuredAgentSessionHost } from '../native-chat/agent-session-wire/structured-agent-session-registry'
 import type { StructuredAgentSessionHost } from '../native-chat/agent-session-wire/structured-agent-session-host'
 import {
@@ -15,6 +15,22 @@ const POLL_INTERVAL_MS = 1_000
 
 export function structuredAutomationRunHandle(sessionId: string): string {
   return `${STRUCTURED_RUN_HANDLE_PREFIX}${sessionId}`
+}
+
+/** The handle a run is observed through: its chat when it ran one, else its terminal pane. */
+export function resolveAutomationRunObserverHandle(
+  run: AutomationRun,
+  terminalHandle: () => string | null
+): string | null {
+  if (run.sessionKind === 'structured' && run.chatSessionId) {
+    const host = getStructuredAgentSessionHost()
+    // Why: a host nobody installed yet has no record to read, and that is not proof the chat is
+    // gone — the observer waits for the host. Only a mounted host can say "no such chat".
+    return !host || host.deps.store.getRecord(run.chatSessionId)
+      ? structuredAutomationRunHandle(run.chatSessionId)
+      : null
+  }
+  return terminalHandle()
 }
 
 export function parseStructuredAutomationRunHandle(handle: string): string | null {

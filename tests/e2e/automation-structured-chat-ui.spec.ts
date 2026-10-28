@@ -22,6 +22,7 @@ test.describe('automation structured chat UI', () => {
     orcaPage: page,
     claudeStub
   }) => {
+    // Reason: two runs through a real Electron app plus the stub agent exceed the default budget.
     test.setTimeout(120_000)
     await waitForSessionReady(page)
     const worktreeId = await waitForActiveWorktree(page)

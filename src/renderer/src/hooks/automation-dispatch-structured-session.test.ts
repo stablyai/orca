@@ -1,4 +1,7 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+
+/** The one instant every case runs at, so no assertion depends on the wall clock. */
+const FIXED_NOW = 1_790_000_000_000
 
 const {
   mockMarkDispatchResult,
@@ -112,6 +115,10 @@ import { structuredAgentSessionPaneKey } from '../../../shared/structured-agent-
 
 describe('automation dispatch structured chat session', () => {
   beforeEach(() => {
+    // Why: the dispatch handler stamps its own start from Date.now(); freezing it keeps
+    // "this status arrived after dispatch" true without the test reading the clock.
+    vi.useFakeTimers({ shouldAdvanceTime: true })
+    vi.setSystemTime(FIXED_NOW)
     vi.clearAllMocks()
     mockListAutomationRunsForTarget.mockResolvedValue([])
     mockSubmitPromptToAgentPty.mockResolvedValue(true)
@@ -139,6 +146,10 @@ describe('automation dispatch structured chat session', () => {
         }
       }
     })
+  })
+
+  afterEach(() => {
+    vi.useRealTimers()
   })
 
   it('launches a structured chat session when Chat UI is enabled and records completion output', async () => {
@@ -202,7 +213,7 @@ describe('automation dispatch structured chat session', () => {
       })
     )
 
-    const now = Date.now() + 10
+    const now = FIXED_NOW + 10
     state.agentStatusByPaneKey = {
       [paneKey]: {
         paneKey,
@@ -454,7 +465,7 @@ describe('automation dispatch structured chat session', () => {
         dispatchToken: `token-${outcome}`
       })
 
-      const now = Date.now() + 10
+      const now = FIXED_NOW + 10
       state.agentStatusByPaneKey = {
         [paneKey]: {
           paneKey,
@@ -532,7 +543,7 @@ describe('automation dispatch structured chat session', () => {
       })
 
       mockMarkDispatchResult.mockClear()
-      const baseTime = Date.now() + 10
+      const baseTime = FIXED_NOW + 10
       const running = {
         paneKey,
         state: 'working' as const,
@@ -619,7 +630,7 @@ describe('automation dispatch structured chat session', () => {
         if (result.status !== 'dispatched') {
           return
         }
-        const now = Date.now() + 10
+        const now = FIXED_NOW + 10
         state.agentStatusByPaneKey = {
           'pane-terminal': {
             paneKey: 'pane-terminal',
@@ -678,6 +689,7 @@ describe('automation dispatch structured chat session', () => {
     'reads fresh store state after awaiting run history for session reuse (%s)',
     async (change) => {
       const { findReusableAutomationSession: realFindReusableAutomationSession } =
+        // ast-grep-ignore: test-no-in-test-import-actual -- the real selector is the point of this case; a mock would assert nothing.
         await vi.importActual<typeof AutomationSessionReuseModule>('@/lib/automation-session-reuse')
       mockFindReusableAutomationSession.mockImplementation(realFindReusableAutomationSession)
 

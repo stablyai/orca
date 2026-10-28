@@ -9,11 +9,10 @@ import {
   judgeIdleRun,
   type AutomationRunAgentEvidence
 } from './automation-run-agent-evidence'
-import { getStructuredAgentSessionHost } from '../native-chat/agent-session-wire/structured-agent-session-registry'
 import {
   observeStructuredAutomationRunCompletion,
   parseStructuredAutomationRunHandle,
-  structuredAutomationRunHandle
+  resolveAutomationRunObserverHandle
 } from './runtime-structured-run-observer'
 
 const TERMINAL_SNAPSHOT_LIMIT = 2_000
@@ -205,21 +204,6 @@ async function buildUnobservedObservation(
   }
 }
 
-function resolveRunObserverHandle(
-  runtime: AutomationRunTerminalHost,
-  run: AutomationRun
-): string | null {
-  if (run.sessionKind === 'structured' && run.chatSessionId) {
-    const host = getStructuredAgentSessionHost()
-    // Why: a host nobody installed yet has no record to read, and that is not proof the chat is
-    // gone — the structured observer waits for the host. Only a mounted host can say "no such chat".
-    return !host || host.deps.store.getRecord(run.chatSessionId)
-      ? structuredAutomationRunHandle(run.chatSessionId)
-      : null
-  }
-  return run.terminalPaneKey ? runtime.getTerminalHandleForPaneKey(run.terminalPaneKey) : null
-}
-
 async function waitUntilTerminalRunSettled(
   runtime: AutomationRunTerminalHost,
   handle: string,
@@ -255,7 +239,13 @@ async function waitUntilTerminalRunSettled(
       }
       if (
         judged &&
-        hasHeldRunTurnDone(judged.evidence, judged.run, runStartedAt, Date.now(), HELD_DONE_SETTLE_MS)
+        hasHeldRunTurnDone(
+          judged.evidence,
+          judged.run,
+          runStartedAt,
+          Date.now(),
+          HELD_DONE_SETTLE_MS
+        )
       ) {
         return {
           status: 'completed',
@@ -310,7 +300,10 @@ export function createRuntimeAutomationRunTerminalObserver(
   evidence?: AutomationRunAgentEvidence
 ): AutomationRunTerminalObserver {
   return {
-    resolveRunTerminal: (run) => resolveRunObserverHandle(runtime, run),
+    resolveRunTerminal: (run) =>
+      resolveAutomationRunObserverHandle(run, () =>
+        run.terminalPaneKey ? runtime.getTerminalHandleForPaneKey(run.terminalPaneKey) : null
+      ),
     observeCompletion: (handle, options) => {
       const structuredSessionId = parseStructuredAutomationRunHandle(handle)
       if (structuredSessionId) {
