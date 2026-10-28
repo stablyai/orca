@@ -1,6 +1,7 @@
 import type { VirtualizedScrollAnchor } from '@/hooks/useVirtualizedScrollAnchor'
 import { setWithLRU } from '@/lib/scroll-cache'
 import type { DiffSection } from '../../diff-section-types'
+import { reloadableBodyCharacters } from './reloadable-diff-body-characters'
 
 export type CachedCombinedDiffViewState = {
   entrySignature: string
@@ -141,24 +142,6 @@ export function rememberCombinedDiffView(
     ...(lease.succession ? { succession: lease.succession } : {})
   })
   trimInactiveDiffBodies()
-}
-
-function reloadableBodyCharacters(section: DiffSection): number {
-  if (section.dirty || section.saveConflict || section.loading || section.loadOnDemand) {
-    return 0
-  }
-  const result = section.diffResult
-  // Text results mirror the section strings; binary bodies live only in the result.
-  return (
-    section.originalContent.length +
-    section.modifiedContent.length +
-    (result && result.originalContent !== section.originalContent
-      ? result.originalContent.length
-      : 0) +
-    (result && result.modifiedContent !== section.modifiedContent
-      ? result.modifiedContent.length
-      : 0)
-  )
 }
 
 function cachedBodyCharacters(view: CachedCombinedDiffViewState): number {
