@@ -32,7 +32,7 @@ function run(overrides: Partial<AutomationRun>): AutomationRun {
 function find(
   runs: AutomationRun[],
   options: {
-    status?: { state: string; agentType?: string }
+    status?: { state: string; agentType?: string; sessionBoundary?: boolean }
     livePtyIds?: string[]
   } = {}
 ): string | null {
@@ -146,6 +146,32 @@ describe('automation session reuse selection', () => {
     ['another agent', { state: 'done', agentType: 'codex' }]
   ])('rejects a pane holding %s', (_label, status) => {
     expect(find([run({})], { status })).toBeNull()
+  })
+
+  it('never falls back to an older idle pane when the newest live pane is busy', () => {
+    expect(
+      find([
+        run({
+          id: 'run-old',
+          terminalPaneKey: 'tab-old:leaf-1',
+          terminalPtyId: 'pty-old',
+          createdAt: 1
+        }),
+        run({
+          id: 'run-new',
+          terminalPaneKey: 'tab-new:leaf-1',
+          terminalPtyId: 'pty-new',
+          status: 'dispatched',
+          createdAt: 2
+        })
+      ])
+    ).toBeNull()
+  })
+
+  it('never treats a session boundary as an idle turn', () => {
+    expect(
+      find([run({})], { status: { state: 'done', agentType: 'claude', sessionBoundary: true } })
+    ).toBeNull()
   })
 
   it('accepts an idle agent whose type the host could not tell', () => {

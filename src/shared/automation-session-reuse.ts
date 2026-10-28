@@ -34,12 +34,14 @@ export function isAutomationReuseAgent(
   return !status.agentType || status.agentType === 'unknown' || status.agentType === agentId
 }
 
-/** Idle means the agent finished its turn and can take another prompt. */
+/** Idle means the agent finished its turn and can take another prompt; a session boundary is not a turn. */
 export function isIdleAutomationReuseStatus(
-  status: { state: string; agentType?: AgentType },
+  status: { state: string; agentType?: AgentType; sessionBoundary?: boolean },
   agentId: TuiAgent
 ): boolean {
-  return status.state === 'done' && isAutomationReuseAgent(status, agentId)
+  return (
+    status.state === 'done' && !status.sessionBoundary && isAutomationReuseAgent(status, agentId)
+  )
 }
 
 export function findReusableAutomationRun<Session>(
@@ -48,16 +50,13 @@ export function findReusableAutomationRun<Session>(
     agentStatusForPane: (paneKey: string) => { state: string; agentType?: AgentType } | undefined
   }
 ): Session | null {
-  for (const candidate of liveRuns(args)) {
-    if (candidate.run.status !== 'completed') {
-      continue
-    }
-    const status = args.agentStatusForPane(candidate.run.terminalPaneKey)
-    if (status && isIdleAutomationReuseStatus(status, args.agentId)) {
-      return candidate.session
-    }
+  // The newest live pane is the automation's session; older panes are leftovers it must not fall back to.
+  const newest = findLiveAutomationRun(args)
+  if (!newest || newest.run.status !== 'completed') {
+    return null
   }
-  return null
+  const status = args.agentStatusForPane(newest.run.terminalPaneKey)
+  return status && isIdleAutomationReuseStatus(status, args.agentId) ? newest.session : null
 }
 
 /** The newest session this automation still holds, whatever its agent is doing; callers may wait for it. */
