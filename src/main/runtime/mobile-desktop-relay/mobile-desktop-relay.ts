@@ -22,11 +22,14 @@ import {
 
 const RELAY_CONNECT_TIMEOUT_MS = 15_000
 
+/** A phone, or a paired desktop/web client relayed under runtime.client-relay.v1; the server sees both as phones. */
 export type RelayedPhone = {
   connectionId: string
   deviceId: string
   deviceToken: string
   clientCapabilities: () => readonly RuntimeCapability[]
+  /** Runs once the target names a configured server, before its sync asks for this caller's grant. */
+  onServerResolved?: (environmentId: string) => void
   reply: (frame: string) => void
   sendBinary: (bytes: Uint8Array<ArrayBufferLike>) => boolean | void
 }
@@ -50,7 +53,7 @@ class RelayLink {
 
 /** One socket per (phone connection, configured server), authenticated with memory-only delegated phone grants.
  * Forward execution-host methods only; old servers require an update, and revocation lasts until the next sync.
- * Replies stay opaque except stream-id renumbering; replace every upstream desktop-token occurrence. */
+ * Replies stay opaque except stream-id renumbering and swapping the server token back to the caller's. */
 export class MobileDesktopRelay {
   private readonly links = new Map<string, RelayLink>()
   private readonly grants: DelegatedPhoneGrantCache
@@ -59,7 +62,8 @@ export class MobileDesktopRelay {
   constructor(
     private readonly options: {
       hosts: MobileDesktopRelayHosts
-      listPhones: () => DelegatedMobileDeviceSyncParams['phones']
+      /** The callers to keep delegated devices for on that server. */
+      listPhones: (environmentId: string) => DelegatedMobileDeviceSyncParams['phones']
       allocateStreamId: () => number
       /** Whether this desktop's settings open `agent` as a chat. */
       nativeChatDefault: (agent: string) => boolean
@@ -209,6 +213,7 @@ export class MobileDesktopRelay {
     if (!host) {
       throw unavailable('The server is not configured on this computer.')
     }
+    phone.onServerResolved?.(link.environmentId)
     const grants = await this.grants.get(host, phone.deviceId)
     if (grants.kind === 'update-needed') {
       throw unavailable('The server needs an Orca update to open its workspaces from a phone.')
@@ -233,7 +238,7 @@ export class MobileDesktopRelay {
           onText: (plaintext) => {
             const frame = link.replies.text(plaintext)
             if (frame !== null) {
-              phone.reply(frame)
+              phone.reply(withCallerToken(frame, grant.token, phone.deviceToken))
             }
           },
           onBinary: (bytes) => {
@@ -277,6 +282,11 @@ export class MobileDesktopRelay {
       }
     }
   }
+}
+
+// A server echoing its caller (e.g. a driver's clientId) names the child; the caller only knows itself.
+function withCallerToken(frame: string, hostToken: string, callerToken: string): string {
+  return frame.includes(hostToken) ? frame.split(hostToken).join(callerToken) : frame
 }
 
 function linkKey(connectionId: string, environmentId: string): string {

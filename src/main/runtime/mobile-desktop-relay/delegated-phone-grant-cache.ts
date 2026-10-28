@@ -14,7 +14,9 @@ export class DelegatedPhoneGrantCache {
 
   constructor(
     private readonly hosts: MobileDesktopRelayHosts,
-    private readonly listPhones: () => DelegatedMobileDeviceSyncParams['phones']
+    private readonly listPhones: (
+      environmentId: string
+    ) => DelegatedMobileDeviceSyncParams['phones']
   ) {}
 
   environmentIds(): string[] {
@@ -47,7 +49,7 @@ export class DelegatedPhoneGrantCache {
 
   private sync(host: MobileDesktopRelayHost): Promise<DelegatedPhoneGrants> {
     const entry: GrantsEntry = {
-      promise: syncDelegatedPhoneGrants(this.hosts, host, this.listPhones()),
+      promise: syncDelegatedPhoneGrants(this.hosts, host, this.listPhones(host.environmentId)),
       settled: false
     }
     this.entries.set(host.environmentId, entry)
