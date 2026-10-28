@@ -99,7 +99,7 @@ printf 'stub:%s\\n' "$*"
           .map((waiter) => waiter.id)
       })
     }
-    const command = gitExecFileAsync([tier === 'background' ? 'status' : 'rev-parse', id], {
+    const command = gitExecFileAsync([tier === 'background' ? 'diff' : 'rev-parse', id], {
       cwd: root,
       admissionTier: tier,
       signal: controller.signal,
@@ -118,7 +118,7 @@ printf 'stub:%s\\n' "$*"
     await waitForLiveChild(stateDir, id, controller.signal)
     await writeFile(path.join(gateDir, id), 'release\n')
     await expect(commands.get(id)).resolves.toEqual({
-      stdout: `stub:${id.startsWith('background-') ? 'status' : 'rev-parse'} ${id}\n`,
+      stdout: `stub:${id.startsWith('background-') ? 'diff' : 'rev-parse'} ${id}\n`,
       stderr: ''
     })
   }
