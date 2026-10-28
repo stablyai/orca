@@ -11449,7 +11449,8 @@
             "conflictCount_one": "{{count}} конфликт",
             "conflictCount_few": "{{count}} конфликта",
             "conflictCount_many": "{{count}} конфликтов",
-            "conflictCount_other": "{{count}} конфликта"
+            "conflictCount_other": "{{count}} конфликта",
+            "conflictCount": "{{count}} конфликтов"
           },
           "SourceControlAgentActionDialogForm": {
             "ea4788705e": "Отмена",
@@ -11592,7 +11593,10 @@
                 "commitsBehind_one": "Отставание на {{count}} коммит",
                 "commitsBehind_few": "Отставание на {{count}} коммита",
                 "commitsBehind_many": "Отставание на {{count}} коммитов",
-                "commitsBehind_other": "Отставание на {{count}} коммитов"
+                "commitsBehind_other": "Отставание на {{count}} коммитов",
+                "pendingChecks": "{{count}} проверок в ожидании",
+                "failingChecks": "{{count}} проверок с ошибкой",
+                "unresolvedChecks": "{{count}} проверок без результата"
               },
               "loadFailedOnMachine": "Не удалось загрузить с {{machine}}: {{detail}}",
               "empty": {
@@ -12009,7 +12013,14 @@
                   "forcePushBeforeReview": "Принудительно отправить перед {{shortLabel}}",
                   "pushBeforeReview": "Отправить перед {{shortLabel}}",
                   "titleForcePushBeforeCreatingReview": "Отправить принудительно с проверкой lease перед созданием {{reviewLabel}}",
-                  "titlePushBeforeCreatingReview": "Отправить локальные коммиты перед созданием {{reviewLabel}}"
+                  "titlePushBeforeCreatingReview": "Отправить локальные коммиты перед созданием {{reviewLabel}}",
+                  "titleForcePushOlderCopiesCount": "Удалённая ветка содержит только старые копии локальных коммитов. Принудительно отправить {{count}} коммитов ветки с проверкой актуальности удалённой ветки, чтобы обновить {{upstreamName}}.",
+                  "pullCount": "Получить {{count}} коммитов",
+                  "titleUnpublishedForcePushCount": "Принудительно отправить {{count}} коммитов ветки с проверкой актуальности удалённой ветки и при необходимости настроить отслеживаемую ветку.",
+                  "fastForwardCount": "Продвинуть ветку на {{count}} коммитов",
+                  "titleManualForcePush": "Принудительно отправить {{count}} локальных коммитов с проверкой актуальности удалённой ветки, чтобы обновить {{upstreamName}}.",
+                  "pushCount": "Отправить {{count}} коммитов",
+                  "titleManualForcePushReplaceRemote": "Принудительно отправить {{count}} локальных коммитов с проверкой актуальности удалённой ветки, чтобы обновить {{upstreamName}} и заменить коммиты, которые есть только на удалённой ветке."
                 }
               },
               "primary": {
@@ -16590,7 +16601,8 @@
           "unresolvedConflicts_one": "{{count}} неразрешённый конфликт",
           "unresolvedConflicts_few": "{{count}} неразрешённых конфликта",
           "unresolvedConflicts_many": "{{count}} неразрешённых конфликтов",
-          "unresolvedConflicts_other": "{{count}} неразрешённых конфликта"
+          "unresolvedConflicts_other": "{{count}} неразрешённых конфликта",
+          "unresolvedConflicts": "{{count}} неразрешённых конфликтов"
         },
         "ConflictReviewFileTree": {
           "8528a5eaf5": "Решено",

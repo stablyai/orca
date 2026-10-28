@@ -14268,7 +14268,8 @@
             "entryFailedInWorkspace": "{{value0}} in {{value1}}",
             "diffCommentNotesCopyFailed": "Failed to copy notes",
             "conflictCount_one": "{{count}} conflict",
-            "conflictCount_other": "{{count}} conflicts"
+            "conflictCount_other": "{{count}} conflicts",
+            "conflictCount": "{{count}} conflicts"
           },
           "SourceControlAgentActionDialog": {
             "8e856842d1": "Could not start the selected agent.",
@@ -14425,7 +14426,10 @@
                 "pendingChecks_one": "{{count}} check pending",
                 "pendingChecks_other": "{{count}} checks pending",
                 "unresolvedChecks_one": "{{count}} check unresolved",
-                "unresolvedChecks_other": "{{count}} checks unresolved"
+                "unresolvedChecks_other": "{{count}} checks unresolved",
+                "failingChecks": "{{count}} failing checks",
+                "pendingChecks": "{{count}} checks pending",
+                "unresolvedChecks": "{{count}} checks unresolved"
               },
               "empty": {
                 "state": {
@@ -14816,7 +14820,14 @@
                   "titleManualForcePush_other": "Force push {{count}} local commits with lease to update {{upstreamName}}.",
                   "titleUnpublishedForcePushBranch": "Force push this branch with lease and set an upstream if needed.",
                   "titleUnpublishedForcePushCount_one": "Force push {{count}} branch commit with lease and set an upstream if needed.",
-                  "titleUnpublishedForcePushCount_other": "Force push {{count}} branch commits with lease and set an upstream if needed."
+                  "titleUnpublishedForcePushCount_other": "Force push {{count}} branch commits with lease and set an upstream if needed.",
+                  "pushCount": "Push {{count}} commits",
+                  "pullCount": "Pull {{count}} commits",
+                  "fastForwardCount": "Fast-forward {{count}} commits",
+                  "titleForcePushOlderCopiesCount": "Remote only has older copies of local commits. Force push {{count}} branch commits with lease to update {{upstreamName}}.",
+                  "titleManualForcePushReplaceRemote": "Force push {{count}} local commits with lease to update {{upstreamName}} and replace remote-only commits.",
+                  "titleManualForcePush": "Force push {{count}} local commits with lease to update {{upstreamName}}.",
+                  "titleUnpublishedForcePushCount": "Force push {{count}} branch commits with lease and set an upstream if needed."
                 }
               },
               "primary": {
@@ -16630,7 +16641,8 @@
           "55d61a0ccd": "conflict ·",
           "da539359b6": "No working-tree file is available to edit for this conflict.",
           "unresolvedConflicts_one": "{{count}} unresolved conflict",
-          "unresolvedConflicts_other": "{{count}} unresolved conflicts"
+          "unresolvedConflicts_other": "{{count}} unresolved conflicts",
+          "unresolvedConflicts": "{{count}} unresolved conflicts"
         },
         "ConflictReviewFileTree": {
           "3449521a8c": "No conflicts in this snapshot.",
