@@ -30,9 +30,11 @@ import { useDiffEditorRegistration } from './diff-navigation-context'
 import { preserveDiffViewStateAcrossModelSwaps } from './diff-model-swap-view-state'
 import { monacoFindOptions } from './monaco-find-options'
 import { useDocumentDarkTheme } from '@/hooks/use-document-dark-theme'
+import { retainDiffViewerModelOwner } from './diff-viewer-model-ownership'
 
 export default function DiffViewer({
   modelKey,
+  ownerFileId,
   originalModelKey,
   modifiedModelKey,
   originalContent,
@@ -221,7 +223,11 @@ export default function DiffViewer({
 
       const originalEditor = diffEditor.getOriginalEditor()
       const modifiedEditor = diffEditor.getModifiedEditor()
+      const modelOwnership = ownerFileId
+        ? retainDiffViewerModelOwner(diffEditor, ownerFileId)
+        : undefined
       modifiedEditor.onDidDispose(() => {
+        modelOwnership?.dispose()
         if (diffEditorRef.current !== diffEditor) {
           return
         }
@@ -273,7 +279,16 @@ export default function DiffViewer({
         diffEditor.focus()
       }
     },
-    [editable, setupCopy, modelKey, filePath, sideBySide, registerDiffEditor, unregisterDiffEditor]
+    [
+      editable,
+      setupCopy,
+      modelKey,
+      ownerFileId,
+      filePath,
+      sideBySide,
+      registerDiffEditor,
+      unregisterDiffEditor
+    ]
   )
 
   // Snapshot on layout cleanup before unmount, avoiding scroll-time writes.
