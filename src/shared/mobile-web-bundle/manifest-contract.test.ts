@@ -194,17 +194,22 @@ describe('the page routes a manifest declares', () => {
   it('bounds the two lists together, not one at a time', () => {
     const names = (count, prefix) =>
       Array.from({ length: count }, (_value, index) => `${prefix}${String(index)}`)
-    const half = MOBILE_WEB_BUNDLE_MAX_ROUTE_GRANTS / 2
+    const required = Math.floor(MOBILE_WEB_BUNDLE_MAX_ROUTE_GRANTS / 2)
+    const optional = MOBILE_WEB_BUNDLE_MAX_ROUTE_GRANTS - required
     // At the ceiling exactly, split across the lanes.
     expect(
       withRoutes([
-        { pathname: '/h', grants: names(half, 'req'), optionalGrants: names(half, 'opt') }
+        { pathname: '/h', grants: names(required, 'req'), optionalGrants: names(optional, 'opt') }
       ])
     ).toBe(true)
     // Individually valid arrays can exceed the combined session grant cap.
     expect(
       withRoutes([
-        { pathname: '/h', grants: names(half + 1, 'req'), optionalGrants: names(half, 'opt') }
+        {
+          pathname: '/h',
+          grants: names(required + 1, 'req'),
+          optionalGrants: names(optional, 'opt')
+        }
       ])
     ).toBe(false)
     expect(
