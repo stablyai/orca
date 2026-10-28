@@ -149,24 +149,36 @@ describe('shell lifecycle log lines', () => {
     ])
   })
 
-  it('logs a missed ready deadline, the failure it causes and the recovery flow', () => {
+  it('logs a missed ready deadline, the file check it causes and the recovery flow', () => {
     const opened = replay(DOWNLOAD_OPEN)
-    const { lines } = replay([{ type: 'document-loaded' }, { type: 'page-ready-deadline' }], opened)
+    const { lines } = replay(
+      [
+        { type: 'document-loaded' },
+        { type: 'page-ready-deadline' },
+        { type: 'generation-verified', intact: false, pageReady: false }
+      ],
+      opened
+    )
     expect(summary(lines)).toEqual([
       'web-shell-page Web shell: page never said ready before the deadline',
+      'web-shell-page Web shell: checked the cached app | intact=no',
       'web-shell-flow Web shell: checking host'
     ])
   })
 
-  it('logs a document that never finished loading, and the recovery flow', () => {
+  it('logs a document that never finished loading, and the file check that keeps its bytes', () => {
     const opened = replay(DOWNLOAD_OPEN)
     const { lines } = replay(
-      [{ type: 'document-started' }, { type: 'document-load-deadline' }],
+      [
+        { type: 'document-started' },
+        { type: 'document-load-deadline' },
+        { type: 'generation-verified', intact: true, pageReady: false }
+      ],
       opened
     )
     expect(summary(lines)).toEqual([
       'web-shell-page Web shell: document never finished loading before the deadline',
-      'web-shell-flow Web shell: checking host'
+      'web-shell-page Web shell: checked the cached app | intact=yes'
     ])
   })
 

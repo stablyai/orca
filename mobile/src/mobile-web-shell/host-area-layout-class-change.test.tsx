@@ -44,6 +44,7 @@ const doubles = vi.hoisted(
 
 vi.mock('expo-crypto', () => ({ getRandomBytes: (length: number) => new Uint8Array(length) }))
 vi.mock('expo-file-system', () => ({ Directory: class {}, File: class {}, Paths: { cache: '' } }))
+vi.mock('react-native', () => ({ AppState: {} }))
 vi.mock('../transport/mobile-endpoint-supervisor-support', () => ({
   encodeBase64Url: () => 'session-id'
 }))
@@ -80,6 +81,7 @@ const store: GenerationStore = {
   },
   abortStagedGeneration: async () => undefined,
   openReusableAssets: async () => ({ has: () => false, check: async () => false }),
+  verifyActiveGeneration: async () => true,
   sweepStagedGenerations: async () => undefined,
   deleteHostCache: async () => undefined,
   recordUpdateFailure: async () => undefined,
@@ -117,7 +119,7 @@ async function settledKinds(
         createStore: () => store,
         mintSessionId: () => `session-${String((minted += 1))}`,
         now: () => 0,
-        setTimer: () => () => {}
+        setForegroundTimer: () => () => {}
       }
     })
     seen.push(session.state)

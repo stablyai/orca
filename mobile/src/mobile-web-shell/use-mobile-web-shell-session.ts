@@ -10,6 +10,7 @@ import {
 import type { GenerationStore } from './generation-store'
 import { deriveHostCacheKey } from './host-cache-key'
 import { download, openCache, readManifest } from './mobile-web-shell-session-effects'
+import { verifyGeneration } from './generation-verification'
 import {
   createMobileWebShellRuntime,
   DOCUMENT_LOAD_DEADLINE_MS,
@@ -27,6 +28,7 @@ import {
   traceShellStep
 } from './shell-lifecycle-log'
 import { shellPageFrame, type ShellPageFrame } from './shell-page-frame'
+import { createShellPageDeadline } from './shell-page-deadline'
 import {
   createMobileWebShellSession,
   reduceMobileWebShellSession
@@ -94,8 +96,7 @@ export function useMobileWebShellSession(args: {
   const epochRef = useRef(0)
   // Abort abandoned downloads to release their four host read slots.
   const downloadsRef = useRef<Set<AbortController>>(new Set())
-  // Cancel deadlines too; epoch guards alone leave real timers alive until expiry.
-  const timersRef = useRef<Set<() => void>>(new Set())
+  const [deadline] = useState(() => createShellPageDeadline(runtime.setForegroundTimer))
   const hostIdRef = useRef(hostId)
   const logTraceRef = useRef(EMPTY_SHELL_LOG_TRACE)
   const runEffectRef = useRef<
@@ -105,9 +106,8 @@ export function useMobileWebShellSession(args: {
   const cancelPending = useCallback((): void => {
     downloadsRef.current.forEach((controller) => controller.abort())
     downloadsRef.current.clear()
-    timersRef.current.forEach((cancel) => cancel())
-    timersRef.current.clear()
-  }, [])
+    deadline.cancel()
+  }, [deadline])
 
   const dispatch = useCallback(
     (epoch: number, event: MobileWebShellSessionEvent): void => {
@@ -194,24 +194,25 @@ export function useMobileWebShellSession(args: {
             elapsedMs: runtime.now() - startedAtRef.current
           })
           return
+        case 'verify-generation':
+          await verifyGeneration(store, hostKey, flow, effect, send)
+          return
+        case 'cancel-deadlines':
+          deadline.cancel()
+          return
         case 'remount':
           send({ type: 'remounted', flow, sessionId: runtime.mintSessionId() })
           return
         case 'await-page-ready':
-        case 'await-document-load': {
-          const pageReady = effect.kind === 'await-page-ready'
-          const cancel = runtime.setTimer(
-            () => {
-              timersRef.current.delete(cancel)
-              send({ type: pageReady ? 'page-ready-deadline' : 'document-load-deadline', flow })
-            },
-            pageReady ? PAGE_READY_DEADLINE_MS : DOCUMENT_LOAD_DEADLINE_MS
+          deadline.arm(PAGE_READY_DEADLINE_MS, () => send({ type: 'page-ready-deadline', flow }))
+          return
+        case 'await-document-load':
+          deadline.arm(DOCUMENT_LOAD_DEADLINE_MS, () =>
+            send({ type: 'document-load-deadline', flow })
           )
-          timersRef.current.add(cancel)
-        }
       }
     },
-    [client, dispatch, hostId, hostKey, runtime]
+    [client, deadline, dispatch, hostId, hostKey, runtime]
   )
   // Install the runner after commit, before dispatching effects, so discarded renders cannot execute work.
   useEffect(() => {
@@ -237,7 +238,7 @@ export function useMobileWebShellSession(args: {
     if (shellStallLine(state, sessionRef.current, logTraceRef.current) === null) {
       return
     }
-    return runtime.setTimer(() => {
+    return runtime.setForegroundTimer(() => {
       const line = shellStallLine(state, sessionRef.current, logTraceRef.current)
       if (line !== null) {
         recordShellLifecycleLine(hostIdRef.current, line)

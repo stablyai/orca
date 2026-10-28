@@ -223,7 +223,7 @@ describe('an update this shell refused, once it is on screen', () => {
       totalBytes: CACHED.totalBytes,
       elapsedMs: 8
     })
-    const dropped = run(served.session, { type: 'shell-failed', reason: 'document-load-failed' })
+    const dropped = run(served.session, { type: 'shell-failed', reason: 'generation-unreadable' })
     expect(dropped.session.updateNotice).toBeNull()
   })
 })

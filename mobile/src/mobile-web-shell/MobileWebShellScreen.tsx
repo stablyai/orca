@@ -176,7 +176,7 @@ export function MobileWebShellScreen({
     snapshot,
     readStorage,
     onStorageWrite: writeStorage,
-    // Treat a page that never renders as document-load-failed: refetch once for replaced bytes, then fail visibly if its code still breaks.
+    // Treat a page that never renders as document-load-failed: remount verified bytes once, then fail visibly if its code still breaks.
     // Never throw from the page error boundary/native frame callback.
     onPageFault: (error) => {
       console.warn('[web-shell] the page faulted', error)

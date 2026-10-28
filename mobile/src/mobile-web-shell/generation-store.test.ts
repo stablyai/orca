@@ -619,6 +619,49 @@ describe('reusable assets for the next download', () => {
   })
 })
 
+// A page failure deletes cached files only on this evidence; a page bug alone must not cost a redownload.
+describe('verifying the files of a failed page', () => {
+  const SCRIPT = `${HOST}/generations/${BUILD}/assets/app.js`
+
+  async function activated(): Promise<{
+    fs: FakeFileSystem
+    store: ReturnType<typeof createGenerationStore>
+  }> {
+    const fs = createFakeFileSystem()
+    const store = createGenerationStore({ fileSystem: fs })
+    await activate(store, HOST)
+    return { fs, store }
+  }
+
+  it('passes a build whose files all have their manifest length', async () => {
+    const { store } = await activated()
+    expect(await store.verifyActiveGeneration(HOST, BUILD)).toBe(true)
+  })
+
+  it('fails a truncated file', async () => {
+    const { fs, store } = await activated()
+    fs.seed(SCRIPT, { kind: 'file', bytes: new Uint8Array(1) })
+    expect(await store.verifyActiveGeneration(HOST, BUILD)).toBe(false)
+  })
+
+  it('fails a missing file', async () => {
+    const { fs, store } = await activated()
+    await fs.delete(`${ROOT}/${SCRIPT}`)
+    expect(await store.verifyActiveGeneration(HOST, BUILD)).toBe(false)
+  })
+
+  it('fails a build that is not on disk', async () => {
+    const { store } = await activated()
+    expect(await store.verifyActiveGeneration(HOST, SECOND_BUILD)).toBe(false)
+  })
+
+  it('rejects rather than failing the files when the manifest cannot be read', async () => {
+    const { fs, store } = await activated()
+    fs.failReadsAt(`${HOST}/generations/${BUILD}/manifest.json`)
+    await expect(store.verifyActiveGeneration(HOST, BUILD)).rejects.toThrow()
+  })
+})
+
 // Older builds could leave manifest-next.json after an interrupted rewrite; this reader must ignore it.
 describe('a pending manifest left by an older build', () => {
   const MANIFEST_PATH = `${HOST}/generations/${BUILD}/manifest.json`

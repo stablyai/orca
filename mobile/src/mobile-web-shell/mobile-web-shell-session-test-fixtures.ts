@@ -109,6 +109,15 @@ export const CACHED_BELOW_HOST_FLOOR: CachedGeneration = {
   compat: { ...CACHED.compat, runtimeProtocolVersion: 0 }
 }
 
+// Page-failure recovery inputs: a failed document, then the file check's verdict.
+export const DOCUMENT_FAILED = { type: 'shell-failed', reason: 'document-load-failed' } as const
+export const FILES_DAMAGED = {
+  type: 'generation-verified',
+  intact: false,
+  pageReady: false
+} as const
+export const FILES_INTACT = { type: 'generation-verified', intact: true, pageReady: false } as const
+
 // Default result events to the current flow; stale-result tests pin their superseded flow explicitly.
 type PendingEvent<E = MobileWebShellSessionEvent> = E extends { flow: number }
   ? Omit<E, 'flow'> & { readonly flow?: number }
@@ -132,6 +141,7 @@ export function stamp(flow: number, event: PendingEvent): MobileWebShellSessionE
     case 'download-staged':
     case 'activated':
     case 'remounted':
+    case 'generation-verified':
     case 'download-failed':
     case 'page-ready-deadline':
     case 'document-load-deadline':

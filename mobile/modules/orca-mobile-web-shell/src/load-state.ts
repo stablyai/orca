@@ -1,7 +1,7 @@
 import { z } from 'zod'
 
 // Parse native load events; caller owns recovery, view never reloads/retries.
-// generation-unreadable/document-load-failed: delete host cache and download once. render-process-gone: remount once without deletion; memory pressure/provider updates look like bad bundles.
+// generation-unreadable: delete host cache and download once. document-load-failed: refetch only if the files fail verification, else remount once. render-process-gone: remount once without deletion; memory pressure/provider updates look like bad bundles.
 export const MOBILE_WEB_SHELL_FAILURE_REASONS = [
   /** The generation directory has no readable manifest, or declares an asset we refuse to map. */
   'generation-unreadable',

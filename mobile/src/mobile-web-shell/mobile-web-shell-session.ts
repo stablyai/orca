@@ -1,4 +1,3 @@
-import type { MobileWebShellFailureReason } from '../../modules/orca-mobile-web-shell/src/load-state'
 import { evaluateMobileWebBundleCompat } from '../transport/mobile-web-bundle-compat'
 import type {
   CachedGeneration,
@@ -29,6 +28,11 @@ import { CLEAR_PAGE_DOCUMENT_STATE, pageDocumentStatePatch } from './page-docume
 import { openByOwnRoutes, openCached, rendersRoute } from './mobile-web-shell-cached-generation'
 import { step } from './mobile-web-shell-session-step'
 import { AWAIT_DOCUMENT_LOAD, reducePageDocumentLifecycle } from './page-document-lifecycle'
+import {
+  reduceGenerationVerified,
+  reduceShellFailed,
+  type RefetchAfterDelete
+} from './shell-failure-recovery'
 
 export function createMobileWebShellSession(
   routePathname: string,
@@ -157,32 +161,9 @@ function onManifestRead(
   )
 }
 
-// Retry suspect disk bytes once via delete/refetch; renderer loss gets one remount without deletion; unavailable isolation is terminal.
-// Ignore reports outside ready: retired-view batches must not interrupt recovery already in flight.
-function onShellFailed(
-  session: MobileWebShellSession,
-  reason: MobileWebShellFailureReason
-): MobileWebShellStep {
-  if (session.state.kind !== 'ready') {
-    return step(session, {})
-  }
-  const failed = { kind: 'failed', reason, retriedOnce: session.retriedOnce } as const
-  if (reason === 'isolation-unavailable') {
-    return step(session, { state: failed })
-  }
-  if (reason === 'render-process-gone') {
-    return session.remountedOnce
-      ? step(session, { state: failed })
-      : step(session, { remountedOnce: true }, [{ kind: 'remount' }])
-  }
-  if (session.retriedOnce || session.gates === null) {
-    return step(session, { state: failed })
-  }
-  // Reenter gates after failure: ready may hold unreadable reconnect status, which must not become a bundle-unavailable wall.
-  return startFlow(session, session.gates, { retriedOnce: true, cached: null }, [
-    { kind: 'delete-cache' }
-  ])
-}
+// Reenter gates after failure: ready may hold unreadable reconnect status, which must not become a bundle-unavailable wall.
+const refetchAfterDelete: RefetchAfterDelete = (session, gates) =>
+  startFlow(session, gates, { retriedOnce: true, cached: null }, [{ kind: 'delete-cache' }])
 
 // Record the resulting decision once for Troubleshoot; release builds forward no console logs.
 function onDownloadFailed(
@@ -295,16 +276,23 @@ export function reduceMobileWebShellSession(
     case 'download-failed':
       return onDownloadFailed(session, event.cause)
     case 'shell-failed':
-      return onShellFailed(session, event.reason)
+      return reduceShellFailed(session, event.reason, refetchAfterDelete)
+    case 'generation-verified':
+      return reduceGenerationVerified(session, event, refetchAfterDelete)
     case 'remounted':
     case 'document-started':
     case 'document-loaded':
     case 'page-ready-deadline':
     case 'document-load-deadline':
       return reducePageDocumentLifecycle(session, event, (failed) =>
-        onShellFailed(failed, 'document-load-failed')
+        reduceShellFailed(failed, 'document-load-failed', refetchAfterDelete)
       )
     case 'page-ready':
+      return step(
+        session,
+        pageDocumentStatePatch(session, event),
+        session.state.kind === 'ready' ? [{ kind: 'cancel-deadlines' }] : []
+      )
     case 'page-painted':
     case 'page-back-claim':
       return step(session, pageDocumentStatePatch(session, event))

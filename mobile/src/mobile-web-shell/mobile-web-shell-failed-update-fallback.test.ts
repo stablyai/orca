@@ -34,6 +34,7 @@ const doubles = vi.hoisted((): Doubles => ({
 
 vi.mock('expo-crypto', () => ({ getRandomBytes: (length: number) => new Uint8Array(length) }))
 vi.mock('expo-file-system', () => ({ Directory: class {}, File: class {}, Paths: { cache: '' } }))
+vi.mock('react-native', () => ({ AppState: {} }))
 vi.mock('../transport/mobile-endpoint-supervisor-support', () => ({
   encodeBase64Url: () => 'session-id'
 }))
@@ -166,7 +167,7 @@ async function mountRoute(fileSystem: FakeGenerationFileSystem): Promise<Mounted
         createStore: () => createGenerationStore({ fileSystem }),
         mintSessionId: () => 'session-id',
         now: () => 0,
-        setTimer: () => () => {}
+        setForegroundTimer: () => () => {}
       }
     })
     latest.state = session.state

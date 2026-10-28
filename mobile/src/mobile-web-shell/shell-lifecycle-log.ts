@@ -61,6 +61,7 @@ export function traceShellStep(
     case 'download-staged':
     case 'download-failed':
     case 'shell-failed':
+    case 'generation-verified':
     case 'retry-pressed':
     case 'page-painted':
     case 'page-back-claim':
@@ -168,6 +169,14 @@ function eventLines(
               `source=${trace.openedFrom ?? 'unknown'} build=${buildPrefix(before.state.buildId)} activatedMs=${before.state.elapsedMs}`
             )
           ]
+    case 'generation-verified':
+      return [
+        pageLine(
+          event.intact ? 'info' : 'warn',
+          'Web shell: checked the cached app',
+          `intact=${yesNo(event.intact)}`
+        )
+      ]
     case 'page-ready-deadline':
       return before.pageReady
         ? []

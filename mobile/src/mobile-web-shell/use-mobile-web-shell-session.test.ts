@@ -32,6 +32,10 @@ type Doubles = {
     settle: Settle<MobileWebBundleFetchResult>
   }[]
   manifest: MobileWebBundleManifestRead
+  appState: {
+    currentState: string
+    listeners: Set<(state: string) => void>
+  }
 }
 
 const doubles = vi.hoisted((): Doubles => {
@@ -60,7 +64,8 @@ const doubles = vi.hoisted((): Doubles => {
     manifestClients: [],
     manifestRejection: null,
     fetches: [],
-    manifest
+    manifest,
+    appState: { currentState: 'active', listeners: new Set() }
   }
 })
 
@@ -69,6 +74,17 @@ vi.mock('@react-native-async-storage/async-storage', () => ({
   default: { getItem: async () => null, setItem: async () => undefined }
 }))
 vi.mock('expo-file-system', () => ({ Directory: class {}, File: class {}, Paths: { cache: '' } }))
+vi.mock('react-native', () => ({
+  AppState: {
+    get currentState() {
+      return doubles.appState.currentState
+    },
+    addEventListener: (_type: 'change', listener: (state: string) => void) => {
+      doubles.appState.listeners.add(listener)
+      return { remove: () => doubles.appState.listeners.delete(listener) }
+    }
+  }
+}))
 vi.mock('../transport/mobile-endpoint-supervisor-support', () => ({
   encodeBase64Url: () => 'session-id'
 }))
@@ -97,7 +113,12 @@ vi.mock('../transport/mobile-web-bundle-fetch', () => ({
     })
 }))
 
-import { DOCUMENT_LOAD_DEADLINE_MS, PAGE_READY_DEADLINE_MS } from './mobile-web-shell-runtime'
+import {
+  createMobileWebShellRuntime,
+  DOCUMENT_LOAD_DEADLINE_MS,
+  PAGE_READY_DEADLINE_MS,
+  type MobileWebShellRuntime
+} from './mobile-web-shell-runtime'
 import { SHELL_STALL_LOG_MS } from './shell-lifecycle-log'
 import { connectionLogStore } from '../transport/persisted-connection-log-store'
 import { useMobileWebShellSession } from './use-mobile-web-shell-session'
@@ -127,6 +148,9 @@ function createFakeStore(): {
   staged: () => number
   committed: () => number
   aborted: () => number
+  verified: () => number
+  deleted: () => number
+  damageFiles: () => void
 } {
   let settleCacheRead: Settle<ActiveGeneration | null> = () => {}
   let releaseStage: () => void = () => {}
@@ -134,6 +158,9 @@ function createFakeStore(): {
   let staged = 0
   let committed = 0
   let aborted = 0
+  let verified = 0
+  let deleted = 0
+  let intact = true
   const store: GenerationStore = {
     readActiveGeneration: () =>
       new Promise<ActiveGeneration | null>((resolve) => {
@@ -156,8 +183,14 @@ function createFakeStore(): {
       aborted += 1
     },
     openReusableAssets: async () => ({ has: () => false, check: async () => false }),
+    verifyActiveGeneration: async () => {
+      verified += 1
+      return intact
+    },
     sweepStagedGenerations: async () => undefined,
-    deleteHostCache: async () => undefined,
+    deleteHostCache: async () => {
+      deleted += 1
+    },
     recordUpdateFailure: async () => undefined,
     readUpdateFailures: async () => [],
     forgetHostUpdateFailures: async () => undefined
@@ -171,7 +204,12 @@ function createFakeStore(): {
     settleStage: () => releaseStage(),
     staged: () => staged,
     committed: () => committed,
-    aborted: () => aborted
+    aborted: () => aborted,
+    verified: () => verified,
+    deleted: () => deleted,
+    damageFiles: () => {
+      intact = false
+    }
   }
 }
 
@@ -211,6 +249,7 @@ type Mounted = {
   documentLoaded: () => void
   pageReady: () => void
   pagePainted: () => void
+  shellFailed: (reason: 'document-load-failed') => void
   downloadProgress: () => DownloadProgressFeed
   timers: ReturnType<typeof createTimerSeam>
 }
@@ -235,7 +274,10 @@ afterEach(async () => {
   })
 })
 
-async function mount(store: GenerationStore): Promise<Mounted> {
+async function mount(
+  store: GenerationStore,
+  setForegroundTimer?: MobileWebShellRuntime['setForegroundTimer']
+): Promise<Mounted> {
   const timers = createTimerSeam()
   const handle: {
     retry: () => void
@@ -243,6 +285,7 @@ async function mount(store: GenerationStore): Promise<Mounted> {
     documentLoaded: () => void
     pageReady: () => void
     pagePainted: () => void
+    shellFailed: (reason: 'document-load-failed') => void
     states: MobileWebShellSessionState[]
     handshakes: boolean[]
     downloadProgress: DownloadProgressFeed | null
@@ -252,6 +295,7 @@ async function mount(store: GenerationStore): Promise<Mounted> {
     documentLoaded: () => {},
     pageReady: () => {},
     pagePainted: () => {},
+    shellFailed: () => {},
     states: [],
     handshakes: [],
     downloadProgress: null
@@ -264,7 +308,7 @@ async function mount(store: GenerationStore): Promise<Mounted> {
         createStore: () => store,
         mintSessionId: () => 'session-id',
         now: () => 0,
-        setTimer: timers.setTimer
+        setForegroundTimer: setForegroundTimer ?? timers.setTimer
       }
     })
     handle.retry = session.retry
@@ -272,6 +316,7 @@ async function mount(store: GenerationStore): Promise<Mounted> {
     handle.documentLoaded = session.reportDocumentLoaded
     handle.pageReady = session.reportPageReady
     handle.pagePainted = session.reportPagePainted
+    handle.shellFailed = session.reportShellFailure
     handle.states.push(session.state)
     handle.handshakes.push(session.pageReady)
     handle.downloadProgress = session.downloadProgress
@@ -295,6 +340,7 @@ async function mount(store: GenerationStore): Promise<Mounted> {
     documentLoaded: () => handle.documentLoaded(),
     pageReady: () => handle.pageReady(),
     pagePainted: () => handle.pagePainted(),
+    shellFailed: (reason) => handle.shellFailed(reason),
     downloadProgress: () => {
       if (handle.downloadProgress === null) {
         throw new Error('the hook never rendered')
@@ -487,8 +533,7 @@ describe('the wait for the page to speak', () => {
     doubles.gates.hostCapabilities = [MOBILE_WEB_BUNDLE_CAPABILITY]
   })
 
-  async function ready(): Promise<Mounted> {
-    const fake = createFakeStore()
+  async function ready(fake = createFakeStore()): Promise<Mounted> {
     const mounted = await mount(fake.store)
     fake.settleCacheRead(activeGeneration())
     await flush()
@@ -496,20 +541,23 @@ describe('the wait for the page to speak', () => {
     return mounted
   }
 
-  it('fails the generation a finished document never spoke for, and asks to fetch it again', async () => {
-    const mounted = await ready()
+  it('fails the generation a finished document never spoke for, and asks to fetch damaged files again', async () => {
+    const fake = createFakeStore()
+    fake.damageFiles()
+    const mounted = await ready(fake)
     await act(async () => {
       mounted.documentLoaded()
     })
-    expect(live(mounted.timers.armed).map((timer) => timer.delayMs)).toEqual([
-      DOCUMENT_LOAD_DEADLINE_MS,
-      SHELL_STALL_LOG_MS,
-      PAGE_READY_DEADLINE_MS
-    ])
+    // The ready wait replaces the load wait it made moot.
+    const armed = live(mounted.timers.armed).map((timer) => timer.delayMs)
+    expect(armed).toContain(PAGE_READY_DEADLINE_MS)
+    expect(armed).not.toContain(DOCUMENT_LOAD_DEADLINE_MS)
     await act(async () => {
       mounted.timers.fire()
     })
+    expect(fake.verified()).toBe(1)
     expect(mounted.states().at(-1)?.kind).toBe('checking')
+    expect(fake.deleted()).toBe(1)
     await act(async () => {
       mounted.tree.unmount()
     })
@@ -517,7 +565,8 @@ describe('the wait for the page to speak', () => {
 
   it('fails a generation whose document the view never finished, instead of spinning forever', async () => {
     // iOS 18 can refuse its own document load without any failure callback (#28626).
-    const mounted = await ready()
+    const fake = createFakeStore()
+    const mounted = await ready(fake)
     await act(async () => {
       mounted.documentStarted()
     })
@@ -527,7 +576,10 @@ describe('the wait for the page to speak', () => {
     await act(async () => {
       mounted.timers.fire()
     })
-    expect(mounted.states().at(-1)?.kind).toBe('checking')
+    // Intact files are remounted under a fresh session rather than downloaded again.
+    expect(fake.verified()).toBe(1)
+    expect(fake.deleted()).toBe(0)
+    expect(mounted.states().at(-1)?.kind).toBe('ready')
     await act(async () => {
       mounted.tree.unmount()
     })
@@ -588,7 +640,7 @@ describe('the wait for the page to speak', () => {
           createStore: () => fake.store,
           mintSessionId: () => 'session-id',
           now: () => 0,
-          setTimer: createTimerSeam().setTimer
+          setForegroundTimer: createTimerSeam().setTimer
         }
       })
       seen.push(session.state)
@@ -704,5 +756,75 @@ describe('the wait for the page to speak', () => {
     })
     // Cancel real timers on unmount as well as rejecting their results by epoch.
     expect(mounted.timers.armed.every((timer) => timer.cancelled)).toBe(true)
+  })
+})
+
+// RN holds timers while backgrounded and fires overdue ones on resume, before the suspended WebView has loaded anything.
+describe('deadlines on the real foreground timer', () => {
+  beforeEach(() => {
+    vi.useFakeTimers()
+    doubles.manifestRejection = null
+    doubles.connection = { client: {}, state: 'connected' }
+    doubles.gates.hostCapabilities = [MOBILE_WEB_BUNDLE_CAPABILITY]
+    doubles.appState.currentState = 'active'
+    doubles.appState.listeners.clear()
+  })
+  afterEach(() => {
+    vi.useRealTimers()
+  })
+
+  function moveApp(state: string): void {
+    doubles.appState.currentState = state
+    for (const listener of doubles.appState.listeners) {
+      listener(state)
+    }
+  }
+
+  async function opened(fake: ReturnType<typeof createFakeStore>): Promise<Mounted> {
+    const mounted = await mount(fake.store, createMobileWebShellRuntime().setForegroundTimer)
+    fake.settleCacheRead(activeGeneration())
+    await flush()
+    expect(mounted.states().at(-1)?.kind).toBe('ready')
+    return mounted
+  }
+
+  it('gives a document opened just before backgrounding its whole deadline after return', async () => {
+    const fake = createFakeStore()
+    const mounted = await opened(fake)
+    moveApp('background')
+    await act(async () => {
+      vi.advanceTimersByTime(DOCUMENT_LOAD_DEADLINE_MS + 5_000)
+    })
+    moveApp('active')
+    await act(async () => {
+      vi.advanceTimersByTime(DOCUMENT_LOAD_DEADLINE_MS - 1)
+    })
+    expect(fake.deleted()).toBe(0)
+    expect(fake.verified()).toBe(0)
+    // A document that never loads in the foreground still fails (#28626), without deleting intact files.
+    await act(async () => {
+      vi.advanceTimersByTime(1)
+    })
+    expect(fake.verified()).toBe(1)
+    expect(fake.deleted()).toBe(0)
+    expect(mounted.states().at(-1)?.kind).toBe('ready')
+  })
+
+  it('remounts a faulting page on intact files, then fails it, without downloading', async () => {
+    const fake = createFakeStore()
+    const mounted = await opened(fake)
+    await act(async () => {
+      mounted.shellFailed('document-load-failed')
+    })
+    await act(async () => {
+      mounted.shellFailed('document-load-failed')
+    })
+    expect(fake.deleted()).toBe(0)
+    expect(doubles.fetches).toHaveLength(0)
+    expect(fake.verified()).toBe(1)
+    expect(mounted.states().at(-1)).toMatchObject({
+      kind: 'failed',
+      reason: 'document-load-failed'
+    })
   })
 })

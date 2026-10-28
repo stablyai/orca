@@ -11,6 +11,7 @@ const fake = vi.hoisted((): { fileSystem: FakeGenerationFileSystem | null } => (
 }))
 
 vi.mock('expo-file-system', () => ({ Directory: class {}, File: class {}, Paths: { cache: '' } }))
+vi.mock('react-native', () => ({ AppState: {} }))
 vi.mock('expo-crypto', () => ({ getRandomBytes: (length: number) => new Uint8Array(length) }))
 vi.mock('./generation-store-file-system', () => ({
   createExpoGenerationFileSystem: () => fake.fileSystem

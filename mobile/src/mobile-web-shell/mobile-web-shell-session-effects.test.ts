@@ -63,6 +63,7 @@ function storeThat(fail: 'stage' | 'commit' | null): GenerationStore {
         : async () => ({ buildId: MANIFEST.buildId, directory: 'd', manifest: MANIFEST }),
     abortStagedGeneration: async () => undefined,
     openReusableAssets: async () => ({ has: () => false, check: async () => false }),
+    verifyActiveGeneration: async () => true,
     sweepStagedGenerations: async () => undefined,
     deleteHostCache: async () => undefined,
     recordUpdateFailure: async () => undefined,
@@ -94,7 +95,7 @@ async function downloadEvents(
       createStore: () => store,
       mintSessionId: () => 's',
       now: () => 0,
-      setTimer: () => () => {}
+      setForegroundTimer: () => () => {}
     },
     startedAt: 0,
     downloads,
@@ -266,7 +267,7 @@ describe('a download that reuses the cached generation', () => {
         createStore: () => store,
         mintSessionId: () => 's',
         now: () => 0,
-        setTimer: () => () => {}
+        setForegroundTimer: () => () => {}
       },
       startedAt: 0,
       downloads: new Set(),

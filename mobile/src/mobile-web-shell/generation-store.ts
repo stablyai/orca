@@ -42,6 +42,8 @@ export type StagedGeneration = {
 export type GenerationStore = {
   readActiveGeneration(hostKey: string): Promise<ActiveGeneration | null>
   openReusableAssets(hostKey: string): Promise<MobileWebBundleReusableAssets>
+  // True only when buildId's tree holds its manifest and every asset at its manifest length; rejects when unreadable.
+  verifyActiveGeneration(hostKey: string, buildId: string): Promise<boolean>
   stageGeneration(hostKey: string, result: MobileWebBundleFetchResult): Promise<StagedGeneration>
   commitGeneration(staged: StagedGeneration): Promise<ActiveGeneration>
   abortStagedGeneration(staged: StagedGeneration): Promise<void>
@@ -246,6 +248,24 @@ export function createGenerationStore(options: {
     return reusableAssetsOf(fs, await readActive(hostKey))
   }
 
+  // Read the mounted build's own tree; read failures reject so transient I/O never reads as damage.
+  async function verifyActive(hostKey: string, buildId: string): Promise<boolean> {
+    const directory = joinUri(generationsRoot(hostKey), buildId)
+    const text = await fs.readText(joinUri(directory, MANIFEST_FILE_NAME))
+    const manifest = text === null ? null : parseManifest(text)
+    if (manifest?.buildId !== buildId) {
+      return false
+    }
+    // Lengths, not hashes: bytes were hash-verified before staging, and truncation is what interrupted writes leave.
+    for (const asset of manifest.assets) {
+      const size = await fs.fileSize(joinUri(directory, requireStorablePath(asset.path)))
+      if (size !== asset.byteLength) {
+        return false
+      }
+    }
+    return true
+  }
+
   async function sweep(): Promise<void> {
     // Sweep every host’s tmp tree; interrupted downloads may belong to a host this launch never opens.
     for (const host of await listHostDirectories()) {
@@ -272,6 +292,7 @@ export function createGenerationStore(options: {
   return {
     readActiveGeneration: (hostKey) => serialize(() => openActive(hostKey)),
     openReusableAssets: (hostKey) => serialize(() => openReusable(hostKey)),
+    verifyActiveGeneration: (hostKey, buildId) => serialize(() => verifyActive(hostKey, buildId)),
     stageGeneration: (hostKey, result) => serialize(() => stage(hostKey, result)),
     commitGeneration: (staged) => serialize(() => commit(staged)),
     abortStagedGeneration: (staged) =>
