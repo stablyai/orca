@@ -7,18 +7,8 @@ import {
 } from './rich-markdown-web-document-mount'
 import type { MobileRichMarkdownEditorMessage } from '../mobile-rich-markdown-editor-contract'
 
-/**
- * The page's mount of the editor document, as a unit.
- *
- * What it owns is everything between the component and the factory: the sheet planted once per
- * page and reaching only inside the host, the markup the document reads its surface out of, and
- * the dispose that has to leave the page as it found it. Rulings 20 and 21 are the point of the
- * last one — a second mount must not inherit the first's listeners, and the first's must not go on
- * reporting into a host that has gone.
- *
- * What a browser makes of the sheet is not a question this environment can answer and is measured
- * in `config/scripts/mobile-web-app/mobile-web-app-rich-markdown-render.test.mjs` instead.
- */
+// Prove page mount installs scoped style/markup and fully disposes editor state/listeners before remount (rulings 20/21).
+// Browser styling/execCommand behavior belongs to mobile-web-app-rich-markdown-render.test.mjs, not happy-dom.
 const mounted: RichMarkdownWebDocument[] = []
 
 function mount(posts: MobileRichMarkdownEditorMessage[] = [], url: string | null = null) {
@@ -56,8 +46,7 @@ describe('the editor document mounted in the page', () => {
   })
 
   it('never reports a keyboard inset, because the screen measures the same viewport', () => {
-    // The seam supplies no source, so the document has nothing to observe and nothing to post. A
-    // report here would lift the screen's own bar a second time.
+    // No keyboard source means no observer/report; duplicate viewport measurement would double-lift screen bar.
     const { posts } = mount()
     window.dispatchEvent(new Event('resize'))
     expect(posts.filter((message) => message.type === 'keyboardInset')).toEqual([])
@@ -99,9 +88,7 @@ describe('the editor document mounted in the page', () => {
     surfaceIn(second.host)!.dispatchEvent(new Event('input', { bubbles: true }))
 
     expect(second.posts).toEqual([{ type: 'change', markdown: 'second', generation: 0 }])
-    // The precondition the empty list needs: the detached surface is still an element events can
-    // be dispatched on, so nothing reporting from it is the listeners being gone rather than the
-    // event never happening.
+    // Assert detached surface still receives dispatched events before concluding old listeners are removed.
     firstSurface.innerHTML = '<p>first</p>'
     firstSurface.dispatchEvent(new Event('input', { bubbles: true }))
     expect(first.posts).toEqual([])
@@ -110,8 +97,7 @@ describe('the editor document mounted in the page', () => {
   it('gives the host back when the document fails to start, rather than leaving a dead one', () => {
     const host = document.createElement('div')
     document.body.appendChild(host)
-    // The one failure the start sequence has: a surface it cannot read. Faked at the element read
-    // rather than at the factory, so the unwind under test is the real one.
+    // Fail at actual surface lookup so factory’s partial-start unwind stays real.
     vi.spyOn(host, 'querySelector').mockReturnValue(null)
 
     expect(() =>
@@ -125,9 +111,7 @@ describe('the editor document mounted in the page', () => {
   })
 
   it('answers the URL commands from the host rather than from a dialog the shell never shows', async () => {
-    // `execCommand` is the browser's and happy-dom has none, so what the command *does* is the
-    // render check's to measure; what this can say is that the URL comes from the host's seam and
-    // reaches the command with it.
+    // Record host URL reaching execCommand; real browser rig verifies command result because happy-dom has no implementation.
     const executed: [string, string | undefined][] = []
     Object.defineProperty(document, 'execCommand', {
       configurable: true,

@@ -112,10 +112,7 @@ export type SidebarFeedIndex = {
   repoOf: (worktree: Pick<Worktree, 'repoId' | 'hostId'>) => Repo | undefined
 }
 
-/**
- * Its own host's registration when the catalog has one. A host that lists a same-id copy without
- * its own registration still reads as that repo's, as the window reads it.
- */
+/** Prefer the row host’s registration; missing same-ID registrations use repoMap fallback like the window. */
 function repoOfWorktree(
   repoMap: ReadonlyMap<string, Repo>,
   reposByKey: ReadonlyMap<HostScopedRepoKey, Repo>,
@@ -157,10 +154,7 @@ export function rankSidebarFeedWorktrees(
   ).map(getWorktreeHostIdentity)
 }
 
-/**
- * Presentation only: `live` with each workspace that `heldFrom` also lists keeping the Recent
- * stamp it had there, so project sections ordered by Recent hold still. New rows keep theirs.
- */
+/** Keep prior Recent stamps for existing rows during project recency hold; new rows retain live stamps. */
 export function withHeldProjectRecency(
   live: SidebarFeedIndex,
   heldFrom: SidebarFeedIndex

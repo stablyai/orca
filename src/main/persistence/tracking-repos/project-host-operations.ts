@@ -74,8 +74,6 @@ export class ProjectHostPersistenceOperations {
     this.operations.scheduleSave()
   }
 
-  // ── Repos ──────────────────────────────────────────────────────────
-
   getRepos(): Repo[] {
     return this.state.repos.map((repo) => this.hydrateRepo(repo))
   }
@@ -142,7 +140,7 @@ export class ProjectHostPersistenceOperations {
       createdAt: now,
       updatedAt: now
     }
-    // Why: persist independently so future repo projection sync doesn't erase this non-repo-backed setup.
+    // Independent setup persistence survives future repo projection sync.
     this.state.projectHostSetups.push(setup)
     this.scheduleSave()
     return { project, setup }
@@ -175,7 +173,7 @@ export class ProjectHostPersistenceOperations {
     return { project, setup: updatedSetup }
   }
 
-  // Why: the same repo id can exist on several hosts; never fall back to a sibling host's row.
+  // Same-ID repos require host proof; sibling-host fallback would edit the wrong row.
   private findSetupRepo(setup: ProjectHostSetup): Repo | undefined {
     return setup.repoId
       ? this.state.repos.find(
@@ -193,7 +191,6 @@ export class ProjectHostPersistenceOperations {
     if (!project) {
       return null
     }
-    // With no exact row the setup is stale, and the path below drops just the setup.
     const repo = this.findSetupRepo(setup)
     if (repo) {
       this.removeProjectForHost(repo)
@@ -204,7 +201,6 @@ export class ProjectHostPersistenceOperations {
     return { project, setup }
   }
 
-  /** O(1) repo count; unlike `getRepos()` this skips per-repo hydration. */
   getRepoCount(): number {
     return this.state.repos.length
   }
@@ -214,12 +210,7 @@ export class ProjectHostPersistenceOperations {
     return repo ? this.hydrateRepo(repo) : undefined
   }
 
-  /**
-   * Record a background-resolved git username; kept out of updateRepo's whitelist so the renderer can't write it directly.
-   * Takes the probed repo, not just its id: the same id can exist on several execution hosts, and an
-   * id-only lookup would write one host's username onto a sibling host's row and cache key.
-   * @returns true when the hydrated value changed.
-   */
+  /** Store probed usernames by exact repo/host; renderer patches cannot author this cache. Returns whether hydration changed. */
   setResolvedRepoGitUsername(
     target: Pick<Repo, 'id' | 'connectionId' | 'executionHostId'>,
     username: string
@@ -238,7 +229,7 @@ export class ProjectHostPersistenceOperations {
       return false
     }
     if (username) {
-      // Why: persist so the next launch hydrates repos with the right branch prefix before enrichment re-runs.
+      // Retain branch-prefix identity for startup before background enrichment reruns.
       repo.gitUsername = username
     } else {
       delete repo.gitUsername

@@ -217,7 +217,6 @@ describe('AgentKanbanCard', () => {
     expect(header).toHaveTextContent('Sparse-checkout parser')
     expect(header).not.toHaveTextContent('dashboard-review')
     expect(footer).toHaveTextContent('dashboard-review')
-    // The message line is attributed to the user again — the name moved up.
     expect(screen.getByText('You')).toBeInTheDocument()
   })
 

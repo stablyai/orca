@@ -8,10 +8,7 @@ import {
 } from './credential-store.js'
 import { openRelayDatabase, type RelayDatabase } from './database.js'
 
-// The outage this guards against: the credential cleanup ran every 30s in all 23 cells and both
-// sweeps over relay_invites had no usable index, so each one seq-scanned the whole table inside the
-// maintenance transaction. Only a real planner can show the partial indexes take that away, and
-// only a real server has ctid.
+// Real planner/ctid coverage: 23 cells’ 30s invite sweeps once scanned the whole table; partial indexes must remove those scans.
 const databaseUrl = process.env.ORCA_RELAY_TEST_POSTGRES_URL
 const describePostgres = databaseUrl ? describe : describe.skip
 const schema = 'relay_credential_sweep_test'
@@ -129,9 +126,7 @@ describePostgres('credential cleanup against PostgreSQL', () => {
     const expiry = await cleanupPlan('UPDATE relay_invites', 0)
     const reservation = await cleanupPlan('UPDATE relay_invites', 1)
 
-    // Which of the two partial indexes serves the reservation pass is the planner's call: both
-    // predicates hold only live invites, so either one reads a handful of rows. The invariant is
-    // that neither pass reads the whole table any more.
+    // Either partial index may win; both restrict to live invites, and neither sweep may scan the whole table.
     for (const sweep of [expiry, reservation]) {
       expect(sweep).not.toContain('Seq Scan on relay_invites')
       expect(sweep).toMatch(/using relay_invites_sweep_(expiry|reservation)/)
@@ -140,10 +135,7 @@ describePostgres('credential cleanup against PostgreSQL', () => {
   })
 
   it('plans the basis sweep off the composite index rather than the 1.5 GB heap', async () => {
-    // The shape that made this the most expensive statement in the sweep: 20,000 settled bases to
-    // 50 live ones. A partial index on active = 1 looks like the answer to that ratio and is not:
-    // a basis is inserted active and flipped to 0, so it accumulates the same dead entries, and
-    // the planner picks the composite index anyway. See the schema comment beside it.
+    // Active→inactive basis flips leave dead partial-index entries; with 20k settled/50 live the planner still picks the composite index (see schema).
     await database.query(
       `INSERT INTO relay_connection_bases
        (basis_conn_id, user_id, relay_host_id, relay_device_id, owning_control_generation,
@@ -169,11 +161,7 @@ describePostgres('credential cleanup against PostgreSQL', () => {
   })
 
   it('plans the drained basis reaper off the composite index, not the heap', async () => {
-    // Why the composite index stays for now: it is the only one covering active = 0, and the case
-    // that needs it is the steady state, where every row is inside retention and the reaper must
-    // learn there is nothing to do. While the backlog drains the planner rightly prefers a bounded
-    // sequential scan, because it finds its 5,000 rows and stops; measured at 200k rows, the
-    // drained batch costs 5 buffers with this index and 1,274 without it.
+    // Keep composite index for drained active=0 retention checks (5 vs 1,274 buffers at 200k rows); backlog batches correctly favor bounded seq scans.
     await database.query(
       `INSERT INTO relay_connection_bases
        (basis_conn_id, user_id, relay_host_id, relay_device_id, owning_control_generation,

@@ -11,10 +11,7 @@ import { CodexSubagentPollScheduler } from './codex-subagent-poll-scheduler'
 
 type PublishRow = (row: AgentHookEventPayload) => void
 
-/** Wakes the execution host (main for local panes, the relay for remote ones) when a pane held
- *  `working` only by owed Claude task notifications must be restated: nothing arrives when a
- *  notification is never sent. A firing re-reads the pane, so a wakeup left behind by a closed or
- *  moved pane is a no-op and needs no teardown of its own. */
+/** Wake the local/remote execution host when owed notifications expire without another event. Re-read the pane so closed/moved leftovers are no-ops. */
 export class ClaudeOwedNotificationExpiryTimers {
   private readonly wakeups = new CodexSubagentPollScheduler<PublishRow>(0, (paneKey, publish) =>
     this.restate(paneKey, publish)
@@ -29,8 +26,7 @@ export class ClaudeOwedNotificationExpiryTimers {
       this.wakeups.clear(paneKey)
       return
     }
-    // Why capped: a wall clock stepped far back would otherwise ask for a delay setTimeout cannot
-    // hold; restate() re-checks the deadline, so waking early only re-arms.
+    // Cap delays after backward clock steps; restate rechecks the deadline and may re-arm.
     const delay = Math.min(
       CLAUDE_OWED_TASK_NOTIFICATION_LEASE_MS,
       Math.max(0, deadline - Date.now())
@@ -64,14 +60,12 @@ export class ClaudeOwedNotificationExpiryTimers {
       return
     }
     const row = this.state.lastStatusByPaneKey.get(paneKey)
-    // Why the builder a child's end re-emits through: the fold it runs is what gives up on the
-    // expired notifications, and the row must read exactly like every other Claude row.
+    // Use the child-end fold so expired debt produces the same row as other Claude events.
     const payload = buildClaudeCachedLeadStatusPayload(this.state, undefined, paneKey, {})
     if (!row || !payload) {
       return
     }
-    // Why the stored row's envelope: its launch token and owner must reach the same fences a
-    // hook's row does; like a transcript-poll restatement, it is no hook event and no new prompt.
+    // Retain stored launch/owner fencing; timer restatement is neither a hook nor a new prompt.
     publish({
       ...row,
       hasExplicitPrompt: undefined,

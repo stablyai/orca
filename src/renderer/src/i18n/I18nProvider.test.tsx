@@ -18,17 +18,12 @@ import * as languageReadiness from './language-readiness'
 import { usePluginLanguagePackStore } from '../store/plugin-language-packs'
 import { I18nProvider } from './I18nProvider'
 
-// Why: settings arrive async over IPC after first render. The provider used to
-// fall back to the 'system' language while settings were null, kicking off an
-// OS-locale changeLanguage that raced with — and could permanently override —
-// the persisted preference. These tests pin the fixed ordering.
+// Wait for async settings before selecting the OS locale, or an in-flight load can override the persisted preference.
 
 const initialAppState = useAppStore.getInitialState()
 const roots: Root[] = []
 
-// Why: the 'system' UI language resolves through navigator.language; stubbing it
-// lets these tests simulate a non-English OS locale (the #7188 repro) without
-// depending on the host machine's locale.
+// Stub navigator.language to reproduce a non-English OS independently of the test host.
 const ORIGINAL_SYSTEM_LOCALE = navigator.language
 function stubSystemLocale(tag: string): void {
   Object.defineProperty(navigator, 'language', { value: tag, configurable: true })
@@ -152,9 +147,7 @@ describe('I18nProvider startup language', () => {
   })
 
   it('applies persisted English even if i18n reports it as already active', async () => {
-    // Why: i18n.language stays stale while a lazy catalog load is in flight; a
-    // guard comparing against it skipped the correction back to the persisted
-    // language and let the in-flight OS locale win.
+    // i18n.language stays stale during lazy loading; comparing it can skip correcting an in-flight OS-locale switch.
     const changeLanguage = vi.spyOn(i18n, 'changeLanguage')
 
     await renderProvider()
@@ -168,14 +161,11 @@ describe('I18nProvider startup language', () => {
   })
 
   it('never applies the OS locale on a non-English system when English is persisted (#7188)', async () => {
-    // Why: on a Spanish OS the pre-fix provider kicked off changeLanguage('es')
-    // while settings were still null, and the in-flight OS switch then beat the
-    // persisted English preference. The fix applies nothing until settings load.
+    // No locale request may start before persisted settings arrive, even on a Spanish OS.
     stubSystemLocale('es-ES')
     const changeLanguage = vi.spyOn(i18n, 'changeLanguage')
 
     await renderProvider()
-    // No OS-locale switch is kicked off while settings are still loading.
     expect(changeLanguage).not.toHaveBeenCalled()
 
     await act(async () => {
@@ -184,7 +174,6 @@ describe('I18nProvider startup language', () => {
       })
     })
 
-    // English wins and the Spanish OS locale is never requested.
     expect(useLanguageReadiness.getState().detection?.locale).toBe('es')
     expect(changeLanguage).toHaveBeenCalledWith('en')
     expect(changeLanguage).not.toHaveBeenCalledWith('es')

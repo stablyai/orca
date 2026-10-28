@@ -17,7 +17,6 @@ async function encodeBitmap(bitmap: ImageBitmap): Promise<Blob | null> {
   }
 }
 
-/** Re-encodes at full resolution without JPEG loss; null when it cannot fit. */
 export async function shrinkFeedbackImage(image: Blob, maxBytes: number): Promise<Blob | null> {
   const bitmap = await createImageBitmap(image)
   try {

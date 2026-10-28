@@ -5,10 +5,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 type RouteDependencies = {
   routes: { pathname: string; params?: Record<string, string> }[]
   refusals: number
-  /** `mount:<pathname>` / `unmount:<pathname>`, which is the only thing that tells a remount from
-   *  a prop update — and a remount is what drops the old session's bridge and its grants. */
   lifecycle: string[]
-  /** Every `onRouteParamClear` the screen was handed, so a case can erase the way the page does. */
   clears: ((param: 'paneKey', value: string) => void)[]
   params: Record<string, string | string[] | undefined>
 }
@@ -30,7 +27,6 @@ vi.mock('react-native', () => ({
   View: 'View'
 }))
 
-// The workspace route reads the desktop's connection to decide whether a server is reachable.
 vi.mock('../transport/host-client-hooks', () => ({
   useHostClient: () => ({ client: null, state: 'disconnected' })
 }))
@@ -65,8 +61,7 @@ vi.mock('./MobileWebShellScreen', async () => {
       if (props.onRouteParamClear) {
         dependencies.clears.push(props.onRouteParamClear)
       }
-      // Empty deps on purpose: keyed on the pathname this would re-fire on a prop update and read
-      // exactly like a remount, which is the one thing it exists to tell apart.
+      // Keep deps empty so prop updates cannot impersonate remounts.
       const mountedAs = React.useRef(props.route.pathname)
       React.useEffect(() => {
         const pathname = mountedAs.current
@@ -100,7 +95,6 @@ async function update(renderer: ReactTestRenderer): Promise<void> {
   })
 }
 
-/** Every pane key the shell was handed, in the order it was handed them, clears included. */
 function paneKeysSeen(): string[] {
   return dependencies.routes.map((route) => route.params?.paneKey ?? '')
 }
@@ -121,13 +115,7 @@ describe('the session route that hands off to the shell', () => {
     ])
   })
 
-  /**
-   * A repeated query key, which expo-router answers with an array.
-   *
-   * A bare read puts that array straight into a template, where `String(['a','b'])` is `a,b` and
-   * `encodeURIComponent` makes it `a%2Cb` — one segment, so the bridge's segment rule accepts it
-   * and the shell opens a page for a host that does not exist.
-   */
+  // Read repeated Expo query keys through firstParam; encoding the array as a,b would invent one valid but nonexistent host segment.
   it('takes the first value of a repeated param, not the joined array', async () => {
     dependencies.params = {
       hostId: ['host-a', 'host-b'],
@@ -168,12 +156,7 @@ describe('the session route that hands off to the shell', () => {
     }
   })
 
-  /**
-   * A route change is a new session, and the old one's bridge must not outlive it.
-   *
-   * The host captures the grants its session was opened with, so a screen reused across a route
-   * change keeps authorising frames under the grants of the route the page has left.
-   */
+  // Remount on route change so the old bridge cannot retain the previous route’s grants.
   it('remounts the shell when the route changes rather than updating it', async () => {
     const renderer = await renderSession()
     dependencies.params = { hostId: 'host-2', worktreeId: 'wt-9' }
@@ -196,26 +179,16 @@ describe('the session route that hands off to the shell', () => {
     ])
   })
 
-  /**
-   * The two pane cases (ruling 33.1). Both measure mounts, because a remount here is a bridge
-   * teardown and a page reload for what is a tab switch.
-   *
-   * The spent tap is what made the repeat one unreachable: the page cleared the param on its own
-   * router, the native route kept it, and `SET_PARAMS` writing the value already there moved no
-   * key and remounted nothing. Here the page erases the native param (ruling 34), so the second
-   * tap is a change again.
-   */
+  // Pane taps must update without remounting. Clear the native param after page consumption so a repeat tap becomes another change (rulings 33.1/34).
   it('hands a repeat tap for the same pane to the mounted page, twice, with no remount', async () => {
     dependencies.params = { hostId: 'host-1', worktreeId: 'wt-1', paneKey: 'pane-1' }
     const renderer = await renderSession()
     expect(paneKeysSeen()).toEqual(['pane-1'])
-    // The page applied it and says so, naming what it applied.
     await act(async () => {
       dependencies.clears.at(-1)?.('paneKey', 'pane-1')
     })
     await update(renderer)
     expect(dependencies.params.paneKey).toBe('')
-    // The same notification tapped again.
     dependencies.params = { ...dependencies.params, paneKey: 'pane-1' }
     await update(renderer)
     expect(paneKeysSeen().filter((key) => key === 'pane-1')).toHaveLength(2)

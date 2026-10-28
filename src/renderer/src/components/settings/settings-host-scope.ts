@@ -1,9 +1,8 @@
 import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
 
-/** Host whose accounts, agents and terminal capabilities Settings shows; chosen in the page. */
 export type SettingsHostScope = {
   target: RuntimeClientTarget
-  /** False when the chosen server is no longer saved: panes say so instead of showing another host. */
+  /** Missing saved hosts must not silently fall back to another host. */
   available: boolean
 }
 
@@ -13,9 +12,8 @@ export const LOCAL_SETTINGS_HOST_SCOPE: SettingsHostScope = {
 }
 
 export function resolveSettingsHostScope(args: {
-  /** Null until the user picks a host in the page. */
   choice: RuntimeClientTarget | null
-  /** The "default host for new projects" setting; only the initial default, never a later override. */
+  /** Seeds the initial choice; never overrides an explicit selection. */
   defaultEnvironmentId: string | null | undefined
   savedEnvironmentIds: readonly string[]
   catalogHydrated: boolean
@@ -31,7 +29,7 @@ export function resolveSettingsHostScope(args: {
   }
   return {
     target: { kind: 'environment', environmentId },
-    // Why: an unhydrated catalog is not evidence the server is gone.
+    // An unhydrated catalog does not prove the server was removed.
     available: !args.catalogHydrated || args.savedEnvironmentIds.includes(environmentId)
   }
 }

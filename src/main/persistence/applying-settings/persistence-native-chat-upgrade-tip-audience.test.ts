@@ -4,7 +4,7 @@ import {
   createStore,
   readDataFile,
   writeDataFile
-} from '../../persistence-test-harness'
+} from '../persistence-test-harness'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -13,7 +13,7 @@ import { getDefaultPersistedState } from '../../../shared/constants'
 import type {
   NativeChatUpgradeTipAudience,
   NativeChatUpgradeTipVariant
-} from '../../../shared/native-chat-upgrade-tip-audience'
+} from '../../../shared/native-chat/native-chat-upgrade-tip-audience'
 import { normalizeProfileProjectState } from '../../orca-profiles/profile-project-state-file'
 
 vi.mock('electron', () => ({

@@ -37,6 +37,12 @@ describe('resolveHttpLinkBrowserPlacement', () => {
         WT
       )
     ).toEqual({ targetGroupId: 'right' })
+    expect(
+      resolveHttpLinkBrowserPlacement(
+        state({ rightActiveTabId: 'browser', activeGroupId: 'right' }),
+        WT
+      )
+    ).toEqual({ targetGroupId: 'right' })
   })
 
   it('ignores a browser hidden behind another tab and splits beside the source instead', () => {

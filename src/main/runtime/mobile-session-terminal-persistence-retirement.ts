@@ -79,8 +79,7 @@ export function retireTerminalSurfaceFromPersistence(
 
   const isLegacyFinalSurface = !layout && persistedTab?.ptyId === surface.ptyId
   if (!exactLeafInLayout && !isLegacyFinalSurface) {
-    // Why: tab.ptyId may describe a live sibling. The absent exact leaf still
-    // needs a tombstone, but sibling evidence must not remove its parent.
+    // Tombstone the absent exact leaf; tab.ptyId may name a live sibling and cannot justify parent removal.
     return recordTerminalSurfaceRetirement(session, surface, paneKey)
   }
 

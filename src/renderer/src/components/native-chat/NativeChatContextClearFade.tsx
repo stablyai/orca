@@ -1,7 +1,6 @@
 import type { ReactNode } from 'react'
 
-/** The transcript pane. A live `/clear` fades it out, swaps the transcript while it is unseen
- *  (`NATIVE_CHAT_CONTEXT_CLEAR_FADE_MS`), then fades it back in. */
+/** Swap the transcript while hidden during the live /clear fade, then reveal it again. */
 export function NativeChatContextClearFade({
   clearing,
   children

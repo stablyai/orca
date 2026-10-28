@@ -7,6 +7,7 @@ import { listEnvironments } from '../../../shared/runtime-environment-store'
 import { findOrcadMigrationSourceCutoverForTarget } from '../../ssh/orcad-migration-cutover-journal'
 import { abandonOrcadConversion } from '../../ssh/orcad-conversion-abandon'
 import { retainOrcadMigrationSource } from '../../ssh/orcad-migration-source-retention'
+import { enableMovedOrcadAutomationsForTarget } from '../../ssh/orcad-migration-moved-automations'
 import { hasOrcadTemplate } from '../../orcad/orcad-artifact-materializer'
 import { isOrcadHostUnavailableFixableOnHost } from '../../orcad/orcad-host-unavailable'
 import { managedServerUpdateDeps } from '../../ssh/managed-server-update-deps'
@@ -15,6 +16,7 @@ import { verifyOrcadManagedServing } from '../../managed-server/lifecycle/orcad-
 import { convertSshTargetToManagedOrcad } from '../../managed-server/lifecycle/orcad-runtime-conversion'
 import {
   orcadMigrationDestinationFor,
+  orcadServerAutomationEnablerFor,
   orcadServerFolderCatalogFor,
   orcadServerRepositoriesFor
 } from '../../managed-server/lifecycle/orcad-runtime-conversion-wiring'
@@ -57,9 +59,21 @@ export function hostServerOnConnectDeps(userDataPath: string): HostServerOnConne
     ensureServing: (environmentId) => verifyOrcadManagedServing(userDataPath, environmentId),
     retainCommittedSource: async (target) => {
       const head = findOrcadMigrationSourceCutoverForTarget(userDataPath, target.id)
-      if (head?.phase === 'destination-committed') {
-        await retainOrcadMigrationSource(userDataPath, head.migrationId, store)
+      if (head?.phase !== 'destination-committed') {
+        return 0
       }
+      await retainOrcadMigrationSource(userDataPath, head.migrationId, store)
+      // Retry what earlier connects could not reach the server to re-enable.
+      const environment = listEnvironments(userDataPath).find(
+        (entry) => entry.id === head.destinationEnvironmentId
+      )
+      return environment
+        ? enableMovedOrcadAutomationsForTarget(
+            userDataPath,
+            target.id,
+            orcadServerAutomationEnablerFor(environment)
+          )
+        : 0
     },
     hasTemplate: hasOrcadTemplate,
     recordedUnavailable: (target) =>
@@ -112,7 +126,8 @@ export function hostServerOnConnectDeps(userDataPath: string): HostServerOnConne
         // Releasing the direct session here would cancel the connect that requested conversion.
         destinationFor: orcadMigrationDestinationFor,
         serverRepositoriesFor: orcadServerRepositoriesFor,
-        serverFolderCatalogFor: orcadServerFolderCatalogFor
+        serverFolderCatalogFor: orcadServerFolderCatalogFor,
+        serverAutomationEnablerFor: orcadServerAutomationEnablerFor
       })
       if (converted.outcome === 'converted' || converted.outcome === 'refused') {
         // Move-anyway consent covers one attempt; retain it on failure so held-fence verification can resume.

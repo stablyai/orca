@@ -3,7 +3,7 @@ import type {
   AgentJournalTurnScope
 } from '../../../shared/agent-session-journal-types'
 import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../shared/agent-session-journal-types'
-import { CLAUDE_LOCAL_COMMAND_OUTPUT_FRAME_KIND } from '../../../shared/native-chat-provider-frame-summary'
+import { CLAUDE_LOCAL_COMMAND_OUTPUT_FRAME_KIND } from '../../../shared/native-chat/native-chat-provider-frame-summary'
 import {
   boundPayload,
   PROVIDER_FRAME_PAYLOAD_LIMITS,

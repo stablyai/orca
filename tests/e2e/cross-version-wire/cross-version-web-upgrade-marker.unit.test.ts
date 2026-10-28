@@ -8,10 +8,7 @@ import {
   resolveBaselineReleaseRef
 } from './release-checkout'
 
-/**
- * The web client marks its WebSocket upgrade with `?orca-client=web`. Released hosts and this host
- * must both accept the marked upgrade from a plain-http LAN page, as they accept a phone's.
- */
+// Released hosts must accept ?orca-client=web upgrades from plain-HTTP LAN pages, like phone upgrades.
 const SUITE_TIMEOUT_MS = 180_000
 const LAN_PAGE = 'http://192.168.1.20:6768'
 

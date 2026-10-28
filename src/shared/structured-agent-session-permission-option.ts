@@ -1,15 +1,12 @@
-// The chat's permission mode as a picker descriptor: shows the mode the host states, never derives it.
+// Show host-stated permission mode; never infer what is running.
 
 import {
   AGENT_CHAT_PERMISSION_MODE_OPTION_ID,
   agentChatPermissionModes,
-  chatModelSupportsAutoMode,
-  offeredChatPermissionModes,
   type AgentChatPermissionMode
 } from './agent-chat-permission-mode'
-import type { AgentSessionOptionCatalog } from './agent-session-option-catalog'
 import type { StructuredAgentSessionOptionRecord } from './structured-agent-session-option-state'
-import type { SessionOptionDescriptor } from './native-chat-session-options'
+import type { SessionOptionDescriptor } from './native-chat/input/native-chat-session-options'
 
 /** English names and descriptions for surfaces without a translation catalog. */
 const MODE_COPY: Readonly<Record<AgentChatPermissionMode, { label: string; description: string }>> =
@@ -29,14 +26,14 @@ const MODE_COPY: Readonly<Record<AgentChatPermissionMode, { label: string; descr
     }
   }
 
-const CODEX_DESCRIPTIONS: Partial<Record<AgentChatPermissionMode, string>> = {
-  ask: 'Edits files and runs commands in this workspace; asks before anything else',
-  'full-access': 'Never asks; can edit any file and use the network'
-}
-
 // Claude's copy names the person's own settings; other agents decide what they already allow.
 const OTHER_AGENT_DESCRIPTIONS: Partial<Record<AgentChatPermissionMode, string>> = {
   ask: "Asks before edits or commands it isn't already allowed to make"
+}
+
+const CODEX_DESCRIPTIONS: Partial<Record<AgentChatPermissionMode, string>> = {
+  ...OTHER_AGENT_DESCRIPTIONS,
+  'full-access': 'Never asks; can edit any file and use the network'
 }
 
 const ANTIGRAVITY_DESCRIPTIONS: Partial<Record<AgentChatPermissionMode, string>> = {
@@ -54,57 +51,58 @@ function agentDescriptions(agent: string): Partial<Record<AgentChatPermissionMod
   return AGENT_DESCRIPTIONS.get(agent) ?? OTHER_AGENT_DESCRIPTIONS
 }
 
-/** Only decides whether the menu offers Approve for me, by the host's own rule. */
-function currentModelSupportsAutoMode(
-  catalog: AgentSessionOptionCatalog | null,
-  record: StructuredAgentSessionOptionRecord
-): boolean {
-  const model = record.values.model?.value
-  return (
-    catalog !== null &&
-    chatModelSupportsAutoMode(catalog.models, typeof model === 'string' ? model : undefined)
-  )
-}
-
 export function structuredAgentSessionPermissionDescriptor(state: {
-  catalog: AgentSessionOptionCatalog | null
   record: StructuredAgentSessionOptionRecord
   permissionMode: string | null
-  pendingId?: string | null
+  permissionOwnSupported?: boolean | null
+  reportedPermissionMode?: string | null
 }): SessionOptionDescriptor | null {
   const support = agentChatPermissionModes(state.record.agent)
-  const current = support?.modes.find((mode) => mode === state.permissionMode)
-  if (!support || !current) {
+  const own = state.permissionMode === 'own'
+  if (!support || (!own && !support.modes.some((mode) => mode === state.permissionMode))) {
     return null
   }
-  const offered = offeredChatPermissionModes(
-    support,
-    current === 'auto' ||
-      (state.pendingId !== 'model' && currentModelSupportsAutoMode(state.catalog, state.record))
-  )
+  const current =
+    state.reportedPermissionMode === undefined && !own && state.permissionOwnSupported !== true
+      ? (state.permissionMode ?? undefined)
+      : (state.reportedPermissionMode ?? undefined)
+  const reported = support.modes.find((mode) => mode === current)
+  const label = reported
+    ? MODE_COPY[reported].label
+    : current === 'plan'
+      ? 'Plan mode'
+      : current === 'read-only'
+        ? 'Read only'
+        : (current ?? 'Permissions')
   return {
+    description: label,
     id: AGENT_CHAT_PERMISSION_MODE_OPTION_ID,
     label: 'Permissions',
     category: 'mode',
     kind: {
       type: 'select',
       currentValue: current,
-      choices: offered.map((value) => ({
+      choices: support.modes.map((value) => ({
         value,
         label: MODE_COPY[value].label,
         description: agentDescriptions(state.record.agent)[value] ?? MODE_COPY[value].description
       }))
     },
-    valueSource: 'applied',
+    valueSource:
+      current === undefined
+        ? 'unknown'
+        : state.reportedPermissionMode === undefined
+          ? 'applied'
+          : 'reported',
     transport: 'agent-session',
-    settable: true
+    settable: state.permissionOwnSupported !== null && current !== undefined
   }
 }
 
-/** The value a host predating per-chat modes shows: it runs its own Agent Permissions. */
+/** Older hosts apply their own Agent Permissions instead of per-chat modes. */
 export const LEGACY_HOST_PERMISSION_VALUE = 'host'
 
-/** A read-only pill for a host that ignores per-chat modes, so its chats never look unset. */
+/** Read-only legacy-host mode prevents unsupported per-chat settings from looking unset. */
 export function legacyHostPermissionDescriptor(): SessionOptionDescriptor {
   return {
     id: AGENT_CHAT_PERMISSION_MODE_OPTION_ID,
@@ -126,4 +124,27 @@ export function legacyHostPermissionDescriptor(): SessionOptionDescriptor {
     transport: 'agent-session',
     settable: false
   }
+}
+
+/** Absent producers retain options fallback; present evidence owns the description, even cleared. */
+export function projectRuntimePermission<T extends { reportedPermissionMode?: string | null }>(
+  state: T,
+  summary: unknown,
+  fence: number | null
+): T {
+  if (typeof summary !== 'object' || summary === null || !('runtimePermission' in summary)) {
+    return state
+  }
+  const report = summary.runtimePermission
+  const valid =
+    typeof report === 'object' &&
+    report !== null &&
+    'fence' in report &&
+    Number.isSafeInteger(report.fence) &&
+    typeof report.fence === 'number' &&
+    report.fence >= 0 &&
+    report.fence === fence &&
+    'mode' in report &&
+    (report.mode === null || typeof report.mode === 'string')
+  return { ...state, reportedPermissionMode: valid ? report.mode : undefined }
 }

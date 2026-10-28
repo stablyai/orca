@@ -17,20 +17,10 @@ export function waitForSentinel(
     let stderrOutput = ''
     let bufferedStdout: Buffer = Buffer.alloc(0)
     let closedAfterSentinel = false
-    // Why: ssh2 fires 'exit' BEFORE 'close' with the remote exit code.
-    // Capturing it here lets us translate exit-42 (relay handshake mismatch)
-    // into a typed RelayVersionMismatchError so the relay-lost retry loop
-    // can skip backoff for this terminal condition.
+    // ssh2 emits exit before close; retain typed handshake refusals so retry logic skips transport backoff.
     let lastExitCode: number | null = null
 
-    // Why: when the sentinel timeout fires we close the channel and wait a
-    // short grace window for the 'close' handler to surface the typed
-    // RelayVersionMismatchError if the remote --connect actually exited 42.
-    // Settling here unconditionally would let a slow exit-42 (e.g. a remote
-    // with congested SSH multiplex or a paused VM) be misclassified as a
-    // generic timeout — which routes through the relay-lost retry backoff
-    // and re-introduces the failure mode the typed error was meant to
-    // prevent.
+    // After timeout, allow close 500ms to report typed exit 42/43 before settling a generic timeout.
     const TIMEOUT_GRACE_MS = 500
     let timeoutFired = false
     let timeoutGraceTimer: ReturnType<typeof setTimeout> | null = null
@@ -115,29 +105,19 @@ export function waitForSentinel(
     }
 
     const failStartupOutputCap = (): void => {
-      // Why: before the sentinel, stdout is untrusted startup noise; cap it
-      // like stderr so a broken remote cannot grow memory until timeout.
+      // Cap untrusted pre-sentinel stdout like stderr to bound memory until timeout.
       failOrClose(new Error('Relay startup output exceeded 64 KiB before ready sentinel'))
       channel.close()
     }
 
-    // Why: SSH channel streams emit `error` when the remote host disappears.
-    // Unhandled EventEmitter errors are process-fatal, so convert them into
-    // startup rejection before the sentinel and transport close after it.
+    // Channel errors must reject startup or close transport; unhandled EventEmitter errors are process-fatal.
     channel.on('error', (err: Error) => failOrClose(err))
     channel.stderr.on('error', (err: Error) => failOrClose(err))
 
     channel.on('close', () => {
       if (!sentinelReceived) {
         if (!settled) {
-          // Why: a wire-handshake mismatch on the daemon side closes the
-          // socket; --connect prints the mismatch detail to stderr and exits
-          // with code 42 BEFORE writing the sentinel. Translate that into a
-          // typed RelayVersionMismatchError so the retry loop in ssh.ts can
-          // distinguish a recoverable transport drop from this terminal
-          // condition and skip backoff. The check still wins over a fired
-          // timeout because the timeout handler defers settling for a small
-          // grace window so the close handler can deliver the exit code.
+          // Pre-sentinel exit 42/43 is a terminal handshake refusal, even within the timeout grace window.
           const refusal = buildRelayHandshakeRefusalError(lastExitCode, stderrOutput)
           if (refusal) {
             rejectStartup(refusal)
@@ -157,11 +137,7 @@ export function waitForSentinel(
       notifyClosed()
     })
 
-    // Why: data arriving in the same TCP chunk as the sentinel is buffered
-    // here. It's delivered on the first onData registration rather than
-    // immediately after resolve, because resolve schedules a microtask —
-    // the caller's `await` hasn't resumed yet, so no callbacks are
-    // registered when the synchronous code after resolve runs.
+    // Buffer post-sentinel bytes until await resumes and the multiplexer subscribes; resolve alone only schedules a microtask.
     let pendingAfterSentinel: Buffer | null = null
 
     channel.on('data', (data: Buffer) => {
@@ -183,8 +159,7 @@ export function waitForSentinel(
         MAX_RELAY_STARTUP_BUFFER_BYTES - bufferedStdout.length + RELAY_SENTINEL_BUFFER.length
       )
       const searchableData = data.subarray(0, searchableDataLength)
-      // Why: search only far enough to accept a sentinel at the cap boundary;
-      // bytes after the sentinel are framed relay data and may be large.
+      // Cap startup noise only; a sentinel at the boundary may precede large framed relay data.
       const startupStdout =
         bufferedStdout.length === 0
           ? searchableData
@@ -222,10 +197,7 @@ export function waitForSentinel(
           },
           onData: (cb) => {
             dataCallbacks.push(cb)
-            // Why: deliver buffered post-sentinel data to the first
-            // subscriber. This is the multiplexer constructor, which
-            // registers onData synchronously — the data is guaranteed
-            // to reach the decoder before any other frames arrive.
+            // Deliver buffered bytes to the first subscriber before newer frames reach its decoder.
             if (pendingAfterSentinel) {
               const buf = pendingAfterSentinel
               pendingAfterSentinel = null

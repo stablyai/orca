@@ -1,4 +1,5 @@
 import { randomUUID } from 'node:crypto'
+import path from 'node:path'
 import { browserDownloadDestinationReservations } from './browser-download-destination'
 import { routeBrowserClientDownload } from './browser-client-download-routing'
 import {
@@ -10,12 +11,34 @@ import type { BrowserDownloadFinishedEvent } from '../../shared/browser-guest-ev
 import { BrowserManagerQueries } from './browser-manager-queries'
 
 export abstract class BrowserManagerDownloadCreation extends BrowserManagerQueries {
+  private unownedDownloadOwnerResolver: ((webContentsId: number) => string | null) | null = null
+  private readonly requestedFilenames = new WeakMap<Electron.DownloadItem, string>()
+  private readonly requestedSavePaths = new WeakMap<Electron.DownloadItem, string>()
+
+  /**
+   * Extension pages and workers are never registered as tabs, so their downloads would wait
+   * forever for a registration; the resolver names the page that owns them instead.
+   */
+  setUnownedDownloadOwnerResolver(resolver: (webContentsId: number) => string | null): void {
+    this.unownedDownloadOwnerResolver = resolver
+  }
+
+  /** chrome.downloads `filename`: names the item before its destination is reserved. */
+  requestDownloadFilename(item: Electron.DownloadItem, filename: string): void {
+    this.requestedFilenames.set(item, filename)
+  }
+
+  /** chrome.downloads `saveAs`: the path the user chose in the save dialog, used as is. */
+  requestDownloadSavePath(item: Electron.DownloadItem, savePath: string): void {
+    this.requestedSavePaths.set(item, savePath)
+  }
+
   handleGuestWillDownload(args: { guestWebContentsId: number; item: Electron.DownloadItem }): void {
     const { guestWebContentsId, item } = args
     const downloadId = randomUUID()
     const requestedFilename = (() => {
       try {
-        return item.getFilename() || 'download'
+        return this.requestedFilenames.get(item) || item.getFilename() || 'download'
       } catch {
         return 'download'
       }
@@ -46,8 +69,14 @@ export abstract class BrowserManagerDownloadCreation extends BrowserManagerQueri
 
     // Stage client-hosted downloads for the remote workspace; popups use their opener.
     const ownerContext = this.resolvePopupOwnerContext(guestWebContentsId)
+    const adoptedTabId = ownerContext
+      ? null
+      : (this.unownedDownloadOwnerResolver?.(guestWebContentsId) ?? null)
     const decision = routeBrowserClientDownload({
-      guestWebContentsId: ownerContext?.rootGuestWebContentsId ?? guestWebContentsId
+      guestWebContentsId:
+        ownerContext?.rootGuestWebContentsId ??
+        (adoptedTabId ? this.getGuestWebContentsId(adoptedTabId) : null) ??
+        guestWebContentsId
     })
     const clientRoute = decision.kind === 'remote' ? decision.route : null
     const destination = (() => {
@@ -61,6 +90,10 @@ export abstract class BrowserManagerDownloadCreation extends BrowserManagerQueri
       // Never fall back to local Downloads for an unresolved remote destination.
       if (decision.kind === 'blocked') {
         return null
+      }
+      const chosenPath = this.requestedSavePaths.get(item)
+      if (chosenPath) {
+        return { filename: path.basename(chosenPath), savePath: chosenPath, reservationKey: null }
       }
       try {
         return browserDownloadDestinationReservations.reserve(requestedFilename)
@@ -94,7 +127,7 @@ export abstract class BrowserManagerDownloadCreation extends BrowserManagerQueri
     }
     this.downloadsById.set(downloadId, download)
 
-    const browserTabId = ownerContext?.browserTabId ?? null
+    const browserTabId = ownerContext?.browserTabId ?? adoptedTabId
     if (browserTabId) {
       this.bindDownloadToTab(downloadId, browserTabId)
     } else {

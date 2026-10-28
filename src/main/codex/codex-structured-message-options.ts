@@ -1,3 +1,12 @@
+import { pickedSkillsInText } from '../../shared/structured-agent-session-send-mutation'
+import type { AgentJournalMessageItem } from '../../shared/agent-session-journal-types'
+import type { NativeChatBlock } from '../../shared/native-chat-types'
+import type { CodexTurnHost } from './codex-structured-turn-start'
+import { waitForPromiseWithSignal } from '../../shared/abort-signal-reason'
+import { StructuredAgentSessionInputNotAdmitted } from '../native-chat/agent-session-wire/structured-agent-session-input-admission'
+import { agentSessionFailureFact } from '../../shared/agent-session-failure'
+import { codexDispatchRejection } from './codex-structured-turn-end-settlement'
+import type { StructuredAgentSessionAdapter } from '../native-chat/agent-session-wire/structured-agent-session-adapter'
 import type { AgentSessionExecutionOptions } from '../../shared/agent-session-execution-options'
 import { AgentSessionOptionRejectedError } from '../native-chat/agent-session-wire/structured-agent-session-option-error'
 import { readCodexConfiguredLaunchDefaults } from './codex-configured-launch-defaults'
@@ -5,6 +14,27 @@ import { codexAcquireCatalogListing } from './codex-structured-catalog-entry'
 import { CODEX_DEFAULT_SERVICE_TIER } from './codex-structured-service-tier'
 import type { CodexSession } from './codex-structured-session-state'
 import { applyCodexStructuredSessionOption } from './codex-structured-session-options'
+
+function codexModelDefaults(session: CodexSession, selected?: string) {
+  const listing = codexAcquireCatalogListing(session.catalogAccess)
+  const model =
+    selected ??
+    session.reportedOptions.model ??
+    listing?.models.find((entry) => entry.isDefault)?.id
+  const defaultEffort =
+    (model === session.reportedOptions.model ? session.reportedOptions.effort : undefined) ??
+    listing?.models.find((entry) => entry.id === model)?.defaultEffort
+  return { model, defaultEffort }
+}
+
+export function resolvedCodexGoalSettings(
+  session: CodexSession,
+  choices: AgentSessionExecutionOptions = {}
+) {
+  const { model, defaultEffort } = codexModelDefaults(session, choices.model)
+  const effort = choices.effort ?? defaultEffort
+  return { ...(model ? { model } : {}), ...(effort ? { effort } : {}) }
+}
 
 /** Resolve per-message overrides without replacing the session's saved picks. */
 export async function resolvedCodexMessageOptions(
@@ -14,19 +44,13 @@ export async function resolvedCodexMessageOptions(
   if (choices === undefined) {
     return undefined
   }
-  const listing = codexAcquireCatalogListing(session.catalogAccess)
   const priorModel = session.options.get('model')
   const priorEffort = session.options.get('effort')
   // Keep the thread's effort unless switching models.
-  const thread = session.reportedOptions
-  const model =
-    choices.model ?? thread.model ?? listing?.models.find((entry) => entry.isDefault)?.id
+  const { model, defaultEffort } = codexModelDefaults(session, choices.model)
   if (!model && (choices.effort || priorModel || priorEffort)) {
     throw new AgentSessionOptionRejectedError(new Error('codex default model is unavailable'))
   }
-  const listedModel = listing?.models.find((entry) => entry.id === model)
-  const threadEffort = model === thread.model ? thread.effort : undefined
-  const defaultEffort = threadEffort ?? listedModel?.defaultEffort
   if (choices.effort === undefined && priorEffort && !defaultEffort) {
     throw new AgentSessionOptionRejectedError(new Error('codex default effort is unavailable'))
   }
@@ -102,4 +126,67 @@ export async function resolvedCodexMessageOptions(
     }
   }
   return Object.fromEntries(selected.options)
+}
+
+/** Check the live binding after options settle and again whenever the provider is about to write. */
+export async function prepareCodexMessageDispatch(
+  session: CodexSession,
+  input: Parameters<StructuredAgentSessionAdapter['dispatch']>[0],
+  registered: () => boolean
+) {
+  const checkAbort = () => {
+    if (input.signal?.aborted) {
+      throw new StructuredAgentSessionInputNotAdmitted({
+        state: 'rejected',
+        ...codexDispatchRejection(
+          agentSessionFailureFact(session.ended ? 'providerExited' : 'cancelled')
+        )
+      })
+    }
+  }
+  await input.beforeDispatch?.()
+  checkAbort()
+  input.onInputPreparation?.()
+  const turnOptions = await waitForPromiseWithSignal(
+    resolvedCodexMessageOptions(session, input.executionOptions),
+    input.signal
+  ).catch((error: unknown) => {
+    checkAbort()
+    throw error
+  })
+  checkAbort()
+  return {
+    ...input,
+    turnOptions,
+    isCurrent: () =>
+      registered() &&
+      !session.ended &&
+      session.fence === input.fence &&
+      input.isCurrent?.() !== false
+  }
+}
+
+export function turnInputFor(
+  host: CodexTurnHost,
+  body: AgentJournalMessageItem
+): Record<string, unknown>[] {
+  const input: Record<string, unknown>[] = []
+  let text = ''
+  for (const block of body.blocks as NativeChatBlock[]) {
+    if (block.type === 'text' && block.text.length > 0) {
+      input.push({ type: 'text', text: block.text })
+      text += `${block.text}\n`
+    } else if (block.type === 'image-ref' && block.path) {
+      input.push({ type: 'localImage', path: block.path })
+    } else if (block.type === 'image-ref' && block.url) {
+      input.push({ type: 'image', url: block.url })
+    }
+  }
+  // Unknown skill paths suppress plain $name resolution, so send only loaded files when known.
+  for (const skill of pickedSkillsInText(text, body.skills ?? [])) {
+    if (host.skillReport?.hasSkillPath(skill.path) !== false) {
+      input.push({ type: 'skill', name: skill.name, path: skill.path })
+    }
+  }
+  return input
 }

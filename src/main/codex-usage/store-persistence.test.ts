@@ -88,7 +88,7 @@ describe('CodexUsageStore', () => {
     } as unknown as CodexUsagePersistedState)
 
     expect(normalized).toEqual({
-      schemaVersion: 6,
+      schemaVersion: CODEX_USAGE_SCHEMA_VERSION,
       worktreeFingerprint: null,
       processedFiles: [],
       sessions: [],

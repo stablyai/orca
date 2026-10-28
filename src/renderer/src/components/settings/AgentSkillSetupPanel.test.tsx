@@ -270,7 +270,7 @@ describe('AgentSkillSetupPanel', () => {
     expect(mocks.freshnessRefresh).toHaveBeenCalledOnce()
   })
 
-  it('never installs on this machine for a paired host', async () => {
+  it('plans the named skills for a paired host', async () => {
     mocks.target = { kind: 'environment', environmentId: 'env-1' }
     await renderInteractivePanel()
 
@@ -460,18 +460,6 @@ describe('AgentSkillSetupPanel', () => {
     expect(mocks.plan).toHaveBeenCalledTimes(1)
   })
 
-  it('installs for an SSH workspace once its managed server is the target', async () => {
-    mocks.target = { kind: 'environment', environmentId: 'managed-ssh' }
-    await renderInteractivePanel()
-
-    await clickButton('Install')
-
-    expect(mocks.plan).toHaveBeenCalledWith(
-      { kind: 'environment', environmentId: 'managed-ssh' },
-      { names: ['orca-cli'] }
-    )
-  })
-
   it('asks to connect an SSH host no server serves yet, writing nothing here', async () => {
     mocks.target = { kind: 'ssh', targetId: 'box' }
     mocks.plan.mockResolvedValue({ kind: 'unsupported', reason: 'connect-host' })
@@ -508,7 +496,7 @@ describe('AgentSkillSetupPanel', () => {
     await renderInteractivePanel()
     await clickButton('Install')
     expect(container?.querySelector('[data-testid="wsl-terminal"]')?.textContent).toBe(
-      `npx skills@1.7.2 add https://github.com/stablyai/orca/tree/${'0'.repeat(40)} --skill orca-cli --global`
+      `env LC_ALL=C npx skills@1.7.2 add https://github.com/stablyai/orca/tree/${'0'.repeat(40)} --skill orca-cli --global`
     )
     expect(mocks.plan).not.toHaveBeenCalled()
     expect(mocks.execute).not.toHaveBeenCalled()

@@ -1,10 +1,7 @@
 import { readdirSync } from 'node:fs'
 import { join } from 'node:path'
 
-// Why: different models name their ONNX files differently (e.g.
-// encoder.int8.onnx vs tiny-encoder.onnx vs encoder-epoch-99-avg-1.onnx).
-// We resolve the actual path from the manifest's files list by searching
-// for the role name anywhere in the filename.
+// ONNX filenames vary by model; find each role in the manifest.
 export function resolveFile(
   files: string[],
   role: string,
@@ -26,7 +23,7 @@ export function resolveTokens(files: string[], modelDir: string): string {
   return join(modelDir, match)
 }
 
-// Why: BPE models need a vocab file for hotwords token matching, but older caches may omit it.
+// BPE hotword matching needs a vocab file that older caches may lack.
 function discoverBpeVocab(modelDir: string): string | undefined {
   try {
     const entries = readdirSync(modelDir)

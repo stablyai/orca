@@ -190,6 +190,7 @@ type ActiveRecovery = {
 
 const activeRecoveries = new Map<string, ActiveRecovery>()
 const coordinatorFailureCounts = new Map<string, number>()
+const gaveUpRecoveryKeys = new Set<string>()
 let stopping = false
 
 type RecoveryCoordinatorDependencies = {
@@ -214,6 +215,10 @@ function settleRecoveryEntry(
   }
   if (summary?.outcome === 'gave-up') {
     coordinatorFailureCounts.delete(key)
+    gaveUpRecoveryKeys.add(key)
+    console.warn(
+      `[codex-state-db-backfill] Codex session index rebuild gave up for ${key}; a codex wrapper on PATH that sets CODEX_HOME can cause this`
+    )
     return
   }
   if (summary === null) {
@@ -269,6 +274,10 @@ export function startCodexStateDbBackfillRecoveryInBackground(
   return task
 }
 
+export function hasCodexStateDbBackfillRecoveryGivenUp(codexHomePath: string): boolean {
+  return gaveUpRecoveryKeys.has(normalizeRuntimePathForComparison(codexHomePath))
+}
+
 /** Wait for owner arbitration; indexing continues in the background. */
 export async function ensureCodexStateDbBackfillRecoveryStarted(
   codexHomePath: string
@@ -291,5 +300,6 @@ export const _internals = {
     stopping = false
     activeRecoveries.clear()
     coordinatorFailureCounts.clear()
+    gaveUpRecoveryKeys.clear()
   }
 }

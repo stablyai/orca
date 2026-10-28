@@ -142,16 +142,27 @@ describe('command aliases dispatch to the canonical handler', () => {
       expect(process.exitCode).toBe(1)
       expect(callMock).toHaveBeenCalledTimes(1)
       expect(callMock).toHaveBeenCalledWith('worktree.show', { worktree: 'id:wt-1' })
+      expect(JSON.parse(String(logSpy.mock.calls.at(-1)?.[0]))).toMatchObject({
+        ok: false,
+        error: { code: 'worktree_host_unresolved' }
+      })
     } finally {
       process.exitCode = priorExitCode
     }
   })
 
   it('exits non-zero when worktree removal is refused by a failed archive hook', async () => {
+    const { RuntimeRpcFailureError } = await import('./runtime/types.js')
     queueFixtures(callMock, okFixture('req_show', { worktree: { hostId: 'local' } }))
     callMock.mockRejectedValueOnce(
-      Object.assign(new Error('Archive hook failed for worktree: /tmp/wt — exited 23.'), {
-        code: 'worktree_archive_hook_failed'
+      new RuntimeRpcFailureError({
+        id: 'req_archive',
+        ok: false,
+        error: {
+          code: 'worktree_archive_hook_failed',
+          message: 'Archive hook failed for worktree: /tmp/wt — exited 23.'
+        },
+        _meta: { runtimeId: 'runtime-1' }
       })
     )
     const priorExitCode = process.exitCode
@@ -171,6 +182,12 @@ describe('command aliases dispatch to the canonical handler', () => {
           allowFailedArchiveHook: false
         })
       )
+      expect(JSON.parse(String(logSpy.mock.calls.at(-1)?.[0]))).toMatchObject({
+        id: 'req_archive',
+        ok: false,
+        error: { code: 'worktree_archive_hook_failed' },
+        _meta: { runtimeId: 'runtime-1' }
+      })
     } finally {
       process.exitCode = priorExitCode
     }
@@ -188,6 +205,13 @@ describe('command aliases dispatch to the canonical handler', () => {
 
       expect(process.exitCode).toBe(1)
       expect(callMock).not.toHaveBeenCalledWith('worktree.rm', expect.anything())
+      expect(JSON.parse(String(logSpy.mock.calls.at(-1)?.[0]))).toMatchObject({
+        ok: false,
+        error: {
+          code: 'invalid_argument',
+          message: expect.stringContaining('without --run-hooks no hook runs at all')
+        }
+      })
     } finally {
       process.exitCode = priorExitCode
     }
@@ -270,7 +294,9 @@ describe('artifact runtime routing', () => {
     vi.stubEnv('ORCA_ENVIRONMENT', 'remote-environment')
     vi.stubEnv('ORCA_PAIRING_CODE', 'remote-pairing-code')
     vi.spyOn(console, 'log').mockImplementation(() => undefined)
-    callMock.mockResolvedValue(okFixture('artifact-list', { status: 'ok', value: [] }))
+    callMock.mockResolvedValue(
+      okFixture('artifact-list', { status: 'ok', value: { artifacts: [] } })
+    )
     runtimeClientConstructorMock.mockClear()
 
     await main(['artifacts', 'list', '--json'], '/folder-workspace')
@@ -357,12 +383,27 @@ describe('unknown command surfaces a suggestion', () => {
     )
 
     await main(
-      ['orchestration', 'worker-start', '--task', 't1', '--worktree', 'repo-1', '--agent', 'codex'],
+      [
+        'orchestration',
+        'worker-start',
+        '--task',
+        't1',
+        '--worktree',
+        'repo-1',
+        '--agent',
+        'codex',
+        '--from',
+        'term-caller'
+      ],
       '/tmp/repo'
     )
 
     expect(process.exitCode).toBe(1)
     const stderr = errorSpy.mock.calls.map((call) => String(call[0])).join('\n')
+    expect(callMock).toHaveBeenCalledExactlyOnceWith(
+      'orchestration.workerStart',
+      expect.objectContaining({ worktree: 'repo-1', from: 'term-caller' })
+    )
     expect(stderr).toContain('No Orca workspace matched the worktree selector "repo-1"')
     expect(stderr).toContain('id:repo-1::<absolute-path>')
     expect(stderr).toContain('Valid selector forms:')
@@ -423,22 +464,25 @@ describe('unknown help command surfaces a suggestion', () => {
 
 describe('nested command group help', () => {
   it.each([
+    ['browser', ['browser', '--help'], ['identity get', 'identity set']],
+    ['browser identity', ['browser', 'identity', '--help'], ['get', 'set']],
     ['browser', ['browser'], ['identity get', 'identity set']],
+    ['skills', ['skills'], ['installed', 'share']],
     ['browser identity', ['browser', 'identity'], ['get', 'set']]
   ])(
     'prints successful help for %s without constructing a runtime client',
-    async (_, path, commands) => {
+    async (path, argv, commands) => {
       const previousExitCode = process.exitCode
       const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
       runtimeClientConstructorMock.mockClear()
       process.exitCode = 0
 
       try {
-        await main([...path, '--help'], '/tmp/repo')
+        await main(argv, '/tmp/repo')
 
         expect(process.exitCode).toBe(0)
         const output = logSpy.mock.calls.flat().join('\n')
-        expect(output).toContain(`orca ${path.join(' ')}`)
+        expect(output).toContain(`orca ${path}`)
         for (const command of commands) {
           expect(output).toContain(command)
         }
@@ -451,19 +495,48 @@ describe('nested command group help', () => {
       }
     }
   )
+
+  it('reports a flagged bare group as a missing subcommand, not a typo', async () => {
+    const previousExitCode = process.exitCode
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+    runtimeClientConstructorMock.mockClear()
+    process.exitCode = 0
+
+    try {
+      await main(['skills', '--worktree', 'active'], '/tmp/repo')
+
+      expect(process.exitCode).toBe(1)
+      const stderr = errorSpy.mock.calls.flat().join('\n')
+      expect(stderr).toContain('Missing subcommand for: orca skills')
+      expect(stderr).toContain('orca skills --help')
+      expect(stderr).not.toContain('Did you mean')
+      expect(runtimeClientConstructorMock).not.toHaveBeenCalled()
+    } finally {
+      process.exitCode = previousExitCode
+      errorSpy.mockRestore()
+    }
+  })
+
+  it('keeps an executable leaf ahead of its child groups', async () => {
+    const previousExitCode = process.exitCode
+    process.exitCode = 0
+    serveOrcaAppMock.mockClear().mockResolvedValue(0)
+
+    try {
+      await main(['serve'], '/tmp/repo')
+
+      expect(process.exitCode).toBe(0)
+      expect(serveOrcaAppMock).toHaveBeenCalledExactlyOnceWith(
+        expect.objectContaining({ json: false })
+      )
+    } finally {
+      process.exitCode = previousExitCode
+      serveOrcaAppMock.mockReset()
+    }
+  })
 })
 
 describe('orca help', () => {
-  it('prints root help without contacting the runtime', async () => {
-    const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
-
-    await main(['--help'], '/tmp/repo')
-
-    expect(logSpy.mock.calls[0][0]).toContain('Usage: orca <command>')
-    expect(callMock).not.toHaveBeenCalled()
-    logSpy.mockRestore()
-  })
-
   it('progressively discloses Linear commands', async () => {
     const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
 

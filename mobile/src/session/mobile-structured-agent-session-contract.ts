@@ -1,19 +1,21 @@
+import type { AgentSessionSlashCommand } from '../../../src/shared/agent-session-wire'
 import type { RpcClient } from '../transport/rpc-client'
 import type { StructuredAgentSessionHostSupport } from './mobile-structured-agent-session-host-support'
-import type { MobileNativeChatSendOutcome } from './mobile-native-chat-send'
-import type { MobileNativeChatVisualSource } from './mobile-native-chat-visual-read'
-import type { MobileChatPermission } from './mobile-native-chat-permission'
-import type { MobileChatQuestion } from './mobile-native-chat-question'
+import type { MobileNativeChatSendOutcome } from './native-chat/mobile-native-chat-send'
+import type { MobileNativeChatVisualSource } from './native-chat/visual/mobile-native-chat-visual-read'
+import type { MobileChatPermission } from './native-chat/input/mobile-native-chat-permission'
+import type { MobileChatQuestion } from './native-chat/input/mobile-native-chat-question'
 import type { MobileNativeChatSession } from './use-mobile-native-chat-session'
 import type { NativeChatLiveTurnIndicator } from '../../../src/shared/native-chat-turn-status'
 import type { NativeChatResolvedPrompt } from '../../../src/shared/native-chat-resolution-receipt'
 import type { useMobileStructuredAgentOptions } from './use-mobile-structured-agent-options'
 import type { useMobileStructuredAgentTurnTiming } from './use-mobile-structured-agent-turn-timing'
 import type { StructuredMobileSendAttachment } from './use-mobile-structured-send-with-outcome'
+import type { AgentJournalSkillRef } from '../../../src/shared/agent-session-journal-types'
 import type {
   MobileNativeChatCommandRefusalCauses,
   MobileNativeChatSendErrorReporter
-} from './use-mobile-native-chat-send-error'
+} from './native-chat/use-mobile-native-chat-send-error'
 import type { MobileStructuredQueuedMessageControls } from './use-mobile-structured-queued-message-controls'
 import type { MobileStructuredBackgroundTasks } from './use-mobile-structured-background-tasks'
 
@@ -21,14 +23,16 @@ export type StructuredMobileSession = ReturnType<typeof useMobileStructuredAgent
   ReturnType<typeof useMobileStructuredAgentTurnTiming> & {
     session: MobileNativeChatSession
     isWorking: boolean
+    /** Desktop's Stop rule: a running turn, or conversation Stop while working or sending. */
+    canStop: boolean
     turnId: string | null
-    /** What labels the live turn's one indicator row. */
     turnIndicator: NativeChatLiveTurnIndicator
     sendWithOutcome: (
       text: string,
       images?: string[],
       deadline?: number,
-      attachments?: readonly StructuredMobileSendAttachment[]
+      attachments?: readonly StructuredMobileSendAttachment[],
+      skills?: readonly AgentJournalSkillRef[]
     ) => Promise<MobileNativeChatSendOutcome>
     cancel: () => void
     receipts: ReadonlyMap<string, NativeChatResolvedPrompt>
@@ -37,16 +41,12 @@ export type StructuredMobileSession = ReturnType<typeof useMobileStructuredAgent
     permission: MobileChatPermission | null
     question: MobileChatQuestion | null
     respondPermission: (optionId: string) => Promise<boolean>
-    respondQuestion: (answer: string) => Promise<boolean>
+    respondQuestion: (answer: string, prompt?: MobileChatQuestion['prompt']) => Promise<boolean>
     cancelPrompt: (prompt?: { itemId: string; expectedRevision: number }) => Promise<boolean>
-    /** The queued-draft cards and their actions, from any host that publishes them. */
     queued: MobileStructuredQueuedMessageControls
     commandRefusalCauses: MobileNativeChatCommandRefusalCauses
-    /** Running child work for the strip above the composer, as desktop shows it. */
     backgroundTasks: MobileStructuredBackgroundTasks
-    /** Where this chat's `::orca-visual` lines read their HTML from; null without a client. */
     visualSource: MobileNativeChatVisualSource | null
-    /** This phone's photos, by the row id their send is drawn under. */
     imagePreviewsByMessageId: Record<string, string[]>
   }
 
@@ -61,9 +61,10 @@ export type MobileStructuredAgentSessionArgs = {
   /** Capability facts from the shared runtime status probe; null follows the legacy wire. */
   hostSupport: StructuredAgentSessionHostSupport | null
   agent: string | null
-  /** The active pane's live composer; Edit copies a card's text through it. */
+  /** What the session reported for its `/` menu; undefined until read or on an older host. */
+  sessionCommands?: readonly AgentSessionSlashCommand[]
   appendComposerText?: (text: string) => boolean
   onSendError: MobileNativeChatSendErrorReporter
-  /** Called on any accepted queued-card action; retires the route's failure banner. */
+  // Accepted queued actions retire the route’s failure banner.
   onActionResolved?: () => void
 }

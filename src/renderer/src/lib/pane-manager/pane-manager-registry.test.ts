@@ -11,8 +11,7 @@ import {
 } from './pane-manager-registry'
 
 describe('pane manager registry', () => {
-  // Why: the registry is module-global; unregister in afterEach so a failed
-  // assertion cannot leak fake managers into later tests.
+  // Unregister module-global fake managers even after failures so they cannot leak into later tests.
   const registeredManagers: { resetWebglTextureAtlases(): void }[] = []
 
   function registerManager(): { resetWebglTextureAtlases: Mock<() => void> } {
@@ -58,10 +57,7 @@ describe('pane manager registry', () => {
   })
 
   it('clears every recovered atlas before presenting any pane', () => {
-    // Why: per-pane clear+present interleaves a present against atlas generation
-    // N with the next pane's wipe to N+1. The first synchronized-output column
-    // then keeps pre-hide footer pixels. Wipe first, present once the generation
-    // is final.
+    // Per-pane wipe/present interleaves atlas generations and preserves stale footer pixels; wipe all before presenting.
     const order: string[] = []
     const first = {
       resetWebglTextureAtlases: vi.fn<() => void>(() => order.push('first-reset')),
@@ -219,8 +215,7 @@ describe('pane manager registry', () => {
     expect(after).toEqual([before[1]])
   })
 
-  // Why: this is the number crash reports could never recover from breadcrumb
-  // multiplicity, since every manager's first pane is id 1.
+  // Every manager starts pane IDs at 1; breadcrumb multiplicity cannot recover population counts.
   it('counts panes across managers and drops them on unregister', () => {
     const twoPanes = {
       resetWebglTextureAtlases: vi.fn<() => void>(),

@@ -42,8 +42,21 @@ export function DeleteWorktreeDirtyChangeHint({
 
   const label =
     changeCount > 0
-      ? `${changeCount} uncommitted or untracked ${changeCount === 1 ? 'change' : 'changes'}`
-      : 'Uncommitted or untracked changes'
+      ? changeCount === 1
+        ? translate(
+            'auto.components.sidebar.DeleteWorktreeDirtyChangeHint.changeCount_one',
+            '{{count}} uncommitted or untracked change',
+            { count: changeCount }
+          )
+        : translate(
+            'auto.components.sidebar.DeleteWorktreeDirtyChangeHint.changeCount_other',
+            '{{count}} uncommitted or untracked changes',
+            { count: changeCount }
+          )
+      : translate(
+          'auto.components.sidebar.DeleteWorktreeDirtyChangeHint.changes',
+          'Uncommitted or untracked changes'
+        )
 
   const warningLabel = (
     <>

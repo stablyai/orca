@@ -13,8 +13,7 @@ function createWebviewRef(): {
 } {
   const findInPage = vi.fn()
   const stopFindInPage = vi.fn()
-  // Held apart from ref.current so a test that swaps the guest under the same ref can still ask
-  // what happened to the node it swapped out.
+  // Track listeners independently of ref.current to verify cleanup after a guest swap.
   const addEventListener = vi.fn()
   const removeEventListener = vi.fn()
   const ref = {
@@ -48,7 +47,15 @@ describe('BrowserFind session flags', () => {
   it('starts a new find session when the query changes', () => {
     const { findInPage } = openFindWithQuery('needle')
 
-    expect(findInPage).toHaveBeenLastCalledWith('needle', { findNext: true })
+    expect(findInPage).toHaveBeenCalledExactlyOnceWith('needle', { findNext: true })
+    findInPage.mockClear()
+
+    fireEvent.change(screen.getByPlaceholderText('Find in page...'), {
+      target: { value: 'replacement' }
+    })
+    act(() => vi.advanceTimersByTime(250))
+
+    expect(findInPage).toHaveBeenCalledExactlyOnceWith('replacement', { findNext: true })
   })
 
   it('advances forward as a follow-up request, not a new session', () => {
@@ -109,9 +116,7 @@ describe('BrowserFind session flags', () => {
   })
 })
 
-// Why this case exists now: a client-hosted pane used to be rebuilt when its page generation
-// changed, which took the listener with it. It re-attaches a new guest under the same mount
-// instead, so nothing but the generation tells the find bar its node is dead.
+// Guest replacement preserves the pane mount; only generation changes can rebind the listener.
 describe('BrowserFind listener rebinding', () => {
   it('moves the found-in-page listener onto a guest swapped in under the same mount', () => {
     const first = createWebviewRef()
@@ -128,8 +133,7 @@ describe('BrowserFind listener rebinding', () => {
     rerender(<BrowserFind isOpen onClose={vi.fn()} webviewRef={first.ref} guestGeneration={2} />)
 
     expect(second.addEventListener).toHaveBeenCalledWith('found-in-page', expect.any(Function))
-    // Why the old guest is asserted too: the pane no longer owns it, but the host may still hold it
-    // alive across the restart, and a listener left behind counts matches into a dead bar forever.
+    // The host may retain the old guest; leaving its listener would keep updating a bar that no longer owns it.
     expect(first.removeEventListener).toHaveBeenCalledWith('found-in-page', staleListener)
   })
 })

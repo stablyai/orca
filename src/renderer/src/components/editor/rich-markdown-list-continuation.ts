@@ -70,9 +70,7 @@ export function commitEmptyOrderedListMarkerAsText(editor: Editor): boolean {
   const from = $from.before(context.listDepth)
   const to = from + list.nodeSize
   const tr = state.tr.replaceWith(from, to, [markerParagraph, nextParagraph])
-  // Why: `1. ` is ambiguous: it may be a list shortcut, or literal text.
-  // Enter on the still-empty item should preserve what the user typed instead
-  // of treating it as an abandoned list and erasing the marker.
+  // Preserve an empty typed numbered marker because it may be literal text rather than an abandoned list.
   tr.setSelection(TextSelection.create(tr.doc, from + markerParagraph.nodeSize + 1))
   view.dispatch(tr.scrollIntoView())
   return true
@@ -130,8 +128,7 @@ export function exitTrailingEmptyOrderedListItem(editor: Editor): boolean {
   const from = $from.before(context.listDepth)
   const to = $from.after(context.listDepth)
   const tr = state.tr.replaceWith(from, to, [remainingList, continuationParagraph])
-  // Why: loaded markdown can contain a trailing empty numbered item. Enter on
-  // that caret target should continue as body text, not keep extending the list.
+  // Loaded empty numbered items should exit to body text instead of extending the list.
   tr.setSelection(TextSelection.create(tr.doc, from + remainingList.nodeSize + 1))
   view.dispatch(tr.scrollIntoView())
   return true
@@ -162,9 +159,7 @@ export function collapseEmptyListContinuationParagraph(editor: Editor): boolean 
   const to = $from.after($from.depth)
   const previousParagraphEnd = from - 1
   const tr = state.tr.delete(from, to)
-  // Why: after backing out of a nested list, Backspace on the blank
-  // continuation line should return to the parent item's text, not unwrap the
-  // numbered list item and remove its marker.
+  // Backspace after leaving a nested list must return to the parent text without removing its numbered marker.
   tr.setSelection(TextSelection.create(tr.doc, previousParagraphEnd))
   view.dispatch(tr.scrollIntoView())
   return true
@@ -202,8 +197,7 @@ export function convertEmptyNestedOrderedItemToContinuation(editor: Editor): boo
   const from = $from.before(context.listDepth)
   const to = from + list.nodeSize
   const tr = state.tr.replaceWith(from, to, replacementParagraph)
-  // Why: an empty nested ordered item is usually the user asking for a
-  // continuation line under the parent item, not another numbered sublist.
+  // Exit an empty nested ordered item to a parent continuation line.
   tr.setSelection(TextSelection.create(tr.doc, from + 1))
   view.dispatch(tr.scrollIntoView())
   return true

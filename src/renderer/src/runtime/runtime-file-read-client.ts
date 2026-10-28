@@ -21,7 +21,10 @@ import { toRuntimeWorktreeSelector } from './runtime-worktree-selector'
 import { chatScratchFileAddress } from './runtime-chat-scratch-file-address'
 import { isAgentSessionAttachmentStorePath } from '../../../shared/agent-session-attachments'
 import type { LocalFileAccess } from '../../../shared/local-file-access'
-import { readRuntimeTerminalArtifactContent } from './runtime-terminal-artifact-read'
+import {
+  isHostFileOutsideWorkspaces,
+  readHostFileOutsideWorkspaces
+} from './runtime-terminal-artifact-read'
 import {
   pagedTextFileResult,
   pinRemoteFileAddress,
@@ -53,7 +56,9 @@ export async function readRuntimeFileContent({
   includeLocalLogMetadata,
   access,
   terminalArtifactGrantId,
-  pageOversizedBinary
+  expectedEnvironmentPairingRevision,
+  pageOversizedBinary,
+  wakeWslDistro
 }: RuntimeFileReadArgs): Promise<RuntimeReadableFileContent> {
   assertExternalSshReadOwnership(target, connectionId, expectedExternalSshTargetId)
   if (target.kind !== 'environment' || !worktreeId) {
@@ -61,15 +66,19 @@ export async function readRuntimeFileContent({
       filePath,
       connectionId,
       includeLocalLogMetadata,
-      ...localAccess(connectionId, access)
+      ...localAccess(connectionId, access),
+      ...(wakeWslDistro && !connectionId ? { wakeWslDistro } : {})
     })
   }
-  if (terminalArtifactGrantId) {
-    return readRuntimeTerminalArtifactContent({
+  // Why: decided synchronously so ordinary reads pin their pairing without an extra await.
+  if (isHostFileOutsideWorkspaces({ filePath, relativePath, grantId: terminalArtifactGrantId })) {
+    return readHostFileOutsideWorkspaces({
       target,
       worktreeId,
-      absolutePath: filePath,
-      grantId: terminalArtifactGrantId
+      filePath,
+      relativePath,
+      grantId: terminalArtifactGrantId,
+      expectedEnvironmentPairingRevision
     })
   }
   // A workspace path first; a chat's scratch file is the absolute path no workspace contains.
@@ -96,9 +105,7 @@ export async function readRuntimeFileContent({
       }
     )
   } catch (err) {
-    // Why: files.read rejects binary paths with the typed 'binary_file' error; fall
-    // back to the base64 preview RPC so PDFs/images render like local/SSH paths.
-    // Match the exact typed error so an unrelated failure can't spoof the fallback.
+    // Typed binary_file refusal permits base64 preview for PDFs/images; unrelated errors cannot spoof this fallback.
     if (err instanceof RuntimeRpcCallError && err.message === 'binary_file') {
       // Why: baseline checks call this too and discard binary content, so paging is opt-in.
       return readRemoteFilePreview(remote, { pageOversized: pageOversizedBinary === true })
@@ -106,8 +113,7 @@ export async function readRuntimeFileContent({
     throw err
   }
   if (result.truncated) {
-    // Why: files.read stops at 512 KiB to fit one reply; a truncated payload saved as
-    // editable content would drop the rest of the file, so read the whole file in chunks.
+    // files.read caps replies at 512KiB; page the whole file or later editable saves truncate it.
     const paged = await readRemoteFileInChunks(remote)
     if (paged.kind === 'ok') {
       return pagedTextFileResult(paged.bytes)
@@ -133,8 +139,7 @@ export async function readRuntimeFilePreview(
   )
   const remoteArgs = getRemoteFileArgs(context, filePath)
   const runtimeTarget = context.target
-  // A chat attachment lives in the paired server's store, outside every worktree; that server
-  // reads it back itself (an older one answers method_not_found, and the preview falls back).
+  // Paired-server chat attachments live outside worktrees; owning server reads them. Older method_not_found keeps preview fallback.
   if (
     !remoteArgs &&
     runtimeTarget.kind === 'environment' &&
@@ -248,8 +253,7 @@ async function remoteChunkedDownloadAvailable(
     )
     return true
   } catch (error) {
-    // Why: compatible older headless servers may lack chunked downloads while
-    // still supporting preview-sized file reads that can complete the request.
+    // Older hosts may lack chunk downloads but still satisfy preview-sized reads.
     if (error instanceof RuntimeRpcCallError && error.code === 'method_not_found') {
       return false
     }
@@ -285,8 +289,7 @@ async function downloadRemoteFileViaPreview(
       { worktree: remoteArgs.worktreeSelector, relativePath: remoteArgs.relativePath },
       { timeoutMs: 15_000 }
     )
-    // Why: old servers use an empty, metadata-free binary result to signal an
-    // unsupported binary; recognized zero-byte previews are still complete.
+    // Legacy empty metadata-free binary means unsupported; recognized zero-byte previews remain valid.
     if (result.isBinary && !result.content && !result.isImage && !result.mimeType) {
       throw new Error(REMOTE_DOWNLOAD_UPDATE_REQUIRED_MESSAGE)
     }

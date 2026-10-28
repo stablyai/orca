@@ -1,5 +1,6 @@
 import WebSocket from 'ws'
 import { cancelUnreadResponseBody } from '../lib/unread-response-body'
+import { isRecord } from '../../shared/agent-status-child-work-value-guards'
 
 export type BrowserSessionUaCdpRequest = Readonly<{
   targetType: string
@@ -17,11 +18,7 @@ type PendingRequest = {
 }
 
 function readRecord(value: unknown): Record<string, unknown> | undefined {
-  if (typeof value !== 'object' || value === null) {
-    return undefined
-  }
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: guarded by the object/null check above; every member is read back through its own typeof check.
-  return value as Record<string, unknown>
+  return isRecord(value) ? value : undefined
 }
 
 function readString(record: Record<string, unknown> | undefined, key: string): string | undefined {

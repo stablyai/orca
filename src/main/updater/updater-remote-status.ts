@@ -10,7 +10,6 @@ import { getLinuxPackageType } from '../linux-update-package-type'
 import { UpdaterNudge } from './updater-nudge'
 import type { UpdateInstallMode } from './updater-state'
 
-/** Exposes updater state to runtime RPC callers without leaking internal mutators. */
 export abstract class UpdaterRemoteStatus extends UpdaterNudge {
   protected getUpdateStatus(): UpdateStatus {
     return this.currentStatus

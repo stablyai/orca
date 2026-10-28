@@ -29,7 +29,7 @@ describe('mayBeJql', () => {
     'value is null',
     'crash in terminal (macOS)',
     'login was slow'
-  ])('sends input that could parse as JQL to Jira: %s', (input) => {
+  ])('recognizes potential JQL: %s', (input) => {
     expect(mayBeJql(input)).toBe(true)
   })
 

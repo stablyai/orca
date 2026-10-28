@@ -42,9 +42,7 @@ async function record(id: string, flushFirst: boolean): Promise<unknown> {
 }
 
 describe('recording scheduler randomness', () => {
-  // Must stay the first test in this file: React pays its one lazy draw per process, so only the
-  // process's first recording can witness a scheduler that fails to absorb it. The `primed` guard
-  // fails loudly rather than passing vacuously if anything records ahead of it.
+  // Keep this test first: only a process’s first act can expose an unprimed React random draw.
   it('draws the same seeded value first in the process as afterwards', async () => {
     expect(reactActQueuePrimed()).toBe(false)
     const first = await record('first-in-process', true)
@@ -53,9 +51,6 @@ describe('recording scheduler randomness', () => {
     expect([first, later]).toEqual([expected, expected])
   })
 
-  // An adapter that drew before the first drain used to sidestep the problem by consuming the
-  // seeded value ahead of React; both placements now record the same one, so that is not a fix an
-  // adapter has to arrange.
   it('draws the same seeded value before the first drain as after it', async () => {
     expect(await record('draw-before-drain', false)).toEqual([
       { name: 'draw', ordinal: 1, value: SEEDED_FIRST_DRAW }

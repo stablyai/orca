@@ -1,3 +1,6 @@
+import type { AgentSessionHandoverContext } from './structured-agent-session-host-types'
+import type { AgentSessionDispatchOutcome } from './structured-agent-session-adapter'
+import { DISPATCH_DOUBT_PERSISTENCE_FAILED } from '../agent-session-journal/journal-dispatch-doubt-reasons'
 import type { AgentSessionMutationEnvelope } from '../../../shared/agent-session-wire'
 import type { JournalOperationReceipt } from '../agent-session-journal/journal-row-writer'
 import type { AgentSessionRecordStore } from '../../runtime/agent-session-record-store'
@@ -117,4 +120,51 @@ export function observedReceipt(
     }
   }
   return observed
+}
+
+export async function resolveHandover(
+  ctx: AgentSessionHandoverContext,
+  clientMessageId: string,
+  outcome: AgentSessionDispatchOutcome | null
+): Promise<void> {
+  if (!outcome || outcome.state === 'admitted') {
+    return
+  }
+  try {
+    await ctx.journal.resolveDispatch(
+      outcome.state === 'accepted'
+        ? {
+            clientMessageId,
+            state: 'accepted',
+            providerIdentity: outcome.providerIdentity,
+            fence: ctx.fence
+          }
+        : outcome.state === 'rejected'
+          ? {
+              clientMessageId,
+              state: 'rejected',
+              reason: outcome.reason,
+              rejection: outcome.rejection,
+              ...(outcome.answeredInTurn ? { answeredInTurn: outcome.answeredInTurn } : {}),
+              fence: ctx.fence
+            }
+          : {
+              clientMessageId,
+              state: 'unknown',
+              reason: outcome.reason,
+              fence: ctx.fence
+            }
+    )
+  } catch (error) {
+    // Persist uncertainty if settlement fails; next-open recovery handles any remaining pending row.
+    try {
+      await ctx.journal.resolveDispatch({
+        clientMessageId,
+        state: 'unknown',
+        reason: DISPATCH_DOUBT_PERSISTENCE_FAILED,
+        fence: ctx.fence
+      })
+    } catch {}
+    throw error
+  }
 }

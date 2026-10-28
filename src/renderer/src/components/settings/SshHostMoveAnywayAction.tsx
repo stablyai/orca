@@ -25,10 +25,7 @@ export function canMoveSshHostAnyway(status: SshManagedServerStatus | undefined)
   )
 }
 
-/**
- * The way out of a move refused only by saved state: move the host now and keep what can't move on
- * this computer. Unsaved drafts stay here, and bridged terminals keep their tabs and panes.
- */
+/** Move despite saved-state refusal; leave unsaved drafts here and preserve bridged terminals’ tabs/panes. */
 export function SshHostMoveAnywayDialog({
   target,
   status,
@@ -58,7 +55,7 @@ export function SshHostMoveAnywayDialog({
     setError(null)
     try {
       await api.allowMoveLeavingBehind({ sshTargetId: target.id })
-      // Tracked so Retry and the row's Connect join this connect instead of dialing a second.
+      // Track connection so Retry/Connect join this attempt instead of dialing twice.
       await trackSshConnect(target.id, window.api.ssh.connect({ targetId: target.id }))
       if (mountedRef.current) {
         setOpen(false)
@@ -113,7 +110,6 @@ export function SshHostMoveAnywayDialog({
   )
 }
 
-/** The same way out where the refusal shows outside Settings, e.g. a disconnected terminal pane. */
 export function SshHostMoveAnywayButton({
   target,
   status,
@@ -132,13 +128,12 @@ export function SshHostMoveAnywayButton({
       <Button
         type="button"
         size="xs"
-        variant="outline"
+        variant="default"
         disabled={disabled}
         onClick={() => setOpen(true)}
       >
         {translate('auto.components.settings.moveAnyway.action', 'Move anyway…')}
       </Button>
-      {/* The connect it runs publishes the new status, so nothing here refreshes. */}
       <SshHostMoveAnywayDialog
         target={target}
         status={status}

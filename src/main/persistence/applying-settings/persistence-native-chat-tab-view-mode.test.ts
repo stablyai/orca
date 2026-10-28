@@ -4,7 +4,7 @@ import {
   createStore,
   writeDataFile,
   makeRepo
-} from '../../persistence-test-harness'
+} from '../persistence-test-harness'
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { rmSync, mkdtempSync } from 'node:fs'
 import { join } from 'node:path'
@@ -60,7 +60,7 @@ describe('Store native-chat tab viewMode persistence', () => {
   })
 
   // Preserve absent viewMode for legacy tabs; renderer hydration supplies terminal mode.
-  it('round-trips viewMode for unified tabs and defaults legacy tabs to terminal', async () => {
+  it('loads chat viewMode and preserves missing legacy viewMode', async () => {
     const WORKTREE = 'repo1::/worktree'
     writeDataFile({
       schemaVersion: 1,

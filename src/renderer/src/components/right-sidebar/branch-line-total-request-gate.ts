@@ -1,8 +1,4 @@
-// Why: several independent code paths call `git.status`; if only some carried
-// the merge base the branch line-total chip would blank out between polls. One
-// registry keeps every path asking for the same thing.
-// Only the visible worktree's SourceControl is mounted and its effect cleanup
-// deletes on every change, so this holds ~1 entry and needs no eviction.
+// Share merge-base requests across status callers so totals do not blink; mounted-panel cleanup bounds this map to ~1 entry.
 const branchLineTotalMergeBaseByWorktree = new Map<string, string>()
 
 /** `null` deletes the entry — that absence is the visibility gate (no merge base ⇒ no host cost). */

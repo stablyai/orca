@@ -5,6 +5,7 @@ import type { SshConnection } from '../../ssh/connection/ssh-connection'
 import { probeManagedOrcadTunnel } from './orcad-managed-tunnel-resume'
 import { ensureManagedOrcadServing } from './orcad-managed-serving'
 import { OrcadManagedTunnelManager } from './orcad-managed-tunnel-manager'
+import { buildOnBindableLocalPort } from './orcad-managed-tunnel-local-port'
 import { getRemoteRuntimeSharedControlAnsweredAt } from '../../ipc/runtime-environments/runtime-environment-shared-control-answers'
 import {
   getSshConnectionManager,
@@ -60,8 +61,10 @@ export async function ensureOrcadManagedTunnel(
   selector: string
 ): Promise<KnownRuntimeEnvironment> {
   const { id } = resolveEnvironment(userDataPath, selector)
-  await buildWithPairingRepair(pairingRecovery(userDataPath), id, (environment) =>
-    managedTunnels.ensure(environment, () => resolveEnvironmentOrNull(userDataPath, id))
+  await buildOnBindableLocalPort(userDataPath, id, () =>
+    buildWithPairingRepair(pairingRecovery(userDataPath), id, (environment) =>
+      managedTunnels.ensure(environment, () => resolveEnvironmentOrNull(userDataPath, id))
+    )
   )
   return resolveEnvironment(userDataPath, id)
 }
@@ -71,8 +74,10 @@ export async function rebuildOrcadManagedTunnel(
   selector: string
 ): Promise<'built' | 'repaired'> {
   const { id } = resolveEnvironment(userDataPath, selector)
-  return buildWithPairingRepair(pairingRecovery(userDataPath), id, (environment) =>
-    managedTunnels.rebuild(environment, () => resolveEnvironmentOrNull(userDataPath, id))
+  return buildOnBindableLocalPort(userDataPath, id, () =>
+    buildWithPairingRepair(pairingRecovery(userDataPath), id, (environment) =>
+      managedTunnels.rebuild(environment, () => resolveEnvironmentOrNull(userDataPath, id))
+    )
   )
 }
 

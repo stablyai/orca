@@ -59,8 +59,7 @@ export function applyDesktopFitFallbackAfterReplay(
     }
     refreshDesktopPaneContents(pane)
   }
-  // Why: the server dimensions are only a fallback; source-dimension replay
-  // must parse and restore its viewport before this can reflow xterm.
+  // Parse source-dimension replay before fallback fitting can reflow xterm.
   if (
     !deferTerminalGeometryMutationDuringRebuild(
       pane.terminal,

@@ -209,8 +209,50 @@ describe('ACP connection loss', () => {
     expect(rig.ended[0]).toMatchObject({
       type: 'ended',
       cause: 'unexpected-exit',
-      reason: 'grok ACP agent exited: panic: out of memory',
-      failure: { kind: 'providerExited', detail: { text: 'panic: out of memory' } }
+      reason: 'grok ACP agent exited (code 0): panic: out of memory',
+      failure: { kind: 'providerExited', detail: { text: '(code 0)\npanic: out of memory' } }
+    })
+  })
+
+  it('reports how a crash ended and keeps a startup warning in stderr as a log, not its cause', async () => {
+    const rig = await openAcpAdapterRig()
+    await rig.acquire()
+    const warning = '[pi-web-access] Dynamic tool activation requires Pi 0.86.0 or newer'
+    rig.child().stderr = warning
+    rig.child().exit({ code: null, signal: 'SIGTERM', processless: false })
+    await waitFor(() => expect(rig.ended).toHaveLength(1))
+    expect(rig.ended[0]).toMatchObject({
+      cause: 'unexpected-exit',
+      reason: `grok ACP agent exited (signal SIGTERM): ${warning}`,
+      failure: {
+        kind: 'providerExited',
+        detail: { text: `(signal SIGTERM)\n${warning}`, audience: 'log' }
+      }
+    })
+  })
+
+  it('adds the exit status to the stream loss that came before a silent exit', async () => {
+    const rig = await openAcpAdapterRig()
+    await rig.acquire()
+    const child = rig.child()
+    child.proveClose = async () => false
+    child.agent.close()
+    await rig.settle()
+    child.exit({ code: null, signal: 'SIGKILL', processless: false })
+    await waitFor(() => expect(rig.ended).toHaveLength(1))
+    expect(rig.ended[0]?.reason).toBe(
+      'grok ACP connection closed: ACP connection closed (signal SIGKILL)'
+    )
+  })
+
+  it('keeps the exit code of a crash that printed nothing to stderr', async () => {
+    const rig = await openAcpAdapterRig()
+    await rig.acquire()
+    rig.child().exit({ code: 1, signal: null, processless: false })
+    await waitFor(() => expect(rig.ended).toHaveLength(1))
+    expect(rig.ended[0]).toMatchObject({
+      reason: 'grok ACP agent exited (code 1)',
+      failure: { kind: 'providerExited', detail: { text: '(code 1)', audience: 'log' } }
     })
   })
 
@@ -243,8 +285,8 @@ describe('ACP connection loss', () => {
     await waitFor(() => expect(rig.ended).toHaveLength(1))
     expect(rig.ended[0]).toMatchObject({
       cause: 'unexpected-exit',
-      reason: 'grok ACP agent exited: panic: late',
-      failure: { kind: 'providerExited', detail: { text: 'panic: late' } }
+      reason: 'grok ACP agent exited (code 0): panic: late',
+      failure: { kind: 'providerExited', detail: { text: '(code 0)\npanic: late' } }
     })
   })
 

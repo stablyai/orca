@@ -2,7 +2,8 @@
 
 import '@testing-library/jest-dom/vitest'
 
-import { cleanup, render, screen } from '@testing-library/react'
+import { cleanup, screen } from '@testing-library/react'
+import { render } from './native-chat-tooltip-test-harness'
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest'
 
 // Why: these fixtures have neither inline visual owners nor sender navigation.
@@ -61,8 +62,7 @@ const toolRun = (id: string, timestamp: number): NativeChatMessage => ({
   source: 'transcript'
 })
 
-// Claude runs A; B is sent mid-turn and Claude answers it after A. The journal writes B when it is
-// sent, so A's remaining tool run and its answer follow B there, and B's turn opens after them.
+// The journal records B mid-turn before A’s remaining output; B’s own turn opens after A ends.
 const messages = [
   text('user-a', 'user', 'Run the first job', 1),
   toolRun('a-tool-1', 2),

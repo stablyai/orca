@@ -36,6 +36,7 @@ import type { FileWriteResult } from '../../../../shared/file-write-disk-precond
 import {
   editorSavePrecondition,
   editorTabModelUri,
+  editorSaveGrant,
   writeEditorSave,
   type EditorSaveResult,
   type EditorSaveTrigger
@@ -68,9 +69,8 @@ export type EditorSaveQueue = {
   dispose: () => void
 }
 
-// Why: keeping the save queue, settle coordination, and the debounce timers that feed it together avoids split-brain saves.
+// Keep debounce and settle coordination with the queue to prevent competing saves.
 export function createEditorSaveQueue(store: AppStoreApi): EditorSaveQueue {
-  // Keyed by record.
   const autoSaveTimers = new Map<string, number>()
   const autoSaveScheduledContent = new Map<string, string>()
 
@@ -94,20 +94,20 @@ export function createEditorSaveQueue(store: AppStoreApi): EditorSaveQueue {
   ): Promise<EditorSaveResult> => {
     const { trigger } = request
     const state = store.getState()
-    // Why: the write-lock wait may have closed the writer; another view of its record holds the text.
+    // A writer closed during the lock wait can leave siblings holding the record’s text.
     const liveFile = liveEditorSaveWriter(state, writerId, writerViewIds, trigger)
     if (!liveFile) {
       return 'failed'
     }
     const fileId = liveFile.id
-    // Why views, not the record id: `fileId` may close mid-write, and a re-key keeps views, not ids.
+    // Track views across mid-write closure and record rekeys, which retain views but change IDs.
     const recordViewIds = [fileId, ...editorBufferSiblingViewIds(state, fileId)]
     const identityKey = editorBufferIdForFile(liveFile, state)
     if (liveFile.csvPreviewOnly === true) {
       throw new Error('Large CSV previews are read-only.')
     }
 
-    // Why: read-only tabs (AI Vault View Log) must never write the agent-owned artifact through editor paths.
+    // Read-only artifact tabs must never write agent-owned files.
     if (liveFile.readOnly === true) {
       return 'failed'
     }
@@ -119,7 +119,7 @@ export function createEditorSaveQueue(store: AppStoreApi): EditorSaveQueue {
       throw new Error('This file is still restoring its workspace owner. Try saving again.')
     }
 
-    // Why: only autosave is blocked while suspended; explicit user saves proceed (the banner warned).
+    // Explicit saves bypass autosave suspension but remain guarded; only Overwrite grants conflict consent.
     if (
       trigger === 'autosave' &&
       (isAutosaveSuspendedForFile(liveFile) ||
@@ -130,14 +130,13 @@ export function createEditorSaveQueue(store: AppStoreApi): EditorSaveQueue {
     }
 
     const nothingToWrite = trigger === 'autosave' ? 'failed' : 'written'
-    // Why: before the flush, which could republish discarded edits; no await follows before the write.
-    // Why the queued record: a rejoin since then moves the view to a record with its own epoch.
+    // Check the queued record’s epoch before flushing discarded text; rejoined views may now have a different epoch.
     const discarded = (): boolean => editorDiscardEpoch(request.recordId) !== request.discardEpoch
     if (discarded()) {
       return nothingToWrite
     }
     flushPendingEditorBuffer(store.getState(), fileId, trigger === 'autosave')
-    // Why: edits saved by the save ahead or reloaded since the request leave nothing to write.
+    // Earlier saves or reloads can leave a queued dirty request with nothing to write.
     const isDirty = store.getState().openFiles.find((file) => file.id === fileId)?.isDirty === true
     if (!isDirty && request.requestedDirty && trigger !== 'overwrite') {
       return nothingToWrite
@@ -160,7 +159,7 @@ export function createEditorSaveQueue(store: AppStoreApi): EditorSaveQueue {
       setModelExternalMutation(store.getState(), fileId, 'changed')
       return 'blocked-stale'
     }
-    // Why: stamp before writing so useEditorExternalWatch ignores our own fs:changed echo (editor-self-write-registry).
+    // Stamp before writing so watcher echoes cannot reload the editor’s own save.
     recordSelfWrite(
       liveFile.filePath,
       contentToSave,
@@ -175,15 +174,16 @@ export function createEditorSaveQueue(store: AppStoreApi): EditorSaveQueue {
         contentToSave,
         editorTabFileAccess(state, liveFile),
         precondition,
-        // Why: a remote write awaits host checks first; a discard in that window must stop the bytes.
+        // Remote host checks await; a discard during them must still prevent the write.
         () => {
           if (discarded()) {
             throw new EditorSaveDiscardedError()
           }
-        }
+        },
+        editorSaveGrant(liveFile, fileContext, () => store.getState())
       )
     } catch (error) {
-      // Why: the self-write stamp is only valid after a real write; clear on failure so it can't suppress a real update.
+      // Clear failed-write stamps so they cannot suppress real external changes.
       clearSelfWrite(liveFile.filePath, liveFile.runtimeEnvironmentId)
       if (error instanceof EditorSaveDiscardedError) {
         return nothingToWrite
@@ -192,7 +192,7 @@ export function createEditorSaveQueue(store: AppStoreApi): EditorSaveQueue {
     }
     if (!writeResult.ok) {
       clearSelfWrite(liveFile.filePath, liveFile.runtimeEnvironmentId)
-      // Why: an explicit save asks the user to convert instead of pausing autosave with a notice.
+      // Explicit saves request conversion rather than suspending autosave.
       if (writeResult.diskConflict === 'not-utf8' && trigger === 'user') {
         return 'not-utf8'
       }
@@ -228,7 +228,7 @@ export function createEditorSaveQueue(store: AppStoreApi): EditorSaveQueue {
   }
 
   const slots = createEditorSaveSlots(async (request) => {
-    // Why: the asking view may close while this waits; the record it was queued under still saves.
+    // A queued save outlives its asking view while sibling views retain the record.
     const askedView = (): OpenFile | null =>
       liveEditorSaveWriter(
         store.getState(),
@@ -246,7 +246,7 @@ export function createEditorSaveQueue(store: AppStoreApi): EditorSaveQueue {
       return 'failed'
     }
     const viewIds = editorBufferSiblingViewIds(store.getState(), view.id)
-    // Why: an edit tab, its unstaged diff and a combined-diff section can all write one file.
+    // Serialize edit, unstaged-diff and combined-diff writes to the same physical file.
     return withEditorFileWriteLock(editorPathHoldKey(store.getState(), view, view.filePath), () =>
       writeSave(view.id, viewIds, request)
     )
@@ -274,7 +274,7 @@ export function createEditorSaveQueue(store: AppStoreApi): EditorSaveQueue {
   }
 
   const settleFileSaves = async (fileId: string, flush = true): Promise<void> => {
-    // Why: rich markdown debounces serialization, so force the pending draft out before dropping the timer.
+    // Flush debounced rich-text serialization before dropping its timer.
     if (flush) {
       flushPendingEditorBuffer(store.getState(), fileId)
     }
@@ -305,7 +305,7 @@ export function createEditorSaveQueue(store: AppStoreApi): EditorSaveQueue {
       const timerId = window.setTimeout(() => {
         autoSaveTimers.delete(key)
         autoSaveScheduledContent.delete(key)
-        // Why: the view that scheduled may have closed while another view keeps the record open.
+        // The scheduling view may close while a sibling keeps the record open.
         const current = store.getState()
         const viewIds = new Set(editorBufferViewIds(current, key))
         const view = current.openFiles.find((openFile) => viewIds.has(openFile.id)) ?? file

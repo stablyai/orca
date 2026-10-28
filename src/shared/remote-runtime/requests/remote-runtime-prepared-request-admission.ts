@@ -1,11 +1,11 @@
-import { RemoteRuntimeClientError } from '../../remote-runtime-client-error'
+import { RemoteRuntimeClientError } from '../remote-runtime-client-error'
 import {
   REMOTE_RUNTIME_MAX_PENDING_REQUESTS,
   REMOTE_RUNTIME_MAX_PENDING_RPC_BYTES,
   REMOTE_RUNTIME_MAX_PROCESS_PENDING_REQUESTS,
   REMOTE_RUNTIME_MAX_PROCESS_PENDING_RPC_BYTES,
   retainedRemoteRuntimeJsonStringBytes
-} from '../../remote-runtime-memory-limits'
+} from '../remote-runtime-memory-limits'
 import type { RuntimeRpcResponse } from '../../runtime-rpc-envelope'
 
 export type RemoteRuntimePreparedRequest = {

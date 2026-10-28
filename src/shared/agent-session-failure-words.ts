@@ -1,29 +1,21 @@
-// The sentence a person reads beside each failure fact, and the one constructor that writes both.
-//
-// A row's `text`, a rejected message's `reason` and a conversation command's `error` are what
-// every released client prints as they are, so the host writes them here, from the fact, and
-// nowhere else: never Orca's own error text, a refusal's message, or a probe's evidence. A
-// provider's words reach the sentence only when the provider wrote them for a person. Each sentence
-// is built from the pieces in `agent-session-failure-copy`, which desktop translates to word the
-// same fact in the reader's language.
+// Build legacy text/reason/error and newer typed facts together. Quote provider text only when authored for a person; shared sentence pieces let desktop translate the same fact.
 
 import {
   isSubmissionRejectionFact,
   type AgentSessionFailureFact,
   type AgentSessionFailureKind,
-  type ProviderDiagnostic,
   type SubmissionRejectionFact,
   type SubmissionRejectionKind
 } from './agent-session-failure'
-import type { AgentSessionConversationCommand } from './agent-session-conversation-command'
+import type { AgentSessionConversationCommand } from './agent-session/agent-session-conversation-command'
 import { cliMissingSentence, notSignedInSentence } from './agent-session-availability-sentences'
 import {
   agentCliInstallationFailureWords,
   sayAgentSessionFailureEnglish,
   type AgentSessionFailureCopyId,
-  type AgentSessionFailureCopyValues,
   type AgentSessionFailureSay
 } from './agent-session-failure-copy'
+import { AGENT_SESSION_GOAL_CONTROL_COPY } from './agent-session-goal-control-copy'
 import { START_REFUSAL_RESUMABLE } from './agent-session-start-refusal-resumable'
 import { providerRetryWords, withRetryCause } from './agent-session-provider-retry-words'
 import {
@@ -31,8 +23,9 @@ import {
   type AgentSessionUsageLimitResetWords
 } from './agent-session-usage-limit-words'
 import { commandRefusedByReason } from './agent-session-command-refusal-words'
-import { attachmentProblemSentence } from './agent-session-attachment-failure-words'
+import { agent, attachmentProblemSentence } from './agent-session-attachment-failure-words'
 import { joinSentences } from './sentence-joining'
+import { quotingPersonDetail } from './agent-session-failure-quoted-detail'
 import { requestTimeoutSeconds } from './agent-session-request-timeout'
 import {
   DISPATCH_REJECTED_CANCELLED,
@@ -43,45 +36,38 @@ import {
 
 declare const failureSentence: unique symbol
 
-/** Words only `agentSessionFailureWords` makes, so no writer can put its own beside a fact. */
+/** Only agentSessionFailureWords constructs these, preventing competing wording beside a fact. */
 export type AgentSessionFailureSentence = string & { readonly [failureSentence]: true }
 
-/** A status row that reports a failure. */
 export type AgentSessionFailureRowWords = {
   text: AgentSessionFailureSentence
   failure: AgentSessionFailureFact
 }
 
-/** A rejection as the host writes it: the sentence (or, for the cases released clients already
- *  hide, the legacy marker) they print, and the fact newer ones read. */
+/** Legacy sentence/hidden marker and the newer fact, written together by the host. */
 export type AgentJournalDispatchRejection = {
   reason: AgentSessionFailureSentence
   rejection: SubmissionRejectionFact
 }
 
-/** `row`: a status row, about the chat. `rejection`: a rejected message's reason, about it.
- *  `answer`: a refused answer to an approval or question, about it. */
+/** row describes the chat; rejection describes a rejected message; answer describes a refused approval/question answer. */
 export type AgentSessionFailureSurface = 'row' | 'rejection' | 'answer'
 
 export type AgentSessionFailureWordsContext = {
   /** The chat's agent, when the writer knows it. */
   agentName?: string
+  stopNotice?: 'pauseUnconfirmed' | 'stopUnconfirmed'
   /** Names the legacy queue-full marker; without it a full queue is worded as a sentence. */
   provider?: 'claude' | 'codex'
-  /** The conversation command a failed start was for, so the next step is to run it again
-   *  rather than to send a message. */
+  /** Retry the failed start's conversation command instead of sending a message. */
   command?: AgentSessionConversationCommand
-  /** The surface retries for the person — its own Retry beside the words, or a read that reconnects
-   *  on its own — so they leave out sending or trying again. */
+  /** Omit retry advice when the surface already retries or offers its own Retry control. */
   retryControl?: boolean
   /** A direct create has no submitted message to send again. */
   messageSubmitted?: boolean
   /** How this reader says a usage limit's reset; without it the words name no time. */
   usageLimitReset?: AgentSessionUsageLimitResetWords
 }
-
-/** Person-facing provider text is quoted, but bounded so the sentence stays one. */
-const MAX_QUOTED_DETAIL_CHARS = 512
 
 type Sentence = (
   context: AgentSessionFailureWordsContext,
@@ -90,30 +76,8 @@ type Sentence = (
   say: AgentSessionFailureSay
 ) => string
 
-function agent(say: AgentSessionFailureSay, { agentName }: AgentSessionFailureWordsContext) {
-  return { agent: agentName ?? say('theAgent') }
-}
-
-/** A sentence whose only value is the agent's name. */
 function namingAgent(id: AgentSessionFailureCopyId): Sentence {
   return (context, _fact, _surface, say) => say(id, agent(say, context))
-}
-
-function quotingPersonDetail(
-  say: AgentSessionFailureSay,
-  lead: AgentSessionFailureCopyId,
-  quotedLead: AgentSessionFailureCopyId,
-  detail: ProviderDiagnostic | undefined,
-  values: AgentSessionFailureCopyValues = {}
-): string {
-  const quoted =
-    detail?.audience === 'person'
-      ? detail.text
-          .slice(0, MAX_QUOTED_DETAIL_CHARS)
-          .trim()
-          .replace(/[.\s]+$/, '')
-      : ''
-  return quoted ? say(quotedLead, { ...values, detail: quoted }) : say(lead, values)
 }
 
 /** The next step after a start or restart that failed: the command, or the message, again. */
@@ -201,6 +165,9 @@ const FAILURE_SENTENCES = {
   claudeAccountSetupFailed: (_context, _fact, _surface, say) => say('claudeAccountSetupFailed'),
   agentCommandNotRunnable: namingAgent('agentCommandNotRunnable'),
   runtimeNotInstalled: namingAgent('runtimeNotInstalled'),
+  fullAccessAsRoot: namingAgent('fullAccessAsRoot'),
+  conversationOpenInTerminal: namingAgent('conversationOpenInTerminal'),
+  conversationOpenElsewhere: (_context, _fact, _surface, say) => say('conversationOpenElsewhere'),
   managedAccountUnsupported: (context, _fact, _surface, say) =>
     joinSentences([
       say('managedAccountUnsupported'),
@@ -248,7 +215,8 @@ const FAILURE_SENTENCES = {
   compactionFailed: (_context, fact, _surface, say) =>
     quotingPersonDetail(say, 'compactionFailed', 'compactionFailedQuoted', fact.detail),
   compactionUnconfirmed: (_context, _fact, _surface, say) => say('compactionUnconfirmed'),
-  cancelUnconfirmed: (_context, _fact, _surface, say) => say('cancelUnconfirmed'),
+  cancelUnconfirmed: ({ stopNotice }, _fact, _surface, say) =>
+    stopNotice ? AGENT_SESSION_GOAL_CONTROL_COPY[stopNotice] : say('cancelUnconfirmed'),
   // The agent was reached and declined, so the sentence says that, not that the Stop was lost.
   stopRefused: (context, fact, _surface, say) =>
     fact.detail?.audience === 'person'
@@ -285,8 +253,7 @@ const FAILURE_SENTENCES = {
       : providerRetryWords(say, agent(say, context), retry),
   usageLimitReached: (context, { usageLimit }, _surface, say) =>
     usageLimitWords(say, agent(say, context), usageLimit, {
-      resetWords: context.usageLimitReset,
-      continueControl: context.retryControl
+      resetWords: context.usageLimitReset
     }),
   previousExitUnverifiable: namingAgent('previousExitUnverifiable'),
   sessionNotRestored: namingAgent('sessionNotRestored')
@@ -304,8 +271,7 @@ export function agentSessionFailureSentence(
   return sentence(context, fact, surface, say)
 }
 
-/** The markers released clients hide, for the rejections that had one before rows carried a fact.
- *  A write failure is the bare marker: its error belongs in the log. */
+/** Preserve markers released clients hide. A write failure keeps the bare marker; its error stays in the log. */
 const LEGACY_REJECTION_MARKERS: Partial<
   Record<SubmissionRejectionKind, (context: AgentSessionFailureWordsContext) => string | undefined>
 > = {

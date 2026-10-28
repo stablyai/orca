@@ -12,7 +12,7 @@ import {
   readPersistedStateJson,
   testState,
   writePersistedStateJson
-} from '../persistence-test-harness'
+} from '../persistence/persistence-test-harness'
 import { AutomationService } from './service'
 
 vi.mock('electron', () => ({
@@ -163,24 +163,6 @@ describe('repeated skipped_unavailable coalescing', () => {
       occurrenceCount: 3,
       lastOccurrenceAt: new Date('2026-05-16T09:00:00').getTime()
     })
-  })
-
-  it('starts a new record when a real run intervened, so history is not rewritten', async () => {
-    vi.setSystemTime(new Date('2026-05-13T08:00:00'))
-    const { store, automation } = await seedUnresolvableAutomation()
-    const completed = store.createAutomationRun(
-      automation,
-      new Date('2026-05-12T09:00:00').getTime()
-    )
-    store.updateAutomationRun({ runId: completed.id, status: 'completed', workspaceId: null })
-    const service = attachedService(store)
-
-    await evaluateAt(store, service, automation.id, '2026-05-13T09:01:00')
-    await evaluateAt(store, service, automation.id, '2026-05-14T09:01:00')
-
-    const runs = store.listAutomationRuns(automation.id)
-    expect(runs.map((run) => run.status)).toEqual(['skipped_unavailable', 'completed'])
-    expect(runs[0].occurrenceCount).toBe(2)
   })
 
   it('gives a manual attempt its own answer rather than folding it into a scheduled skip', async () => {

@@ -21,13 +21,11 @@ const binding = {
 }
 const paneKey = `${binding.tabId}:${binding.leafId}`
 
-/** What the window saves: its own view of the session, which never carries incarnations. */
 function rendererSave(session: WorkspaceSessionState): WorkspaceSessionState {
   const { terminalPtyIncarnationsByPaneKey: _omitted, ...rest } = session
   return structuredClone(rest)
 }
 
-// #30486: a renderer save erased the incarnation, so a restart reattached with no generation proof.
 it('keeps the PTY incarnation across a window save that still binds the pane', async () => {
   const { store } = await fixture()
   await store.persistPtyBinding(binding)

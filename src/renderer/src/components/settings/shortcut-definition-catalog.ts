@@ -12,6 +12,7 @@ import {
 import type { TuiAgent } from '../../../../shared/tui-agent'
 import type { ActivePluginCommand } from '@/store/plugin-panels'
 import { buildPluginCommandKeybindingDefinitions } from '@/lib/plugin-command-keybindings'
+import { translate } from '@/i18n/i18n'
 import { disabledAgentTabActionIds, groupDefinitions, type ShortcutGroup } from './shortcut-groups'
 
 export type ShortcutDefinitionCatalog = {
@@ -42,10 +43,9 @@ export function buildShortcutDefinitionCatalog(options: {
     options.keybindings,
     {
       ignoredActionIds: ignoredConflictActionIds,
-      // Plugin defaults are external additions to Orca's conflict-free static
-      // registry, so surface their collisions even before the user customizes one.
+      // Plugin defaults can conflict with the static registry before any user customization.
       relevantActionIds: pluginDefinitions.map((definition) => definition.id),
-      // Why: warn when main claims a custom chord before it reaches the renderer action.
+      // Warn when main intercepts a custom chord before the renderer receives it.
       includeMainProcessInterception: true
     }
   )
@@ -56,7 +56,14 @@ export function buildShortcutDefinitionCatalog(options: {
     for (const actionId of conflict.actionIds) {
       conflictByAction.set(actionId, [
         ...(conflictByAction.get(actionId) ?? []),
-        `${formatKeybindingList([conflict.binding], options.platform)} conflicts with ${labels}.`
+        translate(
+          'auto.components.settings.shortcutDefinitionCatalog.bindingConflict',
+          '{{binding}} conflicts with {{actions}}.',
+          {
+            binding: formatKeybindingList([conflict.binding], options.platform),
+            actions: labels
+          }
+        )
       ])
     }
   }

@@ -20,13 +20,12 @@ export function resolveProfileStateBackupWorkerPath(moduleDir = __dirname): stri
   return [entry, join(dirname(entry), '..', WORKER_FILENAME)].find(existsSync) ?? entry
 }
 
-/** Snapshot copying and full validation run off the owning runtime thread. */
 export function runProfileStateBackup(
   job: ProfileStateBackupJob,
   signal?: AbortSignal,
   workerPath = resolveProfileStateBackupWorkerPath()
 ): Promise<void> {
-  // Electron always ships the entry, so a missing one there must fail, not block the thread.
+  // Missing packaged entries must fail rather than block Electron's runtime thread.
   return process.versions.electron || existsSync(workerPath)
     ? runProfileStateBackupWorker(job, { workerPath, signal })
     : writeProfileStateBackup(job)
@@ -68,7 +67,7 @@ export async function runProfileStateBackupWorker(
       worker.on('error', (error) => {
         failure = error instanceof Error ? error : new Error(String(error))
       })
-      // Even an error response leaves handles open until the worker actually exits.
+      // Error responses do not prove the worker has closed its handles.
       worker.once('exit', (code) => {
         clearTimeout(timer)
         options.signal?.removeEventListener('abort', abort)

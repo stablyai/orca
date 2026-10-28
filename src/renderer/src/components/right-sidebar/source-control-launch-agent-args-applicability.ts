@@ -28,22 +28,11 @@ export function sourceControlLaunchWorkspace(
   }
 }
 
-/**
- * Do CLI arguments reach the agent this launch would start?
- *
- * A structured native chat session drives the agent over a protocol and reads no CLI arguments,
- * so the dialog must not offer a field that launch would drop. Every other route — a TUI terminal,
- * or a terminal rendered as chat — is a real PTY that applies them.
- *
- * This resolves the route this specific launch would take rather than the user's default alone:
- * a chat-by-default user still gets a terminal on a remote host, an agent without a structured
- * session, or a floating workspace, and the arguments genuinely work there.
- */
+/** Use the actual route: native chats ignore CLI args, while terminal/chat-rendered PTYs apply them even for chat-by-default users. */
 export function sourceControlLaunchAppliesAgentArgs(
   input: SourceControlLaunchAgentArgsApplicabilityInput
 ): boolean {
-  // Why: with no agent picked the route is undecidable; show the field rather than hide a
-  // control the user may need, matching the pre-structured-chat behaviour.
+  // Without an agent the route is unknown; keep the potentially needed field visible.
   if (!input.agent) {
     return true
   }

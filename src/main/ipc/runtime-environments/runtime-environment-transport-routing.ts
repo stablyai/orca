@@ -11,7 +11,7 @@ import type {
 import {
   subscribeRemoteRuntimeRequest,
   type RemoteRuntimeSubscription
-} from '../../../shared/remote-runtime-client'
+} from '../../../shared/remote-runtime/remote-runtime-client'
 import { withRuntimeUnreachableHint } from './runtime-environment-unreachable-hint'
 import { decodeSessionTabsDeltaEvents } from './runtime-environment-session-tabs-delta-decoding'
 import { enqueueRuntimeCall } from './runtime-environment-call-queue'

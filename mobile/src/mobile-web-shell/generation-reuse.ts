@@ -5,12 +5,7 @@ import { joinUri } from './generation-cache-uri'
 import type { ActiveGeneration } from './generation-store'
 import type { GenerationFileSystem } from './generation-store-file-system'
 
-/**
- * Copies, never reads: the active generation was hash-verified when it was written and is never
- * written again (only renamed into place and deleted), and the page opens it as is on every
- * launch, so a whole copy is the same bytes the page already trusts. Matched by content, so an
- * asset the next build renamed is still found.
- */
+// Copy immutable, previously hash-verified assets without reading them into JS; match content so renamed assets remain reusable.
 function cachedFileOf(
   active: ActiveGeneration | null,
   asset: MobileWebBundleAssetRead
@@ -21,7 +16,6 @@ function cachedFileOf(
     : joinUri(active.directory, requireStorablePath(cached.path))
 }
 
-/** What a download may leave to the stage: matched now, and still whole on disk when checked. */
 export function reusableAssetsOf(
   fs: GenerationFileSystem,
   active: ActiveGeneration | null
@@ -45,11 +39,7 @@ export function reusableAssetsOf(
   }
 }
 
-/**
- * Copies a reused asset out of the generation active now, which may not be the one the download
- * checked: a commit in between replaced it. Throws when that generation lacks the asset or the
- * copy is not whole, which fails the stage; the retry checks against the new generation.
- */
+// Stage from the current activation: an intervening commit may have replaced the download’s source. Missing/incomplete copies fail staging so retry checks the new activation.
 export async function copyCachedAsset(
   fs: GenerationFileSystem,
   active: ActiveGeneration | null,

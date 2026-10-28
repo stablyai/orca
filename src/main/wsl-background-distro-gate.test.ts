@@ -12,7 +12,10 @@ import {
   deferUntilWslDistroRunning,
   isWslDistroRunning,
   isWslDistroRunningForBackgroundWork,
-  noteWslDistrosRunning
+  noteWslDistroMayHaveStopped,
+  noteWslDistrosRunning,
+  readSettledConfirmedRunningWslDistros,
+  WSL_STOP_SETTLE_MS
 } from './wsl-background-distro-gate'
 import {
   _resetRunningWslDistroCacheForTests,
@@ -54,6 +57,96 @@ describe('isWslDistroRunning', () => {
     probe = () => Promise.reject(new Error('wsl.exe wedged'))
     await expect(isWslDistroRunning('Ubuntu')).resolves.toBe(false)
     await expect(isWslDistroRunning('Ubuntu')).resolves.toBe(false)
+  })
+})
+
+describe('the stop settle window', () => {
+  it('starts no running read inside the window, even when a timer fires early', async () => {
+    // Node timers can wake ~2ms short; firing far earlier makes a single sleep fail every time.
+    const realSetTimeout = globalThis.setTimeout
+    vi.spyOn(globalThis, 'setTimeout').mockImplementation((handler, ms, ...args) =>
+      realSetTimeout(handler, Math.max(0, (ms ?? 0) - 100), ...args)
+    )
+    const probeStarts: number[] = []
+    wslMocks.listRunningWslDistrosAsync.mockImplementation((options) =>
+      resolveRunningWslDistros(async () => {
+        probeStarts.push(performance.now())
+        return []
+      }, options)
+    )
+    const settledAt = performance.now() + WSL_STOP_SETTLE_MS
+    noteWslDistroMayHaveStopped('Ubuntu')
+
+    await expect(isWslDistroRunning('Ubuntu')).resolves.toBe(false)
+    expect(probeStarts).toHaveLength(1)
+    expect(probeStarts[0]).toBeGreaterThanOrEqual(settledAt)
+  })
+})
+
+describe('readSettledConfirmedRunningWslDistros', () => {
+  it('never answers from a probe that started inside the window, even one still in flight', async () => {
+    let finishStale: (distros: string[]) => void = () => {}
+    const probe = vi
+      .fn<() => Promise<string[]>>()
+      .mockImplementationOnce(() => new Promise((resolve) => (finishStale = resolve)))
+      .mockResolvedValueOnce([])
+    wslMocks.listRunningWslDistrosAsync.mockImplementation((options) =>
+      resolveRunningWslDistros(probe, options)
+    )
+    const stale = isWslDistroRunning('Ubuntu')
+    await vi.waitFor(() => expect(probe).toHaveBeenCalledOnce())
+
+    const settled = readSettledConfirmedRunningWslDistros('Ubuntu', performance.now())
+    finishStale(['Ubuntu'])
+
+    await expect(stale).resolves.toBe(true)
+    await expect(settled).resolves.toEqual({ status: 'confirmed', distros: [] })
+    expect(probe).toHaveBeenCalledTimes(2)
+  })
+})
+
+describe('resolveRunningWslDistros startedAfter', () => {
+  it('answers from a confirmed read that started after the anchor, and reads again for a later one', async () => {
+    const probe = vi.fn(async () => ['Ubuntu'])
+    const anchor = performance.now()
+    await resolveRunningWslDistros(probe)
+    await expect(resolveRunningWslDistros(probe, { startedAfter: anchor })).resolves.toEqual([
+      'Ubuntu'
+    ])
+    expect(probe).toHaveBeenCalledTimes(1)
+    await resolveRunningWslDistros(probe, { startedAfter: performance.now() })
+    expect(probe).toHaveBeenCalledTimes(2)
+  })
+
+  it('never answers an anchored caller from a failed read', async () => {
+    vi.spyOn(console, 'warn').mockImplementation(() => undefined)
+    const anchor = performance.now()
+    await resolveRunningWslDistros(() => Promise.reject(new Error('wsl.exe wedged')))
+    await expect(
+      resolveRunningWslDistros(async () => ['Ubuntu'], {
+        startedAfter: anchor,
+        requireConfirmed: true
+      })
+    ).rejects.toThrow()
+  })
+})
+
+describe('deferUntilWslDistroRunning cancel', () => {
+  it('drops the task it registered, but not a newer one under the same key', () => {
+    const first = vi.fn()
+    const second = vi.fn()
+    const cancelFirst = deferUntilWslDistroRunning('Ubuntu', 'k', first)
+    const cancelSecond = deferUntilWslDistroRunning('Ubuntu', 'k', second)
+    cancelFirst()
+    noteWslDistrosRunning(['Ubuntu'])
+    expect(second).toHaveBeenCalledTimes(1)
+    const third = vi.fn()
+    deferUntilWslDistroRunning('Ubuntu', 'k', third)
+    cancelSecond()
+    cancelFirst()
+    noteWslDistrosRunning(['Ubuntu'])
+    expect(third).toHaveBeenCalledTimes(1)
+    expect(first).not.toHaveBeenCalled()
   })
 })
 

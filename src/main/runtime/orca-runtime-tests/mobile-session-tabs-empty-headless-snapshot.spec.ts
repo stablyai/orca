@@ -9,8 +9,7 @@ import {
 } from '../orca-runtime-test-fixtures.spec'
 import { getRuntimeBrowserPageRegistry } from '../runtime-browser-page-registry'
 
-// #25900: a windowless host listed no tabs for a worktree whose saved session still had live
-// agent terminals, so a client waiting to reattach heard "nothing here" and stayed on Reconnecting.
+// #25900: empty windowless snapshots hid persisted live agents and stranded clients on Reconnecting.
 
 const AGENT_PTY_ID = 'daemon-agent-pty'
 const PLACEMENT = {
@@ -103,7 +102,6 @@ describe('OrcaRuntimeService empty headless session snapshot', () => {
     host.openPage('page-1')
     await listedTabTypes(host.runtime)
     host.closePage('page-1')
-    // The emptied snapshot this host built stays stored while the session gains its terminal.
     expect(await listedTabTypes(host.runtime)).toEqual([])
 
     host.saveAgentTerminal()

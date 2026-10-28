@@ -175,8 +175,7 @@ describe('verifyPackagedOrcadTemplate', () => {
     )
   })
 
-  // Design D2 reverses the old "unused, excluded" contract: SSH relays and managed orcad deploys
-  // materialize their slot from process.resourcesPath/orcad-template, so every desktop OS ships it.
+  // Desktop must carry deployment template on every OS: SSH/managed deploys materialize target slot from resourcesPath (D2).
   it('ships the deployment template as a resource on every desktop OS, never its runtimes', async () => {
     for (const platform of ['win', 'mac', 'linux']) {
       expect(builderConfig[platform].extraResources).toContainEqual({

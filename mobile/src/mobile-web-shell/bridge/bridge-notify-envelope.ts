@@ -2,6 +2,7 @@ import { z } from 'zod'
 import { BridgeErrorCaptureSchema } from './bridge-error-capture'
 import { BRIDGE_HAPTICS_NOTIFY_FIELDS } from './bridge-haptics-notify'
 import { BRIDGE_BACK_CLAIM_NOTIFY } from './bridge-page-back'
+import { BRIDGE_PAGE_LOCATION } from './bridge-page-location'
 import { BRIDGE_PAGE_PAINTED } from './bridge-page-painted'
 import { BRIDGE_CLEARABLE_ROUTE_PARAMS, BRIDGE_ROUTE_PARAM_CLEAR } from './bridge-route-update'
 import {
@@ -26,15 +27,7 @@ import {
   versionSchema
 } from './bridge-frame-fields'
 
-/**
- * Every one-way page-to-shell frame, as one closed union.
- *
- * Its own module because it is the half of the envelope that grows: a notify is what a page uses
- * to tell the shell something it is owed no answer to, and each new one is a member here, a row in
- * `bridge-notify-grants.ts` and a branch in the host. Closed on purpose in all three places — a
- * name no shell implements is refused whole rather than half-served, which is what makes the
- * page's own `grants` check the thing that keeps a newer page quiet on an older shell.
- */
+// Keep notify names closed and paired with grant checks/handlers; older shells reject unknown names, so newer pages must check grants before posting.
 export const BridgeNotifySchema = z.discriminatedUnion('name', [
   z.object({
     v: versionSchema,
@@ -42,38 +35,32 @@ export const BridgeNotifySchema = z.discriminatedUnion('name', [
     name: z.literal('foreground'),
     reason: z.enum(BRIDGE_FOREGROUND_NUDGE_REASONS).optional()
   }),
-  // Behind the `navigate` grant, and that is not a convention: this union is closed, so an older
-  // shell refuses the whole frame as `unrecognised-message`. The page checks `grants.native`
-  // before it posts, which is what a grant is for.
   z.object({
     v: versionSchema,
     type: z.literal('notify'),
     name: z.literal('navigate'),
-    href: z.string().min(1).max(BRIDGE_MAX_ROUTE_HREF_CHARS).regex(BRIDGE_ROUTE_HREF_PATTERN)
+    href: z.string().min(1).max(BRIDGE_MAX_ROUTE_HREF_CHARS).regex(BRIDGE_ROUTE_HREF_PATTERN),
+    // Older shells strip this key and push, which is what every navigate did before it existed.
+    replace: z.literal(true).optional()
   }),
-  // Behind the same `navigate` grant, and carrying no target: the shell pops what it pushed, and
-  // a page naming where to go back to would be naming a screen it cannot see.
+  // Back carries no target; only the native stack knows what screen it will reveal.
   z.object({
     v: versionSchema,
     type: z.literal('notify'),
     name: z.literal(BRIDGE_NAVIGATE_BACK_NOTIFY)
   }),
-  // Behind the `externalLink` grant. The URL is held to the same three schemes on both sides: the
-  // page refuses at the call site so a tap knows it went nowhere, and this refuses the frame so a
-  // page that did not check is still held to it.
+  // Check external-link schemes at both page call and envelope: callers need local refusal and unchecked pages must still be fenced.
   z.object({
     v: versionSchema,
     type: z.literal('notify'),
     name: z.literal(BRIDGE_EXTERNAL_LINK_GRANT),
     url: z.string().min(1).max(BRIDGE_MAX_EXTERNAL_LINK_CHARS).refine(isBridgeExternalLinkUrl)
   }),
-  // Behind the `storage` grant, for the same reason `navigate` is behind its own.
   z.object({
     v: versionSchema,
     type: z.literal('notify'),
     name: z.literal('storage'),
     key: z.string().min(1).max(PAGE_STORAGE_MAX_KEY_CHARS).refine(isPageStorageKey),
-    /** Null removes it, which is what `AsyncStorage.removeItem` does. */
     value: z.string().max(PAGE_STORAGE_MAX_VALUE_CHARS).nullable()
   }),
   z.object({
@@ -88,15 +75,11 @@ export const BridgeNotifySchema = z.discriminatedUnion('name', [
     v: versionSchema,
     type: z.literal('notify'),
     name: z.literal(BRIDGE_FAULT_GRANT),
-    /** The capture an `error` frame already carries, so both directions share one bound and one
-     *  reader. Nothing is owed back: the page is telling the shell, not asking it. */
+    // Share error capture bounds in both directions; this fault report owes no reply.
     error: BridgeErrorCaptureSchema
   }),
-  // Behind the `haptics` grant, and the fields are its own module's for the reason stated there.
   z.object({ v: versionSchema, ...BRIDGE_HAPTICS_NOTIFY_FIELDS }),
-  // The reader erasing its own request (ruling 34). Ungranted, because it can only spend
-  // something this shell put on the route: the param is closed to the one the shell hands over,
-  // and the value is what the page applied — a shell holding a newer one ignores the frame.
+  // Allow only the shell-provided one-shot param; its holder ignores a clear naming an older value (ruling 34).
   z.object({
     v: versionSchema,
     type: z.literal('notify'),
@@ -104,22 +87,25 @@ export const BridgeNotifySchema = z.discriminatedUnion('name', [
     param: z.enum(BRIDGE_CLEARABLE_ROUTE_PARAMS),
     value: z.string().min(1).max(BRIDGE_MAX_ROUTE_PARAM_CHARS)
   }),
-  // Ungranted, and carrying nothing: the page is reporting on its own document, which no grant
-  // gates. The shell waits for it only from a page whose `ready` listed it, so a name an older
-  // shell refuses is one a newer page was never waited on for.
+  // Paint describes the page itself, so needs no grant; the shell waits only when ready declared reporting support.
   z.object({
     v: versionSchema,
     type: z.literal('notify'),
     name: z.literal(BRIDGE_PAGE_PAINTED)
   }),
-  // Ungranted, for the reason the paint report is: the page is describing its own document, and
-  // whether the device's Back key reaches it is the shell's decision either way. The state travels
-  // whole rather than as a toggle, so a frame the shell drops costs one press and not a lane.
+  // Back claims describe document state, not capability; send whole state so a dropped frame cannot invert future claims.
   z.object({
     v: versionSchema,
     type: z.literal('notify'),
     name: z.literal(BRIDGE_BACK_CLAIM_NOTIFY),
     claimed: z.boolean()
+  }),
+  // A host-area page navigates in its own document; report where so a fold can reopen it natively.
+  z.object({
+    v: versionSchema,
+    type: z.literal('notify'),
+    name: z.literal(BRIDGE_PAGE_LOCATION),
+    href: z.string().min(1).max(BRIDGE_MAX_ROUTE_HREF_CHARS).regex(BRIDGE_ROUTE_HREF_PATTERN)
   })
 ])
 

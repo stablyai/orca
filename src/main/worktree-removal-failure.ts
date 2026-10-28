@@ -1,20 +1,41 @@
 import { deleteBranchOfUnregisteredWorktree } from './git/worktree-removal'
-import { isCheckoutRegistered, isUnregisteredRemovalLeftover } from './worktree-removal-leftover'
+import {
+  isRecordedCheckout,
+  registeredRemovalCheckout,
+  isUnregisteredRemovalLeftover
+} from './worktree-removal-leftover'
 import type { WorktreeRemovalFailure, WorktreeRemovalRecord } from './worktree-removal-records'
 import { worktreeCheckoutExists } from './worktree-removal-table'
 
-/** Keep the error if Git dropped registration but left the checkout on disk. */
+/** Retain failures for the same checkout without cleaning up its live Git ownership. */
 export async function failureLeftByGit(
   record: WorktreeRemovalRecord,
   error: unknown,
   cleanupPushTargetRemote: (() => Promise<void>) | undefined
 ): Promise<WorktreeRemovalFailure | undefined> {
-  if (!(await isCheckoutLeftUnregistered(record))) {
+  if (!(await worktreeCheckoutExists(record.worktreePath))) {
     return undefined
   }
+  const message = error instanceof Error ? error.message : String(error)
   const failure = {
-    message: error instanceof Error ? error.message : String(error),
+    message: message.replace(
+      / Close (?:that program|any program using it) and delete again\.$/,
+      () =>
+        ` Close any program using it. You may need to delete the remaining folder at ${record.worktreePath} manually to finish removing this workspace.`
+    ),
     failedAt: Date.now()
+  }
+  try {
+    const registered = await registeredRemovalCheckout(record)
+    if (registered) {
+      return isRecordedCheckout(registered, record) ? { ...failure, message } : undefined
+    }
+    if (!(await isUnregisteredRemovalLeftover(record.repoPath, record.worktreePath))) {
+      return undefined
+    }
+  } catch (error) {
+    console.warn(`[worktrees] could not inspect failed removal of ${record.worktreePath}`, error)
+    return failure
   }
   await finishGitSideOfFailedRemoval(record, cleanupPushTargetRemote)
   return failure
@@ -39,20 +60,5 @@ async function finishGitSideOfFailedRemoval(
     await cleanupPushTargetRemote?.()
   } catch (error) {
     console.warn(`[worktrees] could not clean up the push target of ${record.worktreePath}`, error)
-  }
-}
-
-async function isCheckoutLeftUnregistered(record: WorktreeRemovalRecord): Promise<boolean> {
-  if (!(await worktreeCheckoutExists(record.worktreePath))) {
-    return false
-  }
-  try {
-    return (
-      !(await isCheckoutRegistered(record)) &&
-      (await isUnregisteredRemovalLeftover(record.repoPath, record.worktreePath))
-    )
-  } catch (error) {
-    console.warn(`[worktrees] could not list worktrees of ${record.repoPath}`, error)
-    return false
   }
 }

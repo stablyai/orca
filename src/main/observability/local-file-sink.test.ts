@@ -1,5 +1,3 @@
-// Sink tests: rotation behavior under size pressure and listing.
-
 import {
   chmodSync,
   mkdtempSync,
@@ -24,9 +22,6 @@ afterEach(() => {
 })
 
 function makeRecord(i: number): { i: number; payload: string } {
-  // ~120 bytes per line so we can hit a small cap with a known number of
-  // pushes. Padding character chosen to avoid colliding with redactor rules
-  // in case the test span ever flows through the redactor.
   return { i, payload: 'x'.repeat(100) }
 }
 
@@ -59,10 +54,8 @@ describe('local-file-sink — basic write', () => {
     for (let i = 0; i < 4; i++) {
       sink.push({ i })
     }
-    // Below threshold: nothing on disk yet (the periodic timer is far away).
     expect(statSync(file).size).toBe(0)
     sink.push({ i: 4 })
-    // 5th push hits the threshold, flushes synchronously.
     expect(statSync(file).size).toBeGreaterThan(0)
     sink.close()
   })
@@ -111,8 +104,6 @@ describe('local-file-sink — basic write', () => {
 describe('local-file-sink — rotation', () => {
   it('rotates when the byte cap is exceeded', () => {
     const file = join(dir, 'test.ndjson')
-    // ~120 bytes per record × 5 records = ~600 bytes; cap at 500 forces
-    // rotation before all records land in the same file.
     const sink = createLocalFileSink({
       filePath: file,
       maxBytes: 500,
@@ -128,8 +119,6 @@ describe('local-file-sink — rotation', () => {
 
     const files = listRotatedFiles(file, 3)
     expect(files.length).toBeGreaterThan(1)
-    // The base file always exists after rotation (the post-cascade fresh
-    // open).
     expect(existsSync(file)).toBe(true)
   })
 
@@ -201,7 +190,6 @@ describe('local-file-sink — rotation', () => {
       batchWindowMs: 100_000,
       flushBufferThreshold: 1
     })
-    // Far more than 3 × 500 bytes — exercises the FIFO drop path.
     for (let i = 0; i < 50; i++) {
       sink.push(makeRecord(i))
     }
@@ -209,9 +197,7 @@ describe('local-file-sink — rotation', () => {
     sink.close()
 
     const total = getRotatedFamilySize(file, 3)
-    // Worst case: 3 files × ~500 bytes each + the in-progress base. Allow
-    // 1.5× headroom so the test isn't flaky on rotation timing — what
-    // matters is that we're not unbounded.
+    // Allow rotation headroom while still rejecting unbounded disk growth.
     expect(total).toBeLessThan(3 * 500 * 2)
   })
 })
@@ -233,9 +219,7 @@ describe('local-file-sink — listing + clearing', () => {
     sink.close()
 
     const files = listRotatedFiles(file, 5)
-    // First entry is always the base (newest).
     expect(files[0]).toBe(file)
-    // Subsequent entries are the rotated suffixes in ascending order.
     for (let i = 1; i < files.length; i++) {
       expect(files[i]).toBe(`${file}.${i}`)
     }
@@ -259,7 +243,6 @@ describe('local-file-sink — robustness', () => {
     sink.flush()
     sink.close()
     const lines = readFileSync(file, 'utf8').split('\n').filter(Boolean)
-    // Only the non-circular line lands; circular is silently dropped.
     expect(lines.map((l) => JSON.parse(l))).toEqual([{ ok: 2 }])
   })
 

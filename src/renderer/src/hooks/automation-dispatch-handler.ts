@@ -25,9 +25,7 @@ export async function handleAutomationDispatchRequest({
   dispatchToken
 }: AutomationDispatchRequest): Promise<void> {
   const markDispatchResult = async (result: AutomationDispatchResult): Promise<void> => {
-    // Deliberately no local emit: the write publishes its own host-scoped event
-    // (automation-run-writer.ts) before this reply returns, and an unscoped one
-    // here would arrive second and invalidate every host in the catalog.
+    // The writer publishes host-scoped change before reply; another unscoped emit would invalidate every host.
     await window.api.automations.markDispatchResult(result)
   }
   const state = useAppStore.getState()
@@ -154,8 +152,7 @@ export async function handleAutomationDispatchRequest({
     terminalOwnership = result.terminalOwnership
     completion.setSessionObserver(result.releaseRuntimeObservers)
     if (automation.reuseSession) {
-      // Why: the first fresh launch is the seed for later reuse and must
-      // survive completion under the same policy as an already-reused tab.
+      // Preserve the first fresh-launch seed under the same completion policy as reused tabs.
       releaseTerminalOwnership()
     }
     const launchedTabId = result.tabId

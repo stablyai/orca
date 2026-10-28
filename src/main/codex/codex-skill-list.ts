@@ -1,6 +1,6 @@
 import type { AgentSessionSlashCommand } from '../../shared/agent-session-wire'
 import { structuredSlashCommands } from '../../shared/structured-agent-session-composer'
-import type { CodexAppServerConnection } from './codex-app-server-connection'
+import type { CodexAppServerConnection } from './app-server/codex-app-server-connection-types'
 import type { CodexAppServerRpc } from './codex-app-server-session'
 import {
   CodexAppServerUnsupportedError,
@@ -45,7 +45,22 @@ function arrayField(value: unknown, key: string): unknown[] {
 
 export function codexSkillRows(answer: unknown, cwd: string): AgentSessionSlashCommand[] {
   const entries = arrayField(answer, 'data')
-  const entry = entries.find((candidate) => stringField(candidate, 'cwd') === cwd) ?? entries[0]
+  return entrySkillRows(
+    entries.find((candidate) => stringField(candidate, 'cwd') === cwd) ?? entries[0]
+  )
+}
+
+export function codexFolderSkillReport(
+  answer: unknown,
+  cwd: string
+): AgentSessionSlashCommand[] | undefined {
+  const entry = arrayField(answer, 'data').find(
+    (candidate) => stringField(candidate, 'cwd') === cwd
+  )
+  return entry === undefined ? undefined : [...codexReportCommandRows(), ...entrySkillRows(entry)]
+}
+
+function entrySkillRows(entry: unknown): AgentSessionSlashCommand[] {
   return arrayField(entry, 'skills').flatMap((skill): AgentSessionSlashCommand[] => {
     const name = stringField(skill, 'name')
     const path = stringField(skill, 'path')

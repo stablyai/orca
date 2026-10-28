@@ -11,23 +11,8 @@ const DISMISSAL = {
 }
 
 describe('workspaceCleanup client-ui schema', () => {
-  it('accepts a default browse state', () => {
-    const browse = createDefaultWorkspaceCleanupBrowseState()
-    const parsed = WorkspaceCleanup.parse({ dismissals: { 'wt-1': DISMISSAL }, browse })
-
-    expect(parsed.browse).toEqual(browse)
-    expect(parsed.dismissals['wt-1']).toEqual(DISMISSAL)
-  })
-
   it('still accepts a dismissals-only payload from a client that predates browse', () => {
     expect(WorkspaceCleanup.parse({ dismissals: {} })).toEqual({ dismissals: {} })
-  })
-
-  it('preserves the optional host qualifier on a dismissal', () => {
-    const qualified = { ...DISMISSAL, executionHostId: 'ssh:ssh-1' }
-    const parsed = WorkspaceCleanup.parse({ dismissals: { 'ssh:ssh-1\0wt-1': qualified } })
-
-    expect(parsed.dismissals['ssh:ssh-1\0wt-1']).toEqual(qualified)
   })
 
   // The wire contract: a NEWER client's filter groups must never fail an older

@@ -79,7 +79,6 @@ describe('buildRuntimeSessionPlaceholders', () => {
 
     expect(result.repos).not.toBe(repos)
     expect(result.repos.map((entry) => entry.id)).toEqual(['repo-1', 'repo-2'])
-    // The caller's array must not be mutated in place.
     expect(repos).toHaveLength(1)
   })
 })

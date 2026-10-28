@@ -54,7 +54,7 @@ export function attachEditorAutosaveController(store: AppStoreApi): () => void {
     const draft = store.getState().editorDrafts[fileId]
     if (draft !== undefined) {
       try {
-        // Why: only a written save may close the tab; anything else keeps it and its edits.
+        // Close only after a written result so refusals retain the tab and edits.
         const result = await queueSave(file, draft)
         if (result !== 'written') {
           onNotClosed?.(result === 'failed' ? 'not-saved' : result)
@@ -126,20 +126,19 @@ export function attachEditorAutosaveController(store: AppStoreApi): () => void {
       const discard = 'fileId' in detail && detail.discard === true
       if ('fileId' in detail) {
         matchingFiles = state.openFiles.filter((file) => file.id === detail.fileId)
-        // Why: a view may republish the dropped text while saves drain; no autosave may write it.
+        // Views can republish discarded text while writes drain; keep autosave held until cleanup finishes.
         if (discard) {
           release = holdAutoSave(new Set(matchingFiles.map((f) => editorFileHoldKey(state, f))))
         }
       } else {
-        // Why: a git discard rewrites the file under every workspace showing it, and the guarded
-        // write's compare fallback (older hosts) can't refuse a save that read disk just before git.
+        // Hold all workspace views during Git discard; older-host compare fallback cannot reject a write that read just before Git changed disk.
         const keys = pathMutationHoldKeys(state, detail)
         release = holdAutoSave(keys)
         matchingFiles = state.openFiles.filter((file) => keys.has(editorFileHoldKey(state, file)))
       }
       await Promise.all(matchingFiles.map((file) => settleFileSaves(file.id, !discard)))
     } catch (error) {
-      // Why: a failed settle (e.g. an unresolved CSV cell) must stop the discard, not strand its hold.
+      // Settle failures must reject discard and release its hold rather than strand it.
       release?.()
       detail.reject?.(error instanceof Error ? error.message : String(error))
       return
@@ -150,7 +149,7 @@ export function attachEditorAutosaveController(store: AppStoreApi): () => void {
     detail.resolve()
   }
 
-  // Why: the root subscriber fires on every store tick; skip the scan unless the four autosave inputs changed.
+  // Store writes are frequent; scan only when autosave inputs change.
   let previousAutosaveInputs = getAutosaveSubscriberInputs(store.getState())
   const unsubscribe = store.subscribe(() => {
     const nextAutosaveInputs = getAutosaveSubscriberInputs(store.getState())

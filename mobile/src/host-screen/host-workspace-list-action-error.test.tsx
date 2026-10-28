@@ -55,12 +55,7 @@ function unmountRenderers(): void {
   renderers.clear()
 }
 
-/**
- * The banner the list paints for an action that did not happen, rendered rather than described.
- *
- * The screen's own suite mocks this component away, so nothing there notices if the banner or its
- * dismiss stops being rendered — which is the entire user-visible surface of a failed action.
- */
+// Render the real list banner: the screen suite mocks it away and cannot catch missing error copy or dismissal.
 function listWith(fields: { actionError: string; setActionError: (value: string) => void }) {
   const rows = [{ worktreeId: 'wt-1', repo: 'orca' }]
   const sections = [{ key: 'all', title: '', data: rows }]
@@ -71,8 +66,7 @@ function listWith(fields: { actionError: string; setActionError: (value: string)
     connState: 'connected',
     contentMaxWidth: 600,
     displayWorktrees: rows,
-    // The sidebar shape, which is the one that renders no floating button: what this file is about
-    // sits above the list, and the button is a child it would otherwise have to stand up too.
+    // Use the embedded path to avoid unrelated floating-button dependencies.
     embedded: true,
     forceReconnectHost: () => {},
     hostId: 'host-1',

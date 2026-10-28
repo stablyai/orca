@@ -27,6 +27,9 @@ export function structuredStatusSummariesEqual(
     a.latestPrompt === b.latestPrompt &&
     a.model === b.model &&
     a.permissionMode === b.permissionMode &&
+    a.runtimePermission?.fence === b.runtimePermission?.fence &&
+    a.runtimePermission?.mode === b.runtimePermission?.mode &&
+    (a.runtimePermission === undefined) === (b.runtimePermission === undefined) &&
     a.toolName === b.toolName &&
     a.toolInput === b.toolInput &&
     a.lastAssistantMessage === b.lastAssistantMessage &&
@@ -52,6 +55,19 @@ function isIdleHeldOpenByChildWork(summary: AgentSessionStatusSummary): boolean 
         childWork: summary.children ?? summary.backgroundTasks,
         turnOutcome: summary.turnOutcome
       })
+    )
+  )
+}
+
+export function permissionReportOnly(
+  previous: AgentSessionStatusSummary | undefined,
+  summary: AgentSessionStatusSummary
+): boolean {
+  return Boolean(
+    previous &&
+    structuredStatusSummariesEqual(
+      { ...previous, runtimePermission: summary.runtimePermission },
+      summary
     )
   )
 }

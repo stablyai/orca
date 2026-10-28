@@ -252,7 +252,7 @@ async function rename(sftp: SFTPWrapper, src: string, dst: string): Promise<void
   await renamePlain(sftp, src, dst)
 }
 
-async function renamePlain(sftp: SFTPWrapper, src: string, dst: string): Promise<void> {
+export async function renamePlain(sftp: SFTPWrapper, src: string, dst: string): Promise<void> {
   await sftpOperation<void>(`rename ${src}`, (callback) => {
     sftp.rename(src, dst, callback)
   })

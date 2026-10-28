@@ -1,9 +1,4 @@
-import {
-  closeTestStores,
-  testState,
-  createStore,
-  readDataFile
-} from '../../persistence-test-harness'
+import { closeTestStores, testState, createStore, readDataFile } from '../persistence-test-harness'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -25,9 +20,12 @@ afterEach(async () => {
 
 it('normalizes, saves, reloads, and removes chat appearance overrides', async () => {
   const store = await createStore()
-  store.updateSettings({ nativeChatAppearance: { fontSize: 25, codeFontSize: 15, width: 'wide' } })
+  store.updateSettings({
+    nativeChatAppearance: { fontFamily: ' Georgia ', fontSize: 25, codeFontSize: 15, width: 'wide' }
+  })
   store.flush()
   expect(readDataFile()).toHaveProperty('settings.nativeChatAppearance', {
+    fontFamily: 'Georgia',
     fontSize: 20,
     codeFontSize: 15,
     width: 'wide'
@@ -35,6 +33,7 @@ it('normalizes, saves, reloads, and removes chat appearance overrides', async ()
   await closeTestStores()
   const reopened = await createStore()
   expect(reopened.getSettings().nativeChatAppearance).toEqual({
+    fontFamily: 'Georgia',
     fontSize: 20,
     codeFontSize: 15,
     width: 'wide'

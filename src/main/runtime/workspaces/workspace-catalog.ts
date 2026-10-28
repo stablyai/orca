@@ -122,19 +122,16 @@ export abstract class RuntimeWorkspaceCatalog extends OrcaRuntimeWithReadKittyFi
     return { worktrees, platformByRepoId }
   }
 
-  /** Every git repo's scan, with no metadata: `joinResolvedWorktreeScans` adds that at read. */
   protected scanResolvedWorktreeRepos(): Promise<ResolvedWorktreeRepoScans> {
     return scanResolvedWorktreeRepos(this.store, this.repoWorktreeRowDeps.bind(this), (key) =>
       this.worktreeScanCache.get(key)
     )
   }
 
-  /** The fleet listing from cached scans and the store as it is now, synchronously. */
   protected joinResolvedWorktreeScans(scans: ResolvedWorktreeRepoScans): ResolvedWorktreeScanJoin {
     return joinResolvedWorktreeScans(this.store, this.repoWorktreeRowDeps.bind(this), scans)
   }
 
-  /** Bind the runtime-owned scan cache and folder-workspace stamping into the row resolver. */
   protected repoWorktreeRowDeps(): RepoWorktreeRowDeps {
     const store = this.requireStore()
     return {
@@ -162,8 +159,7 @@ export abstract class RuntimeWorkspaceCatalog extends OrcaRuntimeWithReadKittyFi
     projectRuntimeByRepoId?: ReadonlyMap<string, ProjectExecutionRuntimeResolution>
   ): Promise<RuntimeWorktreeScanResult> {
     const cached = await this.listRepoWorktreesForResolution(repo, projectRuntimeByRepoId)
-    // Why here: paired clients list through this scan (`worktree.detectedList`), so a folder-upgraded
-    // checkout must carry the folder's locator here or its id loses metadata and terminals (#30150).
+    // Paired detectedList must retain folder-upgrade locators or folder ids lose metadata and terminals (#30150).
     const scan = { ...cached, worktrees: preserveFolderUpgradeWorktreePath(repo, cached.worktrees) }
     return scan.ok && getRepoExecutionHostId(repo) === LOCAL_EXECUTION_HOST_ID
       ? {
@@ -180,9 +176,7 @@ export abstract class RuntimeWorkspaceCatalog extends OrcaRuntimeWithReadKittyFi
     repo: Repo,
     projectRuntimeByRepoId?: ReadonlyMap<string, ProjectExecutionRuntimeResolution>
   ): Promise<RuntimeWorktreeScanResult> {
-    // Resolve the execution host, not the raw field: an `executionHostId: 'ssh:*'` row with no
-    // `connectionId` would otherwise get a local project runtime and a `local:default` cache key,
-    // so its scan neither routes remotely nor re-runs when the SSH provider is replaced.
+    // Resolve executionHostId-only SSH rows too; local routing would miskey caches and miss provider replacements.
     const sshConnectionId = getRepoSshConnectionId(repo)
     const projectRuntime = projectRuntimeByRepoId
       ? projectRuntimeByRepoId.get(repo.id)

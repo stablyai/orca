@@ -92,7 +92,6 @@ describe('control flag channel', () => {
     })
   })
 
-  // How a flip is observed: one applied line per generation, and the seat feed's flagsApplied.
   it('flips a flag on and back off, logging each applied generation once', async () => {
     const google = fakeGoogle(cellObject(5, { readinessLocal: true, ticketCheck: 'shadow' }))
     const channel = cellChannel(google.fetchImpl)
@@ -193,7 +192,6 @@ describe('control flag channel', () => {
       google.state.object = object
       await channel.poll()
       expect(channel.applied().generation).toBe(5)
-      // A voided generation is not re-read until it changes.
       await channel.poll()
       expect(google.state.storageRequests.at(-1)?.searchParams.get('ifGenerationNotMatch')).toBe(
         String(generation)

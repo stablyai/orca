@@ -13,6 +13,8 @@ export type SessionMeta = {
   startedAt: string
   endedAt: string | null
   exitCode: number | null
+  /** Absent from an older daemon's sessions (daemon-history-replay-pty.ts). */
+  resizeModel?: string
 }
 
 export type SessionMetaRead =
@@ -45,6 +47,32 @@ export function readTerminalHistoryMetaFromDir(dir: string): SessionMeta | null 
   }
 }
 
+/** A new session's meta, stamped with the resize model of the daemon hosting it. */
+export function newTerminalHistoryMeta(
+  opts: Pick<SessionMeta, 'cwd' | 'cols' | 'rows'>,
+  resizeModel: string | null
+): SessionMeta {
+  return {
+    cwd: opts.cwd,
+    cols: opts.cols,
+    rows: opts.rows,
+    startedAt: new Date().toISOString(),
+    endedAt: null,
+    exitCode: null,
+    ...(resizeModel ? { resizeModel } : {})
+  }
+}
+
+/** Restamps the model a fresh log is recorded against; null drops it (an older daemon). */
+export function stampTerminalHistoryResizeModel(dir: string, resizeModel: string | null): void {
+  const meta = readTerminalHistoryMetaFromDir(dir)
+  if (!meta || meta.resizeModel === (resizeModel ?? undefined)) {
+    return
+  }
+  const { resizeModel: _previous, ...rest } = meta
+  writeTerminalHistoryMeta(dir, resizeModel ? { ...rest, resizeModel } : rest)
+}
+
 export function writeTerminalHistoryMeta(dir: string, meta: SessionMeta): void {
   const metaPath = join(dir, 'meta.json')
   writeFileSync(metaPath, JSON.stringify(meta, null, 2), { mode: PRIVATE_FILE_MODE })
@@ -71,6 +99,7 @@ function isSessionMeta(value: unknown): value is SessionMeta {
     typeof meta.startedAt === 'string' &&
     isValidTerminalHistorySize(meta.cols, meta.rows) &&
     (meta.endedAt === null || typeof meta.endedAt === 'string') &&
-    (meta.exitCode === null || typeof meta.exitCode === 'number')
+    (meta.exitCode === null || typeof meta.exitCode === 'number') &&
+    (meta.resizeModel === undefined || typeof meta.resizeModel === 'string')
   )
 }

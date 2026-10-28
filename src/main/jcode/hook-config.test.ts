@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest'
+import { parse as parseToml } from 'smol-toml'
 import {
   applyJcodeManagedHooks,
   parseJcodeHooksTable,
@@ -152,5 +153,51 @@ turn_end = "~/bin/mine" # replaces agent-hooks/jcode-hook.sh
     expect(result.content).toContain('\r\n')
     expect(result.content).not.toContain('\n[hooks]')
     expect(result.content).not.toContain('\r\r')
+  })
+
+  it.each([
+    ['inline', '[hooks]\npre_tool = ["a.sh"] # gate\n', ['a.sh']],
+    ['inline trailing comma', "[hooks]\npre_tool = [ 'a.sh', ]\n", ['a.sh']],
+    [
+      'multi-line without trailing comma',
+      '[hooks]\r\npre_tool = [\r\n  "a.sh",\r\n  "b.sh"\r\n]\r\n',
+      ['a.sh', 'b.sh']
+    ],
+    [
+      'closing bracket after last element',
+      '[hooks]\npre_tool = [\n  "a.sh", # c\n  "b.sh"]\n',
+      ['a.sh', 'b.sh']
+    ],
+    ['empty', '[hooks]\npre_tool = [ # none yet\n]\n', []]
+  ])('appends to and removes from a %s hook array', (_name, source, user) => {
+    const applied = applyJcodeManagedHooks(source, ['pre_tool'], MANAGED_COMMAND, 'jcode-hook.sh')
+    expect(applied.userOwnedEvents).toEqual([])
+    expect(parseToml(applied.content).hooks).toEqual({ pre_tool: [...user, MANAGED_COMMAND] })
+    expect(parseJcodeHooksTable(applied.content)?.pre_tool).toEqual([...user, MANAGED_COMMAND])
+    expect(removeJcodeManagedHooks(applied.content, 'jcode-hook.sh').content).toBe(source)
+  })
+
+  it('repoints a stale managed array element in place and drops managed duplicates', () => {
+    const stale = tomlQuoteString('/Users/old/.orca/agent-hooks/jcode-hook.cmd')
+    const current = tomlQuoteString(MANAGED_COMMAND)
+    const source = `[hooks]\npre_tool = ["a.sh", ${stale}, "b.sh", ${current}]\nturn_end = [${stale}, ${stale}]\n`
+    const applied = applyJcodeManagedHooks(
+      source,
+      ['pre_tool', 'turn_end'],
+      MANAGED_COMMAND,
+      'jcode-hook.sh'
+    )
+    expect(parseToml(applied.content).hooks).toEqual({
+      pre_tool: ['a.sh', MANAGED_COMMAND, 'b.sh'],
+      turn_end: [MANAGED_COMMAND]
+    })
+  })
+
+  it('rejects hook arrays holding values jcode cannot run', () => {
+    expect(parseJcodeHooksTable('[hooks]\npre_tool = ["a.sh", 5]\n')).toBeNull()
+    expect(parseJcodeHooksTable('[hooks]\npre_tool = [["a.sh"]]\n')).toBeNull()
+    expect(parseJcodeHooksTable('[hooks]\npre_tool = ["a.sh" "b.sh"]\n')).toBeNull()
+    expect(parseJcodeHooksTable('[hooks]\npre_tool = ["a.sh",\n')).toBeNull()
+    expect(parseJcodeHooksTable('[hooks]\npre_tool =\n["a.sh"]\n')).toBeNull()
   })
 })

@@ -1,7 +1,6 @@
 import type { ExecutionHostId } from '../../../shared/execution-host'
 
-// Why: a selection cleared by a process exit is automatic, so the removal that follows may still
-// hand off; a selection the user cleared (last tab closed, a deselect) must stay cleared.
+// Automatic process-exit deselection allows handoff; user-cleared selection must remain cleared.
 let automaticDeselectionDepth = 0
 
 export function runAsAutomaticDeselection<T>(clear: () => T): T {

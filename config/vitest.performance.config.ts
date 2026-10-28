@@ -5,14 +5,21 @@ import baseConfig from './vitest.config'
 import { nodeRuntimePool } from './scripts/vitest-node-runtime-pool'
 
 const contracts = [
+  'src/main/ipc/pty-spawn-scaling.performance.test.ts',
+  'src/renderer/src/components/terminal-pane/pty-connection/saved-resume-cancellation.test.ts',
+  'src/main/ipc/pty/runtime/spawn-preflight-saved-resume.test.ts',
+  'src/main/native-chat/agent-session-wire/structured-agent-session-terminal-writer-acquire.test.ts',
+  'src/main/runtime/hook-status-resume-sleep-ordering.test.ts',
+  'src/renderer/src/hooks/ipc-events/agent-status-refused-resume.performance.test.ts',
   'src/shared/tui-agent-permission-choice.test.ts',
   'src/renderer/src/components/settings/agent-permission-conversion-persistence.test.tsx',
   'src/main/runtime/rpc/methods/repo.test.ts',
   'src/renderer/src/components/tab-bar/use-new-tab-agent-menu-host-preferences.test.tsx',
   'src/main/sqlite/sync-database.test.ts',
+  'src/main/runtime/orchestration/run-binding-performance.test.ts',
   'src/main/runtime/orchestration/db/row-column-lists.test.ts',
-  'src/shared/native-chat-tool-attribution-allocation.test.ts',
-  'src/shared/native-chat-tool-pairing.performance.test.ts',
+  'src/shared/native-chat/tools/native-chat-tool-attribution-allocation.test.ts',
+  'src/shared/native-chat/tools/native-chat-tool-pairing.performance.test.ts',
   'src/main/codex-usage/codex-rollout-file-lifetime.test.ts',
   'src/main/codex-usage/scanner-incremental-append.test.ts',
   'src/main/usage/jsonl-file-reader.test.ts',
@@ -24,7 +31,6 @@ const contracts = [
   'src/renderer/src/store/store-identity-churn-probe.test.ts',
   'config/scripts/app-store-performance-plugin.test.mjs',
   'config/scripts/quadratic-buffer-concat-plugin.test.mjs',
-  'config/scripts/sort-comparator-performance-plugin.test.mjs',
   'src/main/claude-usage/scanner-incremental-append.test.ts',
   'src/main/claude-usage/store-checkpoint-persistence.test.ts'
 ]

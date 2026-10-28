@@ -13,7 +13,7 @@ import type {
   AgentJournalTurnLifecycle
 } from '../../../shared/agent-session-journal-types'
 import { readAgentJournalTurn } from '../../../shared/agent-session-turn-record'
-import { backgroundTaskFallbackText } from '../../../shared/native-chat-background-task-row'
+import { backgroundTaskFallbackText } from '../../../shared/native-chat/input/native-chat-background-task-row'
 import {
   isBackgroundTaskBlock,
   type NativeChatBackgroundTaskBlock

@@ -4,16 +4,7 @@ import type { TerminalTab, TerminalTabRecoveryLedger } from '../../../../shared/
 import { buildMirroredTerminalTabs } from './terminal-build'
 import { toWebTerminalSurfaceTabId } from '../../../../shared/terminal-surface-id'
 
-/**
- * The recovery ledger is client-local. The host publishes no such field, so a
- * rebuild that does not carry the existing one restores this tab's remount
- * allowance on EVERY snapshot — which is the remount storm (b5cfc6ca) the
- * ledger exists to end, re-armed on the host's publication cadence.
- *
- * `generation` is deliberately not asserted here: the host carries none and the
- * rebuild emits none, which is why `isSupersededLedger` compares strictly
- * forward (`>`) rather than `!==`. See terminal-tab-recovery-ledger.ts.
- */
+/** Carry client-only recovery ledger across host rebuilds or every snapshot rearms remount allowance (b5cfc6ca). Host omits generation, so isSupersededLedger compares strictly forward, not inequality (terminal-tab-recovery-ledger.ts). */
 const WORKTREE = 'repo-1::worktree-1'
 const ENVIRONMENT = 'env-1'
 const HOST_TAB = 'host-tab-1'

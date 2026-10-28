@@ -22,8 +22,8 @@ import {
   disposeWatcherProcess,
   resetWatcherProcessForTest,
   subscribeViaWatcherProcess
-} from '../../parcel-watcher-process'
-import type { WatcherProcessSubscription } from '../../parcel-watcher-process-subscription'
+} from './parcel-watcher-process'
+import type { WatcherProcessSubscription } from './parcel-watcher-process-subscription'
 
 type SentMessage = { op: string; id: number }
 

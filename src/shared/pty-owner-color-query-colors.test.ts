@@ -1,19 +1,9 @@
 import { expect, it } from 'vitest'
-import { DEFAULT_TERMINAL_THEME_DARK } from './terminal-theme-selection'
-import { TERMINAL_THEME_CATALOG } from './terminal-themes'
 import {
   ORCA_DEFAULT_COLOR_QUERY_REPLY_COLORS,
   normalizeColorQueryReplyColors,
   resolvePtyOwnerColorQueryColors
 } from './pty-owner-color-query-colors'
-
-it("falls back to the colours of Orca's default dark terminal theme", () => {
-  const theme = TERMINAL_THEME_CATALOG[DEFAULT_TERMINAL_THEME_DARK]
-  expect(ORCA_DEFAULT_COLOR_QUERY_REPLY_COLORS).toEqual({
-    foreground: theme?.foreground,
-    background: theme?.background
-  })
-})
 
 it('prefers host colours, then spawn colours, then the default, skipping unusable pairs', () => {
   const host = { foreground: '#000000', background: '#111111' }

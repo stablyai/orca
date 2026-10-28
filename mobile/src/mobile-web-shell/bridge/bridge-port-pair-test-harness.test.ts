@@ -3,7 +3,6 @@ import type { RpcClient } from '../../transport/rpc-client'
 import type { RpcResponse } from '../../transport/types'
 import { createBridgePortPair, createFakeBridgePortPair } from './bridge-port-pair-test-harness'
 
-/** Every member of the contract, none of them a fake anything: the pair must carry a plain client. */
 function plainShellClient(record: string[]): RpcClient {
   return {
     sendRequest: (method: string) => {

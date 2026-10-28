@@ -11,7 +11,11 @@ export type RuntimeWorktreeAgentSource = Pick<AgentStatusIpcPayload, 'subagents'
   children?: AgentChildWorkView[]
   paneKey: string
   ptyId?: string
+  /** Issued handle the hook row was observed under; keys the agentWait lookup. */
+  terminalHandle?: string
   tabId?: string
+  /** A connected PTY on this host backs the row. */
+  hasLivePty?: true
   worktreeId?: string
   connectionId: string | null
   state: ParsedAgentStatusPayload['state']

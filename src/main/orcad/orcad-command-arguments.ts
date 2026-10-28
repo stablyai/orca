@@ -37,11 +37,7 @@ Environment:
 
 type OrcadCommandArguments = OrcadOptions & { help?: boolean }
 
-/**
- * orcad's flags. A value-taking flag consumes the next token whatever it looks
- * like, so `--bind --json` binds to the literal `--json`; only a missing token
- * is an error. Pinned by orcad-launch-contract.test.ts.
- */
+/** Value-taking flags consume the next token even if it resembles another flag. */
 export function parseArgs(argv: string[]): OrcadCommandArguments {
   const options: OrcadCommandArguments = {}
   for (let i = 0; i < argv.length; i += 1) {
@@ -111,10 +107,7 @@ export function parseArgs(argv: string[]): OrcadCommandArguments {
   return options
 }
 
-/**
- * The `--web-client-root` orcad may serve, or undefined. A root without its index is refused up
- * front: serving it would 404 every browser while the pairing offer advertised a web client URL.
- */
+/** Reject web roots without an index before pairing can advertise a broken URL. */
 export function resolveOrcadWebClientRoot(
   requested: string | undefined,
   warn: (message: string) => void = console.warn

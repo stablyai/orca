@@ -76,13 +76,15 @@ describe('browserManager', () => {
   it('validates popup URLs before opening externally', () => {
     const guest = {
       isDestroyed: vi.fn(() => false),
+      isCurrentlyAudible: vi.fn(() => false),
       getType: vi.fn(() => 'webview'),
       setBackgroundThrottling: guestSetBackgroundThrottlingMock,
       setWindowOpenHandler: guestSetWindowOpenHandlerMock,
       on: guestOnMock,
       prependListener: vi.fn(),
       off: guestOffMock,
-      openDevTools: guestOpenDevToolsMock
+      openDevTools: guestOpenDevToolsMock,
+      getURL: vi.fn(() => 'https://example.com')
     }
     webContentsFromIdMock.mockReturnValue(guest)
 
@@ -109,6 +111,7 @@ describe('browserManager', () => {
     const guest = {
       id: 103,
       isDestroyed: vi.fn(() => false),
+      isCurrentlyAudible: vi.fn(() => false),
       getType: vi.fn(() => 'webview'),
       setBackgroundThrottling: guestSetBackgroundThrottlingMock,
       setWindowOpenHandler: guestSetWindowOpenHandlerMock,
@@ -133,6 +136,8 @@ describe('browserManager', () => {
       webContentsId: guest.id,
       rendererWebContentsId
     })
+    // Registration also reports audio state; this test is about popup routing.
+    rendererSendMock.mockClear()
 
     const handler = guestSetWindowOpenHandlerMock.mock.calls[0][0] as (details: {
       url: string
@@ -184,6 +189,8 @@ describe('browserManager', () => {
     const guest = {
       id: 140,
       isDestroyed: vi.fn(() => false),
+      isCurrentlyAudible: vi.fn(() => false),
+      send: vi.fn(),
       getType: vi.fn(() => 'webview'),
       setBackgroundThrottling: guestSetBackgroundThrottlingMock,
       setWindowOpenHandler: guestSetWindowOpenHandlerMock,
@@ -249,6 +256,7 @@ describe('browserManager', () => {
     const guest = {
       id: 142,
       isDestroyed: vi.fn(() => false),
+      isCurrentlyAudible: vi.fn(() => false),
       getType: vi.fn(() => 'webview'),
       setBackgroundThrottling: guestSetBackgroundThrottlingMock,
       setWindowOpenHandler: guestSetWindowOpenHandlerMock,
@@ -325,6 +333,7 @@ describe('browserManager', () => {
     const guest = {
       id: 143,
       isDestroyed: vi.fn(() => false),
+      isCurrentlyAudible: vi.fn(() => false),
       getType: vi.fn(() => 'webview'),
       setBackgroundThrottling: guestSetBackgroundThrottlingMock,
       setWindowOpenHandler: guestSetWindowOpenHandlerMock,
@@ -384,6 +393,7 @@ describe('browserManager', () => {
     const guest = {
       id: 144,
       isDestroyed: vi.fn(() => false),
+      isCurrentlyAudible: vi.fn(() => false),
       getType: vi.fn(() => 'webview'),
       setBackgroundThrottling: guestSetBackgroundThrottlingMock,
       setWindowOpenHandler: guestSetWindowOpenHandlerMock,
@@ -470,6 +480,7 @@ describe('browserManager', () => {
     const guest = {
       id: 150,
       isDestroyed: vi.fn(() => false),
+      isCurrentlyAudible: vi.fn(() => false),
       getType: vi.fn(() => 'webview'),
       setBackgroundThrottling: guestSetBackgroundThrottlingMock,
       setWindowOpenHandler: guestSetWindowOpenHandlerMock,
@@ -510,6 +521,7 @@ describe('browserManager', () => {
       const child = {
         id: 1500 + index,
         isDestroyed: vi.fn(() => false),
+        isCurrentlyAudible: vi.fn(() => false),
         getType: vi.fn(() => 'webview'),
         setBackgroundThrottling: vi.fn(),
         setWindowOpenHandler: childSetWindowOpenHandlerMock,
@@ -569,6 +581,7 @@ describe('browserManager', () => {
       session: { marker: 'synthetic-opener-session' },
       id: 150,
       isDestroyed: vi.fn(() => false),
+      isCurrentlyAudible: vi.fn(() => false),
       getType: vi.fn(() => 'webview'),
       setBackgroundThrottling: guestSetBackgroundThrottlingMock,
       setWindowOpenHandler: guestSetWindowOpenHandlerMock,
@@ -670,13 +683,15 @@ describe('browserManager', () => {
     const guest = {
       id: 106,
       isDestroyed: vi.fn(() => false),
+      isCurrentlyAudible: vi.fn(() => false),
       getType: vi.fn(() => 'webview'),
       setBackgroundThrottling: guestSetBackgroundThrottlingMock,
       setWindowOpenHandler: guestSetWindowOpenHandlerMock,
       on: guestOnMock,
       prependListener: vi.fn(),
       off: guestOffMock,
-      openDevTools: guestOpenDevToolsMock
+      openDevTools: guestOpenDevToolsMock,
+      getURL: vi.fn(() => 'https://example.com')
     }
     webContentsFromIdMock.mockImplementation((id: number) => {
       if (id === guest.id) {
@@ -719,6 +734,7 @@ describe('browserManager', () => {
     const guest = {
       id: 105,
       isDestroyed: vi.fn(() => false),
+      isCurrentlyAudible: vi.fn(() => false),
       getType: vi.fn(() => 'webview'),
       setBackgroundThrottling: guestSetBackgroundThrottlingMock,
       setWindowOpenHandler: guestSetWindowOpenHandlerMock,
@@ -744,6 +760,7 @@ describe('browserManager', () => {
     const guest = {
       id: 104,
       isDestroyed: vi.fn(() => false),
+      isCurrentlyAudible: vi.fn(() => false),
       getType: vi.fn(() => 'webview'),
       setBackgroundThrottling: guestSetBackgroundThrottlingMock,
       setWindowOpenHandler: guestSetWindowOpenHandlerMock,

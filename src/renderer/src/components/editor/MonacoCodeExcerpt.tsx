@@ -14,8 +14,7 @@ async function ensureColorizationLanguage(language: string): Promise<void> {
   pythonLanguageRegistrationPromise ??=
     import('monaco-editor/esm/vs/basic-languages/python/python.js').then(
       ({ conf, language: pythonTokens }) => {
-        // Why: notebook excerpts colorize without mounting Monaco editors. Load
-        // Python tokens only on demand so non-notebook users do not pay at startup.
+        // Load Python tokens only for notebook excerpts so other users pay no startup cost.
         if (!monaco.languages.getLanguages().some((item) => item.id === 'python')) {
           monaco.languages.register({
             id: 'python',
@@ -48,9 +47,7 @@ export function useMonacoColorizedLines(lines: string[], language: string): stri
     }
 
     let cancelled = false
-    // Why: notebook languages like Python are loaded lazily by Monaco. The
-    // async colorizer waits for that tokenizer; colorizeModelLine can render
-    // only default-token spans if called before the contribution finishes.
+    // Wait for lazy tokenizers before colorizing; colorizeModelLine would emit default tokens while contributions load.
     void ensureColorizationLanguage(language)
       .catch(() => undefined)
       .then(() => monaco.editor.colorize(code, language, { tabSize: 2 }))

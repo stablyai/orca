@@ -1,3 +1,5 @@
+import type { WslRelayRestartSetup } from './wsl-hook-relay-state'
+
 export type WslRelayRecoveryState = {
   distro: string
   cooldownUntil: number
@@ -6,13 +8,21 @@ export type WslRelayRecoveryState = {
 }
 
 export type WslRelayRecoveryIo = {
-  isDistroRunning: (distro: string) => Promise<boolean>
+  /** A confirmed running list read started after `startedAfter`; a failed read counts as stopped. */
+  isDistroRunning: (distro: string, startedAfter: number) => Promise<boolean>
+  /** Runs `task` once something else confirms the distro runs again; never boots it. */
+  deferUntilRunning: (distro: string, task: () => void) => void
   warn: (message: string) => void
   isDisposed: () => boolean
   isCurrent: (state: WslRelayRecoveryState) => boolean
-  restart: (distro: string) => void
+  /** Snapshot of the relay config; read before `dropState` discards it. */
+  captureSetup: (state: WslRelayRecoveryState) => WslRelayRestartSetup
+  restart: (distro: string, setup: WslRelayRestartSetup) => void
   dropState: (state: WslRelayRecoveryState) => void
 }
+
+// A failed running-list read is not proof the distro stopped; look once more after WSL's backoff.
+const REPROBE_AFTER_STOPPED_MS = 30_000
 
 export class WslRelayRecovery {
   constructor(private io: WslRelayRecoveryIo) {}
@@ -56,18 +66,37 @@ export class WslRelayRecovery {
     if (this.io.isDisposed() || !this.io.isCurrent(state)) {
       return
     }
-    const running = await this.io.isDistroRunning(state.distro)
+    // Captured now: once the state is dropped, a later restart would otherwise come back bare.
+    const setup = this.io.captureSetup(state)
+    // Anchored at check time: a read begun right after the terminate may still list the distro.
+    const running = await this.io.isDistroRunning(state.distro, performance.now())
     // The probe await may outlive state replacement; never drop or restart the replacement relay.
     if (this.io.isDisposed() || !this.io.isCurrent(state)) {
       return
     }
     if (!running) {
       this.io.warn(
-        `[agent-hooks] WSL hook relay (${state.distro}): distro not running (or probe failed); restart skipped (next WSL terminal re-ensures)`
+        `[agent-hooks] WSL hook relay (${state.distro}): distro not running (or probe failed); staying down until it runs again or a WSL terminal re-ensures`
       )
       this.io.dropState(state)
+      // E9: come back when the distro runs again (started by the user or another act), never boot it.
+      let restarted = false
+      const restartOnce = (): void => {
+        if (!restarted && !this.io.isDisposed()) {
+          restarted = true
+          this.io.restart(state.distro, setup)
+        }
+      }
+      this.io.deferUntilRunning(state.distro, restartOnce)
+      const reprobe = setTimeout(() => {
+        void this.io
+          .isDistroRunning(state.distro, performance.now())
+          .then((running) => running && restartOnce())
+          .catch(() => {})
+      }, REPROBE_AFTER_STOPPED_MS)
+      reprobe.unref?.()
       return
     }
-    this.io.restart(state.distro)
+    this.io.restart(state.distro, setup)
   }
 }

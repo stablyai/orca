@@ -50,7 +50,6 @@ describe('useFileExplorerTree stale collapsed dirs', () => {
     })
     expect(readDirectoryMock).not.toHaveBeenCalledWith('wt-1', '/repo', '/repo/src')
     expect(result.current.isDirStale('/repo/src')).toBe(true)
-    // Its cached children stay put until something re-reads them.
     expect(result.current.dirCache['/repo/src'].children).toHaveLength(1)
 
     await act(async () => {
@@ -76,10 +75,7 @@ describe('useFileExplorerTree stale collapsed dirs', () => {
   })
 
   it('keeps a mark a superseded refresh never verified, even once the dir is expanded', async () => {
-    // Regression guard: refreshTree used to REPLACE the mark set. A dir marked while collapsed and
-    // then expanded was dropped by the replacement (expanded dirs are never marked) — and when that
-    // refresh bailed on a superseded root load, nothing re-read it and nothing still called it
-    // unverified, so re-expanding served the pre-overflow listing forever.
+    // Replacing stale marks lost collapsed-then-expanded dirs when a superseded root read skipped verification; retain those marks.
     const expanded = new Set<string>()
     const { result, rerender } = renderHook(() => useFileExplorerTree('/repo', expanded, 'wt-1'))
 
@@ -119,8 +115,7 @@ describe('useFileExplorerTree stale collapsed dirs', () => {
   })
 
   it('does not read the expanded dirs when the root read failed', async () => {
-    // Regression guard: loadDir swallows read errors unless failOnError is set, so a dead
-    // transport used to report a completed root read and fan out one doomed wave per 4 dirs.
+    // Swallowed root errors previously launched doomed batches of expanded reads on dead transports.
     const expanded = new Set(['/repo/a', '/repo/b'])
     const { result } = renderHook(() => useFileExplorerTree('/repo', expanded, 'wt-1'))
 
@@ -131,9 +126,11 @@ describe('useFileExplorerTree stale collapsed dirs', () => {
       expect(await result.current.refreshTree()).toBe('root-unreadable')
     })
 
-    // Only the root read was attempted; the expanded dirs were not.
     expect(readDirectoryMock).toHaveBeenCalledTimes(1)
-    expect(readDirectoryMock).toHaveBeenCalledWith('wt-1', '/repo', '/repo')
+    // A background refresh never starts a stopped WSL distro.
+    expect(readDirectoryMock).toHaveBeenCalledWith('wt-1', '/repo', '/repo', {
+      wakeWslDistro: undefined
+    })
   })
 
   it('drops stale marks when the tree is reset for a new worktree', async () => {

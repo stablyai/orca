@@ -64,8 +64,7 @@ export class RuntimeSkillInstallQueries extends RuntimeSkillInstallCommands {
     }
     await this.host.skillTransactionRecovery
     const runtimeId = this.host.getRuntimeId()
-    // Why Promise.all: the receipt walk and the worktree resolve are independent, and the
-    // resolve can take a full scan round-trip on an SSH fleet.
+    // Overlap independent receipt walk and workspace resolution; fleet resolution may require an SSH scan round trip.
     const [installs, worktrees] = await Promise.all([
       listManagedSkillInstalls(join(this.userDataPath(), 'skill-installs'), {
         observeReceipt: async (receipt) =>

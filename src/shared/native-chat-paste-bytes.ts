@@ -1,42 +1,29 @@
-// Pure: turn raw composer text into the exact PTY bytes to write. Shared so the
-// desktop and phone composers deliver a message as the same bytes.
+// Share exact PTY composer bytes across desktop/mobile.
 
 import {
   sanitizeBracketedPasteText,
   wrapTerminalBracketedPasteText
 } from './terminal-bracketed-paste-text'
 
-// Why: carriage return (not \n) is what xterm/agent composers treat as the
-// submit/Enter key over a PTY.
+// PTY Enter is carriage return, not newline.
 const SUBMIT = '\r'
 
-/** True when the draft spans more than one line (so it needs bracketed-paste
- *  wrapping). A trailing newline alone still counts as multi-line. */
+/** Any CR/LF, including a trailing newline, needs bracketed-paste framing. */
 export function isMultilineDraft(text: string): boolean {
   return /[\r\n]/.test(text)
 }
 
-/** The carriage-return submit byte, exported so send paths can write Enter as a
- *  SEPARATE pty write after the framed body (see buildNativeChatPasteBytes). */
+/** Write Enter separately from the framed body; see buildNativeChatPasteBytes. */
 export const NATIVE_CHAT_SUBMIT = SUBMIT
 
-/**
- * Compute the bytes for `text` WITHOUT the trailing submit:
- *  - single-line → `text`
- *  - multi-line  → `\x1b[200~…\x1b[201~` (bracketed-paste wrapped, no submit)
- *
- * Why split the submit out: agent TUIs treat a framed paste that carries a
- * trailing `\r` in the SAME pty write as part of the paste body rather than an
- * Enter, so the text lands in the input box but never sends. Callers write this
- * body first, then write `NATIVE_CHAT_SUBMIT` as a separate, slightly-delayed
- * write (mirrors orca-runtime's writeTerminalAction Enter handling).
- */
+/** Build sanitized body bytes, bracket-framed for multiline input, without submit.
+ * Agent TUIs treat CR in the same PTY write as pasted body, leaving text unsent. Write NATIVE_CHAT_SUBMIT separately after a short delay,
+ * matching orca-runtime writeTerminalAction Enter handling. */
 export function buildNativeChatPasteBytes(text: string): string {
   if (isMultilineDraft(text)) {
     return wrapTerminalBracketedPasteText(text)
   }
-  // Why: sanitize even unframed text so pasted scrollback cannot carry a raw
-  // terminal escape into the agent composer.
+  // Sanitize unframed text too so pasted scrollback cannot inject terminal escapes.
   return sanitizeBracketedPasteText(text)
 }
 

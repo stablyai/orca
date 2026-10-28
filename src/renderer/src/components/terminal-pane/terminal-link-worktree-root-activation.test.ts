@@ -29,10 +29,7 @@ vi.mock('@/lib/language-detect', () => ({
   detectLanguage: (filePath: string) => (filePath.endsWith('.md') ? 'markdown' : 'plaintext')
 }))
 
-// Why: the real helper reads worktreesByRepo/activeRepoId/etc. from the store
-// and orchestrates side effects that are out of scope for the link-handler
-// unit tests. Mock it so these tests only assert on routing (browser tab vs.
-// openFile), not on activation internals.
+// Mock activation orchestration so these suites isolate browser/editor routing from store side effects.
 vi.mock('@/lib/worktree-activation', () => ({
   activateAndRevealWorkspace: vi.fn(),
   activateAndRevealWorktree: vi.fn()

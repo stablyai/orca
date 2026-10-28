@@ -1,3 +1,5 @@
+import { agentSessionRecordFixture } from '../agent-session-record-test-fixture'
+import { agentSessionConversationView } from '../../../shared/agent-session-conversation-view'
 import {
   joinHostModelListingWait,
   isHostModelListingWaitInFlight
@@ -17,8 +19,7 @@ import {
 } from './agent-model-catalog-store'
 
 function record(accountHomePath: string): AgentSessionRecord {
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the service reads only provider, accountHome and location; the rest of the record is irrelevant here.
-  return {
+  return agentSessionRecordFixture({
     sessionId: 'session-1',
     provider: 'grok',
     accountHome: { variable: 'GROK_HOME', path: accountHomePath },
@@ -28,7 +29,7 @@ function record(accountHomePath: string): AgentSessionRecord {
       workspaceId: 'ws-1',
       workspaceKind: 'git-worktree'
     }
-  } as AgentSessionRecord
+  })
 }
 
 function listing(id: string): AgentModelCatalogSuccess {
@@ -58,6 +59,7 @@ describe('agent model catalog service', () => {
     const probe = vi.fn(async (_home: AgentSessionAccountHome) => listing('gpt-a'))
     const service = createAgentModelCatalogService({
       store,
+      getConversation: () => agentSessionConversationView(record('/homes/a')),
       getRecord: () => record('/homes/a'),
       drivesRecord: () => true,
       resolveAccountHome: async () => GROK_HOME('/homes/selected'),
@@ -85,6 +87,7 @@ describe('agent model catalog service', () => {
     const drivesRecord = vi.fn(() => false)
     const service = createAgentModelCatalogService({
       store,
+      getConversation: () => agentSessionConversationView(pinned),
       getRecord: () => pinned,
       drivesRecord,
       resolveAccountHome: async () => GROK_HOME('/homes/selected'),
@@ -93,7 +96,7 @@ describe('agent model catalog service', () => {
 
     await service.read({ agent: 'grok', sessionId: 'session-1' })
 
-    expect(drivesRecord).toHaveBeenCalledWith(pinned)
+    expect(drivesRecord).toHaveBeenCalledWith(agentSessionConversationView(pinned))
     expect(probe).toHaveBeenCalledExactlyOnceWith(GROK_HOME('/homes/selected'), {
       signal: expect.any(AbortSignal)
     })
@@ -106,6 +109,7 @@ describe('agent model catalog service', () => {
     const probe = vi.fn(async () => listing('gpt-new'))
     const service = createAgentModelCatalogService({
       store,
+      getConversation: () => undefined,
       getRecord: () => undefined,
       drivesRecord: () => true,
       resolveAccountHome: async () => GROK_HOME('/homes/new'),
@@ -142,6 +146,7 @@ describe('agent model catalog service', () => {
     )
     const service = createAgentModelCatalogService({
       store,
+      getConversation: () => undefined,
       getRecord: () => undefined,
       drivesRecord: () => true,
       resolveAccountHome: async () => GROK_HOME('/homes/selected')
@@ -167,6 +172,7 @@ describe('agent model catalog service', () => {
     )
     const service = createAgentModelCatalogService({
       store,
+      getConversation: () => agentSessionConversationView(sessionRecord),
       getRecord: () => sessionRecord,
       drivesRecord: () => true,
       resolveAccountHome: async () => GROK_HOME('/homes/selected')
@@ -182,6 +188,7 @@ describe('agent model catalog service', () => {
     })
     const service = createAgentModelCatalogService({
       store,
+      getConversation: () => agentSessionConversationView(record('/homes/a')),
       getRecord: () => record('/homes/a'),
       drivesRecord: () => true,
       resolveAccountHome: async () => GROK_HOME('/homes/a'),
@@ -203,6 +210,7 @@ describe('agent model catalog service', () => {
     const probe = vi.fn(async () => listing('gpt-a'))
     const service = createAgentModelCatalogService({
       store,
+      getConversation: () => undefined,
       getRecord: () => undefined,
       drivesRecord: () => true,
       resolveAccountHome: async () => {
@@ -231,6 +239,7 @@ describe('agent model catalog service', () => {
       const store = new AgentModelCatalogStore()
       const service = createAgentModelCatalogService({
         store,
+        getConversation: () => undefined,
         getRecord: () => undefined,
         drivesRecord: () => true,
         resolveAccountHome: async () => GROK_HOME('/homes/selected'),
@@ -428,6 +437,7 @@ describe('agent model catalog service', () => {
       const store = new AgentModelCatalogStore()
       const service = createAgentModelCatalogService({
         store,
+        getConversation: () => undefined,
         getRecord: () => undefined,
         drivesRecord: () => true,
         resolveAccountHome: async () => GROK_HOME('/homes/selected')
@@ -450,6 +460,7 @@ describe('agent model catalog service', () => {
       const probe = vi.fn(() => new Promise<AgentModelCatalogSuccess>(() => {}))
       const service = createAgentModelCatalogService({
         store,
+        getConversation: () => undefined,
         getRecord: () => undefined,
         drivesRecord: () => true,
         resolveAccountHome: async () => GROK_HOME('/homes/selected'),
@@ -473,6 +484,7 @@ describe('agent model catalog service', () => {
       const workspaceMayOverrideDefaultModel = vi.fn(async () => mayOverride)
       const service = createAgentModelCatalogService({
         store,
+        getConversation: () => undefined,
         getRecord: () => undefined,
         drivesRecord: () => true,
         resolveAccountHome: async () => GROK_HOME('/homes/selected'),
@@ -540,6 +552,7 @@ describe('agent model catalog service', () => {
       const probe = vi.fn(async (home: AgentSessionAccountHome) => listing(JSON.stringify(home)))
       const service = createAgentModelCatalogService({
         store,
+        getConversation: () => agentSessionConversationView(openCodeRecord(managed(PROFILE_A))),
         getRecord: () => openCodeRecord(managed(PROFILE_A)),
         drivesRecord: () => true,
         resolveAccountHome: async () => managed(PROFILE_B),
@@ -561,6 +574,8 @@ describe('agent model catalog service', () => {
       const probe = vi.fn(async () => listing('never'))
       const service = createAgentModelCatalogService({
         store: new AgentModelCatalogStore(),
+        getConversation: () =>
+          agentSessionConversationView(openCodeRecord(managed(PROFILE_A), 'Ubuntu')),
         getRecord: () => openCodeRecord(managed(PROFILE_A), 'Ubuntu'),
         drivesRecord: () => true,
         resolveAccountHome: async () => managed(PROFILE_B),
@@ -609,6 +624,7 @@ it.each(['cold', 'warm', 'failure', 'stop'] as const)(
     )
     const service = createAgentModelCatalogService({
       store,
+      getConversation: () => undefined,
       getRecord: () => undefined,
       drivesRecord: () => true,
       resolveAccountHome: async () => ({ variable: 'CODEX_HOME', path: '/account' }),

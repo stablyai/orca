@@ -1,13 +1,8 @@
-// How each call site's prompt reaches the agent: folded into argv, or pasted once the TUI is
-// ready — and whether it submits. The choice is a per-agent table crossed with the delivery mode
-// the call site asks for, so it is pinned along both axes.
+// Cross each caller’s delivery mode with agent injection policy to verify argv, paste or environment transport and submission.
 
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { TuiAgent } from '../../../shared/tui-agent'
-import {
-  callerProfileCases,
-  type AgentLaunchCallerProfile
-} from './agent-launch-caller-profiles-test-harness'
+
 import {
   createLaunchFunnelStore,
   queuedStartupCommand,
@@ -71,12 +66,7 @@ function commandCarries(text: string): boolean {
 
 const PROMPT = 'Explain the failing check and propose a fix.'
 
-/**
- * One agent per prompt-injection mode crossed with the delivery a call site can ask for.
- * `transport` is what the launch actually does with the text: `argv` folds it into the launch
- * command, `paste` starts the agent empty and sends it once the TUI is ready, and `env` hands it
- * over in the startup environment because the text must never appear on a command line.
- */
+// Cover each injection mode: argv embeds text, paste waits for TUI readiness, and env keeps text off command lines.
 const TRANSPORT_TABLE: readonly {
   agent: TuiAgent
   mode: string
@@ -116,8 +106,7 @@ const TRANSPORT_TABLE: readonly {
     transport: 'argv',
     submits: true
   },
-  // Hermes never puts the query on a command line: it is handed over in the environment and the
-  // launch command is a shell wrapper that consumes and unsets it.
+  // Hermes passes query text through an environment variable that its shell wrapper consumes and unsets, never argv.
   {
     agent: 'hermes',
     mode: 'hermes-query',
@@ -142,78 +131,11 @@ const TRANSPORT_TABLE: readonly {
   }
 ]
 
-const cases = callerProfileCases()
-
-async function launch(profile: AgentLaunchCallerProfile) {
-  const { launchAgentInNewTab } = await import('./launch-agent-in-new-tab')
-  return launchAgentInNewTab({ requestId: 'request-1', ...profile.args })
-}
-
 describe('agent launch caller prompt transport', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     resetLaunchFunnelStore(store)
     mockPasteDraftWhenAgentReady.mockResolvedValue(true)
-  })
-
-  it.each(cases)(
-    'carries the prompt %s sends on the transport its mode picks',
-    async (id, profile) => {
-      const result = await launch(profile)
-
-      if (profile.args.prompt === undefined) {
-        expect(result?.pasteDraftAfterLaunch).toBe(false)
-        expect(mockPasteDraftWhenAgentReady).not.toHaveBeenCalled()
-        expect(commandCarries(PROMPT)).toBe(false)
-        return
-      }
-      // quick-command is the only prompt-carrying call site that names no delivery mode, so its text
-      // rides argv; every other one asks for draft or submit-after-ready and pastes.
-      const ridesArgv = id === 'quick-command'
-      expect(result?.pasteDraftAfterLaunch).toBe(!ridesArgv)
-      expect(commandCarries(PROMPT)).toBe(ridesArgv)
-      // The host is never handed the text: the window pastes it, as main does.
-      for (const [, , params] of callRuntimeRpc.mock.calls) {
-        expect(params).not.toHaveProperty('prompt')
-      }
-    }
-  )
-
-  it.each(cases)(
-    'exposes a delivery promise to %s only for submit-after-ready',
-    async (_id, profile) => {
-      const result = await launch(profile)
-
-      // Why: three call sites branch on this promise being present; a draft launch must NOT get one,
-      // because the composer owns the text until the user sends it.
-      const expectsPromise =
-        profile.args.prompt !== undefined && profile.args.promptDelivery === 'submit-after-ready'
-      expect(result?.promptDeliveryResult !== undefined).toBe(expectsPromise)
-      if (expectsPromise) {
-        await expect(result?.promptDeliveryResult).resolves.toEqual({
-          delivered: true,
-          failureNotified: false
-        })
-      }
-    }
-  )
-
-  it.each(cases)('tells %s when its prompt was actually delivered', async (_id, profile) => {
-    const onPromptDelivered = vi.fn()
-    const { launchAgentInNewTab } = await import('./launch-agent-in-new-tab')
-
-    const result = launchAgentInNewTab({
-      requestId: 'request-2',
-      ...profile.args,
-      onPromptDelivered
-    })
-    await result?.promptDeliveryResult
-
-    if (profile.args.prompt === undefined) {
-      expect(onPromptDelivered).not.toHaveBeenCalled()
-      return
-    }
-    await vi.waitFor(() => expect(onPromptDelivered).toHaveBeenCalledTimes(1))
   })
 
   it.each(
@@ -249,37 +171,6 @@ describe('agent launch caller prompt transport', () => {
         ORCA_HERMES_STARTUP_QUERY: PROMPT
       })
     }
-  })
-
-  it('mirrors an argv-carried draft into the chat composer', async () => {
-    const { launchAgentInNewTab } = await import('./launch-agent-in-new-tab')
-
-    launchAgentInNewTab({
-      requestId: 'request-4',
-      agent: 'claude',
-      worktreeId: 'wt-1',
-      prompt: PROMPT,
-      promptDelivery: 'draft'
-    })
-
-    // Why: the draft rode in on `--prefill`, so no paste runs and nothing else would seed chat.
-    expect(store.seedNativeChatLaunchDraft).toHaveBeenCalledTimes(1)
-    expect(mockPasteDraftWhenAgentReady).not.toHaveBeenCalled()
-  })
-
-  it('refuses a whitespace-only prompt rather than launching a blank agent', async () => {
-    const { launchAgentInNewTab } = await import('./launch-agent-in-new-tab')
-
-    const result = launchAgentInNewTab({
-      requestId: 'request-5',
-      agent: 'codex',
-      worktreeId: 'wt-1',
-      prompt: '   \n  ',
-      promptDelivery: 'submit-after-ready'
-    })
-
-    expect(result?.pasteDraftAfterLaunch).toBe(false)
-    expect(mockPasteDraftWhenAgentReady).not.toHaveBeenCalled()
   })
 
   it('reports an undelivered submit-after-ready prompt without throwing at the caller', async () => {

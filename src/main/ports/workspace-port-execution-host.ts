@@ -29,7 +29,6 @@ function unavailable(executionHostId: string, reason: string): WorkspacePortHost
   }
 }
 
-/** Scans the execution host a workspace resolved to on this endpoint, and names it on the result. */
 export async function scanWorkspacePortsOnExecutionHost(
   executionHostId: ExecutionHostId,
   deps: WorkspacePortExecutionHostDeps
@@ -38,19 +37,14 @@ export async function scanWorkspacePortsOnExecutionHost(
   if (host?.kind === 'local') {
     return { ...(await scanWorkspacePortProbes(await deps.getLocalProbes())), executionHostId }
   }
-  // Why: this process serves no SSH host, so its listeners are unavailable, never "none". Not a
-  // dropped connection: the relay has no port scan, but an Orca server on the host scans as local.
+  // Direct SSH relays cannot scan ports; report unavailable, never empty/disconnected. A managed server scans the host as local.
   if (host?.kind === 'ssh') {
     return unavailable(executionHostId, SSH_PORT_SCAN_UNSUPPORTED_REASON)
   }
   return unavailable(executionHostId, 'This workspace does not run on this server.')
 }
 
-/**
- * Stops a listener only on the host the workspace resolves to now, and only when that is also the
- * host the row was scanned on, so a row from one machine can never signal a same-numbered pid on
- * another.
- */
+/** Signal only when current workspace host matches scanned host; PID numbers can repeat across machines. */
 export async function killWorkspacePortOnExecutionHost(
   resolvedHostId: ExecutionHostId,
   request: Omit<WorkspacePortHostKillRequest, 'worktree'>,
@@ -66,8 +60,7 @@ export async function killWorkspacePortOnExecutionHost(
   if (host?.kind === 'local') {
     return killWorkspacePort(await deps.getLocalProbes(), { pid: request.pid, port: request.port })
   }
-  // Why: the relay can neither attribute a listener to a workspace nor signal it, so ownership
-  // cannot be proven on the SSH host; refusing keeps Stop from ever acting on the wrong machine.
+  // Unserved SSH ownership cannot authorize Stop; refuse rather than signal this machine.
   if (host?.kind === 'ssh') {
     return { ok: false, reason: 'Stopping processes on an SSH host is not supported yet.' }
   }

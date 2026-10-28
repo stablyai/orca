@@ -1,3 +1,4 @@
+import { retireStructuredAgentSessionReadOwner } from '@/components/native-chat/structured-agent-session-read-owner-registry'
 import type { TabsSlice, TabsSliceGet, TabsSliceSet } from './tabs-slice-contract'
 import { collapseGroupLayout } from '../../../../../shared/workspace-layout/tab-group-layout-tree'
 import {
@@ -12,7 +13,7 @@ import { beginStructuredAgentSessionTabClose } from '@/runtime/structured-agent-
 import {
   hasStructuredAgentSessionLaunchCancellationTombstone,
   shouldRetainStructuredAgentSessionLaunchTab
-} from '@/lib/structured-agent-session-launch-registry'
+} from '@/lib/agent-session/launch/structured-agent-session-launch-registry'
 import { structuredAgentSessionTabId } from '../../../../../shared/structured-agent-session-projection'
 import { clearWebSessionFocusIntentIfMatches } from '@/runtime/web-session-focus-intent'
 import { ownsGlobalSelection } from '../../global-selection-owner'
@@ -68,6 +69,9 @@ export function createTabsCloseActions(
           shouldRetainStructuredAgentSessionLaunchTab(worktreeId, tab.entityId) ||
           hasStructuredAgentSessionLaunchCancellationTombstone(worktreeId, tab.entityId)
         const target = structuredAgentSessionTargetForTab(state, tab)
+        if (!tab.executionHostId || !target) {
+          retireStructuredAgentSessionReadOwner(tab.entityId, null, tab.executionHostId ?? '')
+        }
         if (target) {
           if (provisional) {
             clearWebSessionFocusIntentIfMatches(
@@ -97,7 +101,6 @@ export function createTabsCloseActions(
         get().clearNativeChatLaunchDraft(structuredAgentSessionTabId(tab.entityId))
         // The unsent draft stays: it belongs to the conversation, which can be reopened from history.
       }
-      // Why: on closing the active tab, walk the MRU stack to the previously-active tab; pickNextActiveTab falls back to the neighbor.
       const nextActiveTabId =
         group?.activeTabId === tabId
           ? wasLastTab
@@ -121,7 +124,7 @@ export function createTabsCloseActions(
             const nextTabs = (current.unifiedTabsByWorktree[worktreeId] ?? []).filter(
               (item) => item.id !== tabId
             )
-            // Why: close-to-right/others bypass terminals.closeTab, so clear the entityId-keyed unread flag here or a stale dot leaks.
+            // Bulk closes bypass terminals.closeTab, so clear entity-keyed unread markers here too.
             const nextUnreadTerminalTabs = terminalEntityId
               ? omitRecordKeys(current.unreadTerminalTabs, [terminalEntityId])
               : current.unreadTerminalTabs
@@ -157,8 +160,7 @@ export function createTabsCloseActions(
               nextLayoutByWorktree = collapsedState.layoutByWorktree
               nextActiveGroupIdByWorktree = collapsedState.activeGroupIdByWorktree
             }
-            // Why: the landing fallback answers "the user emptied this worktree". An unwound create
-            // never added a tab, so it must leave the selection exactly as the click found it.
+            // Unwinding a failed create added no tab; preserve the original selection instead of landing on welcome.
             const shouldDeactivateWorktree =
               !opts?.preserveWorktreeSelection &&
               landsOnEmptiedWorktree(current, worktreeId, nextTabs.length)
@@ -170,7 +172,7 @@ export function createTabsCloseActions(
               },
               layoutByWorktree: nextLayoutByWorktree,
               activeGroupIdByWorktree: nextActiveGroupIdByWorktree,
-              // Why: skip writing unreadTerminalTabs when the reference is unchanged, avoiding a no-op alloc that re-runs full-state selectors.
+              // Avoid no-op unread allocations that wake full-state selectors.
               ...(nextUnreadTerminalTabs !== current.unreadTerminalTabs
                 ? { unreadTerminalTabs: nextUnreadTerminalTabs }
                 : {}),
@@ -237,8 +239,7 @@ export function createTabsCloseActions(
   }
 }
 
-// "The user emptied this worktree": closing its last tab lands on the welcome screen, unless the
-// close keeps the selection (a cleanup that unwinds a create never added a tab).
+// Last user-close lands on welcome; failed-create cleanup preserves selection.
 type LandingState = Pick<
   AppState,
   | 'activeWorktreeId'

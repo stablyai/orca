@@ -1,4 +1,4 @@
-import { isRemoteRuntimePtyId } from '../../../../shared/remote-runtime-pty-id'
+import { isRemoteRuntimePtyId } from '../../../../shared/remote-runtime/remote-runtime-pty-id'
 import type { TerminalTab } from '../../../../shared/terminal-tab-types'
 import {
   restorePtyDataHandlersAfterFailedShutdown,
@@ -51,8 +51,7 @@ export function createTerminalShutdownGuardController({
   let partialRendererStopSettled = false
 
   const markShutdownPending = (): void => {
-    // Why the early return: tearing down a worktree whose panes already exited passes
-    // no guard ids, and the spreads below would still hand both maps a new identity.
+    // Already-exited workspaces have no guard IDs; skip spreads that would churn both map identities.
     if (exitGuardPtyIds.length === 0) {
       return
     }

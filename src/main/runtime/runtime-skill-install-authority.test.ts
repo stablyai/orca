@@ -20,8 +20,7 @@ function createHost(overrides: Partial<RuntimeSkillCommandHost> = {}): RuntimeSk
 }
 
 describe('createSkillInstallAuthority', () => {
-  // Why: collapsing a thrown lookup into null reports a transient git/IO failure as a missing
-  // workspace, which is unactionable — the real cause never reaches the caller or the logs.
+  // Preserve thrown Git/I/O errors; converting to missing workspace loses actionable cause.
   it('surfaces a worktree lookup failure instead of reporting it as not found', async () => {
     const authority = createSkillInstallAuthority(
       createHost({

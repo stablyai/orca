@@ -1,4 +1,3 @@
-import { LocalPtyProvider } from '../../../providers/local-pty-provider'
 import { isCurrentPtyExit, ptyOwnership } from './ownership-state'
 import {
   localBackgroundStreamUnsub,
@@ -66,13 +65,11 @@ export function bindProviderListeners(session: PtyIpcSession): void {
     }) ?? null
   )
 
-  // Daemon providers lack configure().onData; feed runtime records/streams here.
-  const isLocalProvider = localProvider instanceof LocalPtyProvider
-
+  // Feed the runtime unless the emitting provider already did via configure().
   setLocalDataUnsub(
     localProvider.onData((payload) => {
       const rawLength = payload.sequenceChars ?? payload.data.length
-      const outputSeq = isLocalProvider
+      const outputSeq = payload.runtimeFed
         ? session.runtime?.getPtyOutputSequence(payload.id)
         : session.runtime?.onPtyData(
             payload.id,
@@ -99,7 +96,7 @@ export function bindProviderListeners(session: PtyIpcSession): void {
           )
         : undefined
       try {
-        if (!isLocalProvider) {
+        if (!payload.runtimeFed) {
           const viewShown = ORCA_LAYOUT_OWNER_IS_MAIN && visibleRendererPtys.has(payload.id)
           clearProviderPtyState(payload.id)
           ptyOwnership.delete(payload.id)
@@ -109,7 +106,8 @@ export function bindProviderListeners(session: PtyIpcSession): void {
           session.runtime?.onPtyExit(payload.id, payload.code, payload.incarnationId, {
             providerExitObserved: true,
             ...(viewShown ? { viewShown } : {}),
-            ...(payload.cause ? { cause: payload.cause } : {})
+            ...(payload.cause ? { cause: payload.cause } : {}),
+            ...(payload.hostLost ? { hostLost: true } : {})
           })
         }
         // Control replies may overtake stream data; physical exit must still retire late output.

@@ -77,7 +77,8 @@ vi.mock('@/lib/browser-uuid', () => ({
 
 // Agent creates return no primary tab: the agent's own surface is the worktree's active tab.
 vi.mock('@/lib/worktree-activation', () => ({
-  activateAndRevealWorktree: vi.fn(() => ({ primaryTabId: null }))
+  activateAndRevealWorktree: vi.fn(() => ({ primaryTabId: null })),
+  activateAndRevealWorkspace: vi.fn(() => ({ primaryTabId: null }))
 }))
 
 vi.mock('@/lib/worktree-initial-terminal-seeding', () => ({
@@ -114,7 +115,7 @@ vi.mock('@/lib/ephemeral-vm-worktree-creation', async (importOriginal) => ({
   attachEphemeralVmRuntimeToWorkspace: attachVmRuntime
 }))
 
-import { activateAndRevealWorktree } from '@/lib/worktree-activation'
+import { activateAndRevealWorkspace, activateAndRevealWorktree } from '@/lib/worktree-activation'
 import { ensureWorktreeHasInitialTerminal } from '@/lib/worktree-initial-terminal-seeding'
 import { makeWorktree } from '@/store/slices/worktrees-slice-test-fixtures'
 import { queueWorkspaceActivationTerminalFocus } from '@/lib/workspace-activation-terminal-focus'
@@ -182,7 +183,7 @@ describe('a creation that finishes after the user moved on (#9944)', () => {
     finish()
     await vi.waitFor(() => expect(readyToast.calls).toHaveLength(1))
     readyToast.calls[0]?.onClick()
-    expect(activateAndRevealWorktree).toHaveBeenCalledWith('wt-1', {
+    expect(activateAndRevealWorkspace).toHaveBeenCalledWith('wt-1', {
       sidebarRevealBehavior: 'auto',
       navigationIntent: 'user-open',
       executionHostId: 'runtime:remote-a'
@@ -196,12 +197,13 @@ describe('a creation that finishes after the user moved on (#9944)', () => {
     await vi.waitFor(() => expect(store.removePendingWorktreeCreation).toHaveBeenCalled())
 
     expect(activateAndRevealWorktree).not.toHaveBeenCalled()
+    expect(activateAndRevealWorkspace).not.toHaveBeenCalled()
     expect(queueWorkspaceActivationTerminalFocus).not.toHaveBeenCalled()
     expect(readyToast.calls).toHaveLength(1)
     expect(readyToast.calls[0]?.message).toBe('Worktree Feature is ready')
 
     readyToast.calls[0]?.onClick()
-    expect(activateAndRevealWorktree).toHaveBeenCalledWith('wt-1', {
+    expect(activateAndRevealWorkspace).toHaveBeenCalledWith('wt-1', {
       sidebarRevealBehavior: 'auto',
       navigationIntent: 'user-open'
     })
@@ -269,6 +271,7 @@ describe('a creation that finishes after the user moved on (#9944)', () => {
     // The host already adopted the agent tab, so activation must seed nothing beside it;
     // worktree-creation-backend-startup-focus.test.ts pins that this lands focus on that tab.
     expect(activateAndRevealWorktree).toHaveBeenCalledWith('wt-1', {
+      worktreeCreationId: 'creation-1',
       sidebarRevealBehavior: 'auto',
       agent: 'claude',
       backendStartupTerminalSpawned: true
@@ -301,6 +304,7 @@ describe('a creation that finishes after the user moved on (#9944)', () => {
     await vi.waitFor(() => expect(store.removePendingWorktreeCreation).toHaveBeenCalled())
 
     expect(activateAndRevealWorktree).toHaveBeenCalledWith('wt-1', {
+      worktreeCreationId: 'creation-1',
       sidebarRevealBehavior: 'auto'
     })
     expect(queueWorkspaceActivationTerminalFocus).toHaveBeenCalledWith('wt-1', {

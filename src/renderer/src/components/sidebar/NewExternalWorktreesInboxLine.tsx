@@ -10,8 +10,7 @@ import { translate } from '@/i18n/i18n'
 
 type NewExternalWorktreesInboxLineProps = {
   repoDisplayName: string
-  /** Host this checkout lives on. Set only when the project is checked out on
-   *  more than one host, where the count alone cannot identify the row. */
+  /** Disambiguates checkouts when the project appears on multiple hosts. */
   hostContextLabel?: string
   hostContextHostId?: ExecutionHostId
   inboxCount: number
@@ -37,8 +36,7 @@ export default function NewExternalWorktreesInboxLine({
     'auto.components.sidebar.NewExternalWorktreesInboxLine.c3e8a1f4b2',
     "Don't show again"
   )
-  // Why: the same project on two hosts renders two identical rows, so every
-  // accessible name has to name the host as well as the project.
+  // Accessible names need host labels to distinguish the same project on multiple hosts.
   const repoScopeLabel = hostContextLabel
     ? translate(
         'auto.components.sidebar.NewExternalWorktreesInboxLine.6c07f3a91e',
@@ -118,7 +116,7 @@ export default function NewExternalWorktreesInboxLine({
             aria-hidden="true"
             className={cn(
               'size-3 shrink-0',
-              // Why: the suppress control takes over this slot on hover.
+              // Suppress replaces this indicator on hover.
               onSuppress &&
                 'can-hover:group-hover:opacity-0 can-hover:group-focus-within:opacity-0 [@media(hover:none)]:opacity-0'
             )}

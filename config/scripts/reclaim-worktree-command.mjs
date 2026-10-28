@@ -60,7 +60,7 @@ export async function runReclaimCommand(
       'Add --tests-stopped to include old test caches after stopping cross-version tests.\n'
     )
     output.write(
-      'Manual cleanup includes old ignored dependencies and build output in sibling worktrees. Stop their apps, agents, installs, builds and tests before applying. Shared pnpm stores are retained.\n'
+      'Cleanup includes old ignored dependencies and build output in sibling worktrees, including during automatic dev cleanup. Shared pnpm stores are retained.\n'
     )
     return
   }
@@ -71,7 +71,7 @@ export async function runReclaimCommand(
   }
   if (!options.automatic) {
     output.write(
-      'Manual cleanup includes old dependency installs and build output in sibling worktrees. Stop their apps, agents, installs, builds and tests before applying.\n'
+      'Cleanup includes old dependency installs and build output in sibling worktrees. Shared pnpm stores are retained.\n'
     )
   }
   await reclaim(options)

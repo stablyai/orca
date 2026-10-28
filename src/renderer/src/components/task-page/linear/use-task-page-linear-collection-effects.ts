@@ -1,6 +1,7 @@
 import type { TaskPageLinearInOrcaEffectsModel } from './use-task-page-linear-in-orca-effects'
 import { useEffect } from 'react'
-import { TASK_SEARCH_DEBOUNCE_MS, LINEAR_ITEM_LIMIT } from '../../task-page-source-context'
+import { LINEAR_ITEM_LIMIT } from '../task-page-source-context'
+import { useTaskSearchDebouncedApply } from '../use-task-search-debounced-apply'
 import { clampLinearIssueListLimit } from '../../../../../shared/linear/issue-read-limits'
 import { useTaskPageLinearCustomViewEffects } from './use-task-page-linear-custom-view-effects'
 
@@ -36,15 +37,11 @@ export function useTaskPageLinearCollectionEffectsPrelude(model: TaskPageLinearI
     setLinearProjectIssuesError,
     setLinearProjectParentView
   } = model
-  useEffect(() => {
-    if (!taskResumeApplied) {
-      return
-    }
-    const timeout = window.setTimeout(() => {
-      setAppliedLinearProjectSearch(linearProjectSearchInput)
-    }, TASK_SEARCH_DEBOUNCE_MS)
-    return () => window.clearTimeout(timeout)
-  }, [linearProjectSearchInput, taskResumeApplied, setAppliedLinearProjectSearch])
+  useTaskSearchDebouncedApply(
+    linearProjectSearchInput,
+    taskResumeApplied,
+    setAppliedLinearProjectSearch
+  )
   useEffect(() => {
     if (!taskResumeApplied || taskSource !== 'linear' || linearMode !== 'projects') {
       return
@@ -84,7 +81,6 @@ export function useTaskPageLinearCollectionEffectsPrelude(model: TaskPageLinearI
     return () => {
       cancelled = true
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
     taskResumeApplied,
     taskSource,
@@ -95,7 +91,11 @@ export function useTaskPageLinearCollectionEffectsPrelude(model: TaskPageLinearI
     appliedLinearProjectSearch,
     linearRefreshNonce,
     getCachedLinearProjects,
-    linearTaskSourceContext
+    listLinearProjectsFromStore,
+    linearTaskSourceContext,
+    setLinearProjectsError,
+    setLinearProjectsLoading,
+    setLinearProjectsResult
   ])
   useEffect(() => {
     if (!selectedLinearProject?.workspaceId) {

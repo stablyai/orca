@@ -87,7 +87,7 @@ export async function loadMcpConfigInspections(
         if (isMissingFileError(error)) {
           return { ...inspectMcpConfigContent(candidate, null), absolutePath }
         }
-        // Why: the listing proved the file exists; an unreadable file must not unlock starter overwrite.
+        // Known existing but unreadable configs must never permit starter overwrite.
         return {
           ...inspectMcpConfigContent(candidate, null),
           exists: true,

@@ -46,10 +46,10 @@ describe('a bridged pane no visible view shows', () => {
     subject.setPaused(PTY, true)
     subject.onData(PTY, 'hidden')
     subject.setPaused(PTY, false)
-    // Before the reply: covered by the screen, so still dropped.
+    // The snapshot covers these earlier bytes.
     subject.onData(PTY, 'old')
     snapshot('SCREEN')
-    // Routed after the reply but before the attach call resolves.
+    // Post-snapshot bytes must follow the screen even before attach resolves.
     subject.onData(PTY, 'new')
     finish()
     await Promise.resolve()
@@ -66,7 +66,6 @@ describe('a bridged pane no visible view shows', () => {
     subject.setPaused(PTY, true)
     subject.onData(PTY, '\x1b[10;20H\x1b[6n')
     await vi.waitFor(() => expect(sent).toEqual(['replay:SCREEN', 'data:\x1b[6n']))
-    // Still hidden: later output is dropped again.
     subject.onData(PTY, 'more')
     expect(sent).toHaveLength(2)
   })

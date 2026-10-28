@@ -34,9 +34,7 @@ type LinearAgentSkillInstallCtaProps = {
   runtime: LocalAgentRuntime
 }
 
-// Why: the Linear task provider and the orca-linear agent skill are decoupled
-// setups; this section bridges them so connecting the provider also surfaces
-// the skill agents need to read and edit Linear tasks.
+// Bridge provider setup to its separately installed skill so connected agents can read/edit Linear tasks.
 export function WslLinearAgentSkillInstallCta({
   runtime
 }: LinearAgentSkillInstallCtaProps): React.JSX.Element {

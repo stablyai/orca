@@ -1,7 +1,4 @@
-// Why first, and why the import-free shim: react-dom reads
-// __REACT_DEVTOOLS_GLOBAL_HOOK__ once at module evaluation, so the global has to
-// exist before it. The observer below only wraps a property react-dom re-reads
-// per commit, so its own import graph can evaluate whenever it likes.
+// Install the import-free hook before react-dom reads it during evaluation; the observer below wraps a per-commit property and can load later.
 import './lib/react-devtools-commit-hook-shim'
 import './lib/react-commit-cascade-observer'
 import './assets/main.css'
@@ -86,8 +83,5 @@ getOrCreateRendererRoot(rootElement, import.meta.hot?.data).render(
 )
 recordRendererCrashBreadcrumb('renderer_bootstrap_rendered')
 
-// Why here: the xterm WebGL addon is 243 KB, is only ever constructed once a
-// terminal attaches (many frames away), and is needed by nothing during boot.
-// Starting the load after the first render keeps it off the boot graph while
-// leaving it resolved long before any pane can attach.
+// Defer the 243KB WebGL addon until first render; panes need it only much later, keeping it off boot’s import graph.
 void primeTerminalWebglAddon()

@@ -38,14 +38,11 @@ import { gateAndReseedEmptyWorkspace } from './worktree-activation-gated-empty-r
 import { liftSidebarFiltersHidingWorktree } from './worktree-activation-sidebar-filters'
 import { isFloatingWorkspaceId } from '../../../shared/floating-workspace-worktree'
 import { revealFloatingWorkspacePanel } from './floating-workspace-panel-reveal'
+import { findPendingWorktreeCreationId } from './pending-worktree-creation'
 import { markVisited, readPreviousActive } from './worktree-activation-visit'
 import { selectFolderWorkspaces } from '@/store/workspace-record-selectors'
 
-/**
- * Shared activation sequence used by the worktree palette and add-repo/worktree dialogs.
- * The caller passes only `worktreeId`; the helper derives `repoId` and returns early
- * without side effects if the worktree is not found (deleted between palette open and select).
- */
+/** Share palette/dialog activation; derive repoId and no-op if the selected worktree vanished. */
 export type ActivateAndRevealResult = {
   /** Id of the primary terminal tab seeded with `opts.startup`, or null. Prefer this over
    *  `activeTabIdByWorktree`, which may point at another tab if setup/issue scripts opened their own. */
@@ -184,6 +181,14 @@ export function activateAndRevealWorktree(
   if (!wt) {
     return false
   }
+  const pendingCreationId = findPendingWorktreeCreationId(state.pendingWorktreeCreations, wt.id)
+  // Why: a checkout published mid-create shows its creation progress until that creation hands off.
+  if (pendingCreationId && opts?.worktreeCreationId !== pendingCreationId) {
+    state.setActivePendingWorktreeCreation(pendingCreationId)
+    state.updatePendingWorktreeCreation(pendingCreationId, { loaderVisible: true })
+    state.setActiveView('terminal')
+    return { primaryTabId: null }
+  }
   const hasActivationWork = Boolean(
     opts?.startup || opts?.setup || opts?.defaultTabs || opts?.issueCommand
   )
@@ -197,18 +202,15 @@ export function activateAndRevealWorktree(
     state.activeWorkspaceExecutionHostId === (opts?.executionHostId ?? null) &&
     state.activeView === 'terminal'
 
-  // 1. Set activeRepoId if crossing repos
   if (wt.repoId !== state.activeRepoId) {
     state.setActiveRepo(wt.repoId)
   }
 
-  // 2. Switch any non-terminal view back to terminal
   if (state.activeView !== 'terminal') {
     state.setActiveView('terminal')
   }
 
   const previousActive = readPreviousActive(state)
-  // 3. Core activation: setActiveWorktree also restores per-worktree state, clears unread, bumps dead PTY generations, refreshes GitHub
   state.setActiveWorktree(worktreeId, opts?.executionHostId)
   const postActivationState = useAppStore.getState()
   const ownerRuntimeEnvironmentId = runtimeEnvironmentIdOrLocalUnlessTwin(
@@ -233,10 +235,7 @@ export function activateAndRevealWorktree(
     state.recordWorktreeVisit(worktreeId)
   }
 
-  // Why: the gate is decided BEFORE resuming. A sleeping session must defer seeding until startup
-  // restoration is ready (STA-1111) — resuming first would leave nothing to gate on. Structured
-  // agent inventory hydrates asynchronously too, so an empty tab model can otherwise authorize a
-  // fallback terminal beside a chat that is about to appear.
+  // Decide gate before resuming: resume consumes sleeping evidence, and late structured inventory can otherwise authorize a shell beside a pending chat (STA-1111).
   const shouldGateAgentActivation =
     !hasActivationWork &&
     (workspaceHasSleepingAgentSessions(postActivationState, worktreeId) ||
@@ -245,9 +244,7 @@ export function activateAndRevealWorktree(
           postActivationState.reconcileWorktreeTabModel(worktreeId).renderableTabCount
         )))
   if (!shouldGateAgentActivation) {
-    // Why: sleeping destroys the local PTY but preserves the provider session id, so waking should
-    // restore those CLI sessions. Ordering is load-bearing: resuming synchronously creates the
-    // session's tab first, so the seeding below doesn't add a bare shell next to it.
+    // Resume preserved provider sessions before shell seeding; synchronous tab creation prevents an extra bare shell.
     resumeSleepingAgentSessionsForWorktree(worktreeId)
   }
   if (shouldGateAgentActivation) {
@@ -258,7 +255,6 @@ export function activateAndRevealWorktree(
     })
   }
 
-  // 4. Ensure a focusable surface exists for externally-created worktrees
   const primaryTabId = shouldGateAgentActivation
     ? null
     : providesInitialSurface && !hasActivationWork
@@ -271,6 +267,7 @@ export function activateAndRevealWorktree(
           opts?.issueCommand,
           opts?.defaultTabs,
           {
+            ...(opts?.worktreeCreationId ? { worktreeCreationId: opts.worktreeCreationId } : {}),
             ...(opts?.backendStartupTerminalSpawned ? { backendStartupTerminalSpawned: true } : {}),
             ...(opts?.createNewTerminalForStartup ? { createNewTerminalForStartup: true } : {}),
             ...(providesInitialSurface ? { callerProvidesSurface: true } : {}),
@@ -282,7 +279,6 @@ export function activateAndRevealWorktree(
     useAppStore.getState().queueTabInitialCwd(primaryTabId, opts.initialCwd)
   }
 
-  // 5. Explicit list requests leave the activity view only now that activation has committed.
   if (opts?.showWorkspaceList) {
     state.setSidebarBody('workspaces')
   }
@@ -290,7 +286,6 @@ export function activateAndRevealWorktree(
     liftSidebarFiltersHidingWorktree(wt)
   }
 
-  // 6. Reveal in sidebar
   if (opts?.revealInSidebar !== false) {
     if (opts?.sidebarRevealBehavior || opts?.executionHostId) {
       state.revealWorktreeInSidebar(worktreeId, {
@@ -316,16 +311,12 @@ export function activateAndRevealWorktree(
   return { primaryTabId }
 }
 
-/**
- * Activates a sidebar workspace id of either shape. Rendered sidebar order mixes
- * plain worktree ids with `folder:` keys, so every caller that navigates by that
- * order must dispatch here — the folder branch is what enforces the path-status
- * gate that blocks a missing/unmounted/disconnected-SSH folder (#10716).
- */
+/** Dispatch sidebar IDs through folder/worktree entry points; folder routing enforces missing/unmounted/disconnected path guards (#10716). */
 export function activateAndRevealWorkspace(
   workspaceId: string,
   opts?: WorktreeActivationSurfaceSelection & {
     executionHostId?: ExecutionHostId
+    sidebarRevealBehavior?: PendingSidebarWorktreeReveal['behavior']
     revealInSidebar?: boolean
     showWorkspaceList?: boolean
     /** Worktree-only: folder workspaces are never filter-hidden. */
@@ -339,5 +330,5 @@ export function activateAndRevealWorkspace(
   return activateAndRevealFolderWorkspace(workspaceScope.folderWorkspaceId, opts)
 }
 
-// Why: break the import cycle — nav-history slice (under @/store) can't import activation directly, so register the activator here.
+// Register here to avoid the @/store nav-history → activation import cycle.
 registerWorktreeActivation(activateAndRevealWorkspace, applyWorktreeNavViewEntry)

@@ -65,7 +65,7 @@ export function createStructuredAgentSessionTabSurface(
     deps: {
       store: Pick<
         AgentSessionRecordStore,
-        'getVisibleSessionTabIndex' | 'getSessionTabId' | 'showSessionTabs' | 'getRecord'
+        'getVisibleSessionTabIndex' | 'getSessionTabId' | 'showSessionTabs' | 'getConversation'
       >
     }
   },
@@ -78,7 +78,7 @@ export function createStructuredAgentSessionTabSurface(
     listSessionTabs: (): StructuredAgentSessionTab[] => [
       ...listStructuredAgentSessionTabs(sessions),
       ...[...unopened].flatMap((sessionId) => {
-        const record = sessions.has(sessionId) ? null : host.deps.store.getRecord(sessionId)
+        const record = sessions.has(sessionId) ? null : host.deps.store.getConversation(sessionId)
         return record
           ? [{ sessionId, workspaceId: record.location.workspaceId, agent: record.provider }]
           : []

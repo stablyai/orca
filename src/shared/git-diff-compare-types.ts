@@ -1,8 +1,7 @@
 import type { GitBranchChangeStatus } from './git-status-types'
 import type { LargeDiffRenderLimit } from './large-diff-render-limit'
 
-// ─── Git Status ─────────────────────────────────────────────
-// Re-exported from git-status-types.ts so mobile shares the wire contract without this desktop aggregate.
+// Mobile consumes git-status-types.ts directly to avoid this desktop aggregate.
 
 export type GitBranchChangeEntry = {
   path: string

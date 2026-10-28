@@ -26,6 +26,21 @@ const projectDir = resolve(import.meta.dirname, '../..')
 const prWorkflow = parse(readFileSync(join(projectDir, '.github/workflows/pr.yml'), 'utf8'))
 const e2eWorkflow = parse(readFileSync(join(projectDir, '.github/workflows/e2e.yml'), 'utf8'))
 
+describe('browser native focus routing', () => {
+  it('selects the general E2E lane for focus adapter and image fixture changes', () => {
+    const spec = 'tests/e2e/browser-image-link-focus.spec.ts'
+    for (const file of [
+      'src/renderer/src/components/browser-pane/assemble-chrome/browser-page-guest-focus.ts',
+      'tests/e2e/helpers/browser-link-server.ts'
+    ]) {
+      const specs = selectPrE2eSpecs([file])
+      expect(specs, file).toContain(spec)
+      expect(selectGeneralE2eSpecs(specs), file).toContain(spec)
+      expect(classifyE2eJobs(JSON.stringify(specs)).e2e_run_changed, file).toBe(true)
+    }
+  })
+})
+
 describe('pr-e2e-native-only-routing', () => {
   const workflow = prWorkflow
   const filterStep = workflow.jobs.code_paths.steps.find((step) => step.id === 'e2e_filter')
@@ -57,12 +72,7 @@ describe('pr-e2e-native-only-routing', () => {
 })
 
 describe('pr-e2e-pane-close-routing', () => {
-  /**
-   * The product paths of #21005, "retire captured remote handles when pending panes close". It
-   * changed the pane close and retirement lifecycle across three transports and matched no route
-   * at all, so it merged with E2E skipped outright. The routes named every module that BINDS a
-   * pane and none that unbinds one.
-   */
+  // #21005 changed pane close/retirement across three transports with E2E skipped: routes covered binders but missed unbinders.
   const PENDING_PANE_CLOSE_CHANGE = [
     'src/renderer/src/components/terminal-pane/retire-unbound-ipc-terminal-pane.ts',
     'src/renderer/src/components/terminal-pane/retire-unbound-runtime-terminal-pane.ts',
@@ -88,8 +98,7 @@ describe('pr-e2e-pane-close-routing', () => {
 
     it('routes each unbind authority on its own, not just as a group', () => {
       expect(CLOSE_ROUTE, 'the close route was renamed or removed').toBeDefined()
-      // A single-file change is the shape that slipped through; assert per path rather than only
-      // on the union, where one matching path would hide five that do not.
+      // Assert each single path; union could hide missed routes behind one match.
       for (const file of PENDING_PANE_CLOSE_CHANGE) {
         expect(selectPrE2eSpecs([file]), file).toEqual(CLOSE_ROUTE.specs.toSorted())
       }
@@ -259,6 +268,9 @@ describe('pr-e2e-layout-oracle-routing', () => {
       // Two calls of the reusable workflow in one run must not share artifact names.
       expect(prWorkflow.jobs.layout_oracle.with.artifact_suffix).toBeTruthy()
       expect(prWorkflow.jobs.e2e.with.artifact_suffix).toBeUndefined()
+      // The merge gate keeps Blacksmith speed; the advisory lane runs free.
+      expect(prWorkflow.jobs.layout_oracle.with.fast_runners).toBe(true)
+      expect(prWorkflow.jobs.e2e.with.fast_runners).toBeUndefined()
     })
   })
 })
@@ -275,7 +287,9 @@ describe('ssh-browser-e2e-routing', () => {
     const run = job.steps.find(
       (step) => step.name === 'Run Docker SSH browser network route journeys'
     )
-    expect(job['runs-on']).toBe('blacksmith-4vcpu-ubuntu-2404')
+    expect(job['runs-on']).toBe(
+      "${{ inputs.fast_runners && 'blacksmith-4vcpu-ubuntu-2404' || 'ubuntu-24.04' }}"
+    )
     expect(job.if).toContain("inputs.test_files == ''")
     expect(job.if).toContain(spec)
     expect(install.with['native-runtime']).toBe('node')
@@ -488,6 +502,22 @@ describe('orcad-e2e-routing', () => {
 function selectsManagedSshLane(file) {
   return selectPrE2eSpecs([file]).some((spec) => spec.startsWith(MANAGED_SSH_E2E_SPEC_PREFIX))
 }
+
+describe('wsl-host fake connector routing', () => {
+  it('runs both WSL host specs for a fake connector change', () => {
+    const specs = selectPrE2eSpecs(['src/main/wsl/wsl-host-e2e-fake-connector.ts'])
+    for (const spec of [
+      'tests/e2e/wsl-host-chat.spec.ts',
+      'tests/e2e/wsl-host-fake-transport.spec.ts'
+    ]) {
+      expect(specs, spec).toContain(spec)
+      expect(existsSync(join(projectDir, spec)), spec).toBe(true)
+    }
+    expect(selectPrE2eSpecs(['src/main/wsl/wsl-host-e2e-fake-connector.test.ts'])).not.toContain(
+      'tests/e2e/wsl-host-chat.spec.ts'
+    )
+  })
+})
 
 describe('managed-SSH remote sources routing', () => {
   it('gives every managed-SSH spec a source route', () => {

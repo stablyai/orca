@@ -1,7 +1,7 @@
 import { TaskPageJiraStatusFilters } from '../../TaskPageJiraStatusFilters'
 import { TaskPageJiraSavedFilters } from '../../TaskPageJiraSavedFilters'
 import { TaskPageJiraFavouriteFilters } from '../../TaskPageJiraFavouriteFilters'
-import type { TaskPageComposerActionsModel } from '../../use-task-page-composer-actions'
+import type { TaskPageComposerActionsModel } from '../use-task-page-composer-actions'
 import { cn } from '@/lib/utils'
 import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip'
 import { Button } from '@/components/ui/button'

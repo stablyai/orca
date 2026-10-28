@@ -1,13 +1,11 @@
-// The draft store's memory, shared by its API (the store module) and its persistence. Memory is
-// the owner of every draft; storage only keeps a copy of it.
+// Memory owns drafts; storage keeps a copy shared by the API and persistence modules.
 
 import type {
   NativeChatComposerDraftImage,
   StoredNativeChatComposerDraft
 } from './native-chat-composer-draft-storage'
 
-// Why unsavedText: an adopted launch seed is also parked in the agent's input line, and only this
-// run's seed knows to replace it, so a reload must not bring the copy back.
+// Launch seeds also remain in TUI input; only this run can replace them, so their composer copy must not survive reload.
 export type DraftRecord = StoredNativeChatComposerDraft & { readonly unsavedText?: string }
 
 /** A write or removal handed to storage and not yet confirmed; `draft` is null for a removal. */
@@ -63,12 +61,10 @@ export function reconcileRestoredImageChecks(
 }
 export const scopeListeners = new Map<string, Set<() => void>>()
 
-/** How a change before the startup load lands meets the loaded draft: an edit replaces it, an
- *  append (text or images given back, a paste) is applied again on top of it. */
+/** Pre-hydration appends replay over loaded drafts; ordinary edits replace them. */
 export type DraftAppend = (draft: StoredNativeChatComposerDraft) => StoredNativeChatComposerDraft
 
-/** An append made before the load landed: written onto the stored draft in one change, and made
- *  again on the loaded draft when that load could not have read it. */
+/** Atomically append in storage, then replay onto hydration if that load could not have read it. */
 export type AppendBeforeLoad = {
   /** In-run order, compared with the order at which a load attempt read storage. */
   readonly sequence: number
@@ -88,7 +84,6 @@ type LoadBookkeeping = {
   ) => boolean)[]
 }
 
-// The startup load's bookkeeping, emptied once it lands.
 export const load: LoadBookkeeping = {
   hydrated: false,
   appendSequence: 0,

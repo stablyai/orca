@@ -24,11 +24,7 @@ import {
 import { setModelExternalMutation } from './editor-save-rebaseline'
 import { notifyEditorFileCacheStale } from './editor-autosave'
 
-// Why: when an external process (usually an agent) rewrites a file while the
-// tab holds unsaved edits, the reload pipeline preserves the buffer and marks
-// the tab externalMutation='changed' (issue #7265). This banner is the
-// recovery path — without it the tab is silently stale until close/reopen and
-// the next save clobbers the newer disk content unannounced.
+// External writes preserve unsaved drafts and mark a conflict; expose recovery before a later save can overwrite the newer disk content.
 
 const RELOAD_UNDO_TOAST_DURATION_MS = 8_000
 
@@ -38,14 +34,11 @@ export function reloadTabContentFromDisk(
 ): void {
   const state = useAppStore.getState()
   const liveTab = state.openFiles.find((openFile) => openFile.id === file.id)
-  // Why holder: a clean tab's Reload discards the unsaved text a sibling of the model holds.
+  // A clean tab may share a model whose unsaved draft belongs to a sibling.
   const holder = liveTab ? editorModelDraftHolder(state, liveTab) : undefined
   const discardedDraft = state.editorDrafts[holder?.id ?? file.id]
   const discardedDiskSignature = liveTab?.lastKnownDiskSignature
-  // Why: drop the draft before reloading — the buffer shadows loaded content
-  // (editBuffers ?? fileContents), so a reload alone would keep showing the
-  // stale unsaved text.
-  // Why every sibling: they share the model a reload replaces, so their drafts go with it.
+  // Clear every model sibling’s draft before reload because drafts shadow loaded content.
   const siblings = liveTab ? editorModelSiblingTabs(state, liveTab) : [file]
   for (const tab of siblings) {
     state.clearEditorDraft(tab.id)
@@ -56,8 +49,7 @@ export function reloadTabContentFromDisk(
   if (discardedDraft === undefined) {
     return
   }
-  // Why: on diff tabs the reload rotates the Monaco model, destroying the undo
-  // stack — without this toast a mistaken click is an unrecoverable discard.
+  // Diff reloads destroy model undo history; retain recovery in this toast.
   toast(
     translate('auto.components.editor.ExternalFileChangeBanner.5c02de9b31', 'Reloaded from disk'),
     {
@@ -68,33 +60,23 @@ export function reloadTabContentFromDisk(
         onClick: () => {
           const current = useAppStore.getState()
           const liveFile = current.openFiles.find((openFile) => openFile.id === file.id)
-          // Why: the tab may have closed while the toast was up; restoring a
-          // draft for a dead fileId would strand an orphan buffer. And if the
-          // user already typed after the reload (dirty), that newer work wins
-          // — undoing over it would be a second silent discard. isDirty is the
-          // signal: the editor content-sync repopulates editorDrafts with the
-          // reloaded content itself, so draft existence proves nothing.
-          // Why every sibling: they share the reloaded text, so typing in any of them is newer work.
-          // Why re-read: a tab that joined the model since the reload (another workspace) counts too.
+          // Undo only for live, clean model siblings, including tabs added since reload. isDirty proves newer work; content sync also populates drafts for clean tabs.
           const modelTabs = liveFile ? editorModelSiblingTabs(current, liveFile) : []
           if (!liveFile || modelTabs.some((tab) => tab.isDirty)) {
             return
           }
-          // Why: a reloaded tab that has since left the model holds its own text; leave it alone.
+          // Tabs that left the model now own independent text and must remain untouched.
           const liveSiblings = modelTabs.filter((tab) =>
             siblings.some((reloaded) => reloaded.id === tab.id)
           )
           if (discardedDiskSignature !== undefined) {
-            // Why: the reload re-stamped the baseline to the new disk content;
-            // restoring the pre-reload signature with the draft keeps the
-            // restart scan re-deriving the conflict the undo just brought back.
+            // Restore the old disk signature so restart scans preserve the conflict alongside the recovered draft.
             setEditorDiskBaseline(current, file.id, discardedDiskSignature)
           }
           for (const tab of liveSiblings) {
             current.setEditorDraft(tab.id, discardedDraft)
             current.markFileDirty(tab.id, true)
-            // Why: the disk still differs from the restored draft, so the
-            // conflict (and its autosave suspension) must come back with it.
+            // Restored edits still differ from disk, so restore the conflict and autosave suspension too.
             current.setExternalMutation(tab.id, 'changed')
           }
           trackExternalChangeConflictAction(file, 'undo_reload')
@@ -106,18 +88,14 @@ export function reloadTabContentFromDisk(
 
 export function keepTabEditsOverExternalChange(file: OpenFile): void {
   const state = useAppStore.getState()
-  // Why model-wide: a sibling left marked would keep its banner and suspended autosave if the read fails.
+  // Clear model-wide or siblings would retain banners and suspended autosave when the read fails.
   setModelExternalMutation(state, file.id, null)
-  // Why: the dismissal must survive restart — without advancing the baseline
-  // to the current disk content, the restored-tab conflict scan re-derives
-  // the dismissed conflict from the stale signature on every launch.
-  // Best-effort: a failed read leaves the old signature, which can only
-  // re-surface the banner — never lose data.
+  // Advance the disk baseline so dismissal survives restart; a failed read safely leaves the banner eligible to return.
   const target = getRuntimeTargetForFileOwner(state, file.worktreeId, file.runtimeEnvironmentId)
   if (!target) {
     return
   }
-  // Why tracked: a save right after Keep must compare against the disk the user chose to overwrite.
+  // Track the read so an immediate save compares against the disk the user chose to overwrite.
   const restamp = readRuntimeFileContent({
     target,
     filePath: file.filePath,
@@ -125,16 +103,15 @@ export function keepTabEditsOverExternalChange(file: OpenFile): void {
     worktreeId: file.worktreeId,
     connectionId: getConnectionIdForFile(file.worktreeId, file.filePath) ?? undefined,
     expectedExternalSshTargetId: file.externalSshTargetId,
-    access: editorTabFileAccess(state, file)
+    access: editorTabFileAccess(state, file),
+    terminalArtifactGrantId: file.terminalArtifactGrantId
   }).then((result) => {
     if (result.isBinary) {
       return
     }
     const current = useAppStore.getState()
     const liveFile = current.openFiles.find((openFile) => openFile.id === file.id)
-    // Why: only stamp while the dismissal still stands — a save or a newer
-    // conflict marked in the interim owns the baseline.
-    // A save that finished after this read started already set a newer baseline.
+    // Only stamp if dismissal still stands; newer conflicts and completed saves own the baseline.
     if (
       !liveFile ||
       liveFile.externalMutation === 'changed' ||
@@ -142,9 +119,9 @@ export function keepTabEditsOverExternalChange(file: OpenFile): void {
     ) {
       return
     }
-    // Why: the model's one baseline moves; siblings show the same model, which holds the kept text.
+    // Move the shared model baseline once for all sibling views.
     const moved = setEditorDiskBaseline(current, file.id, getDiskBaselineSignature(result.content))
-    // Why: a dirty model holds the kept text; a revealed sibling must show it, not reload disk.
+    // Dirty siblings share the kept text; revealing them must not reload disk.
     const modelDirty = isEditorModelDirty(current, liveFile)
     for (const tab of moved) {
       current.setExternalMutation(tab.id, null)
@@ -160,7 +137,7 @@ export function keepTabEditsOverExternalChange(file: OpenFile): void {
 export function overwriteDiskWithTabEdits(file: OpenFile): Promise<boolean> {
   const state = useAppStore.getState()
   const live = state.openFiles.find((openFile) => openFile.id === file.id)
-  // Why: the unsaved text may live in another tab of the same model; with none there is nothing to write.
+  // Find the model’s draft holder, which may be another tab; without one there is nothing to overwrite.
   const holder = live ? editorModelDraftHolder(state, live) : undefined
   return holder
     ? attemptEditorFileSave({ fileId: holder.id, overwrite: true })
@@ -175,12 +152,11 @@ export function ExternalFileChangeBanner({
   file: OpenFile
   /** The tab's live buffer (draft if dirty) — what "Keep My Edits" keeps. */
   currentContent: string
-  /** Refetches the tab's content — file body for edit tabs, diff body for
-   *  unstaged diff tabs. */
+  /** Refetch file content for edit tabs or diff content for unstaged tabs. */
   reloadContent: (file: OpenFile) => void
 }): React.JSX.Element {
   const [compareOpen, setCompareOpen] = useState(false)
-  // Why model-level: another tab of the same code model may hold the unsaved text.
+  // A sibling of this code model may own its unsaved text.
   const isModelDirty = useAppStore((state) => {
     const live = state.openFiles.find((openFile) => openFile.id === file.id)
     return live ? isEditorModelDirty(state, live) : file.isDirty
@@ -208,14 +184,12 @@ export function ExternalFileChangeBanner({
   }
 
   return (
-    // Why: role=alert because the banner appears asynchronously (an agent
-    // rewrote the file) — screen readers must announce it unprompted.
+    // Announce asynchronous external-write conflicts to screen readers.
     <div role="alert" className="border-b border-amber-500/20 bg-amber-500/10 px-4 py-2 text-xs">
       <div className="flex items-center justify-between gap-3">
         <div className="flex min-w-0 items-center gap-2">
           <TriangleAlert className="size-3.5 shrink-0 text-amber-600 dark:text-amber-400" />
-          {/* Why: wraps instead of truncating — the overwrite warning at the
-              end of the sentence is the part the user must not lose. */}
+          {/* Wrap the overwrite warning so truncation cannot hide it. */}
           <span className="min-w-0 font-medium text-foreground">
             {translate(
               'auto.components.editor.ExternalFileChangeBanner.7c41e90d12',
@@ -233,7 +207,7 @@ export function ExternalFileChangeBanner({
               'Reload from Disk'
             )}
           </Button>
-          {/* Why: with no unsaved edits there is nothing to write over the newer disk version. */}
+          {/* Only unsaved model edits can overwrite newer disk content. */}
           {isModelDirty && (
             <Button type="button" size="xs" variant="outline" onClick={handleOverwrite}>
               {translate('auto.components.editor.ExternalFileChangeBanner.overwrite', 'Overwrite')}

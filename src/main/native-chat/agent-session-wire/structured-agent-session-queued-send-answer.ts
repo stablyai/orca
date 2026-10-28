@@ -3,7 +3,9 @@ import type { AgentSessionJournal } from '../agent-session-journal/journal-store
 
 /** Refused conversions replay as returned cards, avoiding duplicate Retry rows; null means never queued. */
 export function queuedSendAnswer(
-  journal: Pick<AgentSessionJournal, 'queuedMessages' | 'submission' | 'submissions'>,
+  journal: Pick<AgentSessionJournal, 'submission' | 'submissions'> & {
+    queuedMessages: Pick<AgentSessionJournal['queuedMessages'], 'get'>
+  },
   clientMessageId: string
 ): AgentSessionSendResult | null {
   const draft = journal.queuedMessages.get(clientMessageId)

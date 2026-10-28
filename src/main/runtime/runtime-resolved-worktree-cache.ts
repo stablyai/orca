@@ -20,12 +20,7 @@ export class RuntimeResolvedWorktreeCache {
     return this.resolved
   }
 
-  /**
-   * Why the revision and not the TTL alone: a snapshot only answers for the repos that were
-   * registered when it ran. A repo added afterwards — a remote host the user just connected —
-   * is missing from it for reasons that have nothing to do with what exists on that host, and
-   * callers read the gap as a verdict that the worktree does not exist.
-   */
+  /** Revision invalidates catalogs missing newly registered repos; TTL alone could wrongly report remote worktrees absent. */
   isFresh(inventoryRevision: number, now = Date.now()): boolean {
     return Boolean(
       this.resolved &&
@@ -54,8 +49,7 @@ export class RuntimeResolvedWorktreeCache {
     try {
       const result = await promise
       if (generation === this.resolvedGeneration) {
-        // Why stamped on completion, not entry: a compute that spent longer than the TTL would
-        // otherwise publish an already-expired entry, so the next poll recomputes the same slow path.
+        // Start TTL on completion or slow computation publishes already-expired entries.
         this.resolved = { ...result, inventoryRevision, expiresAt: Date.now() + ttlMs }
       }
       return result

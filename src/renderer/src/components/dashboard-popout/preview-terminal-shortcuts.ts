@@ -26,12 +26,7 @@ export type PreviewShortcutContext = {
   terminalShortcutPolicy: TerminalShortcutPolicy | null | undefined
 }
 
-/**
- * Runs the preview terminal's keys through the same policy a pane uses, so the
- * dashboard encodes word-kills, Option chords, and modified Enter identically.
- * Active pane commands come back for the caller to handle; deferred TUI
- * chords continue through xterm.
- */
+/** Use pane input policy for preview bytes; return pane actions for caller handling and leave deferred TUI chords to xterm. */
 export function resolvePreviewShortcutAction(
   event: KeyboardEvent,
   context: PreviewShortcutContext
@@ -45,15 +40,14 @@ export function resolvePreviewShortcutAction(
     context.optionKeyLocations,
     context.clientPlatform === 'win32',
     context.keybindings,
-    // Why: PSReadLine on a local ConPTY binds Ctrl+←/→ itself; \eb/\ef would print stray b/f.
+    // Why: a local ConPTY reads \eb/\ef as Alt+B/F (stray b/f in PSReadLine), so Ctrl/Alt+←/→ defer.
     () => context.terminalInput?.localWindowsConpty === true,
     context.getKittyKeyboardFlags,
     getLayoutCharacterForCode,
     () => context.terminalInput?.windowsShiftEnterEncoding ?? 'alt-enter',
     // Why: byte protocols follow the pty's host, which differs from the client OS on remote runtimes.
     () => hostPlatform === 'win32',
-    // Why: without it a terminal-first user's remapped tab.close chord — Ctrl+W
-    // is a shell word-kill — reaches the shell in the pane but is swallowed here.
+    // Preserve terminal-first tab.close aliases such as Ctrl+W word-kill, matching the pane.
     normalizeTerminalShortcutPolicy(context.terminalShortcutPolicy),
     () => context.terminalInput?.ctrlEnterCsiU === true
   )

@@ -38,8 +38,7 @@ const WEB_WORKSPACE_SLEEP_TIMEOUT_MS = 150_000
 
 export function createWorktreesApi(): NonNullable<Partial<PreloadApi>['worktrees']> {
   return {
-    // Why the catch: a host predating this method answers `method_not_found`, and an empty list
-    // degrades the suggestion to the pre-existing behavior rather than blocking workspace create.
+    // Older hosts return method_not_found; empty retired names preserve suggestions without blocking create.
     listRetiredNames: async ({ repoId }) => {
       try {
         return readRetiredNameRegistryForRepo(
@@ -65,6 +64,7 @@ export function createWorktreesApi(): NonNullable<Partial<PreloadApi>['worktrees
         baseBranch: args.baseBranch,
         compareBaseRef: args.compareBaseRef,
         branchNameOverride: args.branchNameOverride,
+        ...(args.branchIntent ? { branchIntent: args.branchIntent } : {}),
         linkedIssue: args.linkedIssue,
         linkedPR: args.linkedPR,
         ...(args.linkedItems !== undefined ? { linkedItems: args.linkedItems } : {}),
@@ -177,6 +177,7 @@ export function createWorktreesApi(): NonNullable<Partial<PreloadApi>['worktrees
     // A web client runs no VM, so a reopen during a sleep changes nothing.
     sleepReopened: async () => {},
     resumeSleptPane: async () => false,
+    retireStrandedSleepRecord: async () => {},
     remove: async ({ worktreeId, hostId, force, allowUnverifiedPtyStop, skipArchive }) => {
       invalidateRuntimeWorktreeCaches()
       return callRuntimeResult<RemoveWorktreeResult>(
@@ -185,8 +186,7 @@ export function createWorktreesApi(): NonNullable<Partial<PreloadApi>['worktrees
           worktree: toRuntimeWorktreeSelector(worktreeId),
           ...(hostId ? { hostId } : {}),
           force,
-          // Why (#11960): the web client renders the same Force Delete affordances, so
-          // dropping this field here would leave paired clients permanently wedged.
+          // Forward Force Delete waiver or paired clients stay wedged (#11960).
           allowUnverifiedPtyStop,
           runHooks: skipArchive !== true
         },

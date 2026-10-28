@@ -1,6 +1,4 @@
-// A drag-out in a layout-owner build, end to end: a real store, main's model answering the
-// window's `movePaneToNewTab` through the layout transport, and main's frame drawing the result.
-// The importing test file installs the transport mocks (see layout-apply-test-transport).
+// Real store/main model/frame rig for drag-out; importing suites install layout transport mocks.
 
 import { expect, vi } from 'vitest'
 import { buildWorkspaceSessionPayload } from '@/lib/workspace-session'

@@ -1,13 +1,7 @@
 import type { RuntimeHostDescriptor } from './runtime-host-descriptor'
 
-/**
- * How a new pairing offer relates to a server this client already pairs with.
- * `pin` is the descriptor to keep pinned. `descriptor`:
- * - `pinned`: the offer's descriptor matches (or is now pinned for the first time).
- * - `moved`: same installation, different machine binding: the profile moved or was reinstalled.
- * - `unverifiable`: a pinned server now sends no descriptor (downgraded); the old pin is kept.
- * - `unpinned`: neither side has a descriptor yet.
- */
+/** Retain the pin: pinned matches/newly pins; moved changes binding on the same installation;
+ * unverifiable keeps a missing descriptor’s prior pin; unpinned means neither has one. */
 export type RuntimeHostRePairMatch =
   | {
       kind: 'same-host'
@@ -16,10 +10,7 @@ export type RuntimeHostRePairMatch =
     }
   | { kind: 'different-host' }
 
-/**
- * The host key, which the pairing handshake proves, is the trust root: a different key is a
- * different server. The descriptor only separates a reinstall or a deliberate clone that kept the key.
- */
+/** Handshake-proven host keys anchor trust; descriptors distinguish reinstalls/clones retaining the key. */
 export function classifyRuntimeHostRePair(
   previous: { publicKeys: readonly string[]; pin?: RuntimeHostDescriptor },
   offer: { publicKeyB64: string; hostDescriptor?: RuntimeHostDescriptor }

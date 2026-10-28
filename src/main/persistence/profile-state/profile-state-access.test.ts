@@ -29,7 +29,7 @@ function root(): string {
 }
 
 beforeEach(() => {
-  // Occupied owner fixtures need real rename retries, but no elapsed backoff.
+  // Exercise rename retries without real backoff delays.
   vi.spyOn(Atomics, 'wait').mockReturnValue('timed-out')
 })
 
@@ -212,6 +212,7 @@ describe('profile state owner reclamation', () => {
     const path = root()
     vi.spyOn(identity, 'profileStateAccessBootIdentity').mockReturnValue('current-boot')
     vi.spyOn(identity, 'profileStateAccessMachineIdentity').mockReturnValue('same-machine')
+    vi.spyOn(identity, 'profileStateAccessWrittenThisBoot').mockReturnValue(false)
     const owner = staleGate(path, process.pid, hostname(), {
       bootIdentity: 'previous-boot',
       machineIdentity: 'same-machine'
@@ -220,6 +221,19 @@ describe('profile state owner reclamation', () => {
     acquireProfileStateMaintenance(path).release()
     expect(kill).not.toHaveBeenCalled()
     expect(fs.existsSync(owner)).toBe(false)
+  })
+
+  it('keeps an owner written since this boot by a clone sharing machine-id and hostname (#32918)', () => {
+    const path = root()
+    vi.spyOn(identity, 'profileStateAccessBootIdentity').mockReturnValue('current-boot')
+    vi.spyOn(identity, 'profileStateAccessMachineIdentity').mockReturnValue('cloned-machine')
+    vi.spyOn(identity, 'profileStateAccessWrittenThisBoot').mockReturnValue(true)
+    const owner = staleGate(path, 12345, hostname(), {
+      bootIdentity: 'clone-boot',
+      machineIdentity: 'cloned-machine'
+    })
+    expect(() => acquireProfileStateMaintenance(path)).toThrow('in use')
+    expect(fs.existsSync(owner)).toBe(true)
   })
 
   it('keeps a differently booted machine with the same hostname unverifiable', () => {

@@ -79,8 +79,7 @@ describe('SessionSubagentsSection', () => {
     await act(async () => {})
     expect(queryByText('First pass')).not.toBeNull()
 
-    // Second fetch stays pending: the previous rows must remain visible
-    // instead of flickering back to the hidden loading state.
+    // Hold the replacement read pending to verify retained rows do not flicker away.
     let resolveSecond: (result: AiVaultSubagentListResult) => void = () => {}
     listSubagentSessions.mockImplementationOnce(
       () => new Promise((resolve) => (resolveSecond = resolve))

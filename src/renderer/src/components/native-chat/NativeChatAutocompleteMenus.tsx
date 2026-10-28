@@ -5,9 +5,13 @@ import { cn } from '@/lib/utils'
 import type { SkillSourceKind } from '../../../../shared/skills'
 import { FilenameFirstPath } from '@/components/file-path-cursor-tooltip'
 import { FileTypeIcon } from '@/components/FileTypeIcon'
-import type { ComposerAutocomplete, NativeChatPickerItem } from './native-chat-composer-state'
+import type {
+  ComposerAutocomplete,
+  NativeChatPickerItem
+} from '../../../../shared/native-chat-composer-autocomplete'
 import type { NativeChatMentionFiles } from './use-native-chat-mention-files'
 import { LoadingSpinner } from '@/components/LoadingSpinner'
+import { localizeSlashCommandDescription } from './native-chat-slash-command-descriptions'
 
 export const NativeChatPickerMenu = memo(function NativeChatPickerMenu({
   autocomplete,
@@ -182,10 +186,8 @@ function PickerOption({
 }): React.JSX.Element {
   const annotation = getPickerAnnotation(item)
   const description =
-    item.kind === 'command' &&
-    item.name === 'clear' &&
-    item.description === 'Clear conversation context'
-      ? translate('components.native-chat.composer.clearDescription', 'Clear conversation context')
+    item.kind === 'command'
+      ? localizeSlashCommandDescription(item.name, item.description)
       : item.description
   return (
     <PickerOptionButton
@@ -263,16 +265,16 @@ function PickerOptionButton({
       aria-selected={selected}
       type="button"
       onPointerDown={(event) => {
-        // Why: the textarea owns query and caret state, so pointer acceptance
-        // must run before the browser transfers focus to this row.
+        // Accept before focus transfer because the textarea owns query and caret state.
         event.preventDefault()
         if (event.button === 0) {
           onChoose()
         }
       }}
       className={cn(
-        'flex w-full items-start gap-2 rounded-md border border-transparent px-2 py-1.5 text-left text-sm hover:bg-accent hover:text-accent-foreground',
-        selected && 'border-border bg-accent text-accent-foreground'
+        'flex w-full items-start gap-2 rounded-md border border-transparent px-2 py-1.5 text-left text-sm hover:bg-accent hover:text-accent-foreground hover:[--muted-foreground:var(--accent-foreground)]',
+        selected &&
+          'border-border bg-accent text-accent-foreground [--muted-foreground:var(--accent-foreground)]'
       )}
     >
       {children}
@@ -291,8 +293,7 @@ function getPickerAnnotation(item: NativeChatPickerItem): string | null {
     )
   }
   if (item.kind === 'skill' && item.sources.length > 1) {
-    // Why: name the interpolation `sourceCount`, not `count` — a `count` option
-    // makes i18next resolve plural-suffixed keys that these locales don't define.
+    // Use sourceCount because i18next treats count as pluralization input and these keys have no plural variants.
     return translate(
       'components.native-chat.composer.skillMultipleSources',
       '{{sourceCount}} sources - agent resolves',

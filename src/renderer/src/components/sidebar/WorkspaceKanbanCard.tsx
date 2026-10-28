@@ -9,8 +9,7 @@ import { translate } from '@/i18n/i18n'
 
 type WorkspaceKanbanCardProps = {
   worktree: Worktree
-  // Why: the lane virtualizes, so DOM order no longer implies list position.
-  // Drop-index math reads this instead of counting rendered siblings.
+  // Virtualization breaks DOM-index ordering; drop math needs the full lane position.
   laneIndex: number
   repo: Repo | undefined
   isActive: boolean

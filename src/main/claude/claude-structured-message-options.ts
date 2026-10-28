@@ -1,3 +1,4 @@
+import { claudeStartedUnechoedSend } from './claude-command-lifecycle'
 import { claudeExecutionObservations } from './claude-structured-execution-observations'
 import { dispatchClaudeTurn } from './claude-structured-dispatch'
 import type { StructuredAgentSessionAdapter } from '../native-chat/agent-session-wire/structured-agent-session-adapter'
@@ -10,7 +11,7 @@ import {
 } from '../native-chat/agent-session-wire/structured-agent-session-logger'
 import { listedModels } from './claude-structured-model-catalog'
 import { setClaudeStructuredOption } from './claude-structured-options'
-import type { ClaudeSession } from './claude-structured-session-state'
+import type { ClaudeSession } from './structured/claude-structured-session-state'
 import {
   isAbortSignalReason,
   throwIfSignalAborted,
@@ -87,12 +88,20 @@ export async function dispatchClaudeMessage(
   timeoutMs: number | undefined,
   logger: StructuredAgentSessionLogger = defaultLogger
 ): ReturnType<StructuredAgentSessionAdapter['dispatch']> {
-  const messageOptions = input.executionOptions
   let ranOptions: Record<string, string> = {}
   const outcome = await dispatchClaudeTurn(session, input, async () => {
     await input.beforeDispatch?.()
     try {
       input.signal?.throwIfAborted()
+      // Input joining a running turn, and Orca mail notices, run on the choices Claude already has;
+      // new choices apply at the next new turn.
+      const messageOptions =
+        session.translator?.openTurnHasInputWork ||
+        session.translator?.commandTurnId ||
+        claudeStartedUnechoedSend(session) ||
+        input.body.from?.orchestration?.message === 'mail-notice'
+          ? undefined
+          : input.executionOptions
       input.onInputPreparation?.()
       if (messageOptions !== undefined) {
         await applyClaudeMessageOptions(session, messageOptions, timeoutMs, input.signal)

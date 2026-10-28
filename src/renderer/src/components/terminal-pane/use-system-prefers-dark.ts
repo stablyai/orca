@@ -2,8 +2,7 @@ import { useSyncExternalStore } from 'react'
 
 const SYSTEM_DARK_QUERY = '(prefers-color-scheme: dark)'
 
-// Why: terminal panes can number in the hundreds, but OS color-scheme is one
-// browser signal. Share a single media listener instead of one per pane.
+// Share one OS media listener across hundreds of possible terminal panes.
 const subscribers = new Set<() => void>()
 let mediaQueryList: MediaQueryList | null = null
 let unsubscribeMediaQuery: (() => void) | null = null

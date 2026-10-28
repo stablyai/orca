@@ -10,8 +10,7 @@ export type SkippedAncestorReclassification = {
   updatedFailures: WorkspaceCleanupFailure[]
 }
 
-// Why: late child settlements must re-derive each skip from the current blocker
-// set so provisional "still removing" rows harden or lift instead of going stale.
+// Late child settlement must recompute current blockers so provisional ancestor skips harden or lift.
 export function reclassifySkippedWorkspaceCleanupAncestors({
   skippedAncestors,
   findBlockingDescendants,

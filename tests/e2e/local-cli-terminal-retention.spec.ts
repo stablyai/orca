@@ -1,30 +1,7 @@
-/**
- * TOPOLOGY (c): ONE real Orca desktop app, isolated profile, window ATTACHED,
- * NO paired client — `orca terminal create` over the local runtime socket,
- * which is the transport the shipped CLI uses.
- *
- * Pairing is not what made the paired arm reproduce: `shouldCreateInBackground`
- * is true for ANY create with a worktree selector, no focus request and
- * `rendererBacked !== true`, so a plain local dispatch lands on the same seam.
- * The target is created before any other host terminal, making it the repo's
- * FIRST host-admitted tab — the shape the old `currentRevision <= 0` fence
- * missed. A renderer-owned publication is a precondition, not scenery, and is
- * asserted: a host-only workspace carries a headless epoch and is already safe.
- *
- * Losing the tab is only half the incident. The sleeping-agent record outlives
- * it, so `recordPaneIsOwnedByPreservedPane` reads "no such tab" and the next
- * activation sweep forks the session into a ghost tab. The CLI pane's record is
- * reported live; a second record, on a pane that genuinely does not exist, is
- * written into the stopped profile before the relaunch. That one MUST be
- * replayed, which is what makes the CLI pane's silence evidence rather than a
- * sweep that never ran. It is seeded on disk because a layout-owner build keeps
- * resume records on the panes main holds, so a record for no pane can only come
- * from a loaded profile.
- *
- * Run:
- *   npx playwright test tests/e2e/local-cli-terminal-retention.spec.ts \
- *     --config tests/playwright.config.ts --project electron-headless --workers=1
- */ import { randomUUID } from 'node:crypto'
+// Use the shipped local CLI socket with one attached desktop and no paired client.
+// Create the first host-admitted tab under a proven renderer publication epoch; graph sync must retain its original PTY.
+// On relaunch, a genuinely absent pane’s disk-seeded resume record proves the sweep runs while the retained CLI pane must not gain a ghost tab.
+import { randomUUID } from 'node:crypto'
 import { existsSync, readFileSync, rmSync } from 'node:fs'
 import path from 'node:path'
 import type { ElectronApplication, Page } from '@stablyai/playwright-test'
@@ -56,8 +33,7 @@ test.afterAll(() => {
   rmSync(scratch, { recursive: true, force: true })
 })
 
-/** The runtime's worktree scan lands after first paint, so the renderer knows a
- *  workspace before any selector resolves against it. */
+// First paint can precede runtime worktree discovery; wait until selectors resolve the seeded workspace.
 async function waitForLocalRuntimeWorktree(
   call: RuntimeRpcCall,
   worktreeId: string
@@ -162,8 +138,7 @@ test('keeps a locally created CLI terminal, and never resumes it as a ghost', as
     await waitForLocalRuntimeWorktree(call, worktreeId)
     await waitForLocalRuntimeWorktree(call, unrelatedWorktreeId)
 
-    // PRECONDITION: the RENDERER owns this workspace's publication, so the CLI
-    // tab created next inherits the renderer epoch instead of a headless one.
+    // Require renderer publication so the CLI tab cannot inherit the already-safe headless epoch.
     const rendererTabId = await createHostRendererTerminalTab(firstPage, worktreeId)
     const rendererOwned = await readHostInventoryWhenTabAppears(
       call,
@@ -192,11 +167,9 @@ test('keeps a locally created CLI terminal, and never resumes it as a ghost', as
     )
     createdHandles.push(unrelated.handle)
 
-    // The graph sync a following CLI dispatch drives.
     const secondRendererTabId = await createHostRendererTerminalTab(firstPage, worktreeId)
 
-    // SIGNAL 1 — the frame carrying the new renderer tab is the same merge that
-    // would drop the CLI tab, so judge on that one inventory.
+    // Judge the inventory frame that introduces the renderer tab and could prune the CLI tab.
     const afterSync = await readHostInventoryWhenTabAppears(
       call,
       worktreeId,
@@ -212,11 +185,9 @@ test('keeps a locally created CLI terminal, and never resumes it as a ghost', as
       'the surviving tab must still name the original PTY, not a replacement'
     ).toBe(cli.ptyId)
 
-    // SIGNAL 2 — independent of the inventory: the original process answers.
     await proveSameLivePty(call, cli, 'after-sync')
 
-    // Nothing was appended either: a replacement or resume tab would also
-    // satisfy "the CLI tab is present".
+    // Require exactly the original tabs so replacement/resume tabs cannot hide behind CLI presence.
     expect(
       [...afterSync.tabIds].sort(),
       'the workspace gained or lost a terminal tab across the graph sync'
@@ -231,8 +202,7 @@ test('keeps a locally created CLI terminal, and never resumes it as a ghost', as
     await proveSameLivePty(call, unrelated, 'unrelated-alive')
 
     const cliPaneKey = makePaneKey(cli.tabId, cli.leafId)
-    // Why: a real agent reports its provider session over the hook server;
-    // writing the same store entry keeps this hermetic on the identical path.
+    // Seed the same status-store entry a real agent hook reports, keeping this fixture hermetic.
     await firstPage.evaluate(
       ({ paneKey, sessionId, worktreeId }) => {
         window.__store?.getState().setAgentStatus(
@@ -262,13 +232,11 @@ test('keeps a locally created CLI terminal, and never resumes it as a ghost', as
       )
       .toBe(true)
 
-    // The resume sweep runs once per worktree per Terminal mount; a relaunch puts the retained
-    // pane in front of it. The daemon, and with it the CLI terminal's process, stays up.
+    // Relaunch reruns the resume sweep with the retained pane; its daemon PTY stays alive.
     await session.close(app)
     app = null
 
-    // The control: a record whose pane is gone, i.e. what the pruned CLI tab
-    // would leave behind. Its replay is the proof the sweep ran at all.
+    // Seed an absent pane’s resume record as the positive control for sweep execution.
     const absentTabId = randomUUID()
     const absentPaneKey = makePaneKey(absentTabId, randomUUID())
     mutateStoppedProfileState(session.userDataDir, (state) => {
@@ -306,8 +274,7 @@ test('keeps a locally created CLI terminal, and never resumes it as a ghost', as
           resumeTabIds: tabs.filter((tab) => tab.launchAgent === 'claude').map((tab) => tab.id)
         }
       }, worktreeId)
-    // CONTROL: the absent pane's record must be replayed, which is what makes
-    // the CLI pane's silence below evidence instead of a sweep that never ran.
+    // Require the absent record’s replay before interpreting CLI silence as no ghost.
     await expect
       .poll(async () => (await readWorktreeTabs()).resumeTabIds.length > 0, {
         timeout: 60_000,

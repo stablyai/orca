@@ -20,28 +20,12 @@ const manifestContract = join(
   'manifest-contract.ts'
 )
 
-/**
- * The document, the route chunks and the images the route tree imports. Derived rather than
- * pinned, because a flat number stops agreeing with the chunk ceiling as routes are added: at 128
- * and 42 images, 18 routes are already allowed 98 chunks, and 98 + 42 + 1 is 141, so the asset
- * count would have failed first and named the count rather than the split that caused it. Written
- * as chunks + images + the document, a bundle at the chunk ceiling sits exactly at this one, so
- * the chunk ceiling always trips first and the failure says what actually grew.
- */
+// Derive asset ceiling as chunks+images+document so chunk overflow reports splitting cause before generic count; flat ceiling drifts as routes grow.
 export function mobileWebAppBundleMaxAssets(routeCount, imageCount) {
   return mobileWebAppBundleMaxChunks(routeCount) + imageCount + 1
 }
 
-/**
- * Phase C byte budget for the app bundle, not the contract ceiling (10 MiB per asset,
- * MOBILE_WEB_BUNDLE_MAX_ASSET_BYTES). Deliberately below it so growth trips a build rather than a
- * refused asset on a phone. Splitting barely moves it — the same code is emitted in more files —
- * so shrinking this still means cutting code.
- *
- * This head reads 7,686,714 bytes of the 9,437,184 here, 81.5%, leaving 1,750,470. A reading and
- * not a pin: nothing asserts it, because the number moves with every build. It is here so the
- * generation that spends the rest can see it was already this close.
- */
+// Keep total app byte budget below phone’s per-asset contract ceiling to fail at build; splitting alone cannot shrink code size.
 export const MOBILE_WEB_APP_BUNDLE_MAX_TOTAL_BYTES = 9 * 1024 * 1024
 
 // Only this licensed desktop-identical asset has its own allowance; code retains the 9 MiB fence.
@@ -74,84 +58,39 @@ export function mobileWebAppBundleBudgetBytes(manifest) {
   return manifest.totalBytes - font.byteLength
 }
 
-/**
- * Scripts emitted at every prefix of the sorted route key list, and the route each prefix added.
- *
- * A chunk is emitted per distinct set of importers, not per route, so a route's marginal cost is
- * what it fails to share rather than what it weighs. Re-measured on this head by building
- * `routes.slice(0, n)` for every n, which is what the fence below is derived from rather than
- * fitted to. The spread it shows is 1 to 14: `pr` adds one script, `tasks` adds fourteen.
- * The root `./_layout.tsx` (the page's web sibling of the native root) sorts first; with it the
- * swept tree reads 91 scripts at 16 routes, with theme tokens in the entry.
- *
- * This table is the fence's only input, so a route added to the tree stales it and the pins beside
- * the fence fail until it is re-measured. That is the point: the bound is re-derived, never bumped.
- */
+// Measure sorted route prefixes with routes.slice(0,n): distinct importer sets determine chunks, not route count.
+// Re-measure table when routes change; it is envelope’s only input, and pins must fail rather than permit arbitrary ceiling bumps.
 export const MOBILE_WEB_APP_BUNDLE_SCRIPT_SWEEP = [
   ['./_layout.tsx', 3],
-  ['./h/[hostId]/[...page].tsx', 6],
-  ['./h/[hostId]/accounts.tsx', 10],
-  ['./h/[hostId]/agent-history/[worktreeId].tsx', 15],
-  ['./h/[hostId]/edit.tsx', 20],
-  ['./h/[hostId]/files/[worktreeId].tsx', 24],
-  ['./h/[hostId]/files/preview/[worktreeId].tsx', 31],
-  ['./h/[hostId]/history/[worktreeId].tsx', 34],
+  ['./h/[hostId]/[...page].tsx', 7],
+  ['./h/[hostId]/accounts.tsx', 11],
+  ['./h/[hostId]/agent-history/[worktreeId].tsx', 16],
+  ['./h/[hostId]/edit.tsx', 21],
+  ['./h/[hostId]/files/[worktreeId].tsx', 25],
+  ['./h/[hostId]/files/preview/[worktreeId].tsx', 32],
+  ['./h/[hostId]/history/[worktreeId].tsx', 35],
   ['./h/[hostId]/index.tsx', 42],
-  ['./h/[hostId]/new-workspace.tsx', 49],
-  ['./h/[hostId]/pr/[worktreeId].tsx', 50],
-  ['./h/[hostId]/review/[worktreeId].tsx', 57],
-  ['./h/[hostId]/session/[worktreeId].tsx', 69],
-  ['./h/[hostId]/source-control/[worktreeId].tsx', 73],
-  ['./h/[hostId]/tasks.tsx', 87],
-  ['./h/_layout.tsx', 91]
+  ['./h/[hostId]/new-workspace.tsx', 51],
+  ['./h/[hostId]/pr/[worktreeId].tsx', 52],
+  ['./h/[hostId]/review/[worktreeId].tsx', 60],
+  ['./h/[hostId]/session/[worktreeId].tsx', 72],
+  ['./h/[hostId]/source-control/[worktreeId].tsx', 77],
+  ['./h/[hostId]/tasks.tsx', 92],
+  ['./h/_layout.tsx', 96]
 ]
 
 const sweptScripts = MOBILE_WEB_APP_BUNDLE_SCRIPT_SWEEP.map(([, scripts]) => scripts)
 
-/** What each route after the first cost, which is the spread the envelope is an upper bound of. */
+// Marginal script cost per added route defines measured envelope’s worst-case slope.
 export const MOBILE_WEB_APP_BUNDLE_ROUTE_SCRIPT_SPREAD = sweptScripts
   .slice(1)
   .map((scripts, index) => scripts - sweptScripts[index])
 
-/**
- * How far above the measurement the envelope sits, and the only slack a refactor gets.
- *
- * Measured, not chosen, and per head rather than cumulative: at 8, 10, 12 and 14 routes the head
- * that wrote the old `4r + 16` read 32, 43, 61 and 69, and one refactor with no route added moved
- * the 12-route prefix by four (61 to 57). Four is the worst step a refactor alone has cost. The
- * sweep before this branch read 34, 40, 58 and 71 and this head reads 34, 40, 59 and 75: four at
- * 14 routes, from main's own drift plus the server-workspace modules this head adds. A head
- * between them read 77 there, six past that sweep, and re-measured rather than fitting inside the
- * margin, which is what a step past four is meant to force.
- * Summing the steps instead would grow this number every head and loosen the fence for free.
- */
+// Allow four chunks of measured refactor-only drift per head, never cumulative; larger change requires fresh sweep rather than inflated margin.
 export const MOBILE_WEB_APP_BUNDLE_SCRIPT_MARGIN = 4
 
-/**
- * How many scripts the page may be cut into, for a given number of routes.
- *
- * Anchored on the sweep above rather than fitted to the route count, because the count is not a
- * function of the route count alone: `4r + 16` was a guess at break-even and its slack ran from 17
- * at one route to 4 at thirteen, so it was a near-miss exactly where the tree actually sits. This
- * is the measurement plus the margin at the swept tree, growing by the worst route the sweep saw
- * for every route past it — a route cannot breach it without costing more than any route measured.
- *
- * Flat below the swept length, which is the whole sweep's upper bound too: the count rises with the
- * prefix, so one number above its top row is above every row. The fence is only ever asked about
- * the real tree, and routes are only ever added.
- *
- * Two-sided in the test beside it. An envelope more than the margin above the build is a fence
- * nobody re-derived, and it fails there rather than surviving as headroom for a bump.
- *
- * The route count stays the only term. A deferred engine belongs inside one artifact and costs one
- * script: C7.10 item B first reached mermaid with `import('mermaid')`, which emitted 103 more
- * because mermaid lazily imports each of its own diagram types, and a second term admitting those
- * would have raised this fence far enough to admit any split at all. The build test's control is
- * what holds that line.
- *
- * This is the ceiling that catches a split running away; MOBILE_WEB_APP_BUNDLE_MAX_ENTRY_BYTES
- * below is the one that catches it collapsing, and it is the real budget of the two.
- */
+// Ceiling is swept maximum+margin, flat below sweep length, growing by worst measured route beyond it; test both excess and unused headroom.
+// Route count remains sole term: deferred engine must be one artifact, not admit mermaid’s 103 diagram chunks through a new allowance. Entry closure budget below catches collapsed splitting.
 export function mobileWebAppBundleMaxChunks(routeCount) {
   const beyondTheSweep = Math.max(0, routeCount - MOBILE_WEB_APP_BUNDLE_SCRIPT_SWEEP.length)
   return (
@@ -161,21 +100,8 @@ export function mobileWebAppBundleMaxChunks(routeCount) {
   )
 }
 
-/**
- * What the browser must parse before the first route can paint: the entry plus every chunk it
- * reaches by static import. This is the budget splitting exists to hold — it was 8.16 MB as one
- * chunk and measures 1,244,312 bytes split on this head, 1.19 of the 3 MiB — so a route
- * re-imported statically, or `splitting` dropped, fails the build here instead of arriving as a
- * slow first open on a phone.
- *
- * It is not a per-route escape hatch. Re-measured here by making one route's manifest entry a
- * static import and reading this same closure back: session alone breaks the bound at 3.32 MiB,
- * and tasks at 2.17, source-control 2.04, review 2.03, index 1.89 and files/preview 1.85 each
- * spend most of a budget that has to cover the entry as well. What keeps the hatch usable at all
- * is that expo-router reads `unstable_settings` off layout nodes only, and the subtree's one
- * layout, `h/_layout.tsx`, measures 1.89 MiB static. Any other route needing a synchronous export
- * needs this number re-measured, not a static import.
- */
+// Bound entry/static-import closure before first paint: dropping splitting or statically importing a route can ship slow first-open.
+// Expo-router needs synchronous unstable_settings only on layouts; re-measure budget before making another route static, not as a per-route escape hatch.
 export const MOBILE_WEB_APP_BUNDLE_MAX_ENTRY_BYTES = 3 * 1024 * 1024
 
 /** Every tree whose bytes reach the buildId, so a CRLF checkout cannot fork it. */
@@ -191,12 +117,7 @@ function fail(message) {
   throw new VerificationError(message)
 }
 
-/**
- * How many assets the phone will accept, read from the contract rather than copied: the native
- * shells hold their own 256 and refuse a larger manifest outright. Bundled through esbuild
- * because node cannot resolve that module's extensionless TypeScript imports, so the number is
- * evaluated from the contract and not parsed out of it.
- */
+// Load phone’s manifest asset ceiling from contract through esbuild, which resolves extensionless TS imports; never copy native shell count.
 export async function readMobileWebBundleMaxAssets() {
   const { outputFiles } = await esbuild.build({
     entryPoints: [manifestContract],
@@ -216,15 +137,7 @@ export async function readMobileWebBundleMaxAssets() {
   return ceiling
 }
 
-/**
- * The derived ceiling is only a budget while it stays inside the map the phone can hold: the
- * shells return null for a manifest over MOBILE_WEB_BUNDLE_MAX_ASSETS rather than dropping the
- * extra assets, so a route count that pushes the chunk envelope plus images plus the document past
- * it would pass this build and fail on the device with nothing to read. At today's 42 images that
- * is 28 routes, inside what Phase C adds, which is why this is a build failure and not a comment.
- * The envelope grants the worst swept route to each one past the sweep, so re-measuring a tree
- * whose routes share more moves that crossing out again.
- */
+// Reject derived asset allowance beyond phone’s map limit: shells reject whole oversized manifest, not just extras; re-sweep shared routes to tighten envelope.
 export function assertAssetCeilingFitsShell(routeCount, imageCount, shellMaxAssets) {
   const ceiling = mobileWebAppBundleMaxAssets(routeCount, imageCount)
   if (ceiling > shellMaxAssets) {
@@ -271,9 +184,7 @@ export async function verifyMobileWebAppBundle({ bundleDir = defaultBundleDir } 
       `${bundleDir} is stale: it carries buildId ${manifest.buildId}, a fresh build produces ${first.manifest.buildId}`
     )
   }
-  // Read off the fresh build rather than the manifest: neither bound is a manifest field, and the
-  // buildId just proved this build is the one on disk.
-  // After the fresh build, which is what knows how many of the assets are images.
+  // Read chunk/entry bounds and image count from fresh verified build: they are not manifest fields, while buildId binds on-disk bytes.
   const maxAssets = assertAssetCeilingFitsShell(
     first.routeKeys.length,
     first.imageCount,

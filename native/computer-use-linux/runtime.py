@@ -962,11 +962,14 @@ def press_key(raw):
         return
     if Gdk is None:
         raise RuntimeError("GDK is required for non-character key synthesis")
-    Atspi.generate_keyboard_event(Gdk.keyval_from_name(name), None, Atspi.KeySynthType.PRESSRELEASE)
+    Atspi.generate_keyboard_event(Gdk.keyval_from_name(name), None, Atspi.KeySynthType.SYM)
 
 
 def hotkey(raw):
     key_spec = re.sub(r"(?i)commandorcontrol|cmdorctrl", "ctrl", str(raw))
+    if "+" in key_spec:
+        # xdotool treats an upper-case letter as its shifted keysym, so ctrl+A would press ctrl+shift+a.
+        key_spec = "+".join(part.lower() if len(part) == 1 else part for part in key_spec.split("+"))
     xdotool = shutil.which("xdotool")
     if xdotool:
         subprocess.run([xdotool, "key", key_spec], check=True)
@@ -1047,10 +1050,9 @@ def write_clipboard(value):
 
 
 def set_value(node, value):
-    if node is not None and bool(attempt(node.is_editable_text, False)):
-        editable = attempt(node.get_editable_text_iface)
-        if editable is not None and attempt(lambda: Atspi.EditableText.set_text_contents(editable, str(value)), False):
-            return True
+    editable = attempt(node.get_editable_text_iface) if node is not None else None
+    if editable is not None and attempt(lambda: Atspi.EditableText.set_text_contents(editable, str(value)), False):
+        return True
     value_iface = attempt(node.get_value_iface) if node is not None else None
     if value_iface is not None:
         return bool(attempt(lambda: Atspi.Value.set_current_value(value_iface, float(value)), False))

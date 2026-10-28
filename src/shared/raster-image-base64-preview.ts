@@ -41,8 +41,7 @@ function writeQuartet(
   quartet: readonly number[],
   quartetLength: number
 ): { bytesWritten: number; padded: boolean } | null {
-  // Index reads, not `const [a, b, c, d] = quartet`: destructuring an array runs the iterator
-  // protocol (Symbol.iterator plus four `.next()` calls) once per four input characters.
+  // Index reads avoid iterator setup/four next calls per input quartet.
   const a = quartet[0]
   const b = quartet[1]
   const c = quartetLength > 2 ? quartet[2] : BASE64_PADDING
@@ -131,20 +130,12 @@ export function decodeBase64Prefix(content: string, maxBytes: number): Uint8Arra
   return output.subarray(0, outputLength)
 }
 
-// First probe: past every fixed-offset header (PNG 24, GIF 10, WebP 30, BMP 26) and a JFIF-only
-// JPEG's SOF, so an icon or screenshot is measured from its first bytes instead of its last.
+// 64 bytes clears fixed headers/JFIF SOF, measuring ordinary screenshots/icons without decoding the full image.
 const RASTER_IMAGE_HEADER_PROBE_BYTES = 64
-// Growth per miss. JPEG SOF sits past however much EXIF/ICC/MPF the camera wrote, so the probe
-// widens geometrically: total decoded stays within ~1.07x of the bytes the header actually needed.
+// JPEG metadata can push SOF arbitrarily far; geometric growth keeps repeated decoding within ~1.07x of needed header bytes.
 const RASTER_IMAGE_HEADER_PROBE_GROWTH = 16
 
-/**
- * Whether the encoded dimensions are known to exceed the preview limits.
- *
- * Distinct from a failed read: an unrecognized or truncated header means we could not measure the
- * image, not that it is too large. Treating those the same blanks out valid images that no decoder
- * has trouble with, so only a confident over-limit answer should suppress a preview.
- */
+/** Only confidently oversized images suppress previews; unknown/truncated headers mean unmeasurable, not invalid images. */
 export function exceedsRasterImagePreviewLimits(
   content: string,
   mimeType: string | undefined
@@ -155,8 +146,7 @@ export function exceedsRasterImagePreviewLimits(
   let probeBytes = RASTER_IMAGE_HEADER_PROBE_BYTES
   for (;;) {
     const prefix = decodeBase64Prefix(content, probeBytes)
-    // A short probe only ever fails where the whole payload would: it walks a strict prefix of the
-    // same characters through the same state machine.
+    // Prefix failures also fail the full decoder because both use the same state machine.
     if (!prefix) {
       return false
     }
@@ -169,8 +159,7 @@ export function exceedsRasterImagePreviewLimits(
       if (withinLimits || exhausted) {
         return !withinLimits
       }
-      // About to suppress: redo the decode over the whole payload so the verdict stays the one the
-      // full read gives, including its rejection of base64 that turns invalid past the header.
+      // Revalidate the full payload before suppression so invalid trailing base64 preserves the old unmeasurable verdict.
       probeBytes = RASTER_IMAGE_PREVIEW_HEADER_MAX_BYTES
       continue
     }

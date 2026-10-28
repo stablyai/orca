@@ -185,8 +185,7 @@ export function getBrowserPaneSearchEntries(
           'auto.components.settings.browser.search.linkRoutingModifier.opposite',
           'opposite'
         ),
-        // Why: the row renders live copy but this entry is built with openLinksInApp
-        // false, so index the other title too or the row is unfindable by its own text.
+        // Index the alternate live title because this entry is built with openLinksInApp false.
         getLinkRoutingModifierTitle(true),
         platform.isMac ? 'cmd' : 'ctrl'
       ]
@@ -243,7 +242,7 @@ export function getBrowserPaneSearchEntries(
         ...translateSearchKeyword('auto.components.settings.browser.search.7539f6336c', 'profile')
       ]
     },
-    // Appended, not inserted: BrowserPane selects these entries by index.
+    // Append entries because BrowserPane indexes this catalog by position.
     {
       title: getBrowserClientHostedRemoteTitle(),
       description: getBrowserClientHostedRemoteDescription(),

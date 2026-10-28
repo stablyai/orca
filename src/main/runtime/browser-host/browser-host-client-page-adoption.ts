@@ -4,10 +4,7 @@ import type { BrowserHostLeaseState } from './browser-host-lease-records'
 import type { RuntimeBrowserPlacement } from '../../../shared/runtime-browser-placement'
 import type { BrowserHostRuntimePageIntent } from './browser-host-page-reconciliation-plan'
 
-/**
- * An inventory entry a restarted runtime may take back over. `workspaceId` is narrowed to present
- * because the runtime record it rebuilds cannot exist without one.
- */
+/** Restart-adoptable inventory requires the workspace needed by its runtime record. */
 export type AdoptableClientHostedPage = BrowserClientHostedPageInventory &
   Readonly<{ workspaceId: string }>
 
@@ -19,14 +16,7 @@ export type ClientHostedPageAdoptionCandidacy = {
   hasRuntimePage: (browserPageId: string) => boolean
 }
 
-/**
- * Picks the inventory entries a freshly started runtime may reclaim.
- *
- * Each guard fails closed on its own: a dead guest cannot be rekeyed, a workspace-less entry cannot
- * become a record, another host's page is not ours to take, an entry naming this process is one we
- * closed deliberately rather than lost to a restart, and a page we already track needs recovery
- * rather than adoption.
- */
+/** Adopt only untracked predecessor pages; pages this process closed must not be resurrected. */
 export function selectAdoptableClientHostedPages(
   input: ClientHostedPageAdoptionCandidacy
 ): readonly AdoptableClientHostedPage[] {
@@ -57,24 +47,14 @@ export type ClientHostedPageAdoptionLease = {
   browserHostGeneration: number
 }
 
-/**
- * Turns adoptable entries into restore intents under this runtime's authority.
- *
- * Deliberately no `reclaimFrom`: reclaim rekeys a live guest onto a new authority, but it requires
- * the execution-host key to be unchanged, and no kind of key survives a restart
- * (`browserNetworkExecutionHostKey`). `native`/`wsl` keys name the runtime that minted them; an SSH
- * key names the target instead, but carries the provider epoch, which is freshly random per process.
- * The plan must therefore close the orphaned guest and restore the tab at its last URL. The tab
- * survives; the DOM behind it cannot.
- *
- * Generations are handed out above every generation the inventory reports, because the placement
- * registry refuses a generation below one it has already issued.
- */
+/** Every execution-host key changes on restart (runtime id or SSH provider epoch).
+ * Close/restore instead of reclaiming: preserve the URL/tab, not the orphaned DOM.
+ * Allocate above inventory generations so the placement registry accepts them. */
 export function buildClientPageAdoptionIntents(input: {
   pages: readonly AdoptableClientHostedPage[]
   authority: ClientHostedPageAdoptionAuthority
   lease: ClientHostedPageAdoptionLease
-  /** The key a page in that workspace would be created under now, not the one it was created under. */
+  /** Current workspace key, not the predecessor's key. */
   executionHostKeyByWorkspaceId: ReadonlyMap<string, string>
 }): readonly BrowserHostRuntimePageIntent[] {
   const ordered = [...input.pages].sort(
@@ -124,14 +104,7 @@ export type BrowserHostClientPageAdoptionDependencies = {
   executionHostGrants: Map<string, BrowserClientPageExecutionHostGrant>
 }
 
-/**
- * Runs a reconciliation that takes back pages this runtime never placed, holding the execution-host
- * grants the plan requires and returning the page ids that ended up placed.
- *
- * Grants are settled against the committed placements rather than the reconciliation's outcome: a
- * run that fails part way still leaves the pages it did place, and releasing their grants would
- * strand a live page behind a revoked tunnel.
- */
+/** Retain grants for committed placements even after partial reconciliation failure; revocation would strand live pages. */
 export async function adoptBrowserHostClientPages(
   intents: readonly BrowserHostRuntimePageIntent[],
   options: ReconciliationOptions,

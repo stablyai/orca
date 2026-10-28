@@ -13,14 +13,9 @@ export const ProjectProviderIdentity = z.object({
   host: OptionalString
 })
 
-// Why: `runtime:<environment-id>` ids are minted by the calling client's own pairing store
-// (addEnvironmentFromPairingCode -> randomUUID), so they name a machine only relative to that
-// client. A client sending one to this runtime is addressing *us*, and runtimes do not proxy
-// these calls onward, so the host it names is this machine. Persisting the caller's id verbatim
-// makes one machine look like a different host to every other client, hides its rows from them,
-// and defeats the (projectId, hostId) duplicate check. Store our own spelling instead: `local`.
-// Rows written before this normalization keep their client-minted stamp; readers still project
-// `local` back to `runtime:<their-id>`, so the client-visible model is unchanged.
+// Client-minted runtime IDs address this machine, never a proxy. Persist local so clients share host identity
+// and project/host deduplication works; readers project local back to each client’s own runtime ID.
+// Legacy rows keep their existing stamps.
 export const RequestedHostId = requiredString('Missing host ID').transform((value, ctx) => {
   const hostId = normalizeExecutionHostId(value)
   if (!hostId) {

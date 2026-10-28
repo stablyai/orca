@@ -10,8 +10,7 @@ import { MARKDOWN_DOCUMENT_LIST_JOIN_WINDOW_MS } from './markdown-document-list-
 
 const DOCUMENT_WATCH_DEBOUNCE_MS = 125
 
-// Why: a remounted pane must not join a scan that predates the latest change its unmounted
-// predecessor saw (that pane's pending follow-up died with it).
+// Remounted panes must bypass scans older than the latest observed change because unmount cancels their predecessor’s follow-up.
 const latestMembershipChangeAt = new Map<string, number>()
 const membershipChangeKey = (owner: string | null, rootPath: string): string =>
   `${owner ?? ''}::${normalizeRuntimePathForComparison(rootPath)}`

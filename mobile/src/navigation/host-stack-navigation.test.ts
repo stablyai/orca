@@ -11,8 +11,7 @@ const OTHER_TARGET = {
   params: { hostId: 'host/one', worktreeId: 'repo::/tmp/wt' }
 } as const
 
-// Removal is modeled for real: a no-op unsubscribe would let `setState` keep
-// calling a canceled listener, testing the `active` guard instead of teardown.
+// Remove listeners for real so teardown is tested instead of merely the active guard.
 function navigationHarness(initialState: HostStackNavigationState | undefined) {
   const stateListeners = new Set<() => void>()
   let state = initialState
@@ -57,8 +56,7 @@ function committedHostState(hostIdParam: string): HostStackNavigationState {
   }
 }
 
-// The shape app/_layout.tsx sees: Expo Router mounts it as a screen of its own internal
-// navigator, so every route the host stack lives in sits one level below.
+// Model Expo’s internal root navigator: the host stack sits one level below the layout screen.
 function rootLayoutScopedState(inner: HostStackNavigationState): HostStackNavigationState {
   return { key: 'internal', index: 0, routes: [{ key: '__root', name: '__root', state: inner }] }
 }

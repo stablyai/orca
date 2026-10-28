@@ -1,13 +1,22 @@
 import { beforeAll, describe, expect, it, vi } from 'vitest'
-import { PALETTE_MATCH_BUDGET } from './palette-match-budget'
-import { matchPaletteDocument, type PaletteMatchDiagnostics } from './match-document'
-import * as matchFieldModule from './match-field'
-import { preparePaletteQuery } from './palette-query'
+import { PALETTE_MATCH_BUDGET } from '../../../../shared/palette-match/palette-match-budget'
+import {
+  matchPaletteDocument,
+  type PaletteMatchDiagnostics
+} from '../../../../shared/palette-match/match-document'
+import * as matchFieldModule from '../../../../shared/palette-match/match-field'
+import { preparePaletteQuery } from '../../../../shared/palette-match/palette-query'
 import { buildWorktreePaletteDocuments } from '../worktree-palette-document'
 import { searchWorktreeDocuments } from '../worktree-palette-search'
-import { comparePaletteEntityRanks, createPaletteSearchContext } from './palette-ranking'
-import { buildPaletteDocument, type PaletteDocument } from './palette-document'
-import type { PaletteQueryToken } from './palette-query'
+import {
+  comparePaletteEntityRanks,
+  createPaletteSearchContext
+} from '../../../../shared/palette-match/palette-ranking'
+import {
+  buildPaletteDocument,
+  type PaletteDocument
+} from '../../../../shared/palette-match/palette-document'
+import type { PaletteQueryToken } from '../../../../shared/palette-match/palette-query'
 import { issueCacheKey } from '@/store/github/cache-identity'
 import { getPaletteWorktreeIdentity } from '../palette-repo-resolution'
 import type { Repo } from '../../../../shared/repo-types'
@@ -145,13 +154,7 @@ function retainedMatchPayloadBytes(matches: ReturnType<typeof matchPaletteDocume
   return bytes
 }
 
-/**
- * Why the fastest sample and not p95: this runs in a vitest worker competing for
- * cores with the rest of the suite, so a slow sample records a preemption rather
- * than the matcher. The fastest sample is the least contaminated estimate of
- * intrinsic cost — measured stable within 1.6x on a fully saturated machine,
- * while the slowest of the same batch swung by 17x.
- */
+// Use fastest samples to reduce worker-preemption noise; deterministic counters separately catch work fan-out.
 function fastestSample(samples: readonly number[]): number {
   return Math.min(...samples)
 }
@@ -166,14 +169,7 @@ function timeRepeatedly(work: () => void, rounds: number): number[] {
   return samples
 }
 
-/**
- * One full-corpus pass over four quarter-corpus passes, timed in the same run:
- * ~1 for linear work, ~4 for quadratic. A shared CI runner's speed varies
- * several-fold between runs, so an absolute millisecond ceiling flakes; this
- * ratio cancels machine speed. Both samples do the same amount of linear work so
- * preemption is equally likely in each, and rounds alternate them so a burst of
- * contention lands on both.
- */
+// Compare full versus four quarter passes: ~1 is linear, ~4 quadratic. Alternate equal-work samples so runner-speed/contention swings affect both.
 function quadrupledCorpusCostRatio(
   work: (size: 'quarter' | 'full') => void,
   rounds: number

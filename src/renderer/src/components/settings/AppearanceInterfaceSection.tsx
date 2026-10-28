@@ -138,7 +138,7 @@ export function AppearanceInterfaceSection({
                   ))}
                   {pluginLanguagePacks.map((pack) => (
                     <SelectItem key={pack.id} value={pack.id}>
-                      {pack.locale} — {pack.pluginKey}
+                      {pack.displayName ?? `${pack.locale} — ${pack.pluginKey}`}
                     </SelectItem>
                   ))}
                 </SelectContent>
@@ -156,9 +156,7 @@ export function AppearanceInterfaceSection({
       >
         <SettingsRow
           label={translate('auto.components.settings.AppearancePane.5e6d7aba8d', 'UI Zoom')}
-          // Why: keep only the shortcut hint — the control itself makes "scale the
-          // interface" obvious, but the keyboard gesture and its terminal-pane
-          // exception are not discoverable from the buttons alone.
+          // Explain the shortcut and terminal exception; the zoom buttons already explain scaling.
           description={
             <>
               <ShortcutHintList combos={zoomInKeyCombos} /> /{' '}
@@ -232,8 +230,7 @@ export function AppearanceInterfaceSection({
                     'auto.components.settings.AppearancePane.2edf606c46',
                     'Minimize to Tray on Close'
                   )}
-                  // Why: platform constraint + "close keeps Orca running" consequence are
-                  // both non-obvious from the label alone.
+                  // Explain the non-obvious platform restriction and keep-running consequence.
                   description={translate(
                     'auto.components.settings.AppearancePane.b707773a0d',
                     'When enabled, closing the window keeps Orca running in the system tray instead of quitting.'
@@ -254,8 +251,7 @@ export function AppearanceInterfaceSection({
               >
                 <SettingsSwitchRow
                   label={translate('settings.appearance.menuBarIcon.title', 'Show Menu Bar Icon')}
-                  // Why: this opt-out removes only the status item; macOS Dock
-                  // activation and the close-keeps-running lifecycle stay intact.
+                  // Hiding the status item preserves Dock activation and close-keeps-running behavior.
                   description={translate(
                     'settings.appearance.menuBarIcon.description',
                     'Keep an Orca shortcut and activity indicator in the macOS menu bar.'

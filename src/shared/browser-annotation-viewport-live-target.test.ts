@@ -19,16 +19,27 @@ afterEach(async () => {
   await Promise.all(guestAborts.splice(0).map((abort) => abort()))
 })
 
-async function createGuest(targetIsRoot = false) {
+async function createGuest(placement: 'body' | 'root' | 'shadow' | 'slotted' = 'body') {
   const { Window } = await import('happy-dom')
   const window = new Window({ width: 1000, height: 800 })
   guestAborts.push(() => window.happyDOM.abort())
   const document = window.document
   const scroller = document.createElement('div')
-  const target = targetIsRoot ? document.documentElement : document.createElement('section')
-  if (!targetIsRoot) {
+  const target = placement === 'root' ? document.documentElement : document.createElement('section')
+  const shadowHost = document.createElement('div')
+  document.body.appendChild(shadowHost)
+  if (placement === 'body' || placement === 'shadow') {
     scroller.appendChild(target)
-    document.body.appendChild(scroller)
+    const container =
+      placement === 'shadow' ? shadowHost.attachShadow({ mode: 'open' }) : document.body
+    container.appendChild(scroller)
+  } else if (placement === 'slotted') {
+    // A light-DOM element slotted into a component's own scroll container.
+    const slot = scroller.appendChild(document.createElement('slot'))
+    shadowHost.attachShadow({ mode: 'open' }).appendChild(scroller)
+    shadowHost.appendChild(target)
+    // happy-dom has no slot assignment.
+    Object.defineProperty(target, 'assignedSlot', { value: slot })
   }
   let targetRect: Rect = { x: 40, y: 300, width: 120, height: 30 }
   const contentSize = { width: 120, height: 30 }
@@ -163,7 +174,7 @@ describe('annotation viewport bridge live target', () => {
   })
 
   it('keeps a selected document root on outer-box observation', async () => {
-    const guest = await createGuest(true)
+    const guest = await createGuest('root')
     guest.target.setAttribute(BROWSER_GRAB_SELECTED_ATTRIBUTE, 'selection-1')
     guest.install(true)
     guest.flushFrames()
@@ -207,6 +218,22 @@ describe('annotation viewport bridge live target', () => {
     guest.flushFrames()
     expect(guest.lastReport()?.target).toEqual({ x: 40, y: 120, width: 120, height: 30 })
   })
+
+  it.each(['shadow', 'slotted'] as const)(
+    'tracks a %s target through scroll inside the shadow root',
+    async (placement) => {
+      const guest = await createGuest(placement)
+      guest.target.setAttribute(BROWSER_GRAB_SELECTED_ATTRIBUTE, 'selection-1')
+      guest.install(true)
+      guest.flushFrames()
+      expect(guest.lastReport()?.target).toEqual({ x: 40, y: 300, width: 120, height: 30 })
+
+      guest.moveTarget({ x: 40, y: 120, width: 120, height: 30 })
+      guest.scroller.dispatchEvent(new guest.window.Event('scroll'))
+      guest.flushFrames()
+      expect(guest.lastReport()?.target).toEqual({ x: 40, y: 120, width: 120, height: 30 })
+    }
+  )
 
   it('ignores an earlier page-owned selection marker', async () => {
     const guest = await createGuest()

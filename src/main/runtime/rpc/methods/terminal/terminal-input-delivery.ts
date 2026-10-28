@@ -16,7 +16,7 @@ export function isTerminalInputLockedForClient(
   if (client?.type === 'mobile') {
     return false
   }
-  // Why: pre-refactor mobile builds sent no client metadata, so treat a missing client as legacy mobile (unlocked).
+  // Missing client metadata means legacy mobile with unlocked input.
   if (!client) {
     return false
   }
@@ -27,7 +27,7 @@ export async function assertTerminalSendTextWithinLimit(text: string | undefined
   if (!text) {
     return
   }
-  // Why: sends can be paste-sized; validate outside Zod so large input yields before runtime dispatch.
+  // Validate paste-sized payloads outside Zod so large requests yield before dispatch.
   if (await isTerminalInputTooLargeWithYield(text, TERMINAL_INPUT_MAX_BYTES)) {
     throw new InvalidArgumentError(TERMINAL_INPUT_TOO_LARGE_ERROR)
   }
@@ -118,7 +118,7 @@ export async function commitMobileInputFloorClaim(
   try {
     await current.commit()
   } finally {
-    // Why: the runtime may yield before the next write, which then needs a fresh reservation if desktop reclaimed the floor.
+    // After runtime yields, reserve again if desktop reclaimed the floor before the next write.
     if (claim.current === current) {
       claim.current = null
     }

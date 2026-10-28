@@ -6,8 +6,8 @@ import type {
   StructuredAgentSessionProviderOpenInput,
   StructuredAgentSessionProviderOpenResult
 } from '../native-chat/agent-session-wire/structured-agent-session-provider-open-contract'
-import { initializeCodexAppServerConnection } from './codex-app-server-handshake'
-import type { CodexAppServerConnection } from './codex-app-server-connection'
+import { initializeCodexAppServerConnection } from './app-server/codex-app-server-handshake'
+import type { CodexAppServerConnection } from './app-server/codex-app-server-connection-types'
 import { CodexBackgroundTaskTracker, codexChildWorkSink } from './codex-background-task-tracker'
 import type { CodexSubagentExecutions } from './codex-subagent-executions'
 import type { CodexDispatchEchoes } from './codex-structured-dispatch-echo'
@@ -106,6 +106,7 @@ export async function openCodexStructuredSession(
   )
   current()
   start.setPrimaryThreadId(opened.threadId)
+  attempt.window.appliedSettings.observe(opened)
   const restored = translator?.restoreThread(opened.threadId, opened.thread ?? {})
   if (restored && !restored.accepted) {
     throw AgentSessionAcquisitionRefusal.historyTooLarge(
@@ -142,11 +143,19 @@ export async function openCodexStructuredSession(
     ...codexSessionLifecycle(input.fence, generation),
     threadId: opened.threadId,
     historyMode: opened.historyMode,
+    permissions: {
+      acquiredMode: input.permissionMode ?? 'ask',
+      ...(opened.sandbox ? { acquiredSandbox: opened.sandbox } : {}),
+      launchSandboxIntact: true,
+      cwd: launch.cwd,
+      ...(launch.visuals ? { visualsFolder: launch.visuals.folder } : {})
+    },
     activeTurnIds: new Set(),
     abortedTurnIds: new Set(),
     prompts: attempt.window.prompts,
     options: restoredCodexSessionOptions(input.options),
     reportedOptions: reportedCodexThreadOptions(opened),
+    appliedSettings: attempt.window.appliedSettings,
     ...(catalogAccess ? { catalogAccess } : {}),
     dispatchEchoes: start.dispatchEchoes,
     translator,

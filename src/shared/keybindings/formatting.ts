@@ -9,14 +9,17 @@ import type {
 } from './types'
 import { KEYBINDING_DEFINITIONS, isDigitIndexActionId, isKeybindingActionId } from './definitions'
 import { parseKeybinding } from './parser'
+import { getKeybindingConflictIdentity, keybindingConflictIdentities } from './matching-key'
 import {
   getEffectiveKeybindingsForAction,
   getEffectiveKeybindingsForDefinition,
+  getDefaultBindings,
+  keybindingConflictGroups,
+  bindingsOverlap,
   isKeybindingInterceptedBeforeBrowserChords,
   isKeybindingInterceptedByMainProcess
 } from './effective'
 import { isDoubleTapBinding } from './normalization'
-import { getKeybindingConflictIdentity, keybindingConflictIdentities } from './matching'
 
 function formatModifierGlyph(modifier: ModifierToken, isMac: boolean): string {
   switch (modifier) {
@@ -146,6 +149,7 @@ export function findKeybindingConflictsForDefinitions(
   overrides?: KeybindingOverrides,
   options: FindKeybindingConflictOptions = {}
 ): KeybindingConflict[] {
+  const byId = new Map(definitions.map((definition) => [definition.id, definition]))
   const owners = new Map<string, { binding: string; actionIds: Set<KeybindingActionId> }>()
   const ignoredActionIds = new Set(options.ignoredActionIds ?? [])
   const customizedActions = new Set(
@@ -164,12 +168,13 @@ export function findKeybindingConflictsForDefinitions(
     if (ignoredActionIds.has(definition.id)) {
       continue
     }
-    for (const binding of getEffectiveKeybindingsForDefinition(definition, platform, overrides)) {
-      const groups = new Set([definition.conflictGroup ?? definition.scope])
-      if (definition.conflictGroup) {
-        // Why: native menu accelerators can consume global chords, so check custom bindings against both the menu bucket and scope.
-        groups.add(definition.scope)
-      }
+    for (const binding of getEffectiveKeybindingsForDefinition(
+      definition,
+      platform,
+      overrides,
+      definitions
+    )) {
+      const groups = new Set(keybindingConflictGroups(definition))
       // Why: main consumes these before renderer handlers run, but a focused browser guest runs its own chords ahead of the after-browser ones.
       if (
         options.includeMainProcessInterception &&
@@ -212,9 +217,28 @@ export function findKeybindingConflictsForDefinitions(
     )
     .map(({ binding, actionIds }) => ({
       binding,
-      actionIds: Array.from(actionIds)
+      actionIds: Array.from(actionIds).filter((id) => {
+        const definition = byId.get(id)
+        return (
+          !definition?.implicitDefaultYields ||
+          Object.hasOwn(overrides ?? {}, id) ||
+          !Array.from(actionIds).every((otherId) => {
+            const other = byId.get(otherId)
+            return (
+              otherId === id ||
+              (other &&
+                getDefaultBindings(other, platform).some((ownDefault) =>
+                  bindingsOverlap(definition, binding, other, ownDefault, platform)
+                ))
+            )
+          })
+        )
+      })
     }))
     .filter((conflict) => {
+      if (conflict.actionIds.length < 2) {
+        return false
+      }
       const key = `${conflict.binding}\u0000${conflict.actionIds.join('\u0000')}`
       if (seenConflictKeys.has(key)) {
         return false

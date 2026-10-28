@@ -114,7 +114,6 @@ describe('guarded editor saves under races', () => {
 
     const cleanup = attachEditorAutosaveController(store)
     try {
-      // An Overwrite is already writing when the user clicks Keep.
       const save = requestEditorFileSave({ fileId: GUARDED_PATH, overwrite: true })
       await vi.advanceTimersByTimeAsync(0)
       keepTabEditsOverExternalChange(store.getState().openFiles[0])
@@ -155,7 +154,7 @@ describe('guarded editor saves under races', () => {
     for (const tab of [saver, sibling]) {
       store.getState().setLastKnownDiskSignature(tab.id, getDiskBaselineSignature('A'))
     }
-    // The panel's per-tab text cache, kept the way the panel keeps it.
+    // Model the panel’s per-tab text cache.
     const cache = new Map([
       [saver.id, 'A'],
       [sibling.id, 'A']
@@ -165,7 +164,7 @@ describe('guarded editor saves under races', () => {
         cache.set(event.detail.fileId, event.detail.content)
       }
     }
-    // A dropped cache reloads from disk on the next mount; no text is pushed between tabs.
+    // Eviction reloads disk on remount without pushing text between tabs.
     const drop = (event: Event): void => {
       if (event instanceof CustomEvent) {
         cache.delete(event.detail.fileId)
@@ -181,7 +180,6 @@ describe('guarded editor saves under races', () => {
       await requestEditorFileSave({ fileId: saver.id })
       expect(cache.has(sibling.id)).toBe(false)
 
-      // Remount the sibling (its cache reloads from disk), edit, and save.
       const reloaded = cache.get(sibling.id) ?? disk.files.get(GUARDED_PATH)
       expect(reloaded).toBe('B')
       store.getState().setEditorDraft(sibling.id, `${reloaded} edited`)
@@ -230,7 +228,7 @@ describe('guarded editor saves under races', () => {
       store.getState().setEditorDraft(tab.id, 'X')
       store.getState().markFileDirty(tab.id, true)
     }
-    // A mounted consumer: the panel's per-tab text, fed by saved events, is what a model mounts.
+    // Mount from per-tab text updated by saved events, matching panel consumers.
     const shown = new Map([
       [a.id, 'A'],
       [b.id, 'A']
@@ -251,7 +249,6 @@ describe('guarded editor saves under races', () => {
       gate.resolve()
       await saves
 
-      // The second save queues behind the first and finds the record clean.
       expect(disk.writeFile).toHaveBeenCalledTimes(1)
       expect(disk.files.get(GUARDED_PATH)).toBe('X')
       expect(shown.get(a.id)).toBe('X')
@@ -309,7 +306,7 @@ describe('guarded editor saves under races', () => {
       keepTabEditsOverExternalChange(store.getState().openFiles[0])
       await vi.advanceTimersByTimeAsync(0)
       expect(store.getState().editorDrafts[b.id]).toBe('kept edits')
-      // The record holds the unsaved kept edits, so no view's cache is dropped for disk.
+      // Kept unsaved text must prevent cache eviction in every view.
       expect(dropped).toEqual([])
 
       await requestEditorFileSave({ fileId: a.id })

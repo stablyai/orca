@@ -1,12 +1,4 @@
-/**
- * A move onto a server another desktop on the same login already uses. A project this desktop moves
- * that the server already holds at the same host path is the same checkout, so the move links it
- * to the server's project instead of importing a second row the server refuses. The server's row
- * and state stay as they are; this desktop's own rows stay in its retained source, as moved ones do.
- *
- * Linking rewrites the journal under the same migration id, and only after the server proves it
- * holds nothing of the earlier manifest, so no row ever lands twice.
- */
+/** Link same-host-path checkouts to existing server rows without overwriting their newer state; retain desktop source copies. Re-journal under the same id only after proving the prior manifest absent, preventing duplicate imports. */
 import { getAutomationRunRepoId } from '../../shared/automation-run-identity'
 import type { Automation } from '../../shared/automations-types'
 import type { FolderWorkspace } from '../../shared/folder-workspace-types'
@@ -42,11 +34,7 @@ export type OrcadServerRepository = Pick<Repo, 'id' | 'path'> & {
   projectGroupId?: string | null
 }
 
-/**
- * Incoming projects the server holds at the same host path. `sameId` is the server's copy of this
- * desktop's own row, from an earlier move into the profile a stopped server left (#29560). Only the
- * server machine's own rows count: one it reaches on another host is a different checkout.
- */
+/** Match only server-local checkouts. Same-id rows can survive earlier moves into stopped-server profiles (#29560); nested remote rows identify different hosts. */
 export function repositoriesHeldByServer(
   incoming: readonly OrcadServerRepository[],
   server: readonly OrcadServerRepository[]
@@ -69,11 +57,7 @@ export function repositoriesHeldByServer(
   return { otherId, sameId }
 }
 
-/**
- * The server's same-id rows came from an earlier move unless this one already committed (a crash
- * before the journal caught up), which must resume, not relink. Its live state since then is
- * newer than this desktop's retained copy, so it is linked rather than re-imported over.
- */
+/** Link older same-id imports so retained desktop state cannot overwrite server edits. A commit awaiting journal update must resume instead. */
 async function serverHeldRowsToLink(
   cutover: OrcadMigrationSourceCutover,
   destination: OrcadMigrationDestinationCatalog,
@@ -98,7 +82,6 @@ async function serverHeldRowsToLink(
       }
 }
 
-/** The source the cutover was cut from: the real store less any project or group it linked. */
 function linkedOrcadMigrationSource(
   store: Store,
   cutover: Pick<
@@ -151,16 +134,12 @@ export function linkedOrcadMigrationCutoverPort(args: {
 
 const NO_SERVER_FOLDERS: OrcadServerFolderCatalog = { folderWorkspaces: [], projectGroups: [] }
 
-/** The repo or folder workspace a lease's tab belongs to. */
 function leaseWorkspaceOwner(worktreeId: string): string | undefined {
   const scope = parseWorkspaceKey(worktreeId)
   return scope?.type === 'folder' ? scope.folderWorkspaceId : splitWorktreeId(worktreeId)?.repoId
 }
 
-/**
- * A relay terminal the bridge still serves reattaches only into its own tab, which a linked
- * project never sends to the server: linking now would strand it out of sight, still running.
- */
+/** Linking omits the original tab; refuse if the relay bridge still needs it or a live shell would be stranded. */
 function assertNoRelayTerminalsIn(
   store: Pick<Store, 'getSshRemotePtyLeases'>,
   cutover: OrcadMigrationSourceCutover,
@@ -195,7 +174,6 @@ function assertNoRelayTerminalsIn(
   }
 }
 
-/** What each linked project leaves behind on this desktop, so the connect can say so. */
 export function linkedOrcadMigrationProjects(
   store: {
     getRepos(): OrcadServerRepository[]
@@ -225,7 +203,6 @@ export function linkedOrcadMigrationProjects(
   ]
 }
 
-/** Returns the cutover to commit: the same one, or one re-journaled without the linked projects. */
 export async function linkServerHeldRepositories(args: {
   userDataPath: string
   store: Store
@@ -258,7 +235,7 @@ export async function linkServerHeldRepositories(args: {
   }
   assertNoRelayTerminalsIn(args.store, cutover, linked, folders)
   const source = linkedOrcadMigrationCutoverPort(args)
-  // The relinked manifest is cut from the source as fenced, so it must still be that source.
+  // Re-export only after verifying the original fenced source still matches.
   source.verifyFence(cutover)
   const linkedRepositoryIds = [...new Set([...(cutover.linkedRepositoryIds ?? []), ...linked])]
   const linkedFolderWorkspaceIds = [
@@ -300,14 +277,14 @@ export async function linkServerHeldRepositories(args: {
     manifestSha256: manifest.manifestSha256,
     manifest,
     ...linkedIds,
-    // The retained rows still hold the linked projects, so the baseline is the whole fenced source.
+    // Retained rows include linked projects, so baseline the entire fenced source.
     sourceBaselineFingerprint:
       cutover.sourceBaselineFingerprint ?? orcadCatalogFingerprint(cutover.manifest.payload)
   }
   const aborted = await abortOrcadMigrationCutover(
     { userDataPath, store: args.store, claims: args.claims, destination: args.destination, source },
     cutover.migrationId,
-    // Why keep the fence: the move goes on to the same server, now without the linked projects.
+    // Relinking continues the same move/server, so retain its fence.
     async () => writeOrcadMigrationSourceCutover(userDataPath, relinked)
   )
   if (aborted.outcome !== 'released') {

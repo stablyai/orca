@@ -2,8 +2,7 @@ import { hkdf } from '@noble/hashes/hkdf'
 import { sha256 } from '@noble/hashes/sha256'
 import type { PairedE2EEV2KeySchedule } from './paired-e2ee-primitives'
 
-// Why: pure JS so browsers without crypto.subtle (http://<lan-ip>) and Hermes derive the
-// same v2 keys as the node:crypto schedule. Keep it out of the CLI's unbundled graph.
+// Pure JS preserves shared v2 keys on insecure LAN browsers without crypto.subtle and on Hermes; exclude from the unbundled CLI graph.
 const SALT_LABEL = new TextEncoder().encode('orca-mobile-e2ee/v2/salt\0')
 const INFO_LABEL = new TextEncoder().encode('orca-mobile-e2ee/v2/session\0')
 

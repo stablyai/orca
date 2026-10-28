@@ -1,9 +1,13 @@
-import { isRemoteRuntimePtyId } from '../../../../../shared/remote-runtime-pty-id'
+import {
+  applyTerminalLaunchResult,
+  captureTerminalLaunchContext,
+  type TerminalLaunchContext
+} from './terminal-launch-result-policy'
+import { isRemoteRuntimePtyId } from '../../../../../shared/remote-runtime/remote-runtime-pty-id'
 import { scheduleRuntimeGraphSync } from '@/runtime/sync-runtime-graph'
 import type { PtyBufferSnapshot, PtyConnectResult } from '../pty-transport-types'
 import { warnTerminalLifecycleAnomaly } from '../terminal-lifecycle-diagnostics'
-// Why: a restored pane's stale-account prompt can only be raised once a PTY is
-// actually attached — nothing is inspectable while the session hydrates.
+// Inspect stale-account state only after a concrete PTY attaches.
 import { notifyCodexPaneBoundForStaleSweep } from '@/lib/codex-stale-pane-sweep'
 import { useAppStore } from '@/store'
 import { resolveHiddenRestoreScrollbackRows } from '../terminal-hidden-restore-scrollback'
@@ -34,6 +38,7 @@ type ReattachResultSession = ReattachPayloadSession &
     ConnectPanePtySession,
     | 'agentCompletionCoordinator'
     | 'buildColdRestoreAgentResumeStartup'
+    | 'discardAgentPreReadyDraft'
     | 'mainStartAttach'
     | 'runtimeEnvironmentId'
     | 'activePanePtyBinding'
@@ -45,6 +50,7 @@ type ReattachResultSession = ReattachPayloadSession &
     | 'handleReattachResult'
     | 'mountFollowsTerminalPark'
     | 'registerEffectiveLaunchConfig'
+    | 'cancelSavedResumeStartup'
     | 'registerPaneSerializerFor'
     | 'registerSideEffectFactConsumerForPty'
     | 'reportPanePtyVisibility'
@@ -69,7 +75,11 @@ export function bindHandleReattachResult(sessionBag: ConnectPanePtySession): voi
     result: PtyConnectResult | string | void,
     staleSessionId?: string | null,
     coldRestoreStartup?: ColdRestoreAgentResumeStartup | null,
-    attemptGeneration = session.transportStreamGeneration
+    attemptGeneration = session.transportStreamGeneration,
+    launchContext: TerminalLaunchContext = captureTerminalLaunchContext(
+      sessionBag,
+      coldRestoreStartup ?? sessionBag.paneStartup
+    )
   ): Promise<boolean> => {
     if (session.disposed) {
       return false
@@ -79,31 +89,38 @@ export function bindHandleReattachResult(sessionBag: ConnectPanePtySession): voi
     }
     const isCurrentReattachTransport = (): boolean =>
       !session.disposed &&
-      // A remount can register its successor before the old async result settles.
-      // Do not let the stale session mutate or retire the successor's ownership.
+      // Require current transport ownership before old async results can mutate or retire a successor.
       session.deps.paneTransportsRef.current.get(session.pane.id) === session.transport &&
       attemptGeneration === session.transportStreamGeneration
     if (!isCurrentReattachTransport()) {
       return false
     }
-    // Why: bump only once this attempt owns the stream, or a superseded result
-    // would cancel the current attempt's in-flight snapshot prepaint.
+    // Bump generation only after ownership admission so superseded results cannot cancel current snapshot prepaint.
     session.authoritativeReattachGeneration += 1
     const connectResult =
       result && typeof result === 'object' && 'id' in result ? (result as PtyConnectResult) : null
     if (connectResult?.incarnationId) {
       session.remotePtyIncarnationId = connectResult.incarnationId
     } else if (connectResult?.isReattach || typeof result === 'string') {
-      // Legacy hosts do not publish an incarnation; force client-only
-      // unverifiable evidence until a fresh attach returns one.
+      // Missing legacy incarnation remains client-only unverifiable evidence until a stamped attach.
       session.remotePtyIncarnationId = null
     }
 
+    if (connectResult) {
+      applyTerminalLaunchResult(sessionBag, connectResult, launchContext, 'creator')
+    }
     if (connectResult?.exitedBeforeAttach) {
       // Why: the transport already delivered the dead session's final frame + exit; treat as terminal state, not a failed reattach.
       return true
     }
 
+    // Why: main started a plain shell instead, so nothing of the plan may be registered over it.
+    const startup =
+      connectResult?.agentResumeRefused ||
+      connectResult?.agentResumeUnavailable ||
+      connectResult?.isReattach
+        ? null
+        : coldRestoreStartup
     const ptyId =
       connectResult?.id ?? (typeof result === 'string' ? result : session.transport.getPtyId())
     const hasExplicitPtyId = Boolean(connectResult?.id || typeof result === 'string')
@@ -129,14 +146,6 @@ export function bindHandleReattachResult(sessionBag: ConnectPanePtySession): voi
       })
       return false
     }
-    session.registerEffectiveLaunchConfig(connectResult?.launchConfig, {
-      ...(coldRestoreStartup ? { launchToken: coldRestoreStartup.launchToken } : {}),
-      ...(connectResult?.launchAgent
-        ? { launchAgent: connectResult.launchAgent }
-        : coldRestoreStartup
-          ? { launchAgent: coldRestoreStartup.agent }
-          : {})
-    })
     if (connectResult?.sessionExpired) {
       if (staleSessionId) {
         session.clearExitedPanePtyLayoutBinding(staleSessionId)
@@ -147,25 +156,20 @@ export function bindHandleReattachResult(sessionBag: ConnectPanePtySession): voi
         session.deps.clearTabPtyId(session.deps.tabId, staleSessionId)
       }
       // Why: a host can invalidate the PTY while the tab stays mounted; replace it in place, not with a stale overlay.
-      session.startFreshColdRestoreAgentResume(coldRestoreStartup, {
+      session.startFreshColdRestoreAgentResume(startup, {
         forceBlankRestoredViewport: true
       })
       return false
     }
     const isCurrentReattachPayload = (): boolean => {
       const currentPtyId = session.transport.getPtyId()
-      // Remote transports may publish the result object before their async
-      // bind callback updates getPtyId(); the explicit result is authoritative.
+      // Explicit attach results outrank transient getPtyId nulls before the async bind callback.
       return isCurrentReattachTransport() && (currentPtyId === ptyId || hasExplicitPtyId)
     }
     if (!isCurrentReattachPayload()) {
       return false
     }
-    // The first authoritative attach of the pane a recovery remount produced:
-    // the observation the ledger was waiting for. Placed past the no-PTY-id and
-    // session-expired branches so a failure can never be reported as a success.
-    // Those branches fall through to startFreshColdRestoreAgentResume and leave
-    // the attempt pending, which the ledger's bound then ages out.
+    // Settle recovery success only after PTY/expiry validation; fallback failures stay pending for bounded ledger expiration.
     session.settlePaneAttachAttempt?.('success')
     // Strict precedence snapshot > replay > coldRestore: paint exactly one, else overlapping tails duplicate TUI output on worktree switch.
     const hasStructuralReplay = Boolean(
@@ -180,8 +184,11 @@ export function bindHandleReattachResult(sessionBag: ConnectPanePtySession): voi
       !(mainStarts && session.mainStartAttach) &&
       hasEmptyReattachRetireEvidence(
         ptyId,
-        // Main's attach carries no resume; the evidence reads the pane's record all the same.
-        mainStarts ? session.buildColdRestoreAgentResumeStartup() : coldRestoreStartup
+        connectResult.agentResumeRefused
+          ? null
+          : mainStarts
+            ? session.buildColdRestoreAgentResumeStartup()
+            : coldRestoreStartup
       )
     ) {
       session.transport.disconnect()
@@ -202,10 +209,11 @@ export function bindHandleReattachResult(sessionBag: ConnectPanePtySession): voi
       return false
     }
     session.setPanePtyFitBinding(ptyId)
-    // Keep the session-local identity in step with the transport before any
-    // queued spawn callback can arrive during replay.
+    // Commit session identity before replay can admit queued spawn callbacks.
     session.activePanePtyBinding = ptyId
     session.activePanePtyBindingBoundAt = performance.now()
+    // Why discard: a cold restore can reach a bare shell that `--resume` is typed into next.
+    session.discardAgentPreReadyDraft?.()
     session.reportPanePtyVisibility(ptyId, session.deps.isVisibleRef.current)
     session.registerSideEffectFactConsumerForPty(ptyId)
     session.syncHiddenRendererPtyDelivery()
@@ -216,10 +224,7 @@ export function bindHandleReattachResult(sessionBag: ConnectPanePtySession): voi
       useAppStore.getState().terminalLayoutsByTabId[session.deps.tabId]?.ptyIdsByLeafId?.[
         session.pane.leafId
       ]
-    // A split pane has its own PTY while the legacy tab-level field still
-    // names the source pane. Only infer a tab-wide replacement when that
-    // field is actually bound to this leaf; an unrelated sibling must not be
-    // rewritten to the new pane's PTY.
+    // Only replace tab-level PTY identity when it belongs to this leaf; split spawn cannot rewrite its unrelated source sibling.
     const inferredReplacementPtyId =
       currentTabPtyId &&
       shouldIgnoreStalePanePtyLayoutBinding({
@@ -246,20 +251,14 @@ export function bindHandleReattachResult(sessionBag: ConnectPanePtySession): voi
     // Why: mobile streaming needs xterm's exact screen state; install the serializer + lastTitle source for main-process hydration parity.
     session.registerPaneSerializerFor(ptyId)
 
-    // Why consume-once: only the first reattach of a reveal remount may pay
-    // the probe; a later in-place reconnect on this same mount must not buy a
-    // second timeout before the replay paint.
+    // Spend the park-reveal probe once; later in-place reconnects must not pay another timeout before replay.
     const revealFollowsTerminalPark =
       session.mountFollowsTerminalPark &&
       (connectResult?.isReattach === true || isRemoteRuntimePtyId(ptyId))
     session.mountFollowsTerminalPark = false
-    // Why: ordinary parking destroys xterm. Rebuild from the authoritative
-    // host snapshot before releasing queued live bytes; null falls back to
-    // the subscribe screen without keeping the old xterm mounted.
+    // Parking destroys xterm; restore the host image before live bytes, preserving subscribe paint if no image was proven.
     let prefetchedParkModelSnapshot: PtyBufferSnapshot | null = null
-    // Why kept apart from null: null means "paint nothing", never "the pane is
-    // empty". A probe that proved nothing (timeout, host declined for now) must
-    // also re-ask the host, bounded, once the payload has settled.
+    // Null means no proven paint, never empty; unverifiable probes need a bounded retry after payload settlement.
     let unverifiableParkRevealLedger: ParkRevealRetryLedger | undefined
     let noHostImageReason: ParkRevealNoHostImageReason | undefined
     if (revealFollowsTerminalPark && (!hasStructuralReplay || isRemoteRuntimePtyId(ptyId))) {
@@ -295,7 +294,7 @@ export function bindHandleReattachResult(sessionBag: ConnectPanePtySession): voi
       prefetchedParkModelSnapshot,
       revealFollowsTerminalPark,
       shouldApplyStructuralPayload,
-      coldRestoreStartup,
+      coldRestoreStartup: startup,
       reattachPayloadApplied: !shouldApplyStructuralPayload,
       skippedAltFrameCaptureCols: null
     }

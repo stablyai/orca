@@ -12,7 +12,6 @@ import type { WorkspaceSessionState } from '../../../shared/workspace-session-st
 
 const README = `${TEST_WORKTREE_PATH}/README.md`
 
-/** The editor a converted SSH host's migration writes into the managed server's session. */
 function sessionWithMigratedEditor(): WorkspaceSessionState {
   return {
     ...getDefaultWorkspaceSession(),

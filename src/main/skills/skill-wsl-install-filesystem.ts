@@ -25,9 +25,7 @@ import { runWslProcess } from '../wsl/wsl-runner'
 const BATCH_FILE_COUNT = 8
 const GUEST_COMMAND_TIMEOUT_MS = 30_000
 const GUEST_COMMAND_MAX_OUTPUT_BYTES = 64 * 1024
-// Why far above the default: one batched `listEntries` covers every discovery
-// root of a WSL home at once, which is orders of magnitude more output than any
-// install call. Matched to the discovery scanner's own bound.
+// Batch enumeration spans every discovery root; match discovery's larger output bound.
 const ENUMERATION_MAX_BUFFER_BYTES = 128 * 1024 * 1024
 
 function isWindowsBackedGuestPath(path: string): boolean {
@@ -249,9 +247,7 @@ export class WslSkillInstallFilesystem implements SkillInstallFilesystem {
     return guestPath
   }
 
-  /** Enumeration also has to reach an authorized root *itself*, which
-   *  `requireAllowed` refuses because it demands strict containment. Read-only,
-   *  so admitting the root adds no mutation surface. */
+  /** Read-only enumeration may inspect an authorized root itself; mutation still requires strict containment. */
   private requireReadable(path: string): string {
     const guestPath = this.toGuestPath(path)
     const allowed = this.guestAllowedRoots.some((root) => {

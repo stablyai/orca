@@ -13,7 +13,7 @@ import { callRuntimeFileMutation } from './runtime-file-mutation-rpc'
 import { toRuntimeWorktreeSelector } from './runtime-worktree-selector'
 import type { LocalFileAccess } from '../../../shared/local-file-access'
 import { localAccess } from './runtime-file-read-client'
-import { REMOTE_RUNTIME_MAX_FILE_WRITE_CONTENT_BYTES } from '../../../shared/remote-runtime-memory-limits'
+import { REMOTE_RUNTIME_MAX_FILE_WRITE_CONTENT_BYTES } from '../../../shared/remote-runtime/remote-runtime-memory-limits'
 import {
   FILE_WRITE_OK,
   parseFileWriteResult,
@@ -23,7 +23,7 @@ import {
 import { writeRemoteFileIfUnchanged } from './runtime-file-write-disk-precondition'
 
 /** Refuses a save the host's frame cap would reject by dropping the whole connection. */
-function assertRemoteWriteFitsOneRequest(content: string): void {
+export function assertRemoteWriteFitsOneRequest(content: string): void {
   // Why: one UTF-16 unit escapes to at most 6 bytes, so most saves skip encoding.
   if (content.length * 6 + 2 <= REMOTE_RUNTIME_MAX_FILE_WRITE_CONTENT_BYTES) {
     return
@@ -39,12 +39,17 @@ function assertRemoteWriteFitsOneRequest(content: string): void {
 export async function readRuntimeDirectory(
   context: RuntimeFileOperationArgs,
   dirPath: string,
-  options: { followSymlinks?: boolean } = {}
+  { wakeWslDistro, ...options }: { followSymlinks?: boolean; wakeWslDistro?: boolean } = {}
 ): Promise<DirEntry[]> {
   const remoteArgs = getRemoteFileArgs(context, dirPath)
   if (!remoteArgs) {
     assertLocalFilesystemFallbackAllowed(context)
-    return window.api.fs.readDir({ dirPath, connectionId: context.connectionId, ...options })
+    return window.api.fs.readDir({
+      dirPath,
+      connectionId: context.connectionId,
+      ...options,
+      ...(wakeWslDistro ? { wakeWslDistro } : {})
+    })
   }
   return callRuntimeRpc<DirEntry[]>(
     remoteArgs.target,
@@ -203,7 +208,8 @@ export async function copyRuntimePath(
 export async function deleteRuntimePath(
   context: RuntimeFileOperationArgs,
   targetPath: string,
-  recursive?: boolean
+  recursive?: boolean,
+  options?: { permanent?: boolean }
 ): Promise<void> {
   const remoteArgs = getRemoteFileArgs(context, targetPath)
   if (!remoteArgs) {
@@ -212,7 +218,8 @@ export async function deleteRuntimePath(
       withSshMutationExpectation(context, {
         targetPath,
         connectionId: context.connectionId,
-        recursive
+        recursive,
+        ...(options?.permanent === true ? { permanent: true } : {})
       })
     )
     return

@@ -1,4 +1,4 @@
-import { normalizeJiraQuickFilterState } from '../../shared/jira-quick-filters'
+import { normalizeJiraQuickFilterState } from '../../shared/jira/jira-quick-filters'
 import { JiraQuickFilterStateParam } from '../../shared/rpc-contract/jira-quick-filter-params'
 import {
   normalizeJiraSavedFilterState,
@@ -9,6 +9,8 @@ import { BrowserWindow, ipcMain, webContents, type WebContents } from 'electron'
 import type { Store } from '../persistence'
 import type { PersistedUIState } from '../../shared/persisted-ui-state-types'
 import { isFeatureInteractionId } from '../../shared/feature-interactions'
+import { isWslMoveWindowWriteHeld } from '../persistence/moving-wsl-projects/wsl-move-window-write-hold'
+import { isTrustedMainRendererSender } from './main-renderer-sender-trust'
 
 let trustedUIRendererWebContentsId: number | null = null
 
@@ -58,7 +60,7 @@ export function registerUIHandlers(
   // Broadcast UI state so desktop rehydrates mobile or sibling-window changes.
   store.onUIChanged((ui) => {
     for (const window of BrowserWindow.getAllWindows()) {
-      if (!window.isDestroyed()) {
+      if (!window.isDestroyed() && !window.webContents.isDestroyed()) {
         window.webContents.send('ui:stateChanged', ui)
       }
     }
@@ -86,7 +88,10 @@ export function registerUIHandlers(
   })
 
   ipcMain.handle('ui:set', (_event, args: Partial<PersistedUIState>) => {
-    store.updateUI(args)
+    // A window a WSL move rewrote under is stale until main reloads it.
+    if (!isWslMoveWindowWriteHeld()) {
+      store.updateUI(args)
+    }
   })
 
   ipcMain.handle('ui:recordFeatureInteraction', (_event, id: unknown) => {
@@ -128,22 +133,5 @@ export function registerUIHandlers(
 }
 
 export function isTrustedUIRenderer(sender: WebContents): boolean {
-  if (sender.isDestroyed() || sender.getType() !== 'window') {
-    return false
-  }
-  if (trustedUIRendererWebContentsId != null) {
-    return sender.id === trustedUIRendererWebContentsId
-  }
-
-  const senderUrl = sender.getURL()
-  if (process.env.ELECTRON_RENDERER_URL) {
-    try {
-      return new URL(senderUrl).origin === new URL(process.env.ELECTRON_RENDERER_URL).origin
-    } catch {
-      return false
-    }
-  }
-
-  // Packaged fallback requires the registered main-window ID, not arbitrary file documents.
-  return false
+  return isTrustedMainRendererSender(sender, trustedUIRendererWebContentsId)
 }

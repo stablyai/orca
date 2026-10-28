@@ -8,7 +8,7 @@ import {
 } from '../claude/claude-folder-trust-file'
 import { getManagedScriptFileName, removeManagedHooks } from '../claude/hook-settings'
 import { publishFileWithoutOverwrite } from '../codex-accounts/fs-utils'
-import { CLAUDE_PROFILE_HISTORY_DIRS } from './claude-profile-history'
+import { CLAUDE_PROFILE_HISTORY_DIRS, mergeClaudeProfileDirectory } from './claude-profile-history'
 import { readClaudeProfileObject, resolveClaudeDefaultHome } from './claude-profile-paths'
 import { lstatIfPresent } from './claude-profile-prompt-history'
 import {
@@ -256,6 +256,8 @@ export async function provisionClaudeProfile(args: {
   /** The user's own CLAUDE_CONFIG_DIR; `~/.claude` when unset. */
   userConfigDir?: string
   platform?: NodeJS.Platform
+  /** Before the setup marker, a folder in the profile is one Claude made, not one the user owns. */
+  firstSetup?: boolean
 }): Promise<ClaudeProfileReport> {
   const platform = args.platform ?? process.platform
   const defaultHome = resolveClaudeDefaultHome(args.userHome, args.userConfigDir)
@@ -277,7 +279,11 @@ export async function provisionClaudeProfile(args: {
       // Share linked entries according to their target type.
       const entry = statSync(source, { throwIfNoEntry: false })
       if (entry?.isDirectory()) {
-        return linkClaudeProfileDirectory(source, target, platform)
+        const outcome = linkClaudeProfileDirectory(source, target, platform)
+        // Why: a pane's `claude` can run before setup and create e.g. plugins/installed_plugins.json.
+        return outcome === 'user-owned' && args.firstSetup && lstatIfPresent(target)?.isDirectory()
+          ? mergeClaudeProfileDirectory(args.profileHome, defaultHome, name, platform, report)
+          : outcome
       }
       if (!entry?.isFile()) {
         return 'absent'

@@ -36,8 +36,7 @@ export type MobileNotificationDispatchEvent = {
   notificationId?: string
   notificationSeq?: number
   notificationEpoch?: string
-  // Why: background push must tell "needs input" from "finished" without re-deriving
-  // it from the title. Optional and additive — old clients ignore it.
+  // Additive state distinguishes input-needed from finished in push; old clients ignore it.
   agentState?: AgentStatusState
   /** See `NotificationDispatchRequest.attentionKey`: cooldowns key on it instead of the workspace. */
   attentionKey?: string
@@ -123,9 +122,7 @@ export class RuntimeMobileNotificationController {
     this.desktopClients.report(connectionId, away, Date.now())
   }
 
-  // Why: undefined means unknown and must never silence a phone; only a fresh report or the local
-  // idle state proves someone is at a desktop. A host with no desktop of its own (orca serve) has
-  // only its attached desktops to ask, so their silence is away rather than unknown (#31570).
+  // Unknown must not silence phones; require fresh desktop/local activity. Headless serves use attached desktops, whose silence means away (#31570).
   private resolveDesktopAway(): boolean | undefined {
     if (this.desktopClients.anyPresent(Date.now())) {
       return false

@@ -57,6 +57,7 @@ function rig(initialProbe: AgentModelCatalogProbe = signedOut) {
   )
   const service = createAgentModelCatalogService({
     store,
+    getConversation: () => undefined,
     getRecord: () => undefined,
     drivesRecord: () => true,
     resolveAccountHome: async () => ACCOUNT_HOME,

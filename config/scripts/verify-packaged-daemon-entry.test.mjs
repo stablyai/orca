@@ -29,8 +29,7 @@ describe('verify-packaged-daemon-entry', () => {
     writeFileSync(join(entryDir, 'daemon-entry.js'), source)
   }
 
-  // Why: a silent skip on a missing entry false-passed exactly the packaged
-  // layout regression this gate exists to catch (rc.1 daemon-load incident).
+  // Missing entry must fail: silent skip hid packaged layout regression in rc.1 daemon-load incident.
   it('throws when the unpacked daemon entry is missing', () => {
     expect(() => assertPackagedDaemonEntryExists(resourcesDir)).toThrow(
       /missing unpacked daemon entry/
@@ -125,6 +124,51 @@ describe.skipIf(process.platform === 'win32')('terminal host round trip', () => 
       scratchDirs: readdirSync(root).filter((name) => name.startsWith('oth-'))
     }
   }
+
+  it('accepts a valid peer round trip and cleans up after observing the boot request', async () => {
+    const messagesPath = join(root, 'messages.jsonl')
+    const entry = fakeDaemon(`(socket) => {
+      let buffer = ''
+      socket.on('data', (chunk) => {
+        buffer += chunk
+        let newline
+        while ((newline = buffer.indexOf('\\n')) !== -1) {
+          const message = JSON.parse(buffer.slice(0, newline))
+          buffer = buffer.slice(newline + 1)
+          fs.appendFileSync(${JSON.stringify(messagesPath)}, JSON.stringify(message) + '\\n')
+          if (message.type === 'hello') {
+            if (message.role === 'stream') globalThis.stream = socket
+            socket.write(JSON.stringify({ ok: true }) + '\\n')
+          } else if (message.type === 'createOrAttach') {
+            globalThis.stream.write(JSON.stringify({ payload: { data: 'OK 42' } }) + '\\n')
+          }
+        }
+      })
+    }`)
+    const result = await roundTrip(entry, 1_500)
+    expect(result.error).toBe(null)
+    expect(result.daemonAlive).toBe(false)
+    expect(result.scratchDirs).toEqual([])
+    const messages = readFileSync(messagesPath, 'utf8').trim().split('\n').map(JSON.parse)
+    expect(messages.slice(0, 2).map(({ type, role, token }) => ({ type, role, token }))).toEqual([
+      { type: 'hello', role: 'control', token: 'tok' },
+      { type: 'hello', role: 'stream', token: 'tok' }
+    ])
+    expect(messages[0].clientId).toBe(messages[1].clientId)
+    expect(messages[0].clientId).toMatch(/^[0-9a-f-]{36}$/)
+    expect(messages).toHaveLength(3)
+    expect(messages[2]).toMatchObject({
+      id: 'boot-1',
+      type: 'createOrAttach',
+      payload: {
+        sessionId: 'terminal-host-boot',
+        cols: 80,
+        rows: 24,
+        command: 'echo "OK $((6*7))" && exit'
+      }
+    })
+    expect(messages[2].payload.cwd.startsWith(join(root, 'oth-'))).toBe(true)
+  })
 
   it('rejects by the deadline and cleans up when the daemon never answers the hello', async () => {
     const result = await roundTrip(fakeDaemon('() => {}'), 1_500)

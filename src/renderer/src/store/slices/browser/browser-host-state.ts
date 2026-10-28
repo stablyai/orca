@@ -18,14 +18,7 @@ import type {
 } from './browser-slice-contract'
 import { getExecutionHostIdForWorktree } from '@/lib/worktree-runtime-owner'
 
-/** Rebuild the remote page handles a restored session implies. No placement is seeded: the
- *  persisted generations belong to the host lease that died with the last run, and the first host
- *  snapshot is what supplies the live one.
- *
- *  Client-hosted rows only. A server-hosted page lives on the runtime, which may have restarted or
- *  been redeployed while this desktop was closed; a seeded handle sends its pane down the adopt
- *  branch, and the browser_tab_not_found that comes back deletes the row. With no handle the pane
- *  creates a fresh page at the URL the row persisted, which is what the user left behind. */
+/** Seed restored handles only for client-hosted pages, without dead lease placement generations. Server-hosted pages may vanish during runtime restart; leaving their handle absent recreates the saved URL instead of adopting a missing page and deleting the row. First snapshot supplies live placement. */
 export function buildRestoredRemoteBrowserPageHandles(
   browserPagesByWorkspace: Record<string, BrowserPage[]>
 ): Record<string, RemoteBrowserPageHandle> {
@@ -50,8 +43,7 @@ export function buildRestoredRemoteBrowserPageHandles(
   return handles
 }
 
-/** Whether this desktop hosts the remote page itself rather than streaming it from the host. Staged
- *  and restored rows count before the host confirms a placement, so they never mount as streams. */
+/** Staged/restored client-hosted rows must mount local guests before placement confirmation, never streamed panes. */
 export function isClientHostedBrowserPageHandle(handle: RemoteBrowserPageHandle): boolean {
   return (
     handle.placement?.kind === 'client' ||

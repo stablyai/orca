@@ -222,8 +222,7 @@ export function prepareTerminalPaneMount(
   if (hydratedInitialScrollback.hydrated) {
     deps.initialLayoutRef.current = hydratedInitialScrollback.layout
   }
-  // Numeric pane ids are mount-local; the handle itself is keyed by the
-  // durable tab/leaf identity so a whole-tab remount can reclaim it.
+  // Numeric IDs die with the mount; durable tab/leaf keys let remounts reclaim deferred handles.
   const deferredSplitHandoffs = new Map<number, DeferredSplitPaneHandoffHandle>()
   const ptyDeps = createTerminalPanePtyDeps({
     deps,

@@ -47,10 +47,7 @@ export function createPairedRuntimeParkingEnvironmentIdsSelector() {
 
     const capable = new Set<string>()
     for (const [environmentId, entry] of statuses) {
-      // Why last-verified: a capability is a fact about the host's build, so an unverifiable
-      // probe must not unpark its terminals. See docs/reference/ssh-execution-boundary.md.
-      // Why the revoked gate: parking discards the client's only copy of the scrollback against
-      // a host-side restore, so a host that refused us must not keep promising one.
+      // Keep last-verified build capabilities across unverifiable probes; a revoked host cannot promise restoration (docs/reference/ssh-execution-boundary.md).
       if (isRuntimeHostContactRevoked(entry)) {
         continue
       }

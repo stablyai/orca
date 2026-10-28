@@ -387,6 +387,48 @@ describe('GitHub GraphQL rate-limit guard', () => {
     ).toBe(false)
   })
 
+  it('enqueues instead of gh pr merge --auto when a required merge queue disallows auto-merge', async () => {
+    ghExecFileAsyncMock
+      .mockResolvedValueOnce({ stdout: JSON.stringify({ stack: null }) })
+      .mockResolvedValueOnce({
+        stdout: JSON.stringify({ id: 'PR_kwDO123', headRefOid: 'head-oid', baseRefName: 'main' })
+      })
+      .mockResolvedValueOnce({
+        stdout: JSON.stringify({
+          data: { repository: { mergeQueue: { id: 'MQ_kw' }, autoMergeAllowed: false } }
+        })
+      })
+      .mockResolvedValue({ stdout: '', stderr: '' })
+
+    await expect(
+      setPRAutoMerge('/repo-root', 7, true, 'squash', undefined, {
+        owner: 'stablyai',
+        repo: 'orca',
+        host: 'github.com'
+      })
+    ).resolves.toEqual({ ok: true })
+
+    expect(ghExecFileAsyncMock).toHaveBeenCalledTimes(4)
+    expect(ghExecFileAsyncMock).toHaveBeenNthCalledWith(
+      4,
+      [
+        'api',
+        'graphql',
+        '-f',
+        expect.stringContaining('enqueuePullRequest('),
+        '-f',
+        'pullRequestId=PR_kwDO123',
+        '-f',
+        'expectedHeadOid=head-oid'
+      ],
+      expect.objectContaining({
+        cwd: '/repo-root',
+        env: expect.objectContaining({ GH_PROMPT_DISABLED: '1' }),
+        host: 'github.com'
+      })
+    )
+  })
+
   it('blocks direct merge when GitHub reports required approval', async () => {
     ghExecFileAsyncMock
       .mockResolvedValueOnce({ stdout: JSON.stringify({ stack: null }) })

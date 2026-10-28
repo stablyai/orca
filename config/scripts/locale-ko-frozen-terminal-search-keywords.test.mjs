@@ -3,8 +3,7 @@ import fs from 'node:fs'
 import { describe, expect, it } from 'vitest'
 import { repairTranslatedValue } from './locale-translation-policy.mjs'
 
-// The frozen-terminal recovery entry is searchable only if both halves of the pair use the
-// UI's "stopped" sense; MT rendered `unfreeze` as 녹이다 (thawing ice), splitting them.
+// Use UI’s stopped sense for frozen/unfreeze search pair; MT’s 녹이다 (thaw ice) split recovery search terms.
 const KEYS = [
   'auto.components.settings.terminal.search.88561b3499',
   'auto.components.settings.terminal.search.d4daf4f612'

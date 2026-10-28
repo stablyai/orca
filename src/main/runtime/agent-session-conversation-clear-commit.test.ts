@@ -146,8 +146,11 @@ async function queueClearCards(journal: AgentSessionJournal) {
 }
 
 describe('clear transaction', () => {
-  it('publishes one boundary and receipt while preserving the record and tab on disk', async () => {
+  it.each([false, true])('clears only automatic names (user=%s)', async (user) => {
     const { store, journal, completed, operation, append } = await prepare()
+    await (user
+      ? store.setUserConversationName(SOURCE, 'Saved name', 'rename')
+      : store.setConversationName(SOURCE, 'Saved name'))
     const before = store.getRecord(SOURCE)!
     expect(before.providerHandleChain).toHaveLength(1)
     await queueClearCards(journal)
@@ -163,6 +166,18 @@ describe('clear transaction', () => {
       options: before.options,
       conversationCommand: completed.command
     })
+    expect(reopened.getRecord(SOURCE)?.conversationName).toBe(user ? 'Saved name' : undefined)
+    const context = providerContextBoundaryForClear(completed).operationId
+    expect(
+      await reopened.compareAndSetConversationName(SOURCE, 'Saved name', null, context)
+    ).toEqual(user ? null : expect.objectContaining({ conversationName: 'Saved name' }))
+    expect(
+      await reopened.compareAndSetConversationName(SOURCE, 'Stale result', 'Saved name', null)
+    ).toBeNull()
+    expect(
+      await reopened.compareAndSetConversationName(SOURCE, 'Saved name', 'Saved name', null)
+    ).toBeNull()
+    expect((await open()).getRecord(SOURCE)?.conversationName).toBe('Saved name')
     expect(reopened.getSessionTabId(SOURCE)).toBe('tab-alpha')
     expect(JSON.stringify(reopened.getRecord(SOURCE))).not.toContain('pre-clear-provider-context')
     expect(journal.cursor().epoch).toBe(epoch)
@@ -176,6 +191,7 @@ describe('clear transaction', () => {
   it('rolls the divider and receipt back when the fence moved', async () => {
     const { store, journal, completed, operation, append } = await prepare()
     await queueClearCards(journal)
+    await store.setConversationName(SOURCE, 'Saved name')
     const before = journal.cursor()
     const previousChain = store.getRecord(SOURCE)!.providerHandleChain
     const refused = await append({ ...completed, fence: completed.fence + 1 }).catch(
@@ -183,6 +199,7 @@ describe('clear transaction', () => {
     )
     expect(isAgentSessionRefusalError(refused)).toBe(true)
     expect(journal.cursor()).toEqual(before)
+    expect((await open()).getRecord(SOURCE)?.conversationName).toBe('Saved name')
     expect(
       journal.queuedMessages.list().map(({ messageId, state }) => ({ messageId, state }))
     ).toEqual(['first', 'command', 'last'].map((messageId) => ({ messageId, state: 'waiting' })))

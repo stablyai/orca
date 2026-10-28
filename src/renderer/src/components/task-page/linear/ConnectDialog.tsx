@@ -1,4 +1,4 @@
-import type { TaskPageComposerActionsModel } from '../../use-task-page-composer-actions'
+import type { TaskPageComposerActionsModel } from '../use-task-page-composer-actions'
 import { LinearApiKeyDialog } from '@/components/linear-api-key-dialog'
 export function TaskPageLinearConnectDialog({
   model

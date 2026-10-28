@@ -19,7 +19,6 @@ function writeFixture(contents: string): string {
   return file
 }
 
-/** Every whole line the scan handed out, in the order the caller saw them. */
 function collectLines(file: string, chunkBytes: number, maxScanBytes = 1024 * 1024): string[] {
   const seen: string[] = []
   scanFileRegionsBackward(file, { chunkBytes, maxScanBytes }, (region) => {
@@ -76,8 +75,7 @@ describe('scanFileRegionsBackward', () => {
   })
 
   it('drops the leading partial line when it stops on the byte budget', () => {
-    // Why: a scan capped mid-file has not seen the start of its topmost line, so
-    // emitting it would hand the caller a truncated record.
+    // A byte cap cannot prove the start of the topmost record.
     const file = writeFixture(`${'x'.repeat(500)}\nkeep-me\n`)
     expect(collectLines(file, 64, 128)).toEqual(['keep-me'])
   })

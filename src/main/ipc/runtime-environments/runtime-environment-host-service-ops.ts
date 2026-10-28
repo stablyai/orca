@@ -1,5 +1,6 @@
 import { classifyRuntimeEnvironmentHost } from '../../../shared/runtime-environment-host-kind'
 import type { KnownRuntimeEnvironment } from '../../../shared/runtime-environments'
+import type { WslHostServerStop } from '../../../shared/wsl-host-types'
 import { getWslHostService } from '../../wsl/wsl-host-service-instance'
 
 /** Explicit connection may boot the WSL distro. */
@@ -19,7 +20,7 @@ export async function connectThroughOwningService(
 /** Null delegates removal to the generic store path. */
 export function removeThroughOwningService(
   environment: KnownRuntimeEnvironment
-): Promise<unknown> | null {
+): Promise<WslHostServerStop> | null {
   const host = classifyRuntimeEnvironmentHost(environment)
   switch (host.kind) {
     case 'wsl':

@@ -1,7 +1,5 @@
-// The phone draws a send a Stop took back before the agent started it where it was sent, with the
-// one row after it, and gives neither a turn of its own.
-
 import { createElement } from 'react'
+import { AlertTriangle } from 'lucide-react-native'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { agentJournalSubmissionKey } from '../../../src/shared/agent-session-journal-item-key'
@@ -12,6 +10,9 @@ import type {
   AgentJournalTurnScope
 } from '../../../src/shared/agent-session-journal-types'
 import type { NativeChatMessage } from '../../../src/shared/native-chat-types'
+import { agentSessionFailureFact } from '../../../src/shared/agent-session-failure'
+import { agentSessionFailureWords } from '../../../src/shared/agent-session-failure-words'
+import { AGENT_SESSION_GOAL_CONTROL_COPY } from '../../../src/shared/agent-session-goal-control-copy'
 import { DISPATCH_REJECTED_CANCELLED } from '../../../src/shared/structured-agent-session-dispatch-rejection'
 import { projectStructuredAgentSessionMessages } from '../../../src/shared/structured-agent-session-message-projection'
 import { selectStructuredAgentSettledTurns } from '../../../src/shared/structured-agent-session-turn-timing'
@@ -42,6 +43,7 @@ vi.mock('react-native', async () => {
 })
 vi.mock('expo-clipboard', () => ({ setStringAsync: vi.fn() }))
 vi.mock('lucide-react-native', () => ({
+  AlertTriangle: 'AlertTriangle',
   ArrowUp: 'ArrowUp',
   Bot: 'Bot',
   Brain: 'Brain',
@@ -65,13 +67,13 @@ vi.mock('lucide-react-native', () => ({
   Wrench: 'Wrench'
 }))
 vi.mock('../components/MobileMarkdown', () => ({ MobileMarkdown: () => null }))
-vi.mock('./MobileNativeChatMessageActionsSheet', () => ({
+vi.mock('./native-chat/transcript/MobileNativeChatMessageActionsSheet', () => ({
   MobileNativeChatMessageActionsSheet: () => null
 }))
 
 import { MobileMarkdown } from '../components/MobileMarkdown'
-import { MobileNativeChatMessage } from './MobileNativeChatMessage'
-import { useMobileNativeChatTurnDisclosure } from './use-mobile-native-chat-turn-disclosure'
+import { MobileNativeChatMessage } from './native-chat/transcript/MobileNativeChatMessage'
+import { useMobileNativeChatTurnDisclosure } from './native-chat/transcript/use-mobile-native-chat-turn-disclosure'
 
 const THREAD: AgentJournalTurnScope = { kind: 'thread' }
 let sequence = 0
@@ -155,6 +157,34 @@ describe('a send a Stop took back before the agent started it, on the phone', ()
     act(() => renderer?.unmount())
     renderer = null
   })
+
+  it.each(['pauseUnconfirmed', 'stopUnconfirmed'] as const)(
+    'renders the host %s warning once after projection',
+    (stopNotice) => {
+      const messages = projectStructuredAgentSessionMessages(
+        [
+          item('stop-outcome', {
+            kind: 'status',
+            tone: 'warning',
+            ...agentSessionFailureWords(agentSessionFailureFact('cancelUnconfirmed'), {
+              surface: 'row',
+              stopNotice
+            })
+          })
+        ],
+        [],
+        []
+      )
+      expect(messages).toHaveLength(1)
+      act(() => {
+        renderer = create(createElement(MobileNativeChatMessage, { message: messages[0]! }))
+      })
+      expect(
+        renderer!.root.findAll((node) => String(node.type) === 'Text').map((node) => node.children)
+      ).toEqual([[AGENT_SESSION_GOAL_CONTROL_COPY[stopNotice]]])
+      expect(renderer!.root.findAllByType(AlertTriangle)).toHaveLength(1)
+    }
+  )
 
   it('stays where it was sent, with the stop row after it and no turn status of its own', () => {
     const messages = projectStructuredAgentSessionMessages(items, [], submissions)

@@ -69,7 +69,23 @@ const CLAUDE_SESSION_END_EVENT = {
   definition: { hooks: [{ type: 'command', command: '' }] }
 } as const
 
-export const CLAUDE_MANAGED_EVENTS = [...CLAUDE_EVENTS, CLAUDE_SESSION_END_EVENT] as const
+// MCP elicitation dialogs block on the person (#25020); matcher is the MCP server name.
+const CLAUDE_ELICITATION_EVENTS = [
+  {
+    eventName: 'Elicitation',
+    definition: { matcher: '*', hooks: [{ type: 'command', command: '' }] }
+  },
+  {
+    eventName: 'ElicitationResult',
+    definition: { matcher: '*', hooks: [{ type: 'command', command: '' }] }
+  }
+] as const
+
+export const CLAUDE_MANAGED_EVENTS = [
+  ...CLAUDE_EVENTS,
+  ...CLAUDE_ELICITATION_EVENTS,
+  CLAUDE_SESSION_END_EVENT
+] as const
 
 export type ManagedHookEvent = {
   eventName: string

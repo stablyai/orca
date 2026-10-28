@@ -13,10 +13,7 @@ import {
   type BrowserChromeOverflowMenuProps
 } from '../assemble-chrome/browser-chrome-folded-tools'
 
-/**
- * The preview's overflow menu. It carries the document actions rather than the browsing pane's
- * profile and viewport rows: a preview has no session to switch and no device to emulate.
- */
+/** Preview grants have no browsing session or device emulation; expose document actions instead. */
 export function DocPreviewOverflowMenu({
   onReload,
   onHardReload,

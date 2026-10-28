@@ -1,6 +1,4 @@
-// Structured chats this phone created and that have not yet answered live, as the desktop latches
-// its own launches: only a new chat runs the account's configured model, so only its first frame may
-// name it.
+// Apply account defaults only to this phone’s new chats before their first live options report.
 
 const CREATED_LIMIT = 32
 
@@ -17,14 +15,12 @@ export function rememberMobileCreatedStructuredSession(sessionId: string, worktr
   }
 }
 
-/** The chat's workspace selector when this phone created it, else undefined. */
 export function mobileCreatedStructuredSession(
   sessionId: string
 ): { worktree: string } | undefined {
   return created.get(sessionId)
 }
 
-/** The chat answered live, so a reopened view reads its options rather than the listed default. */
 export function forgetMobileCreatedStructuredSession(sessionId: string): void {
   created.delete(sessionId)
 }

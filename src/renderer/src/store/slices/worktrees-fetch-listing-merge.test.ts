@@ -416,7 +416,7 @@ describe('fetchWorktrees', () => {
     store.setState({ worktreesByRepo: { repo1: [existing] } } as Partial<AppState>)
 
     await store.getState().fetchWorktrees('repo1')
-    store.getState().updateWorktreeGitIdentity(existing.id, { branch: 'refs/heads/next' })
+    store.getState().updateWorktreeGitIdentity(existing.id, { branch: 'refs/heads/next' }, null)
 
     expect(store.getState().worktreesByRepo.repo1[0]).toMatchObject({
       displayName: 'feature',

@@ -31,8 +31,7 @@ beforeEach(() => {
   recordBreadcrumb.mockClear()
   resetReactCommitCascadeTelemetryForTests()
   resetReactCommitCascadeObserverForTests()
-  // Why the delete: install wraps whatever is there, so a hook left over from
-  // the previous test would stack a second counter onto the same callback.
+  // Delete prior hooks so install cannot stack counters across tests.
   delete (globalThis as { __REACT_DEVTOOLS_GLOBAL_HOOK__?: unknown }).__REACT_DEVTOOLS_GLOBAL_HOOK__
   installReactCommitCascadeObserver()
 })
@@ -42,8 +41,7 @@ afterEach(() => {
 })
 
 describe('react devtools commit hook shim', () => {
-  // Why asserted: without a pre-existing hook react-dom injects nothing, so a
-  // packaged build only gets commit callbacks if the shim installs its own.
+  // Packaged builds need the shim: react-dom injects nothing without an existing hook.
   it('exposes what react-dom requires to inject', () => {
     const hook = readHook()
 
@@ -53,8 +51,7 @@ describe('react devtools commit hook shim', () => {
     expect(typeof hook.onCommitFiberRoot).toBe('function')
   })
 
-  // Why asserted: react-dom calls this once per DELETED FIBER, guarded only by
-  // a typeof check. Defining it would put our shim on every unmount path.
+  // Keep onCommitFiberUnmount absent; React would call it once per deleted fiber.
   it('leaves the per-deleted-fiber callbacks undefined', () => {
     const hook = readHook() as Record<string, unknown>
 
@@ -63,9 +60,7 @@ describe('react devtools commit hook shim', () => {
     expect(hook.setStrictMode).toBeUndefined()
   })
 
-  // Why asserted: react-refresh captures this property and calls
-  // oldOnCommitFiberRoot.apply(this, arguments) with no typeof guard, unlike the
-  // fallback it gives onScheduleFiberRoot.
+  // react-refresh calls captured onCommitFiberRoot.apply without the typeof fallback used for onScheduleFiberRoot.
   it('ships a callable onCommitFiberRoot before anything wraps it', () => {
     delete (globalThis as { __REACT_DEVTOOLS_GLOBAL_HOOK__?: unknown })
       .__REACT_DEVTOOLS_GLOBAL_HOOK__
@@ -96,8 +91,7 @@ describe('installReactCommitCascadeObserver', () => {
     expect(recordBreadcrumb).not.toHaveBeenCalled()
   })
 
-  // Why asserted: a future React that stops exposing pendingLanes must make the
-  // diagnostic go quiet, not fire on a depth it can no longer evaluate.
+  // Missing future pendingLanes must silence diagnostics rather than accumulate stale cascade depth.
   it('ends the cascade when pendingLanes is not readable', () => {
     const hook = readHook()
     for (let commit = 0; commit < REACT_COMMIT_CASCADE_NOTICE_LIMIT - 1; commit += 1) {
@@ -112,8 +106,7 @@ describe('installReactCommitCascadeObserver', () => {
     expect(recordBreadcrumb).not.toHaveBeenCalled()
   })
 
-  // Why a string and not undefined: '2' & 42 is 2, so a bitmask-only guard would
-  // keep the cascade alive on a value React never meant as a lane.
+  // A numeric string still passes bitmasks; require a real lane number.
   it('ends the cascade when pendingLanes is not a number', () => {
     const hook = readHook()
     for (let commit = 0; commit < REACT_COMMIT_CASCADE_NOTICE_LIMIT - 1; commit += 1) {
@@ -140,8 +133,7 @@ describe('installReactCommitCascadeObserver', () => {
     expect(previous).toHaveBeenCalledWith(7, CASCADING_ROOT, undefined, true)
   })
 
-  // Why asserted: our throw would otherwise land in react-dom's own catch and
-  // silently unhook DevTools and Fast Refresh from the rest of the chain.
+  // An escaping throw reaches React’s catch and silently skips DevTools/Fast Refresh chaining.
   it('still calls the chained hook when our own work throws', () => {
     const previous = vi.fn()
     const hook = readHook()
@@ -169,8 +161,7 @@ describe('installReactCommitCascadeObserver', () => {
   })
 })
 
-// Why: a reshuffled import or a bundler hoist disables the diagnostic with no
-// test failure. This is what makes that visible in the field instead.
+// Import/hoist changes can silently disable diagnostics; self-check exposes that in field reports.
 describe('install self-check', () => {
   it('breadcrumbs when no commit ever reached the hook', () => {
     vi.useFakeTimers()
@@ -196,8 +187,7 @@ describe('install self-check', () => {
     expect(recordBreadcrumb).not.toHaveBeenCalled()
   })
 
-  // Why asserted: a hook that refuses the assignment is exactly the case the
-  // self-check exists for, so it must arm on the failure path too.
+  // Failed hook assignments must arm self-check too.
   it('breadcrumbs when the hook refuses the callback assignment', () => {
     vi.useFakeTimers()
     resetReactCommitCascadeObserverForTests()
@@ -235,12 +225,7 @@ describe('install self-check', () => {
   })
 })
 
-/**
- * Why an allocation assertion and not a timing one: this callback runs on every
- * commit the app makes, so the cost that matters is garbage. Measured on this
- * loop, an escaping object literal, a template string and a per-call closure
- * each cost more than 3.8 MB where the current code costs tens of KB.
- */
+/** Measure allocations, not timing, on every-commit callbacks; escaping literals/templates/closures each added >3.8MB versus tens of KB baseline. */
 describe('commit hook cost', () => {
   const HOT_COMMITS = 1_000_000
   /** ~30x the measured zero-allocation baseline, ~4x under the cheapest regression. */
@@ -270,8 +255,7 @@ describe('commit hook cost', () => {
     expect(growth).toBeLessThan(MAX_HEAP_GROWTH_BYTES)
   })
 
-  // Why separately: the cascading branch runs the counter, the arm check and the
-  // report guard, none of which may start allocating once a cascade is deep.
+  // Deep cascading commits also run counter/arm/report guards; none may begin allocating.
   it('allocates nothing while a cascade is being counted', () => {
     const hook = readHook()
 
@@ -283,8 +267,7 @@ describe('commit hook cost', () => {
   })
 })
 
-// Why asserted: main.tsx imports this module for its side effect alone, so
-// deleting the bare install call would disable the diagnostic in production.
+// Keep the import-time install call: main.tsx imports this module for side effects only.
 describe('module self-install', () => {
   it('counts commits after nothing but an import', async () => {
     vi.useFakeTimers()

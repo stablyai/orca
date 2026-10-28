@@ -1,15 +1,9 @@
 import { toast } from 'sonner'
 import { translate } from '@/i18n/i18n'
 
-// Why: agent completions can dispatch in bursts; one in-app pointer at the
-// broken OS setting per session teaches the fix without nagging.
+// Notify once per session about blocked OS notifications so completion bursts do not nag.
 let shownThisSession = false
 
-/**
- * In-app stand-in for a native notification that macOS silently swallowed
- * (dispatch returned 'blocked-by-system'): tells the user notifications are
- * off at the OS level and deep-links to the app's System Settings pane.
- */
 export function showBlockedNotificationFallbackToast(): void {
   if (shownThisSession) {
     return

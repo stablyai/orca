@@ -1,3 +1,4 @@
+import { agentSessionConversationView } from '../../../../shared/agent-session-conversation-view'
 import '../unused-default-rpc-methods.test-fixture'
 // The catalog read behind the picker: which directory a named worktree runs in on this host.
 
@@ -38,7 +39,15 @@ describe('agentSession.modelCatalog', () => {
     record = null
     setStructuredAgentSessionHost(
       Object.assign(hostStub(), {
-        deps: { modelCatalog: { read }, store: { getRecord: () => record }, adapter: {} }
+        deps: {
+          modelCatalog: { read },
+          store: {
+            getRecord: () => record,
+            getConversation: () => (record ? agentSessionConversationView(record) : null),
+            requireWritableRecord: () => record
+          },
+          adapter: {}
+        }
       })
     )
   })
@@ -72,6 +81,10 @@ describe('agentSession.modelCatalog', () => {
     }
     const catalog = createAgentModelCatalogService({
       store: new AgentModelCatalogStore(),
+      getConversation: () => {
+        const saved = record ?? undefined
+        return saved ? agentSessionConversationView(saved) : undefined
+      },
       getRecord: () => record ?? undefined,
       drivesRecord: () => true,
       recordWorkspacePath: async () => '/repo/work',
@@ -87,7 +100,15 @@ describe('agentSession.modelCatalog', () => {
     })
     setStructuredAgentSessionHost(
       Object.assign(hostStub(), {
-        deps: { modelCatalog: catalog, store: { getRecord: () => record }, adapter: {} }
+        deps: {
+          modelCatalog: catalog,
+          store: {
+            getRecord: () => record,
+            getConversation: () => (record ? agentSessionConversationView(record) : null),
+            requireWritableRecord: () => record
+          },
+          adapter: {}
+        }
       })
     )
     try {
@@ -188,7 +209,11 @@ describe('agentSession.modelCatalog before anything built the host', () => {
   const installHost = vi.fn(async () => {
     setStructuredAgentSessionHost(
       Object.assign(hostStub(), {
-        deps: { modelCatalog: { read }, store: { getRecord: () => null }, adapter: {} }
+        deps: {
+          modelCatalog: { read },
+          store: { getRecord: () => null, getConversation: () => null },
+          adapter: {}
+        }
       })
     )
   })
@@ -199,8 +224,7 @@ describe('agentSession.modelCatalog before anything built the host', () => {
     clearStructuredHostStub()
   })
 
-  // A new chat's picker reads before its create lands; on a host with no saved chats nothing else
-  // has built the host yet, and a refusal here left the picker on the client's built-in list.
+  // New-chat pickers may be the first host caller; refusing before installation leaves only client-built-in models.
   it('builds the host for a structured chat and answers from its catalog', async () => {
     const reply = await call(
       'agentSession.modelCatalog',
@@ -213,8 +237,7 @@ describe('agentSession.modelCatalog before anything built the host', () => {
     expect(read).toHaveBeenCalledWith({ agent: 'codex', sessionId: SESSION })
   })
 
-  // Terminal-backed chat reads with no session: a host that runs no structured chat keeps its
-  // journal closed, and the read falls back to the CLI listing.
+  // Session-less terminal-chat reads must use CLI listing without opening a structured journal.
   it('does not build the host for a read that names no session', async () => {
     const reply = await call('agentSession.modelCatalog', { agent: 'codex' }, STRUCTURED_CLIENT, {
       ensureStructuredAgentSessionHost: installHost
@@ -252,7 +275,15 @@ describe('agentSession.modelCatalog for a chat on a model its CLI stopped listin
   beforeEach(() => {
     setStructuredAgentSessionHost(
       Object.assign(hostStub(), {
-        deps: { modelCatalog: { read }, store: { getRecord: () => record }, adapter: {} }
+        deps: {
+          modelCatalog: { read },
+          store: {
+            getRecord: () => record,
+            getConversation: () => (record ? agentSessionConversationView(record) : null),
+            requireWritableRecord: () => record
+          },
+          adapter: {}
+        }
       })
     )
   })

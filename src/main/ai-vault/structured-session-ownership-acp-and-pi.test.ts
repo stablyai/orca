@@ -1,4 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
+import { z } from 'zod'
+import { readAcpFixture } from '../acp/acp-timeline-fixture.test-support'
 import type { AgentSessionProviderHandle } from '../../shared/agent-session-provider-handle'
 import type { AiVaultAgent } from '../../shared/ai-vault-types'
 import { setStructuredAgentSessionHost } from '../native-chat/agent-session-wire/structured-agent-session-registry'
@@ -42,7 +44,12 @@ const refused = (command: string) =>
     'agent_session_conflict'
   )
 
-function ownedRow(agent: AiVaultAgent, sessionId: string, filePath: string) {
+function ownedRow(
+  agent: AiVaultAgent,
+  sessionId: string,
+  filePath: string,
+  title = 'First prompt'
+) {
   const result = listResult()
   result.sessions = [
     {
@@ -50,7 +57,7 @@ function ownedRow(agent: AiVaultAgent, sessionId: string, filePath: string) {
       agent,
       sessionId,
       filePath,
-      title: 'First prompt'
+      title
     }
   ]
   return projectStructuredAiVaultSessions(result, OPENS_EVERY_STRUCTURED_CHAT).sessions[0]
@@ -104,11 +111,14 @@ describe('Session History rows owned by OpenCode, Grok, OMP and Pi chats', () =>
       filePath: PI_FILE
     }
   ])(
-    'owns the $rowAgent row of a $handle.agent chat under its CLI title and refuses preparing its resume',
+    'owns the $rowAgent row of a $handle.agent chat under the chat name and refuses preparing its resume',
     ({ handle, rowAgent, sessionId, filePath }) => {
+      // An unnamed chat's row keeps the CLI's title; once named, the row shows the chat's name.
+      installOwnership({ handle })
+      expect(ownedRow(rowAgent, sessionId, filePath)).toMatchObject({ title: 'First prompt' })
       installOwnership({ handle, conversationName: 'Quokka harbor chat' })
       expect(ownedRow(rowAgent, sessionId, filePath)).toMatchObject({
-        title: 'First prompt',
+        title: 'Quokka harbor chat',
         structuredSession: {
           sessionId: 'session-alpha',
           workspaceId: 'workspace-1'
@@ -132,6 +142,38 @@ describe('Session History rows owned by OpenCode, Grok, OMP and Pi chats', () =>
   it('does not own a row of one agent for a chat of another with the same id', () => {
     installOwnership({ handle: acp('omp', OMP_ID) })
     expect(ownedRow('pi', OMP_ID, OMP_FILE)).not.toHaveProperty('structuredSession')
+  })
+})
+
+it('shows the saved native name over a recorded OMP provider title, retaining that title while unnamed', async () => {
+  // Scrubbed OMP 17.0.5 ACP output already replayed by acp-structured-omp-recordings.test.ts.
+  const frames = await readAcpFixture('omp-v17-reply-after-thought')
+  const info = frames.flatMap((frame) => {
+    const parsed = z
+      .object({
+        sessionId: z.string(),
+        update: z.object({ sessionUpdate: z.literal('session_info_update'), title: z.string() })
+      })
+      .safeParse(frame.message.params)
+    return frame.direction === 'in' && frame.message.method === 'session/update' && parsed.success
+      ? [parsed.data]
+      : []
+  })[0]
+  if (!info) {
+    throw new Error('Recorded OMP session title missing')
+  }
+  const handle = acp('omp', info.sessionId)
+  const row = () =>
+    ownedRow('omp', info.sessionId, '/recording/omp-session.jsonl', info.update.title)
+  installOwnership({ handle })
+  expect(row()).toMatchObject({
+    title: info.update.title,
+    structuredSession: { sessionId: 'session-alpha' }
+  })
+  installOwnership({ handle, conversationName: 'My saved OMP name' })
+  expect(row()).toMatchObject({
+    title: 'My saved OMP name',
+    structuredSession: { sessionId: 'session-alpha' }
   })
 })
 

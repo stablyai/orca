@@ -1,4 +1,6 @@
 import { describe, expect, it } from 'vitest'
+import type { RuntimeStatus } from '../../../../shared/runtime-types'
+import { createCompatibleRuntimeStatusResponse } from '@/runtime/runtime-compatibility-test-fixture'
 import { AUTOMATION_LIST_HOST_SCOPE_RUNTIME_CAPABILITY } from '../../../../shared/protocol-version'
 import {
   buildAutomationHostCatalogSource,
@@ -7,6 +9,14 @@ import {
   type AutomationCatalogRuntimeSource,
   type AutomationCatalogSshSource
 } from './automation-host-catalog-source'
+
+function status(overrides: Partial<RuntimeStatus> = {}): RuntimeStatus {
+  const response = createCompatibleRuntimeStatusResponse()
+  if (!response.ok) {
+    throw new Error(response.error.message)
+  }
+  return { ...response.result, ...overrides }
+}
 
 function runtime(
   overrides: Partial<AutomationCatalogRuntimeSource> = {}
@@ -32,7 +42,7 @@ describe('automation host catalog source', () => {
   it('treats a never-probed environment as loading, not as down', () => {
     expect(runtimeAuthorityHealth(runtime())).toBe('loading')
     expect(runtimeAuthorityHealth(runtime({ status: { status: null } }))).toBe('unavailable')
-    expect(runtimeAuthorityHealth(runtime({ status: { status: {} as never } }))).toBe('fresh')
+    expect(runtimeAuthorityHealth(runtime({ status: { status: status() } }))).toBe('fresh')
   })
 
   it('assumes scoped support until the capability set is actually known', () => {
@@ -40,14 +50,14 @@ describe('automation host catalog source', () => {
     // guessing legacy here would only discard owners on a modern host.
     expect(runtimeQuerySupport(runtime())).toBe('scoped')
     expect(runtimeQuerySupport(runtime({ status: { status: null } }))).toBe('scoped')
-    expect(
-      runtimeQuerySupport(runtime({ status: { status: { capabilities: [] } as never } }))
-    ).toBe('legacy-unscoped')
+    expect(runtimeQuerySupport(runtime({ status: { status: status({ capabilities: [] }) } }))).toBe(
+      'legacy-unscoped'
+    )
     expect(
       runtimeQuerySupport(
         runtime({
           status: {
-            status: { capabilities: [AUTOMATION_LIST_HOST_SCOPE_RUNTIME_CAPABILITY] } as never
+            status: status({ capabilities: [AUTOMATION_LIST_HOST_SCOPE_RUNTIME_CAPABILITY] })
           }
         })
       )

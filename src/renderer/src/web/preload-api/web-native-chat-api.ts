@@ -1,5 +1,5 @@
 import type { NativeChatApi, NativeChatAppendedMessages } from '../../../../preload/api-types'
-import { buildNativeChatUnsubscribe } from '../../../../shared/native-chat-stream-unsubscribe'
+import { buildNativeChatUnsubscribe } from '../../../../shared/native-chat/native-chat-stream-unsubscribe'
 import {
   parseRuntimeNativeChatReadSessionResult,
   parseRuntimeNativeChatTurnLifecycle
@@ -18,7 +18,8 @@ export function createWebNativeChatApi(): NativeChatApi {
           agent,
           sessionId,
           limit,
-          transcriptPath
+          transcriptPath,
+          capabilities: { transcriptSourceOrder: 1 }
         })
       ),
     subscribe: (args, onFrame) => {
@@ -48,7 +49,7 @@ export function createWebNativeChatApi(): NativeChatApi {
             subscriptionId: args.subscriptionId,
             transcriptPath: args.transcriptPath,
             limit: args.limit,
-            capabilities: { transcriptPending: 1 }
+            capabilities: { transcriptPending: 1, transcriptSourceOrder: 1 }
           },
           {
             onResponse: (response) => {
@@ -122,7 +123,7 @@ export function createWebNativeChatApi(): NativeChatApi {
                   )
                 }
               } else if (!receivedInitial) {
-                // Why: an unrecognized ok payload never flips receivedInitial, stranding the view on 'loading'; settle it empty instead.
+                // Unknown ok payloads otherwise never set receivedInitial, leaving the view loading forever.
                 receivedInitial = true
                 onFrame({
                   type: 'snapshot',
@@ -134,7 +135,7 @@ export function createWebNativeChatApi(): NativeChatApi {
             }
           },
           {
-            // Why: unsubscribe reaps the fs-watcher on view-toggle (leak fix); echo the pane token so two panes don't tear down each other's watcher.
+            // Unsubscribe reaps the watcher on view toggle; pane tokens prevent cross-pane teardown.
             buildUnsubscribe: () =>
               buildNativeChatUnsubscribe(args.agent, args.sessionId, args.subscriptionId)
           }

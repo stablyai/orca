@@ -97,8 +97,7 @@ describe('ExternalFileChangeBanner', () => {
     expect(markFileDirty).toHaveBeenCalledWith('file-1', false)
     expect(setExternalMutation).toHaveBeenCalledWith('file-1', null)
     expect(reloadContent).toHaveBeenCalledWith(file)
-    // Why: the draft shadows loaded content (editBuffers ?? fileContents), so
-    // the refetch must come last or the stale unsaved text stays visible.
+    // Drafts shadow loaded content, so clear them before refetching.
     expect(calls).toEqual([
       'clearEditorDraft',
       'markFileDirty',
@@ -117,16 +116,14 @@ describe('ExternalFileChangeBanner', () => {
       action: { label: string; onClick: () => void }
     }
     vi.clearAllMocks()
-    // Why: after a real reload the tab is clean with no draft — the undo
-    // guard only restores over that untouched state.
+    // Reload undo is valid only while the clean, draft-free state remains untouched.
     mockStoreState({}, [{ ...file, isDirty: false, externalMutation: undefined } as OpenFile])
 
     options.action.onClick()
 
     expect(setEditorDraft).toHaveBeenCalledWith('file-1', 'discarded draft')
     expect(markFileDirty).toHaveBeenCalledWith('file-1', true)
-    // Why: disk still differs from the restored draft — the conflict (and its
-    // autosave suspension) must return with the edits.
+    // Restored edits still conflict with disk and must suspend autosave again.
     expect(setExternalMutation).toHaveBeenCalledWith('file-1', 'changed')
   })
 
@@ -157,8 +154,7 @@ describe('ExternalFileChangeBanner', () => {
       action: { label: string; onClick: () => void }
     }
     vi.clearAllMocks()
-    // Why: post-reload edits are newer intent than the discarded draft —
-    // undoing over them would be a second silent discard.
+    // Post-reload typing is newer intent; undo must not discard it.
     mockStoreState({ 'file-1': 'newer post-reload edits' }, [
       { ...file, isDirty: true, externalMutation: undefined } as OpenFile
     ])
@@ -178,9 +174,7 @@ describe('ExternalFileChangeBanner', () => {
   })
 
   it('undo restores the pre-reload disk signature with the draft', async () => {
-    // Why: the reload re-stamps the baseline to the new disk content; without
-    // restoring the old signature the restart scan sees disk == baseline and
-    // silently drops the conflict the undo just brought back.
+    // Restore the old disk signature or restart scans would clear the restored conflict against the new baseline.
     mockStoreState({ 'file-1': 'discarded draft' }, [
       { ...file, lastKnownDiskSignature: 'pre-reload-signature' } as OpenFile
     ])
@@ -221,9 +215,7 @@ describe('ExternalFileChangeBanner', () => {
   })
 
   it('keep-my-edits does not stamp a baseline over a newer conflict', async () => {
-    // Why: if the file changed again before the read resolved, the fresh
-    // 'changed' mark owns the baseline — stamping would hide that conflict
-    // from the restart scan.
+    // A newer conflict owns the baseline; a late Keep read must not hide it from restart scans.
     readRuntimeFileContentMock.mockResolvedValue({ content: 'even newer', isBinary: false })
     mockStoreState({}, [{ ...file, externalMutation: 'changed' } as OpenFile])
 

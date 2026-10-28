@@ -2,6 +2,7 @@ import { useMemo, type ReactNode } from 'react'
 import { ActivityIndicator, Pressable, Text, View } from 'react-native'
 import { ChevronLeft } from 'lucide-react-native'
 import { colors } from '../theme/mobile-theme'
+import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import { useBackClaim } from '../navigation/use-back-claim'
 import { BottomDrawer } from '../components/BottomDrawer'
 import {
@@ -31,7 +32,6 @@ import {
   type WorkspaceOptionProps
 } from './workspace-option-controls'
 
-/** Every host the list can show, this computer first; labelled as the rows label them. */
 function useWorkspaceOptionHosts(controller: HostScreenController): WorkspaceOptionHost[] {
   const { displayWorktrees, state } = controller
   return useMemo(() => {
@@ -57,7 +57,6 @@ function useWorkspaceOptionHosts(controller: HostScreenController): WorkspaceOpt
   ])
 }
 
-/** The desktop sidebar's Workspace options, rendered from the shared option list. */
 export function WorkspaceOptionsSheet({ controller }: { controller: HostScreenController }) {
   const { state } = controller
   const pager = useOptionPager<WorkspaceViewOptionKey>()
@@ -65,9 +64,7 @@ export function WorkspaceOptionsSheet({ controller }: { controller: HostScreenCo
     <BottomDrawer
       visible={state.showWorkspaceOptions}
       onClose={() => state.setShowWorkspaceOptions(false)}
-      // The sheet opens on its main page next time.
       onAfterClose={pager.forget}
-      // A page opens at the top even when the main sheet was scrolled down to its row.
       scrollResetKey={pager.page}
     >
       <WorkspaceOptionsContent controller={controller} pager={pager} />
@@ -75,8 +72,8 @@ export function WorkspaceOptionsSheet({ controller }: { controller: HostScreenCo
   )
 }
 
-/** The phone's own changes the desktop has not answered; a slow answer is not a refusal. */
 function WorkspaceOptionsPending({ settings }: Pick<HostScreenController, 'settings'>) {
+  useMobileColorScheme()
   const { pending, stale } = settings.pendingViewChanges
   if (!pending.some((change) => change.kind === 'view')) {
     return null
@@ -99,6 +96,7 @@ function WorkspaceOptionsContent({
   controller: HostScreenController
   pager: OptionPagerControls<WorkspaceViewOptionKey>
 }) {
+  useMobileColorScheme()
   const { settings, state } = controller
   const hosts = useWorkspaceOptionHosts(controller)
   const sections = getShownWorkspaceViewSections({
@@ -113,7 +111,6 @@ function WorkspaceOptionsContent({
       state.view.sharesOtherClientFilter === true && state.serverWorkspaces.hosts.length > 0
   })
 
-  // The open option; it falls back to the main sheet once the option stops showing.
   const pageOption = sections
     .flatMap(({ options }) => options)
     .find((option) => option.key === pager.page)
@@ -161,7 +158,6 @@ function WorkspaceOptionsContent({
 
       {sections.map(({ section, options }) => {
         const sectionLabel = WORKSPACE_VIEW_SECTION_LABELS[section]
-        // Inline unframed rows sit above the section's card; every other row goes in the card.
         const bareRows: ReactNode[] = []
         const framedRows: ReactNode[] = []
         for (const option of options) {

@@ -47,15 +47,17 @@ export const UNIT_EXCLUDE = [
   'src/main/browser/popup-origin-chrome.electron.test.ts',
   'src/main/browser/browser-link-materialization.electron.test.ts',
   'src/main/browser/browser-client-page-renderer-lifecycle.electron.test.ts',
-  'src/main/browser/browser-route-tcp-egress.electron.test.ts',
   'src/main/browser/browser-route-webrtc-egress.electron.test.ts',
-  'src/main/browser/browser-route-h3-egress.electron.test.ts',
-  'src/main/browser/browser-route-dns-prefetch.electron.test.ts',
   'src/main/persistence/profile-state/profile-state-writer-stall.electron.test.ts',
   'src/main/browser/browser-popup-compatibility.electron.test.ts',
   'src/main/browser/browser-popup-adapter-compatibility.electron.test.ts',
   'src/main/browser/browser-popup-native-compatibility.electron.test.ts',
   'src/main/browser/browser-popup-background-compatibility.electron.test.ts',
+  'src/main/browser/extensions/browser-extension-api.electron.test.ts',
+  'src/main/browser/extensions/browser-extension-persistence.electron.test.ts',
+  'src/main/browser/extensions/browser-extension-lifecycle.electron.test.ts',
+  'src/main/browser/extensions/browser-extension-toolbar.electron.test.ts',
+  'src/main/browser/extensions/browser-extension-native-messaging.electron.test.ts',
   `${CROSS_VERSION_WIRE_DIR}**`
 ]
 

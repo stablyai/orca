@@ -6,6 +6,7 @@ import { LOCAL_EXECUTION_HOST_ID } from '../../shared/execution-host'
 import { sessionSearchScopeCatalogFromStore } from '../ai-vault-search/session-search-store-scope-catalog'
 import { getCanonicalUserDataPath } from '../persistence/loading-store/user-data-path'
 import { app } from 'electron'
+import { translateMain } from '../i18n/main-i18n'
 import { OrcaRuntimeService } from '../runtime/orca-runtime'
 import { getLocalPtyProvider } from '../ipc/pty/provider/registry'
 import { clearProviderPtyState } from '../ipc/pty/provider/state-cleanup'
@@ -13,7 +14,7 @@ import { agentHookServer } from '../agent-hooks/server'
 import { toAgentStatusIpcPayload } from '../agent-hooks/server/server-status-identity'
 import { browserManager } from '../browser/browser-manager'
 import { browserSessionRegistry } from '../browser/browser-session-registry'
-import { loadAgentSessionClaimSigner } from '../runtime/agent-session-claim-identity'
+import { loadAgentSessionClaimSigner } from '../runtime/agent-session/ownership/agent-session-claim-identity'
 import { getProfileUserDataPath } from '../orca-profiles/profile-storage-paths'
 import { codexAiVaultSessionResumePreparation } from '../codex/codex-ai-vault-session-resume'
 import { prepareCodexPinnedLaunchHome } from './codex-session-resume-launch'
@@ -84,10 +85,10 @@ export function initializeMainProcessRuntime(): OrcaRuntimeService {
         envelope
       )
   }
-  // Why here and not in the window listener: `subscribeEnrichedStatus` also fires under headless
-  // `orca serve`, which never opens one, and the fleet path runs there too.
+  // Process-scope subscription covers desktop, headless serve and fleet status.
   const observedPaneIdentities = new AgentStatusObservedPaneIdentities()
   const runtime = new OrcaRuntimeService(store, stats, {
+    getSetupTerminalTitle: () => translateMain('worktree.setupTerminalTitle', 'Setup'),
     ...agentHookRuntimeDeps(agentHookServer, observedPaneIdentities, () =>
       state.store?.getSettings()
     ),
@@ -96,10 +97,10 @@ export function initializeMainProcessRuntime(): OrcaRuntimeService {
       getProfileUserDataPath(),
       getProfileUserDataPath()
     ),
-    // Why: resolve the PTY provider lazily — a daemon swap happens later, so an eager reference would freeze the pre-daemon provider (design §4.3).
+    // Resolve provider lazily or later daemon adoption leaves a frozen pre-daemon reference (design §4.3).
     getLocalProvider: () => getLocalPtyProvider(),
     onPtyStopped: clearProviderPtyState,
-    // Why: serve can be promoted in place, so wire the listener from startup; runtime enables desktop-only scanners only for a ready renderer.
+    // Serve can activate in place; wire now, but enable desktop scanners only for a ready renderer.
     onTerminalSideEffects: (batch: TerminalSideEffectBatch) => {
       if (state.mainWindow && !state.mainWindow.isDestroyed()) {
         state.mainWindow.webContents.send('pty:sideEffect', batch)
@@ -111,11 +112,10 @@ export function initializeMainProcessRuntime(): OrcaRuntimeService {
     retireAgentHookCompatibilityAuthority: (paneKey) =>
       agentHookServer.retirePaneAuthority(paneKey),
     canRecoverPersistentLocalPtys: () => getDaemonProvider() !== null,
-    // Why: evaluated per call, not captured — the RPC server that owns the device registry is
-    // constructed with this runtime and does not exist yet at this point.
+    // Resolve per call: the RPC server/device registry is constructed later with this runtime.
     getPairedDeviceName: (pairedDeviceId) =>
       state.runtimeRpc?.getDeviceRegistry()?.getDevice(pairedDeviceId)?.name ?? null,
-    // Why: source codex-home here (runs in window AND serve) so aiVault.listSessions includes managed-Codex sessions; registerCoreHandlers is window-only.
+    // Provide managed Codex homes here for desktop and headless session discovery; core IPC registration is window-only.
     getAdditionalAiVaultCodexHomePaths: () =>
       state.codexRuntimeHome?.getHostCodexHomePathsForSessionDiscovery() ?? [],
     prepareAiVaultSessionResume: codexAiVaultSessionResumePreparation(() => ({
@@ -135,8 +135,7 @@ export function initializeMainProcessRuntime(): OrcaRuntimeService {
         callRuntimeEnvironment(app.getPath('userData'), environmentId, method, params, timeoutMs),
       suspendVm: (workspaceId) => suspendEphemeralVmWorkspace(store, workspaceId)
     },
-    // Why the same function the settings IPC handler calls: a paired client's write and a
-    // local one must reconcile the scanner child through one path, or they can disagree.
+    // Paired/local settings writes must reconcile the scanner child through the same path.
     applySessionSearchSettings: applySessionSearchSettingsChange,
     skillTransactionRecovery: state.skillTransactionRecovery
   })
@@ -144,13 +143,11 @@ export function initializeMainProcessRuntime(): OrcaRuntimeService {
   const sessionSearch = installChildSessionSearchService({
     dataRoot: getCanonicalUserDataPath(),
     getSettings: () => store.getSettings(),
-    // Why read per request rather than snapshot: a repo added or a workspace
-    // renamed between two searches has to be in scope for the second one.
-    // This process answers for its own host, so the catalog is bound to it here.
+    // Read the host catalog per search so added repos/renamed workspaces are immediately in scope.
     getScopeCatalog: () => sessionSearchScopeCatalogFromStore(store, LOCAL_EXECUTION_HOST_ID)
   })
   app.once('will-quit', () => sessionSearch?.dispose())
-  // Why here: this runs for the desktop and headless `orca serve`, and each evaluates its own panes.
+  // Desktop and headless hosts each evaluate their own panes' rules.
   startAgentStateRulesLiveUpdates(store, (rules) =>
     recordDurableCrashBreadcrumb('agent_state_rules_active', rules)
   )
@@ -160,7 +157,7 @@ export function initializeMainProcessRuntime(): OrcaRuntimeService {
     recordObservedAgentStatusPaneIdentity(observedPaneIdentities, enriched, runtime)
   )
   agentHookServer.setCliWriterExecutionMatcher(observedPaneIdentities, runtime)
-  // Switch point: main keeps the resume record of each pane it holds from the status it accepts.
+  // Main records pane resume state from accepted status.
   if (ORCA_LAYOUT_OWNER_IS_MAIN) {
     agentHookServer.subscribeEnrichedStatus((enriched) =>
       runtime.recordHookStatusResume(toAgentStatusIpcPayload(enriched))
@@ -168,8 +165,7 @@ export function initializeMainProcessRuntime(): OrcaRuntimeService {
     agentHookServer.subscribePaneStatusClear((clear) => runtime.forgetHookStatusResume(clear))
     agentHookServer.subscribeStatusDrop((paneKey) => runtime.forgetHookStatusResume({ paneKey }))
   }
-  // Why before anything can attach: a client host that reattaches to a restarted runtime is only
-  // handed its pages back if the runtime found them first.
+  // Rehydrate before clients attach so restarted runtimes can return their owned pages.
   runtime.rehydrateClientHostedBrowserPages()
   browserManager.setBrowserGuestStateChangedListener((worktreeId) => {
     runtime.notifyMobileSessionTabsChanged(worktreeId)
@@ -195,7 +191,7 @@ export function configureRuntimeServices(runtime: OrcaRuntimeService): void {
   runtime.setAccountServices({ claudeAccounts, codexAccounts, rateLimits })
   installWslOrcadAccountShim(store)
   runtime.setCommitMessageAgentEnvironmentResolvers({
-    // Why: Codex hooks/auth live in Orca's managed runtime home even for the default path, so every launch must resolve CODEX_HOME via runtime-home.
+    // Resolve every Codex launch through runtime-home, including default-account hooks/auth.
     prepareForCodexLaunch: prepareCodexRuntimeHomeForLaunch,
     prepareForClaudeLaunch: (target) => state.claudeRuntimeAuth!.prepareForClaudeLaunch(target),
     resolveBaseEnvironment: () => resolveHostAgentBaseEnvironment(store.getSettings())

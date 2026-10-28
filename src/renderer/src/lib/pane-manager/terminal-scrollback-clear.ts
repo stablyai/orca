@@ -9,8 +9,7 @@ export function clearTerminalScrollbackAndFollowOutput(
   terminal: TerminalScrollbackClearTarget
 ): void {
   terminal.clear()
-  // Why: xterm clear() leaves BufferService.isUserScrolling latched when the
-  // viewport was pinned, so a public zero-distance bottom scroll must reset it.
+  // clear() leaves native isUserScrolling latched; a zero-distance bottom scroll resets it.
   terminal.scrollToBottom()
   markTerminalFollowOutput(terminal)
 }

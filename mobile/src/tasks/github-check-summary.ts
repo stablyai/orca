@@ -8,8 +8,7 @@ export type GitHubCheckLike = {
 
 export type GitHubCheckSummary = ProviderCheckSummary
 
-// Why: reuse the desktop classifier verbatim — a second copy is what let mobile call `skipped`
-// unresolved while desktop called the same PR green.
+// Use the desktop classifier so skipped checks cannot disagree across mobile and desktop.
 export function buildGitHubCheckSummary(checks: GitHubCheckLike[]): GitHubCheckSummary {
   return summarizeProviderChecks(checks)
 }

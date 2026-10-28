@@ -1,4 +1,4 @@
-import type { TaskPageComposerActionsModel } from '../../use-task-page-composer-actions'
+import type { TaskPageComposerActionsModel } from '../use-task-page-composer-actions'
 import { TaskPageLinearIssueToolbar } from './IssueToolbar'
 import { translate } from '@/i18n/i18n'
 import { TaskPageLinearIssueRows } from './IssueRows'

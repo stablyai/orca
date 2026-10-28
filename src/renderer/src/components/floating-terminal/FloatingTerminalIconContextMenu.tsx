@@ -67,8 +67,6 @@ export function FloatingTerminalIconContextMenu({
         style={style}
         data-floating-terminal-toggle
         onContextMenuCapture={(event) => {
-          // Why: workspace cards use DropdownMenu anchored at the cursor for
-          // right-click menus; match that style instead of Radix ContextMenu.
           event.preventDefault()
           event.stopPropagation()
           setMenuPoint({ x: event.clientX, y: event.clientY })

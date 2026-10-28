@@ -16,7 +16,6 @@ vi.mock('./editor-stale-view-edit', async (importOriginal) => ({
   staleViewEditEpoch: vi.fn(() => 0)
 }))
 
-/** Two split panes of one notebook tab sharing one record text. */
 function renderSplitPanes(initialContent: string) {
   let shared = initialContent
   const panes = renderHook(() => {
@@ -211,7 +210,6 @@ describe('notebook document editing lifecycle', () => {
     expect(notifyStaleViewEditRejected).toHaveBeenCalledOnce()
     expect(panes.result.current.b.sourceDrafts).toEqual({})
 
-    // B re-synced, so its next edit commits onto pane A's text.
     act(() => {
       panes.result.current.b.updateCellSource(1, 'pane b retry')
       vi.advanceTimersByTime(400)
@@ -252,7 +250,6 @@ describe('notebook document editing lifecycle', () => {
     act(() => vi.advanceTimersByTime(400))
     expect(notifyStaleViewEditRejected).not.toHaveBeenCalled()
 
-    // A fresh draft starts from the published text, so it commits.
     act(() => {
       panes.result.current.b.updateCellSource(0, 'same edit, then more')
       vi.advanceTimersByTime(400)

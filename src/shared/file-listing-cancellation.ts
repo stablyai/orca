@@ -1,11 +1,4 @@
-/**
- * Cancellation identity for workspace file-list scans (fs.listFiles).
- *
- * Why a dedicated error class: the readdir fallback wraps budget errors into
- * "install rg" guidance and Quick Open surfaces load errors verbatim, so a
- * cancelled scan must stay distinguishable from a genuine listing failure at
- * every layer (relay rg/git/readdir, main-process local scan, renderer).
- */
+/** Keep cancellation distinct through relay/main/renderer: readdir wraps budget failures as install-rg guidance, and Quick Open displays load errors verbatim. */
 export class FileListingCancelledError extends Error {
   constructor(message = 'File listing cancelled') {
     super(message)
@@ -13,12 +6,7 @@ export class FileListingCancelledError extends Error {
   }
 }
 
-/**
- * Build the rejection for an aborted scan, preferring the abort reason so a
- * superseded scan reports "superseded" rather than a generic cancellation.
- * Only FileListingCancelledError reasons pass through — a bare abort() sets
- * signal.reason to a DOMException that must not leak past the classifier.
- */
+/** Preserve FileListingCancelledError reasons such as superseded; bare abort’s DOMException must not escape the cancellation classifier. */
 export function fileListingCancellationError(signal?: AbortSignal): Error {
   const reason = signal?.reason
   if (reason instanceof FileListingCancelledError) {

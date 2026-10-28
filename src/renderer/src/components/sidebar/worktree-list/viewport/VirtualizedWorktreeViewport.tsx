@@ -1,11 +1,10 @@
 import React, { useCallback, useMemo, useRef, useState } from 'react'
 import { useAppStore } from '@/store'
-import { getProjectHeaderHostContexts } from '../rows/project-header-host-context'
+import { useProjectHeaderHostContexts } from './use-project-header-host-contexts'
 import { translate } from '@/i18n/i18n'
 import { WorktreeListScrollToTopButton } from '../../WorktreeListScrollToTopButton'
 import { renderWorktreeSidebarDropIndicators } from './drop-indicators'
 import { useWorktreeListScrollToTop } from './use-scroll-to-top'
-import { useRepoSshGateResolver } from '@/hooks/use-repo-ssh-gate-resolver'
 import { getActiveDescendantOptionId } from '../navigation/active-descendant-option'
 import { buildRenderableRows } from '../listing/renderable-rows'
 import { useFolderWorkspacePathStatusRows } from '../listing/use-folder-path-statuses'
@@ -30,6 +29,8 @@ import { EMPTY_PROJECT_GROUPS, type VirtualizedWorktreeViewportProps } from './v
 import { useWorktreeDropCommitContext } from '../drag/use-drop-commit-context'
 import { buildWorktreeVirtualRowContext } from './virtual-row-context'
 import { renderWorktreeVirtualRow } from '../rows/virtual-row-dispatch'
+
+const EMPTY_HOST_OPTIONS: NonNullable<VirtualizedWorktreeViewportProps['hostOptions']> = []
 
 const WORKTREE_SIDEBAR_SCROLL_STYLE: React.CSSProperties = {
   // Why: TanStack Virtual owns scroll correction; native overflow anchoring fights it and causes jumps.
@@ -59,30 +60,13 @@ export const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktr
   const [scrollElement, setScrollElement] = useState<HTMLDivElement | null>(null)
   const settings = useAppStore((s) => s.settings)
   const worktreeVisibilityDefaultsByHost = useAppStore((s) => s.worktreeVisibilityDefaultsByHost)
-  const sshConnectionStates = useAppStore((s) => s.sshConnectionStates)
-  const getRepoSshGate = useRepoSshGateResolver()
-  const runtimeEnvironments = useAppStore((s) => s.runtimeEnvironments)
-  const projectHeaderHostContexts = useMemo(
-    () =>
-      getProjectHeaderHostContexts({
-        rows,
-        visibleProjectRepoIdsBySection: props.visibleProjectRepoIdsBySection,
-        hosts: props.hostOptions ?? [],
-        runtimeEnvironments,
-        sshConnectionStates,
-        repoMap,
-        projectGrouping: props.projectGrouping
-      }),
-    [
-      rows,
-      props.visibleProjectRepoIdsBySection,
-      props.hostOptions,
-      repoMap,
-      props.projectGrouping,
-      runtimeEnvironments,
-      sshConnectionStates
-    ]
-  )
+  const projectHeaderHostContexts = useProjectHeaderHostContexts({
+    rows,
+    visibleProjectRepoIdsBySection: props.visibleProjectRepoIdsBySection,
+    hosts: props.hostOptions ?? EMPTY_HOST_OPTIONS,
+    repoMap,
+    projectGrouping: props.projectGrouping
+  })
   const newCardStyle = settings?.experimentalNewWorktreeCardStyle === true
 
   const reveal = useSidebarRevealHighlight()
@@ -145,8 +129,7 @@ export const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktr
     allRepoIds: props.allRepoIds,
     repoMap,
     projectGroups,
-    folderWorkspaces: props.folderWorkspaces,
-    sshConnectionStates
+    folderWorkspaces: props.folderWorkspaces
   })
 
   const { showScrollToTop, scrollToTop } = useWorktreeListScrollToTop({
@@ -278,8 +261,7 @@ export const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktr
     scrollRef
   })
 
-  // Why: a callback ref that changes identity is re-invoked with null on every render, which
-  // would run the teardown below mid-drag; depend only on the stable teardown callbacks.
+  // Keep the ref callback stable so React cannot invoke null teardown mid-drag on ordinary renders.
   const { cancelPendingRevealFrames, clearRevealHighlightFrame, clearRevealHighlightTimeout } =
     reveal
   const { clearWorktreeDrag } = runtime
@@ -327,7 +309,6 @@ export const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktr
     measureVirtualRowElement,
     settings,
     worktreeVisibilityDefaultsByHost,
-    getRepoSshGate,
     newCardStyle,
     folderBackedProjectGroupIds,
     projectGroups,

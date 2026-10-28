@@ -66,7 +66,7 @@ export function renderSmartWorkspaceNameField(
         <Command
           value={resolvedCommandValue}
           onValueChange={(next) => {
-            // Why: cmdk re-emits when rows reshape; freeze it while debounce trails input.
+            // cmdk re-emits on row reshapes; freeze selection while debounce trails the input.
             if (isQueryStale) {
               return
             }

@@ -1,5 +1,4 @@
 // @vitest-environment happy-dom
-// Why: the conflict-review overview is a read-only live view of the file's shared record (G4).
 import { act, createElement } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -110,7 +109,6 @@ type RenderOptions = {
   reloadContent?: (file: OpenFile) => void
 }
 
-/** Renders the overview as the panel does: drafts through the panel's draft selector. */
 function render(
   store: StoreApi<AppState>,
   review: OpenFile,
@@ -237,7 +235,8 @@ describe('conflict-review overview as a live read-only view of the record', () =
     const reloadContent = vi.fn()
     render(store, review, 'disk', { loadError: 'denied', reloadContent })
     retries.current[0]()
-    expect(reloadContent).toHaveBeenCalledWith(view)
+    // Retry is a user act that may start a stopped WSL distro.
+    expect(reloadContent).toHaveBeenCalledWith(view, { wakeWslDistro: true })
   })
 
   it("mounts as a passive mirror: the view's workspace, no cursor tracking, no reveals", () => {

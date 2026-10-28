@@ -26,14 +26,8 @@ import {
 } from './preview/mobile-web-app-render-harness.mjs'
 import { LAYOUT_SOURCE } from './preview/mobile-web-app-terminal-probe-route.mjs'
 
-/**
- * Held presses on the page. Held ~500 ms, Android WebView turns a touch into a long-press: it fires
- * `contextmenu`, and where text can be selected it starts a selection and then cancels the touch.
- * react-native-web ends a press on all three unless the press refuses `contextmenu` (a Pressable
- * with `onLongPress`), and the page's native-parity style leaves no text to select. Traced on an
- * emulator; headless Chromium generates no long-press from CDP touches, so `holdLikeAndroidWebView`
- * plays it.
- */
+// Android long-press (~500ms) emits contextmenu plus selection/touchcancel on selectable text; RN-Web ends press unless onLongPress refuses contextmenu.
+// Native-parity CSS removes selection; headless CDP does not synthesize Android long-press, so holdLikeAndroidWebView replays observed sequence.
 
 const ROUTES = {
   mic: `/${MOBILE_WEB_APP_ROUTE_ROOT}/hold-dictation-probe`,
@@ -71,7 +65,7 @@ beforeAll(async () => {
     join(routeDir, 'hold-dictation-probe.tsx'),
     holdDictationProbeRouteSource({
       terminalActionsModule: join(sessionDir, 'MobileTerminalInputActions'),
-      chatComposerModule: join(sessionDir, 'MobileNativeChatComposer')
+      chatComposerModule: join(sessionDir, 'native-chat', 'composer', 'MobileNativeChatComposer')
     })
   )
   await writeFile(
@@ -138,11 +132,7 @@ async function openProbe(pathname) {
   return { errors, page }
 }
 
-/**
- * Touch-holds `selector` for `holdMs`, reads `read()` mid-hold, then lifts. At 500 ms it plays
- * Android WebView's long-press: `contextmenu`, then — only where the touch could select text —
- * `selectionchange` and `touchcancel`, which is what the device did while page text was selectable.
- */
+// Hold/read mid-press, then release; at 500ms replay contextmenu and selectionchange/touchcancel only for selectable text, matching Android WebView.
 async function holdLikeAndroidWebView(page, selector, { holdMs, read }) {
   // A handle, not a locator: a label the selector matches can change as soon as the press lands.
   const target = await page.waitForSelector(selector)

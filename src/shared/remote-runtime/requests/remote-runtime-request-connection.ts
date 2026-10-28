@@ -3,7 +3,7 @@ import WebSocket from 'ws'
 import { abortSignalReason } from '../../abort-signal-reason'
 import type { PairedRuntimeConnection } from '../../paired-runtime-connection'
 import { scheduleOrphanedRemoteRuntimeSocketClose } from '../remote-runtime-abort-orphaned-socket'
-import { serializeRemoteRuntimeRpcRequest } from '../../remote-runtime-memory-limits'
+import { serializeRemoteRuntimeRpcRequest } from '../remote-runtime-memory-limits'
 import type { PairedE2EEClientHandshake } from '../../paired-e2ee-client-handshake'
 import {
   prepareRemoteRuntimeRequest,
@@ -29,8 +29,8 @@ import {
   type RemoteRuntimeRequestReadyWaiter
 } from './remote-runtime-request-ready-waiters'
 import { openRemoteRuntimeWebSocket } from './remote-runtime-request-websocket'
-import { sendRemoteRuntimeTokenAuth } from '../../remote-runtime-client-handshake'
-import { remoteRuntimeClientCapabilities } from '../../remote-runtime-client-capabilities'
+import { sendRemoteRuntimeTokenAuth } from '../remote-runtime-client-handshake'
+import { remoteRuntimeClientCapabilities } from '../remote-runtime-client-capabilities'
 import type { RuntimeCapability } from '../../protocol-version'
 type ConnectionState = 'closed' | 'awaiting_ready' | 'awaiting_authenticated' | 'ready'
 const IDLE_CLOSE_MS = 60_000

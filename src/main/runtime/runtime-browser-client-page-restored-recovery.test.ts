@@ -36,8 +36,7 @@ describe('recovery of rehydrated client-hosted pages', () => {
         browserHostClientId: 'host-relaunched',
         pairedDeviceId: 'device-a',
         browserProfileId: 'profile-a',
-        // Re-resolved, never replayed: the persisted record carries no route key because a key
-        // names the runtime process that minted it.
+        // Re-resolve route keys: persisted keys name the predecessor runtime and cannot be replayed.
         executionHostKey: 'native:runtime-new:2'
       })
     )
@@ -95,8 +94,7 @@ describe('recovery of rehydrated client-hosted pages', () => {
       resolveExecutionHostKey: async () => ({ status: 'unavailable' })
     })
 
-    // "The route is not up yet" is a not-now, never permission to retire the page — the
-    // distinction the workspace-gone discriminant exists to make.
+    // Unavailable routes defer recovery; only workspace-gone authorizes retirement.
     expect(authority.createClientPage).not.toHaveBeenCalled()
     expect(releaseUnrecoverablePage).not.toHaveBeenCalled()
     expect(pages.getPage('page-a')?.placement).toEqual(RESTORED_CLIENT_HOSTED_BROWSER_PLACEMENT)
@@ -136,8 +134,7 @@ describe('recovery of rehydrated client-hosted pages', () => {
 
     expect(releaseUnrecoverablePage).not.toHaveBeenCalled()
 
-    // Replaying the persisted key is not a fallback: the client answers a predecessor's key with
-    // browser_client_network_route_authority_mismatch.
+    // Old route keys are not fallback; clients refuse them with browser_client_network_route_authority_mismatch.
     expect(authority.createClientPage).not.toHaveBeenCalled()
   })
 
@@ -161,8 +158,7 @@ describe('recovery of rehydrated client-hosted pages', () => {
       })
     })
 
-    // The persisted record must not shadow a live guest: adoption rekeys the DOM, recovery
-    // recreates it, so a row with a guest behind it belongs to adoption.
+    // Adopt live guests by rekeying DOM; persisted rows must not divert them into destructive recreation.
     expect(result.adoptedPageIds).toEqual(['page-a'])
     expect(pages.getPage('page-a')).toMatchObject({
       placement: freshPlacement,

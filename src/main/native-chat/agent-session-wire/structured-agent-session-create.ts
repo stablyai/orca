@@ -1,3 +1,4 @@
+import { agentSessionConversationView } from '../../../shared/agent-session-conversation-view'
 import { isFloatingWorkspaceId } from '../../../shared/floating-workspace-worktree'
 import { isAgentSessionCreateAdmissionRefusal } from '../../../shared/agent-session-definitive-refusal'
 import type { AgentJournalMessageItem } from '../../../shared/agent-session-journal-types'
@@ -168,16 +169,17 @@ async function foundConversation(
   const existing = context.sessions.get(sessionId)
   const opened = existing
     ? { session: existing }
-    : await openStructuredAgentSessionConversationJournal(deps, candidate.record).catch(
-        (error: unknown) => {
-          deps.logger.warn('opening the journal of a new chat failed', {
-            scope: 'create-journal-open',
-            sessionId,
-            error
-          })
-          throw journalOpenRefusalError(error)
-        }
-      )
+    : await openStructuredAgentSessionConversationJournal(
+        deps,
+        agentSessionConversationView(candidate.record)
+      ).catch((error: unknown) => {
+        deps.logger.warn('opening the journal of a new chat failed', {
+          scope: 'create-journal-open',
+          sessionId,
+          error
+        })
+        throw journalOpenRefusalError(error)
+      })
   const { session } = opened
   const fence = candidate.record.lease.runtimeFence
   let committed = replayed

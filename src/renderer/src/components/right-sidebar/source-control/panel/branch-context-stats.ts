@@ -30,9 +30,7 @@ function formatBehindOfTitle(count: number, ref: string): string {
       )
 }
 
-// Why: the counts carry no color of their own. Green and red are reserved for the
-// line-total chip beside them — an `↑1` in added-green next to `+1,114` reads as one
-// quantity when they count different things (commits vs lines).
+// Reserve green/red for line totals; coloring commit arrows too would make adjacent unlike quantities look combined.
 export type SourceControlBranchContextStat = {
   key: string
   label: string
@@ -51,8 +49,7 @@ export function resolveSourceControlDisplayedBaseRef(
   return configuredRef || null
 }
 
-// Why: context-row labels should stay scannable — drop git namespace prefixes
-// but keep remote qualification (origin/main) so multi-remote bases stay distinct.
+// Drop Git namespace prefixes but retain remote qualification to distinguish multi-remote bases.
 export function formatSourceControlRefLabel(ref: string): string {
   return ref
     .trim()
@@ -61,8 +58,7 @@ export function formatSourceControlRefLabel(ref: string): string {
     .replace(/^refs\/tags\//, '')
 }
 
-// Why: the compare row needs a displayable base; a summary alone with an empty
-// baseRef would still fail the component's displayedBaseRef guard.
+// Require a displayable base, matching the row component's guard.
 export function shouldShowSourceControlBranchContextRow(
   summary: GitBranchCompareSummary | null | undefined,
   compareBaseRef: string | null | undefined
@@ -70,8 +66,7 @@ export function shouldShowSourceControlBranchContextRow(
   return resolveSourceControlDisplayedBaseRef(summary, compareBaseRef) != null
 }
 
-// Why: head-only identity still mounts when there is no base, so toolbar chrome
-// visibility is "base OR head" — not base alone.
+// Toolbar chrome may show head identity without a compare base.
 export function shouldShowSourceControlBranchContextChrome(
   summary: GitBranchCompareSummary | null | undefined,
   compareBaseRef: string | null | undefined,
@@ -80,8 +75,7 @@ export function shouldShowSourceControlBranchContextChrome(
   return shouldShowSourceControlBranchContextRow(summary, compareBaseRef) || headDisplay != null
 }
 
-// Why: both directions, on the line that names the ref they measure. Ahead alone hid
-// the case this row exists for — a rebased branch that has also fallen behind its base.
+// Show both directions against the named base so rebased branches also reveal commits behind it.
 export function buildSourceControlCompareBaseStats(
   summary: GitBranchCompareSummary | null | undefined,
   baseRef: string

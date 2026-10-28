@@ -1,8 +1,4 @@
-/**
- * A worker-start that fails counts toward the Task's circuit breaker, so a coordinator retrying a
- * start that can never succeed (an agent stuck at an interactive prompt) stops at the third failure
- * instead of launching one more live agent every time.
- */
+/** Failed worker starts must advance the circuit breaker instead of spawning indefinitely. */
 
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { OrchestrationDb } from '../orchestration-db'

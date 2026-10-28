@@ -3,12 +3,7 @@ import type { RuntimeClientTarget } from '../../../shared/runtime-client-target'
 import { callStructuredAgentSession } from './structured-agent-session-client'
 import { structuredAgentSessionHostKey } from './structured-agent-session-host-capability'
 
-/**
- * The host's saved model list per host and agent, as the host last answered it, so a new chat's
- * picker renders the host's list on its first frame instead of a guess it corrects. The host stays
- * the only source: every entry is a host answer, replaced by the next one, and dropped when the
- * host says it has none or a setting that picks the account changes.
- */
+/** Host/agent saved model lists seed new-chat pickers without a first-frame guess. Only host answers populate entries; newer answers replace them, absence/account-setting changes drop them. */
 
 type ListedCatalog = Exclude<AgentSessionModelCatalogResult, { origin: 'unknown' }>
 
@@ -36,13 +31,7 @@ function withoutNamedDefault(catalog: ListedCatalog): ListedCatalog {
   }
 }
 
-/**
- * What a chat's first frame may render from: undefined until the host has answered what that
- * frame would show. Whether a new chat runs the listed default depends on its workspace's own
- * config, so another workspace's answer serves only a chat that names its model, a list that
- * names no default, or a default the host says no workspace can replace; never a list the host
- * says is that workspace's own.
- */
+/** Undefined until host answers for this frame. Workspace config can replace defaults, so another workspace’s answer is valid only for named models, no-default lists or host-proven workspace-independent defaults. */
 export function readHostModelCatalogSnapshot(
   target: RuntimeClientTarget,
   agent: string,
@@ -97,8 +86,7 @@ export function recordHostModelCatalogSnapshot(
   )
 }
 
-/** Drops a host's answers, for every agent or only `agents`: the account they were for may not be
- *  the one a new chat pins now. */
+/** Drop all or selected agents’ host answers when the account a new chat pins may change. */
 export function forgetHostModelCatalogSnapshots(
   target: RuntimeClientTarget,
   agents?: readonly string[]
@@ -121,9 +109,7 @@ export function hostModelCatalogSnapshotAgents(target: RuntimeClientTarget): str
     .map((key) => key.slice(prefix.length))
 }
 
-/** Reads the account-level list for each agent ahead of any chat. A failed read keeps nothing new:
- *  it is not evidence the host has no list. `savedOnly` asks the host to answer from what it saved
- *  and start no listing; send it only to a host advertising the saved-only capability. */
+/** Preload account-level lists per agent; failed reads prove no absence. Send savedOnly only when host advertises it, avoiding unsaved CLI listing. */
 export async function preloadHostModelCatalogSnapshots(
   target: RuntimeClientTarget,
   agents: readonly string[],

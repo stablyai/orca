@@ -35,7 +35,7 @@ export function registerProfileStateWorkerCoordinationTests(): void {
     })
 
     it('skips a debounce callback already queued behind the write that consumed its changes', async () => {
-      const { store, authority } = await fixture()
+      const { store, authority, readState } = await fixture()
       const full = vi.spyOn(authority, 'writeCompleteSerializedDomains')
       const gate = authority.pause()
       vi.useFakeTimers()
@@ -50,6 +50,7 @@ export function registerProfileStateWorkerCoordinationTests(): void {
         await durable
         await store.waitForPendingWrite()
         expect(full).not.toHaveBeenCalled()
+        expect(readState().settings.theme).toBe('dark')
       } finally {
         gate.finish.resolve()
         vi.useRealTimers()
@@ -290,10 +291,11 @@ export function registerProfileStateWorkerCoordinationTests(): void {
     it.each(['known-failure', 'indeterminate'] as const)(
       'only rolls back a mutation with a known failure (%s)',
       async (outcome) => {
-        const { store, authority } = await fixture()
+        const { store, authority, readState } = await fixture()
         vi.spyOn(console, 'error').mockImplementation(() => {})
+        const previous = store.getSettings().theme
         const gate = authority.pause()
-        const rollback = vi.fn()
+        const rollback = vi.fn(() => store.updateSettings({ theme: previous }))
         const exact = store.runDurableMutation(() => {
           store.updateSettings({ theme: 'dark' })
           return { value: undefined, rollback }
@@ -303,6 +305,8 @@ export function registerProfileStateWorkerCoordinationTests(): void {
         gate.finish.reject(new ProfileStateWriterError('test', 'write failed', outcome))
         await rejected
         expect(rollback).toHaveBeenCalledTimes(outcome === 'known-failure' ? 1 : 0)
+        expect(store.getSettings().theme).toBe(outcome === 'known-failure' ? previous : 'dark')
+        expect(readState().settings.theme).toBe(previous)
       }
     )
 

@@ -21,14 +21,12 @@ describe('useIpcEvents browser tab close routing', () => {
   beforeEach(() => {
     vi.resetModules()
     vi.unstubAllGlobals()
-    // Undo a partial mock of this module leaked by an earlier describe so the real
-    // resolveFloatingWorkspaceBrowserWorkspaceId (source validation) is used here.
+    // Clear leaked partial mocks so floating browser source validation uses the real resolver.
     vi.doUnmock('@/lib/floating-workspace-terminal-actions')
     closeTerminalTabMock.mockReset()
   })
 
-  // The floating-guest close receiver validates the source id still names a live floating
-  // browser tab, then re-dispatches a typed window event for the mounted panel.
+  // Validate a live floating browser source before redispatching the mounted panel’s typed close event.
   function dispatchedEventTypes(): string[] {
     const dispatchEvent = (window.dispatchEvent as ReturnType<typeof vi.fn>).mock.calls
     return dispatchEvent.map((call) => (call[0] as Event).type)

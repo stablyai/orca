@@ -187,8 +187,7 @@ describe('createUntitledMarkdownFile', () => {
       filePath: '/repo/untitled.md'
     })
 
-    // Why: shell.pathExists is main-process local-only; SSH worktrees must
-    // probe through the same filesystem API that receives the connectionId.
+    // Probe through runtime/SSH-aware files API; shell.pathExists only sees main’s local filesystem.
     expect(pathExists).toHaveBeenCalledWith({
       filePath: '/repo/untitled.md',
       connectionId: 'conn-1'

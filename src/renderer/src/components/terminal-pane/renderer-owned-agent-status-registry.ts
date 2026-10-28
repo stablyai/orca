@@ -1,14 +1,4 @@
-/**
- * Panes whose agent status this renderer owns from the PTY byte stream.
- *
- * Remote-runtime panes have two writers for one store key: the client's own
- * OSC pipeline (pty-connection `shouldOwnAgentStatusInRenderer`) and the
- * mirrored host `session.tabs` snapshot. Without a fence they overwrite each
- * other on every publication and the tab flaps between "working + generated
- * title" and "done + Terminal". Registration marks the claim (decided once at
- * transport creation); the first byte-derived write proves it, so a mirrored
- * pane that never produced status keeps ceding to the host.
- */
+/** Fence host mirroring only after renderer byte-derived status proves its claim; otherwise two writers flap the same pane row between working/generated titles and host defaults. */
 type RendererOwnedAgentStatusPane = {
   environmentId: string
   hasClientWrite: boolean
@@ -22,17 +12,13 @@ export function registerRendererOwnedAgentStatusPane(
   environmentId: string
 ): () => void {
   const existing = panesByPaneKey.get(paneKey)
-  // Why: a remount re-registers the same pane; keep the earned claim unless the
-  // pane moved to another runtime environment (then its bytes are a new stream).
+  // Preserve earned claims across remount unless runtime ownership changes to a different byte stream.
   const entry: RendererOwnedAgentStatusPane = {
     environmentId,
     hasClientWrite: existing?.environmentId === environmentId && existing.hasClientWrite
   }
   panesByPaneKey.set(paneKey, entry)
-  // Why identity-checked: a replacement mount registers before the superseded
-  // pane's dispose runs, and paneKey is `${tabId}:${leafId}` — shared across that
-  // handoff. An unconditional delete would strip the live pane's claim for good,
-  // since markRendererOwnedAgentStatusWrite never recreates a missing entry.
+  // Identity-check release because successor mounts share paneKey; stale deletion would remove a claim that writes cannot recreate.
   return () => {
     if (panesByPaneKey.get(paneKey) === entry) {
       panesByPaneKey.delete(paneKey)

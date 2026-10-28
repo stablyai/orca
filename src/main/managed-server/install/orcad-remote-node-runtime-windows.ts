@@ -2,6 +2,7 @@
 import {
   pinnedNodeRuntimeAsset,
   NODE_RUNTIME_PIN,
+  NODE_RUNTIME_WINDOWS_MINIMUM_BUILD,
   nodeRuntimeExecutablePath
 } from '../../../shared/node-runtime-pin'
 import type { NodeRuntimeTarget } from '../../../shared/node-runtime-pin'
@@ -9,10 +10,12 @@ import { ORCAD_NODE_RUNTIME_WINDOWS_EXECUTABLE } from '../../../shared/orcad-art
 import {
   REMOTE_NODE_RUNTIME_EXIT_PREFIX,
   REMOTE_NODE_RUNTIME_MISSING,
+  REMOTE_NODE_RUNTIME_NO_EXTRACTOR,
   REMOTE_NODE_RUNTIME_READY,
   REMOTE_NODE_RUNTIME_SECURITY_MODIFIED,
   REMOTE_NODE_RUNTIME_SELFTEST_FAILED,
-  REMOTE_NODE_RUNTIME_VERIFIED_MARKER
+  REMOTE_NODE_RUNTIME_VERIFIED_MARKER,
+  REMOTE_WINDOWS_BUILD_UNSUPPORTED
 } from '../../ssh/orcad-remote-node-runtime-report'
 import { powerShellCommand } from '../../ssh/ssh-remote-powershell'
 import { quotePowerShellLiteral as powerShellLiteral } from '../../../shared/powershell-native-argument'
@@ -40,7 +43,20 @@ function runtimeVariables(runtimeDir: string): string[] {
   ]
 }
 
-/** Create an upload stage during a failed probe to avoid another PowerShell spawn. */
+// Git/MSYS tar.exe may precede System32 on PATH and cannot read ZIPs.
+const SYSTEM_TAR = "$tar = Join-Path $env:SystemRoot 'System32\\tar.exe'"
+
+// Read-only; an unreadable build proves nothing, so only a known old one refuses.
+function hostPreflight(): string[] {
+  return [
+    "$build = 0; try { $build = [int](Get-ItemProperty -LiteralPath 'HKLM:\\SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion' -ErrorAction Stop).CurrentBuildNumber } catch { }",
+    `if (($build -gt 0) -and ($build -lt ${NODE_RUNTIME_WINDOWS_MINIMUM_BUILD})) { Write-Output (${powerShellLiteral(`${REMOTE_WINDOWS_BUILD_UNSUPPORTED} `)} + $build); exit 0 }`,
+    SYSTEM_TAR,
+    `if (-not (Test-Path -LiteralPath $tar -PathType Leaf) -and -not (Get-Command Expand-Archive -ErrorAction SilentlyContinue)) { Write-Output ${powerShellLiteral(REMOTE_NODE_RUNTIME_NO_EXTRACTOR)}; exit 0 }`
+  ]
+}
+
+/** Create an upload stage during a failed probe to avoid another PowerShell spawn; first refuse hosts that can't unpack or run it. */
 export function windowsNodeRuntimeProbeCommand(
   runtimeDir: string,
   target: NodeRuntimeTarget,
@@ -57,6 +73,7 @@ export function windowsNodeRuntimeProbeCommand(
       '}',
       ...(stageDir
         ? [
+            ...hostPreflight(),
             `$null = New-Item -ItemType Directory -Force -Path ${powerShellLiteral(stageDir)} -ErrorAction Stop`
           ]
         : []),
@@ -114,8 +131,7 @@ export function windowsNodeRuntimePromoteCommand(args: {
       `$archiveHash = Get-OrcaSha256 $archive`,
       `if ($archiveHash -eq '') { Write-Output 'ORCA_NODE_RUNTIME_ARCHIVE_MISSING'; $script:code = 1; return }`,
       `if ($archiveHash -ne ${powerShellLiteral(asset.archiveSha256)}) { ${modified('the uploaded archive changed after it was written')}; return }`,
-      // Git/MSYS tar.exe may precede System32 on PATH and cannot read ZIPs.
-      "$tar = Join-Path $env:SystemRoot 'System32\\tar.exe'",
+      SYSTEM_TAR,
       '$extractedBy = $null',
       'if (Test-Path -LiteralPath $tar -PathType Leaf) {',
       `$null = & $tar -xf $archive -C $stage ${powerShellLiteral(member)} 2>&1`,

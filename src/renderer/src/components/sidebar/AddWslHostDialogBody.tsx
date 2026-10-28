@@ -6,7 +6,6 @@ import { AddWslHostFormPanel, canAddWslDistro } from './AddWslHostFormPanel'
 import { useWslDistroList } from './use-wsl-distro-list'
 import { useWslHostServerFilesMissing } from './use-wsl-hosts-enabled'
 
-/** The "Add WSL distro" step of the add-host dialog; mounted only while it shows. */
 export function AddWslHostDialogBody({
   adding,
   onAddingChange,
@@ -19,16 +18,14 @@ export function AddWslHostDialogBody({
   onCancel: () => void
 }): React.JSX.Element {
   const serverFilesMissing = useWslHostServerFilesMissing()
-  // Why no listing without server files: nothing could be added, so no wsl.exe work either.
+  // Missing server files prevent adding any distro, so avoid listing through wsl.exe.
   const list = useWslDistroList(!serverFilesMissing)
   const distros = list.distros
   const [chosenDistro, setChosenDistro] = useState('')
   const [error, setError] = useState<string | null>(null)
   const setRuntimeEnvironments = useAppStore((s) => s.setRuntimeEnvironments)
   const readRuntimeHostStatusSnapshots = useAppStore((s) => s.readRuntimeHostStatusSnapshots)
-  // Derived, so a refresh that drops or adds distros never leaves a stale pick: the user's
-  // choice while it can still be added, else the only addable distro (a choice is never implied
-  // among several).
+  // Keep an addable pick or the sole addable distro; never silently choose among several.
   const addable = distros.filter(canAddWslDistro)
   const selectedDistro = addable.some((distro) => distro.name === chosenDistro)
     ? chosenDistro
@@ -45,13 +42,17 @@ export function AddWslHostDialogBody({
     setError(null)
     onAddingChange(true)
     try {
-      // Why startIfStopped: the button said "Start and add", so this click is the user's consent.
+      // Start and add explicitly authorizes starting a stopped distro.
       const result = await api.add({
         distro: selected.name,
         startIfStopped: selected.state === 'stopped'
       })
       if (!result.ok) {
         setError(result.message)
+        if (result.kind === 'distro-stopped') {
+          // It stopped after the list was read; the fresh state turns the button into Start and add.
+          list.refresh()
+        }
         return
       }
       setRuntimeEnvironments(await window.api.runtimeEnvironments.list())

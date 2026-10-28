@@ -115,6 +115,10 @@ function verifyTarget(resourcesDir, templateDir, target, value, schemaVersion) {
       `[verify-packaged-orcad-template] ${target} browserName and browserSha256 must both be present`
     )
   }
+  const packagedBrowser = Object.hasOwn(targetManifest, 'packagedBrowser')
+  if (packagedBrowser && (targetManifest.packagedBrowser !== true || !hasBrowserName)) {
+    throw new Error(`[verify-packaged-orcad-template] ${target} packagedBrowser is invalid`)
+  }
   const targetDir = join(templateDir, ORCAD_TEMPLATE_TARGETS_DIR, target)
   for (const filename of expectedFiles) {
     verifyFile(
@@ -141,11 +145,13 @@ function verifyTarget(resourcesDir, templateDir, target, value, schemaVersion) {
       throw new Error(`[verify-packaged-orcad-template] ${target} browserName is invalid`)
     }
     verifyFile(
-      join(targetDir, browserName),
+      join(packagedBrowser ? resourcesDir : targetDir, browserName),
       requireSha256(targetManifest.browserSha256, `${target} browserSha256`),
       `${target} browser`
     )
-    inventory.push(browserName)
+    if (!packagedBrowser) {
+      inventory.push(browserName)
+    }
   }
   requireExactNames(listFiles(targetDir), inventory, `${target} file inventory`)
 }

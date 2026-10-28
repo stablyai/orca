@@ -38,8 +38,7 @@ export type UseNativeChatExternalAttachmentsArgs = {
   structuredWorktreeId?: string
   /** The structured chat behind this composer; decides where its uploads are stored. */
   structuredSession?: NativeChatStructuredAttachmentSession
-  /** Live composer-disabled state; read at await-resume via a ref so a flip
-   *  mid-upload doesn't attach into a guarded composer. */
+  /** Recheck disabled state after awaits so late uploads cannot attach to a guarded composer. */
   disabled: boolean
   attachResolvedPaths: (
     paths: string[],
@@ -51,11 +50,7 @@ export type UseNativeChatExternalAttachmentsArgs = {
   setNotice: (notice: string | null) => void
 }
 
-/**
- * Attach paths that arrived client-local (composer drop / file picker). SSH
- * worktrees upload into the worktree's `.orca/drops` first so the remote agent
- * can actually read what gets referenced (STA-1465).
- */
+/** Upload client-local files to the owning agent’s store or SSH .orca/drops before referencing them. */
 export function useNativeChatExternalAttachments({
   terminalTabId,
   structuredWorktreeId,
@@ -82,9 +77,7 @@ export function useNativeChatExternalAttachments({
     disabledRef.current = disabled
   }, [disabled])
 
-  // The post-await gate asks which workspace this composer serves now, so it
-  // reads the pane through a ref. Resolving through the render closure would
-  // re-ask the workspace the upload started in — a comparison with itself.
+  // Read the current pane through a ref after awaits; closure-based lookup would compare the original workspace to itself.
   const workspaceRef = useRef<ComposerWorkspace>({
     structuredWorktreeId,
     terminalTabId,
@@ -271,8 +264,7 @@ export function useNativeChatExternalAttachments({
     [captureIntake, mountedRef, setNotice]
   )
 
-  // Chips a paste reserved before its clipboard said they are files: admitted work, so it may
-  // finish after an unmount; a refusal releases them.
+  // Paste-reserved chips are admitted work and may finish after unmount; refusals must release them.
   const captureReservedAttachments = useCallback(
     (
       destinationIsCurrent: () => boolean = () => true,

@@ -60,8 +60,7 @@ import {
 } from './reserve-ledger-writer.js'
 import { ProcessQueuedByteBudget } from './splice-forwarder.js'
 
-// A malformed percent-escape in the request target must be a client error, never a URIError
-// thrown out of the `upgrade` listener (which is uncaught and kills the process).
+// Malformed upgrade paths must return client errors; an uncaught listener URIError kills the process.
 function decodePathSegment(value: string): string | null {
   try {
     return decodeURIComponent(value)
@@ -70,10 +69,7 @@ function decodePathSegment(value: string): string | null {
   }
 }
 
-// Healthy cells peak at 2 waiters (p99, 2026-10-07). A head that has waited half
-// the 2 s acquire timeout with a whole pool's worth queued behind it means
-// hellos are already timing out; the count floor keeps one slow waiter from
-// tripping it. On 10-07 every window that met both also logged SQL failures.
+// Healthy cells peak at 2 waiters; a pool’s worth queued past half the 2s timeout means hellos already fail. Count floor ignores lone slow waiters.
 export const HOST_HELLO_SHED_OLDEST_WAIT_MS = 1_000
 const HOST_HELLO_SHED_RETRY_AFTER_SECONDS = 2
 // Well inside the flag channel's 5 s read, so a flip back starts re-registering within ~6 s.
@@ -100,9 +96,7 @@ function noDelay(socket: WebSocket): void {
   transport?.setNoDelay(true)
 }
 
-// Why: a ws receiver error (oversize or malformed frame) with no 'error'
-// listener throws process-wide; ws itself already closes the socket after
-// emitting it, so logging is all that is left to do.
+// Handle ws receiver errors or they crash the process; ws already closes the socket.
 function guardSocketErrors(socket: WebSocket, kind: string): void {
   socket.on('error', (error) => {
     console.warn(`[orca-relay] ${kind} socket error: ${error.message}`)
@@ -182,8 +176,7 @@ export function createRelayServer(
     observeGrace: (event) => observability.recordReadinessGrace(event)
   })
   const ready = readiness.check
-  // Set once placement is built: a director configured `on` that could not build it (no map or
-  // no rehome credential) books nothing, so it must not keep a reserve cell's dead-man fed.
+  // Only actual booking activity may feed reserve dead-man; configured-on directors missing map/credentials book nothing.
   const placing = { on: false }
   const shadowSeatPoller = startShadowSeatPoller(config, {
     listCells: () => assignments.seatFeedCells(),
@@ -193,7 +186,6 @@ export function createRelayServer(
   const shadowCompare = shadowSeatPoller
     ? new ShadowDirectoryCompare(shadowSeatPoller.directory, options.now)
     : undefined
-  // Step 5 on directors: needs the map and the rehome credential the cells verify.
   const directorId = randomUUID()
   const rehomeAudience = config.rehomeAudience
   // Only a director that books writes rows, and only for the joins it booked.
@@ -201,7 +193,6 @@ export function createRelayServer(
     config.role === 'director' && shadowSeatPoller && config.reservePlacement === 'on'
       ? new ReserveLedgerWriter(observedDatabase, { now: options.now })
       : undefined
-  // Step 1 C: the operator's rehome switch is read only on a director with C switched on.
   const rehomePercent = config.reserveRehomePercent ?? 0
   const rehomeSwitch =
     config.role === 'director' && shadowSeatPoller && rehomeAudience && config.reservePlacement === 'on' && rehomePercent > 0
@@ -241,8 +232,7 @@ export function createRelayServer(
         })
       : undefined
   placing.on = reservePlacement?.placementMode === 'on'
-  // A director that is not placing while a cell is in reserve mode strands that cell's hosts on
-  // its memory: its dead-man flips it back, and this says so loudly until then.
+  // Warn until dead-man flips back: non-placing directors otherwise strand reserve-cell hosts in memory.
   const offWithReserveTimer =
     config.role === 'director' && shadowSeatPoller && !placing.on
       ? setInterval(() => {
@@ -337,7 +327,6 @@ export function createRelayServer(
           configuredConnectionLimits.hardCap,
           configuredConnectionLimits.controlReserve
         )
-  // Step 5: a booking may fill the cell only to the ceiling the directors place against.
   const placementCeiling =
     config.connectionHardCap === undefined || config.connectionUnobservedBound === undefined
       ? null
@@ -354,14 +343,12 @@ export function createRelayServer(
           options.now
         )
       : null
-  // The hello shed's test: the pool is already timing queries out.
   const databaseShedding = (): boolean =>
     readRelayDatabasePoolPressure(database).databasePoolWaiting >= config.databasePoolMax &&
     readRelayDatabasePoolOldestWaitMs(database) >= HOST_HELLO_SHED_OLDEST_WAIT_MS
   const reserveDeadMan = reserveBook
     ? new ReserveDeadMan(config.cellId, options.now, reserveDeadManWindowMs(config.cellId))
     : null
-  // The switch file's admitMode, unless the dead-man has flipped this cell back.
   const effectiveAdmitMode = (): 'db' | 'reserve' => {
     const applied = options.cellFlags?.()
     if (!applied) return 'db'
@@ -402,14 +389,15 @@ export function createRelayServer(
         }
       : undefined
   )
-  // Expired bookings give their units back even while no director is reserving. A flip out of
-  // reserve mode voids the bookings and registers every control admitted from memory.
+  // Expire booking units even with no reserving directors; leaving reserve also re-registers memory controls.
   let appliedAdmitMode = effectiveAdmitMode()
   const admitEffective =
     config.role === 'cell' && reserveBook
       ? new CellAdmitEffectiveWriter({
           write: async (mode) =>
             await assignments.recordCellAdmitEffective({ cellId: config.cellId, cellIncarnation, mode }),
+          claimTrip: async (slots) =>
+            await assignments.claimDeadManTripSlot({ cellId: config.cellId, cellIncarnation, slots }),
           databaseBusy: () => readRelayDatabasePoolPressure(database).databasePoolWaiting > 0,
           now: options.now ?? Date.now
         })
@@ -424,7 +412,12 @@ export function createRelayServer(
         }
         appliedAdmitMode = admitMode
         // A booted cell runs db defaults until its first flag read, so it writes nothing until then.
-        admitEffective?.tick(admitMode, options.cellFlags?.().flags.admitMode === 'reserve')
+        const held = reserveDeadMan?.pendingTrip()
+        admitEffective?.tick(
+          admitMode,
+          options.cellFlags?.().flags.admitMode === 'reserve',
+          held ? { slots: held.slots, permit: () => reserveDeadMan?.permit(held.generation) } : null
+        )
       }, RESERVE_MODE_WATCH_MS)
     : null
   reserveSweepTimer?.unref()
@@ -454,8 +447,7 @@ export function createRelayServer(
       ? {
           cellReserve: (request: ReserveRequest) => sessions.reserve(request),
           cellReserverPoll: () => reserveDeadMan?.contact(),
-          // Reserve until every control it admitted from memory holds a lease again: the flag
-          // workflow records db in Postgres (and sweeps resume) only after this says db.
+          // Report reserve until every memory control has a lease; flag workflow must wait before recording db and resuming sweeps.
           cellAdmitModeRaw: effectiveAdmitMode,
           cellAdmitModeEffective: (): 'db' | 'reserve' =>
             effectiveAdmitMode() === 'reserve' || sessions.reregistrationPending() > 0
@@ -818,23 +810,18 @@ export function createRelayServer(
         userId: identity.sub,
         relayHostId: identity.relayHostId
       })
-      // Null outside reserve mode, so today's path is untouched there.
       const reserveAdmission = sessions.reserveAdmissionFor({
         userId: identity.sub,
         relayHostId: identity.relayHostId
       })
-      // A hello costs several pooled queries, each failing after a 2 s wait. Shed
-      // only while the pool is already timing them out: the refused desktop gets
-      // the same connect error and backoff a timed-out hello gives it today, 2 s
-      // sooner (shipped desktops ignore Retry-After). A rebind over a live control
-      // is a lease rotation, not a reconnect, so it is never refused here.
+      // Shed before several 2s pool waits; shipped desktops use ordinary connect-error backoff and ignore Retry-After.
+      // Preserve live-control rebinds: they rotate leases rather than reconnect.
       if (!isRebind && reserveAdmission === null && databaseShedding()) {
         observability.recordHostHelloShed()
         rejectUpgrade(socket, 503, 'Service Unavailable', HOST_HELLO_SHED_RETRY_AFTER_SECONDS)
         return
       }
-      // A booked host may rise to the hard cap. Once its upgrade holds a unit, the booking's
-      // goes back, so the host counts once; a refused upgrade leaves the booking whole.
+      // Booked upgrades can reach hard cap; return booking unit only after upgrade reserves its own, counting host once.
       const controlUpgrade =
         connectionLedger?.tryReserveControl(isRebind || reserveAdmission === 'booked') ?? null
       if (controlUpgrade && reserveAdmission === 'booked') {
@@ -852,9 +839,7 @@ export function createRelayServer(
         )
         return
       }
-      // Register the release before anything else can throw: the outer catch
-      // destroys the socket, so a close-registered release cannot leak the
-      // reserved connection unit.
+      // Register release before other work can throw; outer-catch socket destruction must return the connection unit.
       const releaseControlUpgrade = (): void => controlUpgrade?.release()
       socket.once('close', releaseControlUpgrade)
       observability.recordAuth(true)

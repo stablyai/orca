@@ -4,6 +4,7 @@ import type { GlobalSettings } from '../../shared/global-settings-types'
 const {
   applyAppIconMock,
   applyAgentStatusHooksEnabledMock,
+  reconcileClaudeAgentViewMock,
   applyElectronProxySettingsMock,
   browserWindowGetAllWindowsMock,
   handleMock,
@@ -20,6 +21,7 @@ const {
 } = vi.hoisted(() => ({
   applyAppIconMock: vi.fn(),
   applyAgentStatusHooksEnabledMock: vi.fn(),
+  reconcileClaudeAgentViewMock: vi.fn(),
   applyElectronProxySettingsMock: vi.fn(),
   browserWindowGetAllWindowsMock: vi.fn(),
   handleMock: vi.fn(),
@@ -76,6 +78,10 @@ vi.mock('../agent-hooks/managed-agent-hook-controls', () => ({
   applyAgentStatusHooksEnabled: applyAgentStatusHooksEnabledMock
 }))
 
+vi.mock('../claude/agent-view-service', () => ({
+  getClaudeAgentViewService: () => ({ reconcile: reconcileClaudeAgentViewMock })
+}))
+
 vi.mock('../worktree-root-preparation', () => ({
   prepareLocalWorktreeRootsForRepos: prepareLocalWorktreeRootsForReposMock
 }))
@@ -114,6 +120,7 @@ describe('registerSettingsHandlers', () => {
     onMock.mockClear()
     applyAppIconMock.mockClear()
     applyAgentStatusHooksEnabledMock.mockReset().mockResolvedValue([])
+    reconcileClaudeAgentViewMock.mockReset().mockResolvedValue(undefined)
     applyElectronProxySettingsMock.mockClear()
     applyElectronProxySettingsMock.mockResolvedValue({ source: 'settings' })
     previewGhosttyImportMock.mockClear()
@@ -178,23 +185,19 @@ describe('registerSettingsHandlers', () => {
     expect(event.returnValue).toEqual({ terminalMainSideEffectAuthority: false })
   })
 
-  it('does not reconcile hooks when the disabled-agent set is unchanged', async () => {
-    const before = {
-      agentStatusHooksEnabled: true,
-      disabledTuiAgents: ['codex', 'claude']
-    }
+  it.each([
+    { disabledTuiAgents: ['claude', 'codex'] },
+    { claudeSubagentNavigationEnabled: true },
+    { claudeSubagentNavigationEnabled: false }
+  ])('reconciles navigation without reinstalling unchanged status hooks: %j', async (updates) => {
+    const before = { agentStatusHooksEnabled: true, disabledTuiAgents: ['codex', 'claude'] }
     store.getSettings.mockReturnValue(before)
-    store.updateSettings.mockReturnValue({
-      ...before,
-      disabledTuiAgents: ['claude', 'codex']
-    })
+    store.updateSettings.mockReturnValue({ ...before, ...updates })
     registerSettingsHandlers(store as never)
-    const handler = handleMock.mock.calls.find((call) => call[0] === 'settings:set')?.[1] as (
-      event: typeof settingsInvokeEvent,
-      args: { disabledTuiAgents: string[] }
-    ) => Promise<unknown>
+    const handler = handleMock.mock.calls.find((call) => call[0] === 'settings:set')?.[1]
 
-    await handler(settingsInvokeEvent, { disabledTuiAgents: ['claude', 'codex'] })
+    await handler(settingsInvokeEvent, updates)
+    expect(reconcileClaudeAgentViewMock).toHaveBeenCalledWith({ ...before, ...updates })
 
     expect(applyAgentStatusHooksEnabledMock).not.toHaveBeenCalled()
   })

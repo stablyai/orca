@@ -55,9 +55,7 @@ function meterToWindow(meter: unknown, windowMinutes: number): RateLimitWindow |
   }
 }
 
-// `GET /zen/go/v1/usage` reports each window as
-// `{ status: "ok" | "rate-limited", percent: 0-100, resetsAt: <ISO> }`
-// (console `routes/zen/go/v1/usage.ts` + `Subscription.analyze*Usage`).
+// Go usage reports status, percent and ISO resetsAt per window (routes/zen/go/v1/usage.ts).
 function percentMeterToWindow(meter: unknown, windowMinutes: number): RateLimitWindow | null {
   if (!isRecord(meter) || typeof meter.percent !== 'number' || !Number.isFinite(meter.percent)) {
     return null
@@ -70,11 +68,6 @@ function percentMeterToWindow(meter: unknown, windowMinutes: number): RateLimitW
   }
 }
 
-/**
- * Parse the OpenCode Go usage API body into Orca's usage windows.
- * @param text - Raw response body from `GET /zen/go/v1/usage`.
- * @returns The mapped windows, or null when the body is not a usage payload.
- */
 export function parseOpenCodeGoUsageApiPayload(text: string): OpenCodeGoUsageWindows | null {
   if (!text || text.length > MAX_STATUS_PAYLOAD_CHARS) {
     return null
@@ -100,7 +93,7 @@ export function parseOpenCodeGoUsageApiPayload(text: string): OpenCodeGoUsageWin
   }
 }
 
-// Console BillingStatus uses integer-string LedgerMicroCents (100,000,000 per USD).
+// BillingStatus uses LedgerMicroCents integer strings: 100,000,000 per USD.
 export function parseOpenCodeGoBillingStatusPayload(text: string): number | null {
   if (!text || text.length > MAX_STATUS_PAYLOAD_CHARS) {
     return null

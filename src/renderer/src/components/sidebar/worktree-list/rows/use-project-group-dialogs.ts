@@ -56,21 +56,23 @@ function reportProjectGroupDeleteFailures(result: {
         'Some projects could not be removed from Orca'
       ),
       {
-        description: translate(
-          'auto.components.sidebar.WorktreeList.f94466bc39',
-          '{{value0}} of {{value1}} contained project{{value2}} remained after deleting the group.',
-          {
-            value0: result.failedProjectRemovals.length,
-            value1: requestedCount,
-            value2: requestedCount === 1 ? '' : 's'
-          }
-        )
+        description:
+          requestedCount === 1
+            ? translate(
+                'auto.components.sidebar.WorktreeList.groupProjectsRemainedSingular',
+                '{{remaining}} of {{count}} contained project remained after deleting the group.',
+                { remaining: result.failedProjectRemovals.length, count: requestedCount }
+              )
+            : translate(
+                'auto.components.sidebar.WorktreeList.groupProjectsRemainedPlural',
+                '{{remaining}} of {{count}} contained projects remained after deleting the group.',
+                { remaining: result.failedProjectRemovals.length, count: requestedCount }
+              )
       }
     )
   }
 }
 
-// Create/rename/delete flows for project groups, including the contained-project fan-out.
 export function useProjectGroupDialogs(args: {
   repos: readonly Repo[]
   repoMap: Map<string, Repo>

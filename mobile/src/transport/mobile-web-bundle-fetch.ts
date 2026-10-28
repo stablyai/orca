@@ -13,21 +13,12 @@ import {
   type MobileWebBundleWindowHeader
 } from './mobile-web-bundle-window-reader'
 
-/** A window is one byte span of an asset on the grid the manifest reply named: a 48 KiB chunk, or a
- *  384 KiB range from a host that serves them.
- *
- *  The host refuses the fifth concurrent read on one connection with `mobile_web_bundle_read_limited`,
- *  so the client never offers a fifth. The four are window reads across the whole manifest, not one
- *  asset each: paging a large asset alone would put every one of its windows on the critical path. */
+// Limit concurrent windows across all assets to the host’s four slots; one reader per asset serializes large scripts.
 const MAX_CONCURRENT_WINDOW_READS = 4
 
-/** The fetch fails when no window reply lands for this long. Timed per fetch, not per read: each
- *  read's reply queues behind the others in flight, so on a slow link (Tailscale through a relay) a
- *  per-read 30s clock failed downloads that were still moving (#29697). */
+// Time fetch-wide inactivity; a queued read on a slow moving link can exceed a per-request stall budget (#29697).
 export const MOBILE_WEB_BUNDLE_WINDOW_STALL_MS = 30_000
-/** A read's reply waits behind at most the other in-flight replies, each landing within the stall
- *  budget or the fetch fails, so a moving fetch should not reach it. Kept that tight because a
- *  stalled fetch's pending reads hold its reassembly buffers until they settle. */
+// Bound pending-read lifetimes so failed fetches release reassembly buffers after the queued-reply allowance.
 const WINDOW_READ_BACKSTOP_MS =
   (MAX_CONCURRENT_WINDOW_READS + 1) * MOBILE_WEB_BUNDLE_WINDOW_STALL_MS
 
@@ -40,10 +31,8 @@ export type MobileWebBundleFetchProgress = {
 
 export type MobileWebBundleFetchResult = {
   readonly manifest: MobileWebBundleManifestRead
-  /** The assets read over the wire, verified. */
   readonly assets: ReadonlyMap<string, Uint8Array>
-  /** The assets left for the stage to copy from the host's cached generation instead: a contract
-   *  with `stageGeneration`, which copies each one and fails rather than stage a tree without it. */
+  // stageGeneration must copy every reused asset or fail rather than stage an incomplete tree.
   readonly reused: readonly string[]
   readonly totalBytes: number
   readonly elapsedMs: number
@@ -57,27 +46,14 @@ type AssetReassembly = {
 
 type WindowRead = { readonly asset: AssetReassembly; readonly offset: number }
 
-/**
- * Where a download may take an asset from instead of the wire: the host's cached generation. A
- * match is by content (hash and length). The cache was hash-verified when it was written and is
- * never modified in place, so the stage's copy of a reused asset is the bytes the page already
- * opens from it.
- */
+// Reuse only matching content hash/length from immutable verified generations.
 export type MobileWebBundleReusableAssets = {
   readonly has: (asset: MobileWebBundleAssetRead) => boolean
-  /** Whether the cached file is still on disk at its full length: a native stat, no bytes read.
-   *  False downloads it instead; never rejects. */
+  // Stat without reading bytes; absent/short files fall back to download and checks never reject.
   readonly check: (asset: MobileWebBundleAssetRead) => Promise<boolean>
 }
 
-/**
- * Reads the manifest, pages every asset it cannot reuse, and returns the verified bytes.
- *
- * Every asset read is checked against the manifest's own sha256 before it is returned, so a
- * truncated or reordered reassembly fails here rather than in a webview much later. Progress
- * counts only what crosses the wire: reused assets cost no wait, so counting them would fill most
- * of the bar at once and then crawl.
- */
+// Verify every asset hash before returning; report only wire bytes so reuse does not make progress jump then stall.
 export async function fetchMobileWebBundle(args: {
   client: RpcClient
   signal?: AbortSignal
@@ -189,8 +165,7 @@ export async function fetchMobileWebBundle(args: {
           await readWindow(read)
         }
       } catch (error) {
-        // One failed window stops every other read: each read a worker would still send holds one
-        // of the host's four slots against the caller's retry.
+        // Stop sibling dispatch after failure so retained reads cannot consume the host slots needed by a retry.
         stopped.abort()
         throw error
       }
@@ -204,7 +179,6 @@ export async function fetchMobileWebBundle(args: {
     }
   }
 
-  /** The candidates no longer whole in the cache, which are downloaded after all. */
   const reuseCandidates = async (): Promise<MobileWebBundleAssetRead[]> => {
     const missed: MobileWebBundleAssetRead[] = []
     for (const entry of candidates) {
@@ -232,8 +206,7 @@ export async function fetchMobileWebBundle(args: {
     if (candidates.size > 0) {
       reportProgress()
     }
-    // Checked while the window reads are in flight: each is a native stat, and the download it
-    // would otherwise delay is waiting on the network.
+    // Overlap native cache stats with network reads rather than delaying download.
     const [, missed] = await Promise.all([readWindows(fetched), reuseCandidates()])
     if (missed.length > 0 && !stopped.signal.aborted) {
       countDownload(missed)
@@ -249,8 +222,7 @@ export async function fetchMobileWebBundle(args: {
   return { manifest, assets, reused, totalBytes: receivedBytes, elapsedMs: Date.now() - startedAt }
 }
 
-/** Largest asset first, so the biggest script's tail is never the last read left in flight. Offsets
- *  are on the window grid, so every read is known up front; `eof` still comes from the reply. */
+// Plan all grid offsets largest-asset first so its tail cannot serialize the end; still validate eof replies.
 function planWindowReads(
   entries: readonly MobileWebBundleAssetRead[],
   windowBytes: number
@@ -267,7 +239,6 @@ function planWindowReads(
   })
 }
 
-/** The bytes the grid slot at `offset` holds: a whole window, or the asset's tail. */
 function windowSlotBytes(
   entry: MobileWebBundleAssetRead,
   offset: number,
@@ -316,7 +287,6 @@ function assertWindowFillsItsSlot(
   )
 }
 
-/** Every slot was accepted exactly once, so only the hash is left to say the bytes are right. */
 async function verifyReassembledAsset(asset: AssetReassembly): Promise<Uint8Array> {
   // Native: hashing in JS held the JS thread for seconds, and React's progress renders waited on it.
   const hashed = toHex(new Uint8Array(await digest(CryptoDigestAlgorithm.SHA256, asset.whole)))
@@ -329,12 +299,7 @@ async function verifyReassembledAsset(asset: AssetReassembly): Promise<Uint8Arra
   return asset.whole
 }
 
-/**
- * Every window reply restates the build, path and offset it answers, and the whole asset's length and
- * hash. Checking all five is what makes a misrouted or stale reply a failure here instead of a
- * corrupt reassembly: a desktop that auto-updates mid-download answers a later window from a
- * different build, and nothing else in the reply would say so.
- */
+// Validate build/path/offset/length/hash echoes so misrouted or post-update replies cannot corrupt reassembly.
 function assertWindowDescribesAsset(
   reply: MobileWebBundleWindowHeader,
   asset: MobileWebBundleAssetRead,

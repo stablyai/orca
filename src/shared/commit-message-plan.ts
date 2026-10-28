@@ -7,21 +7,22 @@ import {
   getCommitMessageModel,
   isCustomAgentId
 } from './commit-message-agent-spec'
-import { planCustomCommand, tokenizeCustomCommandTemplate } from './commit-message-prompt'
+import { planCustomCommand } from './commit-message-prompt'
+import {
+  KIMI_VALUE_OPTIONS,
+  findRecipeOption,
+  planAdditionalAgentArgs,
+  compactRecipeOptions
+} from './commit-message-generation-options'
 import type { TuiAgent } from './tui-agent'
 import { mergeOpenCodeGenerationArgs } from './opencode-generation-command'
+import { buildAntigravityGenerationInput } from './antigravity-generation-stream'
 
-// Why: planning is a pure transformation from "user request + prompt text"
-// into "spawn-ready binary + argv". Keeping it in shared lets both the local
-// generator (main process) and the SSH provider (which delegates to the
-// relay over JSON-RPC) reuse the exact same validation and arg-building
-// logic without duplicating the spec/model/thinking checks.
+// Share pure request/prompt-to-spawn validation and argv planning between local main and SSH JSON-RPC generators.
 
 export type CommitMessagePlanInput = {
   agentId: TuiAgent | 'custom'
-  /** How to read `\` in the user's command override / args / custom command.
-   *  Defaults to POSIX escaping; pass `'literal'` only when the command is known
-   *  to run on native Windows, where `\` is the path separator (#11375). */
+  /** Default POSIX escapes; use literal backslashes only for known native-Windows execution, where they separate paths (#11375). */
   backslash?: CommandTemplateBackslash
   model: string
   thinkingLevel?: string
@@ -39,37 +40,35 @@ export type CommitMessagePlan = {
   label: string
   /** Leading command assignments, applied on the execution host. */
   env?: Record<string, string>
-  outputFormat?: 'opencode-json'
+  outputFormat?: 'opencode-json' | 'antigravity-stream-json' | 'kimi-stream-json'
 }
 
 export type CommitMessagePlanResult =
   | { ok: true; plan: CommitMessagePlan }
   | { ok: false; error: string }
 
-function planAdditionalAgentArgs(
-  agentArgs: string | null | undefined,
-  backslash: CommandTemplateBackslash = 'escape'
-): { ok: true; args: string[] } | { ok: false; error: string } {
-  const trimmed = agentArgs?.trim()
-  if (!trimmed) {
-    return { ok: true, args: [] }
-  }
-  const tokenized = tokenizeCustomCommandTemplate(trimmed, backslash)
-  if (!tokenized.ok) {
-    return { ok: false, error: `CLI arguments are invalid: ${tokenized.error}` }
-  }
-  return { ok: true, args: tokenized.tokens }
-}
-
 const DEFAULT_SINGLETON_OPTIONS: readonly (readonly string[])[] = [['--model']]
+const ANTIGRAVITY_FORMAT_OPTIONS = [
+  '--input-format',
+  '-input-format',
+  '--output-format',
+  '-output-format'
+]
 
 function applyRecipeOptionOverride(args: {
   generatedArgs: string[]
   recipeArgs: string[]
   aliases: readonly string[]
+  valueOptions: readonly string[]
 }): { generatedArgs: string[]; recipeArgs: string[] } {
-  const recipeOption = findOptionOccurrence(args.recipeArgs, args.aliases, true)
-  const generatedOption = findOptionOccurrence(args.generatedArgs, args.aliases, false)
+  const recipeOption = findRecipeOption(args.recipeArgs, args.aliases, args.valueOptions)
+  const generatedOption = findRecipeOption(
+    args.generatedArgs,
+    args.aliases,
+    args.valueOptions,
+    0,
+    false
+  )
   if (!recipeOption || !generatedOption) {
     return { generatedArgs: args.generatedArgs, recipeArgs: args.recipeArgs }
   }
@@ -91,61 +90,29 @@ function applyRecipeOptionOverride(args: {
   }
 }
 
-function removeAllOptionOccurrences(tokens: string[], aliases: readonly string[]): string[] {
-  let result = tokens
-  while (true) {
-    const found = findOptionOccurrence(result, aliases, true)
-    if (!found) {
-      return result
-    }
-    result = [...result.slice(0, found.index), ...result.slice(found.index + found.consumed)]
-  }
-}
-
-/** Drops every occurrence after the first, so a user who types the same singleton
- *  twice in one field still gets a single flag rather than a rejected argv. */
-function keepFirstOptionOccurrence(tokens: string[], aliases: readonly string[]): string[] {
-  let result = tokens
-  while (true) {
-    const first = findOptionOccurrence(result, aliases, true)
-    if (!first) {
-      return result
-    }
-    const tail = result.slice(first.index + first.consumed)
-    const duplicate = findOptionOccurrence(tail, aliases, true)
-    if (!duplicate) {
-      return result
-    }
-    const offset = first.index + first.consumed
-    result = [
-      ...result.slice(0, offset + duplicate.index),
-      ...result.slice(offset + duplicate.index + duplicate.consumed)
-    ]
-  }
-}
-
-/** Removes generated singleton options shadowed by user input. Recipe args
- *  outrank a command-override prefix, which outranks Orca's generated value. */
+/** User recipe args outrank override prefixes, which outrank generated singleton values. */
 function applySingletonOptionOverrides(args: {
   generatedArgs: string[]
   prefixArgs: string[]
   recipeArgs: string[]
   singletonOptions: readonly (readonly string[])[]
+  valueOptions: readonly string[]
 }): { generatedArgs: string[]; prefixArgs: string[]; recipeArgs: string[] } {
   let generatedArgs = args.generatedArgs
   let prefixArgs = args.prefixArgs
   let recipeArgs = args.recipeArgs
 
   for (const aliases of args.singletonOptions) {
-    recipeArgs = keepFirstOptionOccurrence(recipeArgs, aliases)
-    prefixArgs = keepFirstOptionOccurrence(prefixArgs, aliases)
-    const recipeOption = findOptionOccurrence(recipeArgs, aliases, true)
-    const prefixOption = findOptionOccurrence(prefixArgs, aliases, true)
-    const prefixHasTerminator = prefixArgs.includes('--')
+    recipeArgs = compactRecipeOptions(recipeArgs, aliases, args.valueOptions, true)
+    prefixArgs = compactRecipeOptions(prefixArgs, aliases, args.valueOptions, true)
+    const recipeOption = findRecipeOption(recipeArgs, aliases, args.valueOptions)
+    const prefixOption = findRecipeOption(prefixArgs, aliases, args.valueOptions)
+    const prefixHasTerminator =
+      findOptionOccurrence(prefixArgs, ['--'], false, args.valueOptions, 0, false) !== null
     if (recipeOption && !prefixHasTerminator) {
-      prefixArgs = removeAllOptionOccurrences(prefixArgs, aliases)
+      prefixArgs = compactRecipeOptions(prefixArgs, aliases, args.valueOptions)
     } else if (prefixOption && !prefixHasTerminator) {
-      const generatedOption = findOptionOccurrence(generatedArgs, aliases, false)
+      const generatedOption = findRecipeOption(generatedArgs, aliases, args.valueOptions, 0, false)
       if (generatedOption) {
         generatedArgs = [
           ...generatedArgs.slice(0, generatedOption.index),
@@ -154,7 +121,12 @@ function applySingletonOptionOverrides(args: {
       }
       continue
     }
-    const withRecipe = applyRecipeOptionOverride({ generatedArgs, recipeArgs, aliases })
+    const withRecipe = applyRecipeOptionOverride({
+      generatedArgs,
+      recipeArgs,
+      aliases,
+      valueOptions: args.valueOptions
+    })
     generatedArgs = withRecipe.generatedArgs
     recipeArgs = withRecipe.recipeArgs
   }
@@ -219,8 +191,7 @@ export function planCommitMessageGeneration(
           prompt
         }),
         stdinPayload: planned.stdinPayload,
-        // Why: a custom command has no friendly name, so the binary doubles
-        // as the label in error prefixes ("ollama failed: ...").
+        // Custom commands lack friendly names; use the binary in error labels.
         label: planned.binary,
         ...(planned.env ? { env: planned.env } : {})
       }
@@ -259,27 +230,38 @@ export function planCommitMessageGeneration(
   if (!command.ok) {
     return { ok: false, error: command.error }
   }
+  const prefixArgs =
+    input.agentId === 'antigravity'
+      ? compactRecipeOptions(command.prefixArgs, ANTIGRAVITY_FORMAT_OPTIONS)
+      : command.prefixArgs
+  const recipeArgs =
+    input.agentId === 'antigravity'
+      ? compactRecipeOptions(agentArgs.args, ANTIGRAVITY_FORMAT_OPTIONS)
+      : agentArgs.args
   const baseArgs = spec.buildArgs({
     prompt: argvPrompt,
     model: input.model,
     thinkingLevel: input.thinkingLevel,
     strictMcp: options.strictMcp,
-    userArgs: [...command.prefixArgs, ...agentArgs.args]
+    userArgs: [...prefixArgs, ...recipeArgs]
   })
-  // Why: repeating a singleton flag makes yargs-based CLIs parse it as an array and
-  // crash (OpenCode's `model.split('/')`). User values replace Orca's, never stack.
+  // Replace singleton values rather than stack them: yargs arrays crash CLIs such as OpenCode model.split.
   const merged = applySingletonOptionOverrides({
     generatedArgs: baseArgs,
-    prefixArgs: command.prefixArgs,
-    recipeArgs: agentArgs.args,
-    singletonOptions: spec.singletonOptions ?? DEFAULT_SINGLETON_OPTIONS
+    prefixArgs,
+    recipeArgs,
+    singletonOptions: spec.singletonOptions ?? DEFAULT_SINGLETON_OPTIONS,
+    valueOptions: input.agentId === 'kimi' ? KIMI_VALUE_OPTIONS : []
   })
-  const args = insertAdditionalAgentArgs({
-    baseArgs: merged.generatedArgs,
-    agentArgs: merged.recipeArgs,
-    promptDelivery: spec.promptDelivery,
-    prompt: argvPrompt
-  })
+  const args =
+    input.agentId === 'kimi'
+      ? [...merged.generatedArgs, ...merged.recipeArgs]
+      : insertAdditionalAgentArgs({
+          baseArgs: merged.generatedArgs,
+          agentArgs: merged.recipeArgs,
+          promptDelivery: spec.promptDelivery,
+          prompt: argvPrompt
+        })
   const generationArgs = mergeOpenCodeGenerationArgs(
     input.agentId,
     command.binary,
@@ -290,14 +272,29 @@ export function planCommitMessageGeneration(
     input.agentId === 'opencode' || input.agentId === 'opencode2'
       ? findOptionOccurrence(generationArgs, ['--format'], true)
       : null
+  const kimiFormatOption =
+    input.agentId === 'kimi'
+      ? findRecipeOption(generationArgs, ['--output-format'], KIMI_VALUE_OPTIONS)
+      : null
   return {
     ok: true,
     plan: {
       binary: command.binary,
       args: generationArgs,
-      stdinPayload: spec.promptDelivery === 'stdin' ? prompt : null,
+      stdinPayload:
+        input.agentId === 'antigravity'
+          ? buildAntigravityGenerationInput(prompt)
+          : spec.promptDelivery === 'stdin'
+            ? prompt
+            : null,
       label: spec.label,
       ...(formatOption?.value === 'json' ? { outputFormat: 'opencode-json' as const } : {}),
+      ...(kimiFormatOption?.value === 'stream-json'
+        ? { outputFormat: 'kimi-stream-json' as const }
+        : {}),
+      ...(input.agentId === 'antigravity'
+        ? { outputFormat: 'antigravity-stream-json' as const }
+        : {}),
       ...(command.env ? { env: command.env } : {})
     }
   }

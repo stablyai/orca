@@ -6,7 +6,6 @@ import { BRIDGE_PROTOCOL_VERSION } from './bridge/bridge-envelope'
 
 export type SentRequest = {
   method: string
-  /** The arity the host used, which the golden recorder reads as part of the call. */
   args: readonly unknown[]
   resolve: (response: RpcResponse) => void
   reject: (error: unknown) => void
@@ -16,7 +15,6 @@ export type OpenStream = {
   method: string
   params: unknown
   emit: (payload: unknown) => void
-  /** Null when the host did not ask for binary, which is what says `wantsBinary` reached the client. */
   emitBinary: ((frame: BrowserScreencastFrame) => void) | null
   envelope: RpcEnvelopeFields | undefined
   unsubscribes: number
@@ -38,7 +36,6 @@ type ClientGetters = Partial<
   >
 >
 
-/** Every call the host can make, recorded; nothing settles until the test says so. */
 export function createFakeRpcClient(getters: ClientGetters = {}): FakeRpcClient {
   const requests: SentRequest[] = []
   const streams: OpenStream[] = []
@@ -94,7 +91,6 @@ export function createFakeRpcClient(getters: ClientGetters = {}): FakeRpcClient 
   }
 }
 
-/** 22 chars of base64url, which is what the envelope's id pattern accepts. */
 export function bridgeId(index: number): string {
   return index.toString(36).padStart(22, 'a')
 }
@@ -107,8 +103,7 @@ export function rpcSuccess(id: string, result: unknown): RpcResponse {
   return { id, ok: true, result, _meta: { runtimeId: 'runtime-a' } }
 }
 
-/** Two microtask turns: a settled `sendRequest` posts from a `then`, and a post rejection is
- *  reported from a `catch` chained onto it. */
+// Drain request-then-post and its chained rejection catch across two microtask turns.
 export async function flushBridge(): Promise<void> {
   await Promise.resolve()
   await Promise.resolve()

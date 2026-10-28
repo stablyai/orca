@@ -1,4 +1,3 @@
-/** The three media verbs' wire shapes: what a page may ask for, and what a handler may answer. */
 import { describe, expect, it } from 'vitest'
 import { MOBILE_CLIPBOARD_IMAGE_UPLOAD_CHUNK_BASE64_CHARS } from '../../session/mobile-clipboard-image-upload-chunk'
 import { CLIPBOARD_IMAGE_MAX_SOURCE_BYTES } from '../../../../src/shared/clipboard-image'

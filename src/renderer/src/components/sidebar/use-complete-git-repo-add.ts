@@ -23,9 +23,7 @@ export type CompleteGitRepoAdd = (
 type CompleteGitRepoAddOptions = {
   closeModal: () => void
   setHideDefaultBranchWorkspace: (hide: boolean) => void
-  /** Why: the nested Add Project flow (hosted inside the workspace composer)
-   *  keeps the composer open and selects the new project instead of running
-   *  the default-checkout navigation handoff. Telemetry above still applies. */
+  /** Hosted Add Project keeps the composer open and selects the project after normal telemetry. */
   finishProjectAdd?: CompleteGitRepoAdd
 }
 

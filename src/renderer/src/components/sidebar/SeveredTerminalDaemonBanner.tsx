@@ -59,7 +59,6 @@ function refusalMessage(
       )
 }
 
-/** Persistent notice for a Linux AppImage terminal daemon kept although its files are gone. */
 export function SeveredTerminalDaemonBanner(): React.JSX.Element | null {
   const [daemon, setDaemon] = React.useState<PtyManagementSeveredDaemon | null>(null)
   const [dismissed, setDismissed] = React.useState<string | null>(() => readDismissed())

@@ -196,7 +196,6 @@ describe('connection log persistence backpressure', () => {
     expect(attempted).toEqual([['1']])
     release()
     await drainMicrotasks()
-    // The superseded ['1'] snapshot is never replayed; only the newest one is attempted.
     expect(attempted).toEqual([['1'], ['2', '3']])
   })
 
@@ -236,10 +235,8 @@ describe('connection log persistence backpressure', () => {
       for (let i = 0; i < 20; i++) {
         await drainMicrotasks()
       }
-      // 500 stalled appends cost the held write plus one attempt at the newest snapshot.
       expect(writes).toBe(2)
       await vi.advanceTimersByTimeAsync(5_000)
-      // Draining the backoff adds that snapshot's single retry and nothing more.
       expect(writes).toBe(3)
     } finally {
       vi.useRealTimers()

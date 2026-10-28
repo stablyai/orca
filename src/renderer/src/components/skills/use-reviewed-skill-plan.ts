@@ -8,10 +8,7 @@ type ReviewedPlan = { plan: BundledSkillPlan | null; loading: boolean; error: st
 
 type ForcedPlanResult = { request: string; plan: BundledSkillPlan | null; error: string | null }
 
-/**
- * The plan the dialog shows and executes. Replace toggles re-plan with `force`, so main still
- * decides every op; the renderer never edits one. Without toggles it is the shared plan.
- */
+/** Replan Replace choices through main with force paths; the renderer never edits operations and otherwise reuses the shared plan. */
 export function useReviewedSkillPlan(
   target: BundledSkillTarget | null,
   sharedPlan: BundledSkillPlan | null,

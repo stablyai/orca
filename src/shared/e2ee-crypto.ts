@@ -1,6 +1,4 @@
-// Why: Orca's remote runtime transports share one NaCl box format across
-// desktop, CLI, and mobile pairing. Keeping the Node-compatible primitives in
-// shared code prevents the CLI from importing main-process modules.
+// Share NaCl box format across desktop/CLI/mobile pairing with Node-compatible primitives, avoiding main imports from CLI.
 import nacl from 'tweetnacl'
 
 const MAX_E2EE_TEXT_PLAINTEXT_BYTES = 4 * 1024 * 1024

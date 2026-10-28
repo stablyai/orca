@@ -23,7 +23,7 @@ import {
   readDataFile,
   testState,
   writeDataFile
-} from '../../persistence-test-harness'
+} from '../persistence-test-harness'
 import { hostWorktreeTarget } from '../../../shared/worktree/host-qualified-identity'
 
 const { trackMock, getCohortAtEmitMock } = vi.hoisted(() => ({
@@ -83,18 +83,13 @@ describe('orcad migration catalog persistence', () => {
       }
     })
     expect(replay).toEqual(first)
-    expect(restored.getRepos()).toEqual([
-      expect.not.objectContaining({
-        connectionId: expect.anything(),
-        executionHostId: expect.anything()
-      })
-    ])
+    expect(restored.getRepos()).toEqual([expect.objectContaining({ id: 'repo-1' })])
+    expect(restored.getRepos()[0]).not.toHaveProperty('connectionId')
+    expect(restored.getRepos()[0]).not.toHaveProperty('executionHostId')
     expect(restored.getProjectGroups()).toEqual([
-      expect.not.objectContaining({
-        connectionId: expect.anything(),
-        executionHostId: expect.anything()
-      })
+      expect.objectContaining({ id: 'group-1', connectionId: null })
     ])
+    expect(restored.getProjectGroups()[0]).not.toHaveProperty('executionHostId')
     expect(restored.getFolderWorkspaces()).toEqual([
       expect.objectContaining({ id: 'folder-1', comment: 'Keep this note' })
     ])
@@ -416,7 +411,7 @@ describe('orcad migration catalog persistence', () => {
     expect(store.getRepos()).toHaveLength(1)
   })
 
-  it('requires a durable stage before commit and bounds concurrent dormant catalogs', () => {
+  it('requires a stage before commit and bounds concurrent dormant catalogs', () => {
     const store = createStore()
     const input = manifest()
     expect(() => store.commitStagedOrcadMigrationCatalog(input)).toThrow(

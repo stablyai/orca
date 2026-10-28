@@ -11,7 +11,6 @@ import { makePaneKey } from '../../../../shared/stable-pane-id'
 import { FLOATING_TERMINAL_WORKTREE_ID, getDefaultSettings } from '../../../../shared/constants'
 import { resolveAgentAttention } from '@/attention/agent-attention-policy'
 
-// The user is present unless a test says otherwise.
 beforeEach(() => setPresenceGated(false))
 afterEach(() => setPresenceGated(true))
 

@@ -797,6 +797,44 @@ describe('remote hook service installers', () => {
     expect(fs.files.get('/home/dev/.hermes/config.yaml')).toContain('orca-status')
   })
 
+  it('refreshes remote named profiles that keep the plugin enabled, and only those', async () => {
+    const marker = '# Managed by Orca. Do not edit; changes may be overwritten.\n'
+    const profiles = '/home/dev/.hermes/profiles'
+    const disabledConfig = 'plugins:\n  enabled: [orca-status]\n  disabled: [orca-status]\n'
+    const { sftp, fs } = createFakeSftp({
+      [`${profiles}/work/plugins/orca-status/plugin.yaml`]: marker,
+      [`${profiles}/work/plugins/orca-status/__init__.py`]: marker,
+      [`${profiles}/work/config.yaml`]: 'plugins:\n  enabled: [orca-status]\n',
+      [`${profiles}/off/plugins/orca-status/plugin.yaml`]: marker,
+      [`${profiles}/off/plugins/orca-status/__init__.py`]: marker,
+      [`${profiles}/off/config.yaml`]: disabledConfig,
+      [`${profiles}/user/plugins/orca-status/plugin.yaml`]: marker,
+      [`${profiles}/user/plugins/orca-status/__init__.py`]: 'user code\n',
+      [`${profiles}/user/config.yaml`]: 'plugins:\n  enabled: [orca-status]\n'
+    })
+    fs.dirs.add(profiles)
+
+    expect((await new HermesHookService().installRemote(sftp, '/home/dev')).state).toBe('installed')
+
+    expect(fs.files.get(`${profiles}/work/config.yaml`)).toContain('ORCA_AGENT_PANE')
+    expect(fs.files.get(`${profiles}/work/plugins/orca-status/__init__.py`)).toContain(
+      '/hook/hermes'
+    )
+    expect(fs.files.get(`${profiles}/off/config.yaml`)).toBe(disabledConfig)
+    expect(fs.files.get(`${profiles}/user/plugins/orca-status/__init__.py`)).toBe('user code\n')
+  })
+
+  it('still installs the default Hermes profile when remote profiles cannot be listed', async () => {
+    const { sftp, fs } = createFakeSftp()
+    sftp.readdir = (_path, callback) => {
+      callback(Object.assign(new Error('permission denied'), { code: 3 }), [])
+    }
+    vi.spyOn(console, 'warn').mockImplementation(() => {})
+
+    expect((await new HermesHookService().installRemote(sftp, '/home/dev')).state).toBe('installed')
+    expect(fs.files.get('/home/dev/.hermes/config.yaml')).toContain('orca-status')
+  })
+
   it('does not overwrite a remote user-authored Amp plugin file', async () => {
     const { sftp, fs } = createFakeSftp({
       '/home/dev/.config/amp/plugins/orca-agent-status.ts':

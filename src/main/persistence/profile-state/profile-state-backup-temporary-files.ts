@@ -25,7 +25,7 @@ function currentProcessScope(): string | undefined {
     .digest('hex')
 }
 
-/** A dead process proves the temporary database and its journals cannot still be in use. */
+/** Require process-exit proof before deleting temporary databases or journals. */
 export async function removeAbandonedProfileStateBackupFiles(
   databasePath: string,
   now: number

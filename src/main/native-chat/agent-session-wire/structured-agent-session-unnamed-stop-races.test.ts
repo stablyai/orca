@@ -249,7 +249,12 @@ it('Codex: distinct Stops during one running turn interrupt once and allow the n
   const { items } = await current.host.journalSnapshot(SESSION)
   expect(interrupts()).toMatchObject([{ params: { threadId: CODEX_THREAD, turnId: 'turn-1' } }])
   expect(items.filter((item) => item.body.kind === 'status').map((item) => item.body)).toEqual([
-    { kind: 'status', text: 'Cancellation requested.' }
+    {
+      kind: 'status',
+      tone: 'warning',
+      failure: { kind: 'cancelUnconfirmed' },
+      text: 'Codex could not confirm Stop. Check the chat before continuing.'
+    }
   ])
   expect(items.filter((item) => item.body.kind === 'turn').map((item) => item.body)).toMatchObject([
     { kind: 'turn', turnId: 'turn-1', state: 'interrupted' },

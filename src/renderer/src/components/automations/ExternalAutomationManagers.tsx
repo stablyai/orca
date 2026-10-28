@@ -142,8 +142,7 @@ export function ExternalAutomationManagers({
                   manager,
                   actionInProgress: runningActionKey !== null
                 })
-                // Scope-qualified so two hosts running the same provider cannot
-                // label each other's rows or spin each other's buttons.
+                // Scope keys prevent matching providers on different hosts from sharing labels/spinners.
                 const jobKey = externalAutomationJobKey(scope, job.id)
                 const nameId = `automation-name-${jobKey}`
                 const actionKey = (action: ExternalAutomationAction): string =>
@@ -171,11 +170,9 @@ export function ExternalAutomationManagers({
                         </Badge>
                         <Tooltip>
                           <TooltipTrigger asChild>
-                            {/* Absolutely pinned to the row's top-right corner (above the action
-                                icons) so it reaches the true right edge, not just the grid column. */}
+                            {/* Anchor above the action icons at the full row’s right edge, outside the grid column. */}
                             <span className="absolute right-3 top-2 inline-flex shrink-0 items-center gap-1.5">
-                              {/* Match either key: job.enabled flips mid-flight, so a single-action
-                                  match would drop the spinner a render early. */}
+                              {/* Match pause and resume: enabled can flip before the request settles. */}
                               {runningActionKey === actionKey('pause') ||
                               runningActionKey === actionKey('resume') ? (
                                 <RefreshCw className="size-3.5 animate-spin" />

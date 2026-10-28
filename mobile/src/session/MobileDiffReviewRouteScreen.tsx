@@ -9,11 +9,7 @@ import { useWorkspaceClient } from '../transport/use-workspace-client'
 import { useHostProtocolGates } from '../components/host-protocol-gates-context'
 import { useWorkspaceRouteHandoff } from '../navigation/workspace-route-handoff'
 
-/**
- * The review screen as a component rather than a route module: the page's route file mounts it, and
- * the native route file, which mounts the shell, cannot be imported by the page. It reads its own
- * params.
- */
+// Keep the screen importable by the page: native route modules mount the shell.
 export function MobileDiffReviewRouteScreen() {
   const params = useLocalSearchParams<{
     hostId?: string | string[]
@@ -33,8 +29,7 @@ export function MobileDiffReviewRouteScreen() {
     () => (initialFile && initialArea ? { filePath: initialFile, area: initialArea } : null),
     [initialArea, initialFile]
   )
-  // Not `useRouter`: inside the shell's page the session screen is native, so that replace has to
-  // be handed back to the app rather than posted into a document that does not render it.
+  // Hand session replacement to native because this page does not render that route.
   const router = useWorkspaceRouteHandoff()
   const { client, state: connState } = useWorkspaceClient(hostId)
   const forceReconnect = useForceReconnect()

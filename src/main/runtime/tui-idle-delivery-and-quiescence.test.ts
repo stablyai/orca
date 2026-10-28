@@ -7,9 +7,7 @@ import type { RuntimeSyncWindowGraph } from '../../shared/runtime-types'
 import type { OrcaRuntimeService } from './orca-runtime'
 import type { TuiAgent } from '../../shared/tui-agent'
 
-// Follow-ons to #6011. The evidence ranking that fixed the wait path did not reach two
-// other consumers of the same signal: mailbox delivery, which TYPES INTO the pane, and
-// the idle poll's quiescence gate, which read a missing output clock as "never quiet".
+// #6011 follow-ups: apply wait evidence ranking to typing/delivery and allow unobserved output clocks on the open quiet lane.
 
 const WORKTREE_ID = 'repo-1::/tmp/followups'
 const TAB_ID = 'c1c1c1c1-c1c1-4c1c-8c1c-c1c1c1c1c1c1'
@@ -55,8 +53,7 @@ async function makeRuntime(launchAgent: TuiAgent | null, foreground = 'codex') {
   return { runtime, handle: terminals[0].handle }
 }
 
-/** Counts real delivery attempts. Spies on the delivery entry point, NOT on the gate
- *  under test — the gate runs for real and decides whether this is ever reached. */
+/** Spy on actual delivery while running the real settlement gate. */
 function watchDelivery(runtime: OrcaRuntimeService) {
   return vi
     .spyOn(
@@ -67,9 +64,7 @@ function watchDelivery(runtime: OrcaRuntimeService) {
     .mockImplementation(() => {})
 }
 
-// Why fake timers: the retry fires on a real 3s quiescence window, and asserting around it
-// with wall-clock sleeps made the result depend on how promptly a loaded CI runner schedules
-// an interval. The clock is the thing under test, so it has to be the deterministic part.
+// Fake time makes the 3s quiescence window deterministic under CI load.
 describe('mailbox delivery honours the tui-idle evidence ranking', () => {
   beforeEach(() => {
     vi.useFakeTimers()
@@ -84,9 +79,7 @@ describe('mailbox delivery honours the tui-idle evidence ranking', () => {
     runtime.onPtyData(PTY_ID, `${osc('⠋ Codex')}working\n`, Date.now())
     expect(deliver).not.toHaveBeenCalled()
 
-    // The busy agent repaints its title to the bare product name. That reads as `idle`
-    // for display, but it is emitted just as often mid-turn — typing into the pane here
-    // injects the pointer plus Enter into a running turn.
+    // Name-only Codex means idle for display even mid-turn; delivery must not type into that evidence alone.
     runtime.onPtyData(PTY_ID, `${osc('Codex')}still working\n`, Date.now())
     expect(deliver).not.toHaveBeenCalled()
   })
@@ -99,11 +92,7 @@ describe('mailbox delivery honours the tui-idle evidence ranking', () => {
     expect(deliver).toHaveBeenCalled()
   })
 
-  // Why this case exists: the wait path POLLS, so weak evidence that only becomes valid
-  // with time eventually satisfies it. Delivery is edge-driven with no poll behind it, so a
-  // refusal at an edge is final unless another edge arrives. A hookless Codex never emits an
-  // explicit `X ready`, so without a retry the queued message strands permanently once the
-  // pane falls quiet — trading a visible mis-delivery for an invisible lost message.
+  // Time can lift weak-evidence refusal without any further edge; delivery needs a retry to avoid stranded messages.
   it('retries a refused delivery once the pane falls quiet', async () => {
     const { runtime } = await makeRuntime('codex')
     const deliver = watchDelivery(runtime)
@@ -111,8 +100,7 @@ describe('mailbox delivery honours the tui-idle evidence ranking', () => {
     runtime.onPtyData(PTY_ID, `${osc('Codex')}output\n`, Date.now())
     expect(deliver).not.toHaveBeenCalled()
 
-    // Output stops. No further title frame and no renderer graph sync — a daemon-hosted
-    // pane has nobody publishing one, so nothing re-fires an edge on its own.
+    // No further title/graph edge arrives after this daemon output stops.
     await vi.advanceTimersByTimeAsync(5_000)
     expect(deliver).toHaveBeenCalled()
   })
@@ -121,9 +109,7 @@ describe('mailbox delivery honours the tui-idle evidence ranking', () => {
     const { runtime } = await makeRuntime('codex')
     const deliver = watchDelivery(runtime)
     runtime.onPtyData(PTY_ID, `${osc('Codex')}output\n`, Date.now())
-    // Keep the stream alive across the whole retry window.
-    // Deterministic streaming: one chunk every 250ms of virtual time, so the gap between
-    // chunks can never drift past the quiescence window the way a real interval can.
+    // Stream every 250ms of virtual time so no gap can accidentally exceed quiescence.
     for (let tick = 0; tick < 20; tick += 1) {
       runtime.onPtyData(PTY_ID, 'more output\n', Date.now())
       await vi.advanceTimersByTimeAsync(250)
@@ -131,10 +117,7 @@ describe('mailbox delivery honours the tui-idle evidence ranking', () => {
     expect(deliver).not.toHaveBeenCalled()
   })
 
-  // Case B, the mainline path: a hooked Codex emits a name-only frame BEFORE the hook's
-  // `Codex ready`. The name-only frame consumes the working->idle transition, leaving the
-  // ready title as an idle->idle step that delivery was never offered — so the strongest
-  // evidence the agent ever emits could not reach it.
+  // A name-only frame consumes working-to-idle; later explicit readiness must still trigger delivery.
   it('delivers when the ready title arrives after a name-only frame', async () => {
     const { runtime } = await makeRuntime('codex')
     const deliver = watchDelivery(runtime)
@@ -148,9 +131,7 @@ describe('mailbox delivery honours the tui-idle evidence ranking', () => {
     expect(deliver).toHaveBeenCalled()
   })
 
-  // Case C: the agent's own status stream vetoes the idle title, then reports done with no
-  // edge behind it. `working` stays fresh for 30 minutes, so without a re-offer the veto
-  // outlives the turn it described.
+  // First-party done must re-offer delivery after working vetoed idle, without waiting for status expiry.
   it('delivers when a done status lands after the idle title was vetoed', async () => {
     const { runtime } = await makeRuntime('claude')
     const deliver = watchDelivery(runtime)

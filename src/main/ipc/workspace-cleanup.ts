@@ -11,6 +11,7 @@ import {
 import { parseExecutionHostId } from '../../shared/execution-host'
 import { getWorkspaceCleanupHostIdentity } from '../../shared/workspace-cleanup-host-identity'
 import { scanWorkspaceCleanup } from './workspace-cleanup-scan'
+import { addFanoutListener } from '../event-listener-fanout'
 import { hasTargetedWorkspaceCleanupScan } from './workspace-cleanup-scan-targets'
 import {
   persistWorkspaceCleanupScanResult,
@@ -63,7 +64,7 @@ export function registerWorkspaceCleanupHandlers(store: Store): void {
       }
       // Window retirement must cancel scan work, not merely mute its progress.
       const onSenderDestroyed = (): void => controller.abort()
-      sender.once('destroyed', onSenderDestroyed)
+      const releaseDestroyed = addFanoutListener(sender, 'destroyed', onSenderDestroyed)
       try {
         const result = await scanWorkspaceCleanup(store, scanArgs, {
           signal: controller.signal,
@@ -81,9 +82,7 @@ export function registerWorkspaceCleanupHandlers(store: Store): void {
         }
         return result
       } finally {
-        if (!sender.isDestroyed()) {
-          sender.removeListener('destroyed', onSenderDestroyed)
-        }
+        releaseDestroyed()
         if (scanKey && activeScans.get(scanKey) === controller) {
           activeScans.delete(scanKey)
         }

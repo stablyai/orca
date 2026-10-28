@@ -5,27 +5,15 @@ import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { terminalDocumentDouble } from './document/document-terminal-double.test-support'
 import type { TerminalDocumentTerminal } from './document/document-terminal-shape'
 import type { TerminalWebViewCommand } from './terminal-webview-messages'
+import type { TerminalWebViewHandle } from './terminal-webview-contract'
+import { TerminalPaneView } from '../session/TerminalPaneView'
 import { TERMINAL_DOCUMENT_MARKUP } from './terminal-webview-html'
 import terminalNerdFontUrl from '../../assets/fonts/SymbolsNerdFontMono-Regular.woff2'
 
-/**
- * The page's mount, as a unit.
- *
- * Every other reading of it is the render check, which drives the whole page bundle in a real
- * browser: right for behaviour, and too coarse for the three things below, each of which is one
- * line of this module doing the thing no happy path reaches — a dispose while a surface swap is
- * open, a start that throws, and the component's report of that throw.
- *
- * The document is the real factory, hand-written since ruling 25. Only its *arrival* is a seam
- * here, so a start can be made to throw without a stub standing in for the program under test.
- */
-/** Set for the length of one case; the factory throws it instead of building a document. */
+// Use the real factory to test partial swaps, startup failure and its error report without replacing the document under test.
 let startThrows: Error | null = null
-/** The text scale each document the factory built was started at, in order. */
 const startedScales: number[] = []
-/** Whether each of those documents was told to build its terminal before ready. */
 const startedBuilds: boolean[] = []
-/** Set for the length of one case; the document builds its terminals here instead of xterm. */
 let gridTerminal: (() => TerminalDocumentTerminal) | null = null
 
 vi.mock('./document/create-terminal-document', async (importOriginal) => {
@@ -52,6 +40,7 @@ vi.mock('react-native', () => ({
   AppState: { addEventListener: () => ({ remove() {} }) }
 }))
 vi.mock('lucide-react-native', () => ({ RefreshCw: 'Icon' }))
+vi.mock('./TerminalWebView', () => import('./TerminalWebView.web'))
 
 const { createTerminalDocument } = await import('./document/create-terminal-document')
 const { mountTerminalWebDocument } = await import('./terminal-web-document-mount')
@@ -59,7 +48,6 @@ const { TerminalWebView } = await import('./TerminalWebView.web')
 
 const HOST_CLASS = 'orca-terminal-document-host'
 
-/** One host element carrying the document's markup, as the mount plants it. */
 function plantHost() {
   const host = document.createElement('div')
   host.innerHTML = TERMINAL_DOCUMENT_MARKUP
@@ -67,7 +55,6 @@ function plantHost() {
   return host
 }
 
-/** Long enough for init's frame and its write drain, which is where a swap commits. */
 const settle = () => new Promise((resolve) => setTimeout(resolve, 50))
 
 const INIT = { type: 'init', cols: 80, rows: 24, initialData: '', preserveScroll: false } as const
@@ -101,11 +88,7 @@ describe('a stopped document takes its engines with it', () => {
     terminal.dispose()
   })
 
-  /**
-   * `stopTerminalInit`'s set (ruling 22's disposal): a swap that never committed leaves the
-   * committed terminal with nothing pointing at it, so `scope.term` alone is not every engine the
-   * document opened. The oracle is the doubles' own dispose counts.
-   */
+  // A pending swap owns two engines; count actual disposals to verify both stop.
   it('disposes both terminals when a second init is stopped before its swap commits', async () => {
     const host = plantHost()
     const engines: Array<ReturnType<typeof terminalDocumentDouble>> = []
@@ -126,9 +109,7 @@ describe('a stopped document takes its engines with it', () => {
     })
 
     started.send({ ...INIT })
-    // The precondition for two engines: the first init has to commit, because a swap's `oldTerm`
-    // is the committed terminal. Without this the second init would replace an uncommitted one
-    // and there would be a single engine to dispose for the wrong reason.
+    // Commit the first engine before opening a second swap; otherwise there is only one engine to dispose.
     await settle()
     started.send({ ...INIT })
     expect(engines).toHaveLength(2)
@@ -164,18 +145,121 @@ describe('a stopped document takes its engines with it', () => {
 
     started.stop()
 
-    // `scope.term` and `scope.committedTerm` are the same object here, which is what the set
-    // deduplicates: a plain pair of calls would dispose it twice.
     expect(engines[0].disposals()).toBe(1)
+  })
+})
+
+describe('terminal panes start when first selected', () => {
+  it('starts only the selected document among several terminal tabs', () => {
+    vi.useFakeTimers()
+    const count = 3
+    const refs = new Map<string, TerminalWebViewHandle>()
+    const ready: string[] = []
+    const engines: ReturnType<typeof terminalDocumentDouble>[] = []
+    const replayed: string[] = []
+    const addListener = vi.spyOn(document, 'addEventListener')
+    const removeListener = vi.spyOn(document, 'removeEventListener')
+    gridTerminal = () => {
+      const engine = terminalDocumentDouble()
+      engine.terminal.write = (data, callback) => {
+        replayed.push(data)
+        callback?.()
+      }
+      engines.push(engine)
+      return engine.terminal
+    }
+    const noop = () => {}
+    const onRef = (handle: string, ref: TerminalWebViewHandle | null) => {
+      if (ref) {
+        refs.set(handle, ref)
+      } else {
+        refs.delete(handle)
+      }
+    }
+    const onWebReady = (handle: string) => {
+      ready.push(handle)
+      const ref = refs.get(handle)
+      expect(ref).toBeDefined()
+      void ref?.init({ ...INIT, initialData: `snapshot:${handle}`, frame: null })
+    }
+    const panes = (selected: number) =>
+      Array.from({ length: count }, (_, index) =>
+        createElement(TerminalPaneView, {
+          key: index,
+          handle: `terminal-${index}`,
+          active: index === selected,
+          keyboardLift: 0,
+          textScale: 1,
+          onRef,
+          onWebReady,
+          onTextScaleChange: noop,
+          onCellBoxChange: noop,
+          onSelectionMode: noop,
+          onSelectionCopy: noop,
+          onSelectionEvicted: noop,
+          onClipboardWrite: noop,
+          onModesChanged: noop,
+          onKeyboardAvoidanceMetrics: noop,
+          onHaptic: noop,
+          onTerminalInput: noop,
+          onTerminalQueryReply: noop,
+          onTerminalTap: noop,
+          onFileTap: noop,
+          onOpenUrl: noop
+        })
+      )
+    const documentListeners = () => addListener.mock.calls.length - removeListener.mock.calls.length
+    try {
+      act(() => {
+        renderer = create(createElement('div', null, panes(0)), {
+          createNodeMock: () => plantHost()
+        })
+      })
+      expect(startedBuilds).toEqual([true])
+      expect(ready).toEqual(['terminal-0'])
+      expect(refs.size).toBe(1)
+      expect(document.querySelectorAll(`.${HOST_CLASS}`)).toHaveLength(1)
+      const perDocument = documentListeners()
+      expect(perDocument).toBeGreaterThan(0)
+      const firstHost = document.querySelector(`.${HOST_CLASS}`)
+      act(() => {
+        vi.advanceTimersByTime(32)
+      })
+      expect(replayed).toEqual(['\x1b[0msnapshot:terminal-0'])
+
+      act(() => renderer?.update(createElement('div', null, panes(1))))
+      expect(startedBuilds).toEqual([true, true])
+      expect(ready).toEqual(['terminal-0', 'terminal-1'])
+      expect(refs.size).toBe(2)
+      expect(documentListeners()).toBe(2 * perDocument)
+      act(() => {
+        vi.advanceTimersByTime(32)
+      })
+      expect(replayed).toEqual(['\x1b[0msnapshot:terminal-0', '\x1b[0msnapshot:terminal-1'])
+
+      act(() => renderer?.update(createElement('div', null, panes(0))))
+      expect(document.querySelector(`.${HOST_CLASS}`)).toBe(firstHost)
+      expect(startedBuilds).toEqual([true, true])
+      expect(ready).toEqual(['terminal-0', 'terminal-1'])
+      expect(engines.map((engine) => engine.disposals())).toEqual([0, 0])
+
+      act(() => renderer?.unmount())
+      renderer = null
+      expect(refs.size).toBe(0)
+      expect(document.querySelectorAll(`.${HOST_CLASS}`)).toHaveLength(0)
+      expect(documentListeners()).toBe(0)
+      expect(engines.map((engine) => engine.disposals())).toEqual([1, 1])
+    } finally {
+      vi.useRealTimers()
+      addListener.mockRestore()
+      removeListener.mockRestore()
+    }
   })
 })
 
 describe('the page keeps its own capture buffer', () => {
   it('quotes the lines this document captured, and a second mount has none of them', () => {
-    // The buffer is written by the document's own reporter: `startHostNotify` installs it through
-    // `installErrorReporter`, which on the page is a `window` error listener, and every error it
-    // forwards is appended before the report that quotes it. What the page has no use for is the
-    // WebView's head script, which captures what fails before any document exists.
+    // Per-mount reporters append before quoting the buffer; embedded modules have no pre-engine head script.
     const host = plantHost()
     const posted: Array<Record<string, unknown>> = []
     const mounted = mountTerminalWebDocument(host, (message) => posted.push(message))
@@ -191,7 +275,6 @@ describe('the page keeps its own capture buffer', () => {
     expect(messages[0]).toContain('captured: first failure')
     expect(messages[1]).toContain('captured: first failure | second failure')
 
-    // A second mount is a second buffer: the first document's lines are not the second's to quote.
     mounted.dispose()
     const nextHost = plantHost()
     const nextPosted: Array<Record<string, unknown>> = []
@@ -206,7 +289,6 @@ describe('the page keeps its own capture buffer', () => {
   })
 
   it("leaves a browser notice from elsewhere on the page out, so it can't fail a terminal", () => {
-    // The chat list's resize observer can make the browser raise its loop notice; no error is behind it.
     const host = plantHost()
     const posted: Array<Record<string, unknown>> = []
     const mounted = mountTerminalWebDocument(host, (message) => posted.push(message))
@@ -231,7 +313,7 @@ describe('a start that throws gives the host back', () => {
   })
 
   it('leaves the host carrying the markup and the class while the document is alive', () => {
-    // The control: both assertions above hold for a mount that never planted anything.
+    // Assert markup exists so an inert mount cannot satisfy cleanup checks.
     const host = plantHost()
 
     const mounted = mountTerminalWebDocument(host, () => {})
@@ -245,7 +327,6 @@ describe('a start that throws gives the host back', () => {
 
 describe("the document's overlays on the page", () => {
   it('sit inside the host, which is their containing block, rather than over the whole page', () => {
-    // `position: fixed` is the WebView's frame; on the page it is the window, header and all.
     const host = plantHost()
     const mounted = mountTerminalWebDocument(host, () => {})
     const position = (id: string) => getComputedStyle(host.querySelector(`#${id}`)!).position
@@ -271,8 +352,7 @@ describe('the component names the cause of a start that threw', () => {
       )
     })
 
-    // The cause, not just the failure: the readiness watchdog's own message is what the page said
-    // before this path existed, and it names nothing.
+    // Report the actual startup cause rather than the later readiness watchdog’s generic timeout.
     expect(engineErrors).toEqual(['terminal document failed to start - engine missing'])
   })
 
@@ -322,11 +402,6 @@ describe('the text scale a document is built at', () => {
 const CELL = { width: 7.5, height: 15 }
 const FIT_390 = 390 / (7.5 * 55)
 
-/**
- * A laid-out 55x40 grid whose cells scale with the font, as xterm's do, or read 0 while `cells`
- * says they cannot be measured: xterm's DOM measure on a `display:none` host, where no
- * OffscreenCanvas is available.
- */
 function gridDouble(cells: { measurable: boolean }): TerminalDocumentTerminal {
   const terminal = terminalDocumentDouble().terminal
   const cell = () => {
@@ -351,10 +426,6 @@ function gridDouble(cells: { measurable: boolean }): TerminalDocumentTerminal {
   return grid
 }
 
-/**
- * A mounted page document over a grid, whose host box the case sets and pushes as RN layout does:
- * react-native-web's `onLayout` reports a `display:none` screen as 0x0 and its return as the old box.
- */
 async function mountedOverGrid({ laidOutFirst = true } = {}) {
   const cells = { measurable: true }
   const grids: TerminalDocumentTerminal[] = []
@@ -367,7 +438,7 @@ async function mountedOverGrid({ laidOutFirst = true } = {}) {
   let box = { width: 390, height: 600 }
   host.getBoundingClientRect = () => new DOMRect(0, 134, box.width, box.height)
   const mounted = mountTerminalWebDocument(host, () => {})
-  // Trace the public writer because init replaces the surface and Happy DOM proxies CSS properties.
+  // Trace the public style writer because init replaces surfaces and Happy DOM proxies CSS.
   const scales: number[] = []
   const write = CSSStyleDeclaration.prototype.setProperty
   const trace = vi.spyOn(CSSStyleDeclaration.prototype, 'setProperty').mockImplementation(function (
@@ -394,7 +465,6 @@ async function mountedOverGrid({ laidOutFirst = true } = {}) {
   if (laidOutFirst) {
     layOut(390, 600)
   }
-  // The app's init carries the frame it laid out.
   send({
     type: 'init',
     cols: 55,
@@ -452,7 +522,6 @@ describe("the page pushes its terminal frame's box into the document", () => {
   })
 
   it('keeps pan and zoom across hide and show, and refits when the box really changes', async () => {
-    // Native never refits on navigation: its WebView keeps its size while another screen covers it.
     const { mounted, scales, layOut } = await mountedOverGrid()
     const fitted = scales.length
     layOut(0, 0)
@@ -467,7 +536,6 @@ describe("the page pushes its terminal frame's box into the document", () => {
   })
 
   it('keeps pan and zoom when RN laid the host out before the mount existed', async () => {
-    // The first layout can land before the document does; the box it reported is still the box.
     const { mounted, scales, layOut } = await mountedOverGrid({ laidOutFirst: false })
     const fitted = scales.length
     layOut(0, 0)
@@ -487,7 +555,7 @@ describe("the page pushes its terminal frame's box into the document", () => {
     expect(scales.at(-1)).toBe(FIT_390)
     layOut(390, 600)
     await framesUntil(() => scales.at(-1) === 390 / (7.5 * 80))
-    // The held fit is spent: a second hide and show must not run it again over the user's pan.
+    // Consume hidden fit once; later hide/show must preserve user pan.
     const landed = scales.length
     layOut(0, 0)
     layOut(390, 600)
@@ -498,13 +566,12 @@ describe("the page pushes its terminal frame's box into the document", () => {
   })
 
   it('never commits a blind fit when the grid cannot be measured while hidden', async () => {
-    // A reconnect re-inits under a covering screen, where xterm's DOM measure reads every cell as 0.
+    // Re-init while covered so DOM cell measurement is zero until the screen returns.
     const { mounted, scales, send, layOut, cells } = await mountedOverGrid()
     layOut(0, 0)
     const shown = scales.length
     cells.measurable = false
     send({ type: 'init', cols: 55, rows: 40, initialData: '', preserveScroll: false, frame: null })
-    // Past the retry loop's 60-frame cap, where a fit that did not wait commits scale 1.
     for (let frame = 0; frame < 75; frame++) {
       await nextFrame()
     }
@@ -518,10 +585,8 @@ describe("the page pushes its terminal frame's box into the document", () => {
   it('fits a text scale too large to resize the grid while visible', async () => {
     const { mounted, scales, send, layOut, grid } = await mountedOverGrid()
     layOut(280, 600)
-    // The app's refit for the new width sends its grid with the frame.
     send({ type: 'resize', cols: 55, rows: 40, frame: { width: 280, height: 600 } })
     await framesUntil(() => scales.at(-1) === 280 / (7.5 * 55))
-    // fontPxForScale(2) = 26 px: 280 / (7.5 x 2) = 18 columns, under MIN_FIT_COLS, so no resize.
     send({ type: 'set-font-scale', fontScale: 2 })
     await framesUntil(() => scales.at(-1) === 280 / (15 * 55))
     expect(grid().cols).toBe(55)
@@ -531,11 +596,9 @@ describe("the page pushes its terminal frame's box into the document", () => {
   it('refits on show after a text scale too large to resize the grid while hidden', async () => {
     const { mounted, scales, send, layOut } = await mountedOverGrid()
     layOut(280, 600)
-    // The app's refit for the new width sends its grid with the frame.
     send({ type: 'resize', cols: 55, rows: 40, frame: { width: 280, height: 600 } })
     await framesUntil(() => scales.at(-1) === 280 / (7.5 * 55))
     layOut(0, 0)
-    // fontPxForScale(2) = 26 px: 280 / (7.5 x 2) = 18 columns, under MIN_FIT_COLS, so no resize.
     send({ type: 'set-font-scale', fontScale: 2 })
     await nextFrame()
     await nextFrame()
@@ -548,7 +611,6 @@ describe("the page pushes its terminal frame's box into the document", () => {
     const { mounted, scales, send, layOut, grid } = await mountedOverGrid()
     layOut(0, 0)
     send({ type: 'set-font-scale', fontScale: 0.8 })
-    // fontPxForScale(0.8) = 10 px: 390 / (7.5 x 10/13) = 67 columns, where stale cells give 52.
     await framesUntil(() => grid().cols === 67)
     const hidden = scales.length
     layOut(390, 600)

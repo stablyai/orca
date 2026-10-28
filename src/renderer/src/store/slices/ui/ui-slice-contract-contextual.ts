@@ -4,7 +4,7 @@ import type {
   FeatureInteractionState
 } from '../../../../../shared/feature-interactions'
 import type { FeatureTipId } from '../../../../../shared/feature-tips'
-import type { NativeChatUpgradeTipVariant } from '../../../../../shared/native-chat-upgrade-tip-audience'
+import type { NativeChatUpgradeTipVariant } from '../../../../../shared/native-chat/native-chat-upgrade-tip-audience'
 import type { ContextualTourId } from '../../../../../shared/contextual-tours'
 import type { OrcaHookScriptKind } from '../../../lib/orca-hook-trust'
 import type { SettingsNavigationTarget } from '../../../lib/settings-navigation-types'
@@ -24,7 +24,7 @@ export type UISliceContextual = {
     hostId: ExecutionHostId,
     setupId?: string
   ) => void
-  /** One-shot Appearance accordion to expand for nested Settings deep links (e.g. Usage percentages under Window & Sidebar). Cleared when Appearance consumes it. */
+  /** One-shot nested Settings accordion deep link; Appearance clears it on consumption. */
   appearanceAccordionDeepLink: 'interface' | 'terminal' | 'window' | null
   setAppearanceAccordionDeepLink: (
     section: NonNullable<UISliceContextual['appearanceAccordionDeepLink']>

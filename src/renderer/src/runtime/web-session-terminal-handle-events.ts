@@ -100,8 +100,7 @@ export function queueAcceptedWebSessionTerminalSnapshot(
     eligibleSubscribers: new Set(subscribers)
   }
   pendingSnapshotBySession.set(key, pendingSnapshot)
-  // Why: freshness checks can run inside a Zustand updater; defer transport
-  // callbacks and coalesce same-tick snapshots so only the newest fact can win.
+  // Coalesce updater-time snapshots in a microtask so transport callbacks see committed state and newest facts.
   queueMicrotask(() => {
     if (pendingSnapshotBySession.get(key) !== pendingSnapshot) {
       return

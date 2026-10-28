@@ -175,11 +175,7 @@ export function resolveOriginalPaneTarget(args: {
   return { paneKey, worktreeId, tabId: legacy.tabId, leafId }
 }
 
-/**
- * The hook-reported live state of the agent currently running this session,
- * or null when the session is not live in any pane. Matches by provider
- * session id first; falls back to a prompt match only when it is unambiguous.
- */
+/** Find live state by provider session ID, falling back to prompt matches only when unambiguous. */
 export function findAiVaultSessionLiveState(
   state: Pick<AppState, 'agentStatusByPaneKey'>,
   session: AiVaultSession

@@ -1,13 +1,18 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import type * as WslUncAccessGateModule from '../wsl/wsl-unc-access-gate'
 
 const {
+  registerSkillCloudIpcHandlersMock,
   handleMock,
   discoverSkillsMock,
   discoverSkillObservationInWslMock,
   getDefaultWslDistroMock,
   getWslHomeMock,
-  parseWslPathMock
+  parseWslPathMock,
+  assertWslUncPathRunningMock
 } = vi.hoisted(() => ({
+  registerSkillCloudIpcHandlersMock: vi.fn(),
+  assertWslUncPathRunningMock: vi.fn(),
   handleMock: vi.fn(),
   discoverSkillsMock: vi.fn(),
   discoverSkillObservationInWslMock: vi.fn(),
@@ -38,13 +43,19 @@ vi.mock('../skills/skill-discovery-wsl', () => ({
   discoverSkillObservationInWsl: discoverSkillObservationInWslMock
 }))
 
+vi.mock('../wsl/wsl-unc-access-gate', async (importOriginal) => ({
+  ...(await importOriginal<typeof WslUncAccessGateModule>()),
+  assertWslUncPathRunning: assertWslUncPathRunningMock
+}))
+
 vi.mock('./skill-cloud-ipc-handlers', () => ({
-  registerSkillCloudIpcHandlers: vi.fn()
+  registerSkillCloudIpcHandlers: registerSkillCloudIpcHandlersMock
 }))
 
 vi.mock('../wsl', () => ({
   getDefaultWslDistro: getDefaultWslDistroMock,
   getWslHome: getWslHomeMock,
+  getWslHomeAsync: async (distro: string) => getWslHomeMock(distro),
   parseWslPath: parseWslPathMock,
   toLinuxPath: (pathValue: string) => {
     if (pathValue === '\\\\wsl.localhost\\Ubuntu\\home\\alice') {
@@ -59,6 +70,7 @@ vi.mock('../wsl', () => ({
 
 import { registerSkillsHandlers } from './skills'
 import { clearSkillDiscoveryCaches } from '../skills/skill-discovery-target'
+import { WslDistroStoppedError, WslDistroUnverifiableError } from '../wsl/wsl-unc-access-gate'
 
 describe('registerSkillsHandlers', () => {
   const originalPlatform = Object.getOwnPropertyDescriptor(process, 'platform')
@@ -76,6 +88,7 @@ describe('registerSkillsHandlers', () => {
     getWslHomeMock.mockReset()
     parseWslPathMock.mockReset()
     parseWslPathMock.mockReturnValue(null)
+    assertWslUncPathRunningMock.mockReset().mockResolvedValue(undefined)
     discoverSkillsMock.mockResolvedValue({ skills: [], sources: [], scannedAt: 1 })
     discoverSkillObservationInWslMock.mockResolvedValue({ rows: [], sources: [], scannedAt: 1 })
     getWslHomeMock.mockReturnValue('\\\\wsl.localhost\\Ubuntu\\home\\alice')
@@ -175,6 +188,72 @@ describe('registerSkillsHandlers', () => {
       homeDir: '/home/alice',
       sourceKinds: undefined
     })
+  })
+
+  it.each([
+    ['stopped', new WslDistroStoppedError('Ubuntu')],
+    ['unverifiable', new WslDistroUnverifiableError('Ubuntu')]
+  ])(
+    'answers nothing yet for a %s WSL target, without probing its home or scanning in it',
+    async (_state, refusal) => {
+      assertWslUncPathRunningMock.mockRejectedValue(refusal)
+      const handler = getDiscoverHandler()
+      const result = await handler(null, { runtime: 'wsl', wslDistro: 'Ubuntu' })
+
+      expect(assertWslUncPathRunningMock).toHaveBeenCalledWith('', 'Ubuntu')
+      expect(getWslHomeMock).not.toHaveBeenCalled()
+      expect(discoverSkillObservationInWslMock).not.toHaveBeenCalled()
+      // Unknown, not absent: every source is unavailable, so no surface offers Install.
+      expect(result).toMatchObject({
+        skills: [],
+        sources: expect.arrayContaining([expect.objectContaining({ skippedReason: 'unavailable' })])
+      })
+      expect(result).not.toMatchObject({
+        sources: expect.arrayContaining([
+          expect.not.objectContaining({ skippedReason: 'unavailable' })
+        ])
+      })
+    }
+  )
+
+  it('lets an explicit Share discover skills in a stopped distro, as the user act it is', async () => {
+    assertWslUncPathRunningMock.mockRejectedValue(new WslDistroStoppedError('Ubuntu'))
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: registration reads only getRepos and the runtime's provider roots, as the bundled-skill tests do.
+    registerSkillsHandlers(store as never, bundledRuntime() as never)
+    const shareDiscover = registerSkillCloudIpcHandlersMock.mock.lastCall?.[1]
+    expect(shareDiscover).toBeTypeOf('function')
+
+    await shareDiscover({ runtime: 'wsl', wslDistro: 'Ubuntu' })
+
+    expect(assertWslUncPathRunningMock).not.toHaveBeenCalled()
+    expect(getWslHomeMock).toHaveBeenCalledWith('Ubuntu')
+    expect(discoverSkillObservationInWslMock).toHaveBeenCalled()
+  })
+
+  it('lets the Share dialog, which sends no target, read a stopped distro’s repo skills', async () => {
+    registerSkillsHandlers(store as never, bundledRuntime() as never) // oxlint-disable-line typescript/consistent-type-assertions -- SAFETY: registration reads only getRepos and the runtime's provider roots.
+    const shareDiscover = registerSkillCloudIpcHandlersMock.mock.lastCall?.[1]
+
+    await shareDiscover(undefined)
+
+    expect(discoverSkillsMock).toHaveBeenLastCalledWith(
+      expect.objectContaining({ repos, gateStoppedWslDistros: false })
+    )
+  })
+
+  it('keeps passive discovery gated', async () => {
+    const handler = getDiscoverHandler()
+    await handler(null, undefined)
+    expect(discoverSkillsMock).toHaveBeenLastCalledWith(
+      expect.not.objectContaining({ gateStoppedWslDistros: false })
+    )
+  })
+
+  it('never asks the WSL gate for a host target', async () => {
+    const handler = getDiscoverHandler()
+    await handler(null, { runtime: 'host' })
+    expect(assertWslUncPathRunningMock).not.toHaveBeenCalled()
+    expect(discoverSkillsMock).toHaveBeenCalled()
   })
 
   it('shares the home and bundled WSL scan across name-filtered requests', async () => {

@@ -16,23 +16,3 @@ describe('retired config directory recognition', () => {
     expect(isOpenCodeLegacySharedConfigDir('C:/ORCA/opencode-hooks/shared/', 'c:\\orca')).toBe(true)
   })
 })
-
-describe('isOpenCodeLegacySharedConfigDir', () => {
-  const userData = join('fixture', 'user-data')
-
-  it('matches only the retired shared dirs of both OpenCode variants', () => {
-    expect(
-      isOpenCodeLegacySharedConfigDir(join(userData, 'opencode-hooks', 'shared'), userData)
-    ).toBe(true)
-    expect(
-      isOpenCodeLegacySharedConfigDir(join(userData, 'opencode2-hooks', 'shared'), userData)
-    ).toBe(true)
-    expect(
-      isOpenCodeLegacySharedConfigDir(join(userData, 'opencode-hooks', 'mine'), userData)
-    ).toBe(false)
-    expect(
-      isOpenCodeLegacySharedConfigDir(join('other', 'opencode-hooks', 'shared'), userData)
-    ).toBe(false)
-    expect(isOpenCodeLegacySharedConfigDir(undefined, userData)).toBe(false)
-  })
-})

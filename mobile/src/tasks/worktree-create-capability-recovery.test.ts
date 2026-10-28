@@ -3,6 +3,7 @@ import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { RpcClient } from '../transport/rpc-client'
 import { FakeSession } from '../transport/mobile-endpoint-supervisor-test-fakes'
+import { createStableLogicalRpcClient } from '../transport/stable-logical-rpc-client'
 import { useNewWorktreeRuntimeCapabilities } from './worktree-create-capability'
 
 function connection() {
@@ -112,6 +113,34 @@ describe('capability probe recovery', () => {
     await act(async () => host.reconnect())
     expect(current?.tasksSupported).toBe(true)
     expect(host.sendRequest).toHaveBeenCalledTimes(2)
+  })
+  it('keeps a pending create probe when the same host switches from LAN to relay', async () => {
+    const lan = new FakeSession('connected')
+    lan.getLastConnectedAt = () => 1
+    let dropLan: ((reason: Error) => void) | undefined
+    lan.sendRequest.mockImplementation(
+      () =>
+        new Promise((_resolve, reject) => {
+          dropLan = reject
+        })
+    )
+    const relay = connection()
+    relay.sendRequest.mockResolvedValue({
+      id: 'relay',
+      ok: true,
+      result: { capabilities: ['agent.launch.v2', 'worktree.create-idempotency.v1'] },
+      _meta: { runtimeId: 'test' }
+    })
+    const logical = createStableLogicalRpcClient(lan, 'lan')
+    await render(logical)
+    const launch = current?.getAgentLaunchSupport()
+    const idempotency = current?.getWorktreeCreateCutoverSupport()
+    await act(async () => {
+      await logical.migrateTo(relay.client, 'relay')
+      dropLan?.(new Error('socket closed'))
+    })
+    await expect(launch).resolves.toEqual({ replay: false })
+    await expect(idempotency).resolves.toBeTruthy()
   })
   it.each(['before', 'after'])(
     'ignores a prior connection reply resolved %s the current reply',

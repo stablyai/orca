@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from 'vitest'
 import { openDetectedFilePath } from './terminal-link-handlers'
 import { getConnectionId } from '@/lib/connection-context'
 import { getWorkspaceFilePreviewPlan, openFileInBrowserTab } from '@/lib/file-preview'
-import { activateAndRevealWorktree } from '@/lib/worktree-activation'
+import { activateAndRevealWorkspace } from '@/lib/worktree-activation'
 import { downloadAndOpenRemoteTerminalFile } from './terminal-remote-file-download-open'
 import { createTerminalLinkTestDoubles } from './terminal-link-handlers-test-fixtures'
 import {
@@ -252,9 +252,8 @@ describe('handleOscLink', () => {
       filePath: '/home/me/repo/report.html',
       worktreeId: 'wt-1'
     })
-    // Why: the preview tab is the surface — activation must not re-seed a shell into a
-    // workspace whose last terminal the user closed.
-    expect(activateAndRevealWorktree).toHaveBeenCalledWith('wt-1', {
+    // The preview is the surface; activation must not seed a shell into an emptied workspace.
+    expect(activateAndRevealWorkspace).toHaveBeenCalledWith('wt-1', {
       providesInitialSurface: true
     })
   })

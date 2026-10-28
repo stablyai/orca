@@ -1,33 +1,5 @@
 // @vitest-environment happy-dom
-/**
- * `gksrmfRownla` → `한글깨쥠`, replayed from a capture taken on an iPad running
- * iPadOS 26 with a hardware Korean 2-set keyboard (#13345). The recording is
- * the fixture: an earlier round of this work passed against a hand-written
- * shape the device never produces, and shipped a bug the device shows in event
- * 23 of this file.
- *
- * What the device does that no reconstruction guessed — batchim migration:
- *
- *   keydown 'ㅈ' → deleteContentBackward, insertText '깾'  value '한글깾'
- *   keydown 'ㅜ' → deleteContentBackward, insertText '깨주' value '한글깨주'
- *
- * The `ㅈ` first attaches to `깨` as a final consonant, making a different
- * codepoint entirely, and only migrates forward once `ㅜ` says it starts the
- * next syllable. A syllable is not final until the following syllable's vowel
- * decides, so `깨` must not be committed when the `ㅈ` arrives.
- *
- * Two properties are pinned here:
- *
- * - `깨` opens on `ㄲ`, a Shift-typed double consonant. Orca's own Shift rule
- *   (`xterm-bypass-policy.ts`) already hides those keydowns from xterm, so a fix
- *   living inside xterm's CompositionHelper never sees them and every syllable
- *   starting with one — 깨 꿈 딸 빵 쓰다 짜다 — stays broken. Sitting upstream of
- *   the bypass policy is what makes the source of the keydown irrelevant.
- * - Nothing is sent and then retracted. A field-diffing mirror emits one write
- *   per edit and erases the superseded syllable with DEL, which raw-mode TUIs
- *   need not read as "erase one cell" and which costs a round trip each over
- *   SSH or the relay.
- */
+/** Replay iPadOS 26 hardware Korean capture (#13345): 깨 → 깾 → 깨주 proves batchim migration can rewrite a held syllable. Shift-typed initials must be claimed before xterm bypass, with one final write per syllable and no DEL retractions for raw-mode TUIs. */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   deviceTraceKeystrokes,
@@ -76,9 +48,7 @@ describe('the recorded iPad device trace for 한글깨쥠', () => {
       const rig = openIosTerminal()
       const drift = await replayIosDeviceTrace(rig, TRACE)
 
-      // The device build reached the wire as ['한', '글', '깨쥠'] — correct text,
-      // but everything from `깨` on arrived in one chunk at blur, because the
-      // hold stalled the moment `깨` became `깾`.
+      // The device produced correct text only at blur after batchim rewrite stalled the hold; require timely syllable delivery too.
       expect(TRACE.observedSent).toEqual(['한', '글', '깨쥠'])
       expect(rig.emitted).toEqual(['한', '글', '깨'])
       expect(rig.preedit.heldText()).toBe('쥠')
@@ -151,8 +121,7 @@ describe('the recorded iPad device trace for 한글깨쥠', () => {
   })
 
   it('migrates a batchim with nothing committed before it', async () => {
-    // The same rewrite as the trace's `깨` → `깾` → `깨주`, but opening the line:
-    // the settled prefix is empty, so nothing can be released early by accident.
+    // Exercise batchim rewrite at line start, where no settled prefix can mask an early release.
     pretendRecordedDevice()
     const rig = openIosTerminal()
     await typeJamo(rig, 'ㄲ', 'ㄲ', { replaces: false, shiftKey: true })

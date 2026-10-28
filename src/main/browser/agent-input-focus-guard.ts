@@ -3,7 +3,6 @@ import { ipcMain, type WebContents } from 'electron'
 import { BrowserError } from './browser-error'
 
 // Guest presses take Chromium focus; only the hosting pane can restore it (#20595).
-// See docs/reference/agent-browser-focus-isolation.md.
 
 /** Await pane readiness, then release when input ends to restore the user's focus. */
 export type AgentInputFocusGuard = () => Promise<() => void>

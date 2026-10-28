@@ -428,10 +428,12 @@ describe('a start racing the host', () => {
     expect(replayed).toBe(false)
     expect(child()).toBeNull()
     release()
-    expect(await replay).toMatchObject({ ok: true, replayed: true })
+    await eventually(() => expect(child()?.phase).toBe('starting'))
+    expect(replayed).toBe(false)
     expect(child()).toMatchObject({ phase: 'starting', generation: `generation-${spawned + 1}` })
     expect(operationRan).toBe(false)
     opened.resolve()
+    expect(await replay).toMatchObject({ ok: true, replayed: true })
     expect(await operation).toMatchObject({ ok: true })
     expect(operationRan).toBe(true)
     await eventually(async () =>

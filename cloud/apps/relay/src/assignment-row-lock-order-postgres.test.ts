@@ -26,11 +26,7 @@ const hosts = ['rowlockhost00001', 'rowlockhost00002', 'rowlockhost00003', 'rowl
   (relayHostId) => ({ userId, relayHostId })
 )
 
-// Why a deadlock counter and not "it eventually succeeded": the transaction
-// wrapper retries 40P01 three times, so a cycle that fires on every wave still
-// reports success to the caller while burning the retry budget that turns into
-// a 503 under load. PostgreSQL counts every detected cycle in pg_stat_database,
-// which sees through the retry.
+// pg_stat_database exposes cycles hidden by three 40P01 retries; eventual success alone misses deadlocks that exhaust retries under load.
 describePostgres('PostgreSQL row lock order', () => {
   const databases: RelayDatabase[] = []
 

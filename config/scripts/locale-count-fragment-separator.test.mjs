@@ -2,8 +2,7 @@ import { describe, expect, it } from 'vitest'
 
 import { repairTranslatedValue } from './locale-translation-policy.mjs'
 
-// The theme-picker count row renders "Showing {count}" immediately followed by one of these
-// fragments, so translations must keep a leading separator or the numbers fuse ("표시 중 3030 중").
+// Theme count fragments concatenate directly after Showing {count}; preserve separator or numbers fuse (표시 중 3030 중).
 describe('locale-count-fragment-separator', () => {
   it('keeps a slash between shown and total theme counts in CJK locales', () => {
     const brokenByLocale = { ko: '{{value0}} 중', ja: '{{value0}}の', zh: '{{value0}} 的' }

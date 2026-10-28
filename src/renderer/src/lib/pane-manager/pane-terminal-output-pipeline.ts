@@ -55,7 +55,7 @@ export function writeBackgroundTerminalChunk(
   }
 }
 
-// Why: re-arm a zero-delay drain once xterm confirms the previous high-priority batch parsed; the fixed 4/16ms cadence otherwise drips far below xterm's ~100 MB/s parse. Only visible panes are pacer-clocked; background keeps the fixed cadence to protect the focused terminal.
+// Parse-clock visible drains at zero delay instead of limiting xterm to fixed 4/16ms cadence; retain bounded background cadence to protect focus.
 function makeParseClockPacer(): () => void {
   return () => {
     try {
@@ -74,7 +74,7 @@ export function composeParsedCallback(
   ackCreditsParsed: (() => void) | undefined,
   pacer: (() => void) | undefined
 ): TerminalOutputParsedCallback {
-  // Why always non-undefined: the callback doubles as the pipeline-health settle signal — with none, the stall watch could never settle, forcing a probe round-trip per healthy idle pane.
+  // Always provide completion: it settles pipeline health, avoiding a needless probe round-trip for every healthy idle pane.
   return () => {
     try {
       onParsed?.()
@@ -114,7 +114,7 @@ export function writeQueuedChunk(entry: QueueEntry): 'foreground' | 'background'
   }
   const pacer = entry.highPriority ? makeParseClockPacer() : undefined
   const ackCreditsParsed = registerTerminalOutputAckCredits(entry.terminal, queuedWrite.ackCredits)
-  // Why armed BEFORE the write: a wedged WriteBuffer (issue #2836) or disposed xterm (6.1.0-beta.287) never runs the parsed callback, so the watch must be live first to catch it.
+  // Arm before writing: wedged WriteBuffer (#2836) or disposed xterm can omit parsed callbacks entirely.
   armTerminalWriteStallWatch(entry.terminal, {
     onCertifiedDead: () => discardTerminalOutput(entry.terminal)
   })

@@ -1,11 +1,4 @@
-/**
- * The native host, when the desktop refuses the session after the microphone is already open.
- *
- * The hook opens the capture first and asks the desktop for a session second, so by the time a
- * refusal comes back the device is holding a microphone and, since ruling 36, the screen with it.
- * Driven through the real native seam rather than a double, because what has to be given back are
- * device calls: this file is the only place the engine and `expo-keep-awake` answer for it.
- */
+// Use the real native capture/keep-awake seams: desktop refusal arrives after the microphone and screen are held, so both device resources must be released (ruling 36).
 import { createElement } from 'react'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -16,9 +9,7 @@ import {
 } from '../mobile-web-shell/bridge-host-test-fakes'
 
 const device = vi.hoisted(() => ({
-  /** Every engine call, in order. */
   calls: new Array<string>(),
-  /** The screen, as `+` and `-`: taken when the microphone opens, given back when it closes. */
   screen: new Array<string>()
 }))
 
@@ -78,7 +69,6 @@ function dictation(): UseMobileDictationResult {
   return current
 }
 
-/** Answers everything but the one method a case wants to keep in flight, which it collects. */
 async function pumpHolding(
   rpc: FakeRpcClient,
   hold: string,
@@ -97,7 +87,6 @@ async function pumpHolding(
   }
 }
 
-/** Answers every forwarded request, refusing the one the case names. */
 async function pump(rpc: FakeRpcClient, refuse: string): Promise<void> {
   for (let round = 0; round < 8; round += 1) {
     for (const request of rpc.requests.splice(0)) {
@@ -128,18 +117,15 @@ describe('a native start the desktop refuses', () => {
     const rpc = createFakeRpcClient()
     mount(rpc)
     await act(async () => {
-      // The composer's own handler: a refused start is a toast, never a throw into render.
       const started = dictation()
         .start()
         .catch(() => undefined)
       await pump(rpc, 'speech.dictation.start')
       await started
     })
-    // The engine came up before the desktop was asked, so it has to go back down.
     expect(device.calls).toContain('initialize')
     expect(device.calls).toContain('toggleRecording(false)')
-    // And the screen with it: nothing else on this path would release it, and the hook's `start`
-    // has no catch of its own.
+    // The open capture owns a wake tag; no outer start catch releases it.
     expect(device.screen).toEqual(['+', '-'])
     expect(dictation().status).toBe('idle')
   })
@@ -150,7 +136,6 @@ describe('a stale native start whose refusal arrives after a newer one is record
     const rpc = createFakeRpcClient()
     mount(rpc)
     const first: { request: SentRequest | null } = { request: null }
-    // A opens the microphone and waits on the desktop.
     await act(async () => {
       void dictation()
         .start()
@@ -159,7 +144,6 @@ describe('a stale native start whose refusal arrives after a newer one is record
     })
     expect(first.request).not.toBeNull()
     expect(device.screen).toEqual(['+'])
-    // The user gives up on A, then starts B, which takes the microphone and the screen again.
     await act(async () => {
       const cancelled = dictation().cancel()
       await pump(rpc, 'none')
@@ -175,7 +159,7 @@ describe('a stale native start whose refusal arrives after a newer one is record
     expect(dictation().status).toBe('recording')
     const screenWhileRecording = [...device.screen]
     const callsWhileRecording = [...device.calls]
-    // Now A's request finally fails. It owns nothing: the capture and the screen are B's.
+    // A no longer owns the microphone or screen; late failure must leave B alone.
     await act(async () => {
       first.request?.resolve({
         id: 'desktop',
@@ -192,9 +176,7 @@ describe('a stale native start whose refusal arrives after a newer one is record
 
 describe('a stale native start that succeeds after a newer one is recording', () => {
   it('does not commit itself over the dictation that replaced it', async () => {
-    // The mirror image of the case above: A's request resolves rather than rejects. The stale
-    // check after the desktop start is what stops A committing, and `cancelStaleStart` cancels A's
-    // own session without touching the capture — which is B's.
+    // A’s late success must cancel only its desktop session, leaving B’s capture untouched.
     const rpc = createFakeRpcClient()
     mount(rpc)
     const first: { request: SentRequest | null } = { request: null }

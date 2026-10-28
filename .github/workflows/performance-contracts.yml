@@ -14,13 +14,18 @@ on:
       - 'config/oxlint-plugins/quadratic-buffer-concat.mjs'
       - 'config/scripts/*-plugin.test.mjs'
       - '!config/scripts/renderer-scrollbar-style-plugin.test.mjs'
-      - '!config/scripts/mobile-pairing-qrcode-import-plugin.test.mjs'
       # Keep in sync with the contract list in config/vitest.performance.config.ts;
       # without these a rename lands green and only breaks the next nightly.
+      - 'src/main/ipc/pty-spawn-scaling.performance.test.ts'
+      - 'src/main/ipc/pty/runtime/spawn-preflight-saved-resume.test.ts'
+      - 'src/main/native-chat/agent-session-wire/structured-agent-session-terminal-writer-acquire.test.ts'
+      - 'src/main/runtime/hook-status-resume-sleep-ordering.test.ts'
+      - 'src/renderer/src/hooks/ipc-events/agent-status-refused-resume.performance.test.ts'
+      - 'src/renderer/src/components/terminal-pane/pty-connection/saved-resume-cancellation.test.ts'
       - 'src/main/sqlite/sync-database.test.ts'
       - 'src/main/runtime/orchestration/db/row-column-lists.test.ts'
-      - 'src/shared/native-chat-tool-attribution-allocation.test.ts'
-      - 'src/shared/native-chat-tool-pairing.performance.test.ts'
+      - 'src/shared/native-chat/tools/native-chat-tool-attribution-allocation.test.ts'
+      - 'src/shared/native-chat/tools/native-chat-tool-pairing.performance.test.ts'
       - 'src/main/codex-usage/codex-rollout-file-lifetime.test.ts'
       - 'src/main/codex-usage/scanner-incremental-append.test.ts'
       - 'src/main/usage/jsonl-file-reader.test.ts'
@@ -46,7 +51,8 @@ jobs:
       fail-fast: false
       matrix:
         os: [ubuntu-latest, macos-latest, windows-latest]
-    runs-on: ${{ fromJSON('{"ubuntu-latest":"blacksmith-4vcpu-ubuntu-2404","macos-latest":"blacksmith-6vcpu-macos-latest","windows-latest":"blacksmith-4vcpu-windows-2025"}')[matrix.os] || matrix.os }}
+    # Operation-count and retention contracts, not wall-clock budgets: use the hosted images the cache warmers seed.
+    runs-on: ${{ fromJSON('{"ubuntu-latest":"ubuntu-24.04","macos-latest":"macos-15","windows-latest":"windows-2022"}')[matrix.os] || matrix.os }}
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@v6

@@ -124,7 +124,6 @@ export default function IpynbViewer({
     index: number
   ): void => {
     const mod = getShortcutPlatform() === 'darwin' ? event.metaKey : event.ctrlKey
-    // Exactly one of Shift or Cmd/Ctrl.
     if (
       isImeOwnedKeyboardEvent(event) ||
       event.key !== 'Enter' ||

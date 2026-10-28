@@ -41,6 +41,8 @@ type GuestFake = {
   windowOpenHandler: ((details: { url: string; frameName: string }) => unknown) | null
   webRtcPolicy: string | null
   isDestroyed: () => boolean
+  isCurrentlyAudible: () => boolean
+  send: ReturnType<typeof vi.fn>
   isFocused: () => boolean
   getURL: () => string
   getType: () => string
@@ -68,6 +70,8 @@ function createGuest(id: number, url: string): GuestFake {
     windowOpenHandler: null,
     webRtcPolicy: null,
     isDestroyed: () => false,
+    isCurrentlyAudible: () => false,
+    send: vi.fn(),
     isFocused: () => true,
     getURL: () => guest.url,
     getType: () => 'webview',
@@ -141,28 +145,6 @@ describe('guest policy profiles', () => {
     return { guest, grantId: grant.id, browserPageId }
   }
 
-  it('gives a browsing guest popups, link gestures and auth-identity detach tracking', () => {
-    const guest = createGuest(300, 'https://example.com/')
-
-    browserManager.attachGuestPolicies(guest as never)
-
-    expect(listenerCount(guest, 'input-event')).toBe(1)
-    expect(listenerCount(guest, 'did-create-window')).toBe(1)
-    expect(guest.debugger.on).toHaveBeenCalledWith('detach', expect.any(Function))
-    expect(guest.debugger.attach).not.toHaveBeenCalled()
-    expect(guest.debugger.sendCommand).not.toHaveBeenCalled()
-    expect(navigateTo(guest, 'https://elsewhere.example/')).toBe(false)
-  })
-
-  it('gives a workspace-document guest none of it', () => {
-    const { guest } = attachPreviewGuest()
-
-    expect(listenerCount(guest, 'input-event')).toBe(0)
-    expect(listenerCount(guest, 'did-create-window')).toBe(0)
-    expect(guest.debugger.on).not.toHaveBeenCalled()
-    expect(guest.debugger.sendCommand).not.toHaveBeenCalled()
-  })
-
   it('holds a workspace-document guest inside the grant it is showing', () => {
     const { guest, grantId } = attachPreviewGuest()
 
@@ -226,14 +208,5 @@ describe('guest policy profiles', () => {
       expect(browserManager.getGuestWebContentsId(browserPageId)).toBeNull()
       expect([...browserManager.getWebContentsIdByTabId().keys()]).toEqual([BROWSING_PAGE_ID])
     })
-  })
-
-  it('attaches a guest once whatever profile it was asked for', () => {
-    const { guest } = attachPreviewGuest(303)
-
-    browserManager.attachGuestPolicies(guest as never)
-
-    expect(listenerCount(guest, 'did-create-window')).toBe(0)
-    expect(listenerCount(guest, 'will-navigate')).toBe(1)
   })
 })

@@ -1,9 +1,7 @@
 import { useMemo } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useShallow } from 'zustand/react/shallow'
-// Why: this registry mirrors the Settings sidebar in one neutral module so
-// Cmd+J and Settings visibility cannot drift. Keep it free of Settings pane UI
-// imports; the boundary is enforced by a focused architecture test.
+// Share Settings/Cmd+J visibility without Settings pane UI imports; an architecture test enforces this boundary.
 import {
   getRuntimeEnvironmentsSearchEntry,
   getWebRuntimeEnvironmentsSearchEntry
@@ -22,7 +20,7 @@ import { defaultScopeHost } from '@/lib/default-creation-host'
 import { useAppStore } from '@/store'
 import { useProjectHostSetupProjection } from '@/store/selectors'
 import {
-  useChatSettingsTypedPermissions,
+  useChatSettingsOwnPermissions,
   useStructuredAgentSessionHostQueuesMessages
 } from '@/runtime/structured-agent-session-host-capability'
 import type { ProjectGroupingModel } from '../../../shared/project-section-grouping'
@@ -101,9 +99,7 @@ export function buildSettingsNavigationMetadata({
     projectGrouping
   }
 
-  // Why: this array's order must mirror SETTINGS_NAV_GROUPS so the Settings
-  // sidebar and the Cmd+J palette both read top-to-bottom in the same grouped
-  // order — keep each new entry beside its group's siblings.
+  // Match SETTINGS_NAV_GROUPS order so Settings and Cmd+J keep siblings together.
   return [
     ...buildCapabilitySettingsSections(options),
     ...buildSetupSettingsSections(options),
@@ -114,10 +110,7 @@ export function buildSettingsNavigationMetadata({
 }
 
 export function useSettingsNavigationMetadata(): SettingsNavSection[] {
-  // Why: useTranslation subscribes to language changes, but the active locale
-  // must also be a memo dependency below — a rerender alone returns the cached
-  // previous-language sections, leaving the Settings sidebar and Cmd+J palette
-  // stuck in the old language until Settings is remounted.
+  // The locale subscription must also invalidate the memo or labels retain the previous language.
   const { i18n } = useTranslation()
   const activeLocale = i18n.language
   const repos = useAppStore((state) => state.repos)
@@ -133,7 +126,7 @@ export function useSettingsNavigationMetadata(): SettingsNavSection[] {
     })
   )
   const nativeChatEnabled = settings?.experimentalNativeChat === true
-  const typedChatPermissions = useChatSettingsTypedPermissions()
+  const typedChatPermissions = useChatSettingsOwnPermissions()
   const hostQueuesMessages = useStructuredAgentSessionHostQueuesMessages({ kind: 'local' })
   const isMac = isMacUserAgent()
   const isWindows = isWindowsUserAgent()
@@ -167,9 +160,6 @@ export function useSettingsNavigationMetadata(): SettingsNavSection[] {
     hostPlatform: windowsTerminalCapabilities.hostPlatform
   })
 
-  // Why: Settings and Cmd+J share this metadata so platform/runtime visibility
-  // and search entries cannot drift. Keep this hook free of Settings pane UI
-  // imports; see docs/reference/cmd-j-settings-actions-plan.md.
   return useMemo(
     () =>
       buildSettingsNavigationMetadata({

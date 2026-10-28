@@ -92,6 +92,17 @@ describe('buildMobileSourceControlPrimaryAction', () => {
     expect(detached.disabled).toBe(true)
   })
 
+  it('does not republish a branch whose review is already merged, like desktop', () => {
+    const action = buildMobileSourceControlPrimaryAction(
+      args({
+        status: status({ upstreamStatus: { hasUpstream: false, ahead: 0, behind: 0 } }),
+        review: { prState: 'merged', isPRStateLoading: false, reviewNumber: 7, pushTarget: null }
+      })
+    )
+    expect(action.disabled).toBe(true)
+    expect(action.accessibilityHint).toBe('Nothing to commit. The review is already merged.')
+  })
+
   it('dispatches force push with lease when the shared decision requires it', () => {
     const h = handlers()
     const action = buildMobileSourceControlPrimaryAction(
@@ -127,6 +138,33 @@ describe('buildMobileSourceControlPrimaryAction', () => {
     expect(h.runActionSheetGitSequence).toHaveBeenCalledWith('force-push', [
       { method: 'git.push', params: { forceWithLease: true } }
     ])
+  })
+
+  it('leaves a force push to desktop when the review has its own push target', () => {
+    const h = handlers()
+    const action = buildMobileSourceControlPrimaryAction(
+      args({
+        status: status({
+          upstreamStatus: {
+            hasUpstream: true,
+            ahead: 2,
+            behind: 2,
+            behindCommitsArePatchEquivalent: true
+          }
+        }),
+        review: {
+          prState: 'open',
+          isPRStateLoading: false,
+          reviewNumber: 7,
+          pushTarget: { remoteName: 'fork', branchName: 'feature' }
+        },
+        handlers: h
+      })
+    )
+    expect(action.requiresForceWithLease).toBe(true)
+    expect(action.disabled).toBe(true)
+    action.onPress()
+    expect(h.runActionSheetGitSequence).not.toHaveBeenCalled()
   })
 
   it('disables the button for unresolved entries even during a conflict operation', () => {

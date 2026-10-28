@@ -11,13 +11,7 @@ function claim(claimed: boolean): string {
   return clientFrame({ type: 'notify', name: BRIDGE_BACK_CLAIM_NOTIFY, claimed })
 }
 
-/**
- * The staleness half of the Back lane, which is the half with teeth.
- *
- * A claim the shell kept after its document went would have the key handed to a page that has
- * nothing to do with it, and a Back press that does nothing is worse than one that leaves the
- * screen. Every way a document ends is a case here.
- */
+// Clear Back claims on every document-ending path; a stale claim hands the key to an unrelated page and swallows navigation.
 describe('the claim a host holds on the device Back key', () => {
   it('carries the page taking the key and letting it go, and says neither twice', () => {
     const bridge = harness()
@@ -44,13 +38,7 @@ describe('the claim a host holds on the device Back key', () => {
     expect(bridge.backClaims).toEqual([true, false])
   })
 
-  /**
-   * A host ending is not a document ending. A client swapped under a live page rebuilds the host
-   * while the WebView stays mounted, so a teardown that reported the claim gone would take the key
-   * off an open sheet; what ends a session is the session leaving `ready`, which the screen's own
-   * reader answers (`shell-page-back-claim.ts`) and `mobile-web-shell-back-claim-state.test.ts`
-   * pins.
-   */
+  // Host replacement preserves the live document and its Back claim; only leaving ready ends the session (shell-page-back-claim.ts).
   it('reports nothing when the host itself ends: the claim belongs to the session', () => {
     const bridge = harness()
     bridge.host.receive(ready())
@@ -66,7 +54,6 @@ describe('the claim a host holds on the device Back key', () => {
       sessionEstablished: true
     })
     expect(rebuilt.backClaims).toEqual([])
-    // And it delivers on it, over a session that is still open.
     expect(rebuilt.host.sendBack()).toBe(true)
     expect(rebuilt.last()).toEqual({ v: 1, type: BRIDGE_BACK_FRAME })
   })
@@ -108,11 +95,7 @@ describe('handing one press to the page', () => {
     expect(bridge.last()).toEqual({ v: 1, type: BRIDGE_BACK_FRAME })
   })
 
-  /**
-   * Wire compatibility, the half a schema cannot state: a page built before the frame existed reads
-   * one as `unrecognised-message` and drops the whole thing, so the shell must not send it. False
-   * is what leaves the press to the navigator, which is what Back did before this lane.
-   */
+  // Older pages drop unknown Back frames; return false without sending so the navigator retains the press.
   it('sends nothing between documents, when the view belongs to no page', () => {
     const bridge = harness()
     bridge.host.receive(ready())

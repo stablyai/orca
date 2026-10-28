@@ -37,6 +37,7 @@ export class StructuredAgentSessionClientDelivery {
   private readonly turnCompletionFeed
   readonly requestFailures
   private readonly sendSettlement
+  private readonly journalObservers = new Map<string, Set<() => void>>()
 
   constructor(
     private readonly sessions: Map<string, StructuredAgentSessionHostSession>,
@@ -49,7 +50,8 @@ export class StructuredAgentSessionClientDelivery {
     onAgentStarted: (sessionId: string) => void,
     onChildWorkChanged: (sessionId: string) => void,
     // Current clients interpret an absent opening roster as no tasks.
-    readBackgroundTasks: NonNullable<SubscriberFieldHooks['readBackgroundTasks']>
+    readBackgroundTasks: NonNullable<SubscriberFieldHooks['readBackgroundTasks']>,
+    starting?: (sessionId: string) => boolean
   ) {
     this.requestFailures = new StructuredAgentSessionRequestFailures({
       sessions,
@@ -63,6 +65,7 @@ export class StructuredAgentSessionClientDelivery {
     })
     this.statusFeed = createStructuredAgentSessionHostStatusFeed({
       sessions,
+      starting,
       now,
       currentWork: (sessionId, journal) => this.currentWork(sessionId, journal),
       deps,
@@ -199,6 +202,19 @@ export class StructuredAgentSessionClientDelivery {
     this.turnCompletionFeed.observe(sessionId, undefined, { historical: true })
   }
 
+  /** Observe every journal publication, including row-free wakes, without opening a client stream. */
+  observeJournalPublications = (sessionId: string, observer: () => void): (() => void) => {
+    const observers = this.journalObservers.get(sessionId) ?? new Set<() => void>()
+    observers.add(observer)
+    this.journalObservers.set(sessionId, observers)
+    return () => {
+      observers.delete(observer)
+      if (observers.size === 0 && this.journalObservers.get(sessionId) === observers) {
+        this.journalObservers.delete(sessionId)
+      }
+    }
+  }
+
   subscribeStatus = (subscriber: StructuredAgentSessionStatusSubscriber): (() => void) =>
     this.statusFeed.subscribe(subscriber)
   forgetStatus = (sessionId: string): void => this.statusFeed.forget(sessionId)
@@ -227,6 +243,7 @@ export class StructuredAgentSessionClientDelivery {
     this.requestFailures.clear()
     this.stopAtRestCommandUpdates()
     this.sendSettlement.closeAll()
+    this.journalObservers.clear()
   }
 
   private publishJournal(sessionId: string, journal: AgentSessionJournal, activity = true): void {
@@ -235,6 +252,17 @@ export class StructuredAgentSessionClientDelivery {
     // Observe completion after status projection updates, even without subscribers for background chats.
     this.turnCompletionFeed.observe(sessionId, journal)
     this.queue.onJournalActivity(sessionId, activity)
+    for (const observer of this.journalObservers.get(sessionId) ?? []) {
+      try {
+        observer()
+      } catch (error) {
+        this.deps().logger.warn('observing a journal publication failed', {
+          scope: 'journal-delivery',
+          sessionId,
+          error
+        })
+      }
+    }
   }
 
   private currentWork(sessionId: string, journal: AgentSessionJournal) {

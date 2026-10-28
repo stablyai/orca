@@ -9,19 +9,13 @@ import {
   type MobileWebShellUpdateFailure
 } from './mobile-web-shell-update-failure'
 
-/**
- * The last few update failures per host, in the cache root beside the host index.
- *
- * Five per host: Troubleshoot shows the newest, and four behind it are enough to tell one bad
- * download from a host that fails every launch, while the file stays a few kilobytes.
- */
+// Keep enough history to distinguish one bad download from repeated failures without growing diagnostic storage.
 export const MAX_UPDATE_FAILURES_PER_HOST = 5
-/** A ceiling across hosts too, because hosts are not otherwise bounded: six cached hosts' worth. */
+// Bound all hosts too; cached-host eviction does not bound failure-log hosts.
 export const MAX_UPDATE_FAILURES = 30
 
 const UPDATE_FAILURE_LOG_FILE_NAME = 'update-failures.json'
 
-/** Generation ids are sha256 hex; anything else is not recorded as one. */
 const BUILD_ID_PATTERN = /^[a-f0-9]{64}$/
 
 const BuildIdSchema = z.string().regex(BUILD_ID_PATTERN).nullable()
@@ -39,12 +33,11 @@ const UpdateFailureSchema = z
   })
   .strict()
 
-/** A build id the host sent that is not a digest is dropped rather than kept: it is host text. */
+// Drop non-digest build ids rather than persist arbitrary host text.
 function recordableBuildId(buildId: string | null): string | null {
   return buildId !== null && BUILD_ID_PATTERN.test(buildId) ? buildId : null
 }
 
-/** Oldest first. Appends, then evicts oldest-first: per host, then across hosts. */
 export function appendUpdateFailure(
   entries: readonly MobileWebShellUpdateFailure[],
   failure: MobileWebShellUpdateFailure
@@ -67,7 +60,7 @@ function logUri(fs: GenerationFileSystem): string {
   return joinUri(fs.rootUri, UPDATE_FAILURE_LOG_FILE_NAME)
 }
 
-/** Unreadable reads as empty, entry by entry: a diagnostic must never cost the shell anything. */
+// Treat unreadable data as absent and skip bad entries; diagnostics must not prevent shell use.
 export async function readUpdateFailureLog(
   fs: GenerationFileSystem
 ): Promise<MobileWebShellUpdateFailure[]> {
@@ -98,7 +91,7 @@ async function writeUpdateFailureLog(
     await fs.delete(logUri(fs))
     return
   }
-  // Re-validated on the way out as well, so nothing but the listed fields ever reaches disk.
+  // Validate again before writing so unlisted fields cannot reach disk.
   const checked = entries.flatMap((entry) => {
     const valid = UpdateFailureSchema.safeParse(entry)
     return valid.success ? [valid.data] : []

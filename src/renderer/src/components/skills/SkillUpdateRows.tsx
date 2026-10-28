@@ -58,7 +58,6 @@ function UpToDateLine({
   )
 }
 
-/** The skill rows plus, while reviewing, the up-to-date line and the locations toggle. */
 export function SkillUpdateRows({
   skills,
   unforcedPlan,

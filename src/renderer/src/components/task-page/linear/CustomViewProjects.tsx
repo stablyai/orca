@@ -1,4 +1,4 @@
-import type { TaskPageComposerActionsModel } from '../../use-task-page-composer-actions'
+import type { TaskPageComposerActionsModel } from '../use-task-page-composer-actions'
 import { Button } from '@/components/ui/button'
 import { translate } from '@/i18n/i18n'
 import { ChevronLeft, ExternalLink } from 'lucide-react'

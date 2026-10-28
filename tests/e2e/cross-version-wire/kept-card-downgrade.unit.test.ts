@@ -8,17 +8,14 @@ import type {
   AgentSessionJournalProviderHandle
 } from '../../../src/shared/agent-session-journal-types'
 import { claudeProviderHandle } from '../../../src/shared/agent-session-provider-handle-encoding'
-import { USER_MESSAGE_SOURCE } from '../../../src/shared/agent-session-message-source'
+import { USER_MESSAGE_SOURCE } from '../../../src/shared/agent-session/agent-session-message-source'
 import { agentSessionFailureFact } from '../../../src/shared/agent-session-failure'
 import { agentSessionFailureWords } from '../../../src/shared/agent-session-failure-words'
 import { createTrackedJournalOpener } from '../../../src/main/native-chat/agent-session-journal/journal-host-database-test-support'
 import { importReleaseCheckoutModule, materializeReleaseCheckout } from './release-checkout'
 
-// A send this build's quit left queued is an ordinary pending submission, so a build from before
-// the kept send still reads it, its source included, and settles it on its next start. (A queued
-// card is a journal row this build writes at a newer row version, which keeps the chat read-only
-// there; users don't downgrade.) The main commit the kept send branched from; move it to the
-// newest release that predates it. A baseline holding this change tests no downgrade.
+// Pin before kept sends: an older build must read and settle pending submissions left by new-build quit.
+// Queued cards use a newer journal version that makes downgrade read-only; a baseline containing this change tests no skew.
 const BASELINE_REF = '5a56636f6679071d6ec68b851ef7932cd3222560'
 const JOURNAL = 'src/main/native-chat/agent-session-journal'
 const HOST_RESTARTED = agentSessionFailureWords(agentSessionFailureFact('hostRestarted'), {

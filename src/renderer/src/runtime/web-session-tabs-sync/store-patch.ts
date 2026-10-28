@@ -1,7 +1,7 @@
 import {
   markStructuredAgentSessionLaunchesPublished,
   publishedStructuredSessions
-} from '@/lib/structured-agent-session-launch-publication'
+} from '@/lib/agent-session/launch/structured-agent-session-launch-publication'
 import { toRuntimeExecutionHostId } from '../../../../shared/execution-host'
 import type { AppState } from '../../store'
 import { useAppStore } from '../../store'
@@ -22,6 +22,7 @@ import {
   hostWorkingClientBoundaryByPaneKey,
   type WebSessionTabsSyncState
 } from './state'
+import { reportVisibleTabPickToHost } from '../web-session-visible-tab-pick-report'
 import {
   createHostSessionMirrorSettle,
   type HostSessionMirrorPatchVerdict,
@@ -89,7 +90,11 @@ export function applyWebSessionTabsStorePatch(
             continue
           }
           const notificationStatus = clientOwnedNotification ? remapped : accepted
-          if (!notificationStatus) {
+          // Why: an unverifiable `done` restates an earlier turn or none, never a completion.
+          if (
+            !notificationStatus ||
+            (notificationStatus.state === 'done' && notificationStatus.restoredUnconfirmed)
+          ) {
             continue
           }
           const currentClientStateStartedAt = clientOwnedNotification
@@ -191,6 +196,7 @@ export function applyWebSessionTabsStorePatch(
         toRuntimeExecutionHostId(environmentId),
         publishedStructuredSessions([source])
       )
+      reportVisibleTabPickToHost(environmentId, source)
     }
   }
   const settleHostMirror = createHostSessionMirrorSettle(hostMirrorVerdict)

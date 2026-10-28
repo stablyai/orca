@@ -21,10 +21,7 @@ export function browserHistoryRowKey(row: BrowserAddressBarSuggestion): string {
     : `url:${row.normalizedUrl ?? row.url}`
 }
 
-/**
- * Pages and documents as one list, newest first. Like Chrome's history search, every word must
- * appear in the title or the address, in any order.
- */
+/** Combine page/document visits newest first; require every query word in title or address in any order. */
 export function listBrowserHistoryRows(
   browserUrlHistory: readonly BrowserHistoryEntry[],
   workspaceDocHistory: readonly WorkspaceDocHistoryEntry[],

@@ -9,7 +9,11 @@ import { rm } from '../asar-transparent-fs'
 import { compareDottedVersions } from '../orcad/native-host-abi'
 import { DaemonClient } from './client'
 import { DaemonEndpointOwnershipError, holdDaemonAdoptionLease } from './daemon-endpoint-adoption'
-import { buildDaemonScriptArgs, type DaemonChildSpawnOptions } from './daemon-launched-child-spawn'
+import {
+  buildDaemonScriptArgs,
+  DAEMON_V8_FLAGS,
+  type DaemonChildSpawnOptions
+} from './daemon-launched-child-spawn'
 import { macDaemonJobLabel } from './macos-daemon-job-label'
 import type { DaemonProcessHandle } from './daemon-spawner'
 import { DAEMON_SHUTDOWN_TIMEOUT_MS } from './daemon-shutdown-deadline'
@@ -65,6 +69,7 @@ function buildMacDaemonLaunchJob(
     Label: label,
     ProgramArguments: [
       bundle.execPath,
+      ...DAEMON_V8_FLAGS,
       bundle.entryPath,
       ...buildDaemonScriptArgs(options, bundle.execPath)
     ],
@@ -76,6 +81,8 @@ function buildMacDaemonLaunchJob(
     // Associate plist-launched jobs with Orca for Local Network access.
     AssociatedBundleIdentifiers: [LOCAL_BUILD_COMPATIBILITY_CONTRACT.appId],
     ProcessType: 'Interactive',
+    // launchd disables cloud-file downloads for jobs unless asked; shells need them like Terminal.app.
+    MaterializeDatalessFiles: true,
     StandardOutPath: '/dev/null',
     StandardErrorPath: '/dev/null'
   }

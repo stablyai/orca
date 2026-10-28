@@ -37,9 +37,8 @@ const requested = (promptId = PROMPT_ID): string =>
 const settled = (promptId = PROMPT_ID): string =>
   logLine({ kind: 'user_input_prompt_settled', prompt_id: promptId, outcome: 'answered' })
 
-function localShard(sessionId: string): string[] {
-  const hex = sessionId.replace(/-/g, '').slice(0, 12)
-  const date = new Date(Number.parseInt(hex, 16))
+function sessionShard(): string[] {
+  const date = new Date('2026-09-22T19:41:18.839Z')
   return [
     String(date.getFullYear()),
     String(date.getMonth() + 1).padStart(2, '0'),
@@ -53,7 +52,7 @@ describe('muse session log', () => {
 
   beforeEach(() => {
     sessionsDir = mkdtempSync(join(tmpdir(), 'muse-session-log-'))
-    const dir = join(sessionsDir, ...localShard(SESSION_ID), SESSION_ID)
+    const dir = join(sessionsDir, ...sessionShard(), SESSION_ID)
     mkdirSync(dir, { recursive: true })
     logPath = join(dir, 'session.jsonl')
   })
@@ -69,9 +68,11 @@ describe('muse session log', () => {
 
   it('returns undefined for a missing log or a non-v7 session id', () => {
     expect(findMuseSessionLogPath(SESSION_ID, sessionsDir)).toBeUndefined()
-    expect(
-      findMuseSessionLogPath('1471f5e6-bd60-41a2-bfcf-c9086dbd4092', sessionsDir)
-    ).toBeUndefined()
+    const nonV7 = '01a0caa3-0e77-4d41-bad7-46283a45633d'
+    const dir = join(sessionsDir, ...sessionShard(), nonV7)
+    mkdirSync(dir, { recursive: true })
+    writeFileSync(join(dir, 'session.jsonl'), '')
+    expect(findMuseSessionLogPath(nonV7, sessionsDir)).toBeUndefined()
   })
 
   it('reads prompts batched inside a retained_frame', () => {

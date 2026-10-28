@@ -1,5 +1,6 @@
 import { defineMethod } from '../../../core'
 import { OrchestrationError } from '../../../../orchestration/orchestration-error'
+import { readRunRemovedWork } from '../../../../orchestration/db/reset/removed-orchestration-work-read'
 import { assertCallerHandleMatchesEvidence, resolveOrchestrationCaller } from './run-scope'
 import { exposeRun } from './run-receipt'
 import type { OrcaRuntimeService } from '../../../../orca-runtime'
@@ -141,11 +142,13 @@ export const ORCHESTRATION_RUN_METHODS = [
     permission: 'workspace',
     params: RunShowParams,
     handler: (params, { runtime }) => {
-      const run = runtime.getOrchestrationDb().getRun(params.id)
+      const db = runtime.getOrchestrationDb()
+      const run = db.getRun(params.id)
       if (!run) {
         throw new OrchestrationError('run_not_found', `Run ${params.id} was not found.`)
       }
-      return { run: exposeRun(run) }
+      const removedWork = readRunRemovedWork(db.db, run.id, params)
+      return removedWork ? { run: exposeRun(run), removedWork } : { run: exposeRun(run) }
     }
   })
 ]

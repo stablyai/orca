@@ -17,10 +17,10 @@ type ChildBearer = Pick<StructuredAgentSessionHostSession, 'child' | 'lastEndedC
 
 /** Conversation writes use the record fence; provider writes retain the child’s acquisition fence. */
 export function structuredAgentSessionConversationFence(
-  store: Pick<AgentSessionRecordStore, 'getRecord'>,
+  store: Pick<AgentSessionRecordStore, 'getConversation'>,
   sessionId: string
 ): number {
-  return store.getRecord(sessionId)?.lease.runtimeFence ?? 0
+  return store.getConversation(sessionId)?.currentFence ?? 0
 }
 
 /** Index only successful attaches; failures have no child to remove. */

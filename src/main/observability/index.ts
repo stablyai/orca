@@ -1,32 +1,6 @@
-// Composition root for the error-tracking lane (telemetry-error-tracking.md
-// §Architecture). Wires the local NDJSON sink into the active tracer, and
-// exposes a single init/shutdown pair the main process calls from
-// `src/main/index.ts`.
-//
-// Architectural rule (load-bearing): nothing in `src/main/telemetry/`
-// imports from this directory and vice versa — the two lanes never share a
-// code path. Cross-contamination is the failure mode this entire lane is
-// counter-designed against. An import-restricted-paths lint rule will
-// enforce this; even before the rule lands, the rule is a code-review
-// invariant.
-//
-// Consent boundaries (telemetry-error-tracking.md §Consent boundaries):
-//
-//   DO_NOT_TRACK=1            → disable bundle button. KEEP local file.
-//                                Local file writes never leave the machine,
-//                                so they are not "tracking" in the DNT sense.
-//   ORCA_TELEMETRY_DISABLED=1 → identical to DO_NOT_TRACK for this lane.
-//   ORCA_DIAGNOSTICS_DISABLED=1 → ALSO disable local file writes. The escape
-//                                hatch for users on devices where even local
-//                                debug logs are policy-forbidden.
-//   CI detection              → disable everything in this lane.
-//
-// The CI gate matches the same env-var list the product-telemetry consent
-// resolver uses (CI / GITHUB_ACTIONS / GITLAB_CI / CIRCLECI / TRAVIS /
-// BUILDKITE / JENKINS_URL / TEAMCITY_VERSION). Duplicating the list — rather
-// than importing it from `src/main/telemetry/consent.ts` — preserves the
-// import isolation rule above. The cost of one duplicated array vs.
-// punching a hole in the architecture is trivially worth it.
+// Keep diagnostics isolated from product telemetry, including duplicated CI detection.
+// DNT/ORCA_TELEMETRY_DISABLED disable uploads but retain local logs;
+// ORCA_DIAGNOSTICS_DISABLED and CI disable both.
 
 import {
   createLocalFileSink,
@@ -63,11 +37,8 @@ const CI_ENV_VARS = [
 ] as const
 
 export type ObservabilityConsent = {
-  /** Whether the local NDJSON sink is active. */
   readonly localFileEnabled: boolean
-  /** Whether the diagnostic-bundle button should be available. */
   readonly bundleEnabled: boolean
-  /** Reason any of the lanes are disabled, for debug surfaces. */
   readonly disabledReason?:
     | 'do_not_track'
     | 'orca_telemetry_disabled'
@@ -88,11 +59,7 @@ function inCI(): boolean {
   return CI_ENV_VARS.some((v) => process.env[v] !== undefined && process.env[v] !== '')
 }
 
-/** Resolve the per-launch consent state for this lane. Pure — reads only
- *  process.env, so callers can re-evaluate any time without holding state. */
 export function resolveObservabilityConsent(): ObservabilityConsent {
-  // CI and DNT/disabled have different effects on which sub-lanes are gated.
-  // Keep the ordering aligned with §Consent boundaries above.
   const dnt = envOn('DO_NOT_TRACK')
   const orcaDisabled = envOn('ORCA_TELEMETRY_DISABLED')
   const diagnosticsDisabled = envOn('ORCA_DIAGNOSTICS_DISABLED')
@@ -113,8 +80,7 @@ export function resolveObservabilityConsent(): ObservabilityConsent {
     }
   }
   if (dnt || orcaDisabled) {
-    // Local file remains active — DNT is a *network* signal, and the local
-    // file never leaves the machine.
+    // DNT gates network traffic; local files remain on this machine.
     return {
       localFileEnabled: true,
       bundleEnabled: false,
@@ -128,35 +94,27 @@ export function resolveObservabilityConsent(): ObservabilityConsent {
   }
 }
 
-// Re-exported so existing importers of the trace path keep working; the
-// resolution now lives in one place alongside the daemon log path.
 export { getTraceFilePath } from './logs-directory'
-
-// ── Module-level state ───────────────────────────────────────────────────
 
 let sink: LocalFileSink | null = null
 let consent: ObservabilityConsent | null = null
 
-/** Create the local file sink, install it as the active tracer sink, and
- *  update module-level `sink`. */
 function installLocalSink(filePath: string): void {
   try {
     const localSink = createLocalFileSink({ filePath })
     sink = localSink
     setActiveSink(localSink)
   } catch (error) {
-    // Diagnostics are optional: a logs folder that cannot be opened must not stop the app or host.
+    // Optional diagnostics must not prevent app or host startup.
     console.warn(`[observability] tracing is off: cannot open ${filePath}`, error)
   }
 }
 
-/** `traceFilePath` names another process's own file; the desktop's is the bundle's default. */
+/** Override for another process’s trace; desktop traces remain the bundle default. */
 export function initObservability(options?: { traceFilePath?: string }): ObservabilityConsent {
   const c = resolveObservabilityConsent()
   consent = c
   if (!c.localFileEnabled) {
-    // Disabled at the CI / ORCA_DIAGNOSTICS_DISABLED level — leave the
-    // tracer's active sink unset, so all spans are no-ops.
     return c
   }
   installLocalSink(options?.traceFilePath ?? getTraceFilePath())
@@ -164,16 +122,8 @@ export function initObservability(options?: { traceFilePath?: string }): Observa
   return c
 }
 
-/**
- * Why route it here: Windows path hardening lives in `src/shared` and defaults to `console.warn`,
- * which reaches nothing in a packaged build — the main process is GUI-subsystem and owns no
- * console. A credential file left on inherited ACLs is exactly what a diagnostic bundle should
- * show, so it becomes a span in the trace sink.
- *
- * `recovered` ends successfully rather than failing: a host that climbs back out of the
- * rate-limited state has to be as visible as one that fell into it, or the degraded state is only
- * ever half-diagnosable.
- */
+// Windows GUI builds have no console, so trace ACL hardening failures here.
+// Record recovery too, so diagnostics show both entering and leaving degraded state.
 function installSecurePathHardeningReporter(): void {
   setSecurePathHardeningReporter((entry) => {
     const span = startSpan('secure-path.windows-acl', {
@@ -189,7 +139,7 @@ function installSecurePathHardeningReporter(): void {
   })
 }
 
-/** Writes buffered lines now, for an exit that runs no shutdown. */
+/** Flush for exits that bypass shutdown. */
 export function flushObservability(): void {
   try {
     sink?.flush()
@@ -200,8 +150,7 @@ export function flushObservability(): void {
 
 export async function shutdownObservability(): Promise<void> {
   setSecurePathHardeningReporter(null)
-  // Order matters: tracer first so no new pushes arrive while the local sink
-  // is closing and flushing buffered lines.
+  // Stop new tracer writes before closing and flushing the sink.
   setActiveSink(null)
   if (sink) {
     sink.close()
@@ -209,8 +158,6 @@ export async function shutdownObservability(): Promise<void> {
   }
   consent = null
 }
-
-// ── Bundle / trace-folder operations exposed to IPC ─────────────────────
 
 export type DiagnosticsStatus = {
   readonly localFileEnabled: boolean
@@ -233,38 +180,27 @@ export function getDiagnosticsStatus(): DiagnosticsStatus {
   }
 }
 
-/** Collect a bundle from the live trace folder. The `appVersion` /
- *  `platform` / `arch` / `osRelease` / `orcaChannel` inputs come from main
- *  and are baked into the bundle header. NEVER pass `install_id` here —
- *  the bundle's identity is the per-bundle submission ID, not the
- *  PostHog-lane install_id (Issue 8 in the security review). */
+/** Never include install_id: bundles use independent submission IDs. */
 export function collectDiagnosticBundle(
   meta: Pick<
     CollectBundleOptions,
     'appVersion' | 'platform' | 'arch' | 'osRelease' | 'orcaChannel' | 'lookbackMinutes'
   >
 ): CollectedBundle {
-  // Flush the active sink first so the very latest spans are present in the
-  // file when we read it back. Without this, the user's most-recent action
-  // before clicking Share might miss the bundle by a few hundred ms — which
-  // is exactly the case "the thing I just did" they want diagnosed.
+  // Flush before collection so the bundle includes the user’s latest action.
   if (sink) {
     sink.flush()
   }
   return _collectBundle({
     traceFilePath: getTraceFilePath(),
     maxFiles: DEFAULT_MAX_FILES,
-    // Why: the detached daemon writes its lifecycle log to a separate file, so
-    // the bundle collector must be pointed at it explicitly — it does not glob
-    // the logs directory.
+    // The daemon writes a separate file; collection does not glob the directory.
     daemonLogFilePath: getDaemonLogFilePath(),
     daemonLogMaxFiles: DAEMON_LOG_MAX_FILES,
     ...meta
   })
 }
 
-/** Upload a collected bundle payload. Returns the ticket ID on success;
- *  throws on any of the failure modes documented in `bundle.ts`. */
 export async function uploadDiagnosticBundle(
   opts: UploadBundleOptions
 ): Promise<UploadBundleResult> {

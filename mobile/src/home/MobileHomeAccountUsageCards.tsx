@@ -1,4 +1,4 @@
-import { Pressable, StyleSheet, Text, View } from 'react-native'
+import { Pressable, Text, View } from 'react-native'
 import { ClaudeIcon, OpenAIIcon } from '../components/AgentIcons'
 import {
   getActiveProviderRateLimits,
@@ -9,12 +9,15 @@ import {
   type ProviderKey
 } from '../components/AccountUsage'
 import { colors, radii, spacing } from '../theme/mobile-theme'
+import { themedStyleSheet } from '../theme/themed-styles'
+import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import type { HostProfile } from '../transport/types'
 
 export function MobileHomeAccountUsageCards(props: {
   items: { host: HostProfile; snapshot: AccountsSnapshot }[]
   onOpen: (hostId: string) => void
 }) {
+  useMobileColorScheme()
   if (props.items.length === 0) {
     return null
   }
@@ -89,7 +92,7 @@ export function MobileHomeAccountUsageCards(props: {
   )
 }
 
-const styles = StyleSheet.create({
+const styles = themedStyleSheet(() => ({
   sectionHeading: {
     fontSize: 11,
     fontWeight: '600',
@@ -130,4 +133,4 @@ const styles = StyleSheet.create({
   info: { flex: 1, minWidth: 0, gap: 2 },
   email: { fontSize: 13, fontWeight: '600', color: colors.textPrimary },
   bars: { flexDirection: 'row', gap: spacing.md, marginTop: 4 }
-})
+}))

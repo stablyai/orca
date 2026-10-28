@@ -13,8 +13,7 @@ export async function runStarNagDirectStarAttempt(session: StarNagPromptSession)
     return false
   }
   trackStarNagSessionOutcome(session, 'direct_star_succeeded', { mode: 'gh' })
-  // Why: app_starred_orca remains the canonical cross-surface success event;
-  // star_nag_outcome is only the nag-funnel companion.
+  // Keep app_starred_orca as cross-surface success; star_nag_outcome only accompanies the prompt funnel.
   track('app_starred_orca', {
     source: getStarNagAppStarSource(session.source),
     ...getCohortAtEmit()

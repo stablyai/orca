@@ -7,15 +7,13 @@ import {
 } from '@/hooks/useInstalledAgentSkills'
 import { useActiveProjectSkillRuntime } from '@/hooks/useActiveProjectSkillRuntime'
 
-// Shared install/update wiring for Task Sources + Linear settings.
 export function useLinearAgentSkillSetup(): {
   // Legacy-only installs update the legacy name.
   updateSkillName: string
   freshnessSkillName: string | undefined
   skillInstalled: boolean
   skillLoading: boolean
-  // Status surfaces (step badges, checklist pills) read this so a focus-triggered
-  // rescan does not flip a known result back to "checking".
+  // Keep known status through focus rescans instead of flashing Checking.
   skillChecking: boolean
   /** The scan could not vouch for "not installed", so no surface may claim it. */
   skillUnverifiable: boolean

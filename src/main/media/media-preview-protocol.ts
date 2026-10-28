@@ -20,7 +20,7 @@ export const MEDIA_PREVIEW_CUSTOM_SCHEME: Electron.CustomScheme = {
 }
 
 export function readMediaPreview(
-  event: { sender: Pick<WebContents, 'id' | 'once' | 'removeListener'> },
+  event: { sender: Pick<WebContents, 'id' | 'on' | 'removeListener'> },
   target: MediaTarget,
   store: Store
 ): { content: string; isBinary: boolean; mimeType: string; mediaUrl: string } | null {

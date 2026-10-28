@@ -26,8 +26,7 @@ function isUrlValuedRemote(remote: string): boolean {
   return /^[A-Za-z][A-Za-z0-9+.-]*:\/\//.test(remote) || /^[^@/:]+@[^:]+:.+/.test(remote)
 }
 
-// `hasConfiguredBranchPushTarget` resolves up to two URL-valued remotes, so the old
-// per-remote `get-url` scan cost up to 2 x (1 + remotes) subprocesses per call.
+// Two URL-valued remotes formerly cost up to 2 × (1 + remotes) subprocesses.
 async function findRemoteNameForUrl(
   runGit: GitCommandRunner,
   remoteUrl: string
@@ -101,8 +100,7 @@ export async function hasConfiguredBranchPushTarget(
   if (gitRefTargetsBranchOnRemote(baseRef, pushRemoteName, branchName)) {
     return false
   }
-  // Why: branch.merge belongs to branch.remote. Do not combine a user's
-  // pushDefault fork with an origin/main merge target and call it pushable.
+  // branch.merge belongs to branch.remote; pushDefault forks cannot borrow origin/main to become pushable.
   if (
     branchName !== currentBranchName &&
     (pushRemoteName === 'origin' || branchRemoteName !== pushRemoteName)

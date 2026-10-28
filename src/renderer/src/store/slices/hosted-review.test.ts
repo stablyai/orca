@@ -6,6 +6,7 @@ import { refreshHostedReviewCard } from './hosted-review-card-refresh'
 import { getHostedReviewCacheKey } from './hosted-review-cache-identity'
 import { HostedReviewCreationEligibilityTimeoutError } from './hosted-review-cache-state'
 import type { HostedReviewInfo } from '../../../../shared/hosted-review'
+import { getDefaultSettings } from '../../../../shared/constants'
 
 const runtimeRpc = vi.hoisted(() => ({
   callRuntimeRpc: vi.fn()
@@ -541,9 +542,10 @@ describe('hosted review slice', () => {
 
   it('creates a review for an unstamped local repo on this computer, not the focused server', async () => {
     mockApi.hostedReview.create.mockResolvedValueOnce({ ok: true, number: 1, url: 'u' })
-    const focused = { activeRuntimeEnvironmentId: 'env-win' }
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the slice reads only the focus field of settings.
-    const store = makeStore(focused as AppState['settings'])
+    const store = makeStore({
+      ...getDefaultSettings('/tmp'),
+      activeRuntimeEnvironmentId: 'env-win'
+    })
 
     await store.getState().createHostedReview('/repo', {
       provider: 'github',
@@ -702,8 +704,7 @@ describe('hosted review slice', () => {
       })
     ).resolves.toEqual(mergedAtHead)
 
-    // Worktree advanced off the merged head: the branch-scoped cache is fresh,
-    // but the merged review is no longer valid for the new head, so refetch.
+    // Fresh branch cache can hold a merged review invalid for advanced worktree HEAD; refetch.
     await expect(
       store.getState().fetchHostedReviewForBranch('/repo', 'feature/merged', {
         currentHeadOid: 'bbbbbbb'
@@ -805,9 +806,7 @@ describe('hosted review slice', () => {
       })
     ).resolves.toEqual(mergedBehindHead)
 
-    // Why one call: a merged review confirmed for this worktree head is not
-    // stale, so the second read must reuse the branch-scoped cache instead of
-    // refetching every poll.
+    // Confirmed-contained merged review remains valid; reuse branch cache instead of polling provider every read.
     await expect(
       store.getState().fetchHostedReviewForBranch('/repo', 'feature/merged', {
         currentHeadOid: 'bbbbbbb'
@@ -850,8 +849,7 @@ describe('hosted review slice', () => {
     mockApi.hostedReview.forBranch.mockRejectedValueOnce(new Error('transient gh failure'))
 
     try {
-      // Head advanced to bbbbbbb; a failed lookup must not preserve the stale
-      // merged review for the old head.
+      // Failure after head advance must not preserve the prior merged review.
       await expect(
         store.getState().fetchHostedReviewForBranch('/repo', 'feature/merged', {
           force: true,

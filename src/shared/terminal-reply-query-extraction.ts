@@ -1,9 +1,4 @@
-// Terminal-output scanning for reply-eliciting query sequences (DSR/CPR,
-// DA1/DA2, DECRQM, XTGETTCAP-adjacent CSI queries, OSC 10/11 color probes).
-// Shared because both sides must salvage queries out of bytes they are about
-// to drop: the renderer's hidden-output restore queue and main's pending-cap
-// bulk drop. A swallowed query means the program that sent it waits forever
-// for a reply (the bench DSR timeout).
+// Salvage reply-eliciting queries before renderer restore/main bulk-drop paths discard bytes; otherwise querying programs can wait forever.
 import { parseTerminalOscColorQuery } from './terminal-osc-color-reply'
 
 export const HIDDEN_STARTUP_RENDERER_QUERY_PENDING_CHARS = 64
@@ -133,11 +128,15 @@ export function containsStatefulRendererQuery(data: string): boolean {
   return false
 }
 
+// Why: ESC/CAN/SUB abort a CSI (as in xterm), so a carried partial can't eat the next sequence's introducer.
 export function findCsiFinalByteIndex(data: string, offset: number): number {
   for (let index = offset; index < data.length; index++) {
     const code = data.charCodeAt(index)
     if (code >= 0x40 && code <= 0x7e) {
       return index
+    }
+    if (code === 0x1b || code === 0x18 || code === 0x1a) {
+      return index - 1
     }
   }
   return -1

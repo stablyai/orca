@@ -9,7 +9,6 @@ import {
 
 const NO_ROWS: AiVaultPanelWorkspaceRows = { worktree: null, repo: null }
 
-/** The panel's workspace: the one it was opened for, else the active one. */
 export function useAiVaultPanelWorkspace(
   workspace: AiVaultPanelWorkspace | undefined
 ): AiVaultPanelWorkspaceRows & { workspaceId: string | null } {

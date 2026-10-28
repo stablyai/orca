@@ -1,8 +1,12 @@
 import { Terminal } from '@xterm/headless'
 import { describe, expect, it } from 'vitest'
-import { detectTerminalComposerDraft } from '../../shared/terminal-composer-draft'
+import {
+  detectTerminalComposerDraft,
+  hasTerminalComposerPlaceholder
+} from '../../shared/terminal-composer-draft'
 import { HeadlessEmulator } from './headless-emulator'
 import { readTerminalCursorLineContext } from '../../shared/terminal-cursor-line-context'
+import { readRuntimeFixture } from '../runtime/agent-transcript-replay-test-harness'
 
 function writeSync(terminal: Terminal, data: string): void {
   const core = (terminal as unknown as { _core: { writeSync(data: string): void } })._core
@@ -144,6 +148,28 @@ describe('readTerminalCursorLineContext', () => {
 
     expect(detectTerminalComposerDraft(context)?.text).toBe('review the change')
     terminal.dispose()
+  })
+
+  it("reads Codex 0.137's rotating dim placeholder as an empty composer", async () => {
+    const emulator = new HeadlessEmulator({ cols: 80, rows: 24 })
+    await emulator.write(readRuntimeFixture('codex-0-137-0-rotating-placeholder'))
+
+    const context = emulator.getCursorLineContext()
+
+    expect(context?.rawAfterCursor).toContain('Explain this codebase')
+    expect(detectTerminalComposerDraft(context)).toBeNull()
+    emulator.dispose()
+  })
+
+  it("masks Codex 0.157's placeholder when shortcut help sits under the status row", async () => {
+    const emulator = new HeadlessEmulator({ cols: 120, rows: 40 })
+    await emulator.write(readRuntimeFixture('codex-0157-plain-ready'))
+
+    const context = emulator.getCursorLineContext()
+
+    expect(context?.rowsBelow.at(-1)).toContain('? for shortcuts')
+    expect(hasTerminalComposerPlaceholder(context)).toBe(true)
+    emulator.dispose()
   })
 
   it('finds a composer prompt more than 16 wrapped rows above the cursor', async () => {

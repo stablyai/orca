@@ -1,7 +1,10 @@
 import { createElement } from 'react'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import type { AgentSessionQueuedMessage } from '../../../src/shared/agent-session-wire'
+import type {
+  AgentSessionQueuedMessage,
+  AgentSessionQueuedMessageEditHoldResult
+} from '../../../src/shared/agent-session-wire'
 import { agentSessionSendBodyFingerprint } from '../../../src/shared/structured-agent-session-send-mutation'
 import { queuedMessageWithEdit } from '../../../src/shared/queued-message-edit'
 import type { RpcClient } from '../transport/rpc-client'
@@ -25,6 +28,20 @@ function withText(body: AgentSessionQueuedMessage['body'], text: string) {
     throw new Error(edited.reason)
   }
   return edited.body
+}
+
+function editHoldReply(params: unknown): RpcResponse {
+  const result: AgentSessionQueuedMessageEditHoldResult =
+    fieldsOf(params).action === 'release'
+      ? { status: 'released' }
+      : { status: 'held', fingerprint: 'fp', leaseDurationMs: 120_000, remainingMs: 120_000 }
+  return ok(result)
+}
+
+function readOrHoldReply(method: string, params: unknown): RpcResponse {
+  return method === 'agentSession.queuedMessageEditHold'
+    ? editHoldReply(params)
+    : ok({ models: [], current: {} })
 }
 
 vi.mock('@react-native-async-storage/async-storage', () => ({
@@ -89,12 +106,10 @@ describe('mobile in-place queued Edit', () => {
   }
   async function mount(message: AgentSessionQueuedMessage, editSupport: boolean | null = true) {
     vi.clearAllMocks()
-    sendRequest.mockImplementation(async (method) =>
-      method === 'agentSession.queuedMessageEditHold'
-        ? ok({ status: 'held', fingerprint: 'fp', leaseDurationMs: 120_000, remainingMs: 120_000 })
-        : method === 'agentSession.queuedMessageUpdate'
-          ? mutationOk({ status: 'updated', messageId: message.messageId, fingerprint: 'new' })
-          : ok({ models: [], current: {} })
+    sendRequest.mockImplementation(async (method, params) =>
+      method === 'agentSession.queuedMessageUpdate'
+        ? mutationOk({ status: 'updated', messageId: message.messageId, fingerprint: 'new' })
+        : readOrHoldReply(method, params)
     )
     await act(async () => {
       renderer = create(createElement(Harness, { editSupport }))
@@ -125,7 +140,7 @@ describe('mobile in-place queued Edit', () => {
     expect(hook!.queued.edit).toEqual(expect.any(Function))
   })
 
-  it('holds and renews a card while typing, saves its text without replacing images, and cancels in place', async () => {
+  it('holds and renews a card while typing, sends only its edited text, and cancels in place', async () => {
     const message = queuedDraft({
       messageId: 'image-card',
       position: 7,
@@ -169,7 +184,6 @@ describe('mobile in-place queued Edit', () => {
     const body = withText(message.body, 'edited')
     act(() => listener?.(batchEvent([{ ...message, body }])))
     expect(hook!.queued.cards).toMatchObject([{ messageId: 'image-card', text: 'edited' }])
-    expect(body.blocks).toContainEqual({ type: 'image-ref', path: '/images/snapshot.png' })
     expect(hook!.queued.editor).toBeUndefined()
     expect(fieldsOf(holdCalls().at(-1)?.[1])).toMatchObject({
       action: 'release',
@@ -187,13 +201,13 @@ describe('mobile in-place queued Edit', () => {
     expect(append).not.toHaveBeenCalled()
   })
 
-  it('hands a stale Save to the composer and reopens on the newer text; keeps an unconfirmed one', async () => {
+  it('hands a stale Save to the composer and reopens on the newer text; closes an unconfirmed one the card holds', async () => {
     const message = queuedDraft({ messageId: 'draft-1' })
     await mount(message)
     const newer = withText(message.body, 'edited elsewhere')
-    sendRequest.mockImplementation(async (method) => {
+    sendRequest.mockImplementation(async (method, params) => {
       if (method !== 'agentSession.queuedMessageUpdate') {
-        return ok({ status: 'held' })
+        return readOrHoldReply(method, params)
       }
       listener?.(batchEvent([{ ...message, body: newer }]))
       return mutationOk({ status: 'changed', messageId: 'draft-1' })
@@ -209,17 +223,17 @@ describe('mobile in-place queued Edit', () => {
     expect(hook!.queued.editor).toMatchObject({ messageId: 'draft-1', text: 'edited elsewhere' })
     act(() => hook!.queued.editor!.change('saved text'))
     const body = withText(message.body, 'saved text')
-    sendRequest.mockImplementation(async (method) => {
+    sendRequest.mockImplementation(async (method, params) => {
       if (method === 'agentSession.queuedMessageUpdate') {
         listener?.(batchEvent([{ ...message, body }]))
         throw markRpcDeliveryUnknown(new Error('reply lost'))
       }
-      return ok({ status: 'held' })
+      return readOrHoldReply(method, params)
     })
     await act(async () => {
       await hook!.queued.editor!.save()
     })
-    expect(hook!.queued.editor?.text).toBe('saved text')
+    expect(hook!.queued.editor).toBeUndefined()
     expect(hook!.queued.cards[0]?.text).toBe('saved text')
     const retry = sendRequest.mock.calls.findLast(
       ([method]) => method === 'agentSession.queuedMessageUpdate'
@@ -231,11 +245,11 @@ describe('mobile in-place queued Edit', () => {
     expect(append).toHaveBeenCalledTimes(1)
   })
 
-  it('abandons unsaved typing and releases the hold when changing chats', async () => {
+  it('hands unsaved typing to the composer and releases the hold when changing chats', async () => {
     await mount(queuedDraft({ messageId: 'draft-1' }))
     act(() => hook!.queued.editor!.change('unsaved'))
     await act(async () => renderer?.update(createElement(Harness, { sessionId: 'other-chat' })))
-    expect(append).not.toHaveBeenCalled()
+    expect(append).toHaveBeenCalledExactlyOnceWith('unsaved')
     expect(hook!.queued.editor).toBeUndefined()
     expect(
       sendRequest.mock.calls
@@ -250,12 +264,12 @@ describe('mobile in-place queued Edit', () => {
       const message = queuedDraft({ messageId: 'deferred-card' })
       await mount(message)
       let answer: ((response: RpcResponse) => void) | undefined
-      sendRequest.mockImplementation((method) =>
+      sendRequest.mockImplementation((method, params) =>
         method === 'agentSession.queuedMessageUpdate'
           ? new Promise<RpcResponse>((resolve) => {
               answer = resolve
             })
-          : Promise.resolve(ok({ status: 'held' }))
+          : Promise.resolve(readOrHoldReply(method, params))
       )
       act(() => hook!.queued.editor!.change('edited in place'))
       let save: Promise<boolean> | undefined
@@ -264,47 +278,38 @@ describe('mobile in-place queued Edit', () => {
       })
       expect(hook!.queued.editor!.saving).toBe(true)
       await act(async () => renderer?.update(createElement(Harness, { sessionId: 'other-chat' })))
-      expect(append).not.toHaveBeenCalled()
+      expect(append).toHaveBeenCalledExactlyOnceWith('edited in place')
       await act(async () => {
         answer?.(mutationOk({ status, messageId: message.messageId, fingerprint: 'new' }))
         await save
       })
-      expect(append).not.toHaveBeenCalled()
+      expect(append).toHaveBeenCalledTimes(1)
       expect(error).not.toHaveBeenCalled()
       expect(resolved).not.toHaveBeenCalled()
       expect(hook!.queued.editor).toBeUndefined()
     }
   )
 
-  it('retires a removed card during Save and ignores its late refusal while editing another card', async () => {
+  it('lets an in-flight Save decide a removed card: its refusal hands the typing to the composer', async () => {
     const message = queuedDraft({ messageId: 'lost-reply-card' })
     const nextMessage = queuedDraft({ messageId: 'next-card', position: 2 })
     await mount(message)
     act(() => listener?.(batchEvent([message, nextMessage])))
-    expect(hook!.queued.cards.map((card) => card.messageId)).toEqual([
-      message.messageId,
-      nextMessage.messageId
-    ])
     let answer: ((response: RpcResponse) => void) | undefined
-    sendRequest.mockImplementation((method) =>
+    sendRequest.mockImplementation((method, params) =>
       method === 'agentSession.queuedMessageUpdate'
         ? new Promise<RpcResponse>((resolve) => {
             answer = resolve
           })
-        : Promise.resolve(ok({ status: 'held' }))
+        : Promise.resolve(readOrHoldReply(method, params))
     )
     act(() => hook!.queued.editor!.change('submitted edit'))
     let save: Promise<boolean> | undefined
     act(() => {
       save = hook!.queued.editor!.save()
     })
-    expect(hook!.queued.editor?.saving).toBe(true)
     act(() => listener?.(batchEvent([nextMessage])))
-    expect(hook!.queued.editor).toBeUndefined()
-    await act(async () => {
-      expect(await hook!.queued.edit!(nextMessage.messageId)).toBe(true)
-    })
-    act(() => hook!.queued.editor!.change('next edit'))
+    expect(hook!.queued.editor).toMatchObject({ messageId: message.messageId, saving: true })
     await act(async () => {
       answer?.(
         ok({
@@ -314,26 +319,24 @@ describe('mobile in-place queued Edit', () => {
       )
       expect(await save).toBe(false)
     })
-    expect(hook!.queued.editor).toMatchObject({
-      messageId: nextMessage.messageId,
-      text: 'next edit',
-      saving: false
-    })
-    expect(append).not.toHaveBeenCalled()
-    expect(error).not.toHaveBeenCalled()
+    expect(hook!.queued.editor).toBeUndefined()
+    expect(append).toHaveBeenCalledExactlyOnceWith('submitted edit')
+    expect(error).toHaveBeenCalledExactlyOnceWith(
+      'This message was already sent or removed. Your edit is in the chat box.'
+    )
     expect(resolved).not.toHaveBeenCalled()
   })
 
-  it('keeps a refused Save in the editor and closes only when the published card is gone', async () => {
+  it('keeps a refused Save in the editor and hands it to the composer once the card is gone', async () => {
     const message = queuedDraft({ messageId: 'refused-card' })
     await mount(message)
-    sendRequest.mockImplementation(async (method) =>
+    sendRequest.mockImplementation(async (method, params) =>
       method === 'agentSession.queuedMessageUpdate'
         ? ok({
             ok: false,
             refusal: { code: 'agent_session_operation_invalid', message: 'Could not edit.' }
           })
-        : ok({ status: 'held' })
+        : readOrHoldReply(method, params)
     )
     act(() => hook!.queued.editor!.change('keep this text'))
     await act(async () => {
@@ -345,6 +348,10 @@ describe('mobile in-place queued Edit', () => {
     expect(append).not.toHaveBeenCalled()
     act(() => listener?.(batchEvent([])))
     expect(hook!.queued.editor).toBeUndefined()
+    expect(append).toHaveBeenCalledExactlyOnceWith('keep this text')
+    expect(error).toHaveBeenLastCalledWith(
+      'This message was already sent or removed. Your edit is in the chat box.'
+    )
   })
 
   it('keeps exact typing through disconnect and reacquires the hold on the replacement transport', async () => {
@@ -361,7 +368,9 @@ describe('mobile in-place queued Edit', () => {
     expect(hook!.queued.editor?.text).toBe(text)
     const reconnectedRequest = vi.fn<RpcClient['sendRequest']>(async (method, params) =>
       method === 'agentSession.queuedMessageEditHold'
-        ? ok({ status: fieldsOf(params).action === 'renew' ? 'expired' : 'held' })
+        ? fieldsOf(params).action === 'renew'
+          ? ok({ status: 'expired' })
+          : editHoldReply(params)
         : ok({ models: [], current: {} })
     )
     await act(async () =>
@@ -404,7 +413,7 @@ describe('mobile in-place queued Edit', () => {
             answerHold = resolve
           })
         : method === 'agentSession.queuedMessageEditHold'
-          ? Promise.resolve(ok({ status: 'held' }))
+          ? Promise.resolve(readOrHoldReply(method, params))
           : Promise.resolve(
               mutationOk({ status: 'updated', messageId: message.messageId, fingerprint: 'new' })
             )
@@ -418,7 +427,7 @@ describe('mobile in-place queued Edit', () => {
     })
     expect(hook!.queued.editor).toBeUndefined()
     expect(answerHold).toBeDefined()
-    await act(async () => answerHold?.(ok({ status: 'held' })))
+    await act(async () => answerHold?.(editHoldReply({ action: 'acquire' })))
     expect(append).not.toHaveBeenCalled()
   })
 })

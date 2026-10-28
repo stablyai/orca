@@ -17,6 +17,7 @@ import {
   computeWorktreePath,
   computeWorktreePathAsync,
   computeWorkspaceRootAsync,
+  computeWorkspaceRootWithin,
   getWorktreePathSettings
 } from './worktree-logic'
 import {
@@ -51,6 +52,42 @@ describe('computeWorktreePath WSL layout', () => {
     }
     expect(getWslHomeAsyncMock).toHaveBeenCalledExactlyOnceWith('Ubuntu')
     expect(getWslHomeMock).not.toHaveBeenCalled()
+  })
+
+  it('stops waiting for a WSL home at the deadline and falls back, leaving the probe running', async () => {
+    vi.useFakeTimers()
+    try {
+      parseWslPathMock.mockReturnValue({ distro: 'Ubuntu', linuxPath: '/home/jin/repo' })
+      const repoPath = String.raw`\\wsl.localhost\Ubuntu\home\jin\repo`
+      const settings = { workspaceDir: 'C:\\workspaces', nestWorkspaces: true }
+      getWslHomeAsyncMock.mockReturnValue(new Promise<string>(() => {}))
+      const pending = computeWorkspaceRootWithin(repoPath, settings, 5_000)
+      await vi.advanceTimersByTimeAsync(5_000)
+      const fallback = await pending
+      expect(fallback).not.toContain('orca')
+      expect(getWslHomeMock).not.toHaveBeenCalled()
+
+      getWslHomeAsyncMock.mockResolvedValue(String.raw`\\wsl.localhost\Ubuntu\home\jin`)
+      expect(await computeWorkspaceRootWithin(repoPath, settings, 5_000)).toBe(
+        win32.join(String.raw`\\wsl.localhost\Ubuntu\home\jin`, 'orca', 'workspaces')
+      )
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('reads the home through the lookup its main-side caller injects', async () => {
+    parseWslPathMock.mockReturnValue({ distro: 'Ubuntu', linuxPath: '/home/jin/repo' })
+    const readHome = vi.fn(async () => null)
+    const root = await computeWorkspaceRootWithin(
+      String.raw`\\wsl.localhost\Ubuntu\home\jin\repo`,
+      { workspaceDir: 'C:\\workspaces' },
+      5_000,
+      readHome
+    )
+    expect(root).not.toContain('orca')
+    expect(readHome).toHaveBeenCalledExactlyOnceWith('Ubuntu')
+    expect(getWslHomeAsyncMock).not.toHaveBeenCalled()
   })
 
   it('places WSL repo worktrees under the distro home workspace root', () => {

@@ -1,4 +1,4 @@
-import { normalizeAbsolutePath } from '@/lib/terminal-path-normalization'
+import { normalizeAbsolutePath } from '../../../../shared/terminal-path-normalization'
 import { isAbsolutePathLike } from '../editor/editor-panel-file-mode'
 
 export type TabEntryLocalPlatform = 'posix' | 'windows'
@@ -47,8 +47,7 @@ export function validateNewTabEntryAbsolutePath(
 }
 
 export function validateNewTabEntryRelativePath(query: string): string {
-  // Keep tab-created paths workspace-relative and unambiguous across platforms.
-  // Absolute, home-relative, traversal, and UNC variants are handled elsewhere.
+  // Keep new-file paths workspace-relative; absolute/home/traversal/UNC syntax follows separate routes.
   const trimmed = query.trim()
   if (!trimmed) {
     throw new Error('Enter a URL or file path.')

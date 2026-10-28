@@ -1,3 +1,8 @@
+import {
+  getClaudeSubagentNavigationTitle,
+  getClaudeSubagentNavigationDescription,
+  getClaudeSubagentNavigationSearchKeywords
+} from './claude-subagent-navigation-copy'
 import { getAgentCatalog } from '@/lib/agent-catalog'
 import {
   getAgentAwakeDescription,
@@ -123,6 +128,12 @@ const getAllAgentsPaneSearchEntries = createLocalizedCatalog(() => [
     title: getAgentStatusHooksTitle(),
     description: getAgentStatusHooksDescription(),
     keywords: getAgentStatusHooksSearchKeywords()
+  },
+  {
+    id: 'claude-subagent-navigation',
+    title: getClaudeSubagentNavigationTitle(),
+    description: getClaudeSubagentNavigationDescription(),
+    keywords: getClaudeSubagentNavigationSearchKeywords()
   },
   {
     title: getAgentWorkspaceTrustTitle(),

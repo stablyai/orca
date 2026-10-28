@@ -10,6 +10,8 @@ import {
 import { openMainWindow as openMainWindowController } from './startup/main-window-controller'
 import { mainProcessState as state } from './startup/main-process-state'
 import { runMainProcessPreflight } from './startup/main-process-preflight'
+import { runWslHolderUninstallPreflight } from './startup/wsl-holder-uninstall-preflight'
+import { enableLinearRegexpFallback } from './startup/linear-regexp-fallback'
 import { registerMainProcessIpcHandlers } from './startup/main-process-ipc-bootstrap'
 import { initializeMainProcessReady } from './startup/main-process-ready'
 import { installMainProcessQuitHandlers } from './startup/main-process-quit'
@@ -28,9 +30,13 @@ import {
   readProfileStateCopySavedTimes
 } from './persistence/profile-state/profile-state-startup-recovery-dialog'
 import { profileStateDesktopRecoveryArgs } from './startup/profile-state-recovery-preflight'
+import { prepareEarlyMainUiLanguage, translateMain } from './i18n/main-i18n'
 import { ProfileStateRecoveryRequiredError } from './persistence/profile-state/profile-state-recovery-required'
 import { getProfileUserDataPath } from './orca-profiles/profile-storage-paths'
 import { leaseAppImageGenerationForCurrentProcess } from './cli/appimage-generation-lease'
+import { wakeRememberedWslHosts } from './wsl/wsl-host-early-wake'
+import { wslHostsServing } from './wsl/wsl-host-gate'
+import { configureWslHostsGateFromDisk } from './wsl/wsl-host-gate-startup'
 
 function openMainWindow(options: { revealOnDidFinishLoad?: boolean } = {}): BrowserWindow {
   return openMainWindowController(options)
@@ -95,14 +101,24 @@ const handleMacAppActivation = createMacAppActivationHandler({
   requestActivation: requestDesktopActivation
 })
 
-const preflightReady = runMainProcessPreflight({
-  focusExistingWindow,
-  requestDesktopActivation
-})
+// The uninstaller's holder release runs instead of the app, never alongside it.
+const preflightReady =
+  !runWslHolderUninstallPreflight() &&
+  runMainProcessPreflight({
+    focusExistingWindow,
+    requestDesktopActivation
+  })
 
 // Skip userData writes after losing the single-instance lock.
 if (preflightReady) {
+  enableLinearRegexpFallback()
   void leaseAppImageGenerationForCurrentProcess()
+  // Before any gate check: saved WSL work keeps a closed gate serving it.
+  configureWslHostsGateFromDisk(app.getPath('userData'))
+  // Why this early: a cold distro takes seconds to boot; starting now overlaps it with app startup.
+  if (process.platform === 'win32' && wslHostsServing()) {
+    wakeRememberedWslHosts(app.getPath('userData'))
+  }
   app.on('open-url', (event, url) => {
     if (!parseSkillShareId(url)) {
       return
@@ -145,11 +161,13 @@ if (preflightReady) {
       console.error(`[profile-state] ${message}`)
       if (!state.isServeMode && !isBackgroundLaunch()) {
         try {
+          await prepareEarlyMainUiLanguage()
           const userDataPath = getProfileUserDataPath()
           if (isDivergedProfileStateFailure(error)) {
             const choice = await chooseProfileStateCopy({
               ...readProfileStateCopySavedTimes(userDataPath),
-              showMessageBox: (options) => dialog.showMessageBox(options)
+              showMessageBox: (options) => dialog.showMessageBox(options),
+              translate: translateMain
             })
             if (choice !== undefined) {
               // Recovery needs both profile locks, which only a fresh process can own safely.
@@ -171,7 +189,8 @@ if (preflightReady) {
             if (
               await chooseProfileStateRepair({
                 sections,
-                showMessageBox: (options) => dialog.showMessageBox(options)
+                showMessageBox: (options) => dialog.showMessageBox(options),
+                translate: translateMain
               })
             ) {
               app.relaunch({
@@ -194,7 +213,8 @@ if (preflightReady) {
               ? { recoveryCommand: 'orca profile state exports' }
               : {}),
             showMessageBox: (options) => dialog.showMessageBox(options),
-            copyToClipboard: (text) => clipboard.writeText(text)
+            copyToClipboard: (text) => clipboard.writeText(text),
+            translate: translateMain
           })
         } catch (dialogError) {
           console.warn('[profile-state] Recovery dialog failed; exiting safely:', dialogError)

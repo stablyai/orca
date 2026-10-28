@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { AGENT_SESSION_OUTLINE_PREVIEW_MAX_CHARS } from '../../../shared/agent-session-conversation-outline'
+import { AGENT_SESSION_OUTLINE_PREVIEW_MAX_CHARS } from '../../../shared/agent-session/agent-session-conversation-outline'
 import type {
   AgentJournalRenderItem,
   AgentJournalSnapshot

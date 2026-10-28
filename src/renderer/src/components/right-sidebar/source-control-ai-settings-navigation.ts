@@ -1,4 +1,4 @@
-import { getRepositorySourceControlAiSectionId } from '@/components/settings/repository-settings-targets'
+import { getRepositorySourceControlAiSectionId } from '@/components/settings/repository/repository-settings-targets'
 import type { AppState } from '@/store'
 import type { Repo } from '../../../../shared/repo-types'
 

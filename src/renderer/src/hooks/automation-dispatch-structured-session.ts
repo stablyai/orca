@@ -76,7 +76,7 @@ export async function launchStructuredAutomationSession(args: {
   const [{ planAgentSessionLaunch }, { beginStructuredAgentSessionProvisionalLaunch }] =
     await Promise.all([
       import('@/lib/agent-session-launch-plan'),
-      import('@/lib/structured-agent-session-provisional-tab')
+      import('@/lib/agent-session/structured-agent-session-provisional-tab')
     ])
   const executionHostId = parseExecutionHostId(automation.runContext?.hostId)?.id
   const plan = planAgentSessionLaunch(store, {

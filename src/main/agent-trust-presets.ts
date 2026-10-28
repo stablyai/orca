@@ -1,5 +1,6 @@
+import { createHash } from 'node:crypto'
 import { existsSync, mkdirSync, readFileSync, realpathSync } from 'node:fs'
-import { join } from 'node:path'
+import { dirname, join, resolve } from 'node:path'
 import { writeFileAtomically } from './codex-accounts/fs-utils'
 import { upsertProjectTrustLevel } from './codex/config-toml-trust'
 import { runExclusivelyForCodexTrustConfig } from './codex/codex-trust-config-mutation-queue'
@@ -93,6 +94,34 @@ export function markAntigravityWorkspaceTrusted(workspacePath: string, home: str
     mkdirSync(configDir, { recursive: true })
   }
   writeFileAtomically(configPath, `${JSON.stringify(config, null, 2)}\n`)
+}
+
+/** Kimi Code 2.3.1 keeps one exact-folder record per cwd (workspaceTrust/trustRecord.ts). */
+export function markKimiWorkspaceTrusted(workspacePath: string, kimiHome: string): void {
+  // Kimi keys on process.cwd(): physical on POSIX, the spawn path as given on Windows.
+  const root = process.platform === 'win32' ? resolve(workspacePath) : canonicalize(workspacePath)
+  const trustFile = join(kimiHome, 'workspace-trust', kimiWorkspaceTrustKey(root))
+  if (existsSync(trustFile)) {
+    return
+  }
+  mkdirSync(dirname(trustFile), { recursive: true, mode: 0o700 })
+  writeFileAtomically(trustFile, JSON.stringify({ root, trustedAt: Date.now() }), { mode: 0o600 })
+}
+
+/** Mirrors Kimi's trustKey: canonicalWorkspaceRoot then encodeWorkDirKey (workdir-slug.ts). */
+function kimiWorkspaceTrustKey(root: string): string {
+  const slashed = root.replaceAll('\\', '/')
+  const trimmed = slashed.replace(/\/+$/, '')
+  const normalized = /^(?:[A-Za-z]:\/|\/\/)/.test(slashed) ? trimmed.toLowerCase() : trimmed
+  const slug = (normalized.split('/').pop() ?? '')
+    .toLowerCase()
+    .replaceAll(/[^a-z0-9._-]+/g, '-')
+    .replaceAll(/^-+|-+$/g, '')
+    .slice(0, 40)
+    .replaceAll(/^-+|-+$/g, '')
+  const name = slug === '' || slug === '.' || slug === '..' ? 'workspace' : slug
+  const hash = createHash('sha256').update(normalized).digest('hex').slice(0, 12)
+  return `wd_${name}_${hash}`
 }
 
 /** Lock configs in hook-installer order: managed runtime home before system home. */

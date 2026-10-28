@@ -1,5 +1,4 @@
-// STA-4603 / STA-4536: an operator close, a clean finish and a crash must not
-// leave the same record. Each case here was byte-identical before the fix.
+// STA-4603/STA-4536: distinguish operator close, clean finish and crash records.
 import { afterEach, describe, expect, it } from 'vitest'
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -95,7 +94,6 @@ function dispatchOnHandle(
   }
 }
 
-/** Where a lightweight Run's coordinator actually reads its mail (STA-4604). */
 function escalations(db: OrchestrationDb, runId: string) {
   return db.getUnreadMessages(`run:${runId}`, ['escalation'])
 }
@@ -162,8 +160,7 @@ describe('STA-4603/STA-4536 exit provenance', () => {
     const db = createDb()
     const runtime = createRuntime(db)
     const ctx = dispatchOnHandle(db, 'exit delivered without a cause')
-    // No `cause`: the reporter forwards a number and nothing else. Its 0 may be
-    // a SIGKILL, so the record must not claim the agent finished.
+    // Bare code 0 can be synthetic SIGKILL; without cause it cannot prove clean completion.
     runtime.onPtyExit(PTY_ID, 0)
     expect(observe(db, ctx.id)).toEqual({
       status: 'failed',
@@ -177,8 +174,7 @@ describe('STA-4603/STA-4536 exit provenance', () => {
     const runtime = createRuntime(db)
     const ctx = dispatchOnHandle(db, 'whole-tab operator close')
     runtime.markPtyStopRequested(PTY_ID)
-    // The tab teardown drops the leaf from the renderer graph first; the exit
-    // used to find no leaf and leave the row reading 'dispatched' forever.
+    // Renderer teardown removes the leaf first; exit must still settle the dispatch.
     runtime.syncWindowGraph(1, { tabs: [], leaves: [] })
     runtime.onPtyExit(PTY_ID, 0)
     expect(observe(db, ctx.id)).toEqual({
@@ -194,8 +190,7 @@ describe('STA-4603/STA-4536 exit provenance', () => {
     const closedCtx = dispatchOnHandle(closedDb, 'no escalation on close')
     closed.markPtyStopRequested(PTY_ID)
     closed.onPtyExit(PTY_ID, 0)
-    // Assert the dispatch actually settled first: an empty inbox also happens
-    // when nothing was settled at all, which would make this vacuous.
+    // Prove settlement before absence checks so an inert dispatch cannot pass.
     expect(observe(closedDb, closedCtx.id).termination_reason).toBe('operator_close')
     expect(escalations(closedDb, closedCtx.runId)).toHaveLength(0)
 
@@ -209,15 +204,13 @@ describe('STA-4603/STA-4536 exit provenance', () => {
   it('does not carry an unconsumed stop intent across a same-id respawn', () => {
     const db = createDb()
     const runtime = createRuntime(db)
-    // The operator asked for a stop, but the stop never produced an exit — the
-    // process outlived it. A respawn then reuses the same session id.
+    // An unobserved stop outlives its request; respawn reuses the session id.
     runtime.markPtyStopRequested(PTY_ID)
     runtime.synchronizePtyOutputSequenceFromProvider(PTY_ID, { value: 0, generation: 'reset' })
     expect(runtime.isPtyStopRequested(PTY_ID)).toBe(false)
 
     const ctx = dispatchOnHandle(db, 'crash after respawn')
     runtime.onPtyExit(PTY_ID, 0, undefined, { cause: { kind: 'signaled', signal: 9 } })
-    // The replacement's crash must not inherit the old close's provenance.
     expect(observe(db, ctx.id)).toEqual({
       status: 'failed',
       last_failure: 'Agent process killed by signal 9',
@@ -230,15 +223,13 @@ describe('STA-4603/STA-4536 exit provenance', () => {
     const runtime = createRuntime(db)
     const ctx = dispatchOnHandle(db, 'stop requested but never confirmed')
     runtime.markPtyStopRequested(PTY_ID)
-    // The stop paths pass -1 when they asked a process to die and never saw it.
-    // The process may still be running against a revoked dispatch.
+    // -1 reports an unverified stop, so the process may still own a revoked dispatch.
     runtime.onPtyExit(PTY_ID, -1)
     expect(observe(db, ctx.id)).toEqual({
       status: 'failed',
       last_failure: 'Agent process stop was requested but never confirmed',
       termination_reason: 'unknown'
     })
-    // ...and it must still wake the coordinator, unlike a clean close.
     expect(escalations(db, ctx.runId)).toHaveLength(1)
   })
 
@@ -261,9 +252,7 @@ describe('STA-4603/STA-4536 exit provenance', () => {
     const db = createDb()
     const runtime = new OrcaRuntimeService(null)
     runtime.setOrchestrationDb(db)
-    // Model the shipping controller: `orca terminal close` reaches stopAndWait,
-    // which verifies the stop and then reports it with a synthetic code 0 --
-    // a number indistinguishable from a clean agent finish.
+    // stopAndWait reports verified user stops with synthetic 0, indistinguishable from finish by code alone.
     runtime.setPtyController({
       write: () => true,
       kill: () => true,

@@ -67,6 +67,10 @@ describe('groupLinearIssues', () => {
       'identifier'
     )
     expect(sections.map((section) => section.key)).toEqual(['status:Todo', 'status:Done'])
+    expect(sections.map((section) => section.issues.map((entry) => entry.identifier))).toEqual([
+      ['COR-1'],
+      ['COR-2']
+    ])
   })
 })
 

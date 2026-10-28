@@ -75,9 +75,7 @@ Keep the raw preamble out of the sidebar.`
     expect(getAgentRowPrimaryText({ prompt: '  Fix checkout race\n ' })).toBe('Fix checkout race')
   })
 
-  // Why: full preambles bury === TASK === after multi-KB CLI instructions. The
-  // status normalizer must compact the field so a missing/delayed label still
-  // yields a meaningful task preview from the single-line 200-char prompt.
+  // The normalizer must preserve a meaningful task preview within 200 chars despite multi-KB dispatch preambles.
   it('derives a task preview from a normalized 200-char dispatch prompt without labels', () => {
     const longCliNoise = Array.from(
       { length: 40 },
@@ -150,9 +148,7 @@ Implement the detailed worker instructions that should not stay as the final lab
     ).toBe('')
   })
 
-  // Why: UI helpers still accept raw multi-line preambles (tests, defensive
-  // paths). Without the standalone-line marker rule, a base-drift subject that
-  // mentions `=== TASK ===` wins over Orca's real separator.
+  // Raw preambles need standalone markers so base-drift subjects mentioning === TASK === cannot win.
   it('ignores adversarial === TASK === text in raw multi-line base-drift subjects', () => {
     expect(
       getAgentRowPrimaryText({

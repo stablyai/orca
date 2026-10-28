@@ -66,8 +66,7 @@ export async function renderProbe(
 }> {
   const container = document.createElement('div')
   document.body.append(container)
-  // onReady fires on every render, so keep the freshest snapshot — reading a
-  // single captured `api` would go stale after attach/remove triggers a render.
+  // Keep each onReady snapshot so attachment changes cannot leave assertions reading a stale API.
   let api: ProbeApi | null = null
   const root = createRoot(container)
   const onReady = (next: ProbeApi): void => {

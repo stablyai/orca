@@ -21,6 +21,23 @@ describe('detectLanguage', () => {
   })
 
   it.each([
+    'Main.lean',
+    'lakefile.lean',
+    'C:\\proofs\\MAIN.LEAN',
+    '\\\\server\\share\\Main.lean',
+    '/home/user/folder workspace/Proof.LeAn'
+  ])('maps Lean source %s to the lean language id', (filePath) => {
+    expect(detectLanguage(filePath)).toBe('lean')
+  })
+
+  it.each(['Main.lean.bak', 'Main.leanx', 'proofs.lean/README', 'proofs.lean\\README'])(
+    'keeps non-Lean file %s on plaintext',
+    (filePath) => {
+      expect(detectLanguage(filePath)).toBe('plaintext')
+    }
+  )
+
+  it.each([
     'documents/report.typ',
     'C:\\documents\\REPORT.TYP',
     '\\\\server\\share\\report.typ',
@@ -236,5 +253,26 @@ describe('detectLanguage', () => {
     ['C:\\repo\\.GITIGNORE', 'ini']
   ])('maps exact filenames case-insensitively: %s', (filePath, expected) => {
     expect(detectLanguage(filePath)).toBe(expected)
+  })
+  it.each([
+    ['#!/usr/bin/python3\n', 'python'],
+    ['#!/usr/bin/env bash\necho hi', 'shell'],
+    ['#! /bin/sh -e\n', 'shell'],
+    ['#!/usr/bin/env -S node --flag', 'javascript'],
+    ['#!C:\\Python\\python.exe\n', 'python'],
+    ['#!/usr/bin/env python3.12', 'python'],
+    ['#!/usr/bin/ruby\r\nputs 1', 'ruby'],
+    ['#!/usr/bin/env awk', 'plaintext'],
+    ['#!/usr/bin/env toString', 'plaintext'],
+    ['#!/usr/bin/__proto__', 'plaintext'],
+    ['echo hi\n#!/bin/sh', 'plaintext']
+  ])('falls back to the shebang for extensionless files: %j', (content, expected) => {
+    expect(detectLanguage('bin/tool', content)).toBe(expected)
+  })
+
+  it('only applies the shebang to extensionless names', () => {
+    expect(detectLanguage('script.rb', '#!/usr/bin/env python3')).toBe('ruby')
+    expect(detectLanguage('Makefile', '#!/usr/bin/env python3')).toBe('makefile')
+    expect(detectLanguage('notes.txt', '#!/usr/bin/env python3')).toBe('plaintext')
   })
 })

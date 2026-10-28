@@ -51,8 +51,7 @@ export async function startLocalHttpsServer(): Promise<LocalHttpsServer> {
         response.end('<svg xmlns="http://www.w3.org/2000/svg" width="1" height="1"/>')
         return
       }
-      // Why: count only the root document. Favicon/probes would inflate the
-      // document counter and flake exact E2E request-count assertions.
+      // Count only root documents; favicon/probe requests would flake exact request assertions.
       if (requestUrl.pathname !== '/') {
         response.writeHead(404)
         response.end()

@@ -10,7 +10,7 @@ vi.mock('./SshTargetCard', () => ({
   SshTargetCard: ({ target }: { target: SshTarget }) => <div data-ssh-row>{target.label}</div>
 }))
 
-// Why 13,692: the host count from the generated ~/.ssh/config in the crash this guards.
+// Match the 13,692-host generated config that caused the original crash.
 const IMPORTED_HOST_COUNT = 13_692
 const VIEWPORT_HEIGHT_PX = 600
 const ROW_HEIGHT_PX = 52
@@ -63,7 +63,7 @@ let root: Root
 
 beforeEach(() => {
   globalThis.IS_REACT_ACT_ENVIRONMENT = true
-  // Why: happy-dom has no layout; the scroller is one viewport tall and every other box one row.
+  // Supply missing happy-dom layout: one scroller viewport, row-sized boxes elsewhere.
   const heightOf = (element: Element): number =>
     element.classList.contains('overflow-y-auto') ? VIEWPORT_HEIGHT_PX : ROW_HEIGHT_PX
   vi.spyOn(HTMLElement.prototype, 'offsetHeight', 'get').mockImplementation(function (

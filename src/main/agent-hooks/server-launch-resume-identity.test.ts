@@ -63,7 +63,7 @@ describe('a resume launch seeds the pane identity', () => {
     ])
   })
 
-  it("yields to the agent's own report and is replaced by its first hook", async () => {
+  it('yields to a newer agent report', async () => {
     const server = await startServer()
     const launchedAt = Date.now() - 1_000
     const response = await postHookEvent(

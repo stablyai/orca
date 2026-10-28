@@ -6,7 +6,7 @@ import {
   collectUnitDependencyGraph,
   unitConsumers
 } from './ci-unit-dependency-graph.mjs'
-import { discoverUnitFiles } from './ci-unit-files.mjs'
+import { CROSS_VERSION_WIRE_DIR, discoverUnitFiles } from './ci-unit-files.mjs'
 import { planUnitSelection } from './ci-unit-selection.mjs'
 
 const harness = 'src/renderer/src/runtime/web-session-tabs-sync-test-harness.ts'
@@ -34,7 +34,11 @@ const supportBridges = new Set([
 
 function productConsumers(file, graph, unitFiles) {
   return [...unitConsumers([file], graph.reverse)].filter(
-    (consumer) => consumer !== file && !unitFiles.has(consumer) && !supportBridges.has(consumer)
+    (consumer) =>
+      consumer !== file &&
+      !unitFiles.has(consumer) &&
+      !(consumer.startsWith(CROSS_VERSION_WIRE_DIR) && consumer.endsWith('.unit.test.ts')) &&
+      !supportBridges.has(consumer)
   )
 }
 
@@ -62,7 +66,7 @@ describe('unit support routing', () => {
         'src/renderer/src/components/native-chat/NativeChatStructuredSession.next-test-harness.tsx',
         'src/renderer/src/components/native-chat/NativeChatStructuredSession.tsx',
         'src/main/providers/windows-conpty-wide-char-duplication.node-pty.test.ts',
-        'src/main/browser/browser-route-tcp-egress.electron.test.ts'
+        'src/main/browser/browser-route-webrtc-egress.electron.test.ts'
       ]) {
         const result = classifyPrJobs([unitHarness, file])
         expect(result.should_run, file).toBe(true)

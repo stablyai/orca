@@ -36,7 +36,10 @@ const TYPED_START_REFUSALS = [
   'claudeAccountFolderMissing',
   'claudeAccountSetupFailed',
   'agentCommandNotRunnable',
-  'runtimeNotInstalled'
+  'runtimeNotInstalled',
+  'fullAccessAsRoot',
+  'conversationOpenInTerminal',
+  'conversationOpenElsewhere'
 ] as const satisfies readonly (AgentSessionFailureKind &
   AgentSessionRefusalReason<'agent_session_operation_invalid'>)[]
 
@@ -59,8 +62,28 @@ export function providerExitObserved(error: unknown): boolean {
   )
 }
 
-/** Preserve typed/observed causes and diagnostics; unclassified spawn/host errors cannot imply provider failure. */
+/** Cleanup wrappers retain the provider's typed refusal without changing their exit proof. */
+export function startupAcquisitionRefusal(
+  error: unknown,
+  depth = 0
+): AgentSessionAcquisitionRefusal | undefined {
+  if (depth >= 6 || !(error instanceof Error)) {
+    return undefined
+  }
+  if (error instanceof AgentSessionAcquisitionRefusal) {
+    return error
+  }
+  return (
+    startupAcquisitionRefusal(error.cause, depth + 1) ??
+    (error instanceof AggregateError
+      ? error.errors.map((inner) => startupAcquisitionRefusal(inner, depth + 1)).find(Boolean)
+      : undefined)
+  )
+}
+
+/** A failed start keeps its typed refusal or observed exit, and the provider diagnostic its Details show. */
 export function providerStartupFailureFact(cause?: unknown): SubmissionRejectionFact {
+  cause = startupAcquisitionRefusal(cause) ?? cause
   const installation = agentCliInstallationProblemOf(cause)
   if (installation) {
     return agentSessionFailureFact('startFailed', {
@@ -126,7 +149,7 @@ function refusedStartFailureFact(
 }
 
 export type StructuredAgentSessionStartFailureCause =
-  /** Provider words stay host-side; newSession distinguishes first launch from restart. */
+  /** Provider words reach Details, never the sentence; newSession distinguishes first launch from restart. */
   | {
       refusal: AgentSessionWireRefusal
       diagnostic?: ProviderDiagnostic

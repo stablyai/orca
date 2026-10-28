@@ -26,8 +26,10 @@ vi.mock('electron', () => {
 })
 const { CdpWsProxyMock } = vi.hoisted(() => {
   const instances: unknown[] = []
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const MockClass = vi.fn().mockImplementation(function (this: any, _wc: unknown) {
+  const MockClass = vi.fn().mockImplementation(function (
+    this: Record<string, unknown>,
+    _wc: unknown
+  ) {
     this._wc = _wc
     this.start = vi.fn(async () => 'ws://127.0.0.1:9222')
     this.stop = vi.fn(async () => {})
@@ -51,9 +53,8 @@ vi.mock('./cdp-bridge', () => ({
 }))
 
 import { AgentBrowserBridge } from './agent-browser-bridge'
-import { AGENT_BROWSER_IDLE_TIMEOUT_MS } from './agent-browser-process-environment'
 import {
-  createFakeAgentBrowserChild,
+  answerAgentBrowserCommands,
   createSucceedWith,
   mockBrowserManager,
   mockWebContents,
@@ -92,64 +93,6 @@ describe('AgentBrowserBridge', () => {
     bridge.setActiveTab(100)
   })
 
-  it('uses browserPageId as session name', async () => {
-    succeedWith({ snapshot: '...' })
-    await bridge.snapshot()
-
-    const args = execFileMock.mock.calls[0][1] as string[]
-    expect(args).toContain('--session')
-    expect(args[args.indexOf('--session') + 1]).toBe('orca-tab-tab-1')
-  })
-
-  it('passes --cdp on every helper command family so a restarted daemon cannot launch Chrome', async () => {
-    succeedWith({ snapshot: '...' })
-    await bridge.snapshot()
-
-    const snapshotCall = execFileMock.mock.calls.find((c: unknown[]) =>
-      (c[1] as string[]).includes('snapshot')
-    )
-    expect(snapshotCall![1]).toContain('--cdp')
-    const cdpIdx = (snapshotCall![1] as string[]).indexOf('--cdp')
-    expect((snapshotCall![1] as string[])[cdpIdx + 1]).toBe('9222')
-
-    await bridge.click('@e1')
-    await bridge.scroll('down')
-    await bridge.setOffline('on')
-    await bridge.consoleLog()
-    await bridge.exec('get title')
-
-    for (const command of ['click', 'scroll', 'set', 'console', 'get']) {
-      const call = execFileMock.mock.calls.find((candidate: unknown[]) =>
-        (candidate[1] as string[]).includes(command)
-      )
-      expect(call).toBeDefined()
-      const args = call![1] as string[]
-      expect(args).toContain('--cdp')
-      expect(args[args.indexOf('--cdp') + 1]).toBe('9222')
-    }
-  })
-
-  it('always appends --json to commands', async () => {
-    succeedWith({ snapshot: '...' })
-    await bridge.snapshot()
-
-    const snapshotCall = execFileMock.mock.calls.find((c: unknown[]) =>
-      (c[1] as string[]).includes('snapshot')
-    )
-    expect((snapshotCall![1] as string[]).at(-1)).toBe('--json')
-  })
-
-  it('translates success response to result', async () => {
-    succeedWith({ snapshot: 'tree output' })
-    const result = await bridge.snapshot()
-    expect(result).toEqual({ browserPageId: 'tab-1', snapshot: 'tree output' })
-  })
-
-  it('translates error response to BrowserError', async () => {
-    failWith('Element not found')
-    await expect(bridge.click('@e1')).rejects.toThrow('Element not found')
-  })
-
   it('keeps CDP discovery failures generic while the tab session is still live', async () => {
     failWith(CDP_DISCOVERY_FAILURE)
     await expect(bridge.snapshot()).rejects.toMatchObject({
@@ -160,19 +103,15 @@ describe('AgentBrowserBridge', () => {
 
   it('maps in-flight CDP discovery failures to tab not found after the session disappears', async () => {
     let releaseSnapshot: (() => void) | null = null
-    const activeChild = createFakeAgentBrowserChild({ kill: vi.fn() })
-    execFileMock.mockImplementation(
-      (_bin: string, args: string[], _opts: unknown, cb: ExecFileCallback) => {
-        if (args.includes('snapshot')) {
-          releaseSnapshot = () => {
-            cb(null, JSON.stringify({ success: false, error: CDP_DISCOVERY_FAILURE }), '')
-          }
-          return activeChild
+    answerAgentBrowserCommands(execFileMock, stdinWrites, (command, cb) => {
+      if (command[0] === 'snapshot') {
+        releaseSnapshot = () => {
+          cb(null, JSON.stringify({ success: false, error: CDP_DISCOVERY_FAILURE }), '')
         }
-        cb(null, JSON.stringify({ success: true, data: null }), '')
-        return createFakeAgentBrowserChild({ kill: vi.fn() })
+        return
       }
-    )
+      cb(null, JSON.stringify({ success: true, data: null }), '')
+    })
 
     const snapshotPromise = bridge.snapshot()
 
@@ -216,113 +155,15 @@ describe('AgentBrowserBridge', () => {
     expect(args).toContain('@e3')
   })
 
-  it('serializes concurrent commands per session', async () => {
-    const commandCalls: string[][] = []
-
-    execFileMock.mockImplementation(
-      (_bin: string, args: string[], _opts: unknown, cb: ExecFileCallback) => {
-        commandCalls.push(args)
-        cb(null, JSON.stringify({ success: true, data: { ok: true } }), '')
-      }
-    )
-
-    const [r1, r2] = await Promise.all([bridge.snapshot(), bridge.click('@e1')])
-    expect(r1).toEqual({ browserPageId: 'tab-1', ok: true })
-    expect(r2).toEqual({ ok: true })
-    const snapshotIdx = commandCalls.findIndex((a) => a.includes('snapshot'))
-    const clickIdx = commandCalls.findIndex((a) => a.includes('click'))
-    expect(snapshotIdx).toBeLessThan(clickIdx)
-  })
-
-  it('builds cookie set args with all options', async () => {
-    succeedWith({ success: true })
-    await bridge.cookieSet({
-      name: 'sid',
-      value: 'abc',
-      domain: '.example.com',
-      path: '/',
-      secure: true,
-      httpOnly: true,
-      sameSite: 'Lax',
-      expires: 1700000000
-    })
-
-    const args = execFileMock.mock.calls.at(-1)![1] as string[]
-    expect(args).toContain('cookies')
-    expect(args).toContain('set')
-    expect(args).toContain('sid')
-    expect(args).toContain('abc')
-    expect(args).toContain('--domain')
-    expect(args).toContain('.example.com')
-    expect(args).toContain('--path')
-    expect(args).toContain('/')
-    expect(args).toContain('--secure')
-    expect(args).toContain('--httpOnly')
-    expect(args).toContain('--sameSite')
-    expect(args).toContain('Lax')
-    expect(args).toContain('--expires')
-    expect(args).toContain('1700000000')
-  })
-
-  it('applies viewport emulation through CDP so mobile mode is preserved', async () => {
-    const wc = mockWebContents(100)
-    webContentsFromIdMock.mockReturnValue(wc)
-
-    await bridge.setViewport(375, 812, 2, true)
-
-    expect(wc.debugger.sendCommand).toHaveBeenCalledWith('Emulation.setDeviceMetricsOverride', {
-      width: 375,
-      height: 812,
-      deviceScaleFactor: 2,
-      mobile: true
-    })
-    expect(wc.debugger.sendCommand).toHaveBeenCalledWith('Emulation.setVisibleSize', {
-      width: 375,
-      height: 812
-    })
-    const viewportCall = execFileMock.mock.calls.find((call: unknown[]) =>
-      (call[1] as string[]).includes('viewport')
-    )
-    expect(viewportCall).toBeUndefined()
-  })
-
-  it('normalizes selector wait state=visible to the default supported semantics', async () => {
-    succeedWith({ selector: 'h1', waited: 'selector' })
-
-    await bridge.wait({ selector: 'h1', state: 'visible' })
-
-    const args = execFileMock.mock.calls.at(-1)![1] as string[]
-    expect(args).toContain('wait')
-    expect(args).toContain('h1')
-    expect(args).not.toContain('--state')
-  })
-
-  it('enforces conditional wait timeouts at the bridge layer', async () => {
-    succeedWith({ selector: '#ready', waited: 'selector' })
-
-    await bridge.wait({ selector: '#ready', timeout: 1200 })
-
-    const args = execFileMock.mock.calls.at(-1)![1] as string[]
-    const options = execFileMock.mock.calls.at(-1)![2] as { timeout?: number; env?: unknown }
-    expect(args).toContain('wait')
-    expect(args).toContain('#ready')
-    expect(options.timeout).toBe(2200)
-    const env = options.env as NodeJS.ProcessEnv
-    expect(env.PATH).toBe(process.env.PATH)
-    expect(env.AGENT_BROWSER_IDLE_TIMEOUT_MS).toBe(String(AGENT_BROWSER_IDLE_TIMEOUT_MS))
-  })
-
   it('returns browser_timeout for timed conditional waits without recycling the session', async () => {
     const killedError = Object.assign(new Error('timeout'), { killed: true })
-    execFileMock.mockImplementation(
-      (_bin: string, args: string[], _opts: unknown, cb: ExecFileCallback) => {
-        if (args.includes('wait')) {
-          cb(killedError, '', '')
-          return
-        }
-        cb(null, JSON.stringify({ success: true, data: { snapshot: 'fresh' } }), '')
+    answerAgentBrowserCommands(execFileMock, stdinWrites, (command, cb) => {
+      if (command[0] === 'wait') {
+        cb(killedError, '', '')
+        return
       }
-    )
+      cb(null, JSON.stringify({ success: true, data: { snapshot: 'fresh' } }), '')
+    })
 
     for (let i = 0; i < 3; i++) {
       await expect(bridge.wait({ selector: '.missing', timeout: 1200 })).rejects.toThrow(

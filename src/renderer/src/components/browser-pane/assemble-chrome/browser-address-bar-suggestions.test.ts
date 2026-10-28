@@ -209,20 +209,20 @@ describe('browser address bar suggestions', () => {
             url: 'https://acme.dev/a',
             normalizedUrl: 'https://acme.dev/a',
             title: 'A',
-            lastVisitedAt: hoursAgo(23),
+            lastVisitedAt: hoursAgo(1),
             visitCount: 50
           }),
           historyEntry({
             url: 'https://acme.dev/b',
             normalizedUrl: 'https://acme.dev/b',
             title: 'B',
-            lastVisitedAt: hoursAgo(1),
+            lastVisitedAt: hoursAgo(23),
             visitCount: 5000
           })
         ]
       })
 
-      expect(historyUrls(suggestions)).toEqual(['https://acme.dev/b', 'https://acme.dev/a'])
+      expect(historyUrls(suggestions)).toEqual(['https://acme.dev/a', 'https://acme.dev/b'])
     })
 
     it('floors the recency bonus at zero for entries older than a day', () => {

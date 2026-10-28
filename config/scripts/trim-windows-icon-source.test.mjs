@@ -14,9 +14,7 @@ const scriptDir = import.meta.dirname
 const projectDir = dirname(dirname(scriptDir))
 const buildDir = join(projectDir, 'resources', 'build')
 
-// Why: Windows scales the largest ICO frame down for the taskbar/"Open with"
-// list, so the glyph must fill most of that frame to match native apps. The
-// macOS safe-area inset left it at ~83%, which is the visible defect (#5357).
+// Windows downscales largest frame, so match native fill rather than macOS safe-area’s ~83% (#5357).
 const MIN_GLYPH_FILL_FRACTION = 0.92
 
 function largestIcoFrame(icoBuffer) {
@@ -97,6 +95,8 @@ describe('trim pipeline', () => {
     const image = solidSquareWithInset(100, 60)
     const cropped = cropImage(image, findOpaqueBounds(image))
     expect(cropped.width).toBe(60)
+    expect(cropped.height).toBe(60)
+    expect(cropped.data).toEqual(solidSquareWithInset(60, 60).data)
     const squared = squareWithMargin(cropped, 0.04)
     // Glyph (60) plus ~4% margin per side keeps it near-full-bleed.
     expect(glyphFillFraction(squared)).toBeGreaterThanOrEqual(0.9)
@@ -108,6 +108,12 @@ describe('trim pipeline', () => {
     const filled = squareWithMargin(cropImage(image, findOpaqueBounds(image)))
     const small = resizeImage(filled, 32, 32)
     expect(small.width).toBe(32)
+    const edge = {
+      width: 2,
+      height: 1,
+      data: Buffer.from([200, 100, 50, 255, 0, 0, 0, 0])
+    }
+    expect(resizeImage(edge, 1, 1).data).toEqual(Buffer.from([200, 100, 50, 128]))
     expect(glyphFillFraction(small)).toBeGreaterThanOrEqual(0.9)
   })
 })

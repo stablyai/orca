@@ -36,8 +36,7 @@ export default function BrowserFind({
       try {
         webview.findInPage(text, opts)
       } catch {
-        // Why: the webview can be mid-teardown during tab close or navigation
-        // races. Best-effort is better than crashing.
+        // Ignore guest teardown races during navigation or tab close.
       }
     },
     [webviewRef]
@@ -55,8 +54,7 @@ export default function BrowserFind({
     }
   }, [webviewRef])
 
-  // Why: Electron's findNext means "start a NEW session" — follow-up requests that
-  // advance the selection must pass false, or every Enter restarts at the first match.
+  // Electron findNext:true starts a new session; advancing the current selection requires false.
   const findNext = useCallback(() => {
     if (requestQuery) {
       const findNext = activeFindQueryRef.current !== requestQuery
@@ -107,18 +105,12 @@ export default function BrowserFind({
       runFind()
       return
     }
-    // Why: findInPage re-highlights the active match on every call, which can
-    // flash while typing. Debounce typing changes, while reopen and Enter
-    // navigation still use the live query immediately.
+    // Debounce typing to avoid highlight flashes; reopening and Enter still use the live query.
     const id = window.setTimeout(runFind, 200)
     return () => window.clearTimeout(id)
   }, [isOpen, requestQuery, safeFindInPage, safeStopFindInPage])
 
-  // Why the generation is a dependency: this effect captures `webviewRef.current` into a local
-  // variable, so a webview replaced while `isOpen` stays true would leave the listener on a dead
-  // node and find would silently stop counting. Navigation and tab deactivation close the bar and
-  // cover their own cases, but a client-hosted pane re-attaches a new guest in place on a host
-  // restart without either happening.
+  // Rebind on generation changes: client-hosted restart swaps the guest without remounting or closing Find.
   useEffect(() => {
     const webview = webviewRef.current
     if (!webview || !isOpen) {

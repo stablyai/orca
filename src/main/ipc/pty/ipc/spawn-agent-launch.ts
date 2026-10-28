@@ -81,6 +81,10 @@ export async function planPaneAgentLaunch(ctx: PtyIpcSpawnState): Promise<void> 
       ? request.launch
       : undefined
   const params = AgentLaunch.safeParse({ ...launch, paneKey })
+  const suppressStartupUpdatePrompt =
+    request !== null &&
+    'suppressStartupUpdatePrompt' in request &&
+    request.suppressStartupUpdatePrompt === true
   if (
     !runtime ||
     !paneKey ||
@@ -105,17 +109,20 @@ export async function planPaneAgentLaunch(ctx: PtyIpcSpawnState): Promise<void> 
       }
     }
   }
-  const intent = await resolveUnlaunchedIntent(params.data, runtime, null)
+  const { intent } = await resolveUnlaunchedIntent(params.data, runtime, null, {
+    terminalOnly: true
+  })
   if (intent.target.kind !== 'existing') {
     throw new Error('agent_launch_request_invalid')
   }
-  const launchPreferences = toAgentLaunchPreferences(intent.sessionOptions)
+  const launchPreferences = toAgentLaunchPreferences(intent.sessionOptions, intent.agent)
   const planned = await runtime.planAgentPaneLaunch(intent.target.worktree, {
     startupAgent: intent.agent,
     ...(intent.agentArgs !== undefined ? { agentArgs: intent.agentArgs } : {}),
     ...(launchPreferences ? { launchPreferences } : {}),
     ...(intent.launchSource ? { launchSource: intent.launchSource } : {}),
-    ...(intent.cwd ? { cwd: intent.cwd } : {})
+    ...(intent.cwd ? { cwd: intent.cwd } : {}),
+    ...(suppressStartupUpdatePrompt ? { suppressStartupUpdatePrompt } : {})
   })
   ctx.paneAgentLaunch.launchRuntime = planned.launchRuntime
   ctx.args = withPlannedLaunch(args, planned)

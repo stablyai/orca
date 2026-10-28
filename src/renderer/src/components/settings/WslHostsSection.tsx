@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Plus, TerminalSquare, Trash2 } from 'lucide-react'
+import { FolderInput, Plus, TerminalSquare, Trash2 } from 'lucide-react'
 import {
   ORCAD_HOST_NEWER_DEFERRAL_CODE,
   type WslHostConnectIntent,
@@ -33,6 +33,8 @@ import { Button } from '../ui/button'
 import { DropdownMenuItem } from '../ui/dropdown-menu'
 import { managedServerOutcomeLabel } from './managed-server-copy'
 import { ServerListRow, ServerRowChip, type ServerRowStatus } from './runtime-server-list-row'
+import { openWslMoveDialogFor } from '../wsl-move/wsl-move-entry'
+import { WslMoveUnfinishedNotice } from '../wsl-move/WslMoveUnfinishedNotice'
 
 function getWslHostRowStatus(
   status: WslHostStatus | undefined,
@@ -73,11 +75,11 @@ export function WslHostsSection({
 }: {
   onChanged: () => void
 }): React.JSX.Element | null {
-  // Why the store: the remote-server catalog leaves WSL hosts out, so this reads them itself.
+  // Read WSL hosts directly because the remote-server catalog excludes them.
   const environments = useAppStore((s) => s.runtimeEnvironments)
   const enabled = useWslHostsEnabled()
   const serverFilesMissing = useWslHostServerFilesMissing()
-  // Why one line for both: a host that cannot run says why, wherever it is listed.
+  // Share unavailable reasons across every listing of the host.
   const unavailableLabel = serverFilesMissing
     ? getWslHostServerFilesMissingLabel()
     : enabled
@@ -88,7 +90,7 @@ export function WslHostsSection({
   const [connectingId, setConnectingId] = useState<string | null>(null)
   const [removing, setRemoving] = useState<PublicKnownRuntimeEnvironment | null>(null)
   const hosts = environments.filter(isWslHostRuntimeEnvironment)
-  // Why hosts while off: their projects must not seem to vanish; the rows say why they are idle.
+  // Retain disabled hosts so projects cannot appear to vanish; rows explain their idle state.
   if (!wslHostsAvailable() || (!enabled && hosts.length === 0)) {
     return null
   }
@@ -230,6 +232,14 @@ export function WslHostsSection({
                         {translate('auto.components.settings.wslHosts.connect', 'Connect')}
                       </DropdownMenuItem>
                     ) : null}
+                    {unavailableLabel ? null : (
+                      <DropdownMenuItem
+                        onSelect={() => openWslMoveDialogFor(environment.orcadDeployment.distro)}
+                      >
+                        <FolderInput />
+                        {translate('wslMove.entry.hostRow', 'Move projects from this distro…')}
+                      </DropdownMenuItem>
+                    )}
                     <DropdownMenuItem
                       variant="destructive"
                       disabled={connectingId !== null}
@@ -245,6 +255,7 @@ export function WslHostsSection({
           })}
         </div>
       ) : null}
+      {enabled && !serverFilesMissing ? <WslMoveUnfinishedNotice /> : null}
       {removing ? (
         <HostRemoveDialog
           open

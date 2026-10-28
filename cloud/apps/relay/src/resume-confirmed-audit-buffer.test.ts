@@ -116,7 +116,6 @@ describe('the batched resume-confirmed audit', () => {
       aged: RESUME_AUDIT_BUFFER_MAX_ROWS
     })
     expect(await rows()).toEqual([])
-    // Quiet once nothing more is lost.
     await buffer.flush()
     expect(lines).toHaveLength(2)
     buffer.stop()
@@ -127,7 +126,7 @@ describe('the batched resume-confirmed audit', () => {
     database.failing = () => true
     for (let index = 0; index < RESUME_AUDIT_FLUSH_ROWS + 50; index += 1) buffer.add(event(`r${index}`))
     await buffer.flush()
-    // The 50 adds past the batch size sent nothing more: no insert per confirm into a failing database.
+    // Crossing batch size schedules one insert; further adds must not hammer a failing database.
     expect(database.statements).toHaveLength(1)
     buffer.stop()
   })

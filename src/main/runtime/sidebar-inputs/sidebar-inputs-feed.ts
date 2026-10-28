@@ -20,11 +20,7 @@ import { FeedPins, feedPageToken } from './sidebar-inputs-feed-pins'
 /** An urgent change (an accepted command, a metadata write) publishes with no coalesce delay. */
 export type SidebarInputsFeedChange = { urgent?: boolean }
 
-/**
- * One producer's cached snapshot, as entities keyed so that none is needlessly large. `read` is
- * synchronous so a publish never waits on a scan; null means nothing to publish yet, and the
- * producer announces once it has.
- */
+/** Read producer caches synchronously so publishing never waits on scans; null means unavailable until the producer announces readiness. */
 export type SidebarInputsFeedDomain = {
   name: string
   read: () => Record<string, unknown> | null
@@ -37,11 +33,7 @@ export type SidebarInputsFeedDomain = {
 // A change after a quiet spell publishes at once; the rest of its burst at most this often.
 const FLUSH_COALESCE_MS = 50
 
-/**
- * The phone's copy of the sidebar inputs, served from the producers' own snapshots. Everything
- * here (published entities, log, pinned pages) exists only while a phone is subscribed; the
- * producers run regardless, since the desktop reads them too.
- */
+/** Cache/diff/pin phone sidebar inputs only while subscribed; producers continue independently for desktop readers. */
 export class SidebarInputsFeed {
   readonly generation = randomUUID()
   private lastRevision = 0

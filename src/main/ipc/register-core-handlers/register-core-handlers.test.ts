@@ -148,7 +148,8 @@ vi.mock('electron', () => ({
   app: {
     getPath: getPathMock,
     once: vi.fn()
-  }
+  },
+  webContents: { fromId: () => undefined }
 }))
 
 vi.mock('../../shared/runtime-environment-store', () => ({
@@ -296,11 +297,11 @@ vi.mock('../emulator-video-stream', () => ({
   registerEmulatorVideoStreamHandlers: registerEmulatorVideoStreamHandlersMock
 }))
 
-vi.mock('../filesystem', () => ({
+vi.mock('../filesystem/filesystem', () => ({
   registerFilesystemHandlers: registerFilesystemHandlersMock
 }))
 
-vi.mock('../filesystem-watcher-handlers', () => ({
+vi.mock('../filesystem/watchers/filesystem-watcher-handlers', () => ({
   registerFilesystemWatcherHandlers: registerFilesystemWatcherHandlersMock
 }))
 
@@ -323,6 +324,10 @@ vi.mock('../wsl-host-handlers', () => ({
 
 vi.mock('../wsl-move-handlers', () => ({
   registerWslMoveHandlers: vi.fn()
+}))
+
+vi.mock('../wsl-move-orchestrator-wiring', () => ({
+  registerWslMoveOrchestrator: vi.fn()
 }))
 
 vi.mock('../ephemeral-vm', () => ({

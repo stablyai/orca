@@ -1,24 +1,4 @@
-/**
- * Memory-leak regression: per-worktree and per-page maps that the worktree-removal
- * paths previously missed must be evicted on removal.
- *
- * Two families of entity-keyed Records grew monotonically over a session:
- *
- *  - Worktree-keyed: `remoteStatusesByWorktree`, `recentlyClosedEditorTabsByWorktree`
- *    and `defaultTerminalTabsAppliedByWorktreeId` were re-keyed on rename but absent
- *    from BOTH removal paths (the bulk `buildWorktreePurgeState` and the single
- *    `removeWorktree` reducer), while their siblings (gitStatusByWorktree,
- *    recentlyClosedBrowserTabsByWorktree, …) were purged.
- *  - Page/workspace-keyed browser maps: `browserAnnotationsByPageId`,
- *    `remoteBrowserPageHandlesByPageId`, `pendingAddressBarFocusByPageId`,
- *    `pendingAddressBarFocusByTabId` and `recentlyClosedBrowserPagesByWorkspace`
- *    were cleaned only on the single-worktree path (via shutdownWorktreeBrowsers →
- *    closeBrowserTab); the bulk reconcile path (CLI/SSH/other-window git worktree
- *    removal) skipped them, orphaning entries permanently.
- *
- * worktreeId, browser workspace id and browser page id are all unbounded, ephemeral
- * key spaces (fresh UUIDs / path-derived ids, never reused).
- */
+/** Exercise single and bulk removal eviction of worktree caches plus browser page/workspace maps. Fresh ephemeral keys cannot reclaim missed entries, so omissions leak across the renderer session. */
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import type * as AgentStatusModule from '@/lib/agent-status'
 import type { BrowserPage, BrowserWorkspace } from '../../../../shared/browser-workspace-types'
@@ -136,13 +116,11 @@ describe('worktree removal evicts the per-worktree + per-page maps it previously
     store.getState().purgeWorktreeTerminalState([WT1])
 
     const s = store.getState()
-    // Evicted for the removed worktree.
     expect(s.remoteStatusesByWorktree[WT1]).toBeUndefined()
     expect(s.recentlyClosedEditorTabsByWorktree[WT1]).toBeUndefined()
     expect(s.recentlyClosedTerminalTabsByWorktree[WT1]).toBeUndefined()
     expect(s.recentlyClosedTabKindsByWorktree[WT1]).toBeUndefined()
     expect(s.defaultTerminalTabsAppliedByWorktreeId[WT1]).toBeUndefined()
-    // Retained for the surviving worktree (guard over-eviction).
     expect(s.remoteStatusesByWorktree[WT2]).toBeDefined()
     expect(s.recentlyClosedEditorTabsByWorktree[WT2]).toBeDefined()
     expect(s.recentlyClosedTerminalTabsByWorktree[WT2]).toBeDefined()
@@ -194,9 +172,7 @@ describe('worktree removal evicts the per-worktree + per-page maps it previously
 
     store.getState().purgeWorktreeTerminalState([WT1])
 
-    // Removed worktree's pane reads back as never-seen (epoch 0).
     expect(getAgentHibernationPaneOutputEpoch(removedPaneKey)).toBe(0)
-    // Surviving worktree's pane keeps its epoch (guard over-eviction).
     expect(getAgentHibernationPaneOutputEpoch(survivingPaneKey)).toBe(1)
   })
 
@@ -306,7 +282,6 @@ describe('worktree removal evicts the per-worktree + per-page maps it previously
     store.getState().purgeWorktreeTerminalState([WT1])
 
     const s = store.getState()
-    // Removed worktree's workspace + page entries are gone.
     expect(s.browserAnnotationsByPageId[P1]).toBeUndefined()
     expect(s.browserAnnotationMarkerIdsByPageId[P1]).toBeUndefined()
     expect(s.remoteBrowserPageHandlesByPageId[P1]).toBeUndefined()
@@ -314,7 +289,6 @@ describe('worktree removal evicts the per-worktree + per-page maps it previously
     expect(s.pendingAddressBarFocusByTabId[WS1]).toBeUndefined()
     expect(s.pendingAddressBarFocusByTabId[P1]).toBeUndefined()
     expect(s.recentlyClosedBrowserPagesByWorkspace[WS1]).toBeUndefined()
-    // Surviving worktree's entries remain (guard over-eviction).
     expect(s.browserAnnotationsByPageId[P2]).toBeDefined()
     expect(s.browserAnnotationMarkerIdsByPageId[P2]).toEqual(['note-2'])
     expect(s.remoteBrowserPageHandlesByPageId[P2]).toBeDefined()

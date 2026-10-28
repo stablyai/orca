@@ -7,7 +7,7 @@ type OrcadInstanceLockCode =
   | 'orcad_data_root_wrong_owner'
   | 'orcad_data_root_shared'
   | 'orcad_instance_lock_held'
-  /** A holder this machine cannot judge, such as one on a shared home; it may still be running. */
+  /** Shared-home/foreign-machine owners may still run and cannot be judged here. */
   | 'orcad_instance_lock_holder_unverifiable'
   | 'orcad_instance_lock_foreign_identity'
   | 'orcad_instance_lock_unreadable'
@@ -24,24 +24,15 @@ export class OrcadInstanceLockError extends Error {
 
 export type OrcadDataRootPrivacyHooks = {
   platform?: NodeJS.Platform
-  /** Windows: restrict the data root's ACL to this user; false when it could not be applied. */
   restrictWindowsDataRoot?: (dataRoot: string) => boolean
 }
 
-/**
- * Fail closed on a data root other identities can read or write.
- *
- * Why self-heal first and refuse second: this root holds session and credential state (and, at the
- * default `~/.orca`, the credential key), so a group- or world-accessible root is a real exposure — but if
- * we own the directory, tightening it is strictly better than refusing to start. We refuse
- * only when the permissions are not ours to fix.
- */
+/** Repair owned directory permissions before refusing: roots contain credentials and session state. */
 export function assertOrcadDataRootIsPrivate(
   dataRoot: string,
   hooks: OrcadDataRootPrivacyHooks
 ): void {
-  // Windows ACLs are not expressible as a POSIX mode, and `statSync().mode` there reports a
-  // synthesized one, so Windows restricts and verifies the ACL instead, in-process.
+  // Windows synthesizes POSIX mode bits; restrict and verify real ACLs instead.
   if ((hooks.platform ?? process.platform) === 'win32') {
     const restrict =
       hooks.restrictWindowsDataRoot ?? ((path: string) => restrictWindowsPathSync(path, true))
@@ -78,7 +69,7 @@ export function assertOrcadDataRootIsPrivate(
   try {
     chmodSync(dataRoot, 0o700)
   } catch {
-    // Fall through to the re-stat, which produces the actionable message.
+    // Re-stat to produce the actionable permission error.
   }
   let mode: number
   try {

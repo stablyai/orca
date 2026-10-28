@@ -90,7 +90,6 @@ describe('Orca cloud sign-in progress', () => {
   })
 
   afterEach(async () => {
-    // Why: progress lives in module state that outlives a test.
     await signOutCurrentOrcaProfile(userDataPath)
     rmSync(userDataPath, { recursive: true, force: true })
     vi.unstubAllEnvs()

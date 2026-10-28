@@ -69,7 +69,7 @@ function createWindow() {
   const webContents = {
     isDestroyed: () => destroyed,
     send: vi.fn(),
-    once: vi.fn<(event: string, listener: () => void) => void>(),
+    on: vi.fn<(event: string, listener: () => void) => void>(),
     removeListener: vi.fn()
   }
   const fake = {
@@ -88,7 +88,7 @@ function createWindow() {
     },
     destroy: () => {
       destroyed = true
-      webContents.once.mock.calls.find(([event]) => event === 'destroyed')?.[1]()
+      webContents.on.mock.calls.find(([event]) => event === 'destroyed')?.[1]()
     }
   }
 }

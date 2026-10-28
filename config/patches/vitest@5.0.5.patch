@@ -1,0 +1,13 @@
+diff --git a/dist/chunks/cli-api.De07GUeT.js b/dist/chunks/cli-api.De07GUeT.js
+--- a/dist/chunks/cli-api.De07GUeT.js
++++ b/dist/chunks/cli-api.De07GUeT.js
+@@ -11817,7 +11817,8 @@ class TestRun {
+ 				else error.stacks = parseErrorStacktrace(error, {
+ 					frameFilter: project.config.onStackTrace,
+ 					getSourceMap(file) {
+-						if (!project.vite.moduleGraph.getModuleById(file)?.transformResult && existsSync(file)) {
++						// Orca: stack frames can name a directory; existsSync accepts it and readFileSync then throws EISDIR, failing a green run.
++						if (!project.vite.moduleGraph.getModuleById(file)?.transformResult && statSync(file, { throwIfNoEntry: false })?.isFile()) {
+ 							const code = readFileSync(file, "utf-8");
+ 							return extractSourcemapFromFile(code, file)?.map;
+ 						}

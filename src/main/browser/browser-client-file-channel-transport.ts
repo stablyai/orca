@@ -1,6 +1,6 @@
 import { BROWSER_CLIENT_FILE_CHANNEL_REQUIRED_ERROR } from '../../shared/browser-client-file-channel-methods'
 import type { RuntimeRpcResponse } from '../../shared/runtime-rpc-envelope'
-import { RemoteRuntimeClientError } from '../../shared/remote-runtime-client-error'
+import { RemoteRuntimeClientError } from '../../shared/remote-runtime/remote-runtime-client-error'
 
 /** Only unsupported legacy hosts permit local saves; unavailable channels must refuse transfers. */
 export type BrowserClientFileChannelAvailability = 'negotiated' | 'unsupported' | 'unavailable'

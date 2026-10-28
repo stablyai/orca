@@ -12,6 +12,7 @@ import {
   type AgentPermissionChoice
 } from './tui-agent-permission-choice'
 import { permissionRecipeCut } from './agent-permission-args'
+import { planAgentCliArgsSuffix, type AgentStartupShell } from './tui-agent-startup-shell'
 export { agentArgsSetPermission } from './agent-permission-args'
 import type { TuiAgent } from './tui-agent'
 
@@ -33,10 +34,30 @@ export function liftAgentPermissionArgs(
   return { choice: null, args: original }
 }
 
-/**
- * Splits an env-driven bypass (Goose's `GOOSE_MODE=auto`) out of an environment record. Names
- * follow the execution host's identity; unknown browser caches preserve ambiguous spellings.
- */
+/** A recorded launch without Orca's permission flag; recorded text it cannot rebuild stays whole. */
+export function dropRecordedAgentPermissionArgs(
+  agent: TuiAgent,
+  recorded: { agentArgs?: string | null; agentCommand?: string | null },
+  shell: AgentStartupShell
+): { agentArgs?: string | null; agentCommand?: string | null } {
+  const lifted = liftAgentPermissionArgs(agent, recorded.agentArgs)
+  if (!lifted.choice) {
+    return recorded
+  }
+  const command = recorded.agentCommand?.trim()
+  if (!command) {
+    return { ...recorded, agentArgs: lifted.args }
+  }
+  const before = planAgentCliArgsSuffix(recorded.agentArgs, shell)
+  const after = planAgentCliArgsSuffix(lifted.args, shell)
+  if (!before.ok || !after.ok || !command.endsWith(` ${before.suffix}`)) {
+    return recorded
+  }
+  const head = command.slice(0, -before.suffix.length).trimEnd()
+  return { agentArgs: lifted.args, agentCommand: after.suffix ? `${head} ${after.suffix}` : head }
+}
+
+/** Lift env bypass with execution-host name casing; unknown browser caches retain ambiguous spellings. */
 export function liftAgentPermissionEnv(
   agent: TuiAgent,
   env: Record<string, string> | null | undefined,
@@ -75,11 +96,7 @@ type AgentPermissionProfile = Required<
   >
 >
 
-/**
- * Moves each agent's permission out of its Arguments into a stored choice, once per profile.
- * Orca's own flags become the choice and leave the text; no flag means the agent's own settings
- * (those terminals passed none). Text that sets permissions some other way is left whole, on own.
- */
+/** Migrate exact Orca permission recipes once, preserving unrelated text on own; absent flags also mean own because those launches passed none. */
 export function migrateAgentPermissionChoice(
   settings: Partial<AgentPermissionProfile>,
   platform: NodeJS.Platform | null | undefined = agentPermissionHostPlatform()

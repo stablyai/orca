@@ -9,6 +9,7 @@ import {
   type HostWorktreeInfo
 } from '../worktree/home-worktree-info'
 import { MobileHostCard } from './MobileHostCard'
+import { findAllByHostType } from '../test-support/react-test-renderer-host-nodes'
 
 vi.mock('react-native', () => ({
   Pressable: 'Pressable',
@@ -68,9 +69,9 @@ describe('MobileHostCard', () => {
         })
       )
     })
-    return renderer!.root
-      .findAllByType('Text')
-      .flatMap((node) => node.children.filter((child) => typeof child === 'string'))
+    return findAllByHostType(renderer!.root, 'Text').flatMap((node) =>
+      node.children.filter((child) => typeof child === 'string')
+    )
   }
 
   it('renders the counts the host proved', async () => {
@@ -78,8 +79,7 @@ describe('MobileHostCard', () => {
   })
 
   it('keeps rendering the last proven counts after a failed refresh', async () => {
-    // The regression this card shipped once: the caller dropped the counts the
-    // failure path deliberately preserved.
+    // Regress caller dropping counts deliberately preserved on failure.
     expect(await renderCard(markHomeWorktreeCatalogUnavailable(loaded, 'host-1'))).toContain(
       'Last known: 12 worktrees · 2 active'
     )

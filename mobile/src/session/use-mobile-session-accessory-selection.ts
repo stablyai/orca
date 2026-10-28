@@ -1,4 +1,5 @@
 import { useRef, useCallback } from 'react'
+import { getRepoIdFromWorktreeId } from '../../../src/shared/worktree/id'
 import { Keyboard, Platform, type View } from 'react-native'
 import { useClipboardReader, useClipboardWriter } from '../platform/clipboard'
 import { newTabRepoListRead, type MobileRuntimeRepoSummary } from './mobile-session-read-operations'
@@ -17,7 +18,6 @@ import type { createTerminalLiveAccessoryInput } from '../terminal/terminal-live
 import { clearTerminalLiveInputFocusTimer } from '../terminal/terminal-live-input'
 import { stripTerminalSelectionGutter } from '../../../src/shared/terminal-selection-gutter'
 import { useTerminalCopyTrimsGutter } from '../terminal/terminal-copy-gutter-preference'
-import { getRepoIdFromMobileWorktreeId } from './mobile-session-route-helpers'
 import type { MobileSessionTerminalInputModel } from './use-mobile-session-terminal-input'
 
 export function useMobileSessionAccessorySelection(scope: MobileSessionTerminalInputModel) {
@@ -47,10 +47,10 @@ export function useMobileSessionAccessorySelection(scope: MobileSessionTerminalI
   const clipboard = useClipboardWriter()
   const clipboardContents = useClipboardReader().contents
   const trimsGutterRef = useTerminalCopyTrimsGutter(client, connState)
-  // Why: hold-to-repeat matches iOS cadence (400ms then 45ms); non-repeatable keys fire once (holding is destructive).
+  // Repeat only repeatable keys; holding destructive keys must still fire once.
   const repeatTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const repeatIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null)
-  // Why: ref keeps repeat firing the current callback; else a mid-hold tab switch/reconnect routes bytes to a stale terminal.
+  // Read the current callback during repeats so mid-hold tab/reconnect changes cannot route stale bytes.
   const handleAccessoryKeyRef = useRef(handleAccessoryKey)
   // react-doctor-disable-next-line react-doctor/no-ref-current-in-render
   handleAccessoryKeyRef.current = handleAccessoryKey
@@ -80,7 +80,7 @@ export function useMobileSessionAccessorySelection(scope: MobileSessionTerminalI
       if (node !== null) {
         return
       }
-      // Why: clear only on real route detach; client churn during mount would wipe xterm state mid-subscribe.
+      // Clear xterm only on real route detach; client churn during mount must not wipe an active subscription.
       toastSeqRef.current += 1
       clearTerminalCache()
       clearToastHideTimer()
@@ -133,7 +133,6 @@ export function useMobileSessionAccessorySelection(scope: MobileSessionTerminalI
       } catch (e) {
         triggerError()
         const err = e as { name?: string; message?: string }
-        // eslint-disable-next-line no-console
         console.warn('[mobile-clip] setString failed', {
           name: err.name,
           message: err.message
@@ -163,7 +162,6 @@ export function useMobileSessionAccessorySelection(scope: MobileSessionTerminalI
       if (handle !== activeHandleRef.current) {
         return
       }
-      // eslint-disable-next-line no-console
       console.warn('[mobile-clip] selection evicted')
       showToast('Selection cleared (scrolled out of buffer)', 1500)
       setSelectModeActive(false)
@@ -206,10 +204,9 @@ export function useMobileSessionAccessorySelection(scope: MobileSessionTerminalI
     if (!client || isFloatingWorkspaceRoute) {
       return null
     }
-    const repoId = getRepoIdFromMobileWorktreeId(worktreeId)
+    const repoId = getRepoIdFromWorktreeId(worktreeId)
     const repoResponse = await newTabRepoListRead.request(client)
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Preserve the established response shape at this boundary.
-    const repos = (newTabRepoListRead.interpret(repoResponse) as MobileRuntimeRepoSummary[]) ?? []
+    const repos: MobileRuntimeRepoSummary[] = newTabRepoListRead.interpret(repoResponse)
     return repos.find((repo) => repo.id === repoId)?.connectionId?.trim() || null
   }, [client, isFloatingWorkspaceRoute, worktreeId])
 

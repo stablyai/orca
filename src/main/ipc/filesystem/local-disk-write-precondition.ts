@@ -18,6 +18,7 @@ import { readlink, realpath, stat, writeFile } from 'node:fs/promises'
 import { basename, dirname, join, normalize, resolve } from 'node:path'
 import { runKeyedSerializedOperation } from '../../cli/keyed-promise-queue'
 import { serializedParentDirectoryKey } from '../../destination-serialized-local-rename'
+import { windowsFsPath } from '../../wsl/wsl-unc-drive-fs-path'
 import {
   assertLocalWriteTargetIsRegularFile,
   FileTooLargeError,
@@ -146,10 +147,12 @@ async function editorWriteInodeKey(filePath: string): Promise<string | null> {
 
 /** Serialize compare/write by canonical path then inode across IPC/runtime writers; external-process races remain possible during the read. */
 export async function writeLocalTextFileWithDiskPrecondition(
-  filePath: string,
+  requestedPath: string,
   content: string,
   precondition: FileWriteDiskPrecondition | undefined
 ): Promise<FileWriteResult> {
+  // A UNC drive-mount file opens only through its drive path; locks key on that one spelling.
+  const filePath = windowsFsPath(requestedPath)
   // Unguarded writes bypass locks held by stalled guarded saves.
   if (!precondition) {
     await assertLocalWriteTargetIsRegularFile(filePath)

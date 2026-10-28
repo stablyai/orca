@@ -41,7 +41,7 @@ async function readStructuredAgentSessionOptionsAtRest(
   sessionId: string,
   reader: StructuredAgentSessionOptionsReader
 ): Promise<RestingOptions> {
-  const record = deps.store.getRecord(sessionId)
+  const record = deps.store.getConversation(sessionId)
   if (!record) {
     throw new Error('agent_session_identity_required')
   }
@@ -147,6 +147,7 @@ export async function readStructuredAgentSessionOptions(
     if (!child || child.phase === 'starting') {
       return { kind: 'rest' as const }
     }
+    store.requireWritableRecord(sessionId)
     const prepared = adapter.prepareReadOptions?.({ sessionId, fence: child.fence })
     if (prepared) {
       return { kind: 'prepared' as const, child, prepared }
@@ -167,6 +168,7 @@ export async function readStructuredAgentSessionOptions(
         ? await started.prepared.then((apply) =>
             context.serialize(sessionId, async () => {
               const child = (await context.openConversation(sessionId))?.child
+              store.requireWritableRecord(sessionId)
               return child === started.child ? apply() : null
             })
           )
@@ -179,13 +181,13 @@ export async function readStructuredAgentSessionOptions(
     const { catalogListing, ...answer } = live
     options = answer
     // Fill missing live listings from saved catalog state; absent records keep the child’s answer.
-    if (!catalogListing && !answer.listedModelIds && store.getRecord(sessionId)) {
+    if (!catalogListing && !answer.listedModelIds && store.getConversation(sessionId)) {
       const { listedModelIds } = await atRest()
       options = listedModelIds ? { ...answer, listedModelIds } : answer
     }
     if (
       catalogListing &&
-      !independentAgentModelCatalog(store.getRecord(sessionId)?.provider ?? '')
+      !independentAgentModelCatalog(store.getConversation(sessionId)?.provider ?? '')
     ) {
       // Check prior membership before saving: a launch-added row cannot verify itself.
       const listedModelIds = context.deps.modelCatalog
@@ -200,13 +202,13 @@ export async function readStructuredAgentSessionOptions(
   }
   // Earlier reads may have closed/reopened the handle.
   const session = await context.conversation(sessionId)
-  const record = store.getRecord(sessionId)
+  const record = store.getConversation(sessionId)
   const phase = record?.rewind?.phase
   const agent = session.params.provider
   const capabilities = agents.capabilities(agent)
   const floor = session.journal.context.floor()
   const contextFloor = floor ? { contextFloor: floor } : {}
-  // Derive launch mode consistently; children never report it.
+  // Intent and the live agent report stay separate: own never claims a mode before startup.
   const permissionMode = record
     ? await structuredAgentSessionLaunchPermission(context.deps, record)
     : null
@@ -289,7 +291,10 @@ export async function readStructuredAgentSessionOptions(
       confirmed,
       ...(options.current.fastModeState ? { fastModeState: options.current.fastModeState } : {}),
       ...(confirmed?.length ? { confirmed } : {}),
-      ...(permissionMode ? { permissionMode } : {})
+      ...(permissionMode ? { permissionMode } : {}),
+      ...(live && options.current.reportedPermissionMode !== undefined
+        ? { reportedPermissionMode: options.current.reportedPermissionMode }
+        : { reportedPermissionMode: undefined })
     },
     rewind:
       phase === 'prepared' || phase === 'provider-succeeded'

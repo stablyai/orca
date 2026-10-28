@@ -146,8 +146,6 @@ export default function OnboardingFlow({
 
   const requestSkipConfirmation = useCallback(
     (advancedVia: 'button' | 'keyboard') => {
-      // Why: click-off / Escape dismissal stays available on every step,
-      // including the final notifications step, so the modal never feels stuck.
       if (busyLabel || skipConfirmOpen || languagePickerOpen) {
         return
       }
@@ -163,20 +161,17 @@ export default function OnboardingFlow({
     void flowDismissOnboarding(advancedVia)
   }, [flowDismissOnboarding])
 
-  // Why: depend on stable callbacks + step id only so the listener doesn't
-  // re-bind on every render of the parent (flow object identity changes).
+  // Depend on stable callbacks/step ID so the changing flow object cannot churn the key listener.
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent): void => {
       if (languagePickerOpen || skipConfirmOpen) {
         return
       }
-      // Why: don't hijack Enter / Cmd+Enter while the user is typing into the
-      // clone-URL input or any other editable field on a step.
+      // Do not submit while typing in clone URL or another editable field.
       if (isEditableTarget(event.target)) {
         return
       }
-      // Why: onboarding continue is screen-local submit behavior, not a
-      // user-configurable app command.
+      // Continue uses the screen submit shortcut rather than configurable app-command bindings.
       if (!isScreenSubmitShortcut(event)) {
         return
       }
@@ -202,7 +197,7 @@ export default function OnboardingFlow({
   return (
     <TooltipProvider delayDuration={0} skipDelayDuration={0}>
       <div
-        className="fixed inset-0 z-[100] flex items-center justify-center overflow-hidden bg-black/50 p-4 text-foreground backdrop-blur-[2px]"
+        className="fixed inset-0 z-[100] flex items-center justify-center overflow-hidden bg-black/50 p-4 text-foreground"
         data-onboarding-overlay
         onPointerDown={(event) => {
           if (!shouldRequestOnboardingSkipConfirmation(event)) {
@@ -260,8 +255,7 @@ export default function OnboardingFlow({
                       <button
                         type="button"
                         className={cn(
-                          // Why: the visible bars stay 4px tall, but the invisible
-                          // hit area makes hover/click/tooltip targeting reliable.
+                          // Expand the invisible hit area while keeping the stepper bars 4px tall.
                           'relative h-1 rounded-full outline-none transition-all duration-300 before:absolute before:-inset-y-2 before:-inset-x-1 focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-card',
                           isActive
                             ? 'w-10 bg-foreground'
@@ -313,8 +307,7 @@ export default function OnboardingFlow({
             <div
               className={cn(
                 'min-h-0 flex-1 transition-[margin-top] duration-[760ms] ease-[cubic-bezier(0.22,1,0.36,1)] motion-reduce:transition-none',
-                // Why: agent step pins permissions below a capped agent grid scroll
-                // region; other steps keep the shared outer scroll container.
+                // Agent permissions stay outside the capped grid scroll; other steps use the outer scroller.
                 currentStep.id === 'agent'
                   ? 'mt-10 flex flex-col overflow-hidden'
                   : cn('scrollbar-sleek overflow-y-auto pr-1', 'mt-10')

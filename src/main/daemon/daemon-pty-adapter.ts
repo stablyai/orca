@@ -5,6 +5,9 @@ import {
 } from '../../shared/pty-fenced-termination'
 import { FENCED_TERMINATION_PROTOCOL_VERSION } from './daemon-protocol-version'
 import { emitPtyListeners, createPtyExitPayload } from './daemon-pty-listener-emission'
+import type { DaemonPtyRouterExitEvent } from './daemon-pty-router-events'
+import { checkWslBridgeDistro, WSL_DISTRO_LOSS_EXIT_CODE } from './daemon-wsl-bridge-exit'
+import { isProvenProcessExit } from '../../shared/terminal-exit-cause'
 import { DaemonPtyDaemonRecovery } from './daemon-pty-daemon-recovery'
 import type { DaemonPtyAdapterOptions } from './daemon-pty-runtime-state'
 import { supportsMode2031UnsubscribeFact, type DaemonEvent } from './types'
@@ -19,7 +22,9 @@ import {
 } from '../../shared/host-spawn-admission'
 import { isUnknownRequestTypeError } from './daemon-endpoint-errors'
 import type { AutomaticWorkRequestType } from './daemon-automatic-work-protocol'
-import type { DaemonAsyncIoStatus } from '../../shared/daemon-async-io-health'
+import type { DaemonAsyncIoHealth, DaemonAsyncIoStatus } from '../../shared/daemon-async-io-health'
+import { observeDaemonAsyncIoHealth } from './daemon-async-io-telemetry-event'
+import { sameEndpointIdentity } from './daemon-endpoint-incarnation'
 
 export class DaemonPtyAdapter extends DaemonPtyDaemonRecovery implements IPtyProvider {
   constructor(opts: DaemonPtyAdapterOptions) {
@@ -73,6 +78,7 @@ export class DaemonPtyAdapter extends DaemonPtyDaemonRecovery implements IPtyPro
     if (!this.client.isConnected()) {
       return { state: 'unverifiable' }
     }
+    const identity = this.client.getDaemonIdentity()
     try {
       const health = await this.client.request<unknown>('asyncIoHealth', undefined, 7_000)
       if (
@@ -85,7 +91,13 @@ export class DaemonPtyAdapter extends DaemonPtyDaemonRecovery implements IPtyPro
         Number.isFinite(health.pendingMs) &&
         health.pendingMs >= 0
       ) {
-        return { state: health.state, pendingMs: health.pendingMs }
+        const result: DaemonAsyncIoHealth = { state: health.state, pendingMs: health.pendingMs }
+        // A reply that crossed a reconnect cannot be attributed to either incarnation.
+        const current = this.client.getDaemonIdentity()
+        if (identity && current && sameEndpointIdentity(identity, current)) {
+          observeDaemonAsyncIoHealth(identity, this.protocolVersion, result)
+        }
+        return result
       }
     } catch (error) {
       if (isUnknownRequestTypeError(error)) {
@@ -177,6 +189,9 @@ export class DaemonPtyAdapter extends DaemonPtyDaemonRecovery implements IPtyPro
           kind: 'transientFact',
           fact: event.payload
         })
+      } else if (event.event === 'inputClosed') {
+        // Kept per incarnation: the report can land before its own spawn reply.
+        this.inputClosedIncarnations.record(event.sessionId, event.payload.incarnationId)
       } else if (event.event === 'exit') {
         const currentIncarnationId = this.sessionIncarnations.get(event.sessionId)
         const pendingOperations = new Set([
@@ -203,16 +218,57 @@ export class DaemonPtyAdapter extends DaemonPtyDaemonRecovery implements IPtyPro
         ) {
           return
         }
-        this.clearExitedSessionState(
-          event.sessionId,
-          event.payload.code,
-          event.payload.incarnationId
-        )
-        emitPtyListeners(this.exitListeners, (listener) =>
-          listener(createPtyExitPayload(event.sessionId, event.payload))
-        )
+        const wslDistro = this.wslDistrosBySessionId.get(event.sessionId)
+        if (wslDistro && isProvenProcessExit(event.payload.code)) {
+          const exitAt = performance.now()
+          void this.finishWslBridgeExit(event.sessionId, event.payload, wslDistro, exitAt)
+          return
+        }
+        this.finishExit(event.sessionId, event.payload)
       }
     })
+  }
+
+  private finishExit(sessionId: string, exit: Omit<DaemonPtyRouterExitEvent, 'id'>): void {
+    this.clearExitedSessionState(sessionId, exit.code, exit.incarnationId)
+    emitPtyListeners(this.exitListeners, (listener) =>
+      listener(createPtyExitPayload(sessionId, exit))
+    )
+  }
+
+  /** A bridge pane whose distro went away is host loss: it keeps its tab and restorable history. */
+  private async finishWslBridgeExit(
+    sessionId: string,
+    exit: Omit<DaemonPtyRouterExitEvent, 'id'>,
+    wslDistro: string,
+    exitAt: number
+  ): Promise<void> {
+    const verdict = await checkWslBridgeDistro(wslDistro, exitAt, this.readRunningWslDistros)
+    // Only 'lost' keeps the tab; a reboot (or slow wsl.exe) racing the probe reads as an exit.
+    console.info(
+      `[pty] WSL bridge exit: ${verdict} (distro ${wslDistro}, probe ${Math.round(performance.now() - exitAt)}ms)`
+    )
+    // A spawn that replaced this incarnation meanwhile owns the session now.
+    const current = this.sessionIncarnations.get(sessionId)
+    if (current !== undefined && current !== exit.incarnationId) {
+      return
+    }
+    if (verdict !== 'lost') {
+      this.finishExit(sessionId, exit)
+      return
+    }
+    const hostLoss = {
+      code: WSL_DISTRO_LOSS_EXIT_CODE,
+      incarnationId: exit.incarnationId,
+      hostLost: true as const
+    }
+    this.hostLossSessionIds.add(sessionId)
+    this.clearExitedSessionState(sessionId, hostLoss.code, hostLoss.incarnationId, {
+      closeHistory: false
+    })
+    emitPtyListeners(this.exitListeners, (listener) =>
+      listener(createPtyExitPayload(sessionId, hostLoss))
+    )
   }
 
   async getAutomaticWorkStatus(): Promise<AutomaticWorkStatus | null> {

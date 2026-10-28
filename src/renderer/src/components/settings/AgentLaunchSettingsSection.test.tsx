@@ -29,6 +29,7 @@ vi.mock('./HostAgentLaunchSettings', async () => {
   }
 })
 vi.mock('./AgentLaunchSettingsCatalog', () => ({
+  AgentLaunchSettingsLoading: () => <button disabled>Permissions</button>,
   AgentLaunchSettingsCatalog: (props: unknown) => {
     state.local(props)
     return <p>Local launch settings</p>
@@ -93,7 +94,7 @@ describe('launch settings host', () => {
   it('waits for the server list instead of displaying desktop defaults', () => {
     state.runtimeEnvironments = []
     render(section(SSH_HOST))
-    expect(screen.getByText('Loading agent settings…')).toBeTruthy()
+    expect(screen.getByRole('button', { name: 'Permissions' })).toHaveProperty('disabled', true)
     expect(state.local).not.toHaveBeenCalled()
     expect(state.remote).not.toHaveBeenCalled()
   })

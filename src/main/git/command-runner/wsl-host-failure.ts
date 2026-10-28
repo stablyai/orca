@@ -1,7 +1,5 @@
+import { isWslHostFailureExitCode, readWslHostDiagnostic } from '../../wsl/wsl-process-failure'
 import type { ResolvedCommand } from './wsl-command-resolution'
-
-/** wsl.exe's own launch-failure exit, distinct from any status the guest process can return. */
-export const WSL_HOST_FAILURE_EXIT_CODE = 0xffffffff
 
 function outputText(value: unknown): string {
   if (typeof value === 'string') {
@@ -26,10 +24,10 @@ export function readWslHostFailureDiagnostic(
   }
   const exitCode = typeof code === 'number' ? code : typeof status === 'number' ? status : null
   // Recognize the host launch-failure shape without reclassifying guest stderr.
-  if (exitCode !== WSL_HOST_FAILURE_EXIT_CODE || outputText(stderr).trim().length > 0) {
+  if (!isWslHostFailureExitCode(exitCode) || outputText(stderr).trim().length > 0) {
     return null
   }
-  const diagnostic = outputText(stdout).replaceAll('\u0000', '').trim()
+  const diagnostic = readWslHostDiagnostic(outputText(stdout))
   return diagnostic.length > 0 ? diagnostic : 'wsl.exe reported no diagnostic.'
 }
 
@@ -42,4 +40,15 @@ export function annotateWslHostFailure(error: unknown, command: ResolvedCommand)
   const distro = command.wsl.distro
   error.message = `wsl.exe host failure (distro "${distro}"): ${diagnostic}\n${error.message}`
   return Object.assign(error, { wslHostFailure: true, wslDistro: distro })
+}
+
+// The WSL service's answer while a distro it failed to start is unusable; no guest ran.
+const WSL_SERVICE_UNEXPECTED = /Wsl\/Service\/E_UNEXPECTED\b/
+
+/** wsl.exe failed in the WSL service itself, which says nothing about the guest's git setup. */
+export function isTransientWslFailure(error: unknown): boolean {
+  if (!error || typeof error !== 'object' || !('wslHostFailure' in error)) {
+    return false
+  }
+  return error instanceof Error && WSL_SERVICE_UNEXPECTED.test(error.message)
 }

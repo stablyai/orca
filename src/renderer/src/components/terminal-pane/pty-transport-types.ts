@@ -1,3 +1,4 @@
+import type { TerminalAttachmentLaunchResult } from '../../../../shared/terminal-attachment-launch-result'
 import type { AgentIdleEdgeMeta } from '../../../../shared/terminal-output-side-effects'
 import type {
   RestoreSpawnIntent,
@@ -5,6 +6,7 @@ import type {
 } from '../../../../shared/host-spawn-admission'
 import type { ParsedAgentStatusPayload } from '../../../../shared/agent-status-types'
 import type {
+  TerminalLaunchResult,
   AgentProviderSessionMetadata,
   SleepingAgentLaunchConfig
 } from '../../../../shared/agent-session-resume'
@@ -35,26 +37,17 @@ export type PtyBufferSnapshot = {
   cols: number
   rows: number
   seq?: number
-  /** Lowest seq main could still deliver when the snapshot was taken (start
-   *  of its pending renderer-delivery queue; equals `seq` when empty). Bytes
-   *  are delivered once and in order, so a post-restore chunk at or below
-   *  this seq can never be a duplicate the snapshot already covers. */
+  /** Start of main’s pending delivery window; once-only ordered delivery makes earlier post-restore chunks new seq domains rather than snapshot duplicates. */
   pendingDeliveryStartSeq?: number
   source?: 'headless' | 'renderer'
-  /** True when the snapshot captures an alternate-screen TUI (Claude Code,
-   *  vim). Restore must NOT clear xterm's buffer in that case — the TUI's
-   *  scrollback lives in xterm and a clear destroys scroll-up after a tab
-   *  return. Mirrors the attach-time guard in pty-transport.ts. */
+  /** Alternate-screen image: preserve normal scrollback during replay rather than clearing it with the TUI frame. */
   alternateScreen?: boolean
   /** Authoritative normal buffer paired with an alternate-screen frame. */
   scrollbackAnsi?: string
   /** `data` starts on the normal buffer and enters alt itself (remote images fold
    *  their normal buffer in rather than splitting it into `scrollbackAnsi`). */
   carriesNormalBuffer?: boolean
-  /** Trailing incomplete escape sequence main's emulator ingested (a PTY read
-   *  ended mid-escape). Must be written LAST — after post-replay resets, right
-   *  before post-snapshot live chunks — so the continuation completes it
-   *  exactly as live instead of rendering literal (Bug E / #7329). */
+  /** Write incomplete escapes last after reset, before live continuation, so split sequences complete instead of printing literally (#7329). */
   pendingEscapeTailAnsi?: string
   /** Effective kitty flags the owner of this image proved at `seq`. Absent
    *  means unknown; never rewrite that silence into a known `0`. */
@@ -66,8 +59,7 @@ export type PtyBufferSnapshot = {
 export type PtyReplayDataMeta = {
   clearBeforeReplay?: boolean
   pendingEscapeTailAnsi?: string
-  /** Kitty flags the snapshot's owner PROVED at `snapshotSeq`. Absent means
-   *  unknown; the pane tracker must stay unproven rather than assume zero. */
+  /** Owner-proven Kitty flags at snapshotSeq; omission remains unknown rather than known zero. */
   kittyKeyboardFlags?: number
   /** The boundary `kittyKeyboardFlags` describes, recorded as the renderer's
    *  ordered high-water so a quiet pane can still publish a coherent snapshot. */
@@ -90,7 +82,7 @@ export type LocalPtySessionMetadata = {
   shellOverride?: string
 }
 
-export type PtyConnectResult = {
+export type PtyConnectResult = TerminalLaunchResult & {
   id: string
   /** Host-owned PTY incarnation used to fence remote identity observations. */
   incarnationId?: string
@@ -111,9 +103,7 @@ export type PtyConnectResult = {
   snapshotFrameAnsi?: string
   /** Live state to append when omitting `snapshotFrameAnsi`. */
   snapshotFrameRestoreAnsi?: string
-  /** Kitty keyboard flags the daemon snapshot proved, paired with the renderer-
-   *  domain `snapshotSeq` main reconciled for the same attach boundary. Absent
-   *  means unknown, never a proven inactive protocol. */
+  /** Owner-proven Kitty flags at main’s reconciled renderer snapshotSeq; older-host omission remains unknown. */
   snapshotKittyKeyboardFlags?: number
   snapshotTerminalOwner?: 'shell'
   snapshotSeq?: number
@@ -124,18 +114,19 @@ export type PtyConnectResult = {
   startupCwdFallback?: { kind: 'worktree'; cwd: string }
   /** Main declined an unverifiable provider-session resume and launched fresh. */
   agentResumeUnavailable?: true
-  /** Trailing partial escape the daemon emulator held mid-parse; the reattach
-   *  replay writes it LAST (after the reset) so a racing live continuation
-   *  completes it instead of rendering literally (#7329). */
+  /** Main refused the resume and started the plain shell: a native chat is the conversation's home
+   *  or may be writing it, or no record could be checked (the saved session is kept to retry). */
+  agentResumeRefused?: 'chat-home' | 'chat-writing' | 'unverifiable'
+  /** Write daemon’s trailing partial escape after reset so racing live bytes can complete it (#7329). */
   pendingEscapeTailAnsi?: string
 }
 
 type PtyCallbacks = {
+  onLaunchResult?: (result: TerminalAttachmentLaunchResult) => void
   /** Called before an adopted PTY can publish buffered/live bytes. */
   onReattachDetermined?: () => void
   onConnect?: () => void
-  /** A stream re-established after loss carries only new bytes, so the pane must
-   *  re-pull the host's retained buffer or an idle/exited pane paints nothing. */
+  /** Recovered streams contain only new bytes; fetch retained history or idle/exited panes may stay blank. */
   onStreamRecovered?: () => void
   onDisconnect?: () => void
   onData?: (data: string, meta?: PtyDataMeta) => void
@@ -153,8 +144,14 @@ type PtyCallbacks = {
   onSpawnDeferred?: (reason: SpawnDeferralReason) => void
 }
 
+/** What started a pane's recovery: the server connection, or only this pane's stream. */
+export type PtyRecoveryCause = 'connection' | 'stream-stalled' | 'stream-ended'
+
 export type PtyTransportRecoveryState = {
   reason?: 'ownership' | 'ssh-sign-in'
+  cause?: PtyRecoveryCause
+  /** A retry is parked for an outside trigger; nothing retries on its own until then. */
+  waiting?: true
   phase:
     | 'connecting'
     | 'connected'
@@ -175,10 +172,7 @@ export type PtyTransport = {
     cols?: number
     rows?: number
     sessionId?: string
-    /** Hidden-at-spawn declaration (terminal-query-authority.md): no visible
-     *  view will consume this PTY's bytes, so main marks it hidden BEFORE the
-     *  first byte and the gate + model responder own spawn-time queries.
-     *  Ignored by remote-runtime transports (not gate-markable). */
+    /** Declare hidden before spawn bytes so main’s gate/model responder owns queries from byte zero; remote runtimes ignore this local-only field. */
     initiallyHidden?: boolean
     /** Layout-owner build: attach to `sessionId` or start nothing; main starts the pane. */
     attachOnlyView?: true
@@ -190,11 +184,11 @@ export type PtyTransport = {
     envToDelete?: string[]
     launchConfig?: SleepingAgentLaunchConfig
     resumeProviderSession?: AgentProviderSessionMetadata
+    resumeOrigin?: 'saved'
     launchToken?: string
     launchAgent?: TuiAgent
     startupCommandDelivery?: StartupCommandDelivery
-    /** Taken only as the spawn request is sent; main stops the returned PTY before resolving the
-     *  pane's owner. Never taken on a session reattach, so the caller still holds it. */
+    /** Consume only at fresh spawn dispatch; main stops the returned predecessor before resolving ownership. Reattach leaves retirement with the caller. */
     claimReplacedPtyId?: () => string | null
     /** Reject a stale pane after any pre-spawn test gate but before creating a PTY. */
     shouldContinue?: () => boolean
@@ -209,12 +203,7 @@ export type PtyTransport = {
   }) => void
   disconnect: () => void
   sendInput: (data: string, inputKind: TerminalInputKind) => boolean
-  // Why: latency-critical terminal query replies (CPR/DSR/DA/OSC color/pixel
-  // size) must skip input coalescing — a querying program reads them in raw
-  // mode with a short timeout, so a debounced reply lands on the shell prompt
-  // and corrupts input (#7329). Local transports already write promptly, so
-  // this is `sendInput` for them; the remote transport flushes pending input
-  // (preserving order) and sends the reply immediately.
+  // Send query replies immediately, after flushing earlier input in order; debounce can miss raw-mode reads and leak replies at shell prompts (#7329).
   sendInputImmediate: (data: string) => boolean
   sendInputAccepted?: (
     data: string,
@@ -259,9 +248,7 @@ export type PtyTransport = {
   /** Host platform captured by the PTY owner; paired-client OS is not authoritative. */
   getRemotePlatform?: () => NodeJS.Platform | null
   getLocalSessionMetadata?: () => LocalPtySessionMetadata | null
-  /** Drop cross-chunk parser carries (partial OSC-9999 prefix). Called when a
-   *  model-restore marker reports dropped bytes — a carry spanning the gap
-   *  would corrupt the next live chunk. IPC transports only. */
+  /** Drop cross-chunk carry on local-main restore markers; partial OSC state spanning lost bytes would corrupt live output. */
   resetCrossChunkParserState?: () => void
   serializeBuffer?: (
     opts?: RemoteRuntimeSnapshotRequestOptions
@@ -270,9 +257,7 @@ export type PtyTransport = {
     opts?: RemoteRuntimeSnapshotRequestOptions
   ) => Promise<RemoteRuntimeSnapshotOutcome>
   preserve?: () => void
-  /** Hand the live PTY to a successor without process teardown. Terminal for this instance:
-   *  it also drops the transport's output processor from the pty side-effect memory census,
-   *  so a reattached one would run untracked. Create a new transport instead. */
+  /** Terminal handoff releases this transport’s processor census entry without killing the PTY; successors must create a fresh transport. */
   detach?: (options?: { preserveExitObserver?: boolean }) => void
   destroy?: (options?: {
     /** Explicit close can retain retirement intent until an unbound connect settles. */
@@ -282,8 +267,13 @@ export type PtyTransport = {
 
 export type IpcPtyTransportOptions = {
   cwd?: string
-  /** Retain bounded user input while a visible split waits to start its PTY. */
+  /** Retain bounded user input until the pane's first PTY connection binds. */
   bufferInputUntilConnect?: boolean
+  /** A new pane with no old screen: typing before its first remote terminal exists goes to it. */
+  /** 'connect' decides once that the pane looked blank; 'bind' re-checks only what a create can't cause. */
+  keepTypeAheadForNewTerminal?: (phase: 'connect' | 'bind') => boolean
+  /** Re-checked when held input would flush; false drops it (startup work appeared after the hold began). */
+  releasePreconnectInput?: () => boolean
   /** Seed a fresh transport with input handed off from a remounted deferred split. */
   preconnectInput?: readonly PtyPreconnectInputEntry[]
   /** Records newly retained input against a remount-safe deferred split handoff. */
@@ -294,6 +284,7 @@ export type IpcPtyTransportOptions = {
   commandDelivery?: 'renderer' | 'provider'
   launchConfig?: SleepingAgentLaunchConfig
   resumeProviderSession?: AgentProviderSessionMetadata
+  resumeOrigin?: 'saved'
   agentPrompt?: string
   agentPromptDelivery?: AgentPromptDelivery
   agentArgsOverride?: string | null
@@ -318,8 +309,7 @@ export type IpcPtyTransportOptions = {
   onPtyExit?: (ptyId: string, exitCode?: number) => void
   onTitleChange?: (title: string, rawTitle: string) => void
   onPtySpawn?: (ptyId: string) => void
-  /** Asked when a fresh spawn resolves after this transport was destroyed: true keeps the PTY for
-   *  the pane's successor (disposed-spawn-retention.ts); absent or false kills it. */
+  /** Current surface may retain a late disposed spawn for its successor; absent/false authorizes kill (disposed-spawn-retention.ts). */
   retainDisposedSpawn?: () => boolean
   /** Rebind an existing pane after its provider replaces the PTY identity. */
   onPtyRebind?: (ptyId: string, replacedPtyId: string, incarnationId?: string | null) => void

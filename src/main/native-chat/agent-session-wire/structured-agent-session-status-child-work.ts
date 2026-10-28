@@ -31,6 +31,20 @@ export function structuredStatusChildWork(
   return { children, ...(tasks ? { backgroundTasks: tasks } : {}) }
 }
 
+/** Exclude per-tick usage from global broadcasts; chat background channels retain it. */
+export function structuredStatusChildWorkFields(
+  views: readonly AgentChildWorkView[] | undefined,
+  provider: StructuredAgentId
+): StructuredStatusChildWork {
+  const { children, backgroundTasks } = structuredStatusChildWork(views, provider)
+  return {
+    ...(backgroundTasks && backgroundTasks.length > 0
+      ? { backgroundTasks: backgroundTasks.map(({ totalTokens: _tokens, ...task }) => task) }
+      : {}),
+    ...(children ? { children } : {})
+  }
+}
+
 export function structuredStatusChildrenEqual(
   a: readonly AgentChildWorkView[] | undefined,
   b: readonly AgentChildWorkView[] | undefined

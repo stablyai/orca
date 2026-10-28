@@ -89,17 +89,7 @@ function canOpenRtlRun(codePoint: number): boolean {
   return !COMBINING_MARK.test(String.fromCodePoint(codePoint))
 }
 
-/**
- * Character-joiner handler for xterm's registerCharacterJoiner API: returns the
- * [start, end) ranges of a row segment that should render as joined units. A run
- * spans the first to last strong-RTL code point, tunneling neutrals; runs of
- * fewer than two RTL code points are skipped (isolated forms already render).
- *
- * Known xterm limitations: a standalone width-0 cell (e.g. RLM at line start)
- * shifts the run's cell range by one; and the WebGL renderer un-joins for
- * cursor/selection but not decorations, so a search-match highlight inside a run
- * renders all-or-nothing.
- */
+/** Join first-to-last strong RTL through neutrals, requiring two strong code points (isolated forms already render). xterm limitations: standalone width-zero cells can shift ranges; WebGL unjoins cursor/selection but not decorations, making search highlights all-or-nothing. */
 export function findRtlJoinRanges(text: string): [number, number][] {
   const length = text.length
   let i = 0
@@ -108,7 +98,7 @@ export function findRtlJoinRanges(text: string): [number, number][] {
       break
     }
   }
-  // Why: xterm merges other joiners' results into this array in place, so it must be freshly allocated each call.
+  // Return a fresh array: xterm merges other joiners’ ranges into it in place.
   const ranges: [number, number][] = []
   if (i === length) {
     return ranges
@@ -162,7 +152,7 @@ export function findRtlJoinRanges(text: string): [number, number][] {
   return ranges
 }
 
-// Why: Indic clusters share the lazy joiner so one registration, WebGL gate and wiring cover both scripts; the RTL and Indic ranges can never overlap.
+// Share lazy registration/WebGL gating with Indic clusters; RTL and Indic ranges never overlap.
 function findShapingJoinRanges(text: string): [number, number][] {
   const ranges = findRtlJoinRanges(text)
   const indicRanges = findIndicClusterRanges(text)

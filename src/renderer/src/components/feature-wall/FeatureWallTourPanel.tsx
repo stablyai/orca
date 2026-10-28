@@ -57,8 +57,7 @@ export function FeatureWallTourPanel(props: {
   continueButton: ReactNode
   leadingFooterContent?: ReactNode
 }): JSX.Element {
-  // Why: the tour should not slide horizontally between pages; individual
-  // visuals can adapt inside the stage, but the page anchor must stay fixed.
+  // Keep the page anchor fixed while individual visuals change size.
   const contentStageClassName = 'mx-auto w-full max-w-[940px]'
   const previewTitle = props.activeStepCopy?.title ?? props.selected.title
   const panel = (

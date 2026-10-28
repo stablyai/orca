@@ -46,6 +46,7 @@ export function useWorkItemSourcePresentation(
     gitlabItems,
     jiraIssues,
     linearAvailable,
+    linearStatusChecked,
     linearIssues,
     commandValue,
     setCommandValue,
@@ -206,11 +207,12 @@ export function useWorkItemSourcePresentation(
     }
     return null
   }, [jiraSource.intent, linearAvailable, rows, value])
+  // Why: a slow host status read must not let Enter accept a pasted Linear URL as plain text.
   const unresolvedLinearUrlIntent =
     linearUrlIntentOwnsInput &&
-    linearAvailable &&
     sourceIntent !== 'linear' &&
-    (linearLoading || settledLinearUrlQuery !== linearQuery.trim())
+    (!linearStatusChecked ||
+      (linearAvailable && (linearLoading || settledLinearUrlQuery !== linearQuery.trim())))
   const blockingTaskUrlResolution = isBlockingTaskUrlResolution({
     sourceIntent: sourceIntent === 'github' || sourceIntent === 'gitlab' ? sourceIntent : null,
     isQueryStale,

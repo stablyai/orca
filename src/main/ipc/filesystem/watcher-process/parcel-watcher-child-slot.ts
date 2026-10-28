@@ -1,5 +1,5 @@
 import type { ChildProcessHandle } from '@orca/process-host/process-spec'
-import { removeWatcherCanaryDirectory } from '../../parcel-watcher-canary-directory'
+import { removeWatcherCanaryDirectory } from './parcel-watcher-canary-directory'
 
 export class WatcherChildSlot {
   child: ChildProcessHandle | null = null

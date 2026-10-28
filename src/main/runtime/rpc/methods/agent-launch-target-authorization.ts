@@ -1,9 +1,4 @@
-/**
- * A launch that creates its workspace performs that create, so it needs the create method's own
- * authorization. The mobile allowlist is enforced per method name before dispatch, and `agent.launch`
- * being on it must not let a phone make a workspace its create method would be refused. Reading the
- * same list keeps the two from drifting.
- */
+/** Authorize workspace creation against its own method allowlist; mobile access to agent.launch must not bypass create restrictions. */
 
 import { AgentLaunchTargetForbiddenError } from '../../../../shared/agent-launch-target-forbidden'
 import type { AgentLaunchTarget } from '../../../../shared/agent-launch-intent'

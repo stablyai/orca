@@ -13,9 +13,7 @@ import { translate } from '@/i18n/i18n'
 type AutoRenameFailedDialogProps = {
   open: boolean
   onOpenChange: (open: boolean) => void
-  /** Worktree whose auto-rename failed; keys the full-output lookup. */
   worktreeId: string
-  /** Sidebar name of the worktree whose auto-rename failed. */
   worktreeName: string
   /** Persisted failure message — headline plus a sanitized output excerpt. */
   error: string
@@ -64,17 +62,10 @@ type NameGenerationFailedDialogProps = {
   error: string
   /** Full CLI output still held in memory; null falls back to `error`. Keep it stable. */
   readFullOutput: () => Promise<string | null>
-  /** A footer action beside Close, such as running the generation again. */
   action?: ReactNode
 }
 
-/**
- * Modal that surfaces a name-generation failure. It shows the full
- * CLI output when main still holds it (in-memory, lost on restart), falling
- * back to the published excerpt — either can run many lines, so it gets a
- * dedicated scrollable surface rather than a tooltip — see the sibling
- * AddRemoteHostDialog pattern.
- */
+/** Full output is memory-only; fall back to the published excerpt after restart and scroll long replies. */
 export function NameGenerationFailedDialog({
   open,
   onOpenChange,
@@ -122,9 +113,7 @@ export function NameGenerationFailedDialog({
 
   const handleCopy = useCallback(async () => {
     try {
-      // Why: Electron's clipboard IPC, not navigator.clipboard, which fails
-      // silently inside Radix dialogs — and an inline icon swap (no toast),
-      // matching the app's other inline copy buttons.
+      // Use Electron clipboard IPC because navigator.clipboard fails silently in Radix dialogs.
       await window.api.ui.writeClipboardText(detailText)
       setCopied(true)
       if (copiedResetTimerRef.current !== null) {
@@ -149,9 +138,7 @@ export function NameGenerationFailedDialog({
           </DialogTitle>
         </DialogHeader>
         <p className="text-sm text-muted-foreground">{description}</p>
-        {/* Why: agent-CLI output is literal and often multi-line, so render it
-            verbatim (mono, wrapped) inside a height-capped scroll region.
-            min-w-0 keeps an unbroken token from widening this grid column. */}
+        {/* Cap and wrap literal CLI output; min-w-0 prevents unbroken tokens widening the grid. */}
         <div className="min-w-0 space-y-1.5">
           <p className="text-xs font-medium text-foreground">
             {translate(
@@ -173,8 +160,6 @@ export function NameGenerationFailedDialog({
                       'Copy error'
                     )
               }
-              // Why: float over the scroll region's top-right; pad the text so
-              // long lines never slide under the button.
               className="absolute right-1.5 top-1.5 text-muted-foreground hover:text-foreground"
             >
               {copied ? <Check className="size-3.5" /> : <Copy className="size-3.5" />}
@@ -185,8 +170,6 @@ export function NameGenerationFailedDialog({
           </div>
         </div>
         <DialogFooter>
-          {/* Why: Close backs the user out, so it stays quiet (outline, not a
-              solid CTA) — matching the other sidebar dialogs. */}
           <Button type="button" variant="outline" size="sm" onClick={() => onOpenChange(false)}>
             {translate('auto.components.sidebar.AutoRenameFailedDialog.aed1623b1e', 'Close')}
           </Button>

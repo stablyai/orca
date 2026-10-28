@@ -1,9 +1,4 @@
-/**
- * A phone's Markdown read and save, window or not: main answers from the file on disk, through the
- * workspace's own host. The desktop's unsaved text stays the desktop's: the phone sees the disk,
- * with the listed tab's `isDirty` as its "changed on desktop" signal, and the desktop's editor
- * reports a phone save as a change on disk.
- */
+/** Mobile reads/saves host disk, never unsaved desktop text; isDirty reports desktop divergence. */
 import {
   hashMarkdownContent,
   isMarkdownContentByteLengthOverLimit,
@@ -35,13 +30,11 @@ type MarkdownFileAddress = Pick<
 
 export type MarkdownTabDiskHost = Pick<MarkdownFileIo, 'readFile'> & {
   getWorkspaceSessionForWorktree(worktreeId: string): WorkspaceSessionState | null | undefined
-  /** The file calls of one save, all reaching the host its first call reached. */
   forSave(worktreeId: string, file: MarkdownFileAddress): Promise<MarkdownFileIo>
 }
 
 export type MarkdownFileIo = {
-  /** A prefix of the file decoded (at most `maxBytes`, the host may send less), and its full
-   *  size; throws `binary_file` for binary. */
+  /** Decode at most maxBytes (hosts may return less); report full size and reject binary_file. */
   readFile(
     worktreeId: string,
     file: MarkdownFileAddress,
@@ -55,18 +48,16 @@ export type MarkdownFileIo = {
   ): Promise<FileWriteResult>
 }
 
-/** The tab as the phone was shown it; a preview names its source file in `sourceFilePath`. */
 export type ListedMarkdownTab = Pick<
   RuntimeMobileSessionMarkdownTab,
   'id' | 'mode' | 'filePath' | 'sourceFilePath' | 'sourceRelativePath' | 'isDirty' | 'isUntitled'
 >
 
-// Why up to 4 bytes over: a character straddling the cap still decodes whole before the cut.
+// Allow a capped multibyte character to decode whole before cutting.
 const READ_SLACK_BYTES = 4
 
 const saveQueues = new Map<string, Promise<unknown>>()
 
-// Why the saved session: it names the file behind the listed tab, window or not.
 function savedEditorFile(
   host: MarkdownTabDiskHost,
   worktreeId: string,
@@ -79,7 +70,7 @@ function savedEditorFile(
     ? findListedEditorFile(files, session, worktreeId, { id: tab.id, filePath: sourceFilePath })
     : undefined
   if (!file && tab.mode === 'markdown-preview') {
-    // Why: a preview outlives its closed source tab, and only edit tabs are saved; it stays read-only.
+    // Previews may outlive source tabs; only edit tabs persist, so orphaned previews stay read-only.
     return {
       filePath: sourceFilePath,
       relativePath: tab.sourceRelativePath,
@@ -93,7 +84,6 @@ function savedEditorFile(
   return file
 }
 
-/** Why a tab is read-only on the phone whatever the file holds; checked before any disk access. */
 function tabReadOnlyReason(
   tab: ListedMarkdownTab,
   file: PersistedOpenFile
@@ -101,11 +91,10 @@ function tabReadOnlyReason(
   if (tab.mode === 'markdown-preview') {
     return 'unsupported_preview'
   }
-  // Why: a phone save must never make a file of a document the user has not named and saved.
+  // Mobile saves cannot turn unnamed desktop documents into files.
   if (tab.isUntitled) {
     return 'unsupported_untitled'
   }
-  // Why: the editor never saves a read-only tab (a log view), so the phone may not either.
   return file.readOnly ? 'unsupported_tab' : undefined
 }
 
@@ -138,7 +127,6 @@ export async function readMarkdownTabFromDisk(
     filePath: file.filePath,
     relativePath: file.relativePath,
     content: preview.content,
-    // Why the listed flag: unsaved desktop text is the desktop's; the phone only learns it exists.
     isDirty: tab.isDirty,
     version: hashMarkdownContent(preview.content),
     source: 'file',
@@ -195,7 +183,7 @@ async function saveOnce(
   }
   const saved = { tabId: tab.id, isDirty: false as const, version: hashMarkdownContent(content) }
   if (hashMarkdownContent(disk.content) !== baseVersion) {
-    // Why: a repeated save tap that already landed is a success, not a conflict.
+    // A repeated save already on disk succeeds rather than conflicting.
     if (disk.content === content) {
       return { ...saved, content }
     }

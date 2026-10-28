@@ -10,7 +10,6 @@ import { dispatchBrowserPageZoom } from '@/components/browser-pane/host-guest/br
 import { requestViewerZoom } from '@/components/editor/viewer-zoom-request'
 
 export function registerZoomIpcBridge(unsubs: (() => void)[]): void {
-  // Zoom handling for menu accelerators and keyboard fallback paths.
   unsubs.push(
     window.api.ui.onTerminalZoom((direction) => {
       const store = useAppStore.getState()

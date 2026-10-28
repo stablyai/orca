@@ -12,10 +12,7 @@ import type { Automation, AutomationRun } from '../../shared/automations-types'
 import { hasExtraAgentArgs } from '../../shared/automation-extra-agent-args'
 import { getRepoRoutingConnectionId } from '../../shared/execution-host'
 import { structuredAgentSessionPaneKey } from '../../shared/structured-agent-session-projection'
-import { TUI_AGENT_CONFIG } from '../../shared/tui-agent-config'
-import { getStructuredAgentSessionHost } from '../native-chat/agent-session-wire/structured-agent-session-registry'
 import type { OrcaRuntimeService } from '../runtime/orca-runtime'
-import { commitStructuredAgentSessionLaunchPrompt } from '../runtime/rpc/methods/agent-launch-structured-prompt'
 import type { HeadlessAutomationDispatchLaunch } from './headless-dispatch'
 import {
   createHeadlessAutomationStructuredSession,
@@ -144,13 +141,21 @@ export async function launchHeadlessAutomationAgent(
       }
     },
     surfaces: {
-      createStructuredSession: async ({ worktreeId, agent: structuredAgent, withoutPrompt }) => {
+      createStructuredSession: async ({
+        worktreeId,
+        agent: structuredAgent,
+        withoutPrompt,
+        firstMessage,
+        signal
+      }) => {
         const created = await createHeadlessAutomationStructuredSession({
           runtime,
           caller,
           worktreeId,
           agent: structuredAgent,
-          ...(withoutPrompt ? { withoutPrompt: true as const } : {})
+          ...(withoutPrompt ? { withoutPrompt: true as const } : {}),
+          ...(firstMessage ? { firstMessage } : {}),
+          ...(signal ? { signal } : {})
         })
         structured = { sessionId: created.sessionId, tabId: created.tabId }
         if (!workspace) {
@@ -159,19 +164,12 @@ export async function launchHeadlessAutomationAgent(
         }
         return created
       },
-      deliverStructuredPrompt: ({ sessionId, fence, prompt }) =>
-        commitStructuredAgentSessionLaunchPrompt({
-          host: getStructuredAgentSessionHost(),
-          caller,
-          sessionId,
-          fence,
-          text: prompt.text
-        }),
       createTerminalAgent: async ({ worktreeId, startupPrompt }) => {
         const launched = await runtime.launchAgentTerminal(`id:${worktreeId}`, {
           agent,
           prompt: startupPrompt ?? '',
           title: run.title,
+          suppressStartupUpdatePrompt: true,
           ...(automation.extraAgentArgs ? { extraAgentArgs: automation.extraAgentArgs } : {})
         })
         terminal = launched
@@ -184,10 +182,7 @@ export async function launchHeadlessAutomationAgent(
         }
       },
       deliverTerminalPrompt: ({ handle, prompt }) =>
-        runtime.deliverStartupFollowup(handle, {
-          expectedProcess: TUI_AGENT_CONFIG[agent].expectedProcess,
-          prompt: prompt.text
-        })
+        runtime.deliverStartupFollowup(handle, { agent, prompt: prompt.text })
     }
   }
   const published = await launchUntilPublished(execution)

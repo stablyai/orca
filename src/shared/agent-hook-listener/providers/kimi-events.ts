@@ -11,12 +11,12 @@ import {
 import { extractToolFields, isNewTurnEvent } from '../provider-event-routing'
 import { readString } from '../tool-input-preview'
 
-// Why: Kimi's auto-allowed AskUserQuestion emits PreToolUse (not PermissionRequest) while awaiting an answer; treat as waiting so the UI shows the attention icon, not a spinner.
+// Auto-allowed AskUserQuestion still blocks a human on PreToolUse.
 export function isKimiUserInputTool(toolName: string | undefined): boolean {
   return toolName?.replaceAll(/[^a-z0-9]/gi, '').toLowerCase() === 'askuserquestion'
 }
 
-// Why: Kimi Code emits Claude-compatible payloads/event names; normalize but attribute to Kimi so the sidebar shows Kimi's icon/label, not Claude's.
+// Normalize Claude-shaped events while retaining Kimi attribution.
 export function normalizeKimiEvent(
   state: HookListenerState,
   eventName: unknown,
@@ -26,6 +26,18 @@ export function normalizeKimiEvent(
 ): ParsedAgentStatusPayload | null {
   if (shouldIgnoreCompactContinuationUserPromptSubmit(eventName, promptText)) {
     return null
+  }
+  if (eventName === 'SessionStart') {
+    // Why: a resumed session's only pre-prompt signal, so its id stays resumable at the next quit
+    // (#31311); `startup` fires mid-submit of the first message, so it is not an idle boundary.
+    return hookPayload['source'] === 'resume'
+      ? normalizeAgentStatusPayload({
+          state: 'done',
+          prompt: '',
+          agentType: 'kimi',
+          sessionBoundary: true
+        })
+      : null
   }
 
   const toolName = readString(hookPayload, 'tool_name')

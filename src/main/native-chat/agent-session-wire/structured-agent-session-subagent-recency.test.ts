@@ -67,7 +67,7 @@ async function openSession() {
         })
       ]
     ]),
-    getRecord: () => null,
+    getConversation: () => null,
     now: () => 1,
     statusSink: () => ({
       publish: (summary, subject) => server.ingestStructuredStatus(summary, subject),

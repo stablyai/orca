@@ -10,7 +10,6 @@ import { RelayControlClient } from './relay-control-client'
 
 const encoder = new TextEncoder()
 
-/** A JSON control frame, including the forward-compat frames the client must ignore. */
 type ControlFrame = { type: string } & Record<string, unknown>
 const HOST_PROOF_DOMAIN = 'orca-relay-host-proof/v1'
 const CHALLENGE_DOMAIN = 'orca-relay-host-challenge/v1'
@@ -85,7 +84,6 @@ function nextJson(ws: WebSocket): Promise<Record<string, unknown>> {
 describe('RelayControlClient', () => {
   const servers: WebSocketServer[] = []
   const clients: RelayControlClient[] = []
-  /** Raw TCP listeners that accept but never upgrade; they have no WebSocketServer to close. */
   const silentServers: Server[] = []
   const silentSockets: Socket[] = []
 
@@ -118,7 +116,7 @@ describe('RelayControlClient', () => {
   })
 
   it('rejects a control handshake that never receives a proof response', async () => {
-    // host must match the 127.0.0.1 clients dial: a wildcard bind lets a foreign loopback listener claim the port and answer here.
+    // Bind exactly the dialed loopback address so another listener cannot claim it.
     const server = new WebSocketServer({ host: '127.0.0.1', port: 0, perMessageDeflate: false })
     servers.push(server)
     await new Promise<void>((resolve) => server.once('listening', resolve))
@@ -148,9 +146,7 @@ describe('RelayControlClient', () => {
     await expect(client.connect()).rejects.toThrow('relay_control_connect_timeout')
   })
 
-  // Why: the connect deadline is armed in the same tick as the socket and expires from
-  // 'opening' too, so it already bounds a connect that never opens. Without this a reader
-  // concludes the phase is uncovered and adds a second, transport-level bound for it.
+  // The same-tick connect deadline already bounds opening before upgrade.
   it('expires a connect whose upgrade is never answered', async () => {
     const server = createServer((socket) => {
       silentSockets.push(socket)
@@ -269,8 +265,7 @@ describe('RelayControlClient', () => {
     const connecting = client.connect()
     const { socket, authorization, capabilities, path } = await accepted
     expect(authorization).toBe('Bearer scoped-token')
-    // Advertised on the upgrade, never in host-hello: a cell that predates the
-    // capability parses host-hello strictly and would refuse the handshake.
+    // Strict older cells reject new hello keys; advertise capabilities in upgrade headers.
     expect(capabilities).toBe('pending-conn-details,idle-regional-rehome-v1')
     expect(path).toBe('/v1/host/control')
     const hello = await nextJson(socket)
@@ -469,7 +464,6 @@ class FakeControlSocket extends EventEmitter {
     this.pings += 1
   }
 
-  /** The RFC 6455 reply a live peer owes any ping, delivered out of band. */
   pong(): void {
     this.emit('pong')
   }
@@ -548,8 +542,6 @@ function scriptedControl(
         activeConnIds: [],
         pendingConns: []
       })
-      // Same ws parser turn: the close event fires before any awaiting caller
-      // of connect() gets to run.
       if (options.closeWithAck) {
         ws.close(1006)
       }
@@ -559,7 +551,6 @@ function scriptedControl(
   const onConnectionOpen = vi.fn()
   const client = new RelayControlClient({
     cellUrl: origin,
-    // Midpoint random => no jitter, so probe boundaries are exact in tests.
     livenessRandom: options.livenessRandom ?? (() => 0.5),
     relayJwt: 'scoped-token',
     relayHostId,
@@ -591,7 +582,6 @@ describe('RelayControlClient scripted-socket lifecycle', () => {
   })
 
   it('tolerates a cell clock slightly ahead when validating the challenge', async () => {
-    // A relay whose clock runs ~100ms-2s ahead is normal NTP drift, not replay.
     const { client } = scriptedControl({ issuedAtOffsetMs: 1_500 })
 
     await expect(client.connect()).resolves.toMatchObject({ generation: 4 })
@@ -639,9 +629,7 @@ describe('RelayControlClient scripted-socket lifecycle', () => {
     await client.connect()
     expect(client.isLive()).toBe(true)
 
-    // A newer relay opcode the desktop schema does not know. Rule 2 of
-    // remote-wire-compatibility: an unknown-but-well-formed frame is dropped,
-    // never fatal to a live control.
+    // Remote-wire Rule 2: drop unknown well-formed opcodes without killing control.
     socket.deliver({ type: 'relay-hint', v: 2, hint: 'future-feature' })
 
     expect(client.isLive()).toBe(true)
@@ -651,18 +639,23 @@ describe('RelayControlClient scripted-socket lifecycle', () => {
   })
 
   it('ignores a reply whose request already timed out instead of self-closing', async () => {
+    vi.useFakeTimers()
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
     const { client, socket, onClose } = scriptedControl()
     await client.connect()
+    const invite = client
+      .createInvite('device-1', 'expired-req')
+      .catch((error: Error) => error.message)
+    await vi.advanceTimersByTimeAsync(10_000)
+    expect(await invite).toBe('relay_control_request_timeout')
 
-    // A relay control-error carrying a reqId with no live waiter — e.g. a late
-    // reply that arrived after the desktop's request deadline deleted it, or the
-    // relay's no-op error for a command it could not route. Must not be fatal.
+    // Unmatched/late request errors are nonfatal, including replies after waiter timeout.
     socket.deliver({ type: 'control-error', reqId: 'expired-req', code: 'unknown_control_message' })
 
     expect(client.isLive()).toBe(true)
     expect(socket.readyState).toBe(1)
     expect(onClose).not.toHaveBeenCalled()
+    client.closeNow()
     warn.mockRestore()
   })
 
@@ -672,7 +665,6 @@ describe('RelayControlClient scripted-socket lifecycle', () => {
     const closeCodes: number[] = []
     socket.script = (message, ws) => {
       if (message.type === 'host-hello') {
-        // An extra key from a newer relay must not turn the frame into an unknown one.
         ws.deliver({ type: 'control-error', code: 'limit_exceeded', retryAfterMs: 1_000 })
         expect(ws.readyState).toBe(1)
         ws.close(MOBILE_RELAY_CLOSE_CODE.LIMIT_EXCEEDED)
@@ -694,8 +686,7 @@ describe('RelayControlClient scripted-socket lifecycle', () => {
     await client.connect()
     socket.deliver({ type: 'drain', graceMs: 5_000, recovery: 'resolve-director' })
 
-    // A drain-only cell refuses new phones, so this conn-open was issued before
-    // the drain and only this cell holds the phone waiting on it.
+    // Draining cells still own phones whose conn-open was issued before the drain.
     socket.deliver({
       type: 'conn-open',
       connId: 'conn-1',
@@ -724,10 +715,7 @@ describe('RelayControlClient scripted-socket lifecycle', () => {
   })
 })
 
-// STA-7672: a Windows desktop behind NAT/VPN (or resuming from sleep) can hold a
-// half-open control socket that send() writes into happily while nothing comes
-// back. Every pairing request then failed at its 10s deadline against a socket
-// the 75s silence watchdog would not reap for another minute-plus.
+// STA-7672: half-open NAT/VPN/sleep sockets accept sends but strand pairing until the long silence watchdog.
 describe('RelayControlClient half-open recovery', () => {
   afterEach(() => {
     vi.useRealTimers()
@@ -742,14 +730,11 @@ describe('RelayControlClient half-open recovery', () => {
 
     await vi.advanceTimersByTimeAsync(10_000)
 
-    // The request deadline alone must not close the control — a close would have
-    // rejected as relay_control_closed_<code> instead.
     expect(await invite).toBe('relay_control_request_timeout')
     expect(socket.pings).toBe(1)
     expect(socket.readyState).toBe(1)
 
-    // One unanswered probe is UNKNOWN, not death (STA-3320): a lone swallowed
-    // pong is routine on exactly the VPN/cellular paths this detection targets.
+    // STA-3320: one lost pong is inconclusive on cellular/VPN.
     await vi.advanceTimersByTimeAsync(8_000)
     expect(socket.pings).toBe(2)
     expect(socket.readyState).toBe(1)
@@ -757,12 +742,10 @@ describe('RelayControlClient half-open recovery', () => {
     expect(socket.pings).toBe(3)
     expect(socket.readyState).toBe(1)
 
-    // Third consecutive miss is evidence.
     await vi.advanceTimersByTimeAsync(8_000)
     expect(socket.readyState).toBe(3)
     expect(onClose).toHaveBeenCalledWith(1006)
     expect(client.isLive()).toBe(false)
-    // Named in the log so a fleet-wide false positive would be visible.
     expect(warn).toHaveBeenCalledWith(expect.stringContaining('reason=probe-unanswered'))
     warn.mockRestore()
   })
@@ -779,7 +762,6 @@ describe('RelayControlClient half-open recovery', () => {
     expect(socket.pings).toBe(2)
     socket.pong()
 
-    // A later probe run must start from zero, not inherit the earlier miss.
     await vi.advanceTimersByTimeAsync(40_000)
     expect(socket.readyState).toBe(1)
     expect(onClose).not.toHaveBeenCalled()
@@ -796,9 +778,7 @@ describe('RelayControlClient half-open recovery', () => {
     expect(socket.pings).toBe(1)
     await invite
 
-    // The probe run (3 x 8s) outlasts the relay's 15s ping cadence on purpose:
-    // relay liveness runs at the application layer, so a middlebox that swallows
-    // RFC 6455 control frames must not be able to make this a reconnect loop.
+    // Probe runs exceed the relay's 15s application ping interval, avoiding reconnect loops when middleboxes swallow pongs.
     await vi.advanceTimersByTimeAsync(15_000)
     socket.deliver({ type: 'ping', t: Date.now() })
     await vi.advanceTimersByTimeAsync(40_000)
@@ -818,8 +798,7 @@ describe('RelayControlClient half-open recovery', () => {
     socket.deliver({ type: 'ping', t: Date.now() })
     await vi.advanceTimersByTimeAsync(5_000)
 
-    // A reply running past its deadline under relay DB load is not a dead
-    // socket; tearing this control down would strand every phone on the cell.
+    // Late DB replies do not prove dead control; closing would strand every phone.
     expect(await invite).toBe('relay_control_request_timeout')
     expect(socket.pings).toBe(0)
     expect(client.isLive()).toBe(true)
@@ -827,7 +806,6 @@ describe('RelayControlClient half-open recovery', () => {
 
   it('spreads probe deadlines so one slow cell cannot synchronize a cohort', async () => {
     vi.useFakeTimers()
-    // Earliest jitter (-10%) fires at 7.2s; the unjittered boundary is 8s.
     const { client, socket } = scriptedControl({ livenessRandom: () => 0 })
     await client.connect()
     void client.createInvite('device-1').catch(() => undefined)
@@ -847,9 +825,7 @@ describe('RelayControlClient half-open recovery', () => {
 
     await vi.advanceTimersByTimeAsync(10_000)
 
-    // The message is a classification key: mobile-relay-mint-failure.ts matches
-    // it against an anchored /^relay_[a-z0-9_]{1,74}$/, so a diagnostic suffix
-    // silently downgrades this to the generic relay_mint_failed fallback.
+    // Error messages are anchored classification keys; append diagnostics only in logs.
     expect(await invite).toBe('relay_control_request_timeout')
 
     const logged = warn.mock.calls.map((call) => String(call[0])).join('\n')

@@ -6,14 +6,7 @@ import {
 import type { RuntimeClientTarget } from '../../../shared/runtime-client-target'
 import { subscribeRuntimeRpc } from './runtime-rpc-subscribe'
 
-/**
- * This host's agent health snapshot, as its availability stream last published it; every + menu on
- * any of its workspaces reads this one projection. Keyed by host, runtime instance and pairing, so a
- * restarted or re-paired host reads as not ready until it answers, while a reconnect keeps it.
- *
- * A received snapshot is kept without readers and through lost contact. A first failure has no
- * roster; unlike a received empty frame, it says nothing about which agents this host registered.
- */
+/** One agent-health projection per host/runtime/pairing serves all workspace menus. Restart/re-pair needs a new answer; reconnect/lost readers retain received snapshots. Initial failure has no roster and differs from a received empty frame. */
 export type HostStructuredAgentAvailability =
   | { state: 'pending' | 'unavailable' }
   | { state: 'received'; byAgent: ReadonlyMap<string, AgentSessionAgentAvailability> }
@@ -129,7 +122,7 @@ export function acquireHostStructuredAgentAvailability(
     }
     released = true
     held.holders -= 1
-    // Why a microtask: a holder that re-acquires in the same commit keeps the stream it has.
+    // Same-commit reacquisition must retain the stream; defer last-holder close to a microtask.
     queueMicrotask(() => {
       if (held.holders === 0) {
         held.close?.()

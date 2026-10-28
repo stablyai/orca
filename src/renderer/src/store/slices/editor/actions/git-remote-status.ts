@@ -74,7 +74,7 @@ export function createGitRemoteStatus(
         }
         return status
       } catch (error) {
-        // Why: keep prior status on error — a synthetic {hasUpstream:false} would flash 'Publish Branch' on a tracked branch and a click could re-publish, clobbering the upstream.
+        // Retain prior status on error; fake no-upstream flashes Publish and can overwrite real upstream on click.
         if (pushTarget) {
           // Why: don't let an old automatic-poll cache entry suppress the next retry after a transient refresh failure.
           invalidateAutomaticPushTargetUpstreamStatusCache({

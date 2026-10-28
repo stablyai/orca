@@ -10,7 +10,6 @@ export function markBrowserPageOpenedByPage(pageId: string): void {
   pagesOpenedByPage.add(pageId)
 }
 
-/** Closes the page's Orca tab when its guest calls window.close() and the web would allow it. */
 export function handleGuestWindowCloseMessage(
   pageId: string,
   webview: Pick<Electron.WebviewTag, 'canGoBack' | 'canGoForward'>,
@@ -33,12 +32,10 @@ export function handleGuestWindowCloseMessage(
   const tab = (state.unifiedTabsByWorktree[owner.worktreeId] ?? []).find(
     (candidate) => candidate.contentType === 'browser' && candidate.entityId === owner.workspaceId
   )
-  // Why: a pinned tab is one the user chose to keep; a page script can't overrule that.
   if (tab?.isPinned) {
     return
   }
   pagesOpenedByPage.delete(pageId)
-  // Why: the page closes, not the Orca tab around it, when that tab holds other pages too.
   if ((state.browserPagesByWorkspace[owner.workspaceId] ?? []).length > 1) {
     state.closeBrowserPage(pageId)
     return

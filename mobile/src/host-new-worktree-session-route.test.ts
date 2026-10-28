@@ -9,8 +9,7 @@ describe('host new worktree session route', () => {
     )
   })
 
-  // Why: the host reports a create that succeeded with a failed startup terminal via `warning`;
-  // dropping it here is what lands the phone on an unexplained empty session.
+  // Creation can succeed with a startup-terminal warning; preserve it so the phone explains an empty session.
   it('carries a host create warning into the session route', () => {
     expect(
       hostNewWorktreeSessionRoute(

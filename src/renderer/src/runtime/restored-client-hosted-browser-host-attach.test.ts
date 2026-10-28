@@ -47,8 +47,7 @@ describe('ensureBrowserClientHostsForRestoredPages', () => {
     vi.unstubAllGlobals()
   })
 
-  // Why: the host is started lazily on the create path only, so after a relaunch this desktop hosts
-  // nothing and the runtime never gets the attach that would recover the retained pages.
+  // Restored pages need explicit lazy-host startup; without attach the runtime cannot recover retained pages.
   it('starts the browser client host once for an environment with restored client-hosted rows', async () => {
     await ensureBrowserClientHostsForRestoredPages(
       handles({
@@ -71,8 +70,7 @@ describe('ensureBrowserClientHostsForRestoredPages', () => {
     expect(preparedEnvironmentIds().sort()).toEqual(['env-1', 'env-2'])
   })
 
-  // Why: a server-hosted page is the runtime's to run; starting a host for it would claim hosting
-  // duty this desktop was never asked for.
+  // Server-hosted pages need no desktop hosting duty.
   it('starts no host for restored rows the server hosts', async () => {
     await ensureBrowserClientHostsForRestoredPages(
       handles({ 'page-1': { environmentId: 'env-1' } })
@@ -81,8 +79,7 @@ describe('ensureBrowserClientHostsForRestoredPages', () => {
     expect(preparedEnvironmentIds()).toEqual([])
   })
 
-  // Why: the marker is what ends the retries — adoption spends it once the host republishes the
-  // page, and an environment with none left must not be dialled again.
+  // Adoption spends restored markers; environments without them must stop retries.
   it('starts no host once adoption has spent the restored markers', async () => {
     await ensureBrowserClientHostsForRestoredPages(
       handles({ 'page-1': { environmentId: 'env-1', clientHosted: true } })
@@ -111,8 +108,7 @@ describe('ensureBrowserClientHostsForRestoredPages', () => {
     expect(preparedEnvironmentIds()).toEqual(['env-1'])
   })
 
-  // Why: this runs inside the startup chain, and a rejected preparation there would abort hydration
-  // and boot the app in degraded no-save mode.
+  // Preparation failure must not abort startup hydration into degraded no-save mode.
   it('swallows a failed preparation instead of rejecting into hydration', async () => {
     prepareBrowserClientHostPlacement.mockRejectedValue(new Error('runtime_manually_disconnected'))
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
@@ -125,8 +121,7 @@ describe('ensureBrowserClientHostsForRestoredPages', () => {
     warn.mockRestore()
   })
 
-  // Why: preparation resolves to server placement when the probe cannot answer instead of
-  // throwing, so this is the only thing that reports a relaunch whose pages never come back.
+  // Unanswered probes fall back to server placement without throwing; this diagnostic exposes failed relaunch recovery.
   it('warns when preparation answers server placement for pages this desktop was hosting', async () => {
     prepareBrowserClientHostPlacement.mockResolvedValue({ kind: 'server' })
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
@@ -139,16 +134,14 @@ describe('ensureBrowserClientHostsForRestoredPages', () => {
     warn.mockRestore()
   })
 
-  // Why: reachability is observed from the status slice, which can run before the browser slice
-  // has published any handles at all.
+  // Status can observe reachability before browser handles exist.
   it('starts no host for a state with no handle map yet', async () => {
     await expect(ensureBrowserClientHostsForRestoredPages({})).resolves.toBeUndefined()
 
     expect(preparedEnvironmentIds()).toEqual([])
   })
 
-  // Why: hydration can ask before the environment is reachable, and that attempt has to be
-  // retryable or the restored tab never comes back for the rest of the session.
+  // Hydration before reachability must remain retryable or restored tabs never recover.
   it('retries an environment whose preparation failed when it is asked again', async () => {
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
     prepareBrowserClientHostPlacement.mockRejectedValueOnce(new Error('runtime_unreachable'))

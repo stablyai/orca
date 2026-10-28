@@ -1,3 +1,4 @@
+import { agentSessionRecordFixture } from '../native-chat/agent-session-record-test-fixture'
 import { createClaudeStructuredLaunchResolver } from '../runtime/structured-agent-launch-composition.test-support'
 import { chmodSync, mkdtempSync, mkdirSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -9,9 +10,9 @@ import { FLOATING_TERMINAL_WORKTREE_ID } from '../../shared/constants'
 import {
   CLAUDE_DEFAULT_SETTING_SOURCES,
   CLAUDE_SESSION_STATE_EVENTS_ENV,
-  CLAUDE_STRUCTURED_BASE_OPTIONS,
-  claudeSessionIdForOrcaSession
+  CLAUDE_STRUCTURED_BASE_OPTIONS
 } from './claude-structured-launch-resolution'
+import { claudeSessionIdForOrcaSession } from './structured/claude-structured-session-id'
 import { CLAUDE_THINKING_DISPLAY_FLAG, type ClaudeCliFlag } from './claude-cli-flag-support'
 import { claudeProviderHandle } from '../../shared/agent-session-provider-handle-encoding'
 
@@ -21,7 +22,7 @@ const IDENTITY = { sessionId: SESSION_ID } as Parameters<
 >[0]['identity']
 
 function record(overrides: Partial<AgentSessionRecord> = {}): AgentSessionRecord {
-  return {
+  return agentSessionRecordFixture({
     sessionId: SESSION_ID,
     provider: 'claude',
     location: {
@@ -33,7 +34,7 @@ function record(overrides: Partial<AgentSessionRecord> = {}): AgentSessionRecord
     accountHome: { variable: 'CLAUDE_CONFIG_DIR', path: '/home/work/.claude' },
     providerHandleChain: [],
     ...overrides
-  } as AgentSessionRecord
+  })
 }
 
 function identityAt(leafUuid: string | null): typeof IDENTITY {

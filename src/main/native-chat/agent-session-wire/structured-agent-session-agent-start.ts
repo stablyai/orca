@@ -3,28 +3,30 @@
 
 import {
   providerDiagnosticOf,
+  type SubmissionRejectionFact,
   type AgentSessionArgumentProblem,
   type ProviderDiagnostic
 } from '../../../shared/agent-session-failure'
 import { argumentProblemOf } from '../structured-agent-arguments-error'
 import {
   agentSessionRefusalFromReference,
-  readAgentSessionRefusalReference,
-  refuseUnclassified
+  isAgentSessionRefusalError,
+  readAgentSessionRefusalReference
 } from '../../../shared/agent-session-wire-refusals'
-import { agentSessionWriteNoticeEnglish } from '../../../shared/agent-session-refusal-notice'
 import type {
   AgentSessionAttachResult,
   AgentSessionMutationResult,
   AgentSessionWireRefusal
 } from '../../../shared/agent-session-wire'
 import type { StructuredAgentSessionAttachContext } from './structured-agent-session-attach-context'
-import { isQueuedAgentJournalSubmission } from '../../../shared/agent-session-queued-submission'
-import { randomUUID } from 'node:crypto'
 import { attachStructuredAgentSessionForStart } from './structured-agent-session-attach-orchestration'
 import type { StructuredAgentSessionAttachLock } from './structured-agent-session-attach-lock'
-import { structuredAgentSessionStartFlightLock } from './structured-agent-session-start-flight'
-import { isStructuredAgentSessionStartupExpired } from './structured-agent-session-startup-attempt-contract'
+import {
+  failedStructuredAgentSessionStart,
+  registerStructuredAgentSessionStart,
+  structuredAgentSessionStartStillQueued
+} from './structured-agent-session-start-attempts'
+import { retryableStructuredAgentSessionAcquisition } from './structured-agent-session-start-retry'
 import { failedCreateRefusal } from './structured-agent-session-failed-create-refusal'
 import {
   joinClosingStructuredAgentSessionChild,
@@ -49,6 +51,9 @@ export type StructuredAgentSessionResumeOutcome =
       /** Startup silence/ceiling expiry means Orca stopped the start. */
       expired?: true
       argumentProblem?: AgentSessionArgumentProblem
+      retry?: boolean
+      failure?: SubmissionRejectionFact
+      startKey?: string | null
     }
 
 const AGENT_START_CALLER_KEY = 'trusted-local:agent-start'
@@ -63,26 +68,33 @@ export function claimStructuredAgentSessionAgent(
   sessionId: string,
   startedFor?: string
 ): StructuredAgentSessionStartClaim {
+  try {
+    context.deps.store.requireWritableRecord(sessionId)
+  } catch (error) {
+    if (isAgentSessionRefusalError(error)) {
+      return { outcome: Promise.resolve({ ok: false, refusal: error.refusal }) }
+    }
+    throw error
+  }
   const session = context.sessions.get(sessionId)
   const child = session?.child
-  if (
-    startedFor &&
-    !session?.journal
-      .submissions()
-      .some(
-        (submission) =>
-          submission.clientMessageId === startedFor && isQueuedAgentJournalSubmission(submission)
-      )
-  ) {
-    return { outcome: Promise.resolve({ ok: false, aborted: true, refusal: startFailedRefusal() }) }
+  if (!structuredAgentSessionStartStillQueued(session, startedFor)) {
+    return { outcome: Promise.resolve({ ...failedStructuredAgentSessionStart(), aborted: true }) }
+  }
+  const flight = context.runtimeState.startFlights.get(sessionId)
+  if (flight) {
+    return { outcome: flight.outcome }
   }
   if (child && !child.close) {
     return { outcome: Promise.resolve({ ok: true }) }
   }
   return {
-    outcome:
-      context.runtimeState.startFlights.get(sessionId)?.outcome ??
-      registerStart(context, sessionId, startedFor)
+    outcome: registerStructuredAgentSessionStart(
+      context,
+      sessionId,
+      startedFor,
+      (lock, attemptId) => runStart(context, sessionId, startedFor, lock, attemptId)
+    )
   }
 }
 
@@ -118,54 +130,9 @@ export function claimOperationStart(
         sessionId,
         error
       })
-      return { ok: false, refusal: startFailedRefusal() }
+      return failedStructuredAgentSessionStart()
     })
   }
-}
-
-/** Register cancellation, startup limits and quit drainage before the first wait. */
-function registerStart(
-  context: StructuredAgentSessionAttachContext,
-  sessionId: string,
-  startedFor: string | undefined
-): Promise<StructuredAgentSessionResumeOutcome> {
-  const { runtimeState } = context
-  const attemptId = randomUUID()
-  const acquire = runtimeState.acquireAborts.begin(sessionId)
-  runtimeState.startupAttempts.begin(sessionId, attemptId)
-  const lock = structuredAgentSessionStartFlightLock({
-    sessionId,
-    attemptId,
-    signal: acquire.signal,
-    flights: runtimeState.startFlights,
-    serialize: context.serialize
-  })
-  const outcome = context.tasks.trackAttach(
-    Promise.resolve()
-      .then(() => runStart(context, sessionId, startedFor, lock, attemptId))
-      .catch((error: unknown) => {
-        if (!acquire.signal.aborted) {
-          throw error
-        }
-        const expired = isStructuredAgentSessionStartupExpired(acquire.signal.reason)
-        return {
-          ok: false as const,
-          refusal: startFailedRefusal(),
-          ...(expired ? { expired: true as const } : { aborted: true as const })
-        }
-      })
-      .finally(() => {
-        acquire.end()
-        runtimeState.startFlights.end(sessionId, attemptId)
-        runtimeState.startupAttempts.abandon(sessionId, attemptId)
-      })
-  )
-  runtimeState.startFlights.register(sessionId, {
-    attemptId,
-    outcome,
-    abort: acquire.abort
-  })
-  return outcome
 }
 
 async function runStart(
@@ -246,13 +213,6 @@ async function runStart(
       )
 }
 
-function startFailedRefusal(): AgentSessionWireRefusal {
-  return refuseUnclassified(
-    'agent_session_owner_restart_failed',
-    agentSessionWriteNoticeEnglish(['restartFailed'])
-  )
-}
-
 function withDiagnostic(
   refusal: AgentSessionWireRefusal,
   error: unknown,
@@ -266,7 +226,8 @@ function withDiagnostic(
     ...(diagnostic ? { diagnostic } : {}),
     ...(aborted ? { aborted: true as const } : {}),
     ...(expired ? { expired: true as const } : {}),
-    ...(argumentProblem ? { argumentProblem } : {})
+    ...(argumentProblem ? { argumentProblem } : {}),
+    retry: retryableStructuredAgentSessionAcquisition(error)
   }
 }
 

@@ -2,7 +2,7 @@ import { translate } from '@/i18n/i18n'
 import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
 import { UsageCredentialsHostOutdatedError } from '@/runtime/runtime-usage-credentials-client'
 
-/** Where a usage key is saved: this computer, or the Settings host whose usage poller reads it. */
+/** Save keys on the host whose usage poller reads them. */
 export type UsageCredentialHost = {
   owner: RuntimeClientTarget
   /** Null for this computer. */
@@ -28,7 +28,6 @@ export function usageCredentialAccessNotice(
   if (host.label === null) {
     return null
   }
-  // Why: an unanswered host is not one without a key.
   if (access === 'checking') {
     return translate(
       'auto.components.settings.usageCredentialHost.checking',
@@ -76,7 +75,7 @@ export function usageCredentialUnreadableNotice(
       )
 }
 
-/** Why: the other app on that machine still reads a key it sealed, so only it may replace one. */
+/** Only the app that sealed a key can read and replace it. */
 export function usageCredentialSealedElsewhere(
   host: UsageCredentialHost,
   unreadable: 'sealed-elsewhere' | 'unreadable' | undefined
@@ -84,7 +83,6 @@ export function usageCredentialSealedElsewhere(
   return host.label !== null && unreadable === 'sealed-elsewhere'
 }
 
-/** The storage line under a saved key: this computer, or the selected host. */
 export function usageCredentialStoredLabel(host: UsageCredentialHost): string {
   return host.label === null
     ? translate('auto.components.settings.AccountsPane.0b8c1c7e02', 'Stored locally')

@@ -7,7 +7,12 @@ import type { ResumableSessionParseState } from './session-scanner-types'
 // Infer lineage from stamp_UUID artifact directories: task transcripts are label-named and omit parentSession (#9330).
 const OMP_SESSION_DIR_NAME = String.raw`\d{4}-\d{2}-\d{2}T\d{2}-\d{2}-\d{2}-\d{3}Z_[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}`
 
-export const OMP_SESSION_ARTIFACT_DIR_PATTERN = new RegExp(`^${OMP_SESSION_DIR_NAME}$`, 'i')
+const OMP_SESSION_ARTIFACT_DIR_PATTERN = new RegExp(`^${OMP_SESSION_DIR_NAME}$`, 'i')
+
+/** Walk workspace buckets but not task artifact dirs; OMP lists only top-level conversations (#9330). */
+export function isOmpConversationDirectory(name: string, depth: number): boolean {
+  return depth === 0 || !OMP_SESSION_ARTIFACT_DIR_PATTERN.test(name)
+}
 
 // Remote counts include only direct artifact children, matching local readdir; nested grandchildren remain excluded.
 const OMP_SUBAGENT_SUBTREE_PATTERN = new RegExp(String.raw`[\\/]${OMP_SESSION_DIR_NAME}[\\/]`, 'i')
@@ -60,7 +65,7 @@ export function partitionOmpSubagentTranscriptPaths(
   return { sessionFilePaths, subagentTranscriptCounts }
 }
 
-/** Count on the transcript-owning host only; remote walks supply their own counts. */
+/** Count OMP rows on the transcript-owning host only; remote walks supply their own counts. */
 export function withOmpSubagentTranscriptCount(
   state: ResumableSessionParseState,
   transcriptFilePath: string
@@ -74,7 +79,7 @@ export function withOmpSubagentTranscriptCount(
       const session = await state.finalize(platform, options)
       const ownsTranscriptDisk =
         !options?.executionHostId || options.executionHostId === LOCAL_EXECUTION_HOST_ID
-      if (!session || !ownsTranscriptDisk) {
+      if (session?.agent !== 'omp' || !ownsTranscriptDisk) {
         return session
       }
       return {

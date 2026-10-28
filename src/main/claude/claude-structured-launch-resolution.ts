@@ -5,7 +5,10 @@ import type {
   Options as ClaudeAgentSdkOptions,
   PermissionMode
 } from '@anthropic-ai/claude-agent-sdk'
-import type { AgentChatPermissionMode } from '../../shared/agent-chat-permission-mode'
+import type {
+  AgentChatPermissionChoice,
+  AgentChatPermissionMode
+} from '../../shared/agent-chat-permission-mode'
 import {
   agentSessionProviderHandleKey,
   agentSessionProviderHandleRoot
@@ -28,16 +31,18 @@ import {
   resolveClaudeStructuredLaunchHome
 } from './claude-structured-launch-home'
 import type { StructuredAgentLaunchPartResolver } from '../runtime/structured-agent-launch-composition'
-import { claudeSessionIdForOrcaSession } from './claude-structured-session-id'
+import { claudeSessionIdForOrcaSession } from './structured/claude-structured-session-id'
 import {
   pendingAgentSessionRewindFork,
   type AgentSessionRewindFork
 } from '../../shared/agent-session-rewind'
 
-export { claudeSessionIdForOrcaSession }
-
 export const CLAUDE_DEFAULT_SETTING_SOURCES = ['user', 'project', 'local'] as const
 export const CLAUDE_SESSION_STATE_EVENTS_ENV = 'CLAUDE_CODE_EMIT_SESSION_STATE_EVENTS'
+
+type ClaudePermissionOptions = Pick<ClaudeAgentSdkOptions, 'permissionMode' | 'extraArgs'> & {
+  resolvePermissionModeInCli?: true
+}
 
 export type ClaudeStructuredSdkOptions = Pick<
   ClaudeAgentSdkOptions,
@@ -45,19 +50,18 @@ export type ClaudeStructuredSdkOptions = Pick<
   | 'systemPrompt'
   | 'settingSources'
   | 'supportedDialogKinds'
-  | 'extraArgs'
   | 'additionalDirectories'
   | 'plugins'
   | 'model'
   | 'effort'
-  | 'permissionMode'
   | 'allowDangerouslySkipPermissions'
   | 'settings'
   | 'sessionId'
   | 'resume'
   | 'resumeSessionAt'
   | 'forkSession'
->
+> &
+  ClaudePermissionOptions
 
 /** Replay acknowledgements require an explicit flag; the SDK supplies the other transport flags. */
 export const CLAUDE_STRUCTURED_BASE_OPTIONS: ClaudeStructuredSdkOptions = {
@@ -78,8 +82,12 @@ const CLAUDE_PERMISSION_MODES = {
 
 /** Full access is the owned CLI flag: the SDK's typed bypass emits a flag older binaries reject. */
 export function claudeStructuredPermissionOptions(
-  mode: AgentChatPermissionMode
-): Pick<ClaudeStructuredSdkOptions, 'permissionMode' | 'extraArgs'> {
+  mode: AgentChatPermissionChoice
+): ClaudePermissionOptions {
+  if (mode === 'own') {
+    // upstream request: https://github.com/anthropics/claude-agent-sdk-typescript/issues/519
+    return { resolvePermissionModeInCli: true }
+  }
   return mode === 'full-access'
     ? { extraArgs: { 'dangerously-skip-permissions': null } }
     : { permissionMode: CLAUDE_PERMISSION_MODES[mode] }
@@ -136,7 +144,9 @@ export async function resolveClaudeStructuredInvocation(
   options?: Parameters<typeof claudeChildEnv>[2]
 ): Promise<ClaudeStructuredInvocation> {
   const sources = resolvedSources ?? (await resolveClaudeChildEnvSources(deps))
+  deps.signal?.throwIfAborted()
   const auth = await deps.resolveAuthPolicy()
+  deps.signal?.throwIfAborted()
   // Preserve proxy credentials alongside ANTHROPIC_BASE_URL for every account.
   return {
     command: sources.command,

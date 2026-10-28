@@ -1,6 +1,4 @@
-// Why: the runtime rejects stale terminal-artifact grants with these codes, but
-// the RPC mux flattens error shapes to code+message strings, so mobile matches
-// by substring. Single source so grant refresh and preview errors can't drift.
+// The RPC mux flattens grant errors to code+message; share substring matching so refresh and preview errors agree.
 export function isTerminalArtifactGrantError(text: string): boolean {
   const normalized = text.toLowerCase()
   return (

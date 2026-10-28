@@ -392,6 +392,7 @@ orca artifacts delete <id> --json
 - `list` is paged (`nextCursor` → `--cursor`). `delete` takes the artifact id from `list` and does not need the original file.
 - Relative HTML assets are not uploaded — share self-contained HTML or absolute asset URLs.
 - Denied publish/update fails with `artifact_sharing_disabled`; fix Settings instead of retrying.
+- Headless Orca servers have no Orca cloud sign-in, so artifact and skill-sharing commands there fail with `sharing_unavailable_on_host`; share from the desktop app.
 - Desktop: open a local HTML or Markdown file and use **Share as artifact**, or manage links from the sidebar **Artifacts** page.
 
 ## Automations, environments, and hooks

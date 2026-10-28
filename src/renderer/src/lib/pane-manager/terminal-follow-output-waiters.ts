@@ -1,8 +1,6 @@
 import type { TerminalScrollIntentTarget } from './terminal-scroll-intent'
 
-// Why: work that repositions the viewport (clear-and-replay repaints) must wait
-// out a pinned reading position instead of racing it on a timer. Waiters are
-// one-shot: the intent write that turns follow-output back on releases them all.
+// Viewport repositioning must wait for pinned reading to end; the next follow-output intent releases all one-shot waiters.
 const followOutputWaitersByTerminal = new WeakMap<TerminalScrollIntentTarget, Set<() => void>>()
 
 /** Registers a one-shot listener for the terminal's next follow-output intent; returns a canceller. */

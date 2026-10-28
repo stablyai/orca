@@ -1,4 +1,4 @@
-import { useMemo, useRef } from 'react'
+import { useEffect, useEffectEvent, useMemo, useRef } from 'react'
 import { Check, Copy, ExternalLink, Globe, Settings } from 'lucide-react'
 import { toast } from 'sonner'
 import { ShortcutKeyCombo } from '@/components/ShortcutKeyCombo'
@@ -14,6 +14,8 @@ import type { LinkAction, LinkActionRequest } from './link-action-request'
 type LinkActionPopoverProps<TRequest extends LinkActionRequest> = {
   request: TRequest | null
   onClose: (dismissed?: TRequest) => void
+  onPointerDownOutside?: (event: Event) => void
+  onOpenSettings?: () => void
 }
 
 function ActionRow({
@@ -51,16 +53,34 @@ function ActionRow({
   )
 }
 
-/** Shared by the terminal and native chat: pick where a clicked link opens. */
 export function LinkActionPopover<TRequest extends LinkActionRequest>({
   request,
-  onClose
+  onClose,
+  onPointerDownOutside,
+  onOpenSettings
 }: LinkActionPopoverProps<TRequest>): React.JSX.Element {
   const openSettingsPage = useAppStore((state) => state.openSettingsPage)
   const openSettingsTarget = useAppStore((state) => state.openSettingsTarget)
   const copyableDestination = request?.kind === 'url' ? request.destination : ''
   const { copyText, status: copyStatus } = useClipboardTextCopyFeedback(copyableDestination)
   const copyInFlightRef = useRef(false)
+  const contentRef = useRef<HTMLDivElement>(null)
+  const dismissOnOutsidePointerDown = useEffectEvent((event: PointerEvent): void => {
+    if (!request || (event.target instanceof Node && contentRef.current?.contains(event.target))) {
+      return
+    }
+    onPointerDownOutside?.(event)
+    onClose(request)
+  })
+  useEffect(() => {
+    if (!request) {
+      return
+    }
+    // Why: Radix defers outside dismissal to the click and skips it when the click's
+    // propagation is stopped, which hover cards and sidebar cards both do.
+    document.addEventListener('pointerdown', dismissOnOutsidePointerDown, true)
+    return () => document.removeEventListener('pointerdown', dismissOnOutsidePointerDown, true)
+  }, [request])
   const virtualRef = useMemo(
     () => ({
       current: {
@@ -113,6 +133,7 @@ export function LinkActionPopover<TRequest extends LinkActionRequest>({
 
   const openTerminalLinkSettings = (): void => {
     onClose()
+    onOpenSettings?.()
     openSettingsTarget({
       pane: 'browser',
       repoId: null,
@@ -129,6 +150,7 @@ export function LinkActionPopover<TRequest extends LinkActionRequest>({
       <PopoverAnchor virtualRef={virtualRef} />
       {request ? (
         <PopoverContent
+          ref={contentRef}
           align="start"
           side="top"
           sideOffset={6}

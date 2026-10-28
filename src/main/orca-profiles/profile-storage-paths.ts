@@ -55,10 +55,6 @@ export function getOrcaProfileDataFile(
   return getSharedOrcaProfileDataFile(profileId, userDataPath)
 }
 
-/**
- * Return the future profile-state database path without changing the legacy
- * JSON path used by the current Store and its sidecars.
- */
 export function getOrcaProfileStateDatabaseFile(
   profileId: string,
   userDataPath = getProfileUserDataPath()

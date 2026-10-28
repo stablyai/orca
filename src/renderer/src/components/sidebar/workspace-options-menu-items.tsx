@@ -127,8 +127,7 @@ function SortByOptionItem({ preserveWorkspaceBoardOpen }: OptionItemProps): JSX.
               <DropdownMenuRadioItem
                 key={opt.id}
                 value={opt.id}
-                // Keep the menu open so people can compare sort modes and
-                // toggle card properties without reopening the same panel.
+                // Keep the menu open for comparing modes and toggling properties.
                 onSelect={(e) => e.preventDefault()}
               >
                 {opt.label}

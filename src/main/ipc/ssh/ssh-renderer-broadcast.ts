@@ -23,6 +23,7 @@ import {
   portForwardManager
 } from './ssh-ipc-context'
 import { requestDesktopBrowserBridgeReconcile } from '../desktop-browser-bridge-reconcile'
+import { listUnrestoredPortForwards } from './ssh-port-forward-unrestored'
 
 export function broadcastSshState(
   getMainWindow: () => BrowserWindow | null,
@@ -81,7 +82,8 @@ export function broadcastPortForwards(
   }
   win.webContents.send('ssh:port-forwards-changed', {
     targetId,
-    forwards: listForwardsEnriched(targetId)
+    forwards: listForwardsEnriched(targetId),
+    unrestored: listUnrestoredPortForwards(targetId)
   })
 }
 

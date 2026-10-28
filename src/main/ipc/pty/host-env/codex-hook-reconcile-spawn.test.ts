@@ -16,6 +16,7 @@ vi.mock('../../../agent-hooks/wsl-hook-relay-manager', () => ({
     ensureForDistro: vi.fn(),
     getGuestEndpointFilePath: () => '/guest/endpoint.json',
     getOpenCodeOverlayDir: () => join(fixture.userData, 'guest-overlay'),
+    getClaudeAgentView: () => null,
     getGuestAgentPath: () => null
   }
 }))

@@ -11,11 +11,8 @@ export const OFFICIAL_PLUGIN_ID_PREFIX = 'orca-'
 export const OFFICIAL_MARKETPLACE_OWNER = 'stablyai'
 export const OFFICIAL_MARKETPLACE_REPOSITORY = 'orca-plugins'
 
-// Why: theme/icon/skill contributions were deferred, so `contributes` now
-// rejects them and any plugin declaring one fails to install wholesale. The
-// shared marketplace index (which this build does not control) still advertises
-// such packs; hide listings that carry these categories so users never hit a
-// dead "install" path until the marketplace catches up.
+// Hide unsupported contribution categories still advertised by the externally maintained index; otherwise their manifests
+// fail wholesale and present a dead install path until the marketplace catches up.
 export const UNSUPPORTED_MARKETPLACE_CATEGORIES: readonly string[] = [
   'themes',
   'icons',
@@ -48,8 +45,7 @@ export const pluginMarketplaceGitSourceSchema = z.strictObject({
     .min(1)
     .max(32 * 1024)
     .refine(isAllowedPluginGitUrl, 'git URL must use HTTPS or SSH'),
-  // Why: marketplace installs must first resolve a named ref to an exact
-  // commit; an omitted remote default would make the listing irreproducible.
+  // Require a named ref before resolving the exact commit; unspecified remote defaults are not reproducible listings.
   ref: z.string().trim().min(1).max(4_096)
 })
 

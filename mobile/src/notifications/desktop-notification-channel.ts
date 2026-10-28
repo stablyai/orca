@@ -1,13 +1,10 @@
 import * as Notifications from 'expo-notifications'
 import { Platform } from 'react-native'
 
-// Why an id both sides share: the gateway's FCM payload names this channel, so a
-// background push can be the first thing that ever targets it. Android drops a
-// notification whose channel does not exist, and the channel used to be created
-// only inside subscribeToDesktopNotifications — i.e. only once a socket connected.
+// Create the shared FCM channel before socket subscription: a background push can arrive first, and Android drops notifications for missing channels.
 export const DESKTOP_NOTIFICATION_CHANNEL_ID = 'orca-desktop'
 
-/** Idempotent on Android (the OS updates the existing channel); a no-op elsewhere. */
+// Android updates existing channels; other platforms do nothing.
 export async function ensureDesktopNotificationChannel(): Promise<void> {
   if (Platform.OS !== 'android') {
     return

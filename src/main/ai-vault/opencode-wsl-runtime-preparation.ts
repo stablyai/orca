@@ -19,6 +19,7 @@ import {
 import { REMOTE_NODE_RUNTIME_READY } from '../ssh/orcad-remote-node-runtime-report'
 import { getRemoteHostPlatform } from '../ssh/ssh-remote-platform'
 import { runWslProcess, type WslSpec } from '../wsl/wsl-runner'
+import { describeWslProcessFailure } from '../wsl/wsl-process-failure'
 import { filterPathsToRunningWslDistrosAsync } from '../wsl-running-path-filter'
 import type { OpenCodeWslRuntime } from './session-scanner-opencode-wsl-runtime'
 
@@ -97,7 +98,7 @@ async function prepare(distro: string): Promise<OpenCodeWslRuntime> {
       maxOutputBytes: 16 * 1024
     })
     if (result.code !== 0 || result.timedOut) {
-      throw new Error(`WSL SQLite reader setup failed: ${result.stderr.trim() || 'command failed'}`)
+      throw new Error(`WSL SQLite reader setup failed: ${describeWslProcessFailure(result)}`)
     }
     return result.stdout.trim()
   }

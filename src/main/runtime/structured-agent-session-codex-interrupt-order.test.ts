@@ -1,8 +1,4 @@
-// Codex answers an interrupt it took before it ends the turn: on `TurnAborted` the app-server
-// answers pending interrupts, then sends `turn/completed` (interrupted) on the same channel. The
-// Stop's settle, which runs between the two, must label the turn the Stop's: no end row for it
-// ever reads as a failure. Driven through the shipped host, journal and Codex adapter; only the
-// Codex child is fake, and the test delivers the turn's end after the Stop has answered.
+// Drive the real host/journal/adapter with fake Codex: interrupt answers precede turn/completed, so Stop settlement must prevent a transient failed turn.
 
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
@@ -10,9 +6,9 @@ import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type {
   CodexAppServerConnection,
-  CodexAppServerConnectionHandlers,
-  openCodexAppServerConnection
-} from '../codex/codex-app-server-connection'
+  CodexAppServerConnectionHandlers
+} from '../codex/app-server/codex-app-server-connection-types'
+import type { openCodexAppServerConnection } from '../codex/codex-app-server-connection'
 import { readCodexTurnId } from '../codex/codex-structured-thread-facts'
 import { codexTurnLifecycleFake } from '../codex/codex-turn-lifecycle-fake'
 import { computeAgentSessionPayloadFingerprint } from '../../shared/agent-session-mutation-envelope'
@@ -58,7 +54,6 @@ let turns: ReturnType<typeof codexTurnLifecycleFake>
 let statuses: AgentSessionStatusSummary[]
 let opened: Set<string>
 let steers: number
-/** The turn each turn/start answered into, in order. */
 let startedTurns: string[]
 /** When set, Codex answers the interrupt only once it resolves. */
 let interruptAnswer: Promise<void> | null
@@ -120,8 +115,7 @@ function turnEndRows(): AgentJournalTurnItem[] {
   })
 }
 
-/** The Stop has answered with Codex's end still to come; then Codex ends the turn. Stopping
- *  showed while the Stop settled, ended with the turn, and no status read the turn as failed. */
+/** After Stop answers, deliver its pending turn end and verify no intermediate failed status. */
 async function expectInterruptedThroughout(): Promise<void> {
   expect(interrupts).toBe(1)
   expect(turnEndRows()).toEqual([
@@ -192,8 +186,7 @@ beforeEach(async () => {
           return turns.routes['turn/steer'](params)
         }
         if (method === 'turn/interrupt') {
-          // Taken: answered now; the test sends the turn's end once the Stop has answered. A turn
-          // Codex runs but whose turn/started was not yet read gets that frame ahead of the answer.
+          // Codex emits any unread turn/started before answering; the test sends turn/completed afterward.
           interrupts += 1
           if (turns.turnId !== null && !opened.has(turns.turnId)) {
             turns.start()
@@ -264,8 +257,7 @@ describe("a Codex Stop answered before Codex's turn/completed (interrupted)", ()
     }
   )
 
-  // No turn showed when the person pressed Stop, which interrupts the answered turn at once: the
-  // turn that opens is bound by the Stop's settle.
+  // A Stop accepted before turn/started must bind the turn that opens during settlement.
   it('reads the turn that opens behind an in-flight turn/start as interrupted, never failed', async () => {
     const release = turns.holdNextAnswer()
     await send('look around')
@@ -278,9 +270,7 @@ describe("a Codex Stop answered before Codex's turn/completed (interrupted)", ()
   })
 })
 
-// A message sent while the Stop ends the turn goes out once that turn has ended. Codex answered the
-// interrupt, so the turn has aborted even while its turn/completed is still on the wire: the
-// message opens its own turn, never a steer Codex would refuse.
+// An answered interrupt has aborted its turn even before turn/completed; the next send must start a new turn.
 describe('a send behind a Codex Stop answered before its turn ends', () => {
   it('opens its own turn with turn/start, never turn/steer', async () => {
     await send('look around')
@@ -291,8 +281,7 @@ describe('a send behind a Codex Stop answered before its turn ends', () => {
     const stopping = stop()
     await vi.waitFor(() => expect(interrupts).toBe(1))
 
-    // Accepted behind the Stop on the session's lane, so it reaches Codex only once the Stop has
-    // answered and the turn reads ended, while Codex's turn/completed is still to come.
+    // The session lane releases this send after Stop settles, while turn/completed is still pending.
     const sent = send('run this after the stop')
     await vi.waitFor(() => expect(statuses.some((summary) => summary.stopping === true)).toBe(true))
     expect(answers).toBe(1)
@@ -302,7 +291,6 @@ describe('a send behind a Codex Stop answered before its turn ends', () => {
 
     await vi.waitFor(() => expect(answers).toBe(2))
     expect(steers).toBe(0)
-    // Its own turn, not folded into the aborted one, and the message is not lost.
     expect(startedTurns).toEqual(['turn-1', 'turn-2'])
     turns.end('interrupted')
     const clientMessageId = await sent

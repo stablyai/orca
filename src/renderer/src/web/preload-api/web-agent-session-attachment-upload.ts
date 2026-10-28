@@ -17,8 +17,7 @@ import { createBrowserUuid } from '@/lib/browser-uuid'
 const ATTACHMENT_CALL_TIMEOUT_MS = 30_000
 const SERVER_CHANGED = 'The paired Orca server changed while the request was in progress.'
 
-/** Every call goes to the server the paste was meant for, as its desktop counterpart does: a
- *  re-pair or a replaced server process ends the upload instead of storing it elsewhere. */
+/** Pin every chunk to the paste’s server/process; re-pair or process replacement ends the upload, matching desktop. */
 async function callPinned<TResult>(
   target: AgentSessionAttachmentUploadTarget,
   method: string,
@@ -51,8 +50,7 @@ async function callPinned<TResult>(
 
 type AttachmentAppend = { offset: number; contentBase64: string }
 
-/** Aborts a failed transfer so the server frees its slot; only on the same server, since an
- *  abort a re-pair refuses is left to that server's idle expiry. */
+/** Abort only on the original server to release its slot; re-pair refusal leaves cleanup to idle expiry. */
 async function uploadWebAgentSessionAttachment(
   target: AgentSessionAttachmentUploadTarget,
   file: { name: string; byteLength: number },
@@ -104,8 +102,7 @@ async function* browserFileAppends(file: Blob): AsyncGenerator<AttachmentAppend>
 
 const MAX_MEGABYTES = AGENT_SESSION_ATTACHMENT_MAX_BYTES / (1024 * 1024)
 
-/** The browser's picked and dropped files, named by the tokens that hold them, uploaded into the
- *  chat's store on its paired server in input order, as the desktop uploads local paths. */
+/** Upload picked/dropped file tokens to the paired chat store in input order, matching desktop path uploads. */
 export async function uploadBrowserFilesToWebAgentSessionAttachments(
   args: AgentSessionAttachmentUploadTarget & { paths: readonly string[] }
 ): Promise<AgentSessionAttachmentPathUploadResult> {

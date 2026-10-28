@@ -283,7 +283,7 @@ describe('OrcaRuntimeService', () => {
     publishStaleGraph()
 
     await runtime.sleepTerminalsForWorktree(`id:${TEST_WORKTREE_ID}`)
-    // Why: another connected client can republish a pre-sleep graph after physical teardown.
+    // Another client can republish a pre-sleep graph after physical teardown.
     publishStaleGraph()
     const firstObserver = await runtime.getWorktreePs()
     const secondObserver = await runtime.getWorktreePs()
@@ -435,7 +435,7 @@ describe('OrcaRuntimeService', () => {
   })
 
   it('attaches inline agent rows from hook-reported status (not just OSC)', async () => {
-    // Why: agent status arrives via hooks, not OSC; worktree.ps reads the hook snapshot so mobile surfaces those agents.
+    // Hook-only agents must appear in worktree.ps without an OSC status.
     const leafId = '33333333-3333-4333-8333-333333333333'
     const paneKey = `tab-1:${leafId}`
     const now = Date.now()
@@ -612,7 +612,6 @@ describe('OrcaRuntimeService', () => {
     ])
   })
   it('does not carry hook monitoring mode into a newer OSC turn', async () => {
-    // One store, so the newer turn simply replaces the monitoring row; nothing reconciles them.
     const leafId = '55555555-5555-4555-8555-555555555555'
     const statusWiring = makeAgentStatusStoreWiring()
     const runtime = new OrcaRuntimeService(store, undefined, statusWiring.deps)

@@ -80,8 +80,7 @@ export function CodexSwitcherMenu({
       iconOnly={iconOnly}
       asSubmenu={asSubmenu}
       triggerContent={triggerContent}
-      // Why: Codex reset credits render beside the reset action below; showing
-      // them in the generic provider summary duplicates the same metadata.
+      // Reset credits render beside the action below; suppress the generic summary’s duplicate.
       hidePanelResetCredits
       ariaLabel={translate(
         'auto.components.status.bar.StatusBar.ba55303942',
@@ -251,7 +250,13 @@ export function CodexSwitcherMenu({
                             </span>
                           ) : null}
                         </div>
-                        {inactiveUsage?.isFetching && !inactiveUsage.rateLimits ? (
+                        {/* Why: rows follow this desktop's codexTarget, so a remote owner's usage could land on the wrong row. */}
+                        {target.active && !hasActiveRuntimeEnvironment ? (
+                          <InlineUsageBars
+                            limits={codex}
+                            isFetching={codex.status === 'fetching'}
+                          />
+                        ) : inactiveUsage?.isFetching && !inactiveUsage.rateLimits ? (
                           <InlineUsageSkeleton />
                         ) : showSignInAction ? (
                           <InlineUsageSignInAction

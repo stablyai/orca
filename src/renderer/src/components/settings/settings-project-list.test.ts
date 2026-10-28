@@ -65,7 +65,6 @@ describe('buildSettingsProjectList', () => {
 
     expect(projects).toHaveLength(1)
     expect(projects[0].setups).toHaveLength(2)
-    // Representative is the local host's repo.
     expect(projects[0].representativeRepoId).toBe('local-1')
     expect(getSettingsProjectRemovalScope(projects[0])).toBe('project')
   })
@@ -270,7 +269,8 @@ describe('deep-link resolution', () => {
     const map = buildRepoIdToHostSelection(projects)
     expect(map.get('remote-9')).toEqual({
       selectionKey: projects[0].selectionKey,
-      hostId: 'runtime:home-mac'
+      hostId: 'runtime:home-mac',
+      setupId: 'remote-9'
     })
   })
 
@@ -324,6 +324,20 @@ describe('deep-link resolution', () => {
     expect(getSettingsProjectHostRepo(projects[0], repos, hostSelection?.hostId)?.id).toBe(
       'remote-9'
     )
+  })
+
+  it('opens the linked setup when one entry holds two setups on that host (#11689)', () => {
+    const wslPath = '\\\\wsl.localhost\\Ubuntu\\home\\me\\app'
+    const sameHostRepos = [
+      makeRepo({ id: 'windows-clone', gitRemoteIdentity: gitRemote, path: 'C:\\repos\\app' }),
+      makeRepo({ id: 'wsl-clone', gitRemoteIdentity: gitRemote, path: wslPath })
+    ]
+    const [entry] = buildSettingsProjectList(sameHostRepos)
+    const selection = buildRepoIdToHostSelection([entry]).get('wsl-clone')
+
+    expect(
+      getSettingsProjectHostRepo(entry, sameHostRepos, selection?.hostId, selection?.setupId)?.path
+    ).toBe(wslPath)
   })
 
   it('defaults to the local host repo row when no host is selected', () => {
@@ -387,7 +401,7 @@ describe('removeSettingsProjectFromAllHosts', () => {
 
     await removeSettingsProjectFromAllHosts(setups, removeProject)
 
-    // errorFeedback: this is a user-initiated removal, so a failure must surface (#11994).
+    // User-initiated removal failures must surface.
     expect(removeProject.mock.calls).toEqual([
       ['local-1', { hostId: 'local', errorFeedback: 'toast' }],
       ['remote-9', { hostId: 'runtime:home-mac', errorFeedback: 'toast' }]

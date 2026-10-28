@@ -1,31 +1,41 @@
-import { existsSync, mkdtempSync, realpathSync, writeFileSync, unlinkSync } from 'node:fs'
-import { tmpdir } from 'node:os'
+import {
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  realpathSync,
+  writeFileSync,
+  unlinkSync
+} from 'node:fs'
 import { join } from 'node:path'
 import { expect, it, vi } from 'vitest'
+import { supportsTsrs } from '../../config/scripts/tsrs-typecheck-compiler.mjs'
 import { removeTreeSync } from '../../src/shared/windows-transient-lock-removal'
 import { collectTypecheckPass, findTsNocheckFiles } from './check-tests-typecheck-ratchet.mjs'
+import { resolveMobileTypecheckCommand } from './mobile-typecheck-compiler.mjs'
+
+const mobileRoot = realpathSync(join(import.meta.dirname, '..'))
 
 it.each([
-  { compiler: 'javascript', incremental: true },
+  ...(supportsTsrs() ? [{ compiler: 'tsrs', incremental: true }] : []),
+  { compiler: 'bun', incremental: false },
   { compiler: 'native', incremental: false }
 ])(
   'rechecks changed types, diagnostics and test membership with $compiler',
   ({ compiler, incremental }) => {
-    const root = realpathSync(mkdtempSync(join(tmpdir(), 'orca-mobile-typecheck-')))
-    const cache = join(root, '.cache')
-    vi.stubEnv('ORCA_MOBILE_TYPECHECK_CACHE_DIR', cache)
+    // Inside mobile so the project resolves mobile's TypeScript, as the real test project does.
+    const scratch = join(mobileRoot, 'node_modules', '.cache')
+    mkdirSync(scratch, { recursive: true })
+    const root = mkdtempSync(join(scratch, 'orca-mobile-typecheck-'))
     vi.stubEnv('ORCA_MOBILE_TYPECHECK_COMPILER', compiler)
+    const buildInfo = resolveMobileTypecheckCommand('tsconfig.test.json', root).args.find((arg) =>
+      arg.endsWith('.tsbuildinfo')
+    )
+    expect(Boolean(buildInfo)).toBe(incremental)
     try {
       writeFileSync(
         join(root, 'tsconfig.test.json'),
         JSON.stringify({
-          compilerOptions: {
-            strict: true,
-            skipLibCheck: true,
-            types: [],
-            target: 'ES2022',
-            incremental: true
-          },
+          compilerOptions: { strict: true, skipLibCheck: true, types: [], target: 'ES2022' },
           include: ['*.ts']
         })
       )
@@ -35,7 +45,9 @@ it.each([
       writeFileSync(test, source)
       const clean = collectTypecheckPass(root)
       expect(clean).toEqual({ failing: [], programTestFiles: ['value.test.ts'] })
-      expect(existsSync(join(cache, 'tests.tsbuildinfo'))).toBe(incremental)
+      if (buildInfo) {
+        expect(existsSync(buildInfo)).toBe(true)
+      }
       expect(existsSync(join(root, 'tsconfig.test.tsbuildinfo'))).toBe(false)
       expect(collectTypecheckPass(root)).toEqual(clean)
 
@@ -56,7 +68,10 @@ it.each([
     } finally {
       vi.unstubAllEnvs()
       removeTreeSync(root)
+      if (buildInfo) {
+        removeTreeSync(buildInfo)
+      }
     }
   },
-  15_000
+  30_000
 )

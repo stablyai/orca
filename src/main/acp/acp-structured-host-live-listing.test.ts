@@ -24,6 +24,7 @@ describe('a live Grok listing', () => {
     const catalog = createAgentModelCatalogService({
       store: new AgentModelCatalogStore(),
       getRecord: (id) => records?.getRecord(id) ?? undefined,
+      getConversation: (id) => records?.getConversation(id) ?? undefined,
       drivesRecord: () => true,
       resolveAccountHome: async () => ({ variable: 'GROK_HOME', path: '/grok' }),
       recordWorkspacePath: async () => '/workspace/project',

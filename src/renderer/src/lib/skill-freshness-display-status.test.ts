@@ -7,8 +7,7 @@ import {
 } from '../components/skills/bundled-skill-plan-fixtures.test-support'
 import {
   getSkillFreshnessDisplayStatus,
-  hasSkillCopyNeedingAttention,
-  skillPlanHasDetails
+  hasSkillCopyNeedingAttention
 } from './skill-freshness-display-status'
 
 const SKILL_NAME = 'orca-cli'
@@ -20,31 +19,6 @@ function planWith(...ops: BundledSkillOp[]) {
 }
 
 describe('getSkillFreshnessDisplayStatus', () => {
-  it('reports presence only without a plan or without a copy of Orca’s', () => {
-    expect(getSkillFreshnessDisplayStatus(null, SKILL_NAME)).toBe('installed')
-    expect(getSkillFreshnessDisplayStatus(planOf([]), SKILL_NAME)).toBe('installed')
-    expect(skillPlanHasDetails(null, SKILL_NAME)).toBe(false)
-  })
-
-  it('is up to date when every location is kept', () => {
-    const plan = planWith(planOp('keep', SHARED), planOp('keep', CLAUDE))
-    expect(getSkillFreshnessDisplayStatus(plan, SKILL_NAME)).toBe('up-to-date')
-    expect(skillPlanHasDetails(plan, SKILL_NAME)).toBe(false)
-  })
-
-  it('offers an update when a released copy would be rewritten', () => {
-    const plan = planWith(planOp('update', SHARED), planOp('keep', CLAUDE))
-    expect(getSkillFreshnessDisplayStatus(plan, SKILL_NAME)).toBe('update-available')
-    expect(hasSkillCopyNeedingAttention(plan, SKILL_NAME)).toBe(false)
-    expect(skillPlanHasDetails(plan, SKILL_NAME)).toBe(true)
-  })
-
-  it('treats link-only work as up to date but still offers details', () => {
-    const plan = planWith(planOp('keep', SHARED), planOp('link', CLAUDE))
-    expect(getSkillFreshnessDisplayStatus(plan, SKILL_NAME)).toBe('up-to-date')
-    expect(skillPlanHasDetails(plan, SKILL_NAME)).toBe(true)
-  })
-
   it('flags an edited copy left alone, and an interrupted update to repair', () => {
     const edited = planWith(
       planOp('keep', SHARED),

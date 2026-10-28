@@ -1,6 +1,4 @@
-// Layout-owner builds: a local terminal id is a counter, so after a restart a new terminal can reuse
-// the id a saved pane still binds. The spawn commit that binds the new terminal also unbinds the id
-// from every other pane stamped with a different incarnation, so main's layout names one pane.
+// Local terminal counters reset on restart; unbind older stamped incarnations when a new process reuses an ID.
 import type { WorkspaceSessionState } from '../../../shared/workspace-session-state-types'
 
 export type ReusedTerminalBinding = {
@@ -15,11 +13,7 @@ type UnboundFields = Pick<
   'terminalLayoutsByTabId' | 'terminalPtyIncarnationsByPaneKey' | 'tabsByWorktree'
 >
 
-/**
- * The session's layouts, incarnation stamps and tab rows with `ptyId` dropped from each other pane
- * whose stamped incarnation differs; null when none does. The commit writes them with its binding.
- * An unstamped binding (a legacy save) is left alone: nothing proves it names another process.
- */
+/** Unbind other incarnations atomically with the new binding; unstamped legacy panes remain unproven. */
 export function reusedTerminalIdUnbinding(
   session: WorkspaceSessionState,
   binding: ReusedTerminalBinding
@@ -53,7 +47,7 @@ export function reusedTerminalIdUnbinding(
     remainingStamps = Object.fromEntries(
       Object.entries(remainingStamps).filter(([paneKey]) => !stale.includes(paneKey))
     )
-    // The tab row's own terminal id names the stale process too; it takes a pane still bound.
+    // Clear tab-row aliases as well as leaf bindings to the replaced process.
     const named = (tab: { id: string; ptyId?: string | null }) =>
       tab.id === tabId && tab.ptyId === binding.ptyId
     rows = Object.fromEntries(

@@ -27,9 +27,6 @@ export function deliverNativeNotification(
 ): NotificationDispatchResult | Promise<NotificationDispatchResult> {
   if (getEffectiveNotificationSoundId(settings) !== 'system') {
     notificationOptions.silent = true
-  } else if (process.platform === 'darwin') {
-    // macOS treats unset sound as silent; request the OS default explicitly.
-    notificationOptions.sound = 'default'
   }
   const notification = new Notification({
     ...notificationOptions,

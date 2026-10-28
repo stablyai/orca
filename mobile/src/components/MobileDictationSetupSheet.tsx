@@ -1,8 +1,10 @@
 import { useCallback, useEffect, useState } from 'react'
-import { ActivityIndicator, Pressable, StyleSheet, Switch, Text, View } from 'react-native'
+import { ActivityIndicator, Pressable, Switch, Text, View } from 'react-native'
 import { Check, Download } from 'lucide-react-native'
 import { BottomDrawer } from './BottomDrawer'
 import { colors, radii, spacing, typography } from '../theme/mobile-theme'
+import { themedStyleSheet } from '../theme/themed-styles'
+import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import type { RpcClient } from '../transport/rpc-client'
 import { triggerError, triggerSuccess } from '../platform/haptics'
 import { useDictationSetupPoller } from '../dictation/use-dictation-setup-poller'
@@ -34,9 +36,9 @@ function formatSize(bytes: number | null | undefined): string {
   return `${Math.round(bytes / 1_000_000)} MB`
 }
 
-// Lets the user enable dictation and download or pick a speech model on the paired
-// computer, from the phone. Polls while a download is in flight.
+// Configure paired computer’s dictation/model from phone; poll while download is in flight.
 export function MobileDictationSetupSheet({ visible, client, onClose, onReady }: Props) {
+  useMobileColorScheme()
   const [setup, setSetup] = useState<MobileSpeechSetup | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [busy, setBusy] = useState<string | null>(null)
@@ -128,8 +130,7 @@ export function MobileDictationSetupSheet({ visible, client, onClose, onReady }:
 
   return (
     <BottomDrawer visible={visible} onClose={onClose}>
-      {/* Why: BottomDrawer already scrolls its children in a keyboard-aware container;
-          a nested capped ScrollView cut off the lower controls. */}
+      {/* BottomDrawer already scrolls above keyboard; nested capped ScrollView clipped lower controls. */}
       <View>
         <Text style={styles.heading}>Set up voice dictation</Text>
         <Text style={styles.subtitle}>
@@ -225,7 +226,7 @@ export function MobileDictationSetupSheet({ visible, client, onClose, onReady }:
   )
 }
 
-const styles = StyleSheet.create({
+const styles = themedStyleSheet(() => ({
   heading: {
     color: colors.textPrimary,
     fontSize: typography.bodySize,
@@ -279,4 +280,4 @@ const styles = StyleSheet.create({
   selectedTag: { flexDirection: 'row', alignItems: 'center', gap: 4 },
   selectedText: { color: colors.statusGreen, fontSize: typography.metaSize, fontWeight: '600' },
   error: { color: colors.statusRed, fontSize: typography.metaSize, marginTop: spacing.md }
-})
+}))

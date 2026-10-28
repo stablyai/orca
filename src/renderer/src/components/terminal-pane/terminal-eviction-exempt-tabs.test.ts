@@ -17,8 +17,7 @@ function layoutState(ptyIdsByLeafId: Record<string, string>) {
 }
 
 describe('selectEvictionExemptTerminalTabLayoutKey', () => {
-  // Why: the exempt memo is keyed on the tabs array, which a split leaves
-  // untouched — a key blind to layout PTYs would unmount the new live pane.
+  // Split PTYs change without reminting tabs; a layout-blind memo could unmount a new live pane.
   it('changes when a split adds a leaf pty', () => {
     const single = layoutState({ [LEAF_ID]: PTY_ID })
     expect(selectEvictionExemptTerminalTabLayoutKey(single, TABS)).toBe(

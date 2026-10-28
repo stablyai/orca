@@ -7,7 +7,7 @@ import {
   readDataFile,
   readPersistedStateJson,
   makeRepo
-} from '../../persistence-test-harness'
+} from '../persistence-test-harness'
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { writeFileSync, readFileSync, rmSync, mkdtempSync, mkdirSync } from 'node:fs'
 import { join } from 'node:path'
@@ -105,6 +105,47 @@ describe('Store', () => {
     expect(store.getSettings().experimentalTerminalAttention).toBe(false)
     expect(store.getSettings().notifications.customSoundPath).toBeNull()
     expect(store.getRepos()).toHaveLength(1)
+  })
+
+  it('keeps saved action choices and sparse repo args through old-profile migration and re-read', async () => {
+    const recipe = {
+      agentId: 'codex',
+      commandInputTemplate: '{basePrompt}',
+      agentArgs: '',
+      launchPreferences: {
+        agentId: 'codex',
+        model: 'gpt-6-sol',
+        permissionMode: 'ask',
+        options: { thinkingEffort: 'high' }
+      }
+    }
+    const sparse = { agentArgs: '--model gpt-6-sol' }
+    const repo = makeRepo()
+    writeDataFile({
+      schemaVersion: 1,
+      repos: [{ ...repo, sourceControlAi: { actionOverrides: { resolveConflicts: sparse } } }],
+      worktreeMeta: {},
+      settings: {
+        defaultTuiAgent: 'claude',
+        sourceControlAi: { actions: { fixCommitFailure: recipe } }
+      },
+      ui: {},
+      githubCache: { pr: {}, issue: {} },
+      workspaceSession: {}
+    })
+
+    const store = await createStore()
+    expect(store.getSettings().sourceControlAi?.actions?.fixCommitFailure).toEqual(recipe)
+    expect(store.getRepos()[0]?.sourceControlAi?.actionOverrides?.resolveConflicts).toEqual(sparse)
+    store.updateSettings({ theme: 'light' })
+    store.flush()
+    await closeTestStores()
+
+    const reopened = await createStore()
+    expect(reopened.getSettings().sourceControlAi?.actions?.fixCommitFailure).toEqual(recipe)
+    expect(reopened.getRepos()[0]?.sourceControlAi?.actionOverrides?.resolveConflicts).toEqual(
+      sparse
+    )
   })
 
   it('migrates legacy commit-message AI settings to source-control AI on load', async () => {

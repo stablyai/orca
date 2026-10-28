@@ -77,7 +77,7 @@ describe('OrcaRuntimeService', () => {
   })
 
   it('resolves tui-idle when a completion title is coalesced with the next working title', async () => {
-    // Why: batching can coalesce "task done" + next working title into one chunk; a last-title reader misses the idle and hangs (#1083 class).
+    // A coalesced done/working chunk must still expose the idle transition (#1083).
     const runtime = createRuntime()
     syncSinglePty(runtime)
     runtime.onPtyData('pty-1', '\x1b]0;Codex working\x07', 100)
@@ -109,7 +109,7 @@ describe('OrcaRuntimeService', () => {
     runtime.markGraphReady(1)
 
     runtime.onPtyData(ptyId, '\x1b]0;⠋ Cursor Agent\x07', 100)
-    // cursor-agent re-emits its bare native title on internal redraws while still working; it must not stomp the synthesized working title.
+    // Cursor redraws its bare title while working; retain Orca's synthesized status.
     runtime.onPtyData(ptyId, '\x1b]0;Cursor Agent\x07', 101)
 
     expect((await runtime.listTerminals()).terminals[0]).toMatchObject({
@@ -117,12 +117,7 @@ describe('OrcaRuntimeService', () => {
     })
   })
 
-  // Why: this pins the mechanism the refusals below exist for. cursor-agent emits only the
-  // bare native title, and the tracker drops it on sight — so a pane can never hold it
-  // because Cursor said so *now*. The one route into main's records is the stale-working
-  // clear stripping the spinner off Orca's synthesized title after 3s of quiet output, and
-  // that fires whether Cursor parked idle or exited and the shell took the pane back. That
-  // is exactly why the title cannot tell a live pane from a dead one.
+  // The stale-working clear can leave a bare Cursor title over a shell; that title proves identity only.
   it('only records the bare Cursor native title via the stale-working clear', async () => {
     vi.useFakeTimers()
     try {
@@ -137,11 +132,9 @@ describe('OrcaRuntimeService', () => {
       runtime.attachWindow(1)
       runtime.markGraphReady(1)
 
-      // Live from cursor-agent: dropped, never recorded.
       runtime.onPtyData(ptyId, '\x1b]0;Cursor Agent\x07', 100)
       expect((await runtime.listTerminals()).terminals[0].title).not.toBe('Cursor Agent')
 
-      // Orca's synthesized spinner, then quiet output: the clear strips it to the bare title.
       runtime.onPtyData(ptyId, '\x1b]0;⠋ Cursor Agent\x07', 101)
       runtime.onPtyData(ptyId, 'agent finished; shell prompt returns\r\n', 102)
       await vi.advanceTimersByTimeAsync(3_000)
@@ -152,9 +145,7 @@ describe('OrcaRuntimeService', () => {
     }
   })
 
-  // Why: this pane reads no foreground and the next reads a live shell, yet both hold the
-  // same bare title the stale-working clear left behind. Neither read makes that title
-  // liveness, so both must refuse.
+  // Missing foreground evidence must not let a stale Cursor title authorize auto-Enter.
   it('refuses a bare Cursor title while the foreground read is unavailable', async () => {
     vi.useFakeTimers()
     try {
@@ -205,8 +196,7 @@ describe('OrcaRuntimeService', () => {
       runtime.onPtyData(ptyId, 'agent exited; back at the shell\r\n', 101)
       await vi.advanceTimersByTimeAsync(3_000)
 
-      // cursor-agent is gone and the user's shell owns the pane, but the title still reads
-      // "Cursor Agent". A guarded send here would auto-submit Enter into that shell.
+      // Auto-Enter here would submit to the shell despite the retained Cursor title.
       foreground = 'zsh'
       const terminal = (await runtime.listTerminals()).terminals[0]
       expect(terminal.title).toBe('Cursor Agent')
@@ -221,8 +211,7 @@ describe('OrcaRuntimeService', () => {
     }
   })
 
-  // Why: the refusals here must stay scoped to missing evidence. A working foreground read
-  // is what unlocks a live Cursor pane — and is the layer to fix if one is ever refused.
+  // Confirmed cursor-agent foreground must still authorize a live Cursor pane.
   it('accepts a bare Cursor title when the foreground read confirms cursor-agent', async () => {
     vi.useFakeTimers()
     try {
@@ -250,9 +239,7 @@ describe('OrcaRuntimeService', () => {
     }
   })
 
-  // Why: pins the type-narrowing branch, not a reachable state — no caller detaches the
-  // controller. It is the runtime-owned pty path, which the window-graph leaf tests below
-  // never reach, so nothing else would notice it being widened.
+  // Exercise the controller-less type-narrowing branch, unreachable through production callers.
   it('refuses a bare Cursor title on a runtime pty with no controller attached', async () => {
     vi.useFakeTimers()
     try {
@@ -329,7 +316,7 @@ describe('OrcaRuntimeService', () => {
 
       await vi.advanceTimersByTimeAsync(4_000)
 
-      // The dead session keeps its factual last title; the disposed tracker's stale-title rewrite must not fire into the retained record.
+      // A disposed tracker's timer must not rewrite a retained dead session's title.
       expect((await runtime.listTerminals()).terminals[0]).toMatchObject({
         title: 'Codex working'
       })
@@ -358,7 +345,6 @@ describe('OrcaRuntimeService', () => {
 
       runtime.onPtyData(ptyA, '\x1b]0;Codex working\x07', 100)
       runtime.onPtyData(ptyB, '\x1b]0;Aider working\x07', 100)
-      // Only A receives title-less output, so only A's stale timer arms.
       runtime.onPtyData(ptyA, 'output without a title\r\n', 101)
 
       await vi.advanceTimersByTimeAsync(3_000)

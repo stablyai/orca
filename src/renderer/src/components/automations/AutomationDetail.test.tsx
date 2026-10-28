@@ -1,11 +1,6 @@
 // @vitest-environment happy-dom
 
-/**
- * A record Orca switched off used to be indistinguishable from one the user
- * switched off — same "Paused", no reason, no next step. These pin the one new
- * state to the migration's own stamp, and pin the other two to reading exactly
- * as they did before it existed.
- */
+/** Distinguish migration-paused records using their stamp while preserving user-paused and enabled states. */
 
 import { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
@@ -63,14 +58,14 @@ describe('AutomationDetail enablement', () => {
   it('shows a paused record as a plain pause', async () => {
     const container = await render({ enabled: false })
 
-    expect(container.textContent).toContain('Paused')
+    expect(container.querySelector('[data-slot="badge"]')?.textContent).toBe('Paused')
     expect(notice(container)).toBeNull()
   })
 
   it('shows a running automation as enabled', async () => {
     const container = await render({ enabled: true })
 
-    expect(container.textContent).toContain('Enabled')
+    expect(container.querySelector('[data-slot="badge"]')?.textContent).toBe('Enabled')
     expect(notice(container)).toBeNull()
   })
 })

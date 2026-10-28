@@ -1,9 +1,30 @@
 import { rendererPublicationThrottle } from '../window/renderer-publication-throttle'
 import { BrowserManagerState } from './browser-manager-state'
 import { focusGuardUnavailableError, guardPaneFocusForAgentInput } from './agent-input-focus-guard'
+import {
+  BrowserAgentActivity,
+  type AgentCommandLease,
+  type AgentPointerInput
+} from './browser-agent-activity'
 
 export abstract class BrowserManagerVisibility extends BrowserManagerState {
   private readonly capturePaintHolds = new Map<string, number>()
+  protected readonly agentActivity = new BrowserAgentActivity({
+    pageIdForGuest: (guestWebContentsId) =>
+      this.resolveBrowserTabIdForGuestWebContentsId(guestWebContentsId),
+    rendererForPage: (browserPageId) => this.resolveRendererForBrowserTab(browserPageId),
+    worktreeForPage: (browserPageId) => this.worktreeIdByTabId.get(browserPageId) ?? null
+  })
+
+  /** Holds the page's agent marking for one queued command, from queueing until it settles. */
+  beginAgentCommand(browserPageId: string): AgentCommandLease {
+    return this.agentActivity.beginCommand(browserPageId)
+  }
+
+  // Show the agent's pointer landing before the input it precedes reaches the page.
+  showAgentPointer(guest: Electron.WebContents, input: AgentPointerInput): Promise<void> {
+    return this.agentActivity.showPointer(guest, input)
+  }
 
   // Do not await the renderer: minimized or throttled windows must not stall frame capture.
   holdPaintForCapture(guestWebContentsId: number): () => void {

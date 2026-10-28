@@ -31,6 +31,43 @@ vi.mock('../agent-hooks/managed-agent-hook-controls', () => ({
 }))
 
 describe('durable execution-host launch settings', () => {
+  it('maps an old dropdown without clearing agent choices, persists it and publishes typed precedence', async () => {
+    const { store, readState } = await fixture()
+    const controller = new RuntimeClientSettingsController(store)
+    await controller.mutateAgentLaunch({
+      type: 'permission',
+      agent: 'claude',
+      choice: 'full-access'
+    })
+    await controller.update({ nativeChatPermissionMode: 'ask' })
+    await store.flushPendingOrThrowAsync()
+    expect(readState().settings).toMatchObject({
+      agentPermissionDefault: 'ask',
+      agentPermissionOverrides: { claude: 'full-access' }
+    })
+    expect(controller.get().nativeChatPermissionMode).toBe('ask')
+    expect(resolveTuiAgentLaunchArgs('claude', store.getSettings())).toBe(
+      '--dangerously-skip-permissions'
+    )
+    expect(newChatPermissionModeForSettings('claude', store.getSettings())).toBe('full-access')
+    store.updateSettings({ nativeChatPermissionMode: 'full-access', agentPermissionDefault: 'own' })
+    await store.flushPendingOrThrowAsync()
+    const saved = readState()
+    expect(saved.settings.agentPermissionDefault).toBe('own')
+    const reloaded = new Store({
+      serializedState: JSON.stringify(saved),
+      dataFile: join(saved.settings.workspaceDir, 'legacy-permission-reload.json')
+    })
+    try {
+      expect(new RuntimeClientSettingsController(reloaded).get().nativeChatPermissionMode).toBe(
+        'ask'
+      )
+      expect(newChatPermissionModeForSettings('claude', reloaded.getSettings())).toBe('full-access')
+    } finally {
+      await reloaded.freezeWritesAsync()
+    }
+  })
+
   it('persists host carrier edits and reloads the same terminal and new-chat intent', async () => {
     const { store, readState } = await fixture()
     const controller = new RuntimeClientSettingsController(store)
@@ -130,7 +167,7 @@ describe('durable execution-host launch settings', () => {
     const calls: CodexAppServerInvocation[] = []
     const obsolete = deferred<void>()
     const catalog = createCodexAtRestSkillCatalog({
-      resolveWorkspacePath: async () => '/fixture/work',
+      resolveWorkspacePath: async () => process.cwd(),
       resolveCommand: () => '/fixture/codex',
       resolveLaunchArgs: () => structuredAgentConfiguredArgs('codex', store.getSettings()),
       resolveEnvironment: async () => ({ PATH: '/fixture/bin' }),
@@ -344,11 +381,8 @@ describe('durable execution-host launch settings', () => {
     expect(store.getSettings().nativeChatPermissionMode).toBe(before)
     expect(readState().settings.nativeChatPermissionMode).toBe(before)
     await controller.mutateAgentLaunch({ type: 'permissions', syncNativeChat: true, mode: 'auto' })
-    expect(readState().settings.nativeChatPermissionMode).toBe(before)
-    expect(readState().settings.agentNativeChatPermissionModes).toEqual({
-      claude: 'auto',
-      codex: 'auto'
-    })
+    expect(readState().settings.nativeChatPermissionMode).toBe('auto')
+    expect(readState().settings).not.toHaveProperty('agentNativeChatPermissionModes')
   })
 
   it('rolls back a scoped chat default after a failed write and persists a retry', async () => {
@@ -370,14 +404,14 @@ describe('durable execution-host launch settings', () => {
       await store.flushPendingOrThrowAsync().catch(() => {})
     }
     expect(store.getSettings().agentDefaultArgs?.codex).toBe(beforeArgs)
-    expect(store.getSettings().agentNativeChatPermissionModes).toEqual({})
+    expect(store.getSettings()).not.toHaveProperty('agentNativeChatPermissionModes')
     await controller.mutateAgentLaunch({
       type: 'permissions',
       syncNativeChat: true,
       agent: 'codex',
       mode: 'auto'
     })
-    expect(readState().settings.agentNativeChatPermissionModes).toEqual({ codex: 'auto' })
+    expect(readState().settings).not.toHaveProperty('agentNativeChatPermissionModes')
     expect(readState().settings.nativeChatPermissionMode).toBe(beforeNative)
     expect(readState().settings.agentPermissionOverrides).toMatchObject({ codex: 'auto' })
   })
@@ -484,3 +518,7 @@ describe('durable execution-host launch settings', () => {
     expect(readState().settings.agentDefaultArgs.claude).toBe('--newer-write')
   })
 })
+
+vi.mock('../claude/agent-view-service', () => ({
+  getClaudeAgentViewService: () => ({ reconcile: async () => {} })
+}))

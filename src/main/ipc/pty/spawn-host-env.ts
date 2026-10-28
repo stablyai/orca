@@ -1,11 +1,14 @@
+import { getClaudeAgentViewService } from '../../claude/agent-view-service'
 import type { AgentProviderSessionMetadata } from '../../../shared/agent-session-resume'
 import { getAppEnvironment } from '../../../shared/app-environment'
 import type { GlobalSettings } from '../../../shared/global-settings-types'
 import { stampRuntimeSourceEnv } from '../../../shared/runtime-source-env'
+import { SETUP_AGENT_SEQUENCE_SETUP_SCRIPT_ENV } from '../../../shared/setup-agent-sequencing'
 import type { TuiAgent } from '../../../shared/tui-agent'
 import { isTuiAgent } from '../../../shared/tui-agent-config'
+import { addWslEnvKeys } from '../../../shared/wsl-env'
 import { isAgentStatusHooksEnabled } from '../../agent-hooks/managed-agent-hook-controls'
-import { awaitExplicitPiOmpGuestReadiness } from '../../agent-hooks/wsl-pi-omp-guest-readiness'
+import { awaitExplicitAgentPluginGuestReadiness } from '../../agent-hooks/wsl-agent-plugin-readiness'
 import { ensureCodexStateDbBackfillRecoveryStarted } from '../../codex/codex-state-db-backfill-recovery'
 import type { CodexSessionResumePreparation } from '../../codex/codex-session-resume-home'
 import type { CodexAccountSelectionTarget } from '../../codex-accounts/runtime-selection'
@@ -199,11 +202,18 @@ export async function resolvePtySpawnHostEnv(args: PtySpawnHostEnvArgs): Promise
       launchAgent: args.launchAgent,
       launchCommand
     })
-    await awaitExplicitPiOmpGuestReadiness({
+    await awaitExplicitAgentPluginGuestReadiness({
+      settings: ptySettings,
       isWsl,
       distro: wslDistro,
       codexHomePath: selectedCodexHomePath,
       launchAgent: isTuiAgent(args.launchAgent) ? args.launchAgent : undefined,
+      launchCommand
+    })
+    await getClaudeAgentViewService().readyForLaunch({
+      settings: ptySettings,
+      isWsl,
+      launchAgent: args.launchAgent,
       launchCommand
     })
     buildPtyHostEnv(sessionId, env, {
@@ -219,6 +229,7 @@ export async function resolvePtySpawnHostEnv(args: PtySpawnHostEnvArgs): Promise
       isWsl,
       wslDistro,
       agentStatusHooksEnabled: isAgentStatusHooksEnabled(ptySettings),
+      claudeSubagentNavigationEnabled: ptySettings?.claudeSubagentNavigationEnabled,
       terminalInlineImages: ptySettings?.terminalInlineImages,
       disabledTuiAgents: ptySettings?.disabledTuiAgents,
       networkProxySettings: ptySettings,
@@ -236,6 +247,10 @@ export async function resolvePtySpawnHostEnv(args: PtySpawnHostEnvArgs): Promise
       getRuntimeSourceStamp(deps.runtime, getAppEnvironment().getPath('userData'))
     )
     promoteAgentTeamsShimPath(env, args.requestedAgentTeamsPath)
+    if (process.platform === 'win32' && env[SETUP_AGENT_SEQUENCE_SETUP_SCRIPT_ENV]) {
+      // Why: same-protocol daemons from older builds don't add this WSLENV entry themselves.
+      addWslEnvKeys(env, [SETUP_AGENT_SEQUENCE_SETUP_SCRIPT_ENV])
+    }
   } catch (err) {
     // Host prep creates hook/extension state; only this request's minted ID is safe to sweep.
     if (args.mintedSessionId) {

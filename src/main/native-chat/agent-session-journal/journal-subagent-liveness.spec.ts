@@ -9,7 +9,7 @@ import type {
   AgentSessionJournalIdentity
 } from '../../../shared/agent-session-journal-types'
 import { agentJournalItemKey } from '../../../shared/agent-session-journal-item-key'
-import { backgroundTaskFallbackText } from '../../../shared/native-chat-background-task-row'
+import { backgroundTaskFallbackText } from '../../../shared/native-chat/input/native-chat-background-task-row'
 import { isBackgroundTaskBlock, isSubagentGroupBlock } from '../../../shared/native-chat-types'
 import type {
   NativeChatBackgroundTaskBlock,

@@ -35,7 +35,7 @@ type SkillRun = {
   source: BundledSkillSource
 }
 
-/** Literal target paths, as delete and cloud install key locks; sorted so two runs can't deadlock. */
+/** Lock literal paths consistently with delete/cloud installs; sort to prevent deadlocks. */
 async function lockPaths(input: BundledSkillExecuteInput): Promise<string[]> {
   const roots = await resolveBundledSkillTargets(input, input.filesystem)
   const names = input.names ?? input.sources.map((source) => source.name)
@@ -110,7 +110,7 @@ async function settleCleanup(run: SkillRun, cleanup: BundledSkillCleanup) {
     : backUpBundledSkillPath(run.input.filesystem, cleanup.path, backupFor(run)))
 }
 
-/** Re-hashes the copy an update moved aside: a writer that raced the lock keeps its bytes. */
+/** Preserve bytes from a writer that raced the lock by re-hashing the moved-aside copy. */
 async function settleOldCopy(run: SkillRun, old: string) {
   const { folderClass } = await classifyBundledSkillPath(
     run.input.filesystem,
@@ -132,7 +132,6 @@ function requireLinkTarget(op: BundledSkillOp): string {
   return op.linkTarget
 }
 
-/** Applies exactly the op `plan` chose; it never picks a different one. */
 async function applyOp(run: SkillRun, op: BundledSkillOp): Promise<string | undefined> {
   const { filesystem } = run.input
   const files = [{ path: 'SKILL.md', text: run.source.text }]
@@ -212,10 +211,7 @@ async function runSkill(run: SkillRun): Promise<BundledSkillOutcome> {
   return { name: run.entry.name, status: 'ran', ops }
 }
 
-/**
- * Re-plans under every target's lock and runs only a plan that still hashes to `planDigest`;
- * any difference means the user previewed something else, so nothing is written.
- */
+/** Re-plan under all target locks and require the previewed digest; stale previews must write nothing. */
 export async function executeBundledSkillPlan(
   input: BundledSkillExecuteInput,
   planDigest: string

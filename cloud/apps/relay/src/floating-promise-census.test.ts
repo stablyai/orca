@@ -4,12 +4,10 @@ import { fileURLToPath } from 'node:url'
 import ts from 'typescript-api'
 import { describe, expect, it } from 'vitest'
 
-// A promise nobody awaits rejects into Node's unhandledRejection, which ends the process:
-// one lost database reply would drop every host on the cell. Production code must await,
-// return, store and use, or `.catch` every promise it starts.
-// Exempt: functions written to settle every failure themselves. Keyed file#name.
+// Unhandled database rejections can kill a cell and drop every host; consume/catch all promises. Only self-settling functions keyed file#name are exempt.
 const NEVER_REJECTS = new Map([
   ['relay-background-operation.ts#runRelayBackgroundOperation', 'catches and logs every failure'],
+  ['cloud-run-instance-zone.ts#readCloudRunInstanceZone', 'one try/catch; resolves undefined on any failure'],
   ['assignment-cleanup-steps.ts#runAssignmentCleanup', 'runs each step through the above'],
   ['cell-heartbeat-client.ts#send', 'one try/catch around the whole send'],
   ['cell-reserve-client.ts#send', 'one try/catch around the request; resolves every item'],

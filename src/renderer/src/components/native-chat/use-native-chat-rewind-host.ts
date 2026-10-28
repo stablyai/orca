@@ -11,7 +11,6 @@ export type NativeChatRewindSurface = {
   request: (itemId: string, confirm: ConfirmationDialogContextValue) => Promise<void>
 }
 
-/** What the pane hosting a structured session tells its rewind. */
 export type NativeChatRewindHost = {
   /** The host's in-doubt latch, from its status feed. */
   hostBlockedReason?: AgentSessionRewindReason | null
@@ -19,8 +18,7 @@ export type NativeChatRewindHost = {
   isVisible?: boolean
 }
 
-/** What a pane hands its session's rewind: the host's in-doubt latch, its visibility, and where a
- *  returned message lands. `focusComposer` is the same focus the pane's other give-backs use. */
+/** Return rewound messages through the pane’s existing composer focus path; expose host uncertainty and read visibility. */
 export function useNativeChatRewindHost(
   pane: { sessionId: string; target: RuntimeClientTarget; isVisible: boolean },
   composerRef: RefObject<NativeChatComposerHandle | null>

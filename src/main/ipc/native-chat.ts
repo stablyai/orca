@@ -42,7 +42,8 @@ async function readSession(args: NativeChatReadSessionArgs): Promise<ReadTranscr
       sessionId,
       args.transcriptPath
     ),
-    limit
+    limit,
+    sourceOrder: true
   })
 }
 
@@ -196,6 +197,7 @@ async function handleSubscribe(event: IpcMainEvent, args: NativeChatSubscribeArg
       transcriptPath
     ),
     initialLimit: limit,
+    sourceOrder: true,
     onTranscriptPending: () => {
       if (!canPublish()) {
         return

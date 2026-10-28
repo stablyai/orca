@@ -3,8 +3,55 @@ import type { Tab } from '../../../../shared/tab-types'
 import type { TerminalTab } from '../../../../shared/terminal-tab-types'
 import type { DetectedWorktreeListResult, Worktree } from '../../../../shared/worktree/types'
 import type { AppState } from '@/store/types'
+import type { FolderWorkspace } from '../../../../shared/folder-workspace-types'
 
-// Typed store rows for the workspace-scoped native chat suites.
+export const nativeChatFanoutWorkspace = (index: number) => `folder:workspace-${index}`
+
+export function nativeChatFanoutFixture(
+  chats: number,
+  workspaces: number,
+  terminalsPerWorkspace: number
+) {
+  const tabsByWorktree: AppState['tabsByWorktree'] = {}
+  const unifiedTabsByWorktree: AppState['unifiedTabsByWorktree'] = {}
+  const folderWorkspaces: FolderWorkspace[] = []
+  for (let index = 0; index < workspaces; index++) {
+    const id = nativeChatFanoutWorkspace(index)
+    tabsByWorktree[id] = Array.from({ length: terminalsPerWorkspace }, (_, slot) =>
+      terminalTabFixture(`terminal-${index}-${slot}`, id, { sortOrder: slot })
+    )
+    unifiedTabsByWorktree[id] = []
+    folderWorkspaces.push({
+      id: `workspace-${index}`,
+      projectGroupId: 'group',
+      name: id,
+      folderPath: `/repo/${index}`,
+      executionHostId: 'local',
+      linkedTask: null,
+      comment: '',
+      isArchived: false,
+      isUnread: false,
+      isPinned: false,
+      sortOrder: index,
+      lastActivityAt: 0,
+      createdAt: 0,
+      updatedAt: 0
+    })
+  }
+  for (let index = 0; index < chats; index++) {
+    const id = nativeChatFanoutWorkspace(index % workspaces)
+    unifiedTabsByWorktree[id].push(
+      agentSessionTabFixture(`chat-${index}`, id, {
+        entityId: `session-${index}`,
+        executionHostId: 'local',
+        label: `Chat ${index}`,
+        customLabel: `Name ${index}`,
+        sortOrder: index
+      })
+    )
+  }
+  return { tabsByWorktree, unifiedTabsByWorktree, folderWorkspaces }
+}
 
 export function terminalTabFixture(
   id: string,
@@ -84,7 +131,6 @@ export function worktreeFixture(
   }
 }
 
-/** A repo listing that holds only detected (not visible) worktrees. */
 export function detectedListingFixture(
   worktrees: readonly Worktree[]
 ): AppState['detectedWorktreesByRepo'][string] {

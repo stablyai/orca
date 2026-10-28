@@ -49,7 +49,6 @@ import {
 
 let host = FakeOrcadHost.deployedOld()
 
-/** The host's answer to the room check: KB the state needs, KB a prune frees, and `df`'s line. */
 function answerRoom(neededKb: number, reclaimKb: number, availableKb: number): void {
   vi.mocked(execCommand).mockImplementation(async (_conn, command) =>
     command.includes('SNAPSHOT_SPACE')

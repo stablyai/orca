@@ -2,15 +2,8 @@ import { bindDeferredRpcOperation, defineRpcOperation } from '../transport/rpc-o
 import { rpcResultVariant } from '../transport/rpc-operation-result-reader'
 import { dictationSetupSchema, dictationUnreadReplySchema } from './dictation-reply-schema'
 
-// The dictation setup sheet's reads and writes, and the three sends one dictation session makes.
-// Every refusing site here surfaces the host's own message with a screen fallback, so they share
-// one policy and differ only in the copy they fall back to, which stays at the call site.
-//
-// Three of the eight read a setup the sheet renders, and those are checked. The other five read no
-// reply body at all, or read it past a guard whose order is load-bearing; dictation-reply-schema.ts
-// says which and why. An unreadable setup now reaches the sheet's own catch through
-// `interpretOrThrowRefusalMessage`, which shows the host-reply message where main showed
-// `undefined` models and then crashed the refresh on `.some`.
+// Share refusal-message policy across dictation sends; fallback copy stays at each call site.
+// Setup replies are checked; bodyless replies and the transcript read behind a staleness guard follow dictation-reply-schema.ts.
 
 export const dictationSetupRead = bindDeferredRpcOperation(
   defineRpcOperation({
@@ -22,7 +15,7 @@ export const dictationSetupRead = bindDeferredRpcOperation(
   })
 )
 
-/** Starts a download; the sheet polls `speech.models.list` for progress rather than reading this. */
+// The sheet polls models.list for progress; it never reads the download reply body.
 export const dictationModelDownload = bindDeferredRpcOperation(
   defineRpcOperation({
     name: 'speech.dictation-model-download',
@@ -33,7 +26,7 @@ export const dictationModelDownload = bindDeferredRpcOperation(
   })
 )
 
-/** Both writes answer with the whole setup again, which the sheet renders in place of a refetch. */
+// Both writes replace the displayed setup without a refetch.
 export const dictationModelDelete = bindDeferredRpcOperation(
   defineRpcOperation({
     name: 'speech.dictation-model-delete',
@@ -74,11 +67,7 @@ export const dictationAudioChunkSend = bindDeferredRpcOperation(
   })
 )
 
-/**
- * The transcript sits on the reply, but the member read stays at the call site: main checked the
- * refusal before its staleness guard and read `.text` after it, so folding the read into the
- * operation would move the property-read exception across that guard.
- */
+// Keep transcript reads after the caller’s staleness guard; moving them here would expose property-read failures from superseded dictation.
 export const dictationSessionFinish = bindDeferredRpcOperation(
   defineRpcOperation({
     name: 'speech.dictation-finish',
@@ -89,12 +78,7 @@ export const dictationSessionFinish = bindDeferredRpcOperation(
   })
 )
 
-/**
- * Cancel is the only dictation send no call site interprets: all five are cleanup, running under
- * `catch(() => undefined)` or inside `Promise.allSettled`, and the session is already gone locally
- * whatever the host answers. The policy is declared anyway so the operation has one — a refused
- * cancel leaves host state alone, which is what a skip means — but no golden can observe it.
- */
+// Cancel callers already discarded local state and ignore cleanup failures; declare skip policy even though no caller interprets it.
 export const dictationSessionCancel = bindDeferredRpcOperation(
   defineRpcOperation({
     name: 'speech.dictation-cancel-or-skip',

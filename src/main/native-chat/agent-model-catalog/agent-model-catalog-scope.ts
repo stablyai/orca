@@ -1,8 +1,5 @@
 import { homedir } from 'node:os'
-import type {
-  AgentSessionAccountHome,
-  AgentSessionRecord
-} from '../../../shared/agent-session-record'
+import type { AgentSessionAccountHome } from '../../../shared/agent-session-record'
 import { isNativeLocalLocation } from '../../../shared/execution-host'
 import type {
   AgentModelCatalogService,
@@ -14,13 +11,13 @@ import {
   type AgentModelCatalogLookup,
   type AgentModelCatalogResolvedProbe
 } from './agent-model-catalog-discovery'
-import { sessionWorkspacePath } from './agent-model-catalog-workspace'
+import { sessionWorkspacePath, type AgentModelCatalogRecord } from './agent-model-catalog-workspace'
 
 /** Discovery follows launch configuration, never session picks. */
 export async function resolveAgentModelCatalogScope(
   deps: AgentModelCatalogServiceDeps,
   params: Parameters<AgentModelCatalogService['read']>[0],
-  record: AgentSessionRecord | undefined,
+  record: AgentModelCatalogRecord | undefined,
   base: string,
   home: AgentSessionAccountHome | null
 ): Promise<{
@@ -37,10 +34,11 @@ export async function resolveAgentModelCatalogScope(
     return { base, fingerprint: base, exact: false }
   }
   const probe = deps.probes?.[params.agent]
+  const savedOnly = () => params.savedOnly || !!(record && !deps.getRecord(record.sessionId))
   if (params.legacy) {
     const fingerprint = agentModelCatalogScopeFingerprint(base, 'legacy-account')
     const resolved =
-      params.savedOnly || !deps.store.probeDue(fingerprint)
+      savedOnly() || !deps.store.probeDue(fingerprint)
         ? null
         : await probe?.resolveLegacy?.(home).catch(() => null)
     return {
@@ -61,9 +59,9 @@ export async function resolveAgentModelCatalogScope(
     probe?.resolve?.(home, cwd, lookup).catch(() => null)
   const scopeKey = (resolved: AgentModelCatalogResolvedProbe | null | undefined) =>
     agentModelCatalogScopeFingerprint(base, cwd, resolved?.identity)
-  let resolved = await resolve(params.savedOnly ? 'saved' : 'snapshot')
+  let resolved = await resolve(savedOnly() ? 'saved' : 'snapshot')
   // Rerun shells only for reads due to list; saved-only reads must remain passive.
-  if (!params.savedOnly && (!resolved || deps.store.probeDue(scopeKey(resolved)))) {
+  if (!savedOnly() && (!resolved || deps.store.probeDue(scopeKey(resolved)))) {
     resolved = await resolve('recover')
   }
   if (probe?.resolve && !resolved) {

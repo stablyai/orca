@@ -19,16 +19,15 @@ import {
   type DiagnosticsHostSelection
 } from '../src/diagnostics/connection-diagnostics-screen-data'
 import { connectionDiagnosticsScreenStyles as styles } from '../src/diagnostics/connection-diagnostics-screen-styles'
+import { useMobileColorScheme } from '../src/theme/use-mobile-color-scheme'
 import type { ConnectionLogEntry, HostProfile } from '../src/transport/types'
 
-// Why: getSnapshot must be referentially stable when there's no data —
-// a fresh [] per call would make useSyncExternalStore re-render forever.
+// Keep empty snapshot identity stable or useSyncExternalStore rerenders forever.
 const EMPTY_ENTRIES: readonly ConnectionLogEntry[] = []
 
-// Why: reading the log is most needed while a host is failing, so this
-// route also *acquires* the host client — opening it kicks a dial and the
-// log fills live instead of showing a stale tail.
+// Acquire client here so opening logs during host failure starts dialing and live logging.
 export default function NativeConnectionLogRoute() {
+  useMobileColorScheme()
   const clientContext = useRpcClientContext()
   const router = useRouter()
   const params = useLocalSearchParams<{ hostId?: string }>()

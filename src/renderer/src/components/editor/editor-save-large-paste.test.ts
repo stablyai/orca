@@ -25,7 +25,6 @@ afterEach(() => {
   vi.unstubAllGlobals()
 })
 
-/** A single-line editor that the real chunked paste can drive. */
 function createSingleLineEditor(initial: string) {
   let value = initial
   let selection = { startLineNumber: 1, startColumn: 1, endLineNumber: 1, endColumn: 1 }
@@ -53,7 +52,6 @@ function createSingleLineEditor(initial: string) {
   return { container, editorInstance: editorStub as unknown as editor.IStandaloneCodeEditor }
 }
 
-/** A dirty tab at baseline 'base' with the real input bindings installed, then a large paste. */
 function pasteIntoGuardedTab(pasted: string) {
   const files = new Map([[PATH, 'base']])
   const writeFile = vi.fn(async (args: GuardedWriteArgs) => {

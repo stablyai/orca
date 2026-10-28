@@ -32,6 +32,12 @@ on:
         required: false
         type: string
         default: '["1/2","2/2"]'
+      # Why: whole-file balancing cannot split one long spec; Playwright's native shards split its tests.
+      changed_e2e_test_shards:
+        description: JSON test-level shard assignments for the changed-spec lane; empty sizes shards by file count
+        required: false
+        type: string
+        default: ''
       # Why: artifact names are unique per workflow run, and pr.yml calls this workflow twice.
       artifact_suffix:
         description: Appended to the build and trace artifact names so two calls in one run do not collide
@@ -39,6 +45,12 @@ on:
         type: string
         default: ''
       # Why: the app, orcad and its test template (--dark-test-template) build with it; releases refuse it.
+      # Why: only required gates pay for Blacksmith; advisory lanes run on free hosted runners.
+      fast_runners:
+        description: Run on Blacksmith instead of free GitHub-hosted runners
+        required: false
+        type: boolean
+        default: false
       layout_owner:
         description: Set to main to build with ORCA_LAYOUT_OWNER=main and record save-divergence reports
         required: false
@@ -68,8 +80,10 @@ jobs:
   build:
     name: build e2e app
     if: inputs.test_files == '' || github.event_name != 'pull_request' || inputs.needs_build
-    runs-on: blacksmith-8vcpu-ubuntu-2404
+    runs-on: ${{ inputs.fast_runners && 'blacksmith-8vcpu-ubuntu-2404' || 'ubuntu-24.04' }}
     timeout-minutes: 15
+    outputs:
+      changed_e2e_shards: ${{ steps.changed-e2e-shards.outputs.shards }}
     env:
       ORCA_BACKGROUND_LAUNCH: '1'
 
@@ -78,6 +92,24 @@ jobs:
         uses: actions/checkout@v6
         with:
           ref: ${{ inputs.ref || github.ref }}
+
+      - name: Plan changed E2E allocation
+        id: changed-e2e-shards
+        env:
+          TEST_FILES_JSON: ${{ inputs.test_files }}
+          TEST_SHARDS_JSON: ${{ inputs.changed_e2e_test_shards }}
+        run: |
+          if [ -n "$TEST_SHARDS_JSON" ]; then
+            echo "shards=$(jq -c . <<<"$TEST_SHARDS_JSON")" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          node --input-type=module <<'NODE'
+          import { appendFileSync, existsSync } from 'node:fs'
+          const modulePath = './config/scripts/ci-e2e-job-selection.mjs'
+          const selection = existsSync(modulePath) ? await import(modulePath) : {}
+          const shards = selection.generalE2eShards?.(process.env.TEST_FILES_JSON) ?? ['1/1']
+          appendFileSync(process.env.GITHUB_OUTPUT, `shards=${JSON.stringify(shards)}\n`)
+          NODE
 
       - name: Install native build tools
         env:
@@ -197,15 +229,13 @@ jobs:
     name: e2e ${{ matrix.shard_name }}
     needs: [build]
     if: inputs.test_files == ''
-    runs-on: blacksmith-4vcpu-ubuntu-2404
+    runs-on: ${{ inputs.fast_runners && 'blacksmith-4vcpu-ubuntu-2404' || 'ubuntu-24.04' }}
     timeout-minutes: 30
     strategy:
       fail-fast: false
       matrix:
         include:
-          # Fourteen scheduled runs averaged 24.6 minutes per shard; shards 4
-          # and 9 repeatedly hit the 30-minute cap. A 12-way trial still left
-          # one 30-minute shard, so 14 gives the suite enough failure headroom.
+          # Use 14 shards: scheduled average 24.6min and repeated 30min caps remained even in a 12-way trial.
           - shard: '1/14'
             shard_name: 1-of-14
           - shard: '2/14'
@@ -260,14 +290,7 @@ jobs:
           name: e2e-build-out${{ inputs.artifact_suffix }}
           path: out/
 
-      # Why: the Electron suite is wall-clock constrained on OSS runners, but
-      # multiple Electron apps on one Xvfb VM contend on git/Chromium resources.
-      # Sharding keeps each VM at one Playwright worker while splitting the
-      # headless suite across separate runners.
-      # SKIP_BUILD makes Playwright globalSetup reuse the single build job's
-      # artifact instead of starting five concurrent electron-vite builds.
-      # ORCA_E2E_FORWARD_APP_LOGS keeps startup failures visible when Electron
-      # launches but never creates a BrowserWindow.
+      # Shard one worker per VM to avoid Electron/git/Xvfb contention. Reuse one SKIP_BUILD artifact and forward app logs for pre-window failures.
       - name: Balance E2E shard from timing evidence
         env:
           ORCA_BACKGROUND_LAUNCH: '1'
@@ -308,9 +331,7 @@ jobs:
         if: matrix.shard == '1/14'
         run: xvfb-run --auto-servernum bash .github/scripts/e2e-with-window-manager.sh env SKIP_BUILD=1 ORCA_E2E_FORWARD_APP_LOGS=1 pnpm exec playwright test tests/e2e/worktree-switch-first-paint.spec.ts --config tests/playwright.config.ts --project=electron-headful --workers=1
 
-      # Why: Playwright retains traces/screenshots only on failure. Uploading
-      # them as an artifact makes post-mortem debugging on CI possible without
-      # re-running locally.
+      # Upload failure traces/screenshots so CI failures are diagnosable without reproduction.
       - name: Upload Playwright traces
         if: failure() || cancelled()
         uses: actions/upload-artifact@v7
@@ -321,11 +342,15 @@ jobs:
           if-no-files-found: ignore
 
   changed-e2e:
-    name: changed e2e specs
+    name: changed e2e specs (${{ matrix.shard }})
     needs: [build]
     if: inputs.test_files != '' && (github.event_name != 'pull_request' || inputs.run_changed_e2e)
-    runs-on: blacksmith-4vcpu-ubuntu-2404
+    runs-on: ${{ inputs.fast_runners && 'blacksmith-4vcpu-ubuntu-2404' || 'ubuntu-24.04' }}
     timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: ${{ fromJSON(needs.build.outputs.changed_e2e_shards || '["1/1"]') }}
 
     steps:
       - name: Checkout
@@ -334,8 +359,7 @@ jobs:
           ref: ${{ inputs.ref || github.ref }}
 
       - name: Install native build and headless UI tools
-        # Why ripgrep: Quick Open's bounded host-side search requires rg instead of an
-        # unbounded inventory fallback; the paired fixture exercises that real boundary.
+        # Install rg for bounded Quick Open searches exercised by the paired fixture.
         env: *e2e_tool_packages
         run: *install_e2e_tools
 
@@ -353,6 +377,8 @@ jobs:
         env:
           TEST_FILES_JSON: ${{ inputs.test_files }}
           LAYOUT_OWNER: ${{ inputs.layout_owner }}
+          SHARD: ${{ matrix.shard }}
+          TEST_LEVEL_SHARDS: ${{ inputs.changed_e2e_test_shards != '' }}
         run: |
           if [ -f config/scripts/ci-e2e-job-selection.mjs ]; then
             printf '%s\n' "$TEST_FILES_JSON" | node config/scripts/ci-e2e-job-selection.mjs > "$RUNNER_TEMP/general-e2e-specs"
@@ -374,6 +400,9 @@ jobs:
             exit 0
           fi
           E2E_ENV=(SKIP_BUILD=1 ORCA_E2E_FORWARD_APP_LOGS=1 ORCA_E2E_WEB_CLIENT=1)
+          if printf '%s\n' "${TEST_FILES[@]}" | grep -Fxq 'tests/e2e/browser-image-link-focus.spec.ts'; then
+            E2E_ENV+=(ORCA_BACKGROUND_LAUNCH=1 ORCA_E2E_BROWSER_NATIVE_XVFB=1)
+          fi
           E2E_PROJECT_ARGS=()
           if [ -n "$LAYOUT_OWNER" ]; then
             test -f out/main/ORCA_LAYOUT_OWNER_MAIN
@@ -385,8 +414,31 @@ jobs:
           if grep -l '@headful' "${TEST_FILES[@]}" >/dev/null; then
             E2E_PROJECT_ARGS+=(--project=electron-headful)
           fi
+          E2E_SELECTION_ARGS=(--shard="$SHARD")
+          if [ "$TEST_LEVEL_SHARDS" = true ]; then
+            mkdir -p ci-shards-changed
+            pnpm exec playwright test "${TEST_FILES[@]}" --config tests/playwright.config.ts --project=electron-headless "${E2E_PROJECT_ARGS[@]}" --shard="$SHARD" --list --reporter=json > ci-shards-changed/selected-discovery.json
+          elif [ -f config/scripts/ci-e2e-shard-plan.mjs ]; then
+            mkdir -p ci-shards-changed
+            pnpm exec playwright test "${TEST_FILES[@]}" --config tests/playwright.config.ts --project=electron-headless "${E2E_PROJECT_ARGS[@]}" --list --reporter=json > ci-shards-changed/discovery.json
+            export ORCA_SHARD_SOURCE_SHA="$(git rev-parse HEAD)"
+            node config/scripts/ci-e2e-shard-plan.mjs ci-shards-changed/discovery.json "$SHARD" ci-shards-changed
+            pnpm exec playwright test "${TEST_FILES[@]}" --config tests/playwright.config.ts --project=electron-headless "${E2E_PROJECT_ARGS[@]}" --test-list=ci-shards-changed/selected.txt --list --reporter=json > ci-shards-changed/selected-discovery.json
+            node config/scripts/ci-e2e-shard-plan.mjs --verify ci-shards-changed/assignment.json ci-shards-changed/selected-discovery.json
+            E2E_SELECTION_ARGS=(--test-list=ci-shards-changed/selected.txt)
+          fi
           xvfb-run --auto-servernum bash .github/scripts/e2e-with-window-manager.sh env "${E2E_ENV[@]}" \
-            pnpm run test:e2e "${TEST_FILES[@]}" --workers=1 "${E2E_PROJECT_ARGS[@]}"
+            pnpm run test:e2e "${TEST_FILES[@]}" "${E2E_SELECTION_ARGS[@]}" --workers=1 "${E2E_PROJECT_ARGS[@]}"
+
+      - name: Upload changed E2E shard assignment
+        if: always()
+        continue-on-error: true
+        uses: actions/upload-artifact@v7
+        with:
+          name: changed-e2e-shard-${{ strategy.job-index }}${{ inputs.artifact_suffix }}-attempt-${{ github.run_attempt }}
+          path: ci-shards-changed/
+          retention-days: 14
+          if-no-files-found: warn
 
       - name: Summarize layout save divergence
         if: always() && inputs.layout_owner == 'main'
@@ -407,7 +459,7 @@ jobs:
         continue-on-error: true
         uses: actions/upload-artifact@v7
         with:
-          name: layout-divergence-changed${{ inputs.artifact_suffix }}-attempt-${{ github.run_attempt }}
+          name: layout-divergence-changed-${{ strategy.job-index }}${{ inputs.artifact_suffix }}-attempt-${{ github.run_attempt }}
           path: layout-divergence/
           retention-days: 14
           if-no-files-found: warn
@@ -416,7 +468,7 @@ jobs:
         if: failure() || cancelled()
         uses: actions/upload-artifact@v7
         with:
-          name: playwright-traces-changed${{ inputs.artifact_suffix }}
+          name: playwright-traces-changed-${{ strategy.job-index }}${{ inputs.artifact_suffix }}
           path: test-results/
           retention-days: 7
           if-no-files-found: ignore
@@ -424,7 +476,7 @@ jobs:
   ssh-browser-network-route:
     name: ssh browser network route
     if: inputs.test_files == '' || contains(inputs.test_files, 'tests/e2e/ssh-browser-network-execution-route.docker.unit.test.ts')
-    runs-on: blacksmith-4vcpu-ubuntu-2404
+    runs-on: ${{ inputs.fast_runners && 'blacksmith-4vcpu-ubuntu-2404' || 'ubuntu-24.04' }}
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@v6
@@ -448,7 +500,7 @@ jobs:
       inputs.test_files == '' ||
       contains(inputs.test_files, 'tests/e2e/orcad-serve-mode-switch.spec.ts') ||
       contains(inputs.test_files, 'tests/e2e/workspace-layout-oracle-headless.spec.ts')
-    runs-on: blacksmith-4vcpu-ubuntu-2404
+    runs-on: ${{ inputs.fast_runners && 'blacksmith-4vcpu-ubuntu-2404' || 'ubuntu-24.04' }}
     timeout-minutes: 45
     env:
       ORCA_BACKGROUND_LAUNCH: '1'
@@ -475,8 +527,7 @@ jobs:
           slot="$(node config/scripts/build-orcad-prebuilds.mjs --print-slot)"
           pnpm build:orcad-prebuilds
           pnpm build:orcad-prebuilds --require-slots "$slot"
-          # The headless oracle's orcad host must hold the same layout owner as the Electron host,
-          # and so must the template `orca serve` materializes its server from.
+          # The orcad host and its materialized template must use the Electron host’s layout owner.
           if [ -n "$LAYOUT_OWNER" ]; then
             export ORCA_LAYOUT_OWNER="$LAYOUT_OWNER"
             pnpm build:orcad
@@ -549,7 +600,7 @@ jobs:
     name: ssh on managed orcad (Docker ${{ matrix.shard }})
     needs: [build]
     if: inputs.test_files == '' || contains(inputs.test_files, 'tests/e2e/ssh-orcad-')
-    runs-on: blacksmith-4vcpu-ubuntu-2404
+    runs-on: ${{ inputs.fast_runners && 'blacksmith-4vcpu-ubuntu-2404' || 'ubuntu-24.04' }}
     timeout-minutes: 60
     strategy:
       fail-fast: false

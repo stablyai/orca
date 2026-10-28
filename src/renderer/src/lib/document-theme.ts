@@ -69,8 +69,7 @@ export function applyDocumentTheme(
   }
 
   root.classList.toggle('dark', shouldUseDarkTheme)
-  // Mirror with `light` so consumers can observe the resolved theme
-  // symmetrically (Tailwind keys only on `dark`, so this is style-neutral).
+  // Mirror light for symmetric observation; Tailwind still styles only dark.
   root.classList.toggle('light', !shouldUseDarkTheme)
 
   if (!disableTransitions) {
@@ -81,8 +80,7 @@ export function applyDocumentTheme(
   const cancelFrame = options.cancelAnimationFrame ?? window.cancelAnimationFrame.bind(window)
   cancelPendingTransitionDisableFrames(cancelFrame)
 
-  // Why: two frames lets the root theme class recalculate before restoring
-  // normal hover/collapse transitions, preventing staggered color fades.
+  // Wait two frames for root theme recalculation before restoring transitions to avoid staggered fades.
   const firstFrame = requestFrame(() => {
     pendingTransitionDisableFrames = pendingTransitionDisableFrames.filter(
       (id) => id !== firstFrame

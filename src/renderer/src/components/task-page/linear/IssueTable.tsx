@@ -1,4 +1,5 @@
-import type { TaskPageComposerActionsModel } from '../../use-task-page-composer-actions'
+import { useState } from 'react'
+import type { TaskPageComposerActionsModel } from '../use-task-page-composer-actions'
 import { ChevronDown, FolderOpen, ArrowRight, ExternalLink } from 'lucide-react'
 import { findLinearIssueWorkspaceAttachmentInIndex } from '@/lib/linear-issue-workspace-attachment'
 import { getWorktreeAttachmentLabel } from '@/lib/worktree-attachment-label'
@@ -7,13 +8,14 @@ import { LinearPriorityIcon } from '@/components/linear-priority-icon'
 import { LinearStateCell } from './task-page-linear-issue-model'
 import { translate } from '@/i18n/i18n'
 import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip'
-import { formatRelativeTime } from '../../task-page-source-context'
+import { formatRelativeTime } from '../task-page-source-context'
 import { Button } from '@/components/ui/button'
 export function TaskPageLinearIssueTable({
   model
 }: {
   model: TaskPageComposerActionsModel
 }): React.JSX.Element | null {
+  const [collapsedSections, setCollapsedSections] = useState<ReadonlySet<string>>(() => new Set())
   const {
     selectedLinearWorkspaceId,
     linearTaskSourceContext,
@@ -25,19 +27,41 @@ export function TaskPageLinearIssueTable({
     linearIssueListRows,
     handleOpenOrUseLinearItem
   } = model
+  let sectionCollapsed = false
   return (
     <div className="divide-y divide-border/50">
       {linearIssueListRows.map((row) => {
         if (row.type === 'section') {
+          const collapsed = collapsedSections.has(row.key)
+          sectionCollapsed = collapsed
           return (
-            <div key={row.key} className="flex h-9 items-center gap-2 bg-muted/35 px-3">
-              <ChevronDown className="size-3 shrink-0 text-muted-foreground" />
+            <button
+              key={row.key}
+              type="button"
+              aria-expanded={!collapsed}
+              onClick={() => {
+                setCollapsedSections((current) => {
+                  const next = new Set(current)
+                  if (!next.delete(row.key)) {
+                    next.add(row.key)
+                  }
+                  return next
+                })
+              }}
+              className="flex h-9 w-full cursor-pointer items-center justify-start gap-2 rounded-md bg-muted/35 px-3 py-2 text-left text-sm font-medium whitespace-nowrap transition-all hover:bg-accent hover:text-accent-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring dark:hover:bg-accent/50"
+            >
+              <ChevronDown
+                className={cn('size-3 shrink-0 text-muted-foreground', collapsed && '-rotate-90')}
+              />
               <span className="min-w-0 truncate text-[13px] font-medium text-foreground">
                 {row.label}
               </span>
               <span className="shrink-0 text-[11px] text-muted-foreground">{row.count}</span>
-            </div>
+            </button>
           )
+        }
+        if (sectionCollapsed) {
+          return null
         }
         const issue = row.issue
         const selected = issue.id === selectedLinearIssueId

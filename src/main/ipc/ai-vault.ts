@@ -1,3 +1,7 @@
+import {
+  captureRuntimeAiVaultProjectionDependency,
+  type AiVaultProjectionDependency
+} from './ai-vault-projection-dependency'
 import { app, ipcMain } from 'electron'
 import {
   configureAiVaultSessionSources,
@@ -32,7 +36,7 @@ import {
   parseRoutableExecutionHostId,
   requestedExecutionHostScope,
   toRuntimeExecutionHostId,
-  type ExecutionHostScope
+  type ExecutionHostId
 } from '../../shared/execution-host'
 import { createSenderScopedRequestCancellations } from './sender-scoped-request-cancellation'
 import { discoverAiVaultHosts, type AiVaultHostDiscoveryResult } from './ai-vault-host-discovery'
@@ -64,10 +68,15 @@ import { registerAiVaultScanProgressBroadcast } from './ai-vault-scan-progress-b
 
 type AiVaultHandlerOptions = AiVaultSessionSources &
   AiVaultResumeHandlerOptions & {
+    getUserDataPath?: () => string
     getActiveRuntimeAiVaultHostInfos?: () => readonly RuntimeAiVaultHostInfo[]
     scanRuntimeAiVaultSessions?: RuntimeAiVaultScanner
     resolveRuntimeAiVaultSessionTitles?: RuntimeAiVaultSessionTitleResolver
   }
+
+type AiVaultScanHostScope =
+  | { scope: ExecutionHostId }
+  | { scope: 'all'; runtimeHosts: AiVaultHostDiscoveryResult<RuntimeAiVaultHostInfo> }
 
 let scanCoordinator = new AiVaultScanCoordinator()
 let handlerOptions: AiVaultHandlerOptions = {}
@@ -87,6 +96,19 @@ async function listAiVaultSessions(
   options: { signal?: AbortSignal } = {}
 ): Promise<AiVaultListResult> {
   const executionHostScope = requestedExecutionHostScope(args?.executionHostScope)
+  const hostScope: AiVaultScanHostScope =
+    executionHostScope === 'all'
+      ? { scope: executionHostScope, runtimeHosts: getActiveRuntimeAiVaultHostInfosResult() }
+      : { scope: executionHostScope }
+  const parsedHost = parseRoutableExecutionHostId(executionHostScope)
+  const dependency = captureRuntimeAiVaultProjectionDependency(
+    hostScope.scope === 'all'
+      ? hostScope.runtimeHosts.hostInfos.map((host) => host.environmentId)
+      : parsedHost?.kind === 'runtime'
+        ? [parsedHost.environmentId]
+        : [],
+    handlerOptions.getUserDataPath
+  )
   // Canonicalize bounded workspace sets so equivalent scopes share a scan.
   const scopePaths = args?.scopePaths ?? []
   const key = JSON.stringify({
@@ -102,47 +124,55 @@ async function listAiVaultSessions(
     parseRoutableExecutionHostId(executionHostScope)?.kind === 'runtime'
       ? args?.afterFingerprint
       : undefined
-  // Coalesced scans abort only after every same-key caller cancels.
-  return scanCoordinator.run({
-    key: JSON.stringify({ key, depth, afterFingerprint }),
-    force: args?.force,
-    signal: options.signal,
-    start: (scanSignal) => {
-      const scan = () => scanAiVaultSessionsByHostScope(args, executionHostScope, scanSignal, key)
-      if (executionHostScope === LOCAL_EXECUTION_HOST_ID) {
-        return scan()
+  // Why: every renderer request carries its own cancellation signal, so
+  // coalescing has to survive them — the coordinator hands all same-key callers
+  // one scan and only aborts it once every one of them has cancelled.
+  return scanCoordinator
+    .run({
+      key: JSON.stringify({ key, depth, afterFingerprint, projection: dependency.key }),
+      force: args?.force,
+      signal: options.signal,
+      start: (scanSignal) => {
+        const scan = () =>
+          scanAiVaultSessionsByHostScope(args, hostScope, scanSignal, key, dependency)
+        if (executionHostScope === LOCAL_EXECUTION_HOST_ID) {
+          return scan()
+        }
+        return scanHostLegWithCache({
+          cacheKey: key,
+          dependency,
+          depth,
+          scopePaths,
+          force: args?.force === true,
+          afterFingerprint,
+          scan
+        })
       }
-      return scanHostLegWithCache({
-        cacheKey: key,
-        depth,
-        scopePaths,
-        force: args?.force === true,
-        afterFingerprint,
-        scan
-      })
-    }
-  })
+    })
+    .finally(dependency.release)
 }
 
 async function scanAiVaultSessionsByHostScope(
   args: AiVaultListArgs | undefined,
-  executionHostScope: ExecutionHostScope,
+  hostScope: AiVaultScanHostScope,
   signal?: AbortSignal,
-  cacheKey = ''
+  cacheKey = '',
+  dependency?: AiVaultProjectionDependency
 ): Promise<AiVaultListResult> {
   const depth = requestedAiVaultSessionDepth(args)
   const scopePaths = args?.scopePaths ?? []
-  if (executionHostScope === LOCAL_EXECUTION_HOST_ID) {
+  if (hostScope.scope === LOCAL_EXECUTION_HOST_ID) {
     return scanLocalAiVaultSessionsAsIssue(args, signal)
   }
-  if (executionHostScope === 'all') {
-    const runtimeHosts = getActiveRuntimeAiVaultHostInfosResult()
+  if (hostScope.scope === 'all') {
+    const { runtimeHosts } = hostScope
     const runtimeResults = runtimeHosts.issue ? [runtimeHosts.issue] : []
     const scannedResults = await Promise.all([
       scanLocalAiVaultSessionsAsIssue(args, signal),
       ...runtimeHosts.hostInfos.map((hostInfo) =>
         scanHostLegWithCache({
           cacheKey: `${cacheKey}|${hostInfo.executionHostId}`,
+          dependency: dependency?.forHost(hostInfo.environmentId),
           depth,
           scopePaths,
           force: args?.force === true,
@@ -167,6 +197,7 @@ async function scanAiVaultSessionsByHostScope(
     )
   }
 
+  const executionHostScope = hostScope.scope
   const parsed = parseRoutableExecutionHostId(executionHostScope)
   if (parsed?.kind === 'runtime') {
     return scanRuntimeAiVaultSessions({
@@ -200,7 +231,7 @@ async function scanLocalAiVaultSessionsAsIssue(
   signal: AbortSignal | undefined
 ): Promise<AiVaultListResult> {
   try {
-    return await scanLocalAiVaultSessions(args, signal)
+    return await listCachedLocalAiVaultSessions(args, { signal })
   } catch (error) {
     if (isAiVaultScanCancelledError(error)) {
       throw error
@@ -215,14 +246,6 @@ async function scanLocalAiVaultSessionsAsIssue(
     })
     return error instanceof AiVaultLocalScanError ? { ...result, scanId: error.scanId } : result
   }
-}
-
-async function scanLocalAiVaultSessions(
-  args?: AiVaultListArgs,
-  signal?: AbortSignal
-): Promise<AiVaultListResult> {
-  // Share runtime/mobile cache and Codex/WSL source injection with desktop IPC.
-  return listCachedLocalAiVaultSessions(args, { signal })
 }
 
 export function registerAiVaultHandlers(options: AiVaultHandlerOptions = {}): void {

@@ -4,7 +4,7 @@ import type {
   AgentSessionOptionsResult
 } from '../../shared/agent-session-wire'
 import { effectiveServiceTier } from '../../shared/structured-agent-session-effective-tier'
-import type { CodexAppServerConnection } from './codex-app-server-connection'
+import type { CodexAppServerConnection } from './app-server/codex-app-server-connection-types'
 import { structuredAgentSessionOptionModels } from '../native-chat/agent-session-wire/structured-agent-session-option-models'
 import {
   CODEX_DEFAULT_SERVICE_TIER,

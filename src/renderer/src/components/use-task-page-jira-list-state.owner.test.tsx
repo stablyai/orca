@@ -165,3 +165,25 @@ describe('Jira priority list source owner', () => {
     }
   )
 })
+
+describe('Jira Tasks view mode', () => {
+  // Leaving Tasks unmounts the hook, so each case reopens it with a fresh render.
+  function openTasks() {
+    return renderHook(() => useTaskPageJiraListState(fixture())).result
+  }
+
+  it('reopens on the board after the view mode was switched', async () => {
+    const first = openTasks()
+    await act(async () => first.current.setJiraViewMode('board'))
+    cleanup()
+    expect(openTasks().current.jiraViewMode).toBe('board')
+  })
+
+  it('reopens on the list once the view mode is switched back', async () => {
+    const first = openTasks()
+    await act(async () => first.current.setJiraViewMode('board'))
+    await act(async () => first.current.setJiraViewMode('list'))
+    cleanup()
+    expect(openTasks().current.jiraViewMode).toBe('list')
+  })
+})

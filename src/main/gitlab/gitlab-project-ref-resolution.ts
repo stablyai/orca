@@ -6,6 +6,7 @@ import { NEGATIVE_ENTRY_TTL_MS } from '../git/remote-ref-probe-cache'
 import { clearProjectRefInFlight, runProjectRefProbeOnce } from './project-ref-inflight'
 import {
   _resetGlabUnauthenticatedHosts,
+  getGlabPartialHosts,
   isGlabHostKnownUnauthenticated,
   parseGlabAuthStatusHosts,
   rememberGlabHostUnauthenticated,
@@ -47,11 +48,15 @@ export function _getProjectRefCacheSize(): number {
   return projectRefCache.size
 }
 
-function rememberProjectRefCacheEntry(cacheKey: string, value: ProjectRef | null): void {
+function rememberProjectRefCacheEntry(
+  cacheKey: string,
+  value: ProjectRef | null,
+  finite = value === null
+): void {
   // Negative forge identity expires so remote/auth configuration changes can be discovered.
   projectRefCache.set(cacheKey, {
     value,
-    expiresAt: value === null ? Date.now() + NEGATIVE_ENTRY_TTL_MS : Number.POSITIVE_INFINITY
+    expiresAt: finite ? Date.now() + NEGATIVE_ENTRY_TTL_MS : Number.POSITIVE_INFINITY
   })
   while (projectRefCache.size > PROJECT_REF_CACHE_MAX_ENTRIES) {
     const oldestKey = projectRefCache.keys().next().value
@@ -103,9 +108,9 @@ async function resolveProjectRefForRemote(
   localGitOptions: LocalGitExecOptions
 ): Promise<ProjectRef | null> {
   // Abandoned probes may answer their callers but must not overwrite newer cached identity.
-  const publish = (value: ProjectRef | null): void => {
+  const publish = (value: ProjectRef | null, finite = value === null): void => {
     if (ownsKey()) {
-      rememberProjectRefCacheEntry(cacheKey, value)
+      rememberProjectRefCacheEntry(cacheKey, value, finite)
     }
   }
   try {
@@ -139,6 +144,15 @@ async function resolveProjectRefForRemote(
       rememberGlabKnownHost(remoteCandidate.host, connectionId, localGitOptions)
       publish(remoteCandidate)
       return remoteCandidate
+    }
+    const partial = parseGitLabProjectRef(
+      stdout,
+      getGlabPartialHosts(connectionId, localGitOptions)
+    )
+    if (partial) {
+      // Evidence from an unsettled discovery keeps the original miss expiry and never remembers auth.
+      publish(partial, true)
+      return partial
     }
   } catch (error) {
     // Failed SSH and transient probes do not establish a stable non-GitLab remote.

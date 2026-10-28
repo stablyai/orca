@@ -57,7 +57,7 @@ export function getWorktreeSymlinkPathFilterState<T extends WorktreeSymlinkPathS
       }
     }
   } else {
-    // Preserve slice semantics for empty queries and unusual caller-supplied limits.
+    // Retain slice behavior for empty queries and unusual limits.
     filtered = (
       normalizedQuery
         ? suggestions.filter((entry) => entry.name.toLowerCase().includes(normalizedQuery))

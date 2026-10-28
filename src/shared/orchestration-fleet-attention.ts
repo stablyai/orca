@@ -58,16 +58,14 @@ export function projectOrchestrationFleetAttention(
   if (facts.interrupted) {
     categories.push('interruption')
   }
-  // A Dispatch that settled with no worker row has no process to wait on, so its unverifiable
-  // verdict is a statement about supervision that never existed, not work owed to a coordinator.
+  // Unsupervised settled dispatches never had a process to wait on; unverifiable adds no coordinator work.
   if (
     facts.liveness.verdict === 'unverifiable' &&
     facts.liveness.reason !== 'unsupervised_settled'
   ) {
     categories.push(facts.liveness.reason === 'stale_status' ? 'stale' : 'unverifiable')
   }
-  // A proven exit is evidence, not absence: `unverifiable` beside an `exited` verdict told a
-  // reader to keep waiting on a worker the execution host had already reported gone.
+  // Proven exit must not also report absence and tell callers to keep waiting.
   if (
     facts.liveness.verdict !== 'exited' &&
     (facts.outcome === 'outcome_unknown' || facts.outcome === 'finished_unverified')

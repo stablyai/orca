@@ -1,10 +1,7 @@
 import { useCallback, useRef, useState } from 'react'
 import { useMountedRef } from './useMountedRef'
 
-/**
- * Wraps an immediate mutation (no undo delay) with loading/error state
- * and optimistic patching. Skips if the same key is already in-flight.
- */
+/** Track loading/errors and optimistic patches for immediate mutations; deduplicate keys already in flight. */
 export function useImmediateMutation() {
   const [pendingKeys, setPendingKeys] = useState<Set<string>>(new Set())
   const pendingRef = useRef(pendingKeys)

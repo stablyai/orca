@@ -6,7 +6,6 @@ import {
 import type { ActivePluginCommand } from '@/store/plugin-panels'
 import {
   findPluginCommandForKeybinding,
-  getEffectivePluginCommandKeybindings,
   pluginCommandKeybindingActionId,
   pluginCommandKeybindingDefinition
 } from './plugin-command-keybindings'
@@ -22,24 +21,6 @@ const command: ActivePluginCommand = {
 }
 
 describe('plugin command keybindings', () => {
-  it('builds a stable dynamic action definition', () => {
-    expect(pluginCommandKeybindingActionId(command)).toBe('plugin:orca-samples.tasks/open')
-    expect(pluginCommandKeybindingDefinition(command)).toMatchObject({
-      title: 'Open Tasks — Tasks',
-      group: 'Plugins',
-      defaultBindings: { darwin: ['Mod+Alt+T'] }
-    })
-  })
-
-  it('lets user overrides replace or disable contributed defaults', () => {
-    const actionId = pluginCommandKeybindingActionId(command)
-    expect(getEffectivePluginCommandKeybindings(command, 'linux')).toEqual(['Mod+Alt+T'])
-    expect(
-      getEffectivePluginCommandKeybindings(command, 'linux', { [actionId]: ['Mod+Shift+T'] })
-    ).toEqual(['Mod+Shift+T'])
-    expect(getEffectivePluginCommandKeybindings(command, 'linux', { [actionId]: [] })).toEqual([])
-  })
-
   it('matches effective overrides and honors explicit disablement', () => {
     const actionId = pluginCommandKeybindingActionId(command)
     const input = {

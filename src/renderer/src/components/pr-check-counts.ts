@@ -17,14 +17,9 @@ export function getCheckConclusion(check: PRCheckDetail): NonNullable<PRCheckDet
   return check.status === 'completed' ? 'neutral' : 'pending'
 }
 
-/**
- * The check-tab breakdown shared by the PR page and the work-item dialog. Both panes used to keep
- * private copies, which is how one drifted from the Checks panel's own header.
- */
+/** Use one check breakdown across PR page/dialog and the sidebar header. */
 export function getCheckCounts(checks: readonly PRCheckDetail[]): PRCheckCounts {
-  // Why: every bucket is read off the shared rollup rather than re-derived, so these panes cannot
-  // disagree with the checks pill. action_required is the one split back out: it blocks merge like
-  // a failure but reads amber, not red.
+  // Use the shared rollup; split action_required back out because it blocks like failure but reads amber.
   const summary = summarizeProviderChecks(checks)
   const needsAction = checks.filter(
     (check) => getCheckConclusion(check) === 'action_required'
@@ -44,11 +39,7 @@ export type PRCheckCountChip = {
   label: string
 }
 
-/**
- * The count chips above the check list on the PR page and the work-item dialog. One builder so the
- * two panes cannot word the same bucket differently — the neutral bucket read "skipped" here while
- * the sidebar Checks panel called the identical checks "unresolved".
- */
+/** Share count-chip wording so neutral checks read unresolved consistently across surfaces. */
 export function getCheckCountChips(counts: PRCheckCounts): PRCheckCountChip[] {
   const chips: PRCheckCountChip[] = []
   if (counts.passing > 0) {

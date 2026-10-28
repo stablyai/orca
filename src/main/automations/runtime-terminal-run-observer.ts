@@ -4,7 +4,11 @@ import type {
   AutomationRunTerminalObserver
 } from './run-completion-watcher'
 import type { AutomationRun, AutomationRunOutputSnapshot } from '../../shared/automations-types'
-import { judgeIdleRun, type AutomationRunAgentEvidence } from './automation-run-agent-evidence'
+import {
+  hasHeldRunTurnDone,
+  judgeIdleRun,
+  type AutomationRunAgentEvidence
+} from './automation-run-agent-evidence'
 import { getStructuredAgentSessionHost } from '../native-chat/agent-session-wire/structured-agent-session-registry'
 import {
   observeStructuredAutomationRunCompletion,
@@ -20,8 +24,13 @@ const AGENT_START_POLL_INTERVAL_MS = 250
 const AGENT_START_PROBE_TIMEOUT_MS = 250
 /** Allow prompt submission delays and SSH startup before declaring the agent unstarted. */
 const AGENT_START_DEADLINE_MS = 2 * 60 * 1000
+/** How long the agent's own `done` must stand before it settles a run whose screen never reads
+ *  idle (a lost stream or an unknown idle screen, #34064); past any blocked verdict a screen gives. */
+const HELD_DONE_SETTLE_MS = 30_000
 /** Bound re-arming per observation; startup reconciliation can attach again. */
 const OBSERVE_DEADLINE_MS = 6 * 60 * 60 * 1000
+const OBSERVE_STOPPED_MESSAGE =
+  'Orca stopped watching this run after 6h without a completion signal.'
 
 export type AutomationRunTerminalHost = {
   getTerminalHandleForPaneKey(paneKey: string): string | null
@@ -143,6 +152,15 @@ async function waitForAgentStart(
   return false
 }
 
+export const AGENT_HOOKS_REVIEW_BLOCKED_ERROR =
+  'The agent is waiting for someone to review new or changed hooks ("Hooks need review"). Open this run and trust them, or remove them. Scheduled runs keep going and succeed once nothing needs review.'
+
+function describeBlockedAgent(blockedReason: string): string {
+  return blockedReason === 'agent-hooks-review-prompt'
+    ? AGENT_HOOKS_REVIEW_BLOCKED_ERROR
+    : `Automation agent is blocked: ${blockedReason}.`
+}
+
 async function readTerminalSnapshot(
   runtime: AutomationRunTerminalHost,
   handle: string
@@ -170,7 +188,7 @@ async function buildObservation(
     status: 'dispatch_failed',
     outputSnapshot,
     error: wait.blockedReason
-      ? `Automation agent is blocked: ${wait.blockedReason}.`
+      ? describeBlockedAgent(wait.blockedReason)
       : 'Automation agent did not report completion.'
   }
 }
@@ -212,7 +230,11 @@ async function waitUntilTerminalRunSettled(
 ): Promise<AutomationRunCompletionObservation | null> {
   while (Date.now() < deadlineAt) {
     try {
-      const wait = await runtime.waitForTerminal(handle, { condition: 'tui-idle', signal })
+      const wait = await runtime.waitForTerminal(handle, {
+        condition: 'tui-idle',
+        signal,
+        ...(judged ? { timeoutMs: HELD_DONE_SETTLE_MS } : {})
+      })
       if (!judged || !wait.satisfied) {
         return await buildObservation(runtime, handle, wait)
       }
@@ -230,6 +252,16 @@ async function waitUntilTerminalRunSettled(
     } catch (error) {
       if (signal.aborted || !isTerminalWaitTimeout(error)) {
         throw error
+      }
+      if (
+        judged &&
+        hasHeldRunTurnDone(judged.evidence, judged.run, runStartedAt, Date.now(), HELD_DONE_SETTLE_MS)
+      ) {
+        return {
+          status: 'completed',
+          outputSnapshot: snapshotOf(await readTail(runtime, handle)),
+          error: null
+        }
       }
     }
   }
@@ -269,14 +301,7 @@ async function observeTerminalRunCompletion(
     signal,
     startedAt + OBSERVE_DEADLINE_MS
   )
-  return (
-    settled ??
-    buildUnobservedObservation(
-      runtime,
-      handle,
-      'Orca stopped watching this run after 6h without a completion signal.'
-    )
-  )
+  return settled ?? buildUnobservedObservation(runtime, handle, OBSERVE_STOPPED_MESSAGE)
 }
 
 export function createRuntimeAutomationRunTerminalObserver(

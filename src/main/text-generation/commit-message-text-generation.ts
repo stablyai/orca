@@ -147,7 +147,14 @@ export function generateBranchNameFromContext(
 export function generateConversationNameFromContext(
   context: ConversationNameContext,
   params: GenerateCommitMessageParams,
-  target: CommitMessageGenerationTarget
+  target: CommitMessageGenerationTarget,
+  shouldExecute?: () => boolean
 ): Promise<GenerateConversationNameResult> {
-  return generateConversationName({ context, params, target, spawnAgent: spawnSourceControlAgent })
+  return generateConversationName({
+    context,
+    params,
+    target,
+    spawnAgent: spawnSourceControlAgent,
+    shouldExecute
+  })
 }

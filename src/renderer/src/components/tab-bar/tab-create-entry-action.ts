@@ -106,8 +106,7 @@ async function createParentDirectoriesForNewFile(args: {
   for (const segment of directorySegments) {
     currentPath = joinPath(currentPath, segment)
     try {
-      // Why: file creation authorizes the immediate parent before its own mkdir,
-      // so nested new-file paths must materialize parents one level at a time.
+      // Authorize each parent before creating the next nested directory.
       await args.operations.createRuntimePath(args.context, currentPath, 'directory')
     } catch (error) {
       if (!isExistsError(error)) {

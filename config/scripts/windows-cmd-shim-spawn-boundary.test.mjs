@@ -29,7 +29,6 @@ const WINDOWS_SHIM_SPAWN_ALLOWLIST = [
   // Write or assert on shim files rather than spawning one.
   'config/scripts/dev-cli-terminal-wrapper.mjs',
   'config/scripts/dev-cli-terminal-wrapper.test.mjs',
-  'config/scripts/electron-builder-config.test.mjs',
   'config/scripts/live-remote-freeze-rpc.mjs',
   'config/scripts/pty-transcript-secret-scan.test.mjs',
   'config/scripts/remote-agent-session-authority-repro.mjs',

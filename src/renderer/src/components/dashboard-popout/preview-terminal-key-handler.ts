@@ -16,21 +16,13 @@ import {
 import { readTerminalClipboardSelection } from '@/components/terminal-pane/terminal-clipboard-selection-text'
 import { isAppOwnedCopyChord } from '@/components/terminal-pane/xterm-bypass-policy'
 
-/**
- * Installs the preview terminal's ONE custom key handler (xterm allows a single
- * attachCustomKeyEventHandler) covering copy/paste chords, the IME native-text
- * bypass, and the full pane shortcut policy. On macOS plain Cmd+V is left to
- * the Edit-menu accelerator, which reaches this window as an app-menu paste —
- * matching it here too would paste twice.
- *
- * Returns a disposer for the Option-key location listeners the policy needs to
- * tell left Option from right.
- */
+/** Compose IME, clipboard and pane policy in xterm’s single custom handler; defer macOS Cmd+V to its menu accelerator to avoid double paste. Dispose Option-location listeners on teardown. */
 export function installPreviewTerminalKeyHandler(args: {
   terminal: Terminal
   claimImeKeyEvent: (event: KeyboardEvent) => boolean
   pasteClipboardText: (activeElement: Element | null, source: 'keyboard') => void
   sendInput: (data: string) => void
+  requestClose?: () => void
   /** Everything but optionKeyLocations, which this installer tracks itself. */
   getShortcutContext: () => Omit<PreviewShortcutContext, 'optionKeyLocations'>
 }): () => void {
@@ -44,8 +36,7 @@ export function installPreviewTerminalKeyHandler(args: {
     return false
   }
 
-  // Why: a character key's KeyboardEvent.location reports its own position, so
-  // left-vs-right Option must be recorded from the modifier's own keydown.
+  // Record Option location on the modifier event; character key events report their own location.
   const optionKeyLocations = createOptionKeyLocationTracker()
   const optionKittyReleases = createTerminalOptionKittyReleaseTracker()
   const onModifierDown = (event: KeyboardEvent): void => {
@@ -79,8 +70,7 @@ export function installPreviewTerminalKeyHandler(args: {
     event.stopImmediatePropagation()
   }
   if (platform === 'darwin') {
-    // Why: kitty Option-chord encoding resolves base keys through the async
-    // KeyboardLayoutMap; prefetch so the map is cached before the first chord.
+    // Prefetch the async layout map before the first kitty Option chord needs its base key.
     prefetchLayoutCharacters()
   }
   window.addEventListener('keydown', onModifierDown, true)
@@ -139,9 +129,7 @@ export function installPreviewTerminalKeyHandler(args: {
       }
       return consumeEvent(event)
     }
-    // Why darwin-only: only macOS has a real Edit-menu Cmd+V accelerator to
-    // defer to. Windows/Linux draw their own titlebar with the menu hidden, so
-    // a deferred Ctrl+V would never come back — handle it here, like the pane.
+    // Only macOS has the native Cmd+V accelerator; deferred Ctrl+V on Windows/Linux would never return.
     const isMenuPasteChord =
       platform === 'darwin' &&
       event.metaKey &&
@@ -204,14 +192,13 @@ export function installPreviewTerminalKeyHandler(args: {
         nativeOnlyShortcutTracker.armKeyDown(event)
         event.stopImmediatePropagation()
         return false
-      // Why: pane-scoped chords have no target in a preview dialog. Swallow them
-      // — a pane never sends these bytes to the shell, and xterm would encode
-      // e.g. Ctrl+Shift+D as a bare Ctrl+D. Listed one by one rather than under a
-      // `default` so a newly added action has to be classified here, not
-      // silently swallowed.
+      // Why: the focused terminal swallows Escape and Tab, so Cmd/Ctrl+W is the only keyboard exit.
+      case 'closeActivePane':
+        args.requestClose?.()
+        return consumeEvent(event)
+      // Swallow pane-only actions rather than encoding shell bytes such as Ctrl+D; list each so new actions require explicit classification.
       case 'clearActivePane':
       case 'clearPaneTitle':
-      case 'closeActivePane':
       case 'copySelection':
       case 'equalizePaneSizes':
       case 'focusPane':

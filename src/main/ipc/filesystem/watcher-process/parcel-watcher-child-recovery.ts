@@ -3,16 +3,16 @@ import {
   failAllWatcherSubscriptions,
   type PendingWatcherUnsubscribe,
   resolvePendingWatcherUnsubscribes
-} from '../../parcel-watcher-host-subscriptions'
+} from './parcel-watcher-host-subscriptions'
 import type { WatcherCancellationTracker } from './parcel-watcher-cancellation-tracker'
 import {
   createWatcherChildTerminationFailure,
   terminateWatcherChild
 } from './parcel-watcher-child-termination'
 import { resetPendingSubscribeAttempt } from './parcel-watcher-pending-subscribe'
-import type { WatcherProcessCrashFuse } from '../../parcel-watcher-crash-fuse'
-import { WatcherProcessFailure } from '../../parcel-watcher-process-failure'
-import type { WatcherProcessSubscriptionRecord } from '../../parcel-watcher-process-subscription'
+import type { WatcherProcessCrashFuse } from './parcel-watcher-crash-fuse'
+import { WatcherProcessFailure } from './parcel-watcher-process-failure'
+import type { WatcherProcessSubscriptionRecord } from './parcel-watcher-process-subscription'
 
 export function recoverWatcherRecordsAfterChildGone(
   records: Map<number, WatcherProcessSubscriptionRecord>,

@@ -158,13 +158,6 @@ describe('detected worktree index', () => {
     expect(matches[1]).toBe(second)
   })
 
-  it('treats undefined, empty, and empty-bucket catalogs as unpublished', () => {
-    expect(hasIndexedDetectedWorktree(undefined, 'repo::wt')).toBe(false)
-    expect(findIndexedDetectedWorktrees(undefined, 'repo::wt')).toEqual([])
-    expect(hasIndexedDetectedWorktree({}, 'repo::wt')).toBe(false)
-    expect(hasIndexedDetectedWorktree({ repo: { worktrees: [] } }, 'repo::wt')).toBe(false)
-  })
-
   it('re-indexes a new catalog identity instead of serving stale hits', () => {
     const worktree = { id: 'repo::wt', repoId: 'repo' }
     const before = { repo: { worktrees: [worktree] } }

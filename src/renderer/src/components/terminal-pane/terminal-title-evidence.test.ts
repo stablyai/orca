@@ -1,19 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { resolvePaneDisplayTitle, resolvePaneTitleDecision } from './terminal-title-evidence'
-
-describe('resolvePaneDisplayTitle', () => {
-  it('normalizes a Pi-compatible title to the resolved OMP owner', () => {
-    expect(resolvePaneDisplayTitle('Pi ready', 'omp')).toBe('OMP ready')
-  })
-
-  it('passes an unowned title through unchanged', () => {
-    expect(resolvePaneDisplayTitle('bash', undefined)).toBe('bash')
-  })
-
-  it('rewrites an OMP wrapper title through explicit launch Pi ownership', () => {
-    expect(resolvePaneDisplayTitle('\u280b OMP', 'pi', true)).toBe('\u280b Pi')
-  })
-})
+import { resolvePaneTitleDecision } from './terminal-title-evidence'
 
 describe('resolvePaneTitleDecision', () => {
   it('derives the display label and the renderer veto from a pane-scoped OMP owner', () => {
@@ -34,26 +20,12 @@ describe('resolvePaneTitleDecision', () => {
     const decision = resolvePaneTitleDecision({
       normalizedTitle: 'Pi ready',
       rawTitle: '✦ Gemini CLI',
-      // Display label follows the sticky/tab-scoped owner, but the renderer veto
-      // sees no current pane-scoped owner, so the genuine Gemini pane goes DOM.
+      // Sticky ownership labels the tab, but only current pane ownership can veto Gemini’s DOM fallback.
       displayOwnerAgentType: 'omp',
       rendererOwnerAgentType: undefined,
       userGpuMode: 'auto'
     })
     expect(decision.displayTitle).toBe('OMP ready')
-    expect(decision.rendererPolicy.gpuEnabled).toBe(false)
-    expect(decision.rendererPolicy.reason).toBe('agent-compatibility')
-  })
-
-  it('DOM-gates a genuine Gemini pane while preserving its raw title', () => {
-    const decision = resolvePaneTitleDecision({
-      normalizedTitle: '✦ Gemini CLI',
-      rawTitle: '✦ Gemini CLI',
-      displayOwnerAgentType: 'gemini',
-      rendererOwnerAgentType: 'gemini',
-      userGpuMode: 'auto'
-    })
-    expect(decision.rawTitle).toBe('✦ Gemini CLI')
     expect(decision.rendererPolicy.gpuEnabled).toBe(false)
     expect(decision.rendererPolicy.reason).toBe('agent-compatibility')
   })

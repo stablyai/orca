@@ -3,27 +3,20 @@ import { useMemo } from 'react'
 import { useAppStore } from '@/store'
 import { markOnboardingProjectAdded } from '@/lib/onboarding-project-checklist'
 
-/** Contract a host surface (e.g. the workspace composer modal) passes to
- *  AddRepoDialog to nest it as a layered dialog instead of the store modal. */
+/** Nest Add Project in a host surface rather than replacing the store modal. */
 export type AddRepoDialogHostedController = {
   open: boolean
   onOpenChange: (open: boolean) => void
-  /** Called after a Git project is added; the host selects the new project
-   *  instead of running the default-checkout navigation handoff. */
+  /** Select the added Git project instead of navigating to its default checkout. */
   onProjectAdded: (repoId: string) => void | Promise<void>
   onProjectGroupImported?: (groupId: string) => boolean | Promise<boolean>
-  /** Radix close-autofocus hook for the nested dialog. Lets the host redirect
-   *  focus (e.g. to the composer's name field) instead of Radix restoring it
-   *  to the already-unmounted combobox row that opened the dialog. */
+  /** Let the host redirect focus because the opening combobox row may already be unmounted. */
   onCloseAutoFocus?: (event: Event) => void
 }
 
 export function useAddRepoHostedController(hosted: AddRepoDialogHostedController | undefined): {
   closeModal: () => void
-  /** Close for folder/non-git outcomes, which end in folder-workspace
-   *  activation (or the confirm-non-git-folder store modal) instead of a
-   *  composer selection. Hosted mode must close the composer too — leaving it
-   *  open would hide the navigation behind a stale project selection. */
+  /** Close the composer too when folder/non-Git outcomes navigate outside project selection. */
   closeForFolderHandoff: () => void
   finishProjectAdd: CompleteGitRepoAdd | undefined
 } {
@@ -31,8 +24,7 @@ export function useAddRepoHostedController(hosted: AddRepoDialogHostedController
   const hostedOnOpenChange = hosted?.onOpenChange
   const hostedOnProjectAdded = hosted?.onProjectAdded
   const hostedOnProjectGroupImported = hosted?.onProjectGroupImported
-  // Why: hosted mode (nested inside the workspace composer) must close only
-  // this dialog, never the composer modal that lives in the activeModal slot.
+  // Closing nested Add Project must leave its parent composer modal open.
   const closeModal = useMemo(
     () => (hostedOnOpenChange ? () => hostedOnOpenChange(false) : storeCloseModal),
     [hostedOnOpenChange, storeCloseModal]

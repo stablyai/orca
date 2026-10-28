@@ -90,8 +90,7 @@ export async function readFileInChunks(reader: ChunkedFileReader): Promise<Paged
       break
     }
   }
-  // Why: chunks are separate reads, so a rewrite between them (a PDF rebuild) would splice two
-  // versions into one corrupt file.
+  // Separate chunks can straddle rewrites such as PDF rebuilds; validate metadata to avoid splicing corrupt versions.
   const after = await reader.stat()
   if (
     offset !== before.size ||

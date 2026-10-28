@@ -5,18 +5,22 @@ import type { Automation, AutomationRun } from '../../shared/automations-types'
 import { hasExtraAgentArgs } from '../../shared/automation-extra-agent-args'
 import { findReusableAutomationRun } from '../../shared/automation-session-reuse'
 import { isNativeChatDefaultFor } from '../../shared/structured-native-chat-launch-route'
-import { createStructuredAgentSessionId } from '../../shared/structured-agent-session-create'
+import {
+  createStructuredAgentSessionId,
+  type StructuredAgentSessionFirstMessage
+} from '../../shared/structured-agent-session-create'
 import { createStructuredAgentSessionOperationId } from '../../shared/structured-agent-session-mutation'
 import {
   structuredAgentSessionPaneKey,
   structuredAgentSessionTabId
 } from '../../shared/structured-agent-session-projection'
+import { structuredAgentSessionSendBody } from '../../shared/structured-agent-session-send-mutation'
 import type { StructuredAgentSessionHost } from '../native-chat/agent-session-wire/structured-agent-session-host'
 import { getStructuredAgentSessionHost } from '../native-chat/agent-session-wire/structured-agent-session-registry'
 import type { OrcaRuntimeService } from '../runtime/orca-runtime'
-import { commitStructuredAgentSessionLaunchPrompt } from '../runtime/rpc/methods/agent-launch-structured-prompt'
 import { deliverTerminalAgentLaunchPrompt } from '../runtime/rpc/methods/agent-launch-terminal-prompt'
 import { createStructuredAgentSessionForWorktree } from '../runtime/rpc/methods/structured-agent-session-create'
+import { sendAgentTurn } from '../runtime/orchestration/send-agent-turn'
 import type { HeadlessAutomationAgentLaunch } from './headless-automation-agent-launch'
 import { structuredAutomationRunHandle } from './runtime-structured-run-observer'
 
@@ -24,10 +28,19 @@ const STRUCTURED_SETUP_WAIT_TIMEOUT_MS = 60_000
 
 type ReusableTarget =
   | { kind: 'terminal'; handle: string; previous: AutomationRun }
-  | { kind: 'structured'; chatSessionId: string; fence: number; previous: AutomationRun }
+  | {
+      kind: 'structured'
+      chatSessionId: string
+      fence: number
+      host: StructuredAgentSessionHost
+      previous: AutomationRun
+    }
 
 /** The run's pane handle while that pane still holds the run's own PTY; null otherwise. */
-export function runOwnHandle(runtime: OrcaRuntimeService, run: AutomationRun): string | null {
+export function runOwnHandle(
+  runtime: Pick<OrcaRuntimeService, 'getTerminalHandleForPaneKey' | 'getTerminalPtyIdForHandle'>,
+  run: AutomationRun
+): string | null {
   const handle = run.terminalPaneKey
     ? runtime.getTerminalHandleForPaneKey(run.terminalPaneKey)
     : null
@@ -79,11 +92,14 @@ export async function createHeadlessAutomationStructuredSession(args: {
   worktreeId: string
   agent: StructuredAgentId
   withoutPrompt?: true
+  firstMessage?: StructuredAgentSessionFirstMessage
+  signal?: AbortSignal
 }): Promise<{
   sessionId: string
   handle: string
   fence: number
   tabId: string
+  firstMessage?: { clientMessageId: string }
 }> {
   const sessionId = createStructuredAgentSessionId(args.agent, randomUUID)
   const created = await createStructuredAgentSessionForWorktree({
@@ -102,6 +118,8 @@ export async function createHeadlessAutomationStructuredSession(args: {
     worktree: `id:${args.worktreeId}`,
     agent: args.agent,
     ...(args.withoutPrompt ? { atRest: true as const } : {}),
+    ...(args.firstMessage ? { firstMessage: args.firstMessage } : {}),
+    ...(args.signal ? { signal: args.signal } : {}),
     activate: false
   })
   if (!created.ok) {
@@ -115,7 +133,9 @@ export async function createHeadlessAutomationStructuredSession(args: {
     sessionId: created.value.sessionId,
     handle: structuredAgentSessionTabId(created.value.sessionId),
     fence: created.value.fence,
-    tabId
+    tabId,
+    // The committed opening submission, which is what proves the launch prompt landed.
+    ...(created.value.firstMessage ? { firstMessage: created.value.firstMessage } : {})
   }
 }
 
@@ -195,7 +215,10 @@ export async function sendToReusableHeadlessAutomationSession(
         .toSorted((left, right) => right.receivedAt - left.receivedAt)[0]
     },
     liveStructuredSession: (previous) => {
-      const record = host?.deps.store.getRecord(previous.chatSessionId)
+      if (!host) {
+        return null
+      }
+      const record = host.deps.store.getRecord(previous.chatSessionId)
       if (!record || record.location.workspaceId !== worktreeId) {
         return null
       }
@@ -203,6 +226,7 @@ export async function sendToReusableHeadlessAutomationSession(
         kind: 'structured',
         chatSessionId: previous.chatSessionId,
         fence: record.lease.runtimeFence,
+        host,
         previous
       }
     }
@@ -211,14 +235,20 @@ export async function sendToReusableHeadlessAutomationSession(
     return null
   }
   if (session.kind === 'structured') {
-    const messageId = await commitStructuredAgentSessionLaunchPrompt({
-      host,
-      caller: { callerKey: `automation:${request.run.id}` },
+    // Why: a refused send never reached the chat, so the run must start its own session instead.
+    const outcome = await sendAgentTurn({
+      kind: 'structured-session',
+      host: session.host,
       sessionId: session.chatSessionId,
-      fence: session.fence,
-      text
+      callerKey: `automation:${request.run.id}`,
+      turn: {
+        body: structuredAgentSessionSendBody(text, []),
+        operationId: createStructuredAgentSessionOperationId(randomUUID),
+        expectedRuntimeFence: session.fence,
+        delivery: 'queue'
+      }
     })
-    if (!messageId) {
+    if (outcome.kind === 'refused') {
       return null
     }
     const shown = await runtime.showManagedWorktree(`id:${worktreeId}`)

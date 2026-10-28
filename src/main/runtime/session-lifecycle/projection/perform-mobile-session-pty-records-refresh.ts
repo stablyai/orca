@@ -49,22 +49,20 @@ export abstract class OrcaRuntimeWithPerformMobileSessionPtyRecordsRefresh exten
     if (!this.ptyController?.listProcesses && !this.ptyController?.hasPty) {
       return null
     }
-    // Why: floating PTY identity is explicit, so polling must not resolve every Git/SSH worktree.
+    // Floating PTYs need no Git/SSH workspace resolution.
     const isFloatingWorkspace = targetWorktreeId === FLOATING_TERMINAL_WORKTREE_ID
     const resolvedWorktrees = isFloatingWorkspace
       ? []
       : targetWorktreeId
         ? this.listResolvedWorktreesForExplicitTarget(targetWorktreeId)
         : await this.listResolvedWorktrees()
-    // An explicit mobile worktree belongs to one execution host. Query only
-    // that provider; aggregate inventory would wait on unrelated SSH hosts.
+    // Query only the target's execution host; aggregate inventory can block behind unrelated SSH hosts.
     const targetExecutionHost = targetWorktreeId
       ? (resolvedWorktrees.find((worktree) => worktree.id === targetWorktreeId)?.hostId ??
         this.tryGetWorkspaceSessionHostIdForWorktree(targetWorktreeId))
       : null
     const parsedTargetHost = targetExecutionHost ? parseExecutionHostId(targetExecutionHost) : null
-    // Paired/runtime-owned workspaces have a separate controller; this runtime
-    // cannot inspect them and must not silently query its local PTY provider.
+    // Paired runtime workspaces have another controller; never substitute this machine's PTY provider.
     if (parsedTargetHost?.kind === 'runtime') {
       return null
     }
@@ -81,8 +79,7 @@ export abstract class OrcaRuntimeWithPerformMobileSessionPtyRecordsRefresh exten
         parsedTargetHost?.kind === 'ssh' ? parsedTargetHost.id : undefined
       ))
     ) {
-      // A legacy relay ignores the optional projection and would still run its
-      // expensive process-table inventory on every mobile cadence tick.
+      // Legacy relays ignore projection hints and would rescan the expensive process table on every mobile tick.
       return null
     }
     return await this.refreshPtyWorktreeRecordsWithControllerInventory(
@@ -163,20 +160,16 @@ export abstract class OrcaRuntimeWithPerformMobileSessionPtyRecordsRefresh exten
       const publicTab = this.toMobileSessionTabsResult(snapshot!).tabs.find(
         (candidate) => candidate.type === 'terminal' && candidate.id === tab.id
       )
-      // Why: serve-created tabs can be visible before any renderer has adopted
-      // their tab id, so focusing the renderer would silently no-op.
-      // Phone-local activation also needs this path for inactive restored tabs:
-      // desktop focus is intentionally suppressed, but the PTY still must exist.
+      // Serve-created/restored tabs may lack renderer adoption; materialize locally even when phone-only navigation suppresses desktop focus.
       const automatic = isAutomaticTabActivation(opts.intent)
       const shouldMaterializePendingTerminal =
         publicTab?.type === 'terminal' &&
         publicTab.status !== 'ready' &&
-        // Why: opening a tab is the documented wake gesture for a slept pane
-        // (#11598), so only a background probe may be refused for one.
+        // Explicit tab opens wake slept panes (#11598); refuse only automatic probes.
         (!automatic ||
           (!this.isDeliberatelyParkedPane(worktreeId, tab) &&
             !this.isWorktreeTerminalSleepHeld(worktreeId))) &&
-        // Why: a launch's early tab is listed before its agent spawns; that launch's spawn fills it.
+        // An early launch tab must wait for its launch's own spawn.
         !isAgentLaunchRunningIn(worktreeId, {
           kind: 'pane',
           tabId: tab.parentTabId,
@@ -192,13 +185,11 @@ export abstract class OrcaRuntimeWithPerformMobileSessionPtyRecordsRefresh exten
         const trigger = { automatic, targetsHost, targetGroupId }
         let startupCwdFallback: RuntimeMobileSessionTabActivationResult['startupCwdFallback']
         try {
-          // Switch point: a pane main holds starts through main's one starter.
           if (ORCA_LAYOUT_OWNER_IS_MAIN) {
             const started = await this.ensureRestoredPaneStarted(
               { worktreeId, tabId: tab.parentTabId, leafId: tab.leafId },
               trigger
             )
-            // Main no longer holds the pane, so nothing started for it.
             if (started === null) {
               throw new Error('tab_not_found')
             }
@@ -211,7 +202,7 @@ export abstract class OrcaRuntimeWithPerformMobileSessionPtyRecordsRefresh exten
           }
         } catch (err) {
           if (automatic && isWorktreeTerminalsSleepingError(err)) {
-            // Why: the host slept the worktree while this probe waited for the spawn lock.
+            // The host may sleep this worktree while the probe waits for its spawn lock.
             return this.applyMobileSessionTabNavigation(
               this.getMobileSessionTabsForWorktree(worktreeId),
               tab.id,
@@ -265,12 +256,10 @@ export abstract class OrcaRuntimeWithPerformMobileSessionPtyRecordsRefresh exten
         opts.clientNavigationId
       )
     } else if (tab.type === 'browser') {
-      // Opening a saved tab is what starts its page, as on a desktop.
       if (tab.browserPageId) {
         await this.serveBrowserTabs.start(worktreeId, tab.browserPageId)
       }
-      // Why: browser mobile tabs are renderer-owned unified tabs; focusing the
-      // session tab keeps desktop tab order/group state authoritative.
+      // Browser rows are renderer-owned; session-tab focus preserves desktop order/group authority.
       if (targetsHost) {
         this.notifier?.focusEditorTab?.(tab.id, worktreeId)
       }

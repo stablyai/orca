@@ -8,8 +8,7 @@ export type PreflightIssue = {
   description: string
   fixLabel: string
   fixUrl: string
-  /** Git is a hard global dependency and stays pinned; provider-specific CLI
-   *  setup is a soft nudge the user can dismiss. */
+  /** Git is required globally; provider CLI setup nudges remain dismissible. */
   dismissible?: boolean
 }
 
@@ -46,8 +45,7 @@ export function getLandingPreflightIssues(
     })
   }
 
-  // Why: gh only powers GitHub PRs/issues/checks; GitLab-only projects should
-  // not see GitHub setup pressure on the landing screen.
+  // Only nudge GitHub CLI setup when a GitHub-backed project can use it.
   if (!options.hasGitHubBackedProject) {
     return issues
   }

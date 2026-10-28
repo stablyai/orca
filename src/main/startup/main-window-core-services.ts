@@ -3,6 +3,7 @@ import { registerCoreHandlers } from '../ipc/register-core-handlers/register-cor
 import { attachMainWindowServices } from '../window/attach-main-window-services'
 import { initTccPromptNotice } from '../macos-tcc-prompt-notice'
 import { resolveUpdateInstallMode } from '../updater'
+import { desktopConnectorCloud } from './main-process-connector-startup'
 import { mainProcessState as state } from './main-process-state'
 import { prepareCodexAiVaultSessionResume } from '../codex/codex-ai-vault-session-resume'
 import { resolveHostCodexSessionSourceHome } from '../codex/codex-session-source-home'
@@ -21,6 +22,7 @@ import {
 } from './codex-session-resume-launch'
 import { isRecoveryReloadInFlight } from './main-window-lifecycle-flags'
 import { RELAY_HOST_CLOSE_REASON } from '../../shared/relay-host-close-reason'
+import { holdLaunchReconnectOptOuts } from '../ipc/ssh/ssh-host-user-disconnect'
 
 export function attachMainWindowCoreServices(
   window: BrowserWindow,
@@ -61,6 +63,8 @@ export function attachMainWindowCoreServices(
   ) {
     throw new Error('Main window services must be initialized before attaching')
   }
+  // Server status probes start inside registerCoreHandlers; held hosts must be marked first.
+  holdLaunchReconnectOptOuts(store.getSshTargets())
   registerCoreHandlers(
     store,
     runtime,
@@ -94,19 +98,22 @@ export function attachMainWindowCoreServices(
       onBeforeRelaunch: async () => {
         state.isQuitting = true
         state.desktopRelayService?.fenceAndCloseNow()
+        desktopConnectorCloud()?.fence()
         await preserveAgentAuthBeforeRestart({ codexRuntimeHome, store })
       },
       onOrcaProfileAuthMutation: () => {
-        // Why: a provider whose launch-time install failed is installed by the next auth change.
+        // An auth change retries relay installation after launch-time failure.
         void state.desktopRelayInstaller?.authChanged()
         state.desktopRelayService?.authMutated()
+        desktopConnectorCloud()?.accountChanged()
       },
-      // Sign-out is the one fence a paired phone can be told about; quit and
-      // relaunch above stay reasonless so a restart never reads as signed out.
+      // Only sign-out fences paired phones; reasonless quit/relaunch must not look like logout.
       onBeforeOrcaProfileSignOut: () => {
         state.desktopRelayInstaller?.suspend()
         state.desktopRelayService?.fenceAndCloseNow(RELAY_HOST_CLOSE_REASON.SIGNED_OUT)
-      }
+        desktopConnectorCloud()?.signOutStarted()
+      },
+      onAfterOrcaProfileSignOut: () => desktopConnectorCloud()?.signOutFinished()
     },
     state.pluginService ?? undefined,
     state.pluginMarketplaceService && state.pluginMarketplaceInstaller
@@ -131,7 +138,7 @@ export function attachMainWindowCoreServices(
         }
         deps.recordRendererReload(ignoreCache)
       },
-      // Why: let the PTY layer skip its orphan sweep on the recovery reload that re-fires did-finish-load, so live local sessions survive (#5787).
+      // Recovery did-finish-load must skip orphan sweeping to preserve live PTYs (#5787).
       isRecoveryReloadInFlight,
       onCodexHomePtySpawned: handleCodexHomePtySpawned,
       onPtyExit: handlePtyExit,
@@ -141,9 +148,9 @@ export function attachMainWindowCoreServices(
       onWorktreeLifecycle: emitPluginWorktreeLifecycle
     }
   )
-  // Why: attach the durable renderer pull now, but launch the diagnostic process after first paint.
+  // Attach durable diagnostic pulls now, defer process launch past first paint.
   initTccPromptNotice(window, { deferWatchUntilReadyToShow: true })
   rateLimits.attach(window)
-  // Why: quota probes spawn CLIs and hit network, so don't fetch immediately and compete with first paint; show/focus listeners refresh later.
+  // Quota probes spawn CLIs/use network; defer to show/focus refresh so they do not compete with first paint.
   rateLimits.start({ fetchImmediately: false })
 }

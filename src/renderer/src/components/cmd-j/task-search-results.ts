@@ -7,7 +7,7 @@ import {
   type TaskSourceContext
 } from '../../../../shared/task-source-context'
 import { parseCmdJTaskSourceUrl } from '@/lib/worktree-palette-task-url-match'
-import { isWorktreePaletteQueryTooLarge } from '@/lib/worktree-palette-query-bounds'
+import { isWorktreePaletteQueryTooLarge } from '../../../../shared/palette-match/worktree-palette-query-bounds'
 
 export type CmdJTask =
   | { provider: 'linear'; issue: LinearIssue }

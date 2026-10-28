@@ -13,6 +13,7 @@ import {
   checkDaemonHealth,
   checkDaemonHealthWithCoverage,
   E2E_FORCE_DAEMON_HEALTH_UNREACHABLE_ENV,
+  getMacDaemonSystemResolverHealth,
   healthCheckDaemon
 } from './daemon-health'
 import { killStaleDaemon } from './daemon-stale-kill'
@@ -25,6 +26,15 @@ import {
 } from './daemon-process-start-time'
 import { parseDaemonPidFile } from './daemon-pid-file-parse'
 import type { SubprocessHandle } from './session-subprocess-handle'
+import type * as ResolverHealthModule from '../network/macos-system-resolver-health'
+import type { SystemResolverHealth } from './types'
+
+const readResolverHealthMock = vi.hoisted(() => vi.fn<() => Promise<SystemResolverHealth>>())
+
+vi.mock('../network/macos-system-resolver-health', async (importOriginal) => ({
+  ...(await importOriginal<typeof ResolverHealthModule>()),
+  readCurrentProcessMacSystemResolverHealth: readResolverHealthMock
+}))
 
 function createMockSubprocess(): SubprocessHandle {
   return {
@@ -237,6 +247,68 @@ describe('daemon health', () => {
     } finally {
       await closeServer(server)
     }
+  })
+
+  // The resolver probe answers 'unknown' off macOS without touching the socket.
+  describe.skipIf(process.platform !== 'darwin')('macOS resolver health probe', () => {
+    afterEach(() => {
+      vi.useRealTimers()
+      readResolverHealthMock.mockReset()
+    })
+
+    it('answers concurrent probes instead of evicting each other', async () => {
+      // Hold every answer until all three probes are live so their control sockets overlap.
+      const releaseProbes: (() => void)[] = []
+      readResolverHealthMock.mockImplementation(
+        () =>
+          new Promise((resolve) => {
+            releaseProbes.push(() => resolve('healthy'))
+            if (releaseProbes.length === 3) {
+              releaseProbes.forEach((release) => release())
+            }
+          })
+      )
+      const server = new DaemonServer({
+        socketPath,
+        tokenPath,
+        spawnSubprocess: () => createMockSubprocess()
+      })
+      await server.start()
+
+      try {
+        const results = await Promise.all([
+          getMacDaemonSystemResolverHealth(socketPath, tokenPath),
+          getMacDaemonSystemResolverHealth(socketPath, tokenPath),
+          getMacDaemonSystemResolverHealth(socketPath, tokenPath)
+        ])
+        expect(results).toEqual(['healthy', 'healthy', 'healthy'])
+      } finally {
+        await server.shutdown()
+      }
+    })
+
+    it('settles as unknown when the daemon closes the probe socket', async () => {
+      vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
+      writeFileSync(tokenPath, 'token', { mode: 0o600 })
+      const server = createServer((socket) => {
+        socket.once('data', () => {
+          socket.write(`${JSON.stringify({ type: 'hello', ok: true })}\n`)
+          socket.once('data', () => socket.end())
+        })
+      })
+      await new Promise<void>((resolve, reject) => {
+        server.once('error', reject)
+        server.listen(socketPath, resolve)
+      })
+
+      try {
+        await expect(getMacDaemonSystemResolverHealth(socketPath, tokenPath)).resolves.toBe(
+          'unknown'
+        )
+      } finally {
+        await closeServer(server)
+      }
+    })
   })
 })
 

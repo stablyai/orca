@@ -1,13 +1,11 @@
 // @vitest-environment happy-dom
 import { useCallback, useRef, useState } from 'react'
-import { create } from 'zustand'
 import { act, cleanup, renderHook, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import type { JiraIssue } from '../../../shared/jira/jira-types'
 import type { JiraSavedFilterState } from '../../../shared/jira/jira-saved-filters'
-import type { AppState } from '@/store/types'
 import type { TaskPageLinearCollectionEffectsModel } from './task-page/linear/use-task-page-linear-collection-effects'
-import { createJiraSlice } from '@/store/slices/jira'
+import { createTestStore } from '@/store/slices/store-test-helpers'
 import { useTaskPageJiraSavedFilters } from './use-task-page-jira-saved-filters'
 import { useTaskPageJiraListEffects } from './use-task-page-jira-list-effects'
 import type { JiraStatusCatalogItem } from './task-page-jira-status-catalog'
@@ -47,14 +45,7 @@ const selectedStatuses: string[] = []
 const noop = () => {}
 const suspendedRead = new Promise<JiraIssue[]>(() => {})
 
-function createStore() {
-  return create<AppState>()(
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Jira collection actions read only the settings, connection status, and caches initialized here.
-    (...args) => ({ settings: null, ...createJiraSlice(...args) }) as AppState
-  )
-}
-
-function useTaskPageFixture(store: ReturnType<typeof createStore>, remote: boolean) {
+function useTaskPageFixture(store: ReturnType<typeof createTestStore>, remote: boolean) {
   const renders = useRef(0)
   renders.current += 1
   const [jiraIssues, setJiraIssues] = useState<JiraIssue[]>([])
@@ -147,7 +138,7 @@ it.each([
 ])(
   'settles $cache Jira results after $failure and keeps query/refresh working',
   async (testCase) => {
-    const store = createStore()
+    const store = createTestStore()
     store.setState({ jiraStatus: { connected: true, viewer: null, selectedSiteId: 'site-1' } })
     await store.getState().listJiraIssues('assigned', 50)
     if (testCase.cache === 'stale') {
@@ -205,7 +196,7 @@ it.each([
 )
 
 it('recovers from a failed owner read and restores the active exact JQL on retry', async () => {
-  const store = createStore()
+  const store = createTestStore()
   store.setState({ jiraStatus: { connected: true, viewer: null, selectedSiteId: 'site-1' } })
   const savedState: JiraSavedFilterState = {
     filters: [{ id: 'restored', name: 'Restored', jql: 'filter = 12345' }],

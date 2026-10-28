@@ -15,7 +15,7 @@ import {
   hostHistoryDirectory,
   stage
 } from './persistence-orcad-migration-shell-history-fixture'
-import { createStore, testState } from '../../persistence-test-harness'
+import { createStore, testState } from '../persistence-test-harness'
 
 const { missingShells, presentShells } = vi.hoisted(() => ({
   missingShells: new Set<string>(),

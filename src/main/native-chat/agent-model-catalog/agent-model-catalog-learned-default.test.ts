@@ -1,3 +1,5 @@
+import { agentSessionRecordFixture } from '../agent-session-record-test-fixture'
+import { agentSessionConversationView } from '../../../shared/agent-session-conversation-view'
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -45,8 +47,7 @@ function workspace(name: string, files: Record<string, string> = {}): string {
 }
 
 function record(agent: string, workspacePath: string): AgentSessionRecord {
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the catalog service reads only these fields.
-  return {
+  return agentSessionRecordFixture({
     sessionId: `${agent}-1`,
     provider: agent,
     accountHome: HOMES[agent]!,
@@ -57,7 +58,7 @@ function record(agent: string, workspacePath: string): AgentSessionRecord {
       workspaceId: 'ws-1',
       workspaceKind: 'git-worktree'
     }
-  } as AgentSessionRecord
+  })
 }
 
 async function afterNoPickChat(agent: string, workspacePath: string, picked = false) {
@@ -79,6 +80,10 @@ async function afterNoPickChat(agent: string, workspacePath: string, picked = fa
   )
   const catalog = createAgentModelCatalogService({
     store,
+    getConversation: (sessionId) => {
+      const saved = sessionId === chat.sessionId ? chat : undefined
+      return saved ? agentSessionConversationView(saved) : undefined
+    },
     getRecord: (sessionId) => (sessionId === chat.sessionId ? chat : undefined),
     drivesRecord: () => true,
     resolveAccountHome: async () => HOMES[agent]!,

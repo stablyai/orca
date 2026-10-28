@@ -208,9 +208,7 @@ describe('PostgreSQL relay deadlines', () => {
     ).toBe(5_000)
   })
 
-  // Why: a statement deadline that reaches the caller as a crash converts a
-  // transient stall into a failed assignment. It aborts the transaction exactly
-  // as a lock timeout does, so it belongs on the same bounded retry.
+  // Real 57014 aborts transactions like lock timeout; retry rather than fail assignments on transient stalls.
   it('retries a transaction after a statement timeout', async () => {
     vi.spyOn(console, 'warn').mockImplementation(() => undefined)
     const database = await openRelayDatabase({
@@ -262,9 +260,7 @@ describe('PostgreSQL schema startup', () => {
   })
 
   it('fails the boot on a lock timeout instead of re-entering the lock queue', async () => {
-    // The catalog pre-check already answered that the object is missing, so a lock timeout means
-    // this boot lost the queue. Relation locks are granted in queue order, so each retry parks
-    // every writer behind it for another timeout.
+    // Catalog already proved missing: requeued DDL after lock timeout parks every writer behind it again.
     const errors: string[] = []
     vi.spyOn(console, 'error').mockImplementation((line: string) => {
       errors.push(line)

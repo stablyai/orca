@@ -33,8 +33,7 @@ type OsFileDropOwnerOptions<Destination> = {
   sequence: OsFileDropSequence
   canAccept?: boolean | ((event: DragEvent) => boolean)
   captureDestination?: (event: DragEvent) => Destination
-  /** The web client has no file paths; a destination that uploads the bytes itself takes the
-   *  dropped files as held tokens instead of an unresolved-paths refusal. */
+  /** Web destinations that upload bytes receive held-file tokens because browser drops have no local paths. */
   acceptsBrowserFiles?: boolean
   /** Replaces root liveness for paths; preparation failures still reach onDrop. */
   isDestinationLive?: (context: OsFileDropContext<Destination>) => boolean

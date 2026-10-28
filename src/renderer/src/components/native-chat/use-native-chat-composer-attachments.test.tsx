@@ -12,7 +12,7 @@ import { nativeChatPendingAttachmentSnapshot } from './native-chat-pending-attac
 import { readNativeChatDraftCache } from './native-chat-draft-cache'
 import { NATIVE_FILE_DROP_MAX_PATHS } from '../../../../shared/native-file-drop'
 import { imageReferenceToken } from '../../../../shared/native-chat-image-reference'
-import type * as RemoteRuntimePtyIdModule from '../../../../shared/remote-runtime-pty-id'
+import type * as RemoteRuntimePtyIdModule from '../../../../shared/remote-runtime/remote-runtime-pty-id'
 
 import { useAppStore } from '@/store'
 import { resolveNativeChatDraftOwner } from '@/lib/native-chat-draft-owner'
@@ -52,7 +52,7 @@ vi.mock('@/i18n/i18n', () => ({
   translate: (_key: string, fallback: string) => fallback
 }))
 const runtimeTarget = vi.hoisted(() => ({ remote: false }))
-vi.mock('../../../../shared/remote-runtime-pty-id', async (importOriginal) => ({
+vi.mock('../../../../shared/remote-runtime/remote-runtime-pty-id', async (importOriginal) => ({
   ...(await importOriginal<typeof RemoteRuntimePtyIdModule>()),
   isRemoteRuntimePtyId: () => runtimeTarget.remote
 }))
@@ -352,8 +352,7 @@ describe('useNativeChatComposerAttachments', () => {
       first.latest().attachResolvedPaths(['/tmp/orca-native-chat-attach-test.png'])
     })
 
-    // Images are NOT sent to the TUI on attach — they ride along on submit, so
-    // the chip and the TUI input never diverge and removing a chip is clean.
+    // Attach only on submit so chip removal cannot leave stale image paths in TUI input.
     expect(first.latest().imageAttachments).toMatchObject([
       { path: '/tmp/orca-native-chat-attach-test.png' }
     ])
@@ -449,10 +448,7 @@ describe('useNativeChatComposerAttachments', () => {
     act(() => probe.root.unmount())
   })
 
-  // Today's only caller settles ownership synchronously before it calls, so this
-  // verdict cannot arrive false — but the hook exports this entry point. Pinned
-  // because the fallback is not a refusal: a false verdict is not "owned", so a
-  // remote target would blame client-local attachments for an ownership failure.
+  // False ownership must name the ownership failure, even though the current immediate caller checks synchronously.
   it('names the ownership failure when an immediate attach arrives already false', async () => {
     runtimeTarget.remote = true
     const probe = await renderProbe('pty-1', false, { isComposing: () => false })
@@ -468,8 +464,6 @@ describe('useNativeChatComposerAttachments', () => {
     act(() => probe.root.unmount())
   })
 
-  // Ownership is per path: the target-owned drop still lands, the client-local
-  // paste is refused, and the refusal is reported rather than hidden.
   it('keeps the owned half of a mixed queued batch after the target becomes remote', async () => {
     let composing = true
     const probe = await renderProbe('pty-1', false, { isComposing: () => composing })
@@ -489,9 +483,7 @@ describe('useNativeChatComposerAttachments', () => {
     act(() => probe.root.unmount())
   })
 
-  // References are inserted in the order the user made them. Splitting the queue
-  // into an owned half and a client-local half would hoist every workspace drop
-  // ahead of a paste that came first.
+  // Preserve mixed attachment order; grouping by ownership would move workspace drops ahead of earlier pastes.
   it('keeps a mixed queued batch in the order it was attached', async () => {
     let composing = true
     const probe = await renderProbe('pty-1', false, { isComposing: () => composing })
@@ -523,9 +515,7 @@ describe('useNativeChatComposerAttachments', () => {
     act(() => probe.root.unmount())
   })
 
-  // An already-blocked target refuses at the drop instead of queueing. Queued
-  // paths that can never attach would still spend the pending budget, and the
-  // next legitimate drop would be turned away for being one too many.
+  // Refuse permanently blocked targets before queueing so invalid paths cannot exhaust the pending budget.
   it('refuses an already-blocked target at the drop without spending the queue budget', async () => {
     runtimeTarget.remote = true
     let composing = true
@@ -587,8 +577,7 @@ describe('useNativeChatComposerAttachments', () => {
     })
 
     expect(probe.draft()).toBe('각 @/remote/b.txt @/remote/b.txt @/remote/a.txt ')
-    // The focus this flush must not steal would be scheduled a frame out, so without advancing
-    // one the assertions below hold even when the flush does steal focus.
+    // Advance a frame so scheduled focus theft cannot make these assertions pass vacuously.
     await act(async () => {
       await new Promise((resolve) => requestAnimationFrame(resolve))
     })
@@ -830,8 +819,7 @@ describe('useNativeChatComposerAttachments', () => {
       probe.latest().attachResolvedPaths(['/tmp/later.png'])
     })
 
-    // A composer that comes back must still wait for the pending one, which no draft saves; the
-    // later image is saved at once, and shows behind it.
+    // Pending chips survive remounts in memory while later completed images persist without overtaking them.
     expect(nativeChatPendingAttachmentSnapshot('pty-1')).toMatchObject([
       { id: pendingId, path: '', pending: true },
       { path: '/tmp/later.png' }
@@ -845,7 +833,6 @@ describe('useNativeChatComposerAttachments', () => {
       probe.latest().imageAttachments.find((attachment) => attachment.id === pendingId)?.previewUrl
     ).toBe('blob:preview-1')
 
-    // Thumbnails keep the order they were attached in, so their numbers don't jump.
     act(() => probe.latest().resolvePendingImageAttachment(pendingId ?? '', '/tmp/first.png'))
     expect(readNativeChatAttachmentCache('pty-1')).toMatchObject([
       { path: '/tmp/first.png' },

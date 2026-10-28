@@ -19,8 +19,6 @@ vi.mock('../daemon/daemon-provider-init', () => ({
 }))
 vi.mock('../daemon/daemon-provider-state', () => ({
   disconnectDaemon: disconnectDaemonMock,
-  // Exported here purely so the test can prove it is never reached — killing the daemon on
-  // orcad shutdown is what would make an orcad restart destructive again.
   shutdownDaemon: shutdownDaemonMock,
   daemonOwnsFreshPersistentPtys: daemonOwnsFreshPersistentPtysMock,
   readDaemonPidRecord: readDaemonPidRecordMock
@@ -50,9 +48,6 @@ describe('startOrcadDaemon', () => {
 
   it('does not arm the macOS login-session death watch', async () => {
     await startOrcadDaemon()
-    // That watch retires the daemon when the spawning GUI login session dies. An orcad
-    // daemon must survive its SSH session ending — arming it would kill every terminal the
-    // moment the operator logged out, which is the opposite of the property being bought.
     expect(initDaemonPtyProviderMock).toHaveBeenCalledWith(undefined, {
       macosLoginSessionWatch: false,
       recycleStaleDaemonOnEveryPlatform: true,
@@ -85,8 +80,6 @@ describe('startOrcadDaemon', () => {
   it('fails open when the daemon cannot start at all', async () => {
     initDaemonPtyProviderMock.mockRejectedValue(new Error('node-pty is missing'))
     daemonOwnsFreshPersistentPtysMock.mockReturnValue(false)
-    // Fail-open, like the desktop: git, worktrees and non-persistent terminals must still
-    // serve. What must not happen is a thrown startup or a claim of persistence.
     await expect(startOrcadDaemon()).resolves.toEqual({
       state: 'unavailable',
       reason: 'node-pty is missing'
@@ -99,8 +92,6 @@ describe('stopOrcadDaemon', () => {
   it('disconnects and never shuts the daemon down', async () => {
     await stopOrcadDaemon()
     expect(disconnectDaemonMock).toHaveBeenCalledTimes(1)
-    // The whole point of item 4: an orcad restart is non-destructive only if the daemon
-    // outlives it. shutdownDaemon() kills the daemon and every PTY under it.
     expect(shutdownDaemonMock).not.toHaveBeenCalled()
   })
 })

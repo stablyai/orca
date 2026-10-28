@@ -1,5 +1,9 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { openTestAgentSessionRecordStore } from '../../runtime/agent-session-record-store-test-harness'
+import { StructuredAgentSessionHost } from './structured-agent-session-host'
+import { openTestJournalHostDatabase } from '../agent-session-journal/journal-host-database-test-support'
 import { activeProviderContext } from '../../../shared/agent-session-provider-context'
+import { agentJournalItemKey } from '../../../shared/agent-session-journal-item-key'
 import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../shared/agent-session-journal-types'
 import {
   createQueuedMessageTestRig,
@@ -276,4 +280,48 @@ it("refuses /compact reusing another caller's id for a different conversation", 
   expect((await rig.host.journalSnapshot(SESSION)).submissions).toHaveLength(1)
   expect((await rig.host.journalSnapshot(otherSessionId)).submissions).toHaveLength(0)
   expect(rig.compact).toHaveBeenCalledOnce()
+})
+
+it('replays a completed compact after reopening an unreadable writer without compacting again', async () => {
+  const fields = { command: 'compact' as const }
+  const params = {
+    ...fields,
+    envelope: rig.envelope(fields, 'agentSession.conversationCommand', hostTestOperationId())
+  }
+  expect(await rig.host.conversationCommand(CALLER, params)).toMatchObject({ ok: true })
+  await eventually(() => expect(rig.compact).toHaveBeenCalledOnce())
+  rig.finishCompact()
+  const { command } = rig.compact.mock.calls[0]![0]
+  await eventually(async () =>
+    expect(
+      (await rig.host.journalSnapshot(SESSION)).items.find(
+        ({ itemId }) => itemId === agentJournalItemKey(command.identity)
+      )?.body
+    ).toMatchObject({ ...command.running, state: 'completed', outcome: 'success' })
+  )
+  expect(await rig.host.conversationCommand(CALLER, params)).toMatchObject({
+    ok: true,
+    replayed: true
+  })
+  expect(rig.compact).toHaveBeenCalledOnce()
+  rig.host.stopDelivery()
+  await rig.host.flushAllStreamedEvents()
+  openTestJournalHostDatabase(rig.root)
+    .db.prepare(
+      "UPDATE agent_session_records SET record_json = json_set(record_json, '$.lease.minimumNextFence', 'bad') WHERE session_id = ?"
+    )
+    .run(SESSION)
+  const store = await openTestAgentSessionRecordStore(rig.root)
+  const restored = new StructuredAgentSessionHost({ ...rig.host.deps, store })
+  try {
+    expect(store.getRecord(SESSION)).toBeNull()
+    expect(await restored.conversationCommand(CALLER, params)).toMatchObject({
+      ok: true,
+      replayed: true
+    })
+    expect(rig.compact).toHaveBeenCalledOnce()
+  } finally {
+    restored.stopDelivery()
+    await restored.flushAllStreamedEvents()
+  }
 })

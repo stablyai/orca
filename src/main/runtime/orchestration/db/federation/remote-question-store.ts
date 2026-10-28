@@ -31,7 +31,6 @@ type RemoteAnswerParams = {
   body: string
 }
 
-// Returns 'settled' when the stored row already carries this exact answer, 'writable' when the guarded UPDATE may apply.
 function classifyRemoteQuestion(
   this: OrchestrationDb,
   params: RemoteAnswerParams
@@ -55,7 +54,7 @@ function classifyRemoteQuestion(
     }
     return 'settled'
   }
-  // Why: the guarded UPDATE is a silent no-op for a closed question, which the caller would read as stored.
+  // Refuse closed questions explicitly; a guarded no-op UPDATE could otherwise look stored.
   if (question.status === 'closed') {
     throw new OrchestrationError(
       'question_not_found',
@@ -80,8 +79,7 @@ export function answerRemoteQuestion(this: OrchestrationDb, params: RemoteAnswer
   if (changes > 0) {
     return
   }
-  // Why: a concurrent answer or close won the guarded UPDATE after our read; re-classify so the caller
-  // sees the stored outcome instead of a success that never happened.
+  // Reclassify a lost UPDATE race so concurrent answer/close is reported honestly.
   if (classifyRemoteQuestion.call(this, params) === 'settled') {
     return
   }

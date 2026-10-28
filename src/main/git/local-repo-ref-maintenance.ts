@@ -18,6 +18,7 @@ import {
   maintainRepoPackIndex
 } from './repo-pack-index-maintenance'
 import { gitExecFileAsync } from './runner'
+import { assertWslUncPathRunning, wslDistroForPath } from '../wsl/wsl-unc-access-gate'
 import { readRepoCommonDirFromGit } from './worktree-list-reader'
 
 // Maintain native/WSL repos locally; SSH maintenance belongs on its execution host.
@@ -179,6 +180,11 @@ export function createLocalRepoRefMaintenanceTarget(
       return resolved ? refsDirectoryForMainProcess(resolved, args.wslDistro) : undefined
     },
     async isOptedOut(signal: AbortSignal) {
+      // E9: this runs off a quiet-period timer, by which time the distro may have stopped; a refusal
+      // here defers and retries like any failed probe, so no maintenance step boots it.
+      if (wslDistroForPath(args.repoPath, args.wslDistro)) {
+        await assertWslUncPathRunning(args.repoPath, args.wslDistro)
+      }
       try {
         const { stdout } = await gitExecFileAsync(
           ['config', '--get-regexp', '^(maintenance\\.auto|gc\\.auto)$'],

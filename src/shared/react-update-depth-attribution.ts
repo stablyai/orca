@@ -1,14 +1,6 @@
-/**
- * React's nested-update counter is module-global and keyed on the root, not per fiber, so
- * "Maximum update depth exceeded" (minified #185) throws on whichever fiber calls setState
- * next after the counter trips. The catching boundary is a bystander picked by commit order.
- */
+/** React #185 trips a root-global counter; the next setState fiber throws, so the catching boundary is only a commit-order bystander. */
 
-/**
- * react-dom 19.2.x NESTED_UPDATE_LIMIT. getRootForUpdatedFiber throws once the
- * root-global nested-update counter passes it. Every diagnostic that budgets
- * commits against React's bail must derive its threshold from this one number.
- */
+/** React DOM 19.2.x root-global NESTED_UPDATE_LIMIT; derive diagnostic commit thresholds from this value. */
 export const REACT_NESTED_UPDATE_LIMIT = 50
 
 export const UNRELIABLE_BOUNDARY_ATTRIBUTION = 'unreliable'

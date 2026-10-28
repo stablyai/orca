@@ -94,6 +94,30 @@ describe('AddRepoHostSelector', () => {
     expect(html).not.toContain('opacity-55')
   })
 
+  it('says why a failed SSH host needs attention (#29648)', () => {
+    const html = renderToStaticMarkup(
+      <AddRepoHostSelector
+        hosts={[
+          {
+            id: 'ssh:ssh-1',
+            label: 'Builder',
+            detail: 'SSH',
+            kind: 'ssh',
+            health: 'error',
+            presence: 'configured',
+            failureReason: 'All configured authentication methods failed'
+          }
+        ]}
+        selectedHostId="local"
+        open
+        onOpenChange={vi.fn()}
+        onSelectHost={vi.fn()}
+      />
+    )
+
+    expect(html).toContain('Needs attention - All configured authentication methods failed')
+  })
+
   it('shows exact update guidance for incompatible runtime hosts', () => {
     const html = renderToStaticMarkup(
       <AddRepoHostSelector

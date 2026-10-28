@@ -1,3 +1,4 @@
+import { detectProjectLaunchContext } from '../../preflight/workspace-agent-detection'
 import { OrcaRuntimeWithResolveBrowserNetworkExecutionHostForWorktree } from '../terminal/launch/terminal-workspace-scope'
 import type { ResolvedWorktree } from '../runtime-worktree-path-identity'
 import { splitWorktreeIdForFilesystem, worktreeIdentityKey } from '../../../shared/worktree/id'
@@ -18,6 +19,7 @@ import type {
 } from '../runtime-worktree-lineage-resolution'
 import type { OrchestrationDb } from '../orchestration/db/orchestration-db'
 import { resolveNestedWorkerMaxDepth } from '../../../shared/nested-worker-depth'
+import { resolveOrchestrationHeartbeatMinutes } from '../../../shared/orchestration-heartbeat'
 import { chatWorkerErrorEscalationEnabled } from '../orchestration/chat-worker-error-escalation'
 import type { WorkspaceLineage, WorktreeLineage } from '../../../shared/worktree/lineage-types'
 import type { WorkspaceKey } from '../../../shared/folder-workspace-types'
@@ -42,9 +44,7 @@ export abstract class RuntimeWorkspaceSelectors extends OrcaRuntimeWithResolveBr
 
   protected async resolveWorktreeSelector(selector: string): Promise<ResolvedWorktree> {
     const explicitWorktreeId = this.getValidatedExplicitWorktreeIdSelector(selector)
-    // Why only `id:`: every other selector kind is matched across the whole fleet, and their
-    // `selector_ambiguous` contract is defined over all repos. Scoping those would silently pick a
-    // winner where today they correctly refuse. An `id:` selector already names its repo.
+    // Only id selectors name a repo; scoping other selectors would hide fleet-wide ambiguity.
     if (explicitWorktreeId && !this.hasFreshResolvedWorktreeCache()) {
       const scoped = await this.resolveExplicitWorktreeIdScoped(explicitWorktreeId)
       if (scoped) {
@@ -153,6 +153,10 @@ export abstract class RuntimeWorkspaceSelectors extends OrcaRuntimeWithResolveBr
     })
   }
 
+  getOrchestrationHeartbeatMinutes(): number | null {
+    return resolveOrchestrationHeartbeatMinutes(this.store?.getSettings?.())
+  }
+
   hydrateInferredWorktreeLineage(): Promise<void> {
     return this.worktreeLineage.hydrate()
   }
@@ -165,8 +169,7 @@ export abstract class RuntimeWorkspaceSelectors extends OrcaRuntimeWithResolveBr
     return this.worktreeLineage.listWorkspaceLineage()
   }
 
-  // Why: one selector grammar, so connection-scoped resolution can narrow the same
-  // candidate set instead of reimplementing (and diverging from) the matching rules.
+  // Reuse the selector grammar when narrowing connection scope so matching cannot diverge.
   protected selectReposBySelector(selector: string): Repo[] {
     const repos = this.store?.getRepos() ?? []
     if (selector.startsWith('id:')) {
@@ -203,6 +206,11 @@ export abstract class RuntimeWorkspaceSelectors extends OrcaRuntimeWithResolveBr
       throw new Error('selector_ambiguous')
     }
     throw new Error('repo_not_found')
+  }
+
+  async detectProjectLaunchContext(repoSelector: string) {
+    const repo = await this.resolveRepoSelector(repoSelector)
+    return detectProjectLaunchContext(this.requireStore(), repo)
   }
 
   requireStore(): RuntimeStore {

@@ -26,8 +26,7 @@ export const MAX_BROWSER_ADDRESS_BAR_SUGGESTIONS = 8
 export const BROWSER_ADDRESS_BAR_QUERY_MAX_BYTES = 2 * 1024
 
 export type BrowserAddressBarSuggestion = {
-  /** For a workspace-doc row this is the document's absolute path — a selection identity that even
-   *  the url fallback routes correctly, since every pane's navigate runs path detection first. */
+  /** Workspace documents use absolute paths as selection identities; navigation fallbacks run path detection first. */
   url: string
   title: string
   subtitle: string
@@ -83,10 +82,7 @@ type BrowserAddressBarSuggestionInput = {
   kagiSessionLink?: string | null
   searchEngine?: SearchEngine
   value: string
-  /**
-   * `true` on a keystroke that may complete inline; the bar text while it shows a completion, so
-   * row 0 stays that page whatever history does meanwhile.
-   */
+  /** true allows inline completion; a string pins row zero to the visible completion despite history changes. */
   inline?: true | string | null
 }
 
@@ -96,8 +92,7 @@ export function buildBrowserAddressBarSuggestions(
   return withSiteFavicons(buildSuggestionRows(args), args.browserUrlHistory)
 }
 
-// Why by host: a typed address or a host completion has no history entry of its own, and Orca
-// already treats an icon as the site's (the tab strip keeps it across same-site pages).
+// Typed addresses/host completions have no history row; reuse the site’s favicon.
 function withSiteFavicons(
   rows: BrowserAddressBarSuggestion[],
   browserUrlHistory: readonly BrowserHistoryEntry[]
@@ -147,15 +142,13 @@ function buildSuggestionRows({
     rowByEntry.set(entry, toBrowserHistorySuggestion(entry))
   }
   documentEntries.forEach((entry, index) => rowByEntry.set(entry, documentRows[index]))
-  // Why prepare the caller's array as-is: it is the stable `browserUrlHistory`
-  // identity, so the prepare cache hits instead of re-lowercasing every keystroke.
+  // Prepare the stable caller array directly so keystrokes reuse the lowercase cache.
   const preparedHistory = prepareBrowserHistoryEntries(browserUrlHistory)
   const prepared =
     documentEntries.length === 0
       ? preparedHistory
       : [...preparedHistory, ...prepareBrowserHistoryEntries(documentEntries)]
-  // Why url-tail is kept here: the address bar is a navigation surface, so a
-  // path-only recall is still a destination — it just never outranks a real one.
+  // Keep low-priority path-tail recall because every address-bar result is still navigable.
   const historySuggestions: BrowserAddressBarSuggestion[] = matchBrowserHistory({
     prepared,
     query: trimmed,
@@ -183,8 +176,7 @@ function buildSuggestionRows({
     const normalizedUrl = normalizeBrowserNavigationUrl(trimmed, searchEngine, {
       kagiSessionLink
     })
-    // Why: rejected schemes must use the submit path's validation error;
-    // a synthetic row would pass the raw string straight to webview.src.
+    // Rejected schemes must reach submit validation; synthetic rows would write raw strings directly to webview.src.
     topAction = normalizedUrl
       ? {
           url: normalizedUrl,
@@ -197,8 +189,7 @@ function buildSuggestionRows({
       : null
   }
 
-  // Why: like Chrome, row 0 is what Enter does. A visited page that starts with the typed text
-  // takes it (the bar completes inline to it); otherwise what you typed does.
+  // Row zero follows Enter: use a valid inline completion, otherwise the typed action.
   const completion =
     inline === true ? findInlineCompletion(value, historySuggestions) : shownCompletion(inline)
   if (completion) {
@@ -223,8 +214,7 @@ function buildSuggestionRows({
   if (!topAction) {
     return historySuggestions.slice(0, MAX_BROWSER_ADDRESS_BAR_SUGGESTIONS)
   }
-  // Why: the history row gives Enter the same target while showing real page metadata, so it
-  // takes the typed row's place on top.
+  // A duplicate history row supplies real metadata for the same Enter target.
   const duplicate = historySuggestions.find((h) => h.url === topAction.url)
   return [duplicate ?? topAction, ...historySuggestions.filter((h) => h !== duplicate)].slice(
     0,
@@ -254,11 +244,7 @@ function shownCompletion(text: string | null): { text: string; url: string } | n
   return text && url ? { text, url } : null
 }
 
-/**
- * Completes `typed` inline to a visited URL, keeping what the user typed. While the typed text
- * is still inside the host it completes only the host, as Chrome does, so typing an address
- * never lands on some deeper page of that site.
- */
+/** Complete only the host while typing within it, avoiding unexpected navigation to a visited deeper path. */
 export function getBrowserAddressBarInlineCompletion(
   typed: string,
   url: string
@@ -293,8 +279,7 @@ export function getBrowserAddressBarInlineCompletion(
   if (form === undefined) {
     return null
   }
-  // Why: Enter submits the bar text through the pane's own checks, so the completion must go
-  // exactly where that text goes: the typed site for a host, the visited page for a path.
+  // Accept only completions whose text submits to the intended host or visited path through normal pane validation.
   const text = typed + form.slice(typed.length)
   const target = normalizeBrowserNavigationUrl(text)
   if (

@@ -132,7 +132,7 @@ it('cuts at punctuation when the window holds no whitespace at all', async () =>
   }
 })
 
-it('keeps a 9,000-character identifier whole rather than cutting at its underscores', () => {
+it('hard-cuts a 9,000-character identifier without treating underscores as boundaries', () => {
   // Underscores are token characters, so this oversized identifier requires a hard cut.
   const text = 'ab_'.repeat(3000)
   expect(text.length).toBe(9000)

@@ -1,6 +1,4 @@
-// Starting a saved pane that has no live terminal: a client's first view of a pending row, every
-// wake of a slept workspace, and, in the layout-owner build, every trigger that is not a desktop
-// window's own restore.
+// Restore terminal-less saved panes for pending-row activation and workspace wakes; main-owned layouts also handle triggers outside desktop restore.
 
 import type { OrcaRuntimeWithAgentSessionResumeOwnership as AgentSessionResume } from './agent-session-resume-ownership'
 import type {
@@ -17,6 +15,7 @@ import type { TuiAgent } from '../../../../shared/tui-agent'
 import type { AgentLaunchRuntime } from '../../../../shared/agent-launch-runtime'
 import type { RuntimeMobileSessionCreateTerminalResult } from '../../../../shared/runtime-session-contracts'
 import type { RuntimeMobileSessionTerminalTab } from '../../../../shared/runtime-types'
+import type { RuntimeTerminalCreate } from '../../../../shared/runtime-terminal-create-contract'
 import { buildHeadlessMobileSessionTerminalTabs } from '../../mobile-session-terminal-projection'
 import {
   RestoredPaneStarter,
@@ -28,7 +27,12 @@ import { isPublishedHeld, reopenHeldPanes } from '../../terminal/recovery/held-p
 import { reopenNewerDaemonTerminals } from '../../../daemon/daemon-newer-protocol-hold'
 import type { NewerDaemonReopenResult } from '../../../../shared/newer-daemon-hold'
 import type { WorkspaceLayoutStream } from '../../workspace-layout-stream'
-import { parsePaneKey } from '../../../../shared/stable-pane-id'
+import { getDaemonHistoryDir } from '../../../daemon/daemon-launch-paths'
+import { HistoryReader } from '../../../daemon/history-reader'
+import { servesWslMovedPaneHistory } from '../../../orcad/orcad-migration-wsl-destination'
+import { movedPaneHistorySessionId } from '../../../persistence/migrating-orcad-catalog/orcad-terminal-history-installer'
+import { makePaneKey, parsePaneKey } from '../../../../shared/stable-pane-id'
+import { agentProviderSessionsEqual } from '../../../../shared/agent-session-resume'
 import { worktreeIdsEqual } from '../../../../shared/worktree/id'
 
 export abstract class OrcaRuntimeWithRestoredPaneStart extends OrcaRuntimeWithBuildHeadlessMobileSessionBrowserTabs {
@@ -55,11 +59,7 @@ export abstract class OrcaRuntimeWithRestoredPaneStart extends OrcaRuntimeWithBu
     start: 'starting' | { failed: unknown }
   ): void
 
-  /**
-   * The pane's live terminal, started once if it has none: every wake of a slept pane, and in the
-   * layout-owner build any trigger but a desktop window's own restore. Null when main no longer
-   * holds the pane.
-   */
+  /** Start once if no terminal exists; all workspace wakes and non-window restore triggers use this in main-owned layouts. Null if main no longer holds the pane. */
   ensureRestoredPaneStarted(
     pane: RestoredPane,
     trigger: RestoredPaneTrigger = {}
@@ -73,8 +73,7 @@ export abstract class OrcaRuntimeWithRestoredPaneStart extends OrcaRuntimeWithBu
         this.showRestoredPaneStart(`${target.tabId}:${target.leafId}`, { failed: error }),
       start: async (target, plan, startTrigger) => {
         this.hydrateHeadlessMobileSessionTabsFromWorkspaceSession(target.worktreeId)
-        // Why main's layout, not the client projection: at relaunch a window's view can ask before
-        // its graph lists the tab, and the projection is not built while a window is attached.
+        // Read main's layout: relaunch clients may ask before graph sync, and projections are absent while a window is attached.
         const session = this.getWorkspaceSessionForWorktree(target.worktreeId)
         const tab = session
           ? buildHeadlessMobileSessionTerminalTabs(
@@ -93,8 +92,7 @@ export abstract class OrcaRuntimeWithRestoredPaneStart extends OrcaRuntimeWithBu
           ...startTrigger,
           sessionId: plan.sessionId
         })
-        // Why: the started id, not the stored layout, whose bind write may still be in flight.
-        // Resolved only once registered, so a caller delivering to it never misses (A1's handles).
+        // Use the registered start id; its durable bind may still be in flight, but delivery must already resolve its handle.
         if (!started.tab.ptyId || !this.ptysById.has(started.tab.ptyId)) {
           throw new Error('terminal_not_started')
         }
@@ -104,10 +102,7 @@ export abstract class OrcaRuntimeWithRestoredPaneStart extends OrcaRuntimeWithBu
     return this.restoredPanes.ensureStarted(pane, trigger)
   }
 
-  /**
-   * A wake: resumes, each in its own pane, the agents a workspace slept while they ran. Settles
-   * once every start has; a pane whose tab has since closed starts nothing.
-   */
+  /** Resume slept agents in their own panes and await every start; tabs closed in the meantime start nothing. */
   async resumeSleptWorkspaceAgents(worktreeId: string): Promise<void> {
     const records = Object.values(
       this.getWorkspaceSessionForWorktree(worktreeId)?.sleepingAgentSessionsByPaneKey ?? {}
@@ -152,6 +147,34 @@ export abstract class OrcaRuntimeWithRestoredPaneStart extends OrcaRuntimeWithBu
     })
   }
 
+  /**
+   * The session a WSL move installed for this pane (its carried checkpoint, interrupted), so its
+   * first start cold-restores that history once like after an app restart; undefined otherwise.
+   */
+  private async claimMovedPaneHistorySession({
+    worktreeId,
+    tabId,
+    leafId
+  }: RestoredPane): Promise<string | undefined> {
+    // Only a WSL host installs moved panes' history; other hosts skip the scope and meta.json reads.
+    if (!servesWslMovedPaneHistory()) {
+      return undefined
+    }
+    try {
+      const workspace = await this.resolveTerminalWorkspaceLaunchScope(`id:${worktreeId}`)
+      // Why never over SSH: only this host's own daemon holds the installed history.
+      if (workspace.connectionId !== null) {
+        return undefined
+      }
+      const sessionId = movedPaneHistorySessionId(worktreeId, makePaneKey(tabId, leafId))
+      const probe = new HistoryReader(getDaemonHistoryDir()).probeRestorableHistory(sessionId)
+      return probe.status === 'restorable' ? sessionId : undefined
+    } catch {
+      // Why: history is best effort; the pane still starts, only without what it showed before.
+      return undefined
+    }
+  }
+
   /** The pane's stored terminal; undefined while unbound, null once main no longer holds it. */
   private storedPaneBinding({
     worktreeId,
@@ -179,15 +202,9 @@ export abstract class OrcaRuntimeWithRestoredPaneStart extends OrcaRuntimeWithBu
       sessionId
     }: RestoredPaneTrigger & { sessionId?: string }
   ): Promise<RuntimeMobileSessionCreateTerminalResult> {
-    // Why: a pending agent tab may exist without its startup command ever
-    // having been delivered (the create's renderer stalled, #7587), so a
-    // bare materialize would put a plain shell under the agent icon.
-    // Re-resolve the launch like the create path; providers skip startup
-    // commands when attaching to live sessions, so this cannot double-launch.
-    // Why: an agent already ran here and the host recorded its session; resume it rather than
-    // start a bare shell or a fresh agent (#27147, #27777).
+    // Recover undelivered startup commands (#7587) or recorded agent sessions (#27147, #27777); live-session attach skips startup commands, preventing double launches.
     const resumeStartup = await this.resolvePaneOwnedResumeStartup(worktreeId, tab)
-    // Switch point: the record a resume starts from (after any claim), marked live once it runs.
+    // After a claimed-record resume starts, mark that record live.
     const paneKey = `${tab.parentTabId}:${tab.leafId}`
     const resumedRecord =
       ORCA_LAYOUT_OWNER_IS_MAIN && resumeStartup && 'resumeProviderSession' in resumeStartup
@@ -204,9 +221,7 @@ export abstract class OrcaRuntimeWithRestoredPaneStart extends OrcaRuntimeWithBu
           agent: tab.launchAgent
         })
       } catch {
-        // Why: a disabled or unresolvable agent must not make the tab
-        // untappable; fall back to the plain-shell materialize. A runtime that needs repair
-        // rethrows its message here instead of leaving a plain shell under the agent icon.
+        // Disabled/unresolvable agents fall back to a tappable shell; runtime repair errors still refuse rather than hide failure under an agent icon.
         if (workspace) {
           this.resolveAgentLaunchRuntime(workspace, tab.launchAgent)
         }
@@ -214,6 +229,13 @@ export abstract class OrcaRuntimeWithRestoredPaneStart extends OrcaRuntimeWithBu
     }
     let dispatched = false
     try {
+      const startSessionId =
+        sessionId ??
+        (await this.claimMovedPaneHistorySession({
+          worktreeId,
+          tabId: tab.parentTabId,
+          leafId: tab.leafId
+        }))
       const created = await this.createRuntimeOwnedMobileSessionTerminal(
         worktreeId,
         targetsHost,
@@ -222,7 +244,7 @@ export abstract class OrcaRuntimeWithRestoredPaneStart extends OrcaRuntimeWithBu
           identity: {
             tabId: tab.parentTabId,
             leafId: tab.leafId,
-            sessionId
+            sessionId: startSessionId
           },
           cwd: tab.startupCwd,
           command: agentStartup.command,
@@ -230,10 +252,11 @@ export abstract class OrcaRuntimeWithRestoredPaneStart extends OrcaRuntimeWithBu
           startupCommandDelivery: agentStartup.startupCommandDelivery,
           launchConfig: agentStartup.launchConfig,
           launchAgent: agentStartup.launchAgent ?? tab.launchAgent,
-          // Why: a resume is restore work, so the host's restore admission must see it.
+          // Restore admission must authorize resumes too.
           ...('resumeProviderSession' in agentStartup
             ? {
                 resumeProviderSession: agentStartup.resumeProviderSession,
+                resumeOrigin: 'saved' as const,
                 spawnIntent: automatic ? 'automatic-restore' : 'user-resume'
               }
             : {}),
@@ -242,13 +265,36 @@ export abstract class OrcaRuntimeWithRestoredPaneStart extends OrcaRuntimeWithBu
           onPtySpawnDispatched: () => {
             dispatched = true
           },
-          ...(resumeClaim ? { onPtyCreated: resumeClaim.bind } : {}),
+          ...(resumeClaim
+            ? {
+                onPtyCreated: (ptyId: string, result: RuntimeTerminalCreate) => {
+                  const decision = result.savedResumeDecision
+                  if (
+                    !result.isReattach &&
+                    result.agentSessionDisposition !== 'adopted' &&
+                    decision &&
+                    decision.agent === resumeStartup?.launchAgent &&
+                    decision.verdict !== 'admitted' &&
+                    decision.verdict === result.agentResumeRefused &&
+                    agentProviderSessionsEqual(
+                      decision.agent,
+                      decision.providerSession,
+                      resumeStartup?.resumeProviderSession
+                    )
+                  ) {
+                    resumeClaim.settleFailure(false)
+                  } else {
+                    resumeClaim.bind(ptyId)
+                  }
+                }
+              }
+            : {}),
           ...(automatic ? { refuseSleptWorktree: true } : {}),
-          // Switch point: only a start from the pane's own record shows the window's banner.
+          // Only resumes from this pane's record show the window banner.
           ...(resumedRecord ? { resumesSleepingRecord: true as const } : {})
         }
       )
-      // Switch point: under main the resumed agent runs, so its record must not read as a sleep.
+      // A running resumed agent's record must not remain asleep.
       if (created.tab.ptyId && resumedRecord) {
         const hostId = this.getWorkspaceSessionHostIdForWorktree(worktreeId)
         void markResumedRecordLive(
@@ -265,8 +311,7 @@ export abstract class OrcaRuntimeWithRestoredPaneStart extends OrcaRuntimeWithBu
         sessionId &&
         parseAppSshPtyId(sessionId)
       ) {
-        // Why: an expired SSH reattach clears durable bindings in the store,
-        // but this in-memory headless snapshot can still carry the old id.
+        // Expired SSH reattach clears durable bindings before this headless snapshot necessarily drops the old id.
         this.hydrateHeadlessMobileSessionTabsFromWorkspaceSession(worktreeId, { force: true })
       }
       throw err

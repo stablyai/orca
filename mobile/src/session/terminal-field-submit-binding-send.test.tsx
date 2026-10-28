@@ -7,14 +7,7 @@ import { useTerminalLiveInputCommit } from '../terminal/use-terminal-live-input-
 import type { TerminalLiveInputSender } from '../terminal/terminal-live-input-sender'
 import type { MobileSessionTerminalWebviewModel } from './use-mobile-session-terminal-webview'
 
-/**
- * The page's buffered submit, end to end through the hook that owns it.
- *
- * The census beside this file reads one spelling of a frozen handler. This reads the behaviour, so
- * a `useMemo`, a module-level function or a ref captured once fails it the same way: the hook is
- * rendered first as a session is before its effects land — no client, no handle, nothing sendable —
- * then again as it is after, and the field's bound listener has to reach the second one.
- */
+// Bind once before the client/handle arrives, then dispatch after rerender to prove the frozen field listener reads current send state.
 const mocks = vi.hoisted(() => {
   const sent: Array<Record<string, unknown>> = []
   return { sent, acknowledge: async () => {} }
@@ -80,6 +73,7 @@ function buildScope(session: Session): MobileSessionTerminalWebviewModel {
     connStateRef: { current: 'connected' },
     liveInputRef: { current: null },
     commandInputRef: { current: null },
+    ptyModesRef: { current: new Map() },
     liveInputFocusTimerRef: { current: null },
     sendLiveTerminalInputRef: { current: async () => true },
     sessionTabActionSheetKeyboardHideSubRef: { current: null },
@@ -111,8 +105,7 @@ function buildScope(session: Session): MobileSessionTerminalWebviewModel {
 
 function Harness({ session }: { readonly session: Session }): null {
   const { bindCommandField } = useMobileSessionTerminalSendActions(buildScope(session))
-  // Once, as React attaches a ref whose identity does not change — which is why the handler behind
-  // it has to stay current on its own.
+  // Keep ref identity stable as React does; the bound handler must update independently.
   useEffect(() => {
     bindCommandField(fieldAsTextInput)
   }, [bindCommandField])
@@ -210,6 +203,12 @@ function pressControl(): KeyboardEvent {
   return event
 }
 
+function pressEnter(): void {
+  liveField.dispatchEvent(
+    new InputEvent('beforeinput', { bubbles: true, cancelable: true, inputType: 'insertLineBreak' })
+  )
+}
+
 function holdAcknowledgement(): () => void {
   let release = (): void => {}
   const pending = new Promise<void>((resolve) => {
@@ -243,9 +242,35 @@ describe('keyboard controls through the live pending-text queue', () => {
     expect(pressControl().defaultPrevented).toBe(false)
   })
 
-  it.each(['terminal switch', 'disconnect and reconnect'] as const)(
-    'drops a queued control after %s even when the original terminal returns',
-    async (change) => {
+  it.each([
+    { key: 'Ctrl-C', press: pressControl, fieldAfter: 'hellox', expected: 'hello\x03x' },
+    { key: 'Enter', press: pressEnter, fieldAfter: 'x', expected: 'hello\rx' }
+  ])('keeps text typed right after $key behind it', async ({ press, fieldAfter, expected }) => {
+    mocks.sent.length = 0
+    const release = holdAcknowledgement()
+    let renderer: ReactTestRenderer | null = null
+    await act(async () => {
+      renderer = create(createElement(LiveHarness, { session: READY }))
+    })
+    await act(async () => {
+      changeLiveText('hello')
+      press()
+      changeLiveText(fieldAfter)
+    })
+    await act(async () => {
+      release()
+    })
+    expect(mocks.sent.map((send) => send.text).join('')).toBe(expected)
+    act(() => renderer?.unmount())
+  })
+
+  it.each([
+    { key: 'Ctrl-C', press: pressControl, change: 'terminal switch' },
+    { key: 'Ctrl-C', press: pressControl, change: 'disconnect and reconnect' },
+    { key: 'Enter', press: pressEnter, change: 'terminal switch' }
+  ] as const)(
+    'drops a queued $key after $change even when the original terminal returns',
+    async ({ press, change }) => {
       mocks.sent.length = 0
       const release = holdAcknowledgement()
       let renderer: ReactTestRenderer | null = null
@@ -254,7 +279,7 @@ describe('keyboard controls through the live pending-text queue', () => {
       })
       await act(async () => {
         changeLiveText('hello')
-        pressControl()
+        press()
       })
       const changed =
         change === 'terminal switch' ? { ...READY, activeHandle: 'terminal-b' } : OFFLINE

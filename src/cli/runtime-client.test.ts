@@ -15,6 +15,7 @@ const servers = new Set<ReturnType<typeof createServer>>()
 const sockets = new Set<Socket>()
 
 afterEach(async () => {
+  vi.useRealTimers()
   vi.mocked(launchOrcaApp).mockClear()
   for (const socket of sockets) {
     socket.destroy()
@@ -400,20 +401,24 @@ describe.skipIf(process.platform === 'win32')('RuntimeClient', () => {
   it('times out if the runtime never responds', async () => {
     const userDataPath = makeRuntimeClientFixture()
     const endpoint = join(userDataPath, 'runtime.sock')
+    const received = Promise.withResolvers<void>()
     const server = createServer((socket) => {
       sockets.add(socket)
       socket.once('close', () => sockets.delete(socket))
-      // Leave the connection open without a reply to exercise the timeout against a real socket.
+      socket.once('data', () => received.resolve())
     })
     servers.add(server)
     await new Promise<void>((resolve) => server.listen(endpoint, resolve))
     writeMetadata(userDataPath, endpoint)
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
 
     const client = new RuntimeClient(userDataPath, 25)
-
-    await expect(client.call('status.get')).rejects.toMatchObject({
+    const failure = expect(client.call('status.get')).rejects.toMatchObject({
       code: 'runtime_timeout'
     })
+    await received.promise
+    await vi.advanceTimersByTimeAsync(25)
+    await failure
   })
 
   it('preserves a dropped read-only orchestration failure exactly', async () => {
@@ -485,33 +490,41 @@ describe.skipIf(process.platform === 'win32')('RuntimeClient', () => {
   it('allows a per-call timeout override for long runtime requests', async () => {
     const userDataPath = makeRuntimeClientFixture()
     const endpoint = join(userDataPath, 'runtime.sock')
+    const received = Promise.withResolvers<{ id: string; peer: Socket }>()
     const server = createServer((socket) => {
       sockets.add(socket)
       socket.once('close', () => sockets.delete(socket))
       socket.once('data', (data) => {
-        const request = JSON.parse(String(data).trim()) as { id: string }
-        setTimeout(() => {
-          socket.write(
-            `${JSON.stringify({
-              id: request.id,
-              ok: true,
-              result: { satisfied: true },
-              _meta: { runtimeId: 'runtime-1' }
-            })}\n`
-          )
-        }, 40)
+        const request: { id: string } = JSON.parse(String(data).trim())
+        received.resolve({ id: request.id, peer: socket })
       })
     })
     servers.add(server)
     await new Promise<void>((resolve) => server.listen(endpoint, resolve))
     writeMetadata(userDataPath, endpoint)
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
 
     const client = new RuntimeClient(userDataPath, 25)
-    const response = await client.call<{ satisfied: boolean }>('terminal.wait', undefined, {
-      timeoutMs: 250
-    })
+    const completion = client
+      .call<{ satisfied: boolean }>('terminal.wait', undefined, {
+        timeoutMs: 250
+      })
+      .then(
+        (response) => ({ response }),
+        (error: unknown) => ({ error })
+      )
+    const { id, peer } = await received.promise
+    await vi.advanceTimersByTimeAsync(40)
+    peer.write(
+      `${JSON.stringify({
+        id,
+        ok: true,
+        result: { satisfied: true },
+        _meta: { runtimeId: 'runtime-1' }
+      })}\n`
+    )
 
-    expect(response.result).toEqual({ satisfied: true })
+    await expect(completion).resolves.toMatchObject({ response: { result: { satisfied: true } } })
   })
 
   it('preserves structured runtime failures', async () => {

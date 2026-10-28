@@ -1,5 +1,3 @@
-// Pure id-dedup and windowing for both desktop and mobile native-chat streams.
-
 import {
   nativeChatMessagesShareTranscriptRow,
   NATIVE_CHAT_SOURCE_PRIORITY,
@@ -9,11 +7,8 @@ import {
 
 export type NativeChatSourcePriority = Record<NativeChatSource, number>
 
-/** Merge a batch of incoming messages into an existing ordered list, deduping by
- *  `id`. A re-emitted id replaces the existing entry in place only when the
- *  incoming source is at least as authoritative (higher-or-equal priority); new
- *  ids append in arrival order. First-seen order is preserved; never mutates the
- *  input; returns a new array (or the existing reference for an empty batch). */
+/** Deduplicate by id: replace in place only from equal/higher authority; append new ids in arrival order.
+ * Preserve first-seen order without mutating input; empty batches retain the existing reference. */
 export function mergeNativeChatMessagesWith(
   existing: readonly NativeChatMessage[],
   incoming: readonly NativeChatMessage[],
@@ -51,11 +46,8 @@ export function boundNativeChatWindow(
   return messages.slice(start)
 }
 
-/** Stateful id-dedup merger that caches the id→index map across appends so a
- *  streaming run pays O(incoming) per frame instead of O(existing+incoming).
- *  `replaceList` resets the cache for a new base (initial read / loadEarlier);
- *  `applyAppend` folds a live batch in. Output equals the pure
- *  `mergeNativeChatMessagesWith` for every input (locked by the oracle test). */
+/** Cached id→index merger costs O(incoming) per frame. replaceList resets initial/loadEarlier bases; applyAppend streams batches.
+ * Must equal mergeNativeChatMessagesWith for every input, checked by the differential oracle. */
 export type NativeChatMerger = {
   list: NativeChatMessage[]
   readonly indexById: Map<string, number>
@@ -68,17 +60,14 @@ export function createNativeChatMerger(
   return { list: [], indexById: new Map(), priority }
 }
 
-/** Reset the merger to a new base list (replace, don't merge). Used on the
- *  initial read and loadEarlier re-reads, which return an ordered tail. */
+/** Reset the base/cache on initial reads and ordered loadEarlier tails. */
 export function replaceList(merger: NativeChatMerger, list: readonly NativeChatMessage[]): void {
   merger.list = [...list]
   merger.indexById.clear()
   merger.list.forEach((message, index) => merger.indexById.set(message.id, index))
 }
 
-/** Fold a live batch into the merger, deduping by id with source precedence.
- *  Returns a new `list` reference (so React re-renders) and updates the cached
- *  index incrementally — O(incoming), never re-scanning the existing list. */
+/** Merge with source precedence in O(incoming); replace the list reference for React while incrementally updating indexes. */
 export function applyAppend(
   merger: NativeChatMerger,
   incoming: readonly NativeChatMessage[],
@@ -99,8 +88,7 @@ export function applyAppend(
   return next
 }
 
-// Shared inner loop: one id-dedup + precedence rule for both the pure function
-// and the stateful merger, so the two can never drift.
+// Share deduplication/source precedence between pure and cached mergers.
 function applyIncoming(
   list: NativeChatMessage[],
   indexById: Map<string, number>,

@@ -262,8 +262,7 @@ describe('humanizeTerminalError', () => {
     expect(humanized).toContain('Open a new terminal to continue')
   })
 
-  // A daemon generation old enough to still refuse a pane respawning onto an id it is tearing
-  // down answers with the raw class name; the user must not be told to file an issue for it.
+  // Older daemons return raw session-absence classes; humanize them without asking the user to file an issue.
   it('replaces the daemon session-absence string and its id', () => {
     const humanized = humanizeTerminalError(
       "Error invoking remote method 'pty:spawn': SessionNotFoundError: Session not found: wt-1@@pane-a"
@@ -287,8 +286,7 @@ describe('humanizeTerminalError', () => {
     expect(humanized).not.toContain('exited')
   })
 
-  // A live PTY whose delivery was retired must never get the "open a new terminal" copy: acting on
-  // that abandons a running agent on the host.
+  // Retired output delivery leaves the agent running; suggesting a new terminal would abandon it.
   it('describes a retired output source as reconnecting, not as a lost session', () => {
     const humanized = humanizeTerminalError(
       'SSH_PTY_SOURCE_RESTORE_REQUIRED: remote:2f1c:pty-7 checkpointUnavailable'
@@ -661,4 +659,29 @@ it('uses existing Korean recovery copy and preserves the path', async () => {
   } finally {
     await i18n.changeLanguage('en')
   }
+})
+
+// #21342: dismissing hid the toast but left the dead pane with no way out.
+it('offers Close Pane only for a pane whose remote terminal was closed', () => {
+  const onClosePane = vi.fn()
+  const view = render(
+    React.createElement(TerminalErrorToast, {
+      error: 'Remote terminal was closed.',
+      paneOnClient: false,
+      onDismiss: vi.fn(),
+      onClosePane
+    })
+  )
+  fireEvent.click(view.getByText('Close Pane'))
+  expect(onClosePane).toHaveBeenCalledTimes(1)
+
+  view.rerender(
+    React.createElement(TerminalErrorToast, {
+      error: 'Paste failed.',
+      paneOnClient: false,
+      onDismiss: vi.fn(),
+      onClosePane
+    })
+  )
+  expect(view.queryByText('Close Pane')).toBeNull()
 })

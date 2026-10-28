@@ -38,8 +38,7 @@ export function resolveTerminalAgentTabShortcut({
       chatIn: { store: state, worktreeId: activeWorktreeId }
     })
     const workspace = worktreeLaunchWorkspace(activeWorktreeId)
-    // Why: the cached list is empty until the host's probe lands (e.g. a paired server's
-    // workspace right after it opens) or a chat-only default is unlearned; ask that host first.
+    // Probe the workspace host when cache is cold or the chat-only default is unlearned.
     return agent && !chosenAgentChatUnlearned(state, chosen, detectedAgentIds, workspace)
       ? { actionId: 'tab.newAgent', agent }
       : {

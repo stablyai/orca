@@ -56,8 +56,7 @@ async function call(
   const replies: RpcResponse[] = []
   await dispatcher.dispatchStreaming(
     { id: 'request-1', authToken: 'token', method, params },
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the dispatcher writes serialized RpcResponse frames.
-    (raw) => replies.push(JSON.parse(raw) as RpcResponse),
+    (raw) => replies.push(JSON.parse(raw)),
     client
   )
   if (!replies[0]) {

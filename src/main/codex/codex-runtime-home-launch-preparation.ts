@@ -6,9 +6,10 @@ import { codexHookService } from './hook-service'
 import { getDefaultWslDistro } from '../wsl'
 import { isAgentStatusHooksEnabledForAgent } from '../agent-hooks/managed-agent-hook-controls'
 import { reconcileCodexHooksForLaunch } from './codex-hook-reconcile'
+import { grantCodexSandboxReadOnManagedHome } from './codex-windows-sandbox-read-grant'
 
 export function createCodexRuntimeHomeLaunchPreparation(deps: {
-  getRuntimeHome: () => CodexRuntimeHomeService | null
+  getRuntimeHome: () => Pick<CodexRuntimeHomeService, 'prepareForCodexLaunchAsync'> | null
   getSettings: () => GlobalSettings | undefined
 }) {
   return async (
@@ -31,6 +32,9 @@ export function createCodexRuntimeHomeLaunchPreparation(deps: {
         await reconcileCodexHooksForLaunch()
       }
       return null
+    }
+    if (runtimeHomePath !== null && target?.runtime !== 'wsl') {
+      await grantCodexSandboxReadOnManagedHome(runtimeHomePath)
     }
     const hookTarget =
       target?.runtime === 'wsl'

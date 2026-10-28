@@ -82,10 +82,7 @@ export function unavailableProvider(
   }
 }
 
-// Why: beforeEach caches snapshot objects whose updatedAt is pinned at suite
-// start, so after 5 fake minutes every healthy provider looks stale and every
-// activation degrades to a full fetch. Backoff tests that reason about the
-// individual retry lane need healthy providers minted fresh at fetch time.
+// Mint timestamps at fetch time: suite-start snapshots become stale under fake timers and turn retry tests into full fetches.
 export function mockFreshBackgroundProviderFetches(): void {
   vi.mocked(fetchCodexRateLimits).mockImplementation(async () => okProvider('codex', 24))
   vi.mocked(fetchGeminiRateLimits).mockImplementation(async () => okProvider('gemini', 0))
@@ -100,7 +97,6 @@ export function mockFreshBackgroundProviderFetches(): void {
   )
 }
 
-/** Shared `beforeEach` body: healthy stubs for every provider the service polls. */
 export function resetRateLimitProviderMocks(): void {
   vi.clearAllMocks()
   vi.mocked(fetchGeminiRateLimits).mockResolvedValue(okProvider('gemini', 0, Date.now()))

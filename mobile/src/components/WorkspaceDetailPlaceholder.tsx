@@ -1,10 +1,12 @@
-import { View, Text, StyleSheet } from 'react-native'
+import { View, Text } from 'react-native'
 import { SquareTerminal } from 'lucide-react-native'
 import { colors, spacing } from '../theme/mobile-theme'
+import { themedStyleSheet } from '../theme/themed-styles'
+import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 
-// Empty detail pane shown beside the worktree-list sidebar on wide
-// tablet/foldable layouts until the user opens a workspace.
+// Wide tablet/foldable detail stays empty beside list until workspace opens.
 export function WorkspaceDetailPlaceholder() {
+  useMobileColorScheme()
   return (
     <View style={styles.container}>
       <View style={styles.icon}>
@@ -16,7 +18,7 @@ export function WorkspaceDetailPlaceholder() {
   )
 }
 
-const styles = StyleSheet.create({
+const styles = themedStyleSheet(() => ({
   container: {
     flex: 1,
     alignItems: 'center',
@@ -45,4 +47,4 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     maxWidth: 320
   }
-})
+}))

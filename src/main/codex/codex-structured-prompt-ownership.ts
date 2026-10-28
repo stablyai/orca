@@ -1,3 +1,6 @@
+import { isCodexAppServerRequestError } from './app-server/codex-app-server-request-error'
+import { agentSessionFailureFact, providerDiagnosticOf } from '../../shared/agent-session-failure'
+import * as turnEnd from './codex-structured-turn-end-settlement'
 import {
   AgentSessionPromptAnswerRejectedError,
   AgentSessionPromptUnavailableError,
@@ -13,6 +16,7 @@ import {
 import { requireLiveCodexSession, type CodexSession } from './codex-structured-session-state'
 import { interruptCodexTurn } from './codex-structured-turn-cancellation'
 import { codexStopTarget, interruptOpeningCodexTurn } from './codex-structured-turn-open-wait'
+import { stopCodexGoal } from './codex-structured-goal-stop'
 import { CODEX_STOP_GRACE_MS } from './codex-request-end-wait'
 
 type CancelInput = Parameters<StructuredAgentSessionAdapter['cancelTurn']>[0]
@@ -89,6 +93,20 @@ export async function cancelCodexStructuredTurn(input: {
 }): Promise<AgentSessionCancelOutcome> {
   const { request, sessions, requestTimeoutMs } = input
   const session = requireLiveCodexSession(sessions, request.sessionId)
+  if (request.stoppedAt !== undefined && !request.prompt) {
+    const generation = session.acquisitionGeneration
+    return stopCodexGoal({
+      session,
+      stoppedAt: request.stoppedAt,
+      timeoutMs: requestTimeoutMs,
+      current: () =>
+        sessions.get(request.sessionId) === session &&
+        !session.ended &&
+        session.fence === request.fence &&
+        session.acquisitionGeneration === generation,
+      interrupt: () => cancelCodexConversation(input, session)
+    })
+  }
   const prompt = request.prompt
   const requestedTurnId = request.turnId
   if (requestedTurnId === undefined) {
@@ -188,6 +206,34 @@ export async function answerCodexStructuredPrompt(input: {
     answerCodexPrompt(session.prompts, session.connection, claim, prepared)
   } catch (error) {
     session.prompts.releaseClaim(claim)
+    throw error
+  }
+}
+
+/** The reply acknowledges receipt; the translator observes turn completion separately. */
+export async function compactCodexStructuredSession(
+  session: CodexSession,
+  input: Parameters<NonNullable<StructuredAgentSessionAdapter['compact']>>[0],
+  requestTimeoutMs: number | undefined
+): ReturnType<NonNullable<StructuredAgentSessionAdapter['compact']>> {
+  session.translator?.beginCommand(input.command)
+  try {
+    await session.connection.request(
+      'thread/compact/start',
+      { threadId: session.threadId },
+      { timeoutMs: requestTimeoutMs }
+    )
+    return { state: 'accepted', providerIdentity: null }
+  } catch (error) {
+    session.translator?.forgetCommand(input.command.turnId)
+    if (isCodexAppServerRequestError(error)) {
+      return {
+        state: 'rejected',
+        ...turnEnd.codexDispatchRejection(
+          agentSessionFailureFact('providerRejected', { detail: providerDiagnosticOf(error) })
+        )
+      }
+    }
     throw error
   }
 }

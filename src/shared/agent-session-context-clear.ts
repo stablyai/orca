@@ -49,8 +49,7 @@ export function latestAgentSessionContextClearSequence(
   return sequence
 }
 
-/** What a transcript shows: rows from the `/clear` divider at `floor` on, so a cleared chat reads
- *  as cleared. The journal keeps the earlier rows for worker reads and archives. */
+/** Show rows from the /clear divider onward; retain earlier journal rows for workers and archives. */
 export function agentSessionTranscriptRows<
   T extends Pick<AgentJournalRenderItem, 'sequence' | 'body'>
 >(items: readonly T[], floor = latestAgentSessionContextClearSequence(items)): readonly T[] {

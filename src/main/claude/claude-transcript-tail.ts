@@ -1,9 +1,7 @@
 import { open } from 'node:fs/promises'
 import { claudeRecord } from './claude-structured-item-translation'
 
-// Claude appends to a conversation's transcript and never rewrites it, so every row written after
-// a chat last ran sits after the row of the leaf it saved at its last turn end. Reading back from
-// the end to that row costs what was written since, never the conversation's whole length.
+// Read backward to the saved leaf so catch-up costs only the appended stretch, not the whole conversation.
 
 const CHUNK_BYTES = 64 * 1024
 /** One read's budget; an outside stretch larger than this is not caught up. */
@@ -12,8 +10,7 @@ export const CLAUDE_TRANSCRIPT_TAIL_MAX_BYTES = 16 * 1024 * 1024
 export type ClaudeTranscriptTail = {
   /** The main chain from the saved leaf (exclusive) to the newest row, oldest first. */
   rows: Record<string, unknown>[]
-  /** The chain leaves the read stretch through a row other than the saved leaf: the conversation
-   *  was rewound or an earlier message edited outside, so rows the chat shows may no longer be in it. */
+  // The chain leaves this stretch before the saved leaf, indicating an external rewind or edit.
   rewound: boolean
 }
 
@@ -31,7 +28,7 @@ export async function readClaudeTranscriptTail(input: {
     const { size } = await handle.stat()
     input.check()
     const newestFirst: Record<string, unknown>[] = []
-    // The line being read backwards, as the pieces each chunk holds of it, newest first.
+    // Retain split-line chunks newest first while reading backward.
     let pieces: Buffer[] = []
     // A last line without its newline is a write still landing; it is left for the next read.
     let complete = false

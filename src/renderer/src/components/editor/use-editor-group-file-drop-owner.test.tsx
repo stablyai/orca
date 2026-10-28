@@ -46,7 +46,7 @@ function EditorGroup({
   return (
     <>
       <div ref={attachStrip} data-testid={`${groupId}:strip`} />
-      {/* Like TabGroupPanel, the editor area only renders while an editor tab is active. */}
+      {/* Match TabGroupPanel: mount the editor area only for active editor tabs. */}
       {editorTabActive ? <EditorArea worktreeId={worktreeId} groupId={groupId} /> : null}
     </>
   )

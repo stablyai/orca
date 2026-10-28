@@ -24,6 +24,7 @@ import {
   isAgentSessionPreSpawnError
 } from './structured-agent-session-adapter'
 import {
+  startupAcquisitionRefusal,
   providerExitObserved,
   structuredAgentSessionStartFailure
 } from './structured-agent-session-failure-text'
@@ -117,8 +118,9 @@ function failedAcquisitionDetails(
   if (argumentProblem) {
     return { reason: 'attachFailed', argumentProblem }
   }
-  if (error instanceof AgentSessionAcquisitionRefusal) {
-    return { reason: error.reason, ...(error.account ? { account: error.account } : {}) }
+  const typed = startupAcquisitionRefusal(error)
+  if (typed) {
+    return { reason: typed.reason, ...(typed.account ? { account: typed.account } : {}) }
   }
   if (isAgentSessionPreSpawnError(error) && error.reason) {
     return { reason: error.reason }

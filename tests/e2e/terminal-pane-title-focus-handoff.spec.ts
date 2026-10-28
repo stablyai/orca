@@ -1,8 +1,3 @@
-/**
- * E2E tests for the Set Title editor surviving focus handoffs: xterm stealing
- * focus back, early blurs, and blur-commit behavior.
- */
-
 import type { Page } from '@stablyai/playwright-test'
 import { test, expect } from './helpers/orca-app'
 import { splitActiveTerminalPane, waitForPaneCount } from './helpers/terminal'
@@ -31,8 +26,7 @@ async function installDelayedTerminalFocusSteals(
   }, delaysMs)
 }
 
-// Why: keep the suite serial so the headful pane tests never ask Playwright to
-// open multiple visible Electron windows at once.
+// Serialize headful scenarios; visible-window runs require an isolated display.
 test.describe.configure({ mode: 'serial' })
 test.describe('Terminal Panes', () => {
   registerTerminalPaneMountReadiness()
@@ -50,8 +44,7 @@ test.describe('Terminal Panes', () => {
     await expect(titleInput).toBeVisible()
     await expect(titleInput).toBeFocused()
 
-    // Why: overlay controls own the title strip. Clicking the already-open
-    // title input must not leak through to xterm and flash the editor closed.
+    // Title controls own the strip: clicking the open input must not reach xterm and close the editor.
     await titleInput.evaluate((input) => {
       const pointerInit: PointerEventInit = {
         bubbles: true,

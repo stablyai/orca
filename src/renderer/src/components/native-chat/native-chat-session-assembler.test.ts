@@ -321,14 +321,11 @@ describe('assembleNativeChatSession', () => {
       agent: 'claude'
     })
 
-    // Different tool inputs digest to different turn keys, so neither is dropped.
     expect(session.messages.map((m) => m.id)).toEqual(['tc-1', 'tc-2'])
   })
 
   it('keeps two identical consecutive user prompts (distinct ids) — #10', () => {
-    // Same role, identical text, distinct ids: two genuinely distinct turns that
-    // happen to share a prompt. Same source (transcript), so the text fallback
-    // must NOT collapse them.
+    // Identical text within one source can be distinct turns; only cross-source fallback may deduplicate.
     const first = msg({
       id: 'u-1',
       role: 'user',

@@ -4,7 +4,7 @@ import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { ELECTRON_REMOTE_RUNTIME_CLIENT_CAPABILITIES } from '../../../shared/electron-remote-runtime-client-capabilities'
 import { SESSION_TABS_TAB_DELTA_RUNTIME_CAPABILITY } from '../../../shared/protocol-version'
-import { subscribeRemoteRuntimeRequest } from '../../../shared/remote-runtime-client'
+import { subscribeRemoteRuntimeRequest } from '../../../shared/remote-runtime/remote-runtime-client'
 import type { RuntimeRpcResponse } from '../../../shared/runtime-rpc-envelope'
 import {
   addEnvironmentFromPairingCode,
@@ -16,6 +16,7 @@ import { OrcaRuntimeRpcServer } from '../../runtime/runtime-rpc'
 import { makeStore, SESSION_WORKTREE_ID } from '../../runtime/paired-client-navigation-test-harness'
 import { resetSharedControlSupport } from './runtime-environment-shared-control-support'
 import { subscribeRuntimeEnvironment } from './runtime-environment-transport-routing'
+import { partialRuntimeStore } from '../../runtime/runtime-store-partial-fixture'
 
 vi.mock('electron', () => ({ BrowserWindow: { getAllWindows: () => [] } }))
 
@@ -76,8 +77,7 @@ function recorder(): Received & { onResponse: (response: RuntimeRpcResponse<unkn
 
 describe('session.tabs tab delta across mixed client versions', () => {
   it('serves an old desktop full frames and a new desktop the same frames from deltas', async () => {
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the shared paired-client harness store covers every store read this host makes.
-    const runtime = new OrcaRuntimeService(makeStore() as never)
+    const runtime = new OrcaRuntimeService(partialRuntimeStore(makeStore()))
     runtime.attachWindow(1)
     runtime.markGraphReady(1)
     publish(runtime, 1, -1)

@@ -16,6 +16,11 @@ import type { PRInfo } from '../../../../shared/github/pull-request-types'
 import type { Repo } from '../../../../shared/repo-types'
 import type { Worktree } from '../../../../shared/worktree/types'
 import { resolveGitHubPRMergeMethods } from '../../../../shared/github/pull-request-merge-methods'
+import { getPullRequestMergeMethodLabel } from '@/components/github/pull-request-confirmation-copy'
+import {
+  isGitHubPRStackMergeQueueRequired,
+  resolveGitHubPRStackMergeDecision
+} from '../../../../shared/github/pull-request-stack-merge'
 import { runWorktreeDelete } from '../sidebar/delete-worktree-flow'
 import { getDeleteStateForWorktreeHost } from '../sidebar/worktree-delete-state-host-match'
 import { presentGitLabMRMergeState } from './gitlab-mr-merge-state'
@@ -32,11 +37,7 @@ import {
   RIGHT_SIDEBAR_SPLIT_ACTION_ROW_CLASS
 } from './right-sidebar-primary-action-layout'
 import { translate } from '@/i18n/i18n'
-import {
-  getGitHubPRStackMergeBlocker,
-  getGitHubPRStackMergeScope,
-  isGitHubPRStackMergeQueueRequired
-} from './github-pr-stack-merge'
+import { getGitHubPRStackMergeBlocker, getGitHubPRStackMergeScope } from './github-pr-stack-merge'
 
 export default function HostedReviewActions({
   review,
@@ -112,9 +113,12 @@ export default function HostedReviewActions({
               'auto.components.right.sidebar.HostedReviewActions.a32fe6dba6',
               'GitHub will merge this pull request and every pull request below it in the stack.'
             )),
-      directMergeAvailable:
-        !stackBlocker &&
-        (stackMergeScope.complete || presentation.directMergeAvailable || stackUsesMergeQueue),
+      directMergeAvailable: resolveGitHubPRStackMergeDecision({
+        stack: githubPR.stack,
+        reviewMergeQueueRequired: review.mergeQueueRequired,
+        stackMergeQueueRequired: githubPR.mergeQueueRequired,
+        directMergeAvailable: presentation.directMergeAvailable
+      }).directMergeAvailable,
       autoMergeAction: null
     }
   }, [githubPR, isGitLab, review, stackMergeLabel, stackMergeScope, stackUsesMergeQueue])
@@ -153,8 +157,7 @@ export default function HostedReviewActions({
   const menuDisabled = merging || isUpdatingReviewState
 
   const handleDeleteWorktree = useCallback(() => {
-    // Why: route every UI delete entry point through the shared funnel so
-    // skip-confirm, main-worktree, and child-workspace safeguards cannot drift.
+    // Share the delete funnel so skip-confirm, main-worktree, and child-workspace safeguards cannot drift.
     runWorktreeDelete(worktree.id, worktree.hostId ? { expectedHostId: worktree.hostId } : {})
   }, [worktree.hostId, worktree.id])
 
@@ -180,8 +183,7 @@ export default function HostedReviewActions({
           <div className={RIGHT_SIDEBAR_SPLIT_ACTION_ROW_CLASS}>
             <Tooltip>
               <TooltipTrigger asChild>
-                {/* Why: wrapping in a <span> so the tooltip trigger receives pointer
-                  events even when the merge button inside is disabled. */}
+                {/* The span receives tooltip pointer events when the merge button is disabled. */}
                 <span
                   className={cn(
                     'inline-flex min-w-0 max-w-full shrink',
@@ -226,7 +228,8 @@ export default function HostedReviewActions({
                               'Working...'
                             )
                         : mergePresentation.directMergeAvailable
-                          ? (stackMergeLabel ?? mergeMethods.defaultLabel)
+                          ? (stackMergeLabel ??
+                            getPullRequestMergeMethodLabel(mergeMethods.defaultMethod))
                           : (mergePresentation.autoMergeAction?.label ?? mergePresentation.label)}
                     </span>
                   </Button>
@@ -280,14 +283,14 @@ export default function HostedReviewActions({
                   </>
                 )}
                 {(!stackMergeScope || !stackUsesMergeQueue) &&
-                  mergeMethods.methods.map(({ method, label }) => (
+                  mergeMethods.methods.map((method) => (
                     <DropdownMenuItem
                       key={method}
                       disabled={directMergeDisabled}
                       onSelect={() => void handleMerge(method)}
                     >
                       <GitMerge className="size-3.5" />
-                      {label}
+                      {getPullRequestMergeMethodLabel(method)}
                     </DropdownMenuItem>
                   ))}
                 <DropdownMenuSeparator />

@@ -48,9 +48,7 @@ export abstract class OrcaRuntimeWithTerminalCreateDeduplication extends OrcaRun
           const adopted = await this.reconcileRemoteTerminalCreate(
             workspace.id,
             preAllocatedHandle,
-            // Why: an unreachable SSH host vanishes from the aggregate listing, which would read
-            // as absence and respawn over live remote work. Local/folder workspaces have no
-            // connection and keep the aggregate listing.
+            // Scope SSH inventory to its host: aggregate listings silently omit unreachable relays and could respawn live work.
             workspace.connectionId ?? null
           )
           if (adopted) {
@@ -65,8 +63,7 @@ export abstract class OrcaRuntimeWithTerminalCreateDeduplication extends OrcaRun
   protected async reconcileRemoteTerminalCreate(
     worktreeId: string,
     terminalHandle: string,
-    // Why: an aggregate listing drops a non-answering SSH host silently, which would read as
-    // absence. Scoping to the owning host makes an unreachable relay throw instead.
+    // Host-scoped inventory throws for unreachable SSH; aggregate omission cannot prove absence.
     connectionId?: string | null
   ): Promise<RuntimeTerminalCreate | null> {
     if (!this.ptyController?.listProcesses) {
@@ -153,11 +150,16 @@ export abstract class OrcaRuntimeWithTerminalCreateDeduplication extends OrcaRun
 
   async launchAgentTerminal(
     worktreeSelector: string,
-    opts: { agent: TuiAgent; prompt: string; title?: string; extraAgentArgs?: string }
+    opts: {
+      agent: TuiAgent
+      prompt: string
+      title?: string
+      extraAgentArgs?: string
+      suppressStartupUpdatePrompt?: boolean
+    }
   ): Promise<RuntimeTerminalCreate> {
     const worktree = await this.resolveWorktreeSelector(worktreeSelector)
-    // Why: `getRepo(id)` is host-blind; the same repo id on two hosts must build the launch for the
-    // host that owns this worktree (#11163).
+    // Repo ids are host-blind; resolve against the worktree owner before quoting its launch (#11163).
     const resolution = resolveWorktreeLaunchHost(this.store?.getRepos() ?? [], worktree)
     if (resolution.kind === 'ambiguous') {
       throw new Error('worktree_execution_host_unresolved')
@@ -168,6 +170,7 @@ export abstract class OrcaRuntimeWithTerminalCreateDeduplication extends OrcaRun
     }
     const startup = this.buildStartupForAgent(repo, opts.agent, opts.prompt, undefined, {
       ...(opts.extraAgentArgs ? { extraAgentArgs: opts.extraAgentArgs } : {}),
+      ...(opts.suppressStartupUpdatePrompt ? { suppressStartupUpdatePrompt: true } : {}),
       launchScope: await this.resolveTerminalWorkspaceLaunchScope(`id:${worktree.id}`)
     })
     if (startup.launchRuntime instanceof Error) {
@@ -190,12 +193,7 @@ export abstract class OrcaRuntimeWithTerminalCreateDeduplication extends OrcaRun
     return terminal
   }
 
-  // Why: dedupes a worktree.create whose response was lost when a mobile
-  // connection migration (relay/direct hand-off on shoddy cellular) rejected the
-  // in-flight request. A retry with the same clientMutationId returns the
-  // in-flight or just-finished create instead of a duplicate worktree; failures
-  // drop immediately so a genuine retry starts fresh, and successes linger
-  // briefly so a retry whose response was lost in the cutover still reconciles.
+  // Cellular handoff can lose worktree.create responses; join/reuse successes by clientMutationId briefly, and drop failures for fresh retries.
   dedupeWorktreeCreate<T>(
     target: string | { repo: string; repoHostId?: ExecutionHostId },
     clientMutationId: string | undefined,

@@ -1,11 +1,11 @@
 import { useState } from 'react'
-import { Pressable, StyleSheet, Text, View } from 'react-native'
+import { Pressable, Text, View } from 'react-native'
 import { colors, typography } from '../theme/mobile-theme'
-import { queuedMessageStyles } from './mobile-native-chat-queued-message-styles'
+import { themedStyleSheet } from '../theme/themed-styles'
+import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
+import { queuedMessageStyles } from './native-chat/input/mobile-native-chat-queued-message-styles'
 
-/** Two lines, opening on tap when it clips: a card can hold another agent's message the person
- *  never read, and Steer or Delete must not be a blind choice. Opened, the queue's own capped list
- *  scrolls through a long one: a second scroll box inside it would be taller than its viewport. */
+// Expand clipped queued text before Steer/Delete; use the queue’s capped scroller rather than nesting another scroll box.
 export function MobileQueuedCardText({
   text,
   expanded,
@@ -15,8 +15,8 @@ export function MobileQueuedCardText({
   expanded: boolean
   onToggle: () => void
 }): React.JSX.Element {
+  useMobileColorScheme()
   const [clipped, setClipped] = useState(false)
-  // The whole text laid out unseen at the card's width: more than two lines is what clips.
   const measure = (
     <Text
       style={[queuedMessageStyles.bodyText, styles.measure]}
@@ -62,7 +62,7 @@ export function MobileQueuedCardText({
   )
 }
 
-const styles = StyleSheet.create({
+const styles = themedStyleSheet(() => ({
   measure: {
     position: 'absolute',
     left: 0,
@@ -73,4 +73,4 @@ const styles = StyleSheet.create({
     color: colors.textMuted,
     fontSize: typography.metaSize
   }
-})
+}))

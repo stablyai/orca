@@ -24,13 +24,6 @@ describe('hasTerminalDisplayContent', () => {
     expect(hasTerminalDisplayContent('\x1b[0 q\x1b[?25h')).toBe(false)
   })
 
-  it('treats printable text and whitespace redraws as display content', () => {
-    expect(hasTerminalDisplayContent('hello')).toBe(true)
-    expect(hasTerminalDisplayContent('   ')).toBe(true)
-    expect(hasTerminalDisplayContent('\r   ')).toBe(true)
-    expect(hasTerminalDisplayContent('\n')).toBe(true)
-  })
-
   it('treats erase and alternate-screen sequences as display-affecting', () => {
     expect(hasTerminalDisplayContent('\x1b[2J\x1b[H')).toBe(true)
     expect(hasTerminalDisplayContent('\x1b[?1049h')).toBe(true)

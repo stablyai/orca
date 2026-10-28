@@ -16,7 +16,7 @@ export const SET_OUTPUT_PAUSED_OPCODE = 16 as TerminalStreamOpcode
 export const WRITE_UNAVAILABLE_OPCODE = 17 as TerminalStreamOpcode
 
 export function stubRuntime(overrides: Partial<OrcaRuntimeService> = {}): OrcaRuntimeService {
-  // Why: every terminal subscription registers at admission, even one that never reaches a pty.
+  // Admission registers even streams that never reach a PTY.
   const registry = createSubscriptionRegistryDouble()
   const serializeAuthoritativeTerminalBuffer =
     overrides.serializeAuthoritativeTerminalBuffer ??
@@ -25,14 +25,14 @@ export function stubRuntime(overrides: Partial<OrcaRuntimeService> = {}): OrcaRu
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: This partial runtime supplies the terminal RPC methods these tests invoke.
   return {
     getRuntimeId: () => 'test-runtime',
+    getPtyExecutionHostMetadata: () => ({}),
+    getTerminalLaunchResult: () => undefined,
     subscribeToPtyExit: vi.fn(() => vi.fn()),
-    // Why: every multiplex stream registers as a remote view subscriber for
-    // Phase-5 query-authority suppression (terminal-query-authority.md).
+    // View registration suppresses competing query responders (terminal-query-authority.md).
     registerRemoteTerminalViewSubscriber: () => () => {},
-    // Why: the multiplex subscribe path resolves handles via
-    // resolveLiveLeafForHandle (#7718). Default to a live pty so tests that
-    // only stub the legacy resolveLeafForHandle still bind; tests that need a
-    // null/stale leaf override this explicitly.
+    isSoleRemoteTerminalQueryOwner: () => false,
+    answerYieldedTerminalQueries: vi.fn(),
+    // Default guarded handle lookup to live PTY for legacy harness stubs; null/stale cases override it (#7718).
     resolveLiveLeafForHandle: vi.fn().mockReturnValue({ ptyId: 'pty-1' }),
     requestRendererTerminalTabMount: vi.fn().mockReturnValue(true),
     updateRemoteDesktopViewer: vi.fn().mockResolvedValue(true),

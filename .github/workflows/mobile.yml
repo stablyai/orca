@@ -10,9 +10,7 @@ on:
       - converted_to_draft
     paths:
       - 'mobile/**'
-      # Why all of src/shared: mobile imports hundreds of its modules, directly and through the RPC
-      # recordings and the host params check, so any shared edit can move a golden or break mobile's
-      # typecheck. Why the root lockfile: those modules resolve their packages from the root install.
+      # Route shared edits to mobile’s imports/RPC recordings/typecheck; root lockfile changes affect those modules’ root-resolved packages.
       - 'src/shared/**'
       # Mobile's Node RPC recording tools import this package.
       - 'src/packages/process-host/**'
@@ -27,11 +25,14 @@ on:
       - 'src/main/runtime/agent-session-*.ts'
       - 'src/main/native-chat/agent-session-wire/**'
       - 'src/main/runtime/structured-attention-original-delivery.test-fixture.ts'
-      # Why: this job holds the only checks that load the Fastfile, so edits to
-      # it or to the release workflow it guards must re-run them.
+      # Rerun the only Fastfile-loading checks for release-workflow/Fastfile edits.
       - '.github/workflows/mobile.yml'
       - 'config/mobile-ci.vitest.config.mjs'
       - 'config/scripts/run-mobile-ci-tests.mjs'
+      # Mobile typechecks run through the root compiler selection.
+      - 'config/scripts/run-typecheck-projects-in-parallel.mjs'
+      - 'config/scripts/tsrs-typecheck-compiler.mjs'
+      - 'config/scripts/pinned-bun-executable.mjs'
       - 'config/oxlint-code-quality-native-plugins.json'
       - 'config/.bun-version'
       - '.github/actions/install-node-dependencies/**'
@@ -53,9 +54,7 @@ on:
       - '!src/main/**/*.test.[jt]s'
       - '!src/main/**/*.test.[jt]sx'
       - '!src/main/**/*.test.[cm][jt]s'
-  # Why main too: two pull requests can each pass against their own base and disagree once both
-  # land, and `verify` never runs on main. The same source paths as above, less the CI inputs only
-  # `verify` reads.
+  # Check matching source inputs on main too: independently passing PRs can conflict after merge, and verify is PR-only.
   push:
     branches:
       - main
@@ -76,6 +75,9 @@ on:
       - '.github/workflows/mobile.yml'
       - 'config/mobile-ci.vitest.config.mjs'
       - 'config/scripts/run-mobile-ci-tests.mjs'
+      - 'config/scripts/run-typecheck-projects-in-parallel.mjs'
+      - 'config/scripts/tsrs-typecheck-compiler.mjs'
+      - 'config/scripts/pinned-bun-executable.mjs'
       - 'config/.bun-version'
       - '.github/actions/install-node-dependencies/**'
       - '.github/actions/setup-pnpm/**'
@@ -91,9 +93,7 @@ on:
       - '!src/main/**/*.test.[cm][jt]s'
 
 concurrency:
-  # Per commit on main, not per branch. GitHub cancels any PENDING run in a group when a new one
-  # queues, whatever `cancel-in-progress` says, so one shared main group drops the middle merge of
-  # three -- and a merge that breaks main there is exactly what `main-tests` checks for.
+  # Key main concurrency by commit: GitHub replaces pending runs even with cancel-in-progress:false, hiding middle-merge regressions.
   group: mobile-${{ github.event.pull_request.number || github.sha }}
   cancel-in-progress: true
 
@@ -104,17 +104,13 @@ jobs:
   verify:
     name: Mobile verify
     if: github.event_name == 'pull_request' && github.event.pull_request.draft != true
-    # Why ARM: 209s of this job is Vitest and nothing here needs x86: no Android SDK, emulator, gradle,
-    # Hermes or Watchman, no docker, and no artifacts. The Gemfile.lock lists the generic `ruby`
-    # platform, so frozen bundler installs without an aarch64-linux entry.
-    runs-on: blacksmith-4vcpu-ubuntu-2404-arm
+    # Use ARM for pure Vitest; no x86 native toolchain is needed and Gemfile.lock’s ruby platform supports frozen install.
+    runs-on: ubuntu-24.04-arm
 
     env:
-      # Why: an unfrozen bundler silently re-resolves when Gemfile.lock drifts
-      # from the Gemfile, which is how the release jobs could land on different
-      # fastlane versions in the first place. Fail here instead.
+      # Freeze bundler to reject Gemfile drift before release jobs resolve different fastlane versions.
       BUNDLE_FROZEN: 'true'
-      ORCA_MOBILE_TYPECHECK_COMPILER: 'native'
+      ORCA_MOBILE_TYPECHECK_COMPILER: 'bun'
 
     defaults:
       run:
@@ -145,24 +141,48 @@ jobs:
             echo 'should_run=true' >> "$GITHUB_OUTPUT"
           fi
 
-      # bundler-cache installs mobile/Gemfile.lock, so this job is also what
-      # proves the pinned fastlane the release workflow depends on still
-      # resolves — before a release run finds out.
-      - name: Setup Ruby and fastlane
-        id: ruby-tools
+      - name: Setup Ruby
+        id: ruby-setup
         background: true
         if: steps.ruby-scope.outputs.should_run != 'false'
         uses: ruby/setup-ruby@v1
         with:
           ruby-version: '3.3'
-          bundler-cache: true
           working-directory: mobile
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
-      # Why here: pr.yml runs these import rules before mobile's install, when mobile's tsconfig
-      # (which extends expo's) can't load, so its import cycles were never seen. Zero tolerance.
+      - wait: ruby-setup
+
+      # ruby/setup-ruby's bundler-cache saves on every miss; the platform warmup saves this key on main.
+      - name: Resolve fastlane bundle cache
+        id: ruby-bundle
+        if: steps.ruby-scope.outputs.should_run != 'false'
+        env:
+          GEMFILE_HASH: ${{ hashFiles('mobile/Gemfile', 'mobile/Gemfile.lock') }}
+        run: |
+          . /etc/os-release
+          printf 'key=mobile-bundle-v1-%s-%s-%s-%s\n' "$ID-$VERSION_ID" "$(ruby -e 'print RUBY_PLATFORM')" "$(ruby -e 'print RbConfig::CONFIG["ruby_version"]')" "$GEMFILE_HASH" >> "$GITHUB_OUTPUT"
+
+      - name: Restore fastlane bundle
+        if: steps.ruby-scope.outputs.should_run != 'false'
+        uses: actions/cache/restore@v5
+        with:
+          path: mobile/vendor/bundle
+          key: ${{ steps.ruby-bundle.outputs.key }}
+
+      # Installing proves the release’s pinned fastlane still resolves before a release needs it.
+      - name: Install fastlane
+        id: ruby-tools
+        background: true
+        if: steps.ruby-scope.outputs.should_run != 'false'
+        run: |
+          bundle config set --local path "$PWD/vendor/bundle"
+          bundle config set --local deployment true
+          bundle install --jobs 4
+
+      # Check mobile import cycles after Expo deps install; pre-install pr.yml cannot load its tsconfig.
       - name: Lint mobile imports with mobile dependencies installed
         working-directory: .
         run: node node_modules/oxlint/bin/oxlint --config config/oxlint-code-quality-native-plugins.json mobile --deny-warnings
@@ -171,9 +191,7 @@ jobs:
       - name: Typecheck
         id: production-types
         background: true
-        env:
-          GOMAXPROCS: '2'
-        run: node scripts/typecheck-mobile.mjs
+        run: node ../config/scripts/run-typecheck-projects-in-parallel.mjs --compiler=bun --bun-threads=2 --project=mobile/tsconfig.json
 
       # Why a ratchet and not the raw typecheck: mobile/tsconfig.json excludes test files, so until
       # tsconfig.test.json existed nothing checked them, and at introduction 127 of the 632 had
@@ -182,16 +200,9 @@ jobs:
       - name: Typecheck tests (ratchet)
         id: test-types
         background: true
-        env:
-          GOMAXPROCS: '2'
         run: node scripts/check-tests-typecheck-ratchet.mjs
 
-      # This includes the bridged replay of the whole recording corpus, which used to be a second
-      # step of its own behind RPC_FOUNDATION_BRIDGE=1. A gate nobody can forget to set is the point:
-      # it fails when a divergence class grows, when a divergence lands in no class at all, or when
-      # one of the 103 goldens inside the C1 page closure changes the verdict it is pinned to. It is
-      # ~3 min of test time on its own, and Vitest runs it on a worker beside the rest of the suite,
-      # so folding it in costs a fraction of that in wall time and one step less to skip.
+      # Run bridged recording corpus unconditionally: reject growing/unclassified divergence and changed verdicts among 103 C1 goldens. Share worker time instead of a separate skippable env-gated step.
       - name: Detect mobile test inputs
         id: test-scope
         shell: bash
@@ -208,6 +219,7 @@ jobs:
         uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
         with:
           bun-version-file: config/.bun-version
+          no-cache: true
 
       - name: Test
         if: steps.test-scope.outputs.should_run != 'false'
@@ -218,9 +230,7 @@ jobs:
       # All checks read the completed install; compilers need not hold up test workers.
       - wait: [production-types, test-types, ruby-tools]
 
-      # Reports, never gates: the goldens are content-addressed JSON, so their raw diff is hashes.
-      # This decodes which recorded behaviour the pull request moves into the job summary, and runs
-      # after a red Test too, when a reviewer most wants it.
+      # Decode hash-addressed golden behavior changes for review, including after failed tests; advisory only.
       - name: Summarize RPC recording changes
         if: ${{ !cancelled() }}
         continue-on-error: true
@@ -234,11 +244,7 @@ jobs:
         if: steps.ruby-scope.outputs.should_run != 'false'
         run: ruby fastlane/fastfile_testflight_arguments_test.rb
 
-      # Why: nothing else in CI loads the Fastfile, so a syntax error, a broken
-      # require, or an undefined constant only surfaces mid-release — the
-      # ios-distribute job failed every run for six days that way. `lanes` just
-      # loads and lists, so it needs no App Store Connect credentials and makes
-      # no network calls to Apple.
+      # Load/list Fastfile lanes without Apple credentials/network to catch syntax/require/constants before release; ios-distribute failed six days without this guard.
       - name: Smoke-check the Fastfile
         if: steps.ruby-scope.outputs.should_run != 'false'
         env:
@@ -256,13 +262,58 @@ jobs:
       - name: Check formatting
         run: pnpm format:check
 
+  # Reports, never gates: flags in the job summary when a pull request changes the Expo fingerprint,
+  # i.e. dev clients need a native rebuild. Only mobile's install, without scripts: the fingerprint
+  # hashes project sources and dependency paths, never installed package contents.
+  native-fingerprint:
+    name: Mobile native fingerprint
+    if: github.event_name == 'pull_request' && github.event.pull_request.draft != true
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    continue-on-error: true
+
+    defaults:
+      run:
+        working-directory: mobile
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 2
+          persist-credentials: false
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version-file: package.json
+          package-manager-cache: false
+
+      - name: Setup pnpm
+        uses: ./.github/actions/setup-pnpm
+
+      # The base commit may predate the fingerprint tools, so run the head's copy against both.
+      - name: Compare native fingerprint with the base
+        shell: bash
+        run: |
+          set -euo pipefail
+          tools="$RUNNER_TEMP/native-fingerprint"
+          mkdir -p "$tools"
+          cp scripts/native-client.mjs scripts/native-build-cache.cjs "$tools/"
+          pnpm install --frozen-lockfile --ignore-scripts
+          node "$tools/native-client.mjs" fingerprint --project . --out "$tools/head.json"
+          git checkout --quiet --detach HEAD^1
+          pnpm install --frozen-lockfile --ignore-scripts
+          node "$tools/native-client.mjs" fingerprint --project . --out "$tools/base.json"
+          node "$tools/native-client.mjs" compare "$tools/base.json" "$tools/head.json" \
+            --project . --summary "$GITHUB_STEP_SUMMARY"
+
   main-tests:
     name: Mobile tests on main
     env:
-      ORCA_MOBILE_TYPECHECK_COMPILER: 'native'
+      ORCA_MOBILE_TYPECHECK_COMPILER: 'bun'
     if: github.event_name == 'push'
     # Why ARM: the same pure-Node Vitest run `verify` makes on a pull request.
-    runs-on: blacksmith-4vcpu-ubuntu-2404-arm
+    runs-on: ubuntu-24.04-arm
 
     defaults:
       run:
@@ -274,8 +325,10 @@ jobs:
         with:
           persist-credentials: false
 
+      # Restoring the 650 MB store took longer than downloading these packages.
       - uses: ./.github/actions/install-node-dependencies
         with:
+          cache-pnpm-store: 'false'
           cache-dependency-path: |
             pnpm-lock.yaml
             mobile/pnpm-lock.yaml
@@ -286,24 +339,19 @@ jobs:
       - name: Typecheck
         id: production-types
         background: true
-        env:
-          GOMAXPROCS: '2'
-        run: node scripts/typecheck-mobile.mjs
+        run: node ../config/scripts/run-typecheck-projects-in-parallel.mjs --compiler=bun --bun-threads=2 --project=mobile/tsconfig.json
 
       - name: Typecheck tests (ratchet)
         id: test-types
         background: true
-        env:
-          GOMAXPROCS: '2'
         run: node scripts/check-tests-typecheck-ratchet.mjs
 
-      # The whole suite, not only the recordings: the mutant and page-bridge suites read the goldens
-      # too. A red run here names each golden and the `rpc:record` command; the author of the merge
-      # that turned it red re-records in a follow-up.
+      # Run all golden consumers, including mutant/page-bridge suites; failures name the recording and rpc:record command.
       - name: Setup Bun for tests
         uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
         with:
           bun-version-file: config/.bun-version
+          no-cache: true
 
       - name: Test
         env:

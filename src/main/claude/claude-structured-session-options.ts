@@ -6,7 +6,7 @@ import {
   seedModels,
   text
 } from './claude-structured-model-catalog'
-import type { ClaudeSession } from './claude-structured-session-state'
+import type { ClaudeSession } from './structured/claude-structured-session-state'
 import { structuredAgentSessionOptionModels } from '../native-chat/agent-session-wire/structured-agent-session-option-models'
 import {
   claudeFastModeSupport,
@@ -192,6 +192,7 @@ export function claudeStructuredSessionOptionsFrom(
     ...(support ? { fastModeSupport: support } : {}),
     current: {
       model,
+      reportedPermissionMode: session.reportedOptions.reportedPermissionMode,
       ...(effort ? { effort } : {}),
       ...(fastMode !== undefined ? { fastMode } : {}),
       ...(session.fastModeState ? { fastModeState: session.fastModeState } : {}),

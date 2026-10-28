@@ -1,4 +1,4 @@
-import { createElement, useRef, useState } from 'react'
+import { createElement, useRef } from 'react'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
@@ -13,6 +13,7 @@ import type { ConnectionState } from '../transport/types'
 import { structuredAgentSessionHostSupport } from './mobile-structured-agent-session-host-support'
 
 const device = vi.hoisted(() => ({ opens: 0, recording: false }))
+const draft = vi.hoisted(() => ({ text: 'Draft' }))
 vi.mock('react-native', () => ({
   AppState: { addEventListener: () => ({ remove: () => {} }) },
   Platform: { OS: 'ios' }
@@ -39,7 +40,7 @@ vi.mock('../platform/haptics', () => ({ triggerError: () => {} }))
 vi.mock('./use-mobile-native-chat-readability', () => ({
   useMobileNativeChatReadability: () => true
 }))
-vi.mock('./use-mobile-native-chat-input-lease', () => ({
+vi.mock('./native-chat/use-mobile-native-chat-input-lease', () => ({
   useMobileNativeChatInputLease: () => ({
     ready: true,
     readyRef: { current: true },
@@ -64,13 +65,13 @@ vi.mock('./use-mobile-native-chat-controller', async () => {
       args: Parameters<typeof useMobileNativeChatActiveResolution>[0]
     ) => {
       const resolution = useMobileNativeChatActiveResolution(args)
-      const [chatComposerText, setChatComposerText] = useState('Draft')
       return {
         ...resolution,
         nativeChatSession: { messages: [] },
         nativeChatCommandRefusalCauses: null,
-        chatComposerText,
-        setChatComposerText
+        setChatComposerText: (update: string | ((current: string) => string)) => {
+          draft.text = typeof update === 'function' ? update(draft.text) : update
+        }
       }
     }
   }
@@ -217,6 +218,7 @@ beforeEach(() => {
   current = null
   device.opens = 0
   device.recording = false
+  draft.text = 'Draft'
   terminalText = ''
 })
 afterEach(async () => {
@@ -233,7 +235,7 @@ describe('dictation uses the active composer readiness', () => {
       void model().dictation.stop()
     })
     await reply(client, 'speech.dictation.finish', { text: 'spoken words' })
-    expect(model().nativeChatController.chatComposerText).toBe('Draft spoken words')
+    expect(draft.text).toBe('Draft spoken words')
     expect(terminalText).toBe('')
     expect(model().dictation.status).toBe('idle')
     expect(device.recording).toBe(false)
@@ -269,7 +271,7 @@ describe('dictation uses the active composer readiness', () => {
     })
     await reply(client, 'speech.dictation.finish', { text: 'terminal words' })
     expect(terminalText).toBe('terminal words')
-    expect(model().nativeChatController.chatComposerText).toBe('Draft')
+    expect(draft.text).toBe('Draft')
   })
 
   it('cancels an in-flight agent-chat start when the connection drops', async () => {
@@ -291,7 +293,7 @@ describe('dictation uses the active composer readiness', () => {
     )
     await reply(client, 'speech.dictation.cancel', {})
     expect(device.recording).toBe(false)
-    expect(model().nativeChatController.chatComposerText).toBe('Draft')
+    expect(draft.text).toBe('Draft')
     await render(options)
     await start(client)
   })
@@ -316,7 +318,7 @@ describe('dictation uses the active composer readiness', () => {
     await act(async () =>
       pendingFinish?.resolve({ id: 'desktop', ok: true, result: { text: 'late words' } })
     )
-    expect(model().nativeChatController.chatComposerText).toBe('Draft')
+    expect(draft.text).toBe('Draft')
     expect(device.recording).toBe(false)
     await render(options)
     await start(client)

@@ -2,9 +2,10 @@ import type { BrowserCookieImportResult } from '../../shared/browser-workspace-t
 import {
   detectInstalledBrowsers,
   importCookiesFromBrowser,
-  selectBrowserProfile,
-  type DetectedBrowser
-} from './browser-cookie-import'
+  selectBrowserProfile
+} from './cookies/browser-cookie-import'
+import type { DetectedBrowser } from './cookies/sources/browser-cookie-detection-types'
+
 import { recordClientRouteCookieImportSource } from './client-route-cookie-import-source-store'
 import { currentBrowserRoutePartitionBindingStore } from './browser-route-partition-binding-runtime'
 import { resolveBrowserRoutePartitionBinding } from './browser-route-partition-migration'

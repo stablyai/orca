@@ -19,7 +19,6 @@ describe('main-process fatal error guards (issue #9441)', () => {
     const listener = listeners.at(-1) as (reason: unknown, promise: Promise<unknown>) => void
     const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {})
     try {
-      // Why: invoking the listener directly must not throw — a throwing handler would still kill main.
       expect(() =>
         listener(Object.assign(new Error('spawn EAGAIN'), { code: 'EAGAIN' }), Promise.resolve())
       ).not.toThrow()
@@ -169,7 +168,7 @@ describe('main-process fatal error guards (issue #9441)', () => {
     }
     expect(record).toHaveBeenCalledTimes(20)
 
-    // Why: a backward jump must not trap the exhausted window and suppress every later breadcrumb.
+    // Backward clock jumps must reopen exhausted breadcrumb windows.
     now -= 3_600_000
     recordFatalMainProcessError('main_unhandled_rejection', new Error('after backward jump'))
     expect(record).toHaveBeenCalledTimes(21)
@@ -195,7 +194,7 @@ describe('main-process fatal error guards (issue #9441)', () => {
     }
     expect(record).toHaveBeenCalledTimes(20)
 
-    // Why: this record precedes the re-throw that kills main; losing it would recreate issue #9441.
+    // Fatal recording must survive an exhausted rejection window (#9441).
     recordFatalMainProcessError('main_uncaught_exception', new Error('fatal after storm'))
     expect(record).toHaveBeenCalledTimes(21)
     expect(record).toHaveBeenLastCalledWith(
@@ -222,7 +221,6 @@ describe('main-process fatal error guards (issue #9441)', () => {
     } finally {
       process.removeListener('uncaughtException', listener as never)
     }
-    // Why: EPIPE/EIO are expected pipe churn; recording them would flood the breadcrumb store.
     expect(record).not.toHaveBeenCalled()
   })
 

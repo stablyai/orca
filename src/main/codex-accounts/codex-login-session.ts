@@ -5,6 +5,7 @@ import { withCliRuntimeOnPath } from '../../shared/node-cli-command-resolution'
 import { CODEX_LOGIN_CANCELLED_MESSAGE } from '../../shared/codex-auth-errors'
 import { parseWslUncPath } from '../../shared/wsl-paths'
 import { resolveCodexCommand } from '../codex-cli/command'
+import { codexSpawnEnoent } from '../codex-cli/windows-only-agent-cli'
 import { getSpawnArgsForWindows } from '../win32-utils'
 import { runWslProcess } from '../wsl/wsl-runner'
 import { parseCodexLoginAuthUrl } from './codex-login-auth-url'
@@ -145,29 +146,33 @@ async function runCodexLoginProcess(
       }
     }
 
-    // Keep stderr from splitting a streamed auth URL before its one-time publication.
-    let stdoutText = ''
+    // Browser link is on stderr, device-auth on stdout; per-stream buffers stop interleaving splits.
     let publishedAuthUrl = false
-    const publishAuthUrl = (chunk: Buffer): void => {
-      if (publishedAuthUrl) {
-        return
-      }
-      stdoutText = `${stdoutText}${chunk.toString()}`.slice(-MAX_LOGIN_OUTPUT_CHARS)
-      if (deviceAuth) {
-        const prompt = parseCodexDeviceAuthPrompt(stdoutText)
-        if (prompt) {
-          publishedAuthUrl = true
-          deviceAuth.onPrompt(prompt)
+    const readLoginStream = (): ((chunk: Buffer) => void) => {
+      let text = ''
+      return (chunk) => {
+        appendOutput(chunk)
+        if (publishedAuthUrl) {
+          return
         }
-        return
-      }
-      const authUrl = parseCodexLoginAuthUrl(stdoutText)
-      if (authUrl) {
-        publishedAuthUrl = true
-        dependencies.onAuthUrl(authUrl)
-        openAuthUrl?.(authUrl)
+        text = `${text}${chunk.toString()}`.slice(-MAX_LOGIN_OUTPUT_CHARS)
+        if (deviceAuth) {
+          const prompt = parseCodexDeviceAuthPrompt(text)
+          if (prompt) {
+            publishedAuthUrl = true
+            deviceAuth.onPrompt(prompt)
+          }
+          return
+        }
+        const authUrl = parseCodexLoginAuthUrl(text)
+        if (authUrl) {
+          publishedAuthUrl = true
+          dependencies.onAuthUrl(authUrl)
+          openAuthUrl?.(authUrl)
+        }
       }
     }
+    const [readStdout, readStderr] = [readLoginStream(), readLoginStream()]
 
     let timeout: ReturnType<typeof setTimeout> | null = null
     let authWatchInterval: ReturnType<typeof setInterval> | null = null
@@ -187,9 +192,8 @@ async function runCodexLoginProcess(
         clearTimeout(postAuthExitTimeout)
         postAuthExitTimeout = null
       }
-      child.stdout?.off('data', appendOutput)
-      child.stdout?.off('data', publishAuthUrl)
-      child.stderr?.off('data', appendOutput)
+      child.stdout?.off('data', readStdout)
+      child.stderr?.off('data', readStderr)
       child.off('error', onError)
       child.off('close', onClose)
       spawnConfig.interactiveLogin?.cleanup?.()
@@ -245,11 +249,8 @@ async function runCodexLoginProcess(
       settle(() => {
         const isEnoent = (error as NodeJS.ErrnoException).code === 'ENOENT'
         // ENOENT can mean the CLI or its Node interpreter is missing.
-        const isBareCommand = spawnConfig.codexCommand === 'codex'
         const message = isEnoent
-          ? isBareCommand
-            ? 'Codex CLI not found.'
-            : 'Codex CLI found but could not run — Node.js may not be in your PATH.'
+          ? codexSpawnEnoent(spawnConfig.codexCommand).message
           : error.message
         rejectPromise(new Error(message))
       })
@@ -277,9 +278,8 @@ async function runCodexLoginProcess(
       })
     }
 
-    child.stdout?.on('data', appendOutput)
-    child.stdout?.on('data', publishAuthUrl)
-    child.stderr?.on('data', appendOutput)
+    child.stdout?.on('data', readStdout)
+    child.stderr?.on('data', readStderr)
     child.on('error', onError)
     child.on('close', onClose)
   })

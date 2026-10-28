@@ -36,6 +36,7 @@ export async function runGenerationRequest(input: {
   emptyResultName: string
   operation: TextGenerationOperation
   spawnAgent: SpawnSourceControlAgent
+  shouldExecute?: () => boolean
 }): Promise<InternalTextGenerationResult> {
   const params = { ...input.params, backslash: commandBackslashMode(input.target) }
   const planned = planCommitMessageGeneration(params, input.prompt)
@@ -57,7 +58,8 @@ export async function runGenerationRequest(input: {
           target: input.target,
           emptyResultName: input.emptyResultName,
           operation: input.operation,
-          spawnAgent: input.spawnAgent
+          spawnAgent: input.spawnAgent,
+          shouldExecute: input.shouldExecute
         })
   let result = await runClaudeBackgroundAttempts({
     agentId: input.params.agentId,
@@ -82,9 +84,7 @@ export async function runGenerationRequest(input: {
       result = await execute(retry)
     }
   }
-  // Why: only a custom command runs a raw model whose chat template can swallow
-  // the opening think tag; a built-in agent's message may just mention the tag.
-  // PR fields are JSON, so they strip only when parsing fails instead.
+  // Custom raw models can omit the opening think tag; built-in replies may mention it literally. PR JSON strips only after parsing fails.
   if (
     !result.success ||
     !isCustomAgentId(input.params.agentId) ||

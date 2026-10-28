@@ -176,9 +176,7 @@ function FileExplorerFiles(): React.JSX.Element {
     },
     [setNameFilterCollapsedPaths]
   )
-  // Why: every explorer effect lives here, above the `!worktreePath` early
-  // return, so a transient null worktree cannot unmount the tree's reset guard
-  // and SSH generation refs and trigger a full cache-dropping reload on return.
+  // Keep effects above the null-path return so transient missing ownership cannot reset cache guards or SSH generations.
   const paneState = useFileExplorerTreePaneState({
     onRevealOutsideRoot: rootNavigation.revealOutsideRoot,
     activeWorktreeId,
@@ -306,8 +304,7 @@ function FileExplorerFiles(): React.JSX.Element {
             </div>
           </div>
         </FileExplorerQueryStrip>
-        {/* Why: the Files and Contents views share one body slot; layering them
-           avoids remounting heavy virtualized panes while preserving full height. */}
+        {/* Layer Files/Contents in one body slot to retain heavy virtualized panes at full height. */}
         <div className="relative min-h-0 flex-1 overflow-hidden">
           <FileExplorerFilesTreePane
             displayRootPath={displayRootPath}

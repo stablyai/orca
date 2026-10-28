@@ -41,7 +41,7 @@ export function buildLoadingHostedReviewCreationEligibility(
     canCreate: false,
     blockedReason: null,
     nextAction: null,
-    // Why: a loading placeholder has no authoritative existing-review result.
+    // Loading placeholders cannot establish whether a review exists.
     reviewLookupOutcome: 'unavailable'
   }
 }
@@ -63,20 +63,7 @@ export function resolveHostedReviewCreationProviderForTarget(
     : fallback
 }
 
-/**
- * Local-status-only eligibility used when the remote creation probe fails or
- * times out, so the UI can show branch guidance without treating the failed
- * lookup as authority to create a review.
- *
- * Blocker ordering matches main (`dirty` → `no_upstream` → `needs_sync`). The
- * branch/base guard is load-bearing and intentionally stricter than main when
- * base is unknown: without a known base, a failed probe must not synthesize
- * `dirty`/`commit` on what might be the default branch (main would return
- * `default_branch`/`detached_head` and keep Create disabled). Returns null
- * when no local blocker is determinable (unknown base, unknown upstream,
- * ahead-only, fully synced) so the caller can surface the retryable state —
- * matching main, which won't offer a push it can't first auth-check.
- */
+/** After remote failure, offer local blockers in dirty/no-upstream/needs-sync order, never permission to create; require a known non-default branch and return null for unknown upstream or no blocker. */
 export function buildLocalBlockerHostedReviewCreationEligibility(
   provider: HostedReviewProvider,
   status: UnavailableHostedReviewStatus
@@ -94,7 +81,7 @@ export function buildLocalBlockerHostedReviewCreationEligibility(
     canCreate: false as const,
     defaultBaseRef: normalizeHostedReviewBaseRef(status.baseRef ?? '').trim(),
     head: branch,
-    // Why: local Git blockers cannot prove that a hosted review does not exist.
+    // Local Git blockers cannot establish whether a hosted review exists.
     reviewLookupOutcome: 'unavailable' as const
   }
   if (status.hasUncommittedChanges) {
@@ -103,8 +90,7 @@ export function buildLocalBlockerHostedReviewCreationEligibility(
   if (status.hasUpstream === false) {
     return { ...base, blockedReason: 'no_upstream', nextAction: 'publish' }
   }
-  // Unknown upstream (hasUpstream !== true) is retryable, not an actionable
-  // blocker — mirror main, which returns a null blocker there.
+  // Unknown upstream remains retryable, matching main.
   if (status.hasUpstream === true && (status.behind ?? 0) > 0) {
     return { ...base, blockedReason: 'needs_sync', nextAction: 'sync' }
   }

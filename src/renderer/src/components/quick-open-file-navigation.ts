@@ -12,6 +12,8 @@ import {
   isQuickOpenAbsolutePath,
   type QuickOpenQueryTarget
 } from '../../../shared/quick-open-query-target'
+import { hostAbsentRefusal } from './terminal-pane/host-file-refusal'
+import { hostSavesGrantedFiles } from '@/runtime/runtime-terminal-artifact-grant'
 import { scheduleEditorLineReveal } from '@/store/slices/editor/focus/editor-focus-reveal'
 import {
   captureFileExplorerOperationGuard,
@@ -77,6 +79,8 @@ export async function openQuickOpenFile(
       }
     }
   }
+  let terminalArtifactGrantId: string | undefined
+  let grantReadOnly = false
   if (target.kind === 'environment' && isAbsolute) {
     let literal: RuntimeTerminalPathResolution | undefined
     if (rawQuery && rawQuery.trim() !== selectedPath) {
@@ -99,16 +103,30 @@ export async function openQuickOpenFile(
             pathText: filePath
           })
     assertCurrent()
-    if (!resolved.exists || resolved.isDirectory || !resolved.absolutePath) {
+    if (resolved.openTarget?.kind === 'absolute-file') {
+      // Why: a host file outside its workspaces is readable only through the grant it issued.
+      terminalArtifactGrantId = resolved.openTarget.grantId
+      grantReadOnly =
+        resolved.openTarget.readOnly === true ||
+        !(await hostSavesGrantedFiles(target.environmentId))
+      filePath = resolved.openTarget.absolutePath
+      relativePath = filePath
+    } else if (
+      !resolved.exists &&
+      getRelativePathInsideRoot(resolved.absolutePath ?? filePath, root) === null
+    ) {
+      throw await hostAbsentRefusal(target.environmentId, resolved.absolutePath ?? filePath)
+    } else if (
+      !resolved.exists ||
+      resolved.isDirectory ||
+      !resolved.absolutePath ||
+      resolved.relativePath === null
+    ) {
       throw new Error('The host could not open this file path.')
+    } else {
+      filePath = resolved.absolutePath
+      relativePath = resolved.relativePath
     }
-    if (resolved.relativePath === null) {
-      throw new Error(
-        'This host cannot open a pasted path outside the workspace. Add its folder as a workspace first.'
-      )
-    }
-    filePath = resolved.absolutePath
-    relativePath = resolved.relativePath
   } else {
     const stats = await statUserOpenedPath(context, filePath)
     assertCurrent()
@@ -128,6 +146,9 @@ export async function openQuickOpenFile(
     runtimeEnvironmentId: target.kind === 'environment' ? target.environmentId : null,
     ...(route.connectionId && getRelativePathInsideRoot(filePath, root) === null
       ? { externalSshTargetId: route.connectionId }
+      : {}),
+    ...(terminalArtifactGrantId
+      ? { terminalArtifactGrantId, ...(grantReadOnly ? { readOnly: true } : {}) }
       : {}),
     language: detectLanguage(filePath),
     mode: 'edit'

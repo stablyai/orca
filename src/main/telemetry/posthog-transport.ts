@@ -11,7 +11,7 @@ export function buildCommonProps(
   sid: string,
   channel: 'stable' | 'rc'
 ): CommonProps {
-  // Don't truncate here; the validator's `.max(64)` is authoritative, so an over-long string drops rather than being silently masked.
+  // Let authoritative max(64) validation drop overlong versions; truncation would hide invalid data.
   return {
     app_version: getAppEnvironment().getVersion(),
     platform: osPlatform(),
@@ -45,7 +45,7 @@ export function waitForCaptureEnqueue(
       resolve(enqueued)
     }
 
-    // Why: posthog-node capture() enqueues async; this SDK event is the durable boundary before optOut().
+    // Node SDK capture enqueues asynchronously; observe its event before opting out.
     stopListening = client.on('capture', (payload: unknown) => {
       if (!payload || typeof payload !== 'object') {
         return
@@ -64,14 +64,7 @@ export function waitForCaptureEnqueue(
   })
 }
 
-/**
- * Whether to flip the PostHog SDK's in-memory `optedOut` flag at boot.
- *
- * True for DISABLED cohorts only, re-applied every boot (the flag doesn't persist) so any direct
- * `posthog.capture()` bypassing `track()` still drops for an opted-out user. Deliberately excludes
- * `pending_banner`: the direct `telemetry_opted_out` capture in `setOptIn(_, false)` must not drop,
- * or we'd lose the one signal that the opt-out flow works.
- */
+/** Reapply SDK opt-out each boot for disabled users. Keep pending-banner SDK enabled so the direct Turn Off capture can enqueue before optOut. */
 export function shouldOptOutSdkAtInit(consent: ConsentState): boolean {
   return consent.effective === 'disabled'
 }
@@ -81,9 +74,9 @@ export function createPostHogClient(writeKey: string, consent: ConsentState): Po
     host: 'https://us.i.posthog.com',
     flushAt: 20,
     flushInterval: 10_000,
-    // Strip SDK-auto GeoIP / client-IP enrichment; our wire is exactly CommonProps ∪ EventProps ∪ a small allow-list.
+    // Disable SDK GeoIP/IP enrichment to keep the wire inside the declared allow-list.
     disableGeoip: true,
-    // Bumped from the default 1000 (drops oldest-first past cap) to 5000 to tolerate long-offline sessions.
+    // Increase offline buffer from 1000 to 5000; overflow drops oldest events.
     maxQueueSize: 5000
   })
 

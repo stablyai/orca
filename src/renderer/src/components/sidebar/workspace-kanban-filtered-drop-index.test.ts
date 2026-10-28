@@ -51,9 +51,6 @@ describe('resolveFullLaneDropIndex', () => {
   })
 
   it('appends into a lane whose cards are all filtered away', () => {
-    // Why: an empty rendered lane reports drop index 0 for every pointer
-    // position, so honouring it would always prepend. The document-drop path
-    // appends for the same gesture, and these must not disagree.
     expect(
       resolveFullLaneDropIndex({ fullLaneIds: FULL, renderedIds: [], filteredDropIndex: 0 })
     ).toBe(FULL.length)
@@ -66,8 +63,6 @@ describe('resolveFullLaneDropIndex', () => {
   })
 
   it('falls back toward the end of the lane the branch was aiming at', () => {
-    // A head drop resolves to the head, not the tail — the opposite fallback
-    // would land a card at the bottom of a lane the user dropped it on top of.
     expect(
       resolveFullLaneDropIndex({
         fullLaneIds: FULL,
@@ -92,8 +87,6 @@ describe('resolveFullLaneDropIndex', () => {
   })
 
   it('still translates when a stale lane has the same length but different members', () => {
-    // Why: a length-only guard would take the identity branch here and skip
-    // translation, landing the card at an index that means nothing in FULL.
     expect(
       resolveFullLaneDropIndex({
         fullLaneIds: ['a', 'b', 'c'],
@@ -137,10 +130,7 @@ describe('workspace lane full-id channel', () => {
   })
 
   it('survives ids holding every character a path can legally contain', () => {
-    // Why: a POSIX path may hold any byte but NUL and '/', so a newline, comma
-    // or colon delimiter would split one id into phantom lane members. Dropping
-    // the channel is not an escape hatch either — under a query the reader
-    // would fall back to the DOM and see only the matched cards.
+    // Paths can contain newlines, commas and colons; losing full membership would expose only search matches.
     const ids = ['repo-a::/Users/dev/we\nird, one: two', 'repo-b::C:\\src\\atlas']
 
     expect(parseWorkspaceLaneFullIds(serializeWorkspaceLaneFullIds(ids) ?? undefined)).toEqual(ids)

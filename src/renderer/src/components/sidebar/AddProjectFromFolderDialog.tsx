@@ -41,8 +41,7 @@ const AddProjectFromFolderDialog = React.memo(function AddProjectFromFolderDialo
   if (isOpen !== previousOpen) {
     setPreviousOpen(isOpen)
     if (!isOpen) {
-      // Why: closed modal state is fully local; clear it before commit so the
-      // next open never paints stale progress or errors.
+      // Clear closed local state before commit so reopening cannot flash stale progress/errors.
       addGenRef.current++
       setIsAdding(false)
       setError(null)
@@ -53,8 +52,7 @@ const AddProjectFromFolderDialog = React.memo(function AddProjectFromFolderDialo
     closeModal()
     openModal('confirm-non-git-folder', {
       folderPath,
-      // Absence === local: NonGitFolderDialog coerces a missing/empty
-      // runtimeEnvironmentId to null, so omitting the spread signals local.
+      // Omitting runtimeEnvironmentId selects the local folder flow.
       ...(runtimeEnvironmentId ? { runtimeEnvironmentId } : {})
     })
   }, [closeModal, folderPath, openModal, runtimeEnvironmentId])
@@ -81,8 +79,7 @@ const AddProjectFromFolderDialog = React.memo(function AddProjectFromFolderDialo
         openNonGitConfirmation()
         return
       }
-      // Why: after the repo is already added, a non-authoritative refresh
-      // should still close onto the project row instead of trapping the user.
+      // The repo is already persisted; a non-authoritative refresh must not strand the add dialog.
       const ownerOptions = worktreeRefreshOptions(runtimeEnvironmentId)
       await fetchWorktrees(repo.id, ownerOptions)
       if (!mountedRef.current || gen !== addGenRef.current) {

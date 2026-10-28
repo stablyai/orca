@@ -92,7 +92,7 @@ vi.mock('@/lib/agent-session-launch-plan', () => ({
   planAgentSessionLaunch: mockPlanAgentSessionLaunch
 }))
 
-vi.mock('@/lib/structured-agent-session-provisional-tab', () => ({
+vi.mock('@/lib/agent-session/structured-agent-session-provisional-tab', () => ({
   beginStructuredAgentSessionProvisionalLaunch: mockBeginStructuredProvisionalLaunch
 }))
 
@@ -104,7 +104,7 @@ import type * as AutomationSessionReuseModule from '@/lib/automation-session-reu
 import { createAutomationDispatchCompletion } from './automation-dispatch-completion'
 import { handleAutomationDispatchRequest } from './automation-dispatch-handler'
 import { tryDispatchReusableAutomationSession } from './automation-dispatch-structured-session'
-import { resolveAgentStatusLiveEntryMainAgent } from '../store/slices/agent-status-live-entry-main-agent'
+import { resolveAgentStatusLiveEntryMainAgent } from '../store/slices/agent-status/agent-status-live-entry-main-agent'
 import { normalizeAgentStatusPayload } from '../../../shared/agent-status-types'
 import { resolveAgentStatusLiveEntryStateHistory } from '../../../shared/agent-status-live-entry-state-history'
 import { structuredAgentSessionAgentStatus } from '../../../shared/structured-agent-session-agent-status'

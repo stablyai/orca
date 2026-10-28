@@ -1,3 +1,4 @@
+import '../memory/host-malloc-tunables-claim'
 import { readFileSync } from 'node:fs'
 import { startDaemon, type DaemonHandle } from './daemon-main'
 import { createPtySubprocess } from './pty-subprocess'
@@ -19,7 +20,7 @@ import { readCurrentProcessMacSystemResolverHealth } from '../network/macos-syst
 import { readCurrentDaemonReadyIdentity } from './daemon-ready-identity'
 import { publishDaemonPidFile } from './daemon-spawner'
 import { initializeTerminalScopes } from './terminal-scopes-runtime'
-import { isNativePtyException } from './daemon-native-pty-exception'
+import { isNativePtyException, uncaughtExceptionLogDetails } from './daemon-native-pty-exception'
 import { startDaemonScopeDeathWatch } from './daemon-scope-death-watch'
 import { isWindowsProcessTableAvailable } from '../windows/windows-process-table'
 import { leaseAppImageGenerationForCurrentProcess } from '../cli/appimage-generation-lease'
@@ -151,7 +152,7 @@ async function main(): Promise<void> {
       console.error('[daemon] Native PTY exception (suppressed):', err)
       return
     }
-    daemonLog.log('uncaught-exception-fatal', { name: err?.name, message: msg })
+    daemonLog.log('uncaught-exception-fatal', uncaughtExceptionLogDetails(err))
     console.error('[daemon] Uncaught exception (fatal):', err)
     throw err
   })
@@ -159,7 +160,7 @@ async function main(): Promise<void> {
   let daemon: DaemonHandle | null = null
   let deathWatch: MacosLoginSessionDeathWatch | null = null
   let shuttingDown = false
-  const shutdownDeadline = createDaemonShutdownDeadline(daemonLog, () => process.exit(0))
+  const shutdownDeadline = createDaemonShutdownDeadline(daemonLog, () => daemon)
   const beginShutdown = (): void => {
     shuttingDown = true
     shutdownDeadline.start()

@@ -11,7 +11,7 @@ import type { RuntimeBrowserCommandHost } from './browser-command-contracts'
 
 type BrowserProfileLabel = { id: string; label: string }
 
-// Why no Electron import: a host with no engine lists and selects the pages a desktop hosts for it.
+// Engine-free hosts still list/select desktop-hosted pages.
 export type BrowserClientPageQueryHost = Pick<
   RuntimeBrowserCommandHost,
   | 'getAgentBrowserBridge'
@@ -21,10 +21,9 @@ export type BrowserClientPageQueryHost = Pick<
   | 'notifyHeadlessBrowserSessionTabsChanged'
 >
 
-/** The tabs a host's own engine holds, beside the pages desktops host for it. */
 export type BrowserEngineTabs = {
   list(params: { worktree?: string }): Promise<BrowserTabListResult>
-  /** The engine's own per-workspace selection, which its list's global flags do not show. */
+  /** Global list flags do not expose the engine's per-workspace selection. */
   current(params: { worktree?: string }): Promise<BrowserTabShowResult>
   switchTo(params: {
     page: string
@@ -33,11 +32,7 @@ export type BrowserEngineTabs = {
   }): Promise<BrowserTabSwitchResult>
 }
 
-/**
- * One logical tab list per host: its engine's tabs (if any), then the pages desktops host for it.
- * "Current" is what workspace automation without --page drives: the active client page, which the
- * dispatcher routes to first, else the engine's own active tab. Nothing invents a current tab.
- */
+/** Logical order: engine tabs, then client pages. Workspace automation prefers the active client page. */
 export class BrowserClientPageQueries {
   constructor(
     private readonly host: BrowserClientPageQueryHost,
@@ -65,7 +60,7 @@ export class BrowserClientPageQueries {
   }
 
   async browserTabCurrent(params: { worktree?: string }): Promise<BrowserTabShowResult> {
-    // Why only within a workspace: unscoped automation never routes to a client page either.
+    // Unscoped automation never routes to client pages.
     const listed = params.worktree ? await this.browserTabList(params) : { tabs: [] }
     const clientTab = listed.tabs.find(
       (candidate) =>
@@ -76,7 +71,6 @@ export class BrowserClientPageQueries {
       return { tab: clientTab }
     }
     if (this.engine) {
-      // Why the engine's own answer: engine tabs come first, so its index is the logical one.
       return this.engine.current(params)
     }
     throw new BrowserError('browser_no_tab', 'No browser tab open in this worktree')
@@ -155,11 +149,7 @@ function clientPageTabRow(
   }
 }
 
-/**
- * Once an engine tab is created or selected it leads, so no client page may still claim to be
- * active and keep taking workspace automation. With no workspace to scope it to (an engine that
- * does not report one), every client page steps back: guessing a workspace would misroute.
- */
+/** Engine selection must clear competing client activity; unknown workspace clears all to avoid misrouting. */
 export async function yieldClientPageSelection(
   host: Pick<
     BrowserClientPageQueryHost,

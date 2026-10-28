@@ -1,7 +1,7 @@
 import {
   isRemoteRuntimePtyId,
   parseRemoteRuntimePtyId
-} from '../../../../shared/remote-runtime-pty-id'
+} from '../../../../shared/remote-runtime/remote-runtime-pty-id'
 import type { SleepingAgentSessionRecord } from '../../../../shared/agent-session-resume'
 import type { AppState } from '../types'
 import type { WorktreeRuntimeOwnerState } from '@/lib/worktree-runtime-owner-state'
@@ -62,9 +62,7 @@ export function getTerminalPtyOwnershipIdentity(
   if (scopedEnvironmentId) {
     return JSON.stringify(['runtime', scopedEnvironmentId, remote.handle])
   }
-  // Why: hydrated legacy runtime IDs omit their owner, but still refer to the same provider
-  // terminal as a scoped ID in the owning worktree. This reads the owner spawn started it on, as
-  // close does, so identity never disagrees with what a close retires.
+  // Resolve legacy/scoped PTY aliases on the owner used by spawn/close so identity and retirement agree.
   const owner = resolveTerminalPtyOwner(state, worktreeId, 'spawn')
   // Why: a twin's legacy id can't be pinned to either host, so it matches only its own exact id.
   if (owner.kind === 'ambiguous') {

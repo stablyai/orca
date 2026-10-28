@@ -4,6 +4,7 @@ import type {
   RuntimeMobileSessionMarkdownTab
 } from '../../../../shared/runtime-types'
 import type { Tab } from '../../../../shared/tab-types'
+import { editorRowHost } from '../../../../shared/session-tab-file-host'
 import type { MobileSessionWorktreeInputs } from './types'
 import {
   isFileActiveEditorSurface,
@@ -47,7 +48,8 @@ export function buildMobileMarkdownTab(
     ...(sourceFile.isUntitled ? { isUntitled: true as const } : {}),
     documentVersion: draftVersion ?? `file:${sourceFile.id}`,
     color: unifiedTab?.color ?? null,
-    isPinned: unifiedTab?.isPinned === true
+    isPinned: unifiedTab?.isPinned === true,
+    ...editorRowHost(file)
   }
 }
 
@@ -73,6 +75,7 @@ export function buildMobileFileTab(
     isPinned: unifiedTab?.isPinned === true,
     isActive: unifiedTabId
       ? isUnifiedTabActiveInActiveGroup(inputs, unifiedTabId)
-      : isFileActiveEditorSurface(inputs, file)
+      : isFileActiveEditorSurface(inputs, file),
+    ...editorRowHost(file)
   }
 }

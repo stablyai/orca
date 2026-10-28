@@ -1,9 +1,13 @@
-// Route A web entry: mounts the phone's h/[hostId] route tree on react-native-web.
-// Built by `build:mobile-web` into the packaged bundle dir; mounted by the app's shell.
+// Web shell entry for the phone’s h/[hostId] route tree, packaged by build:mobile-web.
 import { useEffect, type PropsWithChildren } from 'react'
 import { createRoot } from 'react-dom/client'
 import { ExpoRoot } from 'expo-router'
-import { colors } from '../src/theme/mobile-theme'
+import {
+  applyMobileColorScheme,
+  colors,
+  getMobileColorScheme,
+  subscribeMobileColorScheme
+} from '../src/theme/mobile-theme'
 import type { BridgeRpcClient } from '../src/mobile-web-shell/bridge/bridge-rpc-client'
 import {
   bootstrapShellPage,
@@ -23,22 +27,15 @@ import { publishExternalLinkOpener } from '../src/platform/external-link.web'
 import { publishHapticsNotifier } from '../src/platform/haptics.web'
 import { startBlurringOnKeyboardClose } from '../src/platform/keyboard-close-blur.web'
 import { publishShellKeyboardSource } from '../src/platform/keyboard-occlusion.web'
-// Named with its extension: this entry is the web build's and the provider it needs is the web
-// sibling's, which takes the page's client. The screens below still import `./client-context`
-// and reach the same module, because the builder resolves both specifiers to the same file.
+// Select the page-client provider explicitly; the builder aliases extensionless screen imports to this same web module.
 import { RpcClientProvider } from '../src/transport/client-context.web'
 // Body replaced at build time: esbuild has no require.context, so the builder synthesizes one.
 import routeContext from './route-manifest'
 
-// The route tree starts at app/h, below the native root layout that owns the provider, so the
-// page supplies it here through ExpoRoot's own wrapper rather than mounting the native shell.
-// No suspense boundary: expo-router wraps every screen in its own, which is what catches the
-// route chunks the manifest defers. A chunk that never arrives is a rejection rather than a wait,
-// and that is the boundary below's, not suspense's.
-// A factory because the client is not in scope until `init` lands, and ExpoRoot takes a component.
+// The h/ tree omits the native root provider, so supply ExpoRoot’s wrapper after init gives us a client.
+// Router suspense handles pending chunks; rejected chunks belong to the outer fault boundary.
 function createRootProviders(client: BridgeRpcClient, target: PageMountTarget) {
-  // A commit is not a paint, and an unpainted WebView shows the surface behind it and nothing else,
-  // so the shell keeps its own frame over this document until the second frame lands.
+  // Wait for the second frame before dropping the shell’s cover; a React commit alone proves no paint.
   const reportRouteScreenPaint = createRouteScreenPaintReporter(
     {
       requestFrame: (callback) => requestAnimationFrame(callback),
@@ -51,9 +48,7 @@ function createRootProviders(client: BridgeRpcClient, target: PageMountTarget) {
     }
   )
   return function RootProviders({ children }: PropsWithChildren) {
-    // Effects run child-first, so 'mounted' lands only after the router tree below this wrapper
-    // has committed. That commit can be the suspense fallback of a route chunk still arriving,
-    // which is why the paint is reported from the screen and not from here.
+    // Child-first effects prove router commit, possibly its suspense fallback; screen paint is reported separately.
     useEffect(() => {
       stampPageMountState(target, 'mounted')
     }, [])
@@ -67,13 +62,7 @@ function createRootProviders(client: BridgeRpcClient, target: PageMountTarget) {
   }
 }
 
-/**
- * The whole page for a shell that opened it and then named no screen.
- *
- * Built as elements rather than markup, and outside React: the route tree is exactly what cannot
- * be mounted here, and a panel that needed it would be a second way to fail. The copy names the
- * one thing that fixes it, because nothing on this device will.
- */
+// Build outside React because an unresolved route tree cannot mount its own recovery panel.
 function renderShellTooOldPanel(container: HTMLElement): void {
   const panel = document.createElement('div')
   panel.setAttribute('role', 'alert')
@@ -96,8 +85,14 @@ if (!container) {
   throw new Error('[orca-mobile-web-app] #root missing')
 }
 const target = document.documentElement
-target.style.setProperty('--muted-foreground', colors.textMuted)
-target.style.setProperty('--foreground', colors.textPrimary)
+// Keep <html> transparent: overlay routes show the native screen through it, and the shell paints bgBase behind the rest.
+function paintDocumentScheme(): void {
+  target.style.setProperty('--muted-foreground', colors.textMuted)
+  target.style.setProperty('--foreground', colors.textPrimary)
+  target.style.colorScheme = getMobileColorScheme()
+}
+paintDocumentScheme()
+subscribeMobileColorScheme(paintDocumentScheme)
 stampPageMountState(target, 'started')
 
 bootstrapShellPage({
@@ -107,23 +102,20 @@ bootstrapShellPage({
     history.replaceState(null, '', href)
   },
   mount: (client, session) => {
-    // Before the first render, because both are read from effects that run on it: the host store is
-    // a plain async function with no provider above it, and the first list paints its pins.
+    // Apply before the first render so no component paints the default dark palette first.
+    applyMobileColorScheme(session.colorScheme)
+    client.onColorSchemeUpdate(applyMobileColorScheme)
+    // Publish plain-function seams before first render because effects and initial list paint already read them.
     publishPageHostProfile(session.host)
-    // Same reason, and the same shape: the seam is a plain function in render trees the provider
-    // does not wrap, so the client's notify is published rather than read from context.
     publishExternalLinkOpener((url) => client.notifyExternalLink(url))
-    // The same shape again, and for the same reason: every haptic on this page is played from a
-    // plain function inside a row's press handler, which no provider wraps.
     publishHapticsNotifier((kind) => client.notifyHaptics(kind))
-    // The shell's keyboard height, read by plain functions as well as hooks; 0 while it is closed.
+    // Expose shell keyboard height to hooks and plain functions.
     publishShellKeyboardSource({
       read: () => client.getShellSession()?.keyboardInset ?? 0,
       subscribe: client.onKeyboardInsetUpdate
     })
     startBlurringOnKeyboardClose()
-    // Scoped to the host `init` named: with none, no key is writable, which is the right answer
-    // for a shell too old to say whose list this is.
+    // Without a host in init, leave every storage key unwritable for older shells.
     publishPageStorage(
       session.storage,
       (key, value) => client.notifyStorageWrite(key, value),
@@ -138,8 +130,7 @@ bootstrapShellPage({
         : null
     )
     createRoot(container).render(
-      // Above `ExpoRoot`, not inside its wrapper: a route this bundle cannot resolve or import
-      // throws where the router renders it, and a boundary below the router never sees that.
+      // Catch outside ExpoRoot so route-resolution/import failures cannot bypass the page boundary.
       <PageFaultBoundary
         onFault={(error) => {
           client.notifyPageFault(error)
@@ -147,10 +138,7 @@ bootstrapShellPage({
       >
         <ExpoRoot
           context={routeContext}
-          // The same URL the line above just wrote, handed over rather than left to be read:
-          // ExpoRoot snapshots `window.location.href` when its module is imported, which is before
-          // any frame has crossed the bridge, so what it captured on its own is the `/` the shell
-          // serves.
+          // Pass the post-init URL explicitly; ExpoRoot’s import-time location predates bridge frames and still names /.
           location={new URL(window.location.href)}
           wrapper={createRootProviders(client, target)}
         />

@@ -19,8 +19,7 @@ export async function refreshWorkspacePortScanForTarget(
     publish(await scanWorkspacePortsForTarget(args.runtimeTarget))
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error)
-    // Why: one dropped scan must not clear the host's last-good ports the way the background
-    // poll's debounce does not; the failure is still recorded so the host is named as unavailable.
+    // Retain last-good ports on one failed refresh like background debounce, while recording host unavailability.
     const previous = args.getWorkspacePortScansByKey()[scanKey]
     publish({
       platform: previous?.platform ?? 'unknown',

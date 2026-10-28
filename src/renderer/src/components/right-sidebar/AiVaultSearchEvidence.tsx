@@ -3,6 +3,21 @@ import type { AiVaultSearchHit } from '../../../../shared/ai-vault-search-types'
 import { translate } from '@/i18n/i18n'
 import { conversationRoleLabel } from './ai-vault-session-row-display'
 
+const LEADING_CONTEXT_CHARS = 12
+
+function searchSnippetLeadingContext(text: string): string {
+  const points = Array.from(text)
+  if (points.length <= LEADING_CONTEXT_CHARS) {
+    return text
+  }
+  // Include the preceding character so trimming preserves complete words at the boundary.
+  const context = points
+    .slice(-LEADING_CONTEXT_CHARS - 1)
+    .join('')
+    .replace(/^\S*\s*/u, '')
+  return `…${context}`
+}
+
 export function highlightedSearchSnippet(snippet: string): React.ReactNode[] {
   const parts: React.ReactNode[] = []
   const marker = /\[\[([\s\S]*?)\]\]/g
@@ -11,7 +26,8 @@ export function highlightedSearchSnippet(snippet: string): React.ReactNode[] {
   for (const match of snippet.matchAll(marker)) {
     const index = match.index
     if (index > offset) {
-      parts.push(snippet.slice(offset, index))
+      const context = snippet.slice(offset, index)
+      parts.push(offset === 0 ? searchSnippetLeadingContext(context) : context)
     }
     parts.push(
       <mark
@@ -48,7 +64,7 @@ export function AiVaultSearchEvidence({ hit }: { hit: AiVaultSearchHit }): React
   return (
     <div className="mt-0.5 min-w-0 text-[12px] leading-4 text-muted-foreground">
       {evidence ? (
-        <div className="line-clamp-2">
+        <div className="line-clamp-2 [overflow-wrap:anywhere]">
           <span className="font-medium text-foreground/80">
             {conversationRoleLabel(evidence.role)}
           </span>

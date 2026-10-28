@@ -20,7 +20,7 @@ export async function revealTerminalPaneInWindow(
     focusExistingMainWindow({
       app,
       getWindow: () => mainWindow,
-      // Why: a reveal moves the window that answered; it never opens a replacement.
+      // Reveal only the answering window; never construct a replacement.
       canOpenWindow: () => false,
       openWindow: () => mainWindow
     })
@@ -52,7 +52,7 @@ function requestTerminalPaneRevealFromRenderer(
       TERMINAL_PANE_REVEAL_TIMEOUT_MS
     )
     const onReply = (event: Electron.IpcMainEvent, reply: TerminalPaneRevealReply): void => {
-      // Why: request ids are visible to renderer code; only the targeted window may answer.
+      // Visible request IDs confer no authority; only the targeted window can answer.
       if (event.sender !== webContents || reply.requestId !== requestId) {
         return
       }

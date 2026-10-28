@@ -16,8 +16,7 @@ export function asDispatchFence(error: unknown): unknown {
     : error
 }
 
-// Why: the handle lookup outranks the pane one, so without this a stale process still holding the
-// row's handle would read and ack the mailbox of the pane the Dispatch was re-pointed at.
+// Handle lookup wins over pane metadata; reject stale processes whose Dispatch moved to another pane.
 export function callerHoldsDispatchPane(
   dispatch: { assignee_pane_key: string | null },
   paneKey: string | undefined
@@ -29,13 +28,8 @@ export function callerHoldsDispatchPane(
   )
 }
 
-/**
- * A terminal whose last Attempt was abandoned, stopped or failed must not read its direct mailbox:
- * an empty result is the worker contract's "checkpoint, not a failure", so the loser would keep
- * working on a Task another terminal now owns. A `completed` Attempt is not fenced — that terminal
- * is free again and may legitimately receive direct mail. Retries need no separate test: every
- * settle that makes an Attempt retry-eligible also drives its Dispatch to failed/circuit_broken.
- */
+/** Refuse consuming reads after abandoned/stopped/failed Attempts; an empty checkpoint would let the loser keep working.
+ * Completed Attempts free the terminal for direct mail. Retry-eligible settlement already fails/circuit-breaks Dispatch. */
 export function isSupersededDispatch(dispatch: DispatchContextRow): boolean {
   return dispatch.status === 'failed' || dispatch.status === 'circuit_broken'
 }

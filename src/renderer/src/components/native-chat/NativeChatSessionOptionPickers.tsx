@@ -4,20 +4,21 @@ import { Button } from '@/components/ui/button'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { translate } from '@/i18n/i18n'
-import { sortNativeChatSessionOptions } from '../../../../shared/native-chat-session-option-snapshot'
+import { sortNativeChatSessionOptions } from '../../../../shared/native-chat/input/native-chat-session-option-snapshot'
 import {
   sessionOptionDispatchUnconfirmed,
   type SessionOptionDescriptor,
   type SessionOptionsSurface,
   type SessionOptionValue
-} from '../../../../shared/native-chat-session-options'
+} from '../../../../shared/native-chat/input/native-chat-session-options'
 import {
   nativeChatModelPillLabel,
   nativeChatOptionValuesLabel,
   nativeChatOptionsPillTitle,
   nativeChatSessionOptionActionLabel,
   nativeChatSessionOptionDisabledReason
-} from './native-chat-session-option-labels'
+} from '../../../../shared/native-chat-session-option-labels'
+import { sayNativeChatSessionOptionTranslated as say } from './native-chat-session-option-labels-text'
 import type { NativeChatOptionPickerRequest } from './native-chat-composer-types'
 import { runSessionOptionSurfaceCall } from './native-chat-session-option-surface-call'
 import { NativeChatModelCombobox } from './NativeChatModelCombobox'
@@ -37,8 +38,7 @@ export type NativeChatSessionOptionPickersProps = {
 /** A descriptor write in flight; its value shows until it settles. */
 type PendingPick = { id: string; value?: SessionOptionValue }
 
-// Why: the picker stays open across a pick, so the choice has to land where it was made before
-// the host answers; a refused write falls back to the snapshot.
+// Show pending picks in place while open; refusal restores the host snapshot.
 function withPendingValue(
   descriptor: SessionOptionDescriptor,
   pending: PendingPick | null
@@ -64,8 +64,7 @@ function withPendingValue(
   return descriptor
 }
 
-// Why: value-only visible text must still include the category in the
-// accessible name (WCAG 2.5.3 Label in Name / voice control).
+// Keep visible value text inside the accessible name for voice control (WCAG 2.5.3).
 function pillAccessibleName(title: string, value: string): string {
   return value === title
     ? title
@@ -87,8 +86,7 @@ function PickerTrigger(props: {
   onKeyDown: React.KeyboardEventHandler<HTMLButtonElement>
 }): React.JSX.Element {
   const [tooltipOpen, setTooltipOpen] = useState(false)
-  // Why: the pill already shows its values, so it only gets a tooltip for what it cannot show.
-  // Held closed rather than unmounted: a pick can flip this, and the open picker hangs off the pill.
+  // Keep the tooltip mounted but closed unless informative; changing wrapper identity would detach the open picker.
   const informative = props.disabledReason !== null || props.dispatched
   return (
     <Tooltip open={informative && tooltipOpen} onOpenChange={setTooltipOpen}>
@@ -160,14 +158,14 @@ function SessionOptionPopover(props: {
   }, [open, demandModelCatalog])
   const focusReturn = useNativeChatPickerFocusReturn(props.focusComposer)
   const modelTitle = translate('components.native-chat.composer.model', 'Model')
-  const modelLabel = nativeChatModelPillLabel(model)
+  const modelLabel = nativeChatModelPillLabel(model, say)
   const modelName = pillAccessibleName(modelTitle, modelLabel)
-  const optionsTitle = nativeChatOptionsPillTitle(options)
-  const optionsLabel = nativeChatOptionValuesLabel(options)
-  const modelReason = nativeChatSessionOptionDisabledReason(model.disabledReason)
+  const optionsTitle = nativeChatOptionsPillTitle(options, say)
+  const optionsLabel = nativeChatOptionValuesLabel(options, say)
+  const modelReason = nativeChatSessionOptionDisabledReason(model.disabledReason, say)
   const optionsReason =
     options.length > 0 && options.every((descriptor) => !descriptor.settable)
-      ? nativeChatSessionOptionDisabledReason(options[0]?.disabledReason)
+      ? nativeChatSessionOptionDisabledReason(options[0]?.disabledReason, say)
       : null
 
   // Different descriptors can save together; hold only a repeat of the same pick.
@@ -244,8 +242,7 @@ function SessionOptionPopover(props: {
         }}
         onInteractOutside={focusReturn.onInteractOutside}
         onCloseAutoFocus={focusReturn.onCloseAutoFocus}
-        // Why: a focused level's tooltip is the top layer, so Radix hands it the first Escape and
-        // the picker would take a second. The search is left to Radix, which waits out an IME.
+        // Close through a level tooltip’s first Escape; let Radix handle search Escape after IME.
         onKeyDown={(event) => {
           if (event.key === 'Escape' && !(event.target instanceof HTMLInputElement)) {
             setOpen(false)
@@ -277,7 +274,7 @@ function SessionOptionPopover(props: {
               className="w-full justify-start"
               onClick={() => act(model)}
             >
-              {nativeChatSessionOptionActionLabel(model)}
+              {nativeChatSessionOptionActionLabel(model, say)}
             </Button>
           </NativeChatSessionOptionWriteGroup>
         )}
@@ -301,8 +298,7 @@ function NativeChatSessionOptionPickersInner({
   focusComposer
 }: NativeChatSessionOptionPickersProps): React.JSX.Element | null {
   const [pending, setPending] = useState<ReadonlyMap<string, PendingPick>>(() => new Map())
-  // Why: the session holds a request across composer remounts; one left standing reopens the
-  // picker each time a prompt card gives the composer back. Dropped even when nothing could open.
+  // Consume requests even without a usable picker so composer remounts cannot reopen them.
   useEffect(() => pickerRequest?.consume(), [pickerRequest])
   const reportedModel = snapshot.find((descriptor) => descriptor.category === 'model')
   if (!surface || !reportedModel) {

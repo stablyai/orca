@@ -48,7 +48,7 @@ describe('terminal agent prompt send RPC', () => {
     expect(sendTerminalAgentPrompt).toHaveBeenCalledWith('terminal-1', 'review this change', {
       inputKind: 'driving',
       beforeWrite: undefined,
-      signal: undefined
+      observationSignal: undefined
     })
     expect(sendTerminal).not.toHaveBeenCalled()
   })

@@ -1,7 +1,5 @@
 // @vitest-environment happy-dom
-// Why: one file open in two workspaces, A in source mode (its editor shows the shared model) and B
-// in rich mode. When the record goes clean every view must show the record's text, or typing in a
-// stale view resurrects text the record no longer holds.
+// When a shared record goes clean, synchronize source and rich views so stale typing cannot resurrect old text.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { act, renderHook } from '@testing-library/react'
 import * as monaco from 'monaco-editor/esm/vs/editor/editor.api.js'
@@ -83,7 +81,6 @@ function openSharedMarkdown() {
     .result.current
   const viewText = (id: string): string =>
     store.getState().editorDrafts[id] ?? fileContents[id].content
-  // A's editor content sync: its `content` prop is the view's text.
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: content sync only calls getModel and pushUndoStop.
   const editorA = {
     getModel: () => model,
@@ -133,7 +130,6 @@ describe('a record that goes clean shows its text in every view', () => {
       typeInA(`${DISK}XYZ`)
       expect(view(b).isDirty).toBe(true)
 
-      // B undoes in rich mode: its commit is the saved document, which reads clean.
       commitFromB(richSaved)
       expect(view(a).isDirty).toBe(false)
       expect(view(b).isDirty).toBe(false)

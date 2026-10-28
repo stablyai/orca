@@ -42,7 +42,7 @@ const ENGLISH_ATTACHMENT_LABELS: WorkspaceAttachmentLabelFormats = {
   issue: (number) => `Issue #${number}`
 }
 
-/** A reference as people say it: the tracker's own key for Linear and Jira, else `PR #12`-style. */
+/** Use provider-native Linear/Jira keys; other references use PR #12-style labels. */
 export function workspaceAttachmentReferenceLabel(
   item: Pick<
     WorkspaceAttachment,

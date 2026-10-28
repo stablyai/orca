@@ -9,13 +9,11 @@ import {
 export type StatementDelay = {
   enabled: boolean
   delayMs: number
-  // Runs before each delayed statement leaves the client, so it sees the locks
-  // the transaction holds between round trips.
+  // Observe held locks before each delayed client round trip.
   beforeTrip?: (sql: string) => Promise<void>
 }
 
-// The serving pool's session settings with a fixed delay in front of every
-// statement, BEGIN and COMMIT included: one delay per cross-region round trip.
+// Inject cross-region delay before every statement, including BEGIN/COMMIT, with serving-pool settings.
 export function openDelayedPostgresDatabase(
   url: string,
   delay: StatementDelay,
@@ -24,8 +22,7 @@ export function openDelayedPostgresDatabase(
   const pool = new pg.Pool({
     connectionString: url,
     max: poolMax,
-    // Same bound as openRelayDatabase, so a saturated pool fails acquires the
-    // way a serving cell does instead of queueing forever.
+    // Use serving acquire bound so pool saturation fails instead of queueing forever.
     connectionTimeoutMillis: 2_000,
     statement_timeout: POSTGRES_STATEMENT_TIMEOUT_MS,
     lock_timeout: POSTGRES_LOCK_TIMEOUT_MS,

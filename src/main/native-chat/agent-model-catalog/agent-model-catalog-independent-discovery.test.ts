@@ -1,3 +1,4 @@
+import { agentSessionConversationView } from '../../../shared/agent-session-conversation-view'
 import { describe, expect, it, vi } from 'vitest'
 import type { AgentSessionRecord } from '../../../shared/agent-session-record'
 import { agentSessionRecordFixture } from '../agent-session-record-test-fixture'
@@ -49,6 +50,10 @@ function harness() {
   const probe: AgentModelCatalogProbe = Object.assign(async () => run(), { resolve })
   const service = createAgentModelCatalogService({
     store,
+    getConversation: (id) => {
+      const saved = record(id, id === 'a' ? 'old' : 'another')
+      return saved ? agentSessionConversationView(saved) : undefined
+    },
     getRecord: (id) => record(id, id === 'a' ? 'old' : 'another'),
     drivesRecord: () => true,
     resolveAccountHome: async () => HOME,

@@ -69,8 +69,7 @@ export type DailySegment = { key: string; value: number; color: string }
 export function getDailySegments(
   entry: ClaudeUsageDailyPoint | CodexUsageDailyPoint
 ): DailySegment[] {
-  // Why: segment order matches the original charts exactly (top-to-bottom).
-  // Segments render as stacked block divs in a table cell with vertical-align: bottom.
+  // Preserve chart segment order in the bottom-aligned stack.
   if ('cacheReadTokens' in entry) {
     return [
       { key: 'cache-write', value: entry.cacheWriteTokens, color: 'rgba(217, 70, 239, 0.7)' },

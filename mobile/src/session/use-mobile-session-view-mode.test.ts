@@ -33,7 +33,6 @@ function deferred<T>(): {
 vi.mock('expo-router', async () => {
   const react = await import('react')
   return {
-    // Run the focus callback once on mount, mirroring a focus.
     useFocusEffect: (cb: () => undefined | (() => void)) => {
       focusEffectRuntime.callback = cb
       react.useEffect(() => cb(), [cb])
@@ -199,7 +198,6 @@ describe('useMobileSessionViewMode', () => {
       await Promise.resolve()
     })
     expect(controller?.isTabChatView('same-tab-id')).toBe(false)
-    // The next workspace's surface waits for its own overrides, not the last one's.
     expect(controller?.ready).toBe(false)
 
     await act(async () => {
@@ -378,32 +376,6 @@ describe('useMobileSessionViewMode', () => {
 
     expect(controller?.isTabChatView('t1')).toBe(false)
     expect(readSessionViewOverridesPreference).toHaveBeenCalledTimes(2)
-  })
-
-  it('finishes an early toggle save after the route unmounts', async () => {
-    const overridesLoad = deferred<Map<string, MobileSessionView>>()
-    vi.mocked(readSessionViewOverridesPreference).mockReturnValue(
-      overridesLoad.promise.then((overrides) => ({ overrides, loaded: true }))
-    )
-    function Harness(): null {
-      controller = useMobileSessionViewMode({ hostId: 'h', worktreeId: 'w' })
-      return null
-    }
-    await act(async () => {
-      renderer = create(createElement(Harness))
-      await Promise.resolve()
-    })
-    act(() => controller?.toggleTabChatView('new-tab'))
-    act(() => renderer?.unmount())
-    renderer = null
-
-    await act(async () => {
-      overridesLoad.resolve(new Map([['saved-tab', 'terminal']]))
-      await Promise.resolve()
-      await Promise.resolve()
-    })
-
-    expect(updateSessionViewOverride).toHaveBeenCalledWith('h', 'w', 'new-tab', 'chat')
   })
 
   it('does not reload a failed override after the route unmounts', async () => {

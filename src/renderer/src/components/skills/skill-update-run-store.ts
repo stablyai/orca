@@ -70,10 +70,7 @@ function clearSuccessTimer(slot: RunSlot): void {
   }
 }
 
-/**
- * Why: a success needs to be *seen*, then get out of the way. Problems stay until the user
- * acts on them, and while the dialog is open closing it is what acknowledges the run.
- */
+/** Let visible success linger briefly; keep problems until acknowledged, and let an open dialog own acknowledgment. */
 function scheduleSuccessLinger(targetKey: string): void {
   const slot = slotFor(targetKey)
   clearSuccessTimer(slot)
@@ -108,7 +105,6 @@ export function getSkillUpdateRun(targetKey: string | null): SkillUpdateRun {
   return (targetKey && slots.get(targetKey)?.run) || IDLE
 }
 
-/** `targetKey` is `bundledSkillTargetKey` of the host; null reads idle. */
 export function useSkillUpdateRun(targetKey: string | null): SkillUpdateRun {
   const read = (): SkillUpdateRun => getSkillUpdateRun(targetKey)
   return useSyncExternalStore(subscribeSkillUpdateRun, read, read)
@@ -168,7 +164,6 @@ export async function startSkillUpdateRun(request: {
   notifyInstalledAgentSkillsChanged()
 }
 
-/** Clears a settled run so the status-bar segment can retire itself. */
 export function acknowledgeSkillUpdateRun(targetKey: string): void {
   const slot = slots.get(targetKey)
   if (!slot || slot.run.state === 'idle' || slot.run.state === 'running') {
@@ -179,7 +174,6 @@ export function acknowledgeSkillUpdateRun(targetKey: string): void {
   setRun(targetKey, IDLE)
 }
 
-/** Clears the status bar's run when it settled; a running one keeps it. */
 export function acknowledgeLatestSkillUpdateRun(): void {
   if (latestTargetKey) {
     acknowledgeSkillUpdateRun(latestTargetKey)

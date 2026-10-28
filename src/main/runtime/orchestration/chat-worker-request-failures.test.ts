@@ -326,7 +326,8 @@ it('keeps each request’s own saved error when another start fails before the d
   )
   await recordStructuredAgentSessionStartFailure(
     { journal: r.journal, fence: 0 },
-    { startKey: 'B-start', ...refused }
+    { startKey: 'B-start', ...refused },
+    'B'
   )
   await tick()
   expect(r.mail().map((message) => JSON.parse(message.payload ?? '{}'))).toMatchObject([

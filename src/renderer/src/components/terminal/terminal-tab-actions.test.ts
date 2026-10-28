@@ -212,6 +212,21 @@ describe('createNewTerminalTab', () => {
     })
     expect(createTab).not.toHaveBeenCalled()
   })
+
+  it('reports a failed host launch to the caller instead of toasting it', async () => {
+    isWebRuntimeSessionActiveMock.mockReturnValue(true)
+    createWebRuntimeSessionTerminalMock.mockResolvedValue({ status: 'failed', message: 'offline' })
+    getStateMock.mockReturnValue(terminalOwnerRows('web-runtime'))
+    const onSettled = vi.fn()
+
+    createNewTerminalTab('wt-1', undefined, { command: 'git fetch --unshallow origin', onSettled })
+
+    await vi.waitFor(() => expect(onSettled).toHaveBeenCalledWith(false))
+    expect(createWebRuntimeSessionTerminalMock).toHaveBeenCalledWith(
+      expect.objectContaining({ command: 'git fetch --unshallow origin' }),
+      { notifyFailure: false }
+    )
+  })
 })
 
 describe('closeTerminalTab', () => {
@@ -353,8 +368,7 @@ describe('closeTerminalTab', () => {
   })
 
   it('sends hostCloseReason on the wire without tagging the local close reason', () => {
-    // Why: parked-tab lifecycle closes must reach the host as 'pty-exit' so it
-    // can adjudicate them, while local guards keyed off `reason` still apply.
+    // Lifecycle close reason must reach host adjudication while local guards still use the original reason.
     const closeTab = vi.fn()
     isWebRuntimeSessionActiveMock.mockReturnValue(true)
     resolveHostSessionTabIdForWebSessionTabMock.mockReturnValue('host-tab-1')
@@ -544,19 +558,14 @@ describe('closeTerminalTab', () => {
 
     closeTerminalTab('terminal-entity-1')
 
-    // Why: a unified terminal must not pre-pick a terminal-only successor — the
-    // store's closeUnifiedTab owns the MRU/neighbor repair (which may land on an
-    // agent-session tab); terminal-tab-actions-unified-close.test.ts covers it.
+    // Unified closes must delegate MRU/neighbor selection to closeUnifiedTab, including non-terminal successors.
     expect(setActiveTab).not.toHaveBeenCalled()
     expect(closeTab).toHaveBeenCalledWith('terminal-entity-1', { reason: undefined })
     expect(closeUnifiedTab).not.toHaveBeenCalled()
   })
 
   it('routes closes on a remote worktree to the host even when the local→host map has no entry', () => {
-    // Why: regression for the close-reappear bug. On a remote-owned worktree the
-    // tab is host-authoritative; when the map has no entry (e.g. a plain-UUID host
-    // tab id) the close must still reach the host via the decoded id, or the
-    // host's next snapshot re-adds the tab. It also prunes locally for snappiness.
+    // Decode unmapped plain-UUID host tabs too, or the next authoritative snapshot resurrects a locally closed tab.
     const closeTab = vi.fn()
     isWebRuntimeSessionActiveMock.mockReturnValue(true)
     resolveHostSessionTabIdForWebSessionTabMock.mockReturnValue(null)
@@ -725,8 +734,7 @@ describe('closeTerminalTab', () => {
       })
     )
 
-    // Why: TerminalPaneOverlayLayer closes by terminalTab.id (the unified id),
-    // not the entityId. The guard must still recognize it as pinned.
+    // Overlay close supplies the unified ID, so pin detection must recognize it.
     closeTerminalTab('unified-pinned-1')
 
     expect(closeUnifiedTab).not.toHaveBeenCalled()
@@ -769,8 +777,7 @@ describe('closeTerminalTab', () => {
       setActiveTab: vi.fn()
     })
 
-    // Why: the legacy no-layout surface routes pty exits through
-    // closeTerminalTab; a self-exited shell must not join the reopen stack.
+    // Self-exit through the legacy no-layout path must not populate reopen history.
     closeTerminalTab('tab-1', { reason: 'pty-exit' })
 
     expect(closeTab).toHaveBeenCalledWith('tab-1', { reason: 'pty-exit' })

@@ -1,7 +1,6 @@
 import type { AutomationRunUsage } from '../../../../shared/automations-types'
 
-// Why: the summary is computed by whichever authority owns the retained runs, so
-// it lives in shared code; only the display formatting below is renderer-only.
+// Keep retained-run summaries shared across owning authorities; only display formatting belongs to the renderer.
 export type { AutomationUsageSummary } from '../../../../shared/automation-usage-summary'
 export { summarizeAutomationRunUsage } from '../../../../shared/automation-usage-summary'
 

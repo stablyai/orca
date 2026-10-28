@@ -113,6 +113,7 @@ describe('Codex structured service tier without send-path catalog waits', () => 
     expect(codex.connections[0].calls.some((call) => call.method === 'thread/resume')).toBe(true)
     expect(codexStartReport(adapter).reportedOptions).toEqual({
       model: 'gpt-next',
+      reportedPermissionMode: null,
       serviceTier: 'ultrafast'
     })
     await send(adapter, 'first')

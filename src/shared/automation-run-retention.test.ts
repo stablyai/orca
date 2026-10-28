@@ -76,8 +76,7 @@ describe('pruneAutomationRuns', () => {
     expect(pruneAutomationRuns(makeRuns('a', 3), -1)).toEqual([])
   })
 
-  // Why: a dispatched run's completion can land hours later; evicting the row
-  // would make updateAutomationRun throw 'Automation run not found.'
+  // Dispatched completions may arrive hours later; retain their rows or updateAutomationRun throws.
   it('never evicts in-flight runs, even far past the cap', () => {
     const inFlight = [
       run({ id: 'old-pending', automationId: 'a', status: 'pending', createdAt: -3 }),
@@ -122,9 +121,7 @@ describe('backfillAutomationRunNumbers', () => {
     expect(backfillAutomationRunNumbers(runs)[0].runNumber).toBe(42)
   })
 
-  // Why: a downgrade to a build that predates `runNumber` appends unnumbered runs
-  // after pruned, high-numbered survivors. Numbering by append position reissues a
-  // number a survivor still holds, and the two runs end up sharing a title.
+  // Downgrades append unnumbered runs after high-numbered survivors; append-position numbering would duplicate retained titles.
   it('never reissues a number a numbered run already holds', () => {
     const runs = [
       run({ id: 'a-0', automationId: 'a', runNumber: 2 }),
