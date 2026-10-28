@@ -70,6 +70,11 @@ const {
 } = require('./scripts/appimage-node-runtime.cjs')
 const { signWindowsUninstallerViaSignPath } = require('./scripts/windows-uninstaller-signing.cjs')
 const { buildMacShipItScheduling } = require('./scripts/macos-shipit-scheduling.cjs')
+const {
+  createWindowsArchitectureResources,
+  getWindowsInstallerArtifactName,
+  getWindowsUpdateChannelPublishOptions
+} = require('./windows-package-architecture.cjs')
 
 // Dev channels need release bundle ID/signature/notarization so Squirrel.Mac accepts updates and macOS retains app identity.
 const isMacHourly = process.env.ORCA_MAC_HOURLY === '1'
@@ -157,10 +162,6 @@ const macSpeechNativeResource = {
 const linuxSpeechNativeResource = {
   from: 'node_modules/sherpa-onnx-linux-${arch}',
   to: 'node_modules/sherpa-onnx-linux-${arch}'
-}
-const winSpeechNativeResource = {
-  from: 'node_modules/sherpa-onnx-win-x64',
-  to: 'node_modules/sherpa-onnx-win-x64'
 }
 // electron-builder replaces these defaults when `depends` is configured; retain
 // Electron's loader requirements alongside Orca's headless-host dependencies.
@@ -520,7 +521,7 @@ module.exports = {
     extraResources: [
       ...commonExtraResources,
       ...windowsRuntimeResources,
-      winSpeechNativeResource,
+      ...createWindowsArchitectureResources(),
       {
         from: 'resources/win32/bin/orca.cmd',
         to: 'bin/orca.cmd'
@@ -540,10 +541,6 @@ module.exports = {
         to: 'bin/orca-agent-hook.exe'
       },
       {
-        from: 'node_modules/agent-browser/bin/agent-browser-win32-x64.exe',
-        to: 'agent-browser-win32-x64.exe'
-      },
-      {
         from: 'native/computer-use-windows/runtime.ps1',
         to: 'computer-use-windows/runtime.ps1'
       },
@@ -551,7 +548,7 @@ module.exports = {
     ]
   },
   nsis: {
-    artifactName: 'orca-windows-setup.${ext}',
+    artifactName: getWindowsInstallerArtifactName(),
     shortcutName: '${productName}',
     uninstallDisplayName: '${productName}',
     createDesktopShortcut: 'always',
@@ -736,7 +733,8 @@ module.exports = {
     owner: 'stablyai',
     repo: devChannelRepo ?? 'orca',
     // Keep main-repo releases draft until release-cut verifies all assets; early --publish always would expose missing Windows installers.
-    releaseType: devChannelRepo ? 'prerelease' : 'draft'
+    releaseType: devChannelRepo ? 'prerelease' : 'draft',
+    ...getWindowsUpdateChannelPublishOptions()
   }
 }
 

@@ -63,6 +63,7 @@ export function isGitHubReleaseTransitionFailure(normalizedMessage: string): boo
     normalizedMessage.includes('unable to find latest version on github') ||
     normalizedMessage.includes('cannot find channel') ||
     normalizedMessage.includes('latest.yml') ||
+    normalizedMessage.includes('latest-arm64.yml') ||
     normalizedMessage.includes('latest-mac.yml') ||
     normalizedMessage.includes('no published versions on github')
   )
@@ -74,6 +75,7 @@ export function isMissingUpdateManifestFailure(message: string): boolean {
     normalizedMessage.includes('404') &&
     (normalizedMessage.includes('cannot find channel') ||
       normalizedMessage.includes('latest.yml') ||
+      normalizedMessage.includes('latest-arm64.yml') ||
       normalizedMessage.includes('latest-mac.yml') ||
       normalizedMessage.includes('latest-linux.yml'))
   )

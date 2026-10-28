@@ -127,7 +127,8 @@ describe('fetchNewerReleaseTag', () => {
     ['darwin', 'arm64', 'latest-mac.yml'],
     ['linux', 'x64', 'latest-linux.yml'],
     ['linux', 'arm64', 'latest-linux-arm64.yml'],
-    ['win32', 'x64', 'latest.yml']
+    ['win32', 'x64', 'latest.yml'],
+    ['win32', 'arm64', 'latest-arm64.yml']
   ] satisfies [NodeJS.Platform, NodeJS.Architecture, string][])(
     'probes the %s %s platform manifest',
     async (platform, arch, manifestName) => {

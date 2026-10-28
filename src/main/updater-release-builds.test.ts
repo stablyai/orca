@@ -175,7 +175,9 @@ describe('listReleaseBuilds', () => {
     )
 
     await expect(
-      listReleaseBuilds('hourly', 'win32').then((builds) => builds.map((build) => build.version))
+      listReleaseBuilds('hourly', 'win32', 'x64').then((builds) =>
+        builds.map((build) => build.version)
+      )
     ).resolves.toEqual(['1.4.163-hourly.202607312054'])
   })
 
@@ -186,7 +188,7 @@ describe('listReleaseBuilds', () => {
       ])
     )
 
-    await expect(listReleaseBuilds('hourly', 'win32')).resolves.toEqual([])
+    await expect(listReleaseBuilds('hourly', 'win32', 'x64')).resolves.toEqual([])
   })
 
   it('keeps mac builds visible on macOS regardless of the Windows leg', async () => {
@@ -205,11 +207,46 @@ describe('listReleaseBuilds', () => {
   it('resolves the platform installer download url', async () => {
     fetchMock.mockResolvedValue(jsonResponse([release('v1.4.163-hourly.202607312054')]))
 
-    const [build] = await listReleaseBuilds('hourly', 'win32')
+    const [build] = await listReleaseBuilds('hourly', 'win32', 'x64')
 
     expect(build.installerUrl).toBe(
       'https://github.com/stablyai/orca-hourly/releases/download/v1.4.163-hourly.202607312054/orca-windows-setup.exe'
     )
+  })
+
+  // Native ARM64 must never be offered the x64 installer; pre-ARM64 releases lack its manifest.
+  it('keeps Windows ARM64 on its own manifest and installer', async () => {
+    fetchMock.mockResolvedValue(
+      jsonResponse([
+        release('v1.4.164', {
+          assets: [
+            ...allPlatformAssets,
+            { name: 'latest-arm64.yml' },
+            { name: 'orca-windows-setup-arm64.exe' }
+          ]
+        }),
+        release('v1.4.163')
+      ])
+    )
+
+    const arm64Builds = await listReleaseBuilds('stable', 'win32', 'arm64')
+    expect(arm64Builds.map((build) => [build.version, build.installerUrl])).toEqual([
+      [
+        '1.4.164',
+        'https://github.com/stablyai/orca/releases/download/v1.4.164/orca-windows-setup-arm64.exe'
+      ]
+    ])
+    const x64Builds = await listReleaseBuilds('stable', 'win32', 'x64')
+    expect(x64Builds.map((build) => [build.version, build.installerUrl])).toEqual([
+      [
+        '1.4.164',
+        'https://github.com/stablyai/orca/releases/download/v1.4.164/orca-windows-setup.exe'
+      ],
+      [
+        '1.4.163',
+        'https://github.com/stablyai/orca/releases/download/v1.4.163/orca-windows-setup.exe'
+      ]
+    ])
   })
 
   it('leaves the installer url null when the release published no installer', async () => {
@@ -217,7 +254,7 @@ describe('listReleaseBuilds', () => {
       jsonResponse([release('v1.4.163-hourly.202607312054', { assets: [{ name: 'latest.yml' }] })])
     )
 
-    const [build] = await listReleaseBuilds('hourly', 'win32')
+    const [build] = await listReleaseBuilds('hourly', 'win32', 'x64')
 
     expect(build.installerUrl).toBeNull()
   })
@@ -230,7 +267,7 @@ describe('listReleaseBuilds', () => {
       ])
     )
 
-    await expect(listReleaseBuilds('hourly', 'win32')).resolves.toEqual([])
+    await expect(listReleaseBuilds('hourly', 'win32', 'x64')).resolves.toEqual([])
   })
 
   it('sends the local gh token as a bearer header when one is available', async () => {
@@ -337,7 +374,7 @@ describe('listReleaseBuilds', () => {
         )
         .mockResolvedValueOnce(jsonResponse([release('v1.4.159')]))
 
-      await listReleaseBuilds('stable', 'win32')
+      await listReleaseBuilds('stable', 'win32', 'x64')
 
       expect(recordRateLimitMock).toHaveBeenCalledExactlyOnceWith('core', 1_800_000_600_000, scope)
     }
@@ -355,7 +392,7 @@ describe('listReleaseBuilds', () => {
     )
     fetchMock.mockResolvedValue(jsonResponse([release('v1.4.159')]))
 
-    await listReleaseBuilds('stable', 'win32')
+    await listReleaseBuilds('stable', 'win32', 'x64')
 
     expect(blockedUntilMock).toHaveBeenCalledWith('core', expect.any(Number), scope)
     expect(requestHeaders().Authorization).toBe('Bearer gho_abc')

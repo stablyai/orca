@@ -1,0 +1,43 @@
+import { describe, expect, it } from 'vitest'
+import type { SpeechModelManifest } from '../../shared/speech-types'
+import {
+  assertLocalSpeechRecognitionSupported,
+  getSupportedSpeechModelSelection,
+  getSupportedSpeechModels,
+  supportsLocalSpeechRecognition
+} from './speech-platform-support'
+import { SPEECH_MODEL_CATALOG } from './model-catalog'
+import { LOCAL_SPEECH_UNAVAILABLE_ERROR } from '../../shared/speech-types'
+
+const localModel = SPEECH_MODEL_CATALOG.find((model) => model.provider === 'local')
+const cloudModel = SPEECH_MODEL_CATALOG.find((model) => model.provider === 'openai')
+if (!localModel || !cloudModel) {
+  throw new Error('catalog needs a local and a cloud model')
+}
+const models: SpeechModelManifest[] = [localModel, cloudModel]
+
+describe('Windows ARM64 speech support', () => {
+  it('does not advertise local speech models without a native addon', () => {
+    expect(supportsLocalSpeechRecognition('win32', 'arm64')).toBe(false)
+    expect(getSupportedSpeechModels(models, 'win32', 'arm64')).toEqual([models[1]])
+  })
+
+  it('preserves local speech models on supported targets', () => {
+    expect(getSupportedSpeechModels(models, 'win32', 'x64')).toBe(models)
+    expect(getSupportedSpeechModels(models, 'darwin', 'arm64')).toBe(models)
+  })
+
+  it('clears unsupported persisted selections', () => {
+    expect(getSupportedSpeechModelSelection(models[0].id, models, 'win32', 'arm64')).toBe('')
+    expect(getSupportedSpeechModelSelection(models[1].id, models, 'win32', 'arm64')).toBe(
+      models[1].id
+    )
+  })
+
+  it('uses one stable error code for unavailable local speech', () => {
+    expect(() => assertLocalSpeechRecognitionSupported('win32', 'arm64')).toThrow(
+      LOCAL_SPEECH_UNAVAILABLE_ERROR
+    )
+    expect(() => assertLocalSpeechRecognitionSupported('win32', 'x64')).not.toThrow()
+  })
+})

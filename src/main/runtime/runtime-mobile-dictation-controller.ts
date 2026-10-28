@@ -1,10 +1,8 @@
 import { getDefaultVoiceSettings } from '../../shared/constants'
 import { getSpeechModelManager, getSpeechSttService } from '../speech/speech-runtime-service'
 import { getCatalogModel, isLocalSpeechModel } from '../speech/model-catalog'
-import {
-  hasLocalSpeechRecognizer,
-  LOCAL_SPEECH_UNAVAILABLE_ERROR
-} from '../speech/stt-worker-paths'
+import { hasLocalSpeechRecognizer } from '../speech/stt-worker-paths'
+import { LOCAL_SPEECH_UNAVAILABLE_ERROR } from '../../shared/speech-types'
 import type { RuntimeStore } from './runtime-store-contract'
 
 type MobileDictationSession = {

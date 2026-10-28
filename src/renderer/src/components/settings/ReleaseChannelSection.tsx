@@ -62,10 +62,11 @@ export function ReleaseChannelSection(): React.JSX.Element {
   const [selectedTag, setSelectedTag] = useState<string | null>(null)
 
   const platform = getShortcutPlatform()
+  const arch = window.api?.platform?.get?.()?.arch
   const runningChannel = appVersion ? getVersionChannel(appVersion) : null
   const requestedChannel = releaseChannelOverride ?? runningChannel ?? 'stable'
   // Synced Mac profiles can carry unsupported hourly channels; fall back instead of offering uninstallable builds.
-  const activeChannel = isChannelSupportedOnPlatform(requestedChannel, platform)
+  const activeChannel = isChannelSupportedOnPlatform(requestedChannel, platform, arch)
     ? requestedChannel
     : 'stable'
   const busy = updateStatus.state === 'checking' || updateStatus.state === 'downloading'
@@ -193,7 +194,7 @@ export function ReleaseChannelSection(): React.JSX.Element {
           )}
           // Show unsupported channels disabled with reasons so users can discover why they are unavailable.
           options={RELEASE_CHANNELS.map((channel) => {
-            const supported = isChannelSupportedOnPlatform(channel, platform)
+            const supported = isChannelSupportedOnPlatform(channel, platform, arch)
             return {
               value: channel,
               label: RELEASE_CHANNEL_LABELS[channel],

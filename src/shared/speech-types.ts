@@ -16,6 +16,9 @@ export type SpeechModelDownloadFile = {
   sha256: string
 }
 
+/** Mobile maps voice_model_not_ready: to host-supported model setup, including hosts with no recognizer. */
+export const LOCAL_SPEECH_UNAVAILABLE_ERROR = 'voice_model_not_ready:unavailable'
+
 export type SpeechModelManifest = {
   id: string
   label: string

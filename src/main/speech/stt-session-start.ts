@@ -2,6 +2,7 @@ import { Worker } from 'node:worker_threads'
 import { getCatalogModel } from './model-catalog'
 import { OpenAiTranscriptionSession } from './openai-transcription-client'
 import { readOpenAiSpeechApiKey } from './openai-api-key-store'
+import { assertLocalSpeechRecognitionSupported } from './speech-platform-support'
 import type { SttEventSink } from './stt-service'
 import type { SttSessionState } from './stt-session-state'
 import {
@@ -11,11 +12,8 @@ import {
   stopSttDictation,
   teardownSttWorker
 } from './stt-session-stop'
-import {
-  getSherpaModulePath,
-  getSttWorkerPath,
-  LOCAL_SPEECH_UNAVAILABLE_ERROR
-} from './stt-worker-paths'
+import { getSherpaModulePath, getSttWorkerPath } from './stt-worker-paths'
+import { LOCAL_SPEECH_UNAVAILABLE_ERROR } from '../../shared/speech-types'
 import {
   attachSttWorkerLifecycle,
   initializeSttWorker,
@@ -88,6 +86,8 @@ async function startSttSession(
     sink({ type: 'ready' })
     return
   }
+
+  assertLocalSpeechRecognitionSupported()
 
   if (state.cloudSession) {
     await stopSttDictation(state, owner, { cancelStarting: false })

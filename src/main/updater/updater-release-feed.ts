@@ -9,6 +9,7 @@ import type { CheckFailureSource } from './updater-state'
 import type { UpdateCheckVariant } from './updater-types'
 import { ReleaseFeedPreflightError } from './updater-state'
 import { UpdaterInstallExecution } from './updater-install-execution'
+import { getGenericUpdateFeedOptions } from './updater-generic-feed-options'
 
 export abstract class UpdaterReleaseFeed extends UpdaterInstallExecution {
   protected clearPrereleaseFallbackContextIfSettled(): void {
@@ -157,7 +158,7 @@ export abstract class UpdaterReleaseFeed extends UpdaterInstallExecution {
       console.info(
         `[updater] release feed pinned: current=${currentVersion} includePrerelease=${includePrerelease} → ${url}`
       )
-      autoUpdater.setFeedURL({ provider: 'generic', url })
+      autoUpdater.setFeedURL(getGenericUpdateFeedOptions(url))
       return 'ready'
     }
     if (releaseTagsResult.state === 'not-ready') {
@@ -169,7 +170,7 @@ export abstract class UpdaterReleaseFeed extends UpdaterInstallExecution {
           `[updater] release feed pinned to last-good: current=${currentVersion} includePrerelease=${includePrerelease} → ${url}`
         )
         this.publishingWindowLastGoodCheck = { lastGoodTag: releaseTagsResult.lastGoodTag }
-        autoUpdater.setFeedURL({ provider: 'generic', url })
+        autoUpdater.setFeedURL(getGenericUpdateFeedOptions(url))
         return 'ready'
       }
       this.clearPublishingWindowLastGoodCheck()
@@ -221,7 +222,7 @@ export abstract class UpdaterReleaseFeed extends UpdaterInstallExecution {
     }
     const url = getReleaseDownloadUrl(stableTag)
     console.info(`[updater] stable fallback feed pinned: current=${currentVersion} → ${url}`)
-    autoUpdater.setFeedURL({ provider: 'generic', url })
+    autoUpdater.setFeedURL(getGenericUpdateFeedOptions(url))
     return 'ready'
   }
 
@@ -257,7 +258,7 @@ export abstract class UpdaterReleaseFeed extends UpdaterInstallExecution {
       `[updater] prerelease manifest missing for ${primaryTag}; retrying once against ${url}`
     )
     const autoUpdater = this.getAutoUpdater()
-    autoUpdater.setFeedURL({ provider: 'generic', url })
+    autoUpdater.setFeedURL(getGenericUpdateFeedOptions(url))
     this.userInitiatedCheck = Boolean(userInitiated)
     this.backgroundCheckLaunchPending = !userInitiated
     this.armUpdateCheckStallTimer(attemptId)

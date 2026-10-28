@@ -6,9 +6,7 @@ import {
   speechRecognizerPackageName
 } from '../../shared/speech-recognizer-package'
 import { currentWorkerEntryLayout, resolveWorkerThreadEntryPath } from '../worker-thread-entry-path'
-
-/** Mobile maps voice_model_not_ready: to host-supported model setup, including hosts with no recognizer. */
-export const LOCAL_SPEECH_UNAVAILABLE_ERROR = 'voice_model_not_ready:unavailable'
+import { supportsLocalSpeechRecognition } from './speech-platform-support'
 
 export function getSttWorkerPath(): string {
   return resolveWorkerThreadEntryPath(currentWorkerEntryLayout(__dirname), 'stt-worker.js')
@@ -16,6 +14,9 @@ export function getSttWorkerPath(): string {
 
 /** Recognizer directory, or null on hosts without one. */
 export function getSherpaModulePath(): string | null {
+  if (!supportsLocalSpeechRecognition()) {
+    return null
+  }
   const nativePackage = speechRecognizerPackageName(process.platform, process.arch)
   const resourcesPath =
     'resourcesPath' in process && typeof process.resourcesPath === 'string'
