@@ -173,6 +173,12 @@ test('the owner enrolls two devices as one member and each member selects only t
     await expect(orcaPage.getByRole('combobox', { name: 'Account', exact: true })).toContainText(
       'owner-fixture'
     )
+    const sharedScreenshot = testInfo.outputPath('shared-project-account.png')
+    await orcaPage.screenshot({ path: sharedScreenshot })
+    await testInfo.attach('shared-project-account', {
+      path: sharedScreenshot,
+      contentType: 'image/png'
+    })
 
     for (const [name, deviceIds, account] of [
       ['Alice', pairedDeviceIds.slice(0, 2), 'alice-fixture'],

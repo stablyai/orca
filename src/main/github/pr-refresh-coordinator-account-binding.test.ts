@@ -22,7 +22,7 @@ const bob = { host: 'github.com', user: 'Bob' }
 describe('PR refresh account binding', () => {
   beforeEach(() => {
     moduleMocks.resetPRRefreshCoordinatorMocks(coordinatorMocks)
-    getPRForBranchOutcomeMock.mockResolvedValue({ kind: 'no-pr', fetchedAt: Date.now() })
+    getPRForBranchOutcomeMock.mockResolvedValue({ kind: 'no-pr', fetchedAt: 1_700_000_000_000 })
   })
 
   afterEach(() => {
