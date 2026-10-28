@@ -1,5 +1,7 @@
+import type { UsageRange } from './usage-range'
+
 export type OpenCodeUsageScope = 'orca' | 'all'
-export type OpenCodeUsageRange = '7d' | '30d' | '90d' | 'all'
+export type OpenCodeUsageRange = UsageRange
 export type OpenCodeUsageBreakdownKind = 'model' | 'project'
 
 export type OpenCodeUsageScanState = {

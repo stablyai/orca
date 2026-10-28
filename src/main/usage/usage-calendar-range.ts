@@ -1,4 +1,4 @@
-type UsageCalendarRange = '7d' | '30d' | '90d' | 'all'
+import type { UsageRange } from '../../shared/usage-range'
 
 function formatLocalDay(date: Date): string {
   const year = date.getFullYear()
@@ -7,11 +7,12 @@ function formatLocalDay(date: Date): string {
   return `${year}-${month}-${day}`
 }
 
-export function getUsageRangeCutoff(range: UsageCalendarRange): string | null {
+/** Returns the inclusive first local-calendar day, or null when no cutoff applies. */
+export function getUsageRangeCutoff(range: UsageRange): string | null {
   if (range === 'all') {
     return null
   }
-  const days = range === '7d' ? 7 : range === '30d' ? 30 : 90
+  const days = range === 'today' ? 1 : range === '7d' ? 7 : range === '30d' ? 30 : 90
   const cutoff = new Date()
   cutoff.setHours(0, 0, 0, 0)
   cutoff.setDate(cutoff.getDate() - (days - 1))

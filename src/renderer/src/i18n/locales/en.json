@@ -21002,5 +21002,15 @@
       "markFile": "Mark {{path}} as viewed",
       "unmarkFile": "Unmark {{path}} as viewed"
     }
+  },
+  "usage": {
+    "range": {
+      "today": "Today"
+    },
+    "overview": {
+      "loadingRange": "Loading usage for this range…",
+      "rangeError": "Unable to load usage for this range.",
+      "range": "Usage time range"
+    }
   }
 }

@@ -20774,5 +20774,15 @@
       "markFile": "将 {{path}} 标记为已查看",
       "unmarkFile": "取消 {{path}} 的已查看标记"
     }
+  },
+  "usage": {
+    "range": {
+      "today": "今天"
+    },
+    "overview": {
+      "range": "用量时间范围",
+      "loadingRange": "正在加载此时间范围的用量…",
+      "rangeError": "无法加载此时间范围的用量。"
+    }
   }
 }

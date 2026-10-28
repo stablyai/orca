@@ -19,7 +19,7 @@ import { formatCost, formatTokens, formatUpdatedAt } from './usage-formatters'
 import { unpricedCostLabel } from './unpriced-cost-label'
 import { translate } from '@/i18n/i18n'
 
-const RANGE_OPTIONS: ClaudeUsageRange[] = ['7d', '30d', '90d', 'all']
+const RANGE_OPTIONS: ClaudeUsageRange[] = ['today', '7d', '30d', '90d', 'all']
 const SCOPE_OPTIONS: { value: ClaudeUsageScope; label: string }[] = [
   {
     value: 'orca',
@@ -35,6 +35,9 @@ const SCOPE_OPTIONS: { value: ClaudeUsageScope; label: string }[] = [
   }
 ]
 const RANGE_LABELS: Record<ClaudeUsageRange, string> = {
+  get today() {
+    return translate('usage.range.today', 'Today')
+  },
   get '7d'() {
     return translate('auto.components.stats.ClaudeUsagePane.rangeLast7Days', 'Last 7 days')
   },
@@ -49,6 +52,7 @@ const RANGE_LABELS: Record<ClaudeUsageRange, string> = {
   }
 }
 
+/** Presents Claude usage with provider-specific scope and local-calendar range controls. */
 export function ClaudeUsagePane(): React.JSX.Element {
   const scanState = useAppStore((state) => state.claudeUsageScanState)
   const summary = useAppStore((state) => state.claudeUsageSummary)

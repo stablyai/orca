@@ -10,7 +10,7 @@ import { formatTokens, formatUpdatedAt } from './usage-formatters'
 import { translate } from '@/i18n/i18n'
 
 // Why: generic labels reuse the OpenCode pane's keys so both panes share one translation.
-const RANGE_OPTIONS: MuseUsageRange[] = ['7d', '30d', '90d', 'all']
+const RANGE_OPTIONS: MuseUsageRange[] = ['today', '7d', '30d', '90d', 'all']
 const SCOPE_OPTIONS: { value: MuseUsageScope; label: string }[] = [
   {
     value: 'orca',
@@ -26,6 +26,9 @@ const SCOPE_OPTIONS: { value: MuseUsageScope; label: string }[] = [
   }
 ]
 const RANGE_LABELS: Record<MuseUsageRange, string> = {
+  get today() {
+    return translate('usage.range.today', 'Today')
+  },
   get '7d'() {
     return translate('auto.components.stats.OpenCodeUsagePane.rangeLast7Days', 'Last 7 days')
   },
@@ -40,6 +43,7 @@ const RANGE_LABELS: Record<MuseUsageRange, string> = {
   }
 }
 
+/** Presents Muse usage with provider-specific scope and local-calendar range controls. */
 export function MuseUsagePane(): React.JSX.Element {
   const scanState = useAppStore((state) => state.museUsageScanState)
   const summary = useAppStore((state) => state.museUsageSummary)

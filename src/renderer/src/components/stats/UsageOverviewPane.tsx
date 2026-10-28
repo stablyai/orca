@@ -1,4 +1,9 @@
-import { useEffect, useMemo } from 'react'
+import { useEffect, useMemo, useState } from 'react'
+import type { UsageRange } from '../../../../shared/usage-range'
+import { useNow } from '../../hooks/use-now'
+import { cn } from '@/lib/utils'
+import { UsageOverviewRangePicker } from './UsageOverviewRangePicker'
+import { useUsageOverviewRange } from './use-usage-overview-range'
 import { Activity, CalendarDays, Coins, DatabaseZap, RefreshCw, Sparkles } from 'lucide-react'
 import { useAppStore } from '../../store'
 import { Badge } from '../ui/badge'
@@ -26,7 +31,10 @@ function formatUpdatedAt(timestamp: number | null): string {
   return `Updated ${new Date(timestamp).toLocaleString()}`
 }
 
+/** Presents combined usage for an independent range, defaulting to the last 30 local-calendar days. */
 export function UsageOverviewPane(): React.JSX.Element {
+  const [range, setRange] = useState<UsageRange>('30d')
+  const day = new Date(useNow(60_000)).toDateString()
   const claudeScanState = useAppStore((state) => state.claudeUsageScanState)
   const claudeSummary = useAppStore((state) => state.claudeUsageSummary)
   const claudeDaily = useAppStore((state) => state.claudeUsageDaily)
@@ -60,30 +68,29 @@ export function UsageOverviewPane(): React.JSX.Element {
     void fetchMuseUsage()
   }, [fetchClaudeUsage, fetchCodexUsage, fetchOpenCodeUsage, fetchMuseUsage])
 
-  const overview = useMemo(
-    () =>
-      buildUsageOverview({
-        claude: {
-          scanState: claudeScanState,
-          summary: claudeSummary,
-          daily: claudeDaily
-        },
-        codex: {
-          scanState: codexScanState,
-          summary: codexSummary,
-          daily: codexDaily
-        },
-        opencode: {
-          scanState: openCodeScanState,
-          summary: openCodeSummary,
-          daily: openCodeDaily
-        },
-        muse: {
-          scanState: museScanState,
-          summary: museSummary,
-          daily: museDaily
-        }
-      }),
+  const input = useMemo(
+    () => ({
+      claude: {
+        scanState: claudeScanState,
+        summary: claudeSummary,
+        daily: claudeDaily
+      },
+      codex: {
+        scanState: codexScanState,
+        summary: codexSummary,
+        daily: codexDaily
+      },
+      opencode: {
+        scanState: openCodeScanState,
+        summary: openCodeSummary,
+        daily: openCodeDaily
+      },
+      muse: {
+        scanState: museScanState,
+        summary: museSummary,
+        daily: museDaily
+      }
+    }),
     [
       claudeDaily,
       claudeScanState,
@@ -99,9 +106,13 @@ export function UsageOverviewPane(): React.JSX.Element {
       openCodeSummary
     ]
   )
+  const { input: rangeInput, loading, error } = useUsageOverviewRange(input, range, day)
+  const overview = useMemo(() => buildUsageOverview(rangeInput), [rangeInput])
+  const dayCount =
+    range === 'today' ? 1 : range === '7d' ? 7 : range === '30d' ? 30 : RECENT_DAY_COUNT
   const recentDays = useMemo(
-    () => getRecentUsageDays(overview.daily, RECENT_DAY_COUNT),
-    [overview.daily]
+    () => getRecentUsageDays(overview.daily, dayCount, new Date(day)),
+    [overview.daily, dayCount, day]
   )
   const isScanning = overview.providers.some((provider) => provider.isScanning)
 
@@ -117,7 +128,7 @@ export function UsageOverviewPane(): React.JSX.Element {
   return (
     <div className="space-y-4" data-testid="usage-overview-pane">
       <section className="rounded-lg border border-border/60 bg-card/30 p-4">
-        <div className="flex items-start justify-between gap-4">
+        <div className="flex flex-wrap items-start justify-between gap-4">
           <div className="min-w-0">
             <h3 className="text-sm font-semibold text-foreground">
               {translate('auto.components.stats.UsageOverviewPane.c760c481c5', 'Usage Overview')}
@@ -132,28 +143,42 @@ export function UsageOverviewPane(): React.JSX.Element {
                 : ''}
             </p>
           </div>
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <Button
-                variant="ghost"
-                size="icon-xs"
-                onClick={handleRefresh}
-                disabled={!overview.hasAnyEnabledProvider || isScanning}
-                aria-label={translate(
-                  'auto.components.stats.UsageOverviewPane.e06d1baf5c',
-                  'Refresh usage overview'
-                )}
-              >
-                <RefreshCw className={`size-3.5 ${isScanning ? 'animate-spin' : ''}`} />
-              </Button>
-            </TooltipTrigger>
-            <TooltipContent side="bottom" sideOffset={6}>
-              {translate('auto.components.stats.UsageOverviewPane.ca6bc5fded', 'Refresh')}
-            </TooltipContent>
-          </Tooltip>
+          <div className="flex items-center gap-2">
+            <UsageOverviewRangePicker range={range} onChange={setRange} />
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  variant="ghost"
+                  size="icon-xs"
+                  onClick={handleRefresh}
+                  disabled={!overview.hasAnyEnabledProvider || isScanning}
+                  aria-label={translate(
+                    'auto.components.stats.UsageOverviewPane.e06d1baf5c',
+                    'Refresh usage overview'
+                  )}
+                >
+                  <RefreshCw className={cn('size-3.5', isScanning && 'animate-spin')} />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent side="bottom" sideOffset={6}>
+                {translate('auto.components.stats.UsageOverviewPane.ca6bc5fded', 'Refresh')}
+              </TooltipContent>
+            </Tooltip>
+          </div>
         </div>
 
-        {!overview.hasAnyEnabledProvider ? (
+        {loading ? (
+          <p role="status" className="mt-4 text-sm text-muted-foreground">
+            {translate('usage.overview.loadingRange', 'Loading usage for this range…')}
+          </p>
+        ) : error ? (
+          <div role="alert" className="mt-4 space-y-2 text-sm text-muted-foreground">
+            <p>{translate('usage.overview.rangeError', 'Unable to load usage for this range.')}</p>
+            <Button variant="outline" size="sm" onClick={handleRefresh}>
+              {translate('auto.components.stats.UsageOverviewPane.ca6bc5fded', 'Refresh')}
+            </Button>
+          </div>
+        ) : !overview.hasAnyEnabledProvider ? (
           <div className="mt-4 rounded-lg border border-dashed border-border/60 bg-card/30 px-4 py-5">
             <div className="max-w-xl space-y-3">
               <div>
@@ -267,47 +292,49 @@ export function UsageOverviewPane(): React.JSX.Element {
         )}
       </section>
 
-      <section className="space-y-3">
-        <div className="flex items-center justify-between gap-3">
-          <div>
-            <h4 className="text-sm font-semibold text-foreground">
-              {translate('auto.components.stats.UsageOverviewPane.33f7b043d2', 'Providers')}
-            </h4>
-            <p className="text-xs text-muted-foreground">
-              {overview.enabledProviderCount}{' '}
-              {translate('auto.components.stats.UsageOverviewPane.ecb0cd8a4c', 'enabled -')}{' '}
-              {overview.dataProviderCount}{' '}
-              {translate('auto.components.stats.UsageOverviewPane.444585cb41', 'with data')}
-            </p>
+      {!loading && !error ? (
+        <section className="space-y-3">
+          <div className="flex items-center justify-between gap-3">
+            <div>
+              <h4 className="text-sm font-semibold text-foreground">
+                {translate('auto.components.stats.UsageOverviewPane.33f7b043d2', 'Providers')}
+              </h4>
+              <p className="text-xs text-muted-foreground">
+                {overview.enabledProviderCount}{' '}
+                {translate('auto.components.stats.UsageOverviewPane.ecb0cd8a4c', 'enabled -')}{' '}
+                {overview.dataProviderCount}{' '}
+                {translate('auto.components.stats.UsageOverviewPane.444585cb41', 'with data')}
+              </p>
+            </div>
+            <Badge variant="outline" className="gap-1">
+              <Activity className="size-3" />
+              {overview.sessions.toLocaleString()}{' '}
+              {translate('auto.components.stats.UsageOverviewPane.22ed1b7669', 'sessions')}
+            </Badge>
           </div>
-          <Badge variant="outline" className="gap-1">
-            <Activity className="size-3" />
-            {overview.sessions.toLocaleString()}{' '}
-            {translate('auto.components.stats.UsageOverviewPane.22ed1b7669', 'sessions')}
-          </Badge>
-        </div>
-        <div className="grid gap-3 xl:grid-cols-2">
-          {overview.providers.map((provider) => (
-            <ProviderUsageRow
-              key={provider.id}
-              provider={provider}
-              totalTokens={overview.totalTokens}
-              onEnable={() => {
-                recordFeatureInteraction('usage-tracking')
-                if (provider.id === 'claude') {
-                  void enableClaudeUsage()
-                } else if (provider.id === 'codex') {
-                  void enableCodexUsage()
-                } else if (provider.id === 'opencode') {
-                  void enableOpenCodeUsage()
-                } else {
-                  void enableMuseUsage()
-                }
-              }}
-            />
-          ))}
-        </div>
-      </section>
+          <div className="grid gap-3 xl:grid-cols-2">
+            {overview.providers.map((provider) => (
+              <ProviderUsageRow
+                key={provider.id}
+                provider={provider}
+                totalTokens={overview.totalTokens}
+                onEnable={() => {
+                  recordFeatureInteraction('usage-tracking')
+                  if (provider.id === 'claude') {
+                    void enableClaudeUsage()
+                  } else if (provider.id === 'codex') {
+                    void enableCodexUsage()
+                  } else if (provider.id === 'opencode') {
+                    void enableOpenCodeUsage()
+                  } else {
+                    void enableMuseUsage()
+                  }
+                }}
+              />
+            ))}
+          </div>
+        </section>
+      ) : null}
     </div>
   )
 }
