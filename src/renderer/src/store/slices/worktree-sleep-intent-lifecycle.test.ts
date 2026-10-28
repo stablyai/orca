@@ -53,6 +53,28 @@ describe('worktree sleep intent lifecycle', () => {
     expect(hasWorktreeSleepIntent(WORKTREE_ID)).toBe(true)
   })
 
+  it('preserves sleeping terminals when a saved view only changes the focused context', () => {
+    const store = createTestStore()
+    seedWorktree(store)
+    const tab = store.getState().createTab(WORKTREE_ID, undefined, undefined, { activate: false })
+    markWorktreeSleepIntent(WORKTREE_ID)
+    const before = store.getState().tabsByWorktree[WORKTREE_ID]
+
+    store.getState().setActiveWorktree(WORKTREE_ID, 'local', { preserveTerminalSessions: true })
+
+    expect(store.getState().activeWorktreeId).toBe(WORKTREE_ID)
+    expect(hasWorktreeSleepIntent(WORKTREE_ID)).toBe(true)
+    expect(store.getState().tabsByWorktree[WORKTREE_ID]).toBe(before)
+    expect(store.getState().tabsByWorktree[WORKTREE_ID][0].generation).toBe(tab.generation)
+    expect(store.getState().everActivatedWorktreeIds.has(WORKTREE_ID)).toBe(false)
+
+    store.getState().setActiveWorktree(WORKTREE_ID, 'local')
+    expect(hasWorktreeSleepIntent(WORKTREE_ID)).toBe(false)
+    expect(store.getState().tabsByWorktree[WORKTREE_ID][0].generation).toBe(
+      (tab.generation ?? 0) + 1
+    )
+  })
+
   it('is released by activating a folder workspace', () => {
     const store = createTestStore()
     store.setState({

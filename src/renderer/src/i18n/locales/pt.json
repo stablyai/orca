@@ -20489,5 +20489,43 @@
     "math": {
       "scrollDisplayEquation": "Rolar equação em bloco"
     }
+  },
+  "workspaceViews": {
+    "views": "Vistas",
+    "newView": "Nova vista…",
+    "renameView": "Renomear vista…",
+    "removeView": "Remover vista guardada",
+    "nameDescription": "Guarde uma disposição de painéis de qualquer projeto neste dispositivo.",
+    "name": "Nome",
+    "cancel": "Cancelar",
+    "save": "Guardar vista",
+    "showNavigation": "Mostrar navegação",
+    "fillWindow": "Preencher janela",
+    "exitView": "Voltar ao espaço de trabalho",
+    "arrangement": "Disposição dos painéis",
+    "grid": "Grelha uniforme",
+    "primary": "Principal e coluna",
+    "addPanel": "Adicionar painel",
+    "choosePanel": "Escolher painel",
+    "pickerDescription": "Escolha painéis existentes. As sessões permanecem no espaço de trabalho original.",
+    "searchPanels": "Procurar projeto, espaço de trabalho ou painel…",
+    "noPanels": "Não há painéis abertos. Abra primeiro um painel num espaço de trabalho.",
+    "alreadyVisible": "Nesta vista",
+    "selected": "Selecionado",
+    "selectionCount": "{{count}} selecionados",
+    "addSelected": "Adicionar painéis selecionados",
+    "restorePanels": "Restaurar todos os painéis",
+    "expandPanel": "Expandir painel",
+    "removePanel": "Remover da vista; manter a sessão aberta",
+    "panelActions": "Ações do painel: {{title}}",
+    "changePanel": "Escolher outro painel…",
+    "moveEarlier": "Mover para antes",
+    "moveLater": "Mover para depois",
+    "unavailable": "Este painel está indisponível. O espaço de trabalho ou o servidor pode estar offline, ou o painel pode ter sido fechado.",
+    "loadingPanel": "A carregar painel…",
+    "resizePanels": "Redimensionar painéis",
+    "empty": "Reúna nesta vista os painéis com que trabalha.",
+    "defaultName": "Vista sem título",
+    "addWorkspacePanels": "Adicionar painéis à vista…"
   }
 }

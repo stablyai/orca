@@ -147,6 +147,7 @@ function captureSide(label, side, outRoot) {
       ...process.env,
       ORCA_BACKGROUND_LAUNCH: '1',
       [TERMINAL_LAYOUT_PARITY_OUT_ENV]: outDir,
+      ORCA_E2E_OUTPUT_DIR: join(outDir, 'playwright'),
       // The working tree builds in Playwright's global setup; checkouts were built above.
       ...(side.skipBuild ? { SKIP_BUILD: '1' } : {})
     },

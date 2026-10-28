@@ -1,3 +1,4 @@
+import { focusWorkspaceViewAnchor } from '@/lib/workspace-view-actions'
 import { memo, useCallback, useMemo } from 'react'
 import { useShallow } from 'zustand/react/shallow'
 import type { Tab, TabGroup } from '../../../../shared/tab-types'
@@ -14,6 +15,8 @@ import { TerminalOverlaySlot } from './TerminalOverlaySlot'
 import { captureWorkspaceEmptiedReaction } from '../tab-group/workspace-emptied-reaction'
 import { TerminalRestoringPlaceholder } from './TerminalRestoringPlaceholder'
 import { useTerminalTabColdParking } from './use-terminal-tab-cold-parking'
+import { useWorkspaceViewProjection } from '../workspace-grid-view/workspace-view-projection'
+import { workspaceViewAnchorId } from '@/lib/workspace-view-layout'
 
 type TerminalOverlayAssignment = {
   unifiedTabId: string
@@ -30,6 +33,7 @@ const TerminalPaneOverlayLayer = memo(function TerminalPaneOverlayLayer({
   worktreeId,
   worktreePath,
   isWorktreeActive,
+  isWorktreeFocused = isWorktreeActive,
   coldParkTerminalPanes = false,
   isForceParked = false,
   shouldMeasureHiddenWorktree = false,
@@ -41,6 +45,8 @@ const TerminalPaneOverlayLayer = memo(function TerminalPaneOverlayLayer({
   worktreeId: string
   worktreePath: string
   isWorktreeActive: boolean
+  /** False for a visible grid view member: its terminals paint but an active pane would grab focus. */
+  isWorktreeFocused?: boolean
   coldParkTerminalPanes?: boolean
   /** Retention-budget force-park keeps eviction-exempt tabs mounted. */
   isForceParked?: boolean
@@ -53,6 +59,7 @@ const TerminalPaneOverlayLayer = memo(function TerminalPaneOverlayLayer({
   /** Grant global keyboard chords to one workspace even when another overlay workspace remains visible. */
   ownsNativeChatToggleShortcut?: boolean
 }): React.JSX.Element | null {
+  const viewProjection = useWorkspaceViewProjection()
   const { terminalTabs, unifiedTabs, groups, activeGroupId } = useAppStore(
     useShallow((state) => ({
       terminalTabs: state.tabsByWorktree[worktreeId] ?? EMPTY_TERMINAL_TABS,
@@ -64,7 +71,7 @@ const TerminalPaneOverlayLayer = memo(function TerminalPaneOverlayLayer({
   const focusGroup = useAppStore((state) => state.focusGroup)
   const consumeSuppressedPtyExit = useAppStore((state) => state.consumeSuppressedPtyExit)
 
-  useNativeChatToggleShortcut(worktreeId, isWorktreeActive && ownsNativeChatToggleShortcut)
+  useNativeChatToggleShortcut(worktreeId, isWorktreeFocused && ownsNativeChatToggleShortcut)
 
   const captureEmptiedReaction = useCallback(
     () => captureWorkspaceEmptiedReaction(worktreeId),
@@ -72,8 +79,12 @@ const TerminalPaneOverlayLayer = memo(function TerminalPaneOverlayLayer({
   )
 
   const focusOwningGroup = useCallback(
-    (groupId: string) => focusGroup(worktreeId, groupId),
-    [focusGroup, worktreeId]
+    (groupId: string) => {
+      if (!focusWorkspaceViewAnchor(viewProjection, groupId)) {
+        focusGroup(worktreeId, groupId)
+      }
+    },
+    [focusGroup, worktreeId, viewProjection]
   )
 
   const groupActiveTabById = useMemo(() => {
@@ -92,14 +103,26 @@ const TerminalPaneOverlayLayer = memo(function TerminalPaneOverlayLayer({
       }
       entries.set(tab.entityId, {
         unifiedTabId: tab.id,
-        groupId: tab.groupId,
-        isActiveInGroup: groupActiveTabById[tab.groupId] === tab.id
+        groupId: viewProjection
+          ? workspaceViewAnchorId(
+              viewProjection.find((p) => p.tab.id === tab.id)?.panel.id ?? tab.id
+            )
+          : tab.groupId,
+        isActiveInGroup: viewProjection
+          ? viewProjection.some((p) => p.tab.id === tab.id && p.visible)
+          : groupActiveTabById[tab.groupId] === tab.id
       })
     }
     return entries
-  }, [groupActiveTabById, unifiedTabs])
+  }, [groupActiveTabById, unifiedTabs, viewProjection])
 
   const activeTerminalTabId = useMemo(() => {
+    if (viewProjection) {
+      return (
+        viewProjection.find((p) => p.focused && p.tab.contentType === 'terminal')?.tab.entityId ??
+        null
+      )
+    }
     if (!activeGroupId) {
       return null
     }
@@ -109,7 +132,7 @@ const TerminalPaneOverlayLayer = memo(function TerminalPaneOverlayLayer({
       }
     }
     return null
-  }, [activeGroupId, assignments])
+  }, [activeGroupId, assignments, viewProjection])
 
   const parkedTerminalTabIds = useTerminalTabColdParking({
     worktreeId,
@@ -146,7 +169,15 @@ const TerminalPaneOverlayLayer = memo(function TerminalPaneOverlayLayer({
             </RetainedPaneHost>
           ) : null
         }
-        const isActive = Boolean(isVisible && assignment?.groupId === activeGroupId)
+        const isFocusedSplit = Boolean(
+          isVisible &&
+          (viewProjection
+            ? viewProjection.some((p) => p.tab.entityId === terminalTab.id && p.focused)
+            : assignment?.groupId === activeGroupId)
+        )
+        // Why split from isFocusedSplit: a grid view cell keeps its own split dimming while
+        // another cell holds focus, but only the focused cell's pane may take the keyboard.
+        const isActive = isFocusedSplit && isWorktreeFocused
         const activityTerminalPortal = findActivityTerminalPortal(activityTerminalPortals, {
           worktreeId,
           tabId: terminalTab.id
@@ -166,7 +197,7 @@ const TerminalPaneOverlayLayer = memo(function TerminalPaneOverlayLayer({
             isWorktreeActive={isWorktreeActive}
             isVisible={isVisible}
             isActive={isActive}
-            dimmed={groups.length > 1 && isVisible && !isActive}
+            dimmed={!viewProjection && groups.length > 1 && isVisible && !isFocusedSplit}
             activityTerminalPortal={activityTerminalPortal}
             onFocusOwningGroup={focusOwningGroup}
             consumeSuppressedPtyExit={consumeSuppressedPtyExit}

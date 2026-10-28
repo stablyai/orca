@@ -1,3 +1,4 @@
+import { focusWorkspaceViewAnchor } from '@/lib/workspace-view-actions'
 import { memo, useCallback, useEffect, useMemo } from 'react'
 import { registerBrowserOverlaySlotViewport } from '../host-guest/browser-page-viewport'
 import { useShallow } from 'zustand/react/shallow'
@@ -8,6 +9,7 @@ import type { Tab, TabGroup } from '../../../../../shared/tab-types'
 import BrowserPane from './browser-workspace-pane'
 import { DeferredBrowserContent } from './DeferredBrowserContent'
 import type { BrowserChromeShortcutScope } from '../describe-page/browser-page-types'
+import { resolveBrowserChromeShortcutScope } from './browser-chrome-shortcut-scope'
 import { tabGroupBodyAnchorName } from '../../tab-group/tab-group-body-anchor'
 import { isFloatingWorkspaceId } from '../../../../../shared/floating-workspace-worktree'
 import { useBrowserGuestPaintRetention } from '../host-guest/browser-guest-paint-retention'
@@ -18,6 +20,8 @@ import {
 } from '@/lib/pane-manager/client-hosted-browser-row-state'
 import { ClientHostedBrowserHostRowPane } from '../client-hosted-browser-host-row-pane'
 import { useAnyBrowserPageMountAdmission } from '../host-guest/browser-page-mount-admission'
+import { useWorkspaceViewProjection } from '../../workspace-grid-view/workspace-view-projection'
+import { workspaceViewAnchorId } from '@/lib/workspace-view-layout'
 
 // Why: Electron <webview> destroys its guest on DOM reparent, so BrowserPanes render at worktree level and moving a tab between groups only swaps the overlay's CSS position-anchor.
 
@@ -50,6 +54,7 @@ const BrowserOverlaySlot = memo(function BrowserOverlaySlot({
   chromeShortcutScope,
   onFocusOwningGroup
 }: BrowserOverlaySlotProps): React.JSX.Element {
+  const viewProjection = useWorkspaceViewProjection()
   // Why: persistent page viewports (webview guests) live under this root so they survive BrowserPane chrome unmounts without reparenting.
   const setSlotViewportRef = useCallback(
     (node: HTMLDivElement | null): void => {
@@ -102,7 +107,8 @@ const BrowserOverlaySlot = memo(function BrowserOverlaySlot({
       style={style}
       className="relative flex min-h-0 flex-1 flex-col"
       data-browser-overlay-tab-id={browserTab.id}
-      onPointerDown={handleFocus}
+      onPointerDown={viewProjection ? undefined : handleFocus}
+      onPointerDownCapture={viewProjection ? handleFocus : undefined}
       onFocusCapture={handleFocus}
     >
       <div ref={setSlotViewportRef} className="absolute inset-0 flex min-h-0 flex-col" />
@@ -121,11 +127,14 @@ const BrowserOverlaySlot = memo(function BrowserOverlaySlot({
 // Memoize the layer against unrelated parent props; focused-split state comes from its own selector.
 const BrowserPaneOverlayLayer = memo(function BrowserPaneOverlayLayer({
   worktreeId,
-  isWorktreeActive
+  isWorktreeActive,
+  isWorktreeFocused = isWorktreeActive
 }: {
   worktreeId: string
   isWorktreeActive: boolean
+  isWorktreeFocused?: boolean
 }): React.JSX.Element {
+  const viewProjection = useWorkspaceViewProjection()
   const { browserTabs, unifiedTabs, groups, focusedGroupId } = useAppStore(
     useShallow((state) => ({
       browserTabs: state.browserTabsByWorktree[worktreeId] ?? EMPTY_BROWSER_TABS,
@@ -147,8 +156,12 @@ const BrowserPaneOverlayLayer = memo(function BrowserPaneOverlayLayer({
 
   // Why: stable identity so BrowserOverlaySlot's memo holds; groupId is passed at call time so one callback serves every slot.
   const focusOwningGroup = useCallback(
-    (groupId: string) => focusGroup(worktreeId, groupId),
-    [focusGroup, worktreeId]
+    (groupId: string) => {
+      if (!focusWorkspaceViewAnchor(viewProjection, groupId)) {
+        focusGroup(worktreeId, groupId)
+      }
+    },
+    [focusGroup, worktreeId, viewProjection]
   )
 
   // Why: build this lookup outside the zustand selector — a fresh object inside it would break useShallow equality and re-render on every unrelated mutation.
@@ -184,36 +197,53 @@ const BrowserPaneOverlayLayer = memo(function BrowserPaneOverlayLayer({
     return window.api.ui.onBrowserPagePointerDown(({ browserPageId }) => {
       const state = useAppStore.getState()
       const owner = resolveBrowserWorkspaceOwner(state, browserPageId, worktreeId)
-      const groupId = owner
+      const tab = owner
         ? state.unifiedTabsByWorktree[worktreeId]?.find(
             (tab) => tab.contentType === 'browser' && tab.entityId === owner.workspaceId
-          )?.groupId
+          )
         : undefined
+      const placement = viewProjection?.find((item) => item.tab.id === tab?.id && item.visible)
+      const groupId = viewProjection
+        ? placement
+          ? workspaceViewAnchorId(placement.panel.id)
+          : undefined
+        : tab?.groupId
       if (groupId) {
         focusOwningGroup(groupId)
       }
     })
-  }, [focusOwningGroup, isWorktreeActive, worktreeId])
+  }, [focusOwningGroup, isWorktreeActive, worktreeId, viewProjection])
 
   return (
     <>
       {browserTabs.map((browserTab) => {
         const assignment = assignments.get(browserTab.id)
-        const isActive = Boolean(isWorktreeActive && assignment && assignment.isActiveInGroup)
-        const chromeShortcutScope: BrowserChromeShortcutScope = !isActive
-          ? 'inactive'
-          : // Why: 'focused' means the main window's focused split, so a floating browser answers only its own chords.
-            isFloatingWorkspace || knownFocusedGroupId === undefined
-            ? 'owned-target'
-            : assignment?.groupId === knownFocusedGroupId
-              ? 'focused'
-              : 'inactive'
+        const placement = viewProjection?.find(
+          (p) => p.tab.contentType === 'browser' && p.tab.entityId === browserTab.id
+        )
+        const isActive = Boolean(
+          isWorktreeActive && (viewProjection ? placement?.visible : assignment?.isActiveInGroup)
+        )
+        const chromeShortcutScope = resolveBrowserChromeShortcutScope({
+          isActive,
+          isWorktreeFocused:
+            isWorktreeFocused && (viewProjection ? placement?.focused === true : true),
+          isFloatingWorkspace,
+          focusedGroupId: knownFocusedGroupId,
+          groupId: assignment?.groupId
+        })
         return (
           <BrowserOverlaySlot
             key={browserTab.id}
             browserTab={browserTab}
             isWorktreeActive={isWorktreeActive}
-            groupId={assignment?.groupId}
+            groupId={
+              viewProjection
+                ? placement
+                  ? workspaceViewAnchorId(placement.panel.id)
+                  : undefined
+                : assignment?.groupId
+            }
             isActive={isActive}
             chromeShortcutScope={chromeShortcutScope}
             onFocusOwningGroup={focusOwningGroup}
@@ -224,7 +254,7 @@ const BrowserPaneOverlayLayer = memo(function BrowserPaneOverlayLayer({
       <ClientHostedBrowserRowOverlaySlot
         worktreeId={worktreeId}
         groups={groups}
-        isWorktreeActive={isWorktreeActive}
+        isWorktreeActive={isWorktreeActive && !viewProjection}
       />
     </>
   )
@@ -281,15 +311,22 @@ function ClientHostedBrowserRowOverlaySlot({
 export const RetainedBrowserPaneOverlayLayer = memo(function RetainedBrowserPaneOverlayLayer({
   worktreeId,
   isWorktreeActive,
+  isWorktreeFocused = isWorktreeActive,
   mountEligible
 }: {
   worktreeId: string
   isWorktreeActive: boolean
+  /** False for a visible grid view member: its browsers paint but must not own chrome chords. */
+  isWorktreeFocused?: boolean
   mountEligible: boolean
 }): React.JSX.Element | null {
   return (
     <DeferredBrowserContent mountEligible={mountEligible}>
-      <BrowserPaneOverlayLayer worktreeId={worktreeId} isWorktreeActive={isWorktreeActive} />
+      <BrowserPaneOverlayLayer
+        worktreeId={worktreeId}
+        isWorktreeActive={isWorktreeActive}
+        isWorktreeFocused={isWorktreeFocused}
+      />
     </DeferredBrowserContent>
   )
 })

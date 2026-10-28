@@ -11,13 +11,18 @@ import {
 } from './browser-pane/host-guest/browser-worktree-surface-paintability'
 import TabGroupSplitLayout from './tab-group/TabGroupSplitLayout'
 import { WorkspacePaneOverlayLayers } from './WorkspacePaneOverlayLayers'
-
+import { WorkspaceViewProjection } from './workspace-grid-view/workspace-view-projection'
+import {
+  useWorkspaceViewSurfaceProjection,
+  WorkspaceViewSurfacePanels
+} from './workspace-grid-view/WorkspaceViewSurfacePanels'
 export const WorktreeSplitSurface = React.memo(function WorktreeSplitSurface({
   worktreeId,
   worktreePath,
   layout,
   focusedGroupId,
   isVisible,
+  isFocused = isVisible,
   shouldMeasureHiddenWorktree,
   shouldColdParkTerminalPanes,
   isForceParked,
@@ -30,6 +35,8 @@ export const WorktreeSplitSurface = React.memo(function WorktreeSplitSurface({
   layout: TabGroupLayoutNode
   focusedGroupId?: string
   isVisible: boolean
+  /** False for a grid view member that is on screen but does not own keyboard focus. */
+  isFocused?: boolean
   shouldMeasureHiddenWorktree: boolean
   shouldColdParkTerminalPanes: boolean
   isForceParked: boolean
@@ -44,41 +51,54 @@ export const WorktreeSplitSurface = React.memo(function WorktreeSplitSurface({
     needsBrowserGuestPaint
   })
 
+  const projection = useWorkspaceViewSurfaceProjection(worktreeId)
   return (
-    <div
-      className={
-        isVisible
-          ? 'absolute inset-0 flex'
-          : shouldKeepPaintable
-            ? 'absolute inset-0 flex opacity-0 pointer-events-none'
-            : 'absolute inset-0 hidden'
-      }
-      inert={!isVisible}
-      aria-hidden={!isVisible}
-    >
-      <TabGroupSplitLayout
-        layout={layout}
-        worktreeId={worktreeId}
-        focusedGroupId={focusedGroupId}
-        isWorktreeActive={isVisible}
-      />
-      <WorkspacePaneOverlayLayers
-        worktreeId={worktreeId}
-        worktreePath={worktreePath}
-        isVisible={isVisible}
-        shouldMeasureHiddenWorktree={shouldMeasureHiddenWorktree}
-        shouldColdParkTerminalPanes={shouldColdParkTerminalPanes}
-        isForceParked={isForceParked}
-        activityTerminalPortals={activityTerminalPortals}
-        backgroundMountTabIds={backgroundMountTabIds}
-        activationDeferredMountTabIds={activationDeferredMountTabIds}
-        mountRetainedBrowserOverlay={shouldMountRetainedBrowserOverlay({
-          isWorktreeVisible: isVisible,
-          hasDeferredBackgroundMounts: backgroundMountTabIds !== null,
-          needsBrowserGuestPaint
-        })}
-        mountEmulatorOverlay={isVisible || backgroundMountTabIds === null}
-      />
-    </div>
+    <WorkspaceViewProjection value={projection}>
+      <div
+        className={
+          isVisible
+            ? projection
+              ? 'absolute inset-0 pointer-events-none'
+              : 'absolute inset-0 flex'
+            : shouldKeepPaintable
+              ? 'absolute inset-0 flex opacity-0 pointer-events-none'
+              : 'absolute inset-0 hidden'
+        }
+        inert={!isVisible}
+        aria-hidden={!isVisible}
+      >
+        <div
+          className={projection ? 'hidden' : 'flex min-h-0 min-w-0 flex-1'}
+          inert={Boolean(projection)}
+        >
+          <TabGroupSplitLayout
+            layout={layout}
+            worktreeId={worktreeId}
+            focusedGroupId={focusedGroupId}
+            isWorktreeActive={isVisible && !projection}
+            isWorktreeFocused={isFocused && !projection}
+          />
+        </div>
+        {projection ? <WorkspaceViewSurfacePanels projection={projection} /> : null}
+        <WorkspacePaneOverlayLayers
+          worktreeId={worktreeId}
+          worktreePath={worktreePath}
+          isVisible={isVisible}
+          isFocused={isFocused}
+          shouldMeasureHiddenWorktree={shouldMeasureHiddenWorktree}
+          shouldColdParkTerminalPanes={shouldColdParkTerminalPanes}
+          isForceParked={isForceParked}
+          activityTerminalPortals={activityTerminalPortals}
+          backgroundMountTabIds={backgroundMountTabIds}
+          activationDeferredMountTabIds={activationDeferredMountTabIds}
+          mountRetainedBrowserOverlay={shouldMountRetainedBrowserOverlay({
+            isWorktreeVisible: isVisible,
+            hasDeferredBackgroundMounts: backgroundMountTabIds !== null,
+            needsBrowserGuestPaint
+          })}
+          mountEmulatorOverlay={isVisible || backgroundMountTabIds === null}
+        />
+      </div>
+    </WorkspaceViewProjection>
   )
 })

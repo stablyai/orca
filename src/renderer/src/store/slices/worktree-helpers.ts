@@ -264,6 +264,8 @@ export type WorktreeSlice = {
       stateTransition?: ActiveWorktreeStateTransition
       /** Tabs the caller just created there: their first spawn is new work, not a wake. */
       createdTabIds?: readonly string[]
+      /** Presentation-only focus must not wake or restart the workspace's terminals. */
+      preserveTerminalSessions?: boolean
     }
   ) => boolean
   /** Recovery remount detaches live PTY then reattaches/replays in fresh xterm. Update generation and row-owned admission ledger atomically; omitted request means external lifecycle remount without admission/ledger. */

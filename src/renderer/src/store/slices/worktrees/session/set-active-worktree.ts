@@ -32,7 +32,8 @@ export function createSetActiveWorktree(
     const stateTransition = options?.stateTransition?.(get())
     const createdTabIds = new Set(options?.createdTabIds)
     // A tab its caller just created is not asleep: its first bind is new work, not a wake.
-    const isWakeable = (tab: { id: string }): boolean => !createdTabIds.has(tab.id)
+    const isWakeable = (tab: { id: string }): boolean =>
+      !options?.preserveTerminalSessions && !createdTabIds.has(tab.id)
     if (stateTransition && !stateTransition.activate) {
       if (Object.keys(stateTransition.patch).length > 0) {
         set(stateTransition.patch)
@@ -100,7 +101,10 @@ export function createSetActiveWorktree(
         worktreeId != null &&
         wakeable.length > 0 &&
         wakeable.every((tab) => !tabHasLivePty(s.ptyIdsByTabId, tab.id))
-      const isFirstActivation = worktreeId != null && !s.everActivatedWorktreeIds.has(worktreeId)
+      const isFirstActivation =
+        worktreeId != null &&
+        !options?.preserveTerminalSessions &&
+        !s.everActivatedWorktreeIds.has(worktreeId)
       const shouldTagTabs = worktreeId != null && wakeable.length > 0 && isFirstActivation
       // Why: bump generation in the same set() as activation so a dead-transport pane can't go visible-but-dead before remount.
       shouldPrepareTerminalTabs = Boolean(
@@ -166,8 +170,10 @@ export function createSetActiveWorktree(
       }
     })
 
-    // Activation explicitly wakes (null only clears selection for sleep); clear intent after remount-generation update so waiting panes connect once.
-    clearWorktreeSleepIntent(worktreeId)
+    // Ordinary navigation wakes after the generation update; view focus preserves sleeping sessions.
+    if (!options?.preserveTerminalSessions) {
+      clearWorktreeSleepIntent(worktreeId)
+    }
 
     if (worktreeId && shouldPrepareTerminalTabs) {
       const prepareTerminalTabs = (): void => {

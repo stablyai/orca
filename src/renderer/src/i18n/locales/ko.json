@@ -20493,5 +20493,43 @@
     "math": {
       "scrollDisplayEquation": "수식 블록 스크롤"
     }
+  },
+  "workspaceViews": {
+    "views": "뷰",
+    "newView": "새 뷰…",
+    "renameView": "뷰 이름 변경…",
+    "removeView": "저장된 뷰 삭제",
+    "nameDescription": "어떤 프로젝트의 패널이든 배치하여 이 기기에 저장합니다.",
+    "name": "이름",
+    "cancel": "취소",
+    "save": "뷰 저장",
+    "showNavigation": "탐색 표시",
+    "fillWindow": "창 채우기",
+    "exitView": "워크스페이스로 돌아가기",
+    "arrangement": "패널 배치",
+    "grid": "균등 그리드",
+    "primary": "주 패널과 세로 배치",
+    "addPanel": "패널 추가",
+    "choosePanel": "패널 선택",
+    "pickerDescription": "기존 패널을 선택합니다. 세션은 원래 워크스페이스에 유지됩니다.",
+    "searchPanels": "프로젝트, 워크스페이스 또는 패널 검색…",
+    "noPanels": "열린 패널이 없습니다. 먼저 워크스페이스에서 패널을 여세요.",
+    "alreadyVisible": "이 뷰에 있음",
+    "selected": "선택됨",
+    "selectionCount": "{{count}}개 선택됨",
+    "addSelected": "선택한 패널 추가",
+    "restorePanels": "모든 패널 복원",
+    "expandPanel": "패널 확대",
+    "removePanel": "뷰에서 제거하고 세션 유지",
+    "panelActions": "패널 작업: {{title}}",
+    "changePanel": "다른 패널 선택…",
+    "moveEarlier": "앞으로 이동",
+    "moveLater": "뒤로 이동",
+    "unavailable": "이 패널을 사용할 수 없습니다. 워크스페이스나 호스트가 오프라인이거나 패널이 닫혔을 수 있습니다.",
+    "loadingPanel": "패널 불러오는 중…",
+    "resizePanels": "패널 크기 조절",
+    "empty": "작업에 사용하는 패널을 이 뷰에 모으세요.",
+    "defaultName": "이름 없는 뷰",
+    "addWorkspacePanels": "뷰에 패널 추가…"
   }
 }

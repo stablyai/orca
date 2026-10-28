@@ -3,6 +3,7 @@ import { SYNC_FIT_PANES_EVENT } from '@/constants/terminal'
 import { tabGroupBodyAnchorName } from './tab-group-body-anchor'
 import { subscribeTabGroupBodyRect, type TabGroupBodyRect } from './tab-group-body-geometry'
 import { UNFOCUSED_SPLIT_GROUP_OPACITY } from './split-group-dim'
+import { useWorkspaceViewProjection } from '../workspace-grid-view/workspace-view-projection'
 
 const HAS_CSS_ANCHOR_POSITIONING =
   typeof CSS !== 'undefined' &&
@@ -42,6 +43,7 @@ export function RetainedPaneHost({
   children,
   ...identity
 }: RetainedPaneHostProps): React.JSX.Element {
+  const viewProjection = useWorkspaceViewProjection()
   const anchorName = groupId !== undefined ? tabGroupBodyAnchorName(groupId) : undefined
   const overlayRef = useRef<HTMLDivElement | null>(null)
   const [measuredFallbackRect, setMeasuredFallbackRect] = useState<TabGroupBodyRect | null>(null)
@@ -150,7 +152,8 @@ export function RetainedPaneHost({
       {...identity}
       inert={!isVisible}
       aria-hidden={!isVisible}
-      onPointerDown={focusGroup}
+      onPointerDown={viewProjection ? undefined : focusGroup}
+      onPointerDownCapture={viewProjection ? focusGroup : undefined}
       onFocusCapture={focusGroup}
     >
       {awaitsFirstFallbackRect ? null : children}

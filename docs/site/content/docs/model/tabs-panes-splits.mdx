@@ -51,3 +51,21 @@ Pane boundaries stay where you put them. Resizing the window doesn't shuffle you
 ## Tab groups across worktrees
 
 Each worktree owns its own tab layout. Switching worktrees swaps the entire pane tree — your browser tab, terminal, and diff reappear exactly as you left them.
+
+## Saved views across projects
+
+Use **Views** in the sidebar footer to create a named arrangement of open panels. Choose **New view…**, name it, then select the terminals, browsers, chats, editors, or diffs you want together. The picker searches projects, workspaces, and panel titles. A workspace's context menu also offers **Add panels to view…**.
+
+A view holds up to six panels. You can select multiple tabs from the same workspace, or combine panels from different projects. A terminal tab keeps its nested terminal splits. Each panel shows its project and workspace; remote panels also name their host.
+
+- **Equal grid** gives panels comparable space. **Primary and stack** makes the first panel larger. Drag the dividers to adjust the proportions, or focus a divider and use its arrow keys. Home resets that divider to equal sizes.
+- Use a panel's title menu to choose another panel or move it earlier or later in the arrangement.
+- Click inside a panel to work in it. Keyboard input and contextual commands follow that panel's owning workspace and host.
+- Opening another terminal or file with Orca's normal commands replaces the focused panel. Selecting a tab already in the view focuses its existing panel; the other panels stay in place.
+- **Expand panel** temporarily fills the workbench with one panel. **Restore all panels** returns to the saved arrangement.
+- **Fill window** hides navigation while retaining your sidebar preferences. **Show navigation** restores them.
+- The panel's **×** removes it from the view and keeps its session open. **Return to workspace** restores the normal workspace layout. Removing a saved view also leaves its sessions alone.
+
+Names, panel references, ordering, and divider positions are remembered on this device. These presentation choices do not change a workspace's tab-group layout and are not sent to other clients. Selecting a workspace outside the arrangement shows that workspace normally; the Views menu reopens your saved arrangement.
+
+If a selected panel closes, or its owning workspace cannot be resolved, its place remains visible with **Choose panel**. Orca does not substitute another host's same-named workspace or launch a replacement session automatically.

@@ -4,6 +4,7 @@ import type { TerminalTab } from '../../../shared/terminal-tab-types'
 import { useAppStore } from '../store'
 import { useWorktreeMap } from '../store/selectors'
 import { getResolvedExecutionHostIdForWorktree } from '@/lib/resolved-worktree-execution-host'
+import { resolveWorkspaceViewTab, selectShownWorkspaceView } from '@/lib/workspace-view-catalog'
 import type { WorktreeTabBucketProjection } from '@/lib/worktree-tab-bucket-projection'
 import { projectWorkspaceSurfaces } from './workspace-surface-projection'
 import {
@@ -69,6 +70,26 @@ export function useTerminalWorkspaceFoundation() {
     () => new Set(workspaceSurfaceIds),
     [workspaceSurfaceIds]
   )
+  const workspaceView = useAppStore(selectShownWorkspaceView)
+  const visibleViewWorkspaceKey = useAppStore((state) =>
+    JSON.stringify([
+      ...new Set(
+        workspaceView?.panels
+          .filter((panel) => resolveWorkspaceViewTab(state, panel))
+          .map((panel) => panel.workspaceId) ?? []
+      )
+    ])
+  )
+  const parsedViewWorkspaceIds: unknown = JSON.parse(visibleViewWorkspaceKey)
+  const visibleWorkspaceIds = useReusedArrayIdentity(
+    workspaceView && Array.isArray(parsedViewWorkspaceIds)
+      ? parsedViewWorkspaceIds.filter(
+          (id): id is string => typeof id === 'string' && workspaceSurfaceIdSet.has(id)
+        )
+      : renderedActiveWorktreeId
+        ? [renderedActiveWorktreeId]
+        : []
+  )
   const activeView = useAppStore((state) => state.activeView)
   // Root subscriptions track mount/parking transitions; LiveTerminalTabBar alone consumes title-only updates.
   const tabsByWorktree = useAppStore((state) =>
@@ -109,6 +130,7 @@ export function useTerminalWorkspaceFoundation() {
     workspaceSurfaceIdSet,
     activeWorktreeId,
     renderedActiveWorktreeId,
+    visibleWorkspaceIds,
     activeWorktreeDeferralHostId,
     activeView,
     tabsByWorktree,

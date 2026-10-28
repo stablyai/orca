@@ -6,6 +6,11 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { BrowserTab as BrowserTabState } from '../../../../../shared/browser-workspace-types'
 import type { Tab, TabGroup } from '../../../../../shared/tab-types'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../../shared/constants'
+import {
+  WorkspaceViewProjection,
+  type WorkspaceViewPlacement
+} from '../../workspace-grid-view/workspace-view-projection'
+import { workspaceViewAnchorId } from '@/lib/workspace-view-layout'
 
 type MockAppState = {
   browserTabsByWorktree: Record<string, readonly BrowserTabState[]>
@@ -22,7 +27,12 @@ const mocks = vi.hoisted(() => ({
   mobileDrivenPageIds: new Set<string>(),
   remotelyViewedPageIds: new Set<string>(),
   focusGroup: vi.fn(),
+  focusViewAnchor: vi.fn<(projection: unknown, anchorId: string) => boolean>(() => false),
   pagePointerDown: vi.fn<(target: { browserPageId: string }) => void>()
+}))
+
+vi.mock('@/lib/workspace-view-actions', () => ({
+  focusWorkspaceViewAnchor: mocks.focusViewAnchor
 }))
 
 vi.mock('../../../store', () => {
@@ -101,6 +111,7 @@ describe('BrowserPaneOverlayLayer', () => {
     mocks.mobileDrivenPageIds.clear()
     mocks.remotelyViewedPageIds.clear()
     mocks.focusGroup.mockClear()
+    mocks.focusViewAnchor.mockReset().mockReturnValue(false)
     mocks.state = createState()
     vi.stubGlobal('api', {
       ui: {
@@ -118,6 +129,45 @@ describe('BrowserPaneOverlayLayer', () => {
     // Clear the module-level row store so sibling tests cannot inherit extra panes.
     clearClientHostedBrowserRowSelection()
     applyClientHostedBrowserRows({ worktreeId: 'wt-1', rows: [] })
+  })
+
+  it('routes a browser guest press to its visible view panel without focusing an underlying group', () => {
+    const state = createState()
+    mocks.state = state
+    mocks.focusViewAnchor.mockReturnValue(true)
+    const placement: WorkspaceViewPlacement = {
+      panel: {
+        id: 'panel-b',
+        workspaceId: 'wt-1',
+        executionHostId: 'local',
+        tabId: 'tab-b',
+        title: 'Browser B',
+        workspaceName: 'main',
+        projectName: 'Project B'
+      },
+      tab: state.unifiedTabsByWorktree['wt-1'][1],
+      visible: true,
+      focused: false
+    }
+    const projection = [placement]
+    const view = render(
+      <WorkspaceViewProjection value={projection}>
+        <BrowserPaneOverlayLayer worktreeId="wt-1" isWorktreeActive isWorktreeFocused={false} />
+      </WorkspaceViewProjection>
+    )
+    act(() => mocks.pagePointerDown({ browserPageId: 'page-b' }))
+    expect(mocks.focusViewAnchor).toHaveBeenCalledWith(projection, workspaceViewAnchorId('panel-b'))
+    expect(mocks.focusGroup).not.toHaveBeenCalled()
+
+    mocks.focusViewAnchor.mockClear()
+    view.rerender(
+      <WorkspaceViewProjection value={[{ ...placement, visible: false }]}>
+        <BrowserPaneOverlayLayer worktreeId="wt-1" isWorktreeActive isWorktreeFocused={false} />
+      </WorkspaceViewProjection>
+    )
+    act(() => mocks.pagePointerDown({ browserPageId: 'page-b' }))
+    expect(mocks.focusViewAnchor).not.toHaveBeenCalled()
+    expect(mocks.focusGroup).not.toHaveBeenCalled()
   })
 
   it('defers browser slots for a restricted hidden mount, then retains them after activation', () => {
@@ -213,6 +263,15 @@ describe('BrowserPaneOverlayLayer', () => {
     // browser-a is the active tab of group-1, and group-1 is the focused split.
     expect(markup).toContain(
       'data-browser-pane-id="browser-a" data-browser-pane-active="true" data-browser-find-shortcut-scope="focused"'
+    )
+  })
+
+  it('keeps a visible but unfocused grid view cell from owning chrome chords', () => {
+    const markup = renderOverlay({ isWorktreeActive: true, isWorktreeFocused: false })
+
+    // Why: its own split is focused within the worktree, but another cell owns the keyboard.
+    expect(markup).toContain(
+      'data-browser-pane-id="browser-a" data-browser-pane-active="true" data-browser-find-shortcut-scope="inactive"'
     )
   })
 
@@ -519,9 +578,19 @@ describe('BrowserPaneOverlayLayer', () => {
   })
 })
 
-function renderOverlay({ isWorktreeActive }: { isWorktreeActive: boolean }): string {
+function renderOverlay({
+  isWorktreeActive,
+  isWorktreeFocused
+}: {
+  isWorktreeActive: boolean
+  isWorktreeFocused?: boolean
+}): string {
   return renderToStaticMarkup(
-    <BrowserPaneOverlayLayer worktreeId="wt-1" isWorktreeActive={isWorktreeActive} />
+    <BrowserPaneOverlayLayer
+      worktreeId="wt-1"
+      isWorktreeActive={isWorktreeActive}
+      isWorktreeFocused={isWorktreeFocused}
+    />
   )
 }
 

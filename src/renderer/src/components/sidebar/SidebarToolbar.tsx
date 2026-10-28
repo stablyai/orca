@@ -8,6 +8,7 @@ import { SidebarSettingsHelpMenu } from './SidebarSettingsHelpMenu'
 import { translate } from '@/i18n/i18n'
 import { useAppStore } from '@/store'
 import { hasFeatureInteraction } from '../../../../shared/feature-interactions'
+import { WorkspaceViewsMenu } from '../workspace-grid-view/WorkspaceViewsMenu'
 
 const WORKSPACE_BOARD_MOVED_HINT_STORAGE_KEY = 'orca.workspaceBoardMovedHintSeen.v1'
 const WORKSPACE_BOARD_MOVED_HINT_DURATION_MS = 12000
@@ -71,6 +72,7 @@ const SidebarToolbar = React.memo(function SidebarToolbar({
           <SidebarSettingsHelpMenu />
         </div>
         <div className="flex items-center gap-1">
+          <WorkspaceViewsMenu compact />
           <ScrollToCurrentWorkspaceToolbarButton />
           <Tooltip open={workspaceBoardMovedHintOpen ? true : undefined}>
             <TooltipTrigger asChild>

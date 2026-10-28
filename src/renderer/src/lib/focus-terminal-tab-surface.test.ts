@@ -49,6 +49,33 @@ describe('focusTerminalTabSurface', () => {
     expect(textarea.focus).toHaveBeenCalled()
   })
 
+  it('focuses a mounted panel synchronously and never falls back to another tab', () => {
+    const frames: FrameRequestCallback[] = []
+    vi.stubGlobal('requestAnimationFrame', (callback: FrameRequestCallback) => {
+      frames.push(callback)
+      return frames.length
+    })
+    vi.stubGlobal('cancelAnimationFrame', vi.fn())
+    const target = { focus: vi.fn() },
+      other = { focus: vi.fn() }
+    let mounted = true
+    vi.stubGlobal('document', {
+      querySelector: (selector: string) =>
+        selector === TAB_HELPER_SELECTOR && mounted
+          ? target
+          : selector === GLOBAL_HELPER_SELECTOR
+            ? other
+            : null
+    })
+
+    focusTerminalTabSurface('tab-1', null, { immediate: true, onlyWithinTab: true })
+    expect(target.focus).toHaveBeenCalledOnce()
+    mounted = false
+    frames.shift()?.(0)
+    frames.shift()?.(0)
+    expect(other.focus).not.toHaveBeenCalled()
+  })
+
   it('optionally refreshes the focused helper native input context', () => {
     flushAnimationFrames()
     const textarea = { focus: vi.fn() }

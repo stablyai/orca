@@ -5,6 +5,7 @@ import { resolveBuildSourceCommit } from '../config/scripts/build-source-commit.
 // Headful pointer-capture runs require an isolated display. Global setup/teardown own the seeded repo; fixtures launch Electron.
 export default defineConfig({
   testDir: './e2e',
+  outputDir: process.env.ORCA_E2E_OUTPUT_DIR,
   // Keep checkout provenance without fetching the PR base during test setup.
   captureGitInfo: { commit: false, diff: false },
   metadata: { sourceCommit: resolveBuildSourceCommit() },

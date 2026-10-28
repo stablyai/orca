@@ -20493,5 +20493,43 @@
     "math": {
       "scrollDisplayEquation": "数式ブロックをスクロール"
     }
+  },
+  "workspaceViews": {
+    "views": "ビュー",
+    "newView": "新しいビュー…",
+    "renameView": "ビューの名前を変更…",
+    "removeView": "保存したビューを削除",
+    "nameDescription": "任意のプロジェクトのパネル配置をこのデバイスに保存します。",
+    "name": "名前",
+    "cancel": "キャンセル",
+    "save": "ビューを保存",
+    "showNavigation": "ナビゲーションを表示",
+    "fillWindow": "ウィンドウ全体に表示",
+    "exitView": "ワークスペースに戻る",
+    "arrangement": "パネルの配置",
+    "grid": "均等グリッド",
+    "primary": "メインと縦並び",
+    "addPanel": "パネルを追加",
+    "choosePanel": "パネルを選択",
+    "pickerDescription": "既存のパネルを選択します。セッションは元のワークスペースに残ります。",
+    "searchPanels": "プロジェクト、ワークスペース、パネルを検索…",
+    "noPanels": "開いているパネルがありません。まずワークスペースでパネルを開いてください。",
+    "alreadyVisible": "このビューに表示中",
+    "selected": "選択済み",
+    "selectionCount": "{{count}} 件を選択",
+    "addSelected": "選択したパネルを追加",
+    "restorePanels": "すべてのパネルを復元",
+    "expandPanel": "パネルを拡大",
+    "removePanel": "ビューから外す（セッションは継続）",
+    "panelActions": "パネルの操作: {{title}}",
+    "changePanel": "別のパネルを選択…",
+    "moveEarlier": "前に移動",
+    "moveLater": "後に移動",
+    "unavailable": "このパネルは利用できません。ワークスペースやホストがオフラインか、パネルが閉じられた可能性があります。",
+    "loadingPanel": "パネルを読み込み中…",
+    "resizePanels": "パネルのサイズを変更",
+    "empty": "作業に使うパネルをこのビューにまとめます。",
+    "defaultName": "無題のビュー",
+    "addWorkspacePanels": "ビューにパネルを追加…"
   }
 }

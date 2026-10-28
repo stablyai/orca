@@ -9,6 +9,7 @@ import { useAppStore } from '../store'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../shared/constants'
 import { selectActiveTerminalChromeState } from '../store/active-terminal-chrome-selector'
 import { useSystemPrefersDark } from '../components/terminal-pane/use-system-prefers-dark'
+import { selectShownWorkspaceView } from '@/lib/workspace-view-catalog'
 import {
   hasRequestedBackgroundTerminalWorktreeMount,
   subscribeBackgroundTerminalWorktreeMountRequests
@@ -19,8 +20,12 @@ export type AppChromeLayout = ReturnType<typeof useAppChromeLayout>
 /** Derive titlebar, tab-strip ownership and surface mount decisions from store state. */
 export function useAppChromeLayout() {
   const activeView = useAppStore((s) => s.activeView)
-  const sidebarOpen = useAppStore((s) => s.sidebarOpen)
-  const rightSidebarOpen = useAppStore((s) => s.rightSidebarOpen)
+  const workspaceView = useAppStore(selectShownWorkspaceView)
+  const fillWorkspaceView = useAppStore(
+    (state) => state.workspaceViewFillWindow && selectShownWorkspaceView(state) !== null
+  )
+  const sidebarOpen = useAppStore((s) => s.sidebarOpen) && !fillWorkspaceView
+  const rightSidebarOpen = useAppStore((s) => s.rightSidebarOpen) && !fillWorkspaceView
   const rightSidebarTab = useAppStore((s) => s.rightSidebarTab)
   const rightSidebarExplorerView = useAppStore((s) => s.rightSidebarExplorerView)
   const isFullScreen = useAppStore((s) => s.isFullScreen)
@@ -56,7 +61,10 @@ export function useAppChromeLayout() {
     (s) => (s.unifiedTabsByWorktree[FLOATING_TERMINAL_WORKTREE_ID]?.length ?? 0) > 0
   )
   const canMountTerminalWorkbenchNow =
-    activeWorktreeId !== null || backgroundTerminalMountRequested || floatingWorkspaceHasTabs
+    activeWorktreeId !== null ||
+    backgroundTerminalMountRequested ||
+    floatingWorkspaceHasTabs ||
+    workspaceView !== null
   // Use state so discarded renders cannot leak the mount latch; the OR below covers this render.
   const [hasMountedTerminalWorkbench, setHasMountedTerminalWorkbench] = useState(false)
   if (canMountTerminalWorkbenchNow && !hasMountedTerminalWorkbench) {
@@ -71,11 +79,16 @@ export function useAppChromeLayout() {
     hasActivePendingCreation: activePendingCreationExists
   })
   const workspaceChromeActive =
-    activeView === 'terminal' && activeWorktreeId !== null && !creationLayoutActive
+    activeView === 'terminal' &&
+    (activeWorktreeId !== null || workspaceView !== null) &&
+    !creationLayoutActive
   const hasTabBar = tabCount >= 2
   // Activity/Space own full pages and hide the workspace sidebar.
   const showSidebar =
-    activeView !== 'settings' && activeView !== 'activity' && activeView !== 'space'
+    activeView !== 'settings' &&
+    activeView !== 'activity' &&
+    activeView !== 'space' &&
+    !fillWorkspaceView
   // Tasks/Landing keep sidebar-width chrome when open; creation suppresses stacked chrome.
   const stackedSidebarOpen =
     !workspaceChromeActive && !creationLayoutActive && showSidebar && sidebarOpen
@@ -134,7 +147,8 @@ export function useAppChromeLayout() {
     rightSidebarTab,
     shouldMountTerminalWorkbench,
     showSidebar,
-    showRightSidebarControls: !creationLayoutActive && canShowRightSidebarForView(activeView),
+    showRightSidebarControls:
+      !creationLayoutActive && !fillWorkspaceView && canShowRightSidebarForView(activeView),
     showTitlebarAppName: settings?.showTitlebarAppName !== false,
     showTitlebarExpandButton: workspaceChromeActive && !hasTabBar && effectiveActiveTabExpanded,
     sidebarOpen,

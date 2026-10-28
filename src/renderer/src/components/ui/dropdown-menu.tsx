@@ -10,6 +10,10 @@ function DropdownMenu({ ...props }: React.ComponentProps<typeof DropdownMenuPrim
   return <DropdownMenuPrimitive.Root data-slot="dropdown-menu" {...props} />
 }
 
+function DropdownMenuGroup({ ...props }: React.ComponentProps<typeof DropdownMenuPrimitive.Group>) {
+  return <DropdownMenuPrimitive.Group data-slot="dropdown-menu-group" {...props} />
+}
+
 function DropdownMenuPortal({
   ...props
 }: React.ComponentProps<typeof DropdownMenuPrimitive.Portal>) {
@@ -236,6 +240,7 @@ function DropdownMenuSubContent({
 
 export {
   DropdownMenu,
+  DropdownMenuGroup,
   DropdownMenuPortal,
   DropdownMenuTrigger,
   DropdownMenuContent,

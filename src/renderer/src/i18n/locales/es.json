@@ -20494,5 +20494,43 @@
     "math": {
       "scrollDisplayEquation": "Desplazar ecuación en bloque"
     }
+  },
+  "workspaceViews": {
+    "views": "Vistas",
+    "newView": "Nueva vista…",
+    "renameView": "Renombrar vista…",
+    "removeView": "Eliminar vista guardada",
+    "nameDescription": "Guarda una disposición de paneles de cualquier proyecto en este dispositivo.",
+    "name": "Nombre",
+    "cancel": "Cancelar",
+    "save": "Guardar vista",
+    "showNavigation": "Mostrar navegación",
+    "fillWindow": "Ocupar ventana",
+    "exitView": "Volver al espacio de trabajo",
+    "arrangement": "Disposición de paneles",
+    "grid": "Cuadrícula uniforme",
+    "primary": "Principal y columna",
+    "addPanel": "Añadir panel",
+    "choosePanel": "Elegir panel",
+    "pickerDescription": "Elige paneles existentes. Sus sesiones permanecen en el espacio de trabajo original.",
+    "searchPanels": "Buscar proyecto, espacio de trabajo o panel…",
+    "noPanels": "No hay paneles abiertos. Abre primero un panel en un espacio de trabajo.",
+    "alreadyVisible": "En esta vista",
+    "selected": "Seleccionado",
+    "selectionCount": "{{count}} seleccionados",
+    "addSelected": "Añadir paneles seleccionados",
+    "restorePanels": "Restaurar todos los paneles",
+    "expandPanel": "Ampliar panel",
+    "removePanel": "Quitar de la vista; mantener la sesión abierta",
+    "panelActions": "Acciones del panel: {{title}}",
+    "changePanel": "Elegir otro panel…",
+    "moveEarlier": "Mover antes",
+    "moveLater": "Mover después",
+    "unavailable": "Este panel no está disponible. Su espacio de trabajo o equipo puede estar desconectado, o el panel puede haberse cerrado.",
+    "loadingPanel": "Cargando panel…",
+    "resizePanels": "Cambiar tamaño de paneles",
+    "empty": "Reúne en esta vista los paneles con los que trabajas.",
+    "defaultName": "Vista sin título",
+    "addWorkspacePanels": "Añadir paneles a la vista…"
   }
 }

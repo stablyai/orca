@@ -20494,5 +20494,43 @@
     "math": {
       "scrollDisplayEquation": "Faire défiler l'équation affichée"
     }
+  },
+  "workspaceViews": {
+    "views": "Vues",
+    "newView": "Nouvelle vue…",
+    "renameView": "Renommer la vue…",
+    "removeView": "Supprimer la vue enregistrée",
+    "nameDescription": "Enregistrez une disposition de panneaux de différents projets sur cet appareil.",
+    "name": "Nom",
+    "cancel": "Annuler",
+    "save": "Enregistrer la vue",
+    "showNavigation": "Afficher la navigation",
+    "fillWindow": "Remplir la fenêtre",
+    "exitView": "Revenir à l’espace de travail",
+    "arrangement": "Disposition des panneaux",
+    "grid": "Grille uniforme",
+    "primary": "Principal et colonne",
+    "addPanel": "Ajouter un panneau",
+    "choosePanel": "Choisir un panneau",
+    "pickerDescription": "Choisissez des panneaux existants. Leurs sessions restent dans l’espace de travail d’origine.",
+    "searchPanels": "Rechercher un projet, un espace de travail ou un panneau…",
+    "noPanels": "Aucun panneau ouvert. Ouvrez d’abord un panneau dans un espace de travail.",
+    "alreadyVisible": "Dans cette vue",
+    "selected": "Sélectionné",
+    "selectionCount": "{{count}} sélectionnés",
+    "addSelected": "Ajouter les panneaux sélectionnés",
+    "restorePanels": "Rétablir tous les panneaux",
+    "expandPanel": "Agrandir le panneau",
+    "removePanel": "Retirer de la vue ; garder la session ouverte",
+    "panelActions": "Actions du panneau : {{title}}",
+    "changePanel": "Choisir un autre panneau…",
+    "moveEarlier": "Déplacer avant",
+    "moveLater": "Déplacer après",
+    "unavailable": "Ce panneau est indisponible. Son espace de travail ou son hôte est peut-être hors ligne, ou le panneau a été fermé.",
+    "loadingPanel": "Chargement du panneau…",
+    "resizePanels": "Redimensionner les panneaux",
+    "empty": "Réunissez dans cette vue les panneaux avec lesquels vous travaillez.",
+    "defaultName": "Vue sans titre",
+    "addWorkspacePanels": "Ajouter des panneaux à la vue…"
   }
 }
