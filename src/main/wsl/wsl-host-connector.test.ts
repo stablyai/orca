@@ -4,13 +4,19 @@ import type { WslRunningDistrosRead } from '../wsl-background-distro-gate'
 import type * as TunnelIdentity from '../managed-server/lifecycle/orcad-managed-tunnel-identity'
 
 const mocks = vi.hoisted(() => ({
-  readRunning: vi.fn<() => Promise<WslRunningDistrosRead>>(),
+  readRunning: vi.fn<(distro: string) => Promise<WslRunningDistrosRead>>(),
   connect: vi.fn(),
   stopServer: vi.fn(async () => ({ stopped: true })),
   verify: vi.fn(),
   ready: vi.fn(() => false),
   managerGet: vi.fn((): unknown => null),
-  managerEnsure: vi.fn(),
+  managerEnsure:
+    vi.fn<
+      (
+        distro: string,
+        options: { requireRunning?: (distro: string) => Promise<boolean> }
+      ) => unknown
+    >(),
   managerIsConnecting: vi.fn(() => false)
 }))
 vi.mock('./wsl-orcad-connection', async (importOriginal) => ({
@@ -22,7 +28,7 @@ vi.mock('./wsl-orcad-connection', async (importOriginal) => ({
   }
 }))
 vi.mock('../wsl-background-distro-gate', () => ({
-  readConfirmedRunningWslDistros: mocks.readRunning,
+  readSettledConfirmedRunningWslDistros: mocks.readRunning,
   listConfirmedRunningWslDistros: vi.fn(async () => [])
 }))
 vi.mock('../managed-server/lifecycle/orcad-managed-tunnel-identity', async (importOriginal) => ({
@@ -57,6 +63,8 @@ it('uses owned readiness without discovery and coalesces cold cleanup without wa
   await expect(passive).resolves.toBe(false)
   await expect(removal).resolves.toEqual({ stopped: true })
   expect(mocks.readRunning).toHaveBeenCalledTimes(1)
+  // Settled for this distro: a list taken while it still stops cannot prove it runs (E9).
+  expect(mocks.readRunning).toHaveBeenCalledWith('Ubuntu')
   mocks.readRunning.mockResolvedValueOnce({ status: 'unavailable' })
   await expect(connector.stopServer('Ubuntu', 'wsl:ubuntu')).resolves.toMatchObject({
     stopped: false
@@ -120,6 +128,10 @@ it('a no-boot call joins a booting connect but stays no-boot itself (E9)', async
     'Ubuntu',
     expect.objectContaining({ requireRunning: expect.any(Function) })
   )
+  const [, { requireRunning }] = mocks.managerEnsure.mock.calls[0]
+  mocks.readRunning.mockResolvedValueOnce({ status: 'confirmed', distros: ['Ubuntu'] })
+  await expect(requireRunning?.('Ubuntu')).resolves.toBe(true)
+  expect(mocks.readRunning).toHaveBeenLastCalledWith('Ubuntu')
   finish()
   await first
 })

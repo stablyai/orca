@@ -54,6 +54,11 @@ export function noteWslDistroMayHaveStopped(distro: string): void {
   mayHaveStoppedAt.set(distroKey(distro), performance.now())
 }
 
+/** Synchronous: a stop of `distro` was noted at or after `since` (performance.now()). */
+export function wasWslDistroNotedStoppedSince(distro: string, since: number): boolean {
+  return (mayHaveStoppedAt.get(distroKey(distro)) ?? -Infinity) >= since
+}
+
 /** A user act just touched the distro, which starts it: an older 'stopped' read no longer answers. */
 export function noteWslDistroWoken(distro: string): void {
   wokenAt.set(distroKey(distro), performance.now())

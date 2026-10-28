@@ -73,7 +73,9 @@ function harness(options: { visible?: boolean } = {}) {
       return connection
     }
   )
-  const readRunning = vi.fn(async () => state.running)
+  const readRunning = vi.fn(
+    async (_afterExit?: { distro: string; exitedAt: number | null }) => state.running
+  )
   const requireRunning = vi.fn(async (_distro: string) => true)
   const readIdentity = vi.fn(async () => state.identity)
   const collectCensus = vi.fn(async () => CENSUS)
@@ -471,6 +473,21 @@ describe('WslOrcadLivenessSupervisor', () => {
     expect(h.readRunning).toHaveBeenCalledTimes(1)
     expect(h.readIdentity).toHaveBeenCalledTimes(1)
     expect(h.ensureHolder).toHaveBeenCalledWith('Ubuntu')
+  })
+
+  // E9 L1: a list probed while the distro still stops must not vouch for ensureHolder or a recovery.
+  it('reads running for the distro, so a noted stop settles first, on heartbeats and recoveries', async () => {
+    const h = harness()
+    await h.supervisor.connect('Ubuntu')
+    await h.advance(WSL_ORCAD_HEARTBEAT_MS)
+    h.state.identity = { distroInstance: 'boot:1', orcad: null }
+    h.state.ensureFails = 100
+    h.lastWatch().exit(0)
+    await h.advance(60_000)
+    expect(h.ensure.mock.calls.length).toBeGreaterThan(1)
+    for (const [afterExit] of h.readRunning.mock.calls) {
+      expect(afterExit).toMatchObject({ distro: 'Ubuntu' })
+    }
   })
 
   it('verifies fully on a heartbeat while its watch holds no open socket to prove orcad', async () => {

@@ -70,7 +70,10 @@ export function createWslOrcadLivenessSupervisor(options: {
     hasUserVisibleWork: options.hasUserVisibleWork,
     deferUntilRunning: deferUntilWslDistroRunning,
     requireRunning: async (distro) =>
-      confirmsRunning(await readConfirmedRunningWslDistros(), wslDistroHolderKey(distro)),
+      confirmsRunning(
+        await readSettledConfirmedRunningWslDistros(distro),
+        wslDistroHolderKey(distro)
+      ),
     ensureHolder: (distro) => options.holder.ensureHeld(distro),
     subscribePower: subscribeSystemPowerLifecycle
   })

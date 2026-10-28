@@ -1,9 +1,18 @@
 import type { ChildProcess } from 'node:child_process'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
-const { runWslProcessMock } = vi.hoisted(() => ({ runWslProcessMock: vi.fn() }))
+const { runWslProcessMock, blockedMock } = vi.hoisted(() => ({
+  runWslProcessMock: vi.fn(),
+  blockedMock: vi.fn(
+    async (
+      _path: string,
+      _distro?: string | null
+    ): Promise<{ distro: string; state: 'stopped' | 'unverifiable' } | null> => null
+  )
+}))
 
 vi.mock('../wsl/wsl-runner', () => ({ runWslProcess: runWslProcessMock }))
+vi.mock('../wsl/wsl-unc-access-gate', () => ({ blockedWslDistroForPath: blockedMock }))
 
 import { createWslProcessGroupTermination } from './wsl-process-group-termination'
 
@@ -11,6 +20,24 @@ describe('WSL process-group termination', () => {
   beforeEach(() => {
     runWslProcessMock.mockReset()
     runWslProcessMock.mockResolvedValue({ code: 0, timedOut: false })
+    blockedMock.mockReset().mockResolvedValue(null)
+  })
+
+  // E9 L2: a cancel or timeout right after `wsl --terminate` must not boot the distro to kill.
+  it('never runs a kill in a stopped distro, whose processes stopped with it', async () => {
+    const termination = createWslProcessGroupTermination('Ubuntu')
+    const wrapped = termination.wrapGuestArgs(['git', 'fetch']).join(' ')
+    const marker = wrapped.match(/(__ORCA_WSL_PROCESS_GROUP_[0-9a-f-]+__=)/)?.[1]
+    termination.observeStderr?.(Buffer.from(`${marker}4321\n`))
+
+    blockedMock.mockResolvedValue({ distro: 'Ubuntu', state: 'stopped' })
+    await expect(termination.force({} as ChildProcess)).resolves.toBe(true)
+    // Unverifiable proves nothing either way: report not terminated, and still never exec.
+    blockedMock.mockResolvedValue({ distro: 'Ubuntu', state: 'unverifiable' })
+    await expect(termination.signal({} as ChildProcess)).resolves.toBe(false)
+
+    expect(blockedMock).toHaveBeenCalledWith('', 'Ubuntu')
+    expect(runWslProcessMock).not.toHaveBeenCalled()
   })
 
   it('wraps the guest command in a reported process group', () => {

@@ -16,6 +16,11 @@ vi.mock('../observability/instrumentation', () => ({
   withGitSpan: (_attributes: unknown, run: () => unknown) => run()
 }))
 vi.mock('../diagnostics/main-thread-churn-probe', () => ({ recordSubprocessSpawn: vi.fn() }))
+// The distro runs in these tests; the stopped-distro kill skip has its own suite.
+vi.mock('../wsl/wsl-unc-access-gate', async (importOriginal) => ({
+  ...(await importOriginal<object>()),
+  blockedWslDistroForPath: async () => null
+}))
 
 import { getBranchConflictKind } from './repo-branch-conflict'
 import { pendingWslDirectGitReadEnvironment } from './command-runner/git-command-resolution'

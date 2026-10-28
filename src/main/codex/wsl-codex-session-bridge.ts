@@ -2,6 +2,8 @@ import { posix as pathPosix } from 'node:path'
 import { normalizeRuntimePathForComparison } from '../../shared/cross-platform-path'
 import { parseWslUncPath } from '../../shared/wsl-paths'
 import { runWslProcess } from '../wsl/wsl-runner'
+import { blockedWslDistroForPath } from '../wsl/wsl-unc-access-gate'
+import { wasWslDistroNotedStoppedSince } from '../wsl-background-distro-gate'
 import { isCodexAccountSessionBridgeStopping } from './codex-account-session-bridge'
 import {
   createCodexAccountStateDb,
@@ -116,6 +118,10 @@ async function bridgeAndIndexWslCodexSessions(
   if (!paths) {
     return
   }
+  // The launch that started this chain was the user act; a stop since then ends it (E9).
+  const startedAt = performance.now()
+  const distroStopped = (): boolean => wasWslDistroNotedStoppedSince(target.distro, startedAt)
+  const stopping = (): boolean => isCodexAccountSessionBridgeStopping() || distroStopped()
   const buildInvocation = (_codexHomePath: string, timeoutMs: number) =>
     buildWslHealInvocation(target.distro, paths.managedHomePath, timeoutMs)
   const homeKey = normalizeRuntimePathForComparison(target.managedCodexHomePath)
@@ -131,7 +137,7 @@ async function bridgeAndIndexWslCodexSessions(
     }
     homesWithCompleteIndex.add(homeKey)
   }
-  if (isCodexAccountSessionBridgeStopping()) {
+  if (stopping() || (await blockedWslDistroForPath('', target.distro))) {
     return
   }
   const summary = await syncWslCodexSessionsIntoManagedHome(target)
@@ -147,7 +153,7 @@ async function bridgeAndIndexWslCodexSessions(
       markersWithoutThread.push(rolloutName)
     }
   }
-  if (markersWithoutThread.length > 0) {
+  if (markersWithoutThread.length > 0 && !distroStopped()) {
     // Why: no thread id means thread/read can never settle it, so it would be reported forever.
     await clearIndexPendingMarkers(target.distro, paths, markersWithoutThread).catch(
       (error: unknown) => {
@@ -155,12 +161,15 @@ async function bridgeAndIndexWslCodexSessions(
       }
     )
   }
-  if (pendingThreads.size > 0 && !isCodexAccountSessionBridgeStopping()) {
+  if (pendingThreads.size > 0 && !stopping()) {
     await dependencies.healPending(target.managedCodexHomePath, pendingThreads, {
       buildInvocation,
-      shouldStop: isCodexAccountSessionBridgeStopping,
-      afterBatch: (settled) =>
-        clearSettledIndexPendingMarkers(target.distro, paths, settled, markerByThreadId)
+      shouldStop: stopping,
+      afterBatch: async (settled) => {
+        if (!distroStopped()) {
+          await clearSettledIndexPendingMarkers(target.distro, paths, settled, markerByThreadId)
+        }
+      }
     })
   }
   if (summary.bridgeFailed) {

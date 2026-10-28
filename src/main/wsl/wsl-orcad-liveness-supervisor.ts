@@ -219,7 +219,8 @@ export class WslOrcadLivenessSupervisor {
 
   private async run(entry: Supervised, trigger: Trigger): Promise<void> {
     const generation = entry.generation
-    let running = await this.deps.readRunning()
+    // Settled: a list taken while the distro was still stopping must not vouch for an ensureHolder.
+    let running = await this.deps.readRunning({ distro: entry.distro, exitedAt: null })
     if (entry.generation !== generation) {
       return
     }
@@ -325,7 +326,7 @@ export class WslOrcadLivenessSupervisor {
         ensure: (options) => this.deps.manager.ensure(entry.distro, { ...options, requireRunning }),
         collectCensus: this.deps.collectCensus,
         arm: (connection) => this.arm(entry, connection),
-        readRunning: this.deps.readRunning
+        readRunning: () => this.deps.readRunning({ distro: entry.distro, exitedAt: null })
       },
       reason
     )

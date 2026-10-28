@@ -20,6 +20,10 @@ vi.mock('./codex-account-session-bridge', () => ({
 }))
 
 import { _internals, startWslCodexSessionBridgeInBackground } from './wsl-codex-session-bridge'
+import {
+  _resetWslBackgroundDistroGateForTests,
+  noteWslDistroMayHaveStopped
+} from '../wsl-background-distro-gate'
 
 const MANAGED_HOME =
   '\\\\wsl.localhost\\Ubuntu\\home\\alice\\.local\\share\\orca\\codex-accounts\\a1\\home'
@@ -55,6 +59,7 @@ beforeEach(() => {
   runWslProcessMock.mockReset()
   stopping.value = false
   _internals.reset()
+  _resetWslBackgroundDistroGateForTests()
 })
 
 describe('startWslCodexSessionBridgeInBackground', () => {
@@ -224,5 +229,49 @@ describe('startWslCodexSessionBridgeInBackground', () => {
 
     expect(openStateDb).not.toHaveBeenCalled()
     expect(runWslProcessMock).not.toHaveBeenCalled()
+  })
+
+  // E9 L2: the launch was the user act; a `wsl --terminate` mid-chain must not be undone by its tail.
+  it('stops the chain once the distro stops, before linking or clearing anything in it', async () => {
+    const openStateDb = vi.fn(async () => {
+      noteWslDistroMayHaveStopped('Ubuntu')
+      return true
+    })
+
+    await startWslCodexSessionBridgeInBackground(TARGET, { openStateDb, healPending: vi.fn() })
+
+    expect(openStateDb).toHaveBeenCalledOnce()
+    expect(runWslProcessMock).not.toHaveBeenCalled()
+  })
+
+  it('stops healing and keeps its markers when the distro stops mid-heal', async () => {
+    runWslProcessMock
+      .mockResolvedValueOnce(bridgeResult([NEWER]))
+      .mockResolvedValue(markerClearResult)
+    let stopSeen: boolean | undefined
+    const healPending = vi.fn<typeof healPendingCodexAccountThreads>(
+      async (_home, _pending, options = {}) => {
+        noteWslDistroMayHaveStopped('Ubuntu')
+        stopSeen = options.shouldStop?.()
+        await options.afterBatch?.([
+          { threadId: '22222222-2222-4222-8222-222222222222', outcome: 'healed' }
+        ])
+        return {
+          outcome: 'completed' as const,
+          healedThreads: 1,
+          missingThreads: 0,
+          failedThreads: 0
+        }
+      }
+    )
+
+    await startWslCodexSessionBridgeInBackground(TARGET, {
+      openStateDb: vi.fn(async () => true),
+      healPending
+    })
+
+    expect(stopSeen).toBe(true)
+    // Only the link ran; no marker clear went into the stopped distro.
+    expect(runWslProcessMock).toHaveBeenCalledTimes(1)
   })
 })
