@@ -74,6 +74,8 @@ class OrcaReadAloudModule : Module() {
       true
     }
 
+    Function("spokenOffset") { id: String -> ReadAloudSpeech.spokenOffset(id) }
+
     Function("stopSpeech") {
       ReadAloudSpeech.stop()
     }

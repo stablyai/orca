@@ -393,6 +393,15 @@ object ReadAloudSpeech : UtteranceProgressListener() {
     }
   }
 
+  // The engine has no pause: Pause stops it, and Resume goes on from the word it was reading.
+  @Volatile private var spokenWord: Pair<String, Int>? = null
+
+  override fun onRangeStart(utteranceId: String, start: Int, end: Int, frame: Int) {
+    spokenWord = utteranceId to start
+  }
+
+  fun spokenOffset(id: String): Int = spokenWord?.takeIf { it.first == id }?.second ?: 0
+
   override fun onStart(utteranceId: String) {
     listener?.invoke("start", utteranceId, null)
   }

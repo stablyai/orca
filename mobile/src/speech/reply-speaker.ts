@@ -4,6 +4,7 @@ import {
   onAudioEvent,
   playChime,
   speakUtterance,
+  spokenOffset,
   stopUtterances,
   type UtteranceCallbacks
 } from './tts-engine'
@@ -21,6 +22,9 @@ let queue: Utterance[] = []
 let current: Utterance | null = null
 // Resume starts again from this piece of `current`.
 let piece = 0
+// Where in its piece the current utterance starts, and where a resume goes on from.
+let pieceFrom = 0
+let resumeFrom = 0
 let startedAt = 0
 let hold: Hold | null = null
 let history: Utterance[] = []
@@ -87,10 +91,11 @@ function advance(utterance: Utterance, index: number): void {
   }
 }
 
-function playPiece(utterance: Utterance, index: number, attempt: number): void {
+function playPiece(utterance: Utterance, index: number, attempt: number, from = 0): void {
   // Why: callbacks of an utterance cut off by stop() can still arrive after the next one started.
   const owns = () => current === utterance && hold === null
   piece = index
+  pieceFrom = from
   const position = `${index + 1}/${utterance.pieces.length}`
   const handlers: UtteranceCallbacks = {
     onStart: () => {
@@ -112,7 +117,7 @@ function playPiece(utterance: Utterance, index: number, attempt: number): void {
         return
       }
       if (attempt < RETRIES_PER_PIECE) {
-        playPiece(utterance, index, attempt + 1)
+        playPiece(utterance, index, attempt + 1, from)
       } else {
         advance(utterance, index)
       }
@@ -122,7 +127,7 @@ function playPiece(utterance: Utterance, index: number, attempt: number): void {
   if (next.kind === 'chime') {
     playChime(handlers)
   } else {
-    speakUtterance(next.text, handlers, next.language ?? null)
+    speakUtterance(next.text.slice(from), handlers, next.language ?? null)
   }
 }
 
@@ -197,6 +202,9 @@ function holdReading(reason: Hold['reason'], label: string): void {
   if (hold?.reason === 'paused') {
     return
   }
+  if (hold === null) {
+    resumeFrom = pieceFrom + spokenOffset()
+  }
   hold = { reason, since: Date.now() }
   logSpeechEvent(`${reason}: ${label}`)
   // A call's hold keeps the focus request, so its end is reported.
@@ -210,7 +218,7 @@ export function pauseReading(reason: string): void {
   holdReading('paused', reason)
 }
 
-/** Goes on from the start of the piece that was cut off. */
+/** Goes on from the word the reading was cut off at, where the engine reports words. */
 export function resumeReading(reason: string): void {
   if (hold === null) {
     return
@@ -219,7 +227,7 @@ export function resumeReading(reason: string): void {
   hold = null
   if (current) {
     emit()
-    playPiece(current, piece, 0)
+    playPiece(current, piece, 0, resumeFrom)
   } else {
     playNext()
   }

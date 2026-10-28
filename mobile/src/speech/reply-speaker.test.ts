@@ -3,6 +3,7 @@ import type { AudioEvent, UtteranceCallbacks } from './tts-engine'
 
 const spoken: { text: string; handlers: UtteranceCallbacks }[] = []
 const stopUtterances = vi.fn()
+const spokenOffset = vi.fn(() => 0)
 const audio: { current: (event: AudioEvent, message: string | null) => void } = {
   current: () => undefined
 }
@@ -11,6 +12,7 @@ vi.mock('./tts-engine', () => ({
   speakUtterance: (text: string, handlers: UtteranceCallbacks) => spoken.push({ text, handlers }),
   playChime: (handlers: UtteranceCallbacks) => spoken.push({ text: '(chime)', handlers }),
   stopUtterances: () => stopUtterances(),
+  spokenOffset: () => spokenOffset(),
   onAudioEvent: (handler: (event: AudioEvent, message: string | null) => void) => {
     audio.current = handler
   }
@@ -58,6 +60,7 @@ beforeEach(() => {
   stopSpeaking()
   spoken.length = 0
   stopUtterances.mockClear()
+  spokenOffset.mockReturnValue(0)
   setAutoReadNeedsHeadphones(false)
   native.isPrivateOutput.mockReturnValue(true)
 })
@@ -163,6 +166,21 @@ describe('reading controls', () => {
     resumeReading('test')
     expect(spoken).toHaveLength(before + 1)
     expect(last().text).toBe(second)
+  })
+
+  it('goes on from the word it was reading, not from the start of the piece', () => {
+    speakReply('long', reply, 'queue')
+    const first = last().text
+    spokenOffset.mockReturnValue(16)
+    pauseReading('test')
+    spokenOffset.mockReturnValue(0)
+    resumeReading('test')
+    expect(last().text).toBe(first.slice(16))
+    // A second pause counts from where the resumed part began.
+    spokenOffset.mockReturnValue(10)
+    pauseReading('test')
+    resumeReading('test')
+    expect(last().text).toBe(first.slice(26))
   })
 
   it('skips to the next message', () => {
