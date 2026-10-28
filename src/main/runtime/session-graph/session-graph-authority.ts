@@ -156,18 +156,25 @@ export abstract class OrcaRuntimeWithTransitionGraphReloadToTerminalState extend
     return workspace
   }
 
-  protected async resolveEmulatorWorkspaceId(selector: string): Promise<string> {
-    const folderWorkspace = this.resolveFolderWorkspaceSelector(selector)
+  /** Folder workspaces first, then Git worktrees; project-group folders have no repo row (STA-12562). Launching needs the folder on disk; teardown must not. */
+  protected async resolveWorkspaceSelector(
+    selector: string,
+    options: { requireUsableFolderPath?: boolean } = {}
+  ): Promise<ResolvedWorktree> {
+    const folderWorkspace = options.requireUsableFolderPath
+      ? (await this.resolveFolderWorkspaceLaunchScope(selector))?.folderWorkspace
+      : this.resolveFolderWorkspaceSelector(selector)
     return folderWorkspace
-      ? folderWorkspaceKey(folderWorkspace.id)
-      : (await this.resolveWorktreeSelector(selector)).id
+      ? this.folderWorkspaceToResolvedWorktree(folderWorkspace)
+      : this.resolveGitWorktreeSelector(selector)
   }
 
-  protected async resolveBrowserWorkspace(selector: string): Promise<ResolvedWorktree> {
-    const folderScope = await this.resolveFolderWorkspaceLaunchScope(selector)
-    return folderScope?.folderWorkspace
-      ? this.folderWorkspaceToResolvedWorktree(folderScope.folderWorkspace)
-      : this.resolveWorktreeSelector(selector)
+  protected async resolveEmulatorWorkspaceId(selector: string): Promise<string> {
+    return (await this.resolveWorkspaceSelector(selector)).id
+  }
+
+  protected resolveBrowserWorkspace(selector: string): Promise<ResolvedWorktree> {
+    return this.resolveWorkspaceSelector(selector, { requireUsableFolderPath: true })
   }
 
   /** Reconcile client-hosted pages per paired device; one attached client cannot account for another's pages. */

@@ -36,3 +36,15 @@ export async function updateViewportForClient(
         )
   return { updated, applied: updated }
 }
+
+export function chainPassiveDesktopResize(
+  claimTail: Promise<boolean>,
+  supportsDesktopViewportClaims: boolean,
+  applyViewport: () => Promise<{ applied: boolean }>
+): Promise<boolean> {
+  return claimTail.then(async (priorClaimed) => {
+    const result = await applyViewport().catch(() => null)
+    // Passive geometry updates cannot revoke an established input claim.
+    return supportsDesktopViewportClaims ? priorClaimed : result?.applied === true
+  })
+}

@@ -58,12 +58,11 @@ type ActiveWslOrcadConnection = {
   forward: StartedPortForward
 }
 
+type InFlightWslOrcadConnect = { promise: Promise<WslOrcadConnection>; noBoot: boolean }
+
 export class WslOrcadConnectionManager {
   private readonly active = new Map<string, ActiveWslOrcadConnection>()
-  private readonly inFlight = new Map<
-    string,
-    { promise: Promise<WslOrcadConnection>; noBoot: boolean }
-  >()
+  private readonly inFlight = new Map<string, InFlightWslOrcadConnect>()
   private readonly generations = new Map<string, number>()
 
   constructor(private readonly dependencies: WslOrcadConnectionDependencies = {}) {}
@@ -128,6 +127,11 @@ export class WslOrcadConnectionManager {
 
   get(distro: string): WslOrcadConnection | null {
     return this.active.get(wslDistroHolderKey(distro))?.connection ?? null
+  }
+
+  /** A connect is running for this distro, so `get` may still name the server it replaces. */
+  isConnecting(distro: string): boolean {
+    return this.inFlight.has(wslDistroHolderKey(distro))
   }
 
   /** Liveness reports a status change for a distro, with whatever connection it has now. */

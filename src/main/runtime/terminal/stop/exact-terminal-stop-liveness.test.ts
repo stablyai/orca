@@ -8,8 +8,8 @@ const LEAF = '10000000-0000-4000-8000-000000000002'
 const INCARNATION = '10000000-0000-4000-8000-000000000003'
 
 class ExactStopRuntime extends OrcaRuntimeService {
-  override resolveWorktreeSelector(selector: string) {
-    return super.resolveWorktreeSelector(selector)
+  override resolveGitWorktreeSelector(selector: string) {
+    return super.resolveGitWorktreeSelector(selector)
   }
 
   override getResolvedWorktreeMap() {
@@ -59,7 +59,7 @@ describe('terminal.stopExact post-stop verification', () => {
   it('verifies a confirmed stop even when an overlapping inventory voids its first check', async () => {
     const runtime = new ExactStopRuntime()
     const worktree = folderWorktree()
-    vi.spyOn(runtime, 'resolveWorktreeSelector').mockResolvedValue(worktree)
+    vi.spyOn(runtime, 'resolveGitWorktreeSelector').mockResolvedValue(worktree)
     vi.spyOn(runtime, 'getResolvedWorktreeMap').mockResolvedValue(new Map([[WORKTREE, worktree]]))
     let stopped = false
     let overlapped: Promise<unknown> | null = null

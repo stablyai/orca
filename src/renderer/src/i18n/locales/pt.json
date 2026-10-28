@@ -509,7 +509,6 @@
       "subagents_other": "{{count}} subagentes"
     },
     "terminal": {
-      "closed": "Nenhum terminal ativo — o painel deste agente foi encerrado.",
       "remotePreviewUnavailable": "Nenhuma pré-visualização para esta sessão remota — abra o espaço de trabalho para ver o terminal.",
       "focusWorktree": "Abrir worktree",
       "close": "Fechar"
@@ -727,11 +726,15 @@
         "system": "Sistema",
         "english": "Inglês",
         "chinese": "中文（简体）",
+        "chineseTraditional": "繁體中文（台灣）",
         "korean": "한국어",
         "japanese": "日本語",
         "spanish": "Español",
         "french": "Français",
-        "portuguese": "Português (Brasil)"
+        "portuguese": "Português (Brasil)",
+        "russian": "Русский",
+        "turkish": "Türkçe",
+        "german": "Deutsch"
       },
       "statusBar": {
         "claudeToggleDescription": "Mostra o uso de tokens e custo do Claude para o espaço de trabalho ativo.",
@@ -4021,7 +4024,6 @@
           "a016ffbeed": "Auto usa o Windows PowerShell agora e alterna para o PowerShell 7+ quando instalado.",
           "5ed5c95344": "Escolha entre Windows PowerShell e PowerShell 7+ para novos painéis de terminal.",
           "3d88af864d": "Escolha se a opção de shell PowerShell inicia o Windows PowerShell ou o PowerShell 7+ para novos painéis de terminal.",
-          "8a956cc91e": "Caracteres tratados como limites de palavra para seleção por clique duplo.",
           "4bebcc2b2c": "Separadores de Palavra",
           "12e06178fa": "linhas",
           "907b0b9d3e": "Personalizado",
@@ -10618,12 +10620,10 @@
           "oneWorkspace": "1 espaço de trabalho",
           "manyWorkspaces": "{{count}} espaços de trabalho",
           "hostHasWorkspacesDefault": "Remove {{value0}} e suas credenciais deste computador. Seus(Suas) {{value1}} permanecem no Orca — os arquivos remotos não são tocados.",
-          "alsoDeleteRemote": "Também excluir estes(as) {{value0}} em {{value1}}",
           "alsoForgetLocal": "Também remover estes(as) {{value0}} do Orca",
           "advanced": "Avançado",
-          "alsoDeleteRemoteHint": "Exclui permanentemente as worktrees Git remotas e suas branches. Não pode ser desfeito.",
           "alsoForgetLocalHint": "Limpa-os apenas do Orca. Os arquivos, worktrees e branches remotos permanecem intocados.",
-          "wslHostEndsTerminals": "Remove {{value0}} do Orca, encerra os terminais abertos e interrompe o servidor Orca nessa distribuição. Os arquivos da distribuição não são alterados."
+          "wslHostEndsTerminalsUnlessShared": "Remove {{value0}} do Orca. A menos que outro Orca aberto neste computador o esteja usando, também encerra seus terminais abertos e para o servidor do Orca nessa distro. Os arquivos da distro não são alterados."
         },
         "AddRepoSteps": {
           "569326d9cc": "Escolher pasta",
@@ -10934,14 +10934,9 @@
           "6c07f3a91e": "{{value0}} em {{value1}}"
         },
         "ForgetSshWorkspaceDialog": {
-          "reconnectFailed": "Falha na reconexão",
-          "forgetBody": "Remove este espaço de trabalho apenas do Orca. Os arquivos, a worktree Git e as branches em {{host}} permanecem intocados.",
-          "title": "Excluir “{{name}}”?",
-          "disconnectedBody": "O host SSH deste espaço de trabalho não está conectado. Reconecte para excluí-lo também no remoto, ou remova-o somente do Orca.",
           "ghostBody": "{{host}} não é mais um host SSH salvo, então este espaço de trabalho não está mais conectado a um host ativo. Ele só pode ser removido do Orca — os arquivos e branches no remoto permanecem intocados.",
           "cancel": "Cancelar",
-          "forget": "Remover do Orca",
-          "reconnectAndDelete": "Reconectar e Excluir"
+          "forget": "Remover do Orca"
         },
         "RepoScanUnavailableIndicator": {
           "title": "Falha na varredura de worktree para {{value0}}",
@@ -11363,6 +11358,7 @@
           "removalPending": "A remoção não foi concluída"
         },
         "wslHostRemoval": {
+          "keptForOthers": "Removido deste Orca. O host continua em execução para {{value0}}.",
           "partial": "O host foi removido, mas algo na distribuição ainda está em execução: {{value0}}",
           "pending": "O Orca ainda não removeu o host: {{value0}} Remova-o novamente para tentar de novo, ou conecte-o para mantê-lo."
         },
@@ -18484,6 +18480,7 @@
         "agentCommandNotRunnable": "O Comando de {{agent}} em Configurações → Agentes deve ser o caminho ou nome de um programa que o Orca possa encontrar, sem argumentos nem variáveis. Altere-o ou redefina-o.",
         "runtimeNotInstalled": "{{agent}} não está instalado no computador que executa este chat. Instale-o pelo chat em uma versão atual do Orca.",
         "fullAccessAsRoot": "{{agent}} não usará Acesso total enquanto for executado como root. Escolha outra permissão para {{agent}} em Configurações → Agentes para o computador que executa este chat e inicie um novo chat.",
+        "launchPreparationFailed": "O Orca não conseguiu preparar a inicialização de {{agent}} no computador que executa este chat.",
         "chooseClaudeAccount": "Escolha ou adicione uma nas configurações de Contas do Claude.",
         "chooseClaudeAccountThenRunCommand": "Escolha ou adicione uma nas configurações de Contas do Claude e execute /{{command}} novamente.",
         "chooseClaudeAccountThenSend": "Escolha ou adicione uma nas configurações de Contas do Claude e envie sua mensagem novamente.",
@@ -18758,7 +18755,6 @@
         "pausedSendFailedWaiting": "Não foi possível enviar — pressione Enviar para tentar novamente quando o agente terminar.",
         "save": "Salvar",
         "editingMessage": "Editando mensagem",
-        "cancelEditing": "Cancelar edição",
         "editChanged": "Esta mensagem mudou durante a edição. Sua versão está no campo de texto do chat.",
         "editChangedPrompt": "Esta mensagem mudou durante a edição. Sua versão estará no campo de texto do chat depois que você responder ao agente.",
         "editChangedNotSaved": "Esta mensagem mudou durante a edição. Sua versão não foi salva.",
@@ -18772,8 +18768,6 @@
         "expand": "Expandir",
         "queued": "Na fila",
         "clearAll": "Limpar tudo",
-        "pasteOrDropImages": "Cole ou solte imagens",
-        "saveNeedsContent": "Adicione texto ou uma imagem para salvar",
         "moveChanged": "A fila mudou antes desta movimentação. Tente arrastar a mensagem novamente.",
         "reorderHint": "Arraste para reordenar ou use as teclas de seta para cima e para baixo.",
         "reorderMessage": "Reordenar mensagem"

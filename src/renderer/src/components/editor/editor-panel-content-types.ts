@@ -21,6 +21,7 @@ export const WORKTREE_HOST_UNRESOLVED_ERROR =
 
 export type FileContent = {
   mediaUrl?: string
+  size?: number
   csvPreview?: CsvFilePreview
   content: string
   isBinary: boolean

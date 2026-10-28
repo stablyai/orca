@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { OrchestrationFleetWorker } from '../../../shared/orchestration-fleet-projection'
-import { subagentGroupFallbackText } from '../../../shared/native-chat-subagent-summary'
+import { subagentGroupFallbackText } from '../../../shared/native-chat/transcript/native-chat-subagent-summary'
 import type {
   NativeChatBlock,
   NativeChatMessage,

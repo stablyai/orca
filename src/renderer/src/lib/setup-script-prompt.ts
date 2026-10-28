@@ -26,6 +26,19 @@ export type SetupScriptPromptInspection =
       status: 'forbidden'
       repoId: string
     }
+  // The repo's WSL distro is stopped: nothing to say until it runs, and a Retry could not succeed.
+  | {
+      status: 'distro-stopped'
+      repoId: string
+    }
+
+/**
+ * States the card shows nothing for: mobile-scope forbiddance (the global banner explains it) and a
+ * stopped WSL distro (focus re-inspects, so the card returns once it runs; a Retry could not succeed).
+ */
+export function isSilentSetupScriptPromptState(state: { status: string }): boolean {
+  return state.status === 'forbidden' || state.status === 'distro-stopped'
+}
 
 export async function inspectSetupScriptPromptState({
   repo,
@@ -39,7 +52,9 @@ export async function inspectSetupScriptPromptState({
   try {
     const hooksResult = await checkHooks()
     if (hooksResult.status === 'error') {
-      return { status: 'error', repoId: repo.id }
+      return hooksResult.unavailable === 'wsl-distro-stopped'
+        ? { status: 'distro-stopped', repoId: repo.id }
+        : { status: 'error', repoId: repo.id }
     }
     const hasEffectiveSetup = hasEffectiveSetupCommand(repo, hooksResult)
     if (hasEffectiveSetup) {
@@ -80,6 +95,12 @@ export function ignoresSharedSetupScripts(repo: Pick<Repo, 'hookSettings'>): boo
 
 export function getSetupScriptPromptDismissalKey(repoHostIdentity: string): string {
   return `${SETUP_SCRIPT_PROMPT_DISMISSAL_PREFIX}${repoHostIdentity}`
+}
+
+/** The repo of a dismissal key, host-qualified (`<host>\0<repoId>`) or legacy bare. */
+export function getSetupScriptPromptDismissalRepoId(entry: string): string {
+  const identity = entry.slice(SETUP_SCRIPT_PROMPT_DISMISSAL_PREFIX.length)
+  return identity.slice(identity.indexOf('\0') + 1)
 }
 
 export function isSetupScriptPromptDismissed(

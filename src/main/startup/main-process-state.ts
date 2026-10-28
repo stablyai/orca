@@ -67,6 +67,8 @@ function createInitialProfileStateAdmission(): ProfileStateRuntimeAdmission | un
 /** Mutable composition-root state shared by startup, window, serve, and quit phases. */
 export const mainProcessState = {
   mainWindow: null as BrowserWindow | null,
+  // Never cleared: closing the last main window still quits on Windows/Linux.
+  hasOpenedMainWindow: false,
   /** User quit bypasses running-process confirmation during close. */
   isQuitting: false,
   store: null as Store | null,
@@ -128,6 +130,9 @@ export const mainProcessState = {
   firstWindowStartupServicesReady: Promise.resolve(),
   // Publish proxy readiness for fetchers; window creation can proceed behind the request guard.
   initialProxyApplicationReady: Promise.resolve(),
+  // Why awaited before runtime services: the first window's session and UI reads must see a
+  // committed WSL move's rewrite. Bounded, never rejects, and resolved at once with the gate off.
+  wslMoveStartupRewriteReady: Promise.resolve(),
   // Parallel i18n gates the translated failure dialog only; phase failures are handled by readiness composition.
   mainProcessI18nReady: Promise.resolve(),
   managedWslCliReconciliationReady: Promise.resolve(),

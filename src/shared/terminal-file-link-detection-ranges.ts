@@ -4,30 +4,33 @@ import type { ParsedTerminalFileLink } from './terminal-links'
 const LEADING_TRIM_CHARS = new Set(['(', '[', '{', '"', "'"])
 const TRAILING_TRIM_CHARS = new Set([')', ']', '}', '"', "'", ',', ';', '.'])
 
+export const ROOTED_PATH_START_PATTERN = /^(?:~[\\/]|[\\/]|\.{1,2}[\\/]|[A-Za-z]:[\\/])/
+
 export type DetectedTerminalFileLinkRange = {
   startIndex: number
   endIndex: number
   text: string
 }
 
-function trimBoundaryPunctuation(
+export function hasPathSeparator(text: string): boolean {
+  return text.includes('/') || text.includes('\\')
+}
+
+export function trimTerminalPathBoundaryPunctuation(
   value: string,
   startIndex: number
 ): DetectedTerminalFileLinkRange | null {
   let start = 0
   let end = value.length
-
   while (start < end && LEADING_TRIM_CHARS.has(value[start])) {
     start += 1
   }
   while (end > start && TRAILING_TRIM_CHARS.has(value[end - 1])) {
     end -= 1
   }
-
   if (start >= end) {
     return null
   }
-
   return {
     text: value.slice(start, end),
     startIndex: startIndex + start,
@@ -41,7 +44,7 @@ export function* detectTerminalFileLinkRanges(
 ): Generator<DetectedTerminalFileLinkRange> {
   for (const match of lineText.matchAll(regex)) {
     const rawStart = match.index ?? 0
-    const trimmed = trimBoundaryPunctuation(match[0], rawStart)
+    const trimmed = trimTerminalPathBoundaryPunctuation(match[0], rawStart)
     if (trimmed) {
       yield trimmed
     }
@@ -83,30 +86,6 @@ export function terminalFileLinkRangesOverlap(
   }
   const previous = claimedRanges[low - 1]
   return previous !== undefined && previous[1] > range.startIndex
-}
-
-export function insertTerminalFileLinkClaimedRange(
-  claimedRanges: [number, number][],
-  range: [number, number]
-): void {
-  // oxlint-disable-next-line unicorn/prefer-at -- the phone's terminal WebView (Chrome 74) has no Array#at
-  const last: [number, number] | undefined = claimedRanges[claimedRanges.length - 1]
-  if (!last || last[0] <= range[0]) {
-    claimedRanges.push(range)
-    return
-  }
-
-  let low = 0
-  let high = claimedRanges.length
-  while (low < high) {
-    const mid = Math.floor((low + high) / 2)
-    if (claimedRanges[mid][0] <= range[0]) {
-      low = mid + 1
-    } else {
-      high = mid
-    }
-  }
-  claimedRanges.splice(low, 0, range)
 }
 
 export function toParsedTerminalFileLink(

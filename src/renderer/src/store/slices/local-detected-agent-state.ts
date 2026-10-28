@@ -1,51 +1,74 @@
 import type { StateCreator } from 'zustand'
 import type { AppState } from '../types'
+import { haveSameDisabledTuiAgents } from '../../../../shared/tui-agent-selection'
 import type { TuiAgent } from '../../../../shared/tui-agent'
+import { isTuiAgent } from '../../../../shared/tui-agent-config'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../shared/constants'
 import { getLocalAgentPreflightContext } from '@/lib/local-preflight-context'
 import { localAgentInventoryContextKey } from '@/lib/local-preflight-context-key'
 import * as contextEviction from './local-agent-context-eviction'
-import { getLegacyLoadingPatch, getSupersededDetectPatch } from './local-agent-legacy-loading'
+import { getLegacyLoadingPatch } from './local-agent-legacy-loading'
+import {
+  refreshLocalAgentInventory,
+  type LocalAgentInventoryLifecycle
+} from './local-agent-inventory-refresh'
 import { createEmptyLocalDetectedAgentState } from './local-detected-agent-store-state'
 import { readLocalAgentInventoryOutcome } from './local-agent-inventory-outcome'
 import type { LocalDetectedAgentState } from './local-detected-agent-store-state'
 
 type LocalDetectedAgentStateCreator = StateCreator<AppState, [], [], LocalDetectedAgentState>
 
-export const createLocalDetectedAgentState: LocalDetectedAgentStateCreator = (set, get) => {
-  const detectPromises = new Map<string, Promise<TuiAgent[]>>()
-  const refreshPromises = new Map<string, Promise<TuiAgent[]>>()
-  const keptThroughFailure = new WeakSet<TuiAgent[]>()
-  const failedDetectContextKeys = new Set<string>()
-  let detectedContextKey: string | null = null
-  let legacyDetectContextKey: string | null = null
-  let legacyRefreshContextKey: string | null = null
-  let localDetectionGeneration = 0
+export const createLocalDetectedAgentState: LocalDetectedAgentStateCreator = (set, get, store) => {
+  let nativeInventoryRequested = false
+  const lifecycle: LocalAgentInventoryLifecycle = {
+    detectPromises: new Map(),
+    refreshPromises: new Map(),
+    keptThroughFailure: new WeakSet(),
+    failedDetectContextKeys: new Set(),
+    detectedContextKey: null,
+    legacyDetectContextKey: null,
+    legacyRefreshContextKey: null,
+    localDetectionGeneration: 0
+  }
 
   const actions = {
     ...createEmptyLocalDetectedAgentState(),
 
     readLocalAgentInventory: (id?: string | null) =>
-      readLocalAgentInventoryOutcome(get(), id, failedDetectContextKeys, keptThroughFailure),
-    ensureNativeDetectedAgents: (): Promise<TuiAgent[]> =>
-      actions.ensureDetectedAgents(undefined, true),
-    ensureDetectedAgents: (worktreeId?: string | null, nativeHost = false): Promise<TuiAgent[]> => {
-      const isFloating = nativeHost || worktreeId === FLOATING_TERMINAL_WORKTREE_ID
+      readLocalAgentInventoryOutcome(
+        get(),
+        id,
+        lifecycle.failedDetectContextKeys,
+        lifecycle.keptThroughFailure
+      ),
+    ensureNativeDetectedAgents: (): Promise<TuiAgent[]> => {
+      nativeInventoryRequested = true
+      return actions.ensureDetectedAgents(undefined, true)
+    },
+    ensureAllDetectedAgents: (worktreeId?: string | null): Promise<TuiAgent[]> =>
+      actions.ensureDetectedAgents(worktreeId, false, true),
+    ensureDetectedAgents: (
+      worktreeId?: string | null,
+      nativeHost = false,
+      includeDisabled = false
+    ): Promise<TuiAgent[]> => {
+      const isolatedInventory =
+        includeDisabled || nativeHost || worktreeId === FLOATING_TERMINAL_WORKTREE_ID
       const context = nativeHost
         ? undefined
         : getLocalAgentPreflightContext(get(), undefined, undefined, worktreeId)
-      const contextKey = localAgentInventoryContextKey(context)
+      const contextKey = localAgentInventoryContextKey(context, includeDisabled)
       const existing = get().localDetectedAgentIdsByContext[contextKey]
-      const inflightRefresh = refreshPromises.get(contextKey)
+      const inflightRefresh = lifecycle.refreshPromises.get(contextKey)
       if (inflightRefresh) {
-        if (!isFloating) {
-          legacyRefreshContextKey = contextKey
+        if (!isolatedInventory) {
+          lifecycle.legacyRefreshContextKey = contextKey
         }
         return inflightRefresh
       }
-      if (existing != null && !failedDetectContextKeys.has(contextKey)) {
-        if (!isFloating) {
-          detectedContextKey = contextKey
+      if (existing != null && !lifecycle.failedDetectContextKeys.has(contextKey)) {
+        if (!isolatedInventory) {
+          lifecycle.detectedContextKey = contextKey
           const state = get()
           if (state.detectedAgentIds !== existing || state.isDetectingAgents) {
             set({ detectedAgentIds: existing, isDetectingAgents: false })
@@ -53,32 +76,37 @@ export const createLocalDetectedAgentState: LocalDetectedAgentStateCreator = (se
         }
         return Promise.resolve(existing)
       }
-      const requestGeneration = localDetectionGeneration
+      const requestGeneration = lifecycle.localDetectionGeneration
       const exposeInflightToLegacy = (): void => {
-        if (!isFloating) {
-          legacyDetectContextKey = contextKey
+        if (!isolatedInventory) {
+          lifecycle.legacyDetectContextKey = contextKey
         }
-        if (isFloating) {
+        if (isolatedInventory) {
           return
         }
         const state = get()
-        const patch = getLegacyLoadingPatch(state, detectedContextKey === contextKey, 'detect')
+        const patch = getLegacyLoadingPatch(
+          state,
+          lifecycle.detectedContextKey === contextKey,
+          'detect'
+        )
         if (patch) {
           set(patch)
         }
       }
-      const inflight = detectPromises.get(contextKey)
+      const inflight = lifecycle.detectPromises.get(contextKey)
       if (inflight) {
         exposeInflightToLegacy()
         return inflight
       }
-      if (!isFloating) {
-        legacyDetectContextKey = contextKey
+      if (!isolatedInventory) {
+        lifecycle.legacyDetectContextKey = contextKey
       }
       set((state) => ({
-        ...(isFloating
+        ...(isolatedInventory
           ? {}
-          : (getLegacyLoadingPatch(state, detectedContextKey === contextKey, 'detect') ?? {})),
+          : (getLegacyLoadingPatch(state, lifecycle.detectedContextKey === contextKey, 'detect') ??
+            {})),
         localDetectedAgentIdsByContext: {
           ...state.localDetectedAgentIdsByContext,
           [contextKey]: existing ?? null
@@ -89,18 +117,18 @@ export const createLocalDetectedAgentState: LocalDetectedAgentStateCreator = (se
         }
       }))
       const pending = window.api.preflight
-        .detectAgents(context)
+        .detectAgents(includeDisabled ? context : { ...context, enabledOnly: true })
         .then((ids) => {
-          const typed = ids as TuiAgent[]
+          const typed = ids.filter(isTuiAgent)
           if (
-            requestGeneration === localDetectionGeneration &&
-            detectPromises.get(contextKey) === pending
+            requestGeneration === lifecycle.localDetectionGeneration &&
+            lifecycle.detectPromises.get(contextKey) === pending
           ) {
-            failedDetectContextKeys.delete(contextKey)
-            const exposeToLegacy = legacyDetectContextKey === contextKey
+            lifecycle.failedDetectContextKeys.delete(contextKey)
+            const exposeToLegacy = lifecycle.legacyDetectContextKey === contextKey
             if (exposeToLegacy) {
-              legacyDetectContextKey = null
-              detectedContextKey = contextKey
+              lifecycle.legacyDetectContextKey = null
+              lifecycle.detectedContextKey = contextKey
             }
             set((state) => ({
               ...(exposeToLegacy ? { detectedAgentIds: typed, isDetectingAgents: false } : {}),
@@ -116,15 +144,15 @@ export const createLocalDetectedAgentState: LocalDetectedAgentStateCreator = (se
           }
           return typed
         })
-        .catch(() => {
+        .catch((): TuiAgent[] => {
           if (
-            requestGeneration === localDetectionGeneration &&
-            detectPromises.get(contextKey) === pending
+            requestGeneration === lifecycle.localDetectionGeneration &&
+            lifecycle.detectPromises.get(contextKey) === pending
           ) {
-            failedDetectContextKeys.add(contextKey)
-            const exposeToLegacy = legacyDetectContextKey === contextKey
+            lifecycle.failedDetectContextKeys.add(contextKey)
+            const exposeToLegacy = lifecycle.legacyDetectContextKey === contextKey
             if (exposeToLegacy) {
-              legacyDetectContextKey = null
+              lifecycle.legacyDetectContextKey = null
             }
             set((state) => ({
               ...(exposeToLegacy ? { detectedAgentIds: [], isDetectingAgents: false } : {}),
@@ -138,170 +166,78 @@ export const createLocalDetectedAgentState: LocalDetectedAgentStateCreator = (se
               )
             }))
           }
-          return [] as TuiAgent[]
+          return []
         })
         .finally(() => {
-          if (detectPromises.get(contextKey) === pending) {
-            detectPromises.delete(contextKey)
+          if (lifecycle.detectPromises.get(contextKey) === pending) {
+            lifecycle.detectPromises.delete(contextKey)
           }
         })
-      detectPromises.set(contextKey, pending)
+      lifecycle.detectPromises.set(contextKey, pending)
       return pending
     },
 
-    refreshDetectedAgents: (worktreeId?: string | null) => {
-      const isFloating = worktreeId === FLOATING_TERMINAL_WORKTREE_ID
-      const context = getLocalAgentPreflightContext(get(), undefined, undefined, worktreeId)
-      const contextKey = localAgentInventoryContextKey(context)
-      const cached = get().localDetectedAgentIdsByContext[contextKey]
-      const hadUsableCache = cached != null && !failedDetectContextKeys.has(contextKey)
-      const requestGeneration = localDetectionGeneration
-      const exposeInflightToLegacy = (): void => {
-        if (!isFloating) {
-          legacyRefreshContextKey = contextKey
-        }
-        if (isFloating) {
-          return
-        }
-        const state = get()
-        const patch = getLegacyLoadingPatch(state, detectedContextKey === contextKey, 'refresh')
-        if (patch) {
-          set(patch)
-        }
-      }
-      const inflight = refreshPromises.get(contextKey)
-      if (inflight) {
-        exposeInflightToLegacy()
-        return inflight
-      }
-      if (!isFloating) {
-        legacyRefreshContextKey = contextKey
-      }
-      const supersedesDetect = detectPromises.delete(contextKey)
-      const clearsLegacyDetect = legacyDetectContextKey === contextKey
-      if (clearsLegacyDetect) {
-        legacyDetectContextKey = null
-      }
-      set((state) => ({
-        ...(isFloating
-          ? {}
-          : (getLegacyLoadingPatch(state, detectedContextKey === contextKey, 'refresh') ?? {})),
-        ...getSupersededDetectPatch(state, contextKey, supersedesDetect, clearsLegacyDetect),
-        isRefreshingLocalAgentsByContext: {
-          ...state.isRefreshingLocalAgentsByContext,
-          [contextKey]: true
-        }
-      }))
-      const pending = window.api.preflight
-        .refreshAgents(context)
-        .then((result) => {
-          const typed = result.agents as TuiAgent[]
-          if (
-            requestGeneration === localDetectionGeneration &&
-            refreshPromises.get(contextKey) === pending
-          ) {
-            failedDetectContextKeys.delete(contextKey)
-            const exposeToLegacy = legacyRefreshContextKey === contextKey
-            if (exposeToLegacy) {
-              legacyRefreshContextKey = null
-              detectedContextKey = contextKey
-            }
-            set((state) => ({
-              ...(exposeToLegacy
-                ? {
-                    detectedAgentIds: typed,
-                    isRefreshingAgents: false,
-                    pathSource: result.pathSource,
-                    pathFailureReason: result.pathFailureReason
-                  }
-                : {}),
-              localDetectedAgentIdsByContext: {
-                ...state.localDetectedAgentIdsByContext,
-                [contextKey]: typed
-              },
-              isRefreshingLocalAgentsByContext: contextEviction.removeLocalAgentContextEntry(
-                state.isRefreshingLocalAgentsByContext,
-                contextKey
-              )
-            }))
-          }
-          return typed
-        })
-        .catch(() => {
-          const fallback = get().localDetectedAgentIdsByContext[contextKey] ?? []
-          if (
-            requestGeneration === localDetectionGeneration &&
-            refreshPromises.get(contextKey) === pending
-          ) {
-            keptThroughFailure.add(fallback)
-            if (!hadUsableCache) {
-              failedDetectContextKeys.add(contextKey)
-            }
-            const exposeToLegacy = legacyRefreshContextKey === contextKey
-            if (exposeToLegacy) {
-              legacyRefreshContextKey = null
-              detectedContextKey = contextKey
-            }
-            set((state) => ({
-              ...(exposeToLegacy ? { detectedAgentIds: fallback, isRefreshingAgents: false } : {}),
-              localDetectedAgentIdsByContext: {
-                ...state.localDetectedAgentIdsByContext,
-                [contextKey]: fallback
-              },
-              isRefreshingLocalAgentsByContext: contextEviction.removeLocalAgentContextEntry(
-                state.isRefreshingLocalAgentsByContext,
-                contextKey
-              )
-            }))
-          }
-          return fallback
-        })
-        .finally(() => {
-          if (refreshPromises.get(contextKey) === pending) {
-            refreshPromises.delete(contextKey)
-          }
-        })
-      refreshPromises.set(contextKey, pending)
-      return pending
-    },
+    refreshAllDetectedAgents: (worktreeId?: string | null): Promise<TuiAgent[]> =>
+      actions.refreshDetectedAgents(worktreeId, true),
+    refreshDetectedAgents: (worktreeId?: string | null, includeDisabled = false) =>
+      refreshLocalAgentInventory(set, get, lifecycle, worktreeId, includeDisabled),
 
     clearLocalDetectedAgentContextsForProjects: (projectIds: readonly string[]) => {
       const eviction = contextEviction.getLocalAgentContextEviction({
         projectIds,
         state: get(),
         internalContextKeys: [
-          ...detectPromises.keys(),
-          ...refreshPromises.keys(),
-          ...failedDetectContextKeys
+          ...lifecycle.detectPromises.keys(),
+          ...lifecycle.refreshPromises.keys(),
+          ...lifecycle.failedDetectContextKeys
         ],
-        detectedContextKey,
-        legacyDetectContextKey,
-        legacyRefreshContextKey
+        detectedContextKey: lifecycle.detectedContextKey,
+        legacyDetectContextKey: lifecycle.legacyDetectContextKey,
+        legacyRefreshContextKey: lifecycle.legacyRefreshContextKey
       })
       if (!eviction) {
         return
       }
       for (const contextKey of eviction.removedContextKeys) {
-        detectPromises.delete(contextKey)
-        refreshPromises.delete(contextKey)
-        failedDetectContextKeys.delete(contextKey)
+        lifecycle.detectPromises.delete(contextKey)
+        lifecycle.refreshPromises.delete(contextKey)
+        lifecycle.failedDetectContextKeys.delete(contextKey)
       }
-      detectedContextKey = eviction.detectedContextKey
-      legacyDetectContextKey = eviction.legacyDetectContextKey
-      legacyRefreshContextKey = eviction.legacyRefreshContextKey
+      lifecycle.detectedContextKey = eviction.detectedContextKey
+      lifecycle.legacyDetectContextKey = eviction.legacyDetectContextKey
+      lifecycle.legacyRefreshContextKey = eviction.legacyRefreshContextKey
       set(eviction.statePatch)
     },
 
     clearLocalDetectedAgents: () => {
-      localDetectionGeneration += 1
-      detectPromises.clear()
-      refreshPromises.clear()
-      failedDetectContextKeys.clear()
-      detectedContextKey = null
-      legacyDetectContextKey = null
-      legacyRefreshContextKey = null
+      nativeInventoryRequested = false
+      lifecycle.localDetectionGeneration += 1
+      lifecycle.detectPromises.clear()
+      lifecycle.refreshPromises.clear()
+      lifecycle.failedDetectContextKeys.clear()
+      lifecycle.detectedContextKey = null
+      lifecycle.legacyDetectContextKey = null
+      lifecycle.legacyRefreshContextKey = null
       set(createEmptyLocalDetectedAgentState())
     }
   }
+  store.subscribe((state, previous) => {
+    if (state.settings?.disabledTuiAgents === previous.settings?.disabledTuiAgents) {
+      return
+    }
+    if (
+      !haveSameDisabledTuiAgents(
+        state.settings?.disabledTuiAgents,
+        previous.settings?.disabledTuiAgents
+      )
+    ) {
+      const reacquireNativeInventory = nativeInventoryRequested
+      actions.clearLocalDetectedAgents()
+      // Native consumers can remain mounted while workspace consumers reacquire only WSL.
+      if (reacquireNativeInventory) {
+        void actions.ensureNativeDetectedAgents()
+      }
+    }
+  })
   return actions
 }

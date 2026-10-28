@@ -255,6 +255,7 @@ function Harness({
     },
     onMicPress: undefined,
     micActive: false,
+    micProcessing: false,
     dictationMode: undefined,
     onMicPressIn: () => {},
     onMicPressOut: () => {},

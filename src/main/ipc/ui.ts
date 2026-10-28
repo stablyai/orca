@@ -9,6 +9,7 @@ import { BrowserWindow, ipcMain, webContents, type WebContents } from 'electron'
 import type { Store } from '../persistence'
 import type { PersistedUIState } from '../../shared/persisted-ui-state-types'
 import { isFeatureInteractionId } from '../../shared/feature-interactions'
+import { isWslMoveWindowWriteHeld } from '../persistence/moving-wsl-projects/wsl-move-window-write-hold'
 import { isTrustedMainRendererSender } from './main-renderer-sender-trust'
 
 let trustedUIRendererWebContentsId: number | null = null
@@ -56,14 +57,7 @@ export function registerUIHandlers(
   store: Store,
   options: { isDashboardPopoutRenderer?: (sender: WebContents) => boolean } = {}
 ): void {
-  // Broadcast UI state so desktop rehydrates mobile or sibling-window changes.
-  store.onUIChanged((ui) => {
-    for (const window of BrowserWindow.getAllWindows()) {
-      if (!window.isDestroyed() && !window.webContents.isDestroyed()) {
-        window.webContents.send('ui:stateChanged', ui)
-      }
-    }
-  })
+  store.onUIChanged((ui) => sendToTrustedUIRenderer('ui:stateChanged', ui))
 
   ipcMain.handle('ui:getJiraQuickFilters', () =>
     normalizeJiraQuickFilterState(store.getUI().jiraQuickFilterState)
@@ -87,7 +81,10 @@ export function registerUIHandlers(
   })
 
   ipcMain.handle('ui:set', (_event, args: Partial<PersistedUIState>) => {
-    store.updateUI(args)
+    // A window a WSL move rewrote under is stale until main reloads it.
+    if (!isWslMoveWindowWriteHeld()) {
+      store.updateUI(args)
+    }
   })
 
   ipcMain.handle('ui:recordFeatureInteraction', (_event, id: unknown) => {

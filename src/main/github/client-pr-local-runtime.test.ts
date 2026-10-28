@@ -227,13 +227,13 @@ describe('GitHub PR local runtime routing', () => {
           stdout: JSON.stringify({ id: 13, node_id: 'PRRC_inline_13', user: null, body: 'Inline' })
         }
       }
-      if (args.length === 2 && endpoint === 'repos/acme/orca/pulls/7') {
+      if (args.includes('--include') && endpoint === 'repos/acme/orca/pulls/7') {
         return {
-          stdout: JSON.stringify({
+          stdout: `HTTP/2.0 200 OK\n\n${JSON.stringify({
             number: 7,
             head: { ref: 'feature', sha: 'head-oid' },
             base: { ref: 'main', sha: 'base-oid' }
-          })
+          })}`
         }
       }
       return { stdout: '', stderr: '' }
@@ -469,13 +469,13 @@ describe('GitHub PR local runtime routing', () => {
       if (endpoint.endsWith('/check-runs/88/annotations?per_page=20')) {
         return { stdout: '[]' }
       }
-      if (args.length === 2 && endpoint === 'repos/team/orca/pulls/7') {
+      if (args.includes('--include') && endpoint === 'repos/team/orca/pulls/7') {
         return {
-          stdout: JSON.stringify({
+          stdout: `HTTP/2.0 200 OK\n\n${JSON.stringify({
             number: 7,
             head: { ref: 'feature', sha: 'head-sha' },
             base: { ref: 'main', sha: 'base-sha' }
-          })
+          })}`
         }
       }
       if (query) {

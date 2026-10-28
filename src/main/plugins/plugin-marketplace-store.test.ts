@@ -1,4 +1,4 @@
-import { mkdtemp, readdir, rm } from 'node:fs/promises'
+import { mkdir, mkdtemp, readFile, readdir, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
@@ -81,5 +81,57 @@ describe('PluginMarketplaceStore', () => {
     const store = new PluginMarketplaceStore(await tempRoot())
     await expect(store.readSnapshot('../outside')).rejects.toThrow()
     await expect(store.removeSource('../outside')).rejects.toThrow()
+  })
+
+  it('keeps release-bearing snapshots out of the key older builds read', async () => {
+    const root = await tempRoot()
+    const store = new PluginMarketplaceStore(root)
+    const registered = await store.addSource(source(), 123)
+    const snapshots = join(root, 'marketplaces', 'snapshots')
+    const legacy = {
+      schemaVersion: 1,
+      sourceId: registered.id,
+      source: source(),
+      marketplaceCommit: 'a'.repeat(40),
+      fetchedAt: 1,
+      marketplace: { name: 'Old', owner: 'community', plugins: [] }
+    }
+    await mkdir(snapshots, { recursive: true })
+    await writeFile(join(snapshots, `${registered.id}.json`), JSON.stringify(legacy))
+    await expect(store.readSnapshot(registered.id)).resolves.toEqual(legacy)
+
+    await store.writeSnapshot({
+      source: registered,
+      marketplaceCommit: 'b'.repeat(40),
+      marketplace: {
+        name: 'New',
+        owner: 'community',
+        plugins: [
+          {
+            id: 'community.notes',
+            source: { kind: 'git', url: 'https://github.com/community/notes.git', ref: 'v1' },
+            categories: [],
+            release: {
+              version: '1.0.0',
+              commit: 'c'.repeat(40),
+              contentHash: 'f'.repeat(64),
+              execution: 'data',
+              minimumOrca: '1.4.0',
+              types: ['interface-language']
+            }
+          }
+        ]
+      }
+    })
+
+    await expect(store.readSnapshot(registered.id)).resolves.toMatchObject({
+      marketplace: { name: 'New' }
+    })
+    // An older build reads only `<id>.json`, which still holds v1-shaped data it can parse.
+    expect(JSON.parse(await readFile(join(snapshots, `${registered.id}.json`), 'utf8'))).toEqual(
+      legacy
+    )
+    await store.removeSource(registered.id)
+    expect(await readdir(snapshots)).toEqual([])
   })
 })

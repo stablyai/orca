@@ -25,9 +25,11 @@ export function createTerminalPtyBindingActions(
       }
       let worktreeId: string | null = null
       let wasActivationSpawn = false
+      let wasAlreadyBound = false
       const isRemoteRuntimeMirror = isRemoteRuntimePtyId(ptyId)
       set((s) => {
         const existingPtyIds = s.ptyIdsByTabId[tabId] ?? []
+        wasAlreadyBound = !replacedPtyId && existingPtyIds.includes(ptyId)
         const remote = parseRemoteRuntimePtyId(ptyId)
         const legacyRemotePtyId = remote?.environmentId ? toRemoteRuntimePtyId(remote.handle) : null
         const hasLegacyPtyBinding = legacyRemotePtyId
@@ -110,14 +112,22 @@ export function createTerminalPtyBindingActions(
           (s.suppressedPtyExitIds[ptyId] ||
             (replacementPtyId && s.suppressedPtyExitIds[replacementPtyId]))
         )
-        const nextSuppressedPtyExitIds = { ...s.suppressedPtyExitIds }
-        delete nextSuppressedPtyExitIds[ptyId]
-        if (replacementPtyId) {
-          delete nextSuppressedPtyExitIds[replacementPtyId]
-        }
-        if (shouldRetainSuppressedExit) {
-          // Why: handle rotation keeps the same terminal lifecycle; an intentional exit racing the rotation must stay suppressed once.
-          nextSuppressedPtyExitIds[ptyId] = true
+        const touchesSuppressedExit =
+          ptyId in s.suppressedPtyExitIds ||
+          (replacementPtyId !== null && replacementPtyId in s.suppressedPtyExitIds)
+        // Keep identity on a plain reattach so subscribers don't re-render for an unchanged map.
+        const nextSuppressedPtyExitIds = touchesSuppressedExit
+          ? { ...s.suppressedPtyExitIds }
+          : s.suppressedPtyExitIds
+        if (touchesSuppressedExit) {
+          delete nextSuppressedPtyExitIds[ptyId]
+          if (replacementPtyId) {
+            delete nextSuppressedPtyExitIds[replacementPtyId]
+          }
+          if (shouldRetainSuppressedExit) {
+            // Why: handle rotation keeps the same terminal lifecycle; an intentional exit racing the rotation must stay suppressed once.
+            nextSuppressedPtyExitIds[ptyId] = true
+          }
         }
         const nextUnverifiedPtyLossTabIds = s.unverifiedPtyLossTabIds[tabId]
           ? omitUnverifiedPtyLossTabIds(s.unverifiedPtyLossTabIds, [tabId])
@@ -168,14 +178,17 @@ export function createTerminalPtyBindingActions(
           ...(nextTabsByWorktree !== s.tabsByWorktree
             ? { tabsByWorktree: nextTabsByWorktree }
             : {}),
-          ptyIdsByTabId: {
-            ...s.ptyIdsByTabId,
-            [tabId]: nextPtyIds
-          },
-          lastKnownRelayPtyIdByTabId: {
-            ...s.lastKnownRelayPtyIdByTabId,
-            [tabId]: ptyId
-          },
+          ...(nextPtyIds !== existingPtyIds || !(tabId in s.ptyIdsByTabId)
+            ? { ptyIdsByTabId: { ...s.ptyIdsByTabId, [tabId]: nextPtyIds } }
+            : {}),
+          ...(s.lastKnownRelayPtyIdByTabId[tabId] !== ptyId
+            ? {
+                lastKnownRelayPtyIdByTabId: {
+                  ...s.lastKnownRelayPtyIdByTabId,
+                  [tabId]: ptyId
+                }
+              }
+            : {}),
           ...(nextUnverifiedPtyLossTabIds !== s.unverifiedPtyLossTabIds
             ? { unverifiedPtyLossTabIds: nextUnverifiedPtyLossTabIds }
             : {}),
@@ -195,7 +208,8 @@ export function createTerminalPtyBindingActions(
       // Why: a bound PTY means the workspace is awake by any route (CLI, automation, client wake), not only activation.
       clearWorktreeSleepIntent(worktreeId)
       // Why: activation spawns come from clicking a worktree, not work in it — skip the lastActivityAt stamp and sortEpoch bump; other spawn reasons still bump.
-      if (worktreeId && !wasActivationSpawn && !isRemoteRuntimeMirror) {
+      // A remount reattaching its own live PTY (e.g. a hidden prewarm) is not new work either.
+      if (worktreeId && !wasActivationSpawn && !wasAlreadyBound && !isRemoteRuntimeMirror) {
         get().bumpWorktreeActivity(worktreeId)
       }
     }

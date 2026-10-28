@@ -19,6 +19,7 @@ describe('orcad terminal census', () => {
       liveSessions: 3,
       startedSinceActivation: 2,
       daemonProtocolVersion: 7,
+      daemonProtocolVersions: [7],
       inProcessSessions: 0
     })
   })
@@ -34,18 +35,22 @@ describe('orcad terminal census', () => {
       liveSessions: 0,
       startedSinceActivation: 0,
       daemonProtocolVersion: null,
+      daemonProtocolVersions: [],
       inProcessSessions: 0
     })
   })
 
-  it('leaves the protocol unknown when sessions span daemon generations', async () => {
+  it('names every daemon generation when sessions span them', async () => {
     const census = await collectOrcadTerminalCensus(
       0,
-      async () => [session(1, 7), session(2, 6)],
+      async () => [session(1, 7), session(2, 6), session(3, 7)],
       async () => 0
     )
-    expect(census.daemonProtocolVersion).toBeNull()
-    expect(census.liveSessions).toBe(2)
+    expect(census).toMatchObject({
+      liveSessions: 3,
+      daemonProtocolVersion: null,
+      daemonProtocolVersions: [6, 7]
+    })
   })
 
   it('leaves the since-activation count unknown when a session has no creation time', async () => {
@@ -85,6 +90,7 @@ describe('orcad terminal census', () => {
       liveSessions: 1,
       startedSinceActivation: null,
       daemonProtocolVersion: null,
+      daemonProtocolVersions: [],
       inProcessSessions: 1
     })
   })

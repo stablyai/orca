@@ -18,6 +18,46 @@ async function tempPluginsDir(): Promise<string> {
 }
 
 describe('installed plugin discovery identity', () => {
+  it('requires a new review when an installed v2 worker has different bytes', async () => {
+    const pluginsDir = await tempPluginsDir()
+    const key = 'orca-samples.worker'
+    const discoverAt = async (hash: string) => {
+      const versionDir = join(pluginsDir, key, hash)
+      await mkdir(versionDir, { recursive: true })
+      await writeFile(join(pluginsDir, key, 'current'), hash)
+      await writeFile(join(versionDir, 'main.mjs'), 'export default () => {}')
+      await writeFile(
+        join(versionDir, 'orca-plugin.json'),
+        JSON.stringify({
+          manifestVersion: 2,
+          execution: 'trusted-worker',
+          id: 'worker',
+          publisher: 'orca-samples',
+          name: 'Worker',
+          version: '1.0.0',
+          engines: { orca: '>=1.0.0' },
+          pluginApi: 1,
+          main: 'main.mjs'
+        })
+      )
+      const [plugin] = await discoverPlugins({
+        pluginsDir,
+        devPluginPaths: [],
+        hostVersion: '1.4.0'
+      })
+      if (!plugin || isInvalidDiscoveredPlugin(plugin)) {
+        throw new Error('expected a valid plugin')
+      }
+      return plugin
+    }
+
+    const approved = await discoverAt('a'.repeat(64))
+    const updated = await discoverAt('b'.repeat(64))
+
+    expect(updated.consentContentHash).toBe('b'.repeat(64))
+    expect(updated.consentFingerprint).not.toBe(approved.consentFingerprint)
+  })
+
   it('keeps the install directory identity when a manifest is invalid or mismatched', async () => {
     const pluginsDir = await tempPluginsDir()
     const installedKey = 'orca-samples.expected'

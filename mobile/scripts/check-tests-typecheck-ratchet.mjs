@@ -157,6 +157,7 @@ export function collectTypecheckPass(root = process.cwd()) {
   const output = `${result.stdout ?? ''}${result.stderr ?? ''}`
   return {
     failing: parseFailingFiles(output),
+    diagnostics: output.split('\n').filter((line) => ERROR_LINE.test(line)),
     programTestFiles: parseProgramTestFiles(output, fs.realpathSync(root))
   }
 }
@@ -281,6 +282,9 @@ export function main(root = process.cwd()) {
 
   if (added.length > 0) {
     printAddedFailure(added)
+    for (const diagnostic of pass.diagnostics) {
+      console.error(diagnostic)
+    }
     if (stale.length > 0) {
       printStaleFailure(stale)
     }

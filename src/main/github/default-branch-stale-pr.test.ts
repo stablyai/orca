@@ -163,7 +163,7 @@ function restPR({
 function primeGhExecWithBranchList(list: Record<string, unknown>[]): void {
   ghExecFileAsyncMock.mockImplementation(async (args: string[]) => {
     if (args[0] === 'api' && args[1]?.includes('pulls?head=')) {
-      return { stdout: JSON.stringify(list) }
+      return { stdout: `HTTP/2.0 200 OK\n\n${JSON.stringify(list)}` }
     }
     throw new Error(`gh unavailable: ${args.join(' ')}`)
   })
@@ -215,7 +215,7 @@ describe('issue #9171: default-branch checkout must not attach a stale non-open 
     const pr = await getPRForBranch('/repo-root', 'master')
 
     expect(ghExecFileAsyncMock).toHaveBeenCalledWith(
-      ['api', 'repos/acme/widgets/pulls?head=acme%3Amaster&state=all&per_page=1'],
+      ['api', 'repos/acme/widgets/pulls?head=acme%3Amaster&state=all&per_page=1', '--include'],
       { cwd: '/repo-root', host: 'github.com' }
     )
     expect(pr).toBeNull()
@@ -280,7 +280,7 @@ describe('issue #9171: default-branch checkout must not attach a stale non-open 
     primeGitExecForDefaultBranch()
     ghExecFileAsyncMock.mockImplementation(async (args: string[]) => {
       if (args[0] === 'api' && args[1]?.includes('pulls?head=')) {
-        return { stdout: '[]' }
+        return { stdout: 'HTTP/2.0 200 OK\n\n[]' }
       }
       if (args[0] === 'pr' && args[1] === 'view' && args[2] === '7') {
         return {
@@ -312,7 +312,7 @@ describe('issue #9171: default-branch checkout must not attach a stale non-open 
     primeGitExecForDefaultBranch()
     ghExecFileAsyncMock.mockImplementation(async (args: string[]) => {
       if (args[0] === 'api' && args[1]?.includes('pulls?head=')) {
-        return { stdout: '[]' }
+        return { stdout: 'HTTP/2.0 200 OK\n\n[]' }
       }
       if (args[0] === 'pr' && args[1] === 'view' && args[2] === '7') {
         return {

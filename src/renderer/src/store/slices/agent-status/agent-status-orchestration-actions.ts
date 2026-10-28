@@ -29,7 +29,7 @@ export function createAgentStatusOrchestrationActions(
       producerHost = LOCAL_EXECUTION_HOST_ID
     ) => {
       const generatedTitleUpdates: AgentStatusEntry[] = []
-      set((s) => {
+      set((s, changedPaneKeys) => {
         const previous = s.runtimeAgentOrchestrationByPaneKey
         const reconciled: Record<string, AgentStatusOrchestrationContext> = Object.fromEntries([])
         let runtimeMapChanged = Object.keys(previous).length !== Object.keys(entries).length
@@ -73,6 +73,7 @@ export function createAgentStatusOrchestrationActions(
                 liveChanged = true
               }
               const nextEntry = { ...liveEntry, orchestration: merged }
+              changedPaneKeys.add(paneKey)
               nextLive[paneKey] = nextEntry
               // Why: only replace titles when labels match the live dispatch taskId; sticky completed context must not rename a later turn.
               if (

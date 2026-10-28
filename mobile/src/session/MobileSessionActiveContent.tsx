@@ -251,6 +251,7 @@ export function MobileSessionActiveContent({
         structuredComposer={nativeChatStructuredComposer}
         onMicPress={dictationEnabled ? handleDictationToggle : undefined}
         micActive={dictation.isRecording}
+        micProcessing={dictation.isProcessing}
         dictationMode={dictationMode}
         onMicPressIn={handleDictationPressIn}
         onMicPressOut={handleDictationPressOut}

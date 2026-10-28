@@ -3,7 +3,8 @@
 # This is a RATCHET: counts may only go DOWN. Only creation flows with no source row may read
 # the default host, through defaultCreationHost. Everything else routes by the owner.
 # Prune after removing reads: pnpm check:focus-read-ratchet --prune
-3 src/renderer/src/app-shell/use-app-shell-services.ts
+1 src/renderer/src/app-shell/ActiveWorkspaceSyncGate.tsx
+2 src/renderer/src/app-shell/use-app-shell-services.ts
 2 src/renderer/src/App.tsx
 1 src/renderer/src/component-fixtures/component-fixture-explorer.tsx # dev-only fixture page seeds default settings
 1 src/renderer/src/components/activity/activity-scope-filter-controls.tsx

@@ -31,7 +31,10 @@ import {
 
 /** Commit a reconciliation patch and return a receipt for its host evidence. */
 export function applyWebSessionTabsStorePatch(
-  buildPatch: (state: AppState) => WebSessionTabsSyncState | Partial<WebSessionTabsSyncState>,
+  buildPatch: (
+    state: AppState,
+    changedAgentPaneKeys: Set<string>
+  ) => WebSessionTabsSyncState | Partial<WebSessionTabsSyncState>,
   hostMirrorVerdict: HostSessionMirrorPatchVerdict,
   agentStatusSnapshots?: RuntimeMobileSessionTabsResult | readonly RuntimeMobileSessionTabsResult[],
   allowCompletionNotification = false
@@ -52,9 +55,10 @@ export function applyWebSessionTabsStorePatch(
   }[] = []
 
   const runStorePatch = (
-    state: AppState
+    state: AppState,
+    changedAgentPaneKeys: Set<string>
   ): WebSessionTabsSyncState | Partial<WebSessionTabsSyncState> => {
-    const patch = buildPatch(state)
+    const patch = buildPatch(state, changedAgentPaneKeys)
     mirroredAgentStatusChanged = patch !== state && Object.hasOwn(patch, 'agentStatusByPaneKey')
     if (agentStatusSnapshots) {
       const nextAgentStatuses = patch.agentStatusByPaneKey ?? state.agentStatusByPaneKey
@@ -182,7 +186,7 @@ export function applyWebSessionTabsStorePatch(
   }
 
   try {
-    useAppStore.setState(runStorePatch)
+    useAppStore.getState().updateAgentStatusState(runStorePatch)
   } catch (error) {
     if (!patchCommitted) {
       throw error

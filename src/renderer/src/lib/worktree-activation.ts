@@ -39,7 +39,11 @@ import { liftSidebarFiltersHidingWorktree } from './worktree-activation-sidebar-
 import { isFloatingWorkspaceId } from '../../../shared/floating-workspace-worktree'
 import { revealFloatingWorkspacePanel } from './floating-workspace-panel-reveal'
 import { findPendingWorktreeCreationId } from './pending-worktree-creation'
-import { markVisited, readPreviousActive } from './worktree-activation-visit'
+import {
+  buildActivationStateTransition,
+  markVisited,
+  readPreviousActive
+} from './worktree-activation-visit'
 import { selectFolderWorkspaces } from '@/store/workspace-record-selectors'
 
 /** Share palette/dialog activation; derive repoId and no-op if the selected worktree vanished. */
@@ -202,16 +206,20 @@ export function activateAndRevealWorktree(
     state.activeWorkspaceExecutionHostId === (opts?.executionHostId ?? null) &&
     state.activeView === 'terminal'
 
-  if (wt.repoId !== state.activeRepoId) {
-    state.setActiveRepo(wt.repoId)
-  }
-
   if (state.activeView !== 'terminal') {
     state.setActiveView('terminal')
   }
 
-  const previousActive = readPreviousActive(state)
-  state.setActiveWorktree(worktreeId, opts?.executionHostId)
+  state.setActiveWorktree(
+    worktreeId,
+    opts?.executionHostId,
+    buildActivationStateTransition(state, worktreeId, {
+      repoId: wt.repoId,
+      // Why: Cmd+J focus recency (docs/cmd-j-empty-query-ordering.md); a plain reselect must not restamp it.
+      stampsVisit: !isPlainAlreadyActiveTerminal,
+      nextHostId: opts?.executionHostId ?? null
+    })
+  )
   const postActivationState = useAppStore.getState()
   const ownerRuntimeEnvironmentId = runtimeEnvironmentIdOrLocalUnlessTwin(
     postActivationState,
@@ -223,16 +231,6 @@ export function activateAndRevealWorktree(
       worktreeId,
       environmentId: ownerRuntimeEnvironmentId
     })
-  }
-
-  // Why: focus recency for Cmd+J ordering, distinct from recordWorktreeVisit/lastActivityAt; stamp before any later async step could throw. See docs/cmd-j-empty-query-ordering.md.
-  if (!isPlainAlreadyActiveTerminal) {
-    markVisited(state, worktreeId, previousActive, opts?.executionHostId ?? null)
-  }
-
-  // Why: skip re-recording for goBack/goForward history navigation — it moves the index instead of visiting anew (isNavigatingHistory).
-  if (!isPlainAlreadyActiveTerminal && !state.isNavigatingHistory) {
-    state.recordWorktreeVisit(worktreeId)
   }
 
   // Decide gate before resuming: resume consumes sleeping evidence, and late structured inventory can otherwise authorize a shell beside a pending chat (STA-1111).

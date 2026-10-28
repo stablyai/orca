@@ -355,4 +355,21 @@ describe('terminal link action routing', () => {
     ).toBe(true)
     expect(request.mock.calls[0][0].destination).toBe(destination)
   })
+
+  it('shows the raw OSC 8 file URI but copies its resolved path', () => {
+    const request = vi.fn()
+
+    handleOscLink('file:///repo/my%20file.ts#L4', plainEvent(), {
+      worktreeId: 'wt-1',
+      worktreePath: '/repo',
+      startupCwd: '/repo',
+      linkActionContext: actionContext(request)
+    })
+
+    expect(request.mock.calls[0][0]).toMatchObject({
+      destination: 'file:///repo/my%20file.ts#L4',
+      copyValue: '/repo/my file.ts',
+      kind: 'file'
+    })
+  })
 })

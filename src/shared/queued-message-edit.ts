@@ -1,6 +1,14 @@
-import type { AgentJournalMessageItem, AgentJournalSubmission } from './agent-session-journal-types'
+import type {
+  AgentJournalMessageItem,
+  AgentJournalSkillRef,
+  AgentJournalSubmission
+} from './agent-session-journal-types'
 import type { AgentSessionQueuedMessage } from './agent-session-queued-message-wire'
-import { agentSessionSendBodyFingerprint } from './structured-agent-session-send-mutation'
+import {
+  pickedSkillsInText,
+  agentSessionSendBodyFingerprint
+} from './structured-agent-session-send-mutation'
+import { MAX_SKILL_REFS } from './rpc-contract/structured-agent-session-message-params'
 import { MAX_BLOCKS, MAX_PROMPT_BYTES } from './rpc-contract/structured-agent-session-params'
 import { imageReferenceInsertion, imageReferenceToken } from './native-chat-image-reference'
 import {
@@ -15,7 +23,12 @@ export type QueuedMessageImageBlock = Extract<
 >
 
 /** What Save writes: the text, and when `images` is given, the complete ordered image set. */
-export type QueuedMessageEdit = { text: string; images?: readonly QueuedMessageImageBlock[] }
+export type QueuedMessageEdit = {
+  text: string
+  images?: readonly QueuedMessageImageBlock[]
+  /** Present means complete replacement, including an empty set; omitted preserves legacy editing. */
+  skills?: readonly AgentJournalSkillRef[]
+}
 
 export type QueuedMessageEditResult =
   | { ok: true; body: AgentJournalMessageItem }
@@ -92,7 +105,7 @@ export function queuedEditTextWithAddedImages(draft: QueuedMessageEditDraft): st
 
 /** The text an edit's typing is measured against: the card's own, its markers following the
  *  images removed so far, so a removal alone is not typing. */
-function queuedEditBaseText(
+export function queuedEditBaseText(
   body: AgentJournalMessageItem,
   kept: readonly { id: string }[]
 ): string | null {
@@ -174,22 +187,29 @@ export function queuedMessageWithEdit(
   edit: QueuedMessageEdit
 ): QueuedMessageEditResult {
   const { text, images } = edit
+  const skills =
+    edit.skills === undefined ? undefined : pickedSkillsInText(text, edit.skills, ['$', '/'])
   const editable = queuedMessageEditableText(body)
   if (editable === null) {
     return { ok: false, reason: 'not-editable' }
   }
-  if (byteLength(text) > MAX_PROMPT_BYTES) {
+  if (byteLength(text) > MAX_PROMPT_BYTES || (skills?.length ?? 0) > MAX_SKILL_REFS) {
     return { ok: false, reason: 'too-large' }
   }
   if (!text.trim() && (images ? images.length === 0 : imageBlocks(body).length === 0)) {
     return { ok: false, reason: 'empty' }
   }
   // Unchanged text and images keep their blocks, so a Save that changes nothing is a no-op.
-  if (text === editable && (!images || sameImages(images, imageBlocks(body)))) {
+  if (
+    text === editable &&
+    (!images || sameImages(images, imageBlocks(body))) &&
+    (skills === undefined || JSON.stringify(skills) === JSON.stringify(body.skills ?? []))
+  ) {
     return { ok: true, body }
   }
   // Plain-text edits cannot retain which occurrence owned a picked file.
-  const { skills: _pickedSkills, ...plainBody } = body
+  const { skills: _pickedSkills, ...withoutSkills } = body
+  const plainBody = { ...withoutSkills, ...(skills?.length ? { skills } : {}) }
   if (images) {
     const blocks: AgentJournalMessageItem['blocks'] = [
       ...(text.trim() ? [{ type: 'text' as const, text: text.trimEnd() }] : []),

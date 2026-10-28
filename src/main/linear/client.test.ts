@@ -114,6 +114,7 @@ async function loadClientModule(options: SafeStorageMockOptions = {}) {
   class AuthenticationLinearError extends Error {}
   // Mock the lazy loader; createRequire bypasses mocks on the raw SDK module.
   vi.doMock('./linear-sdk', () => ({
+    createLinearClient: (options: { apiKey: string }) => new linearClientMock(options),
     loadLinearSdk: () => ({
       AuthenticationLinearError,
       LinearClient: linearClientMock

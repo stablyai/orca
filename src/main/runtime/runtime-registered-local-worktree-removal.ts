@@ -26,7 +26,7 @@ import {
   isOrphanedWorktreeError
 } from '../ipc/worktree-logic'
 import { cleanupLocalOrphanedWorktreeDirectory } from '../local-orphaned-worktree-cleanup'
-import { recoverLocalWindowsWorktreeRemoval } from '../local-worktree-removal-recovery'
+import { recoverPartialLocalWorktreeRemoval } from '../local-worktree-removal-recovery'
 import { findRegisteredDeletableWorktree } from '../worktree-removal-safety'
 import { CLIENT_REMOVAL_HOME } from '../worktree-removal-home-guard'
 import type { RuntimeStore } from './runtime-store-contract'
@@ -249,7 +249,7 @@ export async function finishRuntimeLocalWorktreeRemoval(
       if (usesNativeWindowsRemoval(canonicalPath, localOptions)) {
         throw error
       }
-      const recovered = await recoverLocalWindowsWorktreeRemoval({
+      const recovered = await recoverPartialLocalWorktreeRemoval({
         error,
         force: args.force,
         canonicalWorktreePath: canonicalPath,

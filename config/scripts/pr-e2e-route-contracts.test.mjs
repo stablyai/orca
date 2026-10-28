@@ -503,6 +503,21 @@ function selectsManagedSshLane(file) {
   return selectPrE2eSpecs([file]).some((spec) => spec.startsWith(MANAGED_SSH_E2E_SPEC_PREFIX))
 }
 
+describe('wsl-host remove routing', () => {
+  it('runs the fake transport spec, which covers Remove, for a remove-path change', () => {
+    for (const file of [
+      'src/main/wsl/wsl-host-server-stop.ts',
+      'src/main/wsl/wsl-host-peer-desktops.ts',
+      'src/main/wsl/wsl-host-removal.ts'
+    ]) {
+      expect(selectPrE2eSpecs([file]), file).toContain('tests/e2e/wsl-host-fake-transport.spec.ts')
+    }
+    expect(selectPrE2eSpecs(['src/main/wsl/wsl-host-server-stop.test.ts'])).not.toContain(
+      'tests/e2e/wsl-host-fake-transport.spec.ts'
+    )
+  })
+})
+
 describe('wsl-host fake connector routing', () => {
   it('runs both WSL host specs for a fake connector change', () => {
     const specs = selectPrE2eSpecs(['src/main/wsl/wsl-host-e2e-fake-connector.ts'])

@@ -51,6 +51,10 @@ vi.mock('child_process', () => {
   }
 })
 
+vi.mock('../runtime/structured-agent-shell-environment', () => ({
+  captureHostShellEnvironment: vi.fn(async () => undefined)
+}))
+
 vi.mock('../startup/hydrate-shell-path', () => ({
   hydrateShellPath: hydrateShellPathMock,
   mergePathSegments: mergePathSegmentsMock
@@ -89,6 +93,7 @@ import {
   detectInstalledAgentsWithShellPathHydration
 } from '../preflight/agent-detection'
 import { registerPreflightHandlers } from './preflight'
+import { createGlobalSettingsFixture } from '../../shared/global-settings-test-fixture'
 import { resetPreflightMocks, type HandlerMap } from './preflight-test-harness'
 
 describe('preflight', () => {
@@ -121,6 +126,70 @@ describe('preflight', () => {
       configurable: true,
       value: originalPlatform
     })
+  })
+
+  it.each(['win32', 'darwin', 'linux'])(
+    'skips disabled probes on automatic %s detection and refresh while Settings stays complete',
+    async (platform) => {
+      Object.defineProperty(process, 'platform', { value: platform })
+      const settings = createGlobalSettingsFixture({ disabledTuiAgents: ['kiro'] })
+      registerPreflightHandlers({ getSettings: () => settings })
+      isCommandOnLocalPathMock.mockImplementation(async (command: string) =>
+        ['claude', 'kiro-cli'].includes(command)
+      )
+      await expect(
+        handlers['preflight:detectAgents'](undefined, {
+          enabledOnly: true,
+          disabledTuiAgents: []
+        })
+      ).resolves.toEqual(['claude'])
+      expect(isCommandOnLocalPathMock.mock.calls.map(([command]) => command)).not.toContain(
+        'kiro-cli'
+      )
+      expect(resolveCliCommandsMock).toHaveBeenCalledWith(expect.not.arrayContaining(['kiro-cli']))
+
+      isCommandOnLocalPathMock.mockClear()
+      await expect(
+        handlers['preflight:refreshAgents'](undefined, { enabledOnly: true })
+      ).resolves.toMatchObject({ agents: ['claude'] })
+      expect(isCommandOnLocalPathMock.mock.calls.map(([command]) => command)).not.toContain(
+        'kiro-cli'
+      )
+
+      await expect(handlers['preflight:detectAgents']()).resolves.toEqual(['claude', 'kiro'])
+      expect(isCommandOnLocalPathMock.mock.calls.map(([command]) => command)).toContain('kiro-cli')
+      await expect(handlers['preflight:refreshAgents']()).resolves.toMatchObject({
+        agents: ['claude', 'kiro']
+      })
+
+      settings.disabledTuiAgents = []
+      await expect(
+        handlers['preflight:detectAgents'](undefined, { enabledOnly: true })
+      ).resolves.toEqual(['claude', 'kiro'])
+    }
+  )
+
+  it('filters the WSL guest command batch for automatic inventory and keeps explicit inventory complete', async () => {
+    Object.defineProperty(process, 'platform', { value: 'win32' })
+    const settings = createGlobalSettingsFixture({ disabledTuiAgents: ['kiro'] })
+    registerPreflightHandlers({ getSettings: () => settings })
+    runWslProcessMock.mockResolvedValue({
+      code: 0,
+      timedOut: false,
+      stdout:
+        '__ORCA_AGENT_PATH__claude\t/home/me/bin/claude\n__ORCA_AGENT_PATH__kiro-cli\t/home/me/bin/kiro-cli\n',
+      stderr: ''
+    })
+    await expect(
+      handlers['preflight:detectAgents'](undefined, { wslDistro: 'Ubuntu', enabledOnly: true })
+    ).resolves.toEqual(['claude'])
+    expect(runWslProcessMock.mock.lastCall?.[0]).toMatchObject({ distro: 'Ubuntu' })
+    expect(runWslProcessMock.mock.lastCall?.[0].script).not.toContain("'kiro-cli'")
+    await expect(
+      handlers['preflight:detectAgents'](undefined, { wslDistro: 'Ubuntu' })
+    ).resolves.toEqual(['claude', 'kiro'])
+    expect(runWslProcessMock.mock.lastCall?.[0].script).toContain("'kiro-cli'")
+    expect(isCommandOnLocalPathMock).not.toHaveBeenCalled()
   })
 
   it('only reports agents when which/where resolves to a real executable path', async () => {

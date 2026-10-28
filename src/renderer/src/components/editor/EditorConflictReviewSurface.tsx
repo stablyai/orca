@@ -163,6 +163,8 @@ export function EditorConflictReviewSurface({
           <div className={className}>
             <ImageViewer
               content={fileContent.content}
+              src={fileContent.mediaUrl}
+              byteSize={fileContent.size}
               filePath={contentFile.filePath}
               mimeType={fileContent.mimeType}
             />

@@ -207,7 +207,7 @@ export function registerDiagnosticsHandlers(): void {
 
   ipcMain.handle(
     'diagnostics:collectBundle',
-    (_event, lookbackMinutesIn: unknown): DiagnosticsBundlePreview => {
+    async (_event, lookbackMinutesIn: unknown): Promise<DiagnosticsBundlePreview> => {
       // Enforce consent in main; hiding renderer controls is insufficient.
       const status = getDiagnosticsStatus()
       if (!status.bundleEnabled) {
@@ -218,7 +218,7 @@ export function registerDiagnosticsHandlers(): void {
         typeof lookbackMinutesIn === 'number' && Number.isFinite(lookbackMinutesIn)
           ? Math.max(1, Math.min(30 * 24 * 60, Math.floor(lookbackMinutesIn)))
           : undefined
-      const bundle = collectDiagnosticBundle({
+      const bundle = await collectDiagnosticBundle({
         appVersion: app.getVersion(),
         platform: osPlatform(),
         arch: osArch(),

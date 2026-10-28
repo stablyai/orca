@@ -12,6 +12,8 @@ const { prepareHooks, resolveHome, listHomes } = vi.hoisted(() => ({
   listHomes: vi.fn(() => ['/home/u/.local/share/orca/codex-accounts/a1/home'])
 }))
 
+const wslHost = vi.hoisted(() => vi.fn(() => false))
+vi.mock('../ipc/wsl-guest-windows-drive-path', () => ({ isWslHostOrcadProcess: wslHost }))
 vi.mock('../codex/codex-account-home-hook', () => ({
   reconcileCodexAccountHomeHook: prepareHooks
 }))
@@ -39,6 +41,19 @@ function settings(overrides: Partial<GlobalSettings>): GlobalSettings {
 describe('orcadCodexAccountHomes', () => {
   beforeEach(() => {
     prepareHooks.mockClear()
+  })
+
+  it('on a WSL host with hooks off, leaves the bridge-shared entry alone', async () => {
+    wslHost.mockReturnValue(true)
+    const homes = orcadCodexAccountHomes(
+      () => settings({ agentStatusHooksEnabled: false }),
+      noCleanup
+    )
+    await expect(homes.selectLaunchHome(undefined, { CODEX_HOME: ACCOUNT_HOME })).resolves.toBe(
+      ACCOUNT_HOME
+    )
+    expect(prepareHooks).not.toHaveBeenCalled()
+    wslHost.mockReturnValue(false)
   })
 
   it('puts the hook into a client-sent account home and launches on it', async () => {

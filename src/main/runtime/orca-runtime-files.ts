@@ -4,6 +4,7 @@ import { RuntimeFileAccess } from './files/file-access'
 import { RuntimeFileReads } from './files/file-reads'
 import { RuntimeFileMutations } from './files/file-mutations'
 import { RuntimeFileWatches } from './files/watch/file-watches'
+import { RuntimeStagedFileSaves } from './files/staged-file-save-commands'
 import { RuntimeTerminalPathResolver } from './terminal/terminal-path-resolver'
 import type { RuntimeFileCommandHost } from './files/file-command-host'
 
@@ -41,6 +42,7 @@ export class RuntimeFileCommands {
   readonly restoreFileExplorerWatchersAfterFailedRemoval: RuntimeFileWatches['restoreFileExplorerWatchersAfterFailedRemoval']
   readonly forgetFileExplorerWatchersAfterRemoval: RuntimeFileWatches['forgetFileExplorerWatchersAfterRemoval']
   readonly resolveTerminalPath: RuntimeTerminalPathResolver['resolveTerminalPath']
+  readonly stagedFileSaves: RuntimeStagedFileSaves
 
   constructor(host: RuntimeFileCommandHost) {
     this.search = new RuntimeFileSearch(host)
@@ -48,6 +50,7 @@ export class RuntimeFileCommands {
     this.access = new RuntimeFileAccess(host)
     this.reads = new RuntimeFileReads(host)
     this.mutations = new RuntimeFileMutations(host)
+    this.stagedFileSaves = new RuntimeStagedFileSaves(host)
     this.watches = new RuntimeFileWatches(host)
     this.terminalPaths = new RuntimeTerminalPathResolver(host, this.artifacts)
     this.openMobileFile = this.access.openMobileFile.bind(this.access)

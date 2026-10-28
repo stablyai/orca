@@ -70,6 +70,42 @@ describe('changed-code quality line matching', () => {
     ).toBe(true)
   })
 
+  it.each(['edit', 'rename'])('treats bracketed filenames literally after %s', (change) => {
+    const repo = mkdtempSync(path.join(tmpdir(), 'changed-code-quality-literal-'))
+    try {
+      const hooks = `core.hooksPath=${path.join(repo, '.git', 'no-hooks')}`
+      const git = (...args) => {
+        const result = runProcessSync({
+          program: 'git',
+          args: ['-c', 'commit.gpgsign=false', '-c', hooks, ...args],
+          cwd: repo
+        })
+        expect(result.code, result.stderr).toBe(0)
+        return result.stdout.trim()
+      }
+      git('init', '--quiet')
+      const file = '[cd].ts'
+      const source = change === 'rename' ? '[ab].ts' : file
+      const content = 'export const first = 1\n\nexport const legacy = 3\n'
+      writeFileSync(path.join(repo, source), content)
+      writeFileSync(path.join(repo, 'c.ts'), content)
+      git('add', '.')
+      git('-c', 'user.name=t', '-c', 'user.email=t@example.invalid', 'commit', '-qm', 'base')
+      const base = git('rev-parse', 'HEAD')
+      if (change === 'rename') {
+        git('mv', source, file)
+      }
+      writeFileSync(path.join(repo, file), content.replace('first = 1', 'first = 2'))
+      writeFileSync(path.join(repo, 'c.ts'), content.replace('legacy = 3', 'legacy = 4'))
+
+      const { rangesByFile } = collectAddedLineRanges(repo, base)
+      expect(rangesByFile.get(file)).toEqual([{ start: 1, end: 1 }])
+      expect(rangesByFile.get('c.ts')).toEqual([{ start: 3, end: 3 }])
+    } finally {
+      rmSync(repo, { recursive: true, force: true })
+    }
+  })
+
   it('discovers nested rule overrides while retaining root diagnostics', () => {
     const root = path.resolve(import.meta.dirname, '..', '..')
     const directory = mkdtempSync(path.join(root, 'config', 'changed-code-quality-nested-'))

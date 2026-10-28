@@ -593,6 +593,13 @@ describe('registerPtyHandlers', () => {
         expect(env.GIT_CONFIG_KEY_0).toBe('http.proxy')
         expect(env.GIT_CONFIG_KEY_1).toBeUndefined()
       })
+      it('forwards the sequenced setup script into WSLENV before the daemon boundary', async () => {
+        const env = await withWin32Platform(() =>
+          daemonSpawnAndGetEnv({ ORCA_SEQUENCED_SETUP_SCRIPT: 'true', WSLENV: 'EXISTING/p' })
+        )
+
+        expect(env.WSLENV).toBe('EXISTING/p:ORCA_SEQUENCED_SETUP_SCRIPT')
+      })
     })
   })
 })

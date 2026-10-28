@@ -76,3 +76,15 @@ export async function adoptWslHostLoginEnvironment(
   Object.assign(env, overlay)
   return Object.keys(overlay)
 }
+
+/** Adopts and logs the overlay; never rejects, so startup steps can chain on it. */
+export function adoptWslHostLoginEnvironmentLogged(): Promise<void> {
+  return adoptWslHostLoginEnvironment().then(
+    (names) => {
+      if (names.length > 0) {
+        console.info(`[orcad] adopted login-shell variables: ${names.join(', ')}`)
+      }
+    },
+    (error: unknown) => console.warn('[orcad] could not adopt login-shell variables:', error)
+  )
+}

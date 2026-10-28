@@ -23,6 +23,7 @@ export class CdpWsProxy {
   private client: WebSocket | null = null
   private detachClientListeners: (() => void) | null = null
   private port = 0
+  private stopped = false
   private readonly responder = new CdpClientResponseWriter(() => this.client)
   private readonly sessions = new CdpSyntheticSessionRegistry()
   private readonly discovery: CdpTargetDiscovery
@@ -77,7 +78,14 @@ export class CdpWsProxy {
   }
 
   async start(): Promise<string> {
+    if (this.stopped) {
+      throw new Error('CDP proxy has been stopped')
+    }
     await this.debuggerChannel.attachDebugger()
+    if (this.stopped || this.webContents.isDestroyed()) {
+      await this.stop()
+      throw new Error('CDP proxy has been stopped')
+    }
     return new Promise<string>((resolve, reject) => {
       this.httpServer = createServer((req, res) => {
         if (!isTrustedCdpLoopbackRequest(req, this.port)) {
@@ -145,15 +153,19 @@ export class CdpWsProxy {
   }
 
   async stop(): Promise<void> {
-    this.debuggerChannel.detachDebugger()
-    this.closeClient()
-    if (this.wss) {
-      this.wss.close()
-      this.wss = null
-    }
-    if (this.httpServer) {
-      this.httpServer.close()
-      this.httpServer = null
+    this.stopped = true
+    try {
+      this.debuggerChannel.detachDebugger()
+    } finally {
+      this.closeClient()
+      if (this.wss) {
+        this.wss.close()
+        this.wss = null
+      }
+      if (this.httpServer) {
+        this.httpServer.close()
+        this.httpServer = null
+      }
     }
   }
 

@@ -7,6 +7,7 @@ import { useAppStore } from '@/store'
 import { getRevealAncestorDirs } from './file-explorer-paths'
 import type { DirCache } from './file-explorer-types'
 import type { FileExplorerRowProjection } from './file-explorer-row-projection'
+import { fileExplorerRevealDirToReadOn } from './file-explorer-dir-pages'
 
 type UseFileExplorerRevealParams = {
   onRevealOutsideRoot?: () => void
@@ -26,6 +27,7 @@ type UseFileExplorerRevealParams = {
   rootCache: DirCache | undefined
   rowProjection: FileExplorerRowProjection
   loadDir: (dirPath: string, depth: number, options?: { force?: boolean }) => Promise<boolean>
+  loadMoreDir?: (dirPath: string) => Promise<void>
   setSelectedPath: (path: string | null) => void
   setFlashingPath: Dispatch<SetStateAction<string | null>>
   flashTimeoutRef: RefObject<number | null>
@@ -46,6 +48,7 @@ export function useFileExplorerReveal({
   rootCache,
   rowProjection,
   loadDir,
+  loadMoreDir,
   setSelectedPath,
   setFlashingPath,
   flashTimeoutRef,
@@ -209,6 +212,18 @@ export function useFileExplorerReveal({
       clearPendingExplorerReveal()
       return
     }
+    const readOn = loadMoreDir
+      ? fileExplorerRevealDirToReadOn(dirCache, rowProjection, [
+          ...pendingRevealAncestorDirs,
+          targetPath
+        ])
+      : null
+    if (readOn !== null) {
+      if (!loadingDirPaths.has(readOn)) {
+        void loadMoreDir?.(readOn)
+      }
+      return
+    }
     if (
       rootStillLoading ||
       missingExpandedAncestor ||
@@ -258,6 +273,7 @@ export function useFileExplorerReveal({
     clearPendingExplorerReveal,
     dirCache,
     expanded,
+    loadMoreDir,
     loadingDirPaths,
     pendingExplorerReveal,
     pendingRevealAncestorDirs,

@@ -16,7 +16,7 @@ import type {
 import type { WslHostConnector, WslHostServiceDependencies } from './wsl-host-connector-contract'
 import { wslDistroHolderKey } from './wsl-distro-holder-record'
 import {
-  persistWslHostConnection,
+  saveWslHostConnection,
   readWslHostRecordsQuietly,
   toWslHostStatus
 } from './wsl-host-connection-record'
@@ -84,9 +84,7 @@ export class WslHostService {
     if (!record) {
       return
     }
-    if (connection && persistWslHostConnection(this.deps.userDataPath(), record, connection)) {
-      this.deps.pairingChanged(record.environmentId)
-    }
+    saveWslHostConnection(this.deps, record, { get: () => connection })
     if (status.state === 'distro-stopped') {
       this.parked.add(record.environmentId)
     } else if (status.state === 'ready') {
@@ -299,6 +297,10 @@ export class WslHostService {
       ? (await this.connector.reachability(record.distro, environmentId)) === 'available'
       : false
   }
+
+  /** Re-saves the live connection's pairing and ports, which the deployment link overlays onto. */
+  readonly resaveConnection = (environmentId: string): void =>
+    saveWslHostConnection(this.deps, this.recordForEnvironment(environmentId), this.connector)
 
   /** Whether anything may still be started for this distro (spawn guard). */
   isKnownDistro(distro: string): boolean {

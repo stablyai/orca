@@ -2,6 +2,10 @@ import { findSqliteRuntimeTests } from './vitest-sqlite-runtime-scan.mjs'
 
 // SQLite publication, native bindings, worker IPC, socket liveness, and V8 retention use Node.
 const NODE_RUNTIME_INCLUDE = [
+  // Exercise the native fetch error and abort contracts used by the Linear SDK in Electron.
+  'src/main/linear/linear-request-recovery.test.ts',
+  'src/main/linear/linear-issue-detail-deadline.test.ts',
+  'tests/e2e/linear-cli-recovery.unit.test.ts',
   'src/main/runtime/structured-agent-cli-writers.test.ts',
   'config/scripts/vitest-sqlite-runtime-boundary.test.ts',
   'config/scripts/cloud-security-history-workflow.test.mjs',
@@ -94,6 +98,10 @@ const NODE_RUNTIME_INCLUDE = [
   'src/**/*.node-pty.test.ts',
   'src/**/node-pty-*.test.ts',
   'src/**/*.live-shell.test.ts',
+  // These drive live zsh through node-pty and rely on Node's native PTY stream delivery.
+  'src/main/shell-startup-feature-channel.test.ts',
+  'src/main/daemon/shell-ready.test.ts',
+  'src/main/daemon/repro-13767-shell-ready-marker-lost-to-exec.test.ts',
   'src/**/*real-pty*.test.ts',
   'src/**/*-native.test.ts',
   'src/**/*retention*.test.ts',

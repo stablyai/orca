@@ -111,8 +111,15 @@ export function MobileWebShellScreen({
   // Edge-to-edge disables adjustResize and zeroes WebView IME insets, so visualViewport never shrinks; publish native keyboard height to the page.
   const keyboardInset = Math.max(0, useKeyboardOcclusion())
   const pageInsets = pageSafeAreaInsets({ insets, topCovered: noticeShown })
-  const { snapshot, unreadable, readStorage, refreshStorage, writeStorage, readWorkspaceKey } =
-    usePageHostSnapshot(hostId, route.pathname, ownsHostArea)
+  const {
+    snapshot,
+    unreadable,
+    retry: retryHostSnapshot,
+    readStorage,
+    refreshStorage,
+    writeStorage,
+    readWorkspaceKey
+  } = usePageHostSnapshot(hostId, route.pathname, ownsHostArea)
   // Create the media registry before the bridge; its staged files must belong to this page session.
   const serveDeviceVerb = useNativeDeviceVerbs(state.kind === 'ready' ? state.sessionId : null)
   const servePdfView = useNativePdfViewer(hostId, state.kind === 'ready' ? state.sessionId : null)
@@ -226,16 +233,17 @@ export function MobileWebShellScreen({
   // Use navigation screen options to disable this stack entry’s gesture; the router has no such option.
   useShellPageBack({
     claimed: backClaimed,
+    isFocused: () => navigation.isFocused(),
     sendBack: bridge.sendBack,
     setOptions: navigation.setOptions
   })
   useReportedShellOverlayLoad(onOverlayLoad, state, pageFrame, downloadProgress)
 
-  // A rejected profile read creates no host; fail the document instead of leaving ready forever. Recovery refetches once, then exposes Try again.
+  // Profile failures preserve verified bundle bytes and retry the device store.
   useEffect(() => {
     if (unreadable) {
       console.warn('[web-shell] this host could not be read from the app store')
-      reportShellFailure('document-load-failed')
+      reportShellFailure('host-profile-unreadable')
     }
   }, [reportShellFailure, unreadable])
   useEffect(() => {
@@ -252,7 +260,12 @@ export function MobileWebShellScreen({
       <ShellStateScreen
         hostId={hostId}
         state={state}
-        onRetry={retry}
+        onRetry={() => {
+          if (unreadable) {
+            retryHostSnapshot()
+          }
+          retry()
+        }}
         downloadProgress={downloadProgress}
         host={snapshot?.host ?? null}
       />

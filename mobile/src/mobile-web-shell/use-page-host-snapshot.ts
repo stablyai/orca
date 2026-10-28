@@ -23,6 +23,7 @@ export type PageHostSnapshotView = {
   snapshot: PageHostSnapshot | null
   // Report rejected profile reads; no host can answer ready and nothing retries this read automatically.
   unreadable: boolean
+  retry: () => void
   // Keep init synchronous from a mirror updated by native writers and refreshed from the store.
   readStorage: () => PageStorageForInit
   refreshStorage: () => Promise<void>
@@ -38,6 +39,7 @@ export function usePageHostSnapshot(
 ): PageHostSnapshotView {
   const [snapshot, setSnapshot] = useState<PageHostSnapshot | null>(null)
   const [unreadable, setUnreadable] = useState(false)
+  const [readAttempt, setReadAttempt] = useState(0)
 
   // Apply the shell allowlist on every read/refresh; unrelated mirrored app state must never cross.
   const refreshStorage = useCallback(
@@ -86,7 +88,7 @@ export function usePageHostSnapshot(
     return () => {
       stale = true
     }
-  }, [hostId, refreshStorage])
+  }, [hostId, readAttempt, refreshStorage])
 
   const writeStorage = useCallback(
     (key: string, value: string | null): void => {
@@ -113,6 +115,7 @@ export function usePageHostSnapshot(
   return {
     snapshot,
     unreadable,
+    retry: useCallback(() => setReadAttempt((attempt) => attempt + 1), []),
     readStorage: useCallback(() => {
       // Bound values here or one oversized preference rejects all of init; report omissions so defaulted preferences are diagnosable.
       const held = readMirroredStorage(pageStorageKeysForRoute(hostId, routePathname))

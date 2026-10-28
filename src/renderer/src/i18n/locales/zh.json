@@ -110,11 +110,15 @@
         "system": "系统",
         "english": "English",
         "chinese": "中文（简体）",
+        "chineseTraditional": "繁體中文（台灣）",
         "korean": "한국어",
         "japanese": "日本語",
         "spanish": "Español",
         "french": "Français",
-        "portuguese": "Português (Brasil)"
+        "portuguese": "Português (Brasil)",
+        "russian": "Русский",
+        "turkish": "Türkçe",
+        "german": "Deutsch"
       },
       "statusBar": {
         "claudeToggleDescription": "显示当前工作区的 Claude Token 与费用消耗情况。",
@@ -5473,7 +5477,7 @@
           "5d1a5d51bb": "已停止 {{value0}} 上的进程",
           "c89f290e25": "已复制 {{value0}}",
           "d1113f4660": "无法打开浏览器",
-          "fed49903c9": "{{value0}} 直播 {{value1}}",
+          "fed49903c9": "{{value0}} 个正在运行的 {{value1}}",
           "unknownProcess": "未知进程"
         },
         "WorktreeContextMenu": {
@@ -5924,12 +5928,10 @@
           "oneWorkspace": "1 个工作区",
           "manyWorkspaces": "{{count}} 个工作区",
           "hostHasWorkspacesDefault": "从此计算机移除 {{value0}} 及其凭据。其 {{value1}} 保留在 Orca 中 — 远程文件不会被删除。",
-          "alsoDeleteRemote": "同时在 {{value1}} 上删除这些 {{value0}}",
           "alsoForgetLocal": "同时从 Orca 中移除这些 {{value0}}",
           "advanced": "高级",
-          "alsoDeleteRemoteHint": "永久删除远程 Git 工作树及其分支。此操作不可撤销。",
           "alsoForgetLocalHint": "仅从 Orca 中清除。远程文件、工作树和分支均不受影响。",
-          "wslHostEndsTerminals": "从 Orca 中移除 {{value0}}，结束其打开的终端，并停止该发行版中的 Orca 服务器。发行版中的文件不受影响。"
+          "wslHostEndsTerminalsUnlessShared": "从 Orca 中移除 {{value0}}。除非此计算机上打开的另一个 Orca 正在使用它，否则还会结束其打开的终端，并停止该发行版中的 Orca 服务器。发行版中的文件不受影响。"
         },
         "HostRenameDialog": {
           "1a2b3c4d5e": "重命名主机",
@@ -6083,14 +6085,9 @@
           "sshImportSyncedSingular": "已将 {{count}} 个主机添加到 Orca。"
         },
         "ForgetSshWorkspaceDialog": {
-          "reconnectFailed": "重新连接失败",
-          "forgetBody": "仅从 Orca 中移除此工作区。文件、Git 工作树和 {{host}} 上的分支保持不变。",
-          "title": "从 Orca 中移除“{{name}}”？",
-          "disconnectedBody": "此工作区的 SSH 主机未连接。重新连接以同时在远程删除，或仅从 Orca 中移除。",
           "ghostBody": "{{host}} 不再是已保存的 SSH 主机，因此此工作区不再连接到活跃主机。只能从 Orca 中移除 — 远程文件和分支保持不变。",
           "cancel": "取消",
-          "forget": "从 Orca 中移除",
-          "reconnectAndDelete": "重新连接并删除"
+          "forget": "从 Orca 中移除"
         },
         "MarkdownImageLightbox": {
           "image": "Image",
@@ -6204,7 +6201,7 @@
           "running": "运行中",
           "stopped": "已停止",
           "title": "添加 WSL 发行版",
-          "description": "Orca 在发行版内运行其服务器，因此 git、文件和终端都在 Linux 中原生运行。请将其用于新项目；通过 \\\\wsl.localhost 打开的项目会照常工作。",
+          "description": "Orca 在发行版内运行其服务器，因此 git、文件和终端都在 Linux 中原生运行。通过 \\\\wsl.localhost 打开的项目会照常工作，直到你将它们移到此主机。",
           "distro": "发行版",
           "loading": "正在查找 WSL 发行版…",
           "placeholder": "选择发行版",
@@ -6231,6 +6228,7 @@
           "removalPending": "移除未完成"
         },
         "wslHostRemoval": {
+          "keptForOthers": "已从此 Orca 中移除。该主机将继续为 {{value0}} 运行。",
           "partial": "主机已被移除，但发行版中仍有内容在运行：{{value0}}",
           "pending": "Orca 尚未移除该主机：{{value0}} 可再次移除以重试，或连接以保留它。"
         },
@@ -8186,7 +8184,6 @@
           "a016ffbeed": "Auto 现在使用 Windows PowerShell，并在安装后切换到 PowerShell 7+。",
           "5ed5c95344": "为新的终端窗格选择 Windows PowerShell 和 PowerShell 7+。",
           "3d88af864d": "选择 PowerShell shell 选项是为新终端窗格启动 Windows PowerShell 还是 PowerShell 7+。",
-          "8a956cc91e": "双击选择时将字符视为单词边界。",
           "4bebcc2b2c": "单词分隔符",
           "12e06178fa": "行",
           "907b0b9d3e": "自定义",
@@ -10939,7 +10936,7 @@
           "mixedTitle": "审查访问和内容",
           "instructionalTitle": "审查插件内容",
           "subtitle": "{{value0}} v{{value1}} · {{value2}}",
-          "reconsent": "权限、工作进程信任级别或指令内容自您上次审查此插件以来已更改。在运行之前请再次审查。",
+          "reconsent": "此插件在你批准后已更改。请重新审查以再次运行。",
           "capabilities": "此插件可以",
           "warning": "这些权限限制了插件如何使用 Orca 的 API。其工作进程仍作为普通进程在您的计算机上运行，可以完全访问您的文件、网络和其他进程。",
           "instructionalWarning": "此插件没有工作进程。其指令内容在您或智能体使用时仍可能引发操作。在启用之前，请审查以下指令和命令。",
@@ -17436,6 +17433,7 @@
         "agentCommandNotRunnable": "{{agent}} 在设置 → 智能体中的命令必须是 Orca 能找到的程序路径或名称，且不能包含参数或变量。请修改或重置。",
         "runtimeNotInstalled": "运行此聊天的计算机上未安装 {{agent}}。请在最新版本的 Orca 中从聊天里安装。",
         "fullAccessAsRoot": "{{agent}} 以 root 身份运行时不会使用完全访问。请在运行此聊天的计算机的“设置”→“智能体”中为 {{agent}} 选择其他权限，然后开始新的聊天。",
+        "launchPreparationFailed": "Orca 无法在运行此聊天的计算机上准备启动 {{agent}}。",
         "conversationOpenElsewhere": "Codex 仍在保持此对话打开。请稍后重试，或关闭其他 Codex 终端。",
         "conversationOpenInTerminal": "{{agent}} 已在另一个终端中运行此对话。请退出那里的 {{agent}} 或关闭该终端，然后在这里继续。",
         "chooseClaudeAccount": "请在 Claude 账户设置中选择或添加一个。",
@@ -18097,7 +18095,6 @@
         "pausedSendFailedWaiting": "无法发送。智能体完成后，点按发送以重试。",
         "save": "保存",
         "editingMessage": "正在编辑消息",
-        "cancelEditing": "取消编辑",
         "editChanged": "你编辑时此消息已更改。你编辑的内容已放入聊天输入框。",
         "editChangedPrompt": "你编辑时此消息已更改。回答智能体后，你编辑的内容会出现在聊天输入框中。",
         "editChangedNotSaved": "你编辑时此消息已更改。你的编辑未保存。",
@@ -18110,9 +18107,7 @@
         "collapse": "收起",
         "expand": "展开",
         "queued": "已排队",
-        "clearAll": "全部清除",
-        "pasteOrDropImages": "粘贴或拖入图片",
-        "saveNeedsContent": "添加文字或图片后才能保存"
+        "clearAll": "全部清除"
       },
       "thought": "已思考",
       "thoughtForDuration": "思考了 {{duration}}",
@@ -18829,7 +18824,6 @@
       "subagents_other": "{{count}} 个子智能体"
     },
     "terminal": {
-      "closed": "没有活动的终端 — 该智能体的窗格已关闭。",
       "focusWorktree": "聚焦工作树",
       "close": "关闭",
       "remotePreviewUnavailable": "此远程会话没有预览 - 打开工作区以查看终端。"
@@ -19117,6 +19111,21 @@
       "description": "活动工作区隐藏在侧边栏中。显示它只会调整隐藏它的过滤器。",
       "confirm": "调整滤镜并显示",
       "cancel": "保留过滤器"
+    },
+    "wslMoved": {
+      "movedToHost": "已移至 {{distro}} 主机",
+      "useHere": "重新在此电脑上使用",
+      "useHereTitle": "要重新在此电脑上使用 {{name}} 吗？",
+      "useHereDescription": "Orca 会按移动前的状态在这里打开此项目。你的代码不受影响：它从未移动。移动后在 {{distro}} 主机上所做的更改（例如新标签页和聊天）会留在主机上，不会回来。与它一起移动的项目也会一起回来。在你于 {{distro}} 主机上将其移除之前，项目也会一直保留在那里。此窗口将重新加载。",
+      "useHereConfirm": "在此电脑上使用",
+      "useHereSuperseded": "之后一次移动到 {{distro}} 主机的操作包含此项目。请先将那次移动恢复。",
+      "useHereMoveRunning": "移动到 {{distro}} 主机的操作仍在进行。请在其结束后重试。",
+      "useHereHostKeptForPeers": "{{project}} 已移到 {{distro}} 主机，该主机仍在为另一个 Orca 运行。重新添加该主机即可在此处再次使用它。",
+      "useHereHostUnreachable": "{{distro}} 主机没有响应，Orca 无法停止它上面的此项目副本，其代理可能仍在运行。请在设置中连接或移除该主机，然后重试。",
+      "useHereHostStillRunning": "{{distro}} 主机上的此项目副本仍有终端在运行，其代理可能会运行两次。请稍候再试。",
+      "useHereFailed": "无法将此项目恢复到此电脑。",
+      "useHereUnsavedTitle": "请先保存文件",
+      "useHereUnsavedDescription": "将 {{name}} 恢复到此电脑会重新加载此窗口。请先保存或关闭以下文件：{{files}}"
     },
     "startupWorktreeRefresh": {
       "loading": "正在发现工作区…",

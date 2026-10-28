@@ -29,6 +29,17 @@ describe('Pi RPC session ownership and delivery', () => {
     expect(h.connections).toHaveLength(1)
   })
 
+  it('names a launch that could not be resolved on the host', async () => {
+    const h = await setup()
+    await h.adapter.closeSession(sessionId)
+    h.resolveLaunch.mockRejectedValueOnce(new Error('selector_not_found'))
+    await expect(h.adapter.acquire({ ...h.input, fence: 8 })).rejects.toMatchObject({
+      name: 'AgentSessionPreSpawnError',
+      reason: 'launchPreparationFailed'
+    })
+    expect(h.connections).toHaveLength(1)
+  })
+
   it('does not spawn a start cancelled while resolving its workspace', async () => {
     const h = await setup()
     await h.adapter.closeSession(sessionId)
@@ -39,7 +50,10 @@ describe('Pi RPC session ownership and delivery', () => {
     const started = h.adapter.acquire({ ...h.input, fence: 8, signal: controller.signal })
     await Promise.resolve()
     controller.abort(new Error('Pi closed while starting'))
-    await expect(started).rejects.toThrow('closed while starting')
+    await expect(started).rejects.toMatchObject({
+      message: 'Pi closed while starting',
+      reason: undefined
+    })
     expect(h.connections).toHaveLength(1)
     await expect(h.adapter.acquire({ ...h.input, fence: 9 })).resolves.toMatchObject({
       process: { pid: 4123 }

@@ -32,6 +32,7 @@ import {
   refreshShellPathAndDetectAgents,
   type RefreshAgentsResult
 } from './agent-detection'
+import type { InstalledAgentDetectionOptions } from './installed-agent-detection'
 
 export type AgentDetectionHost =
   | { kind: 'local'; context?: PreflightRuntimeContext }
@@ -130,12 +131,15 @@ function resolveFolderWorkspace(
     : null
 }
 
-export async function detectAgentsOnHost(host: AgentDetectionHost): Promise<string[]> {
+export async function detectAgentsOnHost(
+  host: AgentDetectionHost,
+  options?: InstalledAgentDetectionOptions
+): Promise<string[]> {
   // Unserved hosts are unverifiable; [] would falsely cache no installed agents.
   if (host.kind === 'ssh') {
     throw new SshHostNotServedError(host.connectionId)
   }
-  return detectInstalledAgentsWithShellPathHydration(host.context)
+  return detectInstalledAgentsWithShellPathHydration(host.context, options)
 }
 
 const agentRefreshListeners = new Set<() => void>()
@@ -145,13 +149,18 @@ export function onAgentsRefreshedOnHost(listener: () => void): () => void {
   return () => agentRefreshListeners.delete(listener)
 }
 
-export async function refreshAgentsOnHost(host: AgentDetectionHost): Promise<RefreshAgentsResult> {
+export async function refreshAgentsOnHost(
+  host: AgentDetectionHost,
+  options?: InstalledAgentDetectionOptions
+): Promise<RefreshAgentsResult> {
   if (host.kind === 'ssh') {
     throw new SshHostNotServedError(host.connectionId)
   }
   const wsl = getPreflightWslTarget(host.context)
   const refresh = async (): Promise<RefreshAgentsResult> => {
-    const result = await refreshShellPathAndDetectAgents(host.context)
+    const result = await (options
+      ? refreshShellPathAndDetectAgents(host.context, options)
+      : refreshShellPathAndDetectAgents(host.context))
     if (!wsl) {
       await captureHostShellEnvironment()
     }

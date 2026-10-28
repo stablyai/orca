@@ -20,7 +20,6 @@ import { expect, forwardElectronProcessLogs, test } from './helpers/orca-app'
 import { RuntimeClient } from '../../src/cli/runtime/client'
 import { createRuntimeDesktopPairingOffer } from './helpers/paired-electron-client'
 import { encodePairingOffer } from '../../src/shared/pairing'
-import { listEnvironments } from '../../src/shared/runtime-environment-store'
 import {
   addWslHostEnvironment,
   findWslHostDeployment
@@ -548,7 +547,7 @@ test('a build without the WSL host server files says so instead of failing an ad
   }
 })
 
-test('with the internal gate closed, no WSL host surface shows and a saved host stays untouched', async ({
+test('with the internal gate closed and no saved WSL work, no WSL host surface shows', async ({
   orcaPage
 }, testInfo) => {
   test.setTimeout(180_000)
@@ -560,28 +559,7 @@ test('with the internal gate closed, no WSL host surface shows and a saved host 
     offer.pairingUrl,
     testInfo,
     { connectLogFile },
-    {
-      internalGate: false,
-      // A host saved during internal testing: it must be ignored, never deleted.
-      beforeLaunch: (userDataDir) =>
-        addWslHostEnvironment(userDataDir, {
-          id: WSL_ENVIRONMENT_ID,
-          name: WSL_HOST_LABEL,
-          pairingCode: encodePairingOffer({
-            v: 2,
-            endpoint: 'ws://127.0.0.1:42000',
-            deviceToken: 'gated-token',
-            publicKeyB64: Buffer.alloc(32, 7).toString('base64')
-          }),
-          record: {
-            kind: 'wsl',
-            distro: 'Ubuntu',
-            distroId: '0e3a7f2c-1b4d-4c5e-9f60-7a8b9c0d1e2f',
-            localPort: 42000,
-            remotePort: 6768
-          }
-        })
-    }
+    { internalGate: false }
   )
   try {
     const { page, userDataDir } = desktop
@@ -618,11 +596,103 @@ test('with the internal gate closed, no WSL host surface shows and a saved host 
     await expect(page.getByText(WSL_HOST_LABEL)).toHaveCount(0)
 
     expect(fakeWslConnects(connectLogFile)).toEqual([])
-    expect(listEnvironments(userDataDir).map((environment) => environment.id)).toContain(
+    await expect(page.getByText(/WSL hosts are paused/)).toHaveCount(0)
+    expect(findWslHostDeployment(userDataDir, WSL_ENVIRONMENT_ID)).toBeNull()
+    await page.screenshot({ path: testInfo.outputPath('wsl-hosts-gated-off-settings.png') })
+  } finally {
+    await desktop.dispose()
+    rmSync(logDir, { recursive: true, force: true })
+  }
+})
+test('with the internal gate closed, a saved WSL host stays reachable but nothing new is added or moved (serve-only)', async ({
+  orcaPage
+}, testInfo) => {
+  // Launches a second desktop beside the paired server, like the gate-closed case above.
+  test.setTimeout(180_000)
+  await waitForSessionReady(orcaPage)
+  const offer = await createRuntimeDesktopPairingOffer(orcaPage)
+  const logDir = mkdtempSync(path.join(os.tmpdir(), 'orca-e2e-wsl-serve-only-'))
+  const connectLogFile = path.join(logDir, 'connects.log')
+  const desktop = await launchDesktopWithFakeWsl(
+    offer.pairingUrl,
+    testInfo,
+    { connectLogFile },
+    {
+      internalGate: false,
+      // A host saved while the gate was open: closing the gate must not strand it.
+      beforeLaunch: (userDataDir) =>
+        addWslHostEnvironment(userDataDir, {
+          id: WSL_ENVIRONMENT_ID,
+          name: WSL_HOST_LABEL,
+          pairingCode: encodePairingOffer({
+            v: 2,
+            endpoint: 'ws://127.0.0.1:42000',
+            deviceToken: 'gated-token',
+            publicKeyB64: Buffer.alloc(32, 7).toString('base64')
+          }),
+          record: {
+            kind: 'wsl',
+            distro: 'Ubuntu',
+            distroId: '0e3a7f2c-1b4d-4c5e-9f60-7a8b9c0d1e2f',
+            localPort: 42000,
+            remotePort: 6768
+          }
+        })
+    }
+  )
+  try {
+    const { page, userDataDir } = desktop
+    await setWslHostsEnabled(page, true)
+    expect(await page.evaluate(() => Boolean(window.api.runtimeEnvironments.wslHosts))).toBe(true)
+    const listed = await page.evaluate(() => window.api.runtimeEnvironments.list())
+    expect(listed.map((environment) => environment.id)).toContain(WSL_ENVIRONMENT_ID)
+
+    await page.evaluate(
+      (environmentId) => window.api.runtimeEnvironments.wslHosts?.connect({ environmentId }),
       WSL_ENVIRONMENT_ID
     )
+    await expect
+      .poll(() => fakeWslConnects(connectLogFile), { timeout: 30_000 })
+      .toContain('Ubuntu')
+
+    // Serve-only admits nothing new: main refuses, and the entry points are gone.
+    expect(
+      await page.evaluate(() => window.api.runtimeEnvironments.wslHosts?.add({ distro: 'Ubuntu' }))
+    ).toMatchObject({ ok: false, kind: 'disabled' })
+    expect(
+      await page.evaluate(() => window.api.wslMove.start({ distro: 'Ubuntu', repoIds: [] }))
+    ).toMatchObject({ outcome: 'refused', code: 'wsl_move_unavailable' })
+    await openSidebarProjectDialog(page)
+    await page
+      .getByRole('dialog', { name: /Add a project/i })
+      .getByRole('combobox')
+      .click()
+    await page.locator('[cmdk-item]').filter({ hasText: 'Add remote host' }).click()
+    await expect(page.getByRole('button', { name: /Add SSH host/ })).toBeVisible()
+    await expect(page.getByRole('button', { name: /Add WSL distro/ })).toHaveCount(0)
+    await expect(page.getByText('Adding WSL distros is paused in this build.')).toBeVisible()
+    await settleAnimations(page)
+    await page.screenshot({ path: testInfo.outputPath('wsl-hosts-paused-add-host-menu.png') })
+    // Two menus and the dialog: close them all so the Settings screenshot shows the section.
+    const addProject = page.getByRole('dialog', { name: /Add a project/i })
+    await expect
+      .poll(async () => {
+        await page.keyboard.press('Escape')
+        return addProject.count()
+      })
+      .toBe(0)
+
+    await page.evaluate(() => {
+      const state = window.__store?.getState()
+      state?.openSettingsPage()
+      state?.openSettingsTarget({ pane: 'servers', repoId: null })
+    })
+    await expect(page.getByText(WSL_HOST_LABEL).first()).toBeVisible({ timeout: 30_000 })
+    await expect(page.getByRole('button', { name: 'Add WSL distro' })).toHaveCount(0)
+    await expect(page.getByText(/WSL hosts are paused in this build/)).toBeVisible()
+    await settleAnimations(page)
     expect(findWslHostDeployment(userDataDir, WSL_ENVIRONMENT_ID)).not.toBeNull()
-    await page.screenshot({ path: testInfo.outputPath('wsl-hosts-gated-off-settings.png') })
+    await page.screenshot({ path: testInfo.outputPath('wsl-hosts-serve-only-settings.png') })
   } finally {
     await desktop.dispose()
     rmSync(logDir, { recursive: true, force: true })

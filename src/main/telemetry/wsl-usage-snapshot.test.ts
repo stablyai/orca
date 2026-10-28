@@ -118,6 +118,13 @@ describe('buildWslUsageSnapshot', () => {
     expect(validate('wsl_usage_snapshot', props).ok).toBe(true)
   })
 
+  it('reports the gate state when known, as an optional field', () => {
+    const props = buildWslUsageSnapshot({ ...baseInput, wslHostsGateState: 'serve-only' })
+    expect(props.wsl_hosts_gate_state).toBe('serve-only')
+    expect(validate('wsl_usage_snapshot', props).ok).toBe(true)
+    expect(buildWslUsageSnapshot(baseInput)).not.toHaveProperty('wsl_hosts_gate_state')
+  })
+
   it('reports no WSL and an unreadable registry without a version', () => {
     const props = buildWslUsageSnapshot({
       ...baseInput,

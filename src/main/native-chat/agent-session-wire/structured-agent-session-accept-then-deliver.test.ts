@@ -23,6 +23,7 @@ import type { AgentSessionJournal } from '../agent-session-journal/journal-store
 import { openAgentSessionJournal } from '../agent-session-journal/journal-store-factory'
 import {
   AgentSessionPreSpawnError,
+  launchPreparationFailure,
   type StructuredAgentSessionAdapter
 } from './structured-agent-session-adapter'
 import { journalIdentityFor } from './structured-agent-session-attach'
@@ -453,16 +454,18 @@ describe('a start the chat needed and did not get', () => {
       }
     ],
     [
-      'auth',
+      'launch preparation',
       () =>
         acquire.mockRejectedValueOnce(
-          new AgentSessionPreSpawnError(new Error('Not logged in. Please run /login.'))
+          launchPreparationFailure(
+            new Error('codex launch failed', { cause: new Error('selector_not_found') })
+          )
         ),
       {
-        text: "Codex couldn't restart. Send your message to try again.",
+        text: "Orca couldn't prepare Codex to start on the computer running this chat. Send your message to try again.",
         failure: {
-          kind: 'restartFailed',
-          refusal: { code: 'agent_session_operation_invalid', details: { ownerVerdict: 'exited' } }
+          kind: 'launchPreparationFailed',
+          detail: { text: 'selector_not_found', audience: 'log' }
         }
       }
     ]
@@ -485,6 +488,23 @@ describe('a start the chat needed and did not get', () => {
         : []
     )
     expect(framedRows.length).toBeGreaterThan(0)
+  })
+
+  it("puts the host error behind a failed launch in the unsent message's Details (#34795)", async () => {
+    await host.close(SESSION, 'evict')
+    acquire.mockRejectedValueOnce(
+      launchPreparationFailure(new Error("ENOENT: no such file or directory, stat '/srv/app'"))
+    )
+    const id = await accept('hello')
+    await eventually(async () => expect((await submission(id))?.dispatchState).toBe('rejected'))
+    expect(await submission(id)).toMatchObject({
+      reason:
+        "Orca couldn't prepare Codex to start on the computer running this chat. Send your message to try again.",
+      rejection: {
+        kind: 'launchPreparationFailed',
+        detail: { text: "ENOENT: no such file or directory, stat '/srv/app'", audience: 'log' }
+      }
+    })
   })
 
   it('names the start failure on queued messages when the attach fails after acquiring (W4′a)', async () => {

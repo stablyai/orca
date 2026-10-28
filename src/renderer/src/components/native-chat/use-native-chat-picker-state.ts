@@ -65,6 +65,7 @@ export function useNativeChatPickerState(args: {
   disabled: boolean
   isComposing: () => boolean
   /** Skill names the running session reports; undefined keeps the host disk scan. */
+  commandAvailable?: (name: string) => boolean
   sessionSkills?: readonly NativeChatSessionSkill[]
   /** Refresh host catalogs on every / or $ menu opening, even in resting chats. */
   onPickerOpened?: () => void
@@ -84,6 +85,7 @@ export function useNativeChatPickerState(args: {
     disabled,
     isComposing,
     sessionSkills,
+    commandAvailable,
     onPickerOpened,
     textareaRef,
     setDraft,
@@ -118,7 +120,8 @@ export function useNativeChatPickerState(args: {
             profile,
             discovery,
             dismissed?.context === dismissalContext ? dismissed.triggerKey : null,
-            sessionSkills
+            sessionSkills,
+            commandAvailable
           ),
     [
       caret,
@@ -130,7 +133,8 @@ export function useNativeChatPickerState(args: {
       pickerCommands,
       profile,
       recalledFromHistory,
-      sessionSkills
+      sessionSkills,
+      commandAvailable
     ]
   )
 
@@ -225,13 +229,23 @@ export function useNativeChatPickerState(args: {
         profile,
         discovery,
         null,
-        sessionSkills
+        sessionSkills,
+        commandAvailable
       )
       if (next.mode === 'none' || next.triggerKey !== dismissed.triggerKey) {
         setDismissed(null)
       }
     },
-    [dismissalContext, dismissed, discovery, draft, pickerCommands, profile, sessionSkills]
+    [
+      dismissalContext,
+      dismissed,
+      discovery,
+      draft,
+      pickerCommands,
+      profile,
+      sessionSkills,
+      commandAvailable
+    ]
   )
 
   const classifySend = useCallback(

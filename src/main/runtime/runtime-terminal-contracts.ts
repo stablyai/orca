@@ -67,6 +67,8 @@ export type TerminalCreateOptions = {
   terminalKittyKeyboardProtocol?: boolean
   terminalImageViewerSupported?: boolean
   terminalColorQueryReplies?: TerminalOscColorQueryReplyColors
+  /** Unvalidated wire value: the creator's palette and cursor, pinned with its colours on a windowed host. */
+  terminalViewAttributes?: unknown
   viewMode?: 'terminal' | 'chat'
   /** The tab group a background create joins; defaults to the first group. */
   targetGroupId?: string

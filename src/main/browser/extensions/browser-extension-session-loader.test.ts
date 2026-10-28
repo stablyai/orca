@@ -81,6 +81,7 @@ vi.mock('node:fs', async (importOriginal) => ({
 vi.mock('./browser-extension-api-host', () => ({
   attachBrowserExtensionApiHostToSession: vi.fn(),
   forgetBrowserExtensionContexts: vi.fn(),
+  getBrowserExtensionProfileIdForSession: vi.fn(() => null),
   emitBrowserExtensionWorkerStartEvent: mocks.emitWorkerStart
 }))
 vi.mock('./browser-extension-load-directory', () => ({
@@ -106,6 +107,7 @@ const { getBrowserExtensionProfileStateStore } =
 const { getBrowserExtensionSyncStorageStore } =
   await import('./browser-extension-sync-storage-store')
 const { getBrowserExtensionInstallStore } = await import('./browser-extension-install-store')
+const { getBrowserExtensionActionState } = await import('./browser-extension-action-registry')
 const realFs = await vi.importActual<typeof NodeFs>('node:fs')
 
 const installed = {
@@ -369,6 +371,67 @@ describe('profile changes while startup loads are in flight', () => {
     getBrowserExtensionSyncStorageStore().write('work', ID, { token: 'secret' })
     await loader.detachBrowserExtensionsFromProfileSession({ ...profile, id: 'work' })
     expect(getBrowserExtensionSyncStorageStore().read('work', ID)).toEqual({})
+  })
+})
+
+describe('deleted profile action state', () => {
+  it.each([
+    ['unattached', false, false],
+    ['attached', true, false],
+    ['failed-unload', true, true]
+  ] as const)('retires action payloads for %s', async (label, attached, failedUnload) => {
+    const profileId = `action-retirement-${label}`
+    const profile = {
+      id: profileId,
+      scope: 'isolated' as const,
+      partition: `persist:orca-${profileId}`,
+      label: 'Retired',
+      source: null
+    }
+    const extension = {
+      id: ID,
+      name: 'Vault',
+      path: installed.path,
+      url: `chrome-extension://${ID}/`,
+      version: installed.version,
+      manifest: { action: { default_title: 'Fresh' } }
+    }
+    setBrowserExtensionSupportEnabled(true)
+    if (attached) {
+      loader.attachBrowserExtensionsToProfileSession(profile, [])
+      await loader.whenBrowserExtensionProfileLoaded(profileId)
+    }
+    const removed = getBrowserExtensionActionState(profileId, extension)
+    removed.set('title', 'Retired title')
+    removed.set('icon', { kind: 'data', dataUrl: 'data:image/png;base64,retired' })
+    removed.set('badgeText', 'Retired tab badge', 77)
+    const survivor = getBrowserExtensionActionState(`survivor-${profileId}`, extension)
+    survivor.set('title', 'Surviving title')
+
+    if (failedUnload) {
+      mocks.loaded.set(ID, { id: ID })
+      const unload = vi
+        .spyOn(mocks.session.extensions, 'removeExtension')
+        .mockImplementationOnce(() => {
+          throw new Error('native unload failed')
+        })
+      try {
+        await expect(loader.detachBrowserExtensionsFromProfileSession(profile)).rejects.toThrow(
+          'native unload failed'
+        )
+      } finally {
+        unload.mockRestore()
+        mocks.loaded.delete(ID)
+      }
+    } else {
+      await loader.detachBrowserExtensionsFromProfileSession(profile)
+    }
+
+    const fresh = getBrowserExtensionActionState(profileId, extension)
+    expect(fresh).not.toBe(removed)
+    expect(fresh.get(77)).toMatchObject({ title: 'Fresh', icon: null, badgeText: '' })
+    expect(getBrowserExtensionActionState(`survivor-${profileId}`, extension)).toBe(survivor)
+    expect(survivor.get().title).toBe('Surviving title')
   })
 })
 

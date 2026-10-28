@@ -45,7 +45,7 @@ describe.each(['qoder', 'jcode'] as const)('%s search negotiation', (agent) => {
         filters: {
           agents: [agent, 'codex', 'claude'] as const,
           scopePaths: ['/host/folder'],
-          since: '2026-08-01T00:00:00Z',
+          since: '2026-08-01T00:00:00.000Z',
           sort: 'newest' as const
         }
       }

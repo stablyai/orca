@@ -5,7 +5,7 @@ import {
   resolveWorktreeHostConnection,
   type WorktreeHostConnection
 } from '@/lib/worktree-host-connection-phase'
-import { isNativeChatTranscriptLocalReadable } from '@/lib/native-chat-transcript-readability'
+import { isNativeChatTranscriptLocalReadable } from '../../../../shared/native-chat/transcript/native-chat-transcript-readability'
 import {
   selectRuntimeAwareSshError,
   selectRuntimeAwareSshTargetLabel,

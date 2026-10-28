@@ -34,7 +34,7 @@ function failAfter(replies: readonly string[], confirmed = false): Error {
   return error
 }
 
-function collectVersions(): Promise<void> {
+function collectVersions(): Promise<boolean> {
   return gcOldRemoteInstallVersions(conn, ORCAD_INSTALL_MODEL, home, currentDir, host, {
     isDirLive: async (dir) => (await execCommand(conn, `liveness ${dir}`)).trim() !== 'DEAD'
   })

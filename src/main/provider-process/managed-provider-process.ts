@@ -12,7 +12,7 @@ import {
   type ProviderProcessTeardownVerdict
 } from './provider-process-teardown'
 import type { DescendantTreeVerdict } from '../pty-descendant-exit-verification'
-import { isMissingProviderExecutable } from './provider-executable-missing'
+import { providerSpawnAbsence, type ProviderSpawnAbsence } from './provider-executable-missing'
 import { supervisedProviderSpawnFailure } from './provider-spawn-failure-report'
 import { guardSupervisedProviderGroup } from './provider-group-orphan-guard'
 import {
@@ -66,6 +66,8 @@ export type ManagedProviderProcess = {
   readonly exitPromise: Promise<void>
   /** Direct or supervisor-reported ENOENT for the provider executable. */
   readonly executableMissing: boolean
+  /** What that ENOENT proves absent; the working folder, not the CLI, when the cwd is gone. */
+  readonly spawnAbsence: ProviderSpawnAbsence | null
   /** The last 8 KiB of stderr, which the managed process drains so the child never blocks on it. */
   stderrTail(): string
   onExit(listener: (exit: ProviderProcessExit) => void): void
@@ -161,6 +163,26 @@ export function spawnManagedProviderProcess(
   })
   const rootVerdict = (): DescendantTreeVerdict =>
     observed ? 'exited' : child.pid === undefined ? 'unverifiable' : 'live'
+  // Settled once a failure exists, so the cwd is stat'd at most once and only on failure.
+  let absence: ProviderSpawnAbsence | null | undefined
+  const spawnAbsence = (): ProviderSpawnAbsence | null => {
+    if (absence !== undefined) {
+      return absence
+    }
+    // A direct spawn error names what this process spawned: the supervisor, when there is one.
+    if (spawnError) {
+      const direct = providerSpawnAbsence(spawnError, spec.program, launch.cwd)
+      // A missing supervisor is Orca's own binary (e.g. mid-update), never the agent's CLI.
+      absence = spec.supervised && direct === 'executable' ? null : direct
+      return absence
+    }
+    const reported = observed ? supervisedProviderSpawnFailure(observed.code, stderrTail) : null
+    if (!reported) {
+      return null
+    }
+    absence = providerSpawnAbsence(reported.error, launch.command, launch.cwd)
+    return absence
+  }
   const terminateTree = (): Promise<ProviderProcessTeardownVerdict> =>
     terminateProviderProcessTree(child, { site: options.site, platform })
 
@@ -181,10 +203,10 @@ export function spawnManagedProviderProcess(
       return observed !== null && !observed.processless
     },
     get executableMissing() {
-      const failure =
-        spawnError ??
-        (observed ? supervisedProviderSpawnFailure(observed.code, stderrTail)?.error : null)
-      return isMissingProviderExecutable(failure, launch.command)
+      return spawnAbsence() === 'executable'
+    },
+    get spawnAbsence() {
+      return spawnAbsence()
     },
     stderrTail: () => stderrTail,
     get lastCloseResult() {

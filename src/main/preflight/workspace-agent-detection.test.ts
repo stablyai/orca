@@ -155,7 +155,8 @@ describe('resolveWorkspaceAgentDetectionHost on a Windows host', () => {
       }
     })
     expect(detectInstalledMock).toHaveBeenCalledWith(
-      wslContext('Ubuntu-24.04', 'prospective', 'project-override')
+      wslContext('Ubuntu-24.04', 'prospective', 'project-override'),
+      undefined
     )
   })
 
@@ -341,7 +342,8 @@ describe('preflight.detectAgents resolves the workspace on the host', () => {
       params: { worktreeId: `r1::${WSL_REPO_PATH}` }
     })
     expect(detectInstalledMock).toHaveBeenCalledWith(
-      wslContext('Ubuntu-24.04', 'r1', 'project-override')
+      wslContext('Ubuntu-24.04', 'r1', 'project-override'),
+      undefined
     )
     expect(response).toMatchObject({ ok: true, result: ['claude', 'codex'] })
   })

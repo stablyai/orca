@@ -6,6 +6,7 @@ import { isWslUncPath } from '../../../shared/wsl-paths'
 import { getRepoExecutionHostId, LOCAL_EXECUTION_HOST_ID } from '../../../shared/execution-host'
 import { onWslMoveJournalChange } from './wsl-move-cutover-journal'
 import { resolveWslMoveFence, type WslMoveFenceState } from './wsl-move-fence'
+import { comparableWslPath, isAtOrUnder } from './wsl-move-comparable-path'
 import {
   findProjectHostSetup,
   type ProjectHostSetupTarget
@@ -15,8 +16,13 @@ export type WslMoveProjectRef = { repoId: string } | { folderWorkspaceId: string
 
 export class WslMoveProjectFencedError extends Error {
   readonly code = 'wsl_move_in_progress'
-  constructor() {
-    super('This project is moving to its WSL host. Try again when the move finishes.')
+  /** `hostDistro`: the move already committed, so the host, not a retry, is the way forward. */
+  constructor(hostDistro?: string | null) {
+    super(
+      hostDistro
+        ? `This project now runs on its ${hostDistro} WSL host, so its terminals open there. Use it on this computer again to open one here.`
+        : 'This project is moving to its WSL host. Try again when the move finishes.'
+    )
     this.name = 'WslMoveProjectFencedError'
   }
 }
@@ -35,7 +41,7 @@ type FenceView = { readable: true; state: WslMoveFenceState } | { readable: fals
 let loaded: { userDataKey: string; view: FenceView } | null = null
 
 // app.setName can change casing without changing the Windows directory.
-function userDataKey(userDataPath: string): string {
+export function userDataKey(userDataPath: string): string {
   const resolved = resolve(userDataPath)
   return process.platform === 'win32' ? resolved.toLowerCase() : resolved
 }
@@ -240,6 +246,22 @@ export function isWslMoveWorkspaceBlocked(
   return !!workspaceId && isWslMoveProjectBlocked(store, wslMoveProjectRefForWorkspace(workspaceId))
 }
 
+/**
+ * Whether a new terminal's folder is one a move is taking, whatever workspace it names. A
+ * Linux-spelled folder names no distro, so it matches any moving distro. An unreadable journal lets
+ * no move reach commit, so it fences nothing here.
+ */
+export function isWslMoveCwdFenced(cwd: string): boolean {
+  const fence = loaded?.view
+  if (!fence?.readable) {
+    return false
+  }
+  return fence.state.fencedRoots.some(({ distro, roots }) => {
+    const path = comparableWslPath(cwd, distro)
+    return path !== null && roots.some((root) => isAtOrUnder(path, root))
+  })
+}
+
 export function isWslMoveProjectSessionFrozen(ref: WslMoveProjectRef | null): boolean {
   const fence = loaded?.view
   return !!ref && !!fence?.readable && inScope(fence.state.sessionFrozen, ref)
@@ -291,6 +313,24 @@ function withoutHidden<T extends HostedRow>(rows: T[], toRef: (row: T) => WslMov
     return rows
   }
   return rows.filter((row) => !isLocalWslMoveRow(row) || !inScope(hidden, toRef(row)))
+}
+
+/** The distro whose WSL host owns the project, once a move committed it; null otherwise. */
+export function wslMoveHostDistro(ref: WslMoveProjectRef | null): string | null {
+  const fence = loaded?.view
+  if (!ref || !fence?.readable) {
+    return null
+  }
+  const { hostDistro } = fence.state
+  return (
+    ('repoId' in ref
+      ? hostDistro.repoIds.get(ref.repoId)
+      : hostDistro.folderWorkspaceIds.get(ref.folderWorkspaceId)) ?? null
+  )
+}
+
+export function isWslMoveWorkspaceHostOwned(workspaceId: string): boolean {
+  return wslMoveHostDistro(wslMoveProjectRefForWorkspace(workspaceId)) !== null
 }
 
 export function isLocalWslMoveRow(row: HostedRow): boolean {

@@ -48,7 +48,7 @@ export function buildMobileSessionTabSnapshots(
   const publicationInputs: MobileSessionPublicationInputs = {
     browserTabsByWorktree,
     openFileIndexes,
-    editorDraftVersionByFileId: getEditorDraftVersionByFileId(state.editorDrafts),
+    editorDraftVersionByFileId: getEditorDraftVersionByFileId(state.editorDrafts, state.openFiles),
     agentStatusByWorktreeId: buildMobileSessionAgentStatusByWorktree(
       state.agentStatusByPaneKey ?? {},
       state.tabsByWorktree

@@ -115,13 +115,16 @@ export function useTabGroupCreationCommands({
           useAppStore.getState(),
           worktreeId
         )
-        const outcome = await createWebRuntimeSessionTerminal({
-          worktreeId,
-          environmentId,
-          targetGroupId: groupId,
-          shell: shellOverride,
-          activate: true
-        })
+        const outcome = await createWebRuntimeSessionTerminal(
+          {
+            worktreeId,
+            environmentId,
+            targetGroupId: groupId,
+            shell: shellOverride,
+            activate: true
+          },
+          { userAct: true }
+        )
         if (outcome.status === 'created' || isWebRuntimeSessionActive(environmentId)) {
           return
         }

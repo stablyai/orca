@@ -133,7 +133,8 @@ export function useMobileTasksProviderLoadActions<Model extends ProviderLoadActi
     async (
       requestClient: RpcClient,
       queriedRepos: RepoSummary[],
-      taskPage = 0
+      taskPage = 0,
+      isCurrent: () => boolean = () => true
     ): Promise<{
       items: Array<Extract<TaskItem, { provider: 'github' }>>
       failedCount: number
@@ -150,6 +151,9 @@ export function useMobileTasksProviderLoadActions<Model extends ProviderLoadActi
         queriedRepos,
         GITHUB_REPO_CONCURRENCY,
         async (repo) => {
+          if (!isCurrent()) {
+            return { items: [], repoId: repo.id }
+          }
           try {
             const reply = await githubWorkItemSearchRead.request(requestClient, {
               repo: `id:${repo.id}`,
@@ -218,11 +222,18 @@ export function useMobileTasksProviderLoadActions<Model extends ProviderLoadActi
   )
 
   const countGitHubItemPages = useCallback(
-    async (requestClient: RpcClient, queriedRepos: RepoSummary[]): Promise<number> => {
+    async (
+      requestClient: RpcClient,
+      queriedRepos: RepoSummary[],
+      isCurrent: () => boolean = () => true
+    ): Promise<number> => {
       const counts = await mapWithConcurrency(
         queriedRepos,
         GITHUB_REPO_CONCURRENCY,
         async (repo) => {
+          if (!isCurrent()) {
+            return 0
+          }
           try {
             const reply = await githubWorkItemCountRead.request(
               requestClient,

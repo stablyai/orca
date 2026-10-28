@@ -32,7 +32,7 @@ describe('ExternalChromiumBrowserProcess integration', () => {
         }
         const commands = provider.factory({
           getAgentBrowserBridge: () => null,
-          resolveWorktreeSelector: async (selector) => ({ id: selector }),
+          resolveWorkspaceSelector: async (selector) => ({ id: selector }),
           resolveBrowserWorkspace: async (selector) => ({ id: selector }),
           resolveBrowserNetworkExecutionHost: () => {
             throw new Error('No browser network execution host')

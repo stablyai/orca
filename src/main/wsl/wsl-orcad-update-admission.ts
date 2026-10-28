@@ -1,6 +1,7 @@
 /** Reuse SSH update admission: keep newer, rolled-back or launch-rejected incumbents serving; fenced activation replans before committing. */
 import {
   ORCAD_HOST_NEWER_DEFERRAL_CODE,
+  ORCAD_UPDATE_WSL_MOVE_RUNNING_CODE,
   type WslHostDeferredUpdate
 } from '../../shared/wsl-host-types'
 import { refuseOrcadHostDowngrade } from '../ssh/orcad-host-version-admission'
@@ -46,6 +47,8 @@ export async function admitWslOrcadUpdate(args: {
   appVersion: string
   host: OrcadUpdateFailureHost
   intent: OrcadUpdateIntent
+  /** A project move to this distro runs here: a redeploy would cut it off, even when forced. */
+  moveRunning?: boolean
 }): Promise<WslOrcadUpdateAdmission> {
   const { record, candidateVersion, appVersion } = args
   if (!record.active) {
@@ -58,7 +61,8 @@ export async function admitWslOrcadUpdate(args: {
     appVersion,
     failedBefore: failure !== null
   })
-  if (plan.action !== 'skip' || plan.reason === 'current') {
+  const heldForMove = args.moveRunning === true && plan.action === 'update'
+  if (!heldForMove && (plan.action !== 'skip' || plan.reason === 'current')) {
     return { action: 'deploy', record }
   }
   const adopted = await adoptRunningOrcadVersion(args.slot, record, candidateVersion)
@@ -80,7 +84,15 @@ export async function admitWslOrcadUpdate(args: {
     deferredUpdate:
       adopted.version === candidateVersion
         ? null
-        : skippedUpdateHint(plan, failure, record, candidateVersion, appVersion)
+        : heldForMove
+          ? {
+              candidateVersion,
+              code: ORCAD_UPDATE_WSL_MOVE_RUNNING_CODE,
+              reason:
+                'A project is moving to this WSL host; its server updates once the move finishes.',
+              forceable: false
+            }
+          : skippedUpdateHint(plan, failure, record, candidateVersion, appVersion)
   }
 }
 

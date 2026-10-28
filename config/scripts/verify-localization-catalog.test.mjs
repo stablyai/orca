@@ -163,6 +163,26 @@ describe('verify-localization-catalog', () => {
     expect(readJson(path.join(localesDir, 'en.json'))).toEqual({})
   })
 
+  it('accepts Russian few/many forms only for an existing plural family', async () => {
+    const { root, localesDir } = makeProject({
+      sourceText: 'export {}\n',
+      enCatalog: { images_one: '{{count}} image', images_other: '{{count}} images' }
+    })
+    const russianPath = path.join(localesDir, 'ru.json')
+    writeJson(russianPath, {
+      images_few: '{{count}} изображения',
+      images_many: '{{count}} изображений'
+    })
+    await expect(verifyLocalizationCatalog(root)).resolves.toBe(0)
+
+    writeJson(russianPath, { unknown_many: '{{count}} изображений' })
+    await expect(verifyLocalizationCatalog(root)).resolves.toBe(1)
+    writeJson(russianPath, { images_many: '{{wrongCount}} изображений' })
+    await expect(verifyLocalizationCatalog(root)).resolves.toBe(1)
+    writeJson(russianPath, { images_two: '{{count}} изображения' })
+    await expect(verifyLocalizationCatalog(root)).resolves.toBe(1)
+  })
+
   it('reports partial plugin catalog gaps but rejects malformed interpolation', async () => {
     const { root } = makeProject({
       sourceText: 'export {}\n',

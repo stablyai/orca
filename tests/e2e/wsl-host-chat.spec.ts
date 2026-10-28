@@ -4,128 +4,31 @@
  * there, then sees the distro stop: chat calls refuse without booting it (E9) and switching back
  * to the workspace boots it so the chat continues.
  */
-// Minimum launch copied from wsl-host-fake-transport.spec.ts; move to a shared helper once one is on main.
-import { execFileSync } from 'node:child_process'
-import { existsSync, mkdtempSync, readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdtempSync, rmSync } from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
-import {
-  _electron as electron,
-  type ElectronApplication,
-  type Page
-} from '@stablyai/playwright-test'
-import { getE2ECompletedOnboardingProfile } from './helpers/e2e-completed-onboarding-profile'
-import { getOrcaElectronLaunchArgs } from './helpers/electron-launch-args'
-import { cleanupE2EDaemons, closeElectronAppForE2E } from './helpers/electron-process-shutdown'
-import { createElectronHomeIsolation } from './helpers/electron-home-isolation'
-import { expect, forwardElectronProcessLogs } from './helpers/orca-app'
+import { expect } from './helpers/orca-app'
 import { createRuntimeDesktopPairingOffer } from './helpers/paired-electron-client'
 import { callEnvironment } from './helpers/paired-host-terminal'
 import { buildFakeAgentCommandOverride } from './helpers/fake-agent-command-override'
 import { SUPPORTED, test } from './helpers/structured-claude-stub'
 import { waitForSessionReady } from './helpers/store'
-import { toRuntimeExecutionHostId } from '../../src/shared/execution-host'
-import { WSL_HOSTS_INTERNAL_GATE_ENV } from '../../src/shared/wsl-host-internal-gate'
-
-const WSL_ENVIRONMENT_ID = 'wsl:ubuntu'
-const RUNNING = [{ name: 'Ubuntu', state: 'running', version: 2 }]
-const STOPPED = [{ name: 'Ubuntu', state: 'stopped', version: 2 }]
-
-async function launchDesktopWithFakeWsl(
-  fake: Record<string, unknown>,
-  testInfo: Parameters<typeof forwardElectronProcessLogs>[1]
-): Promise<{ app: ElectronApplication; page: Page; dispose: () => Promise<void> }> {
-  const userDataDir = mkdtempSync(path.join(os.tmpdir(), 'orca-e2e-wsl-chat-desktop-'))
-  writeFileSync(
-    path.join(userDataDir, 'orca-data.json'),
-    `${JSON.stringify(getE2ECompletedOnboardingProfile(), null, 2)}\n`
-  )
-  const { ELECTRON_RUN_AS_NODE: _unused, ...cleanEnv } = process.env
-  void _unused
-  const isolation = createElectronHomeIsolation({
-    inheritedEnv: cleanEnv,
-    launchEnv: {},
-    extraEnv: {
-      [WSL_HOSTS_INTERNAL_GATE_ENV]: '1',
-      ORCA_E2E_FAKE_WSL_HOSTS: JSON.stringify(fake)
-    },
-    userDataDir
-  })
-  const app = await electron.launch({
-    args: getOrcaElectronLaunchArgs(path.join(process.cwd(), 'out', 'main', 'index.js'), false),
-    env: { ...isolation.env, NODE_ENV: 'development', ORCA_E2E_HEADLESS: '1' }
-  })
-  forwardElectronProcessLogs(app, testInfo)
-  const dispose = async (): Promise<void> => {
-    await closeElectronAppForE2E(app)
-    await cleanupE2EDaemons(userDataDir)
-    rmSync(userDataDir, { recursive: true, force: true, maxRetries: 20, retryDelay: 100 })
-  }
-  try {
-    const page = await app.firstWindow({ timeout: 120_000 })
-    await page.waitForLoadState('domcontentloaded')
-    await waitForSessionReady(page)
-    return { app, page, dispose }
-  } catch (error) {
-    await dispose()
-    throw error
-  }
-}
-
-function createGitProject(): string {
-  const dir = mkdtempSync(path.join(os.tmpdir(), 'orca-e2e-wsl-chat-project-'))
-  execFileSync('git', ['init', '-q', '-b', 'main', dir])
-  writeFileSync(path.join(dir, 'README.md'), '# wsl host chat project\n')
-  execFileSync('git', ['-C', dir, 'add', '.'])
-  execFileSync(
-    'git',
-    ['-C', dir, '-c', 'user.name=e2e', '-c', 'user.email=e2e@example.com', 'commit', '-qm', 'init'],
-    { stdio: 'ignore' }
-  )
-  return dir
-}
-
-/** The fake re-reads this file on every check, so it must never see a half-written one. */
-function writeDistros(distrosFile: string, distros: readonly object[]): void {
-  const tmp = `${distrosFile}.tmp`
-  writeFileSync(tmp, JSON.stringify(distros))
-  renameSync(tmp, distrosFile)
-}
-
-function readDistroState(distrosFile: string): string | undefined {
-  const distros: { state?: string }[] = JSON.parse(readFileSync(distrosFile, 'utf8'))
-  return distros[0]?.state
-}
-
-function fakeWslConnects(connectLogFile: string): string[] {
-  return existsSync(connectLogFile)
-    ? readFileSync(connectLogFile, 'utf8').split('\n').filter(Boolean)
-    : []
-}
-
-/** Focuses the project's worktree on the desktop, which is the act that may boot its distro. */
-async function focusProject(page: Page, repoPath: string): Promise<string | null> {
-  return page.evaluate(
-    ({ repoPath, hostId }) => {
-      const state = window.__store?.getState()
-      const repo = state?.repos.find((entry) => entry.path === repoPath)
-      const worktree = repo
-        ? state?.allWorktrees().find((entry) => entry.repoId === repo.id)
-        : undefined
-      if (!state || !worktree) {
-        return null
-      }
-      state.setActiveWorktree(worktree.id, hostId)
-      return worktree.id
-    },
-    { repoPath, hostId: toRuntimeExecutionHostId(WSL_ENVIRONMENT_ID) }
-  )
-}
+import {
+  createGitProject,
+  fakeWslConnects,
+  focusProject,
+  launchDesktopWithFakeWsl,
+  readDistroState,
+  RUNNING,
+  STOPPED,
+  WSL_ENVIRONMENT_ID,
+  writeDistros
+} from './helpers/wsl-host-fake-desktop'
 
 test.describe('native chat on a WSL host', () => {
   test.skip(!SUPPORTED, 'the Claude stub wrapper is POSIX-only')
 
-  test('admits, streams, refuses while the distro is stopped, and continues after focus boots it', async ({
+  test('admits, streams, offers Start for a stopped distro, and continues after Start or a focus boot', async ({
     orcaPage: hub,
     claudeStub
   }, testInfo) => {
@@ -209,19 +112,39 @@ test.describe('native chat on a WSL host', () => {
       await page.screenshot({ path: testInfo.outputPath('wsl-host-chat-streamed.png') })
 
       // The distro stops: a chat call is a runtime call, so it refuses rather than boot it.
-      const connectsBeforeStop = fakeWslConnects(connectLogFile).length
-      writeDistros(distrosFile, STOPPED)
-      await expect
-        .poll(
-          () =>
-            askSupport().then(
-              () => 'answered',
-              (error: unknown) => String(error)
-            ),
-          { timeout: 30_000 }
-        )
-        .toContain('Ubuntu was stopped')
+      const stopDistro = async (): Promise<number> => {
+        const connects = fakeWslConnects(connectLogFile).length
+        writeDistros(distrosFile, STOPPED)
+        await expect
+          .poll(
+            () =>
+              askSupport().then(
+                () => 'answered',
+                (error: unknown) => String(error)
+              ),
+            { timeout: 30_000 }
+          )
+          .toContain('Ubuntu was stopped')
+        return connects
+      }
+      const stoppedNotice = chat.getByText('Ubuntu is stopped', { exact: true })
+      const start = chat.getByRole('button', { name: 'Start', exact: true })
+      const connectsBeforeStart = await stopDistro()
+      // The chat names the stopped distro and offers Start instead of a raw error.
+      await expect(stoppedNotice).toBeVisible({ timeout: 30_000 })
       await page.screenshot({ path: testInfo.outputPath('wsl-host-chat-stopped.png') })
+      expect(fakeWslConnects(connectLogFile)).toHaveLength(connectsBeforeStart)
+      await start.click()
+      await expect
+        .poll(() => fakeWslConnects(connectLogFile).length, { timeout: 60_000 })
+        .toBeGreaterThan(connectsBeforeStart)
+      await expect(stoppedNotice).toBeHidden({ timeout: 60_000 })
+      await send('after Start')
+      await expectReplyAfter('after Start')
+      await page.screenshot({ path: testInfo.outputPath('wsl-host-chat-after-start.png') })
+
+      const connectsBeforeStop = await stopDistro()
+      await expect(stoppedNotice).toBeVisible({ timeout: 30_000 })
 
       // Switching away and back is the user acting on the host: that boots it and the chat goes on.
       await page.evaluate(() => window.__store?.getState().setActiveWorktree(null))

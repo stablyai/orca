@@ -40,22 +40,22 @@ function notifyStopped(previous: string[] | null, running: string[]): void {
   }
 }
 
-const confirmedObservationListeners = new Set<(distros: readonly string[]) => void>()
+type ConfirmedObservationListener = (distros: readonly string[], probeStartedAt: number) => void
 
-/** Notified with every confirmed (successful) probe result; never with a fallback list. */
-export function onConfirmedRunningWslDistros(
-  listener: (distros: readonly string[]) => void
-): () => void {
+const confirmedObservationListeners = new Set<ConfirmedObservationListener>()
+
+/** Notified with every confirmed (successful) probe result and when its probe started; never a fallback list. */
+export function onConfirmedRunningWslDistros(listener: ConfirmedObservationListener): () => void {
   confirmedObservationListeners.add(listener)
   return () => {
     confirmedObservationListeners.delete(listener)
   }
 }
 
-function notifyConfirmedObservation(distros: readonly string[]): void {
+function notifyConfirmedObservation(distros: readonly string[], probeStartedAt: number): void {
   for (const listener of confirmedObservationListeners) {
     try {
-      listener(distros)
+      listener(distros, probeStartedAt)
     } catch (error) {
       console.warn('[wsl] running-distro listener failed', error)
     }
@@ -133,7 +133,7 @@ function observeRunningWslDistros(
       failureStreak = 0
       backoffBypassed = false
       notifyStopped(previous, distros)
-      notifyConfirmedObservation(distros)
+      notifyConfirmedObservation(distros, startedAt)
       return { distros, confirmed: true }
     })
     .catch((error: unknown) => {
@@ -153,6 +153,14 @@ function observeRunningWslDistros(
 /** Last confirmed running list without probing; null before any probe has succeeded. */
 export function peekConfirmedRunningWslDistros(): readonly string[] | null {
   return cache
+}
+
+/** The last confirmed list with its probe's start, for callers that must judge its age. */
+export function peekConfirmedRunningWslDistrosObservation(): {
+  distros: readonly string[]
+  probeStartedAt: number
+} | null {
+  return cache ? { distros: cache, probeStartedAt: cacheStartedAt } : null
 }
 
 export function _resetRunningWslDistroCacheForTests(): void {

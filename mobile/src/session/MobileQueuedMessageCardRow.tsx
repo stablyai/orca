@@ -5,6 +5,7 @@ import {
   AlertCircle,
   CornerDownRight,
   ListEnd,
+  Image as ImageIcon,
   MoreHorizontal,
   Send,
   Trash2
@@ -14,7 +15,7 @@ import { queuedMessageCardSteers } from '../../../src/shared/structured-agent-se
 import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import type { MobileQueuedMessageCard } from './mobile-structured-queued-message-cards'
 import type { MobileQueuedMessageInlineEditor } from './use-mobile-structured-queued-edit'
-import { MobileNativeChatQueuedMessageEditor } from './native-chat/input/MobileNativeChatQueuedMessageEditor'
+import { MobileQueuedMessageComposer } from './MobileQueuedMessageComposer'
 import { MobileQueuedCardText } from './MobileQueuedCardText'
 import { queuedMessageStyles as styles } from './native-chat/input/mobile-native-chat-queued-message-styles'
 
@@ -45,7 +46,7 @@ export function MobileQueuedMessageCardRow({
         style={styles.divided}
         onLayout={(event) => onEditorLayout(event.nativeEvent.layout)}
       >
-        <MobileNativeChatQueuedMessageEditor editor={editor} attribution={card.attribution} />
+        <MobileQueuedMessageComposer editor={editor} attribution={card.attribution} />
       </View>
     )
   }
@@ -93,7 +94,16 @@ function QueuedMessageCardContents({
           ) : null}
         </View>
         <View style={styles.actions}>
-          {}
+          {card.images ? (
+            <View
+              style={styles.actions}
+              accessible
+              accessibilityLabel={`${card.images.length} images`}
+            >
+              <ImageIcon size={12} color={colors.textMuted} strokeWidth={2} />
+              <Text style={styles.caption}>{card.images.length}</Text>
+            </View>
+          ) : null}
           {card.waitsForAgent ? null : (
             <Pressable
               accessibilityRole="button"
@@ -136,7 +146,6 @@ function QueuedMessageCardContents({
           >
             <Trash2 size={14} color={colors.textPrimary} strokeWidth={2} />
           </Pressable>
-          {}
           {card.command ? null : (
             <Pressable
               accessibilityRole="button"

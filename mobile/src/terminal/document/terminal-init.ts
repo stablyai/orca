@@ -109,7 +109,12 @@ export function init(
     preserveScroll && scope.term && scope.term.buffer && scope.term.buffer.active
       ? scope.term.buffer.active
       : null
-  const scrollAnchorRows = prevB ? Math.max(0, (prevB.baseY || 0) - (prevB.viewportY || 0)) : -1
+  // A hidden replay never moved what the reader sees, so one that overtakes it keeps its anchor.
+  const supersededAnchorRows = scope.pendingTerm ? scope.pendingReplayScrollAnchorRows : null
+  const scrollAnchorRows = !preserveScroll
+    ? -1
+    : (supersededAnchorRows ??
+      (prevB ? Math.max(0, (prevB.baseY || 0) - (prevB.viewportY || 0)) : -1))
   scope.terminalGeneration++
   const gen = scope.terminalGeneration
   const reused = scope.provisionalTerm
@@ -143,6 +148,7 @@ export function init(
   // Mirror only replayed modes after normal-buffer prefixes are discarded.
   updateMouseModeFromData(scope, replayData)
   scope.activeAltScreenSnapshot = isAltScreenActive(replayData)
+  scope.pendingReplayScrollAnchorRows = scope.activeAltScreenSnapshot ? null : scrollAnchorRows
   scope.initialOscLinks = Array.isArray(nextOscLinks) ? nextOscLinks : []
   scope.initialOscLinkRowOffset = 0
   scope.initialOscLinkEvictionReady = false

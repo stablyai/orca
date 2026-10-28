@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useShallow } from 'zustand/react/shallow'
 import { onOnboardingReopened } from '../components/onboarding/show-onboarding-event'
 import { shouldShowOnboarding } from '../components/onboarding/should-show-onboarding'
@@ -166,10 +166,9 @@ export function useOnboardingAndFeatureTips() {
     settings
   ])
 
-  return {
-    applyStartupOnboardingState,
-    onboarding,
-    setOnboarding,
-    shouldRender: onboarding !== null && shouldShowOnboarding(onboarding)
-  }
+  const shouldRender = onboarding !== null && shouldShowOnboarding(onboarding)
+  return useMemo(
+    () => ({ applyStartupOnboardingState, onboarding, setOnboarding, shouldRender }),
+    [applyStartupOnboardingState, onboarding, shouldRender]
+  )
 }

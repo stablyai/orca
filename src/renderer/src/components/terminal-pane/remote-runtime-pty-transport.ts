@@ -18,6 +18,7 @@ import {
 import type { AcceptedInputOptions } from './pty-preconnect-input-buffer'
 import type { TerminalInputKind } from '../../../../shared/terminal-input-kind'
 import { isSshSignInPendingTerminalError } from './terminal-ssh-sign-in-error'
+import { terminalCreateThemeParams } from './terminal-view-attributes-publisher'
 /* eslint-disable max-lines -- Why: remote PTY transport keeps lifecycle, JSON fallback, and binary stream wiring together so reconnect/destroy ordering stays testable as one behavior surface. */
 import type { RuntimeRpcResponse } from '../../../../shared/runtime-rpc-envelope'
 import {
@@ -3509,7 +3510,7 @@ export function createRemoteRuntimePtyTransport(
         ...(launchTokenToSend !== undefined ? { launchToken: launchTokenToSend } : {}),
         ...(launchAgentToSend !== undefined ? { launchAgent: launchAgentToSend } : {}),
         ...spawnIntentParams,
-        ...(terminalColorQueryReplies ? { terminalColorQueryReplies } : {}),
+        ...terminalCreateThemeParams(terminalColorQueryReplies),
         ...(terminalKittyKeyboardProtocol === true ? { terminalKittyKeyboardProtocol: true } : {}),
         tabId,
         leafId,
@@ -3733,7 +3734,12 @@ export function createRemoteRuntimePtyTransport(
 
     attach(options) {
       settleSignInConnectWait()
-      recoveryInputHold.expect(null)
+      // Why: like the local attach, keys typed before it reach the terminal this pane names, never another.
+      recoveryInputHold.expect(
+        opts.bufferInputUntilConnect && opts.releasePreconnectInput?.() !== false
+          ? restoredInputEndpoint(options.existingPtyId)
+          : null
+      )
       attachPane(options, false)
     },
 

@@ -1,4 +1,4 @@
-import { dirname, extname, isAbsolute, resolve } from 'node:path'
+import { dirname, isAbsolute, resolve } from 'node:path'
 import { stat } from 'node:fs/promises'
 import type { Store } from '../persistence'
 import type { LocalFileAccess } from '../../shared/local-file-access'
@@ -8,7 +8,7 @@ import {
   type ResolveAuthorizedPathOptions
 } from './filesystem/filesystem-auth'
 import { isDescendantOrEqual } from './filesystem/filesystem-path-containment'
-import { PREVIEWABLE_BINARY_MIME_TYPES } from './filesystem/filesystem-file-content-inspection'
+import { filePreviewForPath } from '../../shared/file-preview-kind'
 import { getDefaultFloatingWorkspacePath } from './floating-workspace-directory'
 import {
   isDeviceNamespacePath,
@@ -58,8 +58,7 @@ export async function resolveUserNamedRegularFile(
 
 // Chat uses img rendering; PDF previews need a different surface.
 function isChatImage(filePath: string): boolean {
-  const extension = extname(filePath).toLowerCase()
-  return Boolean(PREVIEWABLE_BINARY_MIME_TYPES[extension]) && extension !== '.pdf'
+  return filePreviewForPath(filePath)?.kind === 'image'
 }
 
 // Resolve path text first because devices can hide behind dot and parent segments.

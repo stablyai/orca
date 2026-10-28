@@ -37,6 +37,10 @@ import { MobileRelayHostWorktreesParamsSchema } from '../mobile-relay-hosts-cont
 import { MobileWebBundleChunkParamsSchema } from '../mobile-web-bundle/bundle-rpc-contract'
 import { OrcadMigrationBlobChunkRequestSchema } from '../orcad-migration/orcad-migration-blob-transfer'
 import { OrcadMigrationSnapshotChunkRequestSchema } from '../orcad-migration/orcad-migration-scrollback'
+import {
+  OrcadDeclareClientParamsSchema,
+  OrcadPeerDesktopsParamsSchema
+} from '../orcad-peer-desktops-contract'
 import { OrcadTerminalCensusParamsSchema } from '../orcad-terminal-census'
 import { pluginConsentRequestSchema } from '../plugins/plugin-consent-request'
 import {
@@ -220,6 +224,7 @@ import {
 } from './files-mutation-params'
 import {
   DocPreviewFileRead,
+  FileDirRead,
   FileListAll,
   FileOpenDiff,
   FileOpenTab,
@@ -232,6 +237,12 @@ import {
   ResolveTerminalPath,
   ServerDirectoryBrowse
 } from './files-params'
+import {
+  FileSaveAbort,
+  FileSaveBegin,
+  FileSaveChunk,
+  FileSaveCommit
+} from './files-staged-save-params'
 import { FileOpen, FileWatch, WorktreeSelector } from './files-target-params'
 import { TerminalArtifactFile, TerminalArtifactFileWrite } from './files-terminal-artifact-params'
 import {
@@ -531,6 +542,7 @@ import {
   UpdatePaneLayout,
   WorktreeTabSelector
 } from './session-tabs-schemas-params'
+import { SessionReadTerminalScrollbackParams } from './session-terminal-scrollback-params'
 import { SidebarSessionBeginParams } from './sidebar-session-params'
 import {
   SkillsCancelInstallParams,
@@ -956,13 +968,17 @@ export const RPC_PARAMS_BY_METHOD = {
   'files.pathsExist': FilePathsExist,
   'files.read': FileOpen,
   'files.readChunk': FileReadChunk,
-  'files.readDir': FileTreePath,
+  'files.readDir': FileDirRead,
   'files.readDocPreview': DocPreviewFileRead,
   'files.readPreview': FileOpen,
   'files.readTerminalArtifact': TerminalArtifactFile,
   'files.readTerminalArtifactPreview': TerminalArtifactFile,
   'files.rename': FileRename,
   'files.resolveTerminalPath': ResolveTerminalPath,
+  'files.saveAbort': FileSaveAbort,
+  'files.saveBegin': FileSaveBegin,
+  'files.saveChunk': FileSaveChunk,
+  'files.saveCommit': FileSaveCommit,
   'files.search': FileSearch,
   'files.searchPaths': FilePathSearch,
   'files.stat': FileTreePath,
@@ -1088,7 +1104,9 @@ export const RPC_PARAMS_BY_METHOD = {
   'gitlab.updateMRState': UpdateMrState,
   'gitlab.workItemByPath': WorkItemByPath,
   'gitlab.workItemDetails': WorkItemDetails,
+  'host.declareClient': OrcadDeclareClientParamsSchema,
   'host.gitBash.isAvailable': null,
+  'host.peerDesktops': OrcadPeerDesktopsParamsSchema,
   'host.platform': null,
   'host.pwsh.isAvailable': null,
   'host.wsl.isAvailable': null,
@@ -1312,6 +1330,7 @@ export const RPC_PARAMS_BY_METHOD = {
   'runtime.clientCapabilities.update': ClientCapabilitiesUpdate,
   'runtime.clientEvents.subscribe': null,
   'runtime.clientEvents.unsubscribe': ClientEventsUnsubscribeParams,
+  'session.readTerminalScrollback': SessionReadTerminalScrollbackParams,
   'session.tabs.activate': ActivateTab,
   'session.tabs.close': CloseTab,
   'session.tabs.closeLifecycle': CloseLifecycleTab,

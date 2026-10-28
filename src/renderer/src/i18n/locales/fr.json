@@ -283,11 +283,15 @@
         "system": "Système",
         "english": "English",
         "chinese": "中文（简体）",
+        "chineseTraditional": "繁體中文（台灣）",
         "korean": "한국어",
         "japanese": "日本語",
         "spanish": "Español",
         "french": "Français",
-        "portuguese": "Português (Brasil)"
+        "portuguese": "Português (Brasil)",
+        "russian": "Русский",
+        "turkish": "Türkçe",
+        "german": "Deutsch"
       },
       "statusBar": {
         "claudeToggleDescription": "Afficher l'utilisation des tokens et des coûts de Claude pour l'espace de travail actif.",
@@ -6048,12 +6052,10 @@
           "oneWorkspace": "1 espace de travail",
           "manyWorkspaces": "{{count}} espaces de travail",
           "hostHasWorkspacesDefault": "Retire {{value0}} et ses identifiants de cet ordinateur. Ses {{value1}} restent dans Orca — les fichiers distants ne sont pas touchés.",
-          "alsoDeleteRemote": "Supprimer aussi ces {{value0}} sur {{value1}}",
           "alsoForgetLocal": "Retirer aussi ces {{value0}} d'Orca",
           "advanced": "Avancé",
-          "alsoDeleteRemoteHint": "Supprime définitivement les worktrees Git distants et leurs branches. Irréversible.",
           "alsoForgetLocalHint": "Les retire uniquement d'Orca. Les fichiers, worktrees et branches distants restent intacts.",
-          "wslHostEndsTerminals": "Retire {{value0}} d'Orca, ferme ses terminaux ouverts et arrête le serveur d'Orca dans cette distro. Les fichiers de la distro restent intacts."
+          "wslHostEndsTerminalsUnlessShared": "Retire {{value0}} d'Orca. Sauf si un autre Orca ouvert sur cet ordinateur l'utilise, cela ferme aussi ses terminaux ouverts et arrête le serveur d'Orca dans cette distro. Les fichiers de la distro restent intacts."
         },
         "HostRenameDialog": {
           "1a2b3c4d5e": "Renommer l'hôte",
@@ -6236,14 +6238,9 @@
           "sshImportSyncedSingular": "Ajout de {{count}} hôte à Orca."
         },
         "ForgetSshWorkspaceDialog": {
-          "reconnectFailed": "Échec de la reconnexion",
-          "forgetBody": "Retire uniquement cet espace de travail d'Orca. Les fichiers, le worktree Git et les branches sur {{host}} restent intacts.",
-          "title": "Supprimer « {{name}} » ?",
-          "disconnectedBody": "L'hôte SSH de cet espace de travail n'est pas connecté. Reconnectez-le pour le supprimer aussi à distance, ou retirez-le seulement d'Orca.",
           "ghostBody": "{{host}} n'est plus un hôte SSH enregistré ; cet espace de travail n'est donc plus connecté à un hôte actif. Il ne peut être que retiré d'Orca — les fichiers et branches distants restent intacts.",
           "cancel": "Annuler",
-          "forget": "Retirer d'Orca",
-          "reconnectAndDelete": "Reconnecter et supprimer"
+          "forget": "Retirer d'Orca"
         },
         "MarkdownImageLightbox": {
           "image": "Image",
@@ -6383,7 +6380,7 @@
           "running": "En cours",
           "stopped": "Arrêtée",
           "title": "Ajouter une distro WSL",
-          "description": "Orca exécute son serveur dans la distro, de sorte que git, les fichiers et les terminaux s'exécutent nativement sous Linux. Utilisez-la pour les nouveaux projets ; les projets que vous avez ouverts via \\\\wsl.localhost continuent de fonctionner tels quels.",
+          "description": "Orca exécute son serveur dans la distro, de sorte que git, les fichiers et les terminaux s'exécutent nativement sous Linux. Les projets que vous avez ouverts via \\\\wsl.localhost continuent de fonctionner tels quels jusqu'à ce que vous les déplaciez vers cet hôte.",
           "distro": "Distro",
           "loading": "Recherche des distros WSL…",
           "placeholder": "Choisissez une distro",
@@ -6410,6 +6407,7 @@
           "removalPending": "La suppression n'a pas abouti"
         },
         "wslHostRemoval": {
+          "keptForOthers": "Retiré de cet Orca. L'hôte reste actif pour {{value0}}.",
           "partial": "L'hôte a été retiré, mais quelque chose dans la distro est encore en cours d'exécution : {{value0}}",
           "pending": "Orca n'a pas encore supprimé l'hôte : {{value0}} Supprimez-le à nouveau pour réessayer, ou connectez-le pour le conserver."
         },
@@ -8436,7 +8434,6 @@
           "a016ffbeed": "Auto utilise Windows PowerShell pour le moment et bascule vers PowerShell 7+ une fois installé.",
           "5ed5c95344": "Choisissez entre Windows PowerShell et PowerShell 7+ pour les nouveaux volets de terminal.",
           "3d88af864d": "Choisissez si l'option de shell PowerShell lance Windows PowerShell ou PowerShell 7+ pour les nouveaux volets de terminal.",
-          "8a956cc91e": "Caractères traités comme séparateurs de mots pour la sélection par double-clic.",
           "4bebcc2b2c": "Séparateurs de mots",
           "12e06178fa": "lignes",
           "907b0b9d3e": "Personnalisé",
@@ -11123,7 +11120,7 @@
           "mixedTitle": "Examiner l'accès et le contenu",
           "instructionalTitle": "Examiner le contenu du plugin",
           "subtitle": "{{value0}} v{{value1}} · {{value2}}",
-          "reconsent": "Les autorisations, le niveau de confiance du worker ou le contenu instructif ont changé depuis votre dernière revue de ce plugin. Revoyez-le avant qu'il puisse s'exécuter.",
+          "reconsent": "Ce plugin a changé depuis votre approbation. Vérifiez-le pour le relancer.",
           "capabilities": "Ce plugin peut",
           "warning": "Ces autorisations limitent la façon dont le plugin utilise l'API d'Orca. Son worker s'exécute néanmoins comme un processus normal sur votre ordinateur, avec un accès complet à vos fichiers, votre réseau et vos autres processus.",
           "instructionalWarning": "Ce plugin n'a pas de processus worker. Son contenu instructif peut malgré tout déclencher des actions quand vous ou un agent l'utilisez. Examinez les instructions et commandes ci-dessous avant de l'activer.",
@@ -17614,6 +17611,7 @@
         "agentCommandNotRunnable": "{{agent}} : la Commande dans Paramètres → Agents doit être le chemin ou le nom d'un programme qu'Orca peut trouver, sans arguments ni variables. Modifiez-la ou réinitialisez-la.",
         "runtimeNotInstalled": "{{agent}} n'est pas installé sur l'ordinateur qui exécute ce chat. Installez-le depuis le chat dans une version récente d'Orca.",
         "fullAccessAsRoot": "{{agent}} n'utilisera pas l'Accès complet tant qu'il s'exécute en tant que root. Choisissez une autre autorisation pour {{agent}} dans Paramètres → Agents pour l'ordinateur qui exécute ce chat, puis démarrez un nouveau chat.",
+        "launchPreparationFailed": "Orca n'a pas pu préparer le démarrage de {{agent}} sur l'ordinateur qui exécute ce chat.",
         "conversationOpenElsewhere": "Codex maintient encore cette conversation ouverte. Réessayez dans un instant ou fermez les autres terminaux Codex.",
         "conversationOpenInTerminal": "{{agent}} exécute déjà cette conversation dans un autre terminal. Quittez {{agent}} là-bas ou fermez ce terminal pour continuer ici.",
         "chooseClaudeAccount": "Choisissez-en un ou ajoutez-en un dans les paramètres Comptes Claude.",
@@ -18267,7 +18265,6 @@
         "pausedSendFailedWaiting": "Envoi impossible. Quand l'agent aura terminé, appuyez sur Envoyer pour réessayer.",
         "save": "Enregistrer",
         "editingMessage": "Modification du message",
-        "cancelEditing": "Annuler la modification",
         "editChanged": "Ce message a changé pendant que vous le modifiiez. Votre modification se trouve dans le champ de discussion.",
         "editChangedPrompt": "Ce message a changé pendant que vous le modifiiez. Votre modification sera dans le champ de discussion une fois que vous aurez répondu à l'agent.",
         "editChangedNotSaved": "Ce message a changé pendant que vous le modifiiez. Votre modification n'a pas été enregistrée.",
@@ -18281,8 +18278,6 @@
         "expand": "Développer",
         "queued": "En file d'attente",
         "clearAll": "Tout effacer",
-        "pasteOrDropImages": "Collez ou déposez des images",
-        "saveNeedsContent": "Ajoutez du texte ou une image pour enregistrer",
         "moveChanged": "La file d'attente a changé avant ce déplacement. Essayez de faire glisser le message à nouveau.",
         "reorderHint": "Faites glisser pour réorganiser, ou utilisez les touches fléchées Haut et Bas.",
         "reorderMessage": "Réorganiser le message"
@@ -19008,7 +19003,6 @@
       "subagents_other": "{{count}} sous-agents"
     },
     "terminal": {
-      "closed": "Pas de terminal en direct — le volet de cet agent est fermé.",
       "focusWorktree": "Ouvrir le worktree",
       "close": "Fermer",
       "remotePreviewUnavailable": "Aucun aperçu pour cette session à distance — ouvrez l'espace de travail pour afficher le terminal."
@@ -19187,6 +19181,21 @@
       "description": "L'espace de travail actif est masqué dans la barre latérale. Le révéler ajustera uniquement les filtres qui le cachent.",
       "confirm": "Ajustez les filtres et révélez",
       "cancel": "Conserver les filtres"
+    },
+    "wslMoved": {
+      "movedToHost": "Déplacé vers l'hôte {{distro}}",
+      "useHere": "Utiliser à nouveau sur cet ordinateur",
+      "useHereTitle": "Utiliser à nouveau {{name}} sur cet ordinateur ?",
+      "useHereDescription": "Orca ouvrira ce projet ici tel qu'il était avant le déplacement. Votre code n'est pas concerné : il n'a jamais été déplacé. Les modifications faites sur l'hôte {{distro}} depuis le déplacement, comme de nouveaux onglets et chats, restent sur l'hôte et ne reviennent pas. Les projets déplacés avec celui-ci reviennent aussi. Le projet reste également sur l'hôte {{distro}} jusqu'à ce que vous l'y supprimiez. Cette fenêtre va se recharger.",
+      "useHereConfirm": "Utiliser sur cet ordinateur",
+      "useHereSuperseded": "Un déplacement ultérieur vers l'hôte {{distro}} inclut ce projet. Ramenez d'abord celui-là.",
+      "useHereMoveRunning": "Un déplacement vers l'hôte {{distro}} est encore en cours. Réessayez une fois terminé.",
+      "useHereHostKeptForPeers": "{{project}} a été déplacé vers l'hôte {{distro}}, qui reste actif pour un autre Orca. Ajoutez de nouveau l'hôte pour l'utiliser ici.",
+      "useHereHostUnreachable": "L'hôte {{distro}} ne répond pas : Orca ne peut pas arrêter sa copie de ce projet, et ses agents y tournent peut-être encore. Connectez l'hôte dans les Réglages, ou supprimez-le, puis réessayez.",
+      "useHereHostStillRunning": "La copie de ce projet sur l'hôte {{distro}} a encore des terminaux en cours : ses agents pourraient tourner deux fois. Patientez un instant, puis réessayez.",
+      "useHereFailed": "Impossible de ramener ce projet sur cet ordinateur.",
+      "useHereUnsavedTitle": "Enregistrez d'abord vos fichiers",
+      "useHereUnsavedDescription": "Récupérer {{name}} recharge cette fenêtre. Enregistrez ou fermez d'abord ces fichiers : {{files}}"
     },
     "startupWorktreeRefresh": {
       "loading": "Recherche des espaces de travail…",
