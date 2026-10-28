@@ -14,12 +14,22 @@ function parseResetTimesKey(key: string): number[] {
   return key.length === 0 ? [] : key.split('|').map((value) => Number(value))
 }
 
-/** Advance now at the soonest resetsAt label boundary; pass it into the countdown formatter. */
-export function useResetCountdownClock(resetTimes: readonly (number | null | undefined)[]): number {
+/** Advance now at the soonest resetsAt label boundary, or a `planExtraWakes` instant; pass it into the countdown formatter. */
+export function useResetCountdownClock(
+  resetTimes: readonly (number | null | undefined)[],
+  planExtraWakes?: (now: number) => readonly (number | null | undefined)[]
+): number {
   const [scheduledNow, setScheduledNow] = useState(() => Date.now())
   const key = useMemo(() => resetTimesKey(resetTimes), [resetTimes])
   const times = useMemo(() => parseResetTimesKey(key), [key])
   const previousKeyRef = useRef(key)
+  // Key on planned instants, not planner identity: usedPercent can change while resetsAt holds.
+  const extraKey = useMemo(
+    () => resetTimesKey(planExtraWakes?.(scheduledNow) ?? []),
+    [planExtraWakes, scheduledNow]
+  )
+  const extraTimes = useMemo(() => parseResetTimesKey(extraKey), [extraKey])
+
   // Refresh before paint when reset windows change to avoid stale intermediate labels.
   useLayoutEffect(() => {
     if (previousKeyRef.current === key) {
@@ -30,13 +40,20 @@ export function useResetCountdownClock(resetTimes: readonly (number | null | und
   }, [key])
 
   useEffect(() => {
-    const delayMs = getResetCountdownNextTickDelay(scheduledNow, times)
+    let delayMs = getResetCountdownNextTickDelay(scheduledNow, times)
+    for (const wakeAt of extraTimes) {
+      if (wakeAt <= scheduledNow) {
+        continue
+      }
+      const extraDelayMs = wakeAt - scheduledNow
+      delayMs = delayMs === null ? extraDelayMs : Math.min(delayMs, extraDelayMs)
+    }
     if (delayMs === null) {
       return
     }
     const timeout = window.setTimeout(() => setScheduledNow(Date.now()), delayMs)
     return () => window.clearTimeout(timeout)
-  }, [scheduledNow, times])
+  }, [scheduledNow, times, extraTimes])
 
   return scheduledNow
 }
