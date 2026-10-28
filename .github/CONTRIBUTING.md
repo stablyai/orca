@@ -53,6 +53,30 @@ pnpm install
 pnpm dev
 ```
 
+### Using mise (optional)
+
+If you already use [mise](https://mise.jdx.dev), the repo ships a `.mise.toml` that pins Node 24,
+Bun 1.4.4 (matching [`config/.bun-version`](../config/.bun-version)), and reads the pnpm version from
+`packageManager` in [`package.json`](../package.json).
+
+```bash
+mise trust
+mise run setup     # mise install + mise exec -- pnpm install
+mise run dev
+```
+
+| Task             | Runs                                             |
+| ---------------- | ------------------------------------------------ |
+| `mise run setup` | `mise install` then `mise exec -- pnpm install` |
+| `mise run dev`   | `pnpm dev`                                       |
+| `mise run check` | `pnpm check:changed --maxWorkers=2`              |
+| `mise run test`  | `pnpm test:changed --maxWorkers=2`               |
+
+Use one package-manager source, not both: with mise, skip `corepack enable`. mise installs the
+pinned pnpm version and verifies the Corepack-style checksum in `packageManager`. The native
+toolchain, Docker on Linux, and `xvfb` are still required — mise only manages tool versions and task
+shortcuts.
+
 ### Dev Profiles and Parallel Instances
 
 `pnpm dev` in a linked Git worktree uses its own userData profile, renderer port, and remote

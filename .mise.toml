@@ -1,0 +1,33 @@
+# Optional local toolchain for contributors who use mise.
+# The documented setup in .github/CONTRIBUTING.md (Node 24 + corepack + Bun)
+# remains the canonical path and keeps working.
+#
+#   mise trust && mise run setup
+#
+# Do not also run `corepack enable`: mise reads the pnpm version and verifies
+# the Corepack-style checksum from package.json "packageManager".
+
+[tools]
+node = "24"
+# Keep in sync with config/.bun-version, which CI and build scripts read.
+bun = "1.4.4"
+
+[settings]
+# Read pnpm's version from package.json "packageManager".
+idiomatic_version_file_enable_tools = ["pnpm"]
+
+[tasks.setup]
+description = "Install the pinned toolchains and project dependencies"
+run = ["mise install", "mise exec -- pnpm install"]
+
+[tasks.dev]
+description = "Run the desktop app in development mode"
+run = "pnpm dev"
+
+[tasks.check]
+description = "Run the pre-handoff checks (format, lint, typecheck, affected tests, ratchets)"
+run = "pnpm check:changed --maxWorkers=2"
+
+[tasks.test]
+description = "Run the test suites affected by local changes"
+run = "pnpm test:changed --maxWorkers=2"
