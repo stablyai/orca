@@ -1,6 +1,7 @@
 import { ipcRenderer } from 'electron'
 import type { GitForkSyncExpectedUpstream, GitForkSyncResult } from '../../shared/git-fork-sync'
 import type { GitStagingArea, GitUpstreamStatus } from '../../shared/git-status-types'
+import type { GitSubmoduleRepo } from '../../shared/git-submodule-repo-types'
 import type { GitPushTarget } from '../../shared/worktree/types'
 import type { GitStageWorktreeScope } from '../../shared/git-stage-worktree-scope'
 import type { GitHistoryOptions, GitHistoryResult } from '../../shared/git-history'
@@ -16,6 +17,7 @@ export const gitApi = {
     branchLineTotalMergeBase?: string
     requestToken?: string
     wakeWslDistro?: boolean
+    submodulePath?: string
   }) => ipcRenderer.invoke('git:status', args),
   cancelStatus: (args: { requestToken: string }): Promise<void> =>
     ipcRenderer.invoke('git:cancelStatus', args),
@@ -69,11 +71,16 @@ export const gitApi = {
     connectionId?: string
     pushTarget?: GitPushTarget
   }): Promise<GitUpstreamStatus> => ipcRenderer.invoke('git:upstreamStatus', args),
+  submoduleRepos: (args: {
+    worktreePath: string
+    connectionId?: string
+  }): Promise<GitSubmoduleRepo[]> => ipcRenderer.invoke('git:submoduleRepos', args),
   fetch: (args: {
     worktreePath: string
     worktreeId?: string
     connectionId?: string
     pushTarget?: GitPushTarget
+    submodulePath?: string
   }): Promise<void> => ipcRenderer.invoke('git:fetch', args),
   syncFork: (args: {
     worktreePath: string
@@ -87,12 +94,14 @@ export const gitApi = {
     forceWithLease?: boolean
     connectionId?: string
     pushTarget?: unknown
+    submodulePath?: string
   }): Promise<void> => ipcRenderer.invoke('git:push', args),
   pull: (args: {
     worktreePath: string
     worktreeId?: string
     connectionId?: string
     pushTarget?: GitPushTarget
+    submodulePath?: string
   }): Promise<void> => ipcRenderer.invoke('git:pull', args),
   fastForward: (args: {
     worktreePath: string
@@ -124,6 +133,7 @@ export const gitApi = {
     worktreePath: string
     message: string
     connectionId?: string
+    submodulePath?: string
   }): Promise<{ success: boolean; error?: string }> => ipcRenderer.invoke('git:commit', args),
   generateCommitMessage: (args: {
     worktreePath: string
@@ -162,23 +172,30 @@ export const gitApi = {
     worktreePath: string
     connectionId?: string
   }): Promise<void> => ipcRenderer.invoke('git:cancelGeneratePullRequestFields', args),
-  stage: (args: { worktreePath: string; filePath: string; connectionId?: string }): Promise<void> =>
-    ipcRenderer.invoke('git:stage', args),
+  stage: (args: {
+    worktreePath: string
+    filePath: string
+    connectionId?: string
+    submodulePath?: string
+  }): Promise<void> => ipcRenderer.invoke('git:stage', args),
   bulkStage: (args: {
     worktreePath: string
     filePaths: string[]
     connectionId?: string
     scope?: GitStageWorktreeScope
+    submodulePath?: string
   }): Promise<void> => ipcRenderer.invoke('git:bulkStage', args),
   unstage: (args: {
     worktreePath: string
     filePath: string
     connectionId?: string
+    submodulePath?: string
   }): Promise<void> => ipcRenderer.invoke('git:unstage', args),
   bulkUnstage: (args: {
     worktreePath: string
     filePaths: string[]
     connectionId?: string
+    submodulePath?: string
   }): Promise<void> => ipcRenderer.invoke('git:bulkUnstage', args),
   discard: (args: {
     worktreePath: string

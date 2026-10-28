@@ -3,7 +3,11 @@ import { callAbortableRuntimeEnvironment } from '../../runtime/abortable-runtime
 import { toRuntimeWorktreeSelector } from '../../runtime/runtime-worktree-selector'
 import { translate } from '@/i18n/i18n'
 import { callRuntimeResult } from './web-runtime-calls'
-import { mutateGitPath, mutateGitPaths } from './web-git-mutations'
+import {
+  mutateGitPath,
+  mutateGitPaths,
+  resolveRuntimeWorktreeUnlessSubmodule
+} from './web-git-mutations'
 import { requireGitStageWorktreeScopeReceipt } from '../../../../shared/git-stage-worktree-scope'
 import { requireActiveEnvironment, updateEnvironmentFromResponse } from './web-runtime-session'
 import {
@@ -50,9 +54,10 @@ export function createGitApi(): NonNullable<Partial<PreloadApi>['git']> {
       bypassEffectiveUpstreamNegativeCache,
       reuseLineStats,
       branchLineTotalMergeBase,
-      requestToken
+      requestToken,
+      submodulePath
     }) => {
-      const worktree = await resolveRuntimeWorktreeByPath(worktreePath)
+      const worktree = await resolveRuntimeWorktreeUnlessSubmodule(worktreePath, submodulePath)
       const params = {
         worktree: toRuntimeWorktreeSelector(worktree.id),
         includeIgnored,
@@ -152,8 +157,10 @@ export function createGitApi(): NonNullable<Partial<PreloadApi>['git']> {
         pushTarget
       })
     },
-    fetch: async ({ worktreePath, pushTarget }) => {
-      const worktree = await resolveRuntimeWorktreeByPath(worktreePath)
+    // Submodule repositories are served by this machine's main process only.
+    submoduleRepos: async () => [],
+    fetch: async ({ worktreePath, pushTarget, submodulePath }) => {
+      const worktree = await resolveRuntimeWorktreeUnlessSubmodule(worktreePath, submodulePath)
       await callRuntimeResult('git.fetch', {
         worktree: toRuntimeWorktreeSelector(worktree.id),
         pushTarget
@@ -170,16 +177,16 @@ export function createGitApi(): NonNullable<Partial<PreloadApi>['git']> {
         60_000
       )
     },
-    push: async ({ worktreePath, publish, pushTarget }) => {
-      const worktree = await resolveRuntimeWorktreeByPath(worktreePath)
+    push: async ({ worktreePath, publish, pushTarget, submodulePath }) => {
+      const worktree = await resolveRuntimeWorktreeUnlessSubmodule(worktreePath, submodulePath)
       await callRuntimeResult('git.push', {
         worktree: toRuntimeWorktreeSelector(worktree.id),
         publish,
         pushTarget
       })
     },
-    pull: async ({ worktreePath, pushTarget }) => {
-      const worktree = await resolveRuntimeWorktreeByPath(worktreePath)
+    pull: async ({ worktreePath, pushTarget, submodulePath }) => {
+      const worktree = await resolveRuntimeWorktreeUnlessSubmodule(worktreePath, submodulePath)
       await callRuntimeResult('git.pull', {
         worktree: toRuntimeWorktreeSelector(worktree.id),
         pushTarget
@@ -218,8 +225,8 @@ export function createGitApi(): NonNullable<Partial<PreloadApi>['git']> {
         oldPath
       })
     },
-    commit: async ({ worktreePath, message }) => {
-      const worktree = await resolveRuntimeWorktreeByPath(worktreePath)
+    commit: async ({ worktreePath, message, submodulePath }) => {
+      const worktree = await resolveRuntimeWorktreeUnlessSubmodule(worktreePath, submodulePath)
       return callRuntimeResult('git.commit', {
         worktree: toRuntimeWorktreeSelector(worktree.id),
         message
@@ -248,12 +255,13 @@ export function createGitApi(): NonNullable<Partial<PreloadApi>['git']> {
       )
     }),
     cancelGeneratePullRequestFields: () => Promise.resolve(),
-    stage: async ({ worktreePath, filePath }) => mutateGitPath('git.stage', worktreePath, filePath),
-    bulkStage: async ({ worktreePath, filePaths, scope }) => {
+    stage: async ({ worktreePath, filePath, submodulePath }) =>
+      mutateGitPath('git.stage', worktreePath, filePath, submodulePath),
+    bulkStage: async ({ worktreePath, filePaths, scope, submodulePath }) => {
       if (!scope) {
-        return mutateGitPaths('git.bulkStage', worktreePath, filePaths)
+        return mutateGitPaths('git.bulkStage', worktreePath, filePaths, submodulePath)
       }
-      const worktree = await resolveRuntimeWorktreeByPath(worktreePath)
+      const worktree = await resolveRuntimeWorktreeUnlessSubmodule(worktreePath, submodulePath)
       // Why no paths: an older host strips `scope` and stages `filePaths`, so an empty list makes that a no-op.
       const reply = await callRuntimeResult<unknown>('git.bulkStage', {
         worktree: toRuntimeWorktreeSelector(worktree.id),
@@ -262,10 +270,10 @@ export function createGitApi(): NonNullable<Partial<PreloadApi>['git']> {
       })
       requireGitStageWorktreeScopeReceipt(reply, scope)
     },
-    unstage: async ({ worktreePath, filePath }) =>
-      mutateGitPath('git.unstage', worktreePath, filePath),
-    bulkUnstage: async ({ worktreePath, filePaths }) =>
-      mutateGitPaths('git.bulkUnstage', worktreePath, filePaths),
+    unstage: async ({ worktreePath, filePath, submodulePath }) =>
+      mutateGitPath('git.unstage', worktreePath, filePath, submodulePath),
+    bulkUnstage: async ({ worktreePath, filePaths, submodulePath }) =>
+      mutateGitPaths('git.bulkUnstage', worktreePath, filePaths, submodulePath),
     discard: async ({ worktreePath, filePath }) =>
       mutateGitPath('git.discard', worktreePath, filePath),
     bulkDiscard: async ({ worktreePath, filePaths }) => {

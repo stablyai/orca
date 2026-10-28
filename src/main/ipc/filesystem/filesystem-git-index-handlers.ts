@@ -15,6 +15,7 @@ import {
 } from '../local-worktree-runtime-options'
 import { getWorktreeSharedLinkPaths } from '../../git/worktree-shared-directories'
 import { validateGitRelativeFilePath } from './filesystem-path-containment'
+import { resolveGitActionPath } from './git-remote/submodule-action-target'
 import type { FilesystemHandlerContext } from './filesystem-handler-context'
 import { parseGitStageWorktreeScope } from '../../../shared/git-stage-worktree-scope'
 import { requireReachableGitRoute } from '../../providers/execution-host-provider-dispatch'
@@ -26,16 +27,22 @@ export function registerFilesystemGitIndexHandlers(context: FilesystemHandlerCon
     'git:stage',
     async (
       _event,
-      args: { worktreePath: string; filePath: string; connectionId?: string }
+      args: {
+        worktreePath: string
+        filePath: string
+        connectionId?: string
+        submodulePath?: string
+      }
     ): Promise<void> => {
       requireReachableGitRoute(getConnectionExecutionHostId(args.connectionId))
-      const worktreePath = await resolveRegisteredWorktreePath(args.worktreePath, store)
-      const filePath = validateGitRelativeFilePath(worktreePath, args.filePath)
+      const registeredPath = await resolveRegisteredWorktreePath(args.worktreePath, store)
       const gitOptions = getLocalGitOptionsForRegisteredWorktree(
         store,
         args.worktreePath,
-        worktreePath
+        registeredPath
       )
+      const worktreePath = await resolveGitActionPath(args, registeredPath, gitOptions)
+      const filePath = validateGitRelativeFilePath(worktreePath, args.filePath)
       await stageFile(worktreePath, filePath, { ...gitOptions, admissionTier: 'interactive' })
     }
   )
@@ -44,16 +51,22 @@ export function registerFilesystemGitIndexHandlers(context: FilesystemHandlerCon
     'git:unstage',
     async (
       _event,
-      args: { worktreePath: string; filePath: string; connectionId?: string }
+      args: {
+        worktreePath: string
+        filePath: string
+        connectionId?: string
+        submodulePath?: string
+      }
     ): Promise<void> => {
       requireReachableGitRoute(getConnectionExecutionHostId(args.connectionId))
-      const worktreePath = await resolveRegisteredWorktreePath(args.worktreePath, store)
-      const filePath = validateGitRelativeFilePath(worktreePath, args.filePath)
+      const registeredPath = await resolveRegisteredWorktreePath(args.worktreePath, store)
       const gitOptions = getLocalGitOptionsForRegisteredWorktree(
         store,
         args.worktreePath,
-        worktreePath
+        registeredPath
       )
+      const worktreePath = await resolveGitActionPath(args, registeredPath, gitOptions)
+      const filePath = validateGitRelativeFilePath(worktreePath, args.filePath)
       await unstageFile(worktreePath, filePath, { ...gitOptions, admissionTier: 'interactive' })
     }
   )
@@ -101,19 +114,30 @@ export function registerFilesystemGitIndexHandlers(context: FilesystemHandlerCon
     'git:bulkStage',
     async (
       _event,
-      args: { worktreePath: string; filePaths: string[]; connectionId?: string; scope?: unknown }
+      args: {
+        worktreePath: string
+        filePaths: string[]
+        connectionId?: string
+        scope?: unknown
+        submodulePath?: string
+      }
     ): Promise<void> => {
       const scope = parseGitStageWorktreeScope(args.scope)
       requireReachableGitRoute(getConnectionExecutionHostId(args.connectionId))
-      const worktreePath = await resolveRegisteredWorktreePath(args.worktreePath, store)
-      const filePaths = args.filePaths.map((p) => validateGitRelativeFilePath(worktreePath, p))
+      const registeredPath = await resolveRegisteredWorktreePath(args.worktreePath, store)
       const gitOptions = getLocalGitOptionsForRegisteredWorktree(
         store,
         args.worktreePath,
-        worktreePath
+        registeredPath
       )
+      const worktreePath = await resolveGitActionPath(args, registeredPath, gitOptions)
+      // The whole-worktree scope reads the parent repo's shared-link settings, not the submodule's.
+      if (scope && args.submodulePath !== undefined) {
+        throw new Error('Stage All by scope is not available for a submodule')
+      }
+      const filePaths = args.filePaths.map((p) => validateGitRelativeFilePath(worktreePath, p))
       if (scope) {
-        const repo = getLocalRepoForRegisteredWorktree(store, args.worktreePath, worktreePath)
+        const repo = getLocalRepoForRegisteredWorktree(store, args.worktreePath, registeredPath)
         await stageWorktreeChanges(worktreePath, scope, {
           ...gitOptions,
           admissionTier: 'interactive',
@@ -132,16 +156,22 @@ export function registerFilesystemGitIndexHandlers(context: FilesystemHandlerCon
     'git:bulkUnstage',
     async (
       _event,
-      args: { worktreePath: string; filePaths: string[]; connectionId?: string }
+      args: {
+        worktreePath: string
+        filePaths: string[]
+        connectionId?: string
+        submodulePath?: string
+      }
     ): Promise<void> => {
       requireReachableGitRoute(getConnectionExecutionHostId(args.connectionId))
-      const worktreePath = await resolveRegisteredWorktreePath(args.worktreePath, store)
-      const filePaths = args.filePaths.map((p) => validateGitRelativeFilePath(worktreePath, p))
+      const registeredPath = await resolveRegisteredWorktreePath(args.worktreePath, store)
       const gitOptions = getLocalGitOptionsForRegisteredWorktree(
         store,
         args.worktreePath,
-        worktreePath
+        registeredPath
       )
+      const worktreePath = await resolveGitActionPath(args, registeredPath, gitOptions)
+      const filePaths = args.filePaths.map((p) => validateGitRelativeFilePath(worktreePath, p))
       await bulkUnstageFiles(worktreePath, filePaths, {
         ...gitOptions,
         admissionTier: 'interactive'
