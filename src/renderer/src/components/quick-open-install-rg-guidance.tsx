@@ -9,16 +9,7 @@ export type QuickOpenInstallRgGuidanceParts = {
   guidance: string | null
 }
 
-/**
- * Parses the install-ripgrep guidance message produced by the relay's
- * buildInstallRgMessage(). Returns the parts needed to render as formatted
- * guidance (reason + install command) when matched, or null otherwise so
- * callers can fall back to plain-text display.
- *
- * Why: the message is plain text on the wire (thrown as an Error), but the
- * renderer is the only place with enough UI vocabulary to present ripgrep
- * as an inline code span and the install command as a copyable code block.
- */
+/** Parse relay plain-text errors into reason/install-command UI; return null for callers’ plain-text fallback. */
 export function parseQuickOpenInstallRgGuidance(
   message: string
 ): QuickOpenInstallRgGuidanceParts | null {
@@ -31,9 +22,7 @@ export function parseQuickOpenInstallRgGuidance(
   }
   const reason = match[1]
   const tail = match[2].trim()
-  // Why: on unknown distros the relay emits prose like "install ripgrep via
-  // your package manager (e.g. apt/dnf/pacman)"; there is no single command
-  // to copy, so surface it as plain guidance without the code block.
+  // Unknown distros provide package-manager prose; show guidance without a copyable command block.
   const looksLikeCommand = /^(sudo\s+)?(brew|apt|dnf|pacman|apk)\s/.test(tail)
   return {
     reason,
@@ -49,8 +38,7 @@ export function QuickOpenInstallRgGuidance({
 }: QuickOpenInstallRgGuidanceParts): React.JSX.Element {
   const [copied, setCopied] = useState(false)
   const copiedResetTimerRef = useRef<number | null>(null)
-  // Why: clipboard IPC can resolve after this guidance unmounts; avoid
-  // starting a reset timer that will outlive the component.
+  // Late clipboard completion must not start timers after unmount.
   const isMountedRef = useRef(false)
 
   const clearCopiedResetTimer = useCallback((): void => {
@@ -74,10 +62,7 @@ export function QuickOpenInstallRgGuidance({
     if (!command) {
       return
     }
-    // Why: use Electron's clipboard IPC instead of navigator.clipboard; the
-    // latter often fails silently in the renderer due to focus/permission
-    // quirks inside Radix dialogs. All other copy buttons in the app go
-    // through window.api.ui.writeClipboardText for consistency.
+    // Use Electron clipboard IPC because browser focus/permission checks can fail inside dialogs.
     void window.api.ui
       .writeClipboardText(command)
       .then(() => {
@@ -91,9 +76,7 @@ export function QuickOpenInstallRgGuidance({
           setCopied(false)
         }, 1500)
       })
-      .catch(() => {
-        /* best-effort */
-      })
+      .catch(() => {})
   }, [clearCopiedResetTimer, command])
 
   return (

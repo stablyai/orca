@@ -4,7 +4,7 @@ import { build } from 'esbuild'
 import { tmpdir } from 'node:os'
 import { dirname, join, resolve } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
-import { importProfileStateJson } from './profile-state-documents'
+import { importProfileStateJson, readProfileStateSnapshot } from './profile-state-documents'
 import {
   openProfileStateDatabase,
   openProfileStateDatabaseReadOnly,
@@ -105,6 +105,9 @@ describe('profile state database export crash recovery', () => {
       expect(
         snapshot.db.prepare('SELECT value FROM profile_state_meta WHERE key = ?').get('revision')
       ).toEqual({ value: '1' })
+      expect(JSON.parse(readProfileStateSnapshot(snapshot.db).json)).toEqual({
+        settings: { theme: 'dark' }
+      })
     } finally {
       snapshot.db.close()
     }

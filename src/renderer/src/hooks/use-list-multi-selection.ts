@@ -21,8 +21,7 @@ export type ListMultiSelection<T> = {
   selectForContextMenu: (item: T) => readonly T[]
 }
 
-// Click/Cmd/Shift multi-select keyed by id over `items` in render order. `getKey` and
-// `getScope` must keep one identity across renders.
+// Keep getKey/getScope identities stable while selecting by render order.
 export function useListMultiSelection<T>({
   items,
   getKey,
@@ -33,9 +32,7 @@ export function useListMultiSelection<T>({
   /** Pointerdowns outside this element clear the selection. */
   getScope: () => Element | null
 }): ListMultiSelection<T> {
-  // Why: order-preserving item rebuilds must not give this array a new identity —
-  // updateSelectionForGesture depends on it, and a fresh identity there defeats
-  // React.memo bail-out for every row on epoch bumps.
+  // Reuse equal ordered-ID arrays so gesture callbacks stay stable and row memoization survives epoch bumps.
   const visibleKeys = useReusedArrayIdentity(
     useMemo(() => Array.from(new Set(items.map((item) => getKey(item)))), [items, getKey])
   )
@@ -51,9 +48,7 @@ export function useListMultiSelection<T>({
     setSelectionAnchorKey(prunedSelection.anchorId)
   }
 
-  // Why identity reuse: the empty/unchanged-selection case must keep one array
-  // identity — selectForContextMenu and drag-start handlers depend on this
-  // array, and row memo bail-out depends on those staying stable.
+  // Reuse empty/unchanged selections so context-menu/drag callbacks and row memoization remain stable.
   const selectedItems = useReusedArrayIdentity(
     useMemo(() => {
       if (selectedKeys.size === 0) {

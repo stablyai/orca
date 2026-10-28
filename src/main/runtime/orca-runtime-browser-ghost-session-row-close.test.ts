@@ -9,14 +9,7 @@ vi.mock('electron', () => ({
   webContents: { fromId: vi.fn() }
 }))
 
-/**
- * Closing a browser session row whose page this runtime no longer holds.
- *
- * The registry-hit branch owns a page the runtime still knows. A registry MISS used to fall through
- * to the bridge, which is keyed on live guests -- so a row left behind by a released record, or by
- * a predecessor that kept its records in memory only, answered the X with browser_tab_not_found and
- * the ghost stayed on every paired device.
- */
+/** Registry-miss ghost rows must retire without commanding absent guests, or every paired device retains them. */
 describe('browserTabClose on a session row with no runtime page', () => {
   it('retires the runtime-owned session row on a registry miss', async () => {
     const { RuntimeBrowserCommands } = await import('./browser/browser-commands')
@@ -81,8 +74,7 @@ describe('browserTabClose on a session row with no runtime page', () => {
     await expect(
       commands.browserTabClose({ worktree: 'id:wt-1', page: 'page-restored' })
     ).resolves.toEqual({ closed: true })
-    // No lease has ever held this page, so the close must not try to command an absent host --
-    // that refusal is what used to strand a retained tab with no way to dismiss it.
+    // No host lease ever existed; commanding it would strand the retained ghost row.
     expect(pages.getPage('page-restored')).toBeUndefined()
     expect(retireRuntimeOwnedBrowserSessionTab).toHaveBeenCalledWith('wt-1', 'page-restored')
   })
@@ -101,12 +93,12 @@ describe('browserTabClose on a session row with no runtime page', () => {
     await expect(
       commands.browserTabClose({ worktree: 'id:wt-1', page: 'page-live' })
     ).resolves.toEqual({ closed: true })
-    // The guest is destroyed first; the ghost probe must not short-circuit a real close.
+    // Live guests still require destruction before ghost retirement.
     expect(closeTab).toHaveBeenCalledWith('page-live')
   })
 })
 
-// A host with no browser engine still owns its client-hosted page records and session rows.
+// Hosts without a browser engine still own client-hosted page records.
 describe('browserTabClose on a host with no browser engine', () => {
   it('retires a held client-hosted page instead of refusing with browser_unavailable', async () => {
     const { createRuntimeBrowserCommands, setRuntimeBrowserCommandsFactory } =
@@ -138,7 +130,7 @@ describe('browserTabClose on a host with no browser engine', () => {
     const commands = createRuntimeBrowserCommands(
       createHost({
         retireRuntimeOwnedBrowserSessionTab,
-        // A folder workspace is not a git worktree, so only the browser-workspace resolver knows it.
+        // Folder workspaces bypass git selectors; resolve them through browser workspace routing.
         resolveWorktreeSelector: async () => {
           throw new Error('selector_not_found')
         }

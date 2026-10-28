@@ -24,7 +24,7 @@ function expandHomePath(input: string, home: string): string {
 }
 
 function resolveFloatingWorkspaceInput(input: string): string {
-  // Why the environment port: the headless runtime resolves this too, and it has no Electron app.
+  // Headless runtime uses this path resolver without an Electron app.
   const home = getAppEnvironment().getPath('home')
   const expanded = expandHomePath(input, home)
   return path.isAbsolute(expanded) ? path.resolve(expanded) : path.resolve(home, expanded)
@@ -70,9 +70,9 @@ function isTrustedFloatingWorkspaceDirectory(
   return getTrustedFloatingWorkspaceDirectories(settings).has(path.resolve(canonicalDirPath))
 }
 
-/** The app-owned folder floating markdown documents are created in; a desktop-only root. */
+/** Default folder for floating Markdown documents. */
 export function getDefaultFloatingWorkspacePath(): string {
-  // Why the environment port: the headless runtime resolves this too, and it has no Electron app.
+  // Headless runtime uses this resolver too.
   return path.join(getAppEnvironment().getPath('userData'), FLOATING_WORKSPACE_DIRNAME)
 }
 
@@ -99,7 +99,7 @@ export async function resolveFloatingTerminalCwd(
     return ensureDefaultFloatingWorkspacePath()
   }
 
-  // Why: only picker-approved directories may become the cwd, so arbitrary settings text can't.
+  // Only picker-approved directories may become terminal cwd.
   if (isTrustedFloatingWorkspaceDirectory(canonicalCwd, store.getSettings())) {
     return canonicalCwd
   }

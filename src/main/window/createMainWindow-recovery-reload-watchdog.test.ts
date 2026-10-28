@@ -12,9 +12,6 @@ vi.mock('../crash-reporting/durable-crash-breadcrumb', async (importOriginal) =>
 vi.mock('electron', async () =>
   (await import('./createMainWindow-test-harness')).electronModuleMock()
 )
-vi.mock('@electron-toolkit/utils', async () =>
-  (await import('./createMainWindow-test-harness')).electronToolkitUtilsMock()
-)
 vi.mock('./macos-tahoe-release', async () =>
   (await import('./createMainWindow-test-harness')).macosTahoeReleaseMock()
 )
@@ -33,7 +30,7 @@ vi.mock('../browser/browser-client-page-renderer-runtime', async () => {
 import { createMainWindow } from './createMainWindow'
 import {
   browserWindowMock,
-  isMock,
+  appMock,
   powerMonitorOnMock,
   resetMainWindowMocks
 } from './createMainWindow-test-harness'
@@ -43,15 +40,12 @@ import {
 } from './renderer-recovery-reload-watchdog'
 
 const DOCUMENT_URL = 'file:///opt/orca/renderer/index.html'
-// A real macOS install URL: the crash-report redactor's PATH_PATTERNS provably leave this one intact.
+// Use an install file URL the current crash-report path redactor cannot remove.
 const INSTALL_PATH_LOAD_ERROR =
   "ERR_FILE_NOT_FOUND (-6) loading 'file:///Users/jane.doe/Applications/Orca.app/Contents/Resources/app.asar/out/renderer/index.html'"
 const CRASH = { reason: 'crashed', exitCode: 5 } as Electron.RenderProcessGoneDetails
 
-/**
- * Regression cover for the field failure: the recovery reload is issued, never produces a document, and nothing
- * notices — no did-fail-load, no breaker (it counts renderer deaths only), no retry, no prompt.
- */
+/** Reproduce a recovery load with no document or failure event; renderer-death accounting alone cannot detect its stall. */
 describe('renderer recovery reload watchdog', () => {
   beforeEach(() => {
     resetMainWindowMocks()
@@ -60,8 +54,7 @@ describe('renderer recovery reload watchdog', () => {
   })
 
   const createHarness = () => {
-    // Why fan-out: dom-ready and did-finish-load have several real registrants on this one webContents, so
-    // last-writer-wins would silently drop the watchdog's listener if registration order ever changed.
+    // Preserve every lifecycle listener; last-writer-wins mocks could silently omit the watchdog.
     const registered: Record<string, ((...args: any[]) => void)[]> = {}
     const windowHandlers: Record<string, (...args: any[]) => void> = {}
     const register = (event: string, handler: (...args: any[]) => void): void => {
@@ -73,7 +66,7 @@ describe('renderer recovery reload watchdog', () => {
         }
       }
     }
-    // Loads stay pending unless a test settles one: that is exactly the stall being reproduced.
+    // Keep loads pending until explicitly settled to reproduce the stall.
     const settleLoad: { resolve: () => void; reject: (error: Error) => void }[] = []
     const pendingLoad = (): Promise<void> =>
       new Promise<void>((resolve, reject) => settleLoad.push({ resolve, reject }))
@@ -129,7 +122,6 @@ describe('renderer recovery reload watchdog', () => {
 
     createMainWindow(null, { onRecoveryReloadOutcome, onRendererRecoveryExhausted })
     crashRenderer()
-    // 1 initial load + 1 recovery reload, which now stalls forever.
     expect(browserWindowInstance.loadFile).toHaveBeenCalledTimes(2)
 
     vi.advanceTimersByTime(RENDERER_RECOVERY_LOAD_TIMEOUT_MS - 1)
@@ -150,7 +142,6 @@ describe('renderer recovery reload watchdog', () => {
     expect(onRecoveryReloadOutcome).toHaveBeenLastCalledWith(
       expect.objectContaining({ status: 'timeout', attempt: 2 })
     )
-    // Retry budget spent: stop reloading and surface the only retry/quit surface the user has.
     expect(browserWindowInstance.loadFile).toHaveBeenCalledTimes(3)
     expect(onRendererRecoveryExhausted).toHaveBeenCalledWith({
       details: CRASH,
@@ -198,8 +189,7 @@ describe('renderer recovery reload watchdog', () => {
     vi.advanceTimersByTime(RENDERER_RECOVERY_LOAD_TIMEOUT_MS)
     expect(browserWindowInstance.loadFile).toHaveBeenCalledTimes(3)
 
-    // did-finish-load carries no attempt token: this one belongs to the load the timer just abandoned. Crediting
-    // the retry with it disarms the watchdog over a load still in flight — the exact hole this watchdog closes.
+    // An untagged finish event from the abandoned load must not disarm the retry's watchdog.
     windowHandlers['did-finish-load']?.()
     expect(onRecoveryReloadOutcome).not.toHaveBeenCalledWith(
       expect.objectContaining({ status: 'loaded' })
@@ -223,7 +213,7 @@ describe('renderer recovery reload watchdog', () => {
     crashRenderer()
     settleLoad[1]?.reject(new Error('ERR_FILE_NOT_FOUND (-6)'))
     await vi.advanceTimersByTimeAsync(0)
-    // Chromium commits an error document for the failed load, and that document emits did-finish-load too.
+    // Chromium error documents emit did-finish-load too; they do not prove recovery.
     windowHandlers['did-finish-load']?.()
 
     expect(onRecoveryReloadOutcome).not.toHaveBeenCalledWith(
@@ -246,20 +236,18 @@ describe('renderer recovery reload watchdog', () => {
     expect(onRendererRecoveryExhausted).toHaveBeenCalledTimes(1)
     expect(browserWindowInstance.loadFile).toHaveBeenCalledTimes(3)
 
-    // The renderer dies again while the box is up; the breaker never counted stalls, so it lets the reload go.
+    // A second renderer death is still breaker-eligible because stalls do not count.
     crashRenderer()
     expect(browserWindowInstance.loadFile).toHaveBeenCalledTimes(4)
     vi.advanceTimersByTime(RENDERER_RECOVERY_LOAD_TIMEOUT_MS * 2)
 
-    // Nothing dismisses a native message box: a retry the user never asked for, or a second box, stacks on it.
+    // Native dialogs cannot be dismissed programmatically; no unsolicited retry/second dialog may stack on one.
     expect(browserWindowInstance.loadFile).toHaveBeenCalledTimes(4)
     expect(onRendererRecoveryExhausted).toHaveBeenCalledTimes(1)
-    // The stall is still on the record, so the bundle does not read as a recovery that quietly worked.
     expect(onRecoveryReloadOutcome).toHaveBeenLastCalledWith(
       expect.objectContaining({ status: 'timeout', attempt: 1 })
     )
 
-    // Answering the box with Reload hands the next verdict back to the user.
     onRendererRecoveryExhausted.mock.calls[0]?.[0].retry()
     vi.advanceTimersByTime(RENDERER_RECOVERY_LOAD_TIMEOUT_MS * 2)
     expect(onRendererRecoveryExhausted).toHaveBeenCalledTimes(2)
@@ -272,7 +260,6 @@ describe('renderer recovery reload watchdog', () => {
     const { browserWindowInstance, consoleError, crashRenderer, settleLoad } = createHarness()
 
     createMainWindow(null, { onRendererRecoveryExhausted })
-    // Every recovery reload lands, and every landed document then dies with its renderer.
     for (let attempt = 1; attempt <= 3; attempt += 1) {
       crashRenderer()
       settleLoad[attempt]?.resolve()
@@ -282,7 +269,7 @@ describe('renderer recovery reload watchdog', () => {
     expect(onRendererRecoveryExhausted).toHaveBeenCalledTimes(1)
     const loads = browserWindowInstance.loadFile.mock.calls.length
 
-    // The last document landed, but the renderer took it down: declining Reload here strands the user.
+    // The landed document died; manual Reload must remain available.
 
     onRendererRecoveryExhausted.mock.calls[0]?.[0].retry()
     expect(browserWindowInstance.loadFile).toHaveBeenCalledTimes(loads + 1)
@@ -332,7 +319,7 @@ describe('renderer recovery reload watchdog', () => {
 
     createMainWindow(null, { onRecoveryReloadOutcome, onRendererRecoveryExhausted })
     crashRenderer()
-    // A second renderer death supersedes the first reload; Chromium rejects the abandoned load with ERR_ABORTED.
+    // A superseding renderer death causes Chromium to reject the abandoned load with ERR_ABORTED.
     crashRenderer()
     expect(browserWindowInstance.loadFile).toHaveBeenCalledTimes(3)
     settleLoad[1]?.reject(new Error('ERR_ABORTED (-3)'))
@@ -354,18 +341,16 @@ describe('renderer recovery reload watchdog', () => {
     createMainWindow(null, { onRecoveryReloadOutcome, onRendererRecoveryExhausted })
     crashRenderer()
     expect(browserWindowInstance.loadFile).toHaveBeenCalledTimes(2)
-    // Chromium aborts the recovery load because something else replaced it — a user navigation, a close race,
-    // another loadURL caller. The attempt token still says this reload is live, so nothing else filters it.
+    // An external navigation/close/loadURL can abort this load while its attempt token still appears live.
     settleLoad[1]?.reject(new Error(`ERR_ABORTED (-3) loading '${DOCUMENT_URL}'`))
     await vi.advanceTimersByTimeAsync(0)
 
-    // A cold retry here would stomp the load that superseded this one.
+    // Cold retry would overwrite the superseding load.
     expect(browserWindowInstance.loadFile).toHaveBeenCalledTimes(2)
     expect(onRecoveryReloadOutcome).not.toHaveBeenCalled()
     expect(onRendererRecoveryExhausted).not.toHaveBeenCalled()
 
-    // The replacement load lands, and the window the user sees was never worth a Reload/Quit prompt. The crumb
-    // says so: elapsedMs measures the replacement, and the budget analysis has to be able to leave it out.
+    // Report replacement-load elapsed time distinctly so budget analysis can exclude it.
     windowHandlers['did-finish-load']?.()
     expect(onRecoveryReloadOutcome).toHaveBeenCalledWith(
       expect.objectContaining({ status: 'loaded', attempt: 1, superseded: true })
@@ -389,7 +374,6 @@ describe('renderer recovery reload watchdog', () => {
     settleLoad[1]?.reject(new Error('ERR_ABORTED (-3)'))
     await vi.advanceTimersByTimeAsync(0)
 
-    // Ignoring the abort must not disarm the watchdog: the cap still bounds a load that goes nowhere.
     await vi.advanceTimersByTimeAsync(RENDERER_RECOVERY_LOAD_TIMEOUT_MS * 2)
     expect(onRecoveryReloadOutcome).toHaveBeenCalledWith(
       expect.objectContaining({ status: 'timeout', attempt: 1 })
@@ -404,7 +388,7 @@ describe('renderer recovery reload watchdog', () => {
   it('gives the dev server a longer budget than a packaged load', () => {
     const onRecoveryReloadOutcome = vi.fn()
     const { browserWindowInstance, consoleError, crashRenderer } = createHarness()
-    isMock.dev = true
+    appMock.isPackaged = false
     vi.stubEnv('ELECTRON_RENDERER_URL', 'http://localhost:5173/')
 
     try {
@@ -457,7 +441,7 @@ describe('renderer recovery reload watchdog', () => {
       progress: 'none',
       errorCode: 'ERR_FILE_NOT_FOUND'
     })
-    // sanitizeCrashReportString cannot redact a file:///Users/... URL, so nothing path-shaped may reach the crumb.
+    // File URLs evade the path redactor; keep all path-shaped data out of the breadcrumb.
     expect(JSON.stringify(outcome)).not.toContain('/')
 
     consoleError.mockRestore()
@@ -470,7 +454,7 @@ describe('renderer recovery reload watchdog', () => {
     settleLoad[0]?.reject(new Error(INSTALL_PATH_LOAD_ERROR))
     await vi.advanceTimersByTimeAsync(0)
 
-    // Catching the rejection retired the main_unhandled_rejection crumb this used to produce.
+    // Handled rejection must no longer produce main_unhandled_rejection.
     expect(recordDurableCrashBreadcrumbMock).toHaveBeenCalledWith('main_window_load_failed', {
       errorCode: 'ERR_FILE_NOT_FOUND'
     })
@@ -510,7 +494,7 @@ describe('renderer recovery reload watchdog', () => {
     expect(onRendererRecoveryExhausted).toHaveBeenCalledTimes(1)
     expect(browserWindowInstance.loadFile).toHaveBeenCalledTimes(3)
 
-    // Reload is the dialog's default button; unwatched it returned the user to the same unbounded silent hang.
+    // The dialog defaults to Reload; manual retry must not restore an unbounded silent hang.
     onRendererRecoveryExhausted.mock.calls[0]?.[0].retry()
     expect(browserWindowInstance.loadFile).toHaveBeenCalledTimes(4)
 
@@ -544,7 +528,7 @@ describe('renderer recovery reload watchdog', () => {
 
     createMainWindow(null, { onRecoveryReloadOutcome })
     crashRenderer()
-    // Sleep freezes the timer; on wake it would otherwise fire against a load that never got its budget.
+    // Sleep freezes timers; restore the load's full budget after wake.
     vi.advanceTimersByTime(RENDERER_RECOVERY_LOAD_TIMEOUT_MS - 1)
     const resume = powerMonitorOnMock.mock.calls.find(([event]) => event === 'resume')?.[1] as (
       ...args: unknown[]
@@ -556,8 +540,7 @@ describe('renderer recovery reload watchdog', () => {
     expect(browserWindowInstance.loadFile).toHaveBeenCalledTimes(2)
 
     vi.advanceTimersByTime(1)
-    // Why the full span: rewriting the issue time on resume publishes time-since-wake into the bundle, which is
-    // silently wrong on any laptop — the outcome crumb exists to be honest about how long the load actually ran.
+    // Record total elapsed load time, not time since resume, for honest laptop diagnostics.
     expect(onRecoveryReloadOutcome).toHaveBeenCalledWith(
       expect.objectContaining({
         status: 'timeout',
@@ -579,8 +562,7 @@ describe('renderer recovery reload watchdog', () => {
     vi.advanceTimersByTime(10_000)
     reachMilestone('committed')
 
-    // 'no did-finish-load yet' is not a stall: a cold restart here throws away a load that already committed, and
-    // a machine that would have landed at ~60s misses the budget entirely.
+    // A committed but unfinished document is not a stall; restarting would discard a load that could finish within budget.
     vi.advanceTimersByTime(RENDERER_RECOVERY_LOAD_TIMEOUT_MS)
     expect(browserWindowInstance.loadFile).toHaveBeenCalledTimes(2)
     expect(onRecoveryReloadOutcome).not.toHaveBeenCalled()
@@ -593,7 +575,6 @@ describe('renderer recovery reload watchdog', () => {
       elapsedMs: RENDERER_RECOVERY_LOAD_TIMEOUT_MS * 2,
       progress: 'dom-ready'
     })
-    // Still never restarted, and the cap keeps the ~90s worst case the no-document path already had.
     expect(browserWindowInstance.loadFile).toHaveBeenCalledTimes(2)
     expect(onRendererRecoveryExhausted).toHaveBeenCalledTimes(1)
 
@@ -615,8 +596,7 @@ describe('renderer recovery reload watchdog', () => {
     settleLoad[2]?.resolve()
     await vi.advanceTimersByTimeAsync(0)
 
-    // Nothing cancels a pending Chromium load, so escalation must keep watching: a bundle that reads
-    // `exhausted` for a recovery that actually worked misleads the next triage round.
+    // Escalation cannot cancel Chromium loads; keep observing late success or diagnostics falsely report exhaustion.
     expect(onRecoveryReloadOutcome).toHaveBeenCalledWith({
       status: 'loaded',
       attempt: 2,
@@ -624,8 +604,7 @@ describe('renderer recovery reload watchdog', () => {
       afterPrompt: true
     })
 
-    // No API dismisses a native message box, so Reload is still aimed at a window that came back; taking it
-    // would destroy the session the recovery just restored.
+    // Reload after late success would destroy the recovered session; keep the still-open dialog harmless.
     onRendererRecoveryExhausted.mock.calls[0]?.[0].retry()
     expect(browserWindowInstance.loadFile).toHaveBeenCalledTimes(3)
 
@@ -642,8 +621,7 @@ describe('renderer recovery reload watchdog', () => {
     vi.advanceTimersByTime(RENDERER_RECOVERY_LOAD_TIMEOUT_MS * 2)
     onRendererRecoveryExhausted.mock.calls[0]?.[0].retry()
 
-    // The field counts keyed on renderer_recovery_reload mean 'automatic recovery'; a manual retry recorded
-    // under the same name silently redefines them.
+    // Keep manual retries distinct from renderer_recovery_reload automatic-recovery counts.
     expect(onBeforeRecoveryReload.mock.calls.map(([, trigger]) => trigger)).toEqual([
       'automatic',
       'automatic',
@@ -660,7 +638,6 @@ describe('renderer recovery reload watchdog', () => {
     settleLoad[0]?.reject(new Error(`ERR_ABORTED (-3) loading '${DOCUMENT_URL}'`))
     await vi.advanceTimersByTimeAsync(0)
 
-    // A quit or close aborts the in-flight startup load; a healthy shutdown must not look like a launch failure.
     expect(recordDurableCrashBreadcrumbMock).not.toHaveBeenCalledWith(
       'main_window_load_failed',
       expect.anything()

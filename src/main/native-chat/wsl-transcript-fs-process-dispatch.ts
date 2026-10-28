@@ -14,16 +14,12 @@ import { forkWslTranscriptFsProcess } from './wsl-transcript-fs-process-spawn'
 
 export type { WslTranscriptFsProcessHandle } from './wsl-transcript-fs-process-client'
 
-// Why: an env-only check would let a leaked VITEST=true (harnesses spreading
-// process.env into a real app) silently revert production to in-process UNC
-// syscalls; the worker global only exists inside an actual vitest runtime.
+// Require the worker global too: leaked VITEST=true must never enable in-process UNC I/O in real apps.
 function inVitestWorker(): boolean {
   return process.env.VITEST === 'true' && '__vitest_worker__' in globalThis
 }
 
-// Unit suites run the child's own dispatcher (decode included) in-process, so
-// there is exactly one request implementation to drift; production never
-// bypasses the process boundary.
+// Tests reuse child dispatch/decoding in-process; production always crosses the process boundary.
 let inProcessOperations: WslTranscriptFsProcessOperations | null = null
 
 function runInProcess<T>(request: WslTranscriptFsReusableProcessCall): Promise<T> {
@@ -62,8 +58,7 @@ export function openWslTranscriptFsProcess(
   laneKey: string
 ): Promise<WslTranscriptFsProcessHandle | FileHandle> {
   if (inVitestWorker()) {
-    // A real FileHandle: suites drive reads and closes through the plain
-    // handle branch, mirroring non-UNC ownership.
+    // Test suites use real FileHandles and the native ownership path.
     return open(path, 'r')
   }
   return getLaneClient(laneKey).open(path, signal)

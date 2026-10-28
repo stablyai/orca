@@ -1,5 +1,3 @@
-// Finishes a pane's own agent launch on every way its spawn ends.
-
 import {
   AGENT_LAUNCH_PANE_REFUSED_CODE,
   type AgentLaunchPaneAddress,
@@ -17,26 +15,20 @@ export type PaneAgentLaunch = {
   address: AgentLaunchPaneAddress
   paneKey: string
   running: RunningAgentLaunchPane
-  /** The plan's runtime fact: the PTY's shell comes only from it, as for a host launch. */
+  /** The plan chooses the PTY execution shell. */
   launchRuntime?: AgentLaunchRuntime
-  /** The provider was asked for the process: a failure after this proves nothing ran. */
+  /** After provider dispatch, a failure cannot prove that nothing ran. */
   dispatched: boolean
-  /** Right before the provider spawn: refuses a launch whose pane the user closed meanwhile. */
   refuseIfClosed: () => void
 }
 
-type PaneAgentLaunchEnd =
-  | { started: true }
-  /** The agent's process started, then exited before it registered. */
-  | { exitedDuringStart: true }
-  | { error: unknown }
+type PaneAgentLaunchEnd = { started: true } | { exitedDuringStart: true } | { error: unknown }
 
 function finish(launch: PaneAgentLaunch, verdict: AgentLaunchPaneVerdict): void {
   launch.running.finish(verdict)
   launch.runtime.reportAgentLaunchPaneVerdict(launch.address, verdict)
 }
 
-/** Ends the pane's launch, once; returns the error its spawn throws, if it failed. */
 export function endPaneAgentLaunch(ctx: PtyIpcSpawnState, end: PaneAgentLaunchEnd): Error | null {
   const launch = ctx.paneAgentLaunch
   ctx.paneAgentLaunch = null
@@ -70,7 +62,7 @@ export function endPaneAgentLaunch(ctx: PtyIpcSpawnState, end: PaneAgentLaunchEn
   return new Error(AGENT_LAUNCH_PANE_REFUSED_CODE)
 }
 
-/** The user closed it while it started: its agent, if one spawned, stops, as a closed tab's does. */
+/** A pane closed during launch must stop any agent that may already have spawned. */
 function stopClosed(launch: PaneAgentLaunch): void {
   const handle = launch.runtime.getTerminalHandleForPaneKey(launch.paneKey)
   if (handle) {

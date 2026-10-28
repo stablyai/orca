@@ -138,10 +138,7 @@ export function renderMobileTasksRepoPicker(model: ConnectionPresentationModel) 
               <View style={styles.actionSeparator} />
               <Pressable style={styles.repoPickerRow} onPress={() => toggleRepoSelection(repo.id)}>
                 <View
-                  style={[
-                    styles.pickerRepoDot,
-                    { backgroundColor: getRepoBadgeColor(repo, repo.displayName) }
-                  ]}
+                  style={[styles.pickerRepoDot, { backgroundColor: getRepoBadgeColor(repo) }]}
                 />
                 <View style={styles.repoPickerTextWrap}>
                   <Text style={styles.repoPickerTitle} numberOfLines={1}>

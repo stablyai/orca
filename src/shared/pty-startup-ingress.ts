@@ -22,24 +22,14 @@ export type { PtyStartupIngressIntent } from './pty-startup-ingress-intent'
 export type { PtyIngressEmission, PtyStartupIngressOptions } from './pty-startup-ingress-contract'
 
 const MAX_QUERY_CANDIDATE_CHARS = 64
-// Why this long: a torn echo whose halves straddle this window is released raw, so
-// anything under relay jitter reinstates the leak (#12112). Almost nothing is risked
-// by waiting, because the timer is rarely what ends a hold — the next read is, and
-// the snapshot barrier caps the wait independently. The
-// exposure is at most one projection's worth of echo-shaped bytes on an already idle
-// pane, which is why the guess is allowed to be slow rather than tight.
+// Allow relay jitter before releasing torn echoes raw (#12112). Next reads/snapshot barriers usually end the wait;
+// only one projection’s echo-shaped bytes on an idle pane are exposed to this guess.
 const ECHO_CONTINUATION_HOLD_MS = 500
 // Why a default: every PTY has a startup window, because it bounds the long echo watch.
 const DEFAULT_STARTUP_WINDOW_MS = 5_000
 
-/**
- * Serialized source-side classifier. Its raw sequence begins after shell-ready
- * preprocessing and every accepted range is emitted exactly once.
- *
- * It is the only OSC 10/11 answerer for its PTY, for the PTY's whole life: every
- * query is answered and stripped here, so no downstream view ever sees one to answer
- * twice. Kitty keyboard queries alone keep a startup window.
- */
+/** Serialize source classification after shell-ready preprocessing; emit each accepted range once. Own all lifetime OSC 10/11
+ * queries here and strip them so viewers cannot answer twice. Only Kitty authority expires with startup. */
 export class PtyStartupIngress {
   private readonly colorQueries: PtyOwnerColorQueryReplies
   private readonly ownerBackend: PtyOwnerBackend
@@ -102,7 +92,6 @@ export class PtyStartupIngress {
     return this.rawHighWater
   }
 
-  // Query replies stay ordered when an earlier cooked-echo-risk reply is held (#13137, #13892).
   answerLiveQueryReply(reply: string): boolean {
     return !this.closed && reply.length > 0
       ? deliverTerminalQueryReplyPayload(reply, this.delivery)
@@ -139,8 +128,7 @@ export class PtyStartupIngress {
         this.processEchoSpan(operation.chunk)
         return
       case 'close-query':
-        // Why only Kitty: colour authority never hands off, and the echo hold survives
-        // too, because a reply already on the wire is still Orca's to swallow.
+        // Only Kitty authority closes; lifetime color replies and already-written echoes remain owner responsibilities.
         this.kittyQueryOpen = false
         if (this.queryPending?.data.startsWith('\x1b[')) {
           this.releaseQueryPending()
@@ -168,14 +156,8 @@ export class PtyStartupIngress {
     }
   }
 
-  /**
-   * One PTY read. The charge is in `finally` because every path below can return
-   * early: charging after the match gives a real echo the whole read it arrives in,
-   * and charging unconditionally means a projection that never lands still ages out
-   * on the reads that end mid-candidate rather than shadowing the rest of the session.
-   * It charges the read, never the held-bytes-plus-read span, so a tail that waits
-   * across several reads is not billed again on each one.
-   */
+  /** Charge once per read in finally, after matching: complete echoes get their arriving read, and early-returning
+   * partial candidates still age out. Never recharge carried bytes on every subsequent read. */
   private processEchoSpan(span: PtyIngressSourceSpan): void {
     try {
       this.classifyRead(span)
@@ -190,39 +172,22 @@ export class PtyStartupIngress {
     while (this.delivery.hasExpectedEcho && input.data.length > 0) {
       const match = this.delivery.matchEcho(input.data)
       if (match.kind !== 'complete') {
-        // Why hold from the match rather than only at offset 0: the tty coalesces its
-        // echo with whatever the shell printed around it, so a split echo almost
-        // always arrives behind other bytes. Those bytes are emitted now and only the
-        // candidate tail waits, so recognition survives a split at any boundary
-        // without stalling real output.
+        // Echoes follow/coalesce with real shell output; emit the prefix now and retain only the candidate tail across reads.
         if (match.kind === 'partial') {
           const tail = slicePtyIngressSourceSpan(input, match.offset)
           if (match.offset > 0) {
             this.processQuerySpan(slicePtyIngressSourceSpan(input, 0, match.offset))
           }
-          // A still-torn query outranks the echo only while it can still become one:
-          // the tail may open with the BEL that terminates it, since the readline
-          // projection starts with one. Re-parsing it against the tail is what tells
-          // the two apart — a candidate the tail *disproves* is ordinary output that
-          // would otherwise absorb the echo behind it and dump both raw (#12112).
-          //
-          // `partial` counts as viable, not just `match`: the terminator can arrive a
-          // read later, and demoting it would emit a bare ESC and leave a real query
-          // unanswered until the program's own timeout. On ConPTY that costs an echo,
-          // because the ESC-stripped projection shares the `]10;` prefix with a real
-          // query and so keeps re-parsing as `partial` — a hang is the worse of the two.
+          // Keep a query ahead of echo only while the combined candidate stays viable, including partial terminators.
+          // BEL-led readline echoes can complete real queries; disproven candidates must release before the echo (#12112).
+          // ConPTY’s ESC-stripped echo may remain query-shaped, but leaking it is preferable to withholding ESC and timing out.
           if (this.queryPending) {
             const resolved = combinePtyIngressSourceSpans(this.queryPending, tail)
             if (parsePtyStartupQuery(resolved.data, 0, this.kittyQueryOpen).kind !== 'none') {
               this.processQuerySpan(tail)
               return
             }
-            // Unconditional, unlike `releasePendingInSourceOrder`, which withholds a
-            // ConPTY candidate: that one releases candidates still *undetermined*,
-            // and on ConPTY an undetermined candidate may be a query it is meant to
-            // suppress. Here the candidate and the tail together parse as `none`, so
-            // whatever the candidate is, the bytes behind it are not its body — which
-            // is what makes it safe to stop holding the echo hostage to it.
+            // Unlike ordinary ConPTY barrier release, combined candidate+tail is now disproven as a query; release it unconditionally.
             this.releaseQueryPending()
           }
           this.echoPending = tail
@@ -234,8 +199,7 @@ export class PtyStartupIngress {
       if (match.offset > 0) {
         this.processQuerySpan(slicePtyIngressSourceSpan(input, 0, match.offset))
       }
-      // Why release first: a retained torn candidate cannot straddle the suppressed
-      // range without desynchronizing its raw sequence arithmetic.
+      // Release torn candidates before suppressed ranges so raw sequence accounting stays aligned.
       this.releaseQueryPending()
       const echoEnd = match.offset + match.length
       this.emit(slicePtyIngressSourceSpan(input, match.offset, echoEnd), true, '')
@@ -321,15 +285,8 @@ export class PtyStartupIngress {
     }
   }
 
-  /**
-   * Why this order: were both ever live, queryPending would hold the earlier source
-   * bytes. `classifyRead` only ever arms one — it either keeps a viable query and
-   * returns, or releases a disproven one before holding the echo — so this is defense
-   * against a future second arming site, not a live inversion.
-   *
-   * A torn colour query survives these barriers: released raw, its halves would reach a
-   * view that has no authority to answer it. Only its own hold timer or teardown ends it.
-   */
+  /** Release query before echo defensively: it would own earlier bytes, though current classification never arms both.
+   * Retain torn colors across barriers unless explicitly included: viewers lack reply authority, so only hold timeout/teardown ends them. */
   private releasePendingInSourceOrder(includeColorQuery: boolean): void {
     if (includeColorQuery || this.queryPending?.data.startsWith('\x1b[')) {
       this.releaseQueryPending()

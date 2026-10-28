@@ -155,6 +155,8 @@ export function useHostedReviewActions({
       })
       if (!result.ok) {
         setActionError(result.error)
+        // Refresh stale eligibility without replacing the provider's mutation error.
+        await onRefreshReview().catch(() => {})
       } else {
         await onRefreshReview()
       }

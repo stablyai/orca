@@ -11,10 +11,7 @@ export type TerminalScrollIntent = {
   revision: number
 }
 
-// Keyed by stable leaf id, so a pin outlives the xterm instance that recorded
-// it (workspace switch, keyed remount). Unlike the WeakMap-keyed siblings in
-// terminal-scroll-intent.ts these hold a strong string key, so a leaf that is
-// gone for good must be released explicitly — see releaseTerminalScrollIntentKey.
+// Stable leaf pins survive remount, unlike terminal WeakMaps. Strong string keys require explicit release only when the leaf is gone permanently.
 const terminalScrollIntentByKey = new Map<TerminalScrollIntentKey, TerminalScrollIntent>()
 const terminalScrollIntentBindingByKey = new Map<TerminalScrollIntentKey, number>()
 
@@ -44,11 +41,7 @@ export function writeKeyedTerminalScrollIntentBinding(
   terminalScrollIntentBindingByKey.set(key, binding)
 }
 
-/**
- * Drops the keyed intent for a leaf that is gone for good. Only safe on a real
- * close: plain disposal (workspace switch, keyed remount, manager destroy)
- * relies on these entries to restore the pin when the leaf mounts again.
- */
+/** Release only on real close; workspace switch/remount/manager disposal needs the keyed pin for restoration. */
 export function releaseTerminalScrollIntentKey(key: TerminalScrollIntentKey): void {
   terminalScrollIntentByKey.delete(key)
   terminalScrollIntentBindingByKey.delete(key)

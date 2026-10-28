@@ -1,10 +1,4 @@
-/**
- * Hosts whose external managers a probe never answered for.
- *
- * A probe that failed is not a host with nothing on it. Without this line the
- * list would render an unreachable host exactly like a clean one, which is the
- * one claim the page has no evidence for.
- */
+/** Name hosts whose probes failed; no answer cannot be presented as an empty external-manager inventory. */
 
 import { translate } from '@/i18n/i18n'
 import { ownerKey } from '../../../../shared/automation-owner-key'

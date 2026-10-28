@@ -49,7 +49,6 @@ describe('automation schedule drift report', () => {
     expect(
       lines.some((l) => l.includes('Odd days and Mondays') && l.includes('now runs fewer'))
     ).toBe(true)
-    // The untouched preset must not be named, or the report trains the reader to skip it.
     expect(lines.some((l) => l.includes('Weekday standup'))).toBe(false)
   })
 

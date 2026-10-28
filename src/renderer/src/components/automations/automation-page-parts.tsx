@@ -3,8 +3,7 @@ import type { Badge } from '@/components/ui/badge'
 import { cn } from '@/lib/utils'
 import type { AutomationRun } from '../../../../shared/automations-types'
 
-// Frozen at module scope: every run row formats a date, and constructing a
-// DateTimeFormat per cell dominates the render of a long runs table.
+// Reuse one formatter across run cells; per-cell construction dominates large-history rendering.
 const automationDateTimeFormatter = new Intl.DateTimeFormat(undefined, {
   month: 'short',
   day: 'numeric',
@@ -113,6 +112,28 @@ export function Field({
     <div className={cn('min-w-0 space-y-1.5', className)}>
       <div className={cn('text-xs text-muted-foreground', labelClassName)}>{label}</div>
       {children}
+    </div>
+  )
+}
+
+export function AutomationRunErrorNotice({
+  label,
+  error,
+  className
+}: {
+  label: string
+  error: string
+  className?: string
+}): React.JSX.Element {
+  return (
+    <div
+      role="alert"
+      className={cn(
+        'rounded-md border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive',
+        className
+      )}
+    >
+      <span className="font-medium">{label}</span> {error}
     </div>
   )
 }

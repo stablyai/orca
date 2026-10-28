@@ -106,11 +106,7 @@ describe('the iPadOS Hangul path alongside everything else', () => {
   })
 
   it('composes Hangul after a composition that never ended, then a blur', async () => {
-    // Why this case: a `composing` flag latched on compositionstart and cleared
-    // only on compositionend stays true forever when the session is abandoned —
-    // blur mid-composition, pane teardown, a cancelled IME — and silently kills
-    // every claimed key for the rest of the pane's life. The state is derived
-    // from the composition tracker instead, which a blur clears.
+    // Derive expiring composition state: a latched flag survives missing end/blur and can disable input forever.
     pretendIosWeb()
     const rig = openIosTerminal()
     dispatchComposition(rig, 'compositionstart', '')
@@ -134,8 +130,7 @@ describe('the iPadOS Hangul path alongside everything else', () => {
   })
 
   it('leaves a Hanja lookup to the session that owns its preedit', async () => {
-    // Why: ibus-hangul indexes its Hanja table by digit, but only over a live
-    // composition — which xterm's CompositionHelper already commits.
+    // Only live Hanja compositions own candidate digits; xterm already commits those sessions.
     pretendIosWeb()
     const rig = openIosTerminal()
     await typePinyin(rig, 'han', '韓')
@@ -186,9 +181,7 @@ describe('the iPadOS Hangul path alongside everything else', () => {
   })
 
   it('composes Hangul after a paste written straight to the transport', async () => {
-    // Why: `writeTerminalPastePtyInput` bypasses xterm entirely, so it fires no
-    // `onData` a mirror could resync on. A hold reads the field only when it
-    // opens, so there is no state for the paste to make stale.
+    // Paste bypasses xterm.onData; holds read the field on opening, so no mirrored state can become stale.
     pretendIosWeb()
     const rig = openIosTerminal()
     const sent: string[] = []
@@ -202,9 +195,7 @@ describe('the iPadOS Hangul path alongside everything else', () => {
   })
 
   it('leaves non-Hangul scripts on the same device reaching the PTY', async () => {
-    // Why: the bypass claims a key that nothing downstream re-sends, so it must
-    // claim only jamo. A Cyrillic or kana key would otherwise lose its keydown,
-    // its keypress and its `input` alike and arrive as nothing.
+    // Claim only jamo; other scripts have no downstream resend and would disappear.
     pretendIosWeb()
     const rig = openIosTerminal()
     for (const key of ['п', 'р', 'α', 'ω', 'あ', 'カ', 'é', 'ü', '€']) {

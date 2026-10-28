@@ -31,7 +31,6 @@ export type InitialSessionTabsLoadArgs = {
   isCurrent: () => boolean
 }
 
-/** Perform the one-shot inventory fetch used to seed the mirror deterministically. */
 export function loadInitialWebSessionTabs({
   environmentId,
   expectedEnvironmentConnectionGeneration,
@@ -134,6 +133,7 @@ export function loadInitialWebSessionTabs({
           frames: applicable.map((snapshot, index) => ({
             environmentId,
             worktreeId: snapshot.worktree,
+            source: snapshot,
             decision: decisions[index]!,
             expectedEnvironmentConnectionGeneration,
             expectedEnvironmentPairingRevision,
@@ -147,8 +147,7 @@ export function loadInitialWebSessionTabs({
                   expectedEnvironmentConnectionGeneration,
                   expectedEnvironmentPairingRevision,
                   expectedTrackingGeneration,
-                  // Why: a workspace the mirror never writes is not part of the
-                  // inventory the environment-wide verdict has to account for.
+                  // Workspaces the mirror never writes contribute no evidence to the environment-wide verdict.
                   publishedSnapshotCount: result.snapshots.filter((snapshot) =>
                     isHostMirroredWorktree(snapshot.worktree)
                   ).length

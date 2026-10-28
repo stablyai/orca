@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { withRuntimeUnreachableHint } from './runtime-environment-unreachable-hint'
-import { withRemoteRuntimeTailscaleHint } from '../../../shared/remote-runtime-tailscale-hint'
+import { withRemoteRuntimeTailscaleHint } from '../../../shared/remote-runtime/remote-runtime-tailscale-hint'
 
 const UNREACHABLE = 'Could not connect to the remote Orca runtime at ws://127.0.0.1:42000.'
 

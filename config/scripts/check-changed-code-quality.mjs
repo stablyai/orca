@@ -4,6 +4,7 @@ import path from 'node:path'
 import process from 'node:process'
 import { pathToFileURL } from 'node:url'
 import { runProcessSync } from '@orca/process-host'
+import { scanAstGrep } from './ast-grep-scan.mjs'
 import { resolvePullRequestDiffBase } from './git-pull-request-diff-base.mjs'
 import { resolveOxlintInvocation } from './oxlint-cli-invocation.mjs'
 
@@ -16,21 +17,32 @@ const ANTI_SLOP_DISABLE_PATTERN =
   /\/[/*]\s*(?:oxlint|eslint)-disable(?:-next-line|-line)?\s[^\n]*\banti-slop\//
 const REACT_DOCTOR_DISABLE_PATTERN =
   /^\s*\/[/*]\s*(?:oxlint|eslint)-disable(?:-next-line|-line)?\s+react-doctor\/[\w-]+(?:\s*,\s*react-doctor\/[\w-]+)*\s*(?:--(?:(?!\*\/).)*)?(?:\*\/)?\s*$/
+const JS_PLUGINS_CONFIG = 'config/oxlint-js-plugins.json'
+// The root scan no longer loads these plugins, so their suppressions belong to the JS plugins scan.
+const JS_PLUGIN_NAMES = JSON.parse(
+  readFileSync(new URL(`../../${JS_PLUGINS_CONFIG}`, import.meta.url), 'utf8')
+).jsPlugins.map((plugin) => plugin.name)
+const JS_PLUGIN_DISABLE_PATTERN = new RegExp(
+  String.raw`\/[/*]\s*(?:oxlint|eslint)-disable(?:-next-line|-line)?\s[^\n]*\b(?:${JS_PLUGIN_NAMES.join('|')})\/`
+)
 const EXPLICIT_DISABLE_RULE_PATTERN = /(?:-disable(?:-next-line|-line)?\s+|^)[\w-]+(?:\/[\w-]+)?/
 export const OXLINT_SCANS = [
   {
-    // Why: no --config, so Oxlint keeps discovering nested configs. Pinning the root
-    // config would apply root rules to mobile/, whose .oxlintrc.json turns them off.
+    // Leave config discovery enabled so mobile’s nested config can disable root rules.
     label: 'code quality',
     args: ['--report-unused-disable-directives-severity', 'warn']
+  },
+  {
+    // Keep JS plugins in gates: transferring every AST to Node slows the default native scan.
+    label: 'JS plugins',
+    args: ['--config', JS_PLUGINS_CONFIG]
   },
   {
     label: 'casting code quality',
     args: ['--config', 'config/oxlint-code-quality-casting.json']
   },
   {
-    // Why the allow: CI's `audit:code-quality:native` runs before the mobile install, so it can
-    // never see a cycle inside mobile/ — locally, where mobile/node_modules exists, it would.
+    // CI native audit runs before mobile install and cannot see its cycles; keep local changed gate aligned.
     label: 'focused plugins',
     args: [
       '--config',
@@ -53,8 +65,7 @@ export const OXLINT_SCANS = [
     ]
   },
   {
-    // Why changed-lines only: the renderer carries ~4.7k pre-existing restyle/raw-color
-    // findings. Gating added lines holds the line without a repo-wide migration.
+    // Gate added lines against existing renderer design debt (~4.7k findings).
     label: 'design system',
     args: ['--config', 'config/oxlint-design-system.json']
   }
@@ -64,23 +75,21 @@ const SUPPRESSED_REACT_DOCTOR_DIAGNOSTICS = new Map([
   [
     'react-doctor(no-adjust-state-on-prop-change)',
     new Set([
-      'src/renderer/src/components/use-task-page-github-issue-draft.ts',
-      'src/renderer/src/components/use-task-page-jira-creation-state.ts'
+      'src/renderer/src/components/task-page/github/use-task-page-github-issue-draft.ts',
+      'src/renderer/src/components/task-page/jira/use-task-page-jira-creation-state.ts'
     ])
   ],
   [
     'react-doctor(no-derived-state-effect)',
     new Set([
-      'src/renderer/src/components/editor/combined-diff/review-controls/use-combined-diff-view-preferences.ts'
+      'src/renderer/src/components/editor/combined-diff/review-controls/use-combined-diff-view-preferences.ts',
+      // The open-cycle reset effect predates this entry; it surfaced when its body changed.
+      'src/renderer/src/components/right-sidebar/useSourceControlAgentActionDialog.ts'
     ])
   ],
   [
-    // The rule wants one named handle cleared by name. Both startup effects arm a variable number
-    // of refresh timers, every one of them through addTimer into `timers`, which their cleanups
-    // clear -- a shape the rule reports whether the handles live in an array, a Set, or a nested
-    // helper. The finding predates this list; it surfaced when the effect body changed. This map
-    // keys on file, not line, so the entry covers both effects in it; nothing else in the file
-    // arms a timer, so widening it further is the only alternative, not a narrower option.
+    // Existing timer effects clean variable handle sets through addTimer; rule expects one named handle and falsely reports both.
+    // Exemption is per-file, covering those two effects; this file has no other timer effects.
     'react-doctor(effect-needs-cleanup)',
     new Set(['mobile/src/session/use-mobile-session-startup.ts'])
   ]
@@ -144,32 +153,54 @@ function resolveBase(root, requestedBase) {
   throw new Error('Pass the pull request base SHA or make origin/main available locally.')
 }
 
-export function collectAddedLineRanges(root, requestedBase) {
-  // On a pull_request checkout HEAD is the merge commit, so its first parent is the base side and
-  // no merge base has to be computed. Resolving it first is what lets CI checkout shallowly: the
-  // payload base SHA can lag HEAD^1 by any number of commits and need not be in the graph at all.
-  // Off that ref (local runs) the requested base is an arbitrary branch tip, so the merge base is
-  // still what isolates this branch's own lines.
+export function collectAddedLineRanges(
+  root,
+  requestedBase,
+  { includePath = (file) => isRootCodeQualityPath(file) && SOURCE_FILE_PATTERN.test(file) } = {}
+) {
+  // PR checkout HEAD is the merge commit: first parent identifies base without shallow-clone missing payload ancestry.
+  // Local branch tips still need merge-base to isolate their changes.
   const comparisonBase =
     resolvePullRequestDiffBase(root, null) ??
     runGit(root, ['merge-base', resolveBase(root, requestedBase), 'HEAD']).trim()
-  const changedFiles = splitNullDelimited(
-    runGit(root, ['diff', '--name-only', '-z', '--diff-filter=ACMRTUB', comparisonBase, '--'])
+  const changedEntries = splitNullDelimited(
+    runGit(root, ['diff', '--name-status', '--find-renames', '-z', comparisonBase, '--'])
   )
+  const changedFiles = []
+  const renamedSources = new Map()
+  for (let index = 0; index < changedEntries.length;) {
+    const status = changedEntries[index++]
+    const source = changedEntries[index++]
+    if (status.startsWith('R') || status.startsWith('C')) {
+      const destination = changedEntries[index++]
+      changedFiles.push(destination)
+      if (status.startsWith('R') && includePath(source)) {
+        renamedSources.set(destination, source)
+      }
+    } else if (status !== 'D') {
+      changedFiles.push(source)
+    }
+  }
   const untrackedFiles = splitNullDelimited(
     runGit(root, ['ls-files', '--others', '--exclude-standard', '-z'])
   )
   const rangesByFile = new Map()
 
   for (const file of changedFiles) {
-    if (
-      !isRootCodeQualityPath(file) ||
-      !SOURCE_FILE_PATTERN.test(file) ||
-      !existsSync(path.join(root, file))
-    ) {
+    if (!includePath(file) || !existsSync(path.join(root, file))) {
       continue
     }
-    const diff = runGit(root, ['diff', '--unified=0', '--no-color', comparisonBase, '--', file])
+    const source = renamedSources.get(file)
+    const paths = source ? [source, file] : [file]
+    const diff = runGit(root, [
+      'diff',
+      '--find-renames',
+      '--unified=0',
+      '--no-color',
+      comparisonBase,
+      '--',
+      ...paths
+    ])
     const ranges = parseAddedLineRanges(diff)
     if (ranges.length > 0) {
       rangesByFile.set(file, ranges)
@@ -178,11 +209,7 @@ export function collectAddedLineRanges(root, requestedBase) {
 
   for (const file of untrackedFiles) {
     const absolutePath = path.join(root, file)
-    if (
-      !isRootCodeQualityPath(file) ||
-      !SOURCE_FILE_PATTERN.test(file) ||
-      !existsSync(absolutePath)
-    ) {
+    if (!includePath(file) || !existsSync(absolutePath)) {
       continue
     }
     const lineCount = readFileSync(absolutePath, 'utf8').split(/\r?\n/).length
@@ -219,12 +246,7 @@ function diagnosticLineRange(root, filename, span) {
   return { start: startLine, end: startLine + (highlighted.match(/\n/g)?.length ?? 0) }
 }
 
-// Why: a file-splitting refactor makes every line of the new module an "added"
-// line, so pre-existing lint debt in code that merely MOVED starts failing the
-// changed-lines gate. The only way to satisfy it is to edit the moved code,
-// which is exactly what a behavior-preserving refactor must not do. So a
-// diagnostic is exempt when its highlighted lines already existed, verbatim and
-// contiguous, somewhere in the base revision of the files this change touches.
+// Split files mark moved code added; exempt diagnostic blocks already verbatim/contiguous in touched base files to avoid demanding unrelated edits.
 function normalizeSourceLine(line) {
   return line.replace(/\s+/g, ' ').trim()
 }
@@ -279,10 +301,7 @@ function readBaseSourceBatch(root, comparisonBase, files) {
 }
 
 export function collectBaseLineBlocks(root, comparisonBase, files = null) {
-  // Why: in a split, the moved code's base text lives in the ORIGINAL file, which is
-  // often deleted or renamed away. Deleted paths never reach the changed-file list
-  // (it filters to ACMRTUB), so read every path the diff touches, deletions included.
-  // --no-renames: a rename otherwise lists only its new path, which the base lacks.
+  // Read all touched base paths including deletions/rename sources; split code may no longer exist under current paths.
   const paths =
     files ??
     splitNullDelimited(
@@ -334,13 +353,7 @@ function matchMovedCode(highlightedLines, baseBlocks, normalizedBlocks) {
   if (needle.length === 0) {
     return false
   }
-  // Why a near-match rather than an exact contiguous one: a split moves a block
-  // verbatim but a diagnostic's span often reaches past it — most commonly to a
-  // hook dependency array, which legitimately grows when closure variables become
-  // props. Requiring every line to match would report the moved body as new. So:
-  // the block must still start at the same line in the base and appear IN ORDER,
-  // and nearly all of it must be present. Genuinely new code shares neither the
-  // anchor nor the ordering, so it stays reported.
+  // Moved diagnostics can extend into changed dependency arrays; require same base anchor, preserved order and near-complete span rather than exact whole-block equality.
   const MIN_COVERAGE = 0.9
   return baseBlocks.some((block) => {
     let haystack = normalizedBlocks.get(block)
@@ -460,7 +473,10 @@ export function isUnloadedPluginDirectiveUnusedWarning(diagnostic, root, scanLab
   }
   return (diagnostic.labels ?? []).some((label) =>
     diagnosticHighlightedLines(root, diagnostic.filename, label.span).some(
-      (line) => ANTI_SLOP_DISABLE_PATTERN.test(line) || REACT_DOCTOR_DISABLE_PATTERN.test(line)
+      (line) =>
+        ANTI_SLOP_DISABLE_PATTERN.test(line) ||
+        REACT_DOCTOR_DISABLE_PATTERN.test(line) ||
+        JS_PLUGIN_DISABLE_PATTERN.test(line)
     )
   )
 }
@@ -518,6 +534,24 @@ function runOxlintScan(root, scan, files) {
   return parseOxlintOutput(result.stdout, scan.label).diagnostics ?? []
 }
 
+/** ast-grep matches as Oxlint-shaped diagnostics; `info` flaky-test rules are owned by their ratchet. */
+export function runAstGrepScan(root, files) {
+  return scanAstGrep(root, { minSeverity: 'warning', paths: files }).map((match) => ({
+    filename: match.file,
+    code: `ast-grep(${match.ruleId})`,
+    message: match.message,
+    labels: [
+      {
+        span: {
+          line: match.range.start.line + 1,
+          offset: match.range.byteOffset.start,
+          length: match.range.byteOffset.end - match.range.byteOffset.start
+        }
+      }
+    ]
+  }))
+}
+
 export function main(
   root = process.cwd(),
   requestedBase = process.argv.slice(2).find((argument) => argument !== '--')
@@ -551,6 +585,17 @@ export function main(
       `${scan.label}: ${diagnostics.length} new finding(s) across ${files.length} changed file(s).`
     )
   }
+
+  const astGrepFindings = runAstGrepScan(root, files).filter((diagnostic) =>
+    diagnosticTouchesAddedLines(diagnostic, rangesByFile, root, baseBlocks, movedCodeMatcher)
+  )
+  for (const diagnostic of astGrepFindings) {
+    printDiagnostic(diagnostic, root)
+  }
+  failures += astGrepFindings.length
+  console.log(
+    `ast-grep: ${astGrepFindings.length} new finding(s) across ${files.length} changed file(s).`
+  )
 
   const missingSafety = findCastingDirectivesMissingSafety(root, rangesByFile)
   for (const diagnostic of missingSafety) {

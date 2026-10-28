@@ -9,30 +9,20 @@ import { substituteBridgePageClientIdentity } from './bridge/bridge-page-client-
 
 type RequestMessage = Extract<BridgeClientMessage, { type: 'request' }>
 
-/** Live until something settles it; the flag is what keeps a cancelled request's late answer from
- *  being posted under an id the page has moved on from. */
+// Suppress cancelled requests’ late replies so an id the page abandoned cannot receive an old answer.
 type PendingRequest = { live: boolean }
 
 export type BridgeHostRequestDeps = {
   client: RpcClient
-  /** True when a subscription already holds this id; the two share one id space. */
   isIdTaken: (id: string) => boolean
   sendReply: (id: string, payload: RpcResponse) => void
   sendError: (id: string, error: unknown) => void
   capExceeded: (message: string) => Error
-  /** Answers a `native.` method on this device. Rejecting is how the seam refuses one. */
   serveNative: (id: string, method: string, params: unknown) => Promise<RpcResponse>
-  /** This device's identity to the host, swapped in for the page's placeholder. */
   readClientIdentity: () => string | null
 }
 
-/**
- * The requests one page document has in flight, forwarded to the shell's client and settled back.
- *
- * `pending` is the page's view and empties on a cancel or a `close`; `inFlight` is the client's and
- * does not, because `sendRequest` has no cancel. The call keeps its slot on the wire until it
- * settles, and a page that closed between batches would otherwise be handed the cap over again.
- */
+// pending tracks what the page still awaits; inFlight retains uncancellable desktop calls through close/cancel so a replacement document cannot regain their occupied slots.
 export class BridgeHostRequests {
   private readonly pending = new Map<string, PendingRequest>()
   private inFlight = 0
@@ -43,8 +33,7 @@ export class BridgeHostRequests {
     return this.pending.has(id)
   }
 
-  /** `sendRequest` has no cancel: the desktop still runs it, and this only stops the host from
-   *  posting an answer under an id the page has stopped waiting on. */
+  // sendRequest cannot cancel desktop execution; only suppress its now-unwanted reply.
   cancel(id: string): void {
     const record = this.pending.get(id)
     if (record !== undefined) {
@@ -61,20 +50,13 @@ export class BridgeHostRequests {
     return true
   }
 
-  /** The arity the page used, replayed exactly: `sendRequest(m)` and `sendRequest(m, undefined)`
-   *  are different calls to the golden recorder.
-   *
-   *  The `native.` fence is here because this is the one place a *request* reaches the client. A
-   *  `subscribe` reaches it by another door and is fenced in `handleSubscribe`; the two together
-   *  are the whole boundary, and a test that reads only `client.requests` sees only this half. */
+  // Replay the exact argument arity for the golden recorder. Fence native requests here; native subscriptions are fenced separately in handleSubscribe.
   private forward(message: RequestMessage): Promise<RpcResponse> {
     const { client } = this.deps
-    // An envelope is wire fields for a desktop RPC; a native verb never reaches the wire.
     if (isBridgeNativeMethod(message.method)) {
       return this.deps.serveNative(message.id, message.method, message.params)
     }
-    // One of the two doors to the client, and the placeholder must not survive either. A throw
-    // here lands in `open`'s catch, which answers the page the way every other refusal does.
+    // Replace the page’s identity placeholder on this request path too; failures reach open’s normal refusal catch.
     const params = substituteBridgePageClientIdentity(
       message.params,
       this.deps.readClientIdentity()
@@ -93,8 +75,7 @@ export class BridgeHostRequests {
 
   open(message: RequestMessage): void {
     const { id } = message
-    // An id already in flight is a page bug; refusing the newcomer leaves the exchange it collided
-    // with intact, which settling it would not.
+    // Refuse a colliding newcomer without settling the existing request under that id.
     if (this.pending.has(id) || this.deps.isIdTaken(id)) {
       this.deps.sendError(id, this.deps.capExceeded('that id is already in flight'))
       return
@@ -130,12 +111,10 @@ export class BridgeHostRequests {
     )
   }
 
-  /** `notify` is false for the page's own `close`, which has already settled what it owned. */
   closeAll(notify: boolean): void {
     for (const [id, record] of this.pending) {
       record.live = false
-      // In flight when the door shut: the desktop may already have run it, and a page told this was
-      // a definite send failure would offer to retry something that already happened.
+      // Use delivery-unknown because desktop execution may have happened; definite failure would invite unsafe retry.
       if (notify) {
         this.deps.sendError(id, markRpcDeliveryUnknown(new BridgeHostDisposedError()))
       }

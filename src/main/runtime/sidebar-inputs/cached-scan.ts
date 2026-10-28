@@ -1,9 +1,4 @@
-/**
- * A slow listing (git scans) kept as its last applied result, so a producer reads it synchronously.
- * Scans run one at a time; a request during one queues one more after it, so the newest request
- * is always covered. A result applies only over an older one. With no demand, a request just marks
- * the cache stale and the next `ready` scans.
- */
+/** Cache slow listings synchronously. Run one scan at a time plus one queued rerun; newer results win. Without demand, mark stale until ready requests a scan. */
 export class CachedScan<T> {
   private value: T | null = null
   private appliedVersion = 0
@@ -11,6 +6,7 @@ export class CachedScan<T> {
   private scanning: Promise<void> | null = null
   private rescanQueued = false
   private stale = false
+  private readonly freshWaiters: { after: number; done: () => void }[] = []
 
   constructor(
     private readonly deps: {
@@ -41,8 +37,17 @@ export class CachedScan<T> {
     this.stale = false
     this.scanning = this.deps
       .scan()
-      .then((value) => this.apply(version, value))
-      .catch((error: unknown) => console.warn(`[${this.deps.label}] scan failed`, error))
+      .then((value) => {
+        try {
+          this.apply(version, value)
+        } finally {
+          this.settleFresh(version)
+        }
+      })
+      .catch((error: unknown) => {
+        console.warn(`[${this.deps.label}] scan failed`, error)
+        this.settleFresh(version)
+      })
       .finally(() => {
         this.scanning = null
         if (this.rescanQueued) {
@@ -59,6 +64,29 @@ export class CachedScan<T> {
     }
     while (this.scanning && (this.value === null || this.stale)) {
       await this.scanning
+    }
+  }
+
+  /** Calls `done` once a scan started after this call has finished; at once with no demand. */
+  afterFresh(done: () => void): void {
+    if (!this.deps.demand()) {
+      done()
+      return
+    }
+    this.freshWaiters.push({ after: this.version, done })
+    this.request(true)
+  }
+
+  // Why synchronous after apply: a waiter's change lands in the same revision as the result.
+  private settleFresh(version: number): void {
+    const due = this.freshWaiters.filter((waiter) => waiter.after < version)
+    if (due.length === 0) {
+      return
+    }
+    const waiting = this.freshWaiters.filter((waiter) => waiter.after >= version)
+    this.freshWaiters.splice(0, this.freshWaiters.length, ...waiting)
+    for (const waiter of due) {
+      waiter.done()
     }
   }
 

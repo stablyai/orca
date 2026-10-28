@@ -29,8 +29,7 @@ export function BitbucketIntegrationCard(): React.JSX.Element {
   const [connectionLoadFailed, setConnectionLoadFailed] = useState(false)
   const connectionLoadGenerationRef = useRef(0)
 
-  // Reads plaintext metadata only — never the encrypted secret — so mounting the
-  // pane cannot trigger a keychain prompt.
+  // Read metadata only; mounting must not decrypt secrets or trigger keychain prompts.
   const loadConnection = useCallback(async () => {
     const generation = ++connectionLoadGenerationRef.current
     try {
@@ -40,7 +39,7 @@ export function BitbucketIntegrationCard(): React.JSX.Element {
         setConnectionLoadFailed(false)
       }
     } catch {
-      // Why: without this the card renders exactly like "no credential stored" — say it is unknown.
+      // Report unreadable state as unknown rather than indistinguishable from missing credentials.
       if (mountedRef.current && generation === connectionLoadGenerationRef.current) {
         setConnectionLoadFailed(true)
       }
@@ -74,7 +73,6 @@ export function BitbucketIntegrationCard(): React.JSX.Element {
     : null
   const credentialSummary = [authModeLabel, baseUrlOverride].filter(Boolean).join(' · ')
 
-  // A fresh connection and Re-check both refresh preflight and credential state.
   const reloadCardState = (): void => {
     void loadConnection()
     refresh()
@@ -86,8 +84,7 @@ export function BitbucketIntegrationCard(): React.JSX.Element {
     try {
       await window.api.bitbucket.disconnect()
     } catch (error) {
-      // Why: disconnect rethrows when a credential file cannot be deleted.
-      // Unhandled, the card silently re-renders as still connected.
+      // Surface deletion failures; otherwise disconnect silently repaints as still connected.
       if (mountedRef.current) {
         setDisconnectError(
           readIpcErrorMessage(error) ??

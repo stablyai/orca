@@ -97,7 +97,6 @@ describe('useMobileStructuredSessionCommands', () => {
     await act(async () => {
       renderer = create(createElement(Probe, { client, sessionId: 'a' }))
     })
-    // A skill lands on the host while the first read is still out, and the menu opens.
     catalog = [...catalog, { name: 'research', kind: 'skill' as const }]
     await act(async () => hook!.refresh())
     expect(sendRequest).toHaveBeenCalledTimes(1)

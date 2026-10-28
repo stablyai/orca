@@ -112,6 +112,7 @@ export function SidebarWorktreeListDialogs({
           }
         }}
         onConfirm={dialogs.handleConfirmDeleteProjectGroup}
+        unsavedTargets={dialogs.deleteUnsavedTargets}
       />
     </>
   )

@@ -39,6 +39,17 @@ describe('ExpandableMarkdownImage', () => {
     expect(screen.queryByRole('dialog', { name: 'ui.png' })).toBeNull()
   })
 
+  it('keeps managing its own open state when a caller observes changes', () => {
+    const onOpenChange = vi.fn()
+    render(<ExpandableMarkdownImage src="blob:shot" alt="shot.png" onOpenChange={onOpenChange} />)
+    fireEvent.click(screen.getByRole('button', { name: 'Expand image' }))
+    expect(screen.getByRole('dialog', { name: 'shot.png' })).toBeTruthy()
+    expect(onOpenChange).toHaveBeenLastCalledWith(true)
+    fireEvent.click(screen.getByRole('button', { name: 'Close' }))
+    expect(screen.queryByRole('dialog')).toBeNull()
+    expect(onOpenChange).toHaveBeenLastCalledWith(false)
+  })
+
   it('keeps the parent issue drawer open after Escape and close-button dismissal', () => {
     const onOpenChange = vi.fn()
 

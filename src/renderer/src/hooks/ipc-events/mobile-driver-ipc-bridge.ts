@@ -136,10 +136,7 @@ export function registerMobileDriverIpcBridge(
     unsubs.push(unsubscribeBrowserRemoteViewers)
   }
 
-  // Why: no isRuntimeEnvironmentActive guard, unlike the driver channels above. These rows
-  // describe pages a paired client renders for THIS runtime's own worktrees; pointing the window
-  // at a remote environment does not make them someone else's, and dropping them would leave the
-  // host with an uncloseable page it cannot see. Hydration below is unguarded for the same reason.
+  // These pages are paired-client renders of this runtime’s own workspaces; remote focus must not drop them or their unguarded hydration.
   let clientHostedRowsHydrated = false
   const pendingClientHostedRowEvents: ClientHostedBrowserRowsEvent[] = []
   const settleClientHostedRowHydration = (): void => {
@@ -151,8 +148,7 @@ export function registerMobileDriverIpcBridge(
   }
   unsubs.push(
     window.api.runtime.onClientHostedBrowserRowsChanged((event) => {
-      // Why: subscribe before the snapshot round trip and buffer, or the older snapshot
-      // overwrites a page created while it was in flight.
+      // Subscribe/buffer before snapshot reads so in-flight page creations cannot be overwritten by older snapshots.
       if (!clientHostedRowsHydrated) {
         pendingClientHostedRowEvents.push(event)
         while (pendingClientHostedRowEvents.length > MAX_PENDING_MOBILE_STATE_EVENTS) {

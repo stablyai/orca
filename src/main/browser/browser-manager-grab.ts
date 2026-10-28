@@ -13,16 +13,7 @@ import type {
 import { BrowserManagerViewport } from './browser-manager-viewport'
 
 export abstract class BrowserManagerGrab extends BrowserManagerViewport {
-  // --- Browser Context Grab — main-owned operations ---
-
-  /** Validate that the sender owns browserTabId; returns the guest WebContents or null. */
-  /**
-   * The guest a request from `senderWebContentsId` may act on, across both halves of the page
-   * registry. This is the only door taught about workspace-document guests: they are kept out of
-   * the browsing maps entirely, so page management, agent commands, download routing and
-   * certificate attribution all miss them without a guard of their own — and a reader who opens a
-   * tool on the document in front of them still gets an answer.
-   */
+  /** Authorize tools for browsing and document guests; documents stay outside browsing maps. */
   getAuthorizedGuest(
     browserTabId: string,
     senderWebContentsId: number
@@ -41,19 +32,17 @@ export abstract class BrowserManagerGrab extends BrowserManagerViewport {
     }
     const guest = webContents.fromId(guestId)
     if (!guest || guest.isDestroyed()) {
-      // Why: a stale guest must clear every per-tab registry entry, not just the WebContents maps.
+      // Clear every per-tab entry when a guest is stale.
       this.unregisterGuest(browserTabId)
       return null
     }
     return guest
   }
 
-  /** Returns true if a grab operation is currently active for this tab. */
   hasActiveGrabOp(browserTabId: string): boolean {
     return this.grabSessionController.hasActiveGrabOp(browserTabId)
   }
 
-  /** Enable/disable grab mode for a tab: on enable inject the overlay runtime, on disable cancel any active grab op. */
   async setGrabMode(
     browserTabId: string,
     enabled: boolean,
@@ -72,7 +61,7 @@ export abstract class BrowserManagerGrab extends BrowserManagerViewport {
         return false
       }
     }
-    // Why: inject the overlay runtime eagerly on arm so the hover UI appears instantly; re-injection is idempotent/safe.
+    // Arm eagerly so hover feedback appears before selection starts.
     try {
       await guest.executeJavaScript(buildGuestOverlayScript('arm'))
       return true
@@ -81,11 +70,6 @@ export abstract class BrowserManagerGrab extends BrowserManagerViewport {
     }
   }
 
-  /**
-   * Await a single grab selection on the given tab; resolves once on click, cancel, or error.
-   *
-   * Why in-guest: before-input-event fires only for keyboard (not mouse) on guests, so the overlay hit-catcher consumes the click.
-   */
   awaitGrabSelection(
     browserTabId: string,
     opId: string,
@@ -94,12 +78,10 @@ export abstract class BrowserManagerGrab extends BrowserManagerViewport {
     return this.grabSessionController.awaitGrabSelection(browserTabId, opId, guest)
   }
 
-  /** Cancel an active grab operation for the given tab. */
   cancelGrabOp(browserTabId: string, reason: BrowserGrabCancelReason): void {
     this.grabSessionController.cancelGrabOp(browserTabId, reason)
   }
 
-  /** Capture a screenshot of the guest surface, optionally cropped to the given CSS-pixel rect. */
   async captureSelectionScreenshot(
     _browserTabId: string,
     rect: BrowserGrabRect,
@@ -108,7 +90,7 @@ export abstract class BrowserManagerGrab extends BrowserManagerViewport {
     return captureGrabSelectionScreenshot(rect, guest)
   }
 
-  /** Extract the hovered element's payload without disrupting the active grab overlay/awaitClick listener. */
+  /** Preserve the active selection overlay and awaitClick listener. */
   async extractHoverPayload(
     _browserTabId: string,
     guest: Electron.WebContents

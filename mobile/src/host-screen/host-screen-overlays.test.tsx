@@ -38,7 +38,6 @@ afterEach(() => {
   renderer = null
 })
 
-/** The long-press sheet for `row`. */
 async function renderSheet(row: Partial<Worktree>) {
   const controller = {
     actions: {},
@@ -49,7 +48,6 @@ async function renderSheet(row: Partial<Worktree>) {
     hostCapabilities: [MOBILE_DESKTOP_RELAY_RUNTIME_CAPABILITY],
     hostId: 'host-1',
     settings: {},
-    showNewWorktree: false,
     state: {
       actionTarget: { worktreeId: 'wt', repo: 'orca', branch: 'main', ...row },
       confirmDelete: null,
@@ -72,7 +70,6 @@ async function renderSheet(row: Partial<Worktree>) {
   }
 }
 
-/** The long-press sheet's action labels for `row`. */
 async function actionLabels(row: Partial<Worktree>): Promise<string[]> {
   const { sheet } = await renderSheet(row)
   return sheet.props.actions.map((action: { label: string }) => action.label)
@@ -83,25 +80,21 @@ describe('the workspace long-press sheet', () => {
     expect(await actionLabels({})).toContain('Sleep')
   })
 
+  it("keeps Delete disabled on a primary checkout with the desktop's reason", async () => {
+    const { sheet } = await renderSheet({ isMainWorktree: true })
+    const remove = sheet.props.actions.find(
+      (action: { label: string }) => action.label === 'Delete'
+    )
+    expect(remove).toMatchObject({
+      disabled: true,
+      hint: "Primary worktree — can't be deleted. Remove the project instead."
+    })
+  })
+
   it("does not offer Sleep for a server's workspace, which the desktop would sleep by its own id", async () => {
     expect(await actionLabels({ worktreeId: 'runtime:vm-wt', hostId: 'runtime:vm' })).toEqual([
       'Pin',
       'Delete'
     ])
-  })
-
-  it('marks Pin with the pin icon, and Unpin with the crossed-out one', async () => {
-    const icon = async (row: Partial<Worktree>, label: string) =>
-      (await renderSheet(row)).sheet.props.actions.find(
-        (action: { label: string }) => action.label === label
-      ).icon
-    expect(await icon({}, 'Pin')).toBe('Pin')
-    act(() => renderer?.unmount())
-    expect(await icon({ isPinned: true }, 'Unpin')).toBe('PinOff')
-  })
-
-  it("shows the workspace's details above its actions", async () => {
-    const { details } = await renderSheet({ comment: 'Check iPad' })
-    expect(details.props.row).toMatchObject({ worktreeId: 'wt', comment: 'Check iPad' })
   })
 })

@@ -4,7 +4,6 @@ import type {
   DeveloperPermissionStatus
 } from '../../../../shared/developer-permissions-types'
 
-/** Status copy and tone for the macOS developer permission rows. */
 export function developerPermissionStatusLabel(
   id: DeveloperPermissionId,
   status: DeveloperPermissionStatus | undefined

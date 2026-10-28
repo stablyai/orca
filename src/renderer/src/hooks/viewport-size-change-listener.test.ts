@@ -39,8 +39,7 @@ describe('addViewportSizeChangeListener', () => {
     expect(onChange).toHaveBeenCalledTimes(1)
   })
 
-  // Why: the reveal reflow nudges the device scale factor, so Chromium fires resize with identical
-  // dimensions — dismissing transient UI there closes it on every window restore.
+  // Reveal reflow can emit resize with unchanged dimensions; dismissing UI then would close it on every restore.
   it('ignores a resize that leaves the dimensions untouched', () => {
     const viewport = createViewport(1024, 768)
     const onChange = vi.fn()

@@ -11,13 +11,13 @@ import {
   loadWslMoveFence,
   resetWslMoveFenceForTests
 } from './persistence/moving-wsl-projects/wsl-move-scope-guard'
-import type * as LinearCommandDependencies from './runtime/runtime-linear-command-dependencies'
+import type * as LinearCurrentIssueContext from './linear/issue-context/current'
 import type { ResolvedWorktree } from './runtime/runtime-worktree-path-identity'
 
 const { gitExecFileAsyncMock } = vi.hoisted(() => ({ gitExecFileAsyncMock: vi.fn() }))
 vi.mock('./git/runner', () => ({ gitExecFileAsync: gitExecFileAsyncMock }))
-vi.mock('./runtime/runtime-linear-command-dependencies', async (importOriginal) => ({
-  ...(await importOriginal<typeof LinearCommandDependencies>()),
+vi.mock('./linear/issue-context/current', async (importOriginal) => ({
+  ...(await importOriginal<typeof LinearCurrentIssueContext>()),
   resolveLegacyLinearLinkWorkspace: () => ({ workspaceId: 'ws-1', organizationUrlKey: 'acme' })
 }))
 
@@ -56,7 +56,6 @@ describe('push-target bookkeeping under a WSL move', () => {
   async function push(worktreeId: string, hostId?: ExecutionHostId) {
     const setWorktreeMeta = vi.fn()
     const meta = hostId ? { [worktreeId]: mergeWorktreeMetaForWrite(undefined, { hostId }) } : {}
-    // The record lands only on a host that registers the copy's repo.
     const repos = [
       { id: 'repo-1', path: '/ws/repo-1', displayName: 'r', badgeColor: '#000', addedAt: 0 },
       {

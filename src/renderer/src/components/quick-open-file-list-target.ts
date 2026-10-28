@@ -41,7 +41,6 @@ export function getNestedWorktreeExcludeRequest(
     return { paths: [], key: '[]' }
   }
   const paths = getNestedWorktreeExcludePaths(worktreeId, worktreePath, repoWorktrees)
-  // Why: worktree paths can contain newlines. Use JSON as a stable dependency
-  // key while passing the original array to IPC so paths stay lossless.
+  // JSON preserves newline-containing paths in stable dependency keys; pass the original path array to IPC.
   return { paths, key: JSON.stringify(paths) }
 }

@@ -11,6 +11,7 @@ import {
   removeWslHostEnvironment
 } from './runtime-environment-wsl-host-store'
 import { getPreferredPairingOffer } from './runtime-environments'
+import { writeWslHostDeployment } from './wsl-host-deployment-store'
 
 const publicKeyB64 = Buffer.alloc(32, 7).toString('base64')
 
@@ -103,6 +104,74 @@ describe('WSL host environment store', () => {
     })
   })
 
+  it('binds the record to the pairing key and follows a relaunch that changes it', () => {
+    addWslHostEnvironment(userDataPath, {
+      id: 'wsl:ubuntu',
+      name: 'Ubuntu (WSL)',
+      pairingCode: code(42000),
+      record,
+      now: 100
+    })
+    expect(findWslHostDeployment(userDataPath, 'wsl:ubuntu')?.pairingPublicKeyB64).toBe(
+      publicKeyB64
+    )
+    const rotatedKey = Buffer.alloc(32, 9).toString('base64')
+    const refreshed = refreshWslHostPairing(userDataPath, 'wsl:ubuntu', {
+      pairingCode: encodePairingOffer({
+        v: 2,
+        endpoint: 'ws://127.0.0.1:42000',
+        deviceToken: 'token-2',
+        publicKeyB64: rotatedKey
+      }),
+      localPort: 42000,
+      remotePort: 6768
+    })
+    expect(refreshed.pairingChanged).toBe(true)
+    expect(findWslHostDeployment(userDataPath, 'wsl:ubuntu')?.pairingPublicKeyB64).toBe(rotatedKey)
+    expect(listEnvironments(userDataPath)[0]?.orcadDeployment).toMatchObject({ kind: 'wsl' })
+  })
+
+  it('writes nothing when a refreshed pairing does not point at the bridge', () => {
+    addWslHostEnvironment(userDataPath, {
+      id: 'wsl:ubuntu',
+      name: 'Ubuntu (WSL)',
+      pairingCode: code(42000),
+      record,
+      now: 100
+    })
+    const before = findWslHostDeployment(userDataPath, 'wsl:ubuntu')
+    expect(() =>
+      refreshWslHostPairing(userDataPath, 'wsl:ubuntu', {
+        pairingCode: code(43000, 'token-2'),
+        localPort: 42001,
+        remotePort: 6770
+      })
+    ).toThrow(/does not point at its bridge/)
+    expect(findWslHostDeployment(userDataPath, 'wsl:ubuntu')).toEqual(before)
+    expect(listEnvironments(userDataPath)[0]?.orcadDeployment).toMatchObject({ localPort: 42000 })
+  })
+
+  it('stays a WSL host if a key rotation is interrupted between its two writes', () => {
+    addWslHostEnvironment(userDataPath, {
+      id: 'wsl:ubuntu',
+      name: 'Ubuntu (WSL)',
+      pairingCode: code(42000),
+      record,
+      now: 100
+    })
+    const stored = findWslHostDeployment(userDataPath, 'wsl:ubuntu')
+    if (!stored) {
+      throw new Error('record missing')
+    }
+    // The record write landed; the pairing write that follows it did not.
+    writeWslHostDeployment(userDataPath, 'wsl:ubuntu', {
+      ...stored,
+      pairingPublicKeyB64: Buffer.alloc(32, 9).toString('base64'),
+      previousPairingPublicKeyB64: publicKeyB64
+    })
+    expect(listEnvironments(userDataPath)[0]?.orcadDeployment).toMatchObject({ kind: 'wsl' })
+  })
+
   it('removes the environment and its record', () => {
     addWslHostEnvironment(userDataPath, {
       id: 'wsl:ubuntu',
@@ -113,5 +182,30 @@ describe('WSL host environment store', () => {
     removeWslHostEnvironment(userDataPath, 'wsl:ubuntu')
     expect(listEnvironments(userDataPath)).toEqual([])
     expect(findWslHostDeployment(userDataPath, 'wsl:ubuntu')).toBeNull()
+  })
+
+  // A golden image with a baked-in orcad key: each distro is its own host, with its own grant.
+  it('keeps two distros that carry the same orcad key as two hosts', () => {
+    addWslHostEnvironment(userDataPath, {
+      id: 'wsl:ubuntu',
+      name: 'Ubuntu (WSL)',
+      pairingCode: code(42000, 'token-ubuntu'),
+      record
+    })
+    addWslHostEnvironment(userDataPath, {
+      id: 'wsl:ubuntu-2',
+      name: 'Ubuntu-2 (WSL)',
+      pairingCode: code(42001, 'token-ubuntu-2'),
+      record: { ...record, distro: 'Ubuntu-2', localPort: 42001 }
+    })
+    const environments = listEnvironments(userDataPath)
+    expect(environments.map((environment) => environment.id)).toEqual([
+      'wsl:ubuntu',
+      'wsl:ubuntu-2'
+    ])
+    expect(environments.map((environment) => getPreferredPairingOffer(environment))).toEqual([
+      expect.objectContaining({ publicKeyB64, deviceToken: 'token-ubuntu' }),
+      expect.objectContaining({ publicKeyB64, deviceToken: 'token-ubuntu-2' })
+    ])
   })
 })

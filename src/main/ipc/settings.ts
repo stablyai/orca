@@ -1,3 +1,4 @@
+import { getClaudeAgentViewService } from '../claude/agent-view-service'
 import { app, BrowserWindow, ipcMain, nativeTheme } from 'electron'
 import type { Store } from '../persistence'
 import type { GlobalSettings } from '../../shared/global-settings-types'
@@ -17,6 +18,7 @@ import { isAgentStatusHooksEnabledForAgent } from '../../shared/agent-status-hoo
 import { recordManagedHookInstallFailure } from '../agent-hooks/install-telemetry'
 import { applyElectronProxySettings } from '../network/proxy-settings'
 import { applyBrowserSessionProxies } from '../browser/browser-session-proxy'
+import { applyProxyToElectronUpdaterSession } from '../updater/electron-updater-proxy-session'
 import { browserSessionRegistry } from '../browser/browser-session-registry'
 import { sanitizeNetworkSettings } from './network-settings-sanitization'
 import { normalizeAppIconId } from '../../shared/app-icon'
@@ -42,9 +44,6 @@ import {
 import { resolveAiVaultSearchSettings } from '../../shared/ai-vault-search-settings'
 import { applySessionSearchSettingsChange } from '../ai-vault-search/session-search-enablement'
 
-// Why: the whitelist is the source-of-truth for which keys we emit on. Casting
-// to a Set once at module load lets the IPC handler's per-key membership
-// check stay O(1) without re-coercing the readonly tuple on every call.
 const SETTINGS_CHANGED_WHITELIST_SET = new Set<string>(SETTINGS_CHANGED_WHITELIST)
 
 type LegacyTerminalScrollbackSettingsUpdate = Partial<GlobalSettings> & {
@@ -55,17 +54,13 @@ function sanitizeRendererSettingsUpdate(args: Partial<GlobalSettings>): Partial<
   const { terminalScrollbackBytes: _legacyScrollbackBytes, ...sanitizedArgs } =
     args as LegacyTerminalScrollbackSettingsUpdate
   void _legacyScrollbackBytes
-  // Plugin consent and enablement are main-owned authority state. Renderer
-  // writes must pass the dedicated reviewed-fingerprint handlers.
+  // Plugin consent and enablement require main's reviewed-fingerprint handlers.
   delete sanitizedArgs.pluginConsents
   delete sanitizedArgs.disabledPlugins
   return sanitizedArgs
 }
 
-// Why: fields that appear in the View > Appearance submenu need the menu
-// rebuilt after any update so the checkbox `checked` state stays in sync
-// with the persisted value. Electron doesn't reactively re-render menu
-// items when the backing state changes.
+// Electron menus do not react to settings; rebuild appearance checkboxes after writes.
 const APPEARANCE_MENU_KEYS: readonly (keyof GlobalSettings)[] = [
   'showTasksButton',
   'showAutomationsButton',
@@ -99,9 +94,9 @@ export function registerSettingsHandlers(
     }
   })
 
-  ipcMain.handle('settings:get', () => {
-    return readSettingsWithRuntimeEnvironmentPreference(store, app.getPath('userData'))
-  })
+  ipcMain.handle('settings:get', () =>
+    readSettingsWithRuntimeEnvironmentPreference(store, app.getPath('userData'))
+  )
 
   ipcMain.handle(
     'settings:update-pr-bot-author-override',
@@ -116,22 +111,16 @@ export function registerSettingsHandlers(
     }
   )
 
-  // Why: terminal panes can bind PTYs before async settings hydration
-  // completes. The side-effect authority kill switch is consulted once at
-  // transport creation, so the renderer needs the persisted value
-  // synchronously or pre-hydration bindings would always pick main authority
-  // (terminal-side-effect-authority.md, migration switch).
+  // PTYs can bind before hydration; transport authority selection needs persisted settings synchronously.
   ipcMain.on('settings:get-sync', (event) => {
     event.returnValue = readSettingsWithRuntimeEnvironmentPreference(store, app.getPath('userData'))
   })
 
   ipcMain.handle('settings:set', async (event, args: Partial<GlobalSettings>) => {
     const sanitizedArgs = sanitizeRendererSettingsUpdate(args)
-    // Why: connection/navigation code receives the generic settings writer; the
-    // durable server preference has a dedicated Advanced-control boundary.
+    // Generic settings writers cannot change the server preference owned by Advanced controls.
     delete sanitizedArgs.activeRuntimeEnvironmentId
-    // Why: Floating Workspace grants are trusted only when written by the
-    // main-process directory picker, never by renderer-provided settings IPC.
+    // Only the main-process directory picker may grant trusted floating-workspace paths.
     delete sanitizedArgs.floatingTerminalTrustedCwds
     if ('computerAwakeMode' in sanitizedArgs) {
       Object.assign(
@@ -189,10 +178,7 @@ export function registerSettingsHandlers(
     if (args.theme) {
       nativeTheme.themeSource = args.theme
     }
-    // Why: capture the pre-update value so we only emit when the value
-    // actually changes. The settings UI sometimes re-saves the same value
-    // (e.g. blur after a no-op edit), and a `settings_changed` event for a
-    // no-op flip would inflate the experimental-feature-adoption signal.
+    // No-op UI saves must not inflate settings_changed adoption telemetry.
     const before = store.getSettings()
     const updateOptions = {
       notifyListeners: true,
@@ -203,20 +189,24 @@ export function registerSettingsHandlers(
       'alwaysForceDeletePreservedBranches' in sanitizedArgs
         ? await store.updateSettingsAndFlush(sanitizedArgs, updateOptions)
         : store.updateSettings(sanitizedArgs, updateOptions)
+    if (
+      'experimentalAgentDashboardPopout' in sanitizedArgs &&
+      before.experimentalAgentDashboardPopout !== result.experimentalAgentDashboardPopout
+    ) {
+      track('agent_dashboard_enabled', {
+        enabled: result.experimentalAgentDashboardPopout === true
+      })
+    }
     const proxySettingsChanged =
       ('httpProxyUrl' in sanitizedArgs && before.httpProxyUrl !== result.httpProxyUrl) ||
       ('httpProxyBypassRules' in sanitizedArgs &&
         before.httpProxyBypassRules !== result.httpProxyBypassRules)
     if (proxySettingsChanged) {
-      // Start both authorities before yielding so requests cannot enter between their barriers.
-      const defaultSessionApply = applyElectronProxySettings(result)
-      const browserSessionsApply = applyBrowserSessionProxies(
-        browserSessionRegistry.listProfiles(),
-        result
-      )
+      // Start every authority before yielding so requests cannot enter between their barriers.
       const [defaultSessionResult, browserSessionsResult] = await Promise.allSettled([
-        defaultSessionApply,
-        browserSessionsApply
+        applyElectronProxySettings(result),
+        applyBrowserSessionProxies(browserSessionRegistry.listProfiles(), result),
+        applyProxyToElectronUpdaterSession(result)
       ])
       if (defaultSessionResult.status === 'rejected') {
         console.warn('[settings] failed to apply network proxy settings')
@@ -233,6 +223,7 @@ export function registerSettingsHandlers(
         normalizeComputerAwakeMode(result.computerAwakeMode, result.keepComputerAwakeWhileAgentsRun)
       )
     }
+    await getClaudeAgentViewService().reconcile(result)
     const hookSettingChanged =
       ('agentStatusHooksEnabled' in sanitizedArgs &&
         before.agentStatusHooksEnabled !== result.agentStatusHooksEnabled) ||
@@ -272,14 +263,7 @@ export function registerSettingsHandlers(
       applySessionSearchSettingsChange(before, result)
     }
 
-    // Why: telemetry-plan.md§Settings — fire `settings_changed` only for
-    // whitelisted keys, with `value_kind` distinguishing booleans from
-    // string-enum settings. We deliberately do NOT send the raw value for
-    // non-enum settings; the whitelist is currently scoped to experimental
-    // toggles, all of which are booleans, so `value_kind === 'bool'` is
-    // the path the v1 enum has a slot for. If a non-bool whitelisted
-    // setting is ever added, extend the discriminator here at the same
-    // time the schema's `value_kind` enum gains the new value.
+    // Emit only allowlisted keys without raw values; new value kinds require matching schema support.
     for (const key of Object.keys(sanitizedArgs)) {
       if (!SETTINGS_CHANGED_WHITELIST_SET.has(key)) {
         continue
@@ -290,7 +274,7 @@ export function registerSettingsHandlers(
         continue
       }
       if (typeof afterValue !== 'boolean') {
-        // No non-bool whitelist entries today; skip rather than guess.
+        // Unsupported value kinds must not be guessed.
         continue
       }
       track('settings_changed', {
@@ -319,9 +303,7 @@ export function registerSettingsHandlers(
     }
   )
 
-  ipcMain.handle('settings:listFonts', () => {
-    return listSystemFontFamilies()
-  })
+  ipcMain.handle('settings:listFonts', () => listSystemFontFamilies())
 
   ipcMain.handle('settings:previewGhosttyImport', () => {
     return previewGhosttyImport(store)

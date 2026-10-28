@@ -100,8 +100,7 @@ async function onlyTab() {
   return tabs[0]!
 }
 
-// Why each check: reads and the next rename/image insert derive access from the tab, and a restart
-// restores the same filePath/relativePath, so access must survive on the stored fields alone.
+// Reads/rename/image insert derive access from stored tab fields; restart restores only filePath/relativePath, so those must retain access.
 async function expectUserNamedAt(filePath: string): Promise<void> {
   const tab = await onlyTab()
   expect(tab.filePath).toBe(filePath)
@@ -124,7 +123,8 @@ async function expectUserNamedAt(filePath: string): Promise<void> {
     filePath,
     'edited',
     { kind: 'user-file' },
-    expect.anything()
+    expect.anything(),
+    expect.any(Function)
   )
 }
 

@@ -49,8 +49,7 @@ export function acquireElectronDebugger(webContents: WebContents): ElectronDebug
       try {
         dbg.detach()
       } catch {
-        // Best-effort release: the tab may already be gone or DevTools may
-        // have taken ownership after Electron emitted a detach event.
+        // The tab may be destroyed or debugger ownership may have changed.
       }
     }
   }

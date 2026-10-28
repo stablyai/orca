@@ -1,7 +1,7 @@
 // @vitest-environment happy-dom
 import { act } from 'react'
 import { expect, it, vi, type Mock } from 'vitest'
-import { NativeChatResumeOnRestartModal } from './NativeChatResumeOnRestartModal'
+import { NativeChatResumeOnRestartModal } from './NativeChatResumeRuntimeModal'
 import { NativeChatResumeStatusSegment } from './status-bar/NativeChatResumeStatusSegment'
 import {
   createResumeModalFixture,
@@ -59,9 +59,7 @@ it('shows a finished resume as a result, in the past tense, once nothing is left
   expect(dialog()?.textContent).not.toContain('Resuming restores')
   expect(tree()?.querySelectorAll('[role="checkbox"]')).toHaveLength(0)
   expect(tree()?.textContent).not.toContain('Select all')
-  // Auto-resume is still off, so the box stays after Resume.
   expect(dialog()?.textContent).toContain("Don't ask again")
-  // The user pressed Resume, so nothing says it happened on its own.
   expect(dialog()?.textContent).not.toContain('Resumed automatically')
 })
 
@@ -95,7 +93,6 @@ it('does not restore a hidden picker preference when closing a run', async () =>
   await host.release('a', 'b')
   await act(async () => lastToastShow()?.())
   expect(dialog()?.textContent).toContain('Resumed 2 of 2 chats')
-  // Turned off elsewhere, the box is back, unticked: the earlier tick was consumed.
   expect(dontAskAgain().getAttribute('data-state')).toBe('unchecked')
   await act(async () =>
     useAppStore.getState().updateSettings({ nativeChatResumeWorkOnRestart: false })
@@ -155,7 +152,7 @@ it('reopens a collapsed result group with tree keys', async () => {
 })
 
 it('shows a settled nonretryable failure as a result with a Done action', async () => {
-  const failed = { ...failure('a'), outcome: 'unconfirmed' as const, retryable: false }
+  const failed = { ...failure('a'), outcome: 'refused' as const, retryable: false }
   let acted = false
   rpc.mockImplementation(async (_target, method) => {
     if (method === 'agentSession.restartResumable') {
@@ -165,7 +162,7 @@ it('shows a settled nonretryable failure as a result with a Done action', async 
     return {
       sessions: [],
       failed: [failed],
-      continued: [{ sessionId: 'a', outcome: 'unknown' }]
+      continued: [{ sessionId: 'a', outcome: 'refused' }]
     }
   })
   await mountSurfaces()
@@ -217,7 +214,6 @@ it('says a launch resumed on its own and links to the setting', async () => {
     repoId: null,
     sectionId: 'chat-resume-on-restart'
   })
-  // The dialog gets out of the way of the page it opened.
   expect(dialog()).toBeNull()
 })
 
@@ -229,6 +225,5 @@ it('keeps the checkboxes while a chat can still be chosen, whichever tab is show
   expect(dialog()?.textContent).toContain('The ones Orca resumed were restored')
   expect(tree()?.textContent).toContain('Select all')
   await act(async () => button('Resumed1').click())
-  // Filtering to rows that all show a status must not drop the column under the user.
   expect(tree()?.textContent).toContain('Select all')
 })

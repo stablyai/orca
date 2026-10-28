@@ -23,7 +23,7 @@ type BrowserClientNetworkRoute = {
 
 type BrowserClientNetworkRouteRegistryOptions = {
   authority: BrowserHostLeaseAuthority
-  /** Durable name for the authority's machine; its runtimeId is per-process and must not reach storage. */
+  /** Durable machine identity; process runtime IDs must not name storage. */
   authorityStorageKey: string
   reconnectGraceMs?: number
   reconnectRetryDelayMs?: number
@@ -94,7 +94,7 @@ export class BrowserClientNetworkRouteRegistry {
       let released = false
       return {
         key,
-        // Why: the route key fences per-boot generations; storage must outlive them.
+        // Storage identity must outlive the route key’s per-boot generation.
         executionHostIdentity: browserNetworkExecutionHostStorageIdentity(
           executionHost,
           this.options.authorityStorageKey
@@ -223,7 +223,7 @@ export class BrowserClientNetworkRouteRegistry {
     }
   }
 
-  /** A closing route can never be revived, so a retain waits it out and then mints a fresh one. */
+  /** Retain must wait for teardown; closing routes cannot be revived. */
   private async settleClosingRoute(key: string, signal: AbortSignal): Promise<void> {
     let closing = this.routes.get(key)?.closing
     while (closing) {
@@ -246,7 +246,7 @@ export class BrowserClientNetworkRouteRegistry {
     try {
       await closing
     } catch (error) {
-      // Why: an unprovable teardown keeps the closed route in place so the key stays fenced.
+      // Keep failed teardowns indexed so their route key stays fenced.
       retained.closing = undefined
       throw error
     }

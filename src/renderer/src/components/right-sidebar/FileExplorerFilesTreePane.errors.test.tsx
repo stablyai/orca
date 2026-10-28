@@ -11,7 +11,11 @@ import { directoryNode } from './file-explorer-tree-node-test-fixtures'
 import { visit, type ReactElementLike } from './file-explorer-element-tree-test-harness'
 
 type Props = ComponentProps<typeof FileExplorerFilesTreePane>
-function emptyPane(error?: string, wslHostUnavailable: Props['wslHostUnavailable'] = null) {
+function emptyPane(
+  error?: string,
+  wslHostUnavailable: Props['wslHostUnavailable'] = null,
+  refreshDir: (dirPath: string, options?: { wakeWslDistro?: boolean }) => Promise<void> = vi.fn()
+) {
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: This element-tree fixture supplies every field read by the empty pane; child components and event handlers are not executed.
   return FileExplorerFilesTreePane({
     worktreePath: '/repo',
@@ -23,7 +27,8 @@ function emptyPane(error?: string, wslHostUnavailable: Props['wslHostUnavailable
     tree: {
       loadingDirPaths: new Set(),
       rootError: 'Full root unavailable',
-      dirCache: { '/repo/src': { children: [], error } }
+      dirCache: { '/repo/src': { children: [], error } },
+      refreshDir
     },
     selection: {},
     paneState: {
@@ -208,4 +213,18 @@ describe('FileExplorerRow subfolder read failure', () => {
     })
     expect(rows.map((row) => row.props.loadError)).toEqual([LOAD_ERROR])
   })
+})
+
+it('Retry is a user act, so it may start a stopped WSL distro', () => {
+  const refreshDir = vi.fn(async () => {})
+  const elements: ReactElementLike[] = []
+  visit(emptyPane('WSL distro is not running', null, refreshDir), (element) =>
+    elements.push(element)
+  )
+  const onClick = elements.find((element) => element.props?.size === 'xs')?.props.onClick
+  expect(onClick).toBeTypeOf('function')
+  if (typeof onClick === 'function') {
+    onClick()
+  }
+  expect(refreshDir).toHaveBeenCalledWith('/repo/src', { wakeWslDistro: true })
 })

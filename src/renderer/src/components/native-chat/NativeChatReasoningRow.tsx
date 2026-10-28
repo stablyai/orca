@@ -6,7 +6,7 @@ import {
   nativeChatReasoningDisclosureKey,
   nativeChatReasoningHeadline,
   type NativeChatReasoningHeadline
-} from '../../../../shared/native-chat-reasoning-row'
+} from '../../../../shared/native-chat/transcript/native-chat-reasoning-row'
 import {
   NativeChatReasoningBody,
   NativeChatReasoningChevron
@@ -52,7 +52,6 @@ export function NativeChatReasoningRow({
     <div className="min-w-0 text-sm text-chat-foreground-faint">
       <Collapsible open={disclosure.open} onOpenChange={disclosure.setOpen}>
         <CollapsibleTrigger asChild>
-          {/* Laid out like a tool run's header, so its glyph sits in the same column. */}
           <button
             type="button"
             className="group/reasoning flex min-h-6 w-full min-w-0 items-center gap-1.5 rounded-md py-0.5 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"

@@ -156,11 +156,7 @@ export function ConflictBanner({
           </div>
         )}
       </div>
-      {/* Why: the hint is omitted here because the file is already open in the
-         editor below. Showing "Open and edit…" or similar would be confusing
-         when the user is already viewing/editing the working-tree contents.
-         The hint is still shown in ConflictPlaceholderView and the review
-         list where it provides actionable guidance. */}
+      {/* The file is already open below; reserve open/edit guidance for placeholders and the review list. */}
       {!isUnresolved && (
         <div className="mt-1 text-muted-foreground">
           {translate(
@@ -323,12 +319,17 @@ export function ConflictReviewPanel({
             )}
             <div className="flex min-w-0 flex-wrap items-baseline gap-x-1.5">
               <span className="text-sm font-medium text-foreground">
-                {unresolvedCount}{' '}
-                {translate(
-                  'auto.components.editor.ConflictComponents.4be41eaafc',
-                  'unresolved conflict'
-                )}
-                {unresolvedCount === 1 ? '' : 's'}
+                {unresolvedCount === 1
+                  ? translate(
+                      'auto.components.editor.ConflictComponents.unresolvedConflicts_one',
+                      '{{count}} unresolved conflict',
+                      { count: unresolvedCount }
+                    )
+                  : translate(
+                      'auto.components.editor.ConflictComponents.unresolvedConflicts_other',
+                      '{{count}} unresolved conflicts',
+                      { count: unresolvedCount }
+                    )}
               </span>
               <span className="text-muted-foreground/50">·</span>
               <span className="text-xs text-muted-foreground">

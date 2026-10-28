@@ -11,7 +11,7 @@ import type {
 import {
   canonicalizeAgentSessionIdentity,
   type ProviderExecutionNamespace
-} from '../../agent-session-claim-identity'
+} from '../../agent-session/ownership/agent-session-claim-identity'
 import { isTuiAgentEnabled } from '../../../../shared/tui-agent-selection'
 import { buildAgentResumeStartupPlan } from '../../../../shared/tui-agent-startup'
 import { agentLaunchQuotingShell } from '../../../../shared/agent-launch-runtime'
@@ -28,8 +28,7 @@ export abstract class OrcaRuntimeWithGetAgentSessionExecutionNamespace extends O
     agent: TuiAgent
   ): ProviderExecutionNamespace | null {
     if (workspace.connectionId) {
-      // Why: SSH target ids are not execution-namespace proof. Preserve the
-      // legacy launch until an attested route can safely participate in claims.
+      // SSH target ids are not execution-namespace proof; keep legacy launches until attested routes can join claims.
       return null
     }
     const wsl = parseWslUncPath(workspace.path)
@@ -41,8 +40,7 @@ export abstract class OrcaRuntimeWithGetAgentSessionExecutionNamespace extends O
       machine: wsl ? 'wsl-host' : `native:${process.platform}`,
       principal,
       container: wsl ? `wsl:${wsl.distro.toLocaleLowerCase('en-US')}` : 'native',
-      // Why: merging account roots is conservative (it may conflict) and can
-      // never permit two TUIs to own one provider session.
+      // Merging account roots may conflict conservatively but cannot admit two TUIs owning one provider session.
       providerRoot: `profile-default:${agent}`
     }
   }
@@ -52,8 +50,7 @@ export abstract class OrcaRuntimeWithGetAgentSessionExecutionNamespace extends O
     operation: 'resume' | 'create',
     signal?: AbortSignal
   ): Promise<boolean> {
-    // Why: an SSH workspace has no provider here; an unavailable route is not proof of an old
-    // owner, so preserve the structured failure.
+    // Unavailable SSH routes are not proof of an old owner; preserve the structured failure.
     const provider = workspace.connectionId ? null : this.getLocalProvider()
     if (!provider) {
       return true
@@ -117,7 +114,7 @@ export abstract class OrcaRuntimeWithGetAgentSessionExecutionNamespace extends O
       // Why: the renderer still holds the exact old request and may retry it before any side effect.
       throw new Error('agent_session_legacy_required')
     }
-    // Why: nested SSH paths belong to the execution owner, so compatibility selection must happen before local filesystem canonicalization.
+    // Choose SSH compatibility before canonicalizing paths that belong to the execution owner.
     const identity = canonicalizeAgentSessionIdentity(request.agent, request.providerSession)
     const claim = this.agentSessionClaimSigner.createClaim({
       namespace,
@@ -131,8 +128,7 @@ export abstract class OrcaRuntimeWithGetAgentSessionExecutionNamespace extends O
     const launchRuntime = this.resolveAgentLaunchRuntime(workspace, request.agent)
     const { platform } = launchRuntime
     const shell = agentLaunchQuotingShell(launchRuntime)
-    // Why: `workspace.repo` is display metadata and may be a row from another host; the launch
-    // shape must match the PTY route this scope already resolved.
+    // Use the resolved PTY route, not display repo metadata that may belong to another host.
     const isRemote = Boolean(workspace.connectionId)
     const startup = buildAgentResumeStartupPlan({
       agent: request.agent,
@@ -141,8 +137,8 @@ export abstract class OrcaRuntimeWithGetAgentSessionExecutionNamespace extends O
       agentArgs:
         request.agentArgs !== undefined
           ? request.agentArgs
-          : resolveTuiAgentLaunchArgs(request.agent, settings.agentDefaultArgs),
-      agentEnv: resolveTuiAgentLaunchEnv(request.agent, settings.agentDefaultEnv),
+          : resolveTuiAgentLaunchArgs(request.agent, settings),
+      agentEnv: resolveTuiAgentLaunchEnv(request.agent, settings),
       ompResumeFilePath: request.ompResumeFilePath,
       sessionOptions: this.toAgentSessionOptions(request.launchPreferences),
       sessionOptionsOverrideAgentArgs: Boolean(request.launchPreferences),
@@ -162,8 +158,9 @@ export abstract class OrcaRuntimeWithGetAgentSessionExecutionNamespace extends O
       launchConfig: startup.launchConfig,
       startupCommandDelivery: startup.startupCommandDelivery,
       launchAgent: request.agent,
-      // Why: like every host-built resume, the spawn names its session so readers can address it.
+      // Host-built resumes must name their session so readers can address it.
       resumeProviderSession: identity.providerSession,
+      ...(request.resumeOrigin ? { resumeOrigin: request.resumeOrigin } : {}),
       terminalImageViewerSupported: _caller.terminalImageViewerSupported,
       launchRuntime,
       terminalKittyKeyboardProtocol: request.terminalKittyKeyboardProtocol,

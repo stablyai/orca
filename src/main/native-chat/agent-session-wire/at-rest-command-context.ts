@@ -3,9 +3,13 @@ import type { StructuredAgentSessionAtRestCommands } from './structured-agent-se
 const listeners = new Set<(workspaceId?: string) => void>()
 let readiness: Promise<void> | undefined
 const launchSettings = new Set([
+  'activeClaudeManagedAccountId',
+  'activeClaudeManagedAccountIdsByRuntime',
   'agentCmdOverrides',
   'agentDefaultArgs',
   'agentDefaultEnv',
+  'agentPermissionDefault',
+  'agentPermissionOverrides',
   'nativeChatInheritShellEnvironment',
   'nativeChatShellEnvironmentVariables',
   'terminalWindowsShell',

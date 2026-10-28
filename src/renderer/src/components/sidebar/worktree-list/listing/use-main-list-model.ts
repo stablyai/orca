@@ -18,6 +18,7 @@ import {
 } from '../../../../../../shared/execution-host'
 import { getHostDisplayLabelOverrides } from '../../../../../../shared/host-setting-overrides'
 import type { SidebarFeedDomains } from '../../../../../../shared/sidebar-list/sidebar-feed-domains'
+import { EMPTY_SIDEBAR_FEED_DOMAINS } from '../../../../../../shared/sidebar-feed-client/sidebar-feed-snapshot'
 import {
   planSidebarFeedRows,
   renderSidebarFeedRows,
@@ -44,24 +45,10 @@ import { useSidebarExternalWorktreeCards } from './use-external-worktree-cards'
 import { useOrderHeldWhileEngaged, useProjectRecencyHeldWhileEngaged } from './use-order-hold'
 import { useReusedArrayIdentity } from './use-reused-array-identity'
 
-const NO_FEED: SidebarFeedDomains = {
-  workspaces: new Map(),
-  activity: new Map(),
-  review: new Map(),
-  creations: new Map(),
-  pairedServerHosts: new Map(),
-  pairedServerRows: new Map(),
-  repoIcons: new Map(),
-  desktop: null,
-  projectCatalog: null,
-  retention: null
-}
 // The window renders its own collapse, so planning never re-runs on a toggle.
 const PLANNED_UNCOLLAPSED: ReadonlySet<string> = new Set()
 
-/** Every creation main lists, whoever started it (so the window lists what the phone does), less
- *  those the window just ended, plus the window's own main does not list: preflight, a paired
- *  server's, and its work after main's reply. */
+/** Combine main’s shared creations with window-only preflight/server work and exclude locally completed requests. */
 export function withWindowCreations(
   domains: SidebarFeedDomains,
   pendingCreationKeys: readonly string[],
@@ -101,12 +88,7 @@ function windowFolderRecordOf(
   return records.get(folderRecordKey(folder.id, folder.executionHostId)) ?? folder
 }
 
-/**
- * Switch point. The list built from main's inputs, by the builder the phone runs: the window adds
- * only screen state (hover hold, collapse, host drag, agent-send reveal), its desktop-only cards,
- * its own view settings and host order, and its row writes main has not shown yet. Cards render
- * the window's own records for the rows main lists.
- */
+/** Use the phone’s builder over main’s domains, adding desktop state and pending writes; cards read window records. */
 export function useMainSidebarListModel(args: SidebarListModelArgs): SidebarListModel {
   const { filterState, sortBy, groupBy, repos, defaultHostId, settings } = args
   useSidebarListSession()
@@ -121,7 +103,7 @@ export function useMainSidebarListModel(args: SidebarListModelArgs): SidebarList
   const domains = useMemo(
     () =>
       withWindowCreations(
-        overlaySidebarPendingLayer(feed?.domains ?? NO_FEED, pending, {
+        overlaySidebarPendingLayer(feed?.domains ?? EMPTY_SIDEBAR_FEED_DOMAINS, pending, {
           repos,
           lineageById: args.worktreeLineageById
         }),

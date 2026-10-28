@@ -57,8 +57,7 @@ function getInitialTerminalThemeTarget(
   if (customizedDark !== customizedLight) {
     return customizedDark ? 'dark' : 'light'
   }
-  // Why: the picker edits mode-specific slots. Defaulting to the active
-  // terminal mode makes the selected theme apply immediately in system-light.
+  // Default to the active terminal mode so selecting a theme applies immediately in system-light.
   return resolveEffectiveTerminalAppearance(settings, systemPrefersDark).mode
 }
 

@@ -1,4 +1,4 @@
-import React, { useCallback } from 'react'
+import React, { useCallback, useMemo } from 'react'
 import {
   Dialog,
   DialogContent,
@@ -17,10 +17,15 @@ import {
 } from '../../../../shared/execution-host'
 import { countOpenRepoTerminalTabs } from '@/store/repos/repo-removal'
 import { getRecipeVmSshTargetForHost } from '@/lib/recipe-vm-managed-host'
-import { selectWorktreesByRepo } from '@/store/workspace-record-selectors'
+import { RemovalUnsavedFilesNotice } from './RemovalUnsavedFilesNotice'
+import { confirmUnsavedDiscard } from '@/store/slices/worktrees/teardown/removed-workspace-unsaved-files'
+import { projectRemovalTargets } from './removal-unsaved-files'
+import {
+  selectDetectedWorktreesByRepo,
+  selectWorktreesByRepo
+} from '@/store/workspace-record-selectors'
 
-// Why: interpolated into the sentence so locales control where the name sits;
-// U+0000 cannot appear in a real project name, so the split is unambiguous.
+// NUL cannot occur in project names, so translated name-token splitting is unambiguous.
 const NAME_TOKEN = '\u0000'
 
 const RemoveFolderDialog = React.memo(function RemoveFolderDialog() {
@@ -35,10 +40,7 @@ const RemoveFolderDialog = React.memo(function RemoveFolderDialog() {
   const hostId =
     typeof modalData.hostId === 'string' ? normalizeExecutionHostId(modalData.hostId) : null
 
-  // Why: for an SSH project the files live on the remote host's disk, not the
-  // user's — "still on your disk" would be misleading. Name the host (using the
-  // removed-target label when it's a ghost) so the user knows where it remains
-  // and that re-adding that host recovers it.
+  // Remote files remain on the named host’s disk; ghost-host labels explain where recovery is possible.
   const sshConnectionId = useAppStore(
     (s) =>
       s.repos
@@ -65,6 +67,17 @@ const RemoveFolderDialog = React.memo(function RemoveFolderDialog() {
       )
   )
 
+  const worktreesByRepo = useAppStore((s) => selectWorktreesByRepo(s))
+  const detectedWorktreesByRepo = useAppStore((s) => selectDetectedWorktreesByRepo(s))
+  const unsavedTargets = useMemo(
+    () =>
+      projectRemovalTargets(
+        { worktreesByRepo, detectedWorktreesByRepo },
+        repoId ? [{ repoId, hostId }] : []
+      ),
+    [detectedWorktreesByRepo, hostId, repoId, worktreesByRepo]
+  )
+
   const openTerminalCount = useAppStore((s) =>
     repoId && hostId ? countOpenRepoTerminalTabs(s, repoId, hostId) : 0
   )
@@ -82,9 +95,7 @@ const RemoveFolderDialog = React.memo(function RemoveFolderDialog() {
             { count: openTerminalCount }
           )
 
-  // Why: fragment concatenation around the styled name cannot be reordered by
-  // SOV locales (#9294). Translate one full sentence with the name as a
-  // sentinel token, then split on it to re-apply the inline emphasis.
+  // Translate the whole sentence for reorderable locales, then restore emphasis at the name sentinel.
   const description =
     onRecipeVmServer || isRuntimeOwnedSshTargetId(sshConnectionId)
       ? translate(
@@ -106,12 +117,16 @@ const RemoveFolderDialog = React.memo(function RemoveFolderDialog() {
   const [descriptionBeforeName, descriptionAfterName] = description.split(NAME_TOKEN)
 
   const handleConfirm = useCallback(() => {
-    // Why: without the opener's host a bare id could remove another host's row (#13071).
+    // Require the opener’s host so same-ID rows on other hosts cannot be removed.
     if (repoId && hostId) {
-      void removeProject(repoId, { hostId, errorFeedback: 'toast' })
+      void removeProject(repoId, {
+        hostId,
+        errorFeedback: 'toast',
+        confirmedDiscards: confirmUnsavedDiscard(useAppStore.getState, unsavedTargets)
+      })
     }
     closeModal()
-  }, [closeModal, hostId, removeProject, repoId])
+  }, [closeModal, hostId, removeProject, repoId, unsavedTargets])
 
   const handleOpenChange = useCallback(
     (open: boolean) => {
@@ -124,7 +139,7 @@ const RemoveFolderDialog = React.memo(function RemoveFolderDialog() {
 
   return (
     <Dialog open={isOpen} onOpenChange={handleOpenChange}>
-      <DialogContent className="max-w-sm sm:max-w-sm" showCloseButton={false}>
+      <DialogContent surface="security" className="max-w-sm sm:max-w-sm" showCloseButton={false}>
         <DialogHeader>
           <DialogTitle className="text-sm">
             {translate('auto.components.sidebar.RemoveFolderDialog.b79b39d865', 'Remove Project')}
@@ -138,6 +153,7 @@ const RemoveFolderDialog = React.memo(function RemoveFolderDialog() {
             <p className="text-xs font-medium text-foreground">{openTerminalWarning}</p>
           ) : null}
         </DialogHeader>
+        <RemovalUnsavedFilesNotice targets={unsavedTargets} enabled={isOpen} />
         <DialogFooter>
           <Button variant="outline" onClick={() => handleOpenChange(false)}>
             {translate('auto.components.sidebar.RemoveFolderDialog.d36883e046', 'Cancel')}

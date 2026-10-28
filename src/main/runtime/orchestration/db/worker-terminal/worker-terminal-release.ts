@@ -41,8 +41,7 @@ export function requestWorkerTerminalRelease(
       return { disposition: 'retained', resource: null, reason: 'no_owned_resource' }
     }
     if (!WORKER_SETTLED_STATES.includes(worker.state)) {
-      // Why: release is post-completion cleanup only; recording intent for an unsettled or
-      // uncertain worker would let recovery close a terminal the coordinator never reviewed.
+      // Release is post-completion cleanup; uncertain workers must not be closed before coordinator review.
       throw new OrchestrationError(
         'dispatch_inactive',
         `Dispatch ${dispatchId} is ${worker.state}; only a settled worker can release. Use worker-stop to cancel an active worker.`
@@ -123,11 +122,8 @@ export function settleDeadWorkerTerminalRelease(
     const owner = this.getWorkerDispatch(resource.owner_dispatch_id)
     const requesterSettled = Boolean(requester && WORKER_SETTLED_STATES.includes(requester.state))
     const ownerSettled = Boolean(owner && WORKER_SETTLED_STATES.includes(owner.state))
-    // A positive process-exit verdict only proves the exact process is gone; release is terminal
-    // cleanup and must also preserve the worker's output. The archive is only ever written while
-    // `release_state = 'requested'`, so an owner asking to release a pane that never reached that
-    // state can never produce one — demanding it retained the pane forever. That one case settles
-    // as `unavailable`; wherever the capture is still reachable the archive stays mandatory.
+    // Exit proves process death, not preserved output; require an archive whenever capture is reachable.
+    // Capture runs only while requested; an unrequested or retained owner settles unavailable instead.
     const archive = this.getWorkerTerminalArchive(resource.owner_dispatch_id)
     const archiveUnreachable =
       resource.owner_dispatch_id === params.requestingDispatchId &&

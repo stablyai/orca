@@ -49,8 +49,7 @@ function getPreservedBranchDescription(
       )
 }
 
-// Why: Sonner's native action row pinches long branch/worktree names into a
-// narrow column. Keep the native toast frame, but give the body its own footer.
+// Use a custom footer so long branch/worktree names do not squeeze Sonner’s native action row.
 function PreservedBranchToastBody({
   description,
   forceDeleteLabel,

@@ -39,9 +39,9 @@ describe('TabStripTooltipProvider', () => {
     vi.useRealTimers()
   })
 
-  it('holds the first preview until an 800 ms hover', () => {
+  it('holds the first preview until a 500 ms hover', () => {
     hover('first tab')
-    advance(799)
+    advance(499)
     expect(screen.queryByText('Build')).toBeNull()
     advance(1)
     expect(screen.getAllByText('Build').length).toBeGreaterThan(0)

@@ -1,8 +1,8 @@
+import type { HostTerminalStop } from '../terminals/terminal-actions'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type * as AgentStatusModule from '@/lib/agent-status'
 import { getDefaultSettings } from '../../../../shared/constants'
 import { shutdownBufferCaptures } from '@/components/terminal-pane/shutdown-buffer-captures'
-import { createCompatibleRuntimeStatusResponseIfNeeded } from '../../runtime/runtime-compatibility-test-fixture'
 import { createTestStore, makeRuntimeOwnedWorktree, makeTab, seedStore } from './store-test-helpers'
 import {
   applySleepRuntimeRpcDefault,
@@ -56,7 +56,7 @@ describe('shutdownWorktreeTerminals ordering', () => {
     applySleepRuntimeRpcDefault(mockApi)
   })
 
-  it('orders capture, guards, handlers, owner stop, renderer kill, commit, cleanup, and exit settlement', async () => {
+  it("orders capture, guards, handlers, main's stop, commit, cleanup, and exit settlement", async () => {
     const store = createTestStore()
     const worktreeId = 'repo1::/path/wt1'
     seedStore(store, {
@@ -80,8 +80,15 @@ describe('shutdownWorktreeTerminals ordering', () => {
         orderHarness.events.push('terminal-state-cleanup')
       }
     })
+    // Main runs the sleep; its answer comes after the window has guarded its panes.
+    let answer!: (stop: HostTerminalStop) => void
+    const hostStop = new Promise<HostTerminalStop>((resolve) => (answer = resolve))
     orderHarness.unregister.mockImplementationOnce(() => {
       orderHarness.events.push('handler-unregister')
+      queueMicrotask(() => {
+        orderHarness.events.push('host-stop')
+        answer({ failed: false, records: [] })
+      })
       return [
         {
           ptyId: 'pty-1',
@@ -90,40 +97,14 @@ describe('shutdownWorktreeTerminals ordering', () => {
         }
       ]
     })
-    mockApi.runtimeEnvironments.call.mockImplementation(async (args: { method: string }) => {
-      const compatibilityResponse = createCompatibleRuntimeStatusResponseIfNeeded(args)
-      if (compatibilityResponse) {
-        return compatibilityResponse
-      }
-      if (args.method === 'terminal.sleep') {
-        orderHarness.events.push('owner-runtime-rpc')
-      }
-      return {
-        id: 'rpc-order',
-        ok: true,
-        result:
-          args.method === 'terminal.sleep'
-            ? {
-                stopped: 0,
-                stoppedPtyIds: [],
-                livePtyIds: [],
-                postStopVerified: true
-              }
-            : {},
-        _meta: { runtimeId: 'runtime-1' }
-      }
-    })
-    mockApi.pty.kill.mockImplementationOnce(async () => {
-      orderHarness.events.push('renderer-kill')
-    })
-
-    await store.getState().shutdownWorktreeTerminals(worktreeId, { keepIdentifiers: true })
+    await store
+      .getState()
+      .shutdownWorktreeTerminals(worktreeId, { keepIdentifiers: true, hostStop })
     expect(orderHarness.events).toEqual([
       'buffer-capture',
       'shutdown-guard-publication',
       'handler-unregister',
-      'owner-runtime-rpc',
-      'renderer-kill',
+      'host-stop',
       'handler-commit',
       'terminal-state-cleanup',
       'agent-cleanup',

@@ -13,6 +13,7 @@ type FakeFs = {
   dirs: Set<string>
   modes: Map<string, number>
   openSshRenameCount: number
+  operations: { kind: string; path: string; destination?: string }[]
 }
 
 function createFakeSftp(
@@ -30,7 +31,8 @@ function createFakeSftp(
     files: new Map(),
     dirs: new Set(['/']),
     modes: new Map(),
-    openSshRenameCount: 0
+    openSshRenameCount: 0,
+    operations: []
   }
   const noEntryError = (path: string): { code: number; message: string } => ({
     code: 2,
@@ -38,6 +40,7 @@ function createFakeSftp(
   })
   const fakeStats = (mode: number): { mode: number } => ({ mode })
 
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: This fake implements every SFTP operation exercised below.
   const sftp = {
     readFile: (path: string, _enc: string, cb: (err: unknown, data?: string) => void): void => {
       const v = fs.files.get(path)
@@ -57,6 +60,7 @@ function createFakeSftp(
         cb({ code: 4, message: `write failed ${path}` })
         return
       }
+      fs.operations.push({ kind: 'write', path })
       fs.files.set(path, content)
       if (typeof options !== 'string' && options.mode !== undefined) {
         fs.modes.set(path, options.mode)
@@ -64,6 +68,7 @@ function createFakeSftp(
       cb(null)
     },
     rename: (src: string, dst: string, cb: (err: unknown) => void): void => {
+      fs.operations.push({ kind: 'rename', path: src, destination: dst })
       const v = fs.files.get(src)
       if (v === undefined) {
         cb(noEntryError(src))
@@ -92,6 +97,7 @@ function createFakeSftp(
       cb(null)
     },
     chmod: (path: string, mode: number, cb: (err: unknown) => void): void => {
+      fs.operations.push({ kind: 'chmod', path })
       fs.modes.set(path, mode)
       cb(null)
     },
@@ -117,6 +123,7 @@ function createFakeSftp(
       ? {
           ext_openssh_rename: (src: string, dst: string, cb: (err: unknown) => void): void => {
             fs.openSshRenameCount += 1
+            fs.operations.push({ kind: 'openssh-rename', path: src, destination: dst })
             const v = fs.files.get(src)
             if (v === undefined) {
               cb(noEntryError(src))
@@ -185,7 +192,9 @@ describe('installer-utils-remote', () => {
         rejection = error
       })
 
-      await vi.advanceTimersByTimeAsync(30_000)
+      await vi.advanceTimersByTimeAsync(9_999)
+      expect(rejection).toBeNull()
+      await vi.advanceTimersByTimeAsync(1)
 
       expect(rejection).toBeInstanceOf(Error)
       await expect(pending).rejects.toThrow('Timed out waiting for SFTP readFile')
@@ -204,10 +213,16 @@ describe('installer-utils-remote', () => {
     const contents = fs.files.get('/home/u/.claude/settings.json')!
     const parsed = JSON.parse(contents)
     expect(parsed.hooks.Stop[0].hooks[0].command).toBe('foo')
-    // Tmp must be cleaned up.
     const tmp = Array.from(fs.files.keys()).find((k) => k.includes('.tmp'))
     expect(tmp).toBeUndefined()
     expect(fs.modes.get('/home/u/.claude/settings.json')).toBe(0o600)
+    const tempPath = fs.operations[0]?.path
+    expect(tempPath).toMatch(/^\/home\/u\/\.claude\/\.[^.]+\.tmp$/)
+    expect(fs.operations).toEqual([
+      { kind: 'write', path: tempPath },
+      { kind: 'chmod', path: tempPath },
+      { kind: 'rename', path: tempPath, destination: '/home/u/.claude/settings.json' }
+    ])
   })
 
   it('preserves existing config file mode across atomic replacement', async () => {
@@ -218,6 +233,7 @@ describe('installer-utils-remote', () => {
 
     await writeTextFileRemoteAtomic(sftp, path, 'new')
 
+    expect(fs.files.get(path)).toBe('new')
     expect(fs.modes.get(path)).toBe(0o640)
   })
 
@@ -271,7 +287,14 @@ describe('installer-utils-remote', () => {
 
     expect(fs.files.get(path)).toBe('new script')
     expect(fs.modes.get(path)).toBe(0o755)
-    expect(Array.from(fs.files.keys()).some((key) => key.includes('.orca-backup-'))).toBe(false)
+    expect([...fs.files.keys()]).toEqual([path])
+    const tempPath = fs.operations[0]?.path
+    expect(tempPath).toMatch(/^\/home\/u\/\.orca\/agent-hooks\/\.[^.]+\.tmp$/)
+    expect(fs.operations).toEqual([
+      { kind: 'write', path: tempPath },
+      { kind: 'chmod', path: tempPath },
+      { kind: 'openssh-rename', path: tempPath, destination: path }
+    ])
   })
 
   it('leaves the existing managed script intact when temp write fails', async () => {
@@ -283,5 +306,6 @@ describe('installer-utils-remote', () => {
       code: 4
     })
     expect(fs.files.get(path)).toBe('old script')
+    expect([...fs.files.keys()]).toEqual([path])
   })
 })

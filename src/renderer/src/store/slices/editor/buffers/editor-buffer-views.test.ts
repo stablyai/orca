@@ -17,7 +17,7 @@ import {
 } from './editor-buffer-record'
 import {
   EMPTY_EDITOR_BUFFER_VIEW_INDEX,
-  reconcileEditorBufferViewIndex,
+  buildEditorBufferViewIndex,
   type EditorBufferViewIndex
 } from './editor-buffer-views'
 
@@ -113,9 +113,6 @@ describe('editor buffer view index', () => {
     const after = useAppStore.getState()
     expect(after.editorBufferIdOf).toBe(before.editorBufferIdOf)
     expect(after.editorBufferViews).toBe(before.editorBufferViews)
-    const files = [tab('a'), tab('b')]
-    const index = reconcileEditorBufferViewIndex(EMPTY_EDITOR_BUFFER_VIEW_INDEX, files)
-    expect(reconcileEditorBufferViewIndex(index, [...files])).toBe(index)
   })
 
   it('writes a buffer field to one tab only, as before', () => {
@@ -126,7 +123,7 @@ describe('editor buffer view index', () => {
         a: editorBufferRecordFromFile(files[0]),
         b: editorBufferRecordFromFile(files[1])
       },
-      ...reconcileEditorBufferViewIndex(EMPTY_EDITOR_BUFFER_VIEW_INDEX, files)
+      ...buildEditorBufferViewIndex(files, (file) => file.id)
     }
 
     const next = writeEditorBuffer(state, 'a', { isDirty: true }, { isPreview: false })

@@ -19,18 +19,16 @@ import { resolveWorktreeHostId } from '../worktree/worktree-host-context-labels'
 import { filterWorktrees } from '../worktree/workspace-list-sections'
 import { rowFiltersForView, type MobileViewState } from '../worktree/workspace-view-settings'
 
-/** What the host screen draws from a feed-built list, besides its rows' own live content. */
 export type HostFeedListSources = {
   rows: readonly HostSectionRow[]
   /** The phone's own highlight; null while unread or never opened, when nothing is lit. */
   lastVisited: LastVisitedWorktreeOnHost | null
-  /** The rows worktree.ps and the desktop's server lists served, for what each row draws. */
   liveRows: readonly Worktree[]
   repoHostIdByRepoId: ReadonlyMap<string, ExecutionHostId>
   search: string
 }
 
-/** The builder names data headers; Pinned, All and the PR lanes each client names itself. */
+// Clients name Pinned/All/PR lanes themselves; the builder names data headers.
 function headerTitle(row: GroupHeaderRow): string {
   switch (row.icon.kind) {
     case 'pinned':
@@ -63,10 +61,9 @@ function indexLiveRows(
   return (id, hostId) => byIdentity.get(composeWorktreeHostIdentity(hostId, id))
 }
 
-/** Only worktree.ps carries these; a row it has not listed yet draws without them. */
 const NO_LIVE_CONTENT = { liveTerminalCount: 0, hasAttachedPty: false, linkedPR: null }
 
-/** What the feed carries comes from the feed: an older worktree.ps row adds only what it lacks. */
+// Feed fields win; older worktree.ps rows supply only missing live content.
 function drawnRow(
   worktree: HostWorktree,
   hostId: ExecutionHostId,
@@ -100,22 +97,27 @@ function matchesSearch(row: Worktree, query: string): boolean {
   )
 }
 
-/**
- * The phone's sections from the list the shared builder made from the feed: the desktop's headers,
- * order and nesting, each row drawn with the live content the phone already reads, and highlighted
- * by `isLastVisitedWorktreeRow`.
- * Search narrows the rows here, as the desktop's own search never reaches the feed.
- */
+// Use desktop headers/order/nesting with phone live content and last-visited highlight; apply search locally because desktop search never reaches the feed.
 export function buildHostFeedSections(sources: HostFeedListSources): Section[] {
   const liveRowOf = indexLiveRows(sources.liveRows, sources.repoHostIdByRepoId)
   const query = sources.search.trim().toLowerCase()
   const sections: Section[] = []
+  let sectionHostId: ExecutionHostId | null = null
   const rowOf = (
     worktree: HostWorktree,
     hostId: ExecutionHostId,
     repoName: string | undefined,
     workspaceKind: Worktree['workspaceKind']
-  ): Worktree => drawnRow(worktree, hostId, repoName, workspaceKind, liveRowOf(worktree.id, hostId))
+  ): Worktree => {
+    const drawn = drawnRow(
+      worktree,
+      hostId,
+      repoName,
+      workspaceKind,
+      liveRowOf(worktree.id, hostId)
+    )
+    return hostId === sectionHostId ? { ...drawn, hostContextLabel: undefined } : drawn
+  }
   const push = (section: Section) => sections.push(section)
   const current = (): Section => {
     const last = sections.at(-1)
@@ -132,6 +134,7 @@ export function buildHostFeedSections(sources: HostFeedListSources): Section[] {
   for (const row of sources.rows) {
     switch (row.type) {
       case 'host-header':
+        sectionHostId = row.hostId
         push({ key: row.key, title: row.label, count: row.count, data: [] })
         break
       case 'header':
@@ -223,10 +226,7 @@ export function buildHostFeedSections(sources: HostFeedListSources): Section[] {
   return query ? narrowSections(sections, query) : sections
 }
 
-/**
- * For a host whose feed this page cannot read: the rows worktree.ps listed under the view's
- * filters, in their served order and no header, so an older desktop still gets a list.
- */
+// Older hosts with unreadable feeds still list filtered worktree.ps rows in served order without headers.
 export function buildPreFeedSections(sources: {
   rows: Worktree[]
   view: MobileViewState
@@ -247,7 +247,6 @@ export function buildPreFeedSections(sources: {
   return rows.length > 0 ? [{ key: 'all', title: '', data: rows }] : []
 }
 
-/** A section whose title matches keeps every row; otherwise only matching rows, counted as shown. */
 function narrowSections(sections: readonly Section[], query: string): Section[] {
   return sections.flatMap((section) => {
     if (section.title.toLowerCase().includes(query)) {

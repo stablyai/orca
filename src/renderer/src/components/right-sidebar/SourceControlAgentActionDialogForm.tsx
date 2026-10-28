@@ -13,18 +13,23 @@ import {
 } from '@/components/ui/select'
 import type { AgentCatalogEntry } from '@/lib/agent-catalog'
 import { cn } from '@/lib/utils'
-import type { SourceControlLaunchActionId } from '../../../../shared/source-control-ai-actions'
+import type {
+  SourceControlActionRecipe,
+  SourceControlLaunchActionId
+} from '../../../../shared/source-control-ai-actions'
 import type { SourceControlAiWriteTarget } from '../../../../shared/source-control-ai-recipe-save'
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
 import type { Repo } from '../../../../shared/repo-types'
 import type { TuiAgent } from '../../../../shared/tui-agent'
+import type { AgentComboboxSurfaceRows } from '@/components/agent/agent-combobox-surface-items'
 import { SourceControlAgentCliArgsField } from './SourceControlAgentCliArgsField'
 import { SourceControlActionVariableChips } from '../source-control/SourceControlActionVariableChips'
-import { sourceControlActionRecipeMatchesTarget } from './source-control-action-recipe-match'
+import { describeSourceControlActionModel } from '../settings/source-control-action-model-copy'
+import { sourceControlActionRecipeSaveMatchesTarget } from './source-control-action-recipe-match'
 import type { SourceControlAgentScopeNote } from './source-control-agent-action-dialog-result'
 import { translate } from '@/i18n/i18n'
 
-/** What the dialog shows before it starts an agent: only an error the user can fix. */
+/** Expose only delivery errors the user can fix before launch. */
 export type SourceControlAgentActionDeliveryPlanState =
   | { status: 'idle' }
   | { status: 'error'; error: string }
@@ -37,10 +42,12 @@ type SourceControlAgentActionDialogFormProps = {
   selectedAgent: TuiAgent | null
   hasEnabledAgents: boolean
   detecting: boolean
+  surfaceRows: AgentComboboxSurfaceRows
   statusCopy: string | null
   agentArgs: string
   /** False when the launch would be structured native chat; the field is then absent, not disabled. */
   agentArgsApply: boolean
+  recipe: SourceControlActionRecipe
   commandTemplate: string
   savedCommandInputTemplate?: string | null
   saveLaunchRecipe: boolean
@@ -53,7 +60,7 @@ type SourceControlAgentActionDialogFormProps = {
   canStart: boolean
   isStarting: boolean
   startLabel: string
-  onSelectedAgentChange: (agent: TuiAgent | null) => void
+  onAgentPick: (agent: TuiAgent) => void
   onAgentArgsChange: (value: string) => void
   onCommandTemplateChange: (value: string) => void
   onSaveLaunchRecipeChange: (value: boolean) => void
@@ -84,9 +91,11 @@ export function SourceControlAgentActionDialogForm({
   selectedAgent,
   hasEnabledAgents,
   detecting,
+  surfaceRows,
   statusCopy,
   agentArgs,
   agentArgsApply,
+  recipe,
   commandTemplate,
   savedCommandInputTemplate,
   saveLaunchRecipe,
@@ -99,7 +108,7 @@ export function SourceControlAgentActionDialogForm({
   canStart,
   isStarting,
   startLabel,
-  onSelectedAgentChange,
+  onAgentPick,
   onAgentArgsChange,
   onCommandTemplateChange,
   onSaveLaunchRecipeChange,
@@ -110,20 +119,13 @@ export function SourceControlAgentActionDialogForm({
 }: SourceControlAgentActionDialogFormProps): React.JSX.Element {
   const defaultCommandTemplate = savedCommandInputTemplate ?? '{basePrompt}'
   const commandTemplateIncludesBasePrompt = commandTemplate.includes('{basePrompt}')
-  const selectedRecipe = selectedAgent
-    ? {
-        agentId: selectedAgent,
-        commandInputTemplate: commandTemplate,
-        agentArgs
-      }
-    : null
+  const selectedRecipe = recipe
   const selectedSaveTarget = sourceControlLaunchSaveTargetFromValue(saveTargetValue, repo)
-  // Why: start/save only writes the selected target, so the dialog copy must not
-  // depend on whether other available targets also match.
+  // Copy describes only the selected save target, which is the only one start/save writes.
   const selectedLaunchRecipeAlreadySaved = Boolean(
     selectedRecipe &&
     selectedSaveTarget &&
-    sourceControlActionRecipeMatchesTarget({
+    sourceControlActionRecipeSaveMatchesTarget({
       actionId,
       target: selectedSaveTarget,
       recipe: selectedRecipe,
@@ -155,7 +157,9 @@ export function SourceControlAgentActionDialogForm({
             <AgentCombobox
               agents={agentOptions}
               value={selectedAgent}
-              onValueChange={onSelectedAgentChange}
+              onValueChange={onAgentPick}
+              surfaceRows={surfaceRows}
+              disabled={!surfaceRows.selection.ready}
               allowNarrowTrigger
               triggerClassName="w-full"
             />
@@ -187,6 +191,10 @@ export function SourceControlAgentActionDialogForm({
             <p className="flex items-start gap-1.5 text-[11px] text-destructive">
               <TriangleAlert className="mt-px size-3 shrink-0" />
               <span>{statusCopy}</span>
+            </p>
+          ) : selectedAgent && selectedRecipe.launchPreferences?.agentId === selectedAgent ? (
+            <p className="text-[11px] text-muted-foreground">
+              {describeSourceControlActionModel(selectedAgent, selectedRecipe.launchPreferences)}
             </p>
           ) : null}
         </div>

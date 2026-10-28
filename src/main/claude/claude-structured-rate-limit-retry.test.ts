@@ -1,7 +1,4 @@
-// Claude retrying a rate-limited request: the frames below follow Claude Code 2.1.280 against an
-// HTTP 429 stub, captured with `--replay-user-messages --include-partial-messages`. The CLI writes
-// only `api_retry` frames, and echoes the message only once a request gets through or is
-// interrupted, so no turn opens: the send itself is all that says the session is working.
+// Claude Code 2.1.280 HTTP 429 capture: api_retry precedes the replay, so retries open no turn.
 
 import { describe, expect, it, vi } from 'vitest'
 import type {

@@ -19,7 +19,6 @@ import type { SshTarget } from '../../../shared/ssh-types'
 
 const platform = Object.getOwnPropertyDescriptor(process, 'platform')
 
-/** A manual target by default; `source: 'ssh-config'` makes it config-backed instead. */
 function createTarget(overrides?: Partial<SshTarget>): SshTarget {
   return {
     id: 'target-1',
@@ -101,7 +100,6 @@ describe('system SSH muxed forward cancel', () => {
     expect(cancelCall()).toBeUndefined()
   })
 
-  // A master that never registered this spec, or no master at all: nothing was released.
   it('reports nothing released when ssh refuses the request', async () => {
     runProcessMock.mockImplementation(async (request: { args: string[] }) =>
       request.args[0] === '-G'

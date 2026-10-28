@@ -27,8 +27,6 @@ export function registerPreflightHandlers(): void {
     detectAgentsOnHost({ kind: 'local', context: args })
   )
 
-  // Why here: this is the one place that already answers "what can the installed agent CLIs
-  // do", and the probe is cached, so a repeat launch costs nothing.
   ipcMain.handle('preflight:zcodeInteractiveCapability', async () =>
     readZCodeInteractiveCapability()
   )

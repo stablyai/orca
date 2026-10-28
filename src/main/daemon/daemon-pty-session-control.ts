@@ -4,9 +4,11 @@ import { GET_SIZE_PROTOCOL_VERSION } from './daemon-protocol-version'
 import { readDaemonAppliedPtySize, type DaemonAppliedPtySize } from './daemon-pty-applied-size'
 import { FinalCheckpointWaitExpiredError } from './daemon-pty-lifecycle-errors'
 import { DaemonPtySessionInput } from './daemon-pty-session-input'
-import { remainingDaemonRequestTimeoutMs } from './daemon-request-deadline'
+import { remainingDaemonRequestTimeoutMs, teardownReadBudgetMs } from './daemon-request-deadline'
 import type { ColdRestoreInfo } from './history-reader'
 import { normalizeWslColdRestoreCwd } from './wsl-cold-restore-cwd'
+import { readDaemonWslSleepCwd } from './daemon-wsl-sleep-cwd'
+import * as unlistedSession from './daemon-unlisted-session'
 import { SessionNotFoundError, type ListSessionsResult } from './types'
 import { resolveSafePtyDefaultCwd } from '../providers/pty-default-cwd'
 import type { PtySpawnResult } from '../providers/pty-provider-contract'
@@ -14,20 +16,23 @@ import type { PtySpawnResult } from '../providers/pty-provider-contract'
 export const LIVENESS_PROBE_TIMEOUT_MS = 2_000
 
 const MAX_TOMBSTONES = 1000
+// A busy daemon must not eat the final checkpoint's share of the Sleep deadline.
+const LIVE_SLEEP_CWD_BUDGET_MS = 1_500
 
 export abstract class DaemonPtySessionControl extends DaemonPtySessionInput {
+  protected abstract adoptListedSessionForSleep(
+    sessionId: string,
+    deadlineMs?: number
+  ): Promise<void>
+
   async attach(id: string): Promise<Pick<PtySpawnResult, 'providerSequence' | 'lastTitle'> | void> {
     await this.ensureConnected()
     if (!this.canDelegateBackgroundToDaemon) {
       this.setPtyBackgrounded(id, false)
     }
 
-    // Why size-first: attach must ride the session's own geometry — a fixed
-    // 80×24 here could resize a live agent's TUI — and a null size means the
-    // daemon cannot prove the session, so refuse rather than risk a create.
-    // Keep transport failures distinct from an answered "absent". Mapping a
-    // dropped SSH/daemon connection to SessionNotFound would authorize a
-    // duplicate shell or retire a live persisted owner.
+    // Attach at the proven live size; default geometry could resize an agent TUI or accidentally create a shell.
+    // Preserve transport errors: treating lost contact as absence could duplicate or retire a live owner.
     const size = await this.readAppliedSize(id, 'preserve')
     if (!size) {
       throw new SessionNotFoundError(id)
@@ -41,7 +46,7 @@ export abstract class DaemonPtySessionControl extends DaemonPtySessionInput {
     if (result.exitedBeforeSpawnReply) {
       throw new SessionNotFoundError(id)
     }
-    // Why lastTitle: a runtime adopting a surviving session (e.g. a restarted server) never saw it.
+    // A restarted runtime has never seen the surviving session's title.
     return result.providerSequence || result.lastTitle
       ? {
           ...(result.providerSequence ? { providerSequence: result.providerSequence } : {}),
@@ -54,7 +59,7 @@ export abstract class DaemonPtySessionControl extends DaemonPtySessionInput {
     return this.activeSessionIds.has(id)
   }
 
-  /** Whether a spawn of this id would cold-restore saved history (the same probe spawn uses). */
+  /** Use the same saved-history probe as spawn. */
   hasRestorableHistory(id: string): boolean {
     return this.historyReader?.hasRestorableHistory(id) ?? false
   }
@@ -70,22 +75,14 @@ export abstract class DaemonPtySessionControl extends DaemonPtySessionInput {
           )
           return result.size !== null
         } catch (error) {
-          // Why the capability probe rather than the version alone: `getSize` shipped into an
-          // already-released protocol without a bump, so a daemon can report a version that
-          // implies support and still reject the request. Ask what it can do, not what its
-          // number implies — and remember the answer so later probes skip the dead round trip.
+          // getSize shipped without a protocol bump; remember rejection instead of trusting the version alone.
           if (!isUnknownRequestTypeError(error)) {
             throw error
           }
           this.getSizeUnsupported = true
         }
       }
-      // Why: a daemon without `getSize` would otherwise answer `null` forever, and one `null`
-      // makes the whole owner fan-out unprovable — a dead pane could then never be retired.
-      // `listSessions` is the same inventory legacy discovery routes by, and has existed since
-      // the first daemon protocol. Requested directly rather than through `listProcesses` so a
-      // liveness probe does not publish inventory audit observations as a side effect; both
-      // rethrow on failure, so either way a dead socket stays `null` instead of reading absent.
+      // Legacy listSessions can prove absence; request it directly to avoid publishing inventory audit observations.
       const { sessions } = await this.client.request<ListSessionsResult>(
         'listSessions',
         undefined,
@@ -97,6 +94,18 @@ export abstract class DaemonPtySessionControl extends DaemonPtySessionInput {
     }
   }
 
+  /** Whether this daemon lists the session at all, alive or not; null when it can't answer. */
+  listsSession(id: string): Promise<boolean | null> {
+    return unlistedSession.readDaemonSessionListing(this.client, id, LIVENESS_PROBE_TIMEOUT_MS)
+  }
+
+  /** The daemons that share this history dir and can answer for it; a router widens this. */
+  private listingDaemons: () => readonly unlistedSession.SessionListingDaemon[] = () => [this]
+
+  shareSessionListingWith(daemons: () => readonly unlistedSession.SessionListingDaemon[]): void {
+    this.listingDaemons = daemons
+  }
+
   async shutdown(
     id: string,
     opts: { immediate?: boolean; keepHistory?: boolean; deadlineMs?: number }
@@ -104,11 +113,16 @@ export abstract class DaemonPtySessionControl extends DaemonPtySessionInput {
     if (opts.keepHistory && this.disconnectOnlyPromise) {
       throw new Error('Cannot keep history after daemon disconnect has started')
     }
-    const shutdown = this.withHistorySpawnLock(id, () => this.shutdownWithHistoryLock(id, opts))
     if (!opts.keepHistory) {
-      await shutdown
+      await this.withHistorySpawnLock(id, () => this.shutdownWithHistoryLock(id, opts))
       return
     }
+    const shutdown = Promise.resolve().then(async () => {
+      // Outside the spawn lock, which adopting the session's history takes itself.
+      await this.ensureConnected(opts.deadlineMs)
+      await this.adoptListedSessionForSleep(id, opts.deadlineMs).catch(() => {})
+      await this.withHistorySpawnLock(id, () => this.shutdownWithHistoryLock(id, opts))
+    })
     this.keepHistoryShutdowns.add(shutdown)
     try {
       await shutdown
@@ -121,25 +135,39 @@ export abstract class DaemonPtySessionControl extends DaemonPtySessionInput {
     id: string,
     opts: { immediate?: boolean; keepHistory?: boolean; deadlineMs?: number }
   ): Promise<void> {
-    // Why: shutdown can be the first lazy-client operation after restart; connect
-    // before killing so a healthy daemon session is not orphaned (#7742). Connect,
-    // the final-checkpoint wait, and kill all share the caller's one absolute
-    // deadline, so neither a wedged handshake nor a stalled history write can burn
-    // the whole teardown budget before the kill even starts. Only the waits are
-    // bounded — the checkpoint itself stays deadline-free and lossless (STA-4228).
+    // Connect lazily, sharing one deadline with checkpoint waits and kill; durable writes themselves remain unbounded.
     await this.ensureConnected(opts.deadlineMs)
-    // Why: sleep/exact-stop kills the live PTY before the periodic checkpoint may run.
-    // Force a final snapshot so wake can restore the pane users left.
+    // Sleep may precede the first periodic checkpoint; persist the screen before killing.
     if (opts.keepHistory) {
+      const sleepWslDistro = this.wslDistrosBySessionId.get(id)
+      const sleepPaneKey = this.wslPaneKeysBySessionId.get(id)
+      const sleepCwd =
+        sleepWslDistro && sleepPaneKey
+          ? await readDaemonWslSleepCwd(
+              {
+                paneKey: sleepPaneKey,
+                wslDistro: sleepWslDistro,
+                // A live pane's own wsl.exe keeps its distro running.
+                live: this.activeSessionIds.has(id)
+              },
+              opts.deadlineMs
+            )
+          : await this.readLiveSleepCwd(id, opts.deadlineMs)
       const committed = await this.runExclusiveCheckpoint(
         async () => {
-          await this.checkpointSessions([id], { final: true, teardown: true })
+          // Set inside: a caller past its deadline leaves this checkpoint running without it.
+          if (sleepCwd) {
+            this.sleepShellCwds.set(id, sleepCwd)
+          }
+          try {
+            await this.checkpointSessions([id], { final: true, teardown: true })
+          } finally {
+            this.sleepShellCwds.delete(id)
+          }
         },
         { callerDeadlineMs: opts.deadlineMs }
       )
-      // Why throw instead of killing anyway: the snapshot the caller asked us to prove is still
-      // being written. Killing here would race the wake-time restore source to disk, so report the
-      // pty unverified and leave it alive — worktree sleep declines to commit it and retries.
+      // Caller timeout leaves the checkpoint running; preserve the live PTY until recovery data is verified.
       if (!committed) {
         throw new FinalCheckpointWaitExpiredError(id)
       }
@@ -163,7 +191,7 @@ export abstract class DaemonPtySessionControl extends DaemonPtySessionInput {
         if (this.coldRestoreCache.has(id)) {
           this.sleepRestoreSessionIds.add(id)
         }
-        // Why: physical exit must not mark intentional sleep as a clean end; the final checkpoint stays the wake-time recovery authority.
+        // Intentional sleep keeps the final checkpoint authoritative; physical exit must not mark history clean.
         this.historyManager?.suspendSession(id)
       } else if (
         detection?.status === 'unreadable' ||
@@ -172,19 +200,48 @@ export abstract class DaemonPtySessionControl extends DaemonPtySessionInput {
         this.historyManager?.suspendSession(id)
       }
     }
-    await this.client.request(
-      'kill',
-      { sessionId: id, immediate: opts.immediate ?? false },
-      remainingDaemonRequestTimeoutMs(opts.deadlineMs)
-    )
+    try {
+      await this.client.request(
+        'kill',
+        { sessionId: id, immediate: opts.immediate ?? false },
+        remainingDaemonRequestTimeoutMs(opts.deadlineMs)
+      )
+    } catch (error) {
+      // Gone is known for a session this adapter lost, or (after a relaunch forgot that) one whose
+      // history is unended and that no daemon sharing the history dir may still run.
+      if (
+        opts.keepHistory ||
+        !(error instanceof SessionNotFoundError) ||
+        !(
+          this.hostLossSessionIds.has(id) ||
+          (await unlistedSession.isUnlistedLostSession(
+            id,
+            this.historyReader,
+            this.runtimeDir,
+            this.listingDaemons()
+          ))
+        )
+      ) {
+        throw error
+      }
+    }
+    await this.completeShutdownWithHistoryLock(id, opts)
+  }
+
+  /** Complete an explicit close without issuing another kill; the caller holds the spawn/history lock. */
+  protected async completeShutdownWithHistoryLock(
+    id: string,
+    opts: { keepHistory?: boolean }
+  ): Promise<void> {
     this.activeSessionIds.delete(id)
+    this.hostLossSessionIds.delete(id)
     this.clearSessionAwaitingDaemonRecovery(id)
     this.dirtySessionVersions.delete(id)
     if (!opts.keepHistory) {
       this.coldRestoreCache.delete(id)
       this.sleepRestoreSessionIds.delete(id)
     }
-    // Why: the !keepHistory path takes no final checkpoint, so clear sessionsNeedingFullCheckpoint here or it stays stranded (no-op under keepHistory).
+    // Explicit close takes no final checkpoint, so clear its pending full-checkpoint state here.
     this.sessionsNeedingFullCheckpoint.delete(id)
     this.sessionsNeedingLiveCheckpoint.delete(id)
     this.sessionsNeedingContinuityCheckpoint.delete(id)
@@ -195,14 +252,15 @@ export abstract class DaemonPtySessionControl extends DaemonPtySessionInput {
     this.stopCheckpointTimerIfIdle()
     this.initialCwds.delete(id)
     this.wslDistrosBySessionId.delete(id)
-    // Why: only remove history on explicit close; sleep also calls shutdown but wake needs the dir intact for cold restore (opts.keepHistory).
+    this.wslPaneKeysBySessionId.delete(id)
+    // Explicit close removes history; sleep preserves it for wake-time recovery.
     if (this.historyManager && !opts.keepHistory) {
       await this.historyManager
         .removeSession(id)
         .catch((err) => console.warn('[history] removeSession failed:', id, err))
     }
 
-    // Why: the tombstone rejects reattach to a user-killed session; sleep legitimately reattaches on wake, so skip it under keepHistory.
+    // Tombstone explicit kills, but allow sleep sessions to reattach on wake.
     if (!opts.keepHistory) {
       this.killedSessionTombstones.delete(id)
       this.killedSessionTombstones.set(id, Date.now())
@@ -243,11 +301,34 @@ export abstract class DaemonPtySessionControl extends DaemonPtySessionInput {
     }
   }
 
+  /**
+   * A native shell's folder at Sleep (OSC 7, else its process's cwd). Bash prints no OSC 7, so
+   * without this the checkpoint keeps the spawn folder and Wake opens there (e.g. on a Linux host).
+   */
+  private async readLiveSleepCwd(id: string, deadlineMs?: number): Promise<string | null> {
+    // Windows has no process-cwd lookup (it would spawn a missing lsof); the snapshot's OSC 7 cwd stands.
+    const budget = teardownReadBudgetMs(LIVE_SLEEP_CWD_BUDGET_MS, deadlineMs)
+    if (process.platform === 'win32' || budget <= 0 || !this.activeSessionIds.has(id)) {
+      return null
+    }
+    try {
+      const { cwd } = await this.client.request<{ cwd: string | null }>(
+        'getCwd',
+        { sessionId: id },
+        budget
+      )
+      // A removed folder reads back from /proc as `<path> (deleted)`, which no shell can return to.
+      return cwd && !cwd.endsWith(' (deleted)') ? cwd : null
+    } catch {
+      return null
+    }
+  }
+
   async getInitialCwd(id: string): Promise<string> {
     return this.initialCwds.get(id) ?? ''
   }
 
-  // Why: resize() is fire-and-forget and can be dropped daemon-side; read the actually-applied size so the renderer can detect drift and re-assert.
+  // Resize notifications can be dropped; report applied dimensions so the renderer can repair drift.
   async getAppliedSize(id: string): Promise<{ cols: number; rows: number } | null> {
     return await this.readAppliedSize(id, 'suppress')
   }

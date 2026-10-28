@@ -110,9 +110,6 @@ describe('browser client host placement preparation', () => {
     )
   })
 
-  // Why this replaced a throw: the probe used to run only behind a cached "host can client-host"
-  // verdict, so a failed one meant a real problem for a pairing that wanted client hosting. Every
-  // create probes now, and a create that would have succeeded on the server must not die with it.
   it.each([
     ['an offline host', 'runtime_unavailable', 'offline'],
     ['a timed-out probe', 'timeout', 'status.get timed out']

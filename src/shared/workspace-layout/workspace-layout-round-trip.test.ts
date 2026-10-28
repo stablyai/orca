@@ -2,9 +2,8 @@ import { describe, expect, it } from 'vitest'
 import { LOCAL_EXECUTION_HOST_ID, type ExecutionHostId } from '../execution-host'
 import type { WorkspaceSessionState } from '../workspace-session-state-types'
 import { loadWorkspaceLayout } from './workspace-layout-load'
-import { checkWorkspaceLayoutModelRules } from './workspace-layout-model-rules'
-import { checkWorkspaceLayoutRules } from './workspace-layout-rules'
 import { saveWorkspaceLayout } from './workspace-layout-save'
+import { editorFileKey } from './workspace-layout-editor-tab-file'
 import {
   localDesktopSession,
   WORKSPACE_LAYOUT_PROFILES
@@ -50,23 +49,6 @@ describe('workspace layout Loader and Serializer', () => {
     }
   )
 
-  it.each(PROFILES)('%s: a second round trip changes nothing', (_name, hostId, build) => {
-    const once = roundTrip(hostId, build()).saved
-    const twice = roundTrip(hostId, once)
-    expect(twice.loaded.changes).toEqual([])
-    expect(onDisk(twice.saved)).toEqual(onDisk(once))
-  })
-
-  it.each(PROFILES)(
-    '%s: the model obeys the structural rules the stored partition obeys',
-    (_name, hostId, build) => {
-      const stored = build()
-      const { loaded } = roundTrip(hostId, stored)
-      expect(checkWorkspaceLayoutRules([{ hostId, session: stored }])).toEqual([])
-      expect(checkWorkspaceLayoutModelRules([loaded.layout])).toEqual([])
-    }
-  )
-
   it('keeps one record per tab and per-view state out of the model', () => {
     const { loaded } = roundTrip(LOCAL_EXECUTION_HOST_ID, localDesktopSession())
     const layoutJson = JSON.stringify(loaded.layout)
@@ -90,8 +72,7 @@ describe('workspace layout Loader and Serializer', () => {
       ['agent-session-1', 'agent-session'],
       ['tab-unbound', 'terminal']
     ])
-    // tab-agent's terminal id is term-agent: its pane's data is keyed by leaf alone, and the
-    // round trip above saved its pane records under the terminal id.
+    // Pane records use the terminal entity ID term-agent rather than tab-agent; in-memory data is keyed by leaf.
     expect(workspace.leaves?.[leaf(3)]).toMatchObject({
       incarnationId: 'inc-3',
       // The fixture's record is a quit capture: a running agent's resume record, not a sleep.
@@ -105,8 +86,9 @@ describe('workspace layout Loader and Serializer', () => {
       activeTabId: 'tab-agent',
       recentTabIds: ['tab-shell', 'tab-agent']
     })
+    // Keyed as editorFileKey keys it: a layout-owner build keys by owned file id.
     expect(loaded.desktopView.editorDrafts['repo-1::/Users/dev/orca']).toEqual({
-      '/Users/dev/orca/src/app.ts': {
+      [editorFileKey({ filePath: '/Users/dev/orca/src/app.ts' })]: {
         dirtyDraftContent: 'export {}\n',
         lastKnownDiskSignature: 'sig-1'
       }

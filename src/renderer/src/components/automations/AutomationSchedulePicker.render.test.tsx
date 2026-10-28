@@ -9,8 +9,7 @@ import { isValidAutomationCronSchedule } from '../../../../shared/automation-sch
 import { useTranslation } from 'react-i18next'
 import { i18n } from '@/i18n/i18n'
 
-// Why: Radix Select mounts its content in a portal only once opened; the native swap keeps the
-// weekday options in the document so these assertions read real DOM text, not a React element tree.
+// Use a native Select stand-in so weekday assertions read mounted DOM text without opening Radix’s portal.
 vi.mock('@/components/ui/select', () => ({
   Select: ({
     value,
@@ -72,8 +71,7 @@ afterEach(async () => {
   await i18n.changeLanguage('en')
 })
 
-// Mirrors main.tsx: the picker calls translate() directly, so a root-level useTranslation() is
-// what re-renders it after an in-place language switch.
+// Mirror main.tsx’s root translation subscription so direct translate calls refresh on language changes.
 function LanguageAwarePicker({ draft }: { draft: AutomationDraft }): React.JSX.Element {
   useTranslation()
   return React.createElement(AutomationSchedulePicker, {

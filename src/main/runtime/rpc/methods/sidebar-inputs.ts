@@ -66,8 +66,7 @@ export const SIDEBAR_INPUT_METHODS = [
     name: 'sidebarInputs.read',
     permission: 'workspace',
     params: SidebarInputsReadParams,
-    // The feed is this host's own view: its desktop window and its own phone read it. A delegated
-    // phone lists through its own desktop's feed; other desktops and web clients build their own.
+    // Serve only this host's window/own phone; delegated phones use their desktop feed, while other desktops/web build their own.
     handler: async (params, context) => {
       const feed = requireSwitchedOn(context.runtime.sidebarInputsFeed)
       const { connectionId } = context
@@ -109,7 +108,7 @@ export const SIDEBAR_INPUT_METHODS = [
     permission: 'workspace',
     params: null,
     handler: async (_params, { runtime }) =>
-      requireSwitchedOn(runtime.workspaceCreations).snapshot()
+      requireSwitchedOn(runtime.workspaceLifecycle).creationsSnapshot()
   }),
   defineMethod({
     name: 'sidebarInputs.reportView',
@@ -136,7 +135,7 @@ export const SIDEBAR_INPUT_METHODS = [
     name: 'ui.setCollapsed',
     permission: 'workspace',
     params: SetCollapsedParams,
-    // Why the same callers as ui.set: collapsedGroups is not pairing-local, so both writes share one view.
+    // Match ui.set callers because collapsedGroups is a shared-view preference.
     handler: (params, { runtime }) =>
       setCollapsedSection(runtime, requireSwitchedOn(runtime.collapseWriteOrder), params)
   })

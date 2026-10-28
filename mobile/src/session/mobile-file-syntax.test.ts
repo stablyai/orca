@@ -77,6 +77,7 @@ describe('mobile file syntax highlighting', () => {
     expect(resolveMobileSyntaxLanguage('src/App.tsx')).toBe('typescript')
     expect(resolveMobileSyntaxLanguage('worktrees/feature/build.cts')).toBe('typescript')
     expect(resolveMobileSyntaxLanguage('Dockerfile')).toBe('plaintext')
+    expect(resolveMobileSyntaxLanguage('kernels/reduce.cu')).toBe('cpp')
   })
 
   it('emits semantic syntax segments for highlighted code', () => {

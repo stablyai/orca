@@ -20,12 +20,11 @@ describe('OpenCode terminal titles', () => {
     expect(isMeaningfulOpenCodeTerminalTitle('OpenCode')).toBe(false)
     expect(isMeaningfulOpenCodeTerminalTitle('OpenCode ready')).toBe(false)
     expect(isMeaningfulOpenCodeTerminalTitle('OC |')).toBe(false)
-    // Why: the native marker always spaces its separator; `OC|x` is another tool's
-    // pipe-delimited title, so accepting it would make a non-OpenCode pane a send target.
+    // Native markers space separators; accepting OC|Session could turn another tool’s title into an OpenCode send target.
     expect(isMeaningfulOpenCodeTerminalTitle('OC|Session')).toBe(false)
     expect(isMeaningfulOpenCodeTerminalTitle('OC |Session')).toBe(false)
     expect(isMeaningfulOpenCodeTerminalTitle(undefined)).toBe(false)
-    // Why: lowercase is not OpenCode's native marker; avoid "oc |" cwd/task noise.
+    // Lowercase oc is ordinary cwd/task text, not a native marker.
     expect(isOpenCodeNativeTitle('oc | Understand about the plugin')).toBe(false)
     // Why: mid-title OC must not steal another agent's braille/task frame.
     expect(isOpenCodeNativeTitle('⠋ Fix foo | OC | bar')).toBe(false)

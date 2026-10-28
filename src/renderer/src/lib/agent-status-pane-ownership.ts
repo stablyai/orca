@@ -4,10 +4,7 @@ import { collectLeafIdsInOrder } from '../components/terminal-pane/terminal-layo
 import { getIndexedRepoMap, getIndexedWorktreeMap } from '../store/worktree-repo-index'
 import { selectWorktreesByRepo } from '@/store/workspace-record-selectors'
 
-/** Resolve a paneKey (tabId:leafId) to liveness, current title, owning worktree,
- *  and the owning repo's connectionId. Used for agent-type inference and to drop
- *  status updates for torn-down tabs or dead connections (an SSH reconnect retires the
- *  old connectionId, so events still in flight under it must not land). */
+/** Resolve pane liveness, title and owner to reject torn-down tabs or events from retired SSH connections. */
 export function resolvePaneKey(
   store: AppState,
   paneKey: string
@@ -111,25 +108,5 @@ export function resolvePaneKey(
     owningWorktreeId,
     titleUsesTabTitle: paneTitle === undefined,
     tabTitle
-  }
-}
-
-export function resolveWorktreeConnection(
-  store: AppState,
-  worktreeId: string
-): {
-  worktreeExists: boolean
-  repoConnectionId: string | null
-  repoConnectionResolved: boolean
-} {
-  const worktree = getIndexedWorktreeMap(selectWorktreesByRepo(store)).get(worktreeId)
-  if (!worktree) {
-    return { worktreeExists: false, repoConnectionId: null, repoConnectionResolved: false }
-  }
-  const repo = getIndexedRepoMap(store.repos).get(worktree.repoId)
-  return {
-    worktreeExists: true,
-    repoConnectionId: repo?.connectionId ?? null,
-    repoConnectionResolved: repo !== undefined
   }
 }

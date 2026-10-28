@@ -19,18 +19,14 @@ export function getDaemonRuntimeDir(): string {
 export function getDaemonHistoryDir(): string {
   const dir = join(getAppEnvironment().getPath('userData'), 'terminal-history')
   ensurePrivateDir(dir)
-  // Why here: the one accessor every history producer goes through, so the backlog sweep is hooked
-  // once per host that owns the files — native, WSL, or a remote SSH server's own main process.
-  // The scheduler defers and de-duplicates, so the several startup calls cost one late sweep.
+  // Schedule one deferred permission sweep per host, including WSL and SSH servers.
   void scheduleTerminalHistoryPermissionRepair(dir)
   return dir
 }
 
 export function getDaemonEntryPath(): string {
   const appPath = getAppEnvironment().getAppPath()
-  // Why: packaged getAppPath() points at app.asar, so redirect to app.asar.unpacked where daemon-entry.js is fork-executable.
-  // Why asar and not isPackaged: orcad is a packaged non-Electron host whose bundle root holds
-  // orcad.js and daemon-entry.js side by side with no asar to redirect (see parcel-watcher-entry-path.ts).
+  // Electron needs the unpacked script; packaged orcad has no asar to redirect.
   const basePath = appPath.includes('app.asar')
     ? appPath.replace('app.asar', 'app.asar.unpacked')
     : appPath
@@ -40,11 +36,7 @@ export function getDaemonEntryPath(): string {
     : join(basePath, 'out', 'main', 'daemon-entry.js')
 }
 
-/**
- * The version a stale daemon is replaced against once its sessions drain, or null to keep it.
- * Desktop: macOS only, where TCC attribution pins the daemon to the bundle that launched it.
- * orcad opts in everywhere: another version's daemon keeps that version's code and umask (#31135).
- */
+/** Recycle drained stale daemons on macOS for TCC; orcad opts in everywhere for code and umask updates. */
 export function resolveStaleDaemonRecycleVersion(onEveryPlatform = false): string | null {
   const environment = getAppEnvironment()
   if (!environment.isPackaged()) {
@@ -53,16 +45,15 @@ export function resolveStaleDaemonRecycleVersion(onEveryPlatform = false): strin
   return onEveryPlatform || process.platform === 'darwin' ? environment.getVersion() : null
 }
 
-// Why: pass a log-file arg so field failures are diagnosable, but honor the ORCA_DIAGNOSTICS_DISABLED privacy switch.
 export function daemonLogArgs(): string[] {
   const disabled = (process.env.ORCA_DIAGNOSTICS_DISABLED ?? '').trim().toLowerCase()
   return disabled === '1' || disabled === 'true' ? [] : ['--log-file', getDaemonLogFilePath()]
 }
 
-/** Named so a caller clamping this probe to a deadline cannot silently decouple from its default. */
+// Keep deadline clamps aligned with the default probe budget.
 export const DAEMON_SOCKET_PROBE_TIMEOUT_MS = 1_000
 
-// Why: a socket that accepts a connection proves a daemon survived a previous app session and can be reused.
+// A connection proves reachability; authentication and health need separate checks.
 export function probeDaemonSocket(
   socketPath: string,
   timeoutMs = DAEMON_SOCKET_PROBE_TIMEOUT_MS
@@ -99,8 +90,7 @@ export function probeDaemonSocket(
   return promise
 }
 
-// Why recoveryDeadlineMs is required: this probe only ever runs on a startup path that has a
-// budget, and the client's own defaults are far larger than any of them.
+// Require the startup deadline: client defaults exceed the recovery budget.
 export async function getAliveDaemonSessionCount(
   socketPath: string,
   tokenPath: string,
@@ -108,7 +98,7 @@ export async function getAliveDaemonSessionCount(
   protocolVersion = PROTOCOL_VERSION
 ): Promise<number | null> {
   const client = new DaemonClient({ socketPath, tokenPath, protocolVersion })
-  // Why one slice for both: a wedged handshake must not leave the request its own fresh 30s.
+  // Share one budget so a wedged handshake cannot leave the request a fresh 30 seconds.
   const probeTimeoutMs = daemonRecoveryProbeTimeoutMs(recoveryDeadlineMs)
   const probeDeadlineMs = Date.now() + probeTimeoutMs
   try {

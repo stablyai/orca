@@ -1,7 +1,7 @@
 import { Terminal } from '@xterm/headless'
 import { describe, expect, it } from 'vitest'
 
-import { buildFreshShellViewportBlankingSequence } from './terminal-restored-viewport'
+import { buildFreshShellViewportBlankingSequence } from '../../../../shared/terminal-fresh-shell-viewport'
 
 function writeTerminal(term: Terminal, data: string): Promise<void> {
   return new Promise((resolve) => term.write(data, resolve))

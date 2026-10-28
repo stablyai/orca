@@ -96,9 +96,7 @@ async function persistWorktreeMetaUntracked(
     return
   }
   await assertWorkspaceAttachmentWriteCapability(target, updates)
-  // Why: `worktree.set` parses in strip mode, so an older runtime drops the key
-  // and applies the rest. Both gates key off presence, not value — a dropped
-  // *clear* strands a stale link that the Issue row then hides.
+  // Old worktree.set strips unknown keys, including clears; gate by presence so dropped fields cannot strand hidden review links.
   if (
     target.kind === 'environment' &&
     ('linkedWorkItem' in updates || 'linkedTaskSourceContext' in updates)

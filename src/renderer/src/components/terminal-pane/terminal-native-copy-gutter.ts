@@ -5,15 +5,7 @@ type NativeCopyTerminal = Pick<Terminal, 'getSelection' | 'hasSelection'> & {
   element?: HTMLElement
 }
 
-/**
- * xterm binds its own DOM `copy` listener that writes raw screen cells
- * (CoreBrowserTerminal `_initGlobal`). Orca's own chords never reach it — they
- * preventDefault in keydown — but a native copy Orca does not bind still does:
- * Ctrl+Insert is a Chromium copy accelerator on Windows/Linux and is not in
- * `terminal.copySelection`'s bindings, so it would carry the gutter (#19770).
- * Capture phase, so this wins when the event targets the helper textarea and
- * xterm's element-level listener is next in line.
- */
+/** Capture native copy before xterm writes raw cells; unbound browser accelerators such as Windows/Linux Ctrl+Insert otherwise retain the agent gutter (#19770). */
 export function installTerminalNativeCopyGutterTrim(terminal: NativeCopyTerminal): IDisposable {
   const element = terminal.element
   if (!element) {

@@ -35,16 +35,12 @@ const conn: OrcadHostTransport = Object.create(null)
 const host = getRemoteHostPlatform('linux-x64')
 const mockExec = vi.mocked(execCommand)
 
-/**
- * Drive one GC pass against a scripted host. `listing` is what the remote listing command
- * returns; every other command answers from `responses`, defaulting to the happy path
- * (unlocked, complete, dead) so a candidate is removed unless a test says otherwise.
- */
+/** Script a host whose default GC verdicts are unlocked, complete and dead unless overridden. */
 function scriptHost(options: {
   listing: string[]
   liveness?: Record<string, 'LIVE' | 'DEAD' | 'UNKNOWN' | Error>
   removed: string[]
-  /** The activation journal: absent by default, raw contents, or a read with no answer. */
+  /** Absent by default; raw journal or error overrides the read. */
   journal?: string | Error
   fenceHeld?: boolean
 }): void {
@@ -114,7 +110,7 @@ describe('orcad GC', () => {
   })
 
   it('leaves relay directories alone even when the host hands them to it', async () => {
-    // The host is lying — or a future listing bug widened the glob. GC must still refuse.
+    // Even a widened listing must not authorize removal of another model's namespace.
     const removed: string[] = []
     scriptHost({
       listing: ['relay-0.1.0+aa', 'relay-0.0.9+ff', 'orcad-0.1.0+aa'],
@@ -203,7 +199,6 @@ describe('orcad GC', () => {
     ).rejects.toBe(error)
 
     expect(removed).toEqual([])
-    // Journal read and fence probe, then the GC pass up to the unconfirmed probe.
     expect(mockExec).toHaveBeenCalledTimes(6)
     expect(mockExec.mock.calls.at(-1)?.[1]).toContain('.orcad-pid')
   })

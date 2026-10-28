@@ -20,8 +20,10 @@ import type {
 import { classifyWorkerTerminalProcessIncarnation } from '../../orchestration/worker-terminal-process-liveness'
 import { parseWorkerTerminalHostScope } from '../../../../shared/worker-terminal-host-scope'
 import { getRepoIdFromWorktreeId } from '../../../../shared/worktree/id'
-import { buildOrchestrationTaskDisplayMetadata } from '../../../../shared/orchestration-task-display'
+import { escalateWorkerFailure } from '../../orchestration/worker-failure-escalation'
+import { dispatchReportMailbox } from '../../orchestration/dispatch-report-mailbox'
 import { LOCAL_EXECUTION_HOST_ID, toSshExecutionHostId } from '../../../../shared/execution-host'
+import type { OrchestrationDb } from '../../orchestration/db'
 
 export abstract class OrcaRuntimeWithSubscribeToTerminalResize extends OrcaRuntimeWithApplyMobileDisplayMode {
   subscribeToTerminalResize(
@@ -48,99 +50,120 @@ export abstract class OrcaRuntimeWithSubscribeToTerminalResize extends OrcaRunti
     notifyRuntimeListeners(listeners, (listener) => listener(event), 'pty-resize')
   }
 
-  // Why: Section 7.2 — the runtime detects agent exit directly and updates
-  // dispatch contexts immediately, rather than waiting for the coordinator's
-  // next poll cycle. This catches agent crashes and unexpected exits within
-  // milliseconds. The task is set back to 'pending' so it can be re-dispatched.
+  // Section 7.2: observe exits directly so dispatch recovery need not wait for coordinator polling.
   protected failActiveDispatchOnExit(
     handle: string,
     paneKey: string | null,
     exitCode: number,
     cause: TerminalExitCause
   ): void {
-    if (!this._orchestrationDb) {
-      return
-    }
-
-    // Why the pane key too: a reminted handle no longer matches the row, but the
-    // pane identity behind it outlives the remint.
-    const dispatch = this._orchestrationDb.getActiveDispatchForTerminal(
-      handle,
-      paneKey ?? undefined
-    )
-    if (!dispatch) {
-      return
-    }
-    // A process that dies while we are stopping it is that stop succeeding, not a failure:
-    // settling it as `failed` here made the in-flight worker-stop report its own success as an error.
-    // Only a stop begun in THIS runtime can claim the exit; a `stopping` row left durable by a
-    // killed process would otherwise absorb a much later crash as a clean stop.
-    const stopping = this._orchestrationDb.getWorkerDispatch?.(dispatch.id)
-    if (stopping?.state === 'stopping' && stopping.runtime_epoch === this.getRuntimeId()) {
-      this._orchestrationDb.settleWorkerStop(dispatch.id)
-      return
-    }
-
     const errorContext = describeTerminalExitCause(cause)
-    const settled = this._orchestrationDb.failDispatch(dispatch.id, errorContext, {
-      workerProcessExited: true,
-      terminationReason: cause.kind
-    })
-    if (isDeliberateTerminalExit(cause)) {
-      return
-    }
-
-    // Why: create an escalation message so the coordinator is notified about
-    // the unexpected exit on its next check cycle, even if the circuit breaker
-    // hasn't tripped yet.
-    try {
-      const owningRun = this._orchestrationDb.getRun?.(dispatch.run_id)
-      const active = this._orchestrationDb.getActiveCoordinatorRun?.()
-      const recipient =
-        owningRun && owningRun.legacy !== 1
-          ? { to: `run:${owningRun.id}`, runId: owningRun.id }
-          : active
-            ? { to: active.coordinator_handle, runId: undefined }
-            : null
-      if (!recipient) {
-        return
-      }
-      const task = this._orchestrationDb.getTask?.(dispatch.task_id, dispatch.run_id)
-      // Why: prefer the explicit task title and keep the derived one single-line and bounded;
-      // a raw multi-paragraph spec inlined here breaks the coordinator's escalation banner.
-      const title =
-        typeof task?.spec === 'string'
-          ? buildOrchestrationTaskDisplayMetadata({
-              spec: task.spec,
-              taskTitle: task.task_title,
-              displayName: task.display_name
-            }).taskTitle
-          : ''
-      const named = title ? `"${title}" (${dispatch.task_id})` : dispatch.task_id
-      const escalation = this._orchestrationDb.insertMessage({
-        from: handle,
-        to: recipient.to,
+    this.failActiveDispatchAndEscalate(handle, paneKey ?? undefined, {
+      error: errorContext,
+      options: { workerProcessExited: true, terminationReason: cause.kind },
+      processExited: true,
+      // Escalate unexpected exits on the next coordinator check even before its circuit breaker trips.
+      escalate: !isDeliberateTerminalExit(cause),
+      describe: (task, outcome) => ({
         subject: `Agent exited unexpectedly (${errorContext})`,
-        body: `Worker ${handle} stopped while running task ${named}. ${errorContext}.${settled?.status === 'circuit_broken' ? ' This task has now failed too many times, so it will not be retried automatically.' : settled?.status === 'failed' ? ' The task is ready to be dispatched again.' : ''}`,
-        type: 'escalation',
-        priority: 'high',
-        payload: JSON.stringify({
+        body: `Worker ${handle} stopped while running task ${task}. ${errorContext}.${outcome}`
+      }),
+      payload: { exitCode, exitCause: cause }
+    })
+  }
+
+  /** Codex outlives a failed reconnect, so no PTY exit will ever settle its dispatch (#24791). */
+  protected settleLostAgentSession(ptyId: string): void {
+    const surfaces: { handle: string | undefined; paneKey?: string }[] = [
+      ...this.getLeavesForPty(ptyId).map((leaf) => ({
+        handle: this.handleByLeafKey.get(this.getLeafKey(leaf.tabId, leaf.leafId)),
+        paneKey: this.makeRuntimePaneKey(leaf)
+      })),
+      // Pane identity survives handle reminting, as on the exit path.
+      {
+        handle: this.handleByPtyId.get(ptyId),
+        paneKey: this.paneOfPty(this.ptysById.get(ptyId)).paneKey ?? undefined
+      }
+    ]
+    const reason = 'Codex lost its app-server and could not reconnect; relaunch Codex to continue'
+    try {
+      surfaces.some(
+        ({ handle, paneKey }) =>
+          handle !== undefined &&
+          this.failActiveDispatchAndEscalate(handle, paneKey, {
+            error: reason,
+            // The terminal and worktree stay up for inspection; workerProcessExited bypasses the active-worker guard for this dead session.
+            options: { workerProcessExited: true, workerStage: 'agent_session_lost' },
+            processExited: false,
+            escalate: true,
+            describe: (task, outcome) => ({
+              subject: 'Agent session lost',
+              body: `Worker ${handle} can no longer run task ${task}: ${reason}. Its terminal is still open for inspection.${outcome}`
+            }),
+            payload: { reason }
+          })
+      )
+    } catch (error) {
+      console.warn('[orchestration] failed to settle a lost agent session', ptyId, error)
+    }
+  }
+
+  /** Returns whether the surface had an active dispatch. */
+  private failActiveDispatchAndEscalate(
+    handle: string,
+    paneKey: string | undefined,
+    failure: {
+      error: string
+      options: Parameters<OrchestrationDb['failDispatch']>[2]
+      processExited: boolean
+      escalate: boolean
+      describe: (task: string, outcome: string) => { subject: string; body: string }
+      payload: Record<string, unknown>
+    }
+  ): boolean {
+    const db = this._orchestrationDb
+    // Pane identity survives handle reminting.
+    const dispatch = db?.getActiveDispatchForTerminal(handle, paneKey)
+    if (!db || !dispatch) {
+      return false
+    }
+    // Only this runtime's in-flight stop claims the outcome; durable stopping rows from a crashed runtime cannot absorb later failures.
+    const stopping = db.getWorkerDispatch?.(dispatch.id)
+    if (stopping?.state === 'stopping' && stopping.runtime_epoch === this.getRuntimeId()) {
+      if (failure.processExited) {
+        db.settleWorkerStop(dispatch.id)
+      }
+      return true
+    }
+    const settled = db.failDispatch(dispatch.id, failure.error, failure.options)
+    if (!failure.escalate) {
+      return true
+    }
+    escalateWorkerFailure(
+      db,
+      dispatch,
+      {
+        from: handle,
+        mailbox: () => dispatchReportMailbox(db, dispatch),
+        describe: (task) =>
+          failure.describe(
+            task,
+            settled?.status === 'circuit_broken'
+              ? ' This task has now failed too many times, so it will not be retried automatically.'
+              : settled?.status === 'failed'
+                ? ' The task is ready to be dispatched again.'
+                : ''
+          ),
+        payload: {
           taskId: dispatch.task_id,
           dispatchId: dispatch.id,
-          exitCode,
-          exitCause: cause,
+          ...failure.payload,
           handle
-        }),
-        runId: dispatch.run_id
-      })
-      this.notifyMessageArrived(escalation.to_handle, escalation.type)
-    } catch (error) {
-      console.warn('[orchestration] failed to escalate worker exit', {
-        dispatchId: dispatch.id,
-        runId: dispatch.run_id,
-        error
-      })
-    }
+        }
+      },
+      (to, type) => this.notifyMessageArrived(to, type)
+    )
+    return true
   }
 
   async listTerminals(
@@ -161,12 +184,7 @@ export abstract class OrcaRuntimeWithSubscribeToTerminalResize extends OrcaRunti
   ): Promise<'live' | 'exited' | 'unverifiable'> {
     const structuredSessionId = sessionIdFromStructuredWorkerIncarnation(processIncarnation)
     if (structuredSessionId) {
-      // A structured session has no PTY, so the process table can only ever fail to find it —
-      // answering `exited` from that absence would release a running provider child. The durable
-      // agent-session records, walked forward to any `/clear` successor, are asked directly rather
-      // than the in-memory identity registry: settlement forgets the registry entry, so gating on
-      // one made a stopped worker's resource answer `unverifiable` forever and stay in
-      // `worker-list --terminalState retained` for the life of the DB.
+      // Structured sessions have no PTY; consult durable records through /clear successors. The in-memory registry vanishes at settlement, so absence there proves no exit.
       return observeStructuredWorker({ sessionId: structuredSessionId }).status
     }
     const hostScope = parseWorkerTerminalHostScope(serializedHostScope)

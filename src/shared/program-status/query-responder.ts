@@ -7,11 +7,7 @@ type OscHandlerParser = {
   ) => { dispose: () => void }
 }
 
-/**
- * Answers `OSC 7501 ; ?` so Program Status Protocol programs (Claude Code, pi) start reporting.
- * Why one shared handler: the visible renderer xterm and main's hidden-pane emulator each own
- * replies for different chunks, and both must answer before the DA1 sentinel that follows.
- */
+/** Share OSC 7501 query replies across visible xterm and hidden-pane emulators; the owning parser must answer before the DA1 sentinel. */
 export function installProgramStatusQueryResponder(deps: {
   parser: OscHandlerParser
   /** Must already be gated to the reply owner for the chunk being parsed. */

@@ -1,6 +1,4 @@
-// Default-driven create-project state for AddRepoDialog: resolves the default
-// parent (local/runtime host home) and probes Git
-// availability, guarding against stale async results when the target changes.
+// Resolve parent and Git defaults on the chosen host while rejecting stale async results.
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { browseRuntimeServerDirectory } from '@/runtime/runtime-server-directory-browser'
 import { callRuntimeRpc } from '@/runtime/runtime-rpc-client'

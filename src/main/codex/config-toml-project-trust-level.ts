@@ -15,7 +15,7 @@ export type ProjectTrustLevelEntry = {
   line: string
 }
 
-// Why (#22592): Codex writes `"trust_level" = …`; decode the key instead of matching bare text.
+// Codex also writes quoted trust_level keys.
 export function findProjectTrustLevelEntries(text: string): ProjectTrustLevelEntry[] {
   const entries: ProjectTrustLevelEntry[] = []
   let cursor = 0

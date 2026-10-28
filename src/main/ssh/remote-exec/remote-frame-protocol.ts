@@ -1,24 +1,16 @@
-// ─── Relay Protocol ─────────────────────────────────────────────────
-// 13-byte framing header matching VS Code's PersistentProtocol wire format.
-// See design-ssh-support.md § JSON-RPC Protocol Specification.
-
 import { HEADER_LENGTH, MAX_MESSAGE_SIZE } from '../../../shared/relay-frame-decoder'
 export const RELAY_VERSION = '0.1.0'
 export const RELAY_SENTINEL = `ORCA-RELAY v${RELAY_VERSION} READY\n`
 export const RELAY_SENTINEL_TIMEOUT_MS = 10_000
 export const RELAY_REMOTE_DIR = '.orca-remote'
 
-/** Message type byte. */
 export const MessageType = {
   Regular: 1,
   KeepAlive: 9
 } as const
 
-/** Keepalive/timeout. */
 export const KEEPALIVE_SEND_MS = 5_000
 export const TIMEOUT_MS = 20_000
-
-// ── JSON-RPC types ──────────────────────────────────────────────────
 
 export type JsonRpcRequest = {
   jsonrpc: '2.0'
@@ -49,17 +41,7 @@ export type PreparedJsonRpcPayload = Readonly<{
   [JSON_RPC_PAYLOAD_BYTES]: Buffer
 }>
 
-// ── Framing: encode / decode ────────────────────────────────────────
-
-/**
- * Encode a message into a framed buffer (13-byte header + payload).
- *
- * Header layout:
- * - [0]:    TYPE   (1 byte)
- * - [1-4]:  ID     (uint32 big-endian)
- * - [5-8]:  ACK    (uint32 big-endian)
- * - [9-12]: LENGTH (uint32 big-endian)
- */
+/** Match PersistentProtocol: type byte, then big-endian uint32 id/ack/length at offsets 1/5/9, then payload. */
 export function encodeFrame(
   type: number,
   id: number,
@@ -106,8 +88,6 @@ export function parseJsonRpcMessage(payload: Buffer): JsonRpcMessage {
   }
   return msg
 }
-
-// ── Supported platforms ─────────────────────────────────────────────
 
 export type RelayPlatform =
   | 'linux-x64'

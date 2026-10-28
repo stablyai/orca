@@ -1,12 +1,7 @@
 import type { SkillDiscoverySource, SkillSourceKind } from '../../../shared/skills'
 import { translate } from '@/i18n/i18n'
 
-/**
- * True when a root this query cares about did not answer, so its skills are
- * unknown rather than absent. The host serves such a root's last answer, but a
- * root that has never answered has none to serve, and a bare "Not installed"
- * there offers Install for a skill that may already be present.
- */
+/** Unread roots mean unknown skills, not absent; a never-read root has no cached answer to prevent misleading Install actions. */
 export function hasUnreadableAgentSkillSource(
   sources: readonly SkillDiscoverySource[],
   sourceKinds?: readonly SkillSourceKind[]
@@ -36,13 +31,7 @@ export type InstalledAgentSkillVerdict = {
   error: string | null
 }
 
-/**
- * Finding the skill is proof, so only a negative is ever doubted. Two shapes
- * qualify: a scan that answered without reading a root this query cares about,
- * and a scan that never answered at all — invisible to `sources`, which stay
- * empty until a result lands. A failed refresh over an answer already held is
- * neither: that answer still stands.
- */
+/** Doubt negative scans with unread roots or no answer; positive findings and already-held answers remain evidence despite refresh failure. */
 export function getInstalledAgentSkillVerdict(
   scan: InstalledAgentSkillScan
 ): InstalledAgentSkillVerdict {

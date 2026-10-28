@@ -11,10 +11,7 @@ export type HeapWindowReapBudget = {
   budgetMs: number
 }
 
-// Why a TID range and not `WHERE <retention> LIMIT n`: these tables have no index on their
-// retention column, so the planner answers LIMIT with a sequential scan from page 0 (production
-// EXPLAIN, 2026-10-04). That scan gets longer every tick as the reaped head of the heap empties.
-// A TID range bounds each statement to its own pages whatever the table holds.
+// Unindexed retention LIMIT scans restart at page 0 and worsen as the head empties (production EXPLAIN 2026-10-04); TID windows bound each statement’s pages.
 export class HeapWindowReaper {
   private nextPage: number | undefined
 
@@ -53,9 +50,7 @@ export class HeapWindowReaper {
     ) {
       if (page >= pages) page = 0
       const end = Math.min(page + this.budget.pagesPerStatement, pages)
-      // SKIP LOCKED: a row some request holds is left for a later pass rather than waited on.
-      // `= ANY(ARRAY(...))`, not `IN (...)`: IN can plan as a hash join over a sequential scan of
-      // the whole table; an array of TIDs is always a TID scan.
+      // SKIP LOCKED defers busy rows; ANY(TID array) guarantees TID scan while IN may hash-join a full sequential scan.
       deleted += changes(
         await database.query(
           `DELETE FROM ${this.table} WHERE ctid = ANY(ARRAY(

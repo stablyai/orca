@@ -32,7 +32,7 @@ export type WslInteropHealthDeps = {
   log(message: string): void
 }
 
-// Why delayed: the spawn that reported activity is what boots the distro, and the check must never be the one that does.
+// Activity spawns boot distros; delay checks so the health probe never boots one itself.
 export const ACTIVITY_CHECK_DELAY_MS = 5_000
 export const ACTIVITY_CHECK_INTERVAL_MS = 60_000
 // A stop-triggered check bypasses the activity interval but not this floor.
@@ -48,14 +48,7 @@ type DistroHealth = {
   inFlight: Promise<WslInteropCheckOutcome> | null
 }
 
-/**
- * Detects and restores a wiped `WSLInterop` entry in distros Orca is using.
- *
- * Why automatic: the missing entry is a WSL bug state, not a user choice; the
- * repair re-registers exactly what WSL's init registers at boot, it is
- * idempotent, and a prompt would ask users to approve something they cannot
- * diagnose. `[interop] enabled=false` in the distro's wsl.conf is respected.
- */
+/** Restore WSL's own idempotent interop registration after the VM-wide wipe bug; respect explicit wsl.conf interop disablement. */
 export class WslInteropHealthMonitor {
   private readonly distros = new Map<string, DistroHealth>()
   private unsubscribe: (() => void) | null = null

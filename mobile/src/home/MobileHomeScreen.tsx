@@ -1,18 +1,19 @@
 import { useCallback, useState } from 'react'
-import { Alert, StyleSheet } from 'react-native'
+import { Alert } from 'react-native'
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useOpenMobileAccounts } from '../accounts/use-open-mobile-accounts'
 import { getProvenCachedWorktrees } from '../cache/worktree-cache'
 import { ActionSheetModal } from '../components/ActionSheetModal'
 import { ConfirmModal } from '../components/ConfirmModal'
 import { getHostListActionSheetActions } from '../host-list-action-sheet-actions'
-import { hostNewWorktreeRoute } from '../host-route-action-state'
 import { hostRouteWithNotice } from '../host-route-notice'
 import { useResponsiveLayout } from '../layout/responsive-layout'
 import { triggerMediumImpact } from '../platform/haptics'
 import { useOpenMobileSession } from '../session/use-open-mobile-session'
 import { useOpenMobileTasks } from '../tasks/use-open-mobile-tasks'
 import { colors } from '../theme/mobile-theme'
+import { themedStyleSheet } from '../theme/themed-styles'
+import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import {
   useDisconnectHostClient,
   useForceReconnect,
@@ -31,8 +32,10 @@ import { MobileHomeHostList } from './MobileHomeHostList'
 import { MobileHomeListFooter } from './MobileHomeListFooter'
 import { MobileHomeTopBar } from './MobileHomeTopBar'
 import { useMobileHomeData } from './use-mobile-home-data'
+import { newWorkspaceOverlayHref } from '../new-workspace/new-workspace-overlay-route'
 
 export function MobileHomeScreen() {
+  useMobileColorScheme()
   const data = useMobileHomeData()
   const insets = useSafeAreaInsets()
   const { isWideLayout, contentMaxWidth } = useResponsiveLayout()
@@ -122,7 +125,11 @@ export function MobileHomeScreen() {
               connectedHosts={data.connectedHosts}
               resumeCard={data.resumeCard}
               taskProvidersByHost={data.taskProvidersByHost}
-              onCreateWorkspace={(hostId) => data.router.push(hostNewWorktreeRoute(hostId))}
+              onCreateWorkspace={() =>
+                data.router.push(
+                  newWorkspaceOverlayHref(data.connectedHosts.map((host) => host.id))
+                )
+              }
               onOpenAccounts={openMobileAccounts}
               onOpenResume={openResume}
               onOpenTasks={openMobileTasks}
@@ -184,6 +191,6 @@ export function MobileHomeScreen() {
   )
 }
 
-const styles = StyleSheet.create({
+const styles = themedStyleSheet(() => ({
   container: { flex: 1, backgroundColor: colors.bgBase }
-})
+}))

@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
+import { TERMINAL_DEFAULT_WORD_SEPARATOR } from '../../../../shared/terminal-word-separator'
 import {
   DESKTOP_TERMINAL_SCROLLBACK_ROWS_MAX,
   DESKTOP_TERMINAL_SCROLLBACK_ROWS_MIN,
@@ -48,8 +49,7 @@ export function TerminalAdvancedSection({
   const [scrollbackRowsDraft, setScrollbackRowsDraft] = useState(String(scrollbackRows))
   const [prevScrollbackRows, setPrevScrollbackRows] = useState(scrollbackRows)
   if (scrollbackRows !== prevScrollbackRows) {
-    // Why: settings can update outside this pane, so the draft follows the
-    // persisted source once it changes instead of clobbering active edits.
+    // Adopt external settings changes without replacing drafts during active edits.
     setPrevScrollbackRows(scrollbackRows)
     setScrollbackRowsDraft(String(scrollbackRows))
   }
@@ -194,7 +194,7 @@ export function TerminalAdvancedSection({
                   const value = e.target.value
                   updateSettings({ terminalWordSeparator: value || undefined })
                 }}
-                placeholder={` ()[]{},'"\``}
+                placeholder={TERMINAL_DEFAULT_WORD_SEPARATOR}
                 className="w-56 font-mono text-xs"
               />
             }

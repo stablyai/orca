@@ -1,6 +1,5 @@
 import { fork, type ChildProcess } from 'node:child_process'
-import { getAppEnvironment, hasAppEnvironment } from '../../shared/app-environment'
-import { join } from 'node:path'
+import { existsSync } from 'node:fs'
 import type {
   ComputerActionResult,
   ComputerListAppsResult,
@@ -12,6 +11,10 @@ import { normalizeComputerActionResult } from './computer-action-verification-no
 import { isComputerSidecarDiagnostic, logComputerDiagnostic } from './computer-sidecar-diagnostics'
 import { validateComputerSidecarPasteText } from './computer-sidecar-paste-validation'
 import { RuntimeClientError } from './runtime-client-error'
+import { getForkedChildEntryPath } from '../forked-child-entry-path'
+
+// Bundled beside orcad.js on servers and under out/main on desktop.
+export const COMPUTER_SIDECAR_ENTRY_FILENAME = 'computer-sidecar.js'
 
 type ComputerSidecarMethod =
   | 'capabilities'
@@ -47,8 +50,7 @@ type PendingRequest = {
 const REQUEST_TIMEOUT_MS = 60_000
 let sidecar: ComputerSidecarProcess | null = null
 
-// Why: Node treats unhandled child 'error' events as process exceptions, so
-// stale children keep a no-op listener that does not retain the sidecar owner.
+// Suppress stale child errors without retaining the owner or crashing the process.
 function ignoreStaleChildError(): void {}
 
 export async function callComputerSidecarListApps(): Promise<ComputerListAppsResult> {
@@ -94,30 +96,13 @@ export function resetComputerSidecarForTest(): void {
 
 function getComputerSidecar(): ComputerSidecarProcess {
   if (!sidecar) {
-    sidecar = new ComputerSidecarProcess(getComputerSidecarEntryPath())
+    sidecar = new ComputerSidecarProcess(getForkedChildEntryPath(COMPUTER_SIDECAR_ENTRY_FILENAME))
   }
   return sidecar
 }
 
-function getComputerSidecarEntryPath(): string {
-  const app = loadElectronApp()
-  const appPath = app?.getAppPath() ?? process.cwd()
-  const isPackaged = app?.isPackaged ?? false
-  // Why: packaged sidecars must be forked from app.asar.unpacked because
-  // ELECTRON_RUN_AS_NODE bypasses Electron's asar require integration.
-  const basePath = isPackaged ? appPath.replace('app.asar', 'app.asar.unpacked') : appPath
-  return join(basePath, 'out', 'main', 'computer-sidecar.js')
-}
-
-// Why the port and not require('electron'): the literal text fails the plain-Node
-// entry guard even inside a try/catch, and hasAppEnvironment() gives the same
-// "no app root here" answer without it.
-function loadElectronApp(): { getAppPath(): string; isPackaged: boolean } | null {
-  if (!hasAppEnvironment()) {
-    return null
-  }
-  const environment = getAppEnvironment()
-  return { getAppPath: () => environment.getAppPath(), isPackaged: environment.isPackaged() }
+export function computerSidecarMissingMessage(entryPath: string): string {
+  return `Computer use isn't available on this host: its Orca install has no computer-use sidecar (${entryPath}). On an Orca server installed before computer use shipped with it, update or reprovision the server.`
 }
 
 class ComputerSidecarProcess {
@@ -211,6 +196,13 @@ class ComputerSidecarProcess {
     }
     this.cleanupActiveChildListeners()
     this.child = null
+    // Report the missing entry path before fork reduces it to an opaque exit code.
+    if (!existsSync(this.entryPath)) {
+      throw new RuntimeClientError(
+        'unsupported_capability',
+        computerSidecarMissingMessage(this.entryPath)
+      )
+    }
 
     const child = fork(this.entryPath, [], {
       stdio: ['ignore', 'pipe', 'pipe', 'ipc'],
@@ -246,7 +238,6 @@ class ComputerSidecarProcess {
   }
 
   private handleMessage(message: unknown): void {
-    // The sidecar's stdio is piped and unread, so its warnings arrive here.
     if (isComputerSidecarDiagnostic(message)) {
       logComputerDiagnostic(message.message)
       return
@@ -272,8 +263,7 @@ class ComputerSidecarProcess {
     code: number | null,
     signal: NodeJS.Signals | null
   ): void {
-    // Why: a timed-out child can exit after a replacement has started; stale
-    // exits must not clear the live child or reject its in-flight requests.
+    // Ignore stale exits so they cannot reject the replacement's requests.
     if (this.child !== child) {
       return
     }
@@ -293,13 +283,12 @@ class ComputerSidecarProcess {
   }
 
   private handleError(child: ChildProcess, error: Error): void {
-    // Why: late errors from a prior child should not poison the current sidecar.
+    // Ignore late errors from a replaced sidecar.
     if (this.child !== child) {
       return
     }
     this.cleanupActiveChildListeners()
-    // Why: an active process error makes the IPC sidecar unreliable; restart
-    // on the next call instead of reusing a broken helper.
+    // Restart on the next request after an active transport failure.
     this.failActiveChild(child, new RuntimeClientError('accessibility_error', error.message))
   }
 

@@ -6,9 +6,9 @@ import { describe, expect, it } from 'vitest'
 import { getDefaultRepoHookSettings } from '../../shared/constants'
 import type { Repo } from '../../shared/repo-types'
 import { parsePairingCode } from '../../shared/pairing'
-import { RemoteRuntimeRequestConnection } from '../../shared/remote-runtime-request-connection'
-import { RemoteRuntimeSharedControlConnection } from '../../shared/remote-runtime-shared-control-connection'
-import { subscribeRemoteRuntimeRequest } from '../../shared/remote-runtime-client'
+import { RemoteRuntimeRequestConnection } from '../../shared/remote-runtime/requests/remote-runtime-request-connection'
+import { RemoteRuntimeSharedControlConnection } from '../../shared/remote-runtime/control/remote-runtime-shared-control-connection'
+import { subscribeRemoteRuntimeRequest } from '../../shared/remote-runtime/remote-runtime-client'
 import type {
   RuntimeClientEvent,
   RuntimeClientEventStreamMessage
@@ -20,8 +20,7 @@ import { REMOTE_RUNTIME_SHARED_CONTROL_CAPABILITY } from '../../shared/protocol-
 const REMOTE_RUNTIME_TEST_TIMEOUT_MS = 15_000
 const REMOTE_RUNTIME_REQUEST_TIMEOUT_MS = 5_000
 
-// worktree.create routes through the runtime's clientMutationId idempotency
-// wrapper; these stubs run the create straight through (no dedupe).
+// Bypass create idempotency here to test request connection behavior alone.
 const passthroughDedupe = <T>(_repo: string, _id: string | undefined, run: () => Promise<T>) =>
   run()
 

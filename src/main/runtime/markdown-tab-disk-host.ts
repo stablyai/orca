@@ -1,9 +1,5 @@
-/**
- * Where a phone's Markdown tab file is read and written: this machine's disk for a local workspace,
- * and for a paired server's (`runtime:<env>`) the same `files.read` / `files.writeIfUnchanged` calls
- * the desktop editor makes, so that server reads its own disk and does the compare-and-write itself.
- * A raw `ssh:` host is refused on both, by the route every local file command takes.
- */
+/** Local workspaces use local disk; runtime environments use their server's file RPCs/compare-write.
+ * Raw SSH routes remain unsupported instead of falling back to client paths. */
 import { isBinaryBuffer } from '../../shared/binary-buffer'
 import { parseExecutionHostId } from '../../shared/execution-host'
 import {
@@ -11,13 +7,15 @@ import {
   diskConflictFromReadFailure,
   FILE_WRITE_DISK_PRECONDITION_RUNTIME_CAPABILITY,
   FILE_WRITE_IF_UNCHANGED_METHOD,
+  hostEnforcesPrecondition,
+  FILE_WRITE_UNCHANGED,
   parseFileWriteResult,
-  type FileWriteDiskConflict,
+  type FileWriteDiskComparison,
   type FileWriteDiskPrecondition,
   type FileWriteResult
 } from '../../shared/file-write-disk-precondition'
 import { utf8ByteLength } from '../../shared/mobile-markdown-document'
-import { RemoteRuntimeClientError } from '../../shared/remote-runtime-client-error'
+import { RemoteRuntimeClientError } from '../../shared/remote-runtime/remote-runtime-client-error'
 import { assertFileMutationOwnershipCapability } from '../../shared/file-mutation-ownership'
 import type { PersistedOpenFile } from '../../shared/workspace-session-state-types'
 import { readLocalRuntimeFilePrefix } from './files/file-reads'
@@ -46,11 +44,10 @@ export type MarkdownTabDiskRuntime = RuntimeLocalFileHost &
   Pick<MarkdownTabDiskHost, 'getWorkspaceSessionForWorktree'> & {
     resolveRuntimeFileTarget(selector: string): Promise<ResolvedRuntimeFileTarget>
     callEnvironment: EnvironmentCall
-    /** The server's current pairing, so every call of one save reaches the server it probed. */
+    /** Pin every save call to the pairing captured by its initial probe. */
     environmentPairingRevision(environmentId: string): number | undefined
   }
 
-/** One workspace's file route; `pairingRevision` is the pairing a save captured, unset for a read. */
 type MarkdownFileRoute =
   | { environmentId: string; pairingRevision: number | undefined }
   | { environmentId: null; target: ResolvedRuntimeFileTarget }
@@ -60,7 +57,6 @@ export function createMarkdownTabDiskHost(runtime: MarkdownTabDiskRuntime): Mark
     worktreeId: string,
     file: MarkdownFileAddress
   ): Promise<MarkdownFileRoute> => {
-    // Why: a file outside the workspace on an SSH host is that host's; no process here serves it.
     if (file.externalSshTargetId) {
       throw new SshHostNotServedError(file.externalSshTargetId)
     }
@@ -122,7 +118,7 @@ export function createMarkdownTabDiskHost(runtime: MarkdownTabDiskRuntime): Mark
     readFile: fileIo(routeOf).readFile,
     forSave: async (worktreeId, file) => {
       const found = await routeOf(worktreeId, file)
-      // Why: a workspace that moves host mid-save must not take the write somewhere unpinned.
+      // A host move mid-save must not redirect the pinned write.
       const route: MarkdownFileRoute =
         found.environmentId !== null
           ? { ...found, pairingRevision: pairingRevisionOf(runtime, found.environmentId) }
@@ -185,7 +181,7 @@ async function readFileOnEnvironment(
   if (read.truncated !== true) {
     return { content: read.content, byteLength: cut }
   }
-  // Why: a truncated `files.read` reports where it cut, not the file size the phone labels.
+  // Truncated reads report their cut; stat separately for the phone's full-size label.
   const stat = await callEnvironment(call, environmentId, 'files.stat', address, pairingRevision)
   const size = isRecord(stat) && typeof stat.size === 'number' ? stat.size : 0
   return { content: read.content, byteLength: Math.max(size, cut + 1) }
@@ -195,12 +191,8 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null
 }
 
-/**
- * The desktop editor's guarded remote save (`writeRemoteFileIfUnchanged`): a server that advertises
- * the disk check compares at write time; an older one is compared from here before a plain write.
- * Every call is pinned to the pairing the save captured before its first read, so a re-pair never
- * receives the write.
- */
+/** Use server compare-write when advertised; older servers require a client-side precomparison.
+ * Pin every call to the initial pairing so re-pairing cannot redirect the write. */
 async function writeFileOnEnvironment(
   call: EnvironmentCall,
   environmentId: string,
@@ -220,38 +212,44 @@ async function writeFileOnEnvironment(
     worktree: `id:${worktreeId}`,
     relativePath: file.relativePath,
     content,
-    // Why `local`: the server writes only a workspace it runs itself, so the write never hops on.
+    // The server must write locally, never forward the mutation onward.
     expectedExecutionHostId: 'local'
   }
-  if (capabilities.includes(FILE_WRITE_DISK_PRECONDITION_RUNTIME_CAPABILITY)) {
+  if (hostEnforcesPrecondition(capabilities, diskPrecondition)) {
     return parseFileWriteResult(
       await pinned(FILE_WRITE_IF_UNCHANGED_METHOD, { ...params, diskPrecondition })
     )
   }
   const diskConflict = await diskConflictOnServer(pinned, params, diskPrecondition)
+  if (diskConflict === 'identical') {
+    return FILE_WRITE_UNCHANGED
+  }
   if (diskConflict) {
     return { ok: false, diskConflict }
   }
-  return parseFileWriteResult(await pinned('files.write', params))
+  return parseFileWriteResult(
+    capabilities.includes(FILE_WRITE_DISK_PRECONDITION_RUNTIME_CAPABILITY)
+      ? await pinned(FILE_WRITE_IF_UNCHANGED_METHOD, { ...params, diskPrecondition })
+      : await pinned('files.write', params)
+  )
 }
 
-/** For a server that would write unguarded: a read that cannot prove the disk fails the save. */
 async function diskConflictOnServer(
   pinned: (method: string, params: unknown) => Promise<unknown>,
-  address: { worktree: string; relativePath: string },
+  write: { worktree: string; relativePath: string; content: string },
   precondition: FileWriteDiskPrecondition
-): Promise<FileWriteDiskConflict | null> {
+): Promise<FileWriteDiskComparison> {
   let read: unknown
   try {
     read = await pinned('files.read', {
-      worktree: address.worktree,
-      relativePath: address.relativePath
+      worktree: write.worktree,
+      relativePath: write.relativePath
     })
   } catch (error) {
     return diskConflictFromReadFailure(precondition, error)
   }
   if (!isRecord(read) || typeof read.content !== 'string' || read.truncated === true) {
-    return compareDiskWritePrecondition(precondition, undefined)
+    return compareDiskWritePrecondition(precondition, undefined, write.content)
   }
-  return compareDiskWritePrecondition(precondition, read.content)
+  return compareDiskWritePrecondition(precondition, read.content, write.content)
 }

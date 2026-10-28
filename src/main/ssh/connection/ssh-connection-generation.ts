@@ -10,9 +10,7 @@ function createSessionScope(): number {
 }
 
 let sessionGenerationBase = 0
-// Why: a removed target's id can come back (runtime-owned VM targets derive it from the runtime id); its
-// replacement must start above every generation the prior incarnation handed out, or a delayed
-// mutation from the old VM passes the stale-host fence. One scope-wide floor keeps that O(1).
+// Recreated target ids must exceed all prior generation tokens or delayed old-VM mutations pass the host fence; retain one O(1) floor.
 let forgottenGenerationFloor = 0
 let sessionInitialized = false
 const connectionGenerationByTarget = new Map<string, number>()
@@ -55,7 +53,7 @@ export function initializeSshConnectionGenerationSession(): void {
     return
   }
   const sessionScope = createSessionScope()
-  // Why: randomize the process scope so a replacement HUB does not predictably reuse the prior target/counter token.
+  // Randomize process scope so replacement hubs cannot predictably reuse earlier tokens.
   sessionGenerationBase = sessionScope * SESSION_COUNTER_STRIDE
   forgottenGenerationFloor = sessionGenerationBase
   usedSessionScopes.add(sessionScope)
@@ -73,7 +71,7 @@ export function advanceSshConnectionGeneration(targetId: string): number {
     usedSessionScopes.add(nextSessionScope)
     sessionGenerationBase = nextSessionScope * SESSION_COUNTER_STRIDE
     forgottenGenerationFloor = sessionGenerationBase
-    // Why: changing the scope must revoke tokens for every target, not only the target that exhausted its counter.
+    // Scope rollover revokes every target's old tokens, not just the exhausted counter.
     connectionGenerationByTarget.clear()
     next = sessionGenerationBase + 1
   }

@@ -1,9 +1,6 @@
 import { ghExecFileAsync, acquire, release, type LocalGitExecOptions } from '../../gh-utils'
 import { resolveGitHubRepoExecution, type GitHubApiRepository } from '../../github-api-repository'
 import { noteRepositoryRateLimitSpend, repositoryRateLimitGuard } from '../../rate-limit'
-/**
- * Mark or unmark a PR file as viewed via GitHub's GraphQL API.
- */
 export async function setPRFileViewed(args: {
   repoPath: string
   connectionId?: string | null
@@ -28,7 +25,7 @@ export async function setPRFileViewed(args: {
       pullRequest { id }
     }
   }`
-  // Why: viewed toggles fire once per file while reading a diff — the highest-volume GraphQL caller here.
+  // Per-file viewed toggles can produce high GraphQL volume; respect the budget floor.
   const guard = repositoryRateLimitGuard(ownerRepo, 'graphql', ghOptions)
   if (guard.blocked) {
     console.warn(

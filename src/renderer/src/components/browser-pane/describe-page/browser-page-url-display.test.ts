@@ -3,7 +3,6 @@ import { ORCA_BROWSER_BLANK_URL } from '../../../../../shared/constants'
 import {
   getBrowserDisplayTitle,
   getBrowserPageRuntimeEnvironmentId,
-  getNotebookPathFromBrowserUrl,
   getOpenableExternalUrl,
   isChromiumErrorPage,
   retryBrowserTabLoad,
@@ -12,8 +11,9 @@ import {
 import type { BrowserPage as BrowserPageState } from '../../../../../shared/browser-workspace-types'
 
 describe('browser page URL display', () => {
-  it('maps the blank-tab sentinel to about:blank and redacts Kagi session tokens', () => {
-    expect(toDisplayUrl(ORCA_BROWSER_BLANK_URL)).toBe('about:blank')
+  it('shows a blank tab as an empty bar and redacts Kagi session tokens', () => {
+    expect(toDisplayUrl(ORCA_BROWSER_BLANK_URL)).toBe('')
+    expect(toDisplayUrl('about:blank')).toBe('')
     expect(toDisplayUrl('https://kagi.com/search?q=a&token=secret')).not.toContain('secret')
   })
 
@@ -27,10 +27,6 @@ describe('browser page URL display', () => {
   it('detects Chromium error pages', () => {
     expect(isChromiumErrorPage('chrome-error://chromewebdata/')).toBe(true)
     expect(isChromiumErrorPage('https://example.com')).toBe(false)
-  })
-
-  it('extracts notebook paths only from file URLs ending in .ipynb', () => {
-    expect(getNotebookPathFromBrowserUrl('https://example.com/notebook.ipynb')).toBeNull()
   })
 
   it('prefers the page-owned runtime environment id when present', () => {

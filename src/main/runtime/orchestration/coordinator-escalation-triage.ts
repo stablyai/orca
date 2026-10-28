@@ -1,4 +1,3 @@
-/** Turns a worker escalation into a dispatch failure, honoring the circuit breaker. */
 import type { OrchestrationDb } from './db'
 import type { MessageRow } from './types'
 
@@ -15,9 +14,7 @@ export function applyEscalationToDispatch(
       const payload = JSON.parse(msg.payload)
       taskId = payload.taskId
       dispatchId = payload.dispatchId
-    } catch {
-      // Escalation without structured payload — log subject as context
-    }
+    } catch {}
   }
 
   if (!taskId || !dispatchId) {
@@ -55,7 +52,7 @@ export function applyEscalationToDispatch(
     return null
   }
 
-  // Why: fail the dispatch to increment the circuit breaker; under threshold the task returns to 'pending' for re-dispatch next tick.
+  // failDispatch advances the circuit breaker and requeues below-threshold tasks.
   const updated = db.failDispatch(dispatch.id, msg.subject)
   if (updated?.status === 'circuit_broken') {
     onLog(`Task ${taskId} circuit broken after repeated failures`)

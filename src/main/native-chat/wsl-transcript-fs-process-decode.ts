@@ -26,14 +26,12 @@ function decodeDirent(value: WslTranscriptFsDirent): Dirent {
   } as Dirent
 }
 
-/** Revive prototype-dependent results the structured clone stripped. */
 export function decodeWslTranscriptFsProcessValue(
   operation: WslTranscriptFsProcessRequest['operation'],
   value: unknown
 ): unknown {
   if (operation === 'stat' || operation === 'lstat') {
-    // Copy instead of setPrototypeOf: the in-process vitest arm passes the
-    // suite's own fixture here, which may be shared or frozen.
+    // Copy rather than mutate prototypes: in-process tests may supply shared/frozen fixtures.
     return Object.assign(Object.create(Stats.prototype) as Stats, value)
   }
   if (operation === 'readdir') {

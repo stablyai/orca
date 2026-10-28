@@ -24,24 +24,8 @@ import {
 
 const CLIENT_NAME = 'STA-4150 client-hosted restart survival'
 
-/**
- * Server-restart half of the tab-persistence contract. The client-quit half is covered by
- * paired-client-hosted-browser-quit-survival.spec.ts.
- *
- * Two real Electron processes: a headless paired runtime whose serve process is genuinely replaced
- * mid-test, and a desktop client running the guest. Each link in the chain a restart has to survive
- * has its own oracle here, because any one of them failing looks like the same empty tab strip:
- *
- * 1. The client's lease reconnects naming a runtime id that no longer exists. The replacement
- *    answers `browser_client_host_authority_mismatch`, which the client must read as "wait for the
- *    successor" rather than as a reason to retire the environment and its live guests.
- * 2. The relaunched runtime holds no page records, so it has to rebuild them from the inventory the
- *    reattaching host reports — asserted against the runtime's own page registry, not the client's.
- * 3. Adoption reissues the page under fresh generations, so the single-row count catches a recovery
- *    that replays the create URL alongside the adopted page.
- * 4. The guest must come back where the user left it, which is why the fixture moves the page before
- *    the restart: on its create URL, restoring correctly and restoring wrongly agree.
- */
+// Replace the real serve process while its desktop client retains the guest; quit-survival.spec.ts covers the inverse.
+// Authority mismatch must wait for the successor; rebuild host inventory, adopt a fresh generation exactly once, and retain the moved URL.
 test('keeps a client-hosted browser tab across a paired runtime restart', async ({
   testRepoPath
 }, testInfo) => {
@@ -67,15 +51,13 @@ test('keeps a client-hosted browser tab across a paired runtime restart', async 
       )
     ).toBe('restart-survivor')
 
-    // Presence precondition: without it, every post-restart check could pass on a page the
-    // runtime never held in the first place.
+    // Require a host-held page before restart to prevent an empty recovery pass.
     expect(
       await readHostBrowserPageIds(host.client, testRepoPath),
       'the runtime must hold the client-hosted page before the restart'
     ).toContain(opened.remotePageId)
 
-    // Why the guest moves before the restart: with the tab still on its create URL, recovering to
-    // the create URL and recovering to where the user was are the same answer.
+    // Move off the create URL so recovery cannot pass by replaying it.
     await navigateGuest(client.page, fixture.markerUrl, fixture.movedUrl)
     expect(
       await waitForRenderedClientWebview(

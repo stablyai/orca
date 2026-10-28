@@ -4,7 +4,7 @@ import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 import { installFakeAppEnvironment } from '../../../config/scripts/vitest-host-ports-setup'
 import { SPEECH_RECOGNIZER_DIR_ENV } from '../../shared/speech-recognizer-package'
-import { getSherpaModulePath, getSttWorkerPath, hasLocalSpeechRecognizer } from './stt-worker-paths'
+import { getSherpaModulePath, hasLocalSpeechRecognizer } from './stt-worker-paths'
 
 const roots: string[] = []
 afterEach(() => {
@@ -37,10 +37,5 @@ describe('speech worker paths on orcad (#31174)', () => {
     roots.push(dir)
     process.env[SPEECH_RECOGNIZER_DIR_ENV] = dir
     expect(getSherpaModulePath()).toBeNull()
-  })
-
-  it('starts the worker shipped beside the server bundle', () => {
-    installFakeAppEnvironment({ isPackaged: () => true })
-    expect(getSttWorkerPath()).toBe(join(__dirname, 'stt-worker.js'))
   })
 })

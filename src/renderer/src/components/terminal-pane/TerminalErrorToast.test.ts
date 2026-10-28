@@ -13,6 +13,7 @@ vi.mock('@/lib/client-environment-info', () => ({
 }))
 
 import { i18n } from '@/i18n/i18n'
+import { appendPaneTerminalError, terminalErrorForPane } from './terminal-error-accumulation'
 
 import {
   TerminalErrorToast,
@@ -69,6 +70,111 @@ describe('isSshReconnectOwnedTerminalError', () => {
 })
 
 describe('humanizeTerminalError', () => {
+  it('bounds startup row work linearly through accumulated toast renders at N and 10N', () => {
+    const tokenMatches = vi.spyOn(String.prototype, 'match')
+    const translations = vi.spyOn(i18n, 't')
+    try {
+      for (const kind of ['startup', 'mixed', 'unmatched'] as const) {
+        let view: ReturnType<typeof render> | undefined
+        for (const rowCount of [2, 20]) {
+          const rows = Array.from({ length: rowCount }, (_, index) =>
+            kind === 'startup' || (kind === 'mixed' && index % 2 === 0)
+              ? `Attempt ${index}: agent_session_exited_during_start`
+              : `Paste failed ${index}.`
+          )
+          const midpoint = rowCount / 2
+          const errors = appendPaneTerminalError(
+            appendPaneTerminalError({}, 1, rows.slice(0, midpoint).join('\n')),
+            1,
+            rows.slice(midpoint).join('\n')
+          )
+          const error = terminalErrorForPane(null, errors, 1)
+          expect(error).toBe(rows.join('\n'))
+          if (error === null) {
+            throw new Error('Accumulated error missing')
+          }
+          tokenMatches.mockClear()
+          translations.mockClear()
+          const toast = React.createElement(TerminalErrorToast, {
+            error,
+            agentId: 'codex',
+            paneOnClient: false,
+            onDismiss: vi.fn()
+          })
+          if (view) {
+            view.rerender(toast)
+          } else {
+            view = render(toast)
+          }
+
+          const tokenChecks = tokenMatches.mock.calls.filter(
+            ([pattern]) =>
+              pattern instanceof RegExp && pattern.source.includes('agent_(?:session|launch)_')
+          ).length
+          const startupTranslations = translations.mock.calls.filter(
+            ([key]) =>
+              typeof key === 'string' &&
+              key.startsWith('auto.components.terminal.pane.AgentLaunchPaneNotice.')
+          ).length
+          const matchingRows = kind === 'startup' ? rowCount : kind === 'mixed' ? midpoint : 0
+          // Classification and adaptation each visit a row at most once; known exits use two templates.
+          expect(tokenChecks).toBeGreaterThanOrEqual(rowCount)
+          expect(tokenChecks).toBeLessThanOrEqual(2 * rowCount)
+          if (kind === 'startup') {
+            expect(tokenChecks).toBe(2 * rowCount)
+          }
+          expect(startupTranslations).toBe(2 * matchingRows)
+          expect(
+            view.container.textContent?.match(/Codex exited while starting\./g) ?? []
+          ).toHaveLength(matchingRows)
+          expect(view.container.querySelector('a') !== null).toBe(kind !== 'startup')
+          expect(view.container.textContent).not.toContain('agent_session_exited_during_start')
+        }
+        view?.unmount()
+      }
+    } finally {
+      tokenMatches.mockRestore()
+      translations.mockRestore()
+    }
+  })
+
+  it.each([false, true])(
+    'explains a known exit and retains reporting for independent errors: %s',
+    (mixed) => {
+      const code = 'agent_session_exited_during_start'
+      const footer = '---\nOrca: 1.4.232\nOS: win32 10.0 (x64)\nShell: cmd.exe'
+      const view = render(
+        React.createElement(TerminalErrorToast, {
+          error: `Error invoking remote method 'pty:spawn': Error: ${code}${mixed ? '\nPaste failed.' : ''}\n\n${footer}`,
+          agentId: 'codex',
+          paneOnClient: false,
+          onDismiss: vi.fn()
+        })
+      )
+      const text = view.container.textContent ?? ''
+      expect(text).toContain(
+        'Codex exited while starting. Run it in a terminal in this folder to see why, then try again.'
+      )
+      expect(text).not.toContain(code)
+      if (mixed) {
+        expect(text).toContain('Paste failed.')
+      }
+      expect(view.container.querySelectorAll('a')).toHaveLength(mixed ? 1 : 0)
+    }
+  )
+
+  it.each([
+    'agent_session_operation_unknown',
+    'agent_session_claim_unavailable',
+    'agent_launch_future_failure'
+  ])('preserves uncertainty for a startup string without proof of failure: %s', (code) => {
+    const text = humanizeTerminalError(
+      `Error invoking remote method 'pty:spawn': Error: ${code}`,
+      'codex'
+    )
+    expect(text).toBe("Couldn't confirm Codex started. Check its terminal before trying again.")
+  })
+
   it('replaces the pane-owner-unverified code with actionable copy', () => {
     const humanized = humanizeTerminalError('terminal_pane_owner_unverified')
     expect(humanized).not.toContain('terminal_pane_owner_unverified')
@@ -156,8 +262,7 @@ describe('humanizeTerminalError', () => {
     expect(humanized).toContain('Open a new terminal to continue')
   })
 
-  // A daemon generation old enough to still refuse a pane respawning onto an id it is tearing
-  // down answers with the raw class name; the user must not be told to file an issue for it.
+  // Older daemons return raw session-absence classes; humanize them without asking the user to file an issue.
   it('replaces the daemon session-absence string and its id', () => {
     const humanized = humanizeTerminalError(
       "Error invoking remote method 'pty:spawn': SessionNotFoundError: Session not found: wt-1@@pane-a"
@@ -181,8 +286,7 @@ describe('humanizeTerminalError', () => {
     expect(humanized).not.toContain('exited')
   })
 
-  // A live PTY whose delivery was retired must never get the "open a new terminal" copy: acting on
-  // that abandons a running agent on the host.
+  // Retired output delivery leaves the agent running; suggesting a new terminal would abandon it.
   it('describes a retired output source as reconnecting, not as a lost session', () => {
     const humanized = humanizeTerminalError(
       'SSH_PTY_SOURCE_RESTORE_REQUIRED: remote:2f1c:pty-7 checkpointUnavailable'
@@ -555,4 +659,29 @@ it('uses existing Korean recovery copy and preserves the path', async () => {
   } finally {
     await i18n.changeLanguage('en')
   }
+})
+
+// #21342: dismissing hid the toast but left the dead pane with no way out.
+it('offers Close Pane only for a pane whose remote terminal was closed', () => {
+  const onClosePane = vi.fn()
+  const view = render(
+    React.createElement(TerminalErrorToast, {
+      error: 'Remote terminal was closed.',
+      paneOnClient: false,
+      onDismiss: vi.fn(),
+      onClosePane
+    })
+  )
+  fireEvent.click(view.getByText('Close Pane'))
+  expect(onClosePane).toHaveBeenCalledTimes(1)
+
+  view.rerender(
+    React.createElement(TerminalErrorToast, {
+      error: 'Paste failed.',
+      paneOnClient: false,
+      onDismiss: vi.fn(),
+      onClosePane
+    })
+  )
+  expect(view.queryByText('Close Pane')).toBeNull()
 })

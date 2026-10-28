@@ -5,13 +5,7 @@ import type { GlobalSettings } from '../../shared/global-settings-types'
 import { localAiVaultScanRoots } from '../ai-vault/cached-session-list'
 import { installInProcessSessionSearchService } from '../ai-vault-search/session-search-in-process-service'
 
-/**
- * orcad's session search registration.
- *
- * In this process and not the scanner child: orcad never installs the search data
- * root, so its scanner child gets no index and this process is the sole writer.
- * Null on a host whose Node has no `node:sqlite`, which is orcad's stated floor.
- */
+/** Index in-process as sole writer; the scanner child has no installed search data root. */
 export async function installOrcadSessionSearchService(args: {
   userDataPath: string
   getSettings: () => Pick<GlobalSettings, 'aiVaultSearch'>

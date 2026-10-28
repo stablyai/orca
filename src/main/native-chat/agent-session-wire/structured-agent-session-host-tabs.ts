@@ -2,12 +2,7 @@ import type { AgentSessionRecord } from '../../../shared/agent-session-record'
 import type { AgentSessionRecordStore } from '../../runtime/agent-session-record-store'
 import type { StructuredAgentSessionLogger } from './structured-agent-session-logger'
 
-/**
- * Chat-tab visibility is the deletion funnel: every path that removes a chat as a user-facing
- * artifact — a closed tab, the close RPC, worker settlement, worktree removal — retires the
- * durable tab here, so the chat's restart offer and any failure record die with it. Advisory:
- * recovery bookkeeping must never gate closing a chat.
- */
+/** Retire durable tabs/restart offers together; advisory recovery bookkeeping must never block chat close. */
 export function setStructuredAgentSessionTabVisibility(
   host: {
     deps: {
@@ -65,32 +60,30 @@ type TabSessions = ReadonlyMap<
   }
 >
 
-/** The host's chat-tab surface; reads `host.deps` per call, so it sees the host's wrapped deps. */
 export function createStructuredAgentSessionTabSurface(
   host: Parameters<typeof setStructuredAgentSessionTabVisibility>[0] & {
     deps: {
       store: Pick<
         AgentSessionRecordStore,
-        'getVisibleSessionTabIndex' | 'getSessionTabId' | 'showSessionTabs' | 'getRecord'
+        'getVisibleSessionTabIndex' | 'getSessionTabId' | 'showSessionTabs' | 'getConversation'
       >
     }
   },
   sessions: TabSessions,
   forgetStatus: (sessionId: string) => void
 ) {
-  // Restored chats that could not be opened. Each keeps its tab, whose read says why.
+  // Retain restore failures as tabs so their reads can explain why.
   const unopened = new Set<string>()
   return {
     listSessionTabs: (): StructuredAgentSessionTab[] => [
       ...listStructuredAgentSessionTabs(sessions),
       ...[...unopened].flatMap((sessionId) => {
-        const record = sessions.has(sessionId) ? null : host.deps.store.getRecord(sessionId)
+        const record = sessions.has(sessionId) ? null : host.deps.store.getConversation(sessionId)
         return record
           ? [{ sessionId, workspaceId: record.location.workspaceId, agent: record.provider }]
           : []
       })
     ],
-    /** A restore target with a record whose open failed. */
     markUnopened: (sessionId: string): void => {
       unopened.add(sessionId)
     },
@@ -103,7 +96,7 @@ export function createStructuredAgentSessionTabSurface(
       sessionId: string,
       visible: boolean,
       tabId?: string,
-      /** A close that may still put the tab back sends the hidden notice once it settles. */
+      /** Defer hidden notices while a failed close could restore visibility. */
       options?: { deferHiddenNotice?: boolean }
     ): Promise<void> => {
       await setStructuredAgentSessionTabVisibility(host, sessionId, visible, tabId)
@@ -113,7 +106,7 @@ export function createStructuredAgentSessionTabSurface(
           notifyTabHidden(host, sessionId)
         }
       }
-      // The tab edge of the row's lifetime; the handle close is the other.
+      // Tab visibility and handle closure jointly determine status-row lifetime.
       if (!visible && !sessions.get(sessionId)?.child) {
         forgetStatus(sessionId)
       }
@@ -128,7 +121,6 @@ function notifyTabHidden(
   try {
     host.deps.onSessionTabHidden?.(sessionId)
   } catch (error) {
-    // Bookkeeping never gates closing a chat.
     host.deps.logger.warn('a chat tab close listener failed', {
       scope: 'tab-hidden-listener',
       sessionId,

@@ -1,19 +1,8 @@
 import { getRuntimeMetadataPath, type RuntimeMetadata } from '../../shared/runtime-bootstrap'
 import { readRuntimeMetadataAsync } from './runtime-metadata'
 
-/**
- * Why: `orca-runtime.json` is the CLI's only pointer at a live runtime, and it
- * can stop describing this process while this process is still serving RPC —
- * a second instance that slipped past the single-instance lock publishes its
- * own pid and then exits, leaving the CLI on a dead pid (`stale_bootstrap`)
- * against a healthy app (#7848). Chromium's lock is defeated on macOS whenever
- * `SingletonSocket`/`SingletonCookie` go missing, and its socket lives under
- * `$TMPDIR` (`/var/folders/.../T`), which macOS itself purges after 3 days.
- *
- * The owner therefore watches its own record and reclaims it once no live
- * runtime is described. Reclaiming only a dead pid is deliberate: two live
- * runtimes sharing a profile would otherwise ping-pong the file forever.
- */
+/** Reclaim dead runtime metadata so CLI can find this still-serving process (#7848); macOS may purge Chromium's lock socket from TMPDIR after 3 days.
+ * Reclaim dead pids only: two live profile-sharing runtimes must not fight over the file. */
 export const RUNTIME_METADATA_OWNERSHIP_POLL_MS = 10_000
 
 export type RuntimeMetadataOwnershipWatch = {
@@ -44,8 +33,7 @@ export function shouldReclaimRuntimeMetadata(
   if (current.pid === ownedPid && current.runtimeId === ownedRuntimeId) {
     return false
   }
-  // Why: only this process can legitimately claim this pid, so a foreign
-  // runtimeId on it is a leftover from a recycled pid, not a live sibling.
+  // Only this process can own its pid; mismatched runtimeId means recycled-pid debris, not a live sibling.
   if (current.pid === ownedPid) {
     return true
   }
@@ -72,13 +60,13 @@ export function watchRuntimeMetadataOwnership(
     try {
       options.republish()
     } catch (error) {
-      // Why: a transient write failure must not kill the watch; the next tick retries.
+      // Retry transient write failure on the next tick.
       console.error('[runtime] Failed to reclaim runtime metadata ownership:', error)
       return
     }
     options.onReclaim?.(current)
   }
-  // Why: the read is off-thread now, so a slow volume could otherwise stack ticks on one file.
+  // Serialize off-thread reads so slow volumes cannot stack poll ticks.
   const check = (): Promise<void> => {
     inFlight ??= runCheck().finally(() => {
       inFlight = null
@@ -90,7 +78,7 @@ export function watchRuntimeMetadataOwnership(
     () => void check(),
     options.pollIntervalMs ?? RUNTIME_METADATA_OWNERSHIP_POLL_MS
   )
-  // Why: discovery bookkeeping must never be the reason the process stays alive.
+  // Discovery bookkeeping must not keep the process alive.
   timer.unref?.()
   return {
     check,
@@ -102,7 +90,7 @@ async function tryReadRuntimeMetadata(userDataPath: string): Promise<RuntimeMeta
   try {
     return await readRuntimeMetadataAsync(userDataPath)
   } catch (error) {
-    // Why: an unparseable record is as useless to the CLI as a missing one, so treat it as reclaimable.
+    // Malformed records cannot guide CLI; reclaim them as missing.
     console.warn(
       `[runtime] Ignoring unreadable ${getRuntimeMetadataPath(userDataPath)}:`,
       error instanceof Error ? error.message : String(error)
@@ -119,7 +107,7 @@ function isPidRunning(pid: number): boolean {
     process.kill(pid, 0)
     return true
   } catch (error) {
-    // Why: only ESRCH proves the pid is gone; EPERM means a foreign owner holds it (same rule as the socket sweep).
+    // Only ESRCH proves death; EPERM means another owner still holds the pid, as in socket sweep.
     return (error as NodeJS.ErrnoException).code !== 'ESRCH'
   }
 }

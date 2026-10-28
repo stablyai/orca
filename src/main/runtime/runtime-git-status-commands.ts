@@ -1,4 +1,6 @@
 import type { GitHistoryOptions, GitHistoryResult } from '../../shared/git-history'
+import type { GitMutationInFlight } from '../../shared/git-mutation-in-flight'
+import { isGitWorktreeMutationInFlight } from '../git/git-worktree-mutation-state'
 import type {
   GitConflictOperation,
   GitStagingArea,
@@ -6,7 +8,12 @@ import type {
 } from '../../shared/git-status-types'
 import type { RuntimeGitCheckoutResult, RuntimeGitLocalBranches } from '../../shared/runtime-types'
 import type { GitProviderStatusOptions } from '../providers/git-provider-contract'
-import { requireRuntimeGitProvider, type RuntimeGitCommandHost } from './runtime-git-command-target'
+import {
+  localGitOptionsForTarget,
+  requireLocalRuntimeGitRoute,
+  requireRuntimeGitProvider,
+  type RuntimeGitCommandHost
+} from './runtime-git-command-target'
 
 export class RuntimeGitStatusCommands {
   constructor(private readonly host: RuntimeGitCommandHost) {}
@@ -54,6 +61,17 @@ export class RuntimeGitStatusCommands {
   async getRuntimeGitConflictOperation(worktreeSelector: string): Promise<GitConflictOperation> {
     const target = await this.host.resolveRuntimeGitTarget(worktreeSelector)
     return requireRuntimeGitProvider(target).detectConflictOperation(target.worktree.path)
+  }
+
+  async getRuntimeGitMutationInFlight(worktreeSelector: string): Promise<GitMutationInFlight> {
+    const target = await this.host.resolveRuntimeGitTarget(worktreeSelector)
+    requireLocalRuntimeGitRoute(target)
+    return {
+      inFlight: await isGitWorktreeMutationInFlight(
+        target.worktree.path,
+        localGitOptionsForTarget(target)
+      )
+    }
   }
 
   async checkoutRuntimeGitBranch(

@@ -3,8 +3,7 @@ import type { Repo } from '../shared/repo-types'
 
 const { readdirMock } = vi.hoisted(() => ({ readdirMock: vi.fn() }))
 
-// Why the module-level mock rather than a temp directory: the defect is a listing that never
-// returns — a stalled NFS/SMB share or WSL UNC mount — which no real filesystem reproduces.
+// A filesystem mock can reproduce a listing that never settles without stalling a real mount.
 vi.mock('node:fs/promises', async (importOriginal) => ({
   ...((await importOriginal()) as Record<string, unknown>),
   readdir: readdirMock

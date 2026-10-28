@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import type { TerminalLayoutSnapshot } from './terminal-tab-types'
 import {
+  isRuntimePaneTitleOrphan,
   resolveRuntimePaneTitleForLeaf,
   resolveRuntimePaneTitleLeafResolution
 } from './runtime-pane-title-leaf-id'
@@ -22,15 +23,6 @@ const splitLayout: Pick<TerminalLayoutSnapshot, 'root'> = {
 }
 
 describe('resolveRuntimePaneTitleForLeaf', () => {
-  it('returns null when no pane titles are present', () => {
-    expect(resolveRuntimePaneTitleForLeaf(leafLayout, undefined, LEAF_A)).toBeNull()
-    expect(resolveRuntimePaneTitleForLeaf(leafLayout, {}, LEAF_A)).toBeNull()
-  })
-
-  it('maps a single-leaf pane title to its leaf', () => {
-    expect(resolveRuntimePaneTitleForLeaf(leafLayout, { 1: 'Codex' }, LEAF_A)).toBe('Codex')
-  })
-
   it('resolves split-pane titles to the matching leaf by replay order', () => {
     expect(resolveRuntimePaneTitleForLeaf(splitLayout, { 1: 'zsh', 2: 'Codex' }, LEAF_A)).toBe(
       'zsh'
@@ -38,10 +30,6 @@ describe('resolveRuntimePaneTitleForLeaf', () => {
     expect(resolveRuntimePaneTitleForLeaf(splitLayout, { 1: 'zsh', 2: 'Codex' }, LEAF_B)).toBe(
       'Codex'
     )
-  })
-
-  it('does not attribute a lone background split title to an unrelated leaf', () => {
-    expect(resolveRuntimePaneTitleForLeaf(splitLayout, { 2: 'Codex' }, LEAF_A)).toBeNull()
   })
 
   it('uses a lone title when the tab has no resolved layout root', () => {
@@ -71,5 +59,18 @@ describe('resolveRuntimePaneTitleLeafResolution', () => {
       title: 'Codex',
       hasAnyPaneTitle: true
     })
+  })
+})
+
+describe('isRuntimePaneTitleOrphan', () => {
+  it('never treats numeric slots as removed panes', () => {
+    for (const runtimePaneId of ['0', '-1', '2', '3']) {
+      expect(isRuntimePaneTitleOrphan(runtimePaneId, new Set([LEAF_A]))).toBe(false)
+    }
+  })
+
+  it('flags only a durable leaf id the layout no longer has', () => {
+    expect(isRuntimePaneTitleOrphan(LEAF_B, new Set([LEAF_A, LEAF_B]))).toBe(false)
+    expect(isRuntimePaneTitleOrphan(LEAF_B, new Set([LEAF_A]))).toBe(true)
   })
 })

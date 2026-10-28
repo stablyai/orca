@@ -8,14 +8,16 @@ import { ActionSheetContent } from '../components/ActionSheetModal'
 import { BottomDrawer } from '../components/BottomDrawer'
 import { ConfirmModal } from '../components/ConfirmModal'
 import { NewWorktreeModalController } from '../components/NewWorktreeModalController'
-import { hostNewWorktreeSessionRoute } from '../host-route-action-state'
+import { hostNewWorktreeSessionRoute } from '../host-new-worktree-session-route'
 import { isWorktreePinned } from '../worktree/workspace-list-sections'
+import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import { hostScreenStyles as styles } from './host-screen-styles'
 import { WorkspaceOptionsSheet } from './workspace-options-sheet'
 import { WorkspaceDetailsSheet } from './workspace-details-sheet'
 import type { HostScreenController } from './use-host-screen-controller'
 
 export function HostScreenOverlays({ controller }: { controller: HostScreenController }) {
+  useMobileColorScheme()
   const {
     actions,
     catalog,
@@ -24,7 +26,6 @@ export function HostScreenOverlays({ controller }: { controller: HostScreenContr
     existingWorktreePaths,
     hostCapabilities,
     hostId,
-    showNewWorktree,
     state
   } = controller
   const actionTarget = state.actionTarget
@@ -40,7 +41,7 @@ export function HostScreenOverlays({ controller }: { controller: HostScreenContr
     <>
       <WorkspaceOptionsSheet controller={controller} />
 
-      {/* Worktree long-press action sheet (inline confirm to avoid double-Modal lag) */}
+      {/* Confirm inline to avoid stacking native Modals. */}
       <BottomDrawer
         visible={actionTarget != null}
         onClose={() => {
@@ -125,7 +126,14 @@ export function HostScreenOverlays({ controller }: { controller: HostScreenContr
                     {
                       label: 'Delete',
                       destructive: true,
-                      onPress: () => state.setConfirmDelete(actionTarget)
+                      onPress: () => state.setConfirmDelete(actionTarget),
+                      // Like desktop, git can't remove a primary checkout; older hosts omit the flag.
+                      ...(actionTarget.isMainWorktree === true
+                        ? {
+                            disabled: true,
+                            hint: "Primary worktree — can't be deleted. Remove the project instead."
+                          }
+                        : {})
                     }
                   ]
                 : []
@@ -144,7 +152,6 @@ export function HostScreenOverlays({ controller }: { controller: HostScreenContr
         )}
       </BottomDrawer>
 
-      {/* Host remove confirmation */}
       <ConfirmModal
         visible={state.confirmRemoveHost}
         title="Remove Host"
@@ -156,20 +163,15 @@ export function HostScreenOverlays({ controller }: { controller: HostScreenContr
       />
 
       <NewWorktreeModalController
-        ref={state.newWorktreeModalRef}
-        routeVisible={showNewWorktree}
+        visible={state.showNewWorktree}
         client={client}
         hostCapabilities={hostCapabilities}
         hostId={hostId}
         hostLabelById={state.hostLabelById}
         existingWorktreePaths={existingWorktreePaths}
         existingWorktrees={state.worktrees}
-        // The seam, not react-native's `Linking`: this screen is in the tasks page closure, and
-        // inside the shell's WebView `openURL` resolves without opening anything.
+        // Use the platform opener: React Native Linking.openURL resolves without opening anything inside the shell’s WebView.
         openExternalUrl={openExternalLink}
-        onVisibleChange={(visible) => {
-          state.newWorktreeModalVisibleRef.current = visible
-        }}
         onCreated={(worktreeId, worktreeName, warning, executionHost) => {
           void catalog.fetchWorktrees({ allowDuringModal: true })
           actions.navigateFromHostList(
@@ -179,7 +181,7 @@ export function HostScreenOverlays({ controller }: { controller: HostScreenContr
             )
           )
         }}
-        onRouteVisibleChange={actions.setShowNewWorktreeVisible}
+        onClose={actions.closeNewWorktreeModal}
       />
     </>
   )

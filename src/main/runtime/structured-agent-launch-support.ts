@@ -3,7 +3,11 @@ import type { StructuredAgentId } from '../../shared/agent-session-provider-hand
 import type { GlobalSettings } from '../../shared/global-settings-types'
 import { isTuiAgent } from '../../shared/tui-agent-config'
 import { resolveTuiAgentLaunchEnv } from '../../shared/tui-agent-launch-defaults'
-import { observeAgentCliVersion, type AgentCliVersionObservation } from '../agent-cli-version-probe'
+import {
+  checkAgentCliVersion,
+  launchableRelease,
+  type AgentCliVersionCheck
+} from '../agent-cli-version-probe'
 import {
   resolveStructuredAgentSessionCreateSupport,
   warnStructuredAgentSessionCreateUnsupported,
@@ -34,18 +38,16 @@ type LaunchSupportRuntime = LaunchSettingsRuntime & {
   resolveRuntimeFileTarget(selector: string): Promise<{ worktree: { path: string } }>
 }
 
-/** The agent's own check of the release installed on this host, with the environment and Command
- *  setting its launch starts from, run in `cwd`; supported for an agent whose location alone
- *  decides. Throws the launch's pre-spawn refusal for an unrunnable Command setting. */
+/** Check the installed release with launch env/Command settings in cwd; null means location-only admission. Unrunnable Command settings throw launch refusal. */
 export async function observeStructuredAgentLaunch(
   agent: string,
   cwd: () => Promise<string>,
   runtime: LaunchSettingsRuntime,
   refreshShellOnMiss: boolean
-): Promise<AgentCliVersionObservation> {
+): Promise<AgentCliVersionCheck | null> {
   const check = structuredAgentRuntimeMetadata(agent)?.launchCheck
   if (!check) {
-    return 'supported'
+    return null
   }
   const settings = runtime.requireStore().getSettings()
   let directory: Promise<string> | undefined
@@ -61,20 +63,22 @@ export async function observeStructuredAgentLaunch(
     refreshShellOnMiss ? refreshHostAgentBaseEnvironmentAfterMiss : undefined,
     { env: ({ env }) => env, cwd: once }
   )
-  return observeAgentCliVersion(
+  return checkAgentCliVersion(
     { program: launch.command, cwd: await once(), env: launch.env },
-    check.supportsVersion
+    check.minimumVersions
   )
 }
 
-/** Admission's answer in the workspace `cwd` names: only an observed supported release launches. */
+/** Admission's answer in the workspace `cwd` names: only a too-old or unstartable binary keeps the
+ *  terminal. */
 export async function structuredAgentSupportsLaunch(
   agent: string,
   cwd: () => Promise<string>,
   runtime: LaunchSettingsRuntime
 ): Promise<boolean> {
   try {
-    return (await observeStructuredAgentLaunch(agent, cwd, runtime, true)) === 'supported'
+    const release = await observeStructuredAgentLaunch(agent, cwd, runtime, true)
+    return release === null || launchableRelease(release)
   } catch (error) {
     // An unrunnable Command setting is the launch's refusal to state, not a terminal.
     if (isAgentSessionPreSpawnError(error)) {
@@ -91,7 +95,7 @@ export async function resolveHostStructuredAgentLaunchEnvironment(
 ): Promise<Record<string, string>> {
   return {
     ...(await resolveHostAgentBaseEnvironment(settings)),
-    ...(isTuiAgent(agent) ? resolveTuiAgentLaunchEnv(agent, settings.agentDefaultEnv) : {})
+    ...(isTuiAgent(agent) ? resolveTuiAgentLaunchEnv(agent, settings) : {})
   }
 }
 
@@ -117,9 +121,7 @@ export async function structuredAgentHostLaunchSources(
   }
 }
 
-/** `agentSession.createSupport` on this host: every refusal it can know before spawning. The
- *  agent's location rule and installed-agent check from its registration, without installing the
- *  host. A refusal logs which check said no. */
+/** Report pre-spawn refusals from registered location/release checks without installing the host; log the refusing check. */
 export async function resolveHostStructuredAgentCreateSupport(input: {
   agent: StructuredAgentId
   worktreeSelector: string

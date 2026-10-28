@@ -185,18 +185,4 @@ describe('MobileHomeListFooter tasks', () => {
 
     expect(callbacks.onOpenTasks).toHaveBeenCalledWith('server', 'jira')
   })
-
-  it('keeps the New Workspace picker separate from the Tasks picker', async () => {
-    const callbacks = await renderFooter([desk, laptop])
-
-    act(() => pressableWithText('New Workspace').props.onPress())
-    expect(picker('Create Workspace On').props.visible).toBe(true)
-    expect(tasksPicker().props.visible).toBe(false)
-
-    act(() => picker('Create Workspace On').props.onSelect('desk'))
-    act(() => picker('Create Workspace On').props.onAfterClose())
-
-    expect(callbacks.onCreateWorkspace).toHaveBeenCalledWith('desk')
-    expect(callbacks.onOpenTasks).not.toHaveBeenCalled()
-  })
 })

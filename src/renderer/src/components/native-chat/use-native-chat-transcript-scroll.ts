@@ -1,16 +1,4 @@
-// The transcript's scroll behaviour: staying pinned to the bottom while a turn
-// streams, offering the way back when the reader has left, and aligning a row or
-// a card to the top.
-//
-// Split from the list because windowing changed what these have to be careful
-// about, not what they decide: rows resolving their measured height move the
-// content constantly, so "the content changed" and "the reader scrolled" stopped
-// being the same event.
-//
-// The offset belongs to the virtualizer — every pin goes through it, so a scroll
-// it is still reconciling is replaced rather than raced. Following stops only on a
-// reader gesture or a row jump, never on layout or an application write, and
-// resumes when the reader returns to the end.
+// Virtualizer measurements move content without reader input; route pin writes through it and detach only on reader gestures/row jumps.
 
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
 import type { UIEventHandler } from 'react'
@@ -317,8 +305,7 @@ export function useNativeChatTranscriptScroll({
       }
       syncScrollState()
     })
-    // Observe the growing content, not just the fixed-height viewport, so an
-    // in-place streaming growth is seen; also watch the viewport for reflows.
+    // Observe content growth as well as viewport reflows; fixed viewport size misses streaming height changes.
     observer.observe(element)
     if (contentRef.current) {
       observer.observe(contentRef.current)

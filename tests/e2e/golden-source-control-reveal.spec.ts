@@ -9,8 +9,7 @@ import {
 } from './helpers/golden-source-control'
 import { waitForSessionReady } from './helpers/store'
 
-// Why its own file: release-cut restores golden-source-control-open-diff.spec.ts from main onto
-// older patch tags, which predate this menu item (#24502).
+// Keep separate from the open-diff golden that release-cut restores onto tags predating this menu item (#24502).
 test('@golden offers to reveal a changed file in the OS file manager from its Source Control row', async ({
   orcaPage,
   testRepoPath,

@@ -13,7 +13,8 @@ import {
   createTestStore,
   mockApi,
   resetRemoteRuntimeMocks,
-  resetWorktreeSliceModuleMemory
+  resetWorktreeSliceModuleMemory,
+  worktreeListMock
 } from './worktrees-slice-test-harness'
 
 const requestWorktreeBaseFallbackNotice = vi.hoisted(() => vi.fn())
@@ -54,7 +55,7 @@ describe('fetchWorktrees', () => {
       path: '/path/surviving'
     })
 
-    mockApi.worktrees.list.mockResolvedValue([surviving])
+    worktreeListMock.mockResolvedValue([surviving])
     store.setState({
       worktreesByRepo: { repo1: [removed, surviving] },
       sortEpoch: 7,
@@ -91,7 +92,7 @@ describe('fetchWorktrees', () => {
       path: '/path/surviving'
     })
 
-    mockApi.worktrees.list.mockResolvedValue([surviving])
+    worktreeListMock.mockResolvedValue([surviving])
     store.setState({
       worktreesByRepo: { repo1: [removed, surviving] },
       sortEpoch: 7,
@@ -135,7 +136,7 @@ describe('fetchWorktrees', () => {
       path: '/path/surviving'
     })
 
-    mockApi.worktrees.list.mockResolvedValue([surviving])
+    worktreeListMock.mockResolvedValue([surviving])
     store.setState({ worktreesByRepo: { repo1: [removed, surviving] } } as Partial<AppState>)
     await store.getState().updateWorktreeMeta(removed.id, { linkedBitbucketPR: 101 })
     await store.getState().updateWorktreeMeta(surviving.id, { linkedAzureDevOpsPR: 202 })
@@ -469,7 +470,7 @@ describe('fetchWorktrees', () => {
   it('accepts an empty refresh when the repo had no cached worktrees', async () => {
     const store = createTestStore()
 
-    mockApi.worktrees.list.mockResolvedValue([])
+    worktreeListMock.mockResolvedValue([])
     store.setState({ worktreesByRepo: {}, sortEpoch: 7 } as Partial<AppState>)
 
     await store.getState().fetchWorktrees('repo1')

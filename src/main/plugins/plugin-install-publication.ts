@@ -17,8 +17,7 @@ import {
   writePluginInstallProvenance
 } from './plugin-install-provenance'
 
-/** Publishes executable identity and provenance as one recoverable mutation,
- * then retains only current plus one rollback version. */
+/** Publish recoverable executable/provenance identity; retain one predecessor for rollback. */
 export async function publishPluginInstall(input: {
   pluginsDir: string
   pluginDir: string
@@ -40,13 +39,10 @@ export async function publishPluginInstall(input: {
     previousContentHash === input.entry.contentHash && matchesCurrentIdentity(legacyLockEntry)
       ? legacyLockEntry
       : null
-  // Provenance is immutable per executable identity. A same-byte reinstall
-  // is a no-op so a failed or interrupted source change cannot be recovered
-  // later as though it had successfully published.
+  // Same-byte reinstalls preserve immutable provenance; interrupted source changes must not appear published.
   const publishedEntry = existingProvenance ?? legacyCurrentEntry ?? input.entry
   const nextLock = upsertPluginLock(currentLock, publishedEntry)
-  // Why: after a crash between pointer and global-index publication, startup
-  // can reconstruct exact source/commit identity from this immutable record.
+  // Provenance repairs crashes between pointer and global-index publication.
   if (!existingProvenance) {
     await writePluginInstallProvenance(input.pluginDir, publishedEntry)
   }

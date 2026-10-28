@@ -47,8 +47,7 @@ export class MemoryResumeConfirmations {
     this.bases.delete(basisConnId)
   }
 
-  // Routed by where the basis lives, not by the switch, so a flip between accept and confirm
-  // neither fails the confirm nor sends it to a database that holds no basis for it.
+  // Route by basis ownership, not current switch, so mid-confirm flip cannot send an in-memory basis to nonexistent DB state.
   owns(request: ResumeConfirmRequest): boolean {
     this.expireResults()
     return this.bases.has(request.basisConnId) || this.results.has(resultKey(request))

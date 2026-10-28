@@ -122,7 +122,14 @@ describe('tab order in a layout-owner build', () => {
     insertUnifiedTabAfterAnchor(WT, 'tab-c', 'tab-a')
 
     expect(moves()).toEqual([
-      { worktreeId: WT, type: 'moveTab', tabId: 'tab-c', toGroupId: GROUP, index: 1 }
+      {
+        worktreeId: WT,
+        type: 'moveTab',
+        tabId: 'tab-c',
+        toGroupId: GROUP,
+        index: 1,
+        afterTabId: 'tab-a'
+      }
     ])
   })
 
@@ -135,6 +142,8 @@ describe('tab order in a layout-owner build', () => {
     for (const move of moves()) {
       order = order.filter((id) => id !== move.tabId)
       order.splice(move.index, 0, move.tabId)
+      // Each step's anchor is the tab its slot follows in the wanted order.
+      expect(move.afterTabId).toBe(order[move.index - 1] ?? null)
     }
     expect(order).toEqual(['tab-c', 'tab-b', 'tab-a'])
   })
@@ -154,7 +163,14 @@ describe('tab order in a layout-owner build', () => {
     restoreRecentlyClosedTabPosition(store.getState, WT, 'tab-b', { groupId: GROUP })
 
     expect(moves()).toEqual([
-      { worktreeId: WT, type: 'moveTab', tabId: 'tab-b', toGroupId: GROUP, index: 1 }
+      {
+        worktreeId: WT,
+        type: 'moveTab',
+        tabId: 'tab-b',
+        toGroupId: GROUP,
+        index: 1,
+        afterTabId: 'tab-a'
+      }
     ])
   })
 
@@ -164,7 +180,14 @@ describe('tab order in a layout-owner build', () => {
     restoreRecentlyClosedTabPosition(store.getState, WT, 'tab-c', { groupId: GROUP, groupIndex: 0 })
 
     expect(moves()).toEqual([
-      { worktreeId: WT, type: 'moveTab', tabId: 'tab-c', toGroupId: GROUP, index: 0 }
+      {
+        worktreeId: WT,
+        type: 'moveTab',
+        tabId: 'tab-c',
+        toGroupId: GROUP,
+        index: 0,
+        afterTabId: null
+      }
     ])
   })
 })

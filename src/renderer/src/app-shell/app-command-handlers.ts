@@ -28,7 +28,7 @@ import { shortcutPlatform } from './app-window-chrome'
 
 type AppStoreState = ReturnType<typeof useAppStore.getState>
 
-// Abstraction over a real KeyboardEvent and a synthetic double-tap gesture so one dispatch path serves both; KeybindingInput-compatible.
+// Share dispatch between KeyboardEvent and synthetic double-tap input.
 export type ShortcutDispatchInput = {
   isComposing?: boolean
   altGraph?: boolean
@@ -63,7 +63,7 @@ export type AppShortcutState = {
 }
 
 export function useAppShortcutActions() {
-  // Why: consolidate action refs into one useShallow subscription so React runs one equality check per store mutation instead of one per action.
+  // One shallow action subscription avoids an equality check per action on every store mutation.
   return useAppStore(
     useShallow((s) => ({
       toggleSidebar: s.toggleSidebar,
@@ -83,12 +83,7 @@ export function getKeybindingContext(target: EventTarget | null): KeybindingCont
     : 'app'
 }
 
-/**
- * The tab id the inline rename editor listens on, which differs per tab kind: a terminal tab is
- * addressed by its backing terminal id (`activeTabId`), a structured chat tab by its unified tab
- * id. `activeTabId` is terminal-only state and never moves for a structured tab, so reading it
- * there targets whichever terminal was last active. Mirrors TabGroupPanel's tab-strip resolution.
- */
+/** Terminal rename uses its backing entity ID; structured chat uses its unified tab ID. activeTabId stays on the last terminal, matching TabGroupPanel resolution. */
 function resolveRenameTargetTabId(activeWorktreeId: string | null): string | null {
   const store = useAppStore.getState()
   if (store.activeTabType === 'terminal') {
@@ -101,13 +96,7 @@ function resolveRenameTargetTabId(activeWorktreeId: string | null): string | nul
   return activeTab?.contentType === 'agent-session' ? activeTab.id : null
 }
 
-/**
- * Builds the app-level handlers for every keybindable action. Each returns whether it claimed
- * the chord, so an unavailable surface (settings view, closed floating panel) falls through to
- * the terminal or the next handler instead of silently no-opping.
- *
- * `input` is absent when a command is invoked from the palette/menu rather than a key event.
- */
+/** Return whether each action claimed the chord so unavailable surfaces fall through. Palette/menu invocations omit input. */
 export function createAppCommandHandlers(
   state: AppShortcutState,
   input?: ShortcutDispatchInput,
@@ -207,7 +196,7 @@ export function createAppCommandHandlers(
         }
         return claim('sidebar.childWorkspaces.toggle', () => {
           const expanding = store.collapsedGroups.has(groupKey)
-          // Why: same scroll anchoring as the chip click, so the viewport does not jump.
+          // Match chip-click scroll anchoring to avoid viewport jumps.
           requestVirtualizedScrollAnchorRecord('[data-worktree-sidebar]')
           store.toggleCollapsedGroup(groupKey)
           if (expanding) {
@@ -231,8 +220,7 @@ export function createAppCommandHandlers(
         if (!workspaceChromeActive || floatingWorkspaceFocused) {
           return false
         }
-        // Why: a structured chat tab is renamed through the same inline editor, so gating on
-        // 'terminal' alone left the shortcut a silent no-op there.
+        // Resolve both terminal and structured-chat rename targets; a terminal-only gate silently ignores chat.
         const tabId = resolveRenameTargetTabId(activeWorktreeId)
         if (!tabId) {
           return false

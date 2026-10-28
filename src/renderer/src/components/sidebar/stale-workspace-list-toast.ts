@@ -1,8 +1,7 @@
 import { toast } from 'sonner'
 import { translate } from '@/i18n/i18n'
 
-// Why: keys keep their original `delete.worktree.flow` namespace so the existing
-// translations are not orphaned by the move out of that module.
+// Retain translation keys from the original module so existing translations remain usable.
 function staleWorkspaceListToast(title: string): void {
   toast.info(title, {
     description: translate(

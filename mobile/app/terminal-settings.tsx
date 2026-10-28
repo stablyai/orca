@@ -10,13 +10,18 @@ import Animated, {
 import { useRouter } from 'expo-router'
 import { ChevronLeft, ChevronRight, Smartphone, Type } from 'lucide-react-native'
 import { colors, spacing } from '../src/theme/mobile-theme'
+import { useMobileColorScheme } from '../src/theme/use-mobile-color-scheme'
 import { loadHosts } from '../src/transport/host-store'
 import type { HostProfile } from '../src/transport/types'
 import { useFocusedSettingsHostClients } from '../src/transport/settings-host-client-connections'
 import type { RpcClient } from '../src/transport/rpc-client'
 import { PickerModal, type PickerOption } from '../src/components/PickerModal'
 import { TerminalShortcutSettings } from '../src/components/TerminalShortcutSettings'
-import { setTerminalAutoRestoreFitMsForHost } from '../src/terminal/terminal-auto-restore-fit-state'
+import {
+  readTerminalAutoRestoreFitMs,
+  saveTerminalAutoRestoreFitMs,
+  setTerminalAutoRestoreFitMsForHost
+} from '../src/terminal/terminal-auto-restore-fit-state'
 import { terminalSettingsScreenStyles as styles } from '../src/terminal/terminal-settings-screen-styles'
 import { setTerminalSettingsScrollEnabled } from '../src/terminal/terminal-settings-scroll-lock'
 import {
@@ -30,8 +35,7 @@ type RestoreValue = 'indefinite' | '60s' | '5m' | '30m'
 
 type TextSizeValue = 'smallest' | 'smaller' | 'default' | 'large' | 'larger' | 'largest'
 
-// scale = baseline zoom the terminal WebView applies on top of fit-to-width.
-// Keep in sync with TERMINAL_TEXT_SCALES; pinch-to-zoom snaps to these values.
+// Baseline zoom sits above fit-to-width; keep presets in sync with TERMINAL_TEXT_SCALES and pinch snapping.
 const TEXT_SIZE_OPTIONS: (PickerOption<TextSizeValue> & { scale: number })[] = [
   { value: 'smallest', label: 'Smallest (50%)', scale: 0.5 },
   { value: 'smaller', label: 'Smaller (75%)', scale: 0.75 },
@@ -64,10 +68,7 @@ function valueFromMs(ms: number | null | undefined): RestoreValue {
   if (exact) {
     return exact.value
   }
-  // Why: server may return a non-preset ms (custom value, future preset,
-  // or server-side clamp). Snap to the closest finite preset so the
-  // picker's selected radio agrees with the row sublabel rendered by
-  // autoRestoreSummary ("After Xs").
+  // Snap custom/future/clamped server durations to nearest finite preset so picker agrees with autoRestoreSummary.
   let closest: (typeof AUTO_RESTORE_FIT_OPTIONS)[number] | null = null
   let bestDelta = Infinity
   for (const opt of AUTO_RESTORE_FIT_OPTIONS) {
@@ -105,6 +106,7 @@ function HostFitRow({
   ms: number | null | undefined
   onPress: () => void
 }): React.JSX.Element {
+  useMobileColorScheme()
   return (
     <Pressable
       style={({ pressed }) => [styles.row, pressed && styles.rowPressed]}
@@ -122,6 +124,7 @@ function HostFitRow({
 }
 
 export default function TerminalSettingsScreen() {
+  useMobileColorScheme()
   const router = useRouter()
   const insets = useSafeAreaInsets()
   const [hosts, setHosts] = useState<HostProfile[]>([])
@@ -135,11 +138,7 @@ export default function TerminalSettingsScreen() {
     [hostClients]
   )
 
-  // Why: per-host current value, lazily fetched. We keep state at the
-  // screen level rather than per-row so the picker can render at root
-  // level — embedding PickerModal inside a row clipped its BottomDrawer
-  // absoluteFill backdrop to the ScrollView content frame and made the
-  // drawer appear cut-off.
+  // Keep host values/picker at screen root: row-nested PickerModal clips drawer backdrop to ScrollView content.
   const [hostMs, setHostMs] = useState<Record<string, number | null | undefined>>({})
   const [pickerHostId, setPickerHostId] = useState<string | null>(null)
 
@@ -158,8 +157,7 @@ export default function TerminalSettingsScreen() {
   }, [])
 
   const [autocompleteEnabled, setAutocompleteEnabled] = useState(false)
-  // Why: a fast toggle before the initial load resolves must win — otherwise the
-  // delayed read would clobber the user's choice with the stored (stale) value.
+  // Fast toggle must win over delayed initial load.
   const userToggledAutocompleteRef = useRef(false)
   useEffect(() => {
     let stale = false
@@ -185,20 +183,12 @@ export default function TerminalSettingsScreen() {
       if (!client) {
         continue
       }
-      void client
-        .sendRequest('terminal.getAutoRestoreFit')
-        .then((resp) => {
-          if (cancelled) {
-            return
-          }
-          const value = (resp as { ms?: number | null } | null)?.ms
-          // Why: reconnect/status ticks can replay the same value; preserving
-          // object identity avoids rerendering every settings row again.
-          setHostMs((prev) => setTerminalAutoRestoreFitMsForHost(prev, host.id, value))
-        })
-        .catch(() => {
+      void readTerminalAutoRestoreFitMs(client)
+        .catch(() => null)
+        .then((value) => {
           if (!cancelled) {
-            setHostMs((prev) => setTerminalAutoRestoreFitMsForHost(prev, host.id, null))
+            // Preserve object identity on repeated reconnect/status values to avoid rerendering every row.
+            setHostMs((prev) => setTerminalAutoRestoreFitMsForHost(prev, host.id, value))
           }
         })
     }
@@ -218,16 +208,12 @@ export default function TerminalSettingsScreen() {
     }
     setHostMs((prev) => setTerminalAutoRestoreFitMsForHost(prev, hostId, opt.ms))
     try {
-      const resp = (await client.sendRequest('terminal.setAutoRestoreFit', {
-        ms: opt.ms
-      })) as { ms?: number | null } | null
-      setHostMs((prev) => setTerminalAutoRestoreFitMsForHost(prev, hostId, resp?.ms))
+      const saved = await saveTerminalAutoRestoreFitMs(client, opt.ms)
+      setHostMs((prev) => setTerminalAutoRestoreFitMsForHost(prev, hostId, saved))
     } catch {
       try {
-        const resp = (await client.sendRequest('terminal.getAutoRestoreFit')) as {
-          ms?: number | null
-        } | null
-        setHostMs((prev) => setTerminalAutoRestoreFitMsForHost(prev, hostId, resp?.ms))
+        const current = await readTerminalAutoRestoreFitMs(client)
+        setHostMs((prev) => setTerminalAutoRestoreFitMsForHost(prev, hostId, current))
       } catch {
         // give up silently — the next mount retries
       }
@@ -242,8 +228,7 @@ export default function TerminalSettingsScreen() {
   const scrollHandler = useAnimatedScrollHandler((event) => {
     scrollOffsetY.value = event.contentOffset.y
   })
-  // Why: imperative toggle instead of state — a re-render while a drag gesture
-  // is active would rebuild the row gestures and could cancel the drag.
+  // Toggle imperatively: rerendering during drag rebuilds row gestures and can cancel it.
   const setScrollEnabled = useCallback(
     (enabled: boolean) => {
       setTerminalSettingsScrollEnabled(scrollRef, enabled)
@@ -336,10 +321,9 @@ export default function TerminalSettingsScreen() {
 
         <Text style={[styles.groupHeading, styles.inputGroupGap]}>KEYBOARD INPUT</Text>
         <Text style={styles.groupDescription}>
-          Enable phone-style autocomplete, autocorrect, and spelling suggestions in the terminal
-          command bar. Off by default so the keyboard never rewrites commands, flags, or paths.
-          Direct keyboard input (when keys go straight to the terminal) always sends raw keystrokes,
-          so suggestions don&apos;t apply there.
+          Autocomplete, autocorrect, and spelling suggestions apply only to buffered command input.
+          Use the double-chevron button above the keyboard to switch from live input, then edit your
+          command before tapping Send. Off by default to avoid rewriting commands, flags, or paths.
         </Text>
         <View style={[styles.section, styles.sectionTopGap]}>
           <View style={styles.row}>

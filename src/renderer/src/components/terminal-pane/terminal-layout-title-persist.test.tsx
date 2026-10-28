@@ -3,6 +3,7 @@ import { cleanup, renderHook } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { useTerminalPaneLayoutPersistence } from './use-terminal-pane-layout-persistence'
 import type { sendLayoutCommandToOwner } from '@/runtime/layout-owner-command'
+import { LOCAL_LAYOUT_APPLY_ORIGIN } from '@/runtime/server-layout-apply-routes'
 
 const LEFT = '11111111-1111-4111-8111-111111111111'
 const RIGHT = '22222222-2222-4222-8222-222222222222'
@@ -79,7 +80,7 @@ function renderPersistence() {
       controller as unknown as Parameters<typeof useTerminalPaneLayoutPersistence>[0]
     )
   )
-  return { hook, push }
+  return { hook, push, setTabLayout }
 }
 
 afterEach(() => {
@@ -141,9 +142,24 @@ describe('terminal layout title persist', () => {
     expect(push).not.toHaveBeenCalled()
 
     for (const [, , handlers] of mocks.sendLayoutCommandToOwner.mock.calls) {
-      handlers.apply({})
+      handlers.apply({}, LOCAL_LAYOUT_APPLY_ORIGIN)
     }
     // The pane follows the layout's titles main's frame writes (use-host-pane-title-sync.ts).
     expect(push).not.toHaveBeenCalled()
+  })
+})
+
+describe('terminal layout persist with host-retired panes', () => {
+  it('keeps a host-retired pane out of the layout it writes while that pane is still mounted', () => {
+    const { hook, push, setTabLayout } = renderPersistence()
+    hook.result.current.hostRetiredLeafIdsRef.current = new Set([RIGHT])
+
+    hook.result.current.changePaneTitle(1, 'build')
+
+    const written = setTabLayout.mock.lastCall?.[1]
+    expect(written?.root).toEqual({ type: 'leaf', leafId: LEFT })
+    expect(written?.activeLeafId).toBe(LEFT)
+    expect(written?.ptyIdsByLeafId).toEqual({ [LEFT]: 'remote:host:1' })
+    expect(push.mock.lastCall?.[0].layout.root).toEqual({ type: 'leaf', leafId: LEFT })
   })
 })

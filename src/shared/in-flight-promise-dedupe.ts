@@ -33,13 +33,11 @@ export class InFlightPromiseDedupe<T> {
       return existing.promise
     }
     if (this.entries.size >= this.maxEntries) {
-      // Why: evicting active work would let later identical calls duplicate it;
-      // overflow calls still run but cannot extend this object's retention.
+      // Do not evict active work and duplicate it; run overflow without retaining extra entries.
       return Promise.resolve().then(load)
     }
 
-    // Why: this is in-flight coalescing only; the next read after settle must
-    // observe fresh git state instead of a cached diff.
+    // Coalesce only until settlement; subsequent reads must observe fresh Git state.
     const promise = Promise.resolve()
       .then(load)
       .finally(() => {
@@ -53,8 +51,7 @@ export class InFlightPromiseDedupe<T> {
       })
     const entry = {
       promise,
-      // Why: renderer diff rows already time out hung loads; drop matching
-      // in-flight entries too so retry can issue fresh git work.
+      // Expire hung entries alongside renderer timeouts so retries can start fresh Git work.
       timeout:
         this.maxInFlightMs > 0
           ? setTimeout(() => {

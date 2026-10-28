@@ -4,22 +4,10 @@ import {
   PAGE_STORAGE_MAX_VALUE_CHARS
 } from '../page-storage-keys'
 
-/**
- * The page's AsyncStorage: the app's store, read from `init` and written over the `storage` grant.
- *
- * AsyncStorage's web build is `window.localStorage`, and the page has none worth having — Android
- * turns DOM storage off, and on iOS the origin host is the session id, so every remount starts
- * empty. A pin that silently forgets itself is worse than one that cannot be set, so this holds the
- * app's own values instead: `init` primes them, a write is applied here and posted, and the app is
- * where it lands.
- *
- * Reads are synchronous against that cache behind an async surface, which is what the real module
- * is too. Nothing here waits on the shell: a write the shell drops is a write the next `init`
- * corrects, and a read that waited for a round trip would change what the first render sees.
- */
+// Use init-primed native storage, not page localStorage (disabled on Android and session-scoped on iOS).
+// Keep reads synchronous behind AsyncStorage’s async API for first-render timing; writes update cache/post without waiting, and later init repairs dropped writes.
 type PageStorageWriter = (key: string, value: string | null) => boolean
 
-/** Why a write went nowhere, in the page's own words rather than a boolean. */
 type PageStorageRefusal = 'not-allowed' | 'too-large' | 'not-delivered'
 
 const REFUSAL_SENTENCES: Record<PageStorageRefusal, string> = {
@@ -28,23 +16,8 @@ const REFUSAL_SENTENCES: Record<PageStorageRefusal, string> = {
   'not-delivered': 'the app did not take the write'
 }
 
-/**
- * A write the page could not make, as something a screen can put on itself.
- *
- * Raised for one refusal only, `too-large`, and that scope is the whole of ruling 33.4. The real
- * AsyncStorage rejects when its store refuses — a value over the row limit is a SQLite error on
- * Android — so rejecting is the module's own contract for a value too big, and the caller that
- * needs it is written for it: the durable send journal, whose composer catches this and answers
- * "Message not sent" rather than sending a mutation whose operation id was never written down
- * (ruling 7).
- *
- * The other two refusals stay silent drops, because nothing catches them. A page-closure writer of
- * an unlisted key calls `setItem` and awaits it with no catch —
- * `notification-delivery-preferences.ts:39` is the plain case, and `preferences.ts` has several —
- * so rejecting there converts a preference the page was never allowed to keep into an unhandled
- * rejection in the document. A write nobody may make and a write the shell would not take are both
- * the page failing to change anything, which is what it already does; the log is where they go.
- */
+// Reject only too-large writes: the durable journal’s composer catches that to prevent mutations with unpersisted operation ids (ruling 7).
+// Unlisted/ungranted preferences drop silently because their callers have no rejection handlers; log the refusal instead (ruling 33.4).
 export class PageStorageRefusedError extends Error {
   readonly refusal: PageStorageRefusal
   readonly key: string
@@ -59,23 +32,13 @@ export class PageStorageRefusedError extends Error {
 
 const values = new Map<string, string>()
 let write: PageStorageWriter = () => false
-/**
- * The allowlisted keys `init` could not carry because the app's value was over the page's cap.
- *
- * Writable by the allowlist and unwritable in fact (ruling 33.6): the page holds no value for one
- * of these, so anything it writes replaces what the device has rather than extending it. Refused
- * as `too-large`, which is the truth about the key and the one refusal the composer catches.
- */
+// Refuse withheld oversized keys as too-large: the page holds no starting value, so any write would overwrite rather than extend the native value (ruling 33.6).
 let oversizeKeys: ReadonlySet<string> = new Set()
-/** The host this document was opened for; no key belonging to another one is writable. */
 let hostId = ''
-/** And the route, because two of the keys are scoped to the workspace the route names. */
 let routePathname = ''
-/** Set for a host-area page, which opens any workspace of its host in-page: those keys are read
- *  from the shell on demand and may be written. */
+// Host-area pages read workspace-scoped keys on demand and may write them across this host’s workspaces.
 let readWorkspaceKey: ((key: string) => Promise<string | null>) | null = null
 
-/** Called once by the entry, before anything renders, with what `init` carried. */
 export function publishPageStorage(
   entries: Readonly<Record<string, string>>,
   writer: PageStorageWriter,
@@ -101,24 +64,16 @@ function getItem(key: string): Promise<string | null> {
     : Promise.resolve(values.get(key) ?? null)
 }
 
-/**
- * Refused rather than kept locally, and named rather than dropped.
- *
- * A key outside the allowlist is one the shell will not write, so holding it here would answer a
- * later read with a value no other screen in the app can see — a pin that looks set and is not,
- * which is exactly the failure the grant exists to avoid.
- */
+// Never keep refused writes locally; an app-invisible cache value would make a pin appear persisted only to this document.
 function accept(key: string, value: string | null): PageStorageRefusal | null {
   if (!isPageStorageKeyForRoute(key, hostId, routePathname, readWorkspaceKey !== null)) {
     return 'not-allowed'
   }
-  // The envelope's own bound, imported rather than restated: without it an oversized value is
-  // cached here and dropped on the wire, so the page reads back a write no other screen can see.
+  // Use the envelope’s bound so cached values cannot exceed what the shell will write.
   if (value !== null && value.length > PAGE_STORAGE_MAX_VALUE_CHARS) {
     return 'too-large'
   }
-  // And the same refusal for a key whose app-side value was already over it: the page was handed
-  // nothing for this key, so any write it makes is a replacement rather than an edit.
+  // Withheld oversized app values are unwritable too; without their initial contents a page write is destructive replacement.
   if (oversizeKeys.has(key)) {
     return 'too-large'
   }
@@ -133,15 +88,7 @@ function accept(key: string, value: string | null): PageStorageRefusal | null {
   return null
 }
 
-/**
- * The error a refusal is, or nothing. Logged here, because the drop is the thing a reader of a
- * device log has to be able to find — a preference that did not stick looks identical to one
- * nobody set.
- *
- * An error rather than a rejected promise, so a caller that raises no rejection creates none. A
- * promise built per refusal and then discarded is an unhandled rejection in the page, which is
- * exactly what this module's rejection scope exists to avoid.
- */
+// Log refused writes but build plain errors first; discarded rejected promises would create unhandled rejections before the caller chooses its outcome.
 function refusalError(
   key: string,
   refusal: PageStorageRefusal | null
@@ -156,22 +103,12 @@ function refusalError(
   return null
 }
 
-/** One refusal: the rejection the composer's catch is written for, or a logged drop. */
 function settle(key: string, refusal: PageStorageRefusal | null): Promise<void> {
   const error = refusalError(key, refusal)
   return error === null ? Promise.resolve() : Promise.reject(error)
 }
 
-/**
- * A batch is one call with one answer, so it stops where it cannot go on: every pair before the
- * refusal is applied, the refusal is the answer, and nothing after it is attempted (ruling 35).
- *
- * What this replaces collected a refusal per pair, logged each, and rejected with the first that
- * could reject while the rest of the batch went in anyway — one promise describing a call where
- * some pairs landed and some did not, which is the thing a caller cannot act on. No page-closure
- * writer calls `multiSet` or `multiRemove` today, so this is the rule for whoever writes the
- * first one rather than a change to anybody's behaviour.
- */
+// Apply pairs in order and stop at the first refusal: one batch has one result, not a reported failure mixed with later successful writes (ruling 35).
 function applyBatch(pairs: readonly (readonly [string, string | null])[]): Promise<void> {
   for (const [key, value] of pairs) {
     const refusal = accept(key, value)
@@ -194,7 +131,6 @@ const pageAsyncStorage = {
   multiRemove: (keys: readonly string[]): Promise<void> =>
     applyBatch(keys.map((key) => [key, null] as const)),
   getAllKeys: (): Promise<string[]> => Promise.resolve([...values.keys()]),
-  // The app's store is not this document's to empty, and no screen in the page closure calls it.
   clear: (): Promise<void> => Promise.resolve()
 }
 

@@ -1,10 +1,5 @@
-// Why: keep these shapes in lockstep with src/shared/types.ts and
-// src/shared/rate-limit-types.ts. We don't import from desktop here because
-// the mobile bundle must not pull in Electron-coupled type files.
-//
-// Pure state/selectors live here (no React Native imports) so they can be
-// unit-tested directly; AccountUsage.tsx re-exports them alongside the
-// UsageBar component.
+// Keep shapes aligned with shared types/rate-limit-types without pulling Electron-coupled desktop graph into mobile.
+// Pure RN-free selectors stay directly testable; AccountUsage re-exports them with UsageBar.
 import { formatResetCountdown } from '../../../src/shared/rate-limit-reset-format'
 import type {
   AccountsSnapshot,
@@ -53,11 +48,7 @@ export function getInactiveProviderUsage(
   return list.find((u) => u.accountId === accountId) ?? null
 }
 
-// Why: rate limits are fetched for the active target even when no Orca-managed
-// account exists (the default target is the agent's own system-default login).
-// Treat a provider as having usage worth showing when a fetch succeeded or any
-// window has data; an unavailable/error provider with no windows means the
-// system-default login has no credentials for it, so there is nothing to show.
+// System-default logins still fetch quota without managed accounts. Show successful provider or any window data; empty unavailable/error means no credentials.
 export function hasActiveProviderUsage(limits: ProviderRateLimits | null): boolean {
   if (!limits) {
     return false
@@ -73,8 +64,7 @@ export function hasActiveProviderUsage(limits: ProviderRateLimits | null): boole
   return limits.status === 'ok'
 }
 
-// Why: transient errors keep the last successful window data, so availability
-// is per window rather than per provider status.
+// Determine availability per window because transient provider errors retain successful window data.
 export function getUsageBarState(
   limits: ProviderRateLimits | null,
   windowKey: 'session' | 'weekly',
@@ -90,15 +80,7 @@ export function getUsageBarState(
   }
 }
 
-/**
- * Reset countdown for one window, e.g. "Resets in 3h 54m" / "Resets now",
- * or null when the window has no reset timestamp (so the UI degrades to
- * today's bars-only layout).
- *
- * Why: shares formatResetCountdown with the desktop status-bar tooltip so the
- * copy stays identical across surfaces. `now` is a parameter so the function
- * stays pure and unit-testable.
- */
+// Use desktop formatResetCountdown copy with injectable now; return null without reset timestamp to retain bars-only UI.
 export function getWindowResetLabel(
   limits: ProviderRateLimits | null,
   windowKey: 'session' | 'weekly',
@@ -111,9 +93,7 @@ export function getWindowResetLabel(
   return formatResetCountdown(resetsAt - now)
 }
 
-// Why: the usage UI must render for the system-default login, not only for
-// Orca-managed accounts. Show a provider when it has at least one managed
-// account OR active rate-limit data for the system-default target.
+// Show provider with managed accounts or active system-default quota; management is not required for usage UI.
 export function hasRenderableUsage(snapshot: AccountsSnapshot, provider: ProviderKey): boolean {
   const accounts = provider === 'claude' ? snapshot.claude.accounts : snapshot.codex.accounts
   if (accounts.length > 0) {

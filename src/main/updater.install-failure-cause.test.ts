@@ -3,13 +3,13 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type * as TracerModule from './observability/tracer'
 import type * as UpdaterModule from './updater'
 import { loadUpdaterModule, warmUpdaterModule } from './updater-test-module-loader'
+import { updaterMainWindow } from './updater-test-main-window'
 
 const {
   appMock,
   browserWindowMock,
   nativeUpdaterMock,
   autoUpdaterMock,
-  isMock,
   killAllPtyMock,
   recordUpdaterLifecycleMock
 } = vi.hoisted(() => {
@@ -79,7 +79,7 @@ const {
     browserWindowMock: { getAllWindows: vi.fn(() => []) },
     nativeUpdaterMock: { on: vi.fn() },
     autoUpdaterMock,
-    isMock: { dev: false },
+
     killAllPtyMock: vi.fn(),
     recordUpdaterLifecycleMock: vi.fn()
   }
@@ -95,10 +95,17 @@ vi.mock('electron', () => ({
 }))
 
 vi.mock('electron-updater', () => ({ autoUpdater: autoUpdaterMock }))
+vi.mock('./updater-prerelease-feed', () => ({
+  fetchNewerReleaseTagsWithReadiness: vi
+    .fn()
+    .mockResolvedValue({ tags: ['v1.4.241'], state: 'ready' }),
+  getReleaseDownloadUrl: (tag: string) =>
+    `https://github.com/stablyai/orca/releases/download/${tag}`
+}))
+
 vi.mock('./electron-updater-loader', () => ({
   loadElectronAutoUpdater: () => autoUpdaterMock
 }))
-vi.mock('@electron-toolkit/utils', () => ({ is: isMock }))
 vi.mock('./ipc/pty/kill-all', () => ({ killAllPty: killAllPtyMock }))
 vi.mock('./updater-changelog', () => ({
   fetchChangelog: vi.fn().mockResolvedValue(null)
@@ -116,11 +123,9 @@ vi.mock('./linux-update-package-type', () => ({
   isExternallyManagedLinuxInstall: () => false
 }))
 
-// The real electron-updater DebUpdater failure text when elevation is impossible.
 const DEB_ELEVATION_ERROR =
   'Error: Command failed: /usr/bin/pkexec --disable-internal-agent "/bin/bash" "-c" "dpkg -i \'/home/u/.cache/orca-updater/pending/orca-ide_1.4.163_amd64.deb\'"\npkexec must be setuid root'
 
-// electron-updater's ERR_UPDATER_INVALID_SIGNATURE text, which drives its own card in UpdateCard.
 const WINDOWS_SIGNATURE_MISMATCH_ERROR =
   'New version 1.4.163 is not signed by the application owner: publisherNames: Orca, Inc.'
 
@@ -152,17 +157,15 @@ function installSpan(): CapturedSpan | undefined {
   return spans.find((span) => span.name === 'updater.install')
 }
 
-/** Drives the updater to `downloaded`, the only state `quitAndInstall` acts on. */
 async function reachDownloaded(): Promise<typeof UpdaterModule> {
-  const mainWindow = { webContents: { send: vi.fn() } }
+  const mainWindow = updaterMainWindow(vi.fn())
   autoUpdaterMock.checkForUpdates.mockResolvedValue(undefined)
-  // Why: resetModules gives each test a fresh module graph, so the sink must be installed on the
-  // same tracer instance updater.ts will import.
+  // Install the sink on the fresh tracer instance the updater will import.
   tracer = await import('./observability/tracer')
   tracer.setActiveSink(capturingSink())
   const updater = await loadUpdaterModule()
 
-  updater.setupAutoUpdater(mainWindow as never)
+  updater.setupAutoUpdater(mainWindow)
   await vi.advanceTimersByTimeAsync(0)
   await vi.waitFor(() => {
     expect(autoUpdaterMock.checkForUpdates).toHaveBeenCalledTimes(1)
@@ -179,12 +182,7 @@ async function reachDownloaded(): Promise<typeof UpdaterModule> {
 
 warmUpdaterModule()
 
-/**
- * On a `.deb` Linux host electron-updater's `install()` catches the failed elevation and
- * re-dispatches it through the 'error' event *synchronously* inside `quitAndInstall()`. Orca
- * recovers the app state, so the payload has to survive on the status and the span has to exit
- * Failure — otherwise the only record of why the install never ran is destroyed (#11906).
- */
+// DebUpdater can emit install errors synchronously; preserve their cause through recovery.
 describe('quitAndInstall failure carries the updater cause', () => {
   beforeEach(() => {
     vi.resetModules()
@@ -196,7 +194,7 @@ describe('quitAndInstall failure carries the updater cause', () => {
     appMock.getVersion.mockReturnValue('1.4.162')
     appMock.quit.mockReset()
     appMock.isPackaged = true
-    isMock.dev = false
+
     killAllPtyMock.mockReset()
     recordUpdaterLifecycleMock.mockReset()
     Object.defineProperty(process, 'platform', {
@@ -233,8 +231,6 @@ describe('quitAndInstall failure carries the updater cause', () => {
 
     const status = getUpdateStatus()
     expect(status.state).toBe('error')
-    // The only place the real cause exists is this event payload; dropping it leaves nothing
-    // in the logs and nothing actionable in the client's remote-server update dialog.
     const message = status.state === 'error' ? status.message : ''
     expect(message).toContain('pkexec')
     expect(message).toContain('Could not start the update installer.')
@@ -311,7 +307,6 @@ describe('quitAndInstall failure carries the updater cause', () => {
     })
 
     const status = getUpdateStatus()
-    // Prefixing this would put two contradictory instructions on one card.
     expect(status.state === 'error' ? status.message : '').toBe(WINDOWS_SIGNATURE_MISMATCH_ERROR)
   })
 
@@ -343,7 +338,6 @@ describe('quitAndInstall failure carries the updater cause', () => {
   it('carries the cause when quitAndInstall throws instead of dispatching an error event', async () => {
     const { quitAndInstall, getUpdateStatus } = await reachDownloaded()
 
-    // Squirrel/NSIS can reject the request by throwing out of the native call; the event path never runs.
     autoUpdaterMock.quitAndInstall.mockImplementation(() => {
       throw new Error('Squirrel.framework is missing from the app bundle')
     })

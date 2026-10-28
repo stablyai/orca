@@ -23,6 +23,7 @@ function fail(message: string): RpcFailure {
   return { id: 'r', ok: false, error: { code: 'x', message }, _meta: { runtimeId: 'rt' } }
 }
 function malformedFailure(error: { code?: string; message?: string }): RpcResponse {
+  // SAFETY: Intentionally omit RPC error fields to exercise older or malformed server replies.
   return { id: 'r', ok: false, error, _meta: { runtimeId: 'rt' } } as unknown as RpcResponse
 }
 
@@ -212,22 +213,6 @@ describe('rpc wrappers', () => {
 })
 
 describe('dictationModelRowAction', () => {
-  // #31174: a cloud-only host (Windows or a managed SSH server) lists only OpenAI rows.
-  it('lets a ready cloud model be picked like a downloaded one', () => {
-    const cloud = model({
-      id: 'openai-gpt-4o-mini-transcribe',
-      provider: 'openai',
-      status: 'ready'
-    })
-    expect(dictationModelRowAction(cloud, '')).toBe('use')
-    expect(dictationModelRowAction(cloud, cloud.id)).toBe('in-use')
-  })
-
-  it('asks for a key on the host when a cloud model is not ready', () => {
-    const cloud = model({ provider: 'openai', status: 'not-downloaded' })
-    expect(dictationModelRowAction(cloud, '')).toBe('needs-api-key')
-  })
-
   it('keeps on-device rows downloadable until they are ready', () => {
     expect(dictationModelRowAction(model({ status: 'not-downloaded' }), '')).toBe('download')
     expect(dictationModelRowAction(model({ status: 'error' }), '')).toBe('download')

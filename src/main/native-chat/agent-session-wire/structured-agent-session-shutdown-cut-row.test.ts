@@ -1,7 +1,3 @@
-// A quit or update that cuts a reply writes one row saying so, in the words every client already
-// prints, with the cause beside them. A turn that finished, a person's Stop and an idle eviction
-// write none.
-
 import { rm } from 'node:fs/promises'
 import { join } from 'node:path'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
@@ -11,7 +7,7 @@ import {
 } from '../../../shared/agent-session-journal-types'
 import { readAgentSessionOrcaStop } from '../../../shared/agent-session-orca-stop'
 import { withNativeChatCutTurnNotices } from '../../../shared/native-chat-cut-turn-notice'
-import { latestNativeChatOrcaStopCut } from '../../../shared/native-chat-orca-stop-cut'
+import { latestNativeChatOrcaStopCut } from '../../../shared/native-chat/native-chat-orca-stop-cut'
 import { AgentSessionRecoveryCapsule } from '../../runtime/agent-session-recovery-capsule'
 import { openTestAgentSessionRecordStore } from '../../runtime/agent-session-record-store-test-harness'
 import {
@@ -40,7 +36,6 @@ const LEGACY_TEXT =
   'Codex stopped while this response was in progress. You can continue in this conversation.'
 
 let host: StructuredAgentSessionHost
-/** How the provider ends its open turn as it is stopped. */
 let providerEnd: Pick<AgentJournalTurnLifecycle, 'state' | 'outcome' | 'completedAt'>
 
 beforeEach(() => {
@@ -99,8 +94,6 @@ async function runningTurn(): Promise<void> {
   await host.flushStreamedEvents(SESSION)
 }
 
-/** The Orca that ran the turn dies with no teardown; the next one starts over the same files and
- *  finds the turn's owner gone. */
 async function restartAfterDeath(): Promise<void> {
   const { root } = hostTestState()
   beginAgentSessionRuntimeIncarnationForTest()
@@ -153,7 +146,6 @@ describe('the row a quit writes for the reply it cut', () => {
       orcaStop: { cause: trigger }
     })
     expect(row?.turnScope).toEqual({ kind: 'turn', turnItemId })
-    // A client that reads no cause still prints exactly one row for the cut, in today's words.
     expect(readerErrors).toEqual([LEGACY_TEXT])
     expect(latestNativeChatOrcaStopCut(items, [])).toEqual({ turnItemId, cause: trigger })
   })
@@ -186,7 +178,6 @@ describe('the row a quit writes for the reply it cut', () => {
 
     const { items, stopRows, readerErrors } = await reread()
     expect(stopRows).toEqual([])
-    // The cut keeps today's derived notice, and offers no Continue.
     expect(readerErrors).toEqual([LEGACY_TEXT])
     expect(latestNativeChatOrcaStopCut(items, [])).toBeNull()
   })
@@ -210,7 +201,7 @@ describe('the row a restart writes for a reply its Orca died in', () => {
 
   it('names the update an unfinished quit began, never a crash', async () => {
     await runningTurn()
-    // The quit recorded its end, then died before it stopped the agent.
+    // Crash after recording runtime end but before stopping the provider.
     recordAgentSessionRuntimeEnd('update', HOST_TEST_NOW)
 
     await restartAfterDeath()
@@ -227,7 +218,6 @@ describe('the row a restart writes for a reply its Orca died in', () => {
 
     const { stopRows, readerErrors } = await reread()
     expect(stopRows).toEqual([])
-    // The cut keeps today's words.
     expect(readerErrors).toEqual([LEGACY_TEXT])
   })
 })

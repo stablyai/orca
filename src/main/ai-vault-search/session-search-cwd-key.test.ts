@@ -2,9 +2,7 @@ import { expect, it } from 'vitest'
 import { folderGroupKey } from '../../shared/ai-vault-session-filters'
 import { cwdKey } from './session-search-file-records'
 
-// The sidebar groups sessions by `folderGroupKey`, which is the shared
-// normalizer under a `folder:` prefix. A hit's `cwd_key` has to be the same
-// string, or joining an indexed hit to a sidebar group returns nothing.
+// Indexed cwd keys must match the sidebar’s folder-group normalization.
 const CASES: [name: string, cwd: string][] = [
   ['a POSIX path', '/repo/app'],
   ['a trailing slash', '/repo/app/'],
@@ -21,8 +19,6 @@ it.each(CASES)('keys %s exactly as the sidebar does', (_name, cwd) => {
 })
 
 it('keeps the root as a path rather than collapsing it to nothing', () => {
-  // An empty key is indistinguishable from "no cwd", and the scope filter builds
-  // its child prefix as `key + '/'`, which would be `//` for an empty key.
   expect(cwdKey('/')).toBe('/')
 })
 

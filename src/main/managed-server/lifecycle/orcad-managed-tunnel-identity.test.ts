@@ -1,7 +1,7 @@
 import type { PairedRuntimeConnection } from '../../../shared/paired-runtime-connection'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { encodePairingOffer, PAIRING_OFFER_VERSION } from '../../../shared/pairing'
-import { RemoteRuntimeClientError } from '../../../shared/remote-runtime-client-error'
+import { RemoteRuntimeClientError } from '../../../shared/remote-runtime/remote-runtime-client-error'
 import type { ServeReadiness } from '../../server/serve-readiness'
 
 const verifyRuntimePairingIdentity = vi.hoisted(() =>

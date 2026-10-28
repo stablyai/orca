@@ -1,11 +1,4 @@
-/**
- * E2E test for the overflowing tab strip in real browser layout: the active tab docks to the edge
- * it would scroll past, and a tab arriving off screen is revealed beside it without the strip
- * visibly scrolling or the active tab flickering out of view.
- *
- * Why E2E: the unit tests mock slot geometry, so they assume `position: sticky` clamps the active
- * tab to the viewport. Only Chromium layout proves the dock is actually drawn at the edge.
- */
+// Require real Chromium sticky layout to dock an overflowed active tab and reveal arrivals without scrolling/flicker; mocked unit geometry cannot prove the drawn dock.
 
 import type { Page } from '@stablyai/playwright-test'
 import { test, expect } from './helpers/orca-app'

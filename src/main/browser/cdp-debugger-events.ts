@@ -13,7 +13,7 @@ export function createCdpDebuggerMessageListener(
       state.snapshotResult = null
       state.navigationId = null
     }
-    // Why: an unhandled JS dialog blocks all subsequent CDP commands; auto-dismiss to avoid hanging.
+    // Resolve dialogs before they block subsequent CDP commands.
     if (method === 'Page.javascriptDialogOpening') {
       const dialog = params as { type: string; message: string } | undefined
       guest.debugger
@@ -22,7 +22,6 @@ export function createCdpDebuggerMessageListener(
         })
         .catch(() => {})
     }
-    // Why: track iframe sessions so CDP commands and AX queries route to the correct session.
     if (method === 'Target.attachedToTarget') {
       const p = params as
         | {
@@ -32,9 +31,7 @@ export function createCdpDebuggerMessageListener(
         | undefined
       if (p?.sessionId && p.targetInfo?.type === 'iframe' && p.targetInfo.targetId) {
         state.iframeSessions.set(p.targetInfo.targetId, p.sessionId)
-        // Why: no Runtime.enable here. Cross-origin iframes include challenge widgets
-        // (Cloudflare Turnstile), and the Runtime domain's console/Error.stack serialization
-        // is the CDP tell they detect; nothing reads iframe Runtime events anyway.
+        // Skip unused Runtime events: console/Error.stack serialization can expose CDP to challenge widgets.
         guest.debugger.sendCommand('DOM.enable', {}, p.sessionId).catch(() => {})
         guest.debugger.sendCommand('Accessibility.enable', {}, p.sessionId).catch(() => {})
       }
@@ -50,7 +47,6 @@ export function createCdpDebuggerMessageListener(
         }
       }
     }
-    // Why: buffer console/network events per-tab so the agent can retrieve them on demand.
     if (state.capturing) {
       if (method === 'Runtime.consoleAPICalled') {
         const p = params as
@@ -99,7 +95,7 @@ export function createCdpDebuggerMessageListener(
             timestamp: p.timestamp ?? Date.now()
           }
           state.networkLog.push(entry)
-          // Why: map requestId→entry so loadingFinished attributes size to the right response, not the latest one.
+          // Correlate completion sizes by request ID because responses can finish out of order.
           if (p.requestId) {
             state.networkRequestMap.set(p.requestId, entry)
           }
@@ -127,7 +123,6 @@ export function createCdpDebuggerMessageListener(
         }
       }
     }
-    // Why: buffer paused requests so the agent can later inspect and continue or block them.
     if (state.intercepting && method === 'Fetch.requestPaused') {
       const p = params as
         | {

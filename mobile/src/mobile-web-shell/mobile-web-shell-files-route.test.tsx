@@ -5,8 +5,6 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 type RouteDependencies = {
   routes: { pathname: string; params?: Record<string, string> }[]
   refusals: string[]
-  /** `mount:<pathname>` / `unmount:<pathname>`, which is the only thing that tells a remount from
-   *  a prop update — and a remount is what drops the old session's bridge and its grants. */
   lifecycle: string[]
   params: Record<string, string | string[] | undefined>
 }
@@ -27,7 +25,6 @@ vi.mock('react-native', () => ({
   View: 'View'
 }))
 
-// The workspace route reads the desktop's connection to decide whether a server is reachable.
 vi.mock('../transport/host-client-hooks', () => ({
   useHostClient: () => ({ client: null, state: 'disconnected' })
 }))
@@ -51,8 +48,7 @@ vi.mock('./MobileWebShellScreen', async () => {
       route: { pathname: string; params?: Record<string, string> }
     }) => {
       dependencies.routes.push(props.route)
-      // Empty deps on purpose: keyed on the pathname this would re-fire on a prop update and read
-      // exactly like a remount, which is the one thing it exists to tell apart.
+      // Keep deps empty: pathname-driven effects would also run on prop updates and falsely look like remounts.
       const mountedAs = React.useRef(props.route.pathname)
       React.useEffect(() => {
         const pathname = mountedAs.current
@@ -97,14 +93,7 @@ describe('the file explorer route that hands off to the shell', () => {
     ])
   })
 
-  /**
-   * A repeated query key, which expo-router answers with an array.
-   *
-   * A bare read puts that array straight into a template, where `String(['a','b'])` is `a,b` and
-   * `encodeURIComponent` makes it `a%2Cb` — one segment, so the bridge's segment rule accepts it
-   * and the shell opens a page for a host that does not exist. `firstParam` is what the other
-   * switches read through, and it takes the first value.
-   */
+  // Expo returns repeated query keys as arrays; firstParam avoids encoding a,b as one valid but nonexistent host segment.
   it('takes the first value of a repeated param, not the joined array', async () => {
     dependencies.params = {
       hostId: ['host-a', 'host-b'],
@@ -143,13 +132,7 @@ describe('the file explorer route that hands off to the shell', () => {
     }
   })
 
-  /**
-   * A route change is a new session, and the old one's bridge must not outlive it.
-   *
-   * The host captures the grants its session was opened with, so a screen reused across a route
-   * change keeps authorising frames under the grants of the route the page has left. Only a
-   * remount drops it, and only a key guarantees one.
-   */
+  // Remount on route change to dispose the bridge that captured the previous route’s grants.
   it('remounts the shell when the route changes rather than updating it', async () => {
     let renderer: ReturnType<typeof create> | null = null
     await act(async () => {
@@ -167,8 +150,7 @@ describe('the file explorer route that hands off to the shell', () => {
   })
 
   it('remounts when only a param changes, which the page has no other way to learn', async () => {
-    // The page reads its route once, out of `init`. Same pathname, different label: without the
-    // params in the key the shell stays mounted and the page never hears about it.
+    // Labels affect initial route state too; include params in remount identity so the page receives the new value.
     let renderer: ReturnType<typeof create> | null = null
     await act(async () => {
       renderer = create(createElement(MobileFileExplorerScreen))

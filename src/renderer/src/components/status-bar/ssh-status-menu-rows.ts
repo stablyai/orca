@@ -1,23 +1,18 @@
 import type { SshConnectionStatus } from '../../../../shared/ssh-types'
-import { boundHostList, HOST_LIST_ROW_LIMIT } from '../host-picker/bounded-host-list'
+import { boundHostList, type BoundedHostList } from '../host-picker/bounded-host-list'
 
-// Why: a generated ~/.ssh/config can import >10k hosts; a row each made one open cost GBs of DOM.
+// Bound idle hosts because generated SSH configs can turn thousands of rows into gigabytes of DOM.
 export const SSH_STATUS_MENU_IDLE_ROW_LIMIT = 25
-export const SSH_HOST_FIND_RESULT_LIMIT = HOST_LIST_ROW_LIMIT
 
 export type SshStatusMenuTarget = { id: string; label: string; status: SshConnectionStatus }
 
 export type SshStatusMenuRows = {
   connected: SshStatusMenuTarget[]
   inactive: SshStatusMenuTarget[]
-  /** Idle hosts the limit left out; the menu offers a search for them. */
   hiddenIdleCount: number
 }
 
-/**
- * Connected and busy hosts always get a row. Under the idle limit the rest keep config order; past
- * it, hosts that own projects fill the limit first so it keeps the machines the user works on.
- */
+/** Always show busy/connected hosts; above the idle limit, prioritize hosts with projects over config order. */
 export function splitSshStatusMenuRows(
   targets: readonly SshStatusMenuTarget[],
   options: { projectHostIds?: ReadonlySet<string>; idleRowLimit?: number } = {}
@@ -41,15 +36,13 @@ export function splitSshStatusMenuRows(
   }
 }
 
-/** Not-connected hosts matching `query`, through the shared host-list bound and ranking. */
 export function findSshHostMatches(
   targets: readonly SshStatusMenuTarget[],
   query: string,
-  limit = SSH_HOST_FIND_RESULT_LIMIT
-): { matches: SshStatusMenuTarget[]; moreCount: number } {
-  const { shown, hiddenCount } = boundHostList(
+  limit?: number
+): BoundedHostList<SshStatusMenuTarget> {
+  return boundHostList(
     targets.filter((target) => target.status !== 'connected'),
     { query, limit }
   )
-  return { matches: shown, moreCount: hiddenCount }
 }

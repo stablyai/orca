@@ -102,6 +102,11 @@ describe('delete routing', () => {
     assertRuntimeEnvironmentCapability.mockResolvedValue(undefined)
     callRuntimeRpc.mockResolvedValue({ operationId: 'op', skills: [] })
     await deleteSkillsOnRuntimeTarget({ kind: 'environment', environmentId: 'env-1' }, REQUEST)
+    expect(assertRuntimeEnvironmentCapability).toHaveBeenCalledWith(
+      'env-1',
+      'skills.delete.v1',
+      SKILL_DELETE_UPDATE_REQUIRED_MESSAGE
+    )
     expect(callRuntimeRpc).toHaveBeenCalledWith(
       { kind: 'environment', environmentId: 'env-1' },
       'skills.delete',

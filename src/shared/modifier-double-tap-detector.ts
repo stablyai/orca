@@ -1,12 +1,10 @@
 import type { PhysicalModifierToken } from './keybindings'
 
-// Why: max gap between the first release and the second press. Internal — not
-// user-configurable — and tight enough that normal fast typing never triggers.
+// Internal release-to-press window; short enough to avoid normal typing gestures.
 const DOUBLE_TAP_WINDOW_MS = 300
 
 export type ModifierDoubleTapEventType = 'keyDown' | 'keyUp'
 
-// A keyboard event normalized to just what the detector needs.
 export type ModifierDoubleTapEvent = {
   type: ModifierDoubleTapEventType
   // Which physical modifier this event is about, or null for any other key.
@@ -47,8 +45,7 @@ const MODIFIER_BY_KEY: Record<string, PhysicalModifierToken> = {
   Meta: 'Cmd'
 }
 
-// Maps a physical key event to the modifier it represents, or null for any
-// non-modifier key. Detector output is always a physical token (never 'Mod').
+// Emit physical tokens, never the platform-relative Mod alias; other keys return null.
 export function modifierFromKeyEvent(
   code: string | undefined,
   key: string | undefined
@@ -75,7 +72,6 @@ function otherModifierHeld(event: ModifierKeyEventLike, modifier: PhysicalModifi
   return false
 }
 
-// Normalizes a platform key event (DOM or Electron) into the detector input.
 export function toModifierDoubleTapEvent(event: ModifierKeyEventLike): ModifierDoubleTapEvent {
   const modifier = modifierFromKeyEvent(event.code, event.key)
   return {
@@ -95,9 +91,7 @@ export class ModifierDoubleTapDetector {
   private state: DetectorState = { phase: 'idle' }
 
   process(event: ModifierDoubleTapEvent, timestampMs: number): DetectedDoubleTap | null {
-    // A non-modifier key, or a modifier chorded with another, breaks the gesture.
-    // (On keyUp, isModifierOnly:false means another modifier is still held — the
-    // gesture was already reset at that modifier's keyDown.)
+    // Other keys/modifier chords break the gesture; a non-bare keyUp means its chord already reset at keyDown.
     if (event.modifier === null || !event.isModifierOnly) {
       this.state = { phase: 'idle' }
       return null
@@ -142,10 +136,7 @@ export class ModifierDoubleTapDetector {
       this.state = { phase: 'armed', modifier, deadlineMs: timestampMs + DOUBLE_TAP_WINDOW_MS }
       return
     }
-    // Why: a keyup of the armed modifier with no intervening second keydown means
-    // the second press was consumed elsewhere (the main process suppresses it for
-    // an allowlisted action). Clear armed so a later lone press of the same
-    // modifier can't phantom-complete a double-tap.
+    // An armed modifier’s keyUp without second keyDown means main consumed that press; clear it so a later lone press cannot complete a phantom double-tap.
     if (this.state.phase === 'armed' && this.state.modifier === modifier) {
       this.state = { phase: 'idle' }
     }

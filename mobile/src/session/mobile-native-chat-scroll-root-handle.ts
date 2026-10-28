@@ -1,5 +1,5 @@
-import type { MobileNativeChatPageMotion } from './mobile-native-chat-page-motion'
-import type { MobileNativeChatPageAnchoring } from './mobile-native-chat-page-anchoring'
+import type { MobileNativeChatScrollMotion } from './mobile-native-chat-scroll-motion'
+import type { MobileNativeChatScrollAnchoring } from './mobile-native-chat-scroll-anchoring'
 
 export type MobileNativeChatRootPosition = {
   top: number
@@ -18,8 +18,8 @@ type Root = {
   work: number | undefined
   nextWork: number | undefined
   fresh: boolean
-  motion: MobileNativeChatPageMotion
-  anchoring: MobileNativeChatPageAnchoring
+  motion: MobileNativeChatScrollMotion
+  anchoring: MobileNativeChatScrollAnchoring
   detach: () => void
 }
 export type { Root as MobileNativeChatScrollRootHandle }

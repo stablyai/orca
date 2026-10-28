@@ -29,9 +29,7 @@ import {
   type TitleDerivedPaneForeground
 } from './title-derived-pane-agent-identity'
 
-/** Fixed, not per-process: title rows are a pure projection of current pane facts, so they are
- *  comparable across restarts in a way a sequenced authority's rows are not. Ordering against
- *  any other authority's rows is undefined — see agent-status-observation.ts. */
+/** Title snapshots use one restart-stable authority; revisions are comparable only within it, never across authorities. */
 export const TITLE_DERIVED_AGENT_ROW_AUTHORITY_ID = 'renderer-title-projection'
 
 const EMPTY_RUNTIME_TITLES: Record<string, Record<number, string>> = {}
@@ -77,8 +75,7 @@ export function buildTitleDerivedAgentRows(args: {
       const liveSlotIds = paneTitleEntries
         .map(([paneId]) => Number(paneId))
         .filter((paneId) => paneId >= FIRST_PANE_ID)
-      // Why: pane ids only encode creation order while they are the dense sequence a
-      // fresh mount or replay allocates; an in-session pane close leaves them sparse.
+      // Only dense live IDs retain mount/replay creation order; closing a pane makes IDs sparse.
       const liveSlotsAreDense =
         liveSlotIds.length === leafIds.length &&
         liveSlotIds.every((paneId, index) => paneId === FIRST_PANE_ID + index)
@@ -136,10 +133,7 @@ export function buildTitleDerivedAgentRows(args: {
   return rows
 }
 
-/**
- * Constructs a dashboard agent row from a terminal tab's title fallback,
- * normalising Pi-compatible agent names to their owner.
- */
+/** Build title-fallback rows while normalizing Pi-compatible names to their owner. */
 function buildTitleDerivedAgentRow(args: {
   tab: TerminalTab
   leafId: string
@@ -149,19 +143,12 @@ function buildTitleDerivedAgentRow(args: {
   now: number
   runtimeAgentOrchestrationByPaneKey?: Record<string, AgentStatusOrchestrationContext>
 }): DashboardAgentRow | null {
-  // Why launchAgent, not ownerAgentType: this only rewrites a title within its own identity
-  // group (OMP wraps Pi and emits Pi frames), which stays correct in a split. Pane ownership
-  // is a separate, stricter question — it decides identity, so it uses ownerAgentType below.
+  // Launch identity normalizes compatible title frames; stricter per-pane ownership below decides identity within splits.
   const title = normalizeCompatibleAgentTitleForOwner(args.title, args.tab.launchAgent, {
     ownerIsLaunch: Boolean(args.tab.launchAgent)
   })
   const isClaudeAgentsTitle = isClaudeManagementTitle(title)
-  // Why: `claude agents` is a live Claude Code Agent Teams surface, but the
-  // shared detector keeps it neutral so runtime liveness probes do not treat
-  // the management/list screen as active work.
-  // Why (cursor): the native `cursor agent` literal is deliberately status-less so a
-  // redraw cannot stomp hook state — but it still identifies a live pane, so the row
-  // reads idle instead of vanishing (#10258).
+  // Claude management and Cursor’s status-less native titles still identify idle panes without claiming active work.
   const titleStatus = isClaudeAgentsTitle
     ? 'idle'
     : (classifyTitleActivity(title) ?? (isCursorAgentTitle(title) ? 'idle' : null))
@@ -171,8 +158,7 @@ function buildTitleDerivedAgentRow(args: {
   }
   const paneKey = makePaneKey(args.tab.id, args.leafId)
   const orchestration = args.runtimeAgentOrchestrationByPaneKey?.[paneKey]
-  // Why: a status frame proves activity, not identity (Codex over SSH, #8711; OpenCode's
-  // '. '/'* ' frames, #8940), so a title names an agent only when it carries both.
+  // Status frames prove activity, not ownership; a title-derived identity also needs an agent label.
   const titleAgentType =
     !titleStatus || !label
       ? null
@@ -208,13 +194,7 @@ function buildTitleDerivedAgentRow(args: {
     terminalTitle: title,
     lastAssistantMessage: secondary,
     ...(orchestration ? { orchestration } : {}),
-    // Why not the renderer sequencer: this row is RE-DERIVED from the pane's facts on every
-    // render, not observed once, so a counter would churn a new revision per frame and break
-    // memoization. Deriving revision from `now` keeps the stamp deterministic in the same clock
-    // the row already publishes as updatedAt, and monotonic for the pane.
-    // The origin tag is the point: `entryState` above collapses a title-derived IDLE row to
-    // 'working' while the row itself reports idle. That contradiction is out of scope here —
-    // this tag is what makes it findable instead of indistinguishable from a real hook row.
+    // Use deterministic clock revisions for rederived snapshots; title origin distinguishes synthetic working entries from idle rows.
     observation: {
       origin: 'title',
       authorityId: TITLE_DERIVED_AGENT_ROW_AUTHORITY_ID,
@@ -231,12 +211,7 @@ function buildTitleDerivedAgentRow(args: {
     agentType,
     rowSource: 'live',
     state: rowState,
-    // Load-bearing zero, not a placeholder: dashboard readers treat `startedAt === 0` as
-    // "title-derived" and hide its synthetic prompt text. The `args.now` stamps on `entry` above
-    // never reach unread, which reads the store's turn records (`readAgentRowTurnRecords`);
-    // this row has none.
-    // Dashboard bucket caches key their invalidation on the freshness boundary alone, so a bucket
-    // that read these stamps would serve stale counts with no test failing at the change.
+    // Zero marks title-derived prompts; unread uses store turn records, and freshness-keyed dashboard buckets must not consume synthetic now stamps.
     startedAt: 0
   }
 }
@@ -246,18 +221,14 @@ function resolveTitleDerivedPaneOwner(
   layout: TerminalLayoutSnapshot | undefined,
   leafId: string
 ): AgentType | null {
-  // Why: launchAgent is tab-scoped, so it is pane ownership only while the tab has one
-  // leaf; applying it inside a split would let one pane brand its sibling.
+  // Tab-scoped launch ownership applies only to a single leaf; a split must not let one pane brand its sibling.
   if (layout?.root?.type !== 'leaf' || layout.root.leafId !== leafId) {
     return null
   }
   return resolvePaneAgentOwner({ launchAgent: tab.launchAgent })
 }
 
-/**
- * Determines the agent type from a terminal title, normalising Pi-compatible
- * agents to their authoritative owner if specified.
- */
+/** Normalize title agent identity to a compatible authoritative owner when supplied. */
 export function resolveAgentTypeFromTerminalTitle(
   title: string | null | undefined,
   ownerAgentType?: AgentType | null,
@@ -289,15 +260,7 @@ function titleStatusToRowState(
   return 'idle'
 }
 
-/**
- * Resolves the layout leaf that owns a runtime pane title.
- *
- * `runtimePaneTitlesByTabId` mixes two disjoint id spaces: live PaneManager ids
- * (`>= FIRST_PANE_ID`, allocated in pane-creation order) and the `-(leafIndex + 1)`
- * slots parked tabs mint in `fallbackParkedPaneCandidates`. Neither space is ordered
- * like the layout's in-order leaf traversal, so attributing a title by its position
- * in the slot list lands one pane's status on a sibling's row.
- */
+/** Map negative parked slots by leaf traversal and live IDs by creation/PTY bindings; sorting both together misattributes sibling titles. */
 function resolveLeafIdForTitleFallback(args: {
   layout: TerminalLayoutSnapshot | undefined
   leafIds: string[]
@@ -324,9 +287,7 @@ function resolveLeafIdForTitleFallback(args: {
     }
   }
 
-  // After an in-session close, PaneManager ids are sparse while the tab's live
-  // PTYs retain their relative order. Use the durable PTY-to-leaf bindings to
-  // recover the exact leaf instead of assigning a survivor by layout position.
+  // Sparse IDs after pane closure need durable PTY-to-leaf bindings rather than layout-position guesses.
   const ptyBoundLeafId = resolveRuntimePaneTitleLeafIdFromSparseSlots({
     layout: args.layout,
     paneId: args.paneId,
@@ -344,8 +305,7 @@ function resolveLeafIdForTitleFallback(args: {
     return matchingTitleLeafIds[0]
   }
 
-  // Why: in-session pane closes leave the survivors' ids sparse, which creation order
-  // cannot resolve. Index within the LIVE slots only — never across both id spaces.
+  // Fallback indexing uses only live slots; parked slots belong to a separate ID space.
   const paneIndex = args.liveSlotIds.indexOf(args.paneId)
   return paneIndex !== -1 ? (args.leafIds[paneIndex] ?? null) : null
 }

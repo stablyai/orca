@@ -104,6 +104,8 @@ describe('local detected agent context lifecycle', () => {
     await store.getState().refreshDetectedAgents()
     expect(readNativeDetectedAgents(store.getState())).toEqual(['grok'])
     expect(store.getState().detectedAgentIds).toEqual(['codex'])
+    const inventory = store.getState().readLocalAgentInventory(FLOATING_TERMINAL_WORKTREE_ID)
+    expect(inventory).toEqual({ ids: ['grok'], state: 'successful' })
     store.setState({ projects: [] })
     refreshAgents.mockRejectedValueOnce(new Error('native refresh failed'))
     await expect(store.getState().refreshDetectedAgents()).resolves.toEqual(['grok'])

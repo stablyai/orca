@@ -1,14 +1,7 @@
 import { randomUUID } from 'node:crypto'
 import { rename, rm, writeFile } from 'node:fs/promises'
 
-/**
- * Atomic write for plugin state files (lockfile, provenance, pointers, caches).
- *
- * Why the retry: on Windows the rename can fail with EPERM/EACCES/EBUSY while
- * antivirus or an indexer holds the target open (issue #1507). The repo's
- * existing `renameFileWithWindowsRetry` covers the same hazard but is sync;
- * every plugin write path is async, so the backoff parks on a timer instead.
- */
+// Windows AV/indexer rename locks need asynchronous backoff; the existing retry primitive is synchronous (#1507).
 
 const WINDOWS_RENAME_RETRY_DELAYS_MS = [50, 100, 150, 200, 250]
 
@@ -19,7 +12,6 @@ export async function writePluginFileAtomically(
   contents: string,
   options?: PluginAtomicWriteOptions
 ): Promise<void> {
-  // Unique temp name so concurrent writers in one plugins dir cannot collide.
   const temporary = `${target}.${process.pid}.${randomUUID()}.tmp`
   try {
     await writeFile(temporary, contents, { encoding: 'utf8', mode: options?.mode })

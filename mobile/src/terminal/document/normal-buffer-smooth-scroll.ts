@@ -43,11 +43,9 @@ export function applyNormalBufferScrollDelta(scope: TerminalDocumentScope, delta
     const applied = clampNormalScrollLines(scope, lines)
     if (applied !== 0) {
       scope.term.scrollLines(applied)
-      // Why: a touch that scrolled a row is a scroll, even inside TAP_SLOP.
+      // Moving a whole row counts as scroll even within tap slop.
       scope.tapCandidate = null
-      // Why: xterm's renderer is row-based. Buffer touch pixels and only
-      // commit whole rows so TUI canvas layers do not shimmer between
-      // fractional transforms and xterm repaints.
+      // Commit whole rows so fractional transforms cannot shimmer against xterm’s row-based repaint.
       scope.smoothScrollOffsetY += applied * effectiveCellH
     }
     if (applied !== lines) {
@@ -70,9 +68,7 @@ export function enqueueNormalBufferScrollDelta(scope: TerminalDocumentScope, del
   if (scope.normalScrollFrameId !== null) {
     return true
   }
-  // Why: dense terminal rows are expensive to repaint. Coalesce touchmove
-  // deltas into one xterm row-scroll per frame instead of repainting from
-  // the input event stream.
+  // Coalesce touchmove deltas to one row scroll per frame to bound dense-terminal repaints.
   scope.normalScrollFrameId = scheduleDocumentFrame(scope, function () {
     scope.normalScrollFrameId = null
     const delta = scope.pendingNormalScrollDeltaY
@@ -84,7 +80,6 @@ export function enqueueNormalBufferScrollDelta(scope: TerminalDocumentScope, del
   return true
 }
 
-/** Whether the deltas queued for the next frame, with the remainder already held, move a row. */
 export function queuedNormalBufferScrollReachesRow(scope: TerminalDocumentScope) {
   const effectiveCellH = getCellHeight(scope) * getTotalScale(scope)
   return (
@@ -106,7 +101,6 @@ export function resetSmoothScrollOffset(scope: TerminalDocumentScope) {
   updateScrollIndicator(scope, false)
 }
 
-/** Ruling 21: the smooth-scroll frame, which would otherwise scroll the next mount's buffer. */
 export function stopNormalBufferSmoothScroll(scope: TerminalDocumentScope) {
   resetSmoothScrollOffset(scope)
 }

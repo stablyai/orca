@@ -112,6 +112,8 @@ CREATE TABLE IF NOT EXISTS remote_questions (
 CREATE INDEX IF NOT EXISTS idx_remote_questions_dispatch_status
   ON remote_questions(dispatch_id, status);
 
+-- Deletes from tasks, dispatch_contexts and worker tables are recorded in removed_orchestration_work
+-- (removed-orchestration-work-store.ts).
 CREATE TABLE IF NOT EXISTS tasks (
   id            TEXT PRIMARY KEY,
   run_id        TEXT NOT NULL DEFAULT '${LEGACY_RUN_ID}',
@@ -137,6 +139,7 @@ CREATE TABLE IF NOT EXISTS tasks (
 CREATE INDEX IF NOT EXISTS idx_tasks_status ON tasks(status);
 CREATE INDEX IF NOT EXISTS idx_tasks_parent ON tasks(parent_id);
 
+-- Deletes are recorded in removed_orchestration_work (removed-orchestration-work-store.ts).
 CREATE TABLE IF NOT EXISTS dispatch_contexts (
   id                  TEXT PRIMARY KEY,
   run_id              TEXT NOT NULL DEFAULT '${LEGACY_RUN_ID}',

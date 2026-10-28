@@ -13,7 +13,9 @@ import {
 } from '../tasks/workspace-ssh-gate'
 
 type DetectedAgentIdsState = {
+  client: RpcClient
   connectionId: string | null
+  repoId: string | null
   ids: Set<string>
 }
 
@@ -29,12 +31,13 @@ export function useNewWorkspaceExecutionTarget(args: {
   client: RpcClient | null
   connectionId: string | null
   visible: boolean
+  repoId?: string | null
 }): {
   sshGate: WorkspaceSshGate
   detectedAgentIds: Set<string> | null
   connect: () => Promise<void>
 } {
-  const { client, connectionId, visible } = args
+  const { client, connectionId, visible, repoId = null } = args
   const [sshState, setSshState] = useState<WorkspaceSshRecord | null>(null)
   const [connectingTargetId, setConnectingTargetId] = useState<string | null>(null)
   const [detectedAgentIdsState, setDetectedAgentIdsState] = useState<DetectedAgentIdsState | null>(
@@ -46,7 +49,9 @@ export function useNewWorkspaceExecutionTarget(args: {
     connecting: connectingTargetId === connectionId
   })
   const detectedAgentIds =
-    detectedAgentIdsState?.connectionId === connectionId &&
+    detectedAgentIdsState?.client === client &&
+    detectedAgentIdsState.connectionId === connectionId &&
+    detectedAgentIdsState.repoId === repoId &&
     (connectionId === null || sshGate.status === 'connected')
       ? detectedAgentIdsState.ids
       : null
@@ -92,23 +97,29 @@ export function useNewWorkspaceExecutionTarget(args: {
           ? remoteAgentDetectionRead.interpret(
               await remoteAgentDetectionRead.request(client, { connectionId })
             )
-          : localAgentDetectionRead.interpret(await localAgentDetectionRead.request(client))
+          : localAgentDetectionRead.interpret(
+              await (repoId
+                ? localAgentDetectionRead.request(client, { repoId })
+                : localAgentDetectionRead.request(client))
+            )
         if (!stale) {
           setDetectedAgentIdsState({
+            client,
             connectionId,
+            repoId,
             ids: detected.accepted ? new Set(detected.value) : new Set()
           })
         }
       } catch {
         if (!stale) {
-          setDetectedAgentIdsState({ connectionId, ids: new Set() })
+          setDetectedAgentIdsState({ client, connectionId, repoId, ids: new Set() })
         }
       }
     })()
     return () => {
       stale = true
     }
-  }, [client, connectionId, sshGate.status, visible])
+  }, [client, connectionId, repoId, sshGate.status, visible])
 
   async function connect(): Promise<void> {
     if (!client || !connectionId) {

@@ -1,8 +1,4 @@
-/**
- * Cmd/Ctrl+Shift+T reopen behavior: terminal tabs join the recently-closed
- * stacks, and the unified dispatcher pops the most recently closed tab of any
- * kind (terminal/browser/editor) in true cross-type MRU order.
- */
+// Reopen terminal/browser/editor snapshots in true cross-type MRU order via Cmd/Ctrl+Shift+T.
 import { describe, it, expect, vi, beforeEach, onTestFinished } from 'vitest'
 import type * as AgentStatusModule from '@/lib/agent-status'
 import { getDefaultSettings } from '../../../../shared/constants'
@@ -23,7 +19,6 @@ vi.mock('@/lib/agent-status', async (importOriginal) => {
 
 const mockApi = {
   worktrees: {
-    list: vi.fn().mockResolvedValue([]),
     remove: vi.fn().mockResolvedValue(undefined),
     updateMeta: vi.fn().mockResolvedValue({})
   },
@@ -48,13 +43,13 @@ import {
   restoreRecentlyClosedTabPosition
 } from './recently-closed-tabs'
 import { layoutApplyTestTransport } from '@/runtime/layout-apply-test-transport.test-fixture'
+import { drawTabsFromMain } from './tabs-drawn-from-main.test-fixture'
 import { loadMainLayoutModel } from '@/runtime/main-loaded-layout-frames.test-fixture'
 import { openWorkspaceLayoutFrameSync } from '@/runtime/workspace-layout-frame-sync'
 import { endLayoutFramePositions } from '@/runtime/layout-frame-position'
 import { buildWorkspaceSessionPayload } from '@/lib/workspace-session'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
 
-// Main's answer to the window's layout commands, as a switch-on build sends them.
 vi.mock('@/runtime/runtime-rpc-client', async (importOriginal) =>
   (
     await import('@/runtime/layout-apply-test-transport.test-fixture')
@@ -278,9 +273,7 @@ describe('reopenClosedTerminalTab', () => {
   })
 
   it('skips local reopen on a remote-runtime worktree (host owns the terminal)', async () => {
-    // Why: a `runtime:` host id makes the worktree host-owned; a local createTab
-    // would leave an unbacked phantom tab, so reopen must bail and let the
-    // cross-type dispatcher fall through to browser/editor.
+    // Runtime-owned terminal reopen must fall through to browser/editor; local create makes an unbacked phantom racing snapshots.
     const store = createTestStore()
     seedStore(store, {
       worktreesByRepo: {
@@ -440,8 +433,9 @@ describe('restoreRecentlyClosedTabPosition', () => {
 describe('reopenClosedTab cross-type MRU', () => {
   it('reopens closed tabs of mixed kinds in most-recent-first order', async () => {
     const store = makeSeededStore()
+    // A layout-owner build draws the browser tab from main's frames.
+    const main = await drawTabsFromMain(store)
 
-    // Close order: editor → terminal → browser.
     store.setState({ openFiles: [makeOpenFile({ id: '/repo/a.ts', worktreeId: WT })] })
     store.getState().closeFile('/repo/a.ts')
     const terminal = store
@@ -450,7 +444,9 @@ describe('reopenClosedTab cross-type MRU', () => {
     store.getState().closeTab(terminal.id)
     await layoutApplyTestTransport.settle()
     const browser = store.getState().createBrowserTab(WT, 'https://example.com', { title: 'Ex' })
+    await main.settle()
     store.getState().closeBrowserTab(browser.id)
+    await main.settle()
 
     expect(store.getState().recentlyClosedTabKindsByWorktree[WT]).toEqual([
       'browser',
@@ -458,22 +454,20 @@ describe('reopenClosedTab cross-type MRU', () => {
       'editor'
     ])
 
-    // First press: browser comes back.
     expect(store.getState().reopenClosedTab(WT)).toBe(true)
+    await main.settle()
     expect(store.getState().browserTabsByWorktree[WT]?.[0]?.url).toBe('https://example.com')
     expect(store.getState().tabsByWorktree[WT] ?? []).toHaveLength(0)
 
-    // Second press: terminal comes back.
     expect(store.getState().reopenClosedTab(WT)).toBe(true)
     expect(store.getState().tabsByWorktree[WT]?.[0]?.startupCwd).toBe('/path/wt1/api')
     expect(store.getState().openFiles).toHaveLength(0)
 
-    // Third press: editor comes back.
     expect(store.getState().reopenClosedTab(WT)).toBe(true)
     expect(store.getState().openFiles[0]?.filePath).toBe('/repo/a.ts')
 
-    // Nothing left.
     expect(store.getState().reopenClosedTab(WT)).toBe(false)
+    main.close()
   })
 
   it('skips kind entries whose per-type snapshot has drained', () => {

@@ -1,5 +1,3 @@
-// The line under each message the host recorded and then rejected, in the desktop's words.
-
 import { agentJournalSubmissionKey } from '../../../src/shared/agent-session-journal-item-key'
 import { agentSessionWriteNoticeEnglish } from '../../../src/shared/agent-session-refusal-notice'
 import { agentSessionVisibleFailureFacts } from '../../../src/shared/agent-session-visible-failures'
@@ -10,8 +8,7 @@ import { tuiAgentDisplayName } from '../../../src/shared/tui-agent-display-names
 
 const NO_NOTICES: ReadonlyMap<string, string> = new Map()
 
-/** By the row id the transcript draws each message under; shared and empty when no send failed (a
- *  Stop's withdrawal is no failure), so a streaming turn then pays nothing. */
+// Share the empty result during streaming; Stop withdrawals are not send failures.
 export function mobileNativeChatUnsentNotices(
   journal: NativeChatTurnJournal | null,
   agent: string | null | undefined

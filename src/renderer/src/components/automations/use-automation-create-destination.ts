@@ -1,12 +1,4 @@
-/**
- * The create dialog's destination: chosen once, shown, and re-checked at submit.
- *
- * The captured destination is deliberately state rather than a derivation of the
- * live catalog. A dialog keeps the owner it captured for its whole lifetime, so
- * a host that re-pairs or re-registers while the form is open is reported as
- * moved instead of silently followed — which is the only way the user's "create
- * it on that machine" survives the machine changing identity underneath it.
- */
+/** Capture the displayed destination in state for the dialog lifetime; re-pair/re-registration must report movement instead of silently changing the chosen machine. */
 
 import { useCallback, useMemo, useRef, useState } from 'react'
 import { translate } from '@/i18n/i18n'
@@ -98,16 +90,13 @@ export function useAutomationCreateDestination(
   const [captured, setCaptured] = useState<AutomationCreateDestination | null>(null)
   const [reason, setReason] = useState<AutomationCreateDestinationChoiceReason>('unselected')
 
-  // Adjusted during render rather than in an effect, so no frame paints the
-  // previous dialog's capture. Each branch is guarded on an actual change, so
-  // the re-render this schedules converges immediately.
+  // Reset capture during render under change guards so a prior dialog’s owner never paints and updates converge.
   if (!open && (captured !== null || reason !== 'unselected')) {
     setCaptured(null)
     setReason('unselected')
   }
   if (open && !captured) {
-    // Re-resolves until it first captures: a catalog still hydrating must not lock
-    // the form into "choose a host" once the host it would have picked arrives.
+    // Keep resolving until the first capture so late hydration can supply the intended host.
     const entry =
       preselectAutomationCreateHost(entries, filterStableKey, activeWorkspaceStableKey) ??
       soleAutomationCreateHost(entries, catalog.hydration)
@@ -138,8 +127,7 @@ export function useAutomationCreateDestination(
     [captured, reason]
   )
 
-  // Why refs: the check runs inside an async submit, where a value closed over
-  // when the handler was created could be an incarnation old.
+  // Async submit checks read live entries through refs; a closed-over owner may already be obsolete.
   const entriesRef = useRef(entries)
   entriesRef.current = entries
   const repoTablesRef = useRef(repoTables)

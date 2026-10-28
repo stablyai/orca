@@ -5,10 +5,10 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type {
   SessionOptionDescriptor,
   SessionOptionsSurface
-} from '../../../../shared/native-chat-session-options'
+} from '../../../../shared/native-chat/input/native-chat-session-options'
 import { clearNativeChatSessionOptionCacheForTests } from './native-chat-session-option-cache'
 import { clearNativeChatModelEnrichmentForTests } from './native-chat-session-option-enrichment'
-import type * as RemoteRuntimePtyIdModule from '../../../../shared/remote-runtime-pty-id'
+import type * as RemoteRuntimePtyIdModule from '../../../../shared/remote-runtime/remote-runtime-pty-id'
 
 const mocks = vi.hoisted(() => ({
   cancelPendingSends: vi.fn(),
@@ -72,7 +72,7 @@ vi.mock('../../store', () => {
 vi.mock('@/runtime/runtime-terminal-inspection', () => ({
   sendRuntimePtyInput: vi.fn()
 }))
-vi.mock('../../../../shared/remote-runtime-pty-id', async (importOriginal) => ({
+vi.mock('../../../../shared/remote-runtime/remote-runtime-pty-id', async (importOriginal) => ({
   ...(await importOriginal<typeof RemoteRuntimePtyIdModule>()),
   isRemoteRuntimePtyId: () => false
 }))
@@ -159,6 +159,15 @@ vi.mock('./use-native-chat-send-lifecycle', () => ({
 
 import { NativeChatComposer } from './NativeChatComposer'
 import { sendRuntimePtyInput } from '@/runtime/runtime-terminal-inspection'
+
+function createOptionsSurface(): SessionOptionsSurface {
+  return {
+    getSnapshot: () => [],
+    setOption: vi.fn(),
+    invokeAction: vi.fn(),
+    subscribe: () => () => {}
+  }
+}
 
 describe('NativeChatComposer', () => {
   beforeEach(() => {
@@ -288,12 +297,7 @@ describe('NativeChatComposer', () => {
       accepted: false,
       error: null
     }))
-    const optionsSurface = {
-      getSnapshot: () => [],
-      setOption: vi.fn(),
-      invokeAction: vi.fn(),
-      subscribe: () => () => {}
-    } satisfies SessionOptionsSurface
+    const optionsSurface = createOptionsSurface()
     const optionSnapshot = [{ id: 'model' }] as SessionOptionDescriptor[]
     const composer = (sessionPending = false) => (
       <NativeChatComposer
@@ -302,6 +306,7 @@ describe('NativeChatComposer', () => {
         targetPtyId={null}
         agent="codex"
         structuredTransport={{
+          capturePresentation: () => () => true,
           send,
           dispatchCommand,
           optionsSurface,
@@ -331,10 +336,7 @@ describe('NativeChatComposer', () => {
     expect(mocks.setDraft).toHaveBeenCalledWith('')
   })
 
-  // The structured menu offers only what a pick can carry out: the host's own
-  // commands, plus the ones the agent itself runs from message text (Codex `/goal`).
-  // Listing the agent's whole TUI catalog here answered every pick with
-  // "not available in chat sessions".
+  // Offer only commands the structured transport or agent can execute; the full TUI catalog contains unsupported picks.
   it.each([
     ['claude', 'compact', ['model', 'effort', 'resume']],
     ['codex', 'vim', ['model', 'effort', 'goal', 'resume']]
@@ -347,14 +349,10 @@ describe('NativeChatComposer', () => {
         targetPtyId={null}
         agent={agent}
         structuredTransport={{
+          capturePresentation: () => () => true,
           send: vi.fn(() => true),
           dispatchCommand: vi.fn(async () => ({ handled: false, accepted: false, error: null })),
-          optionsSurface: {
-            getSnapshot: () => [],
-            setOption: vi.fn(),
-            invokeAction: vi.fn(),
-            subscribe: () => () => {}
-          },
+          optionsSurface: createOptionsSurface(),
           optionSnapshot: [],
           onError: vi.fn(),
           runtime: 'local',
@@ -382,18 +380,14 @@ describe('NativeChatComposer', () => {
         targetPtyId={null}
         agent="codex"
         structuredTransport={{
+          capturePresentation: () => () => true,
           send,
           dispatchCommand: vi.fn(async () => ({
             handled: false,
             accepted: false,
             error: null
           })),
-          optionsSurface: {
-            getSnapshot: () => [],
-            setOption: vi.fn(),
-            invokeAction: vi.fn(),
-            subscribe: () => () => {}
-          },
+          optionsSurface: createOptionsSurface(),
           optionSnapshot: [],
           worktreeId: 'wt-1',
           onError: vi.fn(),

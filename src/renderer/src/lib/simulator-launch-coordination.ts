@@ -9,8 +9,7 @@ type PrelaunchedSimulatorSession = {
   rememberedAt: number
 }
 
-// Why: prelaunch info is a short-lived handoff to the pane; if the pane never
-// consumes it, stale stream URLs should not stick to removed worktree ids.
+// Expire unconsumed handoffs so removed workspace IDs cannot retain stale stream URLs.
 const PRELAUNCHED_SIMULATOR_SESSION_TTL_MS = 30_000
 const PRELAUNCHED_SIMULATOR_SESSION_MAX = 16
 const prelaunchedSessionsByWorktree = new Map<string, PrelaunchedSimulatorSession>()
@@ -49,8 +48,7 @@ export function rememberPrelaunchedSimulatorSession(
   if (!info?.streamUrl && !info?.wsUrl) {
     return
   }
-  // Why: the TTL measures elapsed handoff age, so wall-clock corrections must
-  // not resurrect stale stream metadata or discard a fresh handoff.
+  // Measure elapsed age monotonically so clock corrections cannot revive stale streams or discard fresh handoffs.
   const rememberedAt = performance.now()
   prelaunchedSessionsByWorktree.delete(worktreeId)
   prelaunchedSessionsByWorktree.set(worktreeId, {
@@ -70,10 +68,6 @@ export function consumePrelaunchedSimulatorSession(worktreeId: string): Emulator
 export function resetSimulatorLaunchCoordinationForTests(): void {
   manualLaunchesByWorktree.clear()
   prelaunchedSessionsByWorktree.clear()
-}
-
-export function getPrelaunchedSimulatorSessionCountForTests(): number {
-  return prelaunchedSessionsByWorktree.size
 }
 
 export function dispatchManualSimulatorLaunchStarted(worktreeId: string): void {

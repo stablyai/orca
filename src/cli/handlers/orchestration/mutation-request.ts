@@ -13,7 +13,7 @@ export async function callOrchestrationMutation<TResult>(
   options?: { timeoutMs?: number; orchestrationCapability?: string },
   unavailableRetryMs = 0
 ) {
-  // Why: every retry reuses one request id, so the host replays instead of applying the mutation twice.
+  // Reuse one request id so retries replay the mutation instead of applying it twice.
   const requestId =
     readRetryRequestFlag(flags) ?? (unavailableRetryMs > 0 ? randomUUID() : undefined)
   const deadline = Date.now() + unavailableRetryMs
@@ -35,7 +35,7 @@ export async function callOrchestrationMutation<TResult>(
         sentError = error
       }
       if (!unavailable || Date.now() + delayMs > deadline) {
-        // Why: a later attempt can fail before its request id is attached, though an earlier one may have landed.
+        // A later failure may lack the request id even though an earlier attempt landed.
         throw orchestrationMutationRecoveryError(
           carriesRequestId(error) ? error : (sentError ?? error)
         )

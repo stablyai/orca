@@ -37,7 +37,6 @@ describe('selectTabAgentTypesByTabId', () => {
     const projection = selectTabAgentTypesByTabId(map)
     expect(projection).toEqual({ 'tab-1': 'claude', 'tab-2': 'codex' })
 
-    // Parity with the lookup it replaces, for every tab.
     for (const tabId of ['tab-1', 'tab-2', 'tab-missing']) {
       expect(projection[tabId] ?? null).toBe(findTabAgentEntry(map, tabId)?.agentType ?? null)
     }
@@ -48,8 +47,7 @@ describe('selectTabAgentTypesByTabId', () => {
       'tab-1:leaf-a': entry({ agentType: undefined }),
       'tab-1:leaf-b': entry({ agentType: 'claude' })
     }
-    // First matching pane wins (claims the tab) with no agentType -> null, exactly
-    // like findTabAgentEntry(...)?.agentType ?? null.
+    // Match legacy first-pane lookup even when its missing agentType masks later matching panes.
     expect(selectTabAgentTypesByTabId(map)['tab-1'] ?? null).toBe(
       findTabAgentEntry(map, 'tab-1')?.agentType ?? null
     )

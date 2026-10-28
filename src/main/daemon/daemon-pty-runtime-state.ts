@@ -1,4 +1,5 @@
 import { DaemonClient } from './client'
+import { DaemonPtyInputClosedIncarnations } from './daemon-pty-input-closed-incarnations'
 import { createDaemonAuditEligibilityTracker } from './daemon-audit-eligibility-event'
 import type {
   DaemonAuditContext,
@@ -30,6 +31,7 @@ import {
 import { HistoryReader } from './history-reader'
 import type { PtyBackgroundStreamEvent } from '../providers/pty-provider-contract'
 import type { DaemonPtyRouterDataEvent, DaemonPtyRouterExitEvent } from './daemon-pty-router-events'
+import type { ReadRunningWslDistros } from './daemon-wsl-bridge-exit'
 
 export type PendingDaemonSpawnOperation = {
   exitsBySessionId: Map<string, { code: number; incarnationId?: string }[]>
@@ -58,6 +60,8 @@ export type DaemonPtyAdapterOptions = {
   runtimeDir?: string
   packagedAppVersion?: string | null
   respawn?: (reason: DaemonRespawnReason) => Promise<void | (() => void)>
+  /** Test seam; production reads the shared, coalesced `wsl --list --running`. */
+  readRunningWslDistros?: ReadRunningWslDistros
 }
 
 export type DaemonRespawnReason =
@@ -78,6 +82,7 @@ export type DaemonIdleRetirementResult =
   | { state: 'unverifiable' }
 
 export abstract class DaemonPtyRuntimeState {
+  protected readonly readRunningWslDistros: ReadRunningWslDistros | undefined
   readonly protocolVersion: number
   protected socketPath: string
   protected tokenPath: string
@@ -112,6 +117,12 @@ export abstract class DaemonPtyRuntimeState {
   protected removeEventListener: (() => void) | null = null
   protected initialCwds = new Map<string, string>()
   protected wslDistrosBySessionId = new Map<string, string>()
+  /** Bridge sessions this adapter turned into host loss; only their later close may find them gone. */
+  protected readonly hostLossSessionIds = new Set<string>()
+  /** ORCA_PANE_KEY a WSL session was spawned with; its shell's folder is read by it at Sleep. */
+  protected wslPaneKeysBySessionId = new Map<string, string>()
+  /** A sleeping WSL pane's shell folder, read before its final checkpoint; the checkpoint keeps it. */
+  protected sleepShellCwds = new Map<string, string>()
   protected killedSessionTombstones = new Map<string, number>()
   protected sleepRestoreSessionIds = new Set<string>()
   protected coldRestoreCache = new ColdRestorePayloadCache(undefined, (sessionId) => {
@@ -121,6 +132,7 @@ export abstract class DaemonPtyRuntimeState {
   protected getSizeUnsupported = false
   protected sessionsAwaitingDaemonRecovery = new Set<string>()
   protected sessionIncarnations = new Map<string, string>()
+  protected inputClosedIncarnations = new DaemonPtyInputClosedIncarnations()
   protected pendingSpawnOperationsBySessionId = new Map<string, Set<PendingDaemonSpawnOperation>>()
   protected pendingClaimSpawnOperations = new Set<PendingDaemonSpawnOperation>()
   protected historySpawnLocks = new Map<string, Promise<void>>()
@@ -164,13 +176,16 @@ export abstract class DaemonPtyRuntimeState {
   protected clearExitedSessionState(
     sessionId: string,
     exitCode: number,
-    expectedIncarnationId?: string
+    expectedIncarnationId?: string,
+    // Host loss leaves history unended, so the pane can still cold-restore (as after a crash).
+    { closeHistory = true }: { closeHistory?: boolean } = {}
   ): void {
     const currentIncarnationId = this.sessionIncarnations.get(sessionId)
     if (currentIncarnationId !== undefined && expectedIncarnationId !== currentIncarnationId) {
       return
     }
     this.activeSessionIds.delete(sessionId)
+    this.inputClosedIncarnations.delete(sessionId)
     this.clearSessionAwaitingDaemonRecovery(sessionId)
     this.dirtySessionVersions.delete(sessionId)
     this.pausedProducerSessionIds.delete(sessionId)
@@ -187,13 +202,14 @@ export abstract class DaemonPtyRuntimeState {
     this.nonFinalAdmissionDeniedSessionIds.delete(sessionId)
     this.lastFullCheckpointAt.delete(sessionId)
     this.stopCheckpointTimerIfIdle()
-    if (this.historyManager) {
+    if (this.historyManager && closeHistory) {
       void this.historyManager
         .closeSession(sessionId, exitCode)
         .catch((error) => console.warn('[history] closeSession failed:', sessionId, error))
     }
     this.initialCwds.delete(sessionId)
     this.wslDistrosBySessionId.delete(sessionId)
+    this.wslPaneKeysBySessionId.delete(sessionId)
     this.sessionIncarnations.delete(sessionId)
   }
 
@@ -216,9 +232,13 @@ export abstract class DaemonPtyRuntimeState {
       tokenPath: opts.tokenPath,
       protocolVersion: opts.protocolVersion
     })
-    this.historyManager = opts.historyPath ? new HistoryManager(opts.historyPath) : null
+    const client = this.client
+    this.historyManager = opts.historyPath
+      ? new HistoryManager(opts.historyPath, { resizeModel: () => client.getDaemonResizeModel() })
+      : null
     this.historyReader = opts.historyPath ? new HistoryReader(opts.historyPath) : null
     this.respawnFn = opts.respawn ?? null
+    this.readRunningWslDistros = opts.readRunningWslDistros
     this.runtimeDir = opts.runtimeDir ?? opts.profileScope ?? null
     this.packagedAppVersion = opts.packagedAppVersion ?? null
     this.supportsCheckpoints = this.protocolVersion >= 4
@@ -246,8 +266,7 @@ export abstract class DaemonPtyRuntimeState {
     return this.protocolVersion >= GIT_CREDENTIAL_GUARD_HOST_PROTOCOL_VERSION
   }
 
-  // Why the id is read rather than ignored: the contract promises a fact about THIS pty, and
-  // answering from the protocol flag alone returned `true` for a session this daemon never owned.
+  // Snapshot authority requires this adapter to own the session, not just support its protocol.
   canProvideAuthoritativeBufferSnapshot(id: string): boolean {
     return this.supportsAuthoritativeBufferSnapshots && this.activeSessionIds.has(id)
   }

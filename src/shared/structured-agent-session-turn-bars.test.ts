@@ -151,8 +151,7 @@ function message(id: string, role: NativeChatMessage['role'] = 'user'): NativeCh
   return { id, role, blocks: [{ type: 'text', text: id }], timestamp: null, source: 'transcript' }
 }
 
-/** The row whose bar carries the running clock, as a surface places it. These journals are from a
- *  host that states no row's turn, so the bar follows the running record's named opener. */
+/** Legacy host without per-row turn scope: anchor bars to the running record’s opener. */
 function barOf(
   transcript: readonly NativeChatMessage[],
   snapshot: {
@@ -163,8 +162,7 @@ function barOf(
   return nativeChatTurnMembership(transcript, snapshot).liveTurnKey
 }
 
-/** The same journal from a host that states each row's turn: a user row belongs to no turn, a
- *  steer to the turn `steers` names, and any other row to the root turn record before it. */
+/** Assign host turn scopes: user rows outside turns, steers under their named turn, other rows under preceding root turn. */
 function scoped(
   items: readonly AgentJournalRenderItem[],
   steers: ReadonlyMap<string, string> = new Map()
@@ -338,8 +336,7 @@ describe('a send Codex folds into the running turn', () => {
       now: 4_500
     })
     const after = selectStructuredAgentTurnBars(ended, submissions, null)
-    // The turn is over: nothing names an owner, so the key falls back to the newest prompt,
-    // which never ran a turn of its own and so has nothing to settle.
+    // Ended turn has no owner; newest prompt fallback never ran its own turn and has no duration.
     const activeTurnKey = barOf(transcript, { items: ended, submissions })!
     expect(activeTurnKey).toBe('orca:second')
     timing = reduceNativeChatTurnTiming(timing, {
@@ -392,8 +389,7 @@ describe('turns whose host names no opener', () => {
   })
 
   it('keeps the running bar on the send Codex opened a turn for before it echoes it', () => {
-    // Codex reports turn/started before hooks and prewarm run, so the turn names its
-    // provider key while the send that opened it is still pending (no alias yet).
+    // Codex opens before hooks/prewarm; pending opener still has provider key and no alias.
     const key = 'codex:thread:t2:0'
     const items: AgentJournalRenderItem[] = [
       user(1, 'first', 1_000),

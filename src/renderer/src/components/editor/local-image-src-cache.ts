@@ -13,8 +13,7 @@ const BLOB_URL_CACHE_MAX_BYTES = 128 * 1024 * 1024
 export const blobUrlCache = new Map<string, string>()
 const blobUrlCacheBytes = new Map<string, number>()
 export const inFlightBlobUrlLoads = new Map<string, Promise<string | null>>()
-// Incremented on release so a read resolving after its last consumer left
-// cannot repopulate the cache.
+// Invalidate late reads on release so they cannot repopulate an unused cache entry.
 const cacheKeyVersions = new Map<string, number>()
 
 export function getLocalImageCacheKeyVersion(key: string): number {
@@ -91,8 +90,7 @@ export function cacheLocalImageBlob(
   let projectedEntries = blobUrlCache.size + (previousUrl === undefined ? 1 : 0)
   let projectedBytes = retainedBytes - previousBytes + byteLength
 
-  // Evict only unpinned entries. If visible leases consume the budget, fail
-  // closed so a late/non-visible decode cannot make retention unbounded.
+  // Evict unpinned entries only; refuse new retention when visible leases consume the budget.
   while (projectedEntries > BLOB_URL_CACHE_MAX_SIZE || projectedBytes > BLOB_URL_CACHE_MAX_BYTES) {
     const candidate = Array.from(blobUrlCache.keys()).find(
       (candidateKey) => candidateKey !== key && !isLocalImageCacheKeyPinned(candidateKey)
@@ -181,8 +179,7 @@ export function releaseLocalImageBlob(key: string): void {
   cacheKeyVersions.set(key, getLocalImageCacheKeyVersion(key) + 1)
   const inFlight = inFlightBlobUrlLoads.get(key)
   if (inFlight) {
-    // A released lease must not be reused by a later visible lease: the
-    // released read may resolve null or be stale for the next owner.
+    // Released reads can resolve null or stale and must not be reused by the next visible lease.
     inFlightBlobUrlLoads.delete(key)
   }
   const url = blobUrlCache.get(key)

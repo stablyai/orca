@@ -1,9 +1,8 @@
-/**
- * The desktop's only way into a WSL distro's orcad (design D2): a loopback listener whose every
- * accepted socket rides its own `wsl.exe` child running the stdio bridge on the distro's pinned
- * Node. WSL localhost forwarding is never used: it refuses connections for 0.2–1 s after a listen
- * and depends on the distro's networking mode.
- */
+/** D2: each accepted loopback socket owns a pinned-Node wsl.exe stdio bridge. Avoid WSL localhost forwarding, whose startup refusal window and network-mode dependence make it unreliable. */
+import {
+  observeWslOrcadBridgeChannel,
+  type WslOrcadBridgeChannelEvents
+} from './wsl-orcad-bridge-activity'
 import type { OrcadHostTransport } from '../ssh/orcad-host-transport'
 import {
   ORCAD_STDIO_BRIDGE_DEPENDENCIES,
@@ -19,6 +18,8 @@ export type WslOrcadStdioBridgeOptions = {
   /** 0 picks a free one. */
   localPort: number
   label: string
+  /** Each bridged socket's lifetime, for the liveness watch that rides the desktop's sockets. */
+  events?: WslOrcadBridgeChannelEvents
 }
 
 export function listenWslOrcadStdioBridge(
@@ -26,6 +27,7 @@ export function listenWslOrcadStdioBridge(
   options: WslOrcadStdioBridgeOptions,
   dependencies: OrcadStdioBridgeDependencies = ORCAD_STDIO_BRIDGE_DEPENDENCIES
 ): Promise<StartedPortForward> {
+  const { events } = options
   return startOrcadStdioBridge(
     transport,
     {
@@ -37,7 +39,13 @@ export function listenWslOrcadStdioBridge(
       remotePort: options.remotePort,
       label: options.label
     },
-    dependencies
+    events
+      ? {
+          ...dependencies,
+          openChannel: async (conn, bridge) =>
+            observeWslOrcadBridgeChannel(await dependencies.openChannel(conn, bridge), events)
+        }
+      : dependencies
   )
 }
 

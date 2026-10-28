@@ -4,12 +4,7 @@ import { dirname, join } from 'node:path'
 import { resolveOrcaManagedCodexHomePath } from './codex-home-paths'
 import { normalizeCodexProjectPathForLookup } from './config-toml-trust'
 
-// Why: a grant session blocks launch prep, so it may not run on every pane
-// launch. This ledger
-// records what a *verified* codex-side grant left behind (per runtime home):
-// the hook identity that was granted, the Codex-computed hash, and the codex
-// binary that computed it. Install skips the RPC while all three still hold;
-// any drift (hook edit, config wipe, codex upgrade) re-triggers a grant.
+// Cache verified grants per home to avoid repeating launch-blocking RPCs.
 
 export type CodexTrustGrantBinaryStamp =
   | { kind: 'native'; path: string; size: number; mtimeMs: number }
@@ -33,7 +28,7 @@ type CodexTrustGrantLedgerFile = {
   homes: Record<string, CodexTrustGrantLedgerHome>
 }
 
-// Why resolved, not created: a read for ~/.codex must not make Orca's own home; a write makes the folder.
+// Reading grants must not create Orca's managed home.
 export function getCodexTrustGrantLedgerPath(): string {
   return join(dirname(resolveOrcaManagedCodexHomePath()), 'trust-grant-ledger.json')
 }
@@ -42,12 +37,7 @@ export function getCodexTrustGrantHomeKey(runtimeHomePath: string): string {
   return normalizeCodexProjectPathForLookup(runtimeHomePath)
 }
 
-/**
- * `null` means the ledger could not be READ, which is different from an absent
- * or corrupt one. A write derived from `empty` persists a file containing only
- * the home being written, destroying every other home's grants — so the write
- * paths refuse on `null` while the read path keeps degrading.
- */
+/** Return null on read errors so writes cannot erase other homes' unreadable grants. */
 function readLedgerFileOrNull(ledgerPath: string): CodexTrustGrantLedgerFile | null {
   const empty: CodexTrustGrantLedgerFile = { version: 1, homes: {} }
   let rawLedger: string
@@ -72,13 +62,11 @@ function readLedgerFileOrNull(ledgerPath: string): CodexTrustGrantLedgerFile | n
     }
     return { version: 1, homes }
   } catch {
-    // Why: a corrupt ledger only costs one extra grant session; never let it
-    // block hook install.
+    // Corruption costs another grant session but must not block hook installation.
     return empty
   }
 }
 
-/** Corrupt or absent still degrades to empty — rebuilding those IS the intent. */
 function readLedgerFile(ledgerPath: string): CodexTrustGrantLedgerFile {
   return readLedgerFileOrNull(ledgerPath) ?? { version: 1, homes: {} }
 }
@@ -112,9 +100,6 @@ export function writeCodexTrustGrantLedgerHome(
 ): void {
   const file = readLedgerFileOrNull(ledgerPath)
   if (!file) {
-    // Why: writing a file derived from `empty` would drop every other home's
-    // grants, and those homes would then be re-prompted for trust they had
-    // already granted. Skip this write; the next grant retries.
     return
   }
   file.homes[getCodexTrustGrantHomeKey(runtimeHomePath)] = home
@@ -139,8 +124,7 @@ export function binaryStampsMatch(
   current: CodexTrustGrantBinaryStamp | null
 ): boolean {
   if (recorded === null || current === null) {
-    // Why: an unresolvable binary stamp must not wedge installs into
-    // re-granting forever; the config/signature checks still gate the skip.
+    // Two unavailable stamps avoid endless re-grants; config and signature checks still apply.
     return recorded === null && current === null
   }
   if (recorded.kind === 'wsl' || current.kind === 'wsl') {

@@ -103,15 +103,25 @@ describe('a resumed control adopts the token its hello proved', () => {
   })
 
   it('keeps a later expiry a refresh delivered over an older token the hello carried', async () => {
-    const { h, session, resumeHello } = await lapsedHost()
-    session.identity = { ...session.identity, exp: nowSeconds() + 600 }
+    const verify = vi.fn<(token: string) => Promise<RelayTokenClaims | null>>()
+    const { h, first, ack } = await connectedHost(300, verify)
+    const session = h.registry.get({ userId: h.identity.sub, relayHostId: h.identity.relayHostId })!
+    const refreshedExpiry = nowSeconds() + 600
+    verify.mockResolvedValueOnce({ ...h.identity, exp: refreshedExpiry })
+    sendRefresh(first)
+    await vi.advanceTimersByTimeAsync(0)
+    expect(session.identity.exp).toBe(refreshedExpiry)
     const older = { ...h.identity, exp: nowSeconds() + 120 }
-    const resumed = await openProof(h, new ProofSocket(), older, resumeHello())
-    answerProof(resumed, h.keyPair)
-    await vi.advanceTimersByTimeAsync(0)
-    expect(session.identity.exp).toBe(nowSeconds() + 600)
-    h.registry.drain(0)
-    await vi.advanceTimersByTimeAsync(0)
+    try {
+      const resumed = await openProof(h, new ProofSocket(), older, resumeHelloFor(h.hello, ack)())
+      answerProof(resumed, h.keyPair)
+      await vi.advanceTimersByTimeAsync(0)
+      expect(sentAck(resumed).generation).toBe(ack.generation)
+      expect(session.identity.exp).toBe(refreshedExpiry)
+    } finally {
+      h.registry.drain(0)
+      await vi.advanceTimersByTimeAsync(0)
+    }
   })
 
   it.each([

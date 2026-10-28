@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import type { NativeChatAppearanceSettings } from '../../../../shared/native-chat-appearance-settings'
+import type { NativeChatAppearanceSettings } from '../../../../shared/native-chat/native-chat-appearance-settings'
 import {
   chatTerminalControlledHint,
   chatTerminalControlledTooltip,

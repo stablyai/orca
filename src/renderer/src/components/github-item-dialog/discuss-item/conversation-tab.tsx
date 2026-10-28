@@ -203,8 +203,7 @@ export function ConversationTab({
         )
         return false
       }
-      // Why: nest under review threads (path/threadId/discussion_r); never post a
-      // separate top-level conversation comment for those.
+      // Reply within review threads instead of creating unrelated top-level conversation comments.
       const isReviewThreadReply = item.type === 'pr' && canPostPRReviewThreadReply(comment)
       const result = isReviewThreadReply
         ? await addPRReviewCommentReplyForRepo({

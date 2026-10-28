@@ -17,29 +17,21 @@ import {
   type WorkspaceCreateEventContext
 } from './workspace-create-event-fields'
 
-/** One create's `workspace_created` / `workspace_create_failed` event: exactly one is sent. */
 export type WorkspaceCreateTelemetry = {
-  /** The recorder the create times its phases into. */
   readonly timing: WorktreeCreateTimingRecorder
-  /** `timing` is the create's own finished timing when it returned one. */
   succeeded(timing?: WorktreeCreateTiming): void
   failed(error: unknown): void
 }
 
 export type WorkspaceCreateTelemetryArgs = {
-  /** The caller-supplied value, validated here; anything else is sent as `unknown`. */
   source: unknown
   entryPoint: WorkspaceCreateEntryPoint
   repoPath: string
   fromExistingBranch: boolean
-  /** Folder workspaces register a directory: no timing, no disk competition, event unchanged. */
+  /** Folder workspaces omit Git timing and disk-concurrency fields. */
   isFolder: boolean
 }
 
-/**
- * Starts the events for one create. Both create entry points (the app's IPC handler and the
- * runtime API) begin here, so a create is counted once and both send the same fields.
- */
 export function beginWorkspaceCreateTelemetry(
   args: WorkspaceCreateTelemetryArgs
 ): WorkspaceCreateTelemetry {
@@ -103,16 +95,11 @@ export function beginWorkspaceCreateTelemetry(
   }
 }
 
-/** Lets a runtime create start its events once it is known to be a Git create. */
 export type RuntimeWorkspaceCreateEvents = {
   begin(repoPath: string): WorktreeCreateTimingRecorder
 }
 
-/**
- * Runs a runtime create and settles its events before returning, so a re-arm the caller fires
- * afterwards is not counted against it. Folder workspaces and requests rejected before `begin`
- * send nothing, as before.
- */
+/** Settle concurrency counts before returning, so subsequent preparation work is excluded. */
 export async function trackRuntimeWorkspaceCreate<T>(
   request: { telemetrySource?: unknown; baseBranch?: string },
   perform: (events: RuntimeWorkspaceCreateEvents) => Promise<T>
@@ -140,15 +127,14 @@ export async function trackRuntimeWorkspaceCreate<T>(
   }
 }
 
-/** Runs after the create has returned, so the repo probe never adds to create latency. */
+/** Probe asynchronously so repository inspection does not delay creation. */
 async function trackWorkspaceCreated(
   props: EventProps<'workspace_created'>,
   repoPath: string,
   timing: WorktreeCreateTiming,
   context: WorkspaceCreateEventContext
 ): Promise<void> {
-  // SSH would need a remote round trip, so only local and WSL repos are probed; with telemetry
-  // off the repo's .git is not read at all.
+  // Avoid SSH round trips; disabled telemetry must not inspect repositories.
   const repoFacts =
     isTelemetryEnabled() && (timing.executionHost === 'local' || timing.executionHost === 'wsl')
       ? await probeCreateEventRepoFacts(repoPath)

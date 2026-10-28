@@ -6,6 +6,10 @@ import { LOCAL_EXECUTION_HOST_ID, parseExecutionHostId } from '../../../shared/e
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../shared/layout-owner-switch'
 import { keepsExitedPane } from '../exited-split-pane-layout-close'
 import type { ExitedSplitPaneFacts } from '../terminal/lifecycle/exited-split-pane-rule'
+import {
+  forgetClosedPaneOfExit,
+  type ClosedPaneOfExit
+} from '../terminal/lifecycle/closed-pane-of-exited-pty'
 import { retireTerminalSurfaceFromPersistence } from '../mobile-session-terminal-persistence-retirement'
 import { retireTerminalSurfacesFromSnapshot } from '../mobile-session-terminal-retirement'
 import { attachRetirementProofsToSnapshot } from '../mobile-session-terminal-retirement-proof'
@@ -16,16 +20,11 @@ export abstract class OrcaRuntimeWithPersistTerminalSurfaceRetirements extends O
     ...args: Parameters<BindPtyIncarnationHandleMethods['findHandleForPtyRecord']>
   ): ReturnType<BindPtyIncarnationHandleMethods['findHandleForPtyRecord']>
 
-  /**
-   * Retires each surface in the in-memory session partition of the host that owns its worktree.
-   * Why: an SSH pane's durable surface lives in that connection's partition; retiring it
-   * against the local partition strands the real ghost and bumps a foreign host's epoch.
-   * `accepted` held the surface; `unpersisted` had no partition to hold it (or refused the write);
-   * `kept` is an exited pane main keeps, so no client is told it retired.
-   */
+  /** Retire in the owning host partition; local writes strand SSH ghosts and alter foreign epochs. accepted=held surface, unpersisted=absent/refused partition, kept=main-retained exited pane. Remove closedPane in the same write. */
   protected stageTerminalSurfaceRetirements(
     retiredSurfaces: readonly RetiredTerminalSurface[],
-    exit?: ExitedSplitPaneFacts
+    exit?: ExitedSplitPaneFacts,
+    closedPane?: ClosedPaneOfExit
   ): {
     accepted: RetiredTerminalSurface[]
     unpersisted: RetiredTerminalSurface[]
@@ -42,7 +41,7 @@ export abstract class OrcaRuntimeWithPersistTerminalSurfaceRetirements extends O
         unpersisted.push(surface)
         continue
       }
-      // Switch point: main keeps an exited pane the window's rule keeps; others retire as before.
+      // Main retains exited panes matching window retention rules; retire all others normally.
       if (
         ORCA_LAYOUT_OWNER_IS_MAIN &&
         exit &&
@@ -52,7 +51,11 @@ export abstract class OrcaRuntimeWithPersistTerminalSurfaceRetirements extends O
         kept.push(surface)
         continue
       }
-      const next = retireTerminalSurfaceFromPersistence(current, surface)
+      const retired = retireTerminalSurfaceFromPersistence(current, surface)
+      const next =
+        retired !== current && closedPane?.paneKey === `${surface.parentTabId}:${surface.leafId}`
+          ? forgetClosedPaneOfExit(retired, closedPane)
+          : retired
       if (next === current) {
         continue
       }
@@ -61,7 +64,7 @@ export abstract class OrcaRuntimeWithPersistTerminalSurfaceRetirements extends O
         this.store!.setWorkspaceSession!(next, hostId)
         accepted.push(surface)
       } catch (error) {
-        // Why: the process is gone whether or not the profile admits the write (quit, maintenance).
+        // The process is gone even when quit/maintenance prevents profile writes.
         console.error('[runtime] could not stage terminal retirement:', error)
         unpersisted.push(surface)
       }
@@ -69,25 +72,26 @@ export abstract class OrcaRuntimeWithPersistTerminalSurfaceRetirements extends O
     return { accepted, unpersisted, kept }
   }
 
-  // Why no rollback: the process is gone, so a failed write leaves the retirement for the next one.
+  // No rollback: failed writes retry retirement later, but the process is already gone.
   protected async persistStagedTerminalSurfaceRetirements(): Promise<void> {
     if (!this.store?.runDurableMutation) {
       return
     }
     try {
-      // Why if-dirty: an earlier write, or another exit's, may already carry this retirement.
+      // Write only if dirty; earlier/concurrent exits may already have persisted retirement.
       await this.store.runDurableMutation(() => ({ value: undefined, persist: 'if-dirty' }))
     } catch (error) {
       console.error('[runtime] terminal retirement is not yet durable:', error)
     }
   }
 
-  // Why synchronous: the exit's stream end cues clients to re-activate, which must find the leaf gone.
+  // Retire synchronously before stream end prompts client reactivation.
   protected retireMobileSessionSurfacesForPty(
     ptyId: string,
     incarnationId: string,
     exactSurfaces: readonly Pick<RetiredTerminalSurface, 'worktreeId' | 'parentTabId' | 'leafId'>[],
-    exit?: ExitedSplitPaneFacts
+    exit?: ExitedSplitPaneFacts,
+    closedPane?: ClosedPaneOfExit
   ): Promise<void> | undefined {
     const terminalHandle =
       this.handleByPtyId.get(ptyId) ?? this.findHandleForPtyRecord(ptyId) ?? undefined
@@ -120,7 +124,7 @@ export abstract class OrcaRuntimeWithPersistTerminalSurfaceRetirements extends O
     if (retiredSurfaces.length === 0) {
       return undefined
     }
-    const staged = this.stageTerminalSurfaceRetirements(retiredSurfaces, exit)
+    const staged = this.stageTerminalSurfaceRetirements(retiredSurfaces, exit, closedPane)
     for (const surface of staged.unpersisted) {
       const repoId = getRepoIdFromWorktreeId(surface.worktreeId)
       this.terminalTopologyRevisionByRepoId.set(
@@ -128,12 +132,10 @@ export abstract class OrcaRuntimeWithPersistTerminalSurfaceRetirements extends O
         (this.terminalTopologyRevisionByRepoId.get(repoId) ?? 0) + 1
       )
     }
-    // Why: one repo epoch can cover multiple exits; a surface the session binds to another PTY or incarnation stays.
+    // One repo epoch may cover many exits; preserve surfaces rebound to other PTYs/incarnations.
     const removableRetiredSurfaces = [...staged.accepted, ...staged.unpersisted]
     for (const [worktreeId, snapshot] of this.mobileSessionTabsByWorktree) {
-      // Why proofs aren't gated on `removable`: the exit is the attestation, and a surface the
-      // renderer already de-persisted leaves persistence nothing to accept. Withholding the proof
-      // then strands the mirror's pane until a second inventory a quiet workspace never sends.
+      // Exit itself attests retirement even if the renderer already removed persistence; withholding proof strands mirrors on quiet workspaces.
       const retirementProofs = terminalHandle
         ? retiredSurfaces
             .filter(
@@ -156,7 +158,7 @@ export abstract class OrcaRuntimeWithPersistTerminalSurfaceRetirements extends O
               snapshot,
               ptyId,
               exactSurfaces: removableSurfaces,
-              // Why: discovery is broad by PTY id, but publication may remove only surfaces the session retired.
+              // Discover broadly by PTY id but publish removals only for retired session surfaces.
               exactOnly: true,
               ...(retirementProofs.length > 0 ? { retirementProofs } : {})
             })

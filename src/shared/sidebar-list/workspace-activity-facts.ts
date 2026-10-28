@@ -1,11 +1,14 @@
 import { z } from 'zod'
 import type { AgentStatusEntry } from '../agent-status-types'
+import {
+  parseWorktreeHostIdentity,
+  type HostScopedWorktreeKey
+} from '../worktree/host-qualified-identity'
 
 const LiveAgentWorktreeStatusSchema = z.enum(['working', 'monitoring', 'permission'])
 
-/** What keeps one workspace out of the sleeping sweep, as its host sees it. */
+/** Host-observed activity that prevents sleeping; lost contact is unverifiable, never gone. */
 const WorkspaceActivityFactsSchema = z.object({
-  /** Execution-boundary vocabulary: a host that only lost contact is unverifiable, never gone. */
   terminal: z.enum(['live', 'unverifiable']).nullable(),
   browser: z.boolean(),
   structuredChat: z.boolean(),
@@ -19,7 +22,7 @@ export const WorkspaceActivityFactsSnapshotSchema = z.object({
   facts: z.record(z.string(), WorkspaceActivityFactsSchema)
 })
 
-/** What a paired server reports for one of its own workspaces; the tabs are its clients' to add. */
+/** Server-owned activity; its clients add browser/chat tabs. */
 export const HostReportedActivitySchema = WorkspaceActivityFactsSchema.pick({
   terminal: true,
   agent: true
@@ -36,6 +39,22 @@ export const IDLE_WORKSPACE_ACTIVITY: WorkspaceActivityFacts = {
   browser: false,
   structuredChat: false,
   agent: null
+}
+
+/** Map host-local activity to every listed row key; unlisted IDs have no row. */
+export function keyWorkspaceActivityByRow(
+  facts: Readonly<Record<string, WorkspaceActivityFacts>>,
+  rows: Readonly<Record<string, { id: string }>>
+): Record<HostScopedWorktreeKey, WorkspaceActivityFacts> {
+  const keyed: Record<HostScopedWorktreeKey, WorkspaceActivityFacts> = {}
+  for (const [identity, row] of Object.entries(rows)) {
+    const key = parseWorktreeHostIdentity(identity)
+    const fact = facts[row.id]
+    if (key && fact) {
+      keyed[key] = fact
+    }
+  }
+  return keyed
 }
 
 export function isIdleWorkspaceActivity(facts: WorkspaceActivityFacts): boolean {
@@ -64,7 +83,6 @@ export function liveAgentStatusOf(
   return entry.workingMode === 'monitoring' ? 'monitoring' : 'working'
 }
 
-/** A permission wait outranks work, and foreground work outranks monitoring. */
 export function strongerLiveAgentStatus(
   current: LiveAgentWorktreeStatus | null | undefined,
   next: LiveAgentWorktreeStatus

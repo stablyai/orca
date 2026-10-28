@@ -21,9 +21,7 @@ export type SetupScriptPromptInspection =
       status: 'error'
       repoId: string
     }
-  // Why: a forbidden (mobile-scope) failure is permanent, not transient — the
-  // card must not offer a retry that re-fires repo.hooksCheck on every focus.
-  // The global scope-mismatch banner already explains the cause.
+  // Mobile-scope forbiddance is permanent; the global banner explains it, and retry-on-focus would repeatedly call hooksCheck.
   | {
       status: 'forbidden'
       repoId: string
@@ -84,6 +82,12 @@ export function getSetupScriptPromptDismissalKey(repoHostIdentity: string): stri
   return `${SETUP_SCRIPT_PROMPT_DISMISSAL_PREFIX}${repoHostIdentity}`
 }
 
+/** The repo of a dismissal key, host-qualified (`<host>\0<repoId>`) or legacy bare. */
+export function getSetupScriptPromptDismissalRepoId(entry: string): string {
+  const identity = entry.slice(SETUP_SCRIPT_PROMPT_DISMISSAL_PREFIX.length)
+  return identity.slice(identity.indexOf('\0') + 1)
+}
+
 export function isSetupScriptPromptDismissed(
   repoHostIdentity: string,
   dismissedEntries: readonly string[]
@@ -129,11 +133,7 @@ export function filterSetupScriptPromptDismissalsToValidRepos(
       }
     }
   }
-  // Why: fetchRepos / fetchRuntimeEnvironmentRepos / validateRepoScopedUi assign
-  // this into set() on every catalog refresh. SetupScriptPromptCard Object.is-
-  // subscribes to the array, so a fresh copy on a no-op prune is a guaranteed miss.
-  // Compare against the original input, not the sanitize copy — sanitize always
-  // allocates, including for [] and already-valid host-identity keys.
+  // No-op pruning must return the original array for Object.is subscribers on every catalog refresh; sanitize always allocates, even for valid/empty input.
   if (isUnchangedDismissalList(value, next)) {
     return value
   }
@@ -168,9 +168,7 @@ export function buildImportedHookSettings(
     ...defaults,
     ...current,
     setupRunPolicy: current?.setupRunPolicy ?? defaults.setupRunPolicy,
-    // Why: imported setup commands are stored as local settings. If a shared
-    // hook file exists, run-both preserves its archive hook; otherwise local
-    // settings need to be authoritative so the imported setup actually runs.
+    // Imported local commands need authority unless a shared hook exists, in which case run-both preserves it.
     commandSourcePolicy:
       current?.commandSourcePolicy === 'local-only'
         ? 'local-only'
@@ -196,9 +194,7 @@ export function formatCandidateSource(candidate: SetupScriptImportCandidate): st
     : `${candidate.label} (${primaryFile})`
 }
 
-// Why: card provenance shows the file(s) we matched, not the provider label.
-// For a single file we just print its name; for two we join with "and"; for
-// more we keep the leading file and summarize the rest as "+N more".
+// Show matched filenames as provenance: one name, two with and, or first +N more; never substitute provider labels.
 export function formatCandidateProvenance(candidate: SetupScriptImportCandidate): string | null {
   if (candidate.provider === 'package-manager') {
     const lockfile = candidate.files.find((file) => file !== 'package.json')

@@ -1,7 +1,3 @@
-/**
- * A hidden, throttled embedder stops compositing: capturePage never settles and no live frame
- * comes. The stream says so once, 10 s after it started, and only if no frame arrived by then.
- */
 import { Buffer } from 'node:buffer'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { startBrowserScreencast } from './browser-screencast-stream'

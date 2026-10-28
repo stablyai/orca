@@ -2,21 +2,14 @@ import type { Repo } from '../../../../shared/repo-types'
 import type { SshConnectionState } from '../../../../shared/ssh-types'
 import { isRuntimeOwnedSshTargetId } from '../../../../shared/execution-host'
 
-/**
- * How a workspace on an SSH host should be deleted, given the host's live
- * state. Drives whether the delete flow can go straight through the normal
- * remote removal, must offer a reconnect-first choice, or can only forget the
- * workspace from Orca because the SSH target is gone entirely.
- */
+/** Choose normal deletion, reconnect-or-forget, or forget-only from SSH target state. */
 export type SshWorkspaceForgetResolution =
   | { kind: 'not-ssh' }
-  // Target exists and the relay is connected — normal remote removal works.
+  // Connected targets allow normal remote removal.
   | { kind: 'connected'; targetId: string }
-  // Target still configured but not connected — offer Reconnect & Delete plus
-  // a local-only forget fallback.
+  // Configured offline targets offer reconnect or local forget.
   | { kind: 'disconnected'; targetId: string; status: SshConnectionState['status'] }
-  // Target was removed; only a project-only "ghost" host remains. Reconnect is
-  // impossible, so forget-from-Orca is the only path.
+  // Removed targets cannot reconnect; only local forget remains.
   | { kind: 'ghost'; targetId: string }
 
 export function resolveSshWorkspaceForget(args: {
@@ -26,8 +19,7 @@ export function resolveSshWorkspaceForget(args: {
   sshTargetLabels: ReadonlyMap<string, string>
 }): SshWorkspaceForgetResolution {
   const connectionId = args.repo?.connectionId?.trim()
-  // Why: runtime-owned (ephemeral-VM) SSH targets manage their own lifecycle and
-  // are never user-facing ghosts, so they take the normal delete path.
+  // Runtime-owned ephemeral targets manage their lifecycle and must never become user-facing ghosts.
   if (!connectionId || isRuntimeOwnedSshTargetId(connectionId)) {
     return { kind: 'not-ssh' }
   }
@@ -35,9 +27,7 @@ export function resolveSshWorkspaceForget(args: {
   const isConfigured = args.sshTargetLabels.has(connectionId)
   const status = args.sshConnectionStates.get(connectionId)?.status
 
-  // Why: a target the user removed leaves repos pinned to a dead id with no
-  // configured target — the grey ghost host. Reconnect can never succeed, so
-  // the only escape is to forget it from Orca.
+  // An unconfigured target cannot reconnect; offer local forget for its remaining records.
   if (!isConfigured) {
     return { kind: 'ghost', targetId: connectionId }
   }

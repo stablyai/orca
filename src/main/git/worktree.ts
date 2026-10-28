@@ -7,9 +7,7 @@ export {
 } from './worktree-add'
 export { forceDeleteLocalBranch } from './worktree-branch-removal'
 export { parseWorktreeList } from '../../shared/git-worktree-porcelain-parser'
-// Unshared by design: verification-after-mutation callers must not join an
-// in-flight scan that predates a raw `git worktree prune` or an external client.
-// Opt into coalescing with `listWorktreesSharedStrict`.
+// Post-mutation verification must not join pre-prune scans; opt into coalescing via listWorktreesSharedStrict.
 export { describeCreatedWorktree, listWorktreesStrict } from './worktree-listing'
 export { moveWorktree } from './worktree-move'
 export {

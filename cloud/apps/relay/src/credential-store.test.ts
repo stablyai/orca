@@ -30,11 +30,15 @@ async function inviteBasis(
 describe('relay credential store', () => {
   it('issues invites with a skew margin under the client-side TTL ceiling', async () => {
     const database = await openInMemoryRelayDatabase()
-    const store = new RelayCredentialStore(database, () => 1_000_000)
-    const invite = await store.createInvite(identity, relayDeviceId)
-    // Zero-tolerance released desktops reject expiry past local now + 10min;
-    // issuing 30s under the ceiling absorbs that much desktop clock lag.
-    expect(invite.expiresAt).toBe(1_000_000 + 10 * 60 * 1_000 - 30 * 1_000)
+    try {
+      const store = new RelayCredentialStore(database, () => 1_000_000)
+      const invite = await store.createInvite(identity, relayDeviceId)
+      // Zero-tolerance released desktops reject expiry past local now + 10min;
+      // issuing 30s under the ceiling absorbs that much desktop clock lag.
+      expect(invite.expiresAt).toBe(1_000_000 + 10 * 60 * 1_000 - 30 * 1_000)
+    } finally {
+      await database.close()
+    }
   })
 
   it('persists one invite reservation with bounded attempts and cooldown', async () => {

@@ -21,7 +21,7 @@ function refuses(schema: z.ZodType<unknown, unknown>, value: unknown): boolean {
 }
 
 describe('Linear account status', () => {
-  it('reads the recorded reply, workspace row included', () => {
+  it('reads the representative reply, workspace row included', () => {
     const status = reads(linearAccountStatusSchema, {
       connected: true,
       workspaces: [{ id: 'linear-workspace', name: 'Workspace' }],
@@ -60,7 +60,7 @@ describe('Linear account status', () => {
 })
 
 describe('the GitHub item count', () => {
-  it('reads the recorded number and names anything else', () => {
+  it('reads the representative number and names anything else', () => {
     expect(reads(githubWorkItemCountSchema, 4)).toBe(4)
     expect(refuses(githubWorkItemCountSchema, '4')).toBe(true)
     expect(refuses(githubWorkItemCountSchema, { count: 4 })).toBe(true)
@@ -83,7 +83,7 @@ describe('the GitLab to-do inbox', () => {
     state: 'pending'
   }
 
-  it('reads the recorded row through untouched, unread members included', () => {
+  it('reads the representative row through untouched, unread members included', () => {
     expect(reads(gitlabTodoListSchema, [RECORDED_TODO])).toEqual([RECORDED_TODO])
   })
 

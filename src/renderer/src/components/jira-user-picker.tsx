@@ -5,11 +5,10 @@ import { Input } from '@/components/ui/input'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { jiraSearchUsers, type RuntimeJiraSettings } from '@/runtime/runtime-jira-client'
 import { translate } from '@/i18n/i18n'
-import type { JiraUser } from '../../../shared/jira-types'
+import type { JiraUser } from '../../../shared/jira/jira-types'
 
 const USER_SEARCH_DEBOUNCE_MS = 250
 
-/** Renders the selectable user rows inside the picker popover. */
 export function JiraUserOptionList({
   users,
   onSelect
@@ -36,11 +35,7 @@ export function JiraUserOptionList({
   )
 }
 
-/**
- * Searchable single-user combobox for Jira user fields. These need an accountId,
- * not the display name a plain text box would collect, since Jira rejects a bare
- * string for user fields.
- */
+/** User fields require accountId values; Jira rejects display-name strings. */
 export type JiraUserPickerFixedOption = {
   key: string
   label: string
@@ -56,7 +51,8 @@ export function JiraUserPicker({
   disabled,
   label,
   fixedOptions,
-  searchUsers
+  searchUsers,
+  allowKnownUserId
 }: {
   providerSettings: RuntimeJiraSettings
   siteId?: string | null
@@ -69,11 +65,13 @@ export function JiraUserPicker({
   fixedOptions?: JiraUserPickerFixedOption[]
   /** Replaces the site-wide user search, e.g. with a project-scoped assignable search. Must be referentially stable. */
   searchUsers?: (query: string) => Promise<JiraUser[]>
+  allowKnownUserId?: boolean
 }): React.JSX.Element {
   const [open, setOpen] = useState(false)
   const [query, setQuery] = useState('')
   const [users, setUsers] = useState<JiraUser[]>([])
   const [loading, setLoading] = useState(false)
+  const knownUserId = query.trim()
 
   useEffect(() => {
     if (!open) {
@@ -166,6 +164,20 @@ export function JiraUserPicker({
             }}
           />
         )}
+        {allowKnownUserId && knownUserId ? (
+          <button
+            type="button"
+            onClick={() => {
+              onSelect({ accountId: knownUserId, displayName: knownUserId })
+              setOpen(false)
+            }}
+            className="flex w-full items-center gap-2 rounded-sm px-2 py-1.5 text-left text-xs hover:bg-accent"
+          >
+            {translate('components.jiraUserPicker.useKnownId', 'Use known user ID "{{value0}}"', {
+              value0: knownUserId
+            })}
+          </button>
+        ) : null}
       </PopoverContent>
     </Popover>
   )

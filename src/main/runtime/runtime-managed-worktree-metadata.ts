@@ -1,8 +1,8 @@
+import { getRepoRegistrationHostIds } from '../../shared/repo-host-identity'
 import type { GitPushTarget, Worktree } from '../../shared/worktree/types'
 import type { WorktreeMeta } from '../../shared/worktree/meta-types'
 import { worktreeWorkspaceKey } from '../../shared/workspace-scope'
 import { splitWorktreeId } from '../../shared/worktree/id'
-import { getRepoExecutionHostId } from '../../shared/execution-host'
 import type { WorktreeSortOrderUpdate } from '../../shared/worktree/sort-order-update'
 import { stripOrcaProvenanceMetaUpdates } from '../worktree-removal-safety'
 import { isRemovedFolderWorkspaceInstance } from '../folder-workspace-meta-presence'
@@ -128,12 +128,12 @@ export async function updateRuntimeManagedWorktreeMetadata(args: {
     })
   }
   const metadataUpdates = stripOrcaProvenanceMetaUpdates(persisted)
-  // Why: a resolution snapshot taken before a removal still returns the workspace (#22712).
+  // Recheck removal: an earlier resolution snapshot may still contain this workspace (#22712).
   if (isRemovedFolderWorkspaceInstance(args.store, worktree.id, executionHostId)) {
     throw new Error('selector_not_found')
   }
   args.store.setWorktreeMeta(target, metadataUpdates)
-  // Why: CLI callers need an explicit push for metadata changed outside the renderer's optimistic update path.
+  // Push explicitly for CLI mutations outside renderer optimistic updates.
   args.ports.invalidateResolved()
   args.ports.notifyChanged(worktree.repoId)
   if (lineage) {
@@ -154,8 +154,7 @@ export function persistRuntimeManagedWorktreeSortOrder(args: {
   /** `sortOrders` omitted: the repo has same-id copies, which an id-keyed patch cannot tell apart. */
   notifyChanged: (repoId: string, sortOrders?: WorktreeSortOrderUpdate[]) => void
 }): { updated: number } {
-  // A moving project keeps its old order; the rest of the batch still lands. Only what was saved
-  // is reported and published.
+  // Skip moving projects but save/publish the rest; report only written orders.
   const updates = writeWorktreeSortOrder(
     args.store,
     { orderedIds: args.orderedIds, hostIds: args.hostIds },
@@ -174,13 +173,8 @@ export function persistRuntimeManagedWorktreeSortOrder(args: {
     }
   }
   for (const [repoId, sortOrders] of updatesByRepo) {
-    const hosts = new Set(
-      args.store
-        .getRepos()
-        .filter((repo) => repo.id === repoId)
-        .map(getRepoExecutionHostId)
-    )
-    args.notifyChanged(repoId, hosts.size > 1 ? undefined : sortOrders)
+    const isTwin = getRepoRegistrationHostIds(args.store.getRepos(), repoId).size > 1
+    args.notifyChanged(repoId, isTwin ? undefined : sortOrders)
   }
   return { updated: updates.length }
 }

@@ -1,3 +1,4 @@
+import { OnboardingLanguageSwitcher } from './OnboardingLanguageSwitcher'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { cn } from '@/lib/utils'
 import { isEditableTarget } from '@/lib/editable-target'
@@ -138,21 +139,20 @@ export default function OnboardingFlow({
     (currentStep.id === 'notifications'
       ? translate('components.onboarding.flow.actions.addFirstProject', 'Add your first project')
       : translate('components.onboarding.flow.actions.continue', 'Continue'))
+  const [languagePickerOpen, setLanguagePickerOpen] = useState(false)
   const [skipConfirmOpen, setSkipConfirmOpen] = useState(false)
   const skipConfirmAdvancedViaRef = useRef<'button' | 'keyboard'>('button')
   const { next: flowNext, dismissOnboarding: flowDismissOnboarding } = flow
 
   const requestSkipConfirmation = useCallback(
     (advancedVia: 'button' | 'keyboard') => {
-      // Why: click-off / Escape dismissal stays available on every step,
-      // including the final notifications step, so the modal never feels stuck.
-      if (busyLabel || skipConfirmOpen) {
+      if (busyLabel || skipConfirmOpen || languagePickerOpen) {
         return
       }
       skipConfirmAdvancedViaRef.current = advancedVia
       setSkipConfirmOpen(true)
     },
-    [busyLabel, skipConfirmOpen]
+    [busyLabel, skipConfirmOpen, languagePickerOpen]
   )
 
   const confirmSkipOnboarding = useCallback(() => {
@@ -161,17 +161,17 @@ export default function OnboardingFlow({
     void flowDismissOnboarding(advancedVia)
   }, [flowDismissOnboarding])
 
-  // Why: depend on stable callbacks + step id only so the listener doesn't
-  // re-bind on every render of the parent (flow object identity changes).
+  // Depend on stable callbacks/step ID so the changing flow object cannot churn the key listener.
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent): void => {
-      // Why: don't hijack Enter / Cmd+Enter while the user is typing into the
-      // clone-URL input or any other editable field on a step.
+      if (languagePickerOpen || skipConfirmOpen) {
+        return
+      }
+      // Do not submit while typing in clone URL or another editable field.
       if (isEditableTarget(event.target)) {
         return
       }
-      // Why: onboarding continue is screen-local submit behavior, not a
-      // user-configurable app command.
+      // Continue uses the screen submit shortcut rather than configurable app-command bindings.
       if (!isScreenSubmitShortcut(event)) {
         return
       }
@@ -180,11 +180,11 @@ export default function OnboardingFlow({
     }
     addAppKeyListener('keydown', onKeyDown)
     return () => removeAppKeyListener('keydown', onKeyDown)
-  }, [flowNext])
+  }, [flowNext, languagePickerOpen, skipConfirmOpen])
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent): void => {
-      if (event.key !== 'Escape' || skipConfirmOpen) {
+      if (event.key !== 'Escape' || skipConfirmOpen || languagePickerOpen) {
         return
       }
       event.preventDefault()
@@ -192,12 +192,12 @@ export default function OnboardingFlow({
     }
     addAppKeyListener('keydown', onKeyDown)
     return () => removeAppKeyListener('keydown', onKeyDown)
-  }, [requestSkipConfirmation, skipConfirmOpen])
+  }, [requestSkipConfirmation, skipConfirmOpen, languagePickerOpen])
 
   return (
     <TooltipProvider delayDuration={0} skipDelayDuration={0}>
       <div
-        className="fixed inset-0 z-[100] flex items-center justify-center overflow-hidden bg-black/50 p-4 text-foreground backdrop-blur-[2px]"
+        className="fixed inset-0 z-[100] flex items-center justify-center overflow-hidden bg-black/50 p-4 text-foreground"
         data-onboarding-overlay
         onPointerDown={(event) => {
           if (!shouldRequestOnboardingSkipConfirmation(event)) {
@@ -226,16 +226,22 @@ export default function OnboardingFlow({
           )}
         >
           <div className="relative flex h-full min-h-0 flex-col px-6 pb-6 pt-8 sm:px-8 sm:pb-8 sm:pt-9">
-            <div className="flex items-center gap-3 text-base font-semibold tracking-tight">
-              <img
-                src={logo}
-                alt=""
-                aria-hidden="true"
-                className="h-7 w-auto shrink-0 invert dark:invert-0"
+            <div className="flex items-center justify-between gap-3">
+              <div className="flex items-center gap-3 text-base font-semibold tracking-tight">
+                <img
+                  src={logo}
+                  alt=""
+                  aria-hidden="true"
+                  className="h-7 w-auto shrink-0 invert dark:invert-0"
+                />
+                <span>
+                  {translate('auto.components.onboarding.OnboardingFlow.a249f81538', 'Orca')}
+                </span>
+              </div>
+              <OnboardingLanguageSwitcher
+                open={languagePickerOpen}
+                onOpenChange={setLanguagePickerOpen}
               />
-              <span>
-                {translate('auto.components.onboarding.OnboardingFlow.a249f81538', 'Orca')}
-              </span>
             </div>
 
             <div className="mt-10 flex items-center gap-2 transition-[margin-top] duration-[760ms] ease-[cubic-bezier(0.22,1,0.36,1)] motion-reduce:transition-none">
@@ -249,8 +255,7 @@ export default function OnboardingFlow({
                       <button
                         type="button"
                         className={cn(
-                          // Why: the visible bars stay 4px tall, but the invisible
-                          // hit area makes hover/click/tooltip targeting reliable.
+                          // Expand the invisible hit area while keeping the stepper bars 4px tall.
                           'relative h-1 rounded-full outline-none transition-all duration-300 before:absolute before:-inset-y-2 before:-inset-x-1 focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-card',
                           isActive
                             ? 'w-10 bg-foreground'
@@ -302,8 +307,7 @@ export default function OnboardingFlow({
             <div
               className={cn(
                 'min-h-0 flex-1 transition-[margin-top] duration-[760ms] ease-[cubic-bezier(0.22,1,0.36,1)] motion-reduce:transition-none',
-                // Why: agent step pins permissions below a capped agent grid scroll
-                // region; other steps keep the shared outer scroll container.
+                // Agent permissions stay outside the capped grid scroll; other steps use the outer scroller.
                 currentStep.id === 'agent'
                   ? 'mt-10 flex flex-col overflow-hidden'
                   : cn('scrollbar-sleek overflow-y-auto pr-1', 'mt-10')

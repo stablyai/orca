@@ -21,7 +21,6 @@ function declaredFile(label: string, path: string | undefined, maxBytes: number)
   return path === undefined ? [] : [{ label, path, kind: 'file' as const, maxBytes }]
 }
 
-/** One line per contribution family that names a file. */
 function declaredArtifactPaths(manifest: PluginManifest): DeclaredArtifact[] {
   const c = manifest.contributes
   return [
@@ -139,7 +138,6 @@ export async function validateDeclaredPluginArtifacts(
   return { ok: true }
 }
 
-/** Parses declared VM recipe artifacts at the immutable install boundary. */
 export async function validatePluginInstallContent(
   rootDir: string,
   manifest: PluginManifest

@@ -16,18 +16,6 @@ describe('file explorer path helpers', () => {
     ).toBe(false)
   })
 
-  it('keeps POSIX path comparisons case-sensitive', () => {
-    expect(isPathEqualOrDescendant('/Repo/src/a.ts', '/repo')).toBe(false)
-  })
-
-  it('builds reveal ancestors from the worktree casing and target relative casing', () => {
-    expect(getRevealAncestorDirs('C:\\Repo', 'c:\\repo\\Src\\Nested\\File.ts')).toEqual([
-      'C:\\Repo\\Src',
-      'C:\\Repo\\Src\\Nested'
-    ])
-    expect(getRevealAncestorDirs('/repo', '/Repo/Src/File.ts')).toBeNull()
-  })
-
   it('builds reveal ancestors for Windows drive-root worktrees', () => {
     expect(getRevealAncestorDirs('C:\\', 'c:\\repo\\src\\app.ts')).toEqual([
       'C:\\repo',

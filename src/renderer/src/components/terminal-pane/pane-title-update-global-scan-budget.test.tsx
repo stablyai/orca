@@ -1,43 +1,5 @@
 // @vitest-environment happy-dom
-/**
- * Deterministic, count-based reproduction for STA-7552 (under STA-7551).
- *
- * Zustand notifies every subscriber synchronously on every `set`, and each
- * subscriber re-runs its selector. A single pane title update therefore pays
- * for every mounted selector that rescans a global collection to conclude
- * nothing changed for it. `useShallow` suppresses the *re-render*, never the
- * selector body, so it does not help here.
- *
- * Scale is Jinjing's live 1.4.203-hourly capture: ~870 workspaces, ~1,400
- * terminal tabs, ~857 sleeping-agent records, ~177 agent-status rows, 20
- * mounted panes/cards.
- *
- * Scale check: this mount opens 5,500 zustand listeners, inside the capture's
- * 5,462-7,478. Most come from the sidebar — the worktree list is not
- * virtualised, so all 870 rows mount and each opens ~6 subscriptions.
- *
- * ONE `setRuntimePaneTitle` at that scale, before/after the park-exemption memo:
- *
- *   metric                                    before      after
- *   zustand listeners                          5,500      5,500
- *   store notifications                            1          1
- *   listener invocations                       5,500      5,500
- *   selector runs: worktree activity summary     896        896
- *   selector runs: worktree card status inputs 2,688      2,688
- *   selector runs: sleeping-record exemption      23         23
- *   sidebar rows committed (of 870)                1          1
- *   React commits: retained panes                  1          1
- *   sleeping-agent records read               19,711          0
- *   agent-status rows read                         0          0
- *   workspace tab buckets read                 1,394      2,081
- *
- * The current count also includes the later per-workspace sleep-state reader.
- *
- * So notification work is O(mounted workspaces) and this fix does not change
- * that — one shared store means every subscriber is visited. What changes is
- * the cost of each visit: the scan is gone, and 5,499 of the 5,500 invocations
- * were already resolving to "nothing changed for me" without re-rendering.
- */
+/** STA-7552: count selector reads at live-profile scale; Zustand invokes every selector on set, even when useShallow suppresses rendering. Global scans must stay absent. */
 import React, { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -45,18 +7,25 @@ import { useShallow } from 'zustand/react/shallow'
 import { useAppStore } from '@/store'
 import { selectTabBarAgentProjections } from '@/components/tab-bar/tab-agent-types-by-tab-id'
 import { useWorktreeActivityStatus } from '@/components/sidebar/use-worktree-activity-status'
+import { useWorktreeActivityStatuses } from '@/components/sidebar/use-worktree-activity-statuses'
+import {
+  PaletteLiveStatusProvider,
+  PaletteWorktreeStatusDot
+} from '@/components/cmd-j/palette-live-status'
 import { WorktreeCardStatusSlot } from '@/components/sidebar/WorktreeCardStatusSlot'
 import { TooltipProvider } from '@/components/ui/tooltip'
 import { readStoreListenerCount } from '@/store/store-listener-census'
 import type { AgentStatusEntry } from '../../../../shared/agent-status-types'
 import type { SleepingAgentSessionRecord } from '../../../../shared/agent-session-resume'
 import type { TerminalTab } from '../../../../shared/terminal-tab-types'
+import type { Tab } from '../../../../shared/tab-types'
+import { structuredAgentSessionPaneKey } from '../../../../shared/structured-agent-session-projection'
 import { useTerminalTabColdParking } from './use-terminal-tab-cold-parking'
-// Why namespace type imports: vi.mock factories are hoisted, and `typeof import()`
-// annotations are banned, so the module shapes come from erased type-only imports.
+// Hoisted mock factories need erased namespace types because typeof import() annotations are banned.
 import type * as SleepingRecordParkExemptionModule from './sleeping-record-park-exemption'
 import type * as WorktreeAgentActivitySummaryModule from '@/components/sidebar/worktree-agent-activity-summary'
 import type * as WorktreeCardStatusInputsModule from '@/components/sidebar/worktree-card-status-inputs'
+import type * as StructuredAgentSessionProjectionModule from '../../../../shared/structured-agent-session-projection'
 
 Reflect.set(globalThis, 'IS_REACT_ACT_ENVIRONMENT', true)
 
@@ -67,10 +36,29 @@ const AGENT_STATUS_COUNT = 177
 /** "Live or mounted panes: 20–28" in the capture. */
 const MOUNTED_WORKTREE_COUNT = 20
 
-const reads = { sleepingRecords: 0, agentStatusRows: 0, workspaceTabBuckets: 0 }
+const reads = {
+  sleepingRecords: 0,
+  agentStatusRows: 0,
+  workspaceTabBuckets: 0,
+  chatTabBuckets: 0,
+  chatTabs: 0
+}
+const chatWork = vi.hoisted(() => ({ hashes: 0 }))
 
-/** True per-module selector executions. Cached selectors read no records, so the
- *  scan counters alone cannot tell "never ran" from "ran and short-circuited". */
+vi.mock('../../../../shared/structured-agent-session-projection', async (importOriginal) => {
+  const actual = await importOriginal<typeof StructuredAgentSessionProjectionModule>()
+  return {
+    ...actual,
+    structuredAgentSessionPaneKey: (
+      ...args: Parameters<typeof actual.structuredAgentSessionPaneKey>
+    ) => {
+      chatWork.hashes += 1
+      return actual.structuredAgentSessionPaneKey(...args)
+    }
+  }
+})
+
+// Count selector executions separately from record reads so cache hits remain visible.
 const selectorRuns = vi.hoisted(() => ({
   sleepingRecordParkExemption: 0,
   worktreeAgentActivitySummary: 0,
@@ -121,9 +109,7 @@ vi.mock('@/components/sidebar/worktree-card-status-inputs', async (importOrigina
   }
 })
 
-/** Workspaces whose sidebar-row subtree committed. Why a `Profiler` and not a
- *  counter in the wrapper: `WorktreeCardStatusSlot` subscribes to the store
- *  itself, so it can commit without re-executing anything above it. */
+// Profile row subtrees because their store subscriptions can commit without rerunning the wrapper.
 const committedSidebarRows = new Set<string>()
 /** React commits of the retained-pane hooks, which live in the probe body. */
 const renders = { retainedPanes: 0 }
@@ -184,8 +170,7 @@ function buildTabsByWorktree(): Record<string, TerminalTab[]> {
 
 const seededTabsByWorktree = buildTabsByWorktree()
 const seededTerminalTabs = Object.values(seededTabsByWorktree).flat()
-/** Counting view of the workspace inventory: one hit per bucket actually read,
- *  so "looked up my own workspace" and "walked all 870" are different numbers. */
+// Count bucket reads to distinguish per-workspace lookup from global inventory scans.
 const tabsByWorktree = countingRecord(Object.entries(seededTabsByWorktree), 'workspaceTabBuckets')
 
 function buildSleepingRecords(): Record<string, SleepingAgentSessionRecord> {
@@ -242,9 +227,7 @@ function recordSidebarRowCommit(worktreeId: string): void {
   committedSidebarRows.add(worktreeId)
 }
 
-/** The real sidebar row. `useWorktreeActivityStatus` opens ~6 store
- *  subscriptions per row, which is where the capture's thousands of listeners
- *  come from — the sidebar is not virtualised, so every workspace is mounted. */
+// Mount real unvirtualized sidebar rows to reproduce roughly six store subscriptions per workspace.
 function SidebarRowProbe({ worktreeId }: { worktreeId: string }): React.JSX.Element {
   return (
     <React.Profiler id={worktreeId} onRender={recordSidebarRowCommit}>
@@ -319,6 +302,9 @@ function resetCounters(): void {
   reads.sleepingRecords = 0
   reads.agentStatusRows = 0
   reads.workspaceTabBuckets = 0
+  reads.chatTabBuckets = 0
+  reads.chatTabs = 0
+  chatWork.hashes = 0
   committedSidebarRows.clear()
   renders.retainedPanes = 0
   notifications = 0
@@ -349,6 +335,7 @@ afterEach(() => {
   container?.remove()
   container = null
   useAppStore.setState(originalState, true)
+  vi.restoreAllMocks()
 })
 
 describe('one pane title update at live-capture scale', () => {
@@ -376,30 +363,23 @@ describe('one pane title update: fanout at live-capture scale', () => {
 
     applyOnePaneTitleUpdate('next title')
 
-    // The capture saw 5,462–7,478 listeners; this mount must be the same order,
-    // and zustand visits every one of them on each notification.
+    // Match the captured listener scale; Zustand visits every listener on each notification.
     expect(listeners).toBeGreaterThan(5_000)
     expect(listeners).toBeLessThan(8_000)
     expect(notifications).toBe(1)
 
-    // Every mounted subscriber's selector still runs. That is unchanged by this
-    // fix and is inherent to one shared store: notification work stays
-    // O(mounted workspaces), ~3,630 instrumented selector executions.
+    // Shared-store notification still invokes every mounted selector.
     expect(selectorRuns.worktreeAgentActivitySummary).toBeGreaterThanOrEqual(WORKSPACE_COUNT)
     expect(selectorRuns.worktreeCardStatusInputs).toBeGreaterThanOrEqual(WORKSPACE_COUNT * 3)
     expect(selectorRuns.sleepingRecordParkExemption).toBeGreaterThanOrEqual(MOUNTED_WORKTREE_COUNT)
 
-    // …but every one of those executions is now an identity check. These three
-    // counters sit on the state maps themselves, so they catch a walk by ANY of
-    // the 5,500 subscribers, not only the three instrumented modules.
+    // Map-level counters catch global walks by any subscriber, including uninstrumented modules.
     expect(reads.sleepingRecords).toBe(0)
     expect(reads.agentStatusRows).toBe(0)
-    // Activity status, card inputs, and sleep state each read their own bucket;
-    // a global inventory scan per consumer would multiply this by 870.
+    // Each consumer reads its own bucket; a global scan multiplies that cost by 870.
     expect(reads.workspaceTabBuckets).toBeLessThan(WORKSPACE_COUNT * 3)
 
-    // Only the workspace that owns the changed pane commits — the other 869
-    // sidebar rows hold their identities and bail out.
+    // Only the owning workspace commits; sibling row identities remain stable.
     expect([...committedSidebarRows]).toEqual([TARGET_WORKTREE_ID])
     expect(renders.retainedPanes).toBeLessThanOrEqual(1)
   })
@@ -412,10 +392,192 @@ describe('one pane title update: fanout at live-capture scale', () => {
     applyOnePaneTitleUpdate('title b')
     applyOnePaneTitleUpdate('title c')
 
-    // Why repeat: one update could be served by a memo warmed at mount; three
-    // prove the cost is independent of how many records the profile stores.
+    // Repeat updates to rule out a mount-warmed memo hiding inventory-dependent cost.
     expect(reads.sleepingRecords).toBe(0)
     expect(reads.agentStatusRows).toBe(0)
     expect([...committedSidebarRows]).toEqual([TARGET_WORKTREE_ID])
   })
 })
+
+type ChatStatusConsumer = 'sidebar' | 'parent picker' | 'palette'
+
+function ChatSidebarProbe({ worktreeId }: { worktreeId: string }): React.JSX.Element {
+  return <span data-chat-status>{useWorktreeActivityStatus(worktreeId)}</span>
+}
+
+function ChatParentPickerProbe({ ids }: { ids: readonly string[] }): React.JSX.Element {
+  const statuses = useWorktreeActivityStatuses(ids)
+  return (
+    <>
+      {ids.map((id) => (
+        <span key={id} data-chat-status>
+          {statuses.get(id)}
+        </span>
+      ))}
+    </>
+  )
+}
+
+function mountChatConsumers(
+  consumer: ChatStatusConsumer,
+  readerCount: number,
+  tabsPerWorkspace: number
+): void {
+  if (root) {
+    act(() => root?.unmount())
+  }
+  container?.remove()
+  useAppStore.setState(originalState, true)
+  const sleptAtByPaneKey: Record<string, number | null> = {}
+  const entries = worktreeIds.map((worktreeId, workspaceIndex) => {
+    const tabs: Tab[] = []
+    // Keep offscreen buckets populated to expose a whole-store scan in any mounted reader.
+    const count = workspaceIndex < readerCount ? tabsPerWorkspace : 1
+    for (let index = 0; index < count; index += 1) {
+      const tab: Tab = {
+        id: `chat-${workspaceIndex}-${index}`,
+        entityId: `session-${workspaceIndex}-${index}`,
+        worktreeId,
+        groupId: 'group-1',
+        contentType: 'agent-session',
+        agentSessionAgent: 'codex',
+        label: 'Codex',
+        customLabel: null,
+        color: null,
+        sortOrder: index,
+        createdAt: 0
+      }
+      // All slept forces a full local scan, rather than a first-awake-tab short circuit.
+      sleptAtByPaneKey[structuredAgentSessionPaneKey(tab.id, tab.entityId)] = 1
+      Object.defineProperty(tabs, index, {
+        enumerable: true,
+        get: () => {
+          reads.chatTabs += 1
+          return tab
+        }
+      })
+    }
+    return [worktreeId, tabs] as const
+  })
+  useAppStore.setState({
+    tabsByWorktree: {},
+    browserTabsByWorktree: {},
+    agentStatusByPaneKey: {},
+    retainedAgentsByPaneKey: {},
+    unifiedTabsByWorktree: countingRecord(entries, 'chatTabBuckets'),
+    structuredChatSleptAtByPaneKey: sleptAtByPaneKey,
+    runtimePaneTitlesByTabId: { [TARGET_TAB_ID]: { [TARGET_PANE_ID]: 'initial title' } }
+  })
+  const ids = worktreeIds.slice(0, readerCount)
+  container = document.createElement('div')
+  document.body.appendChild(container)
+  root = createRoot(container)
+  const content =
+    consumer === 'parent picker' ? (
+      <ChatParentPickerProbe ids={ids} />
+    ) : consumer === 'sidebar' ? (
+      ids.map((id) => <ChatSidebarProbe key={id} worktreeId={id} />)
+    ) : (
+      <PaletteLiveStatusProvider active>
+        {ids.map((id) => (
+          <span key={id} data-chat-status>
+            <PaletteWorktreeStatusDot worktree={{ id }} />
+          </span>
+        ))}
+      </PaletteLiveStatusProvider>
+    )
+  act(() => root?.render(<TooltipProvider>{content}</TooltipProvider>))
+}
+
+function chatStatusLabels(): string[] {
+  return Array.from(
+    container?.querySelectorAll('[data-chat-status]') ?? [],
+    (node) => node.textContent?.trim().toLowerCase() ?? ''
+  )
+}
+
+function measureChatTitleUpdate(): { buckets: number; tabs: number; hashes: number } {
+  resetCounters()
+  const stop = useAppStore.subscribe(() => {
+    notifications += 1
+  })
+  try {
+    applyOnePaneTitleUpdate('next unrelated title')
+    expect(notifications).toBe(1)
+    return { buckets: reads.chatTabBuckets, tabs: reads.chatTabs, hashes: chatWork.hashes }
+  } finally {
+    stop()
+  }
+}
+
+describe.each<ChatStatusConsumer>(['sidebar', 'parent picker', 'palette'])(
+  '%s chat-only status subscriptions',
+  (consumer) => {
+    it.each(['tabs', 'readers'] as const)(
+      'bounds %s work at N and 10N on real title writes',
+      (axis) => {
+        const samples = [1, 10].map((scale) => {
+          const readerCount = axis === 'readers' ? 87 * scale : MOUNTED_WORKTREE_COUNT
+          const tabsPerWorkspace = axis === 'tabs' ? 10 * scale : 2
+          mountChatConsumers(consumer, readerCount, tabsPerWorkspace)
+          expect(chatStatusLabels()).toEqual(Array(readerCount).fill('inactive'))
+          expect(chatWork.hashes).toBeGreaterThan(0)
+          const measured = measureChatTitleUpdate()
+          // Allow React snapshot checks/context renders; never an inventory scan per row.
+          expect(measured.buckets).toBeLessThanOrEqual(readerCount * 6)
+          expect(measured.tabs).toBeLessThanOrEqual(readerCount * tabsPerWorkspace * 6)
+          expect(measured.hashes).toBeLessThanOrEqual(readerCount * tabsPerWorkspace * 6)
+          return measured
+        })
+        for (const operation of ['buckets', 'tabs', 'hashes'] as const) {
+          expect(samples[1][operation]).toBeLessThanOrEqual(Math.max(1, samples[0][operation]) * 10)
+        }
+      }
+    )
+
+    it('observes chat evidence live while preserving agent priority', () => {
+      const now = 1_000
+      vi.spyOn(Date, 'now').mockReturnValue(now)
+      mountChatConsumers(consumer, 1, 1)
+      expect(chatStatusLabels()).toEqual(['inactive'])
+      const tab = useAppStore.getState().unifiedTabsByWorktree[TARGET_WORKTREE_ID][0]
+      const paneKey = structuredAgentSessionPaneKey(tab.id, tab.entityId)
+      act(() => useAppStore.getState().setStructuredChatSleptAt(paneKey, undefined))
+      expect(chatStatusLabels()).toEqual(['active'])
+      act(() => useAppStore.getState().setStructuredChatSleptAt(paneKey, 1))
+      expect(chatStatusLabels()).toEqual(['inactive'])
+      act(() => useAppStore.getState().setStructuredChatSleptAt(paneKey, null))
+      expect(chatStatusLabels()).toEqual(['active'])
+      const working: AgentStatusEntry = {
+        paneKey,
+        worktreeId: TARGET_WORKTREE_ID,
+        state: 'working',
+        prompt: '',
+        updatedAt: now,
+        stateStartedAt: now,
+        stateHistory: []
+      }
+      act(() =>
+        useAppStore.setState({ agentStatusByPaneKey: { [paneKey]: working }, agentStatusEpoch: 1 })
+      )
+      expect(chatStatusLabels()).toEqual(['working'])
+      if (consumer !== 'palette') {
+        act(() =>
+          useAppStore.setState({
+            agentStatusByPaneKey: { [paneKey]: { ...working, state: 'done' } },
+            agentStatusEpoch: 2
+          })
+        )
+        expect(chatStatusLabels()).toEqual(['done'])
+      }
+      act(() =>
+        useAppStore.setState({
+          unifiedTabsByWorktree: {},
+          agentStatusByPaneKey: {},
+          agentStatusEpoch: 3
+        })
+      )
+      expect(chatStatusLabels()).toEqual(['inactive'])
+    })
+  }
+)

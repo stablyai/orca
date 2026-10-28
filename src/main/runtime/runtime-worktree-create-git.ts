@@ -1,4 +1,4 @@
-import { getRepoHostedReviewExecutionHostId } from '../source-control/hosted-review-execution-host'
+import { getStoredRepoExecutionHostId } from '../repo-execution-host'
 import type { BranchPrefixStrategy } from '../../shared/ui-chrome-types'
 import type { Repo } from '../../shared/repo-types'
 import { getPRForBranch } from '../github/client'
@@ -100,7 +100,7 @@ export async function getSelectedHostedReviewForBranch(
   }
   const review = await getHostedReviewForBranch({
     repoPath: repo.path,
-    executionHostId: getRepoHostedReviewExecutionHostId(repo),
+    executionHostId: getStoredRepoExecutionHostId(repo),
     branch: branchName,
     ...executionOptions,
     ...getSelectedReviewLookupHints(args)

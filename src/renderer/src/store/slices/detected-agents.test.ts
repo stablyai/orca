@@ -13,7 +13,7 @@ import {
   RUNTIME_PROTOCOL_VERSION
 } from '../../../../shared/protocol-version'
 import { clearRuntimeCompatibilityCacheForTests } from '@/runtime/runtime-rpc-client'
-import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../shared/constants'
+import { getDefaultSettings, FLOATING_TERMINAL_WORKTREE_ID } from '../../../../shared/constants'
 
 const detectAgents = vi.fn()
 const refreshAgents = vi.fn()
@@ -375,10 +375,11 @@ describe('createDetectedAgentsSlice WSL context', () => {
   it('detects agents in the project override runtime instead of legacy agent location', async () => {
     const store = createTestStore({
       settings: {
+        ...getDefaultSettings('/tmp'),
         localWindowsRuntimeDefault: { kind: 'wsl', distro: 'Ubuntu' },
         localAgentRuntime: 'wsl',
         localAgentWslDistro: 'Ubuntu'
-      } as AppState['settings'],
+      },
       projects: [
         {
           id: 'repo-1',
@@ -393,7 +394,7 @@ describe('createDetectedAgentsSlice WSL context', () => {
       repos: [makeRepo({ id: 'repo-1', path: 'C:\\repo' })],
       activeRepoId: 'repo-1',
       activeWorktreeId: null
-    } as Partial<AppState>)
+    })
 
     await expect(store.getState().ensureDetectedAgents()).resolves.toEqual(['claude'])
 
@@ -580,8 +581,7 @@ describe('createDetectedAgentsSlice remote detection', () => {
 
   it('re-runs remote detection after an empty result instead of pinning it', async () => {
     const store = createTestStore()
-    // An empty [] is truthy, so a prior "no agents found" must not be cached:
-    // a later install / PATH fix has to be picked up without a reconnect.
+    // Retry empty detections so later installs/PATH fixes appear without reconnect; [] truthiness must not cache misses.
     detectRemoteAgents.mockResolvedValueOnce([])
 
     await expect(store.getState().ensureRemoteDetectedAgents('ssh-1')).resolves.toEqual([])
@@ -625,9 +625,7 @@ describe('createDetectedAgentsSlice remote detection', () => {
 
   it('re-runs runtime detection after an empty result instead of pinning it', async () => {
     const store = createTestStore()
-    // An empty [] is truthy, so a prior "no agents found" must not be cached:
-    // a later install / PATH fix has to be picked up without a reconnect. This is
-    // the Orca-serve path (kind: 'runtime'), distinct from the SSH remote path.
+    // Runtime Orca-serve path must retry empty detection after install/PATH fixes too, independently of SSH.
     let detectCalls = 0
     runtimeEnvironmentCall.mockImplementation(({ method }: { method: string }) => {
       let result: unknown

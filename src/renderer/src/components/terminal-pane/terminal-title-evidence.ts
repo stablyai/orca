@@ -6,10 +6,7 @@ import {
   type TerminalGpuAccelerationMode
 } from './terminal-renderer-policy'
 
-/**
- * Owner-aware display label. Wraps the compatible-owner title normalization so
- * the display label follows the resolved owner rather than raw wrapper text.
- */
+/** Normalize display title using resolved compatible ownership instead of raw wrapper text. */
 export function resolvePaneDisplayTitle(
   title: string,
   ownerAgentType: AgentType | null | undefined,
@@ -18,11 +15,7 @@ export function resolvePaneDisplayTitle(
   return normalizeCompatibleAgentTitleForOwner(title, ownerAgentType, { ownerIsLaunch })
 }
 
-/**
- * The resolved decision for one OSC title frame: a single owner-aware display
- * label plus the renderer policy, so `updateTabTitle`, `setRuntimePaneTitle`,
- * task-completion tracking, and the GPU gate all consume one interpretation.
- */
+/** One interpretation feeds tab/pane labels, completion tracking and GPU policy for each OSC title. */
 export type PaneTitleDecision = {
   displayTitle: string
   rawTitle: string
@@ -38,9 +31,7 @@ export type ResolvePaneTitleDecisionInput = {
   displayOwnerAgentType: AgentType | null | undefined
   /** True when displayOwnerAgentType is user-selected launch ownership. */
   displayOwnerIsLaunch?: boolean
-  /** Owner used for the renderer veto — must be pane-scoped and current so a
-   *  sibling/reused pane's launch identity cannot keep GPU for a genuine
-   *  Gemini pane. */
+  /** GPU veto requires current pane ownership; sticky sibling/reused launch identity cannot hide genuine Gemini. */
   rendererOwnerAgentType: AgentType | null | undefined
   userGpuMode: TerminalGpuAccelerationMode
   webglUnavailable?: boolean

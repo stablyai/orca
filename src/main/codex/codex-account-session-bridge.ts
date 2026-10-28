@@ -15,21 +15,11 @@ import {
   readCodexStateDbBackfillStatus
 } from './codex-state-db'
 
-/**
- * Bridges Codex history between Orca-managed Codex homes.
- *
- * Why: a managed account launches Codex against its own self-contained
- * CODEX_HOME, and Codex's `/resume` picker only lists rollouts under that home.
- * Without this, switching accounts hides every conversation the user recorded
- * under a different account (or under their real ~/.codex). Rollouts are
- * hardlinked, so each conversation stays one physical log no matter how many
- * homes list it.
- */
-
+// Hardlink history across homes so account switching preserves /resume entries and one physical log.
 export type CodexAccountSessionBridgeSummary = {
   scannedFiles: number
   linkedFiles: number
-  /** Thread id -> rollout timestamp for every rollout present in the target home via this bridge. */
+  /** Thread ID to rollout timestamp for history present in the target home. */
   bridgedThreads: Map<string, string>
 }
 
@@ -46,12 +36,7 @@ const defaultBackgroundBridgeDependencies: BackgroundBridgeDependencies = {
   healIndex: healCodexAccountSessionIndex
 }
 
-/**
- * Why: Codex indexes every rollout present when it first creates a home's state
- * DB, and the TUI gives up waiting after 30s. Linking history into a fresh home
- * first turns its first launch into a minutes-long backfill (#20669), so an
- * empty home gets its state DB before any history; the heal indexes it afterwards.
- */
+// Create the DB before linking history to avoid first-launch backfill timeouts; heal indexes later.
 async function isReadyForBridgedHistory(
   targetCodexHomePath: string,
   sourceCodexHomePaths: readonly string[],
@@ -77,8 +62,7 @@ async function isReadyForBridgedHistory(
     )
     return false
   }
-  // Why: no DB in a home that has history means Codex keeps it elsewhere
-  // (`sqlite_home`) or keeps none, so linking cannot stall a launch here.
+  // Existing history without a local DB implies sqlite_home or an older CLI; linking is safe.
   // `not-tracked` is a pre-backfill schema that Codex migrates to `pending`.
   return status.kind === 'complete' || status.kind === 'missing'
 }
@@ -87,9 +71,6 @@ function hasSessionRollouts(codexHomePath: string): boolean {
   return countCodexSessionFilesUpTo(join(codexHomePath, 'sessions'), 1) > 0
 }
 
-/**
- * Starts one background bridge per target home, sharing in-flight work.
- */
 export function startCodexAccountSessionBridgeInBackground(
   args: {
     targetCodexHomePath: string
@@ -140,9 +121,10 @@ export function stopCodexAccountSessionBridges(): void {
   stopping = true
 }
 
-/**
- * Mirrors every source home's rollouts into the target home's sessions tree.
- */
+export function isCodexAccountSessionBridgeStopping(): boolean {
+  return stopping
+}
+
 export async function bridgeCodexSessionsIntoAccountHome(args: {
   targetCodexHomePath: string
   sourceCodexHomePaths: readonly string[]
@@ -184,17 +166,13 @@ export async function bridgeCodexSessionsIntoAccountHome(args: {
   return summary
 }
 
-/**
- * Links one rollout into the target sessions tree at the same relative path.
- */
 function bridgeRolloutIntoAccountHome(
   sourceSessionsRoot: string,
   targetSessionsRoot: string,
   sourceFilePath: string
 ): 'linked' | 'existing' | 'failed' {
   const targetFilePath = join(targetSessionsRoot, relative(sourceSessionsRoot, sourceFilePath))
-  // Why: rollout names carry the session UUID, so an existing target path is the
-  // same conversation already bridged (often the same inode) — never a conflict.
+  // Rollout filenames contain session UUIDs; an existing path already represents this conversation.
   if (existsSync(targetFilePath)) {
     return 'existing'
   }
@@ -207,9 +185,6 @@ function bridgeRolloutIntoAccountHome(
   return linkCodexSessionFile(sourceFilePath, targetFilePath) ? 'linked' : 'failed'
 }
 
-/**
- * Drops duplicate and self-referential sources so one launch links each home once.
- */
 function dedupeSourceHomes(
   sourceCodexHomePaths: readonly string[],
   targetCodexHomePath: string

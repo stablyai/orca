@@ -1,5 +1,6 @@
 import {
   useCallback,
+  useLayoutEffect,
   useRef,
   type Dispatch,
   type MutableRefObject,
@@ -20,8 +21,6 @@ type Params = {
   setActionError: (next: string | null) => void
 }
 
-// AI commit-message generation + cancellation. Split from the runners hook to
-// keep each file under the line limit; behavior is unchanged.
 export function useMobileCommitMessageGeneration(params: Params) {
   const {
     client,
@@ -34,15 +33,24 @@ export function useMobileCommitMessageGeneration(params: Params) {
     setActionError
   } = params
   const runRef = useRef(0)
+  const activeRunRef = useRef<number | null>(null)
+  const scopeRef = useRef({ client, worktreeId })
+  useLayoutEffect(() => {
+    if (scopeRef.current.client !== client || scopeRef.current.worktreeId !== worktreeId) {
+      scopeRef.current = { client, worktreeId }
+      runRef.current += 1
+      activeRunRef.current = null
+      setGeneratingMessage(false)
+    }
+  }, [client, worktreeId, setGeneratingMessage])
 
-  // AI-generate a commit message from the staged diff. Matches desktop: the
-  // button is always available; a missing model surfaces as a toast.
   const generateCommitMessage = useCallback(async () => {
-    if (!client || generatingMessage || busyActionRef.current) {
+    if (!client || generatingMessage || activeRunRef.current !== null || busyActionRef.current) {
       return
     }
     runRef.current += 1
     const run = runRef.current
+    activeRunRef.current = run
     setGeneratingMessage(true)
     setActionError(null)
     try {
@@ -51,7 +59,7 @@ export function useMobileCommitMessageGeneration(params: Params) {
         return
       }
       if (result.success) {
-        // Why: same rule as desktop — text typed while the agent ran wins over the generated message.
+        // Text typed during generation wins over the generated message.
         setCommitMessage((current) => (current.length > 0 ? current : result.message))
         triggerSuccess()
       } else if (!result.canceled) {
@@ -59,15 +67,17 @@ export function useMobileCommitMessageGeneration(params: Params) {
         setActionError(result.error)
       }
     } catch (err) {
-      // Why: a transport drop rejects the RPC; without this the error haptic +
-      // message are skipped and the rejection escapes the void-called handler.
+      // Catch transport drops because callers void this handler; retain error feedback.
       if (mountedRef.current && run === runRef.current) {
         triggerError()
         setActionError(err instanceof Error ? err.message : 'Failed to generate commit message')
       }
     } finally {
-      if (mountedRef.current) {
-        setGeneratingMessage(false)
+      if (activeRunRef.current === run) {
+        activeRunRef.current = null
+        if (mountedRef.current) {
+          setGeneratingMessage(false)
+        }
       }
     }
   }, [
@@ -85,10 +95,9 @@ export function useMobileCommitMessageGeneration(params: Params) {
     if (!client || !generatingMessage) {
       return
     }
-    // Why: like desktop's canceled record — a run the host still finishes must not fill the box.
+    // Retire even a host run that finishes after cancellation so it cannot refill the box.
     runRef.current += 1
-    // Why: commit and Create PR call this without awaiting; a dropped transport must not surface
-    // as an unhandled rejection, and the run's own reply still clears the spinner.
+    // Commit/Create PR do not await cancellation; contain rejection and let the run’s reply clear the spinner.
     cancelMobileCommitMessage(client, worktreeId).catch(() => {})
   }, [client, generatingMessage, worktreeId])
 

@@ -30,7 +30,7 @@ export function orcadProfilePreflightCommand(
   nonce: string
 ): string {
   assertPosixOrcadHost(host)
-  // Why no host-Node fallback: a candidate this client installed is always a Node slot.
+  // New candidates always use pinned Node; host Node fallback could mask an incomplete slot.
   const marker = quotePosixShell(
     joinRemotePath(host, directory, ORCAD_NODE_RUNTIME_MARKER_FILENAME)
   )
@@ -44,7 +44,6 @@ export function orcadProfilePreflightCommand(
   return `[ -e ${marker} ] || exit 78; ${orcadNodeSlotRuntimeCommand(host, directory)}${selectOrcadSlotEntryCommand(host, directory)}; ${launch}`
 }
 
-/** Failure leaves the incumbent and its data untouched, including an unconfirmed SSH exit. */
 export async function preflightInstalledOrcad(options: {
   conn: OrcadHostTransport
   host: RemoteHostPlatform
@@ -64,10 +63,7 @@ export async function preflightInstalledOrcad(options: {
   parseOrcadProfilePreflight(output, nonce, ORCAD_NODE_RUNTIME_IDENTITY, options.fullVersion)
 }
 
-/**
- * Windows: resolve the slot's node.exe, then run its selected entry with plain argv. No
- * ORCA_BACKGROUND_LAUNCH here: orcad opens no window, and argv cannot set environment.
- */
+// Windows uses plain argv; orcad opens no window and needs no background-launch environment.
 async function windowsOrcadProfilePreflightCommand(
   options: {
     conn: OrcadHostTransport

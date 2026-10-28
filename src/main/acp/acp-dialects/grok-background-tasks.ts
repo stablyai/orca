@@ -3,7 +3,7 @@ import type { AgentJournalToolCallItem } from '../../../shared/agent-session-jou
 import {
   isSettledBackgroundTaskState,
   normalizeBackgroundTaskKind
-} from '../../../shared/native-chat-background-task-row'
+} from '../../../shared/native-chat/input/native-chat-background-task-row'
 import type { NativeChatBackgroundTaskBlock } from '../../../shared/native-chat-types'
 import type { ToolCallUpdate } from '../generated/acp-protocol.generated'
 import type { AcpBackgroundTaskUpdate, AcpDialectNotification } from './acp-dialect'
@@ -44,16 +44,13 @@ const resultOutputSchema = z.object({
 })
 type GrokTask = z.infer<typeof taskSchema>
 export type GrokTaskResult = z.infer<typeof taskResultSchema>
-/** Grok's output reads name a monitor only by this command prefix. */
 const MONITOR_COMMAND = /^\[monitor[:\]]/
-/** ...and a subagent by this one; subagents are roster rows, not background tasks. */
 const SUBAGENT_COMMAND = /^\[subagent[:\]]/
 
 export function isGrokSubagentTask(task: Pick<GrokTask, 'command'>): boolean {
   return SUBAGENT_COMMAND.test(task.command ?? '')
 }
 
-/** The per-task results of a finished output read or kill call. */
 export function grokTaskResults(
   rawOutput: unknown
 ): { type: 'TaskOutput' | 'KillTask'; tasks: GrokTaskResult[] } | undefined {
@@ -122,7 +119,7 @@ function snapshot(
           : {}),
     ...(label ? { label } : fallbackLabel ? { fallbackLabel } : {}),
     ...(task.output_file === undefined ? {} : { outputFile: task.output_file }),
-    // A running task's summary is Grok's "Background task <id> started", not the task's result.
+    // Running summaries announce startup; only settled summaries contain task results.
     ...(settled ? { summary: task.summary ?? '' } : {}),
     ...(task.error === undefined && !settled ? {} : { error: task.error ?? '' })
   }
@@ -156,7 +153,7 @@ export function grokToolBackgroundTasks(
   }
   const input = taskInputSchema.safeParse(tool.input)
   if (tool.name === 'kill_command_or_subagent' && update.status === 'completed' && input.success) {
-    // Inference: a successful kill call settles its named tasks without a completion notice.
+    // Infer settlement from successful kill calls that emit no separate completion notice.
     return [
       ...new Set([
         ...(input.data.task_ids ?? []),

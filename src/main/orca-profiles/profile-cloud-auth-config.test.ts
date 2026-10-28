@@ -37,6 +37,7 @@ describe('Orca cloud auth config', () => {
         orgEndpoint: 'https://orca-cloud.example/v1/desktop/auth/org',
         logoutEndpoint: 'https://orca-cloud.example/v1/desktop/auth/logout',
         relayTokenEndpoint: 'https://orca-cloud.example/v1/desktop/auth/relay-token',
+        connectorTokenEndpoint: 'https://orca-cloud.example/v1/desktop/auth/connector-token',
         relayDirectorUrl: 'https://relay.onorca.dev',
         clientId: 'desktop-client',
         scope: 'openid profile email offline_access'
@@ -57,6 +58,7 @@ describe('Orca cloud auth config', () => {
         orgEndpoint: 'https://login.onorca.dev/v1/desktop/auth/org',
         logoutEndpoint: 'https://login.onorca.dev/v1/desktop/auth/logout',
         relayTokenEndpoint: 'https://login.onorca.dev/v1/desktop/auth/relay-token',
+        connectorTokenEndpoint: 'https://login.onorca.dev/v1/desktop/auth/connector-token',
         relayDirectorUrl: 'https://relay.onorca.dev',
         clientId: 'orca-desktop',
         scope: 'openid profile email offline_access'
@@ -119,8 +121,6 @@ describe('Orca cloud auth config', () => {
   })
 
   it('ignores dev flags in packaged builds even without NODE_ENV', () => {
-    // Why: packaged main bundles never define NODE_ENV, so packaged-ness must
-    // gate the escape hatches on its own.
     expect(allowsPlaintextOrcaCloudSession({ ORCA_CLOUD_ALLOW_PLAINTEXT_SESSION: '1' }, true)).toBe(
       false
     )

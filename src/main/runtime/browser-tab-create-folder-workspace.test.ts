@@ -1,7 +1,4 @@
-/**
- * A server-hosted browser tab for a folder workspace (#21353). Only the client-hosted branch used
- * the folder-aware resolver, so `id:folder:…` failed with selector_not_found on the server path.
- */
+// #21353: server-hosted tabs must resolve folder selectors too.
 import { describe, expect, it, vi } from 'vitest'
 import type { RuntimeBrowserCommandHost } from './browser/browser-command-contracts'
 

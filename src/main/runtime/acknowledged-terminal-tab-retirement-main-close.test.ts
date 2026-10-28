@@ -1,6 +1,4 @@
-// Layout-owner build twins of acknowledged-terminal-tab-retirement.test.ts: a phone's close of a tab
-// main owns is one layout write main makes itself, so no window acknowledgement is awaited and no
-// state can change between a window's ack and the commit. Each case is that file's scenario.
+// Main-owned counterparts to acknowledged-terminal-tab-retirement.test.ts: close waits for layout durability without a window-ack race.
 import { afterEach, expect, it, vi } from 'vitest'
 import {
   ACK_INCARNATION,
@@ -21,13 +19,12 @@ afterEach(async () => {
     await fixture.dispose()
   }
   vi.restoreAllMocks()
-  // Every case reuses the fixture's tab id, which an earlier case's close fenced in this process.
+  // Reused tab ids must not inherit an earlier test's close fence.
   _resetClosedPaneFencesForTests()
 })
 function fixture(bound = false) {
   const result = createAcknowledgedTabRetirementFixture(bound)
   fixtures.push(result)
-  // Every stop main asks for, so a case can name the terminals its close ended.
   const stopped: string[] = []
   result.runtime.setPtyController({
     write: () => true,
@@ -128,12 +125,6 @@ it("stops a sibling a partial mobile snapshot omitted, from main's own panes", a
   ).toBeUndefined()
 })
 
-it('never asks the window to close, so no successor of the tab id can be hit', async () => {
-  const f = fixture()
-  await f.close()
-  expect(f.closeTerminalTab).not.toHaveBeenCalled()
-})
-
 it('refuses a tab pinned before the close and keeps it', async () => {
   const f = fixture()
   const session = f.store.getWorkspaceSession()
@@ -180,8 +171,7 @@ it('stops the visible and the dormant SSH terminal of the closed tab', async () 
   expect(f.hasTab()).toBe(false)
 })
 
-// Twin of terminal-retirement-async-durability.test.ts's acknowledged close: main's own close
-// answers only once its layout write is durable, as the window-era close waited for its retirement.
+// Main-owned close waits for durable layout, matching window-owned retirement's acknowledgement boundary.
 it("answers the close only once main's layout write is durable", async () => {
   const f = fixture(true)
   await f.store.flushPendingOrThrowAsync()

@@ -12,7 +12,6 @@ import type { NativeChatStructuredComposerTransport } from './native-chat-compos
 type PickerArgs = Parameters<typeof useNativeChatPickerState>[0]
 type ResumeArgs = Parameters<typeof useNativeChatResumeCommand>[0]
 
-/** The composer's `/` and `@` picker over its agent's catalog, with Orca's `/resume` taken first. */
 export function useNativeChatComposerCommandPicker(
   args: Omit<
     PickerArgs,

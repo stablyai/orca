@@ -6,15 +6,7 @@ import {
 } from './docker-ssh-host-target'
 import { quotePosixShell } from '../../../src/shared/shell-argument-quoting'
 
-/**
- * An HTTP fixture that exists only inside the SSH container, on a hostname only the
- * container resolves and an address only the container can reach.
- *
- * Why: a client-hosted browser page proves it egresses through the SSH execution host by
- * rendering this origin at all. The viewing desktop cannot resolve `remote-only.internal`
- * and cannot reach the container's loopback, so a rendered marker is only reachable through
- * the tunnel -- no proxy bookkeeping has to be trusted.
- */
+// Only the SSH container can resolve and reach this loopback origin; rendering its marker proves tunneled egress.
 export const SSH_REMOTE_ONLY_HOST = 'remote-only.internal'
 export const SSH_REMOTE_ONLY_PORT = 18_080
 export const SSH_REMOTE_ONLY_ORIGIN = `http://${SSH_REMOTE_ONLY_HOST}:${SSH_REMOTE_ONLY_PORT}`
@@ -58,7 +50,6 @@ const SERVER_SOURCE = [
   `  .listen(${SSH_REMOTE_ONLY_PORT}, "127.0.0.1")`
 ].join('\n')
 
-/** Publishes the remote-only origin inside the container and waits for it to accept sockets. */
 export function startSshRemoteOnlyBrowserFixture(target: DockerSshHostTarget): void {
   execDockerSshHostTargetCommand(
     target,

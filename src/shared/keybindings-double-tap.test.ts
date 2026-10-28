@@ -1,4 +1,3 @@
-// Double-tap modifier gestures: parsing, matching, capture, format, conflicts.
 import { describe, expect, it } from 'vitest'
 import {
   findKeybindingConflicts,
@@ -23,16 +22,13 @@ describe('keybindings', () => {
     expect(normalizeKeybinding('DoubleTap+Alt')).toEqual({ ok: true, value: 'DoubleTap+Alt' })
     expect(normalizeKeybinding('DoubleTap+Ctrl')).toEqual({ ok: true, value: 'DoubleTap+Ctrl' })
 
-    // A key after DoubleTap is invalid.
     expect(normalizeKeybinding('DoubleTap+Shift+P')).toMatchObject({ ok: false })
-    // Two modifiers is invalid.
     expect(normalizeKeybinding('DoubleTap+Shift+Alt')).toMatchObject({ ok: false })
     // Mod + platform-specific reuses the shared error.
     expect(normalizeKeybinding('DoubleTap+Mod+Cmd')).toEqual({
       ok: false,
       error: 'Use either Mod or a platform-specific modifier, not both.'
     })
-    // Bare DoubleTap is invalid.
     expect(normalizeKeybinding('DoubleTap')).toMatchObject({ ok: false })
 
     expect(isDoubleTapBinding('DoubleTap+Shift')).toBe(true)
@@ -61,14 +57,12 @@ describe('keybindings', () => {
       false
     )
 
-    // Cross-type negatives: a double-tap binding never matches a normal keydown,
-    // and a normal binding never matches a synthetic double-tap input.
+    // Double-tap and ordinary keydown inputs must never cross-match.
     expect(
       keybindingMatchesInput('DoubleTap+Shift', { key: 'A', code: 'KeyA', shift: true }, 'darwin')
     ).toBe(false)
     expect(keybindingMatchesInput('Mod+P', { doubleTapModifier: 'Cmd' }, 'darwin')).toBe(false)
 
-    // Action-level matching works through user overrides, for free.
     expect(
       keybindingMatchesAction('worktree.quickOpen', { doubleTapModifier: 'Shift' }, 'darwin', {
         'worktree.quickOpen': ['DoubleTap+Shift']
@@ -104,12 +98,10 @@ describe('keybindings', () => {
       ok: true,
       value: 'DoubleTap+Alt'
     })
-    // Ctrl is the primary modifier on Linux too, so it canonicalizes to Mod.
     expect(keybindingFromInput({ doubleTapModifier: 'Ctrl' }, 'linux')).toEqual({
       ok: true,
       value: 'DoubleTap+Mod'
     })
-    // Cmd is not the primary modifier off-mac, so it stays explicit.
     expect(keybindingFromInput({ doubleTapModifier: 'Cmd' }, 'linux')).toEqual({
       ok: true,
       value: 'DoubleTap+Cmd'
@@ -130,8 +122,7 @@ describe('keybindings', () => {
   })
 
   it('reports conflicts across two double-tap bindings', () => {
-    // Both actions share the same DoubleTap+Shift binding via overrides, so both
-    // are in customizedActions and the conflict detector must flag them.
+    // Both overridden actions are customized; their shared double-tap binding must conflict.
     const conflicts = findKeybindingConflicts('darwin', {
       'worktree.quickOpen': ['DoubleTap+Shift'],
       'view.tasks': ['DoubleTap+Shift']

@@ -7,15 +7,13 @@ import {
 } from '../../../../shared/ai-vault-types'
 import { translate } from '@/i18n/i18n'
 
-// Distinct state for a zero-turn transcript: the conversation was not persisted,
-// but queued prompts and/or subagent transcripts may still be recoverable.
+// Zero-turn transcripts may still have recoverable queued prompts or subagent history.
 export function SessionUnsavedConversationNotice({
   session,
   logAvailable
 }: {
   session: AiVaultSession
-  // Whether an open-log affordance exists nearby; remote (SSH) sessions have
-  // none, so the "open the log" hint would point at nothing.
+  // Show open-log guidance only when a nearby action exists; SSH sessions have none.
   logAvailable: boolean
 }): React.JSX.Element {
   const recoverable = isAiVaultSessionRecoverableEmpty(session)

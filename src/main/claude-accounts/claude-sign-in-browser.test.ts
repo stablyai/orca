@@ -33,7 +33,6 @@ describe('prepareClaudeSignInBrowser', () => {
       expect(browser?.path).toBe(join(home, '.orca-sign-in-browser'))
       expect(statSync(browser!.path).mode & 0o700).toBe(0o700)
       const next = browser!.nextLink(new AbortController().signal)
-      // Claude runs BROWSER as a program with the link as its only argument.
       execFileSync(browser!.path, [LINK])
       await expect(next).resolves.toBe(LINK)
       await browser!.dispose()

@@ -34,7 +34,6 @@ vi.mock('@/hooks/ipc-events/terminal-command-state', async (importOriginal) => (
   focusTerminalInitiatedTab
 }))
 
-// What main's frames hold: off (no stream) unless a case opens it.
 const frames = vi.hoisted(() => ({ flowing: false, holdsTab: true }))
 vi.mock('@/runtime/layout-frame-position', async (importOriginal) => ({
   ...(await importOriginal<object>()),
@@ -76,7 +75,6 @@ function request(
   }
 }
 
-/** Main's frame draws its tab, as the frame store patch lays it over the store. */
 function drawMainTab(): void {
   store.getState().createTab(WT, undefined, undefined, {
     id: TAB_ID,
@@ -187,7 +185,6 @@ describe("a launch tab main wrote, in a layout-owner build's window", () => {
       verdict: { kind: 'withdrawn' }
     })
 
-    // Main closes it; the window's own close would send a second one.
     expect(store.getState().tabsByWorktree[WT]?.map((tab) => tab.id)).toEqual([TAB_ID])
     expect(launchPane()).toBeUndefined()
     expect(agentLaunchPanePrompt(TAB_ID)).toBeNull()
@@ -198,7 +195,6 @@ describe("a launch tab main wrote, in a layout-owner build's window", () => {
     keepAgentLaunchTabMainWrote(request({ prompt: 'fix the build' }))
     frames.holdsTab = false
 
-    // Any store change: the hold sees main's frames no longer hold the tab.
     store.setState({})
     expect(agentLaunchPanePrompt(TAB_ID)).toBeNull()
     frames.holdsTab = true

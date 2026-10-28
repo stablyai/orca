@@ -1,4 +1,4 @@
-import type { TaskPageComposerActionsModel } from '../../use-task-page-composer-actions'
+import type { TaskPageComposerActionsModel } from '../use-task-page-composer-actions'
 import {
   Dialog,
   DialogContent,
@@ -20,7 +20,7 @@ import {
   SelectContent,
   SelectItem
 } from '@/components/ui/select'
-import { resolveUserRepoSwitchReset } from '@/components/task-page-new-issue-draft'
+import { resolveUserRepoSwitchReset } from '@/components/task-page/task-page-new-issue-draft'
 import RepoBadgeLabel from '@/components/repo/RepoBadgeLabel'
 import { Input } from '@/components/ui/input'
 import { GitHubMarkdownComposer } from '@/components/github/GitHubMarkdownComposer'
@@ -78,7 +78,7 @@ export function TaskPageGitHubIssueDialog({
             {translate('auto.components.TaskPage.d3d0998b7d', 'New GitHub issue')}
           </DialogTitle>
           {(() => {
-            // Why: inline the resolved {owner}/{repo} slug as the source indicator; fall back to displayName when unresolved.
+            // Use the resolved slug as the source indicator, falling back to displayName.
             const entry = newIssueTargetRepo
               ? perRepoSourceState.find((s) =>
                   repoMatchesHostIdentity(newIssueTargetRepo, s.repoId, s.hostId)
@@ -96,8 +96,7 @@ export function TaskPageGitHubIssueDialog({
             )
           })()}
           {(() => {
-            // Why: mirror the Tasks-view target selector so a fork contributor can flip target at filing time (fork-routing regression #1076).
-            // Sibling (not nested) because DialogDescription renders a <p> and the selector a <div> — nesting is invalid HTML.
+            // Keep the fork target selector beside DialogDescription; its div cannot nest inside the description’s p.
             if (!newIssueTargetRepo) {
               return null
             }

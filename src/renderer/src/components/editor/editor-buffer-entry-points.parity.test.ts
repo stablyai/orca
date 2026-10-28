@@ -4,8 +4,6 @@ import type { OpenFile } from '@/store/slices/editor'
 import { needsSavePromptOnClose } from '@/store/slices/editor/buffers/editor-buffer-close-rule'
 import type { EditorBufferViewIndex } from '@/store/slices/editor/buffers/editor-buffer-views'
 import { restartSaveTargets } from './editor-autosave-state-projections'
-import { EDITOR_SAVE_KEYS } from './editor-save-queue'
-import { editorTabModelUri } from './editor-save-disk-precondition'
 import {
   flushPendingEditorBuffer,
   hasPendingEditorBufferChange,
@@ -14,7 +12,7 @@ import {
 import { discardEditorFileChangesAndClose } from './discard-editor-file-changes'
 import type * as EditorAutosave from './editor-autosave'
 
-const quiesce = vi.hoisted(() => vi.fn(async () => undefined))
+const quiesce = vi.hoisted(() => vi.fn(async () => () => {}))
 vi.mock('./editor-autosave', async (importOriginal) => ({
   ...(await importOriginal<typeof EditorAutosave>()),
   requestEditorSaveQuiesce: quiesce
@@ -33,7 +31,7 @@ function tab(id: string, patch: Partial<OpenFile> = {}): OpenFile {
   }
 }
 
-// The cases whose old answers differ: one model shared across workspaces, a clean tab, a non-edit tab.
+// Cover shared workspace models, clean tabs and non-edit surfaces where the old entry points differ.
 const FIXTURE: OpenFile[] = [
   tab('/repo/a.ts', { isDirty: true }),
   tab('editor:wt-2:local:/repo/a.ts', { worktreeId: 'wt-2', isDirty: true }),
@@ -47,7 +45,6 @@ function seed(): AppState {
   return useAppStore.getState()
 }
 
-/** Two views of one record, as the sharing switch will produce. */
 const SHARED: EditorBufferViewIndex = {
   editorBufferIdOf: { a: 'rec', b: 'rec', c: 'c' },
   editorBufferViews: { rec: ['a', 'b'], c: ['c'] }
@@ -69,14 +66,6 @@ describe('editor buffer entry points return the per-tab answer', () => {
   it('restartSaveTargets equals the dirty tabs', () => {
     const state = seed()
     expect(restartSaveTargets(state)).toEqual(state.openFiles.filter((file) => file.isDirty))
-  })
-
-  it.each(IDS)('save keys for %s equal the model URI queue and the tab-id timer', (id) => {
-    const state = seed()
-    const file = state.openFiles.find((candidate) => candidate.id === id)
-    const oldQueueKey = file?.mode === 'edit' ? editorTabModelUri(state, file) : id
-    expect(EDITOR_SAVE_KEYS.queue(state, id)).toBe(oldQueueKey)
-    expect(EDITOR_SAVE_KEYS.schedule(state, id)).toBe(id)
   })
 
   it.each([
@@ -111,11 +100,10 @@ describe('editor buffer entry points return the per-tab answer', () => {
 
     await discardEditorFileChangesAndClose('/repo/a.ts')
 
-    expect(quiesce).toHaveBeenCalledWith({ fileId: '/repo/a.ts' })
+    expect(quiesce).toHaveBeenCalledWith({ fileId: '/repo/a.ts', discard: true })
     const state = useAppStore.getState()
     expect(state.openFiles.some((file) => file.id === '/repo/a.ts')).toBe(false)
     expect(state.editorDrafts['/repo/a.ts']).toBeUndefined()
-    // The same path in another workspace keeps its own dirty flag.
     expect(state.editorBuffers['editor:wt-2:local:/repo/a.ts']?.isDirty).toBe(true)
   })
 })

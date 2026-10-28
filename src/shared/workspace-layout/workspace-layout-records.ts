@@ -1,7 +1,4 @@
-// A published workspace layout as the records main keys by its own ids: the workspace's groups,
-// each tab's row, each terminal tab's pane tree, each pane's terminal binding, each editor file and
-// browser tab. A change frame carries only the records an operation changed (design E1); splitting
-// and joining keep every field, so a field added to a published type rides its record unchanged.
+// Publish changes as keyed records; splitting/joining preserves every field so additive wire fields pass through unchanged (E1).
 
 import { ownedEditorFileId } from '../workspace-session-pane-ownership'
 import { stableJson } from './workspace-layout-load-report'
@@ -14,35 +11,31 @@ import type {
   PublishedWorkspaceLayout
 } from './workspace-layout-published'
 
-/** The workspace's own fields: its groups (the one tab order) and group tree. */
 export type PublishedWorkspaceFields = Omit<
   PublishedWorkspaceLayout,
   'tabs' | 'editorFiles' | 'browserTabs'
 >
 
-/** A tab's row: all but its panes. A terminal tab keeps its creation fields here. */
+/** Tab row excluding pane tree/bindings; retains terminal creation fields. */
 export type PublishedTabRow = Omit<PublishedTab, 'terminal'> & {
   terminal?: Omit<PublishedTerminal, 'root' | 'panes' | 'chatLeafId'>
 }
 
-/** A pane as its tab's tree holds it: all but its terminal binding. */
 export type PublishedTreePane = Omit<
   PublishedPane,
-  'ptyId' | 'ptyGeneration' | 'status' | 'statusReason'
+  'ptyId' | 'ptyGeneration' | 'status' | 'statusReason' | 'resumeOutcome'
 >
 
-/** A terminal tab's pane tree, keyed by the tab's id. */
 export type PublishedPaneTree = Pick<PublishedTerminal, 'root' | 'chatLeafId'> & {
   tabId: string
   /** In tree order. */
   panes: PublishedTreePane[]
 }
 
-/** A pane's terminal binding, apart from its tree so a respawn changes only this record. Its start
- *  status rides here too: a start ends in a binding or a failure, never in a tree change. */
+/** Separate binding/status/resume outcome from the tree so terminal starts and respawns do not rewrite it. */
 export type PublishedPaneBinding = Pick<
   PublishedPane,
-  'leafId' | 'ptyId' | 'ptyGeneration' | 'status' | 'statusReason'
+  'leafId' | 'ptyId' | 'ptyGeneration' | 'status' | 'statusReason' | 'resumeOutcome'
 >
 
 type RecordKinds = {
@@ -98,19 +91,21 @@ export function splitPublishedLayout(layout: PublishedWorkspaceLayout): Publishe
       tabId: tab.id,
       root,
       ...(chatLeafId !== undefined ? { chatLeafId } : {}),
-      panes: panes.map(({ ptyId, ptyGeneration, status, statusReason, ...pane }) => {
+      panes: panes.map(({ ptyId, ptyGeneration, status, statusReason, resumeOutcome, ...pane }) => {
         if (
           ptyId !== undefined ||
           ptyGeneration !== undefined ||
           status !== undefined ||
-          statusReason !== undefined
+          statusReason !== undefined ||
+          resumeOutcome !== undefined
         ) {
           bindings.push({
             leafId: pane.leafId,
             ...(ptyId !== undefined ? { ptyId } : {}),
             ...(ptyGeneration !== undefined ? { ptyGeneration } : {}),
             ...(status !== undefined ? { status } : {}),
-            ...(statusReason !== undefined ? { statusReason } : {})
+            ...(statusReason !== undefined ? { statusReason } : {}),
+            ...(resumeOutcome !== undefined ? { resumeOutcome } : {})
           })
         }
         return pane
@@ -160,7 +155,7 @@ export function joinPublishedLayout(records: PublishedLayoutRecords): PublishedW
 
 type IndexedKind<T> = { order: string[]; byKey: Map<string, { record: T; json: string }> }
 
-/** A layout's records with each one's JSON, so a later layout diffs record by record. */
+/** Index each record’s JSON for later diffs. */
 export type IndexedLayoutRecords = {
   workspaceJson: string
   workspace: PublishedWorkspaceFields
@@ -175,7 +170,7 @@ function indexKind<T>(records: T[], keyOf: (record: T) => string): IndexedKind<T
     const key = keyOf(record)
     const json = stableJson(record)
     const seen = byKey.get(key)
-    // A tab in two groups repeats the same row; two records under one key cannot be keyed.
+    // A tab in multiple groups can repeat an identical row; conflicting records cannot share a key.
     if (seen && seen.json !== json) {
       return null
     }
@@ -235,7 +230,6 @@ function diffKind<T>(
   }
 }
 
-/** What changed between two published copies of one workspace; null when nothing did. */
 export function diffPublishedLayouts(
   key: string,
   before: IndexedLayoutRecords | null,
@@ -245,7 +239,7 @@ export function diffPublishedLayouts(
   if (!before || !after) {
     return { key, change: 'layout', layout }
   }
-  // Trees and bindings are placed by their tabs, so only the other kinds publish an order.
+  // Tabs place trees and bindings; only other record kinds publish order.
   const tabs = diffKind(before.tabs, after.tabs, true)
   const paneTrees = diffKind(before.paneTrees, after.paneTrees, false)
   const bindings = diffKind(before.bindings, after.bindings, false)
@@ -295,11 +289,7 @@ function applyKind<T>(
   })
 }
 
-/**
- * One workspace's change applied to what was last shown for it; undefined once removed. Throws
- * when the change does not fit `before` (a record change for a workspace never shown, a broken
- * order): the reader's copy is no longer the host's and must be fetched again.
- */
+/** Apply to the reader’s last layout, or remove it. Throw on missing bases or broken orders so the reader fetches a fresh host snapshot. */
 export function applyWorkspaceLayoutRecordChange(
   before: PublishedWorkspaceLayout | undefined,
   change: WorkspaceLayoutRecordChange

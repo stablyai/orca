@@ -68,7 +68,6 @@ describe('orcad browser helper in the desktop install park', () => {
         start: async (signal) => {
           starts.push(signal)
           if (hangStarts) {
-            // A starting helper already runs and blocks the install.
             running = true
             await new Promise((_resolve, reject) =>
               signal.addEventListener('abort', () => reject(new Error('aborted')))
@@ -109,7 +108,6 @@ describe('orcad browser helper in the desktop install park', () => {
 
   it('stops the helper for an install and starts it again from the replaced bundle', async () => {
     const parkWatch = watch()
-    // Unregistered on main: the installer refused a live orcad's helper with no way out.
     await expect(
       parkServeSupervisorsForInstall(executable, [HELPER], installerDeps())
     ).resolves.toEqual({ kind: 'parked' })
@@ -119,12 +117,10 @@ describe('orcad browser helper in the desktop install park', () => {
     await step()
     expect(running).toBe(false)
 
-    // Mid-swap the bundle is briefly absent: still held.
     await rm(join(bundle, 'Contents', 'Info.plist'))
     await step()
     expect(starts).toHaveLength(0)
 
-    // ShipIt swapped the bundle: the hold ends and the helper runs from the new app.
     await writeFile(join(bundle, 'Contents', 'Info.plist'), 'v2-new-bundle')
     await step()
     expect(running).toBe(true)
@@ -166,7 +162,6 @@ describe('orcad browser helper in the desktop install park', () => {
     await releaseServeSupervisorPark()
     hangStarts = true
     await step()
-    // The next heartbeat names the starting helper.
     await step()
     expect(starts).toHaveLength(1)
     await expect(

@@ -31,9 +31,7 @@ async function renderPopover(args: {
   return container
 }
 
-// Why: the textarea is a controlled React input, so writing `.value` directly is
-// invisible to React. Drive the change through the native value setter + an
-// 'input' event the way React's synthetic onChange listens for it.
+// Use the native value setter and input event so React observes the controlled textarea change.
 function typeInDraft(container: HTMLElement, value: string): void {
   const textarea = container.querySelector('textarea')
   if (!textarea) {

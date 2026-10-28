@@ -42,8 +42,7 @@ describe('isRetiredCodexHookCommand', () => {
     expect(isRetiredCodexHookCommand(command)).toBe(true)
   })
 
-  // Why: every build writes the frozen form and older builds still write theirs;
-  // sweeping either would strip a live entry another Orca relies on.
+  // Current and older builds share live entries; only abandoned forms may be swept.
   it.each([
     ["this build's command", getManagedCommand(getManagedScriptPath())],
     [

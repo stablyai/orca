@@ -1,7 +1,9 @@
 import { ActivityIndicator, Pressable, Text, View } from 'react-native'
 import { ChevronRight, FileText, Minus, Plus, Trash2 } from 'lucide-react-native'
 import { colors } from '../theme/mobile-theme'
-import { MOBILE_GIT_STATUS_LABELS } from './mobile-git-status'
+import { STATUS_LABELS } from '../../../src/shared/git-status-labels'
+import { CONFLICT_KIND_LABELS } from '../../../src/shared/source-control-conflict-prompts'
+import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import { formatMobileBranchEntryMeta } from './mobile-branch-entry-format'
 import {
   statusColor,
@@ -47,7 +49,7 @@ export function makeRenderFileRow(state: RowState) {
       >
         <View style={styles.statusBadge}>
           <Text style={[styles.statusBadgeText, { color: statusColor(item.status) }]}>
-            {MOBILE_GIT_STATUS_LABELS[item.status]}
+            {STATUS_LABELS[item.status]}
           </Text>
         </View>
         <FileText
@@ -68,13 +70,13 @@ export function makeRenderFileRow(state: RowState) {
             </Text>
           ) : item.conflictStatus === 'unresolved' ? (
             <Text style={styles.fileMeta} numberOfLines={1}>
-              Unresolved conflict
+              {item.conflictKind ? CONFLICT_KIND_LABELS[item.conflictKind] : 'Unresolved conflict'}
             </Text>
           ) : null}
         </View>
         {rowBusy ? (
           <ActivityIndicator size="small" color={colors.textSecondary} />
-        ) : item.area === 'staged' ? (
+        ) : item.canUnstage ? (
           <Pressable
             style={({ pressed }) => [
               styles.iconButton,
@@ -148,6 +150,7 @@ type BranchState = Pick<
 >
 
 export function BranchCompareHeader({ state }: { state: BranchState }) {
+  useMobileColorScheme()
   const {
     shouldShowBranchCompareSection,
     branchCompareSummaryText,
@@ -199,6 +202,7 @@ export function BranchFileRow({
   entry: MobileBranchEntryView
   state: BranchState
 }) {
+  useMobileColorScheme()
   const { busyAction, openBranchDiff, openingBranchPath, openingPath } = state
   const rowBusy = openingBranchPath === entry.path
   const rowDisabled =
@@ -218,7 +222,7 @@ export function BranchFileRow({
     >
       <View style={styles.statusBadge}>
         <Text style={[styles.statusBadgeText, { color: statusColor(entry.status) }]}>
-          {MOBILE_GIT_STATUS_LABELS[entry.status]}
+          {STATUS_LABELS[entry.status]}
         </Text>
       </View>
       <FileText

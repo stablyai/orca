@@ -13,16 +13,7 @@ import {
   type StateIndicatorTooltipSide
 } from '@/components/StateIndicatorTooltip'
 
-// Why: shared state-indicator primitive so the dashboard and the sidebar's
-// agent hover share a single state vocabulary. Most states render as a dot;
-// 'working' renders a spinner. 'done' intentionally diverges from the
-// sidebar's StatusIndicator: the dashboard uses a check icon so completion
-// is visually distinct from 'idle' (grey dot) and the sidebar's 'active'
-// (emerald dot), while the sidebar collapses 'done'/'active' to the same
-// emerald dot and relies on a tooltip. It sits next to the agent icon
-// (Claude/Codex/etc.) — two distinct glyphs: one for *who* (agent icon) and
-// one for *what state* (this indicator). Keeping them separate keeps each
-// scannable instead of fused into one decorated icon.
+// Share state glyphs across agent surfaces. Keep the agent identity icon separate; completion uses a check while sidebar StatusIndicator uses an emerald dot/tooltip.
 
 export type AgentDotState =
   | 'working'
@@ -30,24 +21,15 @@ export type AgentDotState =
   | 'blocked'
   | 'waiting'
   | 'interrupted'
-  // Why: AI Vault subagent rows report a transcript-derived failure, which is
-  // an outcome (like 'done'), not a live attention state like 'blocked'.
+  // Transcript-derived failure is an outcome, distinct from live blocked attention.
   | 'failed'
   | 'done'
   | 'idle'
-  // Why: the pane still has a live PTY but its reporting stream has gone quiet past
-  // the staleness window. Distinct from 'idle' because Orca has evidence something is
-  // held there, and never rendered as 'done' or 'working' — it asserts nothing about
-  // the agent, only about what Orca last heard.
+  // A live PTY with stale reporting proves only missing evidence, not idle/work/completion.
   | 'unverifiable'
-  // Why: the turn ended and Orca cannot prove how. An outcome like 'failed', drawn with the
-  // 'unverifiable' glyph because it too reports missing evidence, never a finish.
+  // The turn ended without a proven outcome; use the missing-evidence glyph, never completion.
   | 'unconfirmed'
-  // Why: the sidebar's title-based status flow (StatusIndicator/WorktreeCard)
-  // collapses blocked + waiting into a single "needs attention" state. Keep
-  // this as a distinct member so that flow can render without inventing a new
-  // vocabulary, while rendering it with the same question glyph and
-  // --agent-question color as the worktree-level permission indicator.
+  // Sidebar combines blocked/waiting as permission; retain its vocabulary with the shared question glyph/token.
   | 'permission'
 
 /** Return the accessible label shared by every visual agent-state marker. */
@@ -91,7 +73,7 @@ type Props = {
 
 type ProgressRing = { tone: AgentProgressRingTone; percent: number }
 
-// Why only live states: a finished row's last percentage would read as work still in flight.
+// Finished rows’ last percentages must not imply work remains in flight.
 function progressRing(state: AgentDotState, progress: number | undefined): ProgressRing | null {
   if (progress === undefined) {
     return null
@@ -136,7 +118,7 @@ export const AgentStateDot = React.memo(function AgentStateDot({
   let indicator: React.JSX.Element
 
   if (ring) {
-    // Why the label on the ring: the progressbar is what a screen reader announces, so say it once there.
+    // Announce the label once on the progressbar itself.
     indicator = (
       <span className={cn('inline-flex shrink-0 items-center justify-center', box, className)}>
         <AgentProgressRing percent={ring.percent} tone={ring.tone} label={label} className={icon} />
@@ -161,10 +143,7 @@ export const AgentStateDot = React.memo(function AgentStateDot({
       </span>
     )
   } else if (state === 'done') {
-    // Why: the dashboard lists many agents, so a check glyph scans well for
-    // agent-reported completion and keeps 'done' visually distinct from
-    // 'idle' and other dot states at a glance. The sidebar's StatusIndicator
-    // intentionally diverges (emerald dot + tooltip) — see file header.
+    // A check distinguishes reported completion from live/idle dots; sidebar StatusIndicator intentionally differs.
     indicator = (
       <span
         className={cn('inline-flex shrink-0 items-center justify-center', box, className)}
@@ -174,8 +153,7 @@ export const AgentStateDot = React.memo(function AgentStateDot({
       </span>
     )
   } else if (state === 'unverifiable' || state === 'unconfirmed') {
-    // Why: a dashed ring reads as "incomplete information" rather than a state claim,
-    // and amber carries warning weight without borrowing 'done' green or 'working' yellow.
+    // A dashed amber ring reports missing evidence without claiming progress or completion.
     indicator = (
       <span
         className={cn('inline-flex shrink-0 items-center justify-center', box, className)}
@@ -205,7 +183,7 @@ export const AgentStateDot = React.memo(function AgentStateDot({
             inner,
             state === 'blocked' || state === 'failed'
               ? 'bg-red-500'
-              : // Why: a user's Stop is not news; muted, never the fault red or the finished green.
+              : // User Stop is muted, not a fault or completion.
                 state === 'interrupted'
                 ? 'bg-muted-foreground'
                 : 'bg-neutral-500/40'

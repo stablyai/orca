@@ -81,11 +81,11 @@ export const ORCHESTRATION_SEND_HANDLER: Record<string, CommandHandler> = {
       !process.env.ORCA_TERMINAL_HANDLE &&
       !readInjectedAgentSessionId()
     ) {
-      // Why: focus isn't lifecycle authority — an identity-less subprocess must fail closed rather than guess the worker.
+      // Focus cannot establish lifecycle ownership; never guess a worker for an identity-less subprocess.
       throwNoActiveSenderTerminal()
     }
 
-    // Why: lifecycle senders preserve ORCA_TERMINAL_HANDLE across restarts for older runtimes.
+    // Preserve the env handle across remints for older runtimes' lifecycle ownership checks.
     const from = await resolveOrchestrationTerminalHandle(flags, cwd, client, 'from')
     const sendParams = {
       from,
@@ -97,8 +97,7 @@ export const ORCHESTRATION_SEND_HANDLER: Record<string, CommandHandler> = {
       priority: getOptionalStringFlag(flags, 'priority'),
       threadId: getOptionalStringFlag(flags, 'thread-id'),
       payload: getOptionalStructuredMessagePayload(flags),
-      // Why: pane key is the remint-stable sender identity the runtime verifies lifecycle ownership against; older runtimes strip it.
-      // A session names itself by its id alone.
+      // Pane keys survive remints; sessions instead authenticate by injected id, never inherited pane keys.
       senderPaneKey:
         from === undefined || readInjectedAgentSessionId()
           ? undefined
@@ -113,7 +112,7 @@ export const ORCHESTRATION_SEND_HANDLER: Record<string, CommandHandler> = {
       'orchestration.send',
       sendParams,
       dispatchCapability ? { orchestrationCapability: dispatchCapability } : undefined,
-      // Why: a worker reports once and ends its turn, so a brief app outage must delay worker_done, not drop it.
+      // Workers report once before ending their turn; retry brief outages so worker_done is not lost.
       type === 'worker_done' ? WORKER_DONE_UNAVAILABLE_RETRY_MS : 0
     )
     await requireWorkerDoneSettlement(client, type, sendParams.payload, result.result)

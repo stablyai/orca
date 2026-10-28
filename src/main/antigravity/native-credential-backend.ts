@@ -66,9 +66,7 @@ export function createAntigravityHostCredentialBackend(home: string): Antigravit
   if (process.platform === 'linux') {
     try {
       kernelRelease = readFileSync('/proc/sys/kernel/osrelease', 'utf8')
-    } catch {
-      /* Environment detectors remain authoritative. */
-    }
+    } catch {}
   }
   if (isAntigravityFileStorageHost(process.env, kernelRelease)) {
     return file

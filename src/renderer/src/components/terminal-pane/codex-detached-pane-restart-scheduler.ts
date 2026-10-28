@@ -8,8 +8,6 @@ import {
 let executorInstalled = false
 let executorGeneration = 0
 let sweepQueued = false
-let sweepRunning = false
-let sweepRequestedAfterRun = false
 
 export function hasAddedPendingCodexPaneRestart(
   current: Record<string, AccountRestartAgent>,
@@ -45,7 +43,6 @@ export function installCodexDetachedPaneRestartExecutor(): () => void {
       executorInstalled = false
       executorGeneration += 1
       sweepQueued = false
-      sweepRequestedAfterRun = false
     }
   }
 }
@@ -54,17 +51,11 @@ export function resetCodexDetachedPaneRestartExecutorForTests(): void {
   executorInstalled = false
   executorGeneration += 1
   sweepQueued = false
-  sweepRunning = false
-  sweepRequestedAfterRun = false
   resetDetachedCodexPaneRestartClaimsForTests()
 }
 
 function scheduleClaimSweep(): void {
   if (!executorInstalled) {
-    return
-  }
-  if (sweepRunning) {
-    sweepRequestedAfterRun = true
     return
   }
   if (sweepQueued) {
@@ -78,21 +69,8 @@ function scheduleClaimSweep(): void {
       return
     }
     sweepQueued = false
-    if (sweepRunning) {
-      sweepRequestedAfterRun = true
-      return
-    }
-    sweepRunning = true
-    void sweepUnclaimedCodexPaneRestarts()
-      .catch((err) => {
-        console.warn('[codex-restart] detached restart sweep failed:', err)
-      })
-      .finally(() => {
-        sweepRunning = false
-        if (executorInstalled && sweepRequestedAfterRun) {
-          sweepRequestedAfterRun = false
-          scheduleClaimSweep()
-        }
-      })
+    void sweepUnclaimedCodexPaneRestarts(scheduleClaimSweep).catch((err) => {
+      console.warn('[codex-restart] detached restart sweep failed:', err)
+    })
   })
 }

@@ -1,7 +1,7 @@
 import { useCallback } from 'react'
 import { toast } from 'sonner'
 import type { Dispatch, RefObject, SetStateAction } from 'react'
-import type { JiraComment, JiraIssue } from '../../../shared/jira-types'
+import type { JiraComment, JiraIssue } from '../../../shared/jira/jira-types'
 import type { RuntimeClientTarget } from '../../../shared/runtime-client-target'
 import { createBrowserUuid } from '@/lib/browser-uuid'
 import { getCommentBodySubmitState } from '@/lib/comment-body-submit-state'

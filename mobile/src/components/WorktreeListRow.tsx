@@ -4,10 +4,13 @@ import { Pressable, StyleSheet, Text, View } from 'react-native'
 import type { MobileRenderableRepoIcon } from '../host-screen/host-screen-reply-schema'
 import { triggerMediumImpact } from '../platform/haptics'
 import { colors, radii, spacing, typography } from '../theme/mobile-theme'
+import { themedStyleSheet } from '../theme/themed-styles'
+import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import type { Worktree } from '../worktree/workspace-list-types'
 import type { WorktreeCardDetails } from '../../../src/shared/worktree/card-properties'
 import { isRemoteExecutionHostId } from '../../../src/shared/execution-host'
 import type { AgentActivityDisplayMode } from '../../../src/shared/ui-chrome-types'
+import type { WorktreeStatus } from '../../../src/shared/worktree-status-rollup'
 import { areStructurallyEqual } from '../worktree/structural-equality'
 import { projectGroupRowIndent } from '../worktree/project-group-indent'
 import { getWorktreeMetaGlyphPresence } from '../worktree/worktree-meta-glyph-presence'
@@ -17,13 +20,10 @@ import { MobileRepoIcon } from './MobileRepoIcon'
 import { WorktreeAgentList } from './WorktreeAgentList'
 import { WorktreeMetaGlyphs, prStateColor } from './WorktreeMetaGlyphs'
 
-// Strip the refs/heads/ prefix for display, matching the desktop sidebar
-// (WorktreeCardHelpers.formatBranchName).
+// Match desktop formatBranchName by hiding refs/heads/ prefix.
 function displayBranch(branch: string): string {
   return branch.replace(/^refs\/heads\//, '')
 }
-
-type WorktreeRollupStatus = 'working' | 'active' | 'permission' | 'done' | 'inactive'
 
 type Props = {
   item: Worktree
@@ -31,13 +31,12 @@ type Props = {
   now: number
   repoColor: string
   repoIcon?: MobileRenderableRepoIcon | null
-  // When the list is already grouped under this repo's section header, the row
-  // omits its own repo icon+name to avoid the redundant "📁 orca" on every row.
+  // Grouped repo header already identifies project; omit duplicate icon/name on each row.
   hideRepo?: boolean
   /** What the desktop's shared Card layout and properties show, and where identity goes. */
   cardDetails: WorktreeCardDetails
   agentActivityDisplayMode: AgentActivityDisplayMode
-  status: WorktreeRollupStatus
+  status: WorktreeStatus
   onPress: (item: Worktree) => void
   onAgentPress?: (item: Worktree, paneKey: string) => void
   statusLive?: boolean
@@ -61,6 +60,7 @@ function WorktreeListRowComponent({
   onLongPress,
   onToggleLineage
 }: Props) {
+  useMobileColorScheme()
   const isFolderWorkspace = item.workspaceKind === 'folder-workspace'
   const folderMeta = item.comment?.trim() || item.path || 'Folder'
   const metaText = isFolderWorkspace ? folderMeta : displayBranch(item.branch)
@@ -154,25 +154,28 @@ function WorktreeListRowComponent({
                 <Text style={styles.childBadgeText}>Child</Text>
               </View>
             )}
-            {cardDetails.host && item.hostContextLabel ? (
+            {cardDetails.host && (item.hostContextLabel || item.hostContextHealthLabel) ? (
               <View
                 style={[styles.childBadge, styles.hostBadge]}
                 accessibilityLabel={hostAccessibilityLabel}
               >
                 <HostKindIcon hostId={hostId} size={10} />
-                <Text style={[styles.childBadgeText, styles.hostBadgeText]} numberOfLines={1}>
-                  {item.hostContextLabel}
-                </Text>
+                {item.hostContextLabel ? (
+                  <Text style={[styles.childBadgeText, styles.hostBadgeText]} numberOfLines={1}>
+                    {item.hostContextLabel}
+                  </Text>
+                ) : null}
                 {/* Why separate Text: the name truncates first so the health word stays readable. */}
                 {item.hostContextHealthLabel ? (
                   <Text style={[styles.childBadgeText, styles.hostHealthText]}>
-                    {`· ${item.hostContextHealthLabel}`}
+                    {item.hostContextLabel
+                      ? `· ${item.hostContextHealthLabel}`
+                      : item.hostContextHealthLabel}
                   </Text>
                 ) : null}
               </View>
             ) : null}
-            {/* Repo glyph+name only when not grouped under this repo and the title has no chip;
-                MobileRepoIcon falls back to a Folder (matching desktop's default). */}
+            {/* Show repo identity only outside grouping/title-chip cases; Folder fallback matches desktop. */}
             {showRepoInMetaRow && (
               <>
                 <MobileRepoIcon repoIcon={repoIcon} size={11} color={repoColor} />
@@ -186,8 +189,7 @@ function WorktreeListRowComponent({
             </Text>
           </View>
         )}
-        {/* Only agents get a secondary activity line, matching desktop. A plain
-            terminal's shell-output tail is intentionally not surfaced here. */}
+        {/* Match desktop agent activity only; plain terminal shell-output tails stay hidden. */}
         {cardDetails.inlineAgents && item.agents && item.agents.length > 0 ? (
           <WorktreeAgentList
             agents={item.agents}
@@ -229,7 +231,7 @@ function WorktreeListRowComponent({
 
 export const WorktreeListRow = memo(WorktreeListRowComponent, areStructurallyEqual)
 
-const styles = StyleSheet.create({
+const styles = themedStyleSheet(() => ({
   worktreeRow: {
     flexDirection: 'row',
     alignItems: 'flex-start',
@@ -243,12 +245,10 @@ const styles = StyleSheet.create({
   worktreeRowPressed: {
     backgroundColor: colors.bgRaised
   },
-  // Highlight the worktree currently focused on the desktop, mirroring the
-  // desktop sidebar's selected-card treatment (raised fill + left accent).
+  // Match desktop focused-worktree card with raised fill and left accent.
   worktreeRowActive: {
     backgroundColor: colors.bgPanel,
-    // Neutral grey accent, matching the desktop's active-tab indicator rather
-    // than a blue line.
+    // Use desktop active-tab neutral accent, not blue.
     borderLeftColor: colors.textSecondary
   },
   indicatorCol: {
@@ -381,4 +381,4 @@ const styles = StyleSheet.create({
     textAlign: 'right',
     paddingTop: 3
   }
-})
+}))

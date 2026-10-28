@@ -2,7 +2,11 @@ import { useCallback, useMemo } from 'react'
 import { Clipboard, ExternalLink, GitBranch } from 'lucide-react'
 import { toast } from 'sonner'
 import { translate } from '@/i18n/i18n'
-import type { JiraIssue, JiraIssueUpdate, JiraMutationResult } from '../../../shared/jira-types'
+import type {
+  JiraIssue,
+  JiraIssueUpdate,
+  JiraMutationResult
+} from '../../../shared/jira/jira-types'
 import { applyJiraIssueKeyCasing } from '../../../shared/workspace-name'
 import type { WorkspaceSeedNameOptions } from '../../../shared/workspace-name'
 import { getJiraIssueKeyCasingSeedOptions } from '@/lib/jira-issue-key-casing'

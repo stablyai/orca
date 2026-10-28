@@ -7,7 +7,7 @@ import {
   RENDERER_RECOVERY_LOAD_TIMEOUT_MS
 } from './renderer-recovery-reload-watchdog'
 
-vi.mock('@electron-toolkit/utils', () => ({ is: { dev: false } }))
+vi.mock('electron', () => ({ app: { isPackaged: true } }))
 
 function createHarness() {
   const webContents = Object.assign(new EventEmitter(), { id: 143 })

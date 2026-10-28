@@ -2,6 +2,7 @@ import type { MessageRow, QuestionRow } from '../../types'
 import { OrchestrationError } from '../../orchestration-error'
 import { exposeQuestionTimestamps } from '../utc-timestamp'
 import type { OrchestrationDb } from '../orchestration-db'
+import { handHelperMailToRun } from '../messages/helper-mailbox-hand-back'
 
 export function createQuestion(
   this: OrchestrationDb,
@@ -11,6 +12,8 @@ export function createQuestion(
     askerHandle: string
     question: string
     options?: string[]
+    /** The asker's report mailbox; the Run when omitted. */
+    to?: string
   }
 ): { question: QuestionRow; message: MessageRow } {
   this.db.exec('BEGIN IMMEDIATE')
@@ -29,7 +32,7 @@ export function createQuestion(
     }
     const message = this.insertMessage({
       from: `dispatch:${params.dispatchId}`,
-      to: `run:${params.runId}`,
+      to: params.to ?? `run:${params.runId}`,
       subject: 'Question',
       body: params.question,
       type: 'question',
@@ -75,19 +78,41 @@ export function answerQuestion(
   params: {
     messageId: string
     runId: string
-    consumerGeneration: number
     body: string
-  }
+  } & (
+    | { consumerGeneration: number }
+    /** A worker answering its own helper, fenced on its Dispatch instead of the Run's consumer. */
+    | { answeredBy: { dispatchId: string; consumerGeneration: number } }
+  )
 ): { question: QuestionRow; message: MessageRow; duplicate: boolean } {
+  const answeredBy = 'answeredBy' in params ? params.answeredBy : null
+  const byDispatch = answeredBy?.dispatchId ?? null
+  const generation = 'consumerGeneration' in params ? params.consumerGeneration : null
   this.db.exec('BEGIN IMMEDIATE')
   try {
-    this.requireCurrentConsumer(params.runId, params.consumerGeneration)
+    if (generation !== null) {
+      this.requireCurrentConsumer(params.runId, generation)
+    }
     const question = this.getQuestionRaw(params.messageId)
     if (!question || question.run_id !== params.runId) {
       throw new OrchestrationError(
         'question_not_found',
         `Question ${params.messageId} was not found in Run ${params.runId}.`
       )
+    }
+    if (answeredBy !== null) {
+      const answerer = this.getDispatchContextById(answeredBy.dispatchId)
+      if (
+        this.getMessageById(question.message_id)?.to_handle !==
+          `dispatch:${answeredBy.dispatchId}` ||
+        (answerer?.status !== 'pending' && answerer?.status !== 'dispatched') ||
+        answerer.consumer_generation !== answeredBy.consumerGeneration
+      ) {
+        throw new OrchestrationError(
+          'consumer_fenced',
+          `Question ${params.messageId} was not asked of active Dispatch ${answeredBy.dispatchId}.`
+        )
+      }
     }
     if (question.status === 'closed') {
       throw new OrchestrationError(
@@ -111,14 +136,14 @@ export function answerQuestion(
     }
 
     const message = this.insertMessage({
-      from: `run:${params.runId}`,
+      from: byDispatch !== null ? `dispatch:${byDispatch}` : `run:${params.runId}`,
       to: `dispatch:${question.dispatch_id}`,
       subject: 'Re: Question',
       body: params.body,
       threadId: question.message_id,
       runId: params.runId
     })
-    // Why: ask returns thread state directly; leaving its answer unread would deliver it again via check.
+    // ask returns the answer directly; mark it read to prevent replay through check.
     this.markAsRead([message.id])
     this.db
       .prepare(
@@ -127,7 +152,7 @@ export function answerQuestion(
              answered_by_generation = ?, answered_at = datetime('now')
          WHERE message_id = ? AND status = 'pending'`
       )
-      .run(message.id, params.body, params.consumerGeneration, question.message_id)
+      .run(message.id, params.body, generation, question.message_id)
     const answered = this.getQuestionRaw(question.message_id) as QuestionRow
     const storedMessage = this.getMessageById(message.id) as MessageRow
     this.db.exec('COMMIT')
@@ -143,6 +168,8 @@ export function answerQuestion(
 }
 
 export function closeQuestionsForDispatch(this: OrchestrationDb, dispatchId: string): string[] {
+  // Every settlement passes here, so transfer helper mail to the Run here too.
+  handHelperMailToRun(this, dispatchId)
   const rows = this.db
     .prepare("SELECT message_id FROM question_threads WHERE dispatch_id = ? AND status = 'pending'")
     .all(dispatchId) as { message_id: string }[]

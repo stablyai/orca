@@ -94,20 +94,7 @@ let cachedState: WeakRef<AppState> | null = null
 let cachedByWorktreeId = new Map<string, TerminalPaneHostState>()
 let previousByWorktreeId = new Map<string, TerminalPaneHostState>()
 
-/**
- * Per-worktree memo of the host state one TerminalPane needs.
- *
- * Why keyed on the whole `state` object and nothing narrower: resolving the
- * execution host walks repos, worktree owners, folder-workspace routes, and the
- * runtime/SSH slices, so no hand-written input list can be shown to be complete
- * — and an incomplete one would hand an SSH pane a stale host. Zustand mints a
- * new state object for every publication, so state identity is an exact,
- * conservative key: a write can never be missed, and within one published state
- * every mounted tab of a worktree resolves the host once instead of once each.
- *
- * The previous result is returned when nothing changed, so the shallow-equal
- * subscriber compares by identity and the selector stops allocating per publication.
- */
+/** Memoize host resolution by whole store identity: ownership spans repo, folder, runtime and SSH state, so narrower keys can miss changes. Resolve once per worktree/publication and reuse unchanged results to avoid per-pane allocations. */
 export function selectTerminalPaneHostState(
   state: AppState,
   worktreeId: string
@@ -128,7 +115,6 @@ export function selectTerminalPaneHostState(
   return result
 }
 
-/** Test seam: drops the memo so a suite can measure a cold resolve. */
 export function resetTerminalPaneHostStateMemoForTests(): void {
   cachedState = null
   cachedByWorktreeId = new Map()

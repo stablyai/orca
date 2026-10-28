@@ -218,6 +218,11 @@ try {
         $MaxDepth = $originalMaxDepth
     }
 
+    foreach ($case in @(@("CmdOrCtrl+A", "^a"), @("Ctrl+Shift+T", "^+t"), @("Ctrl+Enter", "^{ENTER}"))) {
+        $keys = ConvertTo-OrcaSendKeysHotkey $case[0]
+        if ($keys -cne $case[1]) { throw "hotkey $($case[0]) expected '$($case[1])', received '$keys'" }
+    }
+
     Write-Output "windows-snapshot-render-tests-ok"
 } finally {
     Remove-Item -LiteralPath $operationPath -Force -ErrorAction SilentlyContinue

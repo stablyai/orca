@@ -27,7 +27,7 @@ export type WriteTerminalOutputOptions = {
   foreground: boolean
   beforeWrite?: TerminalOutputBeforeWrite
   onParsed?: TerminalOutputParsedCallback
-  /** Parse-deferred delivery ACK (terminal-pty-ack-gate). MUST be invoked when the chunk is parsed OR discarded by any drop path; fire-once, so double invocation is safe but omission permanently shrinks main's in-flight window. */
+  /** Fire delivery ACK once on parse OR discard; duplicate calls are safe, omission permanently shrinks main’s in-flight window. */
   ackCredit?: () => void
   onBackgroundBacklogDropped?: () => void
   latencySensitive?: boolean
@@ -92,7 +92,7 @@ export const BACKGROUND_DRAIN_INTERVAL_MS = 16
 export const HIGH_PRIORITY_DRAIN_INTERVAL_MS = 4
 export const BACKGROUND_CHUNK_CHARS = 16 * 1024
 export const MAX_WRITES_PER_DRAIN = 2
-// Why 8: per-tick volume (8 x 16KB = 128KB ≈ 1.3ms parse) sets the sustained ceiling (~30MB/s) within DRAIN_TIME_BUDGET_MS; at 2 it was only 8MB/s against a ~100MB/s parser (see throughput bench).
+// Eight × 16KB gives ~1.3ms parse/tick (~30MB/s) within the time budget; two writes limited the ~100MB/s parser to ~8MB/s.
 export const HIGH_PRIORITY_MAX_WRITES_PER_DRAIN = 8
 export const DRAIN_TIME_BUDGET_MS = 8
 export const LARGE_BACKLOG_CHARS = 512 * 1024
@@ -107,10 +107,7 @@ export function configureTerminalOutputBacklogCap(scrollbackRows: unknown): void
 export function getTerminalOutputMaxQueueChars(): number {
   return maxQueueChars
 }
-// Why: leading CAN aborts any partial escape sequence before the style reset so the backlog warning renders cleanly.
-// Why ?2026l too: the discarded tail may have held the TUI's closing \x1b[?2026l, and
-// xterm stops repainting until the latch closes or its 1000ms timeout fires — the
-// pane freezes on its last frame, so the warning itself would go unseen for a second.
+// CAN aborts partial escapes before style reset; also close DEC 2026 because discarded tails may contain its end marker, hiding even the warning until xterm’s 1000ms timeout.
 export const BACKGROUND_BACKLOG_WARNING =
   '\x18\x1b[?2026l\x1b[0m\r\n[Orca skipped hidden terminal output because the backlog grew too large.]\r\n'
 // Why a separate foreground message: a visible pane hitting the cap means the drain couldn't keep up with a flood (starved renderer), not merely output produced while hidden.
@@ -126,10 +123,10 @@ const backlogRecoveryByTerminal = new WeakMap<
 >()
 let drainTimer: ReturnType<typeof setTimeout> | null = null
 let drainTimerDelayMs: number | null = null
-// Why a MessageChannel for zero-delay drains: Chromium clamps nested setTimeout(0) to ~4ms; a posted macrotask isn't clamped yet still yields to input/paint. Cancellation is by generation.
+// MessageChannel avoids Chromium’s nested-timer ~4ms clamp while yielding to input/paint.
 let drainImmediatePending = false
-let drainImmediateGeneration = 0
-let useMessageChannelDrain = typeof MessageChannel !== 'undefined' && !isVitestEnv()
+const drainImmediateGeneration = 0
+const useMessageChannelDrain = typeof MessageChannel !== 'undefined' && !isVitestEnv()
 let drainChannel: MessageChannel | null = null
 // Why indirect: the drain loop lives downstream of this module, so it registers itself here rather than being imported back into the queue state it operates on.
 let runDrain: (() => void) | null = null
@@ -159,16 +156,6 @@ function getDrainChannel(): MessageChannel {
     }
   }
   return drainChannel
-}
-
-function cancelImmediateDrain(): void {
-  drainImmediateGeneration++
-  drainImmediatePending = false
-}
-
-export function setUseMessageChannelDrainForTesting(value: boolean | null): void {
-  cancelImmediateDrain()
-  useMessageChannelDrain = value ?? (typeof MessageChannel !== 'undefined' && !isVitestEnv())
 }
 
 export function isMessageChannelDrainEnabled(): boolean {
@@ -208,7 +195,7 @@ export function scheduleDrain(delayMs: number): void {
   drainTimerDelayMs = delayMs
 }
 
-// Why: every discard path MUST fire these before clearing/replacing the queue — a dropped chunk still counts as consumed, or main's in-flight window shrinks permanently and the PTY wedges.
+// Every discard must credit before clearing/replacing; consumed deliveries otherwise permanently shrink main’s window and wedge the PTY.
 export function fireQueuedAckCredits(entry: QueueEntry): void {
   for (let index = entry.chunkIndex; index < entry.chunks.length; index += 1) {
     entry.chunks[index].ackCredit?.()

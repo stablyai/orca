@@ -83,8 +83,7 @@ describe('xterm IME composition cancellation', () => {
       updatePreedit(textarea, preedit)
       await nextEventLoop()
     }
-    // Final Backspace: Chromium clears the preedit and ends the composition
-    // with empty data; the last non-empty compositionupdate was 'c'.
+    // Final Backspace clears preedit and ends with empty data despite a prior nonempty update.
     dispatchProcessKeydown(textarea)
     dispatchCompositionEvent(textarea, 'compositionupdate')
     textarea.value = ''
@@ -120,8 +119,7 @@ describe('xterm IME composition cancellation', () => {
     dispatchCompositionEvent(textarea, 'compositionupdate', '한')
     textarea.value = '한'
     await nextEventLoop()
-    // IBus clears the textarea at compositionend, then restores the commit
-    // through a bare insertText — evidence that this end was not a cancel.
+    // IBus can clear at compositionend then restore through insertText; that proves commit rather than cancel.
     textarea.value = ''
     dispatchCompositionEvent(textarea, 'compositionend')
     textarea.value = '한'

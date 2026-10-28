@@ -158,9 +158,6 @@ export class PiRpcSessionAdapter implements StructuredAgentSessionAdapter {
     await session.connection.request('abort', {}, { timeoutMs: 2_000 })
     return { cancelled: true, ...(turnId ? { turnId } : {}) }
   }
-  stopEndsSession(): boolean {
-    return true
-  }
   awaitStoppedRequestEnd: NonNullable<StructuredAgentSessionAdapter['awaitStoppedRequestEnd']> =
     async (id, at) => {
       const session = this.sessions.get(id)
@@ -233,7 +230,10 @@ export class PiRpcSessionAdapter implements StructuredAgentSessionAdapter {
     return session?.generation === generation && !session.connection.closed
   }
 
-  async closeSession(id: string, requested = true): Promise<boolean> {
+  closeSession(id: string): Promise<boolean> {
+    return this.close(id, true)
+  }
+  private async close(id: string, requested: boolean): Promise<boolean> {
     const session = this.sessions.get(id)
     if (!session) {
       return true
@@ -255,7 +255,7 @@ export class PiRpcSessionAdapter implements StructuredAgentSessionAdapter {
   }
   forceCloseSession(id: string): Promise<boolean> {
     this.sessions.get(id)?.fail(new Error('Pi event sink failed'))
-    return this.closeSession(id, false)
+    return this.close(id, false)
   }
   disposeSession(id: string): Promise<boolean> {
     return this.closeSession(id)

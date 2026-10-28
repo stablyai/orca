@@ -1,15 +1,32 @@
 import { createElement } from 'react'
-import { act, create } from 'react-test-renderer'
-import { describe, expect, it, vi } from 'vitest'
+import { act, create as createRenderer } from 'react-test-renderer'
+
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
   structuredAgentSessionPaneKey,
   structuredAgentSessionTabId
 } from '../../../src/shared/structured-agent-session-projection'
-import type { RpcClient } from '../transport/rpc-client'
 import { MOBILE_DESKTOP_RELAY_RUNTIME_CAPABILITY } from '../../../src/shared/mobile-desktop-relay-contract'
 import type { Worktree } from '../worktree/workspace-list-types'
 import { useHostScreenState } from './use-host-screen-state'
 import { useHostWorktreeActions } from './use-host-worktree-actions'
+import { stubRpcClient } from '../transport/rpc-client-test-stub'
+import type { RpcResponse } from '../transport/types'
+
+const renderers = new Set<ReturnType<typeof createRenderer>>()
+function create(...args: Parameters<typeof createRenderer>): ReturnType<typeof createRenderer> {
+  const renderer = createRenderer(...args)
+  renderers.add(renderer)
+  return renderer
+}
+function unmountRenderers(): void {
+  act(() => {
+    for (const renderer of renderers) {
+      renderer.unmount()
+    }
+  })
+  renderers.clear()
+}
 
 vi.mock('expo-router', () => ({}))
 vi.mock('react-native', () => ({ Platform: { OS: 'ios' } }))
@@ -46,16 +63,18 @@ describe('a workspace child opens its parent pane', () => {
     async (paneKey, executionHost) => {
       const push = vi.fn()
       const replace = vi.fn()
-      const sendRequest = vi.fn(async (_method: string, _params: unknown, _options?: unknown) => ({
-        ok: true,
-        result: {}
-      }))
-      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: this action only sends activation; the scoped client never uses its other methods.
-      const client = { sendRequest } as unknown as RpcClient
+      const sendRequest = vi.fn(
+        async (_method: string, _params: unknown, _options?: unknown): Promise<RpcResponse> => ({
+          id: 'activate',
+          ok: true,
+          result: {}
+        })
+      )
+      const client = stubRpcClient({ sendRequest })
       const row = { ...item, ...(executionHost ? { hostId: executionHost } : {}) }
       const held: { open?: (item: Worktree, paneKey?: string) => void } = {}
       function Probe() {
-        const state = useHostScreenState('host', undefined)
+        const state = useHostScreenState('host')
         held.open = useHostWorktreeActions({
           client,
           hostCapabilities: [MOBILE_DESKTOP_RELAY_RUNTIME_CAPABILITY],
@@ -102,3 +121,5 @@ describe('a workspace child opens its parent pane', () => {
     }
   )
 })
+
+afterEach(unmountRenderers)

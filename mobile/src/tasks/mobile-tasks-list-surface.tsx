@@ -5,7 +5,8 @@ import {
   ActivityIndicator,
   colors,
   TaskProviderLogo,
-  Pressable
+  Pressable,
+  type MobileColorScheme
 } from './mobile-tasks-dependencies'
 import { styles } from './mobile-tasks-legacy-styles'
 import { renderMobileTasksGitHubProjectList } from './mobile-tasks-github-project-list'
@@ -13,7 +14,10 @@ import { renderMobileTasksLinearList } from './mobile-tasks-linear-list'
 import { renderMobileTasksProviderItemList } from './mobile-tasks-provider-item-list'
 import { JiraConnectPrompt } from '../components/JiraConnectPrompt'
 
-export function renderMobileTasksListSurface(model: ConnectionPresentationModel) {
+export function renderMobileTasksListSurface(
+  model: ConnectionPresentationModel,
+  colorScheme: MobileColorScheme
+) {
   const {
     githubMode,
     linearConnected,
@@ -77,15 +81,18 @@ export function renderMobileTasksListSurface(model: ConnectionPresentationModel)
       </Pressable>
     </View>
   ) : provider === 'github' && githubMode === 'project' ? (
-    renderMobileTasksGitHubProjectList(model)
+    renderMobileTasksGitHubProjectList(model, colorScheme)
   ) : (
-    renderMobileTasksNonProjectLists(model)
+    renderMobileTasksNonProjectLists(model, colorScheme)
   )
 }
 
-export function renderMobileTasksNonProjectLists(model: ConnectionPresentationModel) {
+export function renderMobileTasksNonProjectLists(
+  model: ConnectionPresentationModel,
+  colorScheme: MobileColorScheme
+) {
   const { provider } = model
   return provider === 'linear'
-    ? renderMobileTasksLinearList(model)
-    : renderMobileTasksProviderItemList(model)
+    ? renderMobileTasksLinearList(model, colorScheme)
+    : renderMobileTasksProviderItemList(model, colorScheme)
 }

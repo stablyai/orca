@@ -1,5 +1,4 @@
-// Layout-owner build: a pane main is starting a terminal for waits and then attaches to it, and a
-// start that failed shows why. Neither starts a terminal of its own.
+// Wait for main’s terminal start and attach, or show its failure; the window cannot spawn a replacement.
 
 import { useAppStore } from '@/store'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../../shared/layout-owner-switch'
@@ -8,16 +7,19 @@ import type { PaneStartStatus } from '../../../../../shared/workspace-layout/wor
 import type { ConnectPanePtySession } from './connect-pane-pty-session'
 import { resolveTerminalTabId } from './terminal-tab-id'
 
-const waiting = new WeakSet<ConnectPanePtySession>()
+type PaneStartWait = { connects: Set<() => void>; failed: Set<() => void> }
 
-/** The starts this gate covers; a sleeping, resuming or held pane keeps its restore path (C1c). */
+const waiting = new WeakMap<ConnectPanePtySession, PaneStartWait>()
+
+/** The starts this gate waits on; a sleeping or held pane starts on its first view (C1c). */
 const gated = (status: PaneStartStatus | undefined): boolean =>
-  status === 'starting' || status === 'failed'
+  status === 'starting' || status === 'resuming' || status === 'failed'
 
-/** Whether the pane waits on main's start; `connect` runs once main's start for it ends. */
+/** Call connect after main’s start ends, or onFailed on its published failure. */
 export function waitsForMainPaneStart(
   session: ConnectPanePtySession,
-  connect: () => void
+  connect: () => void,
+  onFailed?: () => void
 ): boolean {
   if (!ORCA_LAYOUT_OWNER_IS_MAIN) {
     return false
@@ -26,18 +28,30 @@ export function waitsForMainPaneStart(
   if (!start || !gated(start.status)) {
     return false
   }
-  if (waiting.has(session)) {
+  const joined = waiting.get(session)
+  if (joined) {
+    joined.connects.add(connect)
+    if (onFailed) {
+      joined.failed.add(onFailed)
+      if (start.status === 'failed') {
+        onFailed()
+      }
+    }
     return true
   }
-  waiting.add(session)
+  const wait: PaneStartWait = { connects: new Set([connect]), failed: new Set() }
+  if (onFailed) {
+    wait.failed.add(onFailed)
+  }
+  waiting.set(session, wait)
   recordPtyConnectDiagnostic(`pane=${session.pane.id} -> WAIT FOR MAIN START (${start.status})`)
   let shown = start
   const showFailure = (): void => {
     if (shown.status === 'failed' && !session.disposed) {
-      session.deps.onPtyErrorRef?.current?.(
-        session.pane.id,
-        `The terminal could not start: ${shown.reason ?? 'unknown error'}`
-      )
+      showPaneStartFailure(session, shown.reason)
+      for (const failed of wait.failed) {
+        failed()
+      }
     }
   }
   showFailure()
@@ -61,7 +75,9 @@ export function waitsForMainPaneStart(
       session.waitTeardowns.splice(index, 1)
     }
     if (!session.disposed) {
-      connect()
+      for (const waiter of wait.connects) {
+        waiter()
+      }
     }
   })
   session.waitTeardowns.push(unsubscribe)
@@ -69,7 +85,7 @@ export function waitsForMainPaneStart(
 }
 
 /** The terminal main bound the pane to, as the pane's restore id: the connect then attaches it. */
-function adoptMainBinding(
+export function adoptMainBinding(
   session: ConnectPanePtySession,
   state: ReturnType<typeof useAppStore.getState>
 ): void {
@@ -79,5 +95,18 @@ function adoptMainBinding(
   if (ptyId) {
     session.deps.restoredLeafId = leafId
     session.deps.restoredPtyIdByLeafId = { ...session.deps.restoredPtyIdByLeafId, [leafId]: ptyId }
+  }
+}
+
+/** The one place a pane shows why main's start of it failed (copy the owner approved). */
+export function showPaneStartFailure(
+  session: ConnectPanePtySession,
+  reason: string | undefined
+): void {
+  if (!session.disposed) {
+    session.deps.onPtyErrorRef?.current?.(
+      session.pane.id,
+      `The terminal could not start: ${reason ?? 'unknown error'}`
+    )
   }
 }

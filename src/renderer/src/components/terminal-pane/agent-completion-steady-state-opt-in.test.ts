@@ -6,9 +6,7 @@ import {
   useAgentCompletionCoordinatorLifecycle
 } from './agent-completion-coordinator-test-harness'
 
-// The renderer opts a read into the cheap tier ONLY when it is a self-correcting cadence poll on a
-// local pane. Pending-title reads decide a completion once and remote reads consume evidence, so
-// neither may ask for a capture that omits evidence.
+// Only self-correcting local cadence polls may omit capture evidence; pending-title and remote decisions need it.
 describe('agent completion steadyState opt-in', () => {
   useAgentCompletionCoordinatorLifecycle()
 

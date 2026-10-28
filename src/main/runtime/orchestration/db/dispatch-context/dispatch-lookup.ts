@@ -8,9 +8,9 @@ import {
 import type { OrchestrationDb } from '../orchestration-db'
 import { DISPATCH_CONTEXT_COLUMN_LIST } from '../row-column-lists'
 
-// Why: hoisted and wildcard-free so the graph-publish fan-out hits the SyncDatabase statement cache.
+// Hoist explicit projections so graph-publish queries hit the statement cache.
 const ACTIVE_DISPATCH_BY_HANDLE_SQL =
-  // Why: newest-first like the pane lookups below — an unordered LIMIT 1 could pin a stale row if a handle ever has two active dispatches.
+  // Newest-first avoids selecting a stale row when one handle has multiple active Dispatches.
   `SELECT ${DISPATCH_CONTEXT_COLUMN_LIST} FROM dispatch_contexts
        WHERE assignee_handle = ? AND status IN ('pending', 'dispatched')
        ORDER BY rowid DESC LIMIT 1`
@@ -27,19 +27,13 @@ const LATEST_DISPATCH_BY_HANDLE_SQL = `SELECT ${DISPATCH_CONTEXT_COLUMN_LIST} FR
 export function getActiveDispatchForTerminal(
   this: OrchestrationDb,
   handle: string,
-  // Why optional: a handle reminted between dispatch and exit no longer matches
-  // the row, but the pane identity behind it survives the remint.
+  // Pane identity still resolves Dispatches after handle remint.
   assigneePaneKey?: string
 ): DispatchContextRow | undefined {
   return this.findActiveDispatchForAssignee(handle, assigneePaneKey)
 }
 
-/**
- * Cheap "are there any dispatch rows at all" probe. When false, no terminal
- * can have an active or recent-completed dispatch, so orchestration-context
- * builders can skip their per-terminal query fan-out entirely. Cached after
- * the first probe; createDispatchContext marks it true, resets clear it.
- */
+/** Cache emptiness to skip per-terminal queries; inserts set true and resets invalidate it. */
 
 export function hasAnyDispatchContexts(this: OrchestrationDb): boolean {
   if (this.hasAnyDispatchContextsCache === undefined) {

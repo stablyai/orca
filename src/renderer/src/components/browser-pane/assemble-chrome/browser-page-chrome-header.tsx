@@ -75,6 +75,7 @@ export function BrowserPageChromeHeader({
         convertedFrom={browserTab.convertedFrom ?? null}
         convertedTo={browserTab.convertedTo ?? null}
         loading={browserTab.loading}
+        loadFailed={browserTab.loadError !== null}
         webviewRef={webviewRef}
         reloadMenuOpen={reload.reloadMenuOpen}
         setReloadMenuOpen={reload.setReloadMenuOpen}

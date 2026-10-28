@@ -13,7 +13,6 @@ import {
 } from './ai-vault-session-surface-switch'
 
 export type AiVaultSessionRowChatActions = AiVaultSessionSurfaceSwitchTargets & {
-  /** The session is already open in a pane, so opening it means switching there. */
   canJumpToOriginalPane: boolean
   /** The row's own resume (▶) is greyed out; it is hidden instead while the chat is open. */
   resumeDisabled: boolean
@@ -21,7 +20,6 @@ export type AiVaultSessionRowChatActions = AiVaultSessionSurfaceSwitchTargets & 
   resumeWorktreeId: string | null
 }
 
-/** Every open/resume action a session row offers, decided once for all of its controls. */
 export function resolveAiVaultSessionRowChatActions(args: {
   session: AiVaultSession
   originalPaneTarget: AiVaultOriginalPaneTarget | null

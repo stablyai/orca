@@ -1,6 +1,6 @@
 import { parseExecutionHostId } from '../../../shared/execution-host'
 import type { Worktree } from '../../../shared/worktree/types'
-import { resolveOwnerWithLegacyFallback } from './worktree-runtime-owner'
+import { resolveOwnerOrLocal } from './worktree-runtime-owner'
 import type { WorktreeRuntimeOwnerState } from './worktree-runtime-owner-state'
 import {
   resolveWorktreeOperationRouteResultForHost,
@@ -46,7 +46,7 @@ export function resolveWorktreeRowOpenInRuntimeOwner(
   }
   if (!worktree.hostId) {
     // Why: a twin names no owner, and Open in must not launch it as this desktop's checkout.
-    const owner = resolveOwnerWithLegacyFallback(state, { workspaceId: worktree.id })
+    const owner = resolveOwnerOrLocal(state, { workspaceId: worktree.id })
     if (owner.kind === 'ambiguous') {
       return UNRESOLVED
     }

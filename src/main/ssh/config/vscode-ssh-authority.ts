@@ -1,12 +1,12 @@
 import type { SshTarget } from '../../../shared/ssh-types'
 import { isOpenSshConfigBackedTarget } from '../system-transport/system-ssh-args'
 
-export type VsCodeSshAuthorityResult =
+type VsCodeSshAuthorityResult =
   | { ok: true; authority: string }
   | { ok: false; reason: 'ssh-target-invalid' }
   | { ok: false; reason: 'ssh-alias-required'; host: string; port: number }
 
-function isValidAuthorityPart(value: string, allowEmpty = false): boolean {
+export function isValidAuthorityPart(value: string, allowEmpty = false): boolean {
   return (
     (allowEmpty || value.trim().length > 0) &&
     !Array.from(value).some((character) => {

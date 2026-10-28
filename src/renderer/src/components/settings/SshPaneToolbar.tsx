@@ -20,7 +20,6 @@ import {
   DropdownMenuTrigger
 } from '../ui/dropdown-menu'
 
-/** Section-header actions: sync, add, and the rare restore behind ⋯. */
 export function SshHostsHeaderActions({
   syncing,
   onSync,
@@ -32,9 +31,9 @@ export function SshHostsHeaderActions({
   onAdd: () => void
   onRestoreRemoved: () => void
 }): React.JSX.Element {
-  // null while the menu's count is loading; the menu reads ~/.ssh/config only when opened.
+  // Read ssh/config only on menu opening; null means the count is loading.
   const [removedCount, setRemovedCount] = useState<number | null>(null)
-  // Why: a quick close-and-reopen must not let the older read land over the newer one.
+  // Reject stale reads from quick close/reopen cycles.
   const requestRef = useRef(0)
   const loadRemovedCount = (): void => {
     const request = ++requestRef.current
@@ -47,7 +46,7 @@ export function SshHostsHeaderActions({
     window.api.ssh
       .listConfigHosts({ refresh: true })
       .then((result) => apply(result.hosts.filter((h) => h.previouslyRemoved).length))
-      // Why: an unreadable config shouldn't block restore; the dialog explains what it finds.
+      // Unreadable config must not block restore; its dialog explains the result.
       .catch(() => apply(-1))
   }
   // An ellipsis promises a dialog, so only the enabled item carries one.
@@ -128,10 +127,7 @@ type SshHostsListToolbarProps = {
   onRemoveSelected: () => void
 }
 
-/**
- * The row above the list. The filter stays put while selecting, so "filter, select all, remove"
- * works; only the right side swaps to bulk actions, whose controls keep fixed slots.
- */
+/** Keep filtering stable during selection; swap only fixed-slot bulk actions on the right. */
 export function SshHostsListToolbar(props: SshHostsListToolbarProps): React.JSX.Element {
   const filtering = props.filter.trim() !== ''
   return (
@@ -229,8 +225,7 @@ function SshHostFilterField({
 }): React.JSX.Element {
   const inputRef = useRef<HTMLInputElement>(null)
   const label = translate('auto.components.settings.SshPaneToolbar.filter', 'Filter hosts')
-  // Why not <Input>: the icon and clear button live inside the field, which the primitive's
-  // fixed padding can't host; this mirrors its border, fill and focus ring on the wrapper.
+  // Wrap icon/input/clear together because Input’s fixed padding cannot host them; mirror its border/focus tokens.
   return (
     <div className="flex h-8 max-w-64 items-center gap-2 rounded-md border border-input px-2.5 shadow-xs transition-[color,box-shadow] focus-within:border-ring focus-within:ring-[3px] focus-within:ring-ring/50 dark:bg-input/30">
       <Search className="size-3.5 shrink-0 text-muted-foreground" />
@@ -243,7 +238,7 @@ function SshHostFilterField({
         onChange={(event) => onChange(event.target.value)}
         onKeyDown={(event) => {
           if (event.key === 'Escape' && value !== '' && !event.nativeEvent.isComposing) {
-            // Why: the first Escape clears the text, not the selection or Settings.
+            // First Escape clears the filter before selection or Settings can dismiss.
             event.preventDefault()
             event.stopPropagation()
             onChange('')
@@ -260,7 +255,7 @@ function SshHostFilterField({
             'auto.components.settings.SshPaneToolbar.clearFilter',
             'Clear filter'
           )}
-          // Why: clearing unmounts this button; keep focus in the field being typed in.
+          // Prevent clear-button focus because clearing unmounts it.
           onMouseDown={(event) => event.preventDefault()}
           onClick={() => {
             onChange('')

@@ -79,8 +79,7 @@ async function readInstallManifest(
   return { ok: true, manifest: parsed.manifest }
 }
 
-/** Validates and hashes a source tree without publishing it. Marketplace
- * previews use this exact path so the reviewed bytes match install policy. */
+/** Preview and install share tree verification so reviewed bytes obey install policy. */
 export async function inspectPluginInstallTree(input: {
   rootDir: string
   hostVersion: string
@@ -114,7 +113,6 @@ export async function inspectPluginInstallTree(input: {
   }
 }
 
-/** Installs a validated staging tree into the hash-addressed layout. */
 export async function installStagedPluginTree(input: {
   pluginsDir: string
   stagingDir: string
@@ -149,8 +147,7 @@ export async function installStagedPluginTree(input: {
   if (existsSync(versionDir) && input.repairCorruptedVersion) {
     const existingHash = await hashPluginTree(versionDir)
     if (!existingHash.ok || existingHash.hash !== sourceInspection.contentHash) {
-      // Why: bundled resources are release-index verified above, so they can
-      // safely restore a damaged immutable install instead of staying broken.
+      // Release-index-verified bundled bytes can repair damaged immutable installs.
       await rm(versionDir, { recursive: true, force: true })
     }
   }
@@ -159,14 +156,12 @@ export async function installStagedPluginTree(input: {
     try {
       await rm(stagedVersionDir, { recursive: true, force: true })
       await mkdir(pluginDir, { recursive: true })
-      // Source trees can change while copying. Hashing the destination closes
-      // that race before the immutable directory becomes current.
+      // Rehash the copy before publication because the source may change during copying.
       const stagingRoot = resolve(input.stagingDir)
       await cp(stagingRoot, stagedVersionDir, {
         recursive: true,
         verbatimSymlinks: true,
-        // Source-control metadata is not plugin content. Skip it at the copy
-        // boundary so a large local repository cannot bypass install limits.
+        // Exclude source-control metadata before copying so repository size cannot bypass install limits.
         filter: (source) => {
           const fromRoot = relative(stagingRoot, resolve(source))
           return fromRoot !== '.git' && !fromRoot.startsWith(`.git${sep}`)
@@ -200,8 +195,7 @@ export async function installStagedPluginTree(input: {
       await rm(stagedVersionDir, { recursive: true, force: true })
     }
   } else {
-    // Never repoint at an existing hash directory without proving its bytes;
-    // a previous partial/tampered install must not be revived by reinstall.
+    // Reverify existing hash directories before repointing; partial/tampered installs must not revive.
     const existingHash = await hashPluginTree(versionDir)
     if (!existingHash.ok || existingHash.hash !== sourceInspection.contentHash) {
       return {

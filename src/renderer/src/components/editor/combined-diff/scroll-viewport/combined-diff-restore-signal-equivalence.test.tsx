@@ -26,7 +26,7 @@ const { useCombinedDiffSectionRowKeys } =
 const { createCombinedDiffSectionIndexMap } =
   await import('../resolve-changes/combined-diff-section-identity')
 
-/** The signal this PR replaces: one template string per section, joined, on every section load. */
+/** Baseline signal: rebuild and join one string per section on every load. */
 function legacyRestoreSignal(args: {
   clampRestoreCount: number
   generation: number
@@ -139,23 +139,14 @@ describe('combined diff restore signal', () => {
 
     const steps: Step[] = [
       { clampRestoreCount: 0, generation: 1, sections: base, sideBySide: false },
-      // A section load.
       { clampRestoreCount: 0, generation: 1, sections: loadedC, sideBySide: false },
-      // A no-op commit: fresh array, identical elements.
       { clampRestoreCount: 0, generation: 1, sections: loadedC.slice(), sideBySide: false },
-      // A collapse toggle.
       { clampRestoreCount: 0, generation: 1, sections: collapsedB, sideBySide: false },
-      // A refetch that really changed content (contentGeneration bump).
       { clampRestoreCount: 0, generation: 1, sections: reloadedC, sideBySide: false },
-      // A reorder that keeps every key.
       { clampRestoreCount: 0, generation: 1, sections: reordered, sideBySide: false },
-      // A removal.
       { clampRestoreCount: 0, generation: 1, sections: removed, sideBySide: false },
-      // Inline -> side-by-side.
       { clampRestoreCount: 0, generation: 1, sections: removed, sideBySide: true },
-      // A browser clamp re-pin.
       { clampRestoreCount: 1, generation: 1, sections: removed, sideBySide: true },
-      // A full entry-set rebuild.
       { clampRestoreCount: 1, generation: 2, sections: removed, sideBySide: true }
     ]
 
@@ -176,7 +167,6 @@ describe('combined diff restore signal', () => {
 
     const legacy = steps.map((step) => legacyRestoreSignal(step))
     expect(changePoints(renderSignals(steps))).toEqual(changePoints(legacy))
-    // Every anchor key still resolves to the index a freshly built map would give it.
     expect([...createCombinedDiffSectionIndexMap(sections)]).toEqual([
       ...createCombinedDiffSectionIndexMap(steps.at(-1)!.sections)
     ])

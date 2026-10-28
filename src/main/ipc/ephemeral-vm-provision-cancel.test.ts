@@ -15,7 +15,7 @@ vi.mock('electron', () => ({
   ipcMain: { handle: handleMock, removeHandler: vi.fn() }
 }))
 
-vi.mock('../ephemeral-vm-provisioned-root-source', () => ({
+vi.mock('../ephemeral-vm/provisioned-root-source', () => ({
   resolveProvisionedRootSource: resolveProvisionedRootSourceMock
 }))
 

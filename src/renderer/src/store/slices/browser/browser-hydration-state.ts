@@ -23,7 +23,9 @@ export function projectHydratedBrowserSession(
     | 'tabsByWorktree'
   >,
   session: WorkspaceSessionState,
-  validWorktreeIds: ReadonlySet<string>
+  validWorktreeIds: ReadonlySet<string>,
+  /** A workspace with no remembered browser tab keeps none, instead of restoring its first. */
+  options: { unchosenStaysUnset?: true } = {}
 ) {
   const persistedTabsByWorktree = session.browserTabsByWorktree ?? {}
   const persistedPagesByWorkspace = session.browserPagesByWorkspace ?? {}
@@ -58,9 +60,7 @@ export function projectHydratedBrowserSession(
               canGoForward: tab.canGoForward,
               loadError: tab.loadError ?? null,
               createdAt: tab.createdAt,
-              // Why the tab's copy is authority here: this branch runs when the page array was
-              // salvaged away, and without it a restored document page comes back as a blank
-              // New Tab under a strip entry still naming the document.
+              // Salvaged-away page arrays recover document identity from tab chrome or restore blank New Tabs beneath stale labels.
               docLocation: tab.docLocation ?? null
             } satisfies BrowserPage
           ]
@@ -74,9 +74,7 @@ export function projectHydratedBrowserSession(
           ...persistedPage,
           workspaceId: tab.id,
           worktreeId,
-          // Why re-asserted on restore: the same invariant creation enforces. A session written
-          // by an older or hand-edited build could carry a grant URL here, and it would name a
-          // grant that died with the process that minted it.
+          // Reassert creation’s URL fence for old/handwritten sessions; persisted grants died with their originating process.
           url: page.docLocation ? ORCA_BROWSER_BLANK_URL : normalizeUrl(page.url),
           loading: false,
           loadError: page.loadError ?? null
@@ -113,7 +111,9 @@ export function projectHydratedBrowserSession(
     activeBrowserTabIdByWorktree[worktreeId] =
       persistedTabId && validBrowserTabIds.has(persistedTabId)
         ? persistedTabId
-        : (tabs[0]?.id ?? null)
+        : !persistedTabId && options.unchosenStaysUnset
+          ? null
+          : (tabs[0]?.id ?? null)
   }
 
   const activeWorktreeId = s.activeWorktreeId
@@ -179,8 +179,7 @@ export function projectHydratedBrowserSession(
     browserAnnotationMarkerIdsByPageId: {},
     browserUrlHistory: normalizeBrowserHistoryEntries(session.browserUrlHistory ?? []),
     workspaceDocHistory: normalizeWorkspaceDocHistoryEntries(session.workspaceDocHistory ?? []),
-    // Why restored before the rows are: a close the host never heard must outlive the relaunch
-    // that also restores the row it closed, or the restore silently wins.
+    // Restore undelivered closes before rows or relaunch silently resurrects the pages they hide.
     clientHostedBrowserCloseIntentsByEnvironment:
       session.clientHostedBrowserCloseIntentsByEnvironment ?? {}
   }

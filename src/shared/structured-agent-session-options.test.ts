@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest'
 import { OMP_SESSION_OPTION_CATALOG } from './agent-session-option-catalog-omp'
 import { CODEX_SESSION_OPTION_CATALOG } from './agent-session-option-catalog-claude-codex'
-import { buildNativeChatSessionOptionSnapshot } from './native-chat-session-option-snapshot'
-import { createNativeChatSessionOptionRecord } from './native-chat-session-option-state'
+import { buildNativeChatSessionOptionSnapshot } from './native-chat/input/native-chat-session-option-snapshot'
+import { createNativeChatSessionOptionRecord } from './native-chat/input/native-chat-session-option-state'
 import {
   applyStructuredAgentSessionModelCatalog,
   applyStructuredAgentSessionOptions,
@@ -125,33 +125,6 @@ describe('structured agent session options', () => {
     expect(model.kind.type === 'select' ? model.kind.currentValue : null).toBe('persisted-unknown')
   })
 
-  it('projects live options as directly settable descriptors', () => {
-    const state = applyStructuredAgentSessionOptions(
-      createStructuredAgentSessionOptionState('codex'),
-      CODEX_SESSION_OPTION_CATALOG,
-      {
-        models: [
-          {
-            id: 'account-model',
-            label: 'Account Model',
-            isDefault: true,
-            defaultEffort: 'medium',
-            efforts: [
-              { value: 'medium', label: 'Medium' },
-              { value: 'high', label: 'High' }
-            ]
-          }
-        ],
-        current: { model: 'account-model', effort: 'medium' }
-      }
-    )
-
-    const snapshot = structuredAgentSessionOptionSnapshot(state)
-    expect(snapshot.map((descriptor) => descriptor.id)).toEqual(['model', 'effort'])
-    expect(snapshot.every((descriptor) => descriptor.settable)).toBe(true)
-    expect(snapshot.every((descriptor) => descriptor.action === undefined)).toBe(true)
-  })
-
   it('projects Fast mode only from positive session and model capability', () => {
     const supported = applyStructuredAgentSessionOptions(
       createStructuredAgentSessionOptionState('codex'),
@@ -256,10 +229,7 @@ describe('structured agent session options', () => {
       }
     )
 
-    // The switch has no third position, so the value resolves to the catalog's
-    // own `false`. `unknown` is what stops any surface calling that a default:
-    // `default` is unreachable in this lane (it is hardcoded `mode: 'live'`), and
-    // nothing here has reported the tier the thread is actually routing.
+    // A binary switch resolves false, but unknown provenance prevents claiming it is the running default in this live-only lane.
     expect(structuredAgentSessionOptionSnapshot(state)).toContainEqual(
       expect.objectContaining({
         id: 'fastMode',
@@ -291,7 +261,13 @@ describe('structured agent session options', () => {
     ).toEqual([expect.objectContaining({ id: 'model', settable: false, valueSource: 'unknown' })])
     // Before the host answers, and on the built-in list, no saved pick is named.
     expect(viewModel(cold, seed, {})).toBeUndefined()
-    expect(viewModel(settleStructuredAgentSessionBuiltinCatalog(cold), seed, {})).toBeUndefined()
+    const settled = settleStructuredAgentSessionBuiltinCatalog(cold, false)
+    expect(viewModel(settled, seed, {})).toBeUndefined()
+    expect(settleStructuredAgentSessionBuiltinCatalog(settled, false)).toBe(settled)
+    expect(
+      settleStructuredAgentSessionBuiltinCatalog({ ...settled, listingInProgress: true }, false)
+        .listingInProgress
+    ).toBe(false)
     // Derived only: the record itself never takes the seed.
     expect(seeded.record.values.model).toBeUndefined()
     const live = applyStructuredAgentSessionOptions(seeded, CODEX_SESSION_OPTION_CATALOG, {

@@ -1,20 +1,26 @@
-import { useEffect, type MutableRefObject } from 'react'
-import { conflictOverviewFileId } from '@/store/slices/editor/file-ids/editor-file-ids'
+import { useEffect, useMemo, useRef, type MutableRefObject } from 'react'
+import {
+  conflictOverviewView,
+  conflictOverviewViewsKey
+} from '@/store/slices/editor/buffers/editor-buffer-conflict-overview'
 import type { OpenFile } from '@/store/slices/editor'
 import { joinPath } from '@/lib/path'
-import type { useAppStore } from '@/store'
+import { useAppStore } from '@/store'
 import type { DiffContent, FileContent } from './editor-panel-content-types'
 import { isReloadableSingleFileDiffTab } from './editor-panel-diff-reload'
 import type { EditorPanelDiffContentLoader } from './useEditorPanelDiffContentLoader'
 import type { EditorPanelFileContentLoader } from './useEditorPanelFileContentLoader'
 import { useQuickOpenHistoryVisit } from './use-quick-open-history-visit'
 
+// Showing a tab is a user act: its first load may start a stopped WSL distro. Re-runs from
+// polls (git status, overview views) are not, so they read without waking.
+const ACTIVE_TAB_LOAD = { wakeWslDistro: true }
+
 type GitStatusByWorktree = ReturnType<typeof useAppStore.getState>['gitStatusByWorktree']
 
 type UseEditorPanelActiveTabContentLoadParams = {
   activeFile: OpenFile | null
   selectedConflictReviewFile: OpenFile | null
-  openFiles: readonly OpenFile[]
   isVisible: boolean
   isChangesMode: boolean
   gitStatusEntries: GitStatusByWorktree[string] | undefined
@@ -28,9 +34,7 @@ type UseEditorPanelActiveTabContentLoadParams = {
   loadDiffContent: EditorPanelDiffContentLoader
 }
 
-// Why: the newest read for a tab is already on its way, so a re-run of the lazy
-// effect (a worktree flip-flop re-adds `isVisible`) must not fire a second RPC.
-// An invalidation bumps the tab's generation, so a superseded read never counts.
+// Reuse live reads across visibility changes; invalidation generations distinguish superseded reads.
 function hasLiveRead(
   generationsById: Record<string, number>,
   outstandingById: Record<string, number>,
@@ -43,7 +47,6 @@ function hasLiveRead(
 export function useEditorPanelActiveTabContentLoad({
   activeFile,
   selectedConflictReviewFile,
-  openFiles,
   isVisible,
   isChangesMode,
   gitStatusEntries,
@@ -61,6 +64,22 @@ export function useEditorPanelActiveTabContentLoad({
     activeFile ? fileContents[activeFile.id] : undefined,
     isVisible
   )
+  // Why: an overview file's view can open, close, re-key or rejoin anywhere; reload under its new id.
+  const overviewPaths = useMemo(
+    () =>
+      activeFile?.mode === 'conflict-review' && !selectedConflictReviewFile
+        ? (activeFile.conflictReview?.entries ?? []).map((entry) =>
+            joinPath(activeFile.filePath, entry.path)
+          )
+        : [],
+    [activeFile, selectedConflictReviewFile]
+  )
+  const overviewWorktreeId = activeFile?.worktreeId ?? ''
+  const overviewViewsKey = useAppStore((state) =>
+    overviewPaths.length === 0
+      ? ''
+      : conflictOverviewViewsKey(state, overviewWorktreeId, overviewPaths)
+  )
   const needsFileRead = (fileId: string): boolean => {
     const cached = fileContents[fileId]
     return (
@@ -76,10 +95,14 @@ export function useEditorPanelActiveTabContentLoad({
     )
   }
 
+  const wokenTabIdRef = useRef<string | null>(null)
   useEffect(() => {
     if (!isVisible) {
       return
     }
+    const tabId = selectedConflictReviewFile?.id ?? activeFile?.id ?? null
+    const load = tabId !== wokenTabIdRef.current ? ACTIVE_TAB_LOAD : undefined
+    wokenTabIdRef.current = tabId
     if (activeFile?.mode === 'conflict-review' && !selectedConflictReviewFile) {
       const snapshotEntries = activeFile.conflictReview?.entries ?? []
       if (snapshotEntries.length === 0) {
@@ -99,9 +122,16 @@ export function useEditorPanelActiveTabContentLoad({
         }
 
         const absolutePath = joinPath(activeFile.filePath, entry.path)
-        const fileId = conflictOverviewFileId(openFiles, activeFile.worktreeId, absolutePath)
-        if (needsFileRead(fileId)) {
-          void loadFileContent(absolutePath, fileId, activeFile.worktreeId, entry.path)
+        const view = conflictOverviewView(
+          useAppStore.getState(),
+          activeFile.worktreeId,
+          absolutePath
+        )
+        // Why the view's own owner: another workspace's view must load as it would, never re-owned.
+        if (view ? needsFileRead(view.id) : needsFileRead(absolutePath)) {
+          void (view
+            ? loadFileContent(view.filePath, view.id, view.worktreeId, view.relativePath, load)
+            : loadFileContent(absolutePath, absolutePath, activeFile.worktreeId, entry.path, load))
         }
       }
       return
@@ -120,7 +150,8 @@ export function useEditorPanelActiveTabContentLoad({
           fileToLoad.filePath,
           fileToLoad.id,
           fileToLoad.worktreeId,
-          fileToLoad.relativePath
+          fileToLoad.relativePath,
+          load
         )
       }
       if (isChangesMode && needsDiffRead(fileToLoad.id)) {
@@ -138,6 +169,7 @@ export function useEditorPanelActiveTabContentLoad({
     selectedConflictReviewFile?.id,
     isChangesMode,
     isVisible,
-    gitStatusEntries
+    gitStatusEntries,
+    overviewViewsKey
   ])
 }

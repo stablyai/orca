@@ -11,12 +11,17 @@ import { openEnum } from './zod-salvage'
 
 export const AGENT_SESSION_AVAILABILITY_METHOD = 'agentSession.subscribeAvailability'
 
+/** Whether the program a chat start runs is on this host: `installable` is absent but Orca can
+ *  download it; `unknown` depends on the workspace or could not be read. Older hosts omit it. */
+export type AgentSessionChatProgram = 'available' | 'installable' | 'missing' | 'unknown'
+
 /** `refused` carries the reason (`agent`: this host cannot run its chat); `unknown` is a check that
  *  could not answer, which is never a refusal. */
-export type AgentSessionAgentAvailability =
+export type AgentSessionAgentAvailability = (
   | { agent: string; state: 'available' }
   | { agent: string; state: 'refused'; reason?: string }
   | { agent: string; state: 'unknown' }
+) & { chatProgram?: AgentSessionChatProgram }
 
 export type AgentSessionAvailabilityFrame = {
   type: 'availability'
@@ -29,7 +34,10 @@ const rowSchema = z.object({
   agent: z.string().refine(isStructuredAgentId),
   // A state this build does not know claims nothing.
   state: openEnum(['available', 'refused', 'unknown'] as const, 'unknown'),
-  reason: z.string().max(64).optional()
+  reason: z.string().max(64).optional(),
+  chatProgram: openEnum(['available', 'installable', 'missing', 'unknown'] as const, 'unknown')
+    .optional()
+    .catch(undefined)
 })
 
 /** One frame's answers by agent, or null when the frame is not an availability frame. */
@@ -48,10 +56,13 @@ export function decodeAgentSessionAvailabilityFrame(
     if (!parsed.success || byAgent.has(parsed.data.agent)) {
       continue
     }
-    const { agent, state, reason } = parsed.data
+    const { agent, state, reason, chatProgram } = parsed.data
+    const program = chatProgram ? { chatProgram } : {}
     byAgent.set(
       agent,
-      state === 'refused' ? { agent, state, ...(reason ? { reason } : {}) } : { agent, state }
+      state === 'refused'
+        ? { agent, state, ...(reason ? { reason } : {}), ...program }
+        : { agent, state, ...program }
     )
   }
   return byAgent

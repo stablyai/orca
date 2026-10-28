@@ -19,10 +19,7 @@ export function committedMigrations(
   ]
 }
 
-/**
- * Aborts by identity, with the stored manifest standing in for the one the source cannot send.
- * A commit wins over a stage, as it does for an abort that carries the manifest.
- */
+/** Use the stored manifest; an existing commit takes precedence over abort. */
 export function abortOrcadMigrationCatalogByReference(
   state: StoreRuntimeState['state'],
   reference: OrcadMigrationCatalogReference,

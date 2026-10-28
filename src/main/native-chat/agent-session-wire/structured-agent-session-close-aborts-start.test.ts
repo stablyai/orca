@@ -1,6 +1,4 @@
-// A close must not wait behind a start the provider never answers: the start runs under the
-// session's queue, and the close's own stop is queued behind it. The close aborts the start's
-// signal instead, at whatever phase the attach is in.
+// Abort starts at any attach phase so close cannot wait for a provider that never answers.
 
 import { expect, it, vi } from 'vitest'
 import { AgentSessionRecoveryCapsule } from '../../runtime/agent-session-recovery-capsule'
@@ -39,7 +37,6 @@ function openHost(state: ReturnType<typeof hostTestState>): StructuredAgentSessi
 it('a close stops a start the provider never answers instead of queueing behind it', async () => {
   const state = hostTestState()
   let signal: AbortSignal | undefined
-  // A start the provider never answers ends only when its acquire is aborted.
   state.acquire.mockImplementation(
     (input) =>
       new Promise((_resolve, reject) => {
@@ -57,7 +54,7 @@ it('a close stops a start the provider never answers instead of queueing behind 
 
 it('a close while the attach still probes the previous owner asks no adapter to start', async () => {
   const state = hostTestState()
-  // An adapter that never reads the signal: only the host's own check keeps it from starting.
+  // Test adapters that ignore signals; host admission must still prevent late spawn.
   const host = openHost(state)
   const runtimeState = host.collaboratorsForTests().runtimeState
   const probe = runtimeState.probeOwner.bind(runtimeState)

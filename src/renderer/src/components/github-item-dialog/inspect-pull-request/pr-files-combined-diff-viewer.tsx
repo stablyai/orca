@@ -57,8 +57,7 @@ export function PRFilesCombinedDiffViewer(
   // Why: view preferences outlive a diff-set swap, so they live above the keyed subtree.
   const [sideBySide, setSideBySide] = useState(false)
   const [fileTreeCollapsed, setFileTreeCollapsed] = useState(false)
-  // Why: remounting on the signature retires the previous diff set's sections, loaded
-  // indices, and in-flight results in one step, so nothing can leak across the swap.
+  // Remount on signature changes to retire sections, loaded indices and in-flight results together.
   return (
     <PRFilesCombinedDiffSections
       key={signature}
@@ -94,8 +93,7 @@ function PRFilesCombinedDiffSections({
 }: PRFilesCombinedDiffSectionsProps): React.JSX.Element {
   const settings = useAppStore((s) => s.settings)
   const isDark = useDocumentDarkTheme()
-  // Why: this subtree is keyed by the diff signature, so its file set is fixed for the
-  // mount. Freezing it in state keeps a stable identity without caching through a ref.
+  // The keyed mount fixes this file set; state preserves its identity without a render-time ref cache.
   const [entries] = useState<GitBranchChangeEntry[]>(() =>
     getCombinedDiffBranchEntriesInTreeOrder('commit', files.map(gitHubPRFileToBranchEntry))
   )
@@ -163,9 +161,7 @@ function PRFilesCombinedDiffSections({
   const modifiedEditorsRef = useRef<Map<number, monacoEditor.IStandaloneCodeEditor>>(new Map())
   const handleSectionSaveRef = useRef<(index: number) => Promise<void>>(async () => {})
 
-  // Why: commit-phase write (a render React abandons would leak one), and it must be a layout
-  // effect — collapsing rekeys a section's virtual item, so the remounted DiffSectionItem's
-  // passive effect calls loadSection before any passive effect here could sync this ref.
+  // Sync after commit but before passive effects: collapsed sections remount and read this ref during their passive load.
   useLayoutEffect(() => {
     sectionsRef.current = sections
   }, [sections])

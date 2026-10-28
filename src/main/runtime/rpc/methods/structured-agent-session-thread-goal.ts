@@ -1,7 +1,4 @@
-// `agentSession.threadGoal` — set, pause, resume or clear the provider thread's goal.
-//
-// Additive: an older host answers `method_not_found`, and a client offers the controls only where
-// `agentSession.options` reported `threadGoal`, so it never reaches a host that lacks this method.
+// Offer goal controls only when options reports threadGoal; older hosts lack the method.
 
 import { defineMethod } from '../core'
 import {

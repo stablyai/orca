@@ -1,10 +1,24 @@
-// A chat's options at rest come from the host catalog without waiting on a listing.
+import { agentSessionRecordFixture } from '../agent-session-record-test-fixture'
+import { agentSessionConversationView } from '../../../shared/agent-session-conversation-view'
+import { structuredAgentSessionCapabilityView } from './structured-agent-session-option-models'
+import { claudeFallbackModelOptions } from '../../claude/claude-structured-session-options'
+import { acquired, fakeClaude } from '../../claude/claude-structured-session-test-support'
+import { getAgentSessionOptionCatalog } from '../../../shared/agent-session-option-catalog'
+import {
+  applyStructuredAgentSessionModelCatalog,
+  applyStructuredAgentSessionOptions,
+  createStructuredAgentSessionOptionState
+} from '../../../shared/structured-agent-session-options'
+import { structuredAgentSessionSendSelection } from '../../../shared/structured-agent-session-option-view'
+import type { StructuredAgentSessionLiveOptions } from './structured-agent-session-adapter'
 
 import { describe, expect, it, vi } from 'vitest'
 import type { AgentSessionRecord } from '../../../shared/agent-session-record'
 import type { AgentJournalItemBody } from '../../../shared/agent-session-journal-types'
-import type { AgentSessionProviderHandleLink } from '../../../shared/agent-session-provider-handle'
-import type { AgentSessionRewindRecord } from '../../../shared/agent-session-rewind'
+import {
+  claudeProviderHandle,
+  codexProviderHandle
+} from '../../../shared/agent-session-provider-handle-encoding'
 import type { AgentSessionModelOption } from '../../../shared/agent-session-wire'
 import { createAgentModelCatalogService } from '../agent-model-catalog/agent-model-catalog-service'
 import {
@@ -29,10 +43,10 @@ import {
 
 const SESSION = 'session-1'
 
-type RestingFacts = Pick<Partial<AgentSessionRecord>, 'options'> & {
-  providerHandleChain?: Pick<AgentSessionProviderHandleLink, 'origin'>[]
-  rewind?: Pick<AgentSessionRewindRecord, 'phase'>
-}
+type RestingFacts = Pick<
+  Partial<AgentSessionRecord>,
+  'options' | 'provider' | 'providerHandleChain' | 'rewind'
+>
 
 function restingJournal(items: AgentJournalItemBody[] = [], wroteBeforeOpen = false) {
   return {
@@ -47,15 +61,14 @@ function restingJournal(items: AgentJournalItemBody[] = [], wroteBeforeOpen = fa
 }
 
 function restingRecord(): AgentSessionRecord {
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the resting read and the catalog key touch only these fields.
-  return {
+  return agentSessionRecordFixture({
+    sessionId: SESSION,
     provider: 'codex',
     accountHome: { variable: 'CODEX_HOME', path: '/homes/a' },
     providerHandleChain: [],
     location: { executionHostId: 'local', wslDistro: null },
-    lease: { claimStatus: 'released', ownerProcess: null, runtimeFence: 1 },
     options: {}
-  } as unknown as AgentSessionRecord
+  })
 }
 
 describe('options at rest', () => {
@@ -83,7 +96,11 @@ describe('options at rest', () => {
       deps: {
         adapter: {},
         agents: NO_STRUCTURED_AGENTS,
-        store: { getRecord: () => record },
+        store: {
+          getRecord: () => record,
+          getConversation: () => (record ? agentSessionConversationView(record) : null),
+          requireWritableRecord: () => record
+        },
         modelCatalog: { read }
       },
       serialize: (_sessionId: string, task: () => Promise<unknown>) => task(),
@@ -95,17 +112,22 @@ describe('options at rest', () => {
       readsWithoutModel: true
     })
     expect(current.current).toEqual({ defaulted: [], permissionMode: 'ask' })
-    expect(read).toHaveBeenCalledTimes(1)
+    expect(read).toHaveBeenCalledTimes(2)
     const older = await readStructuredAgentSessionOptions(context, SESSION, {
       readsWithoutModel: false
     })
-    // A new chat that has sent nothing runs that default, which its first send pins.
     expect(older.current).toEqual({
       model: 'gpt-account',
       defaulted: [],
       permissionMode: 'ask'
     })
-    expect(read).toHaveBeenLastCalledWith({ agent: 'codex', sessionId: SESSION, savedOnly: true })
+    expect(read).toHaveBeenCalledWith({
+      agent: 'codex',
+      sessionId: SESSION,
+      savedOnly: true,
+      legacyOptionsDisplay: true,
+      workspacePath: null
+    })
   })
 
   it("names the saved listing's ids and model for a live child that fell back to its default", async () => {
@@ -127,7 +149,11 @@ describe('options at rest', () => {
           })
         },
         agents: NO_STRUCTURED_AGENTS,
-        store: { getRecord: () => record },
+        store: {
+          getRecord: () => record,
+          getConversation: () => (record ? agentSessionConversationView(record) : null),
+          requireWritableRecord: () => record
+        },
         modelCatalog: { read: async () => ({ origin: 'probe', models: [listed], fetchedAt: 1 }) }
       },
       serialize: (_sessionId: string, task: () => Promise<unknown>) => task(),
@@ -141,17 +167,20 @@ describe('options at rest', () => {
     const running = await read()
     expect(running.listedModelIds).toEqual(resting.listedModelIds)
     expect(resting.listedModelIds).toEqual(['gpt-5.5'])
-    // The saved model shows over the child's fallback, and is the chat's own.
     expect(running.current).toMatchObject({ model: 'gpt-unlisted', defaulted: [] })
   })
 
-  it.each(['codex', 'omp', 'grok', 'opencode'] as const)(
+  it.each(['omp', 'grok', 'opencode'] as const)(
     '%s keeps an unknown model and learns menus from later options',
     async (provider) => {
       const record = { ...restingRecord(), provider }
       const probe = vi.fn(() => new Promise<AgentModelCatalogSuccess>(() => {}))
       const modelCatalog = createAgentModelCatalogService({
         store: new AgentModelCatalogStore(),
+        getConversation: () => {
+          const saved = record
+          return saved ? agentSessionConversationView(saved) : undefined
+        },
         getRecord: () => record,
         drivesRecord: () => true,
         resolveAccountHome: async () => ({ variable: 'CODEX_HOME', path: '/homes/a' }),
@@ -170,7 +199,11 @@ describe('options at rest', () => {
         deps: {
           adapter: { readOptions: async () => withLiveCatalogListing(reader.read()) },
           agents: NO_STRUCTURED_AGENTS,
-          store: { getRecord: () => record },
+          store: {
+            getRecord: () => record,
+            getConversation: () => (record ? agentSessionConversationView(record) : null),
+            requireWritableRecord: () => record
+          },
           modelCatalog
         },
         serialize: (_sessionId: string, task: () => Promise<unknown>) => task(),
@@ -185,12 +218,11 @@ describe('options at rest', () => {
       expect(result.models).toEqual([])
       expect(result.current).not.toHaveProperty('model')
       record.options = { model: 'later-model', effort: 'off' }
-      // Only Codex is registered here, and a mode is stated only for a registered agent's chat.
+      // Unregistered agents must not report a permission mode.
       expect((await read()).current).toEqual({
         model: 'later-model',
         effort: 'off',
-        defaulted: [],
-        ...(provider === 'codex' ? { permissionMode: 'ask' } : {})
+        defaulted: []
       })
       for (const emptyStart of [false, true]) {
         modelCatalog.recordLiveListing(SESSION, {
@@ -217,7 +249,15 @@ describe('options at rest', () => {
 })
 
 describe('a chat at rest, read by the host', () => {
-  const created: RestingFacts['providerHandleChain'] = [{ origin: 'created' }]
+  const created = [
+    {
+      origin: 'created',
+      linkId: 'link-1',
+      mintedAtFence: 1,
+      observedAt: 1,
+      handle: codexProviderHandle('provider-session-1')
+    }
+  ] satisfies AgentSessionRecord['providerHandleChain']
   const turn: AgentJournalItemBody = { kind: 'turn', turnId: 'turn-1', state: 'completed' }
   const fast = [{ value: 'priority', label: 'Fast' }]
   const flex = [...fast, { value: 'flex', label: 'Flex' }]
@@ -225,28 +265,37 @@ describe('a chat at rest, read by the host', () => {
     { id: 'gpt-account', label: 'Model', isDefault: true, efforts: [], serviceTiers: fast },
     { id: 'gpt-flex', label: 'Flex', isDefault: false, efforts: [], serviceTiers: flex }
   ]
-  const catalog = (models = listed) => ({
-    read: async () => ({ origin: 'probe' as const, models, fetchedAt: 1 })
+  const catalog = (models: AgentSessionModelOption[] | null = listed, verified = true) => ({
+    read: async (params?: { verifiedOnly?: boolean }) =>
+      models === null || (!verified && params?.verifiedOnly)
+        ? { origin: 'unknown' as const }
+        : { origin: 'probe' as const, models, fetchedAt: 1 }
   })
   function readAtRest(
     facts: RestingFacts,
     items: AgentJournalItemBody[] = [],
     wroteBeforeOpen = false,
-    models = listed
+    models: AgentSessionModelOption[] | null = listed,
+    verified = true,
+    liveOptions?: StructuredAgentSessionLiveOptions
   ) {
     const record = { ...restingRecord(), ...facts }
     const resting = {
-      child: null,
-      params: { provider: 'codex' },
+      child: liveOptions ? { fence: 1 } : null,
+      params: { provider: record.provider },
       journal: restingJournal(items, wroteBeforeOpen)
     }
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: this read touches only the declared context fields.
     const context = {
       deps: {
-        adapter: {},
-        agents: NO_STRUCTURED_AGENTS,
-        store: { getRecord: () => record },
-        modelCatalog: catalog(models)
+        adapter: liveOptions ? { readOptions: async () => liveOptions } : {},
+        agents: claudeAndCodexAgents(),
+        store: {
+          getRecord: () => record,
+          getConversation: () => (record ? agentSessionConversationView(record) : null),
+          requireWritableRecord: () => record
+        },
+        modelCatalog: catalog(models, verified)
       },
       serialize: (_sessionId: string, task: () => Promise<unknown>) => task(),
       openConversation: async () => resting,
@@ -257,10 +306,30 @@ describe('a chat at rest, read by the host', () => {
 
   it.each<[string, RestingFacts, AgentJournalItemBody[], boolean, string[]]>([
     ['started here names its default as its own', {}, [], false, []],
-    ['taken from history', { providerHandleChain: [{ origin: 'adopted' }] }, [], true, ['model']],
+    [
+      'taken from history',
+      { providerHandleChain: [{ ...created[0]!, origin: 'adopted' }] },
+      [],
+      true,
+      ['model']
+    ],
     // A context clear hides the turn from the newest-turn read, not from history.
     ['with a turn before a context clear', {}, [turn], true, ['model']],
-    ['after a rewind', { rewind: { phase: 'completed' } }, [], true, ['model']],
+    [
+      'after a rewind',
+      {
+        rewind: {
+          phase: 'completed',
+          operationId: 'rewind-1',
+          callerKey: 'caller-1',
+          itemId: 'item-1',
+          expectedEpoch: 'epoch-1'
+        }
+      },
+      [],
+      true,
+      ['model']
+    ],
     // A journal founded afresh proves nothing for a chat whose agent already ran.
     ['whose journal went missing', { providerHandleChain: created }, [], false, ['model']]
   ])('%s', async (_name, facts, items, wroteBeforeOpen, defaulted) => {
@@ -268,9 +337,173 @@ describe('a chat at rest, read by the host', () => {
     expect(read.current).toMatchObject({ model: 'gpt-account', defaulted })
   })
 
+  it('uses seeds only for an unknown inventory, never beside known rows or a known empty list', () => {
+    const seed = claudeFallbackModelOptions()
+    expect(
+      structuredAgentSessionCapabilityView({ origin: 'unknown' }, undefined, seed).models
+    ).toEqual(seed)
+    expect(structuredAgentSessionCapabilityView({ models: [] }, undefined, seed).models).toEqual([])
+    expect(
+      structuredAgentSessionCapabilityView({ models: listed }, undefined, seed).models
+    ).toEqual(listed)
+  })
+
+  it('uses installed choices for a live picker, admission and genuine first-run values', async () => {
+    const installed = [
+      {
+        id: 'opus',
+        label: 'Opus',
+        isDefault: false,
+        efforts: [{ value: 'high', label: 'High' }],
+        supportsFastMode: true
+      }
+    ]
+    const answer: StructuredAgentSessionLiveOptions = {
+      models: claudeFallbackModelOptions(),
+      current: { model: 'opus', effort: 'low' }
+    }
+    const result = await readAtRest(
+      { provider: 'claude', options: { model: 'opus', effort: 'low' } },
+      [],
+      false,
+      installed,
+      true,
+      answer
+    )
+    expect(result.models).toEqual(installed)
+    expect(result.current).toMatchObject({ model: 'opus', effort: 'low' })
+    const chat = picking({ model: 'opus' }, installed, undefined, 'claude')
+    expect(await chat.pick('effort', 'low')).toMatchObject({ ok: false })
+    expect(await chat.pick('effort', 'high')).toMatchObject({ ok: true })
+    const firstRun = picking({ model: 'opus' }, installed, undefined, 'claude')
+    firstRun.ran('opus', { effort: 'low' })
+    expect(firstRun.record().options).toEqual({ model: 'opus', effort: 'low' })
+  })
+
+  it.each<[string, AgentSessionModelOption[] | null, string | undefined]>([
+    [
+      'known default',
+      [{ id: 'opus[1m]', label: 'Opus', isDefault: true, efforts: [] }],
+      'opus[1m]'
+    ],
+    ['unknown list', null, 'sonnet'],
+    ['known empty', [], undefined],
+    [
+      'known without default',
+      [{ id: 'opus', label: 'Opus', isDefault: false, efforts: [] }],
+      undefined
+    ]
+  ])('composes %s for a live Claude child that names no model', async (_name, installed, model) => {
+    const adapter = await acquired(fakeClaude({ settings: { effective: {}, sources: [] } }))
+    const live = await adapter.readOptions({ sessionId: SESSION, fence: 7 })
+    expect(live.current.model).toBeUndefined()
+    const answer = await readAtRest({ provider: 'claude' }, [], false, installed, true, live)
+    expect(answer.current.model).toBe(model)
+    expect(answer.current.defaulted).toEqual([])
+    if (installed === null) {
+      const atRest = await readAtRest({ provider: 'claude' }, [], false, installed)
+      expect(atRest.current.model).toBeUndefined()
+    }
+    const seed = getAgentSessionOptionCatalog('claude')!
+    const launch = { newLaunch: true, coherentCatalog: true }
+    const state = applyStructuredAgentSessionOptions(
+      applyStructuredAgentSessionModelCatalog(
+        createStructuredAgentSessionOptionState('claude', seed),
+        seed,
+        installed === null
+          ? { origin: 'unknown' }
+          : { origin: 'probe', models: installed, fetchedAt: 1 },
+        launch
+      ),
+      seed,
+      answer,
+      launch
+    )
+    expect(structuredAgentSessionSendSelection(state)).toEqual(model ? { model } : undefined)
+    const resumed = await readAtRest(
+      {
+        provider: 'claude',
+        providerHandleChain: [
+          {
+            ...created[0]!,
+            origin: 'adopted',
+            handle: claudeProviderHandle('provider-session-1', null)
+          }
+        ]
+      },
+      [],
+      true,
+      installed,
+      true,
+      live
+    )
+    expect(resumed.current.defaulted).toEqual(model ? ['model'] : [])
+    expect(
+      structuredAgentSessionSendSelection(
+        applyStructuredAgentSessionOptions(
+          createStructuredAgentSessionOptionState('claude', seed),
+          seed,
+          resumed
+        )
+      )
+    ).toBeUndefined()
+  })
+
+  it('resolves only an unsaved reported identity against installed rows', async () => {
+    const installed = [
+      {
+        id: 'opus[1m]',
+        resolvedModel: 'claude-opus-current',
+        label: 'Installed Opus',
+        isDefault: false,
+        efforts: [{ value: 'high', label: 'High' }]
+      }
+    ]
+    for (const [reported, saved, shown] of [
+      ['claude-opus-current', {}, 'opus[1m]'],
+      ['unknown-model', {}, 'unknown-model'],
+      ['claude-opus-current', { model: 'claude-opus-current' }, 'claude-opus-current']
+    ] as const) {
+      const result = await readAtRest(
+        { provider: 'claude', options: saved },
+        [],
+        false,
+        installed,
+        true,
+        { models: [], current: { model: reported } }
+      )
+      expect(result.current.model).toBe(shown)
+      expect(result.models.find((row) => row.id === shown)).toMatchObject(
+        shown === 'opus[1m]'
+          ? { label: 'Installed Opus', efforts: installed[0]!.efforts }
+          : { label: shown, efforts: [] }
+      )
+    }
+  })
+
+  it('uses held rows as menus without projecting an unverified default effort', async () => {
+    const answer = await readAtRest(
+      { provider: 'claude', options: { model: 'gpt-account' } },
+      [],
+      false,
+      [{ ...listed[0]!, defaultEffort: 'high', efforts: [{ value: 'high', label: 'High' }] }],
+      false
+    )
+    expect(answer.current.model).toBe('gpt-account')
+    expect(answer.current.effort).toBeUndefined()
+    expect(answer.models[0]?.defaultEffort).toBe('high')
+    const complete = await readAtRest(
+      { provider: 'claude', options: { model: 'gpt-account' } },
+      [],
+      false,
+      answer.models
+    )
+    expect(complete.current.effort).toBe('high')
+  })
+
   it.each([
     ['another model offers', listed, 'default'],
-    // Codex lists no Flex; a Flex from the user's config runs as configured.
+    // Unlisted Codex Flex remains configured without inferred catalog support.
     ['no model lists', listed.slice(0, 1), 'flex']
   ])(
     'names the tier the model runs where %s it, and keeps the saved one',
@@ -292,17 +525,38 @@ describe('a chat at rest, read by the host', () => {
     { id: 'b', label: 'B', isDefault: false, efforts: high },
     { id: 'c', label: 'C', isDefault: false, efforts: [] }
   ]
-  function picking(options: Record<string, string>, models = efforts) {
-    let record: AgentSessionRecord = { ...restingRecord(), options }
+  function picking(
+    options: Record<string, string>,
+    models = efforts,
+    projectOptions?: (
+      sessionId: string,
+      options: Readonly<Record<string, string>>
+    ) => {
+      models: AgentSessionModelOption[]
+      options: Record<string, string>
+    },
+    provider = 'codex'
+  ) {
+    let record: AgentSessionRecord = { ...restingRecord(), options, provider }
     const store = {
+      getConversation: () => {
+        const saved = record
+        return saved ? agentSessionConversationView(saved) : undefined
+      },
       getRecord: () => record,
+      requireWritableRecord: () => record,
       replaceSessionOptions: vi.fn(),
       reviseSessionOptions: async <A>(
         revise: (held: AgentSessionRecord, args: A) => AgentSessionRecord,
         args: A
       ) => (record = revise(record, args))
     }
-    const deps = { store, agents: claudeAndCodexAgents(), modelCatalog: catalog(models) }
+    const deps = {
+      store,
+      agents: claudeAndCodexAgents(),
+      modelCatalog: catalog(models),
+      adapter: { projectOptions }
+    }
     const ctx = { sessionId: SESSION, fence: 1, publish: vi.fn(), now: () => 0 }
     return {
       pick: (key: string, value: string) =>
@@ -322,22 +576,37 @@ describe('a chat at rest, read by the host', () => {
 
   it('admits options only under the model the chat runs, whichever write lands first', async () => {
     const chat = picking({ model: 'a', effort: 'high' })
-    // A model pick drops an inherited effort its row does not offer; an offered one is refused.
+    // New models drop unsupported inherited effort.
     await chat.pick('model', 'c')
     expect(chat.record().options).toEqual({ model: 'c' })
     expect(await chat.pick('effort', 'high')).toMatchObject({ ok: false })
     await chat.pick('model', 'b')
-    // A turn that ran on another model, recorded late, fills nothing, though b offers its effort.
+    // Late execution on another model cannot fill the current model’s intent.
     expect(chat.ran('a', { effort: 'high' }).options).toEqual({ model: 'b' })
     expect(chat.ran('b', { effort: 'high' }).options).toEqual({ model: 'b', effort: 'high' })
-    // A catalog that later drops it, or a pick, keeps the saved value.
     chat.ran('b', { effort: 'low' }, [])
     await chat.pick('serviceTier', 'priority')
     expect(chat.record().options).toEqual({ model: 'b', effort: 'high', serviceTier: 'priority' })
   })
-})
 
-describe('live Codex option reads', () => {
+  it('keeps saved literal values after the installed list omits their model', async () => {
+    const inventory = [{ id: 'B', label: 'B', isDefault: false, efforts: [] }]
+    const chat = picking({ model: 'opus[1m]', effort: 'low' }, inventory, undefined, 'claude')
+    const answer = await readAtRest(
+      { provider: 'claude', options: { model: 'opus[1m]', effort: 'low' } },
+      [],
+      false,
+      inventory,
+      true,
+      { models: [], current: { model: 'claude-opus-5-5[1m]' } }
+    )
+    expect(answer.models.map((row) => row.id)).toEqual(['B', 'opus[1m]'])
+    expect(answer.models[1]).toMatchObject({ efforts: [], effortsKnown: false })
+    expect(answer.current).toMatchObject({ model: 'opus[1m]', effort: 'low' })
+    chat.ran('opus[1m]', { effort: 'high' })
+    expect(chat.record().options).toEqual({ model: 'opus[1m]', effort: 'low' })
+  })
+
   it('keeps newer saved picks after a cold live listing waits without holding the session lane', async () => {
     const listing = Promise.withResolvers<void>()
     const queue = new StructuredAgentSessionTaskQueue()
@@ -361,7 +630,11 @@ describe('live Codex option reads', () => {
       deps: {
         adapter: { prepareReadOptions },
         agents: NO_STRUCTURED_AGENTS,
-        store: { getRecord: () => record }
+        store: {
+          getRecord: () => record,
+          getConversation: () => (record ? agentSessionConversationView(record) : null),
+          requireWritableRecord: () => record
+        }
       },
       serialize: (sessionId: string, task: () => Promise<unknown>) =>
         queue.serialize(sessionId, task),
@@ -404,7 +677,11 @@ describe('live Codex option reads', () => {
           }
         },
         agents: NO_STRUCTURED_AGENTS,
-        store: { getRecord: () => restingRecord() }
+        store: {
+          getRecord: () => restingRecord(),
+          getConversation: () => agentSessionConversationView(restingRecord()),
+          requireWritableRecord: () => restingRecord()
+        }
       },
       serialize: (sessionId: string, task: () => Promise<unknown>) =>
         queue.serialize(sessionId, task),
@@ -437,7 +714,11 @@ describe('live Codex option reads', () => {
       deps: {
         adapter: { prepareReadOptions },
         agents: NO_STRUCTURED_AGENTS,
-        store: { getRecord: () => restingRecord() }
+        store: {
+          getRecord: () => restingRecord(),
+          getConversation: () => agentSessionConversationView(restingRecord()),
+          requireWritableRecord: () => restingRecord()
+        }
       },
       serialize: (sessionId: string, task: () => Promise<unknown>) =>
         queue.serialize(sessionId, task),

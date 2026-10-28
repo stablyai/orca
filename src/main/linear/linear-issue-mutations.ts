@@ -164,10 +164,7 @@ export async function updateIssue(
 
   await acquire()
   try {
-    // Why: labelIds is a full-replace field — a TOCTOU race exists if another
-    // user changes labels between fetch and write. The caller passes the
-    // complete set built from recently-fetched data. Acceptable for v1;
-    // a future version could re-fetch right before writing or use webhooks.
+    // labelIds replaces the full set; concurrent label edits between caller read and write can be lost.
     const resolvedLabelIds = updates.labelIds
 
     const payload: Record<string, unknown> = {}

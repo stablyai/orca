@@ -24,8 +24,7 @@ function isConfirmedSignedOut(provider: ProviderRateLimits): boolean {
   if (provider.usageMetadata?.failureKind === 'missing-credentials') {
     return true
   }
-  // Why: credential refresh and network failures can mention auth while live
-  // sessions remain valid; only explicit signed-out copy earns a sign-in CTA.
+  // Auth wording may describe a refresh/network failure; only proven sign-out warrants a sign-in CTA.
   if (provider.usageMetadata?.failureKind) {
     return false
   }

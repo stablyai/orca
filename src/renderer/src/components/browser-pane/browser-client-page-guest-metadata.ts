@@ -5,18 +5,7 @@ import { recordRendererCrashBreadcrumb } from '@/lib/crash-breadcrumb-recorder'
 import { redactKagiSessionToken } from '../../../../shared/browser-url'
 import type { BrowserClientPageMetadataSnapshot } from './browser-client-page-metadata-publisher'
 
-/**
- * What a client-hosted guest currently is, read straight off the webview, or null once the tag
- * can no longer reach its guest.
- *
- * `eventUrl` wins when a navigation event carries one: the tag's own getURL() can still report the
- * previous page while the event is being delivered. `loading` is forced for did-start-loading,
- * which fires before isLoading() flips.
- *
- * Why total rather than throwing: a guest destroyed in main leaves the tag holding its id, so
- * every method on it throws `Invalid guestInstanceId` from then on — and every caller reads from
- * a React effect, where that unwinds the whole workbench error boundary.
- */
+/** Guest methods can throw after main destroys it; return null rather than unwind a React effect. Prefer navigation-event URLs and force loading at start before tag getters catch up. */
 export function readBrowserClientPageGuestMetadataIfLive(
   webview: Electron.WebviewTag,
   eventUrl?: string,
@@ -32,8 +21,7 @@ export function readBrowserClientPageGuestMetadataIfLive(
       canGoForward: webview.canGoForward()
     }
   } catch (error) {
-    // Why recorded: the catch is total, so a read failure that is NOT guest death would otherwise
-    // be indistinguishable from one — the breadcrumb carries the error text the console cannot.
+    // Record unexpected read failures too; the total catch otherwise makes them indistinguishable from guest death.
     console.warn('[browser-client-page] guest read failed, treating the page as gone:', error)
     recordRendererCrashBreadcrumb('browser_client_page_guest_read_failed', {
       errorName: error instanceof Error ? error.name : typeof error,
@@ -63,5 +51,28 @@ export function createBrowserClientPageLoadFailureHandler(
     } else if (loadError) {
       onFailure(loadError)
     }
+  }
+}
+
+/** Binds the guest events a client-hosted pane mirrors and returns the matching unbind. */
+export function bindBrowserClientPageGuestEvents(
+  webview: Electron.WebviewTag,
+  onStart: (event: Electron.DidStartNavigationEvent) => void,
+  syncNavigation: (event?: Event) => void,
+  onFailLoad: (event: Event) => void
+): () => void {
+  webview.addEventListener('did-start-navigation', onStart)
+  webview.addEventListener('did-stop-loading', syncNavigation)
+  webview.addEventListener('did-navigate', syncNavigation)
+  webview.addEventListener('did-navigate-in-page', syncNavigation)
+  webview.addEventListener('page-title-updated', syncNavigation)
+  webview.addEventListener('did-fail-load', onFailLoad)
+  return () => {
+    webview.removeEventListener('did-start-navigation', onStart)
+    webview.removeEventListener('did-stop-loading', syncNavigation)
+    webview.removeEventListener('did-navigate', syncNavigation)
+    webview.removeEventListener('did-navigate-in-page', syncNavigation)
+    webview.removeEventListener('page-title-updated', syncNavigation)
+    webview.removeEventListener('did-fail-load', onFailLoad)
   }
 }

@@ -2,11 +2,11 @@ import {
   clampLinearSearchLimit,
   clampLinearIssueListLimit,
   listLinearIssues,
-  sanitizeLinearErrorMessage,
   listMcpIssues,
   getLinearTeamMembersOrThrow,
   listLinearTeamsForAgent
 } from './runtime-linear-command-dependencies'
+import { sanitizeLinearErrorMessage } from '../linear/issue-context/errors'
 import type {
   LinearIssueListFilter,
   LinearIssueListResult,

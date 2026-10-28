@@ -1,10 +1,11 @@
-import { useEffect, useMemo, useState } from 'react'
+import { agentsOfferedForLaunch } from '@/lib/host-chat-program'
+import { worktreeLaunchWorkspace } from '@/lib/agent-launch-route-input'
+import { useEffect, useRef, useState } from 'react'
 import { Loader2, MessageSquarePlus } from 'lucide-react'
 import AgentCombobox from '@/components/agent/AgentCombobox'
 import { useAgentMenuObservation } from '@/components/tab-bar/use-new-tab-agent-menu-rows'
 import { useAgentDetectionTargetForWorktree } from '@/hooks/useAgentDetectionTarget'
 import type { AgentLaunchSurface } from '@/lib/agent-session-launch-plan'
-import { workspaceKindForWorktreeId } from '@/lib/agent-launch-route-input'
 import { Button } from '@/components/ui/button'
 import {
   Dialog,
@@ -38,6 +39,7 @@ import { chooseInitialContinuationAgent } from './agent-session-continuation-sel
 type AgentSessionContinuationDialogProps = {
   open: boolean
   request: AgentSessionContinuationRequest | null
+  sourceWorkingDirectory?: string
   onOpenChange: (open: boolean) => void
   /** Fires after the new session launched, so a host can step aside for the new tab. */
   onStarted?: () => void
@@ -48,9 +50,12 @@ const EMPTY_DISABLED_AGENTS: TuiAgent[] = []
 export function AgentSessionContinuationDialog({
   open,
   request,
+  sourceWorkingDirectory,
   onOpenChange,
   onStarted
 }: AgentSessionContinuationDialogProps): React.JSX.Element {
+  const workspace = request ? worktreeLaunchWorkspace(request.worktreeId) : null
+  const abortRef = useRef<AbortController | null>(null)
   const settings = useAppStore((state) => state.settings)
   const [pick, setPick] = useState<{
     request: AgentSessionContinuationRequest | null
@@ -76,36 +81,40 @@ export function AgentSessionContinuationDialog({
   const disabledAgents = settings?.disabledTuiAgents ?? EMPTY_DISABLED_AGENTS
 
   const observation = useAgentMenuObservation(
-    request
-      ? {
-          workspace: {
-            kind: workspaceKindForWorktreeId(request.worktreeId),
-            worktreeId: request.worktreeId
-          },
-          launchCwd: request.initialCwd
-        }
-      : null,
+    workspace ? { workspace, launchCwd: request?.initialCwd } : null,
     open && Boolean(request),
     detectionTarget
   )
   const { detectedIds, detectionFailed } = observation.detection
   const detecting =
     detectedIds === null && !detectionFailed && !observation.detection.needsServerUpdate
-  const agents = useMemo(
-    () =>
-      getAgentCatalog().filter(
-        (agent) => detectedIds?.includes(agent.id) && isTuiAgentEnabled(agent.id, disabledAgents)
-      ),
-    [detectedIds, disabledAgents]
+  // Agents whose chat opens without their CLI are listed too; their rows decide what is pickable.
+  const offered = workspace
+    ? agentsOfferedForLaunch(useAppStore.getState(), workspace, detectedIds)
+    : []
+  const agents = getAgentCatalog().filter(
+    (agent) => offered.includes(agent.id) && isTuiAgentEnabled(agent.id, disabledAgents)
   )
+  const rows = observation.model.state === 'settled' ? observation.model.rows : []
+  const pickable = agents
+    .map((agent) => agent.id)
+    .filter((agent) => rows.some((row) => row.agent === agent && row.kind !== 'chat-unavailable'))
+  const preparing = request === null
+  const controlsDisabled = preparing || detecting || starting
   const hasFullContext = request ? hasFullAgentSessionContext(request.source) : false
 
-  const currentPick =
-    pick?.request === request && agents.some((agent) => agent.id === pick?.agent) ? pick : null
+  useEffect(() => {
+    const abort = open && request ? new AbortController() : null
+    abortRef.current = abort
+    return () => abort?.abort()
+  }, [open, request])
+
+  const currentPick = pick?.request === request && pickable.includes(pick.agent) ? pick : null
   const selectedAgent =
     currentPick?.agent ??
     chooseInitialContinuationAgent({
-      availableAgents: agents.map((agent) => agent.id),
+      availableAgents: pickable,
+      automaticAgents: pickable.filter((agent) => detectedIds?.includes(agent)),
       sourceAgent: request?.source.sourceAgent ?? null,
       defaultAgent: settings?.defaultTuiAgent
     })
@@ -122,7 +131,7 @@ export function AgentSessionContinuationDialog({
   }, [starting])
 
   const handleStart = async (): Promise<void> => {
-    if (!request || !selectedAgent || starting || !selection.ready) {
+    if (!request || detecting || !selectedAgent || starting || !selection.ready) {
       return
     }
     const prompt = buildAgentSessionContinuationPrompt(request.source, contextMode)
@@ -137,7 +146,8 @@ export function AgentSessionContinuationDialog({
       groupId: request.groupId,
       initialCwd: request.initialCwd,
       launchChoice: selection.choice,
-      launchSource: request.launchSource
+      launchSource: request.launchSource,
+      signal: abortRef.current?.signal
     })
     setStarting(false)
     if (launched) {
@@ -151,7 +161,8 @@ export function AgentSessionContinuationDialog({
     ? getAgentLabel(request.source.sourceAgent)
     : null
   const startDisabled =
-    detecting || starting || agents.length === 0 || !selectedAgent || !selection.ready
+    controlsDisabled || agents.length === 0 || !selectedAgent || !selection.ready
+  const workingDirectory = sourceWorkingDirectory ?? request?.initialCwd
 
   return (
     <Dialog
@@ -185,59 +196,67 @@ export function AgentSessionContinuationDialog({
               {sourceName ||
                 translate('components.agentSessionContinuation.untitledSession', 'Current session')}
             </div>
-            {sourceAgentLabel ? (
-              <div className="mt-0.5 text-[11px] text-muted-foreground">
-                {translate(
-                  'components.agentSessionContinuation.originalAgent',
-                  'Original Agent: {{agent}}',
-                  { agent: sourceAgentLabel }
-                )}
-              </div>
-            ) : null}
+            <div className="mt-0.5 min-h-4 text-[11px] text-muted-foreground">
+              {sourceAgentLabel
+                ? translate(
+                    'components.agentSessionContinuation.originalAgent',
+                    'Original Agent: {{agent}}',
+                    { agent: sourceAgentLabel }
+                  )
+                : null}
+            </div>
           </div>
 
           <div className="min-w-0 space-y-1.5">
             <label className="text-xs font-medium">
               {translate('components.agentSessionContinuation.agent', 'Agent')}
             </label>
-            {request ? (
-              <AgentCombobox
-                agents={agents}
-                value={selectedAgent}
-                onValueChange={(agent) => setPick({ request, agent })}
-                surfaceRows={{
-                  model: observation.model,
-                  selection,
-                  contextKey: observation.contextKey,
-                  surface: currentPick?.surface,
-                  onPick: (agent, surface) => setPick({ request, agent, surface })
-                }}
-                allowNarrowTrigger
-                triggerClassName="min-w-0 w-full"
-              />
-            ) : null}
-            {detecting ? (
-              <p className="text-[11px] text-muted-foreground">
-                {translate(
-                  'components.agentSessionContinuation.detectingAgents',
-                  'Detecting Agents on this workspace host…'
-                )}
-              </p>
-            ) : detectionFailed ? (
-              <p className="text-[11px] text-destructive">
-                {translate(
-                  'components.agentSessionContinuation.detectionFailed',
-                  'Could not detect Agents on this workspace host.'
-                )}
-              </p>
-            ) : agents.length === 0 ? (
-              <p className="text-[11px] text-muted-foreground">
-                {translate(
-                  'components.agentSessionContinuation.noAgents',
-                  'No enabled Agents were detected on this workspace host.'
-                )}
-              </p>
-            ) : null}
+            <AgentCombobox
+              disabled={controlsDisabled}
+              agents={agents}
+              value={selectedAgent}
+              onValueChange={(agent) => setPick({ request, agent })}
+              surfaceRows={{
+                model: observation.model,
+                selection,
+                contextKey: observation.contextKey,
+                surface: currentPick?.surface,
+                onPick: (agent, surface) => setPick({ request, agent, surface })
+              }}
+              allowNarrowTrigger
+              triggerClassName="min-w-0 w-full"
+            />
+            <div className="min-h-4">
+              {preparing ? (
+                <p className="text-[11px] text-muted-foreground">
+                  {translate(
+                    'components.agentSessionContinuation.preparingContext',
+                    'Preparing saved chat context…'
+                  )}
+                </p>
+              ) : detecting ? (
+                <p className="text-[11px] text-muted-foreground">
+                  {translate(
+                    'components.agentSessionContinuation.detectingAgents',
+                    'Detecting Agents on this workspace host…'
+                  )}
+                </p>
+              ) : detectionFailed ? (
+                <p className="text-[11px] text-destructive">
+                  {translate(
+                    'components.agentSessionContinuation.detectionFailed',
+                    'Could not detect Agents on this workspace host.'
+                  )}
+                </p>
+              ) : agents.length === 0 ? (
+                <p className="text-[11px] text-muted-foreground">
+                  {translate(
+                    'components.agentSessionContinuation.noAgents',
+                    'No enabled Agents were detected on this workspace host.'
+                  )}
+                </p>
+              ) : null}
+            </div>
           </div>
 
           <div className="min-w-0 space-y-1.5">
@@ -245,6 +264,7 @@ export function AgentSessionContinuationDialog({
               {translate('components.agentSessionContinuation.context', 'Context')}
             </label>
             <Select
+              disabled={controlsDisabled}
               value={contextMode}
               onValueChange={(value) => {
                 if (value === 'focused' || value === 'full') {
@@ -270,25 +290,39 @@ export function AgentSessionContinuationDialog({
                 </SelectItem>
               </SelectContent>
             </Select>
-            <p className="text-[11px] leading-4 text-muted-foreground">
-              {contextMode === 'focused'
-                ? translate(
-                    'components.agentSessionContinuation.modeFocusedDescription',
-                    'Uses the latest status and current workspace, reading older transcript details only when needed.'
-                  )
-                : translate(
-                    'components.agentSessionContinuation.modeFullDescription',
-                    'Asks the new Agent to read the complete saved session before continuing. This can take longer and use significant context, plan usage, or API credits.'
-                  )}
+            <p className="min-h-12 text-[11px] leading-4 text-muted-foreground">
+              {preparing
+                ? null
+                : !hasFullContext
+                  ? request?.source.sourceKind === 'chat'
+                    ? translate(
+                        'components.agentSessionContinuation.modeLoadedDescription',
+                        'Uses recent messages currently loaded in this chat and the current workspace.'
+                      )
+                    : translate(
+                        'components.agentSessionContinuation.modeCapturedDescription',
+                        'Uses captured text and the current workspace.'
+                      )
+                  : contextMode === 'focused'
+                    ? translate(
+                        'components.agentSessionContinuation.modeFocusedDescription',
+                        'Uses the latest status and current workspace, reading older transcript details only when needed.'
+                      )
+                    : translate(
+                        'components.agentSessionContinuation.modeFullDescription',
+                        'Asks the new Agent to read the complete saved session before continuing. This can take longer and use significant context, plan usage, or API credits.'
+                      )}
             </p>
           </div>
 
-          {request?.initialCwd ? (
-            <div className="text-[11px] text-muted-foreground">
-              {translate('components.agentSessionContinuation.startsIn', 'Starts in:')}{' '}
-              <span className="break-all font-mono text-foreground/80">{request.initialCwd}</span>
-            </div>
-          ) : null}
+          <div className="min-h-4 text-[11px] text-muted-foreground">
+            {workingDirectory ? (
+              <>
+                {translate('components.agentSessionContinuation.startsIn', 'Starts in:')}{' '}
+                <span className="break-all font-mono text-foreground/80">{workingDirectory}</span>
+              </>
+            ) : null}
+          </div>
         </div>
 
         <DialogFooter>

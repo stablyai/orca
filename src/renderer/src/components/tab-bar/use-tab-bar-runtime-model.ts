@@ -11,7 +11,7 @@ import { useAgentDetectionTargetForWorktree } from '@/hooks/useAgentDetectionTar
 import { getConnectionIdFromState } from '@/lib/connection-context'
 import { getLocalProjectExecutionRuntimeContext } from '@/lib/local-preflight-context'
 import { isNativeChatTranscriptLocalReadable } from '@/lib/native-chat-transcript-readability'
-import { runtimeEnvironmentIdWithLegacyFallbackUnlessTwin } from '@/lib/worktree-runtime-owner'
+import { runtimeEnvironmentIdOrLocalUnlessTwin } from '@/lib/worktree-runtime-owner'
 import { runtimeTargetForOwnerEnvironment } from '@/runtime/runtime-client-target'
 import { useOptionalShortcutLabel, useShortcutLabel } from '@/hooks/useShortcutLabel'
 import {
@@ -126,7 +126,7 @@ export function useTabBarRuntimeModel({
   const settings = useAppStore((s) => s.settings)
   // Why: use the worktree's owning host so offered Windows shells match the host that actually runs the terminal.
   const activeRuntimeEnvironmentId = useAppStore((s) =>
-    runtimeEnvironmentIdWithLegacyFallbackUnlessTwin(s, worktreeId)
+    runtimeEnvironmentIdOrLocalUnlessTwin(s, worktreeId)
   )
   // Why: retained tab strips rerun selectors on every store write; reuse canonical indexes, don't flatten both slices here.
   const worktreeConnectionId = useAppStore(
@@ -168,8 +168,7 @@ export function useTabBarRuntimeModel({
     isWindowsClient: isWindows,
     worktreeHasRemoteConnection: Boolean(worktreeConnectionId)
   })
-  // Why: `projects`/`repos`/`worktreesByRepo` feed nothing but the local runtime context below, and
-  // `worktreesByRepo` churns on every worktree write; ungated, each write re-renders every tab strip.
+  // Subscribe to project/worktree maps only for the local shell menu; their routine writes otherwise repaint every retained strip.
   const needsLocalProjectRuntime =
     showWindowsShellMenu && !activeRuntimeEnvironmentId?.trim() && !worktreeConnectionId
   const projects = useAppStore((s) => (needsLocalProjectRuntime ? s.projects : EMPTY_PROJECTS))

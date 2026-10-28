@@ -5,17 +5,9 @@ import {
   projectOrchestrationFleet,
   type FleetDurableWorker
 } from './orchestration-fleet-projection'
-import {
-  parseWorkerTerminalHostScope,
-  readWorkerTerminalHostScope
-} from './worker-terminal-host-scope'
+import { readWorkerTerminalHostScope } from './worker-terminal-host-scope'
 
-/**
- * One durable column, one classification. The fleet host label and the remote-connection fence
- * used to parse `host_scope` independently, so a WSL-on-local row could read `local` for its
- * host and remote for the connection its evidence had to carry — and the worker projected
- * `unverifiable` while running on this machine.
- */
+/** One host_scope read must drive host labels and connection fences; divergent WSL-local parsing previously made live local workers unverifiable. */
 const PANE_KEY = 'tab-host:leaf-host'
 const TERMINAL_HANDLE = 'term_host'
 const NOW = 100_000
@@ -146,8 +138,7 @@ function evidence(connectionId: string | null) {
   )
 }
 
-/** `live` proves the status row was accepted as this worker's evidence; the fence is the
- *  only thing that can reject it here, so the verdict reads the fence directly. */
+/** The live verdict proves the projection’s connection fence accepted this worker evidence. */
 function acceptsConnection(hostScope: string | null, connectionId: string | null): boolean {
   const page = projectOrchestrationFleet({
     workers: [worker(hostScope)],
@@ -173,31 +164,11 @@ describe('worker terminal host scope', () => {
       })
       expect(page.workers[0]?.host).toEqual(testCase.host)
 
-      // The fence and the host label come from one read: a row the projection calls local
-      // must not demand a remote connection id, and vice versa.
+      // Local host labels and connection fences must agree; neither may independently classify this scope.
       expect(acceptsConnection(testCase.hostScope, testCase.accepts)).toBe(true)
       if (testCase.rejects) {
         expect(acceptsConnection(testCase.hostScope, testCase.rejects)).toBe(false)
       }
     })
   }
-
-  it('keeps the strict scope contract the process-liveness path depends on', () => {
-    expect(parseWorkerTerminalHostScope('{"kind":"ssh","targetId":"host-1"}')).toEqual({
-      kind: 'ssh',
-      targetId: 'host-1'
-    })
-    expect(
-      parseWorkerTerminalHostScope('{"kind":"wsl","hostId":"local","distro":"Ubuntu"}')
-    ).toEqual({ kind: 'wsl', hostId: 'local', distro: 'Ubuntu' })
-    expect(parseWorkerTerminalHostScope('{"kind":"local","hostId":"local"}')).toEqual({
-      kind: 'local',
-      hostId: 'local'
-    })
-    // A scope missing the facts its kind requires is not a scope.
-    expect(parseWorkerTerminalHostScope('{"kind":"wsl","hostId":"local"}')).toBeNull()
-    expect(parseWorkerTerminalHostScope('{"kind":"ssh"}')).toBeNull()
-    expect(parseWorkerTerminalHostScope('local:workspace-1')).toBeNull()
-    expect(parseWorkerTerminalHostScope(null)).toBeNull()
-  })
 })

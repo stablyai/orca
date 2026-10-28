@@ -3,7 +3,7 @@ import { Button } from '@/components/ui/button'
 import { translate } from '@/i18n/i18n'
 import { cn } from '@/lib/utils'
 import { useNativeChatDisclosure } from './native-chat-disclosure-store'
-import { nativeChatUserMessageFolds } from '../../../../shared/native-chat-user-message-fold'
+import { nativeChatUserMessageFolds } from '../../../../shared/native-chat/transcript/native-chat-user-message-fold'
 
 export function NativeChatUserMessageFold({
   messageId,
@@ -19,8 +19,7 @@ export function NativeChatUserMessageFold({
 }): React.JSX.Element {
   const disclosure = useNativeChatDisclosure(`user-message:${messageId}`, false)
   const longText = useMemo(() => nativeChatUserMessageFolds(markdown), [markdown])
-  // The text rule can pick a prompt that already fits the clip; that one gets no fade or toggle.
-  // Tied to the text it was measured for: a superseding copy of the message is measured again.
+  // Measure each text revision; long-text heuristics can select a prompt that already fits the clip.
   const [measured, setMeasured] = useState({ markdown, fits: false })
   const fits = measured.markdown === markdown && measured.fits
   const folds = longText && !fits

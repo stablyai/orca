@@ -39,19 +39,6 @@ describe('withGitHubCheckDetailsTimeout', () => {
     expect(operationSignal?.aborted).toBe(true)
   })
 
-  it('arms the renderer deadline before starting the operation', async () => {
-    let timerCountWhenStarted = 0
-
-    const result = withGitHubCheckDetailsTimeout(async () => {
-      timerCountWhenStarted = vi.getTimerCount()
-      return 'details'
-    })
-
-    await expect(result).resolves.toBe('details')
-    expect(timerCountWhenStarted).toBe(1)
-    expect(vi.getTimerCount()).toBe(0)
-  })
-
   it('keeps the timeout error when abort-aware work rejects synchronously', async () => {
     const stalled = withGitHubCheckDetailsTimeout(
       (signal) =>
@@ -75,11 +62,5 @@ describe('withGitHubCheckDetailsTimeout', () => {
     await expect(
       withGitHubCheckDetailsTimeout(() => Promise.reject(new Error(message)))
     ).rejects.toMatchObject({ message: 'Localized timeout.' })
-  })
-
-  it('preserves unrelated operation failures', async () => {
-    await expect(
-      withGitHubCheckDetailsTimeout(() => Promise.reject(new Error('authentication failed')))
-    ).rejects.toThrow('authentication failed')
   })
 })

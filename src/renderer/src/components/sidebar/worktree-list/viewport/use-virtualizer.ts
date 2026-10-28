@@ -22,8 +22,7 @@ import {
 
 export type WorktreeListVirtualizer = ReturnType<typeof useWorktreeListVirtualizer>
 
-// The TanStack virtualizer plus the row-identity guards that stop a recycled DOM node
-// from writing a stale height into the wrong slot.
+// Guard virtual row identity so recycled DOM nodes cannot overwrite another slot’s measured height.
 export function useWorktreeListVirtualizer(args: {
   renderRows: RenderRow[]
   firstHeaderIndex: number

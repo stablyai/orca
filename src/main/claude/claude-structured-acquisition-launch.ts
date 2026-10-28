@@ -19,13 +19,12 @@ import {
   type ClaudeSession,
   type ClaudeSessionExit,
   type ClaudeStructuredSessionAdapterDeps
-} from './claude-structured-session-state'
+} from './structured/claude-structured-session-state'
 import {
   claudeAcquisitionCleanupError,
   closeClaudePublishedSessionForDeps
 } from './claude-structured-session-close'
 
-/** The launch with the chat's saved options in its spawn options. */
 export type ClaudeAcquisitionLaunch = ClaudeStructuredLaunch & {
   savedOptions: Omit<ClaudeStructuredSpawnOptions, 'sdkOptions'>
 }
@@ -68,13 +67,12 @@ export async function resolveClaudeAcquisitionLaunch(args: {
           retainedExit.connection,
           retainedExit.error
         )
-        // A proven root exit is what released the lease, so it cannot also refuse the next root;
-        // only an exit this host cannot vouch for still blocks the start.
+        // A proven root exit releases the lease even when descendant cleanup remains unverified.
         if (cleanupError instanceof AgentSessionAcquisitionExitUnprovenError) {
           throw cleanupError
         }
       }
-      // The superseded child must settle before its durable resume identity is reused.
+      // Settle the old child before reusing its durable resume identity.
       await callbacks.settleExit(sessionId, retainedExit)
       resumeSession ??= retainedExit.session
     }

@@ -22,8 +22,7 @@ describe('the failing-file parser', () => {
     expect(parseFailingFiles(output)).toEqual(['src/a.test.ts', 'src/b.test.tsx'])
   })
 
-  // tsc indents the "Overload 1 of 2, ..." detail under its error; counting those as files would
-  // put unparseable entries in the baseline and make the gate unprunable.
+  // Indented overload details are not diagnostic files; counting them makes baseline unprunable.
   it('ignores the indented detail lines tsc prints under an error', () => {
     const output = [
       'src/a.test.ts(12,5): error TS2769: No overload matches this call.',
@@ -33,8 +32,7 @@ describe('the failing-file parser', () => {
     expect(parseFailingFiles(output)).toEqual(['src/a.test.ts'])
   })
 
-  // tsc prints the host separator. Left as-is, a Windows run would read every baseline entry as
-  // both stale and added, and the gate would be unpassable rather than wrong in one direction.
+  // Normalize Windows separators or every baseline entry appears stale and added.
   it("normalises the Windows separators tsc prints to the baseline's POSIX ones", () => {
     const output = [
       'src\\session\\a.test.ts(12,5): error TS2345: Argument of type x.',
@@ -77,9 +75,7 @@ describe('the program census', () => {
     ).toEqual(['src/b.test.ts'])
   })
 
-  // A wildcard include keeps only the higher-priority extension, so a .tsx beside a .test.ts of the
-  // same basename leaves the program with no config change at all. This is the case that hid
-  // MobileHostCard.test.tsx.
+  // Higher-priority .tsx can shadow same-stem .test.ts through wildcard include without config changes (MobileHostCard case).
   it('names a .tsx shadowed by a .test.ts of the same basename', () => {
     expect(
       diffCensus(['src/Card.test.ts', 'src/Card.test.tsx'], ['src/Card.test.ts'], new Map()).missing
@@ -110,8 +106,7 @@ describe('the program census', () => {
     })
   })
 
-  // The allow-list and the tsconfig exclude are two lists of the same four files; drift between
-  // them would either break the build or re-open the hole silently.
+  // Pin allowlist/tsconfig exclusion parity so neither silently widens the other.
   it('matches tsconfig.test.json exclude entry for entry', () => {
     const root = path.join(import.meta.dirname, '..')
     const config = fs.readFileSync(path.join(root, 'tsconfig.test.json'), 'utf8')

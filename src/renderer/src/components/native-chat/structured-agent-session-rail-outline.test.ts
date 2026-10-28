@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import type { AgentSessionConversationOutline } from '../../../../shared/agent-session-conversation-outline'
+import type { AgentSessionConversationOutline } from '../../../../shared/agent-session/agent-session-conversation-outline'
 import { selectStructuredRailOutline } from './structured-agent-session-rail-outline'
 
 function outline(

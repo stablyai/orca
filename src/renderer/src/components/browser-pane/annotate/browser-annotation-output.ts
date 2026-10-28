@@ -30,9 +30,7 @@ function inlineText(
   content: string,
   maxLength = BROWSER_ANNOTATION_INLINE_TEXT_MAX_LENGTH
 ): string {
-  // Why: page-controlled DOM text can include paste-sized content. Inline
-  // annotation fields are prompt previews, so collapse whitespace while
-  // scanning only the bounded text we will actually retain.
+  // Bound scanning as well as retained text: page-controlled DOM snippets may be paste-sized.
   let normalized = ''
   let pendingSpace = false
   for (let index = 0; index < content.length && normalized.length < maxLength;) {
@@ -119,8 +117,7 @@ function formatStyles(styles: BrowserGrabComputedStyles): string[] {
   return lines
 }
 
-// Why: annotation snippets come from page DOM; avoid spreading every backtick
-// run into Math.max when generated HTML contains many fence characters.
+// Scan fence lengths without a spread into Math.max; page-controlled HTML may contain arbitrarily many runs.
 function maxBacktickRunLength(content: string, floor: number): number {
   let maxRun = floor
   let currentRun = 0

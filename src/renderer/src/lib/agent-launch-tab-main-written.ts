@@ -1,9 +1,4 @@
-/**
- * Layout-owner builds: an `agent.launch` tab main wrote itself. The window makes no tab; it keeps
- * what it keeps for a launch tab it made (the launch's pane, whose outcome it shows, the prompt
- * that pane offers to copy, and whose view moves), on the tab main's frame draws. A workspace the
- * window does not draw yet gets these when its tab first draws, outcome included.
- */
+/** Main owns tab creation/closure; attach this window’s session-only prompt, pane verdict and presentation state when its frame draws, retaining them for undrawn workspaces. */
 
 import type { AgentLaunchPaneVerdictEvent } from '../../../shared/agent-launch-pane-verdict'
 import type {
@@ -23,10 +18,8 @@ import { layoutFrameTerminalTab } from '@/runtime/layout-frame-terminal-panes'
 
 type LaunchPane = NonNullable<TerminalTab['agentLaunchPane']>
 
-/** Launch panes of main's tabs this window does not draw yet, by tab id. */
 const undrawn = new Map<string, { pane: LaunchPane; present: () => void; stop: () => void }>()
 
-/** Launch tabs main wrote, which main takes back itself; the newest few, as the prompts are. */
 const MAX_MAIN_WRITTEN_TABS = 32
 const mainWritten = new Set<string>()
 
@@ -46,7 +39,6 @@ export function releaseMainWrittenLaunchTab(tabId: string): boolean {
   return mainWritten.delete(tabId)
 }
 
-/** Drops a held launch: nothing is left for its tab to say, nor its pane to offer. */
 function dropUndrawn(tabId: string): void {
   undrawn.get(tabId)?.stop()
   undrawn.delete(tabId)
@@ -81,7 +73,6 @@ function goneFromFrames(worktreeId: string, tabId: string): boolean {
   return layoutFramesFlowing() && !layoutFrameTerminalTab(worktreeId, tabId)
 }
 
-/** False when main's frames no longer hold the tab, so nothing is held. */
 function keepWhenDrawn(request: AgentLaunchTabPublishRequest, present: () => void): boolean {
   const { worktreeId, tabId } = request
   undrawn.get(tabId)?.stop()
@@ -129,8 +120,7 @@ export function keepAgentLaunchTabMainWrote(
     keepLaunchPane(tabId, tab, launchPaneOf(request))
     present()
   } else if (created && viewer === 'focus-window') {
-    // The reveal draws the workspace; the tab shows once its frame lands. A tab main already
-    // closed reveals nothing.
+    // Reveal the workspace while awaiting its tab frame, unless main already closed the tab.
     if (keepWhenDrawn(request, present)) {
       revealWorkspaceSurface(useAppStore.getState(), worktreeId, [tabId])
     }
@@ -145,10 +135,7 @@ export function keepAgentLaunchTabMainWrote(
   return { tabId, created, placement: { groupId } }
 }
 
-/**
- * A verdict for a launch pane whose tab this window does not draw yet: kept with it, so the tab
- * shows the outcome when it draws. False when no such pane waits.
- */
+/** Retain verdicts for undrawn launch panes; return false when no such pane is pending. */
 export function applyVerdictToUndrawnLaunchTab(event: AgentLaunchPaneVerdictEvent): boolean {
   const entry = undrawn.get(event.tabId)
   if (entry?.pane.leafId !== event.leafId) {
@@ -159,7 +146,6 @@ export function applyVerdictToUndrawnLaunchTab(event: AgentLaunchPaneVerdictEven
     entry.pane = { ...entry.pane, outcome: verdict }
     return true
   }
-  // Settled or taken back.
   dropUndrawn(event.tabId)
   return true
 }

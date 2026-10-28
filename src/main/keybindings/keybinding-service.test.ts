@@ -12,11 +12,7 @@ import {
 import { getUserKeybindingsPath, writeKeybindingOverride } from './keybinding-file'
 import { KeybindingService } from './keybinding-service'
 
-// End-to-end coverage of the tab-switch convention swap: constructs a real
-// KeybindingService (which runs the seed) and asserts the effective bindings AND
-// real keystroke matching for both cohorts. The load-bearing claim under test is
-// that a pre-existing install's behavior is byte-identical to what it was before
-// the swap, on every platform and every customization state.
+// Verify effective bindings and keystroke matching for fresh/existing cohorts across all platforms.
 
 const PLATFORMS: NodeJS.Platform[] = ['darwin', 'linux', 'win32']
 const SWAPPED_ACTIONS = Object.keys(LEGACY_TAB_SWITCH_BINDINGS) as KeybindingActionId[]
@@ -39,8 +35,7 @@ function makeCohort(pending: boolean): {
   }
 }
 
-// A physical bracket press. Mod is Cmd on macOS and Ctrl elsewhere; the matcher
-// resolves brackets by `code`, so this stays layout-independent.
+// Physical bracket codes are layout-independent; Mod maps to the platform modifier.
 function bracketPress(opts: {
   code: 'BracketLeft' | 'BracketRight'
   alt: boolean
@@ -80,7 +75,6 @@ describe('KeybindingService tab-switch cohort seeding', () => {
       })
 
       expect(cohort.seeded()).toBe(false)
-      // Nothing written: a fresh install rides on the registry defaults.
       expect(existsSync(getUserKeybindingsPath(home))).toBe(false)
 
       const overrides = service.getOverrides()
@@ -91,7 +85,6 @@ describe('KeybindingService tab-switch cohort seeding', () => {
         'Mod+Alt+BracketRight'
       ])
 
-      // Shift+bracket now drives the broad all-types cycle.
       expect(
         keybindingMatchesAction(
           'tab.nextAllTypes',
@@ -124,15 +117,13 @@ describe('KeybindingService tab-switch cohort seeding', () => {
       expect(cohort.seeded()).toBe(true)
       const overrides = service.getOverrides()
 
-      // Effective bindings for all four actions equal the pre-swap defaults.
       for (const actionId of SWAPPED_ACTIONS) {
         expect(getEffectiveKeybindingsForAction(actionId, platform, overrides)).toEqual(
           LEGACY_TAB_SWITCH_BINDINGS[actionId]
         )
       }
 
-      // Behavior is unchanged: Mod+Shift+bracket still cycles same-type, and
-      // Mod+Alt+bracket still cycles all-types — the inverse of a fresh install.
+      // Existing installs keep the inverse of fresh-install tab-switch defaults.
       const shiftRight = bracketPress({ code: 'BracketRight', alt: false, shift: true, platform })
       expect(keybindingMatchesAction('tab.nextSameType', shiftRight, platform, overrides)).toBe(
         true
@@ -153,7 +144,6 @@ describe('KeybindingService tab-switch cohort seeding', () => {
 
   it('existing install keeps a rebound action AND pins the pre-swap default on the rest', () => {
     const platform: NodeJS.Platform = 'darwin'
-    // The user had rebound just one action before upgrading.
     writeKeybindingOverride(getUserKeybindingsPath(home), platform, 'tab.nextSameType', ['Mod+K'])
 
     const cohort = makeCohort(true)
@@ -164,12 +154,9 @@ describe('KeybindingService tab-switch cohort seeding', () => {
     })
     const overrides = service.getOverrides()
 
-    // Their custom binding is untouched...
     expect(getEffectiveKeybindingsForAction('tab.nextSameType', platform, overrides)).toEqual([
       'Mod+K'
     ])
-    // ...and the other three still resolve to their pre-swap defaults, not the
-    // new ones — no silent behavior change for a partially-customized user.
     expect(getEffectiveKeybindingsForAction('tab.previousSameType', platform, overrides)).toEqual([
       'Mod+Shift+BracketLeft'
     ])
@@ -191,8 +178,7 @@ describe('KeybindingService tab-switch cohort seeding', () => {
     })
     const afterFirst = first.getOverrides()
 
-    // Same cohort controller: markSeeded flipped it to not-pending, mirroring the
-    // persisted flag flipping to 'done'.
+    // Reuse the cohort after markSeeded to model the persisted done flag.
     const second = new KeybindingService({
       homePath: home,
       platform,
@@ -207,8 +193,7 @@ describe('KeybindingService tab-switch cohort seeding', () => {
   })
 
   it('leaves the cohort pending when the seed write fails (retries next launch)', () => {
-    // homePath is a regular file, so creating `<home>/.orca/` throws. The service
-    // must swallow the error and NOT mark the one-shot done.
+    // A file at homePath forces mkdir failure; the cohort must remain pending.
     const fileHome = join(home, 'not-a-dir')
     writeFileSync(fileHome, 'x', 'utf8')
     const cohort = makeCohort(true)

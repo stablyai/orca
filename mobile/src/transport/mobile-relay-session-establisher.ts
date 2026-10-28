@@ -19,10 +19,7 @@ function directWon(logical: StableLogicalRpcClient): boolean {
   return logical.getActivePath() !== 'relay' && logical.getState() === 'connected'
 }
 
-// Turns one relay credential into the active runtime session: resolve the cell
-// assignment if the director rejects the cached one, open the cell socket,
-// migrate the logical client onto it, then persist the resume confirmation and
-// re-arm the supervisor's timers. Owns the relay it dials.
+// Own candidate relays through cell resolution, logical migration and best-effort resume bookkeeping.
 export class MobileRelaySessionEstablisher {
   private relay: MobileRelayEndpoint
 
@@ -42,7 +39,6 @@ export class MobileRelaySessionEstablisher {
       setRelayRouting: MobileEndpointSupervisorDependencies['setRelayRouting']
       bundle: () => MobileRelayCredentialBundle | null
       adoptBundle: (bundle: MobileRelayCredentialBundle) => void
-      // Hysteresis stamp + rotation-pending clear + recovery log line.
       recordMigration: () => void
       // Owns the stopped/disconnected guard so late bookkeeping cannot arm a stale timer.
       scheduleLease: (expiry: number | null) => void
@@ -55,7 +51,7 @@ export class MobileRelaySessionEstablisher {
   }
 
   async adoptRelay(relay: MobileRelayEndpoint): Promise<void> {
-    // Why: a stopped supervisor's host may be removed or re-paired; its successor owns routing.
+    // A stopped supervisor’s successor owns routing after removal/re-pairing.
     if (this.args.isStopped()) {
       return
     }
@@ -63,8 +59,7 @@ export class MobileRelaySessionEstablisher {
     this.relay = relay
   }
 
-  // Tries each eligible credential until one establishes. Only a grace-repairable
-  // failure (BAD_OUTER_CREDENTIAL) moves on to the next credential.
+  // Try only grace-repairable BAD_OUTER_CREDENTIAL failures with another eligible credential.
   async dialEligible(
     credentials: { token: string; version: number }[]
   ): Promise<
@@ -90,8 +85,6 @@ export class MobileRelaySessionEstablisher {
     return { outcome: 'failed', error: lastError }
   }
 
-  // One credential attempt: a director-class failure re-resolves the cell
-  // assignment, persists it, and dials once more against the authoritative target.
   dial(credential: { token: string; version: number }): Promise<EstablishResult> {
     return dialRelayThroughDirectorFallback({
       resumeToken: credential.token,
@@ -116,9 +109,7 @@ export class MobileRelaySessionEstablisher {
       this.relay,
       credential,
       `confirm-${encodeBase64Url(args.randomBytes(16))}`,
-      // Asserted on the controller's latch, not on the dial result: the close
-      // that carries the reason can land after this dial has already reported
-      // its failure. Only a connection retires it.
+      // Read the controller latch because close reasons can arrive after the dial failed; only connection clears it.
       (reason) => {
         if (reason === RELAY_HOST_CLOSE_REASON.SIGNED_OUT) {
           args.controller.assertHostReachability('signed-out')
@@ -154,8 +145,7 @@ export class MobileRelaySessionEstablisher {
       args.adoptBundle(applied.bundle)
       args.scheduleLease(applied.leaseExpiry)
     } catch (error) {
-      // Why: the session is live and registered — reporting bookkeeping as a dial
-      // failure would book backoff against it and can suspend the healthy session.
+      // Report post-migration bookkeeping separately; counting it as dial failure could suspend the healthy session.
       args.onBookkeepingError(toError(error))
     }
     args.scheduleDirectProbe()

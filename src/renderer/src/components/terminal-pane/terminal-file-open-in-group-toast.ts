@@ -1,7 +1,7 @@
 import { toast } from 'sonner'
 import { translate } from '@/i18n/i18n'
 
-/** The file resolved to something other than an editor in the captured group, so nothing opened. */
+/** The resolved route cannot honor the captured group. */
 export function showOpenInGroupRefusedToast(filePath: string): void {
   toast.error(
     translate(
@@ -10,4 +10,18 @@ export function showOpenInGroupRefusedToast(filePath: string): void {
       { value0: filePath }
     )
   )
+}
+
+export function refuseOpenInGroupRequest(
+  filePath: string,
+  explicit: boolean,
+  isCurrent: () => boolean
+): boolean {
+  if (!explicit) {
+    return false
+  }
+  if (isCurrent()) {
+    showOpenInGroupRefusedToast(filePath)
+  }
+  return true
 }

@@ -80,4 +80,18 @@ describe('removeWslHost', () => {
       { duration: Infinity }
     )
   })
+
+  it('says the host stays, and why, when its stop is pending', async () => {
+    stubApi({
+      stopped: false,
+      reason: 'Start Ubuntu to finish removing it.',
+      verdict: 'unverifiable',
+      kept: true
+    })
+    await removeWslHost('wsl:ubuntu')
+    expect(mocks.warning).toHaveBeenCalledExactlyOnceWith(
+      'Orca didn’t remove the host yet: Start Ubuntu to finish removing it. Remove it again to retry, or connect it to keep it.',
+      { duration: Infinity }
+    )
+  })
 })

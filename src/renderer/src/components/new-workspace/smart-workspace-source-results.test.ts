@@ -170,7 +170,7 @@ describe('Branch source results', () => {
   })
 
   it('drops a short settled query once the live query grows far beyond a typing delta', () => {
-    // Why: prefix-only hold would keep "f" results under "fix-unrelated-payment-bug".
+    // Prefix-only retention would show f results under fix-unrelated-payment-bug.
     expect(
       getVisibleBranchResults({
         mode: 'branches',

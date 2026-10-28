@@ -58,8 +58,7 @@ export async function initializeMainProcessPlugins(runtime: OrcaRuntimeService):
   state.pluginService = new PluginService({
     userDataPath: app.getPath('userData'),
     hostVersion: app.getVersion(),
-    // Feature flag: with the setting off, discovery returns nothing and no
-    // plugin code path runs at all.
+    // Disabled discovery must run no plugin code.
     isPluginSystemEnabled: () => state.store?.getSettings().pluginSystemEnabled === true,
     getDisabledPlugins: () => normalizePluginIdList(state.store?.getSettings().disabledPlugins),
     getPluginConsents: () => normalizePluginConsents(state.store?.getSettings().pluginConsents),
@@ -110,17 +109,14 @@ export async function initializeMainProcessPlugins(runtime: OrcaRuntimeService):
         )
     }
   })
-  // Why: headless `orca serve` clients reach plugins through the runtime RPC
-  // methods, which resolve the service via this module-level setter. Consent
-  // over RPC uses the same hash-keyed write path as the desktop dialog.
+  // Headless RPC resolves this service too; consent shares the desktop hash-keyed write path.
   setPluginServiceForRpc(state.pluginService, {
     applyConsent: (request) =>
       applyPluginConsent({ store, pluginService: state.pluginService!, ...request }),
     applyEnablement: (pluginKey, enabled) =>
       applyPluginEnablement({ store, pluginService: state.pluginService!, pluginKey, enabled })
   })
-  // Lazy kernel: initialize() only discovers manifests — no worker forks, no
-  // panel reads. Zero plugin code runs before an explicit trigger.
+  // Initialization discovers manifests only; workers/panel reads wait for explicit triggers.
   void state.pluginService
     .initialize()
     .then(() => {
@@ -155,8 +151,7 @@ export async function initializeMainProcessPlugins(runtime: OrcaRuntimeService):
   })
   requestBundledPluginBootstrap()
   requestOfficialMarketplaceSeed()
-  // v0 plugin event seams: agent status (hook pipeline tap) + worktree
-  // lifecycle (runtime tap). Server-side filtered per plugin subscription.
+  // Filter hook/worktree events server-side by each plugin subscription.
   agentHookServer.subscribeEnrichedStatus((enriched) => {
     const payload = projectPluginAgentStatusChangedPayload(enriched)
     if (payload) {

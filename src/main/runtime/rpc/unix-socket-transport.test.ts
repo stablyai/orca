@@ -16,8 +16,7 @@ class FakeSocket extends EventEmitter {
   setNoDelay(): void {}
   end(): void {}
 
-  // Emulates net.Socket.setTimeout: ms>0 arms the idle timer, ms=0 suspends it,
-  // and a re-arm without a callback keeps the originally registered handler.
+  // Match setTimeout: positive arms, zero suspends, and callback-free rearm preserves the handler.
   setTimeout(ms: number, handler?: () => void): this {
     if (handler) {
       this.idleHandler = handler

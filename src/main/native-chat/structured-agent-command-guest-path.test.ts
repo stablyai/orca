@@ -10,7 +10,10 @@ vi.mock('../ipc/wsl-guest-windows-drive-path', async (original) => {
   return {
     ...actual,
     guestNativePathEnv: (pathEnv: string | null | undefined) =>
-      actual.guestNativePathEnv(pathEnv, guest.mounts)
+      actual.guestNativePathEnv(pathEnv, guest.mounts),
+    // The stock lookup reads mounts inside this helper, not through the export above.
+    resolveGuestNativeProgram: (...args: Parameters<typeof actual.resolveGuestNativeProgram>) =>
+      actual.resolveGuestNativeProgram(args[0], args[1], args[2], guest.mounts)
   }
 })
 
@@ -36,7 +39,7 @@ function binDir(name: string): string {
   return directory
 }
 
-// Why posix-only: the guest is Linux; Windows resolution never consults drive mounts.
+// Drive-mount filtering applies to Linux guests; Windows resolves its own shims.
 describe.skipIf(process.platform === 'win32')('launch-time CLI resolution in a WSL guest', () => {
   it('skips a Windows shim on a drive mount for the Linux CLI behind it', () => {
     const windowsDrive = binDir('drive')

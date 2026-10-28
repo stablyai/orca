@@ -4,15 +4,23 @@ import type {
   AgentLaunchSettingsMutation
 } from '../../../../shared/agent-launch-settings'
 import type { AgentPermissionsRenderer } from './AgentLaunchSettingsCatalog'
-import { AgentLaunchSettingsCatalog } from './AgentLaunchSettingsCatalog'
+import {
+  AgentLaunchSettingsCatalog,
+  AgentLaunchSettingsLoading
+} from './AgentLaunchSettingsCatalog'
 import {
   mutateHostAgentLaunchSettings,
   readHostAgentLaunchSettings,
   hostSupportsAutoPermissions,
   hostSupportsNativeChatPermissions,
+  hostSupportsOwnChatPermissions,
   type AgentLaunchSettingsOwner
 } from './agent-launch-settings-transport'
 import { Button } from '../ui/button'
+import {
+  useAgentPermissionOverrideNotice,
+  type SelectPermissionOverrides
+} from './agent-permission-override-notice'
 import { translate } from '@/i18n/i18n'
 
 type ReadState =
@@ -22,6 +30,7 @@ type ReadState =
       settings: AgentLaunchSettings
       autoSupported: boolean
       nativeChatPermissionsSupported: boolean
+      chatOwnSupported: boolean
     }
 
 export function HostAgentLaunchSettings({
@@ -41,8 +50,14 @@ export function HostAgentLaunchSettings({
     () => ({ kind: 'runtime' as const, environmentId }),
     [environmentId]
   )
+  const notify = useAgentPermissionOverrideNotice()
   const controllerRef = useRef<AbortController | null>(null)
-  const [read, setRead] = useState<ReadState>({ kind: 'loading' })
+  const currentRead = useRef<ReadState>({ kind: 'loading' })
+  const [read, publishRead] = useState(currentRead.current)
+  const setRead = useCallback((next: ReadState): void => {
+    currentRead.current = next
+    publishRead(next)
+  }, [])
   const [saveFailed, setSaveFailed] = useState(false)
   const mutationTail = useRef<Promise<void> | null>(null)
   const refresh = useCallback(async (): Promise<void> => {
@@ -51,15 +66,23 @@ export function HostAgentLaunchSettings({
     controllerRef.current = controller
     setRead({ kind: 'loading' })
     try {
-      const [settings, autoSupported, nativeChatPermissionsSupported] = await Promise.all([
-        readHostAgentLaunchSettings(owner, controller.signal),
-        hostSupportsAutoPermissions(owner),
-        hostSupportsNativeChatPermissions(owner)
-      ])
+      const [settings, autoSupported, nativeChatPermissionsSupported, chatOwnSupported] =
+        await Promise.all([
+          readHostAgentLaunchSettings(owner, controller.signal),
+          hostSupportsAutoPermissions(owner),
+          hostSupportsNativeChatPermissions(owner),
+          hostSupportsOwnChatPermissions(owner)
+        ])
       if (!controller.signal.aborted) {
         setRead(
           settings
-            ? { kind: 'ready', settings, autoSupported, nativeChatPermissionsSupported }
+            ? {
+                kind: 'ready',
+                settings,
+                autoSupported,
+                nativeChatPermissionsSupported,
+                chatOwnSupported
+              }
             : { kind: 'unsupported' }
         )
       }
@@ -68,58 +91,73 @@ export function HostAgentLaunchSettings({
         setRead({ kind: 'failed' })
       }
     }
-  }, [owner])
+  }, [owner, setRead])
   useEffect(() => {
     void refresh()
     return () => controllerRef.current?.abort()
   }, [refresh])
-  const mutate = async (mutation: AgentLaunchSettingsMutation): Promise<void> => {
-    const controller = controllerRef.current
-    if (!controller || controller.signal.aborted || read.kind !== 'ready') {
-      throw new Error('agent_launch_settings_unavailable')
-    }
-    const write = (mutationTail.current ?? Promise.resolve())
-      .catch(() => {})
-      .then(async () => {
-        if (controller.signal.aborted) {
-          throw new Error('agent_launch_settings_unavailable')
-        }
-        setSaveFailed(false)
-        try {
-          const settings = await mutateHostAgentLaunchSettings(owner, mutation, controller.signal)
-          if (!controller.signal.aborted) {
-            setRead({
-              kind: 'ready',
-              settings,
-              autoSupported: read.autoSupported,
-              nativeChatPermissionsSupported: read.nativeChatPermissionsSupported
-            })
-          }
-        } catch {
-          if (!controller.signal.aborted) {
-            setSaveFailed(true)
-          }
-          throw new Error('agent_launch_settings_save_failed')
-        }
-      })
+  const enqueue = (operation: () => Promise<void>): Promise<void> => {
+    const write = (mutationTail.current ?? Promise.resolve()).catch(() => {}).then(operation)
     mutationTail.current = write
     return write
+  }
+  const write = async (
+    mutation: AgentLaunchSettingsMutation,
+    acknowledged?: (before: AgentLaunchSettings, after: AgentLaunchSettings) => void
+  ): Promise<void> => {
+    const controller = controllerRef.current
+    const latest = currentRead.current
+    if (!controller || controller.signal.aborted || latest.kind !== 'ready') {
+      throw new Error('agent_launch_settings_unavailable')
+    }
+    setSaveFailed(false)
+    try {
+      const settings = await mutateHostAgentLaunchSettings(owner, mutation, controller.signal)
+      if (!controller.signal.aborted) {
+        setRead({ ...latest, settings })
+        acknowledged?.(latest.settings, settings)
+      }
+    } catch {
+      if (!controller.signal.aborted) {
+        setSaveFailed(true)
+      }
+      throw new Error('agent_launch_settings_save_failed')
+    }
+  }
+  const permissions = () => {
+    const latest = currentRead.current
+    return latest.kind === 'ready' ? latest.settings.agentPermission : undefined
+  }
+  const follow = (select: SelectPermissionOverrides) =>
+    enqueue(async () => {
+      for (const agent of select(permissions())) {
+        if (select(permissions()).includes(agent)) {
+          await write({ type: 'permission', agent, choice: 'default' })
+        }
+      }
+    })
+  const mutate = (mutation: AgentLaunchSettingsMutation): Promise<void> =>
+    enqueue(() =>
+      write(mutation, (before, after) =>
+        notify(before.agentPermission, after.agentPermission, mutation, follow)
+      )
+    )
+  if (read.kind === 'loading') {
+    return <AgentLaunchSettingsLoading />
   }
   if (read.kind !== 'ready') {
     return (
       <div className="space-y-2 text-sm text-muted-foreground">
         <p>
-          {read.kind === 'loading'
-            ? translate('settings.agents.loadingHost', 'Loading agent settings…')
-            : read.kind === 'unsupported'
-              ? translate(
-                  'settings.agents.updateHost',
-                  'Update this server to edit its agent launch settings.'
-                )
-              : translate(
-                  'settings.agents.readFailed',
-                  'Couldn’t read agent settings. Check the host connection and try again.'
-                )}
+          {read.kind === 'unsupported'
+            ? translate(
+                'settings.agents.updateHost',
+                'Update this server to edit its agent launch settings.'
+              )
+            : translate(
+                'settings.agents.readFailed',
+                'Couldn’t read agent settings. Check the host connection and try again.'
+              )}
         </p>
         {read.kind === 'failed' ? (
           <Button type="button" variant="ghost" size="xs" onClick={() => void refresh()}>
@@ -140,6 +178,7 @@ export function HostAgentLaunchSettings({
           renderPermissions={renderPermissions}
           autoSupported={read.autoSupported}
           nativeChatPermissionsSupported={read.nativeChatPermissionsSupported}
+          chatOwnSupported={read.chatOwnSupported}
           refreshSettings={() => void refresh()}
         />
       </fieldset>

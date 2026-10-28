@@ -86,8 +86,7 @@ export function renderMobileTasksCreateDrawer(model: ConnectionPresentationModel
                 selectedCreateTarget
                   ? {
                       backgroundColor: getRepoBadgeColor(
-                        selectedCreateTarget as RepoSummary,
-                        (selectedCreateTarget as RepoSummary).displayName
+                        'badgeColor' in selectedCreateTarget ? selectedCreateTarget : undefined
                       )
                     }
                   : undefined
@@ -313,7 +312,7 @@ export function renderMobileTasksLinearConnectDrawer(model: ConnectionPresentati
 export function renderMobileTasksWorkspaceCreateTargetPicker(model: ConnectionPresentationModel) {
   const {
     openWorkspaceCreate,
-    setWorkspaceRepoPickerItem,
+    repoPickerHandoff,
     taskUiReady,
     workspaceRepoOptions,
     workspaceRepoPickerItem,
@@ -327,11 +326,11 @@ export function renderMobileTasksWorkspaceCreateTargetPicker(model: ConnectionPr
       selected={workspaceRepos[0]?.id ?? ''}
       onSelect={(repoId) => {
         if (workspaceRepoPickerItem) {
-          openWorkspaceCreate(workspaceRepoPickerItem, repoId)
+          const item = workspaceRepoPickerItem
+          repoPickerHandoff.closeThen(() => openWorkspaceCreate(item, repoId))
         }
-        setWorkspaceRepoPickerItem(null)
       }}
-      onClose={() => setWorkspaceRepoPickerItem(null)}
+      {...repoPickerHandoff.drawerProps}
       zIndex={TASK_SECONDARY_DRAWER_Z_INDEX}
     />
   )

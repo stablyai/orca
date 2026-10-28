@@ -13,9 +13,7 @@ export type PRRefreshCoordinatorMocks = {
   spendsSharedGitHubComQuotaMock: Mock
 }
 
-// Why: every coordinator suite registers its own `vi.mock` factories (hoisting
-// is per-file), so the mock set and the factory bodies live here and each test
-// file only wires them together.
+// Vitest hoists per file; suites register these shared factories locally.
 export function createPRRefreshCoordinatorMocks(): PRRefreshCoordinatorMocks {
   return {
     sendMock: vi.fn(),
@@ -82,8 +80,7 @@ export function ipcUiModuleMock(mocks: PRRefreshCoordinatorMocks): IpcUiModuleMo
   }
 }
 
-// The coordinator keeps module-level queue state; reset modules and timers so
-// one suite's pending work cannot leak into the next test.
+// Module queues and timers must not leak pending work between tests.
 export function resetPRRefreshCoordinatorMocks(mocks: PRRefreshCoordinatorMocks): void {
   const {
     sendMock,

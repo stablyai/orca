@@ -93,8 +93,6 @@ it('indexes and answers once the setting is on', async () => {
   expect(errors).toEqual([])
 })
 
-// The whole reason the indexer is immutable: a change is a new instance, and the
-// old one is closed before it exists, so there is never a second writer.
 it('closes the live pair and starts a new one on a settings change', async () => {
   const recent = transcriptPath(RECENT_SESSION_ID)
   const ancient = transcriptPath(ANCIENT_SESSION_ID)
@@ -108,13 +106,11 @@ it('closes the live pair and starts a new one on a settings change', async () =>
   await subject.settled()
   expect(await searchFor('ancient')).toEqual([ANCIENT_SESSION_ID])
 
-  // Narrowing: the new instance's opening sweep purges what the window no longer covers.
   subject.apply({ enabled: true, historyDays: 30 })
   await subject.settled()
   expect(await searchFor('ancient')).toEqual([])
   expect(await searchFor('recent')).toEqual([RECENT_SESSION_ID])
 
-  // Widening: the same recipe the other way, admitting files no read ever saw.
   subject.apply({ enabled: true, historyDays: null })
   await subject.settled()
   expect(await searchFor('ancient')).toEqual([ANCIENT_SESSION_ID])
@@ -134,8 +130,6 @@ it('leaves nothing running and no live claim when the setting goes off', async (
 
   subject.apply({ enabled: false, historyDays: null })
   expect(subject.running).toBe(false)
-  // The index is left on disk: disabling is not a deletion, and the claim the
-  // closed indexer staked on the path has to be released or nothing can reopen it.
   expect(existsSync(harness.databasePath)).toBe(true)
   subject.apply({ enabled: true, historyDays: null })
   await subject.settled()
@@ -215,8 +209,6 @@ it('keeps pagination stable when the clock crosses retention before a purge', as
   expect(errors).toEqual([])
 })
 
-// An unresolvable scope is the host's last word, not its first: consent and
-// readiness are what the reader can act on, so they have to answer first.
 it('reports being switched off before blaming a scope it does not know', async () => {
   const subject = newInstance()
   subject.apply({ enabled: false, historyDays: null })
@@ -232,7 +224,6 @@ it('reports not being ready before blaming a scope it does not know', async () =
   const subject = newInstance()
   subject.apply({ enabled: true, historyDays: null })
   await subject.settled()
-  // Consent stands while no index does, which is what `not-ready` names.
   subject.close()
 
   expect(await subject.search({ query: 'anything' }, { kind: 'unknown' })).toEqual({
@@ -255,7 +246,5 @@ it('answers scope-unknown once it is switched on and ready', async () => {
     kind: 'unavailable',
     reason: 'scope-unknown'
   })
-  // The same query answers with hits when no scope is in the way, so the refusal
-  // above is the scope's and not an empty or unreadable index.
   expect(await searchFor('distinctive')).toEqual([RECENT_SESSION_ID])
 })

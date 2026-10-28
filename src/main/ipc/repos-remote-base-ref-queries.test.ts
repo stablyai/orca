@@ -44,7 +44,6 @@ describe('repos:getBaseRefDefault envelope', () => {
     mockStore.getRepos.mockReset().mockReturnValue([])
     mockStore.getRepo.mockReset()
     prepareLocalWorktreeRootForRepoMock.mockReset().mockResolvedValue(undefined)
-    // Reset exec so a newly added test doesn't inherit the previous test's exec mock.
     gitExecFileAsyncMock.mockReset()
     vi.mocked(getBaseRefDefault).mockClear()
     registerRepoHandlers(mockWindow as never, mockStore as never, {} as never)
@@ -82,7 +81,6 @@ describe('repos:getBaseRefDefault envelope', () => {
       remoteCount: number
     }
 
-    // getBaseRefDefault is mocked to 'origin/main', getRemoteCount to 1
     expect(result.defaultBaseRef).toBe('origin/main')
     expect(result.remoteCount).toBe(1)
   })

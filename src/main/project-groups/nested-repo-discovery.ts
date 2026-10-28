@@ -29,8 +29,7 @@ async function hasGitMarker(dirPath: string): Promise<boolean> {
 }
 
 async function readLocalDirectory(dirPath: string): Promise<NestedRepoDirectoryEntry[]> {
-  // Why: Dirent data avoids one stat per child and keeps symlinked directories
-  // from expanding the scan outside the selected folder.
+  // Dirents avoid per-child stat and prevent symlink traversal outside the selected folder.
   const entries = await readdir(dirPath, { withFileTypes: true })
   return entries.map((entry) => ({
     name: entry.name,
@@ -159,8 +158,7 @@ export async function scanNestedRepos(args: {
         continue
       }
       const childPath = filesystem.joinPath(currentFolder.path, name)
-      // Why: broad scans should use cheap filesystem markers instead of
-      // spawning Git for every candidate directory, especially over SSH.
+      // Filesystem markers avoid per-directory Git spawns, especially over SSH.
       const childHasGitMarker = await filesystem.hasGitMarker(childPath)
       if (noteAbort()) {
         break
@@ -172,12 +170,10 @@ export async function scanNestedRepos(args: {
           depth: currentFolder.depth + 1
         })
         emitProgress()
-        // Project Groups organize sibling repos; nested repos stay hidden until a
-        // later UI can explain and select submodule-style layouts explicitly.
+        // Hide submodule-style descendants until the group UI supports selecting them.
         continue
       }
-      // Why: group import should prefer nearby sibling repos over spending the
-      // bounded scan inside an alphabetically early, deeply nested folder.
+      // Breadth-first traversal spends the bounded scan on nearby siblings before deep branches.
       if (currentFolder.depth < options.maxDepth) {
         foldersToTraverse.push({
           path: childPath,

@@ -29,10 +29,7 @@ import type { CodexManagedAccount } from '../../shared/managed-account-types'
 import { CodexRuntimeHomeSync } from './runtime-home-service-sync'
 
 export abstract class CodexRuntimeHomeManagedHome extends CodexRuntimeHomeSync {
-  // Why: a managed HOST account runs against its own self-contained CODEX_HOME
-  // (codex-accounts/<id>/home) rather than the shared runtime mirror. Its
-  // auth.json lives there and codex refreshes it in place, so two accounts never
-  // race one auth.json. WSL accounts keep their per-distro lane.
+  // Host accounts refresh auth in separate homes so concurrent accounts cannot race one auth.json.
   protected getSelfContainedManagedHostAccount(): CodexManagedAccount | null {
     const settings = this.store.getSettings()
     const account = this.getActiveAccount(
@@ -45,7 +42,6 @@ export abstract class CodexRuntimeHomeManagedHome extends CodexRuntimeHomeSync {
     return account
   }
 
-  // Why: session discovery must surface every account's own rollouts wherever they live.
   protected getManagedAccountHomesForSessionDiscovery(): string[] {
     const settings = this.store.getSettings()
     const homes: string[] = []
@@ -56,8 +52,7 @@ export abstract class CodexRuntimeHomeManagedHome extends CodexRuntimeHomeSync {
         homes.push(wslHome)
         continue
       }
-      // Why: no host home can be owned without the accounts root, so a lookup poll skips the
-      // per-account ownership-marker reads (and their warnings) until one exists.
+      // A missing accounts root makes per-account ownership reads and warnings unnecessary.
       hostAccountsRootMissing ??= this.isManagedAccountsRootDefinitivelyAbsent()
       if (hostAccountsRootMissing) {
         continue
@@ -101,9 +96,7 @@ export abstract class CodexRuntimeHomeManagedHome extends CodexRuntimeHomeSync {
   ): string | null {
     const resolved = this.resolveSelfContainedManagedHome(account)
     if (resolved.kind === 'indeterminate') {
-      // Why: refuse the launch rather than silently falling through to the
-      // system default, which would run a different account behind a UI still
-      // showing this one. The selection stays put; a later read may succeed.
+      // Refuse launch without switching accounts behind a UI that still shows this selection.
       throw new ManagedCodexHomeTemporarilyUnavailableError()
     }
     if (resolved.kind === 'untrusted') {
@@ -121,12 +114,9 @@ export abstract class CodexRuntimeHomeManagedHome extends CodexRuntimeHomeSync {
         this.clearSelfContainedManagedSelection(account, 'credential remained unavailable')
         return null
       }
-      // Why: a transient missing/unreadable auth.json is usually codex rotating
-      // it; keep the selection and launch — the CLI re-reads the settled file.
+      // Allow auth rotation to settle; Codex re-reads the file after launch.
     }
-    // Why: link the user's real ~/.codex resources and mirror config into THIS
-    // home (never symlinking into or mutating ~/.codex), so the per-account home
-    // is a complete CODEX_HOME. Hooks/trust are installed by the launch caller.
+    // Materialize resources and config in this home; the launch caller installs hooks and trust.
     this.lastSyncedAccountId = account.id
     this.lastHostAccountUsedSelfContainedHome = true
     this.sharedAuthRefreshBlockedByManagedTransition = true
@@ -140,11 +130,7 @@ export abstract class CodexRuntimeHomeManagedHome extends CodexRuntimeHomeSync {
     return perAccountHome
   }
 
-  // Why: Codex's own `/resume` picker only lists rollouts under the launch
-  // CODEX_HOME, so a self-contained account home starts out with no history at
-  // all. Hardlink every other Orca-visible home's rollouts in — after launch,
-  // since history trees can be large — so switching accounts no longer hides
-  // the user's conversations.
+  // Bridge history in the background: /resume only sees launch-home rollouts, and scans can be large.
   protected startSelfContainedSessionBridgeForLaunch(perAccountHome: string): void {
     void startCodexAccountSessionBridgeInBackground({
       targetCodexHomePath: perAccountHome,
@@ -154,24 +140,19 @@ export abstract class CodexRuntimeHomeManagedHome extends CodexRuntimeHomeSync {
 
   protected getSelfContainedSessionBridgeSourceHomes(): string[] {
     return [
-      // Why: history-only override lets custom-CODEX_HOME users bridge from the
-      // home they actually record sessions in; falls back to the real ~/.codex.
+      // Honor custom history sources without changing credential routing.
       resolveHostCodexSessionSourceHome(this.store.getSettings()) ?? getSystemCodexHomePath(),
-      // Why: path only — a per-account install must not materialize the mirror.
+      // Resolve the mirror path without creating it for per-account launches.
       resolveOrcaManagedCodexHomePath(),
       ...this.getManagedHostAccountHomesForSessionDiscovery()
     ]
   }
 
-  // Why: the per-account home is both the launch CODEX_HOME and the credential
-  // store, so codex reads/refreshes auth.json in place — there is no shared-home
-  // hot-swap or token read-back to reconcile. A trusted home remains selected
-  // while Codex atomically replaces auth.json.
+  // Per-account homes own auth refreshes in place; selection needs no shared-mirror read-back.
   protected syncSelfContainedManagedSelection(account: CodexManagedAccount): void {
     const resolved = this.resolveSelfContainedManagedHome(account)
     if (resolved.kind === 'indeterminate') {
-      // Why: a sync runs on every app start, exactly when antivirus is busiest.
-      // An unreadable home must not deselect the account (#STA-4422).
+      // Transient read failures must preserve selection (#STA-4422).
       return
     }
     const perAccountHome = resolved.kind === 'owned' ? resolved.homePath : null
@@ -180,20 +161,14 @@ export abstract class CodexRuntimeHomeManagedHome extends CodexRuntimeHomeSync {
       this.lastHostAccountUsedSelfContainedHome = true
       this.sharedAuthRefreshBlockedByManagedTransition = true
       this.markSharedRuntimeAuthManaged(account.id)
-      // Why: selection runs well before the user restarts a pane, so history is
-      // already linked in by the time the newly launched Codex opens /resume.
+      // Start history bridging at selection so /resume is ready before the next launch.
       this.startSelfContainedSessionBridgeForLaunch(perAccountHome)
       return
     }
     this.clearSelfContainedManagedSelection(account)
   }
 
-  /**
-   * Why: an unreadable home and an untrustworthy one demand opposite responses.
-   * Only `untrusted` may clear the user's selection; `indeterminate` means we
-   * could not tell, so callers refuse the operation and leave durable state
-   * alone (#STA-4422).
-   */
+  /** Only `untrusted` permits deselection; `indeterminate` must preserve durable state. */
   protected resolveSelfContainedManagedHome(
     account: CodexManagedAccount
   ): { kind: 'owned'; homePath: string } | { kind: 'untrusted' } | { kind: 'indeterminate' } {
@@ -204,8 +179,7 @@ export abstract class CodexRuntimeHomeManagedHome extends CodexRuntimeHomeSync {
       expectedAccountId: account.id
     })
     if (verdict.kind === 'owned') {
-      // Preserve the persisted path spelling (notably /var vs /private/var on
-      // macOS) so injected CODEX_HOME stays stable across the rollout.
+      // Keep persisted spelling (such as /var on macOS) so injected CODEX_HOME remains stable.
       return { kind: 'owned', homePath: account.managedHomePath }
     }
     if (verdict.kind === 'untrusted') {
@@ -281,12 +255,12 @@ export abstract class CodexRuntimeHomeManagedHome extends CodexRuntimeHomeSync {
     if (!distro) {
       return
     }
-    // Why: history-only override lets custom-CODEX_HOME users bridge from their real home; falls back to <wslHome>/.codex.
+    // Honor custom WSL history sources without changing credential routing.
     const systemCodexHomePath =
       resolveWslCodexSessionSourceHome(this.store.getSettings(), distro) ??
       this.getWslSystemCodexHomePath({ runtime: 'wsl', wslDistro: distro })
     if (systemCodexHomePath && systemCodexHomePath !== runtimeHomePath) {
-      // Why: WSL history must be hardlinked inside the distro; host-side links can't bridge Windows and WSL filesystems in a resume-visible way.
+      // Create history links inside the distro so Codex can see them in /resume.
       void startWslCodexSessionBridgeInBackground({
         distro,
         systemCodexHomePath,

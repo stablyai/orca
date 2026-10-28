@@ -8,13 +8,13 @@ import { LINEAR_ISSUE_API_PAGE_SIZE_MAX } from '../../shared/linear/issue-read-l
 import { acquire, release } from './linear-request-concurrency'
 import { clearToken } from './linear-token-store'
 import { getClients, isAuthError } from './client'
-import { linearError } from './issue-context-errors'
+import { linearError } from './issue-context/errors'
 import {
   INVERSE_RELATIONS_QUERY,
   RELATIONS_QUERY,
   type RawRelationNode,
   type RawRelationsResponse
-} from './issue-context-raw'
+} from './issue-context/raw'
 import { createLinearIssueRelation, deleteLinearIssueRelation } from './issue-relation-mutation'
 import { LinearWriteFailure } from './linear-issue-write-support'
 

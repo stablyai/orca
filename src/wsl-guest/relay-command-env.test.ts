@@ -6,8 +6,7 @@ import {
   buildRelayUnattendedGitEnv
 } from './relay-command-env'
 
-// homedir() is the fallback when the relay env carries no HOME; mock it so the
-// fallback path is deterministic and the "no resolvable home" branch is reachable.
+// Fix the fallback home so no-resolvable-home behavior is testable and independent of the user’s machine.
 vi.mock('os', () => ({ homedir: vi.fn(() => '/home/fallback') }))
 
 describe('buildRelayCommandEnv', () => {
@@ -245,7 +244,6 @@ describe('buildRelayGitEnv', () => {
     expect(env.LC_ALL).toBe('en_US.UTF-8')
     expect(env.LANG).toBe('en_US.UTF-8')
     expect(env.LANGUAGE).toBe('en')
-    // PATH fallback behavior is unchanged.
     expect(env.PATH?.split(':')).toEqual(expect.arrayContaining(['/usr/bin', '/usr/local/bin']))
   })
 })

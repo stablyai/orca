@@ -37,8 +37,7 @@ describe('getRuntimeWorktreeRemovalOptionsKey', () => {
 
 describe('runtimeRepoMatchesExecutionHost', () => {
   it('matches an unstamped SSH repo against its own host (#11163)', () => {
-    // The row spells its ownership as `connectionId`; the request spells it as `ssh:<target>`.
-    // Rejecting it here makes repo-add/clone dedupe register a second row for the same path.
+    // Legacy connectionId must match ssh:<target> requests or repo-add/clone dedupe creates duplicate rows.
     expect(runtimeRepoMatchesExecutionHost({ connectionId: 'target-1' }, 'ssh:target-1')).toBe(true)
   })
 

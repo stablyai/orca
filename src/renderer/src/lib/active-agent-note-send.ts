@@ -3,7 +3,7 @@ import { runtimeTargetForOwnerEnvironment } from '@/runtime/runtime-client-targe
 import type { RuntimeClientTarget } from '../../../shared/runtime-client-target'
 import { useAppStore } from '@/store'
 import { callRuntimeRpc } from '@/runtime/runtime-rpc-client'
-import { runtimeEnvironmentIdWithLegacyFallbackUnlessTwin } from '@/lib/worktree-runtime-owner'
+import { runtimeEnvironmentIdOrLocalUnlessTwin } from '@/lib/worktree-runtime-owner'
 import { findActiveRuntimeTerminal, getActiveTerminalNoteTarget } from './active-agent-note-target'
 import type { ActiveTerminalNoteTarget } from './active-agent-note-target'
 import type { ActiveAgentNotesSendResult } from './active-agent-note-send-result'
@@ -74,7 +74,7 @@ async function sendNotesToActiveAgentSessionInternal({
     return reportNoteSendFailure({ status: 'no-active-terminal', code: 'no-note-target' }, null)
   }
   const runtimeTarget = runtimeTargetForOwnerEnvironment(
-    runtimeEnvironmentIdWithLegacyFallbackUnlessTwin(state, worktreeId)
+    runtimeEnvironmentIdOrLocalUnlessTwin(state, worktreeId)
   )
   const terminal = await findActiveRuntimeTerminal(
     runtimeTarget,

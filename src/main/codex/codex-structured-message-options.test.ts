@@ -3,7 +3,7 @@ import { AgentModelCatalogStore } from '../native-chat/agent-model-catalog/agent
 import { optionSession } from './codex-structured-option-session.test-fixture'
 import { resolvedCodexMessageOptions } from './codex-structured-message-options'
 import { dispatchCodexTurn, startCodexTurn } from './codex-structured-turn-start'
-import { CodexAppServerRequestError } from './codex-app-server-connection'
+import { CodexAppServerRequestError } from './app-server/codex-app-server-request-error'
 import type { CodexSession } from './codex-structured-session-state'
 import {
   acquireReadyCodexForTest,
@@ -105,6 +105,21 @@ describe('Codex captured message choices', () => {
     })
   })
 
+  it('sends saved literal model and effort after the installed choices change', async () => {
+    const request = vi.fn(async (_method: string, _params?: Record<string, unknown>) => ({
+      turn: { id: 'turn-1' }
+    }))
+    const session = optionSession(request)
+    seedMessageDefaults(session)
+    for (const model of ['model-b', 'retired-model']) {
+      session.activeTurnIds = new Set()
+      const turnOptions = await resolvedCodexMessageOptions(session, { model, effort: 'low' })
+      await startCodexTurn(session, { clientMessageId: model, body: USER_MESSAGE, turnOptions })
+      expect(request.mock.calls.at(-1)?.[0]).toBe('turn/start')
+      expect(request.mock.calls.at(-1)?.[1]).toMatchObject({ model, effort: 'low' })
+    }
+  })
+
   it('resets an explicit empty choice after a thread launch and earlier turn override', async () => {
     const request = vi.fn(async (method: string, _params?: Record<string, unknown>) =>
       method === 'turn/start'
@@ -148,7 +163,6 @@ describe('Codex captured message choices', () => {
       request.mock.calls.filter(([method]) => method === 'turn/start').map(([, params]) => params)
     ).toMatchObject([
       { model: 'model-a', effort: 'high', personality: 'friendly', serviceTier: 'priority' },
-      // Unchosen keys keep the thread's own model and effort, not the listing's defaults.
       { model: 'model-a', effort: 'high', personality: 'pragmatic', serviceTier: 'flex' },
       { model: 'model-a', effort: 'high' },
       { model: 'model-a', effort: 'low' }
@@ -166,7 +180,7 @@ describe('Codex captured message choices', () => {
     })
   })
 
-  it('reports what a turn ran: a listed effort for an unlisted thread one, a steer its turn', async () => {
+  it('reports what a turn ran: its thread effort, and a steer its turn', async () => {
     const request = vi.fn(async (method: string, _params?: Record<string, unknown>) =>
       method === 'turn/steer' ? { turnId: 'turn-1' } : { turn: { id: 'turn-1' } }
     )
@@ -184,7 +198,7 @@ describe('Codex captured message choices', () => {
         },
         undefined
       )
-    const ran = { model: 'model-a', effort: 'low' }
+    const ran = { model: 'model-a', effort: 'xhigh' }
     expect(await send('first', { model: 'model-a' })).toMatchObject({ ranOptions: ran })
     expect(request.mock.calls[0]?.[1]).toMatchObject(ran)
     session.activeTurnIds = new Set(['turn-1'])

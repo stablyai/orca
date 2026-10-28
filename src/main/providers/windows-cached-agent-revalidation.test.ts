@@ -12,7 +12,6 @@ describe('canRevalidateCachedAgentWithoutScan', () => {
   })
 
   it('is false when node-pty already names a recognized agent (no scan needed)', () => {
-    // Nothing to save here — the fast no-scan path already returns the agent.
     expect(canRevalidateCachedAgentWithoutScan('claude', 'claude')).toBe(false)
   })
 
@@ -48,11 +47,7 @@ describe('judgeCachedAgentJobEvidence', () => {
     })
 
   it('defers to the scan when the build has no job exports to consult', () => {
-    // Every shipped Windows release still ships a node-pty without them
-    // (#16059), so the read is null for ALL real users today. Calling that
-    // 'unavailable' means the retire path never fires for any of them -- worse
-    // than the forked probe it replaced, which at least retired. 'unsupported'
-    // is "nothing to ask", not "asked and could not", so the scan decides.
+    // Missing native exports mean no job capability, not lost contact; let the authoritative scan decide (#16059).
     const unsupported = (anchorProcessId: number | null, identityAgeMs: number) =>
       judgeCachedAgentJobEvidence({
         jobProcessIds: null,
@@ -67,7 +62,6 @@ describe('judgeCachedAgentJobEvidence', () => {
   })
 
   it('is unavailable without a job answer, never exit proof', () => {
-    // Supported-but-null is genuine loss of contact and must still hold.
     expect(judge(null, AGENT, FRESH)).toBe('unavailable')
     expect(judge(null, null, AGED)).toBe('unavailable')
     expect(
@@ -90,8 +84,7 @@ describe('judgeCachedAgentJobEvidence', () => {
   })
 
   it('downgrades an anchored identity when its pid leaves a job that still has members', () => {
-    // The survivor is a detached leftover OR the agent's restarted successor;
-    // only a scan can tell, so the verdict must not be a hard exit.
+    // Another member could be a restarted successor; only a fresh scan can distinguish it from leftovers.
     expect(judge(new Set([SHELL, 777]), AGENT, FRESH)).toBe('anchor-exited')
   })
 
@@ -106,7 +99,6 @@ describe('judgeCachedAgentJobEvidence', () => {
   })
 
   it('treats a shell-pid anchor as unanchored', () => {
-    // The shell being alive proves nothing about the agent.
     expect(judge(new Set([SHELL, 777]), SHELL, FRESH)).toBe('unproven')
   })
 })

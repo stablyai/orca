@@ -27,7 +27,6 @@ export {
   USAGE_WARNING_PERCENT
 } from './provider-extra-usage-section'
 
-// Re-exported from its shared home so status-bar callers keep a single import.
 export { clampUsedPercent }
 
 export {
@@ -35,10 +34,6 @@ export {
   getProviderUsageErrorMessage,
   getProviderUsageStatusLabel
 } from './usage-error-copy'
-
-// ---------------------------------------------------------------------------
-// Formatting helpers
-// ---------------------------------------------------------------------------
 
 export function formatTimeAgo(ts: number): string {
   const diff = Date.now() - ts
@@ -53,8 +48,7 @@ export function formatTimeAgo(ts: number): string {
   return `${hours}h ago`
 }
 
-// Re-export so existing tooltip consumers/tests keep their import path; the
-// implementation is shared with mobile in src/shared/rate-limit-reset-format.
+// Preserve tooltip imports while sharing countdown formatting with mobile.
 export { formatResetCountdown }
 
 export function formatResetCreditExpiry(
@@ -78,10 +72,6 @@ export function formatResetCreditExpiry(
         value0: duration
       })
 }
-
-// ---------------------------------------------------------------------------
-// Shared icon component
-// ---------------------------------------------------------------------------
 
 export function ProviderIcon({ provider }: { provider: string }): React.JSX.Element {
   if (provider === 'codex') {
@@ -149,10 +139,6 @@ function ErrorMessage({
   )
 }
 
-// ---------------------------------------------------------------------------
-// Window section derivation
-// ---------------------------------------------------------------------------
-
 export function getWindowSections(
   p: ProviderRateLimits
 ): { label: string; window: RateLimitWindow | null }[] {
@@ -160,8 +146,7 @@ export function getWindowSections(
     const bucketSections = p.buckets.map((b) => ({ label: b.name, window: b as RateLimitWindow }))
     return [
       ...bucketSections,
-      // Why: Cursor reports the plan total in `monthly` and its pools as buckets,
-      // so dropping it here would hide the number closest to the user's cap.
+      // Include Cursor’s monthly plan total because pools can understate proximity to its cap.
       ...(p.monthly
         ? [
             {
@@ -207,14 +192,7 @@ export function getWindowSections(
   return sections
 }
 
-// ---------------------------------------------------------------------------
-// Tooltip — progress bar section for a single window
-// ---------------------------------------------------------------------------
-
-// Why: the base tooltip component uses `bg-foreground text-background` which
-// inverts the color scheme (light bg in dark mode). These rich tooltips use
-// `text-background` for primary text and `text-background/50` for secondary
-// to stay readable inside the inverted tooltip container.
+// Tooltips invert the theme; use background text tokens for legible primary and secondary content.
 
 function ProviderRateLimitWindowSection({
   window,

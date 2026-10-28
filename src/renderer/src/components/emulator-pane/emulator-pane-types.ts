@@ -42,7 +42,6 @@ export function deviceLabel(
   return 'Mobile Emulator'
 }
 
-/** Resolve the MJPEG endpoint serve-sim exposes for the live phone preview. */
 export function simulatorPreviewStreamUrl(info?: EmulatorStreamInfo): string | undefined {
   if (!info) {
     return undefined

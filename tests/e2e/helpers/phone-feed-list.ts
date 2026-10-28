@@ -1,14 +1,14 @@
 import { expect } from '@stablyai/playwright-test'
 import type { Page } from '@stablyai/playwright-test'
 import { buildSidebarFeedRows } from '../../../src/shared/sidebar-list/sidebar-feed-rows'
-import {
-  HostSidebarFeedReader,
-  type HostSidebarFeedRead
-} from '../../../mobile/src/host-screen/host-sidebar-feed-reader'
 import { buildSidebarFeedCatalog } from '../../../src/shared/sidebar-list/sidebar-feed-catalog'
 import { buildHostFeedView } from '../../../mobile/src/host-screen/host-sidebar-feed-inputs'
 import { buildHostFeedSections } from '../../../mobile/src/host-screen/host-sidebar-feed-sections'
-import { readHostSidebarFeed } from '../../../mobile/src/host-screen/use-host-sidebar-feed'
+import {
+  readHostSidebarFeed,
+  type HostSidebarFeedRead
+} from '../../../mobile/src/host-screen/use-host-sidebar-feed'
+import { createHostSidebarFeedReader } from '../../../mobile/src/host-screen/host-sidebar-feed-connection'
 import { readHostMethodReply } from '../../../mobile/src/host-screen/host-sidebar-feed-operations'
 import {
   hostPlatformRead,
@@ -87,11 +87,7 @@ function socketEventClient(socket: PairedMobileSocket) {
   }
 }
 
-/**
- * The phone page's workspace list over a real paired socket, built by the page's own modules: its
- * refresh lifecycle, feed reader, the shared builder and its section mapping. Reads happen only
- * when that lifecycle makes them; an assertion reads what the page last installed.
- */
+// Use the page’s real refresh/feed/section modules over a paired socket; assertions read the last installed feed, not a forced refresh.
 export async function openPhoneFeedList(
   phone: PairedMobileClient,
   /** The workspace this phone last opened on the host: its list's only highlight. */
@@ -99,11 +95,11 @@ export async function openPhoneFeedList(
 ) {
   const socket = await phone.openSocket()
   const port = socketPort(socket)
-  let read: HostSidebarFeedRead = { installed: null, unavailable: false }
+  let read: HostSidebarFeedRead = { snapshot: null, unavailable: false }
   const installListeners = new Set<() => void>()
-  const reader = new HostSidebarFeedReader(port, (next) => {
-    const installed = next.installed && next.installed !== read.installed
-    read = next
+  const reader = createHostSidebarFeedReader(port, ({ snapshot, unavailable }) => {
+    const installed = snapshot !== null && snapshot !== read.snapshot
+    read = { snapshot, unavailable }
     if (installed) {
       installListeners.forEach((listener) => listener())
     }
@@ -125,8 +121,7 @@ export async function openPhoneFeedList(
     hostPlatformRead.interpret
   )
   const answered = platformRead.kind === 'answered' ? platformRead.value : null
-  // Why matched, not read: this helper and the page may resolve different zod copies, so the
-  // reply's inferred type does not carry across.
+  // Match platform literals because separately resolved zod copies do not share inferred reply types.
   const hostPlatform = NODE_PLATFORM_NAMES.find((name) => name === answered) ?? null
   await syncViewSettings()
   const stop = startHostWorktreeRefresh({

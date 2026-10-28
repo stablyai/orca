@@ -92,7 +92,6 @@ function osDrag(): DropDataTransfer {
   return transfer
 }
 
-/** Mounts the composer's claim the way the real composer hook does. */
 function ClaimingComposer({
   disabled = false,
   onDragOverCapture = IGNORE_DRAG,
@@ -255,8 +254,7 @@ describe('NativeChatPaneFileDropSurface', () => {
     )
     fireDrag(transcript, 'dragover', workspaceDrag())
     expect(container.querySelector(OVERLAY)).toBeNull()
-    // The composer still answers for the drag: that refusal is what keeps it
-    // out of the terminal behind the chat.
+    // Refused composer drags must not fall through to the terminal.
     expect(onDragOverCapture).toHaveBeenCalledTimes(1)
   })
 
@@ -305,7 +303,6 @@ describe('NativeChatPaneFileDropSurface', () => {
     fireDrag(transcript, 'dragover', osDrag())
     expect(container.querySelector(OVERLAY)).not.toBeNull()
 
-    // A drop outside the pane still ends its hover state.
     act(() => {
       document.dispatchEvent(new Event('drop', { bubbles: false }))
     })

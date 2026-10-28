@@ -178,8 +178,7 @@ describe('normalizeImageTranscriptMessages', () => {
   })
 
   it('folds a multi-block companion turn into one turn carrying every ref', () => {
-    // Claude records a multi-image paste as ONE companion message with a marker block
-    // per image, so a single-block-only rule missed every multi-image turn.
+    // Claude emits one companion message with multiple source blocks; single-block matching missed multi-image pastes.
     const out = normalizeImageTranscriptMessages([
       {
         id: 'companion',

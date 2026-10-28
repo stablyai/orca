@@ -1,12 +1,7 @@
 import { z } from 'zod'
 import type { PluginEventName } from './plugin-manifest'
 
-/**
- * Payload contracts for the v0 plugin event set (worktree lifecycle + agent
- * status only). Payloads are bounded projections — never raw runtime
- * objects — so nothing sensitive (absolute repo paths beyond the worktree's
- * own, remotes, credentials) can leak through the event stream.
- */
+/** Publish bounded worktree/agent projections, never raw runtime objects, to avoid leaking unrelated paths, remotes or credentials. */
 
 export const worktreeCreatedPayloadSchema = z.object({
   worktreeId: z.string().min(1).max(2048),
@@ -31,9 +26,7 @@ export const agentStatusChangedPayloadSchema = z.object({
   /** The combined status the user sees: `working` while the main agent or any live child works. */
   state: z.string().min(1).max(256),
   receivedAt: z.number().finite().positive(),
-  /** The main agent's own state beside the combined one, so a plugin can tell "the main agent is
-   *  still working" from "a subagent still runs after the main agent finished". Absent from hosts that
-   *  predate it and from rows with no main agent fact; `state` keeps its meaning either way. */
+  /** Distinguish the main agent from combined child activity; absent on older hosts or without main-agent evidence. State keeps its meaning. */
   mainAgent: z
     .object({
       state: z.string().min(1).max(256),

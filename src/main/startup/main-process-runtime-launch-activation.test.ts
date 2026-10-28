@@ -14,7 +14,6 @@ const launchHooks = vi.hoisted(() => ({
 }))
 
 vi.mock('electron', () => ({ app: electronApp, powerMonitor: { on: vi.fn() } }))
-vi.mock('@electron-toolkit/utils', () => ({ is: { dev: false } }))
 vi.mock('../orca-profiles/profile-cloud-auth-config', () => ({
   getOrcaCloudAuthConfig: () => ({ configured: false })
 }))
@@ -67,7 +66,7 @@ vi.mock('./main-process-pty-startup', () => ({
 vi.mock('./codex-launch-preparation', () => ({ prepareCodexRuntimeHomeForLaunch: vi.fn() }))
 vi.mock('./codex-session-resume-launch', () => ({ prepareCodexSessionResumeForLaunch: vi.fn() }))
 vi.mock('./windows-install-dir-acl-recovery', () => ({
-  // The awaited gap before the first window, where a second-instance launch can land.
+  // Model the awaited repair gap in which a second-instance activation can arrive.
   repairKnownPoisonedInstallDirBeforeWindow: vi.fn(async () => {
     launchHooks.duringInstallDirRepair()
     if (launchHooks.failBeforeWindow) {
@@ -89,6 +88,10 @@ vi.mock('../ipc/startup-notification-registration', () => ({
   triggerStartupNotificationRegistration: vi.fn()
 }))
 vi.mock('./main-process-push-startup', () => ({ startDesktopPushService: vi.fn() }))
+vi.mock('./main-process-connector-startup', () => ({
+  installDesktopConnectorCloud: vi.fn(),
+  connectDesktopConnectorCloud: vi.fn()
+}))
 vi.mock('./startup-diagnostics', () => ({ logStartupMilestone: vi.fn() }))
 const setupHeadlessServeAutoUpdater = vi.hoisted(() => vi.fn())
 vi.mock('../window/main-window-updater', () => ({ setupHeadlessServeAutoUpdater }))
@@ -154,7 +157,7 @@ describe('desktop startup activation', () => {
   let firstLoadListeners: (() => void)[]
   const startupSettled = vi.fn()
 
-  // Mirrors openMainWindow's non-idempotent side effects that broke in the field.
+  // Retain non-idempotent window effects that exposed duplicate startup in production.
   function openMainWindow(): FakeWindow {
     const id = windows.length + 1
     const window: FakeWindow = {
@@ -204,7 +207,6 @@ describe('desktop startup activation', () => {
       whenReady: () => Promise.resolve()
     } as unknown as NonNullable<typeof state.windowsShellPathHydration>
     state.initialProxyApplicationReady = Promise.resolve()
-    // Built the way preflight builds it for a desktop launch.
     state.desktopActivationGate = createServeDesktopActivationGate({
       initialState: 'initializing',
       activateWindow: () =>
@@ -310,7 +312,7 @@ describe('desktop startup activation', () => {
 
     expect(windows).toHaveLength(0)
     expect(launchOrder).toEqual(['ssh-registered', 'rpc-start'])
-    // Signals mark their quit, so the macOS native-quit guard lets them through (#15537).
+    // Signal intent must pass the macOS native-quit guard (#15537).
     expect(registerServeSignalHandlers).toHaveBeenCalledWith(process, quitProcess)
     expect(installServeNativeQuitGuard).toHaveBeenCalledWith(
       expect.objectContaining({

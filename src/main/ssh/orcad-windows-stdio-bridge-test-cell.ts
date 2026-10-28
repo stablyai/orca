@@ -1,7 +1,4 @@
-/**
- * The Windows host lane's stdio bridge cell: the lane's sshd refuses forwarding for the orcad
- * cells' accounts, so the managed tunnel must choose the bridge and reach the live orcad over it.
- */
+/** Prove managed connectivity through stdio when the Windows lane's sshd refuses TCP forwarding. */
 import { connect } from 'node:net'
 import { OrcadManagedTunnelTransportProvider } from '../managed-server/lifecycle/orcad-managed-tunnel-transport'
 import {
@@ -15,7 +12,7 @@ import { probeTcpForwarding } from './ssh-tcp-forwarding-probe'
 
 const RESPONSE_TIMEOUT_MS = 60_000
 
-/** A WebSocket upgrade through the tunnel: orcad's server answers that with no client auth. */
+/** WebSocket upgrade needs no client auth, so its response proves server reachability. */
 function firstResponseLine(port: number): Promise<string> {
   return new Promise((resolve, reject) => {
     const socket = connect(port, '127.0.0.1')

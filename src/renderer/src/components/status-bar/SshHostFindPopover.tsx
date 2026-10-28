@@ -10,6 +10,7 @@ import { Popover, PopoverAnchor, PopoverContent } from '@/components/ui/popover'
 import { cn } from '@/lib/utils'
 import { canConnectSshStatus } from '@/ssh/ssh-connection-recoverability'
 import { STATUS_LABELS, statusColor } from '../settings/SshTargetCard'
+import { HostListOverflowNote } from '../host-picker/HostListOverflowNote'
 import { findSshHostMatches, type SshStatusMenuTarget } from './ssh-status-menu-rows'
 import {
   moreSshHostMatchesLabel,
@@ -33,9 +34,9 @@ export function SshHostFindPopover({
   const [query, setQuery] = useState('')
   const dismissedByPointerRef = useRef(false)
   // Why own filtering: cmdk would mount and score an item per host, the DOM cost this avoids.
-  const { matches, moreCount } = open
+  const { shown, hiddenCount } = open
     ? findSshHostMatches(targets, query)
-    : { matches: [], moreCount: 0 }
+    : { shown: [], hiddenCount: 0 }
 
   return (
     <Popover
@@ -59,8 +60,7 @@ export function SshHostFindPopover({
           dismissedByPointerRef.current = true
         }}
         onCloseAutoFocus={(event) => {
-          // Why: an anchor is not a trigger, so Radix has nowhere to return focus; a keyboard
-          // close goes back to the status button, a click elsewhere keeps what was clicked.
+          // Anchors have no automatic focus return; keyboard closes restore the status button while outside clicks keep focus.
           event.preventDefault()
           if (!dismissedByPointerRef.current) {
             anchorRef.current?.focus()
@@ -76,7 +76,7 @@ export function SshHostFindPopover({
           />
           <CommandList>
             <CommandEmpty>{noMatchingSshHostsLabel()}</CommandEmpty>
-            {matches.map((target) => (
+            {shown.map((target) => (
               <CommandItem
                 key={target.id}
                 value={target.id}
@@ -98,11 +98,7 @@ export function SshHostFindPopover({
               </CommandItem>
             ))}
           </CommandList>
-          {moreCount > 0 ? (
-            <div className="border-t border-border px-3 py-2 text-xs text-muted-foreground">
-              {moreSshHostMatchesLabel(moreCount)}
-            </div>
-          ) : null}
+          <HostListOverflowNote hiddenCount={hiddenCount} label={moreSshHostMatchesLabel} />
         </Command>
       </PopoverContent>
     </Popover>

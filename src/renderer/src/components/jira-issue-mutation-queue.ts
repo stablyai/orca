@@ -1,4 +1,4 @@
-import type { JiraIssue, JiraMutationResult } from '../../../shared/jira-types'
+import type { JiraIssue, JiraMutationResult } from '../../../shared/jira/jira-types'
 import type { GlobalSettings } from '../../../shared/global-settings-types'
 import type { TaskSourceContext } from '../../../shared/task-source-context'
 import { getJiraReadIdentity } from '@/store/slices/jira-read-coordination'

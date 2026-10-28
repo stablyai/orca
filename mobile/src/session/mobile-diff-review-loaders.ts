@@ -18,7 +18,10 @@ import {
   canOpenMobileBranchCompareDiff,
   type MobileGitBranchCompareResult
 } from '../source-control/mobile-branch-compare'
-import { resolveMobileBranchCompareBaseRef } from '../source-control/mobile-branch-base-ref'
+import {
+  resolveMobileBranchCompareBaseRef,
+  type MobileBranchCompareTarget
+} from '../source-control/mobile-branch-base-ref'
 import { gitStatusProjectionRead } from '../source-control/mobile-git-read-operations'
 import { isMobileGitUnavailable } from '../source-control/mobile-git-status'
 import { refusedRpcMessageOrFallback } from '../transport/rpc-refusal-message'
@@ -38,9 +41,9 @@ type DiffLoadInput = {
   worktreeId: string
   item: MobileDiffReviewQueueItem
   branchCompare: MobileGitBranchCompareResult | null
+  ignoreTrimWhitespace?: boolean
 }
 
-/** One settled file diff and the operation that reads it; the two methods share a reader. */
 type PendingFileDiff = {
   reply: RpcResponse
   interpret: (reply: RpcResponse) => MobileReviewGitDiffResult
@@ -48,10 +51,11 @@ type PendingFileDiff = {
 
 export async function loadMobileDiffReviewBranchCompare(
   client: RpcClient,
-  worktreeId: string
+  worktreeId: string,
+  compare?: MobileBranchCompareTarget
 ): Promise<BranchCompareLoadResult> {
   try {
-    const baseRef = await resolveMobileBranchCompareBaseRef(client, worktreeId)
+    const baseRef = await resolveMobileBranchCompareBaseRef(client, worktreeId, compare)
     if (!baseRef) {
       return { result: null }
     }
@@ -59,13 +63,10 @@ export async function loadMobileDiffReviewBranchCompare(
       worktree: `id:${worktreeId}`,
       baseRef
     })
-    // Why the raw refusal: a host that does not offer git to mobile is a capability gap this
-    // screen degrades on, and no acceptance policy carries the code and message through.
+    // Inspect raw refusal to degrade capability gaps; acceptance policies do not carry code/message.
     if (!reply.ok && isMobileGitUnavailable(reply.error?.code, reply.error?.message)) {
       return { result: null }
     }
-    // The reader refuses a compare it cannot normalize, so the "response was invalid" branch main
-    // kept here is gone: an unreadable compare arrives as the incompatible-reply message instead.
     try {
       return { result: reviewBranchCompareRead.interpret(reply) }
     } catch (error) {
@@ -82,7 +83,9 @@ export async function loadMobileDiffReviewBranchCompare(
 
 export async function loadMobileDiffReviewSnapshot(
   client: RpcClient,
-  worktreeId: string
+  worktreeId: string,
+  // Compare against the same base the Changes list just showed.
+  compareAgainstUpstream: boolean
 ): Promise<ReviewScreenState> {
   const statusReply = await gitStatusProjectionRead.request(client, {
     worktree: `id:${worktreeId}`
@@ -103,10 +106,12 @@ export async function loadMobileDiffReviewSnapshot(
     throw new Error('Source control response was invalid')
   }
 
-  // Both legs are interpreted after the barrier, not as each lands: a refused worktree.show must
-  // not decide the error before the compare leg has had its own chance to fail.
+  // Interpret after both reads settle so worktree refusal cannot preempt the compare failure.
   const [branch, worktreeReply] = await Promise.all([
-    loadMobileDiffReviewBranchCompare(client, worktreeId),
+    loadMobileDiffReviewBranchCompare(client, worktreeId, {
+      compareAgainstUpstream,
+      upstreamName: status.upstreamStatus?.upstreamName
+    }),
     reviewWorktreeMetadataRead.request(client, { worktree: `id:${worktreeId}` })
   ])
   let metadata
@@ -153,8 +158,7 @@ export async function loadMobileDiffReviewDiff(input: DiffLoadInput): Promise<Re
       ? await requestBranchFileDiff(client, worktreeId, item, branchCompare)
       : await requestWorktreeFileDiff(client, worktreeId, item)
   if (!pending.reply.ok) {
-    // Why the raw refusal: `diff_too_large` is a render mode rather than a failure, and no
-    // acceptance policy carries the code through.
+    // Read the raw code because diff_too_large selects a render mode rather than a failure.
     if (pending.reply.error?.code === 'diff_too_large') {
       return { kind: 'too-large', itemKey: item.key }
     }
@@ -174,7 +178,9 @@ export async function loadMobileDiffReviewDiff(input: DiffLoadInput): Promise<Re
   if (result.kind === 'too-large') {
     return { kind: 'too-large', itemKey: item.key, byteLength: result.byteLength }
   }
-  const diff = buildMobileDiffLines(result.originalContent, result.modifiedContent)
+  const diff = buildMobileDiffLines(result.originalContent, result.modifiedContent, {
+    ignoreTrimWhitespace: input.ignoreTrimWhitespace
+  })
   const language = resolveMobileSyntaxLanguage(item.filePath)
   return {
     kind: 'ready',

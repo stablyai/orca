@@ -1,5 +1,3 @@
-// Where subagent sections and their roster entries sit among the transcript's slots.
-
 import type {
   NativeChatMessage,
   NativeChatSubagentEntry
@@ -26,7 +24,7 @@ import {
 import {
   nativeChatRowRendersProse,
   nativeChatRowSpeaksOrActs
-} from '../../../../shared/native-chat-trailing-run'
+} from '../../../../shared/native-chat/native-chat-trailing-run'
 import type { NativeChatTranscriptSlot } from './native-chat-transcript-slots'
 
 /** The head of a section no loaded roster row holds: it names whose rows follow it. */
@@ -54,12 +52,7 @@ export type NativeChatSubagentEntriesSlot = {
   estimatedHeight: number
 }
 
-/** Emits subagent sections into `slots`: one the session spawned under its entry in the
- *  roster row that names it, while that row's list is open; any other's head where its
- *  first row happened, and its rows once open. A section is open while it is its running
- *  scope's live frontier (`live`); the reader's choice outranks that. A roster list is
- *  open while the frontier or a reader's choice is on one of its sections, unless the
- *  reader closed the list. */
+/** Place children under loaded roster entries or their first rows; live-frontier defaults yield to reader section/list choices. */
 export function nativeChatSubagentSectionSlots({
   sections,
   choices,
@@ -87,11 +80,9 @@ export function nativeChatSubagentSectionSlots({
       estimatedHeight: NATIVE_CHAT_SUBAGENT_SECTION_HEAD_PX
     })
   }
-  /** `turnKey`: the turn the section is shown in. Its rows carry that one, not the
-   *  turn each was written in, so the outline rail lights where the reader is. */
+  /** Use the section’s displayed turn for all child rows so the outline rail tracks reader position. */
   const pushRows = (agentId: string, depth: number, turnKey: string | undefined): void => {
     const rows = sections.rows.get(agentId) ?? []
-    // The agent's own frontier: its trailing run is live while the agent works.
     const entry = sections.entries.get(agentId)
     const working = entry !== undefined && normalizeSubagentState(entry.state) === 'working'
     const trailing = rows.findLastIndex((row) =>
@@ -132,9 +123,7 @@ export function nativeChatSubagentSectionSlots({
     }
     openBefore(pending, undefined, depth, { turnKey })
   }
-  /** Heads, ahead of `message`, each pending section whose first row came before
-   *  it, with its rows when open; `undefined` flushes the rest. Inside a section
-   *  each sits in that section's turn; in the conversation, in its first row's. */
+  /** Emit heads before the next message; undefined flushes all. Nested sections inherit their enclosing turn. */
   function openBefore(
     pending: string[],
     message: NativeChatMessage | undefined,

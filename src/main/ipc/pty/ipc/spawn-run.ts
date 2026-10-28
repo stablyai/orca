@@ -1,18 +1,6 @@
-import { parsePaneKey } from '../../../../shared/stable-pane-id'
-import { codexReattachedHomeRouteField } from '../host-env/codex-home'
-import type { PaneSpawnOperation } from '../pane/pane-spawn-operation'
-import {
-  rejectPaneSpawnReservation,
-  reserveIdlePaneSpawn,
-  pendingRuntimePaneCreatesByOwnerKey
-} from '../pane/spawn-reservation'
-import { restoreProvisionalPtySize } from '../spawn-options-assembly'
-import {
-  beginPtyIpcSpawn,
-  resolveEarlyPaneKey,
-  resolveEarlyPaneSpawnReservationKey
-} from './spawn-begin'
-import { releaseStoppedPaneBinding, stopReplacedPaneOwner } from '../pane/pane-owner-replacement'
+import { runPtySpawn, normalizePtySpawnSessionId } from '../spawn-operation'
+import { checkPtyIpcLaunchPane, resolveEarlyPaneKey } from './spawn-begin'
+import { stopReplacedPaneOwner } from '../pane/pane-owner-replacement'
 import { keepAbsentBindingForSwap } from './spawn-absent-binding-swap'
 import { planPaneAgentLaunch } from './spawn-agent-launch'
 import { endPaneAgentLaunch } from './spawn-agent-launch-end'
@@ -20,193 +8,105 @@ import { preparePtyIpcSpawnPreflight } from './spawn-preflight'
 import { assemblePtyIpcSpawnEnv } from './spawn-env'
 import { preparePtyIpcQoderCommand } from './spawn-qoder-command'
 import { buildPtyIpcSpawnOptions } from './spawn-options'
-import { executePtyIpcSpawn } from './spawn-execute'
+import { attachOnlyViewOf } from '../pane/attach-only-view'
 import { commitPtyIpcSpawn } from './spawn-commit'
-import { createPtyIpcSpawnState, type PtyIpcSpawnState } from './spawn-state'
+import { createPtyIpcSpawnState } from './spawn-state'
 import { triggerPtySpawnPushTargetMaterialization } from './spawn-push-target-materialization'
 import type { PtySpawnIpcArgs, PtySpawnIpcDeps } from './spawn-types'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
 import { refuseClosedPaneSpawn } from './closed-pane-spawn-refusal'
+import { resolveStablePaneOwner } from '../pane/stable-owner'
+import { excludeReplacedPaneOwner } from '../pane/replaced-pane-owner'
 
-function releaseAbandonedAgentTeamsLeader(ctx: PtyIpcSpawnState): void {
-  if (!ctx.agentTeamsLeaderHandle) {
-    return
-  }
-  ctx.deps.runtime?.releaseClaudeAgentTeamsLeaderForHandle?.(ctx.agentTeamsLeaderHandle)
-  ctx.agentTeamsLeaderHandle = null
-}
-
-export async function runPtyIpcSpawn(deps: PtySpawnIpcDeps, args: PtySpawnIpcArgs) {
+export async function runPtyIpcSpawn(deps: PtySpawnIpcDeps, request: PtySpawnIpcArgs) {
+  const args = { ...request, sessionId: normalizePtySpawnSessionId(request.sessionId) }
   const ctx = createPtyIpcSpawnState(deps, args)
-  const replacedPaneKey =
-    args.replacesPtyId !== undefined ? resolveEarlyPaneSpawnReservationKey(args) : null
-  if (replacedPaneKey) {
-    // Why: hold the pane across the stop, so a spawn for it arriving meanwhile (a hidden tab
-    // revealed mid-restart) joins the replacement instead of reattaching the owner being stopped.
-    ctx.paneSpawnReservation = await reserveIdlePaneSpawn(replacedPaneKey)
-    ctx.paneSpawnReservationKey = replacedPaneKey
+  const admit = () => {
+    triggerPtySpawnPushTargetMaterialization(deps, args)
+    return checkPtyIpcLaunchPane(ctx)
   }
-  const fresh = async (operation: PaneSpawnOperation) => {
-    // Retire the previous preparation before replacing its resource slots or reacquiring its lease.
-    releaseAbandonedAgentTeamsLeader(ctx)
-    ctx.finishTerminalInstall()
-    ctx.finishTerminalInstall = () => {}
-    ctx.releaseWorktreeSpawn?.()
-    ctx.releaseWorktreeSpawn = undefined
-    ctx.paneSpawnOperation = operation
-    ctx.paneSpawnReservation = null
-    ctx.earlyStablePaneOwner = null
-    // Awaited only for a launch: an ordinary spawn reaches its provider in the same turn as before.
-    if (ctx.args.agentLaunch !== undefined) {
-      await planPaneAgentLaunch(ctx)
-    }
-    await preparePtyIpcSpawnPreflight(ctx)
-    await assemblePtyIpcSpawnEnv(ctx)
-    await preparePtyIpcQoderCommand(ctx)
-    await buildPtyIpcSpawnOptions(ctx).catch((error: unknown) => {
-      restoreProvisionalPtySize({
-        sessionId: ctx.effectiveSessionId,
-        sessionAppId: ctx.effectiveSessionAppId,
-        hadSessionSizeBeforeAttach: ctx.hadSessionSizeBeforeAttach,
-        sessionSizeBeforeAttach: ctx.sessionSizeBeforeAttach
-      })
-      throw error
-    })
-    const complete = async (scope: PaneSpawnOperation) => {
-      ctx.paneSpawnOperation = scope
-      // Right before the provider spawn, with nothing awaited in between: a closed pane starts nothing.
-      ctx.paneAgentLaunch?.refuseIfClosed()
-      // Switch point: a pane main closed or took back while this spawn waited starts nothing.
-      if (ORCA_LAYOUT_OWNER_IS_MAIN) {
-        refuseClosedPaneSpawn(deps.store, args.tabId, args.leafId)
+  const admission = args.replacesPtyId === undefined ? admit() : undefined
+  const outcome = await runPtySpawn({
+    state: ctx,
+    admission,
+    prepare: async () => {
+      ctx.earlyStablePaneOwner = excludeReplacedPaneOwner(
+        resolveStablePaneOwner(
+          deps.runtime,
+          deps.store,
+          resolveEarlyPaneKey(ctx.args),
+          ctx.args.worktreeId,
+          ctx.args.connectionId
+        ),
+        ctx.replacedPaneOwner
+      )
+      ctx.earlyWorktreeId = ctx.args.worktreeId
+      if (ctx.args.agentLaunch !== undefined) {
+        await planPaneAgentLaunch(ctx)
       }
-      try {
-        await executePtyIpcSpawn(ctx)
-        const committed = await commitPtyIpcSpawn(ctx)
-        endPaneAgentLaunch(
-          ctx,
-          ctx.exitedBeforeRegistration ? { exitedDuringStart: true } : { started: true }
-        )
-        return committed
-      } finally {
-        if (ctx.pendingRegistrationPtyId) {
-          deps.runtime?.cancelPendingPtyRegistration?.(
-            ctx.pendingRegistrationPtyId,
-            ctx.rejectedRegistrationCandidate?.incarnationId,
-            ctx.pendingRegistrationClaim
-          )
-          ctx.pendingRegistrationPtyId = null
+      await preparePtyIpcSpawnPreflight(ctx)
+      await assemblePtyIpcSpawnEnv(ctx)
+      await preparePtyIpcQoderCommand(ctx)
+      await buildPtyIpcSpawnOptions(ctx)
+    },
+    facts: () => ({
+      validateDispatch: () => {
+        ctx.paneAgentLaunch?.refuseIfClosed()
+        if (ORCA_LAYOUT_OWNER_IS_MAIN) {
+          refuseClosedPaneSpawn(deps.store, ctx.args.tabId, ctx.args.leafId)
+        }
+      },
+      sessionId: ctx.effectiveSessionId,
+      savedResumePaneKey: ctx.stablePaneKey,
+      launchConfig: ctx.effectiveLaunchConfig,
+      suppressRefusedLaunch: () => {
+        ctx.launchCommand = undefined
+        ctx.env = ctx.baseEnv = ctx.spawnEnv = ctx.spawnOptions.env
+        ctx.effectiveLaunchConfig = undefined
+      },
+      paneKey: ctx.reservationPaneKey,
+      preAllocatedHandle: ctx.preAllocatedHandle,
+      replacedPaneOwner: ctx.replacedPaneOwner,
+      attachOnlyView: attachOnlyViewOf(ctx.args),
+      beforeProviderSpawn: () => {
+        if (ctx.paneAgentLaunch) {
+          ctx.paneAgentLaunch.dispatched = true
         }
       }
-    }
-    const latePane =
-      !resolveEarlyPaneKey(args) && ctx.reservationPaneKey
-        ? parsePaneKey(ctx.reservationPaneKey)
-        : null
-    if (latePane) {
-      const pendingCreate = ctx.paneSpawnReservationKey
-        ? pendingRuntimePaneCreatesByOwnerKey.get(ctx.paneSpawnReservationKey)
-        : undefined
-      if (pendingCreate) {
-        await pendingCreate.promise
+    }),
+    drainsExitedStart: true,
+    commit: () => commitPtyIpcSpawn(ctx),
+    onOutcome: (settled) =>
+      endPaneAgentLaunch(
+        ctx,
+        settled.kind === 'registration-exited' ? { exitedDuringStart: true } : { started: true }
+      ),
+    onError: (error) => endPaneAgentLaunch(ctx, { error }),
+    releasePreparation: () => {
+      if (ctx.agentTeamsLeaderHandle) {
+        deps.runtime?.releaseClaudeAgentTeamsLeaderForHandle?.(ctx.agentTeamsLeaderHandle)
+        ctx.agentTeamsLeaderHandle = null
       }
-      ctx.args = { ...ctx.args, ...latePane }
-      let completed: Awaited<ReturnType<typeof complete>> | undefined
-      const adopted = await deps.adoptStablePane({
-        cols: args.cols,
-        rows: args.rows,
-        cwd: ctx.cwd,
-        worktreeId: args.worktreeId,
-        ...latePane,
-        connectionId: args.connectionId,
-        renderer: true,
-        keepAbsentBinding: keepAbsentBindingForSwap(ctx),
-        spawnFresh: async (scope) => (completed = await complete(scope))
-      })
-      if (adopted) {
-        releaseAbandonedAgentTeamsLeader(ctx)
-      }
-      return adopted?.result ?? completed!
-    }
-    return complete(operation)
-  }
-  try {
-    if (args.replacesPtyId !== undefined) {
-      ctx.replacedPaneOwner = await stopReplacedPaneOwner(deps, {
-        replacesPtyId: args.replacesPtyId,
-        paneKey: resolveEarlyPaneKey(args),
-        worktreeId: args.worktreeId,
-        connectionId: args.connectionId
-      })
-    }
-    triggerPtySpawnPushTargetMaterialization(deps, args)
-    const early = await beginPtyIpcSpawn(ctx)
-    if (early) {
-      return early
-    }
-    const paneKey = resolveEarlyPaneKey(args)
-    if (!paneKey || !args.worktreeId || !args.tabId || !args.leafId) {
-      return await fresh({ mustExist: false })
-    }
-    let freshResult: Awaited<ReturnType<typeof fresh>> | undefined
-    const adopted = await deps.adoptStablePane({
-      cols: args.cols,
-      rows: args.rows,
-      cwd: ctx.cwd,
-      worktreeId: args.worktreeId,
-      tabId: args.tabId,
-      leafId: args.leafId,
-      connectionId: args.connectionId,
-      renderer: true,
-      reservation: ctx.paneSpawnReservation ?? undefined,
-      stoppedPtyId: ctx.replacedPaneOwner?.ptyId,
-      keepAbsentBinding: keepAbsentBindingForSwap(ctx),
-      spawnFresh: async (operation) => (freshResult = await fresh(operation))
-    })
-    if (adopted) {
-      releaseAbandonedAgentTeamsLeader(ctx)
+    },
+    releaseHiddenMark: () => {
       if (ctx.preSpawnHiddenMarkId !== null) {
         deps.transitionSpawnHiddenRendererPtyDeliveryState(ctx.preSpawnHiddenMarkId, false)
       }
-      deps.options?.onCodexHomePtySpawned?.({
-        id: adopted.result.id,
-        codexHomePath: null,
-        reattached: true,
-        startedAt: ctx.codexHomeLaunchStartedAt,
-        startedSequence: ctx.codexHomeLaunchStartedSequence,
-        ...codexReattachedHomeRouteField(ctx.reattachedCodexHomeRoutes, adopted.result.id, true)
-      })
-      endPaneAgentLaunch(ctx, { started: true })
-      return adopted.result
-    }
-    return freshResult!
-  } catch (caught) {
-    const err = endPaneAgentLaunch(ctx, { error: caught }) ?? caught
-    releaseAbandonedAgentTeamsLeader(ctx)
-    if (ctx.preSpawnHiddenMarkId !== null) {
-      ctx.deps.transitionSpawnHiddenRendererPtyDeliveryState(ctx.preSpawnHiddenMarkId, false)
-    }
-    if (ctx.pendingRegistrationPtyId) {
-      deps.runtime?.cancelPendingPtyRegistration?.(
-        ctx.pendingRegistrationPtyId,
-        ctx.rejectedRegistrationCandidate?.incarnationId,
-        ctx.pendingRegistrationClaim
-      )
-      ctx.pendingRegistrationPtyId = null
-    }
-    if (ctx.replacedPaneOwner) {
-      await releaseStoppedPaneBinding(deps.store, ctx.replacedPaneOwner)
-    }
-    // Why: once the reservation is created, any later throw —
-    // spawn failure, persist failure, or a post-spawn helper such as
-    // seedHeadlessTerminal/registerPty/track — must settle it. Otherwise
-    // it lingers in paneSpawnReservationsByOwnerKey and every future spawn
-    // for this pane awaits a promise that never resolves. reject is a
-    // no-op once the reservation has already resolved.
-    rejectPaneSpawnReservation(ctx.paneSpawnReservationKey, ctx.paneSpawnReservation, err)
-    throw err
-  } finally {
-    ctx.releaseWorktreeSpawn?.()
-    ctx.finishTerminalInstall()
-  }
+    },
+    adoption: () => ({ renderer: true, keepAbsentBinding: keepAbsentBindingForSwap(ctx) }),
+    ...(args.replacesPtyId !== undefined
+      ? {
+          replace: async () => {
+            ctx.replacedPaneOwner = await stopReplacedPaneOwner(deps, {
+              replacesPtyId: args.replacesPtyId!,
+              paneKey: resolveEarlyPaneKey(args),
+              worktreeId: args.worktreeId,
+              connectionId: args.connectionId
+            })
+            await admit()
+          }
+        }
+      : {})
+  })
+  return outcome.result
 }

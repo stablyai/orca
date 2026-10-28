@@ -5,7 +5,7 @@ import {
   buildAiVaultResumeCopyCommandForWorktree,
   buildAiVaultResumeStartupForWorktree
 } from './ai-vault-resume-command'
-import { canResumeAiVaultSessionOnTarget } from './ai-vault-resume-target'
+import { canResumeAiVaultSessionOnTarget } from '../../../shared/ai-vault-resume-target'
 import { getAiVaultResumeWorkspaceWslDistro } from './ai-vault-resume-shell'
 import { buildAgentLaunchRouteInput } from './agent-launch-route-input'
 import { getLocalProjectExecutionRuntimeContext } from './local-preflight-context'

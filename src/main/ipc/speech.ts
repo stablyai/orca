@@ -47,8 +47,7 @@ export function registerSpeechHandlers(store: Store): void {
         window.webContents.send('speech:downloadProgress', { modelId: id, progress })
       }
     })
-    // Why: ModelManager is process-wide; scope this BrowserWindow closure to
-    // the download/window lifetime so stale windows are not retained.
+    // Scope process-wide model progress callbacks to the download/window lifetime to avoid retaining stale windows.
     let progressCallbackCleared = false
     const cleanupProgressCallback = (): void => {
       if (progressCallbackCleared) {
@@ -81,8 +80,7 @@ export function registerSpeechHandlers(store: Store): void {
 
   const getHotwordsFilePath = (content: string): string => {
     const digest = createHash('sha256').update(content).digest('hex').slice(0, 12)
-    // Why: sherpa-onnx cannot read non-ASCII Windows paths, so co-locate the
-    // hotwords file with the ASCII-safe model cache instead of userData.
+    // sherpa-onnx cannot read non-ASCII Windows paths; use the ASCII-safe model cache for hotwords.
     return join(getSpeechModelManager(store).getModelsDir(), `speech-hotwords-${digest}.txt`)
   }
 
@@ -126,10 +124,7 @@ export function registerSpeechHandlers(store: Store): void {
       window.once('closed', cleanupOnWindowClosed)
 
       try {
-        // Why: on macOS, the Electron binary needs explicit TCC permission for
-        // the microphone. Without it, getUserMedia succeeds but returns a silent
-        // stream (all zeros). Check status and attempt to trigger the system
-        // permission prompt if not yet granted.
+        // macOS can return silent microphone streams without TCC permission; request it before capture.
         if (process.platform === 'darwin') {
           const micStatus = systemPreferences.getMediaAccessStatus('microphone')
           if (micStatus !== 'granted') {
@@ -219,8 +214,7 @@ export function registerSpeechHandlers(store: Store): void {
   ipcMain.handle(
     'speech:feedAudio',
     async (_event, buffer: Buffer, sampleRate: number, sessionId = 'desktop') => {
-      // Why: the preload sends audio as a Buffer to avoid Float32Array data
-      // being zeroed out during contextBridge + IPC serialization.
+      // Preload uses Buffer because contextBridge/IPC can zero Float32Array data.
       const samples = new Float32Array(buffer.buffer, buffer.byteOffset, buffer.byteLength / 4)
       getSpeechSttService(store).feedAudio(
         samples,

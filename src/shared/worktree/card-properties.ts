@@ -18,15 +18,12 @@ export const DEFAULT_WORKTREE_CARD_PROPERTIES: WorktreeCardProperty[] = [
   'cli',
   'comment',
   'ports',
-  // Why: agent activity is the primary reason users opt into the feature, so
-  // the Default mode keeps it inline on each card while Compact removes the
-  // extra row.
+  // Default cards keep agent activity inline; Compact omits the extra row.
   'inline-agents',
   'host'
 ]
 
-// Why: compact cards default to the quiet preset; metadata icons remain opt-in
-// through Show properties instead of appearing automatically.
+// Compact metadata stays opt-in through Show properties.
 export const COMPACT_WORKTREE_CARD_PROPERTIES: WorktreeCardProperty[] = ['status']
 const NORMALIZED_COMPACT_WORKTREE_CARD_PROPERTIES: WorktreeCardProperty[] = ['status', 'unread']
 
@@ -41,8 +38,7 @@ const LEGACY_NORMALIZED_COMPACT_WORKTREE_CARD_PROPERTIES_WITH_AUTOMATION: Worktr
   'automation'
 ]
 
-/** Every card property, in canonical render order. Client schemas derive their
- *  accepted value domain from this so a new property cannot drift out of them. */
+/** Canonical render order also defines client schema domains to prevent drift. */
 export const WORKTREE_CARD_PROPERTIES = [
   'status',
   'unread',
@@ -119,10 +115,7 @@ function matchesWorktreeCardProperties(
   return expected.every((property, index) => properties[index] === property)
 }
 
-/**
- * What the shared Card layout and properties show on a workspace card; each surface draws its own.
- * The desktop card keeps further dense-layout rules of its own (title-row indicators, icon-only SSH).
- */
+/** Shared card projection; desktop additionally applies dense title/SSH rules. */
 export type WorktreeCardDetails = {
   /** The Compact layout as it applies: the new card style overrides it. */
   compactCards: boolean

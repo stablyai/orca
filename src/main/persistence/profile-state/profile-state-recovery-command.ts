@@ -27,6 +27,7 @@ import {
 } from './legacy-json/profile-state-authority-exports'
 import { writeVersionedProfileStateExport } from './legacy-json/profile-state-versioned-export'
 import { readProfileStateDomain } from './profile-state-domain-reader'
+import { repairProfileStateSections } from './profile-state-section-repair'
 import { isRecord } from './profile-state-document-validation'
 import { profileHasPendingProjectMove } from '../../orca-profiles/profile-project-move-record'
 import {
@@ -72,6 +73,24 @@ export function rollbackProfileState(
   }
   if (selector.kind === 'current-sqlite') {
     return adoptCurrentDatabase(userDataPath, result, maintenance)
+  }
+  if (selector.kind === 'repair') {
+    const repaired = repairProfileStateSections({
+      maintenance,
+      location: { ...result, userDataPath },
+      approved: selector.sections,
+      beforeRepair: () => invalidateActiveProfileMarker(userDataPath, result.profileId)
+    })
+    syncHttp1CompatibilityMarkerFromDatabase(userDataPath, result)
+    return {
+      ...result,
+      storage: 'sqlite',
+      restoredPath: result.databaseFile,
+      revision: repaired.revision,
+      quarantineDirectory: repaired.quarantineDirectory,
+      removedDatabaseFiles: [],
+      repairedSections: repaired.sections
+    }
   }
   const revision =
     selector.kind === 'latest-json'
@@ -171,7 +190,7 @@ function restoreDatabaseBackup(
   }
 }
 
-/** Keep SQLite and replace diverged JSON (e.g. edited by an older build) with its export. */
+/** Keep SQLite authoritative by replacing diverged legacy JSON with its accepted export. */
 function adoptCurrentDatabase(
   userDataPath: string,
   result: ProfileStateExportsResult,
@@ -180,7 +199,7 @@ function adoptCurrentDatabase(
   maintenance.assertProfile(result.profileId, result.dataFile, result.databaseFile)
   const authority = new ProfileStateSqliteAuthority(result.databaseFile, result.profileId)
   try {
-    // Validate before archiving so an unreadable database leaves both copies untouched.
+    // Validate first so unreadable authority leaves both copies untouched.
     authority.readInitialState()
     if (authority.revision === 0) {
       throw new ProfileStateRecoveryCommandError(
@@ -196,7 +215,7 @@ function adoptCurrentDatabase(
       existsSync(result.dataFile) ? [result.dataFile] : []
     )
     invalidateActiveProfileMarker(userDataPath, result.profileId)
-    // A retained JSON the marker never accepted would fail the compatibility export's fence.
+    // Unaccepted retained JSON would fail the compatibility export fence.
     const divergedJson = existsSync(result.dataFile) ? readFileSync(result.dataFile) : undefined
     rmSync(result.dataFile, { force: true })
     let revision: number
@@ -254,7 +273,7 @@ function syncHttp1CompatibilityMarkerAfterRollback(
       enabled = parsed.settings.electronHttp1CompatibilityMode === true
     }
   } catch {
-    // Leave the invalidated marker absent so startup reads the restored JSON itself.
+    // Keep the marker absent so startup reads the restored JSON.
     return
   }
   writeHttp1CompatibilityMarker(userDataPath, enabled, profileId)

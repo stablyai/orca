@@ -13,18 +13,7 @@ vi.mock('@/hooks/agent-hook-completion-notifications', () => ({
   observeAgentHookCompletionForNotification: vi.fn()
 }))
 
-/**
- * "Is this epoch retired" had two answers one file apart. The recovery gate
- * (`isRetiredSessionTabsPublicationEpoch`) answers by lineage; the receipt ledger
- * (`recordReceivedWebSessionTabsSnapshot`) still matched the string exactly. A late
- * `:headless-merge:` frame from a superseded generation was therefore rejected at the gate but
- * had already passed the ledger's check, noted itself current, and pushed the live successor onto
- * `retired`. The successor's next frame was then rejected: a publisher that never stopped running
- * was locked out of its worktree.
- *
- * `fences a merged predecessor at the recovery gate as well` stops one frame early — it asserts
- * the merged frame is rejected and never asks whether the successor still gets in afterwards.
- */
+/** Fence retired publisher lineages in both recovery and receipt ledger. A late headless-merge predecessor must neither enter nor retire its live successor; testing rejection alone misses successor lockout. */
 const ENV = 'remote-runtime'
 const WORKTREE = 'repo::/worktree'
 const GEN_1 = 'renderer-generation-1'

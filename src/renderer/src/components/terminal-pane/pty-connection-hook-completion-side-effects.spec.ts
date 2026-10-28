@@ -350,7 +350,8 @@ export function registerPtyConnectionHookCompletionSideEffectsTests(): void {
 
         titleHandler('Codex working', 'Codex working')
         await vi.advanceTimersByTimeAsync(2_500)
-        getForegroundProcess.mockResolvedValue(null)
+        // A crash leaves a live shell; null cannot confirm that the agent exited.
+        getForegroundProcess.mockResolvedValue('pwsh.exe')
         await vi.advanceTimersByTimeAsync(3_000)
         if (hookUpdateBeforeDispatch !== 'none') {
           mockStoreState.agentStatusByPaneKey[paneKey] = {

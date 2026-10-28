@@ -49,7 +49,7 @@ beforeEach(async () => {
 })
 
 describe('extra agent args capability gate', () => {
-  it('refuses a create or move to a host without the capability before writing', async () => {
+  it('refuses a create on a host without the capability before writing', async () => {
     const { createAutomationForDestination } = await client()
     getRuntimeEnvironmentStatus.mockResolvedValue(LEGACY_HOST)
 

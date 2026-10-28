@@ -5,6 +5,7 @@ import {
   normalizeExternalBrowserUrl,
   redactKagiSessionToken
 } from '../../../../../shared/browser-url'
+import { isBlankBrowserUrl } from '@/lib/browser-palette-search'
 import { browserFileUrlToAbsolutePath } from './browser-artifact-upload'
 import type { BrowserTabPageState } from './browser-page-types'
 
@@ -18,8 +19,9 @@ export function getBrowserPageRuntimeEnvironmentId(
   return inferredRuntimeEnvironmentId?.trim() || null
 }
 
+/** A blank tab shows an empty bar, so typing never merges into placeholder text. */
 export function toDisplayUrl(url: string): string {
-  return url === ORCA_BROWSER_BLANK_URL ? 'about:blank' : redactKagiSessionToken(url)
+  return isBlankBrowserUrl(url) ? '' : redactKagiSessionToken(url)
 }
 
 export function getBrowserDisplayTitle(title: string | null | undefined, url: string): string {

@@ -1,4 +1,7 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   deriveBrowserRoutePartitionStorageScope,
   deriveLocalSshBrowserRoutePartitionStorageScope
@@ -8,6 +11,8 @@ const mocks = vi.hoisted(() => ({
   bindings: new Map<string, { fingerprint: string; storageScope: string | null }>(),
   cleared: [] as string[],
   removedDirectories: [] as string[],
+  onRemoveDirectory: vi.fn<(directory: string) => void>(),
+  bindingFilePath: '/tmp/orca-test-profile/browser-route-partition-bindings.json',
   environments: [{ id: 'env-1' }]
 }))
 
@@ -16,7 +21,8 @@ vi.mock('../../shared/runtime-environment-store', () => ({
   listEnvironments: () => mocks.environments
 }))
 vi.mock('./browser-route-partition-binding-runtime', () => ({
-  activeBrowserRoutePartitionOrcaProfileId: () => 'local-default'
+  activeBrowserRoutePartitionOrcaProfileId: () => 'local-default',
+  currentBrowserRoutePartitionBindingFilePath: () => mocks.bindingFilePath
 }))
 vi.mock('./browser-route-partition-storage-dependencies', () => ({
   browserRoutePartitionStorageDependencies: (isPartitionLive: (p: string) => boolean) => ({
@@ -36,11 +42,13 @@ vi.mock('./browser-route-partition-storage-dependencies', () => ({
     },
     removePartitionDirectory: async (directory: string) => {
       mocks.removedDirectories.push(directory)
+      mocks.onRemoveDirectory(directory)
     }
   }),
   releaseEvictedBrowserRoutePartitionStorage: vi.fn(async () => {})
 }))
 
+import { browserRoutePartitionPendingDeletesPath } from './browser-route-partition-pending-deletes'
 import {
   clearBrowserRoutePartitionStorageForLocalSshTarget,
   collectOrphanedBrowserRoutePartitionStorage
@@ -79,6 +87,7 @@ beforeEach(() => {
   seedBindings()
   mocks.cleared.length = 0
   mocks.removedDirectories.length = 0
+  mocks.onRemoveDirectory.mockReset()
 })
 
 describe('route partition storage runtime with local SSH scopes', () => {
@@ -90,8 +99,7 @@ describe('route partition storage runtime with local SSH scopes', () => {
   })
 
   it('skips the sweep entirely when no target list is available', async () => {
-    // Why: without the target list, a live SSH jar is indistinguishable from an
-    // orphan — deleting user cookies is the one unrecoverable mistake here.
+    // Without the target list, live SSH storage is indistinguishable from orphaned storage.
     expect(await collectOrphanedBrowserRoutePartitionStorage()).toEqual([])
     expect(mocks.cleared).toEqual([])
     expect(mocks.bindings.size).toBe(3)
@@ -107,8 +115,6 @@ describe('route partition storage runtime with local SSH scopes', () => {
   })
 
   it('honors the retention-probe union: a retained partition survives every destructive path', async () => {
-    // Why (review): the earlier mocks substituted the union wiring away; this
-    // exercises the REAL retention module through the runtime's isPartitionLive.
     const { registerBrowserRoutePartitionRetentionProbe } =
       await import('./browser-route-partition-retention')
     const unregister = registerBrowserRoutePartitionRetentionProbe(
@@ -132,5 +138,44 @@ describe('route partition storage runtime with local SSH scopes', () => {
     expect(mocks.bindings.has(LIVE_TARGET_PARTITION)).toBe(true)
     expect(mocks.bindings.has(ENV_PARTITION)).toBe(true)
     expect(mocks.bindings.has(REMOVED_TARGET_PARTITION)).toBe(false)
+  })
+})
+
+describe('deferred partition folder deletion at startup', () => {
+  let profileDirectory: string
+
+  beforeEach(() => {
+    profileDirectory = mkdtempSync(join(tmpdir(), 'orca-partition-runtime-'))
+    mocks.bindingFilePath = join(profileDirectory, 'browser-route-partition-bindings.json')
+  })
+
+  afterEach(() => {
+    rmSync(profileDirectory, { recursive: true, force: true })
+  })
+
+  it('keeps a queued folder whose partition is bound while an earlier delete is in flight', async () => {
+    const rebound = `persist:orca-browser-v1-${'d'.repeat(64)}`
+    const first = join('/tmp/orca-test-partitions', `orca-browser-v1-${'e'.repeat(64)}`)
+    const second = join('/tmp/orca-test-partitions', rebound.slice('persist:'.length))
+    writeFileSync(
+      browserRoutePartitionPendingDeletesPath(mocks.bindingFilePath),
+      JSON.stringify([first, second])
+    )
+    mocks.onRemoveDirectory.mockImplementation((directory) => {
+      if (directory === first) {
+        mocks.bindings.set(rebound, {
+          fingerprint: '4'.repeat(64),
+          storageScope: deriveBrowserRoutePartitionStorageScope({
+            orcaProfileId: 'local-default',
+            environmentId: 'env-1'
+          })
+        })
+      }
+    })
+
+    await collectOrphanedBrowserRoutePartitionStorage(() => ['target-live'])
+
+    expect(mocks.removedDirectories).toContain(first)
+    expect(mocks.removedDirectories).not.toContain(second)
   })
 })

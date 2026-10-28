@@ -44,8 +44,7 @@ function matchingSnapshotRows(
   return [...expected.entries()].flatMap(([pid, row]) => {
     const rows = rowsByPid.get(pid)
     if (rejectDuplicatePids && rows?.length !== 1) {
-      // Duplicate PID rows make this non-atomic process-table read ambiguous;
-      // never signal or count either identity as proof of liveness.
+      // Non-atomic reads can contain duplicate PIDs; neither row proves identity.
       return []
     }
     return (rows ?? []).filter((live) => live.startedAt === row.startedAt && live.pgid === row.pgid)
@@ -96,11 +95,7 @@ type VerificationDeps = TerminateDeps & {
   requireIdentityBeforeSignal?: boolean
 }
 
-/**
- * Orca's verdict vocabulary for a snapshotted tree, with no synonyms: `live` is
- * an identity-matched descendant still observed at the deadline; `unverifiable`
- * is a table that could not be read, which is never evidence either way.
- */
+/** live requires an identity match; unverifiable means the available observations cannot prove exit or liveness. */
 export type DescendantTreeVerdict = 'exited' | 'live' | 'unverifiable'
 
 /** An unreadable process table is never proof that a stopped descendant exited. */
@@ -111,7 +106,6 @@ export async function terminateDescendantSnapshotAndWait(
   return (await terminateDescendantSnapshotWithVerdict(snapshot, deps)) === 'exited'
 }
 
-/** Signals the snapshot, then reports what the last table read observed. */
 export async function terminateDescendantSnapshotWithVerdict(
   snapshot: DescendantSnapshot,
   deps: VerificationDeps = {}
@@ -124,9 +118,7 @@ export async function terminateDescendantSnapshotWithVerdict(
   const forced = new Set<number>()
   const signalled = new Set<number>()
   const missingObservations = new Map(snapshot.descendants.map((row) => [row.pid, 0]))
-  // The snapshot is itself a table read that saw each target alive. An absence is evidence only
-  // from a read that started after the target was last seen: a shared or in-flight read begun
-  // earlier can miss a descendant forked since, but a later full scan cannot miss a live one.
+  // Absence counts only from reads started after the last sighting; older in-flight scans can miss new forks.
   const lastSeenAtMs = new Map(
     snapshot.descendants.map((row) => [
       row.pid,
@@ -161,13 +153,10 @@ export async function terminateDescendantSnapshotWithVerdict(
       readTable,
       deps.timeoutMs ?? DESCENDANT_SNAPSHOT_TIMEOUT_MS
     )
-    // A read that missed its own deadline is not an answer, and surrendering on
-    // the first slow one spends none of the window this verification was given:
-    // on a loaded host that reported a tree unverifiable without ever seeing it.
+    // Retry slow reads within the verification window; a missed deadline supplies no evidence.
     if (capture) {
       if (deps.requireIdentityBeforeSignal && hasDuplicateSnapshotPids(snapshot, capture.rows)) {
-        // A duplicate target pid is an ambiguous non-atomic read. Do not signal
-        // either row and do not turn that uncertainty into an exited verdict.
+        // Duplicate target PIDs prove neither ownership nor exit; do not signal either row.
         await waitForDelay(50, deps.keepAlive)
         continue
       }
@@ -176,10 +165,7 @@ export async function terminateDescendantSnapshotWithVerdict(
         recordIdentityObservation(capture, live)
       }
       if (live.length === 0) {
-        // Before a signal has been sent, an empty identity match means the
-        // snapshotted descendants already exited or were replaced. Signalling
-        // those old numeric pids would be unsafe. Every identity needs two
-        // absences from reads that started after it was last seen.
+        // Require two fresh absences per identity before declaring exit without signalling stale PIDs.
         if (deps.requireIdentityBeforeSignal && !provenAbsent()) {
           await waitForDelay(50, deps.keepAlive)
           continue

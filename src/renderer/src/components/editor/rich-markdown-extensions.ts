@@ -6,11 +6,9 @@ import Link from '@tiptap/extension-link'
 import { Code } from '@tiptap/extension-code'
 import Image from '@tiptap/extension-image'
 import Placeholder from '@tiptap/extension-placeholder'
-import TaskItem from '@tiptap/extension-task-item'
+import { TaskItem } from '@tiptap/extension-list'
 import { RichMarkdownTable } from './rich-markdown-table'
-import { TableCell } from '@tiptap/extension-table-cell'
-import { TableHeader } from '@tiptap/extension-table-header'
-import { TableRow } from '@tiptap/extension-table-row'
+import { TableCell, TableHeader, TableRow } from '@tiptap/extension-table'
 import { BlockMath, InlineMath } from '@tiptap/extension-mathematics'
 import { createRichMarkdownExtension } from './rich-markdown-extension'
 import { createLowlight, common } from 'lowlight'
@@ -31,7 +29,7 @@ import {
 } from './rich-markdown-details-extension'
 import { createMarkdownDocLink } from './rich-markdown-doc-link'
 import { RichMarkdownCodeBlock } from './RichMarkdownCodeBlock'
-import { safeReactNodeViewRenderer } from './safe-react-node-view-renderer'
+import { ReactNodeViewRenderer } from '@tiptap/react'
 import { positionStableNodeViewUpdate } from './position-stable-node-view-update'
 import { DragSelectionGuard } from './drag-selection-guard'
 import { createRichMarkdownAnnotationHighlightExtension } from './rich-markdown-annotation-highlight'
@@ -52,8 +50,7 @@ import {
 const lowlight = createCachedLowlight(createLowlight(common))
 
 const RichMarkdownCode = Code.extend({
-  // Why: Markdown supports linked code labels, so code cannot exclude the link
-  // mark even though it should still stay exclusive with emphasis marks.
+  // Permit linked code labels while keeping emphasis marks excluded.
   excludes: 'code bold italic strike underline'
 })
 
@@ -72,9 +69,7 @@ export function createRichMarkdownExtensions({
     throw new Error('HTML superscript links require a document interaction context')
   }
   const extensions: AnyExtension[] = [
-    // Why: rich-mode detection must use the exact same markdown extension set as
-    // the live editor. If these drift, Orca can claim a document is editable in
-    // preview and then still lose syntax on save.
+    // Eligibility and live editing must share extensions or a document deemed safe could still lose syntax on save.
     StarterKit.configure({
       link: false,
       code: false,
@@ -88,9 +83,8 @@ export function createRichMarkdownExtensions({
     RichMarkdownCode,
     RichMarkdownCodeBlockLowlight.extend({
       addNodeView() {
-        // Why: RichMarkdownCodeBlock never reads getPos, so it must not re-render
-        // just because earlier edits shifted this block's document position.
-        return safeReactNodeViewRenderer(RichMarkdownCodeBlock, {
+        // This component never reads getPos; earlier typing must not rerender it merely by shifting its position.
+        return ReactNodeViewRenderer(RichMarkdownCodeBlock, {
           update: positionStableNodeViewUpdate
         })
       }
@@ -103,10 +97,7 @@ export function createRichMarkdownExtensions({
       autolink: true,
       linkOnPaste: true
     }),
-    // Why: in dev mode the renderer is served from http://localhost, so
-    // file:// URLs in <img> tags are blocked by cross-origin restrictions.
-    // A nodeView loads local images via IPC → blob URL, which bypasses this
-    // and works identically in dev and production modes.
+    // Load local images through IPC/blob URLs so dev-server cross-origin restrictions cannot block file URLs.
     Image.extend({
       addStorage() {
         return {
@@ -118,13 +109,9 @@ export function createRichMarkdownExtensions({
       },
       addNodeView() {
         return ({ node, HTMLAttributes }) => {
-          // Why: wrapping the <img> in a container prevents the browser's
-          // native image drag (which sends image bytes) from conflicting with
-          // ProseMirror's node-level drag (which serializes the schema node
-          // for relocation within the document).
+          // A wrapper prevents native image-byte dragging from conflicting with ProseMirror’s schema-node relocation.
           const dom = document.createElement('span')
-          // Why: the wrapper sits in inline content, so it must not introduce a
-          // block box or the surrounding text would break onto its own line.
+          // Keep the image wrapper inline so it cannot break surrounding text onto separate lines.
           dom.style.display = 'inline-block'
           dom.style.lineHeight = '0'
           dom.style.maxWidth = '100%'
@@ -166,9 +153,7 @@ export function createRichMarkdownExtensions({
                     img.src = resolved
                     return
                   }
-                  // Why: local image paths must go through main's file
-                  // checks; a failed load should render missing, not hand
-                  // the raw path back to Chromium.
+                  // Local paths require main’s file checks; failed loads must not fall back to Chromium reading raw paths.
                   img.removeAttribute('src')
                 }
               )
@@ -181,9 +166,7 @@ export function createRichMarkdownExtensions({
 
           loadImage(currentSrc)
 
-          // Why: when the user refocuses the window after deleting or replacing
-          // image files, the blob URL cache is cleared and this callback re-loads
-          // the image from disk so the editor reflects the current filesystem state.
+          // Cache invalidation on refocus must reload replaced/deleted image files from disk.
           const unsubscribe = onImageCacheInvalidated(() => {
             loadImage(currentSrc)
           })
@@ -223,9 +206,7 @@ export function createRichMarkdownExtensions({
       }
     }).configure({
       allowBase64: true,
-      // Why: the markdown parser nests images inside paragraphs, so a block image
-      // node yields a schema-invalid document that only throws on the first edit
-      // that reassembles the paragraph.
+      // Markdown nests images in paragraphs; block image nodes would become schema-invalid and crash on the first edit.
       inline: true
     }),
     RichMarkdownOrderedList,

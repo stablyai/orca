@@ -237,7 +237,7 @@ describe('Grok completion observations', () => {
     ).toBe('done')
   })
 
-  it('keeps a starting finite task working until a later terminal observation', () => {
+  it('keeps a starting finite task working', () => {
     expect(
       normalize({
         hookEventName: 'Stop',

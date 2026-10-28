@@ -2,7 +2,7 @@ import { useCallback, useEffect } from 'react'
 import { useAppStore } from '@/store'
 import {
   getExecutionHostIdForWorktree,
-  runtimeEnvironmentIdWithLegacyFallbackUnlessTwin
+  runtimeEnvironmentIdOrLocalUnlessTwin
 } from '@/lib/worktree-runtime-owner'
 import {
   isFileSearchResultOwnerCurrent,
@@ -25,7 +25,7 @@ export function useFileSearchScope({
   updateActiveSearchState: (updates: { results: null; resultOwner: null; error: null }) => void
 }) {
   const runtimeEnvironmentId = useAppStore((state) =>
-    runtimeEnvironmentIdWithLegacyFallbackUnlessTwin(state, activeWorktreeId)
+    runtimeEnvironmentIdOrLocalUnlessTwin(state, activeWorktreeId)
   )
   const executionHostId = useAppStore((state) =>
     getExecutionHostIdForWorktree(state, activeWorktreeId)

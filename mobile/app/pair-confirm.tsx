@@ -1,5 +1,5 @@
 import { useCallback, useRef, useState } from 'react'
-import { View, Text, StyleSheet, Pressable, ActivityIndicator, BackHandler } from 'react-native'
+import { View, Text, Pressable, ActivityIndicator, BackHandler } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router'
 import { ChevronLeft } from 'lucide-react-native'
@@ -11,6 +11,8 @@ import {
 import type { ConnectionLogEntry } from '../src/transport/types'
 import { useRefreshHostClient } from '../src/transport/host-client-hooks'
 import { colors, spacing, radii, typography } from '../src/theme/mobile-theme'
+import { themedStyleSheet } from '../src/theme/themed-styles'
+import { useMobileColorScheme } from '../src/theme/use-mobile-color-scheme'
 import { ConnectionLog } from '../src/components/ConnectionLog'
 import {
   loadMobileOnboardingSteps,
@@ -19,14 +21,11 @@ import {
 
 type Status = 'awaiting-confirm' | 'connecting' | 'error'
 
-// Why: cap how long the user stares at "Connecting…" during pairing.
-// rpc-client retries forever by design (good for live sessions), but for
-// the *initial* pair we want a hard ceiling so a half-broken Tailscale
-// route surfaces an actionable error with the log visible, instead of
-// spinning silently. ~25s allows for one full connect-timeout + a retry.
+// Bound initial pairing at ~25s (one connect timeout plus retry) so broken routes show an actionable error/log; live RPC retries indefinitely.
 const PAIRING_OVERALL_TIMEOUT_MS = 25_000
 
 export default function PairConfirmScreen() {
+  useMobileColorScheme()
   const router = useRouter()
   const refreshHostClient = useRefreshHostClient()
   const insets = useSafeAreaInsets()
@@ -34,9 +33,7 @@ export default function PairConfirmScreen() {
   const [status, setStatus] = useState<Status>('awaiting-confirm')
   const [errorMessage, setErrorMessage] = useState('')
   const [logs, setLogs] = useState<ConnectionLogEntry[]>([])
-  // Why: collect logs in a ref so the rpc-client callback (which closures
-  // over the initial state setter) always sees the freshest list and we
-  // batch fewer setState calls when entries arrive in bursts.
+  // Ref keeps RPC callback logs current and batches bursty state updates.
   const logsRef = useRef<ConnectionLogEntry[]>([])
   const mountedRef = useRef(true)
   const activePairingAttemptRef = useRef<PreProfilePairingAttempt | null>(null)
@@ -69,8 +66,7 @@ export default function PairConfirmScreen() {
       mountedRef.current = true
       return
     }
-    // Why: pairing attempts can outlive the visible route; dispose them when
-    // the confirm screen detaches without a passive cleanup-only Effect.
+    // Dispose pairing on route detach: attempts can outlive the visible screen, before passive cleanup.
     mountedRef.current = false
     activePairingAttemptRef.current?.dispose()
     activePairingAttemptRef.current = null
@@ -109,10 +105,7 @@ export default function PairConfirmScreen() {
       if (!mountedRef.current || !attemptIsCurrent) {
         return
       }
-      // Why: re-pairing the same desktop now reuses its existing host id
-      // (STA-1840 dedup), so a client cached under that id from an earlier
-      // pairing would keep the stale endpoint/relay. Close it so the
-      // Refresh any cached client from the newly persisted pairing profile.
+      // Re-pair reuses host id; close cached client so it reloads the persisted endpoint/relay (STA-1840).
       refreshHostClient(hostId)
       const onboardingSteps = await loadMobileOnboardingSteps()
       if (!mountedRef.current) {
@@ -201,7 +194,7 @@ export default function PairConfirmScreen() {
   )
 }
 
-const styles = StyleSheet.create({
+const styles = themedStyleSheet(() => ({
   container: {
     flex: 1,
     backgroundColor: colors.bgBase,
@@ -219,9 +212,7 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: 'center',
     paddingHorizontal: spacing.sm,
-    // Why: nudges the centered group slightly above the geometric
-    // middle so the eye reads it as visually centered above the home
-    // indicator / nav bar.
+    // Offset above geometric center to balance home-indicator/nav-bar space.
     paddingBottom: spacing.xl * 2
   },
   title: {
@@ -289,4 +280,4 @@ const styles = StyleSheet.create({
     marginBottom: spacing.xl,
     lineHeight: 20
   }
-})
+}))

@@ -1,8 +1,7 @@
 import { createE2EConfig } from '../../../shared/e2e-config'
 
 const rendererE2EExposeStore = String(import.meta.env.VITE_EXPOSE_STORE) === 'true'
-// Why: the paired web API installs after static modules initialize, so its
-// build-gated fallback must read the test URL before caching this config.
+// The paired API installs after module initialization; read the build-gated test URL before caching configuration.
 const rendererE2EQuery =
   rendererE2EExposeStore && typeof window !== 'undefined'
     ? new URLSearchParams(window.location.search)
@@ -16,8 +15,7 @@ const rendererFallbackE2EConfig = createE2EConfig({
   terminalRetentionLimit: Number(rendererE2EQuery?.get('orcaE2ETerminalRetentionLimit')) || null
 })
 
-// Why: preload owns the Electron startup contract, so renderer code should
-// consume the bridged E2E config from window.api instead of reading env vars.
+// Consume preload’s bridged startup contract rather than renderer env variables.
 export const e2eConfig =
   typeof window !== 'undefined' && window.api?.e2e
     ? window.api.e2e.getConfig()

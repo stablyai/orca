@@ -3,17 +3,28 @@ import { ActivityIndicator, StyleSheet, View } from 'react-native'
 import { useHostClient } from '../transport/host-client-hooks'
 import { useHostStatusGates } from '../transport/host-status-gates'
 import { colors } from '../theme/mobile-theme'
+import { themedStyleSheet } from '../theme/themed-styles'
+import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import { HostStatusGatesContext } from './host-protocol-gates-context'
 import { ProtocolBlockScreen } from './ProtocolBlockScreen'
 
 type Props = {
   hostId: string | undefined
   children: ReactNode
+  /** For a route drawn over another screen: nothing shows while status is pending, not a spinner. */
+  transparentWhilePending?: boolean
+  /** In place of the block screen, for a route that hands a blocked host to the host list. */
+  blocked?: ReactNode
 }
 
-// Why: single choke point above every /h/[hostId] route so a blocked verdict replaces the
-// whole host UI (sidebar + detail stack) while the host list and other hosts stay usable.
-export function HostProtocolGate({ hostId, children }: Props) {
+// Gate all /h/[hostId] UI together while leaving host list/other hosts usable.
+export function HostProtocolGate({
+  hostId,
+  children,
+  transparentWhilePending = false,
+  blocked: blockedView
+}: Props) {
+  useMobileColorScheme()
   const { client, state } = useHostClient(hostId)
   const gates = useHostStatusGates({ hostId, client, connState: state })
   const { compatVerdict, statusPending } = gates
@@ -24,25 +35,26 @@ export function HostProtocolGate({ hostId, children }: Props) {
   const blocked = compatVerdict.kind === 'blocked'
   const pending = statusPending && resolvedHostIdRef.current !== hostKey
   const holdBack = pending && mountedHostIdRef.current !== hostKey
+  const covered = pending && !transparentWhilePending
 
-  // Why: React can replay or discard a render, so the latches record committed
-  // outcomes only — a discarded children render must not count as mounted.
+  // Latch committed outcomes only; discarded/replayed React renders cannot count as mounted.
   useEffect(() => {
     if (resolvedNow) {
       resolvedHostIdRef.current = hostKey
     }
     if (blocked) {
-      // Why: the block screen unmounts the routes, so a later pending window
-      // must not assume a live tree it can overlay.
+      // Block screen unmounts routes; later pending verdict cannot assume live tree to overlay.
       mountedHostIdRef.current = null
     } else if (!holdBack) {
       mountedHostIdRef.current = hostKey
     }
   })
 
+  if (holdBack && transparentWhilePending) {
+    return null
+  }
   if (holdBack) {
-    // Why: nothing is mounted yet for this host, so hold the routes back entirely
-    // rather than letting them mount (and fire their connect RPCs) pre-verdict.
+    // Hold new host routes until verdict so mount effects cannot send RPCs prematurely.
     return (
       <View style={styles.pending}>
         <ActivityIndicator
@@ -53,7 +65,7 @@ export function HostProtocolGate({ hostId, children }: Props) {
     )
   }
   if (blocked) {
-    return <ProtocolBlockScreen verdict={compatVerdict} />
+    return blockedView ?? <ProtocolBlockScreen verdict={compatVerdict} />
   }
   // Why: the host sidebar needs the same status fields; sharing the result avoids a second status.get per route.
   return (
@@ -61,21 +73,17 @@ export function HostProtocolGate({ hostId, children }: Props) {
       <View style={styles.host}>
         <View
           style={styles.host}
-          // Why: the overlay blocks in-tree touches but TalkBack can still walk the covered
-          // stack; hide it while pending (Android counterpart of the overlay's iOS modal flag).
-          importantForAccessibility={pending ? 'no-hide-descendants' : 'auto'}
+          // Hide pending stack from TalkBack too; touch overlay alone does not block Android screen-reader navigation.
+          importantForAccessibility={covered ? 'no-hide-descendants' : 'auto'}
         >
           {children}
         </View>
-        {pending ? (
-          // Why: once the stack is mounted, unmounting it for a pending status.get destroys
-          // in-flight nested navigation, so cover it instead. Mount effects underneath still
-          // run — they wait for connState 'connected' and every capability-dependent call
-          // re-probes status.get itself, so nothing newer than the baseline fires here.
+        {covered ? (
+          // Cover mounted routes during pending status instead of destroying nested navigation.
+          // Underlying mount effects still run, but await connected state and re-probe capabilities before newer-than-baseline calls.
           <View
             style={styles.pendingOverlay}
-            // Why: the fill owns the hit test for in-tree views only — native-Modal-hosted
-            // surfaces (bottom drawers) present in a separate window above it and stay live.
+            // Overlay blocks in-tree touches only; native modal drawers live above it and remain interactive.
             pointerEvents="auto"
             accessibilityViewIsModal
           >
@@ -90,7 +98,7 @@ export function HostProtocolGate({ hostId, children }: Props) {
   )
 }
 
-const styles = StyleSheet.create({
+const styles = themedStyleSheet(() => ({
   pending: {
     flex: 1,
     alignItems: 'center',
@@ -109,4 +117,4 @@ const styles = StyleSheet.create({
     zIndex: 1000,
     elevation: 1000
   }
-})
+}))

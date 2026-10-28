@@ -1,11 +1,12 @@
-// The pieces every failure sentence is made of, in English. The host fills them in as they are;
-// desktop translates each piece whole with this as its fallback, so the two never differ.
+// Share whole English sentence pieces: the host interpolates them; desktop translates each with the same fallback.
 
 import {
   CLAUDE_PROFILE_MISSING_MESSAGE,
   CLAUDE_PROFILE_SETUP_FAILED_MESSAGE
 } from './claude-profile-routing'
 import type { AgentSessionRefusalReference } from './agent-session-wire-refusals'
+import type { AgentCliInstallationProblem } from './agent-cli-installation-problem'
+import { tuiAgentDisplayName } from './tui-agent-display-names'
 
 /** Sentences a refusal notice shows too, so a chat says them one way. */
 export const TERMINAL_AGENT_HOLDS_CHAT = 'This chat is still open in a terminal agent.'
@@ -17,9 +18,7 @@ export const AGENT_STARTING = 'The agent is still starting.'
 export const WAIT_FOR_START = 'Wait for the agent to finish starting.'
 export const AGENT_STILL_WORKING = 'The agent is still working.'
 
-/** Every piece a failure sentence is made of, whole so desktop can translate each on its own.
- *  `{{agent}}` is the agent's name or `theAgent`, `{{command}}` a conversation command's name; the
- *  host fills them in English. */
+/** Whole translatable pieces; the host fills agent (name or theAgent) and command (conversation command name) in English. */
 export const AGENT_SESSION_FAILURE_COPY = {
   theAgent: 'The agent',
   providerStartFailed: '{{agent}} stopped before it finished starting.',
@@ -28,11 +27,11 @@ export const AGENT_SESSION_FAILURE_COPY = {
   sendAgainToTryOnceMore: 'Send your message again to try once more.',
   couldNotStart: "{{agent}} couldn't start.",
   couldNotRestart: "{{agent}} couldn't restart.",
+  cliTooOld:
+    '{{agent}} {{installedVersion}} is too old for chats. Update to {{minimumVersion}} or newer.',
   startTimedOut: '{{agent}} took too long to start (no response to {{method}} after {{seconds}}s).',
   startTimedOutKeepsHappening:
     'If this keeps happening, the computer running this chat may be overloaded.',
-  codexCliTooOld:
-    'Codex {{installedVersion}} is too old for chats. Update to {{minimumVersion}} or newer.',
   argumentsUnsupportedOption: 'Saved Arguments contain an unsupported option ({{option}}).',
   argumentsMissingValue: 'Saved Arguments need a value for {{option}}.',
   argumentsMultipleValues: 'Saved Arguments give {{option}} more than one value.',
@@ -79,6 +78,12 @@ export const AGENT_SESSION_FAILURE_COPY = {
     "{{agent}}'s Command in Settings → Agents must be a program path or name Orca can find, with no arguments or variables. Change it or reset it.",
   runtimeNotInstalled:
     "{{agent}} isn't installed on the computer running this chat. Install it from the chat in a current version of Orca.",
+  fullAccessAsRoot:
+    "{{agent}} won't use Full access while it runs as root. Choose another permission for {{agent}} in Settings → Agents for the computer running this chat, then start a new chat.",
+  conversationOpenElsewhere:
+    'Codex is still holding this conversation open. Try again in a moment, or close other Codex terminals.',
+  conversationOpenInTerminal:
+    '{{agent}} is already running this conversation in another terminal. Quit {{agent}} there or close that terminal to continue here.',
   chooseClaudeAccount: 'Choose or add one in Claude Accounts settings.',
   chooseClaudeAccountThenRunCommand:
     'Choose or add one in Claude Accounts settings, then run /{{command}} again.',
@@ -164,7 +169,6 @@ export const AGENT_SESSION_FAILURE_COPY = {
 
 export type AgentSessionFailureCopyId = keyof typeof AGENT_SESSION_FAILURE_COPY
 
-/** What a piece's `{{name}}` placeholders stand for. */
 export type AgentSessionFailureCopyValues = {
   installedVersion?: string
   minimumVersion?: string
@@ -187,27 +191,41 @@ export type AgentSessionFailureCopyValues = {
   seconds?: string
 }
 
-/** One piece in the reader's language, placeholders filled. */
 export type AgentSessionFailureSay = (
   id: AgentSessionFailureCopyId,
   values?: AgentSessionFailureCopyValues
 ) => string
 
-export function codexInstallationFailureWords(
+export function agentCliTooOldWords(
+  { agent, installedVersion, minimumVersion }: AgentCliInstallationProblem,
+  say: AgentSessionFailureSay
+): string {
+  return say('cliTooOld', {
+    agent: tuiAgentDisplayName(agent) ?? agent,
+    installedVersion,
+    minimumVersion
+  })
+}
+
+/** A refusal's installation sentence; a refusal saved before `agentInstallation` is Codex's. */
+export function agentCliInstallationFailureWords(
   refusal: AgentSessionRefusalReference | undefined,
   say: AgentSessionFailureSay
 ): string | null {
-  const installation =
-    refusal?.code === 'agent_session_operation_invalid'
-      ? refusal.details?.codexInstallation
-      : undefined
-  return installation
-    ? say(installation.installedVersion === null ? 'cliMissing' : 'codexCliTooOld', {
-        agent: 'Codex',
-        installedVersion: installation.installedVersion ?? '',
-        minimumVersion: installation.minimumVersion
-      })
-    : null
+  if (refusal?.code !== 'agent_session_operation_invalid') {
+    return null
+  }
+  const { agentInstallation, codexInstallation } = refusal.details ?? {}
+  if (agentInstallation) {
+    return agentCliTooOldWords(agentInstallation, say)
+  }
+  if (!codexInstallation) {
+    return null
+  }
+  const { installedVersion, minimumVersion } = codexInstallation
+  return installedVersion === null
+    ? say('cliMissing', { agent: 'Codex' })
+    : agentCliTooOldWords({ agent: 'codex', installedVersion, minimumVersion }, say)
 }
 
 /** The host's words, and any surface without translations. */

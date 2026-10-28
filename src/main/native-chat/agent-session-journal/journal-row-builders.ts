@@ -105,8 +105,7 @@ export function journalSubmissionRowBuilder(
     origin?: 'client' | 'host'
     options?: AgentSessionExecutionOptions
   },
-  /** Present when the append hands off a queued draft: the row names that draft, stamped here
-   *  from the consume itself so no hand-off path can leave the link off. */
+  /** Stamp queue links from consumption here so every handoff preserves them. */
   consume?: { messageId: string }
 ): RowBuilder<JournalSubmissionRow> {
   return (seq, ts) => {
@@ -134,7 +133,6 @@ export function journalDispatchRowBuilder(
     input.state === 'accepted' && input.providerIdentity
       ? agentJournalItemKey(input.providerIdentity)
       : null
-  // The only dispatch-row builder: its input type is what makes a rejected row carry its fact.
   return (seq, ts) => ({
     kind: 'dispatch',
     clientMessageId: input.clientMessageId,
@@ -145,7 +143,7 @@ export function journalDispatchRowBuilder(
     ...(input.state === 'rejected' && input.keptAsQueuedMessageId !== undefined
       ? { keptAsQueuedMessageId: input.keptAsQueuedMessageId }
       : {}),
-    // Every rejection states its turn, null for none, so a reader tells it from an older row.
+    // Explicit null distinguishes no answered turn from older rows lacking the field.
     ...(input.state === 'rejected'
       ? {
           answeredInTurn: input.answeredInTurn
@@ -163,10 +161,7 @@ export function journalDispatchRowBuilder(
   })
 }
 
-/** `reason` is the only unbounded field written by Orca's own code: a provider error is
- *  arbitrary text, and a multi-megabyte one reached the row verbatim. Bounded head-first,
- *  because `isWriteFailureSubmission` prefix-matches the value. Rows
- *  written before this keep their full text, so readers still meet unbounded ones. */
+/** Bound provider error heads to preserve prefix-based classification; legacy readers still need their own bound. */
 function boundedDispatchReason(input: ResolveDispatchInput): string | null {
   if (input.state === 'accepted' || input.state === 'pending' || !input.reason) {
     return null
@@ -178,11 +173,7 @@ export function journalLifecycleBatchRowBuilder(
   state: () => JournalReducerState,
   settlementId: string,
   mutations: readonly JournalLifecycleMutationInput[],
-  /** No ROW-level producer: one batch row covers N mutations, so a row-level
-   *  producer would stamp whoever opened the batch onto every one of them.
-   *  An item mutation names its own, or none to keep the row's existing one.
-   *  The reducer still reads row-level linkage as the fallback for a mutation
-   *  that names none, because a row may come from a host that wrote one. */
+  /** Each mutation owns producer linkage; whole-row stamping would misattribute mixed-agent batches. */
   options: { fence: number; recovered?: true },
   revisions?: Map<string, number>
 ): RowBuilder<JournalLifecycleBatchRow> {
@@ -245,7 +236,6 @@ export function buildJournalItemRow(
     body: AgentJournalItemBody
     seq: number
     fence: number
-    /** The writer's provenance claim (`journalItemOwnerFence`); absent for host bookkeeping. */
     ownerFence?: number
     executionOwner?: number
     ts: number
@@ -257,8 +247,7 @@ export function buildJournalItemRow(
 ): JournalItemRow {
   const itemId = journalLifecycleMutationItemId(input)
   const resolved = input.state.aliases.get(itemId) ?? itemId
-  // A tombstoned row keeps its revision in `tombstones`, and the reducer drops
-  // any item at or below it — so a re-add has to outrank the tombstone too.
+  // Recreated items must outrank tombstones or the reducer will discard them.
   const revision = nextJournalItemRevision(input.state, itemId, input.revisions)
   const body = turnEndAfterStop(input.state, resolved, input.body)
   return {
@@ -287,10 +276,7 @@ export function buildJournalTombstoneRow(input: {
   return {
     kind: 'tombstone',
     itemId: input.itemId,
-    // Symmetric with the item builder: `upsertItem` clearing the tombstone on a
-    // re-add is what keeps the two maps disjoint, and that invariant lives in the
-    // reducer. Outranking both here means a repeat removal cannot be dropped as a
-    // stale revision if it ever stops holding.
+    // Rank above both live and tombstone revisions even if map-disjointness is later relaxed.
     revision: nextJournalItemRevision(input.state, input.itemId, input.revisions),
     ...journalRowBase(input.state.epoch, input.seq, input.fence, input.ts)
   }
@@ -321,7 +307,7 @@ export function buildJournalSubmissionRow(input: {
     ...(input.handoverRecorded ? { handoverRecorded: true } : {}),
     ...(input.queuedMessageId !== undefined ? { queuedMessageId: input.queuedMessageId } : {}),
     ...(input.origin !== undefined ? { origin: input.origin } : {}),
-    // The kind only; who the senders are is on the message body.
+    // Sender identities belong to message bodies; persist only the source kind here.
     ...(input.source !== undefined ? { source: { kind: input.source.kind } } : {}),
     ...(input.options ? { options: input.options } : {})
   }

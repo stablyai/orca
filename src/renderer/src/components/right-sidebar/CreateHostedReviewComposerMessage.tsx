@@ -1,6 +1,5 @@
 import { TriangleAlert } from 'lucide-react'
 
-/** Inline blocking message for the create-review composer. */
 export function CreateHostedReviewComposerMessage({
   children
 }: {

@@ -55,11 +55,7 @@ describe('worktree.create launch source', () => {
   })
 })
 
-/**
- * Recorded `worktree.create` requests from clients that update separately from the host: the CLI's
- * `worktree create --agent --prompt` and the phone's create-from-issue draft. The host now starts
- * their agent through the launch executor; what they send and read must not change.
- */
+/** Preserve independently updated CLI/phone worktree.create wire contracts while routing agent startup through the launch executor. */
 describe('worktree.create with a startup agent', () => {
   const repo = {
     id: 'repo-1',
@@ -85,7 +81,6 @@ describe('worktree.create with a startup agent', () => {
     launchSource: 'cli'
   }
 
-  // The phone's "create workspace from issue" with an agent picked.
   const PHONE_ISSUE_DRAFT_CREATE = {
     repo: 'id:repo-1',
     name: 'issue-88',
@@ -270,8 +265,7 @@ describe('worktree missing-terminal teardown RPC', () => {
 })
 
 describe('worktree.listRetiredNames', () => {
-  // The watermark rides alongside the names rather than being expanded into them; a client
-  // predating the field reads the names only and under-retires the compacted tiers.
+  // Keep the watermark beside names; older readers ignore it and under-retire compacted tiers.
   const RETIRED = {
     retiredNamesByRepo: { 'repo-1': ['nautilus-2'] },
     retiredNameTiersByRepo: { 'repo-1': 1 }
@@ -325,8 +319,7 @@ describe('worktree.rm waits for the delete only for clients that can show it', (
     )
   }
 
-  // Why: the reply may wait out Git's delete only for a client that shows the `removing` marker; an
-  // older client is answered on acceptance, as its timeouts and listings expect.
+  // Only clients showing removing can wait out Git deletion; older clients need acceptance before timeout.
 
   it('asks the runtime to wait for a client that advertises background removal', async () => {
     expect(ELECTRON_REMOTE_RUNTIME_CLIENT_CAPABILITIES).toContain(
@@ -375,7 +368,6 @@ describe('worktree.rm host qualification', () => {
     return { id: 'req-1', authToken: 'tok', method: 'worktree.rm', params }
   }
 
-  /** The removal options every case forwards; only the resolved host differs. */
   const forwarded = (hostId?: string): Record<string, unknown> => ({
     force: true,
     runHooks: false,
@@ -532,10 +524,7 @@ describe('worktree.rm host qualification', () => {
     })
     expect(runtime.removeManagedWorktree).not.toHaveBeenCalled()
   })
-  // Why: a delete legitimately arrives after Git stops listing the path (the
-  // caller is clearing a stale row). Pre-resolving the host must not turn that
-  // into a hard failure for a client that sends no hostId — mobile could delete
-  // such a row before host qualification and must still be able to.
+  // Git may already have dropped a stale row; unqualified deletion must still reach removeManagedWorktree.
   it('still deletes a stale workspace for an old client once Git no longer lists it', async () => {
     const runtime = makeRuntime()
     vi.mocked(runtime.showManagedWorktree).mockRejectedValue(new Error('selector_not_found'))
@@ -546,8 +535,7 @@ describe('worktree.rm host qualification', () => {
     )
 
     expect(response).toMatchObject({ ok: true, result: { removed: true } })
-    // Unqualified on purpose: removeManagedWorktree owns the stale-row path and
-    // still refuses on its own if the id turns out to have two owners.
+    // Let removeManagedWorktree handle the stale row; it still refuses ids owned by two hosts.
     expect(runtime.removeManagedWorktree).toHaveBeenCalledWith('id:wt-gone', forwarded())
   })
 })
@@ -564,7 +552,7 @@ describe('worktree.rm waivers travel on their own fields', () => {
     } as unknown as OrcaRuntimeService
   }
 
-  /** The dispatcher validates against the Zod schema, so the test spells the wire shape. */
+  /** Use wire params because dispatcher validation uses the Zod schema. */
   type RmParams = {
     hostId?: string
     force?: boolean
@@ -584,7 +572,7 @@ describe('worktree.rm waivers travel on their own fields', () => {
     await dispatcher.dispatch(request)
   }
 
-  /** Every waiver off unless a case turns it on — the defaults are the assertion. */
+  /** Default every waiver off; each case opts in explicitly. */
   const forwarded = (
     overrides: Partial<Record<string, unknown>> = {}
   ): Record<string, unknown> => ({
@@ -596,9 +584,7 @@ describe('worktree.rm waivers travel on their own fields', () => {
     ...overrides
   })
 
-  // Why (#11960 and #19334): each waiver rides its own field. The desktop sets `force` for an
-  // ordinary confirmed delete, so keying either waiver off `force` would silently disable that gate
-  // on the primary delete path. These cases exist to keep `force` from acquiring a second meaning.
+  // Waivers need independent fields (#11960, #19334): desktop force means confirmed deletion, not bypassing either gate.
 
   it.each([
     [

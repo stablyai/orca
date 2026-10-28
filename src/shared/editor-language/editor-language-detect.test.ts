@@ -14,11 +14,34 @@ describe('detectLanguage', () => {
     expect(detectLanguage('src/routes/index.astro')).toBe('astro')
   })
 
+  it('maps Glimmer files to distinct js/ts language ids', () => {
+    expect(detectLanguage('app/components/hello.gjs')).toBe('glimmer-js')
+    expect(detectLanguage('app/components/hello.gts')).toBe('glimmer-ts')
+    expect(detectLanguage('C:\\app\\components\\HELLO.GTS')).toBe('glimmer-ts')
+  })
+
   it('maps Nim files to the nim language id', () => {
     expect(detectLanguage('src/main.nim')).toBe('nim')
     expect(detectLanguage('tasks/build.nims')).toBe('nim')
     expect(detectLanguage('packages/app.nimble')).toBe('nim')
   })
+
+  it.each([
+    'Main.lean',
+    'lakefile.lean',
+    'C:\\proofs\\MAIN.LEAN',
+    '\\\\server\\share\\Main.lean',
+    '/home/user/folder workspace/Proof.LeAn'
+  ])('maps Lean source %s to the lean language id', (filePath) => {
+    expect(detectLanguage(filePath)).toBe('lean')
+  })
+
+  it.each(['Main.lean.bak', 'Main.leanx', 'proofs.lean/README', 'proofs.lean\\README'])(
+    'keeps non-Lean file %s on plaintext',
+    (filePath) => {
+      expect(detectLanguage(filePath)).toBe('plaintext')
+    }
+  )
 
   it.each([
     'documents/report.typ',
@@ -241,5 +264,26 @@ describe('detectLanguage', () => {
     ['C:\\repo\\.GITIGNORE', 'ini']
   ])('maps exact filenames case-insensitively: %s', (filePath, expected) => {
     expect(detectLanguage(filePath)).toBe(expected)
+  })
+  it.each([
+    ['#!/usr/bin/python3\n', 'python'],
+    ['#!/usr/bin/env bash\necho hi', 'shell'],
+    ['#! /bin/sh -e\n', 'shell'],
+    ['#!/usr/bin/env -S node --flag', 'javascript'],
+    ['#!C:\\Python\\python.exe\n', 'python'],
+    ['#!/usr/bin/env python3.12', 'python'],
+    ['#!/usr/bin/ruby\r\nputs 1', 'ruby'],
+    ['#!/usr/bin/env awk', 'plaintext'],
+    ['#!/usr/bin/env toString', 'plaintext'],
+    ['#!/usr/bin/__proto__', 'plaintext'],
+    ['echo hi\n#!/bin/sh', 'plaintext']
+  ])('falls back to the shebang for extensionless files: %j', (content, expected) => {
+    expect(detectLanguage('bin/tool', content)).toBe(expected)
+  })
+
+  it('only applies the shebang to extensionless names', () => {
+    expect(detectLanguage('script.rb', '#!/usr/bin/env python3')).toBe('ruby')
+    expect(detectLanguage('Makefile', '#!/usr/bin/env python3')).toBe('makefile')
+    expect(detectLanguage('notes.txt', '#!/usr/bin/env python3')).toBe('plaintext')
   })
 })

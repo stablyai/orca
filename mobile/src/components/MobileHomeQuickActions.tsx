@@ -1,18 +1,18 @@
 import { Plus, QrCode } from 'lucide-react-native'
-import { Pressable, StyleSheet, Text, View } from 'react-native'
+import { Pressable, Text, View } from 'react-native'
 import type { HostProfile } from '../transport/types'
 import { colors, radii, spacing } from '../theme/mobile-theme'
-import { PickerModal } from './PickerModal'
-import { useConnectedHostPicker } from './use-connected-host-picker'
+import { themedStyleSheet } from '../theme/themed-styles'
+import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 
 type Props = {
   connectedHosts: HostProfile[]
   onPairDesktop: () => void
-  onCreateWorkspace: (hostId: string) => void
+  onCreateWorkspace: () => void
 }
 
 export function MobileHomeQuickActions(props: Props) {
-  const hostPicker = useConnectedHostPicker(props.connectedHosts)
+  useMobileColorScheme()
   const canCreateWorkspace = props.connectedHosts.length > 0
 
   return (
@@ -38,7 +38,7 @@ export function MobileHomeQuickActions(props: Props) {
             !canCreateWorkspace && styles.quickActionDisabled,
             pressed && styles.quickActionPressed
           ]}
-          onPress={() => hostPicker.pickHost(props.onCreateWorkspace)}
+          onPress={props.onCreateWorkspace}
         >
           <View style={styles.quickActionIcon}>
             <Plus size={16} color={colors.textSecondary} />
@@ -46,12 +46,11 @@ export function MobileHomeQuickActions(props: Props) {
           <Text style={styles.quickActionLabel}>New Workspace</Text>
         </Pressable>
       </View>
-      <PickerModal title="Create Workspace On" {...hostPicker.pickerProps} />
     </>
   )
 }
 
-const styles = StyleSheet.create({
+const styles = themedStyleSheet(() => ({
   sectionHeading: {
     marginTop: spacing.xl,
     marginBottom: spacing.sm,
@@ -97,4 +96,4 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: '600'
   }
-})
+}))

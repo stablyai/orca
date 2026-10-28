@@ -8,11 +8,16 @@ import {
   syntheticSession
 } from './session-search-index-test-fixture'
 
-it('keeps exact text, timestamps, and order across spills and closes its temporary database', () => {
+it('keeps text, timestamps, truncation, and order across spills and closes its temporary database', () => {
   const close = vi.spyOn(SyncDatabase.prototype, 'close')
   const buffer = new SessionSearchWriteBuffer(1)
   const rows = [
-    { role: 'user' as const, text: '😀\u0000\nfirst', timestamp: '2026-10-19T00:00:00.000Z' },
+    {
+      role: 'user' as const,
+      text: '😀\u0000\nfirst',
+      timestamp: '2026-10-19T00:00:00.000Z',
+      textTruncated: true as const
+    },
     { role: 'tool' as const, text: '工具\r\nsecond', timestamp: null },
     { role: 'assistant' as const, text: 'last', timestamp: null }
   ]
@@ -33,6 +38,43 @@ it('keeps exact text, timestamps, and order across spills and closes its tempora
     close.mockRestore()
   }
 })
+
+it.each([1, 1_000_000])(
+  'persists truncation through search writes with a %i-character buffer',
+  async (commitChars) => {
+    const index = await openSessionSearchIndexFile('ss-truncation-staging')
+    const writer = new SessionSearchIndexWriter(index.db, commitChars)
+    const write = writer.beginWrite(syntheticCandidate(), 'replace', 0)
+    if (!write) {
+      throw new Error('Expected write')
+    }
+    try {
+      write.add({
+        role: 'user',
+        text: 'reader prefix '.repeat(1000),
+        timestamp: null,
+        textTruncated: true
+      })
+      write.add({ role: 'assistant', text: 'complete reply', timestamp: null })
+      write.add({ role: 'tool', text: 'output '.repeat(1000), timestamp: null })
+      expect(
+        write.commit({ session: syntheticSession(), byteOffset: 100, incomplete: false })
+      ).toBe(true)
+      expect(
+        index.db.prepare('SELECT role, text_truncated FROM messages ORDER BY id').all()
+      ).toEqual([
+        { role: 'user', text_truncated: 1 },
+        { role: 'user', text_truncated: 1 },
+        { role: 'assistant', text_truncated: 0 },
+        { role: 'tool', text_truncated: 1 }
+      ])
+    } finally {
+      write.discard()
+      writer.close()
+      await index.close()
+    }
+  }
+)
 
 it.each(['discard', 'close', 'removed', 'rollback'] as const)(
   'releases anonymous staging on %s without publishing rows',

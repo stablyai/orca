@@ -1,7 +1,7 @@
 import { performance } from 'node:perf_hooks'
 import type { ExpectedTeardownScope } from './process-gone-classification'
 
-// Why: 5s bounds harm; Restart Manager may wait 30s, so later kills remain reportable.
+// Keep suppression shorter than Restart Manager's wait so later kills remain reportable.
 export const WINDOWS_SESSION_END_CRASH_SUPPRESSION_WINDOW_MS = 5_000
 
 type Clock = () => number
@@ -17,8 +17,7 @@ export function markSystemSessionEnding(): void {
   systemSessionEnded = true
 }
 
-// Why latched, unlike the 5s crash-suppression window below: a native dialog or a recovery verdict is never
-// right once the OS is tearing the session down, however long the process outlives the signal.
+// Latch OS teardown: dialogs and recovery remain inappropriate after the crash-suppression window.
 export function isSystemSessionEnding(): boolean {
   return systemSessionEnded
 }

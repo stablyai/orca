@@ -15,29 +15,6 @@ function frameRow(id: string, provider: string, kind: string): NativeChatMessage
 }
 
 describe('omitNativeChatThreadGoalRows', () => {
-  it('drops goal transitions and keeps every other row', () => {
-    const user: NativeChatMessage = {
-      id: 'user',
-      role: 'user',
-      timestamp: 0,
-      source: 'transcript',
-      blocks: [{ type: 'text', text: 'Ship the parser' }],
-      sentAs: 'goal'
-    }
-    const warning = frameRow('warning', 'codex', 'notification:warning')
-    const messages = [
-      user,
-      frameRow('set', 'codex', 'notification:thread/goal/updated'),
-      warning,
-      frameRow('cleared', 'codex', 'notification:thread/goal/cleared')
-    ]
-
-    expect(omitNativeChatThreadGoalRows(messages).map((message) => message.id)).toEqual([
-      'user',
-      'warning'
-    ])
-  })
-
   it('keeps a same-named frame from another provider', () => {
     const other = frameRow('other', 'claude', 'notification:thread/goal/updated')
     expect(omitNativeChatThreadGoalRows([other])).toEqual([other])

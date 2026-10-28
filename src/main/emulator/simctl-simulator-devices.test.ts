@@ -120,8 +120,7 @@ describe('shutdownSimulatorDevice', () => {
   })
 
   it('propagates real shutdown failures instead of swallowing them', async () => {
-    // execFile's message echoes the command line, which always contains
-    // "shutdown"; a hung device (timeout kill) must still reject.
+    // Command text always contains shutdown; only the actual device state proves it is already off.
     execFileMock.mockImplementation((_command, _args, _options, callback) => {
       callback(
         Object.assign(

@@ -160,4 +160,4 @@ export function resolvePaneStyleOptions(
 export {
   isTerminalBackgroundLight,
   resolveOpaqueTerminalBackground
-} from './terminal-title-contrast'
+} from '../../../shared/terminal-title-contrast'

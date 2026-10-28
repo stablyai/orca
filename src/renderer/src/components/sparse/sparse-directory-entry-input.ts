@@ -10,8 +10,7 @@ export type SparseDirectoryEntryInputResult = {
   error: string | null
 }
 
-/** Turn free-form typing or a multi-line paste into repo-relative entries,
- *  rejecting the same shapes the saved-preset parser rejects. */
+/** Parse typed/pasted repo-relative paths using saved-preset validation constraints. */
 export function parseSparseDirectoryEntryInput(raw: string): SparseDirectoryEntryInputResult {
   const invalid = {
     entries: [],
@@ -30,7 +29,6 @@ export function parseSparseDirectoryEntryInput(raw: string): SparseDirectoryEntr
   return { entries, error: null }
 }
 
-/** Append entries that are not already selected, preserving existing order. */
 export function addSparseDirectoryEntries(selected: string[], entries: string[]): string[] {
   const next = [...selected]
   for (const entry of entries) {

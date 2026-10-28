@@ -161,7 +161,7 @@ export function normalizeWorkspaceAttachments(value: unknown): WorkspaceAttachme
     items.set(key, {
       ...previous,
       ...item,
-      // Why: the collapse pass compares repoId, so a conflict must resolve independently of input order.
+      // Choose conflicting repoId independently of input order because the later collapse pass compares it.
       ...(previous?.repoId && item.repoId && previous.repoId < item.repoId
         ? { repoId: previous.repoId }
         : {}),

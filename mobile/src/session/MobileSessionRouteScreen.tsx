@@ -2,14 +2,12 @@ import { MobileSessionSurface } from './MobileSessionSurface'
 import { useMobileSessionController } from './use-mobile-session-controller'
 import { ActivityIndicator, Text, View } from 'react-native'
 import { colors } from '../theme/mobile-theme'
+import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import { styles } from './mobile-session-styles'
 
-/**
- * The session screen as a component rather than a route module: the page's route file mounts it, and
- * the native route file, which mounts the shell, cannot be imported by the page. Its params are read
- * below this file, by the controller's foundation hook and the notification pane hook.
- */
+// Keep the screen importable by the page; native route modules mount the shell.
 export function MobileSessionRouteScreen() {
+  useMobileColorScheme()
   const controller = useMobileSessionController()
   // Readiness stays true on refocus so returning from Settings preserves mounted panes.
   if (

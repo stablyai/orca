@@ -1,11 +1,11 @@
-/** The live update-check collaborators, shared by the connect decision and the tunnel restore. */
 import { getAppEnvironment } from '../../shared/app-environment'
 import type { ManagedServerUpdateDeps } from './managed-server-update-check'
 import { autoUpdateManagedOrcadEnvironment } from '../managed-server/lifecycle/orcad-managed-auto-update'
 import { requireManagedOrcadTargetStore } from '../managed-server/lifecycle/orcad-managed-runtime-context'
-
-// Hosts whose update failed this launch. Session-only: SshTarget is published to peers.
-const failedThisLaunch = new Set<string>()
+import {
+  orcadUpdateFailedThisLaunch,
+  recordOrcadUpdateFailedThisLaunch
+} from '../managed-server/lifecycle/orcad-managed-update-failure-memory'
 
 export function managedServerUpdateDeps(userDataPath: string): ManagedServerUpdateDeps {
   const registry = requireManagedOrcadTargetStore()
@@ -13,15 +13,18 @@ export function managedServerUpdateDeps(userDataPath: string): ManagedServerUpda
   return {
     autoUpdate: (environmentId, options) =>
       autoUpdateManagedOrcadEnvironment(userDataPath, { environmentId, appVersion, ...options }),
-    // Why the stored row: the caller's target is a copy taken before an overlapping check recorded.
+    // Re-read the store: caller snapshots may predate an overlapping check's failure.
     recordedUpdateFailure: (target) => {
       const failure = (registry.getTarget(target.id) ?? target).managedServerUpdateFailure
       return failure?.appVersion === appVersion ? failure.reason : null
     },
-    // Why only a failure counts: a deferral or skip never tried the update.
-    failedThisLaunch: (target) => failedThisLaunch.has(target.id),
+    // Only attempted failures suppress retry; keep launch-only state out of peer-published SshTarget.
+    failedThisLaunch: (target) => orcadUpdateFailedThisLaunch({ kind: 'ssh', id: target.id }),
     recordUpdateFailure: (target, reason) => {
-      failedThisLaunch.add(target.id)
+      recordOrcadUpdateFailedThisLaunch(
+        { kind: 'ssh', id: target.id },
+        { code: 'orcad_update_failed', reason }
+      )
       registry.updateTarget(target.id, { managedServerUpdateFailure: { reason, appVersion } })
     },
     clearUpdateFailure: (target) => {

@@ -1,3 +1,4 @@
+import type { StructuredAgentSessionAdapter } from '../native-chat/agent-session-wire/structured-agent-session-adapter'
 import { AgentSessionAcquisitionRootExitObservedError } from '../native-chat/agent-session-wire/structured-agent-session-adapter'
 import { ProviderAcquisitionStarts } from '../provider-process/provider-acquisition-starts'
 import { isAcpReadySession, type AcpStructuredChild } from './acp-structured-child'
@@ -14,7 +15,24 @@ export class AcpStructuredChildren {
   readonly sessions = new Map<string, AcpStructuredChild>()
   readonly starts = new ProviderAcquisitionStarts<AcpStructuredConnection>()
   constructor(private readonly deps: AcpStructuredSessionAdapterDeps) {}
-  /** A requested close: proven by the root's exit; a tree not proven gone is the caller's to report. */
+  capturePendingOutput: StructuredAgentSessionAdapter['capturePendingOutput'] = (input) => {
+    const session = this.sessions.get(input.sessionId)
+    if (
+      !session ||
+      !isAcpReadySession(session) ||
+      session.fence !== input.fence ||
+      session.acquisitionGeneration !== input.generation
+    ) {
+      return undefined
+    }
+    const { turns, lane } = session
+    const pending = turns.capturePendingSend(input.clientMessageId)
+    return () =>
+      session.journalClosed === null &&
+      (pending() || lane.hasPendingDiagnostic(input.clientMessageId))
+  }
+
+  /** Requires root exit; reports unproven descendant cleanup separately. */
   async close(sessionId: string): Promise<boolean> {
     const connection = this.sessions.get(sessionId)?.connection
     const closed = await this.stop(sessionId, true)
@@ -28,8 +46,7 @@ export class AcpStructuredChildren {
     return closed
   }
 
-  /** True only once every child is proven gone, or when this adapter runs none for the session:
-   *  a failed start's child, and the session's own. */
+  /** Requires exit of both the failed-start child and the session child, if present. */
   async stop(sessionId: string, requested = true): Promise<boolean> {
     const [failedStart, session] = await Promise.all([
       this.starts.stopFailed(sessionId),
@@ -60,14 +77,14 @@ export class AcpStructuredChildren {
       return session.closing
     }
     if (requested && session.journalClosed === null) {
-      // A close, dispose or quit ends a running turn as a Stop does before the child goes.
+      // Allow the running turn to settle before closing the process.
       session.closeRequested = true
       await windDownAcpTurn(session, this.stopGraceMs())
       if (session.ended) {
         return true
       }
     }
-    // A connection loss already decided why the child ends; a later stop does not relabel it.
+    // Preserve a connection loss's cause across later Stop calls.
     if (session.journalClosed === null) {
       session.closeRequested ||= requested
       session.lane.flush()
@@ -79,7 +96,6 @@ export class AcpStructuredChildren {
     return proven
   }
 
-  /** The child's exit is proven: the host hears it, and nothing of the child stays here. */
   finish(session: AcpStructuredChild, observedAt: number): void {
     if (isAcpReadySession(session)) {
       endAcpStructuredSession(session, observedAt, this.deps.onEvent)
@@ -109,8 +125,7 @@ export class AcpStructuredChildren {
     }
   }
 
-  /** The connection broke while the child may still run: nothing more it says can be journaled, so
-   *  the journal closes now and the child is stopped; the host hears `ended` once that is proven. */
+  /** Close the journal on protocol loss; notify the host after process exit is proven. */
   connectionLost(session: AcpStructuredChild | null, error: Error): void {
     if (
       !session ||

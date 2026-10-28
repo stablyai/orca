@@ -15,8 +15,7 @@ afterEach(async () => {
   tempRoots = []
 })
 
-// Shape of the real ~/.claude/.../9176163a-*.jsonl artifact: CLI metadata plus
-// four queued subagent messages, and zero user/assistant conversation turns.
+// Mirror a real metadata-only Claude transcript containing queued subagent messages but no conversation turns.
 function metadataOnlyTranscript(sessionId: string): unknown[] {
   return [
     {
@@ -49,8 +48,7 @@ describe('recoverable-but-empty Claude sessions', () => {
       join(roots.claudeProjectsDir, 'project', `${sessionId}.jsonl`),
       metadataOnlyTranscript(sessionId)
     )
-    // Sibling subagent transcripts survive even though the parent conversation
-    // was never persisted; a .meta.json sidecar is not a transcript.
+    // Child transcripts can outlive an unpersisted parent; metadata sidecars must not count as transcripts.
     const subagentsDir = join(roots.claudeProjectsDir, 'project', sessionId, 'subagents')
     await writeJsonlFile(join(subagentsDir, 'agent-arev-contracts-1.jsonl'), [
       {
@@ -127,8 +125,6 @@ describe('recoverable-but-empty Claude sessions', () => {
     const session = result.sessions.find((entry) => entry.sessionId === sessionId)
 
     expect(session?.messageCount).toBe(1)
-    // Counted for every local session (the row's "N subagents" affordance),
-    // but a session with real turns is never surfaced as recoverable-empty.
     expect(session?.subagentTranscriptCount).toBe(1)
     expect(isAiVaultSessionRecoverableEmpty(session!)).toBe(false)
   })
@@ -143,7 +139,6 @@ describe('recoverable-but-empty Claude sessions', () => {
         sessionId,
         content: `queued prompt ${n}`
       })),
-      // One prompt consumed, one removed by the user: only one is still queued.
       { type: 'queue-operation', operation: 'dequeue', sessionId },
       {
         type: 'queue-operation',
@@ -180,8 +175,7 @@ describe('recoverable-but-empty Claude sessions', () => {
       first.sessions.find((entry) => entry.sessionId === sessionId)?.subagentTranscriptCount
     ).toBe(0)
 
-    // The parent file never changes again, but a still-running subagent lands
-    // its transcript afterwards; the cached parse must still surface it.
+    // Child writes must refresh recoverability without changing the cached parent transcript.
     await writeJsonlFile(
       join(roots.claudeProjectsDir, 'project', sessionId, 'subagents', 'agent-late.jsonl'),
       [
@@ -203,8 +197,7 @@ describe('recoverable-but-empty Claude sessions', () => {
     tempRoots.push(root)
     const sessionId = 'remote-session'
     const transcriptPath = join(root, `${sessionId}.jsonl`)
-    // A local sibling dir exists, but the transcript content came from an SSH
-    // host — its real subagents live on that host, not on this disk.
+    // Same-path local artifacts must not enrich a transcript fetched from an SSH host.
     await writeJsonlFile(join(root, sessionId, 'subagents', 'agent-x.jsonl'), [{ type: 'user' }])
     const content = metadataOnlyTranscript(sessionId)
       .map((line) => JSON.stringify(line))
@@ -251,8 +244,7 @@ describe('countSubagentTranscripts', () => {
     const transcriptPath = join(root, 'session.jsonl')
     const subagentsDir = join(root, 'session', 'subagents')
     await writeJsonlFile(join(subagentsDir, 'agent-a.jsonl'), [{ type: 'user' }])
-    // A stray sibling artifact and a directory would inflate the row badge past
-    // what the on-demand lister shows; both must fail the shared predicate.
+    // The badge and on-demand lister must both exclude unrelated files and directories.
     await writeFile(join(subagentsDir, 'notes.jsonl'), '{}')
     await mkdir(join(subagentsDir, 'agent-x.jsonl'))
 

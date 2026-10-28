@@ -23,8 +23,12 @@ export type RuntimeFileReadArgs = {
   access?: LocalFileAccess
   /** Host grant for a runtime file outside every workspace (see OpenFile.terminalArtifactGrantId). */
   terminalArtifactGrantId?: string
+  /** Pairing that issued the grant; a same-id re-pair must not answer for it. */
+  expectedEnvironmentPairingRevision?: number
   /** Set by readers that render the bytes: page a remote PDF/image too large for one reply. */
   pageOversizedBinary?: boolean
+  /** A user act (open, expand, Retry); may start a stopped WSL distro. Local reads only. */
+  wakeWslDistro?: boolean
 }
 
 export type RuntimeFileOperationArgs = {

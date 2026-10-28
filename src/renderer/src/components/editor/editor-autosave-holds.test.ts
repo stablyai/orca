@@ -3,7 +3,7 @@ import type { OpenFile } from '@/store/slices/editor'
 import { createEditorStore } from './editor-autosave-controller-test-fixture'
 import { editorFileHoldKey, pathMutationHoldKeys } from './editor-autosave-holds'
 
-// A Windows desktop client: its own path rules must not fold a POSIX host's paths.
+// Emulate a Windows client to ensure its path rules cannot fold distinct POSIX host paths.
 vi.mock('@/lib/desktop-window-chrome', async (importOriginal) => ({
   ...(await importOriginal<object>()),
   isLocalWindowsDesktopClient: () => true
@@ -29,7 +29,6 @@ describe('discard hold keys on a Windows client', () => {
   it('keeps a POSIX backslash file apart from the slash path', () => {
     const backslash = tab('a', '/repo/a\\b.ts', remote)
     const slash = tab('b', '/repo/a/b.ts', remote)
-    // Both resolve to the remote host (not a per-tab fallback), yet stay distinct.
     expect([editorFileHoldKey(state, backslash), editorFileHoldKey(state, slash)]).not.toContain(
       'a'
     )
@@ -55,5 +54,27 @@ describe('discard hold keys on a Windows client', () => {
     const key = editorFileHoldKey(state, tab('a', 'C:\\repo\\a.ts', local))
     expect(key).not.toBe('a')
     expect(key).toBe(editorFileHoldKey(state, tab('b', 'c:/repo/a.ts', local)))
+  })
+
+  it('holds a `\\\\wsl.localhost` tab while its file is discarded via `\\\\wsl$`', () => {
+    const local = { worktreeId: 'wt-1' }
+    const tabKey = editorFileHoldKey(
+      state,
+      tab('b', '\\\\wsl.localhost\\ubuntu\\repo\\a.ts', local)
+    )
+    const discarded = pathMutationHoldKeys(state, {
+      worktreeId: 'wt-1',
+      worktreePath: '\\\\wsl$\\Ubuntu\\repo',
+      relativePath: 'a.ts'
+    })
+    expect(tabKey).not.toBe('b')
+    expect(discarded.has(tabKey)).toBe(true)
+    // Keep Linux path case and distinguish WSL aliases from a real share named wsl.
+    expect(
+      discarded.has(editorFileHoldKey(state, tab('c', '\\\\wsl$\\Ubuntu\\repo\\A.ts', local)))
+    ).toBe(false)
+    expect(
+      discarded.has(editorFileHoldKey(state, tab('d', '\\\\wsl\\Ubuntu\\repo\\a.ts', local)))
+    ).toBe(false)
   })
 })

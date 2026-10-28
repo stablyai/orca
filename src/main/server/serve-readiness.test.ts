@@ -113,8 +113,7 @@ describe('ServeReadinessPublisher', () => {
 
   it('omits the health block entirely when a host does not report one', () => {
     const payload = JSON.parse(renderServeReadiness(ready, { mode: 'json' }))
-    // Why absent rather than a null/empty object: a reader must be able to tell "this host
-    // does not publish health" from "this host published a green verdict".
+    // Absent health means unreported; it must not imply a green verdict.
     expect('health' in payload).toBe(false)
     expect(renderServeReadiness(ready, { mode: 'human' })).not.toContain('Terminal daemon')
   })
@@ -150,7 +149,7 @@ describe('ServeReadinessPublisher', () => {
       }
     }
     const human = renderServeReadiness(failed, { mode: 'human' })
-    // An operator reading the ready block must not have to infer this from a missing line.
+    // Make failure explicit to operators rather than requiring inference from missing output.
     expect(human).toContain('PTY self-test FAILED')
     expect(human).toContain('terminals survive an orcad restart: NO')
   })

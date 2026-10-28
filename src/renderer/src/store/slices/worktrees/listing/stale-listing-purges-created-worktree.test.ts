@@ -14,14 +14,17 @@ import {
   seedStore
 } from '../../store-test-helpers'
 import { createStoreCascadesMockApi } from '../../store-cascades-test-harness'
+import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../../../shared/layout-owner-switch'
 import {
+  readStructuredAgentLaunchRecord,
   resetStructuredAgentLaunchPersistenceForTests,
   writeStructuredAgentLaunchRecord
-} from '@/lib/structured-agent-session-launch-persistence'
+} from '@/lib/agent-session/launch/structured-agent-session-launch-persistence'
+import { wasStructuredAgentLaunchClosedByLocalCancel } from '@/lib/structured-agent-session-local-launch-cancel'
 import {
   hasStructuredAgentSessionLaunchCancellationTombstone,
   resetStructuredAgentLaunchRegistryForTests
-} from '@/lib/structured-agent-session-launch-registry'
+} from '@/lib/agent-session/launch/structured-agent-session-launch-registry'
 
 vi.mock('sonner', () => ({
   toast: { warning: vi.fn(), info: vi.fn(), success: vi.fn(), error: vi.fn(), dismiss: vi.fn() }
@@ -34,6 +37,14 @@ const EXISTING_ID = `${REPO_ID}::/tmp/wt-existing`
 const CREATED_ID = `${REPO_ID}::/tmp/wt-created`
 const SESSION_ID = 'claude_repro_session'
 const AGENT_TAB_ID = `agent-session:${SESSION_ID}`
+
+// A layout-owner build closes a local launch on its host at once and keeps no tombstone.
+function launchWasCancelled(): boolean {
+  return ORCA_LAYOUT_OWNER_IS_MAIN
+    ? wasStructuredAgentLaunchClosedByLocalCancel(SESSION_ID) &&
+        readStructuredAgentLaunchRecord(SESSION_ID) === undefined
+    : hasStructuredAgentSessionLaunchCancellationTombstone(CREATED_ID, SESSION_ID)
+}
 
 function detected(worktree: Worktree): DetectedWorktree {
   return { ...worktree, ownership: 'orca-managed', selectedCheckout: false, visible: true }
@@ -124,7 +135,7 @@ function applyListing(
   rows: Worktree[],
   catalogVersion?: WorktreeCatalogVersion
 ): WorktreeListingMergeOutcome {
-  return mergeFetchedWorktrees(store.setState, {
+  return mergeFetchedWorktrees(store.setState, store.getState, {
     repoId: REPO_ID,
     hostId: 'local',
     ownerWasMissingAtStart: false,
@@ -143,9 +154,7 @@ function applyListing(
   })
 }
 
-// Why this suite exists: it pins what an authoritative listing that omits a known worktree does to
-// the client, which is exactly why the host re-runs a scan that a create overtook instead of
-// publishing it (see detected-provider-listing.ts). The client keeps no fence of its own.
+// An authoritative omission purges known client rows; host must rescan when create overtakes its scan (detected-provider-listing.ts).
 describe('an authoritative listing that omits a just-created worktree', () => {
   beforeEach(() => {
     resetStructuredAgentLaunchPersistenceForTests()
@@ -160,7 +169,7 @@ describe('an authoritative listing that omits a just-created worktree', () => {
     expect(applyListing(store, [existingRow])).toBe('applied')
 
     const state = store.getState()
-    expect(hasStructuredAgentSessionLaunchCancellationTombstone(CREATED_ID, SESSION_ID)).toBe(true)
+    expect(launchWasCancelled()).toBe(true)
     expect(state.activeWorktreeId).toBeNull()
     expect(state.unifiedTabsByWorktree[CREATED_ID]).toBeUndefined()
     expect(state.tabsByWorktree[CREATED_ID]).toBeUndefined()
@@ -175,7 +184,7 @@ describe('an authoritative listing that omits a just-created worktree', () => {
     expect(applyListing(store, [existingRow])).toBe('applied')
 
     const state = store.getState()
-    expect(hasStructuredAgentSessionLaunchCancellationTombstone(CREATED_ID, SESSION_ID)).toBe(true)
+    expect(launchWasCancelled()).toBe(true)
     expect(state.activeWorktreeId).toBeNull()
     expect(state.unifiedTabsByWorktree[CREATED_ID]).toBeUndefined()
   })
@@ -188,17 +197,14 @@ describe('an authoritative listing that omits a just-created worktree', () => {
     expect(applyListing(store, [...rows])).toBe('applied')
 
     const state = store.getState()
-    expect(hasStructuredAgentSessionLaunchCancellationTombstone(CREATED_ID, SESSION_ID)).toBe(false)
+    expect(readStructuredAgentLaunchRecord(SESSION_ID)).toBeDefined()
+    expect(launchWasCancelled()).toBe(false)
     expect(state.activeWorktreeId).toBe(CREATED_ID)
     expect(state.unifiedTabsByWorktree[CREATED_ID]).toHaveLength(2)
   })
 })
 
-// Why this suite exists: the host stamps every listing with the catalog version its scan began
-// at and every create reply with the version the create produced. A listing that predates an
-// applied create is not applied at all, whatever delayed it -- host post-scan work, a coalesced
-// joiner, or the pre-merge terminal teardown -- so it can neither purge the new worktree nor
-// replace the host's rows with a list that lacks it.
+// Catalog versions fence delayed listings before merge/teardown so scans predating applied create cannot purge new tabs or replace current rows.
 describe('a listing versioned before an applied create', () => {
   const HOST = 'host-epoch-1'
   const before = { epoch: HOST, sequence: 6 }
@@ -230,7 +236,8 @@ describe('a listing versioned before an applied create', () => {
     expect(applyListing(store, [existingRow], before)).toBe('superseded')
 
     const state = store.getState()
-    expect(hasStructuredAgentSessionLaunchCancellationTombstone(CREATED_ID, SESSION_ID)).toBe(false)
+    expect(readStructuredAgentLaunchRecord(SESSION_ID)).toBeDefined()
+    expect(launchWasCancelled()).toBe(false)
     expect(state.activeWorktreeId).toBe(CREATED_ID)
     expect(state.unifiedTabsByWorktree[CREATED_ID]).toHaveLength(2)
     expect(state.worktreesByRepo[REPO_ID]!.map((w) => w.id)).toEqual([EXISTING_ID, CREATED_ID])
@@ -282,7 +289,7 @@ describe('a listing versioned before an applied create', () => {
 
     expect(applyListing(store, [existingRow])).toBe('applied')
 
-    expect(hasStructuredAgentSessionLaunchCancellationTombstone(CREATED_ID, SESSION_ID)).toBe(true)
+    expect(launchWasCancelled()).toBe(true)
     expect(store.getState().activeWorktreeId).toBeNull()
   })
 })

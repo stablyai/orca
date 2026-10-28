@@ -114,7 +114,6 @@ describe('AgentHookServer ingestRemote', () => {
       'conn-1'
     )
 
-    // The session-only path returns early, so it must not skip the plugin tap.
     expect(rendererListener).toHaveBeenCalledWith(
       expect.objectContaining({ paneKey: PANE, providerSessionOnly: true })
     )
@@ -461,7 +460,7 @@ describe('AgentHookServer ingestRemote', () => {
     const server = new AgentHookServer()
     const listener = vi.fn()
     server.setListener(listener)
-    // Why: bypass parseAgentStatusPayload with an invalid payload — ingestRemote is the trust boundary under test, not the parser.
+    // Bypass parsing to exercise ingestRemote as an untrusted-input boundary.
     server.ingestRemote(
       {
         paneKey: PANE,
@@ -484,7 +483,6 @@ describe('AgentHookServer ingestRemote', () => {
     }
     const listener = vi.fn()
     server.setListener(listener)
-    // 201 chars — one past the listener's 200-char cap.
     const oversized = 'a'.repeat(201)
     server.ingestRemote(
       { paneKey: oversized, tabId: 'tab-1', worktreeId: 'wt-1', payload },
@@ -612,7 +610,6 @@ describe('AgentHookServer ingestRemote', () => {
   })
 
   it('normalizes inner payload via normalizeAgentStatusPayload — clamps oversized prompt', () => {
-    // Why: a buggy/malicious relay could forward an over-cap field, so ingestRemote re-runs the normalizer to enforce the AGENT_STATUS_MAX_FIELD_LENGTH cap at the trust boundary.
     const server = new AgentHookServer()
     const listener = vi.fn()
     server.setListener(listener)

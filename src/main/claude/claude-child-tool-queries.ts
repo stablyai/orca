@@ -1,6 +1,3 @@
-// Which agent a tool call, a frame or a prompt belongs to, answered from the journal's own linkage,
-// so a child's record, its open operation and its prompt rows all name the agent its rows name.
-
 import type { AgentJournalProducerLinkage } from '../../shared/agent-session-journal-types'
 import type { ClaudePendingPrompt } from './claude-prompt-registry'
 import type { ClaudeToolUse } from './claude-structured-item-translation'
@@ -11,13 +8,11 @@ import type {
 import type { ClaudeToolOriginRegistry } from './claude-tool-origin-registry'
 
 export type ClaudeChildToolQueries = {
-  /** The agent (its canonical task id) whose own traffic made a tool call; null when the session's
-   *  own agent made it, or it was never seen. The same answer a row that call produced carries. */
+  /** Canonical journal owner; null for the session agent or unseen calls. */
   childToolOwner: (toolUseId: string) => string | null
-  /** The child a frame's `parent_tool_use_id` names, and its newest call still awaiting a result. */
+  /** The child named by `parent_tool_use_id` and its newest unanswered call. */
   childActivity: (parentToolUseId: string) => { agentId: string; openTool: ClaudeToolUse | null }
-  /** The linkage a prompt row carries, as the asking agent's other rows carry it; none for the
-   *  session's own agent. */
+  /** Use the asking agent's journal linkage; empty for the session agent. */
   promptProducer: (
     prompt: Pick<ClaudePendingPrompt, 'agentId' | 'toolUseId'>
   ) => AgentJournalProducerLinkage
@@ -46,7 +41,6 @@ export function claudeChildToolQueries(deps: {
       const { agentId } = deps.linkage.settledLinkageFor(parentToolUseId).linkage
       return { agentId: agentId ?? parentToolUseId, openTool }
     },
-    // The provider names the asker when it can; otherwise the gated call's owner is the asker.
     promptProducer: (prompt) => {
       if (prompt.agentId !== undefined) {
         return deps.linkage.linkageForAgent(prompt.agentId)

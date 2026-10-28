@@ -1,5 +1,3 @@
-// The chat sign-in against a scripted Antigravity server.
-
 import { createServer } from 'node:http'
 import { mkdir, mkdtemp, rm, stat, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
@@ -38,7 +36,7 @@ vi.mock('../provider-process/provider-process-teardown', () => ({
 
 const GOOGLE_LINK =
   'https://accounts.google.com/o/oauth2/v2/auth?response_type=code&state=s1&redirect_uri=http%3A%2F%2F127.0.0.1%3A41234%2F'
-// Any host, even one without a published server build, signs in against the fake.
+// Use a fake pin even on hosts without a published server build.
 const PIN = {
   version: '1.3.0',
   url: 'https://example.test/agy.zip',
@@ -55,7 +53,6 @@ afterEach(async () => {
   await Promise.all(folders.splice(0).map((path) => rm(path, { recursive: true, force: true })))
 })
 
-/** A scripted server process whose stdin closing is its exit. */
 function fakeServer(agent: AcpScriptedAgent, stderr = new PassThrough()) {
   agent.on('initialize', (frame) => agent.reply(frame, { protocolVersion: 1 }))
   const child = Object.assign(createFakePipedChild(), {
@@ -69,7 +66,6 @@ function fakeServer(agent: AcpScriptedAgent, stderr = new PassThrough()) {
   return child
 }
 
-/** Scripted browser output; the real command/parser has its own fixture. */
 async function helperOutput(link: string): Promise<string> {
   return `${ANTIGRAVITY_BROWSER_MARKER}${JSON.stringify(link)}\n`
 }
@@ -77,9 +73,7 @@ async function helperOutput(link: string): Promise<string> {
 const sessionFile = (folder: string, suffix: string) =>
   join(folder, 'antigravity-acp', 'conversations', `${SESSION}${suffix}`)
 
-/** A sign-in on a scratch data folder whose server prints `output` when asked to authenticate,
- *  and saves its checking session as a conversation naming `metaCwd` (its own folder by default);
- *  the browser finishing and that session's answer are each the test's to release. */
+/** The test releases browser authentication and session creation independently. */
 async function signInAgainst(
   output: () => Promise<string>,
   options: {
@@ -112,7 +106,7 @@ async function signInAgainst(
     })
   })
   const child = fakeServer(agent, stderr)
-  // A server on PATH, so nothing is downloaded; the chat server ignores the Command setting.
+  // Satisfy runtime resolution from PATH without downloading.
   const bin = join(stateDirectory, 'bin')
   await mkdir(bin)
   await writeFile(join(bin, ANTIGRAVITY_LAUNCH_SPEC.command), '', { mode: 0o755 })
@@ -146,7 +140,6 @@ const printed = (link: string) => async () => `${ANTIGRAVITY_SIGN_IN_PROMPT}${li
 
 const subscribe = ANTIGRAVITY_ACCOUNT_METHODS[5]
 
-/** Follows the host's sign-in over its subscription, as a client does, until `close`. */
 async function follow(
   onFrame: (status: AntigravityChatSignInStatus) => void,
   caller: RpcCallerIdentity = { kind: 'desktop' }
@@ -167,7 +160,6 @@ async function follow(
   return { close: () => transport.abort() }
 }
 
-/** The flow's state once it leaves `phase`. */
 async function stateAfter(flowId: string, phase: string) {
   const left = Promise.withResolvers<AntigravityChatSignInStatus['flow']>()
   const { close } = await follow(({ flow }) => {
@@ -184,7 +176,6 @@ it("shows the helper's link, reads signed in only once a session starts, then re
   )
   const frames: AntigravityChatSignInStatus[] = []
   const watcher = await follow((frame) => frames.push(frame))
-  // A full snapshot on subscribe, before any change; nothing has answered on this host yet.
   expect(frames).toEqual([
     { revision: expect.any(Number), auth: 'unknown', flow: expect.anything() }
   ])
@@ -205,11 +196,9 @@ it("shows the helper's link, reads signed in only once a session starts, then re
   openSession()
   expect(await stateAfter(flowId, 'verifying')).toEqual({ flowId, phase: 'signedIn' })
   expect(readAntigravityChatSignInStatus(DESKTOP).auth).toBe('signedIn')
-  // Its checking session is gone with the server.
   await expect(stat(sessionFile(folder, '.meta'))).rejects.toMatchObject({ code: 'ENOENT' })
   await expect(stat(sessionFile(folder, '.db'))).rejects.toMatchObject({ code: 'ENOENT' })
   await expect(stat(join(folder, 'antigravity-acp', 'brain', SESSION))).rejects.toThrow()
-  // Then one frame per newer revision, and none once the transport closes.
   await vi.waitFor(() => expect(frames.at(-1)?.flow).toEqual({ flowId, phase: 'signedIn' }))
   const revisions = frames.map(({ revision }) => revision)
   expect(revisions).toEqual([...new Set(revisions)].sort((a, b) => a - b))
@@ -222,7 +211,6 @@ it("shows the helper's link, reads signed in only once a session starts, then re
     },
     DESKTOP
   )
-  // The person reads a plain sentence; the raw error goes only to the log.
   expect(await stateAfter(next.flowId, 'starting')).toMatchObject({
     phase: 'failed',
     error: 'Google sign-in for Antigravity failed. Start sign-in again.'
@@ -278,7 +266,6 @@ it('shows another client the sign-in without its link, and refuses it every acti
   await expect(cancelAntigravityChatSignIn('phone', flowId)).rejects.toThrow('no longer active')
   const pasted = 'http://127.0.0.1:41234/?state=s1&code=c1'
   await expect(completeAntigravityChatSignIn('phone', flowId, pasted)).rejects.toThrow('no longer')
-  // Its starter gets the running flow back, and only its starter may cancel it.
   expect(startAntigravityChatSignIn(host, DESKTOP)).toEqual({ flowId })
   expect((await cancelAntigravityChatSignIn(DESKTOP, flowId))?.phase).toBe('cancelled')
   expect(phone.at(-1)?.flow).toEqual({ flowId: null, phase: 'cancelled' })
@@ -289,7 +276,7 @@ it('cancels: its pasted address stops, and no Start runs until the sign-in has u
   const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
   const arrived = Promise.withResolvers<void>()
   const dropped = Promise.withResolvers<void>()
-  // A listener that never answers, so only the flow's end can stop the request.
+  // Leave the request pending until cancellation aborts it.
   const listener = createServer((request) => {
     arrived.resolve()
     request.socket.once('close', () => dropped.resolve())
@@ -308,7 +295,6 @@ it('cancels: its pasted address stops, and no Start runs until the sign-in has u
     const cancelling = cancelAntigravityChatSignIn(DESKTOP, flowId)
     expect(() => startAntigravityChatSignIn(host, DESKTOP)).toThrow('still stopping')
     expect((await cancelling)?.phase).toBe('cancelled')
-    // The paste answers with the cancelled flow, not a delivery failure.
     expect((await pasting)?.phase).toBe('cancelled')
     await dropped.promise
     expect(warn).not.toHaveBeenCalled()
@@ -324,7 +310,6 @@ it('cancels: its pasted address stops, and no Start runs until the sign-in has u
 })
 
 it('refuses a second, different sign-in link, even while the sign-in is being checked', async () => {
-  // The printed line and the helper carry the same link, which is one request.
   const { flowId, finishBrowser, stderr } = await signInAgainst(
     async () => `${await printed(GOOGLE_LINK)()}${await helperOutput(GOOGLE_LINK)}`
   )
@@ -361,12 +346,11 @@ it("sets the host's status from what a chat's server answers, and nothing else",
   await expect(chat.authenticate('oauth-personal')).rejects.toThrow('Authentication')
   expect(auth()).toBe('signedOut')
   await start()
-  // A broken helper line or a foreign link on error output is no answer.
   stderr.write(`${ANTIGRAVITY_BROWSER_MARKER}"not a link"\n`)
   stderr.write(`${ANTIGRAVITY_SIGN_IN_PROMPT}https://accounts.example.com/\n`)
   await new Promise((resolve) => setImmediate(resolve))
   expect([auth(), chat.closed]).toEqual(['signedOut', false])
-  // The printed line, split and left unterminated as the server's last output, still is.
+  // Recognize a sign-in URL even when the final line is split and unterminated.
   const line = `${ANTIGRAVITY_SIGN_IN_PROMPT}${GOOGLE_LINK}`
   agent.stdout.write(line.slice(0, 40))
   agent.stdout.end(line.slice(40))
@@ -392,7 +376,6 @@ it("keeps a checking session whose saved folder is not the sign-in's own", async
 it('signs in from the address a browser on another computer ended on', async () => {
   const received = Promise.withResolvers<string | undefined>()
   let finish = (): void => {}
-  // Stands in for the server's own listener, which finishes once Google's answer reaches it.
   const listener = createServer((request, response) => {
     received.resolve(request.url)
     response.end('ok')
@@ -421,7 +404,6 @@ it('signs in from the address a browser on another computer ended on', async () 
 
 it('never shows a link that is not a Google sign-in back to this host', async () => {
   const foreign = GOOGLE_LINK.replace('accounts.google.com', 'accounts.example.com')
-  // On standard output an unreadable sign-in line ends the server.
   const { flowId } = await signInAgainst(printed(foreign), { stream: 'stdout' })
   const state = await stateAfter(flowId, 'starting')
   expect(state).toMatchObject({ flowId, phase: 'failed' })
@@ -453,7 +435,6 @@ it('retains an unclosed sign-in child for both launch entry points until its exi
   }
   expect((await stat(env.TMPDIR)).isDirectory()).toBe(true)
   expect((await stat(cwd)).isDirectory()).toBe(true)
-  // Its checking session stays until the server is proven gone.
   expect((await stat(sessionFile(old.folder, '.meta'))).isFile()).toBe(true)
   const next = startAntigravityChatSignIn(old.host, DESKTOP)
   expect((await stateAfter(next.flowId, 'starting'))?.phase).toBe('failed')

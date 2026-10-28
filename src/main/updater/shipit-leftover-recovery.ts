@@ -1,10 +1,4 @@
-/**
- * Squirrel.Mac keeps one install request per bundle id in `~/Library/Caches/<id>.ShipIt/`. When
- * ShipIt is cancelled (e.g. "App Still Running", #14732) the request and its staged copy stay,
- * and every later staging stalls behind them until someone deletes them by hand. Before this
- * process stages, it clears them, but only when it alone may: it holds the install lock, no other
- * live Orca has staged anything, and ShipIt is not running.
- */
+/** Cancelled ShipIt requests block later staging (#14732). Clear shared bundle-cache leftovers only under the install lock, with no other live staging owner or running ShipIt. */
 import { homedir } from 'node:os'
 import { join } from 'node:path'
 import { mkdir, open, readFile, readdir, rm, unlink, writeFile } from 'node:fs/promises'
@@ -111,10 +105,7 @@ async function otherLiveOwners(deps: ShipItStagingDeps): Promise<number[]> {
   return live
 }
 
-/**
- * Run right before this process asks Squirrel to stage. Always records this process as a staging
- * owner, so no other Orca clears what it is about to stage.
- */
+/** Register this staging owner even when cleanup is skipped, so other Orca processes cannot clear its update. */
 export async function prepareShipItStaging(deps: ShipItStagingDeps): Promise<ShipItStagingResult> {
   if ((await leftoverNames(deps.cacheDir)).length === 0) {
     await registerOwner(deps)
@@ -142,11 +133,11 @@ async function recoverUnderLock(deps: ShipItStagingDeps): Promise<ShipItStagingR
   if (listing === null) {
     return { kind: 'skipped', reason: 'installer-unknown' }
   }
-  // Why by bundle id: the cache is shared by every copy of Orca, and other apps' ShipIt is irrelevant.
+  // All Orca copies share the bundle cache; other apps' ShipIt processes do not block it.
   if (isShipItRunningForBundleId(listing, deps.bundleId)) {
     return { kind: 'skipped', reason: 'installer-running' }
   }
-  // Why again: an owner may have registered while the process list was read.
+  // An owner may have registered during the process-list read; recheck.
   if ((await otherLiveOwners(deps)).length > 0) {
     return { kind: 'skipped', reason: 'owner-live' }
   }
@@ -157,10 +148,7 @@ async function recoverUnderLock(deps: ShipItStagingDeps): Promise<ShipItStagingR
   return { kind: 'recovered', removed }
 }
 
-/**
- * This process's staging step, or null when it is not a packaged macOS app (tests, dev, other
- * platforms). Never throws: a failed recovery leaves staging exactly as it was before.
- */
+/** Packaged macOS only. Recovery failure leaves staging unchanged and never escapes to the caller. */
 export function prepareThisProcessShipItStaging(): Promise<void> | null {
   if (process.platform !== 'darwin' || !process.execPath.includes('.app/Contents/MacOS/')) {
     return null

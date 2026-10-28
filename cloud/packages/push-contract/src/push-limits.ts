@@ -2,8 +2,7 @@ export const PUSH_LIMITS = {
   titleMaxChars: 80,
   bodyMaxChars: 180,
   maxRegistrationIdsPerSend: 20,
-  // A host pairs phones, not a fleet. The cap bounds what one session can write
-  // through a caller-chosen deviceId.
+  // Bound writes through caller-chosen deviceId to phone-scale use per host.
   maxDevicesPerHost: 64,
   maxHttpBodyBytes: 16 * 1024,
   hostEventsPerWindow: 300,
@@ -13,8 +12,7 @@ export const PUSH_LIMITS = {
   clockSkewToleranceMs: 30_000,
   sessionTtlMs: 24 * 60 * 60 * 1000,
   notificationTtlSeconds: 5 * 60,
-  // The challenge and session routes are the only unauthenticated writes, so
-  // they are capped per client IP before any key material is generated.
+  // Rate-limit unauthenticated challenge/session writes before generating keys.
   unauthenticatedRequestsPerMinutePerIp: 30,
   authenticatedRequestsPerMinutePerIp: 6_000,
   authenticatedRequestsPerMinutePerHost: 600

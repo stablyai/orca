@@ -8,7 +8,7 @@ import { isRepoSearchQueryTooLarge, searchRepos } from '@/lib/repo-search'
 import { cn } from '@/lib/utils'
 import { translate } from '@/i18n/i18n'
 import type { Repo } from '../../../shared/repo-types'
-import type { TaskProjectPickerGroup } from './task-page-default-repo-selection'
+import type { TaskProjectPickerGroup } from './task-page/task-page-default-repo-selection'
 import {
   getSelectedTaskProjectSource,
   hasMultipleTaskProjectHosts,

@@ -26,9 +26,7 @@ function mulberry32(seed: number): () => number {
 
 describe('wait-blocked appended carry', () => {
   it('is byte-identical to the concat+slice carry across a 1MB flood in one 50ms window', () => {
-    // One 50ms throttle window under a TUI flood: ~1MB of output arrives as many
-    // chunks and `runWaitBlockedCheck` must observe exactly the bytes the old
-    // rolling window would have handed it.
+    // A 50ms TUI flood must retain exactly the reference rolling window's bytes.
     const carry = createWaitBlockedAppendedCarry()
     let reference = ''
     const rng = mulberry32(20260902)
@@ -72,8 +70,7 @@ describe('wait-blocked appended carry', () => {
   })
 
   it('retains chunks instead of flattening the window on every chunk', () => {
-    // The named antipattern: once a window exceeds the cap, the old `.slice(-cap)`
-    // copied 256K chars per chunk. Retained chunks copy only the straddling head.
+    // Old slicing copied the full saturated 256KiB window each chunk; retain chunks and copy only the boundary head.
     const carry = createWaitBlockedAppendedCarry()
     const chunk = 'z'.repeat(32 * 1024)
     for (let i = 0; i < 16; i += 1) {

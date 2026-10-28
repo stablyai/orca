@@ -10,7 +10,7 @@ import {
 } from '../managed-server/activation/orcad-activation-record'
 
 const mocks = vi.hoisted(() => ({ send: vi.fn(), ensure: vi.fn(), verify: vi.fn() }))
-vi.mock('../../shared/remote-runtime-client', () => ({
+vi.mock('../../shared/remote-runtime/remote-runtime-client', () => ({
   sendRemoteRuntimeRequestWithStatusPreflight: mocks.send
 }))
 vi.mock('../managed-server/lifecycle/orcad-managed-tunnel', () => ({
@@ -79,6 +79,15 @@ describe('managed orcad terminal census client', () => {
     })
     await expect(collect(active)).resolves.toEqual(census)
     expect(order).toEqual(['wake', 'census'])
+  })
+
+  it('never starts a server just to reopen its terminal admission', async () => {
+    await collectManagedTerminalCensus('/profile', environment, active, undefined, {
+      closeAdmissionForMs: 0
+    })
+    // A server that stopped has nothing left to reopen; waking it could restart or recover it.
+    expect(mocks.verify).not.toHaveBeenCalled()
+    expect(mocks.send.mock.calls[0]?.[2]).toMatchObject({ closeAdmissionForMs: 0 })
   })
 
   it('asks an advertising host with the activation time', async () => {

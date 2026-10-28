@@ -1,9 +1,4 @@
-// Why (#14828): Grok runs a hook `command` containing a space as `pwsh -Command <cmd>`, so the
-// encoded PowerShell launcher put two interpreters between the agent and the script —
-// `grok.exe -> pwsh.exe -> powershell.exe -> cmd.exe` — and the console Grok allocates for a
-// hook stays up for the whole chain. Measured against Grok 1.0.5's own dispatcher timing, the
-// same script costs ~610ms behind the launcher and ~110ms as a bare path. These assertions pin
-// the launch shape; the payload/exit-code contract stays covered by hook-service.test.ts.
+// Prefer one cmd-safe token to avoid Grok's extra pwsh wrapper; use encoded fallback for unsafe paths.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -42,7 +37,7 @@ type InstalledConfig = {
   hooks: Record<string, { matcher?: string; hooks: { command: string }[] }[]>
 }
 
-// Why: generate under a mocked win32 so the POSIX CI legs guard this too (#15117).
+// Stub Windows so command-shape coverage runs on every CI platform.
 function withWin32<T>(run: () => T): T {
   const original = Object.getOwnPropertyDescriptor(process, 'platform')
   Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
@@ -70,21 +65,16 @@ function registeredCommands(config: InstalledConfig): string[] {
 }
 
 describe('Windows Grok managed hook launch shape', () => {
-  // Why: only `process.platform` can be mocked, not `path.join`, so an install on a POSIX
-  // runner produces a `/`-separated path that is cmd-safe by no definition and routes to the
-  // #6078 fallback by design. These synthetic-path cases carry the invariant on every CI leg;
-  // the install-based ones below re-check it against a real generated path on Windows.
+  // POSIX path.join cannot produce a real cmd-safe install path; synthetic Windows paths cover that branch everywhere.
   describe('registered command, from a synthetic Windows path', () => {
     const scriptPath = 'C:\\Users\\dev\\.orca\\agent-hooks\\grok-hook.cmd'
 
     it('registers a cmd-safe script path as the command itself (#14828)', () => {
       const command = withWin32(() => getManagedCommandForTests(scriptPath))
 
-      // Why (#8430): Grok spawns this as argv[0], so it must be exactly one spawnable token.
-      // Forward slashes because Git Bash strips the backslashes out of a bare path.
+      // Grok needs one spawnable token; forward slashes survive Git Bash's backslash stripping.
       expect(command).toBe('C:/Users/dev/.orca/agent-hooks/grok-hook.cmd')
-      // Why: whitespace is the sole trigger for Grok's `pwsh -Command` wrapper, which is the
-      // interpreter this fix removes. Assert the trigger, not just the absence of the name.
+      // Any whitespace reintroduces Grok's pwsh wrapper.
       expect(command, 'a space would reintroduce the pwsh wrapper').not.toMatch(/\s/)
       expect(command).not.toMatch(/powershell|pwsh/i)
       expect(command).not.toMatch(/-EncodedCommand/i)
@@ -95,11 +85,10 @@ describe('Windows Grok managed hook launch shape', () => {
       const command = withWin32(() => getManagedCommandForTests(spaced))
 
       expect(command).toMatch(/-EncodedCommand \S+$/)
-      // Why: the raw path must never reach a cmd.exe command line unquoted.
       expect(command).not.toContain(spaced)
     })
 
-    // Platform-stubbed so the legacy sweep runs on every CI leg; the installed-config legs are win32-only.
+    // Stub Windows so legacy hook cleanup also runs on POSIX CI.
     it('replaces a legacy backslash entry and keeps user hooks', () => {
       const config: HooksConfig = {
         hooks: {
@@ -137,7 +126,6 @@ describe('Windows Grok managed hook launch shape', () => {
       home = ''
     })
 
-    // win32-only: a real cmd-safe managed path needs backslashes; see the note above.
     it.skipIf(process.platform !== 'win32')(
       'writes the generated script path itself to every managed event',
       () => {
@@ -167,7 +155,6 @@ describe('Windows Grok managed hook launch shape', () => {
           `${JSON.stringify({
             hooks: {
               Stop: [{ hooks: [{ type: 'command', command: staleCommand, timeout: 10 }] }],
-              // Why: a retired event must be swept too, or the old launcher keeps firing there.
               SubagentStop: [{ hooks: [{ type: 'command', command: staleCommand, timeout: 10 }] }],
               Notification: [{ hooks: [{ type: 'command', command: '/usr/local/bin/user-hook' }] }]
             }
@@ -186,7 +173,6 @@ describe('Windows Grok managed hook launch shape', () => {
         expect(all).not.toContain(staleCommand)
         expect(all.filter((command) => /-EncodedCommand/i.test(command))).toEqual([])
         expect(config.hooks.SubagentStop).toBeUndefined()
-        // Why: sweeping stale Orca entries must not touch hooks the user wrote.
         expect(all).toContain('/usr/local/bin/user-hook')
         expect(all.filter((command) => command === scriptPath.replaceAll('\\', '/'))).toHaveLength(
           GROK_EVENT_NAMES.length

@@ -77,7 +77,7 @@ describe('Linear description images', () => {
         method: 'POST',
         headers: expect.objectContaining({
           Authorization: entry.apiKey,
-          'public-file-urls-expire-in': String(clientModule.LINEAR_PUBLIC_FILE_URL_EXPIRY_SECONDS)
+          'public-file-urls-expire-in': '3600'
         })
       })
     )
@@ -92,7 +92,7 @@ describe('Linear description images', () => {
     }
   )
 
-  it('matches reordered media by path and preserves the original query parameters', async () => {
+  it('matches reordered media by path using the original URL as the lookup key', async () => {
     const original = `${source}?width=640`
     rawRequest.mockResolvedValue({
       data: {

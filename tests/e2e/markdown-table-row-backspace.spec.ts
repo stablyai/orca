@@ -9,8 +9,7 @@ import {
   waitForRichMarkdownEditor
 } from './helpers/markdown-ordered-list-exit'
 
-// Middle body row starts empty so Backspace can structural-delete without
-// relying on Meta+A (which selects the whole document in TipTap).
+// Start with an empty middle row so Backspace can delete it without document-wide Meta+A.
 const TABLE_MARKDOWN = `| Name | Value |
 | --- | --- |
 | keep | a |
@@ -78,7 +77,6 @@ test.describe('Markdown table keyboard', () => {
       await expect(editor.getByText('keep')).toBeVisible()
       await expect(editor.getByText('stay')).toBeVisible()
 
-      // ── Tab / Shift-Tab cell navigation ────────────────────────────
       await editor.getByText('keep').click()
 
       await orcaPage.keyboard.press('Tab')
@@ -89,7 +87,6 @@ test.describe('Markdown table keyboard', () => {
         })
         .toBe('a')
 
-      // Next Tab lands in the empty body row (no text).
       await orcaPage.keyboard.press('Tab')
       await expect
         .poll(async () => selectionCellText(orcaPage), {
@@ -106,7 +103,6 @@ test.describe('Markdown table keyboard', () => {
         })
         .toBe('a')
 
-      // Enter moves down a column, landing in the empty body row.
       await orcaPage.keyboard.press('Enter')
       await expect
         .poll(async () => selectionCellText(orcaPage), {
@@ -115,8 +111,6 @@ test.describe('Markdown table keyboard', () => {
         })
         .toBe('')
 
-      // ── Empty-row Backspace deletes the whole row ──────────────────
-      // Enter above already left the caret in the empty body row.
       await editor.screenshot({
         path: path.join(SCRATCH_DIR, 'electron-table-row-backspace-before.png')
       })

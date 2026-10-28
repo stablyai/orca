@@ -20,7 +20,6 @@ vi.mock('./worktree-list-reader', () => ({
 }))
 vi.mock('../../shared/git-object-quarantine', async (importOriginal) => ({
   ...(await importOriginal<typeof GitObjectQuarantineModule>()),
-  // Why: hands the resolved objects dir straight to the command; these tests pin routing, not disk.
   createGitObjectQuarantine: (
     resolve: () => Promise<GitObjectsDirectory | undefined>
   ): GitObjectQuarantine => ({

@@ -428,9 +428,10 @@ async function runBenchmark() {
           totalDrain: boundedTotalSummary,
           inputTimerDelay: boundedInputTimerSummary
         },
-        runtimeIngress: {
+        syntheticIngressModel: {
+          scope: 'Local algorithm model; does not execute the shipped PTY runtime',
           legacyRepeatedScans: legacyRuntimeIngressSummary,
-          currentFastPath: currentRuntimeIngressSummary,
+          modeledFastPath: currentRuntimeIngressSummary,
           estimatedReduction:
             legacyRuntimeIngressSummary.max /
             Math.max(currentRuntimeIngressSummary.max, Number.EPSILON)
@@ -457,8 +458,8 @@ async function runBenchmark() {
       `bounded max first slice: ${formatMs(boundedFirstSliceSummary.max)}`,
       `bounded max any slice: ${formatMs(boundedMaxSliceSummary.max)}`,
       `bounded max total drain: ${formatMs(boundedTotalSummary.max)}`,
-      `runtime ingress legacy max: ${formatMs(legacyRuntimeIngressSummary.max)}`,
-      `runtime ingress current max: ${formatMs(currentRuntimeIngressSummary.max)}`,
+      `synthetic ingress legacy max: ${formatMs(legacyRuntimeIngressSummary.max)}`,
+      `synthetic ingress fast-path max: ${formatMs(currentRuntimeIngressSummary.max)}`,
       legacyInputTimerSummary
         ? `legacy max input timer delay: ${formatMs(legacyInputTimerSummary.max)}`
         : null,

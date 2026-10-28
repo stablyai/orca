@@ -1,6 +1,7 @@
 import type { RuntimeMobileSessionTerminalTab } from '../../shared/runtime-types'
 import type { TerminalTab } from '../../shared/terminal-tab-types'
 import type { WorkspaceSessionState } from '../../shared/workspace-session-state-types'
+import { resolveTerminalTabTitle } from '../../shared/tab-title-resolution'
 import {
   readCanonicalPtyOwners,
   resolveCanonicalPtyClaim
@@ -12,10 +13,7 @@ import {
   isPersistedTerminalLeafActive
 } from './mobile-session-layout-projection'
 
-/**
- * Drops a legacy row with no tab-bar entry whose every terminal a tab-bar tab of this workspace
- * holds (the shared Loader's rule; the window hides it too), and moves a selection on it to that tab.
- */
+/** Match the window Loader: remove legacy rows wholly absorbed by tab-bar tabs and move their selection. */
 function withoutAbsorbedLegacyRows(
   worktreeId: string,
   persistedTabs: readonly TerminalTab[],
@@ -44,7 +42,8 @@ function withoutAbsorbedLegacyRows(
 export function buildHeadlessMobileSessionTerminalTabs(
   worktreeId: string,
   persistedTabs: readonly TerminalTab[],
-  session: WorkspaceSessionState
+  session: WorkspaceSessionState,
+  generatedTitlesEnabled = false
 ): RuntimeMobileSessionTerminalTab[] {
   const { rows, selection } = withoutAbsorbedLegacyRows(worktreeId, persistedTabs, session)
   return rows
@@ -55,14 +54,19 @@ export function buildHeadlessMobileSessionTerminalTabs(
       if (leafIds.length === 0) {
         leafIds.push(deriveHeadlessLegacyTerminalLeafId(tab.id))
       }
+      // Tab-wide names and launch identity apply only to sole panes, matching window publications.
+      const tabWide = leafIds.length === 1
       return leafIds.flatMap((leafId) => {
         const ptyId = layout?.ptyIdsByLeafId?.[leafId] ?? (leafIds.length === 1 ? tab.ptyId : null)
-        const title =
-          tab.customTitle?.trim() ||
-          tab.generatedTitle?.trim() ||
-          tab.title?.trim() ||
-          tab.defaultTitle?.trim() ||
-          `Terminal ${index + 1}`
+        const fallbackTitle = tab.defaultTitle?.trim() || `Terminal ${index + 1}`
+        const liveTitle = layout?.titlesByLeafId?.[leafId]?.trim() || tab.title?.trim()
+        const title = tabWide
+          ? resolveTerminalTabTitle(
+              { ...tab, title: liveTitle },
+              generatedTitlesEnabled,
+              fallbackTitle
+            )
+          : tab.customTitle?.trim() || liveTitle || fallbackTitle
         return [
           {
             type: 'terminal' as const,
@@ -71,9 +75,18 @@ export function buildHeadlessMobileSessionTerminalTabs(
             leafId,
             title,
             customTitle: tab.customTitle?.trim() || null,
+            ...(tabWide && tab.quickCommandLabel?.trim()
+              ? { quickCommandLabel: tab.quickCommandLabel.trim() }
+              : {}),
+            ...(tabWide && tab.aiVaultTitle?.title.trim()
+              ? { aiVaultTitle: tab.aiVaultTitle }
+              : {}),
+            ...(tabWide && generatedTitlesEnabled && tab.generatedTitle?.trim()
+              ? { generatedTitle: tab.generatedTitle.trim() }
+              : {}),
             ...(ptyId ? { ptyId } : {}),
             ...(tab.startupCwd ? { startupCwd: tab.startupCwd } : {}),
-            ...(tab.launchAgent ? { launchAgent: tab.launchAgent } : {}),
+            ...(tabWide && tab.launchAgent ? { launchAgent: tab.launchAgent } : {}),
             ...(layout ? { parentLayout: cloneTerminalLayoutSnapshot(layout) } : {}),
             ...(tab.color != null ? { color: tab.color } : {}),
             ...(tab.isPinned ? { isPinned: true } : {}),

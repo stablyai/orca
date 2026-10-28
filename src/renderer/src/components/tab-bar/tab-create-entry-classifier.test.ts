@@ -39,8 +39,7 @@ describe('tab create entry classification', () => {
     }
   )
 
-  // Kept word-for-word in step with the omnibox placeholder (see
-  // TabBarCreateEntry.keyboard.test.tsx), so the two never drift apart.
+  // Keep empty-query guidance aligned with the omnibox placeholder.
   it('advertises tab search in the empty-query message', () => {
     expect(classifyTabEntryQuery('', readyFiles([]))).toEqual({
       kind: 'empty',
@@ -389,8 +388,7 @@ describe('tab create entry classification', () => {
 
   it('keeps file matches for path prefixes that cannot be created', () => {
     const files = ['src/main/index.ts', 'src/renderer/App.tsx']
-    // A trailing separator is an ordinary keystroke on the way to a nested path,
-    // so the matches it finds must survive the unusable-path verdict.
+    // Trailing separators are incomplete paths, but their existing-file matches must survive validation.
     for (const query of ['src/', 'src/renderer/']) {
       expect(
         getTabEntryOptions(query, readyFiles(files)).map((option) => option.classification.kind),

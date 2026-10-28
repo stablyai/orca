@@ -12,15 +12,18 @@ import { BrowserUseSetup } from './BrowserUsePane'
 import { BrowserSearchEngineSetting } from './BrowserSearchEngineSetting'
 import { BrowserLinkRoutingSetting } from './BrowserLinkRoutingSetting'
 import { BrowserLinkRoutingModifierSetting } from './BrowserLinkRoutingModifierSetting'
+import { BrowserLinkRoutingBackgroundSetting } from './BrowserLinkRoutingBackgroundSetting'
 import { BrowserTerminalLinkActionsSetting } from './BrowserTerminalLinkActionsSetting'
 import { BrowserLocalhostWorktreeLabelsSetting } from './BrowserLocalhostWorktreeLabelsSetting'
 import { BrowserClientHostedRemoteSetting } from './BrowserClientHostedRemoteSetting'
 import { BrowserSshWorkspaceRoutingSetting } from './BrowserSshWorkspaceRoutingSetting'
+import { BrowserProfileScopeSetting } from './BrowserProfileScopeSetting'
 import { BrowserUserAgentSetting } from './BrowserUserAgentSetting'
 import { BrowserSitePermissionsSetting } from './BrowserSitePermissionsSetting'
 import { SettingsSubsectionHeader } from './SettingsFormControls'
 import { BrowserSessionCookiesSection } from './BrowserSessionCookiesSection'
 import { BrowserNewProfileDialog } from './BrowserNewProfileDialog'
+import { BrowserExtensionsSection } from './BrowserExtensionsSection'
 import {
   createBrowserHomePageDraftState,
   resolveBrowserHomePageDraftState
@@ -29,6 +32,7 @@ import { buildSidebarHostOptions } from '../sidebar/sidebar-host-options'
 import { getHostDisplayLabelOverrides } from '../../../../shared/host-setting-overrides'
 import {
   getSettingsFocusedExecutionHostId,
+  LOCAL_EXECUTION_HOST_ID,
   type ExecutionHostId
 } from '../../../../shared/execution-host'
 import { isMacUserAgent } from '@/components/terminal-pane/pane-helpers'
@@ -75,6 +79,7 @@ export function BrowserPane({
   const defaultBrowserSessionProfileId = useAppStore((s) => s.defaultBrowserSessionProfileId)
   const setDefaultBrowserSessionProfileId = useAppStore((s) => s.setDefaultBrowserSessionProfileId)
   const defaultProfile = browserSessionProfiles.find((p) => p.id === 'default')
+  const selectedProfileId = defaultBrowserSessionProfileId ?? 'default'
   const nonDefaultProfiles = browserSessionProfiles.filter((p) => p.scope !== 'default')
   const persistedHomePageDraft = browserDefaultUrl ?? ''
   const [homePageDraftState, setHomePageDraftState] = useState(() =>
@@ -117,6 +122,8 @@ export function BrowserPane({
   const showSshWorkspaceRouting = matchesSettingsSearch(searchQuery, [browserSearchEntries[9]])
   const showUserAgent = matchesSettingsSearch(searchQuery, [browserSearchEntries[10]])
   const showSitePermissions = matchesSettingsSearch(searchQuery, [browserSearchEntries[11]])
+  const showProfileScope = matchesSettingsSearch(searchQuery, [browserSearchEntries[12]])
+  const showLinkRoutingBackground = matchesSettingsSearch(searchQuery, [browserSearchEntries[13]])
   const showBrowserUse = matchesSettingsSearch(searchQuery, getBrowserUsePaneSearchEntries())
   const isMac = isMacUserAgent()
   const linkRoutingDescription = getBrowserLinkRoutingDescription(
@@ -269,6 +276,10 @@ export function BrowserPane({
         />
       ) : null}
 
+      {showLinkRoutingBackground ? (
+        <BrowserLinkRoutingBackgroundSetting settings={settings} updateSettings={updateSettings} />
+      ) : null}
+
       {showTerminalLinkActions ? (
         <BrowserTerminalLinkActionsSetting
           settings={settings}
@@ -282,6 +293,10 @@ export function BrowserPane({
           settings={settings}
           updateSettings={updateSettings}
         />
+      ) : null}
+
+      {showProfileScope ? (
+        <BrowserProfileScopeSetting settings={settings} updateSettings={updateSettings} />
       ) : null}
 
       {showClientHostedRemote || showSshWorkspaceRouting ? (
@@ -316,6 +331,18 @@ export function BrowserPane({
           onSelectHost={selectBrowserSessionHost}
           onSelectDefaultProfile={() => setDefaultBrowserSessionProfileId(null)}
           onSelectProfile={setDefaultBrowserSessionProfileId}
+        />
+      ) : null}
+
+      {/* Why local only: release 1 runs extensions in this computer's browser profiles. */}
+      {settings.experimentalBrowserExtensions === true &&
+      selectedBrowserSessionHostId === LOCAL_EXECUTION_HOST_ID ? (
+        <BrowserExtensionsSection
+          profileId={selectedProfileId}
+          profileLabel={
+            browserSessionProfiles.find((profile) => profile.id === selectedProfileId)?.label ??
+            selectedProfileId
+          }
         />
       ) : null}
 

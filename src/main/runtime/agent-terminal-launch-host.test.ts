@@ -1,5 +1,4 @@
-// launchAgentTerminal once read the host-blind `store.getRepo(worktree.repoId)`, so the same repo
-// id on two hosts built the launch for the wrong one (#11163).
+// #11163: colliding repo ids on two hosts once selected the wrong launch settings.
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 vi.mock('electron', () => ({
@@ -48,7 +47,6 @@ describe('launchAgentTerminal execution host', () => {
   })
 
   it('builds the launch for the host the worktree names, not a rival row', async () => {
-    // Two SSH hosts publish the same repo id; the worktree is on m4air.
     const { runtime, buildStartup } = makeRuntime(
       [
         { id: 'repo-shared', path: '/home/me/app', connectionId: 'openclaw' },

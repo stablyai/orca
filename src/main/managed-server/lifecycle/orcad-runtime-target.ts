@@ -5,10 +5,6 @@ import type { OrcadHostTransport } from '../../ssh/orcad-host-transport'
 import { pinnedRuntimeTargetForHost } from '../../ssh/pinned-runtime-host-target'
 import type { RemoteHostPlatform } from '../../ssh/ssh-remote-platform'
 
-/**
- * The runtime target managed orcad deploys on a host, picked by glibc: the host's own target, or
- * its compat runtime below the default's glibc floor.
- */
 export async function resolveOrcadRuntimeTarget(options: {
   conn: OrcadHostTransport
   host: RemoteHostPlatform

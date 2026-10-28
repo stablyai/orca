@@ -1,7 +1,4 @@
 import './rpc/unused-default-rpc-methods.test-fixture'
-// A chat as the assignee of `orchestration dispatch`, end to end on the coordinator-mail rig: its
-// task arrives as any agent's message into a chat does, and it then works the Dispatch as a
-// terminal worker would.
 
 import { describe, expect, it, vi } from 'vitest'
 import { formatOrcaSessionAddress } from '../../shared/orca-session-address'

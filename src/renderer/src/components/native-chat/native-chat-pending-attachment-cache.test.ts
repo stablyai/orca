@@ -39,7 +39,6 @@ describe('the pane pending attachment cache', () => {
       previewUrl: 'blob:preview'
     })
 
-    // The composer keeps its own preview; the cache never holds one.
     expect(nativeChatPendingAttachmentSnapshot('pane-a')).toEqual([
       { id: 'a1', path: '', pending: true }
     ])
@@ -79,7 +78,7 @@ describe('the pane pending attachment cache', () => {
     addPending('tab-1:leaf', 'third')
 
     settleNativeChatPendingAttachment('tab-1:leaf', 'second', '/store/b.png')
-    // Saved at once, so a reload keeps it; the row still shows it behind the one before it.
+    // Persist completion immediately while preserving thumbnail attachment order.
     expect(readNativeChatComposerDraft('tab-1:leaf').images).toEqual([
       { id: 'second', path: '/store/b.png' }
     ])

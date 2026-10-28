@@ -354,8 +354,7 @@ describe('agent hook completion notifications', () => {
     const { observeAgentHookCompletionForNotification } =
       await import('./agent-hook-completion-notifications')
 
-    // Why: Claude SessionStart lands as a sessionBoundary 'done' so a resumed session gets
-    // its sidebar row while idle (STA-3386) — connecting to a session is not completing a turn.
+    // Claude SessionStart publishes boundary-done for idle sidebar restoration, not turn completion (STA-3386).
     observeAgentHookCompletionForNotification({
       paneKey,
       worktreeId: 'wt-1',
@@ -371,7 +370,6 @@ describe('agent hook completion notifications', () => {
 
     expect(dispatchTerminalNotification).not.toHaveBeenCalled()
 
-    // Why: the resumed session's next real turn must still notify normally.
     observeAgentHookCompletionForNotification({
       paneKey,
       worktreeId: 'wt-1',
@@ -608,7 +606,6 @@ describe('agent hook completion notifications', () => {
     }
     expect(_getAgentHookCompletionNotificationCoordinatorCountForTest()).toBe(MANY_PANES.length)
 
-    // Remove liveness for two panes (both the tab hint and the pty list).
     mockStoreState.tabsByWorktree = {
       'wt-1': MANY_PANES.slice(0, 3).map((p) => ({ id: p.tabId, ptyId: p.ptyId }))
     }

@@ -1,8 +1,3 @@
-/**
- * The activation fence's ownership check and conditional release inside the Windows host script,
- * matching the POSIX guard in `orcad-activation-fence-scope.ts`, and the exited-own-lock check of
- * `orcad-exited-own-lock.ts`.
- */
 import {
   ORCAD_FENCE_LOST_EXIT,
   ORCAD_FENCE_LOST_MARKER,
@@ -14,7 +9,7 @@ export const ORCAD_WINDOWS_FENCE_ARG = '--fence'
 
 const text = JSON.stringify
 
-/** Strips `--fence <lockDir> <token>` and exits before the op unless the token is still ours. */
+/** Remove fence argv and refuse the operation unless the host still records this generation. */
 export const ORCAD_WINDOWS_FENCE_PRELUDE = `
 function fenceOwner(lockDir) {
   try { return fs.readFileSync(path.join(lockDir, ${text(ORCAD_FENCE_OWNER_FILENAME)}), 'utf8') } catch { return null }

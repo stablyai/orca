@@ -1,13 +1,8 @@
 import { describe, expect, it } from 'vitest'
-import {
-  AgentModelCatalogStore,
-  type AgentModelCatalogLiveListing
-} from '../native-chat/agent-model-catalog/agent-model-catalog-store'
 import { retireClaudeLaunchedModel } from './claude-structured-retired-model'
 import {
   adapterFor,
   claudeFrame,
-  claudeStartupSettled,
   fakeClaude,
   tick,
   identityFor,
@@ -15,10 +10,10 @@ import {
   recordingJournalSink,
   USER_MESSAGE
 } from './claude-structured-session-test-support'
+import { claudeStartupSettled } from './claude-structured-startup-settled-test-support'
 
 const RETIRED = 'claude-retired-1'
-/** The rows Claude Code 2.1.280 lists for a child launched with `--model claude-bogus-9`: its own
- *  native rows, then one for the launched id, named by that id. */
+/** Claude Code 2.1.280 lists native rows plus the custom model passed at launch. */
 const NATIVE_OPUS = { value: 'opus', resolvedModel: 'claude-opus-5', displayName: 'Opus' }
 const LAUNCHED_ROW = {
   value: RETIRED,
@@ -65,7 +60,7 @@ describe("the CLI's word that a launched model does not exist", () => {
   })
 })
 
-describe("the account catalog facts a child's listing hands the host", () => {
+describe("a child's listing ownership", () => {
   async function listingOfChildLaunchedWith(model: string) {
     const claude = fakeClaude({
       initModels: [NATIVE_OPUS, LAUNCHED_ROW],
@@ -85,38 +80,8 @@ describe("the account catalog facts a child's listing hands the host", () => {
     return catalogListing
   }
 
-  function savedIds(cached: string[] | null, listing: AgentModelCatalogLiveListing) {
-    const store = new AgentModelCatalogStore()
-    if (cached) {
-      store.recordSuccess(
-        'fp',
-        'claude',
-        {
-          models: cached.map((id) => ({ id, label: id, isDefault: false, efforts: [] })),
-          origin: 'probe'
-        },
-        'discovery'
-      )
-    }
-    store.recordSuccess('fp', 'claude', { ...listing, origin: 'live-session' }, 'live')
-    return store.get('fp')?.models.map((model) => model.id)
-  }
-
-  it('marks the row the launch added for its own model, which the account catalog leaves out', async () => {
-    const listing = await listingOfChildLaunchedWith(RETIRED)
-    expect(listing?.launchOnlyModelId).toBe(RETIRED)
-    expect(savedIds(null, listing!)).toEqual(['opus'])
-  })
-
-  it('keeps that row when the account already listed the model', async () => {
-    const listing = await listingOfChildLaunchedWith(RETIRED)
-    expect(savedIds([RETIRED], listing!)).toEqual(['opus', RETIRED])
-  })
-
-  it('marks nothing for a launched native model, which carries its own display name', async () => {
-    const listing = await listingOfChildLaunchedWith('opus')
-    expect(listing?.launchOnlyModelId).toBeUndefined()
-    expect(savedIds(null, listing!)).toEqual(['opus', RETIRED])
+  it('keeps a child listing local to its session', async () => {
+    expect(await listingOfChildLaunchedWith(RETIRED)).toBeUndefined()
   })
 })
 
@@ -174,7 +139,6 @@ describe('a live child still launched with a retired model', () => {
     answerReset()
     await tick()
 
-    // The pick goes out after the reset, so the CLI runs it; the reset's bookkeeping stands aside.
     expect(setModelCalls(claude).map((call) => call.params?.model)).toEqual([undefined, 'opus'])
     const options = await adapter.readOptions({ sessionId: 'session-1', fence: 7 })
     expect(options.current.model).toBe('opus')

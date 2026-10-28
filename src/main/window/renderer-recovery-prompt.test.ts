@@ -85,7 +85,7 @@ describe('presentRendererRecoveryPrompt', () => {
     await run()
     expect(shown).toHaveLength(1)
     expect(shown[0].buttons).toEqual(['Reload', 'Quit'])
-    // Escape lands on cancelId, and this box is window-modal over the window it is about: it must not quit.
+    // Escape retries; a window-modal recovery box must not quit the session.
     expect(shown[0].cancelId).toBe(0)
     expect(shown[0].detail).toContain('graphics-driver or installation problem')
     expect(reload).toHaveBeenCalledOnce()
@@ -144,7 +144,7 @@ describe('presentRendererRecoveryPrompt', () => {
     expect(shown[0].detail).toContain('graphics driver')
   })
 
-  // The window is blank, so dismissing the dialog to copy would leave no way back.
+  // Copy must retain the dialog: blank windows have no other recovery surface.
   it('keeps the dialog up after copying the commands, then still reloads', async () => {
     const { run, shown, copied, reload, quit } = harness({
       diagnose: () => POISON,
@@ -170,8 +170,7 @@ describe('presentRendererRecoveryPrompt', () => {
     expect(shown).toEqual([])
   })
 
-  // The repair lands asynchronously, so a prompt raised while it ran must pick up
-  // the settled copy on the next pass rather than keep saying "repairing now".
+  // Re-read asynchronous repair diagnosis each pass so settled repair replaces stale repairing copy.
   it('re-reads the diagnosis on every pass', async () => {
     const details = ['repairing now', 'repaired']
     let pass = 0

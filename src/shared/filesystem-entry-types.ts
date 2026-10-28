@@ -1,4 +1,3 @@
-// ─── Filesystem ─────────────────────────────────────────────
 export type FilesystemPathFlavor = 'posix' | 'win32'
 
 export type DirEntry = {
@@ -16,7 +15,6 @@ export type FileDocument = {
 
 export type MarkdownDocument = FileDocument
 
-// ─── Filesystem watcher ─────────────────────────────────────
 export type FsChangeEvent = {
   kind: 'create' | 'update' | 'delete' | 'rename' | 'overflow'
   absolutePath: string

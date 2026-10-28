@@ -1,7 +1,4 @@
-// Why: pins the freeze-report primitives — the breadcrumb ring must stay
-// bounded and coalesce repeat events (a flood costs one slot per second, not
-// unbounded memory), and pty-id redaction must keep the correlatable suffix
-// while dropping the path-bearing worktree prefix.
+// Bound/coalesce breadcrumb floods and redact path-bearing PTY prefixes while retaining report correlation suffixes.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   createPtyDeliveryBreadcrumbRing,

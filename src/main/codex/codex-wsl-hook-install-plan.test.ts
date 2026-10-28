@@ -168,9 +168,7 @@ describe('canonicalizeWslLinuxPath', () => {
     ) => void
     secondCallback(new Error('path disappeared'), '')
 
-    // Why: a cold or wedged distro times out without proving the path changed.
-    // Dropping the cache would force the next launch onto /mnt/... and rewrite
-    // trust under a path Codex will not use when automount is customized.
+    // Transport failure cannot invalidate a known-good custom-automount identity.
     expect(settled).toHaveBeenCalledWith({ status: 'unavailable' })
     expect(_internals.canonicalizeWslLinuxPath('Ubuntu', '/home/alias')).toBe('/home/alice')
   })

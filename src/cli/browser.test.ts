@@ -45,6 +45,7 @@ describe('orca cli browser page targeting', () => {
 
   afterEach(() => {
     vi.restoreAllMocks()
+    vi.unstubAllEnvs()
   })
 
   it('passes explicit page ids to snapshot without resolving the current worktree', async () => {
@@ -103,6 +104,7 @@ describe('orca cli browser page targeting', () => {
       index: undefined,
       page: 'page-2'
     })
+    expect(callMock.mock.calls[0][1]).not.toHaveProperty('focus')
   })
 
   it('still resolves the current worktree when tab switch --page is combined with --worktree current', async () => {
@@ -138,18 +140,6 @@ describe('orca cli browser page targeting', () => {
       page: 'page-1',
       focus: true
     })
-  })
-
-  it('omits focus from the payload when --focus is absent', async () => {
-    queueFixtures(callMock, okFixture('req_switch', { switched: 1, browserPageId: 'page-1' }))
-    vi.spyOn(console, 'log').mockImplementation(() => {})
-
-    await main(['tab', 'switch', '--page', 'page-1', '--json'], '/tmp/repo/feature/src')
-
-    expect(callMock).toHaveBeenCalledTimes(1)
-    const call = callMock.mock.calls[0]
-    expect(call[0]).toBe('browser.tabSwitch')
-    expect(call[1]).not.toHaveProperty('focus')
   })
 
   it('passes explicit profile ids to tab create', async () => {
@@ -200,6 +190,27 @@ describe('orca cli browser page targeting', () => {
         url: 'https://example.com/login',
         worktree: 'id:repo::/tmp/repo/feature'
       },
+      { timeoutMs: 60_000 }
+    )
+  })
+
+  it('creates a tab in the calling folder workspace, not the parent sharing its path (#33618)', async () => {
+    const parent = buildWorktree('/tmp/folder', '')
+    const workspace = { ...parent, id: `${parent.id}::workspace:ws-2` }
+    queueFixtures(
+      callMock,
+      worktreeListFixture([parent, workspace]),
+      okFixture('req_tab_create', { browserPageId: 'page-1' })
+    )
+    vi.spyOn(console, 'log').mockImplementation(() => {})
+    vi.stubEnv('ORCA_WORKTREE_ID', workspace.id)
+
+    await main(['tab', 'create', '--url', 'https://example.com', '--json'], '/tmp/folder')
+
+    expect(callMock).toHaveBeenNthCalledWith(
+      2,
+      'browser.tabCreate',
+      { url: 'https://example.com', worktree: `id:${workspace.id}` },
       { timeoutMs: 60_000 }
     )
   })
@@ -699,7 +710,7 @@ describe('orca cli browser waits and viewport flags', () => {
     vi.spyOn(console, 'log').mockImplementation(() => {})
 
     await main(
-      ['wait', '--selector', '#ready', '--timeout', '12000', '--worktree', 'all', '--json'],
+      ['wait', '--selector', '#ready', '--timeout', '45000', '--worktree', 'all', '--json'],
       '/tmp/not-an-orca-worktree'
     )
 
@@ -707,7 +718,7 @@ describe('orca cli browser waits and viewport flags', () => {
       'browser.wait',
       {
         selector: '#ready',
-        timeout: 12000,
+        timeout: 45000,
         text: undefined,
         url: undefined,
         load: undefined,
@@ -715,7 +726,7 @@ describe('orca cli browser waits and viewport flags', () => {
         state: undefined,
         worktree: undefined
       },
-      { timeoutMs: 17000 }
+      { timeoutMs: 75000 }
     )
   })
 

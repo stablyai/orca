@@ -23,7 +23,6 @@ type BrowserNetworkTunnelOpenAdmissionContext = {
   onConnectTimeout: (stream: BrowserNetworkTunnelStream) => void
 }
 
-// Returns null once the rejection has been reported; the caller only registers admitted streams.
 export function admitBrowserNetworkTunnelOpen(
   frame: BrowserNetworkTunnelFrame,
   context: BrowserNetworkTunnelOpenAdmissionContext

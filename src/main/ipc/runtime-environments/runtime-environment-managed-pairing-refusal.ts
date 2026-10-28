@@ -1,4 +1,3 @@
-/** A server managed over SSH refused this desktop's token: pair again over SSH, or say why not. */
 import { errorMessage } from '../../../shared/error-message'
 import { resolveEnvironment } from '../../../shared/runtime-environment-store'
 import { getOrcadSshDeployment } from '../../../shared/runtime-environments'
@@ -9,7 +8,7 @@ import {
 } from '../../managed-server/lifecycle/orcad-managed-tunnel'
 import { getRuntimeEnvironmentStatusOwner } from './runtime-environment-request-connections'
 
-/** Null for anything but a server managed over SSH; other servers are paired by their user. */
+/** Null leaves user-managed pairing recovery to the caller. */
 export function recoverRefusedManagedPairing(
   userDataPath: string,
   environmentId: string,
@@ -25,7 +24,7 @@ export function recoverRefusedManagedPairing(
   return recover(userDataPath, environmentId)
 }
 
-/** Null keeps the usual reconnect; otherwise whether the refused socket should retry. */
+/** Null preserves ordinary reconnect; a promise owns the refused socket recovery. */
 export function handleManagedSharedControlRefusal(
   userDataPath: string,
   environmentId: string,
@@ -40,12 +39,12 @@ export function handleManagedSharedControlRefusal(
     // A re-pair retired this socket for one on the new pairing; otherwise retry with backoff.
     (outcome) => (outcome === 'repaired' ? 'stop' : 'retry'),
     (error: unknown) => {
-      // Why fenced: a newer pairing stored meanwhile has a successor owner this failure never judged.
+      // A concurrent pairing has a successor owner this failure never judged.
       if (
         error instanceof OrcadManagedPairingRepairFailedError &&
         failureStands(userDataPath, environmentId)
       ) {
-        // Why stop: the verdict stands until the user connects again.
+        // Authentication refusal blocks retries until an explicit user connect.
         try {
           getRuntimeEnvironmentStatusOwner(userDataPath, environmentId).authenticationRejected(
             error.message

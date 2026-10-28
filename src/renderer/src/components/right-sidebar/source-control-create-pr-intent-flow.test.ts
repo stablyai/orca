@@ -9,7 +9,6 @@ import {
   getCreatePrIntentStagePaths,
   resolveCreatePrIntentReviewBase,
   resolveCreatePrIntentGeneratedReviewFields,
-  resolveCreatePrIntentRemoteStep,
   shouldAttemptCreateHostedReviewForIntent,
   shouldGenerateHostedReviewDetailsForIntent
 } from './source-control/review/create-pr-intent-flow'
@@ -25,7 +24,8 @@ describe('source-control Create PR intent flow helpers', () => {
         worktreePath: '/repo',
         branch: 'feature',
         provider: 'github',
-        baseRef: 'origin/main'
+        baseRef: 'origin/main',
+        pinnedCopy: null
       })
 
       expect(token.startedAt).toBe(123)
@@ -49,7 +49,8 @@ describe('source-control Create PR intent flow helpers', () => {
       worktreeId: 'wt-1',
       worktreePath: '/repo',
       branch: 'feature/pr',
-      provider: 'github'
+      provider: 'github',
+      pinnedCopy: null
     })
 
     expect(createPrIntentGitStatusMatchesToken(token, { branch: 'refs/heads/feature/pr' })).toBe(
@@ -69,7 +70,8 @@ describe('source-control Create PR intent flow helpers', () => {
       worktreeId: 'wt-1',
       worktreePath: wt1Path,
       branch: 'feature/pr',
-      provider: 'github'
+      provider: 'github',
+      pinnedCopy: null
     })
 
     expect(
@@ -99,7 +101,8 @@ describe('source-control Create PR intent flow helpers', () => {
       worktreePath,
       branch: 'feature/pr',
       provider: 'github',
-      baseRef: 'refs/remotes/origin/main'
+      baseRef: 'refs/remotes/origin/main',
+      pinnedCopy: null
     })
 
     expect(
@@ -151,10 +154,7 @@ describe('source-control Create PR intent flow helpers', () => {
   })
 
   it('prefers the remote-validated eligibility default so it cannot diverge from the composer', () => {
-    // Why: the intent flow's eligibility is recomputed from the same compare
-    // base right before creation, so its default already corrects a local-only
-    // stacked parent to the repo default. The one-click path must target that
-    // same base as the composer, not the raw (possibly unpushable) compare base.
+    // Match the composer's remote-validated base default so one-click creation cannot target an unpushable local stack parent.
     expect(
       resolveCreatePrIntentReviewBase({
         currentBaseRef: 'stacked-parent',
@@ -173,9 +173,7 @@ describe('source-control Create PR intent flow helpers', () => {
   })
 
   it('falls back to the compare base when eligibility supplies no default', () => {
-    // Why: never blank the base. If the main process could not resolve a default
-    // (no candidate on remote and repo default unavailable), keep the user's
-    // compare base rather than dropping to an empty target.
+    // If eligibility has no remote default, preserve the selected compare base instead of an empty target.
     expect(
       resolveCreatePrIntentReviewBase({
         currentBaseRef: 'refs/remotes/origin/release',
@@ -183,111 +181,6 @@ describe('source-control Create PR intent flow helpers', () => {
         composerBaseRef: 'main'
       })
     ).toBe('release')
-  })
-
-  it('resolves safe remote steps for publish, push, and patch-equivalent force-push', () => {
-    expect(
-      resolveCreatePrIntentRemoteStep({
-        upstreamStatus: { hasUpstream: false, ahead: 0, behind: 0 },
-        branchCommitsAhead: 2,
-        hasCurrentBranch: true,
-        hostedReviewCreation: {
-          provider: 'github',
-          review: null,
-          canCreate: false,
-          blockedReason: 'no_upstream',
-          nextAction: 'publish',
-          reviewLookupOutcome: 'not_found'
-        }
-      })
-    ).toBe('publish')
-
-    expect(
-      resolveCreatePrIntentRemoteStep({
-        upstreamStatus: { hasUpstream: true, ahead: 2, behind: 0 },
-        hasCurrentBranch: true,
-        hostedReviewCreation: {
-          provider: 'github',
-          review: null,
-          canCreate: false,
-          blockedReason: 'needs_push',
-          nextAction: 'push',
-          reviewLookupOutcome: 'not_found'
-        }
-      })
-    ).toBe('push')
-
-    expect(
-      resolveCreatePrIntentRemoteStep({
-        upstreamStatus: {
-          hasUpstream: true,
-          ahead: 3,
-          behind: 2,
-          behindCommitsArePatchEquivalent: true
-        },
-        branchCommitsAhead: 3,
-        hasCurrentBranch: true,
-        hostedReviewCreation: {
-          provider: 'github',
-          review: null,
-          canCreate: false,
-          blockedReason: 'needs_sync',
-          nextAction: 'sync',
-          reviewLookupOutcome: 'not_found'
-        }
-      })
-    ).toBe('force_push')
-  })
-
-  it('fast-forwards behind-only branches, blocks diverged and unpublished-without-commits branches', () => {
-    // Genuinely diverged (local + non-equivalent remote commits): auto-merging
-    // would reconcile without consent, so the intent flow keeps the explicit stop.
-    expect(
-      resolveCreatePrIntentRemoteStep({
-        upstreamStatus: { hasUpstream: true, ahead: 1, behind: 1 },
-        hasCurrentBranch: true,
-        hostedReviewCreation: {
-          provider: 'github',
-          review: null,
-          canCreate: false,
-          blockedReason: 'needs_sync',
-          nextAction: 'sync',
-          reviewLookupOutcome: 'not_found'
-        }
-      })
-    ).toBe('blocked')
-
-    // Behind with no local commits: pure --ff-only (never plain merge sync).
-    expect(
-      resolveCreatePrIntentRemoteStep({
-        upstreamStatus: { hasUpstream: true, ahead: 0, behind: 3 },
-        hasCurrentBranch: true,
-        hostedReviewCreation: {
-          provider: 'github',
-          review: null,
-          canCreate: false,
-          blockedReason: 'needs_sync',
-          nextAction: 'sync',
-          reviewLookupOutcome: 'not_found'
-        }
-      })
-    ).toBe('fast_forward')
-
-    expect(
-      resolveCreatePrIntentRemoteStep({
-        upstreamStatus: { hasUpstream: false, ahead: 0, behind: 0 },
-        branchCommitsAhead: 0,
-        hasCurrentBranch: true,
-        hostedReviewCreation: {
-          provider: 'github',
-          review: null,
-          canCreate: false,
-          blockedReason: 'no_upstream',
-          nextAction: 'publish',
-          reviewLookupOutcome: 'not_found'
-        }
-      })
-    ).toBe('blocked')
   })
 
   it('generates details while main preflight remains the final lookup authority', () => {

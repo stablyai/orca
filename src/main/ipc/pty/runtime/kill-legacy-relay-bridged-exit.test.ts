@@ -42,7 +42,6 @@ describe('a proven stop-and-wait of a terminal an older relay still runs', () =>
           null,
           PtyExitProof.from('absent', undefined)
         )
-        // A reported exit already reached the runtime through the bridge.
         if (proven === 'gone') {
           expect(deps.runtime.onPtyExit).toHaveBeenCalledWith(ptyId, 0, undefined)
         } else {

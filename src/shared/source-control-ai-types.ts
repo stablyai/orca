@@ -3,6 +3,8 @@ import type { TuiAgent } from './tui-agent'
 import type { CustomAgentId } from './commit-message-agent-spec'
 import type {
   SourceControlAiActionDefaults,
+  SourceControlActionLaunchPreferences,
+  SourceControlActionSurface,
   SourceControlActionId,
   SourceControlTextActionId,
   AiTextActionId
@@ -59,6 +61,8 @@ export type RepoSourceControlAiOverrides = {
         agentId?: TuiAgent | CustomAgentId | null
         commandInputTemplate?: string | null
         agentArgs?: string | null
+        launchPreferences?: SourceControlActionLaunchPreferences
+        surface?: SourceControlActionSurface
       }
     >
   >
@@ -74,6 +78,8 @@ export type CompleteSourceControlActionRecipe = {
   agentId: TuiAgent | CustomAgentId | null
   commandInputTemplate: string
   agentArgs?: string
+  launchPreferences?: SourceControlActionLaunchPreferences
+  surface?: SourceControlActionSurface
 }
 
 export type WritableRepoSourceControlAiOverrides = {
@@ -81,6 +87,6 @@ export type WritableRepoSourceControlAiOverrides = {
   customAgentCommand?: string
   modelOverridesByOperation?: Partial<Record<SourceControlAiOperation, SourceControlAiModelChoice>>
   instructionsByOperation?: Partial<Record<SourceControlAiOperation, string>>
-  actionOverrides?: Partial<Record<SourceControlActionId, CompleteSourceControlActionRecipe>>
+  actionOverrides?: RepoSourceControlAiOverrides['actionOverrides']
   prCreationDefaults?: SourceControlAiPrCreationDefaults
 }

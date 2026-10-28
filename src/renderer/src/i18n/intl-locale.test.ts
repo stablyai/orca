@@ -1,12 +1,4 @@
-/**
- * `getIntlLocale()` exists because plugin catalogs register under a synthetic
- * `plugin<hex>` resource language. Passing that straight to `Intl` throws, and
- * passing `undefined` silently falls back to the OS locale rather than the
- * language the user selected.
- *
- * The branch assertions stub `supportedLocalesOf` so they describe the helper's
- * logic rather than whichever locales the runtime's ICU build happens to carry.
- */
+/** Synthetic plugin tags must map to real locale tags, never undefined/OS fallback; stub ICU support to test logic independently of installed locale data. */
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { getIntlLocale, i18n, setRendererPluginLanguagePacks } from './i18n'
 import { pluginLanguageResourceId } from '../../../shared/plugins/plugin-language-pack-artifact'
@@ -29,7 +21,6 @@ async function activate(language: string, packs: Packs = []): Promise<void> {
   await i18n.changeLanguage(language)
 }
 
-/** Stubs ICU lookup so a locale counts as supported only when listed. */
 function withSupportedLocales(supported: readonly string[]): void {
   vi.spyOn(Intl.DateTimeFormat, 'supportedLocalesOf').mockImplementation((requested) => {
     const tags = Array.isArray(requested) ? requested : [requested as string]

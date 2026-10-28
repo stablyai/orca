@@ -1,9 +1,4 @@
-/**
- * Upload a Windows directory into a WSL distro (design D1). The guest copies it straight off its
- * `/mnt/<drive>` mount when it can see the source, and otherwise reads a tar from stdin. Either way
- * the tree is staged inside the destination, checked against digests taken on the Windows side,
- * then renamed into place file by file under `flock`, so no reader sees a partially written file.
- */
+/** D1: prefer guest-mounted source, otherwise stream tar. Stage and verify Windows-side digests before per-file atomic promotion; serialize with flock when available. */
 import { createHash, randomBytes } from 'node:crypto'
 import { constants } from 'node:fs'
 import { open } from 'node:fs/promises'
@@ -12,7 +7,7 @@ import { parseWslUncPath, toLinuxPath } from '../../shared/wsl-paths'
 import type { RemoteInstallTransport } from '../managed-server/install/remote-install-transport'
 import { quotePosixShell } from '../../shared/shell-argument-quoting'
 import { execCommand } from '../ssh/remote-exec/remote-exec-command'
-import { RELAY_DEPLOY_TIMEOUT_MS } from '../managed-server/install/remote-deploy-timing'
+import { REMOTE_INSTALL_TIMEOUT_MS } from '../managed-server/install/remote-deploy-timing'
 import { getRemoteHostPlatform } from '../ssh/ssh-remote-platform'
 import {
   collectLocalUploadPlan,
@@ -36,7 +31,7 @@ export function wslGuestSourcePath(localDir: string, distro: string): string | n
   return /^[A-Za-z]:[\\/]/.test(localDir) ? toLinuxPath(localDir) : null
 }
 
-// Success paths never `exit`: execCommand's stdout fence must still print its end marker.
+// Successful scripts must reach execCommand's stdout end fence; never exit early.
 function stageFromGuestPathCommand(source: string, stage: string): string {
   return [
     `source=${quotePosixShell(source)}; stage=${quotePosixShell(stage)}`,
@@ -68,7 +63,7 @@ function verifyAndPromoteCommand(stage: string, dest: string, hasFiles: boolean)
           "  { echo 'staged upload failed its digest check' >&2; exit 1; }"
         ]
       : []),
-    // Serialises concurrent uploads into one destination; each rename is atomic regardless.
+    // Use flock when available to serialize destination uploads; each rename remains atomic.
     'if command -v flock >/dev/null 2>&1; then exec 9<"$dest" && flock 9 || exit 1; fi',
     '(cd "$stage" && find . -mindepth 1 -type d) | while IFS= read -r p; do',
     '  mkdir -p "$dest/$p" || exit 1',
@@ -81,7 +76,7 @@ function verifyAndPromoteCommand(stage: string, dest: string, hasFiles: boolean)
 }
 
 function assertManifestSafePath(path: string): void {
-  // sha256sum escapes these, and the line-based promote loop would split on a newline.
+  // Reject sha256sum-escaped names and newlines that would split promotion records.
   if (/[\n\r\\]/.test(path)) {
     throw new Error(`Unsupported upload path: ${JSON.stringify(path)}`)
   }
@@ -132,7 +127,7 @@ async function* tarStream(plan: LocalUploadPlan, signal?: AbortSignal): AsyncGen
     const handle = await openPlannedFile(file.localPath)
     try {
       const stat = await handle.stat()
-      // Windows has no executable bit; 0755 matches what a /mnt copy of the same file gets.
+      // Windows lacks execute bits; match /mnt-copy mode with 0755.
       const mode = process.platform === 'win32' ? 0o755 : stat.mode & 0o777
       yield buildUstarEntryHeader(
         { path: file.remotePath, size: stat.size, mode, type: 'file' },
@@ -149,7 +144,7 @@ async function* tarStream(plan: LocalUploadPlan, signal?: AbortSignal): AsyncGen
           yield chunk
         }
       }
-      // A file that shrank mid-read would shift every later header.
+      // Reject shrinking files before their size mismatch corrupts later tar headers.
       if (written !== stat.size) {
         throw new Error(`File changed during upload: ${file.localPath}`)
       }
@@ -181,8 +176,8 @@ export async function uploadDirectoryIntoWsl(
   )
   const manifest = await digestManifest(plan, signal)
   const stage = `${remoteDir.replace(/\/+$/, '')}/.orca-upload-${randomBytes(8).toString('hex')}`
-  // Why the deploy bound: a runtime tree over a cold distro outlasts the 30 s probe default.
-  const execOptions = { signal, timeoutMs: RELAY_DEPLOY_TIMEOUT_MS }
+  // Cold runtime deployment exceeds the 30s probe default; use the deploy timeout.
+  const execOptions = { signal, timeoutMs: REMOTE_INSTALL_TIMEOUT_MS }
   const stagedFromGuest =
     guestSource !== null &&
     (await execCommand(conn, stageFromGuestPathCommand(guestSource, stage), execOptions)).trim() !==

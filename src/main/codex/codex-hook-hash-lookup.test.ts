@@ -35,10 +35,6 @@ import {
 import { getCodexHookTrustMemoPath } from './codex-hook-trust-memo'
 import { getManagedCommand, getManagedScriptPath } from './codex-hook-definition'
 
-// Why this file: finding Codex's hash spawns Codex, so the lookup must ask at
-// most once per binary at a time, hold a failure back for a while, and never
-// ask outside the app.
-
 let userData: string
 const command = (): string => getManagedCommand(getManagedScriptPath())
 const HASHES = { stop: 'sha256:stop' }
@@ -79,7 +75,7 @@ describe('what a lookup may spawn', () => {
 
     allowAsking()
     await resolveCodexHookAnswer()
-    // Why: a new process, as the CLI's is: it reads the file the app wrote.
+    // Simulate a CLI process reading the app's saved answer.
     _internals.resetForTesting()
     expect(hashesOf(await resolveCodexHookAnswer())).toEqual(HASHES)
     expect(mocks.probeCodexVersion).toHaveBeenCalledTimes(1)
@@ -132,7 +128,7 @@ describe('what a lookup may spawn', () => {
     await resolveCodexHookAnswer()
     await resolveCodexHookAnswer()
     expect(mocks.probeCodexVersion).toHaveBeenCalledTimes(1)
-    // Why: a new process, the same shim bytes, a different codex behind them.
+    // Simulate a restart with unchanged shim bytes and an updated Codex.
     _internals.resetForTesting()
     allowAsking()
     mocks.probeCodexVersion.mockResolvedValue('codex-cli 0.160.0')
@@ -195,7 +191,7 @@ describe('what a lookup may spawn', () => {
       failure: 'Codex 0.150.1 did not recognize Orca status hook'
     })
     await resolveCodexHookAnswer()
-    // Why: a new process, as after a restart; the version's answer is saved.
+    // Simulate a restart retaining the persisted answer.
     _internals.resetForTesting()
     allowAsking()
 

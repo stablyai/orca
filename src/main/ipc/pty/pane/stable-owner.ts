@@ -1,4 +1,4 @@
-import { persistFreshPaneBinding } from '../runtime/spawn-commit'
+import { persistFreshPaneBinding } from '../spawn-commit-binding'
 import { rollbackWorkspaceSessionAfterFailedAsyncWrite } from '../../../persistence/restoring-sessions/workspace-session-write-rollback'
 import { cloneWorkspaceSessionState } from '../../../persistence/restoring-sessions/session-owner-fields'
 import { toSshExecutionHostId } from '../../../../shared/execution-host'
@@ -178,6 +178,8 @@ export type StablePaneSpawnContext = {
   onOwnerReresolved?: (owner: StablePaneOwner) => void
   /** Only a spawn holding the pane's reservation: it binds next, so its bind swaps the dead id. */
   keepAbsentBinding?: (dead: ReplacedPaneOwner) => void
+  /** Layout-owner build: a window's view, which attaches or starts nothing (attach-only-view.ts). */
+  attachOnlyView?: true
 }
 
 export function stablePanePersistenceFence(

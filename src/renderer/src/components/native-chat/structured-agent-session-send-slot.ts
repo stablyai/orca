@@ -1,6 +1,3 @@
-// A chat's one send slot: the pending entry that draws a message as sending and keeps any other send
-// of that chat out until it settles.
-
 import type { AgentJournalSkillRef } from '../../../../shared/agent-session-journal-types'
 import { createStructuredAgentSessionOperationId } from '../../../../shared/structured-agent-session-mutation'
 import {
@@ -39,7 +36,7 @@ export type StructuredAgentSessionSendRequest = Pick<
   'callerKeepsText' | 'usageLimitContinuationOfTurnItemId' | 'skills'
 > & { onSettled?: (outcome: StructuredAgentSessionSendOutcome) => void }
 
-/** Takes the chat's one send slot, drawn as sending; null while another send of the chat is out. */
+/** Reserve the chat’s single unanswered-send slot; return null while occupied. */
 export function takeStructuredAgentSessionSendSlot(
   input: StructuredAgentSessionSendInput
 ): StructuredAgentSessionPendingSend | null {

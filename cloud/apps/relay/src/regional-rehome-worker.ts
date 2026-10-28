@@ -84,9 +84,7 @@ export function startRegionalRehomeWorker(
             stoppedBy = 'committed'
             break
           }
-          // Every remaining candidate would re-read the same durable row and
-          // answer the same way, so the rest of this page is wasted POSTs.
-          // A source on an older image sends no reason and keeps the old walk.
+          // Global deferrals repeat the same durable verdict for every candidate; older sources omit reason and retain the full walk.
           if (body.outcome === 'deferred' && isGlobalIdleRegionalRehomeDeferral(body.reason)) {
             stoppedBy = body.reason
             break
@@ -102,8 +100,7 @@ export function startRegionalRehomeWorker(
           )
         }
       }
-      // One line per poll that dispatched: silence used to be the only signal
-      // that 100+ candidates all came back deferred.
+      // Summarize dispatched polls so all-deferred pages remain visible.
       console.warn(
         JSON.stringify({
           event: 'orca_relay_idle_rehome_dispatch_summary',

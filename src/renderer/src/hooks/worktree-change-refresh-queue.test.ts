@@ -157,8 +157,7 @@ describe('createWorktreeChangeRefreshQueue', () => {
     const handler = vi.fn().mockReturnValueOnce(firstRefresh.promise).mockResolvedValue(undefined)
     const queue = createWorktreeChangeRefreshQueue(handler)
 
-    // First refresh starts draining immediately; the next two queue behind it.
-    // A plain refresh and a local-pinned refresh differ, so both are kept.
+    // Keep both the plain and local-pinned refresh queued behind the active drain.
     queue.enqueue({ repoId: 'repo-1', forceLocalOwner: false })
     queue.enqueue({ repoId: 'repo-1', forceLocalOwner: false })
     queue.enqueue({ repoId: 'repo-1', forceLocalOwner: true })

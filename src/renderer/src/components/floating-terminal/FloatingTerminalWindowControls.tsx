@@ -25,10 +25,6 @@ type FloatingTerminalWindowControlsProps = {
 const controlButtonClassName =
   'border-border bg-secondary text-secondary-foreground shadow-xs hover:bg-accent hover:text-accent-foreground'
 
-// Why: matches the repo convention (e.g. ReviewPRViewAnimatedVisual) of
-// surfacing the live keybinding in a tooltip as "Label (shortcut)", while
-// degrading to a bare label when the action is unbound (default on Win/Linux,
-// and for minimize on every platform).
 function withShortcutHint(label: string, shortcutLabel: string | null): string {
   return shortcutLabel ? `${label} (${shortcutLabel})` : label
 }
@@ -65,18 +61,12 @@ export function FloatingTerminalWindowControls({
     if (!defaultAgent) {
       return
     }
-    // Why: the shared launcher owns the startup plan, the route and the tab identity, so this
-    // button stays one more caller of it rather than a second copy of new-agent-tab startup.
-    // Floating resolves the terminal-backed lane: a chat view over a PTY when the chat default is
-    // on, never a structured session.
     const result = launchAgentInNewTab({
       requestId: newAgentLaunchRequestId(),
       agent: defaultAgent,
       worktreeId: FLOATING_TERMINAL_WORKTREE_ID,
       launchSource: 'shortcut',
-      // Why: `agent-auto-ack-targets` relies on the floating panel's active tab never becoming the
-      // global `activeTabId`; activating here would also flip the main view off an open editor.
-      // This selects within the floating group below instead.
+      // Do not change global activeTabId or dismiss the main editor; select within the floating group below.
       activate: false
     })
     if (!result) {
@@ -92,10 +82,7 @@ export function FloatingTerminalWindowControls({
     if (result.surface.kind !== 'local-terminal') {
       return
     }
-    // Why: the floating panel renders its visible tab from the unified group's
-    // activeTabId. setActiveTabForWorktree only writes activeTabIdByWorktree, so
-    // the new agent tab would be appended but never selected/focused. activateTab
-    // selects it within the group, matching the empty-state tab creators.
+    // Update both selection models; the unified group drives the visible tab, while the other call updates the legacy map.
     setActiveTabForWorktree(FLOATING_TERMINAL_WORKTREE_ID, result.surface.tabId)
     activateTab(result.surface.tabId)
     focusTerminalTabSurface(result.surface.tabId)

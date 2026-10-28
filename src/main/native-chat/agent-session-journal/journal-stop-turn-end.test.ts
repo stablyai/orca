@@ -1,6 +1,3 @@
-// The turn-end rule as a Stop that named no turn binds it: every turn that ends while the Stop
-// settles, then only the turn it stopped.
-
 import { describe, expect, it } from 'vitest'
 import type { AgentJournalItemBody } from '../../../shared/agent-session-journal-types'
 import { createJournalReducerState, type JournalReducerState } from './journal-reducer'

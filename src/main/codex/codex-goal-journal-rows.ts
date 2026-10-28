@@ -1,10 +1,4 @@
-/**
- * Codex thread goals reach us only as notifications: the `create_goal` tool call the
- * model makes is never emitted as an item, so `thread/goal/updated` is the single
- * truthful signal that a goal exists. The model narrates goals in prose either way,
- * and that prose can be wrong — it claims "Goal created" in sessions where no goal
- * was ever set — so the row below is what lets a reader tell the two apart.
- */
+// Codex emits goal notifications without create_goal items; only notifications establish goal state.
 
 import type {
   AgentJournalThreadGoal,
@@ -15,7 +9,6 @@ import { isAgentJournalThreadGoalStatus } from '../../shared/agent-session-threa
 const GOAL_UPDATED_METHOD = 'thread/goal/updated'
 const GOAL_CLEARED_METHOD = 'thread/goal/cleared'
 
-/** Status values Codex can report, mapped to how a reader would say them. */
 const GOAL_STATUS_PREFIX: Record<string, string> = {
   active: 'Goal set',
   paused: 'Goal paused',
@@ -39,7 +32,6 @@ export function isCodexGoalFrameMethod(method: string): boolean {
   return method === GOAL_UPDATED_METHOD || method === GOAL_CLEARED_METHOD
 }
 
-/** The sentence for a goal frame, or null when the frame is not one. */
 export function codexGoalRowText(method: string, payload: unknown): string | null {
   if (method === GOAL_CLEARED_METHOD) {
     return 'Goal cleared'
@@ -50,16 +42,11 @@ export function codexGoalRowText(method: string, payload: unknown): string | nul
   const goal = goalRecord(payload)
   const objective = typeof goal?.objective === 'string' ? goal.objective.trim() : ''
   const status = typeof goal?.status === 'string' ? goal.status : ''
-  // An unknown future status still says something true rather than falling back to
-  // the bare opcode.
   const prefix = GOAL_STATUS_PREFIX[status] ?? 'Goal updated'
   return objective ? `${prefix}: ${objective}` : prefix
 }
 
-/**
- * What changes the visible sentence. Counters and budget stay in the raw disclosure but
- * cannot append another row with identical copy.
- */
+/** Accounting changes stay in the raw disclosure without appending duplicate visible rows. */
 export function codexGoalRowSignature(method: string, payload: unknown): string | null {
   if (method === GOAL_CLEARED_METHOD) {
     return GOAL_CLEARED_METHOD
@@ -83,7 +70,6 @@ function finiteNumber(value: unknown): number | null {
   return typeof value === 'number' && Number.isFinite(value) ? value : null
 }
 
-/** Codex's goal object in journal form; null when any field is missing or unknown. */
 function codexThreadGoal(record: Record<string, unknown> | null): AgentJournalThreadGoal | null {
   if (record === null) {
     return null
@@ -117,7 +103,6 @@ function codexThreadGoal(record: Record<string, unknown> | null): AgentJournalTh
   }
 }
 
-/** The typed transition a goal frame records, or null for any other frame. */
 export function codexThreadGoalState(
   method: string,
   payload: unknown

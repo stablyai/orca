@@ -20,7 +20,6 @@ import {
   type WorkspaceCleanupSortState
 } from './workspace-cleanup-filter-model'
 
-// Provider-general: every hosted-review provider is selectable, never a GitHub special case.
 const REVIEW_PROVIDER_VALUES: HostedReviewProvider[] = [
   'github',
   'gitlab',
@@ -30,11 +29,7 @@ const REVIEW_PROVIDER_VALUES: HostedReviewProvider[] = [
   'unsupported'
 ]
 
-/**
- * Tolerant by design: this reads user data written by older (and newer) Orca
- * builds, so anything unrecognized falls back to the default rather than
- * throwing away the whole persisted filter state.
- */
+/** Default unknown fields independently when reading older/newer settings instead of discarding the entire filter state. */
 export function normalizeWorkspaceCleanupFilterState(value: unknown): WorkspaceCleanupFilterState {
   const base = createDefaultWorkspaceCleanupFilterState()
   const raw = asRecord(value)

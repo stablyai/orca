@@ -161,3 +161,7 @@ it('returns current settings when proxy reconciliation finishes after a newer th
   expect(readState().settings.theme).toBe('light')
   expect(reply.theme).toBe('light')
 })
+
+vi.mock('../claude/agent-view-service', () => ({
+  getClaudeAgentViewService: () => ({ reconcile: async () => {} })
+}))

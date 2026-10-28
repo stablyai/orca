@@ -97,9 +97,7 @@ function grokTurnEndApplies(
   )
 }
 
-/** A finite `backgroundTasks[]` entry as child work. Grok lists only in-flight tasks, so none
- *  carries a settled state. Monitors are left out: they can run indefinitely and would hold the
- *  pane (and silence its completion) forever. */
+/** Grok lists only in-flight finite tasks; exclude indefinite monitors so they cannot suppress completion forever. */
 function grokFiniteTaskKind(task: unknown): AgentChildWorkKind | null {
   if (!isRecord(task)) {
     return null
@@ -120,9 +118,7 @@ function grokRunningFiniteTasks(
   })
 }
 
-/** What a turn end leaves running behind the main agent. A background subagent is agent work
- *  and keeps the pane `working`; a shell, or a still-active stop hook holding the turn, is watch
- *  work and reads as monitoring. */
+/** After turn end, subagents hold working; shells/active stop hooks hold monitoring. */
 function grokChildWorkLivenessAfterTurnEnd(
   hookPayload: Record<string, unknown>
 ): AgentChildWorkLiveness {
@@ -154,8 +150,7 @@ export function normalizeGrokEvent(
     return null
   }
   if (isGrokEvent(eventName, 'session_start')) {
-    // Why: SessionStart resets stale per-turn state but must not create a working row before any prompt/tool event.
-    // The main agent clock goes with it: a new process is a new main agent.
+    // SessionStart clears stale turn/main-agent clocks but asserts no work before activity.
     clearPaneTurnCacheState(state, paneKey)
     return null
   }
@@ -222,10 +217,7 @@ export function normalizeGrokEvent(
     : isGrokEvent(eventName, 'stop_failure')
       ? ('failure' as const)
       : undefined
-  // Why: every turn end reports what it left running, and a task leaves only when it reports its
-  // own end or the session ends — a cancelled or failed turn with a still-running task reads
-  // monitoring exactly like a plain `stop`. Only a session boundary settles the pane whatever
-  // the inventory says.
+  // Cancel/failure retains reported tasks until their own end; only session boundaries settle independently of inventory.
   const resolution = foldAgentLeadStatus({
     leadState,
     childWorkLiveness:

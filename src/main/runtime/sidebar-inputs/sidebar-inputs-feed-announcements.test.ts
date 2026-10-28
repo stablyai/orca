@@ -1,16 +1,16 @@
-// The announcement census (design §9.4): every domain names the writers of what it reads, and each
-// writer, called through the real store, announces a change. No domain is re-read on a phone read.
+// Exercise every domain's real store writers and announcements (design §9.4); phone reads must not re-read domains.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { RuntimeClientEvent } from '../../../shared/runtime-client-events'
 import type { Repo } from '../../../shared/repo-types'
 import type { PRInfo } from '../../../shared/github/pull-request-types'
-import type { ResolvedWorktree } from '../runtime-worktree-path-identity'
-import type { RuntimeStore } from '../runtime-store-contract'
 import type { WslHostService } from '../../wsl/wsl-host-service'
 import { setWslHostService } from '../../wsl/wsl-host-service-instance'
 import { getGitHubPRCacheKeyCandidates } from '../../../shared/github/github-cache-key'
 import { toRuntimeExecutionHostId } from '../../../shared/execution-host'
-import { hostWorktreeTarget } from '../../../shared/worktree/host-qualified-identity'
+import {
+  getWorktreeHostIdentity,
+  hostWorktreeTarget
+} from '../../../shared/worktree/host-qualified-identity'
 import {
   prGroupOfReviewFact,
   WorkspaceReviewFactsSnapshotSchema,
@@ -82,21 +82,20 @@ async function host() {
       catalogs: () => []
     } as unknown as SidebarInputsFeedSources['pairedServerRows'],
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: as above.
-    workspaceCreations: {
+    workspaceLifecycle: {
       revision: revisions.creations,
-      snapshot: () => ({ creations: {} })
-    } as unknown as SidebarInputsFeedSources['workspaceCreations'],
+      creationsSnapshot: () => ({ creations: {} }),
+      hints: () => ({})
+    } as unknown as SidebarInputsFeedSources['workspaceLifecycle'],
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: as above; one cached worktree, already scanned.
     workspaceRows: {
       revision: revisions.rows,
       snapshot: () => ({ revision: 0, rows: {} }),
-      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: review facts read only these fields.
-      resolvedWorktrees: () => [worktree as unknown as ResolvedWorktree],
+      resolvedWorktrees: () => [worktree],
       ready: async () => {}
     } as unknown as SidebarInputsFeedSources['workspaceRows'],
     repoIcons: { idsByRepo: () => ({}) },
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the real Store is a RuntimeStore.
-    store: () => store as unknown as RuntimeStore,
+    store: () => store,
     onClientEvent: (listener) => {
       clientEvents.add(listener)
       return () => clientEvents.delete(listener)
@@ -115,7 +114,8 @@ async function host() {
         store.patchWorkspaceSession({ activeTabId: 'tab-1' }, toRuntimeExecutionHostId('env-1'))
     },
     temporal: { 'retention owner': () => temporal.forEach((listener) => listener()) },
-    creations: { 'creation registry': () => revisions.creations.bump() },
+    creations: { 'lifecycle queue': () => revisions.creations.bump() },
+    inProgress: { 'lifecycle queue': () => revisions.creations.bump() },
     workspaces: { 'workspace rows producer': () => revisions.rows.bump() },
     detected: { 'detected checkouts producer': () => revisions.detected.bump() },
     liveContent: { 'live content producer': () => revisions.liveContent.bump() },
@@ -212,7 +212,8 @@ describe('sidebar inputs feed announcements', () => {
       detach?.()
       return heard.some((change) => change?.urgent === true)
     }
-    expect(urgency('creations', 'creation registry')).toBe(true)
+    expect(urgency('creations', 'lifecycle queue')).toBe(true)
+    expect(urgency('inProgress', 'lifecycle queue')).toBe(true)
     expect(urgency('desktop', 'pin write')).toBe(true)
     expect(urgency('view', 'ui write')).toBe(true)
   })
@@ -245,7 +246,7 @@ describe('sidebar inputs feed announcements', () => {
     }
     phone.notice(notice)
     await phone.settle()
-    const fact = phone.view().review?.[worktree.id]
+    const fact = phone.view().review?.[getWorktreeHostIdentity(worktree)]
     expect(fact).toEqual({ provider: 'github', reviewState: 'merged' })
     expect(prGroupOfReviewFact(feedReviewFact(fact))).toBe('done')
     phone.disconnect()

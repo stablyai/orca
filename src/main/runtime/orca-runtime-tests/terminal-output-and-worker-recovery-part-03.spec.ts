@@ -1,5 +1,6 @@
 import { withDurableRuntimeStore } from '../runtime-durable-store-fixture'
 import { describe, expect, it, vi } from 'vitest'
+import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../shared/layout-owner-switch'
 import { OrcaRuntimeService, getDefaultWorkspaceSession } from '../orca-runtime-test-mocks.spec'
 import type { OrchestrationDb } from '../orchestration/db'
 import type { WorkspaceSessionState } from '../orca-runtime-test-mocks.spec'
@@ -393,6 +394,10 @@ describe('OrcaRuntimeService', () => {
     ).toBeUndefined()
     expect(harness.getSession().tabsByWorktree[TEST_WORKTREE_ID]).toEqual([])
     expect(harness.getSession().terminalLayoutsByTabId['legacy-post-reveal']).toBeUndefined()
+    if (ORCA_LAYOUT_OWNER_IS_MAIN) {
+      // The window draws main's layout, which no longer holds the tab: its next graph omits it.
+      harness.runtime.syncWindowGraph(TEST_WINDOW_ID, { tabs: [], leaves: [] })
+    }
     const runtimeState = harness.runtime as unknown as {
       tabs: Map<string, unknown>
       leaves: Map<string, unknown>

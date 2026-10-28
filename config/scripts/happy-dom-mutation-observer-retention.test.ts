@@ -40,6 +40,10 @@ describe('happy-dom MutationObserver retention', () => {
   })
 
   it('keeps delivering records after the weak callback would have been collected', async () => {
+    const collectGarbage = globalThis.gc
+    if (typeof collectGarbage !== 'function') {
+      throw new Error('MutationObserver retention requires --expose-gc')
+    }
     installHappyDomMutationObserverRetention()
     const target = document.createElement('div')
     document.body.append(target)
@@ -53,14 +57,11 @@ describe('happy-dom MutationObserver retention', () => {
     await Promise.resolve()
     expect(deliveries).toBe(1)
 
-    const collectGarbage = (globalThis as { gc?: () => void }).gc
-    if (collectGarbage) {
-      for (let round = 0; round < 5; round += 1) {
-        await new Promise((resolve) => setTimeout(resolve, 1))
-        collectGarbage()
-      }
+    for (let round = 0; round < 5; round += 1) {
       await new Promise((resolve) => setTimeout(resolve, 1))
+      collectGarbage()
     }
+    await new Promise((resolve) => setTimeout(resolve, 1))
 
     target.replaceChildren(document.createElement('span'))
     await Promise.resolve()

@@ -47,9 +47,7 @@ jobs:
   build-mac:
     needs: qualification-template
     if: ${{ !cancelled() && (!inputs.qualification_only || needs.qualification-template.result == 'success') && github.repository == 'stablyai/orca' }}
-    # Why: this workflow is outside the SignPath signing run, so Blacksmith
-    # cannot enter Windows artifact provenance while mac notarization gets the
-    # faster runner.
+    # Keep Blacksmith mac notarization outside SignPath’s GitHub-hosted Windows provenance.
     runs-on: blacksmith-6vcpu-macos-15
     timeout-minutes: 60
     # actions: read fetches the release-cut run's artifacts.
@@ -91,13 +89,13 @@ jobs:
         uses: actions/setup-node@v6
         with:
           node-version-file: package.json
+          check-latest: true
           cache: pnpm
           cache-dependency-path: |
             pnpm-lock.yaml
             mobile/pnpm-lock.yaml
 
-      # Why: packaging bundles the pinned Node into the macOS terminal host. Keyed on the pin alone
-      # with no restore-keys, so a pin bump starts empty instead of carrying old archives forward.
+      # Cache bundled host Node by exact pin, without restore keys.
       - name: Locate the pinned Node runtime cache
         shell: bash
         run: echo "ORCA_NODE_RUNTIME_CACHE_DIR=$HOME/Library/Caches/orca-node-runtime" >>"$GITHUB_ENV"
@@ -108,8 +106,7 @@ jobs:
           path: ~/Library/Caches/orca-node-runtime
           key: orca-node-runtime-mac-${{ hashFiles('src/shared/node-runtime-pin.ts') }}
 
-      # Cache the Electron binary + electron-builder tool downloads (notarytool,
-      # winCodeSign, nsis, squirrel, AppImage). Saves ~30-90s per job, incl. mac.
+      # Cache Electron/builder tool downloads to save ~30–90s.
       - name: Cache electron-builder downloads
         uses: actions/cache@v5
         with:
@@ -120,12 +117,7 @@ jobs:
           restore-keys: |
             electron-builder-mac-
 
-      # Why: pnpm install triggers electron's postinstall, which downloads the
-      # Electron binary from GitHub release assets. GitHub's download CDN
-      # occasionally returns 504s that fail the whole release. Retry on
-      # failure so transient network errors don't require a manual re-run.
-      # Why both CPUs: the mac config packages x64 and arm64 from this arm64
-      # runner, so the install must carry both variants of the native optional deps.
+      # Retry transient Electron CDN 504s; install both x64/arm64 optional natives for dual macOS packages.
       - name: Install dependencies
         uses: nick-fields/retry@v4
         with:
@@ -134,8 +126,7 @@ jobs:
           retry_wait_seconds: 30
           command: pnpm install --frozen-lockfile --cpu=current,x64,arm64
 
-      # Why here: electron-builder's beforePack requires out/mobile-web, and the bundle
-      # build resolves React Native and Expo from mobile/node_modules.
+      # Build required out/mobile-web using mobile’s React Native/Expo install.
       - uses: ./.github/actions/install-mobile-dependencies
 
       - name: Verify macOS signing environment
@@ -147,14 +138,11 @@ jobs:
           APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
 
-      # Why: `plutil -lint` accepts duplicate plist keys, but `codesign`
-      # rejects duplicate entitlements after the expensive app build.
+      # Check duplicate entitlements before build: plutil lint accepts duplicates but codesign rejects them.
       - name: Verify macOS entitlements
         run: pnpm verify:macos-entitlements
 
-      # Why: telemetry's transport gate (`src/main/telemetry/client.ts:IS_OFFICIAL_BUILD`)
-      # requires the build identity to be the literal string `stable` or `rc`,
-      # substituted by electron-vite's `define` block at build time.
+      # Set literal stable/rc telemetry identity through Vite define.
       - name: Classify release tag for telemetry build identity
         id: tag-classify
         shell: bash
@@ -162,9 +150,7 @@ jobs:
           TAG: ${{ inputs.tag }}
         run: |
           set -euo pipefail
-          # Why the optional trailing identifier: suffixed side-branch RCs
-          # (vX.Y.Z-rc.N.perf) are rc-channel prerelease builds — same telemetry
-          # identity as plain RCs.
+          # Suffixed vX.Y.Z-rc.N.perf builds keep the same rc-channel telemetry identity.
           if [[ "$TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+-rc\.[0-9]+(\.[0-9A-Za-z]+)?$ ]]; then
             identity=rc
           elif [[ "$TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
@@ -215,16 +201,13 @@ jobs:
 
       - name: Gate runtime file-watcher process isolation
         run: |
-          # Why: #8212 is a native-process crash contract. Prove both the Node
-          # host and the exact Electron runtime survive SIGSEGV before packaging.
+          # #8212: require Node and the exact Electron runtime to survive native SIGSEGV before packaging.
           node config/scripts/runtime-file-watcher-fault-harness.mjs
           ELECTRON_RUN_AS_NODE=1 pnpm exec electron config/scripts/runtime-file-watcher-fault-harness.mjs
 
       - name: Abort if the parent release-cut run was cancelled
         if: ${{ !inputs.qualification_only }}
-        # Why: this workflow is dispatched separately, so cancelling release-cut
-        # does not stop mac `--publish always`. A cancelled parent left v1.4.206
-        # public with only a partial mac upload.
+        # Watch parent cancellation: separately dispatched mac upload otherwise continues (v1.4.206 went public with partial assets).
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           PARENT_RUN: ${{ inputs.release_run_id }}
@@ -255,18 +238,14 @@ jobs:
 
       - name: Verify release remains draft after artifact upload
         if: ${{ !inputs.qualification_only }}
-        # Why: re-draft immediately if electron-builder flipped the GitHub
-        # release public, then fail. Checking without restoring leaves
-        # /releases/latest serving a missing Windows exe.
+        # Re-draft premature builder publication before failing; latest must not keep an incomplete Windows release.
         shell: bash
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           TAG: ${{ inputs.tag }}
         run: node config/scripts/assert-github-release-is-draft.mjs "${{ inputs.tag }}"
 
-      # Why post-publish for macOS: electron-builder packs and uploads in a
-      # single `--publish always` invocation, so there is no cheap insertion
-      # point between pack and upload without splitting those steps.
+      # Check after publish because builder’s single pack/upload invocation has no cheap interposition point.
       - name: Verify telemetry constants present in app.asar
         run: node config/scripts/verify-telemetry-constants.mjs
 

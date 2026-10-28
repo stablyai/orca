@@ -451,8 +451,7 @@ describe('gitlab client — MR operations', () => {
       )
     })
   })
-  // Why: only `api`/`auth` define --hostname, so the `mr` subcommands must take
-  // the self-hosted host through GITLAB_HOST or glab exits on an unknown flag.
+  // mr subcommands reject --hostname; route self-hosted instances through GITLAB_HOST.
   describe('mr subcommands against a self-hosted SSH host', () => {
     const projectRef = { host: 'gitlab.example.internal', path: 'g/p' }
 
@@ -514,6 +513,24 @@ describe('gitlab client — MR operations', () => {
       const [args, options] = glabExecFileAsyncMock.mock.calls[0]
       expect(args).toEqual(['mr', 'merge', '6', '-R', 'g/p', '--yes'])
       expect(options.env).toBeUndefined()
+    })
+  })
+
+  describe('glab state-change refusals', () => {
+    const projectRef = { host: 'gitlab.com', path: 'g/p' }
+    const mutations = { close: closeMR, reopen: reopenMR }
+
+    it.each([
+      ['close', 'this merge request has been closed', true],
+      ['reopen', 'this merge request is already open.', true],
+      ['close', 'this merge request has already been merged', false],
+      ['reopen', 'this merge request has already been merged', false]
+    ] as const)('%s refused with "%s" reports ok=%s', async (action, message, ok) => {
+      glabExecFileAsyncMock.mockRejectedValueOnce(new Error(message))
+
+      await expect(mutations[action]('/repo', 6, undefined, null, projectRef)).resolves.toEqual(
+        ok ? { ok: true } : { ok: false, error: message }
+      )
     })
   })
 })

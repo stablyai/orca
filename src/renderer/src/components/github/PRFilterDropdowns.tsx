@@ -1,7 +1,3 @@
-// Why: GitHub-style PR filter UI. A single "Filters" button opens a popover
-// containing Author / Label / Reviewer / Assignee sections, mirroring GitHub's
-// own collapsed Filters dropdown so the toolbar stays uncluttered when nothing
-// is set. Active filters surface as inline removable pills next to the button.
 import React, { useMemo, useState } from 'react'
 import { ListFilter, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
@@ -27,9 +23,7 @@ type Props = {
   parsed: ParsedTaskQuery
   kind: 'prs' | 'issues'
   authorLogins: string[]
-  // Why: drive label + assignable-user lookups off the first selected repo.
-  // Cross-repo filters can't enumerate every repo's labels in one popover —
-  // GitHub's own PR list scopes the dropdown to a single repo too.
+  // Scope metadata to the first selected repo; one popover cannot enumerate every repo’s labels and users.
   primarySlug: GitHubOwnerRepo | null
   /** Host that owns the repo the primary slug came from. */
   ownerTarget?: RuntimeClientTarget | null
@@ -98,9 +92,7 @@ export default function PRFilterDropdowns({
     primarySlug?.host
   )
 
-  // Why: surface @me as a first-class option even though it's not a real
-  // login — GitHub's search API resolves it server-side to the authenticated
-  // user, matching the behavior of the built-in "Mine" / "Needs review" presets.
+  // Offer @me because GitHub resolves it server-side to the authenticated user.
   const userOpts = useMemo<PickerOption[]>(() => {
     const meOption: PickerOption = { key: '@me', primary: '@me', secondary: 'Current user' }
     return [meOption, ...userOptions(hasPrimarySlug ? assigneesState.data : [])]
@@ -108,9 +100,7 @@ export default function PRFilterDropdowns({
   const authorOpts = useMemo<PickerOption[]>(() => {
     const options = new Map<string, PickerOption>()
     options.set('@me', { key: '@me', primary: '@me', secondary: 'Current user' })
-    // Why: the Author filter should reflect actual visible item authors.
-    // Assignable-user metadata is repo-collaborator scoped and can omit outside
-    // contributors.
+    // Use visible authors because assignable-user metadata excludes outside contributors.
     for (const login of authorLogins) {
       options.set(login.toLowerCase(), { key: login, primary: login })
     }
@@ -131,8 +121,7 @@ export default function PRFilterDropdowns({
   >(null)
   const reviewerMode = reviewerModeOverride ?? reviewerKind
 
-  // Why: treat anything other than the implicit "open" default as an active
-  // status filter so the user can see (and clear) it via the inline pill.
+  // Expose any non-default status as a removable pill.
   const statusActive = (parsed.state !== null && parsed.state !== 'open') || parsed.draft
   const statusPillValue = ((): string | null => {
     const parts: string[] = []
@@ -178,8 +167,6 @@ export default function PRFilterDropdowns({
             variant="outline"
             size="sm"
             className={cn(
-              // Why: solid fill + full foreground text so the control stays
-              // readable on both page canvas and the muted toolbar band.
               'h-8 gap-1.5 rounded-md border-border/60 bg-background px-2.5 text-xs font-medium text-foreground shadow-xs hover:bg-muted/60',
               activeCount > 0 && 'border-border'
             )}
@@ -201,8 +188,7 @@ export default function PRFilterDropdowns({
               reviewerActive={reviewerActive}
               reviewerKind={reviewerKind}
               onPick={(s) => {
-                // Why: each reviewer menu visit should start from the parsed
-                // query unless the user toggles mode during this visit.
+                // Reset reviewer mode to the parsed query on each menu visit.
                 if (s === 'reviewer') {
                   setReviewerModeOverride(null)
                 }

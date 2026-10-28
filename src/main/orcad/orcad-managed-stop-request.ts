@@ -1,4 +1,3 @@
-/** Validating an instance-bound stop request before the running orcad acts on it. */
 import { createHash } from 'node:crypto'
 import { lstatSync } from 'node:fs'
 import { dirname, join, resolve } from 'node:path'
@@ -13,7 +12,7 @@ import {
 } from '../../shared/orcad-stop-request'
 import { readOrcadInstanceLockRecord, type OrcadLockRecord } from './orcad-instance-lock'
 
-/** Keyed by the lock nonce, so a request for a previous instance is never this one's. */
+/** Nonce-scoped paths prevent requests from addressing a previous instance. */
 export function orcadManagedStopRequestPath(instance: OrcadManagedStopInstance): string {
   const digest = createHash('sha256').update(instance.nonce).digest('hex')
   return join(dirname(instance.lockPath), `${ORCAD_MANAGED_STOP_REQUEST_PREFIX}.${digest}`)
@@ -27,7 +26,7 @@ export function readOrcadManagedStopRequest(path: string): OrcadManagedStopReque
   return OrcadManagedStopRequestSchema.parse(JSON.parse(buffer.toString('utf8')))
 }
 
-export function sameOrcadManagedStopInstance(
+function sameOrcadManagedStopInstance(
   left: OrcadManagedStopInstance,
   right: Pick<OrcadManagedStopInstance, 'pid' | 'startedAtMs' | 'nonce'>
 ): boolean {
@@ -36,12 +35,10 @@ export function sameOrcadManagedStopInstance(
   )
 }
 
-/** Whether the instance lock still names exactly this instance. */
 export function orcadInstanceLockNames(instance: OrcadManagedStopInstance): boolean {
   return readOrcadInstanceLockNaming(instance) !== null
 }
 
-/** The lock record, only while it still names exactly this instance. */
 export function readOrcadInstanceLockNaming(
   instance: OrcadManagedStopInstance
 ): OrcadLockRecord | null {
@@ -52,7 +49,6 @@ export function readOrcadInstanceLockNaming(
   return record !== null && sameOrcadManagedStopInstance(instance, record) ? record : null
 }
 
-/** Throws unless the request names this running instance and its lock is still ours. */
 export function validateOrcadManagedStopRequest(
   context: OrcadManagedStopContext,
   requestPath: string
@@ -61,7 +57,7 @@ export function validateOrcadManagedStopRequest(
   if (
     request.version !== context.version ||
     request.runtimeId !== context.runtimeId ||
-    // Resolved: a Windows client names the lock with `/`, orcad's own path.join with `\`.
+    // Windows clients and servers may use different separators for the same lock.
     resolve(request.instance.lockPath) !== resolve(context.instance.lockPath) ||
     !sameOrcadManagedStopInstance(request.instance, context.instance)
   ) {

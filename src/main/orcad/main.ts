@@ -1,4 +1,4 @@
-/** Executable entry for `orcad`. See `./orcad-entry.ts`. */
+import '../memory/host-malloc-tunables-claim'
 import process from 'node:process'
 import { main } from './orcad-entry'
 import { resolveOrcadExitCode } from './orcad-exit-code'
@@ -24,20 +24,16 @@ import {
 } from '../../shared/windows-breakaway-launch'
 import { runWindowsBreakawayLaunchIfRequested } from '../../shared/windows-breakaway-launcher'
 import { parseArgs } from './orcad-command-arguments'
+import { ORCAD_RECLAIM_STALE_LOCK_FLAG } from '../../shared/orcad-stale-lock-reclaim'
 
-// Why exit before the preflight: reaching this line means the whole module graph resolved
-// under plain Node, which is all the build guard needs to prove. Probing natives or
-// starting a server to prove it would bind a port and take a data-root lock on a build
-// machine.
+// A resolved plain-Node module graph proves the build guard; skip probes, ports and data-root locks.
 if (process.argv.includes('--orcad-smoke-load-check')) {
   process.exit(0)
 }
 
 function failStartup(error: unknown): void {
   console.error('orcad: failed to start:', error)
-  // Why a resolved code and not a bare 1: a data-root or bind-address refusal is a
-  // configuration fault that restarting cannot fix, and a supervisor needs to tell the two
-  // apart to avoid restart-spinning on it.
+  // Distinguish configuration refusals so supervisors cannot restart-spin on them.
   process.exit(resolveOrcadExitCode(error))
 }
 
@@ -55,6 +51,10 @@ if (process.argv[2] === '--orcad-structured-provider-load-check') {
 ) {
   void import('./orcad-managed-stop-command').then(({ runOrcadManagedStopCommandAndExit }) =>
     runOrcadManagedStopCommandAndExit(process.argv.slice(2))
+  )
+} else if (process.argv[2] === ORCAD_RECLAIM_STALE_LOCK_FLAG) {
+  void import('./orcad-stale-lock-reclaim').then(({ runOrcadStaleLockReclaimCommandAndExit }) =>
+    runOrcadStaleLockReclaimCommandAndExit(process.argv.slice(2))
   )
 } else {
   startOrcadProcess()
@@ -82,16 +82,15 @@ function startOrcadProcess(): void {
       void runOrcadProfilePreflight(process.argv[3], {
         nativeFeatures: flag === ORCAD_PROFILE_PREFLIGHT_FLAG
       })
-        // Why exit: the owner reads to EOF, so a lingering native handle must not hold the probe open.
+        // The owner reads EOF; lingering native handles must not keep this probe alive.
         .then(() => process.stdout.write('', () => process.exit(0)))
         .catch(failStartup)
     } else {
-      // Why: stdout is the serve readiness API; incidental diagnostics go to stderr.
+      // Stdout is the readiness API; send incidental diagnostics to stderr.
       reserveServeStdoutForReadiness()
       void preflightBundledOrcadStartup()
         .then(() => {
-          // Why: must run before anything requires node-pty; the bundle defers require("node-pty")
-          // so no import does. See ./node-pty-precondition.ts.
+          // Probe before deferred node-pty loading can crash this process.
           runOrcadNativePreflight()
           return main()
         })

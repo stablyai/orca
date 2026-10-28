@@ -5,16 +5,10 @@ import { Input } from '@/components/ui/input'
 import { translate } from '@/i18n/i18n'
 
 const ANNOUNCE_DEBOUNCE_MS = 400
-// Why: the counter overlays the input, so its width has to be reserved rather
-// than guessed — a fixed reserve overlaps typed text once counts reach 3 digits.
-// `ch` keeps that reserve font-relative across platforms: it measures the input's
-// own 12px font while the counter renders at 10px tabular-nums, so digits always
-// over-reserve and '/' and ' ' are narrower still.
+// Reserve counter width in ch units so multi-digit overlays cannot collide with input text across fonts/platforms.
 const CLEAR_BUTTON_RESERVE_PX = 32
 const OVERLAY_GAP_PX = 4
-// Why: a wide counter in a narrow drawer could otherwise reserve the whole
-// field and squeeze the typed text to nothing. Overlapping the counter is the
-// better failure at that size.
+// Cap reserve so a wide counter cannot consume the typed-text area in narrow drawers.
 const MAX_OVERLAY_RESERVE = '55%'
 
 type WorkspaceKanbanSearchFieldProps = {
@@ -78,8 +72,7 @@ export default function WorkspaceKanbanSearchField({
     : null
   const badgeText = tooLargeLabel ?? counterText
 
-  // Why: the filter itself is undebounced, but a polite live region that changes
-  // on every keystroke produces continuous speech and makes the field unusable.
+  // Debounce announcements, not filtering, to avoid continuous per-keystroke screen-reader speech.
   useEffect(() => {
     if (tooLargeMessage) {
       setAnnouncement(tooLargeMessage)
@@ -115,10 +108,7 @@ export default function WorkspaceKanbanSearchField({
         style={hasText ? { paddingRight: overlayReserve(badgeText) } : undefined}
         onChange={(event) => onQueryChange(event.target.value)}
         onKeyDown={(event) => {
-          // Why: useWorkspaceBoardPanel defers Escape to board text fields, so
-          // this field is the only handler — it must cover both outcomes.
-          // Mid-composition Escape belongs to the IME, which cancels the
-          // in-progress reading rather than the query behind it.
+          // The panel defers Escape here; handle clear/close while leaving composition Escape to the IME.
           if (event.key !== 'Escape' || event.nativeEvent.isComposing) {
             return
           }
@@ -132,8 +122,7 @@ export default function WorkspaceKanbanSearchField({
       />
       {hasText ? (
         <div className="absolute right-1 flex items-center gap-0.5">
-          {/* Why: a discarded query looks exactly like one that matched
-              everything, so the field has to say which it was. */}
+          {/* Identify discarded queries because unchanged results otherwise look like a successful match-all search. */}
           {tooLargeLabel ? (
             <span
               aria-hidden="true"
@@ -155,8 +144,7 @@ export default function WorkspaceKanbanSearchField({
               'auto.components.sidebar.WorkspaceKanbanSearchField.3b7ea51793',
               'Clear search'
             )}
-            // Why: clearing unmounts this button, so focus would fall to
-            // <body>. Keep it in the field the user is still typing in.
+            // Prevent mousedown stealing focus; clearing unmounts this button and would send focus to body.
             onMouseDown={(event) => event.preventDefault()}
             onClick={() => {
               onClear()

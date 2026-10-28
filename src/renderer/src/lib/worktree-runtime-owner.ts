@@ -40,14 +40,7 @@ function getUnstampedExecutionHostId(state: WorktreeRuntimeOwnerState): Executio
   return environmentId ? toRuntimeExecutionHostId(environmentId) : 'local'
 }
 
-/**
- * The catalog's answer, or `null` when it has none: no row names an owner for this worktree (a git
- * worktree without a repo row, a folder workspace without a folder-workspace row) and nothing more
- * specific — active-workspace host, detected owner, per-worktree host — applies either. A row that
- * exists and names no owner is a positive `'local'`; a row that has not landed is silence.
- * {@link getExecutionHostIdForWorktree} papers over that silence with the local default, which is the right answer for routing an operation and the wrong one for a caller that
- * reads the host as evidence.
- */
+/** Null means no row/stronger evidence names an owner; an existing hostless row positively means local. getExecutionHostIdForWorktree defaults silence to local for operation routing, which is unsafe as ownership evidence. */
 export function getKnownExecutionHostIdForWorktree(
   state: WorktreeRuntimeOwnerState,
   worktreeId: string | null | undefined
@@ -88,8 +81,7 @@ export function getKnownExecutionHostIdForWorktree(
   const worktree = findWorktreeRecord(state.worktreesByRepo, worktreeId)
   const worktreeHostId = getExecutionHostIdFromWorktreeHost(worktree?.hostId)
   if (worktreeHostId) {
-    // Why: per-worktree host ownership is more specific than the repo host
-    // default, especially when local and runtime checkouts share a project.
+    // Per-worktree ownership outranks repo defaults when local/runtime checkouts share a project.
     return worktreeHostId
   }
   const repoId = worktree?.repoId ?? getRepoIdFromWorktreeId(worktreeId)
@@ -123,10 +115,10 @@ export function getExecutionHostIdForWorktree(
 }
 
 /**
- * {@link resolveOwner}, reading an id no row places as this app's — or, for a folder, the server
- * its saved session names, or a web client's only server.
+ * {@link resolveOwner}, except an id no row places and no caller names a host resolves to this app
+ * instead of `missing` — or, for a folder, to its saved session's server or a web client's only one.
  */
-export function resolveOwnerWithLegacyFallback(
+export function resolveOwnerOrLocal(
   state: WorktreeRuntimeOwnerState,
   ref: WorkspaceOwnerRef
 ): ExecutionHostOwnerMatch<HostAuthority> {
@@ -148,17 +140,18 @@ export function resolveOwnerWithLegacyFallback(
 }
 
 /**
- * The paired server behind {@link resolveOwnerWithLegacyFallback}, or `null` for this app, a
- * directly dialed SSH target or a twin: for readers whose twin answer is "no server", as before.
+ * The paired server {@link resolveOwnerOrLocal} names, or `null` for this app, a directly dialed
+ * SSH target or a twin. Unlike `runtimeEnvironmentIdUnlessTwin`, an unplaced folder on a web
+ * client names that client's server.
  */
-export function runtimeEnvironmentIdWithLegacyFallbackUnlessTwin(
+export function runtimeEnvironmentIdOrLocalUnlessTwin(
   state: WorktreeRuntimeOwnerState,
   workspaceId: string | null | undefined
 ): string | null {
   if (!workspaceId) {
     return null
   }
-  const match = resolveOwnerWithLegacyFallback(state, { workspaceId })
+  const match = resolveOwnerOrLocal(state, { workspaceId })
   return match.kind === 'resolved' && match.owner.endpoint.kind === 'environment'
     ? match.owner.endpoint.environmentId
     : null

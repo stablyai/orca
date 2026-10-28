@@ -8,6 +8,7 @@ import {
 import type { PtySpawnResult } from '../../../providers/pty-provider-contract'
 import { keepAbsentPaneBindingForSwap, releaseAbsentPaneOwner } from './absent-pane-owner'
 import { excludeReplacedPaneOwner } from './replaced-pane-owner'
+import { PANE_NOT_LIVE_ERROR } from '../../../../shared/pane-attach-only-view'
 import type { StablePaneOwner, StablePaneSpawnContext } from './stable-owner'
 
 type StablePaneAttachAttempt =
@@ -50,17 +51,21 @@ export async function attemptStablePaneAttach(
     if (error instanceof TerminalSessionOwnerUnverifiedError) {
       throw new Error('terminal_pane_owner_unverified')
     }
-    // Why: translate before paired-runtime RPC strips the socket error's code and syscall.
+    // Preserve endpoint-loss meaning before paired RPC strips socket code/syscall.
     if (isDaemonEndpointGoneError(error)) {
       throw new TerminalHostGoneError()
     }
-    // Why: only the process that owns the PTY answers this, so its absence is an observed exit.
+    // Only typed absence from the owning registry authorizes retiring the process.
     if (!(error instanceof SessionNotFoundError)) {
       throw error
     }
     const ownerBeforeRetire = args.resolveOwner?.()
     if (ownerBeforeRetire && !isSameStablePaneOwner(ownerBeforeRetire, owner)) {
       return { lostTo: ownerBeforeRetire }
+    }
+    if (args.attachOnlyView) {
+      // Main-started views reuse the bound ID and its terminal history.
+      throw new Error(PANE_NOT_LIVE_ERROR)
     }
     // The adoption holds the pane's reservation, so its fresh bind can swap the dead binding.
     const kept = args.keepAbsentBinding ? keepAbsentPaneBindingForSwap(args, owner) : null

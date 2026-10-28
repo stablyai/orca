@@ -15,14 +15,13 @@ export abstract class AgentBrowserBridgeCaptureCommands extends AgentBrowserBrid
     browserPageId?: string
   ): Promise<BrowserScreenshotResult> {
     const screenshotFormat = format === 'jpeg' ? 'jpeg' : 'png'
-    // Why: agent-browser writes the screenshot to a temp file and returns its path; read it and return base64.
     return this.enqueueTargetedCommand(worktreeId, browserPageId, async (sessionName) => {
       return this.readScreenshotFromResult(
-        await this.execAgentBrowser(sessionName, [
-          'screenshot',
-          '--screenshot-format',
-          screenshotFormat
-        ]),
+        await this.execAgentBrowser(
+          sessionName,
+          ['screenshot', '--screenshot-format', screenshotFormat],
+          { cliArgv: true }
+        ),
         screenshotFormat
       )
     })
@@ -62,7 +61,7 @@ export abstract class AgentBrowserBridgeCaptureCommands extends AgentBrowserBrid
     worktreeId?: string,
     browserPageId?: string
   ): Promise<BrowserEvalResult> {
-    // Why captured here: the queue may run this later, outside the bridged command's context.
+    // Capture the host's scope before the queue can run this command elsewhere.
     const bound = captureRemoteCliBrowserWorkBound()
     return this.enqueueTargetedCommand(
       worktreeId,

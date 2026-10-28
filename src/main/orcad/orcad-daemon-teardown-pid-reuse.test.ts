@@ -13,7 +13,7 @@ import {
 
 vi.mock('../daemon/daemon-protocol-cleanup', () => ({ cleanupDaemonForProtocol: vi.fn() }))
 
-// Windows keeps a dead parent's pid in ppid and reuses pids, so old processes can claim the daemon.
+// Windows preserves dead-parent PPIDs and reuses PIDs; older children can falsely claim the daemon.
 describe('daemon descendant walk under Windows pid reuse', () => {
   afterEach(() => {
     __setDaemonProcessTableReaderForTests()
@@ -40,7 +40,6 @@ describe('daemon descendant walk under Windows pid reuse', () => {
     return root
   }
 
-  /** Records the tree from `before`, then tears down against `after`; resolves to the error, if any. */
   async function teardown(
     root: string,
     before: WindowsProcessIdentityRow[],
@@ -118,7 +117,6 @@ describe('daemon descendant walk under Windows pid reuse', () => {
     const linker = { pid: daemonPid, ppid: 1, name: 'link.exe', creationTimeMs: 9_000 }
     const telemetry = { pid: 2_904, ppid: daemonPid, name: 'vctip.exe', creationTimeMs: 9_500 }
     const root = profile(daemonPid, onTestFinished)
-    // The daemon's own orphan still counts; the new holder's child does not.
     expect(await teardown(root, [daemon, orphan], [linker, orphan, telemetry])).toMatchObject(
       leaked(`OpenConsole.exe 77 (ppid ${daemonPid}, created 6000)`)
     )

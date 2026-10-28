@@ -1,24 +1,41 @@
+import { YOLO_TUI_AGENT_ENV } from './tui-agent-permissions'
 import type { AgentLaunchPreferences } from './agent-session-host-authority'
+import type { AgentType } from './agent-status-types'
+import {
+  readLaunchPermissionChoice,
+  agentPermissionHasTerminalChoice
+} from './tui-agent-permission-choice'
+import { isTuiAgent } from './tui-agent-config'
+import { composeAgentLaunchModel } from './agent-session-option-launch'
 
-/** Session options as the model, effort and mode a launch starts with; one converter for every lane,
- *  so a structured create and a terminal launch read the same picks the same way. */
+/** Compose model/effort for this terminal; send permission mode only where the agent has a flag. */
 export function toAgentLaunchPreferences(
-  sessionOptions: Readonly<Record<string, unknown>> | null | undefined
+  sessionOptions: Readonly<Record<string, unknown>> | null | undefined,
+  agent: AgentType
 ): AgentLaunchPreferences | undefined {
   if (!sessionOptions) {
     return undefined
   }
-  const readString = (key: keyof AgentLaunchPreferences): string | undefined => {
-    const value = sessionOptions[key]
-    return typeof value === 'string' && value.trim() ? value.trim() : undefined
-  }
-  const model = readString('model')
-  const effort = readString('effort')
-  const mode = readString('mode')
+  const model = composeAgentLaunchModel(agent, sessionOptions)
+  const effort =
+    typeof sessionOptions.effort === 'string' && sessionOptions.effort.trim()
+      ? sessionOptions.effort.trim()
+      : undefined
+  const mode = readLaunchPermissionChoice(sessionOptions)
   const preferences: AgentLaunchPreferences = {
     ...(model ? { model } : {}),
     ...(effort ? { effort } : {}),
-    ...(mode ? { mode } : {})
+    ...(mode && isTuiAgent(agent) && agentPermissionHasTerminalChoice(agent, mode) ? { mode } : {})
   }
   return Object.keys(preferences).length > 0 ? preferences : undefined
+}
+
+/** Authority v1 cannot carry a composed per-launch permission environment. */
+export function agentPermissionNeedsPreparedCommand(
+  agent: AgentType,
+  applied: Readonly<Record<string, unknown>> | null | undefined
+): boolean {
+  return (
+    Object.hasOwn(YOLO_TUI_AGENT_ENV, agent) && readLaunchPermissionChoice(applied) !== undefined
+  )
 }

@@ -38,7 +38,7 @@ function cancelPendingStarts(owner: WebContents, filePath: string): void {
   }
 }
 
-// Why: a reloaded, crashed or closed renderer has lost its sessions, so its kernels go with it.
+// Renderer page teardown must also retire its notebook kernels.
 function kernelsOf(owner: WebContents): Map<string, NotebookKernel> {
   let kernels = kernelsByOwner.get(owner)
   if (!kernels) {
@@ -61,8 +61,7 @@ function kernelsOf(owner: WebContents): Map<string, NotebookKernel> {
   return kernels
 }
 
-// Why the notebook path is user-named: it is an open tab, and it only picks the kernel's cwd and
-// the venv folder. Inside a project it resolves to the real file, so the cwd is its real folder.
+// Open notebook paths select cwd/venv; project paths canonicalize to their real file.
 export function registerNotebookHandlers(store: Store): void {
   ipcMain.handle(
     'notebook:listPythonEnvironments',
@@ -71,7 +70,7 @@ export function registerNotebookHandlers(store: Store): void {
       args: { filePath: string; rootPath: string | null; runWorkspaceInterpreters: boolean }
     ): Promise<PythonEnvironments> => {
       await resolveUserNamedRegularFile(args.filePath, store)
-      // Why the unresolved path: rootPath is in the same (possibly symlinked) form, e.g. /tmp.
+      // Environment listing needs the same unresolved spelling as rootPath.
       return listPythonEnvironments(args.filePath, args.rootPath, {
         runWorkspaceInterpreters: args.runWorkspaceInterpreters === true
       })
@@ -90,7 +89,6 @@ export function registerNotebookHandlers(store: Store): void {
       if (owner.isDestroyed()) {
         return { status: 'failed', detail: 'The notebook closed before its kernel started.' }
       }
-      // Each start stays independent until the notebook or issuing document closes.
       const requestToken = randomUUID()
       const controller = startCancellations.begin(event, requestToken)
       if (!controller) {
@@ -102,8 +100,7 @@ export function registerNotebookHandlers(store: Store): void {
       starts.set(args.filePath, pending)
       pending.add(controller)
       try {
-        // Why the real file's folder: relative imports and data paths resolve as on disk, even when
-        // the notebook was opened through a link.
+        // Use the real notebook folder so relative imports and data paths follow disk layout.
         const cwd = dirname(await realpath(await resolveUserNamedRegularFile(args.filePath, store)))
         if (controller.signal.aborted || owner.isDestroyed()) {
           return { status: 'failed', detail: 'The notebook closed before its kernel started.' }

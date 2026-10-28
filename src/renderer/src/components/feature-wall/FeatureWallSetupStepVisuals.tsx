@@ -2,11 +2,6 @@ import type { JSX } from 'react'
 import { FolderGit2, MousePointer2 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
-// Why: these static marks replace storyboarded animations for setup steps whose
-// meaning reads instantly as a single mark — quieter than a looping demo.
-// Each compresses its step to one recognizable idea drawn from the old animation.
-
-// Mac-style terminal traffic-light dots — the signature of an Orca terminal pane.
 function TerminalDots(): JSX.Element {
   return (
     <span className="flex gap-[3px]">
@@ -17,8 +12,6 @@ function TerminalDots(): JSX.Element {
   )
 }
 
-// Why: a small, static mark of two parallel worktrees — quieter than an animated
-// storyboard, which read as cluttered for a step whose meaning is just "two isolated spaces."
 export function SetupWorkspacesVisual(): JSX.Element {
   return (
     <div aria-hidden className="relative h-28 w-[156px] shrink-0">
@@ -45,8 +38,6 @@ function WorktreeGlyphPanel(props: { className?: string }): JSX.Element {
   )
 }
 
-// Use Orca's browser: a browser pane with a cursor grabbing one highlighted
-// element — the point-and-send-to-agent idea compressed into a single mark.
 export function SetupBrowserVisual(): JSX.Element {
   return (
     <div aria-hidden className="relative h-28 w-[156px] shrink-0">
@@ -67,8 +58,6 @@ export function SetupBrowserVisual(): JSX.Element {
   )
 }
 
-// Start work in multiple repos: two project cards, each a folder + name and a
-// live worktree row (emerald dot) — your repos, each running their own work.
 export function SetupMultipleReposVisual(): JSX.Element {
   return (
     <div aria-hidden className="flex w-[156px] shrink-0 flex-col gap-2.5">

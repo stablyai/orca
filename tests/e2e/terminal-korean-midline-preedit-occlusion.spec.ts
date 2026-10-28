@@ -1,22 +1,6 @@
-/**
- * Headless end-to-end coverage for #12545: a mid-line Korean composition must not swallow the
- * character after the cursor.
- *
- * The preedit overlay is an opaque, absolutely-positioned box over the grid, so every cell its
- * bounding rect covers is unreadable while the composition is open. That gives the invariant
- * asserted here — **the overlay renders every committed cell it covers** — and it is the one the
- * bug broke: the box covered `하` and drew only `가`. It is measured from the overlay's real rect
- * against the real cell grid, which is what makes it an on-screen assertion rather than a
- * `textContent` one; a DOM emulator reports every rect as zero and cannot see the difference.
- *
- * Reference terminal implementations do not settle this by geometry. Two mature ones compose marked
- * text into the grid rather than into a floating box, and both still blank the cells under it — so
- * moving off the overlay would not fix the report. Rendering the covered tail is what does.
- *
- * Composition is driven through CDP `Input.imeSetComposition`, so this runs in the normal headless
- * project with no native input source. The row is written straight to the emulator because the
- * defect is in what the overlay draws over the buffer, not in anything reaching the pty.
- */
+// #12545: an opaque mid-line preedit covered 하 but drew only 가; require every covered committed cell to be rendered.
+// Compare real overlay/grid geometry; textContent and zero-rect DOM emulators cannot distinguish occlusion.
+// CDP drives composition without native IME; write the grid directly because this tests drawing rather than PTY delivery.
 import type { Page } from '@stablyai/playwright-test'
 import { expect, test } from './helpers/orca-app'
 import { closeTerminalImePaneArena, openTerminalImePaneArena } from './terminal-ime-pane-arena'
@@ -28,14 +12,8 @@ import {
 } from './terminal-ime-midline-occlusion-probe'
 import { samplePreeditOverlay } from './terminal-ime-preedit-overlay-probe'
 
-/**
- * Waits for the preedit to reach the overlay at a non-zero size, then samples once.
- *
- * Sampled once rather than polled: the pane runs a live shell that can repaint the row out from
- * under the composition, so only the frame the composition opened on carries the state the
- * assertion is about. The readiness gate is deliberately blind to the tail, so it holds identically
- * with and without the fix and the occlusion assertion is what discriminates.
- */
+// Sample once after nonzero readiness, before the live shell can repaint the composition row.
+// Readiness must ignore the tail so it passes both builds and leaves occlusion as the discriminating assertion.
 async function sampleOpenComposition(
   page: Page,
   expectedPreedit = '가'
@@ -57,12 +35,7 @@ function describeOcclusion(sample: MidlinePreeditOcclusionSample): string {
   return `covers ${JSON.stringify(sample.hiddenByOverlay)} / renders ${JSON.stringify(sample.overlayText)}`
 }
 
-/**
- * The invariant, stated so it survives a different cell width: every committed cell the overlay
- * covers must appear in what it draws. How MANY cells it covers is a function of the runner's
- * font metrics — 34.4px over an 8.43px grid spans four columns where an 8px grid spans two — so
- * asserting the covered text verbatim pins the machine, not the behaviour.
- */
+// Require every covered committed cell in rendered text; font metrics change the covered span, so exact tail text would pin the runner.
 function rendersEverythingItCovers(sample: MidlinePreeditOcclusionSample): boolean {
   return sample.overlayText.includes(sample.hiddenByOverlay)
 }
@@ -114,8 +87,7 @@ test.describe('Terminal mid-line Korean preedit occlusion', () => {
     const arena = await openTerminalImePaneArena(orcaPage)
     let completed = false
     try {
-      // The issue's repro: 안녕하세요, then CUB 6. Each Hangul syllable is two cells, so the
-      // cursor lands on 하.
+      // 안녕하세요 then CUB 6 places the cursor on 하 (two cells per syllable).
       await writeToActiveTerminal(orcaPage, '\x1b[2J\x1b[H안녕하세요\x1b[6D')
       await setImeComposition(arena.session, '가')
 
@@ -126,9 +98,6 @@ test.describe('Terminal mid-line Korean preedit occlusion', () => {
         null
       )
 
-      // The load-bearing assertion, and the only one that reads the overlay's geometry against the
-      // grid: an opaque box that covers committed cells has to reproduce them, or the user loses
-      // text for the length of the composition.
       expect(
         sample.hiddenByOverlay.length,
         `the overlay covers no committed text, so there is nothing to assert — ${describeOcclusion(sample)}`
@@ -151,8 +120,7 @@ test.describe('Terminal mid-line Korean preedit occlusion', () => {
   test('leaves the end-of-row composition untouched, with nothing covered to render', async ({
     orcaPage
   }, testInfo) => {
-    // Passes before and after the fix by design: the guard is against over-correcting into
-    // rendering a tail where the row has none.
+    // Pass before/after the fix to guard against drawing a tail where the row has none.
     const arena = await openTerminalImePaneArena(orcaPage)
     let completed = false
     try {

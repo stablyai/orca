@@ -23,14 +23,13 @@ export function registerBaseRefQueryHandlers(store: Store): void {
     ): Promise<BaseRefDefaultResult> => {
       const repo = getRepoForExecutionHost(store, args.repoId, args.hostId)
       if (!repo || isFolderRepo(repo)) {
-        // Why: folder repos have no git state for a base ref; return null + 0 so the renderer skips a fabricated default.
+        // Folder projects have no Git base ref; null prevents a fabricated renderer default.
         return { defaultBaseRef: null, remoteCount: 0 }
       }
-      // Why: an SSH repo's git data lives on a host this process does not serve.
+      // SSH Git state is unavailable to this local handler.
       if (getRepoRoutingConnectionId(repo)) {
         return { defaultBaseRef: null, remoteCount: 0 }
       }
-      // Why: run in parallel; a remote-count failure must not break default detection.
       const [defaultBaseRef, remoteCount] = await Promise.all([
         getBaseRefDefault(repo.path),
         getRemoteCount(repo.path)
@@ -72,8 +71,7 @@ async function searchBaseRefDetailsForRepo(
   if (!isRepoSearchRefsRequestLimit(requestedLimit)) {
     return []
   }
-  // Keep the public IPC shape forgiving while bounding Git and retained results
-  // for callers that request an unusually large page.
+  // Bound Git work and retained results while accepting oversized IPC page requests.
   const limit = clampRepoSearchRefsLimit(requestedLimit)
   if (getRepoRoutingConnectionId(repo)) {
     return []
@@ -89,7 +87,7 @@ function getRepoForExecutionHost(
   if (!hostId) {
     return store.getRepo(repoId) ?? null
   }
-  // Why: repo ids can collide across local and SSH hosts; read must use the same host the Settings pane selected for the write.
+  // Repo IDs can collide across hosts; read the host selected for the corresponding write.
   return (
     store
       .getRepos()

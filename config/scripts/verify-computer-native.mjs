@@ -34,6 +34,12 @@ const checks = [
     enabled: true
   },
   {
+    name: 'Linux keyboard synthesis tests',
+    command: 'python3',
+    args: ['native/computer-use-linux/runtime_keyboard_test.py'],
+    enabled: true
+  },
+  {
     name: 'native provider argument guardrails',
     run: verifyNativeArgumentGuardrails,
     enabled: true
@@ -52,6 +58,12 @@ const checks = [
       ].join(';')
     ],
     enabled: process.platform === 'linux'
+  },
+  {
+    name: 'Linux set_value tests',
+    command: 'python3',
+    args: ['native/computer-use-linux/set_value_test.py'],
+    enabled: true
   },
   {
     name: 'Windows provider PowerShell parse',

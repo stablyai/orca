@@ -24,11 +24,13 @@ import type {
 } from '../../src/shared/runtime-types'
 import { PROTOCOL_VERSION } from '../../src/main/daemon/types'
 import { makePaneKey } from '../../src/shared/stable-pane-id'
+import { getDefaultRepoHookSettings } from '../../src/shared/constants'
 import {
   buildFakeAgentCommandOverride,
   FAKE_AGENT_WINDOWS_SHELL
 } from './helpers/fake-agent-command-override'
 import { FAKE_CODEX_LAUNCH_PROBES_SOURCE } from './helpers/fake-codex-launch-probes'
+import { LAYOUT_OWNER_BUILD } from './helpers/layout-owner-build'
 
 type SpawnEvent = { args: string[]; pid: number }
 type TerminalIdentity = Pick<
@@ -78,16 +80,13 @@ const fakeCodexCommand = buildFakeAgentCommandOverride(
 )
 
 const test = base.extend({
-  launchEnv: [
-    {
-      PATH: `${fakeCliDir}${path.delimiter}${process.env.PATH ?? ''}`,
-      ORCA_E2E_CODEX_SPAWN_LEDGER: spawnLedgerPath,
-      ORCA_E2E_SETUP_LEDGER: setupLedgerPath,
-      ORCA_E2E_CANARY_LEDGER: canaryLedgerPath,
-      ORCA_E2E_SIGNAL_LEDGER: signalLedgerPath
-    },
-    { option: true }
-  ]
+  launchEnv: {
+    PATH: `${fakeCliDir}${path.delimiter}${process.env.PATH ?? ''}`,
+    ORCA_E2E_CODEX_SPAWN_LEDGER: spawnLedgerPath,
+    ORCA_E2E_SETUP_LEDGER: setupLedgerPath,
+    ORCA_E2E_CANARY_LEDGER: canaryLedgerPath,
+    ORCA_E2E_SIGNAL_LEDGER: signalLedgerPath
+  }
 })
 
 function readSpawnLedger(): SpawnEvent[] {
@@ -421,7 +420,8 @@ async function faultProjectionAndActivate(
     },
     {
       activeTabId,
-      identities: terminals.map(({ tabId, leafId }) => ({ tabId, leafId })),
+      // Why none with the switch on: main's frames own the bindings, and no window write drops one.
+      identities: LAYOUT_OWNER_BUILD ? [] : terminals,
       worktreeId
     }
   )
@@ -540,18 +540,20 @@ test('adopts runtime-owned agent and Setup PTYs on first mount', async ({
     kind: 'git'
   })
   const repoId = added.result.repo.id
+  const hookDefaults = getDefaultRepoHookSettings()
   await expect
     .poll(() =>
       orcaPage.evaluate(
-        async ({ repoId, command, windowsShell }) => {
+        async ({ repoId, command, windowsShell, hookDefaults }) => {
           const state = window.__store?.getState()
           await state?.fetchRepos({ runtimeEnvironmentId: null, throwOnError: true })
           const repo = window.__store?.getState().repos.find((candidate) => candidate.id === repoId)
           if (!repo) {
             return false
           }
+          const hookSettings = repo.hookSettings ?? hookDefaults
           await window.__store?.getState().updateRepo(repoId, {
-            hookSettings: { ...repo.hookSettings, setupAgentStartupPolicy: 'start-immediately' }
+            hookSettings: { ...hookSettings, setupAgentStartupPolicy: 'start-immediately' }
           })
           await window.__store?.getState().updateSettings({
             agentCmdOverrides: { codex: command },
@@ -561,7 +563,7 @@ test('adopts runtime-owned agent and Setup PTYs on first mount', async ({
           })
           return true
         },
-        { repoId, command: fakeCodexCommand, windowsShell: FAKE_AGENT_WINDOWS_SHELL }
+        { repoId, command: fakeCodexCommand, windowsShell: FAKE_AGENT_WINDOWS_SHELL, hookDefaults }
       )
     )
     .toBe(true)

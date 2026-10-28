@@ -1,11 +1,6 @@
 import type { AgentSessionProviderContextBoundary } from './agent-session-provider-context'
-// ─── Native chat conversation model (cross-process, IPC-serializable) ────────
-// The single renderer-facing conversation contract for the native chat view.
-// Assembled from layered sources in priority order: on-disk JSONL transcripts,
-// live agent-hook events, and (as a degraded fallback) scrollback scrape — see
-// docs/plans/2026-06-17-001-feat-native-chat-view-plan.md (KTD2). Everything
-// here must be plain JSON: these values cross the IPC boundary, so no class
-// instances, Maps, or Dates.
+// IPC-serializable conversation contract: plain JSON only, no classes/Maps/Dates. Sources prefer transcripts, then hooks,
+// then degraded scrollback; docs/plans/2026-06-17-001-feat-native-chat-view-plan.md (KTD2).
 
 import type {
   AgentSessionBackgroundTask,
@@ -23,19 +18,15 @@ import type {
   AgentJournalToolCallState
 } from './agent-session-journal-types'
 import type { AgentType } from './agent-status-types'
-import type { NativeChatToolMetadata } from './native-chat-tool-identity'
-import type { AgentMessageSource } from './agent-session-message-source'
+import type { NativeChatToolMetadata } from './native-chat/tools/native-chat-tool-identity'
+import type { AgentMessageSource } from './agent-session/agent-session-message-source'
 
 export type { AgentType }
 
-/** Where a message came from. Used for dedup precedence: a transcript message
- *  supersedes a hook message, which supersedes a scrape message. */
 export const NATIVE_CHAT_SOURCES = ['transcript', 'hook', 'scrape'] as const
 export type NativeChatSource = (typeof NATIVE_CHAT_SOURCES)[number]
 
-/** Priority rank for a source — higher wins when two sources describe the same
- *  turn. Kept as data so the assembler's precedence is a single lookup, not a
- *  chain of conditionals. */
+/** Higher source authority wins deduplication of the same turn. */
 export const NATIVE_CHAT_SOURCE_PRIORITY: Record<NativeChatSource, number> = {
   transcript: 3,
   hook: 2,
@@ -45,7 +36,6 @@ export const NATIVE_CHAT_SOURCE_PRIORITY: Record<NativeChatSource, number> = {
 export const NATIVE_CHAT_ROLES = ['user', 'assistant', 'tool', 'reasoning', 'system'] as const
 export type NativeChatRole = (typeof NATIVE_CHAT_ROLES)[number]
 
-/** Plain prose / markdown. The assistant body, a user prompt, reasoning text. */
 export type NativeChatTextBlock = {
   type: 'text'
   text: string
@@ -72,9 +62,7 @@ export type NativeChatTextBlock = {
   usageLimitTurnItemId?: string
 }
 
-/** A tool invocation by the agent. `input` is the (already-serialized) tool
- *  argument payload; kept as `unknown` because each tool's shape differs and
- *  the renderer only previews it. */
+/** Tool arguments remain unknown because provider shapes differ; renderers preview the serialized payload. */
 export type NativeChatToolCallBlock = NativeChatToolMetadata & {
   type: 'tool-call'
   name: string
@@ -97,9 +85,7 @@ export type NativeChatEditPatchHunk = {
   lines: string[]
 }
 
-/** Hunks the provider resolved against the real file before reporting the edit.
- *  Claude supplies these on its edit results; Codex resolves equivalently before
- *  sending, so its patch already carries ranges and needs no companion. */
+/** Provider-resolved file hunks: Claude attaches them to results; Codex resolves ranges in its patch before sending. */
 export type NativeChatEditPatch = {
   filePath?: string
   hunks: NativeChatEditPatchHunk[]
@@ -118,8 +104,7 @@ export type NativeChatToolResultBlock = {
   fullOutputItemId?: string
 }
 
-/** A reference to an image, by local path or remote URL. Exactly the field
- *  that applies is populated; `alt` is optional descriptive text. */
+/** Local path or remote URL, exactly one populated; optional alt text. */
 export type NativeChatImageRefBlock = {
   type: 'image-ref'
   path?: string
@@ -127,11 +112,8 @@ export type NativeChatImageRefBlock = {
   alt?: string
 }
 
-/** Lifecycle of one spawned child agent, as the display collapses it.
- *  `unverifiable` is the repo's loss-of-contact verdict (see
- *  docs/reference/ssh-execution-boundary.md): the child stopped reporting and
- *  nothing proves it exited. Every in-flight provider state collapses to
- *  `working`; `idle` is a child that exists but is not currently working. */
+/** Collapse in-flight provider states to working. idle means existing but inactive; unverifiable means contact lost without proof of exit
+ * (docs/reference/ssh-execution-boundary.md). */
 export const NATIVE_CHAT_SUBAGENT_STATES = [
   'working',
   'idle',
@@ -157,8 +139,7 @@ export type NativeChatSubagentEntry = {
   settledAt?: number
 }
 
-/** One spawn group's roster, revised in place as its children report activity.
- *  Provider-agnostic on purpose: the Codex and Claude lanes both feed this. */
+/** Provider-neutral roster revised in place by Claude/Codex activity. */
 export type NativeChatSubagentGroupBlock = {
   type: 'subagent-group'
   /** Stable group key — the parent turn that spawned these children. */
@@ -166,9 +147,7 @@ export type NativeChatSubagentGroupBlock = {
   agents: NativeChatSubagentEntry[]
 }
 
-/** One subagent's own row: written where it was spawned and revised in place for every later
- *  change and run. Siblings sharing `groupId` and `parentId` draw as one group, which readers
- *  derive; no row lists them together. */
+/** Individual subagent row revised at its spawn position. Readers derive sibling groups from groupId/parentId; no row lists them together. */
 export type NativeChatSubagentBlock = NativeChatSubagentEntry & {
   type: 'subagent'
   /** The turn that spawned it: siblings with the same key draw together. */
@@ -184,15 +163,8 @@ export type NativeChatSubagentBlock = NativeChatSubagentEntry & {
   background?: true
 }
 
-/** One provider background task — a shell command, workflow or monitor run
- *  beside the turn — as its own durable row, revised in place from the
- *  provider's lifecycle frames. Sibling of the roster block rather than a
- *  one-child roster: a backgrounded `sleep 20` is not a subagent, and a group
- *  holding it would read "Ran 1 subagent".
- *
- *  Outcome is a STATUS FIELD, never a red row: a task that failed is a task
- *  with a terminal state, and the row that reports it is the same row that
- *  reported it starting. */
+/** Durable provider task row, revised in place from lifecycle frames. Shell/workflow/monitor tasks are distinct from subagent rosters.
+ * Failures change state on the same row rather than becoming separate red error rows. */
 export type NativeChatBackgroundTaskBlock = {
   type: 'background-task'
   /** Provider task id — the row key, stable across a resume. */
@@ -202,9 +174,7 @@ export type NativeChatBackgroundTaskBlock = {
   label: string
   /** Run state, in the vocabulary the background-tasks strip already renders. */
   state: AgentSessionBackgroundTaskRunState
-  /** The tool call that spawned this task. The transcript has no structural
-   *  parent link for a row, so the relationship is carried as a field here and
-   *  consumers co-locate the row with that tool call. */
+  /** Structural link used to co-locate the task with its spawning call; transcript rows have no separate parent relationship. */
   parentToolUseId?: string
   /** The provider's own sentence about the outcome, when it sent one. */
   summary?: string
@@ -228,21 +198,18 @@ export type NativeChatBlock =
   | NativeChatSubagentBlock
   | NativeChatBackgroundTaskBlock
 
-/** A transcript row. Structured rows carry the journal row's producer linkage, so
- *  "who said this" survives the projection; terminal-backed rows carry none. */
+/** Structured rows preserve journal producer linkage; terminal-backed rows omit it. */
 export type NativeChatMessage = AgentJournalProducerLinkage & {
-  /** Stable across re-reads/appends so the assembler and the renderer list can
-   *  dedup and key by it. */
+  /** Stable dedup/list identity across re-reads and appends. */
   id: string
   role: NativeChatRole
   blocks: NativeChatBlock[]
-  /** Epoch ms when the message was produced, or null when the source could not
-   *  supply one (e.g. some scrape segments). Null sorts before any timestamp. */
+  /** Epoch ms; null when unavailable (e.g. scrape). */
   timestamp: number | null
   source: NativeChatSource
   /** Optional provider row cursor; split projections share it for whole-row paging. */
   transcriptOffset?: number
-  /** Display order when the provider's sequence differs from its stable paging cursor. */
+  /** Canonical display position: JSONL record byte start or database provider sequence, independent of clocks/cursors. */
   transcriptOrder?: number
   /** Model id that produced an assistant response, as the provider API names it. */
   model?: string
@@ -250,11 +217,9 @@ export type NativeChatMessage = AgentJournalProducerLinkage & {
   provider?: string
   /** On assistant responses whose accounting reflects the prompt the model read. */
   usage?: AgentSessionTokenUsage
-  /** Optional explicit turn key. When present, two messages with the same
-   *  `turnId` are treated as the same turn for dedup regardless of `id`. */
+  /** Explicit turn key overrides differing ids for turn deduplication. */
   turnId?: string
-  /** `id` of the transcript row this one follows in the agent's own conversation
-   *  tree, where the decoder carries the agent's link. Absent from older hosts. */
+  /** Provider conversation-tree predecessor id; older hosts omit it. */
   parentId?: string
   /** How a user message was delivered when it was not an ordinary prompt. */
   sentAs?: AgentJournalMessageSendMode
@@ -270,22 +235,17 @@ export type NativeChatMessage = AgentJournalProducerLinkage & {
   from?: AgentMessageSource
   /** Accepted but not yet handed to the agent: drawn after everything the agent has done. */
   queued?: true
-  /** Shown as not sent: in no turn, so a newer turn's bar and clock never land on it. Drawn where
-   *  the journal recorded it, or after the conversation when it holds no place there. */
+  /** Unsent rows belong to no turn. Draw at journal position, or after the conversation when unplaced. */
   unsent?: true
   /** This client's send, made while the chat read Stopping, that the host has not recorded yet. */
   sentWhileStopping?: true
-  /** This client's send the host has not recorded, which only the user's Retry sends again: the
-   *  host holds nothing for it, so it never waits behind a turn. */
+  /** Unrecorded client send awaiting explicit Retry; host holds nothing, so it cannot wait behind a turn. */
   awaitsRetry?: true
-  /** A send a Stop took back (its submission withdrawn): no rail tick, as the conversation
-   *  outline the host serves leaves it out. */
+  /** Withdrawn sends have no rail tick because the host conversation outline excludes them. */
   stoppedBeforeStart?: true
-  /** Set only by the structured projection, on rows the journal holds, and ranks
-   *  them ahead of time. Terminal-backed messages never carry it, and worker reads strip it. */
+  /** Structured journal ordering outranks timestamps; terminal transcripts omit it and worker reads strip it. */
   journalPosition?: AgentJournalPosition
-  /** Set only by the tool fold, on a row that absorbed later tool rows: the newest
-   *  absorbed row's journal position. The row still sorts by its own. */
+  /** Newest absorbed tool row’s position; the folded row still sorts by its own position. */
   foldedJournalPosition?: AgentJournalPosition
   /** Private presentation row; raw host messages never publish this fold-only marker. */
   unpairedToolResults?: true
@@ -318,9 +278,7 @@ export type NativeChatTurnLifecycleState = (typeof NATIVE_CHAT_TURN_LIFECYCLE_ST
 
 export const NATIVE_CHAT_INTERRUPTED_STATUS_TEXT = 'Conversation interrupted'
 
-/** A provider-authored turn boundary recovered from the transcript itself.
- *  Unlike assistant prose, this is explicit lifecycle evidence (completion or
- *  interruption records) and is safe to replay. */
+/** Replay-safe provider completion/interruption evidence recovered from transcripts, unlike assistant prose. */
 export type NativeChatTurnLifecycle = {
   state: NativeChatTurnLifecycleState
   /** Stable provider id when available, otherwise the JSONL record position. */
@@ -341,17 +299,12 @@ export type NativeChatSessionStatus = (typeof NATIVE_CHAT_SESSION_STATUSES)[numb
 export type NativeChatSession = {
   messages: NativeChatMessage[]
   status: NativeChatSessionStatus
-  /** Provider-owned conversation id once known; null before the agent reports
-   *  one (the view shows live hook state and backfills later). */
+  /** Provider conversation id; null until reported while the view shows live hooks and later backfills. */
   sessionId: string | null
   agent: AgentType
   /** Human-readable error when `status === 'error'`. */
   error?: string
 }
-
-// ─── Block type guards ──────────────────────────────────────────────────────
-// Narrowing helpers so consumers don't repeat `block.type === '…'` string
-// literals. Exported for use by the assembler, renderer, and tests.
 
 export function isTextBlock(block: NativeChatBlock): block is NativeChatTextBlock {
   return block.type === 'text'
@@ -365,9 +318,7 @@ export function isToolResultBlock(block: NativeChatBlock): block is NativeChatTo
   return block.type === 'tool-result'
 }
 
-/** The provider-authored interrupt row the transcript decoders emit (Claude's
- *  `interruptedMessageId` record, Codex's `turn_aborted`). The turn it ends
- *  never delivers results for the tool calls it left in flight. */
+/** Provider-authored Claude interruptedMessageId/Codex turn_aborted rows abandon in-flight tool calls without results. */
 export function isInterruptedStatusMessage(message: NativeChatMessage): boolean {
   return (
     message.role === 'system' &&

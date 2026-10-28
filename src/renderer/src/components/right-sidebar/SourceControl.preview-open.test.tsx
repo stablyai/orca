@@ -279,33 +279,37 @@ function clickBranchRow(init: MouseEventInit = {}): void {
 }
 
 describe('SourceControl preview row opens', () => {
-  it('passes preview=true when plain uncommitted row clicks open diff tabs', () => {
+  it.each([
+    ['src/file.ts', 'src/staged.ts', 'typescript'],
+    ['report.html', 'staged.html', 'html'],
+    ['REPORT.HTM', 'STAGED.HTM', 'html']
+  ])('opens %s and %s as preview diff tabs on plain clicks', (path, stagedPath, language) => {
     resetState({
       gitStatusByWorktree: {
         [mocks.activeWorktree.id]: [
-          gitEntry({ path: 'src/file.ts' }),
-          gitEntry({ path: 'src/staged.ts', area: 'staged' })
+          gitEntry({ path }),
+          gitEntry({ path: stagedPath, area: 'staged' })
         ]
       }
     })
     renderSourceControl()
 
-    clickUncommitted('src/file.ts')
-    clickUncommitted('src/staged.ts')
+    clickUncommitted(path)
+    clickUncommitted(stagedPath)
 
     expect(mocks.calls.openDiff).toHaveBeenCalledWith(
       mocks.activeWorktree.id,
-      '/repo/wt/src/file.ts',
-      'src/file.ts',
-      'typescript',
+      `/repo/wt/${path}`,
+      path,
+      language,
       false,
       { targetGroupId: undefined, preview: true }
     )
     expect(mocks.calls.openDiff).toHaveBeenCalledWith(
       mocks.activeWorktree.id,
-      '/repo/wt/src/staged.ts',
-      'src/staged.ts',
-      'typescript',
+      `/repo/wt/${stagedPath}`,
+      stagedPath,
+      language,
       true,
       { targetGroupId: undefined, preview: true }
     )
@@ -403,7 +407,7 @@ describe('SourceControl preview row opens', () => {
     resetState({
       gitStatusByWorktree: { [mocks.activeWorktree.id]: [gitEntry({ path: 'src/file.ts' })] }
     })
-    // Why: the owner stamp routes the discard; a different focused server must not.
+    // Route discard by owner stamp even when another server is focused.
     Object.assign(mocks.activeRepo, { executionHostId: 'runtime:runtime-remote' })
     onTestFinished(() => {
       Reflect.deleteProperty(mocks.activeRepo, 'executionHostId')

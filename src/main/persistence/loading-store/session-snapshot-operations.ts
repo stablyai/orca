@@ -92,7 +92,7 @@ export class SessionSnapshotOperations {
 
   patchWorkspaceSession(patch: WorkspaceSessionPatch, hostId?: string | null): void {
     const resolved = resolveHostId(hostId)
-    // Why: the debounced hot path sends only changed slices; scalar/UI patches skip terminal normalization, topology patches keep stale-PTY protections.
+    // Scalar patches skip topology work; membership patches retain stale-binding protections.
     let next: WorkspaceSessionState = {
       ...this[sessionSnapshotOperationsContext].sessions.getWorkspaceSession(resolved),
       ...patch
@@ -104,7 +104,7 @@ export class SessionSnapshotOperations {
     if (Object.hasOwn(patch, 'browserUrlHistory')) {
       next = pruneWorkspaceSessionBrowserHistory(next)
     }
-    // Why: a unified-tabs patch skips full normalization, so it would bypass the close fence.
+    // Unified-tab patches bypass full normalization but still need close tombstones.
     if (Object.hasOwn(patch, 'unifiedTabs')) {
       next = dropClosedTerminalTabs(next)
     }

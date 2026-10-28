@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import { RELAY_HOST_CLOSE_REASON } from '../../../shared/relay-host-close-reason'
 import { RelayAuthCoordinator } from './relay-auth-coordinator'
 import type { RelayAuthContext } from './relay-auth-identity'
@@ -20,6 +20,7 @@ function coordinatorOver(readContext: () => Promise<RelayAuthContext | null>) {
 }
 
 describe('relay control close reason', () => {
+  afterEach(() => vi.useRealTimers())
   it('names the sign-out when the cloud session is gone', async () => {
     let current: RelayAuthContext | null = context
     const { broker, coordinator } = coordinatorOver(async () => current)
@@ -63,8 +64,6 @@ describe('relay control close reason', () => {
     expect(broker.closeNow).toHaveBeenCalledWith(undefined)
   })
 
-  // A signed-in desktop that merely lost the entitlement must not tell the
-  // phone to sign in — the copy would be wrong and the user has nothing to do.
   it('stays silent when the session survives but the entitlement is gone', async () => {
     let current: RelayAuthContext = context
     const { broker, coordinator } = coordinatorOver(async () => current)
@@ -79,6 +78,7 @@ describe('relay control close reason', () => {
   })
 
   it('stays silent when demand drops and the broker lingers out', async () => {
+    vi.useFakeTimers()
     let demanded = true
     const broker = { closeNow: vi.fn() }
     const coordinator = new RelayAuthCoordinator({
@@ -93,12 +93,16 @@ describe('relay control close reason', () => {
 
     demanded = false
     coordinator.reconcile()
-    await vi.waitFor(() => expect(broker.closeNow).toHaveBeenCalled())
+    await vi.advanceTimersByTimeAsync(0)
+    await vi.advanceTimersByTimeAsync(4)
+    expect(broker.closeNow).not.toHaveBeenCalled()
+    await vi.advanceTimersByTimeAsync(1)
 
+    expect(broker.closeNow).toHaveBeenCalledOnce()
     expect(broker.closeNow).toHaveBeenCalledWith(undefined)
+    coordinator.stop()
   })
 
-  // Replacing a stale broker is a reconnect, not a sign-out.
   it('stays silent when an identity switch replaces the broker', async () => {
     let current = context
     const brokers: { closeNow: ReturnType<typeof vi.fn> }[] = []

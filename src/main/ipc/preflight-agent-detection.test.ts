@@ -32,8 +32,7 @@ const {
 }))
 
 const runWslProcessMock = vi.hoisted(() => vi.fn())
-// Why the runner and not child_process: WSL agent detection goes through
-// runWslProcess now, so a child_process mock never sees it.
+// WSL detection uses runWslProcess, so child_process mocks cannot observe it.
 vi.mock('../wsl/wsl-runner', () => ({ runWslProcess: runWslProcessMock }))
 
 vi.mock('electron', () => ({
@@ -61,9 +60,7 @@ vi.mock('../../shared/node-cli-command-resolution', () => ({
   resolveCliCommands: resolveCliCommandsMock
 }))
 
-// Why (#9297): local PATH resolution is now fs-based (no where/which spawn).
-// These tests express "which commands are on PATH" via the where/which mock,
-// so route the resolver through that same mock to preserve their intent.
+// Route filesystem PATH resolution through the existing command-lookup mock.
 vi.mock('./command-path-resolver', async (importOriginal) => ({
   ...(await importOriginal<typeof LocalCommandResolver>()),
   isCommandOnLocalPath: isCommandOnLocalPathMock,
@@ -249,8 +246,7 @@ describe('preflight', () => {
   })
 
   it('detects agents via the install-dir resolver when which fails (stripped GUI PATH)', async () => {
-    // Why: cold GUI launches can run detection before shell-PATH hydration
-    // adds user install dirs, so `which` can miss runnable CLIs.
+    // Cold GUI detection can precede shell-PATH hydration; install directories remain a fallback.
     execFileAsyncMock.mockImplementation(async (command) => {
       if (command !== 'which') {
         throw new Error(`unexpected command ${String(command)}`)
@@ -280,7 +276,6 @@ describe('preflight', () => {
   })
 
   it('does not double-count an agent already found on PATH via the install-dir resolver', async () => {
-    // Why: the fallback should not duplicate ids when PATH already finds a CLI.
     execFileAsyncMock.mockImplementation(async (command, args) => {
       if (command !== 'which') {
         throw new Error(`unexpected command ${String(command)}`)
@@ -306,7 +301,6 @@ describe('preflight', () => {
   })
 
   it('treats an agent as not installed when the install-dir resolver throws', async () => {
-    // Why: transient fs errors in the fallback must not crash detection.
     execFileAsyncMock.mockImplementation(async (command) => {
       if (command !== 'which') {
         throw new Error(`unexpected command ${String(command)}`)
@@ -494,11 +488,9 @@ describe('preflight', () => {
 
     await expect(detectInstalledAgents({ wslDistro: 'Ubuntu' })).resolves.toEqual(['claude'])
     expect(runWslProcessMock).toHaveBeenCalledTimes(1)
-    // Why: the local fallback must not report host binaries as WSL binaries.
+    // Local install-directory fallback must never supply WSL results.
     expect(resolveCliCommandsMock).not.toHaveBeenCalled()
-    // Why assert the lane, not the argv: argv is the runner's contract and is
-    // pinned by its own tests. What this suite owns is that detection asks the
-    // right distro on the lane that carries the user's PATH.
+    // The runner owns argv; this suite checks distro and PATH lane.
     expect(runWslProcessMock).toHaveBeenCalledWith(
       expect.objectContaining({ distro: 'Ubuntu', loginPath: 'preferred' })
     )
@@ -524,9 +516,7 @@ describe('preflight', () => {
 
     await expect(detectInstalledAgents({ wslDefault: true })).resolves.toEqual(['codex'])
     expect(runWslProcessMock).toHaveBeenCalledTimes(1)
-    // Why: the local fallback must not leak into WSL detection.
     expect(resolveCliCommandsMock).not.toHaveBeenCalled()
-    // No distro named: the runner resolves the default.
     expect(runWslProcessMock).toHaveBeenCalledWith(
       expect.objectContaining({ distro: undefined, loginPath: 'preferred' })
     )

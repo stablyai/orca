@@ -13,7 +13,7 @@ import type { ResolvedWorktree } from './runtime-worktree-path-identity'
 vi.mock('./agent-session-record-store-slot', () => ({
   peekOpenedAgentSessionRecordStore: () => null,
   openAgentSessionRecordStoreOnce: async () => ({
-    store: { listRecords: () => [], getRecord: () => null }
+    store: { listConversations: () => [], getConversation: () => null }
   })
 }))
 

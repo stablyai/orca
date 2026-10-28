@@ -147,8 +147,7 @@ export function useTabStripOverflowNavigation({
 
     const handleStripResize = (): void => {
       updateTabStripOverflowState()
-      // If the user is pinned to the right edge, keep it pinned even as tab
-      // labels (e.g. "Terminal 5" -> branch name) expand and change scrollWidth.
+      // Keep end-pinned strips at the right edge as live labels change scrollWidth.
       if (stickToEndRef.current && !isTabStripPointerGestureActive()) {
         el.scrollLeft = Math.max(0, el.scrollWidth - el.clientWidth)
       }
@@ -231,8 +230,7 @@ export function useTabStripOverflowNavigation({
     const recorded = scrollAnchorRef.current
     if (tabOpened && !pointerGestureActive) {
       if (recorded?.activeTabId === activeTabIdRef.current) {
-        // Why: insertions around the viewed tab keep its on-screen x, the way VS Code and Chrome
-        // leave it still; only a tab that lands out of view scrolls, and the active tab docks.
+        // Preserve the viewed tab’s x through insertion; reveal only offscreen destinations while the active tab docks.
         if (recorded.anchor) {
           restoreTabStripScrollAnchor(strip, recorded.anchor)
         }
@@ -280,9 +278,7 @@ export function useTabStripOverflowNavigation({
       recordScrollAnchor()
       return
     }
-    // Why hold still: active-tab preview changes during a tab press must not move the strip under
-    // a stationary pointer before the release decides click/drag. After a close, the next tab can
-    // be far back in recent history; chasing it throws the strip around, and it docks into view.
+    // Hold the strip through tab presses and closes so it cannot slide under the pointer or chase distant MRU targets.
     if (isTabStripPointerGestureActive() || tabClosedThisCommitRef.current) {
       requestAnimationFrame(updateTabStripOverflowState)
       recordScrollAnchor()

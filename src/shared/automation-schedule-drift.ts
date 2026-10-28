@@ -1,6 +1,4 @@
-// Detects saved cron schedules whose meaning changed in the release that repaired the parser
-// (#15723, #15896). Both repairs were correct, but a persisted cadence can now fire several
-// times more — or several times less — than it did yesterday, with nothing to notice it by.
+// Detect saved cron cadence changes from parser repairs #15723/#15896, including increased and decreased frequency.
 import {
   getAutomationCronExpressionFields,
   parseCronExpression,
@@ -19,10 +17,7 @@ export type AutomationScheduleDrift = {
   currentRunsPerYear: number
 }
 
-/**
- * The pre-repair reading of a field: a bare value carrying a step lost the step, so `5/15`
- * meant `5`. A star or a range kept its step, and is left alone.
- */
+/** Pre-repair bare N/step ignored step; retain star/range step semantics. */
 function toPreRepairField(field: string): string {
   return field
     .split(',')
@@ -36,10 +31,7 @@ function toPreRepairField(field: string): string {
     .join(',')
 }
 
-/**
- * The pre-repair reading of a whole expression. Day restriction came from how many values a
- * field expanded to rather than from what the user wrote, so `1-31` read as unrestricted.
- */
+/** Pre-repair day restriction used expanded-set size, so 1-31 incorrectly appeared unrestricted. */
 function parsePreRepairCron(expression: string): ParsedCron {
   const fields = getAutomationCronExpressionFields(expression, 6)
   const parsed = parseCronExpression(fields.map(toPreRepairField).join(' '))
@@ -83,10 +75,7 @@ function runsPerYear(rule: ParsedCron, days: number): number {
   return Math.round((days / 2) * rule.hours.size * rule.minutes.size)
 }
 
-/**
- * Null when the saved cadence still means what it did before the repair. Only cron schedules
- * can drift; RRULE presets never went through the repaired field parser.
- */
+/** Only changed cron cadence drifts; RRULE presets bypassed the repaired parser. */
 export function describeAutomationScheduleDrift(
   schedule: string,
   anchor = Date.now()
@@ -110,8 +99,7 @@ export function describeAutomationScheduleDrift(
     [...current.minutes].every((minute) => previous.minutes.has(minute)) &&
     [...current.hours].every((hour) => previous.hours.has(hour))
   const { previousDays, currentDays, sameDays } = compareMatchingDays(previous, current, anchor)
-  // Compare what the schedule fires, not how it parsed: the restriction flags move on
-  // expressions whose matched days do not, and those are not worth telling anyone about.
+  // Compare actual fire dates, not changed restriction flags with unchanged cadence.
   if (sameClock && sameDays) {
     return null
   }

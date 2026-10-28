@@ -158,9 +158,7 @@ describe('Jira client credential storage', () => {
   })
 
   it('sends a non-browser User-Agent on Jira POST requests', async () => {
-    // Why: Electron's net.fetch defaults to a Chrome User-Agent, which trips
-    // Atlassian's XSRF filter on POST/PUT REST calls (issue search, create,
-    // update, comment) even under API-token auth, surfacing as a 403.
+    // Electron's Chrome UA trips Atlassian XSRF checks on token-authenticated writes.
     const siteId = 'site-alpha'
     writeJiraFiles(siteId, 'token-alpha')
     netFetchMock.mockResolvedValueOnce(
@@ -487,8 +485,7 @@ describe('Jira client credential storage', () => {
     await expect(
       jira.connect({
         siteUrl: 'jira.example.com',
-        // A username present means classic Basic auth (older Server/DC that
-        // predate PATs); the token slot carries the account password.
+        // Username selects classic Server/DC Basic auth; the token slot holds the password.
         email: 'jdoe',
         apiToken: 'account-password',
         authType: 'server'
@@ -605,8 +602,7 @@ describe('Jira client credential storage', () => {
       authType: 'server'
     })
 
-    // Two PATs (both with empty email) to the same host must not collide onto
-    // one id and silently overwrite each other — the viewer identity keys them.
+    // Same-host PAT accounts need verified viewer identity to avoid overwriting each other.
     const stored = JSON.parse(
       readFileSync(join(tempHome, '.orca', 'jira-sites.json'), 'utf-8')
     ) as {
@@ -782,8 +778,7 @@ describe('Jira site file cross-process visibility', () => {
   })
 
   it('picks up a site connected by another Orca process', async () => {
-    // Every Orca process on the machine shares ~/.orca. Loading before any site
-    // exists must not pin "disconnected" for the life of the process.
+    // Processes share ~/.orca; an initially empty read must observe later connections.
     const jira = await loadClientModule()
     expect(jira.getStatus()).toMatchObject({ connected: false, sites: [] })
 

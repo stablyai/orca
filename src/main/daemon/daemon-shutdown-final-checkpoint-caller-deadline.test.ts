@@ -13,10 +13,9 @@ import type { HistoryCheckpointResult } from './terminal-history-manager-options
 import type { SubprocessHandle } from './session-subprocess-handle'
 import type { TerminalSnapshot } from './types'
 
-// Worktree sleep threads an absolute deadline into stopAndWait; this stands in for it.
+// Model the absolute stop deadline used by worktree sleep.
 const CALLER_DEADLINE_MS = 300
-// Why well above the deadline it proves: a stop that only settles because the whole suite is slow
-// would prove nothing, and a stop that never settles must fail this test rather than hang the run.
+// Outlast the caller deadline so a stranded stop fails without the watchdog masking its behavior.
 const STOP_BUDGET_MS = 8_000
 
 function createMockSubprocess(): SubprocessHandle & { emitData: (data: string) => void } {
@@ -44,7 +43,6 @@ function createMockSubprocess(): SubprocessHandle & { emitData: (data: string) =
   }
 }
 
-/** Resolves 'timed-out' instead of hanging, so a stranded stop fails the test rather than the run. */
 async function withinBudget<T>(work: Promise<T>, budgetMs: number): Promise<T | 'timed-out'> {
   let timer: ReturnType<typeof setTimeout> | undefined
   const budget = new Promise<'timed-out'>((resolve) => {
@@ -97,8 +95,7 @@ describe('STA-4228 keep-history stop bounds only the caller wait on the final ch
   })
 
   afterEach(async () => {
-    // Why before rmSync: a keep-history stop abandons the exclusive checkpoint, and
-    // that write's tmp/rename will recreate files under the temp tree if we delete it first.
+    // Settle abandoned writes before removal; their temp-file rename can otherwise recreate the test directory.
     releaseStall?.()
     releaseStall = undefined
     if (adapter) {
@@ -116,7 +113,6 @@ describe('STA-4228 keep-history stop bounds only the caller wait on the final ch
     rmSync(dir, { recursive: true, force: true })
   })
 
-  /** Wedges one session's checkpoint at the history-write layer until explicitly released. */
   function stallCheckpointFor(stalledSessionId: string): { release: () => void } {
     const manager = adapter.getHistoryManager()
     expect(manager).not.toBeNull()
@@ -171,8 +167,7 @@ describe('STA-4228 keep-history stop bounds only the caller wait on the final ch
     expect(
       await withinBudget(rejectionOf(stopKeepingHistory(wedgedId)), STOP_BUDGET_MS)
     ).toBeInstanceOf(FinalCheckpointWaitExpiredError)
-    // Why issued only now: this is the sleep-stranding case — a stop that starts while the wedged
-    // checkpoint still owns the exclusive tail, which before this fix waited on it forever.
+    // Start the second stop while the abandoned checkpoint still owns the exclusive tail.
     expect(
       await withinBudget(rejectionOf(stopKeepingHistory(laterId)), STOP_BUDGET_MS)
     ).toBeInstanceOf(FinalCheckpointWaitExpiredError)
@@ -187,8 +182,6 @@ describe('STA-4228 keep-history stop bounds only the caller wait on the final ch
       await withinBudget(rejectionOf(stopKeepingHistory(wedgedId)), STOP_BUDGET_MS)
     ).toBeInstanceOf(FinalCheckpointWaitExpiredError)
 
-    // Why liveness and not just bookkeeping: the whole point is that an unproven snapshot must not
-    // authorize the kill, so the daemon must still answer for this session.
     expect(await adapter.probePtyLiveness(wedgedId)).toBe(true)
     expect(adapter.hasPty(wedgedId)).toBe(true)
     stall.release()
@@ -207,8 +200,6 @@ describe('STA-4228 keep-history stop bounds only the caller wait on the final ch
     ).toBeInstanceOf(FinalCheckpointWaitExpiredError)
 
     stall.release()
-    // Why this is the whole point of bounding the wait and not the work: both callers walked away,
-    // and both durable writes still land on disk — the abandoned one and the one queued behind it.
     await vi.waitFor(async () => {
       expect(await onDisk(wedgedId)).toContain('COMMITTING_OUTPUT')
       expect(await onDisk(laterId)).toContain('QUEUED_OUTPUT')

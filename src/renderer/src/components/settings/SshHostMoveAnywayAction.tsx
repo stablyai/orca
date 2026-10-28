@@ -3,6 +3,7 @@ import type { SshManagedServerStatus, SshTarget } from '../../../../shared/ssh-t
 import { useMountedRef } from '@/hooks/useMountedRef'
 import { translate } from '@/i18n/i18n'
 import { sshHostServerReassurance } from '@/ssh/ssh-host-server-setup-copy'
+import { trackSshConnect } from '@/ssh/ssh-connect-in-flight'
 import { Button } from '../ui/button'
 import {
   Dialog,
@@ -17,17 +18,14 @@ import { getManagedOrcadApi } from './use-managed-server-catalog'
 /** Offered only for a refusal that saved state alone causes. */
 export function canMoveSshHostAnyway(status: SshManagedServerStatus | undefined): boolean {
   return Boolean(
-    getManagedOrcadApi() &&
     status?.kind === 'relay' &&
     status.reason === 'refused' &&
-    status.canLeaveBehind
+    status.canLeaveBehind &&
+    getManagedOrcadApi()
   )
 }
 
-/**
- * The way out of a move refused only by saved state: move the host now and keep what can't move on
- * this computer. Unsaved drafts are never deleted, and live terminals still have to be closed.
- */
+/** Move despite saved-state refusal; leave unsaved drafts here and preserve bridged terminals’ tabs/panes. */
 export function SshHostMoveAnywayDialog({
   target,
   status,
@@ -35,7 +33,7 @@ export function SshHostMoveAnywayDialog({
   onOpenChange,
   onChanged
 }: {
-  target: SshTarget
+  target: Pick<SshTarget, 'id' | 'label'>
   status: SshManagedServerStatus | undefined
   open: boolean
   onOpenChange: (open: boolean) => void
@@ -57,7 +55,8 @@ export function SshHostMoveAnywayDialog({
     setError(null)
     try {
       await api.allowMoveLeavingBehind({ sshTargetId: target.id })
-      await window.api.ssh.connect({ targetId: target.id })
+      // Track connection so Retry/Connect join this attempt instead of dialing twice.
+      await trackSshConnect(target.id, window.api.ssh.connect({ targetId: target.id }))
       if (mountedRef.current) {
         setOpen(false)
       }
@@ -108,5 +107,40 @@ export function SshHostMoveAnywayDialog({
         </DialogFooter>
       </DialogContent>
     </Dialog>
+  )
+}
+
+export function SshHostMoveAnywayButton({
+  target,
+  status,
+  disabled = false
+}: {
+  target: Pick<SshTarget, 'id' | 'label'>
+  status: SshManagedServerStatus | undefined
+  disabled?: boolean
+}): React.JSX.Element | null {
+  const [open, setOpen] = useState(false)
+  if (!canMoveSshHostAnyway(status)) {
+    return null
+  }
+  return (
+    <>
+      <Button
+        type="button"
+        size="xs"
+        variant="default"
+        disabled={disabled}
+        onClick={() => setOpen(true)}
+      >
+        {translate('auto.components.settings.moveAnyway.action', 'Move anyway…')}
+      </Button>
+      <SshHostMoveAnywayDialog
+        target={target}
+        status={status}
+        open={open}
+        onOpenChange={setOpen}
+        onChanged={() => {}}
+      />
+    </>
   )
 }

@@ -16,7 +16,6 @@ type PluginCatalogLayoutProps = {
   children: React.ReactNode
 }
 
-/** Shared catalog chrome for both the in-app manager and a future hosted directory. */
 export function PluginCatalogLayout({
   filter,
   onFilterChange,

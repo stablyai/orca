@@ -5,10 +5,10 @@ import {
   getConnectionExecutionHostId,
   getExecutionHostLabel,
   getLocalExecutionHostLabel,
+  getRepoDialableSshTargetId,
   getRepoExecutionHostId,
   getRepoSshConnectionId,
   getSettingsFocusedExecutionHostId,
-  getSshTargetIdForExecutionHost,
   getWorktreeExecutionHostId,
   isOwnedSshTargetId,
   isRepoOnCatalogHost,
@@ -26,8 +26,7 @@ import {
 } from './execution-host'
 
 describe('execution host identity', () => {
-  // Why: the navigator cases below replace globalThis.navigator; restore it after
-  // each test so the stub can't bleed into the rest of the suite.
+  // Restore navigator stubs between tests to prevent suite leakage.
   afterEach(() => {
     vi.unstubAllGlobals()
   })
@@ -52,8 +51,7 @@ describe('execution host identity', () => {
     expect(getLocalExecutionHostLabel('linux')).toBe('Local Linux')
     expect(getLocalExecutionHostLabel('freebsd')).toBe('This computer')
 
-    // With no explicit platform, the label is derived from navigator.userAgent
-    // (the path the live host-selector dialog uses).
+    // Exercise navigator detection used by the live host selector.
     vi.stubGlobal('navigator', { userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)' })
     expect(getLocalExecutionHostLabel()).toBe('Local Windows')
 
@@ -63,8 +61,7 @@ describe('execution host identity', () => {
     vi.stubGlobal('navigator', { userAgent: 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7)' })
     expect(getLocalExecutionHostLabel()).toBe('Local Mac')
 
-    // Non-matching userAgent falls through to process.platform; compare against the
-    // explicit-platform label so the assertion is deterministic on any CI OS.
+    // Compare to the explicit platform fallback so this remains deterministic across CI hosts.
     vi.stubGlobal('navigator', { userAgent: 'totally-unknown-agent' })
     expect(getLocalExecutionHostLabel()).toBe(getLocalExecutionHostLabel(process.platform))
   })
@@ -129,32 +126,29 @@ describe('execution host identity', () => {
     expect(getWorktreeExecutionHostId({}, {}, 'runtime:focused-host')).toBe('runtime:focused-host')
   })
 
-  // These two look interchangeable and are not: one answers "which SSH target holds this row's
-  // files", the other "which connection may this client dial". They agree except on a runtime
-  // host, where a nested target exists but is not dialable from here — so the pane that reads it
-  // needs one answer and the PTY route needs the other.
+  // Runtime nested targets hold files but require their environment to dial; pane reads and client PTY routing need different answers.
   it('distinguishes the SSH target holding a row from the connection this client may dial', () => {
-    // Legacy spelling: `connectionId` alone *is* the host, so both answers agree.
     expect(getRepoSshConnectionId({ connectionId: 'openclaw' })).toBe('openclaw')
-    expect(getSshTargetIdForExecutionHost('ssh:openclaw')).toBe('openclaw')
-    // Unified spelling, no legacy field.
+    expect(getRepoDialableSshTargetId({ connectionId: 'openclaw' })).toBe('openclaw')
     expect(getRepoSshConnectionId({ executionHostId: 'ssh:m4air' })).toBe('m4air')
+    expect(getRepoDialableSshTargetId({ executionHostId: 'ssh:m4air' })).toBe('m4air')
 
-    // A row declaring itself local hands out no SSH connection, whatever the legacy field says:
-    // `local` has no SSH namespace to nest in, so the two spellings are contradicting each other.
+    // A stale connectionId contradicts local, which has no nested SSH namespace.
     expect(
       getRepoSshConnectionId({ executionHostId: 'local', connectionId: 'openclaw' })
     ).toBeNull()
+    expect(
+      getRepoDialableSshTargetId({ executionHostId: 'local', connectionId: 'openclaw' })
+    ).toBeNull()
 
-    // A runtime host does have its own namespace, and a nested target appears only in this field.
-    // Dropping it would make a nested-SSH workspace read as local — which is what decides whether
-    // this client tries to read the transcript itself.
+    // Keep runtime-nested targets or transcript routing would mistake their files for client-local files.
     expect(
       getRepoSshConnectionId({ executionHostId: 'runtime:env-a', connectionId: 'ssh-nested' })
     ).toBe('ssh-nested')
-    // ...but that id is not dialable from this client alone, so the routing answer stays null.
-    expect(getSshTargetIdForExecutionHost('runtime:env-a')).toBeNull()
-    // A runtime host with no nested target is simply not on SSH.
+    // The nested id alone is not client-dialable.
+    expect(
+      getRepoDialableSshTargetId({ executionHostId: 'runtime:env-a', connectionId: 'ssh-nested' })
+    ).toBeNull()
     expect(getRepoSshConnectionId({ executionHostId: 'runtime:env-a' })).toBeNull()
 
     // An ephemeral-VM target is an ordinary client-dialable target and stays an `ssh:` host.
@@ -184,8 +178,7 @@ describe('execution host id delimiter invariant', () => {
     })
   })
 
-  // "All hosts" is the everything-scope. Answering with it for an id that names no host shows one
-  // unroutable row as though it were on every host, which is the opposite of what it is.
+  // An invalid id denotes one unknown host; All hosts would misrepresent its routing scope.
   it('labels an id that names no host as one unknown host, not as every host', () => {
     for (const id of ['ssh:', 'ssh:a|b', 'ssh:%zz', 'runtime:', 'quantum:box'] as const) {
       expect(getExecutionHostLabel(id as never)).toBe('Unknown host')

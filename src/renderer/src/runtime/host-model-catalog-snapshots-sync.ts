@@ -52,9 +52,7 @@ function readsSavedOnly(capabilities: readonly string[] | null | undefined): boo
 // The registered-agent list each host was last preloaded from; a new list preloads again.
 const preloadedFrom = new Map<string, unknown>()
 
-/** Every agent the host registered, read saved-only so no agent's CLI starts. Nothing until the
- *  host's agents are learned (their arrival preloads), or when this list was read already and its
- *  answers were not dropped since (`again`). */
+/** Preload every registered agent saved-only without starting CLIs. Wait for host registration; skip previously read unchanged lists unless again. */
 function preloadRegisteredAgents(
   target: RuntimeClientTarget,
   executionHostId: string,
@@ -73,8 +71,7 @@ function preloadRegisteredAgents(
   )
 }
 
-/** `again` after this machine's answers were dropped. Never then is an older runtime read: its read
- *  lists when nothing is saved. */
+/** Reload after local answers drop; never read older runtimes here because missing saved lists would start listing. */
 async function preloadLocal(again: boolean): Promise<void> {
   const { settings } = useAppStore.getState()
   if (!(await localStructuredChatsInUse(settings))) {
@@ -133,14 +130,7 @@ function accountSettingsChanged(state: AppState, previous: AppState): boolean {
   )
 }
 
-/**
- * Loads each host's saved model lists into the renderer before a chat pane asks: every agent the
- * host registered, read saved-only so no agent's CLI starts — this machine's once its runtime and
- * agents are known, a paired host's at connect and each time this client regains contact. An older
- * host, whose read lists when nothing is saved, is read only for agents with a saved pick (this
- * machine) or that it answered before (paired). An account or launch setting change drops this
- * machine's lists and reads them again for the new account. Returns the unsubscribe.
- */
+/** Preload host-saved lists before chat pickers render, without starting CLIs: local after runtime/agent discovery, paired at connect/reconnect. Older hosts permit only saved-pick local agents or previously answered paired agents. Account/launch-setting changes invalidate and reload local lists. Returns unsubscribe. */
 export function installHostModelCatalogSnapshotsSync(): () => void {
   void preloadLocal(false)
   const stopLocal = subscribeLocalRuntimeCapabilitiesKnown(() => void preloadLocal(false))

@@ -143,7 +143,7 @@ export function planSidebarFeedRows(
   }
   // Each row carries its own edge (sidebar-feed-worktrees.ts); an id-keyed map would keep one host's.
   const lineageById = NO_LINEAGE_MAP
-  const retained = new Set(domains.retention?.retainedIds ?? [])
+  const retained = new Set(domains.retention?.retainedIds)
   const rankByIdentity = new Map(rankedIdentities.map((identity, rank) => [identity, rank]))
   const factsOf = (worktree: Worktree) => byIdentity.get(getWorktreeHostIdentity(worktree))?.facts
   const pairedDeviceIdsByEnvironment = new Map(
@@ -165,7 +165,7 @@ export function planSidebarFeedRows(
       isFolderWorkspace: () => false,
       repoId: (worktree) => worktree.repoId,
       hostId: (worktree) => {
-        const repo = repoMap.get(worktree.repoId)
+        const repo = index.repoOf(worktree)
         return repo ? getWorktreeExecutionHostId(worktree, repo, defaultHostId) : null
       },
       isOtherClient: (worktree) =>
@@ -176,11 +176,9 @@ export function planSidebarFeedRows(
       isDetachedHead: (worktree) => factsOf(worktree)?.detachedHead === true,
       isMainWorktree: (worktree) => worktree.isMainWorktree,
       isSleeping: (worktree) => {
-        const activity = domains.activity.get(worktree.id)
-        return (
-          !retained.has(getWorktreeHostIdentity(worktree)) &&
-          (!activity || isIdleWorkspaceActivity(activity))
-        )
+        const identity = getWorktreeHostIdentity(worktree)
+        const activity = domains.activity.get(identity)
+        return !retained.has(identity) && (!activity || isIdleWorkspaceActivity(activity))
       }
     },
     worktreeLineageById: lineageById,
@@ -231,7 +229,9 @@ export function planSidebarFeedRows(
     groupBy,
     worktrees: visibleWorktrees,
     repoMap,
-    prGroupOf: (worktree) => prGroupOfReviewFact(domains.review.get(worktree.id)),
+    repoOfWorktree: index.repoOf,
+    prGroupOf: (worktree) =>
+      prGroupOfReviewFact(domains.review.get(getWorktreeHostIdentity(worktree))),
     repoOrder,
     workspaceStatuses: view.workspaceStatuses,
     projectOrderBy: view.projectOrderBy,
@@ -295,11 +295,7 @@ export function renderSidebarFeedRows(
   return { rows, sectionRows }
 }
 
-/**
- * The sidebar a feed reader shows: the host's published inputs through the same builder, filters
- * and host sections the desktop window runs, with no clock. The window's transient overlays (drag
- * previews, search, hover hold, agent-send reveal) and its desktop-only cards are not inputs here.
- */
+/** Build from published host inputs through shared filters/grouping without a clock; transient window overlays/cards stay outside. */
 export function buildSidebarFeedRows(
   domains: SidebarFeedDomains,
   catalog: SidebarFeedCatalog,

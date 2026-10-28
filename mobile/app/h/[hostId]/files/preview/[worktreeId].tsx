@@ -16,16 +16,8 @@ import { MobileWebShellScreen } from '../../../../../src/mobile-web-shell/Mobile
 import { PageRouteUnavailableScreen } from '../../../../../src/mobile-web-shell/PageRouteUnavailableScreen'
 import { firstParam } from '../../../../../src/navigation/route-param-reader'
 
-/**
- * The file preview, from the desktop's bundle.
- *
- * Normalized before the shell route is built, not after: a route the preview would refuse is one the shell has no
- * pathname to build from, and a refusal here beats a page opened on params it will refuse again.
- *
- * Only the two path segments are spelled into the pathname; everything else — the file path among
- * them — is a param, which is what keeps a `/`, a space or a `..` out of the segment vocabulary the
- * bridge holds a route to.
- */
+// Normalize preview route before opening shell; rejected params must not mount a page that rejects them again.
+// Only host/worktree ids are path segments; file paths stay params so /, spaces and dot-dot never enter the bridge’s segment vocabulary.
 export default withWorkspaceRoute(function MobileFilePreviewRoute() {
   const params = useLocalSearchParams<{
     hostId?: string | string[]
@@ -59,15 +51,11 @@ export default withWorkspaceRoute(function MobileFilePreviewRoute() {
       })
     : null
 
-  // `route.ok` again for the compiler: `shellRoute` is built only on the ok branch.
+  // Repeat route.ok for narrowing: shellRoute was built only on this branch.
   if (shellRoute === null || !route.ok) {
     return <PageRouteUnavailableScreen hostId={firstParam(params.hostId)} />
   }
-  // Keyed on the whole route, params included, for two reasons. A host captures the grants its
-  // session was opened with, so only a remount drops the bridge the previous route opened. And the
-  // page learns its route exactly once, from `init`: a same-path param change — another file in
-  // this worktree — would otherwise leave the shell mounted and the page still showing the file it
-  // was opened on, with nothing to tell it otherwise.
+  // Key by full route including params: remount drops old grants and re-inits the page, which learns its file only once from init.
   return (
     <MobileWebShellScreen
       key={shellScreenRouteKey(shellRoute)}

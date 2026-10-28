@@ -12,11 +12,7 @@ import {
 import { extractToolFields, isNewTurnEvent } from '../provider-event-routing'
 import { readString } from '../tool-input-preview'
 
-// Why: ZCode's own lifecycle events are camelCase, but its hook runner writes a
-// Claude-compatible stdin alias set (`hook_event_name`, `tool_name`, `tool_input`,
-// `transcript_path`, `last_assistant_message`) alongside them — see ZCode's
-// `packages/core/src/hooks/configured-runner-input.ts`. Orca reads the aliases, so the
-// Claude tool-field extractor applies verbatim; only the agent identity differs.
+// ZCode configured-runner-input emits Claude-compatible aliases beside native camelCase; reuse Claude tool fields with ZCode identity.
 const ZCODE_IDLE_SESSION_START_SOURCES: ReadonlySet<string> = new Set([
   'startup',
   'resume',
@@ -29,12 +25,10 @@ type ZCodeTurn = {
   sessionBoundary?: true
 }
 
-/** What one ZCode lifecycle event says about the pane, or null when it says nothing. */
 function readZCodeTurn(eventName: unknown, hookPayload: Record<string, unknown>): ZCodeTurn | null {
   switch (eventName) {
     case 'SessionStart': {
-      // Why: land a resumed/started session as an idle boundary row, not a phantom spinner;
-      // `compact` fires mid-turn, so anything outside the idle allowlist is dropped.
+      // Only idle SessionStart sources settle; compact remains mid-turn.
       const source = hookPayload['source']
       return typeof source === 'string' && ZCODE_IDLE_SESSION_START_SOURCES.has(source)
         ? { stateName: 'done', sessionBoundary: true }
@@ -45,16 +39,13 @@ function readZCodeTurn(eventName: unknown, hookPayload: Record<string, unknown>)
     case 'PostToolUseFailure':
       return { stateName: 'working' }
     case 'PreToolUse':
-      // Why: ZCode's clarification tool is literally `AskUserQuestion` with Claude's
-      // questions/options input shape, so Orca's question card renders it unchanged.
+      // ZCode AskUserQuestion uses Claude's questions/options shape.
       return {
         stateName: isAskUserQuestionTool(readString(hookPayload, 'tool_name'))
           ? 'waiting'
           : 'working'
       }
-    // Why: ZCode fires this only once the approval card is already on screen and racing the
-    // user's answer (`packages/core/src/tool/executor/permission-flow.ts`), never for an
-    // auto-approved call — so it is proof the pane is blocked on a human.
+    // ZCode emits PermissionRequest only with a displayed human approval, never for auto-approved calls (permission-flow.ts).
     case 'PermissionRequest':
       return { stateName: 'waiting' }
     case 'Stop':

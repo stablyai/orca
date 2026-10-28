@@ -1,3 +1,4 @@
+import { agentSessionCurrentContextRows } from './agent-session-context-clear'
 import type { AgentJournalSnapshot } from './agent-session-journal-types'
 import { agentJournalSubmissionKey } from './agent-session-journal-item-key'
 import { isRootAgentJournalItem } from './agent-session-journal-producer'
@@ -8,7 +9,8 @@ export function firstStructuredChatNamingPrompt(
   snapshot: AgentJournalSnapshot,
   hostStartedAt: number
 ): string {
-  const messages = snapshot.items.filter(
+  const context = agentSessionCurrentContextRows(snapshot.items, snapshot.submissions)
+  const messages = context.items.filter(
     (item) =>
       item.body.kind === 'message' &&
       item.body.role === 'user' &&
@@ -19,7 +21,7 @@ export function firstStructuredChatNamingPrompt(
   if (messages.length !== 1 || !first) {
     return ''
   }
-  const submission = snapshot.submissions.find(
+  const submission = context.submissions.find(
     (send) =>
       send.providerItemId === first.itemId ||
       agentJournalSubmissionKey(send.clientMessageId) === first.itemId

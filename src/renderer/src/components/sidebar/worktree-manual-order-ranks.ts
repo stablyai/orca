@@ -70,9 +70,7 @@ export function buildSparseManualOrderUpdates(args: {
     )
   }
 
-  // Why: Manual is a durable sequence, not a rank for only the rendered slice.
-  // Materialize every known row once when any row is still on the mutable
-  // sortOrder fallback; subsequent drags can use sparse ranks again.
+  // Materialize all known rows once if any lacks a durable rank; later drags can use sparse updates.
   if (args.allWorktreeIds.some((id) => getManualOrderRank(args.rankByWorktreeId!, id) === null)) {
     return buildFallbackManualOrderUpdates(
       mergeVisibleOrderIntoKnownOrder(args.allWorktreeIds, args.orderedIds),
@@ -116,8 +114,7 @@ export function buildSparseManualOrderUpdates(args: {
     }
   } else {
     const gap = beforeRank - afterRank
-    // Why: repeated sparse inserts can eventually exhaust the numeric gap.
-    // Re-index only in that rare dense case; ordinary drags persist moved rows.
+    // Repeated sparse inserts can exhaust numeric gaps; reindex only when the gap is too dense.
     if (gap <= orderedMovedIds.length) {
       return buildFallbackManualOrderUpdates(
         mergeVisibleOrderIntoKnownOrder(args.allWorktreeIds, args.orderedIds),

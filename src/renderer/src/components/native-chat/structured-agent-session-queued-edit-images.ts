@@ -1,10 +1,8 @@
-// A queued edit's images, held in memory for that edit only: the card's own image-ref blocks kept
-// verbatim, apart from the images added in this edit. Not the chat box's saved draft, which
-// outlives a reload and whose scope keys name a chat, not an edit.
+// Keep original card image blocks verbatim; edit-only additions live in memory and must not share the durable chat draft scope.
 
 import type { AgentJournalMessageItem } from '../../../../shared/agent-session-journal-types'
 import {
-  queuedEditBaseText,
+  queuedEditHandOffTyping,
   queuedEditImagesPending,
   queuedEditKeptImages,
   queuedEditTextForKeptImages,
@@ -16,7 +14,6 @@ import type { NativeChatComposerImageAttachment } from './NativeChatComposerFiel
 import { appendNativeChatDraftCache } from './native-chat-draft-cache'
 import { isNativeChatImageAttachmentPath } from './native-chat-image-paste'
 import { imageReferenceInsertion } from '../../../../shared/native-chat-image-reference'
-import { stripSentImagePromptMarkers } from '../../../../shared/native-chat-image-transcript-markers'
 
 export type QueuedEditImageState = {
   /** The chat box this edit hands off to; the one it started in, never another. */
@@ -28,8 +25,7 @@ export type QueuedEditImageState = {
   intake: QueuedEditImageIntake
 }
 
-/** Drives an edit's added images the way an upload or paste drives the chat box's chips. Bound to
- *  one edit, so a late result never lands in another. */
+/** Bind intake to one edit so late upload results cannot attach to another. */
 export type QueuedEditImageIntake = {
   begin: (previewUrl?: string, pendingName?: string) => string | null
   resolve: (id: string, path: string, connectionId?: string | null) => boolean
@@ -49,7 +45,6 @@ export type QueuedEditImagesEditor = {
   empty: boolean
 }
 
-/** A new edit's images: the card's own, and an intake bound to that edit. */
 export function queuedEditImageFields(
   body: AgentJournalMessageItem,
   edit: () => QueuedEditImageState,
@@ -95,12 +90,9 @@ export function releaseQueuedEditImages(edit: QueuedEditImageState): void {
   edit.added.forEach(releasePreview)
 }
 
-/** Unsaved typing and settled additions go to the chat box in one step; true when anything went.
- *  The typing goes without the card's own images, so no marker may name one. An upload still
- *  pending drops, as on the phone: its edit is gone. */
+/** Hand back unsaved text and settled additions atomically, excluding card-owned image markers; discard pending uploads with their edit, as mobile does. */
 export function handOffQueuedEdit(edit: QueuedEditImageState): boolean {
-  const unchanged = edit.text === queuedEditBaseText(edit.body, edit.kept)
-  const typing = unchanged ? '' : stripSentImagePromptMarkers(edit.text, edit.kept.length)
+  const typing = queuedEditHandOffTyping(edit.body, edit)
   const images = edit.added.flatMap((image) => (image.pending ? [] : [settled(image)]))
   const text =
     typing +

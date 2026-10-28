@@ -208,7 +208,7 @@ describe('orchestration RPC methods', () => {
       expect(result.count).toBe(1)
     })
 
-    it('returns typed timeout and rejects a second actionable waiter', async () => {
+    it('returns a typed timeout', async () => {
       setup()
       vi.spyOn(runtime, 'waitForMessage').mockResolvedValueOnce('timed_out')
 
@@ -218,15 +218,28 @@ describe('orchestration RPC methods', () => {
         timeoutMs: 10
       })) as { timedOut: boolean; cancelled: boolean; count: number }
       expect(timedOut).toMatchObject({ timedOut: true, cancelled: false, count: 0 })
+    })
 
-      vi.mocked(runtime.waitForMessage).mockResolvedValueOnce('waiter_exists')
-      await expect(
-        call('orchestration.check', {
-          terminal: 'term_coord',
-          wait: true,
-          timeoutMs: 10
-        })
-      ).rejects.toMatchObject({ code: 'waiter_exists' })
+    it('lets a forgotten Run wait coexist with a new one that receives the same Delivery', async () => {
+      setup()
+      const waitSpy = vi.spyOn(runtime, 'waitForMessage')
+      const waitForRun = () =>
+        call('orchestration.check', { terminal: 'term_coord', wait: true, timeoutMs: 5000 })
+
+      const forgotten = waitForRun()
+      const recovery = waitForRun()
+      await vi.waitFor(() => expect(waitSpy).toHaveBeenCalledTimes(2))
+      await call('orchestration.send', {
+        from: 'term_coord',
+        to: `run:${activeRunId}`,
+        subject: 'first'
+      })
+
+      const [stale, fresh] = (await Promise.all([forgotten, recovery])).map((result) =>
+        result && typeof result === 'object' && 'deliveryId' in result ? result.deliveryId : null
+      )
+      expect(fresh).toMatch(/^delivery_/)
+      expect(stale).toBe(fresh)
     })
 
     it('rejects stale Delivery acknowledgment without consuming queued mail', async () => {
@@ -683,7 +696,6 @@ describe('orchestration RPC methods', () => {
       })) as { messages: { read: number }[]; count: number }
 
       expect(result.count).toBe(2)
-      // Must not have flipped the remaining unread row
       const stillUnread = db.getUnreadMessages('b')
       expect(stillUnread).toHaveLength(1)
     })
@@ -708,8 +720,8 @@ describe('orchestration RPC methods', () => {
     it('--all returns rows with delivered_at set after push-on-idle stamped them', async () => {
       setup()
       const msg = db.insertMessage({ from: 'a', to: 'b', subject: 'hi' })
-      // Why: simulate push-on-idle stamping delivered_at without the runtime loop.
-      db.markAsDelivered([msg.id])
+      // Simulate push-on-idle delivered_at without starting the runtime loop.
+      db.markAsDelivered([msg.id], 'b')
 
       const result = (await call('orchestration.check', {
         terminal: 'b',
@@ -741,7 +753,6 @@ describe('orchestration RPC methods', () => {
       })) as { count: number }
       expect(result.count).toBe(1)
 
-      // Must not have marked read
       expect(db.getUnreadMessages('b')).toHaveLength(1)
     })
 
@@ -853,7 +864,6 @@ describe('orchestration RPC methods', () => {
 
       expect(inbox.count).toBe(2)
       expect(check.count).toBe(2)
-      // Same rows in the same order — both use sequence DESC
       expect(inbox.messages.map((m) => m.id)).toEqual(check.messages.map((m) => m.id))
       expect(inbox.messages.every((m) => m.to_handle === 'b')).toBe(true)
     })

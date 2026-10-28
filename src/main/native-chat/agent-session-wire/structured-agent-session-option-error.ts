@@ -2,7 +2,7 @@
 export class AgentSessionOptionRejectedError extends Error {
   constructor(
     cause: unknown,
-    /** `providerStarting`: nothing is wrong with the value; the session cannot take it yet. */
+    /** providerStarting means the value is valid but cannot be applied yet. */
     readonly refusalReason: 'optionRejected' | 'providerStarting' = 'optionRejected'
   ) {
     super(cause instanceof Error ? cause.message : String(cause), { cause })

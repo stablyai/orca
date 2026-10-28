@@ -6,10 +6,9 @@
 # conventions. This is a RATCHET: counts may only go DOWN.
 # Prune after removing launches: pnpm check:main-sync-spawn-ratchet --prune
 1 src/main/agent-hooks/installer-utils.ts
-2 src/main/browser/browser-cookie-key.ts
+2 src/main/browser/cookies/sources/browser-cookie-key.ts
 1 src/main/browser/browser-route-egress-electron-launch.ts
 1 src/main/browser/browser-route-partition-binding-store.ts
-1 src/main/browser/browser-route-persisted-worker-electron-process.ts
 1 src/main/claude-accounts/runtime-auth-service.ts
 3 src/main/codex-accounts/fs-utils.ts
 2 src/main/codex-accounts/legacy-wsl-runtime-auth-drain-recovery-script-harness.ts
@@ -37,11 +36,9 @@
 2 src/main/persistence/profile-state/profile-state-access-identity.ts
 1 src/main/persistence/profile-state/profile-state-recovery-copy.ts
 1 src/main/plugins/plugin-private-marketplace-ssh-shim.cjs
-1 src/main/pty/posix-pty-foreground-group.ts
-1 src/main/pty/posix-pty-process-groups.ts
+1 src/main/pty/posix-pty-process-table.ts
 1 src/main/pwsh.ts
 1 src/main/runtime/runtime-skill-install-authority.ts
-1 src/main/skills/skill-discovery-target.ts
 2 src/main/startup/cli-launch-redirect.ts
 1 src/main/startup/linux-secret-service-probe.ts
 1 src/main/worktree-runner-script.ts

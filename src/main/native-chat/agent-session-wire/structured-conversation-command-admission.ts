@@ -19,20 +19,19 @@ import {
   type AgentSessionWireRefusal
 } from '../../../shared/agent-session-wire-refusals'
 
-/** The session's child work: `open` decides (the provider's own account), `views` word it. */
+/** Provider open-work evidence decides admission; stored views only word the refusal. */
 export type ConversationCommandChildWork = {
   views: readonly AgentChildWorkView[] | undefined
   open: boolean
 }
 
-/** What admission reads of a turn: the journal, its fence, and only the provider's stop capability. */
 export type ConversationCommandAdmissionContext = {
   sessionId: string
   fence: number
   journal: StructuredAgentSessionCurrentWorkJournal & {
     snapshot(): Pick<ReturnType<AgentSessionJournal['snapshot']>, 'items'>
   }
-  /** The host's projection of current work; without one, the generation at `fence` is live. */
+  /** Without host projection, assume the generation at fence is live. */
   currentWork?: () => StructuredAgentSessionCurrentWork | null
   adapter: Pick<StructuredAgentSessionAdapter, 'backgroundTaskStops'>
 }
@@ -48,15 +47,8 @@ export function conversationCommandInFlight(): AgentSessionWireRefusal {
   return blocked('conversationCommandInFlight', 'Wait for the conversation operation to finish.')
 }
 
-/**
- * Why a conversation command may not run now; null when it may.
- *
- * `childWork` is the session's child records as the chat strip reads them: a refusal may only
- * cite work the strip lists, and ask for a stop only when the strip offers one.
- * `at-rest`: a command accepted with no child running. A running turn on record then belongs to a
- * dead generation, which the start before handover sweeps, so it refuses nothing yet.
- * `handover`: the command is the oldest queued message, and those queued behind it wait for it.
- */
+/** Cite only visible child work and available Stop controls.
+ * At-rest ignores dead-generation turns; at handover, later queued messages wait for this command. */
 export function conversationCommandBlocked(
   ctx: ConversationCommandAdmissionContext,
   record: AgentSessionRecord,
@@ -73,8 +65,6 @@ export function conversationCommandBlocked(
   if (record.lease.handoffStage || record.lease.handoffOperationId) {
     return blocked('handoffInFlight', 'Wait for the session handoff to finish.')
   }
-  // What is current is the host projection's to say: an ended generation's turn, prompt or send
-  // refuses nothing.
   const work = contextStructuredAgentSessionCurrentWork(ctx)
   if (admission !== 'at-rest' && work.activeTurnId()) {
     return blocked('turnActive', 'Wait for the current turn to finish before using this command.')
@@ -92,8 +82,7 @@ export function conversationCommandBlocked(
       'Resolve the pending question or approval before using this command.'
     )
   }
-  // Open work is the live generation's: its adapter ends it on every close, so with no generation
-  // live, any still open is an ended one's leftover and holds nothing.
+  // Closed generations’ leftover child work must not block admission.
   if (work.liveFence !== null && childWork.open) {
     return blocked(
       'backgroundTasksRunning',
@@ -102,8 +91,7 @@ export function conversationCommandBlocked(
         : 'Wait for background tasks to finish before using this command.'
     )
   }
-  // The Working indicator's own rule, so "unsettled" is exactly what the chat shows as working.
-  // At handover the queued messages are those behind this command, waiting for it.
+  // Match the Working indicator; at handover, later messages wait for this command.
   if (
     submissions.some(
       (entry) =>
@@ -118,8 +106,7 @@ export function conversationCommandBlocked(
   return null
 }
 
-/** The strip's own stop controls: a per-row stop where the provider can target one, else its
- *  single untargeted stop. Asking for a stop it does not render names a control nobody can use. */
+/** Ask for Stop only when the strip exposes a usable targeted or untargeted control. */
 function stripOffersStop(
   childWork: readonly AgentChildWorkView[],
   stops: AgentSessionBackgroundTaskStops | undefined

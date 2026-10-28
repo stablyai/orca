@@ -20,10 +20,7 @@ import {
   globalWorktreeVisibilitySourceValue
 } from './worktree-visibility-source-provenance'
 
-/**
- * Why: picking the value Global Settings already holds drops the project's override rather than
- * pinning a duplicate of it, so the same control both overrides and reverts (#14276).
- */
+/** Choosing the global value clears the project override so one control can both override and revert. */
 export function shouldUseGlobalWorktreeVisibility(
   repo: Repo,
   source: WorktreeVisibilitySourceRow,

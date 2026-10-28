@@ -3,7 +3,7 @@ import {
   sanitizeGeneratedJiraIssueSummary,
   type JiraIssueSummaryGenerationContext,
   type JiraIssueSummaryGenerationResult
-} from '../../shared/jira-issue-summary-generation'
+} from '../../shared/jira/jira-issue-summary-generation'
 import type { ResolvedSourceControlAiGenerationParams } from '../../shared/source-control-ai'
 import { spawnSourceControlAgent } from './source-control-agent-launch'
 import { cancelLocalGeneration } from './source-control-generation-lanes'

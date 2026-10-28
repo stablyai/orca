@@ -2,9 +2,11 @@ import type { SettingsSearchEntry } from './settings-search'
 import { translate } from '@/i18n/i18n'
 import { translateSearchKeyword } from './settings-search-keywords'
 import { getBrowserUserAgentSearchEntry } from './browser-user-agent-search'
+import { getBrowserProfileScopeSearchEntry } from './browser-profile-scope-search'
 import { getBrowserSitePermissionsSearchEntry } from './browser-site-permissions-search'
 import {
   getBrowserLinkRoutingDescription,
+  getLinkRoutingBackgroundSearchEntry,
   getLinkRoutingModifierDescription,
   getLinkRoutingModifierTitle
 } from './browser-link-routing-copy'
@@ -183,8 +185,7 @@ export function getBrowserPaneSearchEntries(
           'auto.components.settings.browser.search.linkRoutingModifier.opposite',
           'opposite'
         ),
-        // Why: the row renders live copy but this entry is built with openLinksInApp
-        // false, so index the other title too or the row is unfindable by its own text.
+        // Index the alternate live title because this entry is built with openLinksInApp false.
         getLinkRoutingModifierTitle(true),
         platform.isMac ? 'cmd' : 'ctrl'
       ]
@@ -241,7 +242,7 @@ export function getBrowserPaneSearchEntries(
         ...translateSearchKeyword('auto.components.settings.browser.search.7539f6336c', 'profile')
       ]
     },
-    // Appended, not inserted: BrowserPane selects these entries by index.
+    // Append entries because BrowserPane indexes this catalog by position.
     {
       title: getBrowserClientHostedRemoteTitle(),
       description: getBrowserClientHostedRemoteDescription(),
@@ -298,6 +299,8 @@ export function getBrowserPaneSearchEntries(
       ]
     },
     getBrowserUserAgentSearchEntry(),
-    getBrowserSitePermissionsSearchEntry()
+    getBrowserSitePermissionsSearchEntry(),
+    getBrowserProfileScopeSearchEntry(),
+    getLinkRoutingBackgroundSearchEntry()
   ]
 }

@@ -46,7 +46,6 @@ async function turnEndRig() {
       body: CODEX_TEST_USER_MESSAGE,
       fence: 7
     })
-  // Codex answers a cold send before it opens the turn.
   const sendAndOpen = async (clientMessageId: string) => {
     const outcome = await send(clientMessageId)
     expect(turns.turnId).not.toBeNull()
@@ -78,7 +77,7 @@ describe('a Codex send its turn ended without echoing', () => {
     rig.turns.end('interrupted')
 
     expect(rig.settlements).toEqual([
-      // Codex took it into a turn: no proof it never reached Codex.
+      // An interrupted turn cannot prove the send never reached Codex.
       expect.objectContaining({
         sessionId: 'session-1',
         clientMessageId: 'client-1',
@@ -119,7 +118,7 @@ describe('a Codex send its turn ended without echoing', () => {
     rig.turns.echo('client-1')
     await rig.send('client-2')
 
-    // A failed turn keeps its steered input: Codex records it after the error, before the end.
+    // Codex persists failed-turn input between error and turn/completed.
     rig.codex.connections[0]!.handlers.onNotification?.('error', {
       threadId: CODEX_TEST_THREAD_ID,
       turnId: 'turn-1',
@@ -145,7 +144,7 @@ describe('a Codex send its turn ended without echoing', () => {
     rig.turns.end('completed')
     expect(rig.settlements).toEqual([])
 
-    // Codex echoes before a completed end; this late one only proves the send is still armed.
+    // Artificially late echo verifies correlation survives completion.
     rig.turns.echo('client-1')
     expect(rig.settlements).toEqual([
       expect.objectContaining({
@@ -216,7 +215,6 @@ describe('a Codex send its turn ended without echoing', () => {
       'withdrawn'
     )
     expect(rig.settlements).toEqual([])
-    // The answer opens nothing: the turn keeps its terminal row.
     expect(rig.bodies.filter((body) => body.kind === 'turn')).toHaveLength(rowsAtEnd)
     expect(rig.bodies.findLast((body) => body.kind === 'turn')).toMatchObject({
       state: 'interrupted'

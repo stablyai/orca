@@ -50,7 +50,6 @@ describe("the sidebar row while a person's Stop ends the turn", () => {
     )
   })
 
-  // The row truncates its one line from the end, and the model and time keep their room.
   it('leads with Stopping so a narrow sidebar cuts the chat name, not the status', () => {
     const stopping = row({ state: 'working', stopping: true, stateStartedAt: NOW })
     const secondary = getCompactAgentSecondary(stopping, NOW)

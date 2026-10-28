@@ -1,14 +1,8 @@
-/**
- * Teardown coverage for `nativeChatLaunchDraftByTabId`.
- *
- * A stranded entry is worse than a plain leak: sync-runtime-graph keeps
- * publishing it to mobile as that tab's `launchDraft`. It must evict wherever
- * its sibling `nativeChatLaunchPromptByTabId` does — tab close, orphan sweep,
- * the bulk worktree purge, and the single removeWorktree teardown.
- */
-import { describe, it, expect, vi, beforeEach } from 'vitest'
+/** Evict nativeChatLaunchDraftByTabId wherever launch prompt retires (close, orphan sweep, bulk/single purge); stranded drafts otherwise keep publishing to mobile. */
+import { afterEach, describe, it, expect, vi, beforeEach } from 'vitest'
 import type * as AgentStatusModule from '@/lib/agent-status'
 import { buildOrphanTerminalCleanupPatch } from './terminal-orphan-helpers'
+import { drawTabsFromMain, type TabsDrawnFromMain } from './tabs-drawn-from-main.test-fixture'
 
 vi.mock('sonner', () => ({
   toast: { info: vi.fn(), success: vi.fn(), error: vi.fn(), warning: vi.fn() }
@@ -24,9 +18,20 @@ vi.mock('@/lib/agent-status', async (importOriginal) => {
   return { ...actual, detectAgentStatusFromTitle: vi.fn().mockReturnValue(null) }
 })
 
+// Main answers the window's chat-tab commands and its frames draw them (switch-on builds).
+vi.mock('@/runtime/runtime-rpc-client', async (importOriginal) =>
+  (
+    await import('@/runtime/layout-apply-test-transport.test-fixture')
+  ).runtimeRpcClientWithLayoutApply(await importOriginal())
+)
+vi.mock('@/runtime/runtime-layout-client', async (importOriginal) =>
+  (
+    await import('@/runtime/layout-apply-test-transport.test-fixture')
+  ).runtimeLayoutClientWithTestFrames(await importOriginal())
+)
+
 const mockApi = {
   worktrees: {
-    list: vi.fn().mockResolvedValue([]),
     remove: vi.fn().mockResolvedValue(undefined),
     forceDeletePreservedBranch: vi.fn().mockResolvedValue({ deleted: true }),
     updateMeta: vi.fn().mockResolvedValue({})
@@ -85,9 +90,14 @@ function seedDrafts(store: ReturnType<typeof createTestStore>): void {
 }
 
 describe('nativeChatLaunchDraftByTabId teardown', () => {
+  let main: TabsDrawnFromMain | undefined
   beforeEach(() => {
     vi.clearAllMocks()
     mockApi.worktrees.remove.mockResolvedValue(undefined)
+  })
+  afterEach(() => {
+    main?.close()
+    main = undefined
   })
 
   it('closeTab drops the closed tab’s draft only', () => {
@@ -125,9 +135,7 @@ describe('nativeChatLaunchDraftByTabId teardown', () => {
   })
 
   it('persists the adopted flag, idempotently, and clears the whole entry', () => {
-    // Every consumer test injects these reducers as bare vi.fn()s. `adopted` is
-    // what stops a manually cleared composer from resurrecting the prefill, so
-    // assert the real reducers here.
+    // Consumers stub these reducers; test real adopted handling so manual composer clears cannot revive prefill.
     const store = createTestStore()
     store.getState().seedNativeChatLaunchDraft(draft(TAB1, 'https://github.com/o/r/issues/1'))
     expect(store.getState().nativeChatLaunchDraftByTabId[TAB1]?.adopted).toBeUndefined()
@@ -241,15 +249,18 @@ describe('nativeChatLaunchDraftByTabId teardown', () => {
     return chat
   }
 
-  it('closing a structured chat tab keeps its conversation’s unsent draft', () => {
+  it('closing a structured chat tab keeps its conversation’s unsent draft', async () => {
     const store = createTestStore()
     const chat = seedStructuredChat(store)
+    main = await drawTabsFromMain(store)
     const conversation = structuredAgentSessionDraftScopeKey('session-1')
     updateNativeChatComposerDraft(conversation, { text: 'unsent' }, 'immediate')
 
     store.getState().closeUnifiedTab(chat.id)
+    await main.settle()
 
-    expect(store.getState().unifiedTabsByWorktree[WT1]).toEqual([])
+    // Main's frame drops a workspace with no tabs left; the window keeps an empty list.
+    expect(store.getState().unifiedTabsByWorktree[WT1] ?? []).toEqual([])
     expect(readNativeChatComposerDraft(conversation).text).toBe('unsent')
   })
 

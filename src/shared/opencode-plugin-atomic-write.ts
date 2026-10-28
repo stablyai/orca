@@ -31,9 +31,7 @@ export function resolveCanonicalPluginWritePath(pluginPath: string): string {
     throw error
   }
 
-  // Why: realpathSync.native resolves canonical target when it exists;
-  // if target is missing (dangling symlink), follow readlinkSync chain so the
-  // target file is created at the intended destination and the symlink stays intact.
+  // Resolve existing symlinks via realpath; follow dangling readlink chains so atomic writes create the intended target without replacing the link.
   try {
     return realpathSync.native(pluginPath)
   } catch (error) {
@@ -66,16 +64,14 @@ export function resolveCanonicalPluginWritePath(pluginPath: string): string {
   throw new Error(`Too many levels of symbolic links resolving "${pluginPath}"`)
 }
 
-// Why: write to sibling temp file and rename so concurrent reloads never observe a truncated or missing file.
+// Sibling-temp rename prevents reloads from seeing partial or missing plugin files.
 function writeAtomicFile(targetPath: string, content: string): void {
   const dir = dirname(targetPath)
   mkdirSync(dir, { recursive: true })
   let existingMode: number | undefined
   try {
     existingMode = statSync(targetPath).mode & 0o777
-  } catch {
-    // Target does not exist yet.
-  }
+  } catch {}
   const tmpPath = join(dir, `.${basename(targetPath)}.${process.pid}.${randomUUID()}.tmp`)
   try {
     writeFileSync(tmpPath, content, { encoding: 'utf8', mode: existingMode })
@@ -87,20 +83,18 @@ function writeAtomicFile(targetPath: string, content: string): void {
     if (existsSync(tmpPath)) {
       try {
         unlinkSync(tmpPath)
-      } catch {
-        // Best effort cleanup.
-      }
+      } catch {}
     }
   }
 }
 
-// Why: preserve dotfile symlinks at canonical paths by atomically replacing the real target file.
+// Atomically replace the canonical target, preserving dotfile symlinks.
 export function writeCanonicalOpenCodePluginAtomically(pluginPath: string, source: string): void {
   const targetPath = resolveCanonicalPluginWritePath(pluginPath)
   writeAtomicFile(targetPath, source)
 }
 
-// Why: replace any mirrored symlink directly in the overlay without following it to the user's config.
+// Replace overlay links themselves; never follow them into user configuration.
 export function writeOverlayOpenCodePluginAtomically(pluginPath: string, source: string): void {
   writeAtomicFile(pluginPath, source)
 }

@@ -1,5 +1,3 @@
-// The queue's publication as the client reducer keeps it: the draft list and what rides with it.
-
 import type {
   AgentSessionQueuedMessage,
   AgentSessionQueuePause
@@ -11,8 +9,7 @@ export type StructuredAgentSessionQueuePublication = {
   nextQueuedMessageId?: string | null
 }
 
-/** First claim with a list wins, and what rides with it comes from that claim; no claim at all
- *  leaves all absent (older host). */
+/** First list-bearing claim owns accompanying queue fields; no list leaves fields absent for older hosts. */
 export function queuePublicationField(
   ...claims: StructuredAgentSessionQueuePublication[]
 ): StructuredAgentSessionQueuePublication {

@@ -7,21 +7,8 @@ import type { RuntimeBrowserCommandHost } from './browser/browser-command-contra
 import type { RuntimeBrowserCommands } from './browser/browser-commands'
 import { closeBrowserPageWithoutEngine } from './browser/browser-client-page-close'
 
-/**
- * How `OrcaRuntimeService` obtains its browser-automation commands.
- *
- * Why a factory rather than a direct import: `browser/browser-commands.ts` reaches the
- * whole Chromium cluster — `BrowserWindow`, `session`, `webContents`, cookie jars —
- * 15 modules that a Node host cannot load at all. Importing the class for its *type*
- * is free; constructing it is what drags the cluster in.
- *
- * The desktop installs the Electron factory. A Node host installs an external provider
- * when one resolves; otherwise every browser RPC rejects with the closed
- * `browser_unavailable` code and capability filtering hides the affordance.
- *
- * Deliberately NOT a stub object with silently-succeeding methods: that is the
- * "looks fine, returns a lie" shape this codebase rejects. Absent means rejected.
- */
+/** Inject Electron browser construction to keep Chromium imports out of Node hosts; type imports remain safe.
+ * Node hosts use external providers or reject browser_unavailable and hide capability; never silently succeed with a stub. */
 
 export type RuntimeBrowserCommandsFactory = (
   host: RuntimeBrowserCommandHost
@@ -77,22 +64,14 @@ export type RuntimeBrowserUnavailableCause = {
 
 let unavailableCause: RuntimeBrowserUnavailableCause | null = null
 
-/**
- * Recorded by whoever tried to resolve a provider, because only that code can tell a
- * missing driver from an unset env var from a launch that threw. Null once one resolves.
- */
+/** Only provider resolution can distinguish missing driver/config/launch failure; clear the note once a provider resolves. */
 export function setRuntimeBrowserUnavailableCause(
   cause: RuntimeBrowserUnavailableCause | null
 ): void {
   unavailableCause = cause
 }
 
-/**
- * The cause this process can prove. A healthy factory outranks any recorded note: the failure
- * is a renderer-backed factory with no window. An unhealthy one keeps the resolver's note, since
- * a factory serving only client pages stays installed when no engine resolved; with no note the
- * engine started and later died. Unknown beats guessing.
- */
+/** Healthy factory wins; otherwise retain resolver evidence, or report engine death if none. Infer no unproven cause. */
 export function runtimeBrowserUnavailableCause(): RuntimeBrowserUnavailableCause {
   if (currentFactory && runtimeBrowserCommandsFactoryIsAvailable()) {
     return { reason: 'desktop_window_unavailable' }
@@ -100,11 +79,7 @@ export function runtimeBrowserUnavailableCause(): RuntimeBrowserUnavailableCause
   return unavailableCause ?? { reason: currentFactory ? 'provider_unhealthy' : 'unknown' }
 }
 
-/**
- * Build the commands, or a rejecting proxy when this host has no browser. The proxy
- * throws per call rather than at construction so the runtime still starts — the
- * capability is simply not advertised.
- */
+/** Reject per call when unavailable so runtime startup still succeeds and capability is hidden. */
 export function createRuntimeBrowserCommands(
   host: RuntimeBrowserCommandHost
 ): RuntimeBrowserCommands {
@@ -114,11 +89,11 @@ export function createRuntimeBrowserCommands(
   return new Proxy({} as RuntimeBrowserCommands, {
     get: (_target, property) => {
       if (property === 'then') {
-        // Why: an awaited undefined must not look like a thenable.
+        // Avoid treating the proxy as a thenable when awaited.
         return undefined
       }
       if (property === 'browserTabClose') {
-        // Why: a stale client-hosted tab must stay closeable when this host has no engine.
+        // Stale client-hosted tabs remain closeable even without an engine.
         return (params: Parameters<RuntimeBrowserCommands['browserTabClose']>[0]) =>
           closeBrowserPageWithoutEngine(host, params ?? {}, browserUnavailableError)
       }

@@ -121,9 +121,7 @@ export type ExactRefProbeStdinExec = (
   options: ExactRefProbeExecOptions & { stdin: string }
 ) => Promise<{ stdout: string }>
 
-/** `cat-file --batch-check` reports every ref from one child, and reports a missing ref as data
- *  rather than a failed exit — so a batch stays as decidable as a per-ref `show-ref --verify`.
- *  A repo with many remotes otherwise pays one subprocess per remote on every conflict check. */
+/** Batch exact probes in one child; missing refs remain data rather than aborting the batch. */
 export async function probeAnyExactRefBatched(
   runGit: ExactRefProbeStdinExec,
   refs: readonly string[],
@@ -143,7 +141,7 @@ export async function probeAnyExactRefBatched(
   } catch {
     return { found: false, unknown: true }
   }
-  // Trim per line so a CRLF-translating host's `\r` does not become part of the type.
+  // Trim CRLF so carriage returns cannot become part of the type.
   const lines = stdout
     .split('\n')
     .map((line) => line.trim())

@@ -128,8 +128,7 @@ describe('PluginPanel', () => {
     expect(initialIframe?.getAttribute('name')).toBe(
       'orca-plugin-panel:plugin:orca-samples.my-plugin/dashboard'
     )
-    // Why: allow-same-origin would let plugin HTML reach the app DOM/storage;
-    // the sandbox must stay scripts-only.
+    // allow-same-origin would expose app DOM/storage; keep the sandbox scripts-only.
     expect(initialIframe?.getAttribute('sandbox')).toBe('allow-scripts')
   })
 

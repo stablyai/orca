@@ -1,5 +1,4 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import type { OrcadHostTransport } from '../../ssh/orcad-host-transport'
 import { getRemoteHostPlatform } from '../../ssh/ssh-remote-platform'
 
 const execOrcadRemote = vi.hoisted(() => vi.fn())
@@ -7,25 +6,13 @@ vi.mock('../install/orcad-remote-runtime-control', () => ({ execOrcadRemote }))
 const resolveOrcadRemoteContext = vi.hoisted(() => vi.fn())
 vi.mock('../install/orcad-remote-context', () => ({ resolveOrcadRemoteContext }))
 
-import {
-  orcadBoundPort,
-  readManagedOrcadBoundPort,
-  resolveManagedOrcadTunnelPort
-} from './orcad-managed-bound-port'
+import { orcadBoundPort, resolveManagedOrcadTunnelPort } from './orcad-managed-bound-port'
 import type { KnownRuntimeEnvironment } from '../../../shared/runtime-environments'
 import type { SshTarget } from '../../../shared/ssh-types'
+import { unusedOrcadHostTransport } from '../../ssh/unused-host-transport.test-fixture'
 
 function readinessLine(boundEndpoint: string | null): string {
   return `${JSON.stringify({ type: 'orca_server_ready', runtimeId: 'runtime-1', boundEndpoint })}\n`
-}
-
-function slot() {
-  return {
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: exec is mocked; the connection is never used.
-    conn: {} as OrcadHostTransport,
-    host: getRemoteHostPlatform('linux-x64'),
-    remoteInstallDir: '/home/deploy/.orca-orcad/1.0.0'
-  }
 }
 
 describe('orcadBoundPort', () => {
@@ -35,32 +22,6 @@ describe('orcadBoundPort', () => {
 
   it.each([null, 'not a url', 'ws://127.0.0.1'])('returns null for %s', (boundEndpoint) => {
     expect(orcadBoundPort({ boundEndpoint })).toBeNull()
-  })
-})
-
-describe('readManagedOrcadBoundPort', () => {
-  beforeEach(() => {
-    execOrcadRemote.mockReset()
-  })
-
-  it('follows orcad off a preferred port another runtime holds', async () => {
-    execOrcadRemote.mockResolvedValue(readinessLine('ws://127.0.0.1:58520'))
-    await expect(readManagedOrcadBoundPort(slot(), 6_768)).resolves.toBe(58_520)
-  })
-
-  it.each([
-    ['no readiness file', ''],
-    ['a readiness without an endpoint', readinessLine(null)]
-  ])('falls back to the preferred port for %s (older builds)', async (_label, output) => {
-    execOrcadRemote.mockResolvedValue(output)
-    await expect(readManagedOrcadBoundPort(slot(), 6_768)).resolves.toBe(6_768)
-  })
-
-  it('surfaces a failed host read instead of guessing a port', async () => {
-    execOrcadRemote.mockImplementation(async () => {
-      throw new Error('channel closed')
-    })
-    await expect(readManagedOrcadBoundPort(slot(), 6_768)).rejects.toThrow('channel closed')
   })
 })
 
@@ -77,8 +38,7 @@ describe('resolveManagedOrcadTunnelPort', () => {
       environment: { [kind]: link } as unknown as KnownRuntimeEnvironment,
       // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: passed through to the mocked context.
       target: { id: 'ssh-1' } as SshTarget,
-      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: passed through to the mocked context.
-      connection: {} as OrcadHostTransport
+      connection: unusedOrcadHostTransport()
     }
   }
 
@@ -96,6 +56,20 @@ describe('resolveManagedOrcadTunnelPort', () => {
     })
     execOrcadRemote.mockResolvedValue(readinessLine('ws://127.0.0.1:58520'))
     await expect(resolveManagedOrcadTunnelPort(input('orcadDeployment'))).resolves.toBe(58_520)
+  })
+
+  it.each([
+    ['no readiness file', ''],
+    ['a readiness without an endpoint', readinessLine(null)]
+  ])('falls back to the preferred port for %s (older builds)', async (_label, output) => {
+    resolveOrcadRemoteContext.mockResolvedValue({
+      activationRecord: { active: '1.0.0+abc' },
+      connection: {},
+      host: getRemoteHostPlatform('linux-x64'),
+      remoteHome: '/home/deploy'
+    })
+    execOrcadRemote.mockResolvedValue(output)
+    await expect(resolveManagedOrcadTunnelPort(input('orcadDeployment'))).resolves.toBe(6_768)
   })
 
   it('keeps the configured port for independent SSH access without touching the host', async () => {

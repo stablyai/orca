@@ -17,6 +17,7 @@ import { WORKTREE_METADATA_DOMAINS } from '../../persistence/loading-store/workt
 import { ProducerRevision } from './producer-revision'
 import { WorkspaceGitIdentity } from './workspace-git-identity'
 import { CachedScan } from './cached-scan'
+import type { WorkspaceLifecycleQueue } from '../workspaces/workspace-lifecycle-queue'
 
 // The settings the visibility filter reads: the defaults, and the layouts that classify a checkout.
 const VISIBILITY_SETTINGS = [
@@ -51,6 +52,8 @@ export type WorkspaceRowsSources = {
   join: (scans: ResolvedWorktreeRepoScans) => ResolvedWorktreeScanJoin
   /** worktree.ps's visibility filters over a listing. */
   visible: (snapshot: ResolvedWorktreeSnapshot) => ResolvedWorktreeSnapshot
+  /** Its finished creates and deletes keep their hints until a fresh scan lists them. */
+  lifecycle?: Pick<WorkspaceLifecycleQueue, 'setMembership'> | null
   onClientEvent: (
     listener: (event: RuntimeClientEvent) => void,
     options: { consumesTerminalSideEffects: false }
@@ -65,12 +68,7 @@ type Joined = {
   scannedRepoKeys: ResolvedWorktreeScanJoin['scannedRepoKeys']
 }
 
-/**
- * This host's workspace rows: cached per-repo scans joined with the store's metadata at read, so a
- * read is synchronous and a metadata write publishes without waiting on git; scans refresh apart.
- * The revision moves on catalog changes, applied scans and saves that may touch metadata; session
- * saves never move it.
- */
+/** Join cached repo scans with current metadata synchronously; refresh scans separately. Catalog/applied-scan/metadata revisions publish, session saves do not. */
 export class WorkspaceRowsProducer {
   readonly revision = new ProducerRevision()
   readonly gitIdentity = new WorkspaceGitIdentity()
@@ -89,6 +87,7 @@ export class WorkspaceRowsProducer {
       demand: () => this.revision.hasListeners(),
       applied: () => this.applied()
     })
+    sources.lifecycle?.setMembership((done) => this.scans.afterFresh(done))
     sources.onClientEvent(
       (event) => {
         if (event.type === 'worktreesChanged' || event.type === 'reposChanged') {

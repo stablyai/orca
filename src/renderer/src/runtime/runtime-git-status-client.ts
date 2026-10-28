@@ -1,4 +1,5 @@
 import type { GitHistoryOptions, GitHistoryResult } from '../../../shared/git-history'
+import type { GitMutationInFlight } from '../../../shared/git-mutation-in-flight'
 import type {
   GitConflictOperation,
   GitStagingArea,
@@ -18,6 +19,8 @@ export async function getRuntimeGitStatus(
     reuseLineStats?: boolean
     branchLineTotalMergeBase?: string
     signal?: AbortSignal
+    /** A user act that may start a stopped WSL distro; local status only. */
+    wakeWslDistro?: boolean
   }
 ): Promise<GitStatusResult> {
   const target = context.target
@@ -42,7 +45,8 @@ export async function getRuntimeGitStatus(
         ...includeLineStatsArgs,
         ...upstreamCacheBypassArgs,
         ...lineStatsReuseArgs,
-        ...branchLineTotalArgs
+        ...branchLineTotalArgs,
+        ...(options?.wakeWslDistro && !context.connectionId ? { wakeWslDistro: true } : {})
       },
       options?.signal
     )
@@ -198,6 +202,24 @@ export async function getRuntimeGitConflictOperation(
   return callRuntimeRpc<GitConflictOperation>(
     target,
     'git.conflictOperation',
+    { worktree: toRuntimeWorktreeSelector(context.worktreeId) },
+    { timeoutMs: 15_000 }
+  )
+}
+
+export async function getRuntimeGitMutationInFlight(
+  context: RuntimeGitContext
+): Promise<GitMutationInFlight> {
+  const target = context.target
+  if (target.kind === 'local' || !context.worktreeId) {
+    return window.api.git.mutationInFlight({
+      worktreePath: resolveLocalWorktreePath(context),
+      connectionId: context.connectionId
+    })
+  }
+  return callRuntimeRpc<GitMutationInFlight>(
+    target,
+    'git.mutationInFlight',
     { worktree: toRuntimeWorktreeSelector(context.worktreeId) },
     { timeoutMs: 15_000 }
   )

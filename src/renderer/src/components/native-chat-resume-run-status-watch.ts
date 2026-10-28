@@ -1,12 +1,14 @@
+import type { RuntimeClientTarget } from '../../../shared/runtime-client-target'
 import { getStructuredAgentSessionStatusFeed } from '@/runtime/structured-agent-session-status-feed'
 import { observeResumeRun, type ResumeRun } from './native-chat-resume-run'
 
 /** Capture every frame, even while the dialog is closed or React batches renders. */
 export function watchResumeRunStatus(
   current: () => ResumeRun | null,
-  publish: (run: ResumeRun) => void
+  publish: (run: ResumeRun) => void,
+  target: RuntimeClientTarget = { kind: 'local' }
 ): () => void {
-  const feed = getStructuredAgentSessionStatusFeed({ kind: 'local' })
+  const feed = getStructuredAgentSessionStatusFeed(target)
   const notice = () => {
     const run = current()
     if (!run) {

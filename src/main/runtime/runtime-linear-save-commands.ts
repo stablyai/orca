@@ -1,9 +1,9 @@
 import {
   LINEAR_WRITE_BODY_CAP,
   updateLinearIssueForAgent,
-  LinearWriteFailure,
-  linearError
+  LinearWriteFailure
 } from './runtime-linear-command-dependencies'
+import { linearError } from '../linear/issue-context/errors'
 import type {
   LinearIssueTaskUpdateRequest,
   LinearIssueTaskUpdateResult,
@@ -51,7 +51,7 @@ export class RuntimeLinearSaveCommands extends RuntimeLinearCommentCommands {
     if (Object.keys(fields).length === 0) {
       throw linearError('linear_write_failed', 'No issue fields were provided to save.')
     }
-    const alreadySet = this.linearSavedIssueMatchesIntent(current, fields)
+    const alreadySet = await this.linearSavedIssueMatchesIntent(current, fields)
     const updated = alreadySet
       ? current
       : await this.runLinearAgentWrite(
@@ -62,7 +62,7 @@ export class RuntimeLinearSaveCommands extends RuntimeLinearCommentCommands {
               target.workspaceId,
               { signal }
             )
-            if (!this.linearSavedIssueMatchesIntent(saved, fields)) {
+            if (!(await this.linearSavedIssueMatchesIntent(saved, fields))) {
               throw new LinearWriteFailure(
                 'unconfirmed',
                 'Linear issue save could not be confirmed.'

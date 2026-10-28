@@ -1,26 +1,17 @@
-// Live (real-socket, real-timer) repro harness for issue #5049: Android
-// remote sessions that appear connected but stop responding until the app
-// is reopened. Unlike rpc-client.test.ts (fake timers, mocked e2ee), this
-// runs the REAL rpc-client with real tweetnacl E2EE against an in-process
-// ws server, simulating the Tailscale failure modes behind the report.
-//
-// Opt-in because the quick scenario takes ~15s wall-clock and the full
-// parked-loop scenario ~8 minutes:
-//   ORCA_MOBILE_LIVE_REPRO=1 pnpm vitest run src/transport/rpc-client-live-recovery.test.ts
-//   ORCA_MOBILE_LIVE_REPRO_FULL=1 ... (adds the 8-minute parked-loop case)
+// Exercise legacy framing with real sockets, timers and NaCl against half-open mobile/Tailscale paths (#5049).
+// ORCA_MOBILE_LIVE_REPRO=1 enables the short case; ORCA_MOBILE_LIVE_REPRO_FULL=1 adds the roughly eight-minute recovery loop.
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { randomBytes } from 'node:crypto'
-import type { AddressInfo } from 'node:net'
 import nacl from 'tweetnacl'
 import { WebSocketServer, type WebSocket as ServerSocket } from 'ws'
 import { connect, type RpcClient } from './rpc-client'
 
-// Why: expo-crypto only exists inside a React Native runtime; Node's CSPRNG
-// is equivalent for the harness. Everything else (tweetnacl, the wire
-// protocol) is the real production path.
+// Use Node secure randomness in place of Expo; keep production crypto/framing for the harness.
 vi.mock('expo-crypto', () => ({
   getRandomBytes: (n: number) => new Uint8Array(randomBytes(n))
 }))
+
+vi.mock('./direct-e2ee-framing-policy', () => import('./legacy-direct-framing-test-policy'))
 
 const RUN_LIVE =
   process.env.ORCA_MOBILE_LIVE_REPRO === '1' || !!process.env.ORCA_MOBILE_LIVE_REPRO_FULL
@@ -55,9 +46,7 @@ function e2eeDecrypt(encrypted: string, sharedKey: Uint8Array): string | null {
   return plaintext ? new TextDecoder().decode(plaintext) : null
 }
 
-// Why: port 0 lets the OS assign a free port so the opt-in harness can't
-// fail with EADDRINUSE; the full scenario restarts on the captured port
-// because the client keeps reconnecting to its original URL.
+// Use an OS-assigned initial port, then reuse it because the client retains its reconnect URL.
 function startServer(port = 0): Promise<WebSocketServer> {
   // host must match the 127.0.0.1 clients dial: a wildcard bind lets a foreign loopback listener claim the port and answer here.
   const wss = new WebSocketServer({ host: '127.0.0.1', port })
@@ -70,7 +59,16 @@ function startServer(port = 0): Promise<WebSocketServer> {
       }
       const msg = typeof data === 'string' ? data : data.toString('utf-8')
       if (!sharedKey) {
-        const hello = JSON.parse(msg) as { publicKeyB64: string }
+        const hello: unknown = JSON.parse(msg)
+        if (
+          !hello ||
+          typeof hello !== 'object' ||
+          !('publicKeyB64' in hello) ||
+          typeof hello.publicKeyB64 !== 'string'
+        ) {
+          ws.terminate()
+          return
+        }
         const clientKey = Uint8Array.from(Buffer.from(hello.publicKeyB64, 'base64'))
         sharedKey = nacl.box.before(clientKey, serverKeyPair.secretKey)
         ws.send(JSON.stringify({ type: 'e2ee_ready' }))
@@ -80,12 +78,23 @@ function startServer(port = 0): Promise<WebSocketServer> {
       if (!plaintext) {
         return
       }
-      const request = JSON.parse(plaintext) as { id?: string; type?: string; deviceToken?: string }
+      const request: unknown = JSON.parse(plaintext)
+      if (!request || typeof request !== 'object') {
+        return
+      }
       if (!authenticated) {
-        if (request.type === 'e2ee_auth' && request.deviceToken === AUTH_TOKEN) {
+        if (
+          'type' in request &&
+          request.type === 'e2ee_auth' &&
+          'deviceToken' in request &&
+          request.deviceToken === AUTH_TOKEN
+        ) {
           authenticated = true
           ws.send(e2eeEncrypt(JSON.stringify({ type: 'e2ee_authenticated' }), sharedKey))
         }
+        return
+      }
+      if (!('id' in request) || typeof request.id !== 'string') {
         return
       }
       ws.send(
@@ -97,7 +106,11 @@ function startServer(port = 0): Promise<WebSocketServer> {
 }
 
 function serverPort(wss: WebSocketServer): number {
-  return (wss.address() as AddressInfo).port
+  const address = wss.address()
+  if (!address || typeof address === 'string') {
+    throw new Error('Expected an assigned loopback port')
+  }
+  return address.port
 }
 
 function stopServer(wss: WebSocketServer): Promise<void> {
@@ -167,7 +180,7 @@ describe.runIf(RUN_LIVE)('live foreground recovery (issue #5049)', () => {
   )
 
   it.runIf(RUN_FULL)(
-    'repro: parked retry loop stays stuck until the foreground nudge',
+    'foreground nudge accelerates recovery while the trickle retry is pending',
     { timeout: 600_000 },
     async () => {
       wss = await startServer()
@@ -179,15 +192,12 @@ describe.runIf(RUN_LIVE)('live foreground recovery (issue #5049)', () => {
       await stopServer(wss)
       wss = null
       await waitFor('retry cap scheduled (~5 min)', 480_000, () => c.getReconnectAttempt() >= 12)
-      // The attempt counter hits 12 when the final attempt is *scheduled*;
-      // its 60s backoff timer is still pending. Let it fire and fail while
-      // the server is still down so the loop truly parks.
+      // Wait for the final scheduled retry to fire while the server is still down, beyond the count reaching its cap.
       await sleep(65_000)
       expect(c.getState()).toBe('reconnecting')
 
       wss = await startServer(port)
-      // Pre-fix behavior: even with the server back, a parked loop never
-      // recovers — the user had to restart the app.
+      // The next 90-second trickle retry is still pending during this observation.
       await sleep(70_000)
       expect(c.getState()).not.toBe('connected')
 

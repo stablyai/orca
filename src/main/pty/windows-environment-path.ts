@@ -106,13 +106,13 @@ function readNativeRegistryPaths(
 
 function cachePersistedWindowsPathReads(reads: RegistryPathRead[], readSequence: number): string[] {
   if (readSequence < persistedWindowsPathCommittedSequence) {
-    // Why: a slower async read must not replace a newer synchronous refresh.
+    // An older async read must not overwrite a newer synchronous refresh.
     return persistedWindowsPathCache ? [...persistedWindowsPathCache.segments] : []
   }
   persistedWindowsPathCommittedSequence = readSequence
   const segments = windowsPathRegistryFallback.commitReads(reads)
   if (!segments) {
-    // Why: unresolved hives preserve ordering, but still need negative caching on the PTY hot path.
+    // Cache unresolved hives too, preserving ordering without repeated spawn-path reads.
     persistedWindowsPathCache = { readAt: Date.now(), segments: [] }
     return []
   }
@@ -155,7 +155,7 @@ function readRegExePathsAsync(
 ): Promise<RegistryPathRead[]> {
   return Promise.all(
     WINDOWS_PATH_REGISTRY_KEYS.map(async ([key, valueName]) => {
-      // Why: `/v Path` fails when the value is absent; the native reader calls that an empty PATH.
+      // Missing /v Path fails reg.exe; querying the key treats an absent value as empty like native reads.
       const stdout = await query(getRegExePath(env), ['query', key])
       return stdout === null
         ? { failed: true, segments: [] }
@@ -189,8 +189,7 @@ export function readPersistedWindowsPathSegments(options: ReadWindowsPathOptions
   }
 
   if (!options.forceRefresh && useProductionCache && pendingPersistedWindowsPathRefresh) {
-    // Why: synchronous PTY construction cannot await the active refresh; its stale cache is
-    // safer than duplicating the registry read on Electron's main thread.
+    // Synchronous PTY construction uses stale cache instead of blocking main on a duplicate registry read.
     return persistedWindowsPathCache ? [...persistedWindowsPathCache.segments] : []
   }
 
@@ -213,16 +212,14 @@ export function readPersistedWindowsPathSegments(options: ReadWindowsPathOptions
           return { failed: true, segments: [] }
         }
       })
-    : // Why: no synchronous reg.exe on the PTY hot path; the async refresh fills the cache.
+    : // Never fork synchronous reg.exe on the PTY hot path; async refresh fills the cache.
       (readNativeRegistryPaths(env, pathDelimiter) ?? FAILED_REGISTRY_READS)
   const segments = reads.flatMap((read) => read.segments)
   if (!useProductionCache) {
     return segments
   }
 
-  // Why: local PTY spawn is a hot path on Windows, and each uncached refresh performs two
-  // synchronous native registry reads. A short TTL keeps terminal bursts cheap while still
-  // picking up newly installed CLIs soon.
+  // Short TTL shares native registry reads across terminal bursts while picking up new CLIs.
   return cachePersistedWindowsPathReads(reads, readSequence)
 }
 
@@ -263,7 +260,7 @@ export async function readPersistedWindowsPathSegmentsAsync(
   const refresh = (
     options.execFile
       ? readRegExePathsAsync(execFileRegQuery(options.execFile), env, pathDelimiter)
-      : // Why: an Orca server slot does not ship the native addon, so reg.exe reads it there.
+      : // Server slots lack the native addon and need the reg.exe fallback.
         Promise.resolve(
           readNativeRegistryPaths(env, pathDelimiter) ??
             readRegExePathsAsync(runProcessRegQuery, env, pathDelimiter)
@@ -274,7 +271,7 @@ export async function readPersistedWindowsPathSegmentsAsync(
       return segments
     }
     if (cacheGeneration !== persistedWindowsPathCacheGeneration) {
-      // Why: callers must not merge or inspect a snapshot invalidated while its queries ran.
+      // Retry snapshots invalidated while registry queries were running.
       return readPersistedWindowsPathSegmentsAsync()
     }
     return cachePersistedWindowsPathReads(reads, readSequence)

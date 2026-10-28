@@ -3,10 +3,7 @@ import type { MountAdapter } from '../recording-scenario'
 
 const HOST = 'host-1'
 
-/**
- * The Home card's per-host accounts read. Its decoder is re-exported through `AccountUsage.tsx`,
- * so this recording is also what proves that screen module loads under the mount loader.
- */
+// Load the decoder through AccountUsage so recordings verify the screen module works under the mount loader.
 export function homeAccountsMountAdapters(
   modules: ReturnType<typeof operationModuleLoader>
 ): Record<string, MountAdapter> {

@@ -3,9 +3,6 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 vi.mock('electron', async () =>
   (await import('./createMainWindow-test-harness')).electronModuleMock()
 )
-vi.mock('@electron-toolkit/utils', async () =>
-  (await import('./createMainWindow-test-harness')).electronToolkitUtilsMock()
-)
 vi.mock('./macos-tahoe-release', async () =>
   (await import('./createMainWindow-test-harness')).macosTahoeReleaseMock()
 )
@@ -372,10 +369,7 @@ describe('createMainWindow', () => {
     )
   })
 
-  // Why (#5787): a hung-but-ALIVE renderer (never gone, never crashed) must NOT
-  // silently bypass the close guard — force-killing it that way is what destroyed
-  // other sessions. It must route through window:close-requested so the
-  // save/running-process confirmation runs.
+  // #5787: hung-but-live renderers still need save/process confirmation; bypassing close guards destroys other sessions.
   it('requests confirmation for a hung-but-alive renderer instead of bypassing', () => {
     const windowHandlers: Record<string, (...args: any[]) => void> = {}
     const webContents = {
@@ -410,7 +404,6 @@ describe('createMainWindow', () => {
 
     createMainWindow(null)
 
-    // No render-process-gone and isCrashed() === false: the renderer is alive.
     const preventDefault = vi.fn()
     windowHandlers.close({ preventDefault } as never)
 

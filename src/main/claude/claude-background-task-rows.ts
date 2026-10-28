@@ -1,8 +1,5 @@
-// One durable row per Claude background `task_id`, revised in place from the
-// lifecycle frames so a failed command prints once with the provider sentence.
-
 import type { AgentJournalTurnScope } from '../../shared/agent-session-journal-types'
-import { isSettledBackgroundTaskState } from '../../shared/native-chat-background-task-row'
+import { isSettledBackgroundTaskState } from '../../shared/native-chat/input/native-chat-background-task-row'
 import type { StructuredAgentSessionEventSink } from '../native-chat/agent-session-wire/structured-agent-session-event-sink'
 import { record, taskAliasId } from './claude-background-task-frames'
 import {
@@ -36,20 +33,18 @@ const TASK_SUBTYPES: ReadonlySet<string> = new Set([
   'task_notification'
 ])
 
+const SILENT_ROW_REFRESH_SUBTYPES: ReadonlySet<string> = new Set([
+  'task_progress',
+  'background_tasks_changed'
+])
+
 export type ClaudeBackgroundTaskRowsDeps = {
   sink: StructuredAgentSessionEventSink
-  /** Whether a tool id names a tool call this session forwarded at the TOP
-   *  level. Consulted on first admission only: a task whose spawning tool never
-   *  reached the transcript is a nested child, and a top-level row minted for it
-   *  would claim an invocation the user never saw. */
+  /** Require a forwarded top-level invocation on first admission to exclude nested children. */
   isForwardedParentTool: (toolUseId: string) => boolean
-  /** Whether an earlier provider run of this session rostered this task as a
-   *  subagent. Its announcement is not repeated, so this is the only route from
-   *  a later frame for it — Claude's restart notice above all — to the roster. */
+  /** Recover earlier-run subagent ownership when Claude does not repeat its announcement. */
   rosteredByEarlierRun?: (taskId: string) => boolean
-  /** Opens a turn for the frame being journaled. A typed row is provider
-   *  output, so writing one must reopen a turn the provider resumed itself —
-   *  otherwise the session renders the row while reporting idle. */
+  /** Reopen provider-resumed turns before journaling output so the session reports working. */
   openOutputTurn?: (frame: Record<string, unknown>, observedAt: number) => void
   /** The turn a row written now belongs to: the open one, else the conversation. */
   turnScope: () => AgentJournalTurnScope
@@ -79,14 +74,12 @@ export class ClaudeBackgroundTaskRows {
     )
   }
 
-  /** @internal - exposed for tests only: what the bounded ledgers are holding,
-   *  so eviction can be proved without reaching into the collections. */
+  /** @internal Ledger sizes exposed for eviction tests. */
   get ledgerSizes(): ClaudeBackgroundTaskLedgerSizes & { readonly overflowTerminalRows: number } {
     return { ...this.ledgers.sizes, overflowTerminalRows: this.overflowTerminalRows.size }
   }
 
-  /** The frame being journaled right now, so a write can open its turn. Null
-   *  outside `observe`: a teardown sweep must never open one. */
+  /** Null outside observe so teardown writes cannot reopen a turn. */
   private journaling: { frame: Record<string, unknown>; observedAt: number } | null = null
 
   observe(message: Record<string, unknown>, observedAt: number = this.now()): boolean {
@@ -98,8 +91,7 @@ export class ClaudeBackgroundTaskRows {
     }
   }
 
-  /** A Monitor result can identify its task before any lifecycle announcement.
-   *  Its later notification belongs to that tool call, not a transcript row. */
+  /** Monitor results may precede announcements; their notifications belong to the tool call. */
   observeMonitorToolResult(taskId: unknown): void {
     const id = taskAliasId(taskId)
     if (id !== undefined) {
@@ -189,10 +181,7 @@ export class ClaudeBackgroundTaskRows {
     if (row && row.terminalNotificationReceived) {
       return true
     }
-    // Remembered even for a task never admitted. It scopes the anti-resurrection
-    // guard to ANNOUNCEMENTS: a late `task_started` cannot reopen work already
-    // reported finished, which is a different thing from this frame stating the
-    // outcome itself.
+    // Remember terminal evidence even without admission so late announcements cannot resurrect work.
     this.ledgers.rememberTerminal(this.rows, id, claudeBackgroundTaskToolUseId(message))
     if (!row) {
       return this.openTerminalRow(id, message)
@@ -203,10 +192,7 @@ export class ClaudeBackgroundTaskRows {
     return true
   }
 
-  /** The row a terminal frame opens for itself. A task the transcript never
-   *  admitted still owes the user its outcome, and the frame carries everything
-   *  that outcome needs, so the row map only ever ENRICHES one — a missing entry
-   *  is not a reason to render nothing. */
+  // A terminal frame supplies its own outcome; a retained row only enriches it.
   private openTerminalRow(id: string, message: Record<string, unknown>): boolean {
     if (!ensureClaudeBackgroundTaskRowSlot(this.rows, MAX_TASK_ROWS)) {
       this.overflowTerminalRows.observeNotificationWithoutSlot(id, message)
@@ -236,9 +222,7 @@ export class ClaudeBackgroundTaskRows {
       return true
     }
     const patch = record(message.patch)
-    // A tracked row remains this owner's responsibility even if a later patch
-    // reports foreground execution; its terminal notification still revises
-    // the durable row. Only an untracked task belongs to the foreground owner.
+    // Retain ownership of admitted rows even if later patches mark the task foreground.
     if (patch?.is_backgrounded === false && !this.rows.has(id)) {
       this.ledgers.rememberForeign(id, 'foreground')
       return true
@@ -247,8 +231,6 @@ export class ClaudeBackgroundTaskRows {
     if (change.state && isSettledBackgroundTaskState(change.state)) {
       this.ledgers.rememberTerminal(this.rows, id, claudeBackgroundTaskToolUseId(message))
     }
-    // A patch is folded into the row it names and is never a row of its own, so
-    // an untracked task takes no row from it.
     if (row) {
       this.revise(id, change)
     }
@@ -284,7 +266,14 @@ export class ClaudeBackgroundTaskRows {
       id,
       row,
       () => {
-        if (journaling && openOutputTurn) {
+        // Why: progress and roster ticks refresh the row only. Opening a turn
+        // here flips an idle chat back to working.
+        const subtype = journaling?.frame.subtype
+        if (
+          journaling &&
+          openOutputTurn &&
+          (typeof subtype !== 'string' || !SILENT_ROW_REFRESH_SUBTYPES.has(subtype))
+        ) {
           this.deps.openOutputTurn?.(journaling.frame, journaling.observedAt)
         }
       },

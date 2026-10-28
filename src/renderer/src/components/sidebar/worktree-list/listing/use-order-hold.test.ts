@@ -108,7 +108,8 @@ describe('useProjectRecencyHeldWhileEngaged', () => {
     workspaces: [],
     worktrees: [makeWorktree('b', 'b', { lastActivityAt: recentAt })],
     folderWorkspaces: [],
-    repoMap: new Map()
+    repoMap: new Map(),
+    repoOf: () => undefined
   })
   const recentOf = (index: SidebarFeedIndex): number[] =>
     index.worktrees.map((worktree: Worktree) => worktree.lastActivityAt)

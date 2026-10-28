@@ -19,6 +19,7 @@ export async function generateConversationName(input: {
   params: ResolvedSourceControlAiGenerationParams
   target: CommitMessageGenerationTarget
   spawnAgent: SpawnSourceControlAgent
+  shouldExecute?: () => boolean
 }): Promise<GenerateConversationNameResult> {
   const { context, params } = input
   const firstPrompt = clampConversationNameFirstPrompt(context.firstPrompt)

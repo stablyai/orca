@@ -32,7 +32,7 @@ export function RuntimeShareComputerButton(): React.JSX.Element {
         setActiveLinkCount(result.grants.length)
       }
     } catch {
-      // Why: the count is a hint; the dialog reports load failures where they can be acted on.
+      // Counts are hints; the dialog reports actionable load failures.
     }
   }, [mountedRef])
   useEffect(() => {

@@ -8,11 +8,7 @@ import { resumeRunView, type ResumeRunFilter } from './native-chat-resume-run-vi
 import { ResumeRunStatusIcon } from './NativeChatResumeRunStatusIcon'
 import { ResumeRunSummary } from './NativeChatResumeRunSummary'
 
-/**
- * The dialog's view of a run it is following: its title, the progress line and filters, the rows
- * in the order that matters, and each row's status icon. Null when no run is being followed, so
- * the dialog is then exactly the offer it was.
- */
+/** Project the followed run’s status/filters/ordered rows. Without one, return null so the dialog shows the host offer. */
 
 export type ResumeRunPanel = {
   title: React.ReactNode

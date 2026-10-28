@@ -14,7 +14,10 @@ export async function updatePullRequestBySlug(
     return { ok: false, error: number.error }
   }
   if (!args.updates || typeof args.updates !== 'object') {
-    return { ok: false, error: { type: 'validation_error', message: 'Updates required.' } }
+    return {
+      ok: false,
+      error: { type: 'validation_error', message: 'Updates required.', reason: 'updates_required' }
+    }
   }
   const patchArgs: string[] = [
     '-X',

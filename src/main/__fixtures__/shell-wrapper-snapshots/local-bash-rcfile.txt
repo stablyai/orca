@@ -3,8 +3,7 @@ _orca_shell_features=",${ORCA_SHELL_FEATURES:-},"
 builtin unset ORCA_SHELL_FEATURES
 __orca_has_feature() { [[ "$_orca_shell_features" == *",$1,"* ]]; }
 __orca_has_feature identity && printf "\033]777;orca-shell-start:%s\007" "$$"
-# Why a plain variable: the channel is consumed and destroyed in these first
-# lines, so nothing this shell later spawns can see or inherit the selection.
+# Consume feature selection before startup files can inherit it into children.
 __orca_ready_marker=""
 __orca_has_feature ready && __orca_ready_marker=1
 unset _orca_shell_features
@@ -17,14 +16,9 @@ elif [[ -f "$HOME/.bash_login" ]]; then
 elif [[ -f "$HOME/.profile" ]]; then
   source "$HOME/.profile"
 fi
-# Why: enable bracketed paste so Orca can deliver a multiline startup prompt as
-# a single literal paste (ESC[200~…ESC[201~). Without it, older readline builds
-# treat each embedded newline as Enter and mangle the prompt into PS2
-# continuation. Modern readline defaults this on; force it for the rest.
+# Older readline needs explicit bracketed paste so multiline prompts do not submit each newline.
 [[ $- == *i* ]] && bind 'set enable-bracketed-paste on' 2>/dev/null
-# Why: preserve bash's normal login-shell contract. Many users already source
-# ~/.bashrc from ~/.bash_profile; forcing ~/.bashrc again here would duplicate
-# PATH edits, hooks, and prompt init in Orca startup-command shells.
+# Login profiles may already source .bashrc; sourcing it again would duplicate PATH, hooks and prompt setup.
 __orca_restore_agent_teams_path() {
   [[ -n "${ORCA_AGENT_TEAMS_SHIM_DIR:-}" ]] || return 0
   case "$PATH" in
@@ -46,8 +40,7 @@ if [ -n "${ORCA_WSL_CLI_DIR:-}" ]; then
     printf 'Orca CLI unavailable: cannot run %s. Check WSL Windows-drive mount options.\n' "$ORCA_WSL_CLI_DIR/${ORCA_CLI_COMMAND:-}" >&2
   fi
 fi
-# Why: user startup files may set the default OpenCode config after Orca's
-# spawn env; restore the Orca-managed config dir before the first prompt.
+# Restore Orca-managed config after user startup files may override it.
 [[ -n "${ORCA_OPENCODE_CONFIG_DIR:-}" ]] && export OPENCODE_CONFIG_DIR="${ORCA_OPENCODE_CONFIG_DIR}"
 if [[ -n "${ORCA_DATA_ACCOUNT_DATA_HOME:-}" ]]; then
   export XDG_DATA_HOME="${ORCA_DATA_ACCOUNT_DATA_HOME}"
@@ -57,7 +50,7 @@ if [[ -n "${ORCA_DATA_ACCOUNT_DATA_HOME:-}" ]]; then
     export OPENCODE_DB="opencode.db"
   fi
 fi
-[[ -n "${ORCA_MIMOCODE_HOME:-}" ]] && export MIMOCODE_HOME="${ORCA_MIMOCODE_HOME}"
+[[ -n "${ORCA_MIMOCODE_CONFIG_DIR:-}" ]] && export MIMOCODE_CONFIG_DIR="${ORCA_MIMOCODE_CONFIG_DIR}"
 # Why: OMP does not auto-load Orca's managed status extension; wrap only
 # interactive launch invocations so subcommands such as `omp config` keep
 # their normal argv shape.
@@ -120,7 +113,7 @@ if [[ -n "${ORCA_OMP_STATUS_EXTENSION:-}" ]]; then
   function omp { __orca_omp "$@"; }
 fi
 
-# Why: Codex must keep using Orca's runtime CODEX_HOME after profile scripts.
+# Profile scripts must not replace Orca's runtime CODEX_HOME.
 [[ -n "${ORCA_CODEX_HOME:-}" ]] && export CODEX_HOME="${ORCA_CODEX_HOME}"
 # Why: a typed alias expands inside the shell, after pane launch prep.
 # Why unalias inside the substitution: an alias named codex makes command -v
@@ -134,6 +127,9 @@ if [[ -n "${__orca_codex_binary:-}" && -x "${__orca_codex_binary}" ]]; then
   function codex {
     # Why local: zsh's warn_create_global warns for each global a function creates.
     local __orca_codex_arg __orca_codex_isolate="${ORCA_CODEX_ISOLATE:-1}" __orca_codex_identity="${ORCA_CODEX_ISOLATE:-1}"
+    if [[ "${ORCA_REMOTE_VIEWER_CLIPBOARD:-}" == 1 && -z "${SSH_CONNECTION+x}" && -z "${SSH_TTY+x}" ]]; then
+      local -x SSH_CONNECTION='127.0.0.1 0 127.0.0.1 0'
+    fi
     if [[ -n "${ORCA_CODEX_LAUNCH_PREFLIGHT:-}" && -x "${ORCA_CODEX_LAUNCH_PREFLIGHT}" ]]; then
       "${ORCA_CODEX_LAUNCH_PREFLIGHT}" agent hooks prepare-codex >/dev/null 2>&1 || :
     fi
@@ -184,11 +180,7 @@ if [[ -n "${ORCA_CLAUDE_PROFILE_POINTER:-}" && -n "${__orca_claude_binary:-}" &&
 fi
 unset __orca_claude_binary
 
-# Why: emit OSC 133 C/D so terminal-command-lifecycle can drop stale agent
-# status when the foreground command (e.g. an interrupted Claude/Codex CLI)
-# exits — mirrors the zsh wrapper. Without this, bash users (default on most
-# Linux distros) keep a stuck 'working' spinner for up to 30 min after the
-# CLI exits without sending a Stop/SessionEnd hook.
+# OSC 133 C/D clears agent status after interrupted CLIs exit without sending Stop/SessionEnd hooks.
 __orca_initializing_wrapper=1
 __orca_osc133_precmd() {
   local exit_code=$?
@@ -236,12 +228,11 @@ __orca_osc133_preexec() {
   __orca_run_user_debug_trap
   [[ -z "${__orca_in_prompt_command:-}" ]] || return 0
   [[ -z "${__orca_in_command:-}" ]] || return 0
-  # Why: bash DEBUG fires for every simple command, including PROMPT_COMMAND
-  # bodies and chained traps can call us repeatedly for one command.
+  # DEBUG runs per simple command; chained traps may reenter for the same foreground command.
   printf "\033]133;C\007"
   __orca_in_command=1
 }
-# Why: prepend so we capture $? before the user's PROMPT_COMMAND chain mutates it.
+# Capture $? before the user's PROMPT_COMMAND chain mutates it.
 __orca_normalize_prompt_command_part() {
   local __orca_value="$1" __orca_output_name="$2" __orca_character __orca_chunk
   local __orca_value_length=${#1} __orca_suffix_length=0 __orca_backslash_length=0
@@ -377,8 +368,6 @@ __orca_finish_legacy_prompt_dispatch() {
       eval "$__orca_suffix_part"
     done
   fi
-  trap '__orca_osc133_preexec' DEBUG
-  unset __orca_in_legacy_prompt_wrapper
 }
 __orca_normalize_prompt_command() {
   [[ -z "${__orca_prompt_command_normalized:-}" ]] || return 0
@@ -400,7 +389,8 @@ __orca_normalize_prompt_command() {
     __orca_prompt_status_variable="__orca_prompt_status_$$"
     __orca_prompt_status_capture_command="$__orca_prompt_status_variable=\$?"
     __orca_prompt_status_value="\${$__orca_prompt_status_variable}"
-    PROMPT_COMMAND="$__orca_prompt_status_capture_command; __orca_prompt_status=$__orca_prompt_status_value"'; __orca_prompt_had_functrace=""; if [[ -o functrace ]]; then __orca_prompt_had_functrace=1; set +T; fi; __orca_outer_debug_trap_spec="$(trap -p DEBUG)"; [[ -z "$__orca_prompt_had_functrace" ]] || set -T; unset __orca_prompt_had_functrace; __orca_run_prompt_command_array; __orca_finish_legacy_prompt_dispatch'
+    # Why: a changed DEBUG trap misses the capture command, and bash <= 4.3 reverts traps set in functions.
+    PROMPT_COMMAND="$__orca_prompt_status_capture_command; __orca_in_legacy_prompt_wrapper=1; __orca_prompt_status=$__orca_prompt_status_value"'; __orca_prompt_had_functrace=""; if [[ -o functrace ]]; then __orca_prompt_had_functrace=1; set +T; fi; __orca_outer_debug_trap_spec="$(trap -p DEBUG)"; [[ -z "$__orca_prompt_had_functrace" ]] || set -T; unset __orca_prompt_had_functrace; __orca_run_prompt_command_array; __orca_finish_legacy_prompt_dispatch; trap __orca_osc133_preexec DEBUG; unset __orca_in_legacy_prompt_wrapper'
   fi
 }
 __orca_prepend_prompt_command() {
@@ -422,8 +412,7 @@ __orca_append_prompt_command() {
   fi
 }
 __orca_prepend_prompt_command "__orca_osc133_precmd"
-# Why: append the marker through PROMPT_COMMAND so it fires after the login
-# startup files have rebuilt the prompt, without re-running user rc files.
+# Mark readiness after user prompt setup without rerunning startup files.
 if [[ -n "$__orca_ready_marker" ]]; then
   __orca_prompt_mark() {
     printf "\033]777;orca-shell-ready\007"
@@ -476,8 +465,7 @@ fi
 unset __orca_debug_trap_spec __orca_debug_trap_command __orca_had_functrace
 unset -f __orca_normalize_prompt_command_part __orca_normalize_prompt_command __orca_prepend_prompt_command __orca_append_prompt_command
 unset __orca_prompt_command_normalized
-# Why: arm DEBUG after wrapper setup; otherwise bash treats our own rcfile
-# commands as a foreground command and emits a fake C/D before the first prompt.
+# Arm DEBUG after wrapper setup to avoid fake foreground C/D events before the first prompt.
 __orca_initial_prompt=1
 trap '__orca_osc133_preexec' DEBUG
 unset __orca_initializing_wrapper

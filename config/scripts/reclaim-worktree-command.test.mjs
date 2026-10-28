@@ -1,6 +1,6 @@
 import { PassThrough } from 'node:stream'
 import { expect, it, vi } from 'vitest'
-import { parseReclaimArguments, runReclaimCommand } from './reclaim-worktree-command.mjs'
+import { runReclaimCommand } from './reclaim-worktree-command.mjs'
 
 function terminal(answer, tty = true) {
   const input = new PassThrough()
@@ -22,14 +22,15 @@ it.each(['Y', 'y', 'yes', ' YES '])(
   async (answer) => {
     const streams = terminal(answer)
     const reclaim = vi.fn().mockResolvedValue({ completed: true })
-    await runReclaimCommand(['--tests-stopped', '--release-cache-min-age-days', '7'], {
-      ...streams,
-      reclaim
-    })
+    await runReclaimCommand(
+      ['--tests-stopped', '--release-cache-min-age-days', '7', '--generated-min-age-days', '3'],
+      { ...streams, reclaim }
+    )
     expect(reclaim.mock.calls.map(([options]) => options.apply)).toEqual([false, true])
     expect(reclaim.mock.calls[1][0]).toMatchObject({
       testsStopped: true,
-      releaseCacheMinAgeDays: 7
+      releaseCacheMinAgeDays: 7,
+      generatedMinAgeDays: 3
     })
   }
 )
@@ -56,6 +57,7 @@ it('does not interpret piped input as approval', async () => {
   const reclaim = vi.fn().mockResolvedValue({ completed: true })
   await runReclaimCommand([], { ...streams, reclaim })
   expect(reclaim).toHaveBeenCalledTimes(1)
+  expect(reclaim.mock.calls[0][0].apply).toBe(false)
   expect(streams.text()).not.toContain('[y/N]')
 })
 
@@ -73,9 +75,14 @@ it.each([
   ['--release-cache-min-age-days'],
   ['--release-cache-min-age-days', 'NaN'],
   ['--release-cache-min-age-days', '-1'],
+  ['--generated-min-age-days'],
+  ['--generated-min-age-days', 'NaN'],
+  ['--generated-min-age-days', '-1'],
   ['--unknown']
-])('rejects invalid flags before any sweep: %j', (...args) => {
-  expect(() => parseReclaimArguments(args)).toThrow()
+])('rejects invalid flags before any sweep: %j', async (...args) => {
+  const reclaim = vi.fn()
+  await expect(runReclaimCommand(args, { reclaim })).rejects.toThrow()
+  expect(reclaim).not.toHaveBeenCalled()
 })
 
 it('shows the single command without starting cleanup for help', async () => {

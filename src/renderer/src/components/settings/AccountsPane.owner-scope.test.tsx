@@ -156,7 +156,6 @@ it("drops a server's late account result after the page moves to another server"
 
   await act(async () => fake.pendingSelect?.(claudeRoster('acct-a', 'alpha@server-a.test', true)))
 
-  // Server A's roster must not replace server B's in the pane now scoped to B.
   expect(screen.queryByText('alpha@server-a.test')).toBeNull()
   expect(screen.getByText('beta@server-b.test')).toBeTruthy()
 })

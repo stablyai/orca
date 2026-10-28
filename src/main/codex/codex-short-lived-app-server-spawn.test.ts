@@ -9,9 +9,7 @@ vi.mock('../codex-cli/command', () => ({ resolveCodexCommand: () => NPM_CODEX_SH
 import { buildNativeHealInvocation } from './codex-session-index-heal'
 import { createCodexModelCatalogProbe } from './codex-model-catalog-probe'
 
-// Why: spawnProcess resolves npm's codex.cmd past cmd.exe, but only when it is handed the shim.
-// A builder that pre-wraps it in `cmd.exe /d /c` puts cmd.exe back into every short-lived
-// Codex launch — hundreds of them while a large history indexes.
+// Pass the npm shim directly so spawnProcess can resolve it without cmd.exe.
 describe('short-lived Codex app-server invocations on Windows', () => {
   const originalPlatform = Object.getOwnPropertyDescriptor(process, 'platform')
 

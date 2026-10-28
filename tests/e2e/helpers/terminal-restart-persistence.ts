@@ -28,15 +28,7 @@ export function seededRepoPathOrSkip(): string {
   return repoPath
 }
 
-/**
- * Shared bootstrap for a *first* launch: attach the seeded test repo,
- * activate its worktree, ensure a terminal is mounted, and return the
- * PTY id we can drive with `execInTerminal`.
- *
- * Why: every test in this file needs the exact same starting state on the
- * first launch. Inlining it would obscure the thing each test is actually
- * asserting about the *second* launch.
- */
+// Attach and activate the seeded repo on first launch, returning its mounted PTY for execInTerminal.
 export async function bootstrapFirstLaunch(
   page: Page,
   repoPath: string
@@ -62,11 +54,7 @@ export async function bootstrapFirstLaunch(
   return { worktreeId, ptyId }
 }
 
-/**
- * Shared bootstrap for a *second* launch: just wait for the session to
- * restore, and confirm the previously-active worktree is the active one
- * again so downstream assertions operate against the right worktree.
- */
+// Require the expected active worktree after session restoration.
 export async function bootstrapRestoredLaunch(
   page: Page,
   expectedWorktreeId: string,
@@ -77,9 +65,7 @@ export async function bootstrapRestoredLaunch(
     .poll(async () => getActiveWorktreeId(page), { timeout: 10_000 })
     .toBe(expectedWorktreeId)
   await ensureTerminalVisible(page)
-  // Why: the PaneManager remounts asynchronously after session hydration. The
-  // restored terminal surface is what we're about to assert against, so make
-  // sure it exists before any content/layout assertion races.
+  // Hydration precedes PaneManager remount; require the real surface before content/layout assertions.
   await waitForActiveTerminalManager(page, 30_000)
   await waitForPaneCount(page, paneCount, 30_000)
 }

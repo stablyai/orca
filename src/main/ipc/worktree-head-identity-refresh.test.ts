@@ -56,8 +56,7 @@ function mockRead(identities: WorktreeHeadIdentity[] = [], complete = true): voi
   vi.mocked(readGitCommonHeadIdentities).mockResolvedValue({ identities, complete })
 }
 
-// Advance only the clock, so promotion-on-the-next-event is exercised without
-// the one-shot catch-up timer firing and muddling the assertion.
+// Move only wall time to test event-driven promotion without firing the catch-up timer.
 function skipInterval(): void {
   vi.setSystemTime(Date.now() + HEAD_IDENTITY_FULL_REBASELINE_INTERVAL_MS)
 }
@@ -85,7 +84,6 @@ describe('refreshWorktreeHeadIdentities', () => {
 
     await refreshWorktreeHeadIdentities(makeHost(), state, true, headIdentityScopeForEntry('wt-a'))
 
-    // A scoped first call still cannot trust an empty memo.
     expect(lastScope()).toEqual(FULL_HEAD_IDENTITY_SCOPE)
     expect(notifyWorktreeHeadIdentitiesChanged).not.toHaveBeenCalled()
   })
@@ -111,7 +109,6 @@ describe('refreshWorktreeHeadIdentities', () => {
     await refreshWorktreeHeadIdentities(host, state, false)
     vi.mocked(readGitCommonHeadIdentities).mockClear()
 
-    // A `locked` / `config.worktree` write classifies to the empty scope.
     await refreshWorktreeHeadIdentities(host, state, true, EMPTY_HEAD_IDENTITY_SCOPE)
 
     expect(readGitCommonHeadIdentities).not.toHaveBeenCalled()
@@ -125,8 +122,7 @@ describe('refreshWorktreeHeadIdentities', () => {
     await refreshWorktreeHeadIdentities(host, state, true, PRIMARY_HEAD_IDENTITY_SCOPE)
     expect(lastScope()).toEqual(PRIMARY_HEAD_IDENTITY_SCOPE)
 
-    // A ref can move with no event under any admin dir (`git update-ref` from a
-    // sibling worktree), so the blind window has to be bounded.
+    // External update-ref can move a branch without any watched admin-directory write.
     skipInterval()
     await refreshWorktreeHeadIdentities(host, state, true, PRIMARY_HEAD_IDENTITY_SCOPE)
     expect(lastScope()).toEqual(FULL_HEAD_IDENTITY_SCOPE)
@@ -141,26 +137,18 @@ describe('refreshWorktreeHeadIdentities', () => {
     await refreshWorktreeHeadIdentities(host, state, false)
     vi.mocked(readGitCommonHeadIdentities).mockClear()
 
-    // `git worktree lock`/`unlock` and sparse toggles classify to the empty
-    // scope. They must not be able to starve the re-baseline that bounds the
-    // window where a ref moved with no event under any admin dir.
+    // Empty-scope structural churn must not starve the full freshness checkpoint.
     skipInterval()
     mockRead([identity('bbb')])
-    // An empty scope only ever reaches the refresh from a structural burst, so
-    // the reachable pairing is `emit: false`: the promotion's job here is
-    // baseline/cache hygiene, and the structural catalog notification that runs
-    // in the same flush is what publishes the head.
+    // Structural catalog notification carries the head; empty-scope promotion silently repairs the baseline.
     await refreshWorktreeHeadIdentities(host, state, false, EMPTY_HEAD_IDENTITY_SCOPE)
 
     expect(lastScope()).toEqual(FULL_HEAD_IDENTITY_SCOPE)
     expect(notifyWorktreeHeadIdentitiesChanged).not.toHaveBeenCalled()
 
-    // Re-baselined, so the next narrow burst diffs against the fresh head
-    // instead of re-reporting a move the catalog already published.
     await refreshWorktreeHeadIdentities(host, state, true, headIdentityScopeForEntry('wt-a'))
     expect(notifyWorktreeHeadIdentitiesChanged).not.toHaveBeenCalled()
 
-    // The promotion also re-arms the interval, so the next empty burst is free.
     vi.mocked(readGitCommonHeadIdentities).mockClear()
     await refreshWorktreeHeadIdentities(host, state, false, EMPTY_HEAD_IDENTITY_SCOPE)
     expect(readGitCommonHeadIdentities).not.toHaveBeenCalled()
@@ -169,8 +157,7 @@ describe('refreshWorktreeHeadIdentities', () => {
   it('does not arm the freshness clock on a full read that could not enumerate', async () => {
     const host = makeHost()
     const state = createWorktreeHeadIdentityRefreshState()
-    // A full read whose `worktrees/` listing failed has not seen entries added
-    // since the last good listing, so it is not a freshness checkpoint.
+    // Failed enumeration cannot prove a complete freshness checkpoint.
     mockRead([identity('aaa')], false)
     await refreshWorktreeHeadIdentities(host, state, false)
     mockRead([identity('aaa')])
@@ -178,7 +165,6 @@ describe('refreshWorktreeHeadIdentities', () => {
     await refreshWorktreeHeadIdentities(host, state, true, headIdentityScopeForEntry('wt-a'))
     expect(lastScope()).toEqual(FULL_HEAD_IDENTITY_SCOPE)
 
-    // That one enumerated, so the clock arms and the next narrow burst stays narrow.
     await refreshWorktreeHeadIdentities(host, state, true, headIdentityScopeForEntry('wt-a'))
     expect(lastScope()).toEqual(headIdentityScopeForEntry('wt-a'))
   })
@@ -246,8 +232,7 @@ describe('refreshWorktreeHeadIdentities', () => {
     })
     await refreshWorktreeHeadIdentities(host, state, true, headIdentityScopeForEntry('wt-a'))
 
-    // The baseline must still hold `aaa`, so the next refresh re-reports `bbb`
-    // rather than diffing it away as already published.
+    // Failed publication must preserve the old baseline so the next refresh retries the notification.
     vi.mocked(notifyWorktreeHeadIdentitiesChanged).mockClear()
     await refreshWorktreeHeadIdentities(host, state, true, headIdentityScopeForEntry('wt-a'))
     expect(notifyWorktreeHeadIdentitiesChanged).toHaveBeenCalledWith(expect.anything(), 'repo-1', [
@@ -277,8 +262,7 @@ describe('refreshWorktreeHeadIdentities', () => {
       headIdentityScopeForEntry('wt-a')
     )
     await refreshWorktreeHeadIdentities(host, state, true, headIdentityScopeForEntry('wt-b'))
-    // macOS recreates the window while the watch lives on: the queued re-run
-    // returns at the teardown guard and must not lose the scope with it.
+    // macOS window recreation can strand a queued scope behind a destroyed-window guard.
     windowState.destroyed = true
     release()
     await inFlight
@@ -325,7 +309,6 @@ describe('refreshWorktreeHeadIdentities', () => {
     await refreshWorktreeHeadIdentities(host, state, true, headIdentityScopeForEntry('wt-a'))
     expect(notifyWorktreeHeadIdentitiesChanged).not.toHaveBeenCalled()
 
-    // Listing recovers with wt-b unchanged: it must not be reported as moved.
     mockRead([identity('aaa'), other])
     await refreshWorktreeHeadIdentities(host, state, true, headIdentityScopeForEntry('wt-a'))
     expect(notifyWorktreeHeadIdentitiesChanged).not.toHaveBeenCalled()
@@ -337,13 +320,11 @@ describe('refreshWorktreeHeadIdentities', () => {
     mockRead([identity('aaa')])
     await refreshWorktreeHeadIdentities(host, state, false)
 
-    // A scoped pass leaves any drift it could not see unbounded, so it arms a
-    // one-shot catch-up rather than waiting for an event that may never come.
+    // A scoped pass needs a one-shot full read even if no further event arrives.
     await refreshWorktreeHeadIdentities(host, state, true, headIdentityScopeForEntry('wt-a'))
     expect(lastScope()).toEqual(headIdentityScopeForEntry('wt-a'))
 
-    // External `git update-ref` moved the head with no watched write, then total
-    // silence: no burst, no debounce flush, nothing.
+    // Model an unwatched external ref update followed by complete event silence.
     mockRead([identity('bbb')])
     await vi.advanceTimersByTimeAsync(HEAD_IDENTITY_FULL_REBASELINE_INTERVAL_MS)
 
@@ -358,8 +339,6 @@ describe('refreshWorktreeHeadIdentities', () => {
     const host = makeHost()
     const state = createWorktreeHeadIdentityRefreshState()
     mockRead([identity('aaa')])
-    // Cold start is a full pass: it disarms rather than arming, because nothing
-    // is outstanding after a full read.
     await refreshWorktreeHeadIdentities(host, state, false)
     expect(state.rebaselineTimer).toBeNull()
 
@@ -367,8 +346,6 @@ describe('refreshWorktreeHeadIdentities', () => {
     await vi.advanceTimersByTimeAsync(HEAD_IDENTITY_FULL_REBASELINE_INTERVAL_MS * 5)
     expect(readGitCommonHeadIdentities).not.toHaveBeenCalled()
 
-    // Re-baseline so the scoped pass below stays scoped, then check that the
-    // catch-up it arms disarms once it has run: never a recurring poll.
     await refreshWorktreeHeadIdentities(host, state, false, FULL_HEAD_IDENTITY_SCOPE)
     await refreshWorktreeHeadIdentities(host, state, true, headIdentityScopeForEntry('wt-a'))
     expect(state.rebaselineTimer).not.toBeNull()

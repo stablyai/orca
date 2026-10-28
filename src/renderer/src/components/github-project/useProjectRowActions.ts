@@ -206,7 +206,7 @@ export function useProjectRowActions({
       if (!workItem) {
         return
       }
-      // Why: issue #4756 changed only TaskPage's "Create workspace"; Project view stays on direct "start work now" launch.
+      // Project actions start work immediately; TaskPage’s background creation flow does not apply.
       void launchWorkItemDirect({
         item: workItem,
         repoId: resolution.repo.id,

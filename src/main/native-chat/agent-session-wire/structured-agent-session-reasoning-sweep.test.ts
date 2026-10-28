@@ -1,5 +1,3 @@
-// A reasoning row a dead generation left open is ended by both host sweeps, and is not by itself
-// evidence that a response was interrupted.
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'

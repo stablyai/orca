@@ -4,6 +4,12 @@ import { makePaneKey } from '../../../../shared/stable-pane-id'
 import { sendTerminalInputThroughPane } from './pty-connection-test-dom'
 import { flushAsyncTicks } from './pty-connection-test-async'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
+import {
+  bindsPaneInStore,
+  expectWindowStartAskedMain,
+  mainLayoutApplyTransport,
+  mainStartsPaneAs
+} from './pty-connection-test-main-pane-start-fixtures'
 import { expectMainFrameClosesExitedSplitPaneOnce } from './pty-connection-test-exited-split-pane-close'
 import {
   LEAF_1,
@@ -82,6 +88,7 @@ export function registerPtyConnectionPtyExitTeardownTests(): void {
         }
       })
       await installTerminalTestGlobals()
+      ;(await mainLayoutApplyTransport()).reset()
     })
 
     afterEach(async () => {
@@ -243,7 +250,7 @@ export function registerPtyConnectionPtyExitTeardownTests(): void {
     })
 
     it('closes a hidden split pane whose PTY exits before output instead of keeping a ghost', async () => {
-      // Why (regression, ghost blank pane): a hidden pane's bytes are withheld by the hidden-delivery gate, so "no output" proves nothing — keeping it strands a blank ghost on reveal.
+      // Hidden delivery withholds bytes, so no output cannot justify retaining an exited ghost pane.
       const { connectPanePty } = await import('./pty-connection')
       const transport = createMockTransport('pty-pane-2')
       transportFactoryQueue.push(transport)
@@ -272,7 +279,7 @@ export function registerPtyConnectionPtyExitTeardownTests(): void {
     })
 
     it('keeps a worktree sole terminal mounted when its freshly-spawned PTY exits before input (direnv failure)', async () => {
-      // Why (regression): a failing .envrc direnv makes the sole terminal's shell exit immediately; routing to onPtyExitRef would close the tab and bounce the user to Landing, so keep it mounted.
+      // Keep an unused shell mounted after startup failure so direnv errors do not close the tab and return to Landing.
       const { connectPanePty } = await import('./pty-connection')
       const transport = createMockTransport('tab-pty')
       transportFactoryQueue.push(transport)
@@ -298,9 +305,7 @@ export function registerPtyConnectionPtyExitTeardownTests(): void {
     })
 
     it('keeps a worktree sole terminal mounted when only a captured shortcut preceded the exit', async () => {
-      // Why (regression): captured shortcuts refresh the redraw window, but that must not
-      // count as "the user typed into this pane" — otherwise Shift+Enter before a direnv
-      // failure closes the tab and bounces the user to Landing.
+      // Shortcut-driven redraw activity is not typed input; Shift+Enter must not turn startup failure into tab closure.
       const { connectPanePty } = await import('./pty-connection')
       const transport = createMockTransport('tab-pty')
       transportFactoryQueue.push(transport)
@@ -342,8 +347,7 @@ export function registerPtyConnectionPtyExitTeardownTests(): void {
 
       onPtyExit?.('tab-pty', -1)
 
-      // A synthetic exit is not proof that the remote process ended. Keep the
-      // persisted binding and let the tab-level handler mark it unverifiable.
+      // Synthetic remote exit is unverifiable; retain the persisted binding for tab-level recovery.
       expect(deps.clearExitedPanePtyLayoutBinding).not.toHaveBeenCalled()
       expect(deps.clearTabPtyId).not.toHaveBeenCalled()
       expect(deps.onPtyExitRef.current).toHaveBeenCalledWith('tab-pty', -1)
@@ -529,16 +533,23 @@ export function registerPtyConnectionPtyExitTeardownTests(): void {
       transport.connect.mockImplementation(
         async (options: { sessionId?: string; callbacks: ConnectCallbacks }) => {
           callbacks.push(options.callbacks)
-          if (options.sessionId) {
+          if (options.sessionId === 'lost-pty') {
             options.callbacks.onData?.('too many consoles in use, max consoles is 128')
             return { id: currentPtyId, sessionExpired: true }
           }
-          currentPtyId = 'resume-pty'
-          return currentPtyId
+          // Switch on, the replacement is main's start, which the window attaches to.
+          currentPtyId = options.sessionId ?? 'resume-pty'
+          return options.sessionId ? { id: currentPtyId } : currentPtyId
         }
       )
       transportFactoryQueue.push(transport)
       installSleepingCodexResumeState('lost-pty')
+      if (ORCA_LAYOUT_OWNER_IS_MAIN) {
+        await mainStartsPaneAs({
+          ptyId: 'pty-main',
+          bind: bindsPaneInStore(() => mockStoreState, 'tab-1', LEAF_1)
+        })
+      }
       const deps = createDeps({
         onPaneProcessDied: vi.fn(),
         restoredLeafId: LEAF_1,
@@ -548,10 +559,14 @@ export function registerPtyConnectionPtyExitTeardownTests(): void {
       connectPanePty(createPane(1) as never, createManager(1) as never, deps as never)
       await flushAsyncTicks(30)
       expect(callbacks).toHaveLength(2)
+      if (ORCA_LAYOUT_OWNER_IS_MAIN) {
+        await expectWindowStartAskedMain(transport, makePaneKey('tab-1', LEAF_1))
+        expect(currentPtyId).toBe('pty-main')
+      }
       const onPtyExit = createdTransportOptions[0]?.onPtyExit as
         | ((ptyId: string, exitCode?: number) => void)
         | undefined
-      onPtyExit?.('resume-pty', 1)
+      onPtyExit?.(currentPtyId, 1)
 
       expect(deps.onPaneProcessDied).toHaveBeenCalledWith({
         paneId: 1,
@@ -562,7 +577,7 @@ export function registerPtyConnectionPtyExitTeardownTests(): void {
     })
 
     it('tears down the sole terminal when a reattached (not freshly spawned) PTY exits', async () => {
-      // Why: reattach/coldRestore skip onPtySpawn, so a now-dead previously-live session must still route through onPtyExitRef; the keep-mounted guard is only for brand-new shells.
+      // Reattach skips onPtySpawn; the unused-new-shell guard must not retain a dead previously-live session.
       const { connectPanePty } = await import('./pty-connection')
       const transport = createMockTransport('tab-pty')
       transportFactoryQueue.push(transport)
@@ -643,8 +658,7 @@ export function registerPtyConnectionPtyExitTeardownTests(): void {
       transportPtyId = 'terminal-reconnected'
       onPtyRebind?.('terminal-reconnected', 'terminal-old')
 
-      // The fixture dependency is intentionally lightweight, so mirror the live
-      // tab/layout commit that the real store performs atomically on replacement.
+      // Mirror the real store’s atomic tab/layout replacement in this lightweight fixture.
       mockStoreState.tabsByWorktree['wt-1'][0]!.ptyId = 'terminal-reconnected'
       const replacementLayout = mockStoreState.terminalLayoutsByTabId?.['tab-1']
       if (!replacementLayout) {

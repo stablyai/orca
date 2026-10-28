@@ -117,7 +117,6 @@ export function FeatureWallBody(props: {
                 ? 'max-w-[340px]'
                 : 'max-w-[400px]'
               : 'max-w-[480px]'
-  const setupTerminalHeightPx = source === 'onboarding' ? 140 : 240
   const settingContent = isTasks ? (
     <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
       <LinearRow compact />
@@ -128,17 +127,9 @@ export function FeatureWallBody(props: {
   ) : isAgentsUsage ? (
     <UsageAccountsCard onAccountStateChange={onUsageAccountStateChange} />
   ) : isAgentsOrchestration ? (
-    <OrchestrationSetupCard
-      compact
-      terminalHeightPx={setupTerminalHeightPx}
-      skill={orchestrationSkill}
-    />
+    <OrchestrationSetupCard compact skill={orchestrationSkill} />
   ) : isWorkbenchBrowser ? (
-    <BrowserUseSkillSetupCard
-      compact
-      terminalHeightPx={setupTerminalHeightPx}
-      skill={browserUseSkill}
-    />
+    <BrowserUseSkillSetupCard compact skill={browserUseSkill} />
   ) : isReviewPrView ? (
     <GitHubRow compact />
   ) : isReviewShip ? (
@@ -147,8 +138,7 @@ export function FeatureWallBody(props: {
   const shouldUseOnboardingTourZones =
     source === 'onboarding' && hasAnimatedVisual && Boolean(settingContent)
   const shouldStickSetupToBottom = shouldUseOnboardingTourZones
-  // Why: several visuals expand/collapse internally; setup controls should sit
-  // after a stable stage so they do not jump with the animation loop.
+  // Reserve a stable stage so expanding visuals cannot move setup controls.
   const visualStageHeight = isTasks
     ? 'h-[288px]'
     : isWorkbenchEditor

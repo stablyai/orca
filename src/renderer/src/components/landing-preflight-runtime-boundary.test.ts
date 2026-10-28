@@ -124,12 +124,10 @@ describe('landing preflight runtime boundary', () => {
     act(() => setDocumentVisibility('hidden'))
     expect(vi.getTimerCount()).toBe(0)
 
-    // Five poll windows pass behind a hidden window with no IPC at all.
     act(() => vi.advanceTimersByTime(150_000))
     expect(refresh).not.toHaveBeenCalled()
 
-    // The sibling visibilitychange handler force-refreshes on reveal, so the
-    // banner is current the moment it can be seen; the poll re-arms behind it.
+    // Reveal force-refreshes through the sibling visibility handler; polling only re-arms afterward.
     act(() => setDocumentVisibility('visible'))
     expect(refresh).toHaveBeenCalledTimes(1)
     expect(refresh).toHaveBeenCalledWith({ force: true })

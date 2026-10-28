@@ -24,13 +24,8 @@ export function imageSourcePathFromText(text: string): string | null {
   return text.match(IMAGE_SOURCE_MARKER)?.[1]?.trim() ?? null
 }
 
-/** Every image-source path a user turn carries, or [] when it is not a pure
- *  image-source turn.
- *
- *  Why not `soleText`: Claude records a multi-image paste as ONE companion message
- *  holding one `[Image: source: ...]` text block per image, so requiring a single
- *  block missed every multi-image turn. A turn qualifies only when it is all text
- *  and every block is a marker, so a real prompt is never mistaken for one. */
+/** Source paths only from all-text turns whose every block is an image-source marker. Claude groups multi-image pastes into one turn;
+ * requiring one block misses them, while accepting mixed blocks would hide real prompts. */
 export function imageSourcePathsFromMessage(message: NativeChatMessage): string[] {
   if (message.role !== 'user' || message.blocks.length === 0) {
     return []
@@ -53,9 +48,7 @@ export function isImageSourceUserTurn(message: NativeChatMessage): boolean {
   return imageSourcePathsFromMessage(message).length > 0
 }
 
-/** The text the agent reads: each composer chip becomes `[Image #N]`, N being its image's place
- *  among the images sent with it, as the Claude and Codex TUIs number them. A chip whose image is
- *  not sent is dropped. */
+/** Map chips to sent-image [Image #N] positions, matching Claude/Codex TUIs; drop chips whose images were not sent. */
 export function imageReferencesToPromptMarkers(
   text: string,
   sentImageIds: readonly string[]
@@ -77,8 +70,7 @@ function replaceSentImagePromptMarkers(
   )
 }
 
-/** The inverse, for a sent message put back in the composer: `[Image #k]` becomes a chip for its
- *  k-th image. A number past its images is left as typed. */
+/** Restore sent markers as image chips; leave out-of-range numbers literal. */
 export function promptMarkersToImageReferences(text: string, imageIds: readonly string[]): string {
   return replaceSentImagePromptMarkers(text, (number, marker) => {
     const attachmentId = imageIds[number - 1]
@@ -86,8 +78,7 @@ export function promptMarkersToImageReferences(text: string, imageIds: readonly 
   })
 }
 
-/** A structured chat's sent text without the `[Image #k]` markers its send added for its
- *  `imageCount` images. A number past its images is left as typed. */
+/** Remove only markers belonging to this structured send’s imageCount; leave out-of-range numbers literal. */
 export function stripSentImagePromptMarkers(text: string, imageCount: number): string {
   return withoutStrippedMarkerSpace(
     text,
@@ -218,8 +209,7 @@ export function normalizeImageTranscriptMessages(
         index = nextIndex
         continue
       }
-      // Only THIS turn's paths: `imagePaths` also holds the following source turns the
-      // fold scan looked at, and without a prompt to fold into they stay separate turns.
+      // Without a following prompt, keep only this turn’s paths; later scanned source turns remain separate.
       normalized.push({
         ...message,
         blocks: messageImagePaths.map((path) => ({ type: 'image-ref' as const, path }))

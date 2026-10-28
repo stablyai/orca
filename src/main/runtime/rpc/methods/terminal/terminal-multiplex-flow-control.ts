@@ -17,8 +17,7 @@ import type { TerminalMultiplexStream } from './terminal-stream-types'
 
 export function installMultiplexFlowControl(state: TerminalMultiplexConnection): void {
   const { runtime, streams } = state
-  // Why: snapshot frames bypass the ACK window, so only a drained link can afford history;
-  // a recovery on every ACK of a sustained flood would otherwise outgrow the client's intake.
+  // Snapshots bypass ACK windows; restore history only after link drain so sustained floods cannot outrun intake.
   const linkHasRoomForHistory = (stream: TerminalMultiplexStream): boolean =>
     stream.ackInFlightBytes <= TERMINAL_MULTIPLEX_ACK_BATCH_BYTES &&
     state.ackTotalInFlightBytes <= TERMINAL_MULTIPLEX_ACK_BATCH_BYTES
@@ -32,7 +31,7 @@ export function installMultiplexFlowControl(state: TerminalMultiplexConnection):
     }
     stream.ackRecoverySnapshotInFlight = true
     try {
-      // Why history: output was dropped, so the client's own history ends before this screen and must be replaced, not kept.
+      // Replace client history after dropped output; its retained history no longer reaches this screen.
       const carriesHistory = linkHasRoomForHistory(stream)
       const serialized = await serializeBudgetedRequestedSnapshot(
         runtime,

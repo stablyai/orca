@@ -32,13 +32,7 @@ function shouldPreserveTerminalScrollbackBuffersForRepoMap(
     return true
   }
   if (!repoById.has(repoId)) {
-    // Why: when the repo catalog is not hydrated, treating the worktree as
-    // remote avoids losing the only scrollback source a relay/runtime terminal
-    // may have.
-    // Why this direction is local to this decision: worktree-runtime-owner.ts resolves the same
-    // unhydrated catalog to 'local'. Safe there (nothing is destroyed), data loss here. "Fail
-    // open" names a direction per decision, never a house style — do not pattern-match it across
-    // the two.
+    // An unhydrated repo catalog is remote for scrollback retention: dropping its only restore copy loses data. worktree-runtime-owner may safely choose local for its non-destructive decision; do not copy that default here.
     return true
   }
   return false
@@ -133,8 +127,7 @@ export function pruneLocalTerminalScrollbackBuffers(
     terminalLayoutsByTabId[tabId] = layoutWithoutBuffers
   }
 
-  // The local-only home gets the same classification and cap; it is never externalized to refs,
-  // so an uncapped entry here would sit inline in every persisted write.
+  // Cap the local-only home too: it stays inline rather than being externalized to refs.
   const localOnlyForRead = session.localOnlyScrollbackByTabId
   let localOnlyScrollbackByTabId: Record<string, Record<string, string>> | null = null
   for (const [tabId, buffers] of Object.entries(localOnlyForRead ?? {})) {
@@ -158,10 +151,7 @@ export function pruneLocalTerminalScrollbackBuffers(
 
   return {
     ...session,
-    // Why: local daemon history/checkpoints are authoritative for restart
-    // scrollback. Keeping renderer-captured buffers for local tabs makes every
-    // persisted state write scale with old terminal output; remote/runtime tabs
-    // keep them because teardown may leave no local history to cold-restore.
+    // Local daemon history/checkpoints own restart scrollback. Retain remote/runtime captures because teardown may leave no local history.
     ...(terminalLayoutsByTabId ? { terminalLayoutsByTabId } : {}),
     ...(localOnlyScrollbackByTabId ? { localOnlyScrollbackByTabId } : {})
   }

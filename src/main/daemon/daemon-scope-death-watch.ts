@@ -21,7 +21,7 @@ exec systemctl --user --no-block stop "$2"
 `
 
 type ScopeDeathWatchOptions = {
-  /** From `ownFreshDaemonScope`; the terminal slice is bound to it, so stopping it reaps both. */
+  /** Stopping the owned daemon scope also reaps its bound terminal slice. */
   daemonScope: string | null
   log: (event: string, details?: Record<string, unknown>) => void
   spawn?: (spec: ProcessSpec) => SpawnedProcess

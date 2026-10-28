@@ -12,10 +12,8 @@ import { resetRestoredBrowserClientHostAttachForTests } from '@/runtime/restored
 import { createTestStore, makeWorktree, makeTab } from './store-test-helpers'
 import { createStoreSessionMockApi, makeBrowserTab } from './store-session-test-harness'
 
-// Mock sonner (imported by repos.ts)
 vi.mock('sonner', () => ({ toast: { info: vi.fn(), success: vi.fn(), error: vi.fn() } }))
 
-// Mock agent-status (imported by terminal-helpers)
 vi.mock('@/lib/agent-status', async (importOriginal) => {
   const actual = await importOriginal<typeof AgentStatusModule>()
   return {
@@ -71,10 +69,107 @@ describe('hydrateBrowserSession', () => {
     expect(s.activeBrowserTabId).toBe('browser-1')
   })
 
+  // Main load repairs tabless local/SSH browsers; window must not mint IDs main cannot resolve (L280).
+  it.each([
+    ['local', {}, undefined],
+    [
+      'directly dialed SSH',
+      { connectionId: 'box', executionHostId: 'ssh:box' as const },
+      'ssh:box' as const
+    ]
+  ])(
+    'leaves a tabless browser record to main in a layout-owner build, else gives it a tab (%s)',
+    (_name, repoHost, hostId) => {
+      const store = createTestStore()
+      const validWt = 'repo1::/path/wt1'
+      store.setState({
+        repos: [
+          {
+            id: 'repo1',
+            path: '/repo1',
+            displayName: 'Repo 1',
+            badgeColor: '#000',
+            addedAt: 0,
+            ...repoHost
+          }
+        ],
+        worktreesByRepo: {
+          repo1: [makeWorktree({ id: validWt, repoId: 'repo1', path: '/path/wt1', hostId })]
+        },
+        activeWorktreeId: validWt
+      })
+
+      store.getState().hydrateBrowserSession({
+        activeRepoId: 'repo1',
+        activeWorktreeId: validWt,
+        activeTabId: null,
+        tabsByWorktree: {},
+        terminalLayoutsByTabId: {},
+        browserTabsByWorktree: {
+          [validWt]: [
+            makeBrowserTab({ id: 'browser-1', worktreeId: validWt, url: 'https://example.com' })
+          ]
+        }
+      })
+
+      const browserTabs = (store.getState().unifiedTabsByWorktree[validWt] ?? []).filter(
+        (tab) => tab.contentType === 'browser'
+      )
+      expect(browserTabs.map((tab) => tab.entityId)).toEqual(
+        ORCA_LAYOUT_OWNER_IS_MAIN ? [] : ['browser-1']
+      )
+    }
+  )
+
+  // Main loads only requested workspace owners; paired-server records retain window repair.
+  it.each([
+    ['workspace', {}],
+    ['SSH workspace', { connectionId: 'vm1' }]
+  ])("still gives a paired server's tabless browser record a tab (%s)", (_name, sshTarget) => {
+    const store = createTestStore()
+    const serverWt = 'repo1::/srv/wt1'
+    store.setState({
+      repos: [
+        {
+          id: 'repo1',
+          path: '/srv',
+          displayName: 'Server repo',
+          badgeColor: '#000',
+          addedAt: 0,
+          executionHostId: 'runtime:env-1',
+          ...sshTarget
+        }
+      ],
+      worktreesByRepo: {
+        repo1: [
+          makeWorktree({ id: serverWt, repoId: 'repo1', path: '/srv/wt1', hostId: 'runtime:env-1' })
+        ]
+      },
+      activeWorktreeId: serverWt
+    })
+
+    store.getState().hydrateBrowserSession({
+      activeRepoId: 'repo1',
+      activeWorktreeId: serverWt,
+      activeTabId: null,
+      tabsByWorktree: {},
+      terminalLayoutsByTabId: {},
+      browserTabsByWorktree: {
+        [serverWt]: [
+          makeBrowserTab({ id: 'browser-1', worktreeId: serverWt, url: 'https://example.com' })
+        ]
+      }
+    })
+
+    expect(
+      (store.getState().unifiedTabsByWorktree[serverWt] ?? [])
+        .filter((tab) => tab.contentType === 'browser')
+        .map((tab) => tab.entityId)
+    ).toEqual(['browser-1'])
+  })
+
   it('synthesizes a page for a browser workspace whose persisted page list is empty', () => {
-    // Why: session salvage drops a corrupt page by rebuilding the array, so the
-    // key survives holding []. Treating that as "has pages" restores a workspace
-    // with no page at all — a dead about:blank tab nothing prunes or reloads.
+    // Salvage can leave [] after dropping a corrupt page; this must not count as a renderable browser workspace.
     const store = createTestStore()
     const validWt = 'repo1::/path/wt1'
 
@@ -199,7 +294,6 @@ describe('hydrateBrowserSession', () => {
         repo1: [makeWorktree({ id: wt, repoId: 'repo1', path: '/path/wt1' })]
       },
       activeWorktreeId: wt,
-      // Simulate hydrateEditorSession returning {} (no editor files) — activeTabTypeByWorktree stays empty.
       activeTabTypeByWorktree: {}
     })
 
@@ -235,7 +329,6 @@ describe('hydrateBrowserSession', () => {
         repo1: [makeWorktree({ id: wt, repoId: 'repo1', path: '/path/wt1' })]
       },
       activeWorktreeId: wt,
-      // Simulate hydrateEditorSession having already set this to 'editor'
       activeTabTypeByWorktree: { [wt]: 'editor' }
     })
 
@@ -253,7 +346,6 @@ describe('hydrateBrowserSession', () => {
     })
 
     const s = store.getState()
-    // The existing 'editor' entry set by hydrateEditorSession must not be overwritten
     expect(s.activeTabTypeByWorktree[wt]).toBe('editor')
   })
 
@@ -388,8 +480,7 @@ describe('hydrateBrowserSession remote page handle seeding', () => {
     resetRestoredBrowserClientHostAttachForTests()
   })
 
-  // Why the wiring and not just the helper: the runtime only hands retained pages back when this
-  // desktop attaches as a host, and nothing else in the boot chain starts one after a relaunch.
+  // Test hydration wiring: restored client pages need desktop host attachment and no other boot step starts it.
   it('starts the browser client host for a restored client-hosted page', () => {
     createHydratedStore({
       id: 'page-1',
@@ -414,8 +505,7 @@ describe('hydrateBrowserSession remote page handle seeding', () => {
     expect(mockApi.runtimeEnvironments.prepareBrowserClientHostPlacement).not.toHaveBeenCalled()
   })
 
-  // Why: without a seeded handle the restored pane sees no remote page at all and falls through to
-  // a bare browser.tabCreate — a silent downgrade to a blank server page.
+  // Missing remote handle falls through to tabCreate, silently replacing restored content with a blank server page.
   it('seeds a remote page handle for a restored client-hosted page', () => {
     const store = createHydratedStore({
       id: 'page-1',
@@ -445,9 +535,7 @@ describe('hydrateBrowserSession remote page handle seeding', () => {
     expect(store.getState().remoteBrowserPageHandlesByPageId['page-1']?.placement).toBeUndefined()
   })
 
-  // Why nothing is seeded here: a server-hosted page lives on the runtime, and a runtime that
-  // restarted while this desktop was closed no longer has it. A seeded handle sends the pane down
-  // the adopt branch, which answers browser_tab_not_found by deleting the row.
+  // Restarted runtimes lose server pages; seeded handles would adopt missing pages and delete their restored rows.
   it('seeds no handle for a restored server-hosted page', () => {
     const store = createHydratedStore({
       id: 'page-1',
@@ -470,8 +558,7 @@ describe('hydrateBrowserSession remote page handle seeding', () => {
     expect(store.getState().remoteBrowserPageHandlesByPageId).toEqual({})
   })
 
-  // Why this drives the real session object: what a seeded handle does to a pane is decided inside
-  // ensureRemotePage. Asserting the store map alone says nothing about which branch it picks.
+  // Drive ensureRemotePage through the real session; store-map assertions alone cannot prove adopt versus create.
   function createStreamedSession(
     store: ReturnType<typeof createTestStore>,
     deps: {
@@ -527,9 +614,7 @@ describe('hydrateBrowserSession remote page handle seeding', () => {
     expect(callRpc.mock.calls.map(([, method]) => method)).toEqual(['browser.tabShow'])
   })
 
-  // Why the runtime is made to answer browser_tab_not_found: that is what a runtime restarted while
-  // the desktop was closed says, and the adopt branch answers it by closing the row. Re-creating is
-  // what the user sees as their tab coming back at the URL they left it on.
+  // Restarted runtime returns browser_tab_not_found; recreate at saved URL instead of adopting and deleting the row.
   it('re-creates a restored server-hosted page at its saved URL instead of adopting it', async () => {
     const store = createHydratedStore({
       id: 'page-1',

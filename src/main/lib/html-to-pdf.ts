@@ -12,10 +12,7 @@ export class ExportTimeoutError extends Error {
 
 const EXPORT_TIMEOUT_MS = 60_000
 
-// Why: injected into the hidden export window so printToPDF does not fire while
-// <img> elements are still fetching. printToPDF renders whatever is painted at
-// the moment it runs; without this gate, remote images and Mermaid SVGs loaded
-// via <img> can be missing from the output.
+// Printing captures the current paint; wait for remote images and image-backed diagrams to load.
 const WAIT_FOR_IMAGES_SCRIPT = `
 new Promise((resolve) => {
   const imgs = Array.from(document.images || [])
@@ -34,9 +31,7 @@ export async function htmlToPdf(html: string): Promise<Buffer> {
   const tempDir = app.getPath('temp')
   const tempPath = path.join(tempDir, `orca-export-${randomUUID()}.html`)
 
-  // Why: 'wx' is an exclusive create, so the shared temp dir cannot pre-seat this
-  // path as a symlink and have the export write through it. EEXIST is the one
-  // failure where the path is not ours, so it must not be unlinked below.
+  // Exclusive creation prevents writing through pre-seated symlinks; EEXIST paths belong to someone else.
   try {
     await writeFile(tempPath, html, { encoding: 'utf-8', flag: 'wx' })
   } catch (error) {
@@ -54,10 +49,7 @@ export async function htmlToPdf(html: string): Promise<Buffer> {
         sandbox: true,
         contextIsolation: true,
         nodeIntegration: false,
-        // Why: image-wait needs to run a short script inside the export page, and
-        // the exported renderer DOM may already embed scripts/SVGs (e.g. Mermaid)
-        // that need JS to paint correctly. The window stays sandboxed and
-        // isolated so this is safe.
+        // Image readiness probes and exported scripts/SVGs need JavaScript within the sandboxed, isolated renderer.
         javascript: true
       }
     })
@@ -65,9 +57,7 @@ export async function htmlToPdf(html: string): Promise<Buffer> {
     let timer: NodeJS.Timeout | undefined
 
     try {
-      // Why: the timeout has to cover loading too. An export document whose script
-      // never yields fires neither did-finish-load nor did-fail-load, so a
-      // render-only timeout would leave this window and its temp file forever.
+      // Bound loading too: a non-yielding document script never fires load completion or failure.
       const timeoutPromise = new Promise<never>((_resolve, reject) => {
         timer = setTimeout(() => reject(new ExportTimeoutError()), EXPORT_TIMEOUT_MS)
       })
@@ -113,13 +103,11 @@ function isAlreadyExists(error: unknown): boolean {
   return error instanceof Error && 'code' in error && error.code === 'EEXIST'
 }
 
-// unlink never follows a symlink, so this removes the entry this export created
-// and never the target of one swapped in underneath it.
+// unlink removes the entry without following a symlink swapped in by another process.
 async function removeOwnTempDocument(tempPath: string): Promise<void> {
   try {
     await unlink(tempPath)
   } catch {
-    // Why: best-effort cleanup — losing the temp file should not surface
-    // as a user-facing export failure.
+    // Best-effort temp cleanup must not turn successful export into failure.
   }
 }

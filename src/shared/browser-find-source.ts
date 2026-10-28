@@ -4,11 +4,7 @@ export type BrowserFindSource = {
   browserWorkspaceId: string
 }
 
-/**
- * Who a forwarded Cmd/Ctrl+F is aimed at. Main knows the workspace only for guests registered
- * through the renderer; a client-hosted guest is registered by main's own host runtime, whose
- * wire command carries no workspace. Page ids are unique, so an unscoped target still resolves.
- */
+/** Forward chrome chords by unique page ID even without workspace: client-hosted commands lack it, unlike renderer-registered guests. */
 export type BrowserFindTarget = {
   browserPageId: string
   browserWorkspaceId?: string

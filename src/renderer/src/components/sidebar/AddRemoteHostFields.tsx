@@ -18,7 +18,8 @@ export function SshHostFields({
   preferAdvancedOpen = false,
   configIdentityAlias = null,
   onFormChange,
-  onSubmit
+  onSubmit,
+  offerProxyConnectionReuse = false
 }: {
   form: EditingTarget
   disabled: boolean
@@ -28,6 +29,7 @@ export function SshHostFields({
   configIdentityAlias?: string | null
   onFormChange: (updater: (prev: EditingTarget) => EditingTarget) => void
   onSubmit: () => void
+  offerProxyConnectionReuse?: boolean
 }) {
   const [advancedOpen, setAdvancedOpen] = useState(preferAdvancedOpen)
   return (
@@ -134,6 +136,7 @@ export function SshHostFields({
         form={form}
         disabled={disabled}
         onFormChange={onFormChange}
+        offerProxyConnectionReuse={offerProxyConnectionReuse}
       />
     </form>
   )
@@ -178,7 +181,7 @@ export function RemoteServerFields({
     >
       <div className="space-y-1.5">
         <Label htmlFor="add-server-name">
-          {translate('auto.components.sidebar.AddRemoteHostDialog.serverName', 'Name in Orca')}
+          {translate('auto.components.sidebar.AddRemoteHostDialog.nameInOrca', 'Name in Orca')}
         </Label>
         <Input
           id="add-server-name"
@@ -194,7 +197,7 @@ export function RemoteServerFields({
       </div>
       <div className="space-y-1.5">
         <Label htmlFor="add-server-pairing-code">
-          {translate('auto.components.sidebar.AddRemoteHostDialog.pairingCode', 'Access link')}
+          {translate('auto.components.sidebar.AddRemoteHostDialog.accessLink', 'Access link')}
         </Label>
         <Input
           id="add-server-pairing-code"

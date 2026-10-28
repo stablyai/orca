@@ -13,8 +13,7 @@ export function buildPluginWorkerSpawnSpec(
     pluginKey: plugin.pluginKey,
     rootDir: plugin.rootDir,
     mainEntry: plugin.manifest.main,
-    // Dev plugins keep one root across manifest edits; include the parsed
-    // manifest so hot reload cannot reuse a worker with stale contributions.
+    // Dev roots survive manifest changes; include revision to prevent stale worker reuse.
     manifestRevision: JSON.stringify(plugin.manifest),
     grantedCapabilities
   }

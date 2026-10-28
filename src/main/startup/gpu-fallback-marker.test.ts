@@ -105,9 +105,7 @@ describe('gpu-fallback-marker', () => {
     expect(existsSync(join(userDataPath, GPU_FALLBACK_MARKER_FILE))).toBe(false)
   })
 
-  // Why: enableMainProcessGpuFeatures() is skipped while GPU fallback is active, and that function
-  // carries the macOS disable-skia-graphite fix. A marker that survived on darwin would silently
-  // strip the fix from the Macs it targets, so pin the platform gate for darwin specifically.
+  // A macOS fallback marker would skip the Graphite fix inside GPU-feature setup; ensure fallback stays win32-only.
   it('clears an active marker on macOS so the Graphite fix is never skipped', () => {
     writeGpuFallbackMarker(
       userDataPath,

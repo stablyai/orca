@@ -1,48 +1,41 @@
-import { afterEach, beforeEach, describe, expect, it } from 'vitest'
-import Database from '../../sqlite/sync-database'
-import { ensureQueuedMessagesTable } from './queued-message-schema'
-import { getQueuedMessage, insertQueuedMessage } from './queued-message-table'
-import { updateQueuedMessage } from './queued-message-update'
+import { describe, expect, it } from 'vitest'
+import { queuedMessageUpdateDecision } from './queued-message-update'
+import type { QueuedMessageRow } from './queued-message-table'
 import type { AgentJournalMessageItem } from '../../../shared/agent-session-journal-types'
 import { agentSessionSendBodyFingerprint } from '../../../shared/structured-agent-session-send-mutation'
 import { MAX_PROMPT_BYTES } from '../../../shared/rpc-contract/structured-agent-session-params'
 
 export function registerQueuedMessageUpdateTests(): void {
-  let db: Database.Database
   const sessionId = 'folder-session'
   const initial: AgentJournalMessageItem = {
     kind: 'message',
     role: 'user',
     blocks: [{ type: 'text', text: 'base' }]
   }
-  beforeEach(() => {
-    db = new Database(':memory:')
-    ensureQueuedMessagesTable(db)
-  })
-  afterEach(() => db.close())
-  function insert(body = initial, messageId = 'card') {
-    return insertQueuedMessage(db, {
-      sessionId,
-      messageId,
+  function card(body = initial, state: QueuedMessageRow['state'] = 'waiting'): QueuedMessageRow {
+    return {
+      messageId: 'card',
+      position: 1,
       body,
       fingerprint: agentSessionSendBodyFingerprint(sessionId, body),
-      hostInstance: 'remote-host',
-      queuedAt: { epoch: 'epoch', sequence: 4 },
-      now: 1,
-      holdReason: 'send_failed'
+      state,
+      holdReason: null,
+      returnedReason: null,
+      returnedRejection: null,
+      consumedAs: null,
+      queuedAt: { epoch: 'epoch', sequence: 4 }
+    }
+  }
+  function decide(row: QueuedMessageRow | null, text: string, base = row?.fingerprint ?? '') {
+    return queuedMessageUpdateDecision(row, sessionId, {
+      messageId: 'card',
+      expectedBodyFingerprint: base,
+      text
     })
   }
-  function update(text: string, fingerprint = agentSessionSendBodyFingerprint(sessionId, initial)) {
-    return updateQueuedMessage(
-      db,
-      sessionId,
-      { messageId: 'card', expectedBodyFingerprint: fingerprint, text },
-      () => {}
-    )
-  }
 
-  describe('atomic queued text update', () => {
-    it('preserves identity, cursor, order, sender, kind, role, send mode and attachment order', () => {
+  describe('queued text update decision', () => {
+    it('keeps sender, send mode and attachment order, replacing only the text', () => {
       const body: AgentJournalMessageItem = {
         ...initial,
         sentAs: 'goal',
@@ -54,132 +47,71 @@ export function registerQueuedMessageUpdateTests(): void {
           { type: 'text', text: 'two' }
         ]
       }
-      const before = insert(body)
-      expect(update('edited', before.fingerprint).status).toBe('updated')
-      const after = getQueuedMessage(db, sessionId, 'card')!
-      expect(after).toEqual({
-        ...before,
+      const decision = decide(card(body), 'edited')
+      expect(decision).toMatchObject({
+        status: 'ready',
         body: {
           ...body,
           blocks: [body.blocks[0]!, { type: 'text', text: 'edited' }, body.blocks[2]!]
-        },
-        fingerprint: after.fingerprint
-      })
-      expect(after.fingerprint).toBe(agentSessionSendBodyFingerprint(sessionId, after.body))
-    })
-    it('saving the same text keeps several text blocks as they are', () => {
-      const body: AgentJournalMessageItem = {
-        ...initial,
-        blocks: [
-          { type: 'text', text: 'one' },
-          { type: 'text', text: 'two' }
-        ]
-      }
-      const before = insert(body)
-      expect(update('one\ntwo', before.fingerprint).status).toBe('unchanged')
-      expect(getQueuedMessage(db, sessionId, 'card')).toEqual(before)
-    })
-    it('retains returned-card refusal and failure hold rather than requeueing', () => {
-      insert()
-      db.prepare(
-        "UPDATE queued_messages SET state = 'returned', returned_reason = 'refused', consumed_as = 'submission' WHERE message_id = 'card'"
-      ).run()
-      const before = getQueuedMessage(db, sessionId, 'card')!
-      expect(update('edit').status).toBe('updated')
-      expect(getQueuedMessage(db, sessionId, 'card')).toMatchObject({
-        state: 'returned',
-        returnedReason: before.returnedReason,
-        consumedAs: before.consumedAs,
-        holdReason: before.holdReason,
-        position: before.position
+        }
       })
     })
     it('checks the resulting body before the expected base, making lost-answer retry safe', () => {
-      insert()
-      expect(update('edit').status).toBe('updated')
-      expect(update('edit').status).toBe('unchanged')
-      expect(update('other').status).toBe('changed')
-    })
-    it('accepts semantic A/B/A and preserves the latest host-owned sender', () => {
-      insert()
+      const edited = card({ ...initial, blocks: [{ type: 'text', text: 'edit' }] })
       const base = agentSessionSendBodyFingerprint(sessionId, initial)
-      update('B')
-      const second = getQueuedMessage(db, sessionId, 'card')!
-      update('base', second.fingerprint)
-      const from: NonNullable<AgentJournalMessageItem['from']> = {
-        kind: 'agent',
-        senders: [],
-        orchestration: null
-      }
-      const latestBody = { ...initial, from }
-      db.prepare("UPDATE queued_messages SET body_json = ? WHERE message_id = 'card'").run(
-        JSON.stringify(latestBody)
-      )
-      expect(agentSessionSendBodyFingerprint(sessionId, latestBody)).toBe(base)
-      expect(update('C', base).status).toBe('updated')
-      expect(getQueuedMessage(db, sessionId, 'card')?.body.from).toEqual(from)
+      expect(decide(edited, 'edit', base).status).toBe('unchanged')
+      expect(decide(edited, 'other', base).status).toBe('changed')
+      expect(decide(card(), 'edit').status).toBe('ready')
     })
-    it('refuses empty, oversized, command and unsupported bodies without modifying them', () => {
-      insert()
-      expect(update('  ').status).toBe('not-editable')
-      expect(update('é'.repeat(MAX_PROMPT_BYTES)).status).toBe('not-editable')
-      db.prepare('DELETE FROM queued_messages').run()
-      const command = insert({ ...initial, command: { name: 'compact' } })
-      expect(update('edit', command.fingerprint).status).toBe('not-editable')
-      expect(getQueuedMessage(db, sessionId, 'card')).toEqual(command)
-      db.prepare('DELETE FROM queued_messages').run()
-      const unsupported = insert({
+    it('refuses empty, oversized, command and unsupported bodies', () => {
+      expect(decide(card(), '  ').status).toBe('not-editable')
+      expect(decide(card(), 'é'.repeat(MAX_PROMPT_BYTES)).status).toBe('not-editable')
+      expect(decide(card({ ...initial, command: { name: 'compact' } }), 'edit').status).toBe(
+        'not-editable'
+      )
+      const unsupported = card({
         ...initial,
         blocks: [{ type: 'tool-result', callId: 'tool', output: 'retained' }]
       })
-      expect(update('edit', unsupported.fingerprint).status).toBe('not-editable')
-      expect(getQueuedMessage(db, sessionId, 'card')).toEqual(unsupported)
+      expect(decide(unsupported, 'edit').status).toBe('not-editable')
     })
     it('allows empty text with a retained attachment, and inserts text before one with none', () => {
-      const before = insert({
+      const captioned = card({
         ...initial,
         blocks: [
           { type: 'text', text: 'caption' },
           { type: 'image-ref', path: 'file.png' }
         ]
       })
-      expect(update('', before.fingerprint).status).toBe('updated')
-      expect(getQueuedMessage(db, sessionId, 'card')?.body.blocks).toEqual([
-        { type: 'text', text: '' },
-        { type: 'image-ref', path: 'file.png' }
-      ])
-      const imageOnly = insert(
-        { ...initial, blocks: [{ type: 'image-ref', path: 'file.png' }] },
-        'image'
-      )
-      expect(
-        updateQueuedMessage(
-          db,
-          sessionId,
-          { messageId: 'image', expectedBodyFingerprint: imageOnly.fingerprint, text: 'added' },
-          () => {}
-        ).status
-      ).toBe('updated')
-      expect(getQueuedMessage(db, sessionId, 'image')?.body.blocks).toEqual([
-        { type: 'text', text: 'added' },
-        { type: 'image-ref', path: 'file.png' }
-      ])
+      expect(decide(captioned, '')).toMatchObject({
+        body: {
+          blocks: [
+            { type: 'text', text: '' },
+            { type: 'image-ref', path: 'file.png' }
+          ]
+        }
+      })
+      const imageOnly = card({ ...initial, blocks: [{ type: 'image-ref', path: 'file.png' }] })
+      expect(decide(imageOnly, 'added')).toMatchObject({
+        body: {
+          blocks: [
+            { type: 'text', text: 'added' },
+            { type: 'image-ref', path: 'file.png' }
+          ]
+        }
+      })
     })
-    it('a failed transaction rolls back body and fingerprint together', () => {
-      const before = insert()
-      db.exec('BEGIN IMMEDIATE')
-      update('edit')
-      db.exec('ROLLBACK')
-      expect(getQueuedMessage(db, sessionId, 'card')).toEqual(before)
-    })
-    it('dispatch, withdrawal and a pruned tombstone all answer gone', () => {
-      insert()
-      db.prepare("UPDATE queued_messages SET state = 'dispatched' WHERE message_id = 'card'").run()
-      expect(update('edit')).toMatchObject({ status: 'gone', disposition: 'dispatched' })
-      db.prepare("UPDATE queued_messages SET state = 'withdrawn' WHERE message_id = 'card'").run()
-      expect(update('edit')).toMatchObject({ status: 'gone', disposition: 'withdrawn' })
-      db.prepare('DELETE FROM queued_messages').run()
-      expect(update('edit')).toMatchObject({ status: 'gone', disposition: 'missing' })
+    it('a returned card stays editable; a dispatched, withdrawn or missing one answers gone', () => {
+      expect(decide(card(initial, 'returned'), 'edit').status).toBe('ready')
+      expect(decide(card(initial, 'dispatched'), 'edit')).toMatchObject({
+        status: 'gone',
+        disposition: 'dispatched'
+      })
+      expect(decide(card(initial, 'withdrawn'), 'edit')).toMatchObject({
+        status: 'gone',
+        disposition: 'withdrawn'
+      })
+      expect(decide(null, 'edit')).toMatchObject({ status: 'gone', disposition: 'missing' })
     })
   })
 }

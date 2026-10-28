@@ -1,4 +1,16 @@
+// @vitest-environment happy-dom
+import { Terminal } from '@xterm/xterm'
 import { createElement } from 'react'
+import { createTerminalDocumentScope } from '../terminal/document/document-scope'
+import {
+  startTerminalDocument,
+  stopTerminalDocument
+} from '../terminal/document/create-terminal-document'
+import { handleMsg } from '../terminal/document/host-message-router'
+import type { TerminalDocumentTerminal } from '../terminal/document/document-terminal-shape'
+import { TERMINAL_DOCUMENT_MARKUP } from '../terminal/terminal-webview-html/document-markup'
+import { recoverActiveTerminalAfterForeground } from '../terminal/terminal-foreground-recovery'
+import type { ConnectionState } from '../transport/types'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { TerminalWebViewHandle } from '../terminal/terminal-webview-contract'
@@ -14,7 +26,6 @@ const PHONE = { cols: 55, rows: 44 }
 
 type StreamHandler = (result: unknown) => void
 
-/** The route's subscribe, driven end to end against a recording client and terminal. */
 function subscriptionHarness(opts: {
   fit: typeof PHONE | null
   webReady: boolean
@@ -31,7 +42,6 @@ function subscriptionHarness(opts: {
     write: vi.fn(),
     init: vi.fn(({ cols, rows }: { cols: number; rows: number }) => {
       order.push(`init ${cols}x${rows}`)
-      // An init's document reports its laid-out box before its ready.
       fit = fit ?? PHONE
     }),
     resize: vi.fn(),
@@ -141,13 +151,11 @@ function subscriptionHarness(opts: {
       currentTerminal = next
       fields.terminalRefs.current.set(HANDLE, next)
     },
-    // The document's web-ready, carrying the box xterm laid out.
     documentReady: () => {
       act(() => webReady!(HANDLE))
     },
     fields,
     terminalFrameRef,
-    // The frame's onLayout.
     layOutFrame: (width: number, height = 751) => act(() => notifyFrame!({ width, height }))
   }
 }
@@ -203,7 +211,6 @@ describe('a terminal first subscribe', () => {
     const harness = subscriptionHarness({ fit: null, webReady: true, frameWidth: 0 })
     harness.subscribe()
     expect(harness.order).toEqual([])
-    // The frame's first layout subscribes the document held back for it.
     harness.layOutFrame(427)
     expect(harness.order).toEqual(['subscribe null'])
   })
@@ -217,7 +224,6 @@ describe('a terminal first subscribe', () => {
     harness.layOutFrame(427, 700)
     expect(harness.order).toEqual(['subscribe null'])
     expect(notifyTerminalFrameWidth).not.toHaveBeenCalled()
-    // A hidden 0x0 layout keeps the box it was laid out at.
     harness.layOutFrame(0, 0)
     expect(harness.terminalFrameRef.current).toEqual({ width: 427, height: 700 })
     harness.layOutFrame(360.5, 700)
@@ -255,7 +261,6 @@ describe('settled terminal fits belong to their stream and document', () => {
       .map(([callback]) => callback)
   }
   function clearStreamCache(harness: ReturnType<typeof subscriptionHarness>) {
-    // The production clear path retires streams, then clears their numeric sequences.
     harness.fields.terminalUnsubsRef.current.forEach((unsub) => unsub())
     harness.fields.terminalUnsubsRef.current.clear()
     harness.fields.subscribeSeqRef.current.clear()
@@ -367,4 +372,90 @@ describe('a stream terminating while subscribe is still returning', () => {
     expect(h.stopStream).toHaveBeenCalledTimes(1)
     expect(h.fields.signalTerminalInventoryRecovery).toHaveBeenCalledTimes(1)
   })
+})
+
+describe('foreground snapshots preserve the terminal reading position', () => {
+  it.each(['connected', 'reconnecting'] as const)(
+    'restores the reading row after recovery from %s',
+    async (connectionState) => {
+      const h = subscriptionHarness({ fit: PHONE, webReady: true, viewport: PHONE })
+      document.body.innerHTML = TERMINAL_DOCUMENT_MARKUP
+      let ready = Promise.resolve()
+      let resolveReady = () => {}
+      const scope = createTerminalDocumentScope({
+        installHostTransport: () => () => {},
+        hasEngine: () => true,
+        createTerminal: (options) => {
+          const terminal = new Terminal(options)
+          terminal.open = () => {}
+          // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: xterm implements the document API; its options are initialized by the document.
+          return terminal as unknown as TerminalDocumentTerminal
+        },
+        createWebglAddon: () => null,
+        createUnicode11Addon: () => null,
+        postToHost: (message) => {
+          if (message.type === 'ready') {
+            resolveReady()
+          }
+        }
+      })
+      startTerminalDocument(scope)
+      try {
+        vi.mocked(h.terminal.init).mockImplementation((options) => {
+          ready = new Promise((resolve) => {
+            resolveReady = resolve
+          })
+          handleMsg(scope, { type: 'init', ...options })
+        })
+        const snapshot = Array.from({ length: 200 }, (_, row) => `LINE_${row}`).join('\r\n')
+        const replay = async (serialized: unknown = snapshot) => {
+          h.event(h.fields.client.subscribe.mock.calls.length - 1, {
+            type: 'scrollback',
+            cols: PHONE.cols,
+            rows: PHONE.rows,
+            serialized
+          })
+          await ready
+        }
+        h.subscribe()
+        await replay()
+        expect(scope.term!.buffer.active.viewportY).toBe(scope.term!.buffer.active.baseY)
+        scope.term!.scrollToLine(40)
+        const readingRow = scope.term!.buffer.active.getLine(40)?.translateToString(true)
+        const connStateRef: { current: ConnectionState } = { current: connectionState }
+        const scheduled: Array<() => void> = []
+        const recover = () =>
+          recoverActiveTerminalAfterForeground({
+            ...h.fields,
+            connStateRef,
+            subscribeToTerminal: h.subscribe,
+            schedule: (callback) => scheduled.push(callback)
+          })
+        if (connectionState === 'reconnecting') {
+          expect(recover()).toBe('deferred')
+          connStateRef.current = 'connected'
+        }
+        expect(recover()).toBe('recovered')
+        scheduled.splice(0).forEach((callback) => callback())
+        await replay()
+        expect(scope.term!.buffer.active.viewportY).toBe(40)
+        expect(scope.term!.buffer.active.getLine(40)?.translateToString(true)).toBe(readingRow)
+
+        scope.term!.scrollToBottom()
+        recover()
+        scheduled.splice(0).forEach((callback) => callback())
+        await replay()
+        expect(scope.term!.buffer.active.viewportY).toBe(scope.term!.buffer.active.baseY)
+
+        scope.term!.scrollToLine(40)
+        recover()
+        scheduled.splice(0).forEach((callback) => callback())
+        await replay('')
+        expect(scope.term!.buffer.active.viewportY).toBe(0)
+        expect(scope.term!.buffer.active.baseY).toBe(0)
+      } finally {
+        stopTerminalDocument(scope)
+      }
+    }
+  )
 })

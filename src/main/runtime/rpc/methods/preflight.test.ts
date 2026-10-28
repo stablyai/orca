@@ -68,8 +68,8 @@ describe('preflight RPC methods', () => {
     const refreshed = await dispatcher.dispatch(makeRequest('preflight.refreshAgents', null))
 
     // An older client sends no workspace and keeps the host-default probe.
-    expect(resolveAgentDetectionHost).toHaveBeenNthCalledWith(1, undefined)
-    expect(resolveAgentDetectionHost).toHaveBeenNthCalledWith(2, undefined)
+    expect(resolveAgentDetectionHost).toHaveBeenNthCalledWith(1, undefined, undefined)
+    expect(resolveAgentDetectionHost).toHaveBeenNthCalledWith(2, undefined, undefined)
     expect(detectInstalledAgentsWithShellPathHydrationMock).toHaveBeenCalledWith(undefined)
     expect(refreshShellPathAndDetectAgentsMock).toHaveBeenCalledWith(undefined)
     expect(detected).toMatchObject({ ok: true, result: ['codex'] })
@@ -117,6 +117,84 @@ describe('preflight RPC methods', () => {
     expect(detectInstalledAgentsWithShellPathHydrationMock).toHaveBeenCalledTimes(1)
     expect(ssh).toMatchObject({ ok: false, error: { message: SSH_HOST_NOT_SERVED_MESSAGE } })
   })
+
+  it('forwards a repo target before workspace creation and rejects malformed ids', async () => {
+    detectInstalledAgentsWithShellPathHydrationMock.mockResolvedValueOnce(['codex'])
+    const resolveAgentDetectionHost = vi.fn(() => ({ kind: 'local' }) as const)
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the dispatcher reads only these two runtime members.
+    const runtime = {
+      getRuntimeId: () => 'runtime',
+      resolveAgentDetectionHost
+    } as unknown as OrcaRuntimeService
+    const dispatcher = new RpcDispatcher({ runtime, methods: PREFLIGHT_METHODS })
+    const response = await dispatcher.dispatch(
+      makeRequest('preflight.detectAgents', {
+        repoId: 'r1',
+        path: '/client-controlled',
+        wslDistro: 'client-controlled',
+        executionHostId: 'local'
+      })
+    )
+    expect(resolveAgentDetectionHost).toHaveBeenCalledWith(undefined, 'r1')
+    expect(response).toMatchObject({ ok: true, result: ['codex'] })
+    resolveAgentDetectionHost.mockClear()
+    for (const repoId of ['', null, 1, { path: '/client-controlled' }]) {
+      const malformed = await dispatcher.dispatch(makeRequest('preflight.detectAgents', { repoId }))
+      expect(malformed).toMatchObject({ ok: false, error: { code: 'invalid_argument' } })
+    }
+    expect(resolveAgentDetectionHost).not.toHaveBeenCalled()
+  })
+
+  it('routes a project through its launch context and rejects mixed selectors before detection', async () => {
+    const context = { agents: ['codex'], workspaceKind: 'git', executionContext: { kind: 'host' } }
+    const detectProjectLaunchContext = vi.fn().mockResolvedValue(context)
+    const resolveAgentDetectionHost = vi.fn()
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the dispatcher reads only these runtime members.
+    const runtime = {
+      getRuntimeId: () => 'runtime',
+      detectProjectLaunchContext,
+      resolveAgentDetectionHost
+    } as unknown as OrcaRuntimeService
+    const dispatcher = new RpcDispatcher({ runtime, methods: PREFLIGHT_METHODS })
+    const project = { repo: 'r1' }
+    const response = await dispatcher.dispatch(makeRequest('preflight.detectAgents', { project }))
+    expect(response).toMatchObject({ ok: true, result: context })
+    expect(detectProjectLaunchContext).toHaveBeenCalledExactlyOnceWith('r1')
+    detectProjectLaunchContext.mockClear()
+    for (const selector of [{ repoId: 'r1' }, { worktreeId: 'r1::/work' }]) {
+      const mixed = await dispatcher.dispatch(
+        makeRequest('preflight.detectAgents', { project, ...selector })
+      )
+      expect(mixed).toMatchObject({ ok: false, error: { code: 'invalid_argument' } })
+    }
+    expect(detectProjectLaunchContext).not.toHaveBeenCalled()
+    expect(resolveAgentDetectionHost).not.toHaveBeenCalled()
+  })
+
+  it.each(['preflight.detectAgents', 'preflight.refreshAgents'])(
+    '%s never probes locally after repository ownership refuses',
+    async (method) => {
+      detectInstalledAgentsWithShellPathHydrationMock.mockClear()
+      refreshShellPathAndDetectAgentsMock.mockClear()
+      const resolveAgentDetectionHost = vi
+        .fn()
+        .mockRejectedValue(new Error('workspace_on_other_runtime'))
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the dispatcher reads only these runtime members.
+      const runtime = {
+        getRuntimeId: () => 'runtime',
+        resolveAgentDetectionHost
+      } as unknown as OrcaRuntimeService
+      const dispatcher = new RpcDispatcher({ runtime, methods: PREFLIGHT_METHODS })
+      const response = await dispatcher.dispatch(makeRequest(method, { repoId: 'foreign-repo' }))
+      expect(resolveAgentDetectionHost).toHaveBeenCalledWith(undefined, 'foreign-repo')
+      expect(response).toMatchObject({
+        ok: false,
+        error: { message: 'workspace_on_other_runtime' }
+      })
+      expect(detectInstalledAgentsWithShellPathHydrationMock).not.toHaveBeenCalled()
+      expect(refreshShellPathAndDetectAgentsMock).not.toHaveBeenCalled()
+    }
+  )
 
   it('refuses agent detection on an SSH target this host does not serve', async () => {
     detectInstalledAgentsWithShellPathHydrationMock.mockClear()

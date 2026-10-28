@@ -103,8 +103,7 @@ export function useMobileBrowserCommands(args: MobileBrowserCommandArgs) {
         browserPointerWheel.interpret(wheelReply)
         setError(null)
       } catch {
-        // Scroll bursts commonly race page reload/navigation. Avoid replacing
-        // the live browser with transient command errors like selector_not_found.
+        // Scroll bursts race navigation; keep usable stream instead of replacing it with transient selector errors.
       } finally {
         wheelCommandInFlightRef.current = false
         flushPendingWheelCommand()
@@ -163,8 +162,7 @@ export function useMobileBrowserCommands(args: MobileBrowserCommandArgs) {
         browserPointerUp.interpret(upReply)
         setError(null)
       } catch {
-        // Pointer commands can race page navigation. Keep the stream visible;
-        // actionable failures still surface through navigation/stream errors.
+        // Pointer sends race navigation; keep stream and surface actionable failures through navigation/stream paths.
       }
     },
     [client, pageParams, pointerModifiers]
@@ -246,14 +244,11 @@ export function useMobileBrowserCommands(args: MobileBrowserCommandArgs) {
     [sendBrowserRequest]
   )
 
-  // The card is the page's block, not an overlay of the pane's: the host's `dialogClosed` is what
-  // says the page took the answer, so clearing it on the press would report one it never got.
+  // Card represents page’s actual block; only host dialogClosed proves answer applied, not button press.
   const sendDialogCommand = useCallback(
     async (method: 'browser.dialogAccept' | 'browser.dialogDismiss') => {
       const command = method === 'browser.dialogAccept' ? browserDialogAccept : browserDialogDismiss
-      // The token marks which answer this is. The host takes one per dialog, so the card's buttons
-      // go dead while it is in flight, and only the answer that armed the card may write to it:
-      // a reply that lands after the page raised its next dialog belongs to neither.
+      // Token binds answer to current dialog and disables duplicate taps; stale replies cannot mutate next card.
       const token = (dialogAnswerTokenRef.current += 1)
       setDialog((current) =>
         current === null ? null : { ...current, error: undefined, pending: token }
@@ -262,8 +257,7 @@ export function useMobileBrowserCommands(args: MobileBrowserCommandArgs) {
         async (rpc, page, options) => command.interpret(await command.request(rpc, page, options)),
         { suppressError: true, timeoutMs: 5_000 }
       )
-      // A refused or timed-out answer leaves the page blocked on the same dialog, so the card
-      // stays and says so rather than looking like a button that does nothing.
+      // Refusal/timeout leaves page blocked, so retain card with error explanation.
       setDialog((current) =>
         current === null || current.pending !== token
           ? current

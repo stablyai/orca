@@ -73,8 +73,7 @@ describe('PostgreSQL push gateway startup', () => {
     await database.close()
   })
 
-  // Why: a CREATE INDEX on a grown table can outlive the 5s request deadline,
-  // and a schema that inherits it fails every startup at the same statement.
+  // Growing-table CREATE INDEX can exceed request deadlines; inheriting them makes startup fail forever at the same DDL.
   it('applies the schema on an untimed pool that is gone before the serving pool opens', async () => {
     const database = await openPushDatabase({
       databaseUrl: 'postgresql://push@localhost:55440/orca_push',

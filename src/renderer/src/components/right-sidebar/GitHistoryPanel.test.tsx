@@ -60,8 +60,6 @@ describe('GitHistoryPanel', () => {
     }
   )
 
-  // The dense row is subject-only; author and date now surface on expand, so the
-  // collapsed row shows the subject and short id (the short id via aria-label).
   it('renders the commit subject row', () => {
     const markup = renderToStaticMarkup(
       <GitHistoryPanel

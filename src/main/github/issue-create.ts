@@ -15,11 +15,7 @@ function githubIssueErrorMessage(error: unknown): string {
   return stderr.trim() || stdout.trim()
 }
 
-/**
- * Create a new GitHub issue. Uses `gh api` with explicit owner/repo so the
- * call does not depend on the current working directory having a remote that
- * matches the repo the user picked in the tasks page.
- */
+/** Explicit owner/repo preserves the Tasks-selected source independently of cwd remotes. */
 export async function createIssue(
   repoPath: string,
   title: string,
@@ -52,32 +48,25 @@ export async function createIssue(
   }
   await acquire()
   try {
-    const createArgs = (issueBody: string) => {
-      const args = [
-        'api',
-        '-X',
-        'POST',
-        `repos/${ownerRepo.owner}/${ownerRepo.repo}/issues`,
-        '--raw-field',
-        `title=${trimmedTitle}`,
-        '--raw-field',
-        `body=${issueBody}`
-      ]
-      for (const label of fields?.labels ?? []) {
-        args.push('--raw-field', `labels[]=${label}`)
-      }
-      for (const assignee of fields?.assignees ?? []) {
-        args.push('--raw-field', `assignees[]=${assignee}`)
-      }
-      return args
-    }
+    const issuesEndpoint = `repos/${ownerRepo.owner}/${ownerRepo.repo}/issues`
+    // Why: stdin keeps large inline-image bodies off argv, which Windows caps at 32K chars.
+    const createIssueRequest = (issueBody: string) =>
+      ghExecFileAsync(['api', '-X', 'POST', issuesEndpoint, '--input', '-'], {
+        ...ghOptions,
+        stdin: JSON.stringify({
+          title: trimmedTitle,
+          body: issueBody,
+          ...(fields?.labels?.length ? { labels: fields.labels } : {}),
+          ...(fields?.assignees?.length ? { assignees: fields.assignees } : {})
+        })
+      })
 
     const parseIssue = (stdout: string) =>
       JSON.parse(stdout) as { number?: number; html_url?: string; url?: string }
 
     let data: { number?: number; html_url?: string; url?: string }
     try {
-      const { stdout } = await ghExecFileAsync(createArgs(body), ghOptions)
+      const { stdout } = await createIssueRequest(body)
       data = parseIssue(stdout)
     } catch (err) {
       const message = githubIssueErrorMessage(err)
@@ -85,9 +74,8 @@ export async function createIssue(
         return { ok: false, error: message }
       }
 
-      // Why: GitHub rejects oversized bodies on create but accepts the same body
-      // on update, so establish the issue before attaching its body.
-      const { stdout } = await ghExecFileAsync(createArgs(''), ghOptions)
+      // GitHub can accept a body on update that it rejects during creation; establish the issue first.
+      const { stdout } = await createIssueRequest('')
       data = parseIssue(stdout)
       if (typeof data.number !== 'number') {
         return { ok: false, error: 'Unexpected response from GitHub' }
@@ -95,15 +83,8 @@ export async function createIssue(
 
       try {
         await ghExecFileAsync(
-          [
-            'api',
-            '-X',
-            'PATCH',
-            `repos/${ownerRepo.owner}/${ownerRepo.repo}/issues/${data.number}`,
-            '--raw-field',
-            `body=${body}`
-          ],
-          ghOptions
+          ['api', '-X', 'PATCH', `${issuesEndpoint}/${data.number}`, '--input', '-'],
+          { ...ghOptions, stdin: JSON.stringify({ body }) }
         )
       } catch (patchErr) {
         const patchMessage = githubIssueErrorMessage(patchErr)
