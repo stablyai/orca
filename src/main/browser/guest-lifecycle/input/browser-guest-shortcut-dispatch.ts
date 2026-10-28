@@ -23,6 +23,7 @@ export type GuestShortcutForwardContext = {
   getKeybindings?: () => KeybindingOverrides | undefined
   resolveWorktreeId?: (browserTabId: string) => string | null
   resolveWorkspaceId?: (browserTabId: string) => string | null
+  supportsAnnotations?: (browserTabId: string) => boolean
   forwardBrowserPageZoom: (event: Electron.Event, direction: BrowserPageZoomDirection) => void
   /** False for plugin frames: no address bar, history, find or page zoom, and Close closes the
    *  active tab rather than a browser source. */
@@ -43,6 +44,7 @@ export function forwardGuestShortcutInput(
     getKeybindings,
     resolveWorktreeId,
     resolveWorkspaceId,
+    supportsAnnotations,
     forwardBrowserPageZoom
   } = ctx
   const page = ctx.browserPage !== false
@@ -130,9 +132,8 @@ export function forwardGuestShortcutInput(
     const target: BrowserFindTarget = { browserPageId: browserTabId, browserWorkspaceId }
     renderer.send('ui:findInBrowserPage', target)
   } else if (
-    // Client-hosted panes have no workspace or annotation listener; leave the chord to the page.
     page &&
-    resolveWorkspaceId?.(browserTabId) &&
+    (supportsAnnotations?.(browserTabId) ?? Boolean(resolveWorkspaceId?.(browserTabId))) &&
     keybindingMatchesAction('browser.annotateElement', input, process.platform, keybindings)
   ) {
     renderer.send('browser:grabModeToggle', browserTabId, 'annotate')
