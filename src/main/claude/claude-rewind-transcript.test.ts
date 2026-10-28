@@ -8,7 +8,7 @@ import { AgentSessionRewindRecordSchema } from '../../shared/agent-session-rewin
 import { agentSessionRecordFixture } from '../native-chat/agent-session-record-test-fixture'
 import { createClaudeStructuredLaunchResolver } from '../runtime/structured-agent-launch-composition.test-support'
 import { resolveClaudeRewindFork } from './claude-rewind-fork'
-import { claudeSessionIdForRewind } from './claude-structured-session-id'
+import { claudeSessionIdForRewind } from './structured/claude-structured-session-id'
 
 let root: string
 let home: string
